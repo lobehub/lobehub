@@ -1,8 +1,8 @@
 'use client';
 
-import { Modal } from '@lobehub/ui';
 import { memo } from 'react';
 
+import ImperativeModal from '@/components/ImperativeModal';
 import FileViewer from '@/features/FileViewer';
 import { type UploadFileItem } from '@/types/files/upload';
 
@@ -17,7 +17,7 @@ const FilePreviewModal = memo<FilePreviewModalProps>(({ file, open, onClose }) =
   const previewUrl = file.previewUrl || file.fileUrl || file.base64Url || '';
 
   return (
-    <Modal
+    <ImperativeModal
       allowFullscreen
       centered
       destroyOnHidden
@@ -49,7 +49,7 @@ const FilePreviewModal = memo<FilePreviewModalProps>(({ file, open, onClose }) =
         updatedAt={new Date()}
         url={previewUrl}
       />
-    </Modal>
+    </ImperativeModal>
   );
 });
 

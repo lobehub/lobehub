@@ -10,6 +10,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import WideScreenContainer from '../../../WideScreenContainer';
+import { MessageForwardSelectToHere } from '../../MessageForward';
 import {
   dataSelectors,
   inputSelectors,
@@ -82,6 +83,11 @@ const VirtualizedList = memo<VirtualizedListProps>(
     });
 
     const isAutoScrollEnabled = useAutoScrollEnabled();
+
+    // While multi-selecting, let message rows span the full stream width so the
+    // clickable/highlight band fills the available space instead of the centered
+    // reading column.
+    const isSelectionMode = useConversationStore(messageStateSelectors.isSelectionMode);
 
     // Store actions
     const registerVirtuaScrollMethods = useConversationStore((s) => s.registerVirtuaScrollMethods);
@@ -276,6 +282,8 @@ const VirtualizedList = memo<VirtualizedListProps>(
         onTouchMoveCapture={markUserScrollIntent}
         onWheelCapture={markUserScrollIntent}
       >
+        {/* Pinned to the list viewport top; only renders while multi-selecting */}
+        <MessageForwardSelectToHere />
         {/* Debug Inspector - placed outside VList so it won't be recycled by the virtual list */}
         {OPEN_DEV_INSPECTOR && <DebugInspector />}
         <VList
@@ -344,7 +352,11 @@ const VirtualizedList = memo<VirtualizedListProps>(
             }
 
             return (
-              <WideScreenContainer key={messageId} style={{ position: 'relative' }}>
+              <WideScreenContainer
+                fullWidth={isSelectionMode}
+                key={messageId}
+                style={{ position: 'relative' }}
+              >
                 {content}
                 {isLastItem && isAutoScrollEnabled && !spacerActive && <AutoScroll />}
               </WideScreenContainer>

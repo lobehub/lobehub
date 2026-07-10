@@ -2,18 +2,16 @@
 
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
 import { Button, Flexbox, Icon } from '@lobehub/ui';
-import {
-  createModal,
-  type ImperativeModalProps,
-  ModalFooter,
-  type ModalInstance,
-} from '@lobehub/ui/base-ui';
-import { t as i18nt } from 'i18next';
+import type { ImperativeModalProps, ModalInstance } from '@lobehub/ui/base-ui';
+import { createModal, ModalFooter } from '@lobehub/ui/base-ui';
+import debug from 'debug';
 import { AlertCircle, LogIn } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useElectronStore } from '@/store/electron';
+
+const log = debug('lobe-client:auth-required-modal');
 
 interface AuthRequiredModalContentProps {
   onActionReady: (api: { signIn: () => Promise<void> }) => void;
@@ -73,17 +71,13 @@ AuthRequiredModalContent.displayName = 'AuthRequiredModalContent';
 
 interface FooterProps {
   isSigningIn: boolean;
-  onLater: () => void;
   onSignIn: () => void;
 }
 
-const AuthRequiredFooter = memo<FooterProps>(({ isSigningIn, onLater, onSignIn }) => {
+const AuthRequiredFooter = memo<FooterProps>(({ isSigningIn, onSignIn }) => {
   const { t } = useTranslation('auth');
   return (
     <ModalFooter>
-      <Button disabled={isSigningIn} onClick={onLater}>
-        {t('authModal.later')}
-      </Button>
       <Button icon={<Icon icon={LogIn} />} loading={isSigningIn} type="primary" onClick={onSignIn}>
         {isSigningIn ? t('authModal.signingIn') : t('authModal.signIn')}
       </Button>
@@ -91,6 +85,18 @@ const AuthRequiredFooter = memo<FooterProps>(({ isSigningIn, onLater, onSignIn }
   );
 });
 AuthRequiredFooter.displayName = 'AuthRequiredFooter';
+
+const AuthRequiredModalTitle = memo(() => {
+  const { t } = useTranslation('auth');
+
+  return (
+    <Flexbox horizontal align="center" gap={8}>
+      <Icon icon={AlertCircle} />
+      {t('authModal.title')}
+    </Flexbox>
+  );
+});
+AuthRequiredModalTitle.displayName = 'AuthRequiredModalTitle';
 
 export const useAuthRequiredModal = () => {
   const instanceRef = useRef<ModalInstance | null>(null);
@@ -110,11 +116,7 @@ export const useAuthRequiredModal = () => {
     };
 
     const renderFooter = () => (
-      <AuthRequiredFooter
-        isSigningIn={isSigningIn}
-        onLater={handleClose}
-        onSignIn={() => signIn()}
-      />
+      <AuthRequiredFooter isSigningIn={isSigningIn} onSignIn={() => signIn()} />
     );
 
     instanceRef.current = createModal({
@@ -129,19 +131,19 @@ export const useAuthRequiredModal = () => {
             isSigningIn = next;
             instanceRef.current?.update?.({
               footer: renderFooter(),
-              maskClosable: !next,
+              maskClosable: false,
             } as Partial<ImperativeModalProps>);
           }}
         />
       ),
       footer: renderFooter(),
       maskClosable: false,
-      title: (
-        <Flexbox horizontal align="center" gap={8}>
-          <Icon icon={AlertCircle} />
-          {i18nt('authModal.title', { ns: 'auth' })}
-        </Flexbox>
-      ),
+      onOpenChange: (nextOpen) => {
+        if (!nextOpen) {
+          instanceRef.current = null;
+        }
+      },
+      title: <AuthRequiredModalTitle />,
     });
   }, []);
 
@@ -151,14 +153,25 @@ export const useAuthRequiredModal = () => {
 const AuthRequiredModal = memo(() => {
   const { open } = useAuthRequiredModal();
 
-  useWatchBroadcast('authorizationRequired', () => {
+  useWatchBroadcast('authorizationRequired', (payload) => {
+    const reason = payload?.reason ?? 'unknown';
     const state = useElectronStore.getState();
-    if (state.isConnectionDrawerOpen) return;
+    if (state.isConnectionDrawerOpen) {
+      log('authorizationRequired ignored (connection drawer open). reason=%s', reason);
+      return;
+    }
     // Wait until remote sync config has loaded once (avoid a flash before SWR resolves).
     // Do not gate on `dataSyncConfig.active`: after sign-out `active` is false but 401 + X-Auth-Required
     // still means the user must re-authenticate; gating on active would suppress the modal forever.
-    if (!state.isInitRemoteServerConfig) return;
+    if (!state.isInitRemoteServerConfig) {
+      log(
+        'authorizationRequired ignored (remote server config not initialized). reason=%s',
+        reason,
+      );
+      return;
+    }
 
+    log('authorizationRequired: opening modal. reason=%s', reason);
     open();
   });
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import { type ClaudeAuthStatus, type ToolStatus } from '@lobechat/electron-client-ipc';
+import { type BinaryStatus, type ClaudeAuthStatus } from '@lobechat/electron-client-ipc';
 import {
   getHeterogeneousAgentClientConfig,
   isRemoteHeterogeneousType,
@@ -12,10 +12,11 @@ import { createStaticStyles, cssVar } from 'antd-style';
 import { Loader2Icon, PencilLine, RefreshCw, XCircle } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 
 import HeterogeneousAgentStatusGuide from '@/features/Electron/HeterogeneousAgent/StatusGuide';
-import { toolDetectorService } from '@/services/electron/toolDetector';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { usePermission } from '@/hooks/usePermission';
+import { binaryService } from '@/services/electron/binary';
 
 const COMMAND_LINE_HEIGHT = 28;
 
@@ -215,12 +216,13 @@ interface HeterogeneousAgentStatusCardProps {
 const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
   ({ provider, onCommandChange }) => {
     const { t } = useTranslation('setting');
-    const navigate = useNavigate();
+    const navigate = useWorkspaceAwareNavigate();
+    const { allowed: canEdit } = usePermission('edit_own_content');
     const providerConfig = getHeterogeneousAgentClientConfig(provider.type);
     const defaultCommand = providerConfig?.command || '';
     const resolvedCommand = provider.command?.trim() || defaultCommand;
     const isUsingCustomCommand = resolvedCommand !== defaultCommand;
-    const [status, setStatus] = useState<ToolStatus | undefined>();
+    const [status, setStatus] = useState<BinaryStatus | undefined>();
     const [auth, setAuth] = useState<ClaudeAuthStatus | null>(null);
     const [commandInput, setCommandInput] = useState(resolvedCommand);
     const [detecting, setDetecting] = useState(true);
@@ -243,7 +245,7 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
       }
 
       try {
-        const result = await toolDetectorService.getClaudeAuthStatus(resolvedCommand);
+        const result = await binaryService.getClaudeAuthStatus(resolvedCommand);
         setAuth(result);
       } catch (error) {
         console.warn('[HeterogeneousAgentStatusCard] Failed to get Claude auth status:', error);
@@ -260,7 +262,7 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
 
       setDetecting(true);
       try {
-        const result = await toolDetectorService.detectHeterogeneousAgentCommand({
+        const result = await binaryService.detectHeterogeneousAgentCommand({
           agentType: provider.type,
           command: resolvedCommand,
         });
@@ -303,11 +305,12 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
     }, [isEditingCommand]);
 
     const startEditingCommand = useCallback(() => {
+      if (!canEdit) return;
       if (savingCommand) return;
 
       setCommandInput(resolvedCommand);
       setIsEditingCommand(true);
-    }, [resolvedCommand, savingCommand]);
+    }, [canEdit, resolvedCommand, savingCommand]);
 
     const cancelEditingCommand = useCallback(() => {
       setCommandInput(resolvedCommand);
@@ -315,6 +318,8 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
     }, [resolvedCommand]);
 
     const commitCommand = useCallback(async () => {
+      if (!canEdit) return;
+
       const normalizedCommand = commandInput.trim() || defaultCommand;
       setCommandInput(normalizedCommand);
 
@@ -330,7 +335,7 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
       } finally {
         setSavingCommand(false);
       }
-    }, [commandInput, defaultCommand, onCommandChange, resolvedCommand, savingCommand]);
+    }, [canEdit, commandInput, defaultCommand, onCommandChange, resolvedCommand, savingCommand]);
 
     const renderStatusTag = () => {
       if (detecting) {
@@ -409,7 +414,7 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
               <div className={styles.commandInputWrap}>
                 <Input
                   className={styles.commandInput}
-                  disabled={savingCommand}
+                  disabled={!canEdit || savingCommand}
                   placeholder={t('heterogeneousStatus.command.placeholder')}
                   ref={commandInputRef as never}
                   value={commandInput}
@@ -445,6 +450,7 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
                 <ActionIcon
                   aria-label={t('heterogeneousStatus.command.edit')}
                   className={`command-edit-button ${styles.commandEditButton}`}
+                  disabled={!canEdit}
                   icon={PencilLine}
                   size="small"
                   onClick={startEditingCommand}

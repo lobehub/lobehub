@@ -1,12 +1,16 @@
 'use client';
 
-import { Button, Flexbox, Modal, stopPropagation } from '@lobehub/ui';
+import { Flexbox, stopPropagation } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
+import ImperativeModal from '@/components/ImperativeModal';
+import { usePermission } from '@/hooks/usePermission';
+import { groupKeys } from '@/libs/swr/keys';
 import { agentService } from '@/services/agent';
 import { useGlobalStore } from '@/store/global';
 import { useHomeStore } from '@/store/home';
@@ -40,6 +44,7 @@ export interface CreateGroupModalProps {
 
 const CreateGroupModal = memo<CreateGroupModalProps>(({ id, onCancel, open }) => {
   const { t } = useTranslation(['chat', 'common']);
+  const { allowed: canCreate } = usePermission('create_content');
   const { message } = App.useApp();
 
   const toggleExpandSessionGroup = useGlobalStore((s) => s.toggleExpandSessionGroup);
@@ -54,7 +59,7 @@ const CreateGroupModal = memo<CreateGroupModalProps>(({ id, onCancel, open }) =>
 
   // Fetch all agents
   const { data: allAgents = [], isLoading: isLoadingAgents } = useSWR<AgentItemData[]>(
-    open ? 'queryAgentsForCreateGroup' : null,
+    open ? groupKeys.queryAgentsForCreate() : null,
     () => agentService.queryAgents(),
   );
 
@@ -74,6 +79,8 @@ const CreateGroupModal = memo<CreateGroupModalProps>(({ id, onCancel, open }) =>
   }, [open, id, setSelectedAgents]);
 
   const handleConfirm = async () => {
+    if (!canCreate) return;
+
     if (groupName.length === 0 || groupName.length > 20 || groupName.trim() === '') {
       message.warning(t('sessionGroup.tooLong'));
       return;
@@ -108,11 +115,12 @@ const CreateGroupModal = memo<CreateGroupModalProps>(({ id, onCancel, open }) =>
     onCancel();
   };
 
-  const isConfirmDisabled = groupName.trim() === '' || selectedAgentIds.length === 0 || isCreating;
+  const isConfirmDisabled =
+    !canCreate || groupName.trim() === '' || selectedAgentIds.length === 0 || isCreating;
 
   return (
     <div onClick={stopPropagation}>
-      <Modal
+      <ImperativeModal
         allowFullscreen
         destroyOnHidden
         open={open}
@@ -142,11 +150,15 @@ const CreateGroupModal = memo<CreateGroupModalProps>(({ id, onCancel, open }) =>
             <SelectedAgentList
               agents={allAgents}
               groupName={groupName}
-              onGroupNameChange={setGroupName}
+              onGroupNameChange={(name) => {
+                if (!canCreate) return;
+
+                setGroupName(name);
+              }}
             />
           </Flexbox>
         </Flexbox>
-      </Modal>
+      </ImperativeModal>
     </div>
   );
 });

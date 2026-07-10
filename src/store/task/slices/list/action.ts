@@ -1,12 +1,15 @@
 import { mutate, useClientDataSWR } from '@/libs/swr';
+import { taskKeys } from '@/libs/swr/keys';
 import { taskService } from '@/services/task';
 import type { StoreSetter } from '@/store/types';
 
 import type { TaskStore } from '../../store';
-import type { TaskGroupItem, TaskListItem, TaskViewMode } from './initialState';
-
-const FETCH_TASK_LIST_KEY = 'fetchTaskList';
-const FETCH_TASK_GROUP_LIST_KEY = 'fetchTaskGroupList';
+import type {
+  TaskGroupItem,
+  TaskListItem,
+  TaskListVisibilityFilter,
+  TaskViewMode,
+} from './initialState';
 
 /**
  * Sentinel used as `listAgentId` when the task list is showing tasks across all agents
@@ -29,6 +32,33 @@ const DEFAULT_KANBAN_GROUPS = [
   { key: 'canceled', statuses: ['canceled'] },
 ];
 
+/**
+ * Map the UI-side filter chip value to the server-side `visibility` enum.
+ * 'all' has no server filter (undefined), 'workspace' translates to the DB
+ * 'public' value, and 'private' passes through unchanged.
+ */
+const filterToServerVisibility = (
+  filter: 'all' | 'private' | 'workspace',
+): 'private' | 'public' | undefined => {
+  if (filter === 'all') return undefined;
+  if (filter === 'workspace') return 'public';
+  return 'private';
+};
+
+/**
+ * Cleared whenever the list scope changes (all-agents <-> a specific agent).
+ * The list and group datasets are shared store fields, so without this reset
+ * the previous scope's tasks would render until the new fetch resolves — e.g.
+ * the `/tasks` page briefly showing only the last-visited agent's tasks.
+ */
+const scopeChangeResetState = {
+  isTaskGroupListInit: false,
+  isTaskListInit: false,
+  taskGroups: [] as TaskGroupItem[],
+  tasks: [] as TaskListItem[],
+  tasksTotal: 0,
+};
+
 type Setter = StoreSetter<TaskStore>;
 
 export const createTaskListSlice = (set: Setter, get: () => TaskStore, _api?: unknown) =>
@@ -45,23 +75,37 @@ export class TaskListSliceActionImpl {
   }
 
   refreshTaskGroupList = async (): Promise<void> => {
-    const { listAgentId } = this.#get();
-    await mutate([FETCH_TASK_GROUP_LIST_KEY, listAgentId]);
+    const { listAgentId, listVisibility } = this.#get();
+    await mutate(taskKeys.groupList(listAgentId, listVisibility));
   };
 
   fetchTaskList = async (params: Parameters<typeof taskService.list>[0]) =>
     taskService.list(params);
 
   refreshTaskList = async (): Promise<void> => {
-    const { listAgentId } = this.#get();
+    const { listAgentId, listVisibility } = this.#get();
     await Promise.all([
-      mutate([FETCH_TASK_LIST_KEY, listAgentId]),
-      mutate([FETCH_TASK_GROUP_LIST_KEY, listAgentId]),
+      mutate(taskKeys.list(listAgentId, listVisibility)),
+      mutate(taskKeys.groupList(listAgentId, listVisibility)),
     ]);
   };
 
   setListAgentId = (agentId?: string): void => {
     this.#set({ listAgentId: agentId }, false, 'setListAgentId');
+  };
+
+  setListVisibility = (visibility: TaskListVisibilityFilter): void => {
+    if (this.#get().listVisibility === visibility) return;
+    // Clear the cached list so the chip flip doesn't render stale entries
+    // from the previous filter while the new fetch is in flight.
+    this.#set(
+      {
+        ...scopeChangeResetState,
+        listVisibility: visibility,
+      },
+      false,
+      'setListVisibility',
+    );
   };
 
   setViewMode = (mode: TaskViewMode): void => {
@@ -78,19 +122,24 @@ export class TaskListSliceActionImpl {
     const { agentId, allAgents = false, enabled = true } = options;
     const effectiveKey = allAgents ? ALL_AGENTS_LIST_KEY : agentId;
     if (effectiveKey && this.#get().listAgentId !== effectiveKey) {
-      this.#set({ listAgentId: effectiveKey }, false, 'useFetchTaskGroupList/syncAgentId');
+      this.#set(
+        { ...scopeChangeResetState, listAgentId: effectiveKey },
+        false,
+        'useFetchTaskGroupList/syncAgentId',
+      );
     }
+    const listVisibility = this.#get().listVisibility;
 
     return useClientDataSWR(
-      enabled && effectiveKey ? [FETCH_TASK_GROUP_LIST_KEY, effectiveKey] : null,
+      enabled && effectiveKey ? taskKeys.groupList(effectiveKey, listVisibility) : null,
       async () => {
         return taskService.groupList({
           assigneeAgentId: allAgents ? undefined : agentId,
           groups: DEFAULT_KANBAN_GROUPS,
+          visibility: filterToServerVisibility(listVisibility),
         });
       },
       {
-        fallbackData: { data: [], success: true },
         onSuccess: (data: { data: TaskGroupItem[] }) => {
           this.#set(
             { isTaskGroupListInit: true, taskGroups: data.data },
@@ -113,16 +162,23 @@ export class TaskListSliceActionImpl {
     const { agentId, allAgents = false, enabled = true } = options;
     const effectiveKey = allAgents ? ALL_AGENTS_LIST_KEY : agentId;
     if (effectiveKey && this.#get().listAgentId !== effectiveKey) {
-      this.#set({ listAgentId: effectiveKey }, false, 'useFetchTaskList/syncAgentId');
+      this.#set(
+        { ...scopeChangeResetState, listAgentId: effectiveKey },
+        false,
+        'useFetchTaskList/syncAgentId',
+      );
     }
+    const listVisibility = this.#get().listVisibility;
 
     return useClientDataSWR(
-      enabled && effectiveKey ? [FETCH_TASK_LIST_KEY, effectiveKey] : null,
+      enabled && effectiveKey ? taskKeys.list(effectiveKey, listVisibility) : null,
       async ([, id]: [string, string]) => {
-        return this.fetchTaskList(allAgents ? {} : { assigneeAgentId: id });
+        return this.fetchTaskList({
+          ...(allAgents ? {} : { assigneeAgentId: id }),
+          visibility: filterToServerVisibility(listVisibility),
+        });
       },
       {
-        fallbackData: { data: [], success: true, total: 0 },
         onSuccess: (data: { data: TaskListItem[]; total: number }) => {
           this.#set(
             {

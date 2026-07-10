@@ -8,6 +8,7 @@ packages:
   - '../../packages/electron-client-ipc'
   - '../../packages/file-loaders'
   - '../../packages/desktop-bridge'
+  - '../../packages/device-control'
   - '../../packages/device-gateway-client'
   - '../../packages/device-identity'
   - '../../packages/local-file-shell'
@@ -16,3 +17,9 @@ packages:
   - './stubs/business-const'
   - './stubs/types'
   - '.'
+allowBuilds:
+  electron: set this to true or false
+  electron-winstaller: set this to true or false
+  esbuild: set this to true or false
+  get-windows: set this to true or false
+  node-mac-permissions: set this to true or false

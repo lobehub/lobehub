@@ -1,7 +1,7 @@
 'use client';
 
 import { type AnchorHTMLAttributes, type FC } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 
 const EXTERNAL_HREF_REGEX = /https?:\/\//;
 

@@ -21,6 +21,7 @@ services:
       - '5432:5432'
     volumes:
       - './data:/var/lib/postgresql/data'
+    command: ['postgres', '-c', 'shared_preload_libraries=pg_search']
     environment:
       - 'POSTGRES_DB=${LOBE_DB_NAME}'
       - 'POSTGRES_PASSWORD=${POSTGRES_PASSWORD}'

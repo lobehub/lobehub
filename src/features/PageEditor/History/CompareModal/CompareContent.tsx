@@ -7,6 +7,7 @@ import { RotateCcwIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useAuthorInfo } from '@/business/client/hooks/useAuthorInfo';
 import type {
   DocumentHistoryListItem,
   DocumentHistorySaveSource,
@@ -112,6 +113,8 @@ const CompareContent = memo<CompareContentProps>(
       [items, selectedHistoryId],
     );
 
+    const authorInfo = useAuthorInfo(selectedItem?.userId);
+
     if (!selectedItem) return null;
 
     const canRestore = !selectedItem.isCurrent;
@@ -130,6 +133,11 @@ const CompareContent = memo<CompareContentProps>(
                 {dayjs(selectedItem.savedAt).fromNow()} ·{' '}
                 {saveSourceLabels[selectedItem.saveSource]}
               </Text>
+              {authorInfo?.fullName && (
+                <Text className={styles.meta} title={authorInfo.fullName} type={'secondary'}>
+                  · {authorInfo.fullName}
+                </Text>
+              )}
             </Flexbox>
             {canRestore && (
               <Button icon={RotateCcwIcon} size={'small'} onClick={() => onRestore(selectedItem)}>

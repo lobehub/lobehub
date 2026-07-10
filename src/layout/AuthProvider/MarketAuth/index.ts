@@ -1,4 +1,5 @@
 export { MarketAuthProvider, useMarketAuth } from './MarketAuthProvider';
+export type { MarketAuthScene } from './scenes';
 export type {
   MarketAuthContextType,
   MarketAuthSession,

@@ -33,7 +33,11 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-const FCSearchModel = memo(() => {
+interface FCSearchModelProps {
+  disabled?: boolean;
+}
+
+const FCSearchModel = memo<FCSearchModelProps>(({ disabled }) => {
   const { t } = useTranslation('chat');
   const agentId = useAgentId();
   const { updateAgentChatConfig } = useUpdateAgentConfig();
@@ -47,12 +51,14 @@ const FCSearchModel = memo(() => {
         <InfoTooltip title={t('search.searchModel.desc')} />
       </Flexbox>
       <FunctionCallingModelSelect
+        disabled={disabled}
         value={searchFCModel}
         style={{
           maxWidth: 160,
           width: 160,
         }}
         onChange={async (value) => {
+          if (disabled) return;
           await updateAgentChatConfig({ searchFCModel: value });
         }}
       />

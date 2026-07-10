@@ -4,6 +4,7 @@ import { type SWRResponse } from 'swr';
 
 import { MESSAGE_CANCEL_FLAT } from '@/const/message';
 import { useClientDataSWR } from '@/libs/swr';
+import { toolKeys } from '@/libs/swr/keys';
 import { pluginService } from '@/services/plugin';
 import { type StoreSetter } from '@/store/types';
 import { merge } from '@/utils/merge';
@@ -39,11 +40,6 @@ export class PluginActionImpl {
   refreshPlugins = async (): Promise<void> => {
     const data = await pluginService.getInstalledPlugins();
     this.#set({ installedPlugins: data }, false, 'refreshPlugins');
-  };
-
-  removeAllPlugins = async (): Promise<void> => {
-    await pluginService.removeAllPlugins();
-    await this.#get().refreshPlugins();
   };
 
   updateInstallLoadingState = (id: string, loading: boolean | undefined): void => {
@@ -88,7 +84,7 @@ export class PluginActionImpl {
 
   useFetchInstalledPlugins = (enable: boolean): SWRResponse => {
     return useClientDataSWR(
-      enable ? 'useFetchInstalledPlugins' : null,
+      enable ? toolKeys.installedPlugins() : null,
       () => pluginService.getInstalledPlugins(),
       {
         onSuccess: (data: LobeTool[]) => {

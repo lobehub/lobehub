@@ -47,6 +47,12 @@ export interface NavItemProps extends Omit<BlockProps, 'children' | 'title'> {
   actions?: ReactNode;
   active?: boolean;
   contextMenuItems?: GenericItemType[] | (() => GenericItemType[]);
+  /**
+   * Optional second line rendered under the title (e.g. a topic's project
+   * directory). When set, the row grows to fit both lines; when omitted the
+   * layout is byte-identical to a single-line row.
+   */
+  description?: ReactNode;
   disabled?: boolean;
   extra?: ReactNode;
   /**
@@ -58,6 +64,12 @@ export interface NavItemProps extends Omit<BlockProps, 'children' | 'title'> {
   loading?: boolean;
   slots?: NavItemSlots;
   title: ReactNode;
+  /**
+   * Override the title text color. Defaults to colorText when active and
+   * colorTextSecondary otherwise. Pass cssVar.colorText to keep a row's title
+   * fully emphasized regardless of active state (e.g. topic titles).
+   */
+  titleColor?: string;
 }
 
 const NavItem = memo<NavItemProps>(
@@ -70,15 +82,18 @@ const NavItem = memo<NavItemProps>(
     icon,
     iconSize = 18,
     title,
+    titleColor,
+    description,
     onClick,
     disabled,
     loading,
     extra,
     slots,
+    style,
     ...rest
   }) => {
     const iconColor = active ? cssVar.colorText : cssVar.colorTextDescription;
-    const textColor = active ? cssVar.colorText : cssVar.colorTextSecondary;
+    const textColor = titleColor ?? (active ? cssVar.colorText : cssVar.colorTextSecondary);
     const variant = active ? 'filled' : 'borderless';
 
     const { titlePrefix, iconPostfix } = slots || {};
@@ -87,9 +102,19 @@ const NavItem = memo<NavItemProps>(
       ? {
           as: 'a' as const,
           href,
-          style: { color: 'inherit', textDecoration: 'none' },
         }
       : {};
+
+    const mergedStyle =
+      href || disabled || style
+        ? {
+            ...(href ? { color: 'inherit', textDecoration: 'none' } : undefined),
+            // `disabled` only blocks the click by itself — dim the row so the
+            // blocked state is visible instead of a silently dead button.
+            ...(disabled ? { cursor: 'not-allowed', opacity: 0.5 } : undefined),
+            ...style,
+          }
+        : undefined;
 
     const Content = (
       <Block
@@ -98,8 +123,10 @@ const NavItem = memo<NavItemProps>(
         className={cx(styles.container, className)}
         clickable={!disabled}
         gap={8}
-        height={36}
+        height={description ? undefined : 36}
+        paddingBlock={description ? 4 : undefined}
         paddingInline={4}
+        style={mergedStyle}
         variant={variant}
         onClick={(e) => {
           // Always prevent default <a> navigation for normal clicks to avoid full page reload.
@@ -114,7 +141,15 @@ const NavItem = memo<NavItemProps>(
         {...rest}
       >
         {icon && (
-          <Center flex={'none'} height={28} width={28}>
+          <Center
+            flex={'none'}
+            // With a description the row is two lines tall; align the leading icon
+            // to the title's first line (match its line-height) instead of letting
+            // it center across both lines, which drops it into the gap.
+            height={description ? 22 : 28}
+            style={description ? { alignSelf: 'flex-start' } : undefined}
+            width={28}
+          >
             {loading ? (
               <NeuralNetworkLoading size={iconSize} />
             ) : (
@@ -126,15 +161,24 @@ const NavItem = memo<NavItemProps>(
         {iconPostfix}
         <Flexbox horizontal align={'center'} flex={1} gap={8} style={{ overflow: 'hidden' }}>
           {titlePrefix}
-          <Text
-            color={textColor}
-            style={{ flex: 1 }}
-            ellipsis={{
-              tooltipWhenOverflow: true,
-            }}
-          >
-            {title}
-          </Text>
+          {description ? (
+            <Flexbox flex={1} gap={1} style={{ overflow: 'hidden' }}>
+              <Text color={textColor} ellipsis={{ tooltipWhenOverflow: true }}>
+                {title}
+              </Text>
+              {description}
+            </Flexbox>
+          ) : (
+            <Text
+              color={textColor}
+              style={{ flex: 1 }}
+              ellipsis={{
+                tooltipWhenOverflow: true,
+              }}
+            >
+              {title}
+            </Text>
+          )}
           <Flexbox
             horizontal
             align={'center'}

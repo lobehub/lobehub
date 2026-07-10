@@ -20,7 +20,7 @@ export class MessageTranslationController extends BaseController {
       const { messageId } = this.getParams<{ messageId: string }>(c);
 
       const db = await this.getDatabase();
-      const translateService = new MessageTranslateService(db, userId);
+      const translateService = new MessageTranslateService(db, userId, this.getWorkspaceId(c));
       const translate = await translateService.getTranslateByMessageId(messageId);
 
       return this.success(c, translate, 'Translation info retrieved successfully');
@@ -41,7 +41,7 @@ export class MessageTranslationController extends BaseController {
       const translatePayload = (await this.getBody<MessageTranslateBody>(c))!;
 
       const db = await this.getDatabase();
-      const translateService = new MessageTranslateService(db, userId);
+      const translateService = new MessageTranslateService(db, userId, this.getWorkspaceId(c));
       const result = await translateService.translateMessage({
         messageId,
         ...translatePayload,
@@ -65,7 +65,7 @@ export class MessageTranslationController extends BaseController {
       const configData = (await this.getBody<MessageTranslateInfoUpdate>(c))!;
 
       const db = await this.getDatabase();
-      const translateService = new MessageTranslateService(db, userId);
+      const translateService = new MessageTranslateService(db, userId, this.getWorkspaceId(c));
       const result = await translateService.updateTranslateInfo({ ...configData, messageId });
 
       return this.success(c, result, 'Translation info updated successfully');
@@ -84,7 +84,7 @@ export class MessageTranslationController extends BaseController {
       const { messageId } = this.getParams<{ messageId: string }>(c);
 
       const db = await this.getDatabase();
-      const translateService = new MessageTranslateService(db, userId);
+      const translateService = new MessageTranslateService(db, userId, this.getWorkspaceId(c));
       const result = await translateService.deleteTranslateByMessageId(messageId);
 
       return this.success(c, result, 'Translation info deleted successfully');

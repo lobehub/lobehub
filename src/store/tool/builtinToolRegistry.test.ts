@@ -1,4 +1,5 @@
 import { WEB_ONBOARDING } from '@lobechat/builtin-agents';
+import { ClaudeCodeIdentifier as ClaudeCodeToolIdentifier } from '@lobechat/builtin-tool-claude-code/client';
 import {
   GroupAgentBuilderApiName,
   GroupAgentBuilderIdentifier,
@@ -12,10 +13,18 @@ import {
   WebOnboardingIdentifier,
   WebOnboardingManifest,
 } from '@lobechat/builtin-tool-web-onboarding';
+import { getBuiltinRenderDisplayControl } from '@lobechat/builtin-tools/displayControls';
 import { builtinToolIdentifiers } from '@lobechat/builtin-tools/identifiers';
-import { describe, expect, it } from 'vitest';
+import { getBuiltinInspector } from '@lobechat/builtin-tools/inspectors';
+import { registerBuiltinToolSurfaces } from '@lobechat/builtin-tools/register';
+import { getBuiltinRender } from '@lobechat/builtin-tools/renders';
+import { beforeAll, describe, expect, it } from 'vitest';
 
 describe('builtin tool registry', () => {
+  beforeAll(() => {
+    registerBuiltinToolSurfaces();
+  });
+
   it('includes skill store in builtin identifiers', () => {
     expect(builtinToolIdentifiers).toContain(SkillStoreIdentifier);
   });
@@ -36,6 +45,14 @@ describe('builtin tool registry', () => {
     expect(GroupAgentBuilderInspectors[GroupAgentBuilderApiName.createGroup]).toBeDefined();
   });
 
+  it('registers shared Linear MCP surfaces for Claude Code server variants', () => {
+    const apiName = 'mcp__linear-server__save_issue';
+
+    expect(getBuiltinInspector(ClaudeCodeToolIdentifier, apiName)).toBeDefined();
+    expect(getBuiltinRender(ClaudeCodeToolIdentifier, apiName)).toBeDefined();
+    expect(getBuiltinRenderDisplayControl(ClaudeCodeToolIdentifier, apiName)).toBe('expand');
+  });
+
   it('includes user interaction and web onboarding in web onboarding runtime plugins', () => {
     const runtime =
       typeof WEB_ONBOARDING.runtime === 'function'
@@ -44,6 +61,7 @@ describe('builtin tool registry', () => {
 
     expect(runtime.plugins).toContain(UserInteractionIdentifier);
     expect(runtime.plugins).toContain(WebOnboardingIdentifier);
+    expect(runtime.agencyConfig?.executionTarget).toBe('none');
   });
 
   it('exposes the marketplace APIs under the web onboarding manifest', () => {

@@ -82,39 +82,31 @@ const MasonryView = memo(function MasonryView({
   const isNavigating = useMemo(() => {
     if (!currentQueryParams || !queryParams) return false;
 
+    // Sidebar mode toggle is a "space switch" — treat visibility change as
+    // navigation so the skeleton shows while the new fetch is in flight.
     return (
       currentQueryParams.libraryId !== queryParams.libraryId ||
       currentQueryParams.parentId !== queryParams.parentId ||
-      currentQueryParams.category !== queryParams.category
+      currentQueryParams.category !== queryParams.category ||
+      currentQueryParams.visibility !== queryParams.visibility
     );
   }, [currentQueryParams, queryParams]);
 
   // Map ResourceItem[] to FileListItem[] for compatibility
+  // Spread `item` first so file-backed fields (e.g. `fileId`) are preserved —
+  // chunk actions need `fileId` to resolve `docs_*` ids to `file_*` ids (#16267).
   const rawData = useMemo(
     () =>
-      resourceList?.map(
-        (item): FileListItem => ({
-          chunkCount: item.chunkCount ?? null,
-          chunkingError: item.chunkingError ?? null,
-          chunkingStatus: (item.chunkingStatus as any) ?? null,
-          content: item.content,
-          createdAt: item.createdAt,
-          editorData: item.editorData,
-          embeddingError: item.embeddingError ?? null,
-          embeddingStatus: (item.embeddingStatus as any) ?? null,
-          fileType: item.fileType,
-          finishEmbedding: item.finishEmbedding ?? false,
-          id: item.id,
-          metadata: item.metadata,
-          name: item.name,
-          parentId: item.parentId,
-          size: item.size,
-          slug: item.slug,
-          sourceType: item.sourceType,
-          updatedAt: item.updatedAt,
-          url: item.url ?? '',
-        }),
-      ) ?? [],
+      resourceList?.map((item): FileListItem => ({
+        ...item,
+        chunkCount: item.chunkCount ?? null,
+        chunkingError: item.chunkingError ?? null,
+        chunkingStatus: (item.chunkingStatus as any) ?? null,
+        embeddingError: item.embeddingError ?? null,
+        embeddingStatus: (item.embeddingStatus as any) ?? null,
+        finishEmbedding: item.finishEmbedding ?? false,
+        url: item.url ?? '',
+      })) ?? [],
     [resourceList],
   );
 

@@ -7,32 +7,32 @@ import { z } from 'zod';
 import { MemoryTypeSchema } from './common';
 
 const ActivityAssociatedLocationSchema = z.object({
-  address: z.string().optional().nullable(),
-  extra: z.string().nullable().optional(),
+  address: z.string().nullish(),
+  extra: z.string().nullish(),
   name: z.string().optional(),
-  tags: z.array(z.string()).optional().nullable(),
+  tags: z.array(z.string()).nullish(),
   type: z.string().optional(),
 });
 
 const ActivityAssociationSchema = z.object({
-  extra: z.string().nullable().optional(),
+  extra: z.string().nullish(),
   name: z.string(),
   type: z.string().optional(),
 });
 
 export const WithActivitySchema = z.object({
-  associatedLocations: z.array(ActivityAssociatedLocationSchema).optional().nullable(),
-  associatedObjects: z.array(ActivityAssociationSchema).optional().nullable(),
-  associatedSubjects: z.array(ActivityAssociationSchema).optional().nullable(),
-  endsAt: z.string().optional().nullable(),
-  feedback: z.string().optional().nullable(),
-  metadata: z.record(z.unknown()).optional().nullable(),
+  associatedLocations: z.array(ActivityAssociatedLocationSchema).nullish(),
+  associatedObjects: z.array(ActivityAssociationSchema).nullish(),
+  associatedSubjects: z.array(ActivityAssociationSchema).nullish(),
+  endsAt: z.string().nullish(),
+  feedback: z.string().nullish(),
+  metadata: z.record(z.unknown()).nullish(),
   narrative: z.string(),
-  notes: z.string().optional().nullable(),
-  startsAt: z.string().optional().nullable(),
-  status: z.string().optional().nullable(),
-  tags: z.array(z.string()).optional().nullable(),
-  timezone: z.string().optional().nullable(),
+  notes: z.string().nullish(),
+  startsAt: z.string().nullish(),
+  status: z.string().nullish(),
+  tags: z.array(z.string()).nullish(),
+  timezone: z.string().nullish(),
   type: z.union([z.nativeEnum(ActivityTypeEnum), z.string()]).optional(),
 });
 
@@ -40,7 +40,7 @@ export const ActivityMemoryItemSchema = z.object({
   details: z.string(),
   memoryCategory: z.string(),
   memoryType: MemoryTypeSchema,
-  sourceIds: z.array(z.string()).optional().nullable(),
+  sourceIds: z.array(z.string()).nullish(),
   summary: z.string(),
   tags: z.array(z.string()),
   title: z.string(),

@@ -1,4 +1,4 @@
-import { type FilesTabs, type SortType } from '@/types/files';
+import { type FilesTabs, type FileUploader, type SortType } from '@/types/files';
 
 /**
  * Unified resource item that represents both files and documents
@@ -29,6 +29,7 @@ export interface ResourceItem {
 
   embeddingStatus?: string | null;
   embeddingTaskId?: string | null;
+  fileId?: string | null;
   fileType: string;
   finishEmbedding?: boolean;
   // Identity
@@ -50,9 +51,16 @@ export interface ResourceItem {
   title?: string;
 
   updatedAt: Date;
+  uploader?: FileUploader | null;
 
   // File-specific (optional)
   url?: string;
+
+  // Workspace ownership (used by the Item components to decide whether to
+  // render the private-lock badge). `userId` is the creator; `visibility` is
+  // scoped to workspace mode — `null` when the row is in personal mode.
+  userId?: string | null;
+  visibility?: 'private' | 'public' | null;
 }
 
 /**
@@ -68,6 +76,12 @@ export interface ResourceQueryParams {
   showFilesInKnowledgeBase?: boolean;
   sorter?: 'name' | 'createdAt' | 'size';
   sortType?: SortType;
+  /**
+   * Workspace-mode visibility narrowing driven by the Sidebar mode toggle.
+   * `'private'` shows the caller's own private rows; `'public'` shows
+   * workspace-shared rows. Omitted in personal mode.
+   */
+  visibility?: 'private' | 'public';
 }
 
 /**
@@ -82,6 +96,12 @@ export interface CreateFileParams {
   size: number;
   sourceType: 'file';
   url: string;
+  /**
+   * Optional workspace visibility carried through the optimistic path so the
+   * lock badge stays consistent while the create request is in flight.
+   * Server-side default kicks in when omitted.
+   */
+  visibility?: 'private' | 'public';
 }
 
 /**

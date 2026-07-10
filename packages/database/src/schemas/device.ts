@@ -1,19 +1,10 @@
+import type { WorkingDirEntry } from '@lobechat/types';
+import { sql } from 'drizzle-orm';
 import { index, jsonb, pgTable, text, uniqueIndex, uuid, varchar } from 'drizzle-orm/pg-core';
 
 import { timestamps, timestamptz } from './_helpers';
 import { users } from './user';
 import { workspaces } from './workspace';
-
-/**
- * A working directory the device has used. Structured (rather than a bare path
- * string) so metadata such as the detected repo type survives — a remote client
- * viewing this device can't re-probe its filesystem, so whatever isn't captured
- * here at the source is lost. Mirrors the client-local `RecentDirEntry` shape.
- */
-export interface WorkingDirEntry {
-  path: string;
-  repoType?: 'git' | 'github';
-}
 
 /**
  * Stable device identity anchor — one row per physical machine per user.
@@ -32,6 +23,17 @@ export const devices = pgTable(
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
+    // `workspace_id` distinguishes the two kinds of device row:
+    //   - NULL          → a PERSONAL device, identified by (userId, deviceId).
+    //   - <workspaceId> → a device ENROLLED into that workspace (shared infra),
+    //     identified by (workspaceId, deviceId). `userId` then only records the
+    //     first enroller — it is NOT part of the identity, so two members
+    //     enrolling the same machine resolve to ONE row (see the partial unique
+    //     below) and the original enroller is preserved. The router uses this
+    //     `userId` to gate writes to "self-or-owner" (see
+    //     `canEditWorkspaceDevice`). The same physical machine produces a
+    //     distinct `deviceId` per principal (the hash mixes in userId /
+    //     `workspace:<id>`), so personal and workspace rows never collide.
     workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
     /** Machine-derived id (sha256 truncated to 32 chars; 64 leaves room for fallback randomUUID) */
@@ -56,8 +58,24 @@ export const devices = pgTable(
     ...timestamps,
   },
   (t) => [
-    /** One row per (user, machine); register() upserts on this target */
-    uniqueIndex('devices_user_id_device_id_unique').on(t.userId, t.deviceId),
+    /**
+     * One row per (user, machine) for PERSONAL devices; register() upserts on
+     * this target (partial → ON CONFLICT must repeat the
+     * `WHERE workspace_id IS NULL` predicate). Workspace rows are excluded so
+     * `user_id` is not part of their identity (see workspace partial below).
+     */
+    uniqueIndex('devices_user_id_device_id_unique')
+      .on(t.userId, t.deviceId)
+      .where(sql`${t.workspaceId} IS NULL`),
+    /**
+     * One row per (workspace, machine) for enrolled devices, regardless of which
+     * member ran the enrollment. registerWorkspaceDevice() upserts on this target
+     * (partial → ON CONFLICT must repeat the `WHERE workspace_id IS NOT NULL`
+     * predicate).
+     */
+    uniqueIndex('devices_workspace_id_device_id_unique')
+      .on(t.workspaceId, t.deviceId)
+      .where(sql`${t.workspaceId} IS NOT NULL`),
     index('devices_user_id_idx').on(t.userId),
     index('devices_workspace_id_idx').on(t.workspaceId),
   ],

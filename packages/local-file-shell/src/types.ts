@@ -14,6 +14,7 @@ export interface RunCommandParams {
 }
 
 export interface RunCommandResult {
+  duration_ms?: number;
   error?: string;
   /**
    * Present only after the command has exited.
@@ -22,6 +23,10 @@ export interface RunCommandResult {
    */
   exit_code?: number;
   output?: string;
+  output_files?: {
+    stderr: { path: string; size: number; truncated: boolean };
+    stdout: { path: string; size: number; truncated: boolean };
+  };
   /**
    * Session identifier. Present for background commands and foreground commands
    * that can be resumed with `getCommandOutput`.
@@ -47,6 +52,12 @@ export interface GetCommandOutputParams {
 }
 
 export interface GetCommandOutputResult {
+  /**
+   * Time in milliseconds from command start to this observation.
+   * For running commands, this is elapsed time at observation time.
+   * For completed commands, this is the final duration.
+   */
+  duration_ms?: number;
   error?: string;
   /**
    * Present only after the command has exited.
@@ -55,6 +66,10 @@ export interface GetCommandOutputResult {
    */
   exit_code?: number;
   output: string;
+  output_files?: {
+    stderr: { path: string; size: number; truncated: boolean };
+    stdout: { path: string; size: number; truncated: boolean };
+  };
   stderr: string;
   stdout: string;
   /**
@@ -76,6 +91,12 @@ export interface KillCommandResult {
 // ─── File Types ───
 
 export interface ReadFileParams {
+  /**
+   * Working directory a relative `path` is resolved against (the device-bound
+   * directory, injected by the runtime). Absolute paths ignore it; absent → the
+   * process cwd, as before.
+   */
+  cwd?: string;
   fullContent?: boolean;
   loc?: [number, number];
   path: string;
@@ -100,6 +121,8 @@ export interface ReadFileResult {
 
 export interface WriteFileParams {
   content: string;
+  /** Working directory a relative `path` resolves against. See {@link ReadFileParams.cwd}. */
+  cwd?: string;
   path: string;
 }
 
@@ -109,6 +132,8 @@ export interface WriteFileResult {
 }
 
 export interface EditFileParams {
+  /** Working directory a relative `file_path` resolves against. See {@link ReadFileParams.cwd}. */
+  cwd?: string;
   file_path: string;
   new_string: string;
   old_string: string;
@@ -125,6 +150,8 @@ export interface EditFileResult {
 }
 
 export interface ListFilesParams {
+  /** Working directory a relative `path` resolves against. See {@link ReadFileParams.cwd}. */
+  cwd?: string;
   limit?: number;
   path: string;
   sortBy?: 'createdTime' | 'modifiedTime' | 'name' | 'size';
@@ -150,6 +177,8 @@ export interface ListFilesResult {
 export interface GlobFilesParams {
   /** Legacy alias for `scope`. Honored when set; prefer `scope` for new callers. */
   cwd?: string;
+  /** Maximum number of results to collect. When omitted, callers may apply their own default. */
+  limit?: number;
   pattern: string;
   /** Working directory scope. When `pattern` is relative, it is joined with this scope. Defaults to the current working directory. */
   scope?: string;
@@ -226,6 +255,11 @@ export interface MoveFileItem {
 }
 
 export interface MoveFilesParams {
+  /**
+   * Working directory each item's relative `oldPath`/`newPath` resolves against.
+   * See {@link ReadFileParams.cwd}.
+   */
+  cwd?: string;
   items: MoveFileItem[];
 }
 

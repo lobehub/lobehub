@@ -13,6 +13,7 @@ const createHistoryItem = (
   isCurrent: false,
   savedAt,
   saveSource: 'autosave',
+  userId: 'test-user',
   ...overrides,
 });
 

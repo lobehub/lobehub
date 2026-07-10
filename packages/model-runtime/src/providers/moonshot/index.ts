@@ -14,6 +14,11 @@ import { createRouterRuntime } from '../../core/RouterRuntime';
 import type { ChatStreamPayload } from '../../types';
 import { getModelPropertyWithFallback } from '../../utils/getFallbackModelProperty';
 import { MODEL_LIST_CONFIGS, processModelList } from '../../utils/modelParse';
+import {
+  isKimiNativeThinkingModel,
+  isKimiPreserveThinkingModel,
+  isKimiThinkingToggleModel,
+} from './kimiModelId';
 
 export interface MoonshotModelCard {
   context_length?: number;
@@ -30,14 +35,7 @@ type MoonshotSDKType = 'anthropic' | 'openai';
 
 // Shared constants and helpers
 const MOONSHOT_SEARCH_TOOL = { function: { name: '$web_search' }, type: 'builtin_function' } as any;
-/**
- * Matches kimi-k2.N models (K2.5, K2.6, ...) that expose a thinking toggle via
- * `payload.thinking.type`. Assumes every future kimi-k2.N release keeps the same
- * toggle contract and param constraints; if Moonshot diverges, introduce an
- * explicit allowlist instead of widening this prefix.
- */
-const isKimiThinkingToggleModel = (model: string) => model.startsWith('kimi-k2.');
-const isKimiNativeThinkingModel = (model: string) => model.startsWith('kimi-k2-thinking');
+
 const isEmptyContent = (content: any) =>
   content === '' || content === null || content === undefined;
 const hasValidReasoning = (reasoning: any) => reasoning?.content && !reasoning?.signature;
@@ -162,7 +160,15 @@ const buildMoonshotAnthropicPayload = async (
     : 1024;
   const thinkingParam =
     isNativeThinking || payload.thinking?.type !== 'disabled'
-      ? ({ budget_tokens: resolvedThinkingBudget, type: 'enabled' } as const)
+      ? {
+          budget_tokens: resolvedThinkingBudget,
+          type: 'enabled' as const,
+          // Only inject keep:'all' for kimi-k2.6; kimi-k2.5 does not support it and
+          // kimi-k2.7-code always has Preserved Thinking active (no need to pass the param)
+          ...(payload.preserveThinking && isKimiPreserveThinkingModel(payload.model)
+            ? { keep: 'all' as const }
+            : {}),
+        }
       : ({ type: 'disabled' } as const);
 
   return {
@@ -189,7 +195,14 @@ const buildMoonshotOpenAIPayload = (
   if (isK2Family || isNativeThinking) {
     const thinkingParam =
       isNativeThinking || thinking?.type !== 'disabled'
-        ? { type: 'enabled' }
+        ? {
+            type: 'enabled',
+            // Only inject keep:'all' for kimi-k2.6; kimi-k2.5 does not support it and
+            // kimi-k2.7-code always has Preserved Thinking active (no need to pass the param)
+            ...(payload.preserveThinking && isKimiPreserveThinkingModel(model)
+              ? { keep: 'all' }
+              : {}),
+          }
         : { type: 'disabled' };
 
     return {
@@ -220,21 +233,16 @@ const buildMoonshotOpenAIPayload = (
  * Fetch Moonshot models from the API using OpenAI client
  */
 const fetchMoonshotModels = async ({ client }: { client: OpenAI }): Promise<ChatModelCard[]> => {
-  try {
-    const modelsPage = (await client.models.list()) as any;
-    const modelList: MoonshotModelCard[] = modelsPage.data || [];
+  const modelsPage = (await client.models.list()) as any;
+  const modelList: MoonshotModelCard[] = modelsPage.data || [];
 
-    const processedList = modelList.map((model) => ({
-      contextWindowTokens: model.context_length,
-      id: model.id,
-      vision: model.supports_image_in,
-    }));
+  const processedList = modelList.map((model) => ({
+    contextWindowTokens: model.context_length,
+    id: model.id,
+    vision: model.supports_image_in,
+  }));
 
-    return processModelList(processedList, MODEL_LIST_CONFIGS.moonshot, 'moonshot');
-  } catch (error) {
-    console.warn('Failed to fetch Moonshot models:', error);
-    return [];
-  }
+  return processModelList(processedList, MODEL_LIST_CONFIGS.moonshot, 'moonshot');
 };
 
 /**
@@ -266,6 +274,9 @@ export const LobeMoonshotOpenAI = createOpenAICompatibleRuntime({
   debug: {
     chatCompletion: () => process.env.DEBUG_MOONSHOT_CHAT_COMPLETION === '1',
   },
+  // Kimi models support prompt_cache_key for multi-turn session cache optimization.
+  // Docs: https://platform.kimi.com/docs/api/chat#body-one-of-0-prompt-cache-key
+  promptCacheKeyModels: [/^kimi-/],
   provider: ModelProvider.Moonshot,
 });
 

@@ -5,14 +5,15 @@ const log = debug('lobe-client:drag-upload:local');
 
 export type DragContentKind = 'files' | 'folders' | 'mixed' | 'none';
 
-export interface DroppedFolder {
+export interface DroppedLocalPath {
+  isDirectory: boolean;
   name: string;
   path: string;
 }
 
-export interface PartitionedDroppedItems {
+export interface PartitionedDroppedLocalPaths {
   files: File[];
-  folders: DroppedFolder[];
+  localPaths: DroppedLocalPath[];
 }
 
 /**
@@ -26,7 +27,7 @@ const resolveElectronFilePath = (file: File): string | null => {
     }
   ).window?.electron?.webUtils;
   if (!webUtils?.getPathForFile) {
-    log('webUtils.getPathForFile unavailable on window.electron — folder path cannot be resolved');
+    log('webUtils.getPathForFile unavailable on window.electron — local path cannot be resolved');
     return null;
   }
   try {
@@ -129,52 +130,51 @@ export const detectDragContentKind = (items: DataTransferItemList | null): DragC
 };
 
 /**
- * Partition dropped DataTransferItems into top-level folders (with absolute
- * filesystem paths via Electron's webUtils) and top-level files. Folders are
- * NOT recursed into — the caller is expected to treat them as mention targets.
+ * Partition dropped DataTransferItems into top-level local path references (with
+ * absolute filesystem paths via Electron's webUtils) and upload fallback files.
+ * Folders are NOT recursed into when their path resolves — the caller is
+ * expected to reference the folder itself.
  *
- * When a folder is encountered without an Electron path (e.g. running in
- * browser), it is skipped from the folders list — callers may still fall back
- * to upload by inspecting unhandled items.
+ * When a path cannot be resolved (e.g. running in browser), the item falls back
+ * to upload. Directories are flattened so the user does not silently lose data.
  */
-export const partitionDroppedItems = async (
+export const partitionDroppedItemsAsLocalPaths = async (
   items: DataTransferItem[],
-): Promise<PartitionedDroppedItems> => {
-  const folders: DroppedFolder[] = [];
+): Promise<PartitionedDroppedLocalPaths> => {
   const files: File[] = [];
+  const localPaths: DroppedLocalPath[] = [];
 
   for (const item of items) {
     if (item.kind !== 'file') continue;
 
     const entry = safeGetEntry(item);
+    const topLevelFile = item.getAsFile();
+    const path = topLevelFile ? resolveElectronFilePath(topLevelFile) : null;
+
+    if (path) {
+      localPaths.push({
+        isDirectory: !!entry?.isDirectory,
+        name: topLevelFile?.name || entry?.name || path.split('/').pop() || path,
+        path,
+      });
+      continue;
+    }
 
     if (entry?.isDirectory) {
-      const directoryFile = item.getAsFile();
-      const path = directoryFile ? resolveElectronFilePath(directoryFile) : null;
-      if (path) {
-        folders.push({
-          name: directoryFile?.name || entry.name || path.split('/').pop() || path,
-          path,
-        });
-        continue;
-      }
-      // Fallback (no Electron / no path): flatten the directory's files for
-      // upload so the user isn't silently dropped.
       const flattened = await processEntry(entry);
       files.push(...flattened);
       continue;
     }
 
-    const file = item.getAsFile();
-    if (file) {
-      files.push(file);
+    if (topLevelFile) {
+      files.push(topLevelFile);
     } else if (entry) {
       const flattened = await processEntry(entry);
       files.push(...flattened);
     }
   }
 
-  return { files, folders };
+  return { files, localPaths };
 };
 
 export interface UseLocalDragUploadOptions {
@@ -183,15 +183,16 @@ export interface UseLocalDragUploadOptions {
    */
   disabled?: boolean;
   /**
-   * When true, top-level folders are routed to onLocalFolders instead of being
-   * recursively flattened for upload. Top-level files still flow to onUploadFiles.
-   * Requires Electron (uses webUtils.getPathForFile) to resolve folder paths.
+   * When true, top-level files and folders are routed to onLocalPaths instead of
+   * being uploaded. Requires Electron (uses webUtils.getPathForFile) to resolve
+   * absolute filesystem paths.
    */
-  enableLocalFolderMention?: boolean;
+  enableLocalPathReference?: boolean;
   /**
-   * Callback for top-level dropped folders when enableLocalFolderMention is on.
+   * Callback for top-level dropped files and folders when local path reference
+   * mode is on.
    */
-  onLocalFolders?: (folders: DroppedFolder[]) => void | Promise<void>;
+  onLocalPaths?: (paths: DroppedLocalPath[]) => void | Promise<void>;
   /**
    * Callback when files are dropped
    */
@@ -220,7 +221,7 @@ export interface UseLocalDragUploadResult {
 export const useLocalDragUpload = (
   options: UseLocalDragUploadOptions,
 ): UseLocalDragUploadResult => {
-  const { onUploadFiles, disabled = false, enableLocalFolderMention, onLocalFolders } = options;
+  const { onUploadFiles, disabled = false, enableLocalPathReference, onLocalPaths } = options;
 
   // Only preventDefault to allow drop, do NOT stopPropagation
   const handleDragOver = useCallback(
@@ -247,11 +248,15 @@ export const useLocalDragUpload = (
 
       const items = Array.from(e.dataTransfer.items);
 
-      if (enableLocalFolderMention && onLocalFolders) {
-        const { folders, files } = await partitionDroppedItems(items);
-        log('drop partitioned: %d folder(s), %d file(s)', folders.length, files.length);
-        if (folders.length > 0) {
-          await onLocalFolders(folders);
+      if (enableLocalPathReference && onLocalPaths) {
+        const { localPaths, files } = await partitionDroppedItemsAsLocalPaths(items);
+        log(
+          'drop partitioned: %d local path(s), %d upload fallback file(s)',
+          localPaths.length,
+          files.length,
+        );
+        if (localPaths.length > 0) {
+          await onLocalPaths(localPaths);
         }
         if (files.length > 0) {
           await onUploadFiles(files);
@@ -259,12 +264,12 @@ export const useLocalDragUpload = (
         return;
       }
 
-      log('drop without folder-mention path, uploading files only');
+      log('drop without local-path reference, uploading files only');
       const files = await getFileListFromDataTransferItems(items);
       if (files.length === 0) return;
       await onUploadFiles(files);
     },
-    [disabled, enableLocalFolderMention, onLocalFolders, onUploadFiles],
+    [disabled, enableLocalPathReference, onLocalPaths, onUploadFiles],
   );
 
   const getContainerProps = useCallback(

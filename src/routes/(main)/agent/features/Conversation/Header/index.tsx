@@ -10,9 +10,9 @@ import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
+import { useElectronStore } from '@/store/electron';
 
 import HeaderActions from './HeaderActions';
-import ParamsPanelToggle from './ParamsPanelToggle';
 import ShareButton from './ShareButton';
 import Tags from './Tags';
 import WorkingPanelToggle from './WorkingPanelToggle';
@@ -42,8 +42,11 @@ const headerStyles = createStaticStyles(({ css }) => ({
 const Header = memo(() => {
   const agentId = useChatStore((s) => s.activeAgentId);
   const topicWorkingDirectory = useChatStore(topicSelectors.currentTopicWorkingDirectory);
+  const currentDeviceId = useElectronStore((s) => s.gatewayDeviceInfo?.deviceId);
   const agentWorkingDirectory = useAgentStore((s) =>
-    agentId ? agentByIdSelectors.getAgentWorkingDirectoryById(agentId)(s) : undefined,
+    agentId
+      ? agentByIdSelectors.getAgentWorkingDirectoryById(agentId, currentDeviceId)(s)
+      : undefined,
   );
   const isLocalSystemEnabled = useAgentStore((s) =>
     agentId ? chatConfigByIdSelectors.isLocalSystemEnabledById(agentId)(s) : false,
@@ -77,7 +80,6 @@ const Header = memo(() => {
               <OpenInAppButton workingDirectory={effectiveWorkingDirectory} />
             )}
             <ShareButton />
-            <ParamsPanelToggle />
             <WorkingPanelToggle />
           </Flexbox>
         }

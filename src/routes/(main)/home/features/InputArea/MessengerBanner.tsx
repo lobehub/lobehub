@@ -6,8 +6,8 @@ import { MessageCircleIcon, X } from 'lucide-react';
 import type { FC } from 'react';
 import React, { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { getPlatformIcon } from '@/routes/(main)/agent/channel/const';
 import { useGlobalStore } from '@/store/global';
 
@@ -73,7 +73,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 const MessengerBanner = memo(() => {
   const { t } = useTranslation('common');
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
 
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
 

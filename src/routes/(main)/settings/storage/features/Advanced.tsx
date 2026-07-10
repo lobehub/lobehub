@@ -1,7 +1,7 @@
 'use client';
 
 import { BRANDING_NAME } from '@lobechat/business-const';
-import { type FormGroupItemType } from '@lobehub/ui';
+import type { FormGroupItemType } from '@lobehub/ui';
 import { Button, Form, Icon } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { App, Switch } from 'antd';
@@ -10,15 +10,12 @@ import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AccountDeletion from '@/business/client/features/AccountDeletion';
+import { useTransferAgentsFormItem } from '@/business/client/hooks/useTransferAgentsFormItem';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import DataImporter from '@/features/DataImporter';
 import { configService } from '@/services/config';
-import { useChatStore } from '@/store/chat';
-import { useFileStore } from '@/store/file';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { featureFlagsSelectors, serverConfigSelectors } from '@/store/serverConfig/selectors';
-import { useSessionStore } from '@/store/session';
-import { useToolStore } from '@/store/tool';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
@@ -28,49 +25,9 @@ const AdvancedActions = () => {
   const { hideDocs } = useServerConfigStore(featureFlagsSelectors);
   const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
   const checked = useUserStore(userGeneralSettingsSelectors.telemetry);
-  const [clearSessions, clearSessionGroups] = useSessionStore((s) => [
-    s.clearSessions,
-    s.clearSessionGroups,
-  ]);
-  const [clearTopics, clearAllMessages] = useChatStore((s) => [
-    s.removeAllTopics,
-    s.clearAllMessages,
-  ]);
-  const [removeAllFiles] = useFileStore((s) => [s.removeAllFiles]);
-  const removeAllPlugins = useToolStore((s) => s.removeAllPlugins);
+  const transferAgentsFormItems = useTransferAgentsFormItem();
   const resetSettings = useUserStore((s) => s.resetSettings);
   const updateGeneralConfig = useUserStore((s) => s.updateGeneralConfig);
-
-  const handleClear = useCallback(() => {
-    confirmModal({
-      cancelText: t('cancel', { ns: 'common' }),
-      content: t('danger.clear.confirm'),
-      okButtonProps: {
-        danger: true,
-      },
-      okText: t('danger.clear.action'),
-      onOk: async () => {
-        await clearSessions();
-        await removeAllPlugins();
-        await clearTopics();
-        await removeAllFiles();
-        await clearAllMessages();
-        await clearSessionGroups();
-
-        message.success(t('danger.clear.success'));
-      },
-      title: t('danger.clear.title'),
-    });
-  }, [
-    clearAllMessages,
-    clearSessionGroups,
-    clearSessions,
-    clearTopics,
-    message,
-    removeAllFiles,
-    removeAllPlugins,
-    t,
-  ]);
 
   const handleReset = useCallback(() => {
     confirmModal({
@@ -121,17 +78,6 @@ const AdvancedActions = () => {
       ...(enableBusinessFeatures ? [renderExportButtonFormItem()] : []),
       {
         children: (
-          <Button danger type={'primary'} onClick={handleClear}>
-            {t('danger.clear.action')}
-          </Button>
-        ),
-        desc: t('danger.clear.desc'),
-        label: t('danger.clear.title'),
-        layout: 'horizontal',
-        minWidth: undefined,
-      },
-      {
-        children: (
           <Button danger type={'primary'} onClick={handleReset}>
             {t('danger.reset.action')}
           </Button>
@@ -165,13 +111,24 @@ const AdvancedActions = () => {
     title: t('analytics.title'),
   };
 
+  const dataMigration: FormGroupItemType | undefined = transferAgentsFormItems
+    ? {
+        children: transferAgentsFormItems,
+        title: t('storage.migration.title'),
+      }
+    : undefined;
+
   return (
     <>
       <Form
         collapsible={false}
-        items={hideDocs ? [analytics, system] : [system]}
         itemsType={'group'}
         variant={'filled'}
+        items={[
+          ...(hideDocs ? [analytics] : []),
+          ...(dataMigration ? [dataMigration] : []),
+          system,
+        ]}
         {...FORM_STYLE}
       />
       {enableBusinessFeatures && <AccountDeletion />}

@@ -1,13 +1,12 @@
-import { type SWRResponse } from 'swr';
+import type { SWRResponse } from 'swr';
 
+import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { mutate, useClientDataSWR } from '@/libs/swr';
+import { knowledgeBaseKeys } from '@/libs/swr/keys';
 import { knowledgeBaseService } from '@/services/knowledgeBase';
-import { type KnowledgeBaseStore } from '@/store/library/store';
-import { type StoreSetter } from '@/store/types';
-import { type CreateKnowledgeBaseParams, type KnowledgeBaseItem } from '@/types/knowledgeBase';
-
-const FETCH_KNOWLEDGE_BASE_LIST_KEY = 'FETCH_KNOWLEDGE_BASE';
-const FETCH_KNOWLEDGE_BASE_ITEM_KEY = 'FETCH_KNOWLEDGE_BASE_ITEM';
+import type { KnowledgeBaseStore } from '@/store/library/store';
+import type { StoreSetter } from '@/store/types';
+import type { CreateKnowledgeBaseParams, KnowledgeBaseItem } from '@/types/knowledgeBase';
 
 type Setter = StoreSetter<KnowledgeBaseStore>;
 export const createCrudSlice = (set: Setter, get: () => KnowledgeBaseStore, _api?: unknown) =>
@@ -44,11 +43,32 @@ export class KnowledgeBaseCrudActionImpl {
   };
 
   refreshKnowledgeBaseList = async (): Promise<void> => {
-    await mutate(FETCH_KNOWLEDGE_BASE_LIST_KEY);
+    const workspaceId = getActiveWorkspaceId();
+    // The KB list is keyed by (workspaceId, visibility?), so we invalidate the
+    // three surfaces that can be currently rendered — unscoped, private-only,
+    // workspace-only — to keep both modes in sync after a mutation.
+    await Promise.all([
+      mutate(knowledgeBaseKeys.list(workspaceId)),
+      mutate(knowledgeBaseKeys.list(workspaceId, 'private')),
+      mutate(knowledgeBaseKeys.list(workspaceId, 'public')),
+    ]);
   };
 
   removeKnowledgeBase = async (id: string): Promise<void> => {
     await knowledgeBaseService.deleteKnowledgeBase(id);
+    await this.#get().refreshKnowledgeBaseList();
+  };
+
+  publishKnowledgeBaseToWorkspace = async (id: string): Promise<void> => {
+    await knowledgeBaseService.publishKnowledgeBaseToWorkspace(id);
+    await this.#get().refreshKnowledgeBaseList();
+  };
+
+  setKnowledgeBaseVisibility = async (
+    id: string,
+    visibility: 'private' | 'public',
+  ): Promise<void> => {
+    await knowledgeBaseService.setKnowledgeBaseVisibility(id, visibility);
     await this.#get().refreshKnowledgeBaseList();
   };
 
@@ -62,7 +82,7 @@ export class KnowledgeBaseCrudActionImpl {
 
   useFetchKnowledgeBaseItem = (id: string): SWRResponse<KnowledgeBaseItem | undefined> => {
     return useClientDataSWR<KnowledgeBaseItem | undefined>(
-      [FETCH_KNOWLEDGE_BASE_ITEM_KEY, id],
+      knowledgeBaseKeys.item(id),
       () => knowledgeBaseService.getKnowledgeBaseById(id),
       {
         onSuccess: (item) => {
@@ -81,18 +101,18 @@ export class KnowledgeBaseCrudActionImpl {
   };
 
   useFetchKnowledgeBaseList = (
-    params: { suspense?: boolean } = {},
+    visibility?: 'private' | 'public',
   ): SWRResponse<KnowledgeBaseItem[]> => {
+    const workspaceId = getActiveWorkspaceId();
     return useClientDataSWR<KnowledgeBaseItem[]>(
-      FETCH_KNOWLEDGE_BASE_LIST_KEY,
-      () => knowledgeBaseService.getKnowledgeBaseList(),
+      knowledgeBaseKeys.list(workspaceId, visibility),
+      () => knowledgeBaseService.getKnowledgeBaseList(visibility),
       {
         fallbackData: [],
         onSuccess: () => {
           if (!this.#get().initKnowledgeBaseList)
             this.#set({ initKnowledgeBaseList: true }, false, 'useFetchKnowledgeBaseList/init');
         },
-        suspense: params.suspense,
       },
     );
   };

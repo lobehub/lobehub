@@ -19,6 +19,12 @@ export type HeterogeneousEventType =
   | 'stream_start'
   | 'stream_chunk'
   | 'stream_end'
+  /**
+   * Producer-side boundary meaning this operation will not emit more visible
+   * assistant/tool output. The operation may still wait for `agent_runtime_end`
+   * to finish terminal bookkeeping.
+   */
+  | 'visible_output_end'
   | 'tool_start'
   | 'tool_end'
   /**
@@ -60,6 +66,16 @@ export interface StreamStartData {
   externalSignal?: ExternalSignalContext;
   model?: string;
   provider?: string;
+  /**
+   * CC-native session id (`system:init.session_id`), carried on every
+   * stream_start so the server can stamp it on each persisted message's
+   * `metadata.heteroSessionId`. The topic-level `heteroSessionId` only keeps
+   * the single latest value; a per-message copy lets a diff pinpoint the exact
+   * row where CC forked to a new session (e.g. `--resume` hit a recycled /
+   * empty session and started fresh) — the forensic signal for a lost-history
+   * "session break".
+   */
+  sessionId?: string;
 }
 
 /**
@@ -184,6 +200,29 @@ export interface ToolEndData {
   toolCallId: string;
 }
 
+/**
+ * A single image echoed by a heterogeneous tool_result — e.g. CC's `Read` on
+ * an image file, which returns an `image` content block instead of text.
+ *
+ * The adapter synthesizes these onto `pluginState.images` carrying the raw
+ * base64 `data` (it can only see the CLI payload, not the file store). The
+ * runtime-side {@link AgentStreamPipeline} then uploads each one and rewrites
+ * the entry into a `{ fileId, url }` reference, dropping `data` so the heavy
+ * base64 never reaches the persistence sinks / DB. If upload is unavailable or
+ * fails, the entry is dropped and the human-readable `[Image: …]` placeholder
+ * left in `content` is the fallback.
+ */
+export interface HeterogeneousToolResultImage {
+  /** Base64 payload — present pre-upload; stripped once `fileId`/`url` are set. */
+  data?: string;
+  /** File record id after upload to the file store. */
+  fileId?: string;
+  /** IANA media type, e.g. `image/png`. */
+  mediaType: string;
+  /** Remote URL after upload. */
+  url?: string;
+}
+
 /** Data shape for tool_result events (ACP-specific) */
 export interface ToolResultData {
   content: string;
@@ -193,6 +232,10 @@ export interface ToolResultData {
    * this for tools whose tool_use input *is* the target state (e.g. CC's
    * TodoWrite) so consumers can render derived UI from a single message shape,
    * without each consumer re-parsing tool args.
+   *
+   * Image-returning tools (CC `Read`) synthesize `pluginState.images` as
+   * {@link HeterogeneousToolResultImage}[] — see that type for the base64 →
+   * uploaded-reference lifecycle.
    */
   pluginState?: Record<string, any>;
   /** Subagent context if this tool_result belongs to a subagent inner tool. */
@@ -232,6 +275,10 @@ export interface UsageData {
   inputCacheMissTokens: number;
   /** Input tokens written into the prompt cache (cache creation). */
   inputWriteCacheTokens?: number;
+  /** Output tokens used for model reasoning. */
+  outputReasoningTokens?: number;
+  /** Non-reasoning output tokens. */
+  outputTextTokens?: number;
   totalInputTokens: number;
   totalOutputTokens: number;
   totalTokens: number;

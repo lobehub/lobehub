@@ -2,6 +2,7 @@ import { type CategoryItem, type CategoryListQuery } from '@lobehub/market-sdk';
 import { type SWRResponse } from 'swr';
 import useSWR from 'swr';
 
+import { discoverKeys } from '@/libs/swr/keys';
 import { discoverService } from '@/services/discover';
 import { type DiscoverStore } from '@/store/discover';
 import { globalHelpers } from '@/store/global/helpers';
@@ -27,7 +28,7 @@ export class GroupAgentActionImpl {
   useGroupAgentCategories = (params: CategoryListQuery = {}): SWRResponse<CategoryItem[]> => {
     const locale = globalHelpers.getCurrentLanguage();
     return useSWR(
-      ['group-agent-categories', locale, ...Object.values(params)].filter(Boolean).join('-'),
+      discoverKeys.groupAgentCategories(locale, params),
       async () => discoverService.getGroupAgentCategories(params),
       {
         revalidateOnFocus: false,
@@ -41,7 +42,7 @@ export class GroupAgentActionImpl {
   }): SWRResponse<DiscoverGroupAgentDetail | undefined> => {
     const locale = globalHelpers.getCurrentLanguage();
     return useSWR(
-      ['group-agent-details', locale, params.identifier, params.version].filter(Boolean).join('-'),
+      discoverKeys.groupAgentDetail(locale, params.identifier, params.version),
       async () => discoverService.getGroupAgentDetail(params),
       {
         revalidateOnFocus: false,
@@ -51,7 +52,7 @@ export class GroupAgentActionImpl {
 
   useGroupAgentIdentifiers = (): SWRResponse<IdentifiersResponse> => {
     return useSWR(
-      'group-agent-identifiers',
+      discoverKeys.groupAgentIdentifiers(),
       async () => discoverService.getGroupAgentIdentifiers(),
       {
         revalidateOnFocus: false,
@@ -62,7 +63,7 @@ export class GroupAgentActionImpl {
   useGroupAgentList = (params: GroupAgentQueryParams = {}): SWRResponse<GroupAgentListResponse> => {
     const locale = globalHelpers.getCurrentLanguage();
     return useSWR(
-      ['group-agent-list', locale, ...Object.values(params)].filter(Boolean).join('-'),
+      discoverKeys.groupAgentList(locale, params),
       async () =>
         discoverService.getGroupAgentList({
           ...params,

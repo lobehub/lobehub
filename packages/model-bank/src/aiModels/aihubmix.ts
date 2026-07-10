@@ -14,7 +14,10 @@ const aihubmixChatModels: AIChatModelCard[] = [
     description: 'GPT-5.5 is our newest frontier model for the most complex professional work.',
     displayName: 'GPT-5.5',
     enabled: true,
+    family: 'gpt',
+    generation: 'gpt-5.5',
     id: 'gpt-5.5',
+    knowledgeCutoff: '2025-12',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -75,7 +78,10 @@ const aihubmixChatModels: AIChatModelCard[] = [
     description:
       'GPT-5.4 is the frontier model for complex professional work with highest reasoning capability.',
     displayName: 'GPT-5.4',
+    family: 'gpt',
+    generation: 'gpt-5.4',
     id: 'gpt-5.4',
+    knowledgeCutoff: '2025-08',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -137,7 +143,10 @@ const aihubmixChatModels: AIChatModelCard[] = [
       'GPT-5.4 mini brings GPT-5.4 strengths to a faster, more efficient model for high-volume coding and agentic workflows.',
     displayName: 'GPT-5.4 mini',
     enabled: true,
+    family: 'gpt',
+    generation: 'gpt-5.4',
     id: 'gpt-5.4-mini',
+    knowledgeCutoff: '2025-08',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -165,7 +174,10 @@ const aihubmixChatModels: AIChatModelCard[] = [
     description:
       'GPT-5.4 nano is our lowest-cost GPT-5.4-class model for high-throughput tasks where speed and cost matter most.',
     displayName: 'GPT-5.4 nano',
+    family: 'gpt',
+    generation: 'gpt-5.4',
     id: 'gpt-5.4-nano',
+    knowledgeCutoff: '2025-08',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -192,7 +204,10 @@ const aihubmixChatModels: AIChatModelCard[] = [
     description:
       'GPT-5.4 Pro uses more compute to think harder and provide consistently better answers, available in the Responses API only.',
     displayName: 'GPT-5.4 Pro',
+    family: 'gpt',
+    generation: 'gpt-5.4',
     id: 'gpt-5.4-pro',
+    knowledgeCutoff: '2025-08',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -239,7 +254,10 @@ const aihubmixChatModels: AIChatModelCard[] = [
     description:
       'GPT-5.3 Chat is the latest ChatGPT model used in ChatGPT with improved conversation experiences.',
     displayName: 'GPT-5.3 Chat',
+    family: 'gpt',
+    generation: 'gpt-5.3',
     id: 'gpt-5.3-chat-latest',
+    knowledgeCutoff: '2025-08',
     maxOutput: 16_384,
     pricing: {
       units: [
@@ -263,7 +281,10 @@ const aihubmixChatModels: AIChatModelCard[] = [
     description:
       'GPT-5.2 is a flagship model for coding and agentic workflows with stronger reasoning and long-context performance.',
     displayName: 'GPT-5.2',
+    family: 'gpt',
+    generation: 'gpt-5.2',
     id: 'gpt-5.2',
+    knowledgeCutoff: '2025-08',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -290,7 +311,10 @@ const aihubmixChatModels: AIChatModelCard[] = [
     description:
       'GPT-5.2 pro: smarter, more precise GPT-5.2 (Responses API only), for hard problems and longer multi-turn reasoning.',
     displayName: 'GPT-5.2 pro',
+    family: 'gpt',
+    generation: 'gpt-5.2',
     id: 'gpt-5.2-pro',
+    knowledgeCutoff: '2025-08',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -314,7 +338,10 @@ const aihubmixChatModels: AIChatModelCard[] = [
     description:
       'GPT-5.2 Chat is the ChatGPT variant (chat-latest) for the latest conversation improvements.',
     displayName: 'GPT-5.2 Chat',
+    family: 'gpt',
+    generation: 'gpt-5.2',
     id: 'gpt-5.2-chat-latest',
+    knowledgeCutoff: '2025-08',
     maxOutput: 16_384,
     pricing: {
       units: [
@@ -338,7 +365,10 @@ const aihubmixChatModels: AIChatModelCard[] = [
     description:
       'GPT-5.1 is the flagship model optimized for coding and agent tasks, with configurable reasoning intensity and longer context.',
     displayName: 'GPT-5.1',
+    family: 'gpt',
+    generation: 'gpt-5.1',
     id: 'gpt-5.1',
+    knowledgeCutoff: '2024-09',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -362,7 +392,10 @@ const aihubmixChatModels: AIChatModelCard[] = [
     contextWindowTokens: 128_000,
     description: 'GPT-5.1 Chat: the ChatGPT variant of GPT-5.1, built for chat scenarios.',
     displayName: 'GPT-5.1 Chat',
+    family: 'gpt',
+    generation: 'gpt-5.1',
     id: 'gpt-5.1-chat-latest',
+    knowledgeCutoff: '2024-09',
     maxOutput: 16_384,
     pricing: {
       units: [
@@ -386,7 +419,10 @@ const aihubmixChatModels: AIChatModelCard[] = [
     description:
       'GPT-5.1 Codex: GPT-5.1 optimized for agentic coding tasks, for more complex code/agent workflows in the Responses API.',
     displayName: 'GPT-5.1 Codex',
+    family: 'gpt',
+    generation: 'gpt-5.1',
     id: 'gpt-5.1-codex',
+    knowledgeCutoff: '2024-09',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -414,7 +450,10 @@ const aihubmixChatModels: AIChatModelCard[] = [
     description:
       'GPT-5.1 Codex mini: smaller, lower-cost Codex variant optimized for agentic coding.',
     displayName: 'GPT-5.1 Codex mini',
+    family: 'gpt',
+    generation: 'gpt-5.1',
     id: 'gpt-5.1-codex-mini',
+    knowledgeCutoff: '2024-09',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -441,7 +480,10 @@ const aihubmixChatModels: AIChatModelCard[] = [
     description:
       'GPT-5 pro uses more compute to think deeper and consistently deliver better answers.',
     displayName: 'GPT-5 pro',
+    family: 'gpt',
+    generation: 'gpt-5',
     id: 'gpt-5-pro',
+    knowledgeCutoff: '2024-09',
     maxOutput: 272_000,
     pricing: {
       units: [
@@ -467,7 +509,10 @@ const aihubmixChatModels: AIChatModelCard[] = [
     description:
       'GPT-5 Codex is a GPT-5 variant optimized for agentic coding tasks in Codex-like environments.',
     displayName: 'GPT-5 Codex',
+    family: 'gpt',
+    generation: 'gpt-5',
     id: 'gpt-5-codex',
+    knowledgeCutoff: '2024-09',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -495,7 +540,10 @@ const aihubmixChatModels: AIChatModelCard[] = [
     description:
       'Best model for cross-domain coding and agent tasks. GPT-5 delivers leaps in accuracy, speed, reasoning, context awareness, structured thinking, and problem solving.',
     displayName: 'GPT-5',
+    family: 'gpt',
+    generation: 'gpt-5',
     id: 'gpt-5',
+    knowledgeCutoff: '2024-09',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -523,7 +571,10 @@ const aihubmixChatModels: AIChatModelCard[] = [
     description:
       'A faster, more cost-effective GPT-5 variant for well-defined tasks, delivering faster responses while maintaining quality.',
     displayName: 'GPT-5 mini',
+    family: 'gpt',
+    generation: 'gpt-5',
     id: 'gpt-5-mini',
+    knowledgeCutoff: '2024-05',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -549,7 +600,10 @@ const aihubmixChatModels: AIChatModelCard[] = [
     description:
       'The fastest and most cost-effective GPT-5 variant, ideal for latency- and cost-sensitive applications.',
     displayName: 'GPT-5 nano',
+    family: 'gpt',
+    generation: 'gpt-5',
     id: 'gpt-5-nano',
+    knowledgeCutoff: '2024-05',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -574,7 +628,10 @@ const aihubmixChatModels: AIChatModelCard[] = [
     description:
       'The GPT-5 model used in ChatGPT, combining strong language understanding and generation for conversational apps.',
     displayName: 'GPT-5 Chat',
+    family: 'gpt',
+    generation: 'gpt-5',
     id: 'gpt-5-chat-latest',
+    knowledgeCutoff: '2024-09',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -597,7 +654,10 @@ const aihubmixChatModels: AIChatModelCard[] = [
     description:
       'o4-mini is our latest small o-series model, optimized for fast, efficient reasoning with strong coding and vision performance.',
     displayName: 'o4-mini',
+    family: 'o-series',
+    generation: 'o4',
     id: 'o4-mini',
+    knowledgeCutoff: '2024-06',
     maxOutput: 100_000,
     pricing: {
       units: [
@@ -624,7 +684,10 @@ const aihubmixChatModels: AIChatModelCard[] = [
     description:
       'o4-mini-deep-research is a faster, more affordable deep-research model for complex multi-step research. It can search and synthesize web information and access your own data via MCP connectors.',
     displayName: 'o4-mini Deep Research',
+    family: 'o-series',
+    generation: 'o4',
     id: 'o4-mini-deep-research',
+    knowledgeCutoff: '2024-06',
     maxOutput: 100_000,
     pricing: {
       units: [
@@ -651,7 +714,10 @@ const aihubmixChatModels: AIChatModelCard[] = [
     description:
       'o3-pro uses more compute to think deeper and consistently deliver better answers, available only via the Responses API.',
     displayName: 'o3-pro',
+    family: 'o-series',
+    generation: 'o3',
     id: 'o3-pro',
+    knowledgeCutoff: '2024-06',
     maxOutput: 100_000,
     pricing: {
       units: [
@@ -677,7 +743,10 @@ const aihubmixChatModels: AIChatModelCard[] = [
     description:
       'o3 is a powerful general-purpose model that excels across domains. It sets a new bar for math, science, coding, and vision reasoning, and is strong at technical writing and instruction following. Use it to analyze text, code, and images and solve complex multi-step problems.',
     displayName: 'o3',
+    family: 'o-series',
+    generation: 'o3',
     id: 'o3',
+    knowledgeCutoff: '2024-06',
     maxOutput: 100_000,
     pricing: {
       units: [
@@ -704,7 +773,10 @@ const aihubmixChatModels: AIChatModelCard[] = [
     description:
       'o3-deep-research is our most advanced deep-research model for complex multi-step research. It can search and synthesize web information and access your own data via MCP connectors.',
     displayName: 'o3 Deep Research',
+    family: 'o-series',
+    generation: 'o3',
     id: 'o3-deep-research',
+    knowledgeCutoff: '2024-06',
     maxOutput: 100_000,
     pricing: {
       units: [
@@ -730,7 +802,10 @@ const aihubmixChatModels: AIChatModelCard[] = [
     description:
       'GPT-4.1 is our flagship model for complex tasks and cross-domain problem solving.',
     displayName: 'GPT-4.1',
+    family: 'gpt',
+    generation: 'gpt-4.1',
     id: 'gpt-4.1',
+    knowledgeCutoff: '2024-06',
     maxOutput: 32_768,
     pricing: {
       units: [
@@ -754,7 +829,10 @@ const aihubmixChatModels: AIChatModelCard[] = [
     contextWindowTokens: 1_047_576,
     description: 'GPT-4.1 mini balances intelligence, speed, and cost for many use cases.',
     displayName: 'GPT-4.1 mini',
+    family: 'gpt',
+    generation: 'gpt-4.1',
     id: 'gpt-4.1-mini',
+    knowledgeCutoff: '2024-06',
     maxOutput: 32_768,
     pricing: {
       units: [
@@ -777,7 +855,10 @@ const aihubmixChatModels: AIChatModelCard[] = [
     contextWindowTokens: 1_047_576,
     description: 'GPT-4.1 nano is the fastest and most cost-effective GPT-4.1 model.',
     displayName: 'GPT-4.1 nano',
+    family: 'gpt',
+    generation: 'gpt-4.1',
     id: 'gpt-4.1-nano',
+    knowledgeCutoff: '2024-06',
     maxOutput: 32_768,
     pricing: {
       units: [
@@ -797,7 +878,10 @@ const aihubmixChatModels: AIChatModelCard[] = [
     description:
       'ChatGPT-4o is a dynamic model updated in real time. It combines strong language understanding and generation for large-scale use cases like customer support, education, and technical assistance.',
     displayName: 'ChatGPT-4o',
+    family: 'gpt',
+    generation: 'gpt-4o',
     id: 'chatgpt-4o-latest',
+    knowledgeCutoff: '2023-10',
     pricing: {
       units: [
         { name: 'textInput', rate: 5, strategy: 'fixed', unit: 'millionTokens' },
@@ -817,6 +901,8 @@ const aihubmixChatModels: AIChatModelCard[] = [
     description: 'A non-reasoning variant for simple use cases',
     displayName: 'Grok 4.20 (Non-Reasoning)',
     enabled: true,
+    family: 'grok',
+    generation: 'grok-4',
     id: 'grok-4-20-non-reasoning',
     maxOutput: 2_000_000,
     pricing: {
@@ -844,6 +930,8 @@ const aihubmixChatModels: AIChatModelCard[] = [
     description: 'Intelligent, blazing-fast model that reasons before responding',
     displayName: 'Grok 4.20',
     enabled: true,
+    family: 'grok',
+    generation: 'grok-4',
     id: 'grok-4-20-reasoning',
     maxOutput: 2_000_000,
     pricing: {
@@ -871,6 +959,8 @@ const aihubmixChatModels: AIChatModelCard[] = [
       'A team of 4 or 16 agents, Excels at research use cases, Does not currently support client-side tools. Only supports xAI server side tools (eg X Search, Web Search tools) and remote MCP tools.',
     displayName: 'Grok 4.20 Multi-Agent',
     enabled: true,
+    family: 'grok',
+    generation: 'grok-4.20',
     id: 'grok-4.20-multi-agent-0309',
     maxOutput: 2_000_000,
     pricing: {
@@ -890,79 +980,15 @@ const aihubmixChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
-      search: true,
-      vision: true,
-    },
-    contextWindowTokens: 2_000_000,
-    description:
-      'We’re excited to release Grok 4 Fast, our latest progress in cost-effective reasoning models.',
-    displayName: 'Grok 4 Fast (Non-Reasoning)',
-    id: 'grok-4-fast-non-reasoning',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-09-09',
-    settings: {
-      searchImpl: 'params',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-      search: true,
-      vision: true,
-    },
-    contextWindowTokens: 2_000_000,
-    description:
-      'We’re excited to release Grok 4 Fast, our latest progress in cost-effective reasoning models.',
-    displayName: 'Grok 4 Fast',
-    id: 'grok-4-fast-reasoning',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-09-09',
-    settings: {
-      searchImpl: 'params',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-      vision: true,
-    },
-    contextWindowTokens: 256_000,
-    description:
-      'Latest Grok flagship with unmatched performance in language, math, and reasoning — a true all-rounder. Currently points to grok-4-0709; due to limited resources it is temporarily 10% higher than official pricing and is expected to return to official price later.',
-    displayName: 'Grok 4 0709',
-    id: 'grok-4',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 3.3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 16.5, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-07-09',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
     },
     contextWindowTokens: 131_072,
     description:
       'Flagship model for enterprise use cases like data extraction, coding, and summarization, with deep knowledge in finance, healthcare, law, and science.',
     displayName: 'Grok 3',
+    family: 'grok',
+    generation: 'grok-3',
     id: 'grok-3',
+    knowledgeCutoff: '2024-11',
     pricing: {
       units: [
         { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
@@ -982,7 +1008,10 @@ const aihubmixChatModels: AIChatModelCard[] = [
     description:
       'Lightweight model that thinks before responding. Fast and smart for logic tasks not requiring deep domain knowledge, with access to raw reasoning traces.',
     displayName: 'Grok 3 Mini',
+    family: 'grok',
+    generation: 'grok-3',
     id: 'grok-3-mini',
+    knowledgeCutoff: '2024-11',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
@@ -1008,7 +1037,10 @@ const aihubmixChatModels: AIChatModelCard[] = [
       "Claude Opus 4.7 is Anthropic's most capable generally available model for complex reasoning and agentic coding.",
     displayName: 'Claude Opus 4.7',
     enabled: true,
+    family: 'claude-opus',
+    generation: 'claude-4.7',
     id: 'claude-opus-4-7',
+    knowledgeCutoff: '2026-01',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -1037,7 +1069,10 @@ const aihubmixChatModels: AIChatModelCard[] = [
     description:
       'Claude Opus 4.6 is Anthropic’s most intelligent model for building agents and coding.',
     displayName: 'Claude Opus 4.6',
+    family: 'claude-opus',
+    generation: 'claude-4.6',
     id: 'claude-opus-4-6',
+    knowledgeCutoff: '2025-05',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -1071,7 +1106,10 @@ const aihubmixChatModels: AIChatModelCard[] = [
     description:
       'Claude Opus 4.5 is Anthropic’s flagship model, combining top-tier intelligence with scalable performance for complex, high-quality reasoning tasks.',
     displayName: 'Claude Opus 4.5',
+    family: 'claude-opus',
+    generation: 'claude-4.5',
     id: 'claude-opus-4-5-20251101',
+    knowledgeCutoff: '2025-05',
     maxOutput: 64_000,
     pricing: {
       units: [
@@ -1105,7 +1143,10 @@ const aihubmixChatModels: AIChatModelCard[] = [
     description:
       'Claude Opus 4.1 is Anthropic’s newest and most powerful model for highly complex tasks, excelling in performance, intelligence, fluency, and comprehension.',
     displayName: 'Claude Opus 4.1',
+    family: 'claude-opus',
+    generation: 'claude-4.1',
     id: 'claude-opus-4-1-20250805',
+    knowledgeCutoff: '2025-01',
     maxOutput: 32_000,
     pricing: {
       units: [
@@ -1135,45 +1176,14 @@ const aihubmixChatModels: AIChatModelCard[] = [
       structuredOutput: true,
       vision: true,
     },
-    contextWindowTokens: 200_000,
-    description:
-      'Claude Opus 4 is Anthropic’s most powerful model for highly complex tasks, excelling in performance, intelligence, fluency, and comprehension.',
-    displayName: 'Claude Opus 4',
-    id: 'claude-opus-4-20250514',
-    maxOutput: 32_000,
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 16.8, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 84, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheRead', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
-        {
-          lookup: { prices: { '5m': 20.625 }, pricingParams: ['ttl'] },
-          name: 'textInput_cacheWrite',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-      ],
-    },
-    releasedAt: '2025-05-23',
-    settings: {
-      extendParams: ['disableContextCaching', 'enableReasoning', 'reasoningBudgetToken'],
-      searchImpl: 'params',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-      search: true,
-      structuredOutput: true,
-      vision: true,
-    },
     contextWindowTokens: 1_000_000,
     description: 'Claude Sonnet 4.6 is Anthropic’s best combination of speed and intelligence.',
     displayName: 'Claude Sonnet 4.6',
     enabled: true,
+    family: 'claude-sonnet',
+    generation: 'claude-4.6',
     id: 'claude-sonnet-4-6',
+    knowledgeCutoff: '2025-05',
     maxOutput: 64_000,
     pricing: {
       units: [
@@ -1213,7 +1223,10 @@ const aihubmixChatModels: AIChatModelCard[] = [
     description:
       'Sonnet 4.5 is the world’s best model for agents, coding, and computer use. It is also our most accurate and detailed model on long-running tasks, with enhanced knowledge in coding, finance, and cybersecurity.',
     displayName: 'Claude Sonnet 4.5',
+    family: 'claude-sonnet',
+    generation: 'claude-4.5',
     id: 'claude-sonnet-4-5-20250929',
+    knowledgeCutoff: '2025-01',
     maxOutput: 64_000,
     pricing: {
       units: [
@@ -1240,72 +1253,6 @@ const aihubmixChatModels: AIChatModelCard[] = [
       functionCall: true,
       reasoning: true,
       search: true,
-      vision: true,
-    },
-    contextWindowTokens: 200_000,
-    description:
-      'Claude Sonnet 4 can produce near-instant responses or extended step-by-step reasoning that users can see. API users can finely control how long the model thinks.',
-    displayName: 'Claude Sonnet 4',
-    id: 'claude-sonnet-4-20250514',
-    maxOutput: 64_000,
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 3.3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 16.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheRead', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
-        {
-          lookup: { prices: { '5m': 4.125 }, pricingParams: ['ttl'] },
-          name: 'textInput_cacheWrite',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-      ],
-    },
-    releasedAt: '2025-05-23',
-    settings: {
-      extendParams: ['disableContextCaching', 'enableReasoning', 'reasoningBudgetToken'],
-      searchImpl: 'params',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-      search: true,
-      vision: true,
-    },
-    contextWindowTokens: 200_000,
-    description:
-      'Claude 3.7 Sonnet is Anthropic’s most intelligent model and the first hybrid reasoning model on the market. It can produce near-instant responses or extended step-by-step reasoning that users can see. Sonnet is especially strong at coding, data science, vision, and agent tasks.',
-    displayName: 'Claude 3.7 Sonnet',
-    id: 'claude-3-7-sonnet-20250219',
-    maxOutput: 64_000,
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 3.3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 16.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheRead', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
-        {
-          lookup: { prices: { '5m': 4.125 }, pricingParams: ['ttl'] },
-          name: 'textInput_cacheWrite',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-      ],
-    },
-    releasedAt: '2025-02-24',
-    settings: {
-      extendParams: ['disableContextCaching', 'enableReasoning', 'reasoningBudgetToken'],
-      searchImpl: 'params',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-      search: true,
       structuredOutput: true,
       vision: true,
     },
@@ -1314,7 +1261,10 @@ const aihubmixChatModels: AIChatModelCard[] = [
       'Claude Haiku 4.5 is Anthropic’s fastest and smartest Haiku model, with lightning speed and extended reasoning.',
     displayName: 'Claude Haiku 4.5',
     enabled: true,
+    family: 'claude-haiku',
+    generation: 'claude-4.5',
     id: 'claude-haiku-4-5-20251001',
+    knowledgeCutoff: '2025-02',
     maxOutput: 64_000,
     pricing: {
       units: [
@@ -1339,65 +1289,19 @@ const aihubmixChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
-      vision: true,
-    },
-    contextWindowTokens: 200_000,
-    description:
-      'Claude 3.5 Haiku is Anthropic’s fastest next-gen model. Compared to Claude 3 Haiku, it improves across skills and surpasses the previous largest model Claude 3 Opus on many intelligence benchmarks.',
-    displayName: 'Claude 3.5 Haiku',
-    id: 'claude-3-5-haiku-20241022',
-    maxOutput: 8192,
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 1.1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 5.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheRead', rate: 0.1, strategy: 'fixed', unit: 'millionTokens' },
-        {
-          lookup: { prices: { '5m': 1.1 }, pricingParams: ['ttl'] },
-          name: 'textInput_cacheWrite',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-      ],
-    },
-    releasedAt: '2024-11-05',
-    settings: {
-      extendParams: ['disableContextCaching'],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
       reasoning: true,
     },
     contextWindowTokens: 131_072,
     description:
       'DeepSeek-V3.1 thinking mode: a new hybrid reasoning model with thinking and non-thinking modes, more efficient than DeepSeek-R1-0528. Post-training optimizations significantly improve agent tool use and agent task performance.',
     displayName: 'DeepSeek V3.1 (Think)',
+    family: 'deepseek',
+    generation: 'deepseek-v3.1',
     id: 'DeepSeek-V3.1-Think',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.56, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 1.68, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'DeepSeek V3.1 Fast is the high-TPS fast variant of DeepSeek V3.1. Hybrid thinking mode: via chat templates, one model supports both thinking and non-thinking. Smarter tool use: post-training boosts tool and agent task performance.',
-    displayName: 'DeepSeek V3.1 (Fast)',
-    id: 'DeepSeek-V3.1-Fast',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 1.096, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 3.288, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
@@ -1412,6 +1316,8 @@ const aihubmixChatModels: AIChatModelCard[] = [
     description:
       'Upgraded to version 250528; a fully-capable R1 deployed on ByteDance Volcano Cloud, 671B total parameters with up to 64K input. Currently the most stable and recommended.',
     displayName: 'DeepSeek R1',
+    family: 'deepseek',
+    generation: 'deepseek-r1',
     id: 'DeepSeek-R1',
     pricing: {
       units: [
@@ -1430,6 +1336,8 @@ const aihubmixChatModels: AIChatModelCard[] = [
     description:
       'Deployed by Microsoft; DeepSeek R1 has been upgraded to DeepSeek-R1-0528. The update increases compute and post-training algorithm optimizations, significantly improving reasoning depth and inference. It performs strongly on math, coding, and general logic benchmarks, approaching leading models like O3 and Gemini 2.5 Pro.',
     displayName: 'DeepSeek R1 0528 (Azure)',
+    family: 'deepseek',
+    generation: 'deepseek-r1',
     id: 'azure-DeepSeek-R1-0528',
     pricing: {
       units: [
@@ -1447,6 +1355,8 @@ const aihubmixChatModels: AIChatModelCard[] = [
     description:
       'ByteDance Volcengine’s open deployment is currently the most stable; recommended. It has been auto-upgraded to the latest release (250324).',
     displayName: 'DeepSeek V3',
+    family: 'deepseek',
+    generation: 'deepseek-v3',
     id: 'DeepSeek-V3',
     pricing: {
       units: [
@@ -1464,6 +1374,8 @@ const aihubmixChatModels: AIChatModelCard[] = [
     description:
       'Provider: sophnet. DeepSeek V3 Fast is the high-TPS version of DeepSeek V3 0324, full-precision (non-quantized) with stronger code and math and faster responses.',
     displayName: 'DeepSeek V3 (Fast)',
+    family: 'deepseek',
+    generation: 'deepseek-v3',
     id: 'DeepSeek-V3-Fast',
     pricing: {
       units: [
@@ -1485,7 +1397,10 @@ const aihubmixChatModels: AIChatModelCard[] = [
       "Gemini 3.1 Flash Image (Nano Banana 2) is Google's fastest native image generation model with thinking support, conversational image generation and editing.",
     displayName: 'Nano Banana 2',
     enabled: true,
+    family: 'gemini',
+    generation: 'gemini-3.1',
     id: 'gemini-3.1-flash-image-preview',
+    knowledgeCutoff: '2025-01',
     maxOutput: 32_768,
     pricing: {
       approximatePricePerImage: 0.067,
@@ -1505,6 +1420,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      audio: true,
       functionCall: true,
       reasoning: true,
       search: true,
@@ -1517,7 +1433,10 @@ const aihubmixChatModels: AIChatModelCard[] = [
       'Gemini 3.1 Pro Preview provides better thinking, improved token efficiency, and a reliable experience optimized for software engineering behavior.',
     displayName: 'Gemini 3.1 Pro Preview',
     enabled: true,
+    family: 'gemini',
+    generation: 'gemini-3.1',
     id: 'gemini-3.1-pro-preview',
+    knowledgeCutoff: '2025-01',
     maxOutput: 65_536,
     pricing: {
       units: [
@@ -1566,6 +1485,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      audio: true,
       functionCall: true,
       reasoning: true,
       search: true,
@@ -1577,7 +1497,10 @@ const aihubmixChatModels: AIChatModelCard[] = [
     description:
       "Gemini 3.1 Flash-Lite Preview is Google's most cost-efficient multimodal model, optimized for high-volume agentic tasks, translation, and data processing.",
     displayName: 'Gemini 3.1 Flash-Lite Preview',
+    family: 'gemini',
+    generation: 'gemini-3.1',
     id: 'gemini-3.1-flash-lite-preview',
+    knowledgeCutoff: '2025-01',
     maxOutput: 65_536,
     pricing: {
       units: [
@@ -1596,6 +1519,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      audio: true,
       functionCall: true,
       reasoning: true,
       search: true,
@@ -1606,7 +1530,10 @@ const aihubmixChatModels: AIChatModelCard[] = [
     description:
       'Gemini 3 Pro is Google’s most intelligent model with SOTA reasoning and multimodal understanding, plus strong agent and vibe-coding capabilities.',
     displayName: 'Gemini 3 Pro Preview',
+    family: 'gemini',
+    generation: 'gemini-3',
     id: 'gemini-3-pro-preview',
+    knowledgeCutoff: '2025-01',
     maxOutput: 65_536,
     pricing: {
       units: [
@@ -1655,6 +1582,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      audio: true,
       functionCall: true,
       reasoning: true,
       search: true,
@@ -1666,7 +1594,10 @@ const aihubmixChatModels: AIChatModelCard[] = [
       'Gemini 3 Flash is the smartest model built for speed, combining cutting-edge intelligence with excellent search grounding.',
     displayName: 'Gemini 3 Flash Preview',
     enabled: true,
+    family: 'gemini',
+    generation: 'gemini-3',
     id: 'gemini-3-flash-preview',
+    knowledgeCutoff: '2025-01',
     maxOutput: 65_536,
     pricing: {
       units: [
@@ -1700,7 +1631,10 @@ const aihubmixChatModels: AIChatModelCard[] = [
     description:
       'Gemini 3 Pro Image (Nano Banana Pro) is Google’s image generation model with multimodal chat support.',
     displayName: 'Nano Banana Pro',
+    family: 'gemini',
+    generation: 'gemini-3',
     id: 'gemini-3-pro-image-preview',
+    knowledgeCutoff: '2025-01',
     maxOutput: 32_768,
     pricing: {
       approximatePricePerImage: 0.134,
@@ -1729,7 +1663,10 @@ const aihubmixChatModels: AIChatModelCard[] = [
     description:
       'Gemini 2.5 Pro is Google’s most advanced thinking model for reasoning over complex problems in code, math, and STEM, and for analyzing large datasets, codebases, and documents with long context.',
     displayName: 'Gemini 2.5 Pro',
+    family: 'gemini',
+    generation: 'gemini-2.5',
     id: 'gemini-2.5-pro',
+    knowledgeCutoff: '2025-01',
     maxOutput: 65_536,
     pricing: {
       units: [
@@ -1756,7 +1693,10 @@ const aihubmixChatModels: AIChatModelCard[] = [
     contextWindowTokens: 1_048_576 + 65_536,
     description: 'Gemini 2.5 Flash is Google’s best-value model with full capabilities.',
     displayName: 'Gemini 2.5 Flash',
+    family: 'gemini',
+    generation: 'gemini-2.5',
     id: 'gemini-2.5-flash',
+    knowledgeCutoff: '2025-01',
     maxOutput: 65_536,
     pricing: {
       units: [
@@ -1782,7 +1722,10 @@ const aihubmixChatModels: AIChatModelCard[] = [
     description:
       'Nano Banana is Google’s newest, fastest, and most efficient native multimodal model, allowing image generation and editing through conversation.',
     displayName: 'Nano Banana',
+    family: 'gemini',
+    generation: 'gemini-2.5',
     id: 'gemini-2.5-flash-image',
+    knowledgeCutoff: '2025-06',
     maxOutput: 8192,
     pricing: {
       approximatePricePerImage: 0.039,
@@ -1807,7 +1750,10 @@ const aihubmixChatModels: AIChatModelCard[] = [
     description:
       'Gemini 2.5 Flash-Lite is Google’s smallest, best-value model, designed for large-scale use.',
     displayName: 'Gemini 2.5 Flash-Lite',
+    family: 'gemini',
+    generation: 'gemini-2.5',
     id: 'gemini-2.5-flash-lite',
+    knowledgeCutoff: '2025-01',
     maxOutput: 65_536,
     pricing: {
       units: [
@@ -1833,6 +1779,8 @@ const aihubmixChatModels: AIChatModelCard[] = [
     description:
       'Qwen3 thinking-mode open-source model. Compared to the previous version (Qwen3-235B-A22B), it significantly improves logic, general ability, knowledge, and creativity, suitable for hard reasoning scenarios.',
     displayName: 'Qwen3 235B A22B Thinking 2507',
+    family: 'qwen',
+    generation: 'qwen3',
     id: 'qwen3-235b-a22b-thinking-2507',
     maxOutput: 32_768,
     organization: 'Qwen',
@@ -1854,6 +1802,8 @@ const aihubmixChatModels: AIChatModelCard[] = [
     description:
       'Qwen3 non-thinking open-source model. Compared to the previous version (Qwen3-235B-A22B), it slightly improves subjective creativity and model safety.',
     displayName: 'Qwen3 235B A22B Instruct 2507',
+    family: 'qwen',
+    generation: 'qwen3',
     id: 'qwen3-235b-a22b-instruct-2507',
     maxOutput: 32_768,
     organization: 'Qwen',
@@ -1876,6 +1826,8 @@ const aihubmixChatModels: AIChatModelCard[] = [
     description:
       'Qwen3 thinking-mode open-source model. Compared to the previous version (Qwen3-30B-A3B), it significantly improves logic, general ability, knowledge, and creativity, suitable for hard reasoning scenarios.',
     displayName: 'Qwen3 30B A3B Thinking 2507',
+    family: 'qwen',
+    generation: 'qwen3',
     id: 'qwen3-30b-a3b-thinking-2507',
     maxOutput: 32_768,
     organization: 'Qwen',
@@ -1897,6 +1849,8 @@ const aihubmixChatModels: AIChatModelCard[] = [
     description:
       'Compared to the previous version (Qwen3-30B-A3B), overall Chinese/English and multilingual general ability is significantly improved. Subjective open-ended tasks are specially optimized for stronger preference alignment and more helpful responses.',
     displayName: 'Qwen3 30B A3B Instruct 2507',
+    family: 'qwen',
+    generation: 'qwen3',
     id: 'qwen3-30b-a3b-instruct-2507',
     maxOutput: 32_768,
     organization: 'Qwen',

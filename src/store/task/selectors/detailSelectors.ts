@@ -1,4 +1,6 @@
-import type { TaskDetailData } from '@lobechat/types';
+import type { TaskDetailData, TaskVerifyConfig } from '@lobechat/types';
+
+import type { SaveStatus } from '@/types/saveState';
 
 import type { TaskStoreState } from '../initialState';
 
@@ -17,6 +19,11 @@ const activeTaskName = (s: TaskStoreState) => activeTaskDetail(s)?.name;
 const activeTaskStatus = (s: TaskStoreState) => activeTaskDetail(s)?.status;
 
 const activeTaskPriority = (s: TaskStoreState) => activeTaskDetail(s)?.priority ?? 0;
+
+const activeTaskVisibility = (s: TaskStoreState): 'private' | 'public' =>
+  activeTaskDetail(s)?.visibility ?? 'public';
+
+const activeTaskCreatedByUserId = (s: TaskStoreState) => activeTaskDetail(s)?.createdByUserId;
 
 const activeTaskInstruction = (s: TaskStoreState) => activeTaskDetail(s)?.instruction;
 
@@ -60,9 +67,17 @@ const activeTaskScheduleMaxExecutions = (s: TaskStoreState) =>
 
 const activeTaskCheckpoint = (s: TaskStoreState) => activeTaskDetail(s)?.checkpoint;
 
-const activeTaskReview = (s: TaskStoreState) => activeTaskDetail(s)?.review;
+// Read the RESOLVED verify config that getTaskDetail populates via
+// TaskModel.getVerifyConfig (which includes the legacy `config.review` fallback
+// during migration) — not the raw `config.verify`. Reading raw config.verify
+// would return undefined for a legacy review-only task, so the panel would open
+// as unconfigured and the first autosave could clobber the old settings.
+const activeTaskVerifyConfig = (s: TaskStoreState): TaskVerifyConfig | undefined =>
+  activeTaskDetail(s)?.verify ?? undefined;
 
 const activeTaskWorkspace = (s: TaskStoreState) => activeTaskDetail(s)?.workspace ?? [];
+
+const activeTaskWorkspaceId = (s: TaskStoreState) => activeTaskDetail(s)?.workspaceId;
 
 const activeTaskError = (s: TaskStoreState) => activeTaskDetail(s)?.error;
 
@@ -85,7 +100,10 @@ const canCancelActiveTask = (s: TaskStoreState): boolean => {
   return ['backlog', 'paused', 'running', 'scheduled'].includes(detail.status);
 };
 
-const taskSaveStatus = (s: TaskStoreState) => s.taskSaveStatus;
+// Save status is keyed per task, so switching tasks reads the target task's own
+// status (defaulting to 'idle') instead of a stale 'failed' from a prior task.
+const taskSaveStatus = (s: TaskStoreState): SaveStatus =>
+  (s.activeTaskId ? s.taskSaveStatusMap[s.activeTaskId] : undefined) ?? 'idle';
 
 const activeTopicDrawerTopicId = (s: TaskStoreState) => s.activeTopicDrawerTopicId;
 
@@ -93,6 +111,7 @@ export const taskDetailSelectors = {
   activeTaskAgentId,
   activeTaskAutomationMode,
   activeTaskCheckpoint,
+  activeTaskCreatedByUserId,
   activeTaskModel,
   activeTaskDependencies,
   activeTaskDescription,
@@ -107,14 +126,16 @@ export const taskDetailSelectors = {
   activeTaskPeriodicInterval,
   activeTaskPriority,
   activeTaskProvider,
-  activeTaskReview,
   activeTaskScheduleMaxExecutions,
   activeTaskSchedulePattern,
   activeTaskScheduleTimezone,
   activeTaskStatus,
   activeTaskSubtasks,
   activeTaskTopicCount,
+  activeTaskVerifyConfig,
+  activeTaskVisibility,
   activeTaskWorkspace,
+  activeTaskWorkspaceId,
   activeTopicDrawerTopicId,
   canCancelActiveTask,
   canPauseActiveTask,

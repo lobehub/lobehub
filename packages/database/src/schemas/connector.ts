@@ -1,4 +1,5 @@
 import type { CustomPluginParams, ToolManifest } from '@lobechat/types';
+import { sql } from 'drizzle-orm';
 import {
   boolean,
   index,
@@ -12,6 +13,7 @@ import {
 } from 'drizzle-orm/pg-core';
 
 import { timestamps, timestamptz, varchar255 } from './_helpers';
+import { agents } from './agent';
 import { users } from './user';
 import { workspaces } from './workspace';
 
@@ -29,6 +31,15 @@ export interface OIDCConfig {
    * - client_id_metadata_document: this value IS the metadata URL
    */
   clientId?: string;
+
+  /**
+   * Client secret for confidential clients.
+   * - pre_registration: filled in by the user
+   * - dcr: written back after dynamic registration succeeds
+   * Stored in plaintext (non-token credential); access/refresh tokens live
+   * encrypted in `credentials` instead.
+   */
+  clientSecret?: string;
 
   /** OIDC discovery issuer URL — preferred over manual endpoint overrides */
   issuer?: string;
@@ -89,6 +100,36 @@ export const ConnectorMcpConnectionType = {
 export type ConnectorMcpConnectionType =
   (typeof ConnectorMcpConnectionType)[keyof typeof ConnectorMcpConnectionType];
 
+/**
+ * Composio runtime config carried on `user_connectors.metadata.composio`.
+ *
+ * This is the source of truth for running a Composio connector at runtime
+ * (manifest building + tool execution), replacing the reverse lookup into
+ * `user_installed_plugins.customParams.composio`. `connectedAccountId` is the
+ * only field strictly required to execute a tool; the rest support connection
+ * management and list display.
+ */
+export interface ComposioConnectorMetadata {
+  appSlug: string;
+  authConfigId: string;
+  connectedAccountId: string;
+  redirectUrl?: string;
+  /** 'PENDING' | 'ACTIVE' | 'FAILED' — Composio-side connection status */
+  status: string;
+}
+
+/**
+ * Typed shape of the `metadata` column. Keeps an index signature so existing
+ * ad-hoc keys (e.g. `customHeaders`) and future extensions stay valid.
+ */
+export interface ConnectorMetadata {
+  [key: string]: unknown;
+  avatar?: string;
+  composio?: ComposioConnectorMetadata;
+  customHeaders?: Record<string, string>;
+  description?: string;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // user_connectors
 // ─────────────────────────────────────────────────────────────────────────────
@@ -113,6 +154,16 @@ export const userConnectors = pgTable(
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
     workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
+
+    /**
+     * Agent-scoped connector. When set, this connector belongs to a specific
+     * agent and takes priority over the workspace/personal connector of the
+     * same identifier at resolution time (Agent > Workspace > Personal). Null
+     * for personal/workspace connectors. Composio agent-specific accounts live
+     * on this row's `metadata`, so the whole agent dimension stays on this
+     * table (no `agent_id` on `user_installed_plugins`).
+     */
+    agentId: text('agent_id').references(() => agents.id, { onDelete: 'cascade' }),
 
     // ── Connector identity ────────────────────────────────────────────────
     /** Fixed slug for built-ins (e.g. "linear"); nanoid for custom ones */
@@ -145,16 +196,25 @@ export const userConnectors = pgTable(
     tokenExpiresAt: timestamptz('token_expires_at'),
 
     /** Safe non-sensitive metadata for display and future extensibility */
-    metadata: jsonb('metadata').$type<Record<string, unknown>>(),
+    metadata: jsonb('metadata').$type<ConnectorMetadata>(),
 
     ...timestamps,
   },
   (t) => [
-    uniqueIndex('user_connectors_user_identifier_unique').on(t.userId, t.identifier),
+    index('user_connectors_personal_identifier_idx')
+      .on(t.userId, t.identifier)
+      .where(sql`${t.workspaceId} IS NULL AND ${t.agentId} IS NULL`),
+    index('user_connectors_workspace_identifier_idx')
+      .on(t.userId, t.workspaceId, t.identifier)
+      .where(sql`${t.workspaceId} IS NOT NULL AND ${t.agentId} IS NULL`),
+    index('user_connectors_agent_identifier_idx')
+      .on(t.agentId, t.identifier)
+      .where(sql`${t.agentId} IS NOT NULL`),
     index('user_connectors_user_id_idx').on(t.userId),
     /** Scanned by background token-refresh worker */
     index('user_connectors_token_expires_at_idx').on(t.tokenExpiresAt),
     index('user_connectors_workspace_id_idx').on(t.workspaceId),
+    index('user_connectors_agent_id_idx').on(t.agentId),
   ],
 );
 
@@ -241,7 +301,7 @@ export const userConnectorTools = pgTable(
      * Three-state permission:
      * - 'auto'            — allow AI to call without confirmation
      * - 'needs_approval'  — require human approval before execution
-     * - 'disabled'        — not injected; AI cannot see or call this tool
+     * - 'disabled'        — injected with blocking description; AI knows it is disabled and cannot call it
      */
     permission: text('permission').notNull(),
 
@@ -283,6 +343,8 @@ export const userConnectorTools = pgTable(
 export type NewUserConnectorTool = typeof userConnectorTools.$inferInsert;
 export type UserConnectorToolItem = typeof userConnectorTools.$inferSelect;
 
+// Deprecated legacy plugin install table. Keep workspaceId only for old rows;
+// workspace audits should ignore this table instead of expanding constraints.
 export const userInstalledPlugins = pgTable(
   'user_installed_plugins',
   {

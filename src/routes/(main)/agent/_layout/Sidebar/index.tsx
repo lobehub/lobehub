@@ -1,15 +1,13 @@
 import React, { memo } from 'react';
 
 import { NavPanelPortal } from '@/features/NavPanel';
-import SideBarLayout from '@/features/NavPanel/SideBarLayout';
 
-import Body from './Body';
-import Header from './Header';
+import AgentSidebarContent from './Content';
 
 const Sidebar = memo(() => {
   return (
     <NavPanelPortal navKey="agent">
-      <SideBarLayout body={<Body />} header={<Header />} />
+      <AgentSidebarContent />
     </NavPanelPortal>
   );
 });

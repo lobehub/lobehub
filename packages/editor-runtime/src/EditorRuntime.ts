@@ -1,6 +1,6 @@
 import type { PageContentContext } from '@lobechat/prompts';
 import type { IEditor } from '@lobehub/editor';
-import { LITEXML_APPLY_COMMAND, LITEXML_MODIFY_COMMAND } from '@lobehub/editor';
+import { LITEXML_APPLY_COMMAND, LITEXML_MODIFY_COMMAND } from '@lobehub/editor/litexml-commands';
 import debug from 'debug';
 
 import type {
@@ -39,6 +39,16 @@ export type EditorMutationApiName = 'editTitle' | 'initPage' | 'modifyNodes' | '
 export interface EditorMutationContext {
   apiName: EditorMutationApiName;
 }
+
+/**
+ * Payload for a single LiteXML modify-batch operation — the runtime shape of
+ * the `LITEXML_MODIFY_COMMAND` payload.
+ */
+export type LiteXMLBatchOperation =
+  | { action: 'insert'; afterId: string; litexml: string }
+  | { action: 'insert'; beforeId: string; litexml: string }
+  | { action: 'modify'; litexml: string | string[] }
+  | { action: 'remove'; id: string };
 
 export interface EditorRuntimeDebugSnapshot {
   currentDocId?: string;
@@ -175,6 +185,55 @@ export class EditorRuntime {
     } catch {
       return false;
     }
+  }
+
+  /**
+   * Apply a snapshot produced by the server-side PageAgent execution runtime
+   * onto the currently mounted editor. Skips persistence side-effects: the
+   * server already wrote the row, so calling `afterMutateHandler` here would
+   * loop the save path back through `commitEditorMutation`.
+   *
+   * `editorData` is the Lexical `SerializedEditorState` (or `null`/`undefined`
+   * when the server only changed metadata such as the title).
+   */
+  applyServerSnapshot(snapshot: {
+    content?: string;
+    editorData?: Record<string, unknown> | null;
+    title?: string;
+  }): boolean {
+    let applied = false;
+
+    if (this.editor && snapshot.editorData) {
+      try {
+        this.editor.setDocument('json', JSON.stringify(snapshot.editorData), { keepId: true });
+        applied = true;
+      } catch (error) {
+        log('[EditorRuntime] applyServerSnapshot:editorData failed', error);
+      }
+    } else if (this.editor && typeof snapshot.content === 'string') {
+      try {
+        this.editor.setDocument('markdown', snapshot.content, { keepId: true });
+        applied = true;
+      } catch (error) {
+        log('[EditorRuntime] applyServerSnapshot:markdown failed', error);
+      }
+    }
+
+    if (typeof snapshot.title === 'string' && this.titleSetter) {
+      try {
+        this.titleSetter(snapshot.title);
+        applied = true;
+      } catch (error) {
+        log('[EditorRuntime] applyServerSnapshot:title failed', error);
+      }
+    }
+
+    log('[EditorRuntime] applyServerSnapshot', {
+      applied,
+      hasEditorData: !!snapshot.editorData,
+      hasTitle: typeof snapshot.title === 'string',
+    });
+    return applied;
   }
 
   /**
@@ -480,9 +539,7 @@ export class EditorRuntime {
       throw new Error('modifyNodes failed: LiteXML data source is not ready.');
     }
 
-    // Dispatch all operations at once. The LiteXML command handler returns false
-    // even after handling the command, so the return value is not a failure signal.
-    log('Dispatching LITEXML_MODIFY_COMMAND with payload:', commandPayload);
+    log('Dispatching LiteXML modify batch with payload:', commandPayload);
     editor.dispatchCommand(LITEXML_MODIFY_COMMAND, commandPayload);
 
     const successCount = results.filter((r) => r.success).length;
@@ -773,11 +830,8 @@ export class EditorRuntime {
         throw new Error('replaceText failed: LiteXML data source is not ready.');
       }
 
-      const dispatchSuccess = editor.dispatchCommand(LITEXML_APPLY_COMMAND, {
-        litexml: litexmlUpdates,
-      });
-
-      log('Command dispatched, success:', dispatchSuccess);
+      editor.dispatchCommand(LITEXML_APPLY_COMMAND, { litexml: litexmlUpdates });
+      log('LiteXML replace dispatched');
     }
 
     const result = { modifiedNodeIds, replacementCount: totalReplacementCount };

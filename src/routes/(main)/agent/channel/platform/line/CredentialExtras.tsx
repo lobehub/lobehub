@@ -1,25 +1,29 @@
 'use client';
 
-import { App, Button, Form as AntdForm } from 'antd';
+import { Button } from '@lobehub/ui/base-ui';
+import { App, Form as AntdForm } from 'antd';
 import { Download } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAgentStore } from '@/store/agent';
 
-const CredentialExtras = memo(() => {
+import type { PlatformCredentialExtrasProps } from '../types';
+
+const CredentialExtras = memo<PlatformCredentialExtrasProps>(({ disabled }) => {
   const { t: _t } = useTranslation('agent');
   const t = _t as (key: string) => string;
   const { message } = App.useApp();
   const form = AntdForm.useFormInstance();
   const channelAccessToken = AntdForm.useWatch(['credentials', 'channelAccessToken'], form) as
-    | string
-    | undefined;
+    string | undefined;
   const [loading, setLoading] = useState(false);
 
   const lineFetchBotInfo = useAgentStore((s) => s.lineFetchBotInfo);
 
   const handleFetch = async () => {
+    if (disabled) return;
+
     const token = channelAccessToken?.trim();
     if (!token) {
       message.warning(t('channel.line.fetchBotInfoMissingToken'));
@@ -47,7 +51,7 @@ const CredentialExtras = memo(() => {
 
   return (
     <Button
-      disabled={!channelAccessToken?.trim()}
+      disabled={disabled || !channelAccessToken?.trim()}
       icon={<Download size={14} />}
       loading={loading}
       size="small"

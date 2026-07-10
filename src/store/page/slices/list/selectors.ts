@@ -52,6 +52,43 @@ const getFilteredDocumentsLimited = (s: PageState): LobeDocument[] => {
   return allDocs.slice(0, pageSize);
 };
 
+// Workspace-mode sidebar buckets: split filtered docs into "private" (creator
+// only) and "workspace-shared". Personal-mode `visibility` is meaningless — the
+// caller decides whether to render the flat list or the dual accordion.
+const getPrivateFilteredDocuments = (s: PageState): LobeDocument[] =>
+  getFilteredDocuments(s).filter((doc) => doc.visibility === 'private');
+
+const getWorkspaceFilteredDocuments = (s: PageState): LobeDocument[] =>
+  getFilteredDocuments(s).filter((doc) => doc.visibility !== 'private');
+
+// Bucket-scoped, sidebar-sized page slices — mirror the Limited helper for the
+// dual-accordion Pages sidebar so each bucket paginates independently.
+const getPrivateFilteredDocumentsLimited = (s: PageState): LobeDocument[] => {
+  const pageSize = useGlobalStore.getState().status.pagePageSize || 20;
+  return getPrivateFilteredDocuments(s).slice(0, pageSize);
+};
+
+const getWorkspaceFilteredDocumentsLimited = (s: PageState): LobeDocument[] => {
+  const pageSize = useGlobalStore.getState().status.pagePageSize || 20;
+  return getWorkspaceFilteredDocuments(s).slice(0, pageSize);
+};
+
+const privateFilteredDocumentsCount = (s: PageState): number =>
+  getPrivateFilteredDocuments(s).length;
+
+const workspaceFilteredDocumentsCount = (s: PageState): number =>
+  getWorkspaceFilteredDocuments(s).length;
+
+const hasMorePrivateFilteredDocuments = (s: PageState): boolean => {
+  const pageSize = useGlobalStore.getState().status.pagePageSize || 20;
+  return getPrivateFilteredDocuments(s).length > pageSize;
+};
+
+const hasMoreWorkspaceFilteredDocuments = (s: PageState): boolean => {
+  const pageSize = useGlobalStore.getState().status.pagePageSize || 20;
+  return getWorkspaceFilteredDocuments(s).length > pageSize;
+};
+
 const getDocumentById = (docId: string | undefined) => (s: PageState) => {
   if (!docId) return undefined;
 
@@ -83,8 +120,16 @@ export const listSelectors = {
   getDocumentById,
   getFilteredDocuments,
   getFilteredDocumentsLimited,
+  getPrivateFilteredDocuments,
+  getPrivateFilteredDocumentsLimited,
+  getWorkspaceFilteredDocuments,
+  getWorkspaceFilteredDocumentsLimited,
   hasMoreDocuments,
   hasMoreFilteredDocuments,
+  hasMorePrivateFilteredDocuments,
+  hasMoreWorkspaceFilteredDocuments,
   isDocumentsLoading,
   isLoadingMoreDocuments,
+  privateFilteredDocumentsCount,
+  workspaceFilteredDocumentsCount,
 };

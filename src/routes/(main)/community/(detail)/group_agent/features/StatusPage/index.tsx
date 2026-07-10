@@ -5,14 +5,15 @@ import { Button, FluentEmoji, Text } from '@lobehub/ui';
 import { Result } from 'antd';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 
 interface StatusPageProps {
   status: 'unpublished' | 'archived' | 'deprecated';
 }
 
 const StatusPage = memo<StatusPageProps>(({ status }) => {
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const { t } = useTranslation('discover');
 
   const handleBackToMarket = () => {

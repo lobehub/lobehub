@@ -14,6 +14,8 @@ import {
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { sanitizeBm25Query } from '../../utils/bm25';
+import { normalizeInboxAgentMeta, normalizeInboxAgentTitle } from '../../utils/inboxAgent';
+import { buildWorkspaceWhere } from '../../utils/workspace';
 
 export type SearchResultType =
   | 'page'
@@ -73,6 +75,7 @@ export interface TopicSearchResult extends BaseSearchResult {
   } | null;
   agentId: string | null;
   favorite: boolean | null;
+  groupId: string | null;
   sessionId: string | null;
   type: 'topic';
 }
@@ -95,6 +98,7 @@ export interface FolderSearchResult extends BaseSearchResult {
 export interface MessageSearchResult extends BaseSearchResult {
   agentId: string | null;
   content: string;
+  groupId: string | null;
   model: string | null;
   role: string;
   topicId: string | null;
@@ -199,10 +203,16 @@ const RECENCY_CANDIDATE_MULTIPLIER = 4;
 export class SearchRepo {
   private userId: string;
   private db: LobeChatDatabase;
+  private workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.userId = userId;
     this.db = db;
+    this.workspaceId = workspaceId;
+  }
+
+  private get scope() {
+    return { userId: this.userId, workspaceId: this.workspaceId };
   }
 
   /**
@@ -404,26 +414,33 @@ export class SearchRepo {
       .from(agents)
       .where(
         and(
-          eq(agents.userId, this.userId),
+          buildWorkspaceWhere(this.scope, agents),
           sql`(${agents.title} @@@ ${bm25Query} OR ${agents.description} @@@ ${bm25Query} OR ${agents.slug} @@@ ${bm25Query} OR ${agents.tags} @@@ ${bm25Query} OR ${agents.systemRole} @@@ ${bm25Query})`,
         ),
       )
       .orderBy(sql`paradedb.score(${agents.id}) DESC`)
       .limit(limit);
 
-    return this.mapScoresToRelevance(rows).map((row) => ({
-      avatar: row.avatar,
-      backgroundColor: row.backgroundColor,
-      createdAt: row.createdAt,
-      description: row.description,
-      id: row.id,
-      relevance: row.relevance,
-      slug: row.slug,
-      tags: (row.tags as string[]) || [],
-      title: row.title || '',
-      type: 'agent' as const,
-      updatedAt: row.updatedAt,
-    }));
+    return this.mapScoresToRelevance(rows).map((row) => {
+      const meta = normalizeInboxAgentMeta(
+        { avatar: row.avatar, title: row.title },
+        { slug: row.slug },
+      );
+
+      return {
+        avatar: meta.avatar,
+        backgroundColor: row.backgroundColor,
+        createdAt: row.createdAt,
+        description: row.description,
+        id: row.id,
+        relevance: row.relevance,
+        slug: row.slug,
+        tags: (row.tags as string[]) || [],
+        title: meta.title || '',
+        type: 'agent' as const,
+        updatedAt: row.updatedAt,
+      };
+    });
   }
 
   /**
@@ -447,10 +464,12 @@ export class SearchRepo {
         agentBackgroundColor: agents.backgroundColor,
         agentId: topics.agentId,
         agentMatchedId: agents.id,
+        agentSlug: agents.slug,
         agentTitle: agents.title,
         content: topics.content,
         createdAt: topics.createdAt,
         favorite: topics.favorite,
+        groupId: topics.groupId,
         id: topics.id,
         score: sql<number>`paradedb.score(${topics.id})`,
         sessionId: topics.sessionId,
@@ -458,10 +477,10 @@ export class SearchRepo {
         updatedAt: topics.updatedAt,
       })
       .from(topics)
-      .leftJoin(agents, and(eq(topics.agentId, agents.id), eq(agents.userId, this.userId)))
+      .leftJoin(agents, and(eq(topics.agentId, agents.id), buildWorkspaceWhere(this.scope, agents)))
       .where(
         and(
-          eq(topics.userId, this.userId),
+          buildWorkspaceWhere(this.scope, topics),
           agentId ? eq(topics.agentId, agentId) : undefined,
           sql`(${topics.title} @@@ ${bm25Query} OR ${topics.content} @@@ ${bm25Query} OR ${topics.description} @@@ ${bm25Query})`,
         ),
@@ -473,15 +492,21 @@ export class SearchRepo {
       .map((row) => ({
         agent: row.agentMatchedId
           ? {
-              avatar: row.agentAvatar,
+              avatar: normalizeInboxAgentMeta(
+                { avatar: row.agentAvatar, title: row.agentTitle },
+                { slug: row.agentSlug },
+              ).avatar,
               backgroundColor: row.agentBackgroundColor,
-              title: row.agentTitle,
+              title: normalizeInboxAgentTitle(row.agentTitle, {
+                slug: row.agentSlug,
+              }),
             }
           : null,
         agentId: row.agentId,
         createdAt: row.createdAt,
         description: this.truncate(row.content),
         favorite: row.favorite,
+        groupId: row.groupId,
         id: row.id,
         relevance: row.relevance,
         sessionId: row.sessionId,
@@ -506,9 +531,11 @@ export class SearchRepo {
     const rows = await this.db
       .select({
         agentId: messages.agentId,
+        agentSlug: agents.slug,
         agentTitle: agents.title,
         content: messages.content,
         createdAt: messages.createdAt,
+        groupId: messages.groupId,
         id: messages.id,
         model: messages.model,
         role: messages.role,
@@ -520,7 +547,7 @@ export class SearchRepo {
       .leftJoin(agents, eq(messages.agentId, agents.id))
       .where(
         and(
-          eq(messages.userId, this.userId),
+          buildWorkspaceWhere(this.scope, messages),
           ne(messages.role, 'tool'),
           agentId ? eq(messages.agentId, agentId) : undefined,
           sql`${messages.content} @@@ ${bm25Query}`,
@@ -534,7 +561,11 @@ export class SearchRepo {
         agentId: row.agentId,
         content: row.content || '',
         createdAt: row.createdAt,
-        description: row.agentTitle || 'General Chat',
+        description:
+          normalizeInboxAgentTitle(row.agentTitle, {
+            slug: row.agentSlug,
+          }) || 'General Chat',
+        groupId: row.groupId,
         id: row.id,
         model: row.model,
         relevance: row.relevance,
@@ -574,7 +605,7 @@ export class SearchRepo {
       .leftJoin(knowledgeBaseFiles, eq(files.id, knowledgeBaseFiles.fileId))
       .where(
         and(
-          eq(files.userId, this.userId),
+          buildWorkspaceWhere(this.scope, files),
           ne(files.fileType, 'custom/document'),
           sql`${files.name} @@@ ${bm25Query}`,
         ),
@@ -619,7 +650,7 @@ export class SearchRepo {
       .from(documents)
       .where(
         and(
-          eq(documents.userId, this.userId),
+          buildWorkspaceWhere(this.scope, documents),
           eq(documents.fileType, DOCUMENT_FOLDER_TYPE),
           sql`(${documents.title} @@@ ${bm25Query} OR ${documents.slug} @@@ ${bm25Query} OR ${documents.description} @@@ ${bm25Query})`,
         ),
@@ -661,7 +692,7 @@ export class SearchRepo {
       .from(documents)
       .where(
         and(
-          eq(documents.userId, this.userId),
+          buildWorkspaceWhere(this.scope, documents),
           eq(documents.fileType, 'custom/document'),
           sql`(${documents.title} @@@ ${bm25Query} OR ${documents.slug} @@@ ${bm25Query} OR ${documents.content} @@@ ${bm25Query})`,
         ),
@@ -710,7 +741,7 @@ export class SearchRepo {
 
     const matchClause = sql`(${documents.title} @@@ ${bm25Query} OR ${documents.slug} @@@ ${bm25Query} OR ${documents.content} @@@ ${bm25Query})`;
     const folderClause = ne(documents.fileType, DOCUMENT_FOLDER_TYPE);
-    const userClause = eq(documents.userId, this.userId);
+    const userClause = buildWorkspaceWhere(this.scope, documents);
 
     const inlineRowsPromise = this.db
       .select({
@@ -751,7 +782,7 @@ export class SearchRepo {
         knowledgeBaseFiles,
         and(
           eq(knowledgeBaseFiles.fileId, documents.fileId),
-          eq(knowledgeBaseFiles.userId, this.userId),
+          buildWorkspaceWhere(this.scope, knowledgeBaseFiles),
           inArray(knowledgeBaseFiles.knowledgeBaseId, knowledgeBaseIds),
         ),
       )
@@ -842,7 +873,7 @@ export class SearchRepo {
       .from(chatGroups)
       .where(
         and(
-          eq(chatGroups.userId, this.userId),
+          buildWorkspaceWhere(this.scope, chatGroups),
           sql`(${chatGroups.title} @@@ ${bm25Query} OR ${chatGroups.description} @@@ ${bm25Query})`,
         ),
       )
@@ -884,7 +915,7 @@ export class SearchRepo {
       .from(knowledgeBases)
       .where(
         and(
-          eq(knowledgeBases.userId, this.userId),
+          buildWorkspaceWhere(this.scope, knowledgeBases),
           sql`(${knowledgeBases.name} @@@ ${bm25Query} OR ${knowledgeBases.description} @@@ ${bm25Query})`,
         ),
       )

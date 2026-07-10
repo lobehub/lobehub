@@ -1,12 +1,15 @@
 'use client';
 
-import { Button, Flexbox, Modal } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { Divider } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
+import ImperativeModal from '@/components/ImperativeModal';
+import { groupKeys } from '@/libs/swr/keys';
 import { agentService } from '@/services/agent';
 
 import { type AgentItemData } from './AgentItem';
@@ -48,7 +51,7 @@ const AddGroupMemberModal = memo<AddGroupMemberModalProps>(
 
     // Fetch agents from the new API (non-virtual agents only)
     const { data: allAgents = [], isLoading: isLoadingAgents } = useSWR(
-      open ? 'queryAgents' : null,
+      open ? groupKeys.queryAgents() : null,
       () => agentService.queryAgents(),
     );
 
@@ -86,7 +89,7 @@ const AddGroupMemberModal = memo<AddGroupMemberModalProps>(
     const isConfirmDisabled = selectedAgentIds.length === 0 || isAdding;
 
     return (
-      <Modal
+      <ImperativeModal
         allowFullscreen
         open={open}
         title={t('memberSelection.addMember')}
@@ -115,7 +118,7 @@ const AddGroupMemberModal = memo<AddGroupMemberModalProps>(
           {/* Right Column - Selected Agents */}
           <SelectedAgentList agents={allAgents} />
         </Flexbox>
-      </Modal>
+      </ImperativeModal>
     );
   },
 );

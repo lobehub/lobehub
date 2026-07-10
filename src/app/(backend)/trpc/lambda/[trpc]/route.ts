@@ -6,6 +6,15 @@ import { prepareRequestForTRPC } from '@/libs/trpc/utils/request-adapter';
 import { createResponseMeta } from '@/libs/trpc/utils/responseMeta';
 import { lambdaRouter } from '@/server/routers/lambda';
 
+const SILENT_TRPC_ERROR_LOG_KEY = '__lobeSilentTRPCErrorLog';
+
+const shouldSkipTRPCErrorLog = (cause: unknown): boolean =>
+  Boolean(
+    cause &&
+    typeof cause === 'object' &&
+    (cause as Record<string, unknown>)[SILENT_TRPC_ERROR_LOG_KEY],
+  );
+
 const handler = (req: NextRequest) => {
   // Clone the request to avoid "Response body object should not be disturbed or locked" error
   // in Next.js 16 when the body stream has been consumed by Next.js internal mechanisms
@@ -23,6 +32,7 @@ const handler = (req: NextRequest) => {
       // Filter out the error of UNAUTHORIZED, because this is normal behavior
       // And it has been displayed at the front end to let the user login
       if (error.code === 'UNAUTHORIZED') return;
+      if (shouldSkipTRPCErrorLog(error.cause)) return;
 
       console.info(`Error in tRPC handler (lambda) on path: ${path}, type: ${type}`);
       console.error(error);

@@ -33,7 +33,7 @@ import {
 import DebugNode from '@/components/DebugNode';
 import { useIsMobile } from '@/hooks/useIsMobile';
 
-const styles = createStaticStyles(({ css }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   dropdownMenu: css`
     .ant-avatar {
       margin-inline-end: var(--ant-margin-xs);
@@ -41,6 +41,13 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   trigger: css`
     outline: none;
+
+    /* Keyboard users still need a landmark for where Enter will land. */
+    &:focus-visible {
+      border-radius: ${cssVar.borderRadius};
+      outline: 2px solid ${cssVar.colorPrimary};
+      outline-offset: 2px;
+    }
   `,
 }));
 
@@ -92,6 +99,25 @@ const SubmenuScrollStyle = createGlobalStyle`
      Knowledge submenu's Libraries/Files headers) keep their default padding. */
   [data-submenu] > [role='menu'] [role='group']:has([data-skill-activation-group]) > [role='presentation'] {
     padding-block: 0;
+  }
+
+  /* The skill submenu is the only submenu that uses a header slot (the search
+     bar). renderDropdownMenuItems wraps it in DropdownMenuHeader's default
+     8px/12px padding — which can't be reached via props — leaving the borderless
+     search floating in a tall gap and indented past the rows below. Trim the
+     padding so the search sits snug against the divider and its icon lines up
+     with the 16px icon column shared by the menu rows. */
+  [data-submenu] > [role='menu'] > *:has(.lobe-skill-submenu-search) {
+    padding-block: 4px;
+    padding-inline: 4px;
+  }
+
+  /* Submenu triggers that opt into a custom trailing chevron (the Plus menu's
+     Skills / Attachments rows mark their extra icon with .lobe-submenu-chevron)
+     render that chevron themselves; hide base-ui's default triangle submenu arrow
+     — always the last child of the trigger's content — so the two don't stack. */
+  [role='menuitem']:has(.lobe-submenu-chevron) > * > *:last-child {
+    display: none;
   }
 `;
 

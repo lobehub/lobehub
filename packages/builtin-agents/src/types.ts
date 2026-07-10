@@ -1,4 +1,8 @@
-import type { LobeAgentChatConfig, LobeAgentConfig } from '@lobechat/types';
+import type {
+  LobeAgentAgencyConfig,
+  LobeAgentChatConfig,
+  LobeAgentConfig,
+} from '@lobechat/types';
 
 import type { GroupSupervisorContext } from './agents/group-supervisor/type';
 
@@ -16,6 +20,7 @@ export const BUILTIN_AGENT_SLUGS = {
   selfReflection: 'self-reflection',
   skillManagement: 'skill-management',
   taskAgent: 'task-agent',
+  verifyAgent: 'verify-agent',
   webOnboarding: 'web-onboarding',
 } as const;
 
@@ -37,6 +42,9 @@ export interface BuiltinAgentPersistConfig {
  * Runtime Result - dynamically generated config, not persisted
  */
 export interface BuiltinAgentRuntimeResult {
+  /** Runtime agency configuration overrides */
+  agencyConfig?: Partial<LobeAgentAgencyConfig>;
+
   /** Runtime chat configuration overrides */
   chatConfig?: Partial<LobeAgentChatConfig>;
 

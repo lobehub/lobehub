@@ -1,3 +1,4 @@
+import { TRPCError } from '@trpc/server';
 import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 
 import type {
@@ -6,22 +7,68 @@ import type {
   NewChatGroup,
   NewChatGroupAgent,
 } from '../schemas';
-import { chatGroups, chatGroupsAgents } from '../schemas';
+import { agents, chatGroups, chatGroupsAgents } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { normalizeInboxAgentAvatar } from '../utils/inboxAgent';
+import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 export class ChatGroupModel {
   private userId: string;
   private db: LobeChatDatabase;
+  private workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.userId = userId;
     this.db = db;
+    this.workspaceId = workspaceId;
   }
+
+  private ownership = () =>
+    buildWorkspaceWhere(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      {
+        userId: chatGroups.userId,
+        workspaceId: chatGroups.workspaceId,
+        visibility: chatGroups.visibility,
+      },
+    );
+
+  /**
+   * Get member avatar metas (avatar + backgroundColor) grouped by chatGroupId,
+   * ordered by member order. Inbox members fall back to the default avatar.
+   */
+  getMemberAvatarsByGroupIds = async (
+    groupIds: string[],
+  ): Promise<Map<string, Array<{ avatar: string | null; backgroundColor: string | null }>>> => {
+    const map = new Map<string, Array<{ avatar: string | null; backgroundColor: string | null }>>();
+    if (groupIds.length === 0) return map;
+
+    const rows = await this.db
+      .select({
+        avatar: agents.avatar,
+        backgroundColor: agents.backgroundColor,
+        chatGroupId: chatGroupsAgents.chatGroupId,
+        slug: agents.slug,
+      })
+      .from(chatGroupsAgents)
+      .innerJoin(agents, eq(chatGroupsAgents.agentId, agents.id))
+      .where(inArray(chatGroupsAgents.chatGroupId, groupIds))
+      .orderBy(chatGroupsAgents.order);
+
+    for (const { avatar, backgroundColor, chatGroupId, slug } of rows) {
+      const list = map.get(chatGroupId) ?? [];
+      list.push({ avatar: normalizeInboxAgentAvatar(avatar, { slug }), backgroundColor });
+      map.set(chatGroupId, list);
+    }
+
+    return map;
+  };
+
   // ******* Query Methods ******* //
 
   async findById(id: string): Promise<ChatGroupItem | undefined> {
     const item = await this.db.query.chatGroups.findFirst({
-      where: and(eq(chatGroups.id, id), eq(chatGroups.userId, this.userId)),
+      where: and(eq(chatGroups.id, id), this.ownership()),
     });
 
     return item;
@@ -30,7 +77,7 @@ export class ChatGroupModel {
   async query(): Promise<ChatGroupItem[]> {
     return this.db.query.chatGroups.findMany({
       orderBy: [desc(chatGroups.updatedAt)],
-      where: eq(chatGroups.userId, this.userId),
+      where: this.ownership(),
     });
   }
 
@@ -44,7 +91,7 @@ export class ChatGroupModel {
       columns: { id: true },
       orderBy: [desc(chatGroups.updatedAt)],
       where: and(
-        eq(chatGroups.userId, this.userId),
+        this.ownership(),
         sql`${chatGroups.config}->>'forkedFromIdentifier' = ${forkedFromIdentifier}`,
       ),
     });
@@ -58,7 +105,7 @@ export class ChatGroupModel {
     const groupIds = groups.map((g) => g.id);
 
     const groupAgents = await this.db.query.chatGroupsAgents.findMany({
-      where: inArray(chatGroupsAgents.chatGroupId, groupIds),
+      where: and(inArray(chatGroupsAgents.chatGroupId, groupIds), this.agentsOwnership()),
       with: { agent: true },
     });
 
@@ -87,7 +134,7 @@ export class ChatGroupModel {
 
     const agents = await this.db.query.chatGroupsAgents.findMany({
       orderBy: [chatGroupsAgents.order],
-      where: eq(chatGroupsAgents.chatGroupId, groupId),
+      where: and(eq(chatGroupsAgents.chatGroupId, groupId), this.agentsOwnership()),
     });
 
     return { agents, group };
@@ -98,7 +145,12 @@ export class ChatGroupModel {
   async create(params: Omit<NewChatGroup, 'userId'>): Promise<ChatGroupItem> {
     const [result] = await this.db
       .insert(chatGroups)
-      .values({ ...params, userId: this.userId })
+      .values(
+        buildWorkspacePayload(
+          { userId: this.userId, workspaceId: this.workspaceId },
+          { ...params },
+        ),
+      )
       .returning();
 
     return result;
@@ -119,6 +171,7 @@ export class ChatGroupModel {
       chatGroupId: group.id,
       order: index,
       userId: this.userId,
+      workspaceId: this.workspaceId ?? null,
     }));
 
     const agents = await this.db.insert(chatGroupsAgents).values(agentParams).returning();
@@ -132,11 +185,37 @@ export class ChatGroupModel {
     const [result] = await this.db
       .update(chatGroups)
       .set(value)
-      .where(and(eq(chatGroups.id, id), eq(chatGroups.userId, this.userId)))
+      .where(and(eq(chatGroups.id, id), this.ownership()))
       .returning();
 
     if (!result) {
       throw new Error('Chat group not found or access denied');
+    }
+
+    return result;
+  }
+
+  /**
+   * Publish a private chat group into the workspace. One-way: once shared,
+   * other members may have started using it, so we never let it slip back to
+   * `private`. Restricted to the creator's own still-private group.
+   */
+  async publishToWorkspace(id: string): Promise<ChatGroupItem> {
+    const [result] = await this.db
+      .update(chatGroups)
+      .set({ updatedAt: new Date(), visibility: 'public' })
+      .where(
+        and(
+          eq(chatGroups.id, id),
+          this.ownership(),
+          eq(chatGroups.userId, this.userId),
+          eq(chatGroups.visibility, 'private'),
+        ),
+      )
+      .returning();
+
+    if (!result) {
+      throw new Error('Chat group not found, already published, or access denied');
     }
 
     return result;
@@ -153,6 +232,7 @@ export class ChatGroupModel {
       order: options?.order || 0,
       role: options?.role || 'assistant',
       userId: this.userId,
+      workspaceId: this.workspaceId ?? null,
     };
 
     const [result] = await this.db.insert(chatGroupsAgents).values(params).returning();
@@ -172,7 +252,56 @@ export class ChatGroupModel {
     agentIds: string[],
   ): Promise<{ added: NewChatGroupAgent[]; existing: string[] }> {
     const group = await this.findById(groupId);
-    if (!group) throw new Error('Group not found');
+    if (!group) throw new TRPCError({ code: 'NOT_FOUND', message: 'Group not found' });
+
+    // Composite visibility rule for group membership:
+    // - A caller-owned private group may admit the caller's own private agents
+    //   alongside public ones.
+    // - Any public group, or any group the caller doesn't own, must contain
+    //   only public agents — even the caller's own private agent can't be
+    //   added, because that would expose it to the other members.
+    // `findById` already scopes by visibility, so reaching here with
+    // `group.visibility === 'private'` implies `group.userId === this.userId`.
+    const allowPrivateMembers = group.visibility === 'private' && group.userId === this.userId;
+
+    if (agentIds.length > 0) {
+      // Resolve each requested agent through the workspace + visibility
+      // predicate so another user's private agent never enters this set; it
+      // simply doesn't match the row filter, and we surface NOT_FOUND below.
+      const visibleAgents = await this.db
+        .select({
+          id: agents.id,
+          userId: agents.userId,
+          visibility: agents.visibility,
+        })
+        .from(agents)
+        .where(
+          and(
+            inArray(agents.id, agentIds),
+            buildWorkspaceWhere(
+              { userId: this.userId, workspaceId: this.workspaceId },
+              {
+                userId: agents.userId,
+                workspaceId: agents.workspaceId,
+                visibility: agents.visibility,
+              },
+            ),
+          ),
+        );
+
+      const visibleById = new Map(visibleAgents.map((row) => [row.id, row]));
+      for (const agentId of agentIds) {
+        const row = visibleById.get(agentId);
+        if (!row) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Agent not found' });
+        }
+        if (row.visibility === 'private' && !allowPrivateMembers) {
+          // Caller owns this private agent (visibility predicate would have
+          // hidden it otherwise) but the group can't hold private members.
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Agent not found' });
+        }
+      }
+    }
 
     const existingAgents = await this.getGroupAgents(groupId);
     const existingAgentIds = new Set(existingAgents.map((a) => a.agentId));
@@ -189,6 +318,7 @@ export class ChatGroupModel {
       chatGroupId: groupId,
       enabled: true,
       userId: this.userId,
+      workspaceId: this.workspaceId ?? null,
     }));
 
     const added = await this.db.insert(chatGroupsAgents).values(newAgents).returning();
@@ -196,10 +326,19 @@ export class ChatGroupModel {
     return { added, existing: existingIds };
   }
 
+  private agentsOwnership = () =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, chatGroupsAgents);
+
   async removeAgentFromGroup(groupId: string, agentId: string): Promise<void> {
     await this.db
       .delete(chatGroupsAgents)
-      .where(and(eq(chatGroupsAgents.chatGroupId, groupId), eq(chatGroupsAgents.agentId, agentId)));
+      .where(
+        and(
+          eq(chatGroupsAgents.chatGroupId, groupId),
+          eq(chatGroupsAgents.agentId, agentId),
+          this.agentsOwnership(),
+        ),
+      );
   }
 
   /**
@@ -212,7 +351,11 @@ export class ChatGroupModel {
     await this.db
       .delete(chatGroupsAgents)
       .where(
-        and(eq(chatGroupsAgents.chatGroupId, groupId), inArray(chatGroupsAgents.agentId, agentIds)),
+        and(
+          eq(chatGroupsAgents.chatGroupId, groupId),
+          inArray(chatGroupsAgents.agentId, agentIds),
+          this.agentsOwnership(),
+        ),
       );
   }
 
@@ -224,7 +367,13 @@ export class ChatGroupModel {
     const [result] = await this.db
       .update(chatGroupsAgents)
       .set({ ...updates, updatedAt: new Date() })
-      .where(and(eq(chatGroupsAgents.chatGroupId, groupId), eq(chatGroupsAgents.agentId, agentId)))
+      .where(
+        and(
+          eq(chatGroupsAgents.chatGroupId, groupId),
+          eq(chatGroupsAgents.agentId, agentId),
+          this.agentsOwnership(),
+        ),
+      )
       .returning();
 
     return result;
@@ -236,7 +385,7 @@ export class ChatGroupModel {
     // Agents are automatically deleted due to CASCADE constraint
     const [result] = await this.db
       .delete(chatGroups)
-      .where(and(eq(chatGroups.id, id), eq(chatGroups.userId, this.userId)))
+      .where(and(eq(chatGroups.id, id), this.ownership()))
       .returning();
 
     if (!result) {
@@ -247,7 +396,7 @@ export class ChatGroupModel {
   }
 
   async deleteAll(): Promise<void> {
-    await this.db.delete(chatGroups).where(eq(chatGroups.userId, this.userId));
+    await this.db.delete(chatGroups).where(this.ownership());
   }
 
   // ******* Agent Query Methods ******* //
@@ -255,14 +404,58 @@ export class ChatGroupModel {
   async getGroupAgents(groupId: string): Promise<ChatGroupAgentItem[]> {
     return this.db.query.chatGroupsAgents.findMany({
       orderBy: [chatGroupsAgents.order],
-      where: eq(chatGroupsAgents.chatGroupId, groupId),
+      where: and(eq(chatGroupsAgents.chatGroupId, groupId), this.agentsOwnership()),
     });
+  }
+
+  /**
+   * Read-only roster of a group's **enabled** agents joined with their agent meta
+   * (title/description) and membership role, ordered by member order.
+   *
+   * Used to inject the group member list — with the real `agt_*` IDs — into the
+   * supervisor/member runtime context so the orchestration model dispatches
+   * members by their actual IDs instead of hallucinating role names (which then
+   * fail to resolve to an agent, surfacing as "Agent member(s) failed to start").
+   *
+   * Disabled members are excluded (matching `getEnabledGroupAgents`): advertising
+   * them in `<group_participants>` would let the supervisor invoke a disabled
+   * agent, since the group-management runtime accepts whatever id it dispatches.
+   */
+  async getGroupAgentsWithMeta(groupId: string): Promise<
+    Array<{
+      agentId: string;
+      description: string | null;
+      role: string | null;
+      title: string | null;
+    }>
+  > {
+    return this.db
+      .select({
+        agentId: chatGroupsAgents.agentId,
+        description: agents.description,
+        role: chatGroupsAgents.role,
+        title: agents.title,
+      })
+      .from(chatGroupsAgents)
+      .innerJoin(agents, eq(chatGroupsAgents.agentId, agents.id))
+      .where(
+        and(
+          eq(chatGroupsAgents.chatGroupId, groupId),
+          eq(chatGroupsAgents.enabled, true),
+          this.agentsOwnership(),
+        ),
+      )
+      .orderBy(chatGroupsAgents.order);
   }
 
   async getEnabledGroupAgents(groupId: string): Promise<ChatGroupAgentItem[]> {
     return this.db.query.chatGroupsAgents.findMany({
       orderBy: [chatGroupsAgents.order],
-      where: and(eq(chatGroupsAgents.chatGroupId, groupId), eq(chatGroupsAgents.enabled, true)),
+      where: and(
+        eq(chatGroupsAgents.chatGroupId, groupId),
+        eq(chatGroupsAgents.enabled, true),
+        this.agentsOwnership(),
+      ),
     });
   }
 
@@ -275,9 +468,7 @@ export class ChatGroupModel {
     const groupIds = await this.db
       .selectDistinct({ chatGroupId: chatGroupsAgents.chatGroupId })
       .from(chatGroupsAgents)
-      .where(
-        and(eq(chatGroupsAgents.userId, this.userId), inArray(chatGroupsAgents.agentId, agentIds)),
-      );
+      .where(and(this.agentsOwnership(), inArray(chatGroupsAgents.agentId, agentIds)));
 
     if (groupIds.length === 0) return [];
 
@@ -288,7 +479,7 @@ export class ChatGroupModel {
           chatGroups.id,
           groupIds.map((g) => g.chatGroupId),
         ),
-        eq(chatGroups.userId, this.userId),
+        this.ownership(),
       ),
     });
   }

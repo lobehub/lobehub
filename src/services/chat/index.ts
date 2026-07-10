@@ -1,6 +1,6 @@
 import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
 import {
-  KLAVIS_SERVER_TYPES,
+  COMPOSIO_APP_TYPES,
   LOBEHUB_SKILL_PROVIDERS,
   REQUEST_AGENT_ID_HEADER,
   REQUEST_TOPIC_ID_HEADER,
@@ -10,19 +10,22 @@ import { type OfficialToolItem } from '@lobechat/context-engine';
 import { type FetchSSEOptions } from '@lobechat/fetch-sse';
 import { fetchSSE, standardizeAnimationStyle } from '@lobechat/fetch-sse';
 import type { ChatCompletionErrorPayload } from '@lobechat/model-runtime';
-import { AgentRuntimeError, responsesAPIModels } from '@lobechat/model-runtime';
-import type {
-  RuntimeInitialContext,
-  RuntimeStepContext,
-  TracePayload,
-  UIChatMessage,
+import { AgentRuntimeError, isResponsesAPIModel } from '@lobechat/model-runtime';
+import {
+  ChatErrorType,
+  getDisabledPluginIds,
+  type RuntimeInitialContext,
+  type RuntimeStepContext,
+  type TracePayload,
+  TraceTagMap,
+  type UIChatMessage,
 } from '@lobechat/types';
-import { ChatErrorType, TraceTagMap } from '@lobechat/types';
 import { merge } from 'es-toolkit/compat';
 import { ModelProvider } from 'model-bank';
 
 import { DEFAULT_AGENT_CONFIG } from '@/const/settings';
 import { getSearchConfig } from '@/helpers/getSearchConfig';
+import { isCanUseFC } from '@/helpers/isCanUseFC';
 import { getAgentStoreState } from '@/store/agent';
 import {
   agentByIdSelectors,
@@ -34,7 +37,7 @@ import { getChatStoreState } from '@/store/chat';
 import { getToolStoreState } from '@/store/tool';
 import {
   builtinToolSelectors,
-  klavisStoreSelectors,
+  composioStoreSelectors,
   lobehubSkillStoreSelectors,
 } from '@/store/tool/selectors';
 import { getUserStoreState, useUserStore } from '@/store/user';
@@ -173,6 +176,8 @@ class ChatService {
     const userMemorySettings = settingsSelectors.currentMemorySettings(getUserStoreState());
     const effectiveMemoryEffort =
       chatConfig.memory?.effort ?? userMemorySettings.effort ?? 'medium';
+    const enableAgentMode =
+      chatConfig.enableAgentMode !== false && isCanUseFC(payload.model, payload.provider!);
 
     // =================== 1.2 build agent builder context =================== //
 
@@ -202,19 +207,19 @@ class ChatService {
       const activeAgentConfig =
         agentSelectors.getAgentConfigById(activeAgentId)(getAgentStoreState());
 
-      // Build official tools list (builtin tools + Klavis tools)
+      // Build official tools list (builtin tools + Composio tools)
       const toolState = getToolStoreState();
       const enabledPlugins = activeAgentConfig?.plugins || [];
 
       const officialTools: OfficialToolItem[] = [];
 
-      // Get builtin tools (excluding Klavis tools)
+      // Get builtin tools (excluding Composio tools)
       const builtinTools = builtinToolSelectors.metaList(toolState);
-      const klavisIdentifiers = new Set(KLAVIS_SERVER_TYPES.map((t) => t.identifier));
+      const composioIdentifiers = new Set(COMPOSIO_APP_TYPES.map((t) => t.identifier));
 
       for (const tool of builtinTools) {
-        // Skip Klavis tools in builtin list (they'll be shown separately)
-        if (klavisIdentifiers.has(tool.identifier)) continue;
+        // Skip Composio tools in builtin list (they'll be shown separately)
+        if (composioIdentifiers.has(tool.identifier)) continue;
 
         officialTools.push({
           description: tool.meta?.description,
@@ -226,24 +231,24 @@ class ChatService {
         });
       }
 
-      // Get Klavis tools (if enabled)
-      const isKlavisEnabled =
+      // Get Composio tools (if enabled)
+      const isComposioEnabled =
         typeof window !== 'undefined' &&
-        window.global_serverConfigStore?.getState()?.serverConfig?.enableKlavis;
+        window.global_serverConfigStore?.getState()?.serverConfig?.enableComposio;
 
-      if (isKlavisEnabled) {
-        const allKlavisServers = klavisStoreSelectors.getServers(toolState);
+      if (isComposioEnabled) {
+        const allComposioServers = composioStoreSelectors.getServers(toolState);
 
-        for (const klavisType of KLAVIS_SERVER_TYPES) {
-          const server = allKlavisServers.find((s) => s.identifier === klavisType.identifier);
+        for (const composioType of COMPOSIO_APP_TYPES) {
+          const server = allComposioServers.find((s) => s.identifier === composioType.identifier);
 
           officialTools.push({
-            description: `LobeHub Mcp Server: ${klavisType.label}`,
-            enabled: enabledPlugins.includes(klavisType.identifier),
-            identifier: klavisType.identifier,
+            description: `LobeHub Mcp Server: ${composioType.label}`,
+            enabled: enabledPlugins.includes(composioType.identifier),
+            identifier: composioType.identifier,
             installed: !!server,
-            name: klavisType.label,
-            type: 'klavis',
+            name: composioType.label,
+            type: 'composio',
           });
         }
       }
@@ -282,6 +287,10 @@ class ChatService {
       agentBuilderContext,
       agentDocuments,
       agentId: targetAgentId,
+      // `agentConfig.plugins` is the raw (pre-filter) field — `plugins` below
+      // is already pinned-only (resolved upstream in agentConfigResolver).
+      disabledPluginIds: getDisabledPluginIds(agentConfig.plugins),
+      enableAgentMode,
       // Use raw chatConfig values, not selectors with business logic that may force false
       enableHistoryCount: chatConfig.enableHistoryCount,
       enableUserMemories,
@@ -368,7 +377,7 @@ class ChatService {
       ? findDeploymentName(model, provider)
       : undefined;
     const shouldUseDeploymentField =
-      (provider === ModelProvider.Azure && responsesAPIModels.has(model)) ||
+      (provider === ModelProvider.Azure && isResponsesAPIModel(model)) ||
       provider === ModelProvider.Spark;
 
     if (!shouldUseDeploymentField && deploymentName) {
@@ -460,6 +469,8 @@ class ChatService {
       },
       provider,
     });
+    const { getBusinessTrpcHeaders } = await import('@/business/client/trpc-headers');
+    Object.assign(headers as Record<string, string>, await getBusinessTrpcHeaders());
 
     const { DEFAULT_MODEL_PROVIDER_LIST } = await import('model-bank/modelProviders');
     const providerConfig = DEFAULT_MODEL_PROVIDER_LIST.find((item) => item.id === provider);

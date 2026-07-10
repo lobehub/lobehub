@@ -31,6 +31,7 @@ export const systemPrompt = `You have access to a Skills tool that can activate 
 
 - **runCommand**: Call this to execute shell commands in the cloud sandbox
   - Use for general CLI commands, platform tools (e.g., \`lh\` CLI), and ad-hoc operations
+  - If \`lobe-local-system\` runCommand is also available, default shell execution to it — use this sandbox runCommand only when the task needs LobeHub-managed credentials, isolation, or a tool missing on the local device
   - Provide the command to execute and a clear description of what it does
   - Returns the command output (stdout/stderr) and exit code
   - Requires user confirmation before execution
@@ -52,7 +53,7 @@ export const systemPrompt = `You have access to a Skills tool that can activate 
 <runcommand_vs_execscript>
 **When to use runCommand vs execScript:**
 
-- **runCommand (Default for most commands)**:
+- **runCommand (default of the two)**:
   - Use for general shell commands and CLI tools (e.g., \`lh kb list\`, \`npm install\`)
   - Use for platform tool commands (LobeHub CLI, etc.)
   - No skill context needed — just provide the command

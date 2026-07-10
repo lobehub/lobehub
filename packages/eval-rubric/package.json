@@ -27,7 +27,7 @@
   },
   "dependencies": {
     "@lobechat/types": "workspace:*",
-    "ajv": "^8.17.1"
+    "ajv": "^8.20.0"
   },
   "devDependencies": {
     "typescript": "^6.0.3"

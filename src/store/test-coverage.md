@@ -234,7 +234,7 @@ Before updating documentation, create a summary of what was accomplished:
 **Example Summary:**
 
 ```
-Store: chat/slices/aiChat
+Store: chat/slices/agentRun
 Coverage: 65% → 82% (+17%)
 Tests Added: 52 new tests
 Features Tested:
@@ -507,7 +507,7 @@ bunx eslint src/store/[domain]/
   - `file/slices/fileManager/action.test.ts` - 35 tests (692 LOC) covering file management operations
 - **Actions Tested**:
   - **mcpStore** (7 main actions): updateMCPInstallProgress, cancelInstallMCPPlugin, cancelMcpConnectionTest, testMcpConnection, uninstallMCPPlugin, loadMoreMCPPlugins, resetMCPPluginList, useFetchMCPPluginList, installMCPPlugin
-  - **fileManager** (15 actions): dispatchDockFileList, embeddingChunks, parseFilesToChunks, pushDockFileList, reEmbeddingChunks, reParseFile, refreshFileList, removeAllFiles, removeFileItem, removeFiles, toggleEmbeddingIds, toggleParsingIds, useFetchFileItem, useFetchFileManage
+  - **fileManager** (14 actions): dispatchDockFileList, embeddingChunks, parseFilesToChunks, pushDockFileList, reEmbeddingChunks, reParseFile, refreshFileList, removeFileItem, removeFiles, toggleEmbeddingIds, toggleParsingIds, useFetchFileItem, useFetchFileManage
 - **Features Tested**:
   - MCP plugin installation flow (normal, resume, with dependencies, with config)
   - MCP connection testing (HTTP and STDIO)
@@ -577,7 +577,7 @@ bunx eslint src/store/[domain]/
 
 ### Store-Specific Notes
 
-- **chat/aiChat**: Complex streaming logic, requires careful mocking of chatService
+- **chat/agentRun**: Complex streaming logic, requires careful mocking of chatService
 - **chat/thread**: ✅ Comprehensive tests complete (39 tests, \~80 LOC)
 - **tool/mcpStore**: ✅ Comprehensive tests complete (41 tests, 624 LOC)
 - **file/fileManager**: ✅ Comprehensive tests complete (35 tests, 205 LOC)

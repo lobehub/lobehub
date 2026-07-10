@@ -1,9 +1,6 @@
 export interface ClientSecretPayload {
   /**
    * Represents the user's API key
-   *
-   * If provider need multi keys like bedrock,
-   * this will be used as the checker whether to use frontend key
    */
   apiKey?: string;
   /**

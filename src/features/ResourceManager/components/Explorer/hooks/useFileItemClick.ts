@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router';
 
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
 
 export interface UseFileItemClickOptions {
@@ -23,7 +24,7 @@ export const useFileItemClick = ({
   isPage,
   onOpen,
 }: UseFileItemClickOptions) => {
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const setMode = useResourceManagerStore((s) => s.setMode);
   const setCurrentViewItemId = useResourceManagerStore((s) => s.setCurrentViewItemId);
@@ -72,7 +73,19 @@ export const useFileItemClick = ({
       // Call onOpen if provided for backwards compatibility
       onOpen?.(id);
     }
-  }, [isFolder, slug, id, libraryId, isPage, navigate, searchParams, setSearchParams, setMode, setCurrentViewItemId, onOpen]);
+  }, [
+    isFolder,
+    slug,
+    id,
+    libraryId,
+    isPage,
+    navigate,
+    searchParams,
+    setSearchParams,
+    setMode,
+    setCurrentViewItemId,
+    onOpen,
+  ]);
 
   return handleClick;
 };

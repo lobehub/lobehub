@@ -1,12 +1,14 @@
 import type { AiProviderConfig, AiProviderSettings } from '@lobechat/types';
+import { isNotNull, isNull } from 'drizzle-orm';
 import {
   boolean,
   index,
   integer,
   jsonb,
   pgTable,
-  primaryKey,
   text,
+  uniqueIndex,
+  uuid,
   varchar,
 } from 'drizzle-orm/pg-core';
 import type { AiModelSettings } from 'model-bank';
@@ -20,6 +22,14 @@ export const aiProviders = pgTable(
   {
     id: varchar('id', { length: 64 }).notNull(),
     name: text('name'),
+
+    /**
+     * Surrogate primary key for the workspace-scoped rebuild. Migration 0110
+     * replaced the composite PK (id, provider_id, user_id) with this single-col
+     * surrogate so that workspace-scoped partial unique indexes can enforce
+     * business uniqueness. The PK itself no longer carries unique semantics.
+     */
+    _id: uuid('_id').defaultRandom().notNull().primaryKey(),
 
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
@@ -48,7 +58,12 @@ export const aiProviders = pgTable(
     ...timestamps,
   },
   (table) => [
-    primaryKey({ columns: [table.id, table.userId] }),
+    uniqueIndex('ai_providers_id_user_id_unique')
+      .on(table.id, table.userId)
+      .where(isNull(table.workspaceId)),
+    uniqueIndex('ai_providers_id_user_id_workspace_id_unique')
+      .on(table.id, table.userId, table.workspaceId)
+      .where(isNotNull(table.workspaceId)),
     index('ai_providers_user_id_idx').on(table.userId),
     index('ai_providers_workspace_id_idx').on(table.workspaceId),
   ],
@@ -61,6 +76,15 @@ export const aiModels = pgTable(
   'ai_models',
   {
     id: varchar('id', { length: 150 }).notNull(),
+
+    /**
+     * Surrogate primary key for the workspace-scoped rebuild. Migration 0110
+     * replaced the composite PK (id, provider_id, user_id) with this single-col
+     * surrogate so that workspace-scoped partial unique indexes can enforce
+     * business uniqueness. The PK itself no longer carries unique semantics.
+     */
+    _id: uuid('_id').defaultRandom().notNull().primaryKey(),
+
     displayName: varchar('display_name', { length: 200 }),
     description: text('description'),
     organization: varchar('organization', { length: 100 }),
@@ -86,7 +110,12 @@ export const aiModels = pgTable(
     ...timestamps,
   },
   (table) => [
-    primaryKey({ columns: [table.id, table.providerId, table.userId] }),
+    uniqueIndex('ai_models_id_provider_id_user_id_unique')
+      .on(table.id, table.providerId, table.userId)
+      .where(isNull(table.workspaceId)),
+    uniqueIndex('ai_models_id_provider_id_user_id_workspace_id_unique')
+      .on(table.id, table.providerId, table.userId, table.workspaceId)
+      .where(isNotNull(table.workspaceId)),
     index('ai_models_user_id_idx').on(table.userId),
     index('ai_models_workspace_id_idx').on(table.workspaceId),
   ],

@@ -1,22 +1,31 @@
+import { AGENT_CHAT_TOPIC_URL, GROUP_CHAT_TOPIC_URL } from '@lobechat/const';
 import isEqual from 'fast-deep-equal';
 import { gt, parse, valid } from 'semver';
 import type { SWRResponse } from 'swr';
 
-import { SESSION_CHAT_TOPIC_URL } from '@/const/url';
+import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { CURRENT_VERSION, isDesktop } from '@/const/version';
 import { useOnlyFetchOnceSWR } from '@/libs/swr';
+import { globalKeys } from '@/libs/swr/keys';
 import { globalService } from '@/services/global';
 import { getElectronStoreState } from '@/store/electron';
 import { electronSyncSelectors } from '@/store/electron/selectors';
 import type { SystemStatus } from '@/store/global/initialState';
-import { DEFAULT_HOME_SIDEBAR_EXPANDED_KEYS } from '@/store/global/initialState';
+import {
+  DEFAULT_HOME_SIDEBAR_EXPANDED_KEYS,
+  DEFAULT_RESOURCE_MANAGER_COLUMN_WIDTHS,
+} from '@/store/global/initialState';
 import type { StoreSetter } from '@/store/types';
 import type { LocaleMode } from '@/types/locale';
 import { switchLang } from '@/utils/client/switchLang';
 import { merge } from '@/utils/merge';
 import { setNamespace } from '@/utils/storeDebug';
 
-import { DEFAULT_HIDDEN_SECTIONS, DEFAULT_SIDEBAR_ITEMS } from '../selectors/systemStatus';
+import {
+  DEFAULT_HIDDEN_SECTIONS,
+  DEFAULT_SIDEBAR_ITEMS,
+  routeOverlayWrites,
+} from '../selectors/systemStatus';
 import type { GlobalStore } from '../store';
 
 const n = setNamespace('g');
@@ -68,7 +77,7 @@ export class GlobalGeneralActionImpl {
 
   openTopicInNewWindow = async (agentId: string, topicId: string): Promise<void> => {
     const popupPath = `/popup/agent/${agentId}/${topicId}`;
-    const browserUrl = SESSION_CHAT_TOPIC_URL(agentId, topicId);
+    const browserUrl = AGENT_CHAT_TOPIC_URL(agentId, topicId);
 
     if (isDesktop) {
       try {
@@ -99,7 +108,7 @@ export class GlobalGeneralActionImpl {
 
   openGroupTopicInNewWindow = async (groupId: string, topicId: string): Promise<void> => {
     const popupPath = `/popup/group/${groupId}/${topicId}`;
-    const browserUrl = `/group/${groupId}?topic=${topicId}`;
+    const browserUrl = GROUP_CHAT_TOPIC_URL(groupId, topicId);
 
     if (isDesktop) {
       try {
@@ -148,11 +157,13 @@ export class GlobalGeneralActionImpl {
     }
   };
 
-  updateResourceManagerColumnWidth = (column: 'name' | 'date' | 'size', width: number): void => {
-    const currentWidths = this.#get().status.resourceManagerColumnWidths || {
-      date: 160,
-      name: 574,
-      size: 140,
+  updateResourceManagerColumnWidth = (
+    column: 'name' | 'date' | 'size' | 'uploader',
+    width: number,
+  ): void => {
+    const currentWidths = {
+      ...DEFAULT_RESOURCE_MANAGER_COLUMN_WIDTHS,
+      ...this.#get().status.resourceManagerColumnWidths,
     };
 
     this.#get().updateSystemStatus({
@@ -174,10 +185,20 @@ export class GlobalGeneralActionImpl {
     );
   };
 
-  updateSystemStatus = (status: Partial<SystemStatus>, action?: any): void => {
+  updateSystemStatus = (
+    status: Partial<SystemStatus>,
+    action?: any,
+    options?: { skipWorkspaceOverlay?: boolean },
+  ): void => {
     if (!this.#get().isStatusInit) return;
 
-    const nextStatus = merge(this.#get().status, status);
+    // When inside a workspace, route whitelisted sidebar-layout fields into
+    // `status.workspace.*` so personal-mode preferences stay untouched. The
+    // init path bypasses routing — it rehydrates whatever shape was persisted.
+    const workspaceId = options?.skipWorkspaceOverlay ? null : getActiveWorkspaceId();
+    const routedPatch = routeOverlayWrites(status, workspaceId);
+
+    const nextStatus = merge(this.#get().status, routedPatch);
 
     if (isEqual(this.#get().status, nextStatus)) return;
 
@@ -187,7 +208,7 @@ export class GlobalGeneralActionImpl {
 
   useCheckLatestVersion = (enabledCheck: boolean = true): SWRResponse<string> => {
     return useOnlyFetchOnceSWR(
-      enabledCheck ? 'checkLatestVersion' : null,
+      enabledCheck ? globalKeys.latestVersion() : null,
       async () => globalService.getLatestVersion(),
       {
         focusThrottleInterval: 1000 * 60 * 30,
@@ -215,7 +236,7 @@ export class GlobalGeneralActionImpl {
       isDesktop &&
         // only check server version for self-hosted remote server
         electronSyncSelectors.storageMode(getElectronStoreState()) !== 'cloud'
-        ? 'checkServerVersion'
+        ? globalKeys.serverVersion()
         : null,
       async () => globalService.getServerVersion(),
       {
@@ -262,7 +283,7 @@ export class GlobalGeneralActionImpl {
 
   useInitSystemStatus = (): SWRResponse => {
     return useOnlyFetchOnceSWR<SystemStatus>(
-      'initSystemStatus',
+      globalKeys.systemStatus(),
       () => this.#get().statusStorage.getFromLocalStorage(),
       {
         onSuccess: (status) => {
@@ -276,7 +297,9 @@ export class GlobalGeneralActionImpl {
             workingSidebarRevealRequest: undefined,
           };
 
-          this.#get().updateSystemStatus(statusWithResetTransientStates, 'initSystemStatus');
+          this.#get().updateSystemStatus(statusWithResetTransientStates, 'initSystemStatus', {
+            skipWorkspaceOverlay: true,
+          });
         },
       },
     );

@@ -19,7 +19,7 @@ export class ResponsesController extends BaseController {
       const body = await this.getBody<CreateResponseRequest>(c);
       const userId = this.getUserId(c);
       const db = await this.getDatabase();
-      const service = new ResponsesService(db, userId);
+      const service = new ResponsesService(db, userId, this.getWorkspaceId(c));
 
       if (body.stream) {
         return this.handleStreamingResponse(c, service, body);

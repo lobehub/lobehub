@@ -1,5 +1,6 @@
 import type { SpeedMultiplier } from '@lobechat/agent-mock';
-import { ActionIcon, Dropdown, Flexbox, Segmented, toast } from '@lobehub/ui';
+import { ActionIcon, type DropdownItem, DropdownMenu, Flexbox, toast } from '@lobehub/ui';
+import { Tabs, type TabsItem } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Pause, Play, Repeat, RotateCcw, SkipForward } from 'lucide-react';
 import { memo, useCallback, useMemo, useRef } from 'react';
@@ -9,12 +10,12 @@ import { useAgentMockReplayTarget } from '../hooks/useAgentMockReplayTarget';
 import { useMockCases } from '../hooks/useMockCases';
 import { useAgentMockStore } from '../store/agentMockStore';
 
-const SPEED_OPTIONS: Array<{ label: string; value: SpeedMultiplier }> = [
-  { label: '0.5×', value: 0.5 },
-  { label: '1×', value: 1 },
-  { label: '2×', value: 2 },
-  { label: '5×', value: 5 },
-  { label: '∞', value: 'instant' },
+const SPEED_OPTIONS: Array<{ key: string; label: string; value: SpeedMultiplier }> = [
+  { key: '0.5', label: '0.5×', value: 0.5 },
+  { key: '1', label: '1×', value: 1 },
+  { key: '2', label: '2×', value: 2 },
+  { key: '5', label: '5×', value: 5 },
+  { key: 'instant', label: '∞', value: 'instant' },
 ];
 
 const styles = createStaticStyles(({ css }) => ({
@@ -117,7 +118,7 @@ export const TransportBar = memo(() => {
     launchCase();
   }, [launchCase, playback, seekToEventIndex, selected, status]);
 
-  const stepMenu = useMemo(
+  const stepMenu: DropdownItem[] = useMemo(
     () => [
       { key: 'event', label: 'Next event', onClick: stepEvent },
       { key: 'step', label: 'Next step', onClick: stepStep },
@@ -157,16 +158,9 @@ export const TransportBar = memo(() => {
         title={running ? 'Pause' : paused ? 'Resume' : 'Play'}
         onClick={handlePlay}
       />
-      <Dropdown
-        disabled={disabled}
-        placement="topLeft"
-        menu={{
-          items: stepMenu.map(({ key, label }) => ({ key, label })),
-          onClick: ({ key }) => stepMenu.find((m) => m.key === key)?.onClick(),
-        }}
-      >
+      <DropdownMenu items={stepMenu} placement="topLeft">
         <ActionIcon disabled={disabled} icon={SkipForward} size="small" title="Step" />
-      </Dropdown>
+      </DropdownMenu>
       <ActionIcon
         disabled={disabled}
         icon={RotateCcw}
@@ -200,13 +194,13 @@ export const TransportBar = memo(() => {
       <span className={styles.time}>
         {elapsed} / {total}
       </span>
-      <Segmented
-        disabled={disabled}
-        options={SPEED_OPTIONS}
+      <Tabs
+        activeKey={String(speed)}
+        items={SPEED_OPTIONS.map((o): TabsItem => ({ disabled, key: o.key, label: o.label }))}
         size="small"
-        value={speed}
-        onChange={(value) => {
-          const next = value as SpeedMultiplier;
+        onChange={(key) => {
+          const next = SPEED_OPTIONS.find((o) => o.key === key)?.value;
+          if (next === undefined) return;
           setSpeedStore(next);
           setSpeed(next);
         }}

@@ -2,9 +2,10 @@
 
 import { Accordion, AccordionItem, Flexbox, Text } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation } from 'react-router';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { SettingsTabs } from '@/store/global/initialState';
 import { isModifierClick } from '@/utils/navigation';
 
@@ -12,7 +13,7 @@ import { SettingsGroupKey, useCategory } from '../../hooks/useCategory';
 
 const Body = memo(() => {
   const categoryGroups = useCategory();
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const location = useLocation();
 
   // Extract current tab from pathname: /settings/profile -> profile
@@ -54,7 +55,7 @@ const Body = memo(() => {
           >
             <Flexbox gap={1} paddingBlock={1}>
               {group.items.map((item) => {
-                const url = getTabUrl(item.key);
+                const url = item.href ?? getTabUrl(item.key);
                 return (
                   <Link
                     key={item.key}

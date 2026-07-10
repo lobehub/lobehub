@@ -8,6 +8,7 @@ import { documents, files } from '../../schemas/file';
 import { chunks, embeddings } from '../../schemas/rag';
 import { fileChunks } from '../../schemas/relations';
 import { users } from '../../schemas/user';
+import { workspaces } from '../../schemas/workspace';
 import type { LobeChatDatabase } from '../../type';
 import { KnowledgeRepo } from './index';
 
@@ -254,6 +255,159 @@ describe('KnowledgeRepo', () => {
 
       expect(otherUserFile).toBeUndefined();
       expect(otherUserDoc).toBeUndefined();
+    });
+  });
+
+  describe('query - workspace isolation', () => {
+    const workspaceId = 'knowledge-workspace';
+
+    beforeEach(async () => {
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Knowledge Workspace',
+        primaryOwnerId: userId,
+        slug: workspaceId,
+      });
+
+      await serverDB.insert(files).values([
+        {
+          fileType: 'application/pdf',
+          name: 'workspace-owner-file.pdf',
+          size: 1024,
+          url: 'workspace-owner-file-url',
+          userId,
+          workspaceId,
+        },
+        {
+          fileType: 'application/pdf',
+          name: 'viewer-personal-file.pdf',
+          size: 1024,
+          url: 'viewer-personal-file-url',
+          userId: otherUserId,
+        },
+      ]);
+
+      await serverDB.insert(documents).values([
+        {
+          content: 'Workspace owner document',
+          fileType: 'application/pdf',
+          filename: 'workspace-owner-doc.pdf',
+          source: 'workspace-owner-source',
+          sourceType: 'api',
+          totalCharCount: 100,
+          totalLineCount: 10,
+          userId,
+          workspaceId,
+        },
+        {
+          content: 'Viewer personal document',
+          fileType: 'application/pdf',
+          filename: 'viewer-personal-doc.pdf',
+          source: 'viewer-personal-source',
+          sourceType: 'api',
+          totalCharCount: 100,
+          totalLineCount: 10,
+          userId: otherUserId,
+        },
+      ]);
+    });
+
+    it('should return workspace items regardless of the creator user', async () => {
+      const workspaceRepo = new KnowledgeRepo(serverDB, otherUserId, workspaceId);
+
+      const results = await workspaceRepo.query({ category: FilesTabs.All });
+
+      const names = results.map((item) => item.name).sort();
+      expect(names).toEqual(['workspace-owner-doc.pdf', 'workspace-owner-file.pdf']);
+    });
+
+    it('should not return workspace items in personal mode', async () => {
+      const results = await knowledgeRepo.query({ category: FilesTabs.All });
+
+      const names = results.map((item) => item.name).sort();
+      expect(names).not.toContain('workspace-owner-doc.pdf');
+      expect(names).not.toContain('workspace-owner-file.pdf');
+    });
+  });
+
+  describe('query - workspace visibility', () => {
+    const workspaceId = 'knowledge-visibility-workspace';
+
+    beforeEach(async () => {
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Visibility Workspace',
+        primaryOwnerId: userId,
+        slug: workspaceId,
+      });
+
+      await serverDB.insert(documents).values([
+        {
+          content: 'Public workspace document',
+          fileType: 'application/pdf',
+          filename: 'public-doc.pdf',
+          source: 'public-source',
+          sourceType: 'api',
+          totalCharCount: 100,
+          totalLineCount: 10,
+          userId,
+          visibility: 'public',
+          workspaceId,
+        },
+        {
+          content: 'Caller private document',
+          fileType: 'application/pdf',
+          filename: 'caller-private-doc.pdf',
+          source: 'caller-private-source',
+          sourceType: 'api',
+          totalCharCount: 100,
+          totalLineCount: 10,
+          userId,
+          visibility: 'private',
+          workspaceId,
+        },
+        {
+          content: 'Other member private document',
+          fileType: 'application/pdf',
+          filename: 'other-private-doc.pdf',
+          source: 'other-private-source',
+          sourceType: 'api',
+          totalCharCount: 100,
+          totalLineCount: 10,
+          userId: otherUserId,
+          visibility: 'private',
+          workspaceId,
+        },
+      ]);
+    });
+
+    it('should hide other members private documents in All view', async () => {
+      const repo = new KnowledgeRepo(serverDB, userId, workspaceId);
+
+      const names = (await repo.query({ category: FilesTabs.All })).map((item) => item.name).sort();
+
+      expect(names).toEqual(['caller-private-doc.pdf', 'public-doc.pdf']);
+      expect(names).not.toContain('other-private-doc.pdf');
+    });
+
+    it('should only return caller-owned private documents when visibility=private', async () => {
+      const repo = new KnowledgeRepo(serverDB, userId, workspaceId);
+
+      const names = (await repo.query({ category: FilesTabs.All, visibility: 'private' })).map(
+        (item) => item.name,
+      );
+
+      expect(names).toEqual(['caller-private-doc.pdf']);
+    });
+
+    it('should hide other members private documents in queryRecent', async () => {
+      const repo = new KnowledgeRepo(serverDB, userId, workspaceId);
+
+      const names = (await repo.queryRecent(10)).map((item) => item.name).sort();
+
+      expect(names).toContain('caller-private-doc.pdf');
+      expect(names).toContain('public-doc.pdf');
+      expect(names).not.toContain('other-private-doc.pdf');
     });
   });
 

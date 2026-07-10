@@ -11,7 +11,43 @@ export {
   REMOTE_HETEROGENEOUS_AGENT_CONFIGS,
 } from './config';
 export { HETEROGENEOUS_TYPE_LABELS } from './labels';
+export type {
+  CreateAssistantIntent,
+  MainAgentIntent,
+  MainAgentReduceCtx,
+  MainAgentRunState,
+  MainAgentTurnToolState,
+  MainPersistToolBatchIntent,
+  MainRecordUsageIntent,
+  MainResolveToolResultIntent,
+  MainStreamContentIntent,
+  PersistAssistantIntent,
+  SetErrorIntent,
+} from './mainAgentCoordinator';
+export { createMainAgentRunState, reduceMainAgent } from './mainAgentCoordinator';
 export { createAdapter, listAgentTypes } from './registry';
+export type {
+  CreateMessageIntent,
+  CreateThreadIntent,
+  FinalizeThreadIntent,
+  PersistContentIntent,
+  PersistToolBatchEntry,
+  PersistToolBatchIntent,
+  RecordUsageIntent,
+  ResolveToolResultIntent,
+  StreamContentIntent,
+  SubagentIntent,
+  SubagentReduceCtx,
+  SubagentRunSnapshot,
+  SubagentRunsState,
+} from './subagentCoordinator';
+export {
+  createSubagentRunsState,
+  type EventScope,
+  getEventScope,
+  reduceSubagentRuns,
+  rehydrateSubagentRunsState,
+} from './subagentCoordinator';
 export type {
   AgentEventAdapter,
   AgentProcessConfig,

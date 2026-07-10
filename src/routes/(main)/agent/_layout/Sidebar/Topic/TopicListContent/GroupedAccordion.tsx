@@ -5,7 +5,7 @@ import isEqual from 'fast-deep-equal';
 import { MoreHorizontal } from 'lucide-react';
 import { type ComponentType, memo, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import urlJoin from 'url-join';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
@@ -23,6 +23,7 @@ import { useAgentTopicGroupMode } from '../hooks/useAgentTopicGroupMode';
 export interface GroupItemComponentProps {
   activeThreadId?: string;
   activeTopicId?: string;
+  expanded: boolean;
   group: GroupedTopic;
 }
 
@@ -75,6 +76,7 @@ const GroupedAccordion = memo<GroupedAccordionProps>(({ GroupItem }) => {
           <GroupItem
             activeThreadId={activeThreadId}
             activeTopicId={activeTopicId}
+            expanded={expandedKeys.includes(group.id)}
             group={group}
             key={group.id}
           />

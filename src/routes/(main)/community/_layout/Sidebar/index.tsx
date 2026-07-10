@@ -1,14 +1,13 @@
-import React, { memo } from 'react';
+import { memo } from 'react';
 
 import { NavPanelPortal } from '@/features/NavPanel';
-import SideBarLayout from '@/features/NavPanel/SideBarLayout';
 
-import Header from './Header';
+import Content from './Content';
 
 const Sidebar = memo(() => {
   return (
     <NavPanelPortal navKey="discover">
-      <SideBarLayout header={<Header />} />
+      <Content />
     </NavPanelPortal>
   );
 });

@@ -2,7 +2,7 @@
 
 ## Fluent Registration API
 
-Use the middleware helpers in `src/server/services/agentSignal/runtime/middleware.ts`.
+Use the middleware helpers in `apps/server/src/services/agentSignal/runtime/middleware.ts`.
 
 They provide:
 
@@ -32,7 +32,7 @@ The context gives you:
 
 Read:
 
-- `src/server/services/agentSignal/runtime/context.ts`
+- `apps/server/src/services/agentSignal/runtime/context.ts`
 
 ## Return Contracts
 
@@ -48,7 +48,7 @@ Return one of these shapes:
 Read:
 
 - `packages/agent-signal/src/base/types.ts`
-- `src/server/services/agentSignal/runtime/AgentSignalScheduler.ts`
+- `apps/server/src/services/agentSignal/runtime/AgentSignalScheduler.ts`
 
 ## Policy Composition Pattern
 
@@ -58,9 +58,12 @@ Example from `analyzeIntent`:
 
 ```ts
 return defineAgentSignalHandlers([
+  ...(options.procedure ? [createToolOutcomeSourceHandler(options.procedure)] : []),
   createFeedbackSatisfactionJudgeProcessor(...),
   createFeedbackDomainJudgeSignalHandler(...),
   createFeedbackActionPlannerSignalHandler(),
+  defineSkillManagementActionHandler(...),
+  createCompletionSkillSynthesisSourceHandler(...),
   defineUserMemoryActionHandler(...),
 ]);
 ```
@@ -72,8 +75,8 @@ That bundle is later passed into the runtime via:
 
 Read:
 
-- `src/server/services/agentSignal/policies/index.ts`
-- `src/server/services/agentSignal/policies/analyzeIntent/index.ts`
+- `apps/server/src/services/agentSignal/policies/index.ts`
+- `apps/server/src/services/agentSignal/policies/analyzeIntent/index.ts`
 
 ## Source Handler Pattern
 
@@ -81,7 +84,7 @@ Use a source handler when you are interpreting a producer event into semantic si
 
 Reference:
 
-- `src/server/services/agentSignal/policies/analyzeIntent/feedbackSatisfaction.ts`
+- `apps/server/src/services/agentSignal/policies/analyzeIntent/feedbackSatisfaction.ts`
 
 Pattern:
 
@@ -94,9 +97,7 @@ return defineSourceHandler(
     // optionally use ctx.runtimeState
 
     return {
-      signals: [
-        /* one or more semantic signals */
-      ],
+      signals: [/* one or more semantic signals */],
       status: 'dispatch',
     };
   },
@@ -114,8 +115,8 @@ Use a signal handler when one semantic state should branch into more semantic st
 
 References:
 
-- `src/server/services/agentSignal/policies/analyzeIntent/feedbackDomain.ts`
-- `src/server/services/agentSignal/policies/analyzeIntent/feedbackAction.ts`
+- `apps/server/src/services/agentSignal/policies/analyzeIntent/feedbackDomain.ts`
+- `apps/server/src/services/agentSignal/policies/analyzeIntent/feedbackAction.ts`
 
 Pattern:
 
@@ -125,9 +126,7 @@ return defineSignalHandler(
   'signal.my-policy-router',
   async (signal): Promise<RuntimeProcessorResult | void> => {
     return {
-      actions: [
-        /* planned work */
-      ],
+      actions: [/* planned work */],
       status: 'dispatch',
     };
   },
@@ -144,11 +143,13 @@ Use signal handlers for:
 
 ## Action Handler Pattern
 
-Use an action handler when the runtime should do actual work.
+Use an action handler when the runtime should do actual work or enqueue the work
+that will run out-of-band.
 
-Reference:
+References:
 
-- `src/server/services/agentSignal/policies/analyzeIntent/actions/userMemory.ts`
+- `apps/server/src/services/agentSignal/policies/analyzeIntent/actions/userMemory.ts`
+- `apps/server/src/services/agentSignal/policies/analyzeIntent/actions/skillManagement.ts`
 
 Pattern:
 
@@ -180,15 +181,27 @@ Keep these rules:
 - return stable `actionId`
 - include failure detail in `error`
 - let the scheduler turn the `ExecutorResult` into built-in result signals
+- for async `execAgent` actions, report the enqueue result here and project durable receipts from `agent.execution.completed`
+
+For memory and skill self-iteration actions, the concrete side effect is
+`enqueueSelfIterationRun(...)`. The background run stamps an Agent Signal
+operation marker, writes durable resources in the agent runtime, then exposes
+mutation outcomes on the completion source's `selfIteration` payload. Do not add
+a second synchronous receipt projection to the action handler.
 
 ## Source, Signal, And Action Type Placement
 
 Use this split:
 
 - external event payloads:
-  `src/server/services/agentSignal/sourceTypes.ts`
+  `packages/agent-signal/src/source/sourceTypes.ts`
+- source-event envelopes and scope keys:
+  `packages/agent-signal/src/source/sourceEvent.ts`
+  `packages/agent-signal/src/source/scopeKey.ts`
+- server source normalization and hydration:
+  `apps/server/src/services/agentSignal/sources/**`
 - policy-owned signal and action payloads:
-  `src/server/services/agentSignal/policies/types.ts`
+  `apps/server/src/services/agentSignal/policies/types.ts`
 - normalized shared node contracts:
   `packages/agent-signal/src/base/types.ts`
 
@@ -216,13 +229,15 @@ Prefer focused tests near the touched code.
 
 Useful references:
 
-- `src/server/services/agentSignal/runtime/__tests__/AgentSignalRuntime.test.ts`
-- `src/server/services/agentSignal/__tests__/index.integration.test.ts`
-- `src/server/services/agentSignal/policies/analyzeIntent/__tests__/*`
-- `src/server/services/agentSignal/policies/analyzeIntent/actions/__tests__/*`
+- `apps/server/src/services/agentSignal/runtime/__tests__/AgentSignalRuntime.test.ts`
+- `apps/server/src/services/agentSignal/__tests__/index.integration.test.ts`
+- `apps/server/src/services/agentSignal/policies/analyzeIntent/__tests__/*`
+- `apps/server/src/services/agentSignal/policies/analyzeIntent/actions/__tests__/*`
+- `apps/server/src/services/agentSignal/services/selfIteration/completion/__test__/*`
 
 Test at the smallest level that proves the behavior:
 
 - handler unit test for one routing rule
 - runtime test for queue fan-out
+- completion projection test for async memory or skill receipts
 - integration test for service ingress and observability persistence

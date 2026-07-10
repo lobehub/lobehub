@@ -150,6 +150,7 @@ export abstract class UnixContentSearch extends BaseContentSearch {
       const { stdout, stderr, exitCode } = await execa(tool, args, {
         cwd: searchPath,
         reject: false,
+        stdin: 'ignore',
       });
 
       if (exitCode !== 0 && exitCode !== 1 && stderr) {
@@ -225,6 +226,7 @@ export abstract class UnixContentSearch extends BaseContentSearch {
       const { stdout } = await execa(tool, args, {
         cwd: this.resolveSearchPath(params),
         reject: false,
+        stdin: 'ignore',
       });
 
       let total = 0;

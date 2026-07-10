@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { taskService } from '@/services/task';
+import { taskDetailSelectors } from '@/store/task/selectors';
 
 import { useTaskStore } from '../../store';
 
@@ -30,6 +31,10 @@ vi.mock('@/components/AntdStaticMethods', () => ({
   notification: { error: vi.fn() },
 }));
 
+vi.mock('@lobehub/ui/base-ui', () => ({
+  toast: { error: vi.fn(), success: vi.fn() },
+}));
+
 beforeEach(() => {
   vi.resetAllMocks();
   useTaskStore.setState({
@@ -37,7 +42,7 @@ beforeEach(() => {
     isCreatingTask: false,
     isDeletingTask: false,
     taskDetailMap: {},
-    taskSaveStatus: 'idle',
+    taskSaveStatusMap: {},
   });
 });
 
@@ -89,9 +94,12 @@ describe('TaskDetailSliceAction', () => {
       expect(useTaskStore.getState().isCreatingTask).toBe(false);
     });
 
-    it('should throw on error and reset isCreatingTask', async () => {
+    it('should reject and reset isCreatingTask on error (callers own the error path)', async () => {
       vi.mocked(taskService.create).mockRejectedValue(new Error('fail'));
 
+      // createTask keeps its rejecting contract so callers that rely on `catch`
+      // (e.g. the recommend-template flow) don't fall through to a false success;
+      // the composer callers add their own catch + toast (V4).
       await expect(useTaskStore.getState().createTask({ instruction: 'Test' })).rejects.toThrow(
         'fail',
       );
@@ -114,12 +122,12 @@ describe('TaskDetailSliceAction', () => {
 
       expect(useTaskStore.getState().taskDetailMap['T-1'].name).toBe('New Name');
       expect(taskService.update).toHaveBeenCalledWith('T-1', { name: 'New Name' });
-      expect(useTaskStore.getState().taskSaveStatus).toBe('saved');
+      expect(useTaskStore.getState().taskSaveStatusMap['T-1']).toBe('saved');
     });
 
-    it('should propagate error, reset saveStatus, refresh, and toast on failure', async () => {
+    it('should propagate error, mark saveStatus failed, refresh, and toast on failure', async () => {
       const { mutate } = await import('@/libs/swr');
-      const { message } = await import('@/components/AntdStaticMethods');
+      const { toast } = await import('@lobehub/ui/base-ui');
       useTaskStore.setState({
         taskDetailMap: {
           'T-1': { identifier: 'T-1', instruction: 'Test', status: 'backlog' },
@@ -132,9 +140,11 @@ describe('TaskDetailSliceAction', () => {
         'fail',
       );
 
-      expect(useTaskStore.getState().taskSaveStatus).toBe('idle');
-      expect(mutate).toHaveBeenCalledWith(['fetchTaskDetail', 'T-1']);
-      expect(message.error).toHaveBeenCalled();
+      // The failure must surface as `failed` (never `idle`) so the save hint
+      // shows an error + Retry instead of masquerading as a clean state.
+      expect(useTaskStore.getState().taskSaveStatusMap['T-1']).toBe('failed');
+      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-1']);
+      expect(toast.error).toHaveBeenCalled();
     });
 
     it('should refresh the cached parent on failure when updating from a subtask detail page', async () => {
@@ -158,8 +168,8 @@ describe('TaskDetailSliceAction', () => {
         useTaskStore.getState().updateTask('T-sub', { assigneeAgentId: 'agent-x' }),
       ).rejects.toThrow('fail');
 
-      expect(mutate).toHaveBeenCalledWith(['fetchTaskDetail', 'T-sub']);
-      expect(mutate).toHaveBeenCalledWith(['fetchTaskDetail', 'T-parent']);
+      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-sub']);
+      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-parent']);
     });
 
     it('should not show error when update succeeds but cache refresh fails', async () => {
@@ -177,7 +187,7 @@ describe('TaskDetailSliceAction', () => {
 
       await useTaskStore.getState().updateTask('T-1', { assigneeAgentId: 'agent-x' });
 
-      expect(useTaskStore.getState().taskSaveStatus).toBe('saved');
+      expect(useTaskStore.getState().taskSaveStatusMap['T-1']).toBe('saved');
       expect(message.error).not.toHaveBeenCalled();
     });
 
@@ -205,9 +215,9 @@ describe('TaskDetailSliceAction', () => {
       expect(taskService.update).toHaveBeenCalledWith('T-sub', { parentTaskId: 'T-new-parent' });
       expect(useTaskStore.getState().taskDetailMap['T-sub']).not.toHaveProperty('parentTaskId');
       expect(refreshTaskList).toHaveBeenCalled();
-      expect(mutate).toHaveBeenCalledWith(['fetchTaskDetail', 'T-sub']);
-      expect(mutate).toHaveBeenCalledWith(['fetchTaskDetail', 'T-parent']);
-      expect(mutate).toHaveBeenCalledWith(['fetchTaskDetail', 'T-new-parent']);
+      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-sub']);
+      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-parent']);
+      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-new-parent']);
     });
 
     it('should refresh the parent that was patched even if activeTaskId changes mid-flight', async () => {
@@ -233,8 +243,32 @@ describe('TaskDetailSliceAction', () => {
         useTaskStore.getState().updateTask('T-sub', { assigneeAgentId: 'agent-x' }),
       ).rejects.toThrow('fail');
 
-      expect(mutate).toHaveBeenCalledWith(['fetchTaskDetail', 'T-sub']);
-      expect(mutate).toHaveBeenCalledWith(['fetchTaskDetail', 'T-parent']);
+      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-sub']);
+      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-parent']);
+    });
+
+    it('should scope save status per task so a failure does not leak across navigation', async () => {
+      useTaskStore.setState({
+        activeTaskId: 'T-1',
+        taskDetailMap: {
+          'T-1': { identifier: 'T-1', instruction: 'One', status: 'backlog' },
+          'T-2': { identifier: 'T-2', instruction: 'Two', status: 'backlog' },
+        },
+      });
+
+      vi.mocked(taskService.update).mockRejectedValue(new Error('fail'));
+
+      await expect(useTaskStore.getState().updateTask('T-1', { name: 'New' })).rejects.toThrow(
+        'fail',
+      );
+
+      // Opening task T-2 must show a clean state — T-1's `failed` stays with T-1.
+      useTaskStore.getState().setActiveTaskId('T-2');
+      expect(taskDetailSelectors.taskSaveStatus(useTaskStore.getState())).toBe('idle');
+
+      // Returning to T-1 still reflects its own failed save.
+      useTaskStore.getState().setActiveTaskId('T-1');
+      expect(taskDetailSelectors.taskSaveStatus(useTaskStore.getState())).toBe('failed');
     });
   });
 
@@ -302,7 +336,7 @@ describe('TaskDetailSliceAction', () => {
       await useTaskStore.getState().addComment('T-1', 'Nice work');
 
       expect(taskService.addComment).toHaveBeenCalledWith('T-1', 'Nice work', undefined);
-      expect(mutate).toHaveBeenCalledWith(['fetchTaskDetail', 'T-1']);
+      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-1']);
     });
   });
 
@@ -314,7 +348,7 @@ describe('TaskDetailSliceAction', () => {
       await useTaskStore.getState().addDependency('T-1', 'T-2', 'blocks');
 
       expect(taskService.addDependency).toHaveBeenCalledWith('T-1', 'T-2', 'blocks');
-      expect(mutate).toHaveBeenCalledWith(['fetchTaskDetail', 'T-1']);
+      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-1']);
     });
 
     it('should propagate error from service', async () => {
@@ -334,7 +368,7 @@ describe('TaskDetailSliceAction', () => {
       await useTaskStore.getState().removeDependency('T-1', 'T-2');
 
       expect(taskService.removeDependency).toHaveBeenCalledWith('T-1', 'T-2');
-      expect(mutate).toHaveBeenCalledWith(['fetchTaskDetail', 'T-1']);
+      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-1']);
     });
   });
 
@@ -349,8 +383,8 @@ describe('TaskDetailSliceAction', () => {
       await useTaskStore.getState().unpinDocument('task_child', 'doc_1');
 
       expect(taskService.unpinDocument).toHaveBeenCalledWith('task_child', 'doc_1');
-      expect(mutate).toHaveBeenCalledWith(['fetchTaskDetail', 'task_child']);
-      expect(mutate).toHaveBeenCalledWith(['fetchTaskDetail', 'T-1']);
+      expect(mutate).toHaveBeenCalledWith(['task:detail', 'task_child']);
+      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-1']);
     });
 
     it('should not double-refresh when source task equals active task', async () => {
@@ -362,7 +396,7 @@ describe('TaskDetailSliceAction', () => {
       await useTaskStore.getState().unpinDocument('T-1', 'doc_1');
 
       expect(mutate).toHaveBeenCalledTimes(1);
-      expect(mutate).toHaveBeenCalledWith(['fetchTaskDetail', 'T-1']);
+      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-1']);
     });
   });
 

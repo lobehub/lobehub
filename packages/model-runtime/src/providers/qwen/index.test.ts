@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { LobeOpenAICompatibleRuntime } from '../../core/BaseAI';
 import { testProvider } from '../../providerTestUtils';
-import { LobeQwenAI } from './index';
+import { LobeQwenAI, params } from './index';
 
 const provider = ModelProvider.Qwen;
 const defaultBaseURL = 'https://dashscope.aliyuncs.com/compatible-mode/v1';
@@ -31,6 +31,22 @@ beforeEach(() => {
 });
 
 describe('LobeQwenAI - custom features', () => {
+  describe('prompt_cache_key', () => {
+    it('should not inject Moonshot prompt_cache_key for Kimi model ids', async () => {
+      await instance.chat(
+        {
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'kimi-k2.6',
+        },
+        { user: 'user-abc' },
+      );
+
+      const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+
+      expect(calledPayload.prompt_cache_key).toBeUndefined();
+    });
+  });
+
   describe('thinking payload mapping', () => {
     it('should forward enable_thinking and reasoning_effort for deepseek-v4 models', async () => {
       await instance.chat({
@@ -96,6 +112,119 @@ describe('LobeQwenAI - custom features', () => {
 
       expect(calledPayload.enable_thinking).toBe(true);
       expect(calledPayload.thinking_budget).toBe(4096);
+    });
+  });
+
+  describe('preserve thinking mapping', () => {
+    it('should map preserveThinking to preserve_thinking for qwen3.6-plus', () => {
+      const payload = {
+        messages: [
+          { content: 'hello', role: 'user' },
+          {
+            content: 'answer',
+            reasoning: { content: 'reasoning content' },
+            role: 'assistant',
+          },
+        ],
+        model: 'qwen3.6-plus',
+        preserveThinking: true,
+      } as any;
+
+      const result = params.chatCompletion!.handlePayload!(payload);
+
+      expect(result.preserve_thinking).toBe(true);
+      expect(result.messages).toEqual([
+        { content: 'hello', role: 'user' },
+        {
+          content: 'answer',
+          reasoning_content: 'reasoning content',
+          role: 'assistant',
+        },
+      ]);
+    });
+
+    it('should set preserve_thinking=false when explicitly disabled on supported model', () => {
+      const payload = {
+        messages: [{ content: 'hello', role: 'user' }],
+        model: 'qwen3.6-plus',
+        preserveThinking: false,
+      } as any;
+
+      const result = params.chatCompletion!.handlePayload!(payload);
+
+      expect(result.preserve_thinking).toBe(false);
+    });
+
+    it('should map preserveThinking for deployment-name aliases when caller provides the param', () => {
+      const payload = {
+        messages: [
+          {
+            content: 'answer',
+            reasoning: { content: 'reasoning content' },
+            role: 'assistant',
+          },
+        ],
+        model: 'my-qwen3.6-plus-deployment',
+        preserveThinking: true,
+      } as any;
+
+      const result = params.chatCompletion!.handlePayload!(payload);
+
+      expect(result.preserve_thinking).toBe(true);
+      expect(result.messages).toEqual([
+        {
+          content: 'answer',
+          reasoning_content: 'reasoning content',
+          role: 'assistant',
+        },
+      ]);
+    });
+
+    it('should not set preserve_thinking when preserveThinking is absent but still keep reasoning_content', () => {
+      const payload = {
+        messages: [
+          {
+            content: 'answer',
+            reasoning: { content: 'reasoning content' },
+            role: 'assistant',
+          },
+        ],
+        model: 'qwen3.5-plus',
+      } as any;
+
+      const result = params.chatCompletion!.handlePayload!(payload);
+
+      expect(result.preserve_thinking).toBeUndefined();
+      expect(result.messages).toEqual([
+        {
+          content: 'answer',
+          reasoning_content: 'reasoning content',
+          role: 'assistant',
+        },
+      ]);
+    });
+
+    it('should keep caller-provided reasoning_content', () => {
+      const payload = {
+        messages: [
+          {
+            content: 'answer',
+            reasoning_content: 'existing reasoning content',
+            role: 'assistant',
+          },
+        ],
+        model: 'qwen3.5-plus',
+      } as any;
+
+      const result = params.chatCompletion!.handlePayload!(payload);
+
+      expect(result.messages).toEqual([
+        {
+          content: 'answer',
+          reasoning_content: 'existing reasoning content',
+          role: 'assistant',
+        },
+      ]);
     });
   });
 });

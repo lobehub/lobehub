@@ -19,6 +19,7 @@ export interface AzureOpenAIKeyVault {
 
 export interface AWSBedrockKeyVault {
   accessKeyId?: string;
+  apiKey?: string;
   region?: string;
   secretAccessKey?: string;
   sessionToken?: string;

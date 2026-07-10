@@ -82,6 +82,7 @@ export const formatIntergerNumber = (num?: any) => {
 };
 
 export const formatUsageValue = (number: number) => {
+  if (number >= 1_000_000_000) return `${numeral(number / 1_000_000_000).format('0.[0]')}B`;
   if (number >= 1_000_000) return `${numeral(number / 1_000_000).format('0.[0]')}M`;
   if (number >= 1_000) return `${numeral(number / 1_000).format('0.[0]')}K`;
   return numeral(number).format('0,0');

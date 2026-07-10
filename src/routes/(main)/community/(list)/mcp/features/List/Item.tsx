@@ -17,13 +17,14 @@ import { createStaticStyles, cssVar } from 'antd-style';
 import { ClockIcon } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useNavigate } from 'react-router-dom';
 import urlJoin from 'url-join';
 
 import InstallationIcon from '@/components/MCPDepsIcon';
 import OfficialIcon from '@/components/OfficialIcon';
 import PublishedTime from '@/components/PublishedTime';
 import Scores from '@/features/MCP/Scores';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { discoverService } from '@/services/discover';
 import { type DiscoverMcpItem } from '@/types/discover';
 
@@ -86,7 +87,7 @@ const McpItem = memo<DiscoverMcpItem>(
     github,
   }) => {
     const { t } = useTranslation('discover');
-    const navigate = useNavigate();
+    const navigate = useWorkspaceAwareNavigate();
     const link = urlJoin('/community/mcp', identifier);
 
     const handleClick = useCallback(() => {
@@ -148,11 +149,11 @@ const McpItem = memo<DiscoverMcpItem>(
                   overflow: 'hidden',
                 }}
               >
-                <Link style={{ color: 'inherit', overflow: 'hidden' }} to={link}>
+                <WorkspaceLink style={{ color: 'inherit', overflow: 'hidden' }} to={link}>
                   <Text ellipsis as={'h2'} className={styles.title}>
                     {name}
                   </Text>
-                </Link>
+                </WorkspaceLink>
                 {isOfficial && (
                   <Tooltip title={t('isOfficial')}>
                     <OfficialIcon />

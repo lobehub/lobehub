@@ -26,10 +26,15 @@ import { z } from 'zod';
 
 import { FormInput, FormPassword } from '@/components/FormInput';
 import { SkeletonInput, SkeletonSwitch } from '@/components/Skeleton';
+import { usePermission } from '@/hooks/usePermission';
 import { lambdaQuery } from '@/libs/trpc/client';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
-import { type AiProviderDetailItem, type AiProviderSourceType } from '@/types/aiProvider';
+import {
+  type AiProviderDetailItem,
+  type AiProviderSourceType,
+  type UpdateAiProviderConfigParams,
+} from '@/types/aiProvider';
 import { AiProviderSourceEnum } from '@/types/aiProvider';
 
 import { KeyVaultsConfigKey, LLMProviderApiTokenKey, LLMProviderBaseUrlKey } from '../../const';
@@ -113,6 +118,7 @@ export interface ProviderConfigProps extends Omit<AiProviderDetailItem, 'enabled
     placeholder?: string;
     showModelFetcher?: boolean;
   };
+  normalizeConfigValues?: (values: UpdateAiProviderConfigParams) => UpdateAiProviderConfigParams;
   showAceGcm?: boolean;
   source?: AiProviderSourceType;
   title?: ReactNode;
@@ -134,6 +140,7 @@ const ProviderConfig = memo<ProviderConfigProps>(
     source = AiProviderSourceEnum.Builtin,
     apiKeyUrl,
     title,
+    normalizeConfigValues,
   }) => {
     const {
       authType,
@@ -146,6 +153,7 @@ const ProviderConfig = memo<ProviderConfigProps>(
     } = settings || {};
     const { t } = useTranslation('modelProvider');
     const [form] = Form.useForm();
+    const { allowed: canManageProvider } = usePermission('manage_provider_key');
 
     const isOAuthProvider = authType === 'oauthDeviceFlow';
 
@@ -154,7 +162,7 @@ const ProviderConfig = memo<ProviderConfigProps>(
       { providerId: id },
       { enabled: isOAuthProvider, refetchOnWindowFocus: true },
     );
-    const isOAuthAuthenticated = oauthStatus?.isAuthenticated ?? false;
+    const isOAuthAuthenticated = oauthStatus?.status === 'ACTIVE';
 
     const [
       data,
@@ -247,6 +255,12 @@ const ProviderConfig = memo<ProviderConfigProps>(
       },
       [updateAiProviderConfig],
     );
+
+    const normalizeValues = useCallback(
+      (values: UpdateAiProviderConfigParams) => normalizeConfigValues?.(values) ?? values,
+      [normalizeConfigValues],
+    );
+
     const { run: debouncedHandleValueChange } = useDebounceFn(handleValueChange, {
       wait: 500,
     });
@@ -416,7 +430,7 @@ const ProviderConfig = memo<ProviderConfigProps>(
                   // Set connection test state to prevent duplicate requests from onValuesChange
                   isCheckingConnection.current = true;
                   // Proactively save the latest form values to ensure fetchAiProviderRuntimeState retrieves up-to-date data
-                  await updateAiProviderConfig(id, form.getFieldsValue());
+                  await updateAiProviderConfig(id, normalizeValues(form.getFieldsValue()));
                 }}
               />
             ),
@@ -504,11 +518,13 @@ const ProviderConfig = memo<ProviderConfigProps>(
         {shouldShowForm && (
           <Form
             className={cx(styles.form, className)}
+            disabled={!canManageProvider}
             form={form}
             items={[model]}
             variant={'borderless'}
             onValuesChange={(_, values) => {
-              debouncedHandleValueChange(id, values);
+              if (!canManageProvider) return;
+              debouncedHandleValueChange(id, normalizeValues(values));
             }}
             {...FORM_STYLE}
           />

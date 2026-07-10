@@ -11,6 +11,7 @@
     "./ai360": "./src/aiModels/ai360.ts",
     "./aihubmix": "./src/aiModels/aihubmix.ts",
     "./akashchat": "./src/aiModels/akashchat.ts",
+    "./antgroup": "./src/aiModels/antgroup.ts",
     "./anthropic": "./src/aiModels/anthropic.ts",
     "./azureai": "./src/aiModels/azureai.ts",
     "./azure": "./src/aiModels/azure.ts",
@@ -96,10 +97,10 @@
   },
   "dependencies": {
     "@lobechat/business-const": "workspace:*",
-    "type-fest": "^5.2.0"
+    "type-fest": "^5.7.0"
   },
   "devDependencies": {
-    "tsdown": "^0.21.4",
+    "tsdown": "^0.21.10",
     "typescript": "^6.0.3"
   },
   "peerDependencies": {

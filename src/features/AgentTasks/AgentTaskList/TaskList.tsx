@@ -5,9 +5,11 @@ import { ClipboardCheckIcon, UserRound } from 'lucide-react';
 import { Fragment, memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncBoundary from '@/components/AsyncBoundary';
 import { useTaskStore } from '@/store/task';
 import { taskListSelectors } from '@/store/task/selectors';
 
+import type { TaskItemRouteScope } from '../features/AgentTaskItem';
 import AgentTaskItem from '../features/AgentTaskItem';
 import AssigneeAvatar from '../features/AssigneeAvatar';
 import PriorityHighIcon from '../features/icons/PriorityHighIcon';
@@ -27,16 +29,33 @@ import {
 import TaskItemSkeleton from './TaskItemSkeleton';
 
 interface TaskListProps {
+  /**
+   * Settled signal — truthy once the current scope's list has loaded into the
+   * store, `undefined` while unsettled. Derived from the store's
+   * `isTaskListInit` (not raw SWR `data`) so it resets in lockstep with `tasks`
+   * on a scope/visibility switch and never disagrees with the empty signal.
+   */
+  data?: unknown;
+  /** Thrown error from the list SWR — surfaced as a failure state, not a skeleton. */
+  error?: unknown;
+  /** First-load / retry in flight (SWR `isLoading`). */
+  isLoading?: boolean;
+  onRetry?: () => void;
   onShowHiddenCompleted?: () => void;
   options: TaskListViewOptions;
+  routeScope?: TaskItemRouteScope;
 }
 
 const HIDDEN_COMPLETED_STATUS_SET = new Set<string>(HIDDEN_WHEN_COMPLETED_STATUSES);
 
-const renderTaskRows = (items: ReturnType<typeof taskListSelectors.taskList>, sub?: boolean) =>
+const renderTaskRows = (
+  items: ReturnType<typeof taskListSelectors.taskList>,
+  sub?: boolean,
+  routeScope?: TaskItemRouteScope,
+) =>
   items.map((task, index) => (
     <Fragment key={task.identifier}>
-      <AgentTaskItem task={task} />
+      <AgentTaskItem routeScope={routeScope} task={task} />
       {!sub && index !== items.length - 1 && <Divider dashed style={{ margin: 0 }} />}
     </Fragment>
   ));
@@ -44,9 +63,10 @@ const renderTaskRows = (items: ReturnType<typeof taskListSelectors.taskList>, su
 const renderTaskListBlock = (
   items: ReturnType<typeof taskListSelectors.taskList>,
   sub?: boolean,
+  routeScope?: TaskItemRouteScope,
 ) => (
   <Block gap={sub ? 0 : 2} padding={2} variant={'borderless'}>
-    {renderTaskRows(items, sub)}
+    {renderTaskRows(items, sub, routeScope)}
   </Block>
 );
 
@@ -118,10 +138,10 @@ const renderGroupTitle = (group: TaskGroupMeta, count: number, sub?: boolean) =>
   </Flexbox>
 );
 
-const TaskList = memo<TaskListProps>(({ onShowHiddenCompleted, options }) => {
+const TaskList = memo<TaskListProps>((props) => {
+  const { data, error, isLoading, onRetry, onShowHiddenCompleted, options, routeScope } = props;
   const { t } = useTranslation('chat');
   const tasks = useTaskStore(taskListSelectors.taskList);
-  const isInit = useTaskStore(taskListSelectors.isTaskListInit);
   const groupBy = normalizeGroupBy(options.groupBy, 'status');
   const subGroupBy = normalizeGroupBy(options.subGroupBy, 'none');
   const effectiveSubGroupBy = groupBy === 'none' ? 'none' : subGroupBy;
@@ -193,26 +213,22 @@ const TaskList = memo<TaskListProps>(({ onShowHiddenCompleted, options }) => {
     });
   }, [effectiveSubGroupBy, groupBy, options, visibleTasks]);
 
-  if (!isInit) {
-    return (
-      <Block gap={2} padding={2} variant={'borderless'}>
-        {Array.from({ length: 5 }).map((_, index) => (
-          <Fragment key={`task-skeleton-${index}`}>
-            <TaskItemSkeleton />
-            {index !== 4 && <Divider dashed style={{ margin: 0 }} />}
-          </Fragment>
-        ))}
-      </Block>
-    );
-  }
+  const skeleton = (
+    <Block gap={2} padding={2} variant={'borderless'}>
+      {Array.from({ length: 5 }).map((_, index) => (
+        <Fragment key={`task-skeleton-${index}`}>
+          <TaskItemSkeleton />
+          {index !== 4 && <Divider dashed style={{ margin: 0 }} />}
+        </Fragment>
+      ))}
+    </Block>
+  );
 
-  if (tasks.length === 0) {
-    return (
-      <Center height={'80vh'} width={'100%'}>
-        <Empty description={t('taskList.empty')} icon={ClipboardCheckIcon} />
-      </Center>
-    );
-  }
+  const emptyState = (
+    <Center height={'80vh'} width={'100%'}>
+      <Empty description={t('taskList.empty')} icon={ClipboardCheckIcon} />
+    </Center>
+  );
 
   const hiddenFooter = hiddenCount > 0 && (
     <Flexbox
@@ -235,58 +251,73 @@ const TaskList = memo<TaskListProps>(({ onShowHiddenCompleted, options }) => {
     </Flexbox>
   );
 
-  if (groupBy === 'none') {
-    return (
+  const content =
+    groupBy === 'none' ? (
       <>
-        {renderTaskListBlock(groupedTaskEntries[0]?.items ?? [])}
+        {renderTaskListBlock(groupedTaskEntries[0]?.items ?? [], false, routeScope)}
+        {hiddenFooter}
+      </>
+    ) : (
+      <>
+        <Accordion gap={16}>
+          {groupedTaskEntries.map((group) => {
+            return (
+              <AccordionItem
+                defaultExpand
+                indicatorPlacement={'end'}
+                itemKey={`group-${group.meta.key}`}
+                key={group.meta.key}
+                paddingBlock={8}
+                paddingInline={14}
+                title={renderGroupTitle(group.meta, group.items.length)}
+                variant={'filled'}
+                styles={{
+                  header: { marginBottom: 8 },
+                }}
+              >
+                {group.subGroups.length > 0 ? (
+                  <Accordion gap={6}>
+                    {group.subGroups.map(([subGroup, subGroupTasks]) => (
+                      <AccordionItem
+                        defaultExpand
+                        indicatorPlacement={'end'}
+                        itemKey={`sub-${group.meta.key}-${subGroup.key}`}
+                        key={`${group.meta.key}-${subGroup.key}`}
+                        paddingBlock={6}
+                        paddingInline={14}
+                        title={renderGroupTitle(subGroup, subGroupTasks.length, true)}
+                      >
+                        {renderTaskListBlock(subGroupTasks, true, routeScope)}
+                      </AccordionItem>
+                    ))}
+                  </Accordion>
+                ) : (
+                  renderTaskListBlock(group.items, false, routeScope)
+                )}
+              </AccordionItem>
+            );
+          })}
+        </Accordion>
         {hiddenFooter}
       </>
     );
-  }
 
+  // Error is gated ahead of empty by AsyncBoundary, so a failed fetch shows a
+  // Retry block instead of the "no tasks" empty. `data` is the
+  // store-derived settled signal — see the `data` prop doc above.
   return (
-    <>
-      <Accordion gap={16}>
-        {groupedTaskEntries.map((group) => {
-          return (
-            <AccordionItem
-              defaultExpand
-              indicatorPlacement={'end'}
-              itemKey={`group-${group.meta.key}`}
-              key={group.meta.key}
-              paddingBlock={8}
-              paddingInline={14}
-              title={renderGroupTitle(group.meta, group.items.length)}
-              variant={'filled'}
-              styles={{
-                header: { marginBottom: 8 },
-              }}
-            >
-              {group.subGroups.length > 0 ? (
-                <Accordion gap={6}>
-                  {group.subGroups.map(([subGroup, subGroupTasks]) => (
-                    <AccordionItem
-                      defaultExpand
-                      indicatorPlacement={'end'}
-                      itemKey={`sub-${group.meta.key}-${subGroup.key}`}
-                      key={`${group.meta.key}-${subGroup.key}`}
-                      paddingBlock={6}
-                      paddingInline={14}
-                      title={renderGroupTitle(subGroup, subGroupTasks.length, true)}
-                    >
-                      {renderTaskListBlock(subGroupTasks, true)}
-                    </AccordionItem>
-                  ))}
-                </Accordion>
-              ) : (
-                renderTaskListBlock(group.items)
-              )}
-            </AccordionItem>
-          );
-        })}
-      </Accordion>
-      {hiddenFooter}
-    </>
+    <AsyncBoundary
+      data={data}
+      empty={emptyState}
+      error={error}
+      errorVariant={'block'}
+      isEmpty={tasks.length === 0}
+      isLoading={isLoading}
+      loading={skeleton}
+      onRetry={onRetry}
+    >
+      {content}
+    </AsyncBoundary>
   );
 });
 

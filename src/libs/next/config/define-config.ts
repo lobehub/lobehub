@@ -2,6 +2,10 @@ import { codeInspectorPlugin } from 'code-inspector-plugin';
 import { type NextConfig } from 'next';
 import { type Header, type Redirect } from 'next/dist/lib/load-custom-routes';
 
+import { dockerCanvasTracingIncludes } from './dockerCanvasTracingIncludes';
+
+const LANDING_SITEMAP_URL = 'https://lobehub.com/sitemap.xml';
+
 interface CustomNextConfig {
   experimental?: NextConfig['experimental'];
   headers?: Header[];
@@ -45,11 +49,7 @@ export function defineConfig(config: CustomNextConfig) {
               // Ensure native bindings are included in standalone output.
               // `@napi-rs/canvas` is loaded via dynamic `require()` (see packages/file-loaders),
               // which may not be picked up by Next.js output tracing.
-              'node_modules/@napi-rs/canvas/**/*',
-              'node_modules/@napi-rs/canvas-*/**/*',
-              // pnpm real package locations (including platform-specific bindings with `.node`)
-              'node_modules/.pnpm/@napi-rs+canvas*/**/*',
-              'node_modules/.pnpm/@napi-rs+canvas-*/**/*',
+              ...dockerCanvasTracingIncludes,
             ]
           : []),
       ],
@@ -269,25 +269,26 @@ export function defineConfig(config: CustomNextConfig) {
     }),
     reactStrictMode: true,
     redirects: async () => [
+      // Sitemap generation lives on the landing site; keep legacy app sitemap URLs crawlable.
       {
-        destination: '/sitemap-index.xml',
+        destination: LANDING_SITEMAP_URL,
         permanent: true,
         source: '/sitemap.xml',
       },
       {
-        destination: '/sitemap-index.xml',
+        destination: LANDING_SITEMAP_URL,
         permanent: true,
         source: '/sitemap-0.xml',
       },
       {
-        destination: '/sitemap/plugins-1.xml',
+        destination: LANDING_SITEMAP_URL,
         permanent: true,
-        source: '/sitemap/plugins.xml',
+        source: '/sitemap-index.xml',
       },
       {
-        destination: '/sitemap/assistants-1.xml',
+        destination: LANDING_SITEMAP_URL,
         permanent: true,
-        source: '/sitemap/assistants.xml',
+        source: '/sitemap/:path*',
       },
       {
         destination: '/manifest.webmanifest',
@@ -363,7 +364,7 @@ export function defineConfig(config: CustomNextConfig) {
       'oidc-provider',
     ],
 
-    transpilePackages: ['mermaid', 'better-auth-harmony'],
+    transpilePackages: ['mermaid'],
     turbopack: {
       rules: {
         ...(isTest

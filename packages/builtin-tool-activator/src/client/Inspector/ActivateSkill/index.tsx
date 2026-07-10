@@ -20,6 +20,9 @@ const resolveLabel = (t: TFunction<'plugin'>, source: ActivateSkillSource | unde
     case 'agent': {
       return t('builtins.lobe-skills.apiName.activateAgentSkill');
     }
+    case 'device': {
+      return t('builtins.lobe-skills.apiName.activateDeviceSkill');
+    }
     case 'project': {
       return t('builtins.lobe-skills.apiName.activateProjectSkill');
     }

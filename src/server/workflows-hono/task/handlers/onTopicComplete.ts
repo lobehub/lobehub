@@ -1,6 +1,9 @@
+import type { TaskRunTrigger } from '@lobechat/types';
 import debug from 'debug';
+import { and, eq } from 'drizzle-orm';
 import type { Context } from 'hono';
 
+import { tasks } from '@/database/schemas';
 import { getServerDB } from '@/database/server';
 import { TaskLifecycleService } from '@/server/services/taskLifecycle';
 
@@ -13,6 +16,8 @@ export interface OnTopicCompletePayload {
   lastAssistantContent?: string;
   operationId: string;
   reason?: string;
+  // Static body field set by TaskRunnerService — what triggered the run.
+  runTrigger?: TaskRunTrigger;
   taskId: string;
   taskIdentifier: string;
   topicId?: string;
@@ -27,6 +32,7 @@ export async function onTopicComplete(c: Context) {
       lastAssistantContent,
       operationId,
       reason,
+      runTrigger,
       taskId,
       taskIdentifier,
       topicId,
@@ -46,13 +52,22 @@ export async function onTopicComplete(c: Context) {
     );
 
     const db = await getServerDB();
-    const taskLifecycle = new TaskLifecycleService(db, userId);
+    // System-level callback: derive workspace from the task row so the
+    // lifecycle service writes briefs / status into the correct workspace.
+    const [taskRow] = await db
+      .select({ workspaceId: tasks.workspaceId })
+      .from(tasks)
+      .where(and(eq(tasks.id, taskId), eq(tasks.createdByUserId, userId)))
+      .limit(1);
+    const wsId = taskRow?.workspaceId ?? undefined;
+    const taskLifecycle = new TaskLifecycleService(db, userId, wsId);
 
     await taskLifecycle.onTopicComplete({
       errorMessage,
       lastAssistantContent,
       operationId,
       reason: reason || 'done',
+      runTrigger,
       taskId,
       taskIdentifier,
       topicId,

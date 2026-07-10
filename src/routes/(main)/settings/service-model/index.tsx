@@ -8,7 +8,6 @@ import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfi
 
 import Image from '../image/features/Image';
 import OpenAI from '../tts/features/OpenAI';
-import STT from '../tts/features/STT';
 
 const Page = () => {
   const { t } = useTranslation('setting');
@@ -17,12 +16,7 @@ const Page = () => {
     <>
       <SettingHeader title={t('tab.serviceModel')} />
       <ModelAssignmentsForm />
-      {enableSTT && (
-        <>
-          <STT />
-          <OpenAI />
-        </>
-      )}
+      {enableSTT && <OpenAI />}
       {showAiImage && <Image />}
     </>
   );

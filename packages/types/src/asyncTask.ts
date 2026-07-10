@@ -48,6 +48,17 @@ export enum AsyncTaskErrorType {
    */
   TaskTriggerError = 'TaskTriggerError',
   Timeout = 'TaskTimeout',
+  /* ↓ cloud slot | workspace freeze ↓ */
+  /**
+   * Workspace was manually frozen by an admin; spend is blocked until unfrozen.
+   */
+  WorkspaceFrozenByAdmin = 'WorkspaceFrozenByAdmin',
+  /**
+   * Workspace was auto-frozen by risk control after abnormal spend; spend is blocked
+   * until manually unfrozen by an admin.
+   */
+  WorkspaceFrozenByRiskControl = 'WorkspaceFrozenByRiskControl',
+  /* ↑ cloud slot ↑ */
 }
 
 export interface AsyncTaskStructuredErrorItem {

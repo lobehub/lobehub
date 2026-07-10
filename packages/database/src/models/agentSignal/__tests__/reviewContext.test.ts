@@ -10,6 +10,7 @@ import {
   messagePlugins,
   messages,
   topics,
+  userMemories,
   users,
 } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
@@ -366,6 +367,230 @@ describe('AgentSignalReviewContextModel', () => {
           topicId,
         }),
       ]);
+    });
+  });
+
+  describe('listRelevantMemories', () => {
+    it('returns recent memory summaries scoped to the user, newest first', async () => {
+      const otherUserId = 'agent-signal-review-context-other-user';
+
+      await serverDB.insert(users).values([{ id: userId }, { id: otherUserId }]);
+      await serverDB.insert(userMemories).values([
+        {
+          id: 'agent-signal-review-context-memory-old',
+          lastAccessedAt: new Date('2026-05-01T00:00:00.000Z'),
+          summary: 'old memory summary',
+          updatedAt: new Date('2026-05-01T00:00:00.000Z'),
+          userId,
+        },
+        {
+          id: 'agent-signal-review-context-memory-new',
+          lastAccessedAt: new Date('2026-05-03T00:00:00.000Z'),
+          summary: 'new memory summary',
+          updatedAt: new Date('2026-05-03T00:00:00.000Z'),
+          userId,
+        },
+        {
+          id: 'agent-signal-review-context-memory-other',
+          lastAccessedAt: new Date('2026-05-04T00:00:00.000Z'),
+          summary: 'foreign memory summary',
+          updatedAt: new Date('2026-05-04T00:00:00.000Z'),
+          userId: otherUserId,
+        },
+      ]);
+
+      const model = new AgentSignalReviewContextModel(serverDB, userId);
+
+      const result = await model.listRelevantMemories({ limit: 10 });
+
+      expect(result).toEqual([
+        expect.objectContaining({
+          content: 'new memory summary',
+          id: 'agent-signal-review-context-memory-new',
+        }),
+        expect.objectContaining({
+          content: 'old memory summary',
+          id: 'agent-signal-review-context-memory-old',
+        }),
+      ]);
+    });
+
+    it('honors the limit and falls back to title/details when summary is missing', async () => {
+      await serverDB.insert(users).values({ id: userId });
+      await serverDB.insert(userMemories).values([
+        {
+          details: 'detailed body content',
+          id: 'agent-signal-review-context-memory-details',
+          lastAccessedAt: new Date('2026-05-05T00:00:00.000Z'),
+          updatedAt: new Date('2026-05-05T00:00:00.000Z'),
+          userId,
+        },
+        {
+          id: 'agent-signal-review-context-memory-title',
+          lastAccessedAt: new Date('2026-05-04T00:00:00.000Z'),
+          title: 'memory title only',
+          updatedAt: new Date('2026-05-04T00:00:00.000Z'),
+          userId,
+        },
+      ]);
+
+      const model = new AgentSignalReviewContextModel(serverDB, userId);
+
+      const result = await model.listRelevantMemories({ limit: 1 });
+
+      expect(result).toEqual([
+        expect.objectContaining({
+          content: 'detailed body content',
+          id: 'agent-signal-review-context-memory-details',
+        }),
+      ]);
+    });
+
+    it('returns an empty list when the user has no memories', async () => {
+      await serverDB.insert(users).values({ id: userId });
+
+      const model = new AgentSignalReviewContextModel(serverDB, userId);
+
+      await expect(model.listRelevantMemories({ limit: 10 })).resolves.toEqual([]);
+    });
+  });
+
+  describe('listSelfReflectionTopicActivity', () => {
+    it('returns scoped failed evidence for a single topic and agent', async () => {
+      const otherTopicId = 'agent-signal-review-context-other-topic';
+
+      await serverDB.insert(users).values({ id: userId });
+      await serverDB.insert(agents).values([
+        {
+          chatConfig: { selfIteration: { enabled: true } },
+          id: agentId,
+          title: 'Review Context Agent',
+          userId,
+        },
+      ]);
+      await serverDB.insert(topics).values([
+        {
+          agentId,
+          id: topicId,
+          title: 'Self reflection topic',
+          userId,
+        },
+        {
+          agentId,
+          id: otherTopicId,
+          title: 'Other topic',
+          userId,
+        },
+      ]);
+      await serverDB.insert(messages).values([
+        {
+          agentId,
+          content: 'assistant failed',
+          createdAt: new Date('2026-05-03T12:00:00.000Z'),
+          error: { message: 'model failed mid stream' },
+          id: 'agent-signal-review-context-reflection-message-error',
+          role: 'assistant',
+          topicId,
+          userId,
+        },
+        {
+          agentId,
+          content: 'tool failed',
+          createdAt: new Date('2026-05-03T13:00:00.000Z'),
+          id: 'agent-signal-review-context-reflection-tool-error',
+          role: 'assistant',
+          topicId,
+          userId,
+        },
+        {
+          agentId,
+          content: 'other topic failure ignored',
+          createdAt: new Date('2026-05-03T14:00:00.000Z'),
+          error: { message: 'ignored other topic error' },
+          id: 'agent-signal-review-context-reflection-other-topic',
+          role: 'assistant',
+          topicId: otherTopicId,
+          userId,
+        },
+      ]);
+      await serverDB.insert(messagePlugins).values({
+        apiName: 'search',
+        error: { message: 'upstream timeout during reflection' },
+        id: 'agent-signal-review-context-reflection-tool-error',
+        identifier: 'web-search',
+        toolCallId: 'tool-call-reflection',
+        userId,
+      });
+
+      const model = new AgentSignalReviewContextModel(serverDB, userId);
+
+      const result = await model.listSelfReflectionTopicActivity({
+        agentId,
+        topicId,
+        windowEnd: new Date('2026-05-03T23:59:59.999Z'),
+        windowStart: new Date('2026-05-03T00:00:00.000Z'),
+      });
+
+      expect(result).toEqual([
+        expect.objectContaining({
+          failedMessages: [
+            {
+              errorSummary: '{"message": "model failed mid stream"}',
+              messageId: 'agent-signal-review-context-reflection-message-error',
+            },
+          ],
+          failedToolCalls: [
+            {
+              apiName: 'search',
+              errorSummary: '{"message": "upstream timeout during reflection"}',
+              identifier: 'web-search',
+              messageId: 'agent-signal-review-context-reflection-tool-error',
+              toolCallId: 'tool-call-reflection',
+            },
+          ],
+          failedToolCount: 1,
+          failureCount: 1,
+          topicId,
+        }),
+      ]);
+    });
+
+    it('returns an empty list when the topic has no in-window activity', async () => {
+      await serverDB.insert(users).values({ id: userId });
+      await serverDB.insert(agents).values([
+        {
+          chatConfig: { selfIteration: { enabled: true } },
+          id: agentId,
+          title: 'Review Context Agent',
+          userId,
+        },
+      ]);
+      await serverDB.insert(topics).values({
+        agentId,
+        id: topicId,
+        title: 'Self reflection topic',
+        userId,
+      });
+      await serverDB.insert(messages).values({
+        agentId,
+        content: 'outside window message',
+        createdAt: new Date('2026-05-10T12:00:00.000Z'),
+        id: 'agent-signal-review-context-reflection-outside',
+        role: 'assistant',
+        topicId,
+        userId,
+      });
+
+      const model = new AgentSignalReviewContextModel(serverDB, userId);
+
+      const result = await model.listSelfReflectionTopicActivity({
+        agentId,
+        topicId,
+        windowEnd: new Date('2026-05-03T23:59:59.999Z'),
+        windowStart: new Date('2026-05-03T00:00:00.000Z'),
+      });
+
+      expect(result).toEqual([]);
     });
   });
 });

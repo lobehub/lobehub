@@ -9,6 +9,7 @@ describe('ExtendParamsSelect', () => {
   describe('normalizeExtendParamsValue', () => {
     const definitionMap = new Map([
       ['enableReasoning', { key: 'enableReasoning' }],
+      ['reasoningMode', { key: 'reasoningMode' }],
       ['reasoningBudgetToken', { key: 'reasoningBudgetToken' }],
     ]) as any;
 
@@ -20,10 +21,10 @@ describe('ExtendParamsSelect', () => {
     it('should filter unsupported extend params while keeping valid values', () => {
       expect(
         normalizeExtendParamsValue(
-          ['enableReasoning', 'unsupportedParam', 'reasoningBudgetToken'] as any,
+          ['enableReasoning', 'unsupportedParam', 'reasoningMode', 'reasoningBudgetToken'] as any,
           definitionMap,
         ),
-      ).toEqual(['enableReasoning', 'reasoningBudgetToken']);
+      ).toEqual(['enableReasoning', 'reasoningMode', 'reasoningBudgetToken']);
     });
   });
 
@@ -34,6 +35,8 @@ describe('ExtendParamsSelect', () => {
       gpt5_1ReasoningEffort: 'reasoningEffort',
       gpt5_2ProReasoningEffort: 'reasoningEffort',
       gpt5_2ReasoningEffort: 'reasoningEffort',
+      gpt5_6ReasoningEffort: 'reasoningEffort',
+      glm5_2ReasoningEffort: 'reasoningEffort',
       thinkingLevel2: 'thinkingLevel',
     };
 
@@ -42,6 +45,11 @@ describe('ExtendParamsSelect', () => {
       expect(TITLE_KEY_ALIASES['gpt5_1ReasoningEffort']).toBe('reasoningEffort');
       expect(TITLE_KEY_ALIASES['gpt5_2ReasoningEffort']).toBe('reasoningEffort');
       expect(TITLE_KEY_ALIASES['gpt5_2ProReasoningEffort']).toBe('reasoningEffort');
+      expect(TITLE_KEY_ALIASES['gpt5_6ReasoningEffort']).toBe('reasoningEffort');
+    });
+
+    it('should map GLM-5.2 variant to reasoningEffort', () => {
+      expect(TITLE_KEY_ALIASES['glm5_2ReasoningEffort']).toBe('reasoningEffort');
     });
 
     it('should map thinkingLevel2 to thinkingLevel', () => {
@@ -61,6 +69,8 @@ describe('ExtendParamsSelect', () => {
       gpt5_1ReasoningEffort: 'reasoningEffort',
       gpt5_2ProReasoningEffort: 'reasoningEffort',
       gpt5_2ReasoningEffort: 'reasoningEffort',
+      gpt5_6ReasoningEffort: 'reasoningEffort',
+      glm5_2ReasoningEffort: 'reasoningEffort',
       thinkingLevel2: 'thinkingLevel',
     };
 
@@ -70,6 +80,7 @@ describe('ExtendParamsSelect', () => {
 
     it('should return the alias key when available', () => {
       expect(getTitleKey('gpt5ReasoningEffort')).toBe('reasoningEffort');
+      expect(getTitleKey('glm5_2ReasoningEffort')).toBe('reasoningEffort');
       expect(getTitleKey('thinkingLevel2')).toBe('thinkingLevel');
     });
 

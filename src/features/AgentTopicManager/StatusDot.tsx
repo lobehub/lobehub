@@ -12,18 +12,21 @@ const STATUS_COLOR: Record<string, string> = {
   archived: cssVar.colorWarning,
   completed: cssVar.colorTextQuaternary,
   failed: cssVar.colorError,
+  idle: cssVar.colorTextQuaternary,
   paused: cssVar.colorInfo,
   running: cssVar.colorWarning,
   waitingForHuman: cssVar.colorInfo,
 };
 
 interface StatusDotProps {
-  status: string;
+  status: string | undefined;
 }
 
-const StatusDot = memo<StatusDotProps>(({ status }) => {
+const StatusDot = memo<StatusDotProps>(({ status: rawStatus }) => {
   const { t } = useTranslation('topic');
   const { isDarkMode } = useTheme();
+  // No status (e.g. a topic that dropped out of the running set) reads as idle.
+  const status = rawStatus || 'idle';
   const color = STATUS_COLOR[status] ?? cssVar.colorTextQuaternary;
   const labelKey = `management.status.${status}` as const;
 

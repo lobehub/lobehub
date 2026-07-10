@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -71,6 +71,34 @@ export function isProcessAlive(pid: number): boolean {
 }
 
 /**
+ * Verify a live PID actually belongs to a LobeHub connect daemon.
+ *
+ * A bare `isProcessAlive` check is not enough: if a daemon dies without cleaning
+ * up `daemon.pid` (crash, `kill -9`, reboot), the OS can later reuse that PID
+ * for an unrelated process. Acting on the stale PID would let `lh logout` /
+ * `connect stop` SIGTERM a stranger. The daemon is always spawned as
+ * `<node> … connect … --daemon-child`, so we confirm that signature in the
+ * process command line before trusting the PID.
+ *
+ * Best-effort and deliberately conservative: if the command line can't be read
+ * (e.g. `ps` is unavailable), we return `false` so callers never kill a process
+ * we can't positively identify.
+ */
+export function isDaemonProcess(pid: number): boolean {
+  try {
+    // `-ww` disables column truncation so the trailing `--daemon-child` flag is
+    // never cut off; stderr is silenced so a dead PID just yields an empty match.
+    const command = execFileSync('ps', ['-ww', '-p', String(pid), '-o', 'command='], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+    return command.includes('--daemon-child') && command.includes('connect');
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Get the PID of a running daemon, cleaning up stale PID files.
  * Returns null if no daemon is running.
  */
@@ -78,9 +106,11 @@ export function getRunningDaemonPid(): number | null {
   const pid = readPid();
   if (pid === null) return null;
 
-  if (isProcessAlive(pid)) return pid;
+  // Require both liveness AND identity — a live-but-reused PID is treated as
+  // stale so we never act on a process that isn't ours.
+  if (isProcessAlive(pid) && isDaemonProcess(pid)) return pid;
 
-  // Stale PID file — process is dead
+  // Stale PID file — process is dead or the PID now belongs to someone else.
   removePid();
   removeStatus();
   return null;

@@ -1,3 +1,4 @@
+import { withOtelMetricsForUpstashWorkflows } from '@lobechat/observability-otel/modules/upstash-workflow';
 import { serve } from '@upstash/workflow/nextjs';
 import debug from 'debug';
 
@@ -6,6 +7,7 @@ import { getServerDB } from '@/database/server';
 import { qstashClient } from '@/libs/qstash';
 import { AgentEvalRunService } from '@/server/services/agentEvalRun';
 import { type FinalizeRunPayload } from '@/server/workflows/agentEvalRun';
+import { resolveAgentEvalRunWorkspace } from '@/server/workflows/agentEvalRun/utils';
 
 const log = debug('lobe-server:workflows:finalize-run');
 
@@ -21,7 +23,7 @@ const log = debug('lobe-server:workflows:finalize-run');
  * 4. Update run status to 'completed'
  */
 export const { POST } = serve<FinalizeRunPayload>(
-  async (context) => {
+  withOtelMetricsForUpstashWorkflows(async (context) => {
     const { runId, userId } = context.requestPayload ?? {};
 
     log('Starting: runId=%s', runId);
@@ -31,10 +33,11 @@ export const { POST } = serve<FinalizeRunPayload>(
     }
 
     const db = await getServerDB();
+    const wsId = await resolveAgentEvalRunWorkspace(db, runId);
 
     // Step 1: Get run details
     const run = await context.run('agent-eval-run:get-run', async () => {
-      const runModel = new AgentEvalRunModel(db, userId);
+      const runModel = new AgentEvalRunModel(db, userId, wsId);
       return runModel.findById(runId);
     });
 
@@ -49,7 +52,7 @@ export const { POST } = serve<FinalizeRunPayload>(
 
     // Step 2: Get all RunTopics (already evaluated in recordTrajectoryCompletion)
     const runTopics = await context.run('agent-eval-run:get-run-topics', async () => {
-      const runTopicModel = new AgentEvalRunTopicModel(db, userId);
+      const runTopicModel = new AgentEvalRunTopicModel(db, userId, wsId);
       return runTopicModel.findByRunId(runId);
     });
 
@@ -57,7 +60,7 @@ export const { POST } = serve<FinalizeRunPayload>(
 
     // Step 3: Aggregate metrics from already-evaluated RunTopics
     const metrics = await context.run('agent-eval-run:aggregate-metrics', async () => {
-      const service = new AgentEvalRunService(db, userId);
+      const service = new AgentEvalRunService(db, userId, wsId);
       return service.evaluateAndFinalizeRun({
         run: { config: run.config, id: runId, metrics: run.metrics, startedAt: run.startedAt },
         runTopics,
@@ -80,7 +83,7 @@ export const { POST } = serve<FinalizeRunPayload>(
           : 'completed';
 
     await context.run('agent-eval-run:update-run', async () => {
-      const runModel = new AgentEvalRunModel(db, userId);
+      const runModel = new AgentEvalRunModel(db, userId, wsId);
       return runModel.update(runId, { metrics, status: runStatus });
     });
 
@@ -93,7 +96,7 @@ export const { POST } = serve<FinalizeRunPayload>(
       runId,
       success: true,
     };
-  },
+  }),
   {
     flowControl: { key: 'agent-eval-run.finalize-run', parallelism: 10, rate: 1 },
     qstashClient,

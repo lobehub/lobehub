@@ -78,10 +78,29 @@ export interface ParsedTool {
   verb: 'get' | 'list' | 'save' | 'create' | 'delete' | 'search' | 'extract' | 'prepare' | 'other';
 }
 
+const isLinearMcpServerSegment = (segment: string) =>
+  segment
+    .toLowerCase()
+    .split(/[^a-z0-9]+/u)
+    .includes('linear');
+
+export const getLinearToolSuffix = (apiName: string): string => {
+  if (apiName.startsWith(LINEAR_MCP_PREFIX)) return apiName.slice(LINEAR_MCP_PREFIX.length);
+
+  const parts = apiName.split('__');
+  if (parts.length >= 3 && parts[0] === 'mcp') {
+    const serverParts = parts.slice(1, -1);
+    if (serverParts.some(isLinearMcpServerSegment)) return parts.at(-1) || apiName;
+  }
+
+  return apiName;
+};
+
+export const isLinearMcpApiName = (apiName: string): boolean =>
+  getLinearToolSuffix(apiName) !== apiName;
+
 export const parseToolName = (apiName: string): ParsedTool => {
-  const suffix = apiName.startsWith(LINEAR_MCP_PREFIX)
-    ? apiName.slice(LINEAR_MCP_PREFIX.length)
-    : apiName;
+  const suffix = getLinearToolSuffix(apiName);
 
   if (suffix === 'extract_images') return { noun: 'images', verb: 'extract' };
   if (suffix === 'prepare_attachment_upload') return { noun: 'attachment upload', verb: 'prepare' };

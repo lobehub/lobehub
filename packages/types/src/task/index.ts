@@ -4,13 +4,7 @@ import type { ChatFileItem } from '../message/ui/chat';
 // ── Task type aliases ──
 
 export type TaskStatus =
-  | 'backlog'
-  | 'canceled'
-  | 'completed'
-  | 'failed'
-  | 'paused'
-  | 'running'
-  | 'scheduled';
+  'backlog' | 'canceled' | 'completed' | 'failed' | 'paused' | 'running' | 'scheduled';
 
 export type TaskPriority = 0 | 1 | 2 | 3 | 4;
 
@@ -18,6 +12,19 @@ export type TaskActivityType = 'brief' | 'comment' | 'created' | 'topic';
 
 // null = no automation
 export type TaskAutomationMode = 'heartbeat' | 'schedule';
+
+/**
+ * What triggered a given task run. Threaded from the run entry point
+ * (`TaskRunnerService.runTask`) through to `onTopicComplete` so lifecycle
+ * decisions can tell an ad-hoc manual "run now" apart from an automation tick.
+ *
+ * - `manual`    — user (or an agent tool call) invoked the run ad-hoc. Its
+ *                 failure is a one-off signal and must NOT change the task's
+ *                 scheduling state, nor count against the maxExecutions quota.
+ * - `schedule`  — a cron `schedule` tick fired the run.
+ * - `heartbeat` — a heartbeat interval tick fired the run.
+ */
+export type TaskRunTrigger = 'manual' | 'schedule' | 'heartbeat';
 
 // ── Config types ──
 
@@ -31,6 +38,41 @@ export interface CheckpointConfig {
     after?: boolean;
     before?: boolean;
   };
+}
+
+/**
+ * Task-level delivery-acceptance (verify) gate config, persisted under
+ * `tasks.config.verify`. This is the authoritative source for a task run's
+ * verify gate — it is *not* unioned with any agent-level mount
+ * (`agencyConfig.verifyRubricId`) — the task config is authoritative and never
+ * field-level merged with the agent-level rubric.
+ *
+ * Subtasks inherit with whole-config override semantics: a subtask uses its own
+ * config when present, otherwise the nearest ancestor's config in full (never a
+ * field-level merge). Resolved at runtime via `TaskModel.resolveVerifyConfig`.
+ */
+export interface TaskVerifyConfig {
+  /** Whether the verify gate runs on topic completion. */
+  enabled?: boolean;
+  /** Task-level cap on verify repair / re-run iterations. */
+  maxIterations?: number;
+  /**
+   * The one-sentence acceptance requirement the user typed — the source the
+   * acceptance criteria were AI-generated from. Kept so the UI can show it and
+   * offer "regenerate", distinct from the resolved criteria themselves.
+   */
+  requirement?: string;
+  /**
+   * Which agent executes the verify run (the Push-model review agent). When
+   * omitted, falls back to the built-in verify agent. The execution target /
+   * bound device is inherited from the chosen agent's `agencyConfig`, not
+   * written here.
+   */
+  verifierAgentId?: string;
+  /** One-off ad-hoc criteria ids (references `verify_criteria.id`). */
+  verifyCriteriaIds?: string[];
+  /** Reuse a rubric template (references `verify_rubrics.id`). */
+  verifyRubricId?: string;
 }
 
 export interface WorkspaceDocNode {
@@ -82,6 +124,12 @@ export interface TaskTopicHandoff {
    * about the brief delivery itself, written by the lifecycle service.
    */
   briefDecision?: BriefDecision;
+  /**
+   * Raw last assistant message of the run, captured on completion.
+   * Shown on the run card alongside the LLM-synthesized `summary` so the feed
+   * surfaces the actual run output, not only the summary.
+   */
+  content?: string;
   keyFindings?: string[];
   nextAction?: string;
   summary?: string;
@@ -91,9 +139,10 @@ export interface TaskTopicHandoff {
 // ── Task context (runtime state pockets stored in tasks.context JSONB) ──
 
 export interface TaskSchedulerContext {
-  // Count of consecutive 'error' reasons since the last 'done'. When it hits
-  // the fuse threshold (currently 3) we stop re-arming until the user resolves
-  // the urgent brief.
+  // Count of consecutive automation-tick 'error' reasons since the last 'done'.
+  // When it hits the fuse threshold (currently 3) we pause the task / stop
+  // re-arming until the user resolves the urgent brief. Manual "run now"
+  // failures do NOT touch this counter.
   consecutiveFailures?: number;
   // ISO timestamp when the latest tick was scheduled. Informational only.
   scheduledAt?: string;
@@ -102,7 +151,53 @@ export interface TaskSchedulerContext {
   tickMessageId?: string;
 }
 
+/**
+ * Durable lifecycle audit trail for a task, stored under
+ * `tasks.context.lifecycle`. Unlike the live `tasks.error` column — which is
+ * cleared on the next successful run so the UI only shows the *current* error —
+ * this pocket is append-style history that a later success does NOT wipe. It
+ * exists so "the morning check silently didn't fire" is diagnosable after the
+ * fact instead of being masked by a later manual success (LOBE-11390).
+ */
+export interface TaskLifecycleAudit {
+  // Monotonic lifetime count of failed runs (never reset on success).
+  errorCount?: number;
+  // The most recent failure, retained even after a later success clears the
+  // live `error` column.
+  lastError?: {
+    at: string;
+    message: string;
+    trigger?: TaskRunTrigger;
+  };
+  lastPausedAt?: string;
+  // When the task was last auto-paused by the failure fuse, and why.
+  lastPauseReason?: string;
+  // When a successful run last cleared a prior error state (recovery marker).
+  lastRecoveredAt?: string;
+}
+
+// Pointer back to the agent conversation that spawned this task via the
+// `createTask` tool. Captured at creation so the task lifecycle can deliver the
+// handoff result back to that session once the task completes.
+export interface TaskOriginContext {
+  // The agent that invoked the createTask tool (the task's creator session).
+  agentId?: string;
+  // The assistant message that carried the createTask tool call — the tool-call
+  // anchor, sourced from the runtime's `payload.parentMessageId` (NOT the source
+  // user message). A later bridge can backfill the tool message under this.
+  messageId?: string;
+  // The operation that was running when the task was created.
+  operationId?: string;
+  // The tool call id of the createTask invocation. Doubles as the dedupe key
+  // for the eventual result-bridge delivery.
+  toolCallId?: string;
+  // The topic the creator conversation lives in — the default delivery target.
+  topicId?: string;
+}
+
 export interface TaskContext {
+  lifecycle?: TaskLifecycleAudit;
+  origin?: TaskOriginContext;
   scheduler?: TaskSchedulerContext;
 }
 
@@ -149,6 +244,11 @@ export interface TaskItem {
   status: string;
   totalTopics: number | null;
   updatedAt: Date;
+  // 'private' tasks are only visible to their creator in workspace mode.
+  // 'public' (default) tasks are visible to every workspace member.
+  // The column is ignored in personal mode (no workspace).
+  visibility: 'private' | 'public';
+  workspaceId: string | null;
 }
 
 export type TaskListItem = TaskItem & {
@@ -188,6 +288,8 @@ export interface NewTask {
   status?: string;
   totalTopics?: number | null;
   updatedAt?: Date;
+  visibility?: 'private' | 'public';
+  workspaceId?: string | null;
 }
 
 // ── Task Detail (shared across CLI, viewTask tool, task.detail router) ──
@@ -199,6 +301,11 @@ export interface TaskDetailSubtaskAssignee {
   title: string | null;
 }
 
+export interface TaskDetailSubtaskRunningTopic {
+  id: string;
+  operationId?: string | null;
+}
+
 export interface TaskDetailSubtask {
   assignee?: TaskDetailSubtaskAssignee | null;
   automationMode?: TaskAutomationMode | null;
@@ -208,6 +315,7 @@ export interface TaskDetailSubtask {
   identifier: string;
   name?: string | null;
   priority?: number | null;
+  runningTopic?: TaskDetailSubtaskRunningTopic | null;
   schedule?: { pattern?: string | null; timezone?: string | null };
   status: string;
 }
@@ -283,6 +391,12 @@ export interface TaskDetailActivity {
     threadId?: string | null;
   } | null;
   seq?: number | null;
+  /** Topic-only: task that owns this run when a parent detail includes descendant topics. */
+  sourceTaskId?: string | null;
+  /** Topic-only: display identifier of the task that owns this run, e.g. T-12. */
+  sourceTaskIdentifier?: string | null;
+  /** Topic-only: display name of the task that owns this run. */
+  sourceTaskName?: string | null;
   status?: string | null;
   summary?: string;
   taskId?: string | null;
@@ -301,6 +415,8 @@ export interface TaskDetailData {
   checkpoint?: CheckpointConfig;
   config?: Record<string, unknown>;
   createdAt?: string;
+  /** Creator of the task; used by the UI to gate creator-only actions (e.g. make private). */
+  createdByUserId?: string | null;
   dependencies?: Array<{ dependsOn: string; type: string }>;
   description?: string | null;
   /** Rich-editor JSON state for the instruction; preserves details markdown drops (image size, etc.). */
@@ -319,7 +435,6 @@ export interface TaskDetailData {
   name?: string | null;
   parent?: { agentId?: string | null; identifier: string; name: string | null } | null;
   priority?: number | null;
-  review?: Record<string, any> | null;
   schedule?: {
     maxExecutions?: number | null;
     pattern?: string | null;
@@ -329,5 +444,12 @@ export interface TaskDetailData {
   subtasks?: TaskDetailSubtask[];
   topicCount?: number;
   userId?: string | null;
+  /** Task-level verify (delivery-acceptance) gate config; `tasks.config.verify`. */
+  verify?: TaskVerifyConfig | null;
+  /** Visibility within a workspace. 'public' is workspace-shared (default);
+   *  'private' is only visible to the creator. Ignored in personal mode. */
+  visibility?: 'private' | 'public';
   workspace?: TaskDetailWorkspaceNode[];
+  /** Owning workspace; null for personal (non-workspace) tasks. */
+  workspaceId?: string | null;
 }

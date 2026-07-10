@@ -20,6 +20,7 @@ declare global {
   interface Window {
     __DEBUG_PROXY__: boolean | undefined;
     __editor?: IEditor;
+    __LOBE_BOOT_T_HTML__?: number;
     /** Dev-only: Zustand store snapshots via `getState()` keyed by store name */
     __LOBE_STORES?: Record<string, () => unknown>;
     __SERVER_CONFIG__: SPAServerConfig | undefined;

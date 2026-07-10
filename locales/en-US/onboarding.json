@@ -122,6 +122,7 @@
   "responseLanguage.auto": "Auto (Follow system language)",
   "responseLanguage.desc": "Choose the Agent’s reply language",
   "responseLanguage.hint": "After selecting a language, AI responses will use that language, and the interface language will also sync",
+  "responseLanguage.saveFailed": "Failed to save. Please try again.",
   "responseLanguage.title": "Which language should we use to communicate?",
   "responseLanguage.title2": "Start with language, build true understanding.",
   "responseLanguage.title3": "Let me speak clearly and understand you better~",

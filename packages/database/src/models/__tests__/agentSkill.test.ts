@@ -336,5 +336,21 @@ describe('AgentSkillModel', () => {
       const result = await agentSkillModel.findByName('Other Skill');
       expect(result).toBeUndefined();
     });
+
+    it('matches case-insensitively so model casing drift still resolves', async () => {
+      await serverDB.insert(agentSkills).values({
+        name: 'agent-browser',
+        description: 'browser CLI',
+        identifier: 'lobe-agent-browser',
+        source: 'user',
+        manifest: createManifest(),
+        userId,
+      });
+
+      for (const query of ['agent-browser', 'Agent-Browser', 'AGENT-BROWSER']) {
+        const result = await agentSkillModel.findByName(query);
+        expect(result?.name).toBe('agent-browser');
+      }
+    });
   });
 });

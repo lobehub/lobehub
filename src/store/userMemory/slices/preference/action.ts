@@ -4,6 +4,7 @@ import { type SWRResponse } from 'swr';
 import useSWR from 'swr';
 
 import { type DisplayPreferenceMemory } from '@/database/repositories/userMemory';
+import { userMemoryKeys } from '@/libs/swr/keys';
 import { memoryCRUDService, userMemoryService } from '@/services/userMemory';
 import { type StoreSetter } from '@/store/types';
 import { LayersEnum } from '@/types/userMemory';
@@ -71,20 +72,10 @@ export class PreferenceActionImpl {
   };
 
   useFetchPreferences = (params: PreferenceQueryParams): SWRResponse<any> => {
-    const swrKeyParts = [
-      'useFetchPreferences',
-      params.page,
-      params.pageSize,
-      params.q,
-      params.sort,
-    ];
-    const swrKey = swrKeyParts
-      .filter((part) => part !== undefined && part !== null && part !== '')
-      .join('-');
     const page = params.page ?? 1;
 
     return useSWR(
-      swrKey,
+      userMemoryKeys.preferences(params),
       async () => {
         const result = await userMemoryService.queryMemories({
           layer: LayersEnum.Preference,

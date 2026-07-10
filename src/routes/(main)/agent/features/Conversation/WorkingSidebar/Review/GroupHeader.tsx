@@ -24,6 +24,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     inset-block-start: 0;
 
     display: flex;
+    flex: none;
     gap: 6px;
     align-items: center;
 
@@ -31,7 +32,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
        so the header stays the same size whether or not the fold button is
        rendered. Without this, expanding/collapsing a group would jitter the
        sticky header height because the button toggles between rendered and
-       not. padding-inline keeps the left-edge alignment with file rows. */
+       not. flex:none keeps the column flex list from compressing the sticky
+       header during expand/collapse. padding-inline keeps the left-edge
+       alignment with file rows. */
     block-size: 32px;
     padding-inline: 10px;
 

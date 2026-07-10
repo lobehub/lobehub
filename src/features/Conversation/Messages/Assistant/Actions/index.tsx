@@ -22,6 +22,7 @@ const DEFAULT_MENU: MessageActionSlot[] = [
   'translate',
   'divider',
   'share',
+  'select',
   'divider',
   'regenerate',
   'delAndRegenerate',

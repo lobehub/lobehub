@@ -1,7 +1,11 @@
 import { buildAgentSkillIdentifier } from '@lobechat/const';
 import useSWR, { type SWRResponse } from 'swr';
 
-import { agentDocumentService, agentDocumentSWRKeys } from '@/services/agentDocument';
+import {
+  type AgentDocumentListItem,
+  agentDocumentService,
+  agentDocumentSWRKeys,
+} from '@/services/agentDocument';
 import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
@@ -12,9 +16,7 @@ const n = setNamespace('agentDocumentSkills');
 
 type Setter = StoreSetter<ToolStore>;
 
-const mapDocsToSkills = (
-  docs: Awaited<ReturnType<typeof agentDocumentService.getDocuments>>,
-): AgentDocumentSkillItem[] =>
+const mapDocsToSkills = (docs: AgentDocumentListItem[]): AgentDocumentSkillItem[] =>
   docs
     .filter((doc) => doc.isSkillBundle)
     .map((doc) => ({
@@ -56,7 +58,7 @@ export class AgentDocumentSkillsActionImpl {
     }
 
     try {
-      const docs = await agentDocumentService.getDocuments({ agentId });
+      const docs = await agentDocumentService.listDocuments({ agentId, excludeWeb: true });
       const items = mapDocsToSkills(docs);
       this.#set(
         { agentDocumentSkills: items, agentDocumentSkillsAgentId: agentId },
@@ -87,15 +89,18 @@ export class AgentDocumentSkillsActionImpl {
 
   /**
    * SWR-backed hook that fetches the agent's skill bundles and keeps the store
-   * in sync. Shares the same SWR key as the working-sidebar panel so the panel
-   * fetch and the registry sync collapse into one network request.
+   * in sync. Fetches the `non-web` variant (drops the unbounded web-clip docs it
+   * never needs) so this eager, always-mounted slash-menu hook doesn't pull the
+   * full document list into the homepage batch. The working-sidebar panel keeps
+   * its own full-list fetch; both revalidate together via the shared
+   * `agent:documentsList` prefix (see `invalidateDocumentMutation`).
    */
   useFetchAgentDocumentSkills = (
     agentId: string | undefined,
-  ): SWRResponse<Awaited<ReturnType<typeof agentDocumentService.getDocuments>>> =>
-    useSWR<Awaited<ReturnType<typeof agentDocumentService.getDocuments>>>(
-      agentId ? agentDocumentSWRKeys.documentsList(agentId) : null,
-      async () => agentDocumentService.getDocuments({ agentId: agentId! }),
+  ): SWRResponse<AgentDocumentListItem[]> =>
+    useSWR<AgentDocumentListItem[]>(
+      agentId ? agentDocumentSWRKeys.documentsNonWebList(agentId) : null,
+      async () => agentDocumentService.listDocuments({ agentId: agentId!, excludeWeb: true }),
       {
         onSuccess: (docs) => {
           if (!agentId) return;

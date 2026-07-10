@@ -1,6 +1,7 @@
 'use client';
 
-import { Flexbox, Icon, Tabs, Tag } from '@lobehub/ui';
+import { Flexbox, Icon, Tag } from '@lobehub/ui';
+import { Tabs } from '@lobehub/ui/base-ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import { createStaticStyles } from 'antd-style';
 import { BookOpenIcon, DownloadIcon, FileTextIcon, HistoryIcon, ListIcon } from 'lucide-react';
@@ -40,7 +41,7 @@ const Nav = memo<{
   const nav = (
     <Tabs
       activeKey={activeTab}
-      compact={mobile}
+      variant="square"
       items={[
         {
           icon: <Icon icon={BookOpenIcon} size={16} />,
@@ -112,7 +113,12 @@ const Nav = memo<{
   ) : (
     <Flexbox horizontal align={'center'} className={styles.nav} justify={'space-between'}>
       {nav}
-      <Flexbox horizontal gap={12}>
+      <Flexbox
+        horizontal
+        flex="none"
+        gap={12}
+        style={{ marginInlineStart: 12, whiteSpace: 'nowrap' }}
+      >
         <a
           className={styles.link}
           href="https://discord.gg/AYFPHvv2jT"

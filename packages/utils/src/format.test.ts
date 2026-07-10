@@ -284,6 +284,13 @@ describe('format', () => {
     it('formats million-level token counts with M suffix', () => {
       expect(formatUsageValue(1_000_000)).toBe('1M');
       expect(formatUsageValue(1_500_000)).toBe('1.5M');
+      expect(formatUsageValue(999_900_000)).toBe('999.9M');
+    });
+
+    it('rolls over to B suffix once counts reach a billion (1000M)', () => {
+      expect(formatUsageValue(1_000_000_000)).toBe('1B');
+      expect(formatUsageValue(9_092_900_000)).toBe('9.1B');
+      expect(formatUsageValue(10_285_700_000)).toBe('10.3B');
     });
   });
 

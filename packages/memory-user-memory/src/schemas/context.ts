@@ -82,6 +82,7 @@ export const ContextMemoryItemSchema = z.object({
   sourceIds: z
     .array(z.string())
     .nullable()
+    .default(() => [])
     .describe('Stable source message ids that support this memory'),
   summary: z.string().describe('Concise overview of this specific memory'),
   tags: z.array(z.string()).describe('User defined tags that summarize the context facets'),

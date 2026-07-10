@@ -1,4 +1,4 @@
-import type {
+import {
   ActivityMemoryItemSchema,
   AddIdentityActionSchema,
   ContextMemoryItemSchema,
@@ -119,14 +119,15 @@ export class MemoryExecutionRuntime {
   ): Promise<BuiltinServerRuntimeOutput> {
     if (this.isReadOnly) return READ_ONLY_RESULT;
     try {
-      const result = await this.service.addContextMemory(params);
+      const input = ContextMemoryItemSchema.parse(params);
+      const result = await this.service.addContextMemory(input);
 
       if (!result.success) {
         return { content: result.message, success: false };
       }
 
       return {
-        content: `Context memory "${params.title}" saved with memoryId: "${result.memoryId}" and contextId: "${result.contextId}"`,
+        content: `Context memory "${input.title}" saved with memoryId: "${result.memoryId}" and contextId: "${result.contextId}"`,
         state: { contextId: result.contextId, memoryId: result.memoryId },
         success: true,
       };
@@ -143,14 +144,15 @@ export class MemoryExecutionRuntime {
   ): Promise<BuiltinServerRuntimeOutput> {
     if (this.isReadOnly) return READ_ONLY_RESULT;
     try {
-      const result = await this.service.addActivityMemory(params);
+      const input = ActivityMemoryItemSchema.parse(params);
+      const result = await this.service.addActivityMemory(input);
 
       if (!result.success) {
         return { content: result.message, success: false };
       }
 
       return {
-        content: `Activity memory "${params.title}" saved with memoryId: "${result.memoryId}" and activityId: "${result.activityId}"`,
+        content: `Activity memory "${input.title}" saved with memoryId: "${result.memoryId}" and activityId: "${result.activityId}"`,
         state: { activityId: result.activityId, memoryId: result.memoryId },
         success: true,
       };
@@ -167,14 +169,15 @@ export class MemoryExecutionRuntime {
   ): Promise<BuiltinServerRuntimeOutput> {
     if (this.isReadOnly) return READ_ONLY_RESULT;
     try {
-      const result = await this.service.addExperienceMemory(params);
+      const input = ExperienceMemoryItemSchema.parse(params);
+      const result = await this.service.addExperienceMemory(input);
 
       if (!result.success) {
         return { content: result.message, success: false };
       }
 
       return {
-        content: `Experience memory "${params.title}" saved with memoryId: "${result.memoryId}" and experienceId: "${result.experienceId}"`,
+        content: `Experience memory "${input.title}" saved with memoryId: "${result.memoryId}" and experienceId: "${result.experienceId}"`,
         state: { experienceId: result.experienceId, memoryId: result.memoryId },
         success: true,
       };
@@ -191,14 +194,15 @@ export class MemoryExecutionRuntime {
   ): Promise<BuiltinServerRuntimeOutput> {
     if (this.isReadOnly) return READ_ONLY_RESULT;
     try {
-      const result = await this.service.addIdentityMemory(params);
+      const input = AddIdentityActionSchema.parse(params);
+      const result = await this.service.addIdentityMemory(input);
 
       if (!result.success) {
         return { content: result.message, success: false };
       }
 
       return {
-        content: `Identity memory "${params.title}" saved with memoryId: "${result.memoryId}" and identityId: "${result.identityId}"`,
+        content: `Identity memory "${input.title}" saved with memoryId: "${result.memoryId}" and identityId: "${result.identityId}"`,
         state: { identityId: result.identityId, memoryId: result.memoryId },
         success: true,
       };
@@ -215,14 +219,15 @@ export class MemoryExecutionRuntime {
   ): Promise<BuiltinServerRuntimeOutput> {
     if (this.isReadOnly) return READ_ONLY_RESULT;
     try {
-      const result = await this.service.addPreferenceMemory(params);
+      const input = PreferenceMemoryItemSchema.parse(params);
+      const result = await this.service.addPreferenceMemory(input);
 
       if (!result.success) {
         return { content: result.message, success: false };
       }
 
       return {
-        content: `Preference memory "${params.title}" saved with memoryId: "${result.memoryId}" and preferenceId: "${result.preferenceId}"`,
+        content: `Preference memory "${input.title}" saved with memoryId: "${result.memoryId}" and preferenceId: "${result.preferenceId}"`,
         state: { memoryId: result.memoryId, preferenceId: result.preferenceId },
         success: true,
       };
@@ -239,15 +244,16 @@ export class MemoryExecutionRuntime {
   ): Promise<BuiltinServerRuntimeOutput> {
     if (this.isReadOnly) return READ_ONLY_RESULT;
     try {
-      const result = await this.service.updateIdentityMemory(params);
+      const input = UpdateIdentityActionSchema.parse(params);
+      const result = await this.service.updateIdentityMemory(input);
 
       if (!result.success) {
         return { content: result.message, success: false };
       }
 
       return {
-        content: `Identity memory updated: ${params.id}`,
-        state: { identityId: params.id },
+        content: `Identity memory updated: ${input.id}`,
+        state: { identityId: input.id },
         success: true,
       };
     } catch (e) {
@@ -263,15 +269,16 @@ export class MemoryExecutionRuntime {
   ): Promise<BuiltinServerRuntimeOutput> {
     if (this.isReadOnly) return READ_ONLY_RESULT;
     try {
-      const result = await this.service.removeIdentityMemory(params);
+      const input = RemoveIdentityActionSchema.parse(params);
+      const result = await this.service.removeIdentityMemory(input);
 
       if (!result.success) {
         return { content: result.message, success: false };
       }
 
       return {
-        content: `Identity memory removed: ${params.id}\nReason: ${params.reason}`,
-        state: { identityId: params.id, reason: params.reason },
+        content: `Identity memory removed: ${input.id}\nReason: ${input.reason}`,
+        state: { identityId: input.id, reason: input.reason },
         success: true,
       };
     } catch (e) {

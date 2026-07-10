@@ -13,6 +13,12 @@ export type SaveStatus = 'idle' | 'saving' | 'saved';
 
 export interface AgentSliceState {
   activeAgentId?: string;
+  /**
+   * Per-agent config fetch error message. Lets the UI distinguish "fetch
+   * failed" from "still loading" instead of showing an endless skeleton
+   * (e.g. 401s are not retried by SWR). Cleared on successful fetch / retry.
+   */
+  agentConfigErrorMap: Record<string, string>;
   agentDocumentsMap: Record<string, AgentContextDocument[]>;
   agentMap: Record<string, PartialDeep<AgentItem>>;
   agentSettingInstance?: AgentSettingsInstance | null;
@@ -38,7 +44,6 @@ export interface AgentSliceState {
    * Save status for showing auto-save hint
    */
   saveStatus: SaveStatus;
-  showAgentSetting: boolean;
   /**
    * Content being streamed for system role update
    */
@@ -53,6 +58,7 @@ export interface AgentSliceState {
 }
 
 export const initialAgentSliceState: AgentSliceState = {
+  agentConfigErrorMap: {},
   agentDocumentsMap: {},
   agentMap: {},
   availableAgents: undefined,
@@ -67,7 +73,6 @@ export const initialAgentSliceState: AgentSliceState = {
     title: false,
   },
   saveStatus: 'idle',
-  showAgentSetting: false,
   streamingSystemRole: undefined,
   streamingSystemRoleInProgress: false,
 };

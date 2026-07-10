@@ -4,6 +4,8 @@ import type { SearchMode } from '../search';
 import type { TopicGroupMode } from '../topic';
 import type { UserMemoryEffort } from '../user/settings/memory';
 import type { RuntimeEnvConfig } from './agentConfig';
+import type { ReasoningGraph } from './graph';
+import { ReasoningGraphSchema } from './graph';
 
 export interface WorkingModel {
   model: string;
@@ -36,6 +38,11 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
    * Disable context caching
    */
   disableContextCaching?: boolean;
+  /**
+   * Disable Gateway mode for this agent. Undefined means Gateway mode follows
+   * the app-level default and stays enabled when the server supports it.
+   */
+  disableGatewayMode?: boolean;
 
   effort?: 'low' | 'medium' | 'high' | 'max';
   /**
@@ -65,6 +72,11 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
   enableContextCompression?: boolean;
   enableFollowUpChips?: boolean;
   /**
+   * Whether to route this agent through a graph-style orchestration runtime.
+   * Undefined means the agent uses the default runtime path.
+   */
+  enableGraphMode?: boolean;
+  /**
    * Enable historical message count
    */
   enableHistoryCount?: boolean;
@@ -81,11 +93,19 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
    * Whether to enable streaming output
    */
   enableStreaming?: boolean;
+  glm5_2ReasoningEffort?: 'high' | 'max';
   gpt5_1ReasoningEffort?: 'none' | 'low' | 'medium' | 'high';
   gpt5_2ProReasoningEffort?: 'medium' | 'high' | 'xhigh';
   gpt5_2ReasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
+  gpt5_6ReasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
   gpt5ReasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
+  /**
+   * Graph-style orchestration runtime definition. Stored in chat config to avoid
+   * a dedicated agent table column while keeping eval-run snapshots intact.
+   */
+  graph?: null | ReasoningGraph;
   grok4_3ReasoningEffort?: 'none' | 'low' | 'medium' | 'high';
+  grok4_5ReasoningEffort?: 'low' | 'medium' | 'high';
   grok4_20ReasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh';
   /**
    * Number of historical messages
@@ -113,6 +133,12 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
    * Effort level for Claude Opus 4.7 and later (adds xhigh tier between high and max)
    */
   opus47Effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+
+  /**
+   * Whether to preserve and pass historical thinking content to the model
+   * (provider support required, e.g. Qwen preserve_thinking)
+   */
+  preserveThinking?: boolean;
   reasoningBudgetToken?: number;
   /**
    * Reasoning budget token for models with 32k max (GLM-5/GLM-4.7)
@@ -124,13 +150,17 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
   reasoningBudgetToken80k?: number;
   reasoningEffort?: 'low' | 'medium' | 'high';
   /**
+   * Selects the Responses API reasoning execution mode.
+   */
+  reasoningMode?: 'standard' | 'pro';
+  ring2_6ReasoningEffort?: 'high' | 'xhigh';
+  /**
    * Runtime environment configuration (desktop only)
    */
   runtimeEnv?: RuntimeEnvConfig;
-
   searchFCModel?: WorkingModel;
-  searchMode?: SearchMode;
 
+  searchMode?: SearchMode;
   /**
    * Skill activate mode:
    * - 'auto': Default tools (LobeTools, Skills, SkillStore, etc.) are always active,
@@ -147,11 +177,20 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
   textVerbosity?: 'low' | 'medium' | 'high';
 
   thinking?: 'disabled' | 'auto' | 'enabled';
+
   thinkingBudget?: number;
   thinkingLevel?: 'minimal' | 'low' | 'medium' | 'high';
   thinkingLevel2?: 'low' | 'high';
   thinkingLevel3?: 'low' | 'medium' | 'high';
   thinkingLevel4?: 'minimal' | 'high';
+  /**
+   * Tool-resolution mode. When set it overrides the `enableAgentMode` derivation:
+   * - `agent`  full default toolset + plugins + always-on tools
+   * - `chat`   strict runtime-managed allow-list (KB / memory / web-browsing)
+   * - `custom` the toolset is EXACTLY the agent's declared plugins — nothing
+   *            auto-injected. For focused builtin sub-agents (e.g. the verifier).
+   */
+  toolMode?: 'agent' | 'chat' | 'custom';
   /**
    * Maximum length for tool execution result content (in characters)
    * This prevents context overflow when sending tool results back to LLM
@@ -172,10 +211,7 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
 /**
  * Zod schema for RuntimeEnvConfig
  */
-const runtimeEnvModeEnum = z.enum(['local', 'cloud', 'none']);
-
 export const RuntimeEnvConfigSchema = z.object({
-  runtimeMode: z.record(z.string(), runtimeEnvModeEnum).optional(),
   workingDirectory: z.string().optional(),
 });
 
@@ -203,13 +239,17 @@ export const AgentChatConfigSchema = z
     deepseekV4ReasoningEffort: z.enum(['none', 'high', 'max']).optional(),
     compressionModelId: z.string().optional(),
     disableContextCaching: z.boolean().optional(),
+    disableGatewayMode: z.boolean().optional(),
     effort: z.enum(['low', 'medium', 'high', 'max']).optional(),
     enableAdaptiveThinking: z.boolean().optional(),
     enableAgentMode: z.boolean().optional(),
+    toolMode: z.enum(['agent', 'chat', 'custom']).optional(),
     enableAutoScrollOnStreaming: z.boolean().optional(),
     enableCompressHistory: z.boolean().optional(),
     enableContextCompression: z.boolean().optional(),
+    enableGraphMode: z.boolean().optional(),
     enableFollowUpChips: z.boolean().optional(),
+    graph: ReasoningGraphSchema.nullish(),
     enableHistoryCount: z.boolean().optional(),
     enableMaxTokens: z.boolean().optional(),
     enableReasoning: z.boolean().optional(),
@@ -219,9 +259,13 @@ export const AgentChatConfigSchema = z
     gpt5_1ReasoningEffort: z.enum(['none', 'low', 'medium', 'high']).optional(),
     gpt5_2ProReasoningEffort: z.enum(['medium', 'high', 'xhigh']).optional(),
     gpt5_2ReasoningEffort: z.enum(['none', 'low', 'medium', 'high', 'xhigh']).optional(),
+    gpt5_6ReasoningEffort: z.enum(['none', 'low', 'medium', 'high', 'xhigh', 'max']).optional(),
+    glm5_2ReasoningEffort: z.enum(['high', 'max']).optional(),
     grok4_20ReasoningEffort: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
     grok4_3ReasoningEffort: z.enum(['none', 'low', 'medium', 'high']).optional(),
+    grok4_5ReasoningEffort: z.enum(['low', 'medium', 'high']).optional(),
     hy3ReasoningEffort: z.enum(['no_think', 'low', 'high']).optional(),
+    ring2_6ReasoningEffort: z.enum(['high', 'xhigh']).optional(),
     historyCount: z.number().optional(),
     imageAspectRatio: z.string().optional(),
     imageAspectRatio2: z.string().optional(),
@@ -229,10 +273,12 @@ export const AgentChatConfigSchema = z
     imageResolution2: z.enum(['512', '1K', '2K', '4K']).optional(),
     opus47Effort: z.enum(['low', 'medium', 'high', 'xhigh', 'max']).optional(),
     runtimeEnv: RuntimeEnvConfigSchema.optional(),
+    preserveThinking: z.boolean().optional(),
     reasoningBudgetToken: z.number().optional(),
     reasoningBudgetToken32k: z.number().optional(),
     reasoningBudgetToken80k: z.number().optional(),
     reasoningEffort: z.enum(['low', 'medium', 'high']).optional(),
+    reasoningMode: z.enum(['standard', 'pro']).optional(),
     searchFCModel: z
       .object({
         model: z.string(),

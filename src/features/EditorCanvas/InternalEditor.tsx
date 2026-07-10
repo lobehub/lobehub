@@ -12,7 +12,8 @@ import {
 import { Editor, useEditorState } from '@lobehub/editor/react';
 import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
-import { memo, type RefObject, useCallback, useEffect, useMemo, useRef } from 'react';
+import type { CSSProperties, RefObject } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { createChatInputRichPlugins } from '@/features/ChatInput/InputEditor/plugins';
@@ -98,6 +99,7 @@ export interface InternalEditorProps extends EditorCanvasProps {
 const InternalEditor = memo<InternalEditorProps>(
   ({
     contentChangeLockRef,
+    disabled,
     editable = true,
     editor,
     extraPlugins,
@@ -129,6 +131,18 @@ const InternalEditor = memo<InternalEditorProps>(
     }, []);
 
     const finalPlaceholder = placeholder || t('pageEditor.editorPlaceholder');
+    const wrapperStyle = useMemo<CSSProperties>(
+      () => ({
+        cursor: disabled ? 'not-allowed' : undefined,
+        maxWidth: '100%',
+        minWidth: 0,
+        opacity: disabled ? 0.65 : undefined,
+        overflow: 'hidden',
+        pointerEvents: disabled ? 'none' : undefined,
+        width: '100%',
+      }),
+      [disabled],
+    );
 
     // Build plugins array
     const plugins = useMemo(() => {
@@ -151,8 +165,10 @@ const InternalEditor = memo<InternalEditorProps>(
         ? [...extraPlugins, ...STATIC_PLUGINS, imagePlugin, filePlugin]
         : [...STATIC_PLUGINS, imagePlugin, filePlugin];
 
-      // Add toolbar if enabled
-      if (floatingToolbar) {
+      // Add toolbar only when the editor is actually editable — a locked /
+      // read-only page must not surface the floating formatting toolbar on
+      // text selection (its buttons would dispatch commands that never save).
+      if (floatingToolbar && editable && !disabled) {
         return [
           ...basePlugins,
           Editor.withProps(ReactToolbarPlugin, {
@@ -171,6 +187,8 @@ const InternalEditor = memo<InternalEditorProps>(
       return basePlugins;
     }, [
       customPlugins,
+      disabled,
+      editable,
       editor,
       editorState,
       extraPlugins,
@@ -272,6 +290,7 @@ const InternalEditor = memo<InternalEditorProps>(
           // During document hydration (e.g. route switch), we only advance snapshot
           // and skip external change callback to avoid false dirty checks.
           if (contentChangeLockRef?.current) return;
+          if (disabled) return;
 
           onContentChangeRef.current?.();
         }
@@ -280,10 +299,11 @@ const InternalEditor = memo<InternalEditorProps>(
       return () => {
         unregister();
       };
-    }, [contentChangeLockRef, editor]); // Only depend on stable refs and editor
+    }, [contentChangeLockRef, disabled, editor]); // Only depend on stable refs and editor
 
     return (
       <div
+        style={wrapperStyle}
         onClick={(e) => {
           e.stopPropagation();
           e.preventDefault();
@@ -291,7 +311,7 @@ const InternalEditor = memo<InternalEditorProps>(
       >
         <Editor
           content={''}
-          editable={editable}
+          editable={editable && !disabled}
           editor={editor}
           placeholder={finalPlaceholder}
           plugins={plugins}

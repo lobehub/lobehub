@@ -1,0 +1,14 @@
+{
+  "name": "@lobechat/business-server",
+  "version": "0.0.0",
+  "private": true,
+  "exports": {
+    "./*": "./src/*.ts"
+  },
+  "dependencies": {
+    "@lobechat/database": "workspace:*",
+    "@lobechat/model-runtime": "workspace:*",
+    "@lobechat/trpc": "workspace:*",
+    "@lobechat/types": "workspace:*"
+  }
+}

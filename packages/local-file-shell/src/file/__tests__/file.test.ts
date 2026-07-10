@@ -304,6 +304,39 @@ describe('file operations', () => {
       expect(result.linesAdded).toBeGreaterThan(0);
       expect(result.linesDeleted).toBeGreaterThan(0);
     });
+
+    it('should match a multi-line LF old_string against a CRLF file (Windows)', async () => {
+      const filePath = path.join(tmpDir, 'crlf.txt');
+      await writeFile(filePath, 'line1\r\nline2\r\nline3\r\n');
+
+      // LLM emits `\n` even though the file on disk uses `\r\n`.
+      const result = await editLocalFile({
+        file_path: filePath,
+        new_string: 'lineA\nlineB',
+        old_string: 'line1\nline2',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.replacements).toBe(1);
+      // Existing CRLF line-ending style is preserved.
+      expect(fs.readFileSync(filePath, 'utf8')).toBe('lineA\r\nlineB\r\nline3\r\n');
+    });
+
+    it('should replace_all with an LF old_string against a CRLF file', async () => {
+      const filePath = path.join(tmpDir, 'crlf-all.txt');
+      await writeFile(filePath, 'a\r\nb\r\na\r\nb\r\n');
+
+      const result = await editLocalFile({
+        file_path: filePath,
+        new_string: 'x\ny',
+        old_string: 'a\nb',
+        replace_all: true,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.replacements).toBe(2);
+      expect(fs.readFileSync(filePath, 'utf8')).toBe('x\r\ny\r\nx\r\ny\r\n');
+    });
   });
 
   // ─── listLocalFiles ───
@@ -559,6 +592,15 @@ describe('file operations', () => {
 
       expect(result).toHaveProperty('success');
       expect(result).toHaveProperty('matches');
+      expect(result.matches).toContain('./search.txt');
+    });
+
+    it('should return matching lines in content mode', async () => {
+      await writeFile(path.join(tmpDir, 'search.txt'), 'hello world\nfoo bar\nhello again');
+
+      const result = await grepContent({ cwd: tmpDir, output_mode: 'content', pattern: 'hello' });
+
+      expect(result.matches[0]).toContain('./search.txt:1:1:hello world');
     });
 
     it('should handle no matches', async () => {

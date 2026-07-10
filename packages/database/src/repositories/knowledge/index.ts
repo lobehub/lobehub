@@ -1,11 +1,12 @@
-import type { QueryFileListParams } from '@lobechat/types';
+import type { FileUploader, QueryFileListParams } from '@lobechat/types';
 import { FilesTabs, SortType } from '@lobechat/types';
 import { and, eq, sql } from 'drizzle-orm';
 
 import { DocumentModel } from '../../models/document';
 import { FileModel } from '../../models/file';
-import { DOCUMENT_FOLDER_TYPE, documents, files, knowledgeBaseFiles } from '../../schemas';
+import { DOCUMENT_FOLDER_TYPE, documents, files, knowledgeBaseFiles, users } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { buildWorkspaceWhere } from '../../utils/workspace';
 
 export interface KnowledgeItem {
   chunkTaskId?: string | null;
@@ -28,7 +29,16 @@ export interface KnowledgeItem {
    */
   sourceType: 'file' | 'document';
   updatedAt: Date;
+  uploader?: FileUploader | null;
   url?: string;
+  /** Workspace creator id (used by UI to decide if current user owns the row). */
+  userId?: string | null;
+  /**
+   * Workspace visibility. `null` when querying in personal mode (column is
+   * ignored). UI uses this together with `userId` to surface the lock icon
+   * and the publish-to-workspace affordance.
+   */
+  visibility?: 'private' | 'public' | null;
 }
 
 /**
@@ -39,13 +49,43 @@ export class KnowledgeRepo {
   private db: LobeChatDatabase;
   private fileModel: FileModel;
   private documentModel: DocumentModel;
+  private workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.userId = userId;
     this.db = db;
-    this.fileModel = new FileModel(db, userId);
-    this.documentModel = new DocumentModel(db, userId);
+    this.workspaceId = workspaceId;
+    this.fileModel = new FileModel(db, userId, workspaceId);
+    this.documentModel = new DocumentModel(db, userId, workspaceId);
   }
+
+  private fileOwnershipSql = (alias: 'f' = 'f') => {
+    if (!this.workspaceId) {
+      return sql`${sql.raw(`${alias}.user_id`)} = ${this.userId} AND ${sql.raw(`${alias}.workspace_id`)} IS NULL`;
+    }
+
+    // Workspace mode: members see all public rows; private rows are scoped to
+    // their creator. Mirrors `buildWorkspaceWhere` for the raw-SQL UNION paths.
+    return sql`${sql.raw(`${alias}.workspace_id`)} = ${this.workspaceId} AND (
+      ${sql.raw(`${alias}.visibility`)} IS NULL
+      OR ${sql.raw(`${alias}.visibility`)} = 'public'
+      OR (${sql.raw(`${alias}.visibility`)} = 'private' AND ${sql.raw(`${alias}.user_id`)} = ${this.userId})
+    )`;
+  };
+
+  private documentOwnershipSql = (alias: 'd' | 'documents' = 'd') => {
+    if (!this.workspaceId) {
+      return sql`${sql.raw(`${alias}.user_id`)} = ${this.userId} AND ${sql.raw(`${alias}.workspace_id`)} IS NULL`;
+    }
+
+    // Workspace mode: members see all public rows; private rows are scoped to
+    // their creator. Mirrors `buildWorkspaceWhere` for the raw-SQL UNION paths.
+    return sql`${sql.raw(`${alias}.workspace_id`)} = ${this.workspaceId} AND (
+      ${sql.raw(`${alias}.visibility`)} IS NULL
+      OR ${sql.raw(`${alias}.visibility`)} = 'public'
+      OR (${sql.raw(`${alias}.visibility`)} = 'private' AND ${sql.raw(`${alias}.user_id`)} = ${this.userId})
+    )`;
+  };
 
   /**
    * Query combined results from files and documents tables
@@ -60,6 +100,7 @@ export class KnowledgeRepo {
     parentId,
     limit = 50,
     offset = 0,
+    visibility,
   }: QueryFileListParams = {}): Promise<KnowledgeItem[]> {
     // If parentId is provided, check if it's a slug and resolve it to an ID
     let resolvedParentId = parentId;
@@ -72,6 +113,11 @@ export class KnowledgeRepo {
       // Otherwise assume it's already an ID
     }
 
+    // Visibility filter is only meaningful in workspace mode. Personal-mode
+    // rows have `visibility` set to the schema default and are already fully
+    // scoped by `workspace_id IS NULL AND user_id = caller`.
+    const effectiveVisibility = this.workspaceId ? visibility : undefined;
+
     // Build file query
     const fileQuery = this.buildFileQuery({
       category,
@@ -81,6 +127,7 @@ export class KnowledgeRepo {
       showFilesInKnowledgeBase,
       sortType,
       sorter,
+      visibility: effectiveVisibility,
     });
 
     // Build document query (notes)
@@ -91,6 +138,7 @@ export class KnowledgeRepo {
       q,
       sortType,
       sorter,
+      visibility: effectiveVisibility,
     });
 
     // Combine both queries with UNION ALL
@@ -150,7 +198,17 @@ export class KnowledgeRepo {
         slug: row.slug,
         sourceType: row.source_type,
         updatedAt: new Date(row.updated_at),
+        uploader: row.uploader_id
+          ? {
+              avatar: row.uploader_avatar,
+              fullName: row.uploader_full_name,
+              id: row.uploader_id,
+              username: row.uploader_username,
+            }
+          : null,
         url: row.url,
+        userId: row.user_id,
+        visibility: row.visibility,
       };
     });
 
@@ -179,11 +237,19 @@ export class KnowledgeRepo {
         d.content,
         d.slug,
         COALESCE(d.metadata, f.metadata) as metadata,
+        f.user_id,
+        f.visibility,
+        u.id as uploader_id,
+        u.full_name as uploader_full_name,
+        u.username as uploader_username,
+        u.avatar as uploader_avatar,
         'file' as source_type
       FROM ${files} f
       LEFT JOIN ${documents} d
         ON f.id = d.file_id
-      WHERE f.user_id = ${this.userId}
+      LEFT JOIN ${users} u
+        ON f.user_id = u.id
+      WHERE ${this.fileOwnershipSql('f')}
         AND NOT EXISTS (
           SELECT 1 FROM ${knowledgeBaseFiles}
           WHERE ${knowledgeBaseFiles.fileId} = f.id
@@ -207,9 +273,25 @@ export class KnowledgeRepo {
         content,
         slug,
         metadata,
+        user_id,
+        visibility,
+        uploader_id,
+        uploader_full_name,
+        uploader_username,
+        uploader_avatar,
         'document' as source_type
-      FROM ${documents}
-      WHERE user_id = ${this.userId}
+      FROM (
+        SELECT
+          documents.*,
+          u.id as uploader_id,
+          u.full_name as uploader_full_name,
+          u.username as uploader_username,
+          u.avatar as uploader_avatar
+        FROM ${documents}
+        LEFT JOIN ${users} u
+          ON documents.user_id = u.id
+      ) documents
+      WHERE ${this.documentOwnershipSql('documents')}
         AND source_type != ${'file'}
         AND knowledge_base_id IS NULL
     `;
@@ -263,7 +345,17 @@ export class KnowledgeRepo {
         slug: row.slug,
         sourceType: row.source_type,
         updatedAt: new Date(row.updated_at),
+        uploader: row.uploader_id
+          ? {
+              avatar: row.uploader_avatar,
+              fullName: row.uploader_full_name,
+              id: row.uploader_id,
+              username: row.uploader_username,
+            }
+          : null,
         url: row.url,
+        userId: row.user_id,
+        visibility: row.visibility,
       };
     });
 
@@ -315,7 +407,10 @@ export class KnowledgeRepo {
 
     if (document.fileType === DOCUMENT_FOLDER_TYPE) {
       const children = await this.db.query.documents.findMany({
-        where: and(eq(documents.parentId, id), eq(documents.userId, this.userId)),
+        where: and(
+          eq(documents.parentId, id),
+          buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, documents),
+        ),
       });
 
       for (const child of children) {
@@ -323,7 +418,10 @@ export class KnowledgeRepo {
       }
 
       const childFiles = await this.db.query.files.findMany({
-        where: and(eq(files.parentId, id), eq(files.userId, this.userId)),
+        where: and(
+          eq(files.parentId, id),
+          buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, files),
+        ),
       });
 
       for (const file of childFiles) {
@@ -344,8 +442,9 @@ export class KnowledgeRepo {
     knowledgeBaseId,
     showFilesInKnowledgeBase,
     parentId,
+    visibility,
   }: QueryFileListParams = {}): ReturnType<typeof sql> {
-    const whereConditions: any[] = [sql`f.user_id = ${this.userId}`];
+    const whereConditions: any[] = [this.fileOwnershipSql('f')];
 
     // Parent ID filter
     if (parentId !== undefined) {
@@ -359,6 +458,15 @@ export class KnowledgeRepo {
     // Search filter
     if (q) {
       whereConditions.push(sql`f.name ILIKE ${`%${q}%`}`);
+    }
+
+    // Visibility filter — narrows the ownership-scoped pool. Explicit private
+    // rows with no `visibility` column still surface under 'public' since the
+    // schema default + backfill treats them as public.
+    if (visibility === 'private') {
+      whereConditions.push(sql`f.visibility = 'private'`);
+    } else if (visibility === 'public') {
+      whereConditions.push(sql`(f.visibility = 'public' OR f.visibility IS NULL)`);
     }
 
     // Category filter
@@ -376,7 +484,7 @@ export class KnowledgeRepo {
     // Knowledge base filter
     if (knowledgeBaseId) {
       // Build where conditions using proper table references (f.column instead of files.column)
-      const kbWhereConditions: any[] = [sql`f.user_id = ${this.userId}`];
+      const kbWhereConditions: any[] = [this.fileOwnershipSql('f')];
 
       // Parent ID filter
       if (parentId !== undefined) {
@@ -405,6 +513,12 @@ export class KnowledgeRepo {
         }
       }
 
+      if (visibility === 'private') {
+        kbWhereConditions.push(sql`f.visibility = 'private'`);
+      } else if (visibility === 'public') {
+        kbWhereConditions.push(sql`(f.visibility = 'public' OR f.visibility IS NULL)`);
+      }
+
       return sql`
         SELECT
           COALESCE(d.id, f.id) as id,
@@ -422,6 +536,12 @@ export class KnowledgeRepo {
           d.content,
           d.slug,
           COALESCE(d.metadata, f.metadata) as metadata,
+          f.user_id,
+          f.visibility,
+          u.id as uploader_id,
+          u.full_name as uploader_full_name,
+          u.username as uploader_username,
+          u.avatar as uploader_avatar,
           'file' as source_type
         FROM ${files} f
         INNER JOIN ${knowledgeBaseFiles} kbf
@@ -429,6 +549,8 @@ export class KnowledgeRepo {
           AND kbf.knowledge_base_id = ${knowledgeBaseId}
         LEFT JOIN ${documents} d
           ON f.id = d.file_id
+        LEFT JOIN ${users} u
+          ON f.user_id = u.id
         WHERE ${sql.join(kbWhereConditions, sql` AND `)}
       `;
     }
@@ -462,10 +584,18 @@ export class KnowledgeRepo {
         d.content,
         d.slug,
         COALESCE(d.metadata, f.metadata) as metadata,
+        f.user_id,
+        f.visibility,
+        u.id as uploader_id,
+        u.full_name as uploader_full_name,
+        u.username as uploader_username,
+        u.avatar as uploader_avatar,
         'file' as source_type
       FROM ${files} f
       LEFT JOIN ${documents} d
         ON f.id = d.file_id
+      LEFT JOIN ${users} u
+        ON f.user_id = u.id
       WHERE ${sql.join(whereConditions, sql` AND `)}
     `;
   }
@@ -475,9 +605,10 @@ export class KnowledgeRepo {
     q,
     knowledgeBaseId,
     parentId,
+    visibility,
   }: QueryFileListParams = {}): ReturnType<typeof sql> {
     const whereConditions: any[] = [
-      sql`${documents.userId} = ${this.userId}`,
+      this.documentOwnershipSql('documents'),
       sql`${documents.sourceType} != ${'file'}`,
     ];
 
@@ -494,6 +625,14 @@ export class KnowledgeRepo {
     if (q) {
       whereConditions.push(
         sql`(${documents.title} ILIKE ${`%${q}%`} OR ${documents.filename} ILIKE ${`%${q}%`})`,
+      );
+    }
+
+    if (visibility === 'private') {
+      whereConditions.push(sql`${documents.visibility} = 'private'`);
+    } else if (visibility === 'public') {
+      whereConditions.push(
+        sql`(${documents.visibility} = 'public' OR ${documents.visibility} IS NULL)`,
       );
     }
 
@@ -532,6 +671,12 @@ export class KnowledgeRepo {
             NULL::text as content,
             NULL::varchar(255) as slug,
             NULL::jsonb as metadata,
+            NULL::text as user_id,
+            NULL::text as visibility,
+            NULL::text as uploader_id,
+            NULL::text as uploader_full_name,
+            NULL::text as uploader_username,
+            NULL::text as uploader_avatar,
             NULL::text as source_type
           WHERE false
         `;
@@ -542,7 +687,7 @@ export class KnowledgeRepo {
     // Documents are linked to knowledge bases through files table via fileId
     if (knowledgeBaseId) {
       // Build where conditions using proper table references (d.column instead of documents.column)
-      const kbWhereConditions: any[] = [sql`d.user_id = ${this.userId}`];
+      const kbWhereConditions: any[] = [this.documentOwnershipSql('d')];
 
       // Parent ID filter
       if (parentId !== undefined) {
@@ -556,6 +701,12 @@ export class KnowledgeRepo {
       // Search filter
       if (q) {
         kbWhereConditions.push(sql`(d.title ILIKE ${`%${q}%`} OR d.filename ILIKE ${`%${q}%`})`);
+      }
+
+      if (visibility === 'private') {
+        kbWhereConditions.push(sql`d.visibility = 'private'`);
+      } else if (visibility === 'public') {
+        kbWhereConditions.push(sql`(d.visibility = 'public' OR d.visibility IS NULL)`);
       }
 
       // Category filter
@@ -577,7 +728,9 @@ export class KnowledgeRepo {
         } else if (fileTypePrefix) {
           kbWhereConditions.push(sql`d.file_type ILIKE ${`${fileTypePrefix}%`}`);
         } else {
-          // Exclude documents from other categories (Images, Videos, Audios, Websites)
+          // Exclude documents from other categories (Images, Videos, Audios, Websites).
+          // Keep the NULL placeholder column set aligned with the other UNION
+          // branches so PostgreSQL doesn't complain about mismatched arity.
           return sql`
             SELECT
               NULL::varchar(30) as id,
@@ -595,6 +748,12 @@ export class KnowledgeRepo {
               NULL::text as content,
               NULL::varchar(255) as slug,
               NULL::jsonb as metadata,
+              NULL::text as user_id,
+              NULL::text as visibility,
+              NULL::text as uploader_id,
+              NULL::text as uploader_full_name,
+              NULL::text as uploader_username,
+              NULL::text as uploader_avatar,
               NULL::text as source_type
             WHERE false
           `;
@@ -623,31 +782,47 @@ export class KnowledgeRepo {
           d.content,
           d.slug,
           d.metadata,
+          d.user_id,
+          d.visibility,
+          u.id as uploader_id,
+          u.full_name as uploader_full_name,
+          u.username as uploader_username,
+          u.avatar as uploader_avatar,
           'document' as source_type
         FROM ${documents} d
+        LEFT JOIN ${users} u
+          ON d.user_id = u.id
         WHERE ${sql.join(kbWhereConditions, sql` AND `)}
       `;
     }
 
     return sql`
       SELECT
-        id,
-        file_id,
-        id as document_id,
-        COALESCE(title, filename, 'Untitled') as name,
-        file_type,
-        total_char_count as size,
-        source as url,
-        created_at,
-        updated_at,
+        documents.id,
+        documents.file_id,
+        documents.id as document_id,
+        COALESCE(documents.title, documents.filename, 'Untitled') as name,
+        documents.file_type,
+        documents.total_char_count as size,
+        documents.source as url,
+        documents.created_at,
+        documents.updated_at,
         NULL as chunk_task_id,
         NULL as embedding_task_id,
-        editor_data,
-        content,
-        slug,
-        metadata,
+        documents.editor_data,
+        documents.content,
+        documents.slug,
+        documents.metadata,
+        documents.user_id,
+        documents.visibility,
+        u.id as uploader_id,
+        u.full_name as uploader_full_name,
+        u.username as uploader_username,
+        u.avatar as uploader_avatar,
         'document' as source_type
       FROM ${documents}
+      LEFT JOIN ${users} u
+        ON documents.user_id = u.id
       WHERE ${sql.join(whereConditions, sql` AND `)}
     `;
   }

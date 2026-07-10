@@ -2,7 +2,7 @@ import type { Command } from 'commander';
 import pc from 'picocolors';
 
 import { getTrpcClient } from '../api/client';
-import { outputJson, printTable, timeAgo } from '../utils/format';
+import { confirm, outputJson, printTable, timeAgo } from '../utils/format';
 import { log } from '../utils/logger';
 
 export function registerDeviceCommand(program: Command) {
@@ -73,6 +73,60 @@ export function registerDeviceCommand(program: Command) {
       console.log(`  Music              : ${info.musicPath}`);
       console.log(`  Pictures           : ${info.picturesPath}`);
       console.log(`  Videos             : ${info.videosPath}`);
+    });
+
+  // ── delete ────────────────────────────────────────────
+
+  device
+    .command('delete <deviceId...>')
+    .alias('remove')
+    .description('Remove one or more devices from your account')
+    .option('--yes', 'Skip confirmation prompt')
+    .action(async (deviceIds: string[], options: { yes?: boolean }) => {
+      if (!options.yes) {
+        const label =
+          deviceIds.length === 1 ? `device "${deviceIds[0]}"` : `${deviceIds.length} devices`;
+        const confirmed = await confirm(`Are you sure you want to remove ${label}?`);
+        if (!confirmed) {
+          console.log('Cancelled.');
+          return;
+        }
+      }
+
+      const client = await getTrpcClient();
+
+      // Resolve each device's scope first: workspace devices are owner-gated and
+      // live in a separate pool, so they need `removeWorkspaceDevice`, not the
+      // personal `removeDevice`. Routing blindly through the personal path would
+      // no-op on a workspace device yet still print success. `listDevices`
+      // already returns both pools (only when a workspace context is set).
+      const devices = await client.device.listDevices.query();
+      const byId = new Map(devices.map((d: any) => [d.deviceId, d]));
+
+      let failed = 0;
+      for (const deviceId of deviceIds) {
+        const device = byId.get(deviceId);
+        if (!device) {
+          failed += 1;
+          log.error(
+            `Device "${deviceId}" was not found. Run 'lh device list' to see available devices.`,
+          );
+          continue;
+        }
+        try {
+          if (device.scope === 'workspace') {
+            await client.device.removeWorkspaceDevice.mutate({ deviceId });
+          } else {
+            await client.device.removeDevice.mutate({ deviceId });
+          }
+          console.log(`${pc.green('✓')} Removed device ${pc.bold(deviceId)}`);
+        } catch (e) {
+          failed += 1;
+          log.error(`Failed to remove "${deviceId}": ${(e as Error).message}`);
+        }
+      }
+
+      if (failed > 0) process.exit(1);
     });
 
   // ── status ────────────────────────────────────────────

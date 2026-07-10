@@ -1,20 +1,43 @@
 import type { BriefDecision, TaskTopicHandoff } from '@lobechat/types';
-import { and, count, desc, eq, gte, sql } from 'drizzle-orm';
+import { and, count, desc, eq, gte, inArray, sql } from 'drizzle-orm';
 
 import type { TaskTopicItem } from '../schemas/task';
 import { tasks, taskTopics } from '../schemas/task';
 import { topics } from '../schemas/topic';
 import type { LobeChatDatabase } from '../type';
+import { buildWorkspaceWhere } from '../utils/workspace';
 
 const TERMINAL_TOPIC_STATUSES = new Set(['canceled', 'completed', 'failed', 'timeout']);
 
 export class TaskTopicModel {
   private readonly userId: string;
   private readonly db: LobeChatDatabase;
+  private readonly workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.db = db;
     this.userId = userId;
+    this.workspaceId = workspaceId;
+  }
+
+  private ownership = () =>
+    buildWorkspaceWhere(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      {
+        userId: taskTopics.userId,
+        visibility: taskTopics.visibility,
+        workspaceId: taskTopics.workspaceId,
+      },
+    );
+
+  /** Look up the parent task's visibility so newly added topics mirror it. */
+  private async getTaskVisibility(taskId: string): Promise<'private' | 'public'> {
+    const row = await this.db
+      .select({ visibility: tasks.visibility })
+      .from(tasks)
+      .where(eq(tasks.id, taskId))
+      .limit(1);
+    return row[0]?.visibility ?? 'public';
   }
 
   /**
@@ -29,14 +52,24 @@ export class TaskTopicModel {
     await this.db
       .update(topics)
       .set(setClause)
-      .where(and(eq(topics.id, topicId), eq(topics.userId, this.userId)));
+      .where(
+        and(
+          eq(topics.id, topicId),
+          buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, topics),
+        ),
+      );
   }
 
   async add(
     taskId: string,
     topicId: string,
-    params: { operationId?: string; seq: number },
+    params: {
+      operationId?: string;
+      seq: number;
+      trigger?: 'manual' | 'schedule' | 'heartbeat';
+    },
   ): Promise<void> {
+    const visibility = await this.getTaskVisibility(taskId);
     await this.db
       .insert(taskTopics)
       .values({
@@ -44,7 +77,10 @@ export class TaskTopicModel {
         seq: params.seq,
         taskId,
         topicId,
+        trigger: params.trigger,
         userId: this.userId,
+        visibility,
+        workspaceId: this.workspaceId ?? null,
       })
       .onConflictDoNothing();
   }
@@ -53,13 +89,7 @@ export class TaskTopicModel {
     await this.db
       .update(taskTopics)
       .set({ status })
-      .where(
-        and(
-          eq(taskTopics.taskId, taskId),
-          eq(taskTopics.topicId, topicId),
-          eq(taskTopics.userId, this.userId),
-        ),
-      );
+      .where(and(eq(taskTopics.taskId, taskId), eq(taskTopics.topicId, topicId), this.ownership()));
 
     if (TERMINAL_TOPIC_STATUSES.has(status)) {
       await this.markTopicEnded(topicId, status);
@@ -79,7 +109,7 @@ export class TaskTopicModel {
           eq(taskTopics.taskId, taskId),
           eq(taskTopics.topicId, topicId),
           eq(taskTopics.status, 'running'),
-          eq(taskTopics.userId, this.userId),
+          this.ownership(),
         ),
       )
       .returning();
@@ -93,26 +123,14 @@ export class TaskTopicModel {
     await this.db
       .update(taskTopics)
       .set({ operationId })
-      .where(
-        and(
-          eq(taskTopics.taskId, taskId),
-          eq(taskTopics.topicId, topicId),
-          eq(taskTopics.userId, this.userId),
-        ),
-      );
+      .where(and(eq(taskTopics.taskId, taskId), eq(taskTopics.topicId, topicId), this.ownership()));
   }
 
   async updateHandoff(taskId: string, topicId: string, handoff: TaskTopicHandoff): Promise<void> {
     await this.db
       .update(taskTopics)
       .set({ handoff })
-      .where(
-        and(
-          eq(taskTopics.taskId, taskId),
-          eq(taskTopics.topicId, topicId),
-          eq(taskTopics.userId, this.userId),
-        ),
-      );
+      .where(and(eq(taskTopics.taskId, taskId), eq(taskTopics.topicId, topicId), this.ownership()));
   }
 
   /**
@@ -131,13 +149,23 @@ export class TaskTopicModel {
       .set({
         handoff: sql`jsonb_set(COALESCE(${taskTopics.handoff}, '{}'::jsonb), '{briefDecision}', ${JSON.stringify(decision)}::jsonb)`,
       })
-      .where(
-        and(
-          eq(taskTopics.taskId, taskId),
-          eq(taskTopics.topicId, topicId),
-          eq(taskTopics.userId, this.userId),
-        ),
-      );
+      .where(and(eq(taskTopics.taskId, taskId), eq(taskTopics.topicId, topicId), this.ownership()));
+  }
+
+  /**
+   * Patch the raw run output into `handoff.content` without
+   * disturbing other handoff keys. Uses `jsonb_set` so it is order-independent
+   * with respect to `updateHandoff` — critically, this lets the caller persist
+   * the last message even when the (separate) handoff-summary LLM call fails, so
+   * the run card always has a result to show.
+   */
+  async updateHandoffContent(taskId: string, topicId: string, content: string): Promise<void> {
+    await this.db
+      .update(taskTopics)
+      .set({
+        handoff: sql`jsonb_set(COALESCE(${taskTopics.handoff}, '{}'::jsonb), '{content}', ${JSON.stringify(content)}::jsonb)`,
+      })
+      .where(and(eq(taskTopics.taskId, taskId), eq(taskTopics.topicId, topicId), this.ownership()));
   }
 
   async updateReview(
@@ -159,26 +187,14 @@ export class TaskTopicModel {
         reviewScores: review.scores,
         reviewedAt: new Date(),
       })
-      .where(
-        and(
-          eq(taskTopics.taskId, taskId),
-          eq(taskTopics.topicId, topicId),
-          eq(taskTopics.userId, this.userId),
-        ),
-      );
+      .where(and(eq(taskTopics.taskId, taskId), eq(taskTopics.topicId, topicId), this.ownership()));
   }
 
   async timeoutRunning(taskId: string): Promise<number> {
     const result = await this.db
       .update(taskTopics)
       .set({ status: 'timeout' })
-      .where(
-        and(
-          eq(taskTopics.taskId, taskId),
-          eq(taskTopics.status, 'running'),
-          eq(taskTopics.userId, this.userId),
-        ),
-      )
+      .where(and(eq(taskTopics.taskId, taskId), eq(taskTopics.status, 'running'), this.ownership()))
       .returning({ topicId: taskTopics.topicId });
 
     await Promise.all(
@@ -195,14 +211,27 @@ export class TaskTopicModel {
     const result = await this.db
       .select()
       .from(taskTopics)
-      .where(and(eq(taskTopics.topicId, topicId), eq(taskTopics.userId, this.userId)))
+      .where(and(eq(taskTopics.topicId, topicId), this.ownership()))
       .limit(1);
     return result[0] || null;
   }
 
-  async countByTask(taskId: string, options?: { since?: Date }): Promise<number> {
-    const conditions = [eq(taskTopics.taskId, taskId), eq(taskTopics.userId, this.userId)];
+  /**
+   * Count a task's runs, optionally scoped by creation time and/or trigger
+   * source.
+   *
+   * `triggers` filters on the `trigger` column so the maxExecutions quota can
+   * count only automation ticks and ignore ad-hoc manual runs (LOBE-11391).
+   * Legacy rows have a NULL trigger; they are excluded whenever `triggers` is
+   * passed (they predate the column and can't be attributed to a schedule).
+   */
+  async countByTask(
+    taskId: string,
+    options?: { since?: Date; triggers?: Array<'manual' | 'schedule' | 'heartbeat'> },
+  ): Promise<number> {
+    const conditions = [eq(taskTopics.taskId, taskId), this.ownership()];
     if (options?.since) conditions.push(gte(taskTopics.createdAt, options.since));
+    if (options?.triggers?.length) conditions.push(inArray(taskTopics.trigger, options.triggers));
 
     const rows = await this.db
       .select({ value: count() })
@@ -215,7 +244,23 @@ export class TaskTopicModel {
     return this.db
       .select()
       .from(taskTopics)
-      .where(and(eq(taskTopics.taskId, taskId), eq(taskTopics.userId, this.userId)))
+      .where(and(eq(taskTopics.taskId, taskId), this.ownership()))
+      .orderBy(desc(taskTopics.seq));
+  }
+
+  async findRunningByTaskIds(taskIds: string[]): Promise<TaskTopicItem[]> {
+    if (taskIds.length === 0) return [];
+
+    return this.db
+      .select()
+      .from(taskTopics)
+      .where(
+        and(
+          inArray(taskTopics.taskId, taskIds),
+          eq(taskTopics.status, 'running'),
+          this.ownership(),
+        ),
+      )
       .orderBy(desc(taskTopics.seq));
   }
 
@@ -239,13 +284,17 @@ export class TaskTopicModel {
       })
       .from(taskTopics)
       .innerJoin(topics, eq(taskTopics.topicId, topics.id))
-      .where(and(eq(taskTopics.taskId, taskId), eq(taskTopics.userId, this.userId)))
+      .where(and(eq(taskTopics.taskId, taskId), this.ownership()))
       .orderBy(desc(taskTopics.seq));
   }
 
   async findWithHandoff(taskId: string, limit: number) {
     return this.db
       .select({
+        // The agent that actually ran this topic — used so each activity row
+        // keeps its own avatar instead of inheriting the task's *current*
+        // assignee (which changes when the task is reassigned).
+        agentId: topics.agentId,
         completedAt: topics.completedAt,
         createdAt: taskTopics.createdAt,
         handoff: taskTopics.handoff,
@@ -258,21 +307,46 @@ export class TaskTopicModel {
       })
       .from(taskTopics)
       .leftJoin(topics, eq(taskTopics.topicId, topics.id))
-      .where(and(eq(taskTopics.taskId, taskId), eq(taskTopics.userId, this.userId)))
+      .where(and(eq(taskTopics.taskId, taskId), this.ownership()))
       .orderBy(desc(taskTopics.seq))
+      .limit(limit);
+  }
+
+  async findWithHandoffByTaskIds(taskIds: string[], limit: number) {
+    if (taskIds.length === 0) return [];
+
+    return this.db
+      .select({
+        // The agent that actually ran this topic — used so each activity row
+        // keeps its own avatar instead of inheriting the task's *current*
+        // assignee (which changes when the task is reassigned).
+        agentId: topics.agentId,
+        completedAt: topics.completedAt,
+        createdAt: taskTopics.createdAt,
+        handoff: taskTopics.handoff,
+        metadata: topics.metadata,
+        operationId: taskTopics.operationId,
+        seq: taskTopics.seq,
+        sourceTaskAssigneeAgentId: tasks.assigneeAgentId,
+        sourceTaskId: tasks.id,
+        sourceTaskIdentifier: tasks.identifier,
+        sourceTaskName: tasks.name,
+        status: taskTopics.status,
+        title: topics.title,
+        topicId: taskTopics.topicId,
+      })
+      .from(taskTopics)
+      .innerJoin(tasks, eq(taskTopics.taskId, tasks.id))
+      .leftJoin(topics, eq(taskTopics.topicId, topics.id))
+      .where(and(inArray(taskTopics.taskId, taskIds), this.ownership()))
+      .orderBy(desc(taskTopics.createdAt), desc(taskTopics.seq))
       .limit(limit);
   }
 
   async remove(taskId: string, topicId: string): Promise<boolean> {
     const result = await this.db
       .delete(taskTopics)
-      .where(
-        and(
-          eq(taskTopics.taskId, taskId),
-          eq(taskTopics.topicId, topicId),
-          eq(taskTopics.userId, this.userId),
-        ),
-      )
+      .where(and(eq(taskTopics.taskId, taskId), eq(taskTopics.topicId, topicId), this.ownership()))
       .returning();
 
     if (result.length > 0) {

@@ -2,6 +2,9 @@ import type { AIBaseModelCard } from 'model-bank';
 import type OpenAI from 'openai';
 
 import type {
+  ASROptions,
+  ASRPayload,
+  ASRResponse,
   ChatMethodOptions,
   ChatStreamPayload,
   CreateImageMethodOptions,
@@ -64,6 +67,8 @@ export interface LobeRuntimeAI {
     payload: TextToSpeechPayload,
     options?: TextToSpeechOptions,
   ) => Promise<ArrayBuffer>;
+
+  transcribe?: (payload: ASRPayload, options?: ASROptions) => Promise<ASRResponse>;
 }
 /* eslint-enabled */
 
@@ -84,4 +89,8 @@ export abstract class LobeOpenAICompatibleRuntime {
     payload: EmbeddingsPayload,
     options?: EmbeddingsOptions,
   ): Promise<Embeddings[]>;
+
+  transcribe?(payload: ASRPayload, options?: ASROptions): Promise<ASRResponse>;
+
+  textToSpeech?(payload: TextToSpeechPayload, options?: TextToSpeechOptions): Promise<ArrayBuffer>;
 }

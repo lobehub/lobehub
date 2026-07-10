@@ -1,6 +1,6 @@
-import { SESSION_CHAT_URL } from '@lobechat/const';
+import { AGENT_CHAT_URL } from '@lobechat/const';
 import { useMemo } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router';
 
 // Sub-routes that are agent-scoped views (not tied to a specific topic/task id),
 // safe to carry over when switching between agents from the sidebar switcher.
@@ -20,6 +20,6 @@ export const usePreservedAgentUrl = (agentId: string): string => {
     if (subPath && PRESERVED_AGENT_SUB_PATHS.has(subPath)) {
       return `/agent/${agentId}/${subPath}`;
     }
-    return SESSION_CHAT_URL(agentId, false);
+    return AGENT_CHAT_URL(agentId, false);
   }, [agentId, pathname]);
 };

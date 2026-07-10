@@ -5,6 +5,9 @@ import { LinkIcon, ServerIcon, Trash2Icon, UserIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncError from '@/components/AsyncError';
+import { usePermission } from '@/hooks/usePermission';
+
 import { buildDiscordOpenBotUrl } from '../constants';
 import { createMessengerLinkModal } from '../LinkModal';
 import {
@@ -32,6 +35,8 @@ interface DiscordDetailProps {
 // (`messenger.discord.connections.*`) makes that distinction explicit.
 const DiscordDetail = memo<DiscordDetailProps>(({ appId, botUsername, name, onBack }) => {
   const { t } = useTranslation('messenger');
+  const { allowed: canCreate } = usePermission('create_content');
+  const { allowed: canEdit } = usePermission('edit_own_content');
 
   const data = useMessengerData('discord');
   const { handleSetActive, handleUnlink } = useLinkActions({
@@ -46,6 +51,7 @@ const DiscordDetail = memo<DiscordDetailProps>(({ appId, botUsername, name, onBa
   });
 
   const handleDisconnectInstallation = (id: string) =>
+    canEdit &&
     disconnectInstallation(id, {
       confirm: t('messenger.discord.connections.disconnectConfirm'),
       failedKey: 'messenger.discord.connections.disconnectFailed',
@@ -53,6 +59,8 @@ const DiscordDetail = memo<DiscordDetailProps>(({ appId, botUsername, name, onBa
       title: t('messenger.discord.connections.disconnectTitle'),
     });
 
+  if (data.error && data.isInitialLoading)
+    return <AsyncError error={data.error} variant={'block'} onRetry={data.mutate} />;
   if (data.isInitialLoading) return <IntegrationDetailSkeleton withNestedContent />;
 
   const { installations, links } = data;
@@ -65,6 +73,7 @@ const DiscordDetail = memo<DiscordDetailProps>(({ appId, botUsername, name, onBa
 
   const headerAction = (
     <Button
+      disabled={!canCreate || !canEdit}
       icon={<Icon icon={LinkIcon} />}
       type={hasInstallations ? 'default' : 'primary'}
       onClick={handleOpenLink}
@@ -116,6 +125,7 @@ const DiscordDetail = memo<DiscordDetailProps>(({ appId, botUsername, name, onBa
             status="pending"
             action={
               <Button
+                disabled={!canCreate || !canEdit}
                 href={buildDiscordOpenBotUrl(appId)}
                 icon={<Icon icon={LinkIcon} />}
                 size="small"

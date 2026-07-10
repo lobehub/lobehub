@@ -1,4 +1,11 @@
-import type { ChatTopic, ChatTopicStatus, GroupedTopic, TimeGroupId } from '@lobechat/types';
+import type {
+  ChatTopic,
+  ChatTopicMetadata,
+  ChatTopicStatus,
+  GroupedTopic,
+  TimeGroupId,
+} from '@lobechat/types';
+import { getWorkingDirEffectivePath, getWorkingDirSourcePath } from '@lobechat/types';
 import dayjs from 'dayjs';
 import isToday from 'dayjs/plugin/isToday';
 import isYesterday from 'dayjs/plugin/isYesterday';
@@ -64,6 +71,15 @@ const sortGroups = (groups: GroupedTopic[]): GroupedTopic[] => {
   });
 };
 
+/**
+ * Resolve the timestamp a topic sorts/groups by for the given field. For
+ * `updatedAt` this is the server-provided `sortUpdatedAt` (latest message
+ * activity), falling back to the raw `updatedAt` when absent — so the sidebar
+ * order matches the server ORDER BY and doesn't jump. (LOBE-11543)
+ */
+export const getTopicSortTime = (topic: ChatTopic, field: 'createdAt' | 'updatedAt'): number =>
+  field === 'updatedAt' ? (topic.sortUpdatedAt ?? topic.updatedAt) : topic.createdAt;
+
 // Generic time-based grouping parameterized by field
 const groupTopicsByField = (
   topics: ChatTopic[],
@@ -71,11 +87,13 @@ const groupTopicsByField = (
 ): GroupedTopic[] => {
   if (!topics.length) return [];
 
-  const sortedTopics = [...topics].sort((a, b) => b[field] - a[field]);
+  const sortedTopics = [...topics].sort(
+    (a, b) => getTopicSortTime(b, field) - getTopicSortTime(a, field),
+  );
   const groupsMap = new Map<TimeGroupId, ChatTopic[]>();
 
   for (const topic of sortedTopics) {
-    const groupId = getTopicGroupId(topic[field]);
+    const groupId = getTopicGroupId(getTopicSortTime(topic, field));
     const existing = groupsMap.get(groupId);
     if (existing) {
       existing.push(topic);
@@ -106,7 +124,33 @@ const getProjectName = (dir: string): string => {
   return segments.at(-1) || dir;
 };
 
-const normalizeWorkingDirectory = (dir: string): string => dir.replace(/[/\\]+$/, '').trim();
+const normalizeWorkingDirectory = (dir: string): string => dir.trim().replace(/[/\\]+$/, '');
+
+const normalizeOptionalWorkingDirectory = (dir: string | undefined): string | undefined => {
+  if (!dir) return undefined;
+  const normalized = normalizeWorkingDirectory(dir);
+  return normalized || undefined;
+};
+
+export const getTopicMetadataWorkingDirectorySourcePath = (
+  metadata?: ChatTopicMetadata,
+): string | undefined =>
+  normalizeOptionalWorkingDirectory(
+    getWorkingDirSourcePath(metadata?.workingDirectoryConfig) ?? metadata?.workingDirectory,
+  );
+
+export const getTopicMetadataWorkingDirectoryEffectivePath = (
+  metadata?: ChatTopicMetadata,
+): string | undefined =>
+  normalizeOptionalWorkingDirectory(
+    getWorkingDirEffectivePath(metadata?.workingDirectoryConfig) ?? metadata?.workingDirectory,
+  );
+
+export const getTopicWorkingDirectorySourcePath = (topic: ChatTopic): string | undefined =>
+  getTopicMetadataWorkingDirectorySourcePath(topic.metadata);
+
+export const getTopicWorkingDirectoryEffectivePath = (topic: ChatTopic): string | undefined =>
+  getTopicMetadataWorkingDirectoryEffectivePath(topic.metadata);
 
 export const groupTopicsByProject = (
   topics: ChatTopic[],
@@ -117,8 +161,7 @@ export const groupTopicsByProject = (
   const groupsMap = new Map<string, { children: ChatTopic[]; path: string }>();
 
   for (const topic of topics) {
-    const raw = topic.metadata?.workingDirectory;
-    const normalized = raw ? normalizeWorkingDirectory(raw) : '';
+    const normalized = getTopicWorkingDirectorySourcePath(topic) ?? '';
     const id = normalized ? `${PROJECT_GROUP_PREFIX}${normalized}` : NO_PROJECT_GROUP_ID;
     const existing = groupsMap.get(id);
     if (existing) {
@@ -130,7 +173,7 @@ export const groupTopicsByProject = (
 
   // Sort topics inside each group by chosen field desc
   for (const group of groupsMap.values()) {
-    group.children.sort((a, b) => b[field] - a[field]);
+    group.children.sort((a, b) => getTopicSortTime(b, field) - getTopicSortTime(a, field));
   }
 
   const groups: GroupedTopic[] = Array.from(groupsMap.entries()).map(
@@ -145,47 +188,57 @@ export const groupTopicsByProject = (
   return groups.sort((a, b) => {
     if (a.id === NO_PROJECT_GROUP_ID) return 1;
     if (b.id === NO_PROJECT_GROUP_ID) return -1;
-    const aTime = a.children[0]?.[field] ?? 0;
-    const bTime = b.children[0]?.[field] ?? 0;
+    const aTime = a.children[0] ? getTopicSortTime(a.children[0], field) : 0;
+    const bTime = b.children[0] ? getTopicSortTime(b.children[0], field) : 0;
     return bTime - aTime;
   });
 };
 
-// Status-based grouping. Fixed priority order: topics awaiting a human come
-// first, then running, then active; the remaining states fall below. Topics
-// without a status are treated as `active`. The group `id` is the raw status
-// value so the sidebar can resolve its title via `groupTitle.byStatus.<id>`.
+// The display buckets for status grouping. These are NOT raw `ChatTopicStatus`
+// values: the three states that need the user's attention — awaiting a human,
+// failed, and an unread completion — collapse into a single `pending` bucket so
+// the sidebar surfaces "needs attention" in one place. The remaining buckets map
+// 1:1 to a status. The group `id` resolves its title via `groupTitle.byStatus.<id>`.
+export type TopicStatusBucket =
+  'pending' | 'running' | 'active' | 'paused' | 'completed' | 'archived';
+
+// Fixed priority order: `pending` (needs attention) comes first, then running,
+// then active; the remaining states fall below. Topics without a status are
+// treated as `active`.
 //
-// The server orders the query by the same priority (see `STATUS_SORT_RANK` in
-// `@lobechat/database` topic model) so the right page is fetched; this only
-// re-buckets that already-ordered page for display. Keep the two in sync. The
-// one client-only nuance is `loadingTopicIds` (a topic streaming right now),
-// which the server can't know about — see `resolveStatusBucket`.
-export const STATUS_GROUP_ORDER: ChatTopicStatus[] = [
-  'waitingForHuman',
+// The server orders the query by the underlying status priority (see
+// `STATUS_SORT_RANK` in `@lobechat/database` topic model) so the right page is
+// fetched; this only re-buckets that already-ordered page for display. The one
+// client-only nuance is `loadingTopicIds` (a topic streaming right now), which
+// the server can't know about — see `resolveStatusBucket`. The unread state is
+// now a persisted `topics.status === 'unread'`, so it needs no client overlay.
+export const STATUS_GROUP_ORDER: TopicStatusBucket[] = [
+  'pending',
   'running',
   'active',
   'paused',
-  'failed',
   'completed',
   'archived',
 ];
 
 /**
  * Resolve the bucket a topic belongs to. Mirrors the icon precedence in the
- * sidebar `TopicItem`: `waitingForHuman` wins, then a topic that is actively
- * streaming on this client (`loadingTopicIds`, a transient client-only state
- * the server can't see) or persisted as `running` lands in `running`, then the
+ * sidebar `TopicItem`: anything needing attention (`waitingForHuman`, `failed`,
+ * or an unread completion `unread`) lands in `pending`; then a topic actively
+ * streaming on this client (`loadingTopicIds`, a transient client-only state the
+ * server can't see) or persisted as `running` lands in `running`; then the
  * persisted status, defaulting to `active`.
  */
 const resolveStatusBucket = (
   topic: ChatTopic,
   loadingTopicIds?: ReadonlySet<string>,
-): ChatTopicStatus => {
-  if (topic.status === 'waitingForHuman') return 'waitingForHuman';
+): TopicStatusBucket => {
+  if (topic.status === 'waitingForHuman' || topic.status === 'failed' || topic.status === 'unread')
+    return 'pending';
   if (loadingTopicIds?.has(topic.id) || topic.status === 'running') return 'running';
-  const status = topic.status ?? 'active';
-  return STATUS_GROUP_ORDER.includes(status) ? status : 'active';
+  const status: ChatTopicStatus = topic.status ?? 'active';
+  if (status === 'paused' || status === 'completed' || status === 'archived') return status;
+  return 'active';
 };
 
 export const groupTopicsByStatus = (
@@ -195,7 +248,7 @@ export const groupTopicsByStatus = (
 ): GroupedTopic[] => {
   if (!topics.length) return [];
 
-  const groupsMap = new Map<ChatTopicStatus, ChatTopic[]>();
+  const groupsMap = new Map<TopicStatusBucket, ChatTopic[]>();
 
   for (const topic of topics) {
     const id = resolveStatusBucket(topic, loadingTopicIds);
@@ -209,7 +262,7 @@ export const groupTopicsByStatus = (
 
   // Sort topics inside each group by chosen field desc
   for (const children of groupsMap.values()) {
-    children.sort((a, b) => b[field] - a[field]);
+    children.sort((a, b) => getTopicSortTime(b, field) - getTopicSortTime(a, field));
   }
 
   // Emit only non-empty groups, in the fixed priority order

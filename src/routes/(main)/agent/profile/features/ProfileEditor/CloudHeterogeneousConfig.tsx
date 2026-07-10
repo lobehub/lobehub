@@ -3,13 +3,15 @@
 import { type HeterogeneousProviderConfig, type UserCredSummary } from '@lobechat/types';
 import { Github } from '@lobehub/icons';
 import { Flexbox } from '@lobehub/ui';
-import { Avatar, Button, Input, Select, Spin, Tag, Typography } from 'antd';
+import { Button, Select } from '@lobehub/ui/base-ui';
+import { Avatar, Input, Spin, Tag, Typography } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { CheckCircle2, KeyRound, X } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { usePermission } from '@/hooks/usePermission';
 import { lambdaClient, lambdaQuery } from '@/libs/trpc/client';
 
 // Fixed cred key for Claude Code OAuth token — never changes
@@ -121,11 +123,14 @@ interface TokenSectionProps {
 
 const TokenSection = memo<TokenSectionProps>(({ existingCred, onSaved, onEnvChange }) => {
   const { t } = useTranslation('setting');
+  const { allowed: canEdit } = usePermission('edit_own_content');
   const [editing, setEditing] = useState(!existingCred);
   const [tokenInput, setTokenInput] = useState('');
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
+    if (!canEdit) return;
+
     const token = tokenInput.trim();
     if (!token) return;
     setSaving(true);
@@ -153,7 +158,14 @@ const TokenSection = memo<TokenSectionProps>(({ existingCred, onSaved, onEnvChan
           <span className={styles.sectionLabel}>{t('heterogeneousStatus.cloud.tokenLabel')}</span>
         </Flexbox>
         {existingCred && !editing && (
-          <span className={styles.manageLink} onClick={() => setEditing(true)}>
+          <span
+            className={styles.manageLink}
+            onClick={() => {
+              if (!canEdit) return;
+
+              setEditing(true);
+            }}
+          >
             {t('heterogeneousStatus.cloud.tokenChange')}
           </span>
         )}
@@ -172,14 +184,16 @@ const TokenSection = memo<TokenSectionProps>(({ existingCred, onSaved, onEnvChan
       ) : (
         <Flexbox horizontal gap={8}>
           <Input.Password
+            autoComplete="new-password"
             autoFocus={!!existingCred}
+            disabled={!canEdit}
             placeholder={t('heterogeneousStatus.cloud.tokenPlaceholder')}
             style={{ flex: 1 }}
             value={tokenInput}
             onChange={(e) => setTokenInput(e.target.value)}
             onPressEnter={handleSave}
           />
-          <Button loading={saving} type="primary" onClick={handleSave}>
+          <Button disabled={!canEdit} loading={saving} type="primary" onClick={handleSave}>
             {t('heterogeneousStatus.cloud.tokenSave')}
           </Button>
           {existingCred && (
@@ -210,9 +224,12 @@ interface RepoListSectionProps {
 
 const RepoListSection = memo<RepoListSectionProps>(({ repos, onReposChange }) => {
   const { t } = useTranslation('setting');
+  const { allowed: canEdit } = usePermission('edit_own_content');
   const [input, setInput] = useState('');
 
   const addRepo = () => {
+    if (!canEdit) return;
+
     const v = input.trim();
     if (!v || repos.includes(v)) return;
     onReposChange([...repos, v]);
@@ -221,6 +238,8 @@ const RepoListSection = memo<RepoListSectionProps>(({ repos, onReposChange }) =>
 
   const removeRepo = (repo: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!canEdit) return;
+
     onReposChange(repos.filter((r) => r !== repo));
   };
 
@@ -238,6 +257,7 @@ const RepoListSection = memo<RepoListSectionProps>(({ repos, onReposChange }) =>
               </Typography.Text>
               <button
                 className={`${styles.repoDeleteBtn} repo-delete-btn`}
+                disabled={!canEdit}
                 onClick={(e) => removeRepo(repo, e)}
               >
                 <X size={12} />
@@ -249,13 +269,16 @@ const RepoListSection = memo<RepoListSectionProps>(({ repos, onReposChange }) =>
 
       <Flexbox horizontal gap={8}>
         <Input
+          disabled={!canEdit}
           placeholder={t('heterogeneousStatus.cloud.repoPlaceholder')}
           style={{ flex: 1 }}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onPressEnter={addRepo}
         />
-        <Button onClick={addRepo}>{t('heterogeneousStatus.cloud.repoAdd')}</Button>
+        <Button disabled={!canEdit} onClick={addRepo}>
+          {t('heterogeneousStatus.cloud.repoAdd')}
+        </Button>
       </Flexbox>
 
       <span className={styles.sectionDesc}>{t('heterogeneousStatus.cloud.repoDesc')}</span>
@@ -267,7 +290,8 @@ const RepoListSection = memo<RepoListSectionProps>(({ repos, onReposChange }) =>
 const CloudHeterogeneousConfig = memo<CloudHeterogeneousConfigProps>(
   ({ provider, onEnvChange }) => {
     const { t } = useTranslation('setting');
-    const navigate = useNavigate();
+    const navigate = useWorkspaceAwareNavigate();
+    const { allowed: canEdit } = usePermission('edit_own_content');
 
     const currentEnv = provider.env ?? {};
     const storedGithubCredKey = currentEnv.GITHUB_CRED_KEY ?? '';
@@ -290,8 +314,25 @@ const CloudHeterogeneousConfig = memo<CloudHeterogeneousConfigProps>(
     const githubCreds = allCreds.filter(
       (c) => c.type === 'oauth' && c.oauthProvider?.toLowerCase().includes('github'),
     );
+    const githubCredOptions = githubCreds.map((cred) => ({
+      label: (
+        <span className={styles.credOption}>
+          {cred.oauthAvatar ? <Avatar size={16} src={cred.oauthAvatar} /> : <Github size={14} />}
+          <span>{cred.name}</span>
+          {cred.oauthUsername && (
+            <Typography.Text style={{ fontSize: 12 }} type="secondary">
+              @{cred.oauthUsername}
+            </Typography.Text>
+          )}
+        </span>
+      ),
+      title: [cred.name, cred.oauthUsername].filter(Boolean).join(' '),
+      value: cred.key,
+    }));
 
     const saveEnv = (patch: Record<string, string>) => {
+      if (!canEdit) return;
+
       void onEnvChange({ ...currentEnv, ...patch });
     };
 
@@ -335,35 +376,17 @@ const CloudHeterogeneousConfig = memo<CloudHeterogeneousConfigProps>(
 
             <Select
               allowClear
-              placeholder={t('heterogeneousStatus.cloud.githubPlaceholder')}
+              disabled={!canEdit}
+              options={githubCredOptions}
               style={{ width: '100%' }}
-              value={storedGithubCredKey || undefined}
-              notFoundContent={
-                <Flexbox style={{ padding: '8px 0', fontSize: 12 }}>
-                  {t('heterogeneousStatus.cloud.githubNoCreds')}
-                </Flexbox>
+              value={storedGithubCredKey || null}
+              placeholder={
+                githubCredOptions.length > 0
+                  ? t('heterogeneousStatus.cloud.githubPlaceholder')
+                  : t('heterogeneousStatus.cloud.githubNoCreds')
               }
-              onChange={(key: string) => saveEnv({ GITHUB_CRED_KEY: key })}
-              onClear={() => saveEnv({ GITHUB_CRED_KEY: '' })}
-            >
-              {githubCreds.map((cred) => (
-                <Select.Option key={cred.key} value={cred.key}>
-                  <span className={styles.credOption}>
-                    {cred.oauthAvatar ? (
-                      <Avatar size={16} src={cred.oauthAvatar} />
-                    ) : (
-                      <Github size={14} />
-                    )}
-                    <span>{cred.name}</span>
-                    {cred.oauthUsername && (
-                      <Typography.Text style={{ fontSize: 12 }} type="secondary">
-                        @{cred.oauthUsername}
-                      </Typography.Text>
-                    )}
-                  </span>
-                </Select.Option>
-              ))}
-            </Select>
+              onChange={(key) => saveEnv({ GITHUB_CRED_KEY: typeof key === 'string' ? key : '' })}
+            />
 
             <span className={styles.sectionDesc}>{t('heterogeneousStatus.cloud.githubDesc')}</span>
           </Flexbox>

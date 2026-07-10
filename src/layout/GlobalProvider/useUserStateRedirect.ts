@@ -5,10 +5,63 @@ import { useCallback } from 'react';
 import { isDesktop } from '@/const/version';
 import { onboardingSelectors } from '@/store/user/selectors';
 import { type UserInitializationState } from '@/types/user';
+import { buildOnboardingRedirectUrl } from '@/utils/onboardingRedirect';
 
-const redirectIfNotOn = (currentPath: string, path: string) => {
-  if (!currentPath.startsWith(path)) {
-    window.location.href = path;
+const DEFER_REDIRECT_PREFIXES = ['/invite'];
+
+const RESERVED_FIRST_SEGMENTS = new Set([
+  'agent',
+  'community',
+  'desktop-onboarding',
+  'devtools',
+  'eval',
+  'group',
+  'image',
+  'me',
+  'memory',
+  'next-auth',
+  'onboarding',
+  'page',
+  'resource',
+  'settings',
+  'share',
+  'signin',
+  'signup',
+  'subscription',
+  'task',
+  'tasks',
+  'video',
+]);
+
+const FIRST_SEGMENT_REGEX = /^\/([^/?#]+)/;
+
+const isPathUnder = (pathname: string, prefix: string): boolean =>
+  pathname === prefix || pathname.startsWith(`${prefix}/`);
+
+const parseFirstSegment = (pathname: string): string | null => {
+  const match = pathname.match(FIRST_SEGMENT_REGEX);
+  return match ? match[1] : null;
+};
+
+/**
+ * Defer the onboarding redirect when the path is a workspace-scoped route
+ * (first segment is a workspace slug, i.e. not one of the reserved app
+ * segments) or an explicitly deferred prefix like `/invite`. Reserved
+ * first segments (e.g. `/agent`, `/settings`) fall through to the normal
+ * onboarding check.
+ */
+export const shouldDeferOnboardingRedirect = (pathname: string): boolean => {
+  if (DEFER_REDIRECT_PREFIXES.some((prefix) => isPathUnder(pathname, prefix))) return true;
+
+  const first = parseFirstSegment(pathname);
+
+  return !!first && !RESERVED_FIRST_SEGMENTS.has(first);
+};
+
+const redirectToOnboarding = (currentPath: string, search: string) => {
+  if (!currentPath.startsWith('/onboarding')) {
+    // Thread the page the user was on so onboarding finish points return there
+    window.location.href = buildOnboardingRedirectUrl(currentPath + search);
   }
 };
 
@@ -23,14 +76,9 @@ export const useWebUserStateRedirect = () =>
     const { pathname, search } = window.location;
 
     if (!onboardingSelectors.needsOnboarding(state)) return;
+    if (shouldDeferOnboardingRedirect(pathname)) return;
 
-    // Skip onboarding when the user lands on any agent page with a message param
-    // (e.g. "Try in LobeHub" links from Skills Marketplace). The /agent/inbox slug
-    // may be rewritten to /agent/{resolvedId} by AgentIdSync before this callback
-    // fires, so matching only /agent/inbox would miss the resolved-slug case.
-    if (pathname.startsWith('/agent/') && new URLSearchParams(search).has('message')) return;
-
-    redirectIfNotOn(pathname, '/onboarding');
+    redirectToOnboarding(pathname, search);
   }, []);
 
 export const useUserStateRedirect = () => {

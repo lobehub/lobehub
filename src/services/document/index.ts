@@ -38,6 +38,7 @@ const serializeHistoryList = <
       isCurrent: boolean;
       saveSource: ListHistoryOutput['items'][number]['saveSource'];
       savedAt: Date | string;
+      userId: string;
     }>;
     nextBeforeSavedAt?: Date | string;
   },
@@ -99,6 +100,12 @@ export interface CreateDocumentParams {
   parentId?: string;
   slug?: string;
   title: string;
+  /**
+   * Workspace-only: force the new document into a specific visibility bucket.
+   * Omit to let the server pick the default (`api` sourceType top-level docs
+   * default to `private`, nested docs inherit their parent).
+   */
+  visibility?: 'private' | 'public';
 }
 
 export interface ListDocumentHistoryParams extends ListHistoryInput {}
@@ -121,6 +128,8 @@ export interface DocumentHistoryClientSurface {
   saveDocumentHistory: (params: SaveDocumentHistoryInput) => Promise<SaveDocumentHistoryOutput>;
   updateDocument: (params: UpdateDocumentParams) => Promise<UpdateDocumentOutput>;
 }
+
+const autosavedOnceIds = new Set<string>();
 
 export class DocumentService {
   async createDocument(params: CreateDocumentParams): Promise<DocumentItem> {
@@ -211,7 +220,10 @@ export class DocumentService {
   }
 
   async updateDocument(params: UpdateDocumentParams): Promise<UpdateDocumentOutput> {
-    const result = await lambdaClient.document.updateDocument.mutate(params);
+    const isFirstAutosave = params.saveSource === 'autosave' && !autosavedOnceIds.has(params.id);
+    const mutationParams = isFirstAutosave ? { ...params, breakAutosaveWindow: true } : params;
+    const result = await lambdaClient.document.updateDocument.mutate(mutationParams);
+    if (isFirstAutosave) autosavedOnceIds.add(params.id);
 
     return {
       ...result,
@@ -223,12 +235,74 @@ export class DocumentService {
     };
   }
 
+  /**
+   * Acquire or refresh the collaborative edit lock for a workspace page.
+   * Doubles as the heartbeat. Personal pages always report as unlocked.
+   */
+  async acquireDocumentLock(id: string, ownerId?: string) {
+    return lambdaClient.document.acquireDocumentLock.mutate({ id, ownerId });
+  }
+
+  /** Read-only peek of the current edit lock (does not acquire). */
+  async getDocumentLock(id: string, ownerId?: string) {
+    return lambdaClient.document.getDocumentLock.query({ id, ownerId });
+  }
+
+  async releaseDocumentLock(id: string, ownerId?: string): Promise<void> {
+    await lambdaClient.document.releaseDocumentLock.mutate({ id, ownerId });
+  }
+
   async saveDocumentHistory(params: SaveDocumentHistoryInput): Promise<SaveDocumentHistoryOutput> {
     const result = await lambdaClient.document.saveDocumentHistory.mutate(params);
 
     return {
       savedAt: result.savedAt instanceof Date ? result.savedAt.toISOString() : result.savedAt,
     };
+  }
+
+  async transferDocument(
+    documentId: string,
+    targetWorkspaceId: string | null,
+    targetVisibility?: 'private' | 'public',
+  ): Promise<void> {
+    await lambdaClient.document.transferDocument.mutate({
+      documentId,
+      targetVisibility,
+      targetWorkspaceId,
+    });
+  }
+
+  async copyDocumentToWorkspace(
+    documentId: string,
+    targetWorkspaceId: string | null,
+    targetVisibility?: 'private' | 'public',
+  ): Promise<{ rootId: string }> {
+    return lambdaClient.document.copyDocumentToWorkspace.mutate({
+      documentId,
+      targetVisibility,
+      targetWorkspaceId,
+    });
+  }
+
+  /**
+   * Publish a private document (and its whole subtree) into the workspace.
+   * Thin wrapper around `setDocumentVisibility(id, 'public')`; kept for
+   * existing callers.
+   */
+  async publishDocumentToWorkspace(id: string): Promise<{ documentIds: string[] }> {
+    return lambdaClient.document.publishDocumentToWorkspace.mutate({ id });
+  }
+
+  /**
+   * Flip a document subtree's workspace visibility. Bidirectional companion
+   * to `publishDocumentToWorkspace`. Server cascades over the whole subtree
+   * for P1 tree consistency.
+   */
+  async setDocumentVisibility(
+    id: string,
+    visibility: 'private' | 'public',
+  ): Promise<{ documentIds: string[] }> {
+    return lambdaClient.document.setDocumentVisibility.mutate({ id, visibility });
   }
 }
 

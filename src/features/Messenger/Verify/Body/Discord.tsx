@@ -21,10 +21,11 @@ interface DiscordBodyProps {
   randomId: string;
   signInUrl: string;
   tokenData?: PeekedToken | null;
+  userAvatar?: string | null;
 }
 
 const DiscordBody = memo<DiscordBodyProps>(
-  ({ existingLink, lobeAccount, platformMeta, randomId, signInUrl, tokenData }) => {
+  ({ existingLink, lobeAccount, platformMeta, randomId, signInUrl, tokenData, userAvatar }) => {
     const { t } = useTranslation('messenger');
     const [done, setDone] = useState(false);
 
@@ -60,6 +61,7 @@ const DiscordBody = memo<DiscordBodyProps>(
         infoRows={infoRows}
         platform="discord"
         randomId={randomId}
+        userAvatar={userAvatar}
         blockingNotice={
           rebindBlocked
             ? {

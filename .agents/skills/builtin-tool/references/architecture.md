@@ -271,7 +271,7 @@ Lists in the same file you may need to touch:
 
 - `defaultToolIds` — added to the agent's tool list by default
 - `alwaysOnToolIds` — forced on regardless of user selection (use sparingly)
-- `runtimeManagedToolIds` — enable state controlled by runtime, not user UI; **must mirror the rules map** in `src/server/modules/Mecha/AgentToolsEngine/index.ts` and `src/helpers/toolEngineering/index.ts`
+- `runtimeManagedToolIds` — enable state controlled by runtime, not user UI; **must mirror the rules map** in `apps/server/src/modules/Mecha/AgentToolsEngine/index.ts` and `src/helpers/toolEngineering/index.ts`
 
 ---
 

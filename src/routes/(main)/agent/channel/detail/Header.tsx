@@ -1,7 +1,7 @@
 'use client';
 
 import { ActionIcon, Flexbox, Tag } from '@lobehub/ui';
-import { Button, Switch } from 'antd';
+import { Button, Switch } from '@lobehub/ui/base-ui';
 import { ExternalLink, RefreshCw } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,12 +14,14 @@ import { getPlatformIcon } from '../const';
 
 interface HeaderProps {
   currentConfig?: { enabled: boolean };
+  disabled?: boolean;
   enabledValue?: boolean;
   onRefreshStatus?: () => void;
   onToggleEnable: (enabled: boolean) => void;
   platformDef: SerializedPlatformDefinition;
   refreshingStatus?: boolean;
   runtimeStatus?: BotRuntimeStatus;
+  toggleDisabled?: boolean;
   toggleLoading?: boolean;
 }
 
@@ -35,11 +37,13 @@ const Header = memo<HeaderProps>(
   ({
     platformDef,
     currentConfig,
+    disabled,
     enabledValue,
     onRefreshStatus,
     onToggleEnable,
     refreshingStatus,
     runtimeStatus,
+    toggleDisabled,
     toggleLoading,
   }) => {
     const { t } = useTranslation('agent');
@@ -90,6 +94,13 @@ const Header = memo<HeaderProps>(
         <Flexbox horizontal align="center" gap={8}>
           {ColorIcon && <ColorIcon size={32} />}
           {platformDef.name}
+          {platformDef.access?.requiredPlan === 'paid' && (
+            <Tag color="gold" size={'small'}>
+              {platformDef.access.rolloutMode === 'notice'
+                ? t('channel.paidFeature.noticeBadge')
+                : t('channel.paidFeature.badge')}
+            </Tag>
+          )}
           {statusLabel && (
             <Tag color={statusColor} size={'small'}>
               {statusLabel}
@@ -97,6 +108,7 @@ const Header = memo<HeaderProps>(
           )}
           {onRefreshStatus && currentConfig?.enabled && (
             <ActionIcon
+              disabled={disabled}
               icon={RefreshCw}
               loading={refreshingStatus}
               size={'small'}
@@ -123,16 +135,12 @@ const Header = memo<HeaderProps>(
         </Flexbox>
         <Flexbox horizontal align="center" gap={8}>
           {currentConfig && (
-            <>
-              <span style={{ color: 'var(--ant-color-text-secondary)', fontSize: 14 }}>
-                {effectiveEnabled ? t('channel.enabled') : t('channel.disabled')}
-              </span>
-              <Switch
-                checked={effectiveEnabled}
-                loading={toggleLoading}
-                onChange={onToggleEnable}
-              />
-            </>
+            <Switch
+              checked={effectiveEnabled}
+              disabled={toggleDisabled ?? disabled}
+              loading={toggleLoading}
+              onChange={onToggleEnable}
+            />
           )}
         </Flexbox>
       </Flexbox>

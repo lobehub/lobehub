@@ -3,12 +3,12 @@
 import { Flexbox } from '@lobehub/ui';
 import { createStaticStyles, useTheme } from 'antd-style';
 import { memo, useCallback, useEffect, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router';
 
 import DragUploadZone from '@/components/DragUploadZone';
 import { PageEditor } from '@/features/PageEditor';
+import { usePermission } from '@/hooks/usePermission';
 import dynamic from '@/libs/next/dynamic';
-import { useCurrentFolderId } from '@/routes/(main)/resource/features/hooks/useCurrentFolderId';
 import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
 import { documentService } from '@/services/document';
 import { useFileStore } from '@/store/file';
@@ -17,6 +17,7 @@ import { documentSelectors } from '@/store/file/slices/document/selectors';
 import FileEditor from './components/Editor';
 import Explorer from './components/Explorer';
 import UploadDock from './components/UploadDock';
+import { useTopLevelFileUpload } from './hooks/useTopLevelFileUpload';
 
 const ChunkDrawer = dynamic(() => import('./components/ChunkDrawer'), { ssr: false });
 
@@ -59,7 +60,6 @@ export type ResourceManagerMode = 'editor' | 'explorer' | 'page';
 const ResourceManager = memo(() => {
   const theme = useTheme();
   const [, setSearchParams] = useSearchParams();
-  const currentFolderId = useCurrentFolderId();
   const [mode, currentViewItemId, libraryId, setMode, setCurrentViewItemId] =
     useResourceManagerStore((s) => [
       s.mode,
@@ -70,12 +70,16 @@ const ResourceManager = memo(() => {
     ]);
 
   const currentDocument = useFileStore(documentSelectors.getDocumentById(currentViewItemId));
-  const pushDockFileList = useFileStore((s) => s.pushDockFileList);
   const updateDocumentOptimistically = useFileStore((s) => s.updateDocumentOptimistically);
+  const { allowed: canUpload } = usePermission('create_content');
+  const uploadTopLevel = useTopLevelFileUpload();
 
   const handleUploadFiles = useCallback(
-    (files: File[]) => pushDockFileList(files, libraryId, currentFolderId ?? undefined),
-    [currentFolderId, libraryId, pushDockFileList],
+    (files: File[]) => {
+      if (!canUpload) return;
+      void uploadTopLevel(files);
+    },
+    [canUpload, uploadTopLevel],
   );
 
   const cssVariables = useMemo<Record<string, string>>(
@@ -133,7 +137,11 @@ const ResourceManager = memo(() => {
 
   return (
     <>
-      <DragUploadZone enabledFiles style={{ height: '100%' }} onUploadFiles={handleUploadFiles}>
+      <DragUploadZone
+        enabledFiles={canUpload}
+        style={{ height: '100%' }}
+        onUploadFiles={handleUploadFiles}
+      >
         <Flexbox className={styles.container} height={'100%'} style={cssVariables}>
           {/* Explorer is always rendered to preserve its state */}
           <Explorer />

@@ -1,23 +1,32 @@
 /**
  * @vitest-environment happy-dom
  */
-import { render, screen } from '@testing-library/react';
-import type { ReactNode } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
+import type { CSSProperties, ReactNode } from 'react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import TopicItem from './index';
 
 const useTopicNavigationMock = vi.hoisted(() => vi.fn());
+const prefetchMessagesMock = vi.hoisted(() => vi.fn());
+const agentRuntimeRunningMock = vi.hoisted(() => ({ value: false }));
+const runningStartTimeMock = vi.hoisted(() => ({ value: undefined as number | undefined }));
+const topicUnreadCompletedMock = vi.hoisted(() => ({ value: false }));
 
 vi.mock('@lobehub/ui', () => ({
   Flexbox: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => (
     <div {...props}>{children}</div>
   ),
   Icon: () => <div data-testid="topic-item-icon" />,
+  Popover: ({ children }: { children?: ReactNode }) => <>{children}</>,
   Skeleton: {
     Button: (props: Record<string, unknown>) => <div {...props} />,
   },
   Tag: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+  Text: ({ children, style }: { children?: ReactNode; style?: CSSProperties }) => (
+    <span style={style}>{children}</span>
+  ),
+  Tooltip: ({ children }: { children?: ReactNode }) => <>{children}</>,
 }));
 
 vi.mock('antd-style', () => ({
@@ -53,15 +62,32 @@ vi.mock('react-i18next', () => ({
 }));
 
 vi.mock('@/const/version', () => ({ isDesktop: false }));
-vi.mock('@/const/url', () => ({
-  SESSION_CHAT_TOPIC_URL: (agentId: string, topicId: string) => `/agent/${agentId}/${topicId}`,
-}));
 vi.mock('@/features/NavPanel/components/NavItem', () => ({
-  default: ({ active, title }: { active?: boolean; title?: ReactNode }) => (
-    <div data-active={String(active)} data-testid="nav-item">
+  default: ({
+    active,
+    description,
+    extra,
+    href,
+    title,
+  }: {
+    active?: boolean;
+    description?: ReactNode;
+    extra?: ReactNode;
+    href?: string;
+    title?: ReactNode;
+  }) => (
+    <div data-active={String(active)} data-href={href} data-testid="nav-item">
       {title}
+      {description}
+      {extra}
     </div>
   ),
+}));
+vi.mock('@/features/ChatInput/ControlBar/DirIcon', () => ({
+  default: () => <span data-testid="dir-icon" />,
+}));
+vi.mock('@/business/client/hooks/useActiveWorkspaceSlug', () => ({
+  useActiveWorkspaceSlug: () => 'team',
 }));
 vi.mock('@/routes/(main)/agent/channel/const', () => ({
   getPlatformIcon: () => null,
@@ -75,12 +101,21 @@ vi.mock('@/store/agent', () => ({
 }));
 vi.mock('@/store/chat', () => ({
   useChatStore: (
-    selector: (state: { topicLoadingIds: string[]; topicRenamingId: string }) => unknown,
-  ) => selector({ topicLoadingIds: [], topicRenamingId: '' }),
+    selector: (state: {
+      prefetchMessages: typeof prefetchMessagesMock;
+      topicLoadingIds: string[];
+      topicRenamingId: string;
+    }) => unknown,
+  ) =>
+    selector({ prefetchMessages: prefetchMessagesMock, topicLoadingIds: [], topicRenamingId: '' }),
 }));
 vi.mock('@/store/chat/selectors', () => ({
   operationSelectors: {
-    isTopicUnreadCompleted: () => () => false,
+    getAgentRuntimeStartTimeByContext: () => () => runningStartTimeMock.value,
+    getVisibleAgentRuntimeStartTimeByContext: () => () => runningStartTimeMock.value,
+    isAgentRuntimeRunningByContext: () => () => agentRuntimeRunningMock.value,
+    isAgentRuntimeVisiblyRunningByContext: () => () => false,
+    isTopicUnreadCompleted: () => () => topicUnreadCompletedMock.value,
   },
 }));
 vi.mock('@/store/electron', () => ({
@@ -89,6 +124,15 @@ vi.mock('@/store/electron', () => ({
 }));
 vi.mock('../../hooks/useTopicNavigation', () => ({
   useTopicNavigation: () => useTopicNavigationMock(),
+}));
+vi.mock('./MetaHoverCard', () => ({
+  default: () => null,
+}));
+vi.mock('./metaCardData', () => ({
+  PR_STATE_VISUAL: {},
+  getPullRequestState: () => 'open',
+  // Return undefined so TopicItem skips the hover Popover wrapper in tests.
+  getTopicMetaCard: () => undefined,
 }));
 vi.mock('./Actions', () => ({
   default: () => null,
@@ -106,6 +150,14 @@ vi.mock('../../TopicListContent/ThreadList', () => ({
 }));
 
 describe('TopicItem active state', () => {
+  afterEach(() => {
+    prefetchMessagesMock.mockClear();
+    agentRuntimeRunningMock.value = false;
+    runningStartTimeMock.value = undefined;
+    topicUnreadCompletedMock.value = false;
+    vi.useRealTimers();
+  });
+
   it('keeps the current topic highlighted on topic page sub-routes', () => {
     useTopicNavigationMock.mockReturnValue({
       isInAgentSubRoute: true,
@@ -133,5 +185,111 @@ describe('TopicItem active state', () => {
 
     expect(screen.getByTestId('nav-item')).toHaveAttribute('data-active', 'false');
     expect(screen.queryByTestId('topic-thread-list')).not.toBeInTheDocument();
+  });
+
+  it('prefixes the cmd-click href with the active workspace slug', () => {
+    useTopicNavigationMock.mockReturnValue({
+      isInAgentSubRoute: false,
+      isInTopicContextRoute: false,
+      navigateToTopic: vi.fn(),
+      routeTopicId: undefined,
+    });
+
+    render(<TopicItem id="tpc_test" title="Topic" />);
+
+    expect(screen.getByTestId('nav-item')).toHaveAttribute(
+      'data-href',
+      '/team/agent/agt_test/tpc_test',
+    );
+  });
+
+  it('shows running elapsed time in the nav item extra slot', () => {
+    vi.useFakeTimers();
+    const now = Date.UTC(2026, 0, 1, 0, 0, 33);
+    vi.setSystemTime(now);
+    runningStartTimeMock.value = now - 33_000;
+    useTopicNavigationMock.mockReturnValue({
+      isInAgentSubRoute: false,
+      isInTopicContextRoute: false,
+      navigateToTopic: vi.fn(),
+      routeTopicId: undefined,
+    });
+
+    render(<TopicItem id="tpc_test" status="running" title="Topic" />);
+
+    expect(screen.getByText('00:33')).toBeInTheDocument();
+  });
+
+  it('prefetches messages when a topic is an unread completion', async () => {
+    topicUnreadCompletedMock.value = true;
+    useTopicNavigationMock.mockReturnValue({
+      isInAgentSubRoute: false,
+      isInTopicContextRoute: false,
+      navigateToTopic: vi.fn(),
+      routeTopicId: undefined,
+    });
+
+    render(<TopicItem id="tpc_test" title="Topic" />);
+
+    await waitFor(() => {
+      expect(prefetchMessagesMock).toHaveBeenCalledWith({
+        agentId: 'agt_test',
+        scope: 'main',
+        topicId: 'tpc_test',
+      });
+    });
+  });
+
+  it('prefetches unread completed messages after the runtime stops', async () => {
+    agentRuntimeRunningMock.value = true;
+    topicUnreadCompletedMock.value = true;
+    useTopicNavigationMock.mockReturnValue({
+      isInAgentSubRoute: false,
+      isInTopicContextRoute: false,
+      navigateToTopic: vi.fn(),
+      routeTopicId: undefined,
+    });
+
+    const { rerender } = render(<TopicItem id="tpc_test" title="Topic" />);
+
+    expect(prefetchMessagesMock).not.toHaveBeenCalled();
+
+    agentRuntimeRunningMock.value = false;
+    rerender(<TopicItem id="tpc_test" title="Topic done" />);
+
+    await waitFor(() => {
+      expect(prefetchMessagesMock).toHaveBeenCalledWith({
+        agentId: 'agt_test',
+        scope: 'main',
+        topicId: 'tpc_test',
+      });
+    });
+  });
+
+  it('shows the topic worktree and branch from structured metadata', () => {
+    useTopicNavigationMock.mockReturnValue({
+      isInAgentSubRoute: false,
+      isInTopicContextRoute: false,
+      navigateToTopic: vi.fn(),
+      routeTopicId: undefined,
+    });
+
+    render(
+      <TopicItem
+        showWorkingDirectory
+        id="tpc_test"
+        title="Topic"
+        metadata={{
+          workingDirectory: '/repo-fix',
+          workingDirectoryConfig: {
+            git: { activeWorktree: '/repo-fix', branch: 'fix', isWorktree: true },
+            path: '/repo',
+            repoType: 'git',
+          },
+        }}
+      />,
+    );
+
+    expect(screen.getByText('repo/repo-fix · fix')).toBeInTheDocument();
   });
 });

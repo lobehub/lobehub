@@ -23,6 +23,8 @@ const DEFAULT_MENU: MessageActionSlot[] = [
   'tts',
   'translate',
   'divider',
+  'select',
+  'divider',
   'regenerate',
   'del',
 ];

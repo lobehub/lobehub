@@ -1,20 +1,24 @@
 import { type ModalProps } from '@lobehub/ui';
-import { Flexbox, Input, Modal, stopPropagation } from '@lobehub/ui';
+import { Flexbox, Input, stopPropagation } from '@lobehub/ui';
 import { App } from 'antd';
 import { type MouseEvent } from 'react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import ImperativeModal from '@/components/ImperativeModal';
+import { usePermission } from '@/hooks/usePermission';
 import { useGlobalStore } from '@/store/global';
 import { useHomeStore } from '@/store/home';
 
 interface CreateGroupModalProps extends ModalProps {
   id: string;
+  visibility?: 'private' | 'public';
 }
 
 const CreateGroupModal = memo<CreateGroupModalProps>(
-  ({ id, open, onCancel }: CreateGroupModalProps) => {
+  ({ id, open, onCancel, visibility }: CreateGroupModalProps) => {
     const { t } = useTranslation('chat');
+    const { allowed: canCreate } = usePermission('create_content');
 
     const toggleExpandSessionGroup = useGlobalStore((s) => s.toggleExpandSessionGroup);
     const { message } = App.useApp();
@@ -24,10 +28,10 @@ const CreateGroupModal = memo<CreateGroupModalProps>(
 
     return (
       <div onClick={stopPropagation}>
-        <Modal
+        <ImperativeModal
           allowFullscreen
           destroyOnHidden
-          okButtonProps={{ loading }}
+          okButtonProps={{ disabled: !canCreate, loading }}
           open={open}
           title={t('sessionGroup.createGroup')}
           width={400}
@@ -36,11 +40,13 @@ const CreateGroupModal = memo<CreateGroupModalProps>(
             onCancel?.(e);
           }}
           onOk={async (e: MouseEvent<HTMLButtonElement>) => {
+            if (!canCreate) return;
+
             if (input.length === 0 || input.length > 20 || input.trim() === '')
               return message.warning(t('sessionGroup.tooLong'));
 
             setLoading(true);
-            const groupId = await addGroup(input);
+            const groupId = await addGroup(input, visibility);
             await updateAgentGroup(id, groupId);
             toggleExpandSessionGroup(groupId, true);
             setLoading(false);
@@ -52,12 +58,13 @@ const CreateGroupModal = memo<CreateGroupModalProps>(
           <Flexbox paddingBlock={16}>
             <Input
               autoFocus
+              disabled={!canCreate}
               placeholder={t('sessionGroup.inputPlaceholder')}
               value={input}
               onChange={(e) => setInput(e.target.value)}
             />
           </Flexbox>
-        </Modal>
+        </ImperativeModal>
       </div>
     );
   },

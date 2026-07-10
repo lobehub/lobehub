@@ -14,6 +14,7 @@ import type {
   ChatToolPayloadWithResult,
   ToolIntervention,
 } from '../common/tools';
+import type { ChatAudioItem } from './audio';
 import type { ChatMessageExtra } from './extra';
 import type { ChatFileChunk } from './rag';
 import type { ChatVideoItem } from './video';
@@ -30,7 +31,9 @@ export type UIMessageRoleType =
   | 'assistantGroup'
   | 'agentCouncil'
   | 'compressedGroup'
-  | 'compareGroup';
+  | 'compareGroup'
+  | 'verify'
+  | 'taskCallback';
 
 export interface ChatFileItem {
   content?: string;
@@ -84,6 +87,13 @@ export interface TaskBlock {
 
 export interface AssistantContentBlock {
   content: string;
+  /**
+   * Multi-agent broadcast members rendered inline as a single AgentCouncil block
+   * (parallel columns) within the supervisor's assistant group — instead of a
+   * separate top-level `agentCouncil` message. Set on a dedicated council block
+   * that carries no own content/tools.
+   */
+  council?: UIChatMessage[];
   error?: ChatMessageError | null;
   fileList?: ChatFileItem[];
   id: string;
@@ -169,9 +179,17 @@ export interface TaskDetail {
   totalToolCalls?: number;
 }
 
+export interface MessageSender {
+  avatar?: string | null;
+  fullName?: string | null;
+  id: string;
+  username?: string | null;
+}
+
 export interface UIChatMessage {
   // Group chat fields (alphabetically before other fields)
   agentId?: string | 'supervisor';
+  audioList?: ChatAudioItem[];
   /**
    * Branch information for user messages with multiple children
    */
@@ -251,6 +269,17 @@ export interface UIChatMessage {
    */
   role: UIMessageRoleType;
   search?: GroundingSearch | null;
+  /**
+   * The workspace member who authored this message. Populated by the server
+   * query via a users LEFT JOIN. `null` for messages whose author account was
+   * deleted (rare — `messages.user_id` cascades on delete, so this is mainly
+   * a safety fallback) or for messages returned by paths that don't hydrate
+   * this field yet (streaming/optimistic client messages).
+   *
+   * Used by the User bubble to render the actual sender's avatar in
+   * workspace-shared topics instead of hard-coding the viewer's own avatar.
+   */
+  sender?: MessageSender | null;
   sessionId?: string;
   /**
    * External-signal callback blocks (). Set on virtual

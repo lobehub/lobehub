@@ -18,4 +18,4 @@
 
 @{pr-author}
 
-> **Note for Claude**: Replace `{pr-author}` with the actual PR author. Retrieve via `gh pr view <number> --json author --jq '.author.login'`. Do not hardcode a username.
+> \[!NOTE]: Replace `{pr-author}` with the actual PR author. Retrieve via `gh pr view <number> --json author --jq '.author.login'`. Do not hardcode a username.

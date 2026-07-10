@@ -13,19 +13,18 @@ export interface CustomPluginMetadata {
 export interface CustomPluginParams {
   apiMode?: 'openapi' | 'simple';
   avatar?: string;
+  /**
+   * Composio integration parameters
+   */
+  composio?: {
+    appSlug: string;
+    authConfigId: string;
+    connectedAccountId: string;
+    redirectUrl?: string;
+    status: string;
+  };
   description?: string;
   enableSettings?: boolean;
-  /**
-   * Klavis integration parameters
-   */
-  klavis?: {
-    instanceId: string;
-    isAuthenticated: boolean;
-    oauthUrl?: string;
-    serverName: string;
-    serverUrl: string;
-  };
-
   manifestMode?: 'local' | 'url';
   manifestUrl?: string;
   /**
@@ -43,6 +42,8 @@ export interface CustomPluginParams {
       type: 'none' | 'bearer' | 'oauth2';
       token?: string; // Bearer Token
       accessToken?: string; // OAuth2 Access Token
+      clientId?: string; // OAuth2 client ID
+      clientSecret?: string; // OAuth2 client secret
     };
     // Added headers configuration support
     headers?: Record<string, string>;

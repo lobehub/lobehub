@@ -3,6 +3,7 @@
 import { Flexbox } from '@lobehub/ui';
 import { memo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useLocation } from 'react-router';
 
 import { useElectronStore } from '@/store/electron';
 
@@ -16,6 +17,7 @@ interface RecentlyViewedProps {
 
 const RecentlyViewed = memo<RecentlyViewedProps>(({ onClose }) => {
   const { t } = useTranslation('electron');
+  const location = useLocation();
   const styles = useStyles;
 
   const loadPinnedPages = useElectronStore((s) => s.loadPinnedPages);
@@ -23,8 +25,8 @@ const RecentlyViewed = memo<RecentlyViewedProps>(({ onClose }) => {
   const { pinnedPages, recentPages } = useResolvedPages();
 
   useEffect(() => {
-    loadPinnedPages();
-  }, [loadPinnedPages]);
+    loadPinnedPages(location.pathname + location.search);
+  }, [loadPinnedPages, location.pathname, location.search]);
 
   const isEmpty = pinnedPages.length === 0 && recentPages.length === 0;
 

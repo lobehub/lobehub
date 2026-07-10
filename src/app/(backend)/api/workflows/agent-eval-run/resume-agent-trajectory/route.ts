@@ -1,3 +1,4 @@
+import { withOtelMetricsForUpstashWorkflows } from '@lobechat/observability-otel/modules/upstash-workflow';
 import { serve } from '@upstash/workflow/nextjs';
 import debug from 'debug';
 
@@ -5,11 +6,12 @@ import { getServerDB } from '@/database/server';
 import { qstashClient } from '@/libs/qstash';
 import { AgentEvalRunService } from '@/server/services/agentEvalRun';
 import type { ResumeAgentTrajectoryPayload } from '@/server/workflows/agentEvalRun';
+import { resolveAgentEvalRunWorkspace } from '@/server/workflows/agentEvalRun/utils';
 
 const log = debug('lobe-server:workflows:resume-agent-trajectory');
 
 export const { POST } = serve<ResumeAgentTrajectoryPayload>(
-  async (context) => {
+  withOtelMetricsForUpstashWorkflows(async (context) => {
     const payload = context.requestPayload ?? {};
     const { runId, testCaseId, topicId, userId } = payload;
 
@@ -27,7 +29,8 @@ export const { POST } = serve<ResumeAgentTrajectoryPayload>(
     }
 
     const db = await getServerDB();
-    const service = new AgentEvalRunService(db, userId);
+    const wsId = await resolveAgentEvalRunWorkspace(db, runId);
+    const service = new AgentEvalRunService(db, userId, wsId);
 
     await context.run('resume-agent-trajectory:exec-agent', () =>
       service.executeResumedTrajectory(payload),
@@ -41,7 +44,7 @@ export const { POST } = serve<ResumeAgentTrajectoryPayload>(
     );
 
     return { success: true, testCaseId, topicId };
-  },
+  }),
   {
     flowControl: {
       key: 'agent-eval-run.resume-agent-trajectory',

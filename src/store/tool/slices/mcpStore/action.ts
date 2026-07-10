@@ -11,6 +11,7 @@ import useSWR from 'swr';
 
 import { type MCPErrorData } from '@/libs/mcp/types';
 import { parseStdioErrorMessage } from '@/libs/mcp/types';
+import { toolKeys } from '@/libs/swr/keys';
 import { discoverService } from '@/services/discover';
 import { mcpService } from '@/services/mcp';
 import { pluginService } from '@/services/plugin';
@@ -864,21 +865,15 @@ export class PluginMCPStoreActionImpl {
     const requestParams = isDesktop
       ? params
       : { ...params, connectionType: McpConnectionType.http };
-    const swrKeyParts = [
-      'useFetchMCPPluginList',
-      locale,
-      requestParams.page,
-      requestParams.pageSize,
-      requestParams.q,
-      requestParams.connectionType,
-    ];
-    const swrKey = swrKeyParts
-      .filter((part) => part !== undefined && part !== null && part !== '')
-      .join('-');
     const page = requestParams.page ?? 1;
 
     return useSWR<PluginListResponse>(
-      swrKey,
+      toolKeys.mcpPluginList(locale, {
+        connectionType: requestParams.connectionType,
+        page: requestParams.page,
+        pageSize: requestParams.pageSize,
+        q: requestParams.q,
+      }),
       () => discoverService.getMCPPluginList(requestParams),
       {
         onSuccess: (data) => {

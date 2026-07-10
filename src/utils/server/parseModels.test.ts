@@ -571,41 +571,6 @@ describe('transformToChatModelCards', () => {
     expect(result).toMatchSnapshot();
   });
 
-  it('should use default deploymentName from known model when not specified in string (VolcEngine case)', async () => {
-    const knownModel = LOBE_DEFAULT_MODEL_LIST.find(
-      (m) => m.id === 'deepseek-r1' && m.providerId === 'volcengine',
-    );
-    const defaultChatModels: AiFullModelCard[] = [];
-    const result = await transformToAiModelList({
-      modelString: '+deepseek-r1',
-      defaultModels: defaultChatModels,
-      providerId: 'volcengine',
-      withDeploymentName: true,
-    });
-    expect(result).toContainEqual({
-      ...knownModel,
-      enabled: true,
-    });
-  });
-
-  it('should use deploymentName from modelString when specified (VolcEngine case)', async () => {
-    const defaultChatModels: AiFullModelCard[] = [];
-    const knownModel = LOBE_DEFAULT_MODEL_LIST.find(
-      (m) => m.id === 'deepseek-r1' && m.providerId === 'volcengine',
-    );
-    const result = await transformToAiModelList({
-      modelString: `+deepseek-r1->my-custom-deploy`,
-      defaultModels: defaultChatModels,
-      providerId: 'volcengine',
-      withDeploymentName: true,
-    });
-    expect(result).toContainEqual({
-      ...knownModel,
-      enabled: true,
-      config: { deploymentName: 'my-custom-deploy' },
-    });
-  });
-
   it('should set both id and deploymentName to the full string when no -> is used and withDeploymentName is true', async () => {
     const defaultChatModels: AiFullModelCard[] = [];
     const result = await transformToAiModelList({
@@ -737,7 +702,10 @@ describe('transformToChatModelCards', () => {
           'ChatGPT-4o is a dynamic model that updates in real time to stay current. It combines strong language understanding and generation, suitable for large-scale applications such as customer support, education, and technical support.',
         displayName: 'GPT-4o',
         enabled: true,
+        family: 'gpt',
+        generation: 'gpt-4o',
         id: 'gpt-4o',
+        knowledgeCutoff: '2023-10',
         maxOutput: 4096,
         pricing: {
           units: [
@@ -775,7 +743,10 @@ describe('transformToChatModelCards', () => {
         providerId: 'azure',
         source: 'builtin',
         enabled: true,
+        family: 'gpt',
+        generation: 'gpt-4o',
         id: 'gpt-4o-mini',
+        knowledgeCutoff: '2023-10',
         maxOutput: 4096,
         pricing: {
           units: [
@@ -809,9 +780,12 @@ describe('transformToChatModelCards', () => {
           'o1-mini is a fast, cost-effective reasoning model designed for programming, math, and science use cases. It has a 128K context window and an October 2023 knowledge cutoff.',
         displayName: 'OpenAI o1-mini',
         enabled: true,
+        family: 'o-series',
+        generation: 'o1',
         providerId: 'azure',
         source: 'builtin',
         id: 'o1-mini',
+        knowledgeCutoff: '2023-10',
         maxOutput: 65536,
         pricing: {
           units: [

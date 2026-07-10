@@ -3,6 +3,7 @@ import isEqual from 'fast-deep-equal';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useFetchSessions } from '@/hooks/useFetchSessions';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
@@ -57,10 +58,11 @@ const DefaultMode = memo(() => {
     children: filterSessionsForView(group.children),
   }));
 
-  const [sessionGroupKeys, updateSystemStatus] = useGlobalStore((s) => [
-    systemStatusSelectors.sessionGroupKeys(s),
-    s.updateSystemStatus,
-  ]);
+  const activeWorkspaceId = useActiveWorkspaceId();
+  const sessionGroupKeys = useGlobalStore(
+    systemStatusSelectors.sessionGroupKeys(activeWorkspaceId),
+  );
+  const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
 
   const items = useMemo(
     () =>

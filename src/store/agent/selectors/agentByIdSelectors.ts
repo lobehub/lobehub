@@ -3,11 +3,14 @@ import { DEFAULT_MODEL, DEFAUTT_AGENT_TTS_CONFIG, isDesktop } from '@lobechat/co
 import { type AgentBuilderContext } from '@lobechat/context-engine';
 import {
   type AgentMode,
+  getActivePluginIds,
+  getWorkingDirEffectivePath,
   type LobeAgentAgencyConfig,
   type LobeAgentTTSConfig,
   type RuntimeEnvConfig,
 } from '@lobechat/types';
 
+import { resolveTargetDeviceId } from '@/helpers/agentWorkingDirectory';
 import { globalAgentContextManager } from '@/helpers/GlobalAgentContextManager';
 
 import { type AgentStoreState } from '../initialState';
@@ -28,10 +31,16 @@ const getAgentModelProviderById =
   (s: AgentStoreState): string =>
     agentSelectors.getAgentConfigById(agentId)(s)?.provider || DEFAULT_PROVIDER;
 
+/**
+ * Pinned plugin identifiers for the agent — disabled entries are excluded.
+ * Every current consumer (token estimation, share-image preview, auth alerts,
+ * the Skills panel) wants "what's actually configured/active", matching the
+ * pre-tri-state semantics where array-membership meant pinned.
+ */
 const getAgentPluginsById =
   (agentId: string) =>
   (s: AgentStoreState): string[] =>
-    agentSelectors.getAgentConfigById(agentId)(s)?.plugins || [];
+    getActivePluginIds(agentSelectors.getAgentConfigById(agentId)(s)?.plugins);
 
 const getAgentSystemRoleById =
   (agentId: string) =>
@@ -42,6 +51,16 @@ const getAgentTTSById =
   (agentId: string) =>
   (s: AgentStoreState): LobeAgentTTSConfig =>
     agentSelectors.getAgentConfigById(agentId)(s)?.tts || DEFAUTT_AGENT_TTS_CONFIG;
+
+const getAgentTTSVoiceById =
+  (agentId: string) =>
+  (s: AgentStoreState): string =>
+    getAgentTTSById(agentId)(s).voice?.openai || 'alloy';
+
+const getAgentConfigErrorById =
+  (agentId: string) =>
+  (s: AgentStoreState): string | undefined =>
+    agentId ? s.agentConfigErrorMap[agentId] : undefined;
 
 const getAgentFilesById = (agentId: string) => (s: AgentStoreState) =>
   agentSelectors.getAgentConfigById(agentId)(s)?.files || [];
@@ -60,7 +79,8 @@ const isAgentConfigLoadingById = (agentId: string) => (s: AgentStoreState) =>
 const getAgentModeById =
   (agentId: string) =>
   (s: AgentStoreState): AgentMode | undefined => {
-    const chatConfig = agentSelectors.getAgentConfigById(agentId)(s)?.chatConfig;
+    const config = agentSelectors.getAgentConfigById(agentId)(s);
+    const chatConfig = config?.chatConfig;
     return chatConfig?.enableAgentMode === false ? undefined : 'auto';
   };
 
@@ -71,7 +91,8 @@ const getAgentModeById =
 const getAgentEnableModeById =
   (agentId: string) =>
   (s: AgentStoreState): boolean => {
-    const chatConfig = agentSelectors.getAgentConfigById(agentId)(s)?.chatConfig;
+    const config = agentSelectors.getAgentConfigById(agentId)(s);
+    const chatConfig = config?.chatConfig;
     return chatConfig?.enableAgentMode !== false;
   };
 
@@ -85,15 +106,35 @@ const getAgentRuntimeEnvConfigById =
     agentSelectors.getAgentConfigById(agentId)(s)?.chatConfig?.runtimeEnv;
 
 /**
- * Get working directory by agentId
+ * Get the agent-level working directory by agentId.
+ *
+ * Precedence (the agent-owned slice only — topic overrides and device defaults
+ * are layered on by callers):
+ *
+ *   agent's per-device choice (`agencyConfig.workingDirByDevice[targetDeviceId]`)
+ *     > legacy per-agent localStorage value (pre-migration fallback)
+ *     > desktop path > home path
+ *
+ * `currentDeviceId` is passed in (not read cross-store) so hook callers stay
+ * reactive to device changes. The target device is resolved from it via
+ * `resolveTargetDeviceId`, so a device-bound agent reads its bound device's
+ * choice rather than the local machine's.
  */
 const getAgentWorkingDirectoryById =
-  (agentId: string) =>
+  (agentId: string, currentDeviceId?: string) =>
   (s: AgentStoreState): string | undefined => {
     if (!isDesktop) return;
 
     const ctx = globalAgentContextManager.getContext();
-    return s.localAgentWorkingDirectoryMap[agentId] ?? ctx.desktopPath ?? ctx.homePath;
+    const agencyConfig = agentSelectors.getAgentConfigById(agentId)(s)?.agencyConfig;
+    const targetDeviceId = resolveTargetDeviceId(agencyConfig, currentDeviceId);
+    const agentChoice = targetDeviceId
+      ? getWorkingDirEffectivePath(agencyConfig?.workingDirByDevice?.[targetDeviceId])
+      : undefined;
+
+    return (
+      agentChoice ?? s.localAgentWorkingDirectoryMap[agentId] ?? ctx.desktopPath ?? ctx.homePath
+    );
   };
 
 /**
@@ -113,7 +154,9 @@ const getAgentBuilderContextById =
         openingMessage: config?.openingMessage,
         openingQuestions: config?.openingQuestions,
         params: config?.params,
-        plugins: config?.plugins,
+        // Pinned identifiers only — AgentBuilderContext.config.plugins is a
+        // display DTO (still string[]); a disabled plugin isn't "enabled".
+        plugins: getActivePluginIds(config?.plugins),
         provider: config?.provider,
         systemRole: config?.systemRole,
       },
@@ -144,11 +187,22 @@ const isAgentHeterogeneousById =
  */
 const getAgentById = (agentId: string) => (s: AgentStoreState) => s.agentMap[agentId];
 
+/**
+ * Workspace-scoped agent: shared across workspace members, so it executes on
+ * the workspace device pool / sandbox — never on the current member's own
+ * client. Feed this into `resolveExecutionTarget`'s `workspaceScoped` option.
+ */
+const isWorkspaceAgentById =
+  (agentId: string) =>
+  (s: AgentStoreState): boolean =>
+    !!s.agentMap[agentId]?.workspaceId;
+
 export const agentByIdSelectors = {
   getAgencyConfigById,
   getAgentBuilderContextById,
   getAgentById,
   getAgentConfigById: agentSelectors.getAgentConfigById,
+  getAgentConfigErrorById,
   getAgentEnableModeById,
   getAgentFilesById,
   getAgentKnowledgeBasesById,
@@ -159,7 +213,9 @@ export const agentByIdSelectors = {
   getAgentPluginsById,
   getAgentSystemRoleById,
   getAgentTTSById,
+  getAgentTTSVoiceById,
   getAgentWorkingDirectoryById,
   isAgentConfigLoadingById,
   isAgentHeterogeneousById,
+  isWorkspaceAgentById,
 };

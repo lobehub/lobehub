@@ -1,7 +1,7 @@
 import type { HeterogeneousProviderConfig } from '@lobechat/types';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 
 import HeterogeneousAgentStatusCard from './HeterogeneousAgentStatusCard';
@@ -126,8 +126,8 @@ vi.mock('@/features/Electron/HeterogeneousAgent/StatusGuide', () => ({
   ),
 }));
 
-vi.mock('@/services/electron/toolDetector', () => ({
-  toolDetectorService: {
+vi.mock('@/services/electron/binary', () => ({
+  binaryService: {
     detectHeterogeneousAgentCommand,
     getClaudeAuthStatus,
   },

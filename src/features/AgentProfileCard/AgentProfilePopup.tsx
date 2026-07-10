@@ -8,10 +8,11 @@ import { createStaticStyles } from 'antd-style';
 import { BookOpen, FileText, Settings } from 'lucide-react';
 import { memo, type PropsWithChildren, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
 
 import ModelSelect from '@/features/ModelSelect';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { agentProfileKeys } from '@/libs/swr/keys';
 import { agentService } from '@/services/agent';
 import { useAgentGroupStore } from '@/store/agentGroup';
 
@@ -71,14 +72,14 @@ interface AgentProfilePopupProps extends PropsWithChildren {
 const AgentProfilePopup = memo<AgentProfilePopupProps>(
   ({ agent, agentId, groupId, children, trigger = 'click' }) => {
     const { t } = useTranslation('chat');
-    const navigate = useNavigate();
+    const navigate = useWorkspaceAwareNavigate();
     const [open, setOpen] = useState(false);
     const [loading, setLoading] = useState(false);
 
     const updateMemberAgentConfig = useAgentGroupStore((s) => s.updateMemberAgentConfig);
 
     const { data: fetched, isLoading } = useSWR(
-      open ? ['agentProfile', agentId] : null,
+      open ? agentProfileKeys.detail(agentId) : null,
       () => agentService.getAgentConfigById(agentId) as Promise<FetchedAgent | null>,
       { revalidateOnFocus: false },
     );

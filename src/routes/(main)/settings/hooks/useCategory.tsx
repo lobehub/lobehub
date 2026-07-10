@@ -3,6 +3,7 @@ import { Avatar } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import {
   BellIcon,
+  Blocks,
   Brain,
   BrainCircuit,
   ChartColumnBigIcon,
@@ -35,7 +36,6 @@ import {
   useServerConfigStore,
 } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
-import { labPreferSelectors } from '@/store/user/selectors';
 import { userProfileSelectors } from '@/store/user/slices/auth/selectors';
 import { userGeneralSettingsSelectors } from '@/store/user/slices/settings/selectors';
 
@@ -47,6 +47,8 @@ export enum SettingsGroupKey {
 }
 
 export interface CategoryItem {
+  /** Override the navigation URL. When omitted, Body derives the URL from `key`. */
+  href?: string;
   icon: any;
   key: SettingsTabs;
   label: string;
@@ -70,9 +72,6 @@ export const useCategory = () => {
   ]);
   const remoteServerUrl = useElectronStore(electronSyncSelectors.remoteServerUrl);
   const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
-  const enableExecutionDeviceSwitcher = useUserStore(
-    labPreferSelectors.enableExecutionDeviceSwitcher,
-  );
 
   const avatarUrl = useMemo(() => {
     if (!avatar) return undefined;
@@ -102,7 +101,7 @@ export const useCategory = () => {
         key: SettingsTabs.Appearance,
         label: t('tab.appearance'),
       },
-      enableExecutionDeviceSwitcher && {
+      {
         icon: MonitorSmartphoneIcon,
         key: SettingsTabs.Devices,
         label: t('tab.devices'),
@@ -125,7 +124,9 @@ export const useCategory = () => {
       title: t('group.common'),
     });
 
-    // Subscription group
+    // Personal subscription / billing items. Always shown when business
+    // features are enabled — workspace settings live under a separate
+    // `/:workspaceSlug/settings/*` surface and never share this sidebar.
     if (enableBusinessFeatures) {
       const subscriptionItems: CategoryItem[] = [
         { icon: Map, key: SettingsTabs.Plans, label: tSubscription('tab.plans') },
@@ -160,6 +161,11 @@ export const useCategory = () => {
         icon: SkillsIcon,
         key: SettingsTabs.Skill,
         label: t('tab.skill'),
+      },
+      {
+        icon: Blocks,
+        key: SettingsTabs.Connector,
+        label: t('tab.connector'),
       },
       {
         icon: BrainCircuit,
@@ -235,7 +241,6 @@ export const useCategory = () => {
     tAuth,
     tSubscription,
     enableBusinessFeatures,
-    enableExecutionDeviceSwitcher,
     hideDocs,
     mobile,
     showApiKeyManage,

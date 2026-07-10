@@ -9,22 +9,32 @@ import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { alwaysOnToolIds, chatModeAllowedToolIds, defaultToolIds } from '@lobechat/builtin-tools';
 import { createEnableChecker, type PluginEnableChecker } from '@lobechat/context-engine';
 import { ToolsEngine } from '@lobechat/context-engine';
-import { type ChatCompletionTool, type ToolManifest, type WorkingModel } from '@lobechat/types';
+import {
+  type BuiltinToolManifest,
+  type BuiltinToolResolveContext,
+  type ChatCompletionTool,
+  type ToolManifest,
+  type WorkingModel,
+} from '@lobechat/types';
 
+import type { ConnectorToolPermission } from '@/database/schemas';
 import { isToolAvailableInCurrentEnv } from '@/helpers/toolAvailability';
+import { patchManifestWithPermissions } from '@/libs/mcp/patchManifestPermissions';
 import { getAgentStoreState } from '@/store/agent';
 import { agentChatConfigSelectors, agentSelectors } from '@/store/agent/selectors';
 import { getToolStoreState } from '@/store/tool';
 import {
-  klavisStoreSelectors,
+  composioStoreSelectors,
   lobehubSkillStoreSelectors,
   pluginSelectors,
 } from '@/store/tool/selectors';
+import { connectorSelectors } from '@/store/tool/slices/connector';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
 
 import { getSearchConfig } from '../getSearchConfig';
 import { isCanUseFC } from '../isCanUseFC';
+import { buildClientConnectorManifests } from './buildClientConnectorManifests';
 
 /**
  * Tools engine configuration options
@@ -34,15 +44,30 @@ export interface ToolsEngineConfig {
   additionalManifests?: ToolManifest[];
   /** Default tool IDs that will always be added to the end of the tools list */
   defaultToolIds?: string[];
+  /**
+   * Identifiers the agent has explicitly disabled (`agents.plugins` tri-state).
+   * Dropped from the combined manifest pool entirely — not just the
+   * enableChecker rule map — because `allowExplicitActivation` lets the
+   * activator resolve/enable any manifest present in `manifestSchemas`
+   * regardless of the rules, bypassing a rule-only gate.
+   */
+  disabledPluginIds?: string[];
   /** Custom enable checker for plugins */
   enableChecker?: PluginEnableChecker;
+  /**
+   * Runtime context for context-aware builtin manifests. When provided, each
+   * builtin tool with a `resolveManifest` produces its manifest for this context
+   * (trimming APIs or opting out via `null`). Omit for context-free callers
+   * (e.g. UI token estimation) — they get the full static manifests.
+   */
+  manifestContext?: BuiltinToolResolveContext;
 }
 
 /**
  * A manifest is usable by ToolsEngine only if it has a non-empty `api` array.
  * ToolsEngine.convertManifestsToTools calls `manifest.api.map(...)` unconditionally,
  * so any entry with `api` missing / non-array will crash the whole tools build.
- * Sources that populate manifests (installed plugins, Klavis, LobeHub skills, MCP)
+ * Sources that populate manifests (installed plugins, Composio, LobeHub skills, MCP)
  * have no shared schema validation, so we guard defensively at the merge point.
  */
 const isValidToolManifest = (m: ToolManifest | undefined): m is ToolManifest =>
@@ -79,19 +104,66 @@ const dropInvalidManifests = (manifests: (ToolManifest | undefined)[], source: s
  * Initialize ToolsEngine with current manifest schemas and configurable options
  */
 export const createToolsEngine = (config: ToolsEngineConfig = {}): ToolsEngine => {
-  const { enableChecker, additionalManifests = [], defaultToolIds } = config;
+  const {
+    enableChecker,
+    additionalManifests = [],
+    defaultToolIds,
+    disabledPluginIds = [],
+    manifestContext,
+  } = config;
 
   const toolStoreState = getToolStoreState();
 
-  // Get all available plugin manifests
-  const pluginManifests = pluginSelectors.installedPluginManifestList(toolStoreState);
+  // Get custom connector manifests (user-added MCP servers). Connectors take
+  // priority over plugins: any plugin sharing a connector identifier is dropped
+  // so the connector (server-side execution with its stored token) wins.
+  const connectorManifests = buildClientConnectorManifests(
+    connectorSelectors.customConnectors(toolStoreState),
+  );
+  const connectorIdentifiers = new Set(connectorManifests.map((m) => m.identifier));
 
-  // Get all builtin tool manifests
-  const builtinManifests = toolStoreState.builtinTools.map((tool) => tool.manifest as ToolManifest);
+  // Per-connector tool permissions, keyed by connector identifier. Used to patch
+  // community-MCP plugin manifests below so the user's needs_approval / disabled
+  // settings surface as humanIntervention (custom connectors are handled by their
+  // own manifests above; disabled is also hard-blocked at the mcp router).
+  const connectorPermsByIdentifier = new Map(
+    connectorSelectors
+      .connectorList(toolStoreState)
+      .map((c) => [c.identifier, new Map(c.tools.map((t) => [t.toolName, t.permission]))] as const),
+  );
 
-  // Get Klavis tool manifests
-  const klavisTools = klavisStoreSelectors.klavisAsLobeTools(toolStoreState);
-  const klavisManifests = klavisTools.map((tool) => tool.manifest as ToolManifest).filter(Boolean);
+  // Get all available plugin manifests (excluding ones now covered by a connector),
+  // patched with their connector tool permissions when a connector row exists.
+  const pluginManifests = pluginSelectors
+    .installedPluginManifestList(toolStoreState)
+    .filter((m) => !connectorIdentifiers.has(m.identifier))
+    .map((m) => {
+      const perms = connectorPermsByIdentifier.get(m.identifier);
+      return perms && perms.size > 0
+        ? (patchManifestWithPermissions(
+            m as any,
+            perms as Map<string, ConnectorToolPermission>,
+          ) as ToolManifest)
+        : m;
+    });
+
+  // Get all builtin tool manifests. When a manifest context is supplied (agent
+  // runtime path), context-aware tools resolve their manifest for it — trimming
+  // APIs (e.g. lobe-agent hides callSubAgent in groups) or opting out via `null`.
+  // Context-free callers fall back to the full static manifest.
+  const builtinManifests = toolStoreState.builtinTools
+    .map((tool) =>
+      manifestContext && tool.resolveManifest
+        ? tool.resolveManifest(manifestContext)
+        : tool.manifest,
+    )
+    .filter((m): m is BuiltinToolManifest => !!m) as ToolManifest[];
+
+  // Get Composio tool manifests
+  const composioTools = composioStoreSelectors.composioAsLobeTools(toolStoreState);
+  const composioManifests = composioTools
+    .map((tool) => tool.manifest as ToolManifest)
+    .filter(Boolean);
 
   // Get LobeHub Skill tool manifests
   const lobehubSkillTools = lobehubSkillStoreSelectors.lobehubSkillAsLobeTools(toolStoreState);
@@ -101,13 +173,23 @@ export const createToolsEngine = (config: ToolsEngineConfig = {}): ToolsEngine =
 
   // Combine all manifests, dropping entries that would crash ToolsEngine.
   // Each source is filtered separately so the warning pinpoints the origin.
-  const allManifests = [
+  const combinedManifests = [
     ...dropInvalidManifests(pluginManifests, 'installedPlugins'),
     ...dropInvalidManifests(builtinManifests, 'builtinTools'),
-    ...dropInvalidManifests(klavisManifests, 'klavis'),
+    ...dropInvalidManifests(composioManifests, 'composio'),
     ...dropInvalidManifests(lobehubSkillManifests, 'lobehubSkills'),
+    ...dropInvalidManifests(connectorManifests, 'connectors'),
     ...dropInvalidManifests(additionalManifests, 'additionalManifests'),
   ];
+
+  // Disabled identifiers are dropped from the pool outright (not left for the
+  // enableChecker rules) — a plugin, skill, connector, or user-toggleable
+  // builtin tool the agent has explicitly disabled must not be discoverable/
+  // activatable at all, matching the server-side (aiAgent gateway) treatment.
+  const allManifests =
+    disabledPluginIds.length === 0
+      ? combinedManifests
+      : combinedManifests.filter((m) => !disabledPluginIds.includes(m.identifier));
 
   return new ToolsEngine({
     defaultToolIds,
@@ -121,12 +203,18 @@ export const createAgentToolsEngine = (
   workingModel: WorkingModel,
   /** Runtime-resolved plugin IDs (from agentConfigResolver), may include tools beyond the active agent */
   pluginIds?: string[],
+  /** Conversation context for context-aware builtin manifests (scope, isSubAgent). */
+  manifestContext?: BuiltinToolResolveContext,
 ) => {
   const searchConfig = getSearchConfig(workingModel.model, workingModel.provider);
   const agentState = getAgentStoreState();
+  // `currentAgentPlugins` already resolves to pinned-only identifiers — disabled
+  // entries never reach the tools-engine whitelist.
   const userPlugins = agentSelectors.currentAgentPlugins(agentState);
+  const disabledPluginIds = agentSelectors.currentAgentDisabledPlugins(agentState);
   const isChatMode =
-    agentChatConfigSelectors.currentChatConfig(agentState).enableAgentMode === false;
+    agentChatConfigSelectors.currentChatConfig(agentState).enableAgentMode === false ||
+    !isCanUseFC(workingModel.model, workingModel.provider);
 
   // Each entry below still respects its own runtime gate; in chat mode this
   // is the entire whitelist. `allowExplicitActivation` and user plugins /
@@ -162,6 +250,8 @@ export const createAgentToolsEngine = (
 
   return createToolsEngine({
     defaultToolIds: isChatMode ? chatModeAllowedToolIds : defaultToolIds,
+    disabledPluginIds,
+    manifestContext,
     enableChecker: createEnableChecker({
       allowExplicitActivation: !isChatMode,
       platformFilter: ({ pluginId }) => {

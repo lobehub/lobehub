@@ -122,6 +122,22 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
     match: sub('content exceeds maximum length of 100KB'),
   },
   { code: AgentRuntimeErrorType.ExceededContextWindow, match: sub('免费API限制模型输入token小于') },
+  {
+    code: AgentRuntimeErrorType.ExceededContextWindow,
+    match: sub('conversation is too long'),
+    note: 'Anthropic suggests /compact when the context overflows',
+  },
+  {
+    code: AgentRuntimeErrorType.ExceededContextWindow,
+    match: sub('上下文已经全量可用'),
+    note: 'proxy gates 1m context — request overflowed the default window',
+  },
+  {
+    code: AgentRuntimeErrorType.ExceededContextWindow,
+    match: sub("the model's context length"),
+    note: 'OpenAI-style: passed N input + requested M output > context length',
+  },
+  { code: AgentRuntimeErrorType.ExceededContextWindow, match: sub('input tokens and requested') },
 
   // ─────────────────────────────────────────────────────────────────────────
   // InsufficientQuota — account balance / billing exhausted (long-term)
@@ -130,6 +146,12 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
     code: AgentRuntimeErrorType.InsufficientQuota,
     match: sub('insufficient balance', { caseInsensitive: true }),
   },
+  {
+    code: AgentRuntimeErrorType.InsufficientQuota,
+    match: sub('unavailable for free. The paid version'),
+  },
+  { code: AgentRuntimeErrorType.InsufficientQuota, match: sub('used all available credits') },
+  { code: AgentRuntimeErrorType.InsufficientQuota, match: sub('CodingPlan subscription') },
   {
     code: AgentRuntimeErrorType.InsufficientQuota,
     match: sub('insufficient quota', { caseInsensitive: true }),
@@ -357,6 +379,23 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
     match: sub('Your account requires verification before using the API'),
     note: 'freemodel.dev phone verification',
   },
+  {
+    code: AgentRuntimeErrorType.InsufficientQuota,
+    match: sub('Your balance is used up. Please top up to continue.'),
+  },
+  {
+    code: AgentRuntimeErrorType.InsufficientQuota,
+    match: sub('reached your weekly usage limit', { caseInsensitive: true }),
+  },
+  { code: AgentRuntimeErrorType.InsufficientQuota, match: sub('已达到 Token Plan 用量上限') },
+  {
+    code: AgentRuntimeErrorType.InsufficientQuota,
+    match: sub('Token Plan usage limit reached'),
+  },
+  {
+    code: AgentRuntimeErrorType.InsufficientQuota,
+    match: sub('The free quota has been exhausted'),
+  },
 
   // ─────────────────────────────────────────────────────────────────────────
   // RateLimitExceeded — short-window rate limit (transient, retryable)
@@ -423,6 +462,11 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
   {
     code: AgentRuntimeErrorType.RateLimitExceeded,
     match: sub('Request rate increased too quickly'),
+  },
+  { code: AgentRuntimeErrorType.RateLimitExceeded, match: sub('Console API returned 429') },
+  {
+    code: AgentRuntimeErrorType.RateLimitExceeded,
+    match: sub('per-user model TPM limit'),
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -496,6 +540,21 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
   { code: AgentRuntimeErrorType.ProviderServiceUnavailable, match: sub('502: Bad gateway') },
   { code: AgentRuntimeErrorType.ProviderServiceUnavailable, match: sub('502 <!DOCTYPE html>') },
   { code: AgentRuntimeErrorType.ProviderServiceUnavailable, match: sub('503 Gateway Error') },
+  {
+    code: AgentRuntimeErrorType.ProviderServiceUnavailable,
+    match: sub('503 "Service Unavailable"'),
+  },
+  {
+    code: AgentRuntimeErrorType.ProviderServiceUnavailable,
+    match: sub('Hệ thống đang bận'),
+    note: 'Vietnamese proxy: system busy, retry shortly',
+  },
+  {
+    code: AgentRuntimeErrorType.ProviderServiceUnavailable,
+    match: sub('Vision is temporarily unavailable. Send text-only requests for now.'),
+  },
+  { code: AgentRuntimeErrorType.ProviderServiceUnavailable, match: sub('服务器问题调试中') },
+  { code: AgentRuntimeErrorType.ProviderServiceUnavailable, match: sub('undergoing an upgrade') },
 
   // ─────────────────────────────────────────────────────────────────────────
   // ProviderNetworkError — connection / timeout
@@ -513,10 +572,29 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
     // generic "Connection error." surfaces on the top-level message.
     match: sub('Connection error.'),
   },
+  { code: AgentRuntimeErrorType.ProviderNetworkError, match: sub('fetch failed') },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // StateStoreReadError — a state-store READ failed: either a blocking read
+  // (XREAD / BLPOP) aborted because the caller disconnected, or the operation's
+  // agent state could not be loaded. Must precede StateStorePersistError so the
+  // write-side bucket doesn't claim it.
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    code: AgentRuntimeErrorType.StateStoreReadError,
+    match: sub('ERR caller gone'),
+    note: 'Upstash aborts the in-flight blocking read (XREAD/BLPOP) when the originating request is already gone.',
+  },
+  {
+    code: AgentRuntimeErrorType.StateStoreReadError,
+    match: sub('Agent state not found for operation'),
+    note: 'coordinator.loadAgentState() returned null — the operation state was evicted/cleaned up before this read.',
+  },
 
   // ─────────────────────────────────────────────────────────────────────────
   // StateStorePersistError — Redis / Upstash agent-state store (NOT the LLM
-  // provider). ioredis aborts, request-size cap, suspended DB.
+  // provider). ioredis aborts, request-size cap, suspended DB, readonly upgrade
+  // window. Write / connection-level drops.
   // ─────────────────────────────────────────────────────────────────────────
   {
     code: AgentRuntimeErrorType.StateStorePersistError,
@@ -531,11 +609,20 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
     code: AgentRuntimeErrorType.StateStorePersistError,
     match: sub('database has been suspended'),
   },
+  {
+    code: AgentRuntimeErrorType.StateStorePersistError,
+    match: sub('READONLY Writes are temporarily rejected'),
+    note: 'Upstash rejects writes against the read-only replica during a server upgrade.',
+  },
 
   // ─────────────────────────────────────────────────────────────────────────
   // NoAvailableChannel — router / proxy has no upstream
   // ─────────────────────────────────────────────────────────────────────────
   { code: AgentRuntimeErrorType.NoAvailableChannel, match: sub('No available accounts') },
+  {
+    code: AgentRuntimeErrorType.NoAvailableChannel,
+    match: sub('All available accounts exhausted'),
+  },
   { code: AgentRuntimeErrorType.NoAvailableChannel, match: sub('No endpoints found') },
   {
     code: AgentRuntimeErrorType.NoAvailableChannel,
@@ -547,6 +634,7 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
   },
   { code: AgentRuntimeErrorType.NoAvailableChannel, match: sub('no available channels for model') },
   { code: AgentRuntimeErrorType.NoAvailableChannel, match: sub('No available channel for model') },
+  { code: AgentRuntimeErrorType.NoAvailableChannel, match: sub('no channel available for model') },
   { code: AgentRuntimeErrorType.NoAvailableChannel, match: sub('无可用渠道') },
   {
     code: AgentRuntimeErrorType.NoAvailableChannel,
@@ -575,6 +663,10 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
     code: AgentRuntimeErrorType.NoAvailableChannel,
     match: sub('upstream rejected the request payload'),
     note: 'freethe routing short-circuit',
+  },
+  {
+    code: AgentRuntimeErrorType.NoAvailableChannel,
+    match: sub('"code":"NOT_FOUND","msg":"route not found"'),
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -606,6 +698,40 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
     match: sub('reached its end of life on'),
     note: 'newapi-style 410 Gone',
   },
+  {
+    code: AgentRuntimeErrorType.ModelNotFound,
+    match: sub('is not allowed on this server'),
+    note: 'ollama allow-list rejects the requested model',
+  },
+  {
+    code: AgentRuntimeErrorType.ModelNotFound,
+    match: sub('Publisher Model'),
+    note: 'Vertex: publisher model path not found',
+  },
+  { code: AgentRuntimeErrorType.ModelNotFound, match: sub('你请求的模型') },
+  { code: AgentRuntimeErrorType.ModelNotFound, match: sub('不存在或未上线') },
+  { code: AgentRuntimeErrorType.ModelNotFound, match: sub('has no provider supported') },
+  { code: AgentRuntimeErrorType.ModelNotFound, match: sub('model identifier is invalid') },
+  { code: AgentRuntimeErrorType.ModelNotFound, match: sub('Incorrect model ID') },
+  { code: AgentRuntimeErrorType.ModelNotFound, match: sub('not available for integrator') },
+  { code: AgentRuntimeErrorType.ModelNotFound, match: sub('is not available. Please use') },
+  { code: AgentRuntimeErrorType.ModelNotFound, match: sub('The requested model is not available') },
+  { code: AgentRuntimeErrorType.ModelNotFound, match: sub('Requested model is not valid') },
+  { code: AgentRuntimeErrorType.ModelNotFound, match: sub('invalid params, unknown model') },
+  {
+    code: AgentRuntimeErrorType.ModelNotFound,
+    match: sub('Unknown Model, please check the model code'),
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // InvalidVertexCredentials
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    code: AgentRuntimeErrorType.InvalidVertexCredentials,
+    match: sub('Authentication is not set up. Please provide either a project and location'),
+    note: '@google/genai Vertex setup error: missing project/location or ADC credentials.',
+    provider: 'vertexai',
+  },
 
   // ─────────────────────────────────────────────────────────────────────────
   // InvalidProviderAPIKey
@@ -629,6 +755,11 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
     code: AgentRuntimeErrorType.InvalidProviderAPIKey,
     match: sub('API key expired. Please renew the API key'),
   },
+  { code: AgentRuntimeErrorType.InvalidProviderAPIKey, match: sub('API key is disabled.') },
+  {
+    code: AgentRuntimeErrorType.InvalidProviderAPIKey,
+    match: sub('This API key has been suspended.'),
+  },
   {
     code: AgentRuntimeErrorType.InvalidProviderAPIKey,
     match: sub('API Key not found. Please pass a valid API key'),
@@ -641,6 +772,10 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
   {
     code: AgentRuntimeErrorType.InvalidProviderAPIKey,
     match: sub('invalidapikey', { caseInsensitive: true }),
+  },
+  {
+    code: AgentRuntimeErrorType.InvalidProviderAPIKey,
+    match: sub('No active credentials for provider'),
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -674,6 +809,24 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
   { code: AgentRuntimeErrorType.PermissionDenied, match: sub('This token has no access to model') },
   { code: AgentRuntimeErrorType.PermissionDenied, match: sub('该令牌无权访问模型') },
   { code: AgentRuntimeErrorType.PermissionDenied, match: sub('您的 IP 不在令牌允许访问的列表中') },
+  { code: AgentRuntimeErrorType.PermissionDenied, match: sub('User has been banned') },
+  {
+    code: AgentRuntimeErrorType.PermissionDenied,
+    match: sub('Only Codex clients can use this group'),
+    note: 'proxy restricts the group to Codex clients',
+  },
+  { code: AgentRuntimeErrorType.PermissionDenied, match: sub('not available for trial users') },
+  { code: AgentRuntimeErrorType.PermissionDenied, match: sub('403 Forbidden') },
+  { code: AgentRuntimeErrorType.PermissionDenied, match: sub('403 | Forbidden') },
+  {
+    code: AgentRuntimeErrorType.PermissionDenied,
+    match: sub('You have no permission to access this resource'),
+  },
+  {
+    code: AgentRuntimeErrorType.PermissionDenied,
+    match: sub('Access denied due to Virtual Network'),
+  },
+  { code: AgentRuntimeErrorType.PermissionDenied, match: sub('does not allow the current client') },
 
   // ─────────────────────────────────────────────────────────────────────────
   // AccountDeactivated
@@ -699,6 +852,11 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
   // CapabilityNotSupported
   // ─────────────────────────────────────────────────────────────────────────
   { code: AgentRuntimeErrorType.CapabilityNotSupported, match: sub('not implemented') },
+  {
+    code: AgentRuntimeErrorType.CapabilityNotSupported,
+    match: sub('Image inference is not supported on this endpoint'),
+  },
+  { code: AgentRuntimeErrorType.CapabilityNotSupported, match: sub('不支持SSE调用方式') },
   { code: AgentRuntimeErrorType.CapabilityNotSupported, match: sub('The model is not a VLM') },
   { code: AgentRuntimeErrorType.CapabilityNotSupported, match: sub('is not a multimodal model') },
   {
@@ -729,6 +887,10 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
   {
     code: AgentRuntimeErrorType.CapabilityNotSupported,
     match: sub('does not support tool calling.'),
+  },
+  {
+    code: AgentRuntimeErrorType.CapabilityNotSupported,
+    match: sub('The model rejected this request. It may not support the input you sent'),
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -775,6 +937,8 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
     note: 'MiniMax',
   },
   { code: AgentRuntimeErrorType.ContentModeration, match: sub('sensitive_words_detected') },
+  { code: AgentRuntimeErrorType.ContentModeration, match: sub('sensitive words detected') },
+  { code: AgentRuntimeErrorType.ContentModeration, match: sub('请勿发送探测请求') },
   {
     code: AgentRuntimeErrorType.ContentModeration,
     match: sub('Output data may contain inappropriate content'),
@@ -884,6 +1048,68 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
   },
   { code: AgentRuntimeErrorType.InvalidRequestFormat, match: sub('Unknown name "definitions"') },
   { code: AgentRuntimeErrorType.InvalidRequestFormat, match: sub("function_response.response' (") },
+  // Malformed-request rejections harvested from the UpstreamHttpError fallback
+  // bucket. Mix of upstream-proxy quirks and request-shape rejections; a few may
+  // also surface harness request-building bugs (negative max_tokens, illegal
+  // content-block type) — classifying keeps them visible under a precise code
+  // instead of the bare HTTP fallback.
+  { code: AgentRuntimeErrorType.InvalidRequestFormat, match: sub('参数非法，取值范围') },
+  { code: AgentRuntimeErrorType.InvalidRequestFormat, match: sub('参数错误超过') },
+  { code: AgentRuntimeErrorType.InvalidRequestFormat, match: sub('Param Incorrect') },
+  { code: AgentRuntimeErrorType.InvalidRequestFormat, match: sub('tokenization failed') },
+  { code: AgentRuntimeErrorType.InvalidRequestFormat, match: sub('invalid image detail') },
+  { code: AgentRuntimeErrorType.InvalidRequestFormat, match: sub("invalid 'parameters' schema") },
+  { code: AgentRuntimeErrorType.InvalidRequestFormat, match: sub("can't find closing '}'") },
+  { code: AgentRuntimeErrorType.InvalidRequestFormat, match: sub('Unsupported parameter(s):') },
+  { code: AgentRuntimeErrorType.InvalidRequestFormat, match: sub('messages parameter is illegal') },
+  {
+    code: AgentRuntimeErrorType.InvalidRequestFormat,
+    match: sub('GenerateContentRequest proto is invalid'),
+    note: 'Gemini: malformed function_response / content in request',
+  },
+  { code: AgentRuntimeErrorType.InvalidRequestFormat, match: sub('max_tokens must be at least') },
+  { code: AgentRuntimeErrorType.InvalidRequestFormat, match: sub('Yêu cầu không hợp lệ') },
+  // More malformed/oversized-request rejections harvested from the
+  // UpstreamHttpError residue — provider-side validation + custom-proxy schema
+  // bridges, all upstream-side.
+  { code: AgentRuntimeErrorType.InvalidRequestFormat, match: sub('allowed: adaptive, disabled') },
+  {
+    code: AgentRuntimeErrorType.InvalidRequestFormat,
+    match: sub('invalid thinking: only type=enabled'),
+  },
+  {
+    code: AgentRuntimeErrorType.InvalidRequestFormat,
+    match: sub('Request contains an invalid argument'),
+  },
+  { code: AgentRuntimeErrorType.InvalidRequestFormat, match: sub("Input should be 'enabled'") },
+  { code: AgentRuntimeErrorType.InvalidRequestFormat, match: sub('参数非法。请检查文档') },
+  { code: AgentRuntimeErrorType.InvalidRequestFormat, match: sub('"code":"BAD_REQUEST') },
+  { code: AgentRuntimeErrorType.InvalidRequestFormat, match: sub('Field required') },
+  { code: AgentRuntimeErrorType.InvalidRequestFormat, match: sub('invalid image detail') },
+  { code: AgentRuntimeErrorType.InvalidRequestFormat, match: sub('field MaxTokens invalid') },
+  { code: AgentRuntimeErrorType.InvalidRequestFormat, match: sub('field ReasoningEffort invalid') },
+  { code: AgentRuntimeErrorType.InvalidRequestFormat, match: sub('request validation errors') },
+  {
+    code: AgentRuntimeErrorType.InvalidRequestFormat,
+    match: sub('function_declarations'),
+    note: 'custom gemini proxies mangle tool schema; lobehub-native schema bug fixed in #14740',
+  },
+  { code: AgentRuntimeErrorType.InvalidRequestFormat, match: sub('Request body too large for') },
+  {
+    code: AgentRuntimeErrorType.InvalidRequestFormat,
+    match: sub('error getting file type: failed to download file'),
+  },
+  {
+    code: AgentRuntimeErrorType.InvalidRequestFormat,
+    match: sub('Unable to download the file. Please verify the URL and try again.'),
+  },
+  {
+    code: AgentRuntimeErrorType.InvalidRequestFormat,
+    match: sub(
+      'The request is invalid for this endpoint. Check your model name, messages, tools, and parameters.',
+    ),
+  },
+  { code: AgentRuntimeErrorType.InvalidRequestFormat, match: sub('422 status code (no body)') },
 
   // ─────────────────────────────────────────────────────────────────────────
   // UserConfigError
@@ -916,6 +1142,15 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
     code: AgentRuntimeErrorType.UserConfigError,
     match: sub('is not allowed for this virtual key'),
   },
+  // Endpoint / base-URL misconfiguration: upstream returns a routing 404 for a
+  // path the user's proxy config never exposed.
+  { code: AgentRuntimeErrorType.UserConfigError, match: sub('page not found') },
+  { code: AgentRuntimeErrorType.UserConfigError, match: sub('No route for that URI') },
+  { code: AgentRuntimeErrorType.UserConfigError, match: sub('url.not_found') },
+  {
+    code: AgentRuntimeErrorType.UserConfigError,
+    match: sub('OpenAIException - {"detail":"Not Found"}'),
+  },
 
   // ─────────────────────────────────────────────────────────────────────────
   // UpstreamGatewayError — proxy / gateway-layer failure (openresty, litellm,
@@ -934,6 +1169,11 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
     code: AgentRuntimeErrorType.UpstreamGatewayError,
     match: sub('525 <!DOCTYPE html>'),
     note: 'Cloudflare 525 SSL handshake',
+  },
+  {
+    code: AgentRuntimeErrorType.UpstreamGatewayError,
+    match: sub('<!doctype html', { caseInsensitive: true }),
+    note: 'bare HTML error body from a proxy/gateway (no status prefix)',
   },
 
   // ─────────────────────────────────────────────────────────────────────────

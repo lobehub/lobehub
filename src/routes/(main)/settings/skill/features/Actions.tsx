@@ -1,12 +1,13 @@
-import { Button, DropdownMenu, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
+import { DropdownMenu, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
+import { Button, confirmModal } from '@lobehub/ui/base-ui';
 import { Space } from 'antd';
 import { MoreHorizontalIcon, Trash2 } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import McpSettingsModal from '@/features/MCP/MCPSettings/McpSettingsModal';
-import PluginDetailModal from '@/features/PluginDetailModal';
+import { createMcpSettingsModal } from '@/features/MCP/MCPSettings/McpSettingsModal';
+import { createPluginDetailModal } from '@/features/PluginDetailModal';
+import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useServerConfigStore } from '@/store/serverConfig';
@@ -33,8 +34,9 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
 
   const isCustomPlugin = type === 'customPlugin';
   const { t } = useTranslation('plugin');
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const plugin = useToolStore(pluginSelectors.getToolManifestById(identifier));
+  const { allowed: canCreate } = usePermission('create_content');
+  const { allowed: canEdit } = usePermission('edit_own_content');
   const [togglePlugin, isPluginEnabledInAgent] = useAgentStore((s) => [
     s.togglePlugin,
     agentSelectors.currentAgentPlugins(s).includes(identifier),
@@ -42,20 +44,25 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
   const hasSettings = pluginHelpers.isSettingSchemaNonEmpty(plugin?.settings);
 
   const [showModal, setModal] = useState(false);
-  const [mcpSettingsOpen, setMcpSettingsOpen] = useState(false);
 
   const isCommunityMCP = !isCustomPlugin && isMCP;
   const showConfigureButton = isCustomPlugin || isMCP || hasSettings;
 
   const configureButton = (
     <Button
+      disabled={!canEdit}
       onClick={() => {
+        if (!canEdit) return;
         if (isCustomPlugin) {
           setModal(true);
         } else if (isCommunityMCP) {
-          setMcpSettingsOpen(true);
+          createMcpSettingsModal({ identifier });
         } else {
-          setSettingsOpen(true);
+          createPluginDetailModal({
+            id: identifier,
+            schema: plugin?.settings,
+            tab: 'settings',
+          });
         }
       }}
     >
@@ -81,10 +88,12 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
               items={[
                 {
                   danger: true,
+                  disabled: !canEdit,
                   icon: <Icon icon={Trash2} />,
                   key: 'uninstall',
                   label: t('store.actions.uninstall'),
                   onClick: () => {
+                    if (!canEdit) return;
                     confirmModal({
                       okButtonProps: { danger: true },
                       onOk: async () => {
@@ -100,14 +109,16 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
                 },
               ]}
             >
-              <Button icon={MoreHorizontalIcon} loading={installing} />
+              <Button icon={<Icon icon={MoreHorizontalIcon} />} loading={installing} />
             </DropdownMenu>
           </Space.Compact>
         ) : (
           <Button
+            disabled={!canCreate || !canEdit}
             loading={installing}
             size={mobile ? 'small' : undefined}
             onClick={async () => {
+              if (!canCreate || !canEdit) return;
               if (isMCP) {
                 await installMCPPlugin(identifier);
                 await togglePlugin(identifier);
@@ -118,20 +129,6 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
           </Button>
         )}
       </Flexbox>
-      <PluginDetailModal
-        id={identifier}
-        open={settingsOpen}
-        schema={plugin?.settings}
-        tab="settings"
-        onClose={() => {
-          setSettingsOpen(false);
-        }}
-      />
-      <McpSettingsModal
-        identifier={identifier}
-        open={mcpSettingsOpen}
-        onClose={() => setMcpSettingsOpen(false)}
-      />
     </>
   );
 });

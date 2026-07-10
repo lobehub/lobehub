@@ -1,5 +1,6 @@
 'use client';
 
+import { normalizeAskUserQuestions } from '@lobechat/shared-tool-ui/ask-user';
 import type { BuiltinRenderProps } from '@lobechat/types';
 import { Flexbox, Icon, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
@@ -134,7 +135,7 @@ const AskUserQuestion = memo<
   BuiltinRenderProps<AskUserQuestionArgs, AskUserQuestionState, unknown>
 >(({ args, pluginError, pluginState }) => {
   const { t } = useTranslation('plugin');
-  const questions = args?.questions ?? [];
+  const questions = normalizeAskUserQuestions(args);
   const answers = pluginState?.askUserAnswers;
   const freeform = answers?.['__freeform__'];
   const freeformText = typeof freeform === 'string' ? freeform.trim() : '';

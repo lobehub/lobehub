@@ -86,6 +86,48 @@ describe('Operation Actions', () => {
       expect(merged.filesPreview[0]).toMatchObject({ id: 'f1', name: 'a.png' });
       expect(merged.filesPreview[2]).toMatchObject({ id: 'f3', mimeType: 'application/pdf' });
     });
+
+    it('should preserve context selections from queued messages', () => {
+      const merged = mergeQueuedMessages([
+        {
+          content: 'first',
+          createdAt: 1,
+          id: 'q1',
+          interruptMode: 'soft',
+          metadata: {
+            contextSelections: [
+              {
+                content: 'const first = true;',
+                filePath: 'src/first.ts',
+                id: 'selection-1',
+                source: 'code',
+              },
+            ],
+          },
+        },
+        {
+          content: 'second',
+          createdAt: 2,
+          id: 'q2',
+          interruptMode: 'soft',
+          metadata: {
+            contextSelections: [
+              {
+                content: 'const second = true;',
+                filePath: 'src/second.ts',
+                id: 'selection-2',
+                source: 'code',
+              },
+            ],
+          },
+        },
+      ]);
+
+      expect(merged.metadata?.contextSelections).toEqual([
+        expect.objectContaining({ filePath: 'src/first.ts', id: 'selection-1' }),
+        expect.objectContaining({ filePath: 'src/second.ts', id: 'selection-2' }),
+      ]);
+    });
   });
 
   describe('startOperation', () => {
@@ -1119,6 +1161,31 @@ describe('Operation Actions', () => {
 
       expect(context.scope).toBe('group');
       expect(context.isNew).toBe(true);
+    });
+
+    it('should preserve documentId from operation context (page scope)', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      let operationId: string;
+
+      act(() => {
+        operationId = result.current.startOperation({
+          type: 'sendMessage',
+          context: {
+            agentId: 'page-agent',
+            documentId: 'doc-1',
+            scope: 'page',
+          },
+        }).operationId;
+      });
+
+      const context = result.current.internal_getConversationContext({ operationId: operationId! });
+
+      // Dropping documentId here sinks page-scoped optimistic writes into the
+      // `page_<agent>_new` bucket while the editor reads `page_<agent>_doc-1`,
+      // leaving the copilot stuck on the loading skeleton.
+      expect(context.documentId).toBe('doc-1');
+      expect(context.scope).toBe('page');
     });
 
     it('should fallback to global state when no operationId provided', () => {

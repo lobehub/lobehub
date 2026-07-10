@@ -1,17 +1,22 @@
 'use client';
 
 import type { GitFileDiffStatus } from '@lobechat/electron-client-ipc';
+import { nanoid } from '@lobechat/utils';
 import { ActionIcon, copyToClipboard, Flexbox, PatchDiff } from '@lobehub/ui';
-import { Popconfirm } from 'antd';
-import { createStaticStyles } from 'antd-style';
+import { confirmModal } from '@lobehub/ui/base-ui';
+import { createStaticStyles, cssVar as themeCssVar } from 'antd-style';
 import { CopyIcon, LocateFixedIcon, Undo2Icon } from 'lucide-react';
 import path from 'path-browserify-esm';
-import { memo, type MouseEvent, useCallback, useState } from 'react';
+import { memo, type MouseEvent, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { message } from '@/components/AntdStaticMethods';
-import { electronGitService } from '@/services/electron/git';
+import { gitService } from '@/services/git';
+import { useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
+
+import type { DiffSelectedLineRange } from './selection';
+import { buildCodeContextSelection } from './selection';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   additions: css`
@@ -20,9 +25,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   // Hover-revealed row actions, anchored to the right edge with a gradient
   // mask that fades in from transparent → row hover-bg so any path/stats
   // text behind the icons softly disappears instead of being abruptly
-  // overlapped. `:has(data-force-visible='true')` keeps the actions
-  // up while a revert Popconfirm is open — otherwise the trigger would
-  // collapse as soon as the cursor entered the popover.
+  // overlapped.
   actions: css`
     pointer-events: none;
 
@@ -41,7 +44,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     transition: opacity 0.15s;
 
-    &:has([data-force-visible='true']),
     [data-review-row]:hover & {
       pointer-events: auto;
       opacity: 1;
@@ -115,21 +117,79 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
+const reviewDiffUnsafeCSS = `
+  :host {
+    --diffs-dark-bg: transparent !important;
+    --diffs-light-bg: transparent !important;
+    --diffs-gap-fallback: 8px;
+    --diffs-added-light: ${themeCssVar.colorSuccessHover};
+    --diffs-added-dark: ${themeCssVar.colorSuccessBorderHover};
+    --diffs-modified-light: ${themeCssVar.colorInfoHover};
+    --diffs-modified-dark: ${themeCssVar.colorInfoBorderHover};
+    --diffs-deleted-light: ${themeCssVar.colorErrorHover};
+    --diffs-deleted-dark: ${themeCssVar.colorErrorBorderHover};
+  }
+
+  [data-gutter-buffer] {
+    opacity: 0.2 !important;
+  }
+
+  [data-code] {
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+  }
+
+  [data-gutter] {
+    backdrop-filter: blur(16px) !important;
+  }
+
+  [data-gutter-utility-slot] [data-utility-button] {
+    width: 18px !important;
+    min-width: 18px !important;
+    height: 18px !important;
+    margin-right: calc(1ch - 8px) !important;
+    border: 1px solid #0969da !important;
+    border-radius: 4px !important;
+    background: #0969da !important;
+    background-color: #0969da !important;
+    color: #fff !important;
+    fill: currentColor !important;
+    box-shadow: 0 1px 3px ${themeCssVar.colorFillSecondary} !important;
+  }
+
+  [data-gutter-utility-slot] [data-utility-button]:is(:hover, :focus-visible, :active) {
+    border-color: #0860ca !important;
+    background: #0860ca !important;
+    background-color: #0860ca !important;
+    color: #fff !important;
+    fill: currentColor !important;
+  }
+
+  [data-gutter-utility-slot] [data-utility-button] [data-icon] {
+    width: 10px !important;
+    height: 10px !important;
+  }
+`;
+
 interface FileItemHeaderProps {
   additions: number;
   deletions: number;
   filePath: string;
+  /** Hide the leading directory portion — used in tree layout where the
+   * containing folders are already shown by the tree, so the row only needs
+   * the bare filename. */
+  hideDir?: boolean;
   /** Called after a successful revert so the parent can refresh the patch list. */
   onReverted?: () => void;
   /** When provided, enables the per-file revert button (unstaged mode only). */
-  revertContext?: { workingDirectory: string };
+  revertContext?: { deviceId?: string; workingDirectory: string };
   // Status reserved for future use (e.g. dim deleted entries) — keep on the
   // shape so the parent doesn't need to re-derive it later.
   status: GitFileDiffStatus;
 }
 
 export const FileItemHeader = memo<FileItemHeaderProps>(
-  ({ filePath, additions, deletions, revertContext, onReverted }) => {
+  ({ filePath, additions, deletions, hideDir, revertContext, onReverted }) => {
     const { t } = useTranslation('chat');
     const revealInFilesTab = useGlobalStore((s) => s.revealInFilesTab);
 
@@ -155,43 +215,50 @@ export const FileItemHeader = memo<FileItemHeaderProps>(
       [filePath, revealInFilesTab],
     );
 
-    const [confirmOpen, setConfirmOpen] = useState(false);
-    const [reverting, setReverting] = useState(false);
-
-    const handleConfirmRevert = useCallback(async () => {
-      if (!revertContext) return;
-      setReverting(true);
-      try {
-        const result = await electronGitService.revertGitFile({
-          filePath,
-          path: revertContext.workingDirectory,
+    const handleRevert = useCallback(
+      (event: MouseEvent<HTMLDivElement>) => {
+        event.stopPropagation();
+        if (!revertContext) return;
+        confirmModal({
+          cancelText: t('workingPanel.review.revert.confirm.cancel'),
+          content: t('workingPanel.review.revert.confirm.description'),
+          okButtonProps: { danger: true },
+          okText: t('workingPanel.review.revert.confirm.ok'),
+          onOk: async () => {
+            try {
+              const result = await gitService.revertGitFile({
+                deviceId: revertContext.deviceId,
+                filePath,
+                path: revertContext.workingDirectory,
+              });
+              if (result.success) {
+                message.success(t('workingPanel.review.revert.success', { fileName }));
+                onReverted?.();
+              } else {
+                message.error(
+                  t('workingPanel.review.revert.failed', {
+                    error: result.error || 'unknown error',
+                  }),
+                );
+              }
+            } catch (error: any) {
+              message.error(
+                t('workingPanel.review.revert.failed', {
+                  error: error?.message || String(error),
+                }),
+              );
+            }
+          },
+          title: t('workingPanel.review.revert.confirm.title'),
         });
-        if (result.success) {
-          message.success(t('workingPanel.review.revert.success', { filePath }));
-          onReverted?.();
-        } else {
-          message.error(
-            t('workingPanel.review.revert.failed', {
-              error: result.error || 'unknown error',
-            }),
-          );
-        }
-      } catch (error: any) {
-        message.error(
-          t('workingPanel.review.revert.failed', {
-            error: error?.message || String(error),
-          }),
-        );
-      } finally {
-        setReverting(false);
-        setConfirmOpen(false);
-      }
-    }, [filePath, onReverted, revertContext, t]);
+      },
+      [fileName, filePath, onReverted, revertContext, t],
+    );
 
     return (
       <div className={styles.header}>
         <span className={styles.pathWrapper} title={filePath}>
-          {dir && (
+          {!hideDir && dir && (
             // bdi keeps the dir's visual order LTR while the span is
             // direction: rtl for head-side truncation of leading segments.
             <span className={styles.dir}>
@@ -222,29 +289,13 @@ export const FileItemHeader = memo<FileItemHeaderProps>(
             onClick={handleReveal}
           />
           {revertContext && (
-            <Popconfirm
-              arrow={false}
-              cancelText={t('workingPanel.review.revert.confirm.cancel')}
-              description={t('workingPanel.review.revert.confirm.description', { filePath })}
-              okButtonProps={{ danger: true, loading: reverting, type: 'primary' }}
-              okText={t('workingPanel.review.revert.confirm.ok')}
-              open={confirmOpen}
-              placement={'bottomRight'}
-              title={t('workingPanel.review.revert.confirm.title')}
-              onCancel={() => setConfirmOpen(false)}
-              onConfirm={handleConfirmRevert}
-              onOpenChange={setConfirmOpen}
-            >
-              <span onClick={(event) => event.stopPropagation()}>
-                <ActionIcon
-                  className={`${styles.rowAction} ${styles.revertDanger}`}
-                  data-force-visible={confirmOpen}
-                  icon={Undo2Icon}
-                  size={'small'}
-                  title={t('workingPanel.review.revert')}
-                />
-              </span>
-            </Popconfirm>
+            <ActionIcon
+              className={`${styles.rowAction} ${styles.revertDanger}`}
+              icon={Undo2Icon}
+              size={'small'}
+              title={t('workingPanel.review.revert')}
+              onClick={handleRevert}
+            />
           )}
         </Flexbox>
       </div>
@@ -265,11 +316,55 @@ interface FileItemBodyProps {
   truncated: boolean;
   viewMode: 'unified' | 'split';
   wordWrap: boolean;
+  workingDirectory: string;
 }
 
 const FileItemBody = memo<FileItemBodyProps>(
-  ({ filePath, patch, isBinary, truncated, expanded, viewMode, wordWrap, textDiff }) => {
+  ({
+    filePath,
+    patch,
+    isBinary,
+    truncated,
+    expanded,
+    viewMode,
+    workingDirectory,
+    wordWrap,
+    textDiff,
+  }) => {
     const { t } = useTranslation('chat');
+    const addChatContextSelection = useFileStore((s) => s.addChatContextSelection);
+    const fileName = path.basename(filePath);
+    const ext = path.extname(filePath).slice(1).toLowerCase();
+    const language = ext || undefined;
+
+    const diffOptions = useMemo(
+      () => ({
+        enableGutterUtility: true,
+        enableLineSelection: true,
+        lineDiffType: textDiff ? ('word-alt' as const) : ('none' as const),
+        onGutterUtilityClick: (range: DiffSelectedLineRange) => {
+          const selection = buildCodeContextSelection({
+            filePath,
+            language,
+            patch,
+            range,
+            workingDirectory,
+          });
+
+          if (!selection) return;
+
+          addChatContextSelection({
+            ...selection,
+            id: `code-selection-${nanoid(6)}`,
+            type: 'text',
+          });
+          message.success(t('workingPanel.review.addSelectionToContext.success'));
+        },
+        overflow: wordWrap ? ('wrap' as const) : ('scroll' as const),
+        unsafeCSS: reviewDiffUnsafeCSS,
+      }),
+      [addChatContextSelection, filePath, language, patch, t, textDiff, wordWrap, workingDirectory],
+    );
 
     if (!expanded) return null;
 
@@ -277,21 +372,16 @@ const FileItemBody = memo<FileItemBodyProps>(
     if (truncated) return <div className={styles.empty}>{t('workingPanel.review.tooLarge')}</div>;
     if (!patch) return <div className={styles.empty}>{t('workingPanel.review.error')}</div>;
 
-    const fileName = path.basename(filePath);
-    const ext = path.extname(filePath).slice(1).toLowerCase();
-
     return (
       <PatchDiff
+        diffOptions={diffOptions}
         fileName={fileName}
-        language={ext || undefined}
+        language={language}
         patch={patch}
         showHeader={false}
+        style={{ borderRadius: 0 }}
         variant={'borderless'}
         viewMode={viewMode}
-        diffOptions={{
-          lineDiffType: textDiff ? 'word-alt' : 'none',
-          overflow: wordWrap ? 'wrap' : 'scroll',
-        }}
       />
     );
   },

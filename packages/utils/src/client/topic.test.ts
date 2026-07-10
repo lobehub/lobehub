@@ -2,7 +2,14 @@ import type { ChatTopic } from '@lobechat/types';
 import dayjs from 'dayjs';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
-import { groupTopicsByStatus, groupTopicsByTime, groupTopicsByUpdatedTime } from './topic';
+import {
+  getTopicWorkingDirectoryEffectivePath,
+  getTopicWorkingDirectorySourcePath,
+  groupTopicsByProject,
+  groupTopicsByStatus,
+  groupTopicsByTime,
+  groupTopicsByUpdatedTime,
+} from './topic';
 
 // Mock current date to ensure consistent test results
 const NOW = '2024-01-15T12:00:00Z';
@@ -213,6 +220,101 @@ describe('groupTopicsByUpdatedTime', () => {
     // By updatedAt: grouped under yesterday
     expect(byUpdated[0].id).toBe('yesterday');
   });
+
+  it('should group and sort by sortUpdatedAt (activity time) when present, ignoring updatedAt', () => {
+    const lastYear = dayjs().subtract(1, 'year').valueOf();
+    const today = dayjs().valueOf();
+
+    // Row was edited last year (updatedAt) but had message activity today
+    // (sortUpdatedAt) — the sidebar must group it under "today". (LOBE-11543)
+    const topic: ChatTopic = {
+      id: 'active',
+      title: 'Recently active',
+      createdAt: lastYear,
+      updatedAt: lastYear,
+      sortUpdatedAt: today,
+    };
+
+    const result = groupTopicsByUpdatedTime([topic]);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe('today');
+  });
+
+  it('should order rows by sortUpdatedAt (activity) over updatedAt (row edit time)', () => {
+    const base = dayjs().subtract(1, 'month').valueOf();
+    // `a` has an older row edit time but newer activity → must sort first.
+    const a: ChatTopic = {
+      id: 'a',
+      title: 'Older edit, newer activity',
+      createdAt: base,
+      updatedAt: dayjs().hour(9).valueOf(),
+      sortUpdatedAt: dayjs().hour(11).valueOf(),
+    };
+    const b: ChatTopic = {
+      id: 'b',
+      title: 'Newer edit, older activity',
+      createdAt: base,
+      updatedAt: dayjs().hour(10).valueOf(),
+      sortUpdatedAt: dayjs().hour(10).valueOf(),
+    };
+
+    const result = groupTopicsByUpdatedTime([b, a]);
+
+    expect(result[0].children.map((t) => t.id)).toEqual(['a', 'b']);
+  });
+});
+
+describe('working directory topic helpers', () => {
+  const createTopic = (
+    id: string,
+    metadata: ChatTopic['metadata'],
+    updatedAt: number = 0,
+  ): ChatTopic => ({
+    createdAt: updatedAt,
+    id,
+    metadata,
+    title: id,
+    updatedAt,
+  });
+
+  it('preserves source and effective paths for worktree topics', () => {
+    const topic = createTopic('worktree', {
+      workingDirectory: '/repo-fix',
+      workingDirectoryConfig: {
+        git: { activeWorktree: '/repo-fix', branch: 'fix', isWorktree: true },
+        path: '/repo',
+        repoType: 'git',
+      },
+    });
+
+    expect(getTopicWorkingDirectorySourcePath(topic)).toBe('/repo');
+    expect(getTopicWorkingDirectoryEffectivePath(topic)).toBe('/repo-fix');
+  });
+
+  it('groups worktree topics under the source project', () => {
+    const topics = [
+      createTopic(
+        'worktree',
+        {
+          workingDirectory: '/repo-fix',
+          workingDirectoryConfig: {
+            git: { activeWorktree: '/repo-fix', branch: 'fix', isWorktree: true },
+            path: '/repo',
+            repoType: 'git',
+          },
+        },
+        2,
+      ),
+      createTopic('source', { workingDirectory: '/repo' }, 1),
+    ];
+
+    const result = groupTopicsByProject(topics, 'updatedAt');
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({ id: 'project:/repo', title: 'repo' });
+    expect(result[0].children.map((topic) => topic.id)).toEqual(['worktree', 'source']);
+  });
 });
 
 describe('groupTopicsByStatus', () => {
@@ -232,7 +334,7 @@ describe('groupTopicsByStatus', () => {
     expect(groupTopicsByStatus([], 'updatedAt')).toEqual([]);
   });
 
-  it('should order groups by fixed priority: waitingForHuman, running, then active', () => {
+  it('should order groups by fixed priority: pending, running, then active', () => {
     const topics = [
       createTopic('a', 'active'),
       createTopic('r', 'running'),
@@ -241,7 +343,30 @@ describe('groupTopicsByStatus', () => {
 
     const result = groupTopicsByStatus(topics, 'updatedAt');
 
-    expect(result.map((g) => g.id)).toEqual(['waitingForHuman', 'running', 'active']);
+    expect(result.map((g) => g.id)).toEqual(['pending', 'running', 'active']);
+  });
+
+  it('should collapse waitingForHuman and failed into the pending bucket', () => {
+    const topics = [
+      createTopic('w', 'waitingForHuman', 2),
+      createTopic('f', 'failed', 1),
+      createTopic('a', 'active'),
+    ];
+
+    const result = groupTopicsByStatus(topics, 'updatedAt');
+
+    expect(result.map((g) => g.id)).toEqual(['pending', 'active']);
+    expect(result[0].children.map((t) => t.id)).toEqual(['w', 'f']);
+  });
+
+  it('should bucket an unread completion as pending while read completions stay completed', () => {
+    const topics = [createTopic('unread', 'unread'), createTopic('read', 'completed')];
+
+    const result = groupTopicsByStatus(topics, 'updatedAt');
+
+    expect(result.map((g) => g.id)).toEqual(['pending', 'completed']);
+    expect(result[0].children.map((t) => t.id)).toEqual(['unread']);
+    expect(result[1].children.map((t) => t.id)).toEqual(['read']);
   });
 
   it('should bucket topics without a status as active', () => {
@@ -263,7 +388,7 @@ describe('groupTopicsByStatus', () => {
 
     const result = groupTopicsByStatus(topics, 'updatedAt');
 
-    expect(result.map((g) => g.id)).toEqual(['waitingForHuman', 'paused', 'completed']);
+    expect(result.map((g) => g.id)).toEqual(['pending', 'paused', 'completed']);
   });
 
   it('should sort topics inside a group by the chosen field desc', () => {
@@ -288,11 +413,11 @@ describe('groupTopicsByStatus', () => {
     expect(result[1].children.map((t) => t.id)).toEqual(['idle']);
   });
 
-  it('should keep a loading topic in waitingForHuman (it outranks the running overlay)', () => {
+  it('should keep a loading topic in pending (it outranks the running overlay)', () => {
     const topics = [createTopic('waiting', 'waitingForHuman')];
 
     const result = groupTopicsByStatus(topics, 'updatedAt', new Set(['waiting']));
 
-    expect(result.map((g) => g.id)).toEqual(['waitingForHuman']);
+    expect(result.map((g) => g.id)).toEqual(['pending']);
   });
 });

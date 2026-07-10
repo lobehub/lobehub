@@ -168,7 +168,7 @@ export const LobeAgentManifest: BuiltinToolManifest = {
     {
       description: 'Clear todo items. Can clear only completed items or all items.',
       name: LobeAgentApiName.clearTodos,
-      humanIntervention: 'always',
+      humanIntervention: 'required',
       renderDisplayControl: 'expand',
       parameters: {
         properties: {
@@ -179,6 +179,47 @@ export const LobeAgentManifest: BuiltinToolManifest = {
           },
         },
         required: ['mode'],
+        type: 'object',
+      },
+    },
+
+    // ==================== Ask User Question ====================
+    {
+      description: 'Ask the user one or more clarifying questions with multiple-choice options.',
+      humanIntervention: 'always',
+      name: LobeAgentApiName.askUserQuestion,
+      renderDisplayControl: 'collapsed',
+      parameters: {
+        properties: {
+          questions: {
+            items: {
+              properties: {
+                header: { type: 'string' },
+                multiSelect: { type: 'boolean' },
+                options: {
+                  items: {
+                    properties: {
+                      description: { type: 'string' },
+                      label: { type: 'string' },
+                    },
+                    required: ['label', 'description'],
+                    type: 'object',
+                  },
+                  maxItems: 4,
+                  minItems: 2,
+                  type: 'array',
+                },
+                question: { type: 'string' },
+              },
+              required: ['header', 'question', 'options'],
+              type: 'object',
+            },
+            maxItems: 4,
+            minItems: 1,
+            type: 'array',
+          },
+        },
+        required: ['questions'],
         type: 'object',
       },
     },
@@ -216,51 +257,6 @@ export const LobeAgentManifest: BuiltinToolManifest = {
           },
         },
         required: ['description', 'instruction'],
-        type: 'object',
-      },
-    },
-    {
-      description:
-        'Dispatch one or more sub-agents in parallel. Each sub-agent runs in an isolated context. Use this when several independent investigations / multi-step tasks should proceed concurrently.',
-      name: LobeAgentApiName.callSubAgents,
-      parameters: {
-        properties: {
-          tasks: {
-            description: 'Array of sub-agents to dispatch.',
-            items: {
-              properties: {
-                description: {
-                  description: 'Brief description of what this sub-agent does (shown in UI).',
-                  type: 'string',
-                },
-                instruction: {
-                  description: 'Detailed instruction/prompt for the sub-agent execution.',
-                  type: 'string',
-                },
-                inheritMessages: {
-                  description:
-                    'Whether to inherit context messages from the parent conversation. Default is false.',
-                  type: 'boolean',
-                },
-                ...(isDesktop && {
-                  runInClient: {
-                    description:
-                      'Whether to run on the desktop client (for local file/shell access). MUST be true when the sub-agent requires local-system tools. Default is false (server execution).',
-                    type: 'boolean',
-                  },
-                }),
-                timeout: {
-                  description: 'Optional timeout in milliseconds. Default is 30 minutes.',
-                  type: 'number',
-                },
-              },
-              required: ['description', 'instruction'],
-              type: 'object',
-            },
-            type: 'array',
-          },
-        },
-        required: ['tasks'],
         type: 'object',
       },
     },

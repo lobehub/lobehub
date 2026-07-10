@@ -208,9 +208,22 @@ const getBlockHasTools =
     return !!tools && tools.length > 0;
   };
 
+/** 1-based position of a verify message among all verify messages in the thread. */
+const getVerifyOrdinal = (id: string) => (s: State) => {
+  let ordinal = 0;
+  for (const message of s.displayMessages) {
+    if (message.role === 'verify') {
+      ordinal += 1;
+      if (message.id === id) return ordinal;
+    }
+  }
+  return ordinal || 1;
+};
+
 export const dataSelectors = {
   currentTopicSummary,
   dbMessages,
+  getVerifyOrdinal,
   displayMessageIds,
   displayMessages,
   findLastMessageId,

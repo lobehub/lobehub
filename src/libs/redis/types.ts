@@ -1,15 +1,7 @@
 export type RedisKey = string | Buffer;
 export type RedisValue = string | Buffer | number;
 
-export type RedisConfig = {
-  database?: number;
-  enabled: boolean;
-  password?: string;
-  prefix: string;
-  tls: boolean;
-  url: string;
-  username?: string;
-};
+export type { RedisConfig } from '@lobechat/types';
 
 export interface SetOptions {
   ex?: number;
@@ -24,6 +16,13 @@ export interface SetOptions {
 
 export type RedisSetResult = 'OK' | null | string;
 export type RedisMSetArgument = Record<string, RedisValue> | Map<RedisKey, RedisValue>;
+export type RedisScanResult = [cursor: string, keys: string[]];
+export type RedisScanArgs =
+  | []
+  | ['MATCH', string]
+  | ['COUNT', number]
+  | ['MATCH', string, 'COUNT', number]
+  | ['COUNT', number, 'MATCH', string];
 
 /**
  * Chainable pipeline builder. Commands are buffered and sent in a single round-trip on exec().
@@ -58,6 +57,7 @@ export interface RedisClient {
   mget: (...keys: RedisKey[]) => Promise<(string | null)[]>;
   mset: (values: RedisMSetArgument) => Promise<'OK'>;
   pipeline: () => RedisPipeline;
+  scan: (cursor: string, ...args: RedisScanArgs) => Promise<RedisScanResult>;
   set: (key: RedisKey, value: RedisValue, options?: SetOptions) => Promise<RedisSetResult>;
   setex: (key: RedisKey, seconds: number, value: RedisValue) => Promise<'OK'>;
   ttl: (key: RedisKey) => Promise<number>;

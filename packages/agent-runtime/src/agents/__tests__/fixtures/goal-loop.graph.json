@@ -1,0 +1,154 @@
+{
+  "description": "Plan, execute, and verify a /goal request until the verifier marks it complete.",
+  "edges": [
+    {
+      "from": "__root__",
+      "to": "plan",
+      "instruction": "Read and search only. Convert the user /goal request into concrete goals. Do not modify files.",
+      "input": {
+        "fields": [{ "from": "__root__", "field": "query" }]
+      },
+      "output": {
+        "instruction": "Extract the planned goals.",
+        "fields": [{ "field": "goals" }]
+      }
+    },
+    {
+      "from": "plan",
+      "to": "work",
+      "instruction": "Complete the planned goals. Work through the provided goals and summarize what changed.",
+      "input": {
+        "fields": [{ "from": "plan", "field": "goals" }]
+      },
+      "output": {
+        "instruction": "Extract a concise work summary.",
+        "fields": [{ "field": "summary" }]
+      }
+    },
+    {
+      "from": "work",
+      "to": "verify",
+      "instruction": "Verify whether the work satisfies the planned goals. Return fin=true only when all goals are complete.",
+      "input": {
+        "fields": [
+          { "from": "plan", "field": "goals" },
+          { "from": "work", "field": "summary" }
+        ]
+      },
+      "output": {
+        "instruction": "Extract the verification review.",
+        "fields": [{ "field": "review" }]
+      }
+    },
+    {
+      "from": "verify",
+      "to": "work",
+      "condition": {
+        "type": "object",
+        "properties": {
+          "review": {
+            "type": "object",
+            "properties": {
+              "fin": {
+                "const": false
+              }
+            },
+            "required": ["fin"]
+          }
+        },
+        "required": ["review"]
+      },
+      "instruction": "Continue working on the unfinished goals from the verifier review. Focus only on review.unfinish.",
+      "input": {
+        "fields": [
+          { "from": "verify", "field": "review" },
+          { "from": "work", "field": "summary" }
+        ]
+      },
+      "output": {
+        "instruction": "Extract the updated work summary.",
+        "fields": [{ "field": "summary" }]
+      },
+      "maxTraversals": 3
+    }
+  ],
+  "fields": {
+    "query": {
+      "desc": "Original user /goal request.",
+      "schema": {
+        "type": "string"
+      }
+    },
+    "goals": {
+      "desc": "Concrete goals planned from the user request.",
+      "schema": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "desc": {
+              "type": "string"
+            }
+          },
+          "required": ["name", "desc"]
+        }
+      }
+    },
+    "summary": {
+      "desc": "Worker summary describing completed work and remaining risk.",
+      "schema": {
+        "type": "string"
+      }
+    },
+    "review": {
+      "desc": "Verifier decision and unfinished goals.",
+      "schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "fin": {
+            "type": "boolean"
+          },
+          "unfinish": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "desc": {
+                  "type": "string"
+                }
+              },
+              "required": ["name", "desc"]
+            }
+          }
+        },
+        "required": ["fin", "unfinish"]
+      }
+    }
+  },
+  "maxInstructionCount": 64,
+  "name": "goal-loop",
+  "nodes": {
+    "plan": {
+      "type": "agent",
+      "allowedToolApiNames": ["read", "search"],
+      "maxAgentSteps": 8
+    },
+    "work": {
+      "type": "agent",
+      "maxAgentSteps": 24
+    },
+    "verify": {
+      "type": "llm"
+    }
+  },
+  "terminal": "verify"
+}

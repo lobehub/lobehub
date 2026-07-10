@@ -3,7 +3,7 @@
 import { MAX_ONBOARDING_STEPS } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import { memo, useCallback, useEffect, useRef } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router';
 
 import Loading from '@/components/Loading/BrandTextLoading';
 import ModeSwitch from '@/features/Onboarding/components/ModeSwitch';
@@ -47,9 +47,9 @@ const ClassicOnboardingPage = memo(() => {
       s.goToNextStep,
       s.goToPreviousStep,
     ]);
-  const enableKlavis = useServerConfigStore(serverConfigSelectors.enableKlavis);
+  const enableComposio = useServerConfigStore(serverConfigSelectors.enableComposio);
   const serverConfigInit = useServerConfigStore((s) => s.serverConfigInit);
-  const shouldSkipProSettingsStep = serverConfigInit && !enableKlavis;
+  const shouldSkipProSettingsStep = serverConfigInit && !enableComposio;
   const autoSkippedStepKeysRef = useRef<Set<string>>(new Set());
   const viewedStepKeysRef = useRef<Set<string>>(new Set());
 

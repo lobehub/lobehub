@@ -1,0 +1,136 @@
+---
+title: Configuring Cloud Sandbox
+description: Configure the built-in Cloud Sandbox provider, including Market and self-hosted Onlyboxes.
+tags:
+  - Cloud Sandbox
+  - Onlyboxes
+  - Self-hosting
+---
+
+# Configuring Cloud Sandbox
+
+Cloud Sandbox powers the built-in code execution, shell command, file operation, and file export tools. By default, LobeHub uses the Market sandbox. Self-hosted deployments can switch the same tool surface to an Onlyboxes-compatible sandbox provider.
+
+## Core Environment Variables
+
+### `SANDBOX_PROVIDER`
+
+- Type: Optional
+- Description: Selects the server-side sandbox provider.
+- Default: `market`
+- Example: `onlyboxes`
+
+Supported values:
+
+- `market`: Use the existing Market sandbox.
+- `onlyboxes`: Use an Onlyboxes-compatible self-hosted sandbox console.
+
+### `MARKET_BASE_URL`
+
+- Type: Optional
+- Description: Base URL of the Market service. Leave it unset when using the official Market; set it only when connecting to a self-hosted or dedicated Market service.
+- Default: `https://market.lobehub.com`
+- Example: `https://market.example.com`
+
+### `MARKET_TRUSTED_CLIENT_ID`
+
+- Type: Optional
+- Description: Market Trusted Client ID used by the LobeHub server to call Market capabilities on behalf of the current user. It must be registered by the target Market service.
+- Default: -
+- Example: `lobechat-com`
+
+### `MARKET_TRUSTED_CLIENT_SECRET`
+
+- Type: Optional
+- Description: Shared secret for the Market Trusted Client. It must match the target Market service configuration.
+- Default: -
+- Example: `your-market-trusted-client-secret`
+
+### `ONLYBOXES_BASE_URL`
+
+- Type: Required when `SANDBOX_PROVIDER=onlyboxes`
+- Description: Base URL of the Onlyboxes console API. Do not include `/api/v1`.
+- Default: -
+- Example: `https://onlyboxes.example.com`
+
+### `ONLYBOXES_JIT_SIGNING_KEY`
+
+- Type: Required when `SANDBOX_PROVIDER=onlyboxes`
+- Description: HMAC signing key used to mint Onlyboxes MCP JIT bearer tokens. It must match the Onlyboxes console `CONSOLE_JIT_SIGNING_KEY`.
+- Default: -
+- Example: `onlyboxes-jit-signing-secret`
+
+### `ONLYBOXES_JIT_ISSUER`
+
+- Type: Optional
+- Description: Issuer used in Onlyboxes JIT token claims.
+- Default: `APP_URL`
+- Example: `https://lobehub.example.com`
+
+### `ONLYBOXES_JIT_TTL_SEC`
+
+- Type: Optional
+- Description: Lifetime of each Onlyboxes JIT token minted by LobeHub.
+- Default: `1800`
+- Example: `900`
+
+### `ONLYBOXES_LEASE_TTL_SEC`
+
+- Type: Optional
+- Description: Lease duration for persistent terminal sessions created by the Cloud Sandbox provider.
+- Default: `900`
+- Example: `3600`
+
+## Market Configuration
+
+By default, LobeHub uses the official Market sandbox and does not require extra sandbox configuration:
+
+```bash
+# SANDBOX_PROVIDER=market
+```
+
+To explicitly use Market, or to connect to a self-hosted or dedicated Market service, configure:
+
+```bash
+SANDBOX_PROVIDER=market
+MARKET_BASE_URL=https://market.example.com
+```
+
+If that Market service requires the LobeHub server to call sandbox, credential, or skill capabilities on behalf of the current user, also configure Trusted Client credentials:
+
+```bash
+MARKET_TRUSTED_CLIENT_ID=lobechat-com
+MARKET_TRUSTED_CLIENT_SECRET=your-market-trusted-client-secret
+```
+
+`MARKET_TRUSTED_CLIENT_ID` must be registered in the Market service's trusted client allowlist, and `MARKET_TRUSTED_CLIENT_SECRET` must match the shared secret configured on the Market service. Without Trusted Client credentials, Market capabilities that require authentication continue to use the existing user authorization flow.
+
+## Onlyboxes Runtime Requirements
+
+The configured Onlyboxes worker should expose `terminalExec` and `terminalResource`. LobeHub uses `terminalExec` as the compatibility layer for shell commands, code execution, and file operations, and uses `terminalResource` for file export through a pre-signed upload URL.
+
+For feature parity with the Market sandbox, the terminal runtime image should include:
+
+- `python3`, used by file operation wrappers and Python execution
+- `node`, used by JavaScript execution
+- `npx` with access to `tsx`, used by TypeScript execution
+- Standard shell utilities such as `base64`, `find`, and `grep`
+
+Minimum configuration for using Onlyboxes:
+
+```bash
+SANDBOX_PROVIDER=onlyboxes
+ONLYBOXES_BASE_URL=https://onlyboxes.example.com
+ONLYBOXES_JIT_SIGNING_KEY=onlyboxes-jit-signing-secret
+```
+
+Set the same secret on the Onlyboxes console:
+
+```bash
+CONSOLE_JIT_SIGNING_KEY=onlyboxes-jit-signing-secret
+```
+
+<Callout type={'info'}>
+  File export still writes the exported artifact to the configured LobeHub S3 storage. Configure the
+  S3 environment variables when users need to download files generated inside the sandbox.
+</Callout>

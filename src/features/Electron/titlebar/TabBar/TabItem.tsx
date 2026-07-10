@@ -1,5 +1,7 @@
 'use client';
 
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import {
   ActionIcon,
   Avatar,
@@ -52,6 +54,10 @@ const TabItem = memo<TabItemProps>(
     const isUnread = useTabUnread(tab);
     const showUnreadDot = !isRunning && isUnread;
 
+    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+      id,
+    });
+
     const handleClick = useCallback(() => {
       if (!isActive) {
         onActivate(id, tab.url);
@@ -69,11 +75,13 @@ const TabItem = memo<TabItemProps>(
     const contextMenuItems = useCallback(
       (): GenericItemType[] => [
         {
+          disabled: totalCount === 1,
           key: 'closeCurrentTab',
           label: t('tab.closeCurrentTab'),
           onClick: () => onClose(id),
         },
         {
+          disabled: totalCount === 1,
           key: 'closeOtherTabs',
           label: t('tab.closeOtherTabs'),
           onClick: () => onCloseOthers(id),
@@ -100,10 +108,23 @@ const TabItem = memo<TabItemProps>(
         <Flexbox
           horizontal
           align="center"
-          className={cx(electronStylish.nodrag, styles.tab, isActive && styles.tabActive)}
           data-active={isActive ? 'true' : undefined}
           gap={6}
+          ref={setNodeRef}
+          className={cx(
+            electronStylish.nodrag,
+            styles.tab,
+            isActive && styles.tabActive,
+            isDragging && styles.tabDragging,
+          )}
+          style={{
+            transform: CSS.Translate.toString(transform),
+            transition,
+            zIndex: isDragging ? 1 : undefined,
+          }}
           onClick={handleClick}
+          {...attributes}
+          {...listeners}
         >
           {meta.avatar ? (
             <span className={styles.avatarWrapper}>
@@ -129,7 +150,9 @@ const TabItem = memo<TabItemProps>(
             )
           )}
           <span className={styles.tabTitle}>{meta.title}</span>
-          <ActionIcon className={styles.closeIcon} icon={X} size="small" onClick={handleClose} />
+          {totalCount > 1 && (
+            <ActionIcon className={styles.closeIcon} icon={X} size="small" onClick={handleClose} />
+          )}
         </Flexbox>
       </ContextMenuTrigger>
     );

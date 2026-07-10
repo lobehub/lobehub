@@ -189,7 +189,7 @@ describe('Tray', () => {
       expect(mockElectronTray.setContextMenu).not.toHaveBeenCalled();
     });
 
-    it('should register both click and right-click listeners', () => {
+    it('should register click, double-click and right-click listeners', () => {
       tray = new Tray(
         {
           iconPath: 'tray.png',
@@ -200,6 +200,7 @@ describe('Tray', () => {
 
       const events = mockElectronTray.on.mock.calls.map((c: any[]) => c[0]);
       expect(events).toContain('click');
+      expect(events).toContain('double-click');
       expect(events).toContain('right-click');
     });
 
@@ -343,6 +344,96 @@ describe('Tray', () => {
       });
 
       expect(() => tray.onClick()).not.toThrow();
+    });
+  });
+
+  describe('onDoubleClick', () => {
+    beforeEach(() => {
+      tray = new Tray(
+        {
+          iconPath: 'tray.png',
+          identifier: 'test-tray',
+        },
+        mockApp,
+      );
+    });
+
+    it('should show the main window', () => {
+      tray.onDoubleClick();
+
+      expect(mockApp.browserManager.showMainWindow).toHaveBeenCalled();
+    });
+
+    it('should not start the capture session', () => {
+      tray.onDoubleClick();
+
+      expect(mockApp.screenCaptureManager.startSession).not.toHaveBeenCalled();
+    });
+
+    it('should not throw when showMainWindow throws', () => {
+      vi.mocked(mockApp.browserManager.showMainWindow).mockImplementationOnce(() => {
+        throw new Error('window failed');
+      });
+
+      expect(() => tray.onDoubleClick()).not.toThrow();
+    });
+  });
+
+  describe('click vs double-click handling', () => {
+    let clickHandler: (() => void) | undefined;
+    let doubleClickHandler: (() => void) | undefined;
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+      tray = new Tray(
+        {
+          iconPath: 'tray.png',
+          identifier: 'test-tray',
+        },
+        mockApp,
+      );
+
+      clickHandler = mockElectronTray.on.mock.calls.find((c: any[]) => c[0] === 'click')?.[1];
+      doubleClickHandler = mockElectronTray.on.mock.calls.find(
+        (c: any[]) => c[0] === 'double-click',
+      )?.[1];
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('should debounce single click before calling startSession', () => {
+      expect(clickHandler).toBeDefined();
+
+      clickHandler?.();
+      expect(mockApp.screenCaptureManager.startSession).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(250);
+      expect(mockApp.screenCaptureManager.startSession).toHaveBeenCalledTimes(1);
+    });
+
+    it('should cancel the pending single click when double-click fires', () => {
+      expect(clickHandler).toBeDefined();
+      expect(doubleClickHandler).toBeDefined();
+
+      clickHandler?.();
+      clickHandler?.();
+      doubleClickHandler?.();
+
+      vi.advanceTimersByTime(1000);
+
+      expect(mockApp.screenCaptureManager.startSession).not.toHaveBeenCalled();
+      expect(mockApp.browserManager.showMainWindow).toHaveBeenCalledTimes(1);
+    });
+
+    it('should only fire startSession once per single-click burst', () => {
+      clickHandler?.();
+      clickHandler?.();
+
+      vi.advanceTimersByTime(250);
+
+      expect(mockApp.screenCaptureManager.startSession).toHaveBeenCalledTimes(1);
     });
   });
 

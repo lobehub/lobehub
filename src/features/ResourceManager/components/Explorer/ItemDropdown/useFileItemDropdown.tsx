@@ -7,7 +7,9 @@ import {
   BookMinusIcon,
   BookPlusIcon,
   DownloadIcon,
+  EyeOffIcon,
   FolderInputIcon,
+  GlobeIcon,
   LinkIcon,
   PencilIcon,
   Trash,
@@ -19,11 +21,15 @@ import { shallow } from 'zustand/shallow';
 import RepoIcon from '@/components/LibIcon';
 import { useKnowledgeBaseListContext } from '@/features/ResourceManager/components/KnowledgeBaseListProvider';
 import { PAGE_FILE_TYPE } from '@/features/ResourceManager/constants';
+import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
+import { usePermission } from '@/hooks/usePermission';
 import { documentService } from '@/services/document';
 import { useFileStore } from '@/store/file';
 import { useKnowledgeBaseStore } from '@/store/library';
 import { useTreeStore } from '@/store/tree';
+import { useUserStore } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
 import { downloadFile } from '@/utils/client/downloadFile';
 
 import MoveToFolderModal from '../MoveToFolderModal';
@@ -37,6 +43,8 @@ interface UseFileItemDropdownParams {
   onRenameStart?: () => void;
   sourceType?: string;
   url: string;
+  userId?: string | null;
+  visibility?: 'private' | 'public' | null;
 }
 
 interface UseFileItemDropdownReturn {
@@ -54,16 +62,28 @@ export const useFileItemDropdown = ({
   fileType,
   sourceType,
   onRenameStart,
+  userId,
+  visibility,
 }: UseFileItemDropdownParams): UseFileItemDropdownReturn => {
-  const { t } = useTranslation(['components', 'common', 'knowledgeBase']);
+  const { t } = useTranslation(['components', 'common', 'knowledgeBase', 'chat']);
   const { message } = App.useApp();
   const appOrigin = useAppOrigin();
+  const { allowed: canEditResources } = usePermission('edit_own_content');
+  const currentUserId = useUserStore(userProfileSelectors.userId);
 
-  const { deleteResource, moveResource, refreshFileList } = useFileStore(
+  const {
+    deleteResource,
+    moveResource,
+    refreshFileList,
+    publishFileToWorkspace,
+    setFileVisibility,
+  } = useFileStore(
     (s) => ({
       deleteResource: s.deleteResource,
       moveResource: s.moveResource,
+      publishFileToWorkspace: s.publishFileToWorkspace,
       refreshFileList: s.refreshFileList,
+      setFileVisibility: s.setFileVisibility,
     }),
     shallow,
   );
@@ -92,8 +112,17 @@ export const useFileItemDropdown = ({
     (sourceType === DERIVED_DOCUMENT_SOURCE_TYPE || fileType === PAGE_FILE_TYPE);
 
   const menuItems = useCallback(() => {
-    // Filter out current knowledge base and create submenu items
-    const availableKnowledgeBases = libraries.filter((kb) => kb.id !== libraryId);
+    // Filter out current knowledge base and constrain by visibility scope:
+    // a private file can only join a private KB, a workspace-public file can
+    // only join a public KB. Personal-mode files (visibility null/undefined)
+    // ignore the scope filter.
+    const availableKnowledgeBases = libraries.filter((kb) => {
+      if (kb.id === libraryId) return false;
+      if (visibility === 'private' || visibility === 'public') {
+        return kb.visibility === visibility;
+      }
+      return true;
+    });
 
     // Submenu for adding files to a library (used when NOT in a library)
     const addToKnowledgeBaseSubmenu: ItemType[] = availableKnowledgeBases.map((kb) => ({
@@ -157,80 +186,153 @@ export const useFileItemDropdown = ({
     }));
 
     const libraryRelatedActions = (
-      isInLibrary
-        ? [
-            availableKnowledgeBases.length > 0 && {
-              children: moveToKnowledgeBaseSubmenu,
-              icon: <Icon icon={BookPlusIcon} />,
-              key: 'moveToOtherLibrary',
-              label: t('FileManager.actions.moveToOtherLibrary'),
-            },
-            {
-              icon: <Icon icon={BookMinusIcon} />,
-              key: 'removeFromLibrary',
-              label: t('FileManager.actions.removeFromLibrary'),
-              onClick: async ({ domEvent }) => {
-                domEvent.stopPropagation();
-
-                confirmModal({
-                  cancelText: t('cancel', { ns: 'common' }),
-                  content: t('FileManager.actions.confirmRemoveFromLibrary', {
-                    count: 1,
-                  }),
-                  okButtonProps: {
-                    danger: true,
-                  },
-                  okText: t('FileManager.actions.removeFromLibrary'),
-                  onOk: async () => {
-                    await removeFilesFromKnowledgeBase(libraryId, [id]);
-
-                    message.success(t('FileManager.actions.removeFromLibrarySuccess'));
-                  },
-                  title: t('FileManager.actions.removeFromLibrary'),
-                });
+      !canEditResources
+        ? []
+        : isInLibrary
+          ? [
+              availableKnowledgeBases.length > 0 && {
+                children: moveToKnowledgeBaseSubmenu,
+                icon: <Icon icon={BookPlusIcon} />,
+                key: 'moveToOtherLibrary',
+                label: t('FileManager.actions.moveToOtherLibrary'),
               },
-            },
-          ]
-        : [
-            availableKnowledgeBases.length > 0 && {
-              children: addToKnowledgeBaseSubmenu,
-              icon: <Icon icon={BookPlusIcon} />,
-              key: 'addToLibrary',
-              label: t('FileManager.actions.addToLibrary'),
-            },
-          ]
+              {
+                icon: <Icon icon={BookMinusIcon} />,
+                key: 'removeFromLibrary',
+                label: t('FileManager.actions.removeFromLibrary'),
+                onClick: async ({ domEvent }) => {
+                  domEvent.stopPropagation();
+
+                  confirmModal({
+                    cancelText: t('cancel', { ns: 'common' }),
+                    content: t('FileManager.actions.confirmRemoveFromLibrary', {
+                      count: 1,
+                    }),
+                    okButtonProps: {
+                      danger: true,
+                    },
+                    okText: t('FileManager.actions.removeFromLibrary'),
+                    onOk: async () => {
+                      await removeFilesFromKnowledgeBase(libraryId, [id]);
+
+                      message.success(t('FileManager.actions.removeFromLibrarySuccess'));
+                    },
+                    title: t('FileManager.actions.removeFromLibrary'),
+                  });
+                },
+              },
+            ]
+          : [
+              availableKnowledgeBases.length > 0 && {
+                children: addToKnowledgeBaseSubmenu,
+                icon: <Icon icon={BookPlusIcon} />,
+                key: 'addToLibrary',
+                label: t('FileManager.actions.addToLibrary'),
+              },
+            ]
     ) as ItemType[];
 
     const hasKnowledgeBaseActions = libraryRelatedActions.some(Boolean);
 
+    // Only the creator of a still-private file (not a folder, since folders
+    // live in the `documents` table and have their own publish flow) sees the
+    // "Publish to workspace" entry. Mirrors the agent / task one-way publish.
+    const isOwnPrivateFile =
+      sourceType !== DERIVED_DOCUMENT_SOURCE_TYPE &&
+      !isFolder &&
+      visibility === 'private' &&
+      !!currentUserId &&
+      userId === currentUserId;
+    // Bidirectional counterpart: workspace-public files owned by the caller
+    // can be pulled back to private via the same guarded server path.
+    const isOwnPublicFile =
+      sourceType !== DERIVED_DOCUMENT_SOURCE_TYPE &&
+      !isFolder &&
+      visibility === 'public' &&
+      !!currentUserId &&
+      userId === currentUserId;
+
     return (
       [
+        canEditResources &&
+          isOwnPrivateFile && {
+            icon: <Icon icon={GlobeIcon} />,
+            key: 'publishToWorkspace',
+            label: t('resources.publishToWorkspace.menu', { ns: 'chat' }),
+            onClick: async ({ domEvent }) => {
+              domEvent.stopPropagation();
+              confirmModal({
+                cancelText: t('cancel', { ns: 'common' }),
+                content: <VisibilityConfirmContent variant="publish" />,
+                okText: t('continue', { ns: 'common' }),
+                title: t('resources.publishToWorkspace.menu', { ns: 'chat' }),
+                onOk: async () => {
+                  try {
+                    await publishFileToWorkspace(id);
+                    message.success(t('resources.publishToWorkspace.success', { ns: 'chat' }));
+                  } catch (error) {
+                    console.error(error);
+                    message.error(t('resources.publishToWorkspace.error', { ns: 'chat' }));
+                  }
+                },
+              });
+            },
+          },
+        canEditResources && isOwnPrivateFile && { type: 'divider' },
+        canEditResources &&
+          isOwnPublicFile && {
+            icon: <Icon icon={EyeOffIcon} />,
+            key: 'makePrivate',
+            label: t('makePrivate', { ns: 'common' }),
+            onClick: async ({ domEvent }) => {
+              domEvent.stopPropagation();
+              confirmModal({
+                cancelText: t('cancel', { ns: 'common' }),
+                content: <VisibilityConfirmContent variant="makePrivate" />,
+                okButtonProps: { danger: true },
+                okText: t('continue', { ns: 'common' }),
+                title: t('makePrivate.confirm.title', { ns: 'common' }),
+                onOk: async () => {
+                  try {
+                    await setFileVisibility(id, 'private');
+                    message.success(t('makePrivate.success', { ns: 'common' }));
+                  } catch (error) {
+                    console.error(error);
+                    message.error(t('makePrivate.error', { ns: 'common' }));
+                  }
+                },
+              });
+            },
+          },
+        canEditResources && isOwnPublicFile && { type: 'divider' },
         ...libraryRelatedActions,
         hasKnowledgeBaseActions && {
           type: 'divider',
         },
-        isInLibrary && {
-          icon: <Icon icon={FolderInputIcon} />,
-          key: 'moveToFolder',
-          label: t('FileManager.actions.moveToFolder'),
-          onClick: async ({ domEvent }) => {
-            domEvent.stopPropagation();
+        canEditResources &&
+          isInLibrary && {
+            icon: <Icon icon={FolderInputIcon} />,
+            key: 'moveToFolder',
+            label: t('FileManager.actions.moveToFolder'),
+            onClick: async ({ domEvent }) => {
+              domEvent.stopPropagation();
 
-            createRawModal(MoveToFolderModal, {
-              fileId: id,
-              knowledgeBaseId: libraryId,
-            });
+              createRawModal(MoveToFolderModal, {
+                fileId: id,
+                knowledgeBaseId: libraryId,
+              });
+            },
           },
-        },
-        isFolder && {
-          icon: <Icon icon={PencilIcon} />,
-          key: 'rename',
-          label: t('FileManager.actions.rename'),
-          onClick: async ({ domEvent }) => {
-            domEvent.stopPropagation();
-            onRenameStart?.();
+        canEditResources &&
+          isFolder && {
+            icon: <Icon icon={PencilIcon} />,
+            key: 'rename',
+            label: t('FileManager.actions.rename'),
+            onClick: async ({ domEvent }) => {
+              domEvent.stopPropagation();
+              onRenameStart?.();
+            },
           },
-        },
         {
           icon: <Icon icon={LinkIcon} />,
           key: 'copyUrl',
@@ -298,10 +400,10 @@ export const useFileItemDropdown = ({
             message.destroy(key);
           },
         },
-        {
+        canEditResources && {
           type: 'divider',
         },
-        {
+        canEditResources && {
           danger: true,
           icon: <Icon icon={Trash} />,
           key: 'delete',
@@ -334,6 +436,8 @@ export const useFileItemDropdown = ({
   }, [
     addFilesToKnowledgeBase,
     appOrigin,
+    canEditResources,
+    currentUserId,
     deleteResource,
     filename,
     id,
@@ -345,10 +449,15 @@ export const useFileItemDropdown = ({
     message,
     moveResource,
     onRenameStart,
+    publishFileToWorkspace,
+    setFileVisibility,
     refreshFileList,
     removeFilesFromKnowledgeBase,
+    sourceType,
     t,
     url,
+    userId,
+    visibility,
   ]);
 
   return { menuItems };

@@ -14,9 +14,10 @@ import { createStaticStyles, cx } from 'antd-style';
 import { ChevronsUpDownIcon } from 'lucide-react';
 import { type DragEvent } from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 
+import BusinessKnowledgeBaseImportAction from '@/business/client/BusinessKnowledgeBaseImportAction';
 import RepoIcon from '@/components/LibIcon';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useDragActive } from '@/routes/(main)/resource/features/DndContextWrapper';
 import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
 import { knowledgeBaseSelectors, useKnowledgeBaseStore } from '@/store/library';
@@ -39,7 +40,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
  * Quickly switch between libraries
  */
 const Head = memo<{ id: string }>(({ id }) => {
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const name = useKnowledgeBaseStore(knowledgeBaseSelectors.getKnowledgeBaseNameById(id));
   const [setMode, setLibraryId] = useResourceManagerStore((s) => [s.setMode, s.setLibraryId]);
   const isDragActive = useDragActive();
@@ -145,6 +146,7 @@ const Head = memo<{ id: string }>(({ id }) => {
           </Center>
         </DropdownMenu>
       )}
+      <BusinessKnowledgeBaseImportAction knowledgeBaseId={id} />
     </Block>
   );
 });

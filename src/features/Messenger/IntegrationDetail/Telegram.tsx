@@ -5,6 +5,9 @@ import { LinkIcon, Trash2Icon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncError from '@/components/AsyncError';
+import { usePermission } from '@/hooks/usePermission';
+
 import { createMessengerLinkModal } from '../LinkModal';
 import {
   DetailLayout,
@@ -27,6 +30,8 @@ interface TelegramDetailProps {
 // header.
 const TelegramDetail = memo<TelegramDetailProps>(({ appId, botUsername, name, onBack }) => {
   const { t } = useTranslation('messenger');
+  const { allowed: canCreate } = usePermission('create_content');
+  const { allowed: canEdit } = usePermission('edit_own_content');
 
   const data = useMessengerData('telegram');
   const { handleSetActive, handleUnlink } = useLinkActions({
@@ -36,6 +41,8 @@ const TelegramDetail = memo<TelegramDetailProps>(({ appId, botUsername, name, on
     platform: 'telegram',
   });
 
+  if (data.error && data.isInitialLoading)
+    return <AsyncError error={data.error} variant={'block'} onRetry={data.mutate} />;
   if (data.isInitialLoading) return <IntegrationDetailSkeleton withNestedContent />;
 
   const { links } = data;
@@ -46,11 +53,24 @@ const TelegramDetail = memo<TelegramDetailProps>(({ appId, botUsername, name, on
     createMessengerLinkModal({ appId, botUsername, name, platform: 'telegram' });
 
   const headerAction = hasLinks ? (
-    <Button danger icon={<Icon icon={Trash2Icon} />} onClick={() => handleUnlink('')}>
+    <Button
+      danger
+      disabled={!canEdit}
+      icon={<Icon icon={Trash2Icon} />}
+      onClick={() => {
+        if (!canEdit) return;
+        handleUnlink('');
+      }}
+    >
       {t('messenger.unlinkCta')}
     </Button>
   ) : (
-    <Button icon={<Icon icon={LinkIcon} />} type="primary" onClick={handleOpenLink}>
+    <Button
+      disabled={!canCreate || !canEdit}
+      icon={<Icon icon={LinkIcon} />}
+      type="primary"
+      onClick={handleOpenLink}
+    >
       {t('messenger.linkCta')}
     </Button>
   );

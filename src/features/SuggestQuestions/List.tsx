@@ -12,10 +12,11 @@ import { useRandomQuestions } from './useRandomQuestions';
 
 interface ListProps {
   count?: number;
+  disabled?: boolean;
   mode: SuggestMode;
 }
 
-const List = memo<ListProps>(({ mode, count = 3 }) => {
+const List = memo<ListProps>(({ mode, count = 3, disabled }) => {
   const { t } = useTranslation('suggestQuestions');
   const { t: tCommon } = useTranslation('common');
   const { questions, refresh } = useRandomQuestions(mode, count);
@@ -32,6 +33,7 @@ const List = memo<ListProps>(({ mode, count = 3 }) => {
           return (
             <Item
               description={prompt}
+              disabled={disabled}
               key={item.id}
               prompt={prompt}
               title={t(item.titleKey as any)}
@@ -39,8 +41,21 @@ const List = memo<ListProps>(({ mode, count = 3 }) => {
           );
         })}
       </Flexbox>
-      <Flexbox horizontal align={'center'} gap={4} style={{ cursor: 'pointer' }} onClick={refresh}>
-        <ActionIcon icon={RefreshCw} size={'small'} />
+      <Flexbox
+        horizontal
+        align={'center'}
+        gap={4}
+        style={{
+          cursor: disabled ? 'not-allowed' : 'pointer',
+          opacity: disabled ? 0.65 : undefined,
+        }}
+        onClick={() => {
+          if (disabled) return;
+
+          refresh();
+        }}
+      >
+        <ActionIcon disabled={disabled} icon={RefreshCw} size={'small'} />
         <Text color={cssVar.colorTextSecondary} fontSize={12}>
           {tCommon('switch')}
         </Text>

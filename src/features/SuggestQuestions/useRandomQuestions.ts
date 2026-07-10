@@ -2,7 +2,24 @@
 
 import { useCallback, useState } from 'react';
 
-const QUESTION_COUNT = 40;
+export type SuggestMode = 'agent' | 'group' | 'write' | 'agentBuilder' | 'groupBuilder';
+
+/**
+ * Size of the question pool each mode can draw from. The keys in the
+ * `suggestQuestions` locale namespace are `${mode}.${id}.{prompt,title}`,
+ * so this must stay in sync with how many questions exist per mode —
+ * otherwise the shuffle would reference missing translation keys.
+ *
+ * The builder modes use a smaller, curated pool of build/configure-oriented
+ * starters instead of the generic end-user chat topics.
+ */
+const QUESTION_POOL_SIZE: Record<SuggestMode, number> = {
+  agent: 40,
+  agentBuilder: 12,
+  group: 40,
+  groupBuilder: 12,
+  write: 40,
+};
 
 const shuffleArray = <T>(array: T[]): T[] => {
   const shuffled = [...array];
@@ -13,8 +30,9 @@ const shuffleArray = <T>(array: T[]): T[] => {
   return shuffled;
 };
 
-const generateQuestions = (mode: string, count: number) => {
-  const ids = Array.from({ length: QUESTION_COUNT }, (_, i) => i + 1);
+const generateQuestions = (mode: SuggestMode, count: number) => {
+  const poolSize = QUESTION_POOL_SIZE[mode];
+  const ids = Array.from({ length: poolSize }, (_, i) => i + 1);
   const shuffled = shuffleArray(ids);
   return shuffled.slice(0, count).map((id) => ({
     id,
@@ -28,8 +46,6 @@ export interface QuestionItem {
   promptKey: string;
   titleKey: string;
 }
-
-export type SuggestMode = 'agent' | 'group' | 'write';
 
 export const useRandomQuestions = (
   mode: SuggestMode,

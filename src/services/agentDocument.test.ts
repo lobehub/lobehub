@@ -52,7 +52,7 @@ describe('AgentDocumentService', () => {
       title: 'title',
     });
 
-    expect(mutate).toHaveBeenCalledWith(['agent-documents', 'agent-1']);
+    expect(mutate).toHaveBeenCalledWith(['agent:documents', 'agent-1']);
   });
 
   it('should revalidate agent documents after removeDocument', async () => {
@@ -63,13 +63,24 @@ describe('AgentDocumentService', () => {
       topicId: 'topic-1',
     });
 
-    expect(mutate).toHaveBeenCalledWith(['agent-documents', 'agent-1']);
-    expect(mutate).toHaveBeenCalledWith(['agent-documents-list', 'agent-1']);
-    expect(mutate).toHaveBeenCalledWith(['workspace-agent-document-editor', 'agent-1', 'doc-1']);
-    expect(mutate).toHaveBeenCalledWith(['page-document-meta', 'page-doc-1']);
-    expect(mutate).toHaveBeenCalledWith(['pageDetail', 'page-doc-1']);
-    expect(mutate).toHaveBeenCalledWith(['pageDocuments']);
-    expect(mutate).toHaveBeenCalledWith(['SWR_USE_FETCH_NOTEBOOK_DOCUMENTS', 'topic-1']);
+    expect(mutate).toHaveBeenCalledWith(['agent:documents', 'agent-1']);
+    // `documentsList` now revalidates via a prefix matcher so the full list and
+    // the `non-web` variant (and their workspace-scoped keys) refresh together.
+    const listMatcher = vi
+      .mocked(mutate)
+      .mock.calls.map((call) => call[0])
+      .find((key) => typeof key === 'function') as ((key: unknown) => boolean) | undefined;
+    expect(listMatcher).toBeDefined();
+    expect(listMatcher!(['agent:documentsList', 'agent-1'])).toBe(true);
+    expect(listMatcher!(['agent:documentsList', 'agent-1', 'non-web'])).toBe(true);
+    expect(listMatcher!(['agent:documentsList', 'agent-1', 'ws-1'])).toBe(true);
+    expect(listMatcher!(['agent:documentsList', 'other-agent'])).toBe(false);
+    expect(listMatcher!(['agent:documents', 'agent-1'])).toBe(false);
+    expect(mutate).toHaveBeenCalledWith(['agent:documentEditor', 'agent-1', 'doc-1']);
+    expect(mutate).toHaveBeenCalledWith(['page:meta', 'page-doc-1']);
+    expect(mutate).toHaveBeenCalledWith(['page:detail', 'page-doc-1']);
+    expect(mutate).toHaveBeenCalledWith(['page:list']);
+    expect(mutate).toHaveBeenCalledWith(['notebook:documents', 'topic-1']);
   });
 
   it('should revalidate agent documents after updateLoadRule', async () => {
@@ -79,7 +90,7 @@ describe('AgentDocumentService', () => {
       rule: {},
     });
 
-    expect(mutate).toHaveBeenCalledWith(['agent-documents', 'agent-1']);
+    expect(mutate).toHaveBeenCalledWith(['agent:documents', 'agent-1']);
   });
 
   it('should fetch target agent documents when cache is missing', async () => {

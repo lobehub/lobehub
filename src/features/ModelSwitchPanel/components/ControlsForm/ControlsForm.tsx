@@ -8,7 +8,10 @@ import { Trans, useTranslation } from 'react-i18next';
 
 import { useAgentId } from '@/features/ChatInput/hooks/useAgentId';
 import { useUpdateAgentConfig } from '@/features/ChatInput/hooks/useUpdateAgentConfig';
-import { resolveDefaultThinkingLevelForModel } from '@/services/chat/mecha/modelParamsResolver';
+import {
+  resolveDefaultEnableAdaptiveThinkingForModel,
+  resolveDefaultThinkingLevelForModel,
+} from '@/services/chat/mecha/modelParamsResolver';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
@@ -17,11 +20,14 @@ import CodexMaxReasoningEffortSlider from './CodexMaxReasoningEffortSlider';
 import ContextCachingSwitch from './ContextCachingSwitch';
 import DeepSeekReasoningEffortSlider from './DeepSeekReasoningEffortSlider';
 import EffortSlider from './EffortSlider';
+import GLM52ReasoningEffortSlider from './GLM52ReasoningEffortSlider';
 import GPT5ReasoningEffortSlider from './GPT5ReasoningEffortSlider';
 import GPT51ReasoningEffortSlider from './GPT51ReasoningEffortSlider';
 import GPT52ProReasoningEffortSlider from './GPT52ProReasoningEffortSlider';
 import GPT52ReasoningEffortSlider from './GPT52ReasoningEffortSlider';
+import { GPT56ReasoningEffortSlider } from './GPT56ReasoningEffortSlider';
 import Grok43ReasoningEffortSlider from './Grok43ReasoningEffortSlider';
+import Grok45ReasoningEffortSlider from './Grok45ReasoningEffortSlider';
 import Grok420ReasoningEffortSlider from './Grok420ReasoningEffortSlider';
 import Hy3ReasoningEffortSlider from './Hy3ReasoningEffortSlider';
 import ImageAspectRatio2Select from './ImageAspectRatio2Select';
@@ -30,9 +36,11 @@ import ImageResolution2Slider from './ImageResolution2Slider';
 import ImageResolutionSlider from './ImageResolutionSlider';
 import Opus47EffortSlider from './Opus47EffortSlider';
 import ReasoningEffortSlider from './ReasoningEffortSlider';
+import ReasoningModeSegmented from './ReasoningModeSegmented';
 import ReasoningTokenSlider from './ReasoningTokenSlider';
 import ReasoningTokenSlider32k from './ReasoningTokenSlider32k';
 import ReasoningTokenSlider80k from './ReasoningTokenSlider80k';
+import Ring26ReasoningEffortSlider from './Ring26ReasoningEffortSlider';
 import Step3_5ReasoningEffortSlider from './Step3_5ReasoningEffortSlider';
 import TextVerbositySlider from './TextVerbositySlider';
 import ThinkingBudgetSlider from './ThinkingBudgetSlider';
@@ -43,6 +51,7 @@ import ThinkingLevelSlider from './ThinkingLevelSlider';
 import ThinkingSlider from './ThinkingSlider';
 
 interface ControlsFormProps {
+  disabled?: boolean;
   model?: string;
   onUpdatingChange?: (updating: boolean) => void;
   provider?: string;
@@ -62,8 +71,14 @@ const resolveEnableReasoningInitialValue = (config: LobeAgentChatConfig) => {
   return undefined;
 };
 
+const resolveEnableAdaptiveThinkingInitialValue = (config: LobeAgentChatConfig, model?: string) => {
+  if (Object.hasOwn(config, 'enableAdaptiveThinking')) return config.enableAdaptiveThinking;
+
+  return resolveDefaultEnableAdaptiveThinkingForModel(model);
+};
+
 const ControlsForm = memo<ControlsFormProps>(
-  ({ model: modelProp, onUpdatingChange, provider: providerProp }) => {
+  ({ disabled, model: modelProp, onUpdatingChange, provider: providerProp }) => {
     const { t } = useTranslation('chat');
     const agentId = useAgentId();
     const { updateAgentChatConfig } = useUpdateAgentConfig();
@@ -83,12 +98,17 @@ const ControlsForm = memo<ControlsFormProps>(
     const modelExtendParams = useAiInfraStore(aiModelSelectors.modelExtendParams(model, provider));
     const initialValues = useMemo(() => {
       const enableReasoningInitialValue = resolveEnableReasoningInitialValue(config);
+      const enableAdaptiveThinkingInitialValue = resolveEnableAdaptiveThinkingInitialValue(
+        config,
+        model,
+      );
 
       return {
         ...config,
+        enableAdaptiveThinking: enableAdaptiveThinkingInitialValue,
         enableReasoning: enableReasoningInitialValue,
       };
-    }, [config]);
+    }, [config, model]);
 
     useEffect(() => {
       form.setFieldsValue(initialValues);
@@ -111,7 +131,7 @@ const ControlsForm = memo<ControlsFormProps>(
 
     const items = [
       {
-        children: <ContextCachingSwitch />,
+        children: <ContextCachingSwitch disabled={disabled} />,
         desc: (
           <span style={isNarrow ? descNarrow : descWide}>
             <Trans i18nKey={'extendParams.disableContextCaching.desc'} ns={'chat'}>
@@ -133,7 +153,7 @@ const ControlsForm = memo<ControlsFormProps>(
         name: 'disableContextCaching',
       },
       {
-        children: <Switch size={'small'} />,
+        children: <Switch disabled={disabled} size={'small'} />,
         desc: (
           <span style={isNarrow ? descNarrow : descWide}>
             <Trans i18nKey={'extendParams.enableReasoning.desc'} ns={'chat'}>
@@ -145,6 +165,18 @@ const ControlsForm = memo<ControlsFormProps>(
         layout: isNarrow ? 'vertical' : 'horizontal',
         minWidth: undefined,
         name: 'enableReasoning',
+      },
+      {
+        children: <Switch disabled={disabled} size={'small'} />,
+        desc: isNarrow ? (
+          <span style={descNarrow}>{t('extendParams.preserveThinking.desc')}</span>
+        ) : (
+          t('extendParams.preserveThinking.desc')
+        ),
+        label: t('extendParams.preserveThinking.title'),
+        layout: isNarrow ? 'vertical' : 'horizontal',
+        minWidth: undefined,
+        name: 'preserveThinking',
       },
       {
         children: <Switch size={'small'} />,
@@ -205,6 +237,21 @@ const ControlsForm = memo<ControlsFormProps>(
         layout: 'vertical',
         minWidth: undefined,
         name: 'reasoningEffort',
+        style: {
+          paddingBottom: 0,
+        },
+      },
+      {
+        children: <ReasoningModeSegmented />,
+        desc: isNarrow ? (
+          <span style={descNarrow}>{t('extendParams.reasoningMode.desc')}</span>
+        ) : (
+          t('extendParams.reasoningMode.desc')
+        ),
+        label: t('extendParams.reasoningMode.title'),
+        layout: 'vertical',
+        minWidth: undefined,
+        name: 'reasoningMode',
         style: {
           paddingBottom: 0,
         },
@@ -273,12 +320,34 @@ const ControlsForm = memo<ControlsFormProps>(
         },
       },
       {
+        children: <GPT56ReasoningEffortSlider />,
+        desc: 'reasoning_effort',
+        label: t('extendParams.reasoningEffort.title'),
+        layout: 'vertical',
+        minWidth: undefined,
+        name: 'gpt5_6ReasoningEffort',
+        style: {
+          paddingBottom: 0,
+        },
+      },
+      {
         children: <GPT52ProReasoningEffortSlider />,
         desc: 'reasoning_effort',
         label: t('extendParams.reasoningEffort.title'),
         layout: 'vertical',
         minWidth: undefined,
         name: 'gpt5_2ProReasoningEffort',
+        style: {
+          paddingBottom: 0,
+        },
+      },
+      {
+        children: <GLM52ReasoningEffortSlider />,
+        desc: 'reasoning_effort',
+        label: t('extendParams.reasoningEffort.title'),
+        layout: 'vertical',
+        minWidth: undefined,
+        name: 'glm5_2ReasoningEffort',
         style: {
           paddingBottom: 0,
         },
@@ -306,12 +375,34 @@ const ControlsForm = memo<ControlsFormProps>(
         },
       },
       {
+        children: <Grok45ReasoningEffortSlider />,
+        desc: 'reasoning_effort',
+        label: t('extendParams.reasoningEffort.title'),
+        layout: 'vertical',
+        minWidth: undefined,
+        name: 'grok4_5ReasoningEffort',
+        style: {
+          paddingBottom: 0,
+        },
+      },
+      {
         children: <Hy3ReasoningEffortSlider />,
         desc: 'reasoning_effort',
         label: t('extendParams.reasoningEffort.title'),
         layout: 'vertical',
         minWidth: undefined,
         name: 'hy3ReasoningEffort',
+        style: {
+          paddingBottom: 0,
+        },
+      },
+      {
+        children: <Ring26ReasoningEffortSlider />,
+        desc: 'reasoning_effort',
+        label: t('extendParams.reasoningEffort.title'),
+        layout: 'vertical',
+        minWidth: undefined,
+        name: 'ring2_6ReasoningEffort',
         style: {
           paddingBottom: 0,
         },
@@ -361,7 +452,7 @@ const ControlsForm = memo<ControlsFormProps>(
         tag: 'thinkingBudget',
       },
       {
-        children: <Switch size={'small'} />,
+        children: <Switch disabled={disabled} size={'small'} />,
         desc: isNarrow ? (
           <span style={descNarrow}>{t('extendParams.urlContext.desc')}</span>
         ) : (
@@ -475,27 +566,35 @@ const ControlsForm = memo<ControlsFormProps>(
     ].filter(Boolean) as FormItemProps[];
 
     return (
-      <Form
-        form={form}
-        initialValues={initialValues}
-        itemsType={'flat'}
-        size={'small'}
-        style={{ fontSize: 12 }}
-        variant={'borderless'}
-        items={
-          (modelExtendParams || [])
-            .map((item: any) => items.find((i) => i.name === item))
-            .filter(Boolean) as FormItemProps[]
-        }
-        onValuesChange={async (values) => {
-          onUpdatingChange?.(true);
-          try {
-            await updateAgentChatConfig(values);
-          } finally {
-            onUpdatingChange?.(false);
-          }
+      <div
+        style={{
+          opacity: disabled ? 0.5 : undefined,
+          pointerEvents: disabled ? 'none' : undefined,
         }}
-      />
+      >
+        <Form
+          form={form}
+          initialValues={initialValues}
+          itemsType={'flat'}
+          size={'small'}
+          style={{ fontSize: 12 }}
+          variant={'borderless'}
+          items={
+            (modelExtendParams || [])
+              .map((item: any) => items.find((i) => i.name === item))
+              .filter(Boolean) as FormItemProps[]
+          }
+          onValuesChange={async (values) => {
+            if (disabled) return;
+            onUpdatingChange?.(true);
+            try {
+              await updateAgentChatConfig(values);
+            } finally {
+              onUpdatingChange?.(false);
+            }
+          }}
+        />
+      </div>
     );
   },
 );

@@ -4,24 +4,38 @@ import { type LobeToolCustomPlugin } from '@lobechat/types';
 import { Button, Drawer, Flexbox } from '@lobehub/ui';
 import { App, Form, Popconfirm } from 'antd';
 import { useResponsive } from 'antd-style';
-import { memo, useEffect, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import MCPManifestForm from './MCPManifestForm';
 import PluginPreview from './PluginPreview';
 
 interface DevModalProps {
+  /** Enable the connector-backed OAuth auth type in the MCP form (see MCPManifestForm). */
+  enableOAuth?: boolean;
   mode?: 'edit' | 'create';
   onDelete?: () => void;
   onOpenChange: (open: boolean) => void;
-  onSave?: (value: LobeToolCustomPlugin) => Promise<void> | void;
+  onSave?: (
+    value: LobeToolCustomPlugin,
+    ctx?: { oauthPopup?: Window | null },
+  ) => Promise<void> | void;
   onValueChange?: (value: Partial<LobeToolCustomPlugin>) => void;
   open?: boolean;
   value?: LobeToolCustomPlugin;
 }
 
 const DevModal = memo<DevModalProps>(
-  ({ open, mode = 'create', value, onValueChange, onSave, onOpenChange, onDelete }) => {
+  ({
+    open,
+    mode = 'create',
+    value,
+    onValueChange,
+    onSave,
+    onOpenChange,
+    onDelete,
+    enableOAuth,
+  }) => {
     const isEditMode = mode === 'edit';
     const { t } = useTranslation('plugin');
     const { message } = App.useApp();
@@ -30,9 +44,59 @@ const DevModal = memo<DevModalProps>(
 
     const { mobile } = useResponsive();
     const [form] = Form.useForm();
+    const authType = Form.useWatch(['customParams', 'mcp', 'auth', 'type'], form);
+
+    // Seed the form once per modal open, waiting for `value` to arrive (it may
+    // be undefined initially while edit-mode credentials are being fetched).
+    const seededRef = useRef(false);
     useEffect(() => {
-      form.setFieldsValue(value);
-    }, []);
+      if (!open) {
+        seededRef.current = false;
+        return;
+      }
+      if (value !== undefined && !seededRef.current) {
+        form.setFieldsValue(value);
+        seededRef.current = true;
+      }
+    }, [open, value]);
+
+    const doSave = async (values: LobeToolCustomPlugin, ctx?: { oauthPopup?: Window | null }) => {
+      if (!onSave) {
+        message.success(t(isEditMode ? 'dev.updateSuccess' : 'dev.saveSuccess'));
+        onOpenChange(false);
+        return;
+      }
+      setSubmitting(true);
+      try {
+        await onSave(values, ctx);
+        message.success(t(isEditMode ? 'dev.updateSuccess' : 'dev.saveSuccess'));
+        onOpenChange(false);
+      } catch (error) {
+        console.error('[DevModal] Install failed:', error);
+        message.error(t('dev.saveError'));
+      } finally {
+        setSubmitting(false);
+      }
+    };
+
+    // OAuth needs window.open within the user-gesture tick (browsers block it
+    // after an async boundary). Open a blank popup synchronously here, validate,
+    // then hand it to onSave which navigates it to the authorize URL. Shared by
+    // the footer save button and the in-form "Authorize" button.
+    const runOAuthFlow = async () => {
+      const popup = window.open('about:blank', 'lobe-connector-oauth', 'width=600,height=720');
+      try {
+        const values = (await form.validateFields()) as LobeToolCustomPlugin;
+        await doSave(values, { oauthPopup: popup });
+      } catch {
+        popup?.close();
+      }
+    };
+
+    const handlePrimaryClick = () => {
+      if (enableOAuth && authType === 'oauth2') return runOAuthFlow();
+      form.submit();
+    };
 
     useEffect(() => {
       if (mode === 'create' && !open) form.resetFields();
@@ -78,9 +142,7 @@ const DevModal = memo<DevModalProps>(
             loading={submitting}
             style={buttonStyle}
             type={'primary'}
-            onClick={() => {
-              form.submit();
-            }}
+            onClick={handlePrimaryClick}
           >
             {t(isEditMode ? 'dev.update' : 'dev.save')}
           </Button>
@@ -94,22 +156,7 @@ const DevModal = memo<DevModalProps>(
           onValueChange?.(form.getFieldsValue());
         }}
         onFormFinish={async (_, info) => {
-          if (onSave) {
-            setSubmitting(true);
-            try {
-              await onSave?.(info.values as LobeToolCustomPlugin);
-              message.success(t(isEditMode ? 'dev.updateSuccess' : 'dev.saveSuccess'));
-              onOpenChange(false);
-            } catch (error) {
-              console.error('[DevModal] Install failed:', error);
-              message.error(t('dev.saveError'));
-            } finally {
-              setSubmitting(false);
-            }
-            return;
-          }
-          message.success(t(isEditMode ? 'dev.updateSuccess' : 'dev.saveSuccess'));
-          onOpenChange(false);
+          await doSave(info.values as LobeToolCustomPlugin);
         }}
       >
         <Drawer
@@ -144,7 +191,12 @@ const DevModal = memo<DevModalProps>(
             }}
           >
             <Flexbox flex={3} gap={16} padding={24} style={{ overflowY: 'auto' }}>
-              <MCPManifestForm form={form} isEditMode={isEditMode} />
+              <MCPManifestForm
+                enableOAuth={enableOAuth}
+                form={form}
+                isEditMode={isEditMode}
+                onAuthorizeOAuth={runOAuthFlow}
+              />
             </Flexbox>
             <PluginPreview form={form} />
           </Flexbox>

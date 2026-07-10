@@ -24,7 +24,7 @@ If the user asks for website changelog pages, load `../docs-changelog/SKILL.md`.
 
 For every `/version-release` execution, you MUST load and apply:
 
-- `../microcopy/SKILL.md`
+- `../../../DESIGN.md` (Voice & Content)
 
 ## Overview
 

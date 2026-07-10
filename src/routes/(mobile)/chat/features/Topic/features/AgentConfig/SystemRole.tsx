@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 
 import AgentInfo from '@/features/AgentInfo';
 import { useOpenChatSettings } from '@/hooks/useInterceptingRoutes';
+import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { ChatSettingsTabs } from '@/store/global/initialState';
@@ -35,6 +36,7 @@ interface SystemRoleProps {
 const SystemRole = memo(({ editing, setEditing, open, setOpen, isLoading }: SystemRoleProps) => {
   const openChatSettings = useOpenChatSettings(ChatSettingsTabs.Prompt);
   const { t } = useTranslation('common');
+  const { allowed: canEdit } = usePermission('edit_own_content');
 
   const [systemRole, updateAgentConfig, meta] = useAgentStore((s) => [
     agentSelectors.currentAgentSystemRole(s),
@@ -43,7 +45,7 @@ const SystemRole = memo(({ editing, setEditing, open, setOpen, isLoading }: Syst
   ]);
 
   const handleOpenWithEdit = (e: MouseEvent) => {
-    if (isLoading) return;
+    if (!canEdit || isLoading) return;
     e.stopPropagation();
     setEditing(true);
     setOpen(true);
@@ -51,7 +53,7 @@ const SystemRole = memo(({ editing, setEditing, open, setOpen, isLoading }: Syst
 
   const handleOpen = (e: MouseEvent) => {
     if (isLoading) return;
-    if (e.altKey) handleOpenWithEdit(e);
+    if (canEdit && e.altKey) handleOpenWithEdit(e);
     setOpen(true);
   };
 
@@ -88,13 +90,17 @@ const SystemRole = memo(({ editing, setEditing, open, setOpen, isLoading }: Syst
         text={{
           cancel: t('cancel'),
           confirm: t('ok'),
-          edit: t('edit'),
+          edit: canEdit ? t('edit') : '',
           title: t('settingAgent.prompt.title', { ns: 'setting' }),
         }}
-        onEditingChange={setEditing}
         onOpenChange={setOpen}
         onChange={(e) => {
+          if (!canEdit) return;
           updateAgentConfig({ systemRole: e });
+        }}
+        onEditingChange={(value) => {
+          if (!canEdit && value) return;
+          setEditing(value);
         }}
       />
     </Flexbox>

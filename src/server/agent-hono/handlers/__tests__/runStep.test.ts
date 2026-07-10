@@ -1,10 +1,13 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { AiAgentService } from '@/server/services/aiAgent';
+
 import { runStep, runStepHealth } from '../runStep';
 
 const mockGetOperationMetadata = vi.fn();
 const mockExecuteStep = vi.fn();
+const mockGetServerDB = vi.hoisted(() => vi.fn());
 
 vi.mock('@/server/modules/AgentRuntime', () => ({
   AgentRuntimeCoordinator: vi.fn().mockImplementation(() => ({
@@ -12,17 +15,34 @@ vi.mock('@/server/modules/AgentRuntime', () => ({
   })),
 }));
 
-vi.mock('@/server/services/agentRuntime', () => ({
-  AgentRuntimeService: vi.fn().mockImplementation(() => ({
+vi.mock('@/server/services/aiAgent', () => ({
+  AiAgentService: vi.fn().mockImplementation(() => ({
     executeStep: mockExecuteStep,
   })),
 }));
 
 vi.mock('@/database/core/db-adaptor', () => ({
-  getServerDB: vi.fn().mockResolvedValue({} as any),
+  getServerDB: mockGetServerDB,
 }));
 
-function buildContext(opts: { body?: unknown; jsonThrows?: boolean; retried?: string }) {
+function buildOperationDiagnosticDB(row?: any) {
+  return {
+    select: vi.fn(() => ({
+      from: vi.fn(() => ({
+        where: vi.fn(() => ({
+          limit: vi.fn().mockResolvedValue(row ? [row] : []),
+        })),
+      })),
+    })),
+  };
+}
+
+function buildContext(opts: {
+  body?: unknown;
+  jsonThrows?: boolean;
+  messageId?: string;
+  retried?: string;
+}) {
   const captures: Array<{ body: any; status: number; headers?: Record<string, string> }> = [];
   const ctx = {
     json: (b: any, status = 200, headers?: Record<string, string>) => {
@@ -30,8 +50,12 @@ function buildContext(opts: { body?: unknown; jsonThrows?: boolean; retried?: st
       return Response.json(b, { status, headers });
     },
     req: {
-      header: (name: string) =>
-        name.toLowerCase() === 'upstash-retried' ? opts.retried : undefined,
+      header: (name: string) => {
+        const normalized = name.toLowerCase();
+        if (normalized === 'upstash-retried') return opts.retried;
+        if (normalized === 'upstash-message-id') return opts.messageId;
+        return undefined;
+      },
       json: opts.jsonThrows
         ? async () => {
             throw new Error('bad json');
@@ -52,6 +76,7 @@ describe('runStep handler', () => {
   beforeEach(() => {
     mockGetOperationMetadata.mockReset();
     mockExecuteStep.mockReset();
+    mockGetServerDB.mockResolvedValue({} as any);
   });
 
   afterEach(() => {
@@ -75,6 +100,16 @@ describe('runStep handler', () => {
 
   it('returns 401 when operation metadata has no userId', async () => {
     mockGetOperationMetadata.mockResolvedValue(null);
+    mockGetServerDB.mockResolvedValue(
+      buildOperationDiagnosticDB({
+        completedAt: null,
+        startedAt: new Date('2026-07-07T03:23:44.015Z'),
+        status: 'running',
+        stepCount: null,
+        traceS3Key: null,
+      }),
+    );
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const { ctx, getCaptures } = buildContext({ body: validBody });
 
     const res = await runStep(ctx);
@@ -82,6 +117,78 @@ describe('runStep handler', () => {
     expect(res.status).toBe(401);
     expect(getCaptures()[0].body).toEqual({ error: 'Invalid operation or unauthorized' });
     expect(mockExecuteStep).not.toHaveBeenCalled();
+    expect(JSON.parse(warnSpy.mock.calls[0][0])).toMatchObject({
+      dbRow: {
+        exists: true,
+        startedAt: '2026-07-07T03:23:44.015Z',
+        status: 'running',
+        stepCount: null,
+        traceS3KeyPresent: false,
+      },
+      event: 'agent.run_step.missing_operation_metadata',
+      metadataPresent: false,
+      operationId: 'op-1',
+      stepIndex: 2,
+      upstashRetried: null,
+    });
+    warnSpy.mockRestore();
+  });
+
+  it('includes QStash retry and message IDs in missing metadata diagnostics', async () => {
+    mockGetOperationMetadata.mockResolvedValue({});
+    mockGetServerDB.mockResolvedValue(buildOperationDiagnosticDB());
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { ctx } = buildContext({
+      body: validBody,
+      messageId: 'msg-123',
+      retried: '3',
+    });
+
+    await runStep(ctx);
+
+    expect(JSON.parse(warnSpy.mock.calls[0][0])).toMatchObject({
+      dbRow: {
+        exists: false,
+        status: null,
+      },
+      metadataHasUserId: false,
+      metadataPresent: true,
+      operationId: 'op-1',
+      qstashMessageId: 'msg-123',
+      stepIndex: 2,
+      upstashRetried: '3',
+    });
+    warnSpy.mockRestore();
+  });
+
+  it('steps through AiAgentService scoped to the operation workspace', async () => {
+    // Regression (two invariants in one path):
+    // 1. workspaceId — a workspace-scoped binding (e.g. Discord bot active agent)
+    //    runs its steps through this QStash worker. Dropping it makes the runtime
+    //    personal-scoped, so the parent-message lookup misses the workspace-scoped
+    //    row → ConversationParentMissing.
+    // 2. sub-agent forking — stepping MUST go through AiAgentService (not a bare
+    //    AgentRuntimeService), because only AiAgentService's runtime carries the
+    //    in-process `execSubAgent` fork callback. A bare runtime here makes
+    //    `lobe-agent.callSubAgent` fail with SUB_AGENT_UNAVAILABLE.
+    mockGetOperationMetadata.mockResolvedValue({ userId: 'user-1', workspaceId: 'ws-1' });
+    mockExecuteStep.mockResolvedValue({
+      nextStepScheduled: false,
+      state: { cost: { total: 0 }, status: 'done', stepCount: 1 },
+      success: true,
+    });
+
+    const { ctx } = buildContext({ body: validBody });
+    await runStep(ctx);
+
+    expect(AiAgentService).toHaveBeenCalledWith(
+      expect.anything(),
+      'user-1',
+      expect.objectContaining({ workspaceId: 'ws-1' }),
+    );
+    expect(mockExecuteStep).toHaveBeenCalledWith(
+      expect.objectContaining({ operationId: 'op-1', stepIndex: 2 }),
+    );
   });
 
   it('returns 429 with Retry-After header when the step is locked', async () => {
@@ -119,6 +226,40 @@ describe('runStep handler', () => {
 
     expect(mockExecuteStep).toHaveBeenCalledWith(
       expect.objectContaining({ externalRetryCount: 3, operationId: 'op-1', stepIndex: 2 }),
+    );
+  });
+
+  it('unwraps QStash `body.payload` resume/intervention fields into executeStep', async () => {
+    mockGetOperationMetadata.mockResolvedValue({ userId: 'user-1' });
+    mockExecuteStep.mockResolvedValue({
+      nextStepScheduled: false,
+      state: { cost: { total: 0 }, status: 'running', stepCount: 2 },
+      success: true,
+    });
+
+    // QStash nests these under `body.payload`, not the top level.
+    const { ctx } = buildContext({
+      body: {
+        context: { foo: 'bar' },
+        operationId: 'op-1',
+        payload: {
+          approvedToolCall: { id: 'tc1' },
+          resumeAsyncTool: true,
+          toolMessageId: 'msg-1',
+        },
+        stepIndex: 2,
+      },
+    });
+    await runStep(ctx);
+
+    expect(mockExecuteStep).toHaveBeenCalledWith(
+      expect.objectContaining({
+        approvedToolCall: { id: 'tc1' },
+        operationId: 'op-1',
+        resumeAsyncTool: true,
+        stepIndex: 2,
+        toolMessageId: 'msg-1',
+      }),
     );
   });
 

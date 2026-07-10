@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { useAgentMeta } from '@/features/Conversation/hooks/useAgentMeta';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import LobeMessage from '@/routes/onboarding/components/LobeMessage';
+import { consumeOnboardingCallbackUrl } from '@/utils/onboardingRedirect';
 
 import FeedbackPanel from './FeedbackPanel';
 import MessengerIntegrations from './MessengerIntegrations';
@@ -57,7 +58,9 @@ const CompletionPanel = memo<CompletionPanelProps>(
               style={{ marginTop: 8 }}
               type={'primary'}
               onClick={() => {
-                if (finishTargetUrl) window.location.assign(finishTargetUrl);
+                // The original signup target takes priority over continuing the onboarding topic
+                const target = consumeOnboardingCallbackUrl() || finishTargetUrl;
+                if (target) window.location.assign(target);
               }}
             >
               {t('agent.enterApp')}

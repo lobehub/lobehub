@@ -1,10 +1,11 @@
 import { LOBE_DEFAULT_MODEL_LIST, ModelProvider } from 'model-bank';
 import urlJoin from 'url-join';
 
-import { responsesAPIModels } from '../../const/models';
 import { createRouterRuntime } from '../../core/RouterRuntime';
 import type { CreateRouterRuntimeOptions } from '../../core/RouterRuntime/createRuntime';
 import { detectModelProvider, processMultiProviderModelList } from '../../utils/modelParse';
+import { responsesAPIModels } from '../openai/openaiModelId';
+import { resolveProviderRouteModels } from '../utils/resolveProviderRouteModels';
 
 export interface NewAPIModelCard {
   created: number;
@@ -26,17 +27,40 @@ export interface NewAPIPricing {
   supported_endpoint_types?: string[];
 }
 
+const isBrowser = () => typeof window !== 'undefined' && typeof document !== 'undefined';
+
 const fetchPricing = async (
   pricingUrl: string,
   apiKey: string,
+  providerId = ModelProvider.NewAPI,
 ): Promise<NewAPIPricing[] | null> => {
   try {
-    const res = await fetch(pricingUrl, {
-      headers: {
-        Accept: 'application/json; charset=utf-8',
-        Authorization: `Bearer ${apiKey}`,
-      },
-    });
+    let res: Response;
+    if (isBrowser()) {
+      res = await fetch(`/webapi/models/${encodeURIComponent(providerId)}/pricing`);
+    } else {
+      const fetchWithAuth = async (useAuth: boolean) => {
+        const headers: Record<string, string> = {
+          Accept: 'application/json; charset=utf-8',
+        };
+        if (useAuth && apiKey) {
+          headers.Authorization = `Bearer ${apiKey}`;
+        }
+        return fetch(pricingUrl, { headers });
+      };
+
+      let usedAuth = true;
+      try {
+        res = await fetchWithAuth(true);
+      } catch {
+        usedAuth = false;
+        res = await fetchWithAuth(false);
+      }
+
+      if (!res.ok && usedAuth) {
+        res = await fetchWithAuth(false);
+      }
+    }
 
     if (!res.ok) return null;
 
@@ -55,7 +79,10 @@ export const params = {
     'X-Client': 'LobeHub',
   },
   id: ModelProvider.NewAPI,
-  models: async ({ client: openAIClient }) => {
+  models: async ({ client: openAIClient, options }) => {
+    const providerId =
+      typeof options?.providerId === 'string' ? options.providerId : ModelProvider.NewAPI;
+
     // Get base URL (remove trailing API version paths like /v1, /v1beta, etc.)
     const baseURL = openAIClient.baseURL.replace(/\/v\d+[a-z]*\/?$/, '');
 
@@ -68,7 +95,11 @@ export const params = {
     // Try to get pricing information to enrich model details
     const pricingMap: Map<string, NewAPIPricing> = new Map();
 
-    const pricingList = await fetchPricing(`${baseURL}/api/pricing`, openAIClient.apiKey || '');
+    const pricingList = await fetchPricing(
+      `${baseURL}/api/pricing`,
+      openAIClient.apiKey || '',
+      providerId,
+    );
     if (Array.isArray(pricingList)) {
       pricingList.forEach((pricing) => {
         pricingMap.set(pricing.model_name, pricing);
@@ -158,7 +189,7 @@ export const params = {
 
     return processMultiProviderModelList([...enrichedModelList, ...additionalModels], 'newapi');
   },
-  routers: (options) => {
+  routers: (options, runtimeContext?: { model?: string }) => {
     const userBaseURL = options.baseURL?.replace(/\/v\d+[a-z]*\/?$/, '') || '';
 
     return [
@@ -190,6 +221,19 @@ export const params = {
         options: {
           ...options,
           baseURL: urlJoin(userBaseURL, '/v1'),
+        },
+      },
+      {
+        apiType: 'deepseek',
+        models: resolveProviderRouteModels(
+          'deepseek',
+          LOBE_DEFAULT_MODEL_LIST,
+          runtimeContext?.model,
+        ),
+        options: {
+          ...options,
+          baseURL: urlJoin(userBaseURL, '/v1'),
+          sdkType: 'openai',
         },
       },
       {

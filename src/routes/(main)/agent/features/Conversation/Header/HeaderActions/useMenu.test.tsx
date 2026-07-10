@@ -1,7 +1,8 @@
 /**
  * @vitest-environment happy-dom
  */
-import { act, renderHook } from '@testing-library/react';
+import { act, render, renderHook, screen } from '@testing-library/react';
+import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { useMenu } from './useMenu';
@@ -16,6 +17,10 @@ const removeTopicMock = vi.hoisted(() => vi.fn());
 const updateTopicTitleMock = vi.hoisted(() => vi.fn());
 const useLocationMock = vi.hoisted(() => vi.fn());
 
+vi.mock('@/business/client/hooks/useAuthorInfo', () => ({
+  useAuthorInfo: () => ({ fullName: 'Miao Miao' }),
+}));
+
 vi.mock('@/components/RenameModal', () => ({
   openRenameModal: vi.fn(),
 }));
@@ -25,7 +30,10 @@ vi.mock('@/const/version', () => ({
 }));
 
 vi.mock('@lobehub/ui', () => ({
+  Block: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+  Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   Icon: () => null,
+  Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
 }));
 
 vi.mock('antd', () => ({
@@ -43,7 +51,7 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('react-router-dom', () => ({
+vi.mock('react-router', () => ({
   useLocation: useLocationMock,
   useParams: () => ({}),
 }));
@@ -63,6 +71,8 @@ vi.mock('@/store/chat', () => ({
         favorite: false,
         id: 'topic-1',
         title: 'Topic 1',
+        updatedAt: '2026-05-27T00:15:00.000Z',
+        userId: 'user-1',
       },
       autoRenameTopicTitle: autoRenameTopicTitleMock,
       favoriteTopic: favoriteTopicMock,
@@ -89,6 +99,7 @@ vi.mock('@/store/global/selectors', () => ({
 const isActionItem = (
   item: unknown,
 ): item is {
+  desc?: unknown;
   key: string;
   label?: unknown;
   onClick?: () => void;
@@ -127,5 +138,23 @@ describe('Conversation header action menu', () => {
     );
 
     expect(popupItem).toBeUndefined();
+  });
+
+  it('renders topic info in the dropdown header above menu actions', () => {
+    useLocationMock.mockReturnValue({ pathname: '/agent/agent-1' });
+
+    const { result } = renderHook(() => useMenu());
+
+    const topicInfoItem = result.current.menuItems.find(
+      (item) => isActionItem(item) && item.key === 'topic-info',
+    );
+
+    expect(topicInfoItem).toBeUndefined();
+    expect(result.current.menuHeader).toBeDefined();
+
+    render(result.current.menuHeader);
+
+    expect(screen.getByText('topic:info.title')).toBeInTheDocument();
+    expect(screen.getByText(/Miao Miao.*topic:info.updatedAt/)).toBeInTheDocument();
   });
 });

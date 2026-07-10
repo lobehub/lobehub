@@ -2,7 +2,7 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet } from 'react-router';
 
 import Footer from '@/features/Setting/Footer';
 import WideScreenContainer from '@/features/WideScreenContainer';

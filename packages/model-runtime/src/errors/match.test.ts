@@ -94,6 +94,28 @@ describe('matchErrorPattern', () => {
     ).toBe(AgentRuntimeErrorType.StateStorePersistError);
   });
 
+  it('classifies the Upstash readonly-upgrade write rejection as StateStorePersistError', () => {
+    expect(
+      matchErrorPattern({
+        message: 'READONLY Writes are temporarily rejected due to server upgrade',
+      })?.code,
+    ).toBe(AgentRuntimeErrorType.StateStorePersistError);
+  });
+
+  it('classifies a caller-gone blocking-read abort as StateStoreReadError', () => {
+    expect(matchErrorPattern({ message: 'ERR caller gone' })?.code).toBe(
+      AgentRuntimeErrorType.StateStoreReadError,
+    );
+  });
+
+  it('classifies a missing-agent-state read as StateStoreReadError', () => {
+    expect(
+      matchErrorPattern({
+        message: 'Agent state not found for operation op_1781276404066_agt_x_tpc_y_z',
+      })?.code,
+    ).toBe(AgentRuntimeErrorType.StateStoreReadError);
+  });
+
   it('classifies harness JS runtime crashes as AgentRuntimeError', () => {
     for (const message of [
       'e.trim is not a function',
@@ -244,5 +266,237 @@ describe('formatErrorRef / parseErrorRef', () => {
     expect(parseErrorRef('E10')).toBeUndefined();
     expect(parseErrorRef('E99999')).toBeUndefined();
     expect(parseErrorRef('E9999')).toBeUndefined();
+  });
+});
+
+describe('matchErrorPattern — refines the UpstreamHttpError fallback bucket', () => {
+  // Real messages that were landing as the bare-HTTP fallback (a 4xx
+  // ProviderBizError whose message matched nothing → codeFromHttpStatus →
+  // UpstreamHttpError). Each must now resolve to a precise code.
+  const cases: [string, string][] = [
+    [
+      'Hệ thống đang bận, vui lòng thử lại sau ít phút.',
+      AgentRuntimeErrorType.ProviderServiceUnavailable,
+    ],
+    ['服务器问题调试中', AgentRuntimeErrorType.ProviderServiceUnavailable],
+    ['1m 上下文已经全量可用，请启用 1m 上下文后重试', AgentRuntimeErrorType.ExceededContextWindow],
+    ["Model 'glm-5.2:cloud' is not allowed on this server.", AgentRuntimeErrorType.ModelNotFound],
+    ['User has been banned (request id: 2026...)', AgentRuntimeErrorType.PermissionDenied],
+    ['Only Codex clients can use this group', AgentRuntimeErrorType.PermissionDenied],
+    [
+      "messages.content.type 参数非法，取值范围 ['text']",
+      AgentRuntimeErrorType.InvalidRequestFormat,
+    ],
+    ['参数错误超过100个', AgentRuntimeErrorType.InvalidRequestFormat],
+    ['max_tokens must be at least 1, got -1.', AgentRuntimeErrorType.InvalidRequestFormat],
+  ];
+
+  it.each(cases)('classifies %j', (message, expected) => {
+    expect(
+      matchErrorPattern({ errorType: AgentRuntimeErrorType.ProviderBizError, message })?.code,
+    ).toBe(expected);
+  });
+});
+
+describe('matchErrorPattern — second residue convergence round', () => {
+  const cases: [string, string][] = [
+    ['The provided model identifier is invalid.', AgentRuntimeErrorType.ModelNotFound],
+    [
+      'Incorrect model ID. Please request to view the model page',
+      AgentRuntimeErrorType.ModelNotFound,
+    ],
+    ['<html><head><title>403 Forbidden</title></head>', AgentRuntimeErrorType.PermissionDenied],
+    [
+      'Access denied due to Virtual Network/Firewall rules.',
+      AgentRuntimeErrorType.PermissionDenied,
+    ],
+    [
+      'This channel does not allow the current client (detected: r9)',
+      AgentRuntimeErrorType.PermissionDenied,
+    ],
+    [
+      "However, the model's context length is 200000 tokens.",
+      AgentRuntimeErrorType.ExceededContextWindow,
+    ],
+    [
+      'Image inference is not supported on this endpoint. Please use /images/generations',
+      AgentRuntimeErrorType.CapabilityNotSupported,
+    ],
+    ['当前模型不支持SSE调用方式。', AgentRuntimeErrorType.CapabilityNotSupported],
+    [
+      'This model is unavailable for free. The paid version is available now',
+      AgentRuntimeErrorType.InsufficientQuota,
+    ],
+    ['fetch failed', AgentRuntimeErrorType.ProviderNetworkError],
+    ['404 page not found', AgentRuntimeErrorType.UserConfigError],
+    [
+      '{"errors":[{"code":7003,"message":"No route for that URI"}]}',
+      AgentRuntimeErrorType.UserConfigError,
+    ],
+    [
+      'invalid params, invalid reasoning.type: "enabled" (allowed: adaptive, disabled)',
+      AgentRuntimeErrorType.InvalidRequestFormat,
+    ],
+    [
+      'Error from provider (Moonshot AI): invalid thinking: only type=enabled is allowed',
+      AgentRuntimeErrorType.InvalidRequestFormat,
+    ],
+    [
+      'function_declarations[0].parameters.properties[set]',
+      AgentRuntimeErrorType.InvalidRequestFormat,
+    ],
+    ['<!doctype html><meta charset="utf-8">', AgentRuntimeErrorType.UpstreamGatewayError],
+  ];
+
+  it.each(cases)('classifies %j', (message, expected) => {
+    expect(
+      matchErrorPattern({ errorType: AgentRuntimeErrorType.ProviderBizError, message })?.code,
+    ).toBe(expected);
+  });
+
+  it('does NOT classify a payload-size (413) rejection as ExceededContextWindow', () => {
+    // A request-body / 413 size limit is not the same as the model context
+    // window — it must stay out of ExceededContextWindow.
+    const code = matchErrorPattern({
+      errorType: AgentRuntimeErrorType.ProviderBizError,
+      message: 'Request body too large for gpt-4o model. Max size: 1000000 tokens.',
+    })?.code;
+    expect(code).not.toBe(AgentRuntimeErrorType.ExceededContextWindow);
+  });
+});
+
+describe('matchErrorPattern — gateway user/upstream residues by category', () => {
+  const groups: { cases: [string, string, string?][]; name: string }[] = [
+    {
+      cases: [
+        [
+          'Your balance is used up. Please top up to continue.',
+          AgentRuntimeErrorType.InsufficientQuota,
+        ],
+        ['have reached your weekly usage limit', AgentRuntimeErrorType.InsufficientQuota],
+        ['已达到 Token Plan 用量上限', AgentRuntimeErrorType.InsufficientQuota],
+        ['Token Plan usage limit reached', AgentRuntimeErrorType.InsufficientQuota],
+        ['The free quota has been exhausted', AgentRuntimeErrorType.InsufficientQuota],
+      ],
+      name: 'quota and plan limits',
+    },
+    {
+      cases: [
+        ['Too many requests', AgentRuntimeErrorType.RateLimitExceeded],
+        ['LLM stream error: Console API returned 429', AgentRuntimeErrorType.RateLimitExceeded],
+        ['rate limit exceeded: per-user model TPM limit', AgentRuntimeErrorType.RateLimitExceeded],
+        ['"quota exceeded"', AgentRuntimeErrorType.RateLimitExceeded],
+      ],
+      name: 'rate limiting',
+    },
+    {
+      cases: [
+        ['no channel available for model', AgentRuntimeErrorType.NoAvailableChannel],
+        ['All available accounts exhausted', AgentRuntimeErrorType.NoAvailableChannel],
+        ['"code":"NOT_FOUND","msg":"route not found"', AgentRuntimeErrorType.NoAvailableChannel],
+        ['Unknown Model, please check the model code', AgentRuntimeErrorType.ModelNotFound],
+        ['Requested model is not valid', AgentRuntimeErrorType.ModelNotFound],
+        ['invalid params, unknown model', AgentRuntimeErrorType.ModelNotFound],
+        ['404 page not found', AgentRuntimeErrorType.UserConfigError],
+        ['OpenAIException - {"detail":"Not Found"}', AgentRuntimeErrorType.UserConfigError],
+      ],
+      name: 'routing, model, and endpoint configuration',
+    },
+    {
+      cases: [
+        [
+          'Authentication is not set up. Please provide either a project and location',
+          AgentRuntimeErrorType.InvalidVertexCredentials,
+          'vertexai',
+        ],
+        ['No active credentials for provider', AgentRuntimeErrorType.InvalidProviderAPIKey],
+        ['API key is disabled.', AgentRuntimeErrorType.InvalidProviderAPIKey],
+        ['This API key has been suspended.', AgentRuntimeErrorType.InvalidProviderAPIKey],
+        ['<h1>403 Forbidden</h1>', AgentRuntimeErrorType.PermissionDenied],
+        ['403 | Forbidden', AgentRuntimeErrorType.PermissionDenied],
+        ['You have no permission to access this resource', AgentRuntimeErrorType.PermissionDenied],
+      ],
+      name: 'credentials and access',
+    },
+    {
+      cases: [
+        [
+          'The model rejected this request. It may not support the input you sent',
+          AgentRuntimeErrorType.CapabilityNotSupported,
+        ],
+        ['sensitive words detected', AgentRuntimeErrorType.ContentModeration],
+        ['请勿发送探测请求', AgentRuntimeErrorType.ContentModeration],
+      ],
+      name: 'capability and moderation',
+    },
+    {
+      cases: [
+        [
+          'Request body too large for deepseek-r1 model',
+          AgentRuntimeErrorType.InvalidRequestFormat,
+        ],
+        [
+          'error getting file type: failed to download file from https://example.com/a.png',
+          AgentRuntimeErrorType.InvalidRequestFormat,
+        ],
+        [
+          'error getting file type: failed to download file, status code: 404',
+          AgentRuntimeErrorType.InvalidRequestFormat,
+        ],
+        [
+          'Unable to download the file. Please verify the URL and try again.',
+          AgentRuntimeErrorType.InvalidRequestFormat,
+        ],
+        [
+          'The request is invalid for this endpoint. Check your model name, messages, tools, and parameters.',
+          AgentRuntimeErrorType.InvalidRequestFormat,
+        ],
+        ['422 status code (no body)', AgentRuntimeErrorType.InvalidRequestFormat],
+      ],
+      name: 'request format and file retrieval',
+    },
+    {
+      cases: [
+        ['503 "Service Unavailable"', AgentRuntimeErrorType.ProviderServiceUnavailable],
+        ['Hệ thống đang bận', AgentRuntimeErrorType.ProviderServiceUnavailable],
+        [
+          'Vision is temporarily unavailable. Send text-only requests for now.',
+          AgentRuntimeErrorType.ProviderServiceUnavailable,
+        ],
+      ],
+      name: 'service unavailable',
+    },
+  ];
+
+  for (const { cases, name } of groups) {
+    it.each(cases)(`classifies ${name}: %j`, (message, expected, provider) => {
+      expect(
+        matchErrorPattern({
+          errorType: AgentRuntimeErrorType.ProviderBizError,
+          message,
+          provider,
+        })?.code,
+      ).toBe(expected);
+      expect(isUserSideError(AgentRuntimeErrorType.ProviderBizError, message, provider)).toBe(true);
+    });
+  }
+
+  it('keeps Vertex setup errors on the Vertex credential code', () => {
+    const message =
+      'Authentication is not set up. Please provide either a project and location, or an API key, or a custom base URL.';
+
+    expect(
+      matchErrorPattern({
+        errorType: AgentRuntimeErrorType.ProviderBizError,
+        message,
+      }),
+    ).toBeUndefined();
+    expect(
+      matchErrorPattern({
+        errorType: AgentRuntimeErrorType.ProviderBizError,
+        message,
+        provider: 'vertexai',
+      })?.code,
+    ).toBe(AgentRuntimeErrorType.InvalidVertexCredentials);
   });
 });

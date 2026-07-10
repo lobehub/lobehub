@@ -3,8 +3,9 @@ import { spawn } from 'node:child_process';
 
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 
-import { AgentStreamPipeline } from './agentStreamPipeline';
+import { AgentStreamPipeline, type UploadHeterogeneousImage } from './agentStreamPipeline';
 import { resolveCliSpawnPlan } from './cliSpawn';
+import { readCodexSessionModel, resolveCodexInitialModel } from './codexModel';
 import type { AgentPromptInput, BuildAgentInputOptions } from './input';
 import { buildAgentInput } from './input';
 
@@ -37,6 +38,15 @@ export interface SpawnAgentOptions {
    */
   inputOptions?: BuildAgentInputOptions;
   /**
+   * Optional tee for the child's RAW stdout bytes, invoked synchronously for
+   * every chunk BEFORE the adapter sees it. The pipeline still consumes stdout
+   * normally — this is a pure side-channel. `lh hetero exec --raw-dump` wires
+   * it to a file writer so the untouched stream-json can be inspected after the
+   * fact (e.g. to tell a CC-side empty `tool_result` apart from an adapter
+   * extraction bug, which the adapted/ingested view alone can't distinguish).
+   */
+  onRawStdout?: (chunk: Buffer) => void;
+  /**
    * Operation id stamped onto every emitted `AgentStreamEvent`. For ingest-
    * connected runs this is the server-allocated op id; for standalone runs
    * (no `--topic` / `--operation-id`) the CLI generates a fresh uuid so
@@ -51,6 +61,15 @@ export interface SpawnAgentOptions {
   prompt: AgentPromptInput;
   /** Resume an existing agent session by its native session id (CC) / thread id (Codex). */
   resumeSessionId?: string;
+  /**
+   * Runtime uploader for tool_result images (CC `Read` on an image file). The
+   * adapter emits the raw base64 on `pluginState.images`; the pipeline calls
+   * this to swap each entry for an uploaded `{ fileId, url }` reference before
+   * the event is persisted, so heavy base64 never reaches the ingest sinks.
+   * Omit in standalone/offline runs — the pipeline then drops the image and
+   * leaves the `[Image: …]` text placeholder as the fallback.
+   */
+  uploadImage?: UploadHeterogeneousImage;
 }
 
 export interface SpawnAgentHandle {
@@ -100,9 +119,11 @@ export interface SpawnAgentHandle {
  * `AskUserQuestion` is disabled because CC's CLI self-injects an
  * `is_error: "Answer questions?"` tool_result in `-p` mode before the host
  * can surface the questions, so the model falls back to plain-text prompting
- * anyway. Remove this once a local MCP-backed replacement is wired to
- * LobeHub's intervention UI.
+ * anyway. `Monitor` and `ScheduleWakeup` are also disabled here because they
+ * can hit the same stuck wakeup path in both desktop and sandbox runs.
  */
+const CLAUDE_CODE_DISALLOWED_TOOLS = ['AskUserQuestion', 'Monitor', 'ScheduleWakeup'] as const;
+
 export const CLAUDE_CODE_BASE_ARGS = [
   '-p',
   '--input-format',
@@ -111,7 +132,7 @@ export const CLAUDE_CODE_BASE_ARGS = [
   'stream-json',
   '--verbose',
   '--disallowedTools',
-  'AskUserQuestion',
+  CLAUDE_CODE_DISALLOWED_TOOLS.join(','),
 ] as const;
 
 // bypassPermissions is blocked when running as root (e.g. cloud sandbox).
@@ -129,7 +150,18 @@ const CLAUDE_CODE_PERMISSION_ARGS = (): string[] =>
       ]
     : ['--permission-mode', 'bypassPermissions'];
 
-const CODEX_REQUIRED_ARGS = ['--json', '--skip-git-repo-check', '--full-auto'] as const;
+export const CODEX_REQUIRED_ARGS = ['--json', '--skip-git-repo-check'] as const;
+export const CODEX_BYPASS_APPROVALS_AND_SANDBOX_ARG = '--dangerously-bypass-approvals-and-sandbox';
+export const CODEX_DEFAULT_EXECUTION_ARGS = [CODEX_BYPASS_APPROVALS_AND_SANDBOX_ARG] as const;
+export const CODEX_EXECUTION_MODE_FLAGS = [
+  '--full-auto',
+  CODEX_BYPASS_APPROVALS_AND_SANDBOX_ARG,
+  '--sandbox',
+  '-s',
+] as const;
+
+const hasAnyFlag = (args: string[], flags: readonly string[]) =>
+  args.some((arg) => flags.includes(arg as (typeof flags)[number]));
 
 interface BuildSpawnArgsParams {
   agentType: string;
@@ -157,10 +189,16 @@ const buildClaudeCodeArgs = ({
   ...extraArgs,
 ];
 
-const buildCodexArgs = ({ extraArgs, inputArgs, resumeSessionId }: BuildSpawnArgsParams) =>
-  resumeSessionId
-    ? ['exec', 'resume', ...CODEX_REQUIRED_ARGS, ...inputArgs, ...extraArgs, resumeSessionId, '-']
-    : ['exec', ...CODEX_REQUIRED_ARGS, ...inputArgs, ...extraArgs];
+const buildCodexArgs = ({ extraArgs, inputArgs, resumeSessionId }: BuildSpawnArgsParams) => {
+  const executionModeArgs = hasAnyFlag(extraArgs, CODEX_EXECUTION_MODE_FLAGS)
+    ? []
+    : [...CODEX_DEFAULT_EXECUTION_ARGS];
+  const optionArgs = [...CODEX_REQUIRED_ARGS, ...executionModeArgs, ...inputArgs, ...extraArgs];
+
+  return resumeSessionId
+    ? ['exec', 'resume', ...optionArgs, resumeSessionId, '-']
+    : ['exec', ...optionArgs];
+};
 
 const buildSpawnArgs = (params: BuildSpawnArgsParams): string[] => {
   switch (params.agentType) {
@@ -230,31 +268,32 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
     resumeSessionId: options.resumeSessionId,
   });
   const cwd = options.cwd || process.cwd();
+  const childEnv = { ...process.env, ...options.env };
+  const initialModel =
+    options.agentType === 'codex'
+      ? (await resolveCodexInitialModel({ args, env: childEnv }))?.model
+      : undefined;
+  const resumedCodexSession =
+    options.agentType === 'codex' && options.resumeSessionId
+      ? await readCodexSessionModel(options.resumeSessionId, { env: childEnv })
+      : undefined;
+  const initialCumulativeUsage = resumedCodexSession?.cumulativeUsage;
 
   const cliSpawnPlan = await resolveCliSpawnPlan(command, args);
   const proc = spawn(cliSpawnPlan.command, cliSpawnPlan.args, {
     cwd,
     detached: process.platform !== 'win32',
-    env: { ...process.env, ...options.env },
+    env: childEnv,
     stdio: ['pipe', 'pipe', 'pipe'],
   });
 
-  const exit = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>(
-    (resolve, reject) => {
-      proc.on('exit', (code, signal) => resolve({ code, signal }));
-      proc.on('error', (err) => reject(err));
-    },
-  );
-
-  if (proc.stdin) {
-    proc.stdin.write(inputPlan.stdin, () => {
-      proc.stdin?.end();
-    });
-  }
-
   const pipeline = new AgentStreamPipeline({
     agentType: options.agentType,
+    cwd,
+    initialCumulativeUsage,
+    initialModel,
     operationId: options.operationId,
+    uploadImage: options.uploadImage,
   });
   const stdout = proc.stdout!;
   const stderr = proc.stderr!;
@@ -275,6 +314,28 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
       w();
     }
   };
+
+  const failStream = (err: Error) => {
+    streamError = err;
+    streamEnded = true;
+    wake();
+  };
+
+  const exit = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>(
+    (resolve, reject) => {
+      proc.on('exit', (code, signal) => resolve({ code, signal }));
+      proc.on('error', (err) => {
+        failStream(err);
+        reject(err);
+      });
+    },
+  );
+
+  if (proc.stdin) {
+    proc.stdin.write(inputPlan.stdin, () => {
+      proc.stdin?.end();
+    });
+  }
 
   // ALL pipeline work — push / flush — runs through this single chain so:
   //   1. multiple `'data'` chunks process in arrival order, even when an
@@ -315,7 +376,19 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
     });
   };
 
-  stdout.on('data', enqueuePush);
+  stdout.on('data', (chunk: Buffer) => {
+    // Tee the raw bytes first so the dump captures exactly what CC emitted,
+    // independent of how the adapter later parses it. Best-effort: a throwing
+    // sink must not break the stream, so guard it.
+    if (options.onRawStdout) {
+      try {
+        options.onRawStdout(chunk);
+      } catch {
+        // raw dump is diagnostic-only; never let it disrupt the run
+      }
+    }
+    enqueuePush(chunk);
+  });
   stdout.on('end', enqueueFlush);
   stdout.on('error', (err) => {
     // Append onto the same chain so the error is surfaced strictly after any

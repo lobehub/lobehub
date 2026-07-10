@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { DEFAULT_INBOX_AVATAR, INBOX_SESSION_ID } from '@lobechat/const';
 import { CHAT_GROUP_SESSION_ID_PREFIX } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -7,11 +8,18 @@ import type { LobeChatDatabase } from '@/database/type';
 
 import { getTestDB } from '../../core/getTestDB';
 import type { NewChatGroup } from '../../schemas';
-import { agents as agentsTable, chatGroups, chatGroupsAgents, users } from '../../schemas';
+import {
+  agents as agentsTable,
+  chatGroups,
+  chatGroupsAgents,
+  users,
+  workspaces,
+} from '../../schemas';
 import { ChatGroupModel } from '../chatGroup';
 
 const userId = 'test-user';
 const otherUserId = 'other-user';
+const workspaceId = 'chat-group-workspace';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
@@ -26,11 +34,18 @@ type RelationAgent = {
 const toRelationAgents = (agents: unknown): RelationAgent[] => agents as RelationAgent[];
 
 const chatGroupModel = new ChatGroupModel(serverDB, userId);
+const workspaceChatGroupModel = new ChatGroupModel(serverDB, otherUserId, workspaceId);
 
 beforeEach(async () => {
   await serverDB.delete(users);
   // Create test users
   await serverDB.insert(users).values([{ id: userId }, { id: otherUserId }]);
+  await serverDB.insert(workspaces).values({
+    id: workspaceId,
+    name: 'Chat Group Workspace',
+    primaryOwnerId: userId,
+    slug: workspaceId,
+  });
 });
 
 afterEach(async () => {
@@ -536,6 +551,132 @@ describe('ChatGroupModel', () => {
         chatGroupModel.addAgentsToGroup('non-existent-group', ['agent-1']),
       ).rejects.toThrow('Group not found');
     });
+
+    describe('private/public visibility composite rule', () => {
+      // Caller is `otherUserId` operating inside `workspaceId`. The owner of
+      // `workspaceId` is `userId`, so we exercise both "my own group" and
+      // "another member's group" within the same workspace.
+      it("allows the caller's own private agent in their own private group", async () => {
+        await serverDB.transaction(async (trx) => {
+          await trx.insert(chatGroups).values({
+            id: 'mine-private-group',
+            title: 'Mine — private',
+            userId: otherUserId,
+            workspaceId,
+            visibility: 'private',
+          });
+          await trx.insert(agentsTable).values({
+            id: 'agt-mine-private',
+            title: 'Mine — private agent',
+            userId: otherUserId,
+            workspaceId,
+            visibility: 'private',
+          });
+        });
+
+        const result = await workspaceChatGroupModel.addAgentsToGroup('mine-private-group', [
+          'agt-mine-private',
+        ]);
+
+        expect(result.added).toHaveLength(1);
+      });
+
+      it("allows a workspace public agent in the caller's own private group", async () => {
+        await serverDB.transaction(async (trx) => {
+          await trx.insert(chatGroups).values({
+            id: 'mine-private-group-pub',
+            title: 'Mine — private',
+            userId: otherUserId,
+            workspaceId,
+            visibility: 'private',
+          });
+          await trx.insert(agentsTable).values({
+            id: 'agt-ws-public',
+            title: 'Workspace public agent',
+            userId, // owned by the workspace owner — visible to all members
+            workspaceId,
+            visibility: 'public',
+          });
+        });
+
+        const result = await workspaceChatGroupModel.addAgentsToGroup('mine-private-group-pub', [
+          'agt-ws-public',
+        ]);
+
+        expect(result.added).toHaveLength(1);
+      });
+
+      it("rejects another member's private agent even in the caller's own private group", async () => {
+        await serverDB.transaction(async (trx) => {
+          await trx.insert(chatGroups).values({
+            id: 'mine-private-group-foreign',
+            title: 'Mine — private',
+            userId: otherUserId,
+            workspaceId,
+            visibility: 'private',
+          });
+          await trx.insert(agentsTable).values({
+            id: 'agt-other-private',
+            title: 'Other private agent',
+            userId,
+            workspaceId,
+            visibility: 'private',
+          });
+        });
+
+        await expect(
+          workspaceChatGroupModel.addAgentsToGroup('mine-private-group-foreign', [
+            'agt-other-private',
+          ]),
+        ).rejects.toThrow('Agent not found');
+      });
+
+      it("rejects the caller's own private agent in their own public group", async () => {
+        await serverDB.transaction(async (trx) => {
+          await trx.insert(chatGroups).values({
+            id: 'mine-public-group',
+            title: 'Mine — public',
+            userId: otherUserId,
+            workspaceId,
+            visibility: 'public',
+          });
+          await trx.insert(agentsTable).values({
+            id: 'agt-mine-private-2',
+            title: 'Mine — private agent',
+            userId: otherUserId,
+            workspaceId,
+            visibility: 'private',
+          });
+        });
+
+        await expect(
+          workspaceChatGroupModel.addAgentsToGroup('mine-public-group', ['agt-mine-private-2']),
+        ).rejects.toThrow('Agent not found');
+      });
+
+      it("rejects a private agent in another member's group (group is public)", async () => {
+        await serverDB.transaction(async (trx) => {
+          await trx.insert(chatGroups).values({
+            id: 'others-public-group',
+            title: 'Others — public',
+            userId, // group owner is the workspace owner, not the caller
+            workspaceId,
+            visibility: 'public',
+          });
+          await trx.insert(agentsTable).values({
+            id: 'agt-mine-private-3',
+            title: 'Mine — private agent',
+            userId: otherUserId,
+            workspaceId,
+            visibility: 'private',
+          });
+        });
+
+        await expect(
+          workspaceChatGroupModel.addAgentsToGroup('others-public-group', ['agt-mine-private-3']),
+        ).rejects.toThrow('Agent not found');
+      });
+    });
   });
 
   describe('removeAgentFromGroup', () => {
@@ -982,6 +1123,61 @@ describe('ChatGroupModel', () => {
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe('user-group');
       expect(result[0].userId).toBe(userId);
+    });
+
+    it('should return workspace groups for members even when rows were created by another user', async () => {
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(chatGroups).values({
+          id: 'workspace-group',
+          title: 'Workspace Group',
+          userId,
+          workspaceId,
+        });
+        await trx.insert(agentsTable).values({
+          id: 'workspace-agent',
+          title: 'Workspace Agent',
+          userId,
+          workspaceId,
+        });
+        await trx.insert(chatGroupsAgents).values({
+          agentId: 'workspace-agent',
+          chatGroupId: 'workspace-group',
+          userId,
+          workspaceId,
+        });
+      });
+
+      const result = await workspaceChatGroupModel.getGroupsWithAgents(['workspace-agent']);
+
+      expect(result).toEqual([expect.objectContaining({ id: 'workspace-group', workspaceId })]);
+    });
+  });
+
+  describe('getMemberAvatarsByGroupIds', () => {
+    it('should group member avatars by chatGroupId in member order with inbox fallback', async () => {
+      await serverDB.insert(agentsTable).values([
+        { avatar: '/custom.png', id: 'member-custom', slug: 'custom', userId },
+        { avatar: null, id: 'member-inbox', slug: INBOX_SESSION_ID, userId },
+      ]);
+      await serverDB.insert(chatGroups).values({ id: 'group-avatars', title: 'G', userId });
+      await serverDB.insert(chatGroupsAgents).values([
+        { agentId: 'member-inbox', chatGroupId: 'group-avatars', order: 1, userId },
+        { agentId: 'member-custom', chatGroupId: 'group-avatars', order: 0, userId },
+      ]);
+
+      const result = await chatGroupModel.getMemberAvatarsByGroupIds(['group-avatars']);
+
+      // Ordered by `order`: custom (0) before inbox (1); inbox avatar falls back.
+      expect(result.get('group-avatars')).toEqual([
+        { avatar: '/custom.png', backgroundColor: null },
+        { avatar: DEFAULT_INBOX_AVATAR, backgroundColor: null },
+      ]);
+    });
+
+    it('should return an empty map for no group ids', async () => {
+      const result = await chatGroupModel.getMemberAvatarsByGroupIds([]);
+
+      expect(result.size).toBe(0);
     });
   });
 });

@@ -1,3 +1,4 @@
+import { withOtelMetricsForUpstashWorkflows } from '@lobechat/observability-otel/modules/upstash-workflow';
 import { serve } from '@upstash/workflow/nextjs';
 import debug from 'debug';
 
@@ -8,6 +9,7 @@ import {
   AgentEvalRunWorkflow,
   type RunAgentTrajectoryPayload,
 } from '@/server/workflows/agentEvalRun';
+import { resolveAgentEvalRunWorkspace } from '@/server/workflows/agentEvalRun/utils';
 
 const log = debug('lobe-server:workflows:run-agent-trajectory');
 
@@ -17,7 +19,7 @@ const log = debug('lobe-server:workflows:run-agent-trajectory');
  * For k>1: creates K threads and triggers K run-thread-trajectory sub-workflows
  */
 export const { POST } = serve<RunAgentTrajectoryPayload>(
-  async (context) => {
+  withOtelMetricsForUpstashWorkflows(async (context) => {
     const { runId, testCaseId, userId } = context.requestPayload ?? {};
 
     log('Starting: runId=%s testCaseId=%s', runId, testCaseId);
@@ -27,7 +29,8 @@ export const { POST } = serve<RunAgentTrajectoryPayload>(
     }
 
     const db = await getServerDB();
-    const service = new AgentEvalRunService(db, userId);
+    const wsId = await resolveAgentEvalRunWorkspace(db, runId);
+    const service = new AgentEvalRunService(db, userId, wsId);
 
     // Step 1: Read all required data
     const data = await context.run('agent-eval-run:load-data', () =>
@@ -107,7 +110,7 @@ export const { POST } = serve<RunAgentTrajectoryPayload>(
       testCaseId,
       topicId: result.topicId,
     };
-  },
+  }),
   {
     flowControl: {
       key: 'agent-eval-run.run-agent-trajectory',

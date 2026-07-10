@@ -1,11 +1,16 @@
 'use client';
 
-import { confirmModal } from '@lobehub/ui/base-ui';
+import { Alert, Flexbox } from '@lobehub/ui';
+import { Button, confirmModal } from '@lobehub/ui/base-ui';
 import { App, Form } from 'antd';
 import { createStaticStyles } from 'antd-style';
+import { ExternalLink } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { usePermission } from '@/hooks/usePermission';
 import type { SerializedPlatformDefinition } from '@/server/services/bot/platforms/types';
 import { agentBotProviderService } from '@/services/agentBotProvider';
 import { useAgentStore } from '@/store/agent';
@@ -64,15 +69,28 @@ export interface TestResult {
 interface PlatformDetailProps {
   agentId: string;
   currentConfig?: CurrentConfig;
+  disabled?: boolean;
   platformDef: SerializedPlatformDefinition;
   runtimeStatus?: BotRuntimeStatus;
 }
 
 const PlatformDetail = memo<PlatformDetailProps>(
-  ({ platformDef, agentId, currentConfig, runtimeStatus }) => {
+  ({ platformDef, agentId, currentConfig, disabled, runtimeStatus }) => {
     const { t } = useTranslation('agent');
+    const navigate = useWorkspaceAwareNavigate();
     const { message: msg } = App.useApp();
     const [form] = Form.useForm<ChannelFormValues>();
+    const { allowed: canEdit } = usePermission('edit_own_content');
+    const activeWorkspaceId = useActiveWorkspaceId();
+    const readOnly = disabled || !canEdit;
+    const paidFeatureBlocked =
+      platformDef.access?.requiredPlan === 'paid' && platformDef.access.allowed === false;
+    const paidFeatureMode = platformDef.access?.rolloutMode ?? 'enforce';
+    const paidFeatureScope = activeWorkspaceId ? 'workspace' : 'personal';
+    const writeDisabled = readOnly || paidFeatureBlocked;
+    // The server allows disable-only updates on paid-blocked channels, so an
+    // already-enabled channel can still be turned off (but not re-enabled).
+    const toggleDisabled = readOnly || (paidFeatureBlocked && !currentConfig?.enabled);
 
     const [
       createBotProvider,
@@ -212,6 +230,7 @@ const PlatformDetail = memo<PlatformDetailProps>(
     );
 
     const handleRefreshStatus = useCallback(async () => {
+      if (writeDisabled) return;
       if (!currentConfig?.enabled) return;
       setRefreshingStatus(true);
       try {
@@ -232,7 +251,14 @@ const PlatformDetail = memo<PlatformDetailProps>(
       } finally {
         setRefreshingStatus(false);
       }
-    }, [agentId, currentConfig, mapRuntimeStatusToResult, msg, refreshBotRuntimeStatus]);
+    }, [
+      agentId,
+      writeDisabled,
+      currentConfig,
+      mapRuntimeStatusToResult,
+      msg,
+      refreshBotRuntimeStatus,
+    ]);
 
     // Reset form and status when switching platforms. Must NOT depend on
     // runtimeStatus — otherwise background status refreshes would wipe
@@ -292,6 +318,8 @@ const PlatformDetail = memo<PlatformDetailProps>(
     }, [currentConfig, stopConnectPolling, syncRuntimeStatus]);
 
     const handleSave = useCallback(async () => {
+      if (writeDisabled) return;
+
       try {
         await form.validateFields();
         const values = form.getFieldsValue(true) as ChannelFormValues;
@@ -363,10 +391,13 @@ const PlatformDetail = memo<PlatformDetailProps>(
       createBotProvider,
       updateBotProvider,
       connectCurrentBot,
+      writeDisabled,
     ]);
 
     const handleExternalAuth = useCallback(
       async (params: { applicationId: string; credentials: Record<string, string> }) => {
+        if (writeDisabled) return;
+
         setSaving(true);
         setSaveResult(undefined);
         setConnectResult(undefined);
@@ -413,12 +444,14 @@ const PlatformDetail = memo<PlatformDetailProps>(
         createBotProvider,
         updateBotProvider,
         connectCurrentBot,
+        writeDisabled,
         msg,
         t,
       ],
     );
 
     const handleDelete = useCallback(async () => {
+      if (readOnly) return;
       if (!currentConfig) return;
 
       confirmModal({
@@ -435,10 +468,11 @@ const PlatformDetail = memo<PlatformDetailProps>(
         },
         title: t('channel.deleteConfirm'),
       });
-    }, [currentConfig, agentId, deleteBotProvider, msg, t, form]);
+    }, [readOnly, currentConfig, agentId, deleteBotProvider, msg, t, form]);
 
     const handleToggleEnable = useCallback(
       async (enabled: boolean) => {
+        if (enabled ? writeDisabled : readOnly) return;
         if (!currentConfig) return;
         try {
           setPendingEnabled(enabled);
@@ -454,10 +488,20 @@ const PlatformDetail = memo<PlatformDetailProps>(
           msg.error(t('channel.updateFailed'));
         }
       },
-      [currentConfig, agentId, updateBotProvider, connectCurrentBot, msg, t],
+      [
+        writeDisabled,
+        readOnly,
+        currentConfig,
+        agentId,
+        updateBotProvider,
+        connectCurrentBot,
+        msg,
+        t,
+      ],
     );
 
     const handleTestConnection = useCallback(async () => {
+      if (writeDisabled) return;
       if (!currentConfig) {
         msg.warning(t('channel.saveFirstWarning'));
         return;
@@ -479,23 +523,57 @@ const PlatformDetail = memo<PlatformDetailProps>(
       } finally {
         setTesting(false);
       }
-    }, [currentConfig, platformDef.id, testConnection, msg, t]);
+    }, [writeDisabled, currentConfig, platformDef.id, testConnection, msg, t]);
+
+    const handlePaidFeatureUpgrade = useCallback(() => {
+      navigate('/settings/plans');
+    }, [navigate]);
 
     return (
       <ChannelPostSaveContext value={postSaveRegistry}>
         <main className={styles.main}>
           <Header
             currentConfig={currentConfig}
+            disabled={writeDisabled}
             enabledValue={pendingEnabled}
             platformDef={platformDef}
             refreshingStatus={refreshingStatus}
             runtimeStatus={observedStatus}
+            toggleDisabled={toggleDisabled}
             toggleLoading={toggleLoading}
             onRefreshStatus={handleRefreshStatus}
             onToggleEnable={handleToggleEnable}
           />
+          {paidFeatureBlocked && (
+            <Alert
+              showIcon
+              style={{ marginBlockStart: 16, maxWidth: 1024, width: '100%' }}
+              type={paidFeatureMode === 'notice' ? 'warning' : 'info'}
+              description={t(`channel.paidFeature.${paidFeatureMode}.desc.${paidFeatureScope}`, {
+                name: platformDef.name,
+              })}
+              message={
+                <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
+                  <span>
+                    {t(`channel.paidFeature.${paidFeatureMode}.title`, {
+                      name: platformDef.name,
+                    })}
+                  </span>
+                  <Button
+                    icon={<ExternalLink size={14} />}
+                    size={'small'}
+                    type={'primary'}
+                    onClick={handlePaidFeatureUpgrade}
+                  >
+                    {t(`channel.paidFeature.cta.${paidFeatureScope}`)}
+                  </Button>
+                </Flexbox>
+              }
+            />
+          )}
           <Body
             currentConfig={currentConfig}
+            disabled={writeDisabled}
             form={form}
             hasConfig={!!currentConfig}
             platformDef={platformDef}
@@ -505,6 +583,7 @@ const PlatformDetail = memo<PlatformDetailProps>(
             connectResult={connectResult}
             connecting={connecting}
             currentConfig={currentConfig}
+            disabled={readOnly}
             form={form}
             hasConfig={!!currentConfig}
             platformDef={platformDef}
@@ -512,6 +591,7 @@ const PlatformDetail = memo<PlatformDetailProps>(
             saving={saving}
             testResult={testResult}
             testing={testing}
+            writeDisabled={writeDisabled}
             onCopied={() => msg.success(t('channel.copied'))}
             onDelete={handleDelete}
             onSave={handleSave}

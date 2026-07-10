@@ -1,3 +1,4 @@
+import { getActivePluginIds } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import { Switch } from 'antd';
 import isEqual from 'fast-deep-equal';
@@ -9,15 +10,17 @@ import { useStore } from '../../store';
 
 const PluginSwitch = memo<{ identifier: string }>(({ identifier }) => {
   const pluginManifestLoading = useToolStore((s) => s.pluginInstallLoading, isEqual);
-  const [userEnabledPlugins, hasPlugin, toggleAgentPlugin] = useStore((s) => [
-    s.config.plugins || [],
+  const [userEnabledPlugins, hasPlugin, disabled, toggleAgentPlugin] = useStore((s) => [
+    getActivePluginIds(s.config.plugins),
     !!s.config.plugins,
+    s.disabled,
     s.toggleAgentPlugin,
   ]);
 
   return (
     <Flexbox horizontal align={'center'} gap={8}>
       <Switch
+        disabled={disabled}
         loading={pluginManifestLoading[identifier]}
         checked={
           // If loading, it means it's activated
@@ -26,6 +29,8 @@ const PluginSwitch = memo<{ identifier: string }>(({ identifier }) => {
             : userEnabledPlugins.includes(identifier)
         }
         onChange={() => {
+          if (disabled) return;
+
           toggleAgentPlugin(identifier);
         }}
       />

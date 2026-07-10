@@ -742,6 +742,7 @@ describe('OpenAIResponsesStream', () => {
   });
 
   it('should handle response.completed without usage', async () => {
+    const onFinal = vi.fn();
     const mockOpenAIStream = createReadableStream([
       {
         type: 'response.created',
@@ -759,10 +760,28 @@ describe('OpenAIResponsesStream', () => {
       },
     ]);
 
-    const protocolStream = OpenAIResponsesStream(mockOpenAIStream);
+    const protocolStream = OpenAIResponsesStream(mockOpenAIStream, {
+      callbacks: { onFinal },
+      payload: { apiMode: 'responses', model: 'gpt-5.4-mini', provider: 'openai' },
+    });
     const chunks = await readStreamChunk(protocolStream);
 
     expect(chunks).toMatchSnapshot();
+    expect(onFinal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        usageMissingDiagnostics: {
+          apiMode: 'responses',
+          hasUsageMetadata: false,
+          includeUsageRequested: undefined,
+          model: 'gpt-5.4-mini',
+          provider: 'openai',
+          responseId: 'resp_completed_no_usage',
+          source: 'openai_responses',
+          terminalEventType: 'response.completed',
+          terminalStatus: 'completed',
+        },
+      }),
+    );
   });
 
   it('should handle unknown chunk type as data', async () => {

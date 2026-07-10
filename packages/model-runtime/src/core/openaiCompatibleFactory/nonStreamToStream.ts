@@ -36,12 +36,16 @@ export const transformResponseToStream = (data: OpenAI.ChatCompletion) =>
             content: choice.message.content,
             role: choice.message.role,
             tool_calls: choice.message.tool_calls?.map(
-              (tool, index): OpenAI.ChatCompletionChunk.Choice.Delta.ToolCall => ({
-                function: tool.function,
-                id: tool.id,
-                index,
-                type: tool.type,
-              }),
+              (tool, index): OpenAI.ChatCompletionChunk.Choice.Delta.ToolCall => {
+                // OpenAI SDK v6 made tool calls a function|custom union; lobehub only emits function calls.
+                const fnTool = tool as OpenAI.ChatCompletionMessageFunctionToolCall;
+                return {
+                  function: fnTool.function,
+                  id: fnTool.id,
+                  index,
+                  type: fnTool.type,
+                };
+              },
             ),
           },
           finish_reason: null,

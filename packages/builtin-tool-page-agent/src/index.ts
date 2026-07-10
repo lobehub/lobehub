@@ -1,4 +1,3 @@
-// Re-export runtime types from @lobechat/editor-runtime
 export { PageAgentManifest } from './manifest';
 export { systemPrompt } from './systemRole';
 export {

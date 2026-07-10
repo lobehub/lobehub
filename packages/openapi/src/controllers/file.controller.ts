@@ -27,7 +27,7 @@ export class FileController extends BaseController {
       const userId = this.getUserId(c)!; // requireAuth middleware ensures userId exists
 
       const db = await this.getDatabase();
-      const fileService = new FileUploadService(db, userId);
+      const fileService = new FileUploadService(db, userId, this.getWorkspaceId(c));
 
       // Process multipart/form-data (returns object: { fields, files })
       const formData = await this.getFormData(c);
@@ -87,7 +87,7 @@ export class FileController extends BaseController {
       const query = this.getQuery(c) as FileListQuery;
 
       const db = await this.getDatabase();
-      const fileService = new FileUploadService(db, userId);
+      const fileService = new FileUploadService(db, userId, this.getWorkspaceId(c));
 
       const result = await fileService.getFileList(query);
 
@@ -106,7 +106,7 @@ export class FileController extends BaseController {
       const userId = this.getUserId(c)!; // requireAuth middleware ensures userId exists
       const { id } = this.getParams(c);
       const db = await this.getDatabase();
-      const fileService = new FileUploadService(db, userId);
+      const fileService = new FileUploadService(db, userId, this.getWorkspaceId(c));
 
       const result = await fileService.getFileDetail(id);
 
@@ -132,7 +132,7 @@ export class FileController extends BaseController {
       };
 
       const db = await this.getDatabase();
-      const fileService = new FileUploadService(db, userId);
+      const fileService = new FileUploadService(db, userId, this.getWorkspaceId(c));
 
       const result = await fileService.getFileUrl(id, options);
 
@@ -151,7 +151,7 @@ export class FileController extends BaseController {
       const userId = this.getUserId(c)!; // requireAuth middleware ensures userId exists
 
       const db = await this.getDatabase();
-      const fileService = new FileUploadService(db, userId);
+      const fileService = new FileUploadService(db, userId, this.getWorkspaceId(c));
 
       const formData = await this.getFormData(c);
       const file = formData.get('file') as File | null;
@@ -201,7 +201,7 @@ export class FileController extends BaseController {
       };
 
       const db = await this.getDatabase();
-      const fileService = new FileUploadService(db, userId);
+      const fileService = new FileUploadService(db, userId, this.getWorkspaceId(c));
 
       const result = await fileService.parseFile(id, options);
 
@@ -222,7 +222,7 @@ export class FileController extends BaseController {
       const body = await this.getBody<Partial<FileChunkRequest>>(c);
 
       const db = await this.getDatabase();
-      const fileService = new FileUploadService(db, userId);
+      const fileService = new FileUploadService(db, userId, this.getWorkspaceId(c));
 
       const result = await fileService.createChunkTask(id, {
         autoEmbedding: body?.autoEmbedding,
@@ -245,7 +245,7 @@ export class FileController extends BaseController {
       const { id } = this.getParams(c);
 
       const db = await this.getDatabase();
-      const fileService = new FileUploadService(db, userId);
+      const fileService = new FileUploadService(db, userId, this.getWorkspaceId(c));
 
       const result = await fileService.getFileChunkStatus(id);
 
@@ -264,7 +264,7 @@ export class FileController extends BaseController {
       const userId = this.getUserId(c)!; // requireAuth middleware ensures userId exists
       const { id } = this.getParams(c);
       const db = await this.getDatabase();
-      const fileService = new FileUploadService(db, userId);
+      const fileService = new FileUploadService(db, userId, this.getWorkspaceId(c));
 
       const result = await fileService.deleteFile(id);
 
@@ -288,7 +288,7 @@ export class FileController extends BaseController {
       }
 
       const db = await this.getDatabase();
-      const fileService = new FileUploadService(db, userId);
+      const fileService = new FileUploadService(db, userId, this.getWorkspaceId(c));
 
       const result = await fileService.handleQueries(body);
 
@@ -309,7 +309,7 @@ export class FileController extends BaseController {
       const body = await this.getBody<UpdateFileRequest>(c);
 
       const db = await this.getDatabase();
-      const fileService = new FileUploadService(db, userId);
+      const fileService = new FileUploadService(db, userId, this.getWorkspaceId(c));
 
       const result = await fileService.updateFile(id, body);
 

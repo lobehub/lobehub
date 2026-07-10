@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useChatStore } from '@/store/chat';
 
+import MoveToAgentButton from './MoveToAgentButton';
 import { useTopicsViewStore } from './store';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -103,6 +104,7 @@ const BulkActionBar = memo(() => {
           title={t('management.bulk.archive')}
           onClick={handleBatchArchive}
         />
+        <MoveToAgentButton />
         <ActionIcon
           icon={Trash2}
           size={'small'}

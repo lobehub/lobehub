@@ -5,6 +5,8 @@ import { Flexbox } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { memo } from 'react';
 
+import { usePermission } from '@/hooks/usePermission';
+
 import ReactionPicker from './ReactionPicker';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -66,6 +68,8 @@ interface ReactionDisplayProps {
 
 const ReactionDisplay = memo<ReactionDisplayProps>(
   ({ reactions, onReactionClick, messageId, isActive }) => {
+    const { allowed: canEdit } = usePermission('edit_own_content');
+
     if (reactions.length === 0) return null;
 
     return (
@@ -74,13 +78,14 @@ const ReactionDisplay = memo<ReactionDisplayProps>(
           <div
             className={cx(styles.reactionTag, isActive?.(reaction.emoji) && styles.active)}
             key={reaction.emoji}
-            onClick={() => onReactionClick?.(reaction.emoji)}
+            style={{ cursor: canEdit ? undefined : 'default' }}
+            onClick={canEdit ? () => onReactionClick?.(reaction.emoji) : undefined}
           >
             <span>{reaction.emoji}</span>
             {reaction.count > 1 && <span className={styles.count}>{reaction.count}</span>}
           </div>
         ))}
-        {messageId && <ReactionPicker messageId={messageId} />}
+        {canEdit && messageId && <ReactionPicker messageId={messageId} />}
       </Flexbox>
     );
   },

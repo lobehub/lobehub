@@ -1,6 +1,6 @@
 ---
 name: trpc-router
-description: 'TRPC router development guide. Use when creating or modifying src/server/routers, adding procedures, or implementing server-side API endpoints.'
+description: 'TRPC router development guide. Use when creating or modifying apps/server/src/routers, adding procedures, or implementing server-side API endpoints.'
 user-invocable: false
 ---
 
@@ -8,9 +8,9 @@ user-invocable: false
 
 ## File Location
 
-- Routers: `src/server/routers/lambda/<domain>.ts`
-- Helpers: `src/server/routers/lambda/_helpers/`
-- Schemas: `src/server/routers/lambda/_schema/`
+- Routers: `apps/server/src/routers/lambda/<domain>.ts`
+- Helpers: `apps/server/src/routers/lambda/_helpers/`
+- Schemas: `apps/server/src/routers/lambda/_schema/`
 
 ## Router Structure
 

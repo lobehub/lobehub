@@ -34,32 +34,27 @@ const createFailedResult = (
   success: false,
 });
 
-export const klavisExecutor: RemoteToolExecutor = async (p, _context) => {
-  // payload.identifier is now the storage identifier (e.g., 'google-calendar')
+export const composioExecutor: RemoteToolExecutor = async (p, _context) => {
   const identifier = p.identifier;
-  const klavisServers = useToolStore.getState().servers || [];
-  const server = klavisServers.find((s) => s.identifier === identifier);
+  const composioServers = useToolStore.getState().composioServers || [];
+  const server = composioServers.find((s) => s.identifier === identifier);
 
   if (!server) {
-    return createFailedResult(`Klavis server not found: ${identifier}`);
+    return createFailedResult(`Composio server not found: ${identifier}`);
   }
 
-  // Parse arguments
   const args = safeParseJSON(p.arguments) || {};
 
-  // Call Klavis tool via store action
-  const result = await useToolStore.getState().callKlavisTool({
-    serverUrl: server.serverUrl,
+  const result = await useToolStore.getState().callComposioTool({
+    identifier,
     toolArgs: args,
-    toolName: p.apiName,
+    toolSlug: p.apiName,
   });
 
   if (!result.success) {
-    return createFailedResult(result.error || 'Klavis tool execution failed');
+    return createFailedResult(result.error || 'Composio tool execution failed');
   }
 
-  // result.data is MCPToolCallProcessedResult from server
-  // Convert to MCPToolCallResult format
   const toolResult = result.data;
   if (toolResult) {
     return {
@@ -70,7 +65,7 @@ export const klavisExecutor: RemoteToolExecutor = async (p, _context) => {
     };
   }
 
-  return createFailedResult('Klavis tool returned empty result');
+  return createFailedResult('Composio tool returned empty result');
 };
 
 export const lobehubSkillExecutor: RemoteToolExecutor = async (p, context) => {

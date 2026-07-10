@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { ToolDetector } from '../../toolDetector';
 import { LinuxSearchServiceImpl } from '../impl/linux';
 
 vi.mock('node:os', () => ({
@@ -17,9 +18,12 @@ vi.mock('../../logger', () => ({
 }));
 
 const fgMock = vi.fn();
-vi.mock('fast-glob', () => ({
-  default: (...args: unknown[]) => fgMock(...args),
-}));
+const fgStreamMock = () => (fgMock as unknown as { stream: ReturnType<typeof vi.fn> }).stream;
+vi.mock('fast-glob', () => {
+  const defaultExport = (...args: unknown[]) => fgMock(...args);
+  Object.defineProperty(defaultExport, 'stream', { get: () => fgStreamMock() });
+  return { default: defaultExport };
+});
 
 const execaMock = vi.fn();
 vi.mock('execa', () => ({
@@ -39,6 +43,7 @@ vi.mock('node:fs/promises', () => ({
 describe('UnixFileSearch glob fallback root', () => {
   beforeEach(() => {
     fgMock.mockReset();
+    (fgMock as unknown as { stream: ReturnType<typeof vi.fn> }).stream = vi.fn();
     execaMock.mockReset();
     // Force the Unix tool selection to fall through to fast-glob so we
     // don't have to mock fd/find availability checks.
@@ -65,5 +70,79 @@ describe('UnixFileSearch glob fallback root', () => {
 
     const [, options] = fgMock.mock.calls[0] as [string, { cwd: string }];
     expect(options.cwd).toBe('/Users/test-home/Downloads');
+  });
+
+  it('uses fast-glob instead of find for globstar-compatible matching', async () => {
+    const toolDetector: ToolDetector = {
+      getBestTool: vi.fn().mockResolvedValue('find'),
+    };
+    const impl = new LinuxSearchServiceImpl(toolDetector);
+
+    await impl.glob({ pattern: '**/*skill*', scope: '/repo/packages' });
+
+    expect(fgMock).toHaveBeenCalledTimes(1);
+    expect(execaMock).not.toHaveBeenCalledWith('find', expect.anything(), expect.anything());
+
+    const [pattern, options] = fgMock.mock.calls[0] as [string, { cwd: string; ignore: string[] }];
+    expect(pattern).toBe('**/*skill*');
+    expect(options.cwd).toBe('/repo/packages');
+    expect(options.ignore).toContain('**/node_modules/**');
+    expect(options.ignore).toContain('**/.git/**');
+  });
+
+  it('passes the execution limit through to fd glob', async () => {
+    const toolDetector: ToolDetector = {
+      getBestTool: vi.fn().mockResolvedValue('fd'),
+    };
+    execaMock.mockResolvedValue({
+      exitCode: 0,
+      stdout: '/repo/packages/a.ts\n/repo/packages/b.ts\n',
+    });
+
+    const impl = new LinuxSearchServiceImpl(toolDetector);
+    await impl.glob({ limit: 7, pattern: '**/*.ts', scope: '/repo/packages' });
+
+    expect(execaMock).toHaveBeenCalledWith(
+      'fd',
+      expect.arrayContaining(['--max-results', '7']),
+      expect.anything(),
+    );
+  });
+
+  it('does not force a glob execution limit when the caller omits it', async () => {
+    const toolDetector: ToolDetector = {
+      getBestTool: vi.fn().mockResolvedValue('fd'),
+    };
+    execaMock.mockResolvedValue({
+      exitCode: 0,
+      stdout: '/repo/packages/a.ts\n',
+    });
+
+    const impl = new LinuxSearchServiceImpl(toolDetector);
+    await impl.glob({ pattern: '**/*.ts', scope: '/repo/packages' });
+
+    const [, args] = execaMock.mock.calls[0] as [string, string[]];
+    expect(args).not.toContain('--max-results');
+  });
+
+  it('streams fast-glob results when the caller provides a glob limit', async () => {
+    fgStreamMock().mockReturnValue(
+      (async function* () {
+        yield { path: '/repo/packages/b.ts', stats: { mtime: new Date('2026-01-02') } };
+        yield { path: '/repo/packages/a.ts', stats: { mtime: new Date('2026-01-01') } };
+        yield { path: '/repo/packages/c.ts', stats: { mtime: new Date('2026-01-03') } };
+      })(),
+    );
+
+    const impl = new LinuxSearchServiceImpl();
+    const result = await impl.glob({ limit: 2, pattern: '**/*.ts', scope: '/repo/packages' });
+
+    expect(fgMock).not.toHaveBeenCalled();
+    expect(fgStreamMock()).toHaveBeenCalledWith(
+      '**/*.ts',
+      expect.objectContaining({ cwd: '/repo/packages', stats: true }),
+    );
+    expect(result.files).toEqual(['/repo/packages/b.ts', '/repo/packages/a.ts']);
+    expect(result.total_files).toBe(2);
   });
 });

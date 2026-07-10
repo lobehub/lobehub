@@ -4,9 +4,10 @@ import { MCP } from '@lobehub/icons';
 import { ActionIcon, DropdownMenu, Grid } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { MoreHorizontal } from 'lucide-react';
-import { memo,Suspense } from 'react';
+import { memo, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 
 import GroupBlock from '../components/GroupBlock';
 import GroupSkeleton from '../components/GroupSkeleton';
@@ -15,7 +16,7 @@ import FeaturedPluginsList from './List';
 
 const FeaturedPlugins = memo(() => {
   const { t } = useTranslation('discover');
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
 
   return (
     <GroupBlock

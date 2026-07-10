@@ -1,5 +1,3 @@
-import { createRequire } from 'node:module';
-
 import { Command } from 'commander';
 
 import { registerAgentCommand } from './commands/agent';
@@ -33,10 +31,11 @@ import { registerStatusCommand } from './commands/status';
 import { registerTaskCommand } from './commands/task';
 import { registerThreadCommand } from './commands/thread';
 import { registerTopicCommand } from './commands/topic';
+import { registerUpdateCommand } from './commands/update';
 import { registerUserCommand } from './commands/user';
-
-const require = createRequire(import.meta.url);
-const { version } = require('../package.json');
+import { registerVerifyCommand } from './commands/verify';
+import { cliVersion } from './pkg';
+import { executeToolCall } from './tools';
 
 export function createProgram() {
   const program = new Command();
@@ -44,7 +43,28 @@ export function createProgram() {
   program
     .name('lh')
     .description('LobeHub CLI - manage and connect to LobeHub services')
-    .version(version);
+    .version(cliVersion);
+
+  const internalToolWorker = program
+    .command('tool-worker')
+    .description('Internal command for isolated tool execution')
+    .requiredOption('--api <name>')
+    .requiredOption('--args-b64 <value>')
+    .option('--timeout <ms>')
+    .action(async (options: { api: string; argsB64: string; timeout?: string }) => {
+      const argsStr = Buffer.from(options.argsB64, 'base64').toString('utf8');
+      const parsedTimeout =
+        options.timeout && options.timeout.trim()
+          ? Number.parseInt(options.timeout, 10)
+          : undefined;
+      const result = await executeToolCall(
+        options.api,
+        argsStr,
+        Number.isFinite(parsedTimeout) ? parsedTimeout : undefined,
+      );
+      process.stdout.write(JSON.stringify(result));
+    });
+  internalToolWorker.helpInformation = () => '';
 
   registerLoginCommand(program);
   registerLogoutCommand(program);
@@ -75,11 +95,13 @@ export function createProgram() {
   registerProviderCommand(program);
   registerPluginCommand(program);
   registerUserCommand(program);
+  registerVerifyCommand(program);
   registerConfigCommand(program);
   registerEvalCommand(program);
   registerMigrateCommand(program);
+  registerUpdateCommand(program);
 
   return program;
 }
 
-export { version as cliVersion };
+export { cliPackageName, cliVersion } from './pkg';

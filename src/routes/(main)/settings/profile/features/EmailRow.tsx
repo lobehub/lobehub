@@ -72,8 +72,11 @@ const EmailRow = () => {
       <Flexbox gap={12}>
         <Input
           autoFocus
+          autoComplete="email"
+          inputMode="email"
           placeholder={t('profile.emailPlaceholder')}
           status={error ? 'error' : undefined}
+          type="email"
           value={editValue}
           onPressEnter={handleSave}
           onChange={(e) => {

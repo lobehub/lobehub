@@ -1,12 +1,15 @@
 /**
- * Type definitions for Discover mock data
- * These mirror the actual types from the application
+ * Type definitions for Discover mock data.
+ *
+ * Keep these small and E2E-focused: they only include fields the Community UI
+ * reads while rendering list and detail pages.
  */
 
-export interface PaginationInfo {
-  page: number;
+export interface ListResponse<T> {
+  currentPage: number;
+  items: T[];
   pageSize: number;
-  total: number;
+  totalCount: number;
   totalPages: number;
 }
 
@@ -19,21 +22,25 @@ export interface DiscoverAssistantItem {
   avatar: string;
   backgroundColor?: string;
   category: string;
+  config?: Record<string, unknown>;
   createdAt: string;
   description: string;
+  examples?: Record<string, unknown>[];
   identifier: string;
   installCount?: number;
   knowledgeCount?: number;
   pluginCount?: number;
+  related?: DiscoverAssistantItem[];
+  summary?: string;
+  tags?: string[];
   title: string;
   tokenUsage?: number;
+  type?: 'agent' | 'agent-group';
+  updatedAt?: string;
   userName?: string;
 }
 
-export interface AssistantListResponse {
-  items: DiscoverAssistantItem[];
-  pagination: PaginationInfo;
-}
+export type AssistantListResponse = ListResponse<DiscoverAssistantItem>;
 
 // ============================================
 // Model Types
@@ -46,19 +53,17 @@ export interface DiscoverModelItem {
     vision?: boolean;
   };
   contextWindowTokens: number;
-  createdAt: string;
   description: string;
   displayName: string;
   id: string;
-  providerId: string;
-  providerName: string;
+  identifier: string;
+  providerCount: number;
+  providers: string[];
+  releasedAt?: string;
   type: string;
 }
 
-export interface ModelListResponse {
-  items: DiscoverModelItem[];
-  pagination: PaginationInfo;
-}
+export type ModelListResponse = ListResponse<DiscoverModelItem>;
 
 // ============================================
 // Provider Types
@@ -66,33 +71,50 @@ export interface ModelListResponse {
 
 export interface DiscoverProviderItem {
   description: string;
-  id: string;
-  logo?: string;
+  identifier: string;
   modelCount: number;
+  models: string[];
   name: string;
+  url?: string;
 }
 
-export interface ProviderListResponse {
-  items: DiscoverProviderItem[];
-  pagination: PaginationInfo;
-}
+export type ProviderListResponse = ListResponse<DiscoverProviderItem>;
 
 // ============================================
 // MCP Types
 // ============================================
 
 export interface DiscoverMcpItem {
-  author: string;
-  avatar: string;
+  author?: string;
+  capabilities: {
+    prompts: boolean;
+    resources: boolean;
+    tools: boolean;
+  };
   category: string;
+  connectionType?: 'http' | 'stdio';
   createdAt: string;
   description: string;
+  github?: {
+    stars?: number;
+    url: string;
+  };
+  icon?: string;
   identifier: string;
+  installationMethods?: string;
   installCount?: number;
-  title: string;
+  isClaimed?: boolean;
+  isFeatured?: boolean;
+  isOfficial?: boolean;
+  isValidated?: boolean;
+  manifestUrl: string;
+  name: string;
+  promptsCount?: number;
+  resourcesCount?: number;
+  toolsCount?: number;
+  updatedAt: string;
 }
 
-export interface McpListResponse {
-  items: DiscoverMcpItem[];
-  pagination: PaginationInfo;
+export interface McpListResponse extends ListResponse<DiscoverMcpItem> {
+  categories: string[];
 }

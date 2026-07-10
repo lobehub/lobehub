@@ -1,13 +1,14 @@
 'use client';
 
-import { Button, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Button, Select } from '@lobehub/ui/base-ui';
 import { useMutation } from '@tanstack/react-query';
-import { Avatar, Empty, Form, Input, Select, Spin } from 'antd';
+import { Avatar, Empty, Form, Input, Spin } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { lambdaClient, lambdaQuery } from '@/libs/trpc/client';
+import { type CredsApi } from '../useCredsApi';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   connectionOption: css`
@@ -30,6 +31,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 interface OAuthCredFormProps {
+  credsApi: CredsApi;
+  disabled?: boolean;
   onBack: () => void;
   onSuccess: () => void;
 }
@@ -41,18 +44,37 @@ interface FormValues {
   oauthConnectionId: number;
 }
 
-const OAuthCredForm: FC<OAuthCredFormProps> = ({ onBack, onSuccess }) => {
+const OAuthCredForm: FC<OAuthCredFormProps> = ({ credsApi, disabled, onBack, onSuccess }) => {
   const { t } = useTranslation('setting');
   const [form] = Form.useForm<FormValues>();
 
-  const { data: connectionsData, isLoading } =
-    lambdaQuery.market.creds.listOAuthConnections.useQuery();
+  const { data: connectionsData, isLoading } = credsApi.query.listOAuthConnections.useQuery();
 
   const connections = connectionsData?.connections ?? [];
+  const connectionOptions = connections.map((conn: any) => {
+    const provider = conn.providerId || 'OAuth';
+    const displayName = conn.providerName || conn.providerUserName || conn.email || conn.name;
+
+    return {
+      label: (
+        <span className={styles.connectionOption}>
+          {conn.avatar && <Avatar size="small" src={conn.avatar} />}
+          <span>
+            <span className={styles.provider}>{provider}</span>
+            {displayName && <span className={styles.username}> - {displayName}</span>}
+          </span>
+        </span>
+      ),
+      title: [provider, displayName].filter(Boolean).join(' '),
+      value: conn.id,
+    };
+  });
 
   const createMutation = useMutation({
-    mutationFn: (values: FormValues) => {
-      return lambdaClient.market.creds.createOAuth.mutate({
+    mutationFn: async (values: FormValues) => {
+      if (disabled) return;
+
+      await credsApi.client.createOAuth.mutate({
         description: values.description,
         key: values.key,
         name: values.name,
@@ -65,6 +87,8 @@ const OAuthCredForm: FC<OAuthCredFormProps> = ({ onBack, onSuccess }) => {
   });
 
   const handleSubmit = (values: FormValues) => {
+    if (disabled) return;
+
     createMutation.mutate(values);
   };
 
@@ -94,24 +118,11 @@ const OAuthCredForm: FC<OAuthCredFormProps> = ({ onBack, onSuccess }) => {
         name="oauthConnectionId"
         rules={[{ required: true, message: t('creds.form.connectionRequired') }]}
       >
-        <Select placeholder={t('creds.form.selectConnectionPlaceholder')}>
-          {connections.map((conn: any) => {
-            const provider = conn.providerId || 'OAuth';
-            const displayName =
-              conn.providerName || conn.providerUserName || conn.email || conn.name;
-            return (
-              <Select.Option key={conn.id} value={conn.id}>
-                <span className={styles.connectionOption}>
-                  {conn.avatar && <Avatar size="small" src={conn.avatar} />}
-                  <span>
-                    <span className={styles.provider}>{provider}</span>
-                    {displayName && <span className={styles.username}> - {displayName}</span>}
-                  </span>
-                </span>
-              </Select.Option>
-            );
-          })}
-        </Select>
+        <Select
+          disabled={disabled}
+          options={connectionOptions}
+          placeholder={t('creds.form.selectConnectionPlaceholder')}
+        />
       </Form.Item>
 
       <Form.Item
@@ -122,7 +133,7 @@ const OAuthCredForm: FC<OAuthCredFormProps> = ({ onBack, onSuccess }) => {
           { pattern: /^[\w-]+$/, message: t('creds.form.keyPattern') },
         ]}
       >
-        <Input placeholder="e.g., github-oauth" />
+        <Input disabled={disabled} placeholder="e.g., github-oauth" />
       </Form.Item>
 
       <Form.Item
@@ -130,16 +141,25 @@ const OAuthCredForm: FC<OAuthCredFormProps> = ({ onBack, onSuccess }) => {
         name="name"
         rules={[{ required: true, message: t('creds.form.nameRequired') }]}
       >
-        <Input placeholder="e.g., GitHub Connection" />
+        <Input disabled={disabled} placeholder="e.g., GitHub Connection" />
       </Form.Item>
 
       <Form.Item label={t('creds.form.description')} name="description">
-        <Input.TextArea placeholder={t('creds.form.descriptionPlaceholder')} rows={2} />
+        <Input.TextArea
+          disabled={disabled}
+          placeholder={t('creds.form.descriptionPlaceholder')}
+          rows={2}
+        />
       </Form.Item>
 
       <div className={styles.footer}>
         <Button onClick={onBack}>{t('creds.form.back')}</Button>
-        <Button htmlType="submit" loading={createMutation.isPending} type="primary">
+        <Button
+          disabled={disabled}
+          htmlType="submit"
+          loading={createMutation.isPending}
+          type="primary"
+        >
           {t('creds.form.submit')}
         </Button>
       </div>

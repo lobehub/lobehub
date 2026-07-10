@@ -1,7 +1,12 @@
 import { constants } from 'node:fs';
-import { access, mkdir, readdir, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises';
+import { access, readFile, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 
+import {
+  defaultSearchProjectFiles,
+  prepareSkillDirectory,
+  type SkillDirectoryDeps,
+} from '@lobechat/device-control';
 import {
   type AuditSafePathsParams,
   type AuditSafePathsResult,
@@ -12,8 +17,7 @@ import {
   type GrepContentParams,
   type GrepContentResult,
   type ListLocalFileParams,
-  type ListProjectSkillsParams,
-  type ListProjectSkillsResult,
+  type LocalFilePreviewResult,
   type LocalFilePreviewUrlParams,
   type LocalFilePreviewUrlResult,
   type LocalMoveFilesResultItem,
@@ -31,6 +35,8 @@ import {
   type ProjectFileIndexEntry,
   type ProjectFileIndexParams,
   type ProjectFileIndexResult,
+  type ProjectFileSearchParams,
+  type ProjectFileSearchResult,
   type RenameLocalFileResult,
   type ResolveSkillResourcePathParams,
   type ResolveSkillResourcePathResult,
@@ -53,7 +59,6 @@ import {
 } from '@lobechat/local-file-shell';
 import { dialog, shell } from 'electron';
 import { execa } from 'execa';
-import { unzipSync } from 'fflate';
 
 import ContentSearchService from '@/services/contentSearchSrv';
 import FileSearchService from '@/services/fileSearchSrv';
@@ -66,6 +71,20 @@ import { ControllerModule, IpcMethod } from './index';
 const logger = createLogger('controllers:LocalFileCtr');
 
 const SAFE_PATH_PREFIXES = ['/tmp', '/var/tmp'] as const;
+const PROJECT_FILE_GLOB_LIMIT = 5000;
+
+const TEXT_PREVIEW_MIME_TYPES = new Set([
+  'application/graphql',
+  'application/javascript',
+  'application/json',
+  'application/markdown',
+  'application/toml',
+  'application/xml',
+  'application/yaml',
+  'text/markdown',
+  'text/mdx',
+  'text/x-markdown',
+]);
 
 const normalizeAbsolutePath = (inputPath: string): string =>
   path.normalize(path.isAbsolute(inputPath) ? inputPath : `/${inputPath}`);
@@ -92,6 +111,48 @@ const resolveNearestExistingRealPath = async (targetPath: string): Promise<strin
 };
 
 const toPosixRelativePath = (filePath: string) => filePath.split(path.sep).join('/');
+
+const normalizeContentType = (contentType: string): string =>
+  contentType.split(';')[0].trim().toLowerCase();
+
+const isTextPreviewMimeType = (mimeType: string): boolean =>
+  mimeType.startsWith('text/') || TEXT_PREVIEW_MIME_TYPES.has(mimeType);
+
+const serializePreviewFile = ({
+  buffer,
+  contentType,
+}: {
+  buffer: Buffer;
+  contentType: string;
+}): NonNullable<LocalFilePreviewResult['preview']> => {
+  const normalizedContentType = normalizeContentType(contentType);
+
+  if (normalizedContentType.startsWith('image/')) {
+    return {
+      base64: buffer.toString('base64'),
+      contentType: normalizedContentType,
+      type: 'image',
+    };
+  }
+
+  if (isTextPreviewMimeType(normalizedContentType)) {
+    return {
+      content: buffer.toString('utf8'),
+      contentType: normalizedContentType,
+      type: 'text',
+    };
+  }
+
+  if (normalizedContentType === 'application/pdf') {
+    return { contentType: normalizedContentType, type: 'pdf' };
+  }
+
+  if (normalizedContentType.startsWith('video/')) {
+    return { contentType: normalizedContentType, type: 'video' };
+  }
+
+  return { contentType: normalizedContentType, type: 'binary' };
+};
 
 const createProjectFileEntry = (
   root: string,
@@ -121,62 +182,6 @@ const collectProjectDirectories = (files: string[], root: string): ProjectFileIn
   }
 
   return [...directories].map((directory) => createProjectFileEntry(root, directory, true));
-};
-
-const SKILL_FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---/;
-
-// Cap recursion to guard against pathological directory trees.
-const MAX_SKILL_FILE_COUNT = 1000;
-
-const listSkillFilesRecursive = async (dir: string): Promise<string[]> => {
-  const results: string[] = [];
-  const stack: string[] = [dir];
-
-  while (stack.length > 0 && results.length < MAX_SKILL_FILE_COUNT) {
-    const current = stack.pop()!;
-    let entries;
-    try {
-      entries = await readdir(current, { withFileTypes: true });
-    } catch {
-      continue;
-    }
-    for (const entry of entries) {
-      if (entry.name.startsWith('.')) continue;
-      const full = path.join(current, entry.name);
-      if (entry.isDirectory()) {
-        stack.push(full);
-      } else if (entry.isFile()) {
-        results.push(toPosixRelativePath(path.relative(dir, full)));
-        if (results.length >= MAX_SKILL_FILE_COUNT) break;
-      }
-    }
-  }
-  return results.sort();
-};
-
-// Parse a minimal YAML frontmatter block for SKILL.md files.
-// Only handles `key: value` lines; multi-line block scalars fall back to the first line.
-const parseSkillFrontmatter = (raw: string): Record<string, string> => {
-  const match = raw.match(SKILL_FRONTMATTER_RE);
-  if (!match) return {};
-
-  const fields: Record<string, string> = {};
-  for (const line of match[1].split(/\r?\n/)) {
-    const colonIdx = line.indexOf(':');
-    if (colonIdx === -1) continue;
-    const key = line.slice(0, colonIdx).trim();
-    if (!key || key.startsWith('#')) continue;
-    let value = line.slice(colonIdx + 1).trim();
-    if (value.startsWith('|') || value.startsWith('>')) continue;
-    if (
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
-    ) {
-      value = value.slice(1, -1);
-    }
-    fields[key] = value;
-  }
-  return fields;
 };
 
 const createDetectedProjectFileEntry = async (
@@ -368,14 +373,14 @@ export default class LocalFileCtr extends ControllerModule {
   }
 
   @IpcMethod()
-  async readFiles({ paths }: LocalReadFilesParams): Promise<LocalReadFileResult[]> {
+  async readFiles({ paths, cwd }: LocalReadFilesParams): Promise<LocalReadFileResult[]> {
     logger.debug('Starting batch file reading:', { count: paths.length });
 
     const results: LocalReadFileResult[] = [];
 
     for (const filePath of paths) {
       logger.debug('Reading single file:', { filePath });
-      const result = await readLocalFile({ path: filePath });
+      const result = await readLocalFile({ cwd, path: filePath });
       results.push(result);
     }
 
@@ -402,9 +407,9 @@ export default class LocalFileCtr extends ControllerModule {
   }
 
   @IpcMethod()
-  async handleMoveFiles({ items }: MoveLocalFilesParams): Promise<LocalMoveFilesResultItem[]> {
+  async handleMoveFiles({ items, cwd }: MoveLocalFilesParams): Promise<LocalMoveFilesResultItem[]> {
     logger.debug('Starting batch file move:', { itemsCount: items?.length });
-    return moveLocalFiles({ items });
+    return moveLocalFiles({ cwd, items });
   }
 
   @IpcMethod()
@@ -420,9 +425,9 @@ export default class LocalFileCtr extends ControllerModule {
   }
 
   @IpcMethod()
-  async handleWriteFile({ path: filePath, content }: WriteLocalFileParams) {
+  async handleWriteFile({ path: filePath, content, cwd }: WriteLocalFileParams) {
     logger.debug(`Writing file ${filePath}`, { contentLength: content?.length });
-    return writeLocalFile({ content, path: filePath });
+    return writeLocalFile({ content, cwd, path: filePath });
   }
 
   @IpcMethod()
@@ -439,11 +444,15 @@ export default class LocalFileCtr extends ControllerModule {
 
   @IpcMethod()
   async getLocalFilePreviewUrl({
+    accept,
+    allowExternalFile,
     path: filePath,
     workingDirectory,
   }: LocalFilePreviewUrlParams): Promise<LocalFilePreviewUrlResult> {
     try {
       const url = await this.app.localFileProtocolManager.createPreviewUrl({
+        accept,
+        allowExternalFile,
         filePath,
         workspaceRoot: workingDirectory,
       });
@@ -460,65 +469,53 @@ export default class LocalFileCtr extends ControllerModule {
   }
 
   @IpcMethod()
-  async handlePrepareSkillDirectory({
-    forceRefresh,
-    url,
-    zipHash,
-  }: PrepareSkillDirectoryParams): Promise<PrepareSkillDirectoryResult> {
-    const cacheRoot = path.join(this.app.appStoragePath, 'file-storage', 'skills');
-    const extractedDir = path.join(cacheRoot, 'extracted', zipHash);
-    const markerPath = path.join(extractedDir, '.prepared');
-    const zipPath = path.join(cacheRoot, 'archives', `${zipHash}.zip`);
-
+  async getLocalFilePreview({
+    accept,
+    allowExternalFile,
+    path: filePath,
+    workingDirectory,
+  }: LocalFilePreviewUrlParams): Promise<LocalFilePreviewResult> {
     try {
-      if (!forceRefresh) {
-        await access(markerPath, constants.F_OK);
-        return { extractedDir, success: true, zipPath };
-      }
-    } catch {
-      // Cache miss, continue preparing the local copy.
-    }
+      const preview = await this.app.localFileProtocolManager.readPreviewFile({
+        accept,
+        allowExternalFile,
+        filePath,
+        workspaceRoot: workingDirectory,
+      });
 
-    try {
-      const response = await netFetch(url);
-      if (!response.ok) {
-        throw new Error(
-          `Failed to download skill package: ${response.status} ${response.statusText}`,
-        );
+      if (!preview) {
+        return { error: 'File is outside the approved workspace', success: false };
       }
 
-      const buffer = Buffer.from(await response.arrayBuffer());
-      const extractedFiles = unzipSync(new Uint8Array(buffer));
-
-      await rm(extractedDir, { force: true, recursive: true });
-      await mkdir(path.dirname(zipPath), { recursive: true });
-      await mkdir(extractedDir, { recursive: true });
-      await writeFile(zipPath, buffer);
-
-      for (const [relativePath, fileContent] of Object.entries(extractedFiles)) {
-        if (relativePath.endsWith('/')) continue;
-
-        const targetPath = path.resolve(extractedDir, relativePath);
-        const normalizedRoot = `${path.resolve(extractedDir)}${path.sep}`;
-        if (targetPath !== path.resolve(extractedDir) && !targetPath.startsWith(normalizedRoot)) {
-          throw new Error(`Unsafe file path in skill archive: ${relativePath}`);
-        }
-
-        await mkdir(path.dirname(targetPath), { recursive: true });
-        await writeFile(targetPath, Buffer.from(fileContent as Uint8Array));
-      }
-
-      await writeFile(markerPath, JSON.stringify({ preparedAt: Date.now(), url, zipHash }), 'utf8');
-
-      return { extractedDir, success: true, zipPath };
-    } catch (error) {
       return {
-        error: (error as Error).message,
-        extractedDir,
-        success: false,
-        zipPath,
+        preview: serializePreviewFile(preview),
+        success: true,
       };
+    } catch (error) {
+      logger.error('Failed to read local file preview:', error);
+      return { error: (error as Error).message, success: false };
     }
+  }
+
+  /**
+   * Host deps for the shared skill-archive cache: this keeps the renderer-IPC
+   * path (here) and the gateway RPC path (`GatewayConnectionCtr` →
+   * `@lobechat/device-control`) on ONE cache directory and one proxy-aware
+   * fetch, so a skill prepared by either entry point is a cache hit for the
+   * other.
+   */
+  getSkillDirectoryDeps(): SkillDirectoryDeps {
+    return {
+      fetchSkillArchive: netFetch,
+      skillCacheRoot: path.join(this.app.appStoragePath, 'file-storage', 'skills'),
+    };
+  }
+
+  @IpcMethod()
+  async handlePrepareSkillDirectory(
+    params: PrepareSkillDirectoryParams,
+  ): Promise<PrepareSkillDirectoryResult> {
+    return prepareSkillDirectory(params, this.getSkillDirectoryDeps());
   }
 
   @IpcMethod()
@@ -628,7 +625,6 @@ export default class LocalFileCtr extends ControllerModule {
           indexedAt: new Date().toISOString(),
           root,
           source: 'git',
-          totalCount: entries.length,
         };
       }
     } catch (error) {
@@ -638,7 +634,11 @@ export default class LocalFileCtr extends ControllerModule {
       });
     }
 
-    const fallback = await this.searchService.glob({ pattern: '**/*', scope: requestedScope });
+    const fallback = await this.searchService.glob({
+      limit: PROJECT_FILE_GLOB_LIMIT,
+      pattern: '**/*',
+      scope: requestedScope,
+    });
     const files = fallback.files.map((filePath) => path.resolve(filePath));
     const entries = await Promise.all(
       files.map((filePath) => createDetectedProjectFileEntry(requestedScope, filePath)),
@@ -657,63 +657,25 @@ export default class LocalFileCtr extends ControllerModule {
       indexedAt: new Date().toISOString(),
       root: requestedScope,
       source: 'glob',
-      totalCount: entries.length,
     };
   }
 
-  /**
-   * Scan agent skill directories under the project root and return parsed
-   * frontmatter for each SKILL.md. Used by the hetero agent's working sidebar
-   * to surface skills available in the current project.
-   */
   @IpcMethod()
-  async listProjectSkills(params: ListProjectSkillsParams): Promise<ListProjectSkillsResult> {
-    const root = params.scope;
-    const sources = ['.agents/skills', '.claude/skills'] as const;
+  async searchProjectFiles(params: ProjectFileSearchParams): Promise<ProjectFileSearchResult> {
+    const startedAt = Date.now();
+    const result = await defaultSearchProjectFiles(params);
 
-    for (const source of sources) {
-      const dir = path.join(root, source);
-      try {
-        const entries = await readdir(dir, { withFileTypes: true });
-        const skills = (
-          await Promise.all(
-            entries
-              .filter((entry) => entry.isDirectory() || entry.isSymbolicLink())
-              .map(async (entry) => {
-                const skillDir = path.join(dir, entry.name);
-                const skillFile = path.join(skillDir, 'SKILL.md');
-                try {
-                  const raw = await readFile(skillFile, 'utf8');
-                  const fields = parseSkillFrontmatter(raw);
-                  const files = await listSkillFilesRecursive(skillDir);
-                  return {
-                    description: fields.description || undefined,
-                    fileCount: files.length,
-                    files,
-                    name: fields.name || entry.name,
-                    path: skillFile,
-                    skillDir,
-                    source,
-                  };
-                } catch {
-                  return null;
-                }
-              }),
-          )
-        )
-          .filter((skill): skill is NonNullable<typeof skill> => skill !== null)
-          .sort((a, b) => a.name.localeCompare(b.name));
+    logger.debug('Project file search completed', {
+      duration: Date.now() - startedAt,
+      entries: result.entries.length,
+      query: params.query,
+      requestedScope: params.scope,
+      root: result.root,
+      source: result.source,
+    });
+    await this.approveProjectRootForPreview(result.root);
 
-        if (skills.length > 0) {
-          await this.approveProjectRootForPreview(root);
-          return { root, skills, source };
-        }
-      } catch {
-        // Directory does not exist or is not readable; try the next candidate.
-      }
-    }
-
-    return { root, skills: [], source: null };
+    return result;
   }
 
   /**

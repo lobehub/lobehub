@@ -69,7 +69,7 @@ export const MODEL_LIST_CONFIGS = {
   longcat: {
     functionCallKeywords: ['longcat'],
     reasoningKeywords: ['thinking'],
-    visionKeywords: [],
+    visionKeywords: ['omni'],
   },
   minimax: {
     functionCallKeywords: ['minimax'],
@@ -104,7 +104,7 @@ export const MODEL_LIST_CONFIGS = {
       'qwen3',
     ],
     reasoningKeywords: ['qvq', 'qwq', 'qwen3', '!-instruct-', '!-coder-'],
-    visionKeywords: ['qvq', '-vl', '-omni'],
+    visionKeywords: ['qvq', '-vl', '-omni', 'qwen3.'],
   },
   replicate: {
     imageOutputKeywords: [
@@ -181,6 +181,13 @@ export const MODEL_OWNER_DETECTION_CONFIG = {
   zeroone: ['yi-'],
   zhipu: ['glm'],
 } as const;
+
+export const isDeepSeekV4FamilyModel = (model: string | undefined): boolean =>
+  typeof model === 'string' && model.toLowerCase().includes('deepseek-v4');
+
+export const isDeepSeekThinkingEligibleModel = (model: string | undefined): boolean =>
+  typeof model === 'string' &&
+  (model.toLowerCase().includes('deepseek-reasoner') || isDeepSeekV4FamilyModel(model));
 
 // Image model keyword configuration
 export const IMAGE_MODEL_KEYWORDS = [

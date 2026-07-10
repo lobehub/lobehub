@@ -16,6 +16,7 @@ const toggleRightPanelMock = vi.hoisted(() => vi.fn());
 const setChatPanelExpandedMock = vi.hoisted(() => vi.fn());
 const createGroupMock = vi.hoisted(() => vi.fn());
 const loadGroupsMock = vi.hoisted(() => vi.fn());
+const createDocumentMock = vi.hoisted(() => vi.fn());
 
 const agentState = vi.hoisted(() => ({
   agentConfigMap: {
@@ -27,10 +28,12 @@ const agentState = vi.hoisted(() => ({
   agentMap: {
     agentBuilder: {},
     groupAgentBuilder: {},
+    pageAgent: {},
   },
   builtinAgentIdMap: {
     'agent-builder': 'agentBuilder',
     'group-agent-builder': 'groupAgentBuilder',
+    'page-agent': 'pageAgent',
   },
   createAgent: createAgentMock,
   inboxAgentId: 'inbox',
@@ -42,6 +45,13 @@ vi.mock('@lobechat/builtin-agents', () => ({
   BUILTIN_AGENT_SLUGS: {
     agentBuilder: 'agent-builder',
     groupAgentBuilder: 'group-agent-builder',
+    pageAgent: 'page-agent',
+  },
+}));
+
+vi.mock('@/services/document', () => ({
+  documentService: {
+    createDocument: createDocumentMock,
   },
 }));
 
@@ -78,6 +88,7 @@ vi.mock('@/store/chat', () => ({
     getState: () => ({
       sendMessage: sendMessageMock,
     }),
+    setState: vi.fn(),
   },
 }));
 
@@ -127,6 +138,7 @@ describe('HomeInputActionImpl', () => {
         id: 'group-new',
       },
     });
+    createDocumentMock.mockResolvedValue({ id: 'doc-new' });
   });
 
   describe('sendAsAgent', () => {
@@ -145,6 +157,40 @@ describe('HomeInputActionImpl', () => {
         }),
       );
     });
+
+    it('forwards context selections to the agent builder message', async () => {
+      const action = createAction();
+      const contextSelections = [
+        {
+          content: 'const selected = true;',
+          filePath: 'src/example.ts',
+          id: 'code-selection',
+          lineRange: { endLine: 12, startLine: 10 },
+          source: 'code' as const,
+        },
+      ];
+
+      await action.sendAsAgent({ contextSelections, message: 'use this selected code' });
+
+      expect(sendMessageMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          contextSelections,
+          message: 'use this selected code',
+        }),
+      );
+    });
+
+    it('passes the workspace slug to the agent builder message context', async () => {
+      const action = createAction();
+
+      await action.sendAsAgent({ message: 'build a support agent', workspaceSlug: 'team' });
+
+      expect(sendMessageMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          context: { agentId: 'agentBuilder', scope: 'agent_builder', workspaceSlug: 'team' },
+        }),
+      );
+    });
   });
 
   describe('sendAsGroup', () => {
@@ -159,6 +205,58 @@ describe('HomeInputActionImpl', () => {
         expect.objectContaining({
           context: { agentId: 'groupAgentBuilder', scope: 'group_agent_builder' },
           message: 'build a research group',
+        }),
+      );
+    });
+
+    it('passes the workspace slug to the group builder message context', async () => {
+      const action = createAction();
+
+      await action.sendAsGroup({ message: 'build a research group', workspaceSlug: 'team' });
+
+      expect(sendMessageMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          context: {
+            agentId: 'groupAgentBuilder',
+            scope: 'group_agent_builder',
+            workspaceSlug: 'team',
+          },
+        }),
+      );
+    });
+  });
+
+  describe('sendAsWrite', () => {
+    it('passes the freshly created document id through the page context', async () => {
+      const action = createAction();
+
+      await action.sendAsWrite({ message: 'write me a doc' });
+
+      expect(createDocumentMock).toHaveBeenCalled();
+      expect(navigateMock).toHaveBeenCalledWith('/page/doc-new');
+      // The new editor has not mounted yet, so the doc id must travel in context
+      // explicitly rather than relying on the page editor runtime singleton.
+      expect(sendMessageMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          context: { agentId: 'pageAgent', documentId: 'doc-new', scope: 'page' },
+          message: 'write me a doc',
+        }),
+      );
+    });
+
+    it('passes the workspace slug to the page agent message context', async () => {
+      const action = createAction();
+
+      await action.sendAsWrite({ message: 'write me a doc', workspaceSlug: 'team' });
+
+      expect(sendMessageMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          context: {
+            agentId: 'pageAgent',
+            documentId: 'doc-new',
+            scope: 'page',
+            workspaceSlug: 'team',
+          },
         }),
       );
     });

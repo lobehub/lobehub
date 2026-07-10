@@ -1,6 +1,5 @@
 'use client';
 
-import type { FormGroupItemType } from '@lobehub/ui';
 import { Form } from '@lobehub/ui';
 import { Switch } from 'antd';
 import isEqual from 'fast-deep-equal';
@@ -16,7 +15,7 @@ import { selectors, useStore } from '../store';
 const AgentSelfIteration = memo(() => {
   const { t } = useTranslation('setting');
   const [form] = Form.useForm();
-  const updateConfig = useStore((s) => s.setChatConfig);
+  const [disabled, updateConfig] = useStore((s) => [s.disabled, s.setChatConfig]);
   const config = useStore(selectors.currentChatConfig, isEqual);
   const isInbox = useAgentStore(builtinAgentSelectors.isInboxAgent);
 
@@ -38,20 +37,20 @@ const AgentSelfIteration = memo(() => {
         valuePropName: 'checked',
       };
 
-  const selfIteration: FormGroupItemType = {
-    children: [selfIterationItem],
-    title: t('settingSelfIteration.title'),
-  };
-
   return (
     <Form
+      disabled={disabled}
       footer={isInbox ? undefined : <Form.SubmitFooter />}
       form={form}
       initialValues={config}
-      items={[selfIteration]}
-      itemsType={'group'}
+      items={[selfIterationItem]}
+      itemsType={'flat'}
       variant={'borderless'}
-      onFinish={updateConfig}
+      onFinish={(values) => {
+        if (disabled) return;
+
+        updateConfig(values);
+      }}
       {...FORM_STYLE}
     />
   );

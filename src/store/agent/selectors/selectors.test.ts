@@ -8,22 +8,13 @@ import {
   INBOX_SESSION_ID,
 } from '@lobechat/const';
 import { KnowledgeType } from '@lobechat/types';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { type AgentStoreState } from '@/store/agent/initialState';
 import { initialAgentSliceState } from '@/store/agent/slices/agent/initialState';
 import { initialBuiltinAgentSliceState } from '@/store/agent/slices/builtin';
 
 import { agentSelectors, currentAgentConfig } from './selectors';
-
-// Mock VoiceList
-vi.mock('@lobehub/tts', () => ({
-  VoiceList: class {
-    static openaiVoiceOptions = [{ value: 'alloy' }];
-    edgeVoiceOptions = [{ value: 'edge-voice' }];
-    microsoftVoiceOptions = [{ value: 'microsoft-voice' }];
-  },
-}));
 
 const createState = (overrides: Partial<AgentStoreState> = {}): AgentStoreState => ({
   ...initialAgentSliceState,
@@ -96,6 +87,34 @@ describe('agentSelectors', () => {
       });
 
       expect(agentSelectors.currentAgentModelProvider(state)).toBe(DEFAULT_PROVIDER);
+    });
+  });
+
+  describe('currentAgentMode', () => {
+    it('should return auto by default', () => {
+      const state = createState({
+        activeAgentId: 'agent-1',
+        agentMap: { 'agent-1': { chatConfig: {} } },
+      });
+
+      expect(agentSelectors.currentAgentMode(state)).toBe('auto');
+      expect(agentSelectors.isAgentModeEnabled(state)).toBe(true);
+    });
+
+    it('should keep the agent in agent mode when agent mode is enabled', () => {
+      const state = createState({
+        activeAgentId: 'agent-1',
+        agentMap: {
+          'agent-1': {
+            chatConfig: { enableAgentMode: true },
+            model: 'claude-opus-4-8',
+            provider: 'lobehub',
+          },
+        },
+      });
+
+      expect(agentSelectors.currentAgentMode(state)).toBe('auto');
+      expect(agentSelectors.isAgentModeEnabled(state)).toBe(true);
     });
   });
 
@@ -204,6 +223,51 @@ describe('agentSelectors', () => {
       });
 
       expect(agentSelectors.currentAgentPlugins(state)).toEqual([]);
+    });
+
+    it('should exclude disabled entries in a mixed-shape plugins array', () => {
+      const state = createState({
+        activeAgentId: 'agent-1',
+        agentMap: {
+          'agent-1': {
+            plugins: [
+              'plugin-1',
+              { identifier: 'plugin-2', mode: 'disabled' },
+              { identifier: 'plugin-3', mode: 'pinned' },
+            ],
+          } as any,
+        },
+      });
+
+      expect(agentSelectors.currentAgentPlugins(state)).toEqual(['plugin-1', 'plugin-3']);
+    });
+  });
+
+  describe('currentAgentDisabledPlugins', () => {
+    it('returns only the disabled identifiers from a mixed-shape plugins array', () => {
+      const state = createState({
+        activeAgentId: 'agent-1',
+        agentMap: {
+          'agent-1': {
+            plugins: [
+              'plugin-1',
+              { identifier: 'plugin-2', mode: 'disabled' },
+              { identifier: 'plugin-3', mode: 'pinned' },
+            ],
+          } as any,
+        },
+      });
+
+      expect(agentSelectors.currentAgentDisabledPlugins(state)).toEqual(['plugin-2']);
+    });
+
+    it('returns an empty array when there are no plugins', () => {
+      const state = createState({
+        activeAgentId: 'agent-1',
+        agentMap: { 'agent-1': {} },
+      });
+
+      expect(agentSelectors.currentAgentDisabledPlugins(state)).toEqual([]);
     });
   });
 
@@ -360,50 +424,6 @@ describe('agentSelectors', () => {
     });
   });
 
-  describe('canCurrentAgentPublishToCommunity', () => {
-    it('should allow publishing normal agents', () => {
-      const state = createState({
-        activeAgentId: 'agent-1',
-        agentMap: { 'agent-1': { id: 'agent-1' } },
-      });
-
-      expect(agentSelectors.canCurrentAgentPublishToCommunity(state)).toBe(true);
-    });
-
-    it('should prevent publishing local heterogeneous agents', () => {
-      const state = createState({
-        activeAgentId: 'agent-1',
-        agentMap: {
-          'agent-1': {
-            agencyConfig: {
-              heterogeneousProvider: { command: 'codex', type: 'codex' },
-            },
-            id: 'agent-1',
-          },
-        },
-      });
-
-      expect(agentSelectors.canCurrentAgentPublishToCommunity(state)).toBe(false);
-    });
-
-    it('should prevent publishing platform agents', () => {
-      const state = createState({
-        activeAgentId: 'agent-1',
-        agentMap: {
-          'agent-1': {
-            agencyConfig: {
-              boundDeviceId: 'device-1',
-              heterogeneousProvider: { type: 'openclaw' },
-            },
-            id: 'agent-1',
-          },
-        },
-      });
-
-      expect(agentSelectors.canCurrentAgentPublishToCommunity(state)).toBe(false);
-    });
-  });
-
   describe('currentKnowledgeIds', () => {
     it('should return enabled file and knowledge base IDs', () => {
       const state = createState({
@@ -482,7 +502,7 @@ describe('agentSelectors', () => {
   });
 
   describe('currentAgentTTSVoice', () => {
-    it('should return openai voice when ttsService is openai', () => {
+    it('should return openai voice', () => {
       const state = createState({
         activeAgentId: 'agent-1',
         agentMap: {
@@ -492,33 +512,7 @@ describe('agentSelectors', () => {
         },
       });
 
-      expect(agentSelectors.currentAgentTTSVoice('en-US')(state)).toBe('nova');
-    });
-
-    it('should return edge voice when ttsService is edge', () => {
-      const state = createState({
-        activeAgentId: 'agent-1',
-        agentMap: {
-          'agent-1': {
-            tts: { ttsService: 'edge', voice: { edge: 'edge-custom' } },
-          },
-        },
-      });
-
-      expect(agentSelectors.currentAgentTTSVoice('en-US')(state)).toBe('edge-custom');
-    });
-
-    it('should return microsoft voice when ttsService is microsoft', () => {
-      const state = createState({
-        activeAgentId: 'agent-1',
-        agentMap: {
-          'agent-1': {
-            tts: { ttsService: 'microsoft', voice: { microsoft: 'microsoft-custom' } },
-          },
-        },
-      });
-
-      expect(agentSelectors.currentAgentTTSVoice('en-US')(state)).toBe('microsoft-custom');
+      expect(agentSelectors.currentAgentTTSVoice(state)).toBe('nova');
     });
 
     it('should return default voice when no voice specified', () => {
@@ -531,7 +525,7 @@ describe('agentSelectors', () => {
         },
       });
 
-      expect(agentSelectors.currentAgentTTSVoice('en-US')(state)).toBe('alloy');
+      expect(agentSelectors.currentAgentTTSVoice(state)).toBe('alloy');
     });
   });
 

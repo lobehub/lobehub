@@ -4,7 +4,8 @@
   "private": true,
   "exports": {
     ".": "./src/index.ts",
-    "./client": "./src/client/index.ts"
+    "./client": "./src/client/index.ts",
+    "./client/executor": "./src/client/executor/index.ts"
   },
   "main": "./src/index.ts",
   "scripts": {
@@ -13,6 +14,7 @@
     "test:update": "vitest -u"
   },
   "dependencies": {
+    "@lobechat/builtin-tool-user-interaction": "workspace:*",
     "@lobechat/const": "workspace:*",
     "@lobechat/prompts": "workspace:*",
     "@lobechat/utils": "workspace:*"

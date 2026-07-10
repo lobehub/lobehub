@@ -1,12 +1,14 @@
 'use client';
 
-import { Alert, Block, Flexbox, Modal, Text } from '@lobehub/ui';
+import { Alert, Block, Flexbox, Text } from '@lobehub/ui';
 import { App } from 'antd';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import ImperativeModal from '@/components/ImperativeModal';
 import PluginAvatar from '@/components/Plugins/PluginAvatar';
 import PluginTag from '@/components/Plugins/PluginTag';
+import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { useToolStore } from '@/store/tool';
 import { mcpStoreSelectors } from '@/store/tool/selectors';
@@ -14,8 +16,7 @@ import { type McpConnectionParams } from '@/types/plugins';
 import { type LobeToolCustomPlugin } from '@/types/tool/plugin';
 
 import ConfigDisplay from './ConfigDisplay';
-import { type McpInstallRequest, type TrustedMarketplaceId } from './types';
-import { TRUSTED_MARKETPLACES } from './types';
+import { type McpInstallRequest } from './types';
 
 interface CustomPluginInstallModalProps {
   installRequest: McpInstallRequest | null;
@@ -28,6 +29,8 @@ const CustomPluginInstallModal = memo<CustomPluginInstallModalProps>(
     const { message } = App.useApp();
     const { t } = useTranslation('plugin');
     const [loading, setLoading] = useState(false);
+    const { allowed: canCreate } = usePermission('create_content');
+    const { allowed: canEdit } = usePermission('edit_own_content');
 
     // Track config updates
     const [updatedConfig, setUpdatedConfig] = useState<{
@@ -44,9 +47,7 @@ const CustomPluginInstallModal = memo<CustomPluginInstallModalProps>(
     const testState = useToolStore(mcpStoreSelectors.getMCPConnectionTestState(identifier));
 
     const schema = installRequest?.schema;
-    const marketId = installRequest?.marketId;
-    const marketplace =
-      isMarketplace && marketId ? TRUSTED_MARKETPLACES[marketId as TrustedMarketplaceId] : null;
+    const isStdioMcp = schema?.config.type === 'stdio';
 
     // Reset loading state and config
     useEffect(() => {
@@ -57,7 +58,7 @@ const CustomPluginInstallModal = memo<CustomPluginInstallModalProps>(
     }, [installRequest]);
 
     const handleConfirm = useCallback(async () => {
-      if (!installRequest || !schema) return;
+      if (!canCreate || !canEdit || !installRequest || !schema) return;
 
       setLoading(true);
       try {
@@ -116,6 +117,8 @@ const CustomPluginInstallModal = memo<CustomPluginInstallModalProps>(
       }
     }, [
       installRequest,
+      canCreate,
+      canEdit,
       schema,
       updatedConfig,
       onComplete,
@@ -135,23 +138,11 @@ const CustomPluginInstallModal = memo<CustomPluginInstallModalProps>(
 
     // Render different Alert components based on type
     const renderAlert = () => {
-      if (!isMarketplace) {
-        return (
-          <Alert
-            showIcon
-            title={t('protocolInstall.custom.security.description')}
-            type="warning"
-            variant={'borderless'}
-          />
-        );
-      }
-
-      // marketplace type
-      return marketplace ? (
+      const sourceAlert = !isMarketplace ? (
         <Alert
           showIcon
-          title={t('protocolInstall.marketplace.trustedBy', { name: marketplace.name })}
-          type="success"
+          title={t('protocolInstall.custom.security.description')}
+          type="warning"
           variant={'borderless'}
         />
       ) : (
@@ -162,20 +153,38 @@ const CustomPluginInstallModal = memo<CustomPluginInstallModalProps>(
           variant={'borderless'}
         />
       );
+
+      return (
+        <Flexbox gap={8}>
+          {sourceAlert}
+          {isStdioMcp && (
+            <Alert
+              showIcon
+              description={t('protocolInstall.stdio.commandExecution.description')}
+              title={t('protocolInstall.stdio.commandExecution.title')}
+              type="warning"
+              variant={'borderless'}
+            />
+          )}
+        </Flexbox>
+      );
     };
 
     const modalTitle = isMarketplace
       ? t('protocolInstall.marketplace.title')
       : t('protocolInstall.custom.title');
 
-    const okText = isMarketplace
-      ? t('protocolInstall.actions.install')
-      : t('protocolInstall.actions.installAnyway');
+    const okText = isStdioMcp
+      ? t('protocolInstall.actions.runCommandAndInstall')
+      : isMarketplace
+        ? t('protocolInstall.actions.install')
+        : t('protocolInstall.actions.installAnyway');
 
     return (
-      <Modal
+      <ImperativeModal
         open
         confirmLoading={loading || testState.loading}
+        okButtonProps={{ disabled: !canCreate || !canEdit }}
         okText={okText}
         title={modalTitle}
         width={680}
@@ -215,7 +224,7 @@ const CustomPluginInstallModal = memo<CustomPluginInstallModalProps>(
             )}
           </Flexbox>
         </Flexbox>
-      </Modal>
+      </ImperativeModal>
     );
   },
 );

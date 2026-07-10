@@ -3,7 +3,8 @@
 import { type NetworkProxySettings } from '@lobechat/electron-client-ipc';
 import { type FormGroupItemType } from '@lobehub/ui';
 import { Form, Skeleton, toast } from '@lobehub/ui';
-import { Button, Form as AntdForm, Input, Radio, Space, Switch } from 'antd';
+import { Button } from '@lobehub/ui/base-ui';
+import { Form as AntdForm, Input, Radio, Space, Switch } from 'antd';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -154,16 +155,25 @@ const ProxyForm = () => {
   );
 
   const handleSave = useCallback(async () => {
+    let values: NetworkProxySettings;
+    try {
+      values = await form.validateFields();
+    } catch {
+      // Validation error — fields surface their own inline messages.
+      return;
+    }
+
     try {
       setIsSaving(true);
-      const values = await form.validateFields();
       await setProxySettings(values);
-    } catch {
-      // validation error
+      toast.success(t('proxy.saveSuccess'));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      toast.error(t('proxy.saveFailed', { error: message }));
     } finally {
       setIsSaving(false);
     }
-  }, [form, setProxySettings]);
+  }, [form, setProxySettings, t]);
 
   const handleReset = useCallback(() => {
     if (proxySettings) form.setFieldsValue(proxySettings);
@@ -265,7 +275,12 @@ const ProxyForm = () => {
               rules: [{ validator: validateProxyUsername }],
             },
             {
-              children: <Input.Password placeholder={t('proxy.password_placeholder')} />,
+              children: (
+                <Input.Password
+                  autoComplete="new-password"
+                  placeholder={t('proxy.password_placeholder')}
+                />
+              ),
               label: t('proxy.password'),
               name: 'proxyPassword',
               rules: [{ validator: validateProxyPassword }],

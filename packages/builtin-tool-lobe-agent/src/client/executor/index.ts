@@ -1,3 +1,4 @@
+import { UserInteractionExecutionRuntime } from '@lobechat/builtin-tool-user-interaction/executionRuntime';
 import type { BuiltinToolContext, BuiltinToolResult, ChatStreamPayload } from '@lobechat/types';
 import { BaseExecutor, RequestTrigger } from '@lobechat/types';
 
@@ -7,8 +8,8 @@ import { useNotebookStore } from '@/store/notebook';
 import { LobeAgentManifest } from '../../manifest';
 import type {
   AnalyzeVisualMediaParams,
+  AskUserQuestionArgs,
   CallSubAgentParams,
-  CallSubAgentsParams,
   ClearTodosParams,
   CreatePlanParams,
   CreateTodosParams,
@@ -138,11 +139,30 @@ const createAbortController = (signal?: AbortSignal) => {
 const isVisualSourceMessage = (message: unknown): message is VisualSourceMessage =>
   !!message && typeof message === 'object';
 
+const nestedSubAgentDisabledResult = (): BuiltinToolResult => ({
+  content: 'Nested sub-agent execution is not allowed.',
+  error: {
+    message: 'Sub-agent calls cannot be triggered from within another sub-agent.',
+    type: 'NestedSubAgentNotAllowed',
+  },
+  success: false,
+});
+
 class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
   readonly identifier = LobeAgentManifest.identifier;
   protected readonly apiEnum = LobeAgentApiName;
 
   private planRuntime = new PlanExecutionRuntime(clientPlanService);
+
+  // Reused from the standalone user-interaction tool — askUserQuestion is
+  // human-intervention 'always', so in normal flows the user's UI submit
+  // becomes the tool result and this runtime is only the fallback executor.
+  private interactionRuntime = new UserInteractionExecutionRuntime();
+
+  // ==================== Ask User Question ====================
+
+  askUserQuestion = (params: AskUserQuestionArgs): Promise<BuiltinToolResult> =>
+    this.interactionRuntime.askUserQuestion(params);
 
   // ==================== Plan / Todo ====================
 
@@ -368,6 +388,10 @@ class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
     params: CallSubAgentParams,
     ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
+    if (ctx.isSubAgent) {
+      return nestedSubAgentDisabledResult();
+    }
+
     const { description, instruction, inheritMessages, timeout } = params;
 
     if (!description || !instruction) {
@@ -394,52 +418,6 @@ class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
     return {
       content: result,
       state: { model, threadId, totalToolCalls, totalTokens },
-      success: true,
-    };
-  };
-
-  callSubAgents = async (
-    params: CallSubAgentsParams,
-    ctx: BuiltinToolContext,
-  ): Promise<BuiltinToolResult> => {
-    const { tasks } = params;
-
-    if (!tasks || tasks.length === 0) {
-      return { content: 'No sub-agents provided to dispatch.', success: false };
-    }
-
-    if (!ctx.subAgent) {
-      return { content: 'Sub-agent execution is not available in this runtime.', success: false };
-    }
-
-    const subAgent = ctx.subAgent;
-    const results = await Promise.all(
-      tasks.map((task) =>
-        subAgent.run({
-          description: task.description,
-          inheritMessages: task.inheritMessages,
-          instruction: task.instruction,
-          timeout: task.timeout,
-          toolMessageId: ctx.messageId,
-        }),
-      ),
-    );
-
-    const content = results
-      .map((r, i) => `${i + 1}. ${tasks[i].description}\n${r.success ? r.result : `❌ ${r.error}`}`)
-      .join('\n\n');
-
-    return {
-      content,
-      state: {
-        subAgents: results.map((r, i) => ({
-          description: tasks[i].description,
-          model: r.model,
-          threadId: r.threadId,
-          totalToolCalls: r.totalToolCalls,
-          totalTokens: r.totalTokens,
-        })),
-      },
       success: true,
     };
   };

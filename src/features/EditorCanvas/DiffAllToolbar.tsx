@@ -3,7 +3,8 @@
 import type { IEditor } from '@lobehub/editor';
 import { DiffAction, LITEXML_DIFFNODE_ALL_COMMAND } from '@lobehub/editor';
 import { Block, Icon } from '@lobehub/ui';
-import { Button, Space } from 'antd';
+import { Button } from '@lobehub/ui/base-ui';
+import { Space } from 'antd';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { Check, X } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
@@ -41,6 +42,14 @@ const useIsEditorInit = (editor?: IEditor) => {
 
   useEffect(() => {
     if (!editor) return;
+
+    // The editor may have initialized between render and this effect
+    // (the Editor canvas mounts earlier and emits 'initialized' synchronously),
+    // so re-check before subscribing to avoid missing the event forever.
+    if (editor.getLexicalEditor()) {
+      setEditInit(true);
+      return;
+    }
 
     const onInit = () => {
       setEditInit(true);
@@ -141,7 +150,7 @@ const DiffAllToolbar = memo<DiffAllToolbarProps>(({ documentId, editor }) => {
           <Button
             color={'default'}
             size={'small'}
-            variant="filled"
+            type="fill"
             onClick={async () => {
               editor.dispatchCommand(LITEXML_DIFFNODE_ALL_COMMAND, {
                 action: DiffAction.Accept,

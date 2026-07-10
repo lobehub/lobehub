@@ -41,6 +41,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 export interface KeyValueEditorProps {
   addButtonText?: string;
   deleteTooltip?: string;
+  disabled?: boolean;
   duplicateKeyErrorText?: string;
   keyPlaceholder?: string;
   onChange?: (value: Record<string, string>) => void;
@@ -58,6 +59,7 @@ const KeyValueEditor = memo<KeyValueEditorProps>(
     addButtonText,
     duplicateKeyErrorText,
     deleteTooltip,
+    disabled,
     style,
   }) => {
     const { t } = useTranslation('components');
@@ -73,6 +75,8 @@ const KeyValueEditor = memo<KeyValueEditorProps>(
     }, [value]);
 
     const triggerChange = (newItems: KeyValueItem[]) => {
+      if (disabled) return;
+
       const keysCount: Record<string, number> = {};
       newItems.forEach((item) => {
         const trimmedKey = item.key.trim();
@@ -89,21 +93,29 @@ const KeyValueEditor = memo<KeyValueEditorProps>(
     };
 
     const handleAdd = () => {
+      if (disabled) return;
+
       const newItems = [...items, { id: uuidv4(), key: '', value: '' }];
       triggerChange(newItems);
     };
 
     const handleRemove = (id: string) => {
+      if (disabled) return;
+
       const newItems = items.filter((item) => item.id !== id);
       triggerChange(newItems);
     };
 
     const handleKeyChange = (id: string, newKey: string) => {
+      if (disabled) return;
+
       const newItems = items.map((item) => (item.id === id ? { ...item, key: newKey } : item));
       triggerChange(newItems);
     };
 
     const handleValueChange = (id: string, newValue: string) => {
+      if (disabled) return;
+
       const newItems = items.map((item) => (item.id === id ? { ...item, value: newValue } : item));
       triggerChange(newItems);
     };
@@ -147,6 +159,7 @@ const KeyValueEditor = memo<KeyValueEditorProps>(
                 <Flexbox flex={1} style={{ position: 'relative' }}>
                   <FormInput
                     className={styles.input}
+                    disabled={disabled}
                     placeholder={keyPlaceholder || t('KeyValueEditor.keyPlaceholder')}
                     status={isDuplicate ? 'error' : undefined}
                     value={item.key}
@@ -169,6 +182,7 @@ const KeyValueEditor = memo<KeyValueEditorProps>(
                 <Flexbox flex={2}>
                   <FormInput
                     className={styles.input}
+                    disabled={disabled}
                     placeholder={valuePlaceholder || t('KeyValueEditor.valuePlaceholder')}
                     value={item.value}
                     variant={'filled'}
@@ -176,6 +190,7 @@ const KeyValueEditor = memo<KeyValueEditorProps>(
                   />
                 </Flexbox>
                 <ActionIcon
+                  disabled={disabled}
                   icon={LucideTrash}
                   size={'small'}
                   style={{ marginTop: 4 }}
@@ -187,6 +202,7 @@ const KeyValueEditor = memo<KeyValueEditorProps>(
           })}
           <Button
             block
+            disabled={disabled}
             icon={<Icon icon={LucidePlus} />}
             size={'small'}
             style={{ marginTop: items.length > 0 ? 16 : 8 }}

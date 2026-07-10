@@ -2,7 +2,7 @@ import { EDITOR_DEBOUNCE_TIME, EDITOR_MAX_WAIT } from '@lobechat/const';
 import { debounce } from 'es-toolkit/compat';
 import { type StateCreator } from 'zustand';
 
-import { type State } from './initialState';
+import { type EditLockState, type State } from './initialState';
 import { initialState } from './initialState';
 
 type SaveConfigPayload = {
@@ -21,6 +21,10 @@ export interface Action {
   finishStreaming: (updateConfig: (payload: SaveConfigPayload) => Promise<void>) => Promise<void>;
   flushSave: () => void;
   handleContentChange: (updateConfig: (payload: SaveConfigPayload) => Promise<void>) => void;
+  /** Latch edit-intent so the lock driver acquires the lock on first real edit. */
+  setHasEdited: (value: boolean) => void;
+  /** Publish the latest edit-lock state from the always-mounted lock driver. */
+  setLockState: (lockState: EditLockState) => void;
   /**
    * Start streaming mode - clears editor and prepares for streaming content
    */
@@ -130,6 +134,21 @@ export const store: (initState?: Partial<State>) => StateCreator<Store> =
           console.error('[ProfileEditor] Failed to read editor content:', error);
         }
       },
+      setHasEdited: (value) => {
+        if (get().hasEdited !== value) set({ hasEdited: value });
+      },
+
+      setLockState: (lockState) => {
+        const prev = get().lockState;
+        if (
+          prev.holderId !== lockState.holderId ||
+          prev.lockedByOther !== lockState.lockedByOther ||
+          prev.pending !== lockState.pending
+        ) {
+          set({ lockState });
+        }
+      },
+
       startStreaming: () => {
         const { editor } = get();
 

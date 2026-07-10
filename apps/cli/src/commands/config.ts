@@ -43,13 +43,15 @@ export function registerConfigCommand(program: Command) {
     .command('usage')
     .description('View usage statistics')
     .option('--month <YYYY-MM>', 'Month to query (default: current)')
+    .option('--agent-id <id>', 'Filter usage to a single agent')
     .option('--daily', 'Group by day')
     .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
-    .action(async (options: { daily?: boolean; json?: string | boolean; month?: string }) => {
+    .action(async (options: { agentId?: string; daily?: boolean; json?: string | boolean; month?: string }) => {
       const client = await getTrpcClient();
 
-      const input: { mo?: string } = {};
+      const input: { agentId?: string; mo?: string } = {};
       if (options.month) input.mo = options.month;
+      if (options.agentId) input.agentId = options.agentId;
 
       if (options.json !== undefined) {
         let jsonResult: any;
@@ -163,6 +165,7 @@ export function registerConfigCommand(program: Command) {
       try {
         // Try single-request endpoint first
         yearLogs = await client.usage.findAndGroupByDateRange.query({
+          agentId: input.agentId,
           endAt: now.toISOString().slice(0, 10),
           startAt: rangeStart.toISOString().slice(0, 10),
         });
@@ -174,7 +177,7 @@ export function registerConfigCommand(program: Command) {
           monthKeys.push(d.toISOString().slice(0, 7));
         }
         const results = await Promise.all(
-          monthKeys.map((mo) => client.usage.findAndGroupByDay.query({ mo })),
+          monthKeys.map((mo) => client.usage.findAndGroupByDay.query({ agentId: input.agentId, mo })),
         );
         yearLogs = results.flat();
       }

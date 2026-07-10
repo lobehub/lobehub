@@ -713,7 +713,7 @@ describe('DataSlice', () => {
 
       // Key should be an array with prefix and context object
       expect(Array.isArray(swrKey)).toBe(true);
-      expect(swrKey[0]).toBe('CONVERSATION_FETCH_MESSAGES');
+      expect(swrKey[0]).toBe('message:list');
       expect(swrKey[1]).toEqual({
         agentId: 'test-session',
         topicId: 'test-topic',

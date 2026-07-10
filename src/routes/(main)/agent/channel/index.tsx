@@ -3,10 +3,12 @@
 import { Flexbox } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { memo, useEffect, useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams } from 'react-router';
 
+import AsyncBoundary from '@/components/AsyncBoundary';
 import Loading from '@/components/Loading/BrandTextLoading';
 import NavHeader from '@/features/NavHeader';
+import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
@@ -31,13 +33,20 @@ const styles = createStaticStyles(({ css }) => ({
 const ChannelPage = memo(() => {
   const { aid } = useParams<{ aid?: string }>();
   const [activeProviderId, setActiveProviderId] = useState<string>('');
+  const { allowed: canEdit } = usePermission('edit_own_content');
 
-  const { data: platforms, isLoading: platformsLoading } = useAgentStore((s) =>
-    s.useFetchPlatformDefinitions(),
-  );
-  const { data: providers, isLoading: providersLoading } = useAgentStore((s) =>
-    s.useFetchBotProviders(aid),
-  );
+  const {
+    data: platforms,
+    isLoading: platformsLoading,
+    error: platformsError,
+    mutate: mutatePlatforms,
+  } = useAgentStore((s) => s.useFetchPlatformDefinitions());
+  const {
+    data: providers,
+    isLoading: providersLoading,
+    error: providersError,
+    mutate: mutateProviders,
+  } = useAgentStore((s) => s.useFetchBotProviders(aid));
   const triggerRefreshAllBotStatuses = useAgentStore((s) => s.triggerRefreshAllBotStatuses);
   const enableImessage = useUserStore(labPreferSelectors.enableImessage);
 
@@ -45,10 +54,22 @@ const ChannelPage = memo(() => {
   // from cached statuses immediately; SWR revalidates once Redis is updated.
   useEffect(() => {
     if (!aid) return;
+    if (!canEdit) return;
     triggerRefreshAllBotStatuses(aid);
-  }, [aid, triggerRefreshAllBotStatuses]);
+  }, [aid, canEdit, triggerRefreshAllBotStatuses]);
 
   const isLoading = platformsLoading || providersLoading;
+  const error = platformsError ?? providersError;
+
+  // Both fetches carry `fallbackData: []`, so a *failed* fetch leaves
+  // `platforms = []` and `allPlatforms` collapses to just the frontend-only
+  // `COMING_SOON_PLATFORMS` — `length > 0` stays true and the surface would
+  // render a plausible coming-soon-only catalog (every real / connected channel
+  // silently dropped). So "has data" is *not* the merged length: it's whether the
+  // real fetch actually yielded platforms. Gate on the raw fetched `platforms`
+  // (never the static merge) and require the providers fetch to have not errored,
+  // so a failed load branches to an error state before we merge the static half.
+  const hasData = (platforms?.length ?? 0) > 0 && !providersError;
 
   // Merge server-side platforms with frontend-only coming-soon entries.
   // Coming-soon entries shadow a server-registered platform of the same id, so a
@@ -97,30 +118,42 @@ const ChannelPage = memo(() => {
     <Flexbox flex={1} height={'100%'}>
       <NavHeader />
       <Flexbox flex={1} style={{ overflowY: 'auto' }}>
-        {isLoading && <Loading debugId="ChannelPage" />}
-
-        {!isLoading && allPlatforms.length > 0 && activePlatformDef && (
-          <div className={styles.container}>
-            <PlatformList
-              activeId={effectiveActiveId}
-              agentId={aid}
-              platforms={allPlatforms}
-              providers={providers}
-              runtimeStatuses={platformRuntimeStatuses}
-              onSelect={setActiveProviderId}
-            />
-            {activePlatformDef.comingSoon ? (
-              <ComingSoonDetail platformDef={activePlatformDef} />
-            ) : (
-              <PlatformDetail
+        <AsyncBoundary
+          data={hasData ? platforms : undefined}
+          error={error}
+          errorVariant={'block'}
+          isLoading={isLoading}
+          loading={<Loading debugId="ChannelPage" />}
+          onRetry={() => {
+            mutatePlatforms();
+            mutateProviders();
+          }}
+        >
+          {activePlatformDef && (
+            <div className={styles.container}>
+              <PlatformList
+                activeId={effectiveActiveId}
                 agentId={aid}
-                currentConfig={currentConfig}
-                platformDef={activePlatformDef}
-                runtimeStatus={platformRuntimeStatuses.get(activePlatformDef.id)}
+                disabled={!canEdit}
+                platforms={allPlatforms}
+                providers={providers}
+                runtimeStatuses={platformRuntimeStatuses}
+                onSelect={setActiveProviderId}
               />
-            )}
-          </div>
-        )}
+              {activePlatformDef.comingSoon ? (
+                <ComingSoonDetail platformDef={activePlatformDef} />
+              ) : (
+                <PlatformDetail
+                  agentId={aid}
+                  currentConfig={currentConfig}
+                  disabled={!canEdit}
+                  platformDef={activePlatformDef}
+                  runtimeStatus={platformRuntimeStatuses.get(activePlatformDef.id)}
+                />
+              )}
+            </div>
+          )}
+        </AsyncBoundary>
       </Flexbox>
     </Flexbox>
   );

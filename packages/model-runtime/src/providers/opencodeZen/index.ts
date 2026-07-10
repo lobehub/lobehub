@@ -1,9 +1,10 @@
 import { LOBE_DEFAULT_MODEL_LIST, ModelProvider } from 'model-bank';
 
-import { responsesAPIModels } from '../../const/models';
 import { createRouterRuntime } from '../../core/RouterRuntime';
 import type { CreateRouterRuntimeOptions } from '../../core/RouterRuntime/createRuntime';
 import { detectModelProvider, processMultiProviderModelList } from '../../utils/modelParse';
+import { responsesAPIModels } from '../openai/openaiModelId';
+import { resolveProviderRouteModels } from '../utils/resolveProviderRouteModels';
 
 const ZEN_BASE_URL = 'https://opencode.ai/zen/v1';
 
@@ -30,7 +31,7 @@ export const params = {
     const modelList = modelsPage.data || [];
     return processMultiProviderModelList(modelList, 'opencodezen');
   },
-  routers: (options) => {
+  routers: (options, runtimeContext?: { model?: string }) => {
     const baseURL = options.baseURL || ZEN_BASE_URL;
     return [
       // Anthropic router for Claude models
@@ -52,6 +53,20 @@ export const params = {
           chatCompletion: {
             useResponseModels: [...Array.from(responsesAPIModels), /gpt-\d(?!\d)/, /^o\d/],
           },
+        },
+      },
+      // DeepSeek models via the deepseek runtime (OpenAI-compatible endpoint)
+      {
+        apiType: 'deepseek',
+        models: resolveProviderRouteModels(
+          'deepseek',
+          LOBE_DEFAULT_MODEL_LIST,
+          runtimeContext?.model,
+        ),
+        options: {
+          ...options,
+          baseURL,
+          sdkType: 'openai',
         },
       },
       // OpenAI-compatible fallback for all other models (Gemini, GLM, Kimi, MiniMax, Qwen, etc.)

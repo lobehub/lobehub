@@ -13,7 +13,15 @@ interface FileListProps {
 
 const FileIcon = memo<FileListProps>(({ fileName, size, variant = 'raw', isDirectory }) => {
   if (isDirectory)
-    return <FileTypeIcon color={'gold'} size={size} type={'folder'} variant={'color'} />;
+    return (
+      <MaterialFileTypeIcon
+        fallbackUnknownType={false}
+        filename={fileName}
+        size={size}
+        type={'folder'}
+        variant={variant}
+      />
+    );
 
   if (Object.keys(mimeTypeMap).some((key) => fileName?.toLowerCase().endsWith(`.${key}`))) {
     const ext = fileName.split('.').pop()?.toLowerCase() as string;

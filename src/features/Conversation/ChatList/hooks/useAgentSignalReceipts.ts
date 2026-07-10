@@ -2,6 +2,7 @@ import type { UIChatMessage } from '@lobechat/types';
 import { useMemo, useRef } from 'react';
 import useSWR from 'swr';
 
+import { agentSignalKeys } from '@/libs/swr/keys';
 import { agentSignalService } from '@/services/agentSignal';
 
 /** Poll cadence for the active conversation's Agent Signal receipt surface. */
@@ -49,7 +50,7 @@ export const useAgentSignalReceipts = (input: {
   }
 
   const { data, isLoading } = useSWR(
-    shouldFetch ? ['agentSignalReceipts', input.agentId, input.topicId] : null,
+    shouldFetch ? agentSignalKeys.receipts(input.agentId!, input.topicId!) : null,
     async () => {
       const result = await agentSignalService.listReceipts({
         agentId: input.agentId!,
@@ -162,13 +163,10 @@ const resolveEffectiveAnchorMessageId = (
   );
   if (assistantReplyId) return assistantReplyId;
 
-  // WORKAROUND:
-  // Start-triggered Agent Signal receipts can arrive before the assistant row is available, so
-  // falling back to the trigger keeps them visible and prevents latest-message drift.
-  //
-  // TODO:
-  // Remove or simplify this fallback when all user-triggered paths provide anchorMessageId or
-  // stable assistant child resolution.
+  // Display fallback belongs here, not in the persisted receipt. A trigger-only
+  // receipt tells us why the signal fired; the UI can attach it to the assistant
+  // reply when that row exists, or keep it visible on the triggering user message
+  // while the assistant row is still unavailable.
   return receipt.triggerMessageId;
 };
 
@@ -197,9 +195,11 @@ const mergeReceiptRefresh = (
 ) => {
   if (newReceipts.length === 0) return currentReceipts;
 
-  const existingIds = new Set(currentReceipts.map((receipt) => receipt.id));
+  const mergedById = new Map(currentReceipts.map((receipt) => [receipt.id, receipt]));
 
-  return [...newReceipts.filter((receipt) => !existingIds.has(receipt.id)), ...currentReceipts]
-    .sort((a, b) => b.createdAt - a.createdAt)
-    .slice(0, 20);
+  for (const receipt of newReceipts) {
+    mergedById.set(receipt.id, receipt);
+  }
+
+  return [...mergedById.values()].sort((a, b) => b.createdAt - a.createdAt).slice(0, 20);
 };

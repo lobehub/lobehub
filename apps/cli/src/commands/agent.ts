@@ -1,5 +1,6 @@
-import { readFileSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 
+import { ReasoningGraphSchema } from '@lobechat/types';
 import type { Command } from 'commander';
 import pc from 'picocolors';
 
@@ -16,6 +17,20 @@ import { confirm, outputJson, printTable, truncate } from '../utils/format';
 import { log, setVerbose } from '../utils/logger';
 import { resolveAgentId } from './agent/resolveAgentId';
 import { registerAgentSpaceFsCommand } from './agent/spaceFs';
+
+const readGraphConfig = async (graphFile: string): Promise<unknown> => {
+  const content = await readFile(graphFile, 'utf8');
+  const graph = JSON.parse(content);
+  const result = ReasoningGraphSchema.safeParse(graph);
+
+  if (!result.success) {
+    const issue = result.error.issues[0];
+    const path = issue?.path.length ? `${issue.path.join('.')}: ` : '';
+    throw new Error(`Invalid ReasoningGraph: ${path}${issue?.message ?? 'unknown error'}`);
+  }
+
+  return result.data;
+};
 
 export function registerAgentCommand(program: Command) {
   const agent = program.command('agent').description('Manage agents');
@@ -154,11 +169,17 @@ export function registerAgentCommand(program: Command) {
     .option('-m, --model <model>', 'New model ID')
     .option('-p, --provider <provider>', 'New provider ID')
     .option('-s, --system-role <role>', 'New system role prompt')
+    .option('--graph-file <path>', 'ReasoningGraph JSON file')
+    .option('--enable-graph', 'Enable graph runtime')
+    .option('--disable-graph', 'Disable graph runtime')
     .action(
       async (
         agentIdArg: string | undefined,
         options: {
           description?: string;
+          disableGraph?: boolean;
+          enableGraph?: boolean;
+          graphFile?: string;
           model?: string;
           provider?: string;
           slug?: string;
@@ -173,11 +194,32 @@ export function registerAgentCommand(program: Command) {
         if (options.provider) value.provider = options.provider;
         if (options.systemRole) value.systemRole = options.systemRole;
 
+        if (options.enableGraph && options.disableGraph) {
+          log.error('Use either --enable-graph or --disable-graph, not both.');
+          process.exit(1);
+          return;
+        }
+
+        const chatConfig: Record<string, any> = {};
+        if (options.enableGraph) chatConfig.enableGraphMode = true;
+        if (options.disableGraph) chatConfig.enableGraphMode = false;
+        if (options.graphFile) {
+          try {
+            chatConfig.graph = await readGraphConfig(options.graphFile);
+          } catch (error) {
+            log.error(`Failed to read graph JSON: ${(error as Error).message}`);
+            process.exit(1);
+            return;
+          }
+        }
+        if (Object.keys(chatConfig).length > 0) value.chatConfig = chatConfig;
+
         if (Object.keys(value).length === 0) {
           log.error(
-            'No changes specified. Use --title, --description, --model, --provider, or --system-role.',
+            'No changes specified. Use --title, --description, --model, --provider, --system-role, --graph-file, --enable-graph, or --disable-graph.',
           );
           process.exit(1);
+          return;
         }
 
         const client = await getTrpcClient();
@@ -347,22 +389,33 @@ export function registerAgentCommand(program: Command) {
         const { serverUrl, headers, token, tokenType } = await getAgentStreamAuthInfo();
         const agentGatewayUrl = options.sse ? undefined : resolveAgentGatewayUrl();
 
-        if (agentGatewayUrl) {
-          await streamAgentEventsViaWebSocket({
-            gatewayUrl: agentGatewayUrl,
-            json: options.json,
-            operationId,
-            serverUrl,
-            token,
-            tokenType,
-            verbose: options.verbose,
-          });
-        } else {
-          const streamUrl = `${serverUrl}/api/agent/stream?operationId=${encodeURIComponent(operationId)}`;
-          await streamAgentEvents(streamUrl, headers, {
-            json: options.json,
-            verbose: options.verbose,
-          });
+        try {
+          if (agentGatewayUrl) {
+            await streamAgentEventsViaWebSocket({
+              gatewayUrl: agentGatewayUrl,
+              json: options.json,
+              operationId,
+              serverUrl,
+              token,
+              tokenType,
+              verbose: options.verbose,
+            });
+          } else {
+            const streamUrl = `${serverUrl}/api/agent/stream?operationId=${encodeURIComponent(operationId)}`;
+            await streamAgentEvents(streamUrl, headers, {
+              json: options.json,
+              verbose: options.verbose,
+            });
+          }
+        } catch (error) {
+          // The live stream (gateway WS / SSE) dropped before the run finished —
+          // the run is still executing server-side. Instead of failing, fall back
+          // to polling the run status until it reaches a terminal state.
+          if (options.json) throw error;
+          log.warn(
+            `Live stream unavailable (${(error as Error).message}). Polling run status every 10s…`,
+          );
+          await pollAgentRunStatus(client, operationId);
         }
       },
     );
@@ -623,6 +676,59 @@ function colorStatus(status: string): string {
     }
     default: {
       return pc.dim(status);
+    }
+  }
+}
+
+const TERMINAL_RUN_STATUSES = new Set([
+  'completed',
+  'done',
+  'success',
+  'failed',
+  'error',
+  'cancelled',
+  'canceled',
+  'aborted',
+]);
+
+/**
+ * Fallback when the live stream (gateway WebSocket / SSE) drops before the run
+ * finishes: the run is still executing server-side, so poll its status every 10s
+ * until it reaches a terminal state (or is no longer tracked, which also means it
+ * has finished). Avoids hard-exiting on a transient gateway disconnect.
+ */
+async function pollAgentRunStatus(
+  client: Awaited<ReturnType<typeof getTrpcClient>>,
+  operationId: string,
+): Promise<void> {
+  const POLL_MS = 10_000;
+  let lastStatus = '';
+  for (let i = 0; ; i++) {
+    if (i > 0) await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+
+    let r: any;
+    try {
+      r = await client.aiAgent.getOperationStatus.query({ operationId } as any);
+    } catch (error) {
+      log.error(`Status poll failed: ${(error as Error).message}`);
+      process.exit(1);
+    }
+
+    if (!r) {
+      log.info('Run is no longer tracked — finished (or expired).');
+      return;
+    }
+
+    const status = r.status || r.state || 'unknown';
+    if (status !== lastStatus) {
+      lastStatus = status;
+      const steps = r.stepCount !== undefined ? ` · ${r.stepCount} step(s)` : '';
+      log.info(`Run status: ${colorStatus(status)}${steps}`);
+    }
+
+    if (TERMINAL_RUN_STATUSES.has(status)) {
+      if (r.error) log.error(`Run error: ${r.error}`);
+      return;
     }
   }
 }

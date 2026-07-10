@@ -1,4 +1,4 @@
-import { ModelProvider } from 'model-bank';
+import { LOBE_DEFAULT_MODEL_LIST, ModelProvider } from 'model-bank';
 import type OpenAI from 'openai';
 
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
@@ -6,6 +6,7 @@ import { createRouterRuntime } from '../../core/RouterRuntime';
 import type { CreateRouterRuntimeOptions } from '../../core/RouterRuntime/createRuntime';
 import type { ChatStreamPayload } from '../../types';
 import { processMultiProviderModelList } from '../../utils/modelParse';
+import { resolveProviderRouteModels } from '../utils/resolveProviderRouteModels';
 
 // ============================================================================
 // Constants
@@ -19,24 +20,24 @@ const MODELS_DEV_URL = 'https://models.dev/api.json';
 // ============================================================================
 
 interface ModelsDevModel {
-  id: string;
-  name?: string;
-  family?: string;
-  provider?: { npm?: string };
-  release_date?: string;
+  [key: string]: any;
   attachment?: boolean;
-  reasoning?: boolean;
-  tool_call?: boolean;
-  structured_output?: boolean;
-  modalities?: { input?: string[]; output?: string[] };
-  limit?: { context?: number; output?: number };
   cost?: {
     input?: number;
     output?: number;
     cache_read?: number;
     cache_write?: number;
   };
-  [key: string]: any;
+  family?: string;
+  id: string;
+  limit?: { context?: number; output?: number };
+  modalities?: { input?: string[]; output?: string[] };
+  name?: string;
+  provider?: { npm?: string };
+  reasoning?: boolean;
+  release_date?: string;
+  structured_output?: boolean;
+  tool_call?: boolean;
 }
 
 interface ModelsDevData {
@@ -272,14 +273,20 @@ export const sanitizeJsonSchema = (schema: any): any => {
         nested[k] = sanitizeJsonSchema(v);
       }
       result[key] = nested;
-    } else if (
-      ['allOf', 'anyOf', 'oneOf', 'prefixItems'].includes(key) &&
-      Array.isArray(value)
-    ) {
+    } else if (['allOf', 'anyOf', 'oneOf', 'prefixItems'].includes(key) && Array.isArray(value)) {
       result[key] = value.map(sanitizeJsonSchema);
     } else if (
-      ['items', 'additionalProperties', 'not', 'contains', 'if', 'then', 'else',
-       'unevaluatedItems', 'unevaluatedProperties'].includes(key)
+      [
+        'items',
+        'additionalProperties',
+        'not',
+        'contains',
+        'if',
+        'then',
+        'else',
+        'unevaluatedItems',
+        'unevaluatedProperties',
+      ].includes(key)
     ) {
       result[key] = sanitizeJsonSchema(value);
     } else {
@@ -431,7 +438,7 @@ export const params = {
       );
     }
   },
-  routers: async (options) => {
+  routers: async (options, runtimeContext?: { model?: string }) => {
     const baseURL = options.baseURL || GO_BASE_URL;
 
     const anthropicModels = await getAnthropicModels();
@@ -442,6 +449,16 @@ export const params = {
         apiType: 'anthropic',
         models: anthropicModels,
         options: { ...options, baseURL: stripV1(baseURL) },
+      },
+      // DeepSeek models via the deepseek runtime (OpenAI-compatible endpoint)
+      {
+        apiType: 'deepseek',
+        models: resolveProviderRouteModels(
+          'deepseek',
+          LOBE_DEFAULT_MODEL_LIST,
+          runtimeContext?.model,
+        ),
+        options: { ...options, baseURL, sdkType: 'openai' },
       },
       // OpenAI-compatible fallback for all other models
       {

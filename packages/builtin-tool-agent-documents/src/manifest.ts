@@ -194,10 +194,15 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'List agent documents. Use this to discover documents that are not auto-injected (e.g. web-crawled pages) or to resolve a title to a document ID.',
+        'List agent documents. Use this to discover documents that are not auto-injected (e.g. web-crawled pages), to expand a folder collapsed in the agent_documents_index, or to resolve a title to a document ID.',
       name: AgentDocumentsApiName.listDocuments,
       parameters: {
         properties: {
+          parentId: {
+            description:
+              'Restrict the listing to the direct children of this folder. Pass the folder id shown on a collapsed 📁 row in the agent_documents_index to expand that folder.',
+            type: 'string',
+          },
           scope: {
             default: 'agent',
             description:

@@ -460,17 +460,19 @@ export const buildAnthropicTools = (
 ) => {
   if (!tools) return;
 
-  return tools.map(
-    (tool, index): Anthropic.Tool => ({
+  return tools.map((tool, index): Anthropic.Tool => {
+    // OpenAI SDK v6 made `ChatCompletionTool` a function|custom union; lobehub only sends function tools.
+    const { function: fn } = tool as OpenAI.ChatCompletionFunctionTool;
+    return {
       cache_control:
         options.enabledContextCaching && index === tools.length - 1
           ? { type: 'ephemeral' }
           : undefined,
-      description: tool.function.description,
-      input_schema: tool.function.parameters as Anthropic.Tool.InputSchema,
-      name: tool.function.name,
-    }),
-  );
+      description: fn.description,
+      input_schema: fn.parameters as Anthropic.Tool.InputSchema,
+      name: fn.name,
+    };
+  });
 };
 
 export const buildSearchTool = (): Anthropic.WebSearchTool20250305 => {
