@@ -5,6 +5,7 @@
   "workingDirectory.agentDescription": "دليل العمل الافتراضي لجميع المحادثات مع هذا الوكيل",
   "workingDirectory.agentLevel": "دليل العمل للوكيل",
   "workingDirectory.bareWorktree": "مجرد",
+  "workingDirectory.branchInWorktree": "في شجرة العمل {{name}}",
   "workingDirectory.branchSearchPlaceholder": "بحث عن الفروع",
   "workingDirectory.branchesEmpty": "لا توجد فروع محلية",
   "workingDirectory.branchesHeading": "الفروع",

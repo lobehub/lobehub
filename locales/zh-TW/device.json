@@ -5,6 +5,7 @@
   "workingDirectory.agentDescription": "所有與此代理的對話的預設工作目錄",
   "workingDirectory.agentLevel": "代理工作目錄",
   "workingDirectory.bareWorktree": "裸倉庫",
+  "workingDirectory.branchInWorktree": "在工作樹 {{name}}",
   "workingDirectory.branchSearchPlaceholder": "搜尋分支",
   "workingDirectory.branchesEmpty": "沒有本地分支",
   "workingDirectory.branchesHeading": "分支",

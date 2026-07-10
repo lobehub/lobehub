@@ -5,6 +5,7 @@
   "workingDirectory.agentDescription": "Directorio de trabajo predeterminado para todas las conversaciones con este Agente",
   "workingDirectory.agentLevel": "Directorio de Trabajo del Agente",
   "workingDirectory.bareWorktree": "desnudo",
+  "workingDirectory.branchInWorktree": "En el área de trabajo {{name}}",
   "workingDirectory.branchSearchPlaceholder": "Buscar ramas",
   "workingDirectory.branchesEmpty": "No hay ramas locales",
   "workingDirectory.branchesHeading": "Ramas",

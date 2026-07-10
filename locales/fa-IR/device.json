@@ -5,6 +5,7 @@
   "workingDirectory.agentDescription": "دایرکتوری کاری پیش‌فرض برای تمام مکالمات با این عامل",
   "workingDirectory.agentLevel": "دایرکتوری کاری عامل",
   "workingDirectory.bareWorktree": "برهنه",
+  "workingDirectory.branchInWorktree": "در شاخه کاری {{name}}",
   "workingDirectory.branchSearchPlaceholder": "جستجوی شاخه‌ها",
   "workingDirectory.branchesEmpty": "هیچ شاخه محلی وجود ندارد",
   "workingDirectory.branchesHeading": "شاخه‌ها",

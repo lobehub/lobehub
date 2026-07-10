@@ -5,6 +5,7 @@
   "workingDirectory.agentDescription": "Domyślny katalog roboczy dla wszystkich rozmów z tym Agentem",
   "workingDirectory.agentLevel": "Katalog roboczy Agenta",
   "workingDirectory.bareWorktree": "gołe",
+  "workingDirectory.branchInWorktree": "W obszarze roboczym {{name}}",
   "workingDirectory.branchSearchPlaceholder": "Szukaj gałęzi",
   "workingDirectory.branchesEmpty": "Brak lokalnych gałęzi",
   "workingDirectory.branchesHeading": "Gałęzie",
