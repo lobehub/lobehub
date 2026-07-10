@@ -1,7 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { getAgentStoreState } from '@/store/agent';
+
 import { AgentManagerRuntime } from '../AgentManagerRuntime';
 import type { IAgentService, IDiscoverService } from '../types';
+
+/**
+ * The `@/store/agent` mock below recreates a fresh object (with fresh
+ * `vi.fn()`s) on every `getAgentStoreState()` call, so a write made through
+ * one call's `optimisticUpdateAgentConfig` isn't visible on another call's
+ * returned object. This finds whichever of this test's calls actually wrote.
+ */
+const getLastOptimisticConfigUpdateCall = () => {
+  for (const result of [...vi.mocked(getAgentStoreState).mock.results].reverse()) {
+    const calls = (result.value.optimisticUpdateAgentConfig as ReturnType<typeof vi.fn>).mock.calls;
+    if (calls.length > 0) return calls.at(-1);
+  }
+  return undefined;
+};
 
 // Create mock services
 const mockAgentService: IAgentService = {
@@ -122,7 +138,6 @@ describe('AgentManagerRuntime', () => {
     it('should create an agent successfully', async () => {
       vi.mocked(mockAgentService.createAgent).mockResolvedValue({
         agentId: 'new-agent-id',
-        sessionId: 'new-session-id',
       });
 
       const result = await runtime.createAgent({
@@ -136,7 +151,6 @@ describe('AgentManagerRuntime', () => {
       expect(result.content).toContain('My New Agent');
       expect(result.state).toMatchObject({
         agentId: 'new-agent-id',
-        sessionId: 'new-session-id',
         success: true,
       });
     });
@@ -204,6 +218,35 @@ describe('AgentManagerRuntime', () => {
       expect(result.success).toBe(true);
       expect(result.content).toBe('No fields to update.');
     });
+
+    it('flips an existing disabled object entry back to pinned, without duplicating it', async () => {
+      const originalPlugins = mockAgentConfig.plugins;
+      mockAgentConfig.plugins = [
+        'plugin-1',
+        { identifier: 'plugin-2', mode: 'disabled' } as any,
+      ] as any;
+
+      try {
+        // Also pass `config.model` so the code populates `state.config.newValues`
+        // (it's otherwise omitted when only `togglePlugin` is set), letting this
+        // test inspect the actual computed plugins array.
+        const result = await runtime.updateAgentConfig('agent-id', {
+          config: { model: 'gpt-4o' },
+          togglePlugin: { pluginId: 'plugin-2', enabled: true },
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.state).toMatchObject({
+          config: {
+            newValues: {
+              plugins: ['plugin-1', { identifier: 'plugin-2', mode: 'pinned' }],
+            },
+          },
+        });
+      } finally {
+        mockAgentConfig.plugins = originalPlugins;
+      }
+    });
   });
 
   describe('deleteAgent', () => {
@@ -256,7 +299,9 @@ describe('AgentManagerRuntime', () => {
       });
 
       expect(result.success).toBe(true);
-      expect(result.content).toContain('Found 2 agents in your workspace, showing 1-2');
+      expect(result.content).toContain('Found 2 agents in your workspace, showing 1-2:');
+      expect(result.content).toContain('id="agent-1"');
+      expect(result.content).toContain('id="agent-2"');
       expect(result.state).toMatchObject({
         agents: expect.arrayContaining([
           expect.objectContaining({ id: 'agent-1', isMarket: false }),
@@ -265,6 +310,31 @@ describe('AgentManagerRuntime', () => {
         hasMore: false,
         source: 'user',
         totalCount: 2,
+      });
+    });
+
+    it('should surface heteroType for heterogeneous agents in state and content', async () => {
+      vi.mocked(mockAgentService.queryAgents).mockResolvedValue([
+        {
+          id: 'cc-agent',
+          title: 'CC 2号机',
+          description: null,
+          avatar: null,
+          backgroundColor: null,
+          heteroType: 'claude-code',
+        },
+      ] as any);
+      vi.mocked(mockAgentService.countAgents).mockResolvedValue(1);
+
+      const result = await runtime.searchAgents({ source: 'user' });
+
+      expect(result.success).toBe(true);
+      expect(result.content).toContain('heteroType="claude-code"');
+      expect(result.content).toContain('heterogeneous agents');
+      expect(result.state).toMatchObject({
+        agents: expect.arrayContaining([
+          expect.objectContaining({ id: 'cc-agent', heteroType: 'claude-code' }),
+        ]),
       });
     });
 
@@ -327,7 +397,7 @@ describe('AgentManagerRuntime', () => {
       const result = await runtime.searchAgents({ keyword: 'nonexistent', source: 'user' });
 
       expect(result.success).toBe(true);
-      expect(result.content).toContain('No agents found');
+      expect(result.content).toContain('No agents matched');
     });
 
     it('should report the real total and a pagination hint when more agents exist', async () => {
@@ -344,7 +414,7 @@ describe('AgentManagerRuntime', () => {
       const result = await runtime.searchAgents({ limit: 20, source: 'user' });
 
       expect(result.success).toBe(true);
-      expect(result.content).toContain('Found 137 agents in your workspace, showing 1-20');
+      expect(result.content).toContain('Found 137 agents in your workspace, showing 1-20:');
       expect(result.content).toContain('call searchAgent with offset=20');
       expect(result.state).toMatchObject({ hasMore: true, offset: 0, totalCount: 137 });
     });
@@ -367,7 +437,7 @@ describe('AgentManagerRuntime', () => {
         limit: 20,
         offset: 20,
       });
-      expect(result.content).toContain('Found 50 agents in your workspace, showing 21-40');
+      expect(result.content).toContain('Found 50 agents in your workspace, showing 21-40:');
       expect(result.content).toContain('call searchAgent with offset=40');
       expect(result.state).toMatchObject({ hasMore: true, offset: 20 });
     });
@@ -392,7 +462,7 @@ describe('AgentManagerRuntime', () => {
         offset: 0,
       });
       expect(result.content).toContain(
-        'requested limit 50 exceeds the maximum of 20, so results were capped at 20',
+        'Requested limit 50 exceeds the maximum of 20; results were capped at 20 per call.',
       );
     });
 
@@ -403,7 +473,7 @@ describe('AgentManagerRuntime', () => {
       const result = await runtime.searchAgents({ offset: 200, source: 'user' });
 
       expect(result.success).toBe(true);
-      expect(result.content).toContain('No agents at offset 200; only 37 agents match');
+      expect(result.content).toContain('No agents at offset 200; only 37 match');
     });
 
     it('should fall back to item count when marketplace omits totalCount', async () => {
@@ -655,6 +725,28 @@ describe('AgentManagerRuntime', () => {
 
       expect(result.success).toBe(false);
       expect(result.content).toContain('not found');
+    });
+
+    it('flips an existing disabled object entry back to pinned, without duplicating it', async () => {
+      const originalPlugins = mockAgentConfig.plugins;
+      mockAgentConfig.plugins = [
+        { identifier: 'lobe-web-browsing', mode: 'disabled' } as any,
+      ] as any;
+
+      try {
+        const result = await runtime.installPlugin('agent-id', {
+          identifier: 'lobe-web-browsing',
+          source: 'official',
+        });
+
+        expect(result.success).toBe(true);
+        expect(getLastOptimisticConfigUpdateCall()).toEqual([
+          'agent-id',
+          { plugins: [{ identifier: 'lobe-web-browsing', mode: 'pinned' }] },
+        ]);
+      } finally {
+        mockAgentConfig.plugins = originalPlugins;
+      }
     });
 
     it('should install market plugin', async () => {

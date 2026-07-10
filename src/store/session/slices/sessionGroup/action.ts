@@ -30,11 +30,6 @@ export class SessionGroupActionImpl {
     return id;
   };
 
-  clearSessionGroups = async (): Promise<void> => {
-    await sessionService.removeSessionGroups();
-    await this.#get().refreshSessions();
-  };
-
   removeSessionGroup = async (id: string): Promise<void> => {
     await sessionService.removeSessionGroup(id);
     await this.#get().refreshSessions();

@@ -1,11 +1,11 @@
 'use client';
 
 import { type ComposioAppType } from '@lobechat/const';
-import { Avatar, Button as LobeButton, DropdownMenu, Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
-import { Button } from 'antd';
+import { Avatar, Center, DropdownMenu, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { Button, confirmModal } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import {
+  CircleCheck,
   Loader2,
   MoreHorizontalIcon,
   RotateCcw,
@@ -16,6 +16,7 @@ import {
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import NavItem from '@/features/NavPanel/components/NavItem';
 import { usePermission } from '@/hooks/usePermission';
 import { useToolStore } from '@/store/tool';
 import { type ComposioServer } from '@/store/tool/slices/composioStore';
@@ -296,7 +297,7 @@ const ComposioSkillItem = memo<ComposioSkillItemProps>(
             ]}
           >
             <Tooltip title={editReason}>
-              <LobeButton disabled={!canEdit} icon={MoreHorizontalIcon} />
+              <Button disabled={!canEdit} icon={<Icon icon={MoreHorizontalIcon} />} />
             </Tooltip>
           </DropdownMenu>
         );
@@ -318,7 +319,7 @@ const ComposioSkillItem = memo<ComposioSkillItemProps>(
             ]}
           >
             <Tooltip title={editReason}>
-              <LobeButton disabled={!canEdit} icon={MoreHorizontalIcon} />
+              <Button disabled={!canEdit} icon={<Icon icon={MoreHorizontalIcon} />} />
             </Tooltip>
           </DropdownMenu>
         );
@@ -328,6 +329,77 @@ const ComposioSkillItem = memo<ComposioSkillItemProps>(
     };
 
     const isConnected = server?.status === ComposioServerStatus.ACTIVE;
+    const isPending = server?.status === ComposioServerStatus.PENDING_AUTH;
+    const isError = server?.status === ComposioServerStatus.ERROR;
+
+    // Compact connect/status control for the left-list (NavItem) row. Mirrors the
+    // ChatInput skills dropdown UX: connected → green check; pending/errored →
+    // Re-authorize; not connected → Connect. All open the OAuth flow inline so
+    // users can tell what is connected instead of hitting a blank detail panel.
+    const renderNavExtra = () => {
+      if (isConnecting || isWaitingAuth) {
+        return <Button disabled icon={<Icon spin icon={Loader2} />} size="small" type="text" />;
+      }
+      if (isConnected) {
+        return (
+          <Tooltip title={t('tools.composio.connected')}>
+            <Center width={20}>
+              <Icon icon={CircleCheck} size={16} style={{ color: cssVar.colorSuccess }} />
+            </Center>
+          </Tooltip>
+        );
+      }
+      if (isPending || isError) {
+        return (
+          <Tooltip title={!canCreate ? createReason : editReason}>
+            <Button
+              disabled={!canCreate || !canEdit}
+              icon={<Icon icon={SquareArrowOutUpRight} />}
+              size="small"
+              type="text"
+              onClick={handleReauthorize}
+            >
+              {t('tools.composio.reauthorize', { defaultValue: 'Re-authorize' })}
+            </Button>
+          </Tooltip>
+        );
+      }
+      return (
+        <Tooltip title={!canCreate ? createReason : editReason}>
+          <Button
+            disabled={!canCreate || !canEdit}
+            icon={<Icon icon={SquareArrowOutUpRight} />}
+            size="small"
+            type="text"
+            onClick={handleConnect}
+          >
+            {t('tools.composio.connect', { defaultValue: 'Connect' })}
+          </Button>
+        </Tooltip>
+      );
+    };
+
+    if (onSelect) {
+      const renderNavIcon = () => {
+        const { icon, label } = serverType;
+        if (typeof icon === 'string') return <Avatar alt={label} avatar={icon} size={18} />;
+        return <Icon fill={cssVar.colorText} icon={icon} size={18} />;
+      };
+      return (
+        <NavItem
+          active={isSelected}
+          extra={renderNavExtra()}
+          icon={renderNavIcon}
+          title={serverType.label}
+          titleColor={!isConnected ? cssVar.colorTextDescription : undefined}
+          // Only connected connectors open the detail panel. When not active
+          // (disconnected / pending / error) the row is inert and the only
+          // affordance is the inline Connect / Re-authorize button — otherwise
+          // clicking opens a blank detail panel that reads as a bug.
+          onClick={isConnected ? onSelect : undefined}
+        />
+      );
+    }
 
     return (
       <Flexbox

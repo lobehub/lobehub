@@ -21,30 +21,29 @@ import {
   type SendButtonHandler,
   type SendButtonProps,
 } from '@/features/ChatInput/store/initialState';
+import { useAgentStore } from '@/store/agent';
+import { chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 import { selectCurrentTurnTodosFromMessages } from '@/store/chat/slices/message/selectors/dbMessage';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { fileChatSelectors, useFileStore } from '@/store/file';
 
+import { buildMessageContextSelections } from '../../ChatInput/utils/contextSelections';
 import WideScreenContainer from '../../WideScreenContainer';
 import InterventionBar from '../InterventionBar';
 import { dataSelectors, messageStateSelectors, useConversationStore } from '../store';
 import TodoProgress from '../TodoProgress';
 import OpStatusTray from './OpStatusTray';
 import QueueTray from './QueueTray';
-import { getConversationChatInputUiState } from './utils';
+import {
+  getContextWindowMessages,
+  getConversationChatInputUiState,
+  toChatInputMessages,
+} from './utils';
 
 /** Max recent messages to feed into auto-complete context (≈10 conversation turns) */
 const MAX_CONTEXT_MESSAGES = 25;
-
-const toChatInputMessages = (messages: ReturnType<typeof dataSelectors.dbMessages>) =>
-  messages
-    .filter((m) => m.role === 'user' || m.role === 'assistant' || m.role === 'tool')
-    .map((m) => ({
-      content: typeof m.content === 'string' ? m.content : '',
-      role: m.role as 'user' | 'assistant' | 'system',
-    }));
 
 const InputCompletionErrorAlertContent = memo<{
   inputCompletionError: InputCompletionError;
@@ -225,14 +224,8 @@ const ChatInput = memo<ChatInputProps>(
   }) => {
     const { t } = useTranslation('chat');
 
-    const dbMessages = useConversationStore(dataSelectors.dbMessages);
-    const contextWindowMessages = useMemo(() => toChatInputMessages(dbMessages), [dbMessages]);
-    const getMessages = useCallback(
-      () => contextWindowMessages.slice(-MAX_CONTEXT_MESSAGES),
-      [contextWindowMessages],
-    );
-
     // ConversationStore state
+    const dbMessages = useConversationStore(dataSelectors.dbMessages);
     const context = useConversationStore((s) => s.context);
     const draftKey = useMemo(() => messageMapKey(context), [context]);
     const [agentId, inputMessage, sendMessage, stopGenerating] = useConversationStore((s) => [
@@ -241,6 +234,23 @@ const ChatInput = memo<ChatInputProps>(
       s.sendMessage,
       s.stopGenerating,
     ]);
+    const [enableHistoryCount, historyCount] = useAgentStore((s) => [
+      chatConfigByIdSelectors.getEnableHistoryCountById(agentId || '')(s),
+      chatConfigByIdSelectors.getHistoryCountById(agentId || '')(s),
+    ]);
+    const chatInputMessages = useMemo(() => toChatInputMessages(dbMessages), [dbMessages]);
+    const contextWindowMessages = useMemo(
+      () =>
+        getContextWindowMessages(dbMessages, {
+          enableHistoryCount,
+          historyCount,
+        }),
+      [dbMessages, enableHistoryCount, historyCount],
+    );
+    const getMessages = useCallback(
+      () => chatInputMessages.slice(-MAX_CONTEXT_MESSAGES),
+      [chatInputMessages],
+    );
     const updateInputMessage = useConversationStore((s) => s.updateInputMessage);
     const setEditor = useConversationStore((s) => s.setEditor);
     const setChatInputOverlayHeight = useConversationStore((s) => s.setChatInputOverlayHeight);
@@ -263,7 +273,10 @@ const ChatInput = memo<ChatInputProps>(
     }, [setChatInputOverlayHeight]);
 
     // Loading state from ConversationStore (bridged from ChatStore)
-    const isInputLoading = useConversationStore(messageStateSelectors.isInputLoading);
+    const isInputLoading = useConversationStore(messageStateSelectors.isInputVisiblyLoading);
+    const isInputQueueBlocked = useChatStore((s) =>
+      operationSelectors.isInputLoadingByContext(context)(s),
+    );
 
     // Pending interventions — use custom equality to prevent infinite re-render loop.
     // The selector creates new array/object refs each call; without equality check,
@@ -308,7 +321,7 @@ const ChatInput = memo<ChatInputProps>(
     // When disableQueue is set (e.g. onboarding), block sending while loading.
     // disableSend hard-blocks regardless of content (host surface is read-only).
     const disabled =
-      isInputEmpty || isUploadingFiles || (!!disableQueue && isInputLoading) || !!disableSend;
+      isInputEmpty || isUploadingFiles || (!!disableQueue && isInputQueueBlocked) || !!disableSend;
     const shouldUsePlainSendButton = !showSendMenu && !!sendMenu;
     const businessCostEstimateAlert = useBusinessChatInputCostEstimateAlert();
     const businessSendAreaPrefix = getBusinessChatInputSendAreaPrefix(sendAreaPrefix);
@@ -330,7 +343,7 @@ const ChatInput = memo<ChatInputProps>(
 
         // Onboarding-style surfaces opt out of message queuing — pressing Enter
         // while the agent is streaming should be a no-op rather than enqueue.
-        if (disableQueue && isInputLoading) return;
+        if (disableQueue && isInputQueueBlocked) return;
 
         // Get content before clearing
         const message = getMarkdownContent();
@@ -345,18 +358,19 @@ const ChatInput = memo<ChatInputProps>(
         fileStore.clearChatUploadFileList();
         fileStore.clearChatContextSelections();
 
-        // Convert ChatContextContent to PageSelection for persistence
-        const pageSelections = currentContextList.map((ctx) => ({
-          content: ctx.preview || '',
-          id: ctx.id,
-          pageId: ctx.pageId || '',
-          xml: ctx.content,
-        }));
+        const { contextSelections, pageSelections } =
+          buildMessageContextSelections(currentContextList);
 
         // Fire and forget - send with captured message
-        await sendMessage({ editorData, files: currentFileList, message, pageSelections });
+        await sendMessage({
+          contextSelections,
+          editorData,
+          files: currentFileList,
+          message,
+          pageSelections,
+        });
       },
-      [sendMessage, disableQueue, disableSend, isInputLoading],
+      [sendMessage, disableQueue, disableSend, isInputQueueBlocked],
     );
 
     const sendButtonProps: SendButtonProps = {

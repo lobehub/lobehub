@@ -14,6 +14,7 @@ export interface RunCommandParams {
 }
 
 export interface RunCommandResult {
+  duration_ms?: number;
   error?: string;
   /**
    * Present only after the command has exited.
@@ -22,6 +23,10 @@ export interface RunCommandResult {
    */
   exit_code?: number;
   output?: string;
+  output_files?: {
+    stderr: { path: string; size: number; truncated: boolean };
+    stdout: { path: string; size: number; truncated: boolean };
+  };
   /**
    * Session identifier. Present for background commands and foreground commands
    * that can be resumed with `getCommandOutput`.
@@ -61,6 +66,10 @@ export interface GetCommandOutputResult {
    */
   exit_code?: number;
   output: string;
+  output_files?: {
+    stderr: { path: string; size: number; truncated: boolean };
+    stdout: { path: string; size: number; truncated: boolean };
+  };
   stderr: string;
   stdout: string;
   /**
@@ -168,6 +177,8 @@ export interface ListFilesResult {
 export interface GlobFilesParams {
   /** Legacy alias for `scope`. Honored when set; prefer `scope` for new callers. */
   cwd?: string;
+  /** Maximum number of results to collect. When omitted, callers may apply their own default. */
+  limit?: number;
   pattern: string;
   /** Working directory scope. When `pattern` is relative, it is joined with this scope. Defaults to the current working directory. */
   scope?: string;

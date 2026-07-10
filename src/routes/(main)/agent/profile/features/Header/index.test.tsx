@@ -1,4 +1,6 @@
+import type * as LobeChatConst from '@lobechat/const';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type * as LucideReact from 'lucide-react';
 import type { PropsWithChildren, ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -35,7 +37,8 @@ const mocks = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('@lobechat/const', () => ({
+vi.mock('@lobechat/const', async (importOriginal) => ({
+  ...(await importOriginal<typeof LobeChatConst>()),
   isDesktop: false,
 }));
 
@@ -82,21 +85,35 @@ vi.mock('@lobehub/ui/base-ui', () => ({
   confirmModal: vi.fn(),
 }));
 
-vi.mock('antd', () => ({
-  App: {
-    useApp: () => ({
-      modal: {
-        confirm: vi.fn(),
-      },
-    }),
-  },
-  Modal: {
-    confirm: vi.fn(),
-  },
-}));
+interface AntdMockModule {
+  App: Record<PropertyKey, unknown>;
+  Modal: Record<PropertyKey, unknown>;
+}
 
-vi.mock('lucide-react', () => ({
+vi.mock('antd', async (importOriginal) => {
+  const actual = await importOriginal<AntdMockModule>();
+
+  return {
+    ...actual,
+    App: {
+      ...actual.App,
+      useApp: () => ({
+        modal: {
+          confirm: vi.fn(),
+        },
+      }),
+    },
+    Modal: {
+      ...actual.Modal,
+      confirm: vi.fn(),
+    },
+  };
+});
+
+vi.mock('lucide-react', async (importOriginal) => ({
+  ...(await importOriginal<typeof LucideReact>()),
   BotMessageSquareIcon: () => null,
+  Circle: () => null,
   Download: () => null,
   MoreHorizontal: () => null,
   Settings2Icon: () => null,
@@ -123,6 +140,10 @@ vi.mock('@/components/AntdStaticMethods', () => ({
 
 vi.mock('@/const/layoutTokens', () => ({
   DESKTOP_HEADER_ICON_SMALL_SIZE: 24,
+}));
+
+vi.mock('@/features/AgentBreadcrumb', () => ({
+  default: () => null,
 }));
 
 vi.mock('@/features/NavHeader', () => ({
@@ -201,6 +222,8 @@ describe('Agent profile Header', () => {
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:agent-profile');
     vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
     mocks.agentState.isCurrentAgentHeterogeneous = false;
+    mocks.agentState.systemRole = 'You are helpful.';
+    mocks.agentState.config.plugins = ['lobe-web-browsing'];
     mocks.profileState.editor = undefined;
   });
 
@@ -227,6 +250,25 @@ describe('Agent profile Header', () => {
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:agent-profile');
   });
 
+  it('excludes disabled entries from the exported markdown plugin list, in a mixed-shape array', async () => {
+    mocks.agentState.config.plugins = [
+      'lobe-web-browsing',
+      { identifier: 'lobe-image-generation', mode: 'disabled' } as any,
+    ];
+
+    render(<Header />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'pageEditor.menu.export.markdown' }));
+
+    await waitFor(() => expect(URL.createObjectURL).toHaveBeenCalled());
+
+    const exportedBlob = getLatestExportedBlob();
+    const exportedMarkdown = await exportedBlob.text();
+
+    expect(exportedMarkdown).toContain('lobe-web-browsing');
+    expect(exportedMarkdown).not.toContain('lobe-image-generation');
+  });
+
   it('should preserve an empty prompt from the mounted editor when exporting markdown', async () => {
     mocks.profileState.editor = {
       getDocument: vi.fn().mockReturnValue(''),
@@ -244,5 +286,23 @@ describe('Agent profile Header', () => {
     expect(exportedMarkdown).toContain('# Test Agent');
     expect(exportedMarkdown).not.toContain('You are helpful.');
     expect(exportedMarkdown).not.toContain('settingAgent.prompt.title');
+  });
+
+  it('should ignore the hidden editor when exporting heterogeneous agent markdown', async () => {
+    const getDocument = vi.fn().mockReturnValue('');
+    mocks.agentState.isCurrentAgentHeterogeneous = true;
+    mocks.profileState.editor = { getDocument };
+
+    render(<Header />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'pageEditor.menu.export.markdown' }));
+
+    await waitFor(() => expect(URL.createObjectURL).toHaveBeenCalled());
+
+    const exportedBlob = getLatestExportedBlob();
+    const exportedMarkdown = await exportedBlob.text();
+
+    expect(getDocument).not.toHaveBeenCalled();
+    expect(exportedMarkdown).toContain('You are helpful.');
   });
 });

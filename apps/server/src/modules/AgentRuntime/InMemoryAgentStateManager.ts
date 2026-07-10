@@ -15,6 +15,11 @@ export class InMemoryAgentStateManager implements IAgentStateManager {
   private steps: Map<string, any[]> = new Map();
   private metadata: Map<string, AgentOperationMetadata> = new Map();
   private events: Map<string, any[][]> = new Map();
+  private stepLocks: Map<string, { expiresAt: number; ownerId: string }> = new Map();
+
+  private executionLockKey(operationId: string): string {
+    return `agent_runtime_operation_lock:${operationId}`;
+  }
 
   async saveAgentState(operationId: string, state: AgentState): Promise<void> {
     // Deep clone to avoid reference issues
@@ -120,6 +125,7 @@ export class InMemoryAgentStateManager implements IAgentStateManager {
     operationId: string,
     data: {
       agentConfig?: any;
+      mirrorToOperationId?: string;
       modelRuntimeConfig?: any;
       userId?: string;
       workspaceId?: string;
@@ -129,6 +135,7 @@ export class InMemoryAgentStateManager implements IAgentStateManager {
       agentConfig: data.agentConfig,
       createdAt: new Date().toISOString(),
       lastActiveAt: new Date().toISOString(),
+      mirrorToOperationId: data.mirrorToOperationId,
       modelRuntimeConfig: data.modelRuntimeConfig,
       status: 'idle',
       totalCost: 0,
@@ -218,15 +225,49 @@ export class InMemoryAgentStateManager implements IAgentStateManager {
   }
 
   async tryClaimStep(
-    _operationId: string,
+    operationId: string,
     _stepIndex: number,
-    _ttlSeconds?: number,
+    ttlSeconds: number = 35,
+    ownerId: string = Date.now().toString(),
   ): Promise<boolean> {
+    const key = this.executionLockKey(operationId);
+    const now = Date.now();
+    const existing = this.stepLocks.get(key);
+
+    if (existing && existing.expiresAt > now) {
+      return false;
+    }
+
+    this.stepLocks.set(key, { expiresAt: now + ttlSeconds * 1000, ownerId });
     return true;
   }
 
-  async releaseStepLock(_operationId: string, _stepIndex: number): Promise<void> {
-    // noop
+  async refreshStepLock(
+    operationId: string,
+    _stepIndex: number,
+    ttlSeconds: number,
+    ownerId?: string,
+  ): Promise<boolean> {
+    const key = this.executionLockKey(operationId);
+    const existing = this.stepLocks.get(key);
+
+    if (!existing || (ownerId && existing.ownerId !== ownerId)) {
+      return false;
+    }
+
+    existing.expiresAt = Date.now() + ttlSeconds * 1000;
+    return true;
+  }
+
+  async releaseStepLock(operationId: string, _stepIndex: number, ownerId?: string): Promise<void> {
+    const key = this.executionLockKey(operationId);
+    const existing = this.stepLocks.get(key);
+
+    if (!existing || (ownerId && existing.ownerId !== ownerId)) {
+      return;
+    }
+
+    this.stepLocks.delete(key);
   }
 
   async disconnect(): Promise<void> {
@@ -242,6 +283,7 @@ export class InMemoryAgentStateManager implements IAgentStateManager {
     this.steps.clear();
     this.metadata.clear();
     this.events.clear();
+    this.stepLocks.clear();
     log('All data cleared');
   }
 

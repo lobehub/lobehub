@@ -95,6 +95,16 @@ describe('internalJwt', () => {
 
       expect(setIssuedAtMock).toHaveBeenCalled();
     });
+
+    it('honors an explicit run-length expiration (e.g. a hetero sandbox run)', async () => {
+      const { signUserJWT } = await import('../internalJwt');
+
+      await signUserJWT('user-abc', '4h');
+
+      expect(setExpirationTimeMock).toHaveBeenCalledWith('4h');
+      // Still a user-scoped token, just longer-lived.
+      expect(SignJWTMock).toHaveBeenCalledWith({ purpose: 'cli-sandbox' });
+    });
   });
 
   describe('signOperationJwt', () => {

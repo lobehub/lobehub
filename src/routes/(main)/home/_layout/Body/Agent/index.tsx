@@ -4,6 +4,7 @@ import { AccordionItem, ContextMenuTrigger, Flexbox, Text } from '@lobehub/ui';
 import React, { memo, Suspense, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
@@ -21,36 +22,18 @@ interface AgentProps {
 const Agent = memo<AgentProps>(({ itemKey }) => {
   const { t } = useTranslation('common');
   const { isRevalidating } = useFetchAgentList();
+  // In workspace mode the section pairs with the "Private" bucket, so the
+  // public/shared agents are labeled "Public" to make the contrast obvious.
+  // Personal mode has no such duality — keep the existing "Agents" label.
+  const activeWorkspaceId = useActiveWorkspaceId();
+  const titleKey = activeWorkspaceId ? 'navPanel.publicAgents' : 'navPanel.agent';
 
   const { openConfigGroupModal } = useAgentModal();
 
   // Create menu items
-  const {
-    createAgentMenuItem,
-    createGroupChatMenuItem,
-    createHeterogeneousAgentMenuItems,
-    createPlatformAgentMenuItem,
-    isLoading,
-  } = useCreateMenuItems();
+  const { createTopLevelMenuItems, isLoading } = useCreateMenuItems();
 
-  const addMenuItems = useMemo(() => {
-    const heterogeneousItems = createHeterogeneousAgentMenuItems();
-    const platformItem = createPlatformAgentMenuItem();
-
-    return [
-      createAgentMenuItem(),
-      createGroupChatMenuItem(),
-      ...(heterogeneousItems.length > 0
-        ? [{ type: 'divider' as const }, ...heterogeneousItems]
-        : []),
-      ...(platformItem ? [{ type: 'divider' as const }, platformItem] : []),
-    ];
-  }, [
-    createAgentMenuItem,
-    createGroupChatMenuItem,
-    createHeterogeneousAgentMenuItems,
-    createPlatformAgentMenuItem,
-  ]);
+  const addMenuItems = useMemo(() => createTopLevelMenuItems(), [createTopLevelMenuItems]);
 
   const handleOpenConfigGroupModal = useCallback(() => {
     openConfigGroupModal();
@@ -74,7 +57,7 @@ const Agent = memo<AgentProps>(({ itemKey }) => {
       title={
         <Flexbox horizontal align="center" gap={4}>
           <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
-            {t('navPanel.agent')}
+            {t(titleKey)}
           </Text>
           {isRevalidating && <NeuralNetworkLoading size={14} />}
         </Flexbox>

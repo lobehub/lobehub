@@ -67,10 +67,25 @@ vi.mock('antd', () => ({
     }),
   },
   ConfigProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
-  Tree: ({ onSelect }: { onSelect?: (keys: string[]) => void }) => (
-    <button data-testid="subtask-tree-node" type="button" onClick={() => onSelect?.(['T-child'])}>
-      T-child
-    </button>
+  Tree: ({
+    onSelect,
+    treeData,
+  }: {
+    onSelect?: (keys: string[]) => void;
+    treeData?: Array<{ key: string; title: ReactNode }>;
+  }) => (
+    <div>
+      {treeData?.map((node) => (
+        <button
+          data-testid="subtask-tree-node"
+          key={node.key}
+          type="button"
+          onClick={() => onSelect?.([node.key])}
+        >
+          {node.title}
+        </button>
+      ))}
+    </div>
   ),
 }));
 
@@ -124,7 +139,9 @@ vi.mock('../features/TaskPriorityTag', () => ({
 }));
 
 vi.mock('../features/TaskStatusTag', () => ({
-  default: () => <span>status</span>,
+  default: ({ children }: { children?: ReactNode }) => (
+    <span data-testid="task-status-tag">{children ?? 'status'}</span>
+  ),
 }));
 
 vi.mock('../features/TaskSubtaskProgressTag', () => ({
@@ -152,6 +169,10 @@ vi.mock('../shared/style', () => ({
 
 vi.mock('./RunSubtasksPreview', () => ({
   default: () => <div>preview</div>,
+}));
+
+vi.mock('./TopicStatusIcon', () => ({
+  default: () => <span data-testid="topic-status-icon">topic running</span>,
 }));
 
 describe('TaskSubtasks', () => {
@@ -193,5 +214,21 @@ describe('TaskSubtasks', () => {
     fireEvent.click(screen.getByTestId('subtask-tree-node'));
 
     expect(mocks.navigate).toHaveBeenCalledWith('/task/T-child');
+  });
+
+  it('uses the running topic status icon when a subtask has an active topic run', () => {
+    mocks.taskState.taskDetailMap['T-parent'].subtasks = [
+      {
+        assignee: { avatar: null, backgroundColor: null, id: 'agt_child', title: 'Child' },
+        identifier: 'T-child',
+        name: 'Child task',
+        runningTopic: { id: 'topic-running', operationId: 'op-running' },
+        status: 'running',
+      },
+    ];
+
+    render(<TaskSubtasks />);
+
+    expect(screen.getByTestId('topic-status-icon')).toBeTruthy();
   });
 });

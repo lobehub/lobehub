@@ -108,4 +108,28 @@ describe('useTaskItemContextMenu', () => {
       itemTypes.some((type, index) => type === 'divider' && itemTypes[index + 1] === 'divider'),
     ).toBe(false);
   });
+
+  it('copies the global task detail link in global route scope', async () => {
+    const { result } = renderHook(() =>
+      useTaskItemContextMenu(
+        {
+          assigneeAgentId: 'agent-1',
+          identifier: 'T-1',
+          priority: 0,
+          status: 'backlog',
+        },
+        'global',
+      ),
+    );
+
+    const copyLinkItem = result.current.items.find(
+      (item) => item && typeof item === 'object' && 'key' in item && item.key === 'copyLink',
+    );
+
+    await (copyLinkItem as { onClick: (info: unknown) => Promise<void> }).onClick({
+      domEvent: { stopPropagation: vi.fn() },
+    });
+
+    expect(mocks.copyToClipboard).toHaveBeenCalledWith('https://example.com/task/T-1');
+  });
 });

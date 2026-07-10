@@ -1,4 +1,4 @@
-import type { TaskDetailData } from '@lobechat/types';
+import type { TaskDetailData, TaskDetailSubtask } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
 import { t } from 'i18next';
 
@@ -7,6 +7,9 @@ import { mutate, useClientDataSWR } from '@/libs/swr';
 import { taskKeys } from '@/libs/swr/keys';
 import { taskService } from '@/services/task';
 import type { StoreSetter } from '@/store/types';
+import { runMutation } from '@/store/utils/runMutation';
+import { saveToast } from '@/store/utils/saveToast';
+import type { SaveStatus } from '@/types/saveState';
 
 import type { TaskStore } from '../../store';
 import { useTaskStore } from '../../store';
@@ -33,12 +36,22 @@ export interface TaskUpdatePayload {
 
 const TASK_DETAIL_POLL_INTERVAL = 10_000;
 
+const hasInFlightSubtask = (subtasks: TaskDetailSubtask[] | undefined): boolean =>
+  subtasks?.some(
+    (subtask) =>
+      Boolean(subtask.runningTopic) ||
+      subtask.status === 'running' ||
+      subtask.status === 'pending' ||
+      hasInFlightSubtask(subtask.children),
+  ) ?? false;
+
 // Poll while the task itself or any topic activity is still in flight, so the
 // UI picks up status transitions (running → completed/failed) without needing
 // a manual refresh. Returns false once everything settles so SWR stops polling.
 const hasInFlightActivity = (detail: TaskDetailData | undefined): boolean => {
   if (!detail) return false;
   if (detail.status === 'running' || detail.status === 'pending') return true;
+  if (hasInFlightSubtask(detail.subtasks)) return true;
   return (
     detail.activities?.some(
       (a) => a.type === 'topic' && (a.status === 'running' || a.status === 'pending'),
@@ -115,7 +128,13 @@ export class TaskDetailSliceActionImpl {
     const detail = result.data;
 
     if (!detail) {
-      throw new Error(`Task not found: ${resolvedId}`);
+      // Mark the *resolved* not-found so the read side can tell it apart from a
+      // network / 500 rejection (which propagates from `taskService.getDetail`
+      // above with an HTTP status). Without this tag both would render the same
+      // terminal 404, telling the user a merely-errored task was deleted.
+      const notFound = new Error(`Task not found: ${resolvedId}`) as Error & { code?: string };
+      notFound.code = 'TASK_NOT_FOUND';
+      throw notFound;
     }
 
     this.internal_dispatchTaskDetail({
@@ -149,6 +168,7 @@ export class TaskDetailSliceActionImpl {
     priority?: number;
     schedulePattern?: string;
     scheduleTimezone?: string;
+    visibility?: 'private' | 'public';
   }): Promise<CreatedTask | null> => {
     this.#set({ isCreatingTask: true }, false, 'createTask/start');
     try {
@@ -240,6 +260,33 @@ export class TaskDetailSliceActionImpl {
     }
   };
 
+  updateTaskVisibility = async (id: string, visibility: 'private' | 'public'): Promise<void> => {
+    try {
+      await taskService.updateVisibility(id, visibility);
+      await Promise.all([this.#get().refreshTaskList(), this.internal_refreshTaskDetail(id)]);
+    } catch (error) {
+      // Surfaces a specific actionable error when the task's assignee is a
+      // private agent. The generic "failed" toast hides what the user must
+      // do next; substitute a targeted one so they know to either reassign
+      // or publish the agent first.
+      const raw = (error as { message?: string })?.message ?? '';
+      const isPrivateAgentBlock = /public task cannot be assigned to a private agent/i.test(raw);
+      message.error(
+        isPrivateAgentBlock
+          ? t('taskDetail.publishToWorkspace.errorPrivateAgent', {
+              defaultValue:
+                'This task is assigned to a private agent. Reassign to a workspace agent, or publish the agent first.',
+              ns: 'chat',
+            })
+          : t('createTask.visibility.changeFailed', {
+              defaultValue: 'Failed to change task visibility',
+              ns: 'chat',
+            }),
+      );
+      throw error;
+    }
+  };
+
   updateTask = async (id: string, data: TaskUpdatePayload): Promise<void> => {
     const { assigneeAgentId, ...rest } = data;
     const optimisticRest = { ...rest };
@@ -265,22 +312,18 @@ export class TaskDetailSliceActionImpl {
     };
 
     this.internal_dispatchTaskDetail({ id, type: 'updateTaskDetail', value: optimistic });
-    this.#set({ taskSaveStatus: 'saving' }, false, 'updateTask/saving');
 
-    try {
-      await taskService.update(id, data);
-      this.#set({ taskSaveStatus: 'saved' }, false, 'updateTask/saved');
-    } catch (error) {
-      this.#set({ taskSaveStatus: 'idle' }, false, 'updateTask/error');
-      await refreshPatchedTargets();
-      message.error(
-        t('taskDetail.updateFailed', {
-          defaultValue: 'Failed to update task',
-          ns: 'chat',
-        }),
-      );
-      throw error;
-    }
+    await runMutation(this.#set, this.#get, {
+      mutate: () => taskService.update(id, data),
+      name: 'updateTask',
+      // Rollback is a server-truth refetch (not a local snapshot), so the
+      // optimistic dispatch above is reconciled from the source of record.
+      onError: async (error) => {
+        await refreshPatchedTargets();
+        saveToast(error, { retry: () => void this.#get().updateTask(id, data) });
+      },
+      setStatus: (status) => this.#get().internal_setTaskSaveStatus(id, status),
+    });
 
     if (assigneeAgentId !== undefined || data.parentTaskId !== undefined) {
       await Promise.all([this.#get().refreshTaskList(), refreshPatchedTargets()]).catch(() => {});
@@ -305,6 +348,17 @@ export class TaskDetailSliceActionImpl {
   };
 
   // ── Internal Actions ──
+
+  // Write the save status for a single task id. Keyed per task so a `failed`
+  // status stays with its task and never bleeds into another task's header after
+  // navigation. Shared by every runMutation-based write across the task slices.
+  internal_setTaskSaveStatus = (id: string, status: SaveStatus): void => {
+    this.#set(
+      { taskSaveStatusMap: { ...this.#get().taskSaveStatusMap, [id]: status } },
+      false,
+      `setTaskSaveStatus/${status}`,
+    );
+  };
 
   internal_dispatchTaskDetail = (payload: TaskDetailDispatch): void => {
     const currentMap = this.#get().taskDetailMap;

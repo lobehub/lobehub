@@ -2,6 +2,9 @@ import { CHAT_GROUP_SESSION_ID_PREFIX } from '@lobechat/types';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { message } from '@/components/AntdStaticMethods';
+import { setScopedMutate } from '@/libs/swr';
+import { agentConfigKeys } from '@/libs/swr/keys';
 import { agentService } from '@/services/agent';
 import { agentDocumentService } from '@/services/agentDocument';
 import { type LobeAgentConfig } from '@/types/agent';
@@ -36,6 +39,12 @@ vi.mock('@/services/agentDocument', () => ({
   resolveAgentDocumentsContext: vi.fn(),
 }));
 
+vi.mock('@/components/AntdStaticMethods', () => ({
+  message: {
+    error: vi.fn(),
+  },
+}));
+
 // Mock sessionStore
 vi.mock('@/store/session', () => ({
   useSessionStore: {
@@ -56,6 +65,7 @@ vi.mock('swr', async (importOriginal) => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  setScopedMutate(vi.fn() as any);
   useAgentStore.setState({
     activeAgentId: undefined,
     agentMap: {},
@@ -387,6 +397,32 @@ describe('AgentSlice Actions', () => {
         expect.any(AbortSignal),
       );
     });
+
+    it('should surface the failure and roll back to server truth when the save is rejected', async () => {
+      const { result } = renderHook(() => useAgentStore());
+
+      vi.mocked(agentService.updateAgentConfig).mockRejectedValue(
+        new Error('Workspace agent can only bind devices enrolled in the same workspace.'),
+      );
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      act(() => {
+        useAgentStore.setState({ activeAgentId: 'agent-1' });
+      });
+
+      const refreshSpy = vi.spyOn(result.current, 'internal_refreshAgentConfig');
+
+      await act(async () => {
+        await result.current.updateAgentConfig({
+          agencyConfig: { boundDeviceId: 'personal-device', executionTarget: 'device' },
+        });
+      });
+
+      expect(message.error).toHaveBeenCalled();
+      // Optimistic value must not survive a rejected write — refetch server truth.
+      expect(refreshSpy).toHaveBeenCalledWith('agent-1');
+      expect(result.current.saveStatus).toBe('idle');
+    });
   });
 
   describe('updateAgentMeta', () => {
@@ -513,8 +549,106 @@ describe('AgentSlice Actions', () => {
       });
     });
 
+    it('should send the latest local agencyConfig when persisting a nested patch', async () => {
+      const { result } = renderHook(() => useAgentStore());
+      const latestAgencyConfig = {
+        boundDeviceId: 'current-device',
+        executionTarget: 'local',
+        heterogeneousProvider: {
+          command: 'claude',
+          env: { CLAUDE_CODE_CRED_KEY: 'cred-key' },
+          type: 'claude-code',
+        },
+        workingDirByDevice: { 'current-device': '/repos/lobehub' },
+      } as const;
+      const nextAgencyConfig = {
+        ...latestAgencyConfig,
+        heterogeneousProvider: { ...latestAgencyConfig.heterogeneousProvider, effort: 'high' },
+      };
+
+      vi.mocked(agentService.updateAgentConfig).mockResolvedValue({
+        agent: { agencyConfig: nextAgencyConfig } as any,
+        success: true,
+      });
+
+      act(() => {
+        useAgentStore.setState({
+          agentMap: { 'agent-1': { agencyConfig: latestAgencyConfig } as any },
+        });
+      });
+
+      await act(async () => {
+        await result.current.updateAgentConfigById('agent-1', {
+          agencyConfig: { heterogeneousProvider: { effort: 'high' } },
+        } as any);
+      });
+
+      expect(agentService.updateAgentConfig).toHaveBeenCalledWith(
+        'agent-1',
+        { agencyConfig: nextAgencyConfig },
+        expect.any(AbortSignal),
+      );
+    });
+
     // Note: refreshSessions is no longer called after optimistic update
     // as the implementation now uses API returned data directly
+
+    it('should refresh agent config SWR cache after a confirmed config update', async () => {
+      const { result } = renderHook(() => useAgentStore());
+      const scopedMutate = vi.fn().mockResolvedValue(undefined);
+      setScopedMutate(scopedMutate as any);
+
+      vi.mocked(agentService.updateAgentConfig).mockResolvedValue({
+        agent: { id: 'agent-1', model: 'model-b', provider: 'lobehub' } as any,
+        success: true,
+      });
+
+      act(() => {
+        useAgentStore.setState({
+          agentMap: { 'agent-1': { id: 'agent-1', model: 'model-a', provider: 'lobehub' } },
+        });
+      });
+
+      await act(async () => {
+        await result.current.updateAgentConfigById('agent-1', {
+          model: 'model-b',
+          provider: 'lobehub',
+        });
+      });
+
+      const configCacheCalls = scopedMutate.mock.calls.filter(
+        ([key]) => JSON.stringify(key) === JSON.stringify(agentConfigKeys.config('agent-1')),
+      );
+      expect(configCacheCalls).toEqual([[agentConfigKeys.config('agent-1')]]);
+    });
+
+    it('should not refresh agent config SWR cache when save fails', async () => {
+      const { result } = renderHook(() => useAgentStore());
+      const scopedMutate = vi.fn().mockResolvedValue(undefined);
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      setScopedMutate(scopedMutate as any);
+
+      vi.mocked(agentService.updateAgentConfig).mockRejectedValue(new Error('save failed'));
+
+      act(() => {
+        useAgentStore.setState({
+          agentMap: { 'agent-1': { id: 'agent-1', model: 'model-a', provider: 'lobehub' } },
+        });
+      });
+
+      await act(async () => {
+        await result.current.updateAgentConfigById('agent-1', {
+          model: 'model-b',
+          provider: 'lobehub',
+        });
+      });
+
+      const configCacheCalls = scopedMutate.mock.calls.filter(
+        ([key]) => JSON.stringify(key) === JSON.stringify(agentConfigKeys.config('agent-1')),
+      );
+      expect(configCacheCalls).toHaveLength(0);
+      expect(result.current.agentMap['agent-1']).toMatchObject({ model: 'model-b' });
+    });
   });
 
   describe('optimisticUpdateAgentMeta', () => {

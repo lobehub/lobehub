@@ -52,11 +52,30 @@ export class FileManageActionImpl {
     this.#get = get;
   }
 
+  #resolveChunkTargetId = async (id: string): Promise<string> => {
+    // Reuse the selector so local resolution consults every store list
+    // (fileList → resourceMap → resourceMap-by-fileId → resourceList).
+    const localResource = fileManagerSelectors.getFileByChunkTargetId(id)(this.#get());
+    if (localResource?.fileId) return localResource.fileId;
+    if (!id.startsWith('docs_')) return id;
+
+    try {
+      const resource = await fileService.getKnowledgeItem(id);
+      return resource?.fileId ?? id;
+    } catch {
+      return id;
+    }
+  };
+
+  #resolveChunkTargetIds = async (ids: string[]): Promise<string[]> =>
+    Promise.all(ids.map((id) => this.#resolveChunkTargetId(id)));
+
   #buildOptimisticUploadResource = (
     file: File,
     result: { id: string; url: string },
     knowledgeBaseId?: string,
     parentId?: string,
+    visibility?: 'private' | 'public',
   ): ResourceItem => {
     const existing = this.#get().resourceMap.get(result.id);
 
@@ -76,6 +95,10 @@ export class FileManageActionImpl {
       size: file.size,
       updatedAt: new Date(),
       url: result.url,
+      // Server persists the final visibility, but the row can be listed before
+      // the refetch lands. Carry the user's picker choice so the lock badge is
+      // consistent while the request is in flight.
+      ...(visibility !== undefined ? { visibility } : {}),
     };
   };
 
@@ -84,6 +107,7 @@ export class FileManageActionImpl {
     file: File,
     knowledgeBaseId?: string,
     parentId?: string,
+    visibility?: 'private' | 'public',
   ) => {
     this.#get().insertLocalResource(
       {
@@ -94,6 +118,7 @@ export class FileManageActionImpl {
         size: file.size,
         sourceType: 'file',
         url: '',
+        ...(visibility !== undefined ? { visibility } : {}),
       },
       id,
     );
@@ -146,11 +171,12 @@ export class FileManageActionImpl {
   };
 
   embeddingChunks = async (fileIds: string[]): Promise<void> => {
+    const chunkTargetIds = await this.#resolveChunkTargetIds(fileIds);
     // toggle file ids
-    this.#get().toggleEmbeddingIds(fileIds);
+    this.#get().toggleEmbeddingIds(chunkTargetIds);
 
     // parse files
-    const pools = fileIds.map(async (id) => {
+    const pools = chunkTargetIds.map(async (id) => {
       try {
         await ragService.createEmbeddingChunksTask(id);
       } catch (e) {
@@ -160,7 +186,7 @@ export class FileManageActionImpl {
 
     await Promise.all(pools);
     await this.#get().refreshFileList();
-    this.#get().toggleEmbeddingIds(fileIds, false);
+    this.#get().toggleEmbeddingIds(chunkTargetIds, false);
   };
 
   loadMoreKnowledgeItems = async (): Promise<void> => {
@@ -219,11 +245,12 @@ export class FileManageActionImpl {
   };
 
   parseFilesToChunks = async (ids: string[], params?: { skipExist?: boolean }): Promise<void> => {
+    const chunkTargetIds = await this.#resolveChunkTargetIds(ids);
     // toggle file ids
-    this.#get().toggleParsingIds(ids);
+    this.#get().toggleParsingIds(chunkTargetIds);
 
     // parse files
-    const pools = ids.map(async (id) => {
+    const pools = chunkTargetIds.map(async (id) => {
       try {
         await ragService.createParseFileTask(id, params?.skipExist);
       } catch (e) {
@@ -233,13 +260,14 @@ export class FileManageActionImpl {
 
     await Promise.all(pools);
     await this.#get().refreshFileList();
-    this.#get().toggleParsingIds(ids, false);
+    this.#get().toggleParsingIds(chunkTargetIds, false);
   };
 
   pushDockFileList = async (
     rawFiles: File[],
     knowledgeBaseId?: string,
     parentId?: string,
+    visibility?: 'private' | 'public',
   ): Promise<void> => {
     const { dispatchDockFileList } = this.#get();
     const generateUploadId = createNanoId(12);
@@ -276,7 +304,13 @@ export class FileManageActionImpl {
     });
 
     for (const uploadFile of uploadFiles) {
-      this.#insertOptimisticUpload(uploadFile.id, uploadFile.file, knowledgeBaseId, parentId);
+      this.#insertOptimisticUpload(
+        uploadFile.id,
+        uploadFile.file,
+        knowledgeBaseId,
+        parentId,
+        visibility,
+      );
     }
 
     // 3. Add all files to dock
@@ -297,6 +331,7 @@ export class FileManageActionImpl {
           onStatusUpdate: dispatchDockFileList,
           parentId,
           uploadId: uploadFileItem.id,
+          visibility,
         });
 
         if (!result) {
@@ -309,6 +344,7 @@ export class FileManageActionImpl {
               result,
               knowledgeBaseId,
               parentId,
+              visibility,
             ),
           );
         }
@@ -339,31 +375,33 @@ export class FileManageActionImpl {
   };
 
   reEmbeddingChunks = async (id: string): Promise<void> => {
-    if (fileManagerSelectors.isCreatingChunkEmbeddingTask(id)(this.#get())) return;
+    const chunkTargetId = await this.#resolveChunkTargetId(id);
+    if (fileManagerSelectors.isCreatingChunkEmbeddingTask(chunkTargetId)(this.#get())) return;
 
     // toggle file ids
-    this.#get().toggleEmbeddingIds([id]);
+    this.#get().toggleEmbeddingIds([chunkTargetId]);
 
-    await serverFileService.removeFileAsyncTask(id, 'embedding');
-
-    await this.#get().refreshFileList();
-
-    await ragService.createEmbeddingChunksTask(id);
+    await serverFileService.removeFileAsyncTask(chunkTargetId, 'embedding');
 
     await this.#get().refreshFileList();
 
-    this.#get().toggleEmbeddingIds([id], false);
+    await ragService.createEmbeddingChunksTask(chunkTargetId);
+
+    await this.#get().refreshFileList();
+
+    this.#get().toggleEmbeddingIds([chunkTargetId], false);
   };
 
   reParseFile = async (id: string): Promise<void> => {
+    const chunkTargetId = await this.#resolveChunkTargetId(id);
     // toggle file ids
-    this.#get().toggleParsingIds([id]);
+    this.#get().toggleParsingIds([chunkTargetId]);
 
-    await ragService.retryParseFile(id);
+    await ragService.retryParseFile(chunkTargetId);
 
     await this.#get().refreshFileList();
 
-    this.#get().toggleParsingIds([id], false);
+    this.#get().toggleParsingIds([chunkTargetId], false);
   };
 
   #refreshKnowledgeListCaches = async (): Promise<void> => {
@@ -389,8 +427,14 @@ export class FileManageActionImpl {
     await revalidateResources();
   };
 
-  removeAllFiles = async (): Promise<void> => {
-    await fileService.removeAllFiles();
+  publishFileToWorkspace = async (id: string): Promise<void> => {
+    await fileService.publishFileToWorkspace(id);
+    await this.#get().refreshFileList();
+  };
+
+  setFileVisibility = async (id: string, visibility: 'private' | 'public'): Promise<void> => {
+    await fileService.setFileVisibility(id, visibility);
+    await this.#get().refreshFileList();
   };
 
   removeFileItem = async (id: string): Promise<void> => {

@@ -1,6 +1,6 @@
 'use client';
 
-import { SESSION_CHAT_URL } from '@lobechat/const';
+import { AGENT_CHAT_URL } from '@lobechat/const';
 import {
   type OverlayDispatchMessagePayload,
   useWatchBroadcast,
@@ -49,7 +49,7 @@ const OverlayMessageDispatcher = memo(() => {
       // replace: true drops prev search params (e.g. a stale `message=`) so
       // MessageFromUrl's message-param effect cannot double-fire alongside
       // the overlay dispatch path.
-      router.push(SESSION_CHAT_URL(agentId, false), { query: {}, replace: true });
+      router.push(AGENT_CHAT_URL(agentId, false), { query: {}, replace: true });
     },
     [router],
   );

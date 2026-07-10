@@ -12,23 +12,24 @@ import { binDir, buildDir } from '@/const/dir';
 import { isDev } from '@/const/env';
 import type { IControlModule } from '@/controllers';
 import AuthCtr from '@/controllers/AuthCtr';
+import {
+  astSearchBinaries,
+  type BinaryCategory,
+  type BinarySpec,
+  browserAutomationBinaries,
+  cliAgentBinaries,
+  contentSearchBinaries,
+  fileSearchBinaries,
+  runtimeEnvironmentBinaries,
+} from '@/modules/binaries';
 import { generateCliWrapper, getCliWrapperDir } from '@/modules/cliEmbedding';
 import { ScreenCaptureManager } from '@/modules/screenCapture/ScreenCaptureManager';
-import {
-  astSearchDetectors,
-  browserAutomationDetectors,
-  cliAgentDetectors,
-  contentSearchDetectors,
-  fileSearchDetectors,
-  type IToolDetector,
-  runtimeEnvironmentDetectors,
-  type ToolCategory,
-} from '@/modules/toolDetectors';
 import type { IServiceModule } from '@/services';
 import { createLogger } from '@/utils/logger';
 
 import { BrowserManager } from './browser/BrowserManager';
 import { backendProxyProtocolManager } from './infrastructure/BackendProxyProtocolManager';
+import { BinaryManager } from './infrastructure/BinaryManager';
 import { I18nManager } from './infrastructure/I18nManager';
 import { IoCContainer } from './infrastructure/IoCContainer';
 import { LocalFileProtocolManager } from './infrastructure/LocalFileProtocolManager';
@@ -36,7 +37,6 @@ import { ProtocolManager } from './infrastructure/ProtocolManager';
 import { RendererUrlManager } from './infrastructure/RendererUrlManager';
 import { StaticFileServerManager } from './infrastructure/StaticFileServerManager';
 import { StoreManager } from './infrastructure/StoreManager';
-import { ToolDetectorManager } from './infrastructure/ToolDetectorManager';
 import { UpdaterManager } from './infrastructure/UpdaterManager';
 import { MenuManager } from './ui/MenuManager';
 import { ShortcutManager } from './ui/ShortcutManager';
@@ -64,7 +64,7 @@ export class App {
   protocolManager: ProtocolManager;
   rendererUrlManager: RendererUrlManager;
   localFileProtocolManager: LocalFileProtocolManager;
-  toolDetectorManager: ToolDetectorManager;
+  binaryManager: BinaryManager;
   screenCaptureManager: ScreenCaptureManager;
   chromeFlags: string[] = ['OverlayScrollbar', 'FluentOverlayScrollbar', 'FluentScrollbar'];
 
@@ -91,13 +91,15 @@ export class App {
     logger.info(` RAM: ${Math.round(os.totalmem() / 1024 / 1024 / 1024)} GB`);
     logger.info(`PATH: ${app.getAppPath()}`);
     logger.info(` lng: ${app.getLocale()}`);
-    logger.info(` bin: ${binDir}`);
+    logger.info(` res: ${binDir}`);
     logger.info('----------------------------------------------');
     logger.info('Starting LobeHub...');
 
-    // Append bundled binaries and CLI wrapper directories to PATH for tool resolution
+    // Append the CLI wrapper directory to PATH so spawned shells can resolve
+    // `lobehub` / `lh` / `lobe`. Managed binary dirs (e.g. agent-browser) are
+    // augmented separately by `binaryManager.augmentPath()` during bootstrap.
     const pathSep = process.platform === 'win32' ? ';' : ':';
-    process.env.PATH = `${process.env.PATH}${pathSep}${binDir}${pathSep}${getCliWrapperDir()}`;
+    process.env.PATH = `${process.env.PATH}${pathSep}${getCliWrapperDir()}`;
 
     logger.debug('Initializing App');
     // Initialize store manager
@@ -145,11 +147,11 @@ export class App {
     this.trayManager = new TrayManager(this);
     this.staticFileServerManager = new StaticFileServerManager(this);
     this.protocolManager = new ProtocolManager(this);
-    this.toolDetectorManager = new ToolDetectorManager(this);
+    this.binaryManager = new BinaryManager(this);
     this.screenCaptureManager = new ScreenCaptureManager(this);
 
-    // Register built-in tool detectors
-    this.registerBuiltinToolDetectors();
+    // Register built-in binary specs
+    this.registerBuiltinBinarySpecs();
 
     // Configure renderer loading strategy (dev server vs static export)
     // should register before app ready
@@ -194,31 +196,29 @@ export class App {
   }
 
   /**
-   * Register built-in tool detectors for content search and file search
+   * Register built-in binary specs the BinaryManager knows about.
    */
-  private registerBuiltinToolDetectors() {
-    logger.debug('Registering built-in tool detectors');
+  private registerBuiltinBinarySpecs() {
+    logger.debug('Registering built-in binary specs');
 
-    const detectorCategories: Partial<Record<ToolCategory, IToolDetector[]>> = {
-      'runtime-environment': runtimeEnvironmentDetectors,
-      'cli-agents': cliAgentDetectors,
-      'ast-search': astSearchDetectors,
-      'browser-automation': browserAutomationDetectors,
-      'content-search': contentSearchDetectors,
-      'file-search': fileSearchDetectors,
+    const binaryCategories: Partial<Record<BinaryCategory, BinarySpec[]>> = {
+      'runtime-environment': runtimeEnvironmentBinaries,
+      'cli-agents': cliAgentBinaries,
+      'ast-search': astSearchBinaries,
+      'browser-automation': browserAutomationBinaries,
+      'content-search': contentSearchBinaries,
+      'file-search': fileSearchBinaries,
     };
 
-    for (const [category, detectors] of Object.entries(detectorCategories)) {
-      if (detectors) {
-        for (const detector of detectors) {
-          this.toolDetectorManager.register(detector, category as ToolCategory);
+    for (const [category, specs] of Object.entries(binaryCategories)) {
+      if (specs) {
+        for (const spec of specs) {
+          this.binaryManager.register(spec, category as BinaryCategory);
         }
       }
     }
 
-    logger.info(
-      `Registered ${this.toolDetectorManager.getRegisteredTools().length} tool detectors`,
-    );
+    logger.info(`Registered ${this.binaryManager.getRegistered().length} binary specs`);
   }
 
   bootstrap = async () => {
@@ -242,6 +242,20 @@ export class App {
     // Generate CLI wrapper for terminal usage
     generateCliWrapper().catch((error) => {
       logger.warn('Failed to generate CLI wrapper:', error);
+    });
+
+    // Surface previously-installed managed binaries on PATH so spawned shells
+    // (and child agents) can resolve them without going through the manager.
+    this.binaryManager.augmentPath().catch((error) => {
+      logger.warn('Failed to augment PATH with managed binaries:', error);
+    });
+
+    // Lazy-install agent-browser in the background — keeps the installer
+    // light (no bundled binary) while still making the CLI available shortly
+    // after first launch. Errors are non-fatal; the Settings panel exposes a
+    // manual retry via `binaryService.detect / ensure` later.
+    this.binaryManager.ensure('agent-browser').catch((error) => {
+      logger.warn('[agent-browser] background ensure failed:', error);
     });
 
     // Initialize i18n. Note: app.getLocale() must be called after app.whenReady() to get the correct value
@@ -455,7 +469,11 @@ export class App {
       };
     });
 
-    this.ipcServer = new ElectronIPCServer(name, ipcServerEvents);
+    // Socket path is derived from this id (`${id}-electron-ipc.sock`). Keep the
+    // package name by default; override with LOBE_IPC_ID so concurrent dev
+    // instances get distinct sockets instead of the last one hijacking the path.
+    const ipcId = process.env.LOBE_IPC_ID || name;
+    this.ipcServer = new ElectronIPCServer(ipcId, ipcServerEvents);
   }
 
   // Add before-quit handler function

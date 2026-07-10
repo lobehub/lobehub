@@ -65,7 +65,7 @@ describe('DeviceGateway', () => {
       const result = await proxy.queryDeviceStatus('user-1');
 
       expect(result).toEqual(expected);
-      expect(mockClient.queryDeviceStatus).toHaveBeenCalledWith('user-1');
+      expect(mockClient.queryDeviceStatus).toHaveBeenCalledWith('user-1', undefined);
     });
 
     it('should return offline status on error', async () => {
@@ -136,7 +136,7 @@ describe('DeviceGateway', () => {
           platform: 'win32',
         },
       ]);
-      expect(mockClient.queryDeviceList).toHaveBeenCalledWith('user-1');
+      expect(mockClient.queryDeviceList).toHaveBeenCalledWith('user-1', undefined);
     });
 
     it('tolerates a legacy gateway response without channels', async () => {
@@ -191,7 +191,7 @@ describe('DeviceGateway', () => {
       const result = await proxy.queryDeviceSystemInfo('user-1', 'dev-1');
 
       expect(result).toEqual(systemInfo);
-      expect(mockClient.getDeviceSystemInfo).toHaveBeenCalledWith('user-1', 'dev-1');
+      expect(mockClient.getDeviceSystemInfo).toHaveBeenCalledWith('user-1', 'dev-1', undefined);
     });
 
     it('should return undefined when result is not successful', async () => {
@@ -443,7 +443,7 @@ describe('DeviceGateway', () => {
       mockClient.invokeRpc.mockResolvedValue({
         data: {
           instructions: [{ content: '# Rules', source: 'AGENTS.md' }],
-          // Device returns rich ProjectSkillItems; only name/description/path survive.
+          // Device returns rich ProjectSkillItems; only prompt metadata survives.
           skills: [
             {
               description: 'spa',
@@ -451,7 +451,20 @@ describe('DeviceGateway', () => {
               files: ['SKILL.md'],
               name: 'spa-routes',
               path: '/proj/.agents/skills/spa-routes/SKILL.md',
+              previewRoot: '/proj',
+              scope: 'project',
               skillDir: '/proj/.agents/skills/spa-routes',
+              source: '.agents/skills',
+            },
+            {
+              description: 'device',
+              fileCount: 2,
+              files: ['SKILL.md', 'refs.md'],
+              name: 'device-writer',
+              path: '/home/.agents/skills/device-writer/SKILL.md',
+              previewRoot: '/home/.agents/skills',
+              scope: 'device',
+              skillDir: '/home/.agents/skills/device-writer',
               source: '.agents/skills',
             },
           ],
@@ -473,6 +486,13 @@ describe('DeviceGateway', () => {
             description: 'spa',
             name: 'spa-routes',
             path: '/proj/.agents/skills/spa-routes/SKILL.md',
+            scope: 'project',
+          },
+          {
+            description: 'device',
+            name: 'device-writer',
+            path: '/home/.agents/skills/device-writer/SKILL.md',
+            scope: 'device',
           },
         ],
       });
@@ -588,6 +608,8 @@ describe('DeviceGateway', () => {
             files: ['SKILL.md'],
             name: 'spa-routes',
             path: '/proj/.agents/skills/spa-routes/SKILL.md',
+            previewRoot: '/proj',
+            scope: 'project',
             skillDir: '/proj/.agents/skills/spa-routes',
             source: '.agents/skills',
           },

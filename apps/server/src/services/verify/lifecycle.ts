@@ -2,11 +2,13 @@ import debug from 'debug';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { TaskModel } from '@/database/models/task';
+import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { createVerifierAgentRunner } from './agentVerifier';
 import { VerifyExecutorService } from './executor';
-import { maybeAutoRepair } from './repairService';
+import { resolveVerifyModelConfig } from './modelConfig';
+import { finalizeVerifyRun } from './settle';
 
 const log = debug('lobe-server:verify-lifecycle');
 
@@ -37,16 +39,17 @@ export const runVerifyOnCompletion = async (
   workspaceId?: string,
 ): Promise<void> => {
   try {
-    const operationModel = new AgentOperationModel(db, userId, workspaceId);
-    const state = await operationModel.getVerifyState(params.operationId);
+    const run = await new VerifyRunModel(db, userId, workspaceId).findByOperation(
+      params.operationId,
+    );
 
     // Opt-in gate: only runs with a confirmed plan that hasn't been verified yet.
-    if (!state?.verifyPlan?.length || !state.verifyPlanConfirmedAt) return;
-    if (state.verifyStatus !== 'planned') return;
+    if (!run?.plan?.length || !run.planConfirmedAt) return;
+    if (run.status !== 'planned') return;
 
-    const op = await operationModel.findById(params.operationId);
-    if (!op?.model || !op?.provider) {
-      log('op %s missing model/provider, cannot run verify', params.operationId);
+    const op = await new AgentOperationModel(db, userId, workspaceId).findById(params.operationId);
+    if (!op) {
+      log('op %s missing, cannot run verify', params.operationId);
       return;
     }
 
@@ -60,19 +63,30 @@ export const runVerifyOnCompletion = async (
       verifierAgentId = verifyConfig?.verifierAgentId ?? undefined;
     }
 
+    const modelConfig = await resolveVerifyModelConfig(
+      db,
+      userId,
+      {
+        parentModel: op.model,
+        parentProvider: op.provider,
+        verifierAgentId,
+      },
+      workspaceId,
+    );
+
     const executor = new VerifyExecutorService(db, userId, workspaceId);
     await executor.execute({
       deliverable: params.deliverable,
       goal: params.goal,
-      modelConfig: { model: op.model, provider: op.provider },
+      modelConfig,
       operationId: params.operationId,
       // `agent`-type checks run as the task-pinned verify agent (or the builtin
       // one), which writes its verdict back via the submitVerifyResult tool.
       runVerifierAgent: createVerifierAgentRunner({
         db,
         deliverable: params.deliverable,
-        model: op.model,
-        provider: op.provider,
+        model: modelConfig.model,
+        provider: modelConfig.provider,
         topicId: op.topicId,
         userId,
         verifierAgentId,
@@ -80,10 +94,24 @@ export const runVerifyOnCompletion = async (
       }),
     });
 
-    // Auto-repair once verification has fully resolved. For runs with only inline
-    // (LLM/program) checks, everything is resolved now; runs with async agent
-    // checks no-op here and re-trigger from the verifier's writeback path.
-    await maybeAutoRepair(db, userId, params.operationId, workspaceId);
+    // Settle the run: repair-aware tail, then (on terminal settle) report + drive
+    // the bound task. For inline (LLM/program) checks everything is resolved now;
+    // runs with async agent checks no-op here and re-enter the same finalizer from
+    // the verifier's writeback path (verifyResult runtime) — so the task is driven
+    // from exactly one place regardless of which path finished last.
+    await finalizeVerifyRun(
+      db,
+      userId,
+      params.operationId,
+      {
+        report: {
+          deliverable: params.deliverable,
+          goal: params.goal,
+          modelConfig,
+        },
+      },
+      workspaceId,
+    );
   } catch (error) {
     log('runVerifyOnCompletion failed for op %s (non-fatal): %O', params.operationId, error);
   }

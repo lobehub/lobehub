@@ -68,6 +68,7 @@ export class ConnectorActionImpl {
         | null;
       isEnabled?: boolean;
       mcpServerUrl?: string;
+      metadata?: Record<string, unknown>;
       name?: string;
       oidcConfig?: {
         clientId?: string;
@@ -144,9 +145,10 @@ export class ConnectorActionImpl {
   /**
    * Bootstrap connector entry for an installed marketplace plugin.
    * Idempotent — safe to call whenever the detail panel opens.
-   * Returns the connectorId.
+   * Returns the connectorId, or `null` for legacy customPlugin rows that own
+   * an MCP endpoint (those go through the frontend migration flow instead).
    */
-  syncPluginTools = async (identifier: string): Promise<string> => {
+  syncPluginTools = async (identifier: string): Promise<string | null> => {
     const result = await lambdaClient.connector.syncPluginTools.mutate({ identifier });
     await this.fetchConnectors();
     return result.connectorId;

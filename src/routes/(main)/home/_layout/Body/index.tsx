@@ -7,6 +7,7 @@ import type { Key, ReactElement } from 'react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
@@ -21,17 +22,19 @@ import { isModifierClick } from '@/utils/navigation';
 
 import Agent from './Agent';
 import { openCustomizeSidebarModal } from './CustomizeSidebarModal';
+import Private from './Private';
 
 export enum GroupKey {
   Agent = 'agent',
   Community = 'community',
   Pages = 'pages',
+  Private = 'private',
   Project = 'project',
   Recents = 'recents',
   Resource = 'resource',
 }
 
-const ACCORDION_KEYS = new Set<string>([GroupKey.Recents, GroupKey.Agent]);
+const ACCORDION_KEYS = new Set<string>([GroupKey.Recents, GroupKey.Agent, GroupKey.Private]);
 
 /** Keys rendered in the header — must be excluded from the body to avoid duplicates
  * when migrating users whose persisted sidebarItems still include them. */
@@ -39,6 +42,7 @@ const HEADER_KEYS = new Set<string>(['home', 'search']);
 
 const accordionComponents: Record<string, (key: string) => ReactElement> = {
   [GroupKey.Agent]: (key) => <Agent itemKey={key} key={key} />,
+  [GroupKey.Private]: (key) => <Private itemKey={key} key={key} />,
   [GroupKey.Recents]: (key) => <Recents itemKey={key} key={key} />,
 };
 
@@ -63,9 +67,17 @@ const Body = memo(() => {
   const tab = useActiveTabKey();
   const navigate = useWorkspaceAwareNavigate();
   const { topNavItems, bottomMenuItems } = useNavLayout();
-  const sidebarItems = useGlobalStore(systemStatusSelectors.sidebarItems);
-  const sidebarExpandedKeys = useGlobalStore(systemStatusSelectors.sidebarExpandedKeys);
-  const hiddenSections = useGlobalStore(systemStatusSelectors.hiddenSidebarSections);
+  // Personal mode has no notion of "private vs workspace-public" — every row
+  // is implicitly the owner's. Hide the Private section entirely there so the
+  // sidebar doesn't sprout an empty accordion users can't populate.
+  const activeWorkspaceId = useActiveWorkspaceId();
+  const sidebarItems = useGlobalStore(systemStatusSelectors.sidebarItems(activeWorkspaceId));
+  const sidebarExpandedKeys = useGlobalStore(
+    systemStatusSelectors.sidebarExpandedKeys(activeWorkspaceId),
+  );
+  const hiddenSections = useGlobalStore(
+    systemStatusSelectors.hiddenSidebarSections(activeWorkspaceId),
+  );
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
 
   const hideSection = useCallback(
@@ -104,8 +116,14 @@ const Body = memo(() => {
 
   // Items that must always be visible regardless of hiddenSections
   const isVisible = useCallback(
-    (k: string) => k === GroupKey.Agent || k === SIDEBAR_SPACER_ID || !hiddenSections.includes(k),
-    [hiddenSections],
+    (k: string) => {
+      // Private accordion is workspace-only. In personal mode every row is
+      // implicitly owner-private, so a dedicated bucket would be a noisy
+      // empty section.
+      if (k === GroupKey.Private && !activeWorkspaceId) return false;
+      return k === GroupKey.Agent || k === SIDEBAR_SPACER_ID || !hiddenSections.includes(k);
+    },
+    [hiddenSections, activeWorkspaceId],
   );
 
   const visibleKeys = useMemo(

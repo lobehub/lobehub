@@ -6,6 +6,7 @@ import type {
   CreateVideoResponse,
   PollVideoStatusResult,
 } from '../../types/video';
+import { resolveMappedModelId } from '../../utils/modelIdMapping';
 import type { CreateVideoOptions } from '../openaiCompatibleFactory';
 
 const log = createDebug('lobe-video:openai-compatible');
@@ -127,15 +128,16 @@ export async function createOpenAICompatibleVideo(
   options: CreateVideoOptions,
 ): Promise<CreateVideoResponse> {
   const { model, params } = payload;
+  const requestModel = resolveMappedModelId(model, options);
   const { prompt, imageUrl, size, duration } = params;
 
-  log('Creating video with OpenAI-compatible API - model: %s, params: %O', model, params);
+  log('Creating video with OpenAI-compatible API - model: %s, params: %O', requestModel, params);
 
   const baseURL = options.baseURL || 'https://api.openai.com/v1';
 
   // Build request body compatible with OpenAI Sora
   const body: Record<string, unknown> = {
-    model,
+    model: requestModel,
     prompt,
   };
 

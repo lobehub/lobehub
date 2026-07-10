@@ -2,11 +2,19 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { agentOperations, files, users, verifyCheckResults, verifyEvidence } from '../../schemas';
+import {
+  agentOperations,
+  files,
+  users,
+  verifyCheckResults,
+  verifyEvidence,
+  verifyRuns,
+} from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { AgentOperationModel } from '../agentOperation';
 import { VerifyCheckResultModel } from '../verifyCheckResult';
 import { VerifyEvidenceModel } from '../verifyEvidence';
+import { VerifyRunModel } from '../verifyRun';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
@@ -20,11 +28,12 @@ beforeEach(async () => {
   await serverDB.delete(users);
   await serverDB.insert(users).values([{ id: userId }]);
   await new AgentOperationModel(serverDB, userId).recordStart({ operationId });
+  const run = await new VerifyRunModel(serverDB, userId).ensureForOperation(operationId);
   const result = await new VerifyCheckResultModel(serverDB, userId).create({
     checkItemId: 'item-1',
     checkItemIndex: 0,
-    operationId,
     verifierType: 'agent',
+    verifyRunId: run.id,
   });
   checkResultId = result.id;
   const [file] = await serverDB
@@ -44,6 +53,7 @@ afterEach(async () => {
   await serverDB.delete(verifyEvidence);
   await serverDB.delete(files);
   await serverDB.delete(verifyCheckResults);
+  await serverDB.delete(verifyRuns);
   await serverDB.delete(agentOperations);
   await serverDB.delete(users);
 });

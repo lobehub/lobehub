@@ -34,7 +34,20 @@ const ApiKeyDatePicker: FC<ApiKeyDatePickerProps> = ({ value, onChange, ...props
       showNow={false}
       renderExtraFooter={() => (
         <Flex justify="center">
-          <a onClick={() => handleOnChange(null)}>{t('apikey.display.neverExpires')}</a>
+          <a
+            role="button"
+            style={{ cursor: 'pointer' }}
+            tabIndex={0}
+            onClick={() => handleOnChange(null)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                handleOnChange(null);
+              }
+            }}
+          >
+            {t('apikey.display.neverExpires')}
+          </a>
         </Flex>
       )}
       onChange={handleOnChange}

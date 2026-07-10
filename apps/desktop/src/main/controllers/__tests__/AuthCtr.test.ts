@@ -23,6 +23,9 @@ const { ipcMainHandleMock } = vi.hoisted(() => ({
 
 // Mock electron
 vi.mock('electron', () => ({
+  app: {
+    getVersion: vi.fn(() => '1.2.3'),
+  },
   BrowserWindow: {
     getAllWindows: vi.fn(() => []),
   },
@@ -199,6 +202,11 @@ describe('AuthCtr', () => {
           (call[0] as string).includes('/oidc/handoff'),
         );
         expect(pollingCalls.length).toBeGreaterThan(0);
+        expect(pollingCalls[0][1]).toEqual(
+          expect.objectContaining({
+            headers: expect.objectContaining({ 'User-Agent': 'LobeHub Desktop/1.2.3' }),
+          }),
+        );
       });
 
       it('should use self-hosted server URL when storageMode is selfHost', async () => {

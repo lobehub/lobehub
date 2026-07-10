@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import {
   type ExecutionPlan,
   executionTargetToRuntimeMode,
+  isDeviceLockedPlan,
   resolveExecutionPlan,
   resolveExecutionTarget,
   resolveRuntimeMode,
@@ -45,7 +46,12 @@ describe('resolveExecutionTarget', () => {
     ).toBe('local');
   });
 
-  it('routes hetero desktop-local bindings to the bound device on web', () => {
+  it('routes a bound desktop-local selection to the bound device on web when device routing is available (plain and hetero)', () => {
+    // LOBE-11473: a `local` pick pins this desktop's own deviceId as
+    // `boundDeviceId`; on web that config still runs on the bound device
+    // server-side, so surface it honestly as `device` instead of masquerading
+    // as `sandbox`. Hetero agents always route here; plain agents need a
+    // device-gateway (`deviceRoutingAvailable`) to actually reach the machine.
     expect(
       resolveExecutionTarget(cfg({ boundDeviceId: 'device-a', executionTarget: 'local' }), {
         clientExecutionAvailable: false,
@@ -53,6 +59,20 @@ describe('resolveExecutionTarget', () => {
       }),
     ).toBe('device');
 
+    expect(
+      resolveExecutionTarget(cfg({ boundDeviceId: 'device-a', executionTarget: 'local' }), {
+        clientExecutionAvailable: false,
+        deviceRoutingAvailable: true,
+      }),
+    ).toBe('device');
+  });
+
+  it('keeps a bound `local` as `sandbox` when no device routing is available (LOBE-11473 regression)', () => {
+    // A plain agent with a bound `local` target but no device-gateway to route
+    // it (self-host without DEVICE_GATEWAY_URL, or any server call that leaves
+    // `deviceRoutingAvailable` unset) must fall back to the cloud sandbox — it
+    // cannot reach the bound device. Guards against resolving to
+    // `device`/`device-unrouted` and stripping sandbox tools server-side.
     expect(
       resolveExecutionTarget(cfg({ boundDeviceId: 'device-a', executionTarget: 'local' }), {
         clientExecutionAvailable: false,
@@ -98,6 +118,64 @@ describe('resolveExecutionTarget', () => {
     expect(
       resolveExecutionTarget(undefined, { clientExecutionAvailable: false, isHetero: true }),
     ).toBe('sandbox');
+  });
+
+  describe('workspaceScoped — a workspace agent never executes on the member client', () => {
+    it('suppresses the desktop `local` default (unset → none, hetero → sandbox)', () => {
+      expect(
+        resolveExecutionTarget(undefined, {
+          clientExecutionAvailable: true,
+          workspaceScoped: true,
+        }),
+      ).toBe('none');
+      expect(
+        resolveExecutionTarget(undefined, {
+          clientExecutionAvailable: true,
+          isHetero: true,
+          workspaceScoped: true,
+        }),
+      ).toBe('sandbox');
+    });
+
+    it('coerces a stored `local` (pre-workspace leftover) to sandbox on desktop', () => {
+      expect(
+        resolveExecutionTarget(cfg({ executionTarget: 'local' }), {
+          clientExecutionAvailable: true,
+          workspaceScoped: true,
+        }),
+      ).toBe('sandbox');
+    });
+
+    it('routes a hetero stored `local` with a (grandfathered) binding to that device', () => {
+      expect(
+        resolveExecutionTarget(cfg({ boundDeviceId: 'device-a', executionTarget: 'local' }), {
+          clientExecutionAvailable: true,
+          isHetero: true,
+          workspaceScoped: true,
+        }),
+      ).toBe('device');
+    });
+
+    it('leaves explicit non-local targets untouched', () => {
+      expect(
+        resolveExecutionTarget(cfg({ executionTarget: 'sandbox' }), {
+          clientExecutionAvailable: true,
+          workspaceScoped: true,
+        }),
+      ).toBe('sandbox');
+      expect(
+        resolveExecutionTarget(cfg({ executionTarget: 'device' }), {
+          clientExecutionAvailable: true,
+          workspaceScoped: true,
+        }),
+      ).toBe('device');
+      expect(
+        resolveExecutionTarget(cfg({ executionTarget: 'auto' }), {
+          clientExecutionAvailable: true,
+          workspaceScoped: true,
+        }),
+      ).toBe('auto');
+    });
   });
 
   describe('trigger=bot — upgrades a local target (bound → device, unbound → auto)', () => {
@@ -191,6 +269,14 @@ describe('resolveRuntimeMode', () => {
     // executionTarget=local synced from desktop, resolved on web → sandbox → cloud
     expect(resolveRuntimeMode(cfg({ executionTarget: 'local' }), false)).toBe('cloud');
   });
+
+  it('routes a bound web `local` to device (runtimeMode none) only when device routing is available', () => {
+    const boundLocal = cfg({ boundDeviceId: 'device-a', executionTarget: 'local' });
+    // with a device-gateway → device → runtimeMode none (routed via the plan)
+    expect(resolveRuntimeMode(boundLocal, false, true)).toBe('none');
+    // without one → sandbox → cloud (LOBE-11473 regression guard)
+    expect(resolveRuntimeMode(boundLocal, false)).toBe('cloud');
+  });
 });
 
 describe('resolveExecutionPlan', () => {
@@ -225,6 +311,20 @@ describe('resolveExecutionPlan', () => {
           agencyConfig: cfg({ boundDeviceId: 'device-a', executionTarget: 'sandbox' }),
           clientExecutionAvailable: true,
           onlineDeviceIds: ONLINE_A,
+        }),
+      ).toEqual({ kind: 'sandbox', target: 'sandbox' });
+    });
+
+    it('keeps a bound `local` as sandbox on a no-gateway backend (LOBE-11473 regression)', () => {
+      // No device-gateway: `clientExecutionAvailable` is false and the plan
+      // never passes `deviceRoutingAvailable`, so a bound `local` target must
+      // resolve to the sandbox — not `device`/`device-unrouted`, which would
+      // strip cloud-sandbox tools on a self-host without device routing.
+      expect(
+        resolveExecutionPlan({
+          agencyConfig: cfg({ boundDeviceId: 'device-a', executionTarget: 'local' }),
+          clientExecutionAvailable: false,
+          onlineDeviceIds: [],
         }),
       ).toEqual({ kind: 'sandbox', target: 'sandbox' });
     });
@@ -682,5 +782,39 @@ describe('resolveExecutionPlan', () => {
         expect(plan).toEqual({ kind: 'sandbox', target: 'sandbox' });
       }
     });
+  });
+});
+
+describe('isDeviceLockedPlan', () => {
+  it('locks routed plans and bound-but-offline plans', () => {
+    expect(isDeviceLockedPlan({ deviceId: 'device-a', kind: 'device', target: 'device' })).toBe(
+      true,
+    );
+    expect(
+      isDeviceLockedPlan({
+        kind: 'device-unrouted',
+        reason: 'bound-device-offline',
+        target: 'device',
+      }),
+    ).toBe(true);
+  });
+
+  it('keeps selection-pending and non-device plans unlocked', () => {
+    // These are exactly the states where the remote-device picker may exist.
+    expect(
+      isDeviceLockedPlan({ kind: 'device-unrouted', reason: 'no-bound-device', target: 'local' }),
+    ).toBe(false);
+    expect(
+      isDeviceLockedPlan({
+        kind: 'device-unrouted',
+        reason: 'ambiguous-online-devices',
+        target: 'auto',
+      }),
+    ).toBe(false);
+    expect(
+      isDeviceLockedPlan({ kind: 'device-unrouted', reason: 'no-online-device', target: 'auto' }),
+    ).toBe(false);
+    expect(isDeviceLockedPlan({ kind: 'none', target: 'none' })).toBe(false);
+    expect(isDeviceLockedPlan({ kind: 'sandbox', target: 'sandbox' })).toBe(false);
   });
 });

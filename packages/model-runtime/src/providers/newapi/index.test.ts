@@ -1079,6 +1079,115 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
       expect(result[0].pricing).toBeUndefined();
     });
 
+    it('should use dedicated proxy route when running in browser', async () => {
+      // Mock browser environment
+      const originalWindow = global.window;
+      const originalDocument = global.document;
+      global.window = {} as any;
+      global.document = {} as any;
+
+      try {
+        const mockClient = {
+          apiKey: 'test-key',
+          baseURL: 'https://api.newapi.com/v1',
+          models: {
+            list: vi.fn().mockResolvedValue({
+              data: [
+                {
+                  created: 123,
+                  id: 'test-model',
+                  object: 'model',
+                  owned_by: 'openai',
+                },
+              ],
+            }),
+          },
+        };
+
+        mockFetch.mockResolvedValue({
+          json: async () => ({
+            data: [
+              {
+                completion_ratio: 1.5,
+                enable_groups: ['default'],
+                model_name: 'test-model',
+                model_price: 10,
+                quota_type: 0,
+              },
+            ],
+            success: true,
+          }),
+          ok: true,
+        });
+
+        mockProcessMultiProviderModelList.mockImplementation((models) => models);
+
+        const result = await params.models({ client: mockClient as any });
+
+        expect(mockFetch).toHaveBeenCalledWith('/webapi/models/newapi/pricing');
+        expect(result[0].pricing).toBeDefined();
+      } finally {
+        global.window = originalWindow;
+        global.document = originalDocument;
+      }
+    });
+
+    it('should use custom provider pricing proxy route when running in browser', async () => {
+      // Mock browser environment
+      const originalWindow = global.window;
+      const originalDocument = global.document;
+      global.window = {} as any;
+      global.document = {} as any;
+
+      try {
+        const mockClient = {
+          apiKey: 'test-key',
+          baseURL: 'https://api.newapi.com/v1',
+          models: {
+            list: vi.fn().mockResolvedValue({
+              data: [
+                {
+                  created: 123,
+                  id: 'custom-model',
+                  object: 'model',
+                  owned_by: 'openai',
+                },
+              ],
+            }),
+          },
+        };
+
+        mockFetch.mockResolvedValue({
+          json: async () => ({
+            data: [
+              {
+                completion_ratio: 1.5,
+                enable_groups: ['default'],
+                model_name: 'custom-model',
+                model_price: 10,
+                quota_type: 0,
+              },
+            ],
+            success: true,
+          }),
+          ok: true,
+        });
+
+        mockProcessMultiProviderModelList.mockImplementation((models) => models);
+
+        const result = await params.models({
+          client: mockClient as any,
+          options: { providerId: 'custom-router' },
+        });
+
+        expect(mockFetch).toHaveBeenCalledWith('/webapi/models/custom-router/pricing');
+        expect(result[0].pricing).toBeDefined();
+      } finally {
+        global.window = originalWindow;
+        global.document = originalDocument;
+      }
+    });
+
     it('should handle pricing data with success=false', async () => {
       const mockClient = {
         apiKey: 'test-key',

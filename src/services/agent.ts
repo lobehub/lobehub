@@ -62,6 +62,14 @@ const normalizeMarketAgentModel = (config?: PartialDeep<AgentItem>): PartialDeep
 export interface CreateAgentParams {
   config?: PartialDeep<AgentItem>;
   groupId?: string;
+  /**
+   * `private` keeps the agent visible only to its creator within the active
+   * workspace; `public` (default) makes it visible to every member. The
+   * router enforces this — sidebar "Create in Private" forwards `'private'`
+   * verbatim, all other creators (templates, marketplace import, etc.)
+   * default to `'public'`.
+   */
+  visibility?: 'private' | 'public';
 }
 
 export interface CreateAgentResult {
@@ -111,7 +119,27 @@ class AgentService {
     return lambdaClient.agent.createAgent.mutate({
       config: normalizedConfig as any,
       groupId: params.groupId,
+      visibility: params.visibility,
     });
+  };
+
+  /**
+   * Publish a private agent to the workspace. Caller should refresh the
+   * sidebar list afterwards so the agent moves from the Private bucket to
+   * the shared list. The inverse (public → private) goes through
+   * {@link setAgentVisibility}.
+   */
+  publishAgentToWorkspace = async (id: string): Promise<void> => {
+    await lambdaClient.agent.publishAgentToWorkspace.mutate({ id });
+  };
+
+  /**
+   * Bidirectional visibility switch (LOBE-11551). The server only allows the
+   * agent's creator or a workspace owner to pull a published agent back to
+   * private, and rejects builtin agents (LobeAI etc.) outright.
+   */
+  setAgentVisibility = async (id: string, visibility: 'private' | 'public'): Promise<void> => {
+    await lambdaClient.agent.setAgentVisibility.mutate({ id, visibility });
   };
 
   /**
@@ -167,8 +195,10 @@ class AgentService {
     });
   };
 
-  getFilesAndKnowledgeBases = async (agentId: string) => {
-    return lambdaClient.agent.getKnowledgeBasesAndFiles.query({ agentId });
+  getFilesAndKnowledgeBases = async (agentId: string, visibility?: 'private' | 'public') => {
+    return lambdaClient.agent.getKnowledgeBasesAndFiles.query(
+      visibility ? { agentId, visibility } : { agentId },
+    );
   };
 
   getAgentConfigById = async (agentId: string) => {
@@ -231,9 +261,15 @@ class AgentService {
   };
 
   /**
-   * Count non-virtual agents with optional keyword filter, matching queryAgents conditions.
+   * Count non-virtual agents with optional keyword and date filters,
+   * matching queryAgents conditions.
    */
-  countAgents = async (params?: { keyword?: string }) => {
+  countAgents = async (params?: {
+    endDate?: string;
+    keyword?: string;
+    range?: [string, string];
+    startDate?: string;
+  }) => {
     return lambdaClient.agent.countAgents.query(params);
   };
 
@@ -265,8 +301,13 @@ class AgentService {
   transferAgent = async (
     agentId: string,
     targetWorkspaceId: string | null,
+    targetVisibility?: 'private' | 'public',
   ): Promise<{ agentId: string; slug: string | null }> => {
-    return lambdaClient.agent.transferAgent.mutate({ agentId, targetWorkspaceId });
+    return lambdaClient.agent.transferAgent.mutate({
+      agentId,
+      targetVisibility,
+      targetWorkspaceId,
+    });
   };
 }
 

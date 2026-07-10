@@ -2,13 +2,15 @@
 
 import { useEditor } from '@lobehub/editor/react';
 import { ActionIcon, Block, Flexbox, Icon, Text } from '@lobehub/ui';
-import { Button } from 'antd';
+import { Button } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { $getRoot } from 'lexical';
 import { ChevronUp, Paperclip, UserCircle2 } from 'lucide-react';
-import { type KeyboardEvent, memo, useCallback, useEffect, useRef, useState } from 'react';
+import { type KeyboardEvent, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import { message } from '@/components/AntdStaticMethods';
 import { EditorCanvas } from '@/features/EditorCanvas';
 import {
   getAttachmentFileIdsFromEditor,
@@ -21,7 +23,10 @@ import { useTaskStore } from '@/store/task';
 import AssigneeAgentSelector from '../features/AssigneeAgentSelector';
 import AssigneeAvatar from '../features/AssigneeAvatar';
 import TaskPriorityTag from '../features/TaskPriorityTag';
+import TaskVisibilityChipLabel from '../features/TaskVisibilityChipLabel';
+import TaskVisibilityTag from '../features/TaskVisibilityTag';
 import { useAgentDisplayMeta } from '../shared/useAgentDisplayMeta';
+import { useAgentVisibility } from '../shared/useAgentVisibility';
 
 interface CreateTaskInlineEntryProps {
   agentId?: string;
@@ -61,26 +66,116 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   const isCreating = useTaskStore((s) => s.isCreatingTask);
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
 
+  const activeWorkspaceId = useActiveWorkspaceId();
   const [priority, setPriority] = useState(0);
   const [assigneeAgentId, setAssigneeAgentId] = useState<string | undefined>(agentId);
   const [instruction, setInstruction] = useState('');
   const [hasAttachments, setHasAttachments] = useState(false);
+  // Default to private in workspace mode so the user has to opt in to share.
+  // In personal mode the chip is hidden and the value is never sent.
+  const [visibility, setVisibility] = useState<'private' | 'public'>('private');
+
+  // A private agent can only run a private task. Coerce + lock the
+  // visibility chip when the selected agent is private.
+  const assigneeVisibility = useAgentVisibility(assigneeAgentId);
+  const isPrivateAgent = assigneeVisibility === 'private';
+  useEffect(() => {
+    if (isPrivateAgent && visibility === 'public') setVisibility('private');
+  }, [isPrivateAgent, visibility]);
 
   const editor = useEditor();
+
+  // Persist the in-progress draft per scope so a reload / accidental close
+  // doesn't eat a long prompt. Skipped for the transient subtask composer.
+  const draftStorageKey = useMemo(
+    () => (parentTaskId ? null : `lobehub:task-create-draft:${agentId ?? 'all'}`),
+    [agentId, parentTaskId],
+  );
+  // Tracks which scope key the editor is currently hydrated for. The component
+  // is reused across /agent/A/tasks -> /agent/B/tasks -> /tasks without
+  // unmounting, so a boolean would strand the new scope on the old draft.
+  const draftRestoredKeyRef = useRef<string | null>(null);
 
   const assigneeMeta = useAgentDisplayMeta(assigneeAgentId);
 
   // When the assignee is locked to a scoped agent, keep it in sync with the
   // `agentId` prop. The route subtree is reused across /agent/A/tasks ->
-  // /agent/B/tasks, so without this the hidden assignee would stay on A.
+  // /agent/B/tasks and /agent/A/tasks -> /tasks, so without this the hidden
+  // assignee would stay on the previous scoped agent.
   useEffect(() => {
-    if (lockAssignee) setAssigneeAgentId(agentId);
+    if (lockAssignee) {
+      setAssigneeAgentId(agentId);
+      return;
+    }
+
+    if (!agentId) setAssigneeAgentId(undefined);
   }, [agentId, lockAssignee]);
 
   useEffect(() => {
     if (!canCreateTask) return;
     if (autoFocus || isHero) editor?.focus?.();
   }, [autoFocus, canCreateTask, editor, isHero]);
+
+  // Hydrate the editor with the current scope's saved draft. Re-runs whenever
+  // the scope key changes (not just on mount): it first resets to this scope's
+  // baseline so a previous scope's draft can't leak across a switch, then loads
+  // the new key's draft. The editor's onContentChange syncs `instruction`.
+  useEffect(() => {
+    if (!draftStorageKey || !editor) return;
+    if (draftRestoredKeyRef.current === draftStorageKey) return;
+    draftRestoredKeyRef.current = draftStorageKey;
+
+    // Reset to baseline for the new scope before hydrating.
+    editor.cleanDocument?.();
+    setPriority(0);
+    setVisibility('private');
+    if (!lockAssignee) setAssigneeAgentId(agentId);
+
+    let raw: string | null;
+    try {
+      raw = localStorage.getItem(draftStorageKey);
+    } catch {
+      raw = null;
+    }
+    if (!raw) return;
+    try {
+      const draft = JSON.parse(raw) as {
+        assigneeAgentId?: string;
+        markdown?: string;
+        priority?: number;
+        visibility?: 'private' | 'public';
+      };
+      if (draft.markdown) editor.setDocument?.('markdown', draft.markdown);
+      if (typeof draft.priority === 'number') setPriority(draft.priority);
+      if (!lockAssignee && draft.assigneeAgentId) setAssigneeAgentId(draft.assigneeAgentId);
+      if (draft.visibility) setVisibility(draft.visibility);
+    } catch {
+      /* ignore a malformed draft */
+    }
+  }, [agentId, draftStorageKey, editor, lockAssignee]);
+
+  // Back the draft to storage on every change. Gated behind the restore pass so
+  // the initial render can't clobber a just-read draft. Write-only on non-empty:
+  // the key is cleared only on a successful submit (below), never here — so a
+  // `setDocument`-timing gap right after restore can't wipe a valid draft.
+  useEffect(() => {
+    if (!draftStorageKey || draftRestoredKeyRef.current !== draftStorageKey || !editor) return;
+    const markdown = String(editor.getDocument?.('markdown') ?? '').trim();
+    if (!markdown) return;
+    try {
+      localStorage.setItem(
+        draftStorageKey,
+        JSON.stringify({
+          assigneeAgentId: lockAssignee ? undefined : assigneeAgentId,
+          markdown,
+          priority,
+          visibility,
+        }),
+      );
+    } catch {
+      /* storage unavailable / quota — persistence is best-effort */
+    }
+  }, [assigneeAgentId, draftStorageKey, editor, instruction, lockAssignee, priority, visibility]);
 
   const handleCollapse = useCallback(() => {
     if (onCollapse) {
@@ -123,35 +218,57 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
 
     const editorJson = editor?.getDocument?.('json') as unknown;
 
-    const result = await createTask({
-      assigneeAgentId,
-      editorData: editorJson,
-      instruction: markdown || trimmedText || name || '',
-      name,
-      parentTaskId,
-      priority: priority || undefined,
-    });
-
-    if (result) {
-      setPriority(0);
-      setAssigneeAgentId(agentId);
-      setInstruction('');
-      editor?.cleanDocument?.();
-      onCreated?.({
-        agentId: result.assigneeAgentId ?? undefined,
-        identifier: result.identifier,
+    // `createTask` keeps its rejecting contract (other callers rely on `catch`);
+    // handle the composer's own failure here so it isn't silent, keeping the
+    // draft intact (the reset only runs on success).
+    try {
+      const result = await createTask({
+        assigneeAgentId,
+        editorData: editorJson,
+        instruction: markdown || trimmedText || name || '',
+        name,
+        parentTaskId,
+        priority: priority || undefined,
+        // Only send visibility in workspace mode; personal mode lets the server
+        // fall through to the schema default ('public', inert in personal mode).
+        visibility: activeWorkspaceId ? visibility : undefined,
       });
+
+      if (result) {
+        setPriority(0);
+        setAssigneeAgentId(agentId);
+        setInstruction('');
+        setVisibility('private');
+        editor?.cleanDocument?.();
+        if (draftStorageKey) {
+          try {
+            localStorage.removeItem(draftStorageKey);
+          } catch {
+            /* ignore */
+          }
+        }
+        onCreated?.({
+          agentId: result.assigneeAgentId ?? undefined,
+          identifier: result.identifier,
+        });
+      }
+    } catch {
+      message.error(t('createTask.createFailed'));
     }
   }, [
+    t,
+    activeWorkspaceId,
     agentId,
     assigneeAgentId,
     createTask,
+    draftStorageKey,
     editor,
     instruction,
     onCreated,
     parentTaskId,
     priority,
     canCreateTask,
+    visibility,
   ]);
 
   const handleSubmitRef = useRef(handleSubmit);
@@ -185,6 +302,10 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
       <Flexbox
         style={{
           fontSize: isHero ? 16 : 14,
+          // Cap the editor so a long draft scrolls inside the box instead of
+          // growing the composer until it pushes the task list below the fold.
+          maxHeight: isHero ? 360 : 200,
+          overflowY: 'auto',
           padding: isHero ? '20px 24px 4px' : '12px 40px 0 16px',
         }}
       >
@@ -268,6 +389,22 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
               </AssigneeAgentSelector>
             );
           })()}
+
+          {activeWorkspaceId && (
+            <TaskVisibilityTag
+              visibility={visibility}
+              lockedReason={
+                isPrivateAgent
+                  ? t('createTask.visibility.privateAgentLocked', {
+                      defaultValue: 'Private agents can only run private tasks.',
+                    })
+                  : undefined
+              }
+              onChange={setVisibility}
+            >
+              <TaskVisibilityChipLabel visibility={visibility} />
+            </TaskVisibilityTag>
+          )}
 
           <ActionIcon
             icon={Paperclip}

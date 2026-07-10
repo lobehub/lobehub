@@ -44,6 +44,18 @@ export const getInstallationStore = (
 const SINGLETON_SUFFIX = ':singleton';
 
 /**
+ * Every messenger-owned gateway connection (per-user typing DOs and SystemBot
+ * singletons) carries this prefix, while agent-bot-provider connections use
+ * the bare provider uuid. The gateway reconciliation sync relies on this to
+ * tell which gateway connections it owns — messenger connections must never
+ * be treated as bot-provider zombies.
+ */
+const MESSENGER_CONNECTION_ID_PREFIX = 'messenger:';
+
+export const isMessengerConnectionId = (connectionId: string): boolean =>
+  connectionId.startsWith(MESSENGER_CONNECTION_ID_PREFIX);
+
+/**
  * Singleton gateway connectionId for a platform-level install.
  *
  * Mirrors what dc-center registers when it brings a SystemBot online —

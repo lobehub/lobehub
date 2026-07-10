@@ -7,9 +7,12 @@
  */
 export enum WorkspaceSettingsTabs {
   APIKey = 'apikey',
+  AuditLog = 'audit-log',
   Billing = 'billing',
+  Connector = 'connector',
   Credits = 'credits',
   Creds = 'creds',
+  Devices = 'devices',
   General = 'general',
   Members = 'members',
   Plans = 'plans',

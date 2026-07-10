@@ -1,17 +1,14 @@
 import { z } from 'zod';
 
+import type { SerializedAgentHook } from '../agentHook';
+import type { WorkingDirConfig } from '../device';
 import type { BaseDataModel } from '../meta';
 
 // Type definitions
 export type ShareVisibility = 'private' | 'link';
 
 export type TimeGroupId =
-  | 'today'
-  | 'yesterday'
-  | 'week'
-  | 'month'
-  | `${number}-${string}`
-  | `${number}`;
+  'today' | 'yesterday' | 'week' | 'month' | `${number}-${string}` | `${number}`;
 
 export type TopicGroupMode = 'byTime' | 'byProject' | 'flat' | 'byStatus';
 export type TopicSortBy = 'createdAt' | 'updatedAt';
@@ -136,6 +133,15 @@ export interface ChatTopicMetadata {
    *     `workingDirectory`.
    */
   heteroSessionId?: string;
+  /**
+   * Heterogeneous-agent session ids scoped by effective working directory.
+   * Claude Code stores native sessions under a cwd-specific project bucket, so
+   * one topic may need different resume ids when the user switches worktrees.
+   *
+   * `heteroSessionId` remains the currently selected cwd's latest id for legacy
+   * readers; this map lets the UI restore the right id when switching back.
+   */
+  heteroSessionIdByWorkingDirectory?: Record<string, string>;
   model?: string;
   /**
    * Free-form feedback collected after agent onboarding completion.
@@ -158,16 +164,20 @@ export interface ChatTopicMetadata {
   runningOperation?: {
     assistantMessageId: string;
     /**
-     * Webhook to fire when the operation completes.
-     * Populated by the IM bot path so heterogeneous agents (Claude Code / Codex)
-     * can call back to the bot-callback endpoint even though they bypass the
-     * normal hook registration flow.
+     * Serialized lifecycle hooks (onComplete / onError) registered for this run.
+     *
+     * Persisted so the heterogeneous-agent terminal path can fire them through
+     * the same `hookDispatcher` the normal LLM runtime uses, instead of a
+     * bespoke single-webhook callback. Read by every hetero terminal site —
+     * the CLI exit (`aiAgent.heteroFinish`), the remote-agent `agentNotify`
+     * done signal, and a synchronous dispatch failure — so the task lifecycle
+     * (`onTopicComplete`) and IM bot completion callbacks fire uniformly.
+     *
+     * Only hooks carrying a webhook config are serializable (handler closures
+     * can't cross a process boundary); queue mode delivers these webhooks while
+     * local mode dispatches the in-memory handlers registered at dispatch time.
      */
-    completionWebhook?: {
-      body?: Record<string, unknown>;
-      delivery?: 'fetch' | 'qstash';
-      url: string;
-    };
+    hooks?: SerializedAgentHook[];
     operationId: string;
     scope?: string;
     threadId?: string | null;
@@ -184,6 +194,16 @@ export interface ChatTopicMetadata {
    * For sidebar grouping, topics are bucketed by this field (byProject mode).
    */
   workingDirectory?: string;
+  /**
+   * Structured topic-level working directory snapshot.
+   *
+   * Kept as a single object, not a list. `workingDirectory` remains the
+   * backwards-compatible effective path; this field preserves the source path
+   * and git/worktree metadata needed to restore the same worktree when the user
+   * switches back to the topic, and to render branch/worktree context in topic
+   * lists without probing the device.
+   */
+  workingDirectoryConfig?: WorkingDirConfig;
 }
 
 export interface ChatTopicSummary {
@@ -230,6 +250,14 @@ export interface ChatTopic extends Omit<BaseDataModel, 'meta'> {
   messageCount?: number | null;
   metadata?: ChatTopicMetadata;
   sessionId?: string;
+  /**
+   * Sort key for the sidebar list: the topic's latest message-activity time
+   * (server `topicActivityAt`), falling back to `updatedAt`. Kept separate from
+   * `updatedAt` so the client sort matches the server ORDER BY (no list jumping)
+   * while `updatedAt` still reflects real row edits like rename/favorite.
+   * (LOBE-11543)
+   */
+  sortUpdatedAt?: number;
   status?: ChatTopicStatus | null;
   title: string;
   /** Server-side mock until real token aggregation lands. */

@@ -2,10 +2,16 @@ import { LobeDeliveryCheckerIdentifier } from '@lobechat/builtin-tool-lobe-deliv
 import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
 
 import type { LobeChatDatabase } from '@/database/type';
+import { VerifyPlanGeneratorService } from '@/server/services/verify';
 
 import type { ServerRuntimeRegistration } from './types';
 
 interface LobeDeliveryCheckerRuntimeContext {
+  /**
+   * Visibility of the executing agent. Forwarded to the plan generator so
+   * verify instruction documents inherit private-agent visibility.
+   */
+  agentVisibility?: 'private' | 'public' | null;
   /** The current Agent Run (`agent_operations.id`) — the verify plan attaches to it. */
   operationId?: string;
   serverDB: LobeChatDatabase;
@@ -30,12 +36,14 @@ class LobeDeliveryCheckerExecutionRuntime {
   private db: LobeChatDatabase;
   private userId: string;
   private workspaceId?: string;
+  private agentVisibility?: 'private' | 'public' | null;
 
   constructor(context: LobeDeliveryCheckerRuntimeContext) {
     this.operationId = context.operationId;
     this.db = context.serverDB;
     this.userId = context.userId;
     this.workspaceId = context.workspaceId;
+    this.agentVisibility = context.agentVisibility;
   }
 
   generateVerifyPlan = async (params: {
@@ -66,8 +74,12 @@ class LobeDeliveryCheckerExecutionRuntime {
     // Agent-authored path: the model enumerated the checks, so create the
     // criteria + a rubric, snapshot it onto this operation, and confirm it. The
     // tool call is human-reviewed (humanIntervention); this runs post-approval.
-    const { VerifyPlanGeneratorService } = await import('@/server/services/verify');
-    const planGenerator = new VerifyPlanGeneratorService(this.db, this.userId, this.workspaceId);
+    const planGenerator = new VerifyPlanGeneratorService(
+      this.db,
+      this.userId,
+      this.workspaceId,
+      this.agentVisibility,
+    );
     const { items, rubricId } = await planGenerator.createPlanFromCriteria({
       criteria,
       operationId: this.operationId,
@@ -110,6 +122,7 @@ export const lobeDeliveryCheckerRuntime: ServerRuntimeRegistration = {
     }
 
     return new LobeDeliveryCheckerExecutionRuntime({
+      agentVisibility: context.agentVisibility,
       operationId: context.operationId,
       serverDB: context.serverDB,
       userId: context.userId,

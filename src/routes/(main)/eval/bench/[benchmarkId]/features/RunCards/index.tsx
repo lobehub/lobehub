@@ -1,7 +1,8 @@
 'use client';
 
-import { ActionIcon, Empty, Flexbox } from '@lobehub/ui';
-import { Typography } from 'antd';
+import { ActionIcon, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { Play, Plus } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -9,6 +10,34 @@ import { useTranslation } from 'react-i18next';
 import { runSelectors, useEvalStore } from '@/store/eval';
 
 import RunSummaryCard from './RunSummaryCard';
+
+const styles = createStaticStyles(({ css }) => ({
+  emptyCard: css`
+    align-items: center;
+    justify-content: center;
+
+    padding-block: 32px;
+    padding-inline: 20px;
+    border: 1px dashed ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadius};
+
+    text-align: center;
+
+    background: ${cssVar.colorFillQuaternary};
+  `,
+  iconBox: css`
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+
+    width: 40px;
+    height: 40px;
+    border-radius: ${cssVar.borderRadius};
+
+    background: ${cssVar.colorFillTertiary};
+  `,
+}));
 
 interface RunCardsProps {
   benchmarkId: string;
@@ -25,7 +54,7 @@ const RunCards = memo<RunCardsProps>(({ datasetId, onCreateRun, benchmarkId }) =
   return (
     <Flexbox gap={12}>
       <Flexbox horizontal align="center" justify="space-between">
-        <Typography.Text strong>{t('benchmark.detail.tabs.runs')}</Typography.Text>
+        <Text weight={600}>{t('benchmark.detail.tabs.runs')}</Text>
         <ActionIcon
           icon={Plus}
           size="small"
@@ -34,7 +63,20 @@ const RunCards = memo<RunCardsProps>(({ datasetId, onCreateRun, benchmarkId }) =
         />
       </Flexbox>
       {runList.length === 0 ? (
-        <Empty description={t('benchmark.card.empty')} icon={Play} />
+        <Flexbox className={styles.emptyCard} gap={12}>
+          <div className={styles.iconBox}>
+            <Icon icon={Play} size={20} style={{ color: cssVar.colorTextQuaternary }} />
+          </div>
+          <Flexbox align="center" gap={2}>
+            <Text color={cssVar.colorTextTertiary}>{t('run.empty.title')}</Text>
+            <Text color={cssVar.colorTextQuaternary} fontSize={12}>
+              {t('run.empty.description')}
+            </Text>
+          </Flexbox>
+          <Button icon={<Plus size={14} />} size="small" type="primary" onClick={onCreateRun}>
+            {t('run.actions.create')}
+          </Button>
+        </Flexbox>
       ) : (
         <Flexbox gap={8}>
           {runList.map((run) => (

@@ -21,8 +21,25 @@ vi.mock('@/services/resource', () => ({
 describe('resource manager store actions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.localStorage.clear();
     useResourceManagerStore.setState(initialState);
     useFileStore.setState(fileInitialState);
+  });
+
+  it('should default workspace resources to private mode when no preference is persisted', () => {
+    useResourceManagerStore.setState({
+      listVisibility: 'workspace',
+      selectAllState: 'loaded',
+      selectedFileIds: ['file-1'],
+    });
+
+    useResourceManagerStore.getState().hydrateListVisibility('workspace-1');
+
+    expect(useResourceManagerStore.getState()).toMatchObject({
+      listVisibility: 'private',
+      selectAllState: 'none',
+      selectedFileIds: [],
+    });
   });
 
   it('should exclude deselected ids when resolving all-selected resources', async () => {

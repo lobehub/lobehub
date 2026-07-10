@@ -19,10 +19,14 @@
   "editMessage.title": "編輯消息",
   "navigateToChat.desc": "切換至對話標籤並進入 Lobe AI",
   "navigateToChat.title": "切換至預設會話",
+  "nextTab.desc": "在桌面應用程式中切換到下一個瀏覽器樣式的標籤頁；到達末尾時會回到第一個標籤頁",
+  "nextTab.title": "下一個標籤頁",
   "openChatSettings.desc": "查看和修改當前會話的設定",
   "openChatSettings.title": "打開會話設定",
   "openHotkeyHelper.desc": "查看所有快捷鍵的使用說明",
   "openHotkeyHelper.title": "打開快捷鍵幫助",
+  "prevTab.desc": "在桌面應用程式中切換到上一個標籤頁；到達開頭時會回到最後一個標籤頁",
+  "prevTab.title": "上一個標籤頁",
   "regenerateMessage.desc": "重新生成最後一條消息",
   "regenerateMessage.title": "重新生成消息",
   "saveDocument.desc": "立即儲存目前文件的所有變更",
@@ -35,10 +39,10 @@
   "showApp.title": "顯示主窗口",
   "switchAgent.desc": "通過按住 Ctrl 加數字 0~9 切換固定在側邊欄的助手",
   "switchAgent.title": "快捷切換助手",
+  "switchTab.desc": "根據其在桌面應用程式標籤列中的位置（1–9）跳轉到特定標籤頁",
+  "switchTab.title": "按編號切換到標籤頁",
   "toggleLeftPanel.desc": "顯示或隱藏左側面板",
   "toggleLeftPanel.title": "顯示/隱藏左側面板",
   "toggleRightPanel.desc": "顯示或隱藏右側面板",
-  "toggleRightPanel.title": "顯示/隱藏右側面板",
-  "toggleZenMode.desc": "專注模式下，只顯示當前會話，隱藏其他 UI",
-  "toggleZenMode.title": "切換專注模式"
+  "toggleRightPanel.title": "顯示/隱藏右側面板"
 }

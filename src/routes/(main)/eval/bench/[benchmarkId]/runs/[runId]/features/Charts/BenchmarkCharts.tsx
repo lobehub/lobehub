@@ -2,40 +2,42 @@
 
 import { BarChart } from '@lobehub/charts';
 import { Flexbox } from '@lobehub/ui';
-import { createStaticStyles, useTheme } from 'antd-style';
+import { createStaticStyles, cssVar, useTheme } from 'antd-style';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import ScatterPlot from './ScatterPlot';
 import StatusDonut from './StatusDonut';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
+const styles = createStaticStyles(({ css }) => ({
   chartCard: css`
     padding: 16px;
-    border: 1px solid ${cssVar.colorBorder};
-    border-radius: 12px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
     background: ${cssVar.colorBgContainer};
   `,
   chartTitle: css`
     margin-block-end: 12px;
-    font-size: 14px;
+    font-size: ${cssVar.fontSizeSM};
     font-weight: 500;
     color: ${cssVar.colorTextSecondary};
   `,
   legendDot: css`
     width: 8px;
     height: 8px;
-    border-radius: 50%;
+    border-radius: 999px;
   `,
   legendText: css`
+    font-size: ${cssVar.fontSizeSM};
     color: ${cssVar.colorTextSecondary};
   `,
   totalCount: css`
     padding-block: 1px;
-    padding-inline: 6px;
-    border-radius: 4px;
+    padding-inline: 8px;
+    border-radius: ${cssVar.borderRadiusXS};
 
-    font-size: 11px;
+    font-family: ${cssVar.fontFamilyCode};
+    font-size: ${cssVar.fontSizeSM};
     font-weight: 600;
     color: ${cssVar.colorTextSecondary};
 
@@ -133,7 +135,7 @@ const BenchmarkCharts = memo<BenchmarkChartsProps>(({ results, benchmarkId, runI
           <span className={styles.chartTitle} style={{ marginBlockEnd: 0 }}>
             {t('run.chart.latencyTokenDistribution')}
           </span>
-          <Flexbox horizontal gap={12} style={{ fontSize: 11 }}>
+          <Flexbox horizontal gap={12} style={{ fontSize: cssVar.fontSizeSM }}>
             <Flexbox horizontal align={'center'} gap={4}>
               <div className={styles.legendDot} style={{ background: theme.colorSuccess }} />
               <span className={styles.legendText}>{t('run.chart.pass')}</span>
@@ -153,7 +155,7 @@ const BenchmarkCharts = memo<BenchmarkChartsProps>(({ results, benchmarkId, runI
 
       {/* Chart 3: Histogram */}
       <Flexbox className={styles.chartCard} flex={1}>
-        <Flexbox horizontal align="center" className={styles.chartTitle} gap={6}>
+        <Flexbox horizontal align="center" className={styles.chartTitle} gap={8}>
           <span>{t('run.chart.latencyDistribution')}</span>
           <span className={styles.totalCount}>{results.length}</span>
         </Flexbox>

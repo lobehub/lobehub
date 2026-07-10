@@ -139,18 +139,18 @@ const PluginItem = memo<PluginItemProps>(({ identifier }) => {
     if (builtinTool) {
       return {
         author: 'LobeHub',
-        avatar: builtinTool.manifest.meta.avatar || '',
+        avatar: builtinTool.avatar || '',
         category: undefined,
         createdAt: '',
-        description: builtinTool.manifest.meta.description || '',
+        description: builtinTool.description || '',
         homepage: 'https://lobehub.com',
         identifier: builtinTool.identifier,
         manifest: undefined,
         related: [],
         schemaVersion: 1,
         source: 'builtin' as const,
-        tags: builtinTool.manifest.meta.tags || ['builtin-tool'],
-        title: builtinTool.manifest.meta.title,
+        tags: builtinTool.tags || ['builtin-tool'],
+        title: builtinTool.title || builtinTool.identifier,
       };
     }
 

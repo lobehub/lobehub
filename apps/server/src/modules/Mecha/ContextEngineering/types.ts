@@ -132,6 +132,8 @@ export interface ServerMessagesEngineParams {
 
   /** Model ID */
   model: string;
+  /** Human-friendly model name, e.g. `Fable 5`. Omit when unknown. */
+  modelDisplayName?: string;
   /** Model knowledge cutoff date, e.g. `2024-06`. Omit when unknown. */
   modelKnowledgeCutoff?: string;
 

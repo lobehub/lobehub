@@ -7,6 +7,8 @@
   "features.assistantMessageGroup.title": "アシスタントメッセージのグループ化表示",
   "features.fleet.desc": "タイトルバーにフリートエントリを表示します。エージェント全体で実行中のタスクを並べて表示するダッシュボードです。",
   "features.fleet.title": "フリートビュー",
+  "features.foldFinishedTurn.desc": "完了した最新ではないエージェントのターンのプロセス（推論やツールの呼び出し）を「処理済み」ヘッダーの下に折りたたみます。最終的な回答は表示されたままです。プロセスを展開するにはクリックしてください。",
+  "features.foldFinishedTurn.title": "完了したターンを折りたたむ",
   "features.groupChat.desc": "複数のAIアシスタントによるグループチャット機能を有効にします。",
   "features.groupChat.title": "グループチャット（マルチアシスタント）",
   "features.imessage.desc": "LobeHub Desktop BlueBubblesブリッジを介してエージェントをiMessageに接続します。",
@@ -15,5 +17,7 @@
   "features.inputMarkdown.title": "入力欄のMarkdownレンダリング",
   "features.platformAgent.desc": "作成メニューに「エージェントを接続」エントリを表示します。接続されたエージェント（例: OpenClaw、Hermes）は、ユーザー自身のデバイス上で動作し、lh connectを介して通信します。",
   "features.platformAgent.title": "エージェントを接続",
+  "features.taskVerify.desc": "タスク詳細に納品受け入れセクションを追加: 受け入れ内容を1文で記述し、AIが編集可能な検証基準を生成します。",
+  "features.taskVerify.title": "タスク納品受け入れ",
   "title": "ラボ"
 }

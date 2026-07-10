@@ -300,7 +300,15 @@ export default defineConfig({
   server: {
     cors: true,
     host: true,
-    port: 9876,
+    port: isMobile
+      ? Number(process.env.MOBILE_SPA_PORT) || 3012
+      : isAuth
+        ? Number(process.env.AUTH_SPA_PORT) || 3013
+        : Number(process.env.SPA_PORT) || 9876,
+    // The dev orchestrator (scripts/devStartupSequence.mts) pre-resolves a free
+    // port and injects it via env; never silently drift to another port, since
+    // downstream consumers locate this server through that env contract.
+    strictPort: true,
     proxy: {
       '/api': `http://localhost:${process.env.PORT || 3010}`,
       '/oidc': `http://localhost:${process.env.PORT || 3010}`,

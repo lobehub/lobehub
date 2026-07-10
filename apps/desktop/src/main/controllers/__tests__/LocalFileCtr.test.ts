@@ -108,7 +108,7 @@ const mockApp = {
     return mockSearchService;
   }),
   localFileProtocolManager: mockLocalFileProtocolManager,
-  toolDetectorManager: {
+  binaryManager: {
     getBestTool: vi.fn(() => null), // No external tools available, use Node.js fallback
   },
 } as unknown as App;
@@ -520,13 +520,19 @@ describe('LocalFileCtr', () => {
         '/mock/app/storage/file-storage/skills/archives/zip-hash-123.zip',
         expect.any(Buffer),
       );
+      // Extraction goes into a staging dir that is swapped in via rename so
+      // the live cache path never exposes a partially written tree.
       expect(mockFsPromises.writeFile).toHaveBeenCalledWith(
-        '/mock/app/storage/file-storage/skills/extracted/zip-hash-123/SKILL.md',
+        '/mock/app/storage/file-storage/skills/extracted/.staging-zip-hash-123/SKILL.md',
         expect.any(Buffer),
       );
       expect(mockFsPromises.writeFile).toHaveBeenCalledWith(
-        '/mock/app/storage/file-storage/skills/extracted/zip-hash-123/docs/reference.txt',
+        '/mock/app/storage/file-storage/skills/extracted/.staging-zip-hash-123/docs/reference.txt',
         expect.any(Buffer),
+      );
+      expect(mockFsPromises.rename).toHaveBeenCalledWith(
+        '/mock/app/storage/file-storage/skills/extracted/.staging-zip-hash-123',
+        '/mock/app/storage/file-storage/skills/extracted/zip-hash-123',
       );
     });
 
@@ -729,7 +735,7 @@ describe('LocalFileCtr', () => {
           }),
         ]),
       );
-      expect(result.totalCount).toBe(result.entries.length);
+      expect(result).not.toHaveProperty('totalCount');
     });
 
     it('should fall back to glob when git indexing fails', async () => {
@@ -746,6 +752,11 @@ describe('LocalFileCtr', () => {
 
       const result = await localFileCtr.getProjectFileIndex({ scope: '/workspace/project' });
 
+      expect(mockSearchService.glob).toHaveBeenCalledWith({
+        limit: 5000,
+        pattern: '**/*',
+        scope: '/workspace/project',
+      });
       expect(result.source).toBe('glob');
       expect(result.entries).toEqual([
         expect.objectContaining({
@@ -759,6 +770,7 @@ describe('LocalFileCtr', () => {
           relativePath: 'src/index.ts',
         }),
       ]);
+      expect(result).not.toHaveProperty('totalCount');
     });
 
     it('should mark glob entries as files when stat fails', async () => {

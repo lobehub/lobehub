@@ -1,8 +1,8 @@
 'use client';
 
 import { SOCIAL_URL } from '@lobechat/business-const';
-import { type TabsProps } from '@lobehub/ui';
-import { Flexbox, Icon, Tabs, Tag } from '@lobehub/ui';
+import { Flexbox, Icon, Tag } from '@lobehub/ui';
+import { Tabs, type TabsItem } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import {
   BookOpenIcon,
@@ -80,7 +80,7 @@ const Nav = memo<NavProps>(
       <Tabs
         activeKey={activeTab}
         className={styles.tabs}
-        compact={mobile}
+        variant="square"
         items={
           [
             // Only show the settings tab for installed plugins
@@ -170,7 +170,7 @@ const Nav = memo<NavProps>(
                   t('mcp.details.versions.title')
                 ),
             },
-          ].filter(Boolean) as TabsProps['items']
+          ].filter(Boolean) as TabsItem[]
         }
         onChange={(key) => setActiveTab?.(key as McpNavKey)}
       />
@@ -182,7 +182,12 @@ const Nav = memo<NavProps>(
       <Flexbox horizontal align={'center'} className={styles.nav} justify={'space-between'}>
         {nav}
         {!inModal && (
-          <Flexbox horizontal gap={12}>
+          <Flexbox
+            horizontal
+            flex="none"
+            gap={12}
+            style={{ marginInlineStart: 12, whiteSpace: 'nowrap' }}
+          >
             <a className={styles.link} href={SOCIAL_URL.discord} rel="noreferrer" target="_blank">
               {t('mcp.details.nav.needHelp')}
             </a>

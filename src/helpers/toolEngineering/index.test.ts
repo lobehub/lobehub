@@ -113,11 +113,14 @@ vi.mock('@/store/tool/selectors', () => ({
   },
 }));
 
+let mockIsCanUseFC = true;
+
 vi.mock('../isCanUseFC', () => ({
-  isCanUseFC: () => true,
+  isCanUseFC: () => mockIsCanUseFC,
 }));
 
 let mockCurrentAgentPlugins: string[] = [];
+let mockCurrentAgentDisabledPlugins: string[] = [];
 
 vi.mock('@/store/agent', () => ({
   getAgentStoreState: () => ({}),
@@ -125,6 +128,7 @@ vi.mock('@/store/agent', () => ({
 
 vi.mock('@/store/agent/selectors', () => ({
   agentSelectors: {
+    currentAgentDisabledPlugins: () => mockCurrentAgentDisabledPlugins,
     currentAgentPlugins: () => mockCurrentAgentPlugins,
     hasEnabledKnowledgeBases: () => false,
   },
@@ -162,6 +166,8 @@ describe('toolEngineering', () => {
     mockInstalledPluginManifestList = () => [];
     mockUseApplicationBuiltinSearchTool = true;
     mockCurrentAgentPlugins = [];
+    mockCurrentAgentDisabledPlugins = [];
+    mockIsCanUseFC = true;
   });
 
   describe('createToolsEngine', () => {
@@ -282,6 +288,31 @@ describe('toolEngineering', () => {
 
       expect(result.enabledToolIds).toContain('lobe-agent');
     });
+
+    it('should use chat-mode defaults when the model does not support function calling', () => {
+      mockIsCanUseFC = false;
+
+      const toolsEngine = createAgentToolsEngine({
+        model: 'gemini-3.1-flash-lite-image',
+        provider: 'lobehub',
+      });
+
+      const result = toolsEngine.generateToolsDetailed({
+        model: 'gemini-3.1-flash-lite-image',
+        provider: 'lobehub',
+        toolIds: [],
+      });
+
+      expect(result.enabledToolIds).toEqual([]);
+      expect(result.filteredTools).not.toContainEqual({
+        id: 'lobe-agent',
+        reason: 'incompatible',
+      });
+      expect(result.filteredTools).toContainEqual({
+        id: 'lobe-web-browsing',
+        reason: 'incompatible',
+      });
+    });
   });
 
   describe('isExplicitActivation bypass', () => {
@@ -354,6 +385,33 @@ describe('toolEngineering', () => {
       // Both should be enabled despite their normal filters
       expect(result.enabledToolIds).toContain('stdio-mcp-plugin');
       expect(result.enabledToolIds).toContain('lobe-web-browsing');
+    });
+
+    it('does NOT let isExplicitActivation enable a plugin the agent has disabled', () => {
+      mockInstalledPluginManifestList = () => [
+        {
+          api: [{ description: 'x', name: 'x', parameters: {} }],
+          identifier: 'disabled-plugin',
+          meta: { title: 'Disabled Plugin' },
+          type: 'default',
+        } as unknown as ToolManifest,
+      ];
+      mockCurrentAgentDisabledPlugins = ['disabled-plugin'];
+
+      const toolsEngine = createAgentToolsEngine({ model: 'gpt-4', provider: 'openai' });
+      const result = toolsEngine.generateToolsDetailed({
+        context: { isExplicitActivation: true },
+        toolIds: ['disabled-plugin'],
+        model: 'gpt-4',
+        provider: 'openai',
+        skipDefaultTools: true,
+      });
+
+      // Unlike a merely rule-disabled tool, a disabled plugin's manifest is
+      // absent from the pool entirely, so explicit activation has nothing to
+      // resolve — it can't bypass a gate that was never reached.
+      expect(result.enabledToolIds).not.toContain('disabled-plugin');
+      expect(result.enabledToolIds).toEqual([]);
     });
   });
 

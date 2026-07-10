@@ -95,6 +95,7 @@ const Content = memo<ContentProps>(({ open, unreadOnly, onMarkAsRead, onArchive 
         <Flexbox key={item.id} padding="4px 8px">
           <NotificationItem
             actionUrl={item.actionUrl}
+            category={item.category}
             content={item.content}
             createdAt={item.createdAt}
             id={item.id}

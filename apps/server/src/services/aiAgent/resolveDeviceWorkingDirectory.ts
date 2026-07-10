@@ -1,3 +1,13 @@
+import type { WorkingDirConfig, WorkingDirConfigValue } from '@lobechat/types';
+import { getWorkingDirEffectivePath } from '@lobechat/types';
+
+const toWorkingDirConfig = (
+  value: WorkingDirConfigValue | null | undefined,
+): WorkingDirConfig | undefined => {
+  if (!value) return;
+  return typeof value === 'string' ? { path: value } : value;
+};
+
 /**
  * Resolve the working directory for a device-bound run.
  *
@@ -17,15 +27,30 @@
  *   when no topic existed yet.
  * - `deviceDefaultCwd` — the device's user-configured default.
  */
-export const resolveDeviceWorkingDirectory = (params: {
+export const resolveDeviceWorkingDirectoryConfig = (params: {
   deviceDefaultCwd?: string | null;
   deviceId?: string;
   initialWorkingDirectory?: string;
+  initialWorkingDirectoryConfig?: WorkingDirConfig;
   topicWorkingDirectory?: string;
-  workingDirByDevice?: Record<string, string> | null;
-}): string | undefined =>
-  params.topicWorkingDirectory ||
-  params.initialWorkingDirectory ||
-  (params.deviceId ? params.workingDirByDevice?.[params.deviceId] : undefined) ||
-  params.deviceDefaultCwd ||
-  undefined;
+  topicWorkingDirectoryConfig?: WorkingDirConfig;
+  workingDirByDevice?: Record<string, WorkingDirConfigValue> | null;
+}): WorkingDirConfig | undefined => {
+  if (params.topicWorkingDirectoryConfig) return params.topicWorkingDirectoryConfig;
+  if (params.topicWorkingDirectory) return { path: params.topicWorkingDirectory };
+  if (params.initialWorkingDirectoryConfig) return params.initialWorkingDirectoryConfig;
+  if (params.initialWorkingDirectory) return { path: params.initialWorkingDirectory };
+
+  const agentChoice = toWorkingDirConfig(
+    params.deviceId ? params.workingDirByDevice?.[params.deviceId] : undefined,
+  );
+  if (agentChoice) return agentChoice;
+  if (params.deviceDefaultCwd) return { path: params.deviceDefaultCwd };
+};
+
+export const resolveDeviceWorkingDirectory = (
+  params: Parameters<typeof resolveDeviceWorkingDirectoryConfig>[0],
+): string | undefined => {
+  const config = resolveDeviceWorkingDirectoryConfig(params);
+  return getWorkingDirEffectivePath(config);
+};

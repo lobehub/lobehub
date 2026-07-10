@@ -75,6 +75,7 @@ export function experimental_buildLlama2Prompt(messages: { content: string; role
 export interface LobeBedrockAIParams {
   accessKeyId?: string;
   accessKeySecret?: string;
+  apiKey?: string;
   id?: string;
   modelIdMapping?: Record<string, string>;
   region?: string;
@@ -89,13 +90,32 @@ export class LobeBedrockAI implements LobeRuntimeAI {
   region: string;
 
   constructor(options: LobeBedrockAIParams = {}) {
-    const { id, modelIdMapping = {}, region, accessKeyId, accessKeySecret, sessionToken } = options;
+    const {
+      id,
+      modelIdMapping = {},
+      region,
+      accessKeyId,
+      accessKeySecret,
+      apiKey,
+      sessionToken,
+    } = options;
 
-    if (!(accessKeyId && accessKeySecret))
-      throw AgentRuntimeError.createError(AgentRuntimeErrorType.InvalidBedrockCredentials);
     this.region = region ?? 'us-east-1';
     this.id = id ?? ModelProvider.Bedrock;
     this.modelIdMapping = modelIdMapping;
+
+    if (apiKey) {
+      this.client = new BedrockRuntimeClient({
+        authSchemePreference: ['httpBearerAuth'],
+        region: this.region,
+        token: { token: apiKey },
+      });
+      return;
+    }
+
+    if (!(accessKeyId && accessKeySecret))
+      throw AgentRuntimeError.createError(AgentRuntimeErrorType.InvalidBedrockCredentials);
+
     this.client = new BedrockRuntimeClient({
       credentials: {
         accessKeyId,
@@ -178,7 +198,7 @@ export class LobeBedrockAI implements LobeRuntimeAI {
     try {
       const [res, pricing] = await Promise.all([
         this.client.send(command, { abortSignal: options?.signal }),
-        getModelPricing(payload.model, this.id),
+        getModelPricing(payload.model, this.id, options?.pricingContext),
       ]);
       const responseBody = JSON.parse(
         new TextDecoder().decode(res.body),
@@ -353,7 +373,7 @@ export class LobeBedrockAI implements LobeRuntimeAI {
         debugStream(debug).catch(console.error);
       }
 
-      const pricing = await getModelPricing(payload.model, this.id);
+      const pricing = await getModelPricing(payload.model, this.id, options?.pricingContext);
       const cacheTTL = resolveCacheTTL({ ...payload, enabledContextCaching }, anthropicBase);
       const pricingOptions = cacheTTL ? { lookupParams: { ttl: cacheTTL } } : undefined;
 

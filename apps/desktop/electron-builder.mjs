@@ -112,14 +112,16 @@ const config = {
     await copyNativeModulesToSource();
     await copyExternalRuntimeModulesToSource();
 
-    console.info('📦 Downloading agent-browser binary...');
-    execSync('node scripts/download-agent-browser.mjs', { stdio: 'inherit', cwd: __dirname });
+    // agent-browser is no longer bundled in the installer — BinaryManager
+    // lazily downloads it on first use into the per-user cache dir. See
+    // apps/desktop/src/main/modules/binaries/agentBrowserBinaries.ts.
 
     // Build and copy CLI bundle for embedding
     console.info('📦 Building CLI for embedding...');
     execSync('npm run build:cli', { stdio: 'inherit', cwd: __dirname });
     const cliSrc = path.resolve(__dirname, '../cli/dist/index.js');
     const cliDest = path.resolve(__dirname, 'resources/bin/lobe-cli.js');
+    await fs.mkdir(path.dirname(cliDest), { recursive: true });
     await fs.copyFile(cliSrc, cliDest);
 
     // Write a minimal package.json next to the CLI bundle so that

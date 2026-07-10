@@ -1,6 +1,7 @@
 'use client';
 
-import { Empty, Segmented } from '@lobehub/ui';
+import { Empty } from '@lobehub/ui';
+import { Tabs } from '@lobehub/ui/base-ui';
 import { Database } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -19,10 +20,10 @@ const DatasetTabs = memo<DatasetTabsProps>(({ datasets, activeDatasetId, onChang
   }
 
   return (
-    <Segmented
-      options={datasets.map((d: any) => ({ label: d.name, value: d.id }))}
-      value={activeDatasetId || datasets[0]?.id}
-      onChange={(value) => onChange(value as string)}
+    <Tabs
+      activeKey={activeDatasetId || datasets[0]?.id}
+      items={datasets.map((d: any) => ({ key: d.id, label: d.name }))}
+      onChange={onChange}
     />
   );
 });

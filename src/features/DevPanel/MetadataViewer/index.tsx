@@ -1,6 +1,7 @@
 'use client';
 
-import { Flexbox, Tabs } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Tabs } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { memo, useState } from 'react';
 
@@ -41,7 +42,6 @@ const MetadataViewer = memo(() => {
         style={{ paddingInlineStart: 0 }}
         title={
           <Tabs
-            compact
             activeKey={active}
             style={{ margin: 16 }}
             items={[

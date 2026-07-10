@@ -16,8 +16,11 @@
 #   init-dev-env.sh migrate          # run DB migrations against the configured DB
 #   init-dev-env.sh seed-user        # seed the baseline test user + CLI API key
 #   init-dev-env.sh qstash           # run local Upstash QStash dev server
+#   init-dev-env.sh preflight        # check agent-runtime prerequisites (QStash up in queue mode)
 #   init-dev-env.sh dev-next         # exec `pnpm run dev:next` with this env
 #   init-dev-env.sh dev              # exec `bun run dev` with this env
+#   init-dev-env.sh stop-dev         # stop the dev server (Next + Vite) started by `dev`
+#   init-dev-env.sh clean            # teardown: stop dev server (DB/Redis containers kept)
 #   init-dev-env.sh clean-db         # remove the managed Postgres/Redis containers
 #
 # Overrides:
@@ -28,15 +31,73 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
 ROOT_ENV_FILE="$REPO_ROOT/.env"
 
-SERVER_PORT="${SERVER_PORT:-3010}"
+# Resolve the workspace root the SAME way test-env.sh does, so both scripts
+# read/write the ports file (and other .records artifacts) at the same path.
+# When the skill resolves under a cloud checkout's submodule
+# (.../lobehub-cloud*/lobehub), REPO_ROOT is the submodule but the shared
+# .records lives at the cloud parent — mismatching it would make setup-db/dev
+# allocate ports that test-env.sh / setup-auth.sh never read.
+WORKSPACE_ROOT="$REPO_ROOT"
+if [[ "$(basename "$WORKSPACE_ROOT")" == "lobehub" ]]; then
+  _parent_root="$(cd "$WORKSPACE_ROOT/.." && pwd)"
+  [[ "$(basename "$_parent_root")" == lobehub-cloud* ]] && WORKSPACE_ROOT="$_parent_root"
+fi
+
+# --- auto-allocated, non-conflicting ports (persisted per workspace) ---------
+# Each repo copy (lobehub-cloud, lobehub-cloud-cc, ...) probes its own free
+# SERVER_PORT / SPA_PORT so copies running concurrently never fight over
+# 3010/9876. Ports are probed once then persisted, so repeated calls (setup-db,
+# seed-user, dev, web-seed) and test-env.sh all agree on the same port. Delete
+# the ports file (or pass SERVER_PORT=... explicitly) to re-allocate.
+PORTS_FILE="${AGENT_TESTING_PORTS_FILE:-$WORKSPACE_ROOT/.records/env/agent-testing-ports.env}"
+
+_port_in_use() { lsof -iTCP:"$1" -sTCP:LISTEN > /dev/null 2>&1; }
+_pick_free_port() {
+  local fallback="$1" p
+  for _ in $(seq 1 80); do
+    p=$(((RANDOM % 20000) + 20000))
+    _port_in_use "$p" || {
+      printf '%s' "$p"
+      return 0
+    }
+  done
+  printf '%s' "$fallback"
+}
+_load_or_alloc_ports() {
+  # Reuse persisted ports verbatim once allocated — the port being "in use" is
+  # expected (our own dev server holds it), so never re-probe on reuse.
+  # shellcheck disable=SC1090
+  [[ -f "$PORTS_FILE" ]] && source "$PORTS_FILE"
+  local changed=0
+  if [[ -z "${ALLOC_SERVER_PORT:-}" ]]; then
+    ALLOC_SERVER_PORT="$(_pick_free_port 3010)"
+    changed=1
+  fi
+  if [[ -z "${ALLOC_SPA_PORT:-}" ]]; then
+    ALLOC_SPA_PORT="$(_pick_free_port 9876)"
+    changed=1
+  fi
+  if [[ "$changed" == 1 ]]; then
+    mkdir -p "$(dirname "$PORTS_FILE")"
+    {
+      printf '# agent-testing auto-allocated ports (delete to re-allocate)\n'
+      printf 'ALLOC_SERVER_PORT=%s\n' "$ALLOC_SERVER_PORT"
+      printf 'ALLOC_SPA_PORT=%s\n' "$ALLOC_SPA_PORT"
+    } > "$PORTS_FILE"
+  fi
+}
+_load_or_alloc_ports
+
+SERVER_PORT="${SERVER_PORT:-$ALLOC_SERVER_PORT}"
+SPA_PORT="${SPA_PORT:-$ALLOC_SPA_PORT}"
 DB_PORT="${DB_PORT:-5433}"
 DB_CONTAINER="${DB_CONTAINER:-lobehub-agent-testing-postgres}"
 DATABASE_URL="${DATABASE_URL:-postgresql://postgres:postgres@localhost:${DB_PORT}/postgres}"
 REDIS_PORT="${REDIS_PORT:-6380}"
 REDIS_CONTAINER="${REDIS_CONTAINER:-lobehub-agent-testing-redis}"
 REDIS_URL="${REDIS_URL:-redis://localhost:${REDIS_PORT}}"
-ENV_FILE_DEFAULT="$REPO_ROOT/.records/env/agent-testing-dev.env"
-CLI_ENV_FILE_DEFAULT="$REPO_ROOT/.records/env/agent-testing-cli.env"
+ENV_FILE_DEFAULT="$WORKSPACE_ROOT/.records/env/agent-testing-dev.env"
+CLI_ENV_FILE_DEFAULT="$WORKSPACE_ROOT/.records/env/agent-testing-cli.env"
 AGENT_TESTING_API_KEY="${AGENT_TESTING_API_KEY:-sk-lh-agenttesting0001}"
 QSTASH_DEV_PORT="${QSTASH_DEV_PORT:-8080}"
 QSTASH_LOCAL_TOKEN="${QSTASH_LOCAL_TOKEN:-eyJVc2VySUQiOiJkZWZhdWx0VXNlciIsIlBhc3N3b3JkIjoiZGVmYXVsdFBhc3N3b3JkIn0=}"
@@ -46,6 +107,34 @@ QSTASH_LOCAL_NEXT_SIGNING_KEY="${QSTASH_LOCAL_NEXT_SIGNING_KEY:-sig_5ZB6DVzB1wjE
 ok() { printf '  \033[32m✔\033[0m %s\n' "$1"; }
 bad() { printf '  \033[31m✘\033[0m %s\n' "$1"; }
 note() { printf '      %s\n' "$1"; }
+
+# A URL is "reachable" when it answers with any HTTP status. Connection refused
+# / no route yields curl code 000. Used for the dev server, where any listener
+# on the port is the thing we mean.
+_http_reachable() {
+  local url="$1" code
+  command -v curl > /dev/null 2>&1 || return 2
+  code="$(curl -s -o /dev/null -m 3 -w '%{http_code}' "$url" 2>/dev/null || true)"
+  [[ -n "$code" && "$code" != "000" ]]
+}
+
+# QStash-specific probe. 8080 is a common dev port, so "something answers HTTP"
+# is not enough — a foreign listener would make preflight green while `agent
+# run` later publishes to a non-QStash endpoint and fails. Key on QStash's REST
+# contract instead: `/v2/schedules` rejects a tokenless request with 401 and
+# answers the configured bearer with 200. A bare/foreign server fails one leg
+# (catch-all 200 servers don't 401; 404/other servers don't 200), and a wrong
+# token also fails (surfacing auth misconfig). Returns 2 when curl is absent.
+_qstash_reachable() {
+  command -v curl > /dev/null 2>&1 || return 2
+  local base="${QSTASH_URL%/}" unauth auth
+  unauth="$(curl -s -o /dev/null -m 3 -w '%{http_code}' "$base/v2/schedules" 2>/dev/null || true)"
+  [[ "$unauth" == "401" ]] || return 1
+  auth="$(curl -s -o /dev/null -m 3 \
+    -H "Authorization: Bearer ${QSTASH_TOKEN:-}" \
+    -w '%{http_code}' "$base/v2/schedules" 2>/dev/null || true)"
+  [[ "$auth" == "200" ]]
+}
 
 guard_no_root_env() {
   if [[ -f "$ROOT_ENV_FILE" ]]; then
@@ -78,6 +167,12 @@ apply_env() {
   export S3_BUCKET="${S3_BUCKET:-agent-testing-bucket}"
   export S3_ENDPOINT="${S3_ENDPOINT:-https://agent-testing-s3.localhost}"
   export S3_SECRET_ACCESS_KEY="${S3_SECRET_ACCESS_KEY:-agent-testing-secret-key}"
+  export SPA_PORT
+  export VITE_DEV_PORT="${VITE_DEV_PORT:-$SPA_PORT}"
+  # Bypass cloud chat-security UA/headless fingerprint checks for local e2e only.
+  # Guarded by NODE_ENV !== 'production' inside detectSuspiciousRequest(), so it
+  # can never weaken production. Lets headless agent-browser drive real chats.
+  export AGENT_TESTING_DISABLE_CHAT_SECURITY="${AGENT_TESTING_DISABLE_CHAT_SECURITY:-1}"
 }
 
 env_keys() {
@@ -102,7 +197,10 @@ env_keys() {
     S3_ACCESS_KEY_ID \
     S3_BUCKET \
     S3_ENDPOINT \
-    S3_SECRET_ACCESS_KEY
+    S3_SECRET_ACCESS_KEY \
+    SPA_PORT \
+    VITE_DEV_PORT \
+    AGENT_TESTING_DISABLE_CHAT_SECURITY
 }
 
 print_env() {
@@ -382,6 +480,55 @@ cmd_status() {
   else
     bad "docker CLI is not available"
   fi
+  if _qstash_reachable; then
+    ok "QStash reachable: $QSTASH_URL"
+  else
+    note "QStash is not answering as QStash at $QSTASH_URL (needed for agent-runtime / queue mode)"
+  fi
+}
+
+# Prerequisite gate for agent-runtime tests. In queue mode (the default here and
+# in production) creating an agent operation POSTs to QStash; if QStash is down
+# the run fails with `ECONNREFUSED 127.0.0.1:8080 / fetch failed` at operation
+# creation — before any LLM call, so no trace is ever recorded. Run this before
+# `lh agent run` (or any durable-op path) and start `qstash` if it fails.
+cmd_preflight() {
+  apply_env
+  local failed=0
+  echo "agent-runtime preflight (AGENT_RUNTIME_MODE=$AGENT_RUNTIME_MODE):"
+
+  if command -v docker > /dev/null 2>&1 &&
+    docker ps --format '{{.Names}}' | grep -Fxq "$REDIS_CONTAINER"; then
+    ok "Redis running: $REDIS_CONTAINER (queue-mode state)"
+  else
+    bad "Redis not running: $REDIS_CONTAINER"
+    note "start it with: $0 setup-db"
+    failed=1
+  fi
+
+  if [[ "$AGENT_RUNTIME_MODE" == "queue" ]]; then
+    if _qstash_reachable; then
+      ok "QStash reachable: $QSTASH_URL (operation dispatch)"
+    else
+      bad "QStash NOT answering as QStash at $QSTASH_URL — agent runs will fail with 'fetch failed' (ECONNREFUSED) or auth errors"
+      note "start it in a separate terminal: $0 qstash"
+      failed=1
+    fi
+  else
+    note "AGENT_RUNTIME_MODE=$AGENT_RUNTIME_MODE (not queue) — QStash not required"
+  fi
+
+  if _http_reachable "$APP_URL"; then
+    ok "dev server reachable: $APP_URL"
+  else
+    note "dev server not reachable at $APP_URL — start it with: $0 dev"
+  fi
+
+  if [[ "$failed" == 1 ]]; then
+    bad "preflight failed — resolve the above before running agent-runtime tests"
+    return 1
+  fi
+  ok "preflight passed — safe to run agent-runtime tests"
 }
 
 cmd_qstash() {
@@ -395,7 +542,12 @@ cmd_qstash() {
 cmd_dev_next() {
   apply_env
   cd "$REPO_ROOT"
-  exec pnpm run dev:next
+  # Pass the allocated port explicitly. The submodule's `dev:next` package script
+  # hard-codes `-p 3010`, so going through it would bind the wrong port whenever
+  # SERVER_PORT was auto-allocated to something else. apply_env already exported
+  # every env this needs (there is no .env to load in this mode), so invoking
+  # next directly is equivalent and port-correct in both cloud and submodule.
+  exec pnpm exec next dev -p "$SERVER_PORT"
 }
 
 cmd_dev() {
@@ -426,8 +578,40 @@ cmd_clean_db() {
   fi
 }
 
+cmd_stop_dev() {
+  apply_env
+  local any=0 pids port
+  for port in "$SERVER_PORT" "$SPA_PORT"; do
+    pids="$(lsof -ti "tcp:$port" -sTCP:LISTEN 2>/dev/null || true)"
+    if [[ -n "$pids" ]]; then
+      # shellcheck disable=SC2086
+      kill $pids 2>/dev/null || true
+      note "stopped listener(s) on :$port ($(echo "$pids" | tr '\n' ' '))"
+      any=1
+    fi
+  done
+  # `bun run dev` supervises Next + Vite; kill the parent too so neither respawns.
+  if pkill -f "bun run dev" 2>/dev/null; then
+    note "stopped 'bun run dev' supervisor"
+    any=1
+  fi
+  if [[ "$any" == 1 ]]; then
+    ok "dev server stopped"
+  else
+    note "no dev server running on :$SERVER_PORT / :$SPA_PORT"
+  fi
+}
+
+cmd_clean() {
+  # Default teardown after a test run: stop the dev server. The managed
+  # Postgres/Redis containers are intentionally reused across runs (setup-db is
+  # idempotent), so they are left running — remove them explicitly with clean-db.
+  cmd_stop_dev
+  note "managed DB/Redis containers left running (reused across runs); remove with: $0 clean-db"
+}
+
 usage() {
-  sed -n '3,24p' "$0" >&2
+  sed -n '3,27p' "$0" >&2
 }
 
 COMMAND="${1:-status}"
@@ -448,8 +632,11 @@ case "$COMMAND" in
   migrate) migrate_db ;;
   seed-user) seed_user ;;
   qstash) cmd_qstash ;;
+  preflight) cmd_preflight ;;
   dev-next) cmd_dev_next ;;
   dev) cmd_dev ;;
+  stop-dev | stop) cmd_stop_dev ;;
+  clean) cmd_clean ;;
   clean-db) cmd_clean_db ;;
   status) cmd_status ;;
   *)

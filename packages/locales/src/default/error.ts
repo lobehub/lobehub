@@ -1,4 +1,9 @@
 export default {
+  'asyncState.desc': 'Something went wrong while loading. Please try again.',
+  'asyncState.metricLabel': 'Failed to load',
+  'asyncState.title': 'Failed to load',
+  'saveState.retry': 'Retry',
+  'saveState.saveFailed': 'Failed to save your changes. Please try again.',
   'error.backHome': 'Back to Home',
   'error.desc': 'Give it a try later, or go back to the known world.',
   'error.stack': 'Error Stack',
@@ -13,6 +18,10 @@ export default {
   'import.incompatible.title': 'Current application does not support importing this file',
   'loginRequired.desc': 'You will be redirected to the sign-in page shortly',
   'loginRequired.title': 'Please sign in to use this feature',
+  'forbidden.backHome': 'Back to Home',
+  'forbidden.desc':
+    "You don't have permission to view this page. Please contact a workspace owner if you need access.",
+  'forbidden.title': 'Access denied',
   'notFound.backHome': 'Back to Home',
   'notFound.check': 'Please check if your URL is correct.',
   'notFound.desc': "We couldn't find the page you were looking for.",
@@ -175,6 +184,38 @@ export default {
     'The model "{{model}}" is no longer available. Please pick a current model from the model selector.',
   'response.UnknownChatFetchError':
     'Sorry, an unknown request error occurred. Please check the information below or try again.',
+  'response.WorkspaceAgentRequiresWorkspaceDevice':
+    'This agent lives in a workspace, so it can only bind devices the whole team can reach. Personal devices stay with the user who registered them — pick a workspace device instead, or enroll this device to the workspace first.',
+  'response.WorkspaceFrozenByAdmin':
+    'This workspace is frozen by an admin and cannot run requests. Please contact the workspace owner to resolve the issue.',
+  'response.WorkspaceFrozenByRiskControl':
+    'This workspace was auto-frozen by risk control and cannot run requests. Please contact support to review the status.',
+  'workspaceBillingInactive.bannerHint': 'Click for details',
+  'workspaceBillingInactive.bannerTitle': 'Workspace subscription inactive',
+  'workspaceBillingInactive.confirm': 'Got it',
+  'workspaceBillingInactive.renew': 'Go to billing',
+  'workspaceBillingInactive.description':
+    "This workspace's paid subscription has lapsed. Sending messages and other paid actions are paused until the subscription is restored — you can still browse shared content in the meantime.",
+  'workspaceBillingInactive.title': 'Workspace subscription inactive',
+  'workspaceFrozenByAdmin.bannerDescription': 'Contact support to review the reason and unfreeze.',
+  'workspaceFrozenByAdmin.bannerHint': 'Click for details',
+  'workspaceFrozenByAdmin.bannerTitle': 'Workspace frozen by admin',
+  'workspaceFrozenByAdmin.contactSupport': 'Contact support',
+  'workspaceFrozenByAdmin.description':
+    'This workspace was frozen by an admin. Review the reason below and contact support if you have questions.',
+  'workspaceFrozenByAdmin.frozenAt': 'Frozen at',
+  'workspaceFrozenByAdmin.reason': 'Reason',
+  'workspaceFrozenByAdmin.title': 'Workspace is frozen',
+  'workspaceFrozenByRiskControl.available': 'Available credits',
+  'workspaceFrozenByRiskControl.bannerDescription': 'Top up credits to resume spend.',
+  'workspaceFrozenByRiskControl.bannerHint': 'Click for details',
+  'workspaceFrozenByRiskControl.bannerTitle': 'Workspace frozen by risk control',
+  'workspaceFrozenByRiskControl.contactSupport': 'Contact support',
+  'workspaceFrozenByRiskControl.description':
+    'This workspace was auto-frozen by risk control after abnormal spending was detected. Top up credits so the workspace is ready to resume, and contact support to unfreeze.',
+  'workspaceFrozenByRiskControl.frozenAt': 'Frozen at',
+  'workspaceFrozenByRiskControl.title': 'Workspace auto-frozen by risk control',
+  'workspaceFrozenByRiskControl.topup': 'Top up credits',
   'stt.responseError': 'Service request failed, please check the configuration or try again',
   'supervisor.decisionFailed':
     'The group host is unable to function. Please check your host configuration to ensure the correct model, API Key, and API endpoint are set.',

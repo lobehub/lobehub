@@ -1,7 +1,8 @@
 'use client';
 
 import { ModelIcon } from '@lobehub/icons';
-import { ActionIcon, Flexbox, InputNumber, Segmented, SliderWithInput, Text } from '@lobehub/ui';
+import { ActionIcon, Flexbox, InputNumber, SliderWithInput, Text } from '@lobehub/ui';
+import { Tabs } from '@lobehub/ui/base-ui';
 import { Divider, Switch } from 'antd';
 import { Clock3, Dices } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
@@ -20,6 +21,7 @@ import {
   ConfigAction,
   GenerationMediaModeSegment,
   GenerationPromptInput,
+  GenerationVisibilitySelector,
   InlineVideoFrames,
 } from '@/routes/(main)/(create)/features/GenerationInput';
 import { AspectRatioSelect } from '@/routes/(main)/(create)/image/features/ConfigPanel';
@@ -29,11 +31,16 @@ import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
 import { useVideoStore } from '@/store/video';
-import { createVideoSelectors, videoGenerationConfigSelectors } from '@/store/video/selectors';
+import {
+  createVideoSelectors,
+  videoGenerationConfigSelectors,
+  videoGenerationTopicSelectors,
+} from '@/store/video/selectors';
 import { useVideoGenerationConfigParam } from '@/store/video/slices/generationConfig/hooks';
 import { generateUniqueSeeds } from '@/utils/number';
 
 import PromptTitle from './Title';
+import { useVideoReferenceUpload } from './useVideoReferenceUpload';
 
 interface PromptInputProps {
   disableAnimation?: boolean;
@@ -97,24 +104,25 @@ const ResolutionItem = memo(() => {
   const { allowed: canCreate } = usePermission('create_content');
   const { value, setValue, enumValues } = useVideoGenerationConfigParam('resolution');
   const options = useMemo(
-    () => (enumValues ?? []).map((v) => ({ label: v, value: v })),
-    [enumValues],
+    () => (enumValues ?? []).map((v) => ({ disabled: !canCreate, key: v, label: v })),
+    [enumValues, canCreate],
   );
 
   if (options.length === 0) return null;
 
   return (
-    <Segmented
-      block
-      disabled={!canCreate}
-      options={options}
+    <Tabs
+      activeKey={value}
+      items={options}
       style={{ width: '100%' }}
-      value={value}
-      variant="filled"
-      onChange={(v) => {
+      styles={{
+        list: { display: 'flex', width: '100%' },
+        tab: { flex: 1 },
+      }}
+      onChange={(key) => {
         if (!canCreate) return;
 
-        setValue(String(v) as any);
+        setValue(key as any);
       }}
     />
   );
@@ -128,26 +136,28 @@ const DurationItem = memo(() => {
     () =>
       enumValues && enumValues.length > 0
         ? enumValues.map((v) => ({
+            disabled: !canCreate,
+            key: String(v),
             label: String(v),
-            value: v,
           }))
         : [],
-    [enumValues],
+    [enumValues, canCreate],
   );
 
   if (options.length > 0) {
     return (
-      <Segmented
-        block
-        disabled={!canCreate}
-        options={options}
+      <Tabs
+        activeKey={String(value ?? min)}
+        items={options}
         style={{ width: '100%' }}
-        value={value ?? min}
-        variant="filled"
-        onChange={(v) => {
+        styles={{
+          list: { display: 'flex', width: '100%' },
+          tab: { flex: 1 },
+        }}
+        onChange={(key) => {
           if (!canCreate) return;
 
-          setValue(Number(v) as any);
+          setValue(Number(key) as any);
         }}
       />
     );
@@ -235,23 +245,25 @@ const PromptExtendItem = memo(() => {
   const { allowed: canCreate } = usePermission('create_content');
   const { value, setValue, enumValues } = useVideoGenerationConfigParam('promptExtend');
 
-  const options = enumValues?.map((item) => ({ label: item, value: item })) ?? [];
+  const options =
+    enumValues?.map((item) => ({ disabled: !canCreate, key: item, label: item })) ?? [];
 
   if (options.length > 0) {
     return (
       <Flexbox gap={6}>
         <Text weight={500}>{t('config.promptExtend.label')}</Text>
-        <Segmented
-          block
-          disabled={!canCreate}
-          options={options}
+        <Tabs
+          activeKey={value as string}
+          items={options}
           style={{ width: '100%' }}
-          value={value as string}
-          variant="filled"
-          onChange={(next) => {
+          styles={{
+            list: { display: 'flex', width: '100%' },
+            tab: { flex: 1 },
+          }}
+          onChange={(key) => {
             if (!canCreate) return;
 
-            setValue(String(next) as any);
+            setValue(key as any);
           }}
         />
       </Flexbox>
@@ -292,6 +304,18 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const isCreating = useVideoStore(createVideoSelectors.isCreating);
   const createVideo = useVideoStore((s) => s.createVideo);
   const setModelAndProviderOnSelect = useVideoStore((s) => s.setModelAndProviderOnSelect);
+  const activeGenerationTopicId = useVideoStore(
+    videoGenerationTopicSelectors.activeGenerationTopicId,
+  );
+  const activeGenerationTopic = useVideoStore((s) =>
+    activeGenerationTopicId
+      ? videoGenerationTopicSelectors.getGenerationTopicById(activeGenerationTopicId)(s)
+      : undefined,
+  );
+  const newGenerationTopicVisibility = useVideoStore(
+    videoGenerationTopicSelectors.newGenerationTopicVisibility,
+  );
+  const setNewGenerationTopicVisibility = useVideoStore((s) => s.setNewGenerationTopicVisibility);
   const currentModel = useVideoStore(videoGenerationConfigSelectors.model);
   const currentProvider = useVideoStore(videoGenerationConfigSelectors.provider);
   const enabledVideoModelList = useAiInfraStore(aiProviderSelectors.enabledVideoModelList);
@@ -311,6 +335,7 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const isSupportWebSearch = useVideoStore(isSupportedParamSelector('webSearch'));
   const isLogin = useUserStore(authSelectors.isLogin);
   const { value: duration } = useVideoGenerationConfigParam('duration');
+  const { handleUploadFiles, uploadingPreviews } = useVideoReferenceUpload();
   useFetchAiVideoConfig();
 
   // Read query parameters
@@ -374,6 +399,14 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
     [imageUrl, imageUrls],
   );
   const hasRefImages = framePreviewUrls.length > 0 || Boolean(endImageUrl);
+  const displayVisibility = activeGenerationTopic
+    ? activeGenerationTopic.visibility === 'private'
+      ? 'private'
+      : 'public'
+    : newGenerationTopicVisibility;
+  const visibilityLockedReason = activeGenerationTopicId
+    ? t('topic.visibility.existingLocked')
+    : undefined;
   const maxCount = useMemo(() => {
     let count = 0;
     if (isSupportImageUrl) count += 1;
@@ -458,9 +491,11 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
                 isSupportEndImage={isSupportEndImageUrl}
                 maxCount={maxCount}
                 maxFileSize={imageUrlsMaxFileSize ?? imageUrlMaxFileSize}
+                uploadingPreviews={uploadingPreviews}
                 onEndImageChange={handleEndImageChange}
                 onImageUrlsChange={handleAddImage}
                 onRemoveImageUrl={handleRemoveImage}
+                onUploadFiles={handleUploadFiles}
                 onImageChange={(data) => {
                   if (data === null) {
                     handleRemoveImage(imageUrl || '');
@@ -479,6 +514,11 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
               style={canCreate ? undefined : { opacity: 0.5, pointerEvents: 'none' }}
             >
               <GenerationMediaModeSegment mode={'video'} />
+              <GenerationVisibilitySelector
+                disabledReason={visibilityLockedReason}
+                visibility={displayVisibility}
+                onChange={setNewGenerationTopicVisibility}
+              />
               <ModelSwitchPanel
                 ModelItemComponent={VideoModelItem}
                 enabledList={enabledVideoModelList}

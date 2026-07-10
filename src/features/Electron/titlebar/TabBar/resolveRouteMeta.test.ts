@@ -2,6 +2,7 @@ import { MessageSquare } from 'lucide-react';
 import { type RouteObject } from 'react-router';
 import { describe, expect, it } from 'vitest';
 
+import { mergeSearchParams } from '@/features/RouteMeta/params';
 import { type RouteMeta } from '@/spa/router/routeMeta';
 
 import {
@@ -39,6 +40,21 @@ describe('matchRouteMeta', () => {
   it('returns empty static meta when no route matches', () => {
     const result = matchRouteMeta(fixtureRoutes, '/nonexistent/path');
     expect(result.static).toEqual({});
+  });
+
+  it('merges search params into route params', () => {
+    const result = matchRouteMeta(fixtureRoutes, '/agent/abc?topic=tpc_1');
+    expect(result.params.aid).toBe('abc');
+    expect(result.params.topic).toBe('tpc_1');
+  });
+});
+
+describe('mergeSearchParams', () => {
+  it('keeps path params when search params use the same key', () => {
+    expect(mergeSearchParams({ aid: 'path-agent' }, '?aid=query-agent&topic=t1')).toEqual({
+      aid: 'path-agent',
+      topic: 't1',
+    });
   });
 });
 

@@ -59,6 +59,7 @@ const {
         setBadge: vi.fn(),
         show: vi.fn(),
       },
+      getVersion: vi.fn(() => '1.2.3'),
       setActivationPolicy: vi.fn(),
       setBadgeCount: vi.fn(),
     },

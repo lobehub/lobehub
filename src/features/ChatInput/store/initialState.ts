@@ -34,6 +34,7 @@ export interface ContextWindowMessage {
 
 export interface ChatInputFeature {
   inputCompletion?: boolean;
+  inputHistory?: boolean;
   mention?: boolean;
   slash?: boolean;
 }
@@ -47,6 +48,7 @@ export interface InputCompletionError {
 
 export const DEFAULT_CHAT_INPUT_FEATURE = {
   inputCompletion: true,
+  inputHistory: true,
   mention: true,
   slash: true,
 } as const satisfies Required<ChatInputFeature>;

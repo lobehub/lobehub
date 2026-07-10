@@ -1,9 +1,11 @@
 'use client';
 
-import { Flexbox, Segmented } from '@lobehub/ui';
-import { type SegmentedOptions } from 'antd/es/segmented';
+import { Flexbox } from '@lobehub/ui';
+import { Tabs, type TabsItem } from '@lobehub/ui/base-ui';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { useToolStore } from '@/store/tool';
 
 import Search from './Search';
 import AddSkillButton from './SkillList/AddSkillButton';
@@ -23,10 +25,16 @@ export const SkillStoreContent = () => {
   const [lobehubKeywords, setLobehubKeywords] = useState('');
   const [skillKeywords, setSkillKeywords] = useState('');
 
-  const options: SegmentedOptions = [
-    { label: t('skillStore.tabs.lobehub'), value: SkillStoreTab.LobeHub },
-    { label: t('skillStore.tabs.skills'), value: SkillStoreTab.Skills },
-    { label: t('skillStore.tabs.mcp'), value: SkillStoreTab.MCP },
+  // Refresh builtin-tool install state for the active workspace whenever the
+  // modal mounts, so entries opened from contexts that don't host the chat
+  // input (e.g. Home banner) don't read leftover personal-scope state.
+  const useFetchUninstalledBuiltinTools = useToolStore((s) => s.useFetchUninstalledBuiltinTools);
+  useFetchUninstalledBuiltinTools(true);
+
+  const options: TabsItem[] = [
+    { key: SkillStoreTab.LobeHub, label: t('skillStore.tabs.lobehub') },
+    { key: SkillStoreTab.Skills, label: t('skillStore.tabs.skills') },
+    { key: SkillStoreTab.MCP, label: t('skillStore.tabs.mcp') },
   ];
 
   const isLobeHub = activeTab === SkillStoreTab.LobeHub;
@@ -37,13 +45,15 @@ export const SkillStoreContent = () => {
     <Flexbox gap={8} style={{ maxHeight: '75vh' }} width={'100%'}>
       <Flexbox gap={8}>
         <Flexbox horizontal align={'center'} gap={8}>
-          <Segmented
-            block
-            options={options}
+          <Tabs
+            activeKey={activeTab}
+            items={options}
             style={{ flex: 1 }}
-            value={activeTab}
-            variant={'filled'}
-            onChange={(v) => setActiveTab(v as SkillStoreTab)}
+            styles={{
+              list: { display: 'flex', width: '100%' },
+              tab: { flex: 1 },
+            }}
+            onChange={(key) => setActiveTab(key as SkillStoreTab)}
           />
           <AddSkillButton />
         </Flexbox>

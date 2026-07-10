@@ -129,6 +129,8 @@ export class ToolNameResolver {
           } else {
             return null;
           }
+        } else if (offeredSet && !offeredSet.has(toolCall.function.name)) {
+          return null;
         }
 
         // Step 1: Resolve hashed identifier if needed

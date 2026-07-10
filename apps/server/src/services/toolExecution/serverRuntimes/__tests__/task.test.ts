@@ -7,6 +7,13 @@ vi.mock('@/server/routers/lambda/task', () => ({
   taskRouter: { createCaller: () => ({}) },
 }));
 
+// APP_URL is a server-only env var; the unit-test env is flagged as client, so
+// reading `appEnv.APP_URL` would throw. Stub it — createTask embeds it as the
+// base URL for absolute task deep-links (so IM / mobile links are clickable).
+vi.mock('@/envs/app', () => ({
+  appEnv: { APP_URL: 'https://app.lobehub.com' },
+}));
+
 // TaskService's transitive deps (taskReview → ModelRuntime) call getLLMConfig
 // at module load, which fails in unit-test env. The runtime is passed a
 // taskService instance per test, so a stubbed class is all we need here.
@@ -156,12 +163,33 @@ describe('createTaskRuntime', () => {
       });
 
       expect(result.success).toBe(true);
+      // The identifier is an absolute markdown link so it stays clickable when
+      // the tool result is delivered to an IM channel / mobile.
+      expect(result.content).toContain('[T-1](https://app.lobehub.com/task/T-1)');
       expect(deps.taskService.createTask).toHaveBeenCalledWith(
         expect.objectContaining({
           assigneeAgentId: 'agt-xyz',
           createdByAgentId: 'agt-xyz',
         }),
       );
+    });
+
+    it('embeds a workspace-scoped link when the task is in a workspace', async () => {
+      const deps = makeDeps();
+
+      const runtime = createTaskRuntime({
+        agentModel: deps.agentModel as any,
+        // The factory supplies this; for a workspace task it prefixes `/{slug}`.
+        resolveLinkBaseUrl: async () => 'https://app.lobehub.com/acme',
+        taskCaller: deps.taskCaller,
+        taskModel: deps.taskModel as any,
+        taskService: deps.taskService as any,
+      });
+
+      const result = await runtime.createTask({ instruction: 'Do something', name: 'Test' });
+
+      expect(result.success).toBe(true);
+      expect(result.content).toContain('[T-1](https://app.lobehub.com/acme/task/T-1)');
     });
 
     it('leaves createdByAgentId undefined when no agentId in context', async () => {
@@ -485,8 +513,10 @@ describe('createTaskRuntime', () => {
       expect(result.success).toBe(true);
       expect(deps.taskService.createTask).toHaveBeenCalledTimes(2);
       expect(result.content).toContain('Created 2 tasks');
-      expect(result.content).toContain('T-A');
-      expect(result.content).toContain('T-B');
+      // Identifiers are rendered as absolute markdown links so they stay
+      // clickable when the message is delivered to IM / mobile.
+      expect(result.content).toContain('[T-A](https://app.lobehub.com/task/T-A)');
+      expect(result.content).toContain('[T-B](https://app.lobehub.com/task/T-B)');
     });
 
     it('continues past per-item failures and reports them in the summary', async () => {

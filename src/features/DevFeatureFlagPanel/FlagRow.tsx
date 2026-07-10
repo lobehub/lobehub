@@ -1,6 +1,7 @@
 'use client';
 
-import { Flexbox, Segmented, Text } from '@lobehub/ui';
+import { Flexbox, Text } from '@lobehub/ui';
+import { Segmented } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { snakeCase } from 'es-toolkit/compat';
 import { memo, useMemo } from 'react';
@@ -11,6 +12,9 @@ import { type FeatureFlagKey } from '@/store/serverConfig/slices/featureFlagOver
 type SegmentedValue = 'true' | 'false' | 'inherit';
 
 const styles = createStaticStyles(({ css }) => ({
+  control: css`
+    flex: none;
+  `,
   meta: css`
     font-family: ${cssVar.fontFamilyCode};
     font-size: 10px;
@@ -93,10 +97,11 @@ const FlagRow = memo<FlagRowProps>(({ flagKey }) => {
         <span className={styles.meta}>server: {String(original)}</span>
       </Flexbox>
       <Segmented
+        className={styles.control}
         options={segmentOptions}
         size={'small'}
         value={value}
-        onChange={(v) => handleChange(v as SegmentedValue)}
+        onChange={handleChange}
       />
     </div>
   );

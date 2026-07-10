@@ -1,4 +1,9 @@
-import { BaseExecutor, type BuiltinToolContext, type BuiltinToolResult } from '@lobechat/types';
+import {
+  BaseExecutor,
+  type BuiltinToolContext,
+  type BuiltinToolResult,
+  type ToolAfterCallContext,
+} from '@lobechat/types';
 
 import { AgentDocumentsExecutionRuntime } from '../ExecutionRuntime';
 import {
@@ -15,6 +20,17 @@ import {
   type UpdateLoadRuleArgs,
 } from '../types';
 
+// APIs that change the document set the client list renders (membership or
+// visible title). Content-only edits (replaceDocumentContent / modifyNodes) and
+// read-only calls are excluded — they don't alter the list. Used by
+// `onAfterCall` to decide when to refresh the client-side documents list.
+const LIST_MUTATING_APIS = new Set<string>([
+  AgentDocumentsApiName.createDocument,
+  AgentDocumentsApiName.removeDocument,
+  AgentDocumentsApiName.renameDocument,
+  AgentDocumentsApiName.copyDocument,
+]);
+
 export class AgentDocumentsExecutor extends BaseExecutor<typeof AgentDocumentsApiName> {
   readonly identifier = AgentDocumentsIdentifier;
   protected readonly apiEnum = AgentDocumentsApiName;
@@ -25,6 +41,15 @@ export class AgentDocumentsExecutor extends BaseExecutor<typeof AgentDocumentsAp
     super();
     this.runtime = runtime;
   }
+
+  // Refresh the client documents list after the agent mutates it. Fires on
+  // `tool_end` regardless of whether the tool ran client- or server-side — the
+  // server-runtime path never touches the client store otherwise, so a created
+  // doc wouldn't appear until a manual refresh.
+  onAfterCall = async ({ apiName, result }: ToolAfterCallContext): Promise<void> => {
+    if (!LIST_MUTATING_APIS.has(apiName) || !result.success) return;
+    await this.runtime.notifyMutated();
+  };
 
   listDocuments = async (
     params: ListDocumentsArgs,

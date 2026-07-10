@@ -68,6 +68,16 @@ describe('InternalEditor readonly state', () => {
     expect(editorProps.last?.editable).toBe(false);
   });
 
+  it('constrains the editor wrapper to its parent width', () => {
+    const { container } = render(<InternalEditor editor={editor} />);
+
+    expect(container.firstElementChild).toHaveStyle({
+      maxWidth: '100%',
+      overflow: 'hidden',
+      width: '100%',
+    });
+  });
+
   it('registers the floating toolbar when editable', () => {
     render(<InternalEditor editor={editor} />);
 

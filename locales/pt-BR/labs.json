@@ -7,6 +7,8 @@
   "features.assistantMessageGroup.title": "Agrupamento de Mensagens do Agente",
   "features.fleet.desc": "Exiba a entrada da Frota na barra de título — um painel lado a lado de todas as tarefas em execução entre seus agentes.",
   "features.fleet.title": "Visão da Frota",
+  "features.foldFinishedTurn.desc": "Colapse o processo (raciocínio e chamadas de ferramentas) de turnos finalizados e não mais recentes do agente sob um cabeçalho \"Processado\". A resposta final permanece visível; clique para expandir o processo.",
+  "features.foldFinishedTurn.title": "Colapsar Turnos Finalizados",
   "features.groupChat.desc": "Ative a coordenação de bate-papo em grupo com múltiplos agentes.",
   "features.groupChat.title": "Bate-Papo em Grupo (Multiagente)",
   "features.imessage.desc": "Conectar agentes ao iMessage através da ponte local LobeHub Desktop BlueBubbles.",
@@ -15,5 +17,7 @@
   "features.inputMarkdown.title": "Renderização de Markdown na Entrada",
   "features.platformAgent.desc": "Exibir a entrada \"Conectar Agente\" no menu de criação. Agentes conectados (por exemplo, OpenClaw, Hermes) são executados em seus próprios dispositivos e se comunicam de volta via lh connect.",
   "features.platformAgent.title": "Conectar Agente",
+  "features.taskVerify.desc": "Adicione uma seção de aceitação de entrega aos detalhes da tarefa: descreva a aceitação em uma frase e deixe a IA gerar critérios de verificação editáveis.",
+  "features.taskVerify.title": "Aceitação de Entrega da Tarefa",
   "title": "Laboratórios"
 }

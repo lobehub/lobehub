@@ -3,9 +3,11 @@ import { BrowserWindow, type Session, session as electronSession } from 'electro
 
 import { isDev } from '@/const/env';
 import { isBackendPath } from '@/const/protocol';
+import { getDesktopEnv } from '@/env';
 import { appendVercelCookie } from '@/utils/http-headers';
 import { createLogger } from '@/utils/logger';
 import { netFetch } from '@/utils/net-fetch';
+import { setDesktopUserAgentHeader } from '@/utils/user-agent';
 
 import type { RendererRequestInterceptor } from './RendererProtocolManager';
 
@@ -33,7 +35,21 @@ export class BackendProxyProtocolManager {
 
   private authRequiredDebounceTimer: NodeJS.Timeout | null = null;
   private pendingAuthRequiredReason: string | null = null;
+  private surfacedUncaughtProxyError = false;
   private static readonly AUTH_REQUIRED_DEBOUNCE_MS = 1000;
+
+  private shouldRethrowProxyErrors() {
+    return isDev && getDesktopEnv().DESKTOP_BACKEND_PROXY_RETHROW_ERRORS;
+  }
+
+  private surfaceUncaughtProxyError(error: unknown) {
+    if (!this.shouldRethrowProxyErrors() || this.surfacedUncaughtProxyError) return;
+
+    this.surfacedUncaughtProxyError = true;
+    setTimeout(() => {
+      throw error;
+    }, 0);
+  }
 
   private notifyAuthorizationRequired(reason: string) {
     // Trailing-edge debounce: coalesce rapid 401 bursts and fire AFTER the burst settles.
@@ -132,16 +148,23 @@ export class BackendProxyProtocolManager {
       const session = electronSession.defaultSession;
       if (!session) return new Response('Backend Proxy Unavailable', { status: 502 });
 
-      const proxied = await this.proxy(request, session);
-      return proxied ?? new Response('Backend Proxy Unavailable', { status: 502 });
+      try {
+        const proxied = await this.proxy(request, session);
+        return proxied ?? new Response('Backend Proxy Unavailable', { status: 502 });
+      } catch (error) {
+        this.logger.error(`BackendProxy interceptor failed: ${request.url}`, error);
+        this.surfaceUncaughtProxyError(error);
+
+        return new Response('Backend Proxy Unavailable', { status: 502 });
+      }
     };
   }
 
   /**
    * Proxy a renderer-originated request through the remote LobeHub backend.
    * Returns `null` if the session has no proxy context registered yet (caller
-   * decides how to fall back). Throws on upstream fetch failure to mirror the
-   * original `protocol.handle` semantics.
+   * decides how to fall back). Upstream network failures become a controlled
+   * 502 response so they do not escape Electron's `protocol.handle` callback.
    */
   async proxy(request: Request, session: Session): Promise<Response | null> {
     const context = this.contexts.get(session);
@@ -158,6 +181,7 @@ export class BackendProxyProtocolManager {
       headers.set('Oidc-Auth', token);
     }
     appendVercelCookie(headers);
+    setDesktopUserAgentHeader(headers);
 
     const requestInit: RequestInit & { duplex?: 'half' } = {
       headers,
@@ -179,7 +203,24 @@ export class BackendProxyProtocolManager {
       upstreamResponse = await netFetch(rewrittenUrl, requestInit);
     } catch (error) {
       this.logger.error(`${logPrefix} upstream fetch failed: ${rewrittenUrl}`, error);
-      throw error;
+      this.surfaceUncaughtProxyError(error);
+
+      const responseHeaders = new Headers({
+        'Access-Control-Allow-Headers': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+        'Content-Type': 'text/plain; charset=utf-8',
+        'X-Src-Url': rewrittenUrl,
+      });
+      const allowOrigin = request.headers.get('Origin') || undefined;
+      if (allowOrigin) {
+        responseHeaders.set('Access-Control-Allow-Origin', allowOrigin);
+        responseHeaders.set('Access-Control-Allow-Credentials', 'true');
+      }
+      return new Response('Backend Proxy Upstream Unavailable', {
+        headers: responseHeaders,
+        status: 502,
+        statusText: 'Bad Gateway',
+      });
     }
 
     const responseHeaders = new Headers(upstreamResponse.headers);

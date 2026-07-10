@@ -3,7 +3,10 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { localDataCache } from './localDataCache';
+import { bootTiming } from '@/libs/bootTiming';
+
+import { taskTemplateKeys } from './keys';
+import { buildLocalDataKey, localDataCache } from './localDataCache';
 import {
   CACHE_TIERS,
   clearSWRCache,
@@ -82,7 +85,7 @@ describe('createCacheProvider — tiering', () => {
       localPatterns: [...CACHE_TIERS.local],
     });
     const map = provider();
-    const key = 'taskTemplate:listDailyRecommend:ai,,3,zh-CN';
+    const key = JSON.stringify(taskTemplateKeys.listDailyRecommend('', 3, 'zh-CN'));
 
     map.set(key, { data: [{ id: 1, title: 'Daily brief' }] });
 
@@ -212,6 +215,51 @@ describe('createCacheProvider — tiering', () => {
     expect(map.has('recents-v')).toBe(false);
   });
 
+  it('hydrates idb-tier entries regardless of age (never expires)', async () => {
+    // seed an idb entry via a throwaway provider
+    const seedScope = { value: 's1' };
+    const { provider: seed } = buildProvider(seedScope);
+    seed().set('MSGS:old', { ok: true });
+    await until(async () => (await localDataCache.entriesByScope('s1')).length > 0);
+
+    // a fresh provider with an absurdly small TTL — the row is well past it
+    const scope = { value: 's1' };
+    const { provider } = buildProvider(scope, { ttl: 1 });
+    const map = provider();
+
+    // idb tier ignores TTL: the stale row still hydrates (stale-while-revalidate)
+    await until(() => map.get('MSGS:old') !== undefined);
+    expect(map.get('MSGS:old')).toEqual({ ok: true });
+  });
+
+  it('drops idb-tier entries on version mismatch', async () => {
+    // seed an idb entry under a different app version
+    const seedScope = { value: 's1' };
+    const { provider: seed } = buildProvider(seedScope, { version: '9.9.9' });
+    seed().set('MSGS:stale', { ok: false });
+    await until(async () => (await localDataCache.entriesByScope('s1')).length > 0);
+
+    const scope = { value: 's1' };
+    const { provider } = buildProvider(scope, { version: '1.0.0' });
+    const map = provider();
+
+    // give async hydration a chance, then assert it never lands
+    await new Promise((r) => setTimeout(r, 40));
+    expect(map.has('MSGS:stale')).toBe(false);
+  });
+
+  it('drops legacy idb rows that carry no cache version', async () => {
+    // seed a row directly with no version (pre-versioning / non-conforming writer)
+    await localDataCache.set(buildLocalDataKey('s1', 'MSGS:legacy'), { ok: false });
+
+    const scope = { value: 's1' };
+    const { provider } = buildProvider(scope, { version: '1.0.0' });
+    const map = provider();
+
+    await new Promise((r) => setTimeout(r, 40));
+    expect(map.has('MSGS:legacy')).toBe(false);
+  });
+
   it('handles localStorage QuotaExceededError without throwing', async () => {
     const scope = { value: 's1' };
     const { provider } = buildProvider(scope);
@@ -231,6 +279,152 @@ describe('createCacheProvider — tiering', () => {
     expect(CACHE_TIERS.local).toContain('recent:list');
     expect(CACHE_TIERS.local).toContain('taskTemplate:');
     expect(CACHE_TIERS.local).toContain('modelConfig:');
+  });
+});
+
+/**
+ * Regression: data fetched while the scope is provisional (anonymous, before
+ * `userId` resolves on a slow cold boot) must not be persisted. Without the
+ * `isEphemeralScope` quarantine, an `anon:personal` write lands in IndexedDB
+ * and is orphaned the moment the real user scope resolves — surfacing as a
+ * stale-loading cache miss on the next boot.
+ */
+describe('createCacheProvider — ephemeral (anonymous) scope quarantine', () => {
+  const isAnon = (scope: string) => scope.startsWith('anon:');
+
+  beforeEach(() => localStorage.clear());
+  afterEach(async () => {
+    vi.restoreAllMocks();
+    await localDataCache.clearScope('anon:personal');
+    await localDataCache.clearScope('u1:ws');
+  });
+
+  it('reproduces the leak: without quarantine, an anon-scope write persists and is orphaned on the scope flip', async () => {
+    const scope = { value: 'anon:personal' };
+    const { provider } = buildProvider(scope); // no isEphemeralScope → current prod behavior for web
+    const map = provider();
+
+    // A message fetched during the anonymous boot window.
+    map.set('MSGS:t1', { items: ['hi'] });
+    map.set('recents', { items: [1] });
+
+    // It leaks into the anon partitions (this is the bug).
+    await until(async () => (await localDataCache.entriesByScope('anon:personal')).length > 0);
+    expect(await localDataCache.entriesByScope('anon:personal')).toHaveLength(1);
+    await until(() => localStorage.getItem(getScopedCacheKey('anon:personal')) !== null);
+
+    // userId resolves → scope flips to the real user; the fresh provider hydrates
+    // the user partition and never sees the orphaned anon row.
+    scope.value = 'u1:ws';
+    const { provider: userProvider } = buildProvider(scope);
+    const userMap = userProvider();
+    await new Promise((r) => setTimeout(r, 40));
+    expect(userMap.has('MSGS:t1')).toBe(false);
+    // The orphaned row is stranded in the anon partition forever.
+    expect(await localDataCache.entriesByScope('anon:personal')).toHaveLength(1);
+  });
+
+  it('fix: with isEphemeralScope, anon-scope writes stay memory-only (no idb, no localStorage)', async () => {
+    const scope = { value: 'anon:personal' };
+    const { provider } = buildProvider(scope, { isEphemeralScope: isAnon });
+    const map = provider();
+
+    map.set('MSGS:t1', { items: ['hi'] });
+    map.set('recents', { items: [1] });
+
+    // In-memory cache still serves the boot fetch…
+    expect(map.get('MSGS:t1')).toEqual({ items: ['hi'] });
+
+    // …but nothing is persisted to either tier.
+    await new Promise((r) => setTimeout(r, 40));
+    expect(await localDataCache.entriesByScope('anon:personal')).toHaveLength(0);
+    expect(localStorage.getItem(getScopedCacheKey('anon:personal'))).toBeNull();
+  });
+
+  it('fix: writes under the resolved (non-anon) scope still persist normally', async () => {
+    const scope = { value: 'u1:ws' };
+    const { provider } = buildProvider(scope, { isEphemeralScope: isAnon });
+    const map = provider();
+
+    map.set('MSGS:t1', { items: ['hi'] });
+    map.set('recents', { items: [1] });
+
+    await until(async () => (await localDataCache.entriesByScope('u1:ws')).length > 0);
+    expect(await localDataCache.entriesByScope('u1:ws')).toHaveLength(1);
+    await until(() => localStorage.getItem(getScopedCacheKey('u1:ws')) !== null);
+  });
+
+  it('fix: the flushAll (visibility/pagehide) path also respects the quarantine', async () => {
+    const scope = { value: 'anon:personal' };
+    const { provider } = buildProvider(scope, { isEphemeralScope: isAnon, debounceMs: 100000 });
+    const map = provider();
+    map.set('MSGS:t1', { items: ['hi'] });
+    map.set('recents', { items: [1] });
+
+    // Force the synchronous teardown flush that bypasses the debounce.
+    document.dispatchEvent(new Event('visibilitychange'));
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
+    document.dispatchEvent(new Event('visibilitychange'));
+    window.dispatchEvent(new Event('pagehide'));
+
+    await new Promise((r) => setTimeout(r, 40));
+    expect(await localDataCache.entriesByScope('anon:personal')).toHaveLength(0);
+    expect(localStorage.getItem(getScopedCacheKey('anon:personal'))).toBeNull();
+  });
+});
+
+describe('cache-hydration span', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    (bootTiming as unknown as { _reset: () => void })._reset();
+  });
+
+  afterEach(async () => {
+    vi.restoreAllMocks();
+    await localDataCache.clearScope('span-s1');
+    await localDataCache.clearScope('span-s2');
+  });
+
+  it('records exactly one cache-hydration span after initial hydration', async () => {
+    vi.spyOn(performance, 'now').mockReturnValueOnce(100).mockReturnValue(200);
+
+    const scope = { value: 'span-s1' };
+    const { hydrated, provider } = buildProvider(scope);
+    provider();
+    await hydrated;
+
+    const { spans } = bootTiming.snapshot();
+    const hydrationSpans = spans.filter((s) => s.name === 'cache-hydration');
+    expect(hydrationSpans).toHaveLength(1);
+    expect(hydrationSpans[0].startMs).toBe(100);
+    expect(hydrationSpans[0].durMs).toBe(100);
+  });
+
+  it('does not record a second cache-hydration span on scope reload', async () => {
+    vi.spyOn(performance, 'now').mockReturnValue(50);
+
+    const scope = { value: 'span-s1' };
+    const { hydrated, provider } = buildProvider(scope);
+    provider();
+    await hydrated;
+
+    scope.value = 'span-s2';
+    await provider.reloadScope!();
+
+    const { spans } = bootTiming.snapshot();
+    expect(spans.filter((s) => s.name === 'cache-hydration')).toHaveLength(1);
+  });
+
+  it('does not record a span when hydration fails', async () => {
+    vi.spyOn(localDataCache, 'entriesByScope').mockRejectedValueOnce(new Error('idb error'));
+
+    const scope = { value: 'span-s1' };
+    const { hydrated, provider } = buildProvider(scope);
+    provider();
+    await hydrated;
+
+    const { spans } = bootTiming.snapshot();
+    expect(spans.filter((s) => s.name === 'cache-hydration')).toHaveLength(0);
   });
 });
 

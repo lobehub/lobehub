@@ -9,7 +9,9 @@ import {
 import { and, eq, inArray } from 'drizzle-orm';
 
 import { permissions, rolePermissions, roles, userRoles } from '../schemas/rbac';
-import type { LobeChatDatabase } from '../type';
+import type { LobeChatDatabase, Transaction } from '../type';
+
+type WorkspaceRoleMutationDb = LobeChatDatabase | Transaction;
 
 /**
  * Map a permission code (e.g. `agent:create`) to the category column —
@@ -188,7 +190,7 @@ export const seedWorkspaceRoles = async (
  *   matching `rbac_user_roles` row
  */
 export const assignWorkspaceRoleToUser = async (
-  db: LobeChatDatabase,
+  db: WorkspaceRoleMutationDb,
   params: {
     roleName: WorkspaceSystemRoleName;
     userId: string;
@@ -218,7 +220,7 @@ export const assignWorkspaceRoleToUser = async (
  * by a fresh `assignWorkspaceRoleToUser` call).
  */
 export const revokeWorkspaceRolesForUser = async (
-  db: LobeChatDatabase,
+  db: WorkspaceRoleMutationDb,
   params: { userId: string; workspaceId: string },
 ): Promise<void> => {
   await db

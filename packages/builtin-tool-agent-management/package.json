@@ -11,8 +11,9 @@
   "dependencies": {
     "@lobechat/agent-manager-runtime": "workspace:*",
     "@lobechat/const": "workspace:*",
-    "lucide-react": "*",
-    "react-router": "*"
+    "@lobechat/heterogeneous-agents": "workspace:*",
+    "lucide-react": "^1.22.0",
+    "react-router": "^8.1.0"
   },
   "devDependencies": {
     "@lobechat/types": "workspace:*"

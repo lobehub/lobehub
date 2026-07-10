@@ -1,16 +1,25 @@
 import { isDesktop } from '@lobechat/const';
+import { getActivePluginIds } from '@lobechat/types';
 import { ActionIcon, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
+import { confirmModal, type ModalInstance } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import type { TFunction } from 'i18next';
-import { BotMessageSquareIcon, Download, MoreHorizontal, Settings2Icon, Trash } from 'lucide-react';
-import { memo, useCallback, useMemo } from 'react';
+import {
+  BarChart3,
+  BotMessageSquareIcon,
+  Download,
+  MoreHorizontal,
+  Settings2Icon,
+  Trash,
+} from 'lucide-react';
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAgentTransferMenuItem } from '@/business/client/hooks/useAgentTransferMenuItem';
 import { useBusinessAgentImportMenuItem } from '@/business/client/hooks/useBusinessAgentImportMenuItem';
 import { message } from '@/components/AntdStaticMethods';
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
+import AgentBreadcrumb from '@/features/AgentBreadcrumb';
 import NavHeader from '@/features/NavHeader';
 import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -22,13 +31,17 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 import { useHomeStore } from '@/store/home';
 import { sanitizeFileName } from '@/utils/sanitizeFileName';
 
+import { openAgentSettingsModal } from '../AgentSettings';
 import { selectors as profileSelectors, useProfileStore } from '../store';
 import AgentForkTag from './AgentForkTag';
 import AgentStatusTag from './AgentStatusTag';
 import AgentVersionReviewTag from './AgentVersionReviewTag';
 import AutoSaveHint from './AutoSaveHint';
 
-type HeaderTranslation = TFunction<readonly ['setting', 'chat', 'file', 'common'], undefined>;
+type HeaderTranslation = TFunction<
+  readonly ['setting', 'chat', 'file', 'common', 'spend'],
+  undefined
+>;
 
 const buildAgentProfileMarkdown = (params: {
   description?: string;
@@ -80,7 +93,7 @@ const buildAgentProfileMarkdown = (params: {
 };
 
 const Header = memo(() => {
-  const { t } = useTranslation(['setting', 'chat', 'file', 'common']);
+  const { t } = useTranslation(['setting', 'chat', 'file', 'common', 'spend']);
   const navigate = useWorkspaceAwareNavigate();
 
   const meta = useAgentStore(agentSelectors.currentAgentMeta, isEqual);
@@ -114,11 +127,15 @@ const Header = memo(() => {
 
   const handleExportMarkdown = useCallback(async () => {
     try {
-      const editorMarkdown = editor?.getDocument('markdown') as string | null | undefined;
+      const editorMarkdown = isHeterogeneous
+        ? undefined
+        : (editor?.getDocument('markdown') as string | null | undefined);
       const profileMarkdown = buildAgentProfileMarkdown({
         description: meta?.description,
         model: config.model,
-        plugins: config.plugins,
+        // Pinned identifiers only — a disabled plugin shouldn't be advertised
+        // as "enabled" in the exported markdown.
+        plugins: getActivePluginIds(config.plugins),
         provider: config.provider,
         systemRole: editorMarkdown ?? systemRole,
         t,
@@ -155,10 +172,19 @@ const Header = memo(() => {
       console.error('Failed to export agent profile markdown:', error);
       message.error(t('settingAgent.export.error', { ns: 'setting' }));
     }
-  }, [config.model, config.plugins, config.provider, editor, meta, systemRole, t]);
+  }, [config.model, config.plugins, config.provider, editor, isHeterogeneous, meta, systemRole, t]);
 
   const importMenuItem = useBusinessAgentImportMenuItem(activeAgentId ?? undefined);
-  const transferMenuItems = useAgentTransferMenuItem(activeAgentId ?? undefined);
+  const transferMenuItems = useAgentTransferMenuItem(activeAgentId ?? undefined, meta);
+
+  const settingsModalRef = useRef<ModalInstance | null>(null);
+  useEffect(
+    () => () => {
+      settingsModalRef.current?.close();
+      settingsModalRef.current = null;
+    },
+    [],
+  );
 
   const menuItems = useMemo(() => {
     const businessTransferMenuItems = transferMenuItems ?? [];
@@ -168,7 +194,18 @@ const Header = memo(() => {
         icon: <Icon icon={Settings2Icon} />,
         key: 'advanced-settings',
         label: t('advancedSettings', { ns: 'setting' }),
-        onClick: () => useAgentStore.setState({ showAgentSetting: true }),
+        onClick: () => {
+          settingsModalRef.current?.close();
+          settingsModalRef.current = openAgentSettingsModal();
+        },
+      },
+      {
+        icon: <Icon icon={BarChart3} />,
+        key: 'usage-stats',
+        label: t('usageStats.entry', { ns: 'spend' }),
+        onClick: () => {
+          if (activeAgentId) navigate(`/agent/${activeAgentId}/stats`);
+        },
       },
       { type: 'divider' as const },
       {
@@ -197,12 +234,25 @@ const Header = memo(() => {
         onClick: handleDelete,
       },
     ].filter(Boolean);
-  }, [canEdit, handleExportMarkdown, handleDelete, t, importMenuItem, transferMenuItems]);
+  }, [
+    activeAgentId,
+    canEdit,
+    handleExportMarkdown,
+    handleDelete,
+    navigate,
+    t,
+    importMenuItem,
+    transferMenuItems,
+  ]);
 
   return (
     <NavHeader
+      styles={{ left: { paddingInlineStart: 24 } }}
       left={
         <Flexbox horizontal align={'center'} gap={8}>
+          {activeAgentId && (
+            <AgentBreadcrumb agentId={activeAgentId} title={t('tab.profile', { ns: 'chat' })} />
+          )}
           <AutoSaveHint />
           <AgentStatusTag />
           <AgentVersionReviewTag />

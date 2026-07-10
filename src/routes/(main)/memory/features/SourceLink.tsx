@@ -1,9 +1,9 @@
+import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
 import { Button, Icon, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { Link2 } from 'lucide-react';
 import { memo } from 'react';
 
-import { SESSION_CHAT_TOPIC_URL } from '@/const/url';
 import { type MemorySource } from '@/database/repositories/userMemory';
 import Link from '@/libs/router/Link';
 
@@ -14,7 +14,7 @@ const SourceLink = memo<{ source?: MemorySource | null }>(({ source }) => {
 
   return (
     <Link
-      href={SESSION_CHAT_TOPIC_URL(source.agentId, source.id)}
+      href={AGENT_CHAT_TOPIC_URL(source.agentId, source.id)}
       style={{
         flex: 1,
         maxWidth: '100%',

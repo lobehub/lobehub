@@ -17,14 +17,17 @@ import {
   MonitorDownIcon,
   MonitorIcon,
   MonitorOffIcon,
+  SettingsIcon,
   SparklesIcon,
 } from 'lucide-react';
 import { memo, type ReactNode, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useSelectExecutionTarget } from '@/features/ChatInput/hooks/useSelectExecutionTarget';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
+import { useIsGatewayModeEnabled } from '@/helpers/gatewayMode';
 import { lambdaQuery } from '@/libs/trpc/client';
-import { gatewayConnectionService } from '@/services/electron/gatewayConnection';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useElectronStore } from '@/store/electron';
@@ -90,6 +93,17 @@ const styles = createStaticStyles(({ css }) => ({
 
     background: ${cssVar.colorSuccess};
     box-shadow: 0 0 0 2px ${cssVar.colorSuccessBg};
+  `,
+  deviceList: css`
+    overflow-y: auto;
+
+    /* Cap the device section so a long list (servers/CLI fleets) stays scrollable
+       inside the popover instead of growing past the viewport. */
+    max-height: 240px;
+
+    /* Room for the scrollbar so rows don't sit flush against it. */
+    margin-inline-end: -4px;
+    padding-inline-end: 4px;
   `,
   empty: css`
     padding-block: 8px;
@@ -232,6 +246,37 @@ const styles = createStaticStyles(({ css }) => ({
     font-weight: 500;
     color: ${cssVar.colorTextTertiary};
   `,
+  manageButton: css`
+    cursor: pointer;
+
+    display: flex;
+    gap: 3px;
+    align-items: center;
+
+    padding: 0;
+    border: none;
+
+    font-size: 11px;
+    color: ${cssVar.colorTextQuaternary};
+
+    background: none;
+
+    transition: color 0.2s;
+
+    &:hover {
+      color: ${cssVar.colorPrimary};
+    }
+  `,
+  groupLabel: css`
+    padding-block: 4px;
+    padding-inline: 8px;
+
+    font-size: 11px;
+    font-weight: 500;
+    color: ${cssVar.colorTextQuaternary};
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  `,
 }));
 
 interface OptionRowProps {
@@ -295,9 +340,14 @@ interface HeteroDeviceSwitcherProps {
 const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   const { t } = useTranslation('chat');
   const [open, setOpen] = useState(false);
+  const navigate = useWorkspaceAwareNavigate();
 
   const agencyConfig = useAgentStore(agentByIdSelectors.getAgencyConfigById(agentId));
-  const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
+  // Workspace-scoped agent: every workspace member runs through one device pool,
+  // so personal devices (only reachable by their registering user) must be
+  // suppressed from the picker. The server enforces the same rule on writes.
+  const agentWorkspaceId = useAgentStore((s) => s.agentMap[agentId]?.workspaceId);
+  const isWorkspaceAgent = Boolean(agentWorkspaceId);
 
   const heteroType = agencyConfig?.heterogeneousProvider?.type;
   const boundDeviceId = agencyConfig?.boundDeviceId;
@@ -322,39 +372,21 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   // Effective target: shared with server dispatch. In particular, a hetero
   // desktop "local" selection that carries this desktop's boundDeviceId becomes
   // a device target when the same agent is opened from web.
+  const deviceRoutingAvailable = useIsGatewayModeEnabled(agentId);
   const executionTarget = resolveExecutionTarget(agencyConfig, {
-    isHetero,
     clientExecutionAvailable: isDesktop,
+    deviceRoutingAvailable,
+    isHetero,
+    workspaceScoped: isWorkspaceAgent,
   });
 
+  const selectExecutionTarget = useSelectExecutionTarget(agentId);
   const handleSelect = useCallback(
     async (target: DeviceExecutionTarget, deviceId?: string) => {
       setOpen(false);
-
-      // `executionTarget` is the single source of truth — the server tool
-      // gate + client `getRuntimeModeById` derive `runtimeMode` from it.
-      let nextBoundDeviceId = target === 'device' ? deviceId : boundDeviceId;
-      if (target === 'local') {
-        nextBoundDeviceId = currentDeviceId;
-        if (!nextBoundDeviceId) {
-          try {
-            nextBoundDeviceId = (await gatewayConnectionService.getDeviceInfo())?.deviceId;
-          } catch {
-            nextBoundDeviceId = undefined;
-          }
-        }
-        if (isHetero && !nextBoundDeviceId) return;
-      }
-
-      await updateAgentConfigById(agentId, {
-        agencyConfig: {
-          ...agencyConfig,
-          executionTarget: target,
-          ...(nextBoundDeviceId ? { boundDeviceId: nextBoundDeviceId } : {}),
-        },
-      });
+      await selectExecutionTarget(target, deviceId);
     },
-    [agentId, agencyConfig, boundDeviceId, currentDeviceId, isHetero, updateAgentConfigById],
+    [selectExecutionTarget],
   );
 
   // Don't render for remote hetero agents — they use RemoteAgentConfigCard in profile.
@@ -362,12 +394,29 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
 
   const boundDevice =
     executionTarget === 'device' ? devices?.find((d) => d.deviceId === boundDeviceId) : undefined;
-  const currentDevice = devices?.find((d) => d.deviceId === currentDeviceId);
-  const deviceRows = devices ?? [];
+
+  // Workspace agents drop the personal section entirely — only workspace
+  // devices are reachable to every member, so no one should see (let alone
+  // pick) a teammate's personal machine.
+  const personalDevices = isWorkspaceAgent
+    ? []
+    : (devices ?? []).filter((d) => d.scope === 'personal');
+  const workspaceDevices = (devices ?? []).filter((d) => d.scope === 'workspace');
+  // Only split into Personal / Workspace sections once a workspace device exists;
+  // otherwise (personal mode / OSS) the list stays flat, exactly as before.
+  const showDeviceGroups = workspaceDevices.length > 0;
+
+  // Empty-state accounting must use the rows the CURRENT agent can actually
+  // pick (post scope filtering) — a workspace agent whose members only have
+  // personal devices would otherwise render neither devices nor an empty state.
+  const deviceRows = [...personalDevices, ...workspaceDevices];
   const hasNoDevices = deviceRows.length === 0;
   // On web with no device, the prominent download card below replaces the small
-  // header link — avoid showing the same CTA twice.
-  const showWebDownloadCard = !isDesktop && hasNoDevices && !isLoading;
+  // header link — avoid showing the same CTA twice. Workspace agents get the
+  // enroll hint instead: downloading the desktop app wouldn't help until the
+  // machine is enrolled into the workspace pool.
+  const showWebDownloadCard = !isDesktop && !isWorkspaceAgent && hasNoDevices && !isLoading;
+  const showWorkspaceEnrollHint = isWorkspaceAgent && hasNoDevices && !isLoading;
 
   // Compute chip
   let chipIcon: ReactNode = <Icon icon={BoxIcon} size={14} />;
@@ -379,11 +428,8 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     chipIcon = <Icon icon={SparklesIcon} size={14} />;
     chipLabel = t('heteroAgent.executionTarget.auto');
   } else if (executionTarget === 'local') {
-    chipIcon = currentDevice ? (
-      getDeviceIcon(currentDevice.platform)
-    ) : (
-      <Icon icon={LaptopIcon} size={14} />
-    );
+    // 本机始终使用通用的本地电脑图标，不区分具体平台
+    chipIcon = <Icon icon={LaptopIcon} size={14} />;
     chipLabel = t('heteroAgent.executionTarget.local');
   } else if (executionTarget === 'device') {
     chipIcon = getDeviceIcon(boundDevice?.platform);
@@ -437,7 +483,19 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
             </span>
           </Tooltip>
         </Flexbox>
-        {isDesktop || showWebDownloadCard ? null : (
+        {isDesktop || showWebDownloadCard ? (
+          <button
+            className={styles.manageButton}
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              navigate('/settings/devices');
+            }}
+          >
+            <Icon icon={SettingsIcon} size={11} />
+            <span>{t('heteroAgent.executionTarget.manage')}</span>
+          </button>
+        ) : (
           <a
             className={styles.headerLink}
             href="https://lobehub.com/downloads"
@@ -467,23 +525,16 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
           onClick={() => void handleSelect('auto')}
         />
       )}
-      {isDesktop ? (
+      {/* `local` pins this machine's PERSONAL deviceId, which a workspace agent
+          can never bind (the server only accepts workspace-enrolled device ids),
+          so hide it there — same policy as hiding personal devices above. */}
+      {isDesktop && !isWorkspaceAgent ? (
         <OptionRow
           active={isActive('local')}
           desc={t('heteroAgent.executionTarget.localDesc')}
-          tag={t('heteroAgent.executionTarget.local')}
-          icon={
-            currentDevice ? (
-              getDeviceIcon(currentDevice.platform)
-            ) : (
-              <Icon icon={LaptopIcon} size={14} />
-            )
-          }
-          label={
-            currentDevice?.friendlyName ||
-            currentDevice?.hostname ||
-            t('heteroAgent.executionTarget.local')
-          }
+          icon={<Icon icon={LaptopIcon} size={14} />}
+          // 本机统一显示「本地设备」，不再带具体设备名称
+          label={t('heteroAgent.executionTarget.local')}
           onClick={() => void handleSelect('local')}
         />
       ) : null}
@@ -494,9 +545,40 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
         label={t('heteroAgent.executionTarget.sandbox')}
         onClick={() => void handleSelect('sandbox')}
       />
-      {deviceRows.map((d) => renderDeviceRow(d))}
+      {deviceRows.length > 0 ? (
+        <div className={styles.deviceList}>
+          {showDeviceGroups ? (
+            <>
+              {personalDevices.length > 0 ? (
+                <>
+                  <div className={styles.groupLabel}>
+                    {t('heteroAgent.executionTarget.personalGroup')}
+                  </div>
+                  {personalDevices.map((d) => renderDeviceRow(d))}
+                </>
+              ) : null}
+              <div className={styles.groupLabel}>
+                {t('heteroAgent.executionTarget.workspaceGroup')}
+              </div>
+              {workspaceDevices.map((d) => renderDeviceRow(d))}
+            </>
+          ) : (
+            personalDevices.map((d) => renderDeviceRow(d))
+          )}
+        </div>
+      ) : null}
       {hasNoDevices && isLoading ? (
         <div className={styles.empty}>{t('heteroAgent.executionTarget.loading')}</div>
+      ) : null}
+      {/* Workspace agent with no workspace device: personal machines are
+          suppressed above, so guide the user to enroll one into the shared
+          pool instead of showing a bare menu. */}
+      {showWorkspaceEnrollHint ? (
+        <div className={styles.empty}>
+          {t('heteroAgent.executionTarget.noWorkspaceDevices', {
+            cmd: `lh connect --workspace ${agentWorkspaceId}`,
+          })}
+        </div>
       ) : null}
       {/* On web with no remote device, guide the user to the desktop app (which
           unlocks local execution + `lh connect`) rather than a muted dead-end. */}
@@ -521,7 +603,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
           <Icon className={styles.downloadCardArrow} icon={ExternalLinkIcon} size={13} />
         </a>
       ) : null}
-      {hasNoDevices && !isLoading && isDesktop ? (
+      {hasNoDevices && !isLoading && isDesktop && !isWorkspaceAgent ? (
         <div className={styles.empty}>{t('heteroAgent.executionTarget.noDevices')}</div>
       ) : null}
     </Flexbox>

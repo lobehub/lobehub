@@ -2,23 +2,32 @@
  * @vitest-environment happy-dom
  */
 import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import InputRow from './InputRow';
 
+const mockConversationState = vi.hoisted(() => ({
+  current: {
+    chatInputOverlayHeight: 0,
+  },
+}));
+
 vi.mock('@/features/Conversation', () => ({
   ChatInput: ({
+    allowExpand,
     compact,
     leftActions,
     rightActions,
     showControlBar,
   }: {
+    allowExpand?: boolean;
     compact?: boolean;
     leftActions?: string[];
     rightActions?: string[];
     showControlBar?: boolean;
   }) => (
     <div
+      data-allow-expand={String(allowExpand ?? true)}
       data-compact={String(compact ?? false)}
       data-left-actions={JSON.stringify(leftActions ?? [])}
       data-right-actions={JSON.stringify(rightActions ?? [])}
@@ -28,14 +37,27 @@ vi.mock('@/features/Conversation', () => ({
   ),
 }));
 
+vi.mock('@/features/Conversation/store', () => ({
+  inputSelectors: {
+    chatInputOverlayHeight: (s: { chatInputOverlayHeight: number }) => s.chatInputOverlayHeight,
+  },
+  useConversationStore: (selector: (s: { chatInputOverlayHeight: number }) => unknown) =>
+    selector(mockConversationState.current),
+}));
+
 vi.mock('@lobehub/ui', () => ({
   Icon: ({ icon }: { icon: () => void }) => <span data-testid="icon">{icon.name}</span>,
 }));
 
 describe('FloatingChatPanel InputRow', () => {
+  beforeEach(() => {
+    mockConversationState.current.chatInputOverlayHeight = 0;
+  });
+
   it('renders ChatInput in compact mode with empty actions and no control bar while collapsed', () => {
     render(<InputRow isCollapsed onExpand={() => {}} />);
     const input = screen.getByTestId('chat-input');
+    expect(input.dataset.allowExpand).toBe('false');
     expect(input.dataset.compact).toBe('true');
     expect(input.dataset.leftActions).toBe('[]');
     expect(input.dataset.rightActions).toBe('[]');
@@ -45,10 +67,11 @@ describe('FloatingChatPanel InputRow', () => {
   it('renders ChatInput at full size with all actions while expanded', () => {
     render(<InputRow isCollapsed={false} onExpand={() => {}} />);
     const input = screen.getByTestId('chat-input');
+    expect(input.dataset.allowExpand).toBe('false');
     expect(input.dataset.compact).toBe('false');
     expect(input.dataset.leftActions).toBe(JSON.stringify(['typo']));
     expect(input.dataset.rightActions).toBe(JSON.stringify(['contextWindow']));
-    expect(input.dataset.showControlBar).toBe('true');
+    expect(input.dataset.showControlBar).toBe('false');
   });
 
   it('keeps the expand bar hidden while collapsed and unfocused — hover alone never reveals it', () => {
@@ -79,6 +102,24 @@ describe('FloatingChatPanel InputRow', () => {
 
     fireEvent.blur(row, { relatedTarget: screen.getByTestId('outside') });
     expect(bar.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  it('offsets the expand bar above the measured chat input overlay', () => {
+    mockConversationState.current.chatInputOverlayHeight = 44;
+    render(<InputRow isCollapsed onExpand={() => {}} />);
+
+    const row = screen.getByTestId('floating-chat-panel-input-row');
+    fireEvent.focus(row);
+
+    expect(screen.getByTestId('floating-chat-panel-hover-bar').style.insetBlockEnd).toBe(
+      'calc(100% + 44px)',
+    );
+  });
+
+  it('keeps the default expand bar position when no chat input overlay is present', () => {
+    render(<InputRow isCollapsed onExpand={() => {}} />);
+
+    expect(screen.getByTestId('floating-chat-panel-hover-bar').style.insetBlockEnd).toBe('');
   });
 
   it('keeps the expand bar hidden while the panel is already expanded', () => {
@@ -112,10 +153,11 @@ describe('FloatingChatPanel InputRow', () => {
     expect(input.dataset.compact).toBe('true');
 
     fireEvent.focus(screen.getByTestId('floating-chat-panel-input-row'));
+    expect(input.dataset.allowExpand).toBe('false');
     expect(input.dataset.compact).toBe('false');
     expect(input.dataset.leftActions).toBe(JSON.stringify(['typo']));
     expect(input.dataset.rightActions).toBe(JSON.stringify(['contextWindow']));
-    expect(input.dataset.showControlBar).toBe('true');
+    expect(input.dataset.showControlBar).toBe('false');
   });
 
   it('restores compact rendering once focus leaves the row entirely', () => {

@@ -140,7 +140,7 @@ export class WindowsMenu extends BaseMenuPlatform implements IMenuPlatform {
       {
         label: t('view.title'),
         submenu: [
-          { accelerator: 'F12', label: t('dev.devTools'), role: 'toggleDevTools' },
+          this.buildDevToolsMenuItem(t('dev.devTools'), 'F12'),
           { type: 'separator' },
           this.buildZoomMenuItem('reset', t('view.resetZoom'), 'CmdOrCtrl+0'),
           ...this.buildZoomMenuItems('in', t('view.zoomIn'), 'CmdOrCtrl+=', ['CmdOrCtrl+Plus']),
@@ -234,7 +234,7 @@ export class WindowsMenu extends BaseMenuPlatform implements IMenuPlatform {
         submenu: [
           { label: t('dev.reload'), role: 'reload' },
           { label: t('dev.forceReload'), role: 'forceReload' },
-          { label: t('dev.devTools'), role: 'toggleDevTools' },
+          this.buildDevToolsMenuItem(t('dev.devTools')),
           { type: 'separator' },
           {
             click: () => {

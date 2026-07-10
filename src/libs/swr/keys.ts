@@ -90,6 +90,23 @@ export const agentKeys = {
   list: def('agent:list', (isLogin: boolean) => ['agent:list', isLogin]),
 };
 
+// ---- agent builder (opening-suggestion chips) ---------------------------
+// Kept off `CACHE_TIERS` on purpose — these are ephemeral LLM-generated chips.
+// `contextSummary` is intentionally NOT part of the key so config autosaves for
+// the same target don't refetch; `nonce` bumps on manual refresh.
+export const agentBuilderKeys = {
+  suggestions: def(
+    'agentBuilder:suggestions',
+    (mode: string, builderAgentId: string, targetId: string | undefined, nonce: number) => [
+      'agentBuilder:suggestions',
+      mode,
+      builderAgentId,
+      targetId,
+      nonce,
+    ],
+  ),
+};
+
 // ---- group --------------------------------------------------------------
 export const groupKeys = {
   detail: def('group:detail', (groupId: string) => ['group:detail', groupId]),
@@ -117,17 +134,40 @@ export const threadKeys = {
 
 // ---- recent -------------------------------------------------------------
 export const recentKeys = {
-  /** Home "all recents" drawer list, keyed by open state. */
-  allDrawer: def('recent:allDrawer', (open: boolean) => ['recent:allDrawer', open]),
-  /** Home recents list, keyed by login + limit. */
-  list: def('recent:list', (isLogin: boolean, limit: number) => ['recent:list', isLogin, limit]),
+  /** Home "all recents" drawer list, keyed by open state and identity scope. */
+  allDrawer: def('recent:allDrawer', (open: boolean, scope: string) => [
+    'recent:allDrawer',
+    open,
+    scope,
+  ]),
+  /** Home recents list, keyed by login + limit + identity scope. */
+  list: def('recent:list', (isLogin: boolean, limit: number, scope: string) => [
+    'recent:list',
+    isLogin,
+    limit,
+    scope,
+  ]),
 };
 
 // ---- task ---------------------------------------------------------------
 export const taskKeys = {
   detail: def('task:detail', (taskId: string) => ['task:detail', taskId]),
-  groupList: def('task:groupList', (agentKey: string | undefined) => ['task:groupList', agentKey]),
-  list: def('task:list', (agentKey: string | undefined) => ['task:list', agentKey]),
+  groupList: def(
+    'task:groupList',
+    (agentKey: string | undefined, visibility: 'all' | 'private' | 'workspace' = 'all') => [
+      'task:groupList',
+      agentKey,
+      visibility,
+    ],
+  ),
+  list: def(
+    'task:list',
+    (agentKey: string | undefined, visibility: 'all' | 'private' | 'workspace' = 'all') => [
+      'task:list',
+      agentKey,
+      visibility,
+    ],
+  ),
 };
 
 // ---- brief --------------------------------------------------------------
@@ -400,8 +440,12 @@ export const ragEvalKeys = {
 // ---- knowledge base -----------------------------------------------------
 export const knowledgeBaseKeys = {
   item: def('knowledgeBase:item', (id: string) => ['knowledgeBase:item', id]),
-  list: def('knowledgeBase:list', (workspaceId?: string | null) =>
-    workspaceId ? ['knowledgeBase:list', workspaceId] : ['knowledgeBase:list'],
+  list: def(
+    'knowledgeBase:list',
+    (workspaceId?: string | null, visibility?: 'private' | 'public') => {
+      const base = workspaceId ? ['knowledgeBase:list', workspaceId] : ['knowledgeBase:list'];
+      return visibility ? [...base, visibility] : base;
+    },
   ),
 };
 
@@ -412,11 +456,26 @@ export const deviceKeys = {
     deviceId,
     path,
   ]),
+  gitBranch: def('device:gitBranch', (deviceId: string, path: string) => [
+    'device:gitBranch',
+    deviceId,
+    path,
+  ]),
   gitBranches: def('device:gitBranches', (deviceId: string, path: string) => [
     'device:gitBranches',
     deviceId,
     path,
   ]),
+  gitLinkedPR: def(
+    'device:gitLinkedPR',
+    (deviceId: string, path: string, branch: string, pullRequestNumber?: number) => [
+      'device:gitLinkedPR',
+      deviceId,
+      path,
+      branch,
+      ...(pullRequestNumber === undefined ? [] : [pullRequestNumber]),
+    ],
+  ),
   gitRemoteBranches: def('device:gitRemoteBranches', (deviceId: string, dirPath: string) => [
     'device:gitRemoteBranches',
     deviceId,
@@ -432,14 +491,13 @@ export const deviceKeys = {
       baseRef,
     ],
   ),
-  gitInfo: def('device:gitInfo', (deviceId: string, path: string, isGithub: boolean) => [
-    'device:gitInfo',
-    deviceId,
-    path,
-    isGithub,
-  ]),
   gitWorkingTreeStatus: def('device:gitWorkingTreeStatus', (deviceId: string, path: string) => [
     'device:gitWorkingTreeStatus',
+    deviceId,
+    path,
+  ]),
+  gitWorktrees: def('device:gitWorktrees', (deviceId: string, path: string) => [
+    'device:gitWorktrees',
     deviceId,
     path,
   ]),
@@ -524,10 +582,13 @@ export const globalKeys = {
 
 // ---- agent knowledge (kept off the `agent:` idb tier on purpose) --------
 export const agentKnowledgeKeys = {
-  list: def('agentKnowledge:list', (agentId: string | undefined) => [
+  list: def(
     'agentKnowledge:list',
-    agentId,
-  ]),
+    (agentId: string | undefined, visibility?: 'private' | 'public') => {
+      const base = ['agentKnowledge:list', agentId] as const;
+      return visibility ? [...base, visibility] : base;
+    },
+  ),
 };
 
 // ---- agent bot ----------------------------------------------------------
@@ -556,6 +617,18 @@ export const chatToolKeys = {
 
 // ---- stats (settings/stats + user header counts) ------------------------
 export const statsKeys = {
+  agentUsageStat: def(
+    'stats:agentUsageStat',
+    (agentId: string, startAt: string, endAt: string, granularity: string) => [
+      'stats:agentUsageStat',
+      agentId,
+      startAt,
+      endAt,
+      granularity,
+    ],
+  ),
+  agents: def('stats:agents', () => ['stats:agents']),
+  countAgents: def('stats:countAgents', () => ['stats:countAgents']),
   countMessages: def('stats:countMessages', () => ['stats:countMessages']),
   countSessions: def('stats:countSessions', () => ['stats:countSessions']),
   countTopics: def('stats:countTopics', () => ['stats:countTopics']),
@@ -594,12 +667,31 @@ export const messengerKeys = {
 
 // ---- verify (deliverable judging) ---------------------------------------
 export const verifyKeys = {
+  criteria: def('verify:criteria', () => ['verify:criteria']),
   instruction: def('verify:instruction', (documentId: string) => [
     'verify:instruction',
     documentId,
   ]),
+  reportBundle: def('verify:reportBundle', (verifyRunId: string) => [
+    'verify:reportBundle',
+    verifyRunId,
+  ]),
+  reportSummaries: def(
+    'verify:reportSummaries',
+    (workspaceId?: string | null, q?: string, cursor?: string) => [
+      'verify:reportSummaries',
+      workspaceId ?? '',
+      q ?? '',
+      cursor ?? '',
+    ],
+  ),
   results: def('verify:results', (operationId: string) => ['verify:results', operationId]),
   rubric: def('verify:rubric', (rubricId: string) => ['verify:rubric', rubricId]),
+  rubricCriteria: def('verify:rubricCriteria', (rubricId: string) => [
+    'verify:rubricCriteria',
+    rubricId,
+  ]),
+  rubrics: def('verify:rubrics', () => ['verify:rubrics']),
   state: def('verify:state', (operationId: string) => ['verify:state', operationId]),
   tracing: def('verify:tracing', (tracingId: string) => ['verify:tracing', tracingId]),
 };
@@ -736,11 +828,20 @@ export const topicActionKeys = {
 export const homeKeys = {
   dailyBrief: def('home:dailyBrief', (userId: string) => ['home:dailyBrief', userId]),
 };
+
+/**
+ * Daily task-template recommendation cache schema version. Bump this when the
+ * persisted recommendation row shape changes incompatibly so desktop clients
+ * stop reading stale localStorage SWR entries.
+ */
+export const TASK_TEMPLATE_RECOMMENDATION_CACHE_VERSION = 2;
+const TASK_TEMPLATE_DAILY_RECOMMEND_ROOT = `taskTemplate:listDailyRecommend:v${TASK_TEMPLATE_RECOMMENDATION_CACHE_VERSION}`;
+
 export const taskTemplateKeys = {
   listDailyRecommend: def(
-    'taskTemplate:listDailyRecommend',
+    TASK_TEMPLATE_DAILY_RECOMMEND_ROOT,
     (refreshSeed: unknown, recommendationCount: number, locale: string) => [
-      'taskTemplate:listDailyRecommend',
+      TASK_TEMPLATE_DAILY_RECOMMEND_ROOT,
       refreshSeed,
       recommendationCount,
       locale,
@@ -809,6 +910,7 @@ export const matchDomain =
 export const swrKeys = {
   agent: { ...agentKeys, ...agentConfigKeys },
   agentBot: agentBotKeys,
+  agentBuilder: agentBuilderKeys,
   agentDocument: agentDocumentSWRKeys,
   agentHome: agentHomeKeys,
   agentKnowledge: agentKnowledgeKeys,

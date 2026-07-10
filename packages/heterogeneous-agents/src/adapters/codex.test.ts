@@ -97,8 +97,12 @@ describe('CodexAdapter', () => {
       type: 'error',
     });
 
-    expect(events.map((event) => event.type)).toEqual(['stream_end', 'error']);
-    expect(events[1].data).toMatchObject({
+    expect(events.map((event) => event.type)).toEqual([
+      'stream_end',
+      'visible_output_end',
+      'error',
+    ]);
+    expect(events[2].data).toMatchObject({
       agentType: 'codex',
       clearEchoedContent: true,
       message:
@@ -123,8 +127,12 @@ describe('CodexAdapter', () => {
         type: 'error',
       });
 
-      expect(events.map((event) => event.type)).toEqual(['stream_end', 'error']);
-      expect(events[1].data).toMatchObject({
+      expect(events.map((event) => event.type)).toEqual([
+        'stream_end',
+        'visible_output_end',
+        'error',
+      ]);
+      expect(events[2].data).toMatchObject({
         agentType: 'codex',
         clearEchoedContent: true,
         code: 'rate_limit',
@@ -157,7 +165,7 @@ describe('CodexAdapter', () => {
         type: 'error',
       });
 
-      expect(events[1].data).toMatchObject({
+      expect(events[2].data).toMatchObject({
         code: 'rate_limit',
         rateLimitInfo: {
           resetsAt: expectedResetAt,
@@ -187,7 +195,7 @@ describe('CodexAdapter', () => {
         type: 'error',
       });
 
-      expect(events[1].data).toMatchObject({
+      expect(events[2].data).toMatchObject({
         code: 'rate_limit',
         rateLimitInfo: {
           resetsAt: expectedResetAt,
@@ -219,13 +227,13 @@ describe('CodexAdapter', () => {
         type: 'error',
       });
 
-      expect(events[1].data).toMatchObject({
+      expect(events[2].data).toMatchObject({
         code: 'rate_limit',
         rateLimitInfo: {
           status: 'rejected',
         },
       });
-      expect(events[1].data.rateLimitInfo).not.toHaveProperty('resetsAt');
+      expect(events[2].data.rateLimitInfo).not.toHaveProperty('resetsAt');
     } finally {
       vi.useRealTimers();
     }
@@ -245,11 +253,19 @@ describe('CodexAdapter', () => {
     ).toEqual([]);
   });
 
-  it('emits a new-step boundary when a second turn starts', () => {
+  it('delays a second turn boundary until the next visible item arrives', () => {
     const adapter = new CodexAdapter();
 
     const firstTurn = adapter.adapt({ type: 'turn.started' });
     const secondTurn = adapter.adapt({ type: 'turn.started' });
+    const nextMessage = adapter.adapt({
+      item: {
+        id: 'item_1',
+        text: 'Second turn output.',
+        type: 'agent_message',
+      },
+      type: 'item.completed',
+    });
 
     expect(firstTurn).toHaveLength(1);
     expect(firstTurn[0]).toMatchObject({
@@ -258,17 +274,47 @@ describe('CodexAdapter', () => {
       type: 'stream_start',
     });
 
-    expect(secondTurn).toHaveLength(2);
+    expect(secondTurn).toHaveLength(1);
     expect(secondTurn[0]).toMatchObject({
       data: {},
       stepIndex: 1,
       type: 'stream_end',
     });
-    expect(secondTurn[1]).toMatchObject({
+    expect(nextMessage).toHaveLength(2);
+    expect(nextMessage[0]).toMatchObject({
       data: { newStep: true, provider: 'codex' },
       stepIndex: 1,
       type: 'stream_start',
     });
+    expect(nextMessage[1]).toMatchObject({
+      data: { chunkType: 'text', content: 'Second turn output.' },
+      stepIndex: 1,
+      type: 'stream_chunk',
+    });
+  });
+
+  it('does not open a new visible step for an empty later turn', () => {
+    const adapter = new CodexAdapter();
+
+    adapter.adapt({ type: 'turn.started' });
+    const secondTurn = adapter.adapt({ type: 'turn.started' });
+    const completion = adapter.adapt({
+      type: 'turn.completed',
+      usage: {
+        input_tokens: 10,
+        output_tokens: 3,
+      },
+    });
+
+    expect(secondTurn).toHaveLength(1);
+    expect(secondTurn[0]).toMatchObject({
+      stepIndex: 1,
+      type: 'stream_end',
+    });
+    expect(completion.map((event) => event.type)).toEqual([
+      'visible_output_end',
+      'agent_runtime_end',
+    ]);
   });
 
   it('emits a new-step boundary when a later agent_message item arrives in the same turn', () => {
@@ -419,6 +465,36 @@ describe('CodexAdapter', () => {
     });
   });
 
+  it('aligns tool_end with the server shape — carries payload + result', () => {
+    const adapter = new CodexAdapter();
+    adapter.adapt({
+      item: {
+        command: 'git worktree add /wt',
+        id: 'item_1',
+        status: 'in_progress',
+        type: 'command_execution',
+      },
+      type: 'item.started',
+    });
+    const completed = adapter.adapt({
+      item: {
+        aggregated_output: 'Preparing worktree',
+        command: 'git worktree add /wt',
+        exit_code: 0,
+        id: 'item_1',
+        status: 'completed',
+        type: 'command_execution',
+      },
+      type: 'item.completed',
+    });
+
+    const end = completed.find((e) => e.type === 'tool_end');
+    expect(end!.data.payload).toMatchObject({
+      toolCalling: { apiName: 'command_execution', id: 'item_1', identifier: 'codex' },
+    });
+    expect(end!.data.result).toMatchObject({ success: true });
+  });
+
   it('maps command execution items into tool lifecycle events', () => {
     const adapter = new CodexAdapter();
 
@@ -481,6 +557,152 @@ describe('CodexAdapter', () => {
       data: { isSuccess: true, toolCallId: 'item_1' },
       type: 'tool_end',
     });
+  });
+
+  it('preserves completed web_search query details for tool rendering', () => {
+    const adapter = new CodexAdapter();
+    const query = 'OpenAI Codex CLI install official documentation';
+
+    const started = adapter.adapt({
+      item: {
+        action: { type: 'other' },
+        id: 'ws_search',
+        query: '',
+        type: 'web_search',
+      },
+      type: 'item.started',
+    });
+    const completed = adapter.adapt({
+      item: {
+        action: {
+          queries: [query, 'OpenAI Codex npm @openai/codex GitHub'],
+          query,
+          type: 'search',
+        },
+        id: 'ws_search',
+        query,
+        status: 'completed',
+        type: 'web_search',
+      },
+      type: 'item.completed',
+    });
+
+    expect(started[0]).toMatchObject({
+      data: {
+        chunkType: 'tools_calling',
+        toolsCalling: [
+          {
+            apiName: 'web_search',
+            arguments: JSON.stringify({
+              action: { type: 'other' },
+              id: 'ws_search',
+              query: '',
+              type: 'web_search',
+            }),
+            id: 'ws_search',
+            identifier: 'codex',
+          },
+        ],
+      },
+      type: 'stream_chunk',
+    });
+    expect(completed[0]).toMatchObject({
+      data: {
+        content: 'Completed web_search.',
+        isError: false,
+        pluginState: {
+          action: {
+            queries: [query, 'OpenAI Codex npm @openai/codex GitHub'],
+            query,
+            type: 'search',
+          },
+          query,
+          status: 'completed',
+        },
+        toolCallId: 'ws_search',
+      },
+      type: 'tool_result',
+    });
+    expect(completed[1]).toMatchObject({
+      data: { isSuccess: true, toolCallId: 'ws_search' },
+      type: 'tool_end',
+    });
+  });
+
+  it('preserves completed web_search action queries for tool rendering', () => {
+    const adapter = new CodexAdapter();
+    const query = 'OpenAI Codex CLI install official documentation';
+    const completed = adapter.adapt({
+      item: {
+        action: {
+          queries: [query, 'OpenAI Codex npm @openai/codex GitHub'],
+          type: 'search',
+        },
+        id: 'ws_search',
+        status: 'completed',
+        type: 'web_search',
+      },
+      type: 'item.completed',
+    });
+    const result = completed.find((event) => event.type === 'tool_result');
+
+    expect(result).toMatchObject({
+      data: {
+        pluginState: {
+          action: {
+            queries: [query, 'OpenAI Codex npm @openai/codex GitHub'],
+            type: 'search',
+          },
+          query,
+          status: 'completed',
+        },
+        toolCallId: 'ws_search',
+      },
+      type: 'tool_result',
+    });
+  });
+
+  it('truncates oversized Codex command output before forwarding tool results', () => {
+    const adapter = new CodexAdapter();
+    const oversizedOutput = 'x'.repeat(25_010);
+
+    adapter.adapt({
+      item: {
+        command: '/bin/zsh -lc find .',
+        id: 'item_oversized',
+        status: 'in_progress',
+        type: 'command_execution',
+      },
+      type: 'item.started',
+    });
+
+    const completed = adapter.adapt({
+      item: {
+        aggregated_output: oversizedOutput,
+        command: '/bin/zsh -lc find .',
+        exit_code: 0,
+        id: 'item_oversized',
+        status: 'completed',
+        type: 'command_execution',
+      },
+      type: 'item.completed',
+    });
+
+    const result = completed[0];
+
+    expect(result.type).toBe('tool_result');
+    expect(result.data.content).toHaveLength(25_078);
+    expect(result.data.content).toContain(
+      '[Output truncated: 10 characters omitted. Original length: 25010 characters]',
+    );
+    expect(result.data.pluginState).toMatchObject({
+      omittedOutputCharacters: 10,
+      originalOutputLength: 25_010,
+      outputTruncated: true,
+      success: true,
+    });
+    expect(result.data.pluginState.output).toBe(result.data.content);
+    expect(result.data.pluginState.stdout).toBe(result.data.content);
   });
 
   it('maps todo_list items into shared todo plugin state', () => {
@@ -796,10 +1018,10 @@ describe('CodexAdapter', () => {
     const adapter = new CodexAdapter({
       initialCumulativeUsage: {
         inputCachedTokens: 42_000,
-        inputCacheMissTokens: 52_000,
-        totalInputTokens: 94_000,
+        inputCacheMissTokens: 9_000,
+        totalInputTokens: 51_000,
         totalOutputTokens: 300,
-        totalTokens: 94_300,
+        totalTokens: 51_300,
       },
     });
     const rawEvents = await loadFixture('collab_tool_call.spawn_wait.jsonl');
@@ -855,17 +1077,17 @@ describe('CodexAdapter', () => {
       data: {
         usage: {
           inputCachedTokens: 1008,
-          inputCacheMissTokens: 937,
-          totalInputTokens: 1945,
+          inputCacheMissTokens: 929,
+          totalInputTokens: 1937,
           totalOutputTokens: 116,
-          totalTokens: 2061,
+          totalTokens: 2053,
         },
       },
     });
     expect(flushed).toEqual([]);
   });
 
-  it('emits stream_end + agent_runtime_end on successful turn completion', () => {
+  it('emits visible_output_end before agent_runtime_end on successful turn completion', () => {
     const adapter = new CodexAdapter();
 
     adapter.adapt({ type: 'turn.started' });
@@ -880,6 +1102,7 @@ describe('CodexAdapter', () => {
     expect(events.map((event) => event.type)).toEqual([
       'step_complete',
       'stream_end',
+      'visible_output_end',
       'agent_runtime_end',
     ]);
   });
@@ -912,6 +1135,9 @@ describe('CodexAdapter', () => {
       }),
       expect.objectContaining({
         type: 'stream_end',
+      }),
+      expect.objectContaining({
+        type: 'visible_output_end',
       }),
       expect.objectContaining({
         type: 'agent_runtime_end',
@@ -1023,6 +1249,7 @@ describe('CodexAdapter', () => {
         cached_input_tokens: 4,
         input_tokens: 10,
         output_tokens: 3,
+        reasoning_output_tokens: 2,
       },
     });
 
@@ -1032,10 +1259,12 @@ describe('CodexAdapter', () => {
         provider: 'codex',
         usage: {
           inputCachedTokens: 4,
-          inputCacheMissTokens: 10,
-          totalInputTokens: 14,
+          inputCacheMissTokens: 6,
+          outputReasoningTokens: 2,
+          outputTextTokens: 1,
+          totalInputTokens: 10,
           totalOutputTokens: 3,
-          totalTokens: 17,
+          totalTokens: 13,
         },
       },
       type: 'step_complete',
@@ -1046,10 +1275,12 @@ describe('CodexAdapter', () => {
     const adapter = new CodexAdapter({
       initialCumulativeUsage: {
         inputCachedTokens: 4,
-        inputCacheMissTokens: 10,
-        totalInputTokens: 14,
+        inputCacheMissTokens: 6,
+        outputReasoningTokens: 1,
+        outputTextTokens: 2,
+        totalInputTokens: 10,
         totalOutputTokens: 3,
-        totalTokens: 17,
+        totalTokens: 13,
       },
     });
 
@@ -1059,6 +1290,7 @@ describe('CodexAdapter', () => {
         cached_input_tokens: 9,
         input_tokens: 25,
         output_tokens: 11,
+        reasoning_output_tokens: 5,
       },
     });
 
@@ -1068,10 +1300,12 @@ describe('CodexAdapter', () => {
         provider: 'codex',
         usage: {
           inputCachedTokens: 5,
-          inputCacheMissTokens: 15,
-          totalInputTokens: 20,
+          inputCacheMissTokens: 10,
+          outputReasoningTokens: 4,
+          outputTextTokens: 4,
+          totalInputTokens: 15,
           totalOutputTokens: 8,
-          totalTokens: 28,
+          totalTokens: 23,
         },
       },
       type: 'step_complete',

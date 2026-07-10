@@ -1,5 +1,5 @@
 name: Claude Translate Non-English Comments
-description: Automatically detect and translate non-English comments to English in codebase
+# Automatically detect and translate non-English comments to English in codebase
 
 on:
   schedule:

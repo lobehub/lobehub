@@ -86,7 +86,7 @@ export const LocalSystemManifest: BuiltinToolManifest = {
           },
           scope: {
             description:
-              'Working directory scope. Limits the search to this directory. Defaults to the current working directory.',
+              'Working directory scope. Limits the search to this directory. If you are searching the current project or are unsure, use "." for the current working directory. Use a specific path when the user names one explicitly.',
             type: 'string',
           },
           limit: {
@@ -258,7 +258,7 @@ export const LocalSystemManifest: BuiltinToolManifest = {
     {
       defaultTimeoutMs: 30_000,
       description:
-        'Retrieve output from a running or completed background shell command. Waits for one output window (up to 30 seconds by default) and returns only new output since the last check.',
+        'Retrieve output from a running or completed background shell command. Waits for one output window (up to 30 seconds by default).',
       name: LocalSystemApiName.getCommandOutput,
       parameters: {
         properties: {
@@ -378,6 +378,11 @@ export const LocalSystemManifest: BuiltinToolManifest = {
       name: LocalSystemApiName.globFiles,
       parameters: {
         properties: {
+          limit: {
+            description:
+              'Maximum number of matches to collect during execution. When omitted, the runtime applies a conservative default limit.',
+            type: 'number',
+          },
           pattern: {
             description:
               'The glob pattern to match files against (e.g. "**/*.js", "src/**/*.ts"). Relative patterns are resolved against the scope.',
@@ -385,7 +390,7 @@ export const LocalSystemManifest: BuiltinToolManifest = {
           },
           scope: {
             description:
-              'Working directory scope. When `pattern` is relative, it is joined with this scope. Defaults to the current working directory.',
+              'Working directory scope. When `pattern` is relative, it is joined with this scope. If you are searching the current project or are unsure, use "." for the current working directory. Use a specific path when the user names one explicitly.',
             type: 'string',
           },
         },

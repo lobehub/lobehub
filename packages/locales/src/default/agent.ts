@@ -11,6 +11,27 @@ export default {
   'channel.botTokenPlaceholderNew': 'Paste your bot token here',
   'channel.connectionConfig': 'Connection Configuration',
   'channel.copied': 'Copied to clipboard',
+  'channel.paidFeature.desc':
+    '{{name}} is available on paid plans. Upgrade to any paid plan to configure and keep this channel connected.',
+  'channel.paidFeature.title': 'Paid plan required',
+  'channel.paidFeature.badge': 'Pro',
+  'channel.paidFeature.cta.personal': 'Upgrade',
+  'channel.paidFeature.cta.workspace': 'Upgrade',
+  'channel.paidFeature.enforce.desc':
+    '{{name}} is available on paid plans. Upgrade to a paid personal plan or a Pro / Business workspace to configure and keep this channel connected.',
+  'channel.paidFeature.enforce.desc.personal':
+    '{{name}} is available on paid personal plans. Upgrade to configure and keep this channel connected.',
+  'channel.paidFeature.enforce.desc.workspace':
+    '{{name}} is available on Pro / Business workspaces. Upgrade this workspace to configure and keep this channel connected.',
+  'channel.paidFeature.enforce.title': 'Paid plan required',
+  'channel.paidFeature.notice.desc':
+    'Due to the high communication costs for the {{name}} channel, we plan to make this channel a paid feature soon. Existing connections remain available during the notice period, but creating or reconnecting this channel now requires a paid personal plan or a Pro / Business workspace.',
+  'channel.paidFeature.notice.desc.personal':
+    'Due to the high communication costs for the {{name}} channel, we plan to make this channel a paid feature soon. Existing connections remain available during the notice period, but creating or reconnecting this channel requires a paid personal plan.',
+  'channel.paidFeature.notice.desc.workspace':
+    'Due to the high communication costs for the {{name}} channel, we plan to make this channel a paid feature soon. Existing connections remain available during the notice period, but creating or reconnecting this channel requires upgrading this workspace to Pro or Business.',
+  'channel.paidFeature.notice.title': '{{name}} will soon require a paid plan',
+  'channel.paidFeature.noticeBadge': 'Pro soon',
   'channel.comingSoon': 'Coming Soon',
   'channel.comingSoonDesc':
     'We are working on bringing this integration to LobeHub. Stay tuned for updates.',
@@ -28,7 +49,6 @@ export default {
   'channel.devWebhookProxyUrl': 'HTTPS Tunnel URL',
   'channel.devWebhookProxyUrlHint':
     'Optional. HTTPS tunnel URL for forwarding webhook requests to local dev server.',
-  'channel.disabled': 'Disabled',
   'channel.discord.description':
     'Connect this agent to Discord server for channel chat and direct messages.',
   'channel.documentation': 'Documentation',
@@ -41,7 +61,6 @@ export default {
   'channel.importSuccess': 'Configuration imported successfully',
   'channel.importFailed': 'Failed to import configuration',
   'channel.importInvalidFormat': 'Invalid configuration file format',
-  'channel.enabled': 'Enabled',
   'channel.encryptKey': 'Encrypt Key',
   'channel.encryptKeyHint': 'Optional. Used to decrypt encrypted event payloads.',
   'channel.encryptKeyPlaceholder': 'Optional encryption key',

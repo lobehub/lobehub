@@ -7,6 +7,7 @@ import {
   BusinessMobileRoutesWithoutMainLayout,
 } from '@/business/client/BusinessMobileRoutes';
 import { mobileAgentSettingsRouteMeta } from '@/features/RouteMeta/mobileRouteMeta';
+import { verifyReportsRouteMeta, verifyRouteMeta } from '@/features/Verify/routeMeta';
 import { agentRouteMeta } from '@/routes/(main)/agent/features/routeMeta';
 import { shareTopicRouteMeta } from '@/routes/share/t/[id]/routeMeta';
 import { dynamicElement, dynamicLayout, ErrorBoundary, redirectElement } from '@/utils/router';
@@ -437,6 +438,13 @@ export const mobileRoutes: RouteObject[] = [
                 ),
                 path: 'usage',
               },
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/audit-log'),
+                  'Mobile > Workspace > Settings > Audit Log',
+                ),
+                path: 'audit-log',
+              },
             ],
             element: dynamicLayout(
               () => import('@/routes/(mobile)/settings/_layout'),
@@ -530,5 +538,27 @@ export const mobileRoutes: RouteObject[] = [
     element: dynamicElement(() => import('@/routes/verify-im'), 'Mobile > VerifyIm'),
     errorElement: <ErrorBoundary />,
     path: '/verify-im',
+  },
+
+  // Verify report workspace — standalone master-detail (outside main layout)
+  {
+    children: [
+      {
+        element: dynamicElement(
+          () => import('@/routes/(main)/verify/empty'),
+          'Mobile > Verify Empty',
+        ),
+        index: true,
+      },
+      {
+        element: dynamicElement(() => import('@/routes/verify/[runId]'), 'Mobile > VerifyReport'),
+        handle: { meta: verifyRouteMeta },
+        path: ':runId',
+      },
+    ],
+    element: dynamicElement(() => import('@/routes/(main)/verify'), 'Mobile > Verify'),
+    errorElement: <ErrorBoundary />,
+    handle: { meta: verifyReportsRouteMeta },
+    path: '/verify',
   },
 ];

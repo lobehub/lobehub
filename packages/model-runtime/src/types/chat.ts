@@ -1,5 +1,6 @@
 import type { ModelPerformance, ModelTokensUsage, ModelUsage } from '@lobechat/types';
 
+import type { ModelPricingContext } from './pricing';
 import type { MessageToolCall, MessageToolCallChunk } from './toolsCalling';
 
 export type LLMRoleType = 'user' | 'system' | 'assistant' | 'function' | 'tool';
@@ -133,6 +134,7 @@ export interface ChatStreamPayload {
   provider?: string;
   reasoning?: {
     effort?: string;
+    mode?: 'standard' | 'pro';
     summary?: string;
   };
   reasoning_effort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
@@ -187,6 +189,8 @@ export interface ChatMethodOptions {
   headers?: Record<string, any>;
   /** Metadata passed to hooks (billing, tracing, etc.) */
   metadata?: Record<string, unknown>;
+  /** Request-scoped pricing context for model-bank pricing lookups. */
+  pricingContext?: ModelPricingContext;
   /**
    * send the request to the ai api endpoint
    */
@@ -258,10 +262,7 @@ export interface UsageMissingDiagnostics {
   provider?: string;
   responseId?: string;
   source:
-    | 'anthropic_messages'
-    | 'google_generative_ai'
-    | 'openai_chat_completions'
-    | 'openai_responses';
+    'anthropic_messages' | 'google_generative_ai' | 'openai_chat_completions' | 'openai_responses';
   terminalEventType: string;
   terminalStatus?: string;
 }

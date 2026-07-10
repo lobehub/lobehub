@@ -3,7 +3,8 @@ import { type TopicExportMode } from '@lobechat/types';
 import { exportFile } from '@lobechat/utils/client';
 import { type FormItemProps } from '@lobehub/ui';
 import { Button, copyToClipboard, Flexbox, Form } from '@lobehub/ui';
-import { App, Segmented, Switch } from 'antd';
+import { Tabs } from '@lobehub/ui/base-ui';
+import { App, Switch } from 'antd';
 import { CopyIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -30,8 +31,8 @@ const ShareJSON = memo(() => {
 
   const exportModeOptions = useMemo(
     () => [
-      { label: t('shareModal.exportMode.full'), value: 'full' as TopicExportMode },
-      { label: t('shareModal.exportMode.simple'), value: 'simple' as TopicExportMode },
+      { key: 'full' as TopicExportMode, label: t('shareModal.exportMode.full') },
+      { key: 'simple' as TopicExportMode, label: t('shareModal.exportMode.simple') },
     ],
     [t],
   );
@@ -39,11 +40,16 @@ const ShareJSON = memo(() => {
   const settings: FormItemProps[] = [
     {
       children: (
-        <Segmented
-          block
-          options={exportModeOptions}
-          value={fieldValue.exportMode}
-          onChange={(value) => setFieldValue((prev) => ({ ...prev, exportMode: value }))}
+        <Tabs
+          activeKey={fieldValue.exportMode}
+          items={exportModeOptions}
+          styles={{
+            list: { display: 'flex', width: '100%' },
+            tab: { flex: 1 },
+          }}
+          onChange={(key) =>
+            setFieldValue((prev) => ({ ...prev, exportMode: key as TopicExportMode }))
+          }
         />
       ),
       label: t('shareModal.exportMode.label'),

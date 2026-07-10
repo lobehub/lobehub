@@ -1,9 +1,9 @@
-import { Modal } from '@lobehub/ui/base-ui';
 import { App, Input } from 'antd';
 import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import ImperativeModal from '@/components/ImperativeModal';
 import { ConnectorSourceType } from '@/database/schemas';
 import { lambdaClient } from '@/libs/trpc/client';
 import { useToolStore } from '@/store/tool';
@@ -313,12 +313,10 @@ const AddConnectorModal = memo<AddConnectorModalProps>(({ open, onClose, connect
     ? t('connector.add.editTitle', 'Edit Connector')
     : t('connector.add.title', 'Add custom connector');
 
-  const okText = isEditMode
-    ? t('connector.add.update', 'Save')
-    : t('connector.add.confirm', 'Add');
+  const okText = isEditMode ? t('connector.add.update', 'Save') : t('connector.add.confirm', 'Add');
 
   return (
-    <Modal
+    <ImperativeModal
       cancelText={t('connector.add.cancel', 'Cancel')}
       confirmLoading={submitting}
       okButtonProps={{ disabled: !name.trim() || !url.trim() }}
@@ -374,6 +372,7 @@ const AddConnectorModal = memo<AddConnectorModalProps>(({ open, onClose, connect
                 onChange={(e) => setClientId(e.target.value)}
               />
               <Input.Password
+                autoComplete="new-password"
                 placeholder={t('connector.add.clientSecret', 'OAuth Client Secret (optional)')}
                 value={clientSecret}
                 onChange={(e) => setClientSecret(e.target.value)}
@@ -387,7 +386,7 @@ const AddConnectorModal = memo<AddConnectorModalProps>(({ open, onClose, connect
           )}
         </div>
       </div>
-    </Modal>
+    </ImperativeModal>
   );
 });
 

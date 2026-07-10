@@ -192,6 +192,10 @@ export interface FixedPricingUnit extends PricingUnitBase {
 export interface TieredPricingUnit extends PricingUnitBase {
   strategy: 'tiered';
   tiers: Array<{
+    /**
+     * Original display price before discounts. Billing and cost calculation use `rate`.
+     */
+    originalRate?: number;
     rate: number;
     upTo: number | 'infinity';
   }>;
@@ -199,6 +203,10 @@ export interface TieredPricingUnit extends PricingUnitBase {
 
 export interface LookupPricingUnit extends PricingUnitBase {
   lookup: {
+    /**
+     * Original display prices before discounts. Billing and cost calculation use `prices`.
+     */
+    originalPrices?: Record<string, number>;
     prices: Record<string, number>;
     pricingParams: string[];
   };
@@ -293,13 +301,16 @@ export type ExtendParamsType =
   | 'effort'
   | 'deepseekV4ReasoningEffort'
   | 'reasoningEffort'
+  | 'reasoningMode'
   | 'gpt5ReasoningEffort'
   | 'gpt5_1ReasoningEffort'
   | 'gpt5_2ReasoningEffort'
   | 'gpt5_2ProReasoningEffort'
+  | 'gpt5_6ReasoningEffort'
   | 'glm5_2ReasoningEffort'
   | 'grok4_20ReasoningEffort'
   | 'grok4_3ReasoningEffort'
+  | 'grok4_5ReasoningEffort'
   | 'hy3ReasoningEffort'
   | 'ring2_6ReasoningEffort'
   | 'codexMaxReasoningEffort'
@@ -346,13 +357,16 @@ export const ExtendParamsTypeSchema = z.enum([
   'effort',
   'deepseekV4ReasoningEffort',
   'reasoningEffort',
+  'reasoningMode',
   'gpt5ReasoningEffort',
   'gpt5_1ReasoningEffort',
   'gpt5_2ReasoningEffort',
   'gpt5_2ProReasoningEffort',
+  'gpt5_6ReasoningEffort',
   'glm5_2ReasoningEffort',
   'grok4_20ReasoningEffort',
   'grok4_3ReasoningEffort',
+  'grok4_5ReasoningEffort',
   'hy3ReasoningEffort',
   'ring2_6ReasoningEffort',
   'codexMaxReasoningEffort',
@@ -519,8 +533,8 @@ export const UpdateAiModelSchema = z.object({
       deploymentName: z.string().optional(),
     })
     .optional(),
-  contextWindowTokens: z.number().nullable().optional(),
-  displayName: z.string().nullable().optional(),
+  contextWindowTokens: z.number().nullish(),
+  displayName: z.string().nullish(),
   settings: AiModelSettingsSchema.optional(),
   type: AiModelTypeSchema.optional(),
 });
@@ -584,6 +598,7 @@ export interface EnabledAiModel {
   id: string;
   knowledgeCutoff?: string;
   parameters?: ModelParamsSchema;
+  pricing?: Pricing;
   providerId: string;
   releasedAt?: string;
   settings?: AiModelSettings;

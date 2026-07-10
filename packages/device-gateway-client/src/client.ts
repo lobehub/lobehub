@@ -68,7 +68,15 @@ export interface GatewayClientOptions {
   serverUrl?: string;
   token: string;
   tokenType?: 'apiKey' | 'jwt' | 'serviceToken';
+  userAgent?: string;
   userId?: string;
+  /**
+   * When set, the connection enrolls as a WORKSPACE-owned device: the gateway
+   * routes it to the `workspace:<id>` principal (reachable by all members)
+   * instead of the signer's personal one. The connect token must carry a
+   * matching `workspace_id` claim or the gateway rejects the socket.
+   */
+  workspaceId?: string;
 }
 
 export class GatewayClient extends EventEmitter {
@@ -85,7 +93,9 @@ export class GatewayClient extends EventEmitter {
   private gatewayUrl: string;
   private token: string;
   private tokenType?: 'apiKey' | 'jwt' | 'serviceToken';
+  private userAgent?: string;
   private userId?: string;
+  private workspaceId?: string;
   private serverUrl?: string;
   private logger: GatewayClientLogger;
   private autoReconnect: boolean;
@@ -94,12 +104,14 @@ export class GatewayClient extends EventEmitter {
     super();
     this.token = options.token;
     this.tokenType = options.tokenType;
+    this.userAgent = options.userAgent;
     this.gatewayUrl = options.gatewayUrl || DEFAULT_GATEWAY_URL;
     this.deviceId = options.deviceId || randomUUID();
     this.connectionId = options.connectionId || randomUUID();
     this.channel = options.channel;
     this.serverUrl = options.serverUrl;
     this.userId = options.userId;
+    this.workspaceId = options.workspaceId;
     this.logger = options.logger || noopLogger;
     this.autoReconnect = options.autoReconnect ?? true;
   }
@@ -160,6 +172,10 @@ export class GatewayClient extends EventEmitter {
   }
 
   async disconnect(): Promise<void> {
+    // Explicit log so a permanent stop (e.g. the auth_failed path calls
+    // disconnect()) is provable from logs instead of inferred from the
+    // absence of later reconnect lines.
+    this.logger.info('Intentional disconnect; auto-reconnect disabled');
     this.intentionalDisconnect = true;
     this.cleanup();
     this.setStatus('disconnected');
@@ -211,7 +227,8 @@ export class GatewayClient extends EventEmitter {
       const wsUrl = this.buildWsUrl();
       this.logger.debug(`Connecting to: ${wsUrl}`);
 
-      const ws = new WebSocket(wsUrl);
+      const wsOptions = this.userAgent ? { headers: { 'User-Agent': this.userAgent } } : undefined;
+      const ws = new WebSocket(wsUrl, wsOptions);
 
       ws.on('open', this.handleOpen);
       ws.on('message', this.handleMessage);
@@ -245,18 +262,39 @@ export class GatewayClient extends EventEmitter {
       params.set('channel', this.channel);
     }
 
-    // Service token mode: pass userId in query
-    if (this.userId) {
+    // Workspace device: route to the `workspace:<id>` principal. Otherwise the
+    // personal path passes userId. (The DO re-validates the token's claim, so
+    // the routing param alone grants nothing.)
+    if (this.workspaceId) {
+      params.set('workspaceId', this.workspaceId);
+    } else if (this.userId) {
       params.set('userId', this.userId);
     }
 
     return `${wsProtocol}://${host}/ws?${params.toString()}`;
   }
 
+  /**
+   * Best-effort JWT `exp` readout for auth logs. Internal backoff/heartbeat
+   * reconnects reuse `this.token`, so whether the token was already expired
+   * at auth time is the deciding fact when diagnosing auth failures from
+   * logs. Never logs the token itself.
+   */
+  private describeTokenExpiry(): string {
+    try {
+      const payload = JSON.parse(Buffer.from(this.token.split('.')[1], 'base64url').toString());
+      if (typeof payload.exp !== 'number') return 'token exp: none';
+      const expired = Date.now() >= payload.exp * 1000;
+      return `token exp: ${new Date(payload.exp * 1000).toISOString()}${expired ? ' (EXPIRED)' : ''}`;
+    } catch {
+      return 'token exp: unparsable';
+    }
+  }
+
   // ─── WebSocket Event Handlers ───
 
   private handleOpen = () => {
-    this.logger.info('WebSocket connected, sending auth...');
+    this.logger.info(`WebSocket connected, sending auth... (${this.describeTokenExpiry()})`);
     this.reconnectDelay = INITIAL_RECONNECT_DELAY;
     this.setStatus('authenticating');
 

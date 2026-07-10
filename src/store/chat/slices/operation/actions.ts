@@ -790,6 +790,33 @@ export class OperationActionsImpl {
     return messages;
   };
 
+  moveQueuedMessages = (fromContextKey: string, toContextKey: string): void => {
+    if (fromContextKey === toContextKey) return;
+
+    const queue = this.#get().queuedMessages[fromContextKey];
+    if (!queue || queue.length === 0) return;
+
+    this.#set(
+      produce((state: ChatStore) => {
+        const fromQueue = state.queuedMessages[fromContextKey];
+        if (!fromQueue || fromQueue.length === 0) return;
+
+        const toQueue = state.queuedMessages[toContextKey] ?? [];
+        state.queuedMessages[toContextKey] = [...toQueue, ...fromQueue];
+        state.queuedMessages[fromContextKey] = [];
+      }),
+      false,
+      n(`moveQueuedMessages/${fromContextKey}/${toContextKey}`),
+    );
+
+    log(
+      '[moveQueuedMessages] fromContextKey=%s, toContextKey=%s, moved %d',
+      fromContextKey,
+      toContextKey,
+      queue.length,
+    );
+  };
+
   removeQueuedMessage = (contextKey: string, messageId: string): void => {
     this.#set(
       produce((state: ChatStore) => {

@@ -13,7 +13,7 @@ import {
   useSetCurrentDrag,
 } from '@/routes/(main)/resource/features/DndContextWrapper';
 import { documentService } from '@/services/document';
-import { useFileStore } from '@/store/file';
+import { getChunkTargetId, useFileStore } from '@/store/file';
 import { type FileListItem } from '@/types/files';
 
 import { useFileItemClick } from '../../hooks/useFileItemClick';
@@ -195,6 +195,7 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
     url,
     name,
     fileType,
+    fileId,
     id,
     selected,
     chunkingStatus,
@@ -205,7 +206,10 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
     metadata,
     sourceType,
     slug,
+    userId,
+    visibility,
   }) => {
+    const chunkTargetId = getChunkTargetId({ fileId, id });
     const [markdownContent, setMarkdownContent] = useState<string>('');
     const [isLoadingMarkdown, setIsLoadingMarkdown] = useState(false);
 
@@ -376,6 +380,8 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
       libraryId: knowledgeBaseId,
       sourceType,
       url,
+      userId,
+      visibility,
     });
 
     return (
@@ -437,7 +443,7 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
                     embeddingStatus={embeddingStatus ?? undefined}
                     fileType={fileType}
                     finishEmbedding={finishEmbedding}
-                    id={id}
+                    id={chunkTargetId}
                     isInView={isInView}
                     name={name}
                     size={size}
@@ -455,7 +461,7 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
                     embeddingStatus={embeddingStatus ?? undefined}
                     fileType={fileType}
                     finishEmbedding={finishEmbedding}
-                    id={id}
+                    id={chunkTargetId}
                     isLoadingMarkdown={isLoadingMarkdown}
                     markdownContent={markdownContent}
                     metadata={metadata}
@@ -473,7 +479,7 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
                     embeddingStatus={embeddingStatus ?? undefined}
                     fileType={fileType}
                     finishEmbedding={finishEmbedding}
-                    id={id}
+                    id={chunkTargetId}
                     isLoadingMarkdown={isLoadingMarkdown}
                     markdownContent={markdownContent}
                     name={name}
@@ -491,7 +497,7 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
                     embeddingStatus={embeddingStatus ?? undefined}
                     fileType={fileType}
                     finishEmbedding={finishEmbedding}
-                    id={id}
+                    id={chunkTargetId}
                     name={name}
                     size={size}
                   />

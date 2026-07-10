@@ -1,4 +1,9 @@
-import type { ExecAgentAppContext, ExecAgentResult } from '@lobechat/types';
+import type {
+  ExecAgentAppContext,
+  ExecAgentResult,
+  RuntimeMentionedAgent,
+  UserInterventionConfig,
+} from '@lobechat/types';
 
 import { lambdaClient } from '@/libs/trpc/client';
 
@@ -24,6 +29,28 @@ export interface ResumeApprovalParam {
   toolCallId: string;
 }
 
+/**
+ * Resume instruction for an operation that paused on a `humanIntervention:
+ * 'always'` tool (e.g. lobe-agent `askUserQuestion`) during a GATEWAY/server
+ * run. When present, the new op writes the human-provided answer as the pending
+ * tool message's result and resumes from `phase: 'tool_result'` — the tool is
+ * NOT re-executed, so the server runtime never overwrites the answer with a
+ * fresh "pending" placeholder.
+ *
+ * Kept as a top-level field (not folded into `appContext`) so the server schema
+ * can validate it independently.
+ */
+export interface ResumeToolResultParam {
+  /** The human-provided tool result (the answer text). */
+  content: string;
+  /** ID of the pending `role='tool'` message this result targets. */
+  parentMessageId: string;
+  /** Optional plugin state to persist on the tool message. */
+  pluginState?: Record<string, unknown>;
+  /** tool_call_id of the pending tool call being answered. */
+  toolCallId: string;
+}
+
 export interface ExecAgentTaskParams {
   agentId?: string;
   appContext?: ExecAgentAppContext;
@@ -32,11 +59,21 @@ export interface ExecAgentTaskParams {
   existingMessageIds?: string[];
   /** File IDs of already-uploaded attachments to attach to the new user message */
   fileIds?: string[];
+  /**
+   * Agents the user @-mentioned in this message (multi-mention). The server
+   * enables the callAgent tool and injects the mentioned-agents delegation
+   * context so the supervisor run delegates to them instead of answering itself.
+   */
+  mentionedAgents?: RuntimeMentionedAgent[];
   /** Parent message ID for regeneration/continue (skip user message creation, branch from this message) */
   parentMessageId?: string;
   prompt: string;
   /** Resume a previous op paused on `human_approve_required` instead of starting from a fresh user prompt. */
   resumeApproval?: ResumeApprovalParam;
+  /** Resume a previous op paused on a human-intervention tool by carrying the human answer as the tool result. */
+  resumeToolResult?: ResumeToolResultParam;
+  /** Tool identifiers the user @-mentioned in this message; the server enables them for this run. */
+  selectedToolIds?: string[];
   slug?: string;
   /**
    * Override what initiated this operation. Server defaults to `'chat'` when
@@ -44,6 +81,7 @@ export interface ExecAgentTaskParams {
    * `agent_operations.trigger` column reflects the real source.
    */
   trigger?: string;
+  userInterventionConfig?: UserInterventionConfig;
 }
 
 /**

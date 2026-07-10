@@ -11,10 +11,10 @@
     "test:coverage": "bunx vitest run --coverage"
   },
   "dependencies": {
-    "ws": "^8.18.1"
+    "ws": "^8.21.0"
   },
   "devDependencies": {
     "@types/ws": "^8.18.1",
-    "vitest": "^3.2.6"
+    "vitest": "3.2.4"
   }
 }

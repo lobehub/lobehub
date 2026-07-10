@@ -200,11 +200,23 @@ export class SkillParser {
         }
       }
 
-      // Fallback: try to find SKILL.md that contains the basePath
-      const basePathPattern = new RegExp(
-        `^[^/]+/${basePath.replaceAll(/^\/|\/$/g, '')}/SKILL\\.md$`,
-      );
-      const matchWithBasePath = allPaths.find((path) => basePathPattern.test(path));
+      // Fallback: try to find SKILL.md at <root>/<basePath>/SKILL.md, where <root>
+      // is a single top-level directory segment (the GitHub "{repo}-{branch}/" prefix).
+      //
+      // NOTE: basePath is fully user-controlled (derived from the GitHub URL path). It must
+      // NOT be interpolated into a `new RegExp(...)`, otherwise crafted paths like `(a+)+`
+      // cause catastrophic backtracking (ReDoS, blocking the event loop) and `[invalid`
+      // throws a SyntaxError. Use plain string matching instead, which is equivalent to the
+      // old `^[^/]+/<basePath>/SKILL\.md$` pattern.
+      const normalizedBasePath = basePath.replaceAll(/^\/|\/$/g, '');
+      const suffix = `/${normalizedBasePath}/SKILL.md`;
+      const matchWithBasePath = allPaths.find((path) => {
+        if (!path.endsWith(suffix)) return false;
+        // The part before the suffix must be a single non-empty segment (no slashes),
+        // matching the `^[^/]+` anchor of the original pattern.
+        const prefix = path.slice(0, -suffix.length);
+        return prefix.length > 0 && !prefix.includes('/');
+      });
 
       if (matchWithBasePath) {
         return {
@@ -212,6 +224,12 @@ export class SkillParser {
           skillMdPath: matchWithBasePath,
         };
       }
+
+      // basePath was explicitly requested (GitHub subdirectory import) but no SKILL.md
+      // exists there. Do NOT fall through to the generic root/first-level lookup below:
+      // that would silently import an unrelated root skill (e.g. "repo-main/SKILL.md")
+      // when the user asked for a specific subdirectory. Report "not found" instead.
+      return { skillMdContent: '', skillMdPath: null };
     }
 
     // Check root directory first

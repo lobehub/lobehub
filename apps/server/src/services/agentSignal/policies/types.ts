@@ -56,17 +56,10 @@ export type AgentSignalFeedbackDomainTarget = 'memory' | 'none' | 'prompt' | 'sk
 export type AgentSignalFeedbackPhase1DomainTarget = 'memory' | 'prompt' | 'skill';
 
 export type AgentSignalSkillIntentExplicitness =
-  | 'explicit_action'
-  | 'implicit_strong_learning'
-  | 'non_skill_preference'
-  | 'weak_positive';
+  'explicit_action' | 'implicit_strong_learning' | 'non_skill_preference' | 'weak_positive';
 
 export type AgentSignalSkillActionIntent =
-  | 'consolidate'
-  | 'create'
-  | 'maintain'
-  | 'noop'
-  | 'refine';
+  'consolidate' | 'create' | 'maintain' | 'noop' | 'refine';
 
 export type AgentSignalSkillIntentRoute = 'accumulate' | 'direct_decision' | 'non_skill';
 
@@ -146,6 +139,8 @@ export interface AgentSignalFeedbackDomainConflictPolicy {
 export interface AgentSignalPolicySignalPayloadMap {
   [AGENT_SIGNAL_POLICY_SIGNAL_TYPES.feedbackDomainMemory]: {
     agentId?: string;
+    /** Assistant message that completed the turn, used as the receipt anchor when known. */
+    anchorMessageId?: string;
     confidence: number;
     conflictPolicy: AgentSignalFeedbackDomainConflictPolicy;
     evidence: AgentSignalFeedbackEvidence[];
@@ -159,9 +154,13 @@ export interface AgentSignalPolicySignalPayloadMap {
     topicId?: string;
     /** Source event trigger copied from the original feedback input when available. */
     trigger?: string;
+    /** Message that initiated the source or run, usually the user message. */
+    triggerMessageId?: string;
   };
   [AGENT_SIGNAL_POLICY_SIGNAL_TYPES.feedbackDomainNone]: {
     agentId?: string;
+    /** Assistant message that completed the turn, used as the receipt anchor when known. */
+    anchorMessageId?: string;
     confidence: number;
     conflictPolicy: AgentSignalFeedbackDomainConflictPolicy;
     evidence: AgentSignalFeedbackEvidence[];
@@ -175,9 +174,13 @@ export interface AgentSignalPolicySignalPayloadMap {
     topicId?: string;
     /** Source event trigger copied from the original feedback input when available. */
     trigger?: string;
+    /** Message that initiated the source or run, usually the user message. */
+    triggerMessageId?: string;
   };
   [AGENT_SIGNAL_POLICY_SIGNAL_TYPES.feedbackDomainPrompt]: {
     agentId?: string;
+    /** Assistant message that completed the turn, used as the receipt anchor when known. */
+    anchorMessageId?: string;
     confidence: number;
     conflictPolicy: AgentSignalFeedbackDomainConflictPolicy;
     evidence: AgentSignalFeedbackEvidence[];
@@ -191,9 +194,13 @@ export interface AgentSignalPolicySignalPayloadMap {
     topicId?: string;
     /** Source event trigger copied from the original feedback input when available. */
     trigger?: string;
+    /** Message that initiated the source or run, usually the user message. */
+    triggerMessageId?: string;
   };
   [AGENT_SIGNAL_POLICY_SIGNAL_TYPES.feedbackDomainSkill]: {
     agentId?: string;
+    /** Assistant message that completed the turn, used as the receipt anchor when known. */
+    anchorMessageId?: string;
     confidence: number;
     conflictPolicy: AgentSignalFeedbackDomainConflictPolicy;
     evidence: AgentSignalFeedbackEvidence[];
@@ -213,9 +220,13 @@ export interface AgentSignalPolicySignalPayloadMap {
     topicId?: string;
     /** Source event trigger copied from the original feedback input when available. */
     trigger?: string;
+    /** Message that initiated the source or run, usually the user message. */
+    triggerMessageId?: string;
   };
   [AGENT_SIGNAL_POLICY_SIGNAL_TYPES.feedbackSatisfaction]: {
     agentId?: string;
+    /** Assistant message that completed the turn, used as the receipt anchor when known. */
+    anchorMessageId?: string;
     confidence: number;
     evidence: AgentSignalFeedbackEvidence[];
     message: string;
@@ -227,6 +238,8 @@ export interface AgentSignalPolicySignalPayloadMap {
     topicId?: string;
     /** Source event trigger copied from the original feedback input when available. */
     trigger?: string;
+    /** Message that initiated the source or run, usually the user message. */
+    triggerMessageId?: string;
   };
   [AGENT_SIGNAL_POLICY_SIGNAL_TYPES.nudgeMemoryConditionMatched]: {
     agentId?: string;
@@ -262,10 +275,7 @@ export interface AgentSignalPolicySignalPayloadMap {
     operationId: string;
     outcome: 'failed' | 'resolved' | 'succeeded';
     reason:
-      | 'execution-failed'
-      | 'repeated-repair'
-      | 'successful-resolution'
-      | 'unexpected-tool-result';
+      'execution-failed' | 'repeated-repair' | 'successful-resolution' | 'unexpected-tool-result';
     serializedContext?: string;
     topicId?: string;
   };
@@ -317,6 +327,8 @@ export interface AgentSignalPolicyActionPayloadMap {
   };
   [AGENT_SIGNAL_POLICY_ACTION_TYPES.skillManagementHandle]: {
     agentId?: string;
+    /** Assistant message that completed the turn, used as the receipt anchor when known. */
+    assistantMessageId?: string;
     conflictPolicy?: AgentSignalFeedbackDomainConflictPolicy;
     evidence?: AgentSignalFeedbackEvidence[];
     feedbackHint?: Exclude<AgentSignalFeedbackSatisfactionResult, 'neutral'>;
@@ -327,9 +339,13 @@ export interface AgentSignalPolicyActionPayloadMap {
     serializedContext?: string;
     sourceHints?: AgentSignalFeedbackSourceHints;
     topicId?: string;
+    /** Message that initiated the source or run, usually the user message. */
+    triggerMessageId?: string;
   };
   [AGENT_SIGNAL_POLICY_ACTION_TYPES.userMemoryHandle]: {
     agentId?: string;
+    /** Assistant message that completed the turn, used as the receipt anchor when known. */
+    assistantMessageId?: string;
     conflictPolicy?: AgentSignalFeedbackDomainConflictPolicy;
     evidence?: AgentSignalFeedbackEvidence[];
     feedbackHint?: Exclude<AgentSignalFeedbackSatisfactionResult, 'neutral'>;
@@ -340,6 +356,8 @@ export interface AgentSignalPolicyActionPayloadMap {
     serializedContext?: string;
     sourceHints?: AgentSignalFeedbackSourceHints;
     topicId?: string;
+    /** Message that initiated the source or run, usually the user message. */
+    triggerMessageId?: string;
   };
 }
 
@@ -415,9 +433,7 @@ export type ActionNudgeHandle = AgentSignalPolicyActionVariant<'action.nudge.han
 
 /** Sources that can trigger the memory-nudge policy. */
 export type MemoryNudgePolicySource =
-  | SourceAgentExecutionCompleted
-  | SourceRuntimeAfterStep
-  | SourceRuntimeBeforeStep;
+  SourceAgentExecutionCompleted | SourceRuntimeAfterStep | SourceRuntimeBeforeStep;
 
 /** Sources that can trigger self-reflection analysis. */
 export type SelfReflectionPolicySource = SourceAgentExecutionCompleted | SourceAgentExecutionFailed;

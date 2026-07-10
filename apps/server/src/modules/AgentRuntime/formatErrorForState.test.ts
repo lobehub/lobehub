@@ -1,8 +1,8 @@
+import { ModelEmptyError } from '@lobechat/model-runtime';
 import { AgentRuntimeErrorType, ChatErrorType } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
 import { formatErrorForState } from './formatErrorForState';
-import { ModelEmptyError } from './ModelEmptyError';
 
 describe('formatErrorForState', () => {
   describe('input normalization', () => {
@@ -83,7 +83,14 @@ describe('formatErrorForState', () => {
     });
 
     it('enriches a thrown ModelEmptyError into a readable retryable terminal error', () => {
-      const result = formatErrorForState(new ModelEmptyError());
+      const result = formatErrorForState(
+        new ModelEmptyError(undefined, {
+          attempt: 3,
+          maxAttempts: 3,
+          outputTokens: 1,
+          retryEvents: [{ attempt: 2, delayMs: 1000, maxAttempts: 3 }],
+        }),
+      );
 
       // The `errorType` field must win over the generic Error → InternalServerError
       // path so the terminal state is classified and dashboard-visible instead of
@@ -95,6 +102,14 @@ describe('formatErrorForState', () => {
       expect(result.countAsFailure).toBe(true);
       expect(result.numericId).toBe(8014);
       expect(result.message).toContain('empty completion');
+      expect(result.body).toMatchObject({
+        diagnostics: {
+          attempt: 3,
+          maxAttempts: 3,
+          outputTokens: 1,
+          retryEvents: [expect.objectContaining({ attempt: 2 })],
+        },
+      });
     });
 
     it('marks provider-side rate limits as retryable with provider attribution', () => {
@@ -167,6 +182,35 @@ describe('formatErrorForState', () => {
       expect(result.type).toBe(AgentRuntimeErrorType.DatabasePersistError);
       expect(result.numericId).toBe(7004);
       expect(result.attribution).toBe('harness');
+    });
+
+    it('unwraps PG diagnostics from a Drizzle "Failed query" cause for final state errors', () => {
+      const error = new Error('Failed query: begin \nparams: ');
+      (error as any).cause = {
+        code: 'XX000',
+        message:
+          'Failed to acquire permit to connect to the database. Too many database connection attempts are currently ongoing.',
+        severity: 'ERROR',
+      };
+
+      const result = formatErrorForState(error);
+
+      expect(result.type).toBe('pg_XX000');
+      expect(result.message).toBe(
+        'PG XX000 · ERROR · Failed to acquire permit to connect to the database. Too many database connection attempts are currently ongoing.',
+      );
+      expect(result.attribution).toBe('harness');
+      expect(result.category).toBe('stream');
+      expect(result.countAsFailure).toBe(true);
+      expect(result.body).toMatchObject({
+        pg: {
+          code: 'XX000',
+          message:
+            'Failed to acquire permit to connect to the database. Too many database connection attempts are currently ongoing.',
+          severity: 'ERROR',
+        },
+        wrappedMessage: 'Failed query: begin \nparams: ',
+      });
     });
   });
 
@@ -256,6 +300,61 @@ describe('formatErrorForState', () => {
       // ProviderBizError is a catch-all — flagged so monitoring can track
       // how much volume still lands in fallback buckets.
       expect(result.isFallback).toBe(true);
+    });
+  });
+
+  // The heterogeneous CLI agents (Claude Code / Codex) used to normalize their
+  // wire `error` event data through a bespoke `toChatMessageError`. That helper is
+  // retired — these inputs now flow through this single canonical formatter so a
+  // hetero error is classified identically to an in-process one. These guard the
+  // shapes that bespoke helper handled (and the '[object Object]' bug it avoided).
+  describe('heterogeneous CLI error normalization', () => {
+    it('keeps a typed wire error `{ message, type, code }` as AgentRuntimeError, message intact', () => {
+      // The real CC/Codex wire shape carries a `type` (→ already-normalized path)
+      // plus a `code` (e.g. AuthRequired) used elsewhere for echo suppression.
+      const result = formatErrorForState({
+        code: 'AuthRequired',
+        message: 'cli adapter failure xyz',
+        type: 'AgentRuntimeError',
+      });
+
+      expect(result.type).toBe(AgentRuntimeErrorType.AgentRuntimeError);
+      expect(result.message).toBe('cli adapter failure xyz');
+    });
+
+    it('extracts `.message` from a typeless `{ message, stderr }` body instead of stringifying it', () => {
+      // Regression: stringifying the object yielded the message "[object Object]".
+      const result = formatErrorForState({ message: 'agent process exited', stderr: 'boom' });
+
+      expect(result.type).toBe(AgentRuntimeErrorType.AgentRuntimeError);
+      expect(result.message).toBe('agent process exited');
+      expect(result.message).not.toBe('[object Object]');
+      // The raw body is preserved so downstream keeps the stderr / code context.
+      expect(result.body).toMatchObject({ message: 'agent process exited', stderr: 'boom' });
+    });
+
+    it('falls back to a generic message for a typeless body with no message', () => {
+      const result = formatErrorForState({ code: 'Unknown' });
+
+      expect(result.type).toBe(AgentRuntimeErrorType.AgentRuntimeError);
+      expect(result.message).toBe('Agent runtime error');
+      expect(result.body).toMatchObject({ code: 'Unknown' });
+    });
+
+    it('wraps a non-string primitive as a generic AgentRuntimeError', () => {
+      const result = formatErrorForState(42);
+
+      expect(result.type).toBe(AgentRuntimeErrorType.AgentRuntimeError);
+      expect(result.message).toBe('Agent runtime error');
+      expect(result.body).toEqual({ message: 'Agent runtime error' });
+    });
+
+    it('wraps a raw string in a `{ message }` body', () => {
+      const result = formatErrorForState('plain string failure');
+
+      expect(result.type).toBe(AgentRuntimeErrorType.AgentRuntimeError);
+      expect(result.message).toBe('plain string failure');
+      expect(result.body).toEqual({ message: 'plain string failure' });
     });
   });
 });

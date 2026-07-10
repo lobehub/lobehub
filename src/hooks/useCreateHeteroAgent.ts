@@ -8,6 +8,11 @@ import { useHomeStore } from '@/store/home';
 export interface CreateHeteroAgentOptions {
   groupId?: string;
   onSuccess?: () => void;
+  /**
+   * Forwarded to the server-side `visibility` column when the call originates
+   * from the sidebar's "Private" bucket. Defaults to undefined (public).
+   */
+  visibility?: 'private' | 'public';
 }
 
 /**
@@ -31,10 +36,17 @@ export const useCreateHeteroAgent = () => {
             },
           },
           avatar: definition.avatar,
+          // Stamp the heterogeneous type as the agent's provider so every reader
+          // (op rows, agent list, message tags) attributes the run to claude-code /
+          // codex rather than the inherited default chat provider (e.g. lobehub).
+          // The real chat model is reported by the CLI at runtime, so `model` stays
+          // unset here and is backfilled per-run.
+          provider: definition.type,
           systemRole: '',
           title: definition.title,
         },
         groupId: options?.groupId,
+        visibility: options?.visibility,
       });
       await refreshAgentList();
       navigate(`/agent/${result.agentId}`);

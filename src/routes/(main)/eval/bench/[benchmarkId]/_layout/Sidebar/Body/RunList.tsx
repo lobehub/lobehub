@@ -65,7 +65,7 @@ const RunList = memo<RunListProps>(({ activeKey, benchmarkId, itemKey }) => {
             {t('sidebar.runs')}
           </Text>
           {runList.length > 0 && (
-            <Text fontSize={11} type="secondary">
+            <Text fontSize={12} type="secondary">
               {runList.length}
             </Text>
           )}

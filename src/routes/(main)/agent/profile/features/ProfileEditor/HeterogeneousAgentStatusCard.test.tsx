@@ -126,8 +126,8 @@ vi.mock('@/features/Electron/HeterogeneousAgent/StatusGuide', () => ({
   ),
 }));
 
-vi.mock('@/services/electron/toolDetector', () => ({
-  toolDetectorService: {
+vi.mock('@/services/electron/binary', () => ({
+  binaryService: {
     detectHeterogeneousAgentCommand,
     getClaudeAuthStatus,
   },

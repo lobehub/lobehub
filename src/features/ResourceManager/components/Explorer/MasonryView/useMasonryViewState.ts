@@ -14,12 +14,12 @@ export const useMasonryViewState = ({
   dataLength,
   isLoading,
   isNavigating,
-  isValidating,
+  isValidating: _isValidating,
   viewMode: _viewMode,
 }: UseMasonryViewStateOptions) => {
   const showSkeleton = useMemo(
-    () => (isLoading && dataLength === 0) || (isNavigating && isValidating),
-    [dataLength, isLoading, isNavigating, isValidating],
+    () => (isLoading && dataLength === 0) || isNavigating,
+    [dataLength, isLoading, isNavigating],
   );
 
   const isMasonryReady = !showSkeleton;

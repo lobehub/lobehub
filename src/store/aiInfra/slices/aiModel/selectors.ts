@@ -27,7 +27,9 @@ const totalAiProviderModelList = (s: AIProviderStoreState) => s.aiProviderModelL
 const isEmptyAiProviderModelList = (s: AIProviderStoreState) => totalAiProviderModelList(s) === 0;
 
 const getModelCard = (model: string, provider: string) => (s: AIProviderStoreState) =>
-  s.builtinAiModelList.find((item) => item.id === model && item.providerId === provider);
+  s.enabledAiModels?.find(
+    (item) => item.id === model && (provider ? item.providerId === provider : true),
+  ) || s.builtinAiModelList.find((item) => item.id === model && item.providerId === provider);
 
 const hasRemoteModels = (s: AIProviderStoreState) =>
   s.aiProviderModelList.some((m) => m.source === AiModelSourceEnum.Remote);

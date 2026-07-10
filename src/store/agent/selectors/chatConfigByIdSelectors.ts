@@ -6,6 +6,7 @@ import {
 import { type LobeAgentChatConfig, type RuntimeEnvMode } from '@lobechat/types';
 
 import { resolveRuntimeMode, resolveToolMode } from '@/helpers/executionTarget';
+import { resolveGatewayModeEnabled } from '@/helpers/gatewayMode';
 import { type AgentStoreState } from '@/store/agent/initialState';
 
 import { agentSelectors } from './selectors';
@@ -73,7 +74,18 @@ const getRuntimeModeById =
   (s: AgentStoreState): RuntimeEnvMode => {
     const config = agentSelectors.getAgentConfigById(agentId)(s);
 
-    return resolveRuntimeMode(config?.agencyConfig, isDesktop);
+    // On web a bound `local` target only surfaces as `device` (not `sandbox`)
+    // when Gateway mode is effectively enabled and can route to the device
+    // (LOBE-11473). Derive the gate from this selector's own state `s` so it
+    // re-evaluates on `disableGatewayMode` changes without a second global read.
+    // Workspace agents never execute on the current member's own client —
+    // their default/stored `local` coerces away (see `workspaceScoped`).
+    return resolveRuntimeMode(
+      config?.agencyConfig,
+      isDesktop,
+      resolveGatewayModeEnabled(s, agentId),
+      !!s.agentMap[agentId]?.workspaceId,
+    );
   };
 
 const getSkillActivateModeById =

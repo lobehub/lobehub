@@ -3,15 +3,38 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AiAgentService } from '../index';
 
 const {
+  mockDeviceFindByDeviceId,
+  mockDeviceFindWorkspaceDeviceById,
+  mockDispatchAgentRun,
   mockMessageCreate,
   mockResolveAttachmentsByFileIds,
   mockSpawnHeteroSandbox,
   mockIngestAttachment,
+  mockPublishAgentRuntimeInit,
+  mockPublishAgentRuntimeEnd,
 } = vi.hoisted(() => ({
+  mockDeviceFindByDeviceId: vi.fn(),
+  mockDeviceFindWorkspaceDeviceById: vi.fn(),
+  mockDispatchAgentRun: vi.fn().mockResolvedValue({ success: true }),
   mockIngestAttachment: vi.fn(),
   mockMessageCreate: vi.fn(),
+  mockPublishAgentRuntimeEnd: vi.fn().mockResolvedValue('end-event-id'),
+  mockPublishAgentRuntimeInit: vi.fn().mockResolvedValue('init-event-id'),
   mockResolveAttachmentsByFileIds: vi.fn(),
   mockSpawnHeteroSandbox: vi.fn().mockResolvedValue(undefined),
+}));
+
+// Local hetero (claude-code / codex) now seeds publishAgentRuntimeInit so the
+// agent-gateway DO reports `running` on a later reconnect. Stub the factory so
+// the assertion below can verify the init, and so the real one (which probes
+// Redis synchronously) doesn't throw a server-env error in the test env.
+vi.mock('@/server/modules/AgentRuntime/factory', () => ({
+  createAgentStateManager: vi.fn(),
+  createStreamEventManager: () => ({
+    publishAgentRuntimeEnd: mockPublishAgentRuntimeEnd,
+    publishAgentRuntimeInit: mockPublishAgentRuntimeInit,
+  }),
+  isRedisAvailable: vi.fn(() => false),
 }));
 
 const emptyResolvedAttachments = {
@@ -65,6 +88,13 @@ vi.mock('@/database/models/agent', () => ({
   AgentModel: vi.fn().mockImplementation(() => ({
     getAgentConfig: vi.fn().mockResolvedValue(heteroAgentConfig),
     queryAgents: vi.fn().mockResolvedValue([]),
+  })),
+}));
+
+vi.mock('@/database/models/device', () => ({
+  DeviceModel: vi.fn().mockImplementation(() => ({
+    findByDeviceId: mockDeviceFindByDeviceId,
+    findWorkspaceDeviceById: mockDeviceFindWorkspaceDeviceById,
   })),
 }));
 
@@ -150,9 +180,15 @@ vi.mock('@/server/modules/Mecha', () => ({
 
 vi.mock('@/server/services/deviceGateway', () => ({
   deviceGateway: {
+    dispatchAgentRun: mockDispatchAgentRun,
     isConfigured: false,
     queryDeviceList: vi.fn().mockResolvedValue([]),
+    resolveDeviceWorkspaceId: vi.fn().mockResolvedValue(undefined),
   },
+}));
+
+vi.mock('@/server/services/heterogeneousAgent/remoteDeviceHeteroContext', () => ({
+  buildRemoteDeviceHeteroContext: vi.fn().mockReturnValue('device context'),
 }));
 
 describe('AiAgentService.execAgent - hetero early-exit file attachments', () => {
@@ -168,7 +204,13 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     mockMessageCreate.mockResolvedValue({ id: 'msg-1' });
     mockResolveAttachmentsByFileIds.mockResolvedValue({ ...emptyResolvedAttachments });
     mockSpawnHeteroSandbox.mockResolvedValue(undefined);
+    mockDispatchAgentRun.mockResolvedValue({ success: true });
+    mockDeviceFindByDeviceId.mockResolvedValue({ defaultCwd: '/Users/alice/repo' });
+    mockDeviceFindWorkspaceDeviceById.mockResolvedValue(undefined);
     mockIngestAttachment.mockReset();
+    heteroAgentConfig.agencyConfig = { heterogeneousProvider: { type: 'claude-code' } } as any;
+    heteroAgentConfig.model = 'claude-code';
+    heteroAgentConfig.provider = 'anthropic';
 
     service = new AiAgentService(mockDb, userId);
   });
@@ -242,6 +284,89 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
 
     const userCall = findUserMessageCreate();
     expect(userCall![0].files).toBeUndefined();
+  });
+
+  it('should pass resolved Claude Code model and effort args to sandbox dispatch', async () => {
+    heteroAgentConfig.agencyConfig.heterogeneousProvider = {
+      effort: 'high',
+      model: 'opus',
+      type: 'claude-code',
+    } as any;
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      prompt: 'Use the selected Claude Code model',
+    });
+
+    expect(mockSpawnHeteroSandbox).toHaveBeenCalledWith(
+      expect.objectContaining({
+        args: ['--model', 'opus', '--effort', 'high'],
+      }),
+    );
+  });
+
+  it('should pass resolved Codex model and reasoning effort args to sandbox dispatch', async () => {
+    heteroAgentConfig.model = 'codex';
+    heteroAgentConfig.provider = 'codex';
+    heteroAgentConfig.agencyConfig.heterogeneousProvider = {
+      effort: 'xhigh',
+      model: 'gpt-5.5',
+      type: 'codex',
+    } as any;
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      prompt: 'Use the selected Codex model',
+    });
+
+    expect(mockSpawnHeteroSandbox).toHaveBeenCalledWith(
+      expect.objectContaining({
+        args: ['--model', 'gpt-5.5', '--effort', 'xhigh'],
+      }),
+    );
+  });
+
+  it('should encode native Codex args before forwarding them to sandbox lh hetero exec', async () => {
+    heteroAgentConfig.model = 'codex';
+    heteroAgentConfig.provider = 'codex';
+    heteroAgentConfig.agencyConfig.heterogeneousProvider = {
+      args: ['-c', 'model = "gpt-5.4"'],
+      effort: 'xhigh',
+      model: 'gpt-5.5',
+      type: 'codex',
+    } as any;
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      prompt: 'Use existing native Codex args',
+    });
+
+    expect(mockSpawnHeteroSandbox).toHaveBeenCalledWith(
+      expect.objectContaining({
+        args: ['--agent-arg=-c', '--agent-arg=model = "gpt-5.4"', '--effort', 'xhigh'],
+      }),
+    );
+  });
+
+  it('should pass resolved Claude Code model and effort args to device dispatch', async () => {
+    heteroAgentConfig.agencyConfig = {
+      boundDeviceId: 'device-1',
+      executionTarget: 'device',
+      heterogeneousProvider: {
+        effort: 'high',
+        model: 'opus',
+        type: 'claude-code',
+      },
+    } as any;
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      prompt: 'Use the selected Claude Code model on device',
+    });
+
+    const dispatchParams = mockDispatchAgentRun.mock.calls[0][0];
+    expect(dispatchParams).toEqual(expect.objectContaining({ deviceId: 'device-1' }));
+    expect(dispatchParams.args).toEqual(['--model', 'opus', '--effort', 'high']);
   });
 
   describe('image delivery to the dispatched CLI', () => {
@@ -409,6 +534,127 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
       expect(userCall![0].files).toBeUndefined();
       expect(mockSpawnHeteroSandbox).toHaveBeenCalledWith(
         expect.objectContaining({ imageList: undefined }),
+      );
+    });
+  });
+
+  // The seed side of the hetero terminal-hook funnel. execAgent runs the hetero
+  // block inline (process A) and serializes the run's lifecycle hooks onto
+  // `topic.metadata.runningOperation.hooks` BEFORE the device/sandbox fork, so
+  // the later heteroFinish callback (process B) can re-fire them across the
+  // process boundary. If this seed drops the task-on-complete webhook, a finished
+  // hetero task's `task_topics.status` stays stuck at `running` because
+  // `onTopicComplete` never gets delivered. Guards that the passed hooks reach
+  // runningOperation.hooks in serialized (webhook-only) form on BOTH dispatch
+  // targets.
+  describe('terminal hook seeding onto runningOperation (regression guard)', () => {
+    const taskHook = {
+      handler: async () => {},
+      id: 'task-on-complete',
+      type: 'onComplete' as const,
+      webhook: {
+        body: { taskId: 'task_x', taskIdentifier: 'T-X', userId: 'test-user-id' },
+        delivery: 'qstash' as const,
+        url: '/api/workflows/task/on-topic-complete',
+      },
+    };
+
+    // Pick out the updateMetadata call that persists the running operation.
+    const findRunningOpSeed = () =>
+      topicMock.updateMetadata.mock.calls
+        .map((call) => call[1])
+        .find((patch: any) => patch?.runningOperation?.operationId);
+
+    it('serializes the onComplete webhook hook onto runningOperation (sandbox dispatch)', async () => {
+      await service.execAgent({
+        agentId: 'agent-1',
+        hooks: [taskHook],
+        prompt: 'do the task',
+      } as any);
+
+      // Sanity: this run took the sandbox path (no bound device).
+      expect(mockSpawnHeteroSandbox).toHaveBeenCalled();
+
+      const seed = findRunningOpSeed();
+      expect(seed).toBeDefined();
+      expect(seed.runningOperation.hooks).toEqual([
+        expect.objectContaining({
+          id: 'task-on-complete',
+          type: 'onComplete',
+          webhook: expect.objectContaining({
+            delivery: 'qstash',
+            url: '/api/workflows/task/on-topic-complete',
+          }),
+        }),
+      ]);
+      // The non-serializable handler must be stripped (only webhook crosses the
+      // process boundary).
+      expect(seed.runningOperation.hooks[0]).not.toHaveProperty('handler');
+    });
+
+    it('serializes the onComplete webhook hook onto runningOperation (device dispatch)', async () => {
+      heteroAgentConfig.agencyConfig = {
+        boundDeviceId: 'device-1',
+        executionTarget: 'device',
+        heterogeneousProvider: { type: 'claude-code' },
+      } as any;
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        hooks: [taskHook],
+        prompt: 'do the task on device',
+      } as any);
+
+      // Sanity: this run took the device path.
+      expect(mockDispatchAgentRun).toHaveBeenCalled();
+
+      const seed = findRunningOpSeed();
+      expect(seed).toBeDefined();
+      expect(seed.runningOperation.hooks?.[0]?.id).toBe('task-on-complete');
+      expect(seed.runningOperation.hooks?.[0]?.webhook?.url).toBe(
+        '/api/workflows/task/on-topic-complete',
+      );
+    });
+
+    // Regression guard for the "open the window and CC stops" bug: a device-
+    // dispatched local hetero run must register the op with the agent-gateway DO
+    // (publishAgentRuntimeInit) so a later reconnect resume reports `running`
+    // instead of a terminal status that clears runningOperation and black-holes
+    // the still-running agent's heteroIngest batches.
+    it('seeds the gateway runtime init for a device-dispatched local hetero run', async () => {
+      heteroAgentConfig.agencyConfig = {
+        boundDeviceId: 'device-1',
+        executionTarget: 'device',
+        heterogeneousProvider: { type: 'claude-code' },
+      } as any;
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        prompt: 'do the task on device',
+      } as any);
+
+      expect(mockDispatchAgentRun).toHaveBeenCalled();
+      expect(mockPublishAgentRuntimeInit).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ heteroType: 'claude-code' }),
+      );
+    });
+
+    it('seeds the gateway runtime init for a sandbox-dispatched local hetero run', async () => {
+      heteroAgentConfig.agencyConfig = {
+        heterogeneousProvider: { type: 'claude-code' },
+      } as any;
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        prompt: 'do the task in the cloud sandbox',
+      } as any);
+
+      // Sanity: this run took the sandbox path.
+      expect(mockSpawnHeteroSandbox).toHaveBeenCalled();
+      expect(mockPublishAgentRuntimeInit).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ heteroType: 'claude-code' }),
       );
     });
   });

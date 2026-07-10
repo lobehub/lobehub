@@ -10,14 +10,16 @@ import {
   type DynamicRouteMeta,
   getRouteMetaFromHandle,
   type RouteMeta,
+  type RouteMetaParams,
 } from '@/spa/router/routeMeta';
 import { useElectronStore } from '@/store/electron';
 
 import DynamicMetaRunner from './DynamicMetaRunner';
+import { mergeSearchParams } from './params';
 
 interface MatchedRouteMeta {
   meta: RouteMeta;
-  params: Record<string, string | undefined>;
+  params: RouteMetaParams;
   routeId: string;
 }
 
@@ -43,6 +45,13 @@ const useMatchedRouteMeta = (): MatchedRouteMeta | null => {
 
 type Translate = (key: string) => string;
 
+const translateTitleKey = (titleKey: string | undefined, translate: Translate) => {
+  if (!titleKey) return '';
+
+  const title = translate(titleKey);
+  return title === titleKey ? '' : title;
+};
+
 const RouteMetaBridge = memo(() => {
   const { t } = useTranslation('electron');
   const location = useLocation();
@@ -50,6 +59,7 @@ const RouteMetaBridge = memo(() => {
   const matched = useMatchedRouteMeta();
   const currentUrl = location.pathname + location.search;
   const matchedRouteId = matched?.routeId ?? null;
+  const DynamicMeta = matched?.meta.DynamicMeta;
   const [dynamic, setDynamic] = useState<DynamicRouteMetaState>({ meta: {}, routeId: null });
 
   const publishRouteMeta = useCallback(
@@ -67,31 +77,36 @@ const RouteMetaBridge = memo(() => {
 
   const translate = t as unknown as Translate;
   const titleKey = matched?.meta.titleKey;
+  const routeMetaParams = useMemo(
+    () => (matched ? mergeSearchParams(matched.params, location.search) : {}),
+    [location.search, matched],
+  );
   // Keep the previously resolved meta while navigating within the same route family
   // (e.g. switching topics) so the title doesn't briefly fall back to the static label.
   const currentDynamic = matched && dynamic.routeId === matched.routeId ? dynamic.meta : {};
-  const title = matched ? currentDynamic.title || (titleKey ? translate(titleKey) : '') : '';
+  const title = matched ? currentDynamic.title || translateTitleKey(titleKey, translate) : '';
 
   useEffect(() => {
-    if (matchedRouteId) return;
+    if (DynamicMeta) return;
 
-    setDynamic({ meta: {}, routeId: null });
+    setDynamic({ meta: {}, routeId: matchedRouteId });
     if (isDesktop) {
-      setCurrentRouteMeta(null);
+      if (matchedRouteId) publishRouteMeta({}, currentUrl);
+      else setCurrentRouteMeta(null);
     }
-  }, [matchedRouteId, publishRouteMeta, setCurrentRouteMeta]);
+  }, [DynamicMeta, matchedRouteId, currentUrl, publishRouteMeta, setCurrentRouteMeta]);
 
   useEffect(() => {
     document.title = title ? `${title} · ${BRANDING_NAME}` : BRANDING_NAME;
   }, [title]);
 
-  if (!matched) return null;
+  if (!matched || !DynamicMeta) return null;
 
   return (
     <DynamicMetaRunner
+      DynamicMeta={DynamicMeta}
       key={matched.routeId}
-      params={matched.params}
-      useDynamicMeta={matched.meta.useDynamicMeta}
+      params={routeMetaParams}
       onResolve={handleResolve}
     />
   );

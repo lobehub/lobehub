@@ -1,4 +1,5 @@
-import { Flexbox, Segmented, Tag } from '@lobehub/ui';
+import { Flexbox, Tag } from '@lobehub/ui';
+import { Tabs } from '@lobehub/ui/base-ui';
 import { type ReactNode } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -25,21 +26,19 @@ const Block = memo<BlockProps>(({ title, count, desc, children, mode, setMode, i
         <Title id={id} tag={<Tag>{count}</Tag>}>
           {title}
         </Title>
-        <Segmented
-          shape={'round'}
-          value={mode}
-          variant={'outlined'}
-          options={[
+        <Tabs
+          activeKey={mode}
+          items={[
             {
+              key: ModeType.Docs,
               label: t('mcp.details.schema.mode.docs'),
-              value: ModeType.Docs,
             },
             {
+              key: ModeType.JSON,
               label: 'JSON',
-              value: ModeType.JSON,
             },
           ]}
-          onChange={(v) => setMode?.(v as ModeType)}
+          onChange={(key) => setMode?.(key as ModeType)}
         />
       </Flexbox>
       <p style={{ marginBottom: 24 }}>{desc}</p>

@@ -1,5 +1,9 @@
 import debug from 'debug';
 
+import {
+  getBotFeatureBlockedMessage,
+  isBotFeatureAccessAllowed,
+} from '@/business/server/bot/featureAccess';
 import { getServerDB } from '@/database/core/db-adaptor';
 import type { DecryptedBotProvider } from '@/database/models/agentBotProvider';
 import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
@@ -12,6 +16,8 @@ import {
   type PlatformDefinition,
   resolveBotProviderConfig,
 } from '@/server/services/bot/platforms';
+
+import { BOT_RUNTIME_STATUSES, updateBotRuntimeStatus } from './runtimeStatus';
 
 const log = debug('lobe-server:bot-gateway');
 
@@ -101,6 +107,19 @@ export class GatewayManager {
       return;
     }
 
+    if (
+      !(await isBotFeatureAccessAllowed({
+        action: 'manage',
+        applicationId,
+        platform,
+        userId: provider.userId,
+        workspaceId: provider.workspaceId ?? undefined,
+      }))
+    ) {
+      log('Feature access denied for %s', key);
+      return;
+    }
+
     const client = this.createClient(platform, provider);
     if (!client) {
       log('Unsupported platform: %s', platform);
@@ -155,6 +174,35 @@ export class GatewayManager {
       activeKeys.add(key);
 
       log('Sync: processing provider %s, hasCredentials=%s', key, !!credentials);
+
+      if (
+        !(await isBotFeatureAccessAllowed({
+          applicationId,
+          platform,
+          userId: provider.userId,
+          workspaceId: provider.workspaceId ?? undefined,
+        }))
+      ) {
+        const existing = this.clients.get(key);
+        if (existing) {
+          await existing.stop();
+          this.clients.delete(key);
+        }
+        // Keep the cached runtime snapshot in sync with the stop — otherwise
+        // the channel UI keeps reporting a connected bot that was just
+        // paid-gated. Mirrors the external-gateway and cron sync paths.
+        await updateBotRuntimeStatus({
+          applicationId,
+          errorMessage: getBotFeatureBlockedMessage(
+            platform,
+            provider.workspaceId ? 'workspace' : 'personal',
+          ),
+          platform,
+          status: BOT_RUNTIME_STATUSES.failed,
+        });
+        log('Sync: feature access denied for %s', key);
+        continue;
+      }
 
       const existing = this.clients.get(key);
       if (existing) {

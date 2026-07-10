@@ -4,6 +4,7 @@ import {
   type ChatToolPayload,
   type ClientSecretPayload,
   type ExecSubAgentParams,
+  type StepActivatedSkill,
 } from '@lobechat/types';
 
 export interface ToolExecutionMemoryEmbeddingRuntime {
@@ -27,6 +28,13 @@ export interface ServerSubAgentRunParams {
 }
 
 export interface ServerSubAgentRunResult {
+  /**
+   * Reason the child failed to start, when `started` is false. Surfaced to the
+   * parent agent's tool result so a `callAgent` dispatch failure is diagnosable
+   * (e.g. "Agent not found", config/scheduling error) instead of an opaque
+   * "failed to start" — see issue #16257.
+   */
+  error?: string;
   /**
    * Whether the child op was actually forked. `false` means the child failed to
    * start (e.g. the operation row could not be created/scheduled): no completion
@@ -108,6 +116,15 @@ export interface ServerAgentMemberRunner {
 }
 
 export interface ToolExecutionContext {
+  /**
+   * Skills activated so far in the conversation (activateSkill /
+   * activateTools tool results), extracted by the runtime executors from the
+   * operation's message history — the server-side equivalent of the client
+   * transport's stepContext. The skills runtime uses this to resolve skill
+   * archives for `execScript` (device `prepareSkillDirectory` + sandbox
+   * `skillZipUrls`); the raw LLM args never carry it.
+   */
+  activatedSkills?: StepActivatedSkill[];
   /** Target device ID for device proxy tool calls */
   activeDeviceId?: string;
   /** Agent ID executing the tool call */
@@ -119,6 +136,33 @@ export interface ToolExecutionContext {
    * result; the member barrier backfills + resumes/finishes the parked supervisor.
    */
   agentMember?: ServerAgentMemberRunner;
+  /**
+   * Visibility of the agent executing this tool call. Resolved once per tool
+   * call in the runtime executor. Tool runtimes that persist agent side-effects
+   * (documents, tasks, etc.) forward this so private-agent output inherits
+   * private visibility and public-agent reads are gated away from private data
+   * — mirroring the `assertAgentVisibilityCompat` invariant on tasks.
+   * `null` when the agent is missing or not visible to the caller.
+   */
+  agentVisibility?: 'private' | 'public' | null;
+  /**
+   * The assistant message that carries this tool call (the runtime's
+   * `payload.parentMessageId`). Distinct from `messageId`, which is the source
+   * *user* message. Tools that need to anchor back to the exact tool-call turn
+   * (e.g. createTask recording its `context.origin`) must use this, not
+   * `messageId`.
+   */
+  assistantMessageId?: string;
+  /**
+   * Whether the run's execution plan is device-capable (`device` or
+   * `device-unrouted`) — derived from `state.metadata.executionPlan` by the
+   * runtime executors. Device-only skills gate listing/activation/loading on
+   * this consistently, so a `device-unrouted` run can activate them before the
+   * model routes a device; actual command execution stays gated at the device
+   * tool layer. Undefined when the caller carries no execution plan (device
+   * gates then fall back to `activeDeviceId`).
+   */
+  deviceCapable?: boolean;
   /** Current page document ID for page-scoped conversations */
   documentId?: string | null;
   /**
@@ -152,11 +196,11 @@ export interface ToolExecutionContext {
   /** Agent runtime operation ID for structured tool outcome identity. */
   operationId?: string;
   /**
-   * Project-level skills (name + absolute SKILL.md path) discovered on the
-   * device filesystem. Used by the Skills runtime to load them on demand via
-   * the device gateway. Derived from the operation's skill set.
+   * Filesystem skills (name + absolute SKILL.md path) discovered on the
+   * execution device. Used by the Skills runtime to load them on demand via the
+   * device gateway. Derived from the operation's skill set.
    */
-  projectSkills?: { location: string; name: string }[];
+  projectSkills?: { location: string; name: string; source?: 'device' | 'project' }[];
   /** Conversation scope captured when the operation was created */
   scope?: string | null;
   /** Server database for LobeHub Skills execution */

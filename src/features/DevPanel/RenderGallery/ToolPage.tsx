@@ -1,6 +1,7 @@
 'use client';
 
-import { Flexbox, Segmented, Tag, Text } from '@lobehub/ui';
+import { Flexbox, Tag, Text } from '@lobehub/ui';
+import { Tabs } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router';
@@ -208,28 +209,28 @@ const DevtoolsToolPage = () => {
               <Text fontSize={12} type={'secondary'} weight={600}>
                 View
               </Text>
-              <Segmented
+              <Tabs
+                activeKey={view}
                 size={'small'}
-                value={view}
-                options={[
-                  { label: 'By API', value: 'api' },
-                  { label: 'Aggregate', value: 'aggregate' },
+                items={[
+                  { key: 'api', label: 'By API' },
+                  { key: 'aggregate', label: 'Aggregate' },
                 ]}
-                onChange={(value) => setView(value as GalleryView)}
+                onChange={(key) => setView(key as GalleryView)}
               />
             </Flexbox>
             <Flexbox horizontal className={styles.controlGroup}>
               <Text fontSize={12} type={'secondary'} weight={600}>
                 Lifecycle
               </Text>
-              <Segmented
+              <Tabs
+                activeKey={mode}
                 size={'small'}
-                value={mode}
-                options={LIFECYCLE_MODES.map((value) => ({
+                items={LIFECYCLE_MODES.map((value) => ({
+                  key: value,
                   label: LIFECYCLE_MODE_LABEL[value],
-                  value,
                 }))}
-                onChange={(value) => setMode(value as LifecycleMode)}
+                onChange={(key) => setMode(key as LifecycleMode)}
               />
             </Flexbox>
           </Flexbox>

@@ -9,11 +9,12 @@
     "test:coverage": "vitest --coverage --silent='passed-only'"
   },
   "dependencies": {
-    "p-map": "^7.0.4"
+    "ajv": "^8.20.0",
+    "p-map": "^7.0.5"
   },
   "devDependencies": {
     "@lobechat/context-engine": "workspace:*",
     "@lobechat/types": "workspace:*",
-    "openai": "^6.42.0"
+    "openai": "^6.45.0"
   }
 }

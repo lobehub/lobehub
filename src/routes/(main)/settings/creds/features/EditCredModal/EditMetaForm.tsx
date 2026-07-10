@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 
 import { usePermission } from '@/hooks/usePermission';
 
-import { useCredsApi } from '../useCredsApi';
+import { type CredsApi } from '../useCredsApi';
 
 const styles = createStaticStyles(({ css }) => ({
   footer: css`
@@ -23,6 +23,7 @@ const styles = createStaticStyles(({ css }) => ({
 
 interface EditMetaFormProps {
   cred: UserCredSummary;
+  credsApi: CredsApi;
   onCancel: () => void;
   onSuccess: () => void;
 }
@@ -32,11 +33,10 @@ interface FormValues {
   name: string;
 }
 
-const EditMetaForm: FC<EditMetaFormProps> = ({ cred, onCancel, onSuccess }) => {
+const EditMetaForm: FC<EditMetaFormProps> = ({ cred, credsApi, onCancel, onSuccess }) => {
   const { t } = useTranslation('setting');
   const { allowed: canManageCredentials } = usePermission('manage_provider_key');
   const [form] = Form.useForm<FormValues>();
-  const credsApi = useCredsApi();
 
   const updateMutation = useMutation({
     mutationFn: async (values: FormValues) => {

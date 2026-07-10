@@ -11,7 +11,6 @@ vi.mock('@/services/plugin', () => ({
   pluginService: {
     getInstalledPlugins: vi.fn().mockResolvedValue([]),
     updatePluginSettings: vi.fn(),
-    removeAllPlugins: vi.fn(),
   },
 }));
 
@@ -72,18 +71,6 @@ describe('useToolStore:plugin', () => {
         mergedSettings,
         expect.any(AbortSignal),
       );
-    });
-  });
-
-  describe('removeAllPlugins', () => {
-    it('should reset all plugin settings', () => {
-      const { result } = renderHook(() => useToolStore());
-
-      act(() => {
-        result.current.removeAllPlugins();
-      });
-
-      expect(pluginService.removeAllPlugins).toBeCalled();
     });
   });
 

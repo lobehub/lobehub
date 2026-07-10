@@ -5,9 +5,16 @@ import {
   type RemoteHeterogeneousAgentType,
 } from '@lobechat/heterogeneous-agents';
 import { Button, Flexbox, Icon } from '@lobehub/ui';
-import { Select } from '@lobehub/ui/base-ui';
-import { Alert, Input, Modal, Steps, Tag, Typography } from 'antd';
+import {
+  Button as BaseButton,
+  createModal,
+  type ModalInstance,
+  Select,
+  useModalContext,
+} from '@lobehub/ui/base-ui';
+import { Alert, Input, Steps, Tag, Typography } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
+import { t as i18nT } from 'i18next';
 import {
   BotIcon,
   CheckCircle2,
@@ -20,6 +27,7 @@ import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { lambdaQuery } from '@/libs/trpc/client';
 import { deviceService } from '@/services/device';
 import { useAgentStore } from '@/store/agent';
@@ -97,18 +105,27 @@ interface AgentProfile {
   title?: string;
 }
 
-interface CreatePlatformAgentModalProps {
+interface CreatePlatformAgentContentProps {
   groupId?: string;
-  onClose: () => void;
-  open: boolean;
+  visibility?: 'private' | 'public';
 }
 
-const CreatePlatformAgentModal = memo<CreatePlatformAgentModalProps>(
-  ({ open, onClose, groupId }) => {
+const COMING_SOON_PLATFORMS = new Set<RemoteHeterogeneousAgentType>(['amp', 'opencode']);
+
+const CreatePlatformAgentContent = memo<CreatePlatformAgentContentProps>(
+  ({ groupId, visibility }) => {
     const { t } = useTranslation('chat');
+    const { close, setCanDismissByClickOutside } = useModalContext();
     const navigate = useNavigate();
     const storeCreateAgent = useAgentStore((s) => s.createAgent);
     const refreshAgentList = useHomeStore((s) => s.refreshAgentList);
+
+    // Creating from a workspace context: the new agent inherits the active
+    // workspace's scope (server-side), so the device picker must restrict to
+    // workspace devices — a workspace agent bound to a personal device is
+    // unreachable to other members and the server rejects the write.
+    const activeWorkspaceId = useActiveWorkspaceId();
+    const restrictToWorkspaceDevices = Boolean(activeWorkspaceId);
 
     const [step, setStep] = useState(0);
     const [platform, setPlatform] = useState<RemoteHeterogeneousAgentType>('openclaw');
@@ -118,17 +135,14 @@ const CreatePlatformAgentModal = memo<CreatePlatformAgentModalProps>(
     const [agentProfile, setAgentProfile] = useState<AgentProfile | null>(null);
     const [fetchingProfile, setFetchingProfile] = useState(false);
     const [creating, setCreating] = useState(false);
+    useEffect(() => {
+      setCanDismissByClickOutside(!creating);
+    }, [creating, setCanDismissByClickOutside]);
     const [capabilityResult, setCapabilityResult] = useState<
       { available: boolean; reason?: string; version?: string } | undefined
     >(undefined);
     const [checkingCapability, setCheckingCapability] = useState(false);
 
-    // Platforms that are not yet ready for production use.
-    // Remove a type from this set when the platform is fully supported.
-    const COMING_SOON_PLATFORMS = new Set<RemoteHeterogeneousAgentType>(['amp', 'opencode']);
-
-    // Derive platform display list from the registry — adding a new platform to
-    // REMOTE_HETEROGENEOUS_AGENT_CONFIGS automatically includes it here.
     const platformDefs = REMOTE_HETEROGENEOUS_AGENT_CONFIGS.map((c) => ({
       comingSoon: COMING_SOON_PLATFORMS.has(c.type),
       desc: t(`platformAgent.create.desc.${c.type}`),
@@ -136,40 +150,23 @@ const CreatePlatformAgentModal = memo<CreatePlatformAgentModalProps>(
       type: c.type,
     }));
 
-    // Fetch device list when the modal opens; expose refetch for the refresh button
     const {
       data: devices,
       isLoading: loadingDevices,
       isFetching: fetchingDevices,
       refetch: refetchDevices,
     } = lambdaQuery.device.listDevices.useQuery(undefined, {
-      enabled: open,
-      staleTime: 0, // always re-fetch when explicitly called
+      staleTime: 0,
     });
 
     const selectedPlatformDef = platformDefs.find((p) => p.type === platform)!;
 
-    // Reset state when modal opens
-    useEffect(() => {
-      if (open) {
-        setStep(0);
-        setPlatform('openclaw');
-        setDeviceId(undefined);
-        setAgentName('');
-        setAgentDescription('');
-        setAgentProfile(null);
-        setCapabilityResult(undefined);
-      }
-    }, [open]);
-
-    // Pre-fill name and description from fetched profile when entering step 2
     useEffect(() => {
       if (step !== 2) return;
       if (agentProfile !== null) {
         if (!agentName) setAgentName(agentProfile.title ?? selectedPlatformDef.name);
         if (!agentDescription) setAgentDescription(agentProfile.description ?? '');
       } else if (!fetchingProfile && !agentName) {
-        // Profile fetch failed or no profile — fall back to platform name
         setAgentName(selectedPlatformDef.name);
       }
     }, [step, agentProfile, fetchingProfile]);
@@ -256,9 +253,10 @@ const CreatePlatformAgentModal = memo<CreatePlatformAgentModalProps>(
             title,
           },
           groupId,
+          visibility,
         });
         await refreshAgentList();
-        onClose();
+        close();
         navigate(`/agent/${result.agentId}`);
       } finally {
         setCreating(false);
@@ -270,9 +268,10 @@ const CreatePlatformAgentModal = memo<CreatePlatformAgentModalProps>(
       agentProfile,
       platform,
       groupId,
+      visibility,
       storeCreateAgent,
       refreshAgentList,
-      onClose,
+      close,
       navigate,
       selectedPlatformDef.name,
     ]);
@@ -301,8 +300,6 @@ const CreatePlatformAgentModal = memo<CreatePlatformAgentModalProps>(
         );
       }
 
-      // Detect outdated lh desktop version — the gateway returns this pattern when the
-      // tool is unknown to the running desktop build.
       const isVersionTooLow = capabilityResult.reason?.includes('is not available on this device');
       if (isVersionTooLow) {
         return (
@@ -369,7 +366,9 @@ const CreatePlatformAgentModal = memo<CreatePlatformAgentModalProps>(
       }
 
       if (step === 1) {
-        const onlineDevices = (devices ?? []).filter((d) => d.online);
+        const onlineDevices = (devices ?? []).filter(
+          (d) => d.online && (!restrictToWorkspaceDevices || d.scope === 'workspace'),
+        );
         const isRefreshing = loadingDevices || fetchingDevices;
 
         const refreshButton = (
@@ -487,24 +486,24 @@ const CreatePlatformAgentModal = memo<CreatePlatformAgentModalProps>(
 
       if (step > 0) {
         buttons.push(
-          <Button key="back" onClick={handleBack}>
+          <BaseButton key="back" onClick={handleBack}>
             {t('platformAgent.create.back')}
-          </Button>,
+          </BaseButton>,
         );
       }
 
       if (step < 2) {
         const nextDisabled = step === 1 && step2NextDisabled;
         buttons.push(
-          <Button disabled={nextDisabled} key="next" type="primary" onClick={handleNext}>
+          <BaseButton disabled={nextDisabled} key="next" type="primary" onClick={handleNext}>
             {t('platformAgent.create.next')}
-          </Button>,
+          </BaseButton>,
         );
       }
 
       if (step === 2) {
         buttons.push(
-          <Button
+          <BaseButton
             disabled={!agentName.trim() && !selectedPlatformDef.name}
             key="create"
             loading={creating}
@@ -512,7 +511,7 @@ const CreatePlatformAgentModal = memo<CreatePlatformAgentModalProps>(
             onClick={() => void handleCreate()}
           >
             {creating ? t('platformAgent.create.creating') : t('platformAgent.create.create')}
-          </Button>,
+          </BaseButton>,
         );
       }
 
@@ -520,31 +519,41 @@ const CreatePlatformAgentModal = memo<CreatePlatformAgentModalProps>(
     };
 
     return (
-      <Modal
-        destroyOnClose
-        footer={renderFooter()}
-        open={open}
-        title={t('platformAgent.create.title')}
-        width={480}
-        onCancel={onClose}
-      >
-        <Flexbox gap={24} paddingBlock={'16px 8px'}>
-          <Steps
-            current={step}
-            size="small"
-            items={[
-              { title: t('platformAgent.create.step1') },
-              { title: t('platformAgent.create.step2') },
-              { title: t('platformAgent.create.step3') },
-            ]}
-          />
-          {renderStepContent()}
+      <Flexbox gap={24} paddingBlock={'16px 8px'}>
+        <Steps
+          current={step}
+          size="small"
+          items={[
+            { title: t('platformAgent.create.step1') },
+            { title: t('platformAgent.create.step2') },
+            { title: t('platformAgent.create.step3') },
+          ]}
+        />
+        {renderStepContent()}
+        <Flexbox horizontal gap={8} justify={'flex-end'}>
+          {renderFooter()}
         </Flexbox>
-      </Modal>
+      </Flexbox>
     );
   },
 );
 
-CreatePlatformAgentModal.displayName = 'CreatePlatformAgentModal';
+CreatePlatformAgentContent.displayName = 'CreatePlatformAgentContent';
 
-export default CreatePlatformAgentModal;
+interface OpenCreatePlatformAgentModalOptions {
+  groupId?: string;
+  visibility?: 'private' | 'public';
+}
+
+export const openCreatePlatformAgentModal = (
+  options?: OpenCreatePlatformAgentModalOptions,
+): ModalInstance =>
+  createModal({
+    content: (
+      <CreatePlatformAgentContent groupId={options?.groupId} visibility={options?.visibility} />
+    ),
+    footer: null,
+    maskClosable: true,
+    title: i18nT('platformAgent.create.title', { ns: 'chat' }),
+    width: 480,
+  });

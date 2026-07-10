@@ -7,6 +7,8 @@
   "features.assistantMessageGroup.title": "گروه‌بندی پیام‌های عامل",
   "features.fleet.desc": "نمایش گزینه Fleet در نوار عنوان — یک داشبورد کنار هم از تمام وظایف در حال اجرا در میان عوامل شما.",
   "features.fleet.title": "نمای Fleet",
+  "features.foldFinishedTurn.desc": "فرآیند (استدلال و تماس‌های ابزار) نوبت‌های پایان‌یافته و غیرآخرین عامل را تحت عنوان \"پردازش شده\" جمع کنید. پاسخ نهایی قابل مشاهده باقی می‌ماند؛ برای گسترش فرآیند کلیک کنید.",
+  "features.foldFinishedTurn.title": "جمع کردن نوبت‌های پایان‌یافته",
   "features.groupChat.desc": "فعال‌سازی هماهنگی گفت‌وگوی گروهی چندعاملی.",
   "features.groupChat.title": "گفت‌وگوی گروهی (چندعاملی)",
   "features.imessage.desc": "اتصال نمایندگان به iMessage از طریق پل BlueBubbles دسکتاپ LobeHub محلی.",
@@ -15,5 +17,7 @@
   "features.inputMarkdown.title": "نمایش Markdown در ورودی",
   "features.platformAgent.desc": "نمایش گزینه \"اتصال عامل\" در منوی ایجاد. عوامل متصل (مانند OpenClaw، Hermes) بر روی دستگاه‌های شما اجرا می‌شوند و از طریق lh connect ارتباط برقرار می‌کنند.",
   "features.platformAgent.title": "اتصال عامل",
+  "features.taskVerify.desc": "یک بخش پذیرش تحویل به جزئیات وظیفه اضافه کنید: پذیرش را در یک جمله توضیح دهید و اجازه دهید هوش مصنوعی معیارهای قابل ویرایش تأیید را تولید کند.",
+  "features.taskVerify.title": "پذیرش تحویل وظیفه",
   "title": "آزمایشگاه‌ها"
 }

@@ -5,6 +5,7 @@
   "config.endImageUrl.label": "الإطار النهائي",
   "config.generateAudio.label": "توليد صوت",
   "config.header.title": "فيديو",
+  "config.imageUpload.maxCountReached": "يمكنك إضافة ما يصل إلى {{count}} من صور المرجع",
   "config.imageUrl.label": "الإطار الابتدائي",
   "config.prompt.placeholder": "صف الفيديو الذي ترغب في إنشائه",
   "config.prompt.placeholderWithRef": "وصف المشهد الذي تريد إنشاؤه مع الصورة",
@@ -26,8 +27,12 @@
   "generation.status.generating": "جارٍ الإنشاء...",
   "generation.validation.endFrameRequiresStartFrame": "لا يمكن استخدام الإطار النهائي بدون إطار ابتدائي. يرجى تعيين إطار ابتدائي أولاً.",
   "topic.createNew": "إنشاء موضوع جديد",
+  "topic.createdBy": "تم الإنشاء بواسطة {{name}}",
   "topic.deleteConfirm": "حذف موضوع الفيديو",
   "topic.deleteConfirmDesc": "أنت على وشك حذف موضوع الفيديو هذا. لا يمكن التراجع عن هذا الإجراء.",
+  "topic.privateTitle": "خاص",
   "topic.title": "مواضيع الفيديو",
-  "topic.untitled": "موضوع افتراضي"
+  "topic.untitled": "موضوع افتراضي",
+  "topic.visibility.existingLocked": "تم تثبيت الرؤية للموضوع الحالي. قم بإنشاء موضوع جديد لاختيار مساحة مختلفة.",
+  "topic.workspaceTitle": "مساحة العمل"
 }

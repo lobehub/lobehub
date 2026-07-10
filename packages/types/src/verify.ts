@@ -18,12 +18,18 @@ export type VerifierType = (typeof verifierTypes)[number];
 export const verifyOnFailStrategies = ['manual', 'auto_repair'] as const;
 export type VerifyOnFailStrategy = (typeof verifyOnFailStrategies)[number];
 
-/** Lifecycle of a single check result. */
+/**
+ * Lifecycle of a single check result.
+ * - errored: the verifier could not run (infra / startup failure) — NOT a
+ *   delivery judgment. Kept distinct from `failed` so a broken verifier never
+ *   reads as a rejected delivery and never seeds an auto-repair round.
+ */
 export const verifyCheckResultStatuses = [
   'pending',
   'running',
   'passed',
   'failed',
+  'errored',
   'skipped',
 ] as const;
 export type VerifyCheckResultStatus = (typeof verifyCheckResultStatuses)[number];
@@ -35,6 +41,123 @@ export type VerifyVerdict = (typeof verifyVerdicts)[number];
 /** Human feedback on a result, feeding the data flywheel. */
 export const verifyUserDecisions = ['accepted', 'rejected', 'overridden'] as const;
 export type VerifyUserDecision = (typeof verifyUserDecisions)[number];
+
+/**
+ * Denormalized rollup of a verification session's pipeline state — mirrors the
+ * legacy `agent_operations.verify_status` set so the two stay interchangeable
+ * while results/reports migrate from being operation-anchored to run-anchored.
+ */
+export const verifyRunStatuses = [
+  'unverified',
+  'planned',
+  'verifying',
+  'passed',
+  'failed',
+  // At least one required check errored (verifier couldn't run) and none
+  // genuinely failed — verification is inconclusive, not a rejected delivery.
+  'errored',
+  'repairing',
+  'delivered',
+] as const;
+export type VerifyRunStatus = (typeof verifyRunStatuses)[number];
+
+/**
+ * What produced a verification session.
+ * - agent:         verifying a real Agent Run (`verify_runs.operation_id` set)
+ * - agent-testing: a standalone session ingested from the agent-testing harness
+ *   (no Agent Run — `operation_id` is null)
+ */
+export const verifyRunSources = ['agent', 'agent-testing'] as const;
+export type VerifyRunSource = (typeof verifyRunSources)[number];
+
+/**
+ * The kind of thing a verification session checks. Orthogonal to `source` (which
+ * records what *produced* the run): `scenario` drives how the report renders its
+ * scope header and scenario-specific detail. Open-ended — new scenarios add a
+ * value here plus their own {@link VerifyRunContext} shape.
+ * - coding: verifying a software change (branch / commit / surfaces under test).
+ */
+export const verifyRunScenarios = ['coding'] as const;
+export type VerifyRunScenario = (typeof verifyRunScenarios)[number];
+
+/**
+ * Coding-scenario scope: where the code under test came from and how it ran.
+ * Rendered as the report's scope header so the verify page reads as the final
+ * report.
+ */
+export interface VerifyCodingPullRequest {
+  /** Pull request number, e.g. 123. */
+  number?: number | string;
+  /** Pull request title. */
+  title?: string;
+  /** Web URL for opening the PR. */
+  url?: string;
+}
+
+export interface VerifyCodingScope {
+  /** Git branch the report was produced against. */
+  branch?: string;
+  /** Git commit (short sha) of the code under test. */
+  commit?: string;
+  /** Entry point / command exercised, e.g. "lh verify ingest-report". */
+  entry?: string;
+  /** The focus / key risk of this round (free text). */
+  focus?: string;
+  /** Associated pull request, when the verification run has one. */
+  pullRequest?: VerifyCodingPullRequest;
+  /** Test surfaces exercised, e.g. ["cli", "web"]. */
+  surfaces?: string[];
+  /** When the report was authored (ISO 8601) — distinct from the row's createdAt (ingest time). */
+  testedAt?: string;
+}
+
+/**
+ * The scenario's context — its scope/provenance, discriminated by the run's
+ * `scenario`. Kept in one jsonb (not columns) so each scenario can carry its own
+ * shape and the viewer can render per scenario without a migration. Today only
+ * `coding`; as scenarios grow this becomes a union (`VerifyCodingScope | …`).
+ *
+ * Distinct from a future generic `metadata` bag (reserved for cross-scenario
+ * extension) — `context` is specifically the active scenario's input.
+ */
+export type VerifyRunContext = VerifyCodingScope;
+
+export interface VerifyInteractionCostOperators {
+  H?: number;
+  K?: number;
+  M?: number;
+  P?: number;
+  R_ms?: number;
+  T_chars?: number;
+}
+
+export interface VerifyInteractionCostPhase {
+  actionCount?: number;
+  activeSeconds?: number;
+  checkItemId?: string;
+  id: string;
+  label?: string;
+  operators?: VerifyInteractionCostOperators;
+  seconds?: number;
+  waitSeconds?: number;
+}
+
+export interface VerifyInteractionCost {
+  actionCount?: number;
+  activeSeconds: number;
+  actualAgentSeconds?: number;
+  categoryCounts?: Record<string, number>;
+  generatedAt?: string;
+  mentalEstimates?: Record<string, unknown>[];
+  model: string;
+  operators: VerifyInteractionCostOperators;
+  phases?: VerifyInteractionCostPhase[];
+  scope?: string;
+  sourceTrace?: string;
+  timingSeconds?: Record<string, number>;
+  totalSeconds: number;
+  waitSeconds: number;
+}
 
 /** Default cap on automatic repair rounds when a rubric doesn't override it. */
 export const DEFAULT_MAX_REPAIR_ROUNDS = 3;
@@ -48,6 +171,24 @@ export interface VerifyRubricConfig {
   /**
    * Max automatic repair rounds (parent-chain depth) before giving up, to cap
    * runaway repair loops. Defaults to {@link DEFAULT_MAX_REPAIR_ROUNDS}.
+   */
+  maxRepairRounds?: number;
+}
+
+/**
+ * Generic per-run extension bag (`verify_runs.metadata`) — cross-scenario knobs
+ * we don't model as columns. Kept open so new policy switches don't require a
+ * migration; the active scenario's input lives in `context`, not here.
+ */
+export interface VerifyRunMetadata {
+  [key: string]: unknown;
+  interactionCost?: VerifyInteractionCost;
+  /**
+   * Per-run override for the repair-round cap, taking precedence over the
+   * rubric's {@link VerifyRubricConfig.maxRepairRounds}. Set from a task's
+   * `TaskVerifyConfig.maxIterations` so a task with ad-hoc criteria or a per-task
+   * override honors its saved cap (the rubric may not carry it). Read at repair
+   * time via {@link DEFAULT_MAX_REPAIR_ROUNDS} fallback.
    */
   maxRepairRounds?: number;
 }
@@ -123,6 +264,21 @@ export const verifyEvidenceCapturedBy = [
 export type VerifyEvidenceCapturedBy = (typeof verifyEvidenceCapturedBy)[number];
 
 /**
+ * Declares that a criterion is evidence-driven: it cannot pass on the
+ * deliverable text alone — the run must capture and upload an artifact of each
+ * listed `type` (via `lh verify upload-evidence`). Stored under the plan item's
+ * `verifierConfig.requiredEvidence`, so adding it needs no schema change. The
+ * structural gate marks a required item `uncertain` when any listed type is
+ * missing, independent of the LLM judge.
+ */
+export interface RequiredEvidenceSpec {
+  /** What the capturer should produce — guidance only, not validated. */
+  hint?: string;
+  /** The evidence medium that must be present for this criterion. */
+  type: VerifyEvidenceType;
+}
+
+/**
  * One evidence artifact produced while judging a check. Carries existence +
  * provenance only — no verdict logic. Verifying an evidence is itself a new
  * check (related through `verify_check_results`), so this table stays flat.
@@ -146,6 +302,8 @@ export interface VerifyEvidence {
   /** Stored artifact — FK to `files`, which owns mime / size / hash / url. */
   fileId?: string | null;
   id: string;
+  /** Generic extension bag; concrete capturer-specific shape is not fixed yet. */
+  metadata?: unknown | null;
   type: VerifyEvidenceType;
 }
 
@@ -155,8 +313,9 @@ export interface VerifyEvidence {
 
 /**
  * A delivery-verification report. A generated artifact (not a computed one):
- * `summary` / `content` are written by an LLM from the run's check results +
- * evidence. Optionally tied to an Agent Run via `operationId` (not required).
+ * `summary` / `content` are written by an LLM from the session's check results +
+ * evidence. Tied to a verification session via `verifyRunId` (which itself
+ * optionally links back to an Agent Run).
  */
 export interface VerifyReport {
   /** Full Markdown report, shown in the expanded review view. */
@@ -167,8 +326,6 @@ export interface VerifyReport {
   /** Producer of this report, e.g. 'system' / a model id. */
   generatedBy?: string | null;
   id: string;
-  /** The Agent Run this report verifies, when bound to one. */
-  operationId?: string | null;
   /** 0-1 aggregate confidence across the run. */
   overallConfidence?: number | null;
   passedChecks?: number | null;
@@ -180,4 +337,6 @@ export interface VerifyReport {
   uncertainChecks?: number | null;
   /** Overall Claim, reusing the verdict vocabulary. */
   verdict?: VerifyVerdict | null;
+  /** The verification session this report summarizes. */
+  verifyRunId: string;
 }

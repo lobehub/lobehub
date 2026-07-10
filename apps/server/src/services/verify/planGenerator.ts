@@ -5,10 +5,10 @@ import type { TracingOptions } from '@lobechat/llm-generation-tracing';
 import type { VerifyCheckItem } from '@lobechat/types';
 import debug from 'debug';
 
-import { AgentOperationModel } from '@/database/models/agentOperation';
 import { DocumentModel } from '@/database/models/document';
 import { VerifyCriterionModel } from '@/database/models/verifyCriterion';
 import { VerifyRubricModel } from '@/database/models/verifyRubric';
+import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { VerifyCriterionItem } from '@/database/schemas/verify';
 import type { LobeChatDatabase } from '@/database/type';
 import { AiGenerationService } from '@/server/services/aiGeneration';
@@ -27,10 +27,18 @@ export interface GeneratePlanParams {
   enableAiGeneration?: boolean;
   /** The user's task / instruction text the run must satisfy. */
   goal: string;
+  /**
+   * When the run opted into verify but produced no decomposed criteria, synthesize
+   * a single agent-type holistic check (the coarse "one broad agent verify"
+   * default) instead of leaving an empty plan (→ verify no-op).
+   */
+  holisticFallback?: boolean;
   maxAiCriteria?: number;
   /** Required only when `enableAiGeneration` is true. */
   modelConfig?: { model: string; provider: string };
   operationId: string;
+  /** One-sentence acceptance the holistic check verifies against (falls back to `goal`). */
+  requirement?: string;
   /** Ad-hoc criteria mounted on the agent (`agencyConfig.verifyCriteriaIds`). */
   verifyCriteriaIds?: string[];
   /** Reusable rubric mounted on the agent (`agencyConfig.verifyRubricId`). */
@@ -41,13 +49,45 @@ export interface GeneratePlanParams {
 export interface CriterionDraft {
   /** One-sentence summary; stored on the `verify_criteria.description` column. */
   description?: string;
+  /**
+   * Reuse an existing instruction document instead of creating one from
+   * `instruction`. Set when re-persisting a hydrated criterion so its detailed
+   * rubric (the doc body) is preserved rather than dropped to null.
+   */
+  documentId?: string | null;
   /** The detailed judging rubric; stored as the linked document's content. */
   instruction?: string;
   onFail?: VerifyCheckItem['onFail'];
   required?: boolean;
   title: string;
+  /** Verifier knobs (e.g. `requiredEvidence`) — attached when the user adds them. */
+  verifierConfig?: Record<string, unknown>;
   verifierType?: VerifyCheckItem['verifierType'];
 }
+
+/**
+ * Synthesize a single `agent`-type holistic check from the task's acceptance
+ * requirement (or its goal). The agent verifier investigates the whole
+ * deliverable and submits one verdict — the coarse "one broad agent verify"
+ * default for tasks that opted into verify without decomposing into criteria
+ * No `requiredEvidence` hard gate: the agent self-captures, so the
+ * structural gate never marks it uncertain for "missing evidence".
+ */
+const buildHolisticAgentItem = (requirement?: string, goal?: string): VerifyCheckItem => {
+  const acceptance = requirement?.trim() || goal?.trim() || 'The deliverable fulfills the task.';
+  return {
+    description: acceptance,
+    id: randomUUID(),
+    index: 0,
+    // Delegate the fail decision to the task bridge (pass→completed / fail→brief)
+    // rather than the operation-level auto-repair loop.
+    onFail: 'manual',
+    required: true,
+    title: 'Task delivery acceptance',
+    verifierConfig: {},
+    verifierType: 'agent',
+  };
+};
 
 const criterionToCheckItem = (
   criterion: VerifyCriterionItem,
@@ -72,16 +112,35 @@ export class VerifyPlanGeneratorService {
   private readonly userId: string;
   private readonly criterionModel: VerifyCriterionModel;
   private readonly rubricModel: VerifyRubricModel;
-  private readonly operationModel: AgentOperationModel;
+  private readonly runModel: VerifyRunModel;
   private readonly documentModel: DocumentModel;
+  /**
+   * Visibility of the agent that triggered this plan (only set when invoked
+   * from a tool runtime). Threaded into every instruction-document create so
+   * private-agent verify criteria stay in the caller's private Pages bucket
+   * instead of leaking to the workspace.
+   */
+  private readonly callerAgentVisibility?: 'private' | 'public' | null;
 
-  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+  constructor(
+    db: LobeChatDatabase,
+    userId: string,
+    workspaceId?: string,
+    callerAgentVisibility?: 'private' | 'public' | null,
+  ) {
     this.db = db;
     this.userId = userId;
+    this.callerAgentVisibility = callerAgentVisibility;
     this.criterionModel = new VerifyCriterionModel(db, userId, workspaceId);
     this.rubricModel = new VerifyRubricModel(db, userId, workspaceId);
-    this.operationModel = new AgentOperationModel(db, userId, workspaceId);
-    this.documentModel = new DocumentModel(db, userId, workspaceId);
+    this.runModel = new VerifyRunModel(db, userId, workspaceId);
+    this.documentModel = new DocumentModel(db, userId, workspaceId, callerAgentVisibility);
+  }
+
+  private get inheritedVisibility(): { visibility: 'private' | 'public' } | Record<string, never> {
+    return this.callerAgentVisibility === 'private' || this.callerAgentVisibility === 'public'
+      ? { visibility: this.callerAgentVisibility }
+      : {};
   }
 
   /**
@@ -122,6 +181,7 @@ export class VerifyPlanGeneratorService {
           title: draft.title,
           totalCharCount: draft.instruction.length,
           totalLineCount: draft.instruction.split('\n').length,
+          ...this.inheritedVisibility,
         });
         documentId = doc.id;
       }
@@ -155,9 +215,10 @@ export class VerifyPlanGeneratorService {
     // 3. Aggregate the criteria under the rubric (criteria reusable across rubrics).
     await this.rubricModel.setCriteria(rubric.id, links);
 
-    // 4. Snapshot onto the operation + confirm so it runs when the op completes.
-    await this.operationModel.setVerifyPlan(params.operationId, items);
-    await this.operationModel.confirmVerifyPlan(params.operationId);
+    // 4. Snapshot onto the run + confirm so it runs when the op completes.
+    const run = await this.runModel.ensureForOperation(params.operationId, { title: params.title });
+    await this.runModel.setPlan(run.id, items);
+    await this.runModel.confirmPlan(run.id);
 
     log(
       'created rubric %s with %d criteria for op %s',
@@ -166,6 +227,101 @@ export class VerifyPlanGeneratorService {
       params.operationId,
     );
     return { items, rubricId: rubric.id };
+  }
+
+  /**
+   * Config-time AI generation: turn a one-sentence acceptance requirement into a
+   * set of proposed criteria for the user to review/edit before saving. Runs the
+   * SAME traced generation as the run-time plan path (`buildPlanPrompt` +
+   * `GENERATED_CRITERIA_JSON_SCHEMA` + `TRACING_SCENARIOS.VerifyPlanGen`), so each
+   * call lands in `llm_generation_tracing` for later precision work. Returns
+   * drafts only — nothing is persisted and no operation is required.
+   */
+  async generateCriteria(params: {
+    context?: string;
+    goal: string;
+    maxCriteria?: number;
+    modelConfig: { model: string; provider: string };
+  }): Promise<CriterionDraft[]> {
+    const maxCriteria = params.maxCriteria ?? DEFAULT_MAX_AI_CRITERIA;
+    const { system, user } = buildPlanPrompt({
+      context: params.context,
+      goal: params.goal,
+      maxCriteria,
+    });
+
+    const ai = new AiGenerationService(this.db, this.userId);
+    const raw = await ai.generateObject(
+      {
+        messages: [
+          { content: system, role: 'system' as const },
+          { content: user, role: 'user' as const },
+        ],
+        model: params.modelConfig.model,
+        provider: params.modelConfig.provider,
+        schema: GENERATED_CRITERIA_JSON_SCHEMA,
+      },
+      {
+        tracing: {
+          promptVersion: VERIFY_PLAN_PROMPT_VERSION,
+          scenario: TRACING_SCENARIOS.VerifyPlanGen,
+          schemaName: GENERATED_CRITERIA_JSON_SCHEMA.name,
+        } satisfies TracingOptions,
+      },
+    );
+
+    const parsed = RawGeneratedCriteriaSchema.safeParse(raw);
+    if (!parsed.success) {
+      log('config criteria-gen output did not match schema: %O', parsed.error.flatten());
+      return [];
+    }
+    return parsed.data.criteria.slice(0, maxCriteria).map((c) => ({
+      description: c.description,
+      instruction: c.instruction,
+      onFail: c.onFail ?? 'manual',
+      required: c.required ?? true,
+      title: c.title,
+      verifierType: c.verifierType,
+    }));
+  }
+
+  /**
+   * Persist a list of (possibly user-edited) drafts as standalone `verify_criteria`
+   * rows and return their ids in order — the "ad-hoc criteria" a task mounts via
+   * `TaskVerifyConfig.verifyCriteriaIds`. The detailed instruction (if any) lands
+   * in a linked document, mirroring the rubric path.
+   */
+  async createCriteriaFromDrafts(drafts: CriterionDraft[]): Promise<string[]> {
+    const ids: string[] = [];
+    for (const [index, draft] of drafts.entries()) {
+      // Reuse the existing instruction doc when re-persisting a hydrated criterion;
+      // only create a fresh doc for a genuinely new draft that carries inline text.
+      let documentId: string | null = draft.documentId ?? null;
+      if (!documentId && draft.instruction) {
+        const doc = await this.documentModel.create({
+          content: draft.instruction,
+          fileType: VERIFY_INSTRUCTION_FILE_TYPE,
+          source: `verify-criterion:adhoc:${index}`,
+          sourceType: 'agent',
+          title: draft.title,
+          totalCharCount: draft.instruction.length,
+          totalLineCount: draft.instruction.split('\n').length,
+          ...this.inheritedVisibility,
+        });
+        documentId = doc.id;
+      }
+      const criterion = await this.criterionModel.create({
+        description: draft.description,
+        documentId,
+        onFail: draft.onFail ?? 'manual',
+        required: draft.required ?? true,
+        title: draft.title,
+        verifierConfig: draft.verifierConfig ?? {},
+        verifierType: draft.verifierType ?? 'llm',
+      });
+      ids.push(criterion.id);
+    }
+    return ids;
   }
 
   /**
@@ -215,7 +371,16 @@ export class VerifyPlanGeneratorService {
       }
     }
 
-    await this.operationModel.setVerifyPlan(params.operationId, items);
+    // 4. Holistic fallback: opted into verify but nothing decomposed into
+    //    criteria — synthesize one agent-type check over the whole deliverable
+    //    so verify actually runs (instead of an empty plan → no-op).
+    if (items.length === 0 && params.holisticFallback) {
+      items.push(buildHolisticAgentItem(params.requirement, params.goal));
+      log('synthesized holistic agent check for op %s', params.operationId);
+    }
+
+    const run = await this.runModel.ensureForOperation(params.operationId, { goal: params.goal });
+    await this.runModel.setPlan(run.id, items);
     log('generated draft plan for op %s with %d items', params.operationId, items.length);
 
     return items;
@@ -276,6 +441,7 @@ export class VerifyPlanGeneratorService {
             title: c.title,
             totalCharCount: c.instruction.length,
             totalLineCount: c.instruction.split('\n').length,
+            ...this.inheritedVisibility,
           });
           documentId = doc.id;
         }

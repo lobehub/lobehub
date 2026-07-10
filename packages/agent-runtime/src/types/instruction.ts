@@ -115,6 +115,7 @@ export interface Agent {
 // ── Payloads ──────────────────────────────────────────────
 
 export interface CallLLMPayload {
+  allowedToolNames?: string[];
   isFirstMessage?: boolean;
   messages: any[];
   model: string;
@@ -190,8 +191,6 @@ export interface SubAgentResultPayload {
     result?: string;
     /** Whether the sub-agent completed successfully */
     success: boolean;
-    /** Sub-agent message ID */
-    taskMessageId: string;
     /** Thread ID where the sub-agent was executed */
     threadId: string;
   };
@@ -211,8 +210,6 @@ export interface SubAgentsBatchResultPayload {
     result?: string;
     /** Whether the sub-agent completed successfully */
     success: boolean;
-    /** Sub-agent message ID */
-    taskMessageId: string;
     /** Thread ID where the sub-agent was executed */
     threadId: string;
   }>;
@@ -275,6 +272,10 @@ export interface AgentInstructionResolveAbortedTools extends AgentInstructionBas
 
 export interface AgentInstructionResolveBlockedTools extends AgentInstructionBase {
   payload: {
+    /** Optional message to write into blocked tool result content */
+    blockedContent?: string;
+    /** Optional machine-readable blocked reason */
+    blockedReason?: string;
     /** Parent message ID (assistant message) */
     parentMessageId: string;
     /** Tool calls that were blocked and need tool results */

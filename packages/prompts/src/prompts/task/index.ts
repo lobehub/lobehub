@@ -55,6 +55,25 @@ export interface TaskSummary {
   status: string;
 }
 
+/**
+ * Deep-link to a task's detail page, so the agent can present task identifiers
+ * as clickable references — mirroring how Linear surfaces an issue's `url`.
+ *
+ * Pass `baseUrl` (e.g. `appEnv.APP_URL`) for an ABSOLUTE link. This is required
+ * whenever the message can leave the app — IM/bot channels (Slack, Telegram,
+ * WeChat…), push notifications, mobile — where there is no app origin to
+ * resolve a relative path against. Omit it only for in-app (SPA) rendering,
+ * where a relative path resolves against the current origin and is more durable.
+ */
+export const taskDetailHref = (identifier: string, baseUrl?: string): string => {
+  const path = `/task/${identifier}`;
+  return baseUrl ? `${baseUrl.replace(/\/$/, '')}${path}` : path;
+};
+
+/** Markdown-link form of a task identifier, e.g. `[T-198](https://app.lobehub.com/task/T-198)`. */
+export const taskRef = (identifier: string, baseUrl?: string): string =>
+  `[${identifier}](${taskDetailHref(identifier, baseUrl)})`;
+
 // Re-export shared types from @lobechat/types for backward compatibility
 export type {
   TaskDetailActivity,
@@ -73,16 +92,50 @@ export const formatTaskLine = (t: TaskSummary): string =>
  * Format createTask response
  */
 export const formatTaskCreated = (
-  t: TaskSummary & { instruction: string; parentLabel?: string },
+  t: TaskSummary & { baseUrl?: string; instruction: string; parentLabel?: string },
 ): string => {
   const lines = [
-    `Task created: ${t.identifier} "${t.name}"`,
+    `Task created: ${taskRef(t.identifier, t.baseUrl)} "${t.name}"`,
     `  Status: ${statusIcon(t.status)} ${t.status}`,
     `  Priority: ${priorityLabel(t.priority)}`,
   ];
-  if (t.parentLabel) lines.push(`  Parent: ${t.parentLabel}`);
+  if (t.parentLabel) lines.push(`  Parent: ${taskRef(t.parentLabel, t.baseUrl)}`);
   lines.push(`  Instruction: ${t.instruction}`);
   return lines.join('\n');
+};
+
+export interface TaskCreatedItem {
+  error?: string;
+  identifier?: string;
+  name: string;
+  success: boolean;
+}
+
+/**
+ * Format the createTasks (batch) response: a header plus one line per task,
+ * with successful identifiers rendered as links (absolute when `baseUrl` is
+ * given — required for IM / mobile, see {@link taskDetailHref}).
+ *
+ * Single source of truth shared by the client executor and the server runtime
+ * so the two stay identical.
+ */
+export const formatTasksCreated = (results: TaskCreatedItem[], baseUrl?: string): string => {
+  const lines = results.map((r, index) => {
+    if (r.success) {
+      const ref = r.identifier ? taskRef(r.identifier, baseUrl) : '(unknown id)';
+      return `${index + 1}. ${ref} "${r.name}" — created`;
+    }
+    return `${index + 1}. "${r.name}" — failed: ${r.error ?? 'Unknown error'}`;
+  });
+
+  const succeeded = results.filter((r) => r.success).length;
+  const failed = results.length - succeeded;
+  const header =
+    failed === 0
+      ? `Created ${succeeded} task${succeeded === 1 ? '' : 's'}:`
+      : `Created ${succeeded}/${results.length} tasks (${failed} failed):`;
+
+  return [header, ...lines].join('\n');
 };
 
 export interface TaskListFilters {
@@ -382,6 +435,17 @@ export interface TaskRunPromptInput {
     } | null;
     status: string;
     subtasks?: Array<TaskSummary & { blockedBy?: string }>;
+    /** Delivery-acceptance criteria the builder must self-evidence while working. */
+    verify?: {
+      criteria?: Array<{
+        required?: boolean;
+        requiredEvidence?: Array<{ hint?: string; type: string }>;
+        title: string;
+      }>;
+      enabled?: boolean;
+      maxIterations?: number;
+      requirement?: string;
+    } | null;
   };
   /** Pinned documents (workspace) */
   workspace?: TaskRunPromptWorkspaceNode[];
@@ -508,6 +572,33 @@ export const buildTaskRunPrompt = (input: TaskRunPromptInput, now?: Date): strin
     }
   } else {
     taskLines.push('Review: (not configured)');
+  }
+
+  // Verify — delivery acceptance (builder self-evidence)
+  if (task.verify?.enabled && (task.verify.criteria?.length || task.verify.requirement)) {
+    taskLines.push('');
+    taskLines.push(
+      `Verify — delivery acceptance (maxIterations: ${task.verify.maxIterations || 3}):`,
+    );
+    if (task.verify.requirement) {
+      taskLines.push(`  Requirement: ${task.verify.requirement}`);
+    }
+    if (task.verify.criteria && task.verify.criteria.length > 0) {
+      taskLines.push('  Criteria — capture the listed evidence while you work:');
+      for (const c of task.verify.criteria) {
+        const flag = c.required === false ? '' : ' (required)';
+        taskLines.push(`    - ${c.title}${flag}`);
+        for (const e of c.requiredEvidence ?? []) {
+          taskLines.push(`        · evidence: ${e.type}${e.hint ? ` — ${e.hint}` : ''}`);
+        }
+      }
+    }
+    taskLines.push(
+      '  Use the `verify` skill to capture each artifact, then submit it with `lh verify',
+    );
+    taskLines.push(
+      '  submit` (the skill resolves your verify run id and check item ids at runtime).',
+    );
   }
 
   // Workspace

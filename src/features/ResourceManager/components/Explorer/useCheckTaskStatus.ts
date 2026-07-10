@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 
 import { resourceService } from '@/services/resource';
-import { useFileStore } from '@/store/file';
+import { getChunkTargetId, useFileStore } from '@/store/file';
 import { AsyncTaskStatus } from '@/types/asyncTask';
 import { type FileListItem } from '@/types/files';
 
@@ -14,7 +14,7 @@ export const useCheckTaskStatus = (data: FileListItem[] | undefined) => {
           (item.chunkingStatus === AsyncTaskStatus.Processing ||
             item.embeddingStatus === AsyncTaskStatus.Processing),
       )
-      .map((item) => item.id) ?? [];
+      .map(getChunkTargetId) ?? [];
   const processingKey = processingFileIds.join(',');
 
   // Poll every 5s to check if chunking/embedding status has changed

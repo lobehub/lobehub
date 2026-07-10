@@ -58,9 +58,9 @@ const service: ActivatorRuntimeService = {
             description: a.description,
             name: a.name,
           })),
-          avatar: builtin.manifest.meta?.avatar,
+          avatar: builtin.avatar,
           identifier: builtin.identifier,
-          name: builtin.manifest.meta?.title ?? builtin.identifier,
+          name: builtin.title ?? builtin.identifier,
           systemRole: builtin.manifest.systemRole,
         });
         continue;

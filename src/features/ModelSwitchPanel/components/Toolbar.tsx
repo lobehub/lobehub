@@ -1,4 +1,5 @@
-import { Flexbox, Icon, SearchBar, Segmented, stopPropagation } from '@lobehub/ui';
+import { Flexbox, Icon, SearchBar, stopPropagation, Tooltip } from '@lobehub/ui';
+import { Tabs } from '@lobehub/ui/base-ui';
 import { ProviderIcon } from '@lobehub/ui/icons';
 import { Brain } from 'lucide-react';
 import { memo } from 'react';
@@ -25,36 +26,48 @@ export const Toolbar = memo<ToolbarProps>(
         align="center"
         className={styles.toolbar}
         gap={4}
+        justify="space-between"
         paddingBlock={8}
         paddingInline={8}
+        width="100%"
       >
-        <SearchBar
-          allowClear
-          placeholder={t('ModelSwitchPanel.searchPlaceholder')}
-          size="small"
-          style={{ flex: 1 }}
-          value={searchKeyword}
-          variant="borderless"
-          onChange={(e) => onSearchKeywordChange(e.target.value)}
-          onKeyDown={stopPropagation}
-        />
-        {showGroupModeSwitch && (
-          <Segmented
+        <Flexbox flex={1} width="100%">
+          <SearchBar
+            allowClear
+            placeholder={t('ModelSwitchPanel.searchPlaceholder')}
             size="small"
-            value={groupMode}
-            options={[
+            style={{ width: '100%' }}
+            styles={{ input: { width: '100%' } }}
+            value={searchKeyword}
+            variant="borderless"
+            onChange={(e) => onSearchKeywordChange(e.target.value)}
+            onKeyDown={stopPropagation}
+          />
+        </Flexbox>
+        {showGroupModeSwitch && (
+          <Tabs
+            activeKey={groupMode}
+            size="small"
+            style={{ minWidth: 0, width: 'fit-content' }}
+            items={[
               {
-                icon: <Icon icon={Brain} />,
-                title: t('ModelSwitchPanel.byModel'),
-                value: 'byModel',
+                key: 'byModel',
+                label: (
+                  <Tooltip title={t('ModelSwitchPanel.byModel')}>
+                    <Icon icon={Brain} />
+                  </Tooltip>
+                ),
               },
               {
-                icon: <Icon icon={ProviderIcon} />,
-                title: t('ModelSwitchPanel.byProvider'),
-                value: 'byProvider',
+                key: 'byProvider',
+                label: (
+                  <Tooltip title={t('ModelSwitchPanel.byProvider')}>
+                    <Icon icon={ProviderIcon} />
+                  </Tooltip>
+                ),
               },
             ]}
-            onChange={(value) => onGroupModeChange?.(value as GroupMode)}
+            onChange={(key) => onGroupModeChange?.(key as GroupMode)}
           />
         )}
       </Flexbox>

@@ -15,8 +15,18 @@
  * (e.g., server-side services vs client-side services).
  */
 import { COMPOSIO_APP_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
-import { marketToolsResultsPrompt, modelsResultsPrompt } from '@lobechat/prompts';
-import type { BuiltinToolResult } from '@lobechat/types';
+import {
+  marketToolsResultsPrompt,
+  modelsResultsPrompt,
+  searchAgentsResultsPrompt,
+} from '@lobechat/prompts';
+import {
+  type BuiltinToolResult,
+  getPluginMode,
+  type HeterogeneousProviderConfig,
+  parsePluginEntry,
+  upsertPluginMode,
+} from '@lobechat/types';
 
 import { getAgentStoreState } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors/selectors';
@@ -50,7 +60,6 @@ import type {
   InstallPluginState,
   MarketToolItem,
   SearchAgentParams,
-  SearchAgentSource,
   SearchAgentState,
   SearchMarketToolsParams,
   SearchMarketToolsState,
@@ -116,7 +125,6 @@ export class AgentManagerRuntime {
         content: `Successfully created agent "${params.title}" with ID: ${result.agentId}`,
         state: {
           agentId: result.agentId,
-          sessionId: result.sessionId,
           success: true,
         } as CreateAgentState,
         success: true,
@@ -171,18 +179,17 @@ export class AgentManagerRuntime {
       // Handle togglePlugin - merge into config.plugins
       if (params.togglePlugin) {
         const { pluginId, enabled } = params.togglePlugin;
-        const currentPlugins = previousConfig?.plugins || [];
-        const isCurrentlyEnabled = currentPlugins.includes(pluginId);
+        const isCurrentlyEnabled = getPluginMode(previousConfig?.plugins, pluginId) === 'pinned';
         const shouldEnable = enabled !== undefined ? enabled : !isCurrentlyEnabled;
 
-        let newPlugins: string[];
-        if (shouldEnable && !isCurrentlyEnabled) {
-          newPlugins = [...currentPlugins, pluginId];
-        } else if (!shouldEnable && isCurrentlyEnabled) {
-          newPlugins = currentPlugins.filter((id) => id !== pluginId);
-        } else {
-          newPlugins = currentPlugins;
-        }
+        // upsertPluginMode preserves an already-matching entry as-is and
+        // flips a disabled entry back to pinned in place, instead of
+        // blindly pushing a duplicate bare-string identifier.
+        const newPlugins = upsertPluginMode(
+          previousConfig?.plugins,
+          pluginId,
+          shouldEnable ? 'pinned' : 'auto',
+        );
 
         finalConfig = { ...finalConfig, plugins: newPlugins };
 
@@ -312,12 +319,23 @@ export class AgentManagerRuntime {
       // orchestrator can reason about what the external agent can actually do.
       const runtime = describeHeterogeneousAgent(config.agencyConfig);
 
+      // Normalize to identifier strings (annotated with mode when not
+      // pinned) — `config.plugins` is the raw AgentPluginEntry[] (string |
+      // {identifier, mode}), but both the LLM-facing summary and the
+      // GetAgentDetailState.config.plugins contract expect string[]. Passing
+      // object-shaped entries through would break GetAgentDetailRender's
+      // <Tag key={plugin}>{plugin}</Tag>.
+      const pluginSummaries = config.plugins?.map((entry) => {
+        const { identifier, mode } = parsePluginEntry(entry);
+        return mode === 'pinned' ? identifier : `${identifier} (${mode})`;
+      });
+
       const detail = {
         config: {
           model: config.model,
           openingMessage: config.openingMessage,
           openingQuestions: config.openingQuestions,
-          plugins: config.plugins,
+          plugins: pluginSummaries,
           provider: config.provider,
           ...(runtime && { runtime }),
           systemRole: config.systemRole,
@@ -336,7 +354,9 @@ export class AgentManagerRuntime {
       if (detail.meta.description) parts.push(detail.meta.description);
       if (detail.config.model)
         parts.push(`Model: ${detail.config.provider || ''}/${detail.config.model}`);
-      if (detail.config.plugins?.length) parts.push(`Plugins: ${detail.config.plugins.join(', ')}`);
+      if (detail.config.plugins?.length) {
+        parts.push(`Plugins: ${detail.config.plugins.join(', ')}`);
+      }
       parts.push(...renderHeteroRuntimeLines(runtime));
       if (detail.config.systemRole) {
         parts.push(`System Prompt: ${detail.config.systemRole}`);
@@ -415,12 +435,14 @@ export class AgentManagerRuntime {
               avatar?: string | null;
               backgroundColor?: string | null;
               description?: string | null;
+              heteroType?: HeterogeneousProviderConfig['type'];
               id: string;
               title?: string | null;
             }) => ({
               avatar: agent.avatar ?? undefined,
               backgroundColor: agent.backgroundColor ?? undefined,
               description: agent.description ?? undefined,
+              heteroType: agent.heteroType,
               id: agent.id,
               isMarket: false,
               title: agent.title ?? undefined,
@@ -457,37 +479,16 @@ export class AgentManagerRuntime {
       const shownUserCount = uniqueAgents.filter((a) => !a.isMarket).length;
       const hasMore = offset + shownUserCount < userTotal;
 
-      const headerBySource: Record<SearchAgentSource, string> = {
-        all: `Found ${userTotal} agents in your workspace and ${marketTotal} in the marketplace, showing ${uniqueAgents.length}:`,
-        market: `Found ${marketTotal} agents in the marketplace, showing the first ${uniqueAgents.length}:`,
-        user: `Found ${userTotal} agents in your workspace, showing ${offset + 1}-${offset + uniqueAgents.length}:`,
-      };
-
-      const notes: string[] = [];
-      if (params.limit && params.limit > MAX_SEARCH_AGENT_LIMIT) {
-        notes.push(
-          `Note: requested limit ${params.limit} exceeds the maximum of ${MAX_SEARCH_AGENT_LIMIT}, so results were capped at ${MAX_SEARCH_AGENT_LIMIT} per call.`,
-        );
-      }
-      if (hasMore) {
-        notes.push(
-          `More workspace agents available: call searchAgent with offset=${offset + shownUserCount}${source === 'all' ? ` and source="user"` : ''} to get the next page.`,
-        );
-      }
-
-      let content: string;
-      if (uniqueAgents.length === 0) {
-        content =
-          totalCount === 0
-            ? 'No agents found matching your search criteria.'
-            : `No agents at offset ${offset}; only ${totalCount} agents match. Retry with a smaller offset.`;
-      } else {
-        const agentList = uniqueAgents
-          .map((a) => `- ${a.title || 'Untitled'} (${a.id})${a.isMarket ? ' [Market]' : ''}`)
-          .join('\n');
-        content = `${headerBySource[source]}\n${agentList}`;
-      }
-      if (notes.length > 0) content += `\n\n${notes.join('\n')}`;
+      const content = searchAgentsResultsPrompt({
+        agents: uniqueAgents,
+        hasMore,
+        marketTotal,
+        maxLimit: MAX_SEARCH_AGENT_LIMIT,
+        offset,
+        requestedLimit: params.limit,
+        source,
+        userTotal,
+      });
 
       return {
         content,
@@ -522,21 +523,19 @@ export class AgentManagerRuntime {
 
       const providers: AvailableProvider[] = filteredList.map((provider) => ({
         id: provider.id,
-        models: provider.children.map(
-          (model): AvailableModel => ({
-            abilities: model.abilities
-              ? {
-                  files: model.abilities.files,
-                  functionCall: model.abilities.functionCall,
-                  reasoning: model.abilities.reasoning,
-                  vision: model.abilities.vision,
-                }
-              : undefined,
-            description: model.description,
-            id: model.id,
-            name: model.displayName || model.id,
-          }),
-        ),
+        models: provider.children.map((model): AvailableModel => ({
+          abilities: model.abilities
+            ? {
+                files: model.abilities.files,
+                functionCall: model.abilities.functionCall,
+                reasoning: model.abilities.reasoning,
+                vision: model.abilities.vision,
+              }
+            : undefined,
+          description: model.description,
+          id: model.id,
+          name: model.displayName || model.id,
+        })),
         name: provider.name,
       }));
 
@@ -1052,11 +1051,14 @@ export class AgentManagerRuntime {
   private async enablePluginForAgent(agentId: string, pluginId: string): Promise<void> {
     await this.ensureAgentLoaded(agentId);
     const agentState = getAgentStoreState();
-    const currentPlugins = agentSelectors.getAgentConfigById(agentId)(agentState)?.plugins || [];
+    const currentPlugins = agentSelectors.getAgentConfigById(agentId)(agentState)?.plugins;
 
-    if (!currentPlugins.includes(pluginId)) {
+    // upsertPluginMode preserves an already-matching entry as-is and flips a
+    // disabled entry back to pinned in place, instead of blindly pushing a
+    // duplicate bare-string identifier.
+    if (getPluginMode(currentPlugins, pluginId) !== 'pinned') {
       await getAgentStoreState().optimisticUpdateAgentConfig(agentId, {
-        plugins: [...currentPlugins, pluginId],
+        plugins: upsertPluginMode(currentPlugins, pluginId, 'pinned'),
       });
     }
   }

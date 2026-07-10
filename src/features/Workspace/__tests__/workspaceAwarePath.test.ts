@@ -11,10 +11,17 @@ describe('buildWorkspaceAwarePath', () => {
   it('prefixes absolute paths with the active workspace slug', () => {
     expect(buildWorkspaceAwarePath('/memory', 'acme')).toBe('/acme/memory');
     expect(buildWorkspaceAwarePath('/agent/inbox', 'acme')).toBe('/acme/agent/inbox');
+    expect(buildWorkspaceAwarePath('/image?model=image-model', 'acme')).toBe(
+      '/acme/image?model=image-model',
+    );
+    expect(buildWorkspaceAwarePath('/video?model=video-model', 'acme')).toBe(
+      '/acme/video?model=video-model',
+    );
     expect(buildWorkspaceAwarePath('/community/agent/jailbreak', 'acme')).toBe(
       '/acme/community/agent/jailbreak',
     );
     expect(buildWorkspaceAwarePath('/group/group-1', 'acme')).toBe('/acme/group/group-1');
+    expect(buildWorkspaceAwarePath('/fleet', 'acme')).toBe('/acme/fleet');
   });
 
   it('bypasses the prefix when `escape` is true', () => {
@@ -29,6 +36,15 @@ describe('buildWorkspaceAwarePath', () => {
   it('does not double-prefix when the path is already under the active slug', () => {
     expect(buildWorkspaceAwarePath('/acme', 'acme')).toBe('/acme');
     expect(buildWorkspaceAwarePath('/acme/memory', 'acme')).toBe('/acme/memory');
+  });
+
+  it('does not prefix paths already qualified by another workspace slug', () => {
+    expect(buildWorkspaceAwarePath('/test-team/agent/agent-1', 'acme')).toBe(
+      '/test-team/agent/agent-1',
+    );
+    expect(buildWorkspaceAwarePath('/test-team/settings/general', 'acme')).toBe(
+      '/test-team/settings/general',
+    );
   });
 
   it('leaves relative paths alone (router resolves them)', () => {
@@ -55,6 +71,7 @@ describe('buildWorkspaceAwarePath', () => {
     expect(buildWorkspaceAwarePath('/settings/credits', 'acme')).toBe('/acme/settings/credits');
     expect(buildWorkspaceAwarePath('/settings/usage', 'acme')).toBe('/acme/settings/usage');
     expect(buildWorkspaceAwarePath('/settings/skill', 'acme')).toBe('/acme/settings/skill');
+    expect(buildWorkspaceAwarePath('/settings/connector', 'acme')).toBe('/acme/settings/connector');
     expect(buildWorkspaceAwarePath('/settings/messenger', 'acme')).toBe('/acme/settings/messenger');
     expect(buildWorkspaceAwarePath('/settings/creds', 'acme')).toBe('/acme/settings/creds');
     expect(buildWorkspaceAwarePath('/settings/provider/openai', 'acme')).toBe(

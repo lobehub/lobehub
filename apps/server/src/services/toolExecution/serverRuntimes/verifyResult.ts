@@ -4,8 +4,9 @@ import debug from 'debug';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
+import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { LobeChatDatabase } from '@/database/type';
-import { maybeAutoRepair, VerifyStatusService } from '@/server/services/verify';
+import { finalizeVerifyRun, VerifyStatusService } from '@/server/services/verify';
 
 import type { ServerRuntimeRegistration } from './types';
 
@@ -55,9 +56,17 @@ class VerifyResultExecutionRuntime {
     );
     const targetOperationId = op?.parentOperationId ?? this.operationId;
 
+    // The result row is keyed by the parent run's verification session.
+    const run = await new VerifyRunModel(this.db, this.userId, this.workspaceId).findByOperation(
+      targetOperationId,
+    );
+    if (!run) {
+      return { content: 'No verification session for this run.', error: 'NO_RUN', success: false };
+    }
+
     const status = params.verdict === 'passed' ? 'passed' : 'failed';
     await new VerifyCheckResultModel(this.db, this.userId, this.workspaceId).updateByCheckItem(
-      targetOperationId,
+      run.id,
       params.checkItemId,
       {
         completedAt: new Date(),
@@ -74,9 +83,10 @@ class VerifyResultExecutionRuntime {
     await new VerifyStatusService(this.db, this.userId, this.workspaceId).recompute(
       targetOperationId,
     );
-    // This may be the last check to resolve — kick auto-repair if the run failed
-    // with auto_repair checks (no-op until everything has a terminal result).
-    await maybeAutoRepair(this.db, this.userId, targetOperationId, this.workspaceId);
+    // This may be the last check to resolve — settle the run through the single
+    // finalizer (repair-aware → drive the bound task on terminal). No report
+    // context here (the verifier sub-agent lacks the builder's deliverable).
+    await finalizeVerifyRun(this.db, this.userId, targetOperationId, {}, this.workspaceId);
 
     log(
       'submitted verdict %s for check %s (op %s)',

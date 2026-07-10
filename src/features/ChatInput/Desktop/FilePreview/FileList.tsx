@@ -10,6 +10,9 @@ import FileItem from './FileItem';
 const styles = createStaticStyles(({ css }) => ({
   container: css`
     overflow-x: scroll;
+
+    /* A swipe past the strip's edge must not fire the browser back gesture. */
+    overscroll-behavior-x: none;
     width: 100%;
   `,
 }));

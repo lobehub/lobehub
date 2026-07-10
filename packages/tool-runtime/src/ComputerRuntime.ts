@@ -308,6 +308,7 @@ export abstract class ComputerRuntime {
 
       const r = result.result || {};
       const commandSuccess = typeof r.success === 'boolean' ? r.success : result.success;
+      const outputFiles = r.outputFiles ?? r.output_files;
 
       const state: RunCommandState = {
         commandId: r.commandId || r.shell_id,
@@ -315,6 +316,7 @@ export abstract class ComputerRuntime {
         exitCode: r.exitCode ?? r.exit_code,
         isBackground: args.background || false,
         output: r.output,
+        outputFiles,
         stderr: r.stderr,
         stdout: r.stdout,
         success: commandSuccess,
@@ -323,6 +325,7 @@ export abstract class ComputerRuntime {
       const content = formatCommandResult({
         error: r.error,
         exitCode: r.exitCode ?? r.exit_code,
+        outputFiles,
         shellId: r.commandId || r.shell_id,
         stderr: r.stderr,
         stdout: r.stdout || r.output,
@@ -348,13 +351,16 @@ export abstract class ComputerRuntime {
 
       const r = result.result || {};
       const outputSuccess = typeof r.success === 'boolean' ? r.success : result.success;
+      const outputFiles = r.outputFiles ?? r.output_files;
 
       const state: GetCommandOutputState = {
         durationMs: r.durationMs ?? r.duration_ms,
         error: r.error,
         exitCode: r.exitCode ?? r.exit_code,
-        newOutput: r.newOutput || r.output,
+        outputFiles,
         running: r.running ?? false,
+        stderr: r.stderr,
+        stdout: r.stdout,
         success: outputSuccess,
       };
 
@@ -363,6 +369,9 @@ export abstract class ComputerRuntime {
         error: r.error,
         exitCode: r.exitCode ?? r.exit_code,
         output: r.newOutput || r.output,
+        outputFiles,
+        stderr: r.stderr,
+        stdout: r.stdout,
         success: outputSuccess,
       });
 

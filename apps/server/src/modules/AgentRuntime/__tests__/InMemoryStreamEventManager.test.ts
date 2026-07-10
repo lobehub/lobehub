@@ -45,6 +45,57 @@ describe('InMemoryStreamEventManager', () => {
     });
   });
 
+  describe('readEventsOnce', () => {
+    it("returns nothing but a tail cursor for '$' (from-now semantics)", async () => {
+      await manager.publishStreamEvent('op-1', {
+        data: {},
+        stepIndex: 0,
+        type: 'agent_runtime_init',
+      });
+
+      const { events, lastEventId } = await manager.readEventsOnce('op-1', '$');
+      expect(events).toHaveLength(0);
+      // Cursor points at the current tail so the next poll reads strictly forward.
+      expect(lastEventId).not.toBe('$');
+    });
+
+    it('returns events after the cursor and advances it', async () => {
+      const firstId = await manager.publishStreamEvent('op-1', {
+        data: { n: 1 },
+        stepIndex: 0,
+        type: 'agent_runtime_init',
+      });
+      await manager.publishStreamEvent('op-1', {
+        data: { result: { a: 1 }, toolCallId: 't1' },
+        stepIndex: 1,
+        type: 'agent_intervention_response',
+      });
+
+      const { events, lastEventId } = await manager.readEventsOnce('op-1', firstId);
+      expect(events).toHaveLength(1);
+      expect(events[0].type).toBe('agent_intervention_response');
+      expect(events[0].data).toMatchObject({ toolCallId: 't1' });
+      expect(lastEventId).toBe(events[0].id);
+    });
+
+    it('is empty with an unchanged cursor when nothing is newer', async () => {
+      const id = await manager.publishStreamEvent('op-1', {
+        data: {},
+        stepIndex: 0,
+        type: 'agent_runtime_init',
+      });
+      const { events, lastEventId } = await manager.readEventsOnce('op-1', id);
+      expect(events).toHaveLength(0);
+      expect(lastEventId).toBe(id);
+    });
+
+    it("returns empty with a '0' cursor for an unknown operation", async () => {
+      const { events, lastEventId } = await manager.readEventsOnce('nope', '$');
+      expect(events).toHaveLength(0);
+      expect(lastEventId).toBe('0');
+    });
+  });
+
   describe('subscribe', () => {
     it('should return an unsubscribe function', async () => {
       const callback = vi.fn();

@@ -19,7 +19,7 @@ import { CompressionRepository } from '@/database/repositories/compression';
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { FileService } from '@/server/services/file';
-import { MessageService } from '@/server/services/message';
+import { type MessageBatchOperation, MessageService } from '@/server/services/message';
 
 import { resolveAgentIdFromSession, resolveContext } from './_helpers/resolveContext';
 import { basicContextSchema } from './_schema/context';
@@ -39,6 +39,42 @@ const messageProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) 
     },
   });
 });
+
+/**
+ * Shared input for the ownership-scoped message analytics queries
+ * (count / countByTopic / topicStats). Every field is an optional filter
+ * applied on top of the `userId × workspace` ownership predicate.
+ */
+const messageAnalyticsSchema = z.object({
+  agentId: z.string().optional(),
+  endDate: z.string().optional(),
+  range: z.tuple([z.string(), z.string()]).optional(),
+  role: z.string().optional(),
+  startDate: z.string().optional(),
+  topicId: z.string().optional(),
+});
+
+const messageBatchOperationSchema = z.discriminatedUnion('type', [
+  z.object({
+    message: CreateNewMessageParamsSchema,
+    type: z.literal('createMessage'),
+  }),
+  z.object({
+    id: z.string(),
+    type: z.literal('updateMessage'),
+    value: UpdateMessageParamsSchema,
+  }),
+  z.object({
+    id: z.string(),
+    type: z.literal('updateToolMessage'),
+    value: z.object({
+      content: z.string().optional(),
+      metadata: z.record(z.string(), z.any()).optional(),
+      pluginError: z.any().optional(),
+      pluginState: z.record(z.string(), z.any()).optional(),
+    }),
+  }),
+]);
 
 export const messageRouter = router({
   addFilesToMessage: messageProcedure
@@ -63,6 +99,45 @@ export const messageRouter = router({
       return ctx.messageService.addFilesToMessage(id, fileIds, resolved);
     }),
 
+  batchMutate: messageProcedure
+    .use(withScopedPermission('message:create'))
+    .use(withScopedPermission('message:update'))
+    .input(
+      z.object({
+        operations: z.array(messageBatchOperationSchema).min(1).max(200),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const operations: MessageBatchOperation[] = await Promise.all(
+        input.operations.map(async (operation): Promise<MessageBatchOperation> => {
+          if (
+            operation.type !== 'createMessage' ||
+            operation.message.agentId ||
+            !operation.message.sessionId
+          ) {
+            return operation as MessageBatchOperation;
+          }
+
+          const agentId = await resolveAgentIdFromSession(
+            operation.message.sessionId,
+            ctx.serverDB,
+            ctx.userId,
+            ctx.workspaceId ?? undefined,
+          );
+
+          return {
+            ...operation,
+            message: {
+              ...operation.message,
+              agentId: agentId!,
+            },
+          } as MessageBatchOperation;
+        }),
+      );
+
+      return ctx.messageService.batchMutate(operations);
+    }),
+
   /**
    * Cancel compression by deleting the compression group and restoring original messages
    */
@@ -71,9 +146,9 @@ export const messageRouter = router({
     .input(
       z.object({
         agentId: z.string(),
-        groupId: z.string().nullable().optional(),
+        groupId: z.string().nullish(),
         messageGroupId: z.string(),
-        threadId: z.string().nullable().optional(),
+        threadId: z.string().nullish(),
         topicId: z.string(),
       }),
     )
@@ -101,18 +176,18 @@ export const messageRouter = router({
       return ctx.messageModel.queryAll(input);
     }),
 
-  count: messageProcedure
-    .input(
-      z
-        .object({
-          endDate: z.string().optional(),
-          range: z.tuple([z.string(), z.string()]).optional(),
-          startDate: z.string().optional(),
-        })
-        .optional(),
-    )
+  count: messageProcedure.input(messageAnalyticsSchema.optional()).query(async ({ ctx, input }) => {
+    return ctx.messageModel.count(input);
+  }),
+
+  /**
+   * Count messages grouped by topic (server-side GROUP BY), sorted by count
+   * desc. Optionally scoped by agent / role / date range.
+   */
+  countByTopic: messageProcedure
+    .input(messageAnalyticsSchema.optional())
     .query(async ({ ctx, input }) => {
-      return ctx.messageModel.count(input);
+      return ctx.messageModel.countGroupByTopic(input);
     }),
 
   countWords: messageProcedure
@@ -139,9 +214,9 @@ export const messageRouter = router({
     .input(
       z.object({
         agentId: z.string(),
-        groupId: z.string().nullable().optional(),
+        groupId: z.string().nullish(),
         messageIds: z.array(z.string()),
-        threadId: z.string().nullable().optional(),
+        threadId: z.string().nullish(),
         topicId: z.string(),
       }),
     )
@@ -184,9 +259,9 @@ export const messageRouter = router({
       z.object({
         agentId: z.string(),
         content: z.string(),
-        groupId: z.string().nullable().optional(),
+        groupId: z.string().nullish(),
         messageGroupId: z.string(),
-        threadId: z.string().nullable().optional(),
+        threadId: z.string().nullish(),
         topicId: z.string(),
       }),
     )
@@ -209,13 +284,13 @@ export const messageRouter = router({
     .use(serverDatabase)
     .input(
       z.object({
-        agentId: z.string().nullable().optional(),
+        agentId: z.string().nullish(),
         current: z.number().optional(),
-        groupId: z.string().nullable().optional(),
+        groupId: z.string().nullish(),
         pageSize: z.number().optional(),
-        sessionId: z.string().nullable().optional(),
-        threadId: z.string().nullable().optional(),
-        topicId: z.string().nullable().optional(),
+        sessionId: z.string().nullish(),
+        threadId: z.string().nullish(),
+        topicId: z.string().nullish(),
         topicShareId: z.string().optional(),
       }),
     )
@@ -260,10 +335,15 @@ export const messageRouter = router({
     return ctx.messageModel.rankModels();
   }),
 
-  removeAllMessages: messageProcedure
-    .use(withScopedPermission('message:delete'))
-    .mutation(async ({ ctx }) => {
-      return ctx.messageModel.deleteAllMessages();
+  /**
+   * Distribution of message counts per topic (topics / mean / median / p90 /
+   * p99 / one-shot ratio + histogram). Aggregated server-side; optionally
+   * scoped by agent / role / date range.
+   */
+  topicStats: messageProcedure
+    .input(messageAnalyticsSchema.optional())
+    .query(async ({ ctx, input }) => {
+      return ctx.messageModel.topicMessageStats(input);
     }),
 
   removeMessage: messageProcedure
@@ -320,7 +400,7 @@ export const messageRouter = router({
     .input(
       z
         .object({
-          groupId: z.string().nullable().optional(),
+          groupId: z.string().nullish(),
         })
         .extend(basicContextSchema.shape),
     )
@@ -345,7 +425,7 @@ export const messageRouter = router({
     .input(
       z.object({
         groupId: z.string(),
-        topicId: z.string().nullable().optional(),
+        topicId: z.string().nullish(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -418,8 +498,8 @@ export const messageRouter = router({
       z.object({
         context: z.object({
           agentId: z.string(),
-          groupId: z.string().nullable().optional(),
-          threadId: z.string().nullable().optional(),
+          groupId: z.string().nullish(),
+          threadId: z.string().nullish(),
           topicId: z.string(),
         }),
         expanded: z.boolean().optional(),

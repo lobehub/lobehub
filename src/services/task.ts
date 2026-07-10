@@ -17,6 +17,7 @@ class TaskService {
     parentTaskId?: string | null;
     priorities?: number[];
     statuses?: TaskStatus[];
+    visibility?: 'private' | 'public';
   }) => lambdaClient.task.list.query(params);
 
   groupList = async (params: {
@@ -28,6 +29,7 @@ class TaskService {
       statuses: string[];
     }>;
     parentTaskId?: string | null;
+    visibility?: 'private' | 'public';
   }) => lambdaClient.task.groupList.query(params);
 
   getSubtasks = async (id: string) => lambdaClient.task.getSubtasks.query({ id });
@@ -43,6 +45,8 @@ class TaskService {
   getCheckpoint = async (id: string) => lambdaClient.task.getCheckpoint.query({ id });
 
   getReview = async (id: string) => lambdaClient.task.getReview.query({ id });
+
+  getVerifyConfig = async (id: string) => lambdaClient.task.getVerifyConfig.query({ id });
 
   // ── Mutations ──
 
@@ -60,7 +64,11 @@ class TaskService {
     priority?: number;
     schedulePattern?: string;
     scheduleTimezone?: string;
+    visibility?: 'private' | 'public';
   }) => lambdaClient.task.create.mutate(params);
+
+  updateVisibility = async (id: string, visibility: 'private' | 'public') =>
+    lambdaClient.task.updateVisibility.mutate({ id, visibility });
 
   update = async (
     id: string,
@@ -145,6 +153,10 @@ class TaskService {
   updateReview = async (...args: Parameters<typeof lambdaClient.task.updateReview.mutate>) =>
     lambdaClient.task.updateReview.mutate(...args);
 
+  updateVerifyConfig = async (
+    ...args: Parameters<typeof lambdaClient.task.updateVerifyConfig.mutate>
+  ) => lambdaClient.task.updateVerifyConfig.mutate(...args);
+
   runReview = async (id: string, params?: { content?: string; topicId?: string }) =>
     lambdaClient.task.runReview.mutate({ id, ...params });
 
@@ -163,11 +175,18 @@ class TaskService {
 
   // ── Transfer / Copy ──
 
-  transferTask = async (taskId: string, targetWorkspaceId: string | null) =>
-    lambdaClient.task.transferTask.mutate({ targetWorkspaceId, taskId });
+  transferTask = async (
+    taskId: string,
+    targetWorkspaceId: string | null,
+    targetVisibility?: 'private' | 'public',
+  ) => lambdaClient.task.transferTask.mutate({ targetVisibility, targetWorkspaceId, taskId });
 
-  copyTaskToWorkspace = async (taskId: string, targetWorkspaceId: string | null) =>
-    lambdaClient.task.copyTaskToWorkspace.mutate({ targetWorkspaceId, taskId });
+  copyTaskToWorkspace = async (
+    taskId: string,
+    targetWorkspaceId: string | null,
+    targetVisibility?: 'private' | 'public',
+  ) =>
+    lambdaClient.task.copyTaskToWorkspace.mutate({ targetVisibility, targetWorkspaceId, taskId });
 }
 
 export const taskService = new TaskService();

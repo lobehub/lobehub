@@ -17,6 +17,7 @@ import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
+import AsyncError from '@/components/AsyncError';
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { buildAgentDocumentPath } from '@/features/AgentDocumentPage/navigation';
 import { DocumentExplorerTree } from '@/features/AgentDocumentsExplorer';
@@ -37,6 +38,7 @@ import { chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { standardizeIdentifier } from '@/utils/identifier';
 
+import DeviceLevelSkills from './DeviceLevelSkills';
 import ProjectLevelSkills from './ProjectLevelSkills';
 import UserLevelSkills, { useUserSkills } from './UserLevelSkills';
 
@@ -274,6 +276,13 @@ interface AgentDocumentsGroupProps {
   activeFilter?: ResourceFilter;
   /** Bound remote device id (device mode); skills are then scanned over RPC. */
   deviceId?: string;
+  /**
+   * Gate the (unbounded) document-list fetch. Defaults to `true`. The working
+   * sidebar passes `false` while its panel is collapsed so entering a
+   * conversation no longer pulls the full list into the initial batch — it
+   * fetches only once the user actually opens the resources panel.
+   */
+  enabled?: boolean;
   openMode?: DocumentOpenMode;
   showFilterTabs?: boolean;
   showLocalProjectSkills?: boolean;
@@ -285,6 +294,7 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
   ({
     activeFilter: controlledFilter,
     deviceId,
+    enabled = true,
     openMode,
     showFilterTabs = true,
     showLocalProjectSkills = false,
@@ -326,18 +336,21 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
     // section layout (flat when a single source has items, sectioned otherwise).
     // Both hooks are SWR-deduped against their respective child fetches.
     const userSkillItems = useUserSkills();
-    const { items: projectSkillItems, isLoading: isProjectSkillsLoading } = useProjectSkills(
-      showProjectSkills ? workingDirectory : undefined,
-      deviceId,
-    );
+    const {
+      deviceItems: deviceSkillItems,
+      error: projectSkillsError,
+      isLoading: isProjectSkillsLoading,
+      projectItems: projectSkillItems,
+    } = useProjectSkills(showProjectSkills ? workingDirectory : undefined, deviceId);
 
     const {
       data = [],
       error,
       isLoading,
       mutate,
-    } = useClientDataSWR(agentId ? agentDocumentSWRKeys.documentsList(agentId) : null, () =>
-      agentDocumentService.listDocuments({ agentId: agentId! }),
+    } = useClientDataSWR(
+      enabled && agentId ? agentDocumentSWRKeys.documentsList(agentId) : null,
+      () => agentDocumentService.listDocuments({ agentId: agentId! }),
     );
 
     const webData = useMemo(
@@ -377,7 +390,13 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
     if (error) {
       return (
         <Center flex={1} paddingBlock={24}>
-          <Text type={'danger'}>{t('workingPanel.resources.error')}</Text>
+          <AsyncError
+            error={error}
+            variant={'block'}
+            onRetry={() => {
+              void mutate();
+            }}
+          />
         </Center>
       );
     }
@@ -508,17 +527,27 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
     );
 
     const renderSkills = () => {
-      // Sections render in fixed order — agent → project → user — and each one
+      // Sections render in fixed order — agent → project → device → user — and each one
       // hides itself when it has nothing to show. When exactly one source has
       // items we drop the group header and render the list flat (no redundant
       // "User skills 1" label above a single row). When everything is empty we
       // fall back to a single placeholder.
       const hasAgent = skillItems.length > 0;
       const hasProject = showProjectSkills && projectSkillItems.length > 0;
+      const hasDevice = showProjectSkills && deviceSkillItems.length > 0;
       const hasUser = userSkillItems.length > 0;
-      const activeCount = (hasAgent ? 1 : 0) + (hasProject ? 1 : 0) + (hasUser ? 1 : 0);
+      const activeCount =
+        (hasAgent ? 1 : 0) + (hasProject ? 1 : 0) + (hasDevice ? 1 : 0) + (hasUser ? 1 : 0);
 
       if (activeCount === 0) {
+        if (showProjectSkills && projectSkillsError) {
+          return (
+            <Center flex={1} paddingBlock={24}>
+              <AsyncError error={projectSkillsError} variant={'block'} />
+            </Center>
+          );
+        }
+
         // Project skills refetch on a working-directory switch (new SWR key →
         // empty items while in flight). Show the loader instead of flashing the
         // empty placeholder when there's nothing else to render yet.
@@ -555,6 +584,13 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
             ))}
           {hasProject && (
             <ProjectLevelSkills
+              deviceId={deviceId}
+              hideHeader={flat}
+              workingDirectory={workingDirectory!}
+            />
+          )}
+          {hasDevice && (
+            <DeviceLevelSkills
               deviceId={deviceId}
               hideHeader={flat}
               workingDirectory={workingDirectory!}

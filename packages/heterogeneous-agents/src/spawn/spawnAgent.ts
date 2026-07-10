@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process';
 
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 
-import { AgentStreamPipeline } from './agentStreamPipeline';
+import { AgentStreamPipeline, type UploadHeterogeneousImage } from './agentStreamPipeline';
 import { resolveCliSpawnPlan } from './cliSpawn';
 import { readCodexSessionModel, resolveCodexInitialModel } from './codexModel';
 import type { AgentPromptInput, BuildAgentInputOptions } from './input';
@@ -61,6 +61,15 @@ export interface SpawnAgentOptions {
   prompt: AgentPromptInput;
   /** Resume an existing agent session by its native session id (CC) / thread id (Codex). */
   resumeSessionId?: string;
+  /**
+   * Runtime uploader for tool_result images (CC `Read` on an image file). The
+   * adapter emits the raw base64 on `pluginState.images`; the pipeline calls
+   * this to swap each entry for an uploaded `{ fileId, url }` reference before
+   * the event is persisted, so heavy base64 never reaches the ingest sinks.
+   * Omit in standalone/offline runs — the pipeline then drops the image and
+   * leaves the `[Image: …]` text placeholder as the fallback.
+   */
+  uploadImage?: UploadHeterogeneousImage;
 }
 
 export interface SpawnAgentHandle {
@@ -110,9 +119,11 @@ export interface SpawnAgentHandle {
  * `AskUserQuestion` is disabled because CC's CLI self-injects an
  * `is_error: "Answer questions?"` tool_result in `-p` mode before the host
  * can surface the questions, so the model falls back to plain-text prompting
- * anyway. Remove this once a local MCP-backed replacement is wired to
- * LobeHub's intervention UI.
+ * anyway. `Monitor` and `ScheduleWakeup` are also disabled here because they
+ * can hit the same stuck wakeup path in both desktop and sandbox runs.
  */
+const CLAUDE_CODE_DISALLOWED_TOOLS = ['AskUserQuestion', 'Monitor', 'ScheduleWakeup'] as const;
+
 export const CLAUDE_CODE_BASE_ARGS = [
   '-p',
   '--input-format',
@@ -121,7 +132,7 @@ export const CLAUDE_CODE_BASE_ARGS = [
   'stream-json',
   '--verbose',
   '--disallowedTools',
-  'AskUserQuestion',
+  CLAUDE_CODE_DISALLOWED_TOOLS.join(','),
 ] as const;
 
 // bypassPermissions is blocked when running as root (e.g. cloud sandbox).
@@ -276,25 +287,13 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
     stdio: ['pipe', 'pipe', 'pipe'],
   });
 
-  const exit = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>(
-    (resolve, reject) => {
-      proc.on('exit', (code, signal) => resolve({ code, signal }));
-      proc.on('error', (err) => reject(err));
-    },
-  );
-
-  if (proc.stdin) {
-    proc.stdin.write(inputPlan.stdin, () => {
-      proc.stdin?.end();
-    });
-  }
-
   const pipeline = new AgentStreamPipeline({
     agentType: options.agentType,
     cwd,
     initialCumulativeUsage,
     initialModel,
     operationId: options.operationId,
+    uploadImage: options.uploadImage,
   });
   const stdout = proc.stdout!;
   const stderr = proc.stderr!;
@@ -315,6 +314,28 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
       w();
     }
   };
+
+  const failStream = (err: Error) => {
+    streamError = err;
+    streamEnded = true;
+    wake();
+  };
+
+  const exit = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>(
+    (resolve, reject) => {
+      proc.on('exit', (code, signal) => resolve({ code, signal }));
+      proc.on('error', (err) => {
+        failStream(err);
+        reject(err);
+      });
+    },
+  );
+
+  if (proc.stdin) {
+    proc.stdin.write(inputPlan.stdin, () => {
+      proc.stdin?.end();
+    });
+  }
 
   // ALL pipeline work — push / flush — runs through this single chain so:
   //   1. multiple `'data'` chunks process in arrival order, even when an

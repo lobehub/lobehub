@@ -1,8 +1,9 @@
 import { AGENT_DOCUMENT_CATEGORY } from '@lobechat/const';
-import { Center, Empty, Flexbox } from '@lobehub/ui';
+import { Center, Empty, Flexbox, Icon } from '@lobehub/ui';
+import { SkillsIcon } from '@lobehub/ui/icons';
 import type { MenuProps } from 'antd';
 import { createStaticStyles } from 'antd-style';
-import { FileTextIcon, Maximize2Icon, Trash2Icon } from 'lucide-react';
+import { FileTextIcon, Maximize2Icon, PenLineIcon, Trash2Icon } from 'lucide-react';
 import type { CSSProperties } from 'react';
 import { memo, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,13 +16,16 @@ import type {
   ExplorerTreeNode,
 } from '@/features/ExplorerTree';
 import {
+  DISABLE_ROW_TEXT_SELECTION_CSS,
+  DOCUMENT_TREE_ICON_CSS,
   ExplorerTree,
-  FOLDER_ICON_CSS,
   getExplorerTreeStyleVars,
   HIDE_POINTER_FOCUS_RING_CSS,
 } from '@/features/ExplorerTree';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { agentDocumentService } from '@/services/agentDocument';
 
+import { openConvertToSkillModal, slugifySkillName } from './ConvertToSkillModal';
 import DocumentExplorerToolbar from './DocumentExplorerToolbar';
 import { useDocumentTreeOps } from './hooks/useDocumentTreeOps';
 import type { AgentDocumentItem } from './types';
@@ -31,7 +35,7 @@ import { canDropDocument } from './utils/canDrop';
 const SKILL_INDEX_FILENAME = 'SKILL.md';
 const FILE_TREE_HOST_TAG = 'file-tree-container';
 const RENAME_INPUT_SELECTOR = 'input[data-item-rename-input]';
-const DOCUMENT_TREE_UNSAFE_CSS = `${FOLDER_ICON_CSS}\n${HIDE_POINTER_FOCUS_RING_CSS}`;
+const DOCUMENT_TREE_UNSAFE_CSS = `${DOCUMENT_TREE_ICON_CSS}\n${HIDE_POINTER_FOCUS_RING_CSS}\n${DISABLE_ROW_TEXT_SELECTION_CSS}`;
 
 // pierre/trees auto-selects the full value when the rename input mounts. For
 // files with extensions (e.g. `Untitled document.md`), narrow the selection to
@@ -136,10 +140,6 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
       })),
     [documents, resolveNodeName, resolveParentRowId],
   );
-  const defaultExpandedIds = useMemo(
-    () => nodes.filter((node) => node.isFolder && node.parentId == null).map((node) => node.id),
-    [nodes],
-  );
   const treeStyleVars = useMemo(
     () => getExplorerTreeStyleVars({ reserveChevronSlot: nodes.some((node) => node.isFolder) }),
     [nodes],
@@ -176,6 +176,54 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
     (parentId: string | null) =>
       ops.createDocument(parentId, { onPendingInserted: focusNewRowForRename }),
     [focusNewRowForRename, ops],
+  );
+
+  const handleConvertToSkill = useCallback(
+    (doc: AgentDocumentItem) => {
+      const fallbackTitle = doc.title || doc.filename || '';
+      openConvertToSkillModal({
+        defaultDescription: doc.description ?? '',
+        defaultName: slugifySkillName(fallbackTitle),
+        defaultTitle: fallbackTitle,
+        generateCacheKey: ['document-to-skill-meta', agentId, doc.id],
+        onGenerate: async () => {
+          const meta = await agentDocumentService.generateSkillMeta({
+            agentId,
+            sourceAgentDocumentId: doc.id,
+          });
+          return meta ?? undefined;
+        },
+        onSubmit: async ({ name, description, title, generation }) => {
+          try {
+            await agentDocumentService.convertDocumentToSkill({
+              agentId,
+              description,
+              name,
+              sourceAgentDocumentId: doc.id,
+              title,
+            });
+            // Record implicit feedback: saving the generated values unchanged is
+            // a positive signal, editing them is negative. Best-effort.
+            if (generation) {
+              void agentDocumentService.recordSkillMetaFeedback({
+                data: {
+                  editedFields: generation.editedFields,
+                  final: { description, name, title },
+                  generated: generation.generated,
+                },
+                edited: generation.edited,
+                tracingId: generation.tracingId,
+              });
+            }
+            await mutate();
+            return undefined;
+          } catch (error) {
+            return error instanceof Error ? error.message : String(error);
+          }
+        },
+      });
+    },
+    [agentId, mutate],
   );
 
   const handleNodeClick = useCallback(
@@ -268,6 +316,7 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
 
       if (!isSkill && !isMulti) {
         items.push({
+          icon: <PenLineIcon size={14} />,
           key: 'rename',
           label: t('workingPanel.resources.tree.rename'),
           onClick: () => startInlineRename(node.id),
@@ -285,6 +334,19 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
         });
       }
 
+      // Only plain agent documents (not folders, web sources, or existing
+      // skills) can be migrated into a managed skill.
+      const isConvertibleToSkill =
+        !isFolder && !isSkill && node.data?.category === AGENT_DOCUMENT_CATEGORY;
+      if (isConvertibleToSkill && !isMulti) {
+        items.push({
+          icon: <Icon icon={SkillsIcon} size={14} />,
+          key: 'convert-to-skill',
+          label: t('workingPanel.resources.tree.convertToSkill'),
+          onClick: () => handleConvertToSkill(node.data!),
+        });
+      }
+
       items.push({
         danger: true,
         icon: <Trash2Icon size={14} />,
@@ -299,6 +361,7 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
     },
     [
       agentId,
+      handleConvertToSkill,
       handleCreateDocument,
       handleCreateFolder,
       isRecoverableSkillBundle,
@@ -332,7 +395,6 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
           canDrag={canDrag}
           canDrop={canDrop}
           canRename={canRename}
-          defaultExpandedIds={defaultExpandedIds}
           getContextMenuItems={getContextMenuItems}
           header={toolbar}
           iconSet="complete"

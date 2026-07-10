@@ -130,8 +130,7 @@ export const connectorRouter = router({
     .input(z.object({ id: z.string().uuid() }))
     .query(async ({ input, ctx }) => {
       const connector = await ctx.connectorModel.findById(input.id);
-      if (!connector)
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
+      if (!connector) throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
 
       const { oidcConfig, credentials, ...rest } = connector;
       const safeOidcConfig = oidcConfig ? { ...oidcConfig, clientSecret: undefined } : oidcConfig;
@@ -167,11 +166,20 @@ export const connectorRouter = router({
     // connector updates the existing row instead of violating the unique index.
     // Status resets to `disconnected` — the OAuth callback / tool sync promotes
     // it back to `connected` on success.
+    //
+    // `sourceType` is honored on update so the legacy customPlugin → connector
+    // migration can promote a half-baked `marketplace` row left behind by the
+    // older `syncPluginTools` code path into a proper `custom` row. Without
+    // this the connector would land but never appear in custom-connector
+    // listings (selector filters on sourceType === 'custom'). Safe because the
+    // other callers (`AddConnectorModal`, marketplace bootstrap) always pass
+    // the same sourceType they originally created the row with.
     const [existing] = await ctx.connectorModel.queryByIdentifiers([input.identifier]);
     if (existing) {
       await ctx.connectorModel.update(existing.id, {
         ...fields,
         isEnabled: input.isEnabled ?? true,
+        sourceType: input.sourceType,
         status: ConnectorStatus.disconnected,
       });
       return { id: existing.id };
@@ -287,7 +295,7 @@ export const connectorRouter = router({
           .partial()
           .omit({ identifier: true, sourceType: true })
           // Allow `null` here so an edit can clear credentials (switch to no-auth).
-          .extend({ credentials: connectorCredentialsInputSchema.nullable().optional() }),
+          .extend({ credentials: connectorCredentialsInputSchema.nullish() }),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -473,16 +481,45 @@ export const connectorRouter = router({
    * Bootstrap a connector entry for an installed marketplace plugin.
    * Reads tool list from user_installed_plugins.manifest.api.
    * Idempotent — safe to call on every open of the detail panel.
+   *
+   * Skips `type='customPlugin'` rows that carry an MCP endpoint: those are
+   * legacy custom MCPs and now go through the frontend migration flow
+   * (CustomConnectorModal in `legacyPlugin` mode), which produces a fully
+   * populated `user_connectors` row (with `mcpServerUrl` / `credentials`).
+   * Letting this procedure build a half-baked marketplace row for them would
+   * be filtered out by the runtime (`buildConnectorManifests` requires a
+   * transport endpoint) and would also collide on the unique `(user_id,
+   * identifier)` index when the migration later tries to upsert.
    */
   syncPluginTools: connectorProcedure
     .input(z.object({ identifier: z.string().min(1) }))
     .mutation(async ({ input, ctx }) => {
       const plugin = await ctx.pluginModel.findById(input.identifier);
 
-      if (!plugin || !plugin.manifest) {
+      if (!plugin) {
         throw new TRPCError({
           code: 'NOT_FOUND',
-          message: `Plugin '${input.identifier}' not found or has no manifest`,
+          message: `Plugin '${input.identifier}' not found`,
+        });
+      }
+
+      // The customPlugin migration guard MUST run before the manifest check.
+      // The users hit by #15674 are the ones whose legacy custom MCP never
+      // successfully reported a `tools/list` after the v2.2.3 break, so their
+      // `user_installed_plugins.manifest` is NULL / empty. If we threw
+      // NOT_FOUND here the SkillDetail fallback would never render and the
+      // migration modal would never surface — exactly the users we are
+      // trying to rescue. Hand off to the frontend migration flow first;
+      // returning null tells the caller "no connector row produced" and the
+      // "Configure" button opens CustomConnectorModal in migration mode.
+      if (plugin.type === 'customPlugin' && plugin.customParams?.mcp) {
+        return { connectorId: null, toolCount: 0 };
+      }
+
+      if (!plugin.manifest) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: `Plugin '${input.identifier}' has no manifest`,
         });
       }
 

@@ -7,6 +7,7 @@ import { useMemo } from 'react';
 
 import { useFileTransferMenuItem } from '@/business/client/hooks/useFileTransferMenuItem';
 import { usePermission } from '@/hooks/usePermission';
+import { getChunkTargetId } from '@/store/file';
 
 import DropdownMenu from '../../ItemDropdown/DropdownMenu';
 import ChunksBadge from './ChunkTag';
@@ -18,6 +19,7 @@ interface FileListItemActionsProps {
   chunkingStatus?: unknown;
   embeddingError?: IAsyncTaskError | null;
   embeddingStatus?: unknown;
+  fileId?: string | null;
   finishEmbedding?: boolean;
   id: string;
   isCreatingFileParseTask: boolean;
@@ -62,6 +64,7 @@ const FileListItemActions = ({
   chunkingStatus,
   embeddingError,
   embeddingStatus,
+  fileId,
   finishEmbedding,
   id,
   isCreatingFileParseTask,
@@ -73,6 +76,7 @@ const FileListItemActions = ({
   t,
 }: FileListItemActionsProps) => {
   const { allowed: canEditResources } = usePermission('edit_own_content');
+  const chunkTargetId = getChunkTargetId({ fileId, id });
   const transferMenuItems = useFileTransferMenuItem(
     id,
     isPage ? 'document' : isFolder ? 'folder' : 'file',
@@ -111,7 +115,7 @@ const FileListItemActions = ({
                 size={'small'}
                 type={'text'}
                 onClick={() => {
-                  parseFiles([id]);
+                  parseFiles([chunkTargetId]);
                 }}
               >
                 {t(
@@ -131,7 +135,7 @@ const FileListItemActions = ({
               embeddingError={embeddingError}
               embeddingStatus={embeddingStatus as any}
               finishEmbedding={finishEmbedding}
-              id={id}
+              id={chunkTargetId}
             />
           </div>
         ))}

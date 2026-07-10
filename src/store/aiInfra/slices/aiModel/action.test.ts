@@ -264,6 +264,72 @@ describe('AiModelAction', () => {
         source: 'remote',
         type: 'image',
       });
+    });
+
+    it('should preserve enabled status of existing models when fetching', async () => {
+      const mockRemoteModels = [
+        {
+          displayName: 'Remote Model 1',
+          id: 'remote-1',
+          enabled: true,
+          type: 'chat',
+        },
+        {
+          displayName: 'Remote Model 2',
+          id: 'remote-2',
+          enabled: false,
+          type: 'chat',
+        },
+      ];
+
+      act(() => {
+        useStore.setState({
+          aiProviderModelList: [
+            {
+              id: 'remote-1',
+              enabled: false,
+              type: 'chat',
+            },
+            {
+              id: 'remote-2',
+              enabled: true,
+              type: 'chat',
+            },
+          ],
+        });
+      });
+
+      const { result } = renderHook(() => useStore());
+      const batchUpdateSpy = vi
+        .spyOn(result.current, 'batchUpdateAiModels')
+        .mockResolvedValue(undefined);
+      const refreshSpy = vi
+        .spyOn(result.current, 'refreshAiModelList')
+        .mockResolvedValue(undefined);
+
+      vi.doMock('@/services/models', () => ({
+        modelsService: {
+          getModels: vi.fn().mockResolvedValue(mockRemoteModels),
+        },
+      }));
+
+      await act(async () => {
+        await result.current.fetchRemoteModelList('test-provider');
+      });
+
+      await waitFor(() => {
+        expect(batchUpdateSpy).toHaveBeenCalled();
+      });
+
+      const batchUpdateArg = batchUpdateSpy.mock.calls[0][0];
+      expect(batchUpdateArg[0]).toMatchObject({
+        id: 'remote-1',
+        enabled: false,
+      });
+      expect(batchUpdateArg[1]).toMatchObject({
+        id: 'remote-2',
+        enabled: true,
+      });
 
       expect(refreshSpy).toHaveBeenCalled();
     });

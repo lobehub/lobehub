@@ -3,6 +3,7 @@ import type {
   LocalMoveFilesResultItem,
   MoveLocalFileParams,
   ProjectFileIndexResult,
+  ProjectFileSearchResult,
   RenameLocalFileResult,
 } from '@lobechat/electron-client-ipc';
 import type { DeviceLocalFilePreview } from '@lobechat/types';
@@ -59,6 +60,24 @@ class ProjectFileService {
     return deviceId
       ? ((await lambdaClient.device.getProjectFileIndex.query({ deviceId, scope })) ?? undefined)
       : localFileService.getProjectFileIndex({ scope });
+  }
+
+  /** Search files within a project working directory. Matching runs on the file host. */
+  async searchProjectFiles({
+    deviceId,
+    limit,
+    query,
+    scope,
+  }: {
+    deviceId?: string;
+    limit?: number;
+    query: string;
+    scope: string;
+  }): Promise<ProjectFileSearchResult | undefined> {
+    return deviceId
+      ? ((await lambdaClient.device.searchProjectFiles.query({ deviceId, limit, query, scope })) ??
+          undefined)
+      : localFileService.searchProjectFiles({ limit, query, scope });
   }
 
   /** File preview payload for a file in a project working directory. */

@@ -2,6 +2,7 @@ import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useIsMobile } from '@/hooks/useIsMobile';
+import { openAgentSettingsModal } from '@/routes/(main)/agent/profile/features/AgentSettings';
 import { useAgentStore } from '@/store/agent';
 import { ChatSettingsTabs } from '@/store/global/initialState';
 
@@ -22,13 +23,16 @@ vi.mock('@/store/global', () => ({
     setState: vi.fn(),
   },
 }));
+vi.mock('@/routes/(main)/agent/profile/features/AgentSettings', () => ({
+  openAgentSettingsModal: vi.fn(),
+}));
 describe('useOpenChatSettings', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    useAgentStore.setState({ showAgentSetting: false, activeAgentId: undefined });
+    useAgentStore.setState({ activeAgentId: undefined });
   });
 
-  it('navigates to mobile chat settings with session info', () => {
+  it('navigates to mobile agent settings route for the active agent', () => {
     useAgentStore.setState({ activeAgentId: '123' });
     vi.mocked(useIsMobile).mockReturnValue(true);
     const { result } = renderHook(() => useOpenChatSettings(ChatSettingsTabs.Opening));
@@ -37,9 +41,7 @@ describe('useOpenChatSettings', () => {
       result.current();
     });
 
-    expect(mockNavigate).toHaveBeenCalledWith(
-      `/chat/settings?session=123&showMobileWorkspace=true`,
-    );
+    expect(mockNavigate).toHaveBeenCalledWith(`/agent/123/settings?showMobileWorkspace=true`);
   });
 
   it('opens desktop agent settings overlay when not on mobile', () => {
@@ -52,7 +54,7 @@ describe('useOpenChatSettings', () => {
       result.current();
     });
 
-    expect(useAgentStore.getState().showAgentSetting).toBeTruthy();
+    expect(openAgentSettingsModal).toHaveBeenCalled();
     expect(mockNavigate).not.toHaveBeenCalled();
   });
 });

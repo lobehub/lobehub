@@ -195,7 +195,7 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
         submenu: [
           { label: t('view.reload'), role: 'reload' },
           { label: t('view.forceReload'), role: 'forceReload' },
-          { accelerator: 'F12', label: t('dev.devTools'), role: 'toggleDevTools' },
+          this.buildDevToolsMenuItem(t('dev.devTools'), 'F12'),
           { type: 'separator' },
           this.buildZoomMenuItem('reset', t('view.resetZoom'), 'CmdOrCtrl+0'),
           ...this.buildZoomMenuItems('in', t('view.zoomIn'), 'CmdOrCtrl+=', ['CmdOrCtrl+Plus']),

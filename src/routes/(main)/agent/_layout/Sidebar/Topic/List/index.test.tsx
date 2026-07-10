@@ -104,7 +104,13 @@ vi.mock('../TopicListContent/FlatMode', () => ({
   default: () => <div data-testid="flat-mode" />,
 }));
 
-vi.mock('@lobehub/ui', () => ({
+// Partial mock: keep every real export (e.g. `lobeStaticStylish`, which
+// `createStaticStyles` reads at import time in transitively-loaded modules like
+// ShareModal/useContainerStyles) and override only Flexbox. A full mock returning
+// just Flexbox drops those exports and crashes collection whenever the suite's
+// module graph evaluates one of them.
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
 }));
 

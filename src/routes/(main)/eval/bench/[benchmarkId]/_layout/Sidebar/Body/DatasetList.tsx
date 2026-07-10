@@ -34,7 +34,7 @@ const DatasetList = memo<DatasetListProps>(({ activeKey, benchmarkId, itemKey })
             {t('sidebar.datasets')}
           </Text>
           {datasetList.length > 0 && (
-            <Text fontSize={11} type="secondary">
+            <Text fontSize={12} type="secondary">
               {datasetList.length}
             </Text>
           )}

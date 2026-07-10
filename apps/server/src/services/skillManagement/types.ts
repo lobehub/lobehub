@@ -48,8 +48,12 @@ export interface SkillSummary {
 export interface SkillDetail extends SkillSummary {
   /** Raw SKILL.md content when requested by callers. */
   content?: string;
+  /** UpdatedAt marker captured from the post-refine backing document for receipt rollback freshness checks. */
+  expectedCurrentDocumentUpdatedAt?: string;
   /** Parsed index frontmatter. */
   frontmatter: SkillFrontmatter;
+  /** Document history id captured immediately before a mutating skill write. */
+  preMutationHistoryId?: string;
 }
 
 /** Current managed skill target snapshot used by proposal merge preflight checks. */

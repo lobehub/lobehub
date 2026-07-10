@@ -63,22 +63,48 @@ export class AiModelActionImpl {
 
     const data = await modelsService.getModels(providerId);
     if (data) {
+      const currentEnabledState = new Map(
+        this.#get().aiProviderModelList.map(({ enabled, id }) => [id, enabled]),
+      );
       await this.#get().batchUpdateAiModels(
-        data.map((model) => ({
-          ...model,
-          abilities: {
-            files: model.files,
-            functionCall: model.functionCall,
-            imageOutput: model.imageOutput,
-            reasoning: model.reasoning,
-            search: model.search,
-            video: model.video,
-            vision: model.vision,
-          },
-          enabled: model.enabled || false,
-          source: 'remote',
-          type: model.type || 'chat',
-        })),
+        data.map((model) => {
+          const result: any = {
+            ...model,
+            enabled: currentEnabledState.get(model.id) ?? model.enabled ?? false,
+            source: 'remote',
+          };
+
+          // Only include abilities if at least one capability is truthy
+          const hasAnyAbility =
+            model.files ||
+            model.functionCall ||
+            model.imageOutput ||
+            model.reasoning ||
+            model.search ||
+            model.video ||
+            model.vision;
+
+          if (hasAnyAbility) {
+            result.abilities = {
+              files: model.files,
+              functionCall: model.functionCall,
+              imageOutput: model.imageOutput,
+              reasoning: model.reasoning,
+              search: model.search,
+              video: model.video,
+              vision: model.vision,
+            };
+          }
+
+          // Always include type to enable remote updates
+          // The SQL layer will preserve non-chat types when remote sends 'chat'
+          // This allows correcting misclassified models (e.g., image → video)
+          if (model.type) {
+            result.type = model.type;
+          }
+
+          return result;
+        }),
       );
 
       await this.#get().refreshAiModelList();

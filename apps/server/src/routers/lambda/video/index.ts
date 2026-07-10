@@ -20,6 +20,7 @@ import { chargeAfterGenerate } from '@/business/server/video-generation/chargeAf
 import { chargeBeforeGenerate } from '@/business/server/video-generation/chargeBeforeGenerate';
 import { getVideoFreeQuota } from '@/business/server/video-generation/getVideoFreeQuota';
 import { AsyncTaskModel } from '@/database/models/asyncTask';
+import { GenerationTopicModel } from '@/database/models/generationTopic';
 import { UserModel } from '@/database/models/user';
 import {
   asyncTasks,
@@ -49,6 +50,7 @@ const videoProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =>
     ctx: {
       asyncTaskModel: new AsyncTaskModel(ctx.serverDB, ctx.userId, wsId),
       fileService: new FileService(ctx.serverDB, ctx.userId, wsId),
+      generationTopicModel: new GenerationTopicModel(ctx.serverDB, ctx.userId, wsId),
     },
   });
 });
@@ -63,12 +65,12 @@ const createVideoInputSchema = z.object({
       aspectRatio: z.string().optional(),
       cameraFixed: z.boolean().optional(),
       duration: z.number().optional(),
-      endImageUrl: z.string().nullable().optional(),
+      endImageUrl: z.string().nullish(),
       generateAudio: z.boolean().optional(),
-      imageUrl: z.string().nullable().optional(),
+      imageUrl: z.string().nullish(),
       prompt: z.string(),
       resolution: z.string().optional(),
-      seed: z.number().nullable().optional(),
+      seed: z.number().nullish(),
     })
     .passthrough(),
   provider: z.string(),
@@ -79,7 +81,7 @@ export const videoRouter = router({
   createVideo: videoCreateProcedure
     .input(createVideoInputSchema)
     .mutation(async ({ input, ctx }) => {
-      const { userId, serverDB, asyncTaskModel, fileService } = ctx;
+      const { userId, serverDB, asyncTaskModel, fileService, generationTopicModel } = ctx;
       const wsId = ctx.workspaceId ?? undefined;
       const { generationTopicId, provider, model, params } = input;
 
@@ -163,6 +165,11 @@ export const videoRouter = router({
       }
 
       // Step 0: Pre-charge (atomic budget deduction to prevent concurrent abuse)
+      const generationTopic = await generationTopicModel.findById(generationTopicId);
+      if (!generationTopic) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Invalid generation topic' });
+      }
+
       const { errorBatch, prechargeResult } = await chargeBeforeGenerate({
         generationTopicId,
         model,
@@ -344,6 +351,7 @@ export const videoRouter = router({
               prechargeResult,
               provider,
               userId,
+              workspaceId: wsId,
             });
           } catch (chargeError) {
             console.error('[video] chargeAfterGenerate failed:', chargeError);

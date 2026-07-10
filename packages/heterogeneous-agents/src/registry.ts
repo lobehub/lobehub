@@ -5,7 +5,7 @@
  * by registering here — no other code changes needed.
  */
 
-import { ClaudeCodeAdapter, CodexAdapter } from './adapters';
+import { ClaudeCodeAdapter, ClaudeCodeSdkAdapter, CodexAdapter } from './adapters';
 import type { AgentEventAdapter } from './types';
 
 interface AgentRegistryEntry {
@@ -15,6 +15,9 @@ interface AgentRegistryEntry {
 const registry: Record<string, AgentRegistryEntry> = {
   'claude-code': {
     createAdapter: () => new ClaudeCodeAdapter(),
+  },
+  'claude-code-sdk': {
+    createAdapter: () => new ClaudeCodeSdkAdapter(),
   },
   'codex': {
     createAdapter: () => new CodexAdapter(),

@@ -561,6 +561,22 @@ describe('lobeAgentRuntime', () => {
       expect(result).toMatchObject({ error: { code: 'SUB_AGENT_START_FAILED' } });
     });
 
+    it('surfaces the underlying reason when the sub-agent fails to start', async () => {
+      const runtime = lobeAgentRuntime.factory(baseContext);
+      const run = vi
+        .fn()
+        .mockResolvedValue({ error: 'QStash queue unavailable', started: false, threadId: '' });
+
+      const result = await runtime.callSubAgent(
+        { description: 'Research', instruction: 'Find the answer' },
+        { ...baseContext, subAgent: { run } } as ToolExecutionContext,
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.content).toBe('Sub-agent failed to start: QStash queue unavailable');
+      expect(result).toMatchObject({ error: { code: 'SUB_AGENT_START_FAILED' } });
+    });
+
     it('fails (not deferred) when no sub-agent runner is available', async () => {
       const runtime = lobeAgentRuntime.factory(baseContext);
 

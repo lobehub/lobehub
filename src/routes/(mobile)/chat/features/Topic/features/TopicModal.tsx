@@ -1,10 +1,10 @@
 'use client';
 
-import { Modal } from '@lobehub/ui';
 import type { PropsWithChildren } from 'react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import ImperativeModal from '@/components/ImperativeModal';
 import { OverlayContainerContext } from '@/features/NavPanel/OverlayContainer';
 import { useFetchTopics } from '@/hooks/useFetchTopics';
 import { useWorkspaceModal } from '@/hooks/useWorkspaceModal';
@@ -24,7 +24,7 @@ const Topics = memo(({ children }: PropsWithChildren) => {
 
   return (
     <OverlayContainerContext value={overlayContainer}>
-      <Modal
+      <ImperativeModal
         allowFullscreen
         footer={null}
         open={open}
@@ -37,7 +37,7 @@ const Topics = memo(({ children }: PropsWithChildren) => {
         <div ref={setOverlayContainer} style={{ height: '100%' }}>
           {children}
         </div>
-      </Modal>
+      </ImperativeModal>
     </OverlayContainerContext>
   );
 });

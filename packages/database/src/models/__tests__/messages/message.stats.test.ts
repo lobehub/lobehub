@@ -702,6 +702,178 @@ describe('MessageModel Statistics Tests', () => {
     });
   });
 
+  describe('count with agent / topic / role filters', () => {
+    const agentId = 'agent-count-filters';
+    const topicA = 'topic-count-a';
+    const topicB = 'topic-count-b';
+
+    beforeEach(async () => {
+      await serverDB.insert(agents).values([
+        { id: agentId, userId },
+        { id: 'agent-other', userId },
+      ]);
+      await serverDB.insert(topics).values([
+        { id: topicA, userId, agentId, title: 'a' },
+        { id: topicB, userId, agentId, title: 'b' },
+      ]);
+      await serverDB.insert(messages).values([
+        { id: 'cf1', userId, role: 'user', content: 'q', agentId, topicId: topicA },
+        { id: 'cf2', userId, role: 'assistant', content: 'a', agentId, topicId: topicA },
+        { id: 'cf3', userId, role: 'user', content: 'q2', agentId, topicId: topicB },
+        // another agent / no topic
+        { id: 'cf4', userId, role: 'user', content: 'other', agentId: 'agent-other' },
+      ]);
+    });
+
+    it('filters by agentId', async () => {
+      expect(await messageModel.count({ agentId })).toBe(3);
+    });
+
+    it('filters by topicId', async () => {
+      expect(await messageModel.count({ topicId: topicA })).toBe(2);
+    });
+
+    it('filters by role', async () => {
+      expect(await messageModel.count({ agentId, role: 'user' })).toBe(2);
+    });
+
+    it('combines filters', async () => {
+      expect(await messageModel.count({ agentId, role: 'user', topicId: topicB })).toBe(1);
+    });
+  });
+
+  describe('countGroupByTopic', () => {
+    const agentId = 'agent-count-by-topic';
+    const topicA = 'topic-cbt-a';
+    const topicB = 'topic-cbt-b';
+
+    beforeEach(async () => {
+      await serverDB.insert(agents).values({ id: agentId, userId });
+      await serverDB.insert(topics).values([
+        { id: topicA, userId, agentId, title: 'a' },
+        { id: topicB, userId, agentId, title: 'b' },
+      ]);
+      await serverDB.insert(messages).values([
+        { id: 'g1', userId, role: 'user', content: '1', agentId, topicId: topicA },
+        { id: 'g2', userId, role: 'user', content: '2', agentId, topicId: topicA },
+        { id: 'g3', userId, role: 'user', content: '3', agentId, topicId: topicA },
+        { id: 'g4', userId, role: 'user', content: '4', agentId, topicId: topicB },
+        // assistant + null-topic rows must be excluded by role / topic filters
+        { id: 'g5', userId, role: 'assistant', content: 'x', agentId, topicId: topicA },
+        { id: 'g6', userId, role: 'user', content: 'no-topic', agentId },
+        // other user must not leak
+        { id: 'g7', userId: otherUserId, role: 'user', content: 'leak', topicId: topicA },
+      ]);
+    });
+
+    it('returns per-topic counts sorted by count desc', async () => {
+      const result = await messageModel.countGroupByTopic({ agentId, role: 'user' });
+      expect(result).toEqual([
+        { count: 3, topicId: topicA },
+        { count: 1, topicId: topicB },
+      ]);
+    });
+
+    it('excludes rows without a topicId', async () => {
+      const result = await messageModel.countGroupByTopic({ agentId });
+      // g6 (no topic) excluded; topicA has 3 user + 1 assistant = 4, topicB has 1
+      expect(result).toEqual([
+        { count: 4, topicId: topicA },
+        { count: 1, topicId: topicB },
+      ]);
+    });
+  });
+
+  describe('topicMessageStats', () => {
+    const agentId = 'agent-topic-stats';
+    const otherAgentId = 'agent-topic-stats-other';
+
+    beforeEach(async () => {
+      await serverDB.insert(agents).values([
+        { id: agentId, userId },
+        { id: otherAgentId, userId },
+      ]);
+      // 4 topics under agentId with 1 / 2 / 3 / 4 user messages each,
+      // plus one topic under another agent that must be excluded by the filter.
+      const topicRows = [
+        { id: 's-t1', count: 1 },
+        { id: 's-t2', count: 2 },
+        { id: 's-t3', count: 3 },
+        { id: 's-t4', count: 4 },
+      ];
+      await serverDB.insert(topics).values([
+        ...topicRows.map((t) => ({ id: t.id, userId, agentId, title: t.id })),
+        { id: 's-other', userId, agentId: otherAgentId, title: 'other' },
+      ]);
+
+      const msgRows = topicRows.flatMap((t) =>
+        Array.from({ length: t.count }).map((_, i) => ({
+          id: `${t.id}-u${i}`,
+          userId,
+          role: 'user',
+          content: `m${i}`,
+          agentId,
+          topicId: t.id,
+        })),
+      );
+      await serverDB.insert(messages).values([
+        ...msgRows,
+        // assistant messages in agentId topics — excluded by role=user
+        { id: 's-t1-a', userId, role: 'assistant', content: 'a', agentId, topicId: 's-t1' },
+        // other agent's topic
+        { id: 's-other-u', userId, role: 'user', content: 'x', agentId: otherAgentId, topicId: 's-other' },
+        // other user must not leak
+        { id: 's-leak', userId: otherUserId, role: 'user', content: 'leak', topicId: 's-t1' },
+      ]);
+    });
+
+    it('computes the per-topic distribution scoped by agent + role', async () => {
+      const stats = await messageModel.topicMessageStats({ agentId, role: 'user' });
+
+      expect(stats.topics).toBe(4);
+      expect(stats.totalMessages).toBe(10);
+      expect(stats.min).toBe(1);
+      expect(stats.max).toBe(4);
+      expect(stats.mean).toBe(2.5);
+      // percentile_cont over [1,2,3,4]
+      expect(stats.median).toBeCloseTo(2.5);
+      expect(stats.p90).toBeCloseTo(3.7);
+      expect(stats.oneshot).toBe(1);
+      expect(stats.oneshotRatio).toBeCloseTo(0.25);
+      expect(stats.histogram).toEqual([
+        { topics: 1, userCount: 1 },
+        { topics: 1, userCount: 2 },
+        { topics: 1, userCount: 3 },
+        { topics: 1, userCount: 4 },
+      ]);
+    });
+
+    it('returns an all-zero summary when nothing matches', async () => {
+      const stats = await messageModel.topicMessageStats({ agentId: 'no-such-agent' });
+      expect(stats).toEqual({
+        histogram: [],
+        max: 0,
+        mean: 0,
+        median: 0,
+        min: 0,
+        oneshot: 0,
+        oneshotRatio: 0,
+        p90: 0,
+        p99: 0,
+        topics: 0,
+        totalMessages: 0,
+      });
+    });
+
+    it('does not leak other users’ topics', async () => {
+      const otherModel = new MessageModel(serverDB, otherUserId);
+      const stats = await otherModel.topicMessageStats({ role: 'user' });
+      // otherUser only has the single leaked message in s-t1
+      expect(stats.topics).toBe(1);
+      expect(stats.totalMessages).toBe(1);
+    });
+  });
+
   describe('hasMoreThanN', () => {
     it('should return true when message count is greater than N', async () => {
       // Create test data

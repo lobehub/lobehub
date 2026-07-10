@@ -135,6 +135,33 @@ describe('LobeAzureOpenAI', () => {
         );
       });
 
+      it('should preserve GPT-5.6 Pro mode and Max effort in Responses payloads', async () => {
+        const mockProdStream = new ReadableStream() as any;
+        const mockDebugStream = new ReadableStream() as any;
+
+        vi.spyOn(instance['client'].responses, 'create').mockResolvedValue({
+          tee: () => [mockProdStream, mockDebugStream],
+        } as any);
+        vi.spyOn(getModelPricingModule, 'getModelPricing').mockResolvedValue(undefined);
+        vi.spyOn(streamsModule, 'OpenAIResponsesStream').mockReturnValue(new ReadableStream());
+
+        await instance.chat({
+          messages: [{ content: 'Review this migration.', role: 'user' }],
+          model: 'gpt-5.6-sol',
+          reasoning: { mode: 'pro' },
+          reasoning_effort: 'max',
+          stream: true,
+        });
+
+        const createCall = (instance['client'].responses.create as Mock).mock.calls[0][0];
+
+        expect(createCall.reasoning).toEqual({
+          effort: 'max',
+          mode: 'pro',
+          summary: 'auto',
+        });
+      });
+
       it('should use deploymentName for Azure Responses API requests while keeping logical model for pricing', async () => {
         const mockProdStream = new ReadableStream() as any;
         const mockDebugStream = new ReadableStream() as any;
@@ -229,7 +256,11 @@ describe('LobeAzureOpenAI', () => {
         expect(createCall.top_logprobs).toBeUndefined();
         expect(createCall.top_p).toBeUndefined();
 
-        expect(getModelPricingModule.getModelPricing).toHaveBeenCalledWith('o3', 'lobehub');
+        expect(getModelPricingModule.getModelPricing).toHaveBeenCalledWith(
+          'o3',
+          'lobehub',
+          undefined,
+        );
         expect(streamsModule.OpenAIStream).toHaveBeenCalledWith(
           mockProdStream,
           expect.objectContaining({
@@ -443,6 +474,30 @@ describe('LobeAzureOpenAI', () => {
       const args = vi.mocked(generateSpy).mock.calls[0][0] as any;
       expect(args).not.toHaveProperty('image');
       expect(res).toEqual({ imageUrl: url });
+    });
+
+    it('should use mapped model id for image generation requests', async () => {
+      instance = new LobeAzureOpenAI({
+        apiKey: 'test_key',
+        baseURL: 'https://test.openai.azure.com/',
+        modelIdMapping: { 'gpt-image-1': 'azure-image-deployment' },
+      });
+      const editSpy = vi
+        .spyOn(instance['client'].images, 'edit')
+        .mockResolvedValue({ data: [{ url: 'https://example.com/mapped.png' }] } as any);
+      const helpers = await import('../../core/contextBuilders/openai');
+      vi.spyOn(helpers, 'convertImageUrlToFile').mockResolvedValue({} as any);
+
+      await instance.createImage({
+        model: 'gpt-image-1',
+        params: { imageUrl: 'https://example.com/source.png', prompt: 'mapped cat' },
+      });
+
+      expect(vi.mocked(editSpy).mock.calls[0][0]).toMatchObject({
+        input_fidelity: 'high',
+        model: 'azure-image-deployment',
+        prompt: 'mapped cat',
+      });
     });
 
     it('should parse string JSON response from images.generate', async () => {

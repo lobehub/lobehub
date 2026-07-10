@@ -29,6 +29,7 @@ import { type ILocalSystemService, LocalSystemExecutionRuntime } from '@lobechat
 import GatewayConnectionService from '@/services/gatewayConnectionSrv';
 import ImessageBridgeService from '@/services/imessageBridgeSrv';
 import { createLogger } from '@/utils/logger';
+import { setDesktopUserAgentHeader } from '@/utils/user-agent';
 
 import HeterogeneousAgentCtr from './HeterogeneousAgentCtr';
 import { ControllerModule, IpcMethod } from './index';
@@ -77,6 +78,12 @@ interface PlatformTaskEntry {
   operationId: string;
   pid: number;
   topicId: string;
+  /**
+   * Workspace that owns the dispatched topic — used at exit time so the
+   * cleanup notify still scopes to the workspace agentNotify resolves the
+   * topic in (the server seeds this via the `runHeteroTask` args).
+   */
+  workspaceId?: string;
 }
 
 /**
@@ -286,14 +293,29 @@ export default class GatewayConnectionCtr extends ControllerModule {
         return { reason: 'Remote server URL not configured', status: 'rejected' };
       }
 
+      // Reuse this device's own logged-in session as the run identity. The
+      // access token is a full user OIDC token (7-day TTL, longer than any run),
+      // which heteroIngest/heteroFinish now accept (ownership-gated), AND which
+      // gives the spawned Claude Code's nested `lh` calls a real login state —
+      // unlike the narrow `hetero-operation` token, which only works for the
+      // ingest endpoints. We deliberately do NOT pass the refresh token to the
+      // CLI: the device stays the single refresher (refresh tokens rotate), and
+      // the 7-day access token outlives the run so no mid-run refresh is needed.
+      //
+      // Fall back to the dispatched `request.jwt` when the device has no access
+      // token (e.g. not logged in), preserving the prior behavior gracefully.
+      const accessToken = await this.remoteServerConfigCtr.getAccessToken();
+      const jwt = accessToken || request.jwt;
+
       // Fire-and-forget: lh hetero exec handles spawn -> adapt ->
       // BatchIngester -> heteroIngest/heteroFinish -> server -> Gateway -> clients.
       // Same command as spawnHeteroSandbox() on the server side.
       this.heterogeneousAgentCtr.spawnLhHeteroExec({
         agentType: request.agentType,
+        args: request.args,
         cwd: request.cwd,
         imageList: request.imageList,
-        jwt: request.jwt,
+        jwt,
         operationId: request.operationId,
         prompt: request.prompt,
         resumeSessionId: request.resumeSessionId,
@@ -361,6 +383,10 @@ export default class GatewayConnectionCtr extends ControllerModule {
       },
       getLocalFilePreview: (params) => this.localFileCtr.getLocalFilePreview(params),
       getProjectFileIndex: (params) => this.localFileCtr.getProjectFileIndex(params),
+      searchProjectFiles: (params) => this.localFileCtr.searchProjectFiles(params),
+      // Skill-archive cache (`prepareSkillDirectory` RPC): reuse LocalFileCtr's
+      // deps so gateway-prepared skills share one cache with the renderer-IPC path.
+      ...this.localFileCtr.getSkillDirectoryDeps(),
     };
   }
 
@@ -524,6 +550,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
             prompt: string;
             taskId: string;
             topicId: string;
+            workspaceId?: string;
           },
         );
         return { content: json, state: safeJsonParse(json), success: true };
@@ -765,8 +792,9 @@ export default class GatewayConnectionCtr extends ControllerModule {
     prompt: string;
     taskId: string;
     topicId: string;
+    workspaceId?: string;
   }): Promise<string> {
-    const { agentId, agentType, cwd, operationId, prompt, taskId, topicId } = args;
+    const { agentId, agentType, cwd, operationId, prompt, taskId, topicId, workspaceId } = args;
     const workDir = cwd || process.cwd();
 
     const [serverUrl, accessToken] = await Promise.all([
@@ -774,11 +802,15 @@ export default class GatewayConnectionCtr extends ControllerModule {
       this.remoteServerConfigCtr.getAccessToken(),
     ]);
 
-    // Inject auth into child env so `lh notify` can authenticate without CLI config.
+    // Inject auth + workspace scope into child env so `lh notify` can
+    // authenticate AND target the same workspace as the dispatched topic
+    // (without LOBEHUB_WORKSPACE_ID, the CLI's notify falls back to personal
+    // mode and the workspace topic 404s).
     const childEnv: NodeJS.ProcessEnv = {
       ...process.env,
       ...(accessToken && { LOBEHUB_JWT: accessToken }),
       ...(serverUrl && { LOBEHUB_SERVER: serverUrl }),
+      ...(workspaceId && { LOBEHUB_WORKSPACE_ID: workspaceId }),
     };
 
     if (agentType === 'openclaw') {
@@ -823,7 +855,14 @@ export default class GatewayConnectionCtr extends ControllerModule {
       if (pid === undefined) throw new Error('Failed to get PID for openclaw process');
       child.unref();
 
-      this.platformTasks.set(taskId, { agentId, agentType, operationId, pid, topicId });
+      this.platformTasks.set(taskId, {
+        agentId,
+        agentType,
+        operationId,
+        pid,
+        topicId,
+        workspaceId,
+      });
 
       child.on('close', (code, signal) => {
         this.platformTasks.delete(taskId);
@@ -831,11 +870,31 @@ export default class GatewayConnectionCtr extends ControllerModule {
           const text = signal
             ? `Task cancelled (signal: ${signal})`
             : `Task failed (exit code: ${code})`;
-          void this.sendNotify({ agentId, content: text, role: 'assistant', topicId }).finally(() =>
-            this.sendNotify({ agentId, content: '', done: true, role: 'assistant', topicId }),
+          void this.sendNotify({
+            agentId,
+            content: text,
+            role: 'assistant',
+            topicId,
+            workspaceId,
+          }).finally(() =>
+            this.sendNotify({
+              agentId,
+              content: '',
+              done: true,
+              role: 'assistant',
+              topicId,
+              workspaceId,
+            }),
           );
         } else {
-          void this.sendNotify({ agentId, content: '', done: true, role: 'assistant', topicId });
+          void this.sendNotify({
+            agentId,
+            content: '',
+            done: true,
+            role: 'assistant',
+            topicId,
+            workspaceId,
+          });
         }
       });
 
@@ -874,7 +933,14 @@ export default class GatewayConnectionCtr extends ControllerModule {
       if (pid === undefined) throw new Error('Failed to get PID for hermes process');
       child.unref();
 
-      this.platformTasks.set(taskId, { agentId, agentType, operationId, pid, topicId });
+      this.platformTasks.set(taskId, {
+        agentId,
+        agentType,
+        operationId,
+        pid,
+        topicId,
+        workspaceId,
+      });
 
       let stdout = '';
       child.stdout.on('data', (chunk: Buffer) => {
@@ -888,8 +954,21 @@ export default class GatewayConnectionCtr extends ControllerModule {
           const text = signal
             ? `Task cancelled (signal: ${signal})`
             : `Task failed (exit code: ${code})`;
-          void this.sendNotify({ agentId, content: text, role: 'assistant', topicId }).finally(() =>
-            this.sendNotify({ agentId, content: '', done: true, role: 'assistant', topicId }),
+          void this.sendNotify({
+            agentId,
+            content: text,
+            role: 'assistant',
+            topicId,
+            workspaceId,
+          }).finally(() =>
+            this.sendNotify({
+              agentId,
+              content: '',
+              done: true,
+              role: 'assistant',
+              topicId,
+              workspaceId,
+            }),
           );
           return;
         }
@@ -902,11 +981,31 @@ export default class GatewayConnectionCtr extends ControllerModule {
         if (sessionId) this.hermesSessionMap.set(topicId, sessionId);
 
         if (response) {
-          void this.sendNotify({ agentId, content: response, role: 'assistant', topicId }).finally(
-            () => this.sendNotify({ agentId, content: '', done: true, role: 'assistant', topicId }),
+          void this.sendNotify({
+            agentId,
+            content: response,
+            role: 'assistant',
+            topicId,
+            workspaceId,
+          }).finally(() =>
+            this.sendNotify({
+              agentId,
+              content: '',
+              done: true,
+              role: 'assistant',
+              topicId,
+              workspaceId,
+            }),
           );
         } else {
-          void this.sendNotify({ agentId, content: '', done: true, role: 'assistant', topicId });
+          void this.sendNotify({
+            agentId,
+            content: '',
+            done: true,
+            role: 'assistant',
+            topicId,
+            workspaceId,
+          });
         }
       });
 
@@ -934,6 +1033,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
         content: 'Task already completed or cancelled',
         role: 'assistant',
         topicId: entry.topicId,
+        workspaceId: entry.workspaceId,
       });
     }
 
@@ -951,6 +1051,12 @@ export default class GatewayConnectionCtr extends ControllerModule {
     done?: boolean;
     role: string;
     topicId: string;
+    /**
+     * Workspace scope for the notify. When set, attaches `X-Workspace-Id` so
+     * agentNotify resolves the workspace-owned topic instead of falling back
+     * to personal mode (which would 404 the lookup).
+     */
+    workspaceId?: string;
   }): Promise<void> {
     try {
       const [serverUrl, token] = await Promise.all([
@@ -959,12 +1065,17 @@ export default class GatewayConnectionCtr extends ControllerModule {
       ]);
       if (!serverUrl || !token) return;
 
+      const { workspaceId, ...body } = params;
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'Oidc-Auth': token,
+      };
+      if (workspaceId) headers['X-Workspace-Id'] = workspaceId;
+      setDesktopUserAgentHeader(headers);
+
       await fetch(`${serverUrl}/trpc/lambda/agentNotify.notify`, {
-        body: JSON.stringify({ json: params }),
-        headers: {
-          'Content-Type': 'application/json',
-          'Oidc-Auth': token,
-        },
+        body: JSON.stringify({ json: body }),
+        headers,
         method: 'POST',
       });
     } catch {
@@ -990,12 +1101,15 @@ export default class GatewayConnectionCtr extends ControllerModule {
     ]);
     if (!serverUrl || !token) return;
 
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Oidc-Auth': token,
+    };
+    setDesktopUserAgentHeader(headers);
+
     await fetch(`${serverUrl}/trpc/lambda/device.register`, {
       body: JSON.stringify({ json: info }),
-      headers: {
-        'Content-Type': 'application/json',
-        'Oidc-Auth': token,
-      },
+      headers,
       method: 'POST',
     });
   }

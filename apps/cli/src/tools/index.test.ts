@@ -7,6 +7,7 @@ import { ShellProcessManager } from '@lobechat/local-file-shell';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { executeToolCall } from './index';
+import * as isolatedWorker from './isolatedWorker';
 
 vi.mock('../utils/logger', () => ({
   log: {
@@ -25,6 +26,7 @@ describe('executeToolCall', () => {
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     fs.rmSync(tmpDir, { force: true, recursive: true });
   });
 
@@ -72,29 +74,39 @@ describe('executeToolCall', () => {
 
     expect(result.success).toBe(true);
     expect(result.content).toContain('dispatched');
-    const state = result.state as { output?: string; stdout?: string };
-    expect(state.stdout ?? state.output).toContain('dispatched');
+    const state = result.state as { stdout?: string };
+    expect(state.stdout).toContain('dispatched');
   });
 
   it('should dispatch listFiles', async () => {
-    await writeFile(path.join(tmpDir, 'a.txt'), 'a');
+    const workerResult = { content: 'list result', state: { totalCount: 1 }, success: true };
+    const spy = vi
+      .spyOn(isolatedWorker, 'executeToolCallInWorker')
+      .mockResolvedValueOnce(workerResult);
 
     const result = await executeToolCall('listFiles', JSON.stringify({ path: tmpDir }));
 
-    expect(result.success).toBe(true);
-    expect((result.state as { totalCount: number }).totalCount).toBeGreaterThan(0);
+    expect(result).toEqual(workerResult);
+    expect(spy).toHaveBeenCalledWith('listFiles', JSON.stringify({ path: tmpDir }), undefined);
   });
 
   it('should dispatch globFiles', async () => {
-    await writeFile(path.join(tmpDir, 'test.ts'), 'code');
+    const workerResult = { content: 'glob result', state: { files: ['test.ts'] }, success: true };
+    const spy = vi
+      .spyOn(isolatedWorker, 'executeToolCallInWorker')
+      .mockResolvedValueOnce(workerResult);
 
     const result = await executeToolCall(
       'globFiles',
       JSON.stringify({ cwd: tmpDir, pattern: '*.ts' }),
     );
 
-    expect(result.success).toBe(true);
-    expect((result.state as { files: string[] }).files).toContain('test.ts');
+    expect(result).toEqual(workerResult);
+    expect(spy).toHaveBeenCalledWith(
+      'globFiles',
+      JSON.stringify({ cwd: tmpDir, pattern: '*.ts' }),
+      undefined,
+    );
   });
 
   it('should dispatch editFile', async () => {
@@ -141,27 +153,42 @@ describe('executeToolCall', () => {
   });
 
   it('should dispatch grepContent', async () => {
-    await writeFile(path.join(tmpDir, 'grep.txt'), 'findme here');
+    const pattern = `findme-${process.pid}`;
+    await writeFile(path.join(tmpDir, 'grep.txt'), `${pattern} here`);
 
+    vi.stubEnv('LOBEHUB_CLI_TOOL_WORKER', '1');
     const result = await executeToolCall(
       'grepContent',
-      JSON.stringify({ cwd: tmpDir, pattern: 'findme' }),
+      // Use the manifest-facing `scope` field. `directory` is a runtime-only
+      // normalized shape and would hide scope->cwd forwarding regressions.
+      JSON.stringify({ glob: '*.txt', output_mode: 'files_with_matches', pattern, scope: tmpDir }),
     );
 
     expect(result.success).toBe(true);
-    expect(result.state).toBeDefined();
+    expect((result.state as { totalMatches: number }).totalMatches).toBe(1);
   });
 
   it('should dispatch searchFiles', async () => {
-    await writeFile(path.join(tmpDir, 'search_target.txt'), 'found');
+    const workerResult = {
+      content: 'search result',
+      state: { results: [{ path: path.join(tmpDir, 'search_target.txt') }] },
+      success: true,
+    };
+    const spy = vi
+      .spyOn(isolatedWorker, 'executeToolCallInWorker')
+      .mockResolvedValueOnce(workerResult);
 
     const result = await executeToolCall(
       'searchFiles',
       JSON.stringify({ directory: tmpDir, keywords: 'search_target' }),
     );
 
-    expect(result.success).toBe(true);
-    expect(result.state).toBeDefined();
+    expect(result).toEqual(workerResult);
+    expect(spy).toHaveBeenCalledWith(
+      'searchFiles',
+      JSON.stringify({ directory: tmpDir, keywords: 'search_target' }),
+      undefined,
+    );
   });
 
   it('should dispatch getCommandOutput', async () => {

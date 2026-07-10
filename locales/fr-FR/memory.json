@@ -34,6 +34,8 @@
   "context.description": "Description",
   "context.empty": "Aucune mémoire contextuelle disponible",
   "context.source": "Source",
+  "detail.notFound.desc": "Cette mémoire a peut-être été supprimée ou n'est plus disponible.",
+  "detail.notFound.title": "Mémoire introuvable",
   "empty.description": "La récupération de la mémoire est un processus progressif. Veuillez engager davantage de conversations pour enrichir le contenu disponible. Essayez d’avoir des interactions plus approfondies avec l’agent afin de mieux capter et stocker des informations précieuses.",
   "empty.search": "Aucune mémoire correspondante trouvée",
   "empty.title": "Aucune mémoire pour le moment",

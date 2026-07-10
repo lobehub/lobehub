@@ -132,8 +132,18 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
 
       case 'globLocalFiles': {
         return {
+          limit: params.limit,
           pattern: params.pattern,
           scope: params.directory,
+        };
+      }
+
+      case 'grepContent': {
+        return {
+          cwd: params.directory ?? params.path ?? params.scope ?? params.cwd,
+          filePattern: params.filePattern ?? params.glob,
+          output_mode: params.output_mode,
+          pattern: params.pattern,
         };
       }
 
@@ -175,6 +185,8 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
             exitCode: raw.exit_code,
             output: raw.output,
             commandId: raw.shell_id,
+            durationMs: raw.duration_ms,
+            outputFiles: raw.output_files,
             stderr: raw.stderr,
             stdout: raw.stdout,
             success: raw.success,
@@ -189,7 +201,9 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
             durationMs: raw.duration_ms,
             exitCode: raw.exit_code,
             error: raw.error,
-            newOutput: raw.output,
+            outputFiles: raw.output_files,
+            stderr: raw.stderr,
+            stdout: raw.stdout,
             success: raw.success,
           },
           success: raw.success,

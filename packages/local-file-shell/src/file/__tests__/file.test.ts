@@ -592,6 +592,15 @@ describe('file operations', () => {
 
       expect(result).toHaveProperty('success');
       expect(result).toHaveProperty('matches');
+      expect(result.matches).toContain('./search.txt');
+    });
+
+    it('should return matching lines in content mode', async () => {
+      await writeFile(path.join(tmpDir, 'search.txt'), 'hello world\nfoo bar\nhello again');
+
+      const result = await grepContent({ cwd: tmpDir, output_mode: 'content', pattern: 'hello' });
+
+      expect(result.matches[0]).toContain('./search.txt:1:1:hello world');
     });
 
     it('should handle no matches', async () => {

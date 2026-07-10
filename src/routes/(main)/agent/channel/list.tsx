@@ -1,9 +1,9 @@
 'use client';
 
 import { exportJSONFile } from '@lobechat/utils/client';
-import { Icon, Tag } from '@lobehub/ui';
+import { ActionIcon, type DropdownItem, DropdownMenu, Icon, Tag } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
-import { App, Dropdown, type MenuProps } from 'antd';
+import { App } from 'antd';
 import { createStaticStyles, cx, useTheme } from 'antd-style';
 import { Book, Download, MoreHorizontal, Trash2, Upload } from 'lucide-react';
 import { memo, useCallback, useRef } from 'react';
@@ -43,7 +43,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     }
 
     &.active {
-      font-weight: 500;
       color: ${cssVar.colorText};
       background: ${cssVar.colorFillSecondary};
     }
@@ -179,7 +178,7 @@ const PlatformList = memo<PlatformListProps>(
     }, [agentId, deleteAllBotProviders, disabled, message, providers, t]);
 
     const hasProviders = !!providers?.length;
-    const menuItems: MenuProps['items'] = [
+    const menuItems: DropdownItem[] = [
       {
         icon: <Icon icon={Download} size={'small'} />,
         key: 'export',
@@ -194,7 +193,7 @@ const PlatformList = memo<PlatformListProps>(
         label: t('channel.importConfig'),
         onClick: handleImport,
       },
-      { type: 'divider' },
+      { type: 'divider' as const },
       {
         danger: true,
         disabled: disabled || !hasProviders,
@@ -287,6 +286,13 @@ const PlatformList = memo<PlatformListProps>(
                     {t('channel.comingSoon')}
                   </Tag>
                 )}
+                {platform.access?.requiredPlan === 'paid' && (
+                  <Tag color="gold" size={'small'} style={{ marginInlineEnd: 0 }}>
+                    {platform.access.rolloutMode === 'notice'
+                      ? t('channel.paidFeature.noticeBadge')
+                      : t('channel.paidFeature.badge')}
+                  </Tag>
+                )}
                 {runtimeStatus && (
                   <div
                     className={styles.statusDot}
@@ -322,21 +328,9 @@ const PlatformList = memo<PlatformListProps>(
           >
             <Icon icon={Book} size={'small'} /> {t('channel.documentation')}
           </a>
-          <Dropdown menu={{ items: menuItems }} trigger={['click']}>
-            <button
-              style={{
-                background: 'transparent',
-                border: 'none',
-                borderRadius: 4,
-                color: theme.colorTextQuaternary,
-                cursor: 'pointer',
-                display: 'flex',
-                padding: 4,
-              }}
-            >
-              <Icon icon={MoreHorizontal} size={'small'} />
-            </button>
-          </Dropdown>
+          <DropdownMenu items={menuItems}>
+            <ActionIcon icon={MoreHorizontal} />
+          </DropdownMenu>
         </div>
       </aside>
     );
