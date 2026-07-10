@@ -338,6 +338,7 @@
   "heteroAgent.modelSelector.reasoning.low": "低",
   "heteroAgent.modelSelector.reasoning.max": "最高",
   "heteroAgent.modelSelector.reasoning.medium": "中",
+  "heteroAgent.modelSelector.reasoning.ultra": "极致",
   "heteroAgent.modelSelector.reasoning.xhigh": "超高",
   "heteroAgent.modelSelector.speed": "速度",
   "heteroAgent.modelSelector.speed.fast": "快速",
