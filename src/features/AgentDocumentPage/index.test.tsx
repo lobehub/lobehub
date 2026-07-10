@@ -45,7 +45,8 @@ vi.mock('./Header', () => ({
 const agentDocumentItemState = vi.hoisted(() => ({
   current: {
     error: undefined as unknown,
-    item: { filename: 'spec.md', id: 'agent-document-1', title: 'Spec' },
+    isNotFound: false as boolean | undefined,
+    item: { filename: 'spec.md', id: 'agent-document-1', title: 'Spec' } as unknown,
     mutate: vi.fn(),
     skillBundle: undefined as unknown,
   },
@@ -55,8 +56,9 @@ vi.mock('./useAgentDocumentItem', () => ({
   useAgentDocumentItem: () => agentDocumentItemState.current,
 }));
 
+const navigateMock = vi.hoisted(() => vi.fn());
 vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
-  useWorkspaceAwareNavigate: () => vi.fn(),
+  useWorkspaceAwareNavigate: () => navigateMock,
 }));
 
 const docChatTopicState = vi.hoisted(() => ({
@@ -102,6 +104,7 @@ describe('AgentDocumentPage', () => {
     mockUserState.current.preference.lab.enableAgentDocumentFloatingChatPanel = false;
     agentDocumentItemState.current = {
       error: undefined,
+      isNotFound: false,
       item: { filename: 'spec.md', id: 'agent-document-1', title: 'Spec' },
       mutate: vi.fn(),
       skillBundle: undefined,
@@ -113,6 +116,7 @@ describe('AgentDocumentPage', () => {
     };
     headerProps.current = undefined;
     panelProps.current = undefined;
+    navigateMock.mockClear();
   });
 
   afterEach(() => {
@@ -124,6 +128,18 @@ describe('AgentDocumentPage', () => {
     render(<AgentDocumentPage documentId="docs_abc" />);
     expect(screen.getByTestId('page-editor').dataset.pageId).toBe('docs_abc');
     expect(screen.getByTestId('header').dataset.documentId).toBe('docs_abc');
+  });
+
+  it('redirects to the docs index (no header/editor) when the doc is genuinely absent', () => {
+    agentDocumentItemState.current = { ...agentDocumentItemState.current, isNotFound: true };
+
+    render(<AgentDocumentPage documentId="docs_missing" />);
+
+    // A deleted/absent doc must not strand the user on a 404 — it redirects to
+    // the docs index empty state.
+    expect(navigateMock).toHaveBeenCalledWith('/agent/agent-from-url/docs', { replace: true });
+    expect(screen.queryByTestId('page-editor')).toBeNull();
+    expect(screen.queryByTestId('header')).toBeNull();
   });
 
   it('passes document list fetch errors to the header', () => {

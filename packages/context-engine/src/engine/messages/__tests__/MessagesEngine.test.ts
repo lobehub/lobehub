@@ -1081,7 +1081,42 @@ Document content here.
       ]);
     });
 
-    it('should not inject selections when page editor is not enabled', async () => {
+    it('should inject generic text selections when page editor is not enabled', async () => {
+      const messages: UIChatMessage[] = [
+        {
+          content: '我是说，这是啥?',
+          createdAt: Date.now(),
+          id: 'msg-1',
+          metadata: {
+            contextSelections: [
+              {
+                content: '脚踢自学习',
+                id: 'text-selection-1',
+                source: 'text',
+                title: '脚踢自学习',
+              },
+            ],
+          },
+          role: 'user',
+          updatedAt: Date.now(),
+        } as UIChatMessage,
+      ];
+
+      const params = createBasicParams({ messages });
+      const engine = new MessagesEngine(params);
+
+      const result = await engine.process();
+
+      expect(result.messages[0].content).toContain('我是说，这是啥?');
+      expect(result.messages[0].content).toContain('<user_context_selections count="1">');
+      expect(result.messages[0].content).toContain('source="text"');
+      expect(result.messages[0].content).toContain('脚踢自学习');
+      expect(result.messages[0].content).toContain(
+        '<!-- SYSTEM CONTEXT (NOT PART OF USER QUERY) -->',
+      );
+    });
+
+    it('should not inject legacy page selections when page editor is not enabled', async () => {
       const messages: UIChatMessage[] = [
         {
           content: 'Question',

@@ -7,6 +7,7 @@ import { AgentModel } from '@/database/models/agent';
 import { FileModel } from '@/database/models/file';
 import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
 import { SessionModel } from '@/database/models/session';
+import { TaskModel } from '@/database/models/task';
 import { UserModel } from '@/database/models/user';
 import { AgentService } from '@/server/services/agent';
 import { EditLockService } from '@/server/services/editLock';
@@ -33,6 +34,10 @@ vi.mock('@/database/models/session', () => ({
   SessionModel: vi.fn(),
 }));
 
+vi.mock('@/database/models/task', () => ({
+  TaskModel: vi.fn(),
+}));
+
 vi.mock('@/database/models/file', () => ({
   FileModel: vi.fn(),
 }));
@@ -49,6 +54,7 @@ describe('agentRouter', () => {
   const userId = 'testUserId';
   let mockCtx: any;
   let agentModelMock: any;
+  let taskModelMock: any;
   let sessionModelMock: any;
   let fileModelMock: any;
   let knowledgeBaseModelMock: any;
@@ -70,6 +76,11 @@ describe('agentRouter', () => {
       update: vi.fn(),
     };
     vi.mocked(AgentModel).mockImplementation(() => agentModelMock);
+
+    taskModelMock = {
+      countTasksBlockingAgentDemotion: vi.fn().mockResolvedValue(0),
+    };
+    vi.mocked(TaskModel).mockImplementation(() => taskModelMock);
 
     sessionModelMock = {
       findByIdOrSlug: vi.fn(),
@@ -342,6 +353,56 @@ describe('agentRouter', () => {
       await caller.updateAgentPinned(mockInput);
 
       expect(agentModelMock.update).toHaveBeenCalledWith(mockInput.id, { pinned: false });
+    });
+  });
+
+  describe('setAgentVisibility', () => {
+    const wsCtx = () => ({ ...mockCtx, workspaceId: 'ws-1' });
+
+    beforeEach(() => {
+      agentModelMock.getAgentVisibilityMeta = vi.fn().mockResolvedValue({
+        slug: null,
+        userId,
+        visibility: 'public',
+      });
+      agentModelMock.setVisibility = vi.fn().mockResolvedValue({ id: 'agent-1' });
+    });
+
+    it('rejects demotion while workspace tasks still depend on the agent', async () => {
+      taskModelMock.countTasksBlockingAgentDemotion.mockResolvedValue(2);
+
+      const caller = agentRouter.createCaller(wsCtx());
+
+      await expect(
+        caller.setAgentVisibility({ id: 'agent-1', visibility: 'private' }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+      // Compared against the agent owner (meta.userId), not just the caller.
+      expect(taskModelMock.countTasksBlockingAgentDemotion).toHaveBeenCalledWith('agent-1', userId);
+      expect(agentModelMock.setVisibility).not.toHaveBeenCalled();
+    });
+
+    it('allows demotion when no task depends on the agent', async () => {
+      taskModelMock.countTasksBlockingAgentDemotion.mockResolvedValue(0);
+
+      const caller = agentRouter.createCaller(wsCtx());
+      const result = await caller.setAgentVisibility({ id: 'agent-1', visibility: 'private' });
+
+      expect(result).toEqual({ success: true });
+      expect(agentModelMock.setVisibility).toHaveBeenCalledWith('agent-1', 'private');
+    });
+
+    it('does not run the public-task guard on promotion', async () => {
+      agentModelMock.getAgentVisibilityMeta.mockResolvedValue({
+        slug: null,
+        userId,
+        visibility: 'private',
+      });
+
+      const caller = agentRouter.createCaller(wsCtx());
+      await caller.setAgentVisibility({ id: 'agent-1', visibility: 'public' });
+
+      expect(taskModelMock.countTasksBlockingAgentDemotion).not.toHaveBeenCalled();
+      expect(agentModelMock.setVisibility).toHaveBeenCalledWith('agent-1', 'public');
     });
   });
 

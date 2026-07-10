@@ -235,6 +235,12 @@ export const taskTopics = pgTable(
     // 'running' | 'completed' | 'failed' | 'timeout' | 'canceled'
     status: text('status').notNull().default('running'),
 
+    // What triggered this run: 'manual' (ad-hoc run-now / agent tool call),
+    // 'schedule' (cron tick) or 'heartbeat' (interval tick). Null for legacy
+    // rows created before this column existed. Used so the maxExecutions quota
+    // counts only automation ticks, not manual runs (LOBE-11391).
+    trigger: text('trigger').$type<'manual' | 'schedule' | 'heartbeat'>(),
+
     // Handoff (populated after topic completes via LLM summarization)
     // { title, summary, keyFindings: string[], nextAction }
     handoff: jsonb('handoff'),
@@ -248,8 +254,8 @@ export const taskTopics = pgTable(
 
     // Snapshot of the task's visibility at the time this run was created.
     // Topics inherit `tasks.visibility` on insert but are **not** cascaded by
-    // `TaskModel.updateVisibility` (LOBE-11028): promoting a task to public
-    // must not retroactively expose runs that happened while it was private.
+    // `TaskModel.updateVisibility`: promoting a task to public must not
+    // retroactively expose runs that happened while it was private.
     visibility: text('visibility', { enum: ['private', 'public'] })
       .default('public')
       .notNull(),

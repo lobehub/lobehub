@@ -71,6 +71,7 @@ describe('buildWorkflowPayloadInput', () => {
     sources: [MemorySourceType.ChatTopic],
     to: undefined,
     topicCursor: undefined,
+    topicFanoutCount: 0,
     topicIds: [],
     userCursor: undefined,
     userId: undefined,

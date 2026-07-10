@@ -3,10 +3,12 @@
 import { ActionIcon, Block, Flexbox, Icon, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import dayjs from 'dayjs';
-import { ArchiveIcon, BellIcon, ImageIcon, VideoIcon } from 'lucide-react';
+import { ArchiveIcon, BellIcon, ImageIcon, MegaphoneIcon, VideoIcon } from 'lucide-react';
 import { memo, useCallback } from 'react';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+
+import { createNotificationDetailModal } from './NotificationDetailModal';
 
 const ACTION_CLASS_NAME = 'notification-item-actions';
 
@@ -39,11 +41,13 @@ const styles = createStaticStyles(({ css }) => ({
 
 const TYPE_ICON_MAP: Record<string, typeof BellIcon> = {
   image_generation_completed: ImageIcon,
+  system_announcement: MegaphoneIcon,
   video_generation_completed: VideoIcon,
 };
 
 interface NotificationItemProps {
   actionUrl?: string | null;
+  category?: string;
   content: string;
   createdAt: Date | string;
   id: string;
@@ -55,14 +59,40 @@ interface NotificationItemProps {
 }
 
 const NotificationItem = memo<NotificationItemProps>(
-  ({ id, type, title, content, createdAt, isRead, actionUrl, onMarkAsRead, onArchive }) => {
+  ({
+    id,
+    type,
+    title,
+    content,
+    category,
+    createdAt,
+    isRead,
+    actionUrl,
+    onMarkAsRead,
+    onArchive,
+  }) => {
     const navigate = useWorkspaceAwareNavigate();
     const TypeIcon = TYPE_ICON_MAP[type] || BellIcon;
 
     const handleClick = useCallback(() => {
       if (!isRead) onMarkAsRead(id);
-      if (actionUrl) navigate(actionUrl);
-    }, [id, isRead, actionUrl, onMarkAsRead, navigate]);
+      const onAction = actionUrl
+        ? () => {
+            if (/^https?:\/\//i.test(actionUrl)) {
+              window.open(actionUrl, '_blank', 'noopener,noreferrer');
+            } else {
+              navigate(actionUrl);
+            }
+          }
+        : undefined;
+      createNotificationDetailModal({
+        category,
+        content,
+        createdAt,
+        onAction,
+        title,
+      });
+    }, [id, isRead, actionUrl, onMarkAsRead, navigate, category, content, createdAt, title]);
 
     const handleArchive = useCallback(
       (e: React.MouseEvent) => {
@@ -93,7 +123,10 @@ const NotificationItem = memo<NotificationItemProps>(
             <Flexbox horizontal align="center" gap={4} justify="space-between">
               <Flexbox horizontal align="center" flex={1} gap={6} style={{ overflow: 'hidden' }}>
                 {!isRead && <span className={styles.unreadDot} />}
-                <Text ellipsis style={{ fontWeight: isRead ? 400 : 600 }}>
+                <Text
+                  ellipsis={{ tooltipWhenOverflow: true }}
+                  style={{ fontWeight: isRead ? 400 : 600 }}
+                >
                   {title}
                 </Text>
               </Flexbox>

@@ -2,6 +2,7 @@
 
 import { type ConversationContext } from '@lobechat/types';
 
+import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { useChatStore } from '@/store/chat';
@@ -13,6 +14,7 @@ import { useChatStore } from '@/store/chat';
  * Used for group chat pages where multiple agents participate.
  */
 export function useGroupContext(): ConversationContext {
+  const workspaceSlug = useActiveWorkspaceSlug();
   const [topicId, threadId] = useChatStore((s) => [
     s.activeTopicId ?? null,
     s.activeThreadId ?? null,
@@ -38,5 +40,6 @@ export function useGroupContext(): ConversationContext {
     scope: threadId ? 'group_agent' : 'group',
     threadId,
     topicId,
+    ...(workspaceSlug ? { workspaceSlug } : {}),
   };
 }

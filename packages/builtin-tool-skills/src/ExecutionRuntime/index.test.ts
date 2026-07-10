@@ -96,6 +96,46 @@ describe('SkillsExecutionRuntime', () => {
         expect(result.success).toBe(false);
         expect(result.content).toBe('Failed to execute command: sandbox timeout');
       });
+
+      it('should fall back to constructor activatedSkills when args carry none', async () => {
+        const execScript = vi.fn().mockResolvedValue({
+          exitCode: 0,
+          output: 'ok',
+          success: true,
+        } satisfies CommandResult);
+        const contextSkills = [{ description: 'PDF tools', id: 'skl_1', name: 'pdf' }];
+        const runtime = new SkillsExecutionRuntime({
+          activatedSkills: contextSkills,
+          service: createMockService({ execScript }),
+        });
+
+        await runtime.execScript(args);
+
+        expect(execScript).toHaveBeenCalledWith('echo hello', {
+          activatedSkills: contextSkills,
+          description: 'test command',
+        });
+      });
+
+      it('should prefer args activatedSkills over the constructor fallback', async () => {
+        const execScript = vi.fn().mockResolvedValue({
+          exitCode: 0,
+          output: 'ok',
+          success: true,
+        } satisfies CommandResult);
+        const argsSkills = [{ id: 'skl_2', name: 'xlsx' }];
+        const runtime = new SkillsExecutionRuntime({
+          activatedSkills: [{ id: 'skl_1', name: 'pdf' }],
+          service: createMockService({ execScript }),
+        });
+
+        await runtime.execScript({ ...args, activatedSkills: argsSkills });
+
+        expect(execScript).toHaveBeenCalledWith('echo hello', {
+          activatedSkills: argsSkills,
+          description: 'test command',
+        });
+      });
     });
 
     describe('via runCommand fallback', () => {
@@ -212,6 +252,28 @@ describe('SkillsExecutionRuntime', () => {
       expect(result.state).toMatchObject({ name: 'deploy', source: 'project' });
     });
 
+    it('activateSkill preserves device source for execution-device skills', async () => {
+      const readFile = vi.fn().mockResolvedValue('# Device Writer\nWrite across projects.');
+      const listFiles = vi.fn().mockResolvedValue([]);
+      const runtime = new SkillsExecutionRuntime({
+        deviceFileAccess: { listFiles, readFile },
+        projectSkills: [
+          {
+            location: '/home/.agents/skills/device-writer/SKILL.md',
+            name: 'device-writer',
+            source: 'device',
+          },
+        ],
+        service: createMockService(),
+      });
+
+      const result = await runtime.activateSkill({ name: 'device-writer' });
+
+      expect(readFile).toHaveBeenCalledWith('/home/.agents/skills/device-writer/SKILL.md');
+      expect(result.success).toBe(true);
+      expect(result.state).toMatchObject({ name: 'device-writer', source: 'device' });
+    });
+
     it('activateSkill takes precedence over a same-named DB skill', async () => {
       const readFile = vi.fn().mockResolvedValue('project content');
       const listFiles = vi.fn().mockResolvedValue([]);
@@ -273,7 +335,7 @@ describe('SkillsExecutionRuntime', () => {
       expect(listFiles).toHaveBeenCalledWith('/repo/.agents/skills/deploy');
       expect(readFile).not.toHaveBeenCalled();
       expect(result.success).toBe(false);
-      expect(result.content).toContain('Resource not found in project skill');
+      expect(result.content).toContain('Resource not found in filesystem skill');
     });
 
     it('readReference rejects hidden segments before consulting the device', async () => {

@@ -82,7 +82,9 @@ const TaskDetailPage = memo<TaskDetailPageProps>(({ taskId, showTaskAgentPanelTo
           <>
             <Breadcrumb taskId={taskId} />
             <TaskDetailHeaderActions />
-            {saveStatus === 'saving' ? <AutoSaveHint saveStatus={saveStatus} /> : undefined}
+            {saveStatus === 'saving' || saveStatus === 'failed' ? (
+              <AutoSaveHint saveStatus={saveStatus} />
+            ) : undefined}
           </>
         }
         right={

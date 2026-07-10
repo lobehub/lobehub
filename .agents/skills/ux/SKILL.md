@@ -1,6 +1,6 @@
 ---
 name: ux
-description: 'LobeHub product design values / principles / checklists. Load this skill whenever the work touches user-interface features or implementation — designing or building any user-facing flow — to get better UX results.'
+description: 'LobeHub product design values / principles / checklists. Use whenever the work touches user-interface features or implementation — designing or building any user-facing flow — to get better UX results.'
 user-invocable: false
 ---
 
@@ -64,6 +64,19 @@ titles, object labels) should read separately from state and actions (save statu
 sharing, panel toggles, overflow menus). When these roles are mixed, users have to infer
 whether an element describes the current object or acts on it.
 
+### Compose the canonical surface component, don't re-derive it・Certainty・Natural
+
+When a surface class already has a canonical component in this codebase — a sidebar row →
+`NavItem`, a collapsible group → `Accordion` / `GroupedAccordion`, an active surface →
+`Block variant='filled'` — **compose it**, don't rebuild the chrome from raw
+`<div>`/`<button>`/`<input>` + a bespoke `createStaticStyles` block. A hand-rolled parallel
+re-derives padding, hover/active states, alignment, and reveal-on-hover by hand, and drifts
+from its siblings on each one — the aggregate reads as "unpolished" even when every single gap
+is tiny. Before building a list / nav / master-detail panel, find the primitive the sibling
+surface uses (grep `NavItem`, `Accordion`) and compose it; fall to raw elements only for a
+genuinely novel row. See **[Read §1.10](references/read.md)** for the full pattern; the
+**react** component-priority rule covers the mechanics.
+
 ## Checklist modules
 
 Grouped by **interaction type** — the kind of thing the user is doing. Jump to the module
@@ -97,6 +110,9 @@ The one-screen scan. Each line links back to a module above for the full rule + 
 - [ ] Live/polling feed signals new items + offers manual refresh, doesn't reorder under the user, and shows a failed refresh distinctly (not as empty). A bulk/destructive control derived from the live-status map (close-idle / clear-inactive) gates on the query's loaded/error state — "unknown/errored" is ineligible, never treated as the inactive value. Conditional polling starts from **reactive state** (`shouldPoll` → `refreshInterval`), not a function-form `refreshInterval` that never schedules a first timer when its initial value is `0`.
 - [ ] A surface with many navigable entries (a big settings area, a long list) offers search / filter / jump, not browse-only — named as a class norm so an absent box is caught.
 - [ ] Marketplace / registry browse cards carry owned/installed state on the tile (not only on the detail) and trust/verified badges via one card contract, consistent across sibling registries; contribute leads to an in-app submit, not an external repo.
+- [ ] A sidebar / nav / master-detail **list row** composes the canonical `NavItem` (+ `Accordion` / `GroupedAccordion` for groups, `Block variant='filled'` for active), not a hand-rolled `<div>`/`<button>`/`<input>` + bespoke CSS — else the hover/active highlight misaligns from the content box, content bleeds to the panel edge, the search/rename/action-reveal drift from every sibling panel, and the list stays a flat ungrouped dump. Grep `NavItem` before building.
+- [ ] A persistent create/compose affordance above a list is the hero only while the list is **empty**; once populated it doesn't bury the records — cap the editor height (max-height + internal scroll) and/or default it to collapsed when the list has data, so the records keep Center Stage.
+- [ ] A status group/label is true for **every** member — don't fold a distinct lifecycle state (scheduled/queued/snoozed) under a label that asserts another (running/in-progress); give it its own group or a neutral label.
 
 **Edit — entering & changing content** ([edit.md](references/edit.md))
 
@@ -109,7 +125,7 @@ The one-screen scan. Each line links back to a module above for the full rule + 
 - [ ] Terminal status screen (success / error `Result`) carries an action: error → escape hatch (retry / back), success → close / go-to-result; no bare `Result` without `extra`, and "auto-closing in Ns" copy only when the close can actually fire.
 - [ ] A result that changes the next step lands in a persistent state (screen / inline), not just a transient toast; "link sent" names the destination + offers resend, failures keep context + offer retry.
 - [ ] Bulk action has a single-item entry (and vice versa).
-- [ ] Async/bulk/irreversible action: confirm → in-progress (locked) → done/error.
+- [ ] Async/bulk/irreversible action: confirm → in-progress (locked) → done/error. But a **slow but atomic** confirm-gated op (device/file delete, git op, seconds-long call) closes the confirm **immediately** (non-blocking `onOk`) and shows progress on the **originating surface** (optimistic removal / row spinner), not a confirm dialog held spinning on the round-trip — the modal is not the progress surface.
 - [ ] A long-running / costly async op (generation / export / large upload) offers **Cancel while it runs** (aborts the work, not just delete-after-the-fact) and keeps an in-place **Retry** on error — named as a generation-class norm so an absent Cancel is caught.
 - [ ] Optimistic create / rename / duplicate surfaces failure (caller catches + toasts); never a silent rollback.
 - [ ] Job-control (run / pause / stop / retry) surfaces start/stop failure — a `catch` that only `console.error`s + optimistic-status rollback reads as a dead button; toast at the store-action boundary so every trigger inherits it.

@@ -60,40 +60,6 @@ export const TOOL_HEADLINE_DETAIL_TRUNCATE_LEN = 117;
 /** Suffix when truncating tool strings. */
 export const TOOL_HEADLINE_TRUNCATION_SUFFIX = '...';
 
-// ─── Post-tool “final answer” block promotion (Group partition) ───────────
-
-/** Sum of heuristic scores at or above this promotes visible prose out of workflow chrome. */
-export const POST_TOOL_FINAL_ANSWER_SCORE_THRESHOLD = 3;
-
-/** Add this score when compacted prose length ≥ this (long answer signal). */
-export const POST_TOOL_ANSWER_LENGTH_LONG_SCORE = 2;
-
-/** Lower bound (chars) for POST_TOOL_ANSWER_LENGTH_LONG_SCORE. */
-export const POST_TOOL_ANSWER_LENGTH_LONG_MIN_CHARS = 180;
-
-/** Add this score when length ∈ [medium min, long min). */
-export const POST_TOOL_ANSWER_MEDIUM_TEXT_SCORE = 1;
-
-/** Lower bound (chars) for medium-length contribution. */
-export const POST_TOOL_ANSWER_LENGTH_MEDIUM_MIN_CHARS = 100;
-
-/** Blank-line paragraphing: strong signal for structured deliverable. */
-export const POST_TOOL_ANSWER_DOUBLE_NEWLINE_SCORE = 2;
-
-/** Without \\n\\n, treat many non-empty lines as paragraphing when count ≥ this. */
-export const POST_TOOL_ANSWER_MULTI_LINE_SCORE = 2;
-
-/** Minimum trimmed lines (with at least one non-empty) to count as multi-line body. */
-export const POST_TOOL_ANSWER_MULTI_LINE_MIN_COUNT = 3;
-
-/** Markdown heading or list at line start: structured deliverable. */
-export const POST_TOOL_ANSWER_MARKDOWN_STRUCTURE_SCORE = 2;
-
-/** Add one point when sentence-ending punctuation count ≥ this (compact text). */
-export const POST_TOOL_ANSWER_PUNCT_MIN_COUNT = 3;
-
-export const POST_TOOL_ANSWER_PUNCT_SCORE = 1;
-
 // ─── Time formatting (workflow summary / reasoning suffix) ───────────────
 
 /** Seconds per minute when formatting durations like "2m 30s". */

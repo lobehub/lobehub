@@ -39,8 +39,6 @@ import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
-import { useUserStore } from '@/store/user';
-import { labPreferSelectors } from '@/store/user/selectors';
 
 const SAVE_DEBOUNCE_MS = 600;
 
@@ -85,7 +83,6 @@ const TaskVerifyConfig = memo(() => {
   const { t } = useTranslation('chat');
   const { message } = App.useApp();
   const { allowed: canEditTask } = usePermission('create_content');
-  const enableTaskVerify = useUserStore(labPreferSelectors.enableTaskVerify);
 
   const taskId = useTaskStore(taskDetailSelectors.activeTaskId);
   const verify = useTaskStore(taskDetailSelectors.activeTaskVerifyConfig);
@@ -351,8 +348,6 @@ const TaskVerifyConfig = memo(() => {
   );
 
   if (!taskId) return null;
-  // Gated behind the Labs "task verify" experimental toggle (off by default).
-  if (!enableTaskVerify) return null;
   // The whole section is an editor surface; hide it when the user can't edit.
   if (!canEditTask) return null;
 

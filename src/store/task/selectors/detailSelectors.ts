@@ -1,5 +1,7 @@
 import type { TaskDetailData, TaskVerifyConfig } from '@lobechat/types';
 
+import type { SaveStatus } from '@/types/saveState';
+
 import type { TaskStoreState } from '../initialState';
 
 const activeTaskId = (s: TaskStoreState) => s.activeTaskId;
@@ -20,6 +22,8 @@ const activeTaskPriority = (s: TaskStoreState) => activeTaskDetail(s)?.priority 
 
 const activeTaskVisibility = (s: TaskStoreState): 'private' | 'public' =>
   activeTaskDetail(s)?.visibility ?? 'public';
+
+const activeTaskCreatedByUserId = (s: TaskStoreState) => activeTaskDetail(s)?.createdByUserId;
 
 const activeTaskInstruction = (s: TaskStoreState) => activeTaskDetail(s)?.instruction;
 
@@ -96,7 +100,10 @@ const canCancelActiveTask = (s: TaskStoreState): boolean => {
   return ['backlog', 'paused', 'running', 'scheduled'].includes(detail.status);
 };
 
-const taskSaveStatus = (s: TaskStoreState) => s.taskSaveStatus;
+// Save status is keyed per task, so switching tasks reads the target task's own
+// status (defaulting to 'idle') instead of a stale 'failed' from a prior task.
+const taskSaveStatus = (s: TaskStoreState): SaveStatus =>
+  (s.activeTaskId ? s.taskSaveStatusMap[s.activeTaskId] : undefined) ?? 'idle';
 
 const activeTopicDrawerTopicId = (s: TaskStoreState) => s.activeTopicDrawerTopicId;
 
@@ -104,6 +111,7 @@ export const taskDetailSelectors = {
   activeTaskAgentId,
   activeTaskAutomationMode,
   activeTaskCheckpoint,
+  activeTaskCreatedByUserId,
   activeTaskModel,
   activeTaskDependencies,
   activeTaskDescription,

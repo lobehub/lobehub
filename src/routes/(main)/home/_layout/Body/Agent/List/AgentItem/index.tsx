@@ -79,7 +79,7 @@ interface AgentItemProps {
 }
 
 const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate }) => {
-  const { id, avatar, backgroundColor, title, pinned, heterogeneousType, visibility } = item;
+  const { id, avatar, backgroundColor, title, pinned, slug, userId, visibility } = item;
   // Unread count is server-computed (topics.status === 'unread') and carried on
   // the sidebar list item, so it stays accurate across agents whose topics
   // aren't loaded into the chat store on this client.
@@ -182,7 +182,9 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate }) 
     id,
     openCreateGroupModal: handleOpenCreateGroupModal,
     pinned: pinned ?? false,
+    slug,
     title: displayTitle,
+    userId,
     visibility,
   });
 

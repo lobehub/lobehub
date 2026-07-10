@@ -3,6 +3,10 @@ export interface Classification {
   // self-published via the CLI; remote URL-only and unknown delivery go to humans.
   delivery: 'local' | 'remote' | 'unknown';
   isSubmission: boolean;
+  // Sub-category the triage bot routes on: a NEW listing submission, an ops
+  // request against an EXISTING listing (rescan / refresh / re-index / stuck
+  // scoring), or neither.
+  kind: 'listing-ops' | 'none' | 'submission';
   reason: string;
   repoUrl: string | null;
 }
@@ -85,6 +89,20 @@ export function classify(title: string, body: string): Classification {
       text,
     );
 
+  // Ops request against an EXISTING listing (rescan / refresh / re-index /
+  // stuck scoring). Kept high-precision like the submission path: an explicit
+  // rescan-style verb or "listing is stale" framing — not just any marketplace
+  // complaint — so product bugs that mention refreshing never match.
+  const isListingOps =
+    hasMcp &&
+    (/\bre-?scan(?:ned|ning)?\b|\bre-?index(?:ed|ing)?\b|refresh (?:the )?(?:existing )?(?:mcp )?(?:server )?(?:listing|metadata)|listing (?:is )?stale|stale (?:listing|scan|canonical)|scoring stuck|stuck scoring|canonical cache|重新扫描|重新索引|刷新.{0,6}(?:列表|收录|索引)/.test(
+      text,
+    ) ||
+      (/\b(?:listing|marketplace)\b|市场/.test(text) &&
+        /\bstale\b|\bscoring\b|\bstuck (?:at|on) v?\d/.test(text)));
+
+  const kind: Classification['kind'] = isListingOps ? 'listing-ops' : 'none';
+
   const isPublishingFlowFeedback =
     /publish-mcp|publishing skill/.test(text) &&
     /\b(?:feedback|wrong|confusing?|docs?|instructions?|guide|command sequence|not work|fail|error|bug|issue|problem|can'?t|cannot|unable)\b/.test(
@@ -123,15 +141,26 @@ export function classify(title: string, body: string): Classification {
           ? 'local'
           : 'unknown';
 
-  if (!hasMcp) return { delivery, isSubmission: false, reason: 'no "mcp" keyword', repoUrl };
+  if (!hasMcp) return { delivery, isSubmission: false, kind, reason: 'no "mcp" keyword', repoUrl };
+  // Listing-ops takes precedence over submission: "add X (rescan existing
+  // listing to v2)" is a rescan of an existing entry, not a new submission.
+  if (isListingOps)
+    return {
+      delivery,
+      isSubmission: false,
+      kind,
+      reason: 'rescan/refresh request for an existing marketplace listing',
+      repoUrl,
+    };
   if (!hasAddVerb)
-    return { delivery, isSubmission: false, reason: 'no add/submit intent', repoUrl };
+    return { delivery, isSubmission: false, kind, reason: 'no add/submit intent', repoUrl };
   if (!hasMarketContext)
-    return { delivery, isSubmission: false, reason: 'no marketplace context', repoUrl };
+    return { delivery, isSubmission: false, kind, reason: 'no marketplace context', repoUrl };
   if (!repoUrl && delivery !== 'remote')
     return {
       delivery,
       isSubmission: false,
+      kind,
       reason: 'no server reference (repo URL or endpoint)',
       repoUrl,
     };
@@ -139,15 +168,23 @@ export function classify(title: string, body: string): Classification {
     return {
       delivery,
       isSubmission: false,
+      kind,
       reason: 'looks like a marketplace/listing bug',
       repoUrl,
     };
   if (isCliFeedback)
-    return { delivery, isSubmission: false, reason: 'looks like CLI/publishing feedback', repoUrl };
+    return {
+      delivery,
+      isSubmission: false,
+      kind,
+      reason: 'looks like CLI/publishing feedback',
+      repoUrl,
+    };
 
   return {
     delivery,
     isSubmission: true,
+    kind: 'submission',
     reason: `new MCP server listing request (${delivery})`,
     repoUrl,
   };

@@ -1,6 +1,8 @@
 import { z } from 'zod';
 
 import { RequestTrigger } from '../../agentRuntime';
+import type { ContextSelection } from './contextSelection';
+import { ContextSelectionSchema } from './contextSelection';
 import type { PageSelection } from './pageSelection';
 import { PageSelectionSchema } from './pageSelection';
 
@@ -180,6 +182,7 @@ export const MessageTaskCallbackSchema = z.object({
 
 export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSchema).extend({
   collapsed: z.boolean().optional(),
+  contextSelections: z.array(ContextSelectionSchema).optional(),
   // Hetero-agent (Claude Code) per-message provenance. Listed here so zod does
   // NOT strip them from writes going through UpdateMessageParamsSchema /
   // CreateMessageParamsSchema (the renderer executor's `messageService` path).
@@ -262,6 +265,11 @@ export interface MessageMetadata {
    */
   collapsed?: boolean;
   compare?: boolean;
+  /**
+   * Generic context selections attached to user messages.
+   * Page selections remain mirrored in `pageSelections` for compatibility.
+   */
+  contextSelections?: ContextSelection[];
   /** @deprecated use the top-level message `usage` field instead */
   cost?: number;
   /** @deprecated use `metadata.performance` instead */

@@ -63,7 +63,11 @@ export class TaskTopicModel {
   async add(
     taskId: string,
     topicId: string,
-    params: { operationId?: string; seq: number },
+    params: {
+      operationId?: string;
+      seq: number;
+      trigger?: 'manual' | 'schedule' | 'heartbeat';
+    },
   ): Promise<void> {
     const visibility = await this.getTaskVisibility(taskId);
     await this.db
@@ -73,6 +77,7 @@ export class TaskTopicModel {
         seq: params.seq,
         taskId,
         topicId,
+        trigger: params.trigger,
         userId: this.userId,
         visibility,
         workspaceId: this.workspaceId ?? null,
@@ -147,6 +152,22 @@ export class TaskTopicModel {
       .where(and(eq(taskTopics.taskId, taskId), eq(taskTopics.topicId, topicId), this.ownership()));
   }
 
+  /**
+   * Patch the raw run output into `handoff.content` without
+   * disturbing other handoff keys. Uses `jsonb_set` so it is order-independent
+   * with respect to `updateHandoff` — critically, this lets the caller persist
+   * the last message even when the (separate) handoff-summary LLM call fails, so
+   * the run card always has a result to show.
+   */
+  async updateHandoffContent(taskId: string, topicId: string, content: string): Promise<void> {
+    await this.db
+      .update(taskTopics)
+      .set({
+        handoff: sql`jsonb_set(COALESCE(${taskTopics.handoff}, '{}'::jsonb), '{content}', ${JSON.stringify(content)}::jsonb)`,
+      })
+      .where(and(eq(taskTopics.taskId, taskId), eq(taskTopics.topicId, topicId), this.ownership()));
+  }
+
   async updateReview(
     taskId: string,
     topicId: string,
@@ -195,9 +216,22 @@ export class TaskTopicModel {
     return result[0] || null;
   }
 
-  async countByTask(taskId: string, options?: { since?: Date }): Promise<number> {
+  /**
+   * Count a task's runs, optionally scoped by creation time and/or trigger
+   * source.
+   *
+   * `triggers` filters on the `trigger` column so the maxExecutions quota can
+   * count only automation ticks and ignore ad-hoc manual runs (LOBE-11391).
+   * Legacy rows have a NULL trigger; they are excluded whenever `triggers` is
+   * passed (they predate the column and can't be attributed to a schedule).
+   */
+  async countByTask(
+    taskId: string,
+    options?: { since?: Date; triggers?: Array<'manual' | 'schedule' | 'heartbeat'> },
+  ): Promise<number> {
     const conditions = [eq(taskTopics.taskId, taskId), this.ownership()];
     if (options?.since) conditions.push(gte(taskTopics.createdAt, options.since));
+    if (options?.triggers?.length) conditions.push(inArray(taskTopics.trigger, options.triggers));
 
     const rows = await this.db
       .select({ value: count() })

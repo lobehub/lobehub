@@ -33,8 +33,9 @@ const SkillPage = memo(() => {
       data={data}
       empty={<SkillEmpty />}
       error={error}
+      errorVariant={'page'}
       isEmpty={items.length === 0}
-      isLoading={isLoading || !data}
+      isLoading={isLoading}
       loading={<Loading />}
       onRetry={() => mutate()}
     >

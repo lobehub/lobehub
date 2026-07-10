@@ -27,6 +27,44 @@ agent-browser wait --load networkidle
 agent-browser snapshot -i # Check result
 ```
 
+## GOMS-KLM interaction tracing
+
+When a UI verification should report user-side interaction cost, run
+`agent-browser` through the agent-testing wrapper:
+
+```bash
+TRACE="$DIR/interaction-trace.jsonl"
+
+./.agents/skills/agent-testing/scripts/agent-browser-klm.mjs \
+  --klm-trace "$TRACE" --klm-phase settings --klm-check case-1 \
+  --session lobehub-dev click @e4
+```
+
+The wrapper forwards the real command to `agent-browser` and appends one JSONL
+event. Physical actions are inferred from the command (`click → P+K`,
+`fill/type → P+T(n)`, `press → K`, `wait → R`). A click only counts the user
+activation; if it causes loading or async work, follow it with an explicit
+`agent-browser wait ...` so response time is counted as `R`.
+
+Mental effort is intentionally not guessed from DOM shape. After the first
+meaningful page view, add an explicit agent estimate:
+
+```bash
+./.agents/skills/agent-testing/scripts/agent-browser-klm.mjs mental \
+  --klm-trace "$TRACE" --klm-phase first-view --m 2 --score 3 \
+  --confidence 0.75 --reason "Need to understand current page state and choose the verify path"
+```
+
+Before publish, summarize the trace into the structured report:
+
+```bash
+./.agents/skills/agent-testing/scripts/agent-browser-klm-analyze.mjs \
+  --trace "$TRACE" --result "$DIR/result.json" --write
+```
+
+This populates `result.json.interactionCost` with the `goms-klm@lobe-v1`
+summary. The raw trace stays in the local report directory for audit/debug.
+
 ## Command Chaining
 
 ```bash

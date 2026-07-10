@@ -47,7 +47,7 @@ interface CreateAgentOptions {
 
 /**
  * Hook for generating menu items for top-level create actions
- * Used in Body/Agent/Actions.tsx and Header/AddButton.tsx
+ * Used by the home sidebar create menus.
  */
 export const useCreateMenuItems = () => {
   const { t } = useTranslation('chat');

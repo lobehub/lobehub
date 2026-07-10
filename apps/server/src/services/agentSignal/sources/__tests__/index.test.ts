@@ -86,4 +86,27 @@ describe('agent signal sources', () => {
     expect(built.sourceType).toBe('agent.execution.completed');
     expect(built.payload.selfIteration).toEqual(selfIteration);
   });
+
+  it('preserves agent user message display and trigger anchors through normalization', async () => {
+    const { buildSource } = await import('..');
+
+    const built = buildSource({
+      payload: {
+        agentId: 'agent_1',
+        anchorMessageId: 'assistant_1',
+        message: 'Remember this preference.',
+        messageId: 'user_1',
+        topicId: 'topic_1',
+        triggerMessageId: 'user_1',
+      },
+      scopeKey: 'topic:topic_1',
+      sourceId: 'assistant_1:completion:user_1',
+      sourceType: 'agent.user.message',
+      timestamp: 1_710_000_000_000,
+    });
+
+    expect(built.sourceType).toBe('agent.user.message');
+    expect(built.payload.anchorMessageId).toBe('assistant_1');
+    expect(built.payload.triggerMessageId).toBe('user_1');
+  });
 });

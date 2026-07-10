@@ -1,3 +1,5 @@
+import { recordUpstashWorkflowEvent } from '@lobechat/observability-otel/modules/upstash-workflow';
+import { errorNameFrom } from '@lobechat/utils';
 import debug from 'debug';
 import type { MiddlewareHandler } from 'hono';
 
@@ -32,8 +34,38 @@ export const qstashOrApiKeyAuth = (): MiddlewareHandler => async (c, next) => {
 
   if (!isValidQStash && !isValidApiKey) {
     log('Rejected: neither QStash sig nor API key matched on %s', c.req.path);
+    recordUpstashWorkflowEvent({
+      errorType: 'Unauthorized',
+      interface: 'qstash',
+      operation: 'serve',
+      path: c.req.path,
+      status: 'error',
+    });
+
     return c.json({ error: 'Unauthorized - Valid QStash signature or API key required' }, 401);
   }
 
-  await next();
+  try {
+    await next();
+    if (isValidQStash) {
+      recordUpstashWorkflowEvent({
+        interface: 'qstash',
+        operation: 'serve',
+        path: c.req.path,
+        status: 'success',
+      });
+    }
+  } catch (error) {
+    if (isValidQStash) {
+      recordUpstashWorkflowEvent({
+        errorType: errorNameFrom(error) ?? typeof error,
+        interface: 'qstash',
+        operation: 'serve',
+        path: c.req.path,
+        status: 'error',
+      });
+    }
+
+    throw error;
+  }
 };

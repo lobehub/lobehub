@@ -91,15 +91,23 @@ export interface AgentState {
 
   /** Operation-level tool set snapshot (immutable after creation) */
   operationToolSet?: OperationToolSet;
+  // --- HIL ---
+  /**
+   * Assistant placeholder seeded for a resume that starts by executing a tool
+   * (e.g. a human-approved / auto-approved tool such as the tools activator).
+   * The first `call_llm` after that tool consumes this id so its output reuses
+   * the placeholder instead of creating a new message and orphaning the seed.
+   * Cleared once consumed.
+   */
+  pendingAssistantMessageId?: string;
   pendingHumanPrompt?: { metadata?: Record<string, unknown>; prompt: string };
+
   pendingHumanSelect?: {
     metadata?: Record<string, unknown>;
     multi?: boolean;
     options: Array<{ label: string; value: string }>;
     prompt?: string;
   };
-
-  // --- HIL ---
   /**
    * When status is 'waiting_for_human', this stores pending requests
    * for human-in-the-loop operations.

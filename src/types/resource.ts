@@ -1,4 +1,4 @@
-import { type FilesTabs, type SortType } from '@/types/files';
+import { type FilesTabs, type FileUploader, type SortType } from '@/types/files';
 
 /**
  * Unified resource item that represents both files and documents
@@ -51,6 +51,7 @@ export interface ResourceItem {
   title?: string;
 
   updatedAt: Date;
+  uploader?: FileUploader | null;
 
   // File-specific (optional)
   url?: string;

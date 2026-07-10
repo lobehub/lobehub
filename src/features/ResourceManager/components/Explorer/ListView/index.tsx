@@ -26,18 +26,26 @@ const ListView = ({ isLoading, isValidating, queryParams }: ListViewProps) => {
     isValidating,
     queryParams,
   });
+  const showUploader = queryParams.visibility !== 'private';
 
-  if (showSkeleton) return <ListViewSkeleton columnWidths={columnWidths} />;
+  if (showSkeleton)
+    return <ListViewSkeleton columnWidths={columnWidths} showUploader={showUploader} />;
 
   return (
     <Flexbox height={'100%'}>
       <div className={styles.scrollContainer}>
-        <ListViewHeader columnWidths={columnWidths} data={data} hasMore={hasMore} />
+        <ListViewHeader
+          columnWidths={columnWidths}
+          data={data}
+          hasMore={hasMore}
+          showUploader={showUploader}
+        />
         <ListViewDropZone currentFolderId={currentFolderId} virtuosoRef={virtuosoRef}>
           <VirtualizedFileList
             columnWidths={columnWidths}
             data={data}
             hasMore={hasMore}
+            showUploader={showUploader}
             virtuosoRef={virtuosoRef}
           />
         </ListViewDropZone>

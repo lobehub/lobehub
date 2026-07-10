@@ -5,6 +5,7 @@ import { type FocusEvent, memo, useCallback, useEffect, useRef, useState } from 
 import { flushSync } from 'react-dom';
 
 import { ChatInput } from '@/features/Conversation';
+import { inputSelectors, useConversationStore } from '@/features/Conversation/store';
 
 import HoverExpandBar from './HoverExpandBar';
 
@@ -78,6 +79,7 @@ const InputRow = memo<InputRowProps>(({ isCollapsed, onExpand }) => {
   const [renderedCollapsed, setRenderedCollapsed] = useState(isCollapsed);
   const [focused, setFocused] = useState(false);
   const focusedRef = useRef(false);
+  const overlayHeight = useConversationStore(inputSelectors.chatInputOverlayHeight);
 
   useEffect(() => {
     if (renderedCollapsed === isCollapsed) return;
@@ -113,7 +115,11 @@ const InputRow = memo<InputRowProps>(({ isCollapsed, onExpand }) => {
         onBlur={handleBlur}
         onFocus={handleFocus}
       >
-        <HoverExpandBar visible={isCollapsed && focused} onExpand={onExpand} />
+        <HoverExpandBar
+          bottomOffset={overlayHeight}
+          visible={isCollapsed && focused}
+          onExpand={onExpand}
+        />
         <div className={s.surface}>
           <ChatInput
             allowExpand={false}

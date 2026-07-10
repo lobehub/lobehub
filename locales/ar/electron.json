@@ -65,6 +65,7 @@
   "navigation.tasks": "المهام",
   "navigation.topics": "المواضيع",
   "navigation.unpin": "إلغاء التثبيت",
+  "navigation.verifyReports": "تقارير التحقق",
   "notification.finishChatGeneration": "اكتمل توليد الرسالة بواسطة الذكاء الاصطناعي",
   "proxy.auth": "يتطلب المصادقة",
   "proxy.authDesc": "إذا كان خادم البروكسي يتطلب اسم مستخدم وكلمة مرور",

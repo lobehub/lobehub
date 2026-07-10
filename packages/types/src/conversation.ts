@@ -233,4 +233,11 @@ export interface ConversationContext {
    * builds `RuntimeInitialContext.taskManager` from the task store.
    */
   viewedTask?: { type: 'list' } | { taskId: string; type: 'detail' };
+  /**
+   * Workspace slug captured at the conversation entry point. Desktop
+   * notifications and other out-of-band navigations use this to return to the
+   * same workspace instead of reinterpreting the target under the currently
+   * active tab.
+   */
+  workspaceSlug?: string;
 }

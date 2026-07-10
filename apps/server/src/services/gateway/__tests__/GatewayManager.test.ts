@@ -8,6 +8,8 @@ const mockFindEnabledByPlatform = vi.hoisted(() => vi.fn());
 const mockFindEnabledByPlatformAndAppId = vi.hoisted(() => vi.fn());
 const mockInitWithEnvKey = vi.hoisted(() => vi.fn());
 const mockGetServerDB = vi.hoisted(() => vi.fn());
+const mockIsBotFeatureAccessAllowed = vi.hoisted(() => vi.fn());
+const mockUpdateBotRuntimeStatus = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 
 vi.mock('@/database/core/db-adaptor', () => ({
   getServerDB: mockGetServerDB,
@@ -26,24 +28,36 @@ vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
   },
 }));
 
+vi.mock('@/business/server/bot/featureAccess', () => ({
+  getBotFeatureBlockedMessage: vi.fn(() => 'blocked'),
+  isBotFeatureAccessAllowed: mockIsBotFeatureAccessAllowed,
+}));
+
+vi.mock('../runtimeStatus', () => ({
+  BOT_RUNTIME_STATUSES: { failed: 'failed' },
+  updateBotRuntimeStatus: mockUpdateBotRuntimeStatus,
+}));
+
 // Fake platform definition for testing
+const mockStartedClient = vi.hoisted(() => ({
+  applicationId: 'app-1',
+  createAdapter: () => ({}),
+  extractChatId: (id: string) => id,
+  getMessenger: () => ({
+    createMessage: async () => {},
+    editMessage: async () => {},
+    removeReaction: async () => {},
+    triggerTyping: async () => {},
+  }),
+  parseMessageId: (id: string) => id,
+  id: 'fakeplatform',
+  start: vi.fn().mockResolvedValue(undefined),
+  stop: vi.fn().mockResolvedValue(undefined),
+}));
+
 const fakeDefinition: PlatformDefinition = {
   clientFactory: {
-    createClient: (config: any) => ({
-      applicationId: config.applicationId,
-      createAdapter: () => ({}),
-      extractChatId: (id: string) => id,
-      getMessenger: () => ({
-        createMessage: async () => {},
-        editMessage: async () => {},
-        removeReaction: async () => {},
-        triggerTyping: async () => {},
-      }),
-      parseMessageId: (id: string) => id,
-      id: config.platform,
-      start: vi.fn().mockResolvedValue(undefined),
-      stop: vi.fn().mockResolvedValue(undefined),
-    }),
+    createClient: () => mockStartedClient,
     validateCredentials: async () => ({ valid: true }),
     validateSettings: async () => ({ valid: true }),
   },
@@ -65,6 +79,9 @@ describe('GatewayManager', () => {
     mockInitWithEnvKey.mockResolvedValue(FAKE_GATEKEEPER);
     mockFindEnabledByPlatform.mockResolvedValue([]);
     mockFindEnabledByPlatformAndAppId.mockResolvedValue(null);
+    mockIsBotFeatureAccessAllowed.mockResolvedValue(true);
+    mockStartedClient.start.mockClear();
+    mockStartedClient.stop.mockClear();
 
     manager = new GatewayManager({ definitions: [fakeDefinition] });
   });
@@ -108,6 +125,29 @@ describe('GatewayManager', () => {
       await manager.start();
 
       expect(manager.isRunning).toBe(true);
+    });
+
+    it('should stop an already running bot when feature access becomes denied', async () => {
+      mockFindEnabledByPlatform.mockResolvedValue([
+        {
+          applicationId: 'app-1',
+          credentials: { key: 'value' },
+          userId: 'owner-1',
+        },
+      ]);
+
+      await manager.start();
+      expect(mockStartedClient.start).toHaveBeenCalledTimes(1);
+
+      mockIsBotFeatureAccessAllowed.mockResolvedValue(false);
+      await (manager as any).syncPlatform('fakeplatform');
+
+      expect(mockStartedClient.stop).toHaveBeenCalledTimes(1);
+      // The cached runtime snapshot must reflect the stop, or the channel UI
+      // keeps showing a connected bot.
+      expect(mockUpdateBotRuntimeStatus).toHaveBeenCalledWith(
+        expect.objectContaining({ applicationId: 'app-1', status: 'failed' }),
+      );
     });
 
     it('should skip already running bots', async () => {

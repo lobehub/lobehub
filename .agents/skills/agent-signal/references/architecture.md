@@ -17,6 +17,23 @@ producer
                   -> observability projection + persistence
 ```
 
+For durable memory, skill, and self-review writes, the action handler can enqueue
+an async `execAgent` run instead of doing the write synchronously:
+
+```text
+action.user-memory.handle | action.skill-management.handle | self-iteration source
+  -> stamp AgentSignal operation marker
+  -> enqueue execAgent
+    -> agent.execution.completed with selfIteration finalState
+      -> completion policy
+        -> buildSelfIterationReceipts(...)
+          -> receipt store
+```
+
+The immediate runtime chain still emits `signal.action.applied | skipped | failed`
+for the enqueue result. User-visible memory and skill receipts are projected from
+the completion event, not from the enqueue action.
+
 The scheduler is queue-driven, not hard-coded for one policy:
 
 ```text
@@ -46,6 +63,8 @@ It provides:
 
 - base node types: source, signal, action
 - builders: `createSource`, `createSignal`, `createAction`
+- shared source type and payload catalog
+- source-event envelopes and scope helpers
 - built-in result signal types
 - runtime result contracts such as `RuntimeProcessorResult` and `ExecutorResult`
 
@@ -53,6 +72,9 @@ Read:
 
 - `packages/agent-signal/src/base/types.ts`
 - `packages/agent-signal/src/base/builders.ts`
+- `packages/agent-signal/src/source/sourceTypes.ts`
+- `packages/agent-signal/src/source/sourceEvent.ts`
+- `packages/agent-signal/src/source/scopeKey.ts`
 - `packages/agent-signal/src/types/events.ts`
 - `packages/agent-signal/src/types/builtin.ts`
 
@@ -62,12 +84,13 @@ Treat this as the server-owned implementation layer.
 
 It owns:
 
-- source catalogs and payload maps
+- source normalization, hydration, and renderers
 - policy-specific signal and action catalogs
 - middleware registration
 - runtime scheduling and guard backends
 - Redis-backed dedupe, waypoint, and policy state
 - service entrypoints for synchronous and async execution
+- receipt projection and persistence for completed self-iteration runs
 
 ### `packages/observability-otel/src/modules/agent-signal`
 
@@ -89,11 +112,13 @@ Examples:
 
 Define source payloads in:
 
-- `apps/server/src/services/agentSignal/sourceTypes.ts`
+- `packages/agent-signal/src/source/sourceTypes.ts`
 
 Build normalized sources in:
 
+- `packages/agent-signal/src/source/sourceEvent.ts`
 - `apps/server/src/services/agentSignal/sources/buildSource.ts`
+- `apps/server/src/services/agentSignal/sources/renderers/*`
 - `packages/agent-signal/src/base/builders.ts`
 
 ### Signal
@@ -186,9 +211,26 @@ agent.user.message
       -> feedback domain signal handler
         -> signal.feedback.domain.*
           -> feedback action planner
-            -> action.user-memory.handle
+            -> action.user-memory.handle | action.skill-management.handle
               -> signal.action.applied | skipped | failed
 ```
+
+The current policy also includes optional tool-outcome projection, skill
+management, deferred completion skill synthesis, nightly review, and completion
+fan-out:
+
+```text
+action.user-memory.handle | action.skill-management.handle
+  -> enqueue execAgent with AgentSignal marker
+    -> agent.execution.completed
+      -> completion policy
+        -> buildSelfIterationReceipts(...)
+          -> memory | skill | review receipts
+```
+
+For skill synthesis, an inbound user-message candidate can be parked during the
+foreground chain and resumed after `agent.execution.completed`, where the full
+trajectory and tool outcomes are available.
 
 Read:
 
@@ -197,3 +239,8 @@ Read:
 - `apps/server/src/services/agentSignal/policies/analyzeIntent/feedbackDomain.ts`
 - `apps/server/src/services/agentSignal/policies/analyzeIntent/feedbackAction.ts`
 - `apps/server/src/services/agentSignal/policies/analyzeIntent/actions/userMemory.ts`
+- `apps/server/src/services/agentSignal/policies/analyzeIntent/actions/skillManagement.ts`
+- `apps/server/src/services/agentSignal/policies/analyzeIntent/completionSkillSynthesis.ts`
+- `apps/server/src/services/agentSignal/policies/completionPolicy.ts`
+- `apps/server/src/services/agentSignal/services/selfIteration/completion/buildSelfIterationReceipts.ts`
+- `apps/server/src/services/agentSignal/services/selfIteration/completion/selfIterationCompletionHandler.ts`

@@ -6,10 +6,12 @@ import type { MenuProps } from 'antd';
 import { message } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { FileIcon } from 'lucide-react';
+import type { DragEvent } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
+import { startWorkspaceFileDrag } from '@/features/ChatInput/InputEditor/workspaceFileDragData';
 import type { ExplorerTreeNode } from '@/features/ExplorerTree';
 import {
   ExplorerTree,
@@ -245,6 +247,22 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
     [openNode],
   );
 
+  // Dragging a row into the chat input inserts a `<localFile />` mention instead
+  // of uploading it. We stamp a custom MIME on dragstart; the input's
+  // useWorkspaceFileDrop reads it. The panel has no onMove, so overriding the
+  // drag effect here can't disturb any internal reorder behaviour.
+  const handleNodeDragStart = useCallback(
+    (node: ExplorerTreeNode<ProjectFileIndexEntry>, event: DragEvent<HTMLElement>) => {
+      if (!node.data) return;
+      startWorkspaceFileDrag(event, {
+        isDirectory: !!node.isFolder,
+        name: node.data.name,
+        path: node.data.path,
+      });
+    },
+    [],
+  );
+
   const getContextMenuItems = useCallback(
     (node: ExplorerTreeNode<ProjectFileIndexEntry>): MenuProps['items'] => {
       if (!node.data) return [];
@@ -359,6 +377,7 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
             unsafeCSS={FILE_TREE_UNSAFE_CSS}
             onExpandedChange={setExpandedIds}
             onNodeClick={handleNodeClick}
+            onNodeDragStart={handleNodeDragStart}
           />
         </div>
       )}

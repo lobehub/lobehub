@@ -64,6 +64,7 @@ interface FooterProps {
   saving: boolean;
   testing: boolean;
   testResult?: TestResult;
+  writeDisabled?: boolean;
 }
 
 const Footer = memo<FooterProps>(
@@ -79,6 +80,7 @@ const Footer = memo<FooterProps>(
     saving,
     testing,
     testResult,
+    writeDisabled,
     onSave,
     onDelete,
     onTestConnection,
@@ -143,7 +145,7 @@ const Footer = memo<FooterProps>(
           <Flexbox horizontal gap={12}>
             {hasConfig && (
               <Button
-                disabled={disabled || saving || connecting}
+                disabled={writeDisabled || saving || connecting}
                 icon={<RefreshCw size={16} />}
                 loading={testing}
                 onClick={onTestConnection}
@@ -152,7 +154,7 @@ const Footer = memo<FooterProps>(
               </Button>
             )}
             <Button
-              disabled={disabled}
+              disabled={writeDisabled}
               icon={<Save size={16} />}
               loading={saving || connecting}
               type="primary"

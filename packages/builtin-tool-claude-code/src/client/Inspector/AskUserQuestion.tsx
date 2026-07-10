@@ -1,12 +1,14 @@
 'use client';
 
+import { normalizeAskUserQuestions } from '@lobechat/shared-tool-ui/ask-user';
 import { inspectorTextStyles, shinyTextStyles } from '@lobechat/shared-tool-ui/styles';
 import type { BuiltinInspectorProps } from '@lobechat/types';
 import { createStaticStyles, cx } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { type AskUserQuestionArgs, ClaudeCodeApiName } from '../../types';
+import type { AskUserQuestionArgs } from '../../types';
+import { ClaudeCodeApiName } from '../../types';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   chip: css`
@@ -31,7 +33,8 @@ export const AskUserQuestionInspector = memo<BuiltinInspectorProps<AskUserQuesti
   ({ args, partialArgs, isArgumentsStreaming, isLoading }) => {
     const { t } = useTranslation('plugin');
     const label = t(ClaudeCodeApiName.AskUserQuestion as any);
-    const questions = args?.questions ?? partialArgs?.questions ?? [];
+    const argsQuestions = normalizeAskUserQuestions(args);
+    const questions = argsQuestions.length ? argsQuestions : normalizeAskUserQuestions(partialArgs);
     const summary =
       questions.length === 0
         ? undefined

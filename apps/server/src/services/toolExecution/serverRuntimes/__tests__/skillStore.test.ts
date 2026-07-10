@@ -62,8 +62,7 @@ describe('skillStoreRuntime', () => {
     mocks.hasAnyPermission.mockResolvedValue(true);
   });
 
-  // Regression guard for LOBE-10893: importing a skill while running inside a
-  // workspace must construct SkillImporter WITH the workspaceId, otherwise the
+  // Regression guard: importing a skill while running inside a workspace must
   // skill row is saved with `workspace_id = NULL` (the importer's personal
   // scope) and becomes invisible to the whole workspace — including the creator
   // whenever they operate in workspace mode.

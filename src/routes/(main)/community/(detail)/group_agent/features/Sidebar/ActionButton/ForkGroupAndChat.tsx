@@ -9,7 +9,6 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
-import { useActiveWorkspace } from '@/business/client/hooks/useActiveWorkspace';
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
@@ -20,10 +19,6 @@ import { discoverService } from '@/services/discover';
 import { marketApiService } from '@/services/marketApi';
 import { useAgentGroupStore } from '@/store/agentGroup';
 
-import {
-  isMarketOrgSetupRequiredError,
-  promptMarketOrgSetup,
-} from '../../../../../utils/marketOrgSetup';
 import { useDetailContext } from '../../DetailProvider';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -99,8 +94,6 @@ const ForkGroupAndChat = memo<{ mobile?: boolean }>(() => {
   const { isAuthenticated, signIn } = useMarketAuth();
   const { allowed: canCreate } = usePermission('create_content');
   const activeWorkspaceId = useActiveWorkspaceId();
-  const activeWorkspace = useActiveWorkspace();
-  const isWorkspaceOwner = activeWorkspace?.role === 'owner';
   const [visibility, setVisibility] = useState<ForkTarget>('private');
 
   const meta = {
@@ -148,24 +141,16 @@ const ForkGroupAndChat = memo<{ mobile?: boolean }>(() => {
       // Same rationale as ForkAndChat.tsx — workspace forks must carry an
       // org `actAs` so Market accepts the request; the local chat group
       // still lands in the user's Private bucket via `visibility: 'private'`
-      // on the groupConfig below. When the workspace has no Community
-      // profile yet we prompt the user (role-aware) and abort the fork.
+      // on the groupConfig below. Freshly created workspaces get the Market
+      // org provisioned upfront in `workspace.create` / the Stripe webhook;
+      // `autoProvision: true` is a best-effort backfill for historical
+      // workspaces without a mirror.
       let actAs: number | undefined;
       if (activeWorkspaceId) {
-        try {
-          const { marketAccountId } =
-            await lambdaClient.workspace.ensureMarketOrganization.mutate();
-          actAs = marketAccountId;
-        } catch (error) {
-          if (isMarketOrgSetupRequiredError(error)) {
-            promptMarketOrgSetup({
-              isOwner: isWorkspaceOwner,
-              onSetup: () => navigate('/community/workspace'),
-            });
-            return;
-          }
-          throw error;
-        }
+        const { marketAccountId } = await lambdaClient.workspace.ensureMarketOrganization.mutate({
+          autoProvision: true,
+        });
+        actAs = marketAccountId;
       }
 
       // Step 2: Fork the group via Market API

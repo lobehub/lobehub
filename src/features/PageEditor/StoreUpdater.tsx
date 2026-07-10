@@ -49,10 +49,13 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     const initMeta = usePageEditorStore((s) => s.initMeta);
     const pageAgentEditor = editor as unknown as PageAgentEditor | undefined;
     // Workspace pages are view-first; resolve once here so the lock + gating read
-    // a single source of truth.
-    const isWorkspacePage = usePageStore((s) =>
-      Boolean(pageSelectors.getDocumentById(pageId)(s)?.workspaceId),
-    );
+    // a single source of truth. Private-visibility pages are creator-only —
+    // no other member can open them — so they stay outside the lock lifecycle
+    // (mirrors DocumentService.isCollaborativeDocument on the server).
+    const isWorkspacePage = usePageStore((s) => {
+      const doc = pageSelectors.getDocumentById(pageId)(s);
+      return Boolean(doc?.workspaceId) && doc?.visibility !== 'private';
+    });
 
     // Drive the collaborative edit lock for workspace pages
     useDocumentLock();

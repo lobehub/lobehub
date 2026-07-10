@@ -2,12 +2,73 @@ import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { useChatStore } from '@/store/chat/store';
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import { operationSelectors } from '../selectors';
+import {
+  INPUT_LOADING_OPERATION_TYPES,
+  INTERIM_LOADING_OPERATION_TYPES,
+  QUEUE_BLOCKING_OPERATION_TYPES,
+} from '../types';
 
 describe('Operation Selectors', () => {
   beforeEach(() => {
     useChatStore.setState(useChatStore.getInitialState());
+  });
+
+  // Coherence invariant: interim approve/submit/skip/regenerate ops must live in
+  // BOTH whitelists. If the input shows loading for an op (INPUT_LOADING), a
+  // follow-up must queue behind it and "Send now" must be able to cancel it
+  // (QUEUE_BLOCKING). Dropping them from either set silently reintroduces the
+  // interleave / stuck-queue / no-op-send-now bugs.
+  describe('operation-type set invariants', () => {
+    it('keeps interim ops in both INPUT_LOADING and QUEUE_BLOCKING', () => {
+      for (const type of INTERIM_LOADING_OPERATION_TYPES) {
+        expect(INPUT_LOADING_OPERATION_TYPES).toContain(type);
+        expect(QUEUE_BLOCKING_OPERATION_TYPES).toContain(type);
+      }
+    });
+  });
+
+  describe('getRunningQueueBlockingOperationIds', () => {
+    it('returns every running queue-blocking op, not just the first', () => {
+      // A delAndRegenerate/delAndResendThread retry runs two concurrent
+      // `regenerate` ops (outer wrapper + inner regenerateUserMessage). "Send now"
+      // must cancel BOTH — returning only the first would leave the queue blocked.
+      const { result } = renderHook(() => useChatStore());
+      const context = { agentId: 'agent1', topicId: 'topic1' };
+      let outerId = '';
+      let innerId = '';
+
+      act(() => {
+        outerId = result.current.startOperation({ type: 'regenerate', context }).operationId;
+        innerId = result.current.startOperation({ type: 'regenerate', context }).operationId;
+      });
+
+      const ids = operationSelectors.getRunningQueueBlockingOperationIds(context)(result.current);
+      expect(ids).toHaveLength(2);
+      expect(ids).toEqual(expect.arrayContaining([outerId, innerId]));
+    });
+
+    it('excludes non-running and non-blocking ops', () => {
+      const { result } = renderHook(() => useChatStore());
+      const context = { agentId: 'agent1', topicId: 'topic1' };
+      let runningId = '';
+
+      act(() => {
+        runningId = result.current.startOperation({ type: 'regenerate', context }).operationId;
+        // Different queue-blocking op, but completed → excluded.
+        const doneId = result.current.startOperation({
+          type: 'execAgentRuntime',
+          context,
+        }).operationId;
+        result.current.completeOperation(doneId);
+      });
+
+      expect(
+        operationSelectors.getRunningQueueBlockingOperationIds(context)(result.current),
+      ).toEqual([runningId]);
+    });
   });
 
   describe('getOperationsByType', () => {
@@ -38,6 +99,49 @@ describe('Operation Selectors', () => {
 
       expect(generateOps).toHaveLength(2);
       expect(reasoningOps).toHaveLength(1);
+    });
+  });
+
+  describe('getRunningQueueBlockingOperationIds', () => {
+    it('returns every running queue blocker for send-now in the same context', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      let outerRegenerate: string;
+      let innerRegenerate: string;
+
+      act(() => {
+        outerRegenerate = result.current.startOperation({
+          context: { agentId: 'agent-1', topicId: 'topic-1' },
+          type: 'regenerate',
+        }).operationId;
+        innerRegenerate = result.current.startOperation({
+          context: { agentId: 'agent-1', topicId: 'topic-1' },
+          type: 'regenerate',
+        }).operationId;
+        const completedRegenerate = result.current.startOperation({
+          context: { agentId: 'agent-1', topicId: 'topic-1' },
+          type: 'regenerate',
+        }).operationId;
+        result.current.startOperation({
+          context: { agentId: 'agent-1', topicId: 'topic-1' },
+          type: 'toolCalling',
+        });
+        result.current.startOperation({
+          context: { agentId: 'agent-2', topicId: 'topic-2' },
+          type: 'regenerate',
+        });
+        result.current.completeOperation(completedRegenerate);
+      });
+
+      // Regression: delAndRegenerate/delAndResendThread can leave both an outer
+      // wrapper regenerate and an inner regenerateUserMessage running. Send-now
+      // must cancel both; cancelling only the first makes it re-queue.
+      expect(
+        operationSelectors.getRunningQueueBlockingOperationIds({
+          agentId: 'agent-1',
+          topicId: 'topic-1',
+        })(result.current),
+      ).toEqual([outerRegenerate!, innerRegenerate!]);
     });
   });
 
@@ -610,6 +714,128 @@ describe('Operation Selectors', () => {
       expect(
         operationSelectors.getVisibleAgentRuntimeStartTimeByContext(context)(result.current),
       ).toBeUndefined();
+    });
+
+    it('should keep visible loading when a queued message waits behind a visibly-done op', () => {
+      const { result } = renderHook(() => useChatStore());
+      const context = { agentId: 'agent1', topicId: 'topic1' };
+
+      act(() => {
+        useChatStore.setState({ activeAgentId: 'agent1', activeTopicId: 'topic1' });
+
+        // Prior op has finished its visible output but hasn't reached its
+        // terminal end yet (visibleLoadingDone), so it is not visibly running.
+        result.current.startOperation({
+          type: 'execAgentRuntime',
+          context,
+          metadata: { startTime: 1000, visibleLoadingDone: true },
+        });
+      });
+
+      // Sanity: without a queued message the input reads idle in this window.
+      expect(operationSelectors.isInputVisiblyLoadingByContext(context)(result.current)).toBe(
+        false,
+      );
+
+      // User sends a follow-up while the op is still running: it queues without
+      // its own op. The visible loading must stay on so the input doesn't look idle.
+      act(() => {
+        result.current.enqueueMessage(messageMapKey(context), {
+          content: 'follow-up',
+          createdAt: 1200,
+          id: 'queued-1',
+          interruptMode: 'soft',
+        });
+      });
+
+      expect(operationSelectors.isInputVisiblyLoadingByContext(context)(result.current)).toBe(true);
+    });
+
+    it('should not pin visible loading on a stale queue once the op is no longer running', () => {
+      const { result } = renderHook(() => useChatStore());
+      const context = { agentId: 'agent1', topicId: 'topic1' };
+
+      let opId!: string;
+      act(() => {
+        useChatStore.setState({ activeAgentId: 'agent1', activeTopicId: 'topic1' });
+        opId = result.current.startOperation({
+          type: 'execAgentRuntime',
+          context,
+          metadata: { startTime: 1000, visibleLoadingDone: true },
+        }).operationId;
+        result.current.enqueueMessage(messageMapKey(context), {
+          content: 'follow-up',
+          createdAt: 1200,
+          id: 'queued-1',
+          interruptMode: 'soft',
+        });
+      });
+
+      expect(operationSelectors.isInputVisiblyLoadingByContext(context)(result.current)).toBe(true);
+
+      // A cancelled/errored run never drains its queue; with no running op left,
+      // the leftover queue must not keep the indicator pinned on.
+      act(() => {
+        result.current.cancelOperation(opId);
+      });
+
+      expect(operationSelectors.isInputVisiblyLoadingByContext(context)(result.current)).toBe(
+        false,
+      );
+    });
+
+    it('should find a queued follow-up in a thread-scope context (full context key)', () => {
+      const { result } = renderHook(() => useChatStore());
+      // Thread scope keys on threadId/scope; a reduced agentId/topicId key would
+      // collapse to the main-scope bucket and miss the queue.
+      const context = {
+        agentId: 'agent1',
+        scope: 'thread' as const,
+        threadId: 'thread1',
+        topicId: 'topic1',
+      };
+
+      act(() => {
+        useChatStore.setState({ activeAgentId: 'agent1', activeTopicId: 'topic1' });
+        result.current.startOperation({
+          type: 'execAgentRuntime',
+          context,
+          metadata: { startTime: 1000, visibleLoadingDone: true },
+        });
+        result.current.enqueueMessage(messageMapKey(context), {
+          content: 'follow-up',
+          createdAt: 1200,
+          id: 'queued-1',
+          interruptMode: 'soft',
+        });
+      });
+
+      expect(operationSelectors.isInputVisiblyLoadingByContext(context)(result.current)).toBe(true);
+    });
+
+    it('should count a queued follow-up in a thread-scope context (QueueTray mounts)', () => {
+      const { result } = renderHook(() => useChatStore());
+      // queuedMessageCount gates whether QueueTray mounts. It must key off the
+      // same full context as getQueuedMessages/enqueue — a reduced
+      // agentId/topicId key would report 0 here and hide the tray even though a
+      // real queued message is pinning the input loading.
+      const context = {
+        agentId: 'agent1',
+        scope: 'thread' as const,
+        threadId: 'thread1',
+        topicId: 'topic1',
+      };
+
+      act(() => {
+        result.current.enqueueMessage(messageMapKey(context), {
+          content: 'follow-up',
+          createdAt: 1200,
+          id: 'queued-1',
+          interruptMode: 'soft',
+        });
+      });
+
+      expect(operationSelectors.queuedMessageCount(context)(result.current)).toBe(1);
     });
 
     it('should keep visible loading for a normal running runtime operation', () => {

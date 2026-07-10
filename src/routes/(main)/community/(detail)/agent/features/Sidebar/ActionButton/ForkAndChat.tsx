@@ -9,7 +9,6 @@ import { customAlphabet } from 'nanoid/non-secure';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useActiveWorkspace } from '@/business/client/hooks/useActiveWorkspace';
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
@@ -21,10 +20,6 @@ import { marketApiService } from '@/services/marketApi';
 import { useAgentStore } from '@/store/agent';
 import { useHomeStore } from '@/store/home';
 
-import {
-  isMarketOrgSetupRequiredError,
-  promptMarketOrgSetup,
-} from '../../../../../utils/marketOrgSetup';
 import { useDetailContext } from '../../DetailProvider';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -93,8 +88,6 @@ const ForkAndChat = memo<{ mobile?: boolean }>(({ mobile }) => {
   const { isAuthenticated, signIn } = useMarketAuth();
   const { allowed: canCreate } = usePermission('create_content');
   const activeWorkspaceId = useActiveWorkspaceId();
-  const activeWorkspace = useActiveWorkspace();
-  const isWorkspaceOwner = activeWorkspace?.role === 'owner';
   const [visibility, setVisibility] = useState<ForkTarget>('private');
 
   const meta = {
@@ -143,25 +136,17 @@ const ForkAndChat = memo<{ mobile?: boolean }>(({ mobile }) => {
       // `x-lobe-owner-account-id` (403). Whether the local agent ends up
       // private or public is independent of this market-side ownership.
       //
-      // When the workspace has no Community profile yet we abort and prompt
-      // the user. Owners get a deep-link CTA; everyone else is asked to
-      // contact the owner.
+      // Freshly created workspaces get the Market org provisioned upfront in
+      // `workspace.create` / the Stripe webhook. `autoProvision: true` is a
+      // best-effort backfill for historical workspaces that predate that
+      // change; if the caller isn't the owner it silently falls through and
+      // the fork surfaces the failure as the usual `fork.failed` toast.
       let actAs: number | undefined;
       if (activeWorkspaceId) {
-        try {
-          const { marketAccountId } =
-            await lambdaClient.workspace.ensureMarketOrganization.mutate();
-          actAs = marketAccountId;
-        } catch (error) {
-          if (isMarketOrgSetupRequiredError(error)) {
-            promptMarketOrgSetup({
-              isOwner: isWorkspaceOwner,
-              onSetup: () => navigate('/community/workspace'),
-            });
-            return;
-          }
-          throw error;
-        }
+        const { marketAccountId } = await lambdaClient.workspace.ensureMarketOrganization.mutate({
+          autoProvision: true,
+        });
+        actAs = marketAccountId;
       }
 
       // Step 2: Fork the agent via Market API (single-item batch)

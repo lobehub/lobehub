@@ -395,6 +395,21 @@ describe('replyTemplate', () => {
       );
     });
 
+    it('returns the friendly InsufficientBudgetForModel copy instead of the generic user fallback', () => {
+      const en = renderAgentError('InsufficientBudgetForModel', undefined, 'op-1');
+      expect(en).toContain('Not enough credits');
+      expect(en).toContain('op-1');
+      const zh = renderAgentError(
+        'InsufficientBudgetForModel',
+        'Workspace budget exceeded',
+        'op-1',
+        'zh-CN',
+        'user',
+      );
+      expect(zh).toContain('积分余额不足');
+      expect(zh).not.toContain('请检查你的输入');
+    });
+
     it('maps both QuotaLimitReached and InsufficientQuota to the same quota copy', () => {
       const a = renderAgentError('QuotaLimitReached', undefined, 'op-1');
       const b = renderAgentError('InsufficientQuota', undefined, 'op-1');

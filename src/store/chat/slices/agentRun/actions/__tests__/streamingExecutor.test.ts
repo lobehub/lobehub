@@ -2184,6 +2184,9 @@ describe('StreamingExecutor actions', () => {
         });
         operationId = res.operationId;
       });
+      const updateTopicStatusSpy = vi
+        .spyOn(result.current, 'updateTopicStatus')
+        .mockResolvedValue(undefined as any);
 
       // Mock internal_createAgentState to return waiting_for_human status
       mockInternalCreateAgentState({
@@ -2201,7 +2204,13 @@ describe('StreamingExecutor actions', () => {
         agentConfig: createMockResolvedAgentConfig(),
       });
       vi.spyOn(agentRuntime.AgentRuntime.prototype, 'step').mockResolvedValue({
-        events: [],
+        events: [
+          {
+            operationId,
+            pendingToolsCalling: [],
+            type: 'human_approve_required',
+          },
+        ],
         newState: createMockRuntimeState(operationId!, 'waiting_for_human'),
         nextContext: undefined,
       });
@@ -2224,6 +2233,13 @@ describe('StreamingExecutor actions', () => {
       // 1. User can see the tool intervention UI without loading indicator
       // 2. A new operation will be created when user approves/rejects
       expect(result.current.operations[operationId!].status).toBe('completed');
+      expect(updateTopicStatusSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agentId: TEST_IDS.SESSION_ID,
+          status: 'waitingForHuman',
+          topicId: TEST_IDS.TOPIC_ID,
+        }),
+      );
       // Parked ≠ terminal: NO `client.runtime.complete` is emitted — the run has
       // not ended, it is waiting for human approval — parked states do not emit
       // mis-emitted a terminal `cancelled` complete signal.
@@ -2654,7 +2670,12 @@ describe('StreamingExecutor actions', () => {
               ...state.messagesMap,
               [messageMapKey({ agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID })]: [
                 {
+                  // The completion notification now anchors its body to THIS run's
+                  // assistant (findCompletionAssistantMessageId walks parentMessageId),
+                  // not a positional findLast — so the seeded assistant must descend
+                  // from the run's parentMessageId (TEST_IDS.USER_MESSAGE_ID) to be found.
                   ...createMockMessage({ id: 'assistant-notif', role: 'assistant' }),
+                  parentId: TEST_IDS.USER_MESSAGE_ID,
                   ...overrides,
                 },
               ],

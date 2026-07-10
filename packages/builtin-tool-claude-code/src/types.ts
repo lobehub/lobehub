@@ -32,6 +32,10 @@ export enum ClaudeCodeApiName {
   AskUserQuestion = 'askUserQuestion',
   Bash = 'Bash',
   Edit = 'Edit',
+  /** Create a new isolated git worktree or enter an existing one. */
+  EnterWorktree = 'EnterWorktree',
+  /** Leave the worktree created by EnterWorktree, optionally removing it. */
+  ExitWorktree = 'ExitWorktree',
   Glob = 'Glob',
   Grep = 'Grep',
   /**
@@ -107,6 +111,22 @@ export interface TodoWriteArgs {
  */
 export interface SkillArgs {
   skill?: string;
+}
+
+/**
+ * Arguments for CC's built-in `EnterWorktree` tool. `name` creates a new
+ * worktree, while `path` switches into one already attached to the repo.
+ * The fields are mutually exclusive; omitting both creates a random name.
+ */
+export interface EnterWorktreeArgs {
+  name?: string;
+  path?: string;
+}
+
+/** Arguments for CC's built-in `ExitWorktree` tool. */
+export interface ExitWorktreeArgs {
+  action: 'keep' | 'remove';
+  discard_changes?: boolean;
 }
 
 /**
@@ -260,32 +280,15 @@ export interface SendMessageResult {
 }
 
 /**
- * One option on an AskUserQuestion question — `label` is what the user picks,
- * `description` is the supporting text shown alongside.
+ * AskUserQuestion data model now lives in `@lobechat/shared-tool-ui/ask-user`
+ * and is consumed identically by the builtin `user-interaction` / `lobe-agent`
+ * surfaces. Re-exported here so CC's existing import sites keep resolving.
  */
-export interface AskUserQuestionOption {
-  description: string;
-  label: string;
-}
-
-/**
- * One question in an `AskUserQuestion` invocation — header is short (≤12
- * chars per CC's contract), `options` is 2-4 entries, `multiSelect` is opt-in.
- */
-export interface AskUserQuestionItem {
-  header: string;
-  multiSelect?: boolean;
-  options: AskUserQuestionOption[];
-  question: string;
-}
-
-/**
- * `AskUserQuestion` tool arguments — mirrors CC's own schema verbatim so the
- * model's existing prompts work unchanged. 1-4 questions per call.
- */
-export interface AskUserQuestionArgs {
-  questions: AskUserQuestionItem[];
-}
+export type {
+  AskUserQuestionArgs,
+  AskUserQuestionItem,
+  AskUserQuestionOption,
+} from '@lobechat/shared-tool-ui/ask-user';
 
 /**
  * Arguments for CC's built-in `WebSearch` tool. CC issues a web search via

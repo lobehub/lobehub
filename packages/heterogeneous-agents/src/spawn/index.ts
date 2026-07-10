@@ -13,7 +13,19 @@
  * that producers have no business pulling in).
  */
 export type { UsageData } from '../types';
-export { AgentStreamPipeline, type AgentStreamPipelineOptions } from './agentStreamPipeline';
+export {
+  AgentStreamPipeline,
+  type AgentStreamPipelineOptions,
+  type UploadHeterogeneousImage,
+} from './agentStreamPipeline';
+export {
+  buildClaudeSdkUserMessageFromStreamJson,
+  ClaudeAgentSdkSession,
+  type ClaudeAgentSdkSessionOptions,
+  type HeterogeneousAgentRuntimeState,
+  type HeterogeneousAgentRuntimeStatus,
+  type HeterogeneousAgentRuntimeTask,
+} from './claudeAgentSdkSession';
 export { type CliSpawnPlan, resolveCliSpawnPlan } from './cliSpawn';
 export { CodexFileChangeTracker } from './codexFileChangeTracker';
 export {
@@ -26,6 +38,11 @@ export {
   readCodexSessionModel,
   resolveCodexInitialModel,
 } from './codexModel';
+export {
+  createFileStoreImageUploader,
+  type FileStoreCreateFileInput,
+  type FileStorePort,
+} from './fileStoreImageUploader';
 export {
   type AgentContentBlock,
   type AgentImageBlock,
@@ -43,6 +60,12 @@ export {
   type NormalizeImageOptions,
 } from './input';
 export { JsonlStreamProcessor } from './jsonlProcessor';
+// NOTE: `resolveCliCommand` is intentionally NOT re-exported here. It runs
+// `promisify(execFile)` at module load, which throws under a partial
+// `node:child_process` mock — and this barrel is widely imported (e.g. for
+// `resolveCliSpawnPlan`), so pulling it in would break unrelated suites at
+// import time. Import it from the dedicated `@lobechat/heterogeneous-agents/
+// resolveCliCommand` subpath instead.
 export {
   CLAUDE_CODE_BASE_ARGS,
   CODEX_BYPASS_APPROVALS_AND_SANDBOX_ARG,

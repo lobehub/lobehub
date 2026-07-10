@@ -4,7 +4,6 @@ import {
   DERIVED_DOCUMENT_SOURCE_TYPE,
 } from '@lobechat/const';
 import { TRPCError } from '@trpc/server';
-import { and, eq, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 
 import {
@@ -20,22 +19,16 @@ import { ChunkModel } from '@/database/models/chunk';
 import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
 import { KnowledgeRepo } from '@/database/repositories/knowledge';
-import { workspaceMembers } from '@/database/schemas';
-import { appEnv } from '@/envs/app';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { DocumentService } from '@/server/services/document';
 import { FileService } from '@/server/services/file';
+import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
 import { AsyncTaskStatus, AsyncTaskType, type IAsyncTaskError } from '@/types/asyncTask';
 import type { FileListItem, KnowledgeItemStatus } from '@/types/files';
 import { QueryFileListSchema, UploadFileSchema } from '@/types/files';
 import { TransferErrorCode } from '@/types/transferError';
 
-/**
- * Generate file proxy URL
- * Returns a unified proxy URL format: ${APP_URL}/f/:id
- */
-const getFileProxyUrl = (fileId: string): string => `${appEnv.APP_URL}/f/${fileId}`;
 const fileTransferEntityTypeSchema = z.enum(['document', 'file', 'folder']);
 
 const filterKnowledgeItems = <
@@ -596,25 +589,6 @@ export const fileRouter = router({
         .slice(0, limit);
     }),
 
-  removeAllFiles: fileProcedure
-    .use(withScopedPermission('file:delete'))
-    .mutation(async ({ ctx }) => {
-      // Get all file IDs for this user
-      const allFiles = await ctx.fileModel.query({ showFilesInKnowledgeBase: true });
-      const fileIds = allFiles.map((f) => f.id);
-
-      // Use deleteMany to properly handle shared files (globalFiles reference counting)
-      const needToRemoveFileList = await ctx.fileModel.deleteMany(
-        fileIds,
-        serverDBEnv.REMOVE_GLOBAL_FILE,
-      );
-
-      // Delete S3 files only if no other users reference them
-      if (needToRemoveFileList && needToRemoveFileList.length > 0) {
-        await ctx.fileService.deleteFiles(needToRemoveFileList.map((file) => file.url!));
-      }
-    }),
-
   removeFile: fileProcedure
     .use(withScopedPermission('file:delete'))
     .input(z.object({ id: z.string() }))
@@ -734,12 +708,49 @@ export const fileRouter = router({
       return { success: true };
     }),
 
+  /**
+   * Toggle a file's workspace visibility. Creator-only. Personal mode has no
+   * workspace visibility concept, so the call is rejected there.
+   */
+  setFileVisibility: fileProcedure
+    .use(withScopedPermission('file:update'))
+    .input(
+      z.object({
+        id: z.string(),
+        visibility: z.enum(['private', 'public']),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (!ctx.workspaceId) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'File visibility only applies inside a workspace',
+        });
+      }
+
+      const file = await ctx.fileModel.findById(input.id);
+      if (!file) throw new TRPCError({ code: 'NOT_FOUND', message: 'File not found' });
+
+      if (file.userId !== ctx.userId) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Only the creator can change a file’s visibility',
+        });
+      }
+
+      if (file.visibility === input.visibility) return { success: true };
+
+      await ctx.fileModel.setVisibility(input.id, input.visibility);
+      return { success: true };
+    }),
+
   transferEntity: fileProcedure
     .use(withScopedPermission('file:upload'))
     .input(
       z.object({
         entityType: fileTransferEntityTypeSchema,
         id: z.string(),
+        targetVisibility: z.enum(['private', 'public']).optional(),
         targetWorkspaceId: z.string().nullable(),
       }),
     )
@@ -753,18 +764,13 @@ export const fileRouter = router({
       }
 
       if (input.targetWorkspaceId) {
-        const [targetMembership] = await ctx.serverDB
-          .select({ role: workspaceMembers.role })
-          .from(workspaceMembers)
-          .where(
-            and(
-              eq(workspaceMembers.workspaceId, input.targetWorkspaceId),
-              eq(workspaceMembers.userId, ctx.userId),
-              isNull(workspaceMembers.deletedAt),
-            ),
-          )
-          .limit(1);
-        if (!targetMembership || targetMembership.role === 'viewer') {
+        const canWriteTarget = await hasWorkspaceScopedPermission({
+          action: 'FILE_UPLOAD',
+          db: ctx.serverDB,
+          userId: ctx.userId,
+          workspaceId: input.targetWorkspaceId,
+        });
+        if (!canWriteTarget) {
           throw new TRPCError({
             cause: { data: { code: TransferErrorCode.TargetNoWriteAccess } },
             code: 'FORBIDDEN',
@@ -788,7 +794,12 @@ export const fileRouter = router({
           targetUserId: ctx.userId,
           targetWorkspaceId: input.targetWorkspaceId,
         });
-        return ctx.documentModel.transferTo(input.id, input.targetWorkspaceId, ctx.userId);
+        return ctx.documentModel.transferTo(
+          input.id,
+          input.targetWorkspaceId,
+          ctx.userId,
+          input.targetVisibility,
+        );
       }
 
       const file = await ctx.fileModel.findById(input.id);
@@ -803,7 +814,12 @@ export const fileRouter = router({
         targetUserId: ctx.userId,
         targetWorkspaceId: input.targetWorkspaceId,
       });
-      return ctx.fileModel.transferTo(input.id, input.targetWorkspaceId, ctx.userId);
+      return ctx.fileModel.transferTo(
+        input.id,
+        input.targetWorkspaceId,
+        ctx.userId,
+        input.targetVisibility,
+      );
     }),
 
   copyEntityToWorkspace: fileProcedure
@@ -812,23 +828,19 @@ export const fileRouter = router({
       z.object({
         entityType: fileTransferEntityTypeSchema,
         id: z.string(),
+        targetVisibility: z.enum(['private', 'public']).optional(),
         targetWorkspaceId: z.string().nullable(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
       if (input.targetWorkspaceId) {
-        const [targetMembership] = await ctx.serverDB
-          .select({ role: workspaceMembers.role })
-          .from(workspaceMembers)
-          .where(
-            and(
-              eq(workspaceMembers.workspaceId, input.targetWorkspaceId),
-              eq(workspaceMembers.userId, ctx.userId),
-              isNull(workspaceMembers.deletedAt),
-            ),
-          )
-          .limit(1);
-        if (!targetMembership || targetMembership.role === 'viewer') {
+        const canWriteTarget = await hasWorkspaceScopedPermission({
+          action: 'FILE_UPLOAD',
+          db: ctx.serverDB,
+          userId: ctx.userId,
+          workspaceId: input.targetWorkspaceId,
+        });
+        if (!canWriteTarget) {
           throw new TRPCError({
             cause: { data: { code: TransferErrorCode.TargetNoWriteAccess } },
             code: 'FORBIDDEN',
@@ -852,7 +864,12 @@ export const fileRouter = router({
           targetUserId: ctx.userId,
           targetWorkspaceId: input.targetWorkspaceId,
         });
-        return ctx.documentModel.copyToWorkspace(input.id, input.targetWorkspaceId, ctx.userId);
+        return ctx.documentModel.copyToWorkspace(
+          input.id,
+          input.targetWorkspaceId,
+          ctx.userId,
+          input.targetVisibility,
+        );
       }
 
       const file = await ctx.fileModel.findById(input.id);
@@ -867,7 +884,12 @@ export const fileRouter = router({
         targetUserId: ctx.userId,
         targetWorkspaceId: input.targetWorkspaceId,
       });
-      return ctx.fileModel.copyToWorkspace(input.id, input.targetWorkspaceId, ctx.userId);
+      return ctx.fileModel.copyToWorkspace(
+        input.id,
+        input.targetWorkspaceId,
+        ctx.userId,
+        input.targetVisibility,
+      );
     }),
 });
 

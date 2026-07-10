@@ -310,6 +310,43 @@ describe('HomeRepository', () => {
       expect(result.ungrouped).toHaveLength(0);
     });
 
+    it('should not count system-triggered unread topics in agent sidebar badges', async () => {
+      const agentId = 'agent-with-system-unread';
+
+      await clientDB.transaction(async (tx) => {
+        await tx.insert(Schema.agents).values({
+          id: agentId,
+          pinned: false,
+          title: 'Agent With System Unread',
+          userId,
+          virtual: false,
+        });
+        await tx.insert(Schema.topics).values([
+          {
+            agentId,
+            id: 'regular-unread-topic',
+            status: 'unread',
+            title: 'Regular unread topic',
+            userId,
+          },
+          {
+            agentId,
+            id: 'document-unread-topic',
+            status: 'unread',
+            title: 'Document unread topic',
+            trigger: 'document',
+            userId,
+          },
+        ]);
+      });
+
+      const result = await homeRepo.getSidebarAgentList();
+
+      expect(result.ungrouped).toHaveLength(1);
+      expect(result.ungrouped[0].id).toBe(agentId);
+      expect(result.ungrouped[0].unreadCount).toBe(1);
+    });
+
     describe('backward compatibility - fallback to sessions.pinned', () => {
       it('should fallback to sessions.pinned when agents.pinned is undefined (legacy data)', async () => {
         // Simulate legacy data: agents.pinned is null, but sessions.pinned is true

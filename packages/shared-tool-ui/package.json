@@ -4,6 +4,7 @@
   "private": true,
   "exports": {
     ".": "./src/index.ts",
+    "./ask-user": "./src/AskUserQuestion/index.ts",
     "./components": "./src/components/index.ts",
     "./inspectors": "./src/Inspector/index.ts",
     "./inspectors/github-labels": "./src/Inspector/GitHub/labels.ts",
@@ -25,6 +26,7 @@
     "lucide-react": "*",
     "path-browserify-esm": "*",
     "react": "*",
+    "react-dom": "*",
     "react-i18next": "*"
   }
 }

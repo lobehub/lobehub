@@ -19,6 +19,8 @@ export type SelectAllState = 'all' | 'loaded' | 'none';
  */
 export type ResourceListVisibilityFilter = 'private' | 'workspace';
 
+export const DEFAULT_WORKSPACE_LIST_VISIBILITY: ResourceListVisibilityFilter = 'private';
+
 export interface State {
   /**
    * Current file category filter
@@ -77,6 +79,8 @@ export const initialState: State = {
   category: FilesTabs.All,
   currentViewItemId: undefined,
   libraryId: undefined,
+  // Personal mode keeps the historical neutral value; workspace mode hydrates
+  // to DEFAULT_WORKSPACE_LIST_VISIBILITY when no saved preference exists.
   listVisibility: 'workspace',
   mode: 'explorer',
   pendingRenameItemId: null,

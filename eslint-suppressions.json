@@ -119,16 +119,6 @@
       "count": 1
     }
   },
-  "src/features/AgentSetting/AgentTTS/SelectWithTTSPreview.tsx": {
-    "no-restricted-imports": {
-      "count": 2
-    }
-  },
-  "src/features/AgentSetting/AgentTTS/index.tsx": {
-    "no-restricted-imports": {
-      "count": 1
-    }
-  },
   "src/features/AgentSkillEdit/index.tsx": {
     "no-restricted-imports": {
       "count": 1
@@ -824,11 +814,6 @@
       "count": 2
     }
   },
-  "src/features/Verify/ReportViewer.tsx": {
-    "no-restricted-imports": {
-      "count": 1
-    }
-  },
   "src/features/Verify/RunResult.tsx": {
     "no-restricted-imports": {
       "count": 1
@@ -1264,11 +1249,6 @@
       "count": 1
     }
   },
-  "src/routes/(main)/settings/creds/features/CreateCredModal/OAuthCredForm.tsx": {
-    "no-restricted-imports": {
-      "count": 1
-    }
-  },
   "src/routes/(main)/settings/creds/features/CredItem.tsx": {
     "no-restricted-imports": {
       "count": 1
@@ -1374,17 +1354,7 @@
       "count": 1
     }
   },
-  "src/routes/(main)/settings/skill/features/ComposioSkillItem.tsx": {
-    "no-restricted-imports": {
-      "count": 1
-    }
-  },
   "src/routes/(main)/settings/skill/features/LeftPanel.tsx": {
-    "no-restricted-imports": {
-      "count": 1
-    }
-  },
-  "src/routes/(main)/settings/skill/features/LobehubSkillItem.tsx": {
     "no-restricted-imports": {
       "count": 1
     }

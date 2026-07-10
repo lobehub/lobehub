@@ -113,13 +113,13 @@ describe('RecentModel', () => {
         });
       });
 
-      it('orders topic rows by latest message activity', async () => {
+      it('orders topic rows by topic updatedAt even when messages are newer', async () => {
         await serverDB.insert(agents).values({ id: 'agent-activity', userId, virtual: false });
         await serverDB.insert(topics).values([
           {
             agentId: 'agent-activity',
             id: 'topic-old-row-latest-message',
-            title: 'latest message wins',
+            title: 'latest message is ignored',
             updatedAt: minutesAgo(30),
             userId,
           },
@@ -142,8 +142,8 @@ describe('RecentModel', () => {
         const result = await recentModel.queryRecent();
 
         expect(result.map((row) => row.id)).toEqual([
-          'topic-old-row-latest-message',
           'topic-new-row-old-message',
+          'topic-old-row-latest-message',
         ]);
         expect(result[0].updatedAt.getTime()).toBeGreaterThan(result[1].updatedAt.getTime());
       });

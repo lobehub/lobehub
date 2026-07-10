@@ -42,6 +42,44 @@ describe('isNonRetryableRequestError', () => {
     ).toBe(true);
   });
 
+  it('returns true for provider content_filter moderation errors', () => {
+    // ROOT CAUSE:
+    //
+    // OpenAI-compatible providers can return content filter rejections as 400
+    // responses with `code`, `type`, or `finish_reason` set to
+    // "content_filter" instead of a structured runtime error type. If the
+    // router treats that raw provider payload as retryable, one blocked prompt
+    // can fan out across fallback channels.
+    //
+    // Before the fix, this returned false because `content_filter` was not in
+    // the non-retryable code set.
+    //
+    // We fixed this by treating provider moderation signals as terminal request
+    // errors at the model-runtime retry gate.
+    expect(
+      isNonRetryableRequestError({
+        error: {
+          code: 'content_filter',
+          message: 'The provider blocked this prompt.',
+          type: 'content_filter',
+        },
+        errorType: AgentRuntimeErrorType.ProviderBizError,
+        status: 400,
+      }),
+    ).toBe(true);
+
+    expect(
+      isNonRetryableRequestError({
+        error: {
+          choices: [{ finish_reason: 'content_policy_violation' }],
+          message: 'The provider blocked this prompt.',
+        },
+        errorType: AgentRuntimeErrorType.ProviderBizError,
+        status: 400,
+      }),
+    ).toBe(true);
+  });
+
   it('returns true for invalid response_format schema errors', () => {
     expect(
       isNonRetryableRequestError({

@@ -3,6 +3,10 @@ import { fetchQrCode, pollQrStatus } from '@lobechat/chat-adapter-wechat';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
+import {
+  assertBotFeatureAccess,
+  withBotPlatformAccessMeta,
+} from '@/business/server/bot/featureAccess';
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
@@ -54,8 +58,15 @@ function assertAccessSettingsForTRPC(settings: Record<string, unknown> | undefin
 }
 
 export const agentBotProviderRouter = router({
-  listPlatforms: authedProcedure.query(() => {
-    return platformRegistry.listSerializedPlatforms();
+  listPlatforms: authedProcedure.query(async ({ ctx }) => {
+    return Promise.all(
+      platformRegistry.listSerializedPlatforms().map((platform) =>
+        withBotPlatformAccessMeta(platform, {
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId ?? undefined,
+        }),
+      ),
+    );
   }),
 
   create: agentBotProviderProcedureWrite
@@ -70,6 +81,14 @@ export const agentBotProviderRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      await assertBotFeatureAccess({
+        action: 'manage',
+        applicationId: input.applicationId,
+        platform: input.platform,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
+      });
+
       const payload = {
         ...input,
         settings: mergeBotSettingsForPersist(input.platform, input.settings),
@@ -167,6 +186,14 @@ export const agentBotProviderRouter = router({
   connectBot: agentBotProviderProcedureWrite
     .input(z.object({ applicationId: z.string(), platform: z.string() }))
     .mutation(async ({ input, ctx }) => {
+      await assertBotFeatureAccess({
+        action: 'manage',
+        applicationId: input.applicationId,
+        platform: input.platform,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
+      });
+
       const service = new GatewayService();
       const status = await service.startClient(input.platform, input.applicationId, ctx.userId);
 
@@ -189,6 +216,14 @@ export const agentBotProviderRouter = router({
           message: `No enabled bot found for ${platform}/${applicationId}`,
         });
       }
+
+      await assertBotFeatureAccess({
+        action: 'manage',
+        applicationId,
+        platform,
+        userId: provider.userId,
+        workspaceId: provider.workspaceId ?? undefined,
+      });
 
       // Validate credentials against the platform API
       const entry = platformRegistry.getPlatform(platform);
@@ -250,13 +285,25 @@ export const agentBotProviderRouter = router({
       }
     }),
 
-  wechatGetQrCode: authedProcedure.mutation(async () => {
+  wechatGetQrCode: authedProcedure.mutation(async ({ ctx }) => {
+    await assertBotFeatureAccess({
+      action: 'manage',
+      platform: 'wechat',
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId ?? undefined,
+    });
     return fetchQrCode();
   }),
 
   wechatPollQrStatus: authedProcedure
     .input(z.object({ qrcode: z.string() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await assertBotFeatureAccess({
+        action: 'manage',
+        platform: 'wechat',
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
+      });
       return pollQrStatus(input.qrcode);
     }),
 
@@ -276,6 +323,24 @@ export const agentBotProviderRouter = router({
 
       // Load existing record to get platform + applicationId for cache invalidation
       const existing = await ctx.agentBotProviderModel.findById(id);
+      const targetPlatform = value.platform ?? existing?.platform;
+      const targetApplicationId = value.applicationId ?? existing?.applicationId;
+      const isDisableOnly =
+        value.enabled === false &&
+        value.applicationId === undefined &&
+        value.credentials === undefined &&
+        value.platform === undefined &&
+        value.settings === undefined;
+
+      if (targetPlatform && !isDisableOnly) {
+        await assertBotFeatureAccess({
+          action: 'manage',
+          applicationId: targetApplicationId,
+          platform: targetPlatform,
+          userId: ctx.userId,
+          workspaceId: existing?.workspaceId ?? ctx.workspaceId ?? undefined,
+        });
+      }
 
       if (value.settings !== undefined) {
         value.settings = mergeBotSettingsForPersist(

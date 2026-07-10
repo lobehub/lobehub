@@ -6,6 +6,8 @@ import { isDesktop } from '@lobechat/const';
 
 import { getActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { agentDocumentService } from '@/services/agentDocument';
+import { invalidateDocumentMutation } from '@/services/document/invalidation';
+import { useAgentStore } from '@/store/agent';
 import { useElectronStore } from '@/store/electron';
 import { electronSyncSelectors } from '@/store/electron/selectors';
 
@@ -107,6 +109,15 @@ const runtime = new AgentDocumentsExecutionRuntime(
       buildAgentDocumentUrl(getAppOrigin(), agentId, documentId, {
         workspaceSlug: getActiveWorkspaceSlug(),
       }),
+    // Revalidate the documents list after the agent mutates it. `onAfterCall`
+    // carries no agentId, so resolve the active chat agent — the one whose run
+    // just produced the tool call. Covers the server-runtime path where the
+    // client service layer never invalidates.
+    onDocumentsMutated: async () => {
+      const agentId = useAgentStore.getState().activeAgentId;
+      if (!agentId) return;
+      await invalidateDocumentMutation({ agentId, cause: 'agent-document' });
+    },
   },
 );
 

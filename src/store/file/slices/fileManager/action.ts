@@ -432,8 +432,9 @@ export class FileManageActionImpl {
     await this.#get().refreshFileList();
   };
 
-  removeAllFiles = async (): Promise<void> => {
-    await fileService.removeAllFiles();
+  setFileVisibility = async (id: string, visibility: 'private' | 'public'): Promise<void> => {
+    await fileService.setFileVisibility(id, visibility);
+    await this.#get().refreshFileList();
   };
 
   removeFileItem = async (id: string): Promise<void> => {

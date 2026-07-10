@@ -5,6 +5,7 @@ import { TransferErrorCode } from '@/types/transferError';
 
 const routerMocks = vi.hoisted(() => ({
   businessFileTransferStorageCheck: vi.fn(),
+  hasWorkspaceScopedPermission: vi.fn(),
 }));
 
 const mockKnowledgeBaseModelCountFileUsage = vi.fn();
@@ -14,6 +15,10 @@ const mockKnowledgeBaseModelTransferTo = vi.fn();
 
 vi.mock('@/business/server/lambda-routers/file', () => ({
   businessFileTransferStorageCheck: routerMocks.businessFileTransferStorageCheck,
+}));
+
+vi.mock('@/server/services/workspacePermission', () => ({
+  hasWorkspaceScopedPermission: routerMocks.hasWorkspaceScopedPermission,
 }));
 
 vi.mock('@/database/models/knowledgeBase', () => ({
@@ -37,6 +42,7 @@ describe('knowledgeBaseRouter', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     routerMocks.businessFileTransferStorageCheck.mockResolvedValue(undefined);
+    routerMocks.hasWorkspaceScopedPermission.mockResolvedValue(true);
     mockKnowledgeBaseModelCopyToWorkspace.mockResolvedValue({ id: 'kb-copy' });
     mockKnowledgeBaseModelCountFileUsage.mockResolvedValue(4096);
     mockKnowledgeBaseModelFindById.mockResolvedValue({ id: 'kb-1' });
@@ -56,7 +62,12 @@ describe('knowledgeBaseRouter', () => {
         targetUserId: 'test-user',
         targetWorkspaceId: null,
       });
-      expect(mockKnowledgeBaseModelTransferTo).toHaveBeenCalledWith('kb-1', null, 'test-user');
+      expect(mockKnowledgeBaseModelTransferTo).toHaveBeenCalledWith(
+        'kb-1',
+        null,
+        'test-user',
+        undefined,
+      );
     });
 
     it('returns a stable error code when the library no longer exists', async () => {
@@ -90,7 +101,32 @@ describe('knowledgeBaseRouter', () => {
         targetUserId: 'test-user',
         targetWorkspaceId: null,
       });
-      expect(mockKnowledgeBaseModelCopyToWorkspace).toHaveBeenCalledWith('kb-1', null, 'test-user');
+      expect(mockKnowledgeBaseModelCopyToWorkspace).toHaveBeenCalledWith(
+        'kb-1',
+        null,
+        'test-user',
+        undefined,
+      );
+    });
+
+    it('rejects target workspace copy when RBAC denies knowledge base creation', async () => {
+      routerMocks.hasWorkspaceScopedPermission.mockResolvedValue(false);
+
+      await expect(
+        caller.copyKnowledgeBaseToWorkspace({
+          id: 'kb-1',
+          targetWorkspaceId: 'workspace-target',
+        }),
+      ).rejects.toMatchObject({
+        cause: {
+          data: {
+            code: TransferErrorCode.TargetNoWriteAccess,
+          },
+        },
+      });
+
+      expect(routerMocks.businessFileTransferStorageCheck).not.toHaveBeenCalled();
+      expect(mockKnowledgeBaseModelCopyToWorkspace).not.toHaveBeenCalled();
     });
   });
 });

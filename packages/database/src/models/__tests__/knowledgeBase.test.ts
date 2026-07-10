@@ -1286,5 +1286,45 @@ describe('KnowledgeBaseModel', () => {
         expect(row?.userId).toBe(userId);
       });
     });
+
+    describe('setVisibility', () => {
+      it('should flip the creator’s own public KB back to private', async () => {
+        const created = await ownerModel.create({ name: 'To Unpublish', visibility: 'public' });
+
+        await ownerModel.setVisibility(created.id, 'private');
+
+        const row = await serverDB.query.knowledgeBases.findFirst({
+          where: eq(knowledgeBases.id, created.id),
+        });
+        expect(row?.visibility).toBe('private');
+      });
+
+      it('should be a no-op when the KB already sits at the target visibility', async () => {
+        const created = await ownerModel.create({ name: 'Already Private', visibility: 'private' });
+        const before = await serverDB.query.knowledgeBases.findFirst({
+          where: eq(knowledgeBases.id, created.id),
+        });
+
+        await ownerModel.setVisibility(created.id, 'private');
+
+        const after = await serverDB.query.knowledgeBases.findFirst({
+          where: eq(knowledgeBases.id, created.id),
+        });
+        expect(after?.visibility).toBe('private');
+        expect(after?.updatedAt).toEqual(before?.updatedAt);
+      });
+
+      it('should refuse to flip another member’s KB', async () => {
+        const owned = await ownerModel.create({ name: 'Owner Public KB', visibility: 'public' });
+
+        await memberModel.setVisibility(owned.id, 'private');
+
+        const row = await serverDB.query.knowledgeBases.findFirst({
+          where: eq(knowledgeBases.id, owned.id),
+        });
+        expect(row?.visibility).toBe('public');
+        expect(row?.userId).toBe(userId);
+      });
+    });
   });
 });

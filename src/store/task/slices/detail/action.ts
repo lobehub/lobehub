@@ -7,6 +7,9 @@ import { mutate, useClientDataSWR } from '@/libs/swr';
 import { taskKeys } from '@/libs/swr/keys';
 import { taskService } from '@/services/task';
 import type { StoreSetter } from '@/store/types';
+import { runMutation } from '@/store/utils/runMutation';
+import { saveToast } from '@/store/utils/saveToast';
+import type { SaveStatus } from '@/types/saveState';
 
 import type { TaskStore } from '../../store';
 import { useTaskStore } from '../../store';
@@ -262,10 +265,10 @@ export class TaskDetailSliceActionImpl {
       await taskService.updateVisibility(id, visibility);
       await Promise.all([this.#get().refreshTaskList(), this.internal_refreshTaskDetail(id)]);
     } catch (error) {
-      // LOBE-10961 surfaces a specific actionable error when the task's assignee
-      // is a private agent. The generic "failed" toast hides what the user must
-      // do next; substitute a targeted one so they know to either reassign or
-      // publish the agent first.
+      // Surfaces a specific actionable error when the task's assignee is a
+      // private agent. The generic "failed" toast hides what the user must
+      // do next; substitute a targeted one so they know to either reassign
+      // or publish the agent first.
       const raw = (error as { message?: string })?.message ?? '';
       const isPrivateAgentBlock = /public task cannot be assigned to a private agent/i.test(raw);
       message.error(
@@ -309,22 +312,18 @@ export class TaskDetailSliceActionImpl {
     };
 
     this.internal_dispatchTaskDetail({ id, type: 'updateTaskDetail', value: optimistic });
-    this.#set({ taskSaveStatus: 'saving' }, false, 'updateTask/saving');
 
-    try {
-      await taskService.update(id, data);
-      this.#set({ taskSaveStatus: 'saved' }, false, 'updateTask/saved');
-    } catch (error) {
-      this.#set({ taskSaveStatus: 'idle' }, false, 'updateTask/error');
-      await refreshPatchedTargets();
-      message.error(
-        t('taskDetail.updateFailed', {
-          defaultValue: 'Failed to update task',
-          ns: 'chat',
-        }),
-      );
-      throw error;
-    }
+    await runMutation(this.#set, this.#get, {
+      mutate: () => taskService.update(id, data),
+      name: 'updateTask',
+      // Rollback is a server-truth refetch (not a local snapshot), so the
+      // optimistic dispatch above is reconciled from the source of record.
+      onError: async (error) => {
+        await refreshPatchedTargets();
+        saveToast(error, { retry: () => void this.#get().updateTask(id, data) });
+      },
+      setStatus: (status) => this.#get().internal_setTaskSaveStatus(id, status),
+    });
 
     if (assigneeAgentId !== undefined || data.parentTaskId !== undefined) {
       await Promise.all([this.#get().refreshTaskList(), refreshPatchedTargets()]).catch(() => {});
@@ -349,6 +348,17 @@ export class TaskDetailSliceActionImpl {
   };
 
   // ── Internal Actions ──
+
+  // Write the save status for a single task id. Keyed per task so a `failed`
+  // status stays with its task and never bleeds into another task's header after
+  // navigation. Shared by every runMutation-based write across the task slices.
+  internal_setTaskSaveStatus = (id: string, status: SaveStatus): void => {
+    this.#set(
+      { taskSaveStatusMap: { ...this.#get().taskSaveStatusMap, [id]: status } },
+      false,
+      `setTaskSaveStatus/${status}`,
+    );
+  };
 
   internal_dispatchTaskDetail = (payload: TaskDetailDispatch): void => {
     const currentMap = this.#get().taskDetailMap;

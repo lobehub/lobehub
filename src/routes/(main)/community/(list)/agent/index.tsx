@@ -35,8 +35,9 @@ const AssistantPage = memo(() => {
       data={data}
       empty={<AssistantEmpty />}
       error={error}
+      errorVariant={'page'}
       isEmpty={items.length === 0}
-      isLoading={isLoading || !data}
+      isLoading={isLoading}
       loading={<Loading />}
       onRetry={() => mutate()}
     >

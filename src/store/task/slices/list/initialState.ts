@@ -7,7 +7,7 @@ export type TaskGroupItem = Awaited<ReturnType<typeof taskService.groupList>>['d
 export type TaskViewMode = 'kanban' | 'list';
 
 /**
- * Top-of-list visibility chip selection (LOBE-10973):
+ * Top-of-list visibility chip selection:
  *   - 'all'       → don't narrow further, show every visible task
  *   - 'private'   → only `tasks.visibility = 'private'` (creator-only)
  *   - 'workspace' → only `tasks.visibility = 'public'` (workspace-shared)

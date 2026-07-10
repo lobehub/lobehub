@@ -48,6 +48,13 @@ export interface UploadFileItem {
    * it will use in the file preview before send the message
    */
   previewUrl?: string;
+  /**
+   * marks a draft entry that references an already-persisted file still backing
+   * an existing message (e.g. restored via "restore to input"). Removing such
+   * an entry from the draft must only drop the draft item — it must NOT delete
+   * the underlying file, or the original message would lose its attachment.
+   */
+  skipRemoveFile?: boolean;
   status: FileUploadStatus;
   tasks?: FileParsingTask;
   uploadState?: FileUploadState;

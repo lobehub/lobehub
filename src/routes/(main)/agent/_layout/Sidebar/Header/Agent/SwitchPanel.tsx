@@ -1,15 +1,24 @@
-import { Flexbox, Popover } from '@lobehub/ui';
+import { Flexbox, Popover, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { type PropsWithChildren } from 'react';
-import { memo, Suspense, useMemo } from 'react';
+import { memo, Suspense, useCallback, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
 import AgentListContent from '@/routes/(main)/home/_layout/Body/Agent/List/AgentListContent';
 import { AgentModalProvider } from '@/routes/(main)/home/_layout/Body/Agent/ModalProvider';
+import PrivateList from '@/routes/(main)/home/_layout/Body/Private/List';
+import { useHomeStore } from '@/store/home';
 
 const styles = createStaticStyles(({ cssVar, css }) => ({
+  sectionHeader: css`
+    padding-block: 4px;
+    padding-inline: 8px;
+    line-height: 20px;
+  `,
   trigger: css`
     &[data-popup-open] {
       background: ${cssVar.colorFillTertiary};
@@ -17,11 +26,35 @@ const styles = createStaticStyles(({ cssVar, css }) => ({
   `,
 }));
 
+interface SectionHeaderProps {
+  children: React.ReactNode;
+}
+
+const SectionHeader = memo<SectionHeaderProps>(({ children }) => (
+  <Flexbox className={styles.sectionHeader}>
+    <Text fontSize={12} type="secondary" weight={500}>
+      {children}
+    </Text>
+  </Flexbox>
+));
+
 const SwitchPanel = memo<PropsWithChildren>(({ children }) => {
   const navigate = useWorkspaceAwareNavigate();
+  const activeWorkspaceId = useActiveWorkspaceId();
+  const { t } = useTranslation('common');
   // AgentListContent no longer owns the SWR subscription; subscribe here so
   // the standalone switcher still triggers a fetch when opened.
   useFetchAgentList();
+
+  // Only show the "私人 / 工作区" split when the user actually has private
+  // items in this workspace — a lone Private header above an empty section
+  // would be noise.
+  const hasPrivateItems = useHomeStore(
+    (s) => s.privateAgentGroups.length > 0 || s.privateUngroupedAgents.length > 0,
+  );
+  const showPrivateSection = Boolean(activeWorkspaceId) && hasPrivateItems;
+
+  const handleMoreClick = useCallback(() => navigate('/'), [navigate]);
 
   const content = useMemo(
     () => (
@@ -35,12 +68,19 @@ const SwitchPanel = memo<PropsWithChildren>(({ children }) => {
               overflowY: 'auto',
             }}
           >
-            <AgentListContent onMoreClick={() => navigate('/')} />
+            {showPrivateSection && (
+              <>
+                <SectionHeader>{t('navPanel.privateAgents')}</SectionHeader>
+                <PrivateList hideCreateButton onMoreClick={handleMoreClick} />
+                <SectionHeader>{t('navPanel.publicAgents')}</SectionHeader>
+              </>
+            )}
+            <AgentListContent onMoreClick={handleMoreClick} />
           </Flexbox>
         </AgentModalProvider>
       </Suspense>
     ),
-    [navigate],
+    [handleMoreClick, showPrivateSection, t],
   );
 
   return (

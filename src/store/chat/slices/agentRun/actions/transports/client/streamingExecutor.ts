@@ -217,7 +217,13 @@ export class StreamingExecutorActionImpl {
     // When disableTools is true (broadcast mode), skipDefaultTools prevents default tools from being added
     const toolsEngine = createAgentToolsEngine(
       { model: agentConfigData.model, provider: agentConfigData.provider! },
-      effectivePluginIds,
+      // Use `mergedToolIds` (not `effectivePluginIds`) so the enable rules cover
+      // user-selected @-mention ids too — the same id set `generateToolsDetailed`
+      // receives below. Otherwise a mentioned tool that isn't pinned to the agent
+      // (e.g. a custom MCP connector picked from the @ list) would have its
+      // manifest included but be defaulted to disabled by the enable checker, so
+      // no function tools are sent. `platformFilter` still gates availability.
+      mergedToolIds,
       // Context-aware builtin manifests: lobe-agent hides callSubAgent in group /
       // sub-agent runs. Replaces the former dropSubAgentInGroup + applyPluginFilters
       // isSubAgent hard-coding.
@@ -704,11 +710,21 @@ export class StreamingExecutorActionImpl {
           }
 
           case 'human_approve_required': {
-            await notifyDesktopHumanApprovalRequired(this.#get, {
-              agentId,
-              groupId,
-              topicId,
-            });
+            await notifyDesktopHumanApprovalRequired(this.#get, context);
+            if (topicId) {
+              const statusWrite = this.#get().updateTopicStatus?.({
+                agentId,
+                groupId,
+                ...(context.scope === 'group' || context.scope === 'group_agent'
+                  ? { scope: context.scope }
+                  : {}),
+                status: 'waitingForHuman',
+                topicId,
+              });
+              void statusWrite?.catch((error) => {
+                console.error('[streamingExecutor] updateTopicStatus failed:', error);
+              });
+            }
             break;
           }
 
@@ -875,12 +891,16 @@ export class StreamingExecutorActionImpl {
       void this.#get().refreshThreads();
 
       // 2. Build the sub-agent ConversationContext (threadId provides isolation)
+      const workspaceSlug = parentOperationId
+        ? this.#get().operations[parentOperationId]?.context.workspaceSlug
+        : undefined;
       const subContext: ConversationContext = {
         agentId,
         isSubAgent: true,
         scope: 'thread',
         threadId,
         topicId,
+        ...(workspaceSlug ? { workspaceSlug } : {}),
       };
 
       // 3. Create a child operation chained to the parent runtime operation

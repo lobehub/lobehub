@@ -49,11 +49,6 @@ export class SessionActionImpl {
     this.#get = get;
   }
 
-  clearSessions = async (): Promise<void> => {
-    await sessionService.removeAllSessions();
-    await this.#get().refreshSessions();
-  };
-
   closeAllAgentsDrawer = (): void => {
     this.#set({ allAgentsDrawerOpen: false }, false, n('closeAllAgentsDrawer'));
   };

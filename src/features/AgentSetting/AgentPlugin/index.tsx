@@ -1,5 +1,6 @@
 'use client';
 
+import { getActivePluginIds } from '@lobechat/types';
 import { type FormGroupItemType } from '@lobehub/ui';
 import { Avatar, Button, Center, Empty, Flexbox, Form, Tag, Tooltip } from '@lobehub/ui';
 import { Space, Switch } from 'antd';
@@ -35,7 +36,9 @@ const AgentPlugin = memo(() => {
   }, []);
 
   const [userEnabledPlugins, disabled, toggleAgentPlugin] = useStore((s) => [
-    s.config.plugins || [],
+    // Pinned identifiers only — a disabled plugin is a distinct, valid
+    // config state, not a "deprecated" one, and shouldn't show up here.
+    getActivePluginIds(s.config.plugins),
     s.disabled,
     s.toggleAgentPlugin,
   ]);

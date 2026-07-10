@@ -5,7 +5,7 @@
  * MCP listing requests are now self-service via the @lobehub/market-cli, so we
  * no longer take them through GitHub issues. This script runs when an issue is
  * opened: if it is a *new-server listing request* (and NOT a marketplace bug or
- * CLI feedback), it labels the issue `mcp-submission`, posts the redirect
+ * CLI feedback), it labels the issue `mcp:submission`, posts the redirect
  * template (pointing at the CLI, with the author's own repo filled in), and
  * closes it as `not_planned`. The comment invites the author to reopen if it
  * was closed by mistake.
@@ -13,6 +13,13 @@
  * Anything that is not a confident match is left untouched for normal triage.
  */
 
+import {
+  MCP_LABEL_COLORS,
+  MCP_LABEL_DESCRIPTIONS,
+  MCP_MANUAL_REVIEW_LABEL,
+  MCP_RESCAN_LABEL,
+  MCP_SUBMISSION_LABEL,
+} from './shared/mcp-labels';
 import { classify } from './shared/mcp-submission-classifier';
 
 declare global {
@@ -24,8 +31,6 @@ declare global {
 }
 
 const MARKER = '<!-- bot:mcp-submission -->';
-const LABEL = 'mcp-submission';
-const LABEL_REMOTE = 'mcp:remote';
 const REPO_PLACEHOLDER = 'https://github.com/<owner>/<repo>';
 
 interface GitHubLabel {
@@ -172,9 +177,31 @@ async function main(): Promise<void> {
   // Idempotency is handled per-step below (label adds are idempotent, the close is a
   // no-op on an already-closed issue, and the redirect comment is guarded by its
   // marker), so a re-run after a partial failure safely completes the missing steps.
-  const { delivery, isSubmission, reason, repoUrl } = classify(issue.title || '', issue.body || '');
-  console.log(`[INFO] Classification: ${isSubmission ? 'SUBMISSION' : 'skip'} — ${reason}`);
+  const { delivery, isSubmission, kind, reason, repoUrl } = classify(
+    issue.title || '',
+    issue.body || '',
+  );
+  console.log(`[INFO] Classification: ${kind} — ${reason}`);
   if (repoUrl) console.log(`[INFO] Extracted repo: ${repoUrl}`);
+
+  // Rescan / refresh requests against an existing listing get their own queue
+  // label and stay open: they need a maintainer (or future automation) to
+  // trigger a rescan, not the "use the CLI" redirect.
+  if (kind === 'listing-ops') {
+    await ensureLabel(
+      owner,
+      repo,
+      token,
+      MCP_RESCAN_LABEL,
+      MCP_LABEL_COLORS.rescan,
+      MCP_LABEL_DESCRIPTIONS.rescan,
+    );
+    await addLabel(owner, repo, token, issueNumber, MCP_RESCAN_LABEL);
+    console.log(
+      '[DONE] Existing-listing rescan request — labeled, left open (no comment, no close)',
+    );
+    return;
+  }
 
   if (!isSubmission) {
     console.log('[DONE] Not a listing request — leaving for normal triage');
@@ -182,24 +209,29 @@ async function main(): Promise<void> {
   }
 
   // Every detected listing request gets the category label.
-  await ensureLabel(owner, repo, token, LABEL, 'c5def5', 'MCP marketplace listing request');
-  await addLabel(owner, repo, token, issueNumber, LABEL);
+  await ensureLabel(
+    owner,
+    repo,
+    token,
+    MCP_SUBMISSION_LABEL,
+    MCP_LABEL_COLORS.submission,
+    MCP_LABEL_DESCRIPTIONS.submission,
+  );
+  await addLabel(owner, repo, token, issueNumber, MCP_SUBMISSION_LABEL);
 
   // Remote-only or unknown-delivery servers cannot be self-published through the
-  // CLI, so we must NOT send the "use the CLI" redirect or close them. Flag for a
-  // maintainer and leave open.
+  // CLI, so we must NOT send the "use the CLI" redirect or close them. Flag for
+  // maintainer review and leave open.
   if (delivery !== 'local') {
-    if (delivery === 'remote') {
-      await ensureLabel(
-        owner,
-        repo,
-        token,
-        LABEL_REMOTE,
-        'fbca04',
-        'Remote-only MCP server — not self-serviceable via the CLI, needs manual handling',
-      );
-      await addLabel(owner, repo, token, issueNumber, LABEL_REMOTE);
-    }
+    await ensureLabel(
+      owner,
+      repo,
+      token,
+      MCP_MANUAL_REVIEW_LABEL,
+      MCP_LABEL_COLORS.manualReview,
+      MCP_LABEL_DESCRIPTIONS.manualReview,
+    );
+    await addLabel(owner, repo, token, issueNumber, MCP_MANUAL_REVIEW_LABEL);
     console.log(
       `[DONE] ${delivery} delivery — left open for manual handling (no comment, no close)`,
     );

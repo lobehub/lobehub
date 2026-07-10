@@ -16,6 +16,11 @@ type Params = Promise<{ id: string }>;
  * - Query database to get file record (without userId filter for public access)
  * - Generate a temporary S3 presigned preview URL
  * - Return 302 redirect
+ *
+ * NOTE: This endpoint is intentionally unauthenticated. The proxy URL is
+ * embedded in bare `<img>` tags, download links, and links shared to AI — none
+ * of which can attach auth headers/cookies. Adding `checkAuth` here would break
+ * every previously-shared `/f/:id` link, so access stays public by id.
  */
 export const GET = async (_req: Request, segmentData: { params: Params }) => {
   try {

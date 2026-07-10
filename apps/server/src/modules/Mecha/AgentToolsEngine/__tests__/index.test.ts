@@ -6,6 +6,7 @@ import { LobeAgentApiName, LobeAgentManifest } from '@lobechat/builtin-tool-lobe
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { MemoryManifest } from '@lobechat/builtin-tool-memory';
 import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
+import { SkillsApiName, SkillsManifest } from '@lobechat/builtin-tool-skills';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { builtinTools } from '@lobechat/builtin-tools';
 import { ToolsEngine } from '@lobechat/context-engine';
@@ -317,6 +318,34 @@ describe('createServerAgentToolsEngine', () => {
     );
     // ...but callSubAgent is stripped so a nested sub-agent cannot recurse.
     expect(lobeAgent?.api.map((a) => a.name)).not.toContain(LobeAgentApiName.callSubAgent);
+  });
+
+  it('rewrites lobe-skills exec descriptions when manifestContext.executionEnv is device-unrouted', () => {
+    const context = createMockContext();
+    const engine = createServerAgentToolsEngine(context, {
+      agentConfig: { plugins: [] },
+      manifestContext: {
+        executionEnv: 'device-unrouted',
+        executionEnvUnroutedReason: 'bound-device-offline',
+      },
+      model: 'deepseek-chat',
+      provider: 'deepseek',
+    });
+
+    const result = engine.generateToolsDetailed({
+      model: 'deepseek-chat',
+      provider: 'deepseek',
+      toolIds: [],
+    });
+
+    // lobe-skills is always-on, so the resolved manifest is what the model sees.
+    const skills = result.enabledManifests.find((m) => m.identifier === SkillsManifest.identifier);
+    const runCommand = skills?.api.find((a) => a.name === SkillsApiName.runCommand);
+    expect(runCommand?.description).toContain('local device but it is offline');
+    // without a manifest context the static description has no offline warning
+    expect(
+      SkillsManifest.api.find((a) => a.name === SkillsApiName.runCommand)?.description,
+    ).not.toContain('offline');
   });
 
   it('hides lobe-agent callSubAgent inside a group run (scope=group)', () => {
@@ -964,6 +993,126 @@ describe('createServerAgentToolsEngine', () => {
 
       expect(result.enabledToolIds).not.toContain(LocalSystemManifest.identifier);
       expect(result.enabledToolIds).not.toContain(RemoteDeviceManifest.identifier);
+    });
+  });
+
+  describe('device-locked physical wall', () => {
+    // When the run is locked to ONE device (routed, or explicitly bound but
+    // offline), the remote-device picker manifest must be PHYSICALLY absent
+    // from manifestSchemas — the rule gate alone is bypassed by the
+    // activator's `isExplicitActivation`.
+    it('explicit activation cannot resolve RemoteDevice when the plan is routed to a device', () => {
+      const context = createMockContext();
+      const engine = createServerAgentToolsEngine(context, {
+        agentConfig: { plugins: [RemoteDeviceManifest.identifier] },
+        canUseDevice: true,
+        deviceContext: { gatewayConfigured: true, deviceOnline: true, autoActivated: true },
+        executionPlan: { deviceId: 'device-001', kind: 'device', target: 'device' },
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const result = engine.generateToolsDetailed({
+        context: { isExplicitActivation: true },
+        toolIds: [RemoteDeviceManifest.identifier],
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      expect(result.enabledToolIds).not.toContain(RemoteDeviceManifest.identifier);
+      expect(result.filteredTools).toContainEqual({
+        id: RemoteDeviceManifest.identifier,
+        reason: 'not_found',
+      });
+    });
+
+    it('explicit activation cannot resolve RemoteDevice when the bound device is offline', () => {
+      // `bound-device-offline` keeps the run locked to the user's selection —
+      // the model must never hop to another machine while it waits.
+      const context = createMockContext();
+      const engine = createServerAgentToolsEngine(context, {
+        agentConfig: { plugins: [RemoteDeviceManifest.identifier] },
+        canUseDevice: true,
+        deviceContext: { boundDeviceId: 'device-001', gatewayConfigured: true },
+        executionPlan: {
+          kind: 'device-unrouted',
+          reason: 'bound-device-offline',
+          target: 'device',
+        },
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const result = engine.generateToolsDetailed({
+        context: { isExplicitActivation: true },
+        toolIds: [RemoteDeviceManifest.identifier],
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      expect(result.enabledToolIds).not.toContain(RemoteDeviceManifest.identifier);
+    });
+
+    it('explicit activation cannot resolve RemoteDevice via deviceContext fallback (no plan)', () => {
+      // Callers without a resolved plan fall back to the raw device context —
+      // an auto-activated device must close the activator bypass the same way.
+      const context = createMockContext();
+      const engine = createServerAgentToolsEngine(context, {
+        agentConfig: { plugins: [RemoteDeviceManifest.identifier] },
+        canUseDevice: true,
+        deviceContext: { gatewayConfigured: true, deviceOnline: true, autoActivated: true },
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const result = engine.generateToolsDetailed({
+        context: { isExplicitActivation: true },
+        toolIds: [RemoteDeviceManifest.identifier],
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      expect(result.enabledToolIds).not.toContain(RemoteDeviceManifest.identifier);
+    });
+
+    it('keeps LocalSystem resolvable on a locked (routed) run — only the picker is stripped', () => {
+      const context = createMockContext();
+      const engine = createServerAgentToolsEngine(context, {
+        agentConfig: { plugins: [LocalSystemManifest.identifier] },
+        canUseDevice: true,
+        deviceContext: { gatewayConfigured: true, deviceOnline: true, autoActivated: true },
+        executionPlan: { deviceId: 'device-001', kind: 'device', target: 'local' },
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const result = engine.generateToolsDetailed({
+        toolIds: [LocalSystemManifest.identifier],
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      expect(result.enabledToolIds).toContain(LocalSystemManifest.identifier);
+    });
+
+    it('keeps RemoteDevice enabled for an unbound unrouted run — a selection is still needed', () => {
+      const context = createMockContext();
+      const engine = createServerAgentToolsEngine(context, {
+        agentConfig: { plugins: [RemoteDeviceManifest.identifier] },
+        canUseDevice: true,
+        deviceContext: { gatewayConfigured: true },
+        executionPlan: { kind: 'device-unrouted', reason: 'no-bound-device', target: 'local' },
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const result = engine.generateToolsDetailed({
+        toolIds: [RemoteDeviceManifest.identifier],
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      expect(result.enabledToolIds).toContain(RemoteDeviceManifest.identifier);
     });
   });
 });
