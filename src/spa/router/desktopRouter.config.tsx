@@ -814,6 +814,13 @@ export const desktopRoutes: RouteObject[] = [
                 ),
                 path: 'skill',
               },
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/connector'),
+                  'Desktop > Workspace > Settings > Connector',
+                ),
+                path: 'connector',
+              },
               // Padded tabs share a centered, max-width container layout.
               {
                 children: [
