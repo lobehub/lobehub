@@ -380,6 +380,63 @@ describe('Group', () => {
     expect(screen.queryByTestId('answer-segment')).not.toBeInTheDocument();
   });
 
+  it('keeps a non-latest finished turn’s final answer visible outside the fold', () => {
+    render(
+      <Group
+        enableProcessFold
+        id="assistant-1"
+        isLatestItem={false}
+        messageIndex={0}
+        blocks={[
+          blk({
+            content: 'Running the checks.',
+            id: 'block-1',
+            tools: [
+              { apiName: 'bash', id: 'tool-1', result: { content: 'ok' } } as any,
+              { apiName: 'bash', id: 'tool-2', result: { content: 'ok' } } as any,
+            ],
+          }),
+          blk({ content: 'Here is the final answer.', id: 'block-2' }),
+        ]}
+      />,
+    );
+
+    const fold = screen.getByTestId('process-fold');
+    const answer = screen.getByTestId('answer-segment');
+    // Folding only ever collapses the process; the final answer stays a visible
+    // sibling for every turn, latest or not — never swallowed into the fold.
+    expect(fold.contains(answer)).toBe(false);
+    expect(fold.contains(screen.getByTestId('workflow-segment'))).toBe(true);
+  });
+
+  it('keeps the latest finished turn’s final answer visible outside the fold', () => {
+    render(
+      <Group
+        enableProcessFold
+        isLatestItem
+        id="assistant-1"
+        messageIndex={0}
+        blocks={[
+          blk({
+            content: 'Running the checks.',
+            id: 'block-1',
+            tools: [
+              { apiName: 'bash', id: 'tool-1', result: { content: 'ok' } } as any,
+              { apiName: 'bash', id: 'tool-2', result: { content: 'ok' } } as any,
+            ],
+          }),
+          blk({ content: 'Here is the final answer.', id: 'block-2' }),
+        ]}
+      />,
+    );
+
+    const fold = screen.getByTestId('process-fold');
+    const answer = screen.getByTestId('answer-segment');
+    // Latest turn: the answer stays out of the fold so it reads without expanding.
+    expect(fold.contains(answer)).toBe(false);
+    expect(fold.contains(screen.getByTestId('workflow-segment'))).toBe(true);
+  });
+
   it('keeps assistant runtime errors outside the workflow collapse', () => {
     const { container } = render(
       <Group

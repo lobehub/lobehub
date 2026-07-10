@@ -1,9 +1,13 @@
 'use client';
 
+import type { UIChatMessage } from '@lobechat/types';
 import { Block, Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { Component, memo, type ReactNode } from 'react';
+import { Component, memo, type ReactNode, useMemo } from 'react';
 
+import { type ConversationContext, ConversationProvider } from '@/features/Conversation';
+
+import { DEVTOOLS_AGENT_ID } from './fixtures';
 import {
   bodyKindForMode,
   type DerivedFixtureProps,
@@ -107,6 +111,71 @@ export const ToolInspectorSlot = memo<ToolInspectorSlotProps>(
 
 ToolInspectorSlot.displayName = 'ToolInspectorSlot';
 
+interface InterventionConversationHostProps {
+  api: ApiEntry;
+  children: ReactNode;
+  derived: DerivedFixtureProps;
+  messageId: string;
+  toolCallId: string;
+}
+
+/**
+ * Intervention components run their form logic against the conversation store
+ * (e.g. draft persistence reads the tool message via `getDbMessageById`), so
+ * the standalone By-API preview must seed a `ConversationProvider` with the
+ * matching assistant → tool message pair — without it they crash on mount.
+ */
+const InterventionConversationHost = memo<InterventionConversationHostProps>(
+  ({ api, children, derived, messageId, toolCallId }) => {
+    const context = useMemo<ConversationContext>(
+      () => ({ agentId: DEVTOOLS_AGENT_ID, topicId: `devtools-intervention-${messageId}` }),
+      [messageId],
+    );
+
+    const messages = useMemo<UIChatMessage[]>(() => {
+      const now = Date.now();
+      const assistantId = `${messageId}-assistant`;
+      return [
+        {
+          content: '',
+          createdAt: now,
+          id: assistantId,
+          role: 'assistant',
+          tools: [
+            {
+              apiName: api.apiName,
+              arguments: JSON.stringify(derived.args ?? {}),
+              id: toolCallId,
+              identifier: api.identifier,
+              source: 'builtin',
+              type: 'builtin',
+            },
+          ],
+          updatedAt: now,
+        },
+        {
+          content: '',
+          createdAt: now,
+          id: messageId,
+          parentId: assistantId,
+          pluginIntervention: { status: 'pending' },
+          role: 'tool',
+          tool_call_id: toolCallId,
+          updatedAt: now,
+        },
+      ];
+    }, [api, derived.args, messageId, toolCallId]);
+
+    return (
+      <ConversationProvider hasInitMessages skipFetch context={context} messages={messages}>
+        {children}
+      </ConversationProvider>
+    );
+  },
+);
+
+InterventionConversationHost.displayName = 'InterventionConversationHost';
+
 interface ToolBodySlotProps {
   api: ApiEntry;
   derived: DerivedFixtureProps;
@@ -179,13 +248,20 @@ export const ToolBodySlot = memo<ToolBodySlotProps>(
       case 'intervention': {
         return api.intervention ? (
           <RenderBoundary label={'Intervention'}>
-            <api.intervention
-              apiName={api.apiName}
-              args={derived.args}
-              identifier={api.identifier}
-              interactionMode={'approval'}
+            <InterventionConversationHost
+              api={api}
+              derived={derived}
               messageId={messageId}
-            />
+              toolCallId={toolCallId}
+            >
+              <api.intervention
+                apiName={api.apiName}
+                args={derived.args}
+                identifier={api.identifier}
+                interactionMode={'approval'}
+                messageId={messageId}
+              />
+            </InterventionConversationHost>
           </RenderBoundary>
         ) : (
           missing('intervention')

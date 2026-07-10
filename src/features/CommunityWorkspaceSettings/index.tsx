@@ -73,7 +73,26 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     font-size: 13px;
     color: ${cssVar.colorTextSecondary};
   `,
+  memberNameLink: css`
+    color: inherit;
+
+    &:hover {
+      color: ${cssVar.colorPrimary};
+    }
+  `,
 }));
+
+/**
+ * The default Market namespace equals the raw cloud userId (e.g.
+ * `user_2gmZCHLaTfh1X48VhuK9OKlNeF1`) — Market's trusted-client user creation
+ * writes `authUserId` straight into `accounts.namespace`, so it always
+ * contains uppercase letters. A user-chosen handle must match Market's org
+ * namespace regex `/^[\da-z][\d_a-z-]*$/`, i.e. lowercase only. Presence of
+ * an uppercase letter is therefore a reliable "this is the auto-assigned
+ * placeholder handle, don't surface it" signal.
+ */
+const isDefaultMarketNamespace = (namespace: string | null): boolean =>
+  !!namespace && /[A-Z]/.test(namespace);
 
 interface SettingCardProps {
   action?: ReactNode;
@@ -153,17 +172,56 @@ const MembersCard = memo<{ canManage: boolean }>(({ canManage }) => {
         render: (_, member) => {
           const name =
             member.displayName || member.userName || member.namespace || `#${member.accountId}`;
+          // Prefer `userName` — it's Market's URL-safe public handle
+          // (`/community/user/:slug`) and lines up with what shows on the
+          // user's own profile page. Fall back to `namespace` only when
+          // there's no userName AND the namespace is a user-chosen handle;
+          // the auto-assigned `user_<mixedCaseId>` placeholder is filtered
+          // out (see isDefaultMarketNamespace).
+          const publicHandle =
+            member.userName ||
+            (member.namespace && !isDefaultMarketNamespace(member.namespace)
+              ? member.namespace
+              : null);
+          // The `/community/user/:slug` page accepts either handle as a slug,
+          // so we keep the row clickable even when we hide the literal handle
+          // — the display name still links out to the user's profile.
+          const profileSlug = publicHandle || member.namespace;
+          const profileUrl = profileSlug ? `/community/user/${profileSlug}` : undefined;
+
+          const nameNode = (
+            <Text strong style={{ fontSize: 14 }}>
+              {name}
+            </Text>
+          );
+
           return (
             <Flexbox horizontal align="center" gap={12}>
               <Avatar avatar={member.avatarUrl || undefined} size={36} title={name} />
               <Flexbox gap={2}>
-                <Text strong style={{ fontSize: 14 }}>
-                  {name}
-                </Text>
-                {member.namespace && (
-                  <Text style={{ fontSize: 12 }} type="secondary">
-                    @{member.namespace}
-                  </Text>
+                {profileUrl ? (
+                  <a
+                    className={styles.memberNameLink}
+                    href={profileUrl}
+                    rel="noopener noreferrer"
+                    target="_blank"
+                  >
+                    {nameNode}
+                  </a>
+                ) : (
+                  nameNode
+                )}
+                {publicHandle && profileUrl && (
+                  <a
+                    className={styles.memberNameLink}
+                    href={profileUrl}
+                    rel="noopener noreferrer"
+                    target="_blank"
+                  >
+                    <Text style={{ fontSize: 12 }} type="secondary">
+                      @{publicHandle}
+                    </Text>
+                  </a>
                 )}
               </Flexbox>
             </Flexbox>
@@ -172,8 +230,9 @@ const MembersCard = memo<{ canManage: boolean }>(({ canManage }) => {
         title: t('user.workspaceProfile.settings.members.column.member'),
       },
       {
-        align: 'right',
+        align: 'left',
         dataIndex: 'role',
+        onCell: () => ({ style: { verticalAlign: 'middle' } }),
         render: (role: CommunityWorkspaceMember['role']) => (
           <Tag>
             {role === 'admin'

@@ -28,6 +28,19 @@ const styles = createStaticStyles(({ css }) => ({
 
     background: ${cssVar.colorBgLayout};
   `,
+  leftActions: css`
+    flex: none;
+    min-width: 0;
+
+    > * {
+      flex: none !important;
+    }
+  `,
+  leftSlot: css`
+    overflow: hidden;
+    flex: 1;
+    min-width: 0;
+  `,
 }));
 
 const DesktopChatInput = memo(() => {
@@ -45,10 +58,8 @@ const DesktopChatInput = memo(() => {
         paddingBlock={'0 12px'}
         paddingInline={12}
       >
-        <ChatInputNotice />
         <ChatInput
           fullscreen={expand}
-          header={<ChatInputActionBar left={<ActionBar />} />}
           slashMenuRef={slashMenuRef}
           footer={
             <ChatInputActionBar
@@ -57,6 +68,18 @@ const DesktopChatInput = memo(() => {
               style={{
                 paddingRight: 8,
               }}
+            />
+          }
+          header={
+            <ChatInputActionBar
+              left={
+                <Flexbox horizontal align={'center'} className={styles.leftSlot} gap={4}>
+                  <Flexbox horizontal align={'center'} className={styles.leftActions}>
+                    <ActionBar disableCollapse />
+                  </Flexbox>
+                  <ChatInputNotice />
+                </Flexbox>
+              }
             />
           }
         >

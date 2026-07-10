@@ -1,6 +1,6 @@
 ---
 name: ux
-description: 'LobeHub product design values / principles / checklists. Load this skill whenever the work touches user-interface features or implementation — designing or building any user-facing flow — to get better UX results.'
+description: 'LobeHub product design values / principles / checklists. Use whenever the work touches user-interface features or implementation — designing or building any user-facing flow — to get better UX results.'
 user-invocable: false
 ---
 
@@ -64,6 +64,19 @@ titles, object labels) should read separately from state and actions (save statu
 sharing, panel toggles, overflow menus). When these roles are mixed, users have to infer
 whether an element describes the current object or acts on it.
 
+### Compose the canonical surface component, don't re-derive it・Certainty・Natural
+
+When a surface class already has a canonical component in this codebase — a sidebar row →
+`NavItem`, a collapsible group → `Accordion` / `GroupedAccordion`, an active surface →
+`Block variant='filled'` — **compose it**, don't rebuild the chrome from raw
+`<div>`/`<button>`/`<input>` + a bespoke `createStaticStyles` block. A hand-rolled parallel
+re-derives padding, hover/active states, alignment, and reveal-on-hover by hand, and drifts
+from its siblings on each one — the aggregate reads as "unpolished" even when every single gap
+is tiny. Before building a list / nav / master-detail panel, find the primitive the sibling
+surface uses (grep `NavItem`, `Accordion`) and compose it; fall to raw elements only for a
+genuinely novel row. See **[Read §1.10](references/read.md)** for the full pattern; the
+**react** component-priority rule covers the mechanics.
+
 ## Checklist modules
 
 Grouped by **interaction type** — the kind of thing the user is doing. Jump to the module
@@ -87,9 +100,9 @@ The one-screen scan. Each line links back to a module above for the full rule + 
 **Read — viewing data & lists** ([read.md](references/read.md))
 
 - [ ] Empty / loading / error states are all designed; empty is a real page with a CTA. Always-rendered chrome (toolbar/header) still gets a body empty state. If the `Empty` component ships a `search`/no-match variant, **wire it** — don't render `<Empty/>` bare so a zero-result search shows the first-run onboarding.
-- [ ] Error is checked before the empty branch — a failed fetch never renders as empty (read `error`, don't coerce `data ?? [] → Empty`); a detail page reads `error` before falling to `NotFound` (failed-to-load ≠ deleted/404).
+- [ ] Error is checked before the empty branch — a failed fetch never renders as empty (read `error`, don't coerce `data ?? [] → Empty`); a detail page reads `error` before falling to `NotFound` (failed-to-load ≠ deleted/404). On a **metrics/dashboard** surface the failure default is a zero-valued object (`?? {…:0}`) that renders as a confident `$0` — read `error` before any aggregate, don't fall through to zeros. A list **merged from a fetched set + a static/frontend set** (`[...fetched, ...placeholders]`) branches `error` before merging — the static half keeps `length > 0`, so a failed fetch renders a plausible partial catalog neither the empty guard nor an error-unread call site catches (channel).
 - [ ] List designed across 1 → 10k rows (virtual scroll / pagination / batch as needed).
-- [ ] Search / filter over a paginated list queries the full set server-side, not just the loaded page (no false "no results" for unfetched rows).
+- [ ] Search / filter over a paginated list queries the full set server-side, not just the loaded page (no false "no results" for unfetched rows). Server-side coverage isn't just the search box — **sort, facet filters, the count badges, and any "act on the filtered set" bulk op** run over the full set too; server-side search + client-side sort/filter/counts still false-empties, mis-orders across pages, and under-counts (topics).
 - [ ] Capped/scrollable/virtualized list scrolls the restored active item into view on mount (`block: 'nearest'`, re-run after async rows mount).
 - [ ] Pickers show all valid targets (default/inbox included); empty = truly none.
 - [ ] Large numbers roll the unit at each 1000× (K→M→B→T), never a coefficient ≥ 1000; use the shared `formatUsageValue` / `formatShortenNumber`.
@@ -97,10 +110,13 @@ The one-screen scan. Each line links back to a module above for the full rule + 
 - [ ] Live/polling feed signals new items + offers manual refresh, doesn't reorder under the user, and shows a failed refresh distinctly (not as empty). A bulk/destructive control derived from the live-status map (close-idle / clear-inactive) gates on the query's loaded/error state — "unknown/errored" is ineligible, never treated as the inactive value. Conditional polling starts from **reactive state** (`shouldPoll` → `refreshInterval`), not a function-form `refreshInterval` that never schedules a first timer when its initial value is `0`.
 - [ ] A surface with many navigable entries (a big settings area, a long list) offers search / filter / jump, not browse-only — named as a class norm so an absent box is caught.
 - [ ] Marketplace / registry browse cards carry owned/installed state on the tile (not only on the detail) and trust/verified badges via one card contract, consistent across sibling registries; contribute leads to an in-app submit, not an external repo.
+- [ ] A sidebar / nav / master-detail **list row** composes the canonical `NavItem` (+ `Accordion` / `GroupedAccordion` for groups, `Block variant='filled'` for active), not a hand-rolled `<div>`/`<button>`/`<input>` + bespoke CSS — else the hover/active highlight misaligns from the content box, content bleeds to the panel edge, the search/rename/action-reveal drift from every sibling panel, and the list stays a flat ungrouped dump. Grep `NavItem` before building.
+- [ ] A persistent create/compose affordance above a list is the hero only while the list is **empty**; once populated it doesn't bury the records — cap the editor height (max-height + internal scroll) and/or default it to collapsed when the list has data, so the records keep Center Stage.
+- [ ] A status group/label is true for **every** member — don't fold a distinct lifecycle state (scheduled/queued/snoozed) under a label that asserts another (running/in-progress); give it its own group or a neutral label.
 
 **Edit — entering & changing content** ([edit.md](references/edit.md))
 
-- [ ] Editors back up in-progress input to durable storage (survives reload, not in-memory only) and recover it after refresh/crash/failed-save; destructive exits warn, never silently discard.
+- [ ] Editors back up in-progress input to durable storage (survives reload, not in-memory only) and recover it after refresh/crash/failed-save; destructive exits warn, never silently discard — including **switching the active item in a master-detail** (a shared form `resetFields()` on selection change silently wipes unsaved input, worst when it's pasted secrets — channel).
 - [ ] Input affordances are stable: static placeholder, no clickable/retrievable content hidden in it.
 
 **Act — operations, flows & buttons** ([act.md](references/act.md))
@@ -109,7 +125,7 @@ The one-screen scan. Each line links back to a module above for the full rule + 
 - [ ] Terminal status screen (success / error `Result`) carries an action: error → escape hatch (retry / back), success → close / go-to-result; no bare `Result` without `extra`, and "auto-closing in Ns" copy only when the close can actually fire.
 - [ ] A result that changes the next step lands in a persistent state (screen / inline), not just a transient toast; "link sent" names the destination + offers resend, failures keep context + offer retry.
 - [ ] Bulk action has a single-item entry (and vice versa).
-- [ ] Async/bulk/irreversible action: confirm → in-progress (locked) → done/error.
+- [ ] Async/bulk/irreversible action: confirm → in-progress (locked) → done/error. But a **slow but atomic** confirm-gated op (device/file delete, git op, seconds-long call) closes the confirm **immediately** (non-blocking `onOk`) and shows progress on the **originating surface** (optimistic removal / row spinner), not a confirm dialog held spinning on the round-trip — the modal is not the progress surface.
 - [ ] A long-running / costly async op (generation / export / large upload) offers **Cancel while it runs** (aborts the work, not just delete-after-the-fact) and keeps an in-place **Retry** on error — named as a generation-class norm so an absent Cancel is caught.
 - [ ] Optimistic create / rename / duplicate surfaces failure (caller catches + toasts); never a silent rollback.
 - [ ] Job-control (run / pause / stop / retry) surfaces start/stop failure — a `catch` that only `console.error`s + optimistic-status rollback reads as a dead button; toast at the store-action boundary so every trigger inherits it.
@@ -125,8 +141,8 @@ The one-screen scan. Each line links back to a module above for the full rule + 
 **Feedback — loading & system response** ([feedback.md](references/feedback.md))
 
 - [ ] No antd `Spin`; use `NeuralNetworkLoading` / project loaders.
-- [ ] Every loading state can fail: on error or timeout, show a failed state with a Reload/Retry action — never an infinite spinner. In an auto-dismissing surface (upload dock / progress toast), the countdown clears **success only** — a failed item persists with Retry.
-- [ ] A compound gate waiting on a secondary/dependent fetch gates on its **in-flight** flag and releases on settled (data / resolved-`null` / error) — never on the dependency being present in a map, or an absent-by-design dependency hangs it forever.
+- [ ] Every loading state can fail: on error or timeout, show a failed state with a Reload/Retry action — never an infinite spinner. In an auto-dismissing surface (upload dock / progress toast), the countdown clears **success only** — a failed item persists with Retry. An error state / retry action that's **modeled in the store but consumed by no surface** (`isXError` selector / `retryX` action with zero `rg` call sites) is still a missing error state — a built-but-orphaned path is a permanent skeleton at the pixel. A **load-more / infinite-scroll** page fetch that fails shows an inline Retry at the list tail (distinct from end-of-list), never a silently vanished "loading more" row with `hasMore` still true that an `IntersectionObserver` re-fires into a silent retry loop (topics).
+- [ ] A compound gate waiting on a secondary/dependent fetch gates on its **in-flight** flag and releases on settled (data / resolved-`null` / error) — never on the dependency being present in a map, or an absent-by-design dependency hangs it forever. An error branch **ordered after** a data-presence gate (`{error && …}` below `if (isLoading = !map[id]) return <Skeleton/>`) is unreachable on first-load failure — it paints only on revalidation, and a resolved-`null` not-found hangs the same permanent skeleton; check error/not-found **before** the gate.
 - [ ] An awaited write that gates navigation/advance resets its busy flag in `finally` + offers retry — a failed write never permanently disables the forward/Back control.
 - [ ] Autosave surfaces a save-state (saving → saved → failed with retry), never a silent write; the save-state enum actually includes a `failed` variant (a catch that resets to `idle` is a silent write); one save-feedback convention across a multi-field surface, ideally in the shared form wrapper.
 - [ ] Capability-gated feature warns (soft, reactive, load-gated) when the model can't deliver it; copy gives the remedy.

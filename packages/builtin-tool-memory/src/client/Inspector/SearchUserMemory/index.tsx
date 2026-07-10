@@ -15,7 +15,10 @@ export const SearchUserMemoryInspector = memo<
 >(({ args, partialArgs, isArgumentsStreaming, isLoading, pluginState }) => {
   const { t } = useTranslation('plugin');
 
-  const query = args?.queries?.join(', ') || partialArgs?.queries?.join(', ');
+  // `queries` comes from raw model tool-call args; a model may emit a scalar where
+  // `string[]` is expected, so `.join` guards against a non-array crashing render.
+  const joinQueries = (queries: unknown) => (Array.isArray(queries) ? queries.join(', ') : '');
+  const query = joinQueries(args?.queries) || joinQueries(partialArgs?.queries);
 
   // Initial streaming state
   if (isArgumentsStreaming && !query) {

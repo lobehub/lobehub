@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 import type {
   AiModelSortMap,
   AiProviderModelListItem,
@@ -10,14 +10,36 @@ import { AiModelSourceEnum, normalizeAiModelType } from 'model-bank';
 import type { AiModelSelectItem, NewAiModelItem } from '../schemas';
 import { aiModels } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 export class AiModelModel {
   private userId: string;
+  private workspaceId?: string;
   private db: LobeChatDatabase;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.userId = userId;
+    this.workspaceId = workspaceId;
     this.db = db;
+  }
+
+  private scopeWhere = () =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, aiModels);
+
+  private values<T extends object>(base: T) {
+    return buildWorkspacePayload({ userId: this.userId, workspaceId: this.workspaceId }, base);
+  }
+
+  private conflictTarget() {
+    return this.workspaceId
+      ? {
+          target: [aiModels.id, aiModels.providerId, aiModels.userId, aiModels.workspaceId],
+          targetWhere: isNotNull(aiModels.workspaceId),
+        }
+      : {
+          target: [aiModels.id, aiModels.providerId, aiModels.userId],
+          targetWhere: isNull(aiModels.workspaceId),
+        };
   }
 
   /**
@@ -57,12 +79,13 @@ export class AiModelModel {
 
     const [result] = await this.db
       .insert(aiModels)
-      .values({
-        ...values,
-        enabled: params.enabled ?? true, // enabled by default, but respect explicit value
-        source: AiModelSourceEnum.Custom,
-        userId: this.userId,
-      })
+      .values(
+        this.values({
+          ...values,
+          enabled: params.enabled ?? true, // enabled by default, but respect explicit value
+          source: AiModelSourceEnum.Custom,
+        }),
+      )
       .returning();
 
     return result;
@@ -71,23 +94,17 @@ export class AiModelModel {
   delete = async (id: string, providerId: string) => {
     return this.db
       .delete(aiModels)
-      .where(
-        and(
-          eq(aiModels.id, id),
-          eq(aiModels.providerId, providerId),
-          eq(aiModels.userId, this.userId),
-        ),
-      );
+      .where(and(eq(aiModels.id, id), eq(aiModels.providerId, providerId), this.scopeWhere()));
   };
 
   deleteAll = async () => {
-    return this.db.delete(aiModels).where(eq(aiModels.userId, this.userId));
+    return this.db.delete(aiModels).where(this.scopeWhere());
   };
 
   query = async () => {
     return this.db.query.aiModels.findMany({
       orderBy: [desc(aiModels.updatedAt)],
-      where: eq(aiModels.userId, this.userId),
+      where: this.scopeWhere(),
     });
   };
 
@@ -109,7 +126,7 @@ export class AiModelModel {
         type: aiModels.type,
       })
       .from(aiModels)
-      .where(and(eq(aiModels.providerId, providerId), eq(aiModels.userId, this.userId)))
+      .where(and(eq(aiModels.providerId, providerId), this.scopeWhere()))
       .orderBy(
         asc(aiModels.sort),
         desc(aiModels.enabled),
@@ -139,24 +156,20 @@ export class AiModelModel {
         type: aiModels.type,
       })
       .from(aiModels)
-      .where(and(eq(aiModels.userId, this.userId)));
+      .where(this.scopeWhere());
 
     return data as EnabledAiModel[];
   };
 
   findById = async (id: string) => {
     return this.db.query.aiModels.findFirst({
-      where: and(eq(aiModels.id, id), eq(aiModels.userId, this.userId)),
+      where: and(eq(aiModels.id, id), this.scopeWhere()),
     });
   };
 
   findByIdAndProvider = async (id: string, providerId: string) => {
     return this.db.query.aiModels.findFirst({
-      where: and(
-        eq(aiModels.id, id),
-        eq(aiModels.providerId, providerId),
-        eq(aiModels.userId, this.userId),
-      ),
+      where: and(eq(aiModels.id, id), eq(aiModels.providerId, providerId), this.scopeWhere()),
     });
   };
 
@@ -165,11 +178,10 @@ export class AiModelModel {
 
     return this.db
       .insert(aiModels)
-      .values({ ...normalizedValue, id, providerId, updatedAt: new Date(), userId: this.userId })
+      .values(this.values({ ...normalizedValue, id, providerId, updatedAt: new Date() }))
       .onConflictDoUpdate({
         set: normalizedValue,
-        target: [aiModels.id, aiModels.providerId, aiModels.userId],
-        targetWhere: isNull(aiModels.workspaceId),
+        ...this.conflictTarget(),
       });
   };
 
@@ -179,6 +191,7 @@ export class AiModelModel {
       ...value,
       updatedAt: now,
       userId: this.userId,
+      workspaceId: this.workspaceId ?? null,
     } as typeof aiModels.$inferInsert;
 
     if (value.type) insertValues.type = normalizeAiModelType(value.type);
@@ -195,8 +208,7 @@ export class AiModelModel {
       .values(insertValues)
       .onConflictDoUpdate({
         set: updateValues,
-        target: [aiModels.id, aiModels.providerId, aiModels.userId],
-        targetWhere: isNull(aiModels.workspaceId),
+        ...this.conflictTarget(),
       });
   };
 
@@ -216,6 +228,7 @@ export class AiModelModel {
         providerId,
         updatedAt: new Date(),
         userId: this.userId,
+        workspaceId: this.workspaceId ?? null,
       };
 
       // Only include fields that have meaningful values
@@ -339,8 +352,7 @@ export class AiModelModel {
           updatedAt: sql`excluded.updated_at`,
           // Note: enabled is intentionally omitted to preserve user toggle state
         },
-        target: [aiModels.id, aiModels.userId, aiModels.providerId],
-        targetWhere: isNull(aiModels.workspaceId),
+        ...this.conflictTarget(),
       })
       .returning();
   };
@@ -361,15 +373,14 @@ export class AiModelModel {
       const defaultModel =
         defaultModelMap.get(`${providerId}:${modelId}`) ??
         defaultModels.find((model) => model.id === modelId);
-      const record: typeof aiModels.$inferInsert = {
+      const record: typeof aiModels.$inferInsert = this.values({
         enabled,
         id: modelId,
         providerId,
         // if the model is not in the db, it's a builtin model
         source: AiModelSourceEnum.Builtin,
         updatedAt: new Date(),
-        userId: this.userId,
-      };
+      });
 
       // Preserve type if available from default model list
       if (defaultModel?.type) {
@@ -388,8 +399,7 @@ export class AiModelModel {
           enabled: sql`excluded.enabled`,
           updatedAt: sql`excluded.updated_at`,
         },
-        target: [aiModels.id, aiModels.userId, aiModels.providerId],
-        targetWhere: isNull(aiModels.workspaceId),
+        ...this.conflictTarget(),
       });
   };
 
@@ -400,7 +410,7 @@ export class AiModelModel {
         and(
           eq(aiModels.providerId, providerId),
           eq(aiModels.source, AiModelSourceEnum.Remote),
-          eq(aiModels.userId, this.userId),
+          this.scopeWhere(),
         ),
       );
   }
@@ -408,7 +418,7 @@ export class AiModelModel {
   clearModelsByProvider(providerId: string) {
     return this.db
       .delete(aiModels)
-      .where(and(eq(aiModels.providerId, providerId), eq(aiModels.userId, this.userId)));
+      .where(and(eq(aiModels.providerId, providerId), this.scopeWhere()));
   }
 
   updateModelsOrder = async (providerId: string, sortMap: AiModelSortMap[]) => {
@@ -428,6 +438,7 @@ export class AiModelModel {
           // source: isBuiltin ? 'builtin' : 'custom',
           updatedAt: now,
           userId: this.userId,
+          workspaceId: this.workspaceId ?? null,
         };
 
         if (type) insertValues.type = type;
@@ -444,8 +455,7 @@ export class AiModelModel {
           .values(insertValues)
           .onConflictDoUpdate({
             set: updateValues,
-            target: [aiModels.id, aiModels.userId, aiModels.providerId],
-            targetWhere: isNull(aiModels.workspaceId),
+            ...this.conflictTarget(),
           });
       });
 

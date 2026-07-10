@@ -2,7 +2,7 @@
  * @vitest-environment happy-dom
  */
 import { renderHook } from '@testing-library/react';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { initialState as initialChatState } from '@/store/chat/initialState';
 import { useChatStore } from '@/store/chat/store';
@@ -11,8 +11,15 @@ import { initialEditorState } from '@/store/document/slices/editor';
 
 import { useAgentContext } from './useAgentContext';
 
+const activeWorkspaceSlugMock = vi.hoisted(() => ({ value: null as string | null }));
+
+vi.mock('@/business/client/hooks/useActiveWorkspaceSlug', () => ({
+  useActiveWorkspaceSlug: () => activeWorkspaceSlugMock.value,
+}));
+
 describe('useAgentContext', () => {
   beforeEach(() => {
+    activeWorkspaceSlugMock.value = null;
     useChatStore.setState(
       {
         ...initialChatState,
@@ -97,5 +104,13 @@ describe('useAgentContext', () => {
     const { result } = renderHook(() => useAgentContext());
 
     expect(result.current.documentId).toBeUndefined();
+  });
+
+  it('captures the active workspace slug for out-of-band navigation', () => {
+    activeWorkspaceSlugMock.value = 'team';
+
+    const { result } = renderHook(() => useAgentContext());
+
+    expect(result.current.workspaceSlug).toBe('team');
   });
 });

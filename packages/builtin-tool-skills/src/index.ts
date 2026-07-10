@@ -1,4 +1,5 @@
 export { SkillsManifest } from './manifest';
+export { resolveSkillsManifest } from './resolveManifest';
 export { systemPrompt } from './systemRole';
 export {
   type ActivateSkillParams,

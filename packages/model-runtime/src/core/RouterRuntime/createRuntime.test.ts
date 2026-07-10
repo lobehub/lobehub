@@ -255,7 +255,7 @@ describe('createRouterRuntime', () => {
       );
     });
 
-    it('should log missing route attempt context outside development without filtering by model', async () => {
+    it('should not log missing route attempt context outside development', async () => {
       const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
       const mockChat = vi.fn().mockResolvedValue('chat-response');
 
@@ -284,26 +284,7 @@ describe('createRouterRuntime', () => {
       });
 
       expect(result).toBe('chat-response');
-      expect(consoleError).toHaveBeenCalledWith('[RouteAttemptMissingContext]', expect.any(String));
-
-      const rawDiagnostic = consoleError.mock.calls[0][1] as string;
-      const diagnostic = JSON.parse(rawDiagnostic);
-
-      expect(diagnostic).toEqual(
-        expect.objectContaining({
-          apiType: 'openai',
-          channelId: 'channel-1',
-          metadataKeys: [],
-          missingTrigger: true,
-          missingUser: true,
-          model: 'claude-3-sonnet',
-          optionUserPresent: false,
-          runtimeUserIdPresent: false,
-          toolsCount: 1,
-        }),
-      );
-      expect(rawDiagnostic).not.toContain('do-not-log');
-      expect(rawDiagnostic).not.toContain('secret_tool');
+      expect(consoleError).not.toHaveBeenCalled();
     });
 
     it('should not attach route attempt metadata for non-lobehub runtime', async () => {

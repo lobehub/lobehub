@@ -48,7 +48,9 @@
   "generation.actions.seedApplyFailed": "Неуспешно прилагане на сийд",
   "generation.actions.seedCopied": "Сийдът е копиран в клипборда",
   "generation.actions.seedCopyFailed": "Неуспешно копиране на сийд",
+  "generation.metadata.by": "от {{name}}",
   "generation.metadata.count": "{{count}} изображения",
+  "generation.metadata.createdAt": "Създадено на {{time}}",
   "generation.status.failed": "Генерирането неуспешно",
   "generation.status.generating": "Генериране...",
   "notSupportGuide.desc": "Текущият режим на внедряване не поддържа AI генериране на изображения. Превключете към <1>режим на внедряване със сървърна база данни</1> или използвайте <3>LobeHub Cloud</3>.",
@@ -60,9 +62,13 @@
   "notSupportGuide.features.multiProviders.title": "Поддръжка на множество доставчици",
   "notSupportGuide.title": "Текущият режим на внедряване не поддържа AI генериране на изображения",
   "topic.createNew": "Създаване на нова тема",
+  "topic.createdBy": "Създадено от {{name}}",
   "topic.deleteConfirm": "Изтриване на тема за генериране",
   "topic.deleteConfirmDesc": "Ще изтриете тази тема за генериране. Това действие не може да бъде отменено, моля, бъдете внимателни.",
   "topic.empty": "Няма теми за генериране",
+  "topic.privateTitle": "Частно",
   "topic.title": "Тема на картината",
-  "topic.untitled": "Тема по подразбиране"
+  "topic.untitled": "Тема по подразбиране",
+  "topic.visibility.existingLocked": "Видимостта е фиксирана за текущата тема. Създайте нова тема, за да изберете различно пространство.",
+  "topic.workspaceTitle": "Работно пространство"
 }

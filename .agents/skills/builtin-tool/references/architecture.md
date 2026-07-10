@@ -223,7 +223,7 @@ The runtime hands every executor method an optional `BuiltinToolContext` as the 
 
 ## i18n Integration
 
-Source of truth: `src/locales/default/plugin.ts`. Keys follow `builtins.<identifier>.<topic>.<…>`:
+Source of truth: `packages/locales/src/default/plugin.ts`. Keys follow `builtins.<identifier>.<topic>.<…>`:
 
 | Key                                   | Use                                                          |
 | ------------------------------------- | ------------------------------------------------------------ |
@@ -232,7 +232,7 @@ Source of truth: `src/locales/default/plugin.ts`. Keys follow `builtins.<identif
 | `builtins.<identifier>.inspector.<…>` | Extra Inspector strings ("no results", chips, counters)      |
 | `builtins.<identifier>.<feature>.<…>` | Render / Intervention strings, free-form per tool            |
 
-For dev preview, also seed `locales/zh-CN/plugin.json` and `locales/en-US/plugin.json`. Run `pnpm i18n` before opening a PR — it's slow, so do it once at the end. (See the **i18n** skill for the full workflow.)
+For dev preview, also seed `locales/zh-CN/plugin.json` and `locales/en-US/plugin.json`. Run `bun run i18n` before opening a PR — it's slow, so do it once at the end. (See the **i18n** skill for the full workflow.)
 
 ---
 

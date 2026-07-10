@@ -20,6 +20,7 @@ import {
   ConfigAction,
   GenerationMediaModeSegment,
   GenerationPromptInput,
+  GenerationVisibilitySelector,
   InlineImageReference,
 } from '@/routes/(main)/(create)/features/GenerationInput';
 import {
@@ -35,7 +36,11 @@ import {
 import ImageModelItem from '@/routes/(main)/(create)/image/features/ConfigPanel/components/ModelSelect/ImageModelItem';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { useImageStore } from '@/store/image';
-import { createImageSelectors, imageGenerationConfigSelectors } from '@/store/image/selectors';
+import {
+  createImageSelectors,
+  generationTopicSelectors,
+  imageGenerationConfigSelectors,
+} from '@/store/image/selectors';
 import {
   useDimensionControl,
   useGenerationConfigParam,
@@ -145,6 +150,16 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const isCreating = useImageStore(createImageSelectors.isCreating);
   const createImage = useImageStore((s) => s.createImage);
   const setModelAndProviderOnSelect = useImageStore((s) => s.setModelAndProviderOnSelect);
+  const activeGenerationTopicId = useImageStore(generationTopicSelectors.activeGenerationTopicId);
+  const activeGenerationTopic = useImageStore((s) =>
+    activeGenerationTopicId
+      ? generationTopicSelectors.getGenerationTopicById(activeGenerationTopicId)(s)
+      : undefined,
+  );
+  const newGenerationTopicVisibility = useImageStore(
+    generationTopicSelectors.newGenerationTopicVisibility,
+  );
+  const setNewGenerationTopicVisibility = useImageStore((s) => s.setNewGenerationTopicVisibility);
   const currentModel = useImageStore(imageGenerationConfigSelectors.model);
   const currentProvider = useImageStore(imageGenerationConfigSelectors.provider);
   const isInit = useImageStore((s) => s.isInit);
@@ -215,6 +230,14 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
 
   const showInlineRef = canDropImage;
   const hasRefImages = imagePreviewUrls.length > 0;
+  const displayVisibility = activeGenerationTopic
+    ? activeGenerationTopic.visibility === 'private'
+      ? 'private'
+      : 'public'
+    : newGenerationTopicVisibility;
+  const visibilityLockedReason = activeGenerationTopicId
+    ? t('topic.visibility.existingLocked')
+    : undefined;
 
   return (
     <Flexbox gap={32} width={'100%'}>
@@ -248,6 +271,11 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
             style={canCreate ? undefined : { opacity: 0.5, pointerEvents: 'none' }}
           >
             <GenerationMediaModeSegment mode={'image'} />
+            <GenerationVisibilitySelector
+              disabledReason={visibilityLockedReason}
+              visibility={displayVisibility}
+              onChange={setNewGenerationTopicVisibility}
+            />
             <ModelSwitchPanel
               ModelItemComponent={ImageModelItem}
               enabledList={enabledImageModelList}

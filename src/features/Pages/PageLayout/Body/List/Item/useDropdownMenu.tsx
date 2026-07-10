@@ -2,18 +2,22 @@ import { type MenuProps } from '@lobehub/ui';
 import { Icon } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
-import { CopyPlus, PanelTop, Pencil, Trash2 } from 'lucide-react';
+import { CopyPlus, EyeOffIcon, PanelTop, Pencil, Trash2, UsersIcon } from 'lucide-react';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { useDocumentTransferMenuItem } from '@/business/client/hooks/useDocumentTransferMenuItem';
 import { isDesktop } from '@/const/version';
+import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { usePermission } from '@/hooks/usePermission';
 import { useElectronStore } from '@/store/electron';
-import { usePageStore } from '@/store/page';
+import { pageSelectors, usePageStore } from '@/store/page';
+import { useUserStore } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
 
 interface ActionProps {
   pageId: string;
@@ -28,14 +32,27 @@ export const useDropdownMenu = ({
   const { message } = App.useApp();
   const navigate = useWorkspaceAwareNavigate();
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
+  const activeWorkspaceId = useActiveWorkspaceId();
   const { allowed: canCreatePage } = usePermission('create_content');
   const { allowed: canEditPage } = usePermission('edit_own_content');
   const addTab = useElectronStore((s) => s.addTab);
   const removePage = usePageStore((s) => s.removePage);
   const duplicatePage = usePageStore((s) => s.duplicatePage);
+  const publishPageToWorkspace = usePageStore((s) => s.publishPageToWorkspace);
+  const setPageVisibility = usePageStore((s) => s.setPageVisibility);
+  const document = usePageStore((s) => pageSelectors.getDocumentById(pageId)(s));
   const transferMenuItems = useDocumentTransferMenuItem(pageId);
+  const currentUserId = useUserStore(userProfileSelectors.userId);
 
-  const handleDelete = () => {
+  const isPrivate = document?.visibility === 'private';
+  const isPublic = document?.visibility === 'public';
+  // Visibility toggles are creator-only — the backend rejects non-owner writes,
+  // but the menu entry itself is the wrong affordance on someone else's page.
+  const isOwnPage = Boolean(currentUserId && document?.userId === currentUserId);
+  const canPublish = Boolean(activeWorkspaceId && isOwnPage && isPrivate && canEditPage);
+  const canMakePrivate = Boolean(activeWorkspaceId && isOwnPage && isPublic && canEditPage);
+
+  const handleDelete = useCallback(() => {
     if (!canEditPage) return;
 
     confirmModal({
@@ -54,9 +71,9 @@ export const useDropdownMenu = ({
       },
       title: t('pageEditor.deleteConfirm.title', { ns: 'file' }),
     });
-  };
+  }, [canEditPage, pageId, removePage, message, t]);
 
-  const handleDuplicate = async () => {
+  const handleDuplicate = useCallback(async () => {
     if (!canCreatePage) return;
 
     try {
@@ -64,7 +81,51 @@ export const useDropdownMenu = ({
     } catch (error) {
       console.error('Failed to duplicate page:', error);
     }
-  };
+  }, [canCreatePage, pageId, duplicatePage]);
+
+  const handlePublish = useCallback(() => {
+    if (!canPublish) return;
+
+    // Copy intentionally does not mention nested pages: Pages sidebar is a
+    // flat list, so users can't see (and don't reliably know about) a
+    // subtree — surfacing a "N sub-pages" count only creates confusion. The
+    // server still cascades the whole subtree on the write path.
+    confirmModal({
+      cancelText: t('cancel'),
+      content: <VisibilityConfirmContent variant="publish" />,
+      okText: t('continue'),
+      onOk: async () => {
+        try {
+          await publishPageToWorkspace(pageId);
+          message.success(t('pageList.publishSuccess', { ns: 'file' }));
+        } catch (error) {
+          console.error('Failed to publish page:', error);
+          message.error(t('pageList.publishError', { ns: 'file' }));
+        }
+      },
+      title: t('pageList.publishConfirm.title', { ns: 'file' }),
+    });
+  }, [canPublish, pageId, publishPageToWorkspace, message, t]);
+
+  const handleMakePrivate = useCallback(() => {
+    if (!canMakePrivate) return;
+    confirmModal({
+      cancelText: t('cancel'),
+      content: <VisibilityConfirmContent variant="makePrivate" />,
+      okButtonProps: { danger: true },
+      okText: t('continue'),
+      onOk: async () => {
+        try {
+          await setPageVisibility(pageId, 'private');
+          message.success(t('makePrivate.success'));
+        } catch (error) {
+          console.error('Failed to make page private:', error);
+          message.error(t('makePrivate.error'));
+        }
+      },
+      title: t('makePrivate.confirm.title'),
+    });
+  }, [canMakePrivate, pageId, setPageVisibility, message, t]);
 
   return useCallback(
     () =>
@@ -101,7 +162,31 @@ export const useDropdownMenu = ({
           label: t('pageList.duplicate', { ns: 'file' }),
           onClick: handleDuplicate,
         },
-        ...(transferMenuItems ?? []),
+        ...(transferMenuItems && transferMenuItems.length > 0
+          ? [{ type: 'divider' as const }, ...transferMenuItems]
+          : []),
+        ...(canPublish
+          ? [
+              { type: 'divider' as const },
+              {
+                icon: <Icon icon={UsersIcon} />,
+                key: 'publishToWorkspace',
+                label: t('pageList.publishToWorkspace', { ns: 'file' }),
+                onClick: handlePublish,
+              },
+            ]
+          : []),
+        ...(canMakePrivate
+          ? [
+              { type: 'divider' as const },
+              {
+                icon: <Icon icon={EyeOffIcon} />,
+                key: 'makePrivate',
+                label: t('makePrivate'),
+                onClick: handleMakePrivate,
+              },
+            ]
+          : []),
         { type: 'divider' },
         {
           danger: true,
@@ -117,8 +202,12 @@ export const useDropdownMenu = ({
       toggleEditing,
       handleDuplicate,
       handleDelete,
+      handlePublish,
+      handleMakePrivate,
       canCreatePage,
       canEditPage,
+      canPublish,
+      canMakePrivate,
       activeWorkspaceSlug,
       pageId,
       addTab,

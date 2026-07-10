@@ -14,6 +14,7 @@ const mockDeletePairingRequest = vi.hoisted(() => vi.fn());
 const mockReleasePairingClaim = vi.hoisted(() => vi.fn());
 const mockCreateOrGetPairingRequest = vi.hoisted(() => vi.fn());
 const mockGetAgentRuntimeRedisClient = vi.hoisted(() => vi.fn().mockReturnValue(null));
+const mockGetBotFeatureAccessState = vi.hoisted(() => vi.fn());
 
 vi.mock('@/database/core/db-adaptor', () => ({
   getServerDB: mockGetServerDB,
@@ -49,6 +50,10 @@ vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
 
 vi.mock('@/server/modules/AgentRuntime/redis', () => ({
   getAgentRuntimeRedisClient: mockGetAgentRuntimeRedisClient,
+}));
+
+vi.mock('@/business/server/bot/featureAccess', () => ({
+  getBotFeatureAccessState: mockGetBotFeatureAccessState,
 }));
 
 // Stub appEnv so accessing `appEnv.APP_URL` in vitest doesn't trip
@@ -453,6 +458,7 @@ describe('BotMessageRouter', () => {
     mockProviderFindById.mockResolvedValue(undefined);
     mockProviderUpdate.mockResolvedValue(undefined);
     mockGetAgentRuntimeRedisClient.mockReturnValue(null);
+    mockGetBotFeatureAccessState.mockResolvedValue({ allowed: true });
   });
 
   describe('getWebhookHandler', () => {
@@ -1099,7 +1105,10 @@ describe('BotMessageRouter', () => {
   });
 
   describe('onNewMessage DM catch-all', () => {
-    async function loadDmCatchAllHandler(settings?: Record<string, unknown>) {
+    async function loadDmCatchAllHandler(
+      settings?: Record<string, unknown>,
+      platform = 'telegram',
+    ) {
       mockFindEnabledByPlatform.mockResolvedValue([
         makeProvider({
           applicationId: 'app-1',
@@ -1107,7 +1116,7 @@ describe('BotMessageRouter', () => {
         }),
       ]);
       const router = new BotMessageRouter();
-      const webhookHandler = router.getWebhookHandler('telegram', 'app-1');
+      const webhookHandler = router.getWebhookHandler(platform, 'app-1');
       const req = new Request('https://example.com/webhook', { body: '{}', method: 'POST' });
       await webhookHandler(req);
 
@@ -1166,6 +1175,131 @@ describe('BotMessageRouter', () => {
       await handler(thread, message);
 
       expect(mockHandleMention).toHaveBeenCalledTimes(1);
+    });
+
+    it('posts a one-time WeChat paid-feature notice and continues handling the DM', async () => {
+      mockGetBotFeatureAccessState.mockResolvedValue({
+        allowed: true,
+        notice: { id: 'wechat-pro-required-v1' },
+        requiredPlan: 'paid',
+        rolloutMode: 'notice',
+      });
+      const handler = await loadDmCatchAllHandler({ dmPolicy: 'open' }, 'wechat');
+      if (!handler) throw new Error('expected catch-all to be registered');
+      const thread = {
+        id: 'wechat:dm-1',
+        isDM: true,
+        post: vi.fn().mockResolvedValue(undefined),
+      };
+      const message = {
+        author: { isBot: false, userId: 'wechat-user-1', userName: 'alice' },
+        text: 'hi in WeChat',
+      };
+
+      await handler(thread, message);
+
+      expect(mockStateSetIfNotExists).toHaveBeenCalledWith(
+        'bot-feature-notice:wechat-pro-required-v1:wechat-user-1',
+        '1',
+      );
+      expect(thread.post).toHaveBeenCalledWith(
+        '提示：由于 WeChat 渠道通信成本过高，LobeHub 微信渠道能力将于近期调整为付费功能。预告期内已有连接可继续使用，但新建或重新连接微信渠道需要升级到个人付费 Plan。',
+      );
+      expect(mockHandleMention).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not repeat the WeChat paid-feature notice after dedupe hits', async () => {
+      mockGetBotFeatureAccessState.mockResolvedValue({
+        allowed: true,
+        notice: { id: 'wechat-pro-required-v1' },
+        requiredPlan: 'paid',
+        rolloutMode: 'notice',
+      });
+      mockStateSetIfNotExists.mockResolvedValue(false);
+      const handler = await loadDmCatchAllHandler({ dmPolicy: 'open' }, 'wechat');
+      if (!handler) throw new Error('expected catch-all to be registered');
+      const thread = {
+        id: 'wechat:dm-1',
+        isDM: true,
+        post: vi.fn().mockResolvedValue(undefined),
+      };
+      const message = {
+        author: { isBot: false, userId: 'wechat-user-1', userName: 'alice' },
+        text: 'hi again',
+      };
+
+      await handler(thread, message);
+
+      expect(thread.post).not.toHaveBeenCalled();
+      expect(mockHandleMention).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not post the paid-feature notice to senders rejected by the access gates', async () => {
+      mockGetBotFeatureAccessState.mockResolvedValue({
+        allowed: true,
+        notice: { id: 'wechat-pro-required-v1' },
+        requiredPlan: 'paid',
+        rolloutMode: 'notice',
+      });
+      const handler = await loadDmCatchAllHandler(
+        { allowFrom: 'bob-id', dmPolicy: 'allowlist' },
+        'wechat',
+      );
+      if (!handler) throw new Error('expected catch-all to be registered');
+      const thread = {
+        id: 'wechat:dm-1',
+        isDM: true,
+        post: vi.fn().mockResolvedValue(undefined),
+      };
+      const message = {
+        author: { isBot: false, userId: 'wechat-stranger', userName: 'stranger' },
+        text: 'hi in WeChat',
+      };
+
+      await handler(thread, message);
+
+      expect(mockHandleMention).not.toHaveBeenCalled();
+      // Only the rejection is posted — no plan notice leaks to blocked senders.
+      expect(thread.post).toHaveBeenCalledTimes(1);
+      expect(thread.post.mock.calls[0][0]).not.toContain('付费');
+    });
+
+    it('posts the enforce-mode denial only to senders that pass the access gates', async () => {
+      mockGetBotFeatureAccessState.mockResolvedValue({
+        allowed: false,
+        blockedMessage: '微信渠道现已升级为付费功能。',
+        requiredPlan: 'paid',
+        rolloutMode: 'enforce',
+      });
+      const handler = await loadDmCatchAllHandler(
+        { allowFrom: 'bob-id', dmPolicy: 'allowlist' },
+        'wechat',
+      );
+      if (!handler) throw new Error('expected catch-all to be registered');
+      const thread = {
+        id: 'wechat:dm-1',
+        isDM: true,
+        post: vi.fn().mockResolvedValue(undefined),
+      };
+
+      // A stranger blocked by the allowlist gets the regular rejection, not
+      // the paid-block copy — plan state must not leak past the gates.
+      await handler(thread, {
+        author: { isBot: false, userId: 'wechat-stranger', userName: 'stranger' },
+        text: 'hi in WeChat',
+      });
+      expect(thread.post).toHaveBeenCalledTimes(1);
+      expect(thread.post.mock.calls[0][0]).not.toContain('付费');
+
+      // An allowlisted sender passes the gates and then receives the denial.
+      thread.post.mockClear();
+      await handler(thread, {
+        author: { isBot: false, userId: 'bob-id', userName: 'bob' },
+        text: 'hi again',
+      });
+      expect(thread.post).toHaveBeenCalledTimes(1);
+      expect(thread.post.mock.calls[0][0]).toContain('付费');
+      expect(mockHandleMention).not.toHaveBeenCalled();
     });
 
     it('should block DM messages blocked by the allowlist and notify the sender', async () => {

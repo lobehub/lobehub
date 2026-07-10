@@ -6,6 +6,7 @@ import type { KnowledgeBaseItem } from '../knowledgeBase';
 import type { FewShots } from '../llm';
 import type { LobeAgentAgencyConfig } from './agencyConfig';
 import { AgentChatConfigSchema, type LobeAgentChatConfig } from './chatConfig';
+import { type AgentPluginEntry, AgentPluginEntrySchema } from './pluginConfig';
 import type { LobeAgentTTSConfig } from './tts';
 
 /**
@@ -64,9 +65,13 @@ export interface LobeAgentConfig {
    */
   params: LLMParams;
   /**
-   * Enabled plugins
+   * Enabled plugins. Each entry is either a legacy bare identifier string
+   * (implicit pinned) or a tri-state `{ identifier, mode }` object — see
+   * `AgentPluginEntry` / `parsePluginEntry`. Prefer the read helpers
+   * (`getActivePluginIds`, `getPinnedPluginIds`, `getDisabledPluginIds`,
+   * `getPluginMode`) over reading this field directly.
    */
-  plugins?: string[];
+  plugins?: AgentPluginEntry[];
 
   /**
    *  Model provider
@@ -95,8 +100,7 @@ export interface LobeAgentConfig {
 }
 
 export type LobeAgentConfigKeys =
-  | keyof LobeAgentConfig
-  | ['params', keyof LobeAgentConfig['params']];
+  keyof LobeAgentConfig | ['params', keyof LobeAgentConfig['params']];
 
 /**
  * Zod schema for creating a new agent.
@@ -115,7 +119,7 @@ export const CreateAgentSchema = z.object({
   openingMessage: z.string().nullish(),
   openingQuestions: z.array(z.string()).optional(),
   params: z.record(z.unknown()).optional(),
-  plugins: z.array(z.string()).optional(),
+  plugins: z.array(AgentPluginEntrySchema).optional(),
   provider: z.string().nullish(),
   sessionGroupId: z.string().nullish(),
   systemRole: z.string().nullish(),
@@ -123,6 +127,12 @@ export const CreateAgentSchema = z.object({
   title: z.string().nullish(),
   tts: z.custom<LobeAgentTTSConfig>().optional(),
   virtual: z.boolean().nullish(),
+  /**
+   * `private` keeps the agent visible only to its creator within the workspace;
+   * `public` (default) makes it visible to every workspace member. Ignored in
+   * personal mode (no workspaceId).
+   */
+  visibility: z.enum(['private', 'public']).optional(),
 });
 
 export type CreateAgentConfig = z.infer<typeof CreateAgentSchema>;
@@ -145,7 +155,7 @@ export interface AgentItem {
   openingMessage?: string | null;
   openingQuestions?: string[];
   params?: any;
-  plugins?: string[];
+  plugins?: AgentPluginEntry[];
   provider?: string | null;
   /** Session group ID for direct grouping */
   sessionGroupId?: string | null;
@@ -157,6 +167,11 @@ export interface AgentItem {
   updatedAt: Date;
   userId: string;
   virtual?: boolean | null;
+  /**
+   * Workspace-scoped visibility. `public` (default) = every workspace member
+   * can see this agent; `private` = creator-only. Ignored in personal mode.
+   */
+  visibility?: 'private' | 'public';
   /** Owning workspace; null for personal (non-workspace) agents. */
   workspaceId?: string | null;
 }

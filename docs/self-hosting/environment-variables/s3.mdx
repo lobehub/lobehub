@@ -55,8 +55,8 @@ LobeHub supports multimodal AI sessions, including the ability to upload unstruc
 
 - Type: Optional
 - Description: Whether to set ACL to `public-read` when uploading files
-- Default: `1`
-- Example: `0`
+- Default: `-` (disabled; the ACL is only set when explicitly configured to `1`)
+- Example: `1`
 
 ### `S3_ENABLE_PATH_STYLE`
 
@@ -94,4 +94,4 @@ Route: [xai] ProviderBizError: Fetching images over plain http:// is not support
 - Default: undefined
 - Example: `1`
 
-When set to `1`, LobeChat will convert videos to base64 encoding before uploading them to the LLM model.
+When set to `1`, LobeHub will convert videos to base64 encoding before uploading them to the LLM model.

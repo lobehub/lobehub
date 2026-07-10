@@ -96,6 +96,27 @@ describe('driveTaskFromVerify', () => {
     expect(deliverMock.mock.calls[0][0]).toMatchObject({ reason: 'error', taskId: 'task-1' });
   });
 
+  it('errored → pauses with a non-accusatory brief; never claims the delivery "did not pass"', async () => {
+    runFindByOperation.mockResolvedValue({ id: 'run-1', metadata: null, status: 'errored' });
+    await driveTaskFromVerify(db, 'u1', 'op-1');
+
+    // Paused for a human, but NOT completed — the delivery was never evaluated.
+    expect(taskUpdateStatus).toHaveBeenCalledWith('task-1', 'paused', { error: null });
+    expect(serviceUpdateStatus).not.toHaveBeenCalled();
+
+    // The brief frames it as an internal verification error, not a rejected delivery.
+    const briefArg = briefCreate.mock.calls[0][0];
+    expect(briefArg.summary).not.toContain('did not pass');
+    expect(briefArg.summary.toLowerCase()).toContain('could not run');
+
+    // The creator callback is an error, but the message must NOT accuse the
+    // delivery of failing verification.
+    const deliverArg = deliverMock.mock.calls[0][0];
+    expect(deliverArg.reason).toBe('error');
+    expect(deliverArg.errorMessage).not.toBe('Delivery did not pass verification.');
+    expect(deliverArg.errorMessage.toLowerCase()).toContain('internal error');
+  });
+
   it('skips when the run has not terminally settled (verifying/repairing)', async () => {
     runFindByOperation.mockResolvedValue({ id: 'run-1', metadata: null, status: 'verifying' });
     await driveTaskFromVerify(db, 'u1', 'op-1');

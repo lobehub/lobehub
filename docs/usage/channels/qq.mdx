@@ -138,13 +138,13 @@ One optional field under **Advanced Settings** carries a lot of weight in day-to
 
 ### Your Platform User ID
 
-This is your own QQ `tiny_id` (the platform-level user identifier — **not** the public-facing QQ number, which doesn't always match), used by:
+This is your own QQ `user_openid` (the platform-level user identifier for private/C2C chats — **not** the public-facing QQ number, which doesn't always match), used by:
 
 - **Pairing approval** — required when **DM Policy** is set to **Pairing**, since `/approve <code>` is the owner's command and the runtime checks the sender against this ID.
 - **AI tools push** — lets the agent reach you proactively (reminders, notifications) by mapping its internal user reference to your QQ account.
 - **Anti-lockout** — auto-trusted by **Allowed Users**, so scoping the bot to friends won't accidentally lock you out.
 
-To get it: DM the bot once with any message and check the server logs for the `tiny_id` field on the inbound event payload (or read it from the OpenAPI dashboard if available). Paste the long numeric ID into **Your Platform User ID** in LobeHub's Advanced Settings.
+To get it: DM the bot once with any message and check the server logs for the `user_openid` field on the inbound event payload (or read it from the OpenAPI dashboard if available). Paste that ID into **Your Platform User ID** in LobeHub's Advanced Settings.
 
 > QQ doesn't expose a single "default server" concept that AI tools can pivot on, so the **Default Server** field is not exposed for QQ channels.
 
@@ -162,7 +162,7 @@ Two independent policies gate inbound traffic. Both default to **Open**.
 
 ### Allowed User IDs (global)
 
-A populated **Allowed User IDs** field is a global gate — DMs *and* group `@mentions` are restricted to listed QQ `tiny_id` values. Empty means "no user-level filter". Use the platform `tiny_id` from the OpenAPI event payload — the visible QQ number is not always the same as the platform ID.
+A populated **Allowed User IDs** field is a global gate — DMs *and* group `@mentions` are restricted to listed QQ `openid` values (`user_openid` for private/C2C chats, `member_openid` for group chats). Empty means "no user-level filter". Read the appropriate `openid` field from the OpenAPI event payload — the visible QQ number is not always the same as the platform ID.
 
 ### DM Policy
 
@@ -183,15 +183,15 @@ See the [Channels overview](/docs/usage/channels/overview#direct-message-policy)
 
 ## Configuration Reference
 
-| Field                   | Required | Description                                                                                          |
-| ----------------------- | -------- | ---------------------------------------------------------------------------------------------------- |
-| **Application ID**      | Yes      | Your bot's App ID from QQ Open Platform                                                              |
-| **App Secret**          | Yes      | Your bot's App Secret from QQ Open Platform                                                          |
-| **Connection Mode**     | No       | `websocket` (default) or `webhook`. Choose based on your QQ Open Platform configuration              |
-| **Allowed User IDs**    | No       | Comma- or whitespace-separated QQ `tiny_id` values. Global gate — applies to DMs and group @mentions |
-| **DM Policy**           | No       | `open` (default), `allowlist`, `pairing`, or `disabled` — who is allowed to DM the bot               |
-| **Group Policy**        | No       | `open` (default), `allowlist`, or `disabled` — where the bot responds to @mentions                   |
-| **Allowed Channel IDs** | No       | Comma- or whitespace-separated QQ group IDs. Used when Group Policy is Allowlist                     |
+| Field                   | Required | Description                                                                                                                                             |
+| ----------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Application ID**      | Yes      | Your bot's App ID from QQ Open Platform                                                                                                                 |
+| **App Secret**          | Yes      | Your bot's App Secret from QQ Open Platform                                                                                                             |
+| **Connection Mode**     | No       | `websocket` (default) or `webhook`. Choose based on your QQ Open Platform configuration                                                                 |
+| **Allowed User IDs**    | No       | Comma- or whitespace-separated QQ `openid` values (`user_openid` for DMs, `member_openid` for groups). Global gate — applies to DMs and group @mentions |
+| **DM Policy**           | No       | `open` (default), `allowlist`, `pairing`, or `disabled` — who is allowed to DM the bot                                                                  |
+| **Group Policy**        | No       | `open` (default), `allowlist`, or `disabled` — where the bot responds to @mentions                                                                      |
+| **Allowed Channel IDs** | No       | Comma- or whitespace-separated QQ group IDs. Used when Group Policy is Allowlist                                                                        |
 
 ## Limitations
 

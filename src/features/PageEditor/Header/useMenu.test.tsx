@@ -13,6 +13,10 @@ const permissionMock = vi.hoisted(() => ({
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
+    i18n: {
+      language: 'en-US',
+      resolvedLanguage: 'en-US',
+    },
     t: (key: string) => key,
   }),
 }));
@@ -24,6 +28,10 @@ vi.mock('@lobechat/const', () => ({
 
 vi.mock('@lobehub/ui', () => ({
   Icon: () => null,
+}));
+
+vi.mock('@lobehub/ui/base-ui', () => ({
+  confirmModal: vi.fn(),
 }));
 
 vi.mock('antd', () => ({
@@ -41,10 +49,29 @@ vi.mock('antd', () => ({
 }));
 
 vi.mock('antd-style', () => ({
+  createStaticStyles: () => ({}),
   cssVar: {
     colorTextTertiary: 'colorTextTertiary',
   },
+  cx: (...args: unknown[]) => args.filter(Boolean).join(' '),
+  keyframes: () => '',
   useResponsive: () => ({ lg: true }),
+}));
+
+vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
+  useActiveWorkspaceId: () => undefined,
+}));
+
+vi.mock('@/business/client/hooks/useAuthorInfo', () => ({
+  useAuthorInfo: () => undefined,
+}));
+
+vi.mock('@/business/client/hooks/useDocumentTransferMenuItem', () => ({
+  useDocumentTransferMenuItem: () => null,
+}));
+
+vi.mock('@/features/VisibilityConfirmContent', () => ({
+  default: () => null,
 }));
 
 vi.mock('@/hooks/usePermission', () => ({
@@ -56,6 +83,27 @@ vi.mock('@/hooks/usePermission', () => ({
 
 vi.mock('@/store/document', () => ({
   useDocumentStore: (selector: (state: Record<string, unknown>) => unknown) => selector({}),
+}));
+
+vi.mock('@/store/page', () => ({
+  pageSelectors: {
+    getDocumentById: (_id: string) => (_s: unknown) => undefined,
+  },
+  usePageStore: (selector: (state: Record<string, unknown>) => unknown) =>
+    selector({
+      publishPageToWorkspace: vi.fn(),
+      setPageVisibility: vi.fn(),
+    }),
+}));
+
+vi.mock('@/store/user', () => ({
+  useUserStore: (selector: (state: Record<string, unknown>) => unknown) => selector({}),
+}));
+
+vi.mock('@/store/user/selectors', () => ({
+  userProfileSelectors: {
+    userId: () => undefined,
+  },
 }));
 
 vi.mock('@/store/document/slices/editor', () => ({

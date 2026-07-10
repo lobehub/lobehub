@@ -793,6 +793,7 @@ export class CodexAdapter implements AgentEventAdapter {
   private hasToolActivitySinceAgentMessage = false;
   private pendingToolCalls = new Set<string>();
   private pendingToolCallStepIndex = new Map<string, number>();
+  private pendingTurnStartBoundary = false;
   private stepToolCalls: ToolCallPayload[] = [];
   private stepToolCallIds = new Set<string>();
   private started = false;
@@ -846,6 +847,8 @@ export class CodexAdapter implements AgentEventAdapter {
     if (this.terminalEndEmitted || this.terminalErrorEmitted) return [];
 
     this.terminalEndEmitted = true;
+    const hadPendingEmptyTurn = this.pendingTurnStartBoundary;
+    this.pendingTurnStartBoundary = false;
     const model = getEventModel(raw) || this.currentModel;
     if (model) this.currentModel = model;
 
@@ -854,7 +857,7 @@ export class CodexAdapter implements AgentEventAdapter {
     if (cumulativeUsage) this.lastCumulativeUsage = cumulativeUsage;
     const events = this.drainPendingToolEndEvents();
 
-    if (usage || model) {
+    if (!hadPendingEmptyTurn && (usage || model)) {
       const data: StepCompleteData = {
         ...(model ? { model } : {}),
         phase: 'turn_metadata',
@@ -865,8 +868,10 @@ export class CodexAdapter implements AgentEventAdapter {
       events.push(this.makeEvent('step_complete', data));
     }
 
-    if (this.started) {
+    if (this.started && !hadPendingEmptyTurn) {
       events.push(this.makeEvent('stream_end', {}));
+      events.push(this.makeEvent('visible_output_end', {}));
+    } else if (this.started) {
       events.push(this.makeEvent('visible_output_end', {}));
     }
     events.push(this.makeEvent('agent_runtime_end', {}));
@@ -933,10 +938,8 @@ export class CodexAdapter implements AgentEventAdapter {
     }
 
     this.stepIndex += 1;
-    return [
-      this.makeEvent('stream_end', {}),
-      this.makeEvent('stream_start', this.getStreamStartData({ newStep: true })),
-    ];
+    this.pendingTurnStartBoundary = true;
+    return [this.makeEvent('stream_end', {})];
   }
 
   private handleItemStarted(item: any): HeterogeneousAgentEvent[] {
@@ -948,7 +951,7 @@ export class CodexAdapter implements AgentEventAdapter {
     this.pendingToolCalls.add(tool.id);
     this.pendingToolCallStepIndex.set(tool.id, this.stepIndex);
 
-    return this.emitToolChunk(tool);
+    return [...this.consumePendingTurnStart(), ...this.emitToolChunk(tool)];
   }
 
   private handleItemCompleted(item: any): HeterogeneousAgentEvent[] {
@@ -957,7 +960,7 @@ export class CodexAdapter implements AgentEventAdapter {
     if (item.type === 'agent_message') {
       if (!item.text) return [];
 
-      const events: HeterogeneousAgentEvent[] = [];
+      const events: HeterogeneousAgentEvent[] = this.consumePendingTurnStart();
       const shouldStartNewStep =
         this.hasToolActivitySinceAgentMessage &&
         !!item.id &&
@@ -991,24 +994,35 @@ export class CodexAdapter implements AgentEventAdapter {
 
     if (!item.id) return [];
 
-    const events: HeterogeneousAgentEvent[] = [];
+    const events: HeterogeneousAgentEvent[] = this.consumePendingTurnStart();
     const pendingStepIndex = this.pendingToolCallStepIndex.get(item.id);
     const belongsToCurrentStep =
       pendingStepIndex === undefined || pendingStepIndex === this.stepIndex;
 
+    const toolPayload = toToolPayload(item);
     if (!this.pendingToolCalls.has(item.id)) {
-      const tool = toToolPayload(item);
-      this.pendingToolCallStepIndex.set(tool.id, this.stepIndex);
-      events.push(...this.emitToolChunk(tool));
+      this.pendingToolCallStepIndex.set(toolPayload.id, this.stepIndex);
+      events.push(...this.emitToolChunk(toolPayload));
     }
 
     this.pendingToolCalls.delete(item.id);
     this.pendingToolCallStepIndex.delete(item.id);
     if (belongsToCurrentStep) this.hasToolActivitySinceAgentMessage = true;
-    events.push(this.makeEvent('tool_result', getToolResultData(item as CodexToolItem)));
+    const resultData = getToolResultData(item as CodexToolItem);
+    const isSuccess = isSuccessfulToolCompletion(item as CodexToolItem);
+    events.push(this.makeEvent('tool_result', resultData));
+    // Align tool_end with the server/gateway shape — carry the `{ toolCalling }`
+    // payload + a `BuiltinToolResult`-shaped `result` so renderer `onAfterCall`
+    // hooks resolve the executor and observe the result, identically to server runs.
     events.push(
       this.makeEvent('tool_end', {
-        isSuccess: isSuccessfulToolCompletion(item as CodexToolItem),
+        isSuccess,
+        payload: { toolCalling: toolPayload },
+        result: {
+          content: resultData.content,
+          success: isSuccess,
+          ...(resultData.pluginState ? { state: resultData.pluginState } : {}),
+        },
         toolCallId: item.id,
       }),
     );
@@ -1049,6 +1063,12 @@ export class CodexAdapter implements AgentEventAdapter {
   private resetStepToolCalls(): void {
     this.stepToolCalls = [];
     this.stepToolCallIds.clear();
+  }
+
+  private consumePendingTurnStart(): HeterogeneousAgentEvent[] {
+    if (!this.pendingTurnStartBoundary) return [];
+    this.pendingTurnStartBoundary = false;
+    return [this.makeEvent('stream_start', this.getStreamStartData({ newStep: true }))];
   }
 
   private getStreamStartData(extra: Record<string, unknown> = {}): StreamStartData {

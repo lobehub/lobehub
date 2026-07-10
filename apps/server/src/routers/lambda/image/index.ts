@@ -11,6 +11,7 @@ import { chargeBeforeGenerate } from '@/business/server/image-generation/chargeB
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AsyncTaskModel } from '@/database/models/asyncTask';
+import { GenerationTopicModel } from '@/database/models/generationTopic';
 import { UserModel } from '@/database/models/user';
 import { type NewGeneration, type NewGenerationBatch } from '@/database/schemas';
 import { asyncTasks, generationBatches, generations } from '@/database/schemas';
@@ -38,6 +39,7 @@ const imageProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =>
     ctx: {
       asyncTaskModel: new AsyncTaskModel(ctx.serverDB, ctx.userId, wsId),
       fileService: new FileService(ctx.serverDB, ctx.userId, wsId),
+      generationTopicModel: new GenerationTopicModel(ctx.serverDB, ctx.userId, wsId),
     },
   });
 });
@@ -67,7 +69,7 @@ export const imageRouter = router({
   createImage: imageCreateProcedure
     .input(createImageInputSchema)
     .mutation(async ({ input, ctx }) => {
-      const { userId, serverDB, asyncTaskModel, fileService } = ctx;
+      const { userId, serverDB, asyncTaskModel, fileService, generationTopicModel } = ctx;
       const wsId = ctx.workspaceId ?? undefined;
       const { generationTopicId, provider, model, imageNum, params } = input;
 
@@ -166,6 +168,11 @@ export const imageRouter = router({
 
       // Defensive check: ensure no full URLs enter the database
       validateNoUrlsInConfig(configForDatabase, 'configForDatabase');
+
+      const generationTopic = await generationTopicModel.findById(generationTopicId);
+      if (!generationTopic) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Invalid generation topic' });
+      }
 
       const chargeResult = await chargeBeforeGenerate({
         clientIp: ctx.clientIp,

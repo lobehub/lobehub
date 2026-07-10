@@ -76,13 +76,19 @@ const useStyles = createStyles(({ css, token }) => ({
 interface BadgeMeta {
   color: 'default' | 'success' | 'error' | 'warning';
   icon: typeof Check;
-  key: 'pending' | 'failed' | 'repairing' | 'passed';
+  key: 'pending' | 'failed' | 'errored' | 'repairing' | 'passed';
 }
 
 const phaseToResult: Record<DockPhase, { badge: BadgeMeta; subKey: string } | null> = {
   draft: {
     badge: { color: 'default', icon: Shield, key: 'pending' },
     subKey: 'result.pending.sub',
+  },
+  errored: {
+    // Warning, not error: the verifier couldn't run, so the delivery was never
+    // judged — never render it as a failed check.
+    badge: { color: 'warning', icon: Info, key: 'errored' },
+    subKey: 'result.errored.sub',
   },
   failed: {
     badge: { color: 'error', icon: X, key: 'failed' },

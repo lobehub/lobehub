@@ -192,8 +192,12 @@ export const maybeAutoRepair = async (
   await new VerifyRepairService(db, userId, workspaceId).triggerAutoRepair(operationId, spawner);
 };
 
+// `errored` = the verifier couldn't run (infra), so there's no delivery fault to
+// repair — exclude it even though it carries no verdict.
 const isFailed = (r: VerifyCheckResultItem | undefined): boolean =>
-  !!r && (r.status === 'failed' || r.verdict === 'failed' || r.verdict === 'uncertain');
+  !!r &&
+  r.status !== 'errored' &&
+  (r.status === 'failed' || r.verdict === 'failed' || r.verdict === 'uncertain');
 
 const buildInstruction = (
   failures: { item: VerifyCheckItem; result: VerifyCheckResultItem | undefined }[],

@@ -3,6 +3,7 @@
 ## Quick Reference by Name
 
 - **@arvinxx**: General/uncategorized issues (default assignee), priority:high issues, tool calling, mcp, database
+- **@AmAzing129**: MCP marketplace listing/submission requests and MCP marketplace listing operations
 - **@canisminor1990**: Design, UI components, editor, markdown rendering
 - **@tjx666**: Model providers and configuration, new model additions, image/video generation, vision, cloud version, documentation, TTS, auth, login/register, database
 - **@ONLY-yours**: Performance, streaming, settings, web platform, marketplace, agent builder, schedule task
@@ -121,13 +122,13 @@ Quick reference for assigning issues based on labels.
 
 - Assign to @arvinxx for general issues
 
-**MCP marketplace listing/submission requests — do NOT mention (auto-handled):**
+**MCP marketplace listing/submission requests — @AmAzing129:**
 
-Requests to **add / submit / list a new MCP server** to the marketplace are now processed automatically by the **MCP Submission Handler** workflow (it redirects installable servers to the self-service CLI and closes them, and labels remote-only servers `mcp:remote` for manual review). For these, **do NOT post any @mention comment — apply labels only.**
+Requests to **add / submit / list a new MCP server** to the marketplace belong to @AmAzing129, not @arvinxx. These may also be processed by the **MCP Submission Handler** workflow (it redirects installable servers to the self-service CLI and closes them, labels non-installable servers `mcp:manual-review`, and labels rescan/refresh requests for existing listings `mcp:rescan`), but if a triage mention is posted, mention @AmAzing129.
 
 - Recognize them by: titles like `[Request] Add <name> to the MCP marketplace`, `[MCP] Add/Submit <name>`, `[MCP Submission] …`, `[MCP Plugin] …`; the body asks to list/index a specific MCP server and links its repo or endpoint.
 - This does **NOT** apply to the following — they still get a normal @mention:
-  - Bugs about the marketplace pipeline or an existing listing — e.g. "scoring stuck", "shows outdated version", "rescan/re-index listing", "not syncing". → `@ONLY-yours @arvinxx`
+  - Bugs about the marketplace pipeline or an existing listing — e.g. "scoring stuck", "shows outdated version", "rescan/re-index listing", "not syncing". → `@ONLY-yours @AmAzing129`
   - Feature requests about the marketplace product itself (search, catalog browser, etc.). → `@ONLY-yours`
 
 ## Comment Templates

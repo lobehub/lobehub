@@ -7,17 +7,6 @@ import { type AssistantContentBlock } from '@/types/index';
 
 import {
   DURATION_SECONDS_PER_MINUTE,
-  POST_TOOL_ANSWER_DOUBLE_NEWLINE_SCORE,
-  POST_TOOL_ANSWER_LENGTH_LONG_MIN_CHARS,
-  POST_TOOL_ANSWER_LENGTH_LONG_SCORE,
-  POST_TOOL_ANSWER_LENGTH_MEDIUM_MIN_CHARS,
-  POST_TOOL_ANSWER_MARKDOWN_STRUCTURE_SCORE,
-  POST_TOOL_ANSWER_MEDIUM_TEXT_SCORE,
-  POST_TOOL_ANSWER_MULTI_LINE_MIN_COUNT,
-  POST_TOOL_ANSWER_MULTI_LINE_SCORE,
-  POST_TOOL_ANSWER_PUNCT_MIN_COUNT,
-  POST_TOOL_ANSWER_PUNCT_SCORE,
-  POST_TOOL_FINAL_ANSWER_SCORE_THRESHOLD,
   TIME_MS_PER_SECOND,
   TOOL_API_DISPLAY_NAMES,
   TOOL_FIRST_DETAIL_MAX_CHARS,
@@ -38,45 +27,39 @@ export const areWorkflowToolsComplete = (tools: ChatToolPayloadWithResult[]): bo
   return collapsible.every((t) => t.result != null && t.result.content !== LOADING_FLAT);
 };
 
-/** Heuristic: visible content already looks like a deliverable, not a one-line status step. */
-export const scoreBlockContentAsAnswerLike = (block: AssistantContentBlock): number => {
+/**
+ * A mixed / post-tool prose block that is just a single short status line
+ * (e.g. "先重建 worktree:") stays folded together with its tools. Anything richer —
+ * multiple lines, markdown structure, more than one sentence, or a long run-on line —
+ * is treated as real prose and lifted out of the fold so it renders inline in reading order.
+ */
+export const isFoldableStatusLine = (block: AssistantContentBlock): boolean => {
   const raw = (block.content ?? '').trim();
-  if (!raw || raw === LOADING_FLAT) return 0;
+  if (!raw || raw === LOADING_FLAT) return true;
 
-  let score = 0;
-  const compact = raw.replaceAll(/\s+/g, ' ');
-  if (compact.length >= POST_TOOL_ANSWER_LENGTH_LONG_MIN_CHARS)
-    score += POST_TOOL_ANSWER_LENGTH_LONG_SCORE;
-  else if (compact.length >= POST_TOOL_ANSWER_LENGTH_MEDIUM_MIN_CHARS)
-    score += POST_TOOL_ANSWER_MEDIUM_TEXT_SCORE;
+  // A status line is a single line; any newline means paragraphed prose.
+  if (raw.includes('\n')) return false;
 
-  if (raw.includes('\n\n')) score += POST_TOOL_ANSWER_DOUBLE_NEWLINE_SCORE;
-  else if (raw.split('\n').filter((l) => l.trim()).length >= POST_TOOL_ANSWER_MULTI_LINE_MIN_COUNT)
-    score += POST_TOOL_ANSWER_MULTI_LINE_SCORE;
-
+  // Markdown heading or list marker → structured deliverable, not a status line.
   if (
-    new RegExp(`^#{1,${WORKFLOW_MARKDOWN_HEADING_MAX_LEVEL}}\\s`, 'm').test(raw) ||
-    /^\s*[-*]\s+\S/m.test(raw)
+    new RegExp(`^#{1,${WORKFLOW_MARKDOWN_HEADING_MAX_LEVEL}}\\s`).test(raw) ||
+    /^[-*]\s+\S/.test(raw)
   )
-    score += POST_TOOL_ANSWER_MARKDOWN_STRUCTURE_SCORE;
+    return false;
 
-  const punctCount = (compact.match(/[。！？.!?]/g) ?? []).length;
-  if (punctCount >= POST_TOOL_ANSWER_PUNCT_MIN_COUNT) score += POST_TOOL_ANSWER_PUNCT_SCORE;
+  // A long run-on line reads as prose even without a second sentence.
+  if (raw.length > WORKFLOW_PROSE_HEADLINE_MAX_CHARS) return false;
 
-  return score;
-};
-
-/** Heuristic: prose-only block after last tool looks like a long deliverable (not a one-line step). */
-export const scorePostToolBlockAsFinalAnswer = (block: AssistantContentBlock): number => {
-  if (block.tools && block.tools.length > 0) return 0;
-
-  return scoreBlockContentAsAnswerLike(block);
+  // Fold only a single sentence. Latin .!? count only at a real sentence boundary
+  // (end or whitespace) so dotted tokens like "src/a.ts" or "Node.js" don't inflate it.
+  const sentenceCount = (raw.match(/[。！？]|[.!?](?=\s|$)/g) ?? []).length;
+  return sentenceCount <= 1;
 };
 
 /**
- * While generating, first index at or after {@param lastToolIndex} whose prose-only block scores
- * as final-answer-like. Tail from here stays out of the workflow fold. Returns null if tooling
- * reappears or nothing qualifies.
+ * While generating, first index at or after {@param lastToolIndex} whose prose-only block reads as
+ * real prose rather than a one-line status. Tail from here stays out of the workflow fold. Returns
+ * null if tooling reappears or nothing qualifies.
  */
 export const getPostToolAnswerSplitIndex = (
   blocks: AssistantContentBlock[],
@@ -90,7 +73,7 @@ export const getPostToolAnswerSplitIndex = (
   for (let i = lastToolIndex + 1; i < blocks.length; i++) {
     const b = blocks[i]!;
     if (b.tools && b.tools.length > 0) return null;
-    if (scorePostToolBlockAsFinalAnswer(b) >= POST_TOOL_FINAL_ANSWER_SCORE_THRESHOLD) return i;
+    if (!isFoldableStatusLine(b)) return i;
   }
   return null;
 };

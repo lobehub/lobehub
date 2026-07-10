@@ -1,9 +1,11 @@
-import { Button, Flexbox, Modal, SortableList } from '@lobehub/ui';
+import { Flexbox, SortableList } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import ImperativeModal from '@/components/ImperativeModal';
 import { usePermission } from '@/hooks/usePermission';
 import { useAiInfraStore } from '@/store/aiInfra';
 import { type AiProviderListItem } from '@/types/aiProvider';
@@ -37,7 +39,7 @@ const ConfigGroupModal = memo<ConfigGroupModalProps>(({ open, onCancel, defaultI
 
   const [items, setItems] = useState(defaultItems);
   return (
-    <Modal
+    <ImperativeModal
       allowFullscreen
       footer={null}
       open={open}
@@ -89,7 +91,7 @@ const ConfigGroupModal = memo<ConfigGroupModalProps>(({ open, onCancel, defaultI
           {t('sortModal.update')}
         </Button>
       </Flexbox>
-    </Modal>
+    </ImperativeModal>
   );
 });
 

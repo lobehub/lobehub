@@ -1,7 +1,6 @@
 import { getComposioAppByIdentifier, getLobehubSkillProviderById } from '@lobechat/const';
-import { confirmModal } from '@lobehub/ui/base-ui';
+import { Button, confirmModal } from '@lobehub/ui/base-ui';
 import { useSize } from 'ahooks';
-import { Button } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { PencilIcon, RefreshCwIcon, Trash2, Unplug } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -146,7 +145,6 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
       t: ts,
     });
 
-    // Sync button label: re-sync tool list from manifest (does NOT reset permissions)
     const syncLabel =
       connector?.sourceType === ConnectorSourceType.custom
         ? t('connector.sync', 'Sync')
@@ -197,22 +195,18 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
 
     return (
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-        {/* Header — full-bleed bar with bottom border, aligned with the left pane's header */}
         <div className={styles.header} ref={headerRef}>
           <div className={styles.headerTitle}>{connectorName}</div>
           <div className={styles.actions}>
-            {/* Reset permissions: restore all tools to auto (fully open) */}
             <Button size="small" onClick={() => resetConnectorPermissions(connectorId)}>
               {t('connector.resetPermissions', 'Reset permissions')}
             </Button>
-            {/* Sync/Refresh: re-sync tool list from manifest */}
             {renderCompactableButton({
               icon: <RefreshCwIcon size={14} />,
               label: syncLabel,
               loading: syncing,
               onClick: handleSync,
             })}
-            {/* Edit button for custom MCP connectors — only http type has a server URL to edit */}
             {isMcpConnector &&
               connector?.mcpConnectionType === 'http' &&
               renderCompactableButton({
@@ -224,7 +218,6 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
               lifecycleActions
             ) : (
               <>
-                {/* Disconnect / Delete for custom MCP connectors */}
                 {isMcpConnector && (
                   <>
                     {renderCompactableButton({
@@ -250,7 +243,6 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
                     })}
                   </>
                 )}
-                {/* Uninstall for builtin and marketplace tools */}
                 {(isBuiltin || isMarketplace) &&
                   renderCompactableButton({
                     danger: true,
@@ -263,7 +255,6 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
           </div>
         </div>
 
-        {/* Body */}
         <div
           style={{
             display: 'flex',
@@ -273,7 +264,6 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
             padding: 16,
           }}
         >
-          {/* Description */}
           {connectorDescription && (
             <div
               style={{
@@ -320,7 +310,6 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
             </div>
           )}
 
-          {/* Edit modal — only http connectors have a server URL to edit */}
           {isMcpConnector && connector?.mcpConnectionType === 'http' && (
             <CustomConnectorModal
               connectorId={connectorId}

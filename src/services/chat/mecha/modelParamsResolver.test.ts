@@ -435,6 +435,60 @@ describe('resolveModelExtendParams', () => {
       });
     });
 
+    describe('gpt5_6ReasoningEffort param', () => {
+      beforeEach(() => {
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(
+          () => true,
+        );
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
+          'gpt5_6ReasoningEffort',
+        ]);
+      });
+
+      it('should set max reasoning_effort for GPT-5.6', () => {
+        const result = resolveModelExtendParams({
+          chatConfig: {
+            gpt5_6ReasoningEffort: 'max',
+          } as any,
+          model: 'gpt-5.6-sol',
+          provider: 'openai',
+        });
+
+        expect(result.reasoning_effort).toBe('max');
+      });
+    });
+
+    describe('reasoningMode param', () => {
+      beforeEach(() => {
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(
+          () => true,
+        );
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
+          'reasoningMode',
+        ]);
+      });
+
+      it('should set Pro mode for GPT-5.6', () => {
+        const result = resolveModelExtendParams({
+          chatConfig: { reasoningMode: 'pro' },
+          model: 'gpt-5.6-sol',
+          provider: 'openai',
+        });
+
+        expect(result.reasoning).toEqual({ mode: 'pro' });
+      });
+
+      it('should omit the default Standard mode', () => {
+        const result = resolveModelExtendParams({
+          chatConfig: { reasoningMode: 'standard' },
+          model: 'gpt-5.6-sol',
+          provider: 'openai',
+        });
+
+        expect(result.reasoning).toBeUndefined();
+      });
+    });
+
     describe('gpt5_2ProReasoningEffort param', () => {
       beforeEach(() => {
         vi.spyOn(aiModelSelectors.aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(

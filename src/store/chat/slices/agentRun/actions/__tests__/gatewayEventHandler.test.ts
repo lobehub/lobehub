@@ -4,7 +4,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { messageService } from '@/services/message';
 import { emitClientAgentSignalSourceEvent } from '@/store/chat/slices/agentRun/actions/lifecycle/agentSignalBridge';
 import { notifyDesktopHumanApprovalRequired } from '@/store/chat/utils/desktopNotification';
-import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import { buildRunLifecycle } from '../lifecycle/buildRunLifecycle';
 import { createGatewayEventHandler } from '../transports/gateway/gatewayEventHandler';
@@ -60,6 +59,7 @@ function createMockStore() {
       };
     }),
     updateOperationMetadata: vi.fn(),
+    updateTopicStatus: vi.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -112,14 +112,22 @@ describe('createGatewayEventHandler', () => {
       const store = createMockStore();
       const handler = createHandler(store);
 
-      handler(makeEvent('stream_start', { assistantMessage: { id: 'msg-step2' } }));
+      handler(
+        makeEvent('stream_start', {
+          assistantMessage: { id: 'msg-step2', role: 'assistant' },
+        }),
+      );
       await flush();
 
       expect(store.associateMessageWithOperation).toHaveBeenCalledWith('msg-step2', 'op-1');
-      // Native gateway streams carry the new assistant id directly + a SoT
-      // uiMessages snapshot on the preceding step_start, so stream_start must
-      // NOT trigger a DB refetch (the refetch is what clobbered the streamed
-      // assistantGroup with a stale placeholder).
+      // Native gateway ships the assistant seed on stream_start, so the client
+      // inserts the message shell locally (createMessage) and must NOT trigger a
+      // DB refetch — the refetch is what clobbered the streamed assistantGroup
+      // with a stale placeholder (LOBE-11501).
+      expect(store.internal_dispatchMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'msg-step2', type: 'createMessage' }),
+        { operationId: 'op-1' },
+      );
       expect(messageService.getMessages).not.toHaveBeenCalled();
       expect(store.replaceMessages).not.toHaveBeenCalled();
       expect(emitClientAgentSignalSourceEvent).toHaveBeenCalledWith(
@@ -514,8 +522,14 @@ describe('createGatewayEventHandler', () => {
   });
 
   describe('visible_output_end', () => {
-    it('clears visible loading without completing the operation', async () => {
+    it('marks visible loading done without completing the operation or clearing topic loading', async () => {
       const store = createMockStore();
+      // The streamed content has landed in the store — the visible_output_end
+      // guard (LOBE-11501) only clears loading once the assistant row is present
+      // with its content, so seed it here to represent that state.
+      store.dbMessagesMap['main_agent-1_topic-1'] = [
+        { content: 'hello back', id: 'msg-initial', role: 'assistant' },
+      ];
       const handler = createHandler(store);
 
       handler(makeEvent('stream_chunk', { chunkType: 'text', content: 'hello back' }));
@@ -530,25 +544,11 @@ describe('createGatewayEventHandler', () => {
         visibleLoadingDone: true,
       });
       expect(store.completeOperation).not.toHaveBeenCalledWith('op-1');
-      expect(store.internal_updateTopicLoading).toHaveBeenCalledWith('topic-1', false);
-    });
-
-    it('keeps topic loading when another message is queued in the same context', async () => {
-      const store = createMockStore();
-      (store as any).queuedMessages = {
-        [messageMapKey({ agentId: 'agent-1', scope: 'session', topicId: 'topic-1' } as any)]: [
-          { content: 'next' },
-        ],
-      };
-      const handler = createHandler(store);
-
-      handler(makeEvent('visible_output_end'));
-      await flush();
-
-      expect(store.updateOperationMetadata).toHaveBeenCalledWith('op-1', {
-        visibleLoadingDone: true,
-      });
-      expect(store.internal_updateTopicLoading).not.toHaveBeenCalledWith('topic-1', false);
+      // Sidebar "running" spinner is driven off `topic.status === 'running'`
+      // (persisted, reset at the terminal) for gateway/hetero runs — not the
+      // client-only `topicLoadingIds` overlay — so visible_output_end no longer
+      // clears it early.
+      expect(store.internal_updateTopicLoading).not.toHaveBeenCalled();
     });
   });
 
@@ -582,6 +582,13 @@ describe('createGatewayEventHandler', () => {
         expect.any(Function),
         expect.objectContaining({
           agentId: 'agent-1',
+          topicId: 'topic-1',
+        }),
+      );
+      expect(store.updateTopicStatus).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agentId: 'agent-1',
+          status: 'waitingForHuman',
           topicId: 'topic-1',
         }),
       );
@@ -695,6 +702,7 @@ describe('createGatewayEventHandler', () => {
         params: { identifier: 'T-3' },
         result: { content: 'Task deleted', success: true },
         toolCallId: 'tc-1',
+        topicId: 'topic-1',
       });
     });
 
@@ -765,6 +773,7 @@ describe('createGatewayEventHandler', () => {
         identifier: 'lobe-task',
         params: { identifier: 'T-5', name: 'renamed' },
         toolCallId: 'tc-3',
+        topicId: 'topic-1',
       });
     });
   });
@@ -1107,7 +1116,9 @@ describe('createGatewayEventHandler', () => {
 
       const handler = createHandler(store);
 
-      handler(makeEvent('stream_start', { assistantMessage: { id: 'msg-new' } }));
+      handler(
+        makeEvent('stream_start', { assistantMessage: { id: 'msg-new', role: 'assistant' } }),
+      );
       handler(makeEvent('stream_chunk', { chunkType: 'text', content: 'Hello' }));
       await flush();
 
@@ -1148,7 +1159,7 @@ describe('createGatewayEventHandler', () => {
       const handler = createHandler(store);
 
       // Step 1: LLM call
-      handler(makeEvent('stream_start', { assistantMessage: { id: 'msg-1' } }));
+      handler(makeEvent('stream_start', { assistantMessage: { id: 'msg-1', role: 'assistant' } }));
       await flush();
       expect(store.associateMessageWithOperation).toHaveBeenCalledWith('msg-1', 'op-1');
 
@@ -1180,7 +1191,7 @@ describe('createGatewayEventHandler', () => {
       // carries the id directly, so it must NOT trigger a DB refetch
       // Only the association switch happens.
       vi.clearAllMocks();
-      handler(makeEvent('stream_start', { assistantMessage: { id: 'msg-2' } }));
+      handler(makeEvent('stream_start', { assistantMessage: { id: 'msg-2', role: 'assistant' } }));
       await flush();
       expect(store.associateMessageWithOperation).toHaveBeenCalledWith('msg-2', 'op-1');
       expect(messageService.getMessages).not.toHaveBeenCalled();

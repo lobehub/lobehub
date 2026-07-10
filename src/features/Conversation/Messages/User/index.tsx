@@ -4,6 +4,7 @@ import { type MouseEventHandler } from 'react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { ChatItem } from '@/features/Conversation/ChatItem';
 import { useUserAvatar } from '@/hooks/useUserAvatar';
 import { useSessionStore } from '@/store/session';
@@ -29,11 +30,21 @@ interface UserMessageProps {
 
 const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
   const item = useConversationStore(dataSelectors.getDisplayMessageById(id), isEqual)!;
-  const { content, createdAt, error, role, extra, targetId } = item;
+  const { content, createdAt, error, role, extra, targetId, sender } = item;
 
   const { t } = useTranslation('chat');
-  const avatar = useUserAvatar();
-  const title = useUserStore(userProfileSelectors.displayUserName);
+  const selfAvatar = useUserAvatar();
+  const selfTitle = useUserStore(userProfileSelectors.displayUserName);
+  const activeWorkspaceId = useActiveWorkspaceId();
+
+  // In workspaces every user bubble shows its sender avatar so ownership is
+  // visible even during single-user testing; personal mode keeps the legacy
+  // hidden-avatar behavior. Optimistic/streaming rows without a `sender`
+  // fall back to the current user, which is who authored them.
+  const showSender = Boolean(activeWorkspaceId);
+  const senderName = sender?.fullName || sender?.username || '';
+  const avatar = sender?.avatar || senderName || selfAvatar;
+  const title = senderName || selfTitle;
 
   // Get editing and loading state from ConversationStore
   const editing = useConversationStore(messageStateSelectors.isMessageEditing(id));
@@ -82,8 +93,8 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
       message={content}
       messageExtra={<UserMessageExtra content={content} extra={extra} id={id} />}
       placement={'right'}
-      showAvatar={false}
-      showTitle={false}
+      showAvatar={showSender}
+      showTitle={showSender}
       time={createdAt}
       titleAddon={dmIndicator}
       onDoubleClick={onDoubleClick}

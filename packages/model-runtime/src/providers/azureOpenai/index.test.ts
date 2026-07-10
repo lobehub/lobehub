@@ -135,6 +135,33 @@ describe('LobeAzureOpenAI', () => {
         );
       });
 
+      it('should preserve GPT-5.6 Pro mode and Max effort in Responses payloads', async () => {
+        const mockProdStream = new ReadableStream() as any;
+        const mockDebugStream = new ReadableStream() as any;
+
+        vi.spyOn(instance['client'].responses, 'create').mockResolvedValue({
+          tee: () => [mockProdStream, mockDebugStream],
+        } as any);
+        vi.spyOn(getModelPricingModule, 'getModelPricing').mockResolvedValue(undefined);
+        vi.spyOn(streamsModule, 'OpenAIResponsesStream').mockReturnValue(new ReadableStream());
+
+        await instance.chat({
+          messages: [{ content: 'Review this migration.', role: 'user' }],
+          model: 'gpt-5.6-sol',
+          reasoning: { mode: 'pro' },
+          reasoning_effort: 'max',
+          stream: true,
+        });
+
+        const createCall = (instance['client'].responses.create as Mock).mock.calls[0][0];
+
+        expect(createCall.reasoning).toEqual({
+          effort: 'max',
+          mode: 'pro',
+          summary: 'auto',
+        });
+      });
+
       it('should use deploymentName for Azure Responses API requests while keeping logical model for pricing', async () => {
         const mockProdStream = new ReadableStream() as any;
         const mockDebugStream = new ReadableStream() as any;

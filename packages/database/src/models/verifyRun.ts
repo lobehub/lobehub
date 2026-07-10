@@ -1,5 +1,5 @@
 import type { VerifyCheckItem, VerifyRunSource, VerifyRunStatus } from '@lobechat/types';
-import { and, desc, eq, isNull } from 'drizzle-orm';
+import { and, desc, eq, ilike, isNull, lt, or, sql } from 'drizzle-orm';
 
 import { agentOperations } from '../schemas/agentOperations';
 import type { NewVerifyRun, VerifyRunItem } from '../schemas/verify';
@@ -22,6 +22,25 @@ export interface VerifyRunState {
   verifyRunId: string | null;
   verifyStatus: VerifyRunStatus | null;
 }
+
+/**
+ * Opaque list cursor = `${createdAt ISO}__${id}`. Both parts are metacharacter-
+ * free (ISO timestamp + uuid), so a plain `__` delimiter round-trips safely.
+ */
+const encodeCursor = (createdAt: Date, id: string): string => `${createdAt.toISOString()}__${id}`;
+
+const decodeCursor = (cursor?: string): { createdAt: Date; id: string } | null => {
+  if (!cursor) return null;
+  const idx = cursor.lastIndexOf('__');
+  if (idx <= 0) return null;
+  const createdAt = new Date(cursor.slice(0, idx));
+  const id = cursor.slice(idx + 2);
+  if (Number.isNaN(createdAt.getTime()) || !id) return null;
+  return { createdAt, id };
+};
+
+/** Escape LIKE/ILIKE metacharacters (`\ % _`) so user input matches literally. */
+const escapeLike = (value: string): string => value.replaceAll(/[\\%_]/g, (c) => `\\${c}`);
 
 const toState = (run: VerifyRunItem | null | undefined): VerifyRunState | null =>
   run
@@ -110,6 +129,67 @@ export class VerifyRunModel {
       orderBy: [desc(verifyRuns.createdAt)],
       where: this.ownership(),
     });
+  };
+
+  /**
+   * Cursor-paginated page of verification sessions, newest first, optionally
+   * filtered by a title search. Ordered by `(createdAt, id)` descending and
+   * paged on that composite key so rows sharing a `createdAt` (e.g. a batch
+   * ingest) can't be dropped or duplicated at a page boundary — a plain
+   * `createdAt`-only cursor would.
+   *
+   * `createdAt` is compared/ordered at **millisecond** precision
+   * (`date_trunc('milliseconds', …)`) to match the cursor, which round-trips
+   * through a JS `Date` / ISO string and so only carries milliseconds. The DB
+   * column is `timestamptz` and can hold microseconds; comparing the raw column
+   * against the truncated cursor would make same-millisecond rows match neither
+   * the `eq` tiebreaker nor the `lt` bound, silently dropping them. Truncating
+   * both sides keeps the keyset lossless.
+   *
+   * Fetches `limit + 1` to detect a further page without a second COUNT query:
+   * `nextCursor` is `null` on the last page, otherwise the encoded cursor of the
+   * last returned row.
+   */
+  queryPage = async ({
+    cursor,
+    limit = 30,
+    q,
+  }: { cursor?: string; limit?: number; q?: string } = {}): Promise<{
+    items: VerifyRunItem[];
+    nextCursor: string | null;
+  }> => {
+    const conditions = [this.ownership()];
+
+    // Millisecond-truncated createdAt — the precision the cursor round-trips at.
+    const createdAtMs = sql`date_trunc('milliseconds', ${verifyRuns.createdAt})`;
+
+    const decoded = decodeCursor(cursor);
+    if (decoded) {
+      // (createdAt, id) < (cursor.createdAt, cursor.id) in descending order.
+      conditions.push(
+        or(
+          lt(createdAtMs, decoded.createdAt),
+          and(eq(createdAtMs, decoded.createdAt), lt(verifyRuns.id, decoded.id)),
+        )!,
+      );
+    }
+
+    const search = q?.trim();
+    // Escape LIKE metacharacters so a user typing `%`/`_` searches literally.
+    if (search) conditions.push(ilike(verifyRuns.title, `%${escapeLike(search)}%`));
+
+    const rows = await this.db.query.verifyRuns.findMany({
+      limit: limit + 1,
+      orderBy: [desc(createdAtMs), desc(verifyRuns.id)],
+      where: and(...conditions),
+    });
+
+    const hasMore = rows.length > limit;
+    const items = hasMore ? rows.slice(0, limit) : rows;
+    const last = items.at(-1);
+    const nextCursor = hasMore && last ? encodeCursor(last.createdAt, last.id) : null;
+
+    return { items, nextCursor };
   };
 
   /** The verification session bound to an Agent Run, or undefined when none yet. */
@@ -201,6 +281,19 @@ export class VerifyRunModel {
       .update(verifyRuns)
       .set({ status })
       .where(and(eq(verifyRuns.id, runId), this.ownership()));
+  };
+
+  update = async (
+    runId: string,
+    value: Partial<Pick<NewVerifyRun, 'context' | 'goal' | 'metadata' | 'scenario' | 'title'>>,
+  ): Promise<VerifyRunItem | undefined> => {
+    const [run] = await this.db
+      .update(verifyRuns)
+      .set(value)
+      .where(and(eq(verifyRuns.id, runId), this.ownership()))
+      .returning();
+
+    return run;
   };
 
   /** Read just the verify-related fields for a session (legacy state shape). */

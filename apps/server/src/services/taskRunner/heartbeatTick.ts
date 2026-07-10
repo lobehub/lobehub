@@ -15,16 +15,10 @@ const TERMINAL_STATUSES = new Set(['canceled', 'completed', 'failed']);
 const isTerminal = (status: string) => TERMINAL_STATUSES.has(status);
 
 export type HeartbeatTickOutcome =
-  | { ran: true; taskIdentifier: string }
-  | { ran: false; reason: HeartbeatTickSkipReason };
+  { ran: true; taskIdentifier: string } | { ran: false; reason: HeartbeatTickSkipReason };
 
 export type HeartbeatTickSkipReason =
-  | 'human-waiting'
-  | 'in-flight'
-  | 'mode-changed'
-  | 'no-interval'
-  | 'not-found'
-  | 'terminal';
+  'human-waiting' | 'in-flight' | 'mode-changed' | 'no-interval' | 'not-found' | 'terminal';
 
 /**
  * Run a heartbeat tick — invoked by both the LocalScheduler `setTimeout`
@@ -66,14 +60,14 @@ export async function runHeartbeatTick(
 
   const wsId = task.workspaceId ?? undefined;
   const briefModel = new BriefModel(db, userId, wsId);
-  if (await briefModel.hasUnresolvedUrgentByTask(taskId)) {
+  if (await briefModel.hasUnresolvedUrgentByTask(taskId, { excludeTypes: ['error'] })) {
     log('skip task=%s reason=human-waiting', taskId);
     return { ran: false, reason: 'human-waiting' };
   }
 
   const runner = new TaskRunnerService(db, userId, wsId);
   try {
-    await runner.runTask({ taskId });
+    await runner.runTask({ taskId, trigger: 'heartbeat' });
   } catch (e) {
     // Concurrent tick / manual run already running this task — treat as a
     // graceful skip. runTask's own rollback only fires when *it* set running,

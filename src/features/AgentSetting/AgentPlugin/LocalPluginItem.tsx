@@ -1,3 +1,4 @@
+import { getActivePluginIds } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import { Switch } from 'antd';
 import { memo } from 'react';
@@ -10,7 +11,7 @@ const MarketList = memo<{ id: string }>(({ id }) => {
     !!s.config.plugins,
     s.disabled,
   ]);
-  const plugins = useStore((s) => s.config.plugins || []);
+  const plugins = useStore((s) => getActivePluginIds(s.config.plugins));
 
   return (
     <Flexbox horizontal align={'center'} gap={8}>

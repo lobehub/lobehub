@@ -11,9 +11,15 @@ import SkillsGroup from './SkillsGroup';
 interface ResourcesSectionProps {
   /** Bound remote device id (device mode); skills are then scanned over RPC. */
   deviceId?: string;
+  /**
+   * Whether this pane is actually visible (panel open + resources tab active).
+   * Gates the agent-document fetch so a collapsed sidebar doesn't pull the full
+   * list on conversation enter.
+   */
+  enabled?: boolean;
 }
 
-const ResourcesSection = memo<ResourcesSectionProps>(({ deviceId }) => {
+const ResourcesSection = memo<ResourcesSectionProps>(({ deviceId, enabled = true }) => {
   const isHetero = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   // Resolve the cwd the same way the runtime bar / WorkingSidebar do
@@ -38,6 +44,7 @@ const ResourcesSection = memo<ResourcesSectionProps>(({ deviceId }) => {
       {!isHetero && (
         <AgentDocumentsGroup
           deviceId={deviceId}
+          enabled={enabled}
           style={{ flex: 1, minHeight: 0 }}
           workingDirectory={workingDirectory}
         />

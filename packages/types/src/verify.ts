@@ -18,12 +18,18 @@ export type VerifierType = (typeof verifierTypes)[number];
 export const verifyOnFailStrategies = ['manual', 'auto_repair'] as const;
 export type VerifyOnFailStrategy = (typeof verifyOnFailStrategies)[number];
 
-/** Lifecycle of a single check result. */
+/**
+ * Lifecycle of a single check result.
+ * - errored: the verifier could not run (infra / startup failure) — NOT a
+ *   delivery judgment. Kept distinct from `failed` so a broken verifier never
+ *   reads as a rejected delivery and never seeds an auto-repair round.
+ */
 export const verifyCheckResultStatuses = [
   'pending',
   'running',
   'passed',
   'failed',
+  'errored',
   'skipped',
 ] as const;
 export type VerifyCheckResultStatus = (typeof verifyCheckResultStatuses)[number];
@@ -47,6 +53,9 @@ export const verifyRunStatuses = [
   'verifying',
   'passed',
   'failed',
+  // At least one required check errored (verifier couldn't run) and none
+  // genuinely failed — verification is inconclusive, not a rejected delivery.
+  'errored',
   'repairing',
   'delivered',
 ] as const;
@@ -76,6 +85,15 @@ export type VerifyRunScenario = (typeof verifyRunScenarios)[number];
  * Rendered as the report's scope header so the verify page reads as the final
  * report.
  */
+export interface VerifyCodingPullRequest {
+  /** Pull request number, e.g. 123. */
+  number?: number | string;
+  /** Pull request title. */
+  title?: string;
+  /** Web URL for opening the PR. */
+  url?: string;
+}
+
 export interface VerifyCodingScope {
   /** Git branch the report was produced against. */
   branch?: string;
@@ -85,6 +103,8 @@ export interface VerifyCodingScope {
   entry?: string;
   /** The focus / key risk of this round (free text). */
   focus?: string;
+  /** Associated pull request, when the verification run has one. */
+  pullRequest?: VerifyCodingPullRequest;
   /** Test surfaces exercised, e.g. ["cli", "web"]. */
   surfaces?: string[];
   /** When the report was authored (ISO 8601) — distinct from the row's createdAt (ingest time). */
@@ -101,6 +121,43 @@ export interface VerifyCodingScope {
  * extension) — `context` is specifically the active scenario's input.
  */
 export type VerifyRunContext = VerifyCodingScope;
+
+export interface VerifyInteractionCostOperators {
+  H?: number;
+  K?: number;
+  M?: number;
+  P?: number;
+  R_ms?: number;
+  T_chars?: number;
+}
+
+export interface VerifyInteractionCostPhase {
+  actionCount?: number;
+  activeSeconds?: number;
+  checkItemId?: string;
+  id: string;
+  label?: string;
+  operators?: VerifyInteractionCostOperators;
+  seconds?: number;
+  waitSeconds?: number;
+}
+
+export interface VerifyInteractionCost {
+  actionCount?: number;
+  activeSeconds: number;
+  actualAgentSeconds?: number;
+  categoryCounts?: Record<string, number>;
+  generatedAt?: string;
+  mentalEstimates?: Record<string, unknown>[];
+  model: string;
+  operators: VerifyInteractionCostOperators;
+  phases?: VerifyInteractionCostPhase[];
+  scope?: string;
+  sourceTrace?: string;
+  timingSeconds?: Record<string, number>;
+  totalSeconds: number;
+  waitSeconds: number;
+}
 
 /** Default cap on automatic repair rounds when a rubric doesn't override it. */
 export const DEFAULT_MAX_REPAIR_ROUNDS = 3;
@@ -124,6 +181,8 @@ export interface VerifyRubricConfig {
  * migration; the active scenario's input lives in `context`, not here.
  */
 export interface VerifyRunMetadata {
+  [key: string]: unknown;
+  interactionCost?: VerifyInteractionCost;
   /**
    * Per-run override for the repair-round cap, taking precedence over the
    * rubric's {@link VerifyRubricConfig.maxRepairRounds}. Set from a task's
@@ -243,6 +302,8 @@ export interface VerifyEvidence {
   /** Stored artifact — FK to `files`, which owns mime / size / hash / url. */
   fileId?: string | null;
   id: string;
+  /** Generic extension bag; concrete capturer-specific shape is not fixed yet. */
+  metadata?: unknown | null;
   type: VerifyEvidenceType;
 }
 

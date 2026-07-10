@@ -117,6 +117,7 @@ describe('desktopRouter config sync', () => {
       '@/routes/(main)/[workspaceSlug]/settings/credits',
       '@/routes/(main)/[workspaceSlug]/settings/usage',
       '@/routes/(main)/[workspaceSlug]/settings/skill',
+      '@/routes/(main)/[workspaceSlug]/settings/connector',
       '@/routes/(main)/[workspaceSlug]/settings/audit-log',
     ];
 

@@ -1,6 +1,7 @@
 'use client';
 
 import { COMPOSIO_APP_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
+import { getActivePluginIds, parsePluginEntry, upsertPluginMode } from '@lobechat/types';
 import { type ItemType } from '@lobehub/ui';
 import { Avatar, Button, Flexbox, Icon } from '@lobehub/ui';
 import { McpIcon, SkillsIcon } from '@lobehub/ui/icons';
@@ -76,8 +77,10 @@ const AgentTool = memo<AgentToolProps>(
     const effectiveAgentId = agentId || activeAgentId || '';
     const config = useAgentStore(agentSelectors.getAgentConfigById(effectiveAgentId), isEqual);
 
-    // Plugin state management
-    const plugins = config?.plugins || [];
+    // Plugin state management — pinned identifiers only (a disabled entry
+    // is a distinct, valid config state; this component has no tri-state UI
+    // and treats it as "not enabled", matching pre-tri-state semantics).
+    const plugins = getActivePluginIds(config?.plugins);
 
     const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
     const updateAgentChatConfigById = useAgentStore((s) => s.updateAgentChatConfigById);
@@ -159,22 +162,18 @@ const AgentTool = memo<AgentToolProps>(
       async (pluginId: string, state?: boolean) => {
         if (!canEdit) return;
         if (!effectiveAgentId) return;
-        const currentPlugins = plugins;
-        const hasPlugin = currentPlugins.includes(pluginId);
+        const hasPlugin = plugins.includes(pluginId);
         const shouldEnable = state !== undefined ? state : !hasPlugin;
+        if (shouldEnable === hasPlugin) return;
 
-        let newPlugins: string[];
-        if (shouldEnable && !hasPlugin) {
-          newPlugins = [...currentPlugins, pluginId];
-        } else if (!shouldEnable && hasPlugin) {
-          newPlugins = currentPlugins.filter((id) => id !== pluginId);
-        } else {
-          return;
-        }
-
-        await updateAgentConfigById(effectiveAgentId, { plugins: newPlugins });
+        // upsertPluginMode operates on the raw (possibly mixed-shape) config
+        // — not the pinned-only `plugins` above — so an existing disabled
+        // entry is flipped in place instead of being dropped from the array.
+        await updateAgentConfigById(effectiveAgentId, {
+          plugins: upsertPluginMode(config?.plugins, pluginId, shouldEnable ? 'pinned' : 'auto'),
+        });
       },
-      [canEdit, effectiveAgentId, plugins, updateAgentConfigById],
+      [canEdit, effectiveAgentId, plugins, config?.plugins, updateAgentConfigById],
     );
 
     // Check if a tool is enabled (handles web browsing specially)
@@ -740,7 +739,8 @@ const AgentTool = memo<AgentToolProps>(
     useEffect(() => {
       if (cleanupDoneRef.current) return;
       if (validIdentifiers.size === 0) return;
-      if (plugins.length === 0) return;
+      const rawPlugins = config?.plugins ?? [];
+      if (rawPlugins.length === 0) return;
       // Don't prune until the connector store has loaded — connector identifiers
       // are absent from validIdentifiers until fetchConnectors() resolves, so
       // running cleanup before that would incorrectly mark enabled connectors as stale.
@@ -748,10 +748,16 @@ const AgentTool = memo<AgentToolProps>(
 
       // Defer cleanup to avoid race with async data loading (SWR, Composio, etc.)
       const timer = setTimeout(() => {
-        const stalePlugins = plugins.filter((id) => !validIdentifiers.has(id));
+        // Checked (and filtered) by identifier regardless of entry shape, so
+        // a stale disabled/pinned object entry is pruned exactly like a
+        // stale legacy string one — untouched valid entries keep their
+        // original shape (lazy per-item upgrade).
+        const isValid = (entry: (typeof rawPlugins)[number]) =>
+          validIdentifiers.has(parsePluginEntry(entry).identifier);
+        const hasStale = rawPlugins.some((entry) => !isValid(entry));
 
-        if (stalePlugins.length > 0 && effectiveAgentId) {
-          const cleanedPlugins = plugins.filter((id) => validIdentifiers.has(id));
+        if (hasStale && effectiveAgentId) {
+          const cleanedPlugins = rawPlugins.filter(isValid);
           updateAgentConfigById(effectiveAgentId, { plugins: cleanedPlugins });
         }
 

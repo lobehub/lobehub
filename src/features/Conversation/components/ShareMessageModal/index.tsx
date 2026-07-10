@@ -1,9 +1,10 @@
 import { type UIChatMessage } from '@lobechat/types';
-import { Flexbox, Modal } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import { Tabs } from '@lobehub/ui/base-ui';
 import { memo, useId, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import ImperativeModal from '@/components/ImperativeModal';
 import ShareDataProvider from '@/features/ShareModal/ShareDataProvider';
 import SharePdf from '@/features/ShareModal/SharePdf';
 import { useIsMobile } from '@/hooks/useIsMobile';
@@ -58,7 +59,7 @@ const ShareModal = memo<ShareModalProps>(({ onCancel, open, message }) => {
   }, [context, isMobile, message, uniqueId, t]);
 
   return (
-    <Modal
+    <ImperativeModal
       allowFullscreen
       centered={false}
       destroyOnHidden={true}
@@ -79,7 +80,7 @@ const ShareModal = memo<ShareModalProps>(({ onCancel, open, message }) => {
           onChange={(key) => setTab(key as Tab)}
         />
       </Flexbox>
-    </Modal>
+    </ImperativeModal>
   );
 });
 

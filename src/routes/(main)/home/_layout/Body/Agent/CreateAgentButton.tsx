@@ -40,9 +40,10 @@ const styles = createStaticStyles(({ css }) => ({
 interface CreateAgentButtonProps {
   className?: string;
   groupId?: string;
+  visibility?: 'private' | 'public';
 }
 
-const CreateAgentButton = memo<CreateAgentButtonProps>(({ groupId, className }) => {
+const CreateAgentButton = memo<CreateAgentButtonProps>(({ groupId, className, visibility }) => {
   const { t } = useTranslation('chat');
   const { allowed: canCreate, reason } = usePermission('create_content');
   const {
@@ -56,9 +57,16 @@ const CreateAgentButton = memo<CreateAgentButtonProps>(({ groupId, className }) 
   } = useCreateMenuItems();
 
   const isCustomGroup = Boolean(groupId) && groupId !== SessionDefaultGroup.Default;
+  // Always carry visibility so agents created inside a private session group
+  // land in the private bucket (otherwise they default to public and end up
+  // orphaned — invisible in both lists). groupId is only attached for custom
+  // groups so the default list keeps creating top-level agents.
   const menuOptions = useMemo(
-    () => (isCustomGroup ? { groupId } : undefined),
-    [groupId, isCustomGroup],
+    () =>
+      isCustomGroup || visibility
+        ? { ...(isCustomGroup ? { groupId } : {}), ...(visibility ? { visibility } : {}) }
+        : undefined,
+    [groupId, isCustomGroup, visibility],
   );
 
   const dropdownItems = useMemo(() => {
@@ -81,9 +89,9 @@ const CreateAgentButton = memo<CreateAgentButtonProps>(({ groupId, className }) 
   const handleClick = () => {
     if (!canCreate) return;
     if (openCreateModal) {
-      openCreateModal('agent', isCustomGroup ? { groupId } : undefined);
+      openCreateModal('agent', menuOptions);
     } else {
-      createAgent(isCustomGroup ? { groupId } : undefined);
+      createAgent(menuOptions);
     }
   };
 

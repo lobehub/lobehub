@@ -19,7 +19,15 @@ export const nextWorkingDirs = (
 ): WorkingDirEntry[] => {
   const path = entry.path.trim();
   if (!path) return [...current];
-  return [{ ...entry, path }, ...current.filter((d) => d.path !== path)].slice(0, max);
+  const existing = current.find((d) => d.path === path);
+  const nextEntry: WorkingDirEntry = { ...entry, path };
+
+  if (!nextEntry.workspace && existing?.workspace) nextEntry.workspace = existing.workspace;
+  if (!nextEntry.workspaceScannedAt && existing?.workspaceScannedAt) {
+    nextEntry.workspaceScannedAt = existing.workspaceScannedAt;
+  }
+
+  return [nextEntry, ...current.filter((d) => d.path !== path)].slice(0, max);
 };
 
 /** Drop a path from a device's `workingDirs` recent list (used by the picker's

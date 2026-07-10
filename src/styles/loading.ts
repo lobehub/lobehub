@@ -57,5 +57,9 @@ export const shinyTextStyles = createStaticStyles(({ css, cssVar }) => ({
     background-size: 200% 100%;
 
     animation: ${shine} 1.5s linear infinite;
+
+    @media (prefers-reduced-motion: reduce) {
+      animation: none;
+    }
   `,
 }));

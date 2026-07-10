@@ -60,11 +60,11 @@ To use the bot in WeChat groups:
 
 ## Advanced Settings
 
-| Setting                  | Default | Description                                              |
-| ------------------------ | ------- | -------------------------------------------------------- |
-| **Character Limit**      | 2000    | Maximum characters per message (range: 100–2000)         |
-| **Message Merge Window** | 2000 ms | How long to wait for additional messages before replying |
-| **Show Usage Stats**     | Off     | Display token/cost stats in replies                      |
+| Setting                  | Default | Description                                                                                                                                                                                |
+| ------------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Character Limit**      | 2000    | Maximum characters per message (range: 100–2048)                                                                                                                                           |
+| **Message Merge Window** | 5000 ms | How long to wait for additional messages before replying. Only takes effect when **Concurrency Mode** is set to `debounce` — the default `queue` mode processes each message as it arrives |
+| **Show Usage Stats**     | Off     | Display token/cost stats in replies                                                                                                                                                        |
 
 ## How It Works
 
@@ -81,8 +81,7 @@ This polling is managed by a background cron job, so the connection is maintaine
 
 - **No message editing** — WeChat does not support editing sent messages. Updated responses will be sent as new messages.
 - **No reactions** — WeChat iLink Bot API does not support emoji reactions.
-- **Text only** — Only text messages are currently supported. Image and file attachments are not yet available.
-- **Message length limit** — Messages exceeding 2000 characters will be automatically split into multiple messages.
+- **Message length limit** — Messages exceeding the character limit will be automatically split into multiple messages.
 - **Session expiration** — The bot session may expire and require re-authentication by scanning a new QR code.
 
 ## Troubleshooting

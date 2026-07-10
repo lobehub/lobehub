@@ -29,6 +29,7 @@ import { selectCurrentTurnTodosFromMessages } from '@/store/chat/slices/message/
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { fileChatSelectors, useFileStore } from '@/store/file';
 
+import { buildMessageContextSelections } from '../../ChatInput/utils/contextSelections';
 import WideScreenContainer from '../../WideScreenContainer';
 import InterventionBar from '../InterventionBar';
 import { dataSelectors, messageStateSelectors, useConversationStore } from '../store';
@@ -357,16 +358,17 @@ const ChatInput = memo<ChatInputProps>(
         fileStore.clearChatUploadFileList();
         fileStore.clearChatContextSelections();
 
-        // Convert ChatContextContent to PageSelection for persistence
-        const pageSelections = currentContextList.map((ctx) => ({
-          content: ctx.preview || '',
-          id: ctx.id,
-          pageId: ctx.pageId || '',
-          xml: ctx.content,
-        }));
+        const { contextSelections, pageSelections } =
+          buildMessageContextSelections(currentContextList);
 
         // Fire and forget - send with captured message
-        await sendMessage({ editorData, files: currentFileList, message, pageSelections });
+        await sendMessage({
+          contextSelections,
+          editorData,
+          files: currentFileList,
+          message,
+          pageSelections,
+        });
       },
       [sendMessage, disableQueue, disableSend, isInputQueueBlocked],
     );

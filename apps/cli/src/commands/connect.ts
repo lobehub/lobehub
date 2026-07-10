@@ -41,16 +41,27 @@ import {
   resolveDeviceIdentity,
   resolveWorkspaceDeviceIdentity,
 } from '../device/register';
+import {
+  installConnectService,
+  readConnectServiceStatus,
+  restartConnectService,
+  startConnectService,
+  stopConnectService,
+  uninstallConnectService,
+} from '../service/connect';
 import { loadOrCreateConnectionId, loadSettings, normalizeUrl, saveSettings } from '../settings';
 import { executeToolCall } from '../tools';
 import { cleanupAllProcesses } from '../tools/shell';
 import { log, setVerbose } from '../utils/logger';
+
+const CONNECT_SERVICE_NAME = 'lobehub-connect.service';
 
 interface ConnectOptions {
   daemon?: boolean;
   daemonChild?: boolean;
   deviceId?: string;
   gateway?: string;
+  serviceChild?: boolean;
   token?: string;
   verbose?: boolean;
   /** Enroll this machine as a device of the given workspace (admin only). */
@@ -68,6 +79,7 @@ export function registerConnectCommand(program: Command) {
     .option('-v, --verbose', 'Enable verbose logging')
     .option('-d, --daemon', 'Run as a background daemon process')
     .option('--daemon-child', 'Internal: runs as the daemon child process')
+    .option('--service-child', 'Internal: runs as the system service child process')
     .action(async (options: ConnectOptions) => {
       if (options.verbose) setVerbose(true);
 
@@ -76,8 +88,9 @@ export function registerConnectCommand(program: Command) {
         return handleDaemonStart(options);
       }
 
-      // --daemon-child: running inside daemon, redirect logging
-      const isDaemonChild = options.daemonChild || process.env.LOBEHUB_DAEMON === '1';
+      const isServiceChild = options.serviceChild || process.env.LOBEHUB_CONNECT_SERVICE === '1';
+      const isDaemonChild =
+        options.daemonChild || isServiceChild || process.env.LOBEHUB_DAEMON === '1';
 
       await runConnect(options, isDaemonChild);
     });
@@ -146,6 +159,75 @@ export function registerConnectCommand(program: Command) {
         log.info('Stopped existing daemon.');
       }
       handleDaemonStart({ ...options, daemon: true });
+    });
+
+  const serviceCmd = connectCmd
+    .command('service')
+    .description('Manage the Linux user systemd connect service');
+
+  serviceCmd
+    .command('install')
+    .description('Install and start the Linux user systemd connect service')
+    .action(() => {
+      installConnectService();
+      log.info(`Installed and started ${CONNECT_SERVICE_NAME}.`);
+      log.info("Run 'lh connect service status' to inspect the service.");
+    });
+
+  serviceCmd
+    .command('uninstall')
+    .description('Remove the Linux user systemd connect service')
+    .action(() => {
+      const removed = uninstallConnectService();
+      if (removed) log.info(`Uninstalled ${CONNECT_SERVICE_NAME}.`);
+      else log.warn('No connect service is installed.');
+    });
+
+  serviceCmd.command('start').description('Start the installed connect service').action(() => {
+    const started = startConnectService();
+    if (started) log.info(`Started ${CONNECT_SERVICE_NAME}.`);
+    else log.warn('No connect service is installed.');
+  });
+
+  serviceCmd.command('stop').description('Stop the installed connect service').action(() => {
+    const stopped = stopConnectService();
+    if (stopped) log.info(`Stopped ${CONNECT_SERVICE_NAME}.`);
+    else log.warn('No connect service is installed.');
+  });
+
+  serviceCmd.command('restart').description('Restart the installed connect service').action(() => {
+    const restarted = restartConnectService();
+    if (restarted) log.info(`Restarted ${CONNECT_SERVICE_NAME}.`);
+    else log.warn('No connect service is installed.');
+  });
+
+  serviceCmd
+    .command('status')
+    .description('Show the installed connect service status')
+    .action(() => {
+      const serviceStatus = readConnectServiceStatus();
+      if (!serviceStatus) {
+        log.info('No connect service is installed.');
+        return;
+      }
+
+      const status = readStatus();
+      log.info('─── Connect Service Status ───');
+      log.info(`  Service          : ${serviceStatus.serviceName}`);
+      log.info(`  Installed        : yes`);
+      log.info(`  Enabled          : ${serviceStatus.enabled ? 'yes' : 'no'}`);
+      log.info(`  Active           : ${serviceStatus.active ? 'yes' : 'no'}`);
+      log.info(`  Sub-state        : ${serviceStatus.subState || 'unknown'}`);
+      if (serviceStatus.mainPid !== null) {
+        log.info(`  PID              : ${serviceStatus.mainPid}`);
+      }
+      if (status) {
+        log.info(`  Connection       : ${status.connectionStatus}`);
+        log.info(`  Gateway          : ${status.gatewayUrl}`);
+        const uptime = formatUptime(new Date(status.startedAt));
+        log.info(`  Uptime           : ${uptime}`);
+      }
+      log.info('──────────────────────────────');
     });
 
   // Top-level alias for `connect stop`. Users who run `lh connect` naturally

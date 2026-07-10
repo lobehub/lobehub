@@ -3,7 +3,11 @@ import { messageMapKey, type MessageMapKeyInput } from '@/store/chat/utils/messa
 import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 
 import { type Operation, type OperationType } from './types';
-import { AI_RUNTIME_OPERATION_TYPES, INPUT_LOADING_OPERATION_TYPES } from './types';
+import {
+  AI_RUNTIME_OPERATION_TYPES,
+  INPUT_LOADING_OPERATION_TYPES,
+  QUEUE_BLOCKING_OPERATION_TYPES,
+} from './types';
 
 // === Basic Queries ===
 /**
@@ -245,6 +249,23 @@ const isAgentRuntimeVisiblyRunningByContext =
   };
 
 /**
+ * All running queue-blocking operation ids in a context (see
+ * QUEUE_BLOCKING_OPERATION_TYPES). "Send now" cancels every one of them, not just
+ * the first: a retry via delAndRegenerate/delAndResendThread runs an outer
+ * wrapper `regenerate` op AND an inner regenerateUserMessage `regenerate` op at
+ * once, so cancelling only one would leave the queue blocked and make "Send now"
+ * a no-op during that retry window.
+ */
+const getRunningQueueBlockingOperationIds =
+  (context: MessageMapKeyInput) =>
+  (s: ChatStoreState): string[] => {
+    if (!context.agentId) return [];
+    return getOperationsByContext(context)(s)
+      .filter((op) => QUEUE_BLOCKING_OPERATION_TYPES.includes(op.type) && op.status === 'running')
+      .map((op) => op.id);
+  };
+
+/**
  * Get the earliest start time for a running agent runtime operation in a
  * specific context. This anchors visible elapsed-time UI to the top-level
  * runtime op instead of short-lived sub-operations.
@@ -330,9 +351,24 @@ const isInputVisiblyLoadingByContext =
 
     const operations = getOperationsByContext(context)(s);
 
-    return operations.some(
+    const hasVisiblyRunning = operations.some(
       (op) => INPUT_LOADING_OPERATION_TYPES.includes(op.type) && isVisiblyRunningOperation(op),
     );
+    if (hasVisiblyRunning) return true;
+
+    // A queued message is a follow-up the user already sent while a prior op was
+    // running; it gets no op of its own until that op ends and the queue drains.
+    // In the window where the prior op has finished its *visible* output
+    // (visibleLoadingDone) but hasn't reached its terminal end yet, there is no
+    // visibly-running op and no op for the queued message, so the input would
+    // look idle even though a send is pending. Keep the visible loading on while
+    // some INPUT_LOADING op is still running to absorb the queue. Gate on a
+    // still-running op so a stale queue left by a cancelled/errored run (which
+    // never drains) doesn't pin the indicator on forever.
+    const hasRunning = operations.some(
+      (op) => INPUT_LOADING_OPERATION_TYPES.includes(op.type) && isRunningOperation(op),
+    );
+    return hasRunning && getQueuedMessages(context)(s).length > 0;
   };
 
 // === Backward Compatibility ===
@@ -747,31 +783,28 @@ const unreadCompletedCountForTopics =
  * Get queued messages count for a context
  */
 const queuedMessageCount =
-  (context: { agentId?: string; groupId?: string; topicId?: string | null }) =>
-  (s: ChatStoreState): number => {
-    if (!context.agentId) return 0;
-    const contextKey = messageMapKey({
-      agentId: context.agentId,
-      groupId: context.groupId,
-      topicId: context.topicId,
-    });
-    return s.queuedMessages[contextKey]?.length ?? 0;
-  };
+  (context: MessageMapKeyInput) =>
+  (s: ChatStoreState): number =>
+    // Delegate to getQueuedMessages so the count keys off the SAME full context
+    // (threadId / scope / documentId / ...) the queue is stored under. A reduced
+    // agentId/groupId/topicId key here would report 0 for thread / page /
+    // group_agent follow-ups, so QueueTray would never mount even though the
+    // input is pinned loading by a real queued message.
+    getQueuedMessages(context)(s).length;
 
 /**
  * Get all queued messages for a context
  */
-const getQueuedMessages =
-  (context: { agentId?: string; groupId?: string; topicId?: string | null }) =>
-  (s: ChatStoreState) => {
-    if (!context.agentId) return [];
-    const contextKey = messageMapKey({
-      agentId: context.agentId,
-      groupId: context.groupId,
-      topicId: context.topicId,
-    });
-    return s.queuedMessages[contextKey] ?? [];
-  };
+const getQueuedMessages = (context: MessageMapKeyInput) => (s: ChatStoreState) => {
+  if (!context.agentId) return [];
+  // Build the key from the FULL context (threadId / scope / subAgentId /
+  // documentId), matching both the enqueue side (`messageMapKey(operationContext)`
+  // in conversationLifecycle) and getOperationsByContext. A reduced
+  // agentId/groupId/topicId key collapses thread / page / group_agent
+  // conversations onto the main-scope bucket, so their queued follow-ups would
+  // never be found.
+  return s.queuedMessages[messageMapKey(context)] ?? [];
+};
 
 /**
  * Operation Selectors
@@ -793,6 +826,7 @@ export const operationSelectors = {
   getOperationsByMessage,
   getOperationsByType,
   getRunningOperations,
+  getRunningQueueBlockingOperationIds,
   getRunningToolCallStartTime,
   hasAnyRunningOperation,
   hasRunningOperationByContext,

@@ -157,6 +157,40 @@ describe('HomeInputActionImpl', () => {
         }),
       );
     });
+
+    it('forwards context selections to the agent builder message', async () => {
+      const action = createAction();
+      const contextSelections = [
+        {
+          content: 'const selected = true;',
+          filePath: 'src/example.ts',
+          id: 'code-selection',
+          lineRange: { endLine: 12, startLine: 10 },
+          source: 'code' as const,
+        },
+      ];
+
+      await action.sendAsAgent({ contextSelections, message: 'use this selected code' });
+
+      expect(sendMessageMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          contextSelections,
+          message: 'use this selected code',
+        }),
+      );
+    });
+
+    it('passes the workspace slug to the agent builder message context', async () => {
+      const action = createAction();
+
+      await action.sendAsAgent({ message: 'build a support agent', workspaceSlug: 'team' });
+
+      expect(sendMessageMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          context: { agentId: 'agentBuilder', scope: 'agent_builder', workspaceSlug: 'team' },
+        }),
+      );
+    });
   });
 
   describe('sendAsGroup', () => {
@@ -171,6 +205,22 @@ describe('HomeInputActionImpl', () => {
         expect.objectContaining({
           context: { agentId: 'groupAgentBuilder', scope: 'group_agent_builder' },
           message: 'build a research group',
+        }),
+      );
+    });
+
+    it('passes the workspace slug to the group builder message context', async () => {
+      const action = createAction();
+
+      await action.sendAsGroup({ message: 'build a research group', workspaceSlug: 'team' });
+
+      expect(sendMessageMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          context: {
+            agentId: 'groupAgentBuilder',
+            scope: 'group_agent_builder',
+            workspaceSlug: 'team',
+          },
         }),
       );
     });
@@ -190,6 +240,23 @@ describe('HomeInputActionImpl', () => {
         expect.objectContaining({
           context: { agentId: 'pageAgent', documentId: 'doc-new', scope: 'page' },
           message: 'write me a doc',
+        }),
+      );
+    });
+
+    it('passes the workspace slug to the page agent message context', async () => {
+      const action = createAction();
+
+      await action.sendAsWrite({ message: 'write me a doc', workspaceSlug: 'team' });
+
+      expect(sendMessageMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          context: {
+            agentId: 'pageAgent',
+            documentId: 'doc-new',
+            scope: 'page',
+            workspaceSlug: 'team',
+          },
         }),
       );
     });

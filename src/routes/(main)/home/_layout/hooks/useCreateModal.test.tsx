@@ -86,6 +86,15 @@ vi.mock('@lobehub/ui', () => ({
   Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
 }));
 
+vi.mock('@/components/ImperativeModal', () => ({
+  default: ({ children, open, width }: { children?: ReactNode; open?: boolean; width?: string }) =>
+    open ? (
+      <div data-modal-width={width} role="dialog">
+        {children}
+      </div>
+    ) : null,
+}));
+
 vi.mock('@/services/marketApi', () => ({
   marketApiService: {
     searchSkill: marketApiMocks.searchSkill,
@@ -99,6 +108,29 @@ vi.mock('@/services/skill', () => ({
 }));
 
 vi.mock('@lobehub/ui/base-ui', () => ({
+  Button: ({
+    children,
+    disabled,
+    loading,
+    onClick,
+    type,
+  }: {
+    children?: ReactNode;
+    disabled?: boolean;
+    loading?: boolean;
+    onClick?: () => void;
+    type?: string;
+  }) => (
+    <button
+      data-button-loading={loading ? 'true' : undefined}
+      data-button-type={type}
+      disabled={disabled}
+      type="button"
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  ),
   Modal: ({ children, open, width }: { children?: ReactNode; open?: boolean; width?: string }) =>
     open ? (
       <div data-modal-width={width} role="dialog">

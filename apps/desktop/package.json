@@ -16,6 +16,7 @@
     "build:run-unpack": "electron .",
     "dev": "electron-vite dev",
     "dev:static": "cross-env DESKTOP_RENDERER_STATIC=1 npm run dev",
+    "fix:electron": "node scripts/fix-electron-runtime.mjs",
     "format": "prettier --write ",
     "i18n": "tsx scripts/i18nWorkflow/index.ts && lobe-i18n",
     "postinstall": "electron-builder install-app-deps",

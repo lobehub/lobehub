@@ -48,7 +48,9 @@
   "generation.actions.seedApplyFailed": "Nie udało się zastosować ziarna",
   "generation.actions.seedCopied": "Ziarno skopiowane do schowka",
   "generation.actions.seedCopyFailed": "Nie udało się skopiować ziarna",
+  "generation.metadata.by": "przez {{name}}",
   "generation.metadata.count": "{{count}} obrazów",
+  "generation.metadata.createdAt": "Utworzono o {{time}}",
   "generation.status.failed": "Generowanie nie powiodło się",
   "generation.status.generating": "Generowanie...",
   "notSupportGuide.desc": "Obecny tryb wdrożenia nie obsługuje generowania obrazów AI. Przełącz się na <1>tryb wdrożenia z bazą danych serwera</1> lub skorzystaj z <3>LobeHub Cloud</3>.",
@@ -60,9 +62,13 @@
   "notSupportGuide.features.multiProviders.title": "Wsparcie wielu dostawców",
   "notSupportGuide.title": "Obecny tryb wdrożenia nie obsługuje generowania obrazów AI",
   "topic.createNew": "Utwórz nowy temat",
+  "topic.createdBy": "Utworzony przez {{name}}",
   "topic.deleteConfirm": "Usuń temat generowania",
   "topic.deleteConfirmDesc": "Zamierzasz usunąć ten temat generowania. Tej operacji nie można cofnąć, proszę zachować ostrożność.",
   "topic.empty": "Brak tematów generowania",
+  "topic.privateTitle": "Prywatne",
   "topic.title": "Temat obrazu",
-  "topic.untitled": "Domyślny temat"
+  "topic.untitled": "Domyślny temat",
+  "topic.visibility.existingLocked": "Widoczność jest ustalona dla bieżącego tematu. Utwórz nowy temat, aby wybrać inną przestrzeń.",
+  "topic.workspaceTitle": "Przestrzeń robocza"
 }

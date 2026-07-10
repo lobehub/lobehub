@@ -1,4 +1,6 @@
 // @vitest-environment node
+import { AgentRuntimeErrorType } from '@lobechat/types';
+import OpenAI from 'openai';
 import type { Mock } from 'vitest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -51,6 +53,17 @@ const toolCallResponse = {
 const responseFormatUnsupportedError = Object.assign(
   new Error('400 Error from provider (DeepSeek): This response_format type is unavailable now'),
   { status: 400 },
+);
+
+const providerContentFilterError = new OpenAI.BadRequestError(
+  400,
+  {
+    code: 'content_filter',
+    message: 'The provider blocked this prompt.',
+    type: 'content_filter',
+  },
+  'content filter',
+  new Headers(),
 );
 
 describe('isResponseFormatUnsupportedError', () => {
@@ -140,6 +153,97 @@ describe('generateObject tool-calling fallback', () => {
     await expect(
       instance.generateObject({ ...generateObjectPayload, model: 'big-pickle' }),
     ).rejects.toMatchObject({ message: expect.stringContaining('Insufficient Balance') });
+
+    expect(getCreateMock(instance)).toHaveBeenCalledTimes(1);
+  });
+
+  it('should classify content_filter error codes as provider content policy violations', async () => {
+    const instance = createInstance();
+    vi.spyOn((instance as any).client.chat.completions, 'create').mockRejectedValue(
+      providerContentFilterError,
+    );
+
+    await expect(
+      instance.generateObject({
+        ...generateObjectPayload,
+        model: 'gpt-4o',
+        responseApi: false,
+      }),
+    ).rejects.toMatchObject({
+      error: {
+        code: 'content_filter',
+        type: 'content_filter',
+      },
+      errorType: AgentRuntimeErrorType.ProviderContentPolicyViolation,
+    });
+
+    expect(getCreateMock(instance)).toHaveBeenCalledTimes(1);
+  });
+
+  it('should classify nested content_filter payloads as provider content policy violations', async () => {
+    const instance = createInstance();
+    vi.spyOn((instance as any).client.chat.completions, 'create').mockRejectedValue(
+      new OpenAI.APIError(
+        400,
+        {
+          error: {
+            code: 'content_filter',
+            message: 'The provider blocked this prompt.',
+            type: 'content_filter',
+          },
+          status: 400,
+        },
+        'content filter',
+        new Headers(),
+      ),
+    );
+
+    await expect(
+      instance.generateObject({
+        ...generateObjectPayload,
+        model: 'gpt-4o',
+        responseApi: false,
+      }),
+    ).rejects.toMatchObject({
+      error: {
+        error: expect.objectContaining({
+          code: 'content_filter',
+          type: 'content_filter',
+        }),
+      },
+      errorType: AgentRuntimeErrorType.ProviderContentPolicyViolation,
+    });
+
+    expect(getCreateMock(instance)).toHaveBeenCalledTimes(1);
+  });
+
+  it('should classify content policy finish reasons as provider content policy violations', async () => {
+    const instance = createInstance();
+    vi.spyOn((instance as any).client.chat.completions, 'create').mockRejectedValue(
+      new OpenAI.APIError(
+        400,
+        {
+          choices: [{ finish_reason: 'content_policy_violation' }],
+          message: 'The provider blocked this prompt.',
+          status: 400,
+        },
+        'content filter',
+        new Headers(),
+      ),
+    );
+
+    await expect(
+      instance.generateObject({
+        ...generateObjectPayload,
+        model: 'gpt-4o',
+        responseApi: false,
+      }),
+    ).rejects.toMatchObject({
+      error: {
+        choices: [expect.objectContaining({ finish_reason: 'content_policy_violation' })],
+      },
+      errorType: AgentRuntimeErrorType.ProviderContentPolicyViolation,
+    });
 
     expect(getCreateMock(instance)).toHaveBeenCalledTimes(1);
   });

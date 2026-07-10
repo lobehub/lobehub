@@ -27,8 +27,12 @@
   "generation.status.generating": "Generando...",
   "generation.validation.endFrameRequiresStartFrame": "El fotograma final no puede usarse sin un fotograma inicial. Por favor, establece primero un fotograma inicial.",
   "topic.createNew": "Crear nuevo tema",
+  "topic.createdBy": "Creado por {{name}}",
   "topic.deleteConfirm": "Eliminar tema de vídeo",
   "topic.deleteConfirmDesc": "Estás a punto de eliminar este tema de vídeo. Esta acción no se puede deshacer.",
+  "topic.privateTitle": "Privado",
   "topic.title": "Temas de vídeo",
-  "topic.untitled": "Tema predeterminado"
+  "topic.untitled": "Tema predeterminado",
+  "topic.visibility.existingLocked": "La visibilidad está fijada para el tema actual. Crea un nuevo tema para elegir un espacio diferente.",
+  "topic.workspaceTitle": "Espacio de trabajo"
 }

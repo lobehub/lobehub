@@ -2,14 +2,15 @@
 
 import { DOWNLOAD_URL } from '@lobechat/const';
 import type { DeviceScope } from '@lobechat/types';
-import { Button, CopyButton, Flexbox, Icon, Modal, Text } from '@lobehub/ui';
-import { Tabs } from '@lobehub/ui/base-ui';
+import { CopyButton, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Button, Tabs } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { DownloadIcon, MonitorDownIcon, ShieldCheckIcon, TerminalIcon } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import ImperativeModal from '@/components/ImperativeModal';
 
 const styles = createStaticStyles(({ css }) => ({
   codeBlock: css`
@@ -57,10 +58,8 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   line: css`
     flex: 1;
-
     width: 1px;
     margin-block-start: 4px;
-
     background: ${cssVar.colorBorderSecondary};
   `,
 }));
@@ -156,7 +155,7 @@ const DeviceConnectModal = memo<DeviceConnectModalProps>(({ onClose, open, initi
   );
 
   return (
-    <Modal
+    <ImperativeModal
       footer={null}
       open={open}
       title={t('devices.connectWizard.title')}
@@ -199,7 +198,7 @@ const DeviceConnectModal = memo<DeviceConnectModalProps>(({ onClose, open, initi
               title={t('devices.connectWizard.desktop.step1')}
             >
               <a href={DOWNLOAD_URL.default} rel="noreferrer" target="_blank">
-                <Button icon={<Icon icon={DownloadIcon} />} size={'small'} type={'primary'}>
+                <Button icon={<Icon icon={DownloadIcon} />} type={'primary'}>
                   {t('devices.connectWizard.desktop.downloadLink')}
                 </Button>
               </a>
@@ -227,7 +226,7 @@ const DeviceConnectModal = memo<DeviceConnectModalProps>(({ onClose, open, initi
           </Text>
         </Flexbox>
       </Flexbox>
-    </Modal>
+    </ImperativeModal>
   );
 });
 

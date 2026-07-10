@@ -301,6 +301,20 @@ export class AgentActionImpl {
           });
 
           await notifyDesktopHumanApprovalRequired(this.#get, operation.context);
+          if (operation.context.topicId) {
+            const statusWrite = this.#get().updateTopicStatus?.({
+              agentId: operation.context.agentId,
+              groupId: operation.context.groupId,
+              ...(operation.context.scope === 'group' || operation.context.scope === 'group_agent'
+                ? { scope: operation.context.scope }
+                : {}),
+              status: 'waitingForHuman',
+              topicId: operation.context.topicId,
+            });
+            void statusWrite?.catch((error) => {
+              console.error('[runAgent] updateTopicStatus failed:', error);
+            });
+          }
 
           // Stop loading state, waiting for human intervention
           log(`Stopping loading for human approval: ${assistantId}`);

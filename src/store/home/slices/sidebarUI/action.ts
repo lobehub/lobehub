@@ -121,8 +121,8 @@ export class SidebarUIActionImpl {
     await this.#get().refreshAgentList();
   };
 
-  addGroup = async (name: string): Promise<string> => {
-    const id = await sessionService.createSessionGroup(name);
+  addGroup = async (name: string, visibility?: 'private' | 'public'): Promise<string> => {
+    const id = await sessionService.createSessionGroup(name, undefined, visibility);
     await this.#get().refreshAgentList();
     return id;
   };

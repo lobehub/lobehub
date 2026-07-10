@@ -1,10 +1,11 @@
 import { type ModalProps } from '@lobehub/ui';
-import { Flexbox, Input, Modal, stopPropagation } from '@lobehub/ui';
+import { Flexbox, Input, stopPropagation } from '@lobehub/ui';
 import { App } from 'antd';
 import { type MouseEvent } from 'react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import ImperativeModal from '@/components/ImperativeModal';
 import { usePermission } from '@/hooks/usePermission';
 import { useGlobalStore } from '@/store/global';
 import { useSessionStore } from '@/store/session';
@@ -29,7 +30,7 @@ const CreateGroupModal = memo<CreateGroupModalProps>(
 
     return (
       <div onClick={stopPropagation}>
-        <Modal
+        <ImperativeModal
           allowFullscreen
           destroyOnHidden
           okButtonProps={{ disabled: !canCreate, loading }}
@@ -64,7 +65,7 @@ const CreateGroupModal = memo<CreateGroupModalProps>(
               onChange={(e) => setInput(e.target.value)}
             />
           </Flexbox>
-        </Modal>
+        </ImperativeModal>
       </div>
     );
   },

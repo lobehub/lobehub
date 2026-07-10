@@ -17,11 +17,8 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('@lobehub/ui', () => ({
-  Flexbox: ({ children, ...props }: HTMLAttributes<HTMLDivElement>) => (
-    <div {...props}>{children}</div>
-  ),
-  Modal: ({
+vi.mock('@/components/ImperativeModal', () => ({
+  default: ({
     cancelText,
     children,
     okText,
@@ -43,6 +40,12 @@ vi.mock('@lobehub/ui', () => ({
         {children}
       </div>
     ) : null,
+}));
+
+vi.mock('@lobehub/ui', () => ({
+  Flexbox: ({ children, ...props }: HTMLAttributes<HTMLDivElement>) => (
+    <div {...props}>{children}</div>
+  ),
   Text: ({ children, ...props }: HTMLAttributes<HTMLSpanElement>) => (
     <span {...props}>{children}</span>
   ),

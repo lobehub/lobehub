@@ -2,6 +2,7 @@
 
 import { type ConversationContext } from '@lobechat/types';
 
+import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { useChatStore } from '@/store/chat';
 import { useDocumentStore } from '@/store/document';
 
@@ -12,6 +13,7 @@ import { useDocumentStore } from '@/store/document';
  * Returns context for regular agent conversations.
  */
 export function useAgentContext(): ConversationContext {
+  const workspaceSlug = useActiveWorkspaceSlug();
   const [agentId, topicId, threadId] = useChatStore((s) => [
     s.activeAgentId,
     s.activeTopicId ?? null,
@@ -40,5 +42,6 @@ export function useAgentContext(): ConversationContext {
     scope: threadId ? 'thread' : 'main',
     threadId,
     topicId,
+    ...(workspaceSlug ? { workspaceSlug } : {}),
   };
 }

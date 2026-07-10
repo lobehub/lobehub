@@ -34,6 +34,8 @@
   "context.description": "설명",
   "context.empty": "상황 기억이 없습니다",
   "context.source": "출처",
+  "detail.notFound.desc": "이 메모리는 삭제되었거나 더 이상 사용할 수 없습니다.",
+  "detail.notFound.title": "메모리를 찾을 수 없음",
   "empty.description": "기억은 점진적으로 추출되는 과정입니다. 더 많은 주제를 축적하여 기억을 풍부하게 하고, 도우미와 더 깊이 있는 대화를 시도해 가치 있는 정보를 더 잘 포착하고 저장하세요.",
   "empty.search": "일치하는 기억을 찾을 수 없습니다",
   "empty.title": "기억 없음",

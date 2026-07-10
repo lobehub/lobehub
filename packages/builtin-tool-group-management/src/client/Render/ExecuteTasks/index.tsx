@@ -2,9 +2,10 @@
 
 import { DEFAULT_AVATAR } from '@lobechat/const';
 import type { AgentGroupMember, BuiltinRenderProps } from '@lobechat/types';
-import { Accordion, AccordionItem, Avatar, Block, Flexbox, Text } from '@lobehub/ui';
+import { Accordion, AccordionItem, Avatar, Block, Flexbox, Markdown, Text } from '@lobehub/ui';
 import { createStaticStyles, useTheme } from 'antd-style';
 import { memo, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
@@ -37,6 +38,14 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     line-height: 1.6;
     color: ${cssVar.colorTextSecondary};
   `,
+  resultBox: css`
+    overflow: hidden;
+  `,
+  resultLabel: css`
+    padding-inline: 4px;
+    font-size: 12px;
+    color: ${cssVar.colorTextTertiary};
+  `,
 
   taskTitle: css`
     overflow: hidden;
@@ -50,65 +59,87 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
  * ExecuteTasks Render component for Group Management tool
  * Accordion-style task list with expandable instruction and assignee on the right
  */
-const ExecuteTasksRender = memo<BuiltinRenderProps<ExecuteTasksParams>>(({ args }) => {
-  const theme = useTheme();
-  const { tasks } = args || {};
+const ExecuteTasksRender = memo<BuiltinRenderProps<ExecuteTasksParams, unknown, string>>(
+  ({ args, content }) => {
+    const { t } = useTranslation('tool');
+    const theme = useTheme();
+    const { tasks } = args || {};
+    const resultContent = typeof content === 'string' ? content.trim() : '';
 
-  // Get active group ID and agents from store
-  const activeGroupId = useAgentGroupStore(agentGroupSelectors.activeGroupId);
-  const groupAgents = useAgentGroupStore((s) =>
-    activeGroupId ? agentGroupSelectors.getGroupAgents(activeGroupId)(s) : [],
-  );
+    // Get active group ID and agents from store
+    const activeGroupId = useAgentGroupStore(agentGroupSelectors.activeGroupId);
+    const groupAgents = useAgentGroupStore((s) =>
+      activeGroupId ? agentGroupSelectors.getGroupAgents(activeGroupId)(s) : [],
+    );
 
-  // Get agent details for each task
-  const tasksWithAgents = useMemo(() => {
-    if (!tasks?.length || !groupAgents.length) return [];
-    return tasks.map((task) => ({
-      ...task,
-      agent: groupAgents.find((agent) => agent.id === task.agentId) as AgentGroupMember | undefined,
-    }));
-  }, [tasks, groupAgents]);
+    // Get agent details for each task
+    const tasksWithAgents = useMemo(() => {
+      if (!tasks?.length) return [];
+      return tasks.map((task) => ({
+        ...task,
+        agent: groupAgents.find((agent) => agent.id === task.agentId) as
+          AgentGroupMember | undefined,
+      }));
+    }, [tasks, groupAgents]);
 
-  if (!tasksWithAgents.length) return null;
+    if (!tasksWithAgents.length && !resultContent) return null;
 
-  return (
-    <Accordion className={styles.container} defaultExpandedKeys={[]} gap={0} variant={'borderless'}>
-      {tasksWithAgents.map((task, index) => (
-        <AccordionItem
-          itemKey={task.agentId || String(index)}
-          key={task.agentId || index}
-          paddingBlock={8}
-          paddingInline={4}
-          action={
-            <div className={styles.assignee}>
-              <Avatar
-                avatar={task.agent?.avatar || DEFAULT_AVATAR}
-                background={task.agent?.backgroundColor || theme.colorBgContainer}
-                shape={'circle'}
-                size={20}
-              />
-              <span>{task.agent?.title}</span>
-            </div>
-          }
-          title={
-            <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
-              <span className={styles.index}>{index + 1}.</span>
-              <Text className={styles.taskTitle} weight={500}>
-                {task.title || 'Task'}
-              </Text>
-            </Flexbox>
-          }
-        >
-          {task.instruction && (
-            <Block padding={12} style={{ marginTop: 8 }} variant={'filled'}>
-              <Text className={styles.instruction}>{task.instruction}</Text>
+    return (
+      <Flexbox className={styles.container} gap={12}>
+        {!!tasksWithAgents.length && (
+          <Accordion defaultExpandedKeys={[]} gap={0} variant={'borderless'}>
+            {tasksWithAgents.map((task, index) => (
+              <AccordionItem
+                itemKey={task.agentId || String(index)}
+                key={task.agentId || index}
+                paddingBlock={8}
+                paddingInline={4}
+                action={
+                  <div className={styles.assignee}>
+                    <Avatar
+                      avatar={task.agent?.avatar || DEFAULT_AVATAR}
+                      background={task.agent?.backgroundColor || theme.colorBgContainer}
+                      shape={'circle'}
+                      size={20}
+                    />
+                    <span>{task.agent?.title}</span>
+                  </div>
+                }
+                title={
+                  <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
+                    <span className={styles.index}>{index + 1}.</span>
+                    <Text className={styles.taskTitle} weight={500}>
+                      {task.title || 'Task'}
+                    </Text>
+                  </Flexbox>
+                }
+              >
+                {task.instruction && (
+                  <Block padding={12} style={{ marginTop: 8 }} variant={'filled'}>
+                    <Text className={styles.instruction}>{task.instruction}</Text>
+                  </Block>
+                )}
+              </AccordionItem>
+            ))}
+          </Accordion>
+        )}
+
+        {resultContent && (
+          <Flexbox gap={4}>
+            <Text className={styles.resultLabel}>
+              {t('agentGroupManagement.executeTasks.results')}
+            </Text>
+            <Block className={styles.resultBox} padding={12} variant={'filled'}>
+              <Markdown style={{ maxHeight: 320, overflow: 'auto' }} variant={'chat'}>
+                {resultContent}
+              </Markdown>
             </Block>
-          )}
-        </AccordionItem>
-      ))}
-    </Accordion>
-  );
-});
+          </Flexbox>
+        )}
+      </Flexbox>
+    );
+  },
+);
 
 ExecuteTasksRender.displayName = 'ExecuteTasksRender';
 

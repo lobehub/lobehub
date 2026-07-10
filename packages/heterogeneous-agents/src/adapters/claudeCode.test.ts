@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { ClaudeCodeAdapter } from './claudeCode';
+import { ClaudeCodeAdapter, ClaudeCodeSdkAdapter } from './claudeCode';
 
 describe('ClaudeCodeAdapter', () => {
   describe('lifecycle', () => {
@@ -16,6 +16,32 @@ describe('ClaudeCodeAdapter', () => {
       expect(events[0].type).toBe('stream_start');
       expect(events[0].data.model).toBe('claude-sonnet-4-6');
       expect(adapter.sessionId).toBe('sess_123');
+    });
+
+    // `system init` beta-tags the id; every later event reports it clean. The
+    // renderer stamps the assistant from this event, so the tag must not leak.
+    it('strips the beta marker from the init model id', () => {
+      const adapter = new ClaudeCodeAdapter();
+      const events = adapter.adapt({
+        model: 'claude-opus-4-8[1m]',
+        session_id: 'sess_123',
+        subtype: 'init',
+        type: 'system',
+      });
+      expect(events[0].data.model).toBe('claude-opus-4-8');
+    });
+
+    // Only a TRAILING marker is a beta tag — a bracket anywhere else is part of
+    // the id and must survive.
+    it('leaves an id without a trailing marker untouched', () => {
+      const adapter = new ClaudeCodeAdapter();
+      const events = adapter.adapt({
+        model: 'claude-opus[4]-8',
+        session_id: 'sess_123',
+        subtype: 'init',
+        type: 'system',
+      });
+      expect(events[0].data.model).toBe('claude-opus[4]-8');
     });
 
     it('emits visible_output_end before agent_runtime_end on success result', () => {
@@ -35,6 +61,14 @@ describe('ClaudeCodeAdapter', () => {
       const events = adapter.adapt({ is_error: true, result: 'boom', type: 'result' });
       expect(events.map((e) => e.type)).toEqual(['stream_end', 'visible_output_end', 'error']);
       expect(events[2].data.message).toBe('boom');
+    });
+
+    it('keeps runtime open until transport close in SDK mode', () => {
+      const adapter = new ClaudeCodeSdkAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      const events = adapter.adapt({ is_error: false, result: 'done', type: 'result' });
+
+      expect(events.map((e) => e.type)).toEqual(['stream_end', 'visible_output_end']);
     });
 
     it('classifies auth failures from failed result events', () => {
@@ -445,6 +479,47 @@ describe('ClaudeCodeAdapter', () => {
       expect(end!.data.toolCallId).toBe('t1');
     });
 
+    it('aligns tool_end with the server shape — carries payload + result', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [
+            {
+              id: 't1',
+              input: { command: 'git worktree add ../wt' },
+              name: 'Bash',
+              type: 'tool_use',
+            },
+          ],
+        },
+        type: 'assistant',
+      });
+
+      const events = adapter.adapt({
+        message: {
+          content: [{ content: 'Preparing worktree', tool_use_id: 't1', type: 'tool_result' }],
+          role: 'user',
+        },
+        type: 'user',
+      });
+
+      const end = events.find((e) => e.type === 'tool_end');
+      // Payload mirrors tool_start's `{ toolCalling }` so `onAfterCall` can resolve
+      // the executor by identifier and read the command args; result gives success.
+      expect(end!.data.payload).toEqual({
+        toolCalling: {
+          apiName: 'Bash',
+          arguments: JSON.stringify({ command: 'git worktree add ../wt' }),
+          id: 't1',
+          identifier: 'claude-code',
+          type: 'default',
+        },
+      });
+      expect(end!.data.result).toMatchObject({ content: 'Preparing worktree', success: true });
+    });
+
     it('handles array-shaped tool_result content', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt({ subtype: 'init', type: 'system' });
@@ -626,9 +701,11 @@ describe('ClaudeCodeAdapter', () => {
     // CC's `Read` on images returns a `tool_result` whose `content` is an
     // `image` block (base64). The generic mapper had no branch for it so
     // resultContent collapsed to '' and the UI's StatusIndicator stuck on the
-    // spinner. Minimal fix: emit a placeholder so the tool ends in completed
-    // state. Image echo (thumbnails) is deferred.
-    it('renders image blocks as a non-empty placeholder', () => {
+    // spinner ( minimal fix: emit an `[Image: …]` content placeholder).
+    //  keeps that placeholder as the human-readable fallback AND
+    // preserves the base64 body on `pluginState.images` so the runtime
+    // pipeline can upload it and the UI can echo a thumbnail.
+    it('renders image blocks as a non-empty placeholder and preserves base64 on pluginState.images', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt({ subtype: 'init', type: 'system' });
       adapter.adapt({
@@ -663,6 +740,7 @@ describe('ClaudeCodeAdapter', () => {
       expect(result!.data.toolCallId).toBe('r1');
       expect(result!.data.content).toBe('[Image: image/png]');
       expect(result!.data.isError).toBe(false);
+      expect(result!.data.pluginState.images).toEqual([{ data: 'AAAA', mediaType: 'image/png' }]);
 
       const end = events.find((e) => e.type === 'tool_end');
       expect(end).toBeDefined();
@@ -696,6 +774,31 @@ describe('ClaudeCodeAdapter', () => {
 
       const result = events.find((e) => e.type === 'tool_result');
       expect(result!.data.content).toBe('[Image: image]');
+      expect(result!.data.pluginState.images).toEqual([{ data: 'AAAA', mediaType: 'image' }]);
+    });
+
+    it('does not set pluginState.images for a text-only tool_result', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [{ id: 'r1', input: { file_path: 'x.ts' }, name: 'Read', type: 'tool_use' }],
+        },
+        type: 'assistant',
+      });
+
+      const events = adapter.adapt({
+        message: {
+          content: [{ content: 'plain text', tool_use_id: 'r1', type: 'tool_result' }],
+          role: 'user',
+        },
+        type: 'user',
+      });
+
+      const result = events.find((e) => e.type === 'tool_result');
+      expect(result!.data.content).toBe('plain text');
+      expect(result!.data.pluginState).toBeUndefined();
     });
   });
 
@@ -1292,9 +1395,12 @@ describe('ClaudeCodeAdapter', () => {
   describe('multi-step execution (message.id boundary)', () => {
     it('does NOT emit step boundary for the first assistant after init', () => {
       const adapter = new ClaudeCodeAdapter();
-      adapter.adapt({ subtype: 'init', type: 'system' });
+      adapter.adapt({ subtype: 'init', session_id: 'sess-A', type: 'system' });
 
-      // First assistant message after init — should NOT trigger newStep
+      // First assistant message after init — should NOT open a new step
+      // (no stream_end, no newStep), but it DOES emit a non-newStep stream_start
+      // carrying the turn's message.id so the reducer can stamp it as
+      // `currentMainMessageId` (→ heteroMessageId on the seeded assistant).
       const events = adapter.adapt({
         message: { id: 'msg_1', content: [{ text: 'step 1', type: 'text' }] },
         type: 'assistant',
@@ -1302,7 +1408,11 @@ describe('ClaudeCodeAdapter', () => {
 
       const types = events.map((e) => e.type);
       expect(types).not.toContain('stream_end');
-      expect(types).not.toContain('stream_start');
+      const streamStart = events.find((e) => e.type === 'stream_start');
+      expect(streamStart).toBeDefined();
+      expect(streamStart!.data.newStep).toBeUndefined();
+      expect(streamStart!.data.messageId).toBe('msg_1');
+      expect(streamStart!.data.sessionId).toBe('sess-A');
       // Should still emit content
       const chunk = events.find((e) => e.type === 'stream_chunk');
       expect(chunk).toBeDefined();
@@ -1677,6 +1787,10 @@ describe('ClaudeCodeAdapter', () => {
       expect(events).toHaveLength(1);
       expect(events[0].type).toBe('tool_end');
       expect(events[0].data.toolCallId).toBe('t1');
+      // A pending tool that never produced a result must NOT report success —
+      // otherwise side-effect hooks would treat an unfinished tool as completed.
+      expect(events[0].data.isSuccess).toBe(false);
+      expect(events[0].data.result).toMatchObject({ success: false });
     });
 
     it('returns empty array when no pending tools', () => {
@@ -2892,6 +3006,46 @@ describe('ClaudeCodeAdapter', () => {
       expect(
         followUp.find((e) => e.type === 'stream_start' && e.data?.newStep)!.data.externalSignal,
       ).toBeUndefined();
+    });
+
+    it('treats SDK background Bash completion notification as task-completion lineage', () => {
+      const adapter = new ClaudeCodeSdkAdapter();
+      init(adapter);
+
+      adapter.adapt({
+        message: {
+          content: [
+            {
+              id: 'toolu_bash',
+              input: { command: 'sleep 1 && echo done', run_in_background: true },
+              name: 'Bash',
+              type: 'tool_use',
+            },
+          ],
+          id: 'msg_01',
+        },
+        type: 'assistant',
+      });
+      adapter.adapt(ccTaskStarted('task_1', 'toolu_bash'));
+      adapter.adapt(ccUser('toolu_bash', 'Background command started'));
+
+      const firstResult = adapter.adapt({
+        is_error: false,
+        result: 'Background command started',
+        type: 'result',
+      });
+      expect(firstResult.map((e) => e.type)).toEqual(['stream_end']);
+
+      adapter.adapt(ccTaskNotification('task_1'));
+
+      const completion = adapter.adapt(ccMessageStart('msg_02'));
+      expect(
+        completion.find((e) => e.type === 'stream_start' && e.data?.newStep)!.data.externalSignal,
+      ).toEqual({
+        sourceToolCallId: 'toolu_bash',
+        sourceToolName: 'Bash',
+        type: 'task-completion',
+      });
     });
 
     /**

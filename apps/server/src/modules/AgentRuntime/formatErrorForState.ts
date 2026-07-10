@@ -2,6 +2,8 @@ import { getErrorCodeSpec, refineErrorCode } from '@lobechat/model-runtime';
 import { AgentRuntimeErrorType, ChatErrorType, type ChatMessageError } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils';
 
+import { formatPgError, pgErrorType, unwrapPgError } from './pgError';
+
 /** Pull a usable HTTP status out of the nested upstream error object. */
 const extractHttpStatus = (body: unknown): number | undefined => {
   if (!body || typeof body !== 'object') return undefined;
@@ -187,6 +189,25 @@ export const formatErrorForState = (error: unknown): ChatMessageError => {
   }
 
   if (error instanceof Error) {
+    const pg = unwrapPgError(error);
+    if (pg) {
+      return {
+        attribution: 'harness',
+        body: {
+          name: error.name,
+          pg,
+          wrappedMessage: error.message,
+        },
+        category: 'stream',
+        countAsFailure: true,
+        httpStatus: 500,
+        message: formatPgError(pg),
+        retryable: false,
+        severity: 'error',
+        type: pgErrorType(pg) as ChatMessageError['type'],
+      };
+    }
+
     return enrichWithSpec({
       body: { name: error.name },
       message: error.message,

@@ -5,6 +5,7 @@ import type { Stream } from 'openai/streaming';
 import type { ChatStreamCallbacks } from '../../../types';
 import type { ILobeAgentRuntimeErrorType } from '../../../types/error';
 import { AgentRuntimeErrorType } from '../../../types/error';
+import { isErrorCausedByContentFilter } from '../../../utils/isErrorCausedByContentFilter';
 import { convertOpenAIUsage } from '../../usageConverters';
 import type {
   ChatPayloadForTransformStream,
@@ -69,6 +70,21 @@ const processMarkdownBase64Images = (text: string): { cleanedText: string; urls:
 
   return { cleanedText, urls };
 };
+
+const createContentFilterStreamError = (
+  chunk: OpenAI.ChatCompletionChunk,
+  finishReason: string,
+  payload?: ChatPayloadForTransformStream,
+): ChatMessageError => ({
+  body: {
+    chunk,
+    finishReason,
+    model: payload?.model,
+    provider: payload?.provider,
+  },
+  message: 'Provider blocked the response due to content policy.',
+  type: AgentRuntimeErrorType.ProviderContentPolicyViolation,
+});
 
 const transformOpenAIStream = (
   chunk: OpenAI.ChatCompletionChunk,
@@ -276,6 +292,14 @@ const transformOpenAIStream = (
 
     // Handle finish reason
     if (item.finish_reason) {
+      if (isErrorCausedByContentFilter(item)) {
+        return {
+          data: createContentFilterStreamError(chunk, item.finish_reason, payload),
+          id: chunk.id,
+          type: 'error',
+        };
+      }
+
       const usageChunk: StreamProtocolChunk | undefined = chunk.usage
         ? { data: convertOpenAIUsage(chunk.usage, payload), id: chunk.id, type: 'usage' }
         : undefined;

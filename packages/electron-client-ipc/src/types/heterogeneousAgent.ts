@@ -35,6 +35,61 @@ export interface HeterogeneousAgentRateLimitInfo {
   status?: string;
 }
 
+export interface HeteroQuotaWindow {
+  resetsAt: number | null;
+  usedPercent: number;
+  windowMinutes: number;
+}
+
+export type CodexQuotaWindow = HeteroQuotaWindow;
+
+export interface CodexRateLimitResetCredits {
+  availableCount: number;
+  credits?: {
+    expiresAt: number | null;
+    grantedAt: number | null;
+    status: string;
+  }[];
+  nextExpiresAt?: number | null;
+  totalEarnedCount?: number;
+}
+
+export interface CodexQuotaSnapshot {
+  error: string | null;
+  provider: 'codex';
+  rateLimitResetCredits?: CodexRateLimitResetCredits | null;
+  session: CodexQuotaWindow | null;
+  status: 'error' | 'ok' | 'unavailable';
+  updatedAt: number;
+  weekly: CodexQuotaWindow | null;
+}
+
+/**
+ * Why the quota can't be shown. `external-auth` means the agent is configured
+ * with an API key / custom base url, so subscription quota does not apply;
+ * the credential reasons mean no fresh OAuth login was found on this machine.
+ */
+export type ClaudeCodeQuotaUnavailableReason =
+  'credentials-expired' | 'credentials-not-found' | 'external-auth';
+
+export interface ClaudeCodeScopedWeekly {
+  /** Display name of the model the window is scoped to, e.g. "Fable". */
+  modelName: string;
+  window: HeteroQuotaWindow;
+}
+
+export interface ClaudeCodeQuotaSnapshot {
+  error: string | null;
+  provider: 'claude-code';
+  reason?: ClaudeCodeQuotaUnavailableReason;
+  /** Model-scoped weekly window (e.g. Fable/Opus), when the plan reports one. */
+  scopedWeekly: ClaudeCodeScopedWeekly | null;
+  session: HeteroQuotaWindow | null;
+  status: 'error' | 'ok' | 'unavailable';
+  updatedAt: number;
+  weekly: HeteroQuotaWindow | null;
+}
+
 export interface HeterogeneousAgentSessionError {
   agentType?: string;
   code?: HeterogeneousAgentSessionErrorCode | string;
@@ -46,4 +101,27 @@ export interface HeterogeneousAgentSessionError {
   resumeSessionId?: string;
   stderr?: string;
   workingDirectory?: string;
+}
+
+export type HeterogeneousAgentRuntimeState =
+  'starting' | 'running' | 'monitoring' | 'idle' | 'stale' | 'closing' | 'closed' | 'error';
+
+export interface HeterogeneousAgentRuntimeTask {
+  description?: string;
+  lastEventAt: number;
+  startedAt: number;
+  taskId: string;
+  toolUseId?: string;
+  type?: string;
+}
+
+export interface HeterogeneousAgentRuntimeStatus {
+  activeTasks: HeterogeneousAgentRuntimeTask[];
+  idleDeadlineAt?: number;
+  lastEventAt: number;
+  operationId?: string;
+  sessionId: string;
+  staleDeadlineAt?: number;
+  state: HeterogeneousAgentRuntimeState;
+  transport: 'claude-sdk' | 'cli-spawn';
 }

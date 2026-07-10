@@ -21,8 +21,9 @@ export const claudeCodeDriver: HeterogeneousAgentDriver = {
     mcpConfigPath,
     prompt,
     resumeSessionId,
+    systemContext,
   }: HeterogeneousAgentBuildPlanParams) {
-    const stdinPayload = await helpers.buildClaudeStreamJsonInput(prompt, imageList);
+    const stdinPayload = await helpers.buildClaudeStreamJsonInput(prompt, imageList, systemContext);
 
     return {
       args: [

@@ -134,17 +134,40 @@ export const threadKeys = {
 
 // ---- recent -------------------------------------------------------------
 export const recentKeys = {
-  /** Home "all recents" drawer list, keyed by open state. */
-  allDrawer: def('recent:allDrawer', (open: boolean) => ['recent:allDrawer', open]),
-  /** Home recents list, keyed by login + limit. */
-  list: def('recent:list', (isLogin: boolean, limit: number) => ['recent:list', isLogin, limit]),
+  /** Home "all recents" drawer list, keyed by open state and identity scope. */
+  allDrawer: def('recent:allDrawer', (open: boolean, scope: string) => [
+    'recent:allDrawer',
+    open,
+    scope,
+  ]),
+  /** Home recents list, keyed by login + limit + identity scope. */
+  list: def('recent:list', (isLogin: boolean, limit: number, scope: string) => [
+    'recent:list',
+    isLogin,
+    limit,
+    scope,
+  ]),
 };
 
 // ---- task ---------------------------------------------------------------
 export const taskKeys = {
   detail: def('task:detail', (taskId: string) => ['task:detail', taskId]),
-  groupList: def('task:groupList', (agentKey: string | undefined) => ['task:groupList', agentKey]),
-  list: def('task:list', (agentKey: string | undefined) => ['task:list', agentKey]),
+  groupList: def(
+    'task:groupList',
+    (agentKey: string | undefined, visibility: 'all' | 'private' | 'workspace' = 'all') => [
+      'task:groupList',
+      agentKey,
+      visibility,
+    ],
+  ),
+  list: def(
+    'task:list',
+    (agentKey: string | undefined, visibility: 'all' | 'private' | 'workspace' = 'all') => [
+      'task:list',
+      agentKey,
+      visibility,
+    ],
+  ),
 };
 
 // ---- brief --------------------------------------------------------------
@@ -417,8 +440,12 @@ export const ragEvalKeys = {
 // ---- knowledge base -----------------------------------------------------
 export const knowledgeBaseKeys = {
   item: def('knowledgeBase:item', (id: string) => ['knowledgeBase:item', id]),
-  list: def('knowledgeBase:list', (workspaceId?: string | null) =>
-    workspaceId ? ['knowledgeBase:list', workspaceId] : ['knowledgeBase:list'],
+  list: def(
+    'knowledgeBase:list',
+    (workspaceId?: string | null, visibility?: 'private' | 'public') => {
+      const base = workspaceId ? ['knowledgeBase:list', workspaceId] : ['knowledgeBase:list'];
+      return visibility ? [...base, visibility] : base;
+    },
   ),
 };
 
@@ -439,12 +466,16 @@ export const deviceKeys = {
     deviceId,
     path,
   ]),
-  gitLinkedPR: def('device:gitLinkedPR', (deviceId: string, path: string, branch: string) => [
+  gitLinkedPR: def(
     'device:gitLinkedPR',
-    deviceId,
-    path,
-    branch,
-  ]),
+    (deviceId: string, path: string, branch: string, pullRequestNumber?: number) => [
+      'device:gitLinkedPR',
+      deviceId,
+      path,
+      branch,
+      ...(pullRequestNumber === undefined ? [] : [pullRequestNumber]),
+    ],
+  ),
   gitRemoteBranches: def('device:gitRemoteBranches', (deviceId: string, dirPath: string) => [
     'device:gitRemoteBranches',
     deviceId,
@@ -462,6 +493,11 @@ export const deviceKeys = {
   ),
   gitWorkingTreeStatus: def('device:gitWorkingTreeStatus', (deviceId: string, path: string) => [
     'device:gitWorkingTreeStatus',
+    deviceId,
+    path,
+  ]),
+  gitWorktrees: def('device:gitWorktrees', (deviceId: string, path: string) => [
+    'device:gitWorktrees',
     deviceId,
     path,
   ]),
@@ -546,10 +582,13 @@ export const globalKeys = {
 
 // ---- agent knowledge (kept off the `agent:` idb tier on purpose) --------
 export const agentKnowledgeKeys = {
-  list: def('agentKnowledge:list', (agentId: string | undefined) => [
+  list: def(
     'agentKnowledge:list',
-    agentId,
-  ]),
+    (agentId: string | undefined, visibility?: 'private' | 'public') => {
+      const base = ['agentKnowledge:list', agentId] as const;
+      return visibility ? [...base, visibility] : base;
+    },
+  ),
 };
 
 // ---- agent bot ----------------------------------------------------------
@@ -637,6 +676,15 @@ export const verifyKeys = {
     'verify:reportBundle',
     verifyRunId,
   ]),
+  reportSummaries: def(
+    'verify:reportSummaries',
+    (workspaceId?: string | null, q?: string, cursor?: string) => [
+      'verify:reportSummaries',
+      workspaceId ?? '',
+      q ?? '',
+      cursor ?? '',
+    ],
+  ),
   results: def('verify:results', (operationId: string) => ['verify:results', operationId]),
   rubric: def('verify:rubric', (rubricId: string) => ['verify:rubric', rubricId]),
   rubricCriteria: def('verify:rubricCriteria', (rubricId: string) => [

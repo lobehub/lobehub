@@ -3,6 +3,7 @@ import type {
   VerifyCheckItem,
   VerifyRubricConfig,
   VerifyRunContext,
+  VerifyRunMetadata,
   VerifyRunScenario,
 } from '@lobechat/types';
 import {
@@ -229,6 +230,9 @@ export const verifyCheckResults = pgTable(
     /** Data / Warrant / Rebuttal narrative — read as a whole. */
     toulmin: jsonb('toulmin').$type<ToulminVerdict>(),
 
+    /** Generic result extension bag. Shape is intentionally unknown until verifier payloads stabilize. */
+    metadata: jsonb('metadata').$type<unknown>(),
+
     /** Forward-looking remediation hint, seeded into auto_repair. */
     suggestion: text('suggestion'),
 
@@ -300,6 +304,9 @@ export const verifyEvidence = pgTable(
      * none of that metadata. Set null if the underlying file is removed.
      */
     fileId: text('file_id').references(() => files.id, { onDelete: 'set null' }),
+
+    /** Generic evidence extension bag. Shape is intentionally unknown until the capturers stabilize it. */
+    metadata: jsonb('metadata').$type<unknown>(),
 
     // ---- Provenance ----
     /** Who / what produced this artifact. */
@@ -455,7 +462,7 @@ export const verifyRuns = pgTable(
      * metadata we don't model yet (the active scenario's input lives in
      * `context`). Kept open so future needs don't require a migration.
      */
-    metadata: jsonb('metadata').$type<Record<string, unknown>>(),
+    metadata: jsonb('metadata').$type<VerifyRunMetadata>(),
 
     /**
      * Immutable check-plan snapshot for this session (instantiated from rubrics /

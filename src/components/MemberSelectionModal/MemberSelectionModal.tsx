@@ -1,17 +1,7 @@
 'use client';
 
-import {
-  ActionIcon,
-  Avatar,
-  Button,
-  Checkbox,
-  Flexbox,
-  List,
-  Modal,
-  SearchBar,
-  Text,
-  Tooltip,
-} from '@lobehub/ui';
+import { ActionIcon, Avatar, Checkbox, Flexbox, List, SearchBar, Text, Tooltip } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { useHover } from 'ahooks';
 import { List as AntdList, Switch } from 'antd';
 import { createStaticStyles, cx } from 'antd-style';
@@ -20,6 +10,7 @@ import { type ChangeEvent } from 'react';
 import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import ImperativeModal from '@/components/ImperativeModal';
 import { DEFAULT_AVATAR } from '@/const/meta';
 import AgentSelectionEmpty from '@/features/AgentSelectionEmpty';
 import ModelSelect from '@/features/ModelSelect';
@@ -232,9 +223,9 @@ const MemberSelectionModal = memo<MemberSelectionModalProps>(
       );
     };
 
-    const handleRemoveAgent = (agentId: string) => {
+    const handleRemoveAgent = useCallback((agentId: string) => {
       setSelectedAgents((prev) => prev.filter((id) => id !== agentId));
-    };
+    }, []);
 
     const handleSearchChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
       setSearchTerm(e.target.value);
@@ -366,7 +357,7 @@ const MemberSelectionModal = memo<MemberSelectionModalProps>(
     const isConfirmDisabled = totalMemberCount < minMembersRequired || isAdding;
 
     return (
-      <Modal
+      <ImperativeModal
         allowFullscreen
         open={open}
         title={modalTitle}
@@ -483,7 +474,7 @@ const MemberSelectionModal = memo<MemberSelectionModalProps>(
             </Flexbox>
           </Flexbox>
         </Flexbox>
-      </Modal>
+      </ImperativeModal>
     );
   },
 );

@@ -122,6 +122,7 @@
   "responseLanguage.auto": "Auto (Volgt systeemtaal)",
   "responseLanguage.desc": "Kies de taal waarin de agent antwoordt",
   "responseLanguage.hint": "Na het selecteren van een taal worden AI-antwoorden in die taal gegeven en wordt de interface ook gesynchroniseerd",
+  "responseLanguage.saveFailed": "Opslaan mislukt. Probeer het opnieuw.",
   "responseLanguage.title": "In welke taal zullen we communiceren?",
   "responseLanguage.title2": "Begin met taal, bouw echte connectie op.",
   "responseLanguage.title3": "Laat me duidelijk spreken en jou beter begrijpen~",

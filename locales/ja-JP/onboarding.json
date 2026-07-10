@@ -122,6 +122,7 @@
   "responseLanguage.auto": "自動（システム言語に従う）",
   "responseLanguage.desc": "AIアシスタントが返信する際の言語を選択",
   "responseLanguage.hint": "言語を選択すると、AIの返信と言語設定がその言語に切り替わります",
+  "responseLanguage.saveFailed": "保存に失敗しました。もう一度お試しください。",
   "responseLanguage.title": "どの言語で会話しましょうか？",
   "responseLanguage.title2": "言葉から始まる、本当の理解。",
   "responseLanguage.title3": "はっきり伝えて、しっかり聞き取れるように～",

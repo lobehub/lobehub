@@ -2,13 +2,14 @@
 
 import { useEditor } from '@lobehub/editor/react';
 import { ActionIcon, Block, Flexbox, Icon, Text } from '@lobehub/ui';
-import { useModalContext } from '@lobehub/ui/base-ui';
-import { Button } from 'antd';
+import { Button, useModalContext } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { Minimize2, Paperclip, UserCircle2, X } from 'lucide-react';
 import { type KeyboardEvent, memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import { message } from '@/components/AntdStaticMethods';
 import { EditorCanvas } from '@/features/EditorCanvas';
 import {
   getAttachmentFileIdsFromEditor,
@@ -21,7 +22,10 @@ import { useTaskStore } from '@/store/task';
 import AssigneeAgentSelector from '../features/AssigneeAgentSelector';
 import AssigneeAvatar from '../features/AssigneeAvatar';
 import TaskPriorityTag from '../features/TaskPriorityTag';
+import TaskVisibilityChipLabel from '../features/TaskVisibilityChipLabel';
+import TaskVisibilityTag from '../features/TaskVisibilityTag';
 import { useAgentDisplayMeta } from '../shared/useAgentDisplayMeta';
+import { useAgentVisibility } from '../shared/useAgentVisibility';
 
 export interface CreateTaskContentProps {
   agentId?: string;
@@ -48,9 +52,23 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
     const isCreating = useTaskStore((s) => s.isCreatingTask);
     const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
 
+    const activeWorkspaceId = useActiveWorkspaceId();
+
     const [title, setTitle] = useState('');
     const [priority, setPriority] = useState(0);
     const [assigneeAgentId, setAssigneeAgentId] = useState<string | undefined>(agentId);
+    // Default to private in workspace mode so the user has to opt in to share.
+    // In personal mode the field is irrelevant and the chip is hidden anyway.
+    const [visibility, setVisibility] = useState<'private' | 'public'>('private');
+
+    // A private agent can only run a private task. When the selected agent
+    // is private we force visibility back to private and lock the chip so
+    // the user can't pick Workspace.
+    const assigneeVisibility = useAgentVisibility(assigneeAgentId);
+    const isPrivateAgent = assigneeVisibility === 'private';
+    useEffect(() => {
+      if (isPrivateAgent && visibility === 'public') setVisibility('private');
+    }, [isPrivateAgent, visibility]);
 
     const editor = useEditor();
     const instructionRef = useRef('');
@@ -80,22 +98,42 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
 
       const editorJson = editor?.getDocument?.('json') as unknown;
 
-      const result = await createTask({
-        assigneeAgentId,
-        editorData: editorJson,
-        instruction: instruction || title.trim(),
-        name: title.trim() || undefined,
-        priority: priority || undefined,
-      });
-
-      if (result) {
-        close();
-        onCreated?.({
-          agentId: result.assigneeAgentId ?? undefined,
-          identifier: result.identifier,
+      // `createTask` keeps its rejecting contract; surface the failure here so a
+      // failed create isn't silent and the modal stays open with its content.
+      try {
+        const result = await createTask({
+          assigneeAgentId,
+          editorData: editorJson,
+          instruction: instruction || title.trim(),
+          name: title.trim() || undefined,
+          priority: priority || undefined,
+          // Only send visibility in workspace mode; personal mode ignores it.
+          visibility: activeWorkspaceId ? visibility : undefined,
         });
+
+        if (result) {
+          close();
+          onCreated?.({
+            agentId: result.assigneeAgentId ?? undefined,
+            identifier: result.identifier,
+          });
+        }
+      } catch {
+        message.error(t('createTask.createFailed'));
       }
-    }, [assigneeAgentId, canCreateTask, close, createTask, editor, onCreated, priority, title]);
+    }, [
+      activeWorkspaceId,
+      assigneeAgentId,
+      canCreateTask,
+      close,
+      createTask,
+      editor,
+      onCreated,
+      priority,
+      t,
+      title,
+      visibility,
+    ]);
 
     const handleSubmitRef = useRef(handleSubmit);
     useEffect(() => {
@@ -220,6 +258,22 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
                 </AssigneeAgentSelector>
               );
             })()}
+
+            {activeWorkspaceId && (
+              <TaskVisibilityTag
+                visibility={visibility}
+                lockedReason={
+                  isPrivateAgent
+                    ? t('createTask.visibility.privateAgentLocked', {
+                        defaultValue: 'Private agents can only run private tasks.',
+                      })
+                    : undefined
+                }
+                onChange={setVisibility}
+              >
+                <TaskVisibilityChipLabel visibility={visibility} />
+              </TaskVisibilityTag>
+            )}
 
             <ActionIcon
               icon={Paperclip}

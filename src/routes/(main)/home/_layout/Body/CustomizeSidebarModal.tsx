@@ -29,14 +29,15 @@ import { memo, useCallback, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { getRouteById } from '@/config/routes';
 import { useGlobalStore } from '@/store/global';
 import { DEFAULT_HOME_SIDEBAR_EXPANDED_KEYS } from '@/store/global/initialState';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import {
-  DEFAULT_HIDDEN_SECTIONS,
   DEFAULT_SIDEBAR_ITEMS,
+  getDefaultHiddenSections,
   SIDEBAR_ACCORDION_KEYS,
   SIDEBAR_SPACER_ID,
 } from '@/store/global/selectors/systemStatus';
@@ -58,6 +59,7 @@ const ALL_SIDEBAR_ITEMS: SidebarItemConfig[] = [
   { id: 'tasks', labelKey: 'tab.tasks', routeId: 'tasks' },
   { id: 'pages', labelKey: 'tab.pages', routeId: 'page' },
   { id: 'recents', labelKey: 'recents' },
+  { id: 'private', labelKey: 'navPanel.privateAgents' },
   { alwaysVisible: true, id: 'agent', labelKey: 'navPanel.agent' },
   { id: 'image', labelKey: 'tab.generation', routeId: 'image' },
   { id: 'community', labelKey: 'tab.community', routeId: 'community' },
@@ -65,8 +67,15 @@ const ALL_SIDEBAR_ITEMS: SidebarItemConfig[] = [
   { id: 'memory', labelKey: 'tab.memory', routeId: 'memory' },
 ];
 
+// Private is workspace-only; in personal mode every row is implicitly
+// owner-private, so hide it from the customizer where toggling it on
+// would render an empty accordion no user can populate.
 export const getAvailableSidebarItems = (isWorkspaceMode: boolean): SidebarItemConfig[] =>
-  ALL_SIDEBAR_ITEMS.filter((item) => !(isWorkspaceMode && item.id === 'memory'));
+  ALL_SIDEBAR_ITEMS.filter((item) => {
+    if (isWorkspaceMode && item.id === 'memory') return false;
+    if (!isWorkspaceMode && item.id === 'private') return false;
+    return true;
+  });
 
 export const getSortableSidebarItemIds = (isWorkspaceMode: boolean): Set<string> =>
   new Set([...getAvailableSidebarItems(isWorkspaceMode).map((item) => item.id), SIDEBAR_SPACER_ID]);
@@ -146,7 +155,12 @@ const SortableItem = memo<{
   onToggle: (key: string) => void;
 }>(({ id, hiddenSections, onToggle }) => {
   const { t } = useTranslation('common');
+  const isWorkspaceMode = !!useActiveWorkspaceSlug();
   const item = ITEM_MAP.get(id);
+  // In workspace mode the Agent bucket pairs with Private, so the label
+  // switches to "Public" — mirroring the sidebar header.
+  const labelKey =
+    item?.id === 'agent' && isWorkspaceMode ? 'navPanel.publicAgents' : item?.labelKey;
   const {
     attributes,
     isDragging,
@@ -186,7 +200,7 @@ const SortableItem = memo<{
           <Icon icon={GripVertical} size={14} style={{ color: cssVar.colorTextQuaternary }} />
         </Flexbox>
         {route?.icon && <Icon icon={route.icon} size={18} />}
-        <Text>{t(item.labelKey as any)}</Text>
+        <Text>{t(labelKey as any)}</Text>
       </Flexbox>
       {item.alwaysVisible ? (
         <Tooltip title={t('navPanel.pinned' as any)}>
@@ -292,13 +306,15 @@ const AccordionGroup = memo<{ children: React.ReactNode }>(({ children }) => {
 
 const OverlayItem = memo<{ id: string }>(({ id }) => {
   const { t } = useTranslation('common');
+  const isWorkspaceMode = !!useActiveWorkspaceSlug();
+  const agentLabelKey = isWorkspaceMode ? 'navPanel.publicAgents' : 'navPanel.agent';
 
   // Accordion group overlay: render a compact representation
   if (id === ACCORDION_GROUP_ID) {
     return (
       <Flexbox horizontal align={'center'} className={styles.overlay} gap={8}>
         <Icon icon={GripVertical} size={14} style={{ color: cssVar.colorTextQuaternary }} />
-        <Text>{t('navPanel.agent' as any)}</Text>
+        <Text>{t(agentLabelKey as any)}</Text>
         <Text type={'secondary'}>+ {t('recents' as any)}</Text>
       </Flexbox>
     );
@@ -319,12 +335,13 @@ const OverlayItem = memo<{ id: string }>(({ id }) => {
   const item = ITEM_MAP.get(id);
   if (!item) return null;
   const route = item.routeId ? getRouteById(item.routeId) : undefined;
+  const labelKey = item.id === 'agent' ? agentLabelKey : item.labelKey;
 
   return (
     <Flexbox horizontal align={'center'} className={styles.overlay} gap={8}>
       <Icon icon={GripVertical} size={14} style={{ color: cssVar.colorTextQuaternary }} />
       {route?.icon && <Icon icon={route.icon} size={18} />}
-      <Text>{t(item.labelKey as any)}</Text>
+      <Text>{t(labelKey as any)}</Text>
     </Flexbox>
   );
 });
@@ -344,11 +361,12 @@ const flattenItems = (outer: string[], inner: string[], bindSpacerToAccordion: b
 const CustomizeSidebarContent = memo(() => {
   const { close } = useModalContext();
   const { t: commonT } = useTranslation('common');
-  const [storeItems, storeHiddenSections, updateSystemStatus] = useGlobalStore((s) => [
-    systemStatusSelectors.sidebarItems(s),
-    systemStatusSelectors.hiddenSidebarSections(s),
-    s.updateSystemStatus,
-  ]);
+  const activeWorkspaceId = useActiveWorkspaceId();
+  const storeItems = useGlobalStore(systemStatusSelectors.sidebarItems(activeWorkspaceId));
+  const storeHiddenSections = useGlobalStore(
+    systemStatusSelectors.hiddenSidebarSections(activeWorkspaceId),
+  );
+  const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
   const isWorkspaceMode = !!useActiveWorkspaceSlug();
   const sortableItemIds = useMemo(
     () => getSortableSidebarItemIds(isWorkspaceMode),
@@ -408,9 +426,9 @@ const CustomizeSidebarContent = memo(() => {
 
   const handleResetDefault = useCallback(() => {
     setItems(DEFAULT_SIDEBAR_ITEMS.filter((id) => sortableItemIds.has(id)));
-    setHiddenSections(DEFAULT_HIDDEN_SECTIONS);
+    setHiddenSections(getDefaultHiddenSections(isWorkspaceMode));
     setShouldResetExpandedKeys(true);
-  }, [sortableItemIds]);
+  }, [sortableItemIds, isWorkspaceMode]);
 
   const handleConfirm = useCallback(() => {
     updateSystemStatus(

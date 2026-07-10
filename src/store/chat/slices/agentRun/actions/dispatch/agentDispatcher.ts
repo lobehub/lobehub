@@ -67,6 +67,14 @@ export interface RuntimeSelectionContext {
   /** Result of `chatStore.isGatewayModeEnabled()`. */
   isGatewayMode: boolean;
   /**
+   * The agent is workspace-scoped (`agent.workspaceId` set). Workspace agents
+   * never execute in-process on the current member's own desktop — a
+   * default/stored `local` target coerces to sandbox/device, so the run
+   * routes through the gateway (see `resolveExecutionTarget`'s
+   * `workspaceScoped`).
+   */
+  isWorkspaceAgent?: boolean;
+  /**
    * Explicit override that wins over automatic selection.
    *
    * Used by sub-agent dispatches (`directMentionRoute`, `callAgent`) so child
@@ -111,7 +119,11 @@ export const selectRuntimeType = (
     const target = resolveExecutionTarget(
       { boundDeviceId: ctx.boundDeviceId, executionTarget: ctx.executionTarget },
       // on the client the desktop build IS where local execution is available
-      { isHetero: true, clientExecutionAvailable: isDesktop },
+      {
+        isHetero: true,
+        clientExecutionAvailable: isDesktop,
+        workspaceScoped: ctx.isWorkspaceAgent,
+      },
     );
     return target === 'local' ? 'hetero' : 'gateway';
   }

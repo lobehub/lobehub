@@ -67,6 +67,26 @@ describe('InMemoryAgentStateManager', () => {
     });
   });
 
+  describe('step execution lock', () => {
+    it('serializes execution across all steps in the same operation', async () => {
+      await expect(manager.tryClaimStep('op-lock', 1, 60, 'owner-a')).resolves.toBe(true);
+      await expect(manager.tryClaimStep('op-lock', 2, 60, 'owner-b')).resolves.toBe(false);
+
+      await manager.releaseStepLock('op-lock', 1, 'owner-b');
+      await expect(manager.tryClaimStep('op-lock', 2, 60, 'owner-b')).resolves.toBe(false);
+
+      await manager.releaseStepLock('op-lock', 1, 'owner-a');
+      await expect(manager.tryClaimStep('op-lock', 2, 60, 'owner-b')).resolves.toBe(true);
+    });
+
+    it('refreshes only the caller-owned lock', async () => {
+      await manager.tryClaimStep('op-refresh', 1, 60, 'owner-a');
+
+      await expect(manager.refreshStepLock('op-refresh', 2, 60, 'owner-b')).resolves.toBe(false);
+      await expect(manager.refreshStepLock('op-refresh', 2, 60, 'owner-a')).resolves.toBe(true);
+    });
+  });
+
   // ------------------------------------------------------------------ //
   // saveAgentState / loadAgentState
   // ------------------------------------------------------------------ //

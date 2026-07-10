@@ -1,8 +1,9 @@
 'use client';
 
 import { Flexbox, Form, FormGroup, FormItem, Tag, Text } from '@lobehub/ui';
-import { Button, Switch } from '@lobehub/ui/base-ui';
-import { Form as AntdForm, type FormInstance, InputNumber, Popconfirm, Select } from 'antd';
+import type { SelectOption } from '@lobehub/ui/base-ui';
+import { Button, Select, Switch } from '@lobehub/ui/base-ui';
+import { Form as AntdForm, type FormInstance, InputNumber, Popconfirm } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { Fragment, memo, useCallback, useMemo, useState } from 'react';
@@ -143,29 +144,35 @@ const SchemaField = memo<SchemaFieldProps>(({ field, parentKey, divider, disable
     case 'string': {
       if (field.enum) {
         const hasDescriptions = field.enumDescriptions?.some(Boolean);
+        const options = field.enum.map((value, i) => ({
+          description: field.enumDescriptions?.[i] ? t(field.enumDescriptions[i]) : undefined,
+          label: field.enumLabels?.[i] ? t(field.enumLabels[i]) : value,
+          value,
+        })) satisfies Array<SelectOption<string> & { description?: string }>;
+
         children = (
           <Select
             disabled={disabled}
+            options={options}
             placeholder={field.placeholder ? t(field.placeholder) : undefined}
             optionRender={
               hasDescriptions
-                ? (item) => (
-                    <Flexbox horizontal align="center" gap={12} justify="space-between">
-                      <span>{item.label}</span>
-                      {item.data.description ? (
-                        <Text fontSize={12} type="secondary">
-                          {item.data.description}
-                        </Text>
-                      ) : null}
-                    </Flexbox>
-                  )
+                ? (item) => {
+                    const option = item as SelectOption<string> & { description?: string };
+
+                    return (
+                      <Flexbox horizontal align="center" gap={12} justify="space-between">
+                        <span>{option.label}</span>
+                        {option.description && (
+                          <Text fontSize={12} type="secondary">
+                            {option.description}
+                          </Text>
+                        )}
+                      </Flexbox>
+                    );
+                  }
                 : undefined
             }
-            options={field.enum.map((value, i) => ({
-              description: field.enumDescriptions?.[i] ? t(field.enumDescriptions[i]) : undefined,
-              label: field.enumLabels?.[i] ? t(field.enumLabels[i]) : value,
-              value,
-            }))}
           />
         );
       } else {

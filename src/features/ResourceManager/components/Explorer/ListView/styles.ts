@@ -11,7 +11,7 @@ export const styles = createStaticStyles(({ css }) => ({
     outline-offset: -4px;
   `,
   header: css`
-    min-width: 800px;
+    min-width: 1040px;
     height: 40px;
     min-height: 40px;
     color: ${cssVar.colorTextDescription};
@@ -30,7 +30,7 @@ export const styles = createStaticStyles(({ css }) => ({
     z-index: 1;
     inset-block-start: 40px;
 
-    min-width: 800px;
+    min-width: 1040px;
     padding-block: 8px;
     padding-inline: 16px;
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};

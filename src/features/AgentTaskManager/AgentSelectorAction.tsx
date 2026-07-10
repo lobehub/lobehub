@@ -1,9 +1,11 @@
 import { Center, Flexbox, Popover } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
+import isEqual from 'fast-deep-equal';
 import { ChevronsUpDownIcon } from 'lucide-react';
 import { memo, Suspense, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { type SidebarAgentItem } from '@/database/repositories/home';
 import { conversationSelectors, useConversationStore } from '@/features/Conversation';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import AgentItem from '@/features/PageEditor/Copilot/AgentSelector/AgentItem';
@@ -32,6 +34,14 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       background: ${cssVar.colorFillSecondary};
     }
   `,
+  sectionHeader: css`
+    padding-block: 4px;
+    padding-inline: 8px;
+
+    font-size: 12px;
+    line-height: 1.4;
+    color: ${cssVar.colorTextTertiary};
+  `,
 }));
 
 interface AgentSelectorActionProps {
@@ -43,18 +53,31 @@ const AgentSelectorAction = memo<AgentSelectorActionProps>(({ onAgentChange }) =
   const [open, setOpen] = useState(false);
   const agentId = useConversationStore(conversationSelectors.agentId);
 
-  const agents = useHomeStore(homeAgentListSelectors.allAgents);
+  const pinnedAgents = useHomeStore(homeAgentListSelectors.pinnedAgents, isEqual);
+  const agentGroups = useHomeStore(homeAgentListSelectors.agentGroups, isEqual);
+  const ungroupedAgents = useHomeStore(homeAgentListSelectors.ungroupedAgents, isEqual);
+  const privateAgentGroups = useHomeStore(homeAgentListSelectors.privateAgentGroups, isEqual);
+  const privateUngroupedAgents = useHomeStore(
+    homeAgentListSelectors.privateUngroupedAgents,
+    isEqual,
+  );
+  const hasPrivateAgents = useHomeStore(homeAgentListSelectors.hasPrivateAgents);
   const isAgentListInit = useHomeStore(homeAgentListSelectors.isAgentListInit);
   const taskAgentId = useAgentStore(builtinAgentSelectors.taskAgentId);
   const taskAgentData = useAgentStore((s) => s.agentMap[taskAgentId || '']);
 
   useFetchAgentList();
 
-  const agentsWithBuiltin = useMemo(() => {
-    const availableAgents = agents.filter((agent) => agent.type === 'agent');
-    const hasTaskAgent = availableAgents.some((agent) => agent.id === taskAgentId);
+  // Workspace bucket: pinned + grouped + ungrouped. In personal mode this is the entire
+  // list (private buckets are empty). The builtin task agent is shared content, so it
+  // is injected at the top of this bucket when missing — keeping the prior behavior.
+  const workspaceAgents = useMemo<SidebarAgentItem[]>(() => {
+    const groupedItems = agentGroups.flatMap((group) => group.items);
+    const merged = [...pinnedAgents, ...groupedItems, ...ungroupedAgents].filter(
+      (agent) => agent.type === 'agent',
+    );
 
-    if (taskAgentId && !hasTaskAgent) {
+    if (taskAgentId && !merged.some((agent) => agent.id === taskAgentId)) {
       return [
         {
           avatar: taskAgentData?.avatar || null,
@@ -65,16 +88,21 @@ const AgentSelectorAction = memo<AgentSelectorActionProps>(({ onAgentChange }) =
           type: 'agent' as const,
           updatedAt: new Date(),
         },
-        ...availableAgents,
+        ...merged,
       ];
     }
 
-    return availableAgents;
-  }, [agents, taskAgentData, taskAgentId, t]);
+    return merged;
+  }, [pinnedAgents, agentGroups, ungroupedAgents, taskAgentId, taskAgentData, t]);
+
+  const privateAgents = useMemo<SidebarAgentItem[]>(() => {
+    const groupedItems = privateAgentGroups.flatMap((group) => group.items);
+    return [...groupedItems, ...privateUngroupedAgents].filter((agent) => agent.type === 'agent');
+  }, [privateAgentGroups, privateUngroupedAgents]);
 
   const activeAgent = useMemo(
-    () => agentsWithBuiltin.find((agent) => agent.id === agentId),
-    [agentId, agentsWithBuiltin],
+    () => [...privateAgents, ...workspaceAgents].find((agent) => agent.id === agentId),
+    [agentId, privateAgents, workspaceAgents],
   );
 
   const handleAgentChange = useCallback(
@@ -83,6 +111,19 @@ const AgentSelectorAction = memo<AgentSelectorActionProps>(({ onAgentChange }) =
     },
     [onAgentChange],
   );
+
+  const renderAgentItems = (list: SidebarAgentItem[]) =>
+    list.map((agent) => (
+      <AgentItem
+        active={agent.id === agentId}
+        agentId={agent.id}
+        agentTitle={agent.title || t('untitledAgent', { ns: 'chat' })}
+        avatar={agent.avatar}
+        key={agent.id}
+        onAgentChange={handleAgentChange}
+        onClose={() => setOpen(false)}
+      />
+    ));
 
   const renderAgents = (
     <Flexbox
@@ -94,17 +135,28 @@ const AgentSelectorAction = memo<AgentSelectorActionProps>(({ onAgentChange }) =
         width: '100%',
       }}
     >
-      {agentsWithBuiltin.map((agent) => (
-        <AgentItem
-          active={agent.id === agentId}
-          agentId={agent.id}
-          agentTitle={agent.title || t('untitledAgent', { ns: 'chat' })}
-          avatar={agent.avatar}
-          key={agent.id}
-          onAgentChange={handleAgentChange}
-          onClose={() => setOpen(false)}
-        />
-      ))}
+      {hasPrivateAgents ? (
+        <>
+          {privateAgents.length > 0 && (
+            <>
+              <div className={styles.sectionHeader}>
+                {t('taskManager.agentSelector.privateGroup', { ns: 'topic' })}
+              </div>
+              {renderAgentItems(privateAgents)}
+            </>
+          )}
+          {workspaceAgents.length > 0 && (
+            <>
+              <div className={styles.sectionHeader}>
+                {t('taskManager.agentSelector.workspaceGroup', { ns: 'topic' })}
+              </div>
+              {renderAgentItems(workspaceAgents)}
+            </>
+          )}
+        </>
+      ) : (
+        renderAgentItems(workspaceAgents)
+      )}
     </Flexbox>
   );
 

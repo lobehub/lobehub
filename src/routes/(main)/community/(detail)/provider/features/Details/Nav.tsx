@@ -4,7 +4,7 @@ import { BRANDING_PROVIDER, SOCIAL_URL } from '@lobechat/business-const';
 import { Flexbox, Icon } from '@lobehub/ui';
 import { Tabs } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
-import { BookOpenIcon, BrainCircuitIcon, ListIcon } from 'lucide-react';
+import { BookOpenIcon, BrainCircuitIcon, ListIcon, SquareArrowOutUpRight } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
@@ -16,6 +16,9 @@ import { useDetailContext } from '../DetailProvider';
 const styles = createStaticStyles(({ css, cssVar }) => {
   return {
     link: css`
+      display: inline-flex;
+      gap: 4px;
+      align-items: center;
       color: ${cssVar.colorTextDescription};
 
       &:hover {
@@ -85,6 +88,7 @@ const Nav = memo<NavProps>(({ mobile, setActiveTab, activeTab = ProviderNavKey.O
       >
         <a className={styles.link} href={SOCIAL_URL.discord} rel="noreferrer" target="_blank">
           {t('mcp.details.nav.needHelp')}
+          <Icon icon={SquareArrowOutUpRight} size={12} />
         </a>
         {identifier && (
           <a
@@ -97,6 +101,7 @@ const Nav = memo<NavProps>(({ mobile, setActiveTab, activeTab = ProviderNavKey.O
             )}
           >
             {t('mcp.details.nav.viewSourceCode')}
+            <Icon icon={SquareArrowOutUpRight} size={12} />
           </a>
         )}
         <a
@@ -106,6 +111,7 @@ const Nav = memo<NavProps>(({ mobile, setActiveTab, activeTab = ProviderNavKey.O
           target="_blank"
         >
           {t('mcp.details.nav.reportIssue')}
+          <Icon icon={SquareArrowOutUpRight} size={12} />
         </a>
       </Flexbox>
     </Flexbox>

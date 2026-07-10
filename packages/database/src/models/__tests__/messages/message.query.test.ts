@@ -3189,4 +3189,81 @@ describe('MessageModel Query Tests', () => {
       expect(await messageModel.getLatestSpineMessageId({ topicId: 'nope' })).toBeUndefined();
     });
   });
+
+  // Regression for the signal-tag exclusion predicate. It used to be
+  // `metadata -> 'signal' IS NULL`, which crashes the production serverless
+  // Postgres engine when used as a WHERE qual (rt_fetch out-of-bounds, SQLSTATE
+  // XX000) and made the agent verifier fail to start. It was rewritten to
+  // `NOT COALESCE(jsonb_exists(metadata, 'signal'), false)`; these lock in the
+  // three metadata shapes the rewrite must handle. Server-DB (node-postgres)
+  // only — the client PGlite path is skipped.
+  describe.skipIf(!isServerDB)('getLatestSpineMessageId — signal predicate regression', () => {
+    it('keeps null and signal-free object metadata, excludes only signal-tagged', async () => {
+      await serverDB.insert(sessions).values([{ id: 'session1', userId }]);
+      await serverDB.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
+      await serverDB.insert(messages).values([
+        {
+          // null metadata — a spine candidate, must not be dropped by the predicate
+          id: 'null-meta',
+          userId,
+          topicId: 'topic1',
+          role: 'assistant',
+          content: 'plain',
+          createdAt: new Date('2023-01-01T00:00:00'),
+        },
+        {
+          // object metadata without a `signal` key — also a spine candidate
+          id: 'obj-meta',
+          userId,
+          topicId: 'topic1',
+          role: 'assistant',
+          content: 'has usage',
+          metadata: { usage: { totalTokens: 10 } } as any,
+          createdAt: new Date('2023-01-01T00:00:01'),
+        },
+        {
+          // newest, but signal-tagged — the only row the predicate must exclude
+          id: 'sig-meta',
+          userId,
+          topicId: 'topic1',
+          role: 'assistant',
+          content: 'callback',
+          metadata: { signal: { type: 'monitor' } } as any,
+          createdAt: new Date('2023-01-01T00:00:02'),
+        },
+      ]);
+
+      // latest non-signal spine row is the signal-free object, not the newer
+      // signal-tagged callback
+      expect(await messageModel.getLatestSpineMessageId({ topicId: 'topic1' })).toBe('obj-meta');
+    });
+
+    it('returns the null-metadata row when it is the only spine candidate', async () => {
+      await serverDB.insert(sessions).values([{ id: 'session1', userId }]);
+      await serverDB.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
+      await serverDB.insert(messages).values([
+        {
+          id: 'null-only',
+          userId,
+          topicId: 'topic1',
+          role: 'assistant',
+          content: 'plain',
+          createdAt: new Date('2023-01-01T00:00:00'),
+        },
+        {
+          id: 'sig-newer',
+          userId,
+          topicId: 'topic1',
+          role: 'assistant',
+          content: 'callback',
+          metadata: { signal: { type: 'monitor' } } as any,
+          createdAt: new Date('2023-01-01T00:00:01'),
+        },
+      ]);
+
+      // guards the COALESCE: a naive `NOT jsonb_exists(metadata, 'signal')` yields
+      // NULL for null metadata and would wrongly drop this row
+      expect(await messageModel.getLatestSpineMessageId({ topicId: 'topic1' })).toBe('null-only');
+    });
+  });
 });

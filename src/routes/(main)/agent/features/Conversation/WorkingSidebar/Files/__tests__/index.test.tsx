@@ -168,7 +168,18 @@ beforeEach(() => {
   handleSpies.setExpanded.mockClear();
   messageSpy.warning.mockClear();
   openLocalFileMock.mockClear();
+  // Default to an empty result so EVERY call resolves to a promise. The search
+  // effect can fire more than once (debounce + effect re-run / StrictMode), and
+  // per-test `mockResolvedValueOnce` only covers the first call — an extra,
+  // un-mocked call would return `undefined`, and the component's
+  // `searchProjectFiles(...).then(...)` would throw "reading 'then'" (flaky in CI).
   searchProjectFilesMock.mockReset();
+  searchProjectFilesMock.mockResolvedValue({
+    entries: [],
+    root: '/repo',
+    searchedAt: '2026-01-01',
+    source: 'git',
+  });
   useGlobalStore.setState({
     ...initialState,
     status: { ...initialState.status, workingSidebarRevealRequest: undefined },
@@ -241,7 +252,7 @@ describe('Files — reveal request integration', () => {
   });
 
   it('filters file tree nodes while retaining ancestor directories', async () => {
-    searchProjectFilesMock.mockResolvedValueOnce({
+    searchProjectFilesMock.mockResolvedValue({
       entries: [
         { isDirectory: true, name: 'src', path: '/repo/src', relativePath: 'src/' },
         { isDirectory: true, name: 'foo', path: '/repo/src/foo', relativePath: 'src/foo/' },
@@ -276,7 +287,7 @@ describe('Files — reveal request integration', () => {
   });
 
   it('shows a no-results state when the file filter has no matches', async () => {
-    searchProjectFilesMock.mockResolvedValueOnce({
+    searchProjectFilesMock.mockResolvedValue({
       entries: [],
       root: '/repo',
       searchedAt: '2026-01-01',

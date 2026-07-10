@@ -220,7 +220,7 @@ The executor only cuts a new assistant message when it receives a step-boundary 
 Relevant files:
 
 - `packages/heterogeneous-agents/src/adapters/codex.ts`
-- `src/store/chat/slices/aiChat/actions/heterogeneousAgentExecutor.ts`
+- `src/store/chat/slices/agentRun/actions/transports/hetero/heterogeneousAgentExecutor.ts`
 
 ## 5. Check Tool Persistence Invariants
 
@@ -263,14 +263,14 @@ Run the smallest useful test set first.
 ```bash
 bunx vitest run --silent='passed-only' 'packages/heterogeneous-agents/src/adapters/codex.test.ts'
 bunx vitest run --silent='passed-only' 'packages/heterogeneous-agents/src/adapters/claudeCode.test.ts'
-bunx vitest run --silent='passed-only' 'src/store/chat/slices/aiChat/actions/__tests__/heterogeneousAgentExecutor.test.ts'
+bunx vitest run --silent='passed-only' 'src/store/chat/slices/agentRun/actions/__tests__/heterogeneousAgentExecutor.test.ts'
 ```
 
 Especially useful places:
 
 - `packages/heterogeneous-agents/src/adapters/codex.test.ts`
 - `packages/heterogeneous-agents/src/adapters/claudeCode.test.ts`
-- `src/store/chat/slices/aiChat/actions/__tests__/heterogeneousAgentExecutor.test.ts`
+- `src/store/chat/slices/agentRun/actions/__tests__/heterogeneousAgentExecutor.test.ts`
 
 Claude Code-specific assertions worth adding when fixing bugs:
 

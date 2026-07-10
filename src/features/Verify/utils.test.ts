@@ -7,6 +7,9 @@ describe('phaseFromStatus', () => {
     expect(phaseFromStatus('planned')).toBe('draft');
     expect(phaseFromStatus('verifying')).toBe('verifying');
     expect(phaseFromStatus('failed')).toBe('failed');
+    // `errored` is a terminal, non-pass phase of its own — never `idle` (which
+    // would drop the checker body and read as still-pending).
+    expect(phaseFromStatus('errored')).toBe('errored');
     expect(phaseFromStatus('repairing')).toBe('repairing');
     expect(phaseFromStatus('passed')).toBe('passed');
     expect(phaseFromStatus('delivered')).toBe('passed');

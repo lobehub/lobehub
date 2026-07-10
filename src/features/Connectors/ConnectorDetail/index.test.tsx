@@ -56,7 +56,9 @@ vi.mock('@lobechat/const', () => ({
   getLobehubSkillProviderById: () => undefined,
 }));
 
-vi.mock('antd', () => ({
+// Stub the base-ui Button to a native button — it needs a MotionProvider the
+// app sets up globally but the unit env doesn't.
+vi.mock('@lobehub/ui/base-ui', () => ({
   Button: ({
     'aria-label': ariaLabel,
     children,
@@ -65,15 +67,16 @@ vi.mock('antd', () => ({
     onClick,
   }: {
     'aria-label'?: string;
-    'children'?: ReactNode;
-    'disabled'?: boolean;
-    'title'?: string;
-    'onClick'?: () => void;
+    children?: ReactNode;
+    disabled?: boolean;
+    title?: string;
+    onClick?: () => void;
   }) => (
-    <button aria-label={ariaLabel} disabled={disabled} title={title} onClick={onClick}>
+    <button aria-label={ariaLabel} disabled={disabled} title={title} type="button" onClick={onClick}>
       {children}
     </button>
   ),
+  confirmModal: vi.fn(),
 }));
 
 vi.mock('@/store/tool', () => ({

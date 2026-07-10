@@ -175,6 +175,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     transform-box: fill-box;
     fill: ${cssVar.colorPrimary};
     animation: op-status-tray-glyph-core 1.5s ease-in-out infinite;
+
+    @media (prefers-reduced-motion: reduce) {
+      animation: none;
+    }
   `,
   glyphOrbit: css`
     transform-origin: center;
@@ -187,6 +191,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     stroke-width: 1.5;
 
     animation: op-status-tray-glyph-spin 2s linear infinite;
+
+    @media (prefers-reduced-motion: reduce) {
+      animation: none;
+    }
   `,
 }));
 

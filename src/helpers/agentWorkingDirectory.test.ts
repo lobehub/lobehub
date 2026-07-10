@@ -1,7 +1,12 @@
 import type { LobeAgentAgencyConfig } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import { resolveAgentWorkingDirectory, resolveTargetDeviceId } from './agentWorkingDirectory';
+import {
+  resolveAgentWorkingDirectory,
+  resolveAgentWorkingDirectoryConfig,
+  resolveAgentWorkingDirectorySource,
+  resolveTargetDeviceId,
+} from './agentWorkingDirectory';
 
 const cfg = (over: Partial<LobeAgentAgencyConfig> = {}): LobeAgentAgencyConfig => ({ ...over });
 
@@ -26,10 +31,7 @@ describe('resolveTargetDeviceId', () => {
 
   it('does not use stale bindings for sandbox targets', () => {
     expect(
-      resolveTargetDeviceId(
-        cfg({ boundDeviceId: 'dev-1', executionTarget: 'sandbox' }),
-        undefined,
-      ),
+      resolveTargetDeviceId(cfg({ boundDeviceId: 'dev-1', executionTarget: 'sandbox' }), undefined),
     ).toBeUndefined();
   });
 
@@ -87,6 +89,23 @@ describe('resolveAgentWorkingDirectory', () => {
     );
   });
 
+  it('uses the active worktree from the per-device source entry as the effective cwd', () => {
+    const agencyConfig = cfg({
+      executionTarget: 'local',
+      workingDirByDevice: {
+        cur: {
+          git: { activeWorktree: '/repo-fix', branch: 'fix', isWorktree: true },
+          path: '/repo',
+          repoType: 'git',
+        },
+      },
+    });
+
+    expect(resolveAgentWorkingDirectory({ agencyConfig, currentDeviceId: 'cur' })).toBe(
+      '/repo-fix',
+    );
+  });
+
   it('ignores the per-device choice when the target device has no entry', () => {
     const agencyConfig = cfg({
       executionTarget: 'local',
@@ -103,5 +122,78 @@ describe('resolveAgentWorkingDirectory', () => {
 
   it('returns undefined when nothing is configured', () => {
     expect(resolveAgentWorkingDirectory({})).toBeUndefined();
+  });
+});
+
+describe('resolveAgentWorkingDirectorySource', () => {
+  it('resolves to the SOURCE repo path, ignoring the active worktree', () => {
+    // A worktree switch records `activeWorktree` but the directory label must
+    // keep showing the repo root (where hetero CLI sessions actually anchor).
+    const agencyConfig = cfg({
+      executionTarget: 'local',
+      workingDirByDevice: {
+        cur: {
+          git: { activeWorktree: '/repo-fix', branch: 'fix', isWorktree: true },
+          path: '/repo',
+          repoType: 'git',
+        },
+      },
+    });
+
+    expect(resolveAgentWorkingDirectorySource({ agencyConfig, currentDeviceId: 'cur' })).toBe(
+      '/repo',
+    );
+    // the effective resolver still yields the worktree — the two intentionally
+    // diverge, and git status (not the directory label) is what consumes it.
+    expect(resolveAgentWorkingDirectory({ agencyConfig, currentDeviceId: 'cur' })).toBe(
+      '/repo-fix',
+    );
+  });
+
+  it('resolves the topic-level config to its source path', () => {
+    expect(
+      resolveAgentWorkingDirectorySource({
+        topicWorkingDirectory: '/topic-effective',
+        topicWorkingDirectoryConfig: {
+          git: { activeWorktree: '/repo-fix', isWorktree: true },
+          path: '/repo',
+        },
+      }),
+    ).toBe('/repo');
+  });
+});
+
+describe('resolveAgentWorkingDirectoryConfig', () => {
+  it('keeps the topic-level rich config as a single structured directory', () => {
+    const topicWorkingDirectoryConfig = {
+      git: { activeWorktree: '/repo-fix', branch: 'fix', isWorktree: true },
+      path: '/repo',
+      repoType: 'git' as const,
+    };
+
+    expect(
+      resolveAgentWorkingDirectoryConfig({
+        agencyConfig: cfg({ workingDirByDevice: { cur: '/agent' } }),
+        currentDeviceId: 'cur',
+        topicWorkingDirectory: '/repo-fix',
+        topicWorkingDirectoryConfig,
+      }),
+    ).toEqual(topicWorkingDirectoryConfig);
+  });
+
+  it('returns the agent rich entry so new topics can snapshot it', () => {
+    const agentChoice = {
+      git: { activeWorktree: '/repo-fix', branch: 'fix', isWorktree: true },
+      path: '/repo',
+      repoType: 'git' as const,
+    };
+    const agencyConfig = cfg({
+      executionTarget: 'local',
+      workingDirByDevice: { cur: agentChoice },
+    });
+
+    expect(resolveAgentWorkingDirectoryConfig({ agencyConfig, currentDeviceId: 'cur' })).toEqual(
+      agentChoice,
+    );
   });
 });

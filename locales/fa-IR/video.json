@@ -27,8 +27,12 @@
   "generation.status.generating": "در حال تولید...",
   "generation.validation.endFrameRequiresStartFrame": "استفاده از فریم پایانی بدون فریم آغازین امکان‌پذیر نیست. لطفاً ابتدا فریم آغازین را تنظیم کنید.",
   "topic.createNew": "ایجاد موضوع جدید",
+  "topic.createdBy": "ایجاد شده توسط {{name}}",
   "topic.deleteConfirm": "حذف موضوع ویدیو",
   "topic.deleteConfirmDesc": "در حال حذف این موضوع ویدیو هستید. این عملیات قابل بازگشت نیست.",
+  "topic.privateTitle": "خصوصی",
   "topic.title": "موضوعات ویدیو",
-  "topic.untitled": "موضوع پیش‌فرض"
+  "topic.untitled": "موضوع پیش‌فرض",
+  "topic.visibility.existingLocked": "قابلیت مشاهده برای موضوع فعلی ثابت است. برای انتخاب فضای متفاوت، یک موضوع جدید ایجاد کنید.",
+  "topic.workspaceTitle": "فضای کاری"
 }

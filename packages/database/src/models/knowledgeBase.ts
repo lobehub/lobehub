@@ -18,8 +18,11 @@ export class KnowledgeBaseModel {
     this.workspaceId = workspaceId;
   }
 
-  private ownership = () =>
-    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, knowledgeBases);
+  private ownership = (callerAgentVisibility?: 'private' | 'public' | null) =>
+    buildWorkspaceWhere(
+      { callerAgentVisibility, userId: this.userId, workspaceId: this.workspaceId },
+      knowledgeBases,
+    );
 
   // create
 
@@ -160,7 +163,15 @@ export class KnowledgeBaseModel {
       );
   };
   // query
-  query = async () => {
+  query = async (options?: {
+    callerAgentVisibility?: 'private' | 'public' | null;
+    visibility?: 'private' | 'public';
+  }) => {
+    const ownershipWhere = this.ownership(options?.callerAgentVisibility);
+    const conditions = options?.visibility
+      ? and(ownershipWhere, eq(knowledgeBases.visibility, options.visibility))
+      : ownershipWhere;
+
     const data = await this.db
       .select({
         avatar: knowledgeBases.avatar,
@@ -172,9 +183,11 @@ export class KnowledgeBaseModel {
         settings: knowledgeBases.settings,
         type: knowledgeBases.type,
         updatedAt: knowledgeBases.updatedAt,
+        userId: knowledgeBases.userId,
+        visibility: knowledgeBases.visibility,
       })
       .from(knowledgeBases)
-      .where(this.ownership())
+      .where(conditions)
       .orderBy(desc(knowledgeBases.updatedAt));
 
     return data as KnowledgeBaseItem[];
@@ -210,6 +223,39 @@ export class KnowledgeBaseModel {
       .update(knowledgeBases)
       .set({ ...value, updatedAt: new Date() })
       .where(and(eq(knowledgeBases.id, id), this.ownership()));
+
+  /**
+   * Publish a private knowledge base into the workspace. Thin wrapper around
+   * `setVisibility(id, 'public')`; kept as a named method for the TRPC
+   * `publishKnowledgeBaseToWorkspace` procedure and existing callers.
+   */
+  publishToWorkspace = async (id: string) => this.setVisibility(id, 'public');
+
+  /**
+   * Flip a knowledge base's `visibility`. Bidirectional companion to
+   * `publishToWorkspace`. The combined `user_id = ?` +
+   * `visibility = fromVisibility` guards keep the operation creator-only and
+   * idempotent against rows already at the target visibility.
+   *
+   * Unpublishing is safe by design — this column only gates KB list
+   * enumeration; other members lose the sidebar entry immediately, while
+   * downstream RAG paths handle a missing/unreachable KB.
+   */
+  setVisibility = async (id: string, visibility: 'private' | 'public') => {
+    const fromVisibility = visibility === 'public' ? 'private' : 'public';
+
+    return this.db
+      .update(knowledgeBases)
+      .set({ updatedAt: new Date(), visibility })
+      .where(
+        and(
+          eq(knowledgeBases.id, id),
+          this.ownership(),
+          eq(knowledgeBases.userId, this.userId),
+          eq(knowledgeBases.visibility, fromVisibility),
+        ),
+      );
+  };
 
   private resolveAvailableName = async (
     db: LobeChatDatabase,
@@ -249,6 +295,7 @@ export class KnowledgeBaseModel {
     id: string,
     targetWorkspaceId: string | null,
     targetUserId: string,
+    targetVisibility?: 'private' | 'public',
   ): Promise<{ id: string }> => {
     return this.db.transaction(async (trx) => {
       const [knowledgeBase] = await trx
@@ -265,6 +312,10 @@ export class KnowledgeBaseModel {
       const fileIds = fileLinks.map((item) => item.fileId);
       const now = new Date();
       const ownershipUpdate = { userId: targetUserId, workspaceId: targetWorkspaceId };
+      // Visibility only applies when landing in a workspace — personal scope
+      // treats every row as implicitly private.
+      const visibilityUpdate =
+        targetWorkspaceId && targetVisibility ? { visibility: targetVisibility } : {};
       const targetName = await this.resolveAvailableName(
         trx as LobeChatDatabase,
         knowledgeBase.name,
@@ -275,7 +326,7 @@ export class KnowledgeBaseModel {
 
       await trx
         .update(knowledgeBases)
-        .set({ ...ownershipUpdate, name: targetName, updatedAt: now })
+        .set({ ...ownershipUpdate, ...visibilityUpdate, name: targetName, updatedAt: now })
         .where(eq(knowledgeBases.id, id));
 
       await trx
@@ -286,7 +337,7 @@ export class KnowledgeBaseModel {
       if (fileIds.length > 0) {
         await trx
           .update(files)
-          .set({ ...ownershipUpdate, updatedAt: now })
+          .set({ ...ownershipUpdate, ...visibilityUpdate, updatedAt: now })
           .where(inArray(files.id, fileIds));
       }
 
@@ -297,7 +348,7 @@ export class KnowledgeBaseModel {
 
       await trx
         .update(documents)
-        .set({ ...ownershipUpdate, updatedAt: now })
+        .set({ ...ownershipUpdate, ...visibilityUpdate, updatedAt: now })
         .where(documentWhere);
 
       return { id };
@@ -308,6 +359,7 @@ export class KnowledgeBaseModel {
     id: string,
     targetWorkspaceId: string | null,
     targetUserId: string,
+    targetVisibility?: 'private' | 'public',
   ): Promise<{ id: string }> => {
     return this.db.transaction(async (trx) => {
       const [knowledgeBase] = await trx
@@ -316,6 +368,9 @@ export class KnowledgeBaseModel {
         .where(and(eq(knowledgeBases.id, id), this.ownership()))
         .limit(1);
       if (!knowledgeBase) throw new Error('Knowledge base not found');
+      // Visibility only applies when landing in a workspace.
+      const visibilityOverride =
+        targetWorkspaceId && targetVisibility ? { visibility: targetVisibility } : {};
       const targetName = await this.resolveAvailableName(
         trx as LobeChatDatabase,
         knowledgeBase.name,
@@ -334,6 +389,7 @@ export class KnowledgeBaseModel {
           type: knowledgeBase.type,
           userId: targetUserId,
           workspaceId: targetWorkspaceId,
+          ...visibilityOverride,
         } as NewKnowledgeBase)
         .returning();
 
@@ -388,6 +444,7 @@ export class KnowledgeBaseModel {
               totalLineCount: document.totalLineCount,
               userId: targetUserId,
               workspaceId: targetWorkspaceId,
+              ...visibilityOverride,
             } as NewDocument)
             .returning({ id: documents.id });
 
@@ -423,6 +480,7 @@ export class KnowledgeBaseModel {
               url: file.url,
               userId: targetUserId,
               workspaceId: targetWorkspaceId,
+              ...visibilityOverride,
             } as NewFile)
             .returning({ id: files.id });
 

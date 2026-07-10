@@ -1,8 +1,8 @@
 'use client';
 
-import { LoadingOutlined } from '@ant-design/icons';
-import { Flexbox, Input } from '@lobehub/ui';
-import { type InputRef, Spin } from 'antd';
+import { Flexbox, Icon, Input } from '@lobehub/ui';
+import { type InputRef } from 'antd';
+import { Loader2Icon } from 'lucide-react';
 import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -40,7 +40,7 @@ const FullNameRow = () => {
   return (
     <ProfileRow label={t('profile.fullName')}>
       <Flexbox horizontal align="center" gap={8}>
-        {saving && <Spin indicator={<LoadingOutlined spin />} size="small" />}
+        {saving && <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.5 }} />}
         <Input
           defaultValue={fullName || ''}
           disabled={saving}

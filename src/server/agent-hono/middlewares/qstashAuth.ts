@@ -1,3 +1,5 @@
+import { recordUpstashWorkflowEvent } from '@lobechat/observability-otel/modules/upstash-workflow';
+import { errorNameFrom } from '@lobechat/utils';
 import debug from 'debug';
 import type { MiddlewareHandler } from 'hono';
 
@@ -18,8 +20,33 @@ export const qstashAuth = (): MiddlewareHandler => async (c, next) => {
 
   if (!isValid) {
     log('Rejected: invalid QStash signature on %s', c.req.path);
+    recordUpstashWorkflowEvent({
+      errorType: 'InvalidSignature',
+      interface: 'qstash',
+      operation: 'serve',
+      path: c.req.path,
+      status: 'error',
+    });
+
     return c.json({ error: 'Invalid signature' }, 401);
   }
 
-  await next();
+  try {
+    await next();
+    recordUpstashWorkflowEvent({
+      interface: 'qstash',
+      operation: 'serve',
+      path: c.req.path,
+      status: 'success',
+    });
+  } catch (error) {
+    recordUpstashWorkflowEvent({
+      errorType: errorNameFrom(error) ?? typeof error,
+      interface: 'qstash',
+      operation: 'serve',
+      path: c.req.path,
+      status: 'error',
+    });
+    throw error;
+  }
 };

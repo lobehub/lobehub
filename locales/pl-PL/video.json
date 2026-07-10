@@ -27,8 +27,12 @@
   "generation.status.generating": "Generowanie...",
   "generation.validation.endFrameRequiresStartFrame": "Klatka końcowa wymaga ustawienia klatki początkowej. Najpierw ustaw klatkę początkową.",
   "topic.createNew": "Utwórz nowy temat",
+  "topic.createdBy": "Utworzony przez {{name}}",
   "topic.deleteConfirm": "Usuń temat wideo",
   "topic.deleteConfirmDesc": "Zamierzasz usunąć ten temat wideo. Tej operacji nie można cofnąć.",
+  "topic.privateTitle": "Prywatne",
   "topic.title": "Tematy wideo",
-  "topic.untitled": "Domyślny temat"
+  "topic.untitled": "Domyślny temat",
+  "topic.visibility.existingLocked": "Widoczność jest ustalona dla bieżącego tematu. Utwórz nowy temat, aby wybrać inną przestrzeń.",
+  "topic.workspaceTitle": "Przestrzeń robocza"
 }

@@ -11,5 +11,5 @@
 | Approval dialog never appears                   | Manifest missing `humanIntervention`, or Intervention not in registry                                                                 |
 | Approval click doesn't wait for inline edit     | Missing `registerBeforeApprove(id, flushFn)`                                                                                          |
 | Portal opens but blank                          | Switch in `Portal/index.tsx` doesn't cover the apiName                                                                                |
-| Strings show as `builtins.lobe-foo.apiName.bar` | Missing i18n key in `src/locales/default/plugin.ts` (or not seeded in dev locale files)                                               |
+| Strings show as `builtins.lobe-foo.apiName.bar` | Missing i18n key in `packages/locales/src/default/plugin.ts` (or not seeded in dev locale files)                                      |
 | Wrong color shade on `<Text type="secondary">`  | `type='secondary'` is lighter than `colorTextSecondary` — pass via `style={{ color: cssVar.colorTextSecondary }}`                     |
