@@ -485,6 +485,78 @@
     server's `S3_ACCESS_KEY_ID/S3_SECRET_ACCESS_KEY=S3RVER`, `S3_ENABLE_PATH_STYLE=1`,
     `S3_PUBLIC_DOMAIN=http://127.0.0.1:29000/<bucket>`.
 
+### E8. ✅ WORKS — a git-worktree checkout needs its OWN `pnpm install`, not a symlinked `node_modules`
+
+- **Situation**: verifying a UI change from a `git worktree` (e.g. `.claude/worktrees/<name>`), which
+  starts with no `node_modules`.
+- **Doesn't work**: symlinking the main checkout's `node_modules` (root and/or `apps/desktop`) into the
+  worktree. The workspace links inside it point `@lobechat/*` at the MAIN checkout's `packages/`, which
+  sits on a different branch — the Electron main build then dies with
+  `[MISSING_EXPORT] "X" is not exported by "../../packages/<pkg>/src/..."`. Renderer source resolves from
+  the worktree while packages resolve from the main repo, so the two disagree.
+- **Works**: run `pnpm install` at the worktree root AND `cd apps/desktop && pnpm install` (standalone,
+  not in the workspace). \~5 min total, mostly hardlinked from the store.
+- **Also**: a Vite dev server left over from an earlier failed `electron-dev.sh start <id>` is REUSED by
+  the retry (`CDP already reachable … Skipping start`) and can keep serving pre-edit module text. If the
+  DOM shows markup that contradicts the source, curl the dev server for the file and grep for a token you
+  just added (`curl -s 127.0.0.1:<vitePort>/src/path/File.tsx | grep -c myNewSymbol`) before blaming the
+  code. `electron-dev.sh stop <id>` then start again to get a clean server.
+
+### E9. Electron dev's FIRST cold boot sits on the splash with an empty `#root` for 1–3 minutes
+
+- **Situation**: after `electron-dev.sh start <id>`, `app-probe.sh auth` returns `isSignedIn:false`,
+  `#root` has providers but `innerText.length === 0`, and the screenshot is just the LobeHub splash. The
+  main log shows `Proactive token refresh failed` / `invalid_grant`.
+- **Doesn't work**: concluding the copied login state expired. That refresh error is a red herring — the
+  app recovers, and `RENDERER_WAIT_S` (60s) can expire while Vite is still on
+  `[optimizer] bundling dependencies`, which ends in `optimized dependencies changed. reloading`.
+- **Works**: poll until the DOM actually has content instead of sleeping a fixed amount:
+  ```bash
+  until [ "$(agent-browser --session s \
+    '(function(){return String(document.getElementById("root").innerText.trim().length>50)})()' < port > --cdp < port > eval \
+    | tr -d '"')" = "true" ]; do sleep 5; done
+  ```
+  Also note `zsh does NOT word-split unquoted vars` — `S="--session x --cdp 9226"; agent-browser $S eval`
+  fails with `Unknown command`. Inline the flags or use an array.
+
+### E10. ✅ WORKS — stop the main process from yanking the renderer back to its last tab
+
+- **Situation**: driving the SPA to a specific route for a screenshot. `history.pushState` + `popstate`
+  lands correctly, then \~15–20s later `location.pathname` snaps back to whatever tab the main process
+  has stored (e.g. `/devtools/claude-code`). A hard `location.href` nav is reverted the same way.
+- **Cause**: the main process broadcasts `navigate`, and `src/features/DesktopNavigationBridge` obeys it.
+- **Works**: HMR-neutralize the bridge for the run, then revert:
+  ```tsx
+  // src/features/DesktopNavigationBridge/index.tsx — [AGENT-TEST] REMOVE
+  useWatchBroadcast('navigate', () => {
+    void handleNavigate;
+  });
+  ```
+  `git checkout -- src/features/DesktopNavigationBridge/index.tsx` afterwards; `grep -rn AGENT-TEST src/`
+  must come back empty.
+
+### E11. ✅ WORKS — drive the working-directory / git-status ControlBar without the native dir picker
+
+- The picker opens a native dialog, but the same write path is reachable from the store. With no active
+  topic, `commit()` persists to `agencyConfig.workingDirByDevice[deviceId]`:
+  ```js
+  const a = window.__LOBE_STORES.agent(),
+    d = window.__LOBE_STORES.device();
+  const did = window.__LOBE_STORES.electron().gatewayDeviceInfo.deviceId;
+  const entry = { path: '/abs/repo', repoType: 'git' };
+  await a.updateAgentConfigById(agentId, {
+    agencyConfig: { workingDirByDevice: { [did]: entry } },
+  });
+  await d.updateDeviceCwd(did, entry, { setDefault: false }); // so the entry exists → sourcePath resolves
+  ```
+  Create a throwaway agent with `agent().createAgent({ title })` and delete it afterwards with
+  `session().removeSession(agentId)` (there is no `deleteAgent` on the agent store) plus
+  `device().removeDeviceWorkingDir(did, path)` — otherwise the fixture cwd lingers in the real account.
+- **Identify icons precisely**: lucide renders `svg.lucide.lucide-git-fork`. Several git icons live in the
+  same bar (the dir picker's `DirIcon` is `git-branch`, the review toggle is `git-compare`), so scope the
+  assertion to the trigger: `document.querySelector('[role=button][aria-label="Worktrees"]') svg`, and
+  still open the PNG to confirm (Case 1).
+
 ### E6. code-inspector-plugin breaks Turbopack compile of Next-served authed pages
 
 - **Situation**: the first AUTHENTICATED render of a Next-served (non-SPA) page whose client
