@@ -220,6 +220,7 @@ const googleChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-3.1',
     id: 'gemini-3.1-flash-lite-image',
+    knowledgeCutoff: '2025-01',
     maxOutput: 4_096,
     pricing: {
       approximatePricePerImage: 0.034,
@@ -231,6 +232,10 @@ const googleChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2026-06-30',
+    settings: {
+      // no imageResolution2: output resolution is fixed at 1K for the Lite model
+      extendParams: ['imageAspectRatio2'],
+    },
     type: 'chat',
   },
   {
