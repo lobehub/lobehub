@@ -1,7 +1,11 @@
 import type { ToolAfterCallContext } from '@lobechat/types';
 import { BaseExecutor } from '@lobechat/types';
 
-import { recordGitCommandEffects } from './worktreeDetection';
+import {
+  recordGitCommandEffects,
+  recordWorktreeEnter,
+  recordWorktreeExit,
+} from './worktreeDetection';
 
 /**
  * Hook-only executor for a heterogeneous CLI agent's tool identifier
@@ -33,6 +37,17 @@ const readShellCommand = (params: unknown): string | string[] | undefined => {
   return undefined;
 };
 
+/**
+ * The CLI's own worktree tools, when it has any. Claude Code moves its session with
+ * `EnterWorktree` / `ExitWorktree` and never shells out, so the `git worktree add`
+ * sniffing in `recordGitCommandEffects` cannot observe those moves. Codex has no
+ * equivalent tool and so passes `undefined`.
+ */
+interface WorktreeApiNames {
+  enter: string;
+  exit: string;
+}
+
 class HeteroCliExecutor extends BaseExecutor<typeof EMPTY_API_ENUM> {
   protected readonly apiEnum = EMPTY_API_ENUM;
 
@@ -41,10 +56,12 @@ class HeteroCliExecutor extends BaseExecutor<typeof EMPTY_API_ENUM> {
    * @param shellApiNames The adapter's shell / run-command tool api name(s). Side
    *   effects are constrained to THIS tool first, then handled uniformly — we don't
    *   sniff every tool call's params.
+   * @param worktreeApiNames The adapter's native enter/exit worktree tools, if any.
    */
   constructor(
     readonly identifier: string,
     private readonly shellApiNames: ReadonlySet<string>,
+    private readonly worktreeApiNames?: WorktreeApiNames,
   ) {
     super();
   }
@@ -55,8 +72,21 @@ class HeteroCliExecutor extends BaseExecutor<typeof EMPTY_API_ENUM> {
     result,
     topicId,
   }: ToolAfterCallContext): Promise<void> => {
-    // Constrain to a SUCCESSFUL run of the shell tool bound to a run topic.
-    if (!result.success || !topicId || !this.shellApiNames.has(apiName)) return;
+    // Constrain to a SUCCESSFUL call bound to a run topic. A refused `ExitWorktree`
+    // (dirty worktree, no active session) fails validation and lands here with
+    // `success: false` — it must not clear the topic's worktree.
+    if (!result.success || !topicId) return;
+
+    if (apiName === this.worktreeApiNames?.enter) {
+      await recordWorktreeEnter({ content: result.content, topicId });
+      return;
+    }
+    if (apiName === this.worktreeApiNames?.exit) {
+      await recordWorktreeExit({ content: result.content, topicId });
+      return;
+    }
+
+    if (!this.shellApiNames.has(apiName)) return;
 
     const command = readShellCommand(params);
     if (command === undefined) return;
@@ -66,5 +96,8 @@ class HeteroCliExecutor extends BaseExecutor<typeof EMPTY_API_ENUM> {
 }
 
 // CC's shell tool is `Bash`; Codex's is `command_execution`.
-export const claudeCodeExecutor = new HeteroCliExecutor('claude-code', new Set(['Bash']));
+export const claudeCodeExecutor = new HeteroCliExecutor('claude-code', new Set(['Bash']), {
+  enter: 'EnterWorktree',
+  exit: 'ExitWorktree',
+});
 export const codexExecutor = new HeteroCliExecutor('codex', new Set(['command_execution']));
