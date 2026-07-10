@@ -2690,6 +2690,7 @@ export class AiAgentService {
             }
           : undefined,
         disableLocalSystem,
+        disabledPluginIds,
         executionPlan,
         globalMemoryEnabled,
         hasEnabledKnowledgeBases,

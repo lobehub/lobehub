@@ -152,6 +152,9 @@ const installedPluginsArg = () =>
 const agentConfigPluginsArg = () =>
   mockCreateServerAgentToolsEngine.mock.calls[0][1].agentConfig.plugins as string[];
 
+const disabledPluginIdsArg = () =>
+  mockCreateServerAgentToolsEngine.mock.calls[0][1].disabledPluginIds as string[];
+
 const toolManifestMapArg = () =>
   mockCreateOperation.mock.calls[0][0].toolSet.manifestMap as Record<string, unknown>;
 
@@ -210,6 +213,7 @@ describe('AiAgentService.execAgent - three-state plugin config (pinned/auto/disa
     await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' } as any);
 
     expect(agentConfigPluginsArg()).toEqual(['plugin-a']);
+    expect(disabledPluginIdsArg()).toEqual(['plugin-b']);
   });
 
   it('behaves identically to a pure string array when no entry is disabled', async () => {

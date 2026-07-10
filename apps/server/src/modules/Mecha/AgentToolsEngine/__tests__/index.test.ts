@@ -296,6 +296,27 @@ describe('createServerAgentToolsEngine', () => {
     expect(lobeAgent?.api.map((a) => a.name)).toContain(LobeAgentApiName.callSubAgent);
   });
 
+  it('should honor an explicit disabled policy for an always-on builtin tool', () => {
+    const context = createMockContext();
+    const engine = createServerAgentToolsEngine(context, {
+      agentConfig: { plugins: [] },
+      disabledPluginIds: [LobeAgentManifest.identifier],
+      model: 'deepseek-chat',
+      provider: 'deepseek',
+    });
+
+    const result = engine.generateToolsDetailed({
+      model: 'deepseek-chat',
+      provider: 'deepseek',
+      toolIds: [],
+    });
+
+    expect(result.enabledToolIds).not.toContain(LobeAgentManifest.identifier);
+    expect(result.enabledManifests).not.toContainEqual(
+      expect.objectContaining({ identifier: LobeAgentManifest.identifier }),
+    );
+  });
+
   it('hides lobe-agent callSubAgent when manifestContext.isSubAgent is true', () => {
     const context = createMockContext();
     const engine = createServerAgentToolsEngine(context, {
