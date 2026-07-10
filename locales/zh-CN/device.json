@@ -5,6 +5,7 @@
   "workingDirectory.agentDescription": "该助手下所有对话的默认工作目录",
   "workingDirectory.agentLevel": "代理工作目录",
   "workingDirectory.bareWorktree": "bare",
+  "workingDirectory.branchInWorktree": "位于工作树 {{name}}",
   "workingDirectory.branchSearchPlaceholder": "搜索分支",
   "workingDirectory.branchesEmpty": "暂无本地分支",
   "workingDirectory.branchesHeading": "分支",

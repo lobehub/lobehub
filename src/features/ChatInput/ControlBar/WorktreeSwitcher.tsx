@@ -1,8 +1,4 @@
-import {
-  deriveWorktreePath,
-  type DeviceGitWorktreeListItem,
-  type WorkingDirEntry,
-} from '@lobechat/types';
+import { deriveWorktreePath, type DeviceGitWorktreeListItem } from '@lobechat/types';
 import { Icon, Input, Tooltip } from '@lobehub/ui';
 import {
   confirmModal,
@@ -31,7 +27,8 @@ import { useTranslation } from 'react-i18next';
 import { gitService } from '@/services/git';
 
 import { openCreateWorktreeModal } from './CreateWorktreeModal';
-import { useCommitWorkingDirectory } from './useCommitWorkingDirectory';
+import { useSwitchWorktree } from './useSwitchWorktree';
+import { getPathName, isDisabled, normalizeDisplayPath } from './worktreeHelpers';
 
 const styles = createStaticStyles(({ css }) => ({
   badge: css`
@@ -326,12 +323,6 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-const getPathName = (path: string): string =>
-  path.replaceAll('\\', '/').split('/').findLast(Boolean) || path;
-
-const normalizeDisplayPath = (path: string): string =>
-  path.replaceAll('\\', '/').replace(/\/+$/, '');
-
 const TEMP_PATH_PREFIXES = ['/tmp', '/var/tmp', '/private/tmp'];
 
 const isTempPath = (path: string): boolean => {
@@ -380,9 +371,6 @@ const getWorktreeBranch = (
   if (worktree.detached && head) return detachedLabel(head);
   return fallbackBranch;
 };
-
-const isDisabled = (worktree: DeviceGitWorktreeListItem): boolean =>
-  !!worktree.bare || !!worktree.prunable;
 
 // The main worktree can never be removed (`git worktree remove <main>` fails with
 // "is a main working tree"), and when the agent runs on a linked worktree it is
@@ -456,7 +444,7 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
     // duplicate delete if the dropdown is reopened mid-removal.
     const [removingPaths, setRemovingPaths] = useState<Set<string>>(() => new Set());
     const currentRowRef = useRef<HTMLDivElement>(null);
-    const { commit } = useCommitWorkingDirectory(agentId);
+    const switchWorktree = useSwitchWorktree({ agentId, isGithub, sourcePath });
 
     // Clear the query each time the dropdown closes so it reopens unfiltered.
     useEffect(() => {
@@ -508,15 +496,10 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
           return;
         }
 
-        const entry: WorkingDirEntry = {
-          ...(worktree.path === sourcePath ? {} : { git: { activeWorktree: worktree.path } }),
-          path: sourcePath,
-          repoType: isGithub ? 'github' : 'git',
-        };
-        await commit(entry);
+        await switchWorktree(worktree.path);
         setOpen(false);
       },
-      [commit, isGithub, sourcePath],
+      [switchWorktree],
     );
 
     const handleRemoveWorktree = useCallback(
@@ -584,16 +567,11 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
 
         // Point the conversation at the freshly created worktree, then reconcile
         // the list so the new row (now `current`) appears.
-        const createdPath = result.worktreePath ?? worktreePath;
-        await commit({
-          git: { activeWorktree: createdPath },
-          path: sourcePath,
-          repoType: isGithub ? 'github' : 'git',
-        });
+        await switchWorktree(result.worktreePath ?? worktreePath);
         await onWorktreesChange?.();
         return undefined;
       },
-      [commit, deviceId, isGithub, onWorktreesChange, path, sourcePath, t],
+      [deviceId, onWorktreesChange, path, sourcePath, switchWorktree, t],
     );
 
     const openCreateWorktree = useCallback(() => {
