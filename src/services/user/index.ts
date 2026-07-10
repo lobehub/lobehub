@@ -16,6 +16,13 @@ import {
 import { type UserSettings } from '@/types/user/settings';
 
 export class UserService {
+  getUserActivitySummary = async (): Promise<{
+    lastUserMessageAt: Date | null;
+    userCreatedAt: Date | null;
+  }> => {
+    return lambdaClient.user.getUserActivitySummary.query();
+  };
+
   getUserRegistrationDuration = async (): Promise<{
     createdAt: string;
     duration: number;

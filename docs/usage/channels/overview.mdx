@@ -73,7 +73,7 @@ Text messages are supported across all platforms. Some features vary by platform
 | Direct messages        | Yes     | Yes   | Yes      | Yes     | Yes | Yes    | Yes     | Yes     |
 | Group chats            | Yes     | Yes   | Yes      | Yes     | Yes | Yes    | Yes     | Yes     |
 | Reactions              | Yes     | Yes   | Yes      | No      | No  | No     | Partial | Partial |
-| Image/file attachments | Yes     | Yes   | Yes      | Inbound | Yes | No     | Yes     | Yes     |
+| Image/file attachments | Yes     | Yes   | Yes      | Inbound | Yes | Yes    | Yes     | Yes     |
 
 ## Allowed Users (global)
 
@@ -124,7 +124,7 @@ Every supported platform defaults to **Open** for both policies so the bot stays
 - **Discord** — Enable Developer Mode in user settings, right-click the user, and choose **Copy User ID**.
 - **Slack** — Open the user's profile → click the `⋮` menu → **Copy member ID** (starts with `U`).
 - **Telegram** — Ask the user to message [@userinfobot](https://t.me/userinfobot), or read `from.id` from the bot's incoming update.
-- **QQ** — Use the `tiny_id` from the OpenAPI event payload (the public-facing QQ number is not guaranteed to be the platform ID).
+- **QQ** — Use the `openid` from the OpenAPI event payload — `user_openid` for private (C2C) messages, `member_openid` for group messages (the public-facing QQ number is not guaranteed to be the platform ID).
 - **Feishu / Lark** — Use the `open_id` from the event payload, or the **User ID** displayed in the developer portal.
 
 ### Finding a channel / group ID

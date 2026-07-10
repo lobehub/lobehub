@@ -50,7 +50,7 @@ A builtin tool is a package the agent runtime can call. It ships **five faces**:
    - `src/client/executor/` — `BaseExecutor` subclass that calls `ExecutionRuntime` (or stores/services directly when frontend-only).
 5. **UI defaults to "do nothing".** Inspector is required (the header strip). Render/Placeholder/Streaming/Intervention/Portal are added **only when there's something specific to show** — empty registries are fine.
 6. **Style with `createStaticStyles + cssVar.*`** (zero-runtime). Fall back to `createStyles + token` only when you genuinely need runtime values. Use `@lobehub/ui` components, not raw antd.
-7. **i18n keys live in `src/locales/default/plugin.ts`.** Inspector titles must come from `t('builtins.<identifier>.apiName.<api>')` so something renders while args stream.
+7. **i18n keys live in `packages/locales/src/default/plugin.ts`.** Inspector titles must come from `t('builtins.<identifier>.apiName.<api>')` so something renders while args stream.
 
 ---
 
@@ -110,7 +110,7 @@ Before opening the PR:
 - [ ] Streaming added for APIs that emit incremental output (run command, write file, code execution).
 - [ ] Intervention added if `humanIntervention` is set in the manifest.
 - [ ] All registry files updated (see [architecture.md → Registry wiring](references/architecture.md#registry-wiring)).
-- [ ] i18n keys in `src/locales/default/plugin.ts` plus dev seeds in `en-US`/`zh-CN`.
+- [ ] i18n keys in `packages/locales/src/default/plugin.ts` plus dev seeds in `en-US`/`zh-CN`.
 - [ ] `bunx vitest run --silent='passed-only' 'packages/builtin-tool-<name>'` passes.
 - [ ] `bun run type-check` passes.
 
