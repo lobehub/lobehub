@@ -12,6 +12,7 @@ import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { isDesktop } from '@/const/version';
 import RightPanel from '@/features/RightPanel';
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
+import { useIsGatewayModeEnabled } from '@/helpers/gatewayMode';
 import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
 import { useClientDataSWR } from '@/libs/swr';
 import AgentDocumentsGroup from '@/routes/(main)/agent/features/Conversation/WorkingSidebar/ResourcesSection/AgentDocumentsGroup';
@@ -81,9 +82,15 @@ const AgentDocumentRightPanel = memo(() => {
   const agencyConfig = useAgentStore((s) =>
     activeAgentId ? agentByIdSelectors.getAgencyConfigById(activeAgentId)(s) : undefined,
   );
+  const deviceRoutingAvailable = useIsGatewayModeEnabled(activeAgentId);
+  const isWorkspaceAgent = useAgentStore((s) =>
+    activeAgentId ? agentByIdSelectors.isWorkspaceAgentById(activeAgentId)(s) : false,
+  );
   const effectiveTarget = resolveExecutionTarget(agencyConfig, {
-    isHetero,
     clientExecutionAvailable: isDesktop,
+    deviceRoutingAvailable,
+    isHetero,
+    workspaceScoped: isWorkspaceAgent,
   });
   const remoteDeviceId =
     effectiveTarget === 'device' && agencyConfig?.boundDeviceId

@@ -23,6 +23,7 @@ export enum SidebarTabKey {
 
 export enum ChatSettingsTabs {
   Connector = 'connector',
+  Graph = 'graph',
   Opening = 'opening',
   Plugin = 'plugin',
   Prompt = 'prompt',
@@ -56,6 +57,7 @@ export enum SettingsTabs {
   ChatAppearance = 'chat-appearance',
   /** @deprecated Use Appearance instead */
   Common = 'common',
+  Connector = 'connector',
   Credits = 'credits',
   Creds = 'creds',
   Devices = 'devices',

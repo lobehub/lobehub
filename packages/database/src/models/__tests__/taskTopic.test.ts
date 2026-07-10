@@ -273,6 +273,29 @@ describe('TaskTopicModel', () => {
       expect(await topicModel.countByTask(task2.id)).toBe(1);
     });
 
+    it('only counts the requested triggers, excluding manual + legacy-null rows', async () => {
+      // LOBE-11391: the maxExecutions quota must count scheduled ticks only —
+      // manual "run now" invocations and legacy rows (null trigger) don't count.
+      const taskModel = new TaskModel(serverDB, userId);
+      const topicModel = new TaskTopicModel(serverDB, userId);
+      const task = await taskModel.create({ instruction: 'Test' });
+      await createTopic('tpc_sched');
+      await createTopic('tpc_manual');
+      await createTopic('tpc_legacy');
+
+      await topicModel.add(task.id, 'tpc_sched', { seq: 1, trigger: 'schedule' });
+      await topicModel.add(task.id, 'tpc_manual', { seq: 2, trigger: 'manual' });
+      await topicModel.add(task.id, 'tpc_legacy', { seq: 3 }); // no trigger → null
+
+      // Unfiltered still counts everything.
+      expect(await topicModel.countByTask(task.id)).toBe(3);
+      // Scheduled-only counts just the one scheduled tick.
+      expect(await topicModel.countByTask(task.id, { triggers: ['schedule'] })).toBe(1);
+      expect(await topicModel.countByTask(task.id, { triggers: ['schedule', 'heartbeat'] })).toBe(
+        1,
+      );
+    });
+
     it('does not count topics owned by a different user', async () => {
       const taskModel = new TaskModel(serverDB, userId);
       const topicModel = new TaskTopicModel(serverDB, userId);

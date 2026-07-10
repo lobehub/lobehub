@@ -11,6 +11,9 @@ export interface ModelExtendParams {
   imageAspectRatio?: string;
   imageResolution?: string;
   preserveThinking?: boolean;
+  reasoning?: {
+    mode?: 'standard' | 'pro';
+  };
   reasoning_effort?: string;
   thinking?: {
     budget_tokens?: number;
@@ -216,6 +219,14 @@ export const applyModelExtendParams = (ctx: ApplyModelExtendParamsContext): Mode
     extendParams.reasoning_effort = chatConfig.gpt5_2ReasoningEffort;
   }
 
+  if (modelExtendParams.includes('gpt5_6ReasoningEffort') && chatConfig.gpt5_6ReasoningEffort) {
+    extendParams.reasoning_effort = chatConfig.gpt5_6ReasoningEffort;
+  }
+
+  if (modelExtendParams.includes('reasoningMode') && chatConfig.reasoningMode === 'pro') {
+    extendParams.reasoning = { ...extendParams.reasoning, mode: 'pro' };
+  }
+
   if (
     modelExtendParams.includes('gpt5_2ProReasoningEffort') &&
     chatConfig.gpt5_2ProReasoningEffort
@@ -233,6 +244,10 @@ export const applyModelExtendParams = (ctx: ApplyModelExtendParamsContext): Mode
 
   if (modelExtendParams.includes('grok4_3ReasoningEffort') && chatConfig.grok4_3ReasoningEffort) {
     extendParams.reasoning_effort = chatConfig.grok4_3ReasoningEffort;
+  }
+
+  if (modelExtendParams.includes('grok4_5ReasoningEffort') && chatConfig.grok4_5ReasoningEffort) {
+    extendParams.reasoning_effort = chatConfig.grok4_5ReasoningEffort;
   }
 
   if (modelExtendParams.includes('hy3ReasoningEffort') && chatConfig.hy3ReasoningEffort) {

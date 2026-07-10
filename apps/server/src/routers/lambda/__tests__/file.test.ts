@@ -772,18 +772,6 @@ describe('fileRouter', () => {
     });
   });
 
-  describe('removeAllFiles', () => {
-    it('should include knowledge-base files when clearing all user files', async () => {
-      mockFileModelQuery.mockResolvedValue([{ id: 'file-1' }, { id: 'file-2' }]);
-      mockFileModelDeleteMany.mockResolvedValue([]);
-
-      await caller.removeAllFiles();
-
-      expect(mockFileModelQuery).toHaveBeenCalledWith({ showFilesInKnowledgeBase: true });
-      expect(mockFileModelDeleteMany).toHaveBeenCalledWith(['file-1', 'file-2'], false);
-    });
-  });
-
   describe('deleteKnowledgeItemsByQuery', () => {
     it('should delete page-backed knowledge items via documentService and plain files via fileModel', async () => {
       mockKnowledgeRepoQuery.mockResolvedValue([

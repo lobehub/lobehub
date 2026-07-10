@@ -10,9 +10,10 @@ import type {
 import {
   CLAUDE_CODE_REASONING_EFFORT_LEVELS,
   CODEX_REASONING_EFFORT_CONFIG_KEY,
-  CODEX_REASONING_EFFORT_LEVELS,
   CODEX_SERVICE_TIER_CONFIG_KEY,
   codexModelSupportsFastSpeed,
+  codexModelSupportsReasoningEffort,
+  getCodexReasoningEffortLevels,
   HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
   resolveClaudeCodeModel,
   resolveClaudeCodeReasoningEffort,
@@ -57,18 +58,24 @@ const CLAUDE_CODE_MODEL_OPTIONS = [
 ] as const;
 
 const CODEX_MODEL_OPTIONS = [
+  { label: 'GPT-5.6 Sol', value: 'gpt-5.6-sol' },
+  { label: 'GPT-5.6 Terra', value: 'gpt-5.6-terra' },
+  { label: 'GPT-5.6 Luna', value: 'gpt-5.6-luna' },
   { label: 'GPT-5.5', value: 'gpt-5.5' },
   { label: 'GPT-5.4', value: 'gpt-5.4' },
   { label: 'GPT-5.4 Mini', value: 'gpt-5.4-mini' },
   { label: 'GPT-5.3 Codex Spark', value: 'gpt-5.3-codex-spark' },
 ] as const;
 
-const MODEL_LABELS: Record<string, string> = Object.fromEntries(
-  [...CLAUDE_CODE_MODEL_OPTIONS, ...CODEX_MODEL_OPTIONS].map((option) => [
-    option.value,
-    option.label,
-  ]),
-);
+const MODEL_LABELS: Record<string, string> = {
+  'gpt-5.6': 'GPT-5.6',
+  ...Object.fromEntries(
+    [...CLAUDE_CODE_MODEL_OPTIONS, ...CODEX_MODEL_OPTIONS].map((option) => [
+      option.value,
+      option.label,
+    ]),
+  ),
+};
 
 const EFFORT_LABEL_KEYS = {
   [HETEROGENEOUS_AGENT_DEFAULT_SELECTION]: 'heteroAgent.modelSelector.default',
@@ -76,6 +83,7 @@ const EFFORT_LABEL_KEYS = {
   low: 'heteroAgent.modelSelector.reasoning.low',
   max: 'heteroAgent.modelSelector.reasoning.max',
   medium: 'heteroAgent.modelSelector.reasoning.medium',
+  ultra: 'heteroAgent.modelSelector.reasoning.ultra',
   xhigh: 'heteroAgent.modelSelector.reasoning.xhigh',
 } as const satisfies Record<HeteroReasoningEffort, string>;
 
@@ -425,8 +433,15 @@ const HeteroModel = memo(() => {
         provider?.type === 'codex' &&
         resolveCodexSpeedMode(provider) === 'fast' &&
         !codexModelSupportsFastSpeed(value);
+      const currentEffort =
+        provider?.type === 'codex' ? resolveCodexReasoningEffort(provider) : undefined;
+      const resetEffort =
+        currentEffort !== undefined &&
+        currentEffort !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
+        !codexModelSupportsReasoningEffort(value, currentEffort);
 
       void patchProvider({
+        ...(resetEffort ? { effort: HETEROGENEOUS_AGENT_DEFAULT_SELECTION } : {}),
         model: value,
         ...(resetSpeed ? { speed: HETEROGENEOUS_AGENT_DEFAULT_SELECTION } : {}),
       });
@@ -471,7 +486,9 @@ const HeteroModel = memo(() => {
   const effortLabelKeys = providerType === 'codex' ? CODEX_EFFORT_LABEL_KEYS : EFFORT_LABEL_KEYS;
   const effortLabel = t(effortLabelKeys[effort]);
   const reasoningLevels =
-    providerType === 'codex' ? CODEX_REASONING_EFFORT_LEVELS : CLAUDE_CODE_REASONING_EFFORT_LEVELS;
+    providerType === 'codex'
+      ? getCodexReasoningEffortLevels(model)
+      : CLAUDE_CODE_REASONING_EFFORT_LEVELS;
   const providerModelOptions =
     providerType === 'codex' ? CODEX_MODEL_OPTIONS : CLAUDE_CODE_MODEL_OPTIONS;
   const effortOptions: { label: string; value: HeteroReasoningEffort }[] = [

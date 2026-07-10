@@ -1,7 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { getAgentStoreState } from '@/store/agent';
+
 import { AgentManagerRuntime } from '../AgentManagerRuntime';
 import type { IAgentService, IDiscoverService } from '../types';
+
+/**
+ * The `@/store/agent` mock below recreates a fresh object (with fresh
+ * `vi.fn()`s) on every `getAgentStoreState()` call, so a write made through
+ * one call's `optimisticUpdateAgentConfig` isn't visible on another call's
+ * returned object. This finds whichever of this test's calls actually wrote.
+ */
+const getLastOptimisticConfigUpdateCall = () => {
+  for (const result of [...vi.mocked(getAgentStoreState).mock.results].reverse()) {
+    const calls = (result.value.optimisticUpdateAgentConfig as ReturnType<typeof vi.fn>).mock.calls;
+    if (calls.length > 0) return calls.at(-1);
+  }
+  return undefined;
+};
 
 // Create mock services
 const mockAgentService: IAgentService = {
@@ -201,6 +217,35 @@ describe('AgentManagerRuntime', () => {
 
       expect(result.success).toBe(true);
       expect(result.content).toBe('No fields to update.');
+    });
+
+    it('flips an existing disabled object entry back to pinned, without duplicating it', async () => {
+      const originalPlugins = mockAgentConfig.plugins;
+      mockAgentConfig.plugins = [
+        'plugin-1',
+        { identifier: 'plugin-2', mode: 'disabled' } as any,
+      ] as any;
+
+      try {
+        // Also pass `config.model` so the code populates `state.config.newValues`
+        // (it's otherwise omitted when only `togglePlugin` is set), letting this
+        // test inspect the actual computed plugins array.
+        const result = await runtime.updateAgentConfig('agent-id', {
+          config: { model: 'gpt-4o' },
+          togglePlugin: { pluginId: 'plugin-2', enabled: true },
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.state).toMatchObject({
+          config: {
+            newValues: {
+              plugins: ['plugin-1', { identifier: 'plugin-2', mode: 'pinned' }],
+            },
+          },
+        });
+      } finally {
+        mockAgentConfig.plugins = originalPlugins;
+      }
     });
   });
 
@@ -680,6 +725,28 @@ describe('AgentManagerRuntime', () => {
 
       expect(result.success).toBe(false);
       expect(result.content).toContain('not found');
+    });
+
+    it('flips an existing disabled object entry back to pinned, without duplicating it', async () => {
+      const originalPlugins = mockAgentConfig.plugins;
+      mockAgentConfig.plugins = [
+        { identifier: 'lobe-web-browsing', mode: 'disabled' } as any,
+      ] as any;
+
+      try {
+        const result = await runtime.installPlugin('agent-id', {
+          identifier: 'lobe-web-browsing',
+          source: 'official',
+        });
+
+        expect(result.success).toBe(true);
+        expect(getLastOptimisticConfigUpdateCall()).toEqual([
+          'agent-id',
+          { plugins: [{ identifier: 'lobe-web-browsing', mode: 'pinned' }] },
+        ]);
+      } finally {
+        mockAgentConfig.plugins = originalPlugins;
+      }
     });
 
     it('should install market plugin', async () => {

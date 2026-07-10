@@ -312,7 +312,12 @@ export class SessionModel {
     if (item) return;
 
     return await this.create({
-      config: merge(DEFAULT_AGENT_CONFIG, defaultAgentConfig),
+      // `merge` returns the `@lobechat/types` LobeAgentConfig shape
+      // (plugins: AgentPluginEntry[]); `create`'s `config` is the DB-layer
+      // NewAgent, whose `plugins` column type is intentionally left as
+      // `string[]` (only the domain types are widened for the tri-state
+      // rollout, not the JSONB column's compile-time annotation).
+      config: merge(DEFAULT_AGENT_CONFIG, defaultAgentConfig) as Partial<NewAgent>,
       slug: INBOX_SESSION_ID,
       type: 'agent',
     });
@@ -533,8 +538,7 @@ export class SessionModel {
     type,
     ...res
   }: SessionItem & { agentsToSessions?: { agent: AgentItem }[] }):
-    | LobeAgentSession
-    | LobeGroupSession => {
+    LobeAgentSession | LobeGroupSession => {
     const meta = {
       avatar: avatar ?? undefined,
       backgroundColor: backgroundColor ?? undefined,

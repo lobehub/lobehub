@@ -53,6 +53,10 @@ export const topicReducer = (state: ChatTopic[] = [], payload: ChatTopicDispatch
           favorite: false,
           id: payload.value.id ?? Date.now().toString(),
           sessionId: payload.value.sessionId || undefined,
+          // A brand-new topic is fresh activity: seed the sidebar sort key so it
+          // lands at the top immediately, matching the server's `topicActivityAt`
+          // once the real row is fetched. (LOBE-11543)
+          sortUpdatedAt: Date.now(),
           updatedAt: Date.now(),
         });
 
@@ -72,19 +76,13 @@ export const topicReducer = (state: ChatTopic[] = [], payload: ChatTopicDispatch
           // Only update if the merged value is different from current (excluding updatedAt).
           // Compare against a plain snapshot, not the raw draft proxy — see message/reducer.ts.
           if (!isEqual(current(currentTopic), mergedTopic)) {
-            // Status flips (running/unread/read bookkeeping) are not user activity —
-            // bumping updatedAt here reorders the updatedAt-sorted sidebar on every
-            // run end / topic read, and the bump reverts on the next refetch (the
-            // server orders by latest-message time), so rows visibly jump around.
-            const isStatusOnlyWrite = Object.keys(value).every((key) => key === 'status');
-
-            if (isStatusOnlyWrite) {
-              draftState[topicIndex] = mergedTopic;
-            } else {
-              // TODO: updatedAt type needs to be changed to Date later
-              // @ts-ignore
-              draftState[topicIndex] = { ...mergedTopic, updatedAt: new Date() };
-            }
+            // Bump `updatedAt` (display/edit time) on every real write. The sidebar
+            // no longer sorts by `updatedAt` — it sorts by `sortUpdatedAt` (activity
+            // time) — so a status flip bumping `updatedAt` here can't reorder the
+            // list; only an explicit `sortUpdatedAt` in `value` moves a row. (LOBE-11543)
+            // TODO: updatedAt type needs to be changed to Date later
+            // @ts-ignore
+            draftState[topicIndex] = { ...mergedTopic, updatedAt: new Date() };
           }
         }
       });
@@ -105,6 +103,10 @@ export const topicReducer = (state: ChatTopic[] = [], payload: ChatTopicDispatch
           ...nextTopic,
           ...value,
           id: nextId,
+          // Resolving a first-send optimistic topic to its real id is fresh activity:
+          // keep it pinned to the top via the sidebar sort key (`sortUpdatedAt`), not
+          // just `updatedAt` which the sidebar no longer sorts by. (LOBE-11543)
+          sortUpdatedAt: Date.now(),
           updatedAt: Date.now(),
         };
 

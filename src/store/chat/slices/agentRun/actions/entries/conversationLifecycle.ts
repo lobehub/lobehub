@@ -52,7 +52,7 @@ import { buildRunLifecycle } from '@/store/chat/slices/agentRun/actions/lifecycl
 import type { RunScope } from '@/store/chat/slices/agentRun/actions/lifecycle/types';
 import { resolveHeteroResume } from '@/store/chat/slices/agentRun/actions/transports/hetero/heteroResume';
 import type { OperationType, QueuedFile } from '@/store/chat/slices/operation/types';
-import { AI_RUNTIME_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
+import { QUEUE_BLOCKING_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
 import { PortalViewType } from '@/store/chat/slices/portal/initialState';
 import { chatPortalSelectors } from '@/store/chat/slices/portal/selectors';
 import { type ChatStore } from '@/store/chat/store';
@@ -151,10 +151,7 @@ const isAbortError = (error: unknown, abortController?: AbortController) =>
 const createAbortError = () =>
   Object.assign(new Error('Compression cancelled'), { name: 'AbortError' });
 
-const QUEUE_BLOCKING_OPERATION_TYPES = new Set<OperationType>([
-  ...AI_RUNTIME_OPERATION_TYPES,
-  'sendMessage',
-]);
+const QUEUE_BLOCKING_OPERATION_TYPE_SET = new Set<OperationType>(QUEUE_BLOCKING_OPERATION_TYPES);
 
 const attachSendTimeMetadataToUserMessage = (
   messages: UIChatMessage[],
@@ -276,6 +273,7 @@ export class ConversationLifecycleActionImpl {
       executionTarget: agentConfig?.agencyConfig?.executionTarget,
       heterogeneousProvider,
       isGatewayMode: this.#get().isGatewayModeEnabled(agentId),
+      isWorkspaceAgent: agentByIdSelectors.isWorkspaceAgentById(agentId)(getAgentStoreState()),
       // Callers that need to pin the runtime (e.g. task topics that were
       // started server-side via runTask) pass `forceRuntime` to override
       // the agent's local/cloud preference.
@@ -425,7 +423,9 @@ export class ConversationLifecycleActionImpl {
     const contextOpIds = this.#get().operationsByContext[currentContextKey] || [];
     const runningQueueBlockingOp = contextOpIds
       .map((id) => this.#get().operations[id])
-      .find((op) => op && QUEUE_BLOCKING_OPERATION_TYPES.has(op.type) && op.status === 'running');
+      .find(
+        (op) => op && QUEUE_BLOCKING_OPERATION_TYPE_SET.has(op.type) && op.status === 'running',
+      );
 
     if (runningQueueBlockingOp) {
       // Snapshot file previews so the tray can render thumbnails AND the
@@ -1196,11 +1196,14 @@ export class ConversationLifecycleActionImpl {
         this.#get().updateOperationMetadata(operationId, { createdTopicId: data.topicId });
         void Promise.resolve(this.#get().refreshTopic()).catch(console.error);
       } else if (operationContext.topicId) {
-        // Optimistically update topic's updatedAt so sidebar re-groups immediately
+        // Optimistically bump the sort key (`sortUpdatedAt`, the sidebar's activity-time
+        // sort/group key) so the topic jumps to the top immediately, before the SWR
+        // refetch returns the server's fresh `topicActivityAt`. Bumping `updatedAt` here
+        // would no longer reorder anything — the sidebar sorts by `sortUpdatedAt`. (LOBE-11543)
         this.#get().internal_dispatchTopic({
           type: 'updateTopic',
           id: operationContext.topicId,
-          value: { updatedAt: Date.now() },
+          value: { sortUpdatedAt: Date.now() },
         });
       }
 
@@ -1597,6 +1600,9 @@ export class ConversationLifecycleActionImpl {
           heterogeneousProvider: parentAgentConfig?.agencyConfig?.heterogeneousProvider,
           inPortalThread,
           isGatewayMode: this.#get().isGatewayModeEnabled(context.agentId),
+          isWorkspaceAgent: context.agentId
+            ? agentByIdSelectors.isWorkspaceAgentById(context.agentId)(getAgentStoreState())
+            : false,
           messages: messagesWithInstruction,
           parentOperationId: operationId,
         },

@@ -134,6 +134,7 @@ export interface ChatStreamPayload {
   provider?: string;
   reasoning?: {
     effort?: string;
+    mode?: 'standard' | 'pro';
     summary?: string;
   };
   reasoning_effort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
@@ -261,10 +262,7 @@ export interface UsageMissingDiagnostics {
   provider?: string;
   responseId?: string;
   source:
-    | 'anthropic_messages'
-    | 'google_generative_ai'
-    | 'openai_chat_completions'
-    | 'openai_responses';
+    'anthropic_messages' | 'google_generative_ai' | 'openai_chat_completions' | 'openai_responses';
   terminalEventType: string;
   terminalStatus?: string;
 }

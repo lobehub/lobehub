@@ -99,10 +99,6 @@ export class SessionService {
     return lambdaClient.session.removeSession.mutate({ id });
   };
 
-  removeAllSessions = () => {
-    return lambdaClient.session.removeAllSessions.mutate();
-  };
-
   // ************************************** //
   // ***********  SessionGroup  *********** //
   // ************************************** //
@@ -117,10 +113,6 @@ export class SessionService {
 
   removeSessionGroup = (id: string, removeChildren?: boolean) => {
     return lambdaClient.sessionGroup.removeSessionGroup.mutate({ id, removeChildren });
-  };
-
-  removeSessionGroups = () => {
-    return lambdaClient.sessionGroup.removeAllSessionGroups.mutate();
   };
 
   updateSessionGroup = (id: string, value: Partial<SessionGroupItem>) => {

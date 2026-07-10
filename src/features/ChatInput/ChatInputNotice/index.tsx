@@ -7,18 +7,41 @@ import { useTranslation } from 'react-i18next';
 
 import { useChatInputNotice } from './useChatInputNotice';
 
-const styles = createStaticStyles(({ css }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   alert: css`
     /* Keep the icon centered against the single-line title. */
     align-items: center !important;
 
+    flex: 0 1 auto;
+
+    min-width: 0;
+    max-width: min(560px, 52vw);
+    padding-block: 4px !important;
+    padding-inline: 8px 10px !important;
+    border-radius: ${cssVar.borderRadius};
+
+    .ant-alert-content {
+      min-width: 0;
+    }
+
+    .ant-alert-message,
     .ant-alert-title {
+      overflow: hidden;
+
       font-size: 12px;
       line-height: 18px !important;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .ant-alert-icon {
+      flex: none;
       height: 18px !important;
+      margin-inline-end: 6px !important;
+    }
+
+    @media (max-width: 768px) {
+      max-width: 100%;
     }
   `,
 }));

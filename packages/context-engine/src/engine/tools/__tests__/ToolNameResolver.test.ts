@@ -897,6 +897,32 @@ describe('ToolNameResolver', () => {
         expect(result).toEqual([]);
       });
 
+      it('should drop fully-qualified tool names that were not offered this turn', () => {
+        const toolCalls = [
+          {
+            function: { arguments: '{}', name: 'workspace____write' },
+            id: 'call_1',
+            type: 'function',
+          },
+        ];
+
+        const manifests = {
+          workspace: {
+            api: [
+              { description: '', name: 'read', parameters: {} },
+              { description: '', name: 'write', parameters: {} },
+            ],
+            identifier: 'workspace',
+            meta: {},
+            type: 'builtin' as const,
+          },
+        };
+
+        const result = resolver.resolve(toolCalls, manifests, ['workspace____read']);
+
+        expect(result).toEqual([]);
+      });
+
       it('should treat an enabled call as unique when a disabled duplicate would have made it ambiguous', () => {
         const toolCalls = [
           {

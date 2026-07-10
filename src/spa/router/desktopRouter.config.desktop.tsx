@@ -36,6 +36,7 @@ import WorkspaceSlugSettingsLayout from '@/routes/(main)/[workspaceSlug]/setting
 import WorkspaceSlugSettingsApiKeyPage from '@/routes/(main)/[workspaceSlug]/settings/apikey';
 import WorkspaceSlugSettingsAuditLogPage from '@/routes/(main)/[workspaceSlug]/settings/audit-log';
 import WorkspaceSlugSettingsBillingPage from '@/routes/(main)/[workspaceSlug]/settings/billing';
+import WorkspaceSlugSettingsConnectorPage from '@/routes/(main)/[workspaceSlug]/settings/connector';
 import WorkspaceSlugSettingsCreditsPage from '@/routes/(main)/[workspaceSlug]/settings/credits';
 import WorkspaceSlugSettingsCredsPage from '@/routes/(main)/[workspaceSlug]/settings/creds';
 import WorkspaceSlugSettingsDevicesPage from '@/routes/(main)/[workspaceSlug]/settings/devices';
@@ -685,6 +686,7 @@ export const desktopRoutes: RouteObject[] = [
               // shell (sidebar + outlet) — they own their internal layout.
               { element: <WorkspaceSlugSettingsProviderPage />, path: 'provider' },
               { element: <WorkspaceSlugSettingsSkillPage />, path: 'skill' },
+              { element: <WorkspaceSlugSettingsConnectorPage />, path: 'connector' },
               // Padded tabs share a centered, max-width container layout.
               {
                 children: [

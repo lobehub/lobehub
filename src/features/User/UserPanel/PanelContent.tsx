@@ -2,18 +2,17 @@ import { Flexbox } from '@lobehub/ui';
 import { type FC } from 'react';
 
 import BusinessPanelContent from '@/business/client/features/User/BusinessPanelContent';
+import UserPanelStatistics from '@/business/client/features/User/UserPanelStatistics';
 import UserPanelWorkspaceSection from '@/business/client/features/User/UserPanelWorkspaceSection';
 import Menu from '@/components/Menu';
 import { isDesktop } from '@/const/version';
 import UserInfo from '@/features/User/UserInfo';
-import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { navigateToDesktopOnboarding } from '@/routes/(desktop)/desktop-onboarding/navigation';
 import { DesktopOnboardingScreen } from '@/routes/(desktop)/desktop-onboarding/types';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
 
-import DataStatistics from '../DataStatistics';
 import UserLoginOrSignup from '../UserLoginOrSignup';
 import LangButton from './LangButton';
 import { useMenu } from './useMenu';
@@ -54,9 +53,7 @@ const PanelContent: FC<{ closePopover: () => void }> = ({ closePopover }) => {
       {isDesktop || isLoginWithAuth ? (
         <>
           <UserInfo avatarProps={{ clickable: false }} />
-          <WorkspaceLink style={{ color: 'inherit' }} to={'/settings/stats'}>
-            <DataStatistics />
-          </WorkspaceLink>
+          <UserPanelStatistics />
           {enableBusinessFeatures && <BusinessPanelContent />}
           <UserPanelWorkspaceSection onSwitch={closePopover} />
         </>

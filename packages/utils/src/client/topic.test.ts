@@ -220,6 +220,49 @@ describe('groupTopicsByUpdatedTime', () => {
     // By updatedAt: grouped under yesterday
     expect(byUpdated[0].id).toBe('yesterday');
   });
+
+  it('should group and sort by sortUpdatedAt (activity time) when present, ignoring updatedAt', () => {
+    const lastYear = dayjs().subtract(1, 'year').valueOf();
+    const today = dayjs().valueOf();
+
+    // Row was edited last year (updatedAt) but had message activity today
+    // (sortUpdatedAt) — the sidebar must group it under "today". (LOBE-11543)
+    const topic: ChatTopic = {
+      id: 'active',
+      title: 'Recently active',
+      createdAt: lastYear,
+      updatedAt: lastYear,
+      sortUpdatedAt: today,
+    };
+
+    const result = groupTopicsByUpdatedTime([topic]);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe('today');
+  });
+
+  it('should order rows by sortUpdatedAt (activity) over updatedAt (row edit time)', () => {
+    const base = dayjs().subtract(1, 'month').valueOf();
+    // `a` has an older row edit time but newer activity → must sort first.
+    const a: ChatTopic = {
+      id: 'a',
+      title: 'Older edit, newer activity',
+      createdAt: base,
+      updatedAt: dayjs().hour(9).valueOf(),
+      sortUpdatedAt: dayjs().hour(11).valueOf(),
+    };
+    const b: ChatTopic = {
+      id: 'b',
+      title: 'Newer edit, older activity',
+      createdAt: base,
+      updatedAt: dayjs().hour(10).valueOf(),
+      sortUpdatedAt: dayjs().hour(10).valueOf(),
+    };
+
+    const result = groupTopicsByUpdatedTime([b, a]);
+
+    expect(result[0].children.map((t) => t.id)).toEqual(['a', 'b']);
+  });
 });
 
 describe('working directory topic helpers', () => {

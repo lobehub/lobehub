@@ -151,7 +151,6 @@
   "management.title": "话题",
   "management.view.card": "卡片",
   "management.view.list": "列表",
-  "metaCard.branchNote": "聊天分支反映上次使用时的活动分支；发送消息将更新聊天分支",
   "metaCard.ci.failure": "CI 未通过",
   "metaCard.ci.none": "无 CI 检查",
   "metaCard.ci.pending": "CI 进行中",

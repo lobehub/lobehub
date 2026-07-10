@@ -1,4 +1,4 @@
-import { and, eq, inArray, ne, sql } from 'drizzle-orm';
+import { and, eq, inArray, ne, notInArray, sql } from 'drizzle-orm';
 
 import type {
   ConnectorToolPermission,
@@ -84,6 +84,21 @@ export class ConnectorToolModel {
           // permission / isWorkArtifact / workArtifactConfig / limitConfig NOT updated
         },
       });
+  };
+
+  /**
+   * Prune a connector's tools down to `keepToolNames` — deletes any row whose
+   * toolName is not in the list. Used to give a manifest refresh replace (not
+   * merge) semantics, so tools removed upstream (e.g. a Composio account that
+   * now exposes fewer tools) stop being advertised to the model. An empty
+   * `keepToolNames` deletes every tool for the connector.
+   */
+  deleteToolsNotIn = async (userConnectorId: string, keepToolNames: string[]): Promise<void> => {
+    const conditions = [eq(userConnectorTools.userConnectorId, userConnectorId), this.ownership()];
+    if (keepToolNames.length > 0) {
+      conditions.push(notInArray(userConnectorTools.toolName, keepToolNames));
+    }
+    await this.db.delete(userConnectorTools).where(and(...conditions));
   };
 
   updatePermission = async (toolId: string, permission: ConnectorToolPermission): Promise<void> => {

@@ -12,6 +12,7 @@ import {
   chatGroupsAgents,
   documents,
   messages,
+  sessionGroups,
   sessions,
   taskComments,
   taskDependencies,
@@ -128,6 +129,32 @@ describe('AgentModel.transferAgent', () => {
       .from(agentsToSessions)
       .where(eq(agentsToSessions.agentId, agent.id));
     expect(link.workspaceId).toBe(wsId1);
+  });
+
+  it('should clear stale session group references on transfer', async () => {
+    const model = new AgentModel(serverDB, userId);
+    const agent = await model.create({ title: 'Grouped Agent' });
+
+    // Personal-scope sidebar folder the agent and its session lived in
+    await serverDB.insert(sessionGroups).values({ id: 'sg-personal', name: 'Folder', userId });
+    await serverDB
+      .update(agents)
+      .set({ sessionGroupId: 'sg-personal' })
+      .where(eq(agents.id, agent.id));
+    await serverDB
+      .insert(sessions)
+      .values({ id: 'sess-grouped', userId, type: 'agent', groupId: 'sg-personal' });
+    await serverDB
+      .insert(agentsToSessions)
+      .values({ agentId: agent.id, sessionId: 'sess-grouped', userId });
+
+    await model.transferAgent(agent.id, wsId1, userId, 'private');
+
+    const updated = await serverDB.query.agents.findFirst({ where: eq(agents.id, agent.id) });
+    expect(updated?.sessionGroupId).toBeNull();
+
+    const [session] = await serverDB.select().from(sessions).where(eq(sessions.id, 'sess-grouped'));
+    expect(session.groupId).toBeNull();
   });
 
   it('should update topics and messages', async () => {

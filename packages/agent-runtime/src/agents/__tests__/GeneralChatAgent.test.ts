@@ -94,6 +94,7 @@ describe('GeneralChatAgent', () => {
           messages: state.messages,
           model: 'gpt-4o-mini',
           provider: 'openai',
+          tools: undefined,
         },
       });
     });
@@ -119,8 +120,43 @@ describe('GeneralChatAgent', () => {
         payload: {
           messages: state.messages,
           message: { role: 'user', content: 'What is the weather?' },
+          tools: undefined,
         },
       });
+    });
+
+    it('should not infer allowedToolNames from normal state tools', async () => {
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+      const state = createMockState({
+        messages: [{ role: 'user', content: 'Use tools if needed' }] as any,
+        tools: [{ function: { name: 'workspace____read' }, type: 'function' }] as any,
+      });
+
+      const result = await agent.runner(createMockContext('user_input'), state);
+
+      expect((result as any).payload).not.toHaveProperty('allowedToolNames');
+      expect((result as any).payload.tools).toBe(state.tools);
+    });
+
+    it('should pass explicit allowedToolNames from config', async () => {
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        allowedToolNames: ['workspace____read'],
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+        tools: [{ function: { name: 'workspace____read' }, type: 'function' }],
+      });
+      const state = createMockState({
+        messages: [{ role: 'user', content: 'Use read only' }] as any,
+      });
+
+      const result = await agent.runner(createMockContext('user_input'), state);
+
+      expect((result as any).payload.allowedToolNames).toEqual(['workspace____read']);
     });
 
     it('should trigger compression using thresholdRatio from compressionConfig', async () => {
@@ -667,6 +703,7 @@ describe('GeneralChatAgent', () => {
         expect(result).toEqual({
           type: 'call_llm',
           payload: {
+            assistantMessageId: undefined,
             messages: state.messages,
             model: 'gpt-4o-mini',
             parentMessageId: 'tool-msg-1',
@@ -702,6 +739,7 @@ describe('GeneralChatAgent', () => {
         expect(result).toEqual({
           type: 'call_llm',
           payload: {
+            assistantMessageId: undefined,
             messages: state.messages,
             model: 'gpt-4o-mini',
             parentMessageId: 'tool-msg-1',
@@ -737,6 +775,7 @@ describe('GeneralChatAgent', () => {
       expect(result).toEqual({
         type: 'call_llm',
         payload: {
+          assistantMessageId: undefined,
           messages: state.messages,
           model: 'gpt-4o-mini',
           parentMessageId: 'tool-msg-1',
@@ -1100,6 +1139,7 @@ describe('GeneralChatAgent', () => {
       expect(result).toEqual({
         type: 'call_llm',
         payload: {
+          assistantMessageId: undefined,
           messages: state.messages,
           model: 'gpt-4o-mini',
           parentMessageId: 'tool-msg-2',
@@ -1663,7 +1703,7 @@ describe('GeneralChatAgent', () => {
         messages: [
           { role: 'user', content: 'Execute task' },
           { role: 'assistant', content: '' },
-          { role: 'task', content: 'Task result', metadata: { instruction: 'Do task' } },
+          { role: 'tool', content: 'Task result', tool_call_id: 'call-sub-agent-1' },
         ] as any,
       });
 
@@ -1671,7 +1711,6 @@ describe('GeneralChatAgent', () => {
         parentMessageId: 'task-parent-msg',
         result: {
           success: true,
-          taskMessageId: 'task-1',
           threadId: 'thread-1',
           result: 'Task result',
         },
@@ -1702,7 +1741,7 @@ describe('GeneralChatAgent', () => {
         messages: [
           { role: 'user', content: 'Execute task' },
           { role: 'assistant', content: '' },
-          { role: 'task', content: 'Task failed: timeout', metadata: { instruction: 'Do task' } },
+          { role: 'tool', content: 'Task failed: timeout', tool_call_id: 'call-sub-agent-1' },
         ] as any,
       });
 
@@ -1710,7 +1749,6 @@ describe('GeneralChatAgent', () => {
         parentMessageId: 'task-parent-msg',
         result: {
           success: false,
-          taskMessageId: 'task-1',
           threadId: 'thread-1',
           error: 'Task timeout after 1800000ms',
         },
@@ -1737,7 +1775,7 @@ describe('GeneralChatAgent', () => {
         messages: [
           { role: 'user', content: 'Execute task' },
           { role: 'assistant', content: '' },
-          { role: 'task', content: 'Task result', metadata: { instruction: 'Do task' } },
+          { role: 'tool', content: 'Task result', tool_call_id: 'call-sub-agent-1' },
         ] as any,
       });
 
@@ -1763,16 +1801,16 @@ describe('GeneralChatAgent', () => {
         messages: [
           { role: 'user', content: 'Execute tasks' },
           { role: 'assistant', content: '' },
-          { role: 'task', content: 'Task 1 result', metadata: { instruction: 'Do task 1' } },
-          { role: 'task', content: 'Task 2 result', metadata: { instruction: 'Do task 2' } },
+          { role: 'tool', content: 'Task 1 result', tool_call_id: 'call-sub-agent-1' },
+          { role: 'tool', content: 'Task 2 result', tool_call_id: 'call-sub-agent-2' },
         ] as any,
       });
 
       const context = createMockContext('sub_agents_batch_result', {
         parentMessageId: 'task-parent-msg',
         results: [
-          { success: true, taskMessageId: 'task-1', threadId: 'thread-1', result: 'Task 1 result' },
-          { success: true, taskMessageId: 'task-2', threadId: 'thread-2', result: 'Task 2 result' },
+          { success: true, threadId: 'thread-1', result: 'Task 1 result' },
+          { success: true, threadId: 'thread-2', result: 'Task 2 result' },
         ],
       });
 
@@ -1808,18 +1846,17 @@ describe('GeneralChatAgent', () => {
         messages: [
           { role: 'user', content: 'Execute tasks' },
           { role: 'assistant', content: '' },
-          { role: 'task', content: 'Task 1 result', metadata: { instruction: 'Do task 1' } },
-          { role: 'task', content: 'Task failed: timeout', metadata: { instruction: 'Do task 2' } },
+          { role: 'tool', content: 'Task 1 result', tool_call_id: 'call-sub-agent-1' },
+          { role: 'tool', content: 'Task failed: timeout', tool_call_id: 'call-sub-agent-2' },
         ] as any,
       });
 
       const context = createMockContext('sub_agents_batch_result', {
         parentMessageId: 'task-parent-msg',
         results: [
-          { success: true, taskMessageId: 'task-1', threadId: 'thread-1', result: 'Task 1 result' },
+          { success: true, threadId: 'thread-1', result: 'Task 1 result' },
           {
             success: false,
-            taskMessageId: 'task-2',
             threadId: 'thread-2',
             error: 'Task timeout after 1800000ms',
           },
@@ -1854,8 +1891,8 @@ describe('GeneralChatAgent', () => {
         messages: [
           { role: 'user', content: 'Execute tasks' },
           { role: 'assistant', content: '' },
-          { role: 'task', content: 'Task 1 result', metadata: { instruction: 'Do task 1' } },
-          { role: 'task', content: 'Task 2 result', metadata: { instruction: 'Do task 2' } },
+          { role: 'tool', content: 'Task 1 result', tool_call_id: 'call-sub-agent-1' },
+          { role: 'tool', content: 'Task 2 result', tool_call_id: 'call-sub-agent-2' },
         ] as any,
       });
 

@@ -5,7 +5,6 @@ import isEqual from 'fast-deep-equal';
 import { messageService } from '@/services/message';
 import { topicService } from '@/services/topic';
 import { type ChatStore } from '@/store/chat/store';
-import { evictMessageCache } from '@/store/chat/utils/evictMessageCache';
 import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
@@ -206,15 +205,6 @@ export class MessagePublicApiActionImpl {
 
     // after remove topic , go back to default topic
     switchTopic(null);
-  };
-
-  clearAllMessages = async (): Promise<void> => {
-    await messageService.removeAllMessages();
-    // Clear messages directly since all messages are deleted
-    this.#get().replaceMessages([]);
-    // replaceMessages only clears the active topic's cache; every other topic's
-    // cached message list is now stale (and never expires) — wipe them all
-    void evictMessageCache(() => true);
   };
 
   copyMessage = async (id: string, content: string): Promise<void> => {

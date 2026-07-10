@@ -1331,6 +1331,7 @@ export class AgentRuntimeService {
             error: newStateError
               ? {
                   attribution: newStateError.attribution,
+                  body: newStateError.body,
                   category: newStateError.category,
                   countAsFailure: newStateError.countAsFailure,
                   httpStatus: newStateError.httpStatus,
@@ -1441,6 +1442,7 @@ export class AgentRuntimeService {
         completionReason: 'error',
         error: {
           attribution: formattedError.attribution,
+          body: formattedError.body,
           category: formattedError.category,
           countAsFailure: formattedError.countAsFailure,
           httpStatus: formattedError.httpStatus,
@@ -1450,7 +1452,11 @@ export class AgentRuntimeService {
           severity: formattedError.severity,
           type: String(formattedError.type),
         },
-        failedStep: { startedAt: stepStartAt, stepIndex },
+        failedStep: {
+          startedAt: stepStartAt,
+          stepIndex,
+          stepType: formattedError.category === 'provider' ? 'call_llm' : 'call_tool',
+        },
         state: finalStateWithError,
       });
 

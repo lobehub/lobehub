@@ -346,12 +346,6 @@ export const messageRouter = router({
       return ctx.messageModel.topicMessageStats(input);
     }),
 
-  removeAllMessages: messageProcedure
-    .use(withScopedPermission('message:delete'))
-    .mutation(async ({ ctx }) => {
-      return ctx.messageModel.deleteAllMessages();
-    }),
-
   removeMessage: messageProcedure
     .use(withScopedPermission('message:delete'))
     .input(

@@ -117,4 +117,28 @@ describe('Advanced settings page', () => {
 
     expect(screen.getByText('features.agentDocumentFloatingChatPanel.title')).toBeDefined();
   });
+
+  it('renders the message text selection actions lab toggle', () => {
+    useUserStore.setState({
+      isUserStateInit: true,
+      setSettings: vi.fn(),
+      updateLab: vi.fn(),
+    });
+
+    render(<Page />, { wrapper: createWrapper() });
+
+    expect(screen.getByText('features.messageTextSelectionActions.title')).toBeDefined();
+  });
+
+  it('does not render released task verify as a lab toggle', () => {
+    useUserStore.setState({
+      isUserStateInit: true,
+      setSettings: vi.fn(),
+      updateLab: vi.fn(),
+    });
+
+    render(<Page />, { wrapper: createWrapper() });
+
+    expect(screen.queryByText('features.taskVerify.title')).toBeNull();
+  });
 });

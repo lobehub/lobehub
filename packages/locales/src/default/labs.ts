@@ -2,6 +2,9 @@ export default {
   'features.agentDocumentFloatingChatPanel.desc':
     'Show the floating chat panel in agent document preview only when this lab feature is enabled.',
   'features.agentDocumentFloatingChatPanel.title': 'Agent Document Floating Chat Panel',
+  'features.agentGraphConfig.desc':
+    'Show graph runtime configuration in an agent profile advanced settings.',
+  'features.agentGraphConfig.title': 'Agent Graph Runtime Configuration',
   'features.agentSelfIteration.desc':
     'Allow the agent to reflect, build self-awareness, and continuously iterate through ongoing attempts and interactions.',
   'features.agentSelfIteration.title': 'Agent Self-iteration',
@@ -22,6 +25,9 @@ export default {
   'features.inputMarkdown.desc':
     'Render Markdown in the input area in real time (bold text, code blocks, tables, etc.).',
   'features.inputMarkdown.title': 'Input Markdown Rendering',
+  'features.messageTextSelectionActions.desc':
+    'Show a quick action when selecting text in chat messages so the selected text can be added to the next conversation context.',
+  'features.messageTextSelectionActions.title': 'Message Text Selection Actions',
   'features.platformAgent.desc':
     'Show the "Connect Agent" entry in the create menu. Connected agents (e.g. OpenClaw, Hermes) run on your own devices and communicate back via lh connect.',
   'features.platformAgent.title': 'Connect Agent',

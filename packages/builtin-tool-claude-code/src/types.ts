@@ -32,6 +32,10 @@ export enum ClaudeCodeApiName {
   AskUserQuestion = 'askUserQuestion',
   Bash = 'Bash',
   Edit = 'Edit',
+  /** Create a new isolated git worktree or enter an existing one. */
+  EnterWorktree = 'EnterWorktree',
+  /** Leave the worktree created by EnterWorktree, optionally removing it. */
+  ExitWorktree = 'ExitWorktree',
   Glob = 'Glob',
   Grep = 'Grep',
   /**
@@ -107,6 +111,22 @@ export interface TodoWriteArgs {
  */
 export interface SkillArgs {
   skill?: string;
+}
+
+/**
+ * Arguments for CC's built-in `EnterWorktree` tool. `name` creates a new
+ * worktree, while `path` switches into one already attached to the repo.
+ * The fields are mutually exclusive; omitting both creates a random name.
+ */
+export interface EnterWorktreeArgs {
+  name?: string;
+  path?: string;
+}
+
+/** Arguments for CC's built-in `ExitWorktree` tool. */
+export interface ExitWorktreeArgs {
+  action: 'keep' | 'remove';
+  discard_changes?: boolean;
 }
 
 /**

@@ -2,7 +2,7 @@
 
 Default surface for verifying **pure frontend changes** (components, store logic, styles, interactions) in the primary product shape. Drives the Electron renderer over CDP with `agent-browser` — see [../references/agent-browser.md](../references/agent-browser.md) for the full command reference.
 
-**Auth**: the Electron app keeps its own persistent login state — log in once manually in the app; sessions survive restarts. Run `../scripts/setup-auth.sh status` before testing (see [../references/auth.md](../references/auth.md)).
+**Auth**: `electron-dev.sh` persists the login across runs — `stop` snapshots it to `~/.lobehub/agent-testing/electron-login`, `start` seeds each new instance from there (`login-status` inspects it, `save-login <id>` captures a live instance). Sign in once, not once per run — and if an instance still comes up signed out, **drive the sign-in yourself**; never ask the user to click it. Run `../scripts/setup-auth.sh status` before testing (see [../references/auth.md](../references/auth.md)).
 
 **Linux / headless (cloud)**: Electron itself runs on Linux, but it has no true headless mode — it needs a display server. In a headless environment wrap the launch with `xvfb-run` (virtual framebuffer). Everything CDP-based keeps working under Xvfb: the `agent-browser --cdp 9222` connection, snapshots, eval, and `agent-browser screenshot` (captured from the renderer via CDP, not the OS screen). What does NOT work on Linux: `capture-app-window.sh` (macOS `screencapture`), osascript, and the ffmpeg recording scripts in their current form.
 
@@ -40,12 +40,15 @@ After `start` succeeds, connect with: `agent-browser --cdp 9222 snapshot -i`
 
 #### Environment Variables
 
-| Variable          | Default                 | Description                              |
-| ----------------- | ----------------------- | ---------------------------------------- |
-| `CDP_PORT`        | `9222`                  | Chrome DevTools Protocol port            |
-| `ELECTRON_LOG`    | `/tmp/electron-dev.log` | Electron process log                     |
-| `ELECTRON_WAIT_S` | `60`                    | Max seconds to wait for Electron process |
-| `RENDERER_WAIT_S` | `60`                    | Max seconds to wait for SPA to load      |
+| Variable               | Default                                   | Description                                       |
+| ---------------------- | ----------------------------------------- | ------------------------------------------------- |
+| `CDP_PORT`             | `9222`                                    | Chrome DevTools Protocol port                     |
+| `ELECTRON_LOG`         | `/tmp/electron-dev.log`                   | Electron process log                              |
+| `ELECTRON_WAIT_S`      | `60`                                      | Max seconds to wait for Electron process          |
+| `RENDERER_WAIT_S`      | `60`                                      | Max seconds to wait for SPA to load               |
+| `LOBE_LOGIN_STATE_DIR` | `~/.lobehub/agent-testing/electron-login` | Persistent login snapshot (survives `/tmp` wipes) |
+| `KEEP_DATA`            | `0`                                       | `1` = `stop <id>` keeps the instance's userData   |
+| `SKIP_LOGIN_SAVE`      | `0`                                       | `1` = `stop <id>` does not snapshot the login     |
 
 ### LobeHub Probes & Quick Navigation
 

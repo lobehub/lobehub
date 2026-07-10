@@ -1,4 +1,4 @@
-import { InsertChatGroupSchema } from '@lobechat/types';
+import { AgentPluginEntrySchema, InsertChatGroupSchema } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -35,7 +35,7 @@ const agentMemberInputSchema = z
     model: z.string().nullish(),
     params: z.any().nullish(),
     pinned: z.boolean().nullish(),
-    plugins: z.array(z.string()).nullish(),
+    plugins: z.array(AgentPluginEntrySchema).nullish(),
     provider: z.string().nullish(),
     sessionGroupId: z.string().nullish(),
     slug: z.string().nullish(),
@@ -93,7 +93,10 @@ export const agentGroupRouter = router({
       // Batch create virtual agents
       const agentConfigs = input.agents.map((agent) => ({
         ...agent,
-        plugins: agent.plugins as string[] | undefined,
+        // `agentModel.batchCreate`'s config type is still `plugins?: string[]`
+        // (widening deferred to the tri-state rollout's final phase); the
+        // zod schema above already allows the tri-state object shape through.
+        plugins: agent.plugins as unknown as string[] | undefined,
         tags: agent.tags as string[] | undefined,
         virtual: true,
       }));
@@ -160,7 +163,7 @@ export const agentGroupRouter = router({
             description: z.string().nullish(),
             model: z.string().nullish(),
             params: z.any().nullish(),
-            plugins: z.array(z.string()).nullish(),
+            plugins: z.array(AgentPluginEntrySchema).nullish(),
             provider: z.string().nullish(),
             systemRole: z.string().nullish(),
             tags: z.array(z.string()).nullish(),
@@ -173,7 +176,9 @@ export const agentGroupRouter = router({
       // 1. Batch create virtual member agents
       const memberConfigs = input.members.map((member) => ({
         ...member,
-        plugins: member.plugins as string[] | undefined,
+        // See the `batchCreateAgentsInGroup` cast above for why this bridges
+        // to `string[]` instead of failing type-check.
+        plugins: member.plugins as unknown as string[] | undefined,
         tags: member.tags as string[] | undefined,
         virtual: true,
       }));

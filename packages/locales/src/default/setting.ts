@@ -189,6 +189,7 @@ export default {
   'agentSkillModal.url.title': 'Import from URL',
   'agentSkillModal.url.urlPlaceholder': 'https://example.com/path/to/SKILL.md',
   'agentSkillTag': 'Agent Skill',
+  'agentTab.graph': 'Graph Runtime',
   'agentTab.opening': 'Opening Settings',
   'agentTab.plugin': 'Skill Settings',
   'agentTab.prompt': 'Agent Profile',
@@ -290,6 +291,16 @@ export default {
   'creds.file.uploadFailed': 'File upload failed',
   'creds.file.uploadSuccess': 'File uploaded successfully',
   'creds.file.uploading': 'Uploading...',
+  'creds.orgSetupRequired':
+    'Community Profile not set up yet. Please complete the workspace Community Profile setup to manage credentials.',
+  'creds.owner.sharedBy': 'Shared by {{name}}',
+  'creds.personalSection.desc':
+    'These are your own credentials. Turn on sharing to make one available to this workspace.',
+  'creds.personalSection.title': 'Your Personal Credentials',
+  'creds.share.error': 'Failed to update sharing for this credential. Please try again.',
+  'creds.share.toggle': 'Share to this workspace',
+  'creds.share.visibility.private': 'Private',
+  'creds.share.visibility.public': 'Public',
   'creds.signIn': 'Sign In to Market',
   'creds.signInRequired': 'Please sign in to the Market to manage your credentials',
   'creds.form.addPair': 'Add Key-Value Pair',
@@ -417,12 +428,6 @@ export default {
   'devices.title': 'My Devices',
   'devices.workingDirectory': 'Working dir: {{path}}',
   'checkingPermissions': 'Checking permissions...',
-  'danger.clear.action': 'Clear Now',
-  'danger.clear.confirm': "Clear all chat data? This can't be undone.",
-  'danger.clear.desc':
-    'Delete all data, including agents, files, messages, and skills. Your account will NOT be deleted.',
-  'danger.clear.success': 'All conversation messages have been cleared',
-  'danger.clear.title': 'Clear Data',
   'danger.reset.action': 'Reset Now',
   'danger.reset.confirm': 'Reset all settings?',
   'danger.reset.currentVersion': 'Current Version',
@@ -843,6 +848,19 @@ export default {
   'settingOpening.openingQuestions.title': 'Opening Questions',
   'settingOpening.title': 'Opening Settings',
   'settingPlugin.title': 'Skill List',
+  'settingGraphRuntime.enabled.desc':
+    'Route this agent through the graph runtime using the snapshot stored below.',
+  'settingGraphRuntime.enabled.title': 'Enable Graph Runtime',
+  'settingGraphRuntime.snapshot.desc':
+    'Paste the complete ReasoningGraph JSON snapshot. It is stored with this agent and used directly at runtime.',
+  'settingGraphRuntime.snapshot.placeholder':
+    'Paste a ReasoningGraph JSON snapshot, for example: {"name":"...","nodes":{...},"terminal":"...","edges":[]}',
+  'settingGraphRuntime.snapshot.title': 'Graph Snapshot',
+  'settingGraphRuntime.validation.invalidGraph': 'Invalid graph snapshot: {{error}}',
+  'settingGraphRuntime.validation.invalidJson': 'Graph snapshot must be valid JSON.',
+  'settingGraphRuntime.validation.required':
+    'A graph snapshot is required before enabling graph runtime.',
+  'settingGraphRuntime.validation.unknown': 'Unknown graph validation error',
   'settingSelfIteration.enabled.desc':
     'Allow this assistant to review recent signals and improve its own skills when the self-iteration workflow runs.',
   'settingSelfIteration.enabled.managedDesc':
@@ -1159,6 +1177,7 @@ When I am ___, I need ___
   'tab.appearance': 'Appearance',
   'tab.chatAppearance': 'Chat Appearance',
   'tab.common': 'Appearance',
+  'tab.connector': 'Connectors',
   'tab.creds': 'Credentials',
   'tab.devices': 'Devices',
   'tab.experiment': 'Experiment',
@@ -1626,6 +1645,14 @@ When I am ___, I need ___
   'workspace.billingPage.plans.creditsTooltip':
     'Workspace-wide monthly credits. Adding seats does NOT grow the pool — overage flows through AutoTopUp.',
   'workspace.billingPage.plans.capacityOnly': 'Up to {{max}} seats',
+  'workspace.billingPage.plans.compare.collaborationTitle': 'Collaboration & Management',
+  'workspace.billingPage.plans.compare.extraSeats': 'Additional seats',
+  'workspace.billingPage.plans.compare.extraSeatsValue': '${{fee}} / seat / month',
+  'workspace.billingPage.plans.compare.includedSeats': 'Included seats',
+  'workspace.billingPage.plans.compare.maxSeats': 'Member capacity',
+  'workspace.billingPage.plans.compare.seatsTitle': 'Seats & Members',
+  'workspace.billingPage.plans.compare.topUpPrice': 'On-demand top-up',
+  'workspace.billingPage.plans.compare.topUpPriceValue': '${{price}} / 1M credits',
   'workspace.billingPage.plans.downgradeToBasicCta': 'Downgrade',
   'workspace.billingPage.plans.headline': 'Choose a plan',
   'workspace.billingPage.plans.basicCapacity': 'Up to 3 seats',
@@ -2670,15 +2697,13 @@ When I am ___, I need ___
   'workspaceSetting.tab.general': 'General',
   'workspaceSetting.tab.members': 'Members',
   'workspaceSetting.storage.comingSoon': 'Workspace-scoped data import & export is coming soon.',
-  'workspaceSetting.storage.danger.clear.desc':
-    'Delete all data in this workspace, including agents, files, messages, and skills. The workspace itself will NOT be deleted.',
-  'workspaceSetting.storage.danger.clear.title': 'Clear Workspace Data',
   'workspaceSetting.storage.danger.reset.desc':
     'Restore all workspace settings to defaults. Workspace data will not be deleted.',
   'workspaceSetting.storage.danger.reset.title': 'Reset Workspace Settings',
   'workspaceSetting.storage.telemetry.desc':
     'Help us improve {{appName}} with anonymous workspace usage data',
   'workspaceSetting.storage.telemetry.title': 'Send Anonymous Workspace Usage Data',
+  'workspaceSetting.tab.connector': 'Connectors',
   'workspaceSetting.tab.skill': 'Skills',
   'tools.add': 'Add Skill',
   'tools.addSkillOrConnector': 'Add Skills / Connectors',
@@ -3026,6 +3051,8 @@ When I am ___, I need ___
   'tools.search': 'Search skills...',
   'tools.activation.auto': 'Auto',
   'tools.activation.auto.desc': 'Smart',
+  'tools.activation.disabled': 'Disabled',
+  'tools.activation.disabled.desc': 'Turned Off',
   'tools.activation.fixed.hint': 'Always on — managed by the app and can’t be turned off',
   'tools.activation.pinned': 'Pinned',
   'tools.activation.pinned.desc': 'Always On',

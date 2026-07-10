@@ -143,25 +143,29 @@ const reviewDiffUnsafeCSS = `
     backdrop-filter: blur(16px) !important;
   }
 
-  [data-utility-button] {
-    width: 16px !important;
-    min-width: 16px !important;
-    height: 16px !important;
+  [data-gutter-utility-slot] [data-utility-button] {
+    width: 18px !important;
+    min-width: 18px !important;
+    height: 18px !important;
     margin-right: calc(1ch - 8px) !important;
-    border: 1px solid ${themeCssVar.colorBorderSecondary} !important;
-    border-radius: 50% !important;
-    background: ${themeCssVar.colorBgContainer} !important;
-    color: ${themeCssVar.colorTextSecondary} !important;
-    box-shadow: 0 2px 8px ${themeCssVar.colorFillSecondary} !important;
+    border: 1px solid #0969da !important;
+    border-radius: 4px !important;
+    background: #0969da !important;
+    background-color: #0969da !important;
+    color: #fff !important;
+    fill: currentColor !important;
+    box-shadow: 0 1px 3px ${themeCssVar.colorFillSecondary} !important;
   }
 
-  [data-utility-button]:hover {
-    border-color: ${themeCssVar.colorPrimary} !important;
-    background: ${themeCssVar.colorPrimaryBg} !important;
-    color: ${themeCssVar.colorPrimary} !important;
+  [data-gutter-utility-slot] [data-utility-button]:is(:hover, :focus-visible, :active) {
+    border-color: #0860ca !important;
+    background: #0860ca !important;
+    background-color: #0860ca !important;
+    color: #fff !important;
+    fill: currentColor !important;
   }
 
-  [data-utility-button] [data-icon] {
+  [data-gutter-utility-slot] [data-utility-button] [data-icon] {
     width: 10px !important;
     height: 10px !important;
   }
@@ -375,6 +379,7 @@ const FileItemBody = memo<FileItemBodyProps>(
         language={language}
         patch={patch}
         showHeader={false}
+        style={{ borderRadius: 0 }}
         variant={'borderless'}
         viewMode={viewMode}
       />

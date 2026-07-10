@@ -39,6 +39,20 @@ afterEach(() => {
 
 describe('RecentActionImpl', () => {
   describe('useFetchRecents onData scope guard', () => {
+    it('does not poll recents periodically', () => {
+      const swrSpy = vi.spyOn(swr, 'useClientDataSWRWithSync').mockReturnValue({
+        data: undefined,
+        isValidating: false,
+        mutate: vi.fn(),
+      } as any);
+
+      renderHook(() => useHomeStore.getState().useFetchRecents(true, 10, 'user-1:ws-A'));
+
+      expect(swrSpy).toHaveBeenCalledWith(expect.any(Array), expect.any(Function), {
+        onData: expect.any(Function),
+      });
+    });
+
     it('applies data for the matching scope and tags recentsScope', () => {
       vi.spyOn(cacheScope, 'getCacheScope').mockReturnValue('user-1:ws-A');
       const getOnData = captureOnData('user-1:ws-A');

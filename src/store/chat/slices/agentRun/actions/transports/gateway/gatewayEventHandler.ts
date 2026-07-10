@@ -61,6 +61,47 @@ const fetchAndReplaceMessages = async (get: () => ChatStore, context: Conversati
   return messages;
 };
 
+const shouldSkipMessageFetch = (
+  event: AgentStreamEvent,
+  runtimeType: 'gateway' | 'hetero',
+): boolean => runtimeType === 'hetero' && event.data?.skipMessageFetch === true;
+
+const getToolId = (tool: unknown): string | undefined =>
+  isRecord(tool) ? pickNonEmptyString(tool.id) : undefined;
+
+const getToolResultMessageId = (tool: unknown): string | undefined =>
+  isRecord(tool) ? pickNonEmptyString(tool.result_msg_id) : undefined;
+
+const preserveToolResultMessageIds = (
+  toolsCalling: unknown[],
+  existingTools: unknown,
+): unknown[] => {
+  if (!Array.isArray(existingTools)) return toolsCalling;
+
+  const resultMsgIdByToolId = new Map<string, string>();
+  for (const tool of existingTools) {
+    const toolId = getToolId(tool);
+    const resultMsgId = getToolResultMessageId(tool);
+    if (toolId && resultMsgId) resultMsgIdByToolId.set(toolId, resultMsgId);
+  }
+
+  if (resultMsgIdByToolId.size === 0) return toolsCalling;
+
+  let changed = false;
+  const merged = toolsCalling.map((tool) => {
+    const toolId = getToolId(tool);
+    if (!toolId || getToolResultMessageId(tool)) return tool;
+
+    const resultMsgId = resultMsgIdByToolId.get(toolId);
+    if (!resultMsgId || !isRecord(tool)) return tool;
+
+    changed = true;
+    return { ...tool, result_msg_id: resultMsgId };
+  });
+
+  return changed ? merged : toolsCalling;
+};
+
 interface ChatToolPayloadLike {
   apiName?: unknown;
   arguments?: unknown;
@@ -567,11 +608,16 @@ export const createGatewayEventHandler = (
           if (data.chunkType === 'tools_calling' && data.toolsCalling) {
             endReasoningIfNeeded();
             hasStreamedContent = true;
+            const toolsCalling = preserveToolResultMessageIds(
+              data.toolsCalling as unknown[],
+              dbMessageSelectors.getDbMessageById(currentAssistantMessageId)(get())?.tools,
+            ) as NonNullable<StreamChunkData['toolsCalling']>;
+
             get().internal_dispatchMessage(
               {
                 id: currentAssistantMessageId,
                 type: 'updateMessage',
-                value: { tools: data.toolsCalling },
+                value: { tools: toolsCalling },
               },
               dispatchContext,
             );
@@ -579,7 +625,7 @@ export const createGatewayEventHandler = (
             // Drive tool calling animation
             get().internal_toggleToolCallingStreaming(
               currentAssistantMessageId,
-              data.toolsCalling.map(() => true),
+              toolsCalling.map(() => true),
             );
 
             // If the server attached a `toolMessageIds` map, it has persisted
@@ -723,8 +769,11 @@ export const createGatewayEventHandler = (
       case 'tool_end': {
         const data = event.data as ToolEndData | undefined;
         enqueue(async () => {
+          const maybeRefresh = shouldSkipMessageFetch(event, runtimeType)
+            ? Promise.resolve()
+            : fetchAndReplaceMessages(get, context).catch(console.error);
           await Promise.all([
-            fetchAndReplaceMessages(get, context).catch(console.error),
+            maybeRefresh,
             dispatchOnAfterCall(data, context.topicId ?? undefined).catch(console.error),
           ]);
         });
@@ -747,7 +796,9 @@ export const createGatewayEventHandler = (
               sourceId: `${operationId}:gateway:step_complete:${event.stepIndex}`,
               sourceType: 'client.gateway.step_complete',
             });
-            await fetchAndReplaceMessages(get, context).catch(console.error);
+            if (!shouldSkipMessageFetch(event, runtimeType)) {
+              await fetchAndReplaceMessages(get, context).catch(console.error);
+            }
           });
         }
         break;
@@ -775,6 +826,10 @@ export const createGatewayEventHandler = (
           get().internal_toggleToolCallingStreaming(currentAssistantMessageId, undefined);
           endReasoningIfNeeded();
 
+          // The terminal snapshot, when the server pushed one — the reconciled
+          // Source of Truth for this run's final assistant text.
+          let terminalMessages: UIChatMessage[] | undefined;
+
           // Reconcile messages FIRST so the terminal run lifecycle's notification
           // (afterRunComplete) can read the final assistant content from the store.
           //
@@ -783,6 +838,7 @@ export const createGatewayEventHandler = (
           // to a DB refetch only if the snapshot is absent (older server
           // builds, or push-event delivery edge cases).
           if (Array.isArray(data?.uiMessages)) {
+            terminalMessages = data.uiMessages;
             get().replaceMessages(data.uiMessages, {
               action: 'gateway/agent_runtime_end',
               context,
@@ -828,7 +884,28 @@ export const createGatewayEventHandler = (
               status,
             });
             if (!requeued && status === 'completed') {
-              await runLifecycle.afterRunComplete({ ...lifecycleEventBase, status });
+              // Notification body, resolved most-authoritative first:
+              //
+              // 1. the terminal snapshot's final assistant text — server-
+              //    finalized, so it wins over the optimistic stream even when
+              //    the two disagree (dropped chunks, server-side rewrites);
+              // 2. `accumulatedContent`, the in-memory stream (a closure
+              //    untouched by `replaceMessages`), for the no-snapshot path
+              //    where `fetchAndReplaceMessages` races the executor's DB
+              //    write and would otherwise leave the body empty. Its stale
+              //    predecessor is NOT read back from that refetch: a not-yet-
+              //    written assistant row would surface the PRIOR turn's reply;
+              // 3. nothing (`''`), letting `afterRunComplete` fall back to its
+              //    store read and then to the generic "generation finished".
+              const finalAssistantContent = terminalMessages?.findLast(
+                (message) => message.role === 'assistant',
+              )?.content;
+
+              await runLifecycle.afterRunComplete({
+                ...lifecycleEventBase,
+                notification: { content: finalAssistantContent || accumulatedContent },
+                status,
+              });
             }
           } else {
             // hetero reuses this handler only for message reconciliation; its

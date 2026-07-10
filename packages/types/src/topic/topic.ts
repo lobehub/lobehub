@@ -250,6 +250,14 @@ export interface ChatTopic extends Omit<BaseDataModel, 'meta'> {
   messageCount?: number | null;
   metadata?: ChatTopicMetadata;
   sessionId?: string;
+  /**
+   * Sort key for the sidebar list: the topic's latest message-activity time
+   * (server `topicActivityAt`), falling back to `updatedAt`. Kept separate from
+   * `updatedAt` so the client sort matches the server ORDER BY (no list jumping)
+   * while `updatedAt` still reflects real row edits like rename/favorite.
+   * (LOBE-11543)
+   */
+  sortUpdatedAt?: number;
   status?: ChatTopicStatus | null;
   title: string;
   /** Server-side mock until real token aggregation lands. */

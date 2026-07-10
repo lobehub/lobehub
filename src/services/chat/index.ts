@@ -11,13 +11,15 @@ import { type FetchSSEOptions } from '@lobechat/fetch-sse';
 import { fetchSSE, standardizeAnimationStyle } from '@lobechat/fetch-sse';
 import type { ChatCompletionErrorPayload } from '@lobechat/model-runtime';
 import { AgentRuntimeError, isResponsesAPIModel } from '@lobechat/model-runtime';
-import type {
-  RuntimeInitialContext,
-  RuntimeStepContext,
-  TracePayload,
-  UIChatMessage,
+import {
+  ChatErrorType,
+  getDisabledPluginIds,
+  type RuntimeInitialContext,
+  type RuntimeStepContext,
+  type TracePayload,
+  TraceTagMap,
+  type UIChatMessage,
 } from '@lobechat/types';
-import { ChatErrorType, TraceTagMap } from '@lobechat/types';
 import { merge } from 'es-toolkit/compat';
 import { ModelProvider } from 'model-bank';
 
@@ -285,6 +287,9 @@ class ChatService {
       agentBuilderContext,
       agentDocuments,
       agentId: targetAgentId,
+      // `agentConfig.plugins` is the raw (pre-filter) field — `plugins` below
+      // is already pinned-only (resolved upstream in agentConfigResolver).
+      disabledPluginIds: getDisabledPluginIds(agentConfig.plugins),
       enableAgentMode,
       // Use raw chatConfig values, not selectors with business logic that may force false
       enableHistoryCount: chatConfig.enableHistoryCount,

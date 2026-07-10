@@ -13,12 +13,12 @@ import {
 
 describe('parseOpenAIModelId', () => {
   it('should parse native GPT model ids', () => {
-    expect(parseOpenAIModelId('gpt-5.6-pro-2026-06-25')).toEqual({
+    expect(parseOpenAIModelId('gpt-5.6-sol')).toEqual({
       family: 'gpt',
       majorVersion: 5,
       minorVersion: 6,
-      modifiers: ['pro'],
-      normalizedModelId: 'gpt-5.6-pro-2026-06-25',
+      modifiers: ['sol'],
+      normalizedModelId: 'gpt-5.6-sol',
       source: 'openai',
     });
   });
@@ -35,12 +35,12 @@ describe('parseOpenAIModelId', () => {
   });
 
   it('should parse OpenRouter OpenAI ids', () => {
-    expect(parseOpenAIModelId('openai/gpt-5.6-mini')).toEqual({
+    expect(parseOpenAIModelId('openai/gpt-5.6-terra')).toEqual({
       family: 'gpt',
       majorVersion: 5,
       minorVersion: 6,
-      modifiers: ['mini'],
-      normalizedModelId: 'gpt-5.6-mini',
+      modifiers: ['terra'],
+      normalizedModelId: 'gpt-5.6-terra',
       source: 'openRouter',
     });
   });
@@ -81,15 +81,16 @@ describe('isGPT5ResponsesModel', () => {
     expect(isGPT5ResponsesModel('gpt-5.5-pro')).toBe(true);
   });
 
-  it('should match future GPT-5 minor versions without allowlist entries', () => {
+  it('should match the GPT-5.6 family without allowlist entries', () => {
     expect(isGPT5ResponsesModel('gpt-5.6')).toBe(true);
-    expect(isGPT5ResponsesModel('gpt-5.6-mini')).toBe(true);
-    expect(isGPT5ResponsesModel('gpt-5.6-pro')).toBe(true);
+    expect(isGPT5ResponsesModel('gpt-5.6-sol')).toBe(true);
+    expect(isGPT5ResponsesModel('gpt-5.6-terra')).toBe(true);
+    expect(isGPT5ResponsesModel('gpt-5.6-luna')).toBe(true);
   });
 
   it('should not force OpenRouter GPT slugs into the built-in Responses API rules', () => {
-    expect(isGPT5ResponsesModel('openai/gpt-5.6-pro')).toBe(false);
-    expect(isResponsesAPIModel('openai/gpt-5.6-pro')).toBe(false);
+    expect(isGPT5ResponsesModel('openai/gpt-5.6-terra')).toBe(false);
+    expect(isResponsesAPIModel('openai/gpt-5.6-terra')).toBe(false);
   });
 
   it('should not match non-GPT-5 ids', () => {
@@ -100,27 +101,31 @@ describe('isGPT5ResponsesModel', () => {
 });
 
 describe('isGPT5ProResponsesModel', () => {
-  it('should match future GPT-5 pro variants', () => {
-    expect(isGPT5ProResponsesModel('gpt-5.6-pro')).toBe(true);
-    expect(isGPT5ProResponsesModel('gpt-5.6-pro-2026-06-25')).toBe(true);
+  it('should match GPT-5 pro variants', () => {
+    expect(isGPT5ProResponsesModel('gpt-5-pro')).toBe(true);
+    expect(isGPT5ProResponsesModel('gpt-5.5-pro')).toBe(true);
   });
 
   it('should not match non-pro GPT-5 variants', () => {
     expect(isGPT5ProResponsesModel('gpt-5.6')).toBe(false);
-    expect(isGPT5ProResponsesModel('gpt-5.6-mini')).toBe(false);
-    expect(isGPT5ProResponsesModel('openai/gpt-5.6-pro-2026-06-25')).toBe(false);
+    expect(isGPT5ProResponsesModel('gpt-5.6-sol')).toBe(false);
+    expect(isGPT5ProResponsesModel('gpt-5.6-terra')).toBe(false);
+    expect(isGPT5ProResponsesModel('gpt-5.6-luna')).toBe(false);
+    expect(isGPT5ProResponsesModel('openai/gpt-5.5-pro')).toBe(false);
   });
 });
 
 describe('supportsGPT5ResponsesReasoningEffortNone', () => {
   it('should support none reasoning effort for non-pro GPT-5 minor models', () => {
     expect(supportsGPT5ResponsesReasoningEffortNone('gpt-5.6')).toBe(true);
-    expect(supportsGPT5ResponsesReasoningEffortNone('gpt-5.6-mini')).toBe(true);
+    expect(supportsGPT5ResponsesReasoningEffortNone('gpt-5.6-sol')).toBe(true);
+    expect(supportsGPT5ResponsesReasoningEffortNone('gpt-5.6-terra')).toBe(true);
+    expect(supportsGPT5ResponsesReasoningEffortNone('gpt-5.6-luna')).toBe(true);
   });
 
   it('should preserve unsupported cases', () => {
     expect(supportsGPT5ResponsesReasoningEffortNone('gpt-5')).toBe(false);
-    expect(supportsGPT5ResponsesReasoningEffortNone('gpt-5.6-pro')).toBe(false);
+    expect(supportsGPT5ResponsesReasoningEffortNone('gpt-5.5-pro')).toBe(false);
     expect(supportsGPT5ResponsesReasoningEffortNone('openai/gpt-5.6')).toBe(false);
     expect(supportsGPT5ResponsesReasoningEffortNone('gpt-4o')).toBe(false);
   });
@@ -133,8 +138,8 @@ describe('isOpenAIReasoningPayloadModel', () => {
     expect(isOpenAIReasoningPayloadModel('o4-mini')).toBe(true);
     expect(isOpenAIReasoningPayloadModel('codex-mini-latest')).toBe(true);
     expect(isOpenAIReasoningPayloadModel('computer-use-preview')).toBe(true);
-    expect(isOpenAIReasoningPayloadModel('gpt-5.6-mini')).toBe(true);
-    expect(isOpenAIReasoningPayloadModel('openai/gpt-5.6')).toBe(true);
+    expect(isOpenAIReasoningPayloadModel('gpt-5.6-luna')).toBe(true);
+    expect(isOpenAIReasoningPayloadModel('openai/gpt-5.6-sol')).toBe(true);
   });
 
   it('should preserve unsupported cases', () => {
@@ -150,14 +155,14 @@ describe('isOpenAIComputerUseModel', () => {
   });
 
   it('should not match unrelated models', () => {
-    expect(isOpenAIComputerUseModel('gpt-5.6')).toBe(false);
+    expect(isOpenAIComputerUseModel('gpt-5.6-sol')).toBe(false);
   });
 });
 
 describe('supportsOpenAIServiceTierFlex', () => {
   it('should support flex tier model families', () => {
-    expect(supportsOpenAIServiceTierFlex('gpt-5.6')).toBe(true);
-    expect(supportsOpenAIServiceTierFlex('openai/gpt-5.6-mini')).toBe(true);
+    expect(supportsOpenAIServiceTierFlex('gpt-5.6-sol')).toBe(true);
+    expect(supportsOpenAIServiceTierFlex('openai/gpt-5.6-terra')).toBe(true);
     expect(supportsOpenAIServiceTierFlex('o3-pro')).toBe(true);
     expect(supportsOpenAIServiceTierFlex('o4-mini')).toBe(true);
   });

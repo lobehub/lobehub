@@ -153,7 +153,7 @@ describe('AgentModalProvider', () => {
     fireEvent.click(screen.getByText('View in Skills'));
 
     expect(mocks.navigate).toHaveBeenCalledWith(
-      '/settings/skill?tab=skill&skill=product-requirements-writer',
+      '/settings/skill?skill=product-requirements-writer',
     );
   });
 });

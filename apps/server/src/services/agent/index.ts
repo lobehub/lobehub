@@ -4,6 +4,7 @@ import { DEFAULT_AGENT_CONFIG } from '@lobechat/const';
 import { type LobeChatDatabase } from '@lobechat/database';
 import { type AgentItem, type LobeAgentConfig } from '@lobechat/types';
 import { cleanObject, merge } from '@lobechat/utils';
+import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { type PartialDeep } from 'type-fest';
 
@@ -223,10 +224,16 @@ export class AgentService {
     value: PartialDeep<AgentItem>,
   ): Promise<UpdateAgentResult> {
     // 1. Execute update
-    await this.agentModel.updateConfig(agentId, value);
+    // `AgentItem` here is the `@lobechat/types` domain shape (plugins:
+    // AgentPluginEntry[]); `agentModel.updateConfig` takes the DB-layer
+    // AgentItem, whose `plugins` column type is intentionally left as
+    // `string[]` (only the domain types are widened for the tri-state
+    // rollout, not the JSONB column's compile-time annotation).
+    await this.agentModel.updateConfig(agentId, value as any);
 
     // 2. Query and return updated data (with default config merged)
     const agent = await this.getAgentConfigById(agentId);
+    if (!agent) throw new TRPCError({ code: 'NOT_FOUND', message: 'Agent not found' });
 
     return { agent: agent as any, success: true };
   }
