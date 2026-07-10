@@ -108,6 +108,14 @@ const TASK_UPDATE_RESULT_PATTERN = /^Updated task #\d+/;
 const TASK_LIST_LINE_PATTERN = /^#(\d+) \[(pending|in_progress|completed)\] (.+)$/;
 
 /**
+ * `system init` tags the model id with a beta marker (`claude-opus-4-8[1m]`)
+ * that no other event — and no model-bank entry — uses. Strip it so the id the
+ * run opens with is the same canonical one `turn_metadata` later confirms;
+ * otherwise the assistant renders the tagged id until the first turn ends.
+ */
+const stripModelBetaMarker = (model?: string) => model?.replace(/\[[^\]]*\]$/, '');
+
+/**
  * Tool name CC sees for the LobeHub-hosted MCP `ask_user_question` server.
  * Source of truth lives in `../askUser/constants.ts`; replicated here as a
  * literal so the adapter compiles in browser bundles without dragging in
@@ -782,7 +790,7 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
     this.started = true;
     return [
       this.makeEvent('stream_start', {
-        model: raw.model,
+        model: stripModelBetaMarker(raw.model),
         provider: 'claude-code',
         // The CC session id every message this run produces belongs to. A
         // change in this value across a topic means CC forked a new session.

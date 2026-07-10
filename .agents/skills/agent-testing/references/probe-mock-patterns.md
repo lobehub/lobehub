@@ -543,10 +543,27 @@
   the shell env). This authenticates BOTH the renderer (BackendProxyProtocolManager injects the
   same token) and any main-process fetch, so the whole app comes up signed in. Revert with
   `git checkout --` + `grep -rn AGENT-TEST` afterwards, and never echo the token.
+- **Works — alternative, no source edit, when you can approve a browser prompt**: seed a
+  PRISTINE profile so the app takes the signed-out path and renders the real login screen
+  instead of hanging:
+  ```bash
+  mkdir -p /tmp/empty-golden
+  LOBE_GOLDEN_PROFILE=/tmp/empty-golden ./electron-dev.sh start <id>
+  ```
+  Drive onboarding (`开始` → `下一步` ×2 → `登录 LobeHub Cloud`). The device-code flow opens the
+  browser and auto-approves against an existing app.lobehub.com session, giving the instance its
+  OWN token — so it never rotates the one the user's resident app holds.
+- **Why the blank shell has no login button**: the failed refresh leaves `isUserStateInit:false`
+  (with `isLoaded:true, user:null`), and the desktop first-frame gate waits on it forever. Every
+  route — `/`, `/desktop-onboarding` — renders empty. Reloading, soft-navving, and waiting all
+  fail to resolve it, so it reads exactly like a Case-1 blank page.
 - **Gotcha**: a worktree installed with `pnpm install --ignore-scripts` has NO electron binary
   (`node_modules/.pnpm/electron@*/node_modules/electron/dist` missing). Fix with
   `cd apps/desktop && pnpm rebuild electron`. Also remember `apps/desktop` and `apps/cli` are
   NOT in the root pnpm workspace — install inside each.
+- **Gotcha**: `electron-dev.sh restart <id>` keeps the userData dir, but a device-code session
+  did NOT survive it — budget for one more login after any restart (e.g. when a main-process
+  change forces one, see E9).
 
 ### C5. ✅ WORKS — main-process `logger.info` is invisible unless `DEBUG` is set
 
@@ -561,3 +578,15 @@ session:')` line. In development `createLogger().info` routes to the `debug` pac
   `grep -oE "controllers:HeterogeneousAgentCtr INFO: [^']*" /tmp/lobe-electron-pool/instance-<id>.log`.
   Don't trust the hetero tracing dir for this — it is gated and the copied golden profile ships
   STALE trace sessions from months earlier that look like a fresh run.
+### E9. Main-process code changes need a restart; Vite HMR only covers the renderer
+
+- Adapters under `packages/heterogeneous-agents` run in the **main** process
+  (JSONL framing + adapter + `toStreamEvent`). Editing one and reloading the
+  renderer verifies nothing — the old adapter is still running.
+- Prove which code each process has before trusting a run:
+  ```bash
+  # renderer: vite serves working-tree src (VITE_BASE + id)
+  curl -s --noproxy '*' "http://127.0.0.1:<vitePort>/src/<path>.ts" | grep -c '<marker>'
+  # main: rebuilt on start into the desktop dist bundle
+  grep -c '<marker>' apps/desktop/dist/main/index.js
+  ```
