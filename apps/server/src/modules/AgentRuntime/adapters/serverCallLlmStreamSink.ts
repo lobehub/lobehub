@@ -17,7 +17,7 @@ interface CreateServerCallLlmStreamSinkInput {
   operationLogId: string;
 }
 
-const BUFFER_INTERVAL = 50;
+const BUFFER_INTERVAL = 300;
 
 const appendTextPart = (parts: ServerCallLlmContentPart[], text: string) => {
   const last = parts.at(-1);
