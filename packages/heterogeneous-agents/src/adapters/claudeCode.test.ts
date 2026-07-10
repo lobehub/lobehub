@@ -31,6 +31,19 @@ describe('ClaudeCodeAdapter', () => {
       expect(events[0].data.model).toBe('claude-opus-4-8');
     });
 
+    // Only a TRAILING marker is a beta tag — a bracket anywhere else is part of
+    // the id and must survive.
+    it('leaves an id without a trailing marker untouched', () => {
+      const adapter = new ClaudeCodeAdapter();
+      const events = adapter.adapt({
+        model: 'claude-opus[4]-8',
+        session_id: 'sess_123',
+        subtype: 'init',
+        type: 'system',
+      });
+      expect(events[0].data.model).toBe('claude-opus[4]-8');
+    });
+
     it('emits visible_output_end before agent_runtime_end on success result', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt({ subtype: 'init', type: 'system' });
