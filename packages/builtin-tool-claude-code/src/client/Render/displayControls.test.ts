@@ -1,0 +1,47 @@
+import { describe, expect, it } from 'vitest';
+
+import { ClaudeCodeApiName } from '../../types';
+import { resolveClaudeCodeRenderDisplayControl } from './displayControls';
+
+const uploaded = { images: [{ mediaType: 'image/png', url: 'https://cdn/a.png' }] };
+
+describe('resolveClaudeCodeRenderDisplayControl', () => {
+  describe('Read', () => {
+    it('expands once the result carries an uploaded image', () => {
+      expect(resolveClaudeCodeRenderDisplayControl(ClaudeCodeApiName.Read, uploaded)).toBe(
+        'expand',
+      );
+    });
+
+    it('stays collapsed for source text, so a Read never dumps a file into the transcript', () => {
+      expect(resolveClaudeCodeRenderDisplayControl(ClaudeCodeApiName.Read)).toBeUndefined();
+      expect(resolveClaudeCodeRenderDisplayControl(ClaudeCodeApiName.Read, {})).toBeUndefined();
+      expect(
+        resolveClaudeCodeRenderDisplayControl(ClaudeCodeApiName.Read, { images: [] }),
+      ).toBeUndefined();
+    });
+
+    it('stays collapsed when the image failed to upload (no url to render)', () => {
+      // The pipeline drops a failed entry, but an entry with no `url` must not
+      // expand an empty card — the `[Image: …]` placeholder is the fallback.
+      expect(
+        resolveClaudeCodeRenderDisplayControl(ClaudeCodeApiName.Read, {
+          images: [{ mediaType: 'image/png' }],
+        }),
+      ).toBeUndefined();
+    });
+
+    it('is still collapsed while the call is in flight (no result yet)', () => {
+      expect(
+        resolveClaudeCodeRenderDisplayControl(ClaudeCodeApiName.Read, undefined),
+      ).toBeUndefined();
+    });
+  });
+
+  it('keeps the static map for every other api, regardless of pluginState', () => {
+    expect(resolveClaudeCodeRenderDisplayControl(ClaudeCodeApiName.Edit)).toBe('expand');
+    expect(resolveClaudeCodeRenderDisplayControl(ClaudeCodeApiName.TodoWrite)).toBe('expand');
+    // An unrelated api with images on its result must not be force-expanded.
+    expect(resolveClaudeCodeRenderDisplayControl(ClaudeCodeApiName.Grep, uploaded)).toBeUndefined();
+  });
+});
