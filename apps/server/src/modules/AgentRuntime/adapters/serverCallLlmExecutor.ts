@@ -8,7 +8,6 @@ import {
   resolveLLMMaxAttempts,
   resolveLLMRetryBudget,
   shouldRetryLLM,
-  UsageCounter,
 } from '@lobechat/agent-runtime';
 import { BRANDING_PROVIDER } from '@lobechat/business-const';
 import { ToolNameResolver } from '@lobechat/context-engine';
@@ -30,8 +29,14 @@ import {
   chatSpanName,
   tracer as agentRuntimeTracer,
 } from '@lobechat/observability-otel/modules/agent-runtime';
-import { type ChatToolPayload, type MessageToolCall } from '@lobechat/types';
-import { sanitizeToolCallArguments, serializePartsForStorage } from '@lobechat/utils';
+import type {
+  ChatImageItem,
+  ChatToolPayload,
+  GroundingSearch,
+  MessageToolCall,
+  ModelPerformance,
+  ModelUsage,
+} from '@lobechat/types';
 
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 
@@ -40,8 +45,11 @@ import { isOperationInterrupted, log, sleep, timing } from '../executorHelpers';
 import { formatErrorEventData } from '../formatErrorEventData';
 import { classifyLLMError } from '../llmErrorClassification';
 import { createConversationParentMissingError } from '../messagePersistErrors';
-import { VISIBLE_OUTPUT_END_PUBLISHED_STEP_INDEX_METADATA_KEY } from '../visibleOutputEnd';
 import { buildServerCallLlmContext } from './serverCallLlmContextBuilder';
+import {
+  finalizeServerCallLlmResult,
+  persistInterruptedServerCallLlmResult,
+} from './serverCallLlmFinalizer';
 import { createServerCallLlmStreamSink } from './serverCallLlmStreamSink';
 import { resolveServerCallLlmTooling, type ServerCallLlmTooling } from './serverCallLlmTooling';
 
@@ -258,10 +266,10 @@ export const callLlm =
             });
             let toolsCalling: ChatToolPayload[] = [];
             let tool_calls: MessageToolCall[] = [];
-            const imageList: any[] = [];
-            let grounding: any = null;
-            let currentStepUsage: any = undefined;
-            let currentStepSpeed: any = undefined;
+            const imageList: ChatImageItem[] = [];
+            let grounding: GroundingSearch | null = null;
+            let currentStepUsage: ModelUsage | undefined;
+            let currentStepSpeed: ModelPerformance | undefined;
             let currentStepFinishReason: string | undefined = undefined;
             let streamError: any = undefined;
             // Set when a terminal turn's answer was salvaged from the reasoning
@@ -589,146 +597,33 @@ export const callLlm =
 
               log('[%s:%d] call_llm completed', operationId, stepIndex);
 
-              // ===== 1. First save original usage to message.metadata =====
-              // Determine final content - use serialized parts if has images, otherwise plain text
-              const finalContent = streamSink.hasContentImages
-                ? serializePartsForStorage(streamSink.contentParts)
-                : streamSink.content;
-
-              // Determine final reasoning - handle multimodal reasoning
-              let finalReasoning: any = undefined;
-              if (streamSink.hasReasoningImages) {
-                // Has images, use multimodal format
-                finalReasoning = {
-                  content: serializePartsForStorage(streamSink.reasoningParts),
-                  isMultimodal: true,
-                };
-              } else if (streamSink.thinkingContent) {
-                // Has text from reasoning but no images
-                finalReasoning = {
-                  content: streamSink.thinkingContent,
-                };
-              }
-
-              // preserveThinking only gates whether reasoning is replayed into the
-              // next LLM payload (state.messages); the DB copy powers UI display
-              // after refresh and must always be saved.
-              const replayedReasoning = shouldReplayAssistantReasoning ? finalReasoning : undefined;
-
-              try {
-                // Build metadata object
-                const metadata: Record<string, any> = {};
-                if (currentStepUsage && typeof currentStepUsage === 'object') {
-                  // Flat fields are kept for backward-compatible readers; `usage`
-                  // is the canonical nested shape new readers should consume.
-                  Object.assign(metadata, currentStepUsage);
-                  metadata.usage = currentStepUsage;
-                }
-                if (currentStepSpeed && typeof currentStepSpeed === 'object') {
-                  Object.assign(metadata, currentStepSpeed);
-                  metadata.performance = currentStepSpeed;
-                }
-                if (streamSink.hasContentImages) {
-                  metadata.isMultimodal = true;
-                }
-                if (answerSalvagedFromReasoning) {
-                  metadata.answerSalvagedFromReasoning = true;
-                }
-
-                // Sanitize tool_call `arguments` before persisting to DB so malformed
-                // JSON (e.g. Qwen emitting `{, ...}`) can't poison future context
-                // builds and 400 strict providers like NVIDIA NIM. See .
-                const persistedTools =
-                  toolsCalling.length > 0
-                    ? toolsCalling.map((t) => ({
-                        ...t,
-                        arguments: sanitizeToolCallArguments(t.arguments),
-                      }))
-                    : undefined;
-
-                await ctx.messageModel.update(assistantMessageItem.id, {
-                  content: finalContent,
-                  imageList: imageList.length > 0 ? imageList : undefined,
-                  metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
-                  reasoning: finalReasoning,
-                  search: grounding,
-                  tools: persistedTools,
-                });
-              } catch (error) {
-                console.error('[call_llm] Failed to update message:', error);
-              }
-
-              // ===== 2. Then accumulate to AgentState =====
-              const newState = structuredClone(state);
-
-              // state.messages flows into the next LLM call payload, so entries
-              // must be safe for strict-provider history replay:
-              //   - drop tool_calls with empty name (undispatchable, and strict
-              //     providers 400 on nameless entries)
-              //   - coerce malformed JSON `arguments` to valid JSON
-              const sanitizedToolCalls =
-                tool_calls.length > 0
-                  ? tool_calls
-                      .filter((tc) => !!tc.function.name)
-                      .map((tc) => ({
-                        ...tc,
-                        function: {
-                          ...tc.function,
-                          arguments: sanitizeToolCallArguments(tc.function.arguments),
-                        },
-                      }))
-                  : [];
-              const stateToolCalls = sanitizedToolCalls.length > 0 ? sanitizedToolCalls : undefined;
-
-              newState.messages.push({
-                content: streamSink.content,
-                id: assistantMessageItem.id,
-                reasoning: replayedReasoning,
-                role: 'assistant',
-                tool_calls: stateToolCalls,
+              const newState = await finalizeServerCallLlmResult({
+                answerSalvagedFromReasoning,
+                assistantMessageId: assistantMessageItem.id,
+                currentStepSpeed,
+                currentStepUsage,
+                grounding,
+                imageList,
+                messageModel: ctx.messageModel,
+                model,
+                provider,
+                shouldReplayAssistantReasoning,
+                state,
+                stepLabel,
+                streamOutput: streamSink,
+                toolCalls: tool_calls,
+                toolsCalling,
+                visibleOutputEndPublishedStepIndex,
               });
 
-              if (currentStepUsage) {
-                // Use UsageCounter to uniformly accumulate usage and cost
-                const { usage, cost } = UsageCounter.accumulateLLM({
-                  cost: newState.cost,
-                  model: llmPayload.model,
-                  modelUsage: currentStepUsage,
-                  provider: llmPayload.provider,
-                  usage: newState.usage,
-                });
-
-                newState.usage = usage;
-                if (cost) newState.cost = cost;
-              }
-
-              // Propagate stepLabel from instruction to state metadata for hook consumers
-              if (stepLabel || visibleOutputEndPublishedStepIndex !== undefined) {
-                const stateMetadata = { ...newState.metadata };
-                if (stepLabel) stateMetadata._stepLabel = stepLabel;
-                if (visibleOutputEndPublishedStepIndex !== undefined) {
-                  stateMetadata[VISIBLE_OUTPUT_END_PUBLISHED_STEP_INDEX_METADATA_KEY] =
-                    visibleOutputEndPublishedStepIndex;
-                }
-                newState.metadata = stateMetadata;
-              }
-
               // Record chat response attributes on the OTel span.
-              const usageRecord = currentStepUsage as
-                | {
-                    inputCachedTokens?: number;
-                    outputReasoningTokens?: number;
-                    totalInputTokens?: number;
-                    totalOutputTokens?: number;
-                  }
-                | undefined;
               chatSpan.setAttributes(
                 buildChatResponseAttributes({
-                  cacheReadInputTokens: usageRecord?.inputCachedTokens,
+                  cacheReadInputTokens: currentStepUsage?.inputCachedTokens,
                   finishReasons: currentStepFinishReason ? [currentStepFinishReason] : undefined,
-                  inputTokens: usageRecord?.totalInputTokens,
-                  outputTokens: usageRecord?.totalOutputTokens,
-                  reasoningOutputTokens: usageRecord?.outputReasoningTokens,
+                  inputTokens: currentStepUsage?.totalInputTokens,
+                  outputTokens: currentStepUsage?.totalOutputTokens,
+                  reasoningOutputTokens: currentStepUsage?.outputReasoningTokens,
                   timeToFirstChunkMs: firstChunkAt,
                 }),
               );
@@ -810,52 +705,22 @@ export const callLlm =
               }
 
               // Cancel/interrupt path: when the user stops mid-stream, the model-runtime
-              // stream is aborted before reaching the post-stream finalize (line ~1078),
+              // stream is aborted before reaching the post-stream finalize,
               // so the DB row remains a LOADING_FLAT placeholder. Without this fix,
               // agent_runtime_end would push the placeholder as the source-of-truth
               // to the client, clobbering the streamed content accumulated in memory.
               // We persist whatever partial content the stream callbacks already
               // accumulated so that reload/end snapshots reflect actual progress.
-              if (
-                interrupted &&
-                (streamSink.content || streamSink.thinkingContent || toolsCalling.length > 0)
-              ) {
-                try {
-                  const persistedTools =
-                    toolsCalling.length > 0
-                      ? toolsCalling.map((t) => ({
-                          ...t,
-                          arguments: sanitizeToolCallArguments(t.arguments),
-                        }))
-                      : undefined;
-                  const interruptedReasoning = streamSink.thinkingContent
-                    ? { content: streamSink.thinkingContent }
-                    : undefined;
-                  const interruptedMetadata: Record<string, any> = { interruptedMidStream: true };
-                  if (currentStepUsage && typeof currentStepUsage === 'object') {
-                    Object.assign(interruptedMetadata, currentStepUsage);
-                    interruptedMetadata.usage = currentStepUsage;
-                  }
-                  if (currentStepSpeed && typeof currentStepSpeed === 'object') {
-                    Object.assign(interruptedMetadata, currentStepSpeed);
-                    interruptedMetadata.performance = currentStepSpeed;
-                  }
-                  await ctx.messageModel.update(assistantMessageItem.id, {
-                    content: streamSink.content,
-                    metadata: interruptedMetadata,
-                    reasoning: interruptedReasoning,
-                    tools: persistedTools,
-                  });
-                  log(
-                    '[%s] Interrupted finalize: persisted partial content (c=%d r=%d tools=%d)',
-                    operationLogId,
-                    streamSink.content.length,
-                    streamSink.thinkingContent.length,
-                    toolsCalling.length,
-                  );
-                } catch (persistErr) {
-                  log('[%s] Interrupted finalize update failed: %O', operationLogId, persistErr);
-                }
+              if (interrupted) {
+                await persistInterruptedServerCallLlmResult({
+                  assistantMessageId: assistantMessageItem.id,
+                  currentStepSpeed,
+                  currentStepUsage,
+                  messageModel: ctx.messageModel,
+                  operationLogId,
+                  streamOutput: streamSink,
+                  toolsCalling,
+                });
               }
 
               throw error;

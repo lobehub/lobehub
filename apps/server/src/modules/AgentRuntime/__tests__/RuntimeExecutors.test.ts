@@ -1697,6 +1697,31 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         );
       });
 
+      it('should clear stale grounding when a reused assistant message receives no grounding', async () => {
+        const executors = createRuntimeExecutors(ctx);
+        const state = createMockState();
+        const existingAssistantId = 'existing-grounded-assistant';
+
+        await executors.call_llm!(
+          {
+            payload: {
+              assistantMessageId: existingAssistantId,
+              messages: [{ content: 'Hello', role: 'user' }],
+              model: 'gpt-4',
+              provider: 'openai',
+              tools: [],
+            },
+            type: 'call_llm' as const,
+          },
+          state,
+        );
+
+        expect(mockMessageModel.update).toHaveBeenCalledWith(
+          existingAssistantId,
+          expect.objectContaining({ search: null }),
+        );
+      });
+
       it('should create new assistant message when assistantMessageId is not provided', async () => {
         const executors = createRuntimeExecutors(ctx);
         const state = createMockState();

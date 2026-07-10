@@ -5,6 +5,7 @@
   "workingDirectory.agentDescription": "Bu Agent ile yapılan tüm konuşmalar için varsayılan çalışma dizini",
   "workingDirectory.agentLevel": "Agent Çalışma Dizini",
   "workingDirectory.bareWorktree": "çıplak",
+  "workingDirectory.branchInWorktree": "Çalışma ağacında {{name}}",
   "workingDirectory.branchSearchPlaceholder": "Dallar arasında ara",
   "workingDirectory.branchesEmpty": "Yerel dal yok",
   "workingDirectory.branchesHeading": "Dallar",

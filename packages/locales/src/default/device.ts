@@ -6,6 +6,7 @@ export default {
   'workingDirectory.agentDescription':
     'Default working directory for all conversations with this Agent',
   'workingDirectory.agentLevel': 'Agent Working Directory',
+  'workingDirectory.branchInWorktree': 'In worktree {{name}}',
   'workingDirectory.branchSearchPlaceholder': 'Search branches',
   'workingDirectory.branchesEmpty': 'No local branches',
   'workingDirectory.branchesHeading': 'Branches',

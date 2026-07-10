@@ -7,7 +7,10 @@ import {
 import { GroupAgentBuilderInspectors } from '@lobechat/builtin-tool-group-agent-builder/client';
 import { SkillStoreApiName, SkillStoreIdentifier } from '@lobechat/builtin-tool-skill-store';
 import { SkillStoreInspectors, SkillStoreRenders } from '@lobechat/builtin-tool-skill-store/client';
-import { UserInteractionIdentifier } from '@lobechat/builtin-tool-user-interaction';
+import {
+  UserInteractionApiName,
+  UserInteractionIdentifier,
+} from '@lobechat/builtin-tool-user-interaction';
 import {
   WebOnboardingApiName,
   WebOnboardingIdentifier,
@@ -53,6 +56,10 @@ describe('builtin tool registry', () => {
     expect(getBuiltinRenderDisplayControl(ClaudeCodeToolIdentifier, apiName)).toBe('expand');
   });
 
+  it('registers the Codex error inspector', () => {
+    expect(getBuiltinInspector('codex', 'error')).toBeDefined();
+  });
+
   it('includes user interaction and web onboarding in web onboarding runtime plugins', () => {
     const runtime =
       typeof WEB_ONBOARDING.runtime === 'function'
@@ -62,6 +69,12 @@ describe('builtin tool registry', () => {
     expect(runtime.plugins).toContain(UserInteractionIdentifier);
     expect(runtime.plugins).toContain(WebOnboardingIdentifier);
     expect(runtime.agencyConfig?.executionTarget).toBe('none');
+  });
+
+  it('registers the ask user question inspector', () => {
+    expect(
+      getBuiltinInspector(UserInteractionIdentifier, UserInteractionApiName.askUserQuestion),
+    ).toBeDefined();
   });
 
   it('exposes the marketplace APIs under the web onboarding manifest', () => {

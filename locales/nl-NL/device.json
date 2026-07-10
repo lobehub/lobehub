@@ -5,6 +5,7 @@
   "workingDirectory.agentDescription": "Standaard werkmap voor alle gesprekken met deze Agent",
   "workingDirectory.agentLevel": "Agent Werkmap",
   "workingDirectory.bareWorktree": "bare",
+  "workingDirectory.branchInWorktree": "In werkboom {{name}}",
   "workingDirectory.branchSearchPlaceholder": "Branches zoeken",
   "workingDirectory.branchesEmpty": "Geen lokale branches",
   "workingDirectory.branchesHeading": "Branches",

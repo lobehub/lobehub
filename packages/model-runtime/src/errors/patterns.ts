@@ -107,6 +107,10 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
     code: AgentRuntimeErrorType.ExceededContextWindow,
     match: sub('request too large for model', { caseInsensitive: true }),
   },
+  {
+    code: AgentRuntimeErrorType.ExceededContextWindow,
+    match: sub('free plan effective context limit reached', { caseInsensitive: true }),
+  },
   { code: AgentRuntimeErrorType.ExceededContextWindow, match: sub('exceeded max context length') },
   {
     code: AgentRuntimeErrorType.ExceededContextWindow,

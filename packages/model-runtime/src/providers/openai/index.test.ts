@@ -3,6 +3,7 @@ import OpenAI from 'openai';
 import type { Mock } from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { AgentRuntimeErrorType } from '../../types/error';
 import * as debugStreamModule from '../../utils/debugStream';
 import * as getModelPricingModule from '../../utils/getModelPricing';
 import officalOpenAIModels from './fixtures/openai-models.json';
@@ -57,6 +58,27 @@ describe('LobeOpenAI', () => {
 
       // Assert
       expect(result).toBeInstanceOf(Response);
+    });
+
+    it('should abort locally when the prompt exceeds the OpenAI model context window', async () => {
+      const mockCreateMethod = vi.spyOn(instance['client'].chat.completions, 'create');
+      const hugeContent = 'lorem ipsum dolor '.repeat(150_000);
+
+      try {
+        await instance.chat({
+          messages: [{ content: hugeContent, role: 'user' }],
+          model: 'gpt-4o',
+          temperature: 0,
+        });
+        expect.fail('expected chat to reject');
+      } catch (error) {
+        expect((error as any).errorType).toBe(AgentRuntimeErrorType.ExceededContextWindow);
+        expect((error as any).error.type).toBe('context_exceeded_pre_flight');
+        expect((error as any).error.model).toBe('gpt-4o');
+        expect((error as any).error.ctx).toBe(128_000);
+      }
+
+      expect(mockCreateMethod).not.toHaveBeenCalled();
     });
 
     describe('Error', () => {

@@ -5,6 +5,7 @@
   "workingDirectory.agentDescription": "이 에이전트와의 모든 대화에 대한 기본 작업 디렉토리",
   "workingDirectory.agentLevel": "에이전트 작업 디렉토리",
   "workingDirectory.bareWorktree": "베어",
+  "workingDirectory.branchInWorktree": "작업 트리 {{name}}에서",
   "workingDirectory.branchSearchPlaceholder": "브랜치 검색",
   "workingDirectory.branchesEmpty": "로컬 브랜치 없음",
   "workingDirectory.branchesHeading": "브랜치",

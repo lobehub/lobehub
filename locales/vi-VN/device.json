@@ -5,6 +5,7 @@
   "workingDirectory.agentDescription": "Thư mục làm việc mặc định cho tất cả các cuộc trò chuyện với Agent này",
   "workingDirectory.agentLevel": "Thư mục làm việc của Agent",
   "workingDirectory.bareWorktree": "trần",
+  "workingDirectory.branchInWorktree": "Trong worktree {{name}}",
   "workingDirectory.branchSearchPlaceholder": "Tìm kiếm nhánh",
   "workingDirectory.branchesEmpty": "Không có nhánh cục bộ",
   "workingDirectory.branchesHeading": "Các nhánh",

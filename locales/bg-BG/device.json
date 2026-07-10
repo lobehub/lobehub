@@ -5,6 +5,7 @@
   "workingDirectory.agentDescription": "По подразбиране работна директория за всички разговори с този агент",
   "workingDirectory.agentLevel": "Работна директория на агента",
   "workingDirectory.bareWorktree": "голо",
+  "workingDirectory.branchInWorktree": "В работното дърво {{name}}",
   "workingDirectory.branchSearchPlaceholder": "Търсене на клонове",
   "workingDirectory.branchesEmpty": "Няма локални клонове",
   "workingDirectory.branchesHeading": "Клонове",
