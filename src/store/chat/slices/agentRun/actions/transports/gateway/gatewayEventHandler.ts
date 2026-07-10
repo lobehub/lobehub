@@ -11,6 +11,7 @@ import type {
   BuiltinToolResult,
   ChatMessageError,
   ConversationContext,
+  GatewayQueueHandoff,
   UIChatMessage,
 } from '@lobechat/types';
 import { AgentRuntimeErrorType } from '@lobechat/types';
@@ -25,12 +26,17 @@ import type {
 import { dbMessageSelectors } from '@/store/chat/slices/message/selectors';
 import type { ChatStore } from '@/store/chat/store';
 import { notifyDesktopHumanApprovalRequired } from '@/store/chat/utils/desktopNotification';
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 // `agent_runtime_end` reasons that are NOT a clean completion: a mid-stream
 // cancel and a deferred-tool park. These must NOT mark the topic unread, and
 // must take the non-success branch in `onSessionComplete` so the run clears
 // back to 'active' rather than persisting as an unread completion.
-const NON_COMPLETION_RUNTIME_END_REASONS = new Set(['interrupted', 'waiting_for_async_tool']);
+const NON_COMPLETION_RUNTIME_END_REASONS = new Set([
+  'interrupted',
+  'queued_message_interrupt',
+  'waiting_for_async_tool',
+]);
 
 /**
  * Whether an `agent_runtime_end` event represents a clean completion (vs. a
@@ -353,6 +359,8 @@ export const createGatewayEventHandler = (
      */
     gatewayOperationId?: string;
     operationId: string;
+    /** Attach the next server operation after a queue handoff. */
+    onQueueHandoff?: (handoff: GatewayQueueHandoff) => Promise<void>;
     /**
      * Shared run lifecycle for this run, assembled by the caller (gateway.ts).
      * Only the gateway transport supplies it — it drives the terminal lifecycle
@@ -806,7 +814,15 @@ export const createGatewayEventHandler = (
 
       case 'agent_runtime_end': {
         enqueue(async () => {
-          const data = event.data as { reason?: string; uiMessages?: UIChatMessage[] } | undefined;
+          const data = event.data as
+            | {
+                queueHandoff?: GatewayQueueHandoff;
+                reason?: string;
+                uiMessages?: UIChatMessage[];
+              }
+            | undefined;
+          const queueHandoff =
+            data?.reason === 'queued_message_interrupt' ? data.queueHandoff : undefined;
 
           void emitClientAgentSignalSourceEvent({
             payload: {
@@ -878,9 +894,24 @@ export const createGatewayEventHandler = (
           //   • cancelled → completeRun only completes the op (no unread badge,
           //     no queue drain, no notification) — same as the old inline path.
           if (runtimeType === 'gateway' && runLifecycle) {
-            const status = isCompletedRuntimeEnd(data?.reason) ? 'completed' : 'cancelled';
+            if (queueHandoff) {
+              get().removeQueuedMessages(messageMapKey(context), queueHandoff.consumedQueueIds);
+              try {
+                // Attach the next local operation before completing the old one
+                // so input/loading state has no idle frame between turns.
+                await params.onQueueHandoff?.(queueHandoff);
+              } catch (error) {
+                console.error('[Gateway] Failed to attach queue handoff operation:', error);
+              }
+            }
+            const status = queueHandoff
+              ? 'completed'
+              : isCompletedRuntimeEnd(data?.reason)
+                ? 'completed'
+                : 'cancelled';
             const { requeued } = await runLifecycle.completeRun({
               ...lifecycleEventBase,
+              queueHandoff: !!queueHandoff,
               status,
             });
             if (!requeued && status === 'completed') {

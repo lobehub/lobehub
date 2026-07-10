@@ -438,10 +438,96 @@ export class ConversationLifecycleActionImpl {
         url: f.fileUrl || f.base64Url || f.previewUrl || '',
       }));
 
+      const queueId = nanoid();
+
+      // Gateway queue ownership lives on the server for persisted topics. A
+      // `_new` topic has no structured server context yet, so stage the same
+      // replay payload locally and flush it as soon as the first exec resolves
+      // the real topic id.
+      if (runtimeType === 'gateway') {
+        const gatewayMessage = await this.#get().prepareGatewayQueuedMessage({
+          context: operationContext,
+          editorData: editorData ?? undefined,
+          fileIds: fileIdList,
+          filesPreview: filesPreview.length > 0 ? filesPreview : undefined,
+          id: queueId,
+          mentionedAgents: hasMentionedAgents ? mentionedAgents : undefined,
+          message,
+          metadata: userMessageMetadata,
+          selectedToolIds:
+            selectedTools.length > 0 ? selectedTools.map((tool) => tool.identifier) : undefined,
+        });
+        const localQueuedMessage = {
+          id: queueId,
+          content: message,
+          editorData: editorData ?? undefined,
+          files: fileIdList,
+          filesPreview: filesPreview.length > 0 ? filesPreview : undefined,
+          forceRuntime: 'gateway' as const,
+          gatewayMessage,
+          gatewaySyncStatus: 'staged' as const,
+          interruptMode: 'soft' as const,
+          metadata: userMessageMetadata,
+          source: 'gateway' as const,
+          createdAt: gatewayMessage.createdAt,
+        };
+        this.#get().enqueueMessage(
+          currentContextKey,
+          localQueuedMessage,
+          runningQueueBlockingOp.id,
+        );
+
+        if (!operationContext.topicId) return;
+
+        try {
+          const result = await this.#get().executeGatewayAgent({
+            context: operationContext,
+            editorData: editorData ?? undefined,
+            fileIds: fileIdList,
+            filesPreview: filesPreview.length > 0 ? filesPreview : undefined,
+            mentionedAgents: hasMentionedAgents ? mentionedAgents : undefined,
+            message,
+            metadata: userMessageMetadata,
+            queueRequestId: queueId,
+            queuedMessage: gatewayMessage,
+            selectedToolIds:
+              selectedTools.length > 0 ? selectedTools.map((tool) => tool.identifier) : undefined,
+          });
+
+          if (
+            result.status === 'queued' ||
+            result.status === 'duplicate' ||
+            result.status === 'rejected'
+          ) {
+            if (result.status === 'queued' || result.status === 'duplicate') {
+              this.#get().markGatewayQueuedMessageSynced(currentContextKey, queueId);
+            } else {
+              antdMessage.warning(t('inputQueue.enqueueRejected', { ns: 'chat' }));
+            }
+            return;
+          }
+
+          // The local blocker was stale and the server claimed the active slot.
+          // executeGatewayAgent already attached the WebSocket; remove the
+          // optimistic tray item instead of issuing a second send.
+          this.#get().removeQueuedMessage(currentContextKey, queueId);
+          return {
+            assistantMessageId: result.assistantMessageId,
+            userMessageId: result.userMessageId,
+          };
+        } catch (error) {
+          console.error('[Gateway] Failed to enqueue follow-up:', error);
+          // Keep the staged payload for polling-driven retry; never lose the
+          // user's draft after the composer was cleared.
+          antdMessage.warning(t('inputQueue.enqueueRejected', { ns: 'chat' }));
+          return;
+        }
+      }
+
       this.#get().enqueueMessage(
         currentContextKey,
         {
-          id: nanoid(),
+          id: queueId,
           content: message,
           editorData: editorData ?? undefined,
           files: fileIdList,
@@ -449,6 +535,7 @@ export class ConversationLifecycleActionImpl {
           ...(forceRuntime ? { forceRuntime } : {}),
           interruptMode: 'soft',
           metadata: userMessageMetadata,
+          source: 'client',
           createdAt: Date.now(),
         },
         runningQueueBlockingOp.id,
@@ -988,6 +1075,13 @@ export class ConversationLifecycleActionImpl {
     // gateway here would drop the mention entirely (execAgentTask carries no mention data).
     if (runtimeType === 'gateway' && !directMentionRoute) {
       try {
+        const gatewayQueueRequestId = nanoid();
+        const gatewayFilesPreview: QueuedFile[] = (files ?? []).map((file) => ({
+          id: file.id,
+          mimeType: file.file?.type ?? '',
+          name: file.file?.name ?? file.id,
+          url: file.fileUrl || file.base64Url || file.previewUrl || '',
+        }));
         // Pass `sendMessage` as `parentOperationId` so executeGatewayAgent
         // completes it the instant phase-1 init finishes (after the child
         // `execServerAgentRuntime` op starts). Without this hand-off the
@@ -995,11 +1089,14 @@ export class ConversationLifecycleActionImpl {
         // and the send button would flicker back to "send".
         const result = await this.#get().executeGatewayAgent({
           context: operationContext,
+          editorData: editorData ?? undefined,
           fileIds: fileIdList,
+          filesPreview: gatewayFilesPreview.length > 0 ? gatewayFilesPreview : undefined,
           message,
-          metadata: requestMetadata,
+          metadata: userMessageMetadata,
           parentOperationId: operationId,
           optimisticTopic,
+          queueRequestId: gatewayQueueRequestId,
           // Forward @-mentioned tool ids so the server runtime enables them for
           // this run — the gateway/server path otherwise never sees the mention
           // selection (only the client runtime did). Omit when empty.
@@ -1016,8 +1113,44 @@ export class ConversationLifecycleActionImpl {
           // Pass temp message IDs so the UI doesn't show a blank loading
           // state while waiting for the first step_start event to replace
           // messages with the server's real IDs.
-          tempMessageIds: [tempAssistantId],
+          tempMessageIds: [tempId, tempAssistantId],
         });
+
+        // Another device may have claimed the topic after our local busy check.
+        // The queue-aware exec response has no operation/message ids and must
+        // stop phase 1 here: remove optimistic bubbles, keep the replay payload
+        // in QueueTray, and do not establish a WebSocket.
+        if (
+          result.status === 'queued' ||
+          result.status === 'duplicate' ||
+          result.status === 'rejected'
+        ) {
+          const queued = result.queuedMessage;
+          this.#get().enqueueMessage(messageMapKey(operationContext), {
+            content: queued.prompt,
+            createdAt: queued.createdAt,
+            editorData: queued.editorData,
+            files: queued.fileIds,
+            filesPreview: queued.filesPreview,
+            forceRuntime: 'gateway',
+            gatewayMessage: queued,
+            gatewaySyncStatus: result.status === 'rejected' ? 'staged' : 'synced',
+            id: queued.id,
+            interruptMode: queued.interruptMode,
+            metadata: queued.metadata,
+            source: 'gateway',
+          });
+          this.#get().internal_dispatchMessage(
+            { ids: [tempId, tempAssistantId], type: 'deleteMessages' },
+            { operationId },
+          );
+          this.#get().completeOperation(operationId);
+          rollbackOptimisticTopic('sendMessage/rollbackOptimisticTopic');
+          if (result.status === 'rejected') {
+            antdMessage.warning(t('inputQueue.enqueueRejected', { ns: 'chat' }));
+          }
+          return;
+        }
 
         // Topic title: gateway-created topics had no LLM-summarized
         // title. executeGatewayAgent has already replaced messages + switched to

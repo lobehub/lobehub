@@ -51,6 +51,7 @@ function createMockStore() {
       },
     } as Record<string, any>,
     replaceMessages: vi.fn(),
+    removeQueuedMessages: vi.fn(),
     startOperation: vi.fn(() => {
       reasoningCounter += 1;
       return {
@@ -65,7 +66,11 @@ function createMockStore() {
 
 function createHandler(
   store: ReturnType<typeof createMockStore>,
-  overrides?: { assistantMessageId?: string; gatewayOperationId?: string },
+  overrides?: {
+    assistantMessageId?: string;
+    gatewayOperationId?: string;
+    onQueueHandoff?: (handoff: any) => Promise<void>;
+  },
 ) {
   const get = vi.fn(() => store) as any;
   const assistantMessageId = overrides?.assistantMessageId ?? 'msg-initial';
@@ -74,6 +79,7 @@ function createHandler(
     assistantMessageId,
     context,
     gatewayOperationId: overrides?.gatewayOperationId,
+    onQueueHandoff: overrides?.onQueueHandoff,
     operationId: 'op-1',
     // The gateway transport injects the shared run lifecycle (built once per run
     // in gateway.ts). Build the real one here so the terminal completeRun /
@@ -801,6 +807,49 @@ describe('createGatewayEventHandler', () => {
   });
 
   describe('agent_runtime_end', () => {
+    it('hands off to the next operation before completing the old local op', async () => {
+      const store = createMockStore();
+      const order: string[] = [];
+      store.completeOperation.mockImplementation(() => order.push('complete-old'));
+      const onQueueHandoff = vi.fn(async () => {
+        order.push('start-next');
+        expect(store.completeOperation).not.toHaveBeenCalled();
+      });
+      const handler = createHandler(store, { onQueueHandoff });
+      const queueHandoff = {
+        consumedQueueIds: ['queue-1'],
+        nextOperation: {
+          agentId: 'agent-1',
+          assistantMessageId: 'assistant-next',
+          autoStarted: true,
+          createdAt: new Date().toISOString(),
+          message: 'created',
+          operationId: 'server-next',
+          status: 'created',
+          success: true,
+          timestamp: new Date().toISOString(),
+          token: 'next-token',
+          topicId: 'topic-1',
+          userMessageId: 'user-next',
+        },
+      };
+
+      handler(
+        makeEvent('agent_runtime_end', {
+          queueHandoff,
+          reason: 'queued_message_interrupt',
+          uiMessages: [],
+        }),
+      );
+      await flush();
+
+      expect(store.removeQueuedMessages).toHaveBeenCalledWith(expect.any(String), ['queue-1']);
+      expect(onQueueHandoff).toHaveBeenCalledWith(queueHandoff);
+      expect(order).toEqual(['start-next', 'complete-old']);
+      expect(store.markTopicUnread).not.toHaveBeenCalled();
+      expect(store.drainQueuedMessages).not.toHaveBeenCalled();
+    });
+
     it('should complete operation and refresh messages', async () => {
       const store = createMockStore();
       const handler = createHandler(store);

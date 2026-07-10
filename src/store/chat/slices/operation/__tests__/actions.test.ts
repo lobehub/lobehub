@@ -1,17 +1,26 @@
-import { act, renderHook } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { produce } from 'immer';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { useIsGatewayModeEnabled } from '@/helpers/gatewayMode';
+import { aiAgentService } from '@/services/aiAgent';
+import { useAgentStore } from '@/store/agent';
+import type { AgentStoreState } from '@/store/agent/initialState';
+import { operationSelectors } from '@/store/chat/selectors';
 import { mergeQueuedMessages } from '@/store/chat/slices/operation/types';
 import { useChatStore } from '@/store/chat/store';
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+import * as serverConfigStore from '@/store/serverConfig';
 
 describe('Operation Actions', () => {
   beforeEach(() => {
+    useAgentStore.setState(useAgentStore.getInitialState());
     useChatStore.setState(useChatStore.getInitialState());
   });
 
   afterEach(() => {
     vi.clearAllTimers();
+    vi.restoreAllMocks();
   });
 
   describe('mergeQueuedMessages', () => {
@@ -127,6 +136,148 @@ describe('Operation Actions', () => {
         expect.objectContaining({ filePath: 'src/first.ts', id: 'selection-1' }),
         expect.objectContaining({ filePath: 'src/second.ts', id: 'selection-2' }),
       ]);
+    });
+  });
+
+  describe('Gateway message queue hydration', () => {
+    it('starts peeking when the agent reactively enables Gateway mode', async () => {
+      vi.spyOn(serverConfigStore, 'getServerConfigStoreState').mockReturnValue({
+        serverConfig: { agentGatewayUrl: 'wss://gateway.test', enableGatewayMode: true },
+      } as ReturnType<typeof serverConfigStore.getServerConfigStoreState>);
+      useAgentStore.setState({
+        activeAgentId: 'agent-gate',
+        agentMap: { 'agent-gate': { chatConfig: { disableGatewayMode: true } } },
+      } as Partial<AgentStoreState>);
+      const peekMessageQueue = vi.spyOn(aiAgentService, 'peekMessageQueue').mockResolvedValue({
+        activeOperationId: null,
+        items: [],
+      });
+      const context = {
+        agentId: 'agent-gate',
+        scope: 'main' as const,
+        topicId: 'topic-gate',
+      };
+
+      const { result } = renderHook(() => {
+        const isGatewayModeEnabled = useIsGatewayModeEnabled(context.agentId);
+        const useFetchGatewayMessageQueue = useChatStore(
+          (state) => state.useFetchGatewayMessageQueue,
+        );
+        const queue = useFetchGatewayMessageQueue(
+          context,
+          !!context.topicId && isGatewayModeEnabled,
+        );
+
+        return { isGatewayModeEnabled, queue };
+      });
+
+      expect(result.current.isGatewayModeEnabled).toBe(false);
+      expect(peekMessageQueue).not.toHaveBeenCalled();
+
+      act(() => {
+        useAgentStore.setState({
+          agentMap: { 'agent-gate': { chatConfig: { disableGatewayMode: false } } },
+        } as Partial<AgentStoreState>);
+      });
+
+      await waitFor(() => expect(result.current.isGatewayModeEnabled).toBe(true));
+      await waitFor(() => expect(peekMessageQueue).toHaveBeenCalledWith(context));
+    });
+
+    it('makes a successful peek visible through the QueueTray selectors', async () => {
+      const context = {
+        agentId: 'agent-hydration',
+        scope: 'main' as const,
+        topicId: 'topic-hydration',
+      };
+      vi.spyOn(aiAgentService, 'peekMessageQueue').mockResolvedValue({
+        activeOperationId: 'operation-active',
+        items: [
+          {
+            createdAt: 1,
+            id: 'queue-hydrated',
+            interruptMode: 'soft',
+            prompt: 'hydrated follow-up',
+            source: 'gateway',
+          },
+        ],
+      });
+
+      const { result } = renderHook(() => {
+        const useFetchGatewayMessageQueue = useChatStore(
+          (state) => state.useFetchGatewayMessageQueue,
+        );
+        return useFetchGatewayMessageQueue(context, true);
+      });
+
+      await waitFor(() => expect(result.current.data?.items).toHaveLength(1));
+      await waitFor(() =>
+        expect(operationSelectors.getQueuedMessages(context)(useChatStore.getState())).toEqual([
+          expect.objectContaining({
+            content: 'hydrated follow-up',
+            id: 'queue-hydrated',
+            source: 'gateway',
+          }),
+        ]),
+      );
+      expect(operationSelectors.queuedMessageCount(context)(useChatStore.getState())).toBe(1);
+    });
+
+    it('removes a staged new-topic item locally before a server queue context exists', async () => {
+      const context = { agentId: 'agent-1', isNew: true, scope: 'main' as const, topicId: null };
+      const contextKey = messageMapKey(context);
+      const staged = {
+        content: 'edit me',
+        createdAt: 1,
+        gatewayMessage: {
+          createdAt: 1,
+          id: 'queue-staged',
+          interruptMode: 'soft' as const,
+          prompt: 'edit me',
+          source: 'gateway' as const,
+        },
+        gatewaySyncStatus: 'staged' as const,
+        id: 'queue-staged',
+        interruptMode: 'soft' as const,
+        source: 'gateway' as const,
+      };
+      useChatStore.setState({ queuedMessages: { [contextKey]: [staged] } });
+      const removeFromServer = vi.spyOn(aiAgentService, 'removeQueuedMessage');
+
+      const removed = await useChatStore.getState().removeGatewayQueuedMessage(context, staged.id);
+
+      expect(removed).toBe(true);
+      expect(useChatStore.getState().queuedMessages[contextKey]).toEqual([]);
+      expect(removeFromServer).not.toHaveBeenCalled();
+    });
+
+    it('keeps the last known queue when peek fails', async () => {
+      const context = { agentId: 'agent-1', scope: 'main' as const, topicId: 'topic-1' };
+      const contextKey = messageMapKey(context);
+      const retained = {
+        content: 'keep me',
+        createdAt: 1,
+        gatewayMessage: {
+          createdAt: 1,
+          id: 'queue-1',
+          interruptMode: 'soft' as const,
+          prompt: 'keep me',
+          source: 'gateway' as const,
+        },
+        gatewaySyncStatus: 'synced' as const,
+        id: 'queue-1',
+        interruptMode: 'soft' as const,
+        source: 'gateway' as const,
+      };
+      useChatStore.setState({ queuedMessages: { [contextKey]: [retained] } });
+      vi.spyOn(aiAgentService, 'peekMessageQueue').mockRejectedValue(new Error('offline'));
+
+      const { result } = renderHook(() =>
+        useChatStore().useFetchGatewayMessageQueue(context, true),
+      );
+
+      await waitFor(() => expect(result.current.error).toBeTruthy());
+      expect(useChatStore.getState().queuedMessages[contextKey]).toEqual([retained]);
     });
   });
 

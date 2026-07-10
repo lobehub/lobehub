@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import type { AgentRuntimeContext, AgentState } from '@lobechat/agent-runtime';
 import { BUILTIN_AGENT_SLUGS, getAgentRuntimeConfig } from '@lobechat/builtin-agents';
 import { builtinSkills } from '@lobechat/builtin-skills';
@@ -39,7 +41,13 @@ import type {
   ExecSubAgentParams,
   ExecSubAgentResult,
   ExecVirtualSubAgentParams,
+  GatewayExecAgentResult,
+  GatewayQueuedFilePreview,
+  GatewayQueuedMessage,
+  GatewayQueueHandoff,
+  GatewayQueueHandoffSnapshot,
   LobeAgentAgencyConfig,
+  MessageMetadata,
   MessagePluginItem,
   RuntimeMentionedAgent,
   UserInterventionConfig,
@@ -130,6 +138,8 @@ import type { ConversationHistoryEntry } from '@/server/services/heterogeneousAg
 import { buildCloudHeteroContext } from '@/server/services/heterogeneousAgent/cloudHeteroContext';
 import { buildRemoteDeviceHeteroContext } from '@/server/services/heterogeneousAgent/remoteDeviceHeteroContext';
 import { MarketService } from '@/server/services/market';
+import { getMessageQueueService, type MessageQueueService } from '@/server/services/messageQueue';
+import { mergeGatewayQueuedMessages } from '@/server/services/messageQueue/merge';
 import { markdownToTxt } from '@/utils/markdownToTxt';
 
 import { resolveDeviceAccessPolicy } from './deviceAccessPolicy';
@@ -147,6 +157,9 @@ import {
 import { isWorkspaceCacheFresh, upsertWorkspaceScan } from './workspaceInitCache';
 
 const log = debug('lobe-server:ai-agent-service');
+
+const buildQueueHandoffMessageId = (operationId: string, role: 'assistant' | 'user'): string =>
+  `msg_queue_${createHash('sha256').update(`${operationId}:${role}`).digest('hex').slice(0, 24)}`;
 
 /**
  * Format error for storage in thread metadata
@@ -288,6 +301,8 @@ interface InternalExecAgentParams extends ExecAgentParams {
   disableTools?: boolean;
   /** Discord context for injecting channel/guild info into agent system message */
   discordContext?: any;
+  /** Rich editor state retained when this Gateway turn is queued. */
+  editorData?: Record<string, unknown>;
   /**
    * Inject a user-role message into the LLM context for this turn WITHOUT
    * persisting it (no DB row, no Agent Signal). Used for ephemeral orchestration
@@ -308,6 +323,8 @@ interface InternalExecAgentParams extends ExecAgentParams {
     /** External URL — fetched if no buffer provided */
     url?: string;
   }>;
+  /** Serializable file previews retained while a Gateway turn is queued. */
+  filesPreview?: GatewayQueuedFilePreview[];
   /** Client-side function tools from Response API — injected into LLM with source='client' */
   functionTools?: Array<{ description?: string; name: string; parameters?: Record<string, any> }>;
   /** External lifecycle hooks (auto-adapt to local/production mode) */
@@ -324,10 +341,20 @@ interface InternalExecAgentParams extends ExecAgentParams {
    * instead of answering itself. Mirrors the client runtime's mention wiring.
    */
   mentionedAgents?: RuntimeMentionedAgent[];
+  /** Deterministic ids used to make queue handoff message creation retry-safe. */
+  messageIds?: { assistant: string; user: string };
+  /** Opt into server-owned Gateway message serialization. */
+  messageQueue?: { enabled: true; requestId: string };
+  /** Opaque replay metadata retained while a Gateway turn is queued. */
+  metadata?: MessageMetadata | Record<string, unknown>;
+  /** Use a caller-selected operation id (queue handoff only). */
+  operationId?: string;
   /** Parent message ID to continue from. Only takes effect when resume is true */
   parentMessageId?: string;
   queueRetries?: number;
   queueRetryDelay?: string;
+  /** Queue ids merged into this deterministic handoff turn. */
+  queueSourceIds?: string[];
   /** Whether to continue execution from an existing persisted message */
   resume?: boolean;
   /**
@@ -369,6 +396,8 @@ interface InternalExecAgentParams extends ExecAgentParams {
   selectedToolIds?: string[];
   /** Abort startup before the agent runtime operation is created */
   signal?: AbortSignal;
+  /** The queue already reserved this operation during handoff. */
+  skipQueueClaim?: boolean;
   /**
    * Whether the LLM call should use streaming.
    * Defaults to true. Set to false for non-streaming scenarios (e.g., bot integrations).
@@ -398,6 +427,14 @@ interface InternalExecAgentParams extends ExecAgentParams {
    * Use { approvalMode: 'headless' } for async tasks that should never wait for human approval
    */
   userInterventionConfig?: UserInterventionConfig;
+}
+
+interface GatewayQueueClaimLifecycle {
+  claimedOperationId?: string;
+  claimedQueueId?: string;
+  operationStarted: boolean;
+  recoveredBatchPersisted?: boolean;
+  recoveredClaim?: boolean;
 }
 
 /**
@@ -440,6 +477,7 @@ export class AiAgentService {
   private readonly topicModel: TopicModel;
   private readonly agentRuntimeService: AgentRuntimeService;
   private readonly marketService: MarketService;
+  private readonly messageQueueService: MessageQueueService | null;
   private readonly composioService: ComposioService;
 
   private readonly workspaceId?: string;
@@ -464,6 +502,7 @@ export class AiAgentService {
     this.taskModel = new TaskModel(db, userId, wsId);
     this.threadModel = new ThreadModel(db, userId, wsId);
     this.topicModel = new TopicModel(db, userId, wsId);
+    this.messageQueueService = getMessageQueueService({ userId, workspaceId: wsId });
     this.agentRuntimeService = new AgentRuntimeService(db, userId, {
       ...options?.runtimeOptions,
       // ── Runtime delegate ─────────────────────────────────────────────────
@@ -478,6 +517,7 @@ export class AiAgentService {
         execSubAgent: this.execSubAgent,
         execVirtualSubAgent: this.execVirtualSubAgent,
         execGroupMember: this.execGroupMember,
+        handoffQueuedMessages: this.handoffQueuedMessages,
       },
       workspaceId: wsId,
     });
@@ -924,6 +964,221 @@ export class AiAgentService {
     return this.agentRuntimeService.completeGroupActionMember(params);
   }
 
+  private async clearRunningOperationIfOwned(
+    topicId: string | undefined,
+    operationId: string,
+  ): Promise<void> {
+    if (!topicId) return;
+
+    try {
+      const topic = await this.topicModel.findById(topicId);
+      const runningOperation = topic?.metadata?.runningOperation as
+        { operationId?: string } | null | undefined;
+      if (runningOperation?.operationId === operationId) {
+        await this.topicModel.updateMetadata(topicId, { runningOperation: null });
+      }
+    } catch (error) {
+      log(
+        'handoffQueuedMessages: failed to compare-clear running operation %s: %O',
+        operationId,
+        error,
+      );
+    }
+  }
+
+  private async recoverPendingQueueHandoff(
+    snapshot: GatewayQueueHandoffSnapshot,
+    messageIds: { assistant: string; user: string },
+  ): Promise<ExecAgentResult | undefined> {
+    const [operation, userMessage, assistantMessage] = await Promise.all([
+      this.agentRuntimeService.getOperationStatus({ operationId: snapshot.nextOperationId }),
+      this.messageModel.findById(messageIds.user),
+      this.messageModel.findById(messageIds.assistant),
+    ]);
+
+    if (!operation || !userMessage || !assistantMessage) return undefined;
+    if (
+      userMessage.role !== 'user' ||
+      assistantMessage.role !== 'assistant' ||
+      userMessage.topicId !== snapshot.context.topicId ||
+      assistantMessage.topicId !== snapshot.context.topicId
+    ) {
+      throw new Error(`Queue handoff message id collision for ${snapshot.nextOperationId}`);
+    }
+
+    // An idle/error/interrupted state only proves that createOperation persisted
+    // its bootstrap state; it does not prove the first step was scheduled. Let
+    // the normal deterministic-id path restart it safely instead of committing a
+    // receipt that would point the client at a dead operation.
+    if (!operation.isActive && !operation.isCompleted) return undefined;
+
+    // execAgent may have completed operation startup and then crashed before
+    // commitHandoff. Restore the reconnect pointer and reconstruct its public
+    // result from deterministic ids instead of running execAgent again.
+    await this.topicModel.updateMetadata(snapshot.context.topicId, {
+      runningOperation: {
+        assistantMessageId: messageIds.assistant,
+        operationId: snapshot.nextOperationId,
+        scope: snapshot.context.scope,
+        threadId: snapshot.context.threadId,
+      },
+    });
+
+    let token: string | undefined;
+    try {
+      token = await signUserJWT(this.userId);
+    } catch {
+      log('recoverPendingQueueHandoff: failed to sign Gateway token');
+    }
+
+    const timestamp = new Date().toISOString();
+    return {
+      agentId: snapshot.context.agentId,
+      assistantMessageId: messageIds.assistant,
+      autoStarted: true,
+      createdAt: operation.metadata.createdAt ?? timestamp,
+      message: 'Agent operation recovered from queue handoff receipt',
+      operationId: snapshot.nextOperationId,
+      status: 'created',
+      success: true,
+      timestamp,
+      token,
+      topicId: snapshot.context.topicId,
+      userMessageId: messageIds.user,
+    };
+  }
+
+  /**
+   * Consume an operation's queued Gateway messages into one fresh top-level
+   * turn. The queue service owns reservation/receipts; this delegate owns the
+   * high-level execAgent pipeline needed to create the actual turn.
+   */
+  handoffQueuedMessages = async ({
+    operationId,
+    state,
+  }: {
+    operationId: string;
+    state: AgentState;
+  }): Promise<GatewayQueueHandoff | undefined> => {
+    if (!this.messageQueueService) return undefined;
+
+    const proposedNextOperationId = `op_${Date.now()}_queue_${nanoid(10)}`;
+    const snapshot = await this.messageQueueService.beginHandoff(
+      operationId,
+      proposedNextOperationId,
+    );
+    if (!snapshot) {
+      await this.messageQueueService.releaseOwned(operationId, { preserveQueue: true });
+      await this.clearRunningOperationIfOwned(state.metadata?.topicId, operationId);
+      return undefined;
+    }
+
+    // A retried old step must reuse the durable receipt. Never run execAgent a
+    // second time after the queued user/assistant rows have been committed.
+    if (snapshot.status === 'committed') {
+      return snapshot.nextOperation?.success
+        ? {
+            consumedQueueIds: snapshot.consumedQueueIds,
+            nextOperation: snapshot.nextOperation,
+          }
+        : undefined;
+    }
+    if (snapshot.status === 'failed' || snapshot.status === 'rolled_back') {
+      await this.clearRunningOperationIfOwned(snapshot.context.topicId, operationId);
+      return undefined;
+    }
+
+    const messageIds = {
+      assistant: buildQueueHandoffMessageId(snapshot.nextOperationId, 'assistant'),
+      user: buildQueueHandoffMessageId(snapshot.nextOperationId, 'user'),
+    };
+    const recoveredOperation = await this.recoverPendingQueueHandoff(snapshot, messageIds);
+    if (recoveredOperation) {
+      const committed = await this.messageQueueService.commitHandoff(
+        operationId,
+        recoveredOperation,
+      );
+      if (committed) {
+        return {
+          consumedQueueIds: snapshot.consumedQueueIds,
+          nextOperation: recoveredOperation,
+        };
+      }
+
+      const receipt = await this.messageQueueService.getHandoffReceipt(operationId);
+      return receipt?.status === 'committed' && receipt.nextOperation?.success
+        ? {
+            consumedQueueIds: receipt.consumedQueueIds,
+            nextOperation: receipt.nextOperation,
+          }
+        : undefined;
+    }
+
+    const merged = mergeGatewayQueuedMessages(snapshot.items);
+    if (!merged) {
+      await this.messageQueueService.rollbackHandoff(operationId, snapshot.nextOperationId);
+      await this.clearRunningOperationIfOwned(snapshot.context.topicId, operationId);
+      return undefined;
+    }
+
+    try {
+      const nextOperation = await this.execAgent({
+        agentId: snapshot.context.agentId,
+        appContext: {
+          ...merged.appContext,
+          groupId: snapshot.context.groupId,
+          isSubAgent: false,
+          scope: snapshot.context.scope,
+          threadId: snapshot.context.threadId,
+          topicId: snapshot.context.topicId,
+        },
+        autoStart: true,
+        deviceId: merged.deviceId,
+        editorData: merged.editorData,
+        fileIds: merged.fileIds,
+        filesPreview: merged.filesPreview,
+        mentionedAgents: merged.mentionedAgents,
+        metadata: merged.metadata,
+        messageIds,
+        operationId: snapshot.nextOperationId,
+        prompt: merged.prompt,
+        queueSourceIds: snapshot.consumedQueueIds,
+        selectedToolIds: merged.selectedToolIds,
+        skipQueueClaim: true,
+        trigger: merged.trigger ?? RequestTrigger.Chat,
+        userInterventionConfig: merged.userInterventionConfig,
+      });
+
+      if (!nextOperation.success) {
+        // execAgent's error result means the turn rows already exist. Treat the
+        // reserved messages as consumed, release only next ownership and retain
+        // messages that arrived during the handoff.
+        await this.messageQueueService.failHandoff(operationId, nextOperation);
+        await this.clearRunningOperationIfOwned(snapshot.context.topicId, operationId);
+        return undefined;
+      }
+
+      const committed = await this.messageQueueService.commitHandoff(operationId, nextOperation);
+      if (!committed) {
+        const receipt = await this.messageQueueService.getHandoffReceipt(operationId);
+        return receipt?.status === 'committed' && receipt.nextOperation?.success
+          ? {
+              consumedQueueIds: receipt.consumedQueueIds,
+              nextOperation: receipt.nextOperation,
+            }
+          : undefined;
+      }
+
+      return { consumedQueueIds: merged.consumedQueueIds, nextOperation };
+    } catch (error) {
+      // No ExecAgentResult means startup never reached the durable failure
+      // boundary. Put the reserved snapshot back at the head for a safe retry.
+      await this.messageQueueService.rollbackHandoff(operationId, snapshot.nextOperationId);
+      await this.clearRunningOperationIfOwned(snapshot.context.topicId, operationId);
+      throw error;
+    }
+  };
+
   /**
    * Execute agent with just a prompt
    *
@@ -937,7 +1192,38 @@ export class AiAgentService {
    *   → ServerMechaModule.ContextEngineering(input, config, messages)
    *   → AgentRuntimeService.createOperation(...)
    */
-  async execAgent(params: InternalExecAgentParams): Promise<ExecAgentResult> {
+  async execAgent(
+    params: InternalExecAgentParams & { messageQueue: { enabled: true; requestId: string } },
+  ): Promise<GatewayExecAgentResult>;
+  async execAgent(params: InternalExecAgentParams): Promise<ExecAgentResult>;
+  async execAgent(params: InternalExecAgentParams): Promise<GatewayExecAgentResult> {
+    const queueLifecycle: GatewayQueueClaimLifecycle = { operationStarted: false };
+
+    try {
+      return await this.execAgentImpl(params, queueLifecycle);
+    } finally {
+      if (queueLifecycle.claimedOperationId && !queueLifecycle.operationStarted) {
+        await this.messageQueueService
+          ?.releaseOwned(queueLifecycle.claimedOperationId, {
+            dedupId: queueLifecycle.claimedQueueId,
+            preserveQueue: true,
+            ...(queueLifecycle.recoveredBatchPersisted && { recoveredBatchPersisted: true }),
+          })
+          .catch((error) => {
+            log(
+              'execAgent: failed to release queue ownership for aborted startup %s: %O',
+              queueLifecycle.claimedOperationId,
+              error,
+            );
+          });
+      }
+    }
+  }
+
+  private async execAgentImpl(
+    params: InternalExecAgentParams,
+    queueLifecycle: GatewayQueueClaimLifecycle,
+  ): Promise<GatewayExecAgentResult> {
     const {
       additionalPluginIds,
       agentId,
@@ -950,7 +1236,9 @@ export class AiAgentService {
       botPlatformContext,
       discordContext,
       existingMessageIds = [],
+      editorData,
       fileIds: attachedFileIds,
+      filesPreview,
       files,
       functionTools,
       hooks,
@@ -964,18 +1252,24 @@ export class AiAgentService {
       taskId,
       evalContext,
       maxSteps,
+      messageIds,
+      messageQueue,
+      metadata,
+      operationId: explicitOperationId,
       disableLocalSystem,
       initialStepCount,
       signal,
       userInterventionConfig = { approvalMode: 'headless' },
       queueRetries,
       queueRetryDelay,
+      queueSourceIds,
       parentMessageId,
       parentOperationId,
       resume,
       resumeApproval,
       resumeToolResult,
       selectedToolIds,
+      skipQueueClaim,
       mentionedAgents,
       suppressUserMessage,
       ephemeralUserMessage,
@@ -1200,6 +1494,38 @@ export class AiAgentService {
     // `effectiveResume` only.
     const runFromHistory = effectiveResume || !!suppressUserMessage;
 
+    // Reject non-top-level queue requests before resume approvals or other
+    // stateful setup can mutate persisted messages.
+    if (
+      messageQueue?.enabled &&
+      (effectiveResume ||
+        !autoStart ||
+        appContext?.groupId ||
+        appContext?.isSubAgent ||
+        appContext?.orchestrationRole === 'member' ||
+        parentOperationId ||
+        cronJobId ||
+        botContext ||
+        operationTaskId)
+    ) {
+      const timestamp = new Date().toISOString();
+      return {
+        agentId: resolvedAgentId,
+        activeOperationId: '',
+        assistantMessageId: '',
+        autoStarted: false,
+        createdAt: timestamp,
+        message: 'Gateway message queue is unavailable for this execution',
+        operationId: '',
+        queueId: messageQueue.requestId,
+        status: 'rejected',
+        success: false,
+        timestamp,
+        topicId: appContext?.topicId ?? '',
+        userMessageId: '',
+      };
+    }
+
     if (effectiveResume) {
       if (!parentMessageId) {
         throw new Error('parentMessageId is required when resume is true');
@@ -1421,6 +1747,43 @@ export class AiAgentService {
 
     await throwIfExecutionAborted('topic setup');
 
+    // The queue claims the real operation id before any message rows are
+    // created. Handoff retries pass the id reserved by beginHandoff so the
+    // ownership pointer, runtime operation and Gateway stream stay identical.
+    const operationId =
+      explicitOperationId ?? `op_${Date.now()}_${resolvedAgentId}_${topicId}_${nanoid(8)}`;
+
+    // Human approval/tool-result resumes run under a fresh operation id. Move
+    // the parked operation's queue lease to that id so the resumed tool_result
+    // step can observe pending messages and soft-interrupt into the standard
+    // handoff path. When the parked op already released at park time,
+    // adoptOwnership claims the idle context without disturbing pending rows.
+    if ((resumeApproval || resumeToolResult) && this.messageQueueService) {
+      const queueContext = {
+        agentId: resolvedAgentId,
+        groupId: appContext?.groupId ?? undefined,
+        scope: appContext?.scope ?? undefined,
+        threadId: appContext?.threadId ?? undefined,
+        topicId,
+      };
+      const queueState = await this.messageQueueService.peek(queueContext);
+      if (queueState.activeOperationId || queueState.items.length > 0) {
+        const topic = await this.topicModel.findById(topicId);
+        const expectedOldOperationId = (
+          topic?.metadata?.runningOperation as { operationId?: string } | null | undefined
+        )?.operationId;
+        const adopted = await this.messageQueueService.adoptOwnership(
+          queueContext,
+          operationId,
+          expectedOldOperationId,
+        );
+        if (!adopted) {
+          throw new Error(`Failed to adopt Gateway queue ownership for resume ${operationId}`);
+        }
+        queueLifecycle.claimedOperationId = operationId;
+      }
+    }
+
     // Extract model and provider from agent config
     const model = agentConfig.model!;
     const provider = agentConfig.provider!;
@@ -1456,6 +1819,141 @@ export class AiAgentService {
     const heteroType = (heteroProviderType ?? model) as
       'claude-code' | 'codex' | 'hermes' | 'openclaw';
 
+    if (messageQueue?.enabled && !skipQueueClaim) {
+      const isTopLevelGatewayChat =
+        autoStart &&
+        !isHeteroAgent &&
+        !appContext?.groupId &&
+        !appContext?.isSubAgent &&
+        appContext?.orchestrationRole !== 'member' &&
+        !parentOperationId &&
+        !effectiveResume &&
+        !cronJobId &&
+        !botContext &&
+        !operationTaskId &&
+        (trigger === undefined || trigger === RequestTrigger.Chat);
+
+      if (!isTopLevelGatewayChat || !this.messageQueueService) {
+        const timestamp = new Date().toISOString();
+        return {
+          agentId: resolvedAgentId,
+          activeOperationId: '',
+          assistantMessageId: '',
+          autoStarted: false,
+          createdAt: timestamp,
+          message: 'Gateway message queue is unavailable for this execution',
+          operationId: '',
+          queueId: messageQueue.requestId,
+          status: 'rejected',
+          success: false,
+          timestamp,
+          topicId,
+          userMessageId: '',
+        };
+      }
+
+      const queueContext = {
+        agentId: resolvedAgentId,
+        groupId: appContext?.groupId ?? undefined,
+        scope: appContext?.scope ?? undefined,
+        threadId: appContext?.threadId ?? undefined,
+        topicId,
+      };
+      const queueTrigger =
+        trigger && Object.values(RequestTrigger).includes(trigger as RequestTrigger)
+          ? (trigger as RequestTrigger)
+          : undefined;
+      const enqueueResult = await this.messageQueueService.claimOrEnqueue(
+        queueContext,
+        operationId,
+        {
+          appContext: { ...appContext, topicId },
+          createdAt: Date.now(),
+          deviceId: requestedDeviceId,
+          editorData,
+          fileIds: attachedFileIds,
+          filesPreview,
+          id: messageQueue.requestId,
+          interruptMode: 'soft',
+          mentionedAgents,
+          metadata: metadata as GatewayQueuedMessage['metadata'],
+          prompt,
+          selectedToolIds,
+          source: 'gateway',
+          trigger: queueTrigger,
+          userInterventionConfig,
+        },
+      );
+
+      if (enqueueResult.decision !== 'proceed') {
+        const timestamp = new Date().toISOString();
+        return {
+          agentId: resolvedAgentId,
+          activeOperationId: enqueueResult.activeOperationId,
+          assistantMessageId: '',
+          autoStarted: false,
+          createdAt: timestamp,
+          message:
+            enqueueResult.decision === 'rejected'
+              ? 'Gateway message queue is full'
+              : 'Gateway message accepted by the active operation queue',
+          operationId: enqueueResult.activeOperationId,
+          queueId: enqueueResult.queueId,
+          status: enqueueResult.decision,
+          success: enqueueResult.decision !== 'rejected',
+          timestamp,
+          topicId,
+          userMessageId: '',
+        };
+      }
+
+      queueLifecycle.claimedOperationId = operationId;
+      queueLifecycle.claimedQueueId = messageQueue.requestId;
+
+      // A previous operation may have released or rolled back with pending
+      // rows but no active owner. The claim script reserves that backlog plus
+      // this request atomically; replay the merged snapshot in this same owner
+      // so a newer request can never jump ahead of older queued input.
+      if (enqueueResult.recoveredItems?.length) {
+        const recovered = mergeGatewayQueuedMessages(enqueueResult.recoveredItems);
+        if (!recovered) throw new Error('Gateway queue recovered an empty message snapshot');
+
+        queueLifecycle.recoveredClaim = true;
+        return this.execAgentImpl(
+          {
+            ...params,
+            appContext: {
+              ...recovered.appContext,
+              groupId: queueContext.groupId,
+              isSubAgent: false,
+              scope: queueContext.scope,
+              threadId: queueContext.threadId,
+              topicId: queueContext.topicId,
+            },
+            deviceId: recovered.deviceId,
+            editorData: recovered.editorData,
+            fileIds: recovered.fileIds,
+            filesPreview: recovered.filesPreview,
+            mentionedAgents: recovered.mentionedAgents,
+            messageIds: {
+              assistant: buildQueueHandoffMessageId(operationId, 'assistant'),
+              user: buildQueueHandoffMessageId(operationId, 'user'),
+            },
+            messageQueue: undefined,
+            metadata: recovered.metadata,
+            operationId,
+            prompt: recovered.prompt,
+            queueSourceIds: recovered.consumedQueueIds,
+            selectedToolIds: recovered.selectedToolIds,
+            skipQueueClaim: true,
+            trigger: recovered.trigger ?? RequestTrigger.Chat,
+            userInterventionConfig: recovered.userInterventionConfig,
+          },
+          queueLifecycle,
+        );
+      }
+    }
+
     // ── Shared turn setup (runs for BOTH hetero and normal agents) ──────────
     // Everything up to and including persisting the turn is identical for both
     // execution modes, so it lives here, before the fork, and both branches
@@ -1488,22 +1986,48 @@ export class AiAgentService {
             threadId: appContext?.threadId ?? null,
             topicId,
           });
+    const existingQueueUserMessage = messageIds?.user
+      ? await this.messageModel.findById(messageIds.user)
+      : undefined;
+    if (
+      existingQueueUserMessage &&
+      (existingQueueUserMessage.role !== 'user' ||
+        existingQueueUserMessage.topicId !== topicId ||
+        existingQueueUserMessage.agentId !== persistAgentId)
+    ) {
+      throw new Error(`Queue handoff user message id collision: ${messageIds?.user}`);
+    }
     const userMessageRecord = runFromHistory
       ? undefined
-      : await this.messageModel.create({
-          agentId: persistAgentId,
-          content: prompt,
-          files: runAttachments.fileIds,
-          // Group reads filter on messages.groupId (MessageModel.query group
-          // branch), so a group turn must stamp groupId or the message never
-          // shows when the topic is reopened (group topic sidebar + ownership fix).
-          groupId: appContext?.groupId ?? undefined,
-          metadata: requestTriggerMetadata,
-          parentId: userMessageParentId,
-          role: 'user',
-          threadId: appContext?.threadId ?? undefined,
-          topicId,
-        });
+      : (existingQueueUserMessage ??
+        (await this.messageModel.create(
+          {
+            agentId: persistAgentId,
+            content: prompt,
+            editorData,
+            files: runAttachments.fileIds,
+            // Group reads filter on messages.groupId (MessageModel.query group
+            // branch), so a group turn must stamp groupId or the message never
+            // shows when the topic is reopened (group topic sidebar + ownership fix).
+            groupId: appContext?.groupId ?? undefined,
+            metadata:
+              metadata || requestTriggerMetadata || messageIds
+                ? {
+                    ...metadata,
+                    ...requestTriggerMetadata,
+                    ...(messageIds && {
+                      queueOperationId: explicitOperationId,
+                      queueSourceIds,
+                    }),
+                  }
+                : undefined,
+            parentId: userMessageParentId,
+            role: 'user',
+            threadId: appContext?.threadId ?? undefined,
+            topicId,
+          },
+          messageIds?.user,
+        )));
     if (userMessageRecord) {
       selfMessageIds.add(userMessageRecord.id);
       log('execAgent: created user message %s', userMessageRecord.id);
@@ -1527,23 +2051,56 @@ export class AiAgentService {
     // / `turn_metadata` (backfilled by HeterogeneousPersistenceHandler), and
     // seeding the agent's chat model would leak it into the model tag. A normal
     // run seeds model + provider as usual.
-    const assistantMessageRecord = await this.messageModel.create({
-      agentId: persistAgentId,
-      content: LOADING_FLAT,
-      // Stamp groupId so the assistant turn is visible in the group read path
-      // (MessageModel.query filters group chats by messages.groupId).
-      groupId: appContext?.groupId ?? undefined,
-      metadata: orchestrationMetadata,
-      model: isHeteroAgent ? undefined : model,
-      parentId: parentMessageId ?? userMessageRecord?.id,
-      provider: isHeteroAgent ? heteroType : provider,
-      role: 'assistant',
-      threadId: appContext?.threadId ?? undefined,
-      topicId,
-    });
+    const existingQueueAssistantMessage = messageIds?.assistant
+      ? await this.messageModel.findById(messageIds.assistant)
+      : undefined;
+    if (
+      existingQueueAssistantMessage &&
+      (existingQueueAssistantMessage.role !== 'assistant' ||
+        existingQueueAssistantMessage.topicId !== topicId ||
+        existingQueueAssistantMessage.agentId !== persistAgentId)
+    ) {
+      throw new Error(`Queue handoff assistant message id collision: ${messageIds?.assistant}`);
+    }
+    const assistantMessageRecord =
+      existingQueueAssistantMessage ??
+      (await this.messageModel.create(
+        {
+          agentId: persistAgentId,
+          content: LOADING_FLAT,
+          // Stamp groupId so the assistant turn is visible in the group read path
+          // (MessageModel.query filters group chats by messages.groupId).
+          groupId: appContext?.groupId ?? undefined,
+          metadata: orchestrationMetadata,
+          model: isHeteroAgent ? undefined : model,
+          parentId: parentMessageId ?? userMessageRecord?.id,
+          provider: isHeteroAgent ? heteroType : provider,
+          role: 'assistant',
+          threadId: appContext?.threadId ?? undefined,
+          topicId,
+        },
+        messageIds?.assistant,
+      ));
     selfMessageIds.add(assistantMessageRecord.id);
     assistantMessageRef.current = assistantMessageRecord.id;
     log('execAgent: created assistant message %s', assistantMessageRecord.id);
+
+    if (queueLifecycle.recoveredClaim) {
+      // The recovered snapshot is now represented by durable deterministic
+      // user/assistant rows. From this point on it must never be restored to the
+      // Redis queue, even if later operation startup fails.
+      queueLifecycle.recoveredBatchPersisted = true;
+      try {
+        const committed = await this.messageQueueService?.commitRecoveredClaim(operationId);
+        if (!committed) {
+          throw new Error(`Failed to finalize recovered Gateway queue claim ${operationId}`);
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        await updateAbortedAssistantMessage(errorMessage);
+        throw error;
+      }
+    }
 
     // Agent Signal is a governance side-channel (feedback / self-iteration). It
     // only applies to the server-side LLM pipeline, so it is intentionally NOT
@@ -1551,6 +2108,7 @@ export class AiAgentService {
     // invocation is itself an Agent Signal background run to avoid recursion.
     if (
       userMessageRecord &&
+      !existingQueueUserMessage &&
       !isHeteroAgent &&
       !shouldSuppressSignal({ appContext, slug: agentSlug ?? undefined })
     ) {
@@ -1580,8 +2138,6 @@ export class AiAgentService {
       const isRemoteHetero = isRemoteHeterogeneousType(heteroType);
       // Same structured shape as the built-in path (`op_{ts}_{agentId}_{topicId}_{rand}`)
       // so hetero ops aren't visually distinct bare nanoids in the trace/op tables.
-      const operationId = `op_${Date.now()}_${resolvedAgentId}_${topicId}_${nanoid(8)}`;
-
       // Persist a first-class agent_operations row for the hetero run. The id is
       // generated here (authoritative) and flows through to heteroIngest /
       // heteroFinish unchanged. Without this row the run is invisible to the
@@ -3169,10 +3725,6 @@ export class AiAgentService {
 
     await throwIfExecutionAborted('operation preparation');
 
-    // 15. Generate operation ID: agt_{timestamp}_{agentId}_{topicId}_{random}
-    const timestamp = Date.now();
-    const operationId = `op_${timestamp}_${resolvedAgentId}_${topicId}_${nanoid(8)}`;
-
     // 16. Create initial context
     let initialContext: AgentRuntimeContext = {
       payload: {
@@ -3572,6 +4124,11 @@ export class AiAgentService {
         userMemory,
         workspaceId: this.workspaceId,
       });
+
+      // From here on the claimed slot belongs to a real runtime operation.
+      // The wrapper must not release it if later best-effort response plumbing
+      // (topic metadata/JWT signing) fails.
+      queueLifecycle.operationStarted = true;
 
       log('execAgent: created operation %s (autoStarted: %s)', operationId, result.autoStarted);
 

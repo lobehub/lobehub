@@ -249,6 +249,7 @@ export class StreamEventManager {
     finalState,
     reason,
     reasonDetail,
+    queueHandoff,
     uiMessages,
   }: PublishAgentRuntimeEndParams): Promise<string> {
     // `finalState.messages` + tool-set fields are stripped centrally
@@ -260,6 +261,7 @@ export class StreamEventManager {
         finalState,
         operationId,
         phase: 'execution_complete',
+        ...(queueHandoff && { queueHandoff }),
         reason: reason || 'completed',
         reasonDetail: reasonDetail || getDefaultReasonDetail(finalState, reason),
         ...(uiMessages !== undefined && { uiMessages }),

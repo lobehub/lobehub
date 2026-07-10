@@ -8,13 +8,20 @@ import type {
   ChatTopicMetadata,
   ConversationContext,
   ExecAgentResult,
+  GatewayQueuedExecAgentResult,
+  GatewayQueuedFilePreview,
+  GatewayQueuedMessage,
+  GatewayQueueHandoff,
   MessageMetadata,
   RuntimeMentionedAgent,
 } from '@lobechat/types';
+import { t } from 'i18next';
 
+import { message as antdMessage } from '@/components/AntdStaticMethods';
 import { isDesktop } from '@/const/version';
 import {
   aiAgentService,
+  type GatewayExecAgentResult,
   type ResumeApprovalParam,
   type ResumeToolResultParam,
 } from '@/services/aiAgent';
@@ -77,6 +84,18 @@ const resolveLocalDeviceId = async (agentId?: string): Promise<string | undefine
 
 type Setter = StoreSetter<ChatStore>;
 
+export type ExecuteGatewayAgentResult =
+  ExecAgentResult | (GatewayQueuedExecAgentResult & { queuedMessage: GatewayQueuedMessage });
+
+export const isGatewayQueueEnqueueResult = (
+  result: GatewayExecAgentResult | ExecuteGatewayAgentResult,
+): result is
+  | GatewayQueuedExecAgentResult
+  | (GatewayQueuedExecAgentResult & {
+      queuedMessage: GatewayQueuedMessage;
+    }) =>
+  result.status === 'duplicate' || result.status === 'queued' || result.status === 'rejected';
+
 // ─── Types ───
 
 export interface GatewayConnection {
@@ -126,6 +145,7 @@ export interface ConnectGatewayParams {
    */
   onSessionComplete?: (info: {
     authFailed: boolean;
+    queueHandoff?: GatewayQueueHandoff;
     succeeded: boolean;
     terminalReceived: boolean;
   }) => void;
@@ -152,6 +172,7 @@ export interface ConnectGatewayParams {
 // ─── Action Implementation ───
 
 export class GatewayActionImpl {
+  readonly #flushingQueueContexts = new Set<string>();
   readonly #get: () => ChatStore;
   readonly #set: Setter;
 
@@ -210,12 +231,14 @@ export class GatewayActionImpl {
     // session_complete is handled separately as an explicit server signal.
     let receivedTerminalEvent = false;
     let terminalSucceeded = false;
+    let terminalQueueHandoff: GatewayQueueHandoff | undefined;
     let sessionCompleted = false;
     const fireSessionComplete = (opts?: { authFailed?: boolean }) => {
       if (sessionCompleted) return;
       sessionCompleted = true;
       onSessionComplete?.({
         authFailed: opts?.authFailed ?? false,
+        queueHandoff: terminalQueueHandoff,
         succeeded: terminalSucceeded,
         terminalReceived: receivedTerminalEvent,
       });
@@ -232,6 +255,13 @@ export class GatewayActionImpl {
       const isOwnOp = !event.operationId || event.operationId === operationId;
       if (isOwnOp && (event.type === 'agent_runtime_end' || event.type === 'error')) {
         receivedTerminalEvent = true;
+      }
+      if (isOwnOp && event.type === 'agent_runtime_end') {
+        const data = event.data as
+          { queueHandoff?: GatewayQueueHandoff; reason?: string } | undefined;
+        if (data?.reason === 'queued_message_interrupt') {
+          terminalQueueHandoff = data.queueHandoff;
+        }
       }
       // Only a clean completion counts as success — a cancel ('interrupted') or
       // deferred-tool park ('waiting_for_async_tool') must take the non-success
@@ -353,6 +383,79 @@ export class GatewayActionImpl {
     );
   };
 
+  /** Build the complete, serializable payload used by both optimistic UI and Redis replay. */
+  prepareGatewayQueuedMessage = async (params: {
+    context: ConversationContext;
+    editorData?: Record<string, unknown>;
+    fileIds?: string[];
+    filesPreview?: GatewayQueuedFilePreview[];
+    id: string;
+    mentionedAgents?: RuntimeMentionedAgent[];
+    message: string;
+    metadata?: MessageMetadata;
+    selectedToolIds?: string[];
+  }): Promise<GatewayQueuedMessage> => {
+    const {
+      context,
+      editorData,
+      fileIds,
+      filesPreview,
+      id,
+      mentionedAgents,
+      message,
+      metadata,
+      selectedToolIds,
+    } = params;
+    const isCreateNewTopic = !context.topicId;
+    const pendingRepos =
+      isCreateNewTopic && context.agentId ? getPendingTopicRepos(context.agentId) : [];
+    const initialTopicMetadata =
+      pendingRepos.length > 0
+        ? {
+            repos: pendingRepos,
+            workingDirectory: pendingRepos[0],
+            workingDirectoryConfig: { path: pendingRepos[0], repoType: 'github' as const },
+          }
+        : undefined;
+    const taskId = context.viewedTask?.type === 'detail' ? context.viewedTask.taskId : undefined;
+    const deviceId = await resolveLocalDeviceId(context.agentId);
+
+    return {
+      appContext: {
+        agentDocumentId: context.agentDocumentId,
+        defaultTaskAssigneeAgentId: context.defaultTaskAssigneeAgentId,
+        documentId: context.documentId,
+        ...(context.scope === 'agent_builder' && {
+          editingAgentId: this.#get().activeAgentId ?? undefined,
+        }),
+        groupId: context.groupId,
+        ...(initialTopicMetadata && { initialTopicMetadata }),
+        orchestrationRole: context.orchestrationRole,
+        scope: context.scope,
+        taskId,
+        threadId: context.threadId,
+        topicId: context.topicId,
+      },
+      createdAt: Date.now(),
+      deviceId,
+      editorData,
+      fileIds,
+      filesPreview,
+      id,
+      interruptMode: 'soft',
+      mentionedAgents,
+      metadata,
+      prompt: message,
+      selectedToolIds,
+      source: 'gateway',
+      trigger: metadata?.trigger,
+      userInterventionConfig: {
+        approvalMode: toolInterventionSelectors.approvalMode(useUserStore.getState()),
+        allowList: toolInterventionSelectors.allowList(useUserStore.getState()),
+      },
+    };
+  };
+
   /**
    * Execute agent task via Gateway WebSocket.
    * Call isGatewayModeEnabled() first to check availability.
@@ -369,11 +472,15 @@ export class GatewayActionImpl {
    */
   executeGatewayAgent = async (params: {
     context: ConversationContext;
+    /** Lexical state retained when this request becomes queued. */
+    editorData?: Record<string, unknown>;
     /** File IDs of already-uploaded attachments to attach to the new user message */
     fileIds?: string[];
+    /** Serializable file previews shown by QueueTray while the request waits. */
+    filesPreview?: GatewayQueuedFilePreview[];
     message: string;
     /** Request metadata carried from the originating user message. */
-    metadata?: Pick<MessageMetadata, 'trigger'>;
+    metadata?: MessageMetadata;
     /** Called when the gateway session completes (agent finished running) */
     onComplete?: () => void;
     /** Temporary sidebar topic inserted by sendMessage before the server creates the real topic. */
@@ -420,6 +527,10 @@ export class GatewayActionImpl {
      * instead of delegating.
      */
     mentionedAgents?: RuntimeMentionedAgent[];
+    /** Enables the server's atomic active-check + queue path for this request. */
+    queueRequestId?: string;
+    /** Prebuilt payload used by the optimistic busy/new-topic queue paths. */
+    queuedMessage?: GatewayQueuedMessage;
     /**
      * Temporary message IDs created during the initial sendMessage phase.
      * These are associated with the new gateway operation so the UI doesn't
@@ -427,10 +538,12 @@ export class GatewayActionImpl {
      * event to call `replaceMessages` with the server's real message IDs.
      */
     tempMessageIds?: string[];
-  }): Promise<ExecAgentResult> => {
+  }): Promise<ExecuteGatewayAgentResult> => {
     const {
       context,
+      editorData,
       fileIds,
+      filesPreview,
       message,
       metadata,
       onComplete,
@@ -441,6 +554,8 @@ export class GatewayActionImpl {
       resumeToolResult,
       selectedToolIds,
       mentionedAgents,
+      queueRequestId,
+      queuedMessage,
       tempMessageIds,
     } = params;
 
@@ -448,22 +563,6 @@ export class GatewayActionImpl {
       window.global_serverConfigStore!.getState().serverConfig.agentGatewayUrl!;
 
     const isCreateNewTopic = !context.topicId;
-    const taskId = context.viewedTask?.type === 'detail' ? context.viewedTask.taskId : undefined;
-
-    // If this is a new topic, read any repos the user pre-selected before
-    // sending the first message. We read without consuming yet — if execAgentTask
-    // fails or is aborted, the selection is preserved so a retry can still pick
-    // it up. We clear only after the server confirms the topic was created.
-    const pendingRepos =
-      isCreateNewTopic && context.agentId ? getPendingTopicRepos(context.agentId) : [];
-    const initialTopicMetadata =
-      pendingRepos.length > 0
-        ? {
-            repos: pendingRepos,
-            workingDirectory: pendingRepos[0],
-            workingDirectoryConfig: { path: pendingRepos[0], repoType: 'github' as const },
-          }
-        : undefined;
 
     // Honour user-initiated cancel during phase-1 init: while we await the
     // execAgentTask round-trip the caller's loading state (e.g. `sendMessage`)
@@ -476,51 +575,51 @@ export class GatewayActionImpl {
       ? this.#get().getOperationAbortSignal(parentOperationId)
       : undefined;
 
-    const localDeviceId = await resolveLocalDeviceId(context.agentId);
-    const userInterventionConfig = {
-      approvalMode: toolInterventionSelectors.approvalMode(useUserStore.getState()),
-      allowList: toolInterventionSelectors.allowList(useUserStore.getState()),
+    const preparedQueuedMessage =
+      queuedMessage ??
+      (await this.prepareGatewayQueuedMessage({
+        context,
+        editorData,
+        fileIds,
+        filesPreview,
+        id: queueRequestId ?? `gateway_${Date.now()}`,
+        mentionedAgents,
+        message,
+        metadata,
+        selectedToolIds,
+      }));
+    const execParams = {
+      agentId: context.agentId,
+      appContext: preparedQueuedMessage.appContext,
+      deviceId: preparedQueuedMessage.deviceId,
+      editorData: preparedQueuedMessage.editorData,
+      fileIds: preparedQueuedMessage.fileIds,
+      filesPreview: preparedQueuedMessage.filesPreview,
+      mentionedAgents: preparedQueuedMessage.mentionedAgents,
+      metadata: preparedQueuedMessage.metadata,
+      parentMessageId,
+      prompt: preparedQueuedMessage.prompt,
+      resumeApproval,
+      resumeToolResult,
+      selectedToolIds: preparedQueuedMessage.selectedToolIds,
+      trigger: preparedQueuedMessage.trigger,
+      userInterventionConfig: preparedQueuedMessage.userInterventionConfig,
     };
 
-    const result = await aiAgentService.execAgentTask(
-      {
-        agentId: context.agentId,
-        appContext: {
-          agentDocumentId: context.agentDocumentId,
-          defaultTaskAssigneeAgentId: context.defaultTaskAssigneeAgentId,
-          documentId: context.documentId,
-          // When AgentBuilder runs, context.agentId is the builtin builder agent.
-          // The actual editing target is chatStore.activeAgentId (kept in sync by
-          // AgentBuilderProvider). Pass it so the server can route tool calls to
-          // the correct agent rather than the builder itself.
-          ...(context.scope === 'agent_builder' && {
-            editingAgentId: this.#get().activeAgentId ?? undefined,
-          }),
-          groupId: context.groupId,
-          ...(initialTopicMetadata && { initialTopicMetadata }),
-          // Forward the group orchestration role so the server can stamp it onto
-          // the assistant message metadata. Without this the gateway-created
-          // supervisor turn loses its role on the step_start snapshot / refetch
-          // and renders as a generic assistant.
-          orchestrationRole: context.orchestrationRole,
-          scope: context.scope,
-          taskId,
-          threadId: context.threadId,
-          topicId: context.topicId,
-        },
-        deviceId: localDeviceId,
-        fileIds,
-        mentionedAgents,
-        parentMessageId,
-        prompt: message,
-        resumeApproval,
-        resumeToolResult,
-        selectedToolIds,
-        trigger: metadata?.trigger,
-        userInterventionConfig,
-      },
-      { signal: abortSignal },
-    );
+    const result = queueRequestId
+      ? await aiAgentService.enqueueMessage(execParams, queueRequestId, { signal: abortSignal })
+      : await aiAgentService.execAgentTask(execParams, { signal: abortSignal });
+
+    if (isGatewayQueueEnqueueResult(result)) {
+      return { ...result, queuedMessage: preparedQueuedMessage };
+    }
+
+    // `proceed` is represented by a normal ExecAgentResult. If the caller had
+    // optimistically staged this same request behind a stale local blocker,
+    // remove it before the new operation flushes the remaining queue.
+    if (queueRequestId) {
+      this.#get().removeQueuedMessage(messageMapKey(context), queueRequestId);
+    }
 
     if (abortSignal?.aborted) {
       // Cancel arrived after execAgentTask resolved — server task exists.
@@ -536,7 +635,8 @@ export class GatewayActionImpl {
       // Topic created successfully — now safe to clear the pending repo selection.
       if (context.agentId) consumePendingTopicRepos(context.agentId);
       if (optimisticTopic) {
-        const topicMetadata = optimisticTopic.metadata ?? initialTopicMetadata;
+        const topicMetadata =
+          optimisticTopic.metadata ?? preparedQueuedMessage.appContext?.initialTopicMetadata;
         this.#get().internal_replaceTopicId({
           agentId: context.agentId,
           groupId: context.groupId,
@@ -578,9 +678,18 @@ export class GatewayActionImpl {
       }
     }
 
-    // Use the server-created topicId for the execution context
-    const execContext = { ...context, topicId: result.topicId };
+    // Once a new topic is persisted, route the operation, events, and staged
+    // queue migration to the real topic bucket rather than `<topicId>_new`.
+    const execContext = {
+      ...context,
+      ...(isCreateNewTopic && result.topicId ? { isNew: false } : {}),
+      topicId: result.topicId,
+    };
     this.#get().moveQueuedMessages(messageMapKey(context), messageMapKey(execContext));
+    const failedQueueIds = await this.flushGatewayMessageQueue(execContext);
+    if (failedQueueIds.length > 0) {
+      antdMessage.warning(t('inputQueue.enqueueRejected', { ns: 'chat' }));
+    }
 
     if (result.topicId) {
       void this.#get().updateTopicStatus?.({
@@ -661,6 +770,7 @@ export class GatewayActionImpl {
       // the same WS that gatewayConnections is keyed on.
       gatewayOperationId: result.operationId,
       operationId: gatewayOpId,
+      onQueueHandoff: (handoff) => this.handoffGatewayOperation(execContext, handoff, onComplete),
       // Shared run lifecycle: drives the terminal completeRun / afterRunComplete
       // for the gateway transport (op completion + unread + queue drain +
       // notification) at `agent_runtime_end` / `error`.
@@ -689,11 +799,12 @@ export class GatewayActionImpl {
     this.#get().connectToGateway({
       gatewayUrl: agentGatewayUrl,
       onEvent: eventRouter,
-      onSessionComplete: ({ succeeded, terminalReceived }) => {
+      onSessionComplete: ({ queueHandoff, succeeded, terminalReceived }) => {
         // The gateway event handler already completed the op via the shared run
         // lifecycle on `agent_runtime_end` / `error`. Only complete here as the
         // terminal-missing fallback so the op never sticks `running`.
         if (!terminalReceived) this.#get().completeOperation(gatewayOpId);
+        if (queueHandoff) return;
         if (result.topicId) {
           // A clean completion the user isn't watching is owned by
           // `markTopicUnread` (status: 'unread'); skip the 'active' write so
@@ -724,6 +835,122 @@ export class GatewayActionImpl {
     return result;
   };
 
+  /** Flush locally staged `_new` follow-ups into the authoritative server queue. */
+  flushGatewayMessageQueue = async (context: ConversationContext): Promise<string[]> => {
+    if (!context.topicId) return [];
+
+    const contextKey = messageMapKey(context);
+    if (this.#flushingQueueContexts.has(contextKey)) return [];
+    this.#flushingQueueContexts.add(contextKey);
+    try {
+      const stagedMessages = [...(this.#get().queuedMessages?.[contextKey] ?? [])]
+        .filter(
+          (message) =>
+            message.source === 'gateway' &&
+            message.gatewaySyncStatus === 'staged' &&
+            message.gatewayMessage,
+        )
+        .sort((a, b) => a.createdAt - b.createdAt);
+      if (stagedMessages.length === 0) return [];
+      const failedIds: string[] = [];
+
+      // Preserve FIFO ordering in Redis; parallel mutations can reorder LPUSH/RPUSH
+      // completion under variable network latency.
+      for (const staged of stagedMessages) {
+        const queued = staged.gatewayMessage!;
+        try {
+          const result = await aiAgentService.enqueueMessage(
+            {
+              agentId: context.agentId,
+              appContext: {
+                ...queued.appContext,
+                groupId: context.groupId,
+                scope: context.scope,
+                threadId: context.threadId,
+                topicId: context.topicId,
+              },
+              deviceId: queued.deviceId,
+              editorData: queued.editorData,
+              fileIds: queued.fileIds,
+              filesPreview: queued.filesPreview,
+              mentionedAgents: queued.mentionedAgents,
+              metadata: queued.metadata,
+              prompt: queued.prompt,
+              selectedToolIds: queued.selectedToolIds,
+              trigger: queued.trigger,
+              userInterventionConfig: queued.userInterventionConfig,
+            },
+            queued.id,
+          );
+
+          if (isGatewayQueueEnqueueResult(result)) {
+            if (result.status === 'queued' || result.status === 'duplicate') {
+              this.#get().markGatewayQueuedMessageSynced(contextKey, queued.id);
+              continue;
+            }
+            failedIds.push(queued.id);
+            continue;
+          }
+
+          // The current operation should already own the server active slot. If
+          // the server unexpectedly started this staged request, stop it rather
+          // than allowing two turns to stream without a matching local socket.
+          await aiAgentService
+            .interruptTask({ operationId: result.operationId, topicId: result.topicId })
+            .catch(() => {});
+          failedIds.push(queued.id);
+        } catch (error) {
+          console.error('[Gateway] Failed to flush staged queue message:', error);
+          failedIds.push(queued.id);
+        }
+      }
+
+      await this.#get()
+        .refreshGatewayMessageQueue(context)
+        .catch(() => {});
+      return failedIds;
+    } finally {
+      this.#flushingQueueContexts.delete(contextKey);
+    }
+  };
+
+  private handoffGatewayOperation = async (
+    context: ConversationContext,
+    handoff: GatewayQueueHandoff,
+    onComplete?: () => void,
+  ): Promise<void> => {
+    const next = handoff.nextOperation;
+    const topicId = next.topicId || context.topicId;
+    if (!topicId) return;
+
+    const topic = topicSelectors.getTopicById(topicId)(this.#get());
+    this.#get().internal_dispatchTopic({
+      id: topicId,
+      type: 'updateTopic',
+      value: {
+        metadata: {
+          ...topic?.metadata,
+          runningOperation: {
+            assistantMessageId: next.assistantMessageId,
+            operationId: next.operationId,
+          },
+        },
+      },
+    });
+
+    await this.reconnectToGatewayOperation({
+      assistantMessageId: next.assistantMessageId,
+      context: { ...context, isNew: false, topicId },
+      onComplete,
+      operationId: next.operationId,
+      scope: context.scope,
+      threadId: context.threadId,
+      token: next.token,
+      topicId,
+    });
+    void this.flushGatewayMessageQueue({ ...context, isNew: false, topicId });
+  };
+
   /**
    * Reconnect to an existing Gateway operation after page reload.
    * Reads runningOperation from topic metadata, refreshes the JWT token,
@@ -731,12 +958,15 @@ export class GatewayActionImpl {
    */
   reconnectToGatewayOperation = async (params: {
     assistantMessageId: string;
+    context?: ConversationContext;
+    onComplete?: () => void;
     operationId: string;
     scope?: string;
     threadId?: string | null;
+    token?: string;
     topicId: string;
   }): Promise<void> => {
-    const { assistantMessageId, operationId, topicId, scope, threadId } = params;
+    const { assistantMessageId, operationId, topicId, scope, threadId, onComplete } = params;
 
     const agentGatewayUrl =
       window.global_serverConfigStore?.getState()?.serverConfig?.agentGatewayUrl;
@@ -762,7 +992,7 @@ export class GatewayActionImpl {
     if (topicCurrentOpId && topicCurrentOpId !== operationId) return;
 
     // Get a fresh JWT token (original expired after 5 min)
-    const { token } = await aiAgentService.refreshGatewayToken(topicId);
+    const token = params.token || (await aiAgentService.refreshGatewayToken(topicId)).token;
 
     // Re-check after the async token refresh: a newer executeGatewayAgent call may have
     // taken over for this topic while we were waiting. If so, bail to avoid a duplicate stream.
@@ -771,8 +1001,8 @@ export class GatewayActionImpl {
       ?.runningOperation?.operationId;
     if (topicOpIdAfterRefresh && topicOpIdAfterRefresh !== operationId) return;
 
-    const agentId = this.#get().activeAgentId;
-    const context = {
+    const agentId = params.context?.agentId ?? this.#get().activeAgentId;
+    const context: ConversationContext = params.context ?? {
       agentId,
       scope: (scope ?? 'main') as ConversationContext['scope'],
       threadId: threadId ?? null,
@@ -823,6 +1053,7 @@ export class GatewayActionImpl {
       // the same WS that gatewayConnections is keyed on.
       gatewayOperationId: operationId,
       operationId: gatewayOpId,
+      onQueueHandoff: (handoff) => this.handoffGatewayOperation(context, handoff, onComplete),
       runLifecycle: buildRunLifecycle(this.#get, {
         context,
         parentMessageId: assistantMessageId,
@@ -845,7 +1076,7 @@ export class GatewayActionImpl {
     this.#get().connectToGateway({
       gatewayUrl: agentGatewayUrl,
       onEvent: eventRouter,
-      onSessionComplete: ({ succeeded, terminalReceived, authFailed }) => {
+      onSessionComplete: ({ succeeded, terminalReceived, authFailed, queueHandoff }) => {
         // A reconnect is a passive re-subscribe — it must not END a run it merely
         // re-subscribed to. Only finalize when the close PROVES the op is over:
         //   - terminalReceived: a real agent_runtime_end / error streamed in, or
@@ -866,6 +1097,7 @@ export class GatewayActionImpl {
         // arrived; an auth failure carries no such event, so finalize it here so
         // the local op never sticks `running`.
         if (authFailed) this.#get().completeOperation(gatewayOpId);
+        if (queueHandoff) return;
 
         // See executeGatewayAgent's onSessionComplete: a clean background
         // completion is left to markTopicUnread (status: 'unread').
@@ -880,6 +1112,7 @@ export class GatewayActionImpl {
         // Clear the persisted marker useGatewayReconnect keys off so a dead op
         // doesn't get reconnected on every reload / task-drawer open.
         topicService.updateTopicMetadata(topicId, { runningOperation: null }).catch(() => {});
+        onComplete?.();
       },
       operationId,
       resumeOnConnect: true,

@@ -868,6 +868,17 @@ export const openInAppKeys = {
   detect: def('openInApp:detect', () => ['openInApp:detect']),
 };
 export const gatewayKeys = {
+  messageQueue: def(
+    'gateway:messageQueue',
+    (agentId: string, topicId: string, groupId?: string, threadId?: string, scope?: string) => [
+      'gateway:messageQueue',
+      agentId,
+      topicId,
+      groupId ?? '',
+      threadId ?? '',
+      scope ?? '',
+    ],
+  ),
   reconnect: def('gateway:reconnect', (operationId: string) => ['gateway:reconnect', operationId]),
 };
 export const userKeys = {

@@ -7,7 +7,11 @@ import type {
   ToolExecutor,
   ToolSource,
 } from '@lobechat/context-engine';
-import type { ChatTopicBotContext, UserInterventionConfig } from '@lobechat/types';
+import type {
+  ChatTopicBotContext,
+  GatewayQueueHandoff,
+  UserInterventionConfig,
+} from '@lobechat/types';
 
 import type { ExecutionPlan } from '@/helpers/executionTarget';
 import { type ServerUserMemoryConfig } from '@/server/modules/Mecha/ContextEngineering/types';
@@ -105,6 +109,15 @@ export interface StepLifecycleCallbacks {
     reason: StepCompletionReason;
   }) => Promise<void>;
 }
+
+/** Input passed upward when a soft queue interrupt needs a fresh operation. */
+export interface HandoffQueuedMessagesParams {
+  operationId: string;
+  state: AgentState;
+}
+
+/** Minimal data the old Gateway run needs in order to follow the new run. */
+export type HandoffQueuedMessagesResult = GatewayQueueHandoff;
 
 /**
  * Step completion reason

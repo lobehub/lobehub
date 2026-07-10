@@ -127,7 +127,8 @@ export class GatewayStreamNotifier implements IStreamEventManager {
   }
 
   async publishAgentRuntimeEnd(params: PublishAgentRuntimeEndParams): Promise<string> {
-    const { operationId, stepIndex, finalState, reason, reasonDetail, uiMessages } = params;
+    const { operationId, stepIndex, finalState, reason, reasonDetail, queueHandoff, uiMessages } =
+      params;
     const result = await this.inner.publishAgentRuntimeEnd(params);
 
     const effectiveReasonDetail = reasonDetail || getDefaultReasonDetail(finalState, reason);
@@ -141,6 +142,7 @@ export class GatewayStreamNotifier implements IStreamEventManager {
       data: {
         errorType,
         finalState,
+        ...(queueHandoff && { queueHandoff }),
         reason,
         reasonDetail: effectiveReasonDetail,
         ...(uiMessages !== undefined && { uiMessages }),

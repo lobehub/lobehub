@@ -222,7 +222,11 @@ export class AgentRuntimeCoordinator {
         await this.streamEventManager.publishAgentRuntimeEnd({
           finalState: stepResult.newState,
           operationId,
-          reason: stepResult.newState.status,
+          ...(stepResult.queueHandoff && { queueHandoff: stepResult.queueHandoff }),
+          reason: stepResult.completionReason ?? stepResult.newState.status,
+          ...(stepResult.completionReasonDetail && {
+            reasonDetail: stepResult.completionReasonDetail,
+          }),
           stepIndex,
           uiMessages: await this.resolveUiMessages(stepResult.newState),
         });

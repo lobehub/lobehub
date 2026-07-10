@@ -1,6 +1,11 @@
 import { type AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import { parse } from '@lobechat/conversation-flow';
-import { type TaskCurrentActivity, type TaskStatusResult } from '@lobechat/types';
+import {
+  type GatewayQueueUpdateInput,
+  type MessageMetadata,
+  type TaskCurrentActivity,
+  type TaskStatusResult,
+} from '@lobechat/types';
 import {
   RequestTrigger,
   ThreadStatus,
@@ -10,11 +15,13 @@ import {
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { and, eq } from 'drizzle-orm';
+import { nanoid } from 'nanoid';
 import pMap from 'p-map';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
+import { AgentModel } from '@/database/models/agent';
 import { MessageModel } from '@/database/models/message';
 import { ThreadModel } from '@/database/models/thread';
 import { TopicModel } from '@/database/models/topic';
@@ -28,6 +35,8 @@ import { AiAgentService } from '@/server/services/aiAgent';
 import { AiChatService } from '@/server/services/aiChat';
 import { getFileProxyUrl } from '@/server/services/file';
 import { HeterogeneousAgentService } from '@/server/services/heterogeneousAgent';
+import { getMessageQueueService } from '@/server/services/messageQueue';
+import { isQueueAgentRuntimeEnabled } from '@/server/services/queue/impls';
 
 import { workingDirConfigSchema } from './workingDirSchema';
 
@@ -129,6 +138,92 @@ const StartExecutionSchema = z.object({
   priority: z.enum(['high', 'normal', 'low']).optional().default('normal'),
 });
 
+// Queue callers submit a structured conversation identity, never the Redis
+// key used internally. Handlers validate this identity against the scoped DB
+// models before deriving the server-owned queue key.
+const GatewayQueueContextSchema = z.object({
+  agentId: z.string().min(1),
+  groupId: z.string().min(1).optional(),
+  scope: z.string().optional(),
+  threadId: z.string().min(1).optional(),
+  topicId: z.string().min(1),
+});
+
+const GatewayQueuedFilePreviewSchema = z.object({
+  id: z.string().min(1),
+  mimeType: z.string(),
+  name: z.string(),
+  url: z.string(),
+});
+
+// Message metadata intentionally remains forward-compatible: clients may send
+// newer metadata fields than this server version knows. Validate the container
+// shape without stripping those fields, while retaining the shared TS type.
+const MessageMetadataInputSchema = z.custom<MessageMetadata>(
+  (value) => typeof value === 'object' && value !== null && !Array.isArray(value),
+  { message: 'Message metadata must be an object' },
+);
+
+const GatewayQueueUpdateSchema = z.object({
+  deviceId: z.string().optional(),
+  editorData: z.record(z.unknown()).optional(),
+  fileIds: z.array(z.string()).optional(),
+  filesPreview: z.array(GatewayQueuedFilePreviewSchema).optional(),
+  mentionedAgents: z.array(z.object({ id: z.string(), name: z.string() })).optional(),
+  metadata: MessageMetadataInputSchema.optional(),
+  prompt: z.string().optional(),
+  selectedToolIds: z.array(z.string()).optional(),
+  trigger: z.nativeEnum(RequestTrigger).optional(),
+  userInterventionConfig: UserInterventionConfigSchema.optional(),
+});
+
+const GatewayQueueMessageRequestSchema = z.object({
+  enabled: z.literal(true),
+  requestId: z.string().min(1),
+});
+
+const UpdateQueuedMessageSchema = GatewayQueueContextSchema.extend({
+  messageId: z.string().min(1),
+  update: GatewayQueueUpdateSchema,
+});
+
+const RemoveQueuedMessageSchema = GatewayQueueContextSchema.extend({
+  messageId: z.string().min(1),
+});
+
+type GatewayQueueContextInput = z.infer<typeof GatewayQueueContextSchema>;
+
+const validateGatewayQueueContext = async (
+  ctx: {
+    agentModel: AgentModel;
+    threadModel: ThreadModel;
+    topicModel: TopicModel;
+  },
+  context: GatewayQueueContextInput,
+): Promise<void> => {
+  const [agent, topic, thread] = await Promise.all([
+    ctx.agentModel.getAgentConfigById(context.agentId),
+    ctx.topicModel.findById(context.topicId),
+    context.threadId ? ctx.threadModel.findById(context.threadId) : undefined,
+  ]);
+
+  const expectedGroupId = context.groupId ?? null;
+  if (
+    !agent ||
+    !topic ||
+    topic.agentId !== context.agentId ||
+    (topic.groupId ?? null) !== expectedGroupId ||
+    (context.threadId &&
+      (!thread ||
+        thread.topicId !== context.topicId ||
+        thread.agentId !== context.agentId ||
+        (thread.groupId ?? null) !== expectedGroupId))
+  ) {
+    // Keep ownership failures indistinguishable from missing resources.
+    throw new TRPCError({ code: 'NOT_FOUND', message: 'Gateway queue context not found' });
+  }
+};
+
 /**
  * Schema for execAgent - execute a single Agent
  */
@@ -172,6 +267,14 @@ const ExecAgentSchema = z
     existingMessageIds: z.array(z.string()).optional().default([]),
     /** File IDs of already-uploaded attachments to attach to the new user message */
     fileIds: z.array(z.string()).optional(),
+    /** Serializable file previews retained while this turn waits in the Gateway queue. */
+    filesPreview: z.array(GatewayQueuedFilePreviewSchema).optional(),
+    /** Rich-editor state retained for editing a queued turn. */
+    editorData: z.record(z.unknown()).optional(),
+    /** Opaque client metadata retained for replay after handoff. */
+    metadata: MessageMetadataInputSchema.optional(),
+    /** Opt into server-owned serialization for this Gateway turn. */
+    messageQueue: GatewayQueueMessageRequestSchema.optional(),
     /** Parent message ID for regeneration/continue (skip user message creation, branch from this message) */
     parentMessageId: z.string().optional(),
     /** The user input/prompt */
@@ -496,12 +599,14 @@ const aiAgentProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) 
       agentRuntimeService: new AgentRuntimeService(ctx.serverDB, ctx.userId, {
         workspaceId: wsId,
       }),
+      agentModel: new AgentModel(ctx.serverDB, ctx.userId, wsId),
       aiAgentService: new AiAgentService(ctx.serverDB, ctx.userId, { workspaceId: wsId }),
       aiChatService: new AiChatService(ctx.serverDB, ctx.userId, wsId),
       heterogeneousAgentService: new HeterogeneousAgentService(ctx.serverDB, ctx.userId, {
         workspaceId: wsId,
       }),
       messageModel: new MessageModel(ctx.serverDB, ctx.userId, wsId),
+      messageQueueService: getMessageQueueService({ userId: ctx.userId, workspaceId: wsId }),
       threadModel: new ThreadModel(ctx.serverDB, ctx.userId, wsId),
       topicModel: new TopicModel(ctx.serverDB, ctx.userId, wsId),
     },
@@ -707,6 +812,65 @@ export const aiAgentRouter = router({
       }
     }),
 
+  peekMessageQueue: aiAgentWriteProcedure
+    .input(GatewayQueueContextSchema)
+    .query(async ({ input, ctx }) => {
+      await validateGatewayQueueContext(ctx, input);
+      if (!ctx.messageQueueService) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'Gateway message queue is unavailable',
+        });
+      }
+
+      return ctx.messageQueueService.peek(input);
+    }),
+
+  updateQueuedMessage: aiAgentWriteProcedure
+    .input(UpdateQueuedMessageSchema)
+    .mutation(async ({ input, ctx }) => {
+      const { messageId, update, ...context } = input;
+      await validateGatewayQueueContext(ctx, context);
+      if (!ctx.messageQueueService) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'Gateway message queue is unavailable',
+        });
+      }
+
+      return ctx.messageQueueService.update(context, messageId, update as GatewayQueueUpdateInput);
+    }),
+
+  removeQueuedMessage: aiAgentWriteProcedure
+    .input(RemoveQueuedMessageSchema)
+    .mutation(async ({ input, ctx }) => {
+      const { messageId, ...context } = input;
+      await validateGatewayQueueContext(ctx, context);
+      if (!ctx.messageQueueService) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'Gateway message queue is unavailable',
+        });
+      }
+
+      return ctx.messageQueueService.remove(context, messageId);
+    }),
+
+  cancelMessageQueue: aiAgentWriteProcedure
+    .input(GatewayQueueContextSchema)
+    .mutation(async ({ input, ctx }) => {
+      await validateGatewayQueueContext(ctx, input);
+      if (!ctx.messageQueueService) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'Gateway message queue is unavailable',
+        });
+      }
+
+      await ctx.messageQueueService.cancelAndClear(input);
+      return { cancelled: true as const };
+    }),
+
   execAgent: aiAgentWriteProcedure.input(ExecAgentSchema).mutation(async ({ input, ctx }) => {
     const {
       agentId,
@@ -716,8 +880,12 @@ export const aiAgentRouter = router({
       autoStart = true,
       deviceId,
       existingMessageIds = [],
+      editorData,
       fileIds,
+      filesPreview,
       mentionedAgents,
+      messageQueue,
+      metadata,
       parentMessageId,
       resumeApproval,
       resumeToolResult,
@@ -729,14 +897,17 @@ export const aiAgentRouter = router({
     log('execAgent: identifier=%s, prompt=%s', agentId || slug, prompt.slice(0, 50));
 
     try {
-      return await ctx.aiAgentService.execAgent({
+      const execParams = {
         agentId,
         appContext,
         autoStart,
         deviceId,
+        editorData,
         existingMessageIds,
         fileIds,
+        filesPreview,
         mentionedAgents,
+        metadata,
         parentMessageId,
         prompt,
         // When parentMessageId is provided, this is a regeneration/continue or a
@@ -748,7 +919,28 @@ export const aiAgentRouter = router({
         slug,
         trigger: trigger ?? RequestTrigger.Chat,
         userInterventionConfig,
-      });
+      };
+
+      // In server/queue mode the backend is authoritative even for an older
+      // browser that predates the explicit queue request id. New clients still
+      // provide their stable id for retry deduplication; legacy calls receive a
+      // server-generated id so they cannot start a concurrent operation.
+      const effectiveMessageQueue =
+        messageQueue ??
+        (isQueueAgentRuntimeEnabled() &&
+        autoStart &&
+        !parentMessageId &&
+        !resumeApproval &&
+        !resumeToolResult &&
+        !appContext?.groupId &&
+        appContext?.orchestrationRole !== 'member' &&
+        (trigger === undefined || trigger === RequestTrigger.Chat)
+          ? { enabled: true as const, requestId: `legacy_${nanoid()}` }
+          : undefined);
+
+      return effectiveMessageQueue
+        ? await ctx.aiAgentService.execAgent({ ...execParams, messageQueue: effectiveMessageQueue })
+        : await ctx.aiAgentService.execAgent(execParams);
     } catch (error: any) {
       console.error('execAgent failed: %O', error);
 

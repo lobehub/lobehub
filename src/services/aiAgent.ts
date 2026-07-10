@@ -1,6 +1,16 @@
 import type {
+  ConversationContext,
   ExecAgentAppContext,
   ExecAgentResult,
+  GatewayExecAgentResult,
+  GatewayQueueContext,
+  GatewayQueuedFilePreview,
+  GatewayQueuePeekResult,
+  GatewayQueueRemoveResult,
+  GatewayQueueUpdateInput,
+  GatewayQueueUpdateResult,
+  MessageMetadata,
+  RequestTrigger,
   RuntimeMentionedAgent,
   UserInterventionConfig,
 } from '@lobechat/types';
@@ -8,6 +18,22 @@ import type {
 import { lambdaClient } from '@/libs/trpc/client';
 
 export type { ExecAgentResult };
+
+export type { GatewayExecAgentResult };
+
+export const resolveGatewayQueueContext = (
+  context: ConversationContext,
+): GatewayQueueContext | undefined => {
+  if (!context.agentId || !context.topicId) return;
+
+  return {
+    agentId: context.agentId,
+    ...(context.groupId ? { groupId: context.groupId } : {}),
+    ...(context.scope ? { scope: context.scope } : {}),
+    ...(context.threadId ? { threadId: context.threadId } : {}),
+    topicId: context.topicId,
+  };
+};
 
 /**
  * Resume instruction for an operation that hit `human_approve_required`. When
@@ -56,15 +82,21 @@ export interface ExecAgentTaskParams {
   appContext?: ExecAgentAppContext;
   autoStart?: boolean;
   deviceId?: string;
+  editorData?: Record<string, unknown>;
   existingMessageIds?: string[];
   /** File IDs of already-uploaded attachments to attach to the new user message */
   fileIds?: string[];
+  filesPreview?: GatewayQueuedFilePreview[];
   /**
    * Agents the user @-mentioned in this message (multi-mention). The server
    * enables the callAgent tool and injects the mentioned-agents delegation
    * context so the supervisor run delegates to them instead of answering itself.
    */
   mentionedAgents?: RuntimeMentionedAgent[];
+  /** Enable atomic active-check + enqueue for this request. */
+  messageQueue?: { enabled: true; requestId: string };
+  /** Complete user-message metadata retained when the request is queued. */
+  metadata?: MessageMetadata;
   /** Parent message ID for regeneration/continue (skip user message creation, branch from this message) */
   parentMessageId?: string;
   prompt: string;
@@ -80,7 +112,7 @@ export interface ExecAgentTaskParams {
    * omitted. Pass a more specific value (`'cli'`, `'openapi'`, …) so the
    * `agent_operations.trigger` column reflects the real source.
    */
-  trigger?: string;
+  trigger?: RequestTrigger;
   userInterventionConfig?: UserInterventionConfig;
 }
 
@@ -168,8 +200,56 @@ class AiAgentService {
   async execAgentTask(
     params: ExecAgentTaskParams,
     options?: { signal?: AbortSignal },
-  ): Promise<ExecAgentResult> {
-    return await lambdaClient.aiAgent.execAgent.mutate(params, options);
+  ): Promise<GatewayExecAgentResult> {
+    return await lambdaClient.aiAgent.execAgent.mutate(
+      {
+        ...params,
+        ...(params.metadata && { metadata: { ...params.metadata } }),
+      },
+      options,
+    );
+  }
+
+  /**
+   * Atomically enqueue a Gateway message when the conversation is active, or
+   * return a normal ExecAgentResult when the active slot is free.
+   */
+  async enqueueMessage(
+    params: Omit<ExecAgentTaskParams, 'messageQueue'>,
+    requestId: string,
+    options?: { signal?: AbortSignal },
+  ): Promise<GatewayExecAgentResult> {
+    return this.execAgentTask({ ...params, messageQueue: { enabled: true, requestId } }, options);
+  }
+
+  async peekMessageQueue(context: GatewayQueueContext): Promise<GatewayQueuePeekResult> {
+    return lambdaClient.aiAgent.peekMessageQueue.query(context);
+  }
+
+  async updateQueuedMessage(
+    context: GatewayQueueContext,
+    messageId: string,
+    update: GatewayQueueUpdateInput,
+  ): Promise<GatewayQueueUpdateResult> {
+    return lambdaClient.aiAgent.updateQueuedMessage.mutate({
+      ...context,
+      messageId,
+      update: {
+        ...update,
+        ...(update.metadata && { metadata: { ...update.metadata } }),
+      },
+    });
+  }
+
+  async removeQueuedMessage(
+    context: GatewayQueueContext,
+    messageId: string,
+  ): Promise<GatewayQueueRemoveResult> {
+    return lambdaClient.aiAgent.removeQueuedMessage.mutate({ ...context, messageId });
+  }
+
+  async cancelMessageQueue(context: GatewayQueueContext): Promise<{ cancelled: true }> {
+    return lambdaClient.aiAgent.cancelMessageQueue.mutate(context);
   }
 
   /**

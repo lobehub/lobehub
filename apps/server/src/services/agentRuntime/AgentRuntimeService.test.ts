@@ -93,6 +93,10 @@ vi.mock('@/server/modules/AgentRuntime/redis', () => ({
   getAgentRuntimeRedisClient: vi.fn().mockReturnValue(null),
 }));
 
+vi.mock('@/server/services/messageQueue', () => ({
+  getMessageQueueService: vi.fn().mockReturnValue(null),
+}));
+
 // Use real AgentRuntimeCoordinator with InMemory backends; only mock unrelated exports
 vi.mock('@/server/modules/AgentRuntime', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
@@ -521,6 +525,139 @@ describe('AgentRuntimeService', () => {
       expect(mockQueueService.scheduleMessage).toHaveBeenCalled();
     });
 
+    it.each(['tools_batch_result', 'sub_agent_result'] as const)(
+      'injects the server queue flag at the safe %s step boundary',
+      async (phase) => {
+        const inspectAndRefresh = vi.fn().mockResolvedValue({
+          context: { agentId: 'agent-1', topicId: 'topic-1' },
+          hasPending: true,
+        });
+        (service as any).messageQueueService = {
+          inspectAndRefresh,
+          releaseOwned: vi.fn(),
+        };
+        const toolResultContext = {
+          ...mockParams.context,
+          phase,
+        };
+        const mockStepResult = {
+          events: [],
+          newState: { ...mockState, status: 'running', stepCount: 2 },
+          nextContext: mockParams.context,
+        };
+        const mockRuntime = { step: vi.fn().mockResolvedValue(mockStepResult) };
+        vi.spyOn(service as any, 'createAgentRuntime').mockReturnValue({ runtime: mockRuntime });
+
+        await service.executeStep({ ...mockParams, context: toolResultContext });
+
+        expect(inspectAndRefresh).toHaveBeenCalledWith('test-operation-1');
+        expect(mockRuntime.step).toHaveBeenCalledWith(
+          mockState,
+          expect.objectContaining({
+            phase,
+            stepContext: expect.objectContaining({ hasQueuedMessages: true }),
+          }),
+        );
+      },
+    );
+
+    it('hands off pending input after a normal no-tool completion before saving terminal state', async () => {
+      const queueHandoff = {
+        consumedQueueIds: ['queue-1'],
+        nextOperation: {
+          agentId: 'agent-1',
+          assistantMessageId: 'assistant-next',
+          autoStarted: true,
+          createdAt: '2026-01-01T00:00:00.000Z',
+          message: 'created',
+          operationId: 'operation-next',
+          status: 'created',
+          success: true,
+          timestamp: '2026-01-01T00:00:00.000Z',
+          topicId: 'topic-1',
+          userMessageId: 'user-next',
+        },
+      };
+      const inspectAndRefresh = vi.fn().mockResolvedValue({
+        context: { agentId: 'agent-1', topicId: 'topic-1' },
+        hasPending: true,
+      });
+      const releaseOwned = vi.fn();
+      const handoffQueuedMessages = vi.fn().mockResolvedValue(queueHandoff);
+      (service as any).messageQueueService = { inspectAndRefresh, releaseOwned };
+      (service as any).delegate = { handoffQueuedMessages };
+      const doneState = { ...mockState, status: 'done', stepCount: 2 };
+      const mockStepResult = {
+        events: [{ finalState: doneState, reason: 'completed', type: 'done' }],
+        newState: doneState,
+        nextContext: undefined,
+      };
+      const mockRuntime = { step: vi.fn().mockResolvedValue(mockStepResult) };
+      vi.spyOn(service as any, 'createAgentRuntime').mockReturnValue({ runtime: mockRuntime });
+
+      await service.executeStep(mockParams);
+
+      expect(handoffQueuedMessages).toHaveBeenCalledWith({
+        operationId: 'test-operation-1',
+        state: doneState,
+      });
+      expect(mockCoordinator.saveStepResult).toHaveBeenCalledWith(
+        'test-operation-1',
+        expect.objectContaining({
+          completionReason: 'queued_message_interrupt',
+          queueHandoff,
+        }),
+      );
+      expect(releaseOwned).not.toHaveBeenCalled();
+      expect(handoffQueuedMessages.mock.invocationCallOrder[0]).toBeLessThan(
+        mockCoordinator.saveStepResult.mock.invocationCallOrder.at(-1),
+      );
+    });
+
+    it('compare-releases queue ownership when a normal completion has no pending input', async () => {
+      const inspectAndRefresh = vi.fn().mockResolvedValue({
+        context: { agentId: 'agent-1', topicId: 'topic-1' },
+        hasPending: false,
+      });
+      const releaseOwned = vi.fn().mockResolvedValue(true);
+      (service as any).messageQueueService = { inspectAndRefresh, releaseOwned };
+      const doneState = { ...mockState, status: 'done', stepCount: 2 };
+      const mockRuntime = {
+        step: vi.fn().mockResolvedValue({
+          events: [{ finalState: doneState, reason: 'completed', type: 'done' }],
+          newState: doneState,
+          nextContext: undefined,
+        }),
+      };
+      vi.spyOn(service as any, 'createAgentRuntime').mockReturnValue({ runtime: mockRuntime });
+
+      await service.executeStep(mockParams);
+
+      expect(releaseOwned).toHaveBeenCalledWith('test-operation-1', { preserveQueue: true });
+    });
+
+    it('keeps queue ownership while waiting for human approval so resume can CAS-adopt it', async () => {
+      const inspectAndRefresh = vi.fn().mockResolvedValue({
+        context: { agentId: 'agent-1', topicId: 'topic-1' },
+        hasPending: true,
+      });
+      const releaseOwned = vi.fn();
+      (service as any).messageQueueService = { inspectAndRefresh, releaseOwned };
+      const waitingState = { ...mockState, status: 'waiting_for_human', stepCount: 2 };
+      const mockRuntime = {
+        step: vi.fn().mockResolvedValue({
+          events: [],
+          newState: waitingState,
+          nextContext: undefined,
+        }),
+      };
+      vi.spyOn(service as any, 'createAgentRuntime').mockReturnValue({ runtime: mockRuntime });
+
+      await service.executeStep(mockParams);
+
+      expect(releaseOwned).not.toHaveBeenCalled();
+    });
+
     it('should resume async tools with the last pending tool result as parentMessageId', async () => {
       const pendingTools = [
         {
@@ -685,6 +822,8 @@ describe('AgentRuntimeService', () => {
 
     it('should save error state to coordinator for later retrieval (inMemory mode fix)', async () => {
       const error = new Error('Test error for inMemory mode');
+      const releaseOwned = vi.fn().mockResolvedValue(true);
+      (service as any).messageQueueService = { releaseOwned };
       const mockRuntime = { step: vi.fn().mockRejectedValue(error) };
       vi.spyOn(service as any, 'createAgentRuntime').mockReturnValue({ runtime: mockRuntime });
 
@@ -704,6 +843,7 @@ describe('AgentRuntimeService', () => {
           status: 'error',
         }),
       );
+      expect(releaseOwned).toHaveBeenCalledWith('test-operation-1', { preserveQueue: true });
     });
 
     it('should handle human intervention', async () => {

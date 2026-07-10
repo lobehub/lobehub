@@ -3,6 +3,7 @@ import {
   type AgentRuntimeContext,
   type AgentState,
 } from '@lobechat/agent-runtime';
+import type { GatewayQueueHandoff } from '@lobechat/types';
 import debug from 'debug';
 import { type Redis } from 'ioredis';
 
@@ -18,10 +19,22 @@ const RELEASE_OWNED_LOCK_SCRIPT =
   "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end";
 
 export interface StepResult {
+  /**
+   * The runtime's semantic finish reason from its terminal `done` event.
+   *
+   * `newState.status` only says that the state is `done`; it cannot distinguish
+   * a normal completion from a soft queue interrupt. Keep the event reason on
+   * the step result so the coordinator can publish the authoritative terminal
+   * reason to Gateway consumers.
+   */
+  completionReason?: string;
+  completionReasonDetail?: string;
   events?: AgentEvent[];
   executionTime: number;
   newState: AgentState;
   nextContext?: AgentRuntimeContext;
+  /** A newly-started operation that consumed the queued inbound messages. */
+  queueHandoff?: GatewayQueueHandoff;
   stepIndex: number;
 }
 

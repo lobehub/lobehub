@@ -55,6 +55,7 @@ import { toAgentSignalTraceEvents } from '@/server/services/agentSignal/observab
 import { FileService } from '@/server/services/file';
 import { mcpService } from '@/server/services/mcp';
 import { MessageService } from '@/server/services/message';
+import { getMessageQueueService, type MessageQueueService } from '@/server/services/messageQueue';
 import { QueueService } from '@/server/services/queue';
 import { LocalQueueServiceImpl } from '@/server/services/queue/impls';
 import { ToolExecutionService } from '@/server/services/toolExecution';
@@ -75,6 +76,8 @@ import {
   type GroupActionMemberBridgeParams,
   type GroupActionOnComplete,
   type GroupMemberTimeoutParams,
+  type HandoffQueuedMessagesParams,
+  type HandoffQueuedMessagesResult,
   type OperationCreationParams,
   type OperationCreationResult,
   type OperationStatusResult,
@@ -208,6 +211,14 @@ export interface AgentRuntimeDelegate {
    * placeholder before resuming the parked parent operation.
    */
   execVirtualSubAgent?: (params: ExecVirtualSubAgentParams) => Promise<unknown>;
+  /**
+   * Atomically move queued Gateway input to a fresh top-level operation.
+   * Called after the runtime has produced `queued_message_interrupt`, but
+   * before the old operation publishes its terminal event.
+   */
+  handoffQueuedMessages?: (
+    params: HandoffQueuedMessagesParams,
+  ) => Promise<HandoffQueuedMessagesResult | undefined>;
 }
 
 export interface AgentRuntimeServiceOptions {
@@ -230,6 +241,8 @@ export interface AgentRuntimeServiceOptions {
    * circular import.
    */
   delegate?: AgentRuntimeDelegate;
+  /** Gateway inbound-message queue used for per-step soft-interrupt checks. */
+  messageQueueService?: MessageQueueService | null;
   /**
    * Custom QueueService
    * Set to null to disable queue scheduling (for synchronous execution tests)
@@ -276,6 +289,7 @@ export class AgentRuntimeService {
   private coordinator: AgentRuntimeCoordinator;
   private delegate: AgentRuntimeDelegate;
   private humanIntervention: HumanInterventionHandler;
+  private messageQueueService: MessageQueueService | null;
   private streamManager: IStreamEventManager;
   private queueService: QueueService | null;
   private traceRecorder: OperationTraceRecorder;
@@ -329,6 +343,10 @@ export class AgentRuntimeService {
     this.serverDB = db;
     this.userId = userId;
     this.workspaceId = options?.workspaceId;
+    this.messageQueueService =
+      options?.messageQueueService === undefined
+        ? getMessageQueueService({ userId, workspaceId: this.workspaceId })
+        : options.messageQueueService;
     const workspaceId = this.workspaceId;
     this.messageModel = new MessageModel(db, this.userId, workspaceId);
     this.completionLifecycle = new CompletionLifecycle(db, userId, workspaceId);
@@ -899,6 +917,17 @@ export class AgentRuntimeService {
 
           const reason = this.determineCompletionReason(agentState);
 
+          await this.messageQueueService
+            ?.releaseOwned(operationId, { preserveQueue: true })
+            .catch((error) =>
+              log(
+                '[%s][%d] Failed to release terminal queue owner: %O',
+                operationId,
+                stepIndex,
+                error,
+              ),
+            );
+
           await this.completionLifecycle.emitSignalEvents(operationId, agentState, reason);
 
           // Dispatch completion hooks so consumers (e.g., bot local-mode promise) can finalize
@@ -1048,6 +1077,36 @@ export class AgentRuntimeService {
           );
         }
 
+        // Refresh the operation's queue lease at every step boundary. Only
+        // expose the flag to phases where GeneralChatAgent can safely stop
+        // after durable tool output; user_input/call_llm must finish normally.
+        // A second inspection runs at terminal time below to catch messages
+        // that arrive while the LLM call itself is in flight.
+        if (this.messageQueueService) {
+          try {
+            const inspection = await this.messageQueueService.inspectAndRefresh(operationId);
+            const canSoftInterruptAfterThisPhase =
+              currentContext?.phase === 'tool_result' ||
+              currentContext?.phase === 'tools_batch_result' ||
+              currentContext?.phase === 'sub_agent_result' ||
+              currentContext?.phase === 'sub_agents_batch_result';
+
+            if (currentContext && inspection) {
+              currentContext = {
+                ...currentContext,
+                stepContext: {
+                  ...currentContext.stepContext,
+                  hasQueuedMessages: canSoftInterruptAfterThisPhase && inspection.hasPending,
+                },
+              };
+            }
+          } catch (error) {
+            // Queue observability must not turn a healthy agent step into an
+            // error. The active TTL still provides eventual recovery.
+            log('[%s][%d] Gateway queue preflight failed: %O', operationId, stepIndex, error);
+          }
+        }
+
         // Pre-step computation: extract device context from DB messages
         // Follows front-end computeStepContext pattern — computed at step boundary, not inside executors
         if (!currentState.metadata?.activeDeviceId) {
@@ -1071,6 +1130,16 @@ export class AgentRuntimeService {
           ? { events: [], newState: forcedFinishState, nextContext: undefined }
           : await runtime.step(currentState, currentContext);
 
+        // The state only records the coarse terminal status (`done`). Preserve
+        // the semantic reason carried by the runtime's terminal event so the
+        // coordinator can distinguish a normal finish from a soft queue
+        // interrupt. The event emitted by `finish` is the source of truth.
+        const completionEvent = [...(stepResult.events ?? [])]
+          .reverse()
+          .find((event) => event.type === 'done');
+        let completionReason = completionEvent?.reason;
+        const completionReasonDetail = completionEvent?.reasonDetail;
+
         // Inner runtime.step() catches model-runtime exceptions and stuffs the
         // raw error into newState.error without re-throwing — so the outer
         // catch at the bottom of this method never sees them. Normalize +
@@ -1089,10 +1158,69 @@ export class AgentRuntimeService {
           log('[%s][%d] Operation was interrupted during step execution', operationId, stepIndex);
         }
 
+        // A queue can also receive its first pending message while the final
+        // LLM call is in flight, after the pre-step inspection. Drain that case
+        // as an automatic handoff too, even when no tool phase existed.
+        let shouldHandoffQueuedMessages = completionReason === 'queued_message_interrupt';
+        let terminalQueueInspected = false;
+        if (stepResult.newState.status === 'done' && this.messageQueueService) {
+          try {
+            const terminalInspection =
+              await this.messageQueueService.inspectAndRefresh(operationId);
+            terminalQueueInspected = terminalInspection !== null;
+            shouldHandoffQueuedMessages =
+              shouldHandoffQueuedMessages || (terminalInspection?.hasPending ?? false);
+          } catch (error) {
+            log(
+              '[%s][%d] Gateway queue terminal inspection failed: %O',
+              operationId,
+              stepIndex,
+              error,
+            );
+          }
+        }
+
+        // Queue handoff must finish before saveStepResult: that save is the
+        // point at which the coordinator publishes agent_runtime_end. This
+        // ordering makes the terminal event an atomic-looking boundary to the
+        // client: it already contains the next operation + assistant ids and a
+        // canonical topic snapshot including the newly-created turn.
+        const queueHandoff =
+          shouldHandoffQueuedMessages && this.delegate.handoffQueuedMessages
+            ? await this.delegate.handoffQueuedMessages({
+                operationId,
+                state: stepResult.newState,
+              })
+            : undefined;
+        if (queueHandoff) completionReason = 'queued_message_interrupt';
+        if (
+          this.messageQueueService &&
+          terminalQueueInspected &&
+          (!shouldHandoffQueuedMessages || !queueHandoff)
+        ) {
+          // No pending work, or a handoff that rolled back/failed, must release
+          // the old owner. `releaseOwned` is compare-and-delete, so this cannot
+          // clear a concurrently committed next operation.
+          await this.messageQueueService.releaseOwned(operationId, { preserveQueue: true });
+        }
+        if (
+          this.messageQueueService &&
+          (stepResult.newState.status === 'error' || stepResult.newState.status === 'interrupted')
+        ) {
+          // These paths do not emit a runtime `finish` instruction, so they
+          // cannot enter the done-only terminal inspection above. Release the
+          // compare-owned slot immediately instead of pinning the context until
+          // TTL. Pending rows remain available for a later Gateway turn.
+          await this.messageQueueService.releaseOwned(operationId, { preserveQueue: true });
+        }
+
         // Save state, coordinator will handle event sending automatically
         await this.coordinator.saveStepResult(operationId, {
           ...stepResult,
+          completionReason,
+          completionReasonDetail,
           executionTime: Date.now() - startAt,
+          queueHandoff,
           stepIndex, // placeholder
         });
 
@@ -1356,6 +1484,16 @@ export class AgentRuntimeService {
         };
       });
     } catch (error) {
+      await this.messageQueueService
+        ?.releaseOwned(operationId, { preserveQueue: true })
+        .catch((releaseError) =>
+          log(
+            '[%s][%d] Failed to release errored queue owner: %O',
+            operationId,
+            stepIndex,
+            releaseError,
+          ),
+        );
       invokeAgentSpan.recordException(error as Error);
       invokeAgentSpan.setStatus({
         code: SpanStatusCode.ERROR,

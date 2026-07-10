@@ -112,6 +112,7 @@ export class InMemoryStreamEventManager implements IStreamEventManager {
     finalState,
     reason,
     reasonDetail,
+    queueHandoff,
     uiMessages,
   }: PublishAgentRuntimeEndParams): Promise<string> {
     // Strip happens centrally inside `publishStreamEvent`.
@@ -120,6 +121,7 @@ export class InMemoryStreamEventManager implements IStreamEventManager {
         finalState,
         operationId,
         phase: 'execution_complete',
+        ...(queueHandoff && { queueHandoff }),
         reason: reason || 'completed',
         reasonDetail: reasonDetail || getDefaultReasonDetail(finalState, reason),
         ...(uiMessages !== undefined && { uiMessages }),

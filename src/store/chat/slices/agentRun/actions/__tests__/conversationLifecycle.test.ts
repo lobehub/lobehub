@@ -1206,6 +1206,127 @@ describe('ConversationLifecycle actions', () => {
         );
       });
 
+      it('should optimistically enqueue a busy Gateway topic and serialize it on the server', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const context = {
+          agentId: TEST_IDS.SESSION_ID,
+          threadId: null,
+          topicId: TEST_IDS.TOPIC_ID,
+        };
+        const contextKey = messageMapKey(context);
+        const gatewayMessage = {
+          appContext: { topicId: TEST_IDS.TOPIC_ID },
+          createdAt: 123,
+          id: 'queue-request-1',
+          interruptMode: 'soft' as const,
+          prompt: 'queued on gateway',
+          source: 'gateway' as const,
+        };
+        const prepareGatewayQueuedMessage = vi.fn().mockResolvedValue(gatewayMessage);
+        const executeGatewayAgent = vi.fn().mockResolvedValue({
+          activeOperationId: 'server-running-op',
+          queueId: gatewayMessage.id,
+          queuedMessage: gatewayMessage,
+          status: 'queued',
+          success: true,
+          topicId: TEST_IDS.TOPIC_ID,
+        });
+
+        act(() => {
+          useChatStore.setState({
+            executeGatewayAgent,
+            isGatewayModeEnabled: () => true,
+            operations: {
+              'local-gateway-op': {
+                childOperationIds: [],
+                context,
+                id: 'local-gateway-op',
+                metadata: {},
+                status: 'running',
+                type: 'execServerAgentRuntime',
+              },
+            } as any,
+            operationsByContext: { [contextKey]: ['local-gateway-op'] },
+            prepareGatewayQueuedMessage,
+          });
+        });
+
+        await act(async () => {
+          await result.current.sendMessage({ context, message: gatewayMessage.prompt });
+        });
+
+        expect(prepareGatewayQueuedMessage).toHaveBeenCalledWith(
+          expect.objectContaining({ context, message: gatewayMessage.prompt }),
+        );
+        expect(executeGatewayAgent).toHaveBeenCalledWith(
+          expect.objectContaining({
+            context,
+            queueRequestId: expect.any(String),
+            queuedMessage: gatewayMessage,
+          }),
+        );
+        expect(useChatStore.getState().queuedMessages[contextKey]).toEqual([
+          expect.objectContaining({
+            content: gatewayMessage.prompt,
+            gatewayMessage,
+            gatewaySyncStatus: 'synced',
+            source: 'gateway',
+          }),
+        ]);
+      });
+
+      it('should stop phase 1 when a cross-device Gateway exec is queued', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const context = {
+          agentId: TEST_IDS.SESSION_ID,
+          threadId: null,
+          topicId: TEST_IDS.TOPIC_ID,
+        };
+        const contextKey = messageMapKey(context);
+        const queuedMessage = {
+          appContext: { topicId: TEST_IDS.TOPIC_ID },
+          createdAt: 456,
+          id: 'cross-device-queue-id',
+          interruptMode: 'soft' as const,
+          prompt: 'cross-device follow-up',
+          source: 'gateway' as const,
+        };
+        const executeGatewayAgent = vi.fn().mockResolvedValue({
+          activeOperationId: 'other-device-op',
+          queueId: queuedMessage.id,
+          queuedMessage,
+          status: 'queued',
+          success: true,
+          topicId: TEST_IDS.TOPIC_ID,
+        });
+        const connectToGateway = vi.fn();
+
+        act(() => {
+          useChatStore.setState({
+            connectToGateway,
+            executeGatewayAgent,
+            isGatewayModeEnabled: () => true,
+          });
+        });
+
+        await act(async () => {
+          await result.current.sendMessage({ context, message: queuedMessage.prompt });
+        });
+
+        expect(executeGatewayAgent).toHaveBeenCalledWith(
+          expect.objectContaining({ queueRequestId: expect.any(String) }),
+        );
+        expect(useChatStore.getState().queuedMessages[contextKey]).toEqual([
+          expect.objectContaining({
+            content: queuedMessage.prompt,
+            gatewaySyncStatus: 'synced',
+            source: 'gateway',
+          }),
+        ]);
+        expect(connectToGateway).not.toHaveBeenCalled();
+        expect(useChatStore.getState().gatewayConnections).toEqual({});
+      });
+
       it('should enqueue when an execHeterogeneousAgent op is running (CC queue mode)', async () => {
         // With Plan A, sends during a running CC turn must hit the
         // same queue path used by client mode — without this we'd spawn a

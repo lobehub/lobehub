@@ -1,7 +1,17 @@
+import type {
+  ConversationContext,
+  GatewayQueuedMessage,
+  GatewayQueuePeekResult,
+  GatewayQueueUpdateInput,
+} from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
 import debug from 'debug';
 import { produce } from 'immer';
+import type { SWRResponse } from 'swr';
 
+import { mutate, useClientDataSWR } from '@/libs/swr';
+import { gatewayKeys } from '@/libs/swr/keys';
+import { aiAgentService, resolveGatewayQueueContext } from '@/services/aiAgent';
 import { type ChatStore } from '@/store/chat/store';
 import { type MessageMapKeyInput } from '@/store/chat/utils/messageMapKey';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
@@ -25,6 +35,36 @@ import {
 
 const n = setNamespace('operation');
 const log = debug('lobe-store:operation');
+
+const GATEWAY_QUEUE_POLL_INTERVAL = 2000;
+
+const gatewayQueueSWRKey = (context: ConversationContext) => {
+  const queueContext = resolveGatewayQueueContext(context);
+  if (!queueContext) return null;
+
+  return gatewayKeys.messageQueue(
+    queueContext.agentId,
+    queueContext.topicId,
+    queueContext.groupId,
+    queueContext.threadId,
+    queueContext.scope,
+  );
+};
+
+const fromGatewayQueuedMessage = (message: GatewayQueuedMessage): QueuedMessage => ({
+  content: message.prompt,
+  createdAt: message.createdAt,
+  editorData: message.editorData,
+  files: message.fileIds,
+  filesPreview: message.filesPreview,
+  forceRuntime: 'gateway',
+  gatewayMessage: message,
+  gatewaySyncStatus: 'synced',
+  id: message.id,
+  interruptMode: message.interruptMode,
+  metadata: message.metadata,
+  source: 'gateway',
+});
 
 const isSameNullableContextValue = (left?: string | null, right?: string | null): boolean =>
   (left ?? null) === (right ?? null);
@@ -733,6 +773,163 @@ export class OperationActionsImpl {
   };
   // ━━━ Message Queue Actions ━━━
 
+  useFetchGatewayMessageQueue = (
+    context: ConversationContext,
+    enabled: boolean,
+  ): SWRResponse<GatewayQueuePeekResult> => {
+    const queueContext = resolveGatewayQueueContext(context);
+    const swrKey = enabled ? gatewayQueueSWRKey(context) : null;
+
+    return useClientDataSWR<GatewayQueuePeekResult>(
+      swrKey,
+      () => aiAgentService.peekMessageQueue(queueContext!),
+      {
+        keepPreviousData: true,
+        refreshInterval: GATEWAY_QUEUE_POLL_INTERVAL,
+        revalidateOnFocus: true,
+        revalidateOnReconnect: true,
+        onSuccess: (data) => {
+          const contextKey = messageMapKey(context);
+          this.internal_replaceGatewayQueuedMessages(
+            contextKey,
+            data.items.map(fromGatewayQueuedMessage),
+          );
+          if (data.activeOperationId) {
+            const hasStaged = (this.#get().queuedMessages[contextKey] ?? []).some(
+              (message) => message.source === 'gateway' && message.gatewaySyncStatus === 'staged',
+            );
+            if (hasStaged) void this.#get().flushGatewayMessageQueue(context);
+          }
+        },
+      },
+    );
+  };
+
+  refreshGatewayMessageQueue = async (context: ConversationContext): Promise<void> => {
+    const key = gatewayQueueSWRKey(context);
+    if (!key) return;
+    await mutate(key);
+  };
+
+  updateGatewayQueuedMessage = async (
+    context: ConversationContext,
+    messageId: string,
+    update: GatewayQueueUpdateInput,
+  ): Promise<boolean> => {
+    const queueContext = resolveGatewayQueueContext(context);
+    if (!queueContext) return false;
+
+    const contextKey = messageMapKey(context);
+    const previousQueue = [...(this.#get().queuedMessages[contextKey] ?? [])];
+    const wasStaged = previousQueue.some(
+      (message) => message.id === messageId && message.gatewaySyncStatus === 'staged',
+    );
+    this.#set(
+      produce((state: ChatStore) => {
+        const message = state.queuedMessages[contextKey]?.find((item) => item.id === messageId);
+        if (!message?.gatewayMessage) return;
+
+        message.gatewayMessage = { ...message.gatewayMessage, ...update };
+        if ('prompt' in update && update.prompt !== undefined) message.content = update.prompt;
+        if ('editorData' in update) message.editorData = update.editorData;
+        if ('fileIds' in update) message.files = update.fileIds;
+        if ('filesPreview' in update) message.filesPreview = update.filesPreview;
+        if ('metadata' in update) message.metadata = update.metadata;
+      }),
+      false,
+      n(`updateGatewayQueuedMessage/${contextKey}/${messageId}`),
+    );
+
+    try {
+      const result = await aiAgentService.updateQueuedMessage(queueContext, messageId, update);
+      if (result.item) {
+        this.#get().enqueueMessage(contextKey, fromGatewayQueuedMessage(result.item));
+      } else if (!result.updated && !wasStaged) {
+        this.#get().removeQueuedMessage(contextKey, messageId);
+      }
+      await this.refreshGatewayMessageQueue(context);
+      return result.updated || wasStaged;
+    } catch (error) {
+      this.#set(
+        produce((state: ChatStore) => {
+          state.queuedMessages[contextKey] = previousQueue;
+        }),
+        false,
+        n(`updateGatewayQueuedMessage/rollback/${contextKey}/${messageId}`),
+      );
+      throw error;
+    }
+  };
+
+  removeGatewayQueuedMessage = async (
+    context: ConversationContext,
+    messageId: string,
+  ): Promise<boolean> => {
+    const contextKey = messageMapKey(context);
+    const previousQueue = [...(this.#get().queuedMessages[contextKey] ?? [])];
+    const wasStaged = previousQueue.some(
+      (message) => message.id === messageId && message.gatewaySyncStatus === 'staged',
+    );
+
+    const queueContext = resolveGatewayQueueContext(context);
+    if (!queueContext) {
+      // `_new` topics have no server queue context yet. Their Gateway follow-ups
+      // are browser-only staged items, so QueueTray edit/delete must remove them
+      // locally instead of becoming inert until the first exec resolves a topic.
+      if (!wasStaged) return false;
+      this.removeQueuedMessage(contextKey, messageId);
+      return true;
+    }
+
+    this.removeQueuedMessage(contextKey, messageId);
+
+    try {
+      const result = await aiAgentService.removeQueuedMessage(queueContext, messageId);
+      await this.refreshGatewayMessageQueue(context);
+      return result.removed || wasStaged;
+    } catch (error) {
+      this.#set(
+        produce((state: ChatStore) => {
+          state.queuedMessages[contextKey] = previousQueue;
+        }),
+        false,
+        n(`removeGatewayQueuedMessage/rollback/${contextKey}/${messageId}`),
+      );
+      throw error;
+    }
+  };
+
+  cancelGatewayMessageQueue = async (context: ConversationContext): Promise<void> => {
+    const queueContext = resolveGatewayQueueContext(context);
+    if (!queueContext) return;
+
+    const contextKey = messageMapKey(context);
+    const previousQueue = [...(this.#get().queuedMessages[contextKey] ?? [])];
+    this.#set(
+      produce((state: ChatStore) => {
+        state.queuedMessages[contextKey] = (state.queuedMessages[contextKey] ?? []).filter(
+          (message) => message.source !== 'gateway',
+        );
+      }),
+      false,
+      n(`cancelGatewayMessageQueue/${contextKey}`),
+    );
+
+    try {
+      await aiAgentService.cancelMessageQueue(queueContext);
+      await this.refreshGatewayMessageQueue(context);
+    } catch (error) {
+      this.#set(
+        produce((state: ChatStore) => {
+          state.queuedMessages[contextKey] = previousQueue;
+        }),
+        false,
+        n(`cancelGatewayMessageQueue/rollback/${contextKey}`),
+      );
+      throw error;
+    }
+  };
+
   /**
    * Enqueue a message for a conversation context.
    * If a hard interrupt, also cancel the running operation.
@@ -752,7 +949,9 @@ export class OperationActionsImpl {
     this.#set(
       produce((state: ChatStore) => {
         const queue = state.queuedMessages[contextKey] ?? [];
-        queue.push(message);
+        const index = queue.findIndex((item) => item.id === message.id);
+        if (index >= 0) queue[index] = message;
+        else queue.push(message);
         state.queuedMessages[contextKey] = queue;
       }),
       false,
@@ -827,6 +1026,53 @@ export class OperationActionsImpl {
       }),
       false,
       n(`removeQueuedMessage/${contextKey}/${messageId}`),
+    );
+  };
+
+  removeQueuedMessages = (contextKey: string, messageIds: string[]): void => {
+    if (messageIds.length === 0) return;
+    const removedIds = new Set(messageIds);
+
+    this.#set(
+      produce((state: ChatStore) => {
+        const queue = state.queuedMessages[contextKey];
+        if (!queue) return;
+        state.queuedMessages[contextKey] = queue.filter((message) => !removedIds.has(message.id));
+      }),
+      false,
+      n(`removeQueuedMessages/${contextKey}`),
+    );
+  };
+
+  /**
+   * Replace only the server-owned portion of a context queue. Browser-owned
+   * entries (including the temporary `_new` topic queue) survive polling.
+   */
+  internal_replaceGatewayQueuedMessages = (contextKey: string, messages: QueuedMessage[]): void => {
+    this.#set(
+      produce((state: ChatStore) => {
+        const localMessages = (state.queuedMessages[contextKey] ?? []).filter(
+          (message) => message.source !== 'gateway' || message.gatewaySyncStatus === 'staged',
+        );
+        const remoteIds = new Set(messages.map((message) => message.id));
+        const preserved = localMessages.filter((message) => !remoteIds.has(message.id));
+        state.queuedMessages[contextKey] = [...preserved, ...messages].sort(
+          (a, b) => a.createdAt - b.createdAt,
+        );
+      }),
+      false,
+      n(`internal_replaceGatewayQueuedMessages/${contextKey}`),
+    );
+  };
+
+  markGatewayQueuedMessageSynced = (contextKey: string, messageId: string): void => {
+    this.#set(
+      produce((state: ChatStore) => {
+        const message = state.queuedMessages[contextKey]?.find((item) => item.id === messageId);
+        if (message?.source === 'gateway') message.gatewaySyncStatus = 'synced';
+      }),
+      false,
+      n(`markGatewayQueuedMessageSynced/${contextKey}/${messageId}`),
     );
   };
 

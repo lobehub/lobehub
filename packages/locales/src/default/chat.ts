@@ -335,7 +335,10 @@ export default {
   'input.warpWithKey': 'Press <key/> to insert a line break',
   'inputQueue.delete': 'Delete',
   'inputQueue.edit': 'Edit',
+  'inputQueue.enqueueRejected':
+    'The server queue could not accept every message. The remaining drafts are still available here.',
   'inputQueue.sendNow': 'Send now (interrupts current run)',
+  'inputQueue.serverMutationFailed': "Couldn't update the queued message. Please try again.",
   'intentUnderstanding.title': 'Understanding your intent...',
   'inviteMembers': 'Invite members',
   'knowledgeBase.all': 'All Content',

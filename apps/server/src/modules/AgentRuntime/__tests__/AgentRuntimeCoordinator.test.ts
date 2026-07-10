@@ -267,6 +267,39 @@ describe('AgentRuntimeCoordinator', () => {
       });
     });
 
+    it('publishes the runtime finish reason and queue handoff for a soft interrupt', async () => {
+      const operationId = 'old-operation-id';
+      const queueHandoff = {
+        consumedQueueIds: ['queued-1', 'queued-2'],
+        nextOperation: {
+          assistantMessageId: 'assistant-next',
+          operationId: 'next-operation-id',
+        },
+      };
+      const stepResult = {
+        completionReason: 'queued_message_interrupt',
+        completionReasonDetail: 'Queued input will continue in a fresh operation',
+        executionTime: 1000,
+        newState: { status: 'done', stepCount: 5 },
+        queueHandoff,
+        stepIndex: 5,
+      };
+
+      mockStateManager.loadAgentState.mockResolvedValue({ status: 'running', stepCount: 4 });
+
+      await coordinator.saveStepResult(operationId, stepResult as any);
+
+      expect(mockStreamManager.publishAgentRuntimeEnd).toHaveBeenCalledWith({
+        finalState: stepResult.newState,
+        operationId,
+        queueHandoff,
+        reason: 'queued_message_interrupt',
+        reasonDetail: 'Queued input will continue in a fresh operation',
+        stepIndex: 5,
+        uiMessages: undefined,
+      });
+    });
+
     it('should still publish step-result end event when visible output event publish fails', async () => {
       const operationId = 'test-operation-id';
       const stepResult = {

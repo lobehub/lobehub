@@ -12,6 +12,7 @@ import { GatewayActionImpl } from '../transports/gateway/gateway';
 
 vi.mock('@/services/aiAgent', () => ({
   aiAgentService: {
+    enqueueMessage: vi.fn(),
     execAgentTask: vi.fn(),
     interruptTask: vi.fn(),
     refreshGatewayToken: vi.fn(),
@@ -300,6 +301,50 @@ describe('GatewayActionImpl', () => {
       expect(state.gatewayConnections['op-1']).toBeUndefined();
     });
 
+    it('should surface queue handoff metadata while cleaning up the old connection', () => {
+      const { action, mockClient, state } = createTestAction();
+      const onSessionComplete = vi.fn();
+      const queueHandoff = {
+        consumedQueueIds: ['queue-1'],
+        nextOperation: {
+          agentId: 'agent-1',
+          assistantMessageId: 'assistant-next',
+          autoStarted: true,
+          createdAt: new Date().toISOString(),
+          message: 'created',
+          operationId: 'op-next',
+          status: 'created',
+          success: true,
+          timestamp: new Date().toISOString(),
+          token: 'next-token',
+          topicId: TEST_TOPIC_ID,
+          userMessageId: 'user-next',
+        },
+      };
+
+      action.connectToGateway({
+        gatewayUrl: 'https://gateway.test.com',
+        onSessionComplete,
+        operationId: 'op-1',
+        token: 'test-token',
+        topicId: TEST_TOPIC_ID,
+      });
+      mockClient.emitEvent('agent_event', {
+        data: { queueHandoff, reason: 'queued_message_interrupt' },
+        operationId: 'op-1',
+        type: 'agent_runtime_end',
+      });
+      mockClient.emitEvent('disconnected');
+
+      expect(state.gatewayConnections['op-1']).toBeUndefined();
+      expect(onSessionComplete).toHaveBeenCalledWith({
+        authFailed: false,
+        queueHandoff,
+        succeeded: false,
+        terminalReceived: true,
+      });
+    });
+
     it('should cleanup on auth_failed', () => {
       const { action, mockClient, state } = createTestAction();
 
@@ -506,6 +551,77 @@ describe('GatewayActionImpl', () => {
     });
   });
 
+  describe('flushGatewayMessageQueue', () => {
+    it('flushes staged new-topic messages in FIFO order and does not send them twice', async () => {
+      const { action, state } = createTestAction();
+      const context = { agentId: 'agent-1', scope: 'main' as const, topicId: 'topic-created' };
+      const key = messageMapKey(context);
+      state.queuedMessages = {
+        [key]: [
+          {
+            content: 'second',
+            createdAt: 2,
+            gatewayMessage: {
+              createdAt: 2,
+              id: 'queue-2',
+              interruptMode: 'soft',
+              prompt: 'second',
+              source: 'gateway',
+            },
+            gatewaySyncStatus: 'staged',
+            id: 'queue-2',
+            interruptMode: 'soft',
+            source: 'gateway',
+          },
+          {
+            content: 'first',
+            createdAt: 1,
+            gatewayMessage: {
+              createdAt: 1,
+              id: 'queue-1',
+              interruptMode: 'soft',
+              prompt: 'first',
+              source: 'gateway',
+            },
+            gatewaySyncStatus: 'staged',
+            id: 'queue-1',
+            interruptMode: 'soft',
+            source: 'gateway',
+          },
+        ],
+      };
+      state.markGatewayQueuedMessageSynced = vi.fn((contextKey: string, id: string) => {
+        const item = state.queuedMessages[contextKey].find((message: any) => message.id === id);
+        item.gatewaySyncStatus = 'synced';
+      });
+      state.refreshGatewayMessageQueue = vi.fn().mockResolvedValue(undefined);
+      vi.mocked(aiAgentService.enqueueMessage).mockImplementation(async (_params, id) => ({
+        agentId: context.agentId,
+        activeOperationId: 'active-op',
+        assistantMessageId: '',
+        autoStarted: false,
+        createdAt: '2026-07-10T00:00:00.000Z',
+        message: 'queued',
+        operationId: 'active-op',
+        queueId: id,
+        status: 'queued',
+        success: true,
+        timestamp: '2026-07-10T00:00:00.000Z',
+        topicId: context.topicId,
+        userMessageId: '',
+      }));
+
+      await action.flushGatewayMessageQueue(context);
+      await action.flushGatewayMessageQueue(context);
+
+      expect(vi.mocked(aiAgentService.enqueueMessage).mock.calls.map((call) => call[1])).toEqual([
+        'queue-1',
+        'queue-2',
+      ]);
+      expect(state.refreshGatewayMessageQueue).toHaveBeenCalledOnce();
+    });
+  });
+
   describe('executeGatewayAgent', () => {
     function createExecuteTestAction() {
       const mockClient = createMockClient();
@@ -649,8 +765,17 @@ describe('GatewayActionImpl', () => {
     });
 
     it('should move queued follow-ups from the new-topic key to the server-created topic key', async () => {
-      const { action, moveQueuedMessages } = createExecuteTestAction();
-      const context = { agentId: 'agent-1', topicId: null, threadId: null };
+      const { action, moveQueuedMessages, startOperation } = createExecuteTestAction();
+      const context = {
+        agentId: 'agent-1',
+        isNew: true,
+        scope: 'main' as const,
+        threadId: null,
+        topicId: null,
+      };
+      const flushGatewayMessageQueue = vi
+        .spyOn(action, 'flushGatewayMessageQueue')
+        .mockResolvedValue([]);
 
       vi.mocked(aiAgentService.execAgentTask).mockResolvedValue({
         agentId: 'agent-1',
@@ -672,9 +797,14 @@ describe('GatewayActionImpl', () => {
         message: 'Hello',
       });
 
+      const resolvedContext = { ...context, isNew: false, topicId: 'topic-created' };
       expect(moveQueuedMessages).toHaveBeenCalledWith(
         messageMapKey(context),
-        messageMapKey({ ...context, topicId: 'topic-created' }),
+        messageMapKey(resolvedContext),
+      );
+      expect(flushGatewayMessageQueue).toHaveBeenCalledWith(resolvedContext);
+      expect(startOperation).toHaveBeenCalledWith(
+        expect.objectContaining({ context: resolvedContext }),
       );
     });
 
@@ -1340,6 +1470,29 @@ describe('GatewayActionImpl', () => {
       expect(topicService.updateTopicMetadata).toHaveBeenCalledWith('topic-1', {
         runningOperation: null,
       });
+    });
+
+    it('does not clear the next runningOperation marker on queue handoff', async () => {
+      const { action, captured, completeOperation, updateTopicStatus } =
+        createOnSessionCompleteHarness();
+
+      await action.reconnectToGatewayOperation({
+        assistantMessageId: 'ast-1',
+        operationId: 'server-op-1',
+        topicId: 'topic-1',
+      });
+
+      vi.mocked(topicService.updateTopicMetadata).mockClear();
+      captured.onSessionComplete!({
+        authFailed: false,
+        queueHandoff: { consumedQueueIds: [], nextOperation: {} },
+        succeeded: false,
+        terminalReceived: true,
+      });
+
+      expect(completeOperation).not.toHaveBeenCalled();
+      expect(topicService.updateTopicMetadata).not.toHaveBeenCalled();
+      expect(updateTopicStatus).not.toHaveBeenCalled();
     });
 
     // auth_failed (or a failed token refresh) is authoritative that the op is

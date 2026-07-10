@@ -76,6 +76,13 @@ export interface RunCompleteEvent extends RunLifecycleEventBase {
   notification?: { content?: string };
   operationStatus?: OperationStatus;
   /**
+   * The gateway server consumed queued input and immediately started the next
+   * operation. The current local operation is terminal, but the user-facing
+   * run is continuing, so completion must not mark unread, notify, or drain the
+   * browser queue.
+   */
+  queueHandoff?: boolean;
+  /**
    * Raw runtime terminal/parked status (client `AgentState['status']`), used to
    * reproduce the exact per-status completion branch. Optional — gateway/hetero
    * adapters that don't expose it rely on `status` instead.
@@ -91,9 +98,9 @@ export interface RunCompleteEvent extends RunLifecycleEventBase {
 
 /**
  * Result of `completeRun`. `requeued` is true when the input-queue drain
- * scheduled a follow-up `sendMessage` — the caller then SKIPS `afterRunComplete`
- * (no desktop notification for a run that immediately continues), matching the
- * current early-return behavior.
+ * scheduled a follow-up `sendMessage`, or when the gateway handed the queue to
+ * a new server operation. The caller then SKIPS `afterRunComplete` (no desktop
+ * notification for a run that immediately continues).
  */
 export interface RunCompleteResult {
   requeued: boolean;

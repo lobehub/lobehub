@@ -1652,6 +1652,26 @@ describe('GeneralChatAgent', () => {
   });
 
   describe('sub_agent_result phase (single sub-agent)', () => {
+    it('should finish before another LLM call when a Gateway message is queued', async () => {
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+      const state = createMockState({
+        messages: [{ role: 'tool', content: 'Task result' }] as any,
+      });
+      const context = {
+        ...createMockContext('sub_agent_result', { parentMessageId: 'task-parent-msg' }),
+        stepContext: { hasQueuedMessages: true },
+      };
+
+      await expect(agent.runner(context, state)).resolves.toEqual({
+        reason: 'queued_message_interrupt',
+        type: 'finish',
+      });
+    });
+
     it('should return call_llm when task completed', async () => {
       const agent = new GeneralChatAgent({
         agentConfig: { maxSteps: 100 },

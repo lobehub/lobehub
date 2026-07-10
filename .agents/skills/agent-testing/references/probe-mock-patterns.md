@@ -515,3 +515,25 @@
 - With `http_proxy`/`HTTP_PROXY` set, `curl http://localhost:<port>` returns the
   proxy's 502 instead of connection-refused, faking a "server up but broken" signal.
   Always `curl --noproxy '*'` for local port probes.
+
+### M8. Observe the provider request before choosing a mock protocol
+
+- **Situation**: an agent run configured through an OpenAI-compatible provider may use
+  `/v1/chat/completions` even when the feature under test is implemented with Responses-style
+  runtime events internally.
+- **Doesn't work**: implementing only `/v1/responses` in the mock and diagnosing the resulting
+  404 as an agent-runtime failure.
+- **Works**: capture the first outbound request path and body shape, then support exactly the
+  protocol the configured provider emits. If both protocols are plausible, keep one shared
+  routing state machine and thin protocol-specific stream serializers.
+
+### D13. Lexical editors need real keyboard clearing for queue timing tests
+
+- **Situation**: reusing a contenteditable Lexical composer for two time-sensitive sends.
+- **Doesn't work**: `agent-browser fill '[contenteditable=true]' ...` can replace visible DOM
+  text without synchronizing Lexical's internal editor state; the next Enter may submit the
+  previous and current prompts concatenated.
+- **Works**: click the editor, press `Meta+a`, press `Backspace`, type with
+  `agent-browser keyboard type`, and assert `get text` exactly matches the intended prompt
+  before pressing Enter. When `record-gif.sh` is also sampling the same session, give the mock
+  boundary a generous delay because screenshot calls serialize with input commands.

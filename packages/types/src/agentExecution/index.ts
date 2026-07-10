@@ -1,5 +1,8 @@
+import type { RequestTrigger } from '../agentRuntime';
 import type { WorkingDirConfig } from '../device';
-import type { TaskDetail, UIChatMessage } from '../message';
+import type { MessageMetadata, TaskDetail, UIChatMessage } from '../message';
+import type { RuntimeMentionedAgent } from '../stepContext';
+import type { UserInterventionConfig } from '../tool';
 import type { ChatTopic } from '../topic';
 
 export type AgentSignalOperationKind =
@@ -184,7 +187,7 @@ export interface ExecAgentResult {
   /** Operation ID for SSE connection */
   operationId: string;
   /** Operation status */
-  status: string;
+  status: 'created' | 'error';
   /** Whether the operation was created successfully */
   success: boolean;
   /** ISO timestamp */
@@ -195,6 +198,120 @@ export interface ExecAgentResult {
   topicId: string;
   /** The user message ID created for this operation */
   userMessageId: string;
+}
+
+// ============ Gateway Message Queue Types ============
+
+/** Structured conversation identity accepted by the server-side Gateway queue. */
+export interface GatewayQueueContext {
+  agentId: string;
+  groupId?: string;
+  scope?: string;
+  threadId?: string;
+  topicId: string;
+}
+
+/** Serializable file preview retained while a Gateway message is queued. */
+export interface GatewayQueuedFilePreview {
+  id: string;
+  mimeType: string;
+  name: string;
+  url: string;
+}
+
+/** Complete replay payload for a Gateway message waiting on an active operation. */
+export interface GatewayQueuedMessage {
+  appContext?: ExecAgentAppContext;
+  createdAt: number;
+  deviceId?: string;
+  editorData?: Record<string, unknown>;
+  fileIds?: string[];
+  filesPreview?: GatewayQueuedFilePreview[];
+  id: string;
+  interruptMode: 'soft';
+  mentionedAgents?: RuntimeMentionedAgent[];
+  metadata?: MessageMetadata;
+  prompt: string;
+  selectedToolIds?: string[];
+  source: 'gateway';
+  trigger?: RequestTrigger;
+  userInterventionConfig?: UserInterventionConfig;
+}
+
+export type GatewayQueueEnqueueDecision = 'duplicate' | 'proceed' | 'queued' | 'rejected';
+
+export interface GatewayQueueEnqueueResult {
+  activeOperationId: string;
+  decision: GatewayQueueEnqueueDecision;
+  queueId: string;
+  /** Idle backlog atomically reserved for this new owner, including the current request. */
+  recoveredItems?: GatewayQueuedMessage[];
+}
+
+/** Queue-aware response returned instead of creating a concurrent Gateway operation. */
+export interface GatewayQueuedExecAgentResult extends Omit<ExecAgentResult, 'status'> {
+  activeOperationId: string;
+  queueId: string;
+  status: 'duplicate' | 'queued' | 'rejected';
+}
+
+export type GatewayExecAgentResult = ExecAgentResult | GatewayQueuedExecAgentResult;
+
+export interface GatewayQueuePeekResult {
+  activeOperationId: string | null;
+  items: GatewayQueuedMessage[];
+}
+
+/** Mutable replay fields accepted by the queue editing API. */
+export interface GatewayQueueUpdateInput {
+  deviceId?: string;
+  editorData?: Record<string, unknown>;
+  fileIds?: string[];
+  filesPreview?: GatewayQueuedFilePreview[];
+  mentionedAgents?: RuntimeMentionedAgent[];
+  metadata?: MessageMetadata;
+  prompt?: string;
+  selectedToolIds?: string[];
+  trigger?: RequestTrigger;
+  userInterventionConfig?: UserInterventionConfig;
+}
+
+export interface GatewayQueueUpdateResult {
+  item: GatewayQueuedMessage | null;
+  updated: boolean;
+}
+
+export interface GatewayQueueRemoveResult {
+  queueId: string;
+  removed: boolean;
+}
+
+export interface GatewayQueueInspection {
+  context: GatewayQueueContext;
+  hasPending: boolean;
+}
+
+export type GatewayQueueHandoffStatus = 'committed' | 'failed' | 'pending' | 'rolled_back';
+
+/** Successful handoff returned to Gateway callers. */
+export interface GatewayQueueHandoff {
+  consumedQueueIds: string[];
+  nextOperation: ExecAgentResult;
+}
+
+/** Durable receipt used to make old-step/QStash retries idempotent. */
+export interface GatewayQueueHandoffReceipt {
+  consumedQueueIds: string[];
+  context: GatewayQueueContext;
+  nextOperation?: ExecAgentResult;
+  nextOperationId: string;
+  oldOperationId: string;
+  status: GatewayQueueHandoffStatus;
+}
+
+/** Queue snapshot reserved by beginHandoff before the next operation is created. */
+export interface GatewayQueueHandoffSnapshot extends GatewayQueueHandoffReceipt {
+  items: GatewayQueuedMessage[];
 }
 
 // ============ Group Agent Execution Types ============

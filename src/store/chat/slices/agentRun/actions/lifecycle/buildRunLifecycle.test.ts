@@ -183,7 +183,7 @@ describe('buildRunLifecycle — sub-agent runs skip top-level effects', () => {
     expect(store.completeOperation).toHaveBeenCalledWith(OP);
   });
 
-  it('a top_level success DOES drain the queue (contrast probe)', async () => {
+  it('a top_level gateway success leaves the server-owned queue alone', async () => {
     const { get, store } = makeStore();
     store.drainQueuedMessages = vi.fn(() => []);
 
@@ -191,7 +191,32 @@ describe('buildRunLifecycle — sub-agent runs skip top-level effects', () => {
       completeEvent('gateway', { status: 'completed' }),
     );
 
+    expect(store.drainQueuedMessages).not.toHaveBeenCalled();
+  });
+
+  it('a top_level client success still drains the browser queue', async () => {
+    const { get, store } = makeStore();
+    store.drainQueuedMessages = vi.fn(() => []);
+
+    await lifecycle('client', get, 'top_level').completeRun(
+      completeEvent('client', { runtimeStatus: 'done' }),
+    );
+
     expect(store.drainQueuedMessages).toHaveBeenCalled();
+  });
+
+  it('a queue handoff completes the old op without unread, notification, or local replay', async () => {
+    const { get, store } = makeStore();
+    store.drainQueuedMessages = vi.fn(() => [{ content: 'do not replay', id: 'q1' } as any]);
+
+    const result = await lifecycle('gateway', get, 'top_level').completeRun(
+      completeEvent('gateway', { queueHandoff: true, status: 'completed' }),
+    );
+
+    expect(result).toEqual({ requeued: true });
+    expect(store.completeOperation).toHaveBeenCalledWith(OP);
+    expect(store.markTopicUnread).not.toHaveBeenCalled();
+    expect(store.drainQueuedMessages).not.toHaveBeenCalled();
   });
 
   it('afterRunComplete is a no-op for a sub_agent run (no notification)', async () => {

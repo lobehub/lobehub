@@ -3,9 +3,10 @@
 import { ActionIcon, Flexbox, Icon, Image } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { ArrowUp, ListEnd, Pencil, Trash2 } from 'lucide-react';
-import { memo, useCallback, useMemo } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { message as antdMessage } from '@/components/AntdStaticMethods';
 import FileIcon from '@/components/FileIcon';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
@@ -159,24 +160,83 @@ const QueueTray = memo(() => {
 
   const queuedMessages = useChatStore((s) => operationSelectors.getQueuedMessages(context)(s));
   const removeQueuedMessage = useChatStore((s) => s.removeQueuedMessage);
+  const removeGatewayQueuedMessage = useChatStore((s) => s.removeGatewayQueuedMessage);
   const dispatchChatUploadFileList = useFileStore((s) => s.dispatchChatUploadFileList);
   const editor = useConversationStore((s) => s.editor);
+  const [pendingIds, setPendingIds] = useState<Set<string>>(() => new Set());
 
   // Edit: restore both the text content AND the attached files back to the
   // input area, so the user can tweak the message and re-send. Without the
   // file restore, images attached to a queued message would silently disappear
   // when the user clicks the pencil.
   const handleEdit = useCallback(
-    (msg: QueuedMessage) => {
-      removeQueuedMessage(contextKey, msg.id);
-      editor?.setDocument('markdown', msg.content);
-      editor?.focus();
-      if (msg.filesPreview?.length) {
-        const restored = reconstructUploadFilesFromQueue(msg.filesPreview);
-        dispatchChatUploadFileList({ files: restored, type: 'addFiles' });
+    async (msg: QueuedMessage) => {
+      if (pendingIds.has(msg.id)) return;
+      setPendingIds((ids) => new Set(ids).add(msg.id));
+
+      try {
+        if (msg.source === 'gateway') {
+          const removed = await removeGatewayQueuedMessage(context, msg.id);
+          // The server may already have consumed the item on another device.
+          // In that case, do not restore a duplicate draft into the editor.
+          if (!removed) return;
+        } else {
+          removeQueuedMessage(contextKey, msg.id);
+        }
+
+        // Restore only after the authoritative removal succeeds. A failed
+        // mutation leaves the queue item intact and avoids duplicating it in
+        // both the server queue and the editor.
+        editor?.setDocument('markdown', msg.content);
+        editor?.focus();
+        if (msg.filesPreview?.length) {
+          const restored = reconstructUploadFilesFromQueue(msg.filesPreview);
+          dispatchChatUploadFileList({ files: restored, type: 'addFiles' });
+        }
+      } catch {
+        antdMessage.error(t('inputQueue.serverMutationFailed'));
+      } finally {
+        setPendingIds((ids) => {
+          const next = new Set(ids);
+          next.delete(msg.id);
+          return next;
+        });
       }
     },
-    [contextKey, dispatchChatUploadFileList, editor, removeQueuedMessage],
+    [
+      context,
+      contextKey,
+      dispatchChatUploadFileList,
+      editor,
+      pendingIds,
+      removeGatewayQueuedMessage,
+      removeQueuedMessage,
+      t,
+    ],
+  );
+
+  const handleDelete = useCallback(
+    async (msg: QueuedMessage) => {
+      if (pendingIds.has(msg.id)) return;
+      if (msg.source !== 'gateway') {
+        removeQueuedMessage(contextKey, msg.id);
+        return;
+      }
+
+      setPendingIds((ids) => new Set(ids).add(msg.id));
+      try {
+        await removeGatewayQueuedMessage(context, msg.id);
+      } catch {
+        antdMessage.error(t('inputQueue.serverMutationFailed'));
+      } finally {
+        setPendingIds((ids) => {
+          const next = new Set(ids);
+          next.delete(msg.id);
+          return next;
+        });
+      }
+    },
+    [context, contextKey, pendingIds, removeGatewayQueuedMessage, removeQueuedMessage, t],
   );
 
   // "Send now": cancel the currently running agent run for this context, then
@@ -225,6 +285,7 @@ const QueueTray = memo(() => {
     <Flexbox className={styles.container} gap={0}>
       {queuedMessages.map((msg, index) => {
         const previews = msg.filesPreview ?? [];
+        const pending = pendingIds.has(msg.id);
         return (
           <Flexbox
             horizontal
@@ -249,22 +310,29 @@ const QueueTray = memo(() => {
               )}
             </Flexbox>
             <ActionIcon
+              disabled={pending}
               icon={Pencil}
+              loading={pending}
               size="small"
               title={t('inputQueue.edit')}
-              onClick={() => handleEdit(msg)}
+              onClick={() => void handleEdit(msg)}
             />
+            {msg.source !== 'gateway' && (
+              <ActionIcon
+                disabled={pending}
+                icon={ArrowUp}
+                size="small"
+                title={t('inputQueue.sendNow')}
+                onClick={() => handleSendNow(msg)}
+              />
+            )}
             <ActionIcon
-              icon={ArrowUp}
-              size="small"
-              title={t('inputQueue.sendNow')}
-              onClick={() => handleSendNow(msg)}
-            />
-            <ActionIcon
+              disabled={pending}
               icon={Trash2}
+              loading={pending}
               size="small"
               title={t('inputQueue.delete')}
-              onClick={() => removeQueuedMessage(contextKey, msg.id)}
+              onClick={() => void handleDelete(msg)}
             />
           </Flexbox>
         );

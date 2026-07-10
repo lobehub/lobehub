@@ -1,4 +1,9 @@
-import type { ConversationContext, MessageMetadata, UploadFileItem } from '@lobechat/types';
+import type {
+  ConversationContext,
+  GatewayQueuedMessage,
+  MessageMetadata,
+  UploadFileItem,
+} from '@lobechat/types';
 
 /**
  * Operation Type Definitions
@@ -242,9 +247,15 @@ export interface QueuedMessage {
   /** Mirrors SendMessageParams.forceRuntime so a queued task-topic follow-up
    *  keeps its gateway pin when the queue drains. */
   forceRuntime?: 'client' | 'gateway' | 'hetero';
+  /** Complete replay payload owned by the Gateway queue. */
+  gatewayMessage?: GatewayQueuedMessage;
+  /** `staged` items exist only in the browser until a server enqueue succeeds. */
+  gatewaySyncStatus?: 'staged' | 'synced';
   id: string;
   interruptMode: 'soft' | 'hard';
   metadata?: MessageMetadata;
+  /** Omitted for the legacy browser queue; Gateway items are server-owned. */
+  source?: 'client' | 'gateway';
 }
 
 /**

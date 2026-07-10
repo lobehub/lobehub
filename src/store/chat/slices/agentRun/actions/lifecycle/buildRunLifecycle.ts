@@ -303,10 +303,10 @@ export const buildRunLifecycle = (
       // fire regardless of which transport reached this boundary.
       const disposition = resolveTerminalDisposition(event);
 
-      const completeSuccess = () => {
+      const completeSuccess = (markUnread = true) => {
         get().completeOperation(operationId);
         const completedOp = get().operations[operationId];
-        if (completedOp?.context.agentId) {
+        if (markUnread && completedOp?.context.agentId) {
           get().markTopicUnread({
             agentId: completedOp.context.agentId,
             groupId: completedOp.context.groupId,
@@ -330,12 +330,25 @@ export const buildRunLifecycle = (
         }
       }
 
+      // The gateway server has already started the next queued turn. Finish
+      // this local transport operation, but keep the user-facing run continuous:
+      // no unread marker, desktop notification, or browser-side queue drain.
+      if (event.queueHandoff) {
+        completeSuccess(false);
+        emitComplete(operationId, runtimeStatus);
+        return { requeued: true };
+      }
+
       // 2. On success with queued messages: drain, complete, and re-trigger a new
       //    sendMessage. Only drain on success — on error the queue is preserved.
       //    Gated to TOP-LEVEL runs only: the input queue belongs to the parent
       //    run, so a nested sub-agent completion must never drain it (it would
       //    re-trigger the user's queued message mid-parent-run). See RunScope.
-      if (disposition === 'success' && adapter.runScope !== 'sub_agent') {
+      if (
+        disposition === 'success' &&
+        adapter.runScope !== 'sub_agent' &&
+        adapter.runtimeType !== 'gateway'
+      ) {
         const remainingQueued = get().drainQueuedMessages(contextKey);
         if (remainingQueued.length > 0) {
           const merged = mergeQueuedMessages(remainingQueued);

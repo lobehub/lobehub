@@ -21,6 +21,7 @@ import {
   type SendButtonHandler,
   type SendButtonProps,
 } from '@/features/ChatInput/store/initialState';
+import { useIsGatewayModeEnabled } from '@/helpers/gatewayMode';
 import { useAgentStore } from '@/store/agent';
 import { chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
@@ -254,6 +255,14 @@ const ChatInput = memo<ChatInputProps>(
     const updateInputMessage = useConversationStore((s) => s.updateInputMessage);
     const setEditor = useConversationStore((s) => s.setEditor);
     const setChatInputOverlayHeight = useConversationStore((s) => s.setChatInputOverlayHeight);
+    const useFetchGatewayMessageQueue = useChatStore((s) => s.useFetchGatewayMessageQueue);
+    const isGatewayModeEnabled = useIsGatewayModeEnabled(context.agentId);
+    const shouldFetchGatewayQueue = !disableQueue && !!context.topicId && isGatewayModeEnabled;
+
+    // Mount queue hydration independently from QueueTray. The tray is gated by
+    // local item count, so putting the fetch inside it would make an empty
+    // browser cache unable to discover server-owned (or cross-device) items.
+    useFetchGatewayMessageQueue(context, shouldFetchGatewayQueue);
 
     // Observe the floating overlay's height (TodoProgress + QueueTray) and
     // publish it so the ChatList container can reserve matching bottom
