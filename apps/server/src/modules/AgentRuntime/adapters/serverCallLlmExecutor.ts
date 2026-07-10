@@ -10,13 +10,7 @@ import {
   shouldRetryLLM,
 } from '@lobechat/agent-runtime';
 import { BRANDING_PROVIDER } from '@lobechat/business-const';
-import { ToolNameResolver } from '@lobechat/context-engine';
-import {
-  type ChatStreamPayload,
-  consumeStreamUntilDone,
-  isEmptyModelCompletion,
-  ModelEmptyError,
-} from '@lobechat/model-runtime';
+import { type ChatStreamPayload, ModelEmptyError } from '@lobechat/model-runtime';
 import {
   context as otelContext,
   SpanKind,
@@ -29,28 +23,20 @@ import {
   chatSpanName,
   tracer as agentRuntimeTracer,
 } from '@lobechat/observability-otel/modules/agent-runtime';
-import type {
-  ChatImageItem,
-  ChatToolPayload,
-  GroundingSearch,
-  MessageToolCall,
-  ModelPerformance,
-  ModelUsage,
-} from '@lobechat/types';
 
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 
 import { type RuntimeExecutorContext } from '../context';
-import { isOperationInterrupted, log, sleep, timing } from '../executorHelpers';
+import { isOperationInterrupted, log, sleep } from '../executorHelpers';
 import { formatErrorEventData } from '../formatErrorEventData';
 import { classifyLLMError } from '../llmErrorClassification';
 import { createConversationParentMissingError } from '../messagePersistErrors';
+import { createServerCallLlmAttempt } from './serverCallLlmAttempt';
 import { buildServerCallLlmContext } from './serverCallLlmContextBuilder';
 import {
   finalizeServerCallLlmResult,
   persistInterruptedServerCallLlmResult,
 } from './serverCallLlmFinalizer';
-import { createServerCallLlmStreamSink } from './serverCallLlmStreamSink';
 import { resolveServerCallLlmTooling, type ServerCallLlmTooling } from './serverCallLlmTooling';
 
 interface PreparedCallLLMContext {
@@ -243,6 +229,9 @@ export const callLlm =
       // semantic span represents the LLM call from the agent's perspective).
       const llmStartTime = Date.now();
       let firstChunkAt: number | undefined;
+      const onFirstChunk = () => {
+        if (firstChunkAt === undefined) firstChunkAt = Date.now() - llmStartTime;
+      };
       const chatSpan = agentRuntimeTracer.startSpan(chatSpanName(model), {
         attributes: buildChatRequestAttributes({
           conversationId: state.metadata?.topicId,
@@ -259,291 +248,36 @@ export const callLlm =
       try {
         return await otelContext.with(chatCtx, async () => {
           for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-            const streamSink = createServerCallLlmStreamSink({
+            const llmAttempt = createServerCallLlmAttempt({
+              attempt,
+              chatPayload,
               ctx,
               events,
+              maxAttempts,
+              messageCount: processedMessages.length,
+              model,
+              modelRuntime,
+              onFirstChunk,
               operationLogId,
+              provider,
+              resolved,
+              topicId: state.metadata?.topicId,
+              trigger: state.metadata?.trigger,
             });
-            let toolsCalling: ChatToolPayload[] = [];
-            let tool_calls: MessageToolCall[] = [];
-            const imageList: ChatImageItem[] = [];
-            let grounding: GroundingSearch | null = null;
-            let currentStepUsage: ModelUsage | undefined;
-            let currentStepSpeed: ModelPerformance | undefined;
-            let currentStepFinishReason: string | undefined = undefined;
-            let streamError: any = undefined;
-            // Set when a terminal turn's answer was salvaged from the reasoning
-            // channel (see the answer-in-thinking guard below) — surfaced in
-            // message metadata for observability.
-            let answerSalvagedFromReasoning = false;
 
             try {
-              log(
-                `${stagePrefix} calling model-runtime chat (attempt %d/%d, model: %s, messages: %d, tools: %d)`,
-                attempt,
-                maxAttempts,
-                model,
-                processedMessages.length,
-                tools?.length ?? 0,
-              );
-
-              // Call model-runtime chat
-              const response = await modelRuntime.chat(chatPayload, {
-                callback: {
-                  onCompletion: async (data) => {
-                    // Capture usage (may or may not include cost)
-                    if (data.usage) {
-                      currentStepUsage = data.usage;
-                    }
-                    // Capture performance metrics (tps / ttft / duration / latency)
-                    if (data.speed) {
-                      currentStepSpeed = data.speed;
-                    }
-                    // Capture provider's terminal finishReason so soft interrupts
-                    // (e.g. Gemini RECITATION / MAX_TOKENS with empty content)
-                    // are visible in tracing instead of being silently swallowed.
-                    if (data.finishReason) {
-                      currentStepFinishReason = data.finishReason;
-                    }
-                  },
-                  onGrounding: async (groundingData) => {
-                    log(`[${operationLogId}][grounding] %O`, groundingData);
-                    grounding = groundingData;
-
-                    await streamManager.publishStreamChunk(operationId, stepIndex, {
-                      chunkType: 'grounding',
-                      grounding: groundingData,
-                    });
-                  },
-                  onText: async (text) => {
-                    if (firstChunkAt === undefined) {
-                      firstChunkAt = Date.now() - llmStartTime;
-                    }
-                    timing(
-                      '[%s] onText received chunk at %d, length: %d',
-                      operationLogId,
-                      Date.now(),
-                      text.length,
-                    );
-                    await streamSink.appendText(text);
-                  },
-                  onThinking: async (reasoning) => {
-                    if (firstChunkAt === undefined) {
-                      firstChunkAt = Date.now() - llmStartTime;
-                    }
-                    timing(
-                      '[%s] onThinking received chunk at %d, length: %d',
-                      operationLogId,
-                      Date.now(),
-                      reasoning.length,
-                    );
-                    await streamSink.appendThinking(reasoning);
-                  },
-                  // Gemini 2.5+/3 multimodal streams deliver assistant text and
-                  // reasoning as `content_part`/`reasoning_part` events (triggered by
-                  // thought parts / thoughtSignature) instead of plain `text`/
-                  // `reasoning`. Without these handlers the text is silently dropped:
-                  // `onCompletion` still reports usage tokens, so the empty-completion
-                  // guard sees outputTokens > 0 and finalizes the turn to a blank
-                  // `done`. Mirror onText/onThinking for text parts so streaming,
-                  // persistence and tracing all capture the content; upload image
-                  // parts to object storage and serialize the multimodal content
-                  // (text + image URLs, in order) — never persist raw base64.
-                  onContentPart: async (part) => {
-                    if (firstChunkAt === undefined) {
-                      firstChunkAt = Date.now() - llmStartTime;
-                    }
-
-                    await streamSink.appendContentPart(part);
-                  },
-                  // Some Gemini / Nano Banana image responses arrive via the
-                  // legacy single-image `base64_image` event instead of
-                  // `content_part` (the Google stream transform emits it when a
-                  // response can't be classified as multimodal). Without this
-                  // handler the image is silently dropped server-side — never
-                  // uploaded, never persisted — and, on channels that omit the
-                  // Image response modality, the raw base64 leaks into text and
-                  // bloats the context. Mirror the onContentPart image branch:
-                  // register a placeholder part, upload to object storage, and
-                  // mark the turn multimodal so raw base64 never lands in content.
-                  onBase64Image: async ({ image }) => {
-                    if (firstChunkAt === undefined) {
-                      firstChunkAt = Date.now() - llmStartTime;
-                    }
-
-                    await streamSink.appendBase64Image(image);
-                  },
-                  onReasoningPart: async (part) => {
-                    if (firstChunkAt === undefined) {
-                      firstChunkAt = Date.now() - llmStartTime;
-                    }
-
-                    await streamSink.appendReasoningPart(part);
-                  },
-                  onToolsCalling: async ({ toolsCalling: raw }) => {
-                    const resolvedCalls = new ToolNameResolver().resolve(
-                      raw,
-                      resolved.promptManifestMap,
-                      resolved.tools.map((tool) => tool.function.name),
-                    );
-                    // Attach source (origin) and executor (dispatch target) for routing.
-                    // `arguments` are kept RAW here on purpose so the tool executor can
-                    // still detect malformed JSON and return an `INVALID_JSON_ARGUMENTS`
-                    // tool-result with the original bad string — that's the
-                    // self-reflection signal the model needs to fix its own output.
-                    // Sanitization happens later, only at the persist boundaries
-                    // (DB write and state.messages push) to protect strict providers
-                    // replaying history. See .
-                    const payload = resolvedCalls.map((p) => ({
-                      ...p,
-                      executor: resolved.executorMap?.[p.identifier],
-                      source: resolved.sourceMap[p.identifier],
-                    }));
-                    // log(`[${operationLogId}][toolsCalling]`, payload);
-                    toolsCalling = payload;
-                    tool_calls = raw;
-
-                    await streamSink.flushTextBuffer();
-
-                    await streamManager.publishStreamChunk(operationId, stepIndex, {
-                      chunkType: 'tools_calling',
-                      toolsCalling: payload,
-                    });
-                  },
-                  onError: async (errorData) => {
-                    streamError = errorData;
-                    console.error(`[${operationLogId}][stream_error]`, errorData);
-                  },
-                },
-                metadata: {
-                  operationId,
-                  topicId: state.metadata?.topicId,
-                  trigger: state.metadata?.trigger,
-                },
-                user: ctx.userId,
-              });
-
-              // Consume stream to ensure all callbacks complete execution
-              await consumeStreamUntilDone(response);
-
-              // If a stream error was captured via onError callback, throw to propagate the error
-              if (streamError) {
-                const streamExecutionError = new Error(
-                  typeof streamError.message === 'string'
-                    ? `LLM stream error: ${streamError.message}`
-                    : `LLM stream error: ${JSON.stringify(streamError)}`,
-                );
-                const { message: _message, ...restStreamError } = streamError as Record<
-                  string,
-                  unknown
-                >;
-                Object.assign(streamExecutionError, restStreamError);
-                throw streamExecutionError;
-              }
-
-              await streamSink.flushTextBuffer();
-              await streamSink.flushReasoningBuffer();
-              streamSink.clearBuffers();
-
-              // Wait for any model-generated image uploads to finish so the
-              // persisted multimodal content references S3 URLs, not base64.
-              await streamSink.waitForImageUploads();
-
-              // Empty-completion guard: if the model produced
-              // nothing actionable — no content, reasoning, tool calls, images,
-              // or output tokens — throw so the retry loop below re-attempts the
-              // turn instead of finalizing to `done` with a blank assistant
-              // message. Skipped when the user interrupted mid-stream, where an
-              // empty turn is expected and must not be retried.
-              const reportedOutputTokens =
-                currentStepUsage && typeof currentStepUsage === 'object'
-                  ? (currentStepUsage as { totalOutputTokens?: unknown }).totalOutputTokens
-                  : undefined;
-
-              if (
-                isEmptyModelCompletion({
-                  content: streamSink.content,
-                  imageCount: imageList.length,
-                  outputTokens:
-                    typeof reportedOutputTokens === 'number' ? reportedOutputTokens : undefined,
-                  reasoning: streamSink.thinkingContent,
-                  toolCallCount: toolsCalling.length + tool_calls.length,
-                }) &&
-                !(await isOperationInterrupted(ctx))
-              ) {
-                log(
-                  '[%s] Model returned an empty completion (attempt %d/%d) — throwing ModelEmptyError to retry',
-                  operationLogId,
-                  attempt,
-                  maxAttempts,
-                );
-                throw new ModelEmptyError(undefined, {
-                  attempt,
-                  contentLength: streamSink.content.length,
-                  finishReason: currentStepFinishReason,
-                  imageCount: imageList.length,
-                  maxAttempts,
-                  model,
-                  outputTokens:
-                    typeof reportedOutputTokens === 'number' ? reportedOutputTokens : undefined,
-                  provider,
-                  reasoningLength: streamSink.thinkingContent.length,
-                  toolCallCount: toolsCalling.length + tool_calls.length,
-                });
-              }
-
-              // Answer-in-thinking salvage: some thinking-mode models — notably
-              // DeepSeek V4 over the Anthropic-compatible API — occasionally emit
-              // the final user-facing answer inside the reasoning channel and stop
-              // naturally with an empty text block. The reasoning is then rendered
-              // as a collapsed "thinking" panel, so the user sees a blank reply.
-              // When a turn ends naturally with no tool calls and no visible
-              // content but non-empty text reasoning, promote the reasoning to be
-              // the answer. This is a backstop; the primary fix is replaying the
-              // real assistant reasoning in history (see modelForcesPreserveThinking
-              // above) which sharply reduces how often the model does this.
-              const isTerminalNaturalStop =
-                currentStepFinishReason === 'end_turn' || currentStepFinishReason === 'stop';
-              if (
-                isTerminalNaturalStop &&
-                toolsCalling.length === 0 &&
-                tool_calls.length === 0 &&
-                streamSink.content.trim().length === 0 &&
-                streamSink.thinkingContent.trim().length > 0 &&
-                !streamSink.hasReasoningImages
-              ) {
-                log(
-                  '[%s] answer-in-thinking salvage: promoting %d chars of reasoning to content',
-                  operationLogId,
-                  streamSink.thinkingContent.length,
-                );
-                streamSink.content = streamSink.thinkingContent;
-                streamSink.thinkingContent = '';
-                answerSalvagedFromReasoning = true;
-              }
-
-              log(
-                `[${operationLogId}] finish model-runtime calling | content: %d chars | reasoning: %d chars | tools: %d | usage: %s`,
-                streamSink.content.length,
-                streamSink.thinkingContent.length,
-                toolsCalling.length,
-                currentStepUsage ? 'yes' : 'none',
-              );
-
-              if (streamSink.thinkingContent) {
-                log(`[${operationLogId}][reasoning]`, streamSink.thinkingContent);
-              }
-              if (streamSink.content) {
-                log(`[${operationLogId}][content]`, streamSink.content);
-              }
-              if (toolsCalling.length > 0) {
-                log(`[${operationLogId}][toolsCalling] `, toolsCalling);
-              }
-
-              // Log usage information
-              if (currentStepUsage) {
-                log(`[${operationLogId}][usage] %O`, currentStepUsage);
-              }
+              await llmAttempt.execute();
+              const {
+                answerSalvagedFromReasoning,
+                finishReason: currentStepFinishReason,
+                grounding,
+                imageList,
+                speed: currentStepSpeed,
+                streamSink,
+                toolCalls: tool_calls,
+                toolsCalling,
+                usage: currentStepUsage,
+              } = llmAttempt;
 
               // Add a complete llm_stream event (including all streaming chunks)
               events.push({
@@ -651,7 +385,7 @@ export const callLlm =
                 },
               };
             } catch (error) {
-              streamSink.clearBuffers();
+              llmAttempt.streamSink.clearBuffers();
 
               const classified = classifyLLMError(error);
               const interrupted = await isOperationInterrupted(ctx);
@@ -714,12 +448,12 @@ export const callLlm =
               if (interrupted) {
                 await persistInterruptedServerCallLlmResult({
                   assistantMessageId: assistantMessageItem.id,
-                  currentStepSpeed,
-                  currentStepUsage,
+                  currentStepSpeed: llmAttempt.speed,
+                  currentStepUsage: llmAttempt.usage,
                   messageModel: ctx.messageModel,
                   operationLogId,
-                  streamOutput: streamSink,
-                  toolsCalling,
+                  streamOutput: llmAttempt.streamSink,
+                  toolsCalling: llmAttempt.toolsCalling,
                 });
               }
 
