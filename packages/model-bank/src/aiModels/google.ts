@@ -208,7 +208,8 @@ const googleChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
-      functionCall: true,
+      // no functionCall: the runtime always requests ['Text', 'Image'] modalities for
+      // nano-banana models, and Vertex AI rejects function declarations in that mode
       imageOutput: true,
       reasoning: true,
       vision: true,
