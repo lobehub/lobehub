@@ -36,7 +36,7 @@ interface FinalizeServerCallLlmResultInput {
   assistantMessageId: string;
   currentStepSpeed?: ModelPerformance;
   currentStepUsage?: ModelUsage;
-  grounding?: GroundingSearch;
+  grounding: GroundingSearch | null;
   imageList: ChatImageItem[];
   messageModel: RuntimeExecutorContext['messageModel'];
   model: string;

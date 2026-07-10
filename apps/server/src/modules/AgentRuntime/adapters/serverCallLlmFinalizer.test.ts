@@ -141,6 +141,7 @@ describe('serverCallLlmFinalizer', () => {
     const newState = await finalizeServerCallLlmResult({
       answerSalvagedFromReasoning: false,
       assistantMessageId: 'assistant-1',
+      grounding: null,
       imageList: [],
       messageModel,
       model: 'gemini',

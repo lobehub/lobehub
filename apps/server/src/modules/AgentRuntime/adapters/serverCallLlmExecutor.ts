@@ -267,7 +267,7 @@ export const callLlm =
             let toolsCalling: ChatToolPayload[] = [];
             let tool_calls: MessageToolCall[] = [];
             const imageList: ChatImageItem[] = [];
-            let grounding: GroundingSearch | undefined;
+            let grounding: GroundingSearch | null = null;
             let currentStepUsage: ModelUsage | undefined;
             let currentStepSpeed: ModelPerformance | undefined;
             let currentStepFinishReason: string | undefined = undefined;

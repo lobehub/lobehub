@@ -102,7 +102,7 @@ export interface UpdateMessageParams {
   provider?: string;
   reasoning?: ModelReasoning;
   role?: string;
-  search?: GroundingSearch;
+  search?: GroundingSearch | null;
   toolCalls?: MessageToolCall[];
   tools?: ChatToolPayload[] | null;
   traceId?: string;
@@ -135,7 +135,7 @@ export const UpdateMessageParamsSchema = z
     provider: z.string().optional(),
     reasoning: ModelReasoningSchema.optional(),
     role: z.string().optional(),
-    search: GroundingSearchSchema.optional(),
+    search: GroundingSearchSchema.nullish(),
     toolCalls: z.array(MessageToolCallSchema).optional(),
     tools: z.array(ChatToolPayloadSchema).nullish(),
     traceId: z.string().optional(),
