@@ -26,10 +26,10 @@
 # Login persistence (so you sign in ONCE, not once per run):
 #   `stop` snapshots the instance's login state into $LOGIN_STATE_DIR before it
 #   wipes the userData, and `start` seeds new instances from that snapshot. The
-#   app's OAuth refresh token ROTATES on every boot and expires after ~7 days, so
-#   the snapshot must be re-taken each run — that is exactly what `stop` does.
-#   The golden profile is only a fallback for the very first run, and is never
-#   written to (it belongs to the user's own dev app).
+#   app's OAuth refresh token ROTATES on every boot, so only the instance that
+#   booted last holds a usable one — the snapshot must be re-taken each run, which
+#   is exactly what `stop` does. The golden profile is only a fallback for the very
+#   first run, and is never written to (it belongs to the user's own dev app).
 #     ./electron-dev.sh login-status      # where the login comes from + expiry
 #     ./electron-dev.sh save-login <id>   # snapshot a live instance without stopping
 #   If an instance is killed instead of stopped (crash, command timeout), its
@@ -223,49 +223,68 @@ copy_login_items() {
   done
 }
 
-# Milliseconds until the profile's OAuth refresh token expires. Prints nothing
-# when the profile carries no token at all; a negative number means expired.
-refresh_token_expiry_ms() {
-  python3 - "$1/lobehub-settings.json" 2>/dev/null <<'PY' || true
+# Reads lobehub-settings.json → encryptedTokens and prints
+#   "<hasRefreshToken:0|1> <msUntilAccessTokenExpiry|?>"
+#
+# `expiresAt` is `Date.now() + data.expires_in * 1000` (RemoteServerConfigCtr.saveTokens),
+# i.e. the ACCESS token's lifetime — NOT the refresh token's. It is routinely in the
+# past on a perfectly refreshable login, so it must never gate whether we keep a
+# profile. What does gate it: the app deletes the whole `encryptedTokens` key
+# (clearTokens) the moment a refresh fails non-retryably (`invalid_grant` &co), and
+# keeps it on transient failures. So a present refreshToken means "can still re-auth".
+read_token_state() {
+  python3 - "$1/lobehub-settings.json" 2>/dev/null <<'PY' || echo "0 ?"
 import json, pathlib, sys, time
 
 path = pathlib.Path(sys.argv[1])
 if not path.is_file():
+    print("0 ?")
     sys.exit(0)
 try:
     tokens = (json.loads(path.read_text()) or {}).get('encryptedTokens') or {}
 except Exception:
+    print("0 ?")
     sys.exit(0)
+
+has_refresh = 1 if tokens.get('refreshToken') else 0
 expires_at = tokens.get('expiresAt')
-if not tokens.get('refreshToken') or not expires_at:
+if not expires_at:
+    print(f"{has_refresh} ?")
     sys.exit(0)
 # The field has been seen in both seconds and milliseconds.
 if expires_at < 1e11:
     expires_at *= 1000
-print(int(expires_at - time.time() * 1000))
+print(f"{has_refresh} {int(expires_at - time.time() * 1000)}")
 PY
 }
 
-# True when the profile can still refresh its session on the next boot.
-profile_has_live_login() {
-  local ms
-  ms=$(refresh_token_expiry_ms "$1")
-  [[ "$ms" =~ ^-?[0-9]+$ ]] && [ "$ms" -gt 0 ]
+# True when the profile still carries a refresh token, i.e. the app can mint a new
+# session from it on the next boot. An expired ACCESS token says nothing here.
+profile_can_reauth() {
+  local state
+  state=$(read_token_state "$1")
+  [ "${state%% *}" = "1" ]
 }
 
 describe_login() {
-  local label="$1" profile="$2" ms
+  local label="$1" profile="$2" state ms access
   if [ ! -d "$profile" ]; then
     echo "  $label: (absent) — $profile"
     return
   fi
-  ms=$(refresh_token_expiry_ms "$profile")
-  if [[ ! "$ms" =~ ^-?[0-9]+$ ]]; then
-    echo "  $label: no token — $profile"
-  elif [ "$ms" -gt 0 ]; then
-    echo "  $label: valid, expires in $((ms / 3600000))h — $profile"
+  state=$(read_token_state "$profile")
+  ms="${state##* }"
+  if [[ "$ms" =~ ^-?[0-9]+$ ]]; then
+    [ "$ms" -gt 0 ] &&
+      access="access token fresh for $((ms / 3600000))h" ||
+      access="access token stale $(( -ms / 3600000 ))h (harmless — it gets refreshed)"
   else
-    echo "  $label: EXPIRED $(( -ms / 3600000 ))h ago — $profile"
+    access="no access-token expiry recorded"
+  fi
+  if [ "${state%% *}" = "1" ]; then
+    echo "  $label: refresh token PRESENT — $access — $profile"
+  else
+    echo "  $label: refresh token GONE (app cleared it after a failed refresh) — $profile"
   fi
 }
 
@@ -295,8 +314,8 @@ probe_renderer_authed() {
 save_login_state() {
   local src="$1" authed_hint="${2:-0}"
   [ -d "$src" ] || return 0
-  if [ "$authed_hint" != "1" ] && ! profile_has_live_login "$src"; then
-    echo "[electron-dev] Not saving login state: $src is signed out / has no valid refresh token (kept the previous snapshot)."
+  if [ "$authed_hint" != "1" ] && ! profile_can_reauth "$src"; then
+    echo "[electron-dev] Not saving login state: $src is signed out (the app cleared its refresh token) — kept the previous snapshot."
     return 0
   fi
   local staging="${LOGIN_STATE_DIR}.staging.$$"
@@ -305,12 +324,10 @@ save_login_state() {
   copy_login_items "$src" "$staging"
   rm -rf "$LOGIN_STATE_DIR"
   mv "$staging" "$LOGIN_STATE_DIR"
-  local ms
-  ms=$(refresh_token_expiry_ms "$LOGIN_STATE_DIR")
-  if [[ "$ms" =~ ^-?[0-9]+$ ]] && [ "$ms" -gt 0 ]; then
-    echo "[electron-dev] Saved login state → $LOGIN_STATE_DIR (refresh token valid for $((ms / 3600000))h)"
+  if profile_can_reauth "$LOGIN_STATE_DIR"; then
+    echo "[electron-dev] Saved login state → $LOGIN_STATE_DIR (refresh token captured)"
   else
-    echo "[electron-dev] Saved login state → $LOGIN_STATE_DIR (cookie session; refresh token already expired)"
+    echo "[electron-dev] Saved login state → $LOGIN_STATE_DIR (cookie session only — no refresh token on disk)"
   fi
 }
 
@@ -337,8 +354,8 @@ seed_userdata() {
   fi
 
   echo "[electron-dev] Seeding userData from $label → $dst"
-  profile_has_live_login "$src" ||
-    echo "[electron-dev]   note: its refresh token is expired — a cookie session may still carry it; otherwise sign in once and 'stop' will capture it."
+  profile_can_reauth "$src" ||
+    echo "[electron-dev]   note: no refresh token on disk — a cookie session may still carry it; otherwise sign in once and 'stop' will capture it."
   copy_login_items "$src" "$dst"
 }
 
@@ -499,7 +516,9 @@ do_start() {
 
   if ! wait_for_cdp; then
     echo "[electron-dev] Failed to bring up CDP. Cleaning up..."
-    do_stop
+    # The app never came up, so its userData is just the seed copy — snapshotting it
+    # would overwrite a good snapshot with an unverified (possibly rejected) token.
+    SKIP_LOGIN_SAVE=1 do_stop
     return 1
   fi
   wait_for_renderer || true
@@ -553,9 +572,10 @@ do_login_status() {
     echo "[electron-dev] Nothing to seed from: sign in once inside the app, then 'save-login <id>' (or just 'stop <id>')."
     return 2
   fi
-  echo "[electron-dev] Note: an expired refresh token does not always mean signed out —"
-  echo "[electron-dev] the app may still hold a cookie session. 'stop'/'save-login' probe the"
-  echo "[electron-dev] running renderer, so a live login is captured either way."
+  echo "[electron-dev] Note: 'expiresAt' in the profile is the ACCESS token's lifetime, not the"
+  echo "[electron-dev] refresh token's — a stale one is normal and gets refreshed on boot. Only a"
+  echo "[electron-dev] missing refresh token means signed out. 'stop'/'save-login' also probe the"
+  echo "[electron-dev] running renderer, so a cookie-only session is captured too."
 }
 
 do_stop_all() {

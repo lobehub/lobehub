@@ -188,18 +188,22 @@ EOF
 $EDEV save-login <id>
 ```
 
-Two traps behind a signed-out instance:
+Three traps behind a signed-out instance:
 
-- **The refresh token rotates on every boot and expires \~7 days after the last
-  refresh.** Only the instance that booted last holds a valid one, so a `stop` is
-  what keeps the snapshot alive. If an instance is _killed_ instead (crash, command
-  timeout) its rotated token dies with it — `save-login <id>` before anything risky.
-  `login-status` reads `lobehub-settings.json → encryptedTokens.expiresAt`.
-- **An expired token does not always mean signed out.** A better-auth cookie can
+- **The refresh token rotates on every boot.** Only the instance that booted last
+  holds a usable one, so a `stop` is what keeps the snapshot alive. If an instance is
+  _killed_ instead (crash, command timeout) its rotated token dies with it —
+  `save-login <id>` before anything risky.
+- **`encryptedTokens.expiresAt` is the ACCESS token's expiry, not the refresh
+  token's.** It is `Date.now() + data.expires_in * 1000` in
+  `RemoteServerConfigCtr.saveTokens`, so it goes stale on a perfectly refreshable
+  login and must never gate whether a profile is kept. The signal that _does_ mean
+  signed out is a **missing `refreshToken`**: the app calls `clearTokens()` (deleting
+  the whole `encryptedTokens` key) when a refresh fails non-retryably
+  (`invalid_grant` \&co), and preserves it on transient failures.
+- **Even a missing token does not always mean signed out.** A better-auth cookie can
   outlive it. `stop` / `save-login` probe the _running renderer_ for a user id, so a
   live cookie-only session is captured too; the on-disk token alone would miss it.
-  Conversely a failed refresh makes the app **erase** `encryptedTokens`, so a
-  signed-out instance leaves no token behind at all.
 
 ## Scope
 

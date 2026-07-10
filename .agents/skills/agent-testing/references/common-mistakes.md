@@ -214,7 +214,7 @@ skill's job to solve and then iterate back into these logs.
 ## Case 8b — Handing the user the sign-in click when the app under test is signed out
 
 **Wrong approach**: an isolated Electron instance came up signed out (its userData had been wiped by an
-earlier `electron-dev.sh stop`, and the golden profile's refresh token was expired → `invalid_grant`), so
+earlier `electron-dev.sh stop`, and the golden profile's refresh token was rejected → `invalid_grant`), so
 the run stopped and offered the user a choice: "I click Sign in and you authorize in the browser" vs
 "skip the screenshot".
 
