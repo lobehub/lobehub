@@ -322,7 +322,11 @@ const DocumentBody = memo(() => {
   const agentDocumentId = useResolvedAgentDocumentId();
   const fullPage = useDocumentViewFullPage();
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
-  const panelEligible = !fullPage && !!activeAgentId && !!documentId;
+  // `agentDocumentId` is what marks this as an *agent* document: only the agent-doc
+  // openers pass it. The notebook opens plain topic documents with the id alone, and
+  // `getOrCreateChatTopic` throws NOT_FOUND on those (no `agent_documents` row), so
+  // the panel — and its topic lookup — must stay out of the way there.
+  const panelEligible = !fullPage && !!activeAgentId && !!documentId && !!agentDocumentId;
   const { topicId: docChatTopicId } = useDocumentChatTopic({
     agentId: panelEligible ? activeAgentId : undefined,
     documentId: panelEligible ? documentId : undefined,

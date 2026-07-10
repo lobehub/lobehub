@@ -42,9 +42,13 @@ const AgentDocumentPage = memo<AgentDocumentPageProps>(({ documentId }) => {
   // agent (the user's main chat context). Pulling that one would 404 the
   // doc-anchored topic lookup whenever the active agent doesn't own this doc.
   const chatAgentId = agentId;
+  // `item` is resolved out of *this agent's* document list, so its presence is the
+  // ownership proof `getOrCreateChatTopic` demands. Waiting for it keeps a bad deep
+  // link from firing a guaranteed-NOT_FOUND lookup before the redirect kicks in.
+  const ownsDocument = !!item;
   const { topicId: docChatTopicId } = useDocumentChatTopic({
-    agentId: chatAgentId,
-    documentId,
+    agentId: ownsDocument ? chatAgentId : undefined,
+    documentId: ownsDocument ? documentId : undefined,
   });
 
   const backToChat = useCallback(
