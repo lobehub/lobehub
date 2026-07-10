@@ -218,10 +218,10 @@ export const agentSelectors = {
 
 LobeHub 是国际化项目，使用 [react-i18next](https://github.com/i18next/react-i18next) 作为 i18n 框架。新增的 UI 文案需要：
 
-1. 在 `src/locales/default/` 对应的 namespace 文件中添加 key（默认语言为英文）：
+1. 在 `packages/locales/src/default/` 对应的 namespace 文件中添加 key（默认语言为英文）：
 
 ```typescript
-// src/locales/default/setting.ts
+// packages/locales/src/default/setting.ts
 export default {
   // ...
   'settingOpening.title': 'Opening Settings',
@@ -234,7 +234,7 @@ export default {
 };
 ```
 
-2. 如果新增了 namespace，需要在 `src/locales/default/index.ts` 中导出
+2. 如果新增了 namespace，需要在 `packages/locales/src/default/index.ts` 中导出
 3. 开发预览时手动翻译 `locales/zh-CN/` 和 `locales/en-US/` 对应的 JSON 文件
 4. CI 会自动运行 `pnpm i18n` 生成其他语言的翻译
 
@@ -321,7 +321,7 @@ const WelcomeMessage = () => {
       <ChatItem avatar={meta} message={message} placement="left" />
       {/* 渲染引导性问题 */}
       <OpeningQuestions questions={openingQuestions} />
-   
+
 </Flexbox>
   ) : (
     <ChatItem avatar={meta} message={message} placement="left" />

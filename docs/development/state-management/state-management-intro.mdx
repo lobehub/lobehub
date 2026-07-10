@@ -115,43 +115,33 @@ LobeHub SessionStore
 └── store.ts
 ```
 
-Based on the provided directory structure of LobeHub SessionStore, we can update the previous document and convert the examples to the implementation of LobeHub's SessionStore. The following is a portion of the updated document:
-
 ### Best Practices for LobeHub SessionStore Directory Structure
 
-In the LobeHub application, session management is a complex functional module, so we use the Slice pattern to organize the data flow. Below is the directory structure of LobeHub SessionStore, where each directory and file has its specific purpose:
+In the LobeHub application, session management is a complex functional module, so we use the [slice pattern](https://github.com/pmndrs/zustand/blob/main/docs/learn/guides/slices-pattern.md) to organize the data flow. Below is the directory structure of LobeHub SessionStore, where each directory and file has its specific purpose:
 
 {/* eslint-disable no-irregular-whitespace */}
 
-```bash
+```fish
 src/store/session
-├── helpers.ts                         # Helper functions
-├── hooks                              # Custom React hooks
-│   ├── index.ts                       # Export file for hooks
-│   ├── useEffectAfterHydrated.ts      # Hook for effects after session hydration
-│   ├── useOnFinishHydrationSession.ts # Hook for session hydration completion
-│   ├── useSessionChatInit.ts          # Hook for session chat initialization
-│   └── useSessionHydrated.ts          # Hook for session hydration status
 ├── index.ts                           # Aggregated export file for SessionStore
 ├── initialState.ts                    # Aggregated initialState for all slices
 ├── selectors.ts                       # Selectors exported from various slices
-├── slices                             # Separated functional modules
-│   ├── agent                          # State and operations related to agents
-│   │   ├── action.ts                  # Action definitions related to agents
-│   │   ├── index.ts                   # Entry file for agent slice
-│   │   ├── selectors.test.ts          # Tests for agent-related selectors
-│   │   └── selectors.ts               # Selector definitions related to agents
-│   └── session                        # State and operations related to sessions
-│   ├── action.test.ts                 # Tests for session-related actions
-│   ├── action.ts                      # Action definitions related to sessions
-│   ├── helpers.ts                     # Helper functions related to sessions
-│   ├── initialState.ts                # Initial state for session slice
-│   └── selectors                      # Session-related selectors and their tests
-│   ├── export.ts                      # Aggregated export for session selectors
-│   ├── index.ts                       # Entry file for session selectors
-│   ├── list.test.ts                   # Tests for list selectors
-│   └── list.ts                        # Definitions for list-related selectors
-└── store.ts                           # Creation and usage of SessionStore
+├── store.ts                           # SessionStore creation and usage
+├── helpers.ts                         # Helper functions
+└── slices                             # Individual functional slices
+    ├── agent                          # Agent Slice
+    │   ├── action.ts
+    │   ├── index.ts
+    │   └── selectors.ts
+    └── session                        # Session Slice
+        ├── action.ts
+        ├── helpers.ts
+        ├── initialState.ts
+        └── selectors
+            ├── export.ts
+            ├── list.ts
+            └── index.ts
+
 ```
 
 ## Implementation of SessionStore
