@@ -14,7 +14,28 @@ const KNOWN_DIVERGENCES: Record<string, string> = {
   '/desktop-onboarding': '/onboarding',
 };
 
-const WEB_ONLY_PATHS = new Set(['/onboarding', '/onboarding/agent', '/onboarding/classic']);
+/**
+ * Web-only routes intentionally absent from Electron (no in-app entry points there).
+ * Paths are flat `path: '...'` literals extracted from both configs.
+ */
+const WEB_ONLY_PATHS = new Set([
+  '/onboarding',
+  '/onboarding/agent',
+  '/onboarding/classic',
+  // Verify report workspace + messenger link flow — web/CLI only
+  '/verify',
+  '/verify-im',
+  ':runId',
+]);
+
+/** Extra `index: true` routes present only on web (verify empty detail). */
+const WEB_ONLY_INDEX_DELTA = 1;
+
+/** handle.meta blobs present only on web. */
+const WEB_ONLY_HANDLE_METAS = new Set([
+  '{ meta: verifyRouteMeta }',
+  '{ meta: verifyReportsRouteMeta }',
+]);
 
 function extractIndexCount(source: string) {
   return [...source.matchAll(/index:\s*true/g)].length;
@@ -87,14 +108,16 @@ describe('desktopRouter config sync', () => {
     expect(missingInSync, `Missing in desktop config: ${missingInSync.join(', ')}`).toEqual([]);
     expect(extraInSync, `Extra in desktop config: ${extraInSync.join(', ')}`).toEqual([]);
     expect(syncIndexCount, 'Desktop config index route count must match async config').toBe(
-      asyncIndexCount,
+      asyncIndexCount - WEB_ONLY_INDEX_DELTA,
     );
   });
 
   it('route handle.meta declarations must match between web and desktop configs', async () => {
     const [asyncSource, syncSource] = await readDesktopRouterSources();
 
-    const asyncMetas = extractHandleMetas(asyncSource);
+    const asyncMetas = extractHandleMetas(asyncSource).filter(
+      (meta) => !WEB_ONLY_HANDLE_METAS.has(meta),
+    );
     const syncMetas = extractHandleMetas(syncSource);
 
     expect(asyncMetas.length, 'Async config must declare at least one handle.meta').toBeGreaterThan(
