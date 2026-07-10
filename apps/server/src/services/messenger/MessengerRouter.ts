@@ -723,7 +723,8 @@ export class MessengerRouter {
     // Telegram has no `replyPrivately` but can reply through `sendDmText`, so
     // register whenever either outlet exists. The full set of command names
     // comes from the shared registry so every platform surfaces the same menu.
-    if (binder.replyPrivately || binder.sendDmText) {
+    const supportsNativeSlashCommands = binder.replyPrivately !== undefined || creds.platform === 'telegram';
+    if (supportsNativeSlashCommands) {
       const slashPaths = this.commands.map((cmd) => `/${cmd.name}`);
       bot.onSlashCommand(slashPaths, async (event) => {
         await this.handleSlashCommand({ binder, bot, client, creds, event, serverDB });
