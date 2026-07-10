@@ -121,6 +121,7 @@ import {
 import { TaskInspectors, TaskManifest, TaskRenders } from '@lobechat/builtin-tool-task/client';
 import {
   UserInteractionIdentifier,
+  UserInteractionInspectors,
   UserInteractionInterventions,
 } from '@lobechat/builtin-tool-user-interaction/client';
 import {
@@ -240,6 +241,7 @@ export const registerBuiltinToolSurfaces = (): void => {
     [SkillStoreManifest.identifier]: SkillStoreInspectors as Record<string, BuiltinInspector>,
     [SkillsManifest.identifier]: SkillsInspectors as Record<string, BuiltinInspector>,
     [TaskManifest.identifier]: TaskInspectors as Record<string, BuiltinInspector>,
+    [UserInteractionIdentifier]: UserInteractionInspectors as Record<string, BuiltinInspector>,
     [WebBrowsingManifest.identifier]: WebBrowsingInspectors as Record<string, BuiltinInspector>,
     [WebOnboardingManifest.identifier]: WebOnboardingInspectors as Record<string, BuiltinInspector>,
     codex: CodexInspectors,

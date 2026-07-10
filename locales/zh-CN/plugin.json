@@ -22,6 +22,7 @@
   "builtins.codex.commandExecution.readFile": "读取文件",
   "builtins.codex.commandExecution.runNode": "运行 node 脚本",
   "builtins.codex.commandExecution.runPython": "运行 python 脚本",
+  "builtins.codex.error.fallback": "Codex 发出了一条警告",
   "builtins.codex.fileChange.editedFiles_one": "已编辑 {{count}} 个文件",
   "builtins.codex.fileChange.editedFiles_other": "已编辑 {{count}} 个文件",
   "builtins.codex.fileChange.editing": "编辑文件中",

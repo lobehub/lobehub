@@ -122,6 +122,7 @@ export default {
   'builtins.codex.commandExecution.readFile': 'Read file',
   'builtins.codex.commandExecution.runNode': 'Run node script',
   'builtins.codex.commandExecution.runPython': 'Run python script',
+  'builtins.codex.error.fallback': 'Codex reported a warning',
   'builtins.codex.fileChange.editedFiles_one': 'Edited {{count}} file',
   'builtins.codex.fileChange.editedFiles_other': 'Edited {{count}} files',
   'builtins.codex.fileChange.editing': 'Editing files',
