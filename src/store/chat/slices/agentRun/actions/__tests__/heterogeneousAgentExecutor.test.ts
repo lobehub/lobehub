@@ -4409,6 +4409,55 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       });
     });
 
+    it('replays a tool-parented signal assistant only after its tool row lands', async () => {
+      // A signal turn parents off the run's last TOOL row, not the spine. So a
+      // create ledger that drains every assistant before any tool row retries
+      // the signal assistant while its parent is still missing, burns its only
+      // retry on a guaranteed FK violation, and drops the turn.
+      const persisted = new Set<string>(['ast-initial']);
+      let toolCreateBlips = 1;
+      mockCreateMessage.mockImplementation(async (params: any) => {
+        // One transient failure on the tool row — the seed of the cascade.
+        if (params.role === 'tool' && toolCreateBlips > 0) {
+          toolCreateBlips -= 1;
+          throw new Error('transient write failure');
+        }
+        // Everything else obeys `messages.parent_id`, like the real table does.
+        if (params.parentId && !persisted.has(params.parentId)) {
+          throw new Error(`FK violation: parent ${params.parentId} is not present`);
+        }
+        persisted.add(params.id);
+        return { id: params.id };
+      });
+
+      await runWithEvents([
+        ccInit(),
+        ccMessageStart('msg_01'),
+        ccToolUse('msg_01', 'toolu_mon_0', 'Monitor', { shell: 'every 1s' }),
+        ccTaskStarted('task_a', 'toolu_mon_0'),
+        ccToolResult('toolu_mon_0', 'Monitor started'),
+        // Natural confirmation turn — parents off the spine.
+        ccMessageStart('msg_02'),
+        ccText('msg_02', 'Monitor started.'),
+        // Monitor pushed stdout → signal callback, parents off the tool row.
+        ccMessageStart('msg_03'),
+        ccText('msg_03', 'tick 1'),
+        ccResult(),
+      ]);
+
+      const toolCreate = mockCreateMessage.mock.calls.find(([p]: any) => p.role === 'tool');
+      const signalCreate = mockCreateMessage.mock.calls.find(
+        ([p]: any) => p.role === 'assistant' && p.metadata?.signal,
+      );
+      expect(toolCreate).toBeDefined();
+      expect(signalCreate).toBeDefined();
+      expect(signalCreate![0].parentId).toBe(toolCreate![0].id);
+
+      // Both rows must exist once the run settles, or the signal turn is lost.
+      expect(persisted.has(toolCreate![0].id)).toBe(true);
+      expect(persisted.has(signalCreate![0].id)).toBe(true);
+    });
+
     it('does NOT stamp metadata.signal on turns following a tool_result (main-chain follow-up)', async () => {
       const idCounter = { tool: 0, assistant: 0 };
       mockCreateMessage.mockImplementation(async (params: any) => {

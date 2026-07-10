@@ -787,16 +787,18 @@ export const executeHeterogeneousAgent = async (
    * be lost once the reducer clears `accContent` on terminal.
    */
   const pendingMainFlush = new Map<string, Record<string, any>>();
-  const pendingMainCreates = new Map<
-    string,
-    Extract<MessageBatchOperation, { type: 'createMessage' }>['message']
-  >();
   /**
-   * Tool rows hang off an assistant row, so a failed `createAssistant` takes
-   * every tool row of that step down with it (FK on `messages.parent_id`).
-   * Replayed after `pendingMainCreates` so the parents exist again.
+   * Retry ledger for every failed row create — assistants AND tool rows, in one
+   * Map on purpose. `messages.parent_id` is a real FK and the parent graph is
+   * not layered: a tool row hangs off its assistant, but a signal/reactive
+   * assistant hangs off the run's last TOOL row (see `computeTurnParentId`).
+   * Splitting the ledger by role would replay a tool-parented assistant before
+   * its parent tool row and lose the turn. Enqueue order IS dependency order —
+   * the reducer can only name a parent it has already emitted a create for —
+   * and `Map` preserves insertion order, so one in-order drain is correct with
+   * no knowledge of which parent kind any given row uses.
    */
-  const pendingToolCreates = new Map<
+  const pendingCreates = new Map<
     string,
     Extract<MessageBatchOperation, { type: 'createMessage' }>['message']
   >();
@@ -1461,7 +1463,7 @@ export const executeHeterogeneousAgent = async (
         } as any;
         messageWriteBatcher.enqueueCreateMessage(messageToCreate, (err) => {
           console.error('[HeterogeneousAgent] Failed to create step assistant:', err);
-          pendingMainCreates.set(intent.messageId, messageToCreate);
+          pendingCreates.set(intent.messageId, messageToCreate);
         });
         get().internal_dispatchMessage(
           { id: intent.messageId, type: 'createMessage', value: messageToCreate },
@@ -1578,7 +1580,7 @@ export const executeHeterogeneousAgent = async (
           const toolMsg = buildToolMessage(x);
           messageWriteBatcher.enqueueCreateMessage(toolMsg, (err) => {
             console.error('[HeterogeneousAgent] Failed to create tool message:', err);
-            pendingToolCreates.set(x.toolMessageId, toolMsg);
+            pendingCreates.set(x.toolMessageId, toolMsg);
           });
           toolMsgIdByCallId.set(x.payload.id, x.toolMessageId);
           mainToolCallIds.add(x.payload.id);
@@ -2006,26 +2008,15 @@ export const executeHeterogeneousAgent = async (
           const queueDrained = await waitForPersistQueue(persistQueue, 'terminal');
 
           if (queueDrained) {
-            // Order is load-bearing: `messages.parent_id` is a real FK, so a row
-            // can only be replayed once its parent is back. Assistants chain to
-            // the previous assistant (Map insertion order == ancestor order),
-            // tool rows chain to their assistant, and every content flush needs
-            // its row to already exist or it silently matches zero rows.
-            for (const [messageId, messageToCreate] of pendingMainCreates) {
+            // Order is load-bearing: rows first, in the order they were enqueued
+            // (that is their FK dependency order), then the content patches —
+            // an update against a row that does not exist yet matches zero rows.
+            for (const [messageId, messageToCreate] of pendingCreates) {
               try {
                 await messageService.createMessage(messageToCreate);
-                pendingMainCreates.delete(messageId);
+                pendingCreates.delete(messageId);
               } catch (err) {
-                console.error('[HeterogeneousAgent] Failed to replay main assistant create:', err);
-              }
-            }
-
-            for (const [messageId, messageToCreate] of pendingToolCreates) {
-              try {
-                await messageService.createMessage(messageToCreate);
-                pendingToolCreates.delete(messageId);
-              } catch (err) {
-                console.error('[HeterogeneousAgent] Failed to replay tool create:', err);
+                console.error('[HeterogeneousAgent] Failed to replay message create:', err);
               }
             }
 
