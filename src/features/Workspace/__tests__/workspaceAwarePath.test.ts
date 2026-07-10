@@ -71,6 +71,7 @@ describe('buildWorkspaceAwarePath', () => {
     expect(buildWorkspaceAwarePath('/settings/credits', 'acme')).toBe('/acme/settings/credits');
     expect(buildWorkspaceAwarePath('/settings/usage', 'acme')).toBe('/acme/settings/usage');
     expect(buildWorkspaceAwarePath('/settings/skill', 'acme')).toBe('/acme/settings/skill');
+    expect(buildWorkspaceAwarePath('/settings/connector', 'acme')).toBe('/acme/settings/connector');
     expect(buildWorkspaceAwarePath('/settings/messenger', 'acme')).toBe('/acme/settings/messenger');
     expect(buildWorkspaceAwarePath('/settings/creds', 'acme')).toBe('/acme/settings/creds');
     expect(buildWorkspaceAwarePath('/settings/provider/openai', 'acme')).toBe(
