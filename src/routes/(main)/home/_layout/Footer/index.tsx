@@ -9,6 +9,7 @@ import { DiscordIcon, GithubIcon } from '@lobehub/ui/icons';
 import {
   Book,
   CircleHelp,
+  Download,
   Feather,
   FileClockIcon,
   FlaskConical,
@@ -369,6 +370,19 @@ const Footer = memo(() => {
         label: t('changelog'),
         onClick: handleOpenChangelogModal,
       },
+      ...(!isDesktop && footer.layout === 'compact'
+        ? [
+            {
+              icon: <Icon icon={Download} />,
+              key: 'get-app',
+              label: (
+                <WorkspaceLink escape to="/downloads">
+                  {t('getApp')}
+                </WorkspaceLink>
+              ),
+            },
+          ]
+        : []),
       ...(footer.layout === 'compact' && !footer.hideGitHub
         ? [
             {

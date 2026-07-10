@@ -14,6 +14,7 @@ import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
 
 import UserLoginOrSignup from '../UserLoginOrSignup';
+import LangButton from './LangButton';
 import { useMenu } from './useMenu';
 
 const PanelContent: FC<{ closePopover: () => void }> = ({ closePopover }) => {
@@ -61,6 +62,7 @@ const PanelContent: FC<{ closePopover: () => void }> = ({ closePopover }) => {
       )}
 
       <Menu items={mainItems} onClick={closePopover} />
+      <LangButton placement={'right' as any} />
       <Menu items={logoutItems} onClick={handleSignOut} />
     </Flexbox>
   );
