@@ -515,3 +515,49 @@
 - With `http_proxy`/`HTTP_PROXY` set, `curl http://localhost:<port>` returns the
   proxy's 502 instead of connection-refused, faking a "server up but broken" signal.
   Always `curl --noproxy '*'` for local port probes.
+
+### E8. ✅ WORKS — Electron pool instance boots BLANK because the copied golden login is dead
+
+- **Situation**: `electron-dev.sh start <id>` seeds userData from the golden dev profile,
+  but the app renders an empty `#root` (innerText length 0, only the LobeHub watermark) and
+  `app-probe.sh auth` returns `isSignedIn:false`. The instance log shows
+  `Refresh response missing access_token or refresh_token { error: 'invalid_grant' }`.
+- **Cause (measured, not guessed)**: OIDC refresh tokens are single-use. Every prior
+  `start <id>` copied the same golden profile and consumed/rotated its refresh token, so the
+  copy's token is already dead. A blank shell here is an AUTH failure, not a render bug —
+  read the instance log before chasing the SPA.
+- **Doesn't work**: pointing `LOBE_GOLDEN_PROFILE` at the packaged app's profile
+  (`~/Library/Application Support/LobeHub`) — the pool instance's startup refresh will rotate
+  that token too and log the user out of their real desktop app.
+- **Works — inject a valid credential the app already owns, no new OAuth grant**:
+  the prod lambda accepts any of the user's valid OIDC access tokens via the `Oidc-Auth`
+  header, and the CLI keeps one in `~/.lobehub`. Extract it with the CLI's own
+  `getValidToken()` (it auto-refreshes), then override the single main-process accessor:
+  ```ts
+  // apps/desktop/src/main/controllers/RemoteServerConfigCtr.ts — [AGENT-TEST] REMOVE
+  async getAccessToken(): Promise<string | null> {
+    if (process.env.LOBE_TEST_ACCESS_TOKEN) return process.env.LOBE_TEST_ACCESS_TOKEN;
+    ...
+  ```
+  `export LOBE_TEST_ACCESS_TOKEN=...` before `electron-dev.sh start <id>` (the script forwards
+  the shell env). This authenticates BOTH the renderer (BackendProxyProtocolManager injects the
+  same token) and any main-process fetch, so the whole app comes up signed in. Revert with
+  `git checkout --` + `grep -rn AGENT-TEST` afterwards, and never echo the token.
+- **Gotcha**: a worktree installed with `pnpm install --ignore-scripts` has NO electron binary
+  (`node_modules/.pnpm/electron@*/node_modules/electron/dist` missing). Fix with
+  `cd apps/desktop && pnpm rebuild electron`. Also remember `apps/desktop` and `apps/cli` are
+  NOT in the root pnpm workspace — install inside each.
+
+### C5. ✅ WORKS — main-process `logger.info` is invisible unless `DEBUG` is set
+
+- **Situation**: proving WHICH code path the Electron main process took (e.g. hetero
+  `ClaudeAgentSdkSession` vs the CLI-spawn `AgentStreamPipeline`). Both produce identical
+  user-visible output, so the verdict needs a main-process log line.
+- **Doesn't work**: grepping the instance log for the `logger.info('Starting Claude Code SDK
+session:')` line. In development `createLogger().info` routes to the `debug` package, which
+  prints nothing unless its namespace is enabled (only `console.error` shows up unconditionally).
+  Absence of the line is NOT evidence the branch didn't run.
+- **Works**: `export DEBUG='controllers:*'` before `electron-dev.sh start <id>`, then
+  `grep -oE "controllers:HeterogeneousAgentCtr INFO: [^']*" /tmp/lobe-electron-pool/instance-<id>.log`.
+  Don't trust the hetero tracing dir for this — it is gated and the copied golden profile ships
+  STALE trace sessions from months earlier that look like a fresh run.

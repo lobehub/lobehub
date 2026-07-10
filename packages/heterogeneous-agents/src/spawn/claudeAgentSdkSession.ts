@@ -6,7 +6,7 @@ import type {
 } from '@anthropic-ai/claude-agent-sdk';
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 
-import { AgentStreamPipeline } from './agentStreamPipeline';
+import { AgentStreamPipeline, type UploadHeterogeneousImage } from './agentStreamPipeline';
 
 const CLAUDE_SDK_DISALLOWED_TOOLS = ['AskUserQuestion', 'Monitor', 'ScheduleWakeup'] as const;
 const DEFAULT_INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000;
@@ -134,6 +134,8 @@ export interface ClaudeAgentSdkSessionOptions {
   resumeSessionId?: string;
   sessionId: string;
   stdinPayload: string;
+  /** Uploader for base64 tool_result images; see `AgentStreamPipelineOptions`. */
+  uploadImage?: UploadHeterogeneousImage;
 }
 
 export class ClaudeAgentSdkSession {
@@ -154,6 +156,7 @@ export class ClaudeAgentSdkSession {
       agentType: 'claude-code-sdk',
       cwd: options.cwd,
       operationId: options.operationId,
+      uploadImage: options.uploadImage,
     });
   }
 

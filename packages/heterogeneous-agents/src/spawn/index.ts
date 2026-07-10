@@ -39,6 +39,11 @@ export {
   resolveCodexInitialModel,
 } from './codexModel';
 export {
+  createFileStoreImageUploader,
+  type FileStoreCreateFileInput,
+  type FileStorePort,
+} from './fileStoreImageUploader';
+export {
   type AgentContentBlock,
   type AgentImageBlock,
   type AgentImageSource,

@@ -32,6 +32,7 @@ import {
   AgentStreamPipeline,
   buildAgentInput,
   ClaudeAgentSdkSession,
+  createFileStoreImageUploader,
   materializeImageToPath,
   normalizeImage,
   readCodexSessionModel,
@@ -45,6 +46,7 @@ import { detectHeterogeneousCliCommand } from '@/modules/binaries';
 import { getHeterogeneousAgentDriver } from '@/modules/heterogeneousAgent';
 import { fetchClaudeCodeQuota } from '@/modules/heterogeneousAgent/claudeCodeQuota';
 import { fetchCodexQuota } from '@/modules/heterogeneousAgent/codexQuota';
+import { createLambdaFileStorePort } from '@/modules/heterogeneousAgent/fileStorePort';
 import type {
   HeterogeneousAgentBuildPlan,
   HeterogeneousAgentImageAttachment,
@@ -53,6 +55,7 @@ import { buildProxyEnv } from '@/modules/networkProxy/envBuilder';
 import { createLogger } from '@/utils/logger';
 
 import { ControllerModule, IpcMethod } from './index';
+import RemoteServerConfigCtr from './RemoteServerConfigCtr';
 
 const logger = createLogger('controllers:HeterogeneousAgentCtr');
 
@@ -275,6 +278,22 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   /** Lazy single MCP server, started on first claude-code prompt. */
   private askUserMcpServer?: AskUserMcpServer;
   private askUserMcpStartPromise?: Promise<AskUserMcpServer>;
+
+  private get remoteServerConfigCtr() {
+    return this.app.getController(RemoteServerConfigCtr);
+  }
+
+  /**
+   * Uploads a base64 tool_result image (CC `Read` on an image file) to the file
+   * store, so the persisted event carries a `{ fileId, url }` reference instead
+   * of heavy base64. Mirrors what `lh hetero exec` does for the gateway path.
+   */
+  private uploadResultImage = createFileStoreImageUploader(() =>
+    createLambdaFileStorePort({
+      getAccessToken: () => this.remoteServerConfigCtr.getAccessToken(),
+      getServerUrl: async () => (await this.remoteServerConfigCtr.getRemoteServerUrl()) ?? null,
+    }),
+  );
 
   private resolveSessionCommand(session: AgentSession): string {
     const resolvedCommand = session.command.trim();
@@ -1125,6 +1144,7 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
       resumeSessionId: session.agentSessionId,
       sessionId: session.sessionId,
       stdinPayload,
+      uploadImage: this.uploadResultImage,
     });
 
     session.sdkSession = sdkSession;
@@ -1294,6 +1314,7 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
       initialCumulativeUsage,
       initialModel: session.model,
       operationId: params.operationId,
+      uploadImage: this.uploadResultImage,
     });
     let stdoutBroadcastQueue: Promise<void> = Promise.resolve();
 

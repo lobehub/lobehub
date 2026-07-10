@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { PassThrough } from 'node:stream';
 
+import type * as HeteroSpawn from '@lobechat/heterogeneous-agents/spawn';
 import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -18,7 +19,10 @@ const { mockGetTrpcClient, mockHeteroFinishMutate, mockHeteroIngestMutate } = vi
   mockHeteroIngestMutate: vi.fn(),
 }));
 
-vi.mock('@lobechat/heterogeneous-agents/spawn', () => ({
+// Keep the real module (notably `createFileStoreImageUploader`) and stub only
+// the process spawn, so the wiring below exercises the actual uploader factory.
+vi.mock('@lobechat/heterogeneous-agents/spawn', async (importOriginal) => ({
+  ...(await importOriginal<typeof HeteroSpawn>()),
   spawnAgent: mockSpawnAgent,
 }));
 
@@ -470,6 +474,37 @@ describe('hetero exec command', () => {
     ]);
 
     expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  // `codex` rather than `claude-code`: the latter mounts the AskUserQuestion MCP
+  // long-poll on server-ingest runs, which never settles under a faked handle.
+  it('wires a tool_result image uploader for server-ingest runs', async () => {
+    mockSpawnAgent.mockReturnValue(createFakeHandle());
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'codex',
+      '--prompt',
+      'hi',
+      '--topic',
+      'topic-1',
+      '--operation-id',
+      'op-server',
+      '--render',
+      'none',
+    ]);
+
+    expect(mockSpawnAgent.mock.calls[0][0].uploadImage).toBeInstanceOf(Function);
+  });
+
+  it('leaves the image uploader unwired for standalone runs, which persist nothing', async () => {
+    mockSpawnAgent.mockReturnValue(createFakeHandle());
+
+    await runCmd(['hetero', 'exec', '--type', 'codex', '--prompt', 'hi', '--render', 'none']);
+
+    expect(mockSpawnAgent.mock.calls[0][0].uploadImage).toBeUndefined();
   });
 
   it('finishes server-ingest runs with error when spawnAgent rejects before streaming', async () => {
