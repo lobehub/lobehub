@@ -76,11 +76,20 @@ const NotificationItem = memo<NotificationItemProps>(
 
     const handleClick = useCallback(() => {
       if (!isRead) onMarkAsRead(id);
+      const onAction = actionUrl
+        ? () => {
+            if (/^https?:\/\//i.test(actionUrl)) {
+              window.open(actionUrl, '_blank', 'noopener,noreferrer');
+            } else {
+              navigate(actionUrl);
+            }
+          }
+        : undefined;
       createNotificationDetailModal({
         category,
         content,
         createdAt,
-        onAction: actionUrl ? () => navigate(actionUrl) : undefined,
+        onAction,
         title,
       });
     }, [id, isRead, actionUrl, onMarkAsRead, navigate, category, content, createdAt, title]);

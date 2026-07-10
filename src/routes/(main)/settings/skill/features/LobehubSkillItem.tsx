@@ -274,7 +274,7 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
           ]}
         >
           <Tooltip title={editReason}>
-            <Button disabled={!canEdit} icon={MoreHorizontalIcon} />
+            <Button disabled={!canEdit} icon={<Icon icon={MoreHorizontalIcon} />} />
           </Tooltip>
         </DropdownMenu>
       );

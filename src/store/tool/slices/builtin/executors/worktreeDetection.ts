@@ -16,7 +16,7 @@ import { getChatStoreState } from '@/store/chat/store';
 
 /** Flags on `git worktree add` that consume the following token as their value. */
 const VALUE_FLAGS = new Set(['-b', '-B', '--reason']);
-const BRANCH_VALUE_FLAGS = new Set(['-b', '-B', '--orphan']);
+const BRANCH_VALUE_FLAGS = new Set(['-b', '-B']);
 const BRANCH_SWITCH_VALUE_FLAGS = new Set([
   '-b',
   '-B',
@@ -26,6 +26,7 @@ const BRANCH_SWITCH_VALUE_FLAGS = new Set([
   '--force-create',
   '--orphan',
 ]);
+const DETACH_FLAGS = new Set(['-d', '--detach']);
 const GIT_BRANCH_SWITCH_SUBCOMMANDS = new Set(['checkout', 'switch']);
 const GIT_SWITCH_VALUE_FLAGS = new Set(['--conflict', '--pathspec-from-file']);
 const GH_VALUE_FLAGS = new Set([
@@ -65,9 +66,7 @@ interface WorktreeAddInfo {
   path: string;
 }
 
-interface BranchSwitchInfo {
-  branch: string;
-}
+type BranchSwitchInfo = { branch: string } | { detached: true };
 
 interface PullRequestCreateInfo {
   branch?: string;
@@ -208,6 +207,8 @@ const parseGitBranchSwitchTokens = (tokens: string[]): BranchSwitchInfo | undefi
   let branch: string | undefined;
   for (let i = 0; i < git.args.length; i += 1) {
     const token = git.args[i];
+    if (DETACH_FLAGS.has(stripQuotes(token))) return { detached: true };
+
     const branchFlag = getOptionValue(git.args, i, [...BRANCH_SWITCH_VALUE_FLAGS]);
     if (branchFlag.value) {
       branch = normalizeBranch(branchFlag.value);
@@ -334,6 +335,26 @@ const applyBranchToConfig = (
 
   delete git.detached;
   if (branchChanged) delete git.github;
+
+  return {
+    ...currentConfig,
+    git,
+    path: source,
+    ...(currentConfig?.repoType ? { repoType: currentConfig.repoType } : {}),
+  };
+};
+
+const applyDetachedToConfig = (
+  currentConfig: WorkingDirConfig | undefined,
+  source: string,
+): WorkingDirConfig => {
+  const git: NonNullable<WorkingDirConfig['git']> = {
+    ...currentConfig?.git,
+    detached: true,
+  };
+
+  delete git.branch;
+  delete git.github;
 
   return {
     ...currentConfig,
@@ -576,7 +597,10 @@ export const recordGitCommandEffects = async (params: {
 
   const branchSwitch = parseGitBranchSwitch(command, resultContent);
   if (branchSwitch) {
-    nextConfig = applyBranchToConfig(nextConfig, source, branchSwitch.branch);
+    nextConfig =
+      'detached' in branchSwitch
+        ? applyDetachedToConfig(nextConfig, source)
+        : applyBranchToConfig(nextConfig, source, branchSwitch.branch);
   }
 
   const prCreate = parseGhPrCreate(command, resultContent);

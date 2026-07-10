@@ -18,6 +18,14 @@ export {
   type AgentStreamPipelineOptions,
   type UploadHeterogeneousImage,
 } from './agentStreamPipeline';
+export {
+  buildClaudeSdkUserMessageFromStreamJson,
+  ClaudeAgentSdkSession,
+  type ClaudeAgentSdkSessionOptions,
+  type HeterogeneousAgentRuntimeState,
+  type HeterogeneousAgentRuntimeStatus,
+  type HeterogeneousAgentRuntimeTask,
+} from './claudeAgentSdkSession';
 export { type CliSpawnPlan, resolveCliSpawnPlan } from './cliSpawn';
 export { CodexFileChangeTracker } from './codexFileChangeTracker';
 export {

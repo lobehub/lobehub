@@ -35,6 +35,7 @@
  * - `tool_result` blocks are in `type: 'user'` events, not assistant events
  */
 
+import { imagePlaceholder } from '../imageEcho';
 import type {
   AgentEventAdapter,
   ExternalSignalContext,
@@ -49,7 +50,6 @@ import type {
   ToolResultData,
   UsageData,
 } from '../types';
-import { imagePlaceholder } from '../imageEcho';
 
 /**
  * The CC tool_use `name` we synthesize `pluginState.todos` for. Inlined here
@@ -459,7 +459,28 @@ const toUsageData = (
 
 // ─── Adapter ───
 
+interface ClaudeCodeAdapterOptions {
+  /**
+   * CLI print-mode treats `result` as the end of the whole process. The Agent
+   * SDK streaming transport can emit multiple `result` messages from one Query,
+   * so runtime completion must be emitted by the transport when the Query closes.
+   */
+  runtimeEndStrategy?: 'on-result' | 'on-transport-close';
+  /**
+   * Background Bash tasks may have no intermediate callback turns: the first
+   * model turn starts the task, and the next model turn is triggered only after
+   * `task_notification`. Treat that final turn as a task-completion signal.
+   */
+  signalBackgroundTaskCompletion?: boolean;
+}
+
+const DEFAULT_ADAPTER_OPTIONS: Required<ClaudeCodeAdapterOptions> = {
+  runtimeEndStrategy: 'on-result',
+  signalBackgroundTaskCompletion: false,
+};
+
 export class ClaudeCodeAdapter implements AgentEventAdapter {
+  private readonly options: Required<ClaudeCodeAdapterOptions>;
   sessionId?: string;
   private pendingRateLimitInfo?: HeterogeneousRateLimitInfo;
 
@@ -615,7 +636,12 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
    */
   private activeTasks = new Map<
     string,
-    { callbackCount: number; sourceToolName: string; toolUseId: string }
+    {
+      callbackCount: number;
+      shouldSignalCompletion: boolean;
+      sourceToolName: string;
+      toolUseId: string;
+    }
   >();
   /**
    * True after a `user` event has been seen but the next turn hasn't yet
@@ -653,6 +679,10 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
    * the preceding callbacks instead of letting it spawn a separate group.
    */
   private pendingTaskCompletion: { sourceToolCallId: string; sourceToolName: string } | undefined;
+
+  constructor(options: ClaudeCodeAdapterOptions = {}) {
+    this.options = { ...DEFAULT_ADAPTER_OPTIONS, ...options };
+  }
 
   adapt(raw: any): HeterogeneousAgentEvent[] {
     if (!raw || typeof raw !== 'object') return [];
@@ -704,8 +734,12 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
     // callback in `openMainMessage`.
     if (raw.subtype === 'task_started' && raw.task_id && raw.tool_use_id) {
       const toolUseId: string = raw.tool_use_id;
+      const toolInput = this.mainToolInputsById.get(toolUseId);
+      const shouldSignalCompletion =
+        this.options.signalBackgroundTaskCompletion && toolInput?.run_in_background === true;
       this.activeTasks.set(raw.task_id, {
         callbackCount: 0,
+        shouldSignalCompletion,
         sourceToolName: this.mainToolNamesById.get(toolUseId) ?? 'unknown',
         toolUseId,
       });
@@ -729,7 +763,7 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
       // normal main chain. Tagging that turn `task-completion` mis-anchors it and
       // drops it from the rendered chain — so leave it untagged.
       const ending = this.activeTasks.get(raw.task_id);
-      if (ending && ending.callbackCount > 0) {
+      if (ending && (ending.callbackCount > 0 || ending.shouldSignalCompletion)) {
         this.pendingTaskCompletion = {
           sourceToolCallId: ending.toolUseId,
           sourceToolName: ending.sourceToolName,
@@ -1429,7 +1463,7 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
 
     const resultMessage = getCliResultMessage(raw.result) || 'Agent execution failed';
     const rateLimitError = getRateLimitTerminalError(raw.result, this.pendingRateLimitInfo);
-    const finalEvent: HeterogeneousAgentEvent = raw.is_error
+    const finalEvent: HeterogeneousAgentEvent | undefined = raw.is_error
       ? this.makeEvent(
           'error',
           rateLimitError ||
@@ -1443,7 +1477,9 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
               message: resultMessage,
             },
         )
-      : this.makeEvent('agent_runtime_end', {});
+      : this.options.runtimeEndStrategy === 'on-result'
+        ? this.makeEvent('agent_runtime_end', {})
+        : undefined;
 
     this.pendingRateLimitInfo = undefined;
     this.streamedTextByMessageId.clear();
@@ -1453,11 +1489,14 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
     // wrongly inherit the previous run's task-completion tag).
     this.pendingTaskCompletion = undefined;
 
+    const shouldEmitVisibleOutputEnd =
+      this.options.runtimeEndStrategy === 'on-result' || this.activeTasks.size === 0;
+
     return [
       ...events,
       this.makeEvent('stream_end', {}),
-      this.makeEvent('visible_output_end', {}),
-      finalEvent,
+      ...(shouldEmitVisibleOutputEnd ? [this.makeEvent('visible_output_end', {})] : []),
+      ...(finalEvent ? [finalEvent] : []),
     ];
   }
 
@@ -1716,5 +1755,14 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
 
   private makeChunkEvent(data: StreamChunkData): HeterogeneousAgentEvent {
     return { data, stepIndex: this.stepIndex, timestamp: Date.now(), type: 'stream_chunk' };
+  }
+}
+
+export class ClaudeCodeSdkAdapter extends ClaudeCodeAdapter {
+  constructor() {
+    super({
+      runtimeEndStrategy: 'on-transport-close',
+      signalBackgroundTaskCompletion: true,
+    });
   }
 }

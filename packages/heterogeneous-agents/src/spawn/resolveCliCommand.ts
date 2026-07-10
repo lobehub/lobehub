@@ -254,7 +254,7 @@ export const DEFAULT_HETERO_COMMAND: Record<HeterogeneousCliAgentType, string> =
 // Well-known absolute install locations probed when a bare command isn't on
 // PATH. This covers GUI-launched apps with a lean launchd PATH: Claude's
 // official installer can put `claude` under ~/.local/bin, while the Codex
-// desktop app bundles a functional CLI inside Codex.app without symlinking it.
+// desktop app bundles a functional CLI inside its app bundle without symlinking it.
 const getWellKnownCommandPaths = (agentType: HeterogeneousCliAgentType): string[] => {
   switch (agentType) {
     case 'claude-code': {
@@ -270,11 +270,16 @@ const getWellKnownCommandPaths = (agentType: HeterogeneousCliAgentType): string[
     case 'codex': {
       if (platform() !== 'darwin') return [];
 
-      const bundledCli = path.join('Codex.app', 'Contents', 'Resources', 'codex');
-      return [
-        path.join('/Applications', bundledCli),
-        path.join(homedir(), 'Applications', bundledCli),
-      ];
+      // Codex.app was renamed to ChatGPT.app. Prefer the current bundle name,
+      // while keeping Codex.app as a fallback for older installations.
+      return ['ChatGPT.app', 'Codex.app'].flatMap((appBundleName) => {
+        const bundledCli = path.join(appBundleName, 'Contents', 'Resources', 'codex');
+
+        return [
+          path.join('/Applications', bundledCli),
+          path.join(homedir(), 'Applications', bundledCli),
+        ];
+      });
     }
     default: {
       return [];
@@ -330,8 +335,8 @@ export interface ResolvedHeteroCommand {
  * to the requested command, preserving the prior PATH-trusting behavior.
  *
  * Resolution only kicks in for the DEFAULT bare command (`codex` / `claude`) —
- * the case that benefits from the well-known-path fallback (e.g. the Codex.app
- * bundled CLI when a broken `codex` shim shadows PATH). A custom command or an
+ * the case that benefits from the well-known-path fallback (e.g. an app-bundled
+ * Codex CLI when a broken `codex` shim shadows PATH). A custom command or an
  * explicit path is used verbatim, unchanged from before. This mirrors the
  * desktop controller, which resolves the default via the binary manager and
  * leaves custom commands to the caller.

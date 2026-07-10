@@ -816,7 +816,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
   ];
   // Resolve the CLI binary once, up front, and reuse it for both the initial
   // run and the resume-retry. For the default bare command (`codex`/`claude`)
-  // this finds the validated binary — including the Codex.app bundled CLI when
+  // this finds the validated binary — including an app-bundled Codex CLI when
   // a broken `codex` shim shadows PATH — so sandbox/terminal runs no longer
   // ENOENT on a stale global install. Custom commands are used verbatim.
   const resolvedCommand = await resolveHeteroSpawnCommand(agentType, options.command);

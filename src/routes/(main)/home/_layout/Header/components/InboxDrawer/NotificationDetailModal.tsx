@@ -63,5 +63,5 @@ export const createNotificationDetailModal = ({
     footer: null,
     maskClosable: true,
     title,
-    width: 480,
+    width: 640,
   });

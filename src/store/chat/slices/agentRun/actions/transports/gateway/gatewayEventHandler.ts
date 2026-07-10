@@ -61,6 +61,47 @@ const fetchAndReplaceMessages = async (get: () => ChatStore, context: Conversati
   return messages;
 };
 
+const shouldSkipMessageFetch = (
+  event: AgentStreamEvent,
+  runtimeType: 'gateway' | 'hetero',
+): boolean => runtimeType === 'hetero' && event.data?.skipMessageFetch === true;
+
+const getToolId = (tool: unknown): string | undefined =>
+  isRecord(tool) ? pickNonEmptyString(tool.id) : undefined;
+
+const getToolResultMessageId = (tool: unknown): string | undefined =>
+  isRecord(tool) ? pickNonEmptyString(tool.result_msg_id) : undefined;
+
+const preserveToolResultMessageIds = (
+  toolsCalling: unknown[],
+  existingTools: unknown,
+): unknown[] => {
+  if (!Array.isArray(existingTools)) return toolsCalling;
+
+  const resultMsgIdByToolId = new Map<string, string>();
+  for (const tool of existingTools) {
+    const toolId = getToolId(tool);
+    const resultMsgId = getToolResultMessageId(tool);
+    if (toolId && resultMsgId) resultMsgIdByToolId.set(toolId, resultMsgId);
+  }
+
+  if (resultMsgIdByToolId.size === 0) return toolsCalling;
+
+  let changed = false;
+  const merged = toolsCalling.map((tool) => {
+    const toolId = getToolId(tool);
+    if (!toolId || getToolResultMessageId(tool)) return tool;
+
+    const resultMsgId = resultMsgIdByToolId.get(toolId);
+    if (!resultMsgId || !isRecord(tool)) return tool;
+
+    changed = true;
+    return { ...tool, result_msg_id: resultMsgId };
+  });
+
+  return changed ? merged : toolsCalling;
+};
+
 interface ChatToolPayloadLike {
   apiName?: unknown;
   arguments?: unknown;
@@ -567,11 +608,16 @@ export const createGatewayEventHandler = (
           if (data.chunkType === 'tools_calling' && data.toolsCalling) {
             endReasoningIfNeeded();
             hasStreamedContent = true;
+            const toolsCalling = preserveToolResultMessageIds(
+              data.toolsCalling as unknown[],
+              dbMessageSelectors.getDbMessageById(currentAssistantMessageId)(get())?.tools,
+            ) as NonNullable<StreamChunkData['toolsCalling']>;
+
             get().internal_dispatchMessage(
               {
                 id: currentAssistantMessageId,
                 type: 'updateMessage',
-                value: { tools: data.toolsCalling },
+                value: { tools: toolsCalling },
               },
               dispatchContext,
             );
@@ -579,7 +625,7 @@ export const createGatewayEventHandler = (
             // Drive tool calling animation
             get().internal_toggleToolCallingStreaming(
               currentAssistantMessageId,
-              data.toolsCalling.map(() => true),
+              toolsCalling.map(() => true),
             );
 
             // If the server attached a `toolMessageIds` map, it has persisted
@@ -723,8 +769,11 @@ export const createGatewayEventHandler = (
       case 'tool_end': {
         const data = event.data as ToolEndData | undefined;
         enqueue(async () => {
+          const maybeRefresh = shouldSkipMessageFetch(event, runtimeType)
+            ? Promise.resolve()
+            : fetchAndReplaceMessages(get, context).catch(console.error);
           await Promise.all([
-            fetchAndReplaceMessages(get, context).catch(console.error),
+            maybeRefresh,
             dispatchOnAfterCall(data, context.topicId ?? undefined).catch(console.error),
           ]);
         });
@@ -747,7 +796,9 @@ export const createGatewayEventHandler = (
               sourceId: `${operationId}:gateway:step_complete:${event.stepIndex}`,
               sourceType: 'client.gateway.step_complete',
             });
-            await fetchAndReplaceMessages(get, context).catch(console.error);
+            if (!shouldSkipMessageFetch(event, runtimeType)) {
+              await fetchAndReplaceMessages(get, context).catch(console.error);
+            }
           });
         }
         break;

@@ -17,6 +17,7 @@
   "agentGroupManagement.executeTask.tokens": "令牌使用量",
   "agentGroupManagement.executeTasks.intervention.instructionPlaceholder": "为代理执行此任务提供详细说明……",
   "agentGroupManagement.executeTasks.intervention.titlePlaceholder": "任务标题……",
+  "agentGroupManagement.executeTasks.results": "执行结果",
   "agentMarketplace.category.businessStrategy": "商业与战略",
   "agentMarketplace.category.contentCreation": "内容创作",
   "agentMarketplace.category.creatorEconomy": "创作者经济",

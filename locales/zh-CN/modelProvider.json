@@ -247,6 +247,7 @@
   "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken32k.hint": "适用于GLM-5和GLM-4.7；控制推理的令牌预算（最大32k）。",
   "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken80k.hint": "适用于Qwen3系列；控制推理的令牌预算（最大80k）。",
   "providerModels.item.modelConfig.extendParams.options.reasoningEffort.hint": "适用于 OpenAI 及其他具备推理能力的模型；控制推理力度。",
+  "providerModels.item.modelConfig.extendParams.options.reasoningMode.hint": "适用于 GPT-5.6 Responses API；可在 Standard 与 Pro 推理模式之间切换。",
   "providerModels.item.modelConfig.extendParams.options.ring2_6ReasoningEffort.hint": "适用于 Ring 2.6 系列；控制推理强度。",
   "providerModels.item.modelConfig.extendParams.options.step3_5ReasoningEffort.hint": "适用于 Step 3.5 系列；控制推理强度。",
   "providerModels.item.modelConfig.extendParams.options.textVerbosity.hint": "适用于 GPT-5+ 系列；控制输出内容的详尽程度。",

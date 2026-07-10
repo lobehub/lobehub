@@ -19,6 +19,7 @@ export default {
   'agentGroupManagement.executeTasks.intervention.instructionPlaceholder':
     'Detailed instruction for the agent to perform this task...',
   'agentGroupManagement.executeTasks.intervention.titlePlaceholder': 'Task title...',
+  'agentGroupManagement.executeTasks.results': 'Results',
   'agentMarketplace.category.businessStrategy': 'Business & Strategy',
   'agentMarketplace.category.contentCreation': 'Content Creation',
   'agentMarketplace.category.creatorEconomy': 'Creator Economy',

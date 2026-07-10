@@ -2312,6 +2312,81 @@ describe('ConversationControl actions', () => {
       );
     });
 
+    it('resolves the local hetero execution op from a reasoning child before submitting via IPC', async () => {
+      const { result } = renderHook(() => useChatStore());
+
+      const agentId = 'hetero-agent';
+      const topicId = 'hetero-topic';
+      const chatKey = messageMapKey({ agentId, topicId });
+
+      const assistantMessage = createMockMessage({
+        id: 'assistant-msg-1',
+        role: 'assistant',
+      });
+      const toolMessage = createMockMessage({
+        id: 'tool-msg-1',
+        parentId: assistantMessage.id,
+        plugin: {
+          apiName: 'askUserQuestion',
+          arguments: '{}',
+          identifier: 'lobe-claude-code',
+          type: 'default',
+        },
+        role: 'tool',
+        tool_call_id: 'cc_call_1',
+      } as any);
+
+      let executionOpId!: string;
+      let reasoningOpId!: string;
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: agentId,
+          activeTopicId: topicId,
+          activeThreadId: undefined,
+          dbMessagesMap: { [chatKey]: [assistantMessage, toolMessage] },
+          messagesMap: { [chatKey]: [assistantMessage, toolMessage] },
+        });
+
+        executionOpId = result.current.startOperation({
+          context: { agentId, messageId: 'user-msg-1', threadId: null, topicId },
+          type: 'execHeterogeneousAgent',
+        }).operationId;
+
+        reasoningOpId = result.current.startOperation({
+          context: { messageId: assistantMessage.id },
+          parentOperationId: executionOpId,
+          type: 'reasoning',
+        }).operationId;
+
+        result.current.completeOperation(reasoningOpId);
+      });
+
+      vi.spyOn(result.current, 'optimisticUpdateMessagePlugin').mockResolvedValue(undefined);
+      vi.spyOn(result.current, 'optimisticUpdateMessageContent').mockResolvedValue(undefined);
+      vi.spyOn(result.current, 'updateTopicStatus').mockResolvedValue(undefined as any);
+      const submitInterventionSpy = vi
+        .spyOn(heterogeneousAgentService, 'submitIntervention')
+        .mockResolvedValue(undefined as any);
+
+      const payload = { 'Which color?': 'Blue' };
+      await act(async () => {
+        await result.current.submitHeteroIntervention('tool-msg-1', 'submit', payload);
+      });
+
+      expect(result.current.messageOperationMap[assistantMessage.id]).toBe(reasoningOpId);
+      expect(result.current.optimisticUpdateMessagePlugin).toHaveBeenCalledWith(
+        'tool-msg-1',
+        { intervention: { status: 'approved' } },
+        { operationId: executionOpId },
+      );
+      expect(submitInterventionSpy).toHaveBeenCalledWith({
+        operationId: executionOpId,
+        result: payload,
+        toolCallId: 'cc_call_1',
+      });
+      expect(lambdaClient.aiAgent.submitHeteroIntervention.mutate).not.toHaveBeenCalled();
+    });
+
     it("falls back to global-state optimistic context and routes a GC'd op to the remote tRPC transport", async () => {
       // When the resolved op has already been garbage-collected (not present in
       // `operations`), the optimistic context is the empty object `{}`

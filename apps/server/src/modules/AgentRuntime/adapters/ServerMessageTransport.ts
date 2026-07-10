@@ -50,7 +50,19 @@ export class ServerMessageTransport implements MessageTransport {
 
   async findById(id: string): Promise<RuntimeMessageRef | undefined> {
     const message = await this.messageModel.findById(id);
-    return message ? { id: message.id } : undefined;
+    return message
+      ? {
+          agentId: message.agentId,
+          groupId: message.groupId,
+          id: message.id,
+          model: message.model,
+          parentId: message.parentId,
+          provider: message.provider,
+          role: message.role,
+          threadId: message.threadId,
+          topicId: message.topicId,
+        }
+      : undefined;
   }
 
   async query(

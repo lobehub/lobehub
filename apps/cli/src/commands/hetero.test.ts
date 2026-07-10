@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, readFile } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { PassThrough } from 'node:stream';
@@ -8,7 +8,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { registerHeteroCommand } from './hetero';
 
-const { mockSpawnAgent } = vi.hoisted(() => ({
+const { mockResolveHeteroSpawnCommand, mockSpawnAgent } = vi.hoisted(() => ({
+  mockResolveHeteroSpawnCommand: vi.fn(),
   mockSpawnAgent: vi.fn(),
 }));
 const { mockGetTrpcClient, mockHeteroFinishMutate, mockHeteroIngestMutate } = vi.hoisted(() => ({
@@ -19,6 +20,10 @@ const { mockGetTrpcClient, mockHeteroFinishMutate, mockHeteroIngestMutate } = vi
 
 vi.mock('@lobechat/heterogeneous-agents/spawn', () => ({
   spawnAgent: mockSpawnAgent,
+}));
+
+vi.mock('@lobechat/heterogeneous-agents/resolveCliCommand', () => ({
+  resolveHeteroSpawnCommand: mockResolveHeteroSpawnCommand,
 }));
 
 vi.mock('../api/client', () => ({
@@ -91,6 +96,12 @@ describe('hetero exec command', () => {
       throw new Error(`__exit__${code}`);
     }) as any);
     stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    mockResolveHeteroSpawnCommand.mockReset();
+    mockResolveHeteroSpawnCommand.mockImplementation(
+      async (agentType: 'claude-code' | 'codex', command?: string) => ({
+        command: command ?? (agentType === 'codex' ? 'codex' : 'claude'),
+      }),
+    );
     mockSpawnAgent.mockReset();
     mockHeteroIngestMutate.mockReset();
     mockHeteroFinishMutate.mockReset();
@@ -301,7 +312,7 @@ describe('hetero exec command', () => {
 
     expect(mockSpawnAgent).toHaveBeenCalledTimes(1);
     expect(mockSpawnAgent.mock.calls[0][0]).toMatchObject({
-      command: undefined,
+      command: 'codex',
       extraArgs: ['-c', 'model = "gpt-5.4"', '-c', 'model_reasoning_effort="xhigh"'],
     });
   });
@@ -414,9 +425,6 @@ describe('hetero exec command', () => {
   });
 
   it('reads multimodal content from --input-json <file>', async () => {
-    const { mkdtemp, writeFile, rm } = await import('node:fs/promises');
-    const { tmpdir } = await import('node:os');
-    const path = await import('node:path');
     const dir = await mkdtemp(`${tmpdir()}/hetero-input-json-`);
     const file = path.join(dir, 'input.json');
     await writeFile(
@@ -446,8 +454,8 @@ describe('hetero exec command', () => {
     // missing local --image paths, fetch failures, etc. The CLI must catch
     // these and exit with a friendly message instead of crashing on an
     // unhandled rejection.
-    mockSpawnAgent.mockReturnValue(
-      Promise.reject(new Error('ENOENT: no such file or directory, open /missing.png')),
+    mockSpawnAgent.mockRejectedValue(
+      new Error('ENOENT: no such file or directory, open /missing.png'),
     );
 
     await runCmd([
@@ -465,7 +473,7 @@ describe('hetero exec command', () => {
   });
 
   it('finishes server-ingest runs with error when spawnAgent rejects before streaming', async () => {
-    mockSpawnAgent.mockReturnValue(Promise.reject(new Error('spawn claude ENOENT')));
+    mockSpawnAgent.mockRejectedValue(new Error('spawn claude ENOENT'));
 
     await runCmd([
       'hetero',
