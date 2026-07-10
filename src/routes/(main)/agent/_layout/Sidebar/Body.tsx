@@ -51,7 +51,10 @@ const Body = memo(() => {
     <Flexbox paddingInline={4}>
       <Accordion expandedKeys={expandedKeys} gap={8} onExpandedChange={handleExpandedChange}>
         <TaskList itemKey={ChatSidebarKey.Tasks} />
-        <Topic itemKey={ChatSidebarKey.Topic} />
+        <Topic
+          expanded={expandedKeys.includes(ChatSidebarKey.Topic)}
+          itemKey={ChatSidebarKey.Topic}
+        />
       </Accordion>
     </Flexbox>
   );

@@ -8,4 +8,4 @@
 
 ![](https://raw.githubusercontent.com/andreasbm/readme/master/assets/lines/rainbow.png)
 
-We've moved the contributing wiki to [this page](https://lobehub.com/zh/docs/development/start).
+We've moved the contributing wiki to [this page](https://lobehub.com/docs/development/start).

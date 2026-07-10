@@ -28,6 +28,7 @@ export default {
   'generation.status.failed': 'Generation Failed',
   'generation.status.generating': 'Generating...',
   'topic.createNew': 'Create New Topic',
+  'topic.createdBy': 'Created by {{name}}',
   'topic.deleteConfirm': 'Delete Video Topic',
   'topic.deleteConfirmDesc':
     'You are about to delete this video topic. This action cannot be undone.',

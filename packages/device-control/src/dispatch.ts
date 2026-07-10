@@ -1,4 +1,5 @@
 import {
+  addGitWorktree,
   checkoutGitBranch,
   deleteGitBranch,
   getGitAheadBehind,
@@ -21,11 +22,13 @@ import {
   writeLocalFile,
 } from '@lobechat/local-file-shell';
 
+import { prepareSkillDirectory } from './skillDirectory';
 import type {
   DeviceControlDeps,
   InitWorkspaceParams,
   ListProjectSkillsParams,
   LocalFilePreviewUrlParams,
+  PrepareSkillDirectoryParams,
   ProjectFileIndexParams,
   ProjectFileSearchParams,
 } from './types';
@@ -40,6 +43,7 @@ import { initWorkspace, listProjectSkills, statPath } from './workspace';
 export const DEVICE_RPC_METHODS = [
   'initWorkspace',
   'listProjectSkills',
+  'prepareSkillDirectory',
   'statPath',
   'getProjectFileIndex',
   'searchProjectFiles',
@@ -61,6 +65,7 @@ export const DEVICE_RPC_METHODS = [
   'renameGitBranch',
   'deleteGitBranch',
   'removeGitWorktree',
+  'addGitWorktree',
   'pullGitBranch',
   'pushGitBranch',
   'revertGitFile',
@@ -91,6 +96,10 @@ export const executeDeviceRpc = async (
 
     case 'listProjectSkills': {
       return listProjectSkills(params as ListProjectSkillsParams, deps);
+    }
+
+    case 'prepareSkillDirectory': {
+      return prepareSkillDirectory(params as PrepareSkillDirectoryParams, deps);
     }
 
     case 'statPath': {
@@ -126,7 +135,9 @@ export const executeDeviceRpc = async (
     }
 
     case 'getLinkedPullRequest': {
-      return getLinkedPullRequest(params as { branch: string; path: string });
+      return getLinkedPullRequest(
+        params as { branch: string; path: string; pullRequestNumber?: number },
+      );
     }
 
     case 'getGitWorkingTreeStatus': {
@@ -175,6 +186,10 @@ export const executeDeviceRpc = async (
 
     case 'removeGitWorktree': {
       return removeGitWorktree(params as { path: string; worktreePath: string });
+    }
+
+    case 'addGitWorktree': {
+      return addGitWorktree(params as { branch: string; path: string; worktreePath: string });
     }
 
     case 'pullGitBranch': {

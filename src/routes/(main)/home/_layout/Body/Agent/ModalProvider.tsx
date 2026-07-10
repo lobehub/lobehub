@@ -112,7 +112,7 @@ const CreateModalRenderer = memo<CreateModalRendererProps>(
     const handleOpenSkills = useCallback(
       (identifier: string) => {
         onClose();
-        navigate(`/settings/skill?tab=skill&skill=${encodeURIComponent(identifier)}`);
+        navigate(`/settings/skill?skill=${encodeURIComponent(identifier)}`);
       },
       [navigate, onClose],
     );

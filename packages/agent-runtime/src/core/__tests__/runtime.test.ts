@@ -377,6 +377,43 @@ describe('AgentRuntime', () => {
         expect(result.newState.pendingAssistantMessageId).toBe('msg_seeded_placeholder');
       });
 
+      it('should stash a tool_result-seeded assistantMessageId as pendingAssistantMessageId', async () => {
+        const agent = new MockAgent();
+        agent.runner = vi.fn(async (_context: AgentRuntimeContext, state: AgentState) => {
+          expect(state.pendingAssistantMessageId).toBe('msg_seeded_placeholder');
+          return { type: 'finish' as const, reason: 'completed' as const, reasonDetail: 'Done' };
+        });
+
+        const runtime = new AgentRuntime(agent);
+        const state = AgentRuntime.createInitialState({ operationId: 'test-session' });
+
+        const result = await runtime.step(
+          state,
+          createTestContext('tool_result', {
+            assistantMessageId: 'msg_seeded_placeholder',
+            parentMessageId: 'tool-msg-1',
+          }),
+        );
+
+        expect(agent.runner).toHaveBeenCalled();
+        expect(result.newState.pendingAssistantMessageId).toBe('msg_seeded_placeholder');
+      });
+
+      it('should allow payload-less tool_result contexts to reach the agent runner', async () => {
+        const agent = new MockAgent();
+        agent.runner = vi.fn(async () => ({
+          type: 'finish' as const,
+          reason: 'completed' as const,
+          reasonDetail: 'Done',
+        }));
+
+        const runtime = new AgentRuntime(agent);
+        const state = AgentRuntime.createInitialState({ operationId: 'test-session' });
+
+        await expect(runtime.step(state, createTestContext('tool_result'))).resolves.toBeDefined();
+        expect(agent.runner).toHaveBeenCalled();
+      });
+
       // Consume-once: once a call_llm step runs it has filled (or replaced) the
       // seeded placeholder, so the seed must be cleared before the next step —
       // otherwise a later assistant turn would reuse the id and overwrite it.

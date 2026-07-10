@@ -104,8 +104,12 @@ const DocumentIdMode = memo<DocumentIdModeProps>(
       await performSave(documentId, undefined, { saveSource: 'system' });
 
       const latestDocument = useDocumentStore.getState().documents[documentId];
+      // A lock CONFLICT is not a network failure — surface the real reason
+      // instead of the generic "check your connection" toast.
+      if (latestDocument?.saveBlockedByLock)
+        throw new Error(t('pageEditor.editMode.lockedBySomeone'));
       return latestDocument ? !latestDocument.isDirty : true;
-    }, [documentId, handleContentChangeStore, performSave, shouldGuardUnsavedChanges]);
+    }, [documentId, handleContentChangeStore, performSave, shouldGuardUnsavedChanges, t]);
 
     const unsavedGuardNode = (
       <UnsavedChangesGuard

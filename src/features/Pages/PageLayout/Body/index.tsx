@@ -53,7 +53,7 @@ const Body = memo(() => {
   // first fetch succeeds, so a failed load surfaces error + Retry instead of a
   // permanent skeleton. The store's `documents` field can't be the signal — it
   // initializes to `[]` (a settled-looking empty), so a failed fetch would fall
-  // through to the "no pages" empty rather than the error (LOBE-11127).
+  // through to the "no pages" empty rather than the error.
   const { data, error, isLoading, isValidating, mutate } = useFetchDocuments();
 
   const filteredDocumentsCount = usePageStore(pageSelectors.filteredDocumentsCount);

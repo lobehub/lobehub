@@ -4,13 +4,14 @@ import type {
   WorkingDirConfigValue,
   WorkingDirEntry,
 } from '@lobechat/types';
-import { getWorkingDirEffectivePath } from '@lobechat/types';
+import { getWorkingDirEffectivePath, getWorkingDirSourcePath } from '@lobechat/types';
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { PartialDeep } from 'type-fest';
 
 import { resolveTargetDeviceId } from '@/helpers/agentWorkingDirectory';
+import { getHeteroSessionIdForWorkingDirectory } from '@/helpers/heteroSessionByWorkingDirectory';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
@@ -23,13 +24,17 @@ const normalizeWorkingDirEntry = (entry: WorkingDirEntry): WorkingDirEntry | und
   if (!path) return undefined;
 
   const activeWorktree = entry.git?.activeWorktree?.trim();
+  const branch = entry.git?.branch?.trim();
   const next: WorkingDirEntry = { ...entry, path };
 
-  if (activeWorktree) {
-    next.git = { ...entry.git, activeWorktree };
-  } else if (next.git) {
-    const git = { ...next.git };
-    delete git.activeWorktree;
+  if (entry.git) {
+    const git = { ...entry.git };
+    if (activeWorktree) git.activeWorktree = activeWorktree;
+    else delete git.activeWorktree;
+
+    if (branch) git.branch = branch;
+    else delete git.branch;
+
     if (Object.keys(git).length > 0) next.git = git;
     else delete next.git;
   }
@@ -60,12 +65,18 @@ const toAgentWorkingDirConfig = (entry: WorkingDirEntry): WorkingDirConfig => ({
  * and Clear would look dead.
  *
  * Changing a topic's cwd invalidates its pinned CC session (sessions are keyed
- * per-cwd), so warn before the implicit reset — same as the legacy pickers.
+ * per-cwd), so warn before the reset and clear the stale session id as part of
+ * the same metadata write — same as the legacy pickers.
  */
 export const useCommitWorkingDirectory = (agentId: string) => {
   const { t } = useTranslation(['plugin', 'chat']);
 
   const agencyConfig = useAgentStore(agentByIdSelectors.getAgencyConfigById(agentId));
+  // Heterogeneous CLI agents (Claude Code, Codex, …) store sessions per-cwd, so
+  // their session cwd anchors to the SOURCE repo — a worktree switch (same repo,
+  // different activeWorktree) must NOT change the session cwd or reset the
+  // session. Non-hetero agents keep running in the effective (worktree) cwd.
+  const isHetero = !!agencyConfig?.heterogeneousProvider;
   const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
   const updateAgentRuntimeEnvConfigById = useAgentStore((s) => s.updateAgentRuntimeEnvConfigById);
   const legacyAgentWorkingDirectory = useAgentStore(
@@ -85,10 +96,30 @@ export const useCommitWorkingDirectory = (agentId: string) => {
   const writeCwd = useCallback(
     async (entry?: WorkingDirEntry) => {
       const effectivePath = getWorkingDirEffectivePath(entry);
+      // The session cwd anchors to the source repo for hetero (stable across
+      // worktree switches) and to the effective/worktree path otherwise.
+      const sessionCwd = isHetero ? getWorkingDirSourcePath(entry) : effectivePath;
       // Topic override wins once a conversation exists; otherwise persist the
       // agent's per-device choice so a new topic inherits it.
       if (activeTopicId) {
-        await updateTopicMetadata(activeTopicId, { workingDirectory: effectivePath });
+        const priorSessionCwd = isHetero
+          ? (getWorkingDirSourcePath(activeTopic?.metadata?.workingDirectoryConfig) ??
+            activeTopic?.metadata?.workingDirectory)
+          : activeTopic?.metadata?.workingDirectory;
+        const scopedHeteroSessionId = getHeteroSessionIdForWorkingDirectory(
+          activeTopic?.metadata,
+          sessionCwd,
+        );
+        // Only a change of session cwd (repo for hetero) invalidates the session;
+        // a worktree switch within the same repo keeps it.
+        const shouldUpdateHeteroSession =
+          priorSessionCwd !== sessionCwd &&
+          (!!activeTopic?.metadata?.heteroSessionId || !!scopedHeteroSessionId);
+        await updateTopicMetadata(activeTopicId, {
+          ...(shouldUpdateHeteroSession ? { heteroSessionId: scopedHeteroSessionId } : {}),
+          workingDirectory: sessionCwd,
+          workingDirectoryConfig: entry ? toAgentWorkingDirConfig(entry) : undefined,
+        });
       } else {
         if (targetDeviceId) {
           const prev = agencyConfig?.workingDirByDevice ?? {};
@@ -121,7 +152,9 @@ export const useCommitWorkingDirectory = (agentId: string) => {
     [
       agentId,
       agencyConfig,
+      activeTopic,
       activeTopicId,
+      isHetero,
       targetDeviceId,
       legacyAgentWorkingDirectory,
       updateAgentConfigById,
@@ -137,7 +170,11 @@ export const useCommitWorkingDirectory = (agentId: string) => {
     // A topic override (when present) is the effective source — drop it first so
     // we fall back to the agent default rather than nuking everything.
     if (activeTopicId && activeTopic?.metadata?.workingDirectory) {
-      await updateTopicMetadata(activeTopicId, { workingDirectory: undefined });
+      await updateTopicMetadata(activeTopicId, {
+        ...(activeTopic.metadata.heteroSessionId ? { heteroSessionId: undefined } : {}),
+        workingDirectory: undefined,
+        workingDirectoryConfig: undefined,
+      });
       return;
     }
     // No topic override: clear the agent-level default(s). Clearing sends
@@ -182,9 +219,16 @@ export const useCommitWorkingDirectory = (agentId: string) => {
 
       const run = () => writeCwd(normalizedEntry);
 
+      // Warn about losing the CLI session only when the SESSION cwd changes.
+      // For hetero that's the source repo — a worktree switch within the same
+      // repo keeps the session, so it must not trigger the reset warning.
       const priorSessionId = activeTopic?.metadata?.heteroSessionId;
-      const priorCwd = activeTopic?.metadata?.workingDirectory;
-      if (priorSessionId && priorCwd && priorCwd !== effectivePath) {
+      const sessionCwd = isHetero ? getWorkingDirSourcePath(normalizedEntry) : effectivePath;
+      const priorSessionCwd = isHetero
+        ? (getWorkingDirSourcePath(activeTopic?.metadata?.workingDirectoryConfig) ??
+          activeTopic?.metadata?.workingDirectory)
+        : activeTopic?.metadata?.workingDirectory;
+      if (priorSessionId && priorSessionCwd && priorSessionCwd !== sessionCwd) {
         confirmModal({
           cancelText: t('heteroAgent.switchCwd.cancel', { ns: 'chat' }),
           content: t('heteroAgent.switchCwd.content', { ns: 'chat' }),
@@ -196,7 +240,7 @@ export const useCommitWorkingDirectory = (agentId: string) => {
       }
       await run();
     },
-    [activeTopic, t, writeCwd],
+    [activeTopic, isHetero, t, writeCwd],
   );
 
   /**

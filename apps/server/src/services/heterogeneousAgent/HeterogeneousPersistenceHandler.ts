@@ -546,8 +546,10 @@ export class HeterogeneousPersistenceHandler {
     if (snapshot.provider) state.main.turnProvider = snapshot.provider;
 
     // Recover the chain spine from the DB. The next normal
-    // turn parents off the run's latest NON-tool / NON-signal main-thread
-    // message; reading it straight from the DB (independent of
+    // turn parents off the run's latest main-thread message that is neither a
+    // tool nor a TOOLLESS signal callback (a tools-bearing signal turn is
+    // main-chain — see `getLastMainThreadSpineMessageId`); reading it straight
+    // from the DB (independent of
     // `currentAssistantId`, which can regress to the seed placeholder on a cold
     // / non-sticky replica — see the multi-replica caveat on the class) keeps
     // consecutive cold-replica steps chained linearly instead of forking onto a

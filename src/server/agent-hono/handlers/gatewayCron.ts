@@ -2,6 +2,10 @@ import debug from 'debug';
 import type { Context } from 'hono';
 import { after } from 'next/server';
 
+import {
+  getBotFeatureBlockedMessage,
+  isBotFeatureAccessAllowed,
+} from '@/business/server/bot/featureAccess';
 import { getServerDB } from '@/database/core/db-adaptor';
 import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
@@ -14,6 +18,10 @@ import {
 } from '@/server/services/bot/platforms';
 import { GatewayService } from '@/server/services/gateway';
 import { BotConnectQueue } from '@/server/services/gateway/botConnectQueue';
+import {
+  BOT_RUNTIME_STATUSES,
+  updateBotRuntimeStatus,
+} from '@/server/services/gateway/runtimeStatus';
 
 const log = debug('lobe-server:bot:gateway:cron');
 
@@ -54,6 +62,40 @@ function createGatewayBot(
   });
 
   return platformRegistry.createClient(platform, config, createRuntimeContext());
+}
+
+/**
+ * Paid-gate check shared by the provider loop and the connect queue. Blocked
+ * providers are skipped and surfaced as failed so the settings UI explains why
+ * the bot is not running, mirroring GatewayService.syncGatewayConnections.
+ */
+async function ensureBotFeatureAccess(
+  platform: string,
+  provider: { applicationId: string; userId: string; workspaceId?: string | null },
+  action: 'manage' | 'runtime',
+): Promise<boolean> {
+  const allowed = await isBotFeatureAccessAllowed({
+    action,
+    applicationId: provider.applicationId,
+    platform,
+    userId: provider.userId,
+    workspaceId: provider.workspaceId ?? undefined,
+  });
+
+  if (!allowed) {
+    await updateBotRuntimeStatus({
+      applicationId: provider.applicationId,
+      errorMessage: getBotFeatureBlockedMessage(
+        platform,
+        provider.workspaceId ? 'workspace' : 'personal',
+      ),
+      platform,
+      status: BOT_RUNTIME_STATUSES.failed,
+    });
+    log('Skipping paid-gated provider platform=%s appId=%s', platform, provider.applicationId);
+  }
+
+  return allowed;
 }
 
 async function processConnectQueue(remainingMs: number): Promise<number> {
@@ -97,6 +139,14 @@ async function processConnectQueue(remainingMs: number): Promise<number> {
           item.platform,
           item.applicationId,
         );
+        await queue.remove(item.platform, item.applicationId);
+        continue;
+      }
+
+      // Queued connects are user-initiated reconnects (startClient), so they
+      // take the manage-mode gate; the provider loop below only keeps
+      // already-running listeners alive and stays on the runtime gate.
+      if (!(await ensureBotFeatureAccess(item.platform, provider, 'manage'))) {
         await queue.remove(item.platform, item.applicationId);
         continue;
       }
@@ -179,6 +229,8 @@ export async function gatewayCron(c: Context): Promise<Response> {
         log('Skipping webhook-mode provider platform=%s appId=%s', platform.id, applicationId);
         continue;
       }
+
+      if (!(await ensureBotFeatureAccess(platform.id, provider, 'runtime'))) continue;
 
       platformTotal++;
       total++;

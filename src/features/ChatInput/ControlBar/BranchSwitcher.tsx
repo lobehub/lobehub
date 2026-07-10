@@ -7,6 +7,7 @@ import {
   DropdownMenuPositioner,
   DropdownMenuRoot,
   DropdownMenuTrigger,
+  toast,
 } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import {
@@ -26,12 +27,12 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
-import { message } from '@/components/AntdStaticMethods';
 import { deviceKeys } from '@/libs/swr/keys';
 import { gitService } from '@/services/git';
 import { useFetchGitWorkingTreeStatus } from '@/store/device';
@@ -241,6 +242,7 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
     const { t: tCommon } = useTranslation('common');
     const [search, setSearch] = useState('');
     const [busyBranch, setBusyBranch] = useState<string | null>(null);
+    const currentRowRef = useRef<HTMLDivElement>(null);
 
     const {
       data: branches = [],
@@ -276,6 +278,32 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
       if (!open) setSearch('');
     }, [open]);
 
+    // Surface a branch-list load failure as a Toast with Retry (base-ui Toast
+    // carries an action; antd `message` can't). Reopening the dropdown also
+    // refetches, but Retry recovers without closing.
+    useEffect(() => {
+      if (open && branchesError) {
+        toast.error({
+          actions: [
+            { label: tCommon('retry'), onClick: () => void mutateBranches(), variant: 'text' },
+          ],
+          title: t('workingDirectory.branchesLoadFailed'),
+        });
+      }
+    }, [open, branchesError, mutateBranches, t, tCommon]);
+
+    // Scroll the current branch into view each time the dropdown opens — the
+    // popup mounts at scrollTop=0, so a checked branch below the fold would read
+    // as "nothing selected". Keyed on branches.length so it fires once the async
+    // list has painted.
+    useEffect(() => {
+      if (!open) return;
+      const raf = requestAnimationFrame(() => {
+        currentRowRef.current?.scrollIntoView({ block: 'nearest' });
+      });
+      return () => cancelAnimationFrame(raf);
+    }, [open, branches.length, currentBranch]);
+
     const filtered = useMemo(() => {
       const query = search.trim().toLowerCase();
       if (!query) return branches;
@@ -297,7 +325,7 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
         try {
           const result = await gitService.checkoutGitBranch({ branch, create, deviceId, path });
           if (!result.success) {
-            message.error(result.error || t('workingDirectory.checkoutFailed'));
+            toast.error(result.error || t('workingDirectory.checkoutFailed'));
           }
         } finally {
           onAfterCheckout?.();
@@ -385,7 +413,7 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
             const result = await gitService.deleteGitBranch({ branch, deviceId, path });
             onAfterCheckout?.();
             if (!result.success) {
-              message.error(result.error || t('workingDirectory.deleteFailed'));
+              toast.error(result.error || t('workingDirectory.deleteFailed'));
             }
           },
           title: t('workingDirectory.deleteBranchTitle'),
@@ -434,7 +462,7 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
 
                   {!isLoading && branchesError && (
                     <div className={styles.emptyState}>
-                      {(branchesError as Error)?.message || t('workingDirectory.branchesEmpty')}
+                      {t('workingDirectory.branchesLoadFailed')}
                     </div>
                   )}
 
@@ -454,6 +482,7 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
                         className={styles.item}
                         closeOnClick={false}
                         key={branch.name}
+                        ref={isCurrent ? currentRowRef : undefined}
                         onClick={() => handleCheckout(branch.name)}
                       >
                         <Icon

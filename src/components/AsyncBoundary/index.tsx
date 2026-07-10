@@ -95,7 +95,16 @@ const AsyncBoundary = memo<AsyncBoundaryProps>(
     }
 
     // 3. Genuinely empty (only reached when !error) → the purpose-built empty page.
-    if (isEmpty) return <Flexbox width={'100%'}>{empty}</Flexbox>;
+    //    Mirror the loading branch's frame (`flex={1}` + `height='100%'`) so the
+    //    empty node inherits a resolved height and can center vertically inside
+    //    bounded parents. Unbounded parents fall through to auto height per spec,
+    //    keeping intrinsic-height empty states unaffected.
+    if (isEmpty)
+      return (
+        <Flexbox flex={1} height={'100%'} width={'100%'}>
+          {empty}
+        </Flexbox>
+      );
 
     // 4. Data.
     return <>{children}</>;

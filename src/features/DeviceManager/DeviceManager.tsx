@@ -396,8 +396,13 @@ const DeviceManager = memo<DeviceManagerProps>(({ onConnect, scope }) => {
   const handleBulkRemove = () => {
     const ids = editableDevices.filter((d) => checkedIds.has(d.deviceId)).map((d) => d.deviceId);
     if (ids.length === 0) return;
+    // Revoking the machine the user is on right now disconnects this very session
+    // — call it out so a bulk sweep can't silently cut the ground from under them.
+    const includesCurrent = ids.some((id) => isCurrent(id));
     confirmModal({
-      content: t('devices.remove.confirmManyDesc', { count: ids.length }),
+      content: includesCurrent
+        ? `${t('devices.remove.confirmManyDesc', { count: ids.length })}\n\n${t('devices.remove.currentSessionWarning')}`
+        : t('devices.remove.confirmManyDesc', { count: ids.length }),
       okButtonProps: { danger: true },
       okText: t('devices.actions.removeSelected', { count: ids.length }),
       onOk: async () => {

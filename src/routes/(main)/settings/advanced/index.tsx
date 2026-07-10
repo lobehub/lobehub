@@ -49,22 +49,24 @@ const Page = memo(() => {
   const [
     isPreferenceInit,
     enableAgentDocumentFloatingChatPanel,
+    enableAgentGraphConfig,
     enableInputMarkdown,
     enablePlatformAgent,
     enableImessage,
     enableFleet,
-    enableTaskVerify,
     enableFoldFinishedTurn,
+    enableMessageTextSelectionActions,
     updateLab,
   ] = useUserStore((s) => [
     preferenceSelectors.isPreferenceInit(s),
     labPreferSelectors.enableAgentDocumentFloatingChatPanel(s),
+    labPreferSelectors.enableAgentGraphConfig(s),
     labPreferSelectors.enableInputMarkdown(s),
     labPreferSelectors.enablePlatformAgent(s),
     labPreferSelectors.enableImessage(s),
     labPreferSelectors.enableFleet(s),
-    labPreferSelectors.enableTaskVerify(s),
     labPreferSelectors.enableFoldFinishedTurn(s),
+    labPreferSelectors.enableMessageTextSelectionActions(s),
     s.updateLab,
   ]);
 
@@ -97,7 +99,7 @@ const Page = memo(() => {
 
   if (!isUserStateInit) {
     // A failed user-state init must show error + Retry, not a permanent skeleton
-    // (LOBE-11139).
+    //
     if (isUserStateInitError)
       return (
         <AsyncError
@@ -175,6 +177,19 @@ const Page = memo(() => {
     {
       children: (
         <Switch
+          checked={enableAgentGraphConfig}
+          loading={!isPreferenceInit}
+          onChange={(checked: boolean) => updateLab({ enableAgentGraphConfig: checked })}
+        />
+      ),
+      className: styles.labItem,
+      desc: tLabs('features.agentGraphConfig.desc'),
+      label: tLabs('features.agentGraphConfig.title'),
+      minWidth: undefined,
+    } satisfies FormItemProps,
+    {
+      children: (
+        <Switch
           checked={enableInputMarkdown}
           loading={!isPreferenceInit}
           onChange={(checked) => updateLab({ enableInputMarkdown: checked })}
@@ -188,19 +203,6 @@ const Page = memo(() => {
     {
       children: (
         <Switch
-          checked={enableTaskVerify}
-          loading={!isPreferenceInit}
-          onChange={(checked) => updateLab({ enableTaskVerify: checked })}
-        />
-      ),
-      className: styles.labItem,
-      desc: tLabs('features.taskVerify.desc'),
-      label: tLabs('features.taskVerify.title'),
-      minWidth: undefined,
-    },
-    {
-      children: (
-        <Switch
           checked={enableFoldFinishedTurn}
           loading={!isPreferenceInit}
           onChange={(checked) => updateLab({ enableFoldFinishedTurn: checked })}
@@ -209,6 +211,19 @@ const Page = memo(() => {
       className: styles.labItem,
       desc: tLabs('features.foldFinishedTurn.desc'),
       label: tLabs('features.foldFinishedTurn.title'),
+      minWidth: undefined,
+    },
+    {
+      children: (
+        <Switch
+          checked={enableMessageTextSelectionActions}
+          loading={!isPreferenceInit}
+          onChange={(checked) => updateLab({ enableMessageTextSelectionActions: checked })}
+        />
+      ),
+      className: styles.labItem,
+      desc: tLabs('features.messageTextSelectionActions.desc'),
+      label: tLabs('features.messageTextSelectionActions.title'),
       minWidth: undefined,
     },
     ...(isDesktop

@@ -41,7 +41,7 @@ const AgentSelect = memo(() => {
 
   // Trigger fetching the home agent list so the popover content is ready when
   // opened. Keep `error` / `mutate` so a failed list fetch shows a Retry state
-  // in the popover instead of a permanent skeleton (LOBE-11079).
+  // in the popover instead of a permanent skeleton.
   const { error: agentListError, mutate: refetchAgentList } = useFetchAgentList();
 
   const isLoading = useAgentStore(agentSelectors.isAgentConfigLoading);

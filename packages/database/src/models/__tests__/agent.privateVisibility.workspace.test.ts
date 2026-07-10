@@ -1,8 +1,9 @@
 // @vitest-environment node
+import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { agents, users, workspaces } from '../../schemas';
+import { agents, sessionGroups, users, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { AgentModel } from '../agent';
 
@@ -134,6 +135,61 @@ describe('AgentModel — private/public cross-user isolation', () => {
       const callerB = new AgentModel(serverDB, userB, workspaceId);
       expect(await callerB.existsById('a-shared-public')).toBe(true);
       expect(await callerB.getAgentConfig('a-shared-public')).not.toBeNull();
+    });
+  });
+
+  describe('setVisibility group rehoming', () => {
+    // A sidebar folder cannot mix visibilities — an agent crossing scopes
+    // while keyed to a group of the old scope would be emitted nowhere by
+    // HomeRepository.processAgentList and vanish from the sidebar.
+    const insertGroup = async (id: string, visibility: 'private' | 'public') => {
+      await serverDB.insert(sessionGroups).values({
+        id,
+        name: id,
+        userId: userA,
+        visibility,
+        workspaceId,
+      });
+    };
+
+    it('clears sessionGroupId when demotion leaves a public group', async () => {
+      await insertGroup('pub-group', 'public');
+      await insertAgent({ id: 'a-grouped', userId: userA, visibility: 'public', workspaceId });
+      await serverDB
+        .update(agents)
+        .set({ sessionGroupId: 'pub-group' })
+        .where(eq(agents.id, 'a-grouped'));
+
+      const callerA = new AgentModel(serverDB, userA, workspaceId);
+      const updated = await callerA.setVisibility('a-grouped', 'private');
+
+      expect(updated?.visibility).toBe('private');
+      expect(updated?.sessionGroupId).toBeNull();
+    });
+
+    it('keeps sessionGroupId when the group already matches the new visibility', async () => {
+      await insertGroup('priv-group', 'private');
+      await insertAgent({ id: 'a-priv-grouped', userId: userA, visibility: 'public', workspaceId });
+      await serverDB
+        .update(agents)
+        .set({ sessionGroupId: 'priv-group' })
+        .where(eq(agents.id, 'a-priv-grouped'));
+
+      const callerA = new AgentModel(serverDB, userA, workspaceId);
+      const updated = await callerA.setVisibility('a-priv-grouped', 'private');
+
+      expect(updated?.visibility).toBe('private');
+      expect(updated?.sessionGroupId).toBe('priv-group');
+    });
+
+    it('keeps ungrouped agents ungrouped on demotion', async () => {
+      await insertAgent({ id: 'a-ungrouped', userId: userA, visibility: 'public', workspaceId });
+
+      const callerA = new AgentModel(serverDB, userA, workspaceId);
+      const updated = await callerA.setVisibility('a-ungrouped', 'private');
+
+      expect(updated?.visibility).toBe('private');
+      expect(updated?.sessionGroupId).toBeNull();
     });
   });
 

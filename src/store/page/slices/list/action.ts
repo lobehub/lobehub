@@ -151,6 +151,20 @@ export class ListActionImpl {
     return result;
   };
 
+  /**
+   * Flip a page (and its whole subtree)'s workspace visibility. Bidirectional
+   * companion to `publishPageToWorkspace`. Refreshes the sidebar so the row
+   * hops between the "Private" and "Workspace" accordions.
+   */
+  setPageVisibility = async (
+    pageId: string,
+    visibility: 'private' | 'public',
+  ): Promise<{ documentIds: string[] }> => {
+    const result = await documentService.setDocumentVisibility(pageId, visibility);
+    await this.#get().refreshDocuments();
+    return result;
+  };
+
   setSearchKeywords = (keywords: string): void => {
     this.#set({ searchKeywords: keywords }, false, n('setSearchKeywords'));
   };

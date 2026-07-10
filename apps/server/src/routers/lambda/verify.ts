@@ -47,7 +47,15 @@ const onFailSchema = z.enum(['manual', 'auto_repair']);
 const decisionSchema = z.enum(['accepted', 'rejected', 'overridden']);
 const modelConfigSchema = z.object({ model: z.string(), provider: z.string() });
 const verdictSchema = z.enum(['passed', 'failed', 'uncertain']);
-const checkStatusSchema = z.enum(['pending', 'running', 'passed', 'failed', 'skipped']);
+const checkStatusSchema = z.enum([
+  'pending',
+  'running',
+  'passed',
+  'failed',
+  // Verifier could not run (infra failure) — carries no verdict.
+  'errored',
+  'skipped',
+]);
 const runSourceSchema = z.enum(['agent', 'agent-testing']);
 const evidenceTypeSchema = z.enum([
   'screenshot',
@@ -87,17 +95,38 @@ const checkItemSchema = z.object({
 });
 
 const verifyRunIdInputSchema = z.object({ verifyRunId: z.string() });
+const omitUndefined = <T extends Record<string, unknown>>(value: T): Partial<T> =>
+  Object.fromEntries(
+    Object.entries(value).filter(([, field]) => field !== undefined),
+  ) as Partial<T>;
 
 // The scenario's context (coding scope), rendered as the report's scope header.
 // Shared by createRun and updateRun so a re-ingest can refresh the scope in place.
+const webUrlSchema = z
+  .string()
+  .url()
+  .refine((value) => {
+    const protocol = new URL(value).protocol;
+    return protocol === 'http:' || protocol === 'https:';
+  });
+
+const pullRequestContextSchema = z.object({
+  number: z.union([z.number(), z.string()]).optional(),
+  title: z.string().optional(),
+  url: webUrlSchema.optional(),
+});
+
 const runContextSchema = z.object({
   branch: z.string().optional(),
   commit: z.string().optional(),
   entry: z.string().optional(),
   focus: z.string().optional(),
+  pullRequest: pullRequestContextSchema.optional(),
   surfaces: z.array(z.string()).optional(),
   testedAt: z.string().optional(),
 });
+
+const runMetadataSchema = z.record(z.unknown());
 
 const updateRunInputSchema = verifyRunIdInputSchema.extend({
   // Every field optional — a re-ingest may refresh only the context/goal while
@@ -105,10 +134,22 @@ const updateRunInputSchema = verifyRunIdInputSchema.extend({
   value: z.object({
     context: runContextSchema.optional(),
     goal: z.string().optional(),
+    metadata: runMetadataSchema.optional(),
     scenario: z.enum(['coding']).optional(),
     title: z.string().trim().min(1).max(200).optional(),
   }),
 });
+
+// Cursor-paginated report list. `cursor` is the opaque token from the previous
+// page's `nextCursor`; `q` filters by title (server-side, so it hits the whole
+// history, not just the loaded page).
+const listReportSummariesInputSchema = z
+  .object({
+    cursor: z.string().optional(),
+    limit: z.number().int().min(1).max(100).optional(),
+    q: z.string().optional(),
+  })
+  .optional();
 
 const uploadEvidenceInputSchema = z
   .object({
@@ -456,6 +497,7 @@ export const verifyRouter = router({
         // The active scenario's context, rendered as the report's scope header.
         context: runContextSchema.optional(),
         goal: z.string().optional(),
+        metadata: runMetadataSchema.optional(),
         operationId: z.string().optional(),
         scenario: z.enum(['coding']).optional(),
         source: runSourceSchema.optional(),
@@ -466,6 +508,7 @@ export const verifyRouter = router({
       ctx.runModel.create({
         context: input.context,
         goal: input.goal,
+        metadata: input.metadata,
         operationId: input.operationId,
         scenario: input.scenario,
         source: input.source ?? 'agent-testing',
@@ -490,34 +533,42 @@ export const verifyRouter = router({
 
   listRuns: verifyProcedure.query(async ({ ctx }) => ctx.runModel.query()),
 
-  listReportSummaries: verifyProcedure.query(async ({ ctx }) => {
-    const runs = await ctx.runModel.query();
-    const reports = await Promise.all(runs.map((run) => ctx.reportModel.findByRun(run.id)));
+  listReportSummaries: verifyProcedure
+    .input(listReportSummariesInputSchema)
+    .query(async ({ ctx, input }) => {
+      const { items: runs, nextCursor } = await ctx.runModel.queryPage({
+        cursor: input?.cursor,
+        limit: input?.limit,
+        q: input?.q,
+      });
+      const reports = await Promise.all(runs.map((run) => ctx.reportModel.findByRun(run.id)));
 
-    return runs.map((run, index) => {
-      const report = reports[index];
+      const items = runs.map((run, index) => {
+        const report = reports[index];
 
-      return {
-        report: report
-          ? {
-              createdAt: report.createdAt,
-              failedChecks: report.failedChecks,
-              generatedAt: report.generatedAt,
-              id: report.id,
-              overallConfidence: report.overallConfidence,
-              passedChecks: report.passedChecks,
-              reviewedByUser: report.reviewedByUser,
-              summary: report.summary,
-              totalChecks: report.totalChecks,
-              uncertainChecks: report.uncertainChecks,
-              verdict: report.verdict,
-              verifyRunId: report.verifyRunId,
-            }
-          : null,
-        run,
-      };
-    });
-  }),
+        return {
+          report: report
+            ? {
+                createdAt: report.createdAt,
+                failedChecks: report.failedChecks,
+                generatedAt: report.generatedAt,
+                id: report.id,
+                overallConfidence: report.overallConfidence,
+                passedChecks: report.passedChecks,
+                reviewedByUser: report.reviewedByUser,
+                summary: report.summary,
+                totalChecks: report.totalChecks,
+                uncertainChecks: report.uncertainChecks,
+                verdict: report.verdict,
+                verifyRunId: report.verifyRunId,
+              }
+            : null,
+          run,
+        };
+      });
+
+      return { items, nextCursor };
+    }),
 
   listResultsByRun: verifyProcedure.input(verifyRunIdInputSchema).query(async ({ ctx, input }) => {
     const run = await resolveVerifyRun(ctx, input.verifyRunId);
@@ -527,34 +578,47 @@ export const verifyRouter = router({
   updateRun: verifyProcedure.input(updateRunInputSchema).mutation(async ({ ctx, input }) => {
     const run = await resolveVerifyRun(ctx, input.verifyRunId);
 
-    const updated = await ctx.runModel.update(run.id, {
-      context: input.value.context,
-      goal: input.value.goal,
-      scenario: input.value.scenario,
-      title: input.value.title,
-    });
+    const updated = await ctx.runModel.update(
+      run.id,
+      omitUndefined({
+        context: input.value.context,
+        goal: input.value.goal,
+        metadata: input.value.metadata,
+        scenario: input.value.scenario,
+        title: input.value.title,
+      }),
+    );
     return { data: updated, success: true };
   }),
 
   ingestResult: verifyProcedure
     .input(
-      z.object({
-        checkItemId: z.string(),
-        checkItemIndex: z.number().optional(),
-        checkItemTitle: z.string().optional(),
-        confidence: z.number().min(0).max(1).optional(),
-        required: z.boolean().optional(),
-        status: checkStatusSchema.optional(),
-        // `.nullish()` (not `.optional()`) so a re-ingest can pass an explicit
-        // `null` to CLEAR a prior suggestion/observation — `undefined` would be
-        // dropped from the conflict UPDATE and leave the stale value on the row,
-        // breaking the full-replace guarantee. See the ingest-report caller.
-        suggestion: z.string().nullish(),
-        toulmin: toulminSchema.nullish(),
-        verdict: verdictSchema,
-        verifierType: verifierTypeSchema.optional(),
-        verifyRunId: z.string(),
-      }),
+      z
+        .object({
+          checkItemId: z.string(),
+          checkItemIndex: z.number().optional(),
+          checkItemTitle: z.string().optional(),
+          confidence: z.number().min(0).max(1).optional(),
+          required: z.boolean().optional(),
+          status: checkStatusSchema.optional(),
+          // `.nullish()` (not `.optional()`) so a re-ingest can pass an explicit
+          // `null` to CLEAR a prior suggestion/observation — `undefined` would be
+          // dropped from the conflict UPDATE and leave the stale value on the row,
+          // breaking the full-replace guarantee. See the ingest-report caller.
+          suggestion: z.string().nullish(),
+          toulmin: toulminSchema.nullish(),
+          // Optional so an infra failure can be recorded as `status: 'errored'`
+          // with no verdict (the verifier never produced a judgment).
+          verdict: verdictSchema.optional(),
+          verifierType: verifierTypeSchema.optional(),
+          verifyRunId: z.string(),
+        })
+        // A row needs either a verdict (→ derives status) or an explicit status
+        // (e.g. `errored`); otherwise there's nothing to record.
+        .refine((v) => v.verdict !== undefined || v.status !== undefined, {
+          message: 'Either a verdict or an explicit status is required.',
+          path: ['verdict'],
+        }),
     )
     .mutation(async ({ ctx, input }) => {
       const run = await resolveVerifyRun(ctx, input.verifyRunId);
@@ -566,7 +630,9 @@ export const verifyRouter = router({
         completedAt: new Date(),
         confidence: input.confidence,
         required: input.required ?? true,
-        status: input.status ?? statusForVerdict(input.verdict),
+        // Prefer an explicit status; else derive from the verdict (the refine
+        // guarantees at least one is present).
+        status: input.status ?? (input.verdict ? statusForVerdict(input.verdict) : 'errored'),
         suggestion: input.suggestion,
         toulmin: input.toulmin,
         verdict: input.verdict,

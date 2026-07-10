@@ -27,6 +27,8 @@ export interface SkillListItem {
   files?: string[];
   id: string;
   name: string;
+  /** Filesystem skill scope when the row comes from a device scan. */
+  scope?: 'device' | 'project';
 }
 
 /**

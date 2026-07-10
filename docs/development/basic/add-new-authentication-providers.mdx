@@ -1,34 +1,34 @@
 ---
 title: New Authentication Provider Guide
-description: Learn how to implement a new authentication provider using Auth.js in LobeHub.
+description: Learn how to implement a new authentication provider using Better Auth in LobeHub.
 tags:
   - Authentication
-  - Auth.js
+  - Better Auth
   - LobeHub
-  - Okta
   - OAuth
+  - OIDC
 ---
 
 # New Authentication Provider Guide
 
-LobeHub uses [Auth.js v5](https://authjs.dev/) as the external authentication service. Auth.js is an open-source authentication library that provides a simple way to implement authentication and authorization features. This document will introduce how to use Auth.js to implement a new authentication provider.
+LobeHub uses [Better Auth](https://www.better-auth.com/) as the external authentication service. Better Auth is an open-source authentication library that provides a simple way to implement authentication and authorization features. This document will introduce how to use Better Auth to implement a new authentication provider.
 
 ## Architecture Overview
 
-To add a new authentication provider in LobeHub (for example, adding Okta), you need to follow the steps below:
+To add a new authentication provider in LobeHub (for example, adding GitLab), you need to follow the steps below:
 
 | Type      | Description                                 | Examples                         |
 | --------- | ------------------------------------------- | -------------------------------- |
 | `builtin` | Providers natively supported by Better Auth | Google, GitHub, Microsoft, Apple |
-| `generic` | Implemented via Generic OIDC/OAuth plugin   | Okta, Auth0, Keycloak, etc.      |
+| `generic` | Implemented via Generic OIDC/OAuth plugin   | Auth0, Keycloak, Okta, etc.      |
 
 ## Adding a New SSO Provider
 
-Using **Okta** as an example, here's how to add a `generic` type provider.
+Using **GitLab** as an example (not yet implemented in the codebase), here's how to add a `generic` type provider.
 
 ### Step 1: Create Provider Definition File
 
-Create `okta.ts` in `src/libs/better-auth/sso/providers/`:
+Create `gitlab.ts` in `src/libs/better-auth/sso/providers/`:
 
 ```ts
 import { authEnv } from '@/envs/auth';
@@ -37,16 +37,16 @@ import { buildOidcConfig } from '../helpers';
 import type { GenericProviderDefinition } from '../types';
 
 const provider: GenericProviderDefinition<{
-  AUTH_OKTA_ID: string;
-  AUTH_OKTA_ISSUER: string;
-  AUTH_OKTA_SECRET: string;
+  AUTH_GITLAB_ID: string;
+  AUTH_GITLAB_ISSUER: string;
+  AUTH_GITLAB_SECRET: string;
 }> = {
   // Build OIDC configuration
   build: (env) =>
     buildOidcConfig({
-      clientId: env.AUTH_OKTA_ID,
-      clientSecret: env.AUTH_OKTA_SECRET,
-      issuer: env.AUTH_OKTA_ISSUER,
+      clientId: env.AUTH_GITLAB_ID,
+      clientSecret: env.AUTH_GITLAB_SECRET,
+      issuer: env.AUTH_GITLAB_ISSUER,
       overrides: {
         // Optional: customize user profile mapping
         mapProfileToUser: (profile) => ({
@@ -54,22 +54,22 @@ const provider: GenericProviderDefinition<{
           name: profile.name ?? profile.preferred_username ?? profile.email ?? profile.sub,
         }),
       },
-      providerId: 'okta',
+      providerId: 'gitlab',
     }),
 
   // Environment variable validation
   checkEnvs: () => {
-    return !!(authEnv.AUTH_OKTA_ID && authEnv.AUTH_OKTA_SECRET && authEnv.AUTH_OKTA_ISSUER)
+    return !!(authEnv.AUTH_GITLAB_ID && authEnv.AUTH_GITLAB_SECRET && authEnv.AUTH_GITLAB_ISSUER)
       ? {
-          AUTH_OKTA_ID: authEnv.AUTH_OKTA_ID,
-          AUTH_OKTA_ISSUER: authEnv.AUTH_OKTA_ISSUER,
-          AUTH_OKTA_SECRET: authEnv.AUTH_OKTA_SECRET,
+          AUTH_GITLAB_ID: authEnv.AUTH_GITLAB_ID,
+          AUTH_GITLAB_ISSUER: authEnv.AUTH_GITLAB_ISSUER,
+          AUTH_GITLAB_SECRET: authEnv.AUTH_GITLAB_SECRET,
         }
       : false;
   },
 
   // Provider ID (used in AUTH_SSO_PROVIDERS)
-  id: 'okta',
+  id: 'gitlab',
   type: 'generic',
 };
 
@@ -82,34 +82,34 @@ Import and register in `src/libs/better-auth/sso/index.ts`:
 
 ```ts
 // Import provider
-import Okta from './providers/okta';
+import GitLab from './providers/gitlab';
 
 // Add to providerDefinitions array
 const providerDefinitions = [
   // ... other providers
-  Okta,
+  GitLab,
 ] as const;
 ```
 
 ### Step 3: Add Environment Variable Types
 
-Add type declarations in `src/envs/auth.ts`:
+Add type declarations in `packages/env/src/auth.ts`:
 
 ```ts
 // Add to ProcessEnv interface
-AUTH_OKTA_ID?: string;
-AUTH_OKTA_SECRET?: string;
-AUTH_OKTA_ISSUER?: string;
+AUTH_GITLAB_ID?: string;
+AUTH_GITLAB_SECRET?: string;
+AUTH_GITLAB_ISSUER?: string;
 
 // Add to getAuthConfig server schema
-AUTH_OKTA_ID: z.string().optional(),
-AUTH_OKTA_SECRET: z.string().optional(),
-AUTH_OKTA_ISSUER: z.string().optional(),
+AUTH_GITLAB_ID: z.string().optional(),
+AUTH_GITLAB_SECRET: z.string().optional(),
+AUTH_GITLAB_ISSUER: z.string().optional(),
 
 // Add to runtimeEnv
-AUTH_OKTA_ID: process.env.AUTH_OKTA_ID,
-AUTH_OKTA_SECRET: process.env.AUTH_OKTA_SECRET,
-AUTH_OKTA_ISSUER: process.env.AUTH_OKTA_ISSUER,
+AUTH_GITLAB_ID: process.env.AUTH_GITLAB_ID,
+AUTH_GITLAB_SECRET: process.env.AUTH_GITLAB_SECRET,
+AUTH_GITLAB_ISSUER: process.env.AUTH_GITLAB_ISSUER,
 ```
 
 ### Step 4: Update Documentation (Optional)
@@ -177,10 +177,10 @@ When configuring OAuth applications, use these callback URL formats:
 After configuring environment variables, enable in `AUTH_SSO_PROVIDERS`:
 
 ```bash
-AUTH_SSO_PROVIDERS=google,github,okta
-AUTH_OKTA_ID=your-client-id
-AUTH_OKTA_SECRET=your-client-secret
-AUTH_OKTA_ISSUER=https://your-domain.okta.com
+AUTH_SSO_PROVIDERS=google,github,gitlab
+AUTH_GITLAB_ID=your-client-id
+AUTH_GITLAB_SECRET=your-client-secret
+AUTH_GITLAB_ISSUER=https://gitlab.example.com
 ```
 
-Now, you can use Okta as your provider to implement the authentication feature in LobeHub.
+Now, you can use GitLab as your provider to implement the authentication feature in LobeHub.

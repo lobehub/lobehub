@@ -23,6 +23,7 @@ export enum SidebarTabKey {
 
 export enum ChatSettingsTabs {
   Connector = 'connector',
+  Graph = 'graph',
   Opening = 'opening',
   Plugin = 'plugin',
   Prompt = 'prompt',
@@ -37,6 +38,13 @@ export enum GroupSettingsTabs {
 
 export type WorkingSidebarTab = 'files' | 'params' | 'resources' | 'review';
 
+export const DEFAULT_RESOURCE_MANAGER_COLUMN_WIDTHS = {
+  date: 160,
+  name: 574,
+  size: 140,
+  uploader: 180,
+};
+
 export enum SettingsTabs {
   About = 'about',
   Advanced = 'advanced',
@@ -49,6 +57,7 @@ export enum SettingsTabs {
   ChatAppearance = 'chat-appearance',
   /** @deprecated Use Appearance instead */
   Common = 'common',
+  Connector = 'connector',
   Credits = 'credits',
   Creds = 'creds',
   Devices = 'devices',
@@ -214,6 +223,7 @@ export interface SystemStatus {
     date: number;
     name: number;
     size: number;
+    uploader: number;
   };
   /**
    * Visibility of the Agent profile right-side Agent Builder panel.
@@ -416,11 +426,7 @@ export const INITIAL_STATUS = {
   pagePageSize: 20,
   portalWidth: 400,
   readNotificationSlugs: [],
-  resourceManagerColumnWidths: {
-    date: 160,
-    name: 574,
-    size: 140,
-  },
+  resourceManagerColumnWidths: DEFAULT_RESOURCE_MANAGER_COLUMN_WIDTHS,
   showCommandMenu: false,
   showFilePanel: true,
   showFleetPanel: true,

@@ -84,9 +84,19 @@ export interface IAgentStateManager {
   loadAgentState: (operationId: string) => Promise<AgentState | null>;
 
   /**
+   * Extend the step execution lock if it is still owned by the caller.
+   */
+  refreshStepLock: (
+    operationId: string,
+    stepIndex: number,
+    ttlSeconds: number,
+    ownerId?: string,
+  ) => Promise<boolean>;
+
+  /**
    * Release the step execution lock.
    */
-  releaseStepLock: (operationId: string, stepIndex: number) => Promise<void>;
+  releaseStepLock: (operationId: string, stepIndex: number, ownerId?: string) => Promise<void>;
 
   /**
    * Save Agent state
@@ -102,7 +112,12 @@ export interface IAgentStateManager {
    * Atomically try to claim a step for execution (distributed lock).
    * Returns true if the lock was acquired, false if another execution already holds it.
    */
-  tryClaimStep: (operationId: string, stepIndex: number, ttlSeconds?: number) => Promise<boolean>;
+  tryClaimStep: (
+    operationId: string,
+    stepIndex: number,
+    ttlSeconds?: number,
+    ownerId?: string,
+  ) => Promise<boolean>;
 }
 
 /**

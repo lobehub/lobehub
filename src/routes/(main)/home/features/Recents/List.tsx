@@ -46,7 +46,7 @@ const RecentsList = memo<RecentsListProps>(({ error, onRetry }) => {
 
   // Error gated ahead of the skeleton so a failed recents fetch shows Retry
   // instead of a permanent skeleton (`isRecentsInit` only flips on success —
-  // LOBE-11079).
+  //
   return (
     <AsyncBoundary
       data={isInit ? recents : undefined}

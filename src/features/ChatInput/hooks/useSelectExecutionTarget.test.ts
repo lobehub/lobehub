@@ -12,6 +12,7 @@ const testState = vi.hoisted(() => ({
           heterogeneousProvider?: { type: string };
         }
       | undefined,
+    agentMap: {} as Record<string, { workspaceId?: string | null }>,
     isHetero: false,
     updateAgentConfigById: vi.fn(),
   },
@@ -53,6 +54,7 @@ vi.mock('@/store/electron', () => ({
 describe('useSelectExecutionTarget', () => {
   beforeEach(() => {
     testState.agent.agencyConfig = undefined;
+    testState.agent.agentMap = {};
     testState.agent.isHetero = false;
     testState.agent.updateAgentConfigById = vi.fn();
     testState.electron.gatewayDeviceInfo = undefined;
@@ -127,5 +129,27 @@ describe('useSelectExecutionTarget', () => {
     await result.current('local');
 
     expect(testState.agent.updateAgentConfigById).not.toHaveBeenCalled();
+  });
+
+  it('refuses local for a workspace agent — its personal deviceId can never pass the workspace device guard', async () => {
+    testState.isDesktop = true;
+    testState.electron.gatewayDeviceInfo = { deviceId: 'this-machine' };
+    testState.agent.agentMap = { 'agent-id': { workspaceId: 'ws-1' } };
+    const { result } = renderHook(() => useSelectExecutionTarget('agent-id'));
+
+    await result.current('local');
+
+    expect(testState.agent.updateAgentConfigById).not.toHaveBeenCalled();
+  });
+
+  it('still persists a device pick for a workspace agent', async () => {
+    testState.agent.agentMap = { 'agent-id': { workspaceId: 'ws-1' } };
+    const { result } = renderHook(() => useSelectExecutionTarget('agent-id'));
+
+    await result.current('device', 'ws-device-1');
+
+    expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith('agent-id', {
+      agencyConfig: { boundDeviceId: 'ws-device-1', executionTarget: 'device' },
+    });
   });
 });

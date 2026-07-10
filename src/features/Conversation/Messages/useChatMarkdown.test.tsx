@@ -45,4 +45,10 @@ describe('useChatMarkdown (assistant / grouped message pipeline)', () => {
     expect(assistantScoped).toBeTruthy();
     expect(remarkPlugins).toContain(assistantScoped!.remarkPlugin);
   });
+
+  it('keeps markdown footnotes visible when structured citations are absent', () => {
+    const { result } = renderHook(() => useChatMarkdown({ id: 'a3', isGenerating: false }));
+
+    expect(result.current.markdownProps.showFootnotes).toBe(true);
+  });
 });

@@ -111,6 +111,8 @@ The one-screen scan. Each line links back to a module above for the full rule + 
 - [ ] A surface with many navigable entries (a big settings area, a long list) offers search / filter / jump, not browse-only — named as a class norm so an absent box is caught.
 - [ ] Marketplace / registry browse cards carry owned/installed state on the tile (not only on the detail) and trust/verified badges via one card contract, consistent across sibling registries; contribute leads to an in-app submit, not an external repo.
 - [ ] A sidebar / nav / master-detail **list row** composes the canonical `NavItem` (+ `Accordion` / `GroupedAccordion` for groups, `Block variant='filled'` for active), not a hand-rolled `<div>`/`<button>`/`<input>` + bespoke CSS — else the hover/active highlight misaligns from the content box, content bleeds to the panel edge, the search/rename/action-reveal drift from every sibling panel, and the list stays a flat ungrouped dump. Grep `NavItem` before building.
+- [ ] A persistent create/compose affordance above a list is the hero only while the list is **empty**; once populated it doesn't bury the records — cap the editor height (max-height + internal scroll) and/or default it to collapsed when the list has data, so the records keep Center Stage.
+- [ ] A status group/label is true for **every** member — don't fold a distinct lifecycle state (scheduled/queued/snoozed) under a label that asserts another (running/in-progress); give it its own group or a neutral label.
 
 **Edit — entering & changing content** ([edit.md](references/edit.md))
 
@@ -123,7 +125,7 @@ The one-screen scan. Each line links back to a module above for the full rule + 
 - [ ] Terminal status screen (success / error `Result`) carries an action: error → escape hatch (retry / back), success → close / go-to-result; no bare `Result` without `extra`, and "auto-closing in Ns" copy only when the close can actually fire.
 - [ ] A result that changes the next step lands in a persistent state (screen / inline), not just a transient toast; "link sent" names the destination + offers resend, failures keep context + offer retry.
 - [ ] Bulk action has a single-item entry (and vice versa).
-- [ ] Async/bulk/irreversible action: confirm → in-progress (locked) → done/error.
+- [ ] Async/bulk/irreversible action: confirm → in-progress (locked) → done/error. But a **slow but atomic** confirm-gated op (device/file delete, git op, seconds-long call) closes the confirm **immediately** (non-blocking `onOk`) and shows progress on the **originating surface** (optimistic removal / row spinner), not a confirm dialog held spinning on the round-trip — the modal is not the progress surface.
 - [ ] A long-running / costly async op (generation / export / large upload) offers **Cancel while it runs** (aborts the work, not just delete-after-the-fact) and keeps an in-place **Retry** on error — named as a generation-class norm so an absent Cancel is caught.
 - [ ] Optimistic create / rename / duplicate surfaces failure (caller catches + toasts); never a silent rollback.
 - [ ] Job-control (run / pause / stop / retry) surfaces start/stop failure — a `catch` that only `console.error`s + optimistic-status rollback reads as a dead button; toast at the store-action boundary so every trigger inherits it.

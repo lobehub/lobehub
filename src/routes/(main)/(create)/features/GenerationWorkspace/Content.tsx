@@ -36,7 +36,7 @@ const Content = ({
   const isCurrentGenerationTopicLoaded = useStore(selectors.isCurrentGenerationTopicLoaded);
   // Keep `error` / `mutate`: the topic's "loaded" flag is `Array.isArray(map[topicId])`,
   // written only on success, so a failed batch fetch would otherwise stick on the
-  // skeleton forever with no retry (LOBE-11208).
+  // skeleton forever with no retry.
   const { error, mutate } = useFetchGenerationBatches(activeTopicId);
   const currentBatches = useStore(selectors.currentGenerationBatches);
   const hasGenerations = currentBatches && currentBatches.length > 0;

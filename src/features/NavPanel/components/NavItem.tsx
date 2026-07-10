@@ -89,6 +89,7 @@ const NavItem = memo<NavItemProps>(
     loading,
     extra,
     slots,
+    style,
     ...rest
   }) => {
     const iconColor = active ? cssVar.colorText : cssVar.colorTextDescription;
@@ -101,9 +102,19 @@ const NavItem = memo<NavItemProps>(
       ? {
           as: 'a' as const,
           href,
-          style: { color: 'inherit', textDecoration: 'none' },
         }
       : {};
+
+    const mergedStyle =
+      href || disabled || style
+        ? {
+            ...(href ? { color: 'inherit', textDecoration: 'none' } : undefined),
+            // `disabled` only blocks the click by itself — dim the row so the
+            // blocked state is visible instead of a silently dead button.
+            ...(disabled ? { cursor: 'not-allowed', opacity: 0.5 } : undefined),
+            ...style,
+          }
+        : undefined;
 
     const Content = (
       <Block
@@ -115,6 +126,7 @@ const NavItem = memo<NavItemProps>(
         height={description ? undefined : 36}
         paddingBlock={description ? 4 : undefined}
         paddingInline={4}
+        style={mergedStyle}
         variant={variant}
         onClick={(e) => {
           // Always prevent default <a> navigation for normal clicks to avoid full page reload.

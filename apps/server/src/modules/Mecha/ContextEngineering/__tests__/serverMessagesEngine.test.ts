@@ -70,6 +70,35 @@ describe('serverMessagesEngine', () => {
       expect(result[0].content).toBe(systemRole + '\n\n' + getCurrentDateContent());
     });
 
+    it('renders {{workingDirectory}} to a fallback instead of leaking the literal (LOBE-11473)', async () => {
+      const messages = createBasicMessages();
+      const systemRole = '<working-directory>{{workingDirectory}}</working-directory>';
+
+      // No additionalVariables — e.g. a web-originated device run whose bound cwd
+      // could not be resolved. The literal must never survive into the prompt.
+      const fallback = await serverMessagesEngine({
+        messages,
+        model: 'gpt-4',
+        provider: 'openai',
+        systemRole,
+      });
+      expect(fallback[0].content).not.toContain('{{workingDirectory}}');
+      expect(fallback[0].content).toContain('(not specified, use user Home directory as default)');
+
+      // A resolved cwd (deviceSystemInfo.workingDirectory) overrides the fallback.
+      const resolved = await serverMessagesEngine({
+        additionalVariables: { workingDirectory: '/Users/tj/project' },
+        messages,
+        model: 'gpt-4',
+        provider: 'openai',
+        systemRole,
+      });
+      expect(resolved[0].content).toContain(
+        '<working-directory>/Users/tj/project</working-directory>',
+      );
+      expect(resolved[0].content).not.toContain('(not specified');
+    });
+
     it('should inject model knowledge cutoff when provided', async () => {
       const messages = createBasicMessages();
 

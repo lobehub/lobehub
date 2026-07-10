@@ -92,7 +92,7 @@ const AgentList = memo<AgentListProps>(({ activeAgentId, error, onRetry, onSelec
   }, [inboxAgentId, inboxMeta, allAgents, t]);
 
   // Error gated ahead of the skeleton so a failed list fetch shows Retry instead
-  // of a permanent skeleton (`isAgentListInit` only flips on success — LOBE-11079).
+  // of a permanent skeleton (`isAgentListInit` only flips on success).
   return (
     <AsyncBoundary
       data={isInit ? allAgents : undefined}

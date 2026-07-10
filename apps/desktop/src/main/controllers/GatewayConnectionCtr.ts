@@ -384,6 +384,9 @@ export default class GatewayConnectionCtr extends ControllerModule {
       getLocalFilePreview: (params) => this.localFileCtr.getLocalFilePreview(params),
       getProjectFileIndex: (params) => this.localFileCtr.getProjectFileIndex(params),
       searchProjectFiles: (params) => this.localFileCtr.searchProjectFiles(params),
+      // Skill-archive cache (`prepareSkillDirectory` RPC): reuse LocalFileCtr's
+      // deps so gateway-prepared skills share one cache with the renderer-IPC path.
+      ...this.localFileCtr.getSkillDirectoryDeps(),
     };
   }
 

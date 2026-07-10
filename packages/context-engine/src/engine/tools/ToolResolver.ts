@@ -1,3 +1,4 @@
+import { ToolNameResolver } from './ToolNameResolver';
 import type {
   ActivatedStepTool,
   LobeToolManifest,
@@ -29,6 +30,7 @@ export class ToolResolver {
     operationToolSet: OperationToolSet,
     stepDelta: StepToolDelta,
     accumulatedActivations: ActivatedStepTool[] = [],
+    allowedToolNames?: string[],
   ): ResolvedToolSet {
     // Start from operation-level snapshot (shallow copies, with safe defaults)
     const tools: UniformTool[] = [...(operationToolSet.tools ?? [])];
@@ -55,12 +57,36 @@ export class ToolResolver {
       this.applyActivation(activation, tools, manifestMap, sourceMap, enabledToolIds);
     }
 
+    const shouldFilterByToolNames = allowedToolNames !== undefined;
+    const allowedToolNameSet = new Set(allowedToolNames ?? []);
+    const toolNameResolver = new ToolNameResolver();
+
+    let promptManifestMap = manifestMap;
+    if (shouldFilterByToolNames) {
+      promptManifestMap = {};
+
+      for (const [identifier, manifest] of Object.entries(manifestMap)) {
+        const api = manifest.api.filter(({ name }) =>
+          allowedToolNameSet.has(toolNameResolver.generate(identifier, name, manifest.type)),
+        );
+
+        if (api.length > 0) {
+          promptManifestMap[identifier] = {
+            ...manifest,
+            api,
+            ...(api.length < manifest.api.length && { systemRole: undefined }),
+          };
+        }
+      }
+    }
+
     // Handle deactivation (e.g. forceFinish strips all tools)
     if (stepDelta.deactivatedToolIds?.includes('*')) {
       return {
         enabledToolIds: [],
         executorMap,
         manifestMap, // keep manifests for ToolNameResolver
+        promptManifestMap: {},
         sourceMap,
         tools: [],
       };
@@ -70,16 +96,24 @@ export class ToolResolver {
     const seen = new Set<string>();
     const dedupedTools: UniformTool[] = [];
     for (const tool of tools) {
+      if (shouldFilterByToolNames && !allowedToolNameSet.has(tool.function.name)) {
+        continue;
+      }
       if (!seen.has(tool.function.name)) {
         seen.add(tool.function.name);
         dedupedTools.push(tool);
       }
     }
 
+    const resolvedEnabledToolIds = shouldFilterByToolNames
+      ? enabledToolIds.filter((id) => !!promptManifestMap[id])
+      : enabledToolIds;
+
     return {
-      enabledToolIds: [...new Set(enabledToolIds)],
+      enabledToolIds: [...new Set(resolvedEnabledToolIds)],
       executorMap,
       manifestMap,
+      promptManifestMap,
       sourceMap,
       tools: dedupedTools,
     };

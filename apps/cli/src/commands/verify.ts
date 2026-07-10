@@ -39,6 +39,9 @@ function assertEnum<T extends string>(value: T | undefined, allowed: T[], flag: 
 type Verdict = 'failed' | 'passed' | 'uncertain';
 type EvidenceType = 'dom_snapshot' | 'gif' | 'screenshot' | 'text' | 'transcript' | 'video';
 
+const INLINE_TEXT_EVIDENCE_LIMIT = 5000;
+const INLINE_TEXT_EVIDENCE_TYPES = new Set<EvidenceType>(['dom_snapshot', 'text', 'transcript']);
+
 /** Map a free-form case/summary result token onto the verify verdict vocabulary. */
 function toVerdict(raw: unknown): Verdict {
   const s = String(raw ?? '').toLowerCase();
@@ -57,6 +60,20 @@ function evidenceTypeForFile(file: string): EvidenceType {
   return 'text';
 }
 
+function inlineTextEvidenceForFile(file: string, type: EvidenceType | string): string | undefined {
+  if (!INLINE_TEXT_EVIDENCE_TYPES.has(type as EvidenceType)) return undefined;
+
+  try {
+    const buffer = readFileSync(file);
+    if (buffer.includes(0)) return undefined;
+
+    const content = buffer.toString('utf8');
+    return content.length > 0 && content.length < INLINE_TEXT_EVIDENCE_LIMIT ? content : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Normalize a case's `evidence` field (string | string[] | {path}[]) to path strings. */
 function evidencePaths(evidence: unknown): string[] {
   if (!evidence) return [];
@@ -64,6 +81,71 @@ function evidencePaths(evidence: unknown): string[] {
   return arr
     .map((e) => (typeof e === 'string' ? e : (e?.path ?? e?.file)))
     .filter((p): p is string => typeof p === 'string' && p.length > 0);
+}
+
+function firstString(...values: unknown[]): string | undefined {
+  return values.find((v): v is string => typeof v === 'string' && v.length > 0);
+}
+
+function firstStringOrNumber(...values: unknown[]): string | number | undefined {
+  return values.find(
+    (v): v is string | number => (typeof v === 'string' && v.length > 0) || typeof v === 'number',
+  );
+}
+
+function objectValue(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+function safeWebUrl(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.toString() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Normalize common agent-testing PR shapes into the verify coding scope. */
+function pullRequestFromResult(result: Record<string, unknown>) {
+  const pr = objectValue(result.pullRequest) ?? objectValue(result.pr);
+  const url = safeWebUrl(
+    firstString(
+      pr?.url,
+      pr?.htmlUrl,
+      pr?.html_url,
+      result.pullRequestUrl,
+      result.prUrl,
+      typeof result.pr === 'string' ? result.pr : undefined,
+    ),
+  );
+  const number = firstStringOrNumber(pr?.number, result.pullRequestNumber, result.prNumber);
+  const title = firstString(pr?.title, result.pullRequestTitle, result.prTitle);
+  const entries = Object.entries({ number, title, url }).filter(([, v]) => v !== undefined);
+
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
+}
+
+function metadataForReport(
+  result: Record<string, unknown>,
+  existingMetadata?: unknown,
+): Record<string, unknown> | undefined {
+  if (!Object.prototype.hasOwnProperty.call(result, 'interactionCost')) return undefined;
+
+  const metadata = { ...objectValue(existingMetadata) };
+  const interactionCost = objectValue(result.interactionCost);
+
+  if (interactionCost) {
+    metadata.interactionCost = interactionCost;
+  } else {
+    delete metadata.interactionCost;
+  }
+
+  return metadata;
 }
 
 /**
@@ -743,15 +825,19 @@ export function registerVerifyCommand(program: Command) {
         }
         const client = await getTrpcClient();
         let fileId: string | undefined;
+        let inlineContent = options.content;
         if (options.file) {
-          const uploaded = await uploadLocalFile(client, options.file);
-          fileId = uploaded.id;
+          inlineContent = inlineTextEvidenceForFile(options.file, options.type!);
+          if (inlineContent === undefined) {
+            const uploaded = await uploadLocalFile(client, options.file);
+            fileId = uploaded.id;
+          }
         }
         const evidence = hasEvidence
           ? [
               {
                 capturedBy: options.by as any,
-                content: options.content,
+                content: inlineContent,
                 description: options.desc,
                 fileId,
                 type: options.type as any,
@@ -807,14 +893,18 @@ export function registerVerifyCommand(program: Command) {
         }
         const client = await getTrpcClient();
         let fileId: string | undefined;
+        let inlineContent = options.content;
         if (options.file) {
-          const uploaded = await uploadLocalFile(client, options.file);
-          fileId = uploaded.id;
+          inlineContent = inlineTextEvidenceForFile(options.file, options.type);
+          if (inlineContent === undefined) {
+            const uploaded = await uploadLocalFile(client, options.file);
+            fileId = uploaded.id;
+          }
         }
         const ev = await client.verify.uploadEvidence.mutate({
           capturedBy: options.by as any,
           checkResultId: options.check,
-          content: options.content,
+          content: inlineContent,
           description: options.desc,
           fileId,
           type: options.type as any,
@@ -993,11 +1083,13 @@ export function registerVerifyCommand(program: Command) {
         const surfaces = Array.isArray(result.surfaces)
           ? result.surfaces.filter((s: unknown) => typeof s === 'string')
           : undefined;
+        const pullRequest = pullRequestFromResult(result);
         const contextEntries = Object.entries({
           branch: typeof result.branch === 'string' ? result.branch : undefined,
           commit: typeof result.commit === 'string' ? result.commit : undefined,
           entry: typeof result.entry === 'string' ? result.entry : undefined,
           focus: typeof result.focus === 'string' ? result.focus : options.goal,
+          pullRequest,
           surfaces: surfaces && surfaces.length > 0 ? surfaces : undefined,
           testedAt: typeof result.createdAt === 'string' ? result.createdAt : undefined,
         }).filter(([, v]) => v !== undefined);
@@ -1010,6 +1102,7 @@ export function registerVerifyCommand(program: Command) {
         const client = await getTrpcClient();
         const goal = options.goal ?? (typeof result.focus === 'string' ? result.focus : undefined);
         const title = options.title ?? result.title;
+        const newRunMetadata = metadataForReport(result);
 
         // Resolve the target session. Reuse the one this report dir already
         // created (recorded in the sidecar) so re-verifying the same case
@@ -1024,9 +1117,10 @@ export function registerVerifyCommand(program: Command) {
           if (existing) {
             reused = true;
             runId = existing.id;
+            const metadata = metadataForReport(result, existing.metadata);
             // 1a. Refresh the scope header / title / goal in place.
             await client.verify.updateRun.mutate({
-              value: { context, goal, scenario, title },
+              value: { context, goal, metadata, scenario, title },
               verifyRunId: runId,
             });
           } else if (options.run) {
@@ -1046,6 +1140,7 @@ export function registerVerifyCommand(program: Command) {
           const run = await client.verify.createRun.mutate({
             context,
             goal,
+            metadata: newRunMetadata,
             operationId: options.operation,
             scenario,
             source: options.source as any,
@@ -1059,7 +1154,8 @@ export function registerVerifyCommand(program: Command) {
         //    rather than duplicating it. Track the ids we touch to prune dropped
         //    cases afterwards, keeping a re-run a full replace.
         const seenCheckItemIds = new Set<string>();
-        let uploaded = 0;
+        let evidenceCount = 0;
+        let inlined = 0;
         for (const [index, c] of cases.entries()) {
           const checkItemId = String(c.id ?? c.checkItemId ?? `case-${index + 1}`);
           seenCheckItemIds.add(checkItemId);
@@ -1101,17 +1197,21 @@ export function registerVerifyCommand(program: Command) {
               continue;
             }
             try {
-              const file = await uploadLocalFile(client, abs);
+              const type = evidenceTypeForFile(abs);
+              const content = inlineTextEvidenceForFile(abs, type);
+              const file = content === undefined ? await uploadLocalFile(client, abs) : undefined;
               await client.verify.uploadEvidence.mutate({
                 capturedBy: 'cli',
                 checkResultId: checkResult.id,
                 // The filename, not the case title — the title already heads the
                 // check card, so reusing it here just triples the same text.
+                content,
                 description: path.basename(abs),
-                fileId: file.id,
-                type: evidenceTypeForFile(abs),
+                fileId: file?.id,
+                type,
               });
-              uploaded += 1;
+              evidenceCount += 1;
+              if (content !== undefined) inlined += 1;
             } catch (e) {
               // A stub/unreachable storage bucket (common in local dev) fails the
               // file PUT — don't abort the whole ingest over one artifact; the
@@ -1169,7 +1269,14 @@ export function registerVerifyCommand(program: Command) {
 
         if (options.json !== undefined) {
           outputJson(
-            { cases: cases.length, evidence: uploaded, pruned, reused, verifyRunId: runId },
+            {
+              cases: cases.length,
+              evidence: evidenceCount,
+              inlined,
+              pruned,
+              reused,
+              verifyRunId: runId,
+            },
             typeof options.json === 'string' ? options.json : undefined,
           );
           return;
@@ -1177,10 +1284,13 @@ export function registerVerifyCommand(program: Command) {
 
         const verb = reused ? 'Updated' : 'Ingested';
         console.log(
-          `${pc.green('✓')} ${verb} ${pc.bold(String(cases.length))} case(s), ${pc.bold(String(uploaded))} evidence file(s)` +
+          `${pc.green('✓')} ${verb} ${pc.bold(String(cases.length))} case(s), ${pc.bold(String(evidenceCount))} evidence artifact(s)` +
+            `${inlined > 0 ? `, ${pc.bold(String(inlined))} inline` : ''}` +
             `${pruned > 0 ? `, pruned ${pc.bold(String(pruned))} stale case(s)` : ''}`,
         );
-        console.log(`${pc.bold('verifyRunId')}: ${runId}${reused ? pc.dim(' (updated in place)') : ''}`);
+        console.log(
+          `${pc.bold('verifyRunId')}: ${runId}${reused ? pc.dim(' (updated in place)') : ''}`,
+        );
         if (options.open) {
           console.log(`${pc.bold('open')}: /verify/${runId}`);
         }

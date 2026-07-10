@@ -104,6 +104,13 @@ export interface VerifyReportSummary {
   run: VerifyRunItem;
 }
 
+/** One cursor-paginated page of report summaries. */
+export interface VerifyReportSummaryPage {
+  items: VerifyReportSummary[];
+  /** Opaque token for the next page, or `null` when this is the last page. */
+  nextCursor: string | null;
+}
+
 export interface GenerateDraftPlanInput {
   context?: string;
   enableAiGeneration?: boolean;
@@ -162,9 +169,17 @@ export class VerifyService {
       verifyRunId,
     }) as Promise<VerifyReportBundle | null>;
 
-  /** Current user's recent verification sessions with report rollup fields. */
-  listReportSummaries = (): Promise<VerifyReportSummary[]> =>
-    lambdaClient.verify.listReportSummaries.query() as Promise<VerifyReportSummary[]>;
+  /**
+   * One cursor-paginated page of the current user's verification sessions with
+   * report rollup fields. `cursor` comes from the previous page's `nextCursor`;
+   * `q` filters by title on the server so search spans the whole history.
+   */
+  listReportSummaries = (params?: {
+    cursor?: string;
+    limit?: number;
+    q?: string;
+  }): Promise<VerifyReportSummaryPage> =>
+    lambdaClient.verify.listReportSummaries.query(params) as Promise<VerifyReportSummaryPage>;
 
   deleteRun = (verifyRunId: string): Promise<unknown> =>
     lambdaClient.verify.deleteRun.mutate({ verifyRunId });

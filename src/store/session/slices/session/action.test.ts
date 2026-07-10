@@ -12,7 +12,6 @@ import { sessionSelectors } from './selectors';
 // Mock sessionService 和其他依赖项
 vi.mock('@/services/session', () => ({
   sessionService: {
-    removeAllSessions: vi.fn(),
     createSession: vi.fn(),
     cloneSession: vi.fn(),
     updateSessionGroup: vi.fn(),
@@ -53,19 +52,6 @@ afterEach(() => {
 });
 
 describe('SessionAction', () => {
-  describe('clearSessions', () => {
-    it('should clear all sessions and refresh the list', async () => {
-      const { result } = renderHook(() => useSessionStore());
-
-      await act(async () => {
-        await result.current.clearSessions();
-      });
-
-      expect(sessionService.removeAllSessions).toHaveBeenCalled();
-      expect(mockRefresh).toHaveBeenCalled(); // 假设 refreshSessions 调用了 getSessions
-    });
-  });
-
   describe('createSession', () => {
     it('should create a new session and switch to it', async () => {
       const { result } = renderHook(() => useSessionStore());

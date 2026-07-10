@@ -29,11 +29,18 @@ export interface StreamChunkInput {
   text?: string;
 }
 
+export interface StreamErrorInput {
+  error: unknown;
+  phase: string;
+  stepIndex: number;
+}
+
 /**
  * Egress for live streaming. Server adapter forwards to the Redis stream
  * (`IStreamEventManager`); the client adapter dispatches into the UI store.
  */
 export interface StreamSink {
   publishChunk: (chunk: StreamChunkInput) => Promise<void>;
+  publishError?: (input: StreamErrorInput) => Promise<void>;
   publishEvent: (event: RuntimeStreamEvent) => Promise<void>;
 }

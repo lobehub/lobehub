@@ -44,9 +44,13 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   main: css`
     position: relative;
+
     flex: 1;
+
     min-width: 0;
     height: 100%;
+
+    background: ${cssVar.colorBgContainer};
   `,
 }));
 

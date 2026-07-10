@@ -123,6 +123,9 @@ export default {
   'extendParams.imageResolution.title': 'Image Resolution',
   'extendParams.reasoningBudgetToken.title': 'Thinking Consumption Token',
   'extendParams.reasoningEffort.title': 'Reasoning Intensity',
+  'extendParams.reasoningMode.desc':
+    'Standard balances speed and cost. Pro performs more model work for difficult tasks and may use more tokens.',
+  'extendParams.reasoningMode.title': 'Reasoning Mode',
   'extendParams.textVerbosity.title': 'Output Text Detail Level',
   'extendParams.thinking.title': 'Deep Thinking Switch',
   'extendParams.thinkingBudget.title': 'Thinking Budget',
@@ -182,6 +185,10 @@ export default {
   'heteroAgent.fullAccess.label': 'Full access',
   'heteroAgent.fullAccess.tooltip':
     'The local coding agent runs with full read/write access to the working directory. Switching permission modes is not available yet.',
+  'heteroAgent.claudeQuota.errorRateLimited':
+    'Claude Code quota is temporarily rate limited. Please try again later.',
+  'heteroAgent.claudeQuota.refreshRateLimited':
+    'Quota refresh is temporarily rate limited. Showing the last available data.',
   'heteroAgent.claudeQuota.scopedWeekly': 'Weekly ({{model}})',
   'heteroAgent.claudeQuota.title': 'Claude Code quota',
   'heteroAgent.claudeQuota.tooltip': 'View Claude Code quota',
@@ -191,6 +198,15 @@ export default {
     'This agent uses an API key / custom endpoint, so subscription quota does not apply.',
   'heteroAgent.claudeQuota.unavailableNotFound':
     'No Claude Code login found. Run claude in a terminal to sign in first.',
+  'heteroAgent.claudeSdkRuntime.state.closed': 'SDK closed',
+  'heteroAgent.claudeSdkRuntime.state.closing': 'SDK closing',
+  'heteroAgent.claudeSdkRuntime.state.error': 'SDK error',
+  'heteroAgent.claudeSdkRuntime.state.idle': 'SDK idle',
+  'heteroAgent.claudeSdkRuntime.state.monitoring': 'SDK monitoring',
+  'heteroAgent.claudeSdkRuntime.state.running': 'SDK running',
+  'heteroAgent.claudeSdkRuntime.state.stale': 'SDK stale',
+  'heteroAgent.claudeSdkRuntime.state.starting': 'SDK starting',
+  'heteroAgent.claudeSdkRuntime.tooltip': '{{state}}. Active background tasks: {{count}}.',
   'heteroAgent.codexQuota.expiresIn': 'Expires in {{duration}}',
   'heteroAgent.codexQuota.nextExpiresIn': 'Next expires in {{duration}}',
   'heteroAgent.codexQuota.resetCredits_one': '1 rate-limit reset available',
@@ -209,6 +225,7 @@ export default {
   'heteroAgent.quota.left': '{{percent}}% left',
   'heteroAgent.quota.noData': 'Quota is not available yet.',
   'heteroAgent.quota.refresh': 'Refresh quota',
+  'heteroAgent.quota.refreshFailed': "Couldn't refresh quota. Showing the last available data.",
   'heteroAgent.quota.resetsIn': 'Resets in {{duration}}',
   'heteroAgent.quota.resetsSoon': 'Resets soon',
   'heteroAgent.quota.session': 'Session',
@@ -228,6 +245,7 @@ export default {
   'heteroAgent.modelSelector.reasoning.low': 'Low',
   'heteroAgent.modelSelector.reasoning.max': 'Max',
   'heteroAgent.modelSelector.reasoning.medium': 'Medium',
+  'heteroAgent.modelSelector.reasoning.ultra': 'Ultra',
   'heteroAgent.modelSelector.reasoning.xhigh': 'Extra High',
   'heteroAgent.modelSelector.speed': 'Speed',
   'heteroAgent.modelSelector.speed.fast': 'Fast',
@@ -265,6 +283,8 @@ export default {
   'heteroAgent.executionTarget.manage': 'Manage',
   'heteroAgent.executionTarget.noDevices':
     'No remote devices yet. Run `lh connect` on another machine to add one.',
+  'heteroAgent.executionTarget.noWorkspaceDevices':
+    'No workspace devices yet. Run `{{cmd}}` on a machine to enroll it for every member.',
   'heteroAgent.executionTarget.none': 'No device',
   'heteroAgent.executionTarget.noneDesc': 'No device enabled',
   'heteroAgent.executionTarget.offline': 'Offline',
@@ -308,13 +328,10 @@ export default {
   'input.modelUnavailable':
     'The current model is no longer available. Choose another model to continue.',
   'input.more': 'More',
-  'input.sandboxModeNotice':
-    'Running in a temporary Cloud Sandbox. Local runs are faster and can access your files.',
   'input.send': 'Send',
   'input.sendWithCmdEnter': 'Press <key/> to send',
   'input.sendWithEnter': 'Press <key/> to send',
   'input.stop': 'Stop',
-  'input.switchToLocal': 'Use local machine',
   'input.warp': 'New Line',
   'input.warpWithKey': 'Press <key/> to insert a line break',
   'inputQueue.delete': 'Delete',
@@ -525,8 +542,6 @@ export default {
   'newPlatformAgent': 'Connect Agent',
   'newGroupChat': 'Create Group',
   'agent.publishToWorkspace': 'Publish to Workspace',
-  'agent.publishToWorkspaceConfirm':
-    'Other workspace members will be able to use this agent. You will not be able to make it private again.',
   'agent.publishToWorkspaceSuccess': 'Published to workspace',
   'resources.publishToWorkspace.menu': 'Publish to Workspace',
   'resources.publishToWorkspace.confirm':
@@ -622,6 +637,9 @@ export default {
   'pageCopilot.welcome': `**Clearer, sharper writing**\n\nDraft, rewrite, or polish—tell me your intent and I'll refine the rest.`,
   'pageSelection.lines': 'Lines {{start}}-{{end}}',
   'pageSelection.reference': 'Selected Text',
+  'textSelection.added': 'Added to conversation context',
+  'textSelection.addToConversation': 'Add to conversation',
+  'textSelection.title': 'Message selection',
   'pin': 'Pin',
   'pinOff': 'Unpin',
   'rag.referenceChunks': 'Reference Source',
@@ -928,6 +946,8 @@ export default {
   'taskDetail.comment.save': 'Save',
   'taskDetail.commentPlaceholder':
     'Leave feedback to guide the agent — your comments shape the next run...',
+  'taskDetail.runFollowUp': 'Ask a follow-up',
+  'taskDetail.runFollowUpPlaceholder': 'Ask a follow-up about this run...',
   'taskDetail.collapseReply': 'Collapse',
   'taskDetail.replyInThread': 'Reply in this thread',
   'taskDetail.replyPlaceholder': 'Reply in this thread...',
@@ -1013,8 +1033,6 @@ export default {
   'taskDetail.updateFailed': 'Failed to update task',
   'taskDetail.publishToWorkspace.menuLabel': 'Publish to Workspace',
   'taskDetail.publishToWorkspace.confirmTitle': 'Publish task to workspace?',
-  'taskDetail.publishToWorkspace.confirmContent':
-    'Once published, this task becomes visible to all workspace members and cannot be reverted to private.',
   'taskDetail.publishToWorkspace.confirmHint':
     'Past runs remain private. Only runs created after publishing will be visible to workspace members.',
   'taskDetail.publishToWorkspace.confirmOk': 'Publish',
@@ -1023,6 +1041,7 @@ export default {
 
   'createTask.assignee': 'Assignee',
   'createTask.collapse': 'Hide input',
+  'createTask.createFailed': 'Failed to create task',
   'createTask.expandToInline': 'Dock to page',
   'createTask.instructionPlaceholder': 'Add task instruction...',
   'createTask.submit': 'Create task',
@@ -1139,6 +1158,10 @@ export default {
   'tool.intervention.optionApprove': 'Approve',
   'tool.intervention.optionApproveRemember': "Approve, and don't ask again for similar actions",
   'tool.intervention.rememberSimilar': "Don't ask again for similar actions",
+  'tool.intervention.renderFallback.description':
+    'This display was downgraded to raw JSON because the current model was not capable enough to generate a stable interactive payload. Switch to a stronger model and try again.',
+  'tool.intervention.renderFallback.rawJson': 'Raw JSON',
+  'tool.intervention.renderFallback.title': 'Interaction display downgraded',
   'tool.intervention.submit': 'Submit',
   'tool.intervention.mode.allowList': 'Allow List',
   'tool.intervention.mode.allowListDesc': 'Only automatically execute approved tools',
@@ -1385,6 +1408,7 @@ export default {
   'workingPanel.skills.rename.placeholder': 'Skill name',
   'workingPanel.skills.rename.title': 'Rename skill',
   'workingPanel.skills.section.agent': 'Agent skills',
+  'workingPanel.skills.section.device': 'Device skills',
   'workingPanel.skills.section.project': 'Project skills',
   'workingPanel.skills.section.user': 'User skills',
   'workingPanel.skills.title': 'Skills',
@@ -1401,6 +1425,7 @@ export default {
   'workingPanel.review.baseRef.loading': 'Loading branches…',
   'workingPanel.review.baseRef.reset': 'Reset to default branch',
   'workingPanel.review.baseRef.unresolved': 'Pick a base branch',
+  'workingPanel.review.addSelectionToContext.success': 'Added selected lines to context',
   'workingPanel.review.binary': 'Binary file — diff not shown',
   'workingPanel.review.collapseAll': 'Collapse all',
   'workingPanel.review.copied': 'Path copied',
@@ -1431,6 +1456,8 @@ export default {
   'workingPanel.review.textDiff.enable': 'Enable inline text diff',
   'workingPanel.review.title': 'Review',
   'workingPanel.review.tooLarge': 'File is too large to diff inline',
+  'workingPanel.review.tree.hide': 'Hide file tree',
+  'workingPanel.review.tree.show': 'Show file tree',
   'workingPanel.review.unstaged': 'Unstaged',
   'workingPanel.review.viewMode.split': 'Switch to split view',
   'workingPanel.review.viewMode.unified': 'Switch to unified view',

@@ -122,6 +122,7 @@
   "responseLanguage.auto": "Auto (Systemsprache verwenden)",
   "responseLanguage.desc": "Wähle die Antwortsprache des Agenten",
   "responseLanguage.hint": "Nach der Auswahl wird die Sprache der KI-Antworten sowie die Oberfläche entsprechend angepasst",
+  "responseLanguage.saveFailed": "Speichern fehlgeschlagen. Bitte versuchen Sie es erneut.",
   "responseLanguage.title": "In welcher Sprache sollen wir kommunizieren?",
   "responseLanguage.title2": "Mit Sprache beginnt echtes Verständnis.",
   "responseLanguage.title3": "Lass mich klar sprechen und dich besser verstehen~",

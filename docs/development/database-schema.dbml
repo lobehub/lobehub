@@ -704,6 +704,7 @@ table user_connectors {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   user_id text [not null]
   workspace_id text
+  agent_id text
   identifier varchar(255) [not null]
   name varchar(255) [not null]
   source_type text [not null]
@@ -721,10 +722,13 @@ table user_connectors {
   updated_at "timestamp with time zone" [not null, default: `now()`]
 
   indexes {
-    (user_id, identifier) [name: 'user_connectors_user_identifier_unique', unique]
+    (user_id, identifier) [name: 'user_connectors_personal_identifier_idx']
+    (user_id, workspace_id, identifier) [name: 'user_connectors_workspace_identifier_idx']
+    (agent_id, identifier) [name: 'user_connectors_agent_identifier_idx']
     user_id [name: 'user_connectors_user_id_idx']
     token_expires_at [name: 'user_connectors_token_expires_at_idx']
     workspace_id [name: 'user_connectors_workspace_id_idx']
+    agent_id [name: 'user_connectors_agent_id_idx']
   }
 }
 
@@ -1223,6 +1227,7 @@ table messages {
     created_at [name: 'messages_created_at_idx']
     (client_id, user_id) [name: 'message_client_id_user_unique', unique]
     topic_id [name: 'messages_topic_id_idx']
+    (topic_id, updated_at) [name: 'messages_topic_id_updated_at_idx']
     parent_id [name: 'messages_parent_id_idx']
     quota_id [name: 'messages_quota_id_idx']
     user_id [name: 'messages_user_id_idx']
@@ -2008,6 +2013,7 @@ table task_topics {
   seq integer [not null]
   operation_id text
   status text [not null, default: 'running']
+  trigger text
   handoff jsonb
   review_passed integer
   review_score integer
@@ -2491,6 +2497,7 @@ table verify_check_results {
   verdict text
   confidence "numeric(3, 2)"
   toulmin jsonb
+  metadata jsonb
   suggestion text
   user_decision text
   is_false_positive boolean
@@ -2545,6 +2552,7 @@ table verify_evidence {
   type text [not null]
   content text
   file_id text
+  metadata jsonb
   captured_by text
   captured_at "timestamp with time zone"
   user_id text [not null]

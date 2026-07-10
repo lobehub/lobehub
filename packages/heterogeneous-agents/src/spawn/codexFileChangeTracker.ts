@@ -6,6 +6,8 @@ import { createPatch } from 'diff';
 interface CodexFileChangeEntry {
   diffText?: string;
   kind?: string;
+  linesAdded?: number;
+  linesDeleted?: number;
   path?: string;
 }
 
@@ -38,7 +40,7 @@ interface CodexFileChangeDiff extends CodexFileChangeLineStats {
   diffText?: string;
 }
 
-interface CodexTrackedFileChangeEntry extends CodexFileChangeEntry, CodexFileChangeDiff {}
+type CodexTrackedFileChangeEntry = CodexFileChangeEntry & CodexFileChangeDiff;
 
 interface CodexTrackedFileChangeItem extends CodexFileChangeItem, CodexFileChangeLineStats {
   changes?: CodexTrackedFileChangeEntry[];
@@ -145,6 +147,13 @@ const computeFileChangeDiff = async (
     if (!snapshot?.exists) return { linesAdded: 0, linesDeleted: 0 };
     if (snapshot.content === undefined) return { linesAdded: 0, linesDeleted: 0 };
     return buildFileChangeDiff(filePath, previousContent, '');
+  }
+
+  if (!snapshot) {
+    return {
+      linesAdded: change.linesAdded ?? 0,
+      linesDeleted: change.linesDeleted ?? 0,
+    };
   }
 
   if (!snapshot?.exists && !current.exists) return { linesAdded: 0, linesDeleted: 0 };

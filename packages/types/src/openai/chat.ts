@@ -117,6 +117,14 @@ export interface ChatStreamPayload {
    * @default openai
    */
   provider?: string;
+  /**
+   * Responses API reasoning configuration.
+   */
+  reasoning?: {
+    effort?: string;
+    mode?: 'standard' | 'pro';
+    summary?: string;
+  };
   response_format?: ChatResponseFormat;
   responseMode?: 'stream' | 'json';
   /**

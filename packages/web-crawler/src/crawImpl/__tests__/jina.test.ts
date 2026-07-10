@@ -186,17 +186,17 @@ describe('jina crawler', () => {
     });
   });
 
-  it('should return undefined if response is not ok', async () => {
+  it('should throw HTTP status error if response is not ok', async () => {
     mockFetch.mockResolvedValue(
-      createMockResponse(null, { ok: false, status: 500, statusText: 'Internal Server Error' }),
+      createMockResponse(null, { ok: false, status: 429, statusText: 'Too Many Requests' }),
     );
 
-    const result = await jina('https://example.com', { filterOptions: {} });
-
-    expect(result).toBeUndefined();
+    await expect(jina('https://example.com', { filterOptions: {} })).rejects.toThrow(
+      'Jina request failed with status 429: Too Many Requests',
+    );
   });
 
-  it('should return undefined if response code is not 200', async () => {
+  it('should throw error if response code is not 200', async () => {
     const mockResponse = createMockResponse(
       {
         code: 400,
@@ -207,9 +207,9 @@ describe('jina crawler', () => {
 
     mockFetch.mockResolvedValue(mockResponse);
 
-    const result = await jina('https://example.com', { filterOptions: {} });
-
-    expect(result).toBeUndefined();
+    await expect(jina('https://example.com', { filterOptions: {} })).rejects.toThrow(
+      'Jina request failed with code 400: Bad Request',
+    );
   });
 
   it('should throw error if fetch throws non-fetch-failed error', async () => {

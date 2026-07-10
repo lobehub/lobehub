@@ -21,6 +21,17 @@ export interface AgentEventLlmResult {
   type: 'llm_result';
 }
 
+export interface AgentEventStreamRetry {
+  data: {
+    attempt: number;
+    delayMs: number;
+    errorType?: string;
+    kind?: string;
+    maxAttempts: number;
+  };
+  type: 'stream_retry';
+}
+
 export interface AgentEventToolPending {
   toolCalls: ToolsCalling[];
   type: 'tool_pending';
@@ -120,6 +131,7 @@ export type AgentEvent =
   | AgentEventLlmStart
   | AgentEventLlmStream
   | AgentEventLlmResult
+  | AgentEventStreamRetry
   // Tool invocation
   | AgentEventToolPending
   | AgentEventToolResult

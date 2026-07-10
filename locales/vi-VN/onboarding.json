@@ -122,6 +122,7 @@
   "responseLanguage.auto": "Tự động (Theo ngôn ngữ hệ thống)",
   "responseLanguage.desc": "Chọn ngôn ngữ phản hồi của Trợ lý",
   "responseLanguage.hint": "Sau khi chọn ngôn ngữ, các phản hồi của AI sẽ sử dụng ngôn ngữ đó và giao diện cũng sẽ được đồng bộ",
+  "responseLanguage.saveFailed": "Lưu không thành công. Vui lòng thử lại.",
   "responseLanguage.title": "Chúng ta nên giao tiếp bằng ngôn ngữ nào?",
   "responseLanguage.title2": "Bắt đầu bằng ngôn ngữ, xây dựng sự thấu hiểu thật sự.",
   "responseLanguage.title3": "Hãy để tôi nói rõ ràng và hiểu bạn tốt hơn~",

@@ -59,6 +59,19 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     border: none;
     border-radius: 0 !important;
   `,
+  leftActions: css`
+    flex: none;
+    min-width: 0;
+
+    > * {
+      flex: none !important;
+    }
+  `,
+  leftSlot: css`
+    overflow: hidden;
+    flex: 1;
+    min-width: 0;
+  `,
 }));
 
 interface DesktopChatInputProps extends ActionToolbarProps {
@@ -169,6 +182,27 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
         style={{ height: 32, minWidth: 64, width: 64 }}
       />
     ) : null;
+    const noticeNode = !isConfigLoading && <ChatInputNotice />;
+    const leftSlotContent = (
+      <Flexbox horizontal align={'center'} className={styles.leftActions}>
+        {leftContent ?? (
+          <ActionBar
+            disableCollapse
+            borderRadius={borderRadius}
+            dropdownPlacement={dropdownPlacement}
+            extraActionItems={extraActionItems}
+          />
+        )}
+      </Flexbox>
+    );
+    const leftSlot = noticeNode ? (
+      <Flexbox horizontal align={'center'} className={styles.leftSlot} gap={4}>
+        {leftSlotContent}
+        {noticeNode}
+      </Flexbox>
+    ) : (
+      leftSlotContent
+    );
 
     const content = (
       <Flexbox
@@ -179,7 +213,6 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
         onDragOver={handleDragOver}
         onDrop={handleDrop}
       >
-        {!isConfigLoading && <ChatInputNotice />}
         <ChatInput
           data-testid="chat-input"
           defaultHeight={chatInputHeight || 32}
@@ -191,17 +224,8 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
           footer={
             compact ? undefined : (
               <ChatInputActionBar
+                left={loadingLeftSlot ?? leftSlot}
                 style={actionBarStyle ?? { paddingRight: 8 }}
-                left={
-                  loadingLeftSlot ??
-                  leftContent ?? (
-                    <ActionBar
-                      borderRadius={borderRadius}
-                      dropdownPlacement={dropdownPlacement}
-                      extraActionItems={extraActionItems}
-                    />
-                  )
-                }
                 right={
                   loadingRightSlot ??
                   rightContent ??

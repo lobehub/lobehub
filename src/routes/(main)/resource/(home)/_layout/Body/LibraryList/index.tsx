@@ -14,6 +14,7 @@ import { useResourceManagerStore } from '@/routes/(main)/resource/features/store
 import { useKnowledgeBaseStore } from '@/store/library';
 
 import Item from './Item';
+import { getLibraryListAsyncState } from './state';
 
 /**
  * Show library list in the sidebar
@@ -52,15 +53,18 @@ const LibraryList = memo(() => {
     });
   };
 
-  const hasData = (data?.length ?? 0) > 0;
-  const showSkeleton = isLoading || (isValidating && !hasData);
+  const {
+    boundaryData,
+    isEmpty,
+    isLoading: showSkeleton,
+  } = getLibraryListAsyncState({ data, isLoading, isValidating });
 
   return (
     <AsyncBoundary
-      data={data}
+      data={boundaryData}
       error={error}
       errorVariant={'inline'}
-      isEmpty={data?.length === 0}
+      isEmpty={isEmpty}
       isLoading={showSkeleton}
       loading={<SkeletonList paddingInline={4} rows={3} />}
       empty={

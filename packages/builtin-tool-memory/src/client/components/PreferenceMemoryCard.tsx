@@ -101,6 +101,12 @@ export const PreferenceMemoryCard = memo<PreferenceMemoryCardProps>(({ data, loa
   const { conclusionDirectives, originContext, appContext, suggestions, type } =
     withPreference || {};
 
+  // `tags`/`suggestions` come from raw model tool-call args without zod coercion,
+  // so a model may emit a scalar where `string[]` is expected. Normalize to arrays
+  // to keep this card from crashing on dirty input (`.map` on a non-array).
+  const safeTags = Array.isArray(tags) ? tags : [];
+  const safeSuggestions = Array.isArray(suggestions) ? suggestions : [];
+
   const hasContextContent =
     originContext?.actor ||
     originContext?.scenario ||
@@ -110,12 +116,12 @@ export const PreferenceMemoryCard = memo<PreferenceMemoryCardProps>(({ data, loa
 
   const hasAppContext = appContext?.app || appContext?.feature || appContext?.surface;
 
-  const hasSuggestions = suggestions && suggestions.length > 0;
+  const hasSuggestions = safeSuggestions.length > 0;
 
   if (
     !summary &&
     !details &&
-    !tags?.length &&
+    !safeTags.length &&
     !title &&
     !conclusionDirectives &&
     !hasContextContent &&
@@ -152,7 +158,7 @@ export const PreferenceMemoryCard = memo<PreferenceMemoryCardProps>(({ data, loa
       {hasContextContent || hasAppContext ? (
         <>
           {/* Collapsed Summary */}
-          {(summary || tags?.length) && (
+          {(summary || safeTags.length > 0) && (
             <Accordion gap={0}>
               <AccordionItem
                 itemKey="summary"
@@ -170,9 +176,9 @@ export const PreferenceMemoryCard = memo<PreferenceMemoryCardProps>(({ data, loa
                 <Flexbox gap={8} paddingBlock={'8px 12px'} paddingInline={8}>
                   {summary && <div className={styles.summary}>{summary}</div>}
                   {details && <div className={styles.detail}>{details}</div>}
-                  {tags && tags.length > 0 && (
+                  {safeTags.length > 0 && (
                     <Flexbox horizontal className={styles.tags} gap={8} wrap={'wrap'}>
-                      {tags.map((tag, index) => (
+                      {safeTags.map((tag, index) => (
                         <Tag key={index}>{tag}</Tag>
                       ))}
                     </Flexbox>
@@ -297,7 +303,7 @@ export const PreferenceMemoryCard = memo<PreferenceMemoryCardProps>(({ data, loa
                 <span className={highlightTextStyles.info}>Suggestions</span>
               </Text>
               <Flexbox gap={8}>
-                {suggestions.map((suggestion, index) => (
+                {safeSuggestions.map((suggestion, index) => (
                   <div className={styles.suggestion} key={index}>
                     {suggestion}
                   </div>
@@ -329,7 +335,7 @@ export const PreferenceMemoryCard = memo<PreferenceMemoryCardProps>(({ data, loa
                     <span className={highlightTextStyles.info}>Suggestions</span>
                   </Text>
                   <Flexbox gap={8}>
-                    {suggestions.map((suggestion, index) => (
+                    {safeSuggestions.map((suggestion, index) => (
                       <div className={styles.suggestion} key={index}>
                         {suggestion}
                       </div>
@@ -337,9 +343,9 @@ export const PreferenceMemoryCard = memo<PreferenceMemoryCardProps>(({ data, loa
                   </Flexbox>
                 </Flexbox>
               )}
-              {tags && tags.length > 0 && (
+              {safeTags.length > 0 && (
                 <Flexbox horizontal className={styles.tags} gap={8} wrap={'wrap'}>
-                  {tags.map((tag, index) => (
+                  {safeTags.map((tag, index) => (
                     <Tag key={index}>{tag}</Tag>
                   ))}
                 </Flexbox>

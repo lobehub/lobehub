@@ -74,6 +74,7 @@ export const knowledgeBaseRouter = router({
     .input(
       z.object({
         id: z.string(),
+        targetVisibility: z.enum(['private', 'public']).optional(),
         targetWorkspaceId: z.string().nullable(),
       }),
     )
@@ -110,7 +111,12 @@ export const knowledgeBaseRouter = router({
         targetWorkspaceId: input.targetWorkspaceId,
       });
 
-      return ctx.knowledgeBaseModel.copyToWorkspace(input.id, input.targetWorkspaceId, ctx.userId);
+      return ctx.knowledgeBaseModel.copyToWorkspace(
+        input.id,
+        input.targetWorkspaceId,
+        ctx.userId,
+        input.targetVisibility,
+      );
     }),
 
   getKnowledgeBaseById: knowledgeBaseProcedure
@@ -155,6 +161,42 @@ export const knowledgeBaseRouter = router({
       if (kb.visibility === 'public') return { success: true };
 
       await ctx.knowledgeBaseModel.publishToWorkspace(input.id);
+      return { success: true };
+    }),
+
+  /**
+   * Toggle a knowledge base's workspace visibility. Creator-only. Personal
+   * mode has no workspace visibility concept, so the call is rejected there.
+   */
+  setKnowledgeBaseVisibility: knowledgeBaseProcedure
+    .use(withScopedPermission('knowledge_base:update'))
+    .input(
+      z.object({
+        id: z.string(),
+        visibility: z.enum(['private', 'public']),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (!ctx.workspaceId) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Knowledge base visibility only applies inside a workspace',
+        });
+      }
+
+      const kb = await ctx.knowledgeBaseModel.findById(input.id);
+      if (!kb) throw new TRPCError({ code: 'NOT_FOUND', message: 'Knowledge base not found' });
+
+      if (kb.userId !== ctx.userId) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Only the creator can change a knowledge base’s visibility',
+        });
+      }
+
+      if (kb.visibility === input.visibility) return { success: true };
+
+      await ctx.knowledgeBaseModel.setVisibility(input.id, input.visibility);
       return { success: true };
     }),
 
@@ -204,6 +246,7 @@ export const knowledgeBaseRouter = router({
     .input(
       z.object({
         id: z.string(),
+        targetVisibility: z.enum(['private', 'public']).optional(),
         targetWorkspaceId: z.string().nullable(),
       }),
     )
@@ -248,7 +291,12 @@ export const knowledgeBaseRouter = router({
         targetWorkspaceId: input.targetWorkspaceId,
       });
 
-      return ctx.knowledgeBaseModel.transferTo(input.id, input.targetWorkspaceId, ctx.userId);
+      return ctx.knowledgeBaseModel.transferTo(
+        input.id,
+        input.targetWorkspaceId,
+        ctx.userId,
+        input.targetVisibility,
+      );
     }),
 
   updateKnowledgeBase: knowledgeBaseProcedure

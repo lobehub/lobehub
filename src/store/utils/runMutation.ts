@@ -36,7 +36,7 @@ export interface RunMutationConfig<TStore extends object, T> {
  * counterpart to the read-side `AsyncBoundary`. It wraps the recurring
  * saving → optimistic → mutate → (saved | rollback + failed + toast) dance so no
  * action can forget the failure branch, which is the exact bug (`catch → 'idle'`,
- * a lost edit rendering as a clean state) the LOBE-11078 audit found duplicated
+ * a lost edit rendering as a clean state) the UX audit found duplicated
  * across the write surfaces.
  *
  * Kept deliberately lightweight vs. the queued `OptimisticEngine` — no cross-action

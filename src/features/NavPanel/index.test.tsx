@@ -71,6 +71,14 @@ vi.mock('@/features/Pages/PageLayout/SidebarContent', () => ({
   default: () => <div>Page sidebar</div>,
 }));
 
+vi.mock('@/routes/(main)/(create)/image/_layout/Sidebar/Content', () => ({
+  default: () => <div>Image sidebar</div>,
+}));
+
+vi.mock('@/routes/(main)/(create)/video/_layout/Sidebar/Content', () => ({
+  default: () => <div>Video sidebar</div>,
+}));
+
 vi.mock('./components/NavPanelDraggable', () => ({
   NavPanelDraggable: ({ activeContent }: NavPanelDraggableMockProps) => (
     <div data-nav-key={activeContent.key} data-testid="nav-panel">

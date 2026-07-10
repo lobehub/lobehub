@@ -710,11 +710,21 @@ export class StreamingExecutorActionImpl {
           }
 
           case 'human_approve_required': {
-            await notifyDesktopHumanApprovalRequired(this.#get, {
-              agentId,
-              groupId,
-              topicId,
-            });
+            await notifyDesktopHumanApprovalRequired(this.#get, context);
+            if (topicId) {
+              const statusWrite = this.#get().updateTopicStatus?.({
+                agentId,
+                groupId,
+                ...(context.scope === 'group' || context.scope === 'group_agent'
+                  ? { scope: context.scope }
+                  : {}),
+                status: 'waitingForHuman',
+                topicId,
+              });
+              void statusWrite?.catch((error) => {
+                console.error('[streamingExecutor] updateTopicStatus failed:', error);
+              });
+            }
             break;
           }
 
@@ -881,12 +891,16 @@ export class StreamingExecutorActionImpl {
       void this.#get().refreshThreads();
 
       // 2. Build the sub-agent ConversationContext (threadId provides isolation)
+      const workspaceSlug = parentOperationId
+        ? this.#get().operations[parentOperationId]?.context.workspaceSlug
+        : undefined;
       const subContext: ConversationContext = {
         agentId,
         isSubAgent: true,
         scope: 'thread',
         threadId,
         topicId,
+        ...(workspaceSlug ? { workspaceSlug } : {}),
       };
 
       // 3. Create a child operation chained to the parent runtime operation

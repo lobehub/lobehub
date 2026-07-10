@@ -185,6 +185,15 @@ missing; a blocked case is not a pass).
   ],
   "commit": "abc1234",
   "createdAt": "2026-06-11T15:30:00+08:00",
+  "interactionCost": {
+    "model": "goms-klm@lobe-v1",
+    "scope": "user-equivalent",
+    "totalSeconds": 8.1,
+    "activeSeconds": 6.1,
+    "waitSeconds": 2,
+    "operators": { "K": 1, "P": 2, "H": 0, "M": 2, "T_chars": 5, "R_ms": 2000 },
+    "phases": []
+  },
   "summary": {
     "total": 1,
     "passed": 1,
@@ -201,6 +210,14 @@ missing; a blocked case is not a pass).
 `score` is optional — use it when the verdict has a subjective component (UI
 polish, copy quality); omit it for purely binary runs. `verdict` is the single
 word the user reads first: `pass`, `fail`, or `partial`.
+
+`interactionCost` is optional and run-level. For UI runs driven through
+`agent-browser`, create `interaction-trace.jsonl` with
+`scripts/agent-browser-klm.mjs`, then run
+`scripts/agent-browser-klm-analyze.mjs --trace "$DIR/interaction-trace.jsonl" --result "$DIR/result.json" --write`. The summary is a user-equivalent GOMS-KLM
+estimate: physical browser actions are derived from agent-browser commands,
+while mental operators (`M`) are explicit agent estimates recorded with the
+wrapper's `mental` subcommand.
 
 When published (Step 4), `verify ingest-report` maps each case onto a check
 result: `name`→title, `status`/`result`→verdict, `observation` (or

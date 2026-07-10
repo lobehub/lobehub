@@ -1,6 +1,6 @@
 {
   "name": "@lobehub/cli",
-  "version": "0.0.38",
+  "version": "0.0.39",
   "type": "module",
   "bin": {
     "lh": "./dist/index.js",
@@ -35,6 +35,7 @@
     "@lobechat/heterogeneous-agents": "workspace:*",
     "@lobechat/local-file-shell": "workspace:*",
     "@lobechat/tool-runtime": "workspace:*",
+    "@lobechat/types": "workspace:*",
     "@trpc/client": "^11.18.0",
     "@types/node": "^24.13.2",
     "@types/semver": "^7.7.1",
@@ -48,6 +49,7 @@
     "picocolors": "^1.1.1",
     "semver": "^7.8.5",
     "superjson": "^2.2.6",
+    "tree-kill": "^1.2.2",
     "tsdown": "^0.21.10",
     "typescript": "^6.0.3",
     "ws": "^8.21.0"

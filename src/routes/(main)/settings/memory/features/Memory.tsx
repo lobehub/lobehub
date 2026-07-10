@@ -2,16 +2,17 @@
 
 import { type UserMemoryEffort } from '@lobechat/types';
 import { type FormGroupItemType } from '@lobehub/ui';
-import { Form, Icon, Skeleton, Tooltip } from '@lobehub/ui';
+import { Form, Skeleton, Tooltip } from '@lobehub/ui';
 import { Switch } from 'antd';
 import isEqual from 'fast-deep-equal';
-import { Loader2Icon } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AutoSaveHint from '@/components/Editor/AutoSaveHint';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import LevelSlider from '@/features/ModelSwitchPanel/components/ControlsForm/LevelSlider';
 import { usePermission } from '@/hooks/usePermission';
+import { useSaveState } from '@/hooks/useSaveState';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
 
@@ -23,7 +24,7 @@ const MemorySetting = memo(() => {
   const [form] = Form.useForm();
   const { memory } = useUserStore(settingsSelectors.currentSettings, isEqual);
   const [setSettings, isUserStateInit] = useUserStore((s) => [s.setSettings, s.isUserStateInit]);
-  const [loading, setLoading] = useState(false);
+  const { status: saveStatus, lastSavedAt, save, retry } = useSaveState();
 
   if (!isUserStateInit) return <Skeleton active paragraph={{ rows: 3 }} title={false} />;
 
@@ -56,12 +57,10 @@ const MemorySetting = memo(() => {
                 1: t('memory.effort.level.medium'),
                 2: t('memory.effort.level.high'),
               }}
-              onChange={async (value) => {
+              onChange={(value) => {
                 if (!canManageMemory) return;
 
-                setLoading(true);
-                await setSettings({ memory: { effort: value } });
-                setLoading(false);
+                save(() => setSettings({ memory: { effort: value } }));
               }}
             />
           </Tooltip>
@@ -72,7 +71,7 @@ const MemorySetting = memo(() => {
         minWidth: undefined,
       },
     ],
-    extra: loading && <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.5 }} />,
+    extra: <AutoSaveHint lastUpdatedTime={lastSavedAt} saveStatus={saveStatus} onRetry={retry} />,
     title: t('memory.title'),
   };
 
@@ -84,12 +83,10 @@ const MemorySetting = memo(() => {
       items={[memorySettings]}
       itemsType={'group'}
       variant={'filled'}
-      onValuesChange={async (values) => {
+      onValuesChange={(values) => {
         if (!canManageMemory) return;
 
-        setLoading(true);
-        await setSettings({ memory: values });
-        setLoading(false);
+        save(() => setSettings({ memory: values }));
       }}
       {...FORM_STYLE}
     />

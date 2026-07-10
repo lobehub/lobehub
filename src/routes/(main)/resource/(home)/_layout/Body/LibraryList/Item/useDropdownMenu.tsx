@@ -2,12 +2,13 @@ import { type MenuProps } from '@lobehub/ui';
 import { Icon } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
-import { FileText, GlobeIcon, PencilLine, Trash } from 'lucide-react';
+import { EyeOffIcon, FileText, GlobeIcon, PencilLine, Trash } from 'lucide-react';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useKnowledgeBaseTransferMenuItem } from '@/business/client/hooks/useKnowledgeBaseTransferMenuItem';
 import { useCreateNewModal } from '@/features/LibraryModal';
+import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { usePermission } from '@/hooks/usePermission';
 import { useKnowledgeBaseStore } from '@/store/library';
 import { useUserStore } from '@/store/user';
@@ -36,6 +37,7 @@ export const useDropdownMenu = ({
   const publishKnowledgeBaseToWorkspace = useKnowledgeBaseStore(
     (s) => s.publishKnowledgeBaseToWorkspace,
   );
+  const setKnowledgeBaseVisibility = useKnowledgeBaseStore((s) => s.setKnowledgeBaseVisibility);
   const { open } = useCreateNewModal();
   const { allowed: canEdit } = usePermission('edit_own_content');
   const transferMenuItems = useKnowledgeBaseTransferMenuItem(id);
@@ -44,6 +46,10 @@ export const useDropdownMenu = ({
   // Mirrors the file / agent / task one-way publish pattern.
   const isOwnPrivateKb =
     visibility === 'private' && !!currentUserId && !!userId && userId === currentUserId;
+  // Bidirectional counterpart: workspace-public KBs owned by the caller can be
+  // pulled back to private via the same guarded server path.
+  const isOwnPublicKb =
+    visibility === 'public' && !!currentUserId && !!userId && userId === currentUserId;
 
   const handleDelete = useCallback(() => {
     if (!canEdit) return;
@@ -73,8 +79,8 @@ export const useDropdownMenu = ({
     if (!isOwnPrivateKb) return;
     confirmModal({
       cancelText: t('cancel', { ns: 'common' }),
-      content: t('library.publishConfirm.content'),
-      okText: t('library.publish'),
+      content: <VisibilityConfirmContent variant="publish" />,
+      okText: t('continue', { ns: 'common' }),
       onOk: async () => {
         try {
           await publishKnowledgeBaseToWorkspace(id);
@@ -87,6 +93,26 @@ export const useDropdownMenu = ({
       title: t('library.publishConfirm.title'),
     });
   }, [isOwnPrivateKb, id, publishKnowledgeBaseToWorkspace, t, message]);
+
+  const handleMakePrivate = useCallback(() => {
+    if (!isOwnPublicKb) return;
+    confirmModal({
+      cancelText: t('cancel', { ns: 'common' }),
+      content: <VisibilityConfirmContent variant="makePrivate" />,
+      okButtonProps: { danger: true },
+      okText: t('continue', { ns: 'common' }),
+      onOk: async () => {
+        try {
+          await setKnowledgeBaseVisibility(id, 'private');
+          message.success(t('makePrivate.success', { ns: 'common' }));
+        } catch (error) {
+          console.error(error);
+          message.error(t('makePrivate.error', { ns: 'common' }));
+        }
+      },
+      title: t('makePrivate.confirm.title', { ns: 'common' }),
+    });
+  }, [isOwnPublicKb, id, setKnowledgeBaseVisibility, t, message]);
 
   return useCallback(
     () =>
@@ -128,6 +154,17 @@ export const useDropdownMenu = ({
             },
           },
         canEdit && isOwnPrivateKb && { type: 'divider' },
+        canEdit &&
+          isOwnPublicKb && {
+            icon: <Icon icon={EyeOffIcon} />,
+            key: 'makePrivate',
+            label: t('makePrivate', { ns: 'common' }),
+            onClick: (info: any) => {
+              info.domEvent?.stopPropagation();
+              handleMakePrivate();
+            },
+          },
+        canEdit && isOwnPublicKb && { type: 'divider' },
         ...(canEdit ? (transferMenuItems ?? []) : []),
         { type: 'divider' },
         {
@@ -146,7 +183,9 @@ export const useDropdownMenu = ({
       handleDelete,
       handleEditDescription,
       handlePublish,
+      handleMakePrivate,
       isOwnPrivateKb,
+      isOwnPublicKb,
       transferMenuItems,
     ],
   );

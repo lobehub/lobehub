@@ -29,6 +29,8 @@ import { AiChatService } from '@/server/services/aiChat';
 import { getFileProxyUrl } from '@/server/services/file';
 import { HeterogeneousAgentService } from '@/server/services/heterogeneousAgent';
 
+import { workingDirConfigSchema } from './workingDirSchema';
+
 const log = debug('lobe-server:ai-agent-router');
 
 const createUiMessageFileUrlResolver = () => {
@@ -146,6 +148,7 @@ const ExecAgentSchema = z
           .object({
             repos: z.array(z.string()).optional(),
             workingDirectory: z.string().optional(),
+            workingDirectoryConfig: workingDirConfigSchema.optional(),
           })
           .optional(),
         /**
@@ -192,6 +195,26 @@ const ExecAgentSchema = z
       })
       .optional(),
     /**
+     * Resume a previous op paused on a `humanIntervention: 'always'` tool (e.g.
+     * lobe-agent `askUserQuestion`). When set, the new op writes the
+     * human-provided answer as the target tool message's result and resumes from
+     * `phase: 'tool_result'` — the tool is NOT re-executed, so the runtime never
+     * overwrites the answer with a fresh "pending" placeholder. Mutually
+     * exclusive with `resumeApproval`.
+     */
+    resumeToolResult: z
+      .object({
+        /** The human-provided tool result (the answer text). */
+        content: z.string(),
+        /** ID of the pending `role='tool'` message this result targets. */
+        parentMessageId: z.string(),
+        /** Optional plugin state to persist on the tool message. */
+        pluginState: z.record(z.unknown()).optional(),
+        /** tool_call_id of the pending tool call being answered. */
+        toolCallId: z.string(),
+      })
+      .optional(),
+    /**
      * Tool identifiers the user @-mentioned in this message. Enabled for this
      * run in addition to the agent's pinned plugins, so a mentioned tool that
      * isn't pinned to the agent (e.g. a custom MCP connector picked from the @
@@ -199,6 +222,14 @@ const ExecAgentSchema = z
      * by the user-scoped lookups downstream, so it can't enable others' tools.
      */
     selectedToolIds: z.array(z.string()).optional(),
+    /**
+     * Agents the user @-mentioned in this message (multi-mention). When present
+     * (and non-group), the run enables the callAgent tool and injects the
+     * mentioned-agents delegation context so the supervisor delegates to them
+     * instead of answering itself. Mirrors the client runtime's
+     * `initialContext.mentionedAgents` + injected callAgent manifest.
+     */
+    mentionedAgents: z.array(z.object({ id: z.string(), name: z.string() })).optional(),
     /** The agent slug to run (either agentId or slug is required) */
     slug: z.string().optional(),
     /**
@@ -686,8 +717,10 @@ export const aiAgentRouter = router({
       deviceId,
       existingMessageIds = [],
       fileIds,
+      mentionedAgents,
       parentMessageId,
       resumeApproval,
+      resumeToolResult,
       selectedToolIds,
       trigger,
       userInterventionConfig,
@@ -703,12 +736,14 @@ export const aiAgentRouter = router({
         deviceId,
         existingMessageIds,
         fileIds,
+        mentionedAgents,
         parentMessageId,
         prompt,
         // When parentMessageId is provided, this is a regeneration/continue or a
         // human-approval resume — either way, skip user message creation.
         resume: !!parentMessageId,
         resumeApproval,
+        resumeToolResult,
         selectedToolIds,
         slug,
         trigger: trigger ?? RequestTrigger.Chat,

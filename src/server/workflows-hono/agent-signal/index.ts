@@ -1,3 +1,4 @@
+import { withOtelMetricsForUpstashWorkflows } from '@lobechat/observability-otel/modules/upstash-workflow';
 import { serve } from '@upstash/workflow/hono';
 import { Hono } from 'hono';
 
@@ -14,9 +15,14 @@ app.post('/cron-hourly-nightly-self-review', qstashAuth(), scheduleNightlyReview
 
 app.post(
   '/run',
-  serve<AgentSignalWorkflowRunPayload>((context) => runAgentSignalWorkflow(context), {
-    qstashClient: createWorkflowQstashClient(),
-  }),
+  serve<AgentSignalWorkflowRunPayload>(
+    withOtelMetricsForUpstashWorkflows((context) => runAgentSignalWorkflow(context), {
+      url: '/api/workflows/agent-signal/run',
+    }),
+    {
+      qstashClient: createWorkflowQstashClient(),
+    },
+  ),
 );
 
 export default app;

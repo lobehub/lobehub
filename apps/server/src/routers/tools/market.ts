@@ -192,7 +192,11 @@ const execInSandboxHandler = async ({
 
     // Preprocess lh commands: rewrite to npx @lobehub/cli + inject auth env vars
     if ((toolName === 'execScript' || toolName === 'runCommand') && params.command) {
-      const lhResult = await preprocessLhCommand(params.command, userId);
+      const lhResult = await preprocessLhCommand(
+        params.command,
+        userId,
+        ctx.workspaceId ?? undefined,
+      );
 
       if (lhResult.error) {
         return {

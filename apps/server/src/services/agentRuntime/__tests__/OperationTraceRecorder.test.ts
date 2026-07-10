@@ -296,6 +296,55 @@ describe('OperationTraceRecorder', () => {
       expect(saved.completionReason).toBe('error');
     });
 
+    it('preserves failed LLM step type and structured error body diagnostics', async () => {
+      store.loadPartial.mockResolvedValue({
+        startedAt: 1000,
+        steps: [{ stepIndex: 0, stepType: 'call_tool' }],
+      });
+
+      await recorder.finalize('op-empty-completion', {
+        completionReason: 'error',
+        error: {
+          body: {
+            diagnostics: {
+              attempt: 3,
+              maxAttempts: 3,
+              outputTokens: 1,
+              retryEvents: [
+                { attempt: 2, delayMs: 1000, maxAttempts: 3, type: 'stream_retry' },
+                { attempt: 3, delayMs: 2000, maxAttempts: 3, type: 'stream_retry' },
+              ],
+            },
+          },
+          message: 'Model returned an empty completion',
+          retryable: true,
+          type: 'ModelEmptyCompletion',
+        },
+        failedStep: { startedAt: 5000, stepIndex: 1, stepType: 'call_llm' },
+        state: { metadata: {}, stepCount: 1 },
+      });
+
+      const saved = store.save.mock.calls[0][0];
+      const failed = saved.steps.find((s: any) => s.stepIndex === 1);
+      expect(failed.stepType).toBe('call_llm');
+      expect(failed.events?.[0]).toMatchObject({
+        error: {
+          body: {
+            diagnostics: {
+              attempt: 3,
+              retryEvents: [
+                expect.objectContaining({ attempt: 2 }),
+                expect.objectContaining({ attempt: 3 }),
+              ],
+            },
+          },
+          type: 'ModelEmptyCompletion',
+        },
+        type: 'error',
+      });
+      expect(saved.error.body.diagnostics).toMatchObject({ attempt: 3, maxAttempts: 3 });
+    });
+
     it('merges the error event into an existing step when stepIndex collides (success-path append landed before later failure)', async () => {
       // The success path may have already pushed step 1 to the partial before
       // a later failure (e.g. saveAgentState throws post-append). The recorder

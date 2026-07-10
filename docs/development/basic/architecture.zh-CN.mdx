@@ -57,7 +57,7 @@ LobeHub 的整体架构由以下核心层组成：
 后端提供两种 API 形式：
 
 - **RESTful WebAPI**（`src/app/(backend)/webapi/`）：处理 chat 流式响应、TTS、文件服务等需要特殊处理的端点
-- **tRPC Routers**（`src/server/routers/`）：类型安全的主要业务路由，按运行时分组：
+- **tRPC Routers**（`apps/server/src/routers/`）：类型安全的主要业务路由，按运行时分组：
   - `lambda/` — 主业务（agent、session、message、topic、file、knowledge、settings 等）
   - `async/` — 耗时异步操作（文件处理、图像生成、RAG 评估）
   - `tools/` — 工具调用（search、MCP、market）

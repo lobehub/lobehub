@@ -81,6 +81,52 @@ describe('applyModelExtendParams', () => {
     ).toBe('high');
   });
 
+  it('resolves GPT-5.6 max reasoning effort', () => {
+    const result = applyModelExtendParams({
+      chatConfig: chatConfig({ gpt5_6ReasoningEffort: 'max' }),
+      extendParams: ['gpt5_6ReasoningEffort'],
+      model: 'gpt-5.6-sol',
+    });
+
+    expect(result.reasoning_effort).toBe('max');
+  });
+
+  it('resolves GPT-5.6 Pro mode independently from reasoning effort', () => {
+    const result = applyModelExtendParams({
+      chatConfig: chatConfig({
+        gpt5_6ReasoningEffort: 'max',
+        reasoningMode: 'pro',
+      }),
+      extendParams: ['reasoningMode', 'gpt5_6ReasoningEffort'],
+      model: 'gpt-5.6-sol',
+    });
+
+    expect(result).toMatchObject({
+      reasoning: { mode: 'pro' },
+      reasoning_effort: 'max',
+    });
+  });
+
+  it('omits the default Standard reasoning mode', () => {
+    const result = applyModelExtendParams({
+      chatConfig: chatConfig({ reasoningMode: 'standard' }),
+      extendParams: ['reasoningMode'],
+      model: 'gpt-5.6-sol',
+    });
+
+    expect(result.reasoning).toBeUndefined();
+  });
+
+  it('omits Pro mode when the model card does not declare reasoningMode', () => {
+    const result = applyModelExtendParams({
+      chatConfig: chatConfig({ reasoningMode: 'pro' }),
+      extendParams: ['gpt5_6ReasoningEffort'],
+      model: 'gpt-5.6-sol',
+    });
+
+    expect(result.reasoning).toBeUndefined();
+  });
+
   it('resolves GLM-5.2 reasoning effort', () => {
     const result = applyModelExtendParams({
       chatConfig: chatConfig({ glm5_2ReasoningEffort: 'max' }),

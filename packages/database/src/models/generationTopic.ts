@@ -9,6 +9,7 @@ import { FileService } from '@/server/services/file';
 
 import type { GenerationTopicItem } from '../schemas/generation';
 import { generationTopics } from '../schemas/generation';
+import { users } from '../schemas/user';
 import type { LobeChatDatabase } from '../type';
 import type { GenerationTopicType } from '../types/generation';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
@@ -39,21 +40,33 @@ export class GenerationTopicModel {
       conditions.push(eq(generationTopics.type, type));
     }
 
-    const topics = await this.db
-      .select()
+    const rows = await this.db
+      .select({
+        avatar: users.avatar,
+        fullName: users.fullName,
+        topic: generationTopics,
+        username: users.username,
+      })
       .from(generationTopics)
+      .leftJoin(users, eq(generationTopics.userId, users.id))
       .orderBy(desc(generationTopics.updatedAt))
       .where(and(...conditions));
 
     return Promise.all(
-      topics.map(async (topic) => {
-        if (topic.coverUrl) {
-          return {
-            ...topic,
-            coverUrl: await this.fileService.getFullFileUrl(topic.coverUrl),
-          };
-        }
-        return topic;
+      rows.map(async ({ topic, avatar, fullName, username }) => {
+        const coverUrl = topic.coverUrl
+          ? await this.fileService.getFullFileUrl(topic.coverUrl)
+          : topic.coverUrl;
+        return {
+          ...topic,
+          coverUrl,
+          creator: {
+            avatar,
+            fullName,
+            id: topic.userId,
+            username,
+          },
+        };
       }),
     );
   };
@@ -94,6 +107,39 @@ export class GenerationTopicModel {
       .update(generationTopics)
       .set({ ...data, updatedAt: new Date() })
       .where(and(eq(generationTopics.id, id), this.ownership()))
+      .returning();
+
+    return updatedTopic;
+  };
+
+  /**
+   * Flip a generation topic's `visibility`. Bidirectional publish/unpublish.
+   * The combined `user_id = ?` + `visibility = fromVisibility` guards keep the
+   * operation creator-only and idempotent against rows already at the target
+   * visibility.
+   *
+   * Unpublishing is safe by design — after the flip, `buildWorkspaceWhere`
+   * hides the topic (and its batches/generations) from other members on the
+   * next read. Files that back the assets are protected separately at their
+   * own `files.visibility`.
+   */
+  setVisibility = async (
+    id: string,
+    visibility: 'private' | 'public',
+  ): Promise<GenerationTopicItem | undefined> => {
+    const fromVisibility = visibility === 'public' ? 'private' : 'public';
+
+    const [updatedTopic] = await this.db
+      .update(generationTopics)
+      .set({ updatedAt: new Date(), visibility })
+      .where(
+        and(
+          eq(generationTopics.id, id),
+          this.ownership(),
+          eq(generationTopics.userId, this.userId),
+          eq(generationTopics.visibility, fromVisibility),
+        ),
+      )
       .returning();
 
     return updatedTopic;

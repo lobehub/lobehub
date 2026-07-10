@@ -2,6 +2,7 @@ export const LobeAgentIdentifier = 'lobe-agent';
 
 export const LobeAgentApiName = {
   analyzeVisualMedia: 'analyzeVisualMedia',
+  askUserQuestion: 'askUserQuestion',
   callSubAgent: 'callSubAgent',
   clearTodos: 'clearTodos',
   createPlan: 'createPlan',
@@ -11,6 +12,18 @@ export const LobeAgentApiName = {
 } as const;
 
 export type LobeAgentApiNameType = (typeof LobeAgentApiName)[keyof typeof LobeAgentApiName];
+
+// ==================== Ask User Question ====================
+//
+// The ask-user-to-clarify capability is reused from the standalone
+// `builtin-tool-user-interaction` package (which still ships independently for
+// now). Re-exported here so lobe-agent consumers get the argument types from a
+// single import surface while both tools coexist.
+export type {
+  AskUserQuestionArgs,
+  AskUserQuestionItem,
+  AskUserQuestionOption,
+} from '@lobechat/builtin-tool-user-interaction';
 
 export interface AnalyzeVisualMediaParams {
   question: string;

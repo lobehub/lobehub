@@ -5,6 +5,11 @@ import type { UploadFileItem } from '../../files';
 import type { MessageSemanticSearchChunk } from '../../rag';
 import type { ChatMessageError } from '../common/base';
 import { ChatMessageErrorSchema } from '../common/base';
+import type {
+  ContextSelection,
+  ContextSelectionBase,
+  ContextSelectionLineRange,
+} from '../common/contextSelection';
 // Import for local use
 import type { PageSelection } from '../common/pageSelection';
 import type { ChatPluginPayload } from '../common/tools';
@@ -83,26 +88,25 @@ export interface CreateNewMessageParams {
   traceId?: string;
 }
 
-export interface ChatContextContent {
-  content: string;
-  /**
-   * Format of the content. Defaults to text.
-   */
-  format?: 'xml' | 'text' | 'markdown';
-  id: string;
-  /**
-   * Page ID the selection belongs to (for page editor selections)
-   */
+export interface ChatContextContent extends ContextSelectionBase {
+  filePath?: string;
+  language?: string;
+  lineRange?: ContextSelectionLineRange;
   pageId?: string;
-  /**
-   * Optional short preview for displaying in UI.
-   */
-  preview?: string;
-  title?: string;
+  side?: 'additions' | 'context' | 'deletions';
+  source?: ContextSelection['source'];
   type: 'text';
+  workingDirectory?: string;
+  xml?: string;
 }
 
 // Re-export PageSelection from common for backwards compatibility
+export type { CodeContextSelection, ContextSelection, PageContextSelection } from '../common';
+export {
+  CodeContextSelectionSchema,
+  ContextSelectionSchema,
+  PageContextSelectionSchema,
+} from '../common';
 export type { PageSelection } from '../common/pageSelection';
 export { PageSelectionSchema } from '../common/pageSelection';
 
@@ -112,6 +116,11 @@ export interface SendMessageParams {
    * @deprecated Use pageSelections instead for page editor selections
    */
   contexts?: ChatContextContent[];
+  /**
+   * Generic context selections attached to the message.
+   * Page selections and code selections should both be represented here.
+   */
+  contextSelections?: ContextSelection[];
   /**
    * create a thread
    * @deprecated Use ConversationContext.newThread instead
@@ -145,7 +154,6 @@ export interface SendMessageParams {
    * Additional metadata for the message (e.g., mentioned users)
    */
   metadata?: Record<string, any>;
-
   onlyAddUserMessage?: boolean;
   /**
    * Page selections attached to the message (for Ask AI functionality)

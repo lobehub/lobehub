@@ -348,6 +348,9 @@ describe('runAgent actions', () => {
         const context = createStreamingContext({
           assistantId: TEST_IDS.ASSISTANT_MESSAGE_ID,
         });
+        const updateTopicStatusSpy = vi
+          .spyOn(result.current, 'updateTopicStatus')
+          .mockResolvedValue(undefined as any);
 
         const event: StreamEvent = {
           type: 'step_start',
@@ -377,6 +380,14 @@ describe('runAgent actions', () => {
           expect.objectContaining({
             agentId: 'agent-1',
             groupId: 'group-1',
+            topicId: 'topic-1',
+          }),
+        );
+        expect(updateTopicStatusSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            agentId: 'agent-1',
+            groupId: 'group-1',
+            status: 'waitingForHuman',
             topicId: 'topic-1',
           }),
         );

@@ -1,5 +1,6 @@
 import type {
   GetGitBranchDiffPayload,
+  GitAddWorktreeResult,
   GitAheadBehind,
   GitBranchDiffPatches,
   GitBranchInfo,
@@ -19,6 +20,7 @@ import type {
   GitWorktreeListItem,
 } from '@lobechat/electron-client-ipc';
 import {
+  addGitWorktree as runAddGitWorktree,
   checkoutGitBranch as runCheckoutGitBranch,
   deleteGitBranch as runDeleteGitBranch,
   type DeviceGitInfo,
@@ -73,6 +75,7 @@ export default class GitController extends ControllerModule {
   async getLinkedPullRequest(payload: {
     branch: string;
     path: string;
+    pullRequestNumber?: number;
   }): Promise<GitLinkedPullRequestResult> {
     return computeLinkedPullRequest(payload);
   }
@@ -146,6 +149,15 @@ export default class GitController extends ControllerModule {
     worktreePath: string;
   }): Promise<GitRemoveWorktreeResult> {
     return runRemoveGitWorktree(payload);
+  }
+
+  @IpcMethod()
+  async addGitWorktree(payload: {
+    branch: string;
+    path: string;
+    worktreePath: string;
+  }): Promise<GitAddWorktreeResult> {
+    return runAddGitWorktree(payload);
   }
 
   @IpcMethod()

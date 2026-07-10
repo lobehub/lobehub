@@ -16,12 +16,13 @@ export interface PreprocessResult {
 /**
  * Detect and preprocess `lh` CLI commands.
  * - Replaces `lh` with `npx -y @lobehub/cli`
- * - Injects LOBEHUB_JWT and LOBEHUB_SERVER env vars
+ * - Injects LOBEHUB_JWT, LOBEHUB_SERVER, and optional workspace scope env vars
  * - Signals caller to skip skill DB lookup
  */
 export const preprocessLhCommand = async (
   command: string,
   userId: string,
+  workspaceId?: string,
 ): Promise<PreprocessResult> => {
   // Match `lh` at the start of the command or after shell operators (&&, ||, ;)
   const lhPattern = /(?:^|&&|\|\||;)\s*lh(?:\s|$)/;
@@ -36,7 +37,9 @@ export const preprocessLhCommand = async (
 
     const serverUrl = isDev ? 'https://app.lobehub.com' : appEnv.APP_URL;
 
-    const envPrefix = `LOBEHUB_JWT=${jwt} LOBEHUB_SERVER=${serverUrl}`;
+    const envParts = [`LOBEHUB_JWT=${jwt}`, `LOBEHUB_SERVER=${serverUrl}`];
+    if (workspaceId) envParts.push(`LOBEHUB_WORKSPACE_ID=${workspaceId}`);
+    const envPrefix = envParts.join(' ');
 
     // Replace `lh` in all sub-commands separated by &&, ||, or ;
     const rewritten = command.replaceAll(

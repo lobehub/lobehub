@@ -4,14 +4,16 @@ import { type FormGroupItemType } from '@lobehub/ui';
 import { Flexbox, Form, Icon, ImageSelect, Skeleton } from '@lobehub/ui';
 import { Select, Tabs } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
-import { Ban, Gauge, Loader2Icon, Monitor, Moon, Mouse, Sun, Waves } from 'lucide-react';
+import { Ban, Gauge, Monitor, Moon, Mouse, Sun, Waves } from 'lucide-react';
 import { useTheme as useNextThemesTheme } from 'next-themes';
-import { memo, useState } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AutoSaveHint from '@/components/Editor/AutoSaveHint';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import { imageUrl } from '@/const/url';
 import { isDesktop } from '@/const/version';
+import { useSaveState } from '@/hooks/useSaveState';
 import { localeOptions } from '@/locales/resources';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
@@ -27,7 +29,7 @@ const Common = memo(() => {
   const language = useGlobalStore(systemStatusSelectors.language);
   const [setSettings, isUserStateInit] = useUserStore((s) => [s.setSettings, s.isUserStateInit]);
   const [switchLocale, isStatusInit] = useGlobalStore((s) => [s.switchLocale, s.isStatusInit]);
-  const [loading, setLoading] = useState(false);
+  const { status: saveStatus, lastSavedAt, save, retry } = useSaveState();
 
   // Use the theme value from next-themes, default to 'system'
   const currentTheme = theme || 'system';
@@ -156,7 +158,7 @@ const Common = memo(() => {
                 width: '50%',
               }}
               onChange={(value) => {
-                setSettings({ general: { responseLanguage: value ?? '' } });
+                save(() => setSettings({ general: { responseLanguage: value ?? '' } }));
               }}
             />
           </Flexbox>
@@ -165,7 +167,7 @@ const Common = memo(() => {
         label: t('settingCommon.responseLanguage.title'),
       },
     ],
-    extra: loading && <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.5 }} />,
+    extra: <AutoSaveHint lastUpdatedTime={lastSavedAt} saveStatus={saveStatus} onRetry={retry} />,
     title: t('settingCommon.title'),
   };
 
@@ -176,11 +178,7 @@ const Common = memo(() => {
       items={[themeFormGroup]}
       itemsType={'group'}
       variant={'filled'}
-      onValuesChange={async (v) => {
-        setLoading(true);
-        await setSettings({ general: v });
-        setLoading(false);
-      }}
+      onValuesChange={(v) => save(() => setSettings({ general: v }))}
       {...FORM_STYLE}
     />
   );

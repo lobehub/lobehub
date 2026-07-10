@@ -117,6 +117,24 @@ describe('resolveAgentConfig', () => {
       expect(result.plugins).toEqual([]);
     });
 
+    it('should exclude disabled entries and resolve legacy strings as pinned, in a mixed-shape plugins array', () => {
+      vi.spyOn(agentSelectors.agentSelectors, 'getAgentConfigById').mockReturnValue(
+        () =>
+          ({
+            ...mockAgentConfig,
+            plugins: [
+              'plugin-a',
+              { identifier: 'plugin-b', mode: 'disabled' },
+              { identifier: 'plugin-c', mode: 'pinned' },
+            ],
+          }) as any,
+      );
+
+      const result = resolveAgentConfig({ agentId: 'test-agent' });
+
+      expect(result.plugins).toEqual(['plugin-a', 'plugin-c']);
+    });
+
     it('should return agent config and chat config correctly', () => {
       const result = resolveAgentConfig({ agentId: 'test-agent' });
 

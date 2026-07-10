@@ -2,8 +2,7 @@
 
 import { getLobehubSkillProviderById } from '@lobechat/const';
 import { Avatar, Markdown, Skeleton } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
-import { Button } from 'antd';
+import { Button, confirmModal } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { Plus, SquareArrowOutUpRight, Trash2, Unplug } from 'lucide-react';
@@ -22,12 +21,7 @@ import { getLocalizedBuiltinSkillDetail, getNoPermissionsTitle } from './localiz
 const AgentSkillDetail = lazy(() => import('@/features/AgentSkillDetail'));
 
 export type ToolDetailType =
-  | 'agent-skill'
-  | 'builtin'
-  | 'builtin-skill'
-  | 'lobehub-connector'
-  | 'mcp-connector'
-  | 'plugin';
+  'agent-skill' | 'builtin' | 'builtin-skill' | 'lobehub-connector' | 'mcp-connector' | 'plugin';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   description: css`

@@ -58,6 +58,7 @@ class AgentDocumentService {
 
   listDocuments = async (params: {
     agentId: string;
+    excludeWeb?: boolean;
     includeArchivedToolResults?: boolean;
     parentId?: string;
     scope?: 'agent' | 'currentTopic';

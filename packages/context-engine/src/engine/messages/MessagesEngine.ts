@@ -34,6 +34,7 @@ import {
   AgentDocumentSystemReplaceInjector,
   AgentManagementContextInjector,
   BotPlatformContextInjector,
+  ContextSelectionsInjector,
   DiscordContextProvider,
   EvalContextSystemInjector,
   ForceFinishSummaryInjector,
@@ -212,8 +213,7 @@ export class MessagesEngine {
     const currentUserMessage = [...messages]
       .reverse()
       .find((m) => m.role === 'user' && typeof m.content === 'string')?.content as
-      | string
-      | undefined;
+      string | undefined;
 
     // Shared config for all agent document injectors
     const agentDocConfig = {
@@ -349,7 +349,9 @@ export class MessagesEngine {
       new SelectedSkillInjector({ enabled: hasSelectedSkills, selectedSkills }),
       // Selected tools (ephemeral user-selected @tool for this request)
       new SelectedToolInjector({ enabled: hasSelectedTools, selectedTools }),
-      // Page selections (inject user-selected text into each user message)
+      // Generic user-attached selections from chat/code/text contexts.
+      new ContextSelectionsInjector({ enabled: true }),
+      // Legacy page editor selections.
       new PageSelectionsInjector({ enabled: isPageEditorEnabled }),
       // Local-system file snapshots (replay send-time @file reads as real tool results)
       new LocalSystemToolSnapshotInjector({ enabled: true }),

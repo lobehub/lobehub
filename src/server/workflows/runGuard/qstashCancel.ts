@@ -1,6 +1,9 @@
-import type { Client as WorkflowClient } from '@upstash/workflow';
-
 import { normalizeWorkflowRunGuardPath } from './keys';
+
+/**
+ * Default Upstash QStash origin used by the SDK when `QSTASH_URL` is not configured.
+ */
+const DEFAULT_QSTASH_URL = 'https://qstash.upstash.io';
 
 /**
  * Input used to resolve active QStash workflow runs affected by a run guard.
@@ -18,7 +21,7 @@ export interface CancelWorkflowRunsByGuardPolicyParams {
 }
 
 /**
- * Result returned after resolving and optionally cancelling QStash workflow runs.
+ * Result returned after cancelling QStash workflow runs by URL prefix.
  */
 export interface CancelWorkflowRunsByGuardPolicyResult {
   /**
@@ -27,21 +30,21 @@ export interface CancelWorkflowRunsByGuardPolicyResult {
   cancelled: number;
 
   /**
-   * Deduplicated workflow run ids selected from active QStash logs.
-   */
-  matchedRunIds: string[];
-
-  /**
-   * Absolute workflow URL prefix used for local log filtering.
+   * Absolute workflow URL prefix passed to the QStash workflow cancellation API.
    */
   workflowUrlPrefix: string;
 }
 
+interface CancelWorkflowRunsResponse {
+  cancelled?: number;
+  error?: string;
+}
+
 /**
- * Builds the absolute workflow URL prefix used for QStash log matching.
+ * Builds the absolute workflow URL prefix used for QStash cancellation.
  *
  * Use when:
- * - Resolving workflow runs from QStash logs by workflow path.
+ * - Cancelling workflow runs from QStash by workflow path.
  * - Matching child workflow endpoint prefixes under a route group.
  *
  * Expects:
@@ -57,51 +60,53 @@ export const buildWorkflowUrlPrefix = ({
 }: CancelWorkflowRunsByGuardPolicyParams): string =>
   new URL(`/${normalizeWorkflowRunGuardPath(workflowPath)}`, appUrl).toString().replace(/\/$/, '');
 
-const matchesWorkflowUrlPrefix = (workflowUrl: string, workflowUrlPrefix: string): boolean => {
-  if (workflowUrl === workflowUrlPrefix) return true;
-  if (!workflowUrl.startsWith(workflowUrlPrefix)) return false;
-
-  const boundary = workflowUrl.at(workflowUrlPrefix.length);
-  return boundary === '/' || boundary === '?' || boundary === '#';
-};
-
 /**
- * Cancels active QStash workflow runs selected by a workflow run guard policy.
+ * Cancels QStash workflow runs selected by a workflow run guard policy.
  *
  * Use when:
- * - A guard with QStash cancellation enabled should stop already-started workflow runs.
- * - SDK `urlStartingWith` cancellation cannot be trusted and run ids must be resolved first.
+ * - A guard with QStash cancellation enabled should stop pending and active workflow runs.
+ * - QStash should resolve matching workflow runs by URL prefix.
  *
  * Expects:
- * - `client.logs` supports filtering with `{ count: 100, state: 'RUN_STARTED' }`.
- * - QStash log entries include workflow URL, state, and run id fields.
+ * - `QSTASH_TOKEN` is configured for the Upstash Workflow REST API.
  *
  * Returns:
- * - The workflow URL prefix, matched run ids, and QStash cancellation count.
+ * - The workflow URL prefix and QStash cancellation count.
  */
 export const cancelWorkflowRunsByGuardPolicy = async (
-  client: Pick<WorkflowClient, 'cancel' | 'logs'>,
   params: CancelWorkflowRunsByGuardPolicyParams,
 ): Promise<CancelWorkflowRunsByGuardPolicyResult> => {
+  const token = process.env.QSTASH_TOKEN;
+  if (!token) throw new Error('QSTASH_TOKEN is required to cancel workflow runs');
+
   const workflowUrlPrefix = buildWorkflowUrlPrefix(params);
-  const logs = await client.logs({ count: 100, state: 'RUN_STARTED' });
-  const matchedRunIds = Array.from(
-    new Set(
-      logs.runs
-        .filter((run) => matchesWorkflowUrlPrefix(run.workflowUrl, workflowUrlPrefix))
-        .map((run) => run.workflowRunId),
-    ),
-  );
+  const qstashUrl = process.env.QSTASH_URL || DEFAULT_QSTASH_URL;
 
-  if (matchedRunIds.length === 0) {
-    return { cancelled: 0, matchedRunIds, workflowUrlPrefix };
+  // NOTICE:
+  // `@upstash/workflow@0.2.23` serializes `urlStartingWith` as `{ workflowUrl: string }`,
+  // but the current Workflow REST API expects the body field to be an array.
+  // Source/context: production returned
+  // `json: cannot unmarshal string into Go struct field CancelWorkflowRunsRequest.workflowUrl of type []string`;
+  // docs: `https://upstash.com/docs/workflow/api-reference/runs/bulk-cancel-workflow-runs`.
+  // Removal condition: replace this direct REST call after upgrading the SDK to a version whose
+  // `client.cancel` URL-prefix branch sends the current API shape.
+  const response = await fetch(new URL('/v2/workflows/runs', qstashUrl), {
+    body: JSON.stringify({ workflowUrl: [workflowUrlPrefix] }),
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    method: 'DELETE',
+  });
+
+  const result = (await response.json()) as CancelWorkflowRunsResponse;
+
+  if (!response.ok || result.error) {
+    throw new Error(result.error || `QStash workflow cancellation failed: ${response.status}`);
   }
-
-  const result = await client.cancel({ ids: matchedRunIds });
 
   return {
     cancelled: result.cancelled || 0,
-    matchedRunIds,
     workflowUrlPrefix,
   };
 };

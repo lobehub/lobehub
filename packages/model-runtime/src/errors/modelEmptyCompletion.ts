@@ -1,5 +1,20 @@
 import { AgentRuntimeErrorType } from '@lobechat/types';
 
+export interface ModelEmptyCompletionDiagnostics {
+  attempt?: number;
+  contentLength?: number;
+  finishReason?: string;
+  imageCount?: number;
+  maxAttempts?: number;
+  model?: string;
+  outputTokens?: number;
+  provider?: string;
+  reasoningLength?: number;
+  retryBudget?: number;
+  retryEvents?: Array<Record<string, unknown>>;
+  toolCallCount?: number;
+}
+
 /**
  * Thrown when the model returns an empty completion — no text content, no
  * reasoning, no tool calls, no images, and ~0 output tokens. This is the "empty
@@ -19,12 +34,15 @@ import { AgentRuntimeErrorType } from '@lobechat/types';
  */
 export class ModelEmptyError extends Error {
   readonly errorType = AgentRuntimeErrorType.ModelEmptyCompletion;
+  readonly diagnostics?: ModelEmptyCompletionDiagnostics;
 
   constructor(
     message = 'Model returned an empty completion (no content, no tool calls, no output tokens).',
+    diagnostics?: ModelEmptyCompletionDiagnostics,
   ) {
     super(message);
     this.name = 'ModelEmptyError';
+    this.diagnostics = diagnostics;
   }
 }
 

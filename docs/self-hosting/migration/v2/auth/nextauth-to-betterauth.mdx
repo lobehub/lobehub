@@ -236,7 +236,7 @@ NEXTAUTH_TO_BETTERAUTH_DRY_RUN=1
 
 ```bash
 # Run migration (NEXTAUTH_TO_BETTERAUTH_DRY_RUN=1, only logs without modifying database)
-npx tsx scripts/nextauth-to-betterauth/index.ts
+bun run scripts/nextauth-to-betterauth/index.ts
 ```
 
 Review the output logs, confirm no issues, then proceed to the next step.
@@ -247,10 +247,10 @@ Update `.env` to set `NEXTAUTH_TO_BETTERAUTH_DRY_RUN` to `0`, then execute:
 
 ```bash
 # Execute migration
-npx tsx scripts/nextauth-to-betterauth/index.ts
+bun run scripts/nextauth-to-betterauth/index.ts
 
 # Verify the migration
-npx tsx scripts/nextauth-to-betterauth/verify.ts
+bun run scripts/nextauth-to-betterauth/verify.ts
 ```
 
 After verifying the test environment migration is successful, proceed to the next step.
@@ -264,7 +264,7 @@ After verifying the test environment migration is successful, proceed to the nex
 
 ```bash
 # Run migration (dry-run mode to verify)
-npx tsx scripts/nextauth-to-betterauth/index.ts
+bun run scripts/nextauth-to-betterauth/index.ts
 ```
 
 Review the output logs, confirm no issues, then proceed to the next step.
@@ -275,10 +275,10 @@ Update `.env` to set `NEXTAUTH_TO_BETTERAUTH_DRY_RUN` to `0`, then execute:
 
 ```bash
 # Execute migration
-npx tsx scripts/nextauth-to-betterauth/index.ts
+bun run scripts/nextauth-to-betterauth/index.ts
 
 # Verify the migration
-npx tsx scripts/nextauth-to-betterauth/verify.ts
+bun run scripts/nextauth-to-betterauth/verify.ts
 ```
 
 ### Step 6: Configure Better Auth and Redeploy

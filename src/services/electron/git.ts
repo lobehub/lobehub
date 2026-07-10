@@ -1,5 +1,6 @@
 import {
   type GetGitBranchDiffPayload,
+  type GitAddWorktreeResult,
   type GitAheadBehind,
   type GitBranchDiffPatches,
   type GitBranchInfo,
@@ -42,6 +43,7 @@ class ElectronGitService {
   async getLinkedPullRequest(params: {
     branch: string;
     path: string;
+    pullRequestNumber?: number;
   }): Promise<GitLinkedPullRequestResult> {
     return this.ipc.git.getLinkedPullRequest(params);
   }
@@ -115,6 +117,14 @@ class ElectronGitService {
     worktreePath: string;
   }): Promise<GitRemoveWorktreeResult> {
     return this.ipc.git.removeGitWorktree(params);
+  }
+
+  async addGitWorktree(params: {
+    branch: string;
+    path: string;
+    worktreePath: string;
+  }): Promise<GitAddWorktreeResult> {
+    return this.ipc.git.addGitWorktree(params);
   }
 }
 

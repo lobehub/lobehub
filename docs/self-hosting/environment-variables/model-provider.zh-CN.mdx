@@ -58,9 +58,9 @@ LobeHub 在部署时提供了丰富的模型服务商相关的环境变量，你
 - 类型：可选
 - 描述：用来控制模型列表，使用 `+` 增加一个模型，使用 `-` 来隐藏一个模型，使用 `模型名=展示名<扩展配置>` 来自定义模型的展示名，用英文逗号隔开。模型定义语法规则见 [模型列表][model-list]
 - 默认值：`-`
-- 示例：`+qwen-7b-chat,+glm-6b,-gpt-3.5-turbo,gpt-4-0125-preview=gpt-4-turbo`
+- 示例：`+qwen-7b-chat,+glm-6b,-gpt-3.5-turbo,gpt-4-turbo=gpt-4o`
 
-上面示例表示增加 `qwen-7b-chat` 和 `glm-6b` 到模型列表，而从列表中删除 `gpt-3.5-turbo`，并将 `gpt-4-0125-preview` 模型名字展示为 `gpt-4-turbo`。如果你想先禁用所有模型，再启用指定模型，可以使用 `-all,+gpt-3.5-turbo`，则表示仅启用 `gpt-3.5-turbo`。
+上面示例表示增加 `qwen-7b-chat` 和 `glm-6b` 到模型列表，而从列表中删除 `gpt-3.5-turbo`，并将 `gpt-4-turbo` 模型名字展示为 `gpt-4o`。如果你想先禁用所有模型，再启用指定模型，可以使用 `-all,+gpt-3.5-turbo`，则表示仅启用 `gpt-3.5-turbo`。
 
 你可以在 [modelProviders](https://github.com/lobehub/lobehub/tree/main/src/config/modelProviders) 查找到当前的所有模型名。
 
@@ -117,7 +117,7 @@ LobeHub 在部署时提供了丰富的模型服务商相关的环境变量，你
 - 类型：可选
 - 描述：用来控制模型列表，使用 `+` 增加一个模型，使用 `-` 来隐藏一个模型，使用 `模型名=展示名<扩展配置>` 来自定义模型的展示名，用英文逗号隔开。模型定义语法规则见 [模型列表][model-list]
 - 默认值：`-`
-- 示例：`-all,+gemini-1.5-flash-latest,+gemini-1.5-pro-latest`
+- 示例：`-all,+gemini-2.5-flash,+gemini-2.5-pro`
 
 ## Vertex AI
 
@@ -147,7 +147,7 @@ LobeHub 在部署时提供了丰富的模型服务商相关的环境变量，你
 - 类型：可选
 - 描述：用来控制模型列表，使用 `+` 增加一个模型，使用 `-` 来隐藏一个模型，使用 `模型名=展示名<扩展配置>` 来自定义模型的展示名，用英文逗号隔开。模型定义语法规则见 [模型列表][model-list]
 - 默认值：`-`
-- 示例：`-all,+gemini-1.5-flash-latest,+gemini-1.5-pro-latest`
+- 示例：`-all,+gemini-2.5-flash,+gemini-2.5-pro`
 
 ## Anthropic AI
 
@@ -268,7 +268,7 @@ LobeHub 在部署时提供了丰富的模型服务商相关的环境变量，你
 
 - 类型：可选
 - 描述：如果您手动配置了 DeepSeek API 代理，可以使用此配置项覆盖默认的 DeepSeek API 请求基础 URL
-- 默认值：`https://api.deepseek.com`
+- 默认值：`https://api.deepseek.com/v1`
 - 示例：`https://my-deepseek-proxy.com`
 
 ### `DEEPSEEK_API_KEY`
@@ -381,7 +381,7 @@ LobeHub 在部署时提供了丰富的模型服务商相关的环境变量，你
 - 类型：可选
 - 描述：用来控制模型列表，使用 `+` 增加一个模型，使用 `-` 来隐藏一个模型，使用 `模型名=展示名<扩展配置>` 来自定义模型的展示名，用英文逗号隔开。模型定义语法规则见 [模型列表][model-list]
 - 默认值：`-`
-- 示例：`-all,+accounts/fireworks/models/firefunction-v2,+accounts/fireworks/models/firefunction-v1`
+- 示例：`-all,+accounts/fireworks/models/llama-v3p3-70b-instruct,+accounts/fireworks/models/deepseek-v3`
 
 ## Ollama
 
@@ -436,7 +436,7 @@ LobeHub 在部署时提供了丰富的模型服务商相关的环境变量，你
 - 类型：可选
 - 描述：用于指定自定义 Perplexity 语言模型。模型定义语法规则见 [模型列表][model-list]
 - 默认值：-
-- 示例： `-all,+llama-3.1-sonar-small-128k-online,+llama-3.1-sonar-small-128k-chat`
+- 示例： `-all,+sonar-pro,+sonar`
 
 ### `PERPLEXITY_PROXY_URL`
 
@@ -477,7 +477,7 @@ LobeHub 在部署时提供了丰富的模型服务商相关的环境变量，你
 - 类型：可选
 - 描述：用来控制模型列表，使用 `+` 增加一个模型，使用 `-` 来隐藏一个模型，使用 `模型名=展示名<扩展配置>` 来自定义模型的展示名，用英文逗号隔开。模型定义语法规则见 [模型列表][model-list]
 - 默认值：`-`
-- 示例：`-all,+gemma2-9b-it,+llama-3.1-8b-instant`
+- 示例：`-all,+llama-3.3-70b-versatile,+llama-3.1-8b-instant`
 
 ### `GROQ_PROXY_URL`
 
@@ -500,7 +500,7 @@ LobeHub 在部署时提供了丰富的模型服务商相关的环境变量，你
 - 类型：可选
 - 描述：用来控制模型列表，使用 `+` 增加一个模型，使用 `-` 来隐藏一个模型，使用 `模型名=展示名<扩展配置>` 来自定义模型的展示名，用英文逗号隔开。模型定义语法规则见 [模型列表][model-list]
 - 默认值：`-`
-- 示例：`-all,+glm-4-alltools,+glm-4-plus`
+- 示例：`-all,+glm-4.6,+glm-4-plus`
 
 ## 01 AI
 
@@ -538,8 +538,8 @@ LobeHub 在部署时提供了丰富的模型服务商相关的环境变量，你
 
 - 类型：可选
 - 描述：如果你手动配置了 Qiniu 接口代理，可以使用此配置项来覆盖默认的 Qiniu API 请求基础 URL
-- 默认值：`https://api.qnaigc.com/v1`
-- 示例：`https://my-qnaigc.com/v1`
+- 默认值：`https://openai.qiniu.com/v1`
+- 示例：`https://my-qiniu-proxy.com/v1`
 
 ## 通义千问
 
@@ -587,7 +587,7 @@ LobeHub 在部署时提供了丰富的模型服务商相关的环境变量，你
 - 类型：可选
 - 描述：用来控制模型列表，使用 `+` 增加一个模型，使用 `-` 来隐藏一个模型，使用 `模型名=展示名<扩展配置>` 来自定义模型的展示名，用英文逗号隔开。模型定义语法规则见 [模型列表][model-list]
 - 默认值：`-`
-- 示例：`-all,+meta-llama/llama-3.1-8b-instruct,+meta-llama/llama-3.1-70b-instruct`
+- 示例：`-all,+meta-llama/llama-3.1-8b-instruct,+meta-llama/llama-3.3-70b-instruct`
 
 ## 百川
 
@@ -680,7 +680,7 @@ LobeHub 在部署时提供了丰富的模型服务商相关的环境变量，你
 - 类型：可选
 - 描述：用来控制模型列表，使用 `+` 增加一个模型，使用 `-` 来隐藏一个模型，使用 `模型名=展示名<扩展配置>` 来自定义模型的展示名，用英文逗号隔开。模型定义语法规则见 [模型列表][model-list]
 - 默认值：`-`
-- 示例：`-all,+hunyuan-lite,+hunyuan-standard`
+- 示例：`-all,+hunyuan-2.0-instruct-20251111,+hunyuan-2.0-thinking-20251109`
 
 ## 火山引擎
 

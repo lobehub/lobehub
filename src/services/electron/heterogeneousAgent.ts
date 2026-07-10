@@ -26,8 +26,15 @@ class HeterogeneousAgentService {
     prompt: string,
     operationId: string,
     imageList?: Array<{ id: string; url: string }>,
+    systemContext?: string,
   ) {
-    return this.ipc.heterogeneousAgent.sendPrompt({ imageList, operationId, prompt, sessionId });
+    return this.ipc.heterogeneousAgent.sendPrompt({
+      imageList,
+      operationId,
+      prompt,
+      sessionId,
+      systemContext,
+    });
   }
 
   async cancelSession(sessionId: string) {

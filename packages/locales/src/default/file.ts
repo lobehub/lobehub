@@ -46,6 +46,7 @@ export default {
   'header.actions.uploadFolder.creatingFolders': 'Creating folder structure...',
   'header.newPageButton': 'New Page',
   'header.uploadButton': 'Upload',
+  'listView.uploadedBy': 'Uploaded by {{name}}',
   'home.getStarted': 'Get Started',
   'home.greeting': 'Get Started',
   'home.quickActions': 'Quick Actions',
@@ -66,22 +67,20 @@ export default {
   'library.list.confirmRemoveLibrary':
     'You are about to delete this library. The files within it will not be deleted but moved to All Files. This action cannot be undone, so please proceed with caution.',
   'library.list.copyDescription':
-    'Clone this library and all of its contents into another workspace.',
+    'You can copy to personal or workspaces that have permission to create a knowledge base.',
   'library.list.copyFailed': 'Failed to copy library',
   'library.list.copySuccess': 'Library copied',
   'library.list.copyTitle': 'Copy library',
   'library.list.copyTo': 'Copy to…',
   'library.list.empty': 'Click <1>+</1> to create a new library',
   'library.list.transferDescription':
-    'Move this library and all of its contents to another workspace.',
+    'You can move to personal or workspaces that have permission to create a knowledge base.',
   'library.list.transferFailed': 'Failed to transfer library',
   'library.list.transferSuccess': 'Library transferred',
   'library.list.transferTitle': 'Transfer library',
   'library.list.transferTo': 'Transfer to…',
   'library.new': 'New Library',
   'library.publish': 'Publish to workspace',
-  'library.publishConfirm.content':
-    'All workspace members will see this knowledge base. This action cannot be undone.',
   'library.publishConfirm.title': 'Publish knowledge base to workspace?',
   'library.title': 'Library',
   'library.workspaceEmpty': 'Create a workspace library',
@@ -185,7 +184,8 @@ export default {
   'pageList.actions.openInNewTab': 'Open in New Tab',
   'pageList.copyConfirm': 'Copy',
   'pageList.copyContent': 'Copy Full Text',
-  'pageList.copyDescription': 'Create a copy of this page in another workspace.',
+  'pageList.copyDescription':
+    'You can copy to personal or workspaces that have permission to create a page.',
   'pageList.copyFailed': 'Failed to copy page',
   'pageList.copySuccess': 'Page copied',
   'pageList.copyTitle': 'Copy page',
@@ -198,8 +198,6 @@ export default {
   'pageList.pageCount': '{{count}} pages in total',
   'pageList.pageSizeItem': '{{count}} items',
   'pageList.privateTitle': 'Private',
-  'pageList.publishConfirm.content':
-    'After publishing, everyone in the workspace can see this page. You can’t change it back to private later.',
   'pageList.publishConfirm.ok': 'Publish',
   'pageList.publishConfirm.title': 'Publish to workspace',
   'pageList.publishError': 'Failed to publish page',
@@ -209,36 +207,42 @@ export default {
   'pageList.workspaceTitle': 'Workspace',
   'pageList.transferConfirm': 'Transfer',
   'pageList.transferDescription':
-    'Move this page (and any folders it contains) to another workspace.',
+    'You can move to personal or workspaces that have permission to create a page.',
   'pageList.transferFailed': 'Failed to transfer page',
   'pageList.transferSuccess': 'Page transferred',
   'pageList.transferTitle': 'Transfer page',
   'pageList.transferTo': 'Transfer to…',
   'pageList.transferWarning': 'This is a one-way move; reverting requires another transfer.',
   'pageList.untitled': 'Untitled',
-  'resourceList.batchCopyDescription': 'Clone selected resources into another workspace.',
+  'resourceList.batchCopyDescription':
+    'You can copy to personal or workspaces that have permission to create resources.',
   'resourceList.batchCopyTitle': 'Copy resources',
-  'resourceList.batchTransferDescription': 'Move selected resources to another workspace.',
+  'resourceList.batchTransferDescription':
+    'You can move to personal or workspaces that have permission to create resources.',
   'resourceList.batchTransferTitle': 'Transfer resources',
   'resourceList.copyConfirm': 'Copy',
-  'resourceList.copyDocumentDescription': 'Clone this document into another workspace.',
+  'resourceList.copyDocumentDescription':
+    'You can copy to personal or workspaces that have permission to create a document.',
   'resourceList.copyDocumentTitle': 'Copy document',
   'resourceList.copyFailed': 'Failed to copy resource',
-  'resourceList.copyFileDescription': 'Clone this file into another workspace.',
+  'resourceList.copyFileDescription':
+    'You can copy to personal or workspaces that have permission to create a file.',
   'resourceList.copyFileTitle': 'Copy file',
   'resourceList.copyFolderDescription':
-    'Clone this folder (and its contents) into another workspace.',
+    'You can copy to personal or workspaces that have permission to create a folder.',
   'resourceList.copyFolderTitle': 'Copy folder',
   'resourceList.copySuccess': 'Resource copied',
   'resourceList.copyTo': 'Copy to…',
   'resourceList.transferConfirm': 'Transfer',
-  'resourceList.transferDocumentDescription': 'Move this document to another workspace.',
+  'resourceList.transferDocumentDescription':
+    'You can move to personal or workspaces that have permission to create a document.',
   'resourceList.transferDocumentTitle': 'Transfer document',
   'resourceList.transferFailed': 'Failed to transfer resource',
-  'resourceList.transferFileDescription': 'Move this file to another workspace.',
+  'resourceList.transferFileDescription':
+    'You can move to personal or workspaces that have permission to create a file.',
   'resourceList.transferFileTitle': 'Transfer file',
   'resourceList.transferFolderDescription':
-    'Move this folder (and its contents) to another workspace.',
+    'You can move to personal or workspaces that have permission to create a folder.',
   'resourceList.transferFolderTitle': 'Transfer folder',
   'resourceList.transferSuccess': 'Resource transferred',
   'resourceList.transferTo': 'Transfer to…',

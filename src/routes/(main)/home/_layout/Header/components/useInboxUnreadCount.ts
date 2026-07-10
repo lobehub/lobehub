@@ -6,7 +6,7 @@ import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
 
 export const INBOX_UNREAD_COUNT_DEDUPING_INTERVAL = 30_000;
-export const INBOX_UNREAD_COUNT_REFRESH_INTERVAL = 10_000;
+export const INBOX_UNREAD_COUNT_REFRESH_INTERVAL = 60_000;
 
 export const useInboxUnreadCount = () => {
   const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);

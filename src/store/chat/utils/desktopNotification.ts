@@ -1,4 +1,10 @@
-import { AGENT_CHAT_TOPIC_URL, AGENT_CHAT_URL, GROUP_CHAT_URL, isDesktop } from '@lobechat/const';
+import {
+  AGENT_CHAT_TOPIC_URL,
+  AGENT_CHAT_URL,
+  GROUP_CHAT_TOPIC_URL,
+  GROUP_CHAT_URL,
+  isDesktop,
+} from '@lobechat/const';
 import type { ConversationContext } from '@lobechat/types';
 import { t } from 'i18next';
 
@@ -13,26 +19,46 @@ export interface DesktopNotificationContext {
   agentId?: ConversationContext['agentId'];
   groupId?: ConversationContext['groupId'];
   topicId?: ConversationContext['topicId'];
+  workspaceSlug?: ConversationContext['workspaceSlug'];
 }
 
 /** Cap the notification body so a long reply doesn't overflow the OS banner. */
 const NOTIFICATION_BODY_MAX_LENGTH = 256;
 
+const applyWorkspaceSlug = (path: string, workspaceSlug?: string): string =>
+  workspaceSlug ? `/${workspaceSlug}${path}` : path;
+
 /**
  * Resolve the SPA path that should be opened when the user clicks a desktop
- * notification, based on the conversation context. Group chats land on the
- * group root (topic is selected from store), 1:1 chats deep-link to the
- * specific topic.
+ * notification, based on the conversation context. Topic-aware contexts
+ * deep-link to the specific topic so clicking from another tab/topic still
+ * lands on the completed run.
  */
 export const resolveNotificationNavigatePath = (
   context: DesktopNotificationContext,
 ): string | undefined => {
-  if (context.groupId) return GROUP_CHAT_URL(context.groupId);
+  if (context.groupId && context.topicId)
+    return applyWorkspaceSlug(
+      GROUP_CHAT_TOPIC_URL(context.groupId, context.topicId),
+      context.workspaceSlug,
+    );
+  if (context.groupId)
+    return applyWorkspaceSlug(GROUP_CHAT_URL(context.groupId), context.workspaceSlug);
   if (context.agentId && context.topicId) {
-    return AGENT_CHAT_TOPIC_URL(context.agentId, context.topicId);
+    return applyWorkspaceSlug(
+      AGENT_CHAT_TOPIC_URL(context.agentId, context.topicId),
+      context.workspaceSlug,
+    );
   }
-  if (context.agentId) return AGENT_CHAT_URL(context.agentId);
+  if (context.agentId)
+    return applyWorkspaceSlug(AGENT_CHAT_URL(context.agentId), context.workspaceSlug);
   return undefined;
+};
+
+export const resolveNotificationNavigate = (context: DesktopNotificationContext) => {
+  const path = resolveNotificationNavigatePath(context);
+
+  return path ? { escape: true, path } : undefined;
 };
 
 /**
@@ -87,14 +113,14 @@ export const notifyDesktopHumanApprovalRequired = async (
       t('desktopNotification.humanApprovalRequired.title', { ns: 'chat' }),
     );
 
-    const navigatePath = resolveNotificationNavigatePath(context);
+    const navigate = resolveNotificationNavigate(context);
 
     await Promise.allSettled([
       desktopNotificationService.setBadgeCount(1),
       desktopNotificationService.showNotification({
         body: t('desktopNotification.humanApprovalRequired.body', { ns: 'chat' }),
         force: true,
-        navigate: navigatePath ? { path: navigatePath } : undefined,
+        navigate,
         requestAttention: true,
         title,
       }),
@@ -133,12 +159,12 @@ export const notifyDesktopAgentCompleted = async (
   try {
     const { desktopNotificationService } = await import('@/services/electron/desktopNotification');
     const fallback = t('notification.finishChatGeneration', { ns: 'electron' });
-    const navigatePath = resolveNotificationNavigatePath(context);
+    const navigate = resolveNotificationNavigate(context);
 
     const tasks: Promise<unknown>[] = [
       desktopNotificationService.showNotification({
         body: buildNotificationBody(content, fallback),
-        navigate: navigatePath ? { path: navigatePath } : undefined,
+        navigate,
         title: resolveNotificationTitle(get, context, fallback),
       }),
     ];

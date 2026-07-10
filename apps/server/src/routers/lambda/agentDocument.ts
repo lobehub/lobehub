@@ -499,6 +499,11 @@ export const agentDocumentRouter = router({
     .input(
       z.object({
         agentId: z.string(),
+        // Drop `sourceType: 'web'` docs (saved web-clips / articles). These grow
+        // unbounded and dominate the payload, but only the working-sidebar "web"
+        // tab renders them. Hot-path consumers (slash menu, skills) pass this so
+        // the list stays small. Ignored for `currentTopic` scope.
+        excludeWeb: z.boolean().optional().default(false),
         // Reveal the auto-created `.tool-results` archive. Off by default so
         // user-facing lists stay clean; the agent document-listing tool opts in.
         includeArchivedToolResults: z.boolean().optional().default(false),
@@ -511,7 +516,7 @@ export const agentDocumentRouter = router({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const { includeArchivedToolResults, parentId } = input;
+      const { excludeWeb, includeArchivedToolResults, parentId } = input;
       if (input.scope === 'currentTopic') {
         if (!input.topicId) throw new Error('topicId is required to list current topic documents');
 
@@ -527,6 +532,7 @@ export const agentDocumentRouter = router({
       }
 
       return ctx.agentDocumentService.listDocuments(input.agentId, input.sourceType, {
+        excludeWeb,
         includeArchivedToolResults,
         parentId,
       });

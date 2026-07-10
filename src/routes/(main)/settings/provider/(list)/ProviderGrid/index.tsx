@@ -30,7 +30,7 @@ const List = memo((props: ListProps) => {
   const [initAiProviderList] = useAiInfraStore((s) => [s.initAiProviderList]);
   // Own the same list fetch (SWR-deduped with ProviderMenu) so a failed load
   // shows error + Retry here too, instead of a permanent skeleton grid
-  // (`initAiProviderList` only flips on success — LOBE-11117).
+  // (`initAiProviderList` only flips on success).
   const useFetchAiProviderList = useAiInfraStore((s) => s.useFetchAiProviderList);
   const { error, mutate } = useFetchAiProviderList();
 

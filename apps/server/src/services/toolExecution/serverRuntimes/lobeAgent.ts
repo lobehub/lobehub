@@ -15,6 +15,7 @@ import {
   selectVisualFileItems,
   validateVisualMediaUrls,
 } from '@lobechat/builtin-tool-lobe-agent';
+import { UserInteractionExecutionRuntime } from '@lobechat/builtin-tool-user-interaction/executionRuntime';
 import type { LobeChatDatabase } from '@lobechat/database';
 import type { ChatStreamPayload } from '@lobechat/model-runtime';
 import { consumeStreamUntilDone } from '@lobechat/model-runtime';
@@ -89,6 +90,10 @@ class LobeAgentExecutionRuntime {
   private topicId?: string;
   private planRuntime: PlanExecutionRuntime;
   private workspaceId?: string;
+  // Reused from the standalone user-interaction tool. askUserQuestion is
+  // human-intervention 'always', so the user's UI answer normally becomes the
+  // tool result; this runtime is only the fallback executor.
+  private interactionRuntime = new UserInteractionExecutionRuntime();
 
   constructor(context: LobeAgentRuntimeContext) {
     this.agentId = context.agentId;
@@ -109,6 +114,11 @@ class LobeAgentExecutionRuntime {
       ),
     );
   }
+
+  // ==================== Ask User Question ====================
+
+  askUserQuestion = (params: unknown): Promise<BuiltinServerRuntimeOutput> =>
+    this.interactionRuntime.askUserQuestion(params);
 
   // ==================== Plan / Todo (delegated to PlanExecutionRuntime) ====================
 

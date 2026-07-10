@@ -11,7 +11,7 @@ import type {
   EvalThreadResult,
   RubricType,
 } from '@lobechat/types';
-import { RequestTrigger } from '@lobechat/types';
+import { getActivePluginIds, RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
 
 import {
@@ -1529,13 +1529,7 @@ export class AgentEvalRunService {
         rubricScores: meta.rubricScores as any,
         score: meta.score as number | undefined,
         status: meta.status as
-          | 'error'
-          | 'external'
-          | 'failed'
-          | 'passed'
-          | 'running'
-          | 'timeout'
-          | undefined,
+          'error' | 'external' | 'failed' | 'passed' | 'running' | 'timeout' | undefined,
         steps: meta.steps as number | undefined,
         threadId: t.id,
         tokens: meta.tokens as number | undefined,
@@ -2206,7 +2200,10 @@ export class AgentEvalRunService {
       fewShots: agentConfig.fewShots,
       model: agentConfig.model,
       params: agentConfig.params as Record<string, unknown>,
-      plugins: agentConfig.plugins,
+      // Pinned identifiers only — this snapshot is a display-only DTO
+      // (EvalRunAgentSnapshot.plugins stays string[]), and a disabled entry
+      // isn't part of what actually ran.
+      plugins: getActivePluginIds(agentConfig.plugins),
       provider: agentConfig.provider,
       systemRole: agentConfig.systemRole,
       title: agentConfig.title,

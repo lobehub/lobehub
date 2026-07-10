@@ -2,14 +2,15 @@
 
 import { HotkeyGroupEnum } from '@lobechat/const/hotkeys';
 import { type FormGroupItemType } from '@lobehub/ui';
-import { Form, HotkeyInput, Icon, Skeleton } from '@lobehub/ui';
+import { Form, HotkeyInput, Skeleton } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
-import { Loader2Icon } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AutoSaveHint from '@/components/Editor/AutoSaveHint';
 import { HOTKEYS_REGISTRATION } from '@/const/hotkeys';
 import { FORM_STYLE } from '@/const/layoutTokens';
+import { useSaveState } from '@/hooks/useSaveState';
 import hotkeyMeta from '@/locales/default/hotkey';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
@@ -21,21 +22,15 @@ const HotkeySetting = memo(() => {
 
   const { hotkey } = useUserStore(settingsSelectors.currentSettings, isEqual);
   const [setSettings, isUserStateInit] = useUserStore((s) => [s.setSettings, s.isUserStateInit]);
-  const [loading, setLoading] = useState(false);
+  const { status: saveStatus, lastSavedAt, save, retry } = useSaveState();
 
   if (!isUserStateInit) return <Skeleton active paragraph={{ rows: 5 }} title={false} />;
 
-  const clearHotkeyBinding = async (id: HotkeyItem['id']) => {
+  const clearHotkeyBinding = (id: HotkeyItem['id']) => {
     if (!hotkey[id]) return;
 
-    setLoading(true);
     form.setFieldValue(id, '');
-
-    try {
-      await setSettings({ hotkey: { [id]: '' } });
-    } finally {
-      setLoading(false);
-    }
+    save(() => setSettings({ hotkey: { [id]: '' } }));
   };
 
   const mapHotkeyItem = (item: HotkeyItem) => {
@@ -68,7 +63,7 @@ const HotkeySetting = memo(() => {
     children: HOTKEYS_REGISTRATION.filter((item) => item.group === HotkeyGroupEnum.Essential).map(
       (item) => mapHotkeyItem(item),
     ),
-    extra: loading && <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.5 }} />,
+    extra: <AutoSaveHint lastUpdatedTime={lastSavedAt} saveStatus={saveStatus} onRetry={retry} />,
     title: t('hotkey.group.essential'),
   };
 
@@ -80,14 +75,7 @@ const HotkeySetting = memo(() => {
       items={[essential]}
       itemsType={'group'}
       variant={'filled'}
-      onValuesChange={async (values) => {
-        setLoading(true);
-        try {
-          await setSettings({ hotkey: values });
-        } finally {
-          setLoading(false);
-        }
-      }}
+      onValuesChange={(values) => save(() => setSettings({ hotkey: values }))}
       {...FORM_STYLE}
     />
   );

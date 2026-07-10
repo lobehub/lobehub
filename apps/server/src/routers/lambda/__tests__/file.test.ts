@@ -772,18 +772,6 @@ describe('fileRouter', () => {
     });
   });
 
-  describe('removeAllFiles', () => {
-    it('should include knowledge-base files when clearing all user files', async () => {
-      mockFileModelQuery.mockResolvedValue([{ id: 'file-1' }, { id: 'file-2' }]);
-      mockFileModelDeleteMany.mockResolvedValue([]);
-
-      await caller.removeAllFiles();
-
-      expect(mockFileModelQuery).toHaveBeenCalledWith({ showFilesInKnowledgeBase: true });
-      expect(mockFileModelDeleteMany).toHaveBeenCalledWith(['file-1', 'file-2'], false);
-    });
-  });
-
   describe('deleteKnowledgeItemsByQuery', () => {
     it('should delete page-backed knowledge items via documentService and plain files via fileModel', async () => {
       mockKnowledgeRepoQuery.mockResolvedValue([
@@ -832,7 +820,12 @@ describe('fileRouter', () => {
         targetUserId: 'test-user',
         targetWorkspaceId: null,
       });
-      expect(mockDocumentModelTransferTo).toHaveBeenCalledWith('doc-1', null, 'test-user');
+      expect(mockDocumentModelTransferTo).toHaveBeenCalledWith(
+        'doc-1',
+        null,
+        'test-user',
+        undefined,
+      );
       expect(mockFileModelFindById).not.toHaveBeenCalled();
     });
 
@@ -855,6 +848,7 @@ describe('fileRouter', () => {
         'file-1',
         'workspace-target',
         'test-user',
+        undefined,
       );
     });
 
@@ -897,7 +891,12 @@ describe('fileRouter', () => {
         targetUserId: 'test-user',
         targetWorkspaceId: null,
       });
-      expect(mockFileModelCopyToWorkspace).toHaveBeenCalledWith('file-1', null, 'test-user');
+      expect(mockFileModelCopyToWorkspace).toHaveBeenCalledWith(
+        'file-1',
+        null,
+        'test-user',
+        undefined,
+      );
     });
 
     it('should copy document resources via documentModel', async () => {
@@ -918,7 +917,12 @@ describe('fileRouter', () => {
         targetUserId: 'test-user',
         targetWorkspaceId: null,
       });
-      expect(mockDocumentModelCopyToWorkspace).toHaveBeenCalledWith('doc-1', null, 'test-user');
+      expect(mockDocumentModelCopyToWorkspace).toHaveBeenCalledWith(
+        'doc-1',
+        null,
+        'test-user',
+        undefined,
+      );
       expect(mockFileModelFindById).not.toHaveBeenCalled();
     });
   });
