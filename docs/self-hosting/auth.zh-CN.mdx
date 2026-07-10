@@ -28,11 +28,12 @@ LobeHub 支持使用 Better Auth 配置外部身份验证服务，供企业 / �
 
 要在 LobeHub 中启用 Better Auth，请设置以下环境变量：
 
-| 环境变量                   | 类型  | 描述                                               |
-| ---------------------- | --- | ------------------------------------------------ |
-| `AUTH_SECRET`          | 必选  | 用于加密会话令牌的密钥。使用以下命令生成：`openssl rand -base64 32`   |
-| `NEXT_PUBLIC_AUTH_URL` | 已废弃 | 已不再需要，认证 URL 现由请求头自动检测。设置该变量会导致部署失败。             |
-| `AUTH_SSO_PROVIDERS`   | 可选  | 启用的 SSO 提供商列表，以逗号分隔，例如 `google,github,microsoft` |
+| 环境变量                   | 类型  | 描述                                                                                                                                                                                |
+| ---------------------- | --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AUTH_SECRET`          | 必选  | 用于加密会话令牌的密钥。使用以下命令生成：`openssl rand -base64 32`                                                                                                                                    |
+| `APP_URL`              | 必选  | 本实例的公网访问地址（例如 `https://lobe.example.com`）。Better Auth 将其作为 `baseURL` 生成 OAuth 回调与 trusted origins。Vercel 上未设置时可回退到 `VERCEL_*`；其他环境若省略会默认 `http://localhost:<PORT>`，导致公网域名 SSO 失败。 |
+| `NEXT_PUBLIC_AUTH_URL` | 已废弃 | 已移除的 NextAuth / 浏览器认证 URL。设置该变量会导致部署失败，请改用 `APP_URL`。                                                                                                                             |
+| `AUTH_SSO_PROVIDERS`   | 可选  | 启用的 SSO 提供商列表，以逗号分隔，例如 `google,github,microsoft`                                                                                                                                  |
 
 ## 支持的 SSO 提供商
 
