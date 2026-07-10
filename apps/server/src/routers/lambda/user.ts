@@ -97,6 +97,10 @@ const userProcedure = authedProcedure.use(serverDatabase).use(async ({ ctx, next
 });
 
 export const userRouter = router({
+  getUserActivitySummary: userProcedure.query(async ({ ctx }) => {
+    return ctx.userModel.getUserActivitySummary();
+  }),
+
   getUserRegistrationDuration: userProcedure.query(async ({ ctx }) => {
     return ctx.userModel.getUserRegistrationDuration();
   }),
