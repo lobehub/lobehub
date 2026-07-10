@@ -55,8 +55,10 @@ Web search ships as a native built-in tool (`lobe-web-browsing`) — there's not
 Open the Agent's **Profile**, click **+ Add Skill**, and enable **Web Search**. That's it — the Agent can now search the web automatically when a question needs current information, or on your explicit request.
 
 <Callout type={'info'}>
-  Because it's built in, Web Search works the same way across every Agent — no API key, plugin
-  install, or MCP server setup required to get started.
+  Built-in Web Search does not need a marketplace plugin or MCP install on the client. **Self-hosted
+  deployments** still need a server search provider configured (default is SearXNG via
+  `SEARXNG_URL` / `SEARCH_PROVIDERS`) — see [Online Search](/docs/self-hosting/advanced/online-search).
+  Managed LobeHub Cloud already has this wired for you.
 </Callout>
 
 ### Optional: MCP-Based Search Tools
@@ -213,9 +215,9 @@ Search queries are sent to your configured search provider. Source websites may 
 </Tabs>
 
 <Callout type={'info'}>
-  Web search works out of the box via the built-in Web Search Skill — no plugin or MCP setup
-  required. If you connect an optional MCP search server instead, that provider may require its
-  own API key or subscription.
+  Client-side, the built-in Web Search Skill needs no plugin or MCP install. Self-hosted servers
+  still require search-provider env setup ([Online Search](/docs/self-hosting/advanced/online-search)).
+  Optional MCP search backends may need their own API key or subscription.
 </Callout>
 
 <Cards>
