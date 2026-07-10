@@ -13,6 +13,11 @@ interface DeviceCodeInfo {
   interval: number;
   userCode: string;
   verificationUri: string;
+  /**
+   * Verification URI with the user_code pre-filled (RFC 8628 §3.3.1), offered
+   * by some providers (e.g. xAI) so the user can skip typing the code.
+   */
+  verificationUriComplete?: string;
 }
 
 interface UseOAuthDeviceFlowOptions {
@@ -133,6 +138,7 @@ export function useOAuthDeviceFlow({
         interval: response.interval,
         userCode: response.userCode,
         verificationUri: response.verificationUri,
+        verificationUriComplete: response.verificationUriComplete,
       };
 
       setDeviceCodeInfo(info);
