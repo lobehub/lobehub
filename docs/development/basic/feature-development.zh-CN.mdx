@@ -298,35 +298,27 @@ const OpeningQuestions = memo(() => {
 - 通过 `setAgentConfig` action 更新配置
 - 使用 `useTranslation('setting')` 获取 i18n 文案
 
-同时我们需要将用户设置的开场配置展示出来，这个是在 chat 页面，对应组件在 `src/features/Onboarding/Agent/WelcomeMessage.tsx`：
+同时我们需要将用户设置的开场配置展示在 chat 页面。Agent 会话使用 `src/features/AgentHome`（`AgentInfo.tsx` 读 `openingMessage`，`OpeningQuestions.tsx` 渲染问题列表）；群聊有对应欢迎区 `src/routes/(main)/group/features/Conversation/AgentWelcome`。**不要**改 `src/features/Onboarding/Agent/WelcomeMessage.tsx` —— 那只是 onboarding 流程。
 
 ```typescript
-const WelcomeMessage = () => {
-  const { t } = useTranslation('chat');
+// src/features/AgentHome/AgentInfo.tsx（简化）
+const AgentInfo = () => {
+  const { t } = useTranslation(['chat', 'welcome']);
 
-  // 从 store/agent 获取当前开场配置
-  const openingMessage = useAgentStore(agentSelectors.openingMessage);
-  const openingQuestions = useAgentStore(agentSelectors.openingQuestions);
-
-  const meta = useSessionStore(sessionMetaSelectors.currentAgentMeta, isEqual);
+  // 优先会话作用域下的 agent 配置（openingMessage 在 agent config 上）
+  const openingMessage = useAgentStore(
+    (s) => agentSelectors.getAgentConfigById(agentId)(s)?.openingMessage || '',
+  );
 
   const message = useMemo(() => {
-    // 用户设置了就用用户设置的
     if (openingMessage) return openingMessage;
-    return !!meta.description ? agentSystemRoleMsg : agentMsg;
-  }, [openingMessage, agentSystemRoleMsg, agentMsg, meta.description]);
+    return t('agentDefaultMessageWithSystemRole', { name: displayTitle });
+  }, [openingMessage, displayTitle, t]);
 
-  return openingQuestions.length > 0 ? (
-    <Flexbox>
-      <ChatItem avatar={meta} message={message} placement="left" />
-      {/* 渲染引导性问题 */}
-      <OpeningQuestions questions={openingQuestions} />
-   
-</Flexbox>
-  ) : (
-    <ChatItem avatar={meta} message={message} placement="left" />
-  );
+  // 渲染头像 + Markdown(message) ...
 };
+
+// src/features/AgentHome/index.tsx 组装 AgentInfo + OpeningQuestions
 ```
 
 ## 五、测试
