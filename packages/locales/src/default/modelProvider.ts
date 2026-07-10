@@ -273,6 +273,8 @@ export default {
     'For GPT-5.2 Pro series; controls reasoning intensity.',
   'providerModels.item.modelConfig.extendParams.options.gpt5_2ReasoningEffort.hint':
     'For GPT-5.2 series; controls reasoning intensity.',
+  'providerModels.item.modelConfig.extendParams.options.gpt5_6ReasoningEffort.hint':
+    'For GPT-5.6 series; controls reasoning intensity from None through Max.',
   'providerModels.item.modelConfig.extendParams.options.glm5_2ReasoningEffort.hint':
     'For GLM-5.2; controls reasoning effort with High and Max levels.',
   'providerModels.item.modelConfig.extendParams.options.grok4_20ReasoningEffort.hint':
@@ -307,6 +309,8 @@ export default {
     'For Qwen3 series; controls token budget for reasoning (max 80k).',
   'providerModels.item.modelConfig.extendParams.options.reasoningEffort.hint':
     'For OpenAI and other reasoning-capable models; controls reasoning effort.',
+  'providerModels.item.modelConfig.extendParams.options.reasoningMode.hint':
+    'For GPT-5.6 Responses API; switches between Standard and Pro reasoning modes.',
   'providerModels.item.modelConfig.extendParams.options.step3_5ReasoningEffort.hint':
     'For Step 3.5 series; controls reasoning intensity.',
   'providerModels.item.modelConfig.extendParams.options.textVerbosity.hint':

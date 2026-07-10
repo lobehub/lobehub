@@ -1,4 +1,5 @@
 import type { ModelTokensUsage, ModelUsage } from '@lobechat/types';
+import { isRecord } from '@lobechat/utils/object';
 import debug from 'debug';
 import type { Pricing } from 'model-bank';
 import type OpenAI from 'openai';
@@ -21,6 +22,41 @@ const shouldKeepUsageValue = (key: string, value: unknown) => {
   return key === 'inputCacheMissTokens';
 };
 
+/**
+ * OpenAI GPT-5.6+ reports cache writes as `cache_write_tokens` under usage details.
+ * The field is not yet in all openai SDK type snapshots, so read it defensively.
+ *
+ * Billing note: write tokens are a subset of total input tokens and are charged at
+ * 1.25× uncached input. They must be excluded from the uncached (1×) miss bucket so
+ * computeChatCost does not double-charge textInput + textInput_cacheWrite.
+ */
+const readCacheWriteTokens = (details: unknown): number | undefined => {
+  if (!isRecord(details)) return undefined;
+
+  const value = details.cache_write_tokens;
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+};
+
+const resolveOpenAIInputCacheMissTokens = (params: {
+  explicitMissTokens?: number;
+  inputCachedTokens?: number;
+  inputWriteCacheTokens?: number;
+  totalInputTokens: number;
+}): number | undefined => {
+  if (typeof params.explicitMissTokens === 'number') return params.explicitMissTokens;
+
+  const hasCacheBreakdown =
+    typeof params.inputCachedTokens === 'number' ||
+    typeof params.inputWriteCacheTokens === 'number';
+
+  if (!hasCacheBreakdown) return undefined;
+
+  return Math.max(
+    0,
+    params.totalInputTokens - (params.inputCachedTokens ?? 0) - (params.inputWriteCacheTokens ?? 0),
+  );
+};
+
 export const convertOpenAIUsage = (
   usage: OpenAI.Completions.CompletionUsage,
   payload?: ChatPayloadForTransformStream,
@@ -32,10 +68,14 @@ export const convertOpenAIUsage = (
 
   const cachedTokens =
     (usage as any).prompt_cache_hit_tokens || usage.prompt_tokens_details?.cached_tokens;
+  const inputWriteCacheTokens = readCacheWriteTokens(usage.prompt_tokens_details);
 
-  const inputCacheMissTokens =
-    (usage as any).prompt_cache_miss_tokens ??
-    (typeof cachedTokens === 'number' ? totalInputTokens - cachedTokens : undefined);
+  const inputCacheMissTokens = resolveOpenAIInputCacheMissTokens({
+    explicitMissTokens: (usage as any).prompt_cache_miss_tokens,
+    inputCachedTokens: typeof cachedTokens === 'number' ? cachedTokens : undefined,
+    inputWriteCacheTokens,
+    totalInputTokens,
+  });
 
   const totalOutputTokens = usage.completion_tokens;
   const outputReasoning = usage.completion_tokens_details?.reasoning_tokens || 0;
@@ -59,6 +99,7 @@ export const convertOpenAIUsage = (
     inputCachedTokens: cachedTokens,
     inputCitationTokens,
     inputTextTokens,
+    inputWriteCacheTokens,
     outputAudioTokens,
     outputImageTokens,
     outputReasoningTokens: outputReasoning,
@@ -90,14 +131,21 @@ export const convertOpenAIResponseUsage = (
   // 1. Extract and default primary values
   const totalInputTokens = usage.input_tokens || 0;
   const inputCachedTokens = usage.input_tokens_details?.cached_tokens || 0;
+  const inputWriteCacheTokens = readCacheWriteTokens(usage.input_tokens_details);
 
   const totalOutputTokens = usage.output_tokens || 0;
   const outputReasoningTokens = usage.output_tokens_details?.reasoning_tokens || 0;
 
   const overallTotalTokens = usage.total_tokens || 0;
 
-  // 2. Calculate derived values
-  const inputCacheMissTokens = totalInputTokens - inputCachedTokens;
+  // 2. Calculate derived values.
+  // Exclude cache writes from the uncached bucket so textInput (1×) and
+  // textInput_cacheWrite (1.25×) do not both bill the same tokens.
+  const inputCacheMissTokens = resolveOpenAIInputCacheMissTokens({
+    inputCachedTokens,
+    inputWriteCacheTokens,
+    totalInputTokens,
+  })!;
 
   // For ResponseUsage, inputTextTokens is effectively totalInputTokens as no further breakdown is given.
   const inputTextTokens = totalInputTokens;
@@ -116,6 +164,7 @@ export const convertOpenAIResponseUsage = (
     inputCachedTokens,
     inputCitationTokens: undefined, // Not in ResponseUsage
     inputTextTokens,
+    inputWriteCacheTokens,
     outputAudioTokens: undefined, // Not in ResponseUsage
     outputImageTokens,
     outputReasoningTokens,

@@ -123,6 +123,9 @@ export default {
   'extendParams.imageResolution.title': 'Image Resolution',
   'extendParams.reasoningBudgetToken.title': 'Thinking Consumption Token',
   'extendParams.reasoningEffort.title': 'Reasoning Intensity',
+  'extendParams.reasoningMode.desc':
+    'Standard balances speed and cost. Pro performs more model work for difficult tasks and may use more tokens.',
+  'extendParams.reasoningMode.title': 'Reasoning Mode',
   'extendParams.textVerbosity.title': 'Output Text Detail Level',
   'extendParams.thinking.title': 'Deep Thinking Switch',
   'extendParams.thinkingBudget.title': 'Thinking Budget',
