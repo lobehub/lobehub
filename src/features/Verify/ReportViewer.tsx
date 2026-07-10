@@ -87,6 +87,11 @@ const styles = createStaticStyles(({ css }) => ({
     grid-template-columns: minmax(0, 1fr) 280px;
     gap: 24px;
     align-items: start;
+
+    /* Reclaim the rail's track when it hides — a hidden child leaves the column behind. */
+    @media (width <= 1120px) {
+      grid-template-columns: minmax(0, 1fr);
+    }
   `,
   reportMain: css`
     min-width: 0;
