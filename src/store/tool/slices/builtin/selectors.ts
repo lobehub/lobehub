@@ -1,4 +1,5 @@
 import {
+  activationModeControlledToolIds,
   alwaysOnToolIds,
   manualModeExcludeToolIds,
   runtimeManagedToolIds,
@@ -179,7 +180,12 @@ const allMetaList = (s: ToolStoreState): LobeToolMetaWithAvailability[] => {
     .agentSkillMetaList(s)
     .map((meta) => ({ ...meta, availableInWeb: true }));
 
-  return [...skillMetas, ...agentSkillMetas, ...builtinMetas, ...getComposioMetasWithAvailability(s)];
+  return [
+    ...skillMetas,
+    ...agentSkillMetas,
+    ...builtinMetas,
+    ...getComposioMetasWithAvailability(s),
+  ];
 };
 
 /**
@@ -232,10 +238,11 @@ const installedAllMetaList = (s: ToolStoreState): LobeToolMetaWithAvailability[]
 };
 
 const MANUAL_MODE_EXCLUDE_TOOL_IDS = new Set(manualModeExcludeToolIds);
+const ACTIVATION_MODE_CONTROLLED_TOOL_IDS = new Set(activationModeControlledToolIds);
 
 /**
- * Get meta for the application-fixed tools (always-on, not user-controllable) that should
- * be shown read-only in the chat-input Tools popover's "Pinned" section.
+ * Get meta for builtin runtime tools that default to pinned and should be shown in the
+ * chat-input Tools popover. Their per-agent policy supports pinned or disabled.
  *
  * These tools are normally `hidden` (and some are `discoverable: false`), so they never
  * appear in `metaList` / `metaListIncludingHidden`. Here we read them directly from
@@ -251,6 +258,7 @@ const fixedDisplayMetaList =
   ({ isManualMode }: { isManualMode: boolean } = { isManualMode: false }) =>
   (s: ToolStoreState): LobeToolMeta[] =>
     alwaysOnToolIds
+      .filter((id) => !ACTIVATION_MODE_CONTROLLED_TOOL_IDS.has(id))
       .filter((id) => !(isManualMode && MANUAL_MODE_EXCLUDE_TOOL_IDS.has(id)))
       .map((id) => s.builtinTools.find((tool) => tool.identifier === id))
       .filter((tool): tool is ToolStoreState['builtinTools'][number] => !!tool)

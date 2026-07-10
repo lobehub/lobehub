@@ -289,6 +289,23 @@ describe('toolEngineering', () => {
       expect(result.enabledToolIds).toContain('lobe-agent');
     });
 
+    it('should honor an explicit disabled policy for an always-on builtin tool', () => {
+      mockCurrentAgentDisabledPlugins = ['lobe-agent'];
+
+      const toolsEngine = createAgentToolsEngine({
+        model: 'deepseek-chat',
+        provider: 'deepseek',
+      });
+
+      const result = toolsEngine.generateToolsDetailed({
+        model: 'deepseek-chat',
+        provider: 'deepseek',
+        toolIds: [],
+      });
+
+      expect(result.enabledToolIds).not.toContain('lobe-agent');
+    });
+
     it('should use chat-mode defaults when the model does not support function calling', () => {
       mockIsCanUseFC = false;
 

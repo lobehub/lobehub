@@ -1093,6 +1093,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
 
         return createManagedSkillItem({
           badge: <Icon icon={Wrench} size={12} />,
+          defaultMode: 'pinned',
           deleteConfig: {
             displayName: title,
             onDelete: () => uninstallBuiltinTool(item.identifier),
@@ -1620,7 +1621,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
             key: 'auto',
             label: renderActivationGroupLabel({
               autoSwitch: true,
-              count: allAutoItems.length,
+              count: fixedDisabledItems.length + allAutoItems.length,
               icon: <Icon icon={Zap} size={14} />,
               open: autoOpen,
               title: t('tools.activation.auto'),
@@ -2014,7 +2015,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   );
 
   return {
-    autoCount: allAutoItems.length,
+    autoCount: allAutoItems.length + fixedDisabledItems.length,
     editPluginDrawer,
     installedPluginItems,
     marketFooter,
