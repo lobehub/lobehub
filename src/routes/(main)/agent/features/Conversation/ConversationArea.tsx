@@ -89,7 +89,7 @@ const Conversation = memo(() => {
   const businessAnalyticsHooks = useBusinessConversationAnalytics(context);
 
   const hooks = useMemo(
-    () => mergeConversationHooks(chatFollowUpHooks, businessAnalyticsHooks),
+    () => mergeConversationHooks(businessAnalyticsHooks, chatFollowUpHooks),
     [businessAnalyticsHooks, chatFollowUpHooks],
   );
 
