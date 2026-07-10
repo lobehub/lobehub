@@ -791,6 +791,22 @@ export const executeHeterogeneousAgent = async (
     string,
     Extract<MessageBatchOperation, { type: 'createMessage' }>['message']
   >();
+  /**
+   * Tool rows hang off an assistant row, so a failed `createAssistant` takes
+   * every tool row of that step down with it (FK on `messages.parent_id`).
+   * Replayed after `pendingMainCreates` so the parents exist again.
+   */
+  const pendingToolCreates = new Map<
+    string,
+    Extract<MessageBatchOperation, { type: 'createMessage' }>['message']
+  >();
+  /** Retry ledger for tool result content / plugin state. */
+  const pendingToolFlush = new Map<string, ToolMessageUpdateOperation['value']>();
+
+  /** Later intents carry a superset of the payload, so a shallow merge wins. */
+  const stashMainFlush = (messageId: string, update: Record<string, any>) => {
+    pendingMainFlush.set(messageId, { ...pendingMainFlush.get(messageId), ...update });
+  };
   /** Serializes async persist operations so ordering is stable. */
   let persistQueue: Promise<void> = Promise.resolve();
   /**
@@ -1004,16 +1020,15 @@ export const executeHeterogeneousAgent = async (
       return;
     }
 
-    messageWriteBatcher.enqueueToolMessageUpdate(
-      toolMsgId,
-      {
-        content,
-        pluginError: isError ? { message: content } : undefined,
-        pluginState,
-      },
-      messageWriteCtx,
-      (err) => console.error('[HeterogeneousAgent] Failed to update tool message content:', err),
-    );
+    const toolUpdate = {
+      content,
+      pluginError: isError ? { message: content } : undefined,
+      pluginState,
+    };
+    messageWriteBatcher.enqueueToolMessageUpdate(toolMsgId, toolUpdate, messageWriteCtx, (err) => {
+      console.error('[HeterogeneousAgent] Failed to update tool message content:', err);
+      pendingToolFlush.set(toolMsgId, { ...pendingToolFlush.get(toolMsgId), ...toolUpdate });
+    });
   };
   const applyInterventionRequest = async (data: AgentInterventionRequestData): Promise<boolean> => {
     const toolMsgId = toolMsgIdByCallId.get(data.toolCallId);
@@ -1472,10 +1487,7 @@ export const executeHeterogeneousAgent = async (
           messageWriteCtx,
           (err) => {
             console.error('[HeterogeneousAgent] Failed to flush main assistant:', err);
-            pendingMainFlush.set(intent.messageId, {
-              ...pendingMainFlush.get(intent.messageId),
-              ...update,
-            });
+            stashMainFlush(intent.messageId, update);
           },
         );
         // Mirror ONLY model/provider into the store: content/reasoning already
@@ -1542,13 +1554,21 @@ export const executeHeterogeneousAgent = async (
           } as any;
         };
 
+        // The ledger always carries the phase-3 shape: by the time it replays,
+        // the tool rows exist, and stashing the phase-1 shape would let a stale
+        // `tools[]` (no `result_msg_id`) clobber a phase-3 write that landed.
+        const finalAssistantUpdate = buildUpdate(true);
+
         // Phase 1: pre-register assistant.tools[] (no result_msg_id yet) so the
         // conversation-flow parser finds matching ids the moment tool rows land.
         messageWriteBatcher.enqueueUpdateMessage(
           intent.assistantMessageId,
           buildUpdate(false),
           messageWriteCtx,
-          (err) => console.error('[HeterogeneousAgent] Failed to pre-register main tools:', err),
+          (err) => {
+            console.error('[HeterogeneousAgent] Failed to pre-register main tools:', err);
+            stashMainFlush(intent.assistantMessageId, finalAssistantUpdate);
+          },
         );
 
         // Phase 2: create rows for new tools with their pre-allocated ids and
@@ -1556,7 +1576,10 @@ export const executeHeterogeneousAgent = async (
         for (const x of intent.tools) {
           if (!x.isNew) continue;
           const toolMsg = buildToolMessage(x);
-          messageWriteBatcher.enqueueCreateMessage(toolMsg);
+          messageWriteBatcher.enqueueCreateMessage(toolMsg, (err) => {
+            console.error('[HeterogeneousAgent] Failed to create tool message:', err);
+            pendingToolCreates.set(x.toolMessageId, toolMsg);
+          });
           toolMsgIdByCallId.set(x.payload.id, x.toolMessageId);
           mainToolCallIds.add(x.payload.id);
           get().internal_dispatchMessage(
@@ -1566,12 +1589,14 @@ export const executeHeterogeneousAgent = async (
         }
 
         // Phase 3: backfill result_msg_id on assistant.tools[].
-        const finalAssistantUpdate = buildUpdate(true);
         messageWriteBatcher.enqueueUpdateMessage(
           intent.assistantMessageId,
           finalAssistantUpdate,
           messageWriteCtx,
-          (err) => console.error('[HeterogeneousAgent] Failed to finalize main tools:', err),
+          (err) => {
+            console.error('[HeterogeneousAgent] Failed to finalize main tools:', err);
+            stashMainFlush(intent.assistantMessageId, finalAssistantUpdate);
+          },
         );
         get().internal_dispatchMessage(
           {
@@ -1618,8 +1643,14 @@ export const executeHeterogeneousAgent = async (
           ...(intent.model && { model: intent.model }),
           ...(intent.provider && { provider: intent.provider }),
         };
-        messageWriteBatcher.enqueueUpdateMessage(intent.messageId, update, messageWriteCtx, (err) =>
-          console.error('[HeterogeneousAgent] Failed to record main usage:', err),
+        messageWriteBatcher.enqueueUpdateMessage(
+          intent.messageId,
+          update,
+          messageWriteCtx,
+          (err) => {
+            console.error('[HeterogeneousAgent] Failed to record main usage:', err);
+            stashMainFlush(intent.messageId, update);
+          },
         );
         // Same payload into the store so usage + model/provider render live —
         // the subagent interpreter's `recordUsage` already does this via
@@ -1975,6 +2006,11 @@ export const executeHeterogeneousAgent = async (
           const queueDrained = await waitForPersistQueue(persistQueue, 'terminal');
 
           if (queueDrained) {
+            // Order is load-bearing: `messages.parent_id` is a real FK, so a row
+            // can only be replayed once its parent is back. Assistants chain to
+            // the previous assistant (Map insertion order == ancestor order),
+            // tool rows chain to their assistant, and every content flush needs
+            // its row to already exist or it silently matches zero rows.
             for (const [messageId, messageToCreate] of pendingMainCreates) {
               try {
                 await messageService.createMessage(messageToCreate);
@@ -1984,12 +2020,36 @@ export const executeHeterogeneousAgent = async (
               }
             }
 
+            for (const [messageId, messageToCreate] of pendingToolCreates) {
+              try {
+                await messageService.createMessage(messageToCreate);
+                pendingToolCreates.delete(messageId);
+              } catch (err) {
+                console.error('[HeterogeneousAgent] Failed to replay tool create:', err);
+              }
+            }
+
             for (const [messageId, update] of pendingMainFlush) {
               try {
                 await updateMessageOrThrow(messageId, update);
                 pendingMainFlush.delete(messageId);
               } catch (err) {
                 console.error('[HeterogeneousAgent] Failed to replay main assistant flush:', err);
+              }
+            }
+
+            for (const [messageId, update] of pendingToolFlush) {
+              try {
+                const result = await messageService.updateToolMessage(messageId, update, {
+                  agentId: context.agentId,
+                  topicId: context.topicId,
+                });
+                if (result?.success === false) {
+                  throw new Error(`updateToolMessage returned success=false for ${messageId}`);
+                }
+                pendingToolFlush.delete(messageId);
+              } catch (err) {
+                console.error('[HeterogeneousAgent] Failed to replay tool flush:', err);
               }
             }
 
