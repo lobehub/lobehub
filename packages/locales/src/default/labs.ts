@@ -1,7 +1,4 @@
 export default {
-  'features.agentDocumentFloatingChatPanel.desc':
-    'Show the floating chat panel in agent document preview only when this lab feature is enabled.',
-  'features.agentDocumentFloatingChatPanel.title': 'Agent Document Floating Chat Panel',
   'features.agentGraphConfig.desc':
     'Show graph runtime configuration in an agent profile advanced settings.',
   'features.agentGraphConfig.title': 'Agent Graph Runtime Configuration',

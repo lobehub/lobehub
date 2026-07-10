@@ -1,6 +1,4 @@
 {
-  "features.agentDocumentFloatingChatPanel.desc": "이 실험실 기능이 활성화된 경우에만 에이전트 문서 미리보기에서 떠 있는 채팅 패널을 표시합니다.",
-  "features.agentDocumentFloatingChatPanel.title": "에이전트 문서 떠 있는 채팅 패널",
   "features.agentSelfIteration.desc": "어시스턴트가 스스로를 성찰하고 자기 인식을 구축하며, 지속적인 시도와 상호작용을 통해 계속해서 발전할 수 있도록 합니다.",
   "features.agentSelfIteration.title": "에이전트 자기 반복",
   "features.assistantMessageGroup.desc": "도우미 메시지와 해당 도구 호출 결과를 그룹으로 묶어 표시합니다",

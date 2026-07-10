@@ -50,21 +50,20 @@ Expand the grounding card to see exactly where the information came from and eva
 
 ## Enabling Web Search
 
-Web search is not active by default — it requires plugin or MCP configuration.
+Web search ships as a native built-in tool (`lobe-web-browsing`) — there's nothing to install. Turn it on per Agent with one click:
 
-<Tabs>
-  <Tab title="Via Skills">
-    Install a web search Skill from the marketplace (Settings → Skills). Options include general web search, news search, and academic search. Some may require an API key from the search provider.
-  </Tab>
+Open the Agent's **Profile**, click **+ Add Skill**, and enable **Web Search**. That's it — the Agent can now search the web automatically when a question needs current information, or on your explicit request.
 
-  <Tab title="Via MCP Servers">
-    Connect a search MCP server (Brave Search, Google Search, DuckDuckGo, etc.) in your MCP settings. This gives more control and supports custom search implementations.
-  </Tab>
+<Callout type={'info'}>
+  Built-in Web Search does not need a marketplace plugin or MCP install on the client. **Self-hosted
+  deployments** still need a server search provider configured (default is SearXNG via
+  `SEARXNG_URL` / `SEARCH_PROVIDERS`) — see [Online Search](/docs/self-hosting/advanced/online-search).
+  Managed LobeHub Cloud already has this wired for you.
+</Callout>
 
-  <Tab title="Per-Agent Configuration">
-    In Agent Settings → Skills, enable web search for that specific Agent and choose the search provider. This lets you control which Agents have web access.
-  </Tab>
-</Tabs>
+### Optional: MCP-Based Search Tools
+
+If you want a specific search backend (Brave Search, Google Search, DuckDuckGo, etc.) or more control over the search implementation, you can alternatively connect a search MCP server in your MCP settings. This is optional — most use cases are already covered by the built-in Web Search Skill above.
 
 ## Using Web Search
 
@@ -216,8 +215,9 @@ Search queries are sent to your configured search provider. Source websites may 
 </Tabs>
 
 <Callout type={'info'}>
-  Web search requires either a search plugin or MCP server to be configured. Some search providers
-  require their own API key or subscription.
+  Client-side, the built-in Web Search Skill needs no plugin or MCP install. Self-hosted servers
+  still require search-provider env setup ([Online Search](/docs/self-hosting/advanced/online-search)).
+  Optional MCP search backends may need their own API key or subscription.
 </Callout>
 
 <Cards>

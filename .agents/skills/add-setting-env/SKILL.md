@@ -15,10 +15,10 @@ Add server-side environment variables to configure default values for user setti
 
 ### 1. Define Environment Variable
 
-Create `src/envs/<domain>.ts`:
+Create `packages/env/src/<domain>.ts` (import path stays `@/envs/<domain>` — tsconfig maps to `packages/env/src/*` first):
 
 ```typescript
-import { createEnv } from '@t3-oss/env-nextjs';
+import { createEnv } from '@t3-oss/env-core';
 import { z } from 'zod';
 
 export const get<Domain>Config = () => {
@@ -88,10 +88,10 @@ const serverSettings: PartialDeep<UserSettings> = {
 - `docs/self-hosting/environment-variables/basic.mdx` (EN)
 - `docs/self-hosting/environment-variables/basic.zh-CN.mdx` (CN)
 
-## Example: AI_IMAGE_DEFAULT_IMAGE_NUM
+## Example: AI\_IMAGE\_DEFAULT\_IMAGE\_NUM
 
 ```typescript
-// src/envs/image.ts
+// packages/env/src/image.ts  (import as @/envs/image)
 AI_IMAGE_DEFAULT_IMAGE_NUM: z.coerce.number().min(1).max(20).optional(),
 
 // packages/types/src/serverConfig.ts

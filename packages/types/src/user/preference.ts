@@ -47,10 +47,6 @@ export const UserLabSchema = z.object({
    */
   enableAgentSelfIteration: z.boolean().optional(),
   /**
-   * enable the floating chat panel in agent document preview
-   */
-  enableAgentDocumentFloatingChatPanel: z.boolean().optional(),
-  /**
    * enable the Fleet view (side-by-side running-task dashboard)
    */
   enableFleet: z.boolean().optional(),

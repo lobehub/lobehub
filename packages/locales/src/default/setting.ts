@@ -427,6 +427,22 @@ export default {
   'devices.status.online': 'Online',
   'devices.title': 'My Devices',
   'devices.workingDirectory': 'Working dir: {{path}}',
+  'downloads.desktop.cta': 'Download desktop app',
+  'downloads.desktop.desc':
+    'Use the native desktop app for local files, system tools, and focused work on your computer.',
+  'downloads.desktop.title': 'Desktop App',
+  'downloads.messenger.cta': 'Open Messenger settings',
+  'downloads.messenger.desc':
+    'Connect LobeHub to the messaging platforms you already use, with quick setup or your own bot configuration.',
+  'downloads.messenger.quickSetup': 'Quick setup',
+  'downloads.messenger.quickSetupTooltip':
+    'You can chat with the official LobeHub account on this platform or manually set up your own.',
+  'downloads.messenger.title': 'Messenger integration',
+  'downloads.mobile.cta': 'Get Mobile App',
+  'downloads.mobile.desc':
+    'Start conversations from your phone and keep LobeHub available when you are away from the desk.',
+  'downloads.mobile.title': 'Mobile App',
+  'downloads.title': 'Discover more ways to use LobeHub',
   'checkingPermissions': 'Checking permissions...',
   'danger.reset.action': 'Reset Now',
   'danger.reset.confirm': 'Reset all settings?',

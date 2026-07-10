@@ -183,7 +183,7 @@ LINE's Messaging API has a few specifics that LobeHub maps as follows:
 - **Typing indicator** — the loading animation is shown in 1:1 user chats only. Group and multi-person room threads silently no-op.
 - **Reactions** — LINE bots cannot send message reactions today, so the 👀 / ✏️ status reactions used on Discord and Slack are not surfaced.
 - **Outbound** — LobeHub uses the **push API** (`/v2/bot/message/push`) rather than the reply API, because the reply token expires in \~60s while agent generation can take longer. Push messages count against your channel's monthly quota for paid plans; the free Developer Trial is unlimited.
-- **Attachments** — inbound images, video, audio, and files are downloaded on demand from the LINE data domain and forwarded to the model. Outbound replies are text-only today.
+- **Attachments** — inbound images, video, audio, and files are downloaded on demand from the LINE data domain and forwarded to the model. Outbound: LINE's Messaging API has no inline binary upload, so only images with a public HTTPS URL are sent as native LINE image messages. Video, audio, and file attachments — and any attachment without a public HTTPS URL — are degraded to a text message with a link to the file (or a placeholder note if no URL is available).
 
 ## Troubleshooting
 

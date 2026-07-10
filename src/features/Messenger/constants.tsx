@@ -3,6 +3,12 @@ import type { ReactNode } from 'react';
 
 export type MessengerPlatform = 'telegram' | 'slack' | 'discord';
 
+export const SUPPORTED_MESSENGER_PLATFORMS = [
+  { id: 'telegram', name: 'Telegram' },
+  { id: 'slack', name: 'Slack' },
+  { id: 'discord', name: 'Discord' },
+] as const satisfies readonly { id: MessengerPlatform; name: string }[];
+
 export const PLATFORM_TAB_ICONS: Record<MessengerPlatform, ReactNode> = {
   discord: <Discord.Color size={16} />,
   slack: <Slack.Color size={16} />,

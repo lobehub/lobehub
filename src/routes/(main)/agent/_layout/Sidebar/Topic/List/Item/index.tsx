@@ -317,7 +317,7 @@ const TopicItem = memo<TopicItemProps>(
 
     const hasUnread = id && (isUnreadCompleted || isRunningTailUnread);
     const unreadIcon = (
-      <span className={styles.unreadWrapper}>
+      <span className={styles.unreadWrapper} data-testid="topic-unread-dot">
         <span className={styles.unreadRipple} />
         <span className={styles.unreadDot} />
       </span>
@@ -418,6 +418,10 @@ const TopicItem = memo<TopicItemProps>(
               </Tooltip>
             );
           }
+          // Unread is the third `pending` attention state (see `resolveStatusBucket`
+          // in `@lobechat/utils/client/topic`), so it ranks with its two siblings
+          // above — and above the PR marker, which shares this single icon slot.
+          if (hasUnread) return unreadIcon;
           // GitHub PR state marker (open=green, merged=purple, closed=red),
           // like Codex. Sits below the attention/active states but above the
           // idle default so an idle topic surfaces its linked PR at a glance.
@@ -438,7 +442,6 @@ const TopicItem = memo<TopicItemProps>(
               />
             );
           }
-          if (hasUnread) return unreadIcon;
           if (metadata?.bot?.platform) {
             const ProviderIcon = getPlatformIcon(metadata.bot!.platform);
             if (ProviderIcon) {

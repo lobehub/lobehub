@@ -1,6 +1,4 @@
 {
-  "features.agentDocumentFloatingChatPanel.desc": "Mostrar el panel de chat flotante en la vista previa del documento del agente solo cuando esta función experimental esté habilitada.",
-  "features.agentDocumentFloatingChatPanel.title": "Panel de Chat Flotante del Documento del Agente",
   "features.agentSelfIteration.desc": "Permite que el asistente reflexione, desarrolle autoconsciencia y realice iteraciones continuas a lo largo de intentos e interacciones.",
   "features.agentSelfIteration.title": "Autoiteración del agente",
   "features.assistantMessageGroup.desc": "Agrupa los mensajes del agente y los resultados de sus herramientas para mostrarlos juntos",

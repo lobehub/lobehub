@@ -79,9 +79,11 @@ tags:
   | `AUTH_MICROSOFT_AUTHORITY_URL` | Optional | Authority URL for Microsoft Entra ID                            |
   | `AUTH_MICROSOFT_TENANT_ID`     | Optional | Directory (tenant) ID for single-tenant apps                    |
 
-  <Callout type={'info'}>
-    **Alternative Environment Variables**: For backward compatibility, these
-    aliases are also supported:
+  <Callout type={'warning'}>
+    **Deprecated Environment Variables**: The following legacy variable names
+    are no longer supported. Setting any of them will cause the deployment to
+    fail at build/startup — use `AUTH_MICROSOFT_ID` / `AUTH_MICROSOFT_SECRET` /
+    `AUTH_MICROSOFT_TENANT_ID` instead:
 
     - `AUTH_MICROSOFT_ENTRA_ID_ID` / `AUTH_MICROSOFT_ENTRA_ID_SECRET`
     - `AUTH_AZURE_AD_ID` / `AUTH_AZURE_AD_SECRET`

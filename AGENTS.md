@@ -23,28 +23,24 @@ lobehub/
 ├── packages/               # Shared packages (@lobechat/*)
 │   ├── database/           # Database schemas, models, repositories
 │   ├── agent-runtime/      # Agent runtime
+│   ├── locales/            # i18n source: packages/locales/src/default/
+│   ├── env/                # env schemas (@/envs/* → packages/env/src/*)
 │   └── ...
 ├── src/
-│   ├── app/                # Next.js App Router (backend API + auth)
-│   │   ├── (backend)/     # API routes (trpc, webapi, etc.)
+│   ├── app/                # Next.js App Router (backend API + auth shell)
+│   │   ├── (backend)/      # API routes (trpc, webapi, etc.)
 │   │   ├── spa/            # SPA HTML template service
-│   │   └── [variants]/(auth)/  # Auth pages (SSR required)
-│   ├── routes/             # SPA page components (Vite)
-│   │   ├── (main)/         # Desktop pages
-│   │   ├── (mobile)/       # Mobile pages
-│   │   ├── (desktop)/      # Desktop-specific pages
-│   │   ├── (popup)/        # Popup window pages
-│   │   ├── onboarding/     # Onboarding pages
-│   │   └── share/          # Share pages
+│   │   └── spa-auth/       # Auth HTML shell (SSR)
+│   ├── routes/             # SPA page segments (thin — delegate to features/)
+│   │   ├── (main)/ (mobile)/ (desktop)/ (popup)/
+│   │   ├── auth/           # Auth page segments (signin, signup, …)
+│   │   ├── onboarding/ share/
 │   ├── spa/                # SPA entry points and router config
-│   │   ├── entry.web.tsx   # Web entry
-│   │   ├── entry.mobile.tsx
-│   │   ├── entry.desktop.tsx
-│   │   ├── entry.popup.tsx
+│   │   ├── entry.{web,mobile,desktop,popup}.tsx
 │   │   └── router/         # React Router configuration
 │   ├── store/              # Zustand stores
 │   ├── services/           # Client services
-│   ├── server/             # Server services and routers
+│   ├── server/             # standalone-Hono pieces only (main backend: apps/server)
 │   └── ...
 └── e2e/                    # E2E tests (Cucumber + Playwright)
 ```
@@ -118,8 +114,8 @@ bun run check [changed-files...]
 
 ### i18n
 
-- Add keys to a namespace file under `src/locales/default/` (e.g. `agent.ts`, `auth.ts`)
-- Hand-write en-US + zh-CN for dev preview: author the English source in `src/locales/default/*.ts`, mirror it to `locales/en-US/`, and hand-translate `locales/zh-CN/`.
+- Add keys to a namespace file under `packages/locales/src/default/` (e.g. `agent.ts`, `auth.ts`)
+- Hand-write en-US + zh-CN for dev preview: author the English source in `packages/locales/src/default/*.ts`, mirror it to `locales/en-US/`, and hand-translate `locales/zh-CN/`.
 - Before opening the PR, run `bun run i18n` (slow) to fill the remaining locales with the script — don't hand-translate those.
 
 ### Code Style
