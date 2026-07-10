@@ -1,6 +1,4 @@
 {
-  "features.agentDocumentFloatingChatPanel.desc": "Zeigen Sie das schwebende Chat-Panel in der Dokumentvorschau des Agenten nur an, wenn diese Lab-Funktion aktiviert ist.",
-  "features.agentDocumentFloatingChatPanel.title": "Schwebendes Chat-Panel für Agentendokumente",
   "features.agentSelfIteration.desc": "Ermöglicht dem Assistenten, zu reflektieren, Selbstwahrnehmung aufzubauen und sich durch fortlaufende Versuche und Interaktionen kontinuierlich weiterzuentwickeln.",
   "features.agentSelfIteration.title": "Agenten-Selbstiteration",
   "features.assistantMessageGroup.desc": "Agenten-Nachrichten und deren Tool-Ergebnisse gemeinsam anzeigen",

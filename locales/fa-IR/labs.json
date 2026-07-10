@@ -1,6 +1,4 @@
 {
-  "features.agentDocumentFloatingChatPanel.desc": "نمایش پنل چت شناور در پیش‌نمایش سند نماینده تنها زمانی که این ویژگی آزمایشی فعال باشد.",
-  "features.agentDocumentFloatingChatPanel.title": "پنل چت شناور سند نماینده",
   "features.agentSelfIteration.desc": "به دستیار امکان می‌دهد درباره عملکرد خود تأمل کند، خودآگاهی ایجاد کند و از طریق تلاش‌ها و تعاملات مداوم به طور پیوسته بهبود یابد.",
   "features.agentSelfIteration.title": "خود‌تکراری عامل",
   "features.assistantMessageGroup.desc": "نمایش گروهی پیام‌های عامل و نتایج ابزارهای فراخوانی‌شده به‌صورت یکجا",

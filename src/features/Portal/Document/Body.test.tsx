@@ -118,7 +118,7 @@ vi.mock('@/store/chat', () => ({
 
 const mockAgentState = vi.hoisted(() => ({
   current: {
-    activeAgentId: 'agent-1',
+    activeAgentId: 'agent-1' as string | undefined,
   },
 }));
 
@@ -140,24 +140,9 @@ vi.mock('@/store/document', () => ({
   useDocumentStore: (selector: any) => selector(mockDocumentState.current),
 }));
 
-const mockUserState = vi.hoisted(() => ({
-  current: {
-    preference: {
-      lab: {
-        enableAgentDocumentFloatingChatPanel: false,
-      },
-    },
-  },
-}));
-
-vi.mock('@/store/user', () => ({
-  useUserStore: (selector: any) => selector(mockUserState.current),
-}));
-
 describe('DocumentBody', () => {
   beforeEach(() => {
     mockAgentState.current.activeAgentId = 'agent-1';
-    mockUserState.current.preference.lab.enableAgentDocumentFloatingChatPanel = false;
     mockDocumentMeta.current = { content: '', filename: 'doc.md' };
     mockUpdateDocument.mockClear();
     docChatTopicState.current = {
@@ -172,23 +157,22 @@ describe('DocumentBody', () => {
     vi.useRealTimers();
   });
 
-  it('does not render FloatingChatPanel when the lab feature is disabled', () => {
-    render(<DocumentBody />);
-
-    expect(screen.queryByTestId('floating-chat-panel')).toBeNull();
-  });
-
-  it('renders FloatingChatPanel when the lab feature is enabled and the doc topic resolves', () => {
-    mockUserState.current.preference.lab.enableAgentDocumentFloatingChatPanel = true;
-
+  it('renders FloatingChatPanel once the doc topic resolves', () => {
     render(<DocumentBody />);
 
     expect(screen.getByTestId('floating-chat-panel')).toBeDefined();
   });
 
   it('holds the panel until the doc-anchored topic id resolves', () => {
-    mockUserState.current.preference.lab.enableAgentDocumentFloatingChatPanel = true;
     docChatTopicState.current = { error: undefined, isLoading: true, topicId: undefined };
+
+    render(<DocumentBody />);
+
+    expect(screen.queryByTestId('floating-chat-panel')).toBeNull();
+  });
+
+  it('does not render FloatingChatPanel without an active agent', () => {
+    mockAgentState.current.activeAgentId = undefined;
 
     render(<DocumentBody />);
 

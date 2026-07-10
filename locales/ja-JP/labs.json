@@ -1,6 +1,4 @@
 {
-  "features.agentDocumentFloatingChatPanel.desc": "このラボ機能が有効になっている場合にのみ、エージェントドキュメントプレビューで浮動チャットパネルを表示します。",
-  "features.agentDocumentFloatingChatPanel.title": "エージェントドキュメント浮動チャットパネル",
   "features.agentSelfIteration.desc": "アシスタントが振り返りを行い、自己認識を深め、継続的な試行と対話を通じて自律的に改善を重ねられるようにします。",
   "features.agentSelfIteration.title": "エージェントの自己反復",
   "features.assistantMessageGroup.desc": "アシスタントのメッセージとそのツール呼び出し結果をグループ化して表示します",

@@ -1,6 +1,4 @@
 {
-  "features.agentDocumentFloatingChatPanel.desc": "Afficher le panneau de chat flottant dans l'aperçu du document de l'agent uniquement lorsque cette fonctionnalité expérimentale est activée.",
-  "features.agentDocumentFloatingChatPanel.title": "Panneau de Chat Flottant pour Document d'Agent",
   "features.agentSelfIteration.desc": "Permet à l’assistant de réfléchir, de développer une conscience de soi et d’itérer en continu à travers des tentatives et des interactions successives.",
   "features.agentSelfIteration.title": "Auto‑itération de l’agent",
   "features.assistantMessageGroup.desc": "Regroupez les messages de l'agent et les résultats de leurs appels d'outils pour les afficher ensemble",

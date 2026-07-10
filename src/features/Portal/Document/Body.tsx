@@ -18,8 +18,6 @@ import { portalKeys } from '@/libs/swr/keys';
 import { documentService } from '@/services/document';
 import { useAgentStore } from '@/store/agent';
 import { useDocumentStore } from '@/store/document';
-import { useUserStore } from '@/store/user';
-import { labPreferSelectors } from '@/store/user/selectors';
 import { getDocumentRenderMode } from '@/utils/documentRenderMode';
 import {
   getSkillMarkdownMetadataError,
@@ -324,10 +322,7 @@ const DocumentBody = memo(() => {
   const agentDocumentId = useResolvedAgentDocumentId();
   const fullPage = useDocumentViewFullPage();
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
-  const enableFloatingChatPanel = useUserStore(
-    labPreferSelectors.enableAgentDocumentFloatingChatPanel,
-  );
-  const panelEligible = !fullPage && enableFloatingChatPanel && !!activeAgentId && !!documentId;
+  const panelEligible = !fullPage && !!activeAgentId && !!documentId;
   const { topicId: docChatTopicId } = useDocumentChatTopic({
     agentId: panelEligible ? activeAgentId : undefined,
     documentId: panelEligible ? documentId : undefined,

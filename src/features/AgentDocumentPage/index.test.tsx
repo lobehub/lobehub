@@ -83,25 +83,8 @@ vi.mock('@/features/FloatingChatPanel', () => ({
   },
 }));
 
-const mockUserState = vi.hoisted(() => ({
-  current: {
-    preference: { lab: { enableAgentDocumentFloatingChatPanel: false } },
-  },
-}));
-vi.mock('@/store/user', () => ({
-  useUserStore: (selector: any) => selector(mockUserState.current),
-}));
-
-vi.mock('@/store/user/selectors', () => ({
-  labPreferSelectors: {
-    enableAgentDocumentFloatingChatPanel: (s: any) =>
-      s.preference.lab.enableAgentDocumentFloatingChatPanel,
-  },
-}));
-
 describe('AgentDocumentPage', () => {
   beforeEach(() => {
-    mockUserState.current.preference.lab.enableAgentDocumentFloatingChatPanel = false;
     agentDocumentItemState.current = {
       error: undefined,
       isNotFound: false,
@@ -151,13 +134,7 @@ describe('AgentDocumentPage', () => {
     expect(headerProps.current).toMatchObject({ itemError });
   });
 
-  it('does not render FloatingChatPanel when the lab feature is disabled', () => {
-    render(<AgentDocumentPage documentId="docs_abc" />);
-    expect(screen.queryByTestId('floating-chat-panel')).toBeNull();
-  });
-
   it('renders FloatingChatPanel anchored on the URL agent + doc-scoped topic', () => {
-    mockUserState.current.preference.lab.enableAgentDocumentFloatingChatPanel = true;
     render(<AgentDocumentPage documentId="docs_abc" />);
 
     const container = screen.getByTestId('wide-screen-container');
@@ -172,7 +149,6 @@ describe('AgentDocumentPage', () => {
   });
 
   it('skips the panel until the doc-anchored topic id resolves', () => {
-    mockUserState.current.preference.lab.enableAgentDocumentFloatingChatPanel = true;
     docChatTopicState.current = { error: undefined, isLoading: true, topicId: undefined };
     render(<AgentDocumentPage documentId="docs_abc" />);
     expect(screen.queryByTestId('floating-chat-panel')).toBeNull();
