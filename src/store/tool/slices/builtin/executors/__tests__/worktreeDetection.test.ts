@@ -11,8 +11,12 @@ import {
 } from '../worktreeDetection';
 
 const chatMocks = vi.hoisted(() => ({
-  topics: {} as Record<string, { metadata?: Record<string, any> }>,
+  topics: {} as Record<string, { agentId?: string | null; metadata?: Record<string, any> }>,
   updateTopicMetadata: vi.fn(),
+}));
+
+const gitServiceMocks = vi.hoisted(() => ({
+  listGitWorktrees: vi.fn(),
 }));
 
 vi.mock('@/store/chat/store', () => ({
@@ -23,6 +27,14 @@ vi.mock('@/store/chat/selectors', () => ({
   topicSelectors: {
     getTopicById: (id: string) => (state: typeof chatMocks) => state.topics[id],
   },
+}));
+
+vi.mock('@/services/git', () => ({
+  gitService: gitServiceMocks,
+}));
+
+vi.mock('@/store/electron', () => ({
+  getElectronStoreState: () => ({ gatewayDeviceInfo: { deviceId: 'device-1' } }),
 }));
 
 describe('parseWorktreeAddPath', () => {
@@ -78,6 +90,41 @@ describe('parseWorktreeAddPath', () => {
   it('returns undefined for non-worktree-add calls', () => {
     expect(parseWorktreeAddPath('git status', '/repo')).toBeUndefined();
     expect(parseWorktreeAddPath('git worktree list', '/repo')).toBeUndefined();
+  });
+
+  it('expands a variable assigned earlier in the same command', () => {
+    expect(
+      parseWorktreeAddPath(
+        'cd /repo\nWT=/tmp/wt-lobe11099\nrm -rf "$WT"\ngit worktree add "$WT" feat/x 2>&1 | tail -2',
+        '/repo',
+      ),
+    ).toBe('/tmp/wt-lobe11099');
+  });
+
+  it('expands ${VAR} and semicolon-separated assignments, resolving relative results', () => {
+    expect(parseWorktreeAddPath('WT=../wt; git worktree add "${WT}"', '/repo')).toBe('/wt');
+  });
+
+  it('expands export assignments and variables referencing earlier variables', () => {
+    expect(
+      parseWorktreeAddPath('export ROOT=/tmp; WT="$ROOT/wt"; git worktree add "$WT"', '/repo'),
+    ).toBe('/tmp/wt');
+  });
+
+  it('never expands single-quoted tokens, per shell semantics', () => {
+    expect(parseWorktreeAddPath("WT=/tmp/wt; git worktree add '$WT'", '/repo')).toBeUndefined();
+  });
+
+  it('does not leak a command-scoped assignment prefix into later expansion', () => {
+    expect(parseWorktreeAddPath('WT=/tmp/wt git status; git worktree add "$WT"', '/repo')).toBe(
+      undefined,
+    );
+  });
+
+  it('returns undefined instead of an unexpandable literal', () => {
+    expect(parseWorktreeAddPath('git worktree add "$WT" feat/x', '/repo')).toBeUndefined();
+    expect(parseWorktreeAddPath('git worktree add $(mktemp -d) feat/x', '/repo')).toBeUndefined();
+    expect(parseWorktreeAddPath('git worktree add ~/wt feat/x', '/repo')).toBeUndefined();
   });
 });
 
@@ -297,6 +344,113 @@ describe('recordGitCommandEffects', () => {
         repoType: 'github',
       },
     });
+  });
+
+  it('does not query the device when the worktree path parses statically', async () => {
+    chatMocks.topics = { t1: PR_TOPIC };
+
+    await recordGitCommandEffects({ command: 'git worktree add /wt', topicId: 't1' });
+
+    expect(gitServiceMocks.listGitWorktrees).not.toHaveBeenCalled();
+    expect(chatMocks.updateTopicMetadata).toHaveBeenCalledWith('t1', {
+      workingDirectoryConfig: {
+        git: { activeWorktree: '/wt', isWorktree: true },
+        path: '/repo',
+        repoType: 'github',
+      },
+    });
+  });
+
+  it('resolves an unparseable $VAR worktree path from the device list by branch', async () => {
+    chatMocks.topics = { t1: PR_TOPIC };
+    gitServiceMocks.listGitWorktrees.mockResolvedValue([
+      { branch: 'canary', current: true, path: '/repo' },
+      { branch: 'feat/x', current: false, path: '/repo-feat-x' },
+    ]);
+
+    await recordGitCommandEffects({ command: 'git worktree add "$WT" feat/x', topicId: 't1' });
+
+    expect(gitServiceMocks.listGitWorktrees).toHaveBeenCalledWith({
+      deviceId: 'device-1',
+      path: '/repo',
+    });
+    expect(chatMocks.updateTopicMetadata).toHaveBeenCalledWith('t1', {
+      workingDirectoryConfig: {
+        git: { activeWorktree: '/repo-feat-x', branch: 'feat/x', isWorktree: true },
+        path: '/repo',
+        repoType: 'github',
+      },
+    });
+  });
+
+  it('queries the topic-bound device when the run was dispatched to one', async () => {
+    chatMocks.topics = {
+      t1: {
+        metadata: {
+          boundDeviceId: 'device-9',
+          workingDirectoryConfig: { path: '/repo', repoType: 'github' },
+        },
+      },
+    };
+    gitServiceMocks.listGitWorktrees.mockResolvedValue([
+      { branch: 'feat/x', current: false, path: '/repo-feat-x' },
+    ]);
+
+    await recordGitCommandEffects({ command: 'git worktree add "$WT" feat/x', topicId: 't1' });
+
+    expect(gitServiceMocks.listGitWorktrees).toHaveBeenCalledWith({
+      deviceId: 'device-9',
+      path: '/repo',
+    });
+  });
+
+  it('matches the device list by the -b created branch', async () => {
+    chatMocks.topics = { t1: PR_TOPIC };
+    gitServiceMocks.listGitWorktrees.mockResolvedValue([
+      { branch: 'feat/y', current: false, path: '/repo-feat-y' },
+    ]);
+
+    await recordGitCommandEffects({
+      command: 'WT=$(mktemp -d); git worktree add -b feat/y "$WT"',
+      topicId: 't1',
+    });
+
+    expect(chatMocks.updateTopicMetadata).toHaveBeenCalledWith('t1', {
+      workingDirectoryConfig: {
+        git: { activeWorktree: '/repo-feat-y', branch: 'feat/y', isWorktree: true },
+        path: '/repo',
+        repoType: 'github',
+      },
+    });
+  });
+
+  it('fails closed when the branch hint matches no worktree', async () => {
+    chatMocks.topics = { t1: PR_TOPIC };
+    gitServiceMocks.listGitWorktrees.mockResolvedValue([
+      { branch: 'canary', current: true, path: '/repo' },
+    ]);
+
+    await recordGitCommandEffects({ command: 'git worktree add "$WT" feat/x', topicId: 't1' });
+
+    expect(chatMocks.updateTopicMetadata).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when there is no usable branch hint', async () => {
+    chatMocks.topics = { t1: PR_TOPIC };
+
+    await recordGitCommandEffects({ command: 'git worktree add "$WT" "$BRANCH"', topicId: 't1' });
+
+    expect(gitServiceMocks.listGitWorktrees).not.toHaveBeenCalled();
+    expect(chatMocks.updateTopicMetadata).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when the device query rejects', async () => {
+    chatMocks.topics = { t1: PR_TOPIC };
+    gitServiceMocks.listGitWorktrees.mockRejectedValue(new Error('device offline'));
+
+    await recordGitCommandEffects({ command: 'git worktree add "$WT" feat/x', topicId: 't1' });
+
+    expect(chatMocks.updateTopicMetadata).not.toHaveBeenCalled();
   });
 
   it('uses gh pr create --head as the topic branch when present', async () => {

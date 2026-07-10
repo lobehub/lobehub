@@ -1,9 +1,12 @@
+import { isDesktop } from '@lobechat/const';
 import type { DeviceGitLinkedPullRequest, WorkingDirConfig } from '@lobechat/types';
 import { getWorkingDirSourcePath } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
 
+import { gitService } from '@/services/git';
 import { topicSelectors } from '@/store/chat/selectors';
 import { getChatStoreState } from '@/store/chat/store';
+import { getElectronStoreState } from '@/store/electron';
 
 /**
  * Detect git / gh side effects in a heterogeneous CLI agent's successful shell
@@ -12,6 +15,12 @@ import { getChatStoreState } from '@/store/chat/store';
  * Runs from the `claude-code` / `codex` executor's `onAfterCall` hook
  * (renderer-side, fired on `tool_end`). The CLI session cwd stays anchored to
  * the source repo; selected worktree / branch / linked PR are topic metadata.
+ *
+ * Command parsing is a trigger + hint, not the source of truth: `$VAR`
+ * references are expanded from assignments earlier in the same command, and a
+ * path that still carries shell syntax after that is never recorded literally —
+ * the real path is read back from the device's `git worktree list` (matched by
+ * the branch hint), or nothing is recorded at all.
  */
 
 /** Flags on `git worktree add` that consume the following token as their value. */
@@ -83,6 +92,14 @@ interface WorktreeAddInfo {
   path: string;
 }
 
+interface WorktreeAddParseResult {
+  branch?: string;
+  /** Resolved absolute path, present only when the command yielded a trustworthy literal. */
+  path?: string;
+  /** Positional commit-ish (often the checked-out branch) — hint for the device lookup. */
+  ref?: string;
+}
+
 type BranchSwitchInfo = { branch: string } | { detached: true };
 
 interface PullRequestCreateInfo {
@@ -104,6 +121,41 @@ const stripQuotes = (token: string): string => {
 const isAbsolute = (p: string): boolean =>
   p.startsWith('/') || p.startsWith('~') || /^[A-Z]:[\\/]/i.test(p) || p.startsWith('\\\\');
 
+type ShellEnv = Record<string, string>;
+
+const VAR_REFERENCE = /\$\{([A-Z_]\w*)\}|\$([A-Z_]\w*)/gi;
+
+/** Expand `$VAR` / `${VAR}` from assignments seen earlier in the command; unknown refs stay. */
+const expandShellVars = (value: string, env: ShellEnv): string =>
+  value.replaceAll(VAR_REFERENCE, (ref, braced, bare) => env[braced ?? bare] ?? ref);
+
+/** stripQuotes + variable expansion; single-quoted tokens never expand (shell semantics). */
+const resolveToken = (token: string, env?: ShellEnv): string => {
+  const value = stripQuotes(token);
+  return !env || token.startsWith("'") ? value : expandShellVars(value, env);
+};
+
+/**
+ * A path token still carrying shell syntax after expansion — an unknown `$VAR`,
+ * `$(…)`, backticks, quotes from broken tokenization, or a `~` we cannot resolve
+ * against the device home — is NOT the literal directory git created.
+ */
+const isLiteralPath = (p: string): boolean => !/["$'`]/.test(p) && !p.startsWith('~');
+
+/**
+ * Fold a pure-assignment segment (`WT=/x`, `export WT=/x A=b`) into the ongoing
+ * env. Assignments prefixing a command (`WT=/x git …`) scope to that command only
+ * and are NOT folded — the shell expands that command's args before applying them.
+ */
+const collectSegmentAssignments = (tokens: string[], env: ShellEnv): void => {
+  const start = stripQuotes(tokens[0] ?? '') === 'export' ? 1 : 0;
+  if (start >= tokens.length || !tokens.slice(start).every((t) => isAssignment(t))) return;
+  for (let i = start; i < tokens.length; i += 1) {
+    const eq = tokens[i].indexOf('=');
+    env[tokens[i].slice(0, eq)] = resolveToken(tokens[i].slice(eq + 1), env);
+  }
+};
+
 const getExecutableName = (token: string): string | undefined =>
   stripQuotes(token).split(/[\\/]/).at(-1)?.toLowerCase();
 
@@ -119,7 +171,8 @@ const isGhExecutable = (token: string): boolean => {
 
 const normalizeBranch = (branch?: string): string | undefined => {
   const value = branch?.trim();
-  if (!value || value === '-') return undefined;
+  // A `$`/backtick here is an unexpanded shell construct, not a branch name.
+  if (!value || value === '-' || /[$`]/.test(value)) return undefined;
   return value.includes(':') ? value.split(':').at(-1) : value;
 };
 
@@ -151,16 +204,19 @@ const consumeCommandPreamble = (tokens: string[]): number => {
 
 const findInCommand = <T>(
   command: string | string[],
-  parser: (tokens: string[]) => T | undefined,
+  parser: (tokens: string[], env?: ShellEnv) => T | undefined,
 ): T | undefined => {
   if (Array.isArray(command)) {
     return command.every((t) => typeof t === 'string') ? parser(command) : undefined;
   }
   if (typeof command !== 'string') return undefined;
 
+  const env: ShellEnv = {};
   for (const segment of command.split(/[\n;|&]/)) {
-    const result = parser(tokenize(segment));
+    const tokens = tokenize(segment);
+    const result = parser(tokens, env);
     if (result) return result;
+    collectSegmentAssignments(tokens, env);
   }
 };
 
@@ -180,12 +236,17 @@ const parsePrUrlFromOutput = (content?: string): { number: number; url: string }
   return { number: Number(match[1]), url: match[0] };
 };
 
-const getOptionValue = (tokens: string[], index: number, flags: readonly string[]) => {
+const getOptionValue = (
+  tokens: string[],
+  index: number,
+  flags: readonly string[],
+  env?: ShellEnv,
+) => {
   const token = tokens[index];
   const inlineValue = getInlineFlagValue(token, flags) ?? getShortFlagValue(token, flags);
-  if (inlineValue !== undefined) return { value: stripQuotes(inlineValue) };
+  if (inlineValue !== undefined) return { value: resolveToken(inlineValue, env) };
   if (flags.includes(stripQuotes(token))) {
-    return { skipNext: true, value: stripQuotes(tokens[index + 1] ?? '') };
+    return { skipNext: true, value: resolveToken(tokens[index + 1] ?? '', env) };
   }
   return {};
 };
@@ -217,7 +278,10 @@ const parseGitSubcommand = (
   return { args: tokens.slice(i + 1), baseCwd, subcommand };
 };
 
-const parseGitBranchSwitchTokens = (tokens: string[]): BranchSwitchInfo | undefined => {
+const parseGitBranchSwitchTokens = (
+  tokens: string[],
+  env?: ShellEnv,
+): BranchSwitchInfo | undefined => {
   const git = parseGitSubcommand(tokens);
   if (!git || !GIT_BRANCH_SWITCH_SUBCOMMANDS.has(git.subcommand)) return undefined;
 
@@ -226,7 +290,7 @@ const parseGitBranchSwitchTokens = (tokens: string[]): BranchSwitchInfo | undefi
     const token = git.args[i];
     if (DETACH_FLAGS.has(stripQuotes(token))) return { detached: true };
 
-    const branchFlag = getOptionValue(git.args, i, [...BRANCH_SWITCH_VALUE_FLAGS]);
+    const branchFlag = getOptionValue(git.args, i, [...BRANCH_SWITCH_VALUE_FLAGS], env);
     if (branchFlag.value) {
       branch = normalizeBranch(branchFlag.value);
       break;
@@ -246,7 +310,7 @@ const parseGitBranchSwitchTokens = (tokens: string[]): BranchSwitchInfo | undefi
 
     // `git checkout <name>` is path-or-branch ambiguous. Use command-only
     // inference only for `git switch <branch>`, whose operand is a branch.
-    if (git.subcommand === 'switch') branch = normalizeBranch(token);
+    if (git.subcommand === 'switch') branch = normalizeBranch(resolveToken(token, env));
     break;
   }
 
@@ -273,6 +337,7 @@ const parseGitBranchSwitch = (
 const parseGhPrCreateTokens = (
   tokens: string[],
   resultContent?: string,
+  env?: ShellEnv,
 ): PullRequestCreateInfo | undefined => {
   const prUrl = parsePrUrlFromOutput(resultContent);
   if (!prUrl) return undefined;
@@ -301,14 +366,14 @@ const parseGhPrCreateTokens = (
       continue;
     }
 
-    const titleValue = getOptionValue(tokens, i, ['-t', '--title']);
+    const titleValue = getOptionValue(tokens, i, ['-t', '--title'], env);
     if (titleValue.value) {
       title = titleValue.value;
       if (titleValue.skipNext) i += 1;
       continue;
     }
 
-    const headValue = getOptionValue(tokens, i, ['-H', '--head']);
+    const headValue = getOptionValue(tokens, i, ['-H', '--head'], env);
     if (headValue.value) {
       branch = normalizeBranch(headValue.value) ?? branch;
       if (headValue.skipNext) i += 1;
@@ -337,7 +402,7 @@ const parseGhPrCreate = (
   command: string | string[],
   resultContent?: string,
 ): PullRequestCreateInfo | undefined =>
-  findInCommand(command, (tokens) => parseGhPrCreateTokens(tokens, resultContent));
+  findInCommand(command, (tokens, env) => parseGhPrCreateTokens(tokens, resultContent, env));
 
 const applyBranchToConfig = (
   currentConfig: WorkingDirConfig | undefined,
@@ -501,9 +566,14 @@ const WRAPPERS = new Set(['sudo', 'env', 'command', 'nice', 'nohup', 'time']);
  * If ONE command's tokens are a real `git … worktree add <path>` invocation, return
  * the path (resolved against the source cwd, honoring a `-C <dir>` override).
  * Requires the executable to actually be `git` — so `echo git worktree add …` or
- * `rg "git worktree add"` never match.
+ * `rg "git worktree add"` never match. When the path token stays shell syntax even
+ * after `$VAR` expansion, `path` is omitted and only the branch/ref hints survive.
  */
-const parseGitWorktreeAddTokens = (tokens: string[], cwd?: string): WorktreeAddInfo | undefined => {
+const parseGitWorktreeAddTokens = (
+  tokens: string[],
+  cwd?: string,
+  env?: ShellEnv,
+): WorktreeAddParseResult | undefined => {
   let i = 0;
 
   // Strip leading `VAR=val` assignments and command wrappers (sudo/env/…).
@@ -517,7 +587,7 @@ const parseGitWorktreeAddTokens = (tokens: string[], cwd?: string): WorktreeAddI
   let baseCwd = cwd;
   while (i < tokens.length && tokens[i].startsWith('-')) {
     if (tokens[i] === '-C') {
-      const dir = stripQuotes(tokens[i + 1] ?? '');
+      const dir = resolveToken(tokens[i + 1] ?? '', env);
       if (dir) baseCwd = resolveWorktreePath(dir, baseCwd);
       i += 2;
     } else if (GIT_VALUE_OPTS.has(tokens[i])) {
@@ -533,12 +603,14 @@ const parseGitWorktreeAddTokens = (tokens: string[], cwd?: string): WorktreeAddI
   if (stripQuotes(tokens[i] ?? '') !== 'add') return undefined;
   i += 1;
 
-  // First positional after `add` is the worktree path.
+  // Positionals after `add`: first is the worktree path, second the commit-ish.
   let branch: string | undefined;
+  let path: string | undefined;
+  let ref: string | undefined;
   for (; i < tokens.length; i += 1) {
     const token = tokens[i];
     if (BRANCH_VALUE_FLAGS.has(token)) {
-      branch = stripQuotes(tokens[i + 1] ?? '') || branch;
+      branch = resolveToken(tokens[i + 1] ?? '', env) || branch;
       i += 1; // skip this flag's value
       continue;
     }
@@ -546,27 +618,45 @@ const parseGitWorktreeAddTokens = (tokens: string[], cwd?: string): WorktreeAddI
       i += 1; // skip this flag's value
       continue;
     }
+    if (/^\d*[<>]/.test(token)) break; // redirection — git's args end here
     if (token.startsWith('-')) continue; // other flags
-    const path = stripQuotes(token);
-    if (path) return { branch, path: resolveWorktreePath(path, baseCwd) };
+    const value = resolveToken(token, env);
+    if (!value) continue;
+    if (path === undefined) {
+      path = value;
+      continue;
+    }
+    ref = value;
+    break;
   }
-  return undefined;
+  if (path === undefined) return undefined;
+
+  return {
+    ...(branch ? { branch } : {}),
+    ...(ref ? { ref } : {}),
+    ...(isLiteralPath(path) ? { path: resolveWorktreePath(path, baseCwd) } : {}),
+  };
 };
 
 const parseWorktreeAddInfo = (
   command: string | string[],
   cwd?: string,
-): WorktreeAddInfo | undefined => {
+): WorktreeAddParseResult | undefined => {
   if (Array.isArray(command)) {
-    // Already-tokenized argv → a single command, boundaries preserved.
+    // Already-tokenized argv → a single command, boundaries preserved. No shell
+    // ran, so tokens are literal — no assignments to collect or vars to expand.
     return command.every((t) => typeof t === 'string')
       ? parseGitWorktreeAddTokens(command, cwd)
       : undefined;
   }
   if (typeof command !== 'string' || !/\bworktree\s+add\b/.test(command)) return undefined;
+
+  const env: ShellEnv = {};
   for (const segment of command.split(/[\n;|&]/)) {
-    const info = parseGitWorktreeAddTokens(tokenize(segment), cwd);
+    const tokens = tokenize(segment);
+    const info = parseGitWorktreeAddTokens(tokens, cwd, env);
     if (info) return info;
+    collectSegmentAssignments(tokens, env);
   }
   return undefined;
 };
@@ -574,17 +664,71 @@ const parseWorktreeAddInfo = (
 /**
  * Parse a shell command for a real `git worktree add <path>` invocation and return
  * the target worktree path (resolved to absolute against `cwd` when relative).
+ * `$VAR` references are expanded from assignments earlier in the same command.
  *
  * `command` is a raw string (tokenized, split on shell separators) OR the argv
  * array form some CLIs use (Codex) — for the array we DON'T re-join+re-tokenize, so
  * a path token containing spaces (`['git','worktree','add','/tmp/my wt']`) keeps its
- * boundary. Returns `undefined` when the call isn't an actual worktree-add.
+ * boundary. Returns `undefined` when the call isn't an actual worktree-add, or when
+ * the path token cannot be statically resolved to a literal directory.
  */
 export const parseWorktreeAddPath = (
   command: string | string[],
   cwd?: string,
 ): string | undefined => {
   return parseWorktreeAddInfo(command, cwd)?.path;
+};
+
+/**
+ * Ground truth for a worktree-add whose path token never survives static parsing
+ * (`git worktree add "$WT" …`, `$(mktemp -d)`, `~/wt`): ask the run's target
+ * device which worktree actually holds the branch the command referenced. Fails
+ * closed — no usable branch hint, no match, or an unreachable device records
+ * nothing rather than a bogus literal.
+ */
+const resolveWorktreeAddFromDevice = async (
+  parsed: WorktreeAddParseResult,
+  source: string,
+  boundDeviceId?: string,
+): Promise<WorktreeAddInfo | undefined> => {
+  const branchHint = normalizeBranch(parsed.branch ?? parsed.ref);
+  if (!branchHint) return undefined;
+
+  // The topic's bound device (written at dispatch) or, unbound, this machine.
+  // Mirrors WorkingDirectorySection: the local device answers over IPC
+  // (deviceId omitted), a remote one over RPC.
+  const currentDeviceId = getElectronStoreState().gatewayDeviceInfo?.deviceId;
+  const targetDeviceId = boundDeviceId ?? currentDeviceId;
+  const isLocalDevice = isDesktop && !!targetDeviceId && targetDeviceId === currentDeviceId;
+
+  try {
+    const worktrees = await gitService.listGitWorktrees({
+      deviceId: isLocalDevice ? undefined : targetDeviceId,
+      path: source,
+    });
+    const match = worktrees.find((worktree) => worktree.branch === branchHint);
+    if (!match) return undefined;
+    return { ...(match.branch ? { branch: match.branch } : {}), path: match.path };
+  } catch {
+    return undefined;
+  }
+};
+
+/**
+ * Turn a parse result into a recordable worktree: trust a statically resolved
+ * path directly, otherwise read the real one back from the device.
+ */
+const resolveWorktreeAddInfo = async (
+  parsed: WorktreeAddParseResult | undefined,
+  source: string,
+  boundDeviceId?: string,
+): Promise<WorktreeAddInfo | undefined> => {
+  if (!parsed) return undefined;
+  if (parsed.path) {
+    const branch = normalizeBranch(parsed.branch);
+    return { ...(branch ? { branch } : {}), path: parsed.path };
+  }
+  return resolveWorktreeAddFromDevice(parsed, source, boundDeviceId);
 };
 
 /**
@@ -604,10 +748,14 @@ export const recordWorktreeAdd = async (params: {
   const topic = topicSelectors.getTopicById(topicId)(state);
   const currentConfig = topic?.metadata?.workingDirectoryConfig;
   const source = getWorkingDirSourcePath(currentConfig) ?? topic?.metadata?.workingDirectory;
+  if (!source) return;
 
-  const worktreeInfo = parseWorktreeAddInfo(command, source);
-  const worktreePath = worktreeInfo?.path;
-  if (!worktreePath || !source || worktreePath === source) return;
+  const worktreeInfo = await resolveWorktreeAddInfo(
+    parseWorktreeAddInfo(command, source),
+    source,
+    topic?.metadata?.boundDeviceId,
+  );
+  if (!worktreeInfo || worktreeInfo.path === source) return;
 
   const nextConfig = applyWorktreeAddToConfig(currentConfig, source, worktreeInfo);
 
@@ -636,8 +784,12 @@ export const recordGitCommandEffects = async (params: {
 
   let nextConfig = currentConfig;
 
-  const worktreeInfo = parseWorktreeAddInfo(command, source);
-  if (worktreeInfo?.path && worktreeInfo.path !== source) {
+  const worktreeInfo = await resolveWorktreeAddInfo(
+    parseWorktreeAddInfo(command, source),
+    source,
+    topic?.metadata?.boundDeviceId,
+  );
+  if (worktreeInfo && worktreeInfo.path !== source) {
     nextConfig = applyWorktreeAddToConfig(nextConfig, source, worktreeInfo);
   }
 
