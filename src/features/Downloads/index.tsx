@@ -1,6 +1,6 @@
 'use client';
 
-import { DOWNLOAD_URL, isDesktop } from '@lobechat/const';
+import { DOWNLOAD_URL, isDesktop, USAGE_DOCUMENTS } from '@lobechat/const';
 import { Block, CopyButton, Flexbox, Icon, Text, ThemeProvider, Tooltip } from '@lobehub/ui';
 import { Button, ScrollArea } from '@lobehub/ui/base-ui';
 import { Lark, Line, QQ, WeChat } from '@lobehub/ui/icons';
@@ -78,11 +78,17 @@ Commands:
   update [options]       Update the LobeHub CLI to the latest published version
   help [command]         display help for command`;
 const CLI_INSTALL_COMMAND = 'npm install -g @lobehub/cli';
+const CHANNEL_DOCS_URL = `${USAGE_DOCUMENTS}/channels`;
 const MANUAL_MESSENGER_PLATFORMS = [
-  { icon: Lark.Color, id: 'feishu', name: 'Feishu / Lark' },
-  { icon: Line.Color, id: 'line', name: 'LINE' },
-  { icon: WeChat.Color, id: 'wechat', name: 'WeChat' },
-  { icon: QQ.Color, id: 'qq', name: 'QQ' },
+  {
+    docsUrl: `${CHANNEL_DOCS_URL}/feishu`,
+    icon: Lark.Color,
+    id: 'feishu',
+    name: 'Feishu / Lark',
+  },
+  { docsUrl: `${CHANNEL_DOCS_URL}/line`, icon: Line.Color, id: 'line', name: 'LINE' },
+  { docsUrl: `${CHANNEL_DOCS_URL}/wechat`, icon: WeChat.Color, id: 'wechat', name: 'WeChat' },
+  { docsUrl: `${CHANNEL_DOCS_URL}/qq`, icon: QQ.Color, id: 'qq', name: 'QQ' },
 ] as const;
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -402,6 +408,7 @@ const DownloadsPage = memo(() => {
     id: string,
     name: string,
     icon: ReactNode,
+    onClick: () => void,
     isQuickSetup = false,
   ) => (
     <Button
@@ -413,7 +420,7 @@ const DownloadsPage = memo(() => {
           {icon}
         </span>
       }
-      onClick={() => navigate('/settings/messenger')}
+      onClick={onClick}
     >
       <span className={styles.platformLabel}>
         <span className={styles.platformName}>{name}</span>
@@ -441,6 +448,7 @@ const DownloadsPage = memo(() => {
             platform.id,
             platform.name,
             <PlatformBrandIcon platform={platform.id} size={18} />,
+            () => navigate('/settings/messenger'),
             true,
           ),
         )}
@@ -450,6 +458,7 @@ const DownloadsPage = memo(() => {
             platform.id,
             platform.name,
             <PlatformIcon size={18} />,
+            () => openExternal(platform.docsUrl),
           );
         })}
       </>
