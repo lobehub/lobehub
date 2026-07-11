@@ -45,9 +45,10 @@ describe('resolveTrayNavigationSnapshot', () => {
       agents: [agent('agent-1', 'Researcher', '2026-07-11T00:00:00.000Z')],
       pinnedPages: [],
       recentPages: [
-        page('Topic title', '/agent/agent-1/topic-1', 5),
+        page('Topic title · Researcher', '/agent/agent-1/topic-1', 5),
         page('Page title', '/page/page-1', 4),
         page('Agent root', '/agent/agent-1', 3),
+        page('Agent task', '/agent/agent-1/task/task-1', 3),
         page('Page list', '/page', 2),
         page('Settings', '/settings', 1),
       ],
