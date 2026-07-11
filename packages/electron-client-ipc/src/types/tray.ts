@@ -1,3 +1,20 @@
+export interface TrayAgentItem {
+  id: string;
+  title: string;
+  url: string;
+}
+
+export interface TrayNavigationItem {
+  title: string;
+  url: string;
+}
+
+export interface TrayNavigationSnapshot {
+  agents: TrayAgentItem[];
+  pinned: TrayNavigationItem[];
+  recent: TrayNavigationItem[];
+}
+
 /**
  * Parameters for showing tray notification
  */

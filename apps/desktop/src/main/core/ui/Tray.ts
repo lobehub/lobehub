@@ -16,12 +16,6 @@ import type { App } from '../App';
 // Create logger
 const logger = createLogger('core:Tray');
 
-// Debounce window for distinguishing a single-click from the leading edge of
-// a double-click. Electron delivers two `click` events before `double-click`,
-// so we defer the single-click action until this window passes — the
-// `double-click` handler clears it if it arrives in time.
-const CLICK_DEBOUNCE_MS = 250;
-
 export interface TrayOptions {
   /**
    * Tray icon path (relative to resource directory)
@@ -59,12 +53,6 @@ export class Tray {
    * happen automatically if we called `_tray.setContextMenu(menu)`).
    */
   private _contextMenu?: ElectronMenu;
-
-  /**
-   * Pending single-click timer. Cleared by the double-click handler so a
-   * double-click never accidentally fires startSession before showMainWindow.
-   */
-  private _clickTimer?: NodeJS.Timeout;
 
   /**
    * Identifier
@@ -130,25 +118,10 @@ export class Tray {
       // Set default context menu
       this.setContextMenu();
 
-      // Left-click: deferred so a follow-up `double-click` can pre-empt it.
+      // Both mouse buttons expose the same native menu.
       this._tray.on('click', () => {
         logger.debug(`[${this.identifier}] Tray clicked`);
-        if (this._clickTimer) clearTimeout(this._clickTimer);
-        this._clickTimer = setTimeout(() => {
-          this._clickTimer = undefined;
-          this.onClick();
-        }, CLICK_DEBOUNCE_MS);
-      });
-
-      // Double-click (macOS / Windows): cancel the pending single-click and
-      // surface the main window instead.
-      this._tray.on('double-click', () => {
-        logger.debug(`[${this.identifier}] Tray double-clicked`);
-        if (this._clickTimer) {
-          clearTimeout(this._clickTimer);
-          this._clickTimer = undefined;
-        }
-        this.onDoubleClick();
+        this.popUpMenu();
       });
 
       // Right-click: pop the stored context menu manually so left-click stays
@@ -156,9 +129,7 @@ export class Tray {
       // `_tray.setContextMenu`).
       this._tray.on('right-click', () => {
         logger.debug(`[${this.identifier}] Tray right-clicked`);
-        if (this._contextMenu && this._tray) {
-          this._tray.popUpContextMenu(this._contextMenu);
-        }
+        this.popUpMenu();
       });
 
       logger.debug(`[${this.identifier}] Tray instance created successfully`);
@@ -204,31 +175,6 @@ export class Tray {
   }
 
   /**
-   * Handle tray click event — opens the Quick Composer overlay.
-   * Right-click opens the context menu (handled by Electron automatically).
-   */
-  onClick() {
-    logger.debug(`[${this.identifier}] Tray click → startSession`);
-    try {
-      void this.app.screenCaptureManager.startSession();
-    } catch (error) {
-      logger.error(`[${this.identifier}] Failed to start capture session:`, error);
-    }
-  }
-
-  /**
-   * Handle tray double-click event — surfaces the main window.
-   */
-  onDoubleClick() {
-    logger.debug(`[${this.identifier}] Tray double-click → showMainWindow`);
-    try {
-      this.app.browserManager.showMainWindow();
-    } catch (error) {
-      logger.error(`[${this.identifier}] Failed to show main window:`, error);
-    }
-  }
-
-  /**
    * Replace the tray context menu with a pre-built Electron Menu instance.
    * Stored in-house and popped up manually on right-click to preserve
    * left-click for the Quick Composer trigger.
@@ -236,6 +182,12 @@ export class Tray {
   setMenu(menu: ElectronMenu) {
     logger.debug(`[${this.identifier}] Attaching prebuilt context menu`);
     this._contextMenu = menu;
+  }
+
+  private popUpMenu() {
+    if (this._contextMenu && this._tray) {
+      this._tray.popUpContextMenu(this._contextMenu);
+    }
   }
 
   /**
