@@ -126,6 +126,42 @@ describe('parseWorktreeAddPath', () => {
     expect(parseWorktreeAddPath('git worktree add $(mktemp -d) feat/x', '/repo')).toBeUndefined();
     expect(parseWorktreeAddPath('git worktree add ~/wt feat/x', '/repo')).toBeUndefined();
   });
+
+  it('unwraps the Codex login-shell wrapper', () => {
+    expect(parseWorktreeAddPath('/bin/zsh -lc "git worktree add -b feat/x ../wt"', '/repo')).toBe(
+      '/wt',
+    );
+    expect(parseWorktreeAddPath("bash -lc 'git worktree add /tmp/wt'", '/repo')).toBe('/tmp/wt');
+    expect(parseWorktreeAddPath('sh -c "git worktree add wt"', '/repo')).toBe('/repo/wt');
+    expect(parseWorktreeAddPath('/usr/bin/env bash -l -c "git worktree add /wt"', '/repo')).toBe(
+      '/wt',
+    );
+  });
+
+  it('unwraps the argv form of the shell wrapper', () => {
+    expect(
+      parseWorktreeAddPath(['/bin/zsh', '-lc', 'git worktree add -b feat/x /tmp/wt'], '/repo'),
+    ).toBe('/tmp/wt');
+    expect(parseWorktreeAddPath(['bash', '-l', '-c', 'git worktree add ../wt'], '/repo')).toBe(
+      '/wt',
+    );
+  });
+
+  it('handles separators, escaped quotes, and nesting inside the wrapper payload', () => {
+    expect(
+      parseWorktreeAddPath('/bin/zsh -lc "cd /repo && git worktree add \\"/tmp/my wt\\""', '/repo'),
+    ).toBe('/tmp/my wt');
+    expect(parseWorktreeAddPath(`zsh -lc 'bash -c "git worktree add /tmp/wt"'`, '/repo')).toBe(
+      '/tmp/wt',
+    );
+  });
+
+  it('still rejects non-git payloads inside a wrapper', () => {
+    expect(
+      parseWorktreeAddPath('/bin/zsh -lc "echo git worktree add /wt"', '/repo'),
+    ).toBeUndefined();
+    expect(parseWorktreeAddPath(`/bin/zsh -lc "rg 'git worktree add' ."`, '/repo')).toBeUndefined();
+  });
 });
 
 const PR_TOPIC = {
@@ -332,6 +368,72 @@ describe('recordGitCommandEffects', () => {
           github: {
             pullRequest: {
               isDraft: true,
+              number: 456,
+              state: 'OPEN',
+              title: 'Fix topic',
+              url: 'https://github.com/lobehub/lobehub/pull/456',
+            },
+            pullRequestStatus: 'ok',
+          },
+        },
+        path: '/repo',
+        repoType: 'github',
+      },
+    });
+  });
+
+  it('records a worktree add shipped through the Codex zsh wrapper', async () => {
+    chatMocks.topics = { t1: PR_TOPIC };
+
+    await recordGitCommandEffects({
+      command: '/bin/zsh -lc "git worktree add -b feat/agent-testing-s3rver /Users/me/wt canary"',
+      topicId: 't1',
+    });
+
+    expect(chatMocks.updateTopicMetadata).toHaveBeenCalledWith('t1', {
+      workingDirectoryConfig: {
+        git: {
+          activeWorktree: '/Users/me/wt',
+          branch: 'feat/agent-testing-s3rver',
+          isWorktree: true,
+        },
+        path: '/repo',
+        repoType: 'github',
+      },
+    });
+  });
+
+  it('updates the branch from a wrapped git switch', async () => {
+    chatMocks.topics = { t1: PR_TOPIC };
+
+    await recordGitCommandEffects({
+      command: 'bash -lc "git switch fix/topic"',
+      topicId: 't1',
+    });
+
+    expect(chatMocks.updateTopicMetadata).toHaveBeenCalledWith('t1', {
+      workingDirectoryConfig: {
+        git: { branch: 'fix/topic' },
+        path: '/repo',
+        repoType: 'github',
+      },
+    });
+  });
+
+  it('binds a created PR from a wrapped gh pr create', async () => {
+    chatMocks.topics = { t1: PR_TOPIC };
+
+    await recordGitCommandEffects({
+      command: `/bin/zsh -lc "gh pr create --title 'Fix topic'"`,
+      resultContent: 'https://github.com/lobehub/lobehub/pull/456',
+      topicId: 't1',
+    });
+
+    expect(chatMocks.updateTopicMetadata).toHaveBeenCalledWith('t1', {
+      workingDirectoryConfig: {
+        git: {
+          github: {
+            pullRequest: {
               number: 456,
               state: 'OPEN',
               title: 'Fix topic',
