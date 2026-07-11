@@ -9,7 +9,8 @@
     "./client": "./src/client/index.ts",
     "./protocol": "./src/protocol/index.ts",
     "./resolveCliCommand": "./src/spawn/resolveCliCommand.ts",
-    "./spawn": "./src/spawn/index.ts"
+    "./spawn": "./src/spawn/index.ts",
+    "./transcript": "./src/transcript/index.ts"
   },
   "main": "./src/index.ts",
   "scripts": {

@@ -1,5 +1,7 @@
 import {
   chatTopicStatusSchema,
+  type HeteroSessionImportPayload,
+  heteroSessionImportPayloadSchema,
   type RecentTopic,
   type RecentTopicGroup,
   type RecentTopicGroupMember,
@@ -19,6 +21,7 @@ import { MessageModel } from '@/database/models/message';
 import { TopicModel } from '@/database/models/topic';
 import { TopicShareModel } from '@/database/models/topicShare';
 import { AgentMigrationRepo } from '@/database/repositories/agentMigration';
+import { HeteroSessionImporterRepo } from '@/database/repositories/heteroSessionImporter';
 import { TopicImporterRepo } from '@/database/repositories/topicImporter';
 import { chatGroups } from '@/database/schemas';
 import { router } from '@/libs/trpc/lambda';
@@ -43,6 +46,7 @@ const topicProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =>
       agentModel: new AgentModel(ctx.serverDB, ctx.userId, wsId),
       agentOperationModel: new AgentOperationModel(ctx.serverDB, ctx.userId, wsId),
       chatGroupModel: new ChatGroupModel(ctx.serverDB, ctx.userId, wsId),
+      heteroSessionImporterRepo: new HeteroSessionImporterRepo(ctx.serverDB, ctx.userId, wsId),
       topicImporterRepo: new TopicImporterRepo(ctx.serverDB, ctx.userId, wsId),
       topicModel: new TopicModel(ctx.serverDB, ctx.userId, wsId),
       topicShareModel: new TopicShareModel(ctx.serverDB, ctx.userId, wsId),
@@ -385,6 +389,33 @@ export const topicRouter = router({
   hasTopics: topicProcedure.query(async ({ ctx }) => {
     return (await ctx.topicModel.count()) === 0;
   }),
+
+  getHeteroSessionImportStatus: topicProcedure
+    .input(
+      z.object({
+        sessions: z.array(z.object({ sessionId: z.string(), topicClientId: z.string() })),
+      }),
+    )
+    .query(async ({ input, ctx }) => {
+      return ctx.heteroSessionImporterRepo.getImportStatus(input.sessions);
+    }),
+
+  importHeteroSessions: topicProcedure
+    .use(withScopedPermission('topic:create'))
+    .input(
+      z.object({
+        agentId: z.string(),
+        groupId: z.string().nullish(),
+        sessions: z.array(heteroSessionImportPayloadSchema),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      return ctx.heteroSessionImporterRepo.importSessions({
+        agentId: input.agentId,
+        groupId: input.groupId,
+        sessions: input.sessions as HeteroSessionImportPayload[],
+      });
+    }),
 
   importTopic: topicProcedure
     .use(withScopedPermission('topic:create'))
