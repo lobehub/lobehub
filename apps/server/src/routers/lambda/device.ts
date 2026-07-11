@@ -18,7 +18,7 @@ import { signWorkspaceDeviceToken } from '@/libs/trpc/utils/internalJwt';
 import { type DeviceAttachment, deviceGateway } from '@/server/services/deviceGateway';
 
 import { preserveWorkspaceCache } from './deviceWorkingDirs';
-import { assertWorkspaceRootApproved } from './deviceWorkspaceGuard';
+import { assertWorkspaceRootApproved, registerDeviceSkillRoots } from './deviceWorkspaceGuard';
 import { workingDirConfigSchema } from './workingDirSchema';
 
 // Derive the zod enum from the canonical config so new platforms are
@@ -526,6 +526,17 @@ export const deviceRouter = router({
         userId: ctx.userId,
         workspaceId: ctx.workspaceId,
       });
+
+      // Register device-scoped skill roots (~/.agents/skills / ~/.claude/skills)
+      // in an in-memory cache so subsequent getLocalFilePreview calls pass the
+      // workspace root guard without polluting the UI's working-directory list.
+      if (result?.skills) {
+        const skillRoots = [
+          ...new Set(result.skills.filter((s) => s.scope === 'device').map((s) => s.previewRoot)),
+        ].filter(Boolean);
+        registerDeviceSkillRoots(input.deviceId, skillRoots);
+      }
+
       return result ?? null;
     }),
 

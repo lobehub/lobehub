@@ -1,5 +1,3 @@
-import path from 'node:path';
-
 import { type DeviceAttachment } from '@lobechat/builtin-tool-remote-device';
 import {
   type DeviceMessageApiResult,
@@ -40,6 +38,7 @@ import type {
   WorkspaceInitResult,
 } from '@lobechat/types';
 import debug from 'debug';
+import { isAbsolute, relative, resolve } from 'pathe';
 
 import { gatewayEnv } from '@/envs/gateway';
 
@@ -49,15 +48,15 @@ const log = debug('lobe-server:device-gateway');
  * Is `target` the same as, or nested inside, `root`?
  *
  * The device's working directory may be a POSIX path (`/Users/…`) or a Windows
- * path (`C:\…`) while this check runs on the cloud server (POSIX). We pick the
- * path flavour from the root's shape so a Windows device path is still resolved
- * with Windows semantics rather than being mangled by `path.posix`.
+ * path (`C:\…` / `\\server\share`) while this check runs on the cloud server
+ * (POSIX). `pathe` auto-detects the path flavour per argument, so Windows
+ * device paths are resolved with Windows semantics without us branching on
+ * `path.win32` / `path.posix`.
  */
 export const isPathWithinRoot = (root: string, target: string): boolean => {
-  const p = /^[A-Z]:[/\\]/i.test(root) ? path.win32 : path.posix;
-  if (!p.isAbsolute(root) || !p.isAbsolute(target)) return false;
-  const relative = p.relative(p.resolve(root), p.resolve(target));
-  return relative === '' || (!relative.startsWith('..') && !p.isAbsolute(relative));
+  if (!isAbsolute(root) || !isAbsolute(target)) return false;
+  const rel = relative(resolve(root), resolve(target));
+  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
 };
 
 /**
