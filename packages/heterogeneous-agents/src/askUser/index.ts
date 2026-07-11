@@ -18,13 +18,6 @@ export {
   type PendingOptions,
 } from './AskUserBridge';
 export {
-  AskUserMcpServer,
-  type AskUserMcpServerOptions,
-  type McpExtraTool,
-  type McpToolResult,
-  type StartedServer,
-} from './AskUserMcpServer';
-export {
   ASK_USER_API_NAME,
   ASK_USER_MCP_SERVER_NAME,
   ASK_USER_TOOL_FULL_NAME,

@@ -20,8 +20,9 @@ import {
   CODEX_CLI_INSTALL_DOCS_URL,
   HeterogeneousAgentSessionErrorCode,
 } from '@lobechat/electron-client-ipc';
-import type { AskUserBridge, McpToolResult } from '@lobechat/heterogeneous-agents/askUser';
-import { AskUserMcpServer } from '@lobechat/heterogeneous-agents/askUser';
+import type { AskUserBridge } from '@lobechat/heterogeneous-agents/askUser';
+import type { McpToolResult } from '@lobechat/heterogeneous-agents/builtinMcp';
+import { LobeBuiltinMcpServer } from '@lobechat/heterogeneous-agents/builtinMcp';
 import type {
   AgentContentBlock,
   HeteroExecImageRef,
@@ -288,8 +289,8 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   /** Op → agent binding for browser MCP tool session resolution. */
   private opIdToAgentId = new Map<string, string>();
   /** Lazy single MCP server, started on first claude-code prompt. */
-  private askUserMcpServer?: AskUserMcpServer;
-  private askUserMcpStartPromise?: Promise<AskUserMcpServer>;
+  private builtinMcpServer?: LobeBuiltinMcpServer;
+  private builtinMcpStartPromise?: Promise<LobeBuiltinMcpServer>;
 
   private get remoteServerConfigCtr() {
     return this.app.getController(RemoteServerConfigCtr);
@@ -791,11 +792,11 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
    * the same listener. Concurrent first-callers de-dupe via the in-flight
    * promise so we don't bind two ports.
    */
-  private async ensureAskUserMcpServerStarted(): Promise<AskUserMcpServer> {
-    if (this.askUserMcpServer) return this.askUserMcpServer;
-    if (!this.askUserMcpStartPromise) {
-      this.askUserMcpStartPromise = (async () => {
-        const server = new AskUserMcpServer({
+  private async ensureBuiltinMcpServerStarted(): Promise<LobeBuiltinMcpServer> {
+    if (this.builtinMcpServer) return this.builtinMcpServer;
+    if (!this.builtinMcpStartPromise) {
+      this.builtinMcpStartPromise = (async () => {
+        const server = new LobeBuiltinMcpServer({
           // In-app browser control tools ride the same per-op MCP server so
           // CC can drive the browser sidebar (LOBE-11712 M3, hetero path).
           extraTools: buildBrowserMcpTools((operationId, apiName, args) =>
@@ -803,17 +804,17 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
           ),
         });
         await server.start();
-        this.askUserMcpServer = server;
+        this.builtinMcpServer = server;
         logger.info('AskUserQuestion MCP server started:', server.url);
         return server;
       })().catch((err) => {
         // Reset so a later sendPrompt can retry; surface the error.
-        this.askUserMcpStartPromise = undefined;
+        this.builtinMcpStartPromise = undefined;
         logger.error('Failed to start AskUserQuestion MCP server:', err);
         throw err;
       });
     }
-    return this.askUserMcpStartPromise;
+    return this.builtinMcpStartPromise;
   }
 
   /**
@@ -826,7 +827,7 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     operationId: string,
     agentId?: string,
   ): Promise<{ bridge: AskUserBridge; cleanup: () => Promise<void>; tmpConfigPath: string }> {
-    const server = await this.ensureAskUserMcpServerStarted();
+    const server = await this.ensureBuiltinMcpServerStarted();
     const bridge = server.registerOperation(operationId);
     if (agentId) this.opIdToAgentId.set(operationId, agentId);
     const tmpConfigPath = path.join(os.tmpdir(), `lobe-cc-mcp-${operationId}.json`);
@@ -852,7 +853,7 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     const cleanup = async () => {
       // Unregistering on the server cancels all bridge pendings AND closes
       // the events iterator (cancelAll fires from within unregisterOperation).
-      this.askUserMcpServer?.unregisterOperation(operationId);
+      this.builtinMcpServer?.unregisterOperation(operationId);
       await slot.pumpDone;
       this.opIdToIntervention.delete(operationId);
       this.opIdToAgentId.delete(operationId);
@@ -1728,7 +1729,7 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
       // CC's stdio close races shutdown we'd leave the MCP server bound to
       // a port. Stopping it here cancels every still-pending bridge with
       // `session_ended` and closes the listener.
-      void this.askUserMcpServer?.stop().catch((err) => {
+      void this.builtinMcpServer?.stop().catch((err) => {
         logger.warn('AskUserQuestion MCP server stop error:', err);
       });
     });

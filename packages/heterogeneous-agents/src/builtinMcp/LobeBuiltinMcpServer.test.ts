@@ -2,20 +2,24 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { AskUserBridge } from './AskUserBridge';
-import { AskUserMcpServer } from './AskUserMcpServer';
-import { ASK_USER_MCP_SERVER_NAME, ASK_USER_TOOL_FULL_NAME, ASK_USER_TOOL_NAME } from './constants';
+import { AskUserBridge } from '../askUser/AskUserBridge';
+import {
+  ASK_USER_MCP_SERVER_NAME,
+  ASK_USER_TOOL_FULL_NAME,
+  ASK_USER_TOOL_NAME,
+} from '../askUser/constants';
+import { LobeBuiltinMcpServer } from './LobeBuiltinMcpServer';
 
-let server: AskUserMcpServer;
+let server: LobeBuiltinMcpServer;
 
 afterEach(async () => {
   await server?.stop();
 });
 
-describe('AskUserMcpServer', () => {
+describe('LobeBuiltinMcpServer', () => {
   describe('lifecycle', () => {
     it('starts on port=0 (auto-assigned), exposes a localhost URL, stops cleanly', async () => {
-      server = new AskUserMcpServer();
+      server = new LobeBuiltinMcpServer();
       const { port, url } = await server.start();
       expect(port).toBeGreaterThan(0);
       expect(url).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/mcp$/);
@@ -26,7 +30,7 @@ describe('AskUserMcpServer', () => {
     });
 
     it('start() is idempotent', async () => {
-      server = new AskUserMcpServer();
+      server = new LobeBuiltinMcpServer();
       const a = await server.start();
       const b = await server.start();
       expect(a.port).toBe(b.port);
@@ -35,7 +39,7 @@ describe('AskUserMcpServer', () => {
 
   describe('per-op routing', () => {
     it('hasOperation / operationCount track register / unregister', async () => {
-      server = new AskUserMcpServer();
+      server = new LobeBuiltinMcpServer();
       await server.start();
 
       expect(server.operationCount).toBe(0);
@@ -54,14 +58,14 @@ describe('AskUserMcpServer', () => {
     });
 
     it('rejects double-registering the same op id', async () => {
-      server = new AskUserMcpServer();
+      server = new LobeBuiltinMcpServer();
       await server.start();
       server.registerOperation('op-1');
       expect(() => server.registerOperation('op-1')).toThrow(/already registered/);
     });
 
     it('urlForOperation appends ?op=<id> to the base url', async () => {
-      server = new AskUserMcpServer();
+      server = new LobeBuiltinMcpServer();
       await server.start();
       server.registerOperation('op-7');
       const url = server.urlForOperation('op-7');
@@ -70,7 +74,7 @@ describe('AskUserMcpServer', () => {
     });
 
     it('unregisterOperation cancels pending bridges', async () => {
-      server = new AskUserMcpServer();
+      server = new LobeBuiltinMcpServer();
       await server.start();
       const bridge = server.registerOperation('op-1');
 
@@ -84,7 +88,7 @@ describe('AskUserMcpServer', () => {
     });
 
     it('publishes the canonical mcp__lobe_cc__ask_user_question tool', async () => {
-      server = new AskUserMcpServer();
+      server = new LobeBuiltinMcpServer();
       await server.start();
       server.registerOperation('probe-op');
 
@@ -104,7 +108,7 @@ describe('AskUserMcpServer', () => {
 
   describe('end-to-end tool call', () => {
     it('routes a tools/call to the right per-op bridge and returns the user answer', async () => {
-      server = new AskUserMcpServer({ pendingTimeoutMs: 30_000, progressIntervalMs: 1000 });
+      server = new LobeBuiltinMcpServer({ pendingTimeoutMs: 30_000, progressIntervalMs: 1000 });
       await server.start();
       const bridge = server.registerOperation('op-A');
 
@@ -160,7 +164,7 @@ describe('AskUserMcpServer', () => {
     });
 
     it('returns an isError tool result when the user cancels', async () => {
-      server = new AskUserMcpServer({ pendingTimeoutMs: 30_000, progressIntervalMs: 1000 });
+      server = new LobeBuiltinMcpServer({ pendingTimeoutMs: 30_000, progressIntervalMs: 1000 });
       await server.start();
       const bridge = server.registerOperation('op-cancel');
 
@@ -205,7 +209,7 @@ describe('AskUserMcpServer', () => {
      * op after the first. Ensures we mint one transport+McpServer per session.
      */
     it('handles sequential ops on independent sessions', async () => {
-      server = new AskUserMcpServer({ pendingTimeoutMs: 30_000, progressIntervalMs: 1000 });
+      server = new LobeBuiltinMcpServer({ pendingTimeoutMs: 30_000, progressIntervalMs: 1000 });
       await server.start();
 
       for (const opId of ['op-seq-1', 'op-seq-2', 'op-seq-3']) {

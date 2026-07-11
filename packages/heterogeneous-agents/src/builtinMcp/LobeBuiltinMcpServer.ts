@@ -8,13 +8,13 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 
-import type { InterventionAnswer } from './AskUserBridge';
-import { AskUserBridge } from './AskUserBridge';
+import type { InterventionAnswer } from '../askUser/AskUserBridge';
+import { AskUserBridge } from '../askUser/AskUserBridge';
 import {
   ASK_USER_MCP_SERVER_NAME,
   ASK_USER_TOOL_NAME,
   DEFAULT_ASK_USER_TIMEOUT_MS,
-} from './constants';
+} from '../askUser/constants';
 
 /**
  * Mirrors CC's built-in `AskUserQuestion` schema. CC's schema:
@@ -98,7 +98,7 @@ export interface McpExtraTool {
   title?: string;
 }
 
-export interface AskUserMcpServerOptions {
+export interface LobeBuiltinMcpServerOptions {
   /**
    * Additional tools registered on every MCP session alongside
    * `ask_user_question` (e.g. the desktop's in-app browser control tools).
@@ -154,7 +154,7 @@ interface SessionEntry {
  * from the same CC subprocess (carrying `mcp-session-id`) route back to the
  * matching transport via `sessionTransports` lookup.
  */
-export class AskUserMcpServer {
+export class LobeBuiltinMcpServer {
   private httpServer?: http.Server;
   /** sessionId → transport+mcp pair. Populated on initialize, removed on session close. */
   private readonly sessionTransports = new Map<string, SessionEntry>();
@@ -172,7 +172,7 @@ export class AskUserMcpServer {
   private readonly pendingTimeoutMs: number;
   private readonly progressIntervalMs: number;
 
-  constructor(private readonly options: AskUserMcpServerOptions = {}) {
+  constructor(private readonly options: LobeBuiltinMcpServerOptions = {}) {
     this.pendingTimeoutMs = options.pendingTimeoutMs ?? DEFAULT_ASK_USER_TIMEOUT_MS;
     this.progressIntervalMs = options.progressIntervalMs ?? 30_000;
   }
@@ -180,7 +180,7 @@ export class AskUserMcpServer {
   /** URL only valid after `start()` resolves. */
   get url(): string {
     if (!this.startedUrl) {
-      throw new Error('AskUserMcpServer not started yet — call start() first');
+      throw new Error('LobeBuiltinMcpServer not started yet — call start() first');
     }
     return this.startedUrl;
   }
@@ -282,7 +282,7 @@ export class AskUserMcpServer {
    */
   registerOperation(operationId: string, bridge?: AskUserBridge): AskUserBridge {
     if (this.operations.has(operationId)) {
-      throw new Error(`AskUserMcpServer: operation already registered: ${operationId}`);
+      throw new Error(`LobeBuiltinMcpServer: operation already registered: ${operationId}`);
     }
     const created = bridge ?? new AskUserBridge(operationId);
     this.operations.set(operationId, { bridge: created });

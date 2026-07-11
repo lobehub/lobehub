@@ -1,4 +1,4 @@
-import type { McpExtraTool, McpToolResult } from '@lobechat/heterogeneous-agents/askUser';
+import type { McpExtraTool, McpToolResult } from '@lobechat/heterogeneous-agents/builtinMcp';
 import { z } from 'zod';
 
 /**
@@ -28,7 +28,7 @@ interface BrowserMcpToolSpec {
  * (same convention as GatewayConnectionCtr's `BrowserIdentifier` mirror), so
  * the schemas are restated here as zod shapes for the MCP SDK.
  */
-const BROWSER_MCP_TOOLS: BrowserMcpToolSpec[] = [
+export const BROWSER_MCP_TOOLS: BrowserMcpToolSpec[] = [
   {
     apiName: 'navigate',
     description:
