@@ -826,6 +826,13 @@
       "when": 1783760291530,
       "tag": "0117_workspace_user_settings_and_device_share",
       "breakpoints": true
+    },
+    {
+      "idx": 118,
+      "version": "7",
+      "when": 1783773134101,
+      "tag": "0118_workspace_user_settings_surrogate_pk",
+      "breakpoints": true
     }
   ],
   "version": "6"
