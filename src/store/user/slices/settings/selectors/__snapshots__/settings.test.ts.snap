@@ -120,6 +120,9 @@ exports[`settingsSelectors > currentTTS > should merge DEFAULT_TTS_CONFIG and s.
 exports[`settingsSelectors > defaultAgent > should merge DEFAULT_AGENT and s.settings.defaultAgent correctly 1`] = `
 {
   "config": {
+    "agencyConfig": {
+      "executionTarget": "auto",
+    },
     "chatConfig": {
       "enableAgentMode": true,
       "enableCompressHistory": true,
@@ -167,6 +170,9 @@ exports[`settingsSelectors > defaultAgent > should merge DEFAULT_AGENT and s.set
 
 exports[`settingsSelectors > defaultAgentConfig > should merge DEFAULT_AGENT_CONFIG and defaultAgent(s).config correctly 1`] = `
 {
+  "agencyConfig": {
+    "executionTarget": "auto",
+  },
   "chatConfig": {
     "enableAgentMode": true,
     "enableCompressHistory": true,

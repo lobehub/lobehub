@@ -10,6 +10,8 @@ import type {
   BrowserControlScrollParams,
   BrowserControlSnapshotResult,
   BrowserControlWaitForParams,
+  BrowserGatewayToolResultParams,
+  BrowserToolCallResult,
 } from '@lobechat/electron-client-ipc';
 import type { WebContents } from 'electron';
 
@@ -27,6 +29,9 @@ const CONTROL_IDLE_MS = 1500;
 const MAX_WAIT_MS = 10_000;
 const SCREENSHOT_MAX_WIDTH = 1200;
 const READ_PAGE_MAX_CHARS = 12_000;
+// A gateway-proxied browser call may include a navigation + mount, so give the
+// renderer executor generous headroom before giving up.
+const GATEWAY_CALL_TIMEOUT_MS = 60_000;
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -126,6 +131,69 @@ export default class BrowserControlCtr extends ControllerModule {
   static override readonly groupName = 'browserControl';
 
   private idleTimers = new Map<string, NodeJS.Timeout>();
+  private pendingGatewayCalls = new Map<
+    string,
+    { reject: (reason: Error) => void; resolve: (result: BrowserToolCallResult) => void }
+  >();
+  private gatewayCallSeq = 0;
+
+  /**
+   * Entry for cloud-agent (gateway) browser tool calls routed back to this
+   * device. Forwards the call to the renderer, which runs the same client
+   * `browserExecutor` used for local runs — so the mount / snapshot / click
+   * logic has one source of truth. Resolves with the executor's result.
+   */
+  async runGatewayToolCall(
+    apiName: string,
+    args: Record<string, unknown>,
+  ): Promise<BrowserToolCallResult> {
+    const { __agentId: agentId, ...toolArgs } = args as { __agentId?: string };
+    if (!agentId) {
+      return { content: 'Browser tool call is missing the agent context', success: false };
+    }
+
+    const win = this.app.browserManager.getMainWindow();
+    if (!win) {
+      return { content: 'The desktop app window is not available', success: false };
+    }
+
+    this.gatewayCallSeq += 1;
+    const requestId = `bgw_${this.gatewayCallSeq}`;
+
+    return new Promise<BrowserToolCallResult>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingGatewayCalls.delete(requestId);
+        reject(new Error('Browser tool call timed out'));
+      }, GATEWAY_CALL_TIMEOUT_MS);
+
+      this.pendingGatewayCalls.set(requestId, {
+        reject: (reason) => {
+          clearTimeout(timer);
+          reject(reason);
+        },
+        resolve: (result) => {
+          clearTimeout(timer);
+          resolve(result);
+        },
+      });
+
+      win.broadcast('browserSidebarGatewayToolCall', {
+        agentId,
+        apiName,
+        args: toolArgs,
+        requestId,
+      });
+    }).catch((error: Error) => ({ content: error.message, success: false }));
+  }
+
+  /** Renderer reports the executor result for a proxied gateway tool call. */
+  @IpcMethod()
+  reportGatewayToolResult(params: BrowserGatewayToolResultParams): void {
+    const pending = this.pendingGatewayCalls.get(params.requestId);
+    if (!pending) return;
+    this.pendingGatewayCalls.delete(params.requestId);
+    pending.resolve(params.result);
+  }
 
   @IpcMethod()
   async snapshot(params: BrowserControlParams): Promise<BrowserControlSnapshotResult> {

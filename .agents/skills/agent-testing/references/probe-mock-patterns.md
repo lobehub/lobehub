@@ -973,3 +973,14 @@ nodeintegration, plugins, disablewebsecurity, allowpopups, preload, …`). The h
   to the `webview` target (`agent-browser screenshot` there) when the embedded page's visual
   matters. Use host-page screenshots only for the app chrome around the webview. Cause of the
   black compositing not established (OOPIF surface not composited into the host capture).
+### E18. Cloud-connected desktop routes even `local` agents to the SERVER runtime — force client with `disableGatewayMode`
+
+- **Situation**: verifying a **client-only** builtin tool (`executors: ['client']`) via a real agent turn on the desktop. The agent's `executionTarget` is `local` and the tool-enable gate (`isLocalSystemEnabled` = runtime `local`) passes, so it _looks_ like it will run client-side.
+- **Doesn't work**: sending the message as-is. On a cloud-connected desktop, gateway mode is on by default, so the run dispatches to `execServerAgentRuntime` (server/queue path) even for a `local` agent. The client-only tool isn't executable there — the model flails and returns a non-answer (e.g. "browser closed") with no real tool effect. Confirm the path by reading the running op's `type` in `window.__LOBE_STORES.chat().operations` (`execServerAgentRuntime` = server; `executeToolCall` = client).
+- **Works**: set the agent's `chatConfig.disableGatewayMode = true` (via `agentStore.updateAgentChatConfigById(id, { disableGatewayMode: true })`) before sending. The run then goes through `executeToolCall` (client runtime); the composer's runtime chip flips to "Local device" and the client executor runs. The gate (`isLocalSystemEnabled`) and the transport (`disableGatewayMode`) are INDEPENDENT — enabling the tool does not force client execution.
+
+### E19. Desktop has no classic session store — reconfigure the existing agent, don't `createSession`
+
+- **Situation**: wanting a throwaway agent for a real-turn test without polluting the user's agent.
+- **Doesn't work**: `sessionStore.createSession({...})` — the desktop app doesn't use the classic session store (`sessions` is `[]`, `activeId` is `'inbox'`); agents are a server-backed model in `agentStore.agentMap` keyed by `agt_...`. The created session never becomes the active agent.
+- **Works**: back up the active agent's full config (`model`, `provider`, `agencyConfig`, relevant `chatConfig`), reconfigure it in place (`updateAgentConfigById` + `updateAgentChatConfigById`), run the test, then restore every field and clear any injected key-vault entry. Also: `chat.sendMessage` requires `context: { agentId, topicId, isNew }` or it throws `Cannot destructure property 'agentId' of 'context'`. Reads right after an `updateAgent*` can be stale — re-read after \~1.5s to confirm persistence.

@@ -61,6 +61,30 @@ export interface BrowserControlWaitForParams extends BrowserControlParams {
   text?: string;
 }
 
+export interface BrowserToolCallResult {
+  content?: string;
+  error?: { body?: unknown; message: string; type: string };
+  state?: unknown;
+  success: boolean;
+}
+
+/**
+ * A browser tool call proxied from a cloud agent run back to this device.
+ * The renderer runs the client `browserExecutor` and reports the result via
+ * `reportGatewayToolResult`, keyed by `requestId`.
+ */
+export interface BrowserGatewayToolCallPayload {
+  agentId: string;
+  apiName: string;
+  args: Record<string, unknown>;
+  requestId: string;
+}
+
+export interface BrowserGatewayToolResultParams {
+  requestId: string;
+  result: BrowserToolCallResult;
+}
+
 export interface BrowserSidebarAgentStatePayload {
   active: boolean;
   sessionId: string;

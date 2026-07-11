@@ -40,6 +40,14 @@ export const DEFAULT_AGENT_CHAT_CONFIG: LobeAgentChatConfig = {
 };
 
 export const DEFAULT_AGENT_CONFIG: LobeAgentConfig = {
+  // Default to cloud/device execution: `auto` auto-activates the single online
+  // device, so a desktop agent runs via the gateway routed to that desktop
+  // (enabling device tools like the in-app browser out of the box), and a
+  // web/mobile agent transparently drives the user's online desktop device —
+  // the cross-device default. With no device online it degrades to
+  // `device-unrouted` (the model can still chat / activate a device), never an
+  // error. Chat-mode agents stay `none` regardless (see resolveExecutionPlan).
+  agencyConfig: { executionTarget: 'auto' },
   chatConfig: DEFAULT_AGENT_CHAT_CONFIG,
   model: DEFAULT_MODEL,
   openingQuestions: [],

@@ -125,7 +125,9 @@ export const BrowserManifest: BuiltinToolManifest = {
       },
     },
   ],
-  executors: ['client'],
+  // `client`: runs in the desktop renderer (local runtime). `server`: cloud
+  // agent runs proxy each call back to the bound device via deviceGateway.
+  executors: ['client', 'server'],
   identifier: BrowserIdentifier,
   meta: {
     avatar: '🌐',
