@@ -31,8 +31,8 @@ Location: `packages/database/src/schemas/_helpers.ts`
 
 ## Naming Conventions
 
-- **Tables**: Plural snake_case (`users`, `session_groups`)
-- **Columns**: snake_case (`user_id`, `created_at`)
+- **Tables**: Plural snake\_case (`users`, `session_groups`)
+- **Columns**: snake\_case (`user_id`, `created_at`)
 - **New tables**: Check nearby existing tables before naming a new one. Preserve
   the established noun family and suffix. For example, if the user-scoped table
   is `user_xxx_logs`, the workspace-scoped counterpart should be
@@ -269,7 +269,12 @@ export const agentsKnowledgeBases = pgTable(
     enabled: boolean('enabled').default(true),
     ...timestamps,
   },
-  (t) => [uniqueIndex('agents_knowledge_bases_agent_id_knowledge_base_id_unique').on(t.agentId, t.knowledgeBaseId)],
+  (t) => [
+    uniqueIndex('agents_knowledge_bases_agent_id_knowledge_base_id_unique').on(
+      t.agentId,
+      t.knowledgeBaseId,
+    ),
+  ],
 );
 ```
 
