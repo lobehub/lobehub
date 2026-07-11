@@ -1123,6 +1123,96 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
   });
 
   // ────────────────────────────────────────────────────
+  // Lost-write recovery — the tpc_mMYve6mAIT4J incident
+  // ────────────────────────────────────────────────────
+
+  describe('lost-write recovery (FK cascade)', () => {
+    /**
+     * End-to-end replay of the original incident against a fake table that
+     * enforces the two invariants the real `messages` table does:
+     *   - `parent_id` is a FK: a create whose parent row is absent throws 23503.
+     *   - an update whose id matches no row reports `success: false` (a lost
+     *     write, not a no-op) — the semantic this PR restored.
+     *
+     * A single transient `createMessage` failure orphans the seed of a spine
+     * chain (`asst → asst → asst …`); every later assistant then fails the FK,
+     * and every content flush in between lands on a row that does not exist.
+     * The fix must recover ALL of it: replay the creates in dependency order,
+     * then replay the content the zero-row updates stashed.
+     */
+    const makeFakeTable = (seedId: string) => {
+      const rows = new Map<string, any>([[seedId, { content: '', id: seedId, role: 'assistant' }]]);
+      let firstAssistantBlipped = false;
+
+      const create = async (params: any) => {
+        // Seed the cascade: the first fresh assistant create fails once, exactly
+        // like the single dropped write that started the real incident.
+        if (params.role === 'assistant' && !firstAssistantBlipped) {
+          firstAssistantBlipped = true;
+          throw new Error('transient write failure');
+        }
+        if (params.parentId && !rows.has(params.parentId)) {
+          throw new Error(`FK violation: parent ${params.parentId} is absent`);
+        }
+        rows.set(params.id, { ...params, content: params.content ?? '' });
+        return { id: params.id };
+      };
+
+      const update = async (id: string, value: any) => {
+        const row = rows.get(id);
+        if (!row) return { success: false };
+        Object.assign(row, value);
+        return { success: true };
+      };
+
+      return { create, rows, update };
+    };
+
+    it('recovers every assistant + its content after a create failure cascades down the spine', async () => {
+      const store = createMockStore({
+        dbMessagesMap: {
+          'main_agent-1_topic-1': [
+            { content: '', id: 'ast-initial', role: 'assistant', topicId: 'topic-1' },
+          ],
+        },
+      });
+      const table = makeFakeTable('ast-initial');
+      mockCreateMessage.mockImplementation(table.create);
+      mockUpdateMessage.mockImplementation(table.update);
+
+      // msg_01 reuses the seed; msg_02..04 are fresh spine assistants, each
+      // parented off the previous one — so orphaning msg_02 takes 03 and 04 too.
+      const texts = {
+        msg_01: 'seed turn answer',
+        msg_02: 'first fresh turn',
+        msg_03: 'second fresh turn',
+        msg_04: 'final answer that must survive',
+      };
+      await runWithEvents(
+        [
+          ccInit(),
+          ccText('msg_01', texts.msg_01),
+          ccText('msg_02', texts.msg_02),
+          ccText('msg_03', texts.msg_03),
+          ccText('msg_04', texts.msg_04),
+          ccResult(),
+        ],
+        { store },
+      );
+
+      // Every assistant turn is present AND carries its text — no empty shells,
+      // nothing dropped. This is the exact assertion that fails pre-fix: the
+      // content updates "succeeded" against absent rows, so the ledger that
+      // would have replayed them stayed empty.
+      const persistedContent = [...table.rows.values()]
+        .filter((r) => r.role === 'assistant')
+        .map((r) => r.content)
+        .sort();
+      expect(persistedContent).toEqual(Object.values(texts).sort());
+    });
+  });
+
+  // ────────────────────────────────────────────────────
   // Error handling
   // ────────────────────────────────────────────────────
 
