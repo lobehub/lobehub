@@ -1,5 +1,6 @@
 import type { AgentRuntimeHost } from '@lobechat/agent-runtime';
 
+import { ServerBlobStore } from './adapters/ServerBlobStore';
 import { ServerCompressionTransport } from './adapters/ServerCompressionTransport';
 import { ServerContextBuilder } from './adapters/ServerContextBuilder';
 import { ServerLifecycleSink } from './adapters/ServerLifecycleSink';
@@ -19,40 +20,46 @@ import { buildPostProcessUrl } from './executorHelpers';
  * is the "server only registers adapters" seam — package-hosted executors take
  * the host instead of the raw ctx.
  *
- * Grows as more executors migrate (tools / llm / context / blob / lifecycle
- * adapters get added here); today it covers the transport-backed lightweight
- * executors such as `finish`, `request_human_approve`, and `resolve_*`.
+ * Keep concrete service construction here so package executors only see narrow
+ * message, model, context, blob, stream, operation, and tool ports.
  */
-export const buildHost = (ctx: RuntimeExecutorContext): AgentRuntimeHost => ({
-  // Only present when the operation registered hooks — mirrors the prior
-  // `if (ctx.hookDispatcher)` guard in the human-approve executor.
-  lifecycle: ctx.hookDispatcher
-    ? new ServerLifecycleSink(ctx.hookDispatcher, ctx.operationId)
-    : undefined,
-  operation: {
-    operationId: ctx.operationId,
-    stepIndex: ctx.stepIndex,
-    topicId: ctx.topicId,
-    userId: ctx.userId,
-    workspaceId: ctx.workspaceId,
-  },
-  transports: {
-    compression: ctx.userId
-      ? new ServerCompressionTransport(ctx.serverDB, ctx.userId, ctx.workspaceId)
+export const buildHost = (ctx: RuntimeExecutorContext): AgentRuntimeHost => {
+  const blob = ctx.userId
+    ? new ServerBlobStore(ctx.serverDB, ctx.userId, ctx.workspaceId)
+    : undefined;
+
+  return {
+    // Only present when the operation registered hooks — mirrors the prior
+    // `if (ctx.hookDispatcher)` guard in the human-approve executor.
+    lifecycle: ctx.hookDispatcher
+      ? new ServerLifecycleSink(ctx.hookDispatcher, ctx.operationId)
       : undefined,
-    context: new ServerContextBuilder(ctx),
-    llm: ctx.userId ? new ServerLLMTransport(ctx) : undefined,
-    messages: new ServerMessageTransport(ctx.messageModel, {
-      postProcessUrl: buildPostProcessUrl(ctx),
-    }),
-    operationStore: new ServerOperationStore(
-      ctx.serverDB,
-      ctx.userId,
-      ctx.workspaceId,
-      ctx.topicId,
-    ),
-    stream: new ServerStreamSink(ctx.streamManager, ctx.operationId),
-    subAgent: ctx.execSubAgent ? new ServerSubAgentTransport(ctx) : undefined,
-    tools: new ServerToolTransport(ctx),
-  },
-});
+    operation: {
+      operationId: ctx.operationId,
+      stepIndex: ctx.stepIndex,
+      topicId: ctx.topicId,
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+    },
+    transports: {
+      blob,
+      compression: ctx.userId
+        ? new ServerCompressionTransport(ctx.serverDB, ctx.userId, ctx.workspaceId)
+        : undefined,
+      context: new ServerContextBuilder(ctx),
+      llm: ctx.userId ? new ServerLLMTransport(ctx, blob) : undefined,
+      messages: new ServerMessageTransport(ctx.messageModel, {
+        postProcessUrl: buildPostProcessUrl(ctx),
+      }),
+      operationStore: new ServerOperationStore(
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId,
+        ctx.topicId,
+      ),
+      stream: new ServerStreamSink(ctx.streamManager, ctx.operationId),
+      subAgent: ctx.execSubAgent ? new ServerSubAgentTransport(ctx) : undefined,
+      tools: new ServerToolTransport(ctx),
+    },
+  };
+};

@@ -1,4 +1,4 @@
-import type { AgentEvent } from '@lobechat/agent-runtime';
+import type { AgentEvent, BlobStore } from '@lobechat/agent-runtime';
 import { ToolNameResolver } from '@lobechat/context-engine';
 import type { ChatMethodOptions, ModelRuntime } from '@lobechat/model-runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -20,12 +20,6 @@ vi.mock('@/envs/file', () => ({
   fileEnv: { NEXT_PUBLIC_S3_FILE_PATH: 'files' },
 }));
 
-vi.mock('@/server/services/file', () => ({
-  FileService: vi.fn().mockImplementation(() => ({
-    uploadBase64: vi.fn(),
-  })),
-}));
-
 const toolName = new ToolNameResolver().generate('workspace', 'search', 'builtin');
 const resolved = {
   enabledToolIds: ['workspace'],
@@ -45,7 +39,10 @@ const resolved = {
   ],
 } as ServerCallLlmTooling['resolved'];
 
-const createAttempt = (runCallbacks: (options: ChatMethodOptions) => Promise<void>) => {
+const createAttempt = (
+  runCallbacks: (options: ChatMethodOptions) => Promise<void>,
+  blobStore?: BlobStore,
+) => {
   const publishStreamChunk = vi.fn().mockResolvedValue('event-1');
   const streamManager = {
     publishStreamChunk,
@@ -68,6 +65,7 @@ const createAttempt = (runCallbacks: (options: ChatMethodOptions) => Promise<voi
   const onFirstChunk = vi.fn();
   const attempt = createServerCallLlmAttempt({
     attempt: 1,
+    blobStore,
     chatPayload: {
       messages: [{ content: 'Question', role: 'user' }],
       model: 'test-model',
@@ -119,18 +117,20 @@ describe('ServerCallLlmAttempt', () => {
 
     await attempt.execute();
 
-    expect(attempt.streamSink.content).toBe('Visible answer');
-    expect(attempt.streamSink.thinkingContent).toBe('Reasoning');
-    expect(attempt.grounding).toEqual({ searchQueries: ['docs'] });
-    expect(attempt.finishReason).toBe('tool_use');
-    expect(attempt.speed).toEqual({ tps: 20, ttft: 100 });
-    expect(attempt.usage).toEqual({
+    const snapshot = attempt.snapshot();
+
+    expect(snapshot.content).toBe('Visible answer');
+    expect(snapshot.reasoning).toBe('Reasoning');
+    expect(snapshot.grounding).toEqual({ searchQueries: ['docs'] });
+    expect(snapshot.finishReason).toBe('tool_use');
+    expect(snapshot.speed).toEqual({ tps: 20, ttft: 100 });
+    expect(snapshot.usage).toEqual({
       totalInputTokens: 10,
       totalOutputTokens: 5,
       totalTokens: 15,
     });
-    expect(attempt.toolCalls).toEqual([rawToolCall]);
-    expect(attempt.toolsCalling).toEqual([
+    expect(snapshot.toolCalls).toEqual([rawToolCall]);
+    expect(snapshot.toolsCalling).toEqual([
       expect.objectContaining({
         apiName: 'search',
         executor: 'server',
@@ -172,10 +172,14 @@ describe('ServerCallLlmAttempt', () => {
       message: 'LLM stream error: provider stream failed',
       status: 503,
     });
-    attempt.streamSink.clearBuffers();
+    attempt.clearBuffers();
 
-    expect(attempt.streamSink.content).toBe('Partial answer');
-    expect(attempt.usage).toEqual({ totalOutputTokens: 3 });
+    expect(attempt.snapshot()).toEqual(
+      expect.objectContaining({
+        content: 'Partial answer',
+        usage: { totalOutputTokens: 3 },
+      }),
+    );
   });
 
   it('salvages a natural-stop answer emitted only in reasoning', async () => {
@@ -190,8 +194,51 @@ describe('ServerCallLlmAttempt', () => {
 
     await attempt.execute();
 
-    expect(attempt.answerSalvagedFromReasoning).toBe(true);
-    expect(attempt.streamSink.content).toBe('Final answer from reasoning');
-    expect(attempt.streamSink.thinkingContent).toBe('');
+    expect(attempt.snapshot()).toEqual(
+      expect.objectContaining({
+        answerSalvagedFromReasoning: true,
+        content: 'Final answer from reasoning',
+        reasoning: '',
+      }),
+    );
+  });
+
+  it('persists generated images through BlobStore and snapshots the resolved URL', async () => {
+    const blobStore: BlobStore = {
+      persistBase64: vi.fn().mockResolvedValue({
+        fileId: 'file-1',
+        key: 'files/generations/image.png',
+        url: 'https://files.example/image.png',
+      }),
+      resolveUrl: vi.fn(),
+    };
+    const { attempt } = createAttempt(async ({ callback }) => {
+      await callback?.onContentPart?.({ content: 'Generated image:', partType: 'text' });
+      await callback?.onContentPart?.({
+        content: 'BASE64_IMAGE',
+        mimeType: 'image/png',
+        partType: 'image',
+      });
+      await callback?.onCompletion?.({
+        text: '',
+        usage: { totalOutputTokens: 1 },
+      });
+    }, blobStore);
+
+    await attempt.execute();
+
+    expect(blobStore.persistBase64).toHaveBeenCalledWith(
+      'BASE64_IMAGE',
+      expect.stringMatching(/files\/generations\/.+\.png$/),
+    );
+    expect(attempt.snapshot()).toEqual(
+      expect.objectContaining({
+        contentParts: [
+          { text: 'Generated image:', type: 'text' },
+          { image: 'https://files.example/image.png', type: 'image' },
+        ],
+        hasContentImages: true,
+      }),
+    );
   });
 });
