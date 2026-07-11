@@ -34,7 +34,7 @@ vi.mock('@/utils/net-fetch', () => ({ netFetch: vi.fn() }));
 vi.mock('@/utils/file-system', () => ({ makeSureDirExist: vi.fn() }));
 
 const mockUploadService = {
-  uploadFileBuffer: vi.fn(),
+  uploadLocalFile: vi.fn(),
 };
 
 const mockApp = {
@@ -146,7 +146,7 @@ describe('LocalFileCtr — readFile / readFiles (real fs)', () => {
     const pngBytes = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
 
     it('should upload the image in main and return a durable reference', async () => {
-      mockUploadService.uploadFileBuffer.mockResolvedValue({
+      mockUploadService.uploadLocalFile.mockResolvedValue({
         id: 'file-1',
         url: 'https://files.example.com/cat.png',
       });
@@ -155,11 +155,7 @@ describe('LocalFileCtr — readFile / readFiles (real fs)', () => {
 
       const result = await localFileCtr.readFile({ path: filePath });
 
-      expect(mockUploadService.uploadFileBuffer).toHaveBeenCalledWith({
-        buffer: pngBytes,
-        fileName: 'cat.png',
-        fileType: 'image/png',
-      });
+      expect(mockUploadService.uploadLocalFile).toHaveBeenCalledWith(filePath);
       expect(result.isImage).toBe(true);
       expect(result.fileType).toBe('image/png');
       expect(result.imageFileId).toBe('file-1');
@@ -168,7 +164,7 @@ describe('LocalFileCtr — readFile / readFiles (real fs)', () => {
     });
 
     it('should resolve a relative image path against cwd', async () => {
-      mockUploadService.uploadFileBuffer.mockResolvedValue({
+      mockUploadService.uploadLocalFile.mockResolvedValue({
         id: 'file-2',
         url: 'https://files.example.com/nested.jpg',
       });
@@ -178,13 +174,15 @@ describe('LocalFileCtr — readFile / readFiles (real fs)', () => {
 
       const result = await localFileCtr.readFile({ cwd: tmpDir, path: 'assets/nested.jpg' });
 
+      // The CLI receives the resolved absolute path, not the relative one.
+      expect(mockUploadService.uploadLocalFile).toHaveBeenCalledWith(filePath);
       expect(result.isImage).toBe(true);
       expect(result.fileType).toBe('image/jpeg');
       expect(result.imageUrl).toBe('https://files.example.com/nested.jpg');
     });
 
     it('should degrade to a placeholder when the upload is declined', async () => {
-      mockUploadService.uploadFileBuffer.mockResolvedValue(undefined);
+      mockUploadService.uploadLocalFile.mockResolvedValue(undefined);
       const filePath = path.join(tmpDir, 'declined.png');
       await writeFile(filePath, pngBytes);
 
@@ -197,7 +195,7 @@ describe('LocalFileCtr — readFile / readFiles (real fs)', () => {
     });
 
     it('should degrade to a placeholder when the upload throws', async () => {
-      mockUploadService.uploadFileBuffer.mockRejectedValue(new Error('network down'));
+      mockUploadService.uploadLocalFile.mockRejectedValue(new Error('network down'));
       const filePath = path.join(tmpDir, 'failed.png');
       await writeFile(filePath, pngBytes);
 
@@ -214,7 +212,7 @@ describe('LocalFileCtr — readFile / readFiles (real fs)', () => {
       expect(result.isImage).toBe(true);
       expect(result.imageUrl).toBeUndefined();
       expect(result.content).toContain('Error accessing or processing file');
-      expect(mockUploadService.uploadFileBuffer).not.toHaveBeenCalled();
+      expect(mockUploadService.uploadLocalFile).not.toHaveBeenCalled();
     });
 
     it('should refuse oversized images instead of loading them', async () => {
@@ -226,7 +224,7 @@ describe('LocalFileCtr — readFile / readFiles (real fs)', () => {
       expect(result.isImage).toBe(true);
       expect(result.imageUrl).toBeUndefined();
       expect(result.content).toContain('too large');
-      expect(mockUploadService.uploadFileBuffer).not.toHaveBeenCalled();
+      expect(mockUploadService.uploadLocalFile).not.toHaveBeenCalled();
     });
 
     it('should read svg as text, not as an image', async () => {

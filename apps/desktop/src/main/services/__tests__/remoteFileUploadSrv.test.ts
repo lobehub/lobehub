@@ -4,6 +4,24 @@ import { type App } from '@/core/App';
 
 import RemoteFileUploadService from '../remoteFileUploadSrv';
 
+const { execFileMock } = vi.hoisted(() => ({
+  execFileMock: vi.fn(),
+}));
+
+vi.mock('node:child_process', () => ({
+  execFile: execFileMock,
+}));
+
+// promisify(execFile) uses the custom-promisify symbol when present; easiest
+// is to make the mock already promisified.
+vi.mock('node:util', () => ({
+  promisify: (fn: any) => fn,
+}));
+
+vi.mock('@/modules/cliEmbedding', () => ({
+  resolveCliScript: () => '/app/resources/bin/lobe-cli.js',
+}));
+
 vi.mock('@/utils/logger', () => ({
   createLogger: () => ({
     debug: vi.fn(),
@@ -11,10 +29,6 @@ vi.mock('@/utils/logger', () => ({
     info: vi.fn(),
     warn: vi.fn(),
   }),
-}));
-
-vi.mock('@/utils/user-agent', () => ({
-  setDesktopUserAgentHeader: vi.fn(),
 }));
 
 const mockRemoteServerConfigCtr = {
@@ -26,94 +40,66 @@ const mockApp = {
   getController: vi.fn(() => mockRemoteServerConfigCtr),
 } as unknown as App;
 
-const fetchMock = vi.fn();
-
-/** Build a trpc lambda response envelope (superjson: `{ json }`). */
-const trpcResponse = (json: unknown) => ({
-  json: async () => ({ result: { data: { json } } }),
-  ok: true,
-});
-
-describe('RemoteFileUploadService.uploadFileBuffer', () => {
+describe('RemoteFileUploadService.uploadLocalFile', () => {
   let service: RemoteFileUploadService;
-  const input = {
-    buffer: Buffer.from('image-bytes'),
-    fileName: 'cat.png',
-    fileType: 'image/png',
-  };
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.stubGlobal('fetch', fetchMock);
-    mockRemoteServerConfigCtr.getRemoteServerUrl.mockResolvedValue('https://server.example.com');
+    mockRemoteServerConfigCtr.getRemoteServerUrl.mockResolvedValue('https://server.example.com/');
     mockRemoteServerConfigCtr.getAccessToken.mockResolvedValue('token-abc');
     service = new RemoteFileUploadService(mockApp);
   });
 
-  it('declines (returns undefined) without an active remote session', async () => {
-    mockRemoteServerConfigCtr.getAccessToken.mockResolvedValue(null);
+  it('runs the embedded CLI with the desktop session injected and parses the record', async () => {
+    execFileMock.mockResolvedValue({
+      stdout: JSON.stringify({ id: 'file-1', url: 'https://files.example.com/cat.png' }),
+    });
 
-    expect(await service.uploadFileBuffer(input)).toBeUndefined();
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-  it('uploads via pre-signed PUT and creates the file record', async () => {
-    fetchMock
-      // 1. file.checkFileHash → miss
-      .mockResolvedValueOnce(trpcResponse({ isExist: false }))
-      // 2. upload.createS3PreSignedUrl
-      .mockResolvedValueOnce(trpcResponse('https://s3.example.com/presigned'))
-      // 3. S3 PUT
-      .mockResolvedValueOnce({ ok: true })
-      // 4. file.createFile
-      .mockResolvedValueOnce(
-        trpcResponse({ id: 'file-1', url: 'https://files.example.com/cat.png' }),
-      );
-
-    const record = await service.uploadFileBuffer(input);
+    const record = await service.uploadLocalFile('/tmp/cat.png');
 
     expect(record).toEqual({ id: 'file-1', url: 'https://files.example.com/cat.png' });
 
-    const [hashUrl, hashInit] = fetchMock.mock.calls[0];
-    expect(hashUrl).toBe('https://server.example.com/trpc/lambda/file.checkFileHash');
-    expect(hashInit.headers['Oidc-Auth']).toBe('token-abc');
-    expect(JSON.parse(hashInit.body).json.hash).toMatch(/^[0-9a-f]{64}$/);
-
-    const [putUrl, putInit] = fetchMock.mock.calls[2];
-    expect(putUrl).toBe('https://s3.example.com/presigned');
-    expect(putInit.method).toBe('PUT');
-    expect(putInit.headers['Content-Type']).toBe('image/png');
-
-    const [createUrl, createInit] = fetchMock.mock.calls[3];
-    expect(createUrl).toBe('https://server.example.com/trpc/lambda/file.createFile');
-    const createBody = JSON.parse(createInit.body).json;
-    expect(createBody.name).toBe('cat.png');
-    expect(createBody.fileType).toBe('image/png');
-    expect(createBody.url).toMatch(/^files\/\d{4}-\d{2}-\d{2}\/[0-9a-f]{64}\.png$/);
+    const [execPath, args, opts] = execFileMock.mock.calls[0];
+    expect(execPath).toBe(process.execPath);
+    expect(args).toEqual([
+      '/app/resources/bin/lobe-cli.js',
+      'file',
+      'upload',
+      '/tmp/cat.png',
+      '--json',
+      'id,url',
+    ]);
+    expect(opts.env.ELECTRON_RUN_AS_NODE).toBe('1');
+    expect(opts.env.LOBEHUB_JWT).toBe('token-abc');
+    // Trailing slash is stripped for LOBEHUB_SERVER.
+    expect(opts.env.LOBEHUB_SERVER).toBe('https://server.example.com');
   });
 
-  it('skips the S3 upload when the hash already exists', async () => {
-    fetchMock
-      .mockResolvedValueOnce(trpcResponse({ isExist: true, url: 'files/2026-07-11/dedup.png' }))
-      .mockResolvedValueOnce(
-        trpcResponse({ id: 'file-2', url: 'https://files.example.com/dedup.png' }),
-      );
+  it('still runs without a desktop session — lh falls back to its own login', async () => {
+    mockRemoteServerConfigCtr.getAccessToken.mockResolvedValue(null);
+    execFileMock.mockResolvedValue({
+      stdout: JSON.stringify({ id: 'file-2', url: 'https://files.example.com/b.png' }),
+    });
 
-    const record = await service.uploadFileBuffer(input);
+    const record = await service.uploadLocalFile('/tmp/b.png');
 
-    expect(record).toEqual({ id: 'file-2', url: 'https://files.example.com/dedup.png' });
-    // Only checkFileHash + createFile — no presign, no PUT.
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    const createBody = JSON.parse(fetchMock.mock.calls[1][1].body).json;
-    expect(createBody.url).toBe('files/2026-07-11/dedup.png');
+    expect(record).toEqual({ id: 'file-2', url: 'https://files.example.com/b.png' });
+    const [, , opts] = execFileMock.mock.calls[0];
+    expect(opts.env.LOBEHUB_JWT).toBeUndefined();
+    expect(opts.env.LOBEHUB_SERVER).toBeUndefined();
   });
 
-  it('throws when the S3 PUT fails', async () => {
-    fetchMock
-      .mockResolvedValueOnce(trpcResponse({ isExist: false }))
-      .mockResolvedValueOnce(trpcResponse('https://s3.example.com/presigned'))
-      .mockResolvedValueOnce({ ok: false, status: 403, statusText: 'Forbidden' });
+  it('returns undefined when the CLI output has no record', async () => {
+    execFileMock.mockResolvedValue({ stdout: '{}' });
 
-    await expect(service.uploadFileBuffer(input)).rejects.toThrow('S3 upload failed: 403');
+    expect(await service.uploadLocalFile('/tmp/none.png')).toBeUndefined();
+  });
+
+  it('propagates CLI failures (non-zero exit) to the caller', async () => {
+    execFileMock.mockRejectedValue(new Error('No authentication found'));
+
+    await expect(service.uploadLocalFile('/tmp/fail.png')).rejects.toThrow(
+      'No authentication found',
+    );
   });
 });

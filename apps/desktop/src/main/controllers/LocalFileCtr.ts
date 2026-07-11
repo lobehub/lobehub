@@ -422,11 +422,10 @@ export default class LocalFileCtr extends ControllerModule {
 
     // Image files: `local-file-shell` refuses binary, and the agent should be
     // able to actually *see* the image (vision) rather than hit "Unsupported
-    // binary file type". Upload the bytes to file storage right here in main
-    // (same convention as the hetero CLI's Read-on-image echo, #16786) and
-    // return a durable { fileId, url } — base64 never crosses IPC and never
-    // reaches the DB; the MessageContent processor turns the uploaded URL into
-    // an `image_url` part for the LLM.
+    // binary file type". Delegate the upload to the embedded CLI
+    // (`lh file upload`) and return a durable { fileId, url } — bytes never
+    // cross IPC and never reach the DB; the MessageContent processor turns
+    // the uploaded URL into an `image_url` part for the LLM.
     const ext = path.extname(params.path).toLowerCase().replace('.', '');
     const imageMimeType = LOCAL_IMAGE_EXT_TO_MIME[ext];
     if (imageMimeType) {
@@ -468,12 +467,8 @@ export default class LocalFileCtr extends ControllerModule {
         );
       }
 
-      const buffer = await readFile(filePath);
-
       try {
-        const record = await this.app
-          .getService(RemoteFileUploadService)
-          .uploadFileBuffer({ buffer, fileName: filename, fileType: imageMimeType });
+        const record = await this.app.getService(RemoteFileUploadService).uploadLocalFile(filePath);
 
         if (record?.url) {
           return buildImageResult(`[Image: ${filename}]`, {
@@ -484,7 +479,7 @@ export default class LocalFileCtr extends ControllerModule {
           });
         }
 
-        logger.warn('Image upload declined (no active remote session):', { filePath });
+        logger.warn('Image upload returned no record:', { filePath });
       } catch (error) {
         logger.warn('Image upload failed:', { error, filePath });
       }

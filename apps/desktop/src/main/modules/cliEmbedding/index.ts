@@ -1,1 +1,1 @@
-export { generateCliWrapper, getCliWrapperDir } from './generateCliWrapper';
+export { generateCliWrapper, getCliWrapperDir, resolveCliScript } from './generateCliWrapper';
