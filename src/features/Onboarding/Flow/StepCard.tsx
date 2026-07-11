@@ -17,6 +17,7 @@ interface StepCardProps extends PropsWithChildren {
   onBack?: () => void;
   onContinue: () => void;
   title: ReactNode;
+  titleExtra?: ReactNode;
 }
 
 const StepCard: FC<StepCardProps> = ({
@@ -29,6 +30,7 @@ const StepCard: FC<StepCardProps> = ({
   onBack,
   onContinue,
   title,
+  titleExtra,
 }) => {
   const { t } = useTranslation('onboarding');
 
@@ -37,9 +39,12 @@ const StepCard: FC<StepCardProps> = ({
       <Banner src={bannerSrc} onBack={onBack} />
       <Flexbox className={styles.body} gap={20}>
         <Flexbox gap={4}>
-          <Text as={'h1'} className={styles.title}>
-            {title}
-          </Text>
+          <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
+            <Text as={'h1'} className={styles.title}>
+              {title}
+            </Text>
+            {titleExtra}
+          </Flexbox>
           {description && <Text className={styles.description}>{description}</Text>}
         </Flexbox>
         {children}
