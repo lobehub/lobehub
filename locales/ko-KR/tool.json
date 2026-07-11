@@ -17,6 +17,7 @@
   "agentGroupManagement.executeTask.tokens": "토큰 사용량",
   "agentGroupManagement.executeTasks.intervention.instructionPlaceholder": "이 작업을 수행하기 위한 에이전트의 자세한 지침...",
   "agentGroupManagement.executeTasks.intervention.titlePlaceholder": "작업 제목...",
+  "agentGroupManagement.executeTasks.results": "결과",
   "agentMarketplace.category.businessStrategy": "비즈니스 및 전략",
   "agentMarketplace.category.contentCreation": "콘텐츠 제작",
   "agentMarketplace.category.creatorEconomy": "크리에이터 경제",

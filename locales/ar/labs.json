@@ -1,4 +1,6 @@
 {
+  "features.agentGraphConfig.desc": "عرض تكوين وقت تشغيل الرسم البياني في إعدادات متقدمة لملف تعريف الوكيل.",
+  "features.agentGraphConfig.title": "تكوين وقت تشغيل الرسم البياني للوكيل",
   "features.agentSelfIteration.desc": "السماح للمساعد بالتفكير الذاتي، وبناء الوعي الذاتي، والاستمرار في التطوير عبر المحاولات والتفاعلات المتواصلة.",
   "features.agentSelfIteration.title": "التكرار الذاتي للوكيل",
   "features.assistantMessageGroup.desc": "تجميع رسائل الوكيل ونتائج استدعاء الأدوات معًا للعرض",
@@ -13,6 +15,8 @@
   "features.imessage.title": "قناة iMessage",
   "features.inputMarkdown.desc": "عرض Markdown في منطقة الإدخال في الوقت الفعلي (نص عريض، كتل الشيفرة، جداول، إلخ).",
   "features.inputMarkdown.title": "عرض Markdown في الإدخال",
+  "features.messageTextSelectionActions.desc": "عرض إجراء سريع عند تحديد نص في رسائل الدردشة بحيث يمكن إضافة النص المحدد إلى سياق المحادثة التالية.",
+  "features.messageTextSelectionActions.title": "إجراءات تحديد نص الرسالة",
   "features.platformAgent.desc": "عرض خيار \"اتصال الوكيل\" في قائمة الإنشاء. الوكلاء المتصلون (مثل OpenClaw، Hermes) يعملون على أجهزتك الخاصة ويتواصلون عبر lh connect.",
   "features.platformAgent.title": "اتصال الوكيل",
   "features.taskVerify.desc": "أضف قسم قبول التسليم إلى تفاصيل المهمة: قم بوصف القبول في جملة واحدة ودع الذكاء الاصطناعي يولد معايير تحقق قابلة للتعديل.",

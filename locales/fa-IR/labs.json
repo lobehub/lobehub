@@ -1,4 +1,6 @@
 {
+  "features.agentGraphConfig.desc": "نمایش تنظیمات زمان اجرای نمودار در تنظیمات پیشرفته پروفایل عامل.",
+  "features.agentGraphConfig.title": "پیکربندی زمان اجرای نمودار عامل",
   "features.agentSelfIteration.desc": "به دستیار امکان می‌دهد درباره عملکرد خود تأمل کند، خودآگاهی ایجاد کند و از طریق تلاش‌ها و تعاملات مداوم به طور پیوسته بهبود یابد.",
   "features.agentSelfIteration.title": "خود‌تکراری عامل",
   "features.assistantMessageGroup.desc": "نمایش گروهی پیام‌های عامل و نتایج ابزارهای فراخوانی‌شده به‌صورت یکجا",
@@ -13,6 +15,8 @@
   "features.imessage.title": "کانال iMessage",
   "features.inputMarkdown.desc": "نمایش زنده Markdown در ناحیه ورودی (متن پررنگ، بلوک‌های کد، جدول‌ها و غیره).",
   "features.inputMarkdown.title": "نمایش Markdown در ورودی",
+  "features.messageTextSelectionActions.desc": "نمایش یک اقدام سریع هنگام انتخاب متن در پیام‌های چت تا متن انتخاب شده به زمینه مکالمه بعدی اضافه شود.",
+  "features.messageTextSelectionActions.title": "اقدامات انتخاب متن پیام",
   "features.platformAgent.desc": "نمایش گزینه \"اتصال عامل\" در منوی ایجاد. عوامل متصل (مانند OpenClaw، Hermes) بر روی دستگاه‌های شما اجرا می‌شوند و از طریق lh connect ارتباط برقرار می‌کنند.",
   "features.platformAgent.title": "اتصال عامل",
   "features.taskVerify.desc": "یک بخش پذیرش تحویل به جزئیات وظیفه اضافه کنید: پذیرش را در یک جمله توضیح دهید و اجازه دهید هوش مصنوعی معیارهای قابل ویرایش تأیید را تولید کند.",

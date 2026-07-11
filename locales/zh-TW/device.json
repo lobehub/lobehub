@@ -70,6 +70,7 @@
   "workingDirectory.removeWorktreeAction": "刪除工作樹",
   "workingDirectory.removeWorktreeConfirm": "刪除工作樹「{{name}}」？這將移除工作樹目錄，但保留其分支。如果有未提交的更改，Git將拒絕執行。",
   "workingDirectory.removeWorktreeFailed": "刪除工作樹失敗",
+  "workingDirectory.removeWorktreePending": "正在刪除工作樹「{{name}}」…",
   "workingDirectory.removeWorktreeSuccess": "工作樹已刪除",
   "workingDirectory.removeWorktreeTitle": "刪除工作樹",
   "workingDirectory.removed": "已移除「{{name}}」",

@@ -1,4 +1,6 @@
 {
+  "features.agentGraphConfig.desc": "Pokaż konfigurację czasu wykonywania grafu w zaawansowanych ustawieniach profilu agenta.",
+  "features.agentGraphConfig.title": "Konfiguracja czasu wykonywania grafu agenta",
   "features.agentSelfIteration.desc": "Pozwala asystentowi na refleksję, budowanie samoświadomości oraz ciągłe doskonalenie poprzez kolejne próby i interakcje.",
   "features.agentSelfIteration.title": "Samoiteracja agenta",
   "features.assistantMessageGroup.desc": "Grupuj wiadomości agenta i wyniki wywołań narzędzi razem do wyświetlenia",
@@ -13,6 +15,8 @@
   "features.imessage.title": "Kanał iMessage",
   "features.inputMarkdown.desc": "Renderuj Markdown w polu wprowadzania w czasie rzeczywistym (pogrubiony tekst, bloki kodu, tabele itp.).",
   "features.inputMarkdown.title": "Renderowanie Markdown w Polu Wprowadzania",
+  "features.messageTextSelectionActions.desc": "Pokaż szybkie działanie podczas zaznaczania tekstu w wiadomościach czatu, aby wybrany tekst można było dodać do kontekstu następnej rozmowy.",
+  "features.messageTextSelectionActions.title": "Akcje zaznaczania tekstu wiadomości",
   "features.platformAgent.desc": "Pokaż opcję „Połącz agenta” w menu tworzenia. Połączone agenty (np. OpenClaw, Hermes) działają na Twoich urządzeniach i komunikują się za pomocą lh connect.",
   "features.platformAgent.title": "Połącz agenta",
   "features.taskVerify.desc": "Dodaj sekcję akceptacji dostawy do szczegółów zadania: opisz akceptację w jednym zdaniu i pozwól AI wygenerować edytowalne kryteria weryfikacji.",

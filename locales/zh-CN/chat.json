@@ -202,7 +202,7 @@
   "extendParams.preserveThinking.title": "传递历史思考过程",
   "extendParams.reasoningBudgetToken.title": "思考 Token 预算",
   "extendParams.reasoningEffort.title": "推理强度",
-  "extendParams.reasoningMode.desc": "标准模式平衡速度与成本；Pro 模式会为困难任务投入更多计算，可能消耗更多 Token。",
+  "extendParams.reasoningMode.desc": "标准模式在速度和成本之间保持平衡。专业模式针对复杂任务进行更多模型处理，并可能使用更多的令牌。",
   "extendParams.reasoningMode.title": "推理模式",
   "extendParams.textVerbosity.title": "输出详细程度",
   "extendParams.thinking.title": "深度思考开关",

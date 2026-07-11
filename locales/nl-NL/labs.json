@@ -1,4 +1,6 @@
 {
+  "features.agentGraphConfig.desc": "Toon grafiek runtime-configuratie in de geavanceerde instellingen van een agentprofiel.",
+  "features.agentGraphConfig.title": "Agent Grafiek Runtime-configuratie",
   "features.agentSelfIteration.desc": "De assistent kan hierdoor reflecteren, zelfinzicht opbouwen en zich continu blijven verbeteren via aanhoudende pogingen en interacties.",
   "features.agentSelfIteration.title": "Agent-zelfiteratie",
   "features.assistantMessageGroup.desc": "Groepeer berichten van de agent en de resultaten van hun tool-aanroepen samen voor weergave",
@@ -13,6 +15,8 @@
   "features.imessage.title": "iMessage-kanaal",
   "features.inputMarkdown.desc": "Toon Markdown in het invoerveld in realtime (vette tekst, codeblokken, tabellen, enz.).",
   "features.inputMarkdown.title": "Markdown-weergave bij Invoer",
+  "features.messageTextSelectionActions.desc": "Toon een snelle actie bij het selecteren van tekst in chatberichten zodat de geselecteerde tekst kan worden toegevoegd aan de context van het volgende gesprek.",
+  "features.messageTextSelectionActions.title": "Acties voor Tekstselectie in Berichten",
   "features.platformAgent.desc": "Toon de optie \"Agent Verbinden\" in het aanmaakmenu. Verbonden agents (bijv. OpenClaw, Hermes) draaien op je eigen apparaten en communiceren terug via lh connect.",
   "features.platformAgent.title": "Agent Verbinden",
   "features.taskVerify.desc": "Voeg een sectie voor leveringsacceptatie toe aan de taakdetails: beschrijf de acceptatie in één zin en laat AI bewerkbare verificatiecriteria genereren.",
