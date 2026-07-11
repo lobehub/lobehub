@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildMessengerPlatformRows } from './useMessengerPlatforms';
+import {
+  buildMessengerPlatformRows,
+  resolveMessengerPlatformsLoading,
+} from './useMessengerPlatforms';
 
 describe('buildMessengerPlatformRows', () => {
   it('orders rows as slack, telegram, discord and drops platforms the server does not report', () => {
@@ -44,5 +47,17 @@ describe('buildMessengerPlatformRows', () => {
 
   it('returns an empty list when the server reports no platforms', () => {
     expect(buildMessengerPlatformRows(undefined, undefined, undefined)).toEqual([]);
+  });
+});
+
+describe('resolveMessengerPlatformsLoading', () => {
+  it('is loading while any of the three sources is still loading', () => {
+    expect(resolveMessengerPlatformsLoading(true, false, false)).toBe(true);
+    expect(resolveMessengerPlatformsLoading(false, true, false)).toBe(true);
+    expect(resolveMessengerPlatformsLoading(false, false, true)).toBe(true);
+  });
+
+  it('is not loading once platforms, installations, and links have all resolved', () => {
+    expect(resolveMessengerPlatformsLoading(false, false, false)).toBe(false);
   });
 });

@@ -7,13 +7,13 @@ import { useTranslation } from 'react-i18next';
 import StepCard from '../../StepCard';
 import type { OnboardingFlowController } from '../../useOnboardingFlow';
 import LocalAgentsPanel from './LocalAgentsPanel';
-import PlatformRow from './PlatformRow';
+import PlatformRow, { PlatformRowSkeleton } from './PlatformRow';
 import QuoteBanner from './QuoteBanner';
-import { useMessengerPlatforms } from './useMessengerPlatforms';
+import { PLATFORM_ORDER, useMessengerPlatforms } from './useMessengerPlatforms';
 
 const Messenger = memo<OnboardingFlowController>(({ back, hasPrevious, next }) => {
   const { t } = useTranslation('onboarding');
-  const { rows } = useMessengerPlatforms();
+  const { isLoading, rows } = useMessengerPlatforms();
 
   return (
     <StepCard
@@ -24,9 +24,9 @@ const Messenger = memo<OnboardingFlowController>(({ back, hasPrevious, next }) =
     >
       <Flexbox gap={20}>
         <Flexbox gap={4}>
-          {rows.map((row) => (
-            <PlatformRow key={row.id} {...row} />
-          ))}
+          {isLoading
+            ? PLATFORM_ORDER.map((id) => <PlatformRowSkeleton key={id} />)
+            : rows.map((row) => <PlatformRow key={row.id} {...row} />)}
         </Flexbox>
         <LocalAgentsPanel />
       </Flexbox>

@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 
+import { buildTelegramDeepLink } from '@/features/Messenger/constants';
 import { useClientDataSWR } from '@/libs/swr';
 import { messengerKeys } from '@/libs/swr/keys';
 import { messengerService } from '@/services/messenger';
@@ -19,10 +20,7 @@ export interface MessengerPlatformRow {
 const SLACK_INSTALL_HREF = '/api/agent/messenger/slack/install';
 const DISCORD_INSTALL_HREF = '/api/agent/messenger/discord/install';
 
-const PLATFORM_ORDER: MessengerPlatformId[] = ['slack', 'telegram', 'discord'];
-
-const buildTelegramDeepLink = (botUsername: string): string =>
-  `https://t.me/${botUsername.replace(/^@/, '')}?start=messenger`;
+export const PLATFORM_ORDER: MessengerPlatformId[] = ['slack', 'telegram', 'discord'];
 
 export const buildMessengerPlatformRows = (
   platforms: AvailablePlatform[] | undefined,
@@ -50,16 +48,24 @@ export const buildMessengerPlatformRows = (
   });
 };
 
+export const resolveMessengerPlatformsLoading = (
+  isLoadingPlatforms: boolean,
+  isLoadingInstallations: boolean,
+  isLoadingLinks: boolean,
+): boolean => isLoadingPlatforms || isLoadingInstallations || isLoadingLinks;
+
 export const useMessengerPlatforms = () => {
   const { data: platforms, isLoading: isLoadingPlatforms } = useClientDataSWR(
     messengerKeys.availablePlatforms(),
     () => messengerService.availablePlatforms(),
   );
-  const { data: installations } = useClientDataSWR(messengerKeys.listMyInstallations(), () =>
-    messengerService.listMyInstallations(),
+  const { data: installations, isLoading: isLoadingInstallations } = useClientDataSWR(
+    messengerKeys.listMyInstallations(),
+    () => messengerService.listMyInstallations(),
   );
-  const { data: links } = useClientDataSWR(messengerKeys.listMyLinks(), () =>
-    messengerService.listMyLinks(),
+  const { data: links, isLoading: isLoadingLinks } = useClientDataSWR(
+    messengerKeys.listMyLinks(),
+    () => messengerService.listMyLinks(),
   );
 
   const rows = useMemo(
@@ -67,5 +73,11 @@ export const useMessengerPlatforms = () => {
     [platforms, installations, links],
   );
 
-  return { isLoading: isLoadingPlatforms, rows };
+  const isLoading = resolveMessengerPlatformsLoading(
+    isLoadingPlatforms,
+    isLoadingInstallations,
+    isLoadingLinks,
+  );
+
+  return { isLoading, rows };
 };
