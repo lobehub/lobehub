@@ -414,6 +414,30 @@ Re-tested end-to-end against the running dev server. The previous claim ("blocks
     text stays short, then read its `button`s (`[Close, 重试]`).
     Pick fixture names that do NOT contain any state keyword you'll assert on.
 
+### C6. ✅ WORKS — read a topic's metadata (workingDirectoryConfig etc.) from the chat store, and reset to a fresh topic
+
+- **Doesn't work**: `chat().topicsMap[topicId]` / `chat().topicDataMap[topicId]` — there is
+  no per-topic-id map. `topicDataMap` is keyed by **view key** (`agent_<agentId>`), and each
+  value is a paginated view object (`{ items, total, hasMore, … }`), not a topic.
+- **Works** (verified while E2E-testing `git worktree add` side-effect recording):
+  ```js
+  var c = window.__LOBE_STORES.chat();
+  var view = c.topicDataMap['agent_' + agentId];
+  var topic = (view.items || []).find(function (x) {
+    return x.id === c.activeTopicId;
+  });
+  topic.metadata.workingDirectoryConfig; // ← e.g. git.activeWorktree written by recordGitCommandEffects
+  ```
+- **Fresh topic without touching the UI**: `await c.openNewTopicOrSaveTopic()` — with an
+  active topic it saves/exits to the agent's no-topic compose state (activeTopicId → null),
+  so the next send creates a new topic. Chain per-case fixtures this way instead of clicking
+  "Start New Topic". The contenteditable ref changes after the switch — re-run
+  `snapshot -i -C` before typing.
+- Full E2E loop this enabled: E11 fixture agent (`heterogeneousProvider: { type: 'claude-code' },
+executionTarget: 'local'` in `agencyConfig`) + one message per case asking CC to run a
+  specific shell command → poll `chat().operations` for `running === 0` → assert the
+  topic's metadata via the probe above. A real CC one-command turn completes in \~10–20s.
+
 ---
 
 ## D. agent-browser / CDP mechanics

@@ -49,6 +49,14 @@ export interface AgentSliceState {
    */
   streamingSystemRole?: string;
   /**
+   * Agent that owns the current system role stream
+   */
+  streamingSystemRoleAgentId?: string;
+  /**
+   * Monotonic token that distinguishes successive streams for the same agent
+   */
+  streamingSystemRoleGeneration: number;
+  /**
    * Whether system role streaming is in progress
    */
   streamingSystemRoleInProgress?: boolean;
@@ -74,5 +82,7 @@ export const initialAgentSliceState: AgentSliceState = {
   },
   saveStatus: 'idle',
   streamingSystemRole: undefined,
+  streamingSystemRoleAgentId: undefined,
+  streamingSystemRoleGeneration: 0,
   streamingSystemRoleInProgress: false,
 };

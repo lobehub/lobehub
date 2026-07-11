@@ -1,4 +1,6 @@
 {
+  "features.agentGraphConfig.desc": "Zeigt die Laufzeitkonfiguration des Graphen in den erweiterten Einstellungen eines Agentenprofils an.",
+  "features.agentGraphConfig.title": "Laufzeitkonfiguration des Agenten-Graphen",
   "features.agentSelfIteration.desc": "Ermöglicht dem Assistenten, zu reflektieren, Selbstwahrnehmung aufzubauen und sich durch fortlaufende Versuche und Interaktionen kontinuierlich weiterzuentwickeln.",
   "features.agentSelfIteration.title": "Agenten-Selbstiteration",
   "features.assistantMessageGroup.desc": "Agenten-Nachrichten und deren Tool-Ergebnisse gemeinsam anzeigen",
@@ -13,6 +15,8 @@
   "features.imessage.title": "iMessage-Kanal",
   "features.inputMarkdown.desc": "Markdown in Echtzeit im Eingabebereich rendern (fetter Text, Codeblöcke, Tabellen usw.).",
   "features.inputMarkdown.title": "Markdown-Darstellung im Eingabefeld",
+  "features.messageTextSelectionActions.desc": "Zeigt eine Schnellaktion beim Auswählen von Text in Chatnachrichten an, damit der ausgewählte Text dem Kontext des nächsten Gesprächs hinzugefügt werden kann.",
+  "features.messageTextSelectionActions.title": "Aktionen zur Textauswahl in Nachrichten",
   "features.platformAgent.desc": "Zeigt den Eintrag \"Agent verbinden\" im Erstellungsmenü an. Verbundene Agenten (z. B. OpenClaw, Hermes) laufen auf Ihren eigenen Geräten und kommunizieren über LH Connect zurück.",
   "features.platformAgent.title": "Agent verbinden",
   "features.taskVerify.desc": "Fügen Sie einen Abschnitt zur Lieferannahme in die Aufgabenbeschreibung hinzu: Beschreiben Sie die Annahme in einem Satz und lassen Sie die KI bearbeitbare Überprüfungskriterien erstellen.",

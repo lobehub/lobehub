@@ -31,6 +31,14 @@ export interface MessageQueryContext {
   topicShareId?: string;
 }
 
+interface MessageReadQueryContext {
+  agentId?: string | null;
+  groupId?: string | null;
+  threadId?: string | null;
+  topicId?: string | null;
+  topicShareId?: string;
+}
+
 export type MessageBatchOperation =
   | {
       message: CreateMessageParams;
@@ -76,7 +84,7 @@ export class MessageService {
     return lambdaClient.message.createMessage.mutate(params as any);
   };
 
-  getMessages = async (params: MessageQueryContext): Promise<UIChatMessage[]> => {
+  getMessages = async (params: MessageReadQueryContext): Promise<UIChatMessage[]> => {
     const data = await lambdaClient.message.getMessages.query(params);
 
     return data as unknown as UIChatMessage[];

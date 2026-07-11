@@ -1,4 +1,6 @@
 {
+  "features.agentGraphConfig.desc": "エージェントプロファイルの詳細設定でグラフの実行時設定を表示します。",
+  "features.agentGraphConfig.title": "エージェントグラフ実行時設定",
   "features.agentSelfIteration.desc": "アシスタントが振り返りを行い、自己認識を深め、継続的な試行と対話を通じて自律的に改善を重ねられるようにします。",
   "features.agentSelfIteration.title": "エージェントの自己反復",
   "features.assistantMessageGroup.desc": "アシスタントのメッセージとそのツール呼び出し結果をグループ化して表示します",
@@ -13,6 +15,8 @@
   "features.imessage.title": "iMessageチャンネル",
   "features.inputMarkdown.desc": "入力エリアでMarkdown（太字、コードブロック、表など）をリアルタイムでレンダリングします。",
   "features.inputMarkdown.title": "入力欄のMarkdownレンダリング",
+  "features.messageTextSelectionActions.desc": "チャットメッセージ内のテキストを選択すると、次の会話コンテキストに選択したテキストを追加できるクイックアクションを表示します。",
+  "features.messageTextSelectionActions.title": "メッセージテキスト選択アクション",
   "features.platformAgent.desc": "作成メニューに「エージェントを接続」エントリを表示します。接続されたエージェント（例: OpenClaw、Hermes）は、ユーザー自身のデバイス上で動作し、lh connectを介して通信します。",
   "features.platformAgent.title": "エージェントを接続",
   "features.taskVerify.desc": "タスク詳細に納品受け入れセクションを追加: 受け入れ内容を1文で記述し、AIが編集可能な検証基準を生成します。",

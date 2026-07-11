@@ -69,6 +69,22 @@ export default {
   'channel.connectStarting': 'Bot is starting. Please wait a moment.',
   'channel.connectSuccess': 'Bot connected successfully',
   'channel.connecting': 'Connecting...',
+  'channel.connectionError.application_not_found':
+    'The bot application does not exist. Check the application ID in the platform console.',
+  'channel.connectionError.connection_closed':
+    'The platform connection was interrupted. LobeHub will try to reconnect automatically.',
+  'channel.connectionError.invalid_credentials':
+    'The bot credentials are invalid. Check the application ID, secret, and access tokens.',
+  'channel.connectionError.missing_credentials':
+    'Required bot credentials are missing. Complete the channel configuration and try again.',
+  'channel.connectionError.permission_denied':
+    "The platform denied access. Check the bot's permissions and enabled capabilities.",
+  'channel.connectionError.rate_limited':
+    'The platform is rate limiting this bot. Wait a moment and try again.',
+  'channel.connectionError.session_expired':
+    'The bot session has expired. Save the channel again to reconnect it.',
+  'channel.connectionError.upstream_unavailable':
+    'The platform service is temporarily unavailable. LobeHub will try again later.',
   'channel.endpointUrl': 'Webhook URL',
   'channel.endpointUrlHint':
     'Please copy this URL and paste it into the <bold>{{fieldName}}</bold> field in the {{name}} Developer Portal.',

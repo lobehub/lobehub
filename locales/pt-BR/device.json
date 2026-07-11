@@ -70,6 +70,7 @@
   "workingDirectory.removeWorktreeAction": "Excluir worktree",
   "workingDirectory.removeWorktreeConfirm": "Excluir worktree “{{name}}”? Isso remove o diretório do worktree, mas mantém seu branch. O Git recusará se houver alterações não confirmadas.",
   "workingDirectory.removeWorktreeFailed": "Falha ao excluir o worktree",
+  "workingDirectory.removeWorktreePending": "Excluindo área de trabalho “{{name}}”…",
   "workingDirectory.removeWorktreeSuccess": "Worktree excluído",
   "workingDirectory.removeWorktreeTitle": "Excluir worktree",
   "workingDirectory.removed": "Removido “{{name}}”",

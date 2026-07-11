@@ -17,6 +17,7 @@
   "agentGroupManagement.executeTask.tokens": "Token 消耗",
   "agentGroupManagement.executeTasks.intervention.instructionPlaceholder": "請輸入代理執行此任務的詳細指示……",
   "agentGroupManagement.executeTasks.intervention.titlePlaceholder": "任務標題……",
+  "agentGroupManagement.executeTasks.results": "結果",
   "agentMarketplace.category.businessStrategy": "商業與策略",
   "agentMarketplace.category.contentCreation": "內容創作",
   "agentMarketplace.category.creatorEconomy": "創作者經濟",

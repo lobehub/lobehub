@@ -13,6 +13,8 @@ export type BotRuntimeStatus = (typeof BOT_RUNTIME_STATUSES)[keyof typeof BOT_RU
 
 export interface BotRuntimeStatusSnapshot {
   applicationId: string;
+  /** Stable cross-platform gateway error code for client-side i18n. */
+  errorCode?: string;
   errorMessage?: string;
   platform: string;
   status: BotRuntimeStatus;

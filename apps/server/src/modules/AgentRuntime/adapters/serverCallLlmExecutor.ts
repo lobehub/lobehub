@@ -5,12 +5,13 @@ import {
   type GeneralAgentCallLLMResultPayload,
   getLLMRetryDelayMs,
   type InstructionExecutionResult,
+  type LLMTransport,
   resolveLLMMaxAttempts,
   resolveLLMRetryBudget,
   shouldRetryLLM,
 } from '@lobechat/agent-runtime';
 import { BRANDING_PROVIDER } from '@lobechat/business-const';
-import { type ChatStreamPayload, ModelEmptyError } from '@lobechat/model-runtime';
+import { ModelEmptyError } from '@lobechat/model-runtime';
 import {
   context as otelContext,
   SpanKind,
@@ -24,13 +25,10 @@ import {
   tracer as agentRuntimeTracer,
 } from '@lobechat/observability-otel/modules/agent-runtime';
 
-import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
-
 import { type RuntimeExecutorContext } from '../context';
 import { isOperationInterrupted, log, sleep } from '../executorHelpers';
 import { formatErrorEventData } from '../formatErrorEventData';
 import { classifyLLMError } from '../llmErrorClassification';
-import { createServerCallLlmAttempt } from './serverCallLlmAttempt';
 import {
   finalizeServerCallLlmResult,
   persistInterruptedServerCallLlmResult,
@@ -41,6 +39,7 @@ interface ServerCallLlmExecutionContext {
   context: ContextBuildOutput;
   model: string;
   provider: string;
+  runAttempt: NonNullable<LLMTransport['runAttempt']>;
   state: AgentState;
   stepLabel?: string;
 }
@@ -67,16 +66,12 @@ class ServerCallLlmTurn {
       context,
       model,
       provider,
+      runAttempt,
       stepLabel,
     } = prepared;
-    const {
-      messages: preparedMessages,
-      modelParameters: resolvedExtendParams,
-      preserveThinking: preserveThinkingForPayload,
-      replayAssistantReasoning: shouldReplayAssistantReasoning,
-      resolvedTools: resolved,
-    } = context;
-    const processedMessages = preparedMessages as ChatStreamPayload['messages'];
+    const { messages: preparedMessages, replayAssistantReasoning: shouldReplayAssistantReasoning } =
+      context;
+    const processedMessages = preparedMessages as Array<{ role?: string }>;
     const operationLogId = `${operationId}:${stepIndex}`;
     log(
       '[%s][call_llm] Starting operation with prepared assistant message: %s',
@@ -85,8 +80,9 @@ class ServerCallLlmTurn {
     );
 
     try {
-      if (!resolved) throw new Error('Resolved tools are required for a server LLM turn');
-      const tools = resolved.tools.length > 0 ? resolved.tools : undefined;
+      if (!context.resolvedTools) {
+        throw new Error('Resolved tools are required for a server LLM turn');
+      }
 
       // A turn must carry at least one non-system message. Anthropic-compatible
       // providers (anthropic / deepseek) move `role: system` into a separate
@@ -104,29 +100,7 @@ class ServerCallLlmTurn {
         );
       }
 
-      // Initialize ModelRuntime (read user's keyVaults from database)
-      const modelRuntime = await initModelRuntimeFromDB(
-        ctx.serverDB,
-        ctx.userId!,
-        provider,
-        ctx.workspaceId,
-      );
-
-      // Construct ChatStreamPayload
       const stream = ctx.stream ?? true;
-      const chatPayload = {
-        messages: processedMessages,
-        model,
-        stream,
-        tools,
-        // ModelExtendParams keeps provider-specific effort/thinking values as loose
-        // strings (e.g. hy3's 'no_think'); the runtime payload narrows them, so cast.
-        ...(resolvedExtendParams as Partial<ChatStreamPayload>),
-        ...(typeof preserveThinkingForPayload === 'boolean' && {
-          preserveThinking: preserveThinkingForPayload,
-        }),
-      };
-
       const maxAttempts = resolveLLMMaxAttempts(provider, SERVER_LLM_RETRY_POLICY);
 
       // OTel chat span — wraps all retry attempts; TTFT recorded on the first
@@ -153,32 +127,27 @@ class ServerCallLlmTurn {
       try {
         return await otelContext.with(chatCtx, async () => {
           for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-            const llmAttempt = createServerCallLlmAttempt({
+            const execution = await runAttempt({
               attempt,
-              chatPayload,
-              ctx,
+              context,
               events,
               maxAttempts,
-              messageCount: processedMessages.length,
               model,
-              modelRuntime,
               onFirstChunk,
-              operationLogId,
               provider,
-              resolved,
-              topicId: state.metadata?.topicId,
-              trigger: state.metadata?.trigger,
+              state,
             });
+            const llmAttempt = execution.output;
 
             try {
-              await llmAttempt.execute();
+              if (!execution.ok) throw execution.error;
+
               const {
                 answerSalvagedFromReasoning,
                 finishReason: currentStepFinishReason,
                 grounding,
                 imageList,
                 speed: currentStepSpeed,
-                streamSink,
                 toolCalls: tool_calls,
                 toolsCalling,
                 usage: currentStepUsage,
@@ -187,9 +156,9 @@ class ServerCallLlmTurn {
               // Add a complete llm_stream event (including all streaming chunks)
               events.push({
                 result: {
-                  content: streamSink.content,
+                  content: llmAttempt.content,
                   finishReason: currentStepFinishReason,
-                  reasoning: streamSink.thinkingContent,
+                  reasoning: llmAttempt.reasoning,
                   tool_calls,
                   usage: currentStepUsage,
                 },
@@ -199,11 +168,11 @@ class ServerCallLlmTurn {
               // Publish stream end event
               await streamManager.publishStreamEvent(operationId, {
                 data: {
-                  finalContent: streamSink.content,
+                  finalContent: llmAttempt.content,
                   grounding,
                   ...(stepLabel && { stepLabel }),
                   imageList: imageList.length > 0 ? imageList : undefined,
-                  reasoning: streamSink.thinkingContent || undefined,
+                  reasoning: llmAttempt.reasoning || undefined,
                   toolsCalling,
                   usage: currentStepUsage,
                 },
@@ -249,7 +218,7 @@ class ServerCallLlmTurn {
                 shouldReplayAssistantReasoning,
                 state,
                 stepLabel,
-                streamOutput: streamSink,
+                streamOutput: llmAttempt,
                 toolCalls: tool_calls,
                 toolsCalling,
                 visibleOutputEndPublishedStepIndex,
@@ -275,7 +244,7 @@ class ServerCallLlmTurn {
                     hasToolsCalling: toolsCalling.length > 0,
                     // Pass assistant message ID as parentMessageId for tool calls
                     parentMessageId: assistantMessageItem.id,
-                    result: { content: streamSink.content, tool_calls },
+                    result: { content: llmAttempt.content, tool_calls },
                     toolsCalling,
                   } as GeneralAgentCallLLMResultPayload,
                   phase: 'llm_result' as const,
@@ -290,8 +259,6 @@ class ServerCallLlmTurn {
                 },
               };
             } catch (error) {
-              llmAttempt.streamSink.clearBuffers();
-
               const classified = classifyLLMError(error);
               const interrupted = await isOperationInterrupted(ctx);
 
@@ -357,7 +324,7 @@ class ServerCallLlmTurn {
                   currentStepUsage: llmAttempt.usage,
                   messageModel: ctx.messageModel,
                   operationLogId,
-                  streamOutput: llmAttempt.streamSink,
+                  streamOutput: llmAttempt,
                   toolsCalling: llmAttempt.toolsCalling,
                 });
               }

@@ -70,6 +70,7 @@
   "workingDirectory.removeWorktreeAction": "Xóa worktree",
   "workingDirectory.removeWorktreeConfirm": "Xóa worktree “{{name}}”? Thao tác này sẽ xóa thư mục worktree nhưng giữ lại nhánh của nó. Git sẽ từ chối nếu có thay đổi chưa được commit.",
   "workingDirectory.removeWorktreeFailed": "Xóa worktree thất bại",
+  "workingDirectory.removeWorktreePending": "Đang xóa nhánh làm việc “{{name}}”…",
   "workingDirectory.removeWorktreeSuccess": "Đã xóa worktree",
   "workingDirectory.removeWorktreeTitle": "Xóa worktree",
   "workingDirectory.removed": "Đã xóa “{{name}}”",

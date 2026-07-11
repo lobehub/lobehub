@@ -663,7 +663,7 @@
   "settingGraphRuntime.enabled.desc": "Route this agent through the graph runtime using the snapshot stored below.",
   "settingGraphRuntime.enabled.title": "Enable Graph Runtime",
   "settingGraphRuntime.snapshot.desc": "Paste the complete ReasoningGraph JSON snapshot. It is stored with this agent and used directly at runtime.",
-  "settingGraphRuntime.snapshot.placeholder": "Paste a ReasoningGraph JSON snapshot, for example: {\"name\":\"...\",\"entry\":\"...\",\"states\":{...},\"terminal\":\"...\",\"transitions\":[]}",
+  "settingGraphRuntime.snapshot.placeholder": "Paste a ReasoningGraph JSON snapshot, for example: {\"name\":\"...\",\"nodes\":{...},\"terminal\":\"...\",\"edges\":[]}",
   "settingGraphRuntime.snapshot.title": "Graph Snapshot",
   "settingGraphRuntime.validation.invalidGraph": "Invalid graph snapshot: {{error}}",
   "settingGraphRuntime.validation.invalidJson": "Graph snapshot must be valid JSON.",

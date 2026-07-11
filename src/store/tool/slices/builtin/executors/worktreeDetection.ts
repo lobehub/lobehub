@@ -16,7 +16,8 @@ import { getElectronStoreState } from '@/store/electron';
  * (renderer-side, fired on `tool_end`). The CLI session cwd stays anchored to
  * the source repo; selected worktree / branch / linked PR are topic metadata.
  *
- * Command parsing is a trigger + hint, not the source of truth: `$VAR`
+ * Command parsing is a trigger + hint, not the source of truth: a Codex-style
+ * login-shell wrapper (`/bin/zsh -lc "…"`) is peeled off first, `$VAR`
  * references are expanded from assignments earlier in the same command, and a
  * path that still carries shell syntax after that is never recorded literally —
  * the real path is read back from the device's `git worktree list` (matched by
@@ -207,12 +208,17 @@ const findInCommand = <T>(
   parser: (tokens: string[], env?: ShellEnv) => T | undefined,
 ): T | undefined => {
   if (Array.isArray(command)) {
-    return command.every((t) => typeof t === 'string') ? parser(command) : undefined;
+    if (!command.every((t) => typeof t === 'string')) return undefined;
+    // A shell-wrapped argv carries a raw shell string as its payload — recurse so
+    // it gets the same separator splitting and `$VAR` expansion as the string form.
+    const wrapped = unwrapShellArgv(command);
+    if (wrapped !== undefined) return findInCommand(wrapped, parser);
+    return parser(command);
   }
   if (typeof command !== 'string') return undefined;
 
   const env: ShellEnv = {};
-  for (const segment of command.split(/[\n;|&]/)) {
+  for (const segment of unwrapShellCommand(command).split(/[\n;|&]/)) {
     const tokens = tokenize(segment);
     const result = parser(tokens, env);
     if (result) return result;
@@ -563,6 +569,63 @@ const GIT_VALUE_OPTS = new Set([
 const WRAPPERS = new Set(['sudo', 'env', 'command', 'nice', 'nohup', 'time']);
 
 /**
+ * Codex ships every shell tool call wrapped in a login shell — the wire command is
+ * `/bin/zsh -lc "git worktree add …"` (or the argv form `['bash', '-lc', 'git …']`)
+ * — so the head token is the shell, never `git`/`gh`, and the real command hides
+ * inside a single quoted token. The display layer strips this wrapper
+ * (`stripShellWrapper` in `packages/builtin-tools/src/codex/commandExecutionUtils.ts`
+ * — keep the accepted shapes in sync), so parsing must strip it too, or the UI shows
+ * a bare git command that this module silently rejected.
+ */
+const SHELL_WRAPPER_PATTERN =
+  /^(?:\/usr\/bin\/env\s+)?(?:\/\S+\/)?(?:bash|sh|zsh)\s+(?:-lc|-c|-l\s+-c)\s+(\S[\s\S]*)$/;
+const SHELL_EXECUTABLES = new Set(['bash', 'sh', 'zsh']);
+
+/** Undo the shell's own quoting of the wrapper payload (`-lc "git \"…\""` → `git "…"`). */
+const stripOuterShellQuotes = (value: string): string => {
+  const trimmed = value.trim();
+  if (trimmed.length < 2) return trimmed;
+
+  const quote = trimmed[0];
+  if ((quote !== '"' && quote !== "'") || trimmed.at(-1) !== quote) return trimmed;
+
+  const body = trimmed.slice(1, -1);
+  if (quote === "'") return body.replaceAll("'\\''", "'");
+
+  return body
+    .replaceAll('\\"', '"')
+    .replaceAll('\\`', '`')
+    .replaceAll('\\$', '$')
+    .replaceAll('\\\\', '\\');
+};
+
+/** `['/bin/zsh', '-lc', 'git …']` → `git …`; undefined when argv is not a shell wrapper. */
+const unwrapShellArgv = (tokens: string[]): string | undefined => {
+  let i = getExecutableName(tokens[0] ?? '') === 'env' ? 1 : 0;
+  if (!SHELL_EXECUTABLES.has(getExecutableName(tokens[i] ?? '') ?? '')) return undefined;
+  i += 1;
+  if (stripQuotes(tokens[i] ?? '') === '-l') i += 1;
+  const flag = stripQuotes(tokens[i] ?? '');
+  if (flag !== '-c' && flag !== '-lc') return undefined;
+  return tokens[i + 1];
+};
+
+/** Peel `bash|sh|zsh -lc "…"` layers off a raw command string until none remain. */
+const unwrapShellCommand = (command: string): string => {
+  let current = command;
+  // Wrappers can nest (`zsh -lc 'bash -c "git …"'`) but only shallowly; each peel
+  // strictly shortens the string, so the depth cap is a formality.
+  for (let depth = 0; depth < 4; depth += 1) {
+    const match = SHELL_WRAPPER_PATTERN.exec(current.trim());
+    if (!match) break;
+    const inner = stripOuterShellQuotes(match[1]);
+    if (!inner) break;
+    current = inner;
+  }
+  return current;
+};
+
+/**
  * If ONE command's tokens are a real `git … worktree add <path>` invocation, return
  * the path (resolved against the source cwd, honoring a `-C <dir>` override).
  * Requires the executable to actually be `git` — so `echo git worktree add …` or
@@ -643,16 +706,22 @@ const parseWorktreeAddInfo = (
   cwd?: string,
 ): WorktreeAddParseResult | undefined => {
   if (Array.isArray(command)) {
+    if (!command.every((t) => typeof t === 'string')) return undefined;
+    // A shell-wrapped argv carries a raw shell string as its payload — recurse so
+    // it gets the same separator splitting and `$VAR` expansion as the string form.
+    const wrapped = unwrapShellArgv(command);
+    if (wrapped !== undefined) return parseWorktreeAddInfo(wrapped, cwd);
     // Already-tokenized argv → a single command, boundaries preserved. No shell
     // ran, so tokens are literal — no assignments to collect or vars to expand.
-    return command.every((t) => typeof t === 'string')
-      ? parseGitWorktreeAddTokens(command, cwd)
-      : undefined;
+    return parseGitWorktreeAddTokens(command, cwd);
   }
-  if (typeof command !== 'string' || !/\bworktree\s+add\b/.test(command)) return undefined;
+  if (typeof command !== 'string') return undefined;
+
+  const unwrapped = unwrapShellCommand(command);
+  if (!/\bworktree\s+add\b/.test(unwrapped)) return undefined;
 
   const env: ShellEnv = {};
-  for (const segment of command.split(/[\n;|&]/)) {
+  for (const segment of unwrapped.split(/[\n;|&]/)) {
     const tokens = tokenize(segment);
     const info = parseGitWorktreeAddTokens(tokens, cwd, env);
     if (info) return info;

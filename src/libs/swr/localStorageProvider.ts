@@ -26,6 +26,7 @@
 import { bootTiming } from '@/libs/bootTiming';
 
 import { buildLocalDataKey, localDataCache } from './localDataCache';
+import { migrateMessageListCache } from './migrations/messageListCache';
 import { isScopeTrusted } from './useCacheScope';
 
 interface CacheEntry<T = unknown> {
@@ -259,6 +260,12 @@ export function createCacheProvider(options: CacheProviderOptions = {}): ScopedS
     let succeeded = false;
     try {
       const entries = await localDataCache.entriesByScope(scope);
+      const migratedEntries = await migrateMessageListCache({
+        entries,
+        onError,
+        providerVersion: version,
+        scope,
+      });
       // The IndexedDB tier holds read-heavy / write-light business entities
       // (messages, topics, …): once written, a row rarely changes. We never drop
       // these by age — a stale row hydrates for an instant first paint and SWR's
@@ -267,7 +274,7 @@ export function createCacheProvider(options: CacheProviderOptions = {}): ScopedS
       // so legacy/unversioned rows (which the age check used to bound) are dropped
       // and a version bump still evicts everyone. TTL governs the localStorage
       // tier only (see `loadLocal`).
-      const valid = entries.filter((e) => e.version === version);
+      const valid = migratedEntries.filter((e) => e.version === version);
       // Map may have changed scope while we awaited; only apply if still current.
       if (cacheMapInstance && getScope() === scope && hydrationEpoch === epoch) {
         cacheMapInstance.hydrate(valid.map((e) => [e.key, e.data]));

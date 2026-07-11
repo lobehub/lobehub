@@ -642,6 +642,7 @@ export class GatewayService {
           const { state } = await client.getStatus(provider.id);
           await updateBotRuntimeStatus({
             applicationId: provider.applicationId,
+            errorCode: state.errorCode,
             errorMessage: state.error,
             platform: provider.platform,
             status: mapGatewayStatusToRuntimeStatus(state.status),
@@ -695,6 +696,7 @@ export class GatewayService {
       const { state } = await client.getStatus(provider.id);
       return await updateBotRuntimeStatus({
         applicationId,
+        errorCode: state.errorCode,
         errorMessage: state.error,
         platform,
         status: mapGatewayStatusToRuntimeStatus(state.status),

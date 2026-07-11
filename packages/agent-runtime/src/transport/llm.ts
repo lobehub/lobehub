@@ -1,6 +1,14 @@
-import type { ModelUsage, OpenAIChatMessage } from '@lobechat/types';
+import type {
+  ChatImageItem,
+  ChatToolPayload,
+  GroundingSearch,
+  MessageToolCall,
+  ModelPerformance,
+  ModelUsage,
+  OpenAIChatMessage,
+} from '@lobechat/types';
 
-import type { AgentState, CallLLMPayload, InstructionExecutionResult } from '../types';
+import type { AgentEvent, AgentState, CallLLMPayload, InstructionExecutionResult } from '../types';
 import type { ContextBuildOutput } from './context';
 import type { RuntimeMessageRef } from './message';
 
@@ -34,6 +42,40 @@ export interface LLMStreamHandlers {
   onText?: (text: string) => void;
 }
 
+export type LLMAttemptContentPart =
+  { image: string; type: 'image' } | { text: string; type: 'text' };
+
+export interface LLMAttemptOutput {
+  answerSalvagedFromReasoning: boolean;
+  content: string;
+  contentParts: LLMAttemptContentPart[];
+  finishReason?: string;
+  grounding: GroundingSearch | null;
+  hasContentImages: boolean;
+  hasReasoningImages: boolean;
+  imageList: ChatImageItem[];
+  reasoning: string;
+  reasoningParts: LLMAttemptContentPart[];
+  speed?: ModelPerformance;
+  toolCalls: MessageToolCall[];
+  toolsCalling: ChatToolPayload[];
+  usage?: ModelUsage;
+}
+
+export interface LLMAttemptInput {
+  attempt: number;
+  context: ContextBuildOutput;
+  events: AgentEvent[];
+  maxAttempts: number;
+  model: string;
+  onFirstChunk?: () => void;
+  provider: string;
+  state: AgentState;
+}
+
+export type LLMAttemptExecution =
+  { error: unknown; ok: false; output: LLMAttemptOutput } | { ok: true; output: LLMAttemptOutput };
+
 export interface LLMTurnInput {
   assistantMessage: RuntimeMessageRef;
   context: ContextBuildOutput;
@@ -55,10 +97,12 @@ export interface LLMTurnInput {
 export interface LLMTransport {
   /**
    * Executes one prepared model turn. The package executor owns instruction
-   * setup while the adapter owns host-specific context, retry, and persistence
-   * until those phases move onto narrower transport ports.
+   * setup/context while the adapter owns retry and persistence until those
+   * phases move onto narrower transport ports.
    */
   executeTurn?: (input: LLMTurnInput) => Promise<InstructionExecutionResult>;
+  /** Executes one model attempt and returns both successful or partial output. */
+  runAttempt?: (input: LLMAttemptInput) => Promise<LLMAttemptExecution>;
   stream: (
     payload: LLMStreamPayload,
     handlers?: LLMStreamHandlers,

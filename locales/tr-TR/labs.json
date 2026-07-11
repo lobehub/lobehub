@@ -1,4 +1,6 @@
 {
+  "features.agentGraphConfig.desc": "Bir ajan profilinin gelişmiş ayarlarında grafik çalışma zamanı yapılandırmasını göster.",
+  "features.agentGraphConfig.title": "Ajan Grafik Çalışma Zamanı Yapılandırması",
   "features.agentSelfIteration.desc": "Asistanın düşünmesini, öz farkındalık geliştirmesini ve devam eden denemeler ile etkileşimler boyunca sürekli yineleme yapmasını sağlar.",
   "features.agentSelfIteration.title": "Aracının Kendi Kendine Yinelemesi",
   "features.assistantMessageGroup.desc": "Temsilci mesajlarını ve bunlara ait araç çağrısı sonuçlarını birlikte gruplayarak görüntüleyin",
@@ -13,6 +15,8 @@
   "features.imessage.title": "iMessage Kanalı",
   "features.inputMarkdown.desc": "Girdi alanında Markdown biçimlendirmesini (kalın metin, kod blokları, tablolar vb.) gerçek zamanlı olarak görüntüleyin.",
   "features.inputMarkdown.title": "Girdi Markdown Görüntüleme",
+  "features.messageTextSelectionActions.desc": "Sohbet mesajlarında metin seçerken hızlı bir eylem göster, böylece seçilen metin bir sonraki konuşma bağlamına eklenebilir.",
+  "features.messageTextSelectionActions.title": "Mesaj Metni Seçim Eylemleri",
   "features.platformAgent.desc": "Oluşturma menüsünde \"Bağlantı Ajanı\" girişini göster. Bağlı ajanlar (ör. OpenClaw, Hermes) kendi cihazlarınızda çalışır ve lh connect aracılığıyla geri iletişim kurar.",
   "features.platformAgent.title": "Bağlantı Ajanı",
   "features.taskVerify.desc": "Görev detayına teslimat kabul bölümü ekleyin: kabulü bir cümleyle açıklayın ve düzenlenebilir doğrulama kriterlerini AI ile oluşturun.",

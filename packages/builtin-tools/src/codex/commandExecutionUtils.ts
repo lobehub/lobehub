@@ -1,3 +1,5 @@
+// The parse-side unwrap in src/store/tool/slices/builtin/executors/worktreeDetection.ts
+// mirrors this wrapper shape — keep the accepted forms in sync.
 const SHELL_WRAPPER_PATTERN =
   /^(?:\/usr\/bin\/env\s+)?(?:\/\S+\/)?(?:bash|sh|zsh)\s+(?:-lc|-c|-l\s+-c)\s+(\S[\s\S]*)$/;
 

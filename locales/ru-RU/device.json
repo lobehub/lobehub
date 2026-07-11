@@ -70,6 +70,7 @@
   "workingDirectory.removeWorktreeAction": "Удалить рабочее дерево",
   "workingDirectory.removeWorktreeConfirm": "Удалить рабочее дерево «{{name}}»? Это удалит каталог рабочего дерева, но сохранит его ветку. Git откажется, если есть несохранённые изменения.",
   "workingDirectory.removeWorktreeFailed": "Не удалось удалить рабочее дерево",
+  "workingDirectory.removeWorktreePending": "Удаление рабочей ветки «{{name}}»…",
   "workingDirectory.removeWorktreeSuccess": "Рабочее дерево удалено",
   "workingDirectory.removeWorktreeTitle": "Удалить рабочее дерево",
   "workingDirectory.removed": "Удалено «{{name}}»",

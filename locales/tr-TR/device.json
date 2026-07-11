@@ -70,6 +70,7 @@
   "workingDirectory.removeWorktreeAction": "Çalışma ağacını sil",
   "workingDirectory.removeWorktreeConfirm": "Çalışma ağacı “{{name}}” silinsin mi? Bu işlem çalışma ağacı dizinini kaldırır ancak dalını korur. Git, kaydedilmemiş değişiklikler varsa reddedecektir.",
   "workingDirectory.removeWorktreeFailed": "Çalışma ağacı silinemedi",
+  "workingDirectory.removeWorktreePending": "Çalışma ağacı “{{name}}” siliniyor…",
   "workingDirectory.removeWorktreeSuccess": "Çalışma ağacı silindi",
   "workingDirectory.removeWorktreeTitle": "Çalışma ağacını sil",
   "workingDirectory.removed": "“{{name}}” kaldırıldı",
