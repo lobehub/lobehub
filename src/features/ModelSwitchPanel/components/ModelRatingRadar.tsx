@@ -29,7 +29,7 @@ export const RADAR_MIN_DIMENSIONS = 5;
 export interface RadarDimensionDatum {
   key: RatingDimensionKey;
   label: string;
-  /** undefined = no data for this dimension: grey label, vertex collapses to center */
+  /** undefined = no data: grey label, dashed axis, vertex omitted from the polygon */
   score?: number;
   sourceUrl?: string;
   tooltip?: string;
@@ -139,9 +139,14 @@ const ModelRatingRadar: FC<ModelRatingRadarProps> = memo(({ dimensions }) => {
           />
         );
       })}
+      {/* connect scored vertices only — plotting a missing dimension at the center would read as a real 0 */}
       <polygon
         className={styles.polygon}
-        points={toPoints(dimensions.map((d, i) => pointAt(i, total, (d.score ?? 0) / 100)))}
+        points={toPoints(
+          dimensions.flatMap((d, i) =>
+            d.score === undefined ? [] : [pointAt(i, total, d.score / 100)],
+          ),
+        )}
       />
       {dimensions.map((dimension, i) => {
         if (dimension.score === undefined) return null;
