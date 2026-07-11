@@ -208,10 +208,6 @@ vi.mock('./AgentStatusTag', () => ({
   default: () => null,
 }));
 
-vi.mock('./AutoSaveHint', () => ({
-  default: () => null,
-}));
-
 vi.mock('./AgentVersionReviewTag', () => ({
   default: () => null,
 }));

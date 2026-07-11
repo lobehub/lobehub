@@ -330,6 +330,13 @@ export interface HeterogeneousTerminalErrorData {
   agentType?: string;
   clearEchoedContent?: boolean;
   code?: string;
+  /**
+   * Diagnostic context from the CLI's terminal event (subtype, HTTP status,
+   * turn count, session id, …). Persisted verbatim into the error body so the
+   * error card's details pane explains the failure even when the CLI reported
+   * no message text.
+   */
+  details?: Record<string, unknown>;
   docsUrl?: string;
   error?: string;
   installCommands?: readonly string[];

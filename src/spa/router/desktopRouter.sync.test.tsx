@@ -1,8 +1,11 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import type { RouteObject } from 'react-router';
 import { matchRoutes } from 'react-router';
 import { describe, expect, it } from 'vitest';
+
+import { WORKSPACE_SETTINGS_TABS } from '@/features/Workspace/workspaceAwarePath';
 
 import { desktopRoutes } from './desktopRouter.config';
 
@@ -159,6 +162,28 @@ describe('desktopRouter config sync', () => {
     // `path: 'billing'` block under `:workspaceSlug` is preserved as redirects)
     expect(asyncSource).toContain("redirectElement('../settings/plans')");
     expect(syncSource).toContain("redirectElement('../settings/plans')");
+  });
+
+  it('workspace-aware navigation recognizes every registered workspace settings tab', () => {
+    const rootRoute = desktopRoutes.find((route) => route.path === '/');
+    const workspaceRoute = rootRoute?.children?.find((route) => route.path === ':workspaceSlug');
+    const settingsRoute = workspaceRoute?.children?.find((route) => route.path === 'settings');
+
+    expect(settingsRoute, 'Workspace settings route must exist').toBeDefined();
+
+    const collectPaths = (routes: RouteObject[]): string[] =>
+      routes.flatMap((route) =>
+        route.path
+          ? [route.path, ...collectPaths(route.children ?? [])]
+          : collectPaths(route.children ?? []),
+      );
+    const registeredTabs = collectPaths(settingsRoute?.children ?? []);
+    const missingTabs = registeredTabs.filter((tab) => !WORKSPACE_SETTINGS_TABS.has(tab));
+
+    expect(
+      missingTabs,
+      `Add workspace settings tabs to WORKSPACE_SETTINGS_TABS: ${missingTabs.join(', ')}`,
+    ).toEqual([]);
   });
 
   it('task list and detail desktop routes share one workspace layout', async () => {

@@ -1,4 +1,5 @@
 import type { ACPBroadcastEvents } from './acp';
+import type { BrowserSidebarBroadcastEvents } from './browserSidebar';
 import type { GatewayConnectionBroadcastEvents } from './gatewayConnection';
 import type { HeterogeneousAgentBroadcastEvents } from './heterogeneousAgent';
 import type { NavigationBroadcastEvents } from './navigation';
@@ -18,6 +19,7 @@ export interface MainBroadcastEvents
   extends
     ACPBroadcastEvents,
     AutoUpdateBroadcastEvents,
+    BrowserSidebarBroadcastEvents,
     GatewayConnectionBroadcastEvents,
     HeterogeneousAgentBroadcastEvents,
     NavigationBroadcastEvents,

@@ -21,8 +21,8 @@ type ServerCallLlmCollectedOutput = Pick<
   | 'contentParts'
   | 'hasContentImages'
   | 'hasReasoningImages'
-  | 'reasoning'
   | 'reasoningParts'
+  | 'thinkingContent'
 >;
 
 interface ServerCallLlmMessageMetadata extends MessageMetadata {
@@ -93,7 +93,7 @@ const buildFinalReasoning = (
     };
   }
 
-  return streamOutput.reasoning ? { content: streamOutput.reasoning } : undefined;
+  return streamOutput.thinkingContent ? { content: streamOutput.thinkingContent } : undefined;
 };
 
 const sanitizePersistedTools = (toolsCalling: ChatToolPayload[]) =>
@@ -204,7 +204,7 @@ export const persistInterruptedServerCallLlmResult = async ({
   streamOutput,
   toolsCalling,
 }: PersistInterruptedServerCallLlmResultInput): Promise<void> => {
-  if (!streamOutput.content && !streamOutput.reasoning && toolsCalling.length === 0) return;
+  if (!streamOutput.content && !streamOutput.thinkingContent && toolsCalling.length === 0) return;
 
   try {
     await messageModel.update(assistantMessageId, {
@@ -214,14 +214,16 @@ export const persistInterruptedServerCallLlmResult = async ({
         currentStepUsage,
         interruptedMidStream: true,
       }),
-      reasoning: streamOutput.reasoning ? { content: streamOutput.reasoning } : undefined,
+      reasoning: streamOutput.thinkingContent
+        ? { content: streamOutput.thinkingContent }
+        : undefined,
       tools: sanitizePersistedTools(toolsCalling),
     });
     log(
       '[%s] Interrupted finalize: persisted partial content (c=%d r=%d tools=%d)',
       operationLogId,
       streamOutput.content.length,
-      streamOutput.reasoning.length,
+      streamOutput.thinkingContent.length,
       toolsCalling.length,
     );
   } catch (error) {

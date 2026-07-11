@@ -154,6 +154,7 @@ export const createServerAgentToolsEngine = (
     canUseDevice = false,
     deviceContext,
     disableLocalSystem = false,
+    disabledPluginIds = [],
     executionPlan,
     globalMemoryEnabled = false,
     hasEnabledKnowledgeBases = false,
@@ -282,6 +283,13 @@ export const createServerAgentToolsEngine = (
     [WebBrowsingManifest.identifier]: isSearchEnabled,
   };
 
+  const excludedIdentifiers = new Set(disabledPluginIds);
+  if (!canUseDevice) {
+    for (const identifier of DEVICE_TOOL_IDENTIFIERS) excludedIdentifiers.add(identifier);
+  } else if (deviceLocked) {
+    for (const identifier of REMOTE_DEVICE_TOOL_IDENTIFIERS) excludedIdentifiers.add(identifier);
+  }
+
   return createServerToolsEngine(context, {
     // Pass additional manifests (e.g., LobeHub Skills)
     additionalManifests,
@@ -309,11 +317,7 @@ export const createServerAgentToolsEngine = (
     // resolve them regardless of which manifest source declared them.
     // Locked turns exclude the remote-device picker only (local-system
     // stays for the routed device).
-    excludeIdentifiers: canUseDevice
-      ? deviceLocked
-        ? REMOTE_DEVICE_TOOL_IDENTIFIERS
-        : undefined
-      : DEVICE_TOOL_IDENTIFIERS,
+    excludeIdentifiers: excludedIdentifiers.size > 0 ? excludedIdentifiers : undefined,
     // Conversation context for context-aware builtin manifests (scope /
     // isSubAgent), e.g. hiding lobe-agent's callSubAgent in sub-agent / group runs.
     manifestContext,

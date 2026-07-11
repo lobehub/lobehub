@@ -598,6 +598,10 @@ export class ChatPortalActionImpl {
     this.#get().pushPortalView({ checkItemId, operationId, type: PortalViewType.VerifyResult });
   };
 
+  openVerifyReport = (runId: string): void => {
+    this.#get().pushPortalView({ runId, type: PortalViewType.VerifyReport });
+  };
+
   popPortalView = (): void => {
     const { portalStack } = this.#get();
 

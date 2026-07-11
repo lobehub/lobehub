@@ -152,6 +152,9 @@ const installedPluginsArg = () =>
 const agentConfigPluginsArg = () =>
   mockCreateServerAgentToolsEngine.mock.calls[0][1].agentConfig.plugins as string[];
 
+const disabledPluginIdsArg = () =>
+  mockCreateServerAgentToolsEngine.mock.calls[0][1].disabledPluginIds as string[];
+
 const toolManifestMapArg = () =>
   mockCreateOperation.mock.calls[0][0].toolSet.manifestMap as Record<string, unknown>;
 
@@ -210,6 +213,7 @@ describe('AiAgentService.execAgent - three-state plugin config (pinned/auto/disa
     await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' } as any);
 
     expect(agentConfigPluginsArg()).toEqual(['plugin-a']);
+    expect(disabledPluginIdsArg()).toEqual(['plugin-b']);
   });
 
   it('behaves identically to a pure string array when no entry is disabled', async () => {
@@ -252,5 +256,20 @@ describe('AiAgentService.execAgent - three-state plugin config (pinned/auto/disa
     // used to re-add them here from the raw (unfiltered) manifest arrays.
     expect(toolManifestMapArg()).not.toHaveProperty('composio-disabled');
     expect(toolManifestMapArg()).not.toHaveProperty('skill-disabled');
+  });
+
+  it('excludes a disabled builtin from the activator-discovery toolManifestMap', async () => {
+    mockGetAgentConfig.mockResolvedValue({
+      chatConfig: {},
+      id: 'agent-1',
+      model: 'gpt-4',
+      plugins: [{ identifier: 'lobe-agent', mode: 'disabled' }],
+      provider: 'openai',
+      systemRole: 'You are a helper',
+    });
+
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' } as any);
+
+    expect(toolManifestMapArg()).not.toHaveProperty('lobe-agent');
   });
 });

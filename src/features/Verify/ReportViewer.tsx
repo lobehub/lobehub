@@ -1531,10 +1531,14 @@ CodingScopeCard.displayName = 'CodingScopeCard';
  * and the full narrative behind a collapsed disclosure. Addressed by `:runId`;
  * refreshes itself while the run is non-terminal.
  */
-const ReportViewer = memo(() => {
+interface ReportViewerProps {
+  runId?: string;
+}
+
+const ReportViewer = memo<ReportViewerProps>(({ runId: explicitRunId }) => {
   const { t } = useTranslation('verify');
-  const { runId } = useParams<{ runId: string }>();
-  const verifyRunId = runId ?? null;
+  const { runId: routeRunId } = useParams<{ runId: string }>();
+  const verifyRunId = explicitRunId ?? routeRunId ?? null;
   const { data, error, isLoading, mutate } = useVerifyReportBundle(verifyRunId);
   const [filter, setFilter] = useState<Filter>('all');
 

@@ -19,6 +19,20 @@ const getLastOptimisticConfigUpdateCall = () => {
   return undefined;
 };
 
+const getOptimisticConfigUpdateCalls = () =>
+  vi.mocked(getAgentStoreState).mock.results.flatMap((result) => {
+    const updateMock = result.value.optimisticUpdateAgentConfig as ReturnType<typeof vi.fn>;
+    return updateMock.mock.calls;
+  });
+
+const getAgentStoreActionCalls = (
+  action: 'appendStreamingSystemRole' | 'finishStreamingSystemRole' | 'startStreamingSystemRole',
+) =>
+  vi.mocked(getAgentStoreState).mock.results.flatMap((result) => {
+    const actionMock = result.value[action] as ReturnType<typeof vi.fn>;
+    return actionMock.mock.calls;
+  });
+
 // Create mock services
 const mockAgentService: IAgentService = {
   countAgents: vi.fn(),
@@ -53,7 +67,7 @@ vi.mock('@/store/agent', () => ({
     internal_dispatchAgentMap: vi.fn(),
     optimisticUpdateAgentConfig: vi.fn(),
     optimisticUpdateAgentMeta: vi.fn(),
-    startStreamingSystemRole: vi.fn(),
+    startStreamingSystemRole: vi.fn(() => 7),
   })),
 }));
 
@@ -551,6 +565,70 @@ describe('AgentManagerRuntime', () => {
 
       expect(result.success).toBe(true);
       expect(result.content).toContain('Successfully cleared system prompt');
+    });
+
+    it('should thread the stream owner and generation through every streaming action', async () => {
+      const result = await runtime.updatePrompt('agent-id', {
+        prompt: 'Hello',
+        streaming: true,
+      });
+
+      expect(result.success).toBe(true);
+      expect(getAgentStoreActionCalls('startStreamingSystemRole')).toContainEqual(['agent-id']);
+      expect(getAgentStoreActionCalls('appendStreamingSystemRole')).toContainEqual([
+        'agent-id',
+        7,
+        'Hello',
+      ]);
+      expect(getAgentStoreActionCalls('finishStreamingSystemRole')).toContainEqual(['agent-id', 7]);
+      expect(getOptimisticConfigUpdateCalls()).toContainEqual([
+        'agent-id',
+        { editorData: null, systemRole: 'Hello' },
+      ]);
+    });
+
+    it('should persist concurrent streams to each explicit agent target', async () => {
+      const agentAUpdate = runtime.updatePrompt('agent-a', {
+        prompt: 'Agent A prompt',
+        streaming: true,
+      });
+      const agentBUpdate = runtime.updatePrompt('agent-b', {
+        prompt: 'Agent B prompt',
+        streaming: true,
+      });
+
+      const results = await Promise.all([agentAUpdate, agentBUpdate]);
+
+      expect(results.every((result) => result.success)).toBe(true);
+      expect(getOptimisticConfigUpdateCalls()).toEqual(
+        expect.arrayContaining([
+          ['agent-a', { editorData: null, systemRole: 'Agent A prompt' }],
+          ['agent-b', { editorData: null, systemRole: 'Agent B prompt' }],
+        ]),
+      );
+    });
+
+    it('should preserve invocation order for concurrent updates to the same agent', async () => {
+      const secondRuntime = new AgentManagerRuntime({
+        agentService: mockAgentService,
+        discoverService: mockDiscoverService,
+      });
+      const firstUpdate = runtime.updatePrompt('agent-id', {
+        prompt: 'First prompt is intentionally longer',
+        streaming: true,
+      });
+      const secondUpdate = secondRuntime.updatePrompt('agent-id', {
+        prompt: 'Second prompt',
+        streaming: false,
+      });
+
+      const results = await Promise.all([firstUpdate, secondUpdate]);
+
+      expect(results.every((result) => result.success)).toBe(true);
+      expect(getOptimisticConfigUpdateCalls()).toEqual([
+        ['agent-id', { editorData: null, systemRole: 'First prompt is intentionally longer' }],
+        ['agent-id', { editorData: null, systemRole: 'Second prompt' }],
+      ]);
     });
   });
 

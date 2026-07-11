@@ -94,6 +94,8 @@ export interface HeterogeneousAgentSessionError {
   agentType?: string;
   code?: HeterogeneousAgentSessionErrorCode | string;
   command?: string;
+  /** Diagnostic context from the CLI's terminal event (subtype, HTTP status, turn count, …). */
+  details?: Record<string, unknown>;
   docsUrl?: string;
   installCommands?: readonly string[];
   message: string;

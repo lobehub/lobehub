@@ -11,7 +11,7 @@ const anthropicChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_000_000,
     description:
-      "Claude Fable 5 is Anthropic's most capable model — a new tier above Opus for the most demanding reasoning and long-horizon agentic work.",
+      "Claude Fable 5 is Anthropic's strongest model — a new tier above Opus for the most demanding reasoning, agentic work, and coding, at a premium price.",
     displayName: 'Claude Fable 5',
     enabled: true,
     family: 'claude-mythos',
@@ -82,7 +82,7 @@ const anthropicChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_000_000,
     description:
-      "Claude Opus 4.8 is Anthropic's most capable model, building on Opus 4.7 with improvements across reasoning, agentic coding, and tool use.",
+      "Claude Opus 4.8 is Anthropic's flagship Opus model, building on Opus 4.7 with improvements across reasoning, agentic coding, and tool use.",
     displayName: 'Claude Opus 4.8',
     enabled: true,
     family: 'claude-opus',

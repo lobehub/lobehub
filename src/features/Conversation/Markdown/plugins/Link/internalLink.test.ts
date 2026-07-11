@@ -36,6 +36,20 @@ describe('parseInternalLink', () => {
     });
   });
 
+  it('parses verification report links', () => {
+    expect(parseInternalLink('https://app.lobehub.com/verify/run-1')).toEqual({
+      pathname: '/verify/run-1',
+      runId: 'run-1',
+      type: 'verify',
+    });
+    expect(parseInternalLink('/lobe-team/verify/run-2', undefined, ['lobe-team'])).toEqual({
+      pathname: '/lobe-team/verify/run-2',
+      runId: 'run-2',
+      type: 'verify',
+      workspaceSlug: 'lobe-team',
+    });
+  });
+
   it('parses workspace-prefixed entity paths', () => {
     expect(
       parseInternalLink('/lobe-team/agent/agt_agent/docs/docs_document', undefined, ['lobe-team']),

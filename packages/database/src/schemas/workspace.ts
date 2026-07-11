@@ -7,6 +7,7 @@ import {
   primaryKey,
   text,
   uniqueIndex,
+  uuid,
   varchar,
 } from 'drizzle-orm/pg-core';
 
@@ -155,6 +156,13 @@ export type NewWorkspaceAuditLog = typeof workspaceAuditLogs.$inferInsert;
 export const workspaceUserSettings = pgTable(
   'workspace_user_settings',
   {
+    /**
+     * Surrogate primary key. Business uniqueness lives in the
+     * (workspace_id, user_id) unique index instead of a composite PK, so the
+     * uniqueness scope can grow by nullable dimensions later without a PK
+     * rebuild (see the ai_providers/ai_models migration 0110 lesson).
+     */
+    id: uuid('id').defaultRandom().notNull().primaryKey(),
     workspaceId: text('workspace_id')
       .references(() => workspaces.id, { onDelete: 'cascade' })
       .notNull(),
@@ -172,11 +180,7 @@ export const workspaceUserSettings = pgTable(
     updatedAt: updatedAt(),
   },
   (t) => [
-    // Composite PK guarantees one row per (workspace, user), which is the
-    // exact scope of the data — matches workspace_members.
-    primaryKey({ columns: [t.workspaceId, t.userId] }),
-    // Reverse lookup ("all workspaces this user has preferences in") stays
-    // cheap for cross-workspace features / bulk cleanup jobs.
+    uniqueIndex('workspace_user_settings_workspace_id_user_id_unique').on(t.workspaceId, t.userId),
     index('workspace_user_settings_user_id_idx').on(t.userId),
   ],
 );

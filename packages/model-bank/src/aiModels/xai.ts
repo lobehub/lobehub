@@ -12,7 +12,7 @@ const xaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 500_000,
     description:
-      "SpaceXAI's flagship model for coding, agentic tasks, and knowledge work — configurable reasoning (low/medium/high, always on).",
+      "SpaceXAI's flagship model for agentic tasks and knowledge work — remarkably fast, with coding ability on par with Claude Opus.",
     displayName: 'Grok 4.5',
     enabled: true,
     family: 'grok',

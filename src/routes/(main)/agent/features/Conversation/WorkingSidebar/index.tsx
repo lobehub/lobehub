@@ -28,6 +28,7 @@ import ResourcesSection from './ResourcesSection';
 import Review from './Review';
 
 const ParamsSection = lazy(() => import('./ParamsSection'));
+const BrowserPane = lazy(() => import('./Browser'));
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   body: css`
@@ -78,7 +79,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-type Tab = 'files' | 'params' | 'review' | 'resources';
+type Tab = 'browser' | 'files' | 'params' | 'review' | 'resources';
 
 const REVIEW_TREE_STORAGE_KEY = 'lobechat-review-tree';
 const DEFAULT_PANEL_WIDTH = 360;
@@ -142,10 +143,14 @@ const AgentWorkingSidebar = memo(() => {
   const reviewAvailable =
     (isLocalSystemEnabled || isDeviceMode) && !!workingDirectory && !!repoType;
   const paramsAvailable = !isHetero;
+  // The in-app browser rides on the Electron <webview> tag — desktop only.
+  const browserAvailable = isDesktop;
+  const browserSessionId = `agent:${activeAgentId ?? 'default'}`;
   const resolveActiveTab = (): Tab => {
     if (storedTab === 'params' && paramsAvailable) return 'params';
     if (storedTab === 'review' && reviewAvailable) return 'review';
     if (storedTab === 'files' && filesAvailable) return 'files';
+    if (storedTab === 'browser' && browserAvailable) return 'browser';
     if (storedTab === 'resources') return 'resources';
     if (isHetero) return 'resources';
     if (reviewAvailable) return 'review';
@@ -163,6 +168,12 @@ const AgentWorkingSidebar = memo(() => {
     false,
   );
   const [panelWidth, setPanelWidth] = useState<number | string>(DEFAULT_PANEL_WIDTH);
+  // Mount the browser pane on first activation only (no eager page load), then
+  // keep it mounted-but-hidden so the page survives tab switches.
+  const [browserActivated, setBrowserActivated] = useState(false);
+  useEffect(() => {
+    if (activeTab === 'browser') setBrowserActivated(true);
+  }, [activeTab]);
   const reviewTwoPane = activeTab === 'review' && reviewAvailable && showReviewTree;
   useEffect(() => {
     if (!reviewTwoPane) return;
@@ -221,6 +232,15 @@ const AgentWorkingSidebar = memo(() => {
                 {t('workingPanel.files.title')}
               </button>
             )}
+            {browserAvailable && (
+              <button
+                className={`${styles.tab} ${activeTab === 'browser' ? styles.tabActive : ''}`}
+                type="button"
+                onClick={() => setWorkingSidebarTab('browser')}
+              >
+                {t('workingPanel.browser.title')}
+              </button>
+            )}
             {paramsAvailable && (
               <button
                 className={`${styles.tab} ${activeTab === 'params' ? styles.tabActive : ''}`}
@@ -257,6 +277,14 @@ const AgentWorkingSidebar = memo(() => {
           {filesAvailable && (
             <Flexbox className={activeTab === 'files' ? styles.pane : styles.paneHidden}>
               <Files deviceId={remoteDeviceId} workingDirectory={workingDirectory} />
+            </Flexbox>
+          )}
+          {browserAvailable && browserActivated && (
+            <Flexbox className={activeTab === 'browser' ? styles.pane : styles.paneHidden}>
+              {/* Keyed by session: the pane holds per-session local state (webview,
+              address bar), so an agent switch must remount it rather than leak the
+              previous agent's page into the new agent's session. */}
+              <BrowserPane key={browserSessionId} sessionId={browserSessionId} />
             </Flexbox>
           )}
           <Flexbox

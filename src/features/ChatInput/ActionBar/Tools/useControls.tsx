@@ -332,12 +332,33 @@ const styles = createStaticStyles(({ css }) => ({
 
     width: 100%;
     min-width: 0;
+
+    &:hover [data-tool-trailing],
+    &:focus-within [data-tool-trailing] {
+      pointer-events: auto;
+      opacity: 1;
+    }
   `,
   toolTrailing: css`
+    pointer-events: none;
+
     display: inline-flex;
     flex: none;
     gap: 8px;
     align-items: center;
+
+    opacity: 0;
+
+    transition: opacity 150ms ${cssVar.motionEaseOut};
+
+    @media (hover: none) {
+      pointer-events: auto;
+      opacity: 1;
+    }
+  `,
+  toolTrailingVisible: css`
+    pointer-events: auto;
+    opacity: 1;
   `,
   typeTag: css`
     display: inline-flex;
@@ -694,13 +715,16 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
           <span className={cx(styles.toolLabelText)}>{label}</span>
           {extraTag}
         </span>
-        <span className={cx(styles.toolTrailing)}>
+        <span
+          data-tool-trailing
+          className={cx(styles.toolTrailing, policyOpenId === id && styles.toolTrailingVisible)}
+        >
           {badge && <span className={cx(styles.typeTag)}>{badge}</span>}
           {action}
         </span>
       </span>
     ),
-    [openSkillPolicyMenu],
+    [openSkillPolicyMenu, policyOpenId],
   );
 
   const createManagedSkillItem = useCallback(

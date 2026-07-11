@@ -54,9 +54,10 @@ export interface LLMAttemptOutput {
   hasContentImages: boolean;
   hasReasoningImages: boolean;
   imageList: ChatImageItem[];
-  reasoning: string;
   reasoningParts: LLMAttemptContentPart[];
   speed?: ModelPerformance;
+  /** Raw streamed thinking text; finalization converts it to the message reasoning object. */
+  thinkingContent: string;
   toolCalls: MessageToolCall[];
   toolsCalling: ChatToolPayload[];
   usage?: ModelUsage;

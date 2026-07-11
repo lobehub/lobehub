@@ -237,5 +237,45 @@ describe('ChatGroupCurdSlice', () => {
 
       expect(mutate).toHaveBeenCalledWith(['group:detail', 'group-1']);
     });
+
+    it('keeps an explicit metadata update bound to its original group', async () => {
+      let resolveUpdate: (() => void) | undefined;
+      vi.mocked(chatGroupService.updateGroup).mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            resolveUpdate = () => resolve({} as any);
+          }),
+      );
+      act(() => {
+        useAgentGroupStore.setState({
+          activeGroupId: 'group-1',
+          groupMap: {
+            'group-1': createMockGroup({ id: 'group-1', title: 'Group One' }),
+            'group-2': createMockGroup({ id: 'group-2', title: 'Group Two' }),
+          },
+        });
+      });
+      const { result } = renderHook(() => useAgentGroupStore());
+
+      let updatePromise!: Promise<void>;
+      act(() => {
+        updatePromise = result.current.updateGroupMetaById('group-1', { title: 'Group One Draft' });
+      });
+      act(() => {
+        useAgentGroupStore.setState({ activeGroupId: 'group-2' });
+      });
+
+      await act(async () => {
+        resolveUpdate?.();
+        await updatePromise;
+      });
+
+      expect(chatGroupService.updateGroup).toHaveBeenCalledExactlyOnceWith('group-1', {
+        title: 'Group One Draft',
+      });
+      expect(mutate).toHaveBeenCalledWith(['group:detail', 'group-1']);
+      expect(result.current.groupMap['group-1']?.title).toBe('Group One Draft');
+      expect(result.current.groupMap['group-2']?.title).toBe('Group Two');
+    });
   });
 });

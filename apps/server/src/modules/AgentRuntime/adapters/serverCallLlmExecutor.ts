@@ -158,7 +158,7 @@ class ServerCallLlmTurn {
                 result: {
                   content: llmAttempt.content,
                   finishReason: currentStepFinishReason,
-                  reasoning: llmAttempt.reasoning,
+                  reasoning: llmAttempt.thinkingContent,
                   tool_calls,
                   usage: currentStepUsage,
                 },
@@ -172,7 +172,7 @@ class ServerCallLlmTurn {
                   grounding,
                   ...(stepLabel && { stepLabel }),
                   imageList: imageList.length > 0 ? imageList : undefined,
-                  reasoning: llmAttempt.reasoning || undefined,
+                  reasoning: llmAttempt.thinkingContent || undefined,
                   toolsCalling,
                   usage: currentStepUsage,
                 },

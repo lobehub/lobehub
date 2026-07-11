@@ -2,7 +2,7 @@
 
 import { Icon } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { BotIcon, CheckSquareIcon, FileTextIcon } from 'lucide-react';
+import { BotIcon, CheckCircleIcon, CheckSquareIcon, FileTextIcon } from 'lucide-react';
 import type { MouseEvent } from 'react';
 import { memo, useCallback } from 'react';
 
@@ -53,6 +53,7 @@ const ENTITY_ICONS = {
   agent: BotIcon,
   document: FileTextIcon,
   task: CheckSquareIcon,
+  verify: CheckCircleIcon,
 } as const;
 
 interface InternalEntityLinkProps {
@@ -64,10 +65,11 @@ interface InternalEntityLinkProps {
 export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, reference }) => {
   const navigate = useWorkspaceAwareNavigate();
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
-  const [openAgentDetail, openDocument, openTaskDetail] = useChatStore((s) => [
+  const [openAgentDetail, openDocument, openTaskDetail, openVerifyReport] = useChatStore((s) => [
     s.openAgentDetail,
     s.openDocument,
     s.openTaskDetail,
+    s.openVerifyReport,
   ]);
   const linkedAgentId = reference.type === 'document' ? reference.agentId : undefined;
   const shouldResolveAgentDocument = !!linkedAgentId && linkedAgentId === activeAgentId;
@@ -118,6 +120,10 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, 
           openTaskDetail(reference.taskId);
           break;
         }
+        case 'verify': {
+          openVerifyReport(reference.runId);
+          break;
+        }
         case 'route': {
           navigate(reference.pathname);
           break;
@@ -131,6 +137,7 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, 
       openAgentDetail,
       openDocument,
       openTaskDetail,
+      openVerifyReport,
       reference,
       resolveAgentDocuments,
       shouldResolveAgentDocument,

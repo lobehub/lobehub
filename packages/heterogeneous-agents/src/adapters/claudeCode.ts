@@ -237,6 +237,25 @@ const CLI_OVERLOADED_PATTERNS = [
 ] as const;
 
 /**
+ * CC streams a synthetic assistant text turn when the underlying API call
+ * fails mid-run — e.g. `API Error: Connection closed mid-response. The
+ * response above may be incomplete.`. The paired terminal `result` event
+ * usually carries NO `result` text for these failures (`subtype:
+ * 'error_during_execution'` and nothing else), so that streamed line is the
+ * only human-readable reason available to the terminal error card.
+ */
+const CC_SYNTHETIC_API_ERROR_PATTERN = /^API Error\b/;
+
+/**
+ * Human-readable fallbacks for CC's terminal error subtypes, used when
+ * neither the result event nor the stream carried any message text.
+ */
+const CLI_ERROR_SUBTYPE_MESSAGES: Record<string, string> = {
+  error_during_execution: 'Claude Code hit an error mid-run and exited without reporting a reason.',
+  error_max_turns: 'Claude Code stopped after reaching its maximum number of turns for this run.',
+};
+
+/**
  * Discriminates a user-side plan/quota limit from everything else.
  *
  * Two signals must BOTH hold:
@@ -413,6 +432,47 @@ const getAuthRequiredTerminalError = (
     message:
       'Claude Code could not authenticate. Sign in again or refresh its credentials, then retry.',
     stderr: rawMessage,
+  };
+};
+
+/**
+ * Last-resort terminal error for `is_error` results that no structured
+ * classifier (rate-limit / overloaded / auth) claimed. CC's error results
+ * frequently carry NO `result` text at all — a mid-response network drop
+ * yields `{subtype: 'error_during_execution', is_error: true}` and nothing
+ * else — which used to surface as an opaque `Agent execution failed`.
+ * Prefer, in order: the CLI's own result text, the synthetic `API Error:`
+ * line captured off the stream, then a subtype-specific description — and
+ * attach the result event's diagnostic fields so the error card's details
+ * pane says what actually happened.
+ */
+const buildFallbackTerminalError = (
+  raw: any,
+  streamedApiError?: string,
+): HeterogeneousTerminalErrorData => {
+  const subtype =
+    typeof raw.subtype === 'string' && raw.subtype !== 'success' ? raw.subtype : undefined;
+  const message =
+    getCliResultMessage(raw.result) ||
+    streamedApiError ||
+    (subtype && CLI_ERROR_SUBTYPE_MESSAGES[subtype]) ||
+    'Agent execution failed';
+
+  const details: Record<string, unknown> = {
+    ...(raw.api_error_status == null ? {} : { apiErrorStatus: raw.api_error_status }),
+    ...(typeof raw.duration_ms === 'number' ? { durationMs: raw.duration_ms } : {}),
+    ...(streamedApiError && streamedApiError !== message ? { lastApiError: streamedApiError } : {}),
+    ...(typeof raw.num_turns === 'number' ? { numTurns: raw.num_turns } : {}),
+    ...(typeof raw.session_id === 'string' ? { sessionId: raw.session_id } : {}),
+    ...(subtype ? { subtype } : {}),
+  };
+
+  return {
+    agentType: 'claude-code',
+    ...(subtype ? { code: subtype } : {}),
+    ...(Object.keys(details).length > 0 ? { details } : {}),
+    error: message,
+    message,
   };
 };
 
@@ -652,6 +712,13 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
    * authoritative usage on `message_delta`.
    */
   private currentStreamEventModel: string | undefined;
+  /**
+   * Latest synthetic `API Error: …` assistant text seen on the main stream
+   * (see {@link CC_SYNTHETIC_API_ERROR_PATTERN}). Feeds the terminal error
+   * classifiers / fallback in `handleResult` when the error result event
+   * itself carries no text; cleared at end of run.
+   */
+  private lastApiErrorText?: string;
   /** Cumulative text streamed via partial-message deltas, keyed by message.id. */
   private streamedTextByMessageId = new Map<string, string>();
   /** Cumulative thinking streamed via partial-message deltas, keyed by message.id. */
@@ -986,7 +1053,11 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
     for (const block of content) {
       switch (block.type) {
         case 'text': {
-          if (block.text) textParts.push(block.text);
+          if (block.text) {
+            textParts.push(block.text);
+            const trimmed = block.text.trim();
+            if (CC_SYNTHETIC_API_ERROR_PATTERN.test(trimmed)) this.lastApiErrorText = trimmed;
+          }
           break;
         }
         case 'thinking': {
@@ -1192,7 +1263,11 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
     for (const block of content) {
       switch (block.type) {
         case 'text': {
-          if (block.text) textParts.push(block.text);
+          if (block.text) {
+            textParts.push(block.text);
+            const trimmed = block.text.trim();
+            if (CC_SYNTHETIC_API_ERROR_PATTERN.test(trimmed)) this.lastApiErrorText = trimmed;
+          }
           break;
         }
         case 'thinking': {
@@ -1600,27 +1675,31 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
       );
     }
 
-    const resultMessage = getCliResultMessage(raw.result) || 'Agent execution failed';
-    const rateLimitError = getRateLimitTerminalError(raw.result, this.pendingRateLimitInfo);
+    // Classifiers read the result text; a mid-run API failure often ships an
+    // EMPTY result (`subtype: 'error_during_execution'` and nothing else), so
+    // fall back to the synthetic `API Error:` line captured off the stream —
+    // an auth / overload failure that died mid-response still classifies to
+    // its dedicated guide instead of the generic fallback.
+    const classifiableResult = getCliResultMessage(raw.result) || this.lastApiErrorText;
+    const rateLimitError = getRateLimitTerminalError(classifiableResult, this.pendingRateLimitInfo);
     const finalEvent: HeterogeneousAgentEvent | undefined = raw.is_error
       ? this.makeEvent(
           'error',
           rateLimitError ||
             getOverloadedTerminalError(
-              raw.result,
+              classifiableResult,
               raw.api_error_status,
               this.pendingRateLimitInfo,
             ) ||
-            getAuthRequiredTerminalError(raw.result) || {
-              error: resultMessage,
-              message: resultMessage,
-            },
+            getAuthRequiredTerminalError(classifiableResult) ||
+            buildFallbackTerminalError(raw, this.lastApiErrorText),
         )
       : this.options.runtimeEndStrategy === 'on-result'
         ? this.makeEvent('agent_runtime_end', {})
         : undefined;
 
     this.pendingRateLimitInfo = undefined;
+    this.lastApiErrorText = undefined;
     this.streamedTextByMessageId.clear();
     this.streamedThinkingByMessageId.clear();
     // Drop any unconsumed task-completion lineage so the next LLM run
