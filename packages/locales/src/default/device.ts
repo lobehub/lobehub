@@ -64,7 +64,7 @@ export default {
   'workingDirectory.pushInProgress': 'Pushing…',
   'workingDirectory.pushNoop': 'Everything up-to-date',
   'workingDirectory.pushSuccess': 'Pushed successfully',
-  'workingDirectory.recent': 'Working directories',
+  'workingDirectory.recent': 'Working directory',
   'workingDirectory.refreshGitStatus': 'Refresh branch & PR status',
   'workingDirectory.removeRecent': 'Remove from recent',
   'workingDirectory.removed': 'Removed “{{name}}”',
