@@ -1,6 +1,6 @@
 'use client';
 
-import { MAX_ONBOARDING_STEPS } from '@lobechat/types';
+import { CLASSIC_ONBOARDING_MAX_STEP } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import { memo, useCallback, useEffect, useRef } from 'react';
 import { Navigate, useNavigate } from 'react-router';
@@ -30,7 +30,7 @@ const CLASSIC_STEP_TRACKING = {
   1: { flow: 'classic', step: 'fullname', stepIndex: 1 },
   [INTERESTS_STEP]: { flow: 'classic', step: 'interests', stepIndex: 2 },
   [PRO_SETTINGS_STEP]: { flow: 'classic', step: 'prosettings', stepIndex: 3 },
-  [MAX_ONBOARDING_STEPS]: { flow: 'classic', step: 'agentpicker', stepIndex: 4 },
+  [CLASSIC_ONBOARDING_MAX_STEP]: { flow: 'classic', step: 'agentpicker', stepIndex: 4 },
 } as const;
 
 const getClassicStepTrackingPayload = (step: number) =>
@@ -165,7 +165,7 @@ const ClassicOnboardingPage = memo(() => {
 
         return <ProSettingsStep onBack={goToPreviousStep} onNext={goToNextStepFromProSettings} />;
       }
-      case MAX_ONBOARDING_STEPS: {
+      case CLASSIC_ONBOARDING_MAX_STEP: {
         return <AgentPickerStep onBack={goToPreviousStepFromAgentPicker} />;
       }
       default: {
@@ -174,7 +174,7 @@ const ClassicOnboardingPage = memo(() => {
     }
   };
 
-  const contentMaxWidth = currentStep === MAX_ONBOARDING_STEPS ? 780 : 600;
+  const contentMaxWidth = currentStep === CLASSIC_ONBOARDING_MAX_STEP ? 780 : 600;
 
   return (
     <OnboardingContainer>

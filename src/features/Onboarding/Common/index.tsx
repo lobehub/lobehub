@@ -1,7 +1,7 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import { MAX_ONBOARDING_STEPS } from '@lobechat/types';
+import { CLASSIC_ONBOARDING_MAX_STEP } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import { memo, useCallback, useEffect, useRef } from 'react';
 import { Navigate, useSearchParams } from 'react-router';
@@ -21,21 +21,10 @@ import { useUserStore } from '@/store/user';
 import { onboardingSelectors } from '@/store/user/selectors';
 import { clearStaleOnboardingCallbackUrl, isSafeRedirectPath } from '@/utils/onboardingRedirect';
 
-/**
- * Remap a `currentStep` persisted under the old 5-step classic flow
- * (1=Telemetry, 2=FullName, 3=Interests, 4=Language, 5=ProSettings) onto
- * the current classic flow (1=FullName, 2=Interests, 3=ProSettings,
- * 4=AgentPicker).
- *
- * Telemetry/Language are extracted into the shared prefix, so an in-progress
- * legacy user must skip those positions when resuming classic. Legacy
- * Language/ProSettings (raw >= 4) resume at the new ProSettings step
- * (MAX_ONBOARDING_STEPS - 1) — never the trailing agent-picker step.
- */
 const remapLegacyClassicStep = (raw: number): number => {
   if (raw <= 2) return 1;
   if (raw === 3) return 2;
-  return MAX_ONBOARDING_STEPS - 1;
+  return CLASSIC_ONBOARDING_MAX_STEP - 1;
 };
 
 const COMMON_STEP_TRACKING = {

@@ -1,5 +1,5 @@
 import { CURRENT_ONBOARDING_VERSION, INBOX_SESSION_ID } from '@lobechat/const';
-import { getPluginMode, MAX_ONBOARDING_STEPS, upsertPluginMode } from '@lobechat/types';
+import { CLASSIC_ONBOARDING_MAX_STEP, getPluginMode, upsertPluginMode } from '@lobechat/types';
 
 import { userService } from '@/services/user';
 import { getAgentStoreState } from '@/store/agent';
@@ -56,7 +56,7 @@ export class OnboardingActionImpl {
 
   goToNextStep = (): void => {
     const currentStep = onboardingSelectors.currentStep(this.#get());
-    if (currentStep === MAX_ONBOARDING_STEPS) return;
+    if (currentStep === CLASSIC_ONBOARDING_MAX_STEP) return;
 
     const nextStep = currentStep + 1;
     this.#set({ localOnboardingStep: nextStep }, false, 'goToNextStep/optimistic');

@@ -1,4 +1,4 @@
-import { MAX_ONBOARDING_STEPS } from '@lobechat/types';
+import { CLASSIC_ONBOARDING_MAX_STEP } from '@lobechat/types';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { MemoryRouter } from 'react-router';
@@ -207,7 +207,7 @@ describe('ClassicOnboardingPage', () => {
   });
 
   it('moves back from the agent picker to interests when ProSettings is skipped', () => {
-    mocks.currentStep = MAX_ONBOARDING_STEPS;
+    mocks.currentStep = CLASSIC_ONBOARDING_MAX_STEP;
     mocks.enableComposio = false;
 
     renderClassic();

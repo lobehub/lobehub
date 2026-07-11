@@ -2,7 +2,7 @@
 
 import { AGENT_ONBOARDING_ENABLED } from '@lobechat/business-const';
 import { isDesktop } from '@lobechat/const';
-import { MAX_ONBOARDING_STEPS } from '@lobechat/types';
+import { CLASSIC_ONBOARDING_MAX_STEP } from '@lobechat/types';
 import { Center, Flexbox, Text } from '@lobehub/ui';
 import { Divider } from 'antd';
 import { cx, useTheme } from 'antd-style';
@@ -50,7 +50,7 @@ const OnBoardingContainer: FC<PropsWithChildren> = ({ children }) => {
     isBranchOnboarding;
 
   const handleSkip = useCallback(() => {
-    void setOnboardingStep(MAX_ONBOARDING_STEPS);
+    void setOnboardingStep(CLASSIC_ONBOARDING_MAX_STEP);
     navigate('/onboarding/classic?entry=skip');
   }, [navigate, setOnboardingStep]);
 

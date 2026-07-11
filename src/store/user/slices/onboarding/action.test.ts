@@ -1,5 +1,5 @@
 import { CURRENT_ONBOARDING_VERSION, INBOX_SESSION_ID } from '@lobechat/const';
-import { MAX_ONBOARDING_STEPS } from '@lobechat/types';
+import { CLASSIC_ONBOARDING_MAX_STEP } from '@lobechat/types';
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -51,14 +51,17 @@ describe('onboarding actions', () => {
       expect(result.current.localOnboardingStep).toBe(2);
     });
 
-    it('should not increment step when already at MAX_ONBOARDING_STEPS', () => {
+    it('should not increment step when already at CLASSIC_ONBOARDING_MAX_STEP', () => {
       const { result } = renderHook(() => useUserStore());
 
       act(() => {
         useUserStore.setState({
           ...initialOnboardingState,
-          localOnboardingStep: MAX_ONBOARDING_STEPS,
-          onboarding: { currentStep: MAX_ONBOARDING_STEPS, version: CURRENT_ONBOARDING_VERSION },
+          localOnboardingStep: CLASSIC_ONBOARDING_MAX_STEP,
+          onboarding: {
+            currentStep: CLASSIC_ONBOARDING_MAX_STEP,
+            version: CURRENT_ONBOARDING_VERSION,
+          },
         });
       });
 
@@ -66,8 +69,7 @@ describe('onboarding actions', () => {
         result.current.goToNextStep();
       });
 
-      // localOnboardingStep should remain at MAX_ONBOARDING_STEPS
-      expect(result.current.localOnboardingStep).toBe(MAX_ONBOARDING_STEPS);
+      expect(result.current.localOnboardingStep).toBe(CLASSIC_ONBOARDING_MAX_STEP);
     });
 
     it('should queue step update when incrementing', () => {
@@ -89,7 +91,7 @@ describe('onboarding actions', () => {
       expect(queueStepUpdateSpy).toHaveBeenCalledWith(3);
     });
 
-    it('should not queue step update when at MAX_ONBOARDING_STEPS', () => {
+    it('should not queue step update when at CLASSIC_ONBOARDING_MAX_STEP', () => {
       const { result } = renderHook(() => useUserStore());
 
       const queueStepUpdateSpy = vi.spyOn(result.current, 'internal_queueStepUpdate');
@@ -97,8 +99,11 @@ describe('onboarding actions', () => {
       act(() => {
         useUserStore.setState({
           ...initialOnboardingState,
-          localOnboardingStep: MAX_ONBOARDING_STEPS,
-          onboarding: { currentStep: MAX_ONBOARDING_STEPS, version: CURRENT_ONBOARDING_VERSION },
+          localOnboardingStep: CLASSIC_ONBOARDING_MAX_STEP,
+          onboarding: {
+            currentStep: CLASSIC_ONBOARDING_MAX_STEP,
+            version: CURRENT_ONBOARDING_VERSION,
+          },
         });
       });
 
