@@ -5,6 +5,7 @@ export interface TrayAgentItem {
 }
 
 export interface TrayNavigationItem {
+  subtitle?: string;
   title: string;
   url: string;
 }

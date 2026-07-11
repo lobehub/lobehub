@@ -26,18 +26,38 @@ describe('resolveTrayNavigationSnapshot', () => {
       ],
       pinnedPages: [],
       recentPages: [
-        page('Old Agent Route', '/acme/agent/agent-1?topic=old', 10),
-        page('Latest Agent Route', '/acme/agent/agent-1?topic=latest', 20),
+        page('Old Agent Route', '/acme/agent/agent-1/topic-old', 10),
+        page('Latest Agent Route', '/acme/agent/agent-1/topic-latest', 20),
       ],
       scope: { slug: 'acme', type: 'workspace' },
     });
 
     expect(snapshot.agents.slice(0, 3)).toEqual([
-      { id: 'agent-1', title: 'Researcher', url: '/acme/agent/agent-1?topic=latest' },
+      { id: 'agent-1', title: 'Researcher', url: '/acme/agent/agent-1/topic-latest' },
       { id: 'agent-2', title: 'Writer', url: '/acme/agent/agent-2' },
       { id: 'agent-3', title: 'Planner', url: '/acme/agent/agent-3' },
     ]);
     expect(snapshot.agents).toHaveLength(4);
+  });
+
+  it('keeps only concrete topics and pages with a descriptive second line', () => {
+    const snapshot = resolveTrayNavigationSnapshot({
+      agents: [agent('agent-1', 'Researcher', '2026-07-11T00:00:00.000Z')],
+      pinnedPages: [],
+      recentPages: [
+        page('Topic title', '/agent/agent-1/topic-1', 5),
+        page('Page title', '/page/page-1', 4),
+        page('Agent root', '/agent/agent-1', 3),
+        page('Page list', '/page', 2),
+        page('Settings', '/settings', 1),
+      ],
+      scope: { type: 'personal' },
+    });
+
+    expect(snapshot.recent).toEqual([
+      { subtitle: 'Researcher', title: 'Topic title', url: '/agent/agent-1/topic-1' },
+      { subtitle: 'Page', title: 'Page title', url: '/page/page-1' },
+    ]);
   });
 
   it('uses personal fallback routes and preserves overflow for More actions', () => {

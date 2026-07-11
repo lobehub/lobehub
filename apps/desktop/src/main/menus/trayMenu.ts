@@ -35,7 +35,11 @@ export const buildTrayMenuTemplate = (
     .map(({ title, url }) => ({ click: () => openRoute(app, url), label: title }));
   const recentItems: MenuItemConstructorOptions[] = snapshot.recent
     .slice(0, RECENT_LIMIT)
-    .map(({ title, url }) => ({ click: () => openRoute(app, url), label: title }));
+    .map(({ subtitle, title, url }) => ({
+      click: () => openRoute(app, url),
+      label: title,
+      sublabel: subtitle,
+    }));
 
   if (snapshot.agents.length > RECENT_AGENT_LIMIT) {
     agentItems.push({

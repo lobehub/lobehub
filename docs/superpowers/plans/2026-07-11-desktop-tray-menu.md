@@ -12,7 +12,8 @@
 
 - Left-click and right-click open the same native tray menu; double-click has no separate action.
 - Quick Composer remains an explicit menu action and retains `Alt+Shift+Space` as its default global shortcut.
-- Show at most 3 Pinned pages, 3 Recent Agents, and 5 Recent pages; omit empty dynamic sections.
+- Show at most 3 Pinned pages, 3 Recent Agents, and 5 concrete Recent topics/pages; omit empty
+  dynamic sections and generic routes. Recent items use title plus an Agent/Page sublabel.
 - Recent Agent selection restores its most recent route and never creates a topic.
 - New Chat is the only tray action that creates a conversation.
 - Main process code treats renderer-provided internal URLs as opaque and never queries application databases.

@@ -34,7 +34,11 @@ vi.mock('../RecentlyViewed/hooks/useResolvedPages', () => ({
       {
         isActive: false,
         meta: { title: 'Research' },
-        tab: { id: '/agent/agent-1', lastVisited: 1, url: '/agent/agent-1' },
+        tab: {
+          id: '/agent/agent-1/topic-1',
+          lastVisited: 1,
+          url: '/agent/agent-1/topic-1',
+        },
       },
     ],
   }),
@@ -52,9 +56,9 @@ describe('useTrayMenuSync', () => {
     await waitFor(() => expect(mocks.updateNavigationSnapshot).toHaveBeenCalledTimes(1));
     expect(mocks.useFetchAgentList).toHaveBeenCalled();
     expect(mocks.updateNavigationSnapshot).toHaveBeenCalledWith({
-      agents: [{ id: 'agent-1', title: 'Researcher', url: '/agent/agent-1' }],
+      agents: [{ id: 'agent-1', title: 'Researcher', url: '/agent/agent-1/topic-1' }],
       pinned: [],
-      recent: [{ title: 'Research', url: '/agent/agent-1' }],
+      recent: [{ subtitle: 'Researcher', title: 'Research', url: '/agent/agent-1/topic-1' }],
     });
 
     rerender();

@@ -13,7 +13,9 @@ history so the menu provides useful navigation alongside explicit application ac
   click behavior.
 - Quick Composer remains an explicit menu item and keeps its existing configurable global
   shortcut. The tray icon itself does not start screen capture.
-- Pinned and Recent entries navigate the main window to their stored URL.
+- Pinned and Recent entries navigate the main window to their stored URL. Recent contains only
+  concrete topics and pages; generic destinations such as Home, Settings, list roots, Tasks, and
+  Memory are excluded.
 - Recent Agents shows at most three recently used agents. Selecting one restores that agent's
   most recent working route; it does not create a new topic.
 - The initial menu shows at most three Pinned entries and five Recent entries.
@@ -28,7 +30,8 @@ The complete menu is divided into five semantic layers:
 
 1. Pinned: two or three explicitly pinned pages or tasks.
 2. Recent Agents: up to three agents ordered by recent use, followed by More Agents when needed.
-3. Recent: three to five recently visited working surfaces, followed by More when needed.
+3. Recent: three to five concrete topics or pages, followed by More when needed. Each item uses
+   two lines: title first, then Agent name for a topic or `Page` for a page.
 4. Quick Actions: Quick Composer, Quick Chat, and New Chat.
 5. Application: Open LobeHub, Settings, and Quit, with Quit separated as the terminal action.
 
@@ -45,6 +48,7 @@ The snapshot contains only display and navigation data:
 
 ```ts
 interface TrayNavigationItem {
+  subtitle?: string;
   title: string;
   url: string;
 }
@@ -89,7 +93,8 @@ labels, but all platforms consume the same navigation snapshot and action callba
 
 The native Electron menu uses disabled section labels for Pinned, Recent Agents, and Recent;
 normal actionable items for agents and pages; separators between semantic layers; and navigation
-commands for More and More Agents. Empty dynamic sections are omitted.
+commands for More and More Agents. Recent items use Electron's native `sublabel` for the second
+line. Empty dynamic sections are omitted.
 
 ## Navigation Flow
 
@@ -119,6 +124,7 @@ Behavior-oriented tests cover:
 - navigation items showing the main window and broadcasting their URL;
 - static actions, including New Chat, remaining available without renderer data;
 - renderer synchronization emitting resolved page and agent titles and URLs.
+- Recent filtering excluding generic routes and providing Agent/Page sublabels.
 
 Tests must avoid snapshots of the entire menu template. Assertions target visible labels,
 callbacks, limits, and navigation outcomes.

@@ -29,6 +29,25 @@ const fallbackAgentUrl = (scope: TabScope, agentId: string) => {
   return `${prefix}/agent/${encodeURIComponent(agentId)}`;
 };
 
+const resolveRecentItem = (page: ResolvedTab, agentNames: ReadonlyMap<string, string>) => {
+  const pathname = new URL(page.tab.url, 'https://lobehub.local').pathname;
+  const segments = pathname.split('/').filter(Boolean);
+  const agentIndex = segments.indexOf('agent');
+  if (agentIndex >= 0 && segments[agentIndex + 1] && segments[agentIndex + 2]) {
+    const agentId = decodeURIComponent(segments[agentIndex + 1]);
+    return {
+      subtitle: agentNames.get(agentId) || 'Untitled',
+      title: page.meta.title,
+      url: page.tab.url,
+    };
+  }
+
+  const pageIndex = segments.indexOf('page');
+  if (pageIndex >= 0 && segments[pageIndex + 1]) {
+    return { subtitle: 'Page', title: page.meta.title, url: page.tab.url };
+  }
+};
+
 export const resolveTrayNavigationSnapshot = ({
   agents,
   pinnedPages,
@@ -40,6 +59,9 @@ export const resolveTrayNavigationSnapshot = ({
   for (const agent of sortedAgents) {
     if (!uniqueAgents.has(agent.id)) uniqueAgents.set(agent.id, agent);
   }
+  const agentNames = new Map(
+    [...uniqueAgents.values()].map((agent) => [agent.id, agent.title || 'Untitled']),
+  );
 
   const visitedPages = [...pinnedPages, ...recentPages].sort(
     (a, b) => b.tab.lastVisited - a.tab.lastVisited,
@@ -54,6 +76,8 @@ export const resolveTrayNavigationSnapshot = ({
         fallbackAgentUrl(scope, agent.id),
     })),
     pinned: pinnedPages.map(({ meta, tab }) => ({ title: meta.title, url: tab.url })),
-    recent: recentPages.map(({ meta, tab }) => ({ title: meta.title, url: tab.url })),
+    recent: recentPages
+      .map((page) => resolveRecentItem(page, agentNames))
+      .filter((item) => item !== undefined),
   };
 };
