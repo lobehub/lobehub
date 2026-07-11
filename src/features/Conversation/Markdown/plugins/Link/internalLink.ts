@@ -1,8 +1,10 @@
+import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { OFFICIAL_URL } from '@lobechat/const';
 
 import { getIdFromIdentifier } from '@/utils/identifier';
 
 const ROUTE_ROOTS = new Set(['agent', 'page', 'task', 'tasks']);
+const BUILTIN_AGENT_SLUG_SET = new Set<string>(Object.values(BUILTIN_AGENT_SLUGS));
 const NON_SPA_ROUTE_ROOTS = new Set(['_next', 'api', 'f', 'oidc', 'trpc', 'webapi']);
 const SPA_ROUTE_ROOTS = new Set([
   'agent',
@@ -120,6 +122,8 @@ export const parseInternalLink = (
   }
 
   if (segments[0] === 'agent' && segments[1]) {
+    if (BUILTIN_AGENT_SLUG_SET.has(segments[1])) return { pathname, type: 'route' };
+
     const agentId = getIdFromIdentifier(segments[1], 'agt');
 
     if (segments[2] === 'docs' && segments[3]) {

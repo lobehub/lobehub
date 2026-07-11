@@ -75,6 +75,10 @@ describe('parseInternalLink', () => {
       pathname: '/agent/agent-1/topics',
       type: 'route',
     });
+    expect(parseInternalLink('/agent/inbox')).toEqual({
+      pathname: '/agent/inbox',
+      type: 'route',
+    });
     expect(parseInternalLink('https://app.lobehub.com/settings/profile')).toEqual({
       pathname: '/settings/profile',
       type: 'route',
