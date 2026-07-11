@@ -6,6 +6,7 @@ const {
   mockDeviceFindByDeviceId,
   mockDeviceFindWorkspaceDeviceById,
   mockDispatchAgentRun,
+  mockGetAgentConfig,
   mockMessageCreate,
   mockResolveAttachmentsByFileIds,
   mockSpawnHeteroSandbox,
@@ -16,6 +17,7 @@ const {
   mockDeviceFindByDeviceId: vi.fn(),
   mockDeviceFindWorkspaceDeviceById: vi.fn(),
   mockDispatchAgentRun: vi.fn().mockResolvedValue({ success: true }),
+  mockGetAgentConfig: vi.fn(),
   mockIngestAttachment: vi.fn(),
   mockMessageCreate: vi.fn(),
   mockPublishAgentRuntimeEnd: vi.fn().mockResolvedValue('end-event-id'),
@@ -88,7 +90,7 @@ const heteroAgentConfig = {
 
 vi.mock('@/database/models/agent', () => ({
   AgentModel: vi.fn().mockImplementation(() => ({
-    getAgentConfig: vi.fn().mockResolvedValue(heteroAgentConfig),
+    getAgentConfig: mockGetAgentConfig,
     queryAgents: vi.fn().mockResolvedValue([]),
   })),
 }));
@@ -102,7 +104,7 @@ vi.mock('@/database/models/device', () => ({
 
 vi.mock('@/server/services/agent', () => ({
   AgentService: vi.fn().mockImplementation(() => ({
-    getAgentConfig: vi.fn().mockResolvedValue(heteroAgentConfig),
+    getAgentConfig: mockGetAgentConfig,
   })),
 }));
 
@@ -204,6 +206,7 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     topicMock.findById.mockResolvedValue(undefined);
     topicMock.updateMetadata.mockResolvedValue(undefined);
     mockMessageCreate.mockResolvedValue({ id: 'msg-1' });
+    mockGetAgentConfig.mockResolvedValue(heteroAgentConfig);
     mockResolveAttachmentsByFileIds.mockResolvedValue({ ...emptyResolvedAttachments });
     mockSpawnHeteroSandbox.mockResolvedValue(undefined);
     mockDispatchAgentRun.mockResolvedValue({ success: true });
@@ -369,6 +372,61 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     const dispatchParams = mockDispatchAgentRun.mock.calls[0][0];
     expect(dispatchParams).toEqual(expect.objectContaining({ deviceId: 'device-1' }));
     expect(dispatchParams.args).toEqual(['--model', 'opus', '--effort', 'high']);
+  });
+
+  describe('device dispatch metadata', () => {
+    it('should not store device routing fields for sandbox local hetero runs', async () => {
+      await service.execAgent({
+        agentId: 'agent-1',
+        prompt: 'Run in sandbox',
+      });
+
+      expect(mockSpawnHeteroSandbox).toHaveBeenCalled();
+      expect(mockDispatchAgentRun).not.toHaveBeenCalled();
+      expect(topicMock.updateMetadata).toHaveBeenCalledWith(
+        'topic-1',
+        expect.objectContaining({
+          runningOperation: expect.not.objectContaining({
+            deviceId: expect.anything(),
+            heteroType: expect.anything(),
+          }),
+        }),
+      );
+    });
+
+    it('should store deviceId and heteroType before dispatching local hetero to a device', async () => {
+      mockGetAgentConfig.mockResolvedValueOnce({
+        ...heteroAgentConfig,
+        agencyConfig: {
+          boundDeviceId: 'device-1',
+          executionTarget: 'device',
+          heterogeneousProvider: { type: 'codex' },
+        },
+        model: 'codex',
+      });
+      service = new AiAgentService(mockDb, userId);
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        prompt: 'Run on my device',
+      });
+
+      expect(mockDispatchAgentRun).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agentType: 'codex',
+          deviceId: 'device-1',
+        }),
+      );
+      expect(topicMock.updateMetadata).toHaveBeenLastCalledWith(
+        'topic-1',
+        expect.objectContaining({
+          runningOperation: expect.objectContaining({
+            deviceId: 'device-1',
+            heteroType: 'codex',
+          }),
+        }),
+      );
+    });
   });
 
   describe('image delivery to the dispatched CLI', () => {

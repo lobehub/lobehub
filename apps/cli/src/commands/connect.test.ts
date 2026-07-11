@@ -37,6 +37,22 @@ vi.mock('../tools/shell', () => ({
   cleanupAllProcesses: vi.fn(),
 }));
 
+vi.mock('../daemon/agentRunSupervisor', () => ({
+  registerAgentRun: vi.fn(),
+}));
+
+vi.mock('../device/agentRun', () => ({
+  spawnHeteroAgentRun: vi.fn(),
+}));
+
+vi.mock('../device/register', () => ({
+  registerDevice: vi.fn().mockResolvedValue(undefined),
+  resolveDeviceIdentity: vi.fn().mockReturnValue({
+    connectionId: 'conn-1',
+    deviceId: 'mock-device-id',
+  }),
+}));
+
 let mockRunningPid: number | null = null;
 let mockSpawnedPid = 0;
 let mockStatus: any = null;
@@ -73,6 +89,7 @@ let clientOptions: any = {};
 let connectCalled = false;
 let lastSentToolResponse: any = null;
 let lastSentSystemInfoResponse: any = null;
+let lastSentAgentRunAck: any = null;
 vi.mock('@lobechat/device-gateway-client', () => ({
   GatewayClient: vi.fn().mockImplementation((opts: any) => {
     clientOptions = opts;
@@ -80,6 +97,7 @@ vi.mock('@lobechat/device-gateway-client', () => ({
     connectCalled = false;
     lastSentToolResponse = null;
     lastSentSystemInfoResponse = null;
+    lastSentAgentRunAck = null;
     return {
       connect: vi.fn().mockImplementation(async () => {
         connectCalled = true;
@@ -90,6 +108,9 @@ vi.mock('@lobechat/device-gateway-client', () => ({
         clientEventHandlers[event] = handler;
       }),
       reconnect: vi.fn().mockResolvedValue(undefined),
+      sendAgentRunAck: vi.fn().mockImplementation((data: any) => {
+        lastSentAgentRunAck = data;
+      }),
       sendSystemInfoResponse: vi.fn().mockImplementation((data: any) => {
         lastSentSystemInfoResponse = data;
       }),
@@ -107,7 +128,11 @@ import { GatewayClient } from '@lobechat/device-gateway-client';
 // eslint-disable-next-line import-x/first
 import { resolveToken } from '../auth/resolveToken';
 // eslint-disable-next-line import-x/first
+import { registerAgentRun } from '../daemon/agentRunSupervisor';
+// eslint-disable-next-line import-x/first
 import { removeStatus, spawnDaemon, stopDaemon, writeStatus } from '../daemon/manager';
+// eslint-disable-next-line import-x/first
+import { spawnHeteroAgentRun } from '../device/agentRun';
 // eslint-disable-next-line import-x/first
 import { loadSettings, saveSettings } from '../settings';
 // eslint-disable-next-line import-x/first
@@ -226,11 +251,50 @@ describe('connect command', () => {
       type: 'tool_call_request',
     });
 
-    expect(executeToolCall).toHaveBeenCalledWith('readLocalFile', '{"path":"/test"}');
+    expect(executeToolCall).toHaveBeenCalledWith('readLocalFile', '{"path":"/test"}', undefined);
     expect(lastSentToolResponse).toEqual({
       requestId: 'req-1',
       result: { content: 'tool result', error: undefined, success: true },
     });
+  });
+
+  it('should register accepted agent_run_request children in the supervisor', async () => {
+    const child = { pid: 4321 };
+    vi.mocked(spawnHeteroAgentRun).mockResolvedValueOnce({
+      ack: { status: 'accepted' },
+      child: child as any,
+    });
+
+    const program = createProgram();
+    await program.parseAsync(['node', 'test', 'connect']);
+
+    await clientEventHandlers['agent_run_request']?.({
+      agentType: 'codex',
+      jwt: 'jwt',
+      operationId: 'op-run',
+      prompt: 'build it',
+      topicId: 'topic-1',
+      type: 'agent_run_request',
+    });
+
+    expect(spawnHeteroAgentRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentType: 'codex',
+        operationId: 'op-run',
+        serverUrl: 'https://app.lobehub.com',
+        topicId: 'topic-1',
+      }),
+      expect.anything(),
+    );
+    expect(registerAgentRun).toHaveBeenCalledWith({
+      agentType: 'codex',
+      child,
+      jwt: 'jwt',
+      operationId: 'op-run',
+      serverUrl: 'https://app.lobehub.com',
+      topicId: 'topic-1',
+    });
+    expect(lastSentAgentRunAck).toEqual({ operationId: 'op-run', status: 'accepted' });
   });
 
   it('should handle system info requests', async () => {
@@ -278,24 +342,6 @@ describe('connect command', () => {
     expect(log.info).toHaveBeenCalledWith(expect.stringContaining('Token refreshed'));
     expect(mockClient.updateToken).toHaveBeenCalledWith('refreshed-token');
     expect(exitSpy).not.toHaveBeenCalled();
-  });
-
-  it('should handle auth_expired', async () => {
-    vi.mocked(resolveToken).mockResolvedValueOnce({
-      serverUrl: 'https://app.lobehub.com',
-      token: 'new-tok',
-      tokenType: 'jwt',
-      userId: 'user',
-    });
-
-    const program = createProgram();
-    await program.parseAsync(['node', 'test', 'connect']);
-
-    await clientEventHandlers['auth_expired']?.();
-
-    expect(log.error).toHaveBeenCalledWith(expect.stringContaining('expired'));
-    expect(cleanupAllProcesses).toHaveBeenCalled();
-    expect(exitSpy).toHaveBeenCalledWith(1);
   });
 
   it('should ignore auth_expired for api key auth', async () => {

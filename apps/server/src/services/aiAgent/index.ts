@@ -31,7 +31,10 @@ import type {
 } from '@lobechat/context-engine';
 import { SkillEngine } from '@lobechat/context-engine';
 import type { LobeChatDatabase } from '@lobechat/database';
-import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
+import {
+  isLocalHeterogeneousType,
+  isRemoteHeterogeneousType,
+} from '@lobechat/heterogeneous-agents';
 import { buildTaskManagerDefaultsPrompt } from '@lobechat/prompts';
 import type {
   ChatAudioItem,
@@ -1805,23 +1808,23 @@ export class AiAgentService {
       // delivers the serialized webhooks persisted on runningOperation below.
       if (hooks?.length) hookDispatcher.register(operationId, hooks);
       const serializedHooks = hookDispatcher.getSerializedHooks(operationId);
+      const runningOperation = {
+        assistantMessageId: assistantMessageRecord.id,
+        hooks: serializedHooks,
+        operationId,
+        scope: appContext?.scope ?? undefined,
+        threadId: appContext?.threadId ?? undefined,
+      };
 
       // Seed topic.metadata.runningOperation so heteroIngest can validate the
       // operation, and so every terminal site (heteroFinish, agentNotify done,
       // dispatch failure) can re-fire the serialized hooks across a process
       // boundary in queue mode.
       await this.topicModel.updateMetadata(topicId, {
-        runningOperation: {
-          assistantMessageId: assistantMessageRecord.id,
-          hooks: serializedHooks,
-          // Store deviceId + heteroType so interruptTask can cancel remote processes
-          ...(isRemoteHetero && remoteDeviceId
-            ? { deviceId: remoteDeviceId, heteroType }
-            : undefined),
-          operationId,
-          scope: appContext?.scope ?? undefined,
-          threadId: appContext?.threadId ?? undefined,
-        },
+        runningOperation:
+          isRemoteHetero && remoteDeviceId
+            ? { ...runningOperation, deviceId: remoteDeviceId, heteroType }
+            : runningOperation,
       });
 
       // Remote hetero agents (openclaw / hermes) dispatch to the device identified
@@ -2073,6 +2076,16 @@ export class AiAgentService {
             agentSystemContext: agentConfig.agencyConfig?.heterogeneousProvider?.systemContext,
             conversationHistory,
             cwd: deviceCwd,
+          });
+
+          // Persist the actual dispatch device so interruptTask can route stop
+          // requests back to this lh connect daemon via cancelAgentRun.
+          await this.topicModel.updateMetadata(topicId, {
+            runningOperation: {
+              ...runningOperation,
+              deviceId: dispatchDeviceId,
+              heteroType,
+            },
           });
 
           const result = await deviceGateway.dispatchAgentRun({
@@ -4612,7 +4625,7 @@ export class AiAgentService {
       throw new Error('Operation ID not found');
     }
 
-    // 2. Cancel remote hetero process (openclaw / hermes) if applicable.
+    // 2. Cancel device-dispatched hetero process if applicable.
     // Check topic.metadata.runningOperation for device + heteroType info seeded by execAgent.
     // This runs regardless of whether interruptOperation succeeds — the remote process
     // is independent of the local operation registry.
@@ -4621,34 +4634,45 @@ export class AiAgentService {
       const runningOp = (topic?.metadata as any)?.runningOperation as
         { deviceId?: string; heteroType?: string; operationId?: string } | undefined;
 
-      if (
-        runningOp?.deviceId &&
-        runningOp.heteroType &&
-        isRemoteHeterogeneousType(runningOp.heteroType)
-      ) {
-        const taskId = runningOp.operationId ?? resolvedOperationId;
-        log(
-          'interruptTask: cancelling remote hetero process heteroType=%s deviceId=%s taskId=%s',
-          runningOp.heteroType,
-          runningOp.deviceId,
-          taskId,
-        );
-        const cancelWorkspaceId = await this.resolveDeviceWorkspaceId(runningOp.deviceId);
-        await deviceGateway
-          .executeToolCall(
-            {
-              deviceId: runningOp.deviceId,
-              userId: this.userId,
-              workspaceId: cancelWorkspaceId,
-            },
-            {
-              apiName: 'cancelHeteroTask',
-              arguments: JSON.stringify({ signal: 'SIGINT', taskId }),
-              identifier: 'cancelHeteroTask',
-            },
-            5_000,
-          )
-          .catch((err) => log('interruptTask: cancelHeteroTask dispatch failed: %O', err));
+      if (runningOp?.deviceId && runningOp.heteroType) {
+        const targetOperationId = runningOp.operationId ?? resolvedOperationId;
+        const toolCall = isLocalHeterogeneousType(runningOp.heteroType)
+          ? {
+              apiName: 'cancelAgentRun',
+              arguments: JSON.stringify({ operationId: targetOperationId, signal: 'SIGINT' }),
+              identifier: 'cancelAgentRun',
+            }
+          : isRemoteHeterogeneousType(runningOp.heteroType)
+            ? {
+                apiName: 'cancelHeteroTask',
+                arguments: JSON.stringify({ signal: 'SIGINT', taskId: targetOperationId }),
+                identifier: 'cancelHeteroTask',
+              }
+            : undefined;
+
+        if (toolCall) {
+          log(
+            'interruptTask: cancelling hetero process heteroType=%s deviceId=%s operationId=%s tool=%s',
+            runningOp.heteroType,
+            runningOp.deviceId,
+            targetOperationId,
+            toolCall.apiName,
+          );
+          const cancelWorkspaceId = isRemoteHeterogeneousType(runningOp.heteroType)
+            ? await this.resolveDeviceWorkspaceId(runningOp.deviceId)
+            : undefined;
+          await deviceGateway
+            .executeToolCall(
+              {
+                deviceId: runningOp.deviceId,
+                userId: this.userId,
+                workspaceId: cancelWorkspaceId,
+              },
+              toolCall,
+              5_000,
+            )
+            .catch((err) => log('interruptTask: %s dispatch failed: %O', toolCall.apiName, err));
+        }
       }
     }
 

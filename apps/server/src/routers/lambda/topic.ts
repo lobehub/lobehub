@@ -687,6 +687,8 @@ export const topicRouter = router({
             .object({
               assistantMessageId: z.string(),
               hooks: z.array(serializedAgentHookSchema).optional(),
+              deviceId: z.string().optional(),
+              heteroType: z.string().optional(),
               operationId: z.string(),
               scope: z.string().optional(),
               threadId: z.string().nullish(),

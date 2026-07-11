@@ -9,6 +9,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { executeToolCall } from './index';
 import * as isolatedWorker from './isolatedWorker';
 
+const { mockCancelAgentRun } = vi.hoisted(() => ({
+  mockCancelAgentRun: vi.fn().mockResolvedValue({ operationId: 'op-1', success: true }),
+}));
+
+vi.mock('../daemon/agentRunSupervisor', () => ({
+  cancelAgentRun: mockCancelAgentRun,
+}));
+
 vi.mock('../utils/logger', () => ({
   log: {
     debug: vi.fn(),
@@ -150,6 +158,17 @@ describe('executeToolCall', () => {
 
     expect(result.success).toBe(false);
     expect(result.error).toBeDefined();
+  });
+
+  it('should dispatch cancelAgentRun', async () => {
+    const result = await executeToolCall(
+      'cancelAgentRun',
+      JSON.stringify({ operationId: 'op-1', signal: 'SIGINT' }),
+    );
+
+    expect(result.success).toBe(true);
+    expect(mockCancelAgentRun).toHaveBeenCalledWith({ operationId: 'op-1', signal: 'SIGINT' });
+    expect(result.content).toBe(JSON.stringify({ operationId: 'op-1', success: true }));
   });
 
   it('should dispatch grepContent', async () => {
