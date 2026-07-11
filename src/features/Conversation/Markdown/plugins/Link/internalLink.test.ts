@@ -79,9 +79,11 @@ describe('parseInternalLink', () => {
       pathname: '/settings/profile',
       type: 'route',
     });
-    expect(parseInternalLink('/api/agent/stream')).toEqual({
-      pathname: '/api/agent/stream',
-      type: 'route',
-    });
+  });
+
+  it('leaves same-origin backend and framework links to the browser', () => {
+    expect(parseInternalLink('/api/agent/stream?operationId=op_1')).toBeNull();
+    expect(parseInternalLink('/webapi/chat')).toBeNull();
+    expect(parseInternalLink('/_next/static/chunks/app.js')).toBeNull();
   });
 });

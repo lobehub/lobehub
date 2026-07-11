@@ -3,6 +3,7 @@ import { OFFICIAL_URL } from '@lobechat/const';
 import { getIdFromIdentifier } from '@/utils/identifier';
 
 const ROUTE_ROOTS = new Set(['agent', 'page', 'task', 'tasks']);
+const NON_SPA_ROUTE_ROOTS = new Set(['_next', 'api', 'webapi']);
 
 export type InternalLinkReference =
   | { agentId: string; pathname: string; type: 'agent'; workspaceSlug?: string }
@@ -68,7 +69,13 @@ export const parseInternalLink = (
   const route = getRouteSegments(url.pathname, new Set(workspaceSlugs));
   const pathname = `${url.pathname}${url.search}${url.hash}`;
 
-  if (!route) return { pathname, type: 'route' };
+  if (!route) {
+    const rootSegment = url.pathname.split('/').find(Boolean);
+
+    if (rootSegment && NON_SPA_ROUTE_ROOTS.has(rootSegment)) return null;
+
+    return { pathname, type: 'route' };
+  }
 
   const { segments, workspaceSlug } = route;
 
