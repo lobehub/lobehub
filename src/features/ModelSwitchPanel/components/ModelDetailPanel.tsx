@@ -1,8 +1,9 @@
 import { Accordion, AccordionItem, Flexbox, Icon, Tag, Text, Tooltip } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { ArrowDownToDot, ArrowUpFromDot, CircleFadingArrowUp } from 'lucide-react';
+import type { ModelRatingSource } from 'model-bank';
 import type { FC } from 'react';
-import { memo } from 'react';
+import { Fragment, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { EnabledProviderWithModels } from '@/types/aiProvider';
@@ -10,6 +11,12 @@ import type { EnabledProviderWithModels } from '@/types/aiProvider';
 import type { FormattedUnitPrice } from '../hooks/useModelDetailPanel';
 import { UNIT_ICON_MAP, useModelDetailPanel } from '../hooks/useModelDetailPanel';
 import type { PricingMode } from '../types';
+import type { RadarDimensionDatum } from './ModelRatingRadar';
+import ModelRatingRadar, {
+  RADAR_MIN_DIMENSIONS,
+  RATING_DIMENSION_ORDER,
+  RATING_SOURCE_NAMES,
+} from './ModelRatingRadar';
 
 export type { PricingMode } from '../types';
 
@@ -30,6 +37,32 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     line-height: 1.5;
     overflow-wrap: anywhere;
     white-space: pre-wrap;
+  `,
+  ratingAttribution: css`
+    padding-block: 2px;
+    padding-inline: 8px;
+    font-size: 11px;
+    color: ${cssVar.colorTextTertiary};
+
+    a {
+      color: ${cssVar.colorTextTertiary};
+
+      &:hover {
+        color: ${cssVar.colorPrimary};
+      }
+    }
+  `,
+  ratingScoreLink: css`
+    display: inline-flex;
+    gap: 4px;
+    align-items: center;
+
+    font-weight: 600;
+    color: ${cssVar.colorText};
+
+    &:hover {
+      color: ${cssVar.colorPrimary};
+    }
   `,
   row: css`
     padding-block: 4px;
@@ -103,6 +136,7 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
       isPricingExpanded,
       model,
       pricingGroups,
+      rating,
     } = useModelDetailPanel({
       enabledList: enabledListProp,
       modelId,
@@ -112,6 +146,36 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
     });
 
     if (!model) return null;
+
+    const ratingDimensions: RadarDimensionDatum[] = rating
+      ? RATING_DIMENSION_ORDER.map((key) => {
+          const dimension = rating[key];
+
+          return {
+            key,
+            label: String(t(`ModelSwitchPanel.detail.rating.dimension.${key}` as any)),
+            score: dimension?.score,
+            sourceUrl: dimension?.sourceUrl,
+            tooltip: dimension
+              ? `${RATING_SOURCE_NAMES[dimension.source]}${
+                  dimension.raw === undefined ? '' : ` · ${dimension.raw}`
+                }`
+              : undefined,
+          };
+        })
+      : [];
+    const ratedDimensions = ratingDimensions.filter((item) => item.score !== undefined);
+    const hasRating = ratedDimensions.length > 0;
+    const ratingSources = rating
+      ? [
+          ...new Map(
+            RATING_DIMENSION_ORDER.flatMap((key) => {
+              const dimension = rating[key];
+              return dimension ? [[dimension.source, dimension.sourceUrl] as const] : [];
+            }),
+          ),
+        ]
+      : [];
 
     const description = model.description
       ? String(
@@ -130,8 +194,76 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
           </Text>
         )}
         {/* Sections */}
-        {(hasPricing || contextWindowLabel || hasAbilities) && (
+        {(hasRating || hasPricing || contextWindowLabel || hasAbilities) && (
           <Accordion expandedKeys={expandedKeys} gap={8} onExpandedChange={handleExpandedChange}>
+            {/* Benchmarks */}
+            {hasRating && (
+              <AccordionItem
+                itemKey="rating"
+                paddingBlock={6}
+                paddingInline={8}
+                title={
+                  <Flexbox horizontal align={'center'} gap={8}>
+                    <div
+                      style={{
+                        background: '#eb2f96',
+                        borderRadius: 2,
+                        flexShrink: 0,
+                        height: 14,
+                        width: 3,
+                      }}
+                    />
+                    <span className={styles.titleText}>{t('ModelSwitchPanel.detail.rating')}</span>
+                  </Flexbox>
+                }
+              >
+                <Flexbox gap={4}>
+                  {ratedDimensions.length >= RADAR_MIN_DIMENSIONS ? (
+                    <ModelRatingRadar dimensions={ratingDimensions} />
+                  ) : (
+                    <Flexbox gap={4}>
+                      {ratedDimensions.map((dimension) => (
+                        <Flexbox
+                          horizontal
+                          align={'center'}
+                          className={styles.row}
+                          justify={'space-between'}
+                          key={dimension.key}
+                        >
+                          <span>{dimension.label}</span>
+                          <Tooltip title={dimension.tooltip}>
+                            {dimension.sourceUrl ? (
+                              <a
+                                className={styles.ratingScoreLink}
+                                href={dimension.sourceUrl}
+                                rel={'noreferrer'}
+                                target={'_blank'}
+                              >
+                                {dimension.score}
+                              </a>
+                            ) : (
+                              <span className={styles.ratingScoreLink}>{dimension.score}</span>
+                            )}
+                          </Tooltip>
+                        </Flexbox>
+                      ))}
+                    </Flexbox>
+                  )}
+                  <Flexbox horizontal className={styles.ratingAttribution} gap={4} wrap={'wrap'}>
+                    <span>{t('ModelSwitchPanel.detail.rating.source')}:</span>
+                    {ratingSources.map(([source, sourceUrl], index) => (
+                      <Fragment key={source}>
+                        {index > 0 && <span>·</span>}
+                        <a href={sourceUrl} rel={'noreferrer'} target={'_blank'}>
+                          {RATING_SOURCE_NAMES[source as ModelRatingSource]}
+                        </a>
+                      </Fragment>
+                    ))}
+                  </Flexbox>
+                </Flexbox>
+              </AccordionItem>
+            )}
+
             {/* Context Length */}
             {contextWindowLabel && (
               <AccordionItem

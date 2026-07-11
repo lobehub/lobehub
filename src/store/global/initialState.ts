@@ -99,6 +99,7 @@ export enum ProfileTabs {
 }
 
 export const MODEL_DETAIL_PANEL_EXPANDED_KEYS = [
+  'rating',
   'context',
   'abilities',
   'pricing',
@@ -108,6 +109,7 @@ export const MODEL_DETAIL_PANEL_EXPANDED_KEYS = [
 export type ModelDetailPanelExpandedKey = (typeof MODEL_DETAIL_PANEL_EXPANDED_KEYS)[number];
 
 export const DEFAULT_MODEL_DETAIL_PANEL_EXPANDED_KEYS = [
+  'rating',
   'pricing',
   'config',
 ] as const satisfies readonly ModelDetailPanelExpandedKey[];
