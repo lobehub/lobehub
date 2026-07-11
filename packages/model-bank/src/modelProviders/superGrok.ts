@@ -11,7 +11,7 @@ import type { ModelProviderCard } from '@/types/llm';
  */
 const SuperGrok: ModelProviderCard = {
   chatModels: [],
-  checkModel: 'grok-4.20-0309-non-reasoning',
+  checkModel: 'grok-4.5',
   description:
     'Access Grok models with your SuperGrok or X Premium subscription, no API key required.',
   disableBrowserRequest: true,
