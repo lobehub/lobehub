@@ -1132,21 +1132,3 @@ desktopRoutes.push({
   errorElement: <ErrorBoundary />,
   path: '/onboarding',
 });
-
-desktopRoutes.push({
-  element: dynamicElement(
-    () => import('@/routes/onboarding/agent'),
-    'Desktop > Onboarding > Agent',
-  ),
-  errorElement: <ErrorBoundary />,
-  path: '/onboarding/agent',
-});
-
-desktopRoutes.push({
-  element: dynamicElement(
-    () => import('@/routes/onboarding/classic'),
-    'Desktop > Onboarding > Classic',
-  ),
-  errorElement: <ErrorBoundary />,
-  path: '/onboarding/classic',
-});

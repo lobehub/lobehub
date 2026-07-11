@@ -1,3 +1,3 @@
-import CommonOnboardingPage from '@/features/Onboarding/Common';
+import OnboardingFlowPage from '@/features/Onboarding/Flow';
 
-export default CommonOnboardingPage;
+export default OnboardingFlowPage;

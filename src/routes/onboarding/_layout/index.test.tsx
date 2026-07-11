@@ -1,37 +1,12 @@
-import type * as BusinessConst from '@lobechat/business-const';
-import type * as Const from '@lobechat/const';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import OnBoardingContainer from './index';
 
 const mocks = vi.hoisted(() => ({
-  AGENT_ONBOARDING_ENABLED: true,
-  enableAgentOnboarding: true as boolean | undefined,
-  isDesktop: false,
-  serverConfigInit: true,
+  finishOnboarding: vi.fn().mockResolvedValue(undefined),
 }));
-
-vi.mock('@lobechat/business-const', async (importOriginal) => {
-  const actual = (await importOriginal()) as typeof BusinessConst;
-  return {
-    ...actual,
-    get AGENT_ONBOARDING_ENABLED() {
-      return mocks.AGENT_ONBOARDING_ENABLED;
-    },
-  };
-});
-
-vi.mock('@lobechat/const', async (importOriginal) => {
-  const actual = (await importOriginal()) as typeof Const;
-  return {
-    ...actual,
-    get isDesktop() {
-      return mocks.isDesktop;
-    },
-  };
-});
 
 vi.mock('@/features/User/UserPanel/LangButton', () => ({
   default: () => <div>Lang Button</div>,
@@ -46,33 +21,14 @@ vi.mock('@/hooks/useIsDark', () => ({
 }));
 
 vi.mock('react-i18next', () => ({
-  Trans: ({ i18nKey, values }: { i18nKey?: string; values?: { mode?: string; skip?: string } }) => {
-    const modeText = values?.mode ?? '';
-
-    if (i18nKey === 'agent.layout.switchMessageClassic') {
-      return `Prefer a different setup method? Switch to ${modeText}.`;
-    }
-
-    const skipText = values?.skip ?? '';
-
-    return `Prefer a different setup method? Switch to ${modeText} or ${skipText}.`;
-  },
   useTranslation: () => ({
     t: (key: string) => key,
   }),
 }));
 
-vi.mock('@/store/serverConfig', () => ({
-  useServerConfigStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({
-      featureFlags: { enableAgentOnboarding: mocks.enableAgentOnboarding },
-      serverConfigInit: mocks.serverConfigInit,
-    }),
-}));
-
 vi.mock('@/store/user', () => ({
   useUserStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({ setOnboardingStep: vi.fn() }),
+    selector({ finishOnboarding: mocks.finishOnboarding }),
 }));
 
 const renderAt = (initialPath: string) =>
@@ -84,62 +40,31 @@ const renderAt = (initialPath: string) =>
     </MemoryRouter>,
   );
 
-const hasSkipFooter = () =>
-  screen.queryByText((content) => content.includes('agent.layout.skip')) !== null;
-
-beforeEach(() => {
-  mocks.AGENT_ONBOARDING_ENABLED = true;
-  mocks.enableAgentOnboarding = true;
-  mocks.isDesktop = false;
-  mocks.serverConfigInit = true;
-});
-
 afterEach(() => {
   cleanup();
+  vi.clearAllMocks();
 });
 
 describe('OnBoardingContainer', () => {
-  it('renders onboarding content without footer on the shared-prefix /onboarding path', () => {
+  it('renders header controls and step content', () => {
     renderAt('/onboarding');
 
     expect(screen.getByText('Lang Button')).toBeInTheDocument();
     expect(screen.getByText('Theme Button')).toBeInTheDocument();
     expect(screen.getByText('Onboarding Content')).toBeInTheDocument();
-    expect(hasSkipFooter()).toBe(false);
   });
 
-  it('shows skip-and-switch footer on /onboarding/agent when agent flow is reachable', () => {
-    renderAt('/onboarding/agent');
-    expect(hasSkipFooter()).toBe(true);
+  it('shows the skip affordance', () => {
+    renderAt('/onboarding');
+
+    expect(screen.getByText('flow.skip')).toBeInTheDocument();
   });
 
-  it('shows the switch footer without a skip link on /onboarding/classic', () => {
-    renderAt('/onboarding/classic');
-    expect(hasSkipFooter()).toBe(false);
-    expect(screen.getByText((content) => content.includes('Switch to'))).toBeInTheDocument();
-  });
+  it('finishes onboarding when skip is clicked', async () => {
+    renderAt('/onboarding');
 
-  it('hides footer when AGENT_ONBOARDING_ENABLED master switch is off', () => {
-    mocks.AGENT_ONBOARDING_ENABLED = false;
-    renderAt('/onboarding/agent');
-    expect(hasSkipFooter()).toBe(false);
-  });
+    fireEvent.click(screen.getByText('flow.skip'));
 
-  it('hides footer on desktop, where agent flow is unreachable', () => {
-    mocks.isDesktop = true;
-    renderAt('/onboarding/agent');
-    expect(hasSkipFooter()).toBe(false);
-  });
-
-  it('hides footer when runtime feature flag enableAgentOnboarding is off', () => {
-    mocks.enableAgentOnboarding = false;
-    renderAt('/onboarding/agent');
-    expect(hasSkipFooter()).toBe(false);
-  });
-
-  it('hides footer until server config has initialized', () => {
-    mocks.serverConfigInit = false;
-    renderAt('/onboarding/agent');
-    expect(hasSkipFooter()).toBe(false);
+    expect(mocks.finishOnboarding).toHaveBeenCalled();
   });
 });
