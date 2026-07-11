@@ -13,8 +13,6 @@ import { lambdaClient } from '@/libs/trpc/client';
 import {
   type SaveUserQuestionInput,
   type SSOProvider,
-  type UserAgentOnboarding,
-  type UserAgentOnboardingContext,
   type UserGuide,
   type UserInitializationState,
   type UserOnboarding,
@@ -56,31 +54,6 @@ export class UserService {
     return lambdaClient.user.getUserSSOProviders.query();
   };
 
-  getOrCreateOnboardingState = async (): Promise<{
-    agentId: string;
-    agentOnboarding: UserAgentOnboarding;
-    context: UserAgentOnboardingContext;
-    feedbackSubmitted: boolean;
-    topicId: string;
-  }> => {
-    return lambdaClient.user.getOrCreateOnboardingState.query();
-  };
-
-  getOnboardingBootstrapState = async (): Promise<{
-    agentId: string;
-    agentOnboarding: UserAgentOnboarding;
-    context: UserAgentOnboardingContext;
-    feedbackSubmitted: boolean;
-    hasMessages: boolean;
-    topicId: string | null;
-  }> => {
-    return lambdaClient.user.getOnboardingBootstrapState.query();
-  };
-
-  sendOnboardingFirstMessage = async (input: { agentId: string }) => {
-    return lambdaClient.user.sendOnboardingFirstMessage.mutate(input);
-  };
-
   getOnboardingAgentContext = async (): Promise<{
     personaContent: string | null;
     phaseGuidance: string;
@@ -112,10 +85,6 @@ export class UserService {
     return lambdaClient.user.patchOnboardingDocument.mutate({ hunks, type });
   };
 
-  makeUserOnboarded = async () => {
-    return lambdaClient.user.makeUserOnboarded.mutate();
-  };
-
   retryOnboardingUnderstandingSource = async (
     input: RetryOnboardingUnderstandingProviderInput,
   ): Promise<OnboardingUnderstandingPollingResult> => {
@@ -132,14 +101,6 @@ export class UserService {
     input: StartOnboardingUnderstandingInput,
   ): Promise<OnboardingUnderstandingPollingResult> => {
     return lambdaClient.user.startOnboardingUnderstanding.mutate(input);
-  };
-
-  resetAgentOnboarding = async () => {
-    return lambdaClient.user.resetAgentOnboarding.mutate();
-  };
-
-  updateAgentOnboarding = async (agentOnboarding: UserAgentOnboarding) => {
-    return lambdaClient.user.updateAgentOnboarding.mutate(agentOnboarding);
   };
 
   updateOnboarding = async (onboarding: UserOnboarding) => {

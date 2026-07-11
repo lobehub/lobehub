@@ -1,5 +1,5 @@
 import { CURRENT_ONBOARDING_VERSION, INBOX_SESSION_ID } from '@lobechat/const';
-import { CLASSIC_ONBOARDING_MAX_STEP, getPluginMode, upsertPluginMode } from '@lobechat/types';
+import { getPluginMode, upsertPluginMode } from '@lobechat/types';
 
 import { userService } from '@/services/user';
 import { getAgentStoreState } from '@/store/agent';
@@ -52,24 +52,6 @@ export class OnboardingActionImpl {
     });
 
     await this.#get().refreshUserState();
-  };
-
-  goToNextStep = (): void => {
-    const currentStep = onboardingSelectors.currentStep(this.#get());
-    if (currentStep === CLASSIC_ONBOARDING_MAX_STEP) return;
-
-    const nextStep = currentStep + 1;
-    this.#set({ localOnboardingStep: nextStep }, false, 'goToNextStep/optimistic');
-    this.#get().internal_queueStepUpdate(nextStep);
-  };
-
-  goToPreviousStep = (): void => {
-    const currentStep = onboardingSelectors.currentStep(this.#get());
-    if (currentStep === 1) return;
-
-    const prevStep = currentStep - 1;
-    this.#set({ localOnboardingStep: prevStep }, false, 'goToPreviousStep/optimistic');
-    this.#get().internal_queueStepUpdate(prevStep);
   };
 
   internal_processStepUpdateQueue = async (): Promise<void> => {
@@ -153,18 +135,6 @@ export class OnboardingActionImpl {
     await agentStore.updateAgentConfigById(inboxAgentId, {
       plugins: upsertPluginMode(inboxRawPlugins, id, shouldOpen ? 'pinned' : 'auto'),
     });
-  };
-
-  updateDefaultModel = async (model: string, provider: string): Promise<void> => {
-    const agentStore = getAgentStoreState();
-    const inboxAgentId = agentStore.builtinAgentIdMap[INBOX_SESSION_ID];
-
-    await Promise.all([
-      // 1. Update user settings' defaultAgentConfig
-      this.#get().updateDefaultAgent({ config: { model, provider } }),
-      // 2. Update inbox agent's model
-      inboxAgentId && agentStore.updateAgentConfigById(inboxAgentId, { model, provider }),
-    ]);
   };
 }
 

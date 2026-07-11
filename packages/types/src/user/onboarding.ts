@@ -30,8 +30,6 @@ export interface OnboardingCapabilities {
 
 export const MAX_ONBOARDING_STEPS = 7;
 
-export const CLASSIC_ONBOARDING_MAX_STEP = 4;
-
 export const UserOnboardingSchema = z.object({
   currentStep: z.number().min(1).max(MAX_ONBOARDING_STEPS).optional(),
   finishedAt: z.string().optional(),

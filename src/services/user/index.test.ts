@@ -11,7 +11,6 @@ const mockLambdaClient = vi.hoisted(() => ({
     getUserRegistrationDuration: { query: vi.fn() },
     getUserState: { query: vi.fn() },
     getUserSSOProviders: { query: vi.fn() },
-    makeUserOnboarded: { mutate: vi.fn() },
     retryOnboardingUnderstandingSource: { mutate: vi.fn() },
     reviseOnboardingUnderstanding: { mutate: vi.fn() },
     startOnboardingUnderstanding: { mutate: vi.fn() },
@@ -123,16 +122,6 @@ describe('UserService', () => {
 
       expect(mockLambdaClient.user.getUserSSOProviders.query).toHaveBeenCalled();
       expect(result).toEqual(mockProviders);
-    });
-  });
-
-  describe('makeUserOnboarded', () => {
-    it('should call lambdaClient.user.makeUserOnboarded.mutate', async () => {
-      mockLambdaClient.user.makeUserOnboarded.mutate.mockResolvedValueOnce({ success: true });
-
-      await userService.makeUserOnboarded();
-
-      expect(mockLambdaClient.user.makeUserOnboarded.mutate).toHaveBeenCalled();
     });
   });
 

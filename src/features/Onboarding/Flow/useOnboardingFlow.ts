@@ -1,3 +1,4 @@
+import { CURRENT_ONBOARDING_VERSION } from '@lobechat/const';
 import { OnboardingStep } from '@lobechat/types';
 import { useCallback, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router';
@@ -47,7 +48,12 @@ export const useOnboardingFlow = (): OnboardingFlowController => {
   const capabilities = useOnboardingCapabilities();
   const visibleSteps = useMemo(() => getVisibleOnboardingSteps(capabilities), [capabilities]);
 
-  const persistedStep = useUserStore((s) => s.localOnboardingStep ?? s.onboarding?.currentStep);
+  const persistedStep = useUserStore((s) => {
+    if (s.localOnboardingStep !== undefined) return s.localOnboardingStep;
+    const version = s.onboarding?.version;
+    if (version === undefined || version < CURRENT_ONBOARDING_VERSION) return undefined;
+    return s.onboarding?.currentStep;
+  });
   const setOnboardingStep = useUserStore((s) => s.setOnboardingStep);
   const finishOnboarding = useUserStore((s) => s.finishOnboarding);
 

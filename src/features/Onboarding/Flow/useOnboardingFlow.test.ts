@@ -9,6 +9,8 @@ const mocks = vi.hoisted(() => ({
   consumeOnboardingCallbackUrl: vi.fn(),
   finishOnboarding: vi.fn().mockResolvedValue(undefined),
   navigate: vi.fn(),
+  onboardingCurrentStep: undefined as number | undefined,
+  onboardingVersion: undefined as number | undefined,
   persistedStep: undefined as number | undefined,
   setOnboardingStep: vi.fn().mockResolvedValue(undefined),
   trackOnboardingCompleted: vi.fn(),
@@ -31,7 +33,10 @@ vi.mock('@/store/user', () => ({
     selector({
       finishOnboarding: mocks.finishOnboarding,
       localOnboardingStep: mocks.persistedStep,
-      onboarding: undefined,
+      onboarding:
+        mocks.onboardingCurrentStep === undefined && mocks.onboardingVersion === undefined
+          ? undefined
+          : { currentStep: mocks.onboardingCurrentStep, version: mocks.onboardingVersion },
       setOnboardingStep: mocks.setOnboardingStep,
     }),
 }));
@@ -51,6 +56,8 @@ vi.mock('@/utils/onboardingRedirect', () => ({
 beforeEach(() => {
   mocks.composio = false;
   mocks.persistedStep = undefined;
+  mocks.onboardingCurrentStep = undefined;
+  mocks.onboardingVersion = undefined;
   mocks.consumeOnboardingCallbackUrl.mockReturnValue(undefined);
 });
 
@@ -227,6 +234,33 @@ describe('useOnboardingFlow', () => {
       targetUrl: '/chat',
     });
     expect(mocks.trackOnboardingStepCompleted).not.toHaveBeenCalled();
+  });
+
+  it('ignores a persisted server currentStep from a legacy pre-v2 onboarding version', () => {
+    mocks.onboardingCurrentStep = OnboardingStep.ChiefAgent;
+    mocks.onboardingVersion = 1;
+
+    const { result } = renderHook(() => useOnboardingFlow());
+
+    expect(result.current.currentStep).toBe(OnboardingStep.Welcome);
+  });
+
+  it('ignores a persisted server currentStep when version is missing', () => {
+    mocks.onboardingCurrentStep = OnboardingStep.ChiefAgent;
+    mocks.onboardingVersion = undefined;
+
+    const { result } = renderHook(() => useOnboardingFlow());
+
+    expect(result.current.currentStep).toBe(OnboardingStep.Welcome);
+  });
+
+  it('honors a persisted server currentStep once the version is current', () => {
+    mocks.onboardingCurrentStep = OnboardingStep.ChiefAgent;
+    mocks.onboardingVersion = 2;
+
+    const { result } = renderHook(() => useOnboardingFlow());
+
+    expect(result.current.currentStep).toBe(OnboardingStep.ChiefAgent);
   });
 
   it('includes the full step set when every capability is enabled', () => {
