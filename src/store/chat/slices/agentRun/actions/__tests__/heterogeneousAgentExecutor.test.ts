@@ -977,12 +977,17 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       );
 
       const dispatched = store.internal_dispatchMessage.mock.calls.find(
-        ([payload]: any) =>
-          payload.type === 'updateMessage' && payload.value?.metadata?.usage !== undefined,
+        ([payload]: any) => payload.type === 'updateMessage' && payload.value?.usage !== undefined,
       );
       expect(dispatched).toBeDefined();
       expect(dispatched![0].value.model).toBe('claude-opus-4-6');
       expect(dispatched![0].value.provider).toBe('claude-code');
+      expect(dispatched![0].value.usage).toMatchObject({
+        totalInputTokens: 100,
+        totalOutputTokens: 20,
+        totalTokens: 120,
+      });
+      expect(dispatched![0].value.metadata.usage).toBeUndefined();
     });
 
     it('should write accumulated reasoning', async () => {
@@ -1022,7 +1027,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       ]);
 
       const usageWrites = mockUpdateMessage.mock.calls.filter(
-        ([, val]: any) => val.metadata?.usage?.totalTokens,
+        ([, val]: any) => val.usage?.totalTokens,
       );
       // One usage write per step (msg_01 → ast-initial, msg_02 → new step assistant)
       expect(usageWrites.length).toBe(2);
@@ -1032,7 +1037,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
 
       const step1 = usageWrites.find(([id]: any) => id === 'ast-initial');
       expect(step1).toBeDefined();
-      const u1 = step1![1].metadata.usage;
+      const u1 = step1![1].usage;
       // msg_01: 100 input (miss) + 200 cached + 50 cache_create = 350; 50 output
       expect(u1.totalInputTokens).toBe(350);
       expect(u1.totalOutputTokens).toBe(50);
@@ -1043,7 +1048,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
 
       const step2 = usageWrites.find(([id]: any) => id === step2Id);
       expect(step2).toBeDefined();
-      const u2 = step2![1].metadata.usage;
+      const u2 = step2![1].usage;
       // msg_02: 300 input (miss, no cache); 80 output
       expect(u2.totalInputTokens).toBe(300);
       expect(u2.totalOutputTokens).toBe(80);
@@ -1077,11 +1082,11 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       ]);
 
       const usageWrites = mockUpdateMessage.mock.calls.filter(
-        ([, val]: any) => val.metadata?.usage?.totalTokens,
+        ([, val]: any) => val.usage?.totalTokens,
       );
       expect(usageWrites.length).toBe(1);
-      expect(usageWrites[0][1].metadata.usage.totalOutputTokens).toBe(265); // not 1
-      expect(usageWrites[0][1].metadata.usage.totalInputTokens).toBe(6);
+      expect(usageWrites[0][1].usage.totalOutputTokens).toBe(265); // not 1
+      expect(usageWrites[0][1].usage.totalInputTokens).toBe(6);
     });
   });
 
@@ -2022,20 +2027,19 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       );
       expect(modelWrites.length).toBeGreaterThan(0);
 
-      const usageWrite = modelWrites.find(([, value]: any) => value.metadata?.usage);
+      const usageWrite = modelWrites.find(([, value]: any) => value.usage);
       expect(usageWrite?.[1]).toMatchObject({
-        metadata: {
-          usage: {
-            inputCachedTokens: 4,
-            inputCacheMissTokens: 6,
-            totalInputTokens: 10,
-            totalOutputTokens: 3,
-            totalTokens: 13,
-          },
-        },
         model: 'gpt-5.5',
         provider: 'codex',
+        usage: {
+          inputCachedTokens: 4,
+          inputCacheMissTokens: 6,
+          totalInputTokens: 10,
+          totalOutputTokens: 3,
+          totalTokens: 13,
+        },
       });
+      expect(usageWrite?.[1].metadata.usage).toBeUndefined();
     });
 
     it('waits for late Codex terminal events when Electron complete arrives before stdout tail', async () => {
@@ -2603,7 +2607,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
 
         expect(contentAttempts.filter((id) => id === finalAssistantId)).toHaveLength(2);
         expect(finalRow.content).toBe(finalText);
-        expect(finalRow.metadata.usage).toMatchObject({
+        expect(finalRow.usage).toMatchObject({
           inputCachedTokens: 4,
           inputCacheMissTokens: 6,
           totalInputTokens: 10,
