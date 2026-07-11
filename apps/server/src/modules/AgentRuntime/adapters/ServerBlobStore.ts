@@ -4,17 +4,24 @@ import type { LobeChatDatabase } from '@lobechat/database';
 import { FileService } from '@/server/services/file';
 
 export class ServerBlobStore implements BlobStore {
-  private readonly fileService: FileService;
+  private fileService?: FileService;
 
-  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
-    this.fileService = new FileService(db, userId, workspaceId);
+  constructor(
+    private readonly db: LobeChatDatabase,
+    private readonly userId: string,
+    private readonly workspaceId?: string,
+  ) {}
+
+  async persistBase64(base64Data: string, pathname: string) {
+    return this.getFileService().uploadBase64(base64Data, pathname);
   }
 
-  persistBase64(base64Data: string, pathname: string) {
-    return this.fileService.uploadBase64(base64Data, pathname);
+  async resolveUrl(ref: BlobRef) {
+    return this.getFileService().getFileAccessUrl(ref);
   }
 
-  resolveUrl(ref: BlobRef) {
-    return this.fileService.getFileAccessUrl(ref);
+  private getFileService() {
+    this.fileService ??= new FileService(this.db, this.userId, this.workspaceId);
+    return this.fileService;
   }
 }
