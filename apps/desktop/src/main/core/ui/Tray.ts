@@ -9,12 +9,14 @@ import type {
 import { app, Menu, nativeImage, Tray as ElectronTray } from 'electron';
 
 import { resourcesDir } from '@/const/dir';
+import { isWindows } from '@/const/env';
 import { createLogger } from '@/utils/logger';
 
 import type { App } from '../App';
 
 // Create logger
 const logger = createLogger('core:Tray');
+const WINDOWS_CLICK_DEBOUNCE_MS = 250;
 
 export interface TrayOptions {
   /**
@@ -53,6 +55,9 @@ export class Tray {
    * happen automatically if we called `_tray.setContextMenu(menu)`).
    */
   private _contextMenu?: ElectronMenu;
+
+  /** Pending Windows click while Electron determines whether it is a double-click. */
+  private _clickTimer?: NodeJS.Timeout;
 
   /**
    * Identifier
@@ -121,8 +126,28 @@ export class Tray {
       // Both mouse buttons expose the same native menu.
       this._tray.on('click', () => {
         logger.debug(`[${this.identifier}] Tray clicked`);
-        this.popUpMenu();
+        if (!isWindows) {
+          this.popUpMenu();
+          return;
+        }
+
+        if (this._clickTimer) clearTimeout(this._clickTimer);
+        this._clickTimer = setTimeout(() => {
+          this._clickTimer = undefined;
+          this.popUpMenu();
+        }, WINDOWS_CLICK_DEBOUNCE_MS);
       });
+
+      if (isWindows) {
+        this._tray.on('double-click', () => {
+          logger.debug(`[${this.identifier}] Tray double-clicked`);
+          if (this._clickTimer) {
+            clearTimeout(this._clickTimer);
+            this._clickTimer = undefined;
+          }
+          this.app.browserManager.showMainWindow();
+        });
+      }
 
       // Right-click: pop the stored context menu manually so left-click stays
       // free (macOS would auto-open the menu on either button if we called

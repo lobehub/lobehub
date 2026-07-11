@@ -10,7 +10,8 @@
 
 ## Global Constraints
 
-- Left-click and right-click open the same native tray menu; double-click has no separate action.
+- Left-click and right-click open the same native tray menu. Windows additionally preserves
+  double-click to show the main window, cancelling its pending single-click menu popup.
 - Quick Composer remains an explicit menu action and retains `Alt+Shift+Space` as its default global shortcut.
 - Show at most 3 Pinned pages, 3 Recent Agents, and 5 concrete Recent topics/pages; omit empty
   dynamic sections and generic routes. Recent items use title plus an Agent/Page sublabel.

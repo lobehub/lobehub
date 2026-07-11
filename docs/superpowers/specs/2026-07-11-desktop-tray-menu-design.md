@@ -9,8 +9,9 @@ history so the menu provides useful navigation alongside explicit application ac
 ## Interaction Contract
 
 - Left-click and right-click open the same native tray menu.
-- Tray double-click no longer opens the main window because it conflicts with the unified
-  click behavior.
+- On Windows, tray double-click continues to open the main window. Windows single-click is
+  deferred briefly so a double-click cancels the pending menu popup. macOS and Linux do not
+  register a separate double-click action.
 - Quick Composer remains an explicit menu item and keeps its existing configurable global
   shortcut. The tray icon itself does not start screen capture.
 - Pinned and Recent entries navigate the main window to their stored URL. Recent contains only
