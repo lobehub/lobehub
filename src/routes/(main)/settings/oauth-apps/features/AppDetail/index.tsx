@@ -11,6 +11,8 @@ import { useTranslation } from 'react-i18next';
 
 import OAuthAppStats from '@/business/client/OAuthAppStats';
 import AvatarUpload from '@/components/AvatarUpload';
+import { useClientDataSWR } from '@/libs/swr';
+import { authKeys } from '@/libs/swr/keys';
 import { lambdaClient } from '@/libs/trpc/client';
 import { type OAuthAppItem } from '@/types/oauthApp';
 
@@ -47,19 +49,29 @@ const DetailBody: FC<DetailBodyProps> = ({ app, canEdit, onChanged, onClose }) =
   const [description, setDescription] = useState(app.description ?? '');
   const [logoUri, setLogoUri] = useState(app.logoUri ?? undefined);
 
+  const { data, mutate } = useClientDataSWR(authKeys.oauthAppById(app.id), () =>
+    lambdaClient.oauthApp.getById.query({ id: app.id }),
+  );
+  const detail = (data as OAuthAppItem | undefined) ?? app;
+
+  const revalidate = () => {
+    mutate();
+    onChanged();
+  };
+
   const updateMutation = useMutation({
     mutationFn: () =>
       lambdaClient.oauthApp.update.mutate({ id: app.id, value: { description, logoUri, name } }),
     onSuccess: () => {
       message.success(t('oauthApp.detail.saveSuccess'));
-      onChanged();
+      revalidate();
     },
   });
 
   const enabledMutation = useMutation({
     mutationFn: (enabled: boolean) =>
       lambdaClient.oauthApp.setEnabled.mutate({ enabled, id: app.id }),
-    onSuccess: () => onChanged(),
+    onSuccess: () => revalidate(),
   });
 
   const deleteMutation = useMutation({
@@ -81,7 +93,7 @@ const DetailBody: FC<DetailBodyProps> = ({ app, canEdit, onChanged, onClose }) =
   return (
     <Flexbox gap={20} paddingBlock={8}>
       <AvatarUpload
-        title={app.name}
+        title={detail.name}
         value={logoUri}
         onUpload={canEdit ? handleUpload : undefined}
       />
@@ -123,20 +135,20 @@ const DetailBody: FC<DetailBodyProps> = ({ app, canEdit, onChanged, onClose }) =
 
       <div className={styles.row}>
         <span className={styles.label}>{t('oauthApp.detail.createdAt')}</span>
-        <Text type={'secondary'}>{app.createdAt.toLocaleString()}</Text>
+        <Text type={'secondary'}>{detail.createdAt.toLocaleString()}</Text>
       </div>
 
       <div className={styles.row}>
         <span className={styles.label}>{t('oauthApp.detail.lastUsedAt')}</span>
         <Text type={'secondary'}>
-          {app.lastUsedAt ? app.lastUsedAt.toLocaleString() : t('oauthApp.detail.neverUsed')}
+          {detail.lastUsedAt ? detail.lastUsedAt.toLocaleString() : t('oauthApp.detail.neverUsed')}
         </Text>
       </div>
 
       <div className={styles.row}>
         <span className={styles.label}>{t('oauthApp.detail.enabled')}</span>
         <Switch
-          checked={!!app.enabled}
+          checked={!!detail.enabled}
           disabled={!canEdit || enabledMutation.isPending}
           onChange={(checked) => enabledMutation.mutate(checked)}
         />

@@ -195,7 +195,7 @@ export default {
   'oauthApp.copy.tooltip': 'Copy',
   'oauthApp.deleteConfirm.cancel': 'Cancel',
   'oauthApp.deleteConfirm.content':
-    'Are you sure you want to delete this app? Existing authorizations will stop working and this cannot be undone.',
+    'Are you sure you want to delete this app? Existing authorizations can no longer be renewed, and the app loses access once current tokens expire. This cannot be undone.',
   'oauthApp.deleteConfirm.ok': 'Delete',
   'oauthApp.deleteConfirm.title': 'Delete this app?',
   'oauthApp.detail.clientId': 'Client ID',

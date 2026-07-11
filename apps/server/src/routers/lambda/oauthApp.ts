@@ -23,9 +23,9 @@ export const oauthAppRouter = router({
   create: oauthAppProcedure
     .input(
       z.object({
-        description: z.string().optional(),
-        logoUri: z.string().optional(),
-        name: z.string().min(1),
+        description: z.string().max(500).optional(),
+        logoUri: z.string().max(300_000).optional(),
+        name: z.string().min(1).max(64),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -58,9 +58,9 @@ export const oauthAppRouter = router({
       z.object({
         id: z.string(),
         value: z.object({
-          description: z.string().optional(),
-          logoUri: z.string().optional(),
-          name: z.string().min(1).optional(),
+          description: z.string().max(500).optional(),
+          logoUri: z.string().max(300_000).optional(),
+          name: z.string().min(1).max(64).optional(),
         }),
       }),
     )

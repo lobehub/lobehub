@@ -4,7 +4,7 @@ import { authKeys } from '@/libs/swr/keys';
 import type { OidcClientMetadata } from '@/types/oidc';
 
 const fetchClientMetadata = async (clientId: string): Promise<OidcClientMetadata> => {
-  const res = await fetch(`/oidc/client-metadata/${clientId}`);
+  const res = await fetch(`/oidc/client-metadata/${encodeURIComponent(clientId)}`);
 
   if (!res.ok) throw new Error(`Request failed with status ${res.status}`);
 
