@@ -65,6 +65,41 @@ interface PreviewData {
   title?: string | null;
 }
 
+const getVerifyStatusLabel = (status: string | null | undefined, t: TFunction<'chat'>) => {
+  switch (status) {
+    case 'delivered': {
+      return t('internalLink.preview.verifyStatus.delivered');
+    }
+    case 'errored': {
+      return t('internalLink.preview.verifyStatus.errored');
+    }
+    case 'failed': {
+      return t('internalLink.preview.verifyStatus.failed');
+    }
+    case 'passed': {
+      return t('internalLink.preview.verifyStatus.passed');
+    }
+    case 'planned': {
+      return t('internalLink.preview.verifyStatus.planned');
+    }
+    case 'repairing': {
+      return t('internalLink.preview.verifyStatus.repairing');
+    }
+    case 'uncertain': {
+      return t('internalLink.preview.verifyStatus.uncertain');
+    }
+    case 'unverified': {
+      return t('internalLink.preview.verifyStatus.unverified');
+    }
+    case 'verifying': {
+      return t('internalLink.preview.verifyStatus.verifying');
+    }
+    default: {
+      return null;
+    }
+  }
+};
+
 const getPreviewData = async (
   reference: InternalLinkReference,
   t: TFunction<'chat'>,
@@ -93,7 +128,10 @@ const getPreviewData = async (
         : null;
     }
     case 'verify': {
-      const { report, run } = await verifyService.getReportBundle(reference.runId);
+      const bundle = await verifyService.getReportBundle(reference.runId);
+      if (!bundle) return null;
+
+      const { report, run } = bundle;
       const status = report?.verdict ?? run.status;
       const counts = report
         ? t('internalLink.preview.verifyCounts', {
@@ -111,9 +149,7 @@ const getPreviewData = async (
 
       return {
         description: report?.summary,
-        meta: [status && t(`internalLink.preview.verifyStatus.${status}`), counts]
-          .filter(Boolean)
-          .join(' · '),
+        meta: [getVerifyStatusLabel(status, t), counts].filter(Boolean).join(' · '),
         secondaryMeta: scope.join(' · '),
         title: run.title,
       };
