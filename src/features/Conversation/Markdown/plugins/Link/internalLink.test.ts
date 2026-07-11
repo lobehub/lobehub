@@ -61,6 +61,14 @@ describe('parseInternalLink', () => {
     ).toBeNull();
   });
 
+  it('accepts official links from the Electron renderer origin', () => {
+    expect(parseInternalLink('https://app.lobehub.com/task/T-201', 'app://renderer')).toEqual({
+      pathname: '/task/T-201',
+      taskId: 'T-201',
+      type: 'task',
+    });
+  });
+
   it('preserves workspace context for workspace-prefixed SPA routes', () => {
     expect(parseInternalLink('/lobe-team/tasks', undefined, ['lobe-team'])).toEqual({
       pathname: '/lobe-team/tasks',

@@ -57,7 +57,12 @@ const isInternalHost = (url: URL, currentOrigin?: string) => {
   if (!currentOrigin) return url.host === officialHost;
 
   try {
-    return url.host === new URL(currentOrigin).host;
+    const originUrl = new URL(currentOrigin);
+    if (originUrl.protocol !== 'http:' && originUrl.protocol !== 'https:') {
+      return url.host === officialHost;
+    }
+
+    return url.host === originUrl.host;
   } catch {
     return false;
   }
