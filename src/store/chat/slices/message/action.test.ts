@@ -1310,6 +1310,80 @@ describe('chatMessage actions', () => {
       expect(mutate).not.toHaveBeenCalled();
     });
 
+    it('skips write-through for scoped buckets the server message:list key cannot represent', async () => {
+      const { result } = renderHook(() => useChatStore());
+
+      await act(async () => {
+        // Page copilot: `documentId` only exists in the local bucket key, so
+        // the canonical agent/topic entry must not be created from it.
+        result.current.replaceMessages([{ id: 'm-page', role: 'user', content: 'hi' }] as any, {
+          context: {
+            agentId: 'wt-page-agent',
+            documentId: 'doc-1',
+            scope: 'page',
+            topicId: 'wt-page-topic',
+          },
+        });
+
+        // Group-agent stream: the canonical key drops `subAgentId`, which
+        // would collide with the group main conversation entry.
+        result.current.replaceMessages([{ id: 'm-sub', role: 'user', content: 'hi' }] as any, {
+          context: {
+            agentId: 'wt-supervisor',
+            groupId: 'wt-group',
+            scope: 'group_agent',
+            subAgentId: 'wt-worker',
+            topicId: 'wt-group-topic',
+          },
+        });
+      });
+
+      expect(mutate).not.toHaveBeenCalled();
+    });
+
+    it('still seeds the canonical entry for a representable group context', async () => {
+      const { result } = renderHook(() => useChatStore());
+
+      const context = {
+        agentId: 'wt-sup',
+        groupId: 'wt-grp',
+        scope: 'group' as const,
+        topicId: 'wt-grp-topic',
+      };
+      const messages = [{ id: 'm-grp', role: 'user', content: 'hi' }] as any;
+
+      await act(async () => {
+        result.current.replaceMessages(messages, { context });
+      });
+
+      expect(mutate).toHaveBeenCalledTimes(1);
+      const [swrKey, dataArg, options] = (mutate as Mock).mock.calls[0];
+      expect(swrKey).toEqual(messageListKey(context));
+      expect(dataArg).toEqual(messages);
+      expect(options).toEqual({ revalidate: false });
+    });
+
+    it('still seeds the canonical entry for a representable group thread context', async () => {
+      const { result } = renderHook(() => useChatStore());
+
+      const context = {
+        agentId: 'wt-worker',
+        groupId: 'wt-grp',
+        scope: 'thread' as const,
+        threadId: 'wt-thread',
+        topicId: 'wt-grp-topic',
+      };
+      const messages = [{ id: 'm-thread', role: 'user', content: 'hi' }] as any;
+
+      await act(async () => {
+        result.current.replaceMessages(messages, { context });
+      });
+
+      expect(mutate).toHaveBeenCalledWith(messageListKey(context), messages, {
+        revalidate: false,
+      });
+    });
+
     it('skips write-through for the useFetchMessages onData sync path', async () => {
       const { result } = renderHook(() => useChatStore());
 

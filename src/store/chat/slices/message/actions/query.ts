@@ -164,7 +164,7 @@ export class MessageQueryActionImpl {
     // updated by the dispatch, so a later remount would hydrate the
     // pre-mutation snapshot (stale content / deleted rows). Seeding here keeps
     // the cache correct even on a store no-op.
-    this.#writeThroughMessageCache(ctx, reconciled, params?.action);
+    this.#writeThroughMessageCache(ctx, messagesKey, reconciled, params?.action);
 
     if (isEqual(nextDbMap, this.#get().dbMessagesMap)) return;
 
@@ -198,7 +198,13 @@ export class MessageQueryActionImpl {
    * because an optimistic dispatch may have already applied this exact state to
    * the store while leaving the cache stale.
    *
-   * Skipped in three cases:
+   * Skipped in four cases:
+   * - contexts the canonical `message:list` key cannot represent — scoped
+   *   buckets such as page copilot (`documentId`) or group-agent streams
+   *   (`subAgentId`) carry a local-only discriminator that
+   *   `normalizeMessageListQueryContext` drops, so seeding the canonical key
+   *   would persist the scoped transcript under the ordinary conversation
+   *   entry and a later mount of THAT conversation would hydrate it.
    * - `useFetchMessages` onData — SWR already holds that exact value, so
    *   re-writing it would double the IndexedDB persist on every fetch.
    * - `prefetchMessages` — the exact cache key is seeded by the prefetch
@@ -210,12 +216,28 @@ export class MessageQueryActionImpl {
    */
   #writeThroughMessageCache = (
     ctx: MessageMapKeyInput,
+    messagesKey: string,
     messages: UIChatMessage[],
     action?: string,
   ): void => {
     if (!ctx.agentId || !ctx.topicId) return;
     if (operationSelectors.isAgentRuntimeRunningByContext(ctx)(this.#get())) return;
     if (action === 'useFetchMessages' || action === 'prefetchMessages') return;
+
+    // The server `message:list` key only carries agentId/groupId/threadId/
+    // topicId (see `normalizeMessageListQueryContext`). When the bucket key
+    // needs more than those fields (page `documentId`, group-agent
+    // `subAgentId`, `isNew`, an isolating `scope`, …) this context cannot be
+    // represented by the canonical key — write nothing rather than store the
+    // scoped transcript under the ordinary conversation entry.
+    const representableBucketKey = messageMapKey({
+      agentId: ctx.agentId,
+      groupId: ctx.groupId,
+      scope: ctx.threadId ? 'thread' : ctx.groupId ? 'group' : 'main',
+      threadId: ctx.threadId,
+      topicId: ctx.topicId,
+    });
+    if (messagesKey !== representableBucketKey) return;
 
     // A concrete canonical key creates the cache entry even when no subscriber
     // has mounted yet, which lets a later conversation switch render locally.
