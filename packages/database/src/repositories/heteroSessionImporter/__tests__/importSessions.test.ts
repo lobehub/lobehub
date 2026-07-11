@@ -3,7 +3,15 @@ import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import { agents, messagePlugins, messages, threads, topics, users } from '../../../schemas';
+import {
+  agents,
+  messagePlugins,
+  messages,
+  threads,
+  topics,
+  users,
+  workspaces,
+} from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
 import { HeteroSessionImporterRepo } from '../index';
 
@@ -257,6 +265,97 @@ describe('HeteroSessionImporterRepo.importSessions', () => {
 
     [topic] = await serverDB.select().from(topics).where(eq(topics.id, first.topicId));
     expect((topic.metadata as any).heteroSourceEndAt).toBe('2026-07-02T00:00:00.000Z');
+  });
+
+  it('persists the transcript workingDirectory on create and on incremental update', async () => {
+    const repo = new HeteroSessionImporterRepo(serverDB, userId);
+    const payload = { ...basePayload(), workingDirectory: '/repo' };
+    const [first] = await repo.importSessions({ agentId, sessions: [payload] });
+
+    const [created] = await serverDB.select().from(topics).where(eq(topics.id, first.topicId));
+    expect((created.metadata as any).workingDirectory).toBe('/repo');
+
+    // the session later moves cwd (e.g. worktree) — re-import refreshes the binding
+    await repo.importSessions({
+      agentId,
+      sessions: [{ ...basePayload(), workingDirectory: '/repo/worktree' }],
+    });
+    const [updated] = await serverDB.select().from(topics).where(eq(topics.id, first.topicId));
+    expect((updated.metadata as any).workingDirectory).toBe('/repo/worktree');
+    expect((updated.metadata as any).heteroSessionId).toBe('s1');
+  });
+
+  it('scopes lookups to the active workspace and rejects cross-scope re-imports', async () => {
+    await serverDB
+      .insert(workspaces)
+      .values({ id: 'ws-1', name: 'Team', primaryOwnerId: userId, slug: 'team-ws' });
+    const personalRepo = new HeteroSessionImporterRepo(serverDB, userId);
+    const workspaceRepo = new HeteroSessionImporterRepo(serverDB, userId, 'ws-1');
+
+    const [personal] = await personalRepo.importSessions({ agentId, sessions: [basePayload()] });
+
+    // (clientId, userId) is globally unique: importing the same session from a
+    // workspace must NOT silently append to the personal topic — it rejects
+    // with the owning scope instead
+    await expect(
+      workspaceRepo.importSessions({ agentId, sessions: [basePayload()] }),
+    ).rejects.toThrow('personal space');
+    const personalRows = await serverDB
+      .select()
+      .from(messages)
+      .where(eq(messages.topicId, personal.topicId));
+    expect(personalRows).toHaveLength(3);
+    expect(personalRows.every((r) => r.workspaceId === null)).toBe(true);
+
+    // a session imported IN the workspace lands there and stays scope-local
+    const wsPayload = basePayload();
+    wsPayload.sessionId = 's2';
+    wsPayload.topicClientId = 'cc-session-s2';
+    for (const m of wsPayload.messages) {
+      m.clientId = `ws-${m.clientId}`;
+      if (m.parentClientId) m.parentClientId = `ws-${m.parentClientId}`;
+    }
+    const [team] = await workspaceRepo.importSessions({ agentId, sessions: [wsPayload] });
+    expect(team.created).toBe(true);
+
+    // status badges are scoped: each side only reports its own scope's topics
+    const wanted = [
+      { sessionId: 's1', topicClientId: 'cc-session-s1' },
+      { sessionId: 's2', topicClientId: 'cc-session-s2' },
+    ];
+    const personalStatus = await personalRepo.getImportStatus(wanted);
+    const teamStatus = await workspaceRepo.getImportStatus(wanted);
+    expect(personalStatus.imported.map((i) => i.topicId)).toEqual([personal.topicId]);
+    expect(teamStatus.imported.map((i) => i.topicId)).toEqual([team.topicId]);
+  });
+
+  it('seeds incremental timestamps past the already-imported tail', async () => {
+    const repo = new HeteroSessionImporterRepo(serverDB, userId);
+    // codex-style: every record repeats the same source timestamp
+    const t = '2026-07-01T00:00:00.000Z';
+    const flat = basePayload();
+    for (const m of flat.messages) m.createdAt = t;
+    await repo.importSessions({ agentId, sessions: [flat] });
+
+    const grown = basePayload();
+    for (const m of grown.messages) m.createdAt = t;
+    grown.messages.push({
+      clientId: 'cc-s1-a2',
+      content: 'synced follow-up',
+      createdAt: t,
+      parentClientId: 'cc-s1-r1',
+      role: 'assistant',
+    });
+    const [second] = await repo.importSessions({ agentId, sessions: [grown] });
+    expect(second.insertedMessages).toBe(1);
+
+    const rows = await serverDB
+      .select()
+      .from(messages)
+      .where(eq(messages.topicId, second.topicId))
+      .orderBy(messages.createdAt);
+    // the synced tail must sort AFTER the rows bumped to t+1, t+2 on first import
+    expect(rows.map((r) => r.clientId)).toEqual(['cc-s1-u1', 'cc-s1-a1', 'cc-s1-r1', 'cc-s1-a2']);
   });
 
   describe('getImportStatus', () => {

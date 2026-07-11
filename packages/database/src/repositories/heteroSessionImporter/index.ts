@@ -9,6 +9,7 @@ import { and, count, eq, inArray, or, sql } from 'drizzle-orm';
 import { messagePlugins, messages, threads, topics } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { idGenerator } from '../../utils/idGenerator';
+import { buildWorkspaceWhere } from '../../utils/workspace';
 
 export interface ImportHeteroSessionsParams {
   agentId: string;
@@ -44,6 +45,14 @@ export class HeteroSessionImporterRepo {
     this.workspaceId = workspaceId;
   }
 
+  /**
+   * Workspace-aware ownership predicate: lookups must stay inside the active
+   * personal/team scope, or importing from a workspace would reuse (and append
+   * to) a topic the same user already imported in another scope.
+   */
+  private scopeWhere = (cols: { userId: any; workspaceId: any }) =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, cols);
+
   importSessions = async (
     params: ImportHeteroSessionsParams,
   ): Promise<HeteroSessionImportResult[]> => {
@@ -72,19 +81,45 @@ export class HeteroSessionImporterRepo {
         undefined,
       );
 
-      // 1. find or create the topic by clientId
+      // hetero resume + project grouping read the bound cwd off
+      // `topic.metadata.workingDirectory` — persist the transcript cwd so
+      // imported topics resume/group under the directory they were recorded in
+      const metadataPatch = {
+        ...(sourceEndAt ? { heteroSourceEndAt: sourceEndAt } : {}),
+        ...(session.workingDirectory ? { workingDirectory: session.workingDirectory } : {}),
+      };
+
+      // 1. find or create the topic by clientId within the active scope
       const [existingTopic] = await tx
         .select({ id: topics.id, metadata: topics.metadata })
         .from(topics)
-        .where(and(eq(topics.clientId, session.topicClientId), eq(topics.userId, this.userId)));
+        .where(and(eq(topics.clientId, session.topicClientId), this.scopeWhere(topics)));
+
+      // the (clientId, userId) unique index makes one session = one topic per
+      // user GLOBALLY — if it exists outside the active scope, appending there
+      // would leak content across scopes and inserting here would violate the
+      // index. Reject explicitly with the reason instead.
+      if (!existingTopic) {
+        const [foreignTopic] = await tx
+          .select({ id: topics.id, workspaceId: topics.workspaceId })
+          .from(topics)
+          .where(and(eq(topics.clientId, session.topicClientId), eq(topics.userId, this.userId)));
+        if (foreignTopic) {
+          throw new Error(
+            `session ${session.sessionId} is already imported in ${
+              foreignTopic.workspaceId ? `workspace ${foreignTopic.workspaceId}` : 'personal space'
+            }; switch to that scope to sync it`,
+          );
+        }
+      }
 
       let topicId = existingTopic?.id;
       const created = !existingTopic;
       if (topicId) {
-        if (sourceEndAt)
+        if (Object.keys(metadataPatch).length > 0)
           await tx
             .update(topics)
-            .set({ metadata: { ...existingTopic.metadata, heteroSourceEndAt: sourceEndAt } })
+            .set({ metadata: { ...existingTopic.metadata, ...metadataPatch } })
             .where(eq(topics.id, topicId));
       } else {
         topicId = idGenerator('topics');
@@ -93,10 +128,7 @@ export class HeteroSessionImporterRepo {
           clientId: session.topicClientId,
           groupId: groupId || null,
           id: topicId,
-          metadata: {
-            ...session.metadata,
-            ...(sourceEndAt ? { heteroSourceEndAt: sourceEndAt } : {}),
-          },
+          metadata: { ...session.metadata, ...metadataPatch },
           title: session.title || 'Imported Session',
           userId: this.userId,
           workspaceId: this.workspaceId ?? null,
@@ -106,18 +138,36 @@ export class HeteroSessionImporterRepo {
       // 2. load existing message clientIds of this session (incremental base)
       const existingRows = existingTopic
         ? await tx
-            .select({ clientId: messages.clientId, id: messages.id })
+            .select({
+              clientId: messages.clientId,
+              createdAt: messages.createdAt,
+              id: messages.id,
+              threadId: messages.threadId,
+            })
             .from(messages)
-            .where(and(eq(messages.topicId, topicId), eq(messages.userId, this.userId)))
+            .where(and(eq(messages.topicId, topicId), this.scopeWhere(messages)))
         : [];
       const clientIdToDbId = new Map<string, string>();
       for (const row of existingRows) if (row.clientId) clientIdToDbId.set(row.clientId, row.id);
+
+      // incremental syncs must continue AFTER the already-imported tail: the
+      // first import may have bumped identical source timestamps to t+1, t+2…,
+      // so a fresh batch seeded at the raw source time would sort before them
+      const maxExistingTs = (threadId: string | null) =>
+        existingRows.reduce(
+          (max: number, row: (typeof existingRows)[number]) =>
+            row.threadId === threadId && row.createdAt && row.createdAt.getTime() > max
+              ? row.createdAt.getTime()
+              : max,
+          0,
+        );
 
       // 3. insert main-chain messages
       const mainStats = await this.insertMessages(tx, {
         agentId,
         clientIdToDbId,
         importMessages: session.messages,
+        seedTs: maxExistingTs(null),
         topicId,
       });
 
@@ -127,7 +177,7 @@ export class HeteroSessionImporterRepo {
         const [existingThread] = await tx
           .select({ id: threads.id })
           .from(threads)
-          .where(and(eq(threads.clientId, thread.clientId), eq(threads.userId, this.userId)));
+          .where(and(eq(threads.clientId, thread.clientId), this.scopeWhere(threads)));
 
         let threadId = existingThread?.id;
         if (!threadId) {
@@ -153,6 +203,7 @@ export class HeteroSessionImporterRepo {
           agentId,
           clientIdToDbId,
           importMessages: thread.messages,
+          seedTs: existingThread ? maxExistingTs(threadId) : 0,
           threadId,
           topicId,
         });
@@ -177,6 +228,8 @@ export class HeteroSessionImporterRepo {
       /** shared across main chain + threads; mutated with newly assigned ids */
       clientIdToDbId: Map<string, string>;
       importMessages: HeteroSessionImportMessage[];
+      /** max createdAt (ms) of the already-imported rows in this chain */
+      seedTs?: number;
       threadId?: string;
       topicId: string;
     },
@@ -192,9 +245,10 @@ export class HeteroSessionImporterRepo {
 
     // Codex rewrites resumed history with IDENTICAL timestamps, and the UI
     // orders by createdAt — keep timestamps strictly increasing within a batch
-    // so the transcript order survives the sort
+    // (seeded past the already-imported tail) so the transcript order survives
+    // the sort even across incremental syncs
     const now = Date.now();
-    let lastTs = 0;
+    let lastTs = params.seedTs ?? 0;
     const messageRows = fresh.map((m, index) => {
       const parsedTs = m.createdAt ? new Date(m.createdAt).getTime() : now + index;
       const ts = Math.max(parsedTs, lastTs + 1);
@@ -274,7 +328,7 @@ export class HeteroSessionImporterRepo {
       .from(topics)
       .where(
         and(
-          eq(topics.userId, this.userId),
+          this.scopeWhere(topics),
           or(inArray(topics.clientId, clientIds), inArray(metadataSessionId, sessionIds)),
         ),
       );
@@ -289,7 +343,7 @@ export class HeteroSessionImporterRepo {
         .from(messages)
         .where(
           and(
-            eq(messages.userId, this.userId),
+            this.scopeWhere(messages),
             inArray(
               messages.topicId,
               importedRows.map((r) => r.id),
