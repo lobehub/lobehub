@@ -13,6 +13,7 @@ import Title from './Title';
 const VerifyReportHeader = memo(() => {
   const navigate = useWorkspaceAwareNavigate();
   const runId = useChatStore(chatPortalSelectors.verifyReportRunId);
+  const clearPortalStack = useChatStore((s) => s.clearPortalStack);
 
   return (
     <Header
@@ -22,7 +23,11 @@ const VerifyReportHeader = memo(() => {
           disabled={!runId}
           icon={Maximize2}
           size={DESKTOP_HEADER_ICON_SMALL_SIZE}
-          onClick={() => runId && navigate(`/verify/${runId}`)}
+          onClick={() => {
+            if (!runId) return;
+            navigate(`/verify/${runId}`);
+            clearPortalStack();
+          }}
         />
       }
     />
