@@ -145,6 +145,7 @@ const AgentWorkingSidebar = memo(() => {
   const paramsAvailable = !isHetero;
   // The in-app browser rides on the Electron <webview> tag — desktop only.
   const browserAvailable = isDesktop;
+  const browserSessionId = `agent:${activeAgentId ?? 'default'}`;
   const resolveActiveTab = (): Tab => {
     if (storedTab === 'params' && paramsAvailable) return 'params';
     if (storedTab === 'review' && reviewAvailable) return 'review';
@@ -280,7 +281,10 @@ const AgentWorkingSidebar = memo(() => {
           )}
           {browserAvailable && browserActivated && (
             <Flexbox className={activeTab === 'browser' ? styles.pane : styles.paneHidden}>
-              <BrowserPane sessionId={`agent:${activeAgentId ?? 'default'}`} />
+              {/* Keyed by session: the pane holds per-session local state (webview,
+              address bar), so an agent switch must remount it rather than leak the
+              previous agent's page into the new agent's session. */}
+              <BrowserPane key={browserSessionId} sessionId={browserSessionId} />
             </Flexbox>
           )}
           <Flexbox

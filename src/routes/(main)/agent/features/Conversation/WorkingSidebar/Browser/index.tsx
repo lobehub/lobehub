@@ -58,11 +58,15 @@ interface BrowserPaneProps {
 
 const BrowserPane = memo<BrowserPaneProps>(({ sessionId }) => {
   const { t } = useTranslation('chat');
-  // Webview src is set once on first navigation and left untouched afterwards —
-  // later navigations go through the controller IPC so the guest page doesn't
-  // remount. `src === undefined` renders the empty state instead of a webview.
-  const [src, setSrc] = useState<string>();
-  const state = useBrowserSidebarState(sessionId, src);
+  // The webview always mounts on a constant about:blank; the real first
+  // navigation is issued through the controller IPC once the guest is attached,
+  // so user-typed text never reaches the src attribute (a DOM-XSS sink). Later
+  // navigations go through the same IPC so the guest page doesn't remount.
+  // `initialUrl === undefined` renders the empty state instead of a webview;
+  // its value only seeds the address bar until the first state broadcast.
+  const [initialUrl, setInitialUrl] = useState<string>();
+  const pendingUrl = useRef<string>(undefined);
+  const state = useBrowserSidebarState(sessionId, initialUrl);
   const [address, setAddress] = useState('');
   const [isEditing, setIsEditing] = useState(false);
   const browserRequest = useGlobalStore((s) => s.status.workingSidebarBrowserRequest);
@@ -71,20 +75,38 @@ const BrowserPane = memo<BrowserPaneProps>(({ sessionId }) => {
 
   // will-attach-webview only sees standard attributes, so the main process
   // can't learn the sessionId there — bind it explicitly once the guest exists.
+  // The pending first navigation rides on a successful attach.
   useEffect(() => {
     const el = webviewRef.current;
     if (!el) return;
 
     const handleDomReady = () => {
       const webContentsId = el.getWebContentsId();
-      electronBrowserSidebarService.attach({ sessionId, webContentsId }).catch((error) => {
-        console.error('[BrowserSidebar] Failed to attach webview:', error);
-      });
+      electronBrowserSidebarService
+        .attach({ sessionId, webContentsId })
+        .then((result) => {
+          if (!result.success) return;
+          const pending = pendingUrl.current;
+          pendingUrl.current = undefined;
+          if (pending) return electronBrowserSidebarService.navigate({ sessionId, url: pending });
+        })
+        .catch((error) => {
+          console.error('[BrowserSidebar] Failed to attach webview:', error);
+        });
     };
 
     el.addEventListener('dom-ready', handleDomReady);
     return () => el.removeEventListener('dom-ready', handleDomReady);
-  }, [src, sessionId]);
+  }, [initialUrl, sessionId]);
+
+  // The pane is keyed by session, so switching agents back remounts it with
+  // empty local state while the main process still holds the session's page.
+  // Bring the webview back on the recorded URL instead of an empty pane.
+  useEffect(() => {
+    if (initialUrl || !state.url || state.url === 'about:blank') return;
+    pendingUrl.current = state.url;
+    setInitialUrl(state.url);
+  }, [initialUrl, state.url]);
 
   useEffect(() => {
     if (!isEditing) setAddress(state.url === 'about:blank' ? '' : state.url);
@@ -106,8 +128,9 @@ const BrowserPane = memo<BrowserPaneProps>(({ sessionId }) => {
     const url = normalizeBrowserUrl(rawUrl);
     setAddress(url);
 
-    if (!src) {
-      setSrc(url);
+    if (!initialUrl) {
+      pendingUrl.current = url;
+      setInitialUrl(url);
       return;
     }
 
@@ -205,13 +228,13 @@ const BrowserPane = memo<BrowserPaneProps>(({ sessionId }) => {
         />
       </Flexbox>
       <Flexbox className={styles.container}>
-        {src ? (
+        {initialUrl ? (
           <webview
             className={styles.webview}
             key={sessionId}
             partition={BROWSER_WEBVIEW_PARTITION}
             ref={webviewRef}
-            src={src}
+            src={'about:blank'}
             {...{ [BROWSER_WEBVIEW_SESSION_ATTRIBUTE]: sessionId }}
           />
         ) : (
