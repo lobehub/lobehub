@@ -1,6 +1,7 @@
 import type { AgentRuntimeHost } from '@lobechat/agent-runtime';
 
 import { ServerCompressionTransport } from './adapters/ServerCompressionTransport';
+import { ServerContextBuilder } from './adapters/ServerContextBuilder';
 import { ServerLifecycleSink } from './adapters/ServerLifecycleSink';
 import { ServerLLMTransport } from './adapters/ServerLLMTransport';
 import { ServerMessageTransport } from './adapters/ServerMessageTransport';
@@ -39,6 +40,7 @@ export const buildHost = (ctx: RuntimeExecutorContext): AgentRuntimeHost => ({
     compression: ctx.userId
       ? new ServerCompressionTransport(ctx.serverDB, ctx.userId, ctx.workspaceId)
       : undefined,
+    context: new ServerContextBuilder(ctx),
     llm: ctx.userId ? new ServerLLMTransport(ctx) : undefined,
     messages: new ServerMessageTransport(ctx.messageModel, {
       postProcessUrl: buildPostProcessUrl(ctx),

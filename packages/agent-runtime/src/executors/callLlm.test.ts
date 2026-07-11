@@ -1,6 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import type { AgentRuntimeHost, LLMTransport, MessageTransport, StreamSink } from '../transport';
+import type {
+  AgentRuntimeHost,
+  ContextBuilder,
+  ContextBuildOutput,
+  LLMTransport,
+  MessageTransport,
+  StreamSink,
+} from '../transport';
 import type { AgentInstructionCallLlm, AgentState } from '../types';
 import { callLlm } from './callLlm';
 
@@ -67,16 +74,28 @@ const createMessageTransport = (): MessageTransport => ({
 
 const createStreamSink = (): StreamSink => ({
   publishChunk: vi.fn(),
+  publishError: vi.fn(),
   publishEvent: vi.fn(),
+});
+
+const contextOutput: ContextBuildOutput = {
+  messages: [{ content: 'prepared hello', role: 'user' }],
+  replayAssistantReasoning: false,
+};
+
+const createContextBuilder = (): ContextBuilder => ({
+  build: vi.fn().mockResolvedValue(contextOutput),
 });
 
 const createHost = (
   llm: LLMTransport,
   messages = createMessageTransport(),
   stream = createStreamSink(),
+  context = createContextBuilder(),
 ): AgentRuntimeHost => ({
   operation: { operationId: 'op-1', stepIndex: 0 },
   transports: {
+    context,
     llm,
     messages,
     stream,
@@ -93,6 +112,7 @@ describe('callLlm executor', () => {
     const executeTurn = vi.fn().mockResolvedValue(expected);
     const messages = createMessageTransport();
     const stream = createStreamSink();
+    const context = createContextBuilder();
     const host = createHost(
       {
         executeTurn,
@@ -100,6 +120,7 @@ describe('callLlm executor', () => {
       },
       messages,
       stream,
+      context,
     );
     const instructionWithParent: AgentInstructionCallLlm = {
       payload: {
@@ -132,9 +153,15 @@ describe('callLlm executor', () => {
       stepIndex: 0,
       type: 'stream_start',
     });
+    expect(context.build).toHaveBeenCalledWith({
+      model: 'gpt-4',
+      payload: instructionWithParent.payload,
+      provider: 'openai',
+      state,
+    });
     expect(executeTurn).toHaveBeenCalledWith({
       assistantMessage: { id: 'assistant-1' },
-      instruction: instructionWithParent,
+      context: contextOutput,
       model: 'gpt-4',
       provider: 'openai',
       state,
@@ -182,6 +209,27 @@ describe('callLlm executor', () => {
     await expect(callLlm(host)(instruction, createState())).rejects.toThrow(
       'LLMTransport.executeTurn is required for call_llm executor',
     );
+  });
+
+  it('publishes context build failures without executing the model turn', async () => {
+    const error = new Error('context failed');
+    const context: ContextBuilder = { build: vi.fn().mockRejectedValue(error) };
+    const executeTurn = vi.fn();
+    const stream = createStreamSink();
+    const host = createHost(
+      { executeTurn, stream: vi.fn() },
+      createMessageTransport(),
+      stream,
+      context,
+    );
+
+    await expect(callLlm(host)(instruction, createState())).rejects.toBe(error);
+    expect(stream.publishError).toHaveBeenCalledWith({
+      error,
+      phase: 'llm_execution',
+      stepIndex: 0,
+    });
+    expect(executeTurn).not.toHaveBeenCalled();
   });
 
   it('fails before creating an assistant message when the parent message is missing', async () => {

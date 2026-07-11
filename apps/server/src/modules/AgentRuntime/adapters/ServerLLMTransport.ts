@@ -10,7 +10,6 @@ import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 
 import type { RuntimeExecutorContext } from '../context';
 import { executeServerCallLlmTurn } from './serverCallLlmExecutor';
-import { resolveServerCallLlmTooling } from './serverCallLlmTooling';
 
 const getErrorMessage = (error: unknown): string => {
   if (error instanceof Error && error.message) return error.message;
@@ -32,16 +31,11 @@ export class ServerLLMTransport implements LLMTransport {
   executeTurn(input: LLMTurnInput): ReturnType<NonNullable<LLMTransport['executeTurn']>> {
     return executeServerCallLlmTurn(this.ctx, {
       assistantMessage: input.assistantMessage,
-      instruction: input.instruction,
+      context: input.context,
       model: input.model,
       provider: input.provider,
       state: input.state,
       stepLabel: input.stepLabel,
-      tooling: resolveServerCallLlmTooling(
-        this.ctx,
-        input.state,
-        input.instruction.payload.allowedToolNames,
-      ),
     });
   }
 

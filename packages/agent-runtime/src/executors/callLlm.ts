@@ -15,6 +15,14 @@ const requireLLMCallTransport = (host: AgentRuntimeHost) => {
   return llm as NonNullable<AgentRuntimeHost['transports']['llm']> & LLMCallTransport;
 };
 
+const requireContextBuilder = (host: AgentRuntimeHost) => {
+  const context = host.transports.context;
+  if (!context) {
+    throw new Error('ContextBuilder is required for call_llm executor');
+  }
+  return context;
+};
+
 const createConversationParentMissingError = (parentId: string) => {
   const error = new Error(
     `Conversation parent message ${parentId} no longer exists. It was likely deleted while the operation was running.`,
@@ -76,6 +84,7 @@ export const callLlm =
   (host: AgentRuntimeHost): InstructionExecutor =>
   async (instruction, state) => {
     const { operation, transports } = host;
+    const contextBuilder = requireContextBuilder(host);
     const llm = requireLLMCallTransport(host);
     const { payload } = instruction as Extract<AgentInstruction, { type: 'call_llm' }>;
     const llmPayload = payload as CallLLMPayload & {
@@ -134,9 +143,25 @@ export const callLlm =
       type: 'stream_start',
     });
 
+    const context = await contextBuilder
+      .build({
+        model,
+        payload: llmPayload,
+        provider,
+        state,
+      })
+      .catch(async (error) => {
+        await transports.stream.publishError?.({
+          error,
+          phase: 'llm_execution',
+          stepIndex: operation.stepIndex,
+        });
+        throw error;
+      });
+
     return llm.executeTurn({
       assistantMessage,
-      instruction: instruction as Extract<AgentInstruction, { type: 'call_llm' }>,
+      context,
       model,
       provider,
       state,

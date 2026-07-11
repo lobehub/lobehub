@@ -1,11 +1,7 @@
 import type { ModelUsage, OpenAIChatMessage } from '@lobechat/types';
 
-import type {
-  AgentInstructionCallLlm,
-  AgentState,
-  CallLLMPayload,
-  InstructionExecutionResult,
-} from '../types';
+import type { AgentState, CallLLMPayload, InstructionExecutionResult } from '../types';
+import type { ContextBuildOutput } from './context';
 import type { RuntimeMessageRef } from './message';
 
 export interface LLMStreamPayload {
@@ -40,7 +36,7 @@ export interface LLMStreamHandlers {
 
 export interface LLMTurnInput {
   assistantMessage: RuntimeMessageRef;
-  instruction: AgentInstructionCallLlm;
+  context: ContextBuildOutput;
   model: string;
   provider: string;
   state: AgentState;
