@@ -8,8 +8,10 @@ import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
 import { type MarkdownElementProps } from '../../type';
+import { parseInternalLink } from '../internalLink';
 import { type LobeLinkKind } from '../parse';
 import FaviconIcon from './FaviconIcon';
+import { InternalEntityLink } from './InternalEntityLink';
 import LinearIcon from './LinearIcon';
 import LinkChip from './LinkChip';
 
@@ -27,6 +29,14 @@ const Render = memo<MarkdownElementProps<LobeLinkProperties>>(({ node }) => {
   const showIcon = useUserStore(userGeneralSettingsSelectors.enableMessageLinkIcon);
 
   const label = linkLabel || linkHref || '';
+  const internalReference = parseInternalLink(
+    linkHref,
+    typeof window === 'undefined' ? undefined : window.location.origin,
+  );
+
+  if (linkHref && internalReference) {
+    return <InternalEntityLink label={label} reference={internalReference} />;
+  }
 
   if (!showIcon) {
     return <LinkChip href={linkHref} label={label} />;

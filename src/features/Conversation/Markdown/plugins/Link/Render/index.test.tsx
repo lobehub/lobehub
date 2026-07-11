@@ -1,8 +1,8 @@
 /**
  * @vitest-environment happy-dom
  */
-import { render } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { fireEvent, render } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import Render from './index';
 
@@ -10,6 +10,23 @@ import Render from './index';
 // selector's return value through this module-level flag so each case can flip
 // the "Link Icon" setting on/off without a real store.
 let mockShowIcon = true;
+const mockNavigate = vi.fn();
+const mockOpenAgentDetail = vi.fn();
+const mockOpenDocument = vi.fn();
+const mockOpenTaskDetail = vi.fn();
+
+vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
+  useWorkspaceAwareNavigate: () => mockNavigate,
+}));
+
+vi.mock('@/store/chat', () => ({
+  useChatStore: (selector: (state: unknown) => unknown) =>
+    selector({
+      openAgentDetail: mockOpenAgentDetail,
+      openDocument: mockOpenDocument,
+      openTaskDetail: mockOpenTaskDetail,
+    }),
+}));
 
 vi.mock('@/store/user', () => ({
   useUserStore: (selector: (s: unknown) => unknown) => selector(undefined),
@@ -30,6 +47,10 @@ const renderLink = (properties: Record<string, unknown>) =>
 
 afterEach(() => {
   mockShowIcon = true;
+});
+
+beforeEach(() => {
+  vi.clearAllMocks();
 });
 
 describe('Link Render — message link icon toggle', () => {
@@ -100,5 +121,67 @@ describe('Link Render — message link icon toggle', () => {
         expect(anchor.querySelector('img')).toBeNull();
       }
     });
+  });
+});
+
+describe('Link Render — internal entities', () => {
+  it('opens official document links in the conversation portal', () => {
+    const { getByRole } = renderLink({
+      linkHref: 'https://app.lobehub.com/agent/agt_1/docs/doc1',
+      linkKind: 'generic',
+      linkLabel: 'Research notes',
+    });
+
+    fireEvent.click(getByRole('link', { name: 'Research notes' }));
+
+    expect(mockOpenDocument).toHaveBeenCalledWith('docs_doc1');
+    expect(getByRole('link', { name: 'Research notes' })).toHaveAttribute(
+      'href',
+      '/agent/agt_1/docs/doc1',
+    );
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it('opens tasks and agents in their portal views', () => {
+    const task = renderLink({
+      linkHref: '/task/T-198',
+      linkKind: 'generic',
+      linkLabel: 'T-198',
+    });
+    fireEvent.click(task.getByRole('link', { name: 'T-198' }));
+    expect(mockOpenTaskDetail).toHaveBeenCalledWith('T-198');
+    task.unmount();
+
+    const agent = renderLink({
+      linkHref: '/agent/agt_1',
+      linkKind: 'generic',
+      linkLabel: 'Research agent',
+    });
+    fireEvent.click(agent.getByRole('link', { name: 'Research agent' }));
+    expect(mockOpenAgentDetail).toHaveBeenCalledWith('agt_1');
+  });
+
+  it('preserves modifier-click browser behavior', () => {
+    const { getByRole } = renderLink({
+      linkHref: '/task/T-198',
+      linkKind: 'generic',
+      linkLabel: 'T-198',
+    });
+
+    fireEvent.click(getByRole('link', { name: 'T-198' }), { metaKey: true });
+
+    expect(mockOpenTaskDetail).not.toHaveBeenCalled();
+  });
+
+  it('navigates non-entity app routes without leaving the SPA', () => {
+    const { getByRole } = renderLink({
+      linkHref: 'https://app.lobehub.com/settings/profile',
+      linkKind: 'generic',
+      linkLabel: 'Profile settings',
+    });
+
+    fireEvent.click(getByRole('link', { name: 'Profile settings' }));
+
+    expect(mockNavigate).toHaveBeenCalledWith('/settings/profile', { escape: true });
   });
 });
