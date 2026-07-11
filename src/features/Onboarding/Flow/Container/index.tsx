@@ -3,44 +3,35 @@
 import { Center, Flexbox, Text } from '@lobehub/ui';
 import { Divider } from 'antd';
 import { cx, useTheme } from 'antd-style';
-import { type FC, type PropsWithChildren, useCallback, useEffect } from 'react';
+import { type FC, type PropsWithChildren, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useLocation, useNavigate } from 'react-router';
+import { useLocation } from 'react-router';
 
 import { ProductLogo } from '@/components/Branding';
 import LangButton from '@/features/User/UserPanel/LangButton';
 import ThemeButton from '@/features/User/UserPanel/ThemeButton';
 import { useIsDark } from '@/hooks/useIsDark';
 import { useIsMobile } from '@/hooks/useIsMobile';
-import { useUserStore } from '@/store/user';
-import {
-  consumeOnboardingCallbackUrl,
-  stashOnboardingCallbackUrl,
-} from '@/utils/onboardingRedirect';
+import { stashOnboardingCallbackUrl } from '@/utils/onboardingRedirect';
 
 import { styles } from './style';
 
-const OnBoardingContainer: FC<PropsWithChildren> = ({ children }) => {
+interface OnBoardingContainerProps extends PropsWithChildren {
+  onSkip: () => Promise<void>;
+}
+
+const OnBoardingContainer: FC<OnBoardingContainerProps> = ({ children, onSkip }) => {
   const isDarkMode = useIsDark();
   const isMobile = useIsMobile();
   const theme = useTheme();
   const { t } = useTranslation('onboarding');
   const { search } = useLocation();
-  const navigate = useNavigate();
 
   // Signup flows land here with a threaded `callbackUrl`; stash it so finish
   // points can restore the original target after onboarding completes.
   useEffect(() => {
     stashOnboardingCallbackUrl(search);
   }, [search]);
-
-  const finishOnboarding = useUserStore((s) => s.finishOnboarding);
-
-  const handleSkip = useCallback(async () => {
-    await finishOnboarding();
-    const targetUrl = consumeOnboardingCallbackUrl() || '/';
-    navigate(targetUrl);
-  }, [finishOnboarding, navigate]);
 
   return (
     <Flexbox
@@ -85,7 +76,7 @@ const OnBoardingContainer: FC<PropsWithChildren> = ({ children }) => {
             fontSize={12}
             style={{ cursor: 'pointer', textAlign: 'center' }}
             type={'secondary'}
-            onClick={handleSkip}
+            onClick={onSkip}
           >
             {t('flow.skip')}
           </Text>

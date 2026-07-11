@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import OnBoardingContainer from './index';
 
 const mocks = vi.hoisted(() => ({
-  finishOnboarding: vi.fn().mockResolvedValue(undefined),
+  onSkip: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('@/features/User/UserPanel/LangButton', () => ({
@@ -26,15 +26,10 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('@/store/user', () => ({
-  useUserStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({ finishOnboarding: mocks.finishOnboarding }),
-}));
-
 const renderAt = (initialPath: string) =>
   render(
     <MemoryRouter initialEntries={[initialPath]}>
-      <OnBoardingContainer>
+      <OnBoardingContainer onSkip={mocks.onSkip}>
         <div>Onboarding Content</div>
       </OnBoardingContainer>
     </MemoryRouter>,
@@ -60,11 +55,11 @@ describe('OnBoardingContainer', () => {
     expect(screen.getByText('flow.skip')).toBeInTheDocument();
   });
 
-  it('finishes onboarding when skip is clicked', async () => {
+  it('delegates to the provided onSkip handler when skip is clicked', () => {
     renderAt('/onboarding');
 
     fireEvent.click(screen.getByText('flow.skip'));
 
-    expect(mocks.finishOnboarding).toHaveBeenCalled();
+    expect(mocks.onSkip).toHaveBeenCalled();
   });
 });

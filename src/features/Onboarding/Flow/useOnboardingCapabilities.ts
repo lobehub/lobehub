@@ -6,6 +6,11 @@ import { messengerKeys } from '@/libs/swr/keys';
 import { messengerService } from '@/services/messenger';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 
+export interface OnboardingCapabilitiesResult {
+  capabilities: OnboardingCapabilities;
+  hasResolvedCapabilities: boolean;
+}
+
 export const resolveMessengerCapability = (
   platforms: unknown[] | undefined,
   error: unknown,
@@ -35,19 +40,30 @@ const useLatchedCapabilities = (capabilities: OnboardingCapabilities): Onboardin
   );
 };
 
-export const useOnboardingCapabilities = (): OnboardingCapabilities => {
+const useResolvedOnce = (isLoading: boolean): boolean => {
+  const resolvedRef = useRef(!isLoading);
+  if (!isLoading) resolvedRef.current = true;
+  return resolvedRef.current;
+};
+
+export const useOnboardingCapabilities = (): OnboardingCapabilitiesResult => {
   const composio = useServerConfigStore(serverConfigSelectors.enableComposio);
 
-  const { data: platforms, error } = useClientDataSWR(messengerKeys.availablePlatforms(), () =>
+  const {
+    data: platforms,
+    error,
+    isLoading,
+  } = useClientDataSWR(messengerKeys.availablePlatforms(), () =>
     messengerService.availablePlatforms(),
   );
 
   const messenger = resolveMessengerCapability(platforms, error);
+  const hasResolvedCapabilities = useResolvedOnce(isLoading);
 
   const capabilities = useMemo(
     () => ({ analysis: false, composio, messenger, starterTasks: false }),
     [composio, messenger],
   );
 
-  return useLatchedCapabilities(capabilities);
+  return { capabilities: useLatchedCapabilities(capabilities), hasResolvedCapabilities };
 };

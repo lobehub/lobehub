@@ -36,16 +36,17 @@ const ONBOARDING_STEP_METRIC_ID: Record<OnboardingStep, OnboardingMetricsStep> =
 export interface OnboardingFlowController {
   back: () => Promise<void>;
   currentStep: OnboardingStep;
-  finish: () => Promise<void>;
+  finish: (options?: { skipped?: boolean }) => Promise<void>;
   hasPrevious: boolean;
   isLast: boolean;
+  isResolving: boolean;
   next: () => Promise<void>;
   visibleSteps: OnboardingStep[];
 }
 
 export const useOnboardingFlow = (): OnboardingFlowController => {
   const navigate = useNavigate();
-  const capabilities = useOnboardingCapabilities();
+  const { capabilities, hasResolvedCapabilities } = useOnboardingCapabilities();
   const visibleSteps = useMemo(() => getVisibleOnboardingSteps(capabilities), [capabilities]);
 
   const persistedStep = useUserStore((s) => {
@@ -57,24 +58,37 @@ export const useOnboardingFlow = (): OnboardingFlowController => {
   const setOnboardingStep = useUserStore((s) => s.setOnboardingStep);
   const finishOnboarding = useUserStore((s) => s.finishOnboarding);
 
+  const lastVisibleStep = visibleSteps.at(-1) ?? visibleSteps[0];
+  const isResolving =
+    !hasResolvedCapabilities && persistedStep !== undefined && persistedStep > lastVisibleStep;
+
   const currentStep = resolveVisibleStep(persistedStep, visibleSteps);
   const isLast = isLastVisibleStep(currentStep, visibleSteps);
   const hasPrevious = getPreviousOnboardingStep(currentStep, visibleSteps) !== undefined;
 
   useEffect(() => {
+    if (isResolving) return;
+
     trackOnboardingStepViewed({
       flow: ONBOARDING_METRICS_FLOW,
       step: ONBOARDING_STEP_METRIC_ID[currentStep],
       stepIndex: currentStep,
     });
-  }, [currentStep]);
+  }, [currentStep, isResolving]);
 
-  const finish = useCallback(async () => {
-    await finishOnboarding();
-    const targetUrl = consumeOnboardingCallbackUrl() || '/';
-    trackOnboardingCompleted({ flow: ONBOARDING_METRICS_FLOW, targetUrl });
-    navigate(targetUrl);
-  }, [finishOnboarding, navigate]);
+  const finish = useCallback(
+    async (options?: { skipped?: boolean }) => {
+      await finishOnboarding();
+      const targetUrl = consumeOnboardingCallbackUrl() || '/';
+      trackOnboardingCompleted({
+        flow: ONBOARDING_METRICS_FLOW,
+        targetUrl,
+        ...(options?.skipped ? { skipped: true } : {}),
+      });
+      navigate(targetUrl);
+    },
+    [finishOnboarding, navigate],
+  );
 
   const next = useCallback(async () => {
     if (isLastVisibleStep(currentStep, visibleSteps)) {
@@ -101,5 +115,5 @@ export const useOnboardingFlow = (): OnboardingFlowController => {
     if (target !== undefined) await setOnboardingStep(target);
   }, [currentStep, visibleSteps, setOnboardingStep]);
 
-  return { back, currentStep, finish, hasPrevious, isLast, next, visibleSteps };
+  return { back, currentStep, finish, hasPrevious, isLast, isResolving, next, visibleSteps };
 };

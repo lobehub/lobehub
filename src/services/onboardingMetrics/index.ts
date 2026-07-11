@@ -64,6 +64,7 @@ export interface OnboardingStepPayload extends Record<string, unknown> {
 
 export interface OnboardingCompletedPayload extends Record<string, unknown> {
   flow: Exclude<OnboardingFlow, 'common'>;
+  skipped?: boolean;
   targetUrl?: string;
 }
 

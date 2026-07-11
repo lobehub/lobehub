@@ -8,6 +8,9 @@ const mocks = vi.hoisted(() => ({
   composio: false,
   consumeOnboardingCallbackUrl: vi.fn(),
   finishOnboarding: vi.fn().mockResolvedValue(undefined),
+  messengerError: undefined as unknown,
+  messengerIsLoading: false,
+  messengerPlatforms: undefined as unknown[] | undefined,
   navigate: vi.fn(),
   onboardingCurrentStep: undefined as number | undefined,
   onboardingVersion: undefined as number | undefined,
@@ -26,6 +29,14 @@ vi.mock('@/services/onboardingMetrics', () => ({
   trackOnboardingCompleted: mocks.trackOnboardingCompleted,
   trackOnboardingStepCompleted: mocks.trackOnboardingStepCompleted,
   trackOnboardingStepViewed: mocks.trackOnboardingStepViewed,
+}));
+
+vi.mock('@/libs/swr', () => ({
+  useClientDataSWR: () => ({
+    data: mocks.messengerPlatforms,
+    error: mocks.messengerError,
+    isLoading: mocks.messengerIsLoading,
+  }),
 }));
 
 vi.mock('@/store/user', () => ({
@@ -58,6 +69,9 @@ beforeEach(() => {
   mocks.persistedStep = undefined;
   mocks.onboardingCurrentStep = undefined;
   mocks.onboardingVersion = undefined;
+  mocks.messengerPlatforms = undefined;
+  mocks.messengerError = undefined;
+  mocks.messengerIsLoading = false;
   mocks.consumeOnboardingCallbackUrl.mockReturnValue(undefined);
 });
 
@@ -273,5 +287,62 @@ describe('useOnboardingFlow', () => {
       OnboardingStep.ConnectApps,
       OnboardingStep.ChiefAgent,
     ]);
+  });
+
+  it('fires finish with a skipped marker when requested', async () => {
+    const { result } = renderHook(() => useOnboardingFlow());
+
+    await act(async () => {
+      await result.current.finish({ skipped: true });
+    });
+
+    expect(mocks.trackOnboardingCompleted).toHaveBeenCalledWith({
+      flow: 'web',
+      skipped: true,
+      targetUrl: '/',
+    });
+  });
+
+  describe('resume-past-last-visible guard', () => {
+    it('holds the flow in a resolving state while the messenger fetch is still pending', () => {
+      mocks.messengerIsLoading = true;
+      mocks.persistedStep = OnboardingStep.Messenger;
+
+      const { result } = renderHook(() => useOnboardingFlow());
+
+      expect(result.current.isResolving).toBe(true);
+      expect(mocks.trackOnboardingStepViewed).not.toHaveBeenCalled();
+    });
+
+    it('does not hold the flow when the persisted step is already within the known visible steps', () => {
+      mocks.messengerIsLoading = true;
+      mocks.persistedStep = OnboardingStep.ChiefAgent;
+
+      const { result } = renderHook(() => useOnboardingFlow());
+
+      expect(result.current.isResolving).toBe(false);
+    });
+
+    it('resolves to the last visible step once the messenger fetch settles empty', () => {
+      mocks.messengerIsLoading = false;
+      mocks.messengerPlatforms = [];
+      mocks.persistedStep = OnboardingStep.Messenger;
+
+      const { result } = renderHook(() => useOnboardingFlow());
+
+      expect(result.current.isResolving).toBe(false);
+      expect(result.current.currentStep).toBe(OnboardingStep.ChiefAgent);
+    });
+
+    it('resolves to Messenger once the fetch settles with available platforms', () => {
+      mocks.messengerIsLoading = false;
+      mocks.messengerPlatforms = [{ id: 'slack' }];
+      mocks.persistedStep = OnboardingStep.Messenger;
+
+      const { result } = renderHook(() => useOnboardingFlow());
+
+      expect(result.current.isResolving).toBe(false);
+      expect(result.current.currentStep).toBe(OnboardingStep.Messenger);
+    });
   });
 });

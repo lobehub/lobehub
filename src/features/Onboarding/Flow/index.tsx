@@ -1,11 +1,11 @@
 'use client';
 
 import { OnboardingStep } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
+import { Center, Flexbox, Icon } from '@lobehub/ui';
+import { Loader2Icon } from 'lucide-react';
 import { memo } from 'react';
 
-import OnBoardingContainer from '@/routes/onboarding/_layout';
-
+import OnBoardingContainer from './Container';
 import ChiefAgent from './steps/ChiefAgent';
 import ConnectApps from './steps/ConnectApps';
 import LearnYourWorld from './steps/LearnYourWorld';
@@ -29,10 +29,18 @@ const OnboardingFlowPage = memo(() => {
   const flow = useOnboardingFlow();
   const StepComponent = STEP_COMPONENTS[flow.currentStep];
 
+  const handleSkip = () => flow.finish({ skipped: true });
+
   return (
-    <OnBoardingContainer>
+    <OnBoardingContainer onSkip={handleSkip}>
       <Flexbox style={{ maxWidth: 600, width: '100%' }}>
-        <StepComponent {...flow} />
+        {flow.isResolving ? (
+          <Center height={200} width={'100%'}>
+            <Icon spin icon={Loader2Icon} size={24} />
+          </Center>
+        ) : (
+          <StepComponent {...flow} />
+        )}
       </Flexbox>
     </OnBoardingContainer>
   );

@@ -6,7 +6,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import OnboardingFlowPage from './index';
 
 const mocks = vi.hoisted(() => ({
-  finishOnboarding: vi.fn().mockResolvedValue(undefined),
+  finish: vi.fn().mockResolvedValue(undefined),
+  isResolving: false,
   stashOnboardingCallbackUrl: vi.fn(),
 }));
 
@@ -14,9 +15,10 @@ vi.mock('./useOnboardingFlow', () => ({
   useOnboardingFlow: () => ({
     back: vi.fn(),
     currentStep: OnboardingStep.Welcome,
-    finish: vi.fn(),
+    finish: mocks.finish,
     hasPrevious: false,
     isLast: false,
+    isResolving: mocks.isResolving,
     next: vi.fn(),
     visibleSteps: [OnboardingStep.Welcome],
   }),
@@ -48,11 +50,6 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('@/store/user', () => ({
-  useUserStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({ finishOnboarding: mocks.finishOnboarding }),
-}));
-
 vi.mock('@/utils/onboardingRedirect', () => ({
   consumeOnboardingCallbackUrl: () => undefined,
   stashOnboardingCallbackUrl: (search: string) => mocks.stashOnboardingCallbackUrl(search),
@@ -68,6 +65,7 @@ const renderAt = (initialPath: string) =>
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  mocks.isResolving = false;
 });
 
 describe('OnboardingFlowPage', () => {
@@ -84,5 +82,21 @@ describe('OnboardingFlowPage', () => {
     renderAt('/onboarding?callbackUrl=%2Fchat');
 
     expect(mocks.stashOnboardingCallbackUrl).toHaveBeenCalledWith('?callbackUrl=%2Fchat');
+  });
+
+  it('renders a loading state instead of a step while capabilities are still resolving', () => {
+    mocks.isResolving = true;
+
+    renderAt('/onboarding');
+
+    expect(screen.queryByText('Welcome Step')).not.toBeInTheDocument();
+  });
+
+  it('fires finish with a skipped marker when the skip affordance is used', () => {
+    renderAt('/onboarding');
+
+    screen.getByText('flow.skip').click();
+
+    expect(mocks.finish).toHaveBeenCalledWith({ skipped: true });
   });
 });
