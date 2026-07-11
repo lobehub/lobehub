@@ -9,6 +9,7 @@ import Banner from './Banner';
 import { styles } from './style';
 
 interface StepCardProps extends PropsWithChildren {
+  bannerContent?: ReactNode;
   bannerSrc?: string;
   continueDisabled?: boolean;
   continueLabel?: string;
@@ -21,6 +22,7 @@ interface StepCardProps extends PropsWithChildren {
 }
 
 const StepCard: FC<StepCardProps> = ({
+  bannerContent,
   bannerSrc,
   children,
   continueDisabled,
@@ -36,7 +38,9 @@ const StepCard: FC<StepCardProps> = ({
 
   return (
     <Flexbox className={styles.card}>
-      <Banner src={bannerSrc} onBack={onBack} />
+      <Banner src={bannerSrc} onBack={onBack}>
+        {bannerContent}
+      </Banner>
       <Flexbox className={styles.body} gap={20}>
         <Flexbox gap={4}>
           <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
