@@ -1,19 +1,10 @@
 interface FooterPromotionContext {
-  agentOnboardingFinished: boolean;
-  agentOnboardingStarted: boolean;
-  classicOnboardingFinished: boolean;
-  enableAgentOnboarding: boolean;
-  isAgentOnboardingPromoRead: boolean;
-  isDesktop: boolean;
-  isMobile: boolean;
   isProductHuntNotificationRead: boolean;
   isWithinProductHuntWindow: boolean;
   serverConfigInit: boolean;
 }
 
 interface FooterPromotionState {
-  isAgentOnboardingPromoAvailable: boolean;
-  shouldAutoShowAgentOnboardingPromo: boolean;
   shouldAutoShowProductHuntCard: boolean;
   shouldShowProductHuntMenuEntry: boolean;
 }
@@ -24,33 +15,12 @@ type FooterPromotionPipelineStep = (
 ) => FooterPromotionState;
 
 const initialFooterPromotionState: FooterPromotionState = {
-  isAgentOnboardingPromoAvailable: false,
-  shouldAutoShowAgentOnboardingPromo: false,
   shouldAutoShowProductHuntCard: false,
   shouldShowProductHuntMenuEntry: false,
 };
 
-const resolveAgentOnboardingPromotion: FooterPromotionPipelineStep = (context, state) => {
-  const isAgentOnboardingPromoAvailable =
-    !context.isDesktop &&
-    !context.isMobile &&
-    context.serverConfigInit &&
-    context.enableAgentOnboarding &&
-    context.classicOnboardingFinished &&
-    !context.agentOnboardingStarted &&
-    !context.agentOnboardingFinished;
-
-  if (!isAgentOnboardingPromoAvailable) return state;
-
-  return {
-    ...state,
-    isAgentOnboardingPromoAvailable,
-    shouldAutoShowAgentOnboardingPromo: !context.isAgentOnboardingPromoRead,
-  };
-};
-
 const resolveProductHuntPromotion: FooterPromotionPipelineStep = (context, state) => {
-  if (state.isAgentOnboardingPromoAvailable || !context.isWithinProductHuntWindow) return state;
+  if (!context.isWithinProductHuntWindow) return state;
 
   return {
     ...state,
@@ -61,7 +31,6 @@ const resolveProductHuntPromotion: FooterPromotionPipelineStep = (context, state
 };
 
 const footerPromotionPipeline = [
-  resolveAgentOnboardingPromotion,
   resolveProductHuntPromotion,
 ] as const satisfies readonly FooterPromotionPipelineStep[];
 

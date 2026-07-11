@@ -5,8 +5,7 @@ import { Flexbox, Text } from '@lobehub/ui';
 import { Switch } from '@lobehub/ui/base-ui';
 import { memo } from 'react';
 
-import ServerIcon from '@/routes/onboarding/components/ComposioServerList/components/ServerIcon';
-
+import ServerIcon from './ServerIcon';
 import { styles } from './style';
 import { useConnectAppToggle } from './useConnectAppToggle';
 

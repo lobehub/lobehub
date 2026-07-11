@@ -1,9 +1,10 @@
 import { useCallback, useState } from 'react';
 
-import { useComposioOAuth } from '@/routes/onboarding/components/ComposioServerList/hooks/useComposioOAuth';
-import { useComposioServerActions } from '@/routes/onboarding/components/ComposioServerList/hooks/useComposioServerActions';
 import { useToolStore } from '@/store/tool';
 import { ComposioServerStatus, composioStoreSelectors } from '@/store/tool/slices/composioStore';
+
+import { useComposioOAuth } from './hooks/useComposioOAuth';
+import { useComposioServerActions } from './hooks/useComposioServerActions';
 
 interface UseConnectAppToggleProps {
   appSlug: string;
