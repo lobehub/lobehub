@@ -1,10 +1,11 @@
 import {
   type AgentEvent,
   type AgentInstruction,
+  type AgentState,
   type CallLLMPayload,
   type GeneralAgentCallLLMResultPayload,
   getLLMRetryDelayMs,
-  type InstructionExecutor,
+  type InstructionExecutionResult,
   resolveLLMMaxAttempts,
   resolveLLMRetryBudget,
   shouldRetryLLM,
@@ -40,8 +41,10 @@ import type { ServerCallLlmTooling } from './serverCallLlmTooling';
 
 interface ServerCallLlmExecutionContext {
   assistantMessage: { id: string };
+  instruction: Extract<AgentInstruction, { type: 'call_llm' }>;
   model: string;
   provider: string;
+  state: AgentState;
   stepLabel?: string;
   tooling: ServerCallLlmTooling;
 }
@@ -51,9 +54,15 @@ const SERVER_LLM_RETRY_POLICY = {
   noRetryProviders: [BRANDING_PROVIDER],
 };
 
-export const callLlm =
-  (ctx: RuntimeExecutorContext, prepared: ServerCallLlmExecutionContext): InstructionExecutor =>
-  async (instruction, state) => {
+class ServerCallLlmTurn {
+  constructor(
+    private readonly ctx: RuntimeExecutorContext,
+    private readonly prepared: ServerCallLlmExecutionContext,
+  ) {}
+
+  async execute(): Promise<InstructionExecutionResult> {
+    const { ctx, prepared } = this;
+    const { instruction, state } = prepared;
     const { payload } = instruction as Extract<AgentInstruction, { type: 'call_llm' }>;
     const llmPayload = payload as CallLLMPayload;
     const { operationId, stepIndex, streamManager } = ctx;
@@ -393,4 +402,10 @@ export const callLlm =
       );
       throw error;
     }
-  };
+  }
+}
+
+export const executeServerCallLlmTurn = (
+  ctx: RuntimeExecutorContext,
+  prepared: ServerCallLlmExecutionContext,
+): Promise<InstructionExecutionResult> => new ServerCallLlmTurn(ctx, prepared).execute();

@@ -4,7 +4,7 @@ import type {
   AgentInstructionCallLlm,
   AgentState,
   CallLLMPayload,
-  InstructionExecutor,
+  InstructionExecutionResult,
 } from '../types';
 import type { RuntimeMessageRef } from './message';
 
@@ -38,7 +38,7 @@ export interface LLMStreamHandlers {
   onText?: (text: string) => void;
 }
 
-export interface LLMCallExecuteInput {
+export interface LLMTurnInput {
   assistantMessage: RuntimeMessageRef;
   instruction: AgentInstructionCallLlm;
   model: string;
@@ -58,12 +58,11 @@ export interface LLMCallExecuteInput {
  */
 export interface LLMTransport {
   /**
-   * Executes a full agent `call_llm` instruction. This is a transitional port:
-   * the server adapter can keep provider/context/persistence specifics while
-   * the package owns the executor registration point. The internals are split
-   * into smaller context/stream/persist ports in the next migration slices.
+   * Executes one prepared model turn. The package executor owns instruction
+   * setup while the adapter owns host-specific context, retry, and persistence
+   * until those phases move onto narrower transport ports.
    */
-  executeCall?: (input: LLMCallExecuteInput) => ReturnType<InstructionExecutor>;
+  executeTurn?: (input: LLMTurnInput) => Promise<InstructionExecutionResult>;
   stream: (
     payload: LLMStreamPayload,
     handlers?: LLMStreamHandlers,

@@ -90,12 +90,12 @@ describe('callLlm executor', () => {
       events: [],
       newState: state,
     };
-    const executeCall = vi.fn().mockResolvedValue(expected);
+    const executeTurn = vi.fn().mockResolvedValue(expected);
     const messages = createMessageTransport();
     const stream = createStreamSink();
     const host = createHost(
       {
-        executeCall,
+        executeTurn,
         stream: vi.fn(),
       },
       messages,
@@ -132,7 +132,7 @@ describe('callLlm executor', () => {
       stepIndex: 0,
       type: 'stream_start',
     });
-    expect(executeCall).toHaveBeenCalledWith({
+    expect(executeTurn).toHaveBeenCalledWith({
       assistantMessage: { id: 'assistant-1' },
       instruction: instructionWithParent,
       model: 'gpt-4',
@@ -148,11 +148,11 @@ describe('callLlm executor', () => {
       events: [],
       newState: state,
     };
-    const executeCall = vi.fn().mockResolvedValue(expected);
+    const executeTurn = vi.fn().mockResolvedValue(expected);
     const messages = createMessageTransport();
     const host = createHost(
       {
-        executeCall,
+        executeTurn,
         stream: vi.fn(),
       },
       messages,
@@ -167,20 +167,20 @@ describe('callLlm executor', () => {
 
     await expect(callLlm(host)(reuseInstruction, state)).resolves.toBe(expected);
     expect(messages.createAssistantMessage).not.toHaveBeenCalled();
-    expect(executeCall).toHaveBeenCalledWith(
+    expect(executeTurn).toHaveBeenCalledWith(
       expect.objectContaining({
         assistantMessage: { id: 'assistant-existing' },
       }),
     );
   });
 
-  it('throws when the LLM transport does not provide executeCall', async () => {
+  it('throws when the LLM transport does not provide executeTurn', async () => {
     const host = createHost({
       stream: vi.fn(),
     });
 
     await expect(callLlm(host)(instruction, createState())).rejects.toThrow(
-      'LLMTransport.executeCall is required for call_llm executor',
+      'LLMTransport.executeTurn is required for call_llm executor',
     );
   });
 
@@ -190,7 +190,7 @@ describe('callLlm executor', () => {
     const stream = createStreamSink();
     const host = createHost(
       {
-        executeCall: vi.fn(),
+        executeTurn: vi.fn(),
         stream: vi.fn(),
       },
       messages,
