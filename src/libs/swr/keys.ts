@@ -877,6 +877,10 @@ export const ollamaKeys = {
   downloadModel: def('ollama:downloadModel', (model: string) => ['ollama:downloadModel', model]),
 };
 export const authKeys = {
+  oidcClientMetadata: def('auth:oidcClientMetadata', (clientId: string) => [
+    'auth:oidcClientMetadata',
+    clientId,
+  ]),
   oidcInteraction: def('auth:oidcInteraction', (uid: string) => ['auth:oidcInteraction', uid]),
 };
 export const cronKeys = {

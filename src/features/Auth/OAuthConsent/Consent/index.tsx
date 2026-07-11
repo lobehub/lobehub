@@ -9,6 +9,7 @@ import AuthCard from '@/features/AuthCard';
 import type { OidcClientMetadata } from '@/types/oidc';
 
 import OAuthApplicationLogo from '../OAuthApplicationLogo';
+import ThirdPartyNotice from '../ThirdPartyNotice';
 import BuiltinConsent from './BuiltinConsent';
 
 interface ClientProps {
@@ -82,6 +83,14 @@ const ConsentClient = memo<ClientProps>(({ uid, clientId, scopes, clientMetadata
           </form>
         }
       >
+        {clientMetadata.isFirstParty === false && (
+          <Flexbox style={{ marginBottom: 16 }}>
+            <ThirdPartyNotice
+              developerName={clientMetadata.developerName}
+              policyUri={clientMetadata.policyUri}
+            />
+          </Flexbox>
+        )}
         <Text fontSize={16} type={'secondary'}>
           {t('consent.permissionsTitle')}
         </Text>
