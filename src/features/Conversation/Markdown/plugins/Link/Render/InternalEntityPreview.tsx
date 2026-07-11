@@ -2,7 +2,8 @@
 
 import { Avatar, Flexbox, Icon, Popover, Skeleton, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { BotIcon, CheckSquareIcon, FileTextIcon } from 'lucide-react';
+import type { TFunction } from 'i18next';
+import { BotIcon, CheckCircleIcon, CheckSquareIcon, FileTextIcon } from 'lucide-react';
 import { memo, type PropsWithChildren, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -10,6 +11,7 @@ import { useClientDataSWR } from '@/libs/swr';
 import { agentService } from '@/services/agent';
 import { documentService } from '@/services/document';
 import { taskService } from '@/services/task';
+import { verifyService } from '@/services/verify';
 
 import type { InternalLinkReference } from '../internalLink';
 
@@ -58,10 +60,15 @@ interface PreviewData {
   avatar?: string | null;
   backgroundColor?: string | null;
   description?: string | null;
+  meta?: string | null;
+  secondaryMeta?: string | null;
   title?: string | null;
 }
 
-const getPreviewData = async (reference: InternalLinkReference): Promise<PreviewData | null> => {
+const getPreviewData = async (
+  reference: InternalLinkReference,
+  t: TFunction<'chat'>,
+): Promise<PreviewData | null> => {
   switch (reference.type) {
     case 'agent': {
       return agentService.getAgentConfigById(reference.agentId);
@@ -85,6 +92,32 @@ const getPreviewData = async (reference: InternalLinkReference): Promise<Preview
           }
         : null;
     }
+    case 'verify': {
+      const { report, run } = await verifyService.getReportBundle(reference.runId);
+      const status = report?.verdict ?? run.status;
+      const counts = report
+        ? t('internalLink.preview.verifyCounts', {
+            failed: report.failedChecks ?? 0,
+            passed: report.passedChecks ?? 0,
+            uncertain: report.uncertainChecks ?? 0,
+          })
+        : null;
+      const context = run.context;
+      const scope = [
+        context?.branch,
+        context?.commit?.slice(0, 10),
+        context?.testedAt ? new Date(context.testedAt).toLocaleString() : null,
+      ].filter(Boolean);
+
+      return {
+        description: report?.summary,
+        meta: [status && t(`internalLink.preview.verifyStatus.${status}`), counts]
+          .filter(Boolean)
+          .join(' · '),
+        secondaryMeta: scope.join(' · '),
+        title: run.title,
+      };
+    }
     case 'route': {
       return null;
     }
@@ -102,7 +135,7 @@ export const InternalEntityPreview = memo<InternalEntityPreviewProps>(
     const [open, setOpen] = useState(false);
     const { data, isLoading } = useClientDataSWR(
       open ? ['internal-entity-preview', reference.type, reference.pathname] : null,
-      () => getPreviewData(reference),
+      () => getPreviewData(reference, t),
       { revalidateOnFocus: false },
     );
 
@@ -111,7 +144,9 @@ export const InternalEntityPreview = memo<InternalEntityPreviewProps>(
         ? BotIcon
         : reference.type === 'task'
           ? CheckSquareIcon
-          : FileTextIcon;
+          : reference.type === 'verify'
+            ? CheckCircleIcon
+            : FileTextIcon;
     const typeLabel = t(`internalLink.preview.${reference.type}`);
 
     const content = isLoading ? (
@@ -141,6 +176,16 @@ export const InternalEntityPreview = memo<InternalEntityPreviewProps>(
         {data?.description && (
           <Text className={styles.description} fontSize={13}>
             {data.description}
+          </Text>
+        )}
+        {data?.meta && (
+          <Text fontSize={12} type={'secondary'}>
+            {data.meta}
+          </Text>
+        )}
+        {data?.secondaryMeta && (
+          <Text fontSize={12} type={'secondary'}>
+            {data.secondaryMeta}
           </Text>
         )}
       </Flexbox>

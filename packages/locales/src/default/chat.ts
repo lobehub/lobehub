@@ -1542,5 +1542,17 @@ export default {
   'internalLink.preview.agent': 'Agent',
   'internalLink.preview.document': 'Page',
   'internalLink.preview.task': 'Task',
+  'internalLink.preview.verify': 'Verification report',
+  'internalLink.preview.verifyCounts':
+    '{{passed}} passed · {{failed}} failed · {{uncertain}} uncertain',
+  'internalLink.preview.verifyStatus.delivered': 'Delivered',
+  'internalLink.preview.verifyStatus.errored': 'Error',
+  'internalLink.preview.verifyStatus.failed': 'Failed',
+  'internalLink.preview.verifyStatus.passed': 'Passed',
+  'internalLink.preview.verifyStatus.planned': 'Planned',
+  'internalLink.preview.verifyStatus.repairing': 'Repairing',
+  'internalLink.preview.verifyStatus.uncertain': 'Uncertain',
+  'internalLink.preview.verifyStatus.unverified': 'Unverified',
+  'internalLink.preview.verifyStatus.verifying': 'Verifying',
   'you': 'You',
 };

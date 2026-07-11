@@ -20,6 +20,7 @@ export enum PortalViewType {
   TaskDetail = 'taskDetail',
   Thread = 'thread',
   ToolUI = 'toolUI',
+  VerifyReport = 'verifyReport',
   VerifyResult = 'verifyResult',
 }
 
@@ -58,6 +59,7 @@ export type PortalViewData =
   | { startMessageId?: string; threadId?: string; type: PortalViewType.Thread }
   | { agentId: string; type: PortalViewType.GroupThread }
   | { taskId: string; type: PortalViewType.TaskDetail }
+  | { runId: string; type: PortalViewType.VerifyReport }
   | { checkItemId: string; operationId: string; type: PortalViewType.VerifyResult };
 
 // ============== Portal State ==============
