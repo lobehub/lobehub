@@ -8,6 +8,7 @@
 
 import { agentBuilderExecutor } from '@lobechat/builtin-tool-agent-builder/executor';
 import { agentManagementExecutor } from '@lobechat/builtin-tool-agent-management/executor';
+import { browserExecutor } from '@lobechat/builtin-tool-browser/client/executor';
 import { calculatorExecutor } from '@lobechat/builtin-tool-calculator/executor';
 import { cloudSandboxExecutor } from '@lobechat/builtin-tool-cloud-sandbox/executor';
 import { credsExecutor } from '@lobechat/builtin-tool-creds/executor';
@@ -151,6 +152,7 @@ export const registerBuiltinToolExecutors = (): void => {
     groupAgentBuilderExecutor,
     groupManagementExecutor,
     knowledgeBaseExecutor,
+    browserExecutor,
     localSystemExecutor,
     memoryExecutor,
     messageExecutor,
