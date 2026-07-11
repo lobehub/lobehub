@@ -59,6 +59,7 @@ describe('parseInternalLink', () => {
     expect(
       parseInternalLink('https://example.com/task/T-200', 'https://chat.example.com'),
     ).toBeNull();
+    expect(parseInternalLink('//example.com/task/T-200', 'https://chat.example.com')).toBeNull();
   });
 
   it('parses agent roots and keeps deeper routes as SPA routes', () => {

@@ -14,7 +14,8 @@ import { chatPortalSelectors } from '@/store/chat/selectors';
 const Body = memo(() => {
   const { t } = useTranslation('chat');
   const agentId = useChatStore(chatPortalSelectors.agentDetailId) || '';
-  const { error, isLoading, mutate } = useAgentStore((s) => s.useFetchAgentConfig(true, agentId));
+  const useFetchAgentConfig = useAgentStore((s) => s.useFetchAgentConfig);
+  const { error, isLoading, mutate } = useFetchAgentConfig(true, agentId);
   const meta = useAgentStore(agentSelectors.getAgentMetaById(agentId));
   const openingMessage = useAgentStore(
     (s) => agentSelectors.getAgentConfigById(agentId)(s)?.openingMessage,

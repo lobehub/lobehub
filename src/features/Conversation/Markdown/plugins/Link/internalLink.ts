@@ -39,7 +39,7 @@ export const parseInternalLink = (
 ): InternalLinkReference | null => {
   if (!href) return null;
 
-  const isRootRelative = href.startsWith('/');
+  const isRootRelative = href.startsWith('/') && !href.startsWith('//');
   let url: URL;
 
   try {
