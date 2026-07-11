@@ -1602,6 +1602,62 @@ describe('createRouterRuntime', () => {
       expect(attemptedKeys).toEqual(['key-1']);
     });
 
+    it('should not let an in-place sorting hook mutate the shared options array', async () => {
+      const attemptedKeys: string[] = [];
+      const sharedOptions = [
+        { apiKey: 'key-1', id: 'channel-a' },
+        { apiKey: 'key-2', id: 'channel-b' },
+      ];
+
+      const Runtime = createRouterRuntime({
+        id: 'test-runtime',
+        routers: [
+          {
+            apiType: 'openai',
+            models: ['gpt-4'],
+            options: sharedOptions,
+            runtime: createRecordingRuntime(attemptedKeys) as any,
+          },
+        ],
+        // Natural in-place usage: sort the received array and return it
+        sortRouterOptions: ({ options }) => options.reverse(),
+      });
+
+      const runtime = new Runtime();
+      await runtime.chat({ messages: [], model: 'gpt-4', temperature: 0.7 });
+
+      // Reorder applies to this request...
+      expect(attemptedKeys).toEqual(['key-2']);
+      // ...but the shared config array stays untouched for concurrent requests
+      expect(sharedOptions.map((o) => o.id)).toEqual(['channel-a', 'channel-b']);
+    });
+
+    it('should reject a hook that shrinks and returns the received array', async () => {
+      const attemptedKeys: string[] = [];
+
+      const Runtime = createRouterRuntime({
+        id: 'test-runtime',
+        routers: [
+          {
+            apiType: 'openai',
+            models: ['gpt-4'],
+            options: [{ apiKey: 'key-1' }, { apiKey: 'key-2' }],
+            runtime: createRecordingRuntime(attemptedKeys) as any,
+          },
+        ],
+        // Mutating the received array must not fool the permutation check
+        sortRouterOptions: ({ options }) => {
+          options.pop();
+          return options;
+        },
+      });
+
+      const runtime = new Runtime();
+      await runtime.chat({ messages: [], model: 'gpt-4', temperature: 0.7 });
+
+      expect(attemptedKeys).toEqual(['key-1']);
+    });
+
     it('should not invoke the hook for a single option', async () => {
       const attemptedKeys: string[] = [];
       const sortRouterOptions = vi.fn();

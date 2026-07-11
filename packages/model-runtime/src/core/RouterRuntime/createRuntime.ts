@@ -432,9 +432,14 @@ export const createRouterRuntime = ({
 
       const startedAt = Date.now();
       try {
+        // Hand the hook a copy: hooks may sort in place (`options.sort(...)`), and the
+        // input can be the shared `router.options` array reused across concurrent
+        // requests. Keeping the original untouched also keeps it a trustworthy
+        // baseline — validating a same-reference return would always pass, even
+        // after mutations like `options.pop()`.
         const sorted = await params.sortRouterOptions({
           model,
-          options: routerOptions,
+          options: [...routerOptions],
           routerId: router.id,
         });
         const isPermutation =
@@ -452,7 +457,9 @@ export const createRouterRuntime = ({
           );
         }
 
-        if (isPermutation) return sorted;
+        // Copy again so a hook retaining its returned array cannot mutate the
+        // list while runWithFallback awaits provider calls between attempts.
+        if (isPermutation) return [...sorted];
 
         log('sortRouterOptions returned a non-permutation result, ignoring');
         return routerOptions;
