@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { mcpService } from './mcp';
 
+const mockConstEnv = vi.hoisted(() => ({ isDesktop: false }));
+
 const mockElectronIpc = {
   mcp: {
     callTool: vi.fn(),
@@ -16,7 +18,9 @@ const mockElectronIpc = {
 // Mock dependencies
 vi.mock('@lobechat/const', () => ({
   CURRENT_VERSION: '1.0.0',
-  isDesktop: false,
+  get isDesktop() {
+    return mockConstEnv.isDesktop;
+  },
 }));
 
 vi.mock('@lobechat/utils', () => ({
@@ -33,6 +37,13 @@ vi.mock('@lobechat/utils', () => ({
 }));
 
 vi.mock('@/libs/trpc/client', () => ({
+  lambdaClient: {
+    connector: {
+      callTool: {
+        mutate: vi.fn(),
+      },
+    },
+  },
   toolsClient: {
     market: {
       callCloudMcpEndpoint: {
@@ -76,14 +87,266 @@ vi.mock('@/store/tool/selectors', () => ({
   pluginSelectors: mockPluginSelectors,
 }));
 
+const createConnector = (overrides: Record<string, unknown> = {}) => ({
+  credentials: null,
+  id: 'connector-1',
+  identifier: 'persisted-stdio',
+  isEnabled: true,
+  mcpConnectionType: 'stdio',
+  mcpServerUrl: null,
+  mcpStdioConfig: {
+    args: ['-y', 'test-mcp-server'],
+    command: 'npx',
+    env: { API_KEY: 'local-key' },
+  },
+  metadata: null,
+  name: 'Persisted STDIO',
+  sourceType: 'custom',
+  status: 'connected',
+  tools: [
+    {
+      crudType: 'read',
+      description: 'Search locally',
+      displayName: null,
+      id: 'connector-tool-1',
+      inputSchema: { type: 'object' },
+      permission: 'auto',
+      toolName: 'search',
+      userConnectorId: 'connector-1',
+    },
+  ],
+  ...overrides,
+});
+
+const createConnectorStoreState = (connectors: ReturnType<typeof createConnector>[]) => ({
+  connectors,
+  fetchConnectors: vi.fn().mockResolvedValue(undefined),
+});
+
+const createToolPayload = (overrides: Partial<ChatToolPayload> = {}): ChatToolPayload => ({
+  id: 'connector-tool-call',
+  identifier: 'persisted-stdio',
+  apiName: 'search',
+  arguments: '{"query":"local"}',
+  type: 'standalone',
+  ...overrides,
+});
+
 describe('MCPService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.resetModules();
+    mockConstEnv.isDesktop = false;
     mockGetToolStoreState.mockReturnValue({});
   });
 
   describe('invokeMcpToolCall', () => {
+    it('should route a persisted STDIO connector through Desktop IPC only', async () => {
+      const { lambdaClient } = await import('@/libs/trpc/client');
+      mockConstEnv.isDesktop = true;
+      const state = createConnectorStoreState([createConnector()]);
+      mockGetToolStoreState.mockReturnValue(state);
+
+      const mockResult = {
+        content: 'local result',
+        state: { content: [{ text: 'local result', type: 'text' }] },
+        success: true,
+      };
+      vi.mocked(mockElectronIpc.mcp.callTool).mockResolvedValue(
+        superjson.serialize(mockResult) as any,
+      );
+
+      const result = await mcpService.invokeMcpToolCall(createToolPayload(), {});
+
+      expect(result).toEqual(mockResult);
+      expect(state.fetchConnectors).toHaveBeenCalledOnce();
+      expect(mockElectronIpc.mcp.callTool).toHaveBeenCalledOnce();
+      expect(lambdaClient.connector.callTool.mutate).not.toHaveBeenCalled();
+    });
+
+    it('should keep a persisted STDIO connector on the server path on Web', async () => {
+      const { lambdaClient } = await import('@/libs/trpc/client');
+      mockGetToolStoreState.mockReturnValue({ connectors: [createConnector()] });
+      vi.mocked(lambdaClient.connector.callTool.mutate).mockResolvedValue('server result');
+
+      const payload = createToolPayload();
+      const result = await mcpService.invokeMcpToolCall(payload, {});
+
+      expect(result).toBe('server result');
+      expect(lambdaClient.connector.callTool.mutate).toHaveBeenCalledWith(
+        {
+          args: payload.arguments,
+          identifier: payload.identifier,
+          toolName: payload.apiName,
+        },
+        { signal: undefined },
+      );
+      expect(mockElectronIpc.mcp.callTool).not.toHaveBeenCalled();
+    });
+
+    it('should keep a persisted HTTP connector on the server path on Desktop', async () => {
+      const { lambdaClient } = await import('@/libs/trpc/client');
+      mockConstEnv.isDesktop = true;
+      mockGetToolStoreState.mockReturnValue({
+        connectors: [
+          createConnector({
+            identifier: 'persisted-http',
+            mcpConnectionType: 'http',
+            mcpServerUrl: 'http://127.0.0.1:3000/mcp',
+            mcpStdioConfig: null,
+          }),
+        ],
+      });
+      vi.mocked(lambdaClient.connector.callTool.mutate).mockResolvedValue('http result');
+
+      const payload = createToolPayload({ identifier: 'persisted-http' });
+      const result = await mcpService.invokeMcpToolCall(payload, {});
+
+      expect(result).toBe('http result');
+      expect(lambdaClient.connector.callTool.mutate).toHaveBeenCalledWith(
+        {
+          args: payload.arguments,
+          identifier: payload.identifier,
+          toolName: payload.apiName,
+        },
+        { signal: undefined },
+      );
+      expect(mockElectronIpc.mcp.callTool).not.toHaveBeenCalled();
+    });
+
+    it('should reject a Desktop STDIO connector without stored config', async () => {
+      const { lambdaClient } = await import('@/libs/trpc/client');
+      mockConstEnv.isDesktop = true;
+      mockGetToolStoreState.mockReturnValue(
+        createConnectorStoreState([createConnector({ mcpStdioConfig: null })]),
+      );
+
+      await expect(mcpService.invokeMcpToolCall(createToolPayload(), {})).rejects.toThrow(
+        'Desktop STDIO connector "persisted-stdio" is missing required mcpStdioConfig.command',
+      );
+      expect(mockElectronIpc.mcp.callTool).not.toHaveBeenCalled();
+      expect(lambdaClient.connector.callTool.mutate).not.toHaveBeenCalled();
+    });
+
+    it('should reject an unsynced Desktop STDIO tool before IPC', async () => {
+      const { lambdaClient } = await import('@/libs/trpc/client');
+      mockConstEnv.isDesktop = true;
+      mockGetToolStoreState.mockReturnValue(createConnectorStoreState([createConnector()]));
+
+      await expect(
+        mcpService.invokeMcpToolCall(createToolPayload({ apiName: 'unknown_tool' }), {}),
+      ).rejects.toThrow("Tool 'unknown_tool' is not available on this connector");
+      expect(mockElectronIpc.mcp.callTool).not.toHaveBeenCalled();
+      expect(lambdaClient.connector.callTool.mutate).not.toHaveBeenCalled();
+    });
+
+    it('should reject a disabled Desktop STDIO tool before IPC', async () => {
+      const { lambdaClient } = await import('@/libs/trpc/client');
+      mockConstEnv.isDesktop = true;
+      mockGetToolStoreState.mockReturnValue(
+        createConnectorStoreState([
+          createConnector({
+            tools: [
+              {
+                crudType: 'read',
+                description: 'Search locally',
+                displayName: null,
+                id: 'connector-tool-1',
+                inputSchema: { type: 'object' },
+                permission: 'disabled',
+                toolName: 'search',
+                userConnectorId: 'connector-1',
+              },
+            ],
+          }),
+        ]),
+      );
+
+      await expect(mcpService.invokeMcpToolCall(createToolPayload(), {})).rejects.toThrow(
+        "Tool 'search' is disabled for this connector",
+      );
+      expect(mockElectronIpc.mcp.callTool).not.toHaveBeenCalled();
+      expect(lambdaClient.connector.callTool.mutate).not.toHaveBeenCalled();
+    });
+
+    it('should parse Desktop connector args and deserialize the IPC result', async () => {
+      mockConstEnv.isDesktop = true;
+      mockGetToolStoreState.mockReturnValue(
+        createConnectorStoreState([
+          createConnector({
+            mcpStdioConfig: {
+              args: ['server.js', '--stdio'],
+              command: 'node',
+              env: { NODE_ENV: 'test' },
+            },
+          }),
+        ]),
+      );
+
+      const mockResult = {
+        content: 'parsed result',
+        state: { content: [{ text: 'parsed result', type: 'text' }] },
+        success: true,
+      };
+      vi.mocked(mockElectronIpc.mcp.callTool).mockResolvedValue(
+        superjson.serialize(mockResult) as any,
+      );
+
+      const result = await mcpService.invokeMcpToolCall(
+        createToolPayload({ arguments: '{"query":"parsed","limit":2}' }),
+        {},
+      );
+
+      const serializedInput = vi.mocked(mockElectronIpc.mcp.callTool).mock.calls[0][0];
+      expect(superjson.deserialize(serializedInput as any)).toEqual({
+        args: { limit: 2, query: 'parsed' },
+        env: { NODE_ENV: 'test' },
+        params: {
+          args: ['server.js', '--stdio'],
+          command: 'node',
+          env: { NODE_ENV: 'test' },
+          name: 'persisted-stdio',
+          type: 'stdio',
+        },
+        toolName: 'search',
+      });
+      expect(result).toEqual(mockResult);
+    });
+
+    it('should re-read Desktop STDIO permission state before IPC', async () => {
+      const { lambdaClient } = await import('@/libs/trpc/client');
+      mockConstEnv.isDesktop = true;
+      const stale = createConnectorStoreState([createConnector()]);
+      const fresh = createConnectorStoreState([
+        createConnector({
+          tools: [
+            {
+              crudType: 'read',
+              description: 'Search locally',
+              displayName: null,
+              id: 'connector-tool-1',
+              inputSchema: { type: 'object' },
+              permission: 'disabled',
+              toolName: 'search',
+              userConnectorId: 'connector-1',
+            },
+          ],
+        }),
+      ]);
+      stale.fetchConnectors.mockImplementation(async () => {
+        mockGetToolStoreState.mockReturnValue(fresh);
+      });
+      mockGetToolStoreState.mockReturnValue(stale);
+
+      await expect(mcpService.invokeMcpToolCall(createToolPayload(), {})).rejects.toThrow(
+        "Tool 'search' is disabled for this connector",
+      );
+
+      expect(stale.fetchConnectors).toHaveBeenCalledOnce();
+      expect(mockElectronIpc.mcp.callTool).not.toHaveBeenCalled();
+      expect(lambdaClient.connector.callTool.mutate).not.toHaveBeenCalled();
+    });
+
     it('should invoke tool call with installed plugin', async () => {
       const { toolsClient } = await import('@/libs/trpc/client');
       const { discoverService } = await import('./discover');

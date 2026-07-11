@@ -6,9 +6,9 @@ import type { ConnectorWithTools } from '@/store/tool/slices/connector/types';
 /**
  * Convert connector store rows into ToolManifest entries for the classic
  * (client-orchestrated) chat path, mirroring the server-side
- * `buildConnectorManifests`. The manifest carries no `mcpParams`/auth — the
- * client has no token; connector tool calls are executed server-side via
- * `connector.callTool`, which decrypts the stored credentials.
+ * `buildConnectorManifests`. The manifest carries no `mcpParams`/auth. HTTP
+ * connector calls execute server-side with stored credentials, while Desktop
+ * STDIO connectors resolve their stored process config from the connector store.
  *
  * Permission mapping:
  * - 'auto'           → humanIntervention undefined (AI calls freely)

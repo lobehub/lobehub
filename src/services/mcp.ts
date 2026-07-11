@@ -9,6 +9,7 @@ import { type PluginManifest } from '@lobehub/market-sdk';
 import { type CallReportRequest } from '@lobehub/market-types';
 import superjson from 'superjson';
 
+import { ConnectorToolPermission } from '@/database/schemas';
 import { type MCPToolCallResult } from '@/libs/mcp';
 import { toolsClient } from '@/libs/trpc/client';
 import { ensureElectronIpc } from '@/utils/electron/ipc';
@@ -30,6 +31,13 @@ function calculateObjectSizeBytes(obj: any): number {
   }
 }
 
+async function callDesktopStdioTool(data: unknown): Promise<MCPToolCallResult> {
+  const serialized = superjson.serialize(data);
+  const serializedResult = await ensureElectronIpc().mcp.callTool(serialized as any);
+
+  return superjson.deserialize(serializedResult as any) as MCPToolCallResult;
+}
+
 class MCPService {
   async invokeMcpToolCall(
     payload: ChatToolPayload,
@@ -40,22 +48,69 @@ class MCPService {
     const { pluginSelectors } = await import('@/store/tool/selectors');
     const { getToolStoreState } = await import('@/store/tool/store');
 
-    const s = getToolStoreState();
+    let s = getToolStoreState();
     const { identifier, arguments: args, apiName } = payload;
 
-    // Connector-first: custom connectors execute server-side with their stored
-    // (encrypted) OAuth token, so route them before the plugin path. The client
-    // has no credentials, hence the dedicated `connector.callTool` endpoint.
-    // Only connectors with a real MCP endpoint are routed here — Lobehub/Composio
-    // skills synced into the connector store have no mcpServerUrl and keep their
-    // original executor path.
+    // Connector-first: Desktop STDIO connectors execute through Electron IPC;
+    // HTTP connectors execute server-side with their stored credentials. Only
+    // connectors with a real MCP endpoint are routed here — Lobehub/Composio
+    // skills synced into the connector store keep their original executor path.
     const { connectorSelectors } = await import('@/store/tool/slices/connector');
-    const connector = connectorSelectors.connectorByIdentifier(identifier)(s);
+    let connector = connectorSelectors.connectorByIdentifier(identifier)(s);
+
+    if (isDesktop && connector?.mcpConnectionType === 'stdio') {
+      const connectorId = connector.id;
+      await s.fetchConnectors();
+      s = getToolStoreState();
+      connector = connectorSelectors.connectorById(connectorId)(s);
+
+      if (!connector || connector.identifier !== identifier) {
+        throw new Error(`Desktop STDIO connector "${identifier}" is no longer available`);
+      }
+      if (!connector.isEnabled) {
+        throw new Error(`Connector "${identifier}" is disabled`);
+      }
+      if (connector.mcpConnectionType !== 'stdio') {
+        throw new Error(`Connector "${identifier}" is no longer configured for STDIO`);
+      }
+    }
+
     if (
       connector &&
       connector.isEnabled &&
       (connector.mcpServerUrl || connector.mcpConnectionType === 'stdio')
     ) {
+      if (isDesktop && connector.mcpConnectionType === 'stdio') {
+        const { mcpStdioConfig } = connector;
+        const tool = connector.tools.find((item) => item.toolName === apiName);
+
+        if (!tool) {
+          throw new Error(`Tool '${apiName}' is not available on this connector`);
+        }
+        if (tool.permission === ConnectorToolPermission.disabled) {
+          throw new Error(`Tool '${apiName}' is disabled for this connector`);
+        }
+
+        if (!mcpStdioConfig?.command) {
+          throw new Error(
+            `Desktop STDIO connector "${identifier}" is missing required mcpStdioConfig.command`,
+          );
+        }
+
+        return callDesktopStdioTool({
+          args: safeParseJSON(args) ?? {},
+          env: mcpStdioConfig.env,
+          params: {
+            args: mcpStdioConfig.args ?? [],
+            command: mcpStdioConfig.command,
+            env: mcpStdioConfig.env,
+            name: identifier,
+            type: 'stdio',
+          },
+          toolName: apiName,
+        });
+      }
+
       const { lambdaClient } = await import('@/libs/trpc/client');
       return (await lambdaClient.connector.callTool.mutate(
         { args, identifier, toolName: apiName },
@@ -158,9 +213,7 @@ class MCPService {
       } else if (isDesktop && isStdio) {
         // For desktop and stdio, use IPC (main process)
         // Note: IPC doesn't support AbortSignal yet
-        const serialized = superjson.serialize(data);
-        const serializedResult = await ensureElectronIpc().mcp.callTool(serialized as any);
-        result = superjson.deserialize(serializedResult as any) as any;
+        result = await callDesktopStdioTool(data);
       } else {
         // For other types, use the toolsClient
         result = await toolsClient.mcp.callTool.mutate(data, { signal });

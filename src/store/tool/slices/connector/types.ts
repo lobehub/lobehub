@@ -1,4 +1,4 @@
-import type { ConnectorToolPermission } from '@/database/schemas';
+import type { ConnectorToolPermission, UserConnectorItem } from '@/database/schemas';
 
 export interface ConnectorTool {
   crudType: string;
@@ -20,6 +20,7 @@ export interface ConnectorWithTools {
   isEnabled: boolean;
   mcpConnectionType: string | null;
   mcpServerUrl: string | null;
+  mcpStdioConfig: UserConnectorItem['mcpStdioConfig'];
   metadata: Record<string, unknown> | null;
   name: string;
   sourceType: string;

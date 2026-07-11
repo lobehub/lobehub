@@ -117,7 +117,7 @@ export const createToolsEngine = (config: ToolsEngineConfig = {}): ToolsEngine =
 
   // Get custom connector manifests (user-added MCP servers). Connectors take
   // priority over plugins: any plugin sharing a connector identifier is dropped
-  // so the connector (server-side execution with its stored token) wins.
+  // so the connector's transport-aware execution path wins.
   const connectorManifests = buildClientConnectorManifests(
     connectorSelectors.customConnectors(toolStoreState),
   );

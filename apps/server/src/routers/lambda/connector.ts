@@ -83,6 +83,50 @@ const connectorCredentialsInputSchema = z.discriminatedUnion('type', [
   z.object({ headers: z.record(z.string(), z.string()), type: z.literal('header') }),
 ]);
 
+const MAX_SYNC_TOOL_COUNT = 256;
+const MAX_SYNC_TOOL_DESCRIPTION_LENGTH = 4096;
+const MAX_SYNC_TOOL_PAYLOAD_SIZE = 2 * 1024 * 1024;
+const MAX_SYNC_TOOL_SCHEMA_SIZE = 64 * 1024;
+
+const syncConnectorToolSchema = z.object({
+  description: z.string().max(MAX_SYNC_TOOL_DESCRIPTION_LENGTH).optional(),
+  inputSchema: z
+    .record(z.string(), z.unknown())
+    .refine(
+      (value) =>
+        new TextEncoder().encode(JSON.stringify(value)).length <= MAX_SYNC_TOOL_SCHEMA_SIZE,
+      {
+        message: `inputSchema must be ${MAX_SYNC_TOOL_SCHEMA_SIZE} bytes or smaller`,
+      },
+    )
+    .optional(),
+  toolName: z.string().min(1).max(255),
+});
+
+const syncConnectorToolsSchema = z
+  .array(syncConnectorToolSchema)
+  .max(MAX_SYNC_TOOL_COUNT)
+  .superRefine((tools, ctx) => {
+    const names = new Set<string>();
+    for (const [index, tool] of tools.entries()) {
+      if (names.has(tool.toolName)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Duplicate tool name: ${tool.toolName}`,
+          path: [index, 'toolName'],
+        });
+      }
+      names.add(tool.toolName);
+    }
+
+    if (new TextEncoder().encode(JSON.stringify(tools)).length > MAX_SYNC_TOOL_PAYLOAD_SIZE) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Tool payload must be ${MAX_SYNC_TOOL_PAYLOAD_SIZE} bytes or smaller`,
+      });
+    }
+  });
+
 const createConnectorSchema = z.object({
   /**
    * Bind this connector to a specific agent (Agent > Workspace/Personal). When
@@ -638,12 +682,17 @@ export const connectorRouter = router({
     }),
 
   /**
-   * Fetch the tool list from the remote MCP server and sync it into
-   * `user_connector_tools`. Manifest-derived fields are overwritten;
-   * user permission settings are preserved.
+   * Sync tools into `user_connector_tools`, either by fetching from the remote
+   * MCP server or by accepting a normalized list for an owned stdio connector.
+   * Manifest-derived fields are overwritten; user permissions are preserved.
    */
   syncTools: connectorWriteProcedure
-    .input(z.object({ id: z.string().uuid() }))
+    .input(
+      z.object({
+        id: z.string().uuid(),
+        tools: syncConnectorToolsSchema.optional(),
+      }),
+    )
     .mutation(async ({ input, ctx }) => {
       const target = await ctx.connectorModel.findById(input.id);
       if (!target) throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
@@ -652,12 +701,18 @@ export const connectorRouter = router({
       // update/delete/reset.
       assertWorkspaceRowManageable(ctx, target.userId, 'connector');
       try {
-        return await syncConnectorToolsById(input.id, ctx);
+        return input.tools === undefined
+          ? await syncConnectorToolsById(input.id, ctx)
+          : await syncConnectorToolsById(input.id, ctx, input.tools);
       } catch (err: any) {
+        const messagePrefix =
+          input.tools === undefined
+            ? 'Failed to fetch tools from MCP server'
+            : 'Failed to sync connector tools';
         throw new TRPCError({
           cause: err,
           code: 'INTERNAL_SERVER_ERROR',
-          message: `Failed to fetch tools from MCP server: ${err?.message ?? 'unknown error'}`,
+          message: `${messagePrefix}: ${err?.message ?? 'unknown error'}`,
         });
       }
     }),

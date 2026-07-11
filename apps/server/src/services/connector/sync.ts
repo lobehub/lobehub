@@ -13,6 +13,12 @@ export interface ConnectorToolSyncContext {
   connectorToolModel: ConnectorToolModel;
 }
 
+export interface ClientConnectorTool {
+  description?: string;
+  inputSchema?: Record<string, unknown>;
+  toolName: string;
+}
+
 /** Build the MCP client connection params (with auth) from a connector row. */
 export const buildConnectorMcpParams = (
   connector: DecryptedConnector,
@@ -34,8 +40,7 @@ export const buildConnectorMcpParams = (
   // type. Merge them on top of any header-type credential headers (older rows
   // stored custom headers as a 'header' credential before this split).
   const customHeaders = connector.metadata?.customHeaders as Record<string, string> | undefined;
-  const mergedHeaders =
-    headers || customHeaders ? { ...headers, ...customHeaders } : undefined;
+  const mergedHeaders = headers || customHeaders ? { ...headers, ...customHeaders } : undefined;
   return {
     auth,
     headers: mergedHeaders,
@@ -87,9 +92,10 @@ export const buildHttpAuthFromCredentials = (
 };
 
 /**
- * Connect to a connector's MCP server, fetch its tool list, and sync it into
- * `user_connector_tools`. Refreshes the OAuth token first when needed, and
- * updates the connector status (`connected` on success, `error` on failure).
+ * Sync a connector's tools into `user_connector_tools`. A supplied list is
+ * accepted only for stdio connectors; otherwise tools are fetched from the MCP
+ * server after refreshing OAuth when needed. Updates status to `connected` on
+ * successful persistence and keeps the existing remote-fetch error handling.
  *
  * Shared by the `syncTools` tRPC mutation and the OAuth callback so a connector
  * has its tools immediately after authorization — no client round-trip needed.
@@ -97,32 +103,54 @@ export const buildHttpAuthFromCredentials = (
 export const syncConnectorToolsById = async (
   connectorId: string,
   ctx: ConnectorToolSyncContext,
+  clientTools?: ClientConnectorTool[],
 ): Promise<{ toolCount: number }> => {
   let connector = await ctx.connectorModel.findById(connectorId);
   if (!connector) throw new Error('Connector not found');
 
-  if (!connector.mcpServerUrl && connector.mcpConnectionType !== ConnectorMcpConnectionType.stdio) {
-    throw new Error('Connector has no MCP server URL configured');
+  let toolsToSync: ClientConnectorTool[];
+
+  if (clientTools !== undefined) {
+    if (connector.mcpConnectionType !== ConnectorMcpConnectionType.stdio) {
+      throw new Error('Client-supplied tools are only supported for stdio connectors');
+    }
+    if (!connector.mcpStdioConfig?.command?.trim()) {
+      throw new Error('Connector has no valid STDIO configuration');
+    }
+    toolsToSync = clientTools;
+  } else {
+    if (
+      !connector.mcpServerUrl &&
+      connector.mcpConnectionType !== ConnectorMcpConnectionType.stdio
+    ) {
+      throw new Error('Connector has no MCP server URL configured');
+    }
+
+    // Refresh the OAuth access token if it has expired before connecting.
+    connector = await ensureFreshConnectorToken(connector, ctx.connectorModel);
+
+    const mcpParams = buildConnectorMcpParams(connector);
+
+    let rawTools: Awaited<ReturnType<typeof mcpService.listRawTools>>;
+    try {
+      rawTools = await mcpService.listRawTools(mcpParams);
+    } catch (err) {
+      await ctx.connectorModel.updateStatus(connectorId, ConnectorStatus.error);
+      throw err;
+    }
+
+    toolsToSync = rawTools.map((tool) => ({
+      description: tool.description,
+      inputSchema: tool.inputSchema as Record<string, unknown>,
+      toolName: tool.name,
+    }));
   }
 
-  // Refresh the OAuth access token if it has expired before connecting.
-  connector = await ensureFreshConnectorToken(connector, ctx.connectorModel);
-
-  const mcpParams = buildConnectorMcpParams(connector);
-
-  let rawTools: Awaited<ReturnType<typeof mcpService.listRawTools>>;
-  try {
-    rawTools = await mcpService.listRawTools(mcpParams);
-  } catch (err) {
-    await ctx.connectorModel.updateStatus(connectorId, ConnectorStatus.error);
-    throw err;
-  }
-
-  const syncInputs = rawTools.map((t) => ({
-    crudType: inferCrudType(t.name),
-    description: t.description,
-    inputSchema: t.inputSchema as Record<string, unknown>,
-    toolName: t.name,
+  const syncInputs = toolsToSync.map((tool) => ({
+    crudType: inferCrudType(tool.toolName),
+    description: tool.description,
+    inputSchema: tool.inputSchema,
+    toolName: tool.toolName,
   }));
 
   await ctx.connectorToolModel.upsertMany(connectorId, syncInputs);

@@ -1,8 +1,13 @@
+import { isDesktop } from '@lobechat/const';
+import type { ToolManifest } from '@lobechat/types';
+
 import type { ConnectorToolPermission } from '@/database/schemas';
 import { lambdaClient } from '@/libs/trpc/client';
+import { mcpService } from '@/services/mcp';
 import type { StoreSetter } from '@/store/types';
 
 import type { ToolStore } from '../../store';
+import { connectorSelectors } from './selectors';
 
 type Setter = StoreSetter<ToolStore>;
 
@@ -10,13 +15,13 @@ export const createConnectorSlice = (set: Setter, get: () => ToolStore, _api?: u
   new ConnectorActionImpl(set, get, _api);
 
 export class ConnectorActionImpl {
-  readonly #set: Setter;
   readonly #get: () => ToolStore;
+  readonly #set: Setter;
 
   constructor(set: Setter, get: () => ToolStore, _api?: unknown) {
     void _api;
-    this.#set = set;
     this.#get = get;
+    this.#set = set;
   }
 
   fetchConnectors = async (): Promise<void> => {
@@ -161,7 +166,42 @@ export class ConnectorActionImpl {
       'syncConnectorTools/start',
     );
     try {
-      await lambdaClient.connector.syncTools.mutate({ id });
+      let connector = connectorSelectors.connectorById(id)(this.#get());
+
+      // A cold Desktop store cannot safely decide whether the connector is
+      // local STDIO. Check both current connector pools before falling back.
+      if (isDesktop && !connector) {
+        await this.fetchConnectors();
+        connector = connectorSelectors.connectorById(id)(this.#get());
+        if (!connector) {
+          await this.fetchAgentBoundConnectors();
+          connector = connectorSelectors.connectorById(id)(this.#get());
+        }
+        if (!connector) throw new Error(`Connector ${id} was not found after refresh`);
+      }
+
+      if (isDesktop && connector?.mcpConnectionType === 'stdio') {
+        const config = connector.mcpStdioConfig;
+        if (!config) throw new Error(`Connector ${id} is missing its STDIO configuration`);
+        if (!config.command?.trim())
+          throw new Error(`Connector ${id} is missing its STDIO command`);
+
+        const manifest: ToolManifest = await mcpService.getStdioMcpServerManifest({
+          args: config.args,
+          command: config.command,
+          env: config.env,
+          name: connector.name,
+        });
+        const tools = manifest.api.map(({ description, name, parameters }) => ({
+          description,
+          inputSchema: parameters,
+          toolName: name,
+        }));
+
+        await lambdaClient.connector.syncTools.mutate({ id, tools });
+      } else {
+        await lambdaClient.connector.syncTools.mutate({ id });
+      }
       await this.#refreshConnectorLists();
     } finally {
       this.#set(
