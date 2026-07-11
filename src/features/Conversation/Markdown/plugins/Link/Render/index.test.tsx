@@ -147,7 +147,7 @@ describe('Link Render — message link icon toggle', () => {
 describe('Link Render — internal entities', () => {
   it('opens official document links in the conversation portal', () => {
     const { getByRole } = renderLink({
-      linkHref: 'https://app.lobehub.com/agent/agt_1/docs/doc1',
+      linkHref: '/agent/agt_1/docs/doc1',
       linkKind: 'generic',
       linkLabel: 'Research notes',
     });
@@ -157,7 +157,7 @@ describe('Link Render — internal entities', () => {
     expect(mockOpenDocument).toHaveBeenCalledWith('docs_doc1', 'agent-document-1');
     expect(getByRole('link', { name: 'Research notes' })).toHaveAttribute(
       'href',
-      'https://app.lobehub.com/agent/agt_1/docs/doc1',
+      '/agent/agt_1/docs/doc1',
     );
     expect(mockNavigate).not.toHaveBeenCalled();
   });
@@ -195,14 +195,26 @@ describe('Link Render — internal entities', () => {
 
   it('navigates non-entity app routes without leaving the SPA', () => {
     const { getByRole } = renderLink({
-      linkHref: 'https://app.lobehub.com/settings/profile',
+      linkHref: '/settings/profile',
       linkKind: 'generic',
       linkLabel: 'Profile settings',
     });
 
     fireEvent.click(getByRole('link', { name: 'Profile settings' }));
 
-    expect(mockNavigate).toHaveBeenCalledWith('/settings/profile', { escape: true });
+    expect(mockNavigate).toHaveBeenCalledWith('/settings/profile');
+  });
+
+  it('preserves workspace prefixes for workspace-qualified SPA routes', () => {
+    const { getByRole } = renderLink({
+      linkHref: '/lobe-team/tasks',
+      linkKind: 'generic',
+      linkLabel: 'Workspace tasks',
+    });
+
+    fireEvent.click(getByRole('link', { name: 'Workspace tasks' }));
+
+    expect(mockNavigate).toHaveBeenCalledWith('/lobe-team/tasks', { escape: true });
   });
 
   it('navigates workspace-qualified entities before opening a scoped portal', () => {

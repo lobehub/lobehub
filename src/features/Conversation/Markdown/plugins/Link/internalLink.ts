@@ -32,7 +32,7 @@ export type InternalLinkReference =
       type: 'document';
       workspaceSlug?: string;
     }
-  | { pathname: string; type: 'route' }
+  | { pathname: string; type: 'route'; workspaceSlug?: string }
   | {
       agentId?: string;
       pathname: string;
@@ -54,9 +54,7 @@ const getRouteSegments = (pathname: string, workspaceSlugs: ReadonlySet<string>)
 
 const isInternalHost = (url: URL, currentOrigin?: string) => {
   const officialHost = new URL(OFFICIAL_URL).host;
-  if (url.host === officialHost) return true;
-
-  if (!currentOrigin) return false;
+  if (!currentOrigin) return url.host === officialHost;
 
   try {
     return url.host === new URL(currentOrigin).host;
@@ -98,7 +96,9 @@ export const parseInternalLink = (
       return null;
     }
 
-    return { pathname, type: 'route' };
+    const workspaceSlug = workspaceSlugs.includes(rootSegment) ? rootSegment : undefined;
+
+    return { pathname, type: 'route', ...(workspaceSlug ? { workspaceSlug } : {}) };
   }
 
   const { segments, workspaceSlug } = route;
@@ -151,5 +151,5 @@ export const parseInternalLink = (
     }
   }
 
-  return { pathname, type: 'route' };
+  return { pathname, type: 'route', ...(workspaceSlug ? { workspaceSlug } : {}) };
 };

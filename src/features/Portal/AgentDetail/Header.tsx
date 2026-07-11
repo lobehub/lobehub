@@ -29,7 +29,7 @@ const Header = memo(() => {
             size={DESKTOP_HEADER_ICON_SMALL_SIZE}
             title={t('internalLink.agent.open')}
             onClick={() => {
-              navigate(`/agent/${agentId}`, { escape: true });
+              navigate(`/agent/${agentId}`);
               clearPortalStack();
             }}
           />

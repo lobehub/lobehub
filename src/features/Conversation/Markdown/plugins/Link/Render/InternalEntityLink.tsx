@@ -119,7 +119,7 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, 
           break;
         }
         case 'route': {
-          navigate(reference.pathname, { escape: true });
+          navigate(reference.pathname);
           break;
         }
       }

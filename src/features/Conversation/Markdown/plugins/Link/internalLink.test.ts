@@ -56,6 +56,17 @@ describe('parseInternalLink', () => {
       taskId: 'T-200',
       type: 'task',
     });
+    expect(
+      parseInternalLink('https://app.lobehub.com/task/T-200', 'https://chat.example.com'),
+    ).toBeNull();
+  });
+
+  it('preserves workspace context for workspace-prefixed SPA routes', () => {
+    expect(parseInternalLink('/lobe-team/tasks', undefined, ['lobe-team'])).toEqual({
+      pathname: '/lobe-team/tasks',
+      type: 'route',
+      workspaceSlug: 'lobe-team',
+    });
   });
 
   it('rejects external hosts even when their path resembles an app route', () => {
