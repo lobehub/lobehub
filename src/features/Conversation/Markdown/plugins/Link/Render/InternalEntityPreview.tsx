@@ -5,8 +5,8 @@ import { createStaticStyles } from 'antd-style';
 import { BotIcon, CheckSquareIcon, FileTextIcon } from 'lucide-react';
 import { memo, type PropsWithChildren, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import useSWR from 'swr';
 
+import { useClientDataSWR } from '@/libs/swr';
 import { agentService } from '@/services/agent';
 import { documentService } from '@/services/document';
 import { taskService } from '@/services/task';
@@ -100,7 +100,7 @@ export const InternalEntityPreview = memo<InternalEntityPreviewProps>(
   ({ children, fallbackTitle, reference }) => {
     const { t } = useTranslation('chat');
     const [open, setOpen] = useState(false);
-    const { data, isLoading } = useSWR(
+    const { data, isLoading } = useClientDataSWR(
       open ? ['internal-entity-preview', reference.type, reference.pathname] : null,
       () => getPreviewData(reference),
       { revalidateOnFocus: false },

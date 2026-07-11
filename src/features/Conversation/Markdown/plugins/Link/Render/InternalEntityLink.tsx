@@ -105,7 +105,7 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, 
         }
         case 'document': {
           const documents = shouldResolveAgentDocument
-            ? (agentDocuments ?? (await resolveAgentDocuments()))
+            ? (agentDocuments ?? (await resolveAgentDocuments().catch(() => undefined)))
             : undefined;
           const agentDocumentId = documents?.find(
             (document) => document.documentId === reference.documentId,
