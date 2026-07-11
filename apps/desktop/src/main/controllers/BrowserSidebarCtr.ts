@@ -1,11 +1,18 @@
 import type {
+  BrowserSidebarAttachParams,
   BrowserSidebarNavigateParams,
   BrowserSidebarResult,
   BrowserSidebarSessionParams,
   BrowserSidebarState,
 } from '@lobechat/electron-client-ipc';
 import type { WebContents, WebPreferences } from 'electron';
-import { app as electronApp, clipboard, session as electronSession, shell } from 'electron';
+import {
+  app as electronApp,
+  clipboard,
+  session as electronSession,
+  shell,
+  webContents as electronWebContents,
+} from 'electron';
 
 import { createLogger } from '@/utils/logger';
 
@@ -13,11 +20,13 @@ import { ControllerModule, IpcMethod } from './index';
 
 const logger = createLogger('controllers:BrowserSidebarCtr');
 
-const SESSION_ATTRIBUTE = 'data-lobe-browser-session-id';
 // Shared persistent profile: logins/cookies survive across agents and restarts,
 // mirroring a regular browser. Agent-driven sessions (M2) will get an isolated
-// partition instead.
+// partition instead. The renderer sets this as the <webview> `partition`
+// attribute — the only reliable identity channel into `will-attach-webview`
+// (custom data-* attributes are NOT forwarded in its params).
 const BROWSER_PARTITION = 'persist:lobe-browser-app';
+const BROWSER_PARTITION_PREFIX = 'persist:lobe-browser-';
 const DEFAULT_BROWSER_URL = 'about:blank';
 const HTTP_URL_PATTERN = /^https?:\/\//i;
 const LOCAL_URL_PATTERN = /^(?:localhost|127(?:\.\d{1,3}){3}|\[?::1\]?)(?::\d+)?(?:[/?#].*)?$/i;
@@ -64,13 +73,36 @@ export default class BrowserSidebarCtr extends ControllerModule {
 
   private ownerWebContentsIds = new Set<number>();
   private pages = new Map<string, BrowserPageRecord>();
-  private pendingAttachSessionIds = new Map<number, string[]>();
   private partitionConfigured = false;
 
   beforeAppReady() {
     electronApp.on('web-contents-created', (_event, webContents) => {
       this.attachOwnerWebContents(webContents);
     });
+  }
+
+  /**
+   * Bind a session to an attached <webview> guest. Identity flows through this
+   * explicit call (renderer reads `getWebContentsId()` on dom-ready) because
+   * `will-attach-webview` params carry no custom attributes to match on.
+   */
+  @IpcMethod()
+  attach(params: BrowserSidebarAttachParams): BrowserSidebarResult {
+    const guest = electronWebContents.fromId(params.webContentsId);
+    if (!guest || guest.isDestroyed()) {
+      return { error: 'Webview is not available', success: false };
+    }
+
+    // Only guests living in our hardened browser partition may be claimed.
+    if (guest.session !== electronSession.fromPartition(BROWSER_PARTITION)) {
+      logger.warn(`Rejected attach for webContents ${params.webContentsId}: wrong session`);
+      return { error: 'Webview does not belong to the browser sidebar', success: false };
+    }
+
+    if (this.getLiveWebContents(params.sessionId)?.id === guest.id) return { success: true };
+
+    this.attachPageWebContents(params.sessionId, guest);
+    return { success: true };
   }
 
   @IpcMethod()
@@ -162,8 +194,9 @@ export default class BrowserSidebarCtr extends ControllerModule {
     this.ownerWebContentsIds.add(webContents.id);
 
     webContents.on('will-attach-webview', (event, webPreferences, params) => {
-      const sessionId = params[SESSION_ATTRIBUTE];
-      if (!sessionId) return;
+      // Custom data-* attributes are not forwarded here, so the partition
+      // attribute (set by the renderer) is the recognition signal.
+      if (!params.partition?.startsWith(BROWSER_PARTITION_PREFIX)) return;
 
       const initialUrl = normalizeBrowserUrl(params.src);
       if (!isSupportedNavigationUrl(initialUrl)) {
@@ -173,27 +206,15 @@ export default class BrowserSidebarCtr extends ControllerModule {
       }
 
       this.configureBrowserSession();
-      this.pushPendingSessionId(webContents.id, sessionId);
 
       params.src = initialUrl;
       params.partition = BROWSER_PARTITION;
 
       this.applySecureWebPreferences(webPreferences);
-
-      const page = this.ensurePage(sessionId);
-      page.url = initialUrl;
-      page.error = undefined;
-    });
-
-    webContents.on('did-attach-webview', (_event, guestWebContents) => {
-      const sessionId = this.shiftPendingSessionId(webContents.id);
-      if (!sessionId) return;
-      this.attachPageWebContents(sessionId, guestWebContents);
     });
 
     webContents.once('destroyed', () => {
       this.ownerWebContentsIds.delete(webContents.id);
-      this.pendingAttachSessionIds.delete(webContents.id);
     });
   }
 
@@ -306,19 +327,6 @@ export default class BrowserSidebarCtr extends ControllerModule {
     const webContents = this.pages.get(sessionId)?.webContents;
     if (!webContents || webContents.isDestroyed()) return undefined;
     return webContents;
-  }
-
-  private pushPendingSessionId(ownerWebContentsId: number, sessionId: string): void {
-    const pending = this.pendingAttachSessionIds.get(ownerWebContentsId) ?? [];
-    pending.push(sessionId);
-    this.pendingAttachSessionIds.set(ownerWebContentsId, pending);
-  }
-
-  private shiftPendingSessionId(ownerWebContentsId: number): string | undefined {
-    const pending = this.pendingAttachSessionIds.get(ownerWebContentsId);
-    const sessionId = pending?.shift();
-    if (pending && pending.length === 0) this.pendingAttachSessionIds.delete(ownerWebContentsId);
-    return sessionId;
   }
 
   private snapshot(sessionId: string): BrowserSidebarState {

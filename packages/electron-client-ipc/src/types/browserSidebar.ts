@@ -2,6 +2,10 @@ export interface BrowserSidebarSessionParams {
   sessionId: string;
 }
 
+export interface BrowserSidebarAttachParams extends BrowserSidebarSessionParams {
+  webContentsId: number;
+}
+
 export interface BrowserSidebarNavigateParams extends BrowserSidebarSessionParams {
   url: string;
 }

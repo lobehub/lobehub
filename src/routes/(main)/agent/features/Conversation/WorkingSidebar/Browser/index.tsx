@@ -18,9 +18,11 @@ import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { electronBrowserSidebarService } from '@/services/electron/browserSidebar';
 import { useGlobalStore } from '@/store/global';
 
-import { BROWSER_WEBVIEW_SESSION_ATTRIBUTE } from './const';
+import { BROWSER_WEBVIEW_PARTITION, BROWSER_WEBVIEW_SESSION_ATTRIBUTE } from './const';
 import { useBrowserSidebarState } from './useBrowserSidebarState';
 import { normalizeBrowserUrl } from './utils';
+
+type WebviewElement = HTMLElement & { getWebContentsId: () => number };
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
@@ -65,6 +67,24 @@ const BrowserPane = memo<BrowserPaneProps>(({ sessionId }) => {
   const [isEditing, setIsEditing] = useState(false);
   const browserRequest = useGlobalStore((s) => s.status.workingSidebarBrowserRequest);
   const consumedNonce = useRef<number>(undefined);
+  const webviewRef = useRef<WebviewElement>(null);
+
+  // will-attach-webview only sees standard attributes, so the main process
+  // can't learn the sessionId there — bind it explicitly once the guest exists.
+  useEffect(() => {
+    const el = webviewRef.current;
+    if (!el) return;
+
+    const handleDomReady = () => {
+      const webContentsId = el.getWebContentsId();
+      electronBrowserSidebarService.attach({ sessionId, webContentsId }).catch((error) => {
+        console.error('[BrowserSidebar] Failed to attach webview:', error);
+      });
+    };
+
+    el.addEventListener('dom-ready', handleDomReady);
+    return () => el.removeEventListener('dom-ready', handleDomReady);
+  }, [src, sessionId]);
 
   useEffect(() => {
     if (!isEditing) setAddress(state.url === 'about:blank' ? '' : state.url);
@@ -189,6 +209,8 @@ const BrowserPane = memo<BrowserPaneProps>(({ sessionId }) => {
           <webview
             className={styles.webview}
             key={sessionId}
+            partition={BROWSER_WEBVIEW_PARTITION}
+            ref={webviewRef}
             src={src}
             {...{ [BROWSER_WEBVIEW_SESSION_ATTRIBUTE]: sessionId }}
           />

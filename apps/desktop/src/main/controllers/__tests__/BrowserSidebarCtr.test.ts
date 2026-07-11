@@ -15,6 +15,7 @@ const {
   ipcMainHandleMock,
   sessionFromPartitionMock,
   shellOpenExternalMock,
+  webContentsFromIdMock,
 } = vi.hoisted(() => {
   const handlers = new Map<string, (event: unknown, ...args: unknown[]) => unknown>();
   const handle = vi.fn(
@@ -30,6 +31,7 @@ const {
     ipcMainHandleMock: handle,
     sessionFromPartitionMock: vi.fn(),
     shellOpenExternalMock: vi.fn().mockResolvedValue(undefined),
+    webContentsFromIdMock: vi.fn(),
   };
 });
 
@@ -57,6 +59,9 @@ vi.mock('electron', () => ({
   },
   shell: {
     openExternal: shellOpenExternalMock,
+  },
+  webContents: {
+    fromId: webContentsFromIdMock,
   },
 }));
 
@@ -109,6 +114,30 @@ describe('BrowserSidebarCtr', () => {
 
   let controller: BrowserSidebarCtr;
 
+  const emitWillAttach = (owner: WebContents, params: Record<string, unknown>) => {
+    const webPreferences = {};
+    const event = { preventDefault: vi.fn() };
+    owner.emit('will-attach-webview', event, webPreferences, params);
+    return { event, webPreferences };
+  };
+
+  const setupOwner = () => {
+    controller.beforeAppReady();
+    const webContentsCreatedHandler = appOnMock.mock.calls.find(
+      ([eventName]) => eventName === 'web-contents-created',
+    )?.[1];
+    const owner = createOwnerWebContents();
+    webContentsCreatedHandler({}, owner);
+    return owner;
+  };
+
+  const attachGuest = async (guest: WebContents, sessionId = 'session-1') => {
+    // Guest must live in the hardened browser partition to be claimable.
+    (guest as unknown as { session: unknown }).session = mockSession;
+    webContentsFromIdMock.mockReturnValue(guest);
+    return invokeIpc('browserSidebar.attach', { sessionId, webContentsId: guest.id });
+  };
+
   beforeEach(() => {
     vi.clearAllMocks();
     ipcHandlers.clear();
@@ -120,21 +149,14 @@ describe('BrowserSidebarCtr', () => {
     controller = new BrowserSidebarCtr(mockApp);
   });
 
-  it('should secure and attach browser sidebar webviews', () => {
-    controller.beforeAppReady();
-    const webContentsCreatedHandler = appOnMock.mock.calls.find(
-      ([eventName]) => eventName === 'web-contents-created',
-    )?.[1];
-    const owner = createOwnerWebContents();
+  it('should harden webviews recognized by the browser partition attribute', () => {
+    const owner = setupOwner();
 
-    webContentsCreatedHandler({}, owner);
-
-    const webPreferences = {};
     const params = {
-      'data-lobe-browser-session-id': 'session-1',
-      'src': 'example.com',
+      partition: 'persist:lobe-browser-app',
+      src: 'example.com',
     };
-    owner.emit('will-attach-webview', { preventDefault: vi.fn() }, webPreferences, params);
+    const { webPreferences } = emitWillAttach(owner, params);
 
     expect(params).toMatchObject({
       partition: 'persist:lobe-browser-app',
@@ -150,9 +172,23 @@ describe('BrowserSidebarCtr', () => {
     expect(mockSession.setPermissionRequestHandler).toHaveBeenCalled();
     expect(mockSession.setPermissionCheckHandler).toHaveBeenCalled();
     expect(mockSession.webRequest.onBeforeRequest).toHaveBeenCalled();
+  });
 
+  it('should ignore webviews without the browser partition', () => {
+    const owner = setupOwner();
+
+    const params = { partition: 'persist:other', src: 'https://example.com' };
+    const { webPreferences } = emitWillAttach(owner, params);
+
+    expect(webPreferences).toEqual({});
+    expect(sessionFromPartitionMock).not.toHaveBeenCalled();
+  });
+
+  it('should bind sessions through the attach IPC and broadcast state', async () => {
+    setupOwner();
     const guest = createGuestWebContents();
-    owner.emit('did-attach-webview', {}, guest);
+
+    await expect(attachGuest(guest)).resolves.toEqual({ success: true });
 
     expect(guest.setWindowOpenHandler).toHaveBeenCalled();
     expect(broadcastToAllWindows).toHaveBeenCalledWith(
@@ -166,25 +202,22 @@ describe('BrowserSidebarCtr', () => {
     );
   });
 
-  it('should keep window.open navigations inside the sidebar page', () => {
-    controller.beforeAppReady();
-    const webContentsCreatedHandler = appOnMock.mock.calls.find(
-      ([eventName]) => eventName === 'web-contents-created',
-    )?.[1];
-    const owner = createOwnerWebContents();
+  it('should reject attaching webContents outside the browser partition', async () => {
+    setupOwner();
     const guest = createGuestWebContents();
+    (guest as unknown as { session: unknown }).session = { notOurs: true };
+    webContentsFromIdMock.mockReturnValue(guest);
 
-    webContentsCreatedHandler({}, owner);
-    owner.emit(
-      'will-attach-webview',
-      { preventDefault: vi.fn() },
-      {},
-      {
-        'data-lobe-browser-session-id': 'session-1',
-        'src': 'https://example.com',
-      },
-    );
-    owner.emit('did-attach-webview', {}, guest);
+    await expect(
+      invokeIpc('browserSidebar.attach', { sessionId: 'session-1', webContentsId: guest.id }),
+    ).resolves.toMatchObject({ success: false });
+    expect(guest.setWindowOpenHandler).not.toHaveBeenCalled();
+  });
+
+  it('should keep window.open navigations inside the sidebar page', async () => {
+    setupOwner();
+    const guest = createGuestWebContents();
+    await attachGuest(guest);
 
     const windowOpenHandler = vi.mocked(guest.setWindowOpenHandler).mock.calls[0][0];
     const result = windowOpenHandler({ url: 'https://lobehub.com' } as never);
@@ -195,24 +228,9 @@ describe('BrowserSidebarCtr', () => {
   });
 
   it('should navigate and capture the attached page through IPC methods', async () => {
-    controller.beforeAppReady();
-    const webContentsCreatedHandler = appOnMock.mock.calls.find(
-      ([eventName]) => eventName === 'web-contents-created',
-    )?.[1];
-    const owner = createOwnerWebContents();
+    setupOwner();
     const guest = createGuestWebContents();
-
-    webContentsCreatedHandler({}, owner);
-    owner.emit(
-      'will-attach-webview',
-      { preventDefault: vi.fn() },
-      {},
-      {
-        'data-lobe-browser-session-id': 'session-1',
-        'src': 'https://example.com',
-      },
-    );
-    owner.emit('did-attach-webview', {}, guest);
+    await attachGuest(guest);
 
     await expect(
       invokeIpc('browserSidebar.navigate', { sessionId: 'session-1', url: 'lobehub.com' }),

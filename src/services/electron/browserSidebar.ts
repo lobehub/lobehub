@@ -1,4 +1,5 @@
 import type {
+  BrowserSidebarAttachParams,
   BrowserSidebarNavigateParams,
   BrowserSidebarResult,
   BrowserSidebarSessionParams,
@@ -10,6 +11,10 @@ import { ensureElectronIpc } from '@/utils/electron/ipc';
 class ElectronBrowserSidebarService {
   private get ipc() {
     return ensureElectronIpc();
+  }
+
+  attach(params: BrowserSidebarAttachParams): Promise<BrowserSidebarResult> {
+    return this.ipc.browserSidebar.attach(params);
   }
 
   captureScreenshotToClipboard(params: BrowserSidebarSessionParams): Promise<BrowserSidebarResult> {
