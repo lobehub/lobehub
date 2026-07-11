@@ -34,13 +34,19 @@ const MIN_DISPLAY_COST = 0.2;
 const formatCost = (cost: number) => cost.toFixed(2);
 
 interface UsageProps {
+  /**
+   * Total tokens consumed across ALL steps of the run (each step resends the
+   * full context, so this is a billing-side figure — NOT the context size).
+   * `usage` itself carries the final step's snapshot, i.e. the context watermark.
+   */
+  cumulativeTokens?: number;
   model: string;
   performance?: ModelPerformance;
   provider: string;
   usage?: ModelUsage;
 }
 
-const Usage = memo<UsageProps>(({ model, usage, performance, provider }) => {
+const Usage = memo<UsageProps>(({ cumulativeTokens, model, usage, performance, provider }) => {
   const onboardingAgentId = useAgentStore(builtinAgentSelectors.webOnboardingAgentId);
   const conversationAgentId = useConversationStore(contextSelectors.agentId);
   // Credit mode already expresses cost in credits — showing USD alongside would conflict.
@@ -78,6 +84,7 @@ const Usage = memo<UsageProps>(({ model, usage, performance, provider }) => {
       <Center horizontal gap={8}>
         {!!usage?.totalTokens && (
           <TokenDetail
+            cumulativeTokens={cumulativeTokens}
             model={model as string}
             performance={performance}
             provider={provider}

@@ -1,6 +1,7 @@
 import type { OpenAIChatMessage, UIChatMessage } from '@lobechat/types';
 
 import type { PlaceholderVariant } from '@/features/ChatInput/InputEditor/Placeholder';
+import type { ContextWindowMessage } from '@/features/ChatInput/store/initialState';
 import { chatHelpers } from '@/store/chat/helpers';
 
 type SupportedChatInputRole = Extract<OpenAIChatMessage['role'], 'assistant' | 'tool' | 'user'>;
@@ -27,7 +28,14 @@ export const getContextWindowMessages = (
     enableHistoryCount?: boolean;
     historyCount?: number;
   },
-) => toChatInputMessages(chatHelpers.getSlicedMessages(messages, options));
+): ContextWindowMessage[] =>
+  chatHelpers
+    .getSlicedMessages(messages, options)
+    .filter(isSupportedChatInputMessage)
+    .map((m) => ({
+      content: typeof m.content === 'string' ? m.content : '',
+      totalTokens: m.role === 'assistant' ? m.usage?.totalTokens : undefined,
+    }));
 
 export interface ConversationChatInputUiState {
   placeholderVariant: PlaceholderVariant;

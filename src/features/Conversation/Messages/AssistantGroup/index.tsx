@@ -102,6 +102,18 @@ const GroupMessage = memo<GroupMessageProps>(
       return children.flatMap((child: AssistantContentBlock) => child.fileList || []);
     }, [children]);
 
+    // Run-level cumulative consumption: `usage` on the group carries the final
+    // step's snapshot (context watermark), so the billing-side total must be
+    // re-summed from the per-step blocks (LOBE-11585).
+    const cumulativeTokens = useMemo(
+      () =>
+        children?.reduce(
+          (sum: number, child: AssistantContentBlock) => sum + (child.usage?.totalTokens || 0),
+          0,
+        ),
+      [children],
+    );
+
     const isInbox = useAgentStore(builtinAgentSelectors.isInboxAgent);
     const [toggleSystemRole] = useGlobalStore((s) => [s.toggleSystemRole]);
     const openChatSettings = useOpenChatSettings();
@@ -258,7 +270,13 @@ const GroupMessage = memo<GroupMessageProps>(
         )}
         {interrupted && <InterruptedHint />}
         {isDevMode && model && (
-          <Usage model={model} performance={performance} provider={provider!} usage={usage} />
+          <Usage
+            cumulativeTokens={cumulativeTokens}
+            model={model}
+            performance={performance}
+            provider={provider!}
+            usage={usage}
+          />
         )}
         {footerRender}
         {reactions.length > 0 && (

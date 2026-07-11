@@ -125,7 +125,7 @@ describe('MessageTransformer', () => {
   });
 
   describe('aggregateMetadata', () => {
-    it('should aggregate usage and performance from multiple children', () => {
+    it('should take token fields from the last child and sum costs', () => {
       const children: AssistantContentBlock[] = [
         {
           content: 'First',
@@ -162,11 +162,13 @@ describe('MessageTransformer', () => {
 
       const result = transformer.aggregateMetadata(children);
 
+      // Token fields come from the LAST step: each step of an agent run
+      // resends the full context, so summing would count it once per step.
       expect(result.usage).toEqual({
         cost: 0.003,
-        totalInputTokens: 25,
-        totalOutputTokens: 45,
-        totalTokens: 70,
+        totalInputTokens: 15,
+        totalOutputTokens: 25,
+        totalTokens: 40,
       });
 
       expect(result.performance).toEqual({
@@ -234,7 +236,7 @@ describe('MessageTransformer', () => {
 
       expect(result.usage).toEqual({
         cost: 0.003,
-        totalTokens: 70,
+        totalTokens: 40,
       });
     });
 

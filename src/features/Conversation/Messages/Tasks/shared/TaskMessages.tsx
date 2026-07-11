@@ -17,7 +17,7 @@ import ContentBlocksScroll from '../../AssistantGroup/components/ContentBlocksSc
 import { resolveAssistantGroupFromMessages } from '../../AssistantGroup/utils/resolveAssistantGroupFromMessages';
 import Usage from '../../components/Extras/Usage';
 import AnimatedNumber from '../../components/Extras/Usage/UsageDetail/AnimatedNumber';
-import { accumulateUsage, formatDuration, formatElapsedTime } from './utils';
+import { formatDuration, formatElapsedTime, resolveRunUsage } from './utils';
 
 const styles = createStaticStyles(({ css }) => ({
   instructionContent: css`
@@ -125,13 +125,13 @@ interface TaskMessagesProps {
  * Processing state - shows all blocks with loading indicator
  */
 const ProcessingView = memo<{
-  accumulatedUsage: { cost?: number; totalTokens?: number };
   messages: UIChatMessage[];
   model?: string;
   provider?: string;
+  runUsage: ReturnType<typeof resolveRunUsage>;
   startTime?: number;
   totalToolCalls: number;
-}>(({ messages, startTime, model, provider, totalToolCalls, accumulatedUsage }) => {
+}>(({ messages, startTime, model, provider, totalToolCalls, runUsage }) => {
   const { t } = useTranslation('chat');
   const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
   const [elapsedTime, setElapsedTime] = useState(0);
@@ -202,7 +202,12 @@ const ProcessingView = memo<{
 
       {/* Usage display */}
       {isDevMode && model && provider && (
-        <Usage model={model} provider={provider} usage={accumulatedUsage} />
+        <Usage
+          cumulativeTokens={runUsage.cumulativeTokens}
+          model={model}
+          provider={provider}
+          usage={runUsage.usage}
+        />
       )}
     </Flexbox>
   );
@@ -219,10 +224,10 @@ const CompletedView = memo<{
   duration?: number;
   model?: string;
   provider?: string;
+  runUsage: ReturnType<typeof resolveRunUsage>;
   totalCost?: number;
-  totalTokens?: number;
   totalToolCalls: number;
-}>(({ blocks, assistantId, duration, totalToolCalls, model, provider, totalTokens, totalCost }) => {
+}>(({ blocks, assistantId, duration, totalToolCalls, model, provider, runUsage, totalCost }) => {
   const { t } = useTranslation('chat');
   const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
 
@@ -291,7 +296,12 @@ const CompletedView = memo<{
 
       {/* Usage display */}
       {isDevMode && model && provider && (
-        <Usage model={model} provider={provider} usage={{ cost: totalCost, totalTokens }} />
+        <Usage
+          cumulativeTokens={runUsage.cumulativeTokens}
+          model={model}
+          provider={provider}
+          usage={{ ...runUsage.usage, cost: totalCost ?? runUsage.usage?.cost }}
+        />
       )}
     </Flexbox>
   );
@@ -320,8 +330,8 @@ const TaskMessages = memo<TaskMessagesProps>(
       [blocks],
     );
 
-    // Accumulate usage from all blocks
-    const accumulatedUsage = useMemo(() => accumulateUsage(blocks), [blocks]);
+    // Resolve run usage from all blocks (last-step tokens + summed cost)
+    const runUsage = useMemo(() => resolveRunUsage(blocks), [blocks]);
 
     return (
       <Flexbox gap={4}>
@@ -333,10 +343,10 @@ const TaskMessages = memo<TaskMessagesProps>(
         {/* Processing or Completed view */}
         {isProcessing ? (
           <ProcessingView
-            accumulatedUsage={accumulatedUsage}
             messages={messages}
             model={model}
             provider={provider}
+            runUsage={runUsage}
             startTime={startTime}
             totalToolCalls={totalToolCalls}
           />
@@ -347,8 +357,8 @@ const TaskMessages = memo<TaskMessagesProps>(
             duration={duration}
             model={model}
             provider={provider}
+            runUsage={runUsage}
             totalCost={totalCost}
-            totalTokens={accumulatedUsage.totalTokens}
             totalToolCalls={totalToolCalls}
           />
         )}

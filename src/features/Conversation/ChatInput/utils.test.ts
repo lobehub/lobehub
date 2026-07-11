@@ -83,6 +83,20 @@ describe('getContextWindowMessages', () => {
       }),
     ).toEqual([]);
   });
+
+  it('carries the real metered totalTokens on assistant messages only', () => {
+    const messagesWithUsage = [
+      { content: 'user', id: 'msg-1', role: 'user', usage: { totalTokens: 999 } },
+      { content: 'assistant', id: 'msg-2', role: 'assistant', usage: { totalTokens: 46_175 } },
+      { content: 'tool', id: 'msg-3', role: 'tool' },
+    ] as any[];
+
+    expect(
+      getContextWindowMessages(messagesWithUsage, { enableHistoryCount: false }).map(
+        (message) => message.totalTokens,
+      ),
+    ).toEqual([undefined, 46_175, undefined]);
+  });
 });
 
 describe('getConversationChatInputUiState', () => {

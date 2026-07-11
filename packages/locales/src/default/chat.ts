@@ -441,6 +441,7 @@ export default {
   'messages.tokenDetails.outputText': 'Text Output',
   'messages.tokenDetails.outputTitle': 'Output Details',
   'messages.tokenDetails.reasoning': 'Deep Thinking',
+  'messages.tokenDetails.runCumulative': 'Run Total (all steps)',
   'messages.tokenDetails.speed.tps.title': 'TPS',
   'messages.tokenDetails.speed.tps.tooltip':
     'Tokens Per Second (TPS). This indicates the average speed of AI-generated content (Tokens/second), calculated from the moment the first Token is received.',
@@ -1157,6 +1158,7 @@ export default {
   'tokenDetails.title': 'Context Details',
   'tokenDetails.tools': 'Skill Settings',
   'tokenDetails.total': 'Total Available',
+  'tokenDetails.untracked': 'Untracked (tool calls, etc.)',
   'tokenDetails.used': 'Total Used',
   'tokenTag.overload': 'Exceeded Limit',
   'tokenTag.remained': 'Remaining',
