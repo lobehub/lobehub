@@ -5,8 +5,8 @@ class OnboardingTasksService {
     throw new Error('onboardingTasksService.getSuggestions is not implemented yet');
   };
 
-  createTasks = async (ids: string[]): Promise<void> => {
-    throw new Error(`onboardingTasksService.createTasks is not implemented yet: ${ids.join(',')}`);
+  createTasks = async (_ids: string[]): Promise<void> => {
+    throw new Error('onboardingTasksService.createTasks is not implemented yet');
   };
 }
 

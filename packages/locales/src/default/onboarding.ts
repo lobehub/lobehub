@@ -7,7 +7,7 @@ export default {
   'flow.steps.chiefAgent.avatarUpload': 'Upload your own avatar',
   'flow.steps.chiefAgent.birthday': 'Born {{date}}',
   'flow.steps.chiefAgent.defaultName': 'Potato',
-  'flow.steps.chiefAgent.hint': 'Custom your chief agent operator',
+  'flow.steps.chiefAgent.hint': 'Customize your chief agent operator',
   'flow.steps.chiefAgent.hire': 'Hire this agent',
   'flow.steps.chiefAgent.hireError': 'Failed to hire this agent, please try again',
   'flow.steps.chiefAgent.mbti': 'INTJ',

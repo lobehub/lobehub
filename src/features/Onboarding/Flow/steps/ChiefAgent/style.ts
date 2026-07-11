@@ -11,11 +11,6 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorText};
   `,
 
-  hint: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextDescription};
-  `,
-
   infoRow: css`
     font-size: 13px;
     color: ${cssVar.colorTextSecondary};

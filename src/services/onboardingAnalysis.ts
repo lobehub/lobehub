@@ -13,8 +13,8 @@ class OnboardingAnalysisService {
     throw new Error('onboardingAnalysisService.getProfile is not implemented yet');
   };
 
-  submitSupplement = async (text: string): Promise<void> => {
-    throw new Error(`onboardingAnalysisService.submitSupplement is not implemented yet: ${text}`);
+  submitSupplement = async (_text: string): Promise<void> => {
+    throw new Error('onboardingAnalysisService.submitSupplement is not implemented yet');
   };
 }
 
