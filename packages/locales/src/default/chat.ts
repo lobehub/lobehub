@@ -1346,6 +1346,7 @@ export default {
   'workingPanel.browser.actions.stop': 'Stop loading',
   'workingPanel.browser.addressPlaceholder': 'Search or enter address',
   'workingPanel.browser.agentControlling': 'Agent is using the browser',
+  'workingPanel.browser.agentCursor': 'Agent',
   'workingPanel.browser.desktopOnly': 'The in-app browser is only available in the desktop app',
   'workingPanel.browser.empty.desc': 'Enter an address or search above to open a page',
   'workingPanel.browser.empty.title': 'Start browsing',

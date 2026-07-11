@@ -41,6 +41,29 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       inset-inline-start 0.4s cubic-bezier(0.3, 0.9, 0.4, 1),
       inset-block-start 0.4s cubic-bezier(0.3, 0.9, 0.4, 1);
   `,
+  cursorLabel: css`
+    position: absolute;
+    inset-block-start: 18px;
+    inset-inline-start: 13px;
+
+    padding-block: 2px;
+    padding-inline: 8px;
+    border-radius: 20px;
+
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 18px;
+    color: #fff;
+    white-space: nowrap;
+
+    background: ${cssVar.geekblue};
+    box-shadow: 0 1px 4px rgb(0 0 0 / 15%);
+  `,
+  cursorSvg: css`
+    display: block;
+    color: ${cssVar.geekblue};
+    filter: drop-shadow(0 1px 2px rgb(0 0 0 / 30%));
+  `,
   dot: css`
     width: 6px;
     height: 6px;
@@ -63,7 +86,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     width: 28px;
     height: 28px;
-    border: 2px solid ${cssVar.colorPrimary};
+    border: 2px solid ${cssVar.geekblue};
     border-radius: 50%;
 
     opacity: 0;
@@ -130,15 +153,16 @@ const AgentOverlay = memo<AgentOverlayProps>(({ sessionId }) => {
           style={{ insetBlockStart: cursor.y, insetInlineStart: cursor.x }}
         >
           {clickSeq > 0 && <div className={styles.ripple} key={clickSeq} />}
-          <svg fill="none" height={22} viewBox="0 0 24 24" width={22}>
+          <svg className={styles.cursorSvg} fill="none" height={22} viewBox="0 0 24 24" width={22}>
             <path
               d="M5 3l14 8-6.5 1.5L9 19 5 3z"
-              fill="#fff"
-              stroke="#000"
+              fill="currentColor"
+              stroke="#fff"
               strokeLinejoin="round"
               strokeWidth={1.5}
             />
           </svg>
+          <div className={styles.cursorLabel}>{t('workingPanel.browser.agentCursor')}</div>
         </div>
       )}
     </>

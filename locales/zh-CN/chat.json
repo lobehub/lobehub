@@ -1278,6 +1278,7 @@
   "workingPanel.browser.actions.stop": "停止加载",
   "workingPanel.browser.addressPlaceholder": "搜索或输入网址",
   "workingPanel.browser.agentControlling": "智能体正在使用浏览器",
+  "workingPanel.browser.agentCursor": "Agent",
   "workingPanel.browser.desktopOnly": "内置浏览器仅在桌面端可用",
   "workingPanel.browser.empty.desc": "在上方输入网址或搜索以打开页面",
   "workingPanel.browser.empty.title": "开始浏览",
