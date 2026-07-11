@@ -27,6 +27,7 @@ import type {
   ConversationContext,
   HeterogeneousProviderConfig,
   MessageMapScope,
+  ModelUsage,
   PageSelection,
   UIChatMessage,
   WorkingDirConfig,
@@ -1638,7 +1639,7 @@ export const executeHeterogeneousAgent = async (
         const update = {
           // Keep usage on the promoted top-level field so the live message UI
           // can render it immediately, before the terminal DB refresh runs.
-          usage: intent.usage,
+          usage: intent.usage as ModelUsage,
           // Wholesale metadata overwrite — re-stamp the provenance the
           // createAssistant write put there.
           metadata: heteroProvenance(mainState.currentMainMessageId),
