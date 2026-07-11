@@ -184,7 +184,7 @@ function setupIpcCapture() {
       }
     },
     /** Emit an already-adapted AgentStreamEvent, matching main-process bridge events. */
-    emitStreamEvent: (sessionId: string, event: any) => {
+    emitStreamEvent: (sessionId: string, event: Record<string, unknown>) => {
       const handler = listeners.get('heteroAgentEvent');
       handler?.(null, {
         event: {
@@ -608,6 +608,69 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
     return { get, store };
   }
 
+  it('surfaces stream_retry metadata on the running operation and clears it on the next event', async () => {
+    const store = createMockStore();
+    const get = vi.fn(() => store);
+
+    let resolveSendPrompt: () => void;
+    mockSendPrompt.mockReturnValue(
+      new Promise<void>((resolve) => {
+        resolveSendPrompt = resolve;
+      }),
+    );
+
+    const executorPromise = executeHeterogeneousAgent(get, defaultParams);
+    await flush();
+
+    ipc.emitStreamEvent('ipc-sess-1', {
+      data: {
+        attempt: 6,
+        delayMs: 1000,
+        error: 'overloaded',
+        errorStatus: 529,
+        maxAttempts: 10,
+        provider: 'anthropic',
+      },
+      type: 'stream_retry',
+    });
+    await flush();
+
+    expect(store.updateOperationMetadata).toHaveBeenCalledWith('op-1', {
+      streamRetry: expect.objectContaining({
+        agentType: 'claude-code',
+        attempt: 6,
+        delayMs: 1000,
+        error: 'overloaded',
+        errorStatus: 529,
+        maxAttempts: 10,
+        provider: 'anthropic',
+      }),
+    });
+    expect(store.operations['op-1'].metadata.streamRetry).toMatchObject({
+      attempt: 6,
+      error: 'overloaded',
+      errorStatus: 529,
+    });
+
+    ipc.emitStreamEvent('ipc-sess-1', {
+      data: {},
+      type: 'agent_runtime_init',
+    });
+    await flush();
+
+    expect(store.updateOperationMetadata).toHaveBeenCalledWith('op-1', {
+      streamRetry: undefined,
+    });
+    expect(store.operations['op-1'].metadata.streamRetry).toBeUndefined();
+
+    ipc.emitComplete('ipc-sess-1');
+    await flush();
+    resolveSendPrompt!();
+    await flush();
+    await executorPromise;
+    await flush();
+  });
+
   // ────────────────────────────────────────────────────
   // Tool 3-phase persistence
   // ────────────────────────────────────────────────────
@@ -977,12 +1040,17 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       );
 
       const dispatched = store.internal_dispatchMessage.mock.calls.find(
-        ([payload]: any) =>
-          payload.type === 'updateMessage' && payload.value?.metadata?.usage !== undefined,
+        ([payload]: any) => payload.type === 'updateMessage' && payload.value?.usage !== undefined,
       );
       expect(dispatched).toBeDefined();
       expect(dispatched![0].value.model).toBe('claude-opus-4-6');
       expect(dispatched![0].value.provider).toBe('claude-code');
+      expect(dispatched![0].value.usage).toMatchObject({
+        totalInputTokens: 100,
+        totalOutputTokens: 20,
+        totalTokens: 120,
+      });
+      expect(dispatched![0].value.metadata.usage).toBeUndefined();
     });
 
     it('should write accumulated reasoning', async () => {
@@ -1022,7 +1090,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       ]);
 
       const usageWrites = mockUpdateMessage.mock.calls.filter(
-        ([, val]: any) => val.metadata?.usage?.totalTokens,
+        ([, val]: any) => val.usage?.totalTokens,
       );
       // One usage write per step (msg_01 → ast-initial, msg_02 → new step assistant)
       expect(usageWrites.length).toBe(2);
@@ -1032,7 +1100,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
 
       const step1 = usageWrites.find(([id]: any) => id === 'ast-initial');
       expect(step1).toBeDefined();
-      const u1 = step1![1].metadata.usage;
+      const u1 = step1![1].usage;
       // msg_01: 100 input (miss) + 200 cached + 50 cache_create = 350; 50 output
       expect(u1.totalInputTokens).toBe(350);
       expect(u1.totalOutputTokens).toBe(50);
@@ -1043,7 +1111,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
 
       const step2 = usageWrites.find(([id]: any) => id === step2Id);
       expect(step2).toBeDefined();
-      const u2 = step2![1].metadata.usage;
+      const u2 = step2![1].usage;
       // msg_02: 300 input (miss, no cache); 80 output
       expect(u2.totalInputTokens).toBe(300);
       expect(u2.totalOutputTokens).toBe(80);
@@ -1077,11 +1145,11 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       ]);
 
       const usageWrites = mockUpdateMessage.mock.calls.filter(
-        ([, val]: any) => val.metadata?.usage?.totalTokens,
+        ([, val]: any) => val.usage?.totalTokens,
       );
       expect(usageWrites.length).toBe(1);
-      expect(usageWrites[0][1].metadata.usage.totalOutputTokens).toBe(265); // not 1
-      expect(usageWrites[0][1].metadata.usage.totalInputTokens).toBe(6);
+      expect(usageWrites[0][1].usage.totalOutputTokens).toBe(265); // not 1
+      expect(usageWrites[0][1].usage.totalInputTokens).toBe(6);
     });
   });
 
@@ -1119,6 +1187,96 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         ([id, val]: any) => id === newStepId && val.content === 'Step 2 content',
       );
       expect(newStepWrite).toBeDefined();
+    });
+  });
+
+  // ────────────────────────────────────────────────────
+  // Lost-write recovery — the tpc_mMYve6mAIT4J incident
+  // ────────────────────────────────────────────────────
+
+  describe('lost-write recovery (FK cascade)', () => {
+    /**
+     * End-to-end replay of the original incident against a fake table that
+     * enforces the two invariants the real `messages` table does:
+     *   - `parent_id` is a FK: a create whose parent row is absent throws 23503.
+     *   - an update whose id matches no row reports `success: false` (a lost
+     *     write, not a no-op) — the semantic this PR restored.
+     *
+     * A single transient `createMessage` failure orphans the seed of a spine
+     * chain (`asst → asst → asst …`); every later assistant then fails the FK,
+     * and every content flush in between lands on a row that does not exist.
+     * The fix must recover ALL of it: replay the creates in dependency order,
+     * then replay the content the zero-row updates stashed.
+     */
+    const makeFakeTable = (seedId: string) => {
+      const rows = new Map<string, any>([[seedId, { content: '', id: seedId, role: 'assistant' }]]);
+      let firstAssistantBlipped = false;
+
+      const create = async (params: any) => {
+        // Seed the cascade: the first fresh assistant create fails once, exactly
+        // like the single dropped write that started the real incident.
+        if (params.role === 'assistant' && !firstAssistantBlipped) {
+          firstAssistantBlipped = true;
+          throw new Error('transient write failure');
+        }
+        if (params.parentId && !rows.has(params.parentId)) {
+          throw new Error(`FK violation: parent ${params.parentId} is absent`);
+        }
+        rows.set(params.id, { ...params, content: params.content ?? '' });
+        return { id: params.id };
+      };
+
+      const update = async (id: string, value: any) => {
+        const row = rows.get(id);
+        if (!row) return { success: false };
+        Object.assign(row, value);
+        return { success: true };
+      };
+
+      return { create, rows, update };
+    };
+
+    it('recovers every assistant + its content after a create failure cascades down the spine', async () => {
+      const store = createMockStore({
+        dbMessagesMap: {
+          'main_agent-1_topic-1': [
+            { content: '', id: 'ast-initial', role: 'assistant', topicId: 'topic-1' },
+          ],
+        },
+      });
+      const table = makeFakeTable('ast-initial');
+      mockCreateMessage.mockImplementation(table.create);
+      mockUpdateMessage.mockImplementation(table.update);
+
+      // msg_01 reuses the seed; msg_02..04 are fresh spine assistants, each
+      // parented off the previous one — so orphaning msg_02 takes 03 and 04 too.
+      const texts = {
+        msg_01: 'seed turn answer',
+        msg_02: 'first fresh turn',
+        msg_03: 'second fresh turn',
+        msg_04: 'final answer that must survive',
+      };
+      await runWithEvents(
+        [
+          ccInit(),
+          ccText('msg_01', texts.msg_01),
+          ccText('msg_02', texts.msg_02),
+          ccText('msg_03', texts.msg_03),
+          ccText('msg_04', texts.msg_04),
+          ccResult(),
+        ],
+        { store },
+      );
+
+      // Every assistant turn is present AND carries its text — no empty shells,
+      // nothing dropped. This is the exact assertion that fails pre-fix: the
+      // content updates "succeeded" against absent rows, so the ledger that
+      // would have replayed them stayed empty.
+      const persistedContent = [...table.rows.values()]
+        .filter((r) => r.role === 'assistant')
+        .map((r) => r.content)
+        .sort();
+      expect(persistedContent).toEqual(Object.values(texts).sort());
     });
   });
 
@@ -1932,20 +2090,19 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       );
       expect(modelWrites.length).toBeGreaterThan(0);
 
-      const usageWrite = modelWrites.find(([, value]: any) => value.metadata?.usage);
+      const usageWrite = modelWrites.find(([, value]: any) => value.usage);
       expect(usageWrite?.[1]).toMatchObject({
-        metadata: {
-          usage: {
-            inputCachedTokens: 4,
-            inputCacheMissTokens: 6,
-            totalInputTokens: 10,
-            totalOutputTokens: 3,
-            totalTokens: 13,
-          },
-        },
         model: 'gpt-5.5',
         provider: 'codex',
+        usage: {
+          inputCachedTokens: 4,
+          inputCacheMissTokens: 6,
+          totalInputTokens: 10,
+          totalOutputTokens: 3,
+          totalTokens: 13,
+        },
       });
+      expect(usageWrite?.[1].metadata.usage).toBeUndefined();
     });
 
     it('waits for late Codex terminal events when Electron complete arrives before stdout tail', async () => {
@@ -2513,7 +2670,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
 
         expect(contentAttempts.filter((id) => id === finalAssistantId)).toHaveLength(2);
         expect(finalRow.content).toBe(finalText);
-        expect(finalRow.metadata.usage).toMatchObject({
+        expect(finalRow.usage).toMatchObject({
           inputCachedTokens: 4,
           inputCacheMissTokens: 6,
           totalInputTokens: 10,
@@ -4407,6 +4564,55 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         sourceToolName: 'Monitor',
         type: 'task-completion',
       });
+    });
+
+    it('replays a tool-parented signal assistant only after its tool row lands', async () => {
+      // A signal turn parents off the run's last TOOL row, not the spine. So a
+      // create ledger that drains every assistant before any tool row retries
+      // the signal assistant while its parent is still missing, burns its only
+      // retry on a guaranteed FK violation, and drops the turn.
+      const persisted = new Set<string>(['ast-initial']);
+      let toolCreateBlips = 1;
+      mockCreateMessage.mockImplementation(async (params: any) => {
+        // One transient failure on the tool row — the seed of the cascade.
+        if (params.role === 'tool' && toolCreateBlips > 0) {
+          toolCreateBlips -= 1;
+          throw new Error('transient write failure');
+        }
+        // Everything else obeys `messages.parent_id`, like the real table does.
+        if (params.parentId && !persisted.has(params.parentId)) {
+          throw new Error(`FK violation: parent ${params.parentId} is not present`);
+        }
+        persisted.add(params.id);
+        return { id: params.id };
+      });
+
+      await runWithEvents([
+        ccInit(),
+        ccMessageStart('msg_01'),
+        ccToolUse('msg_01', 'toolu_mon_0', 'Monitor', { shell: 'every 1s' }),
+        ccTaskStarted('task_a', 'toolu_mon_0'),
+        ccToolResult('toolu_mon_0', 'Monitor started'),
+        // Natural confirmation turn — parents off the spine.
+        ccMessageStart('msg_02'),
+        ccText('msg_02', 'Monitor started.'),
+        // Monitor pushed stdout → signal callback, parents off the tool row.
+        ccMessageStart('msg_03'),
+        ccText('msg_03', 'tick 1'),
+        ccResult(),
+      ]);
+
+      const toolCreate = mockCreateMessage.mock.calls.find(([p]: any) => p.role === 'tool');
+      const signalCreate = mockCreateMessage.mock.calls.find(
+        ([p]: any) => p.role === 'assistant' && p.metadata?.signal,
+      );
+      expect(toolCreate).toBeDefined();
+      expect(signalCreate).toBeDefined();
+      expect(signalCreate![0].parentId).toBe(toolCreate![0].id);
+
+      // Both rows must exist once the run settles, or the signal turn is lost.
+      expect(persisted.has(toolCreate![0].id)).toBe(true);
+      expect(persisted.has(signalCreate![0].id)).toBe(true);
     });
 
     it('does NOT stamp metadata.signal on turns following a tool_result (main-chain follow-up)', async () => {

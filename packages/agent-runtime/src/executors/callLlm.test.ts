@@ -1,6 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import type { AgentRuntimeHost, LLMTransport, MessageTransport, StreamSink } from '../transport';
+import type {
+  AgentRuntimeHost,
+  ContextBuilder,
+  ContextBuildOutput,
+  LLMTransport,
+  MessageTransport,
+  StreamSink,
+} from '../transport';
 import type { AgentInstructionCallLlm, AgentState } from '../types';
 import { callLlm } from './callLlm';
 
@@ -67,16 +74,28 @@ const createMessageTransport = (): MessageTransport => ({
 
 const createStreamSink = (): StreamSink => ({
   publishChunk: vi.fn(),
+  publishError: vi.fn(),
   publishEvent: vi.fn(),
+});
+
+const contextOutput: ContextBuildOutput = {
+  messages: [{ content: 'prepared hello', role: 'user' }],
+  replayAssistantReasoning: false,
+};
+
+const createContextBuilder = (): ContextBuilder => ({
+  build: vi.fn().mockResolvedValue(contextOutput),
 });
 
 const createHost = (
   llm: LLMTransport,
   messages = createMessageTransport(),
   stream = createStreamSink(),
+  context = createContextBuilder(),
 ): AgentRuntimeHost => ({
   operation: { operationId: 'op-1', stepIndex: 0 },
   transports: {
+    context,
     llm,
     messages,
     stream,
@@ -90,16 +109,18 @@ describe('callLlm executor', () => {
       events: [],
       newState: state,
     };
-    const executeCall = vi.fn().mockResolvedValue(expected);
+    const executeTurn = vi.fn().mockResolvedValue(expected);
     const messages = createMessageTransport();
     const stream = createStreamSink();
+    const context = createContextBuilder();
     const host = createHost(
       {
-        executeCall,
+        executeTurn,
         stream: vi.fn(),
       },
       messages,
       stream,
+      context,
     );
     const instructionWithParent: AgentInstructionCallLlm = {
       payload: {
@@ -132,9 +153,15 @@ describe('callLlm executor', () => {
       stepIndex: 0,
       type: 'stream_start',
     });
-    expect(executeCall).toHaveBeenCalledWith({
+    expect(context.build).toHaveBeenCalledWith({
+      model: 'gpt-4',
+      payload: instructionWithParent.payload,
+      provider: 'openai',
+      state,
+    });
+    expect(executeTurn).toHaveBeenCalledWith({
       assistantMessage: { id: 'assistant-1' },
-      instruction: instructionWithParent,
+      context: contextOutput,
       model: 'gpt-4',
       provider: 'openai',
       state,
@@ -148,11 +175,11 @@ describe('callLlm executor', () => {
       events: [],
       newState: state,
     };
-    const executeCall = vi.fn().mockResolvedValue(expected);
+    const executeTurn = vi.fn().mockResolvedValue(expected);
     const messages = createMessageTransport();
     const host = createHost(
       {
-        executeCall,
+        executeTurn,
         stream: vi.fn(),
       },
       messages,
@@ -167,21 +194,42 @@ describe('callLlm executor', () => {
 
     await expect(callLlm(host)(reuseInstruction, state)).resolves.toBe(expected);
     expect(messages.createAssistantMessage).not.toHaveBeenCalled();
-    expect(executeCall).toHaveBeenCalledWith(
+    expect(executeTurn).toHaveBeenCalledWith(
       expect.objectContaining({
         assistantMessage: { id: 'assistant-existing' },
       }),
     );
   });
 
-  it('throws when the LLM transport does not provide executeCall', async () => {
+  it('throws when the LLM transport does not provide executeTurn', async () => {
     const host = createHost({
       stream: vi.fn(),
     });
 
     await expect(callLlm(host)(instruction, createState())).rejects.toThrow(
-      'LLMTransport.executeCall is required for call_llm executor',
+      'LLMTransport.executeTurn is required for call_llm executor',
     );
+  });
+
+  it('publishes context build failures without executing the model turn', async () => {
+    const error = new Error('context failed');
+    const context: ContextBuilder = { build: vi.fn().mockRejectedValue(error) };
+    const executeTurn = vi.fn();
+    const stream = createStreamSink();
+    const host = createHost(
+      { executeTurn, stream: vi.fn() },
+      createMessageTransport(),
+      stream,
+      context,
+    );
+
+    await expect(callLlm(host)(instruction, createState())).rejects.toBe(error);
+    expect(stream.publishError).toHaveBeenCalledWith({
+      error,
+      phase: 'llm_execution',
+      stepIndex: 0,
+    });
+    expect(executeTurn).not.toHaveBeenCalled();
   });
 
   it('fails before creating an assistant message when the parent message is missing', async () => {
@@ -190,7 +238,7 @@ describe('callLlm executor', () => {
     const stream = createStreamSink();
     const host = createHost(
       {
-        executeCall: vi.fn(),
+        executeTurn: vi.fn(),
         stream: vi.fn(),
       },
       messages,

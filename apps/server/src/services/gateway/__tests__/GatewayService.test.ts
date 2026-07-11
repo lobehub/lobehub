@@ -30,13 +30,16 @@ const mockGatewayManager = vi.hoisted(() => ({
 }));
 
 const mockFindEnabledByPlatform = vi.hoisted(() => vi.fn());
+const mockFindByAgentId = vi.hoisted(() => vi.fn());
 const mockFindByIds = vi.hoisted(() => vi.fn());
+const mockFindEnabledByPlatformAndAppId = vi.hoisted(() => vi.fn());
 const mockGetServerDB = vi.hoisted(() => vi.fn());
 const mockInitWithEnvKey = vi.hoisted(() => vi.fn());
 const mockUpdateBotRuntimeStatus = vi.hoisted(() => vi.fn());
 const mockResolveConnectionMode = vi.hoisted(() => vi.fn());
 const mockIsBotFeatureAccessAllowed = vi.hoisted(() => vi.fn());
 const mockGetBotFeatureBlockedMessage = vi.hoisted(() => vi.fn());
+const mockGetBotRuntimeStatus = vi.hoisted(() => vi.fn());
 
 // ─── Module mocks ───
 
@@ -59,8 +62,10 @@ vi.mock('@/database/core/db-adaptor', () => ({
 
 vi.mock('@/database/models/agentBotProvider', () => ({
   AgentBotProviderModel: {
+    findByAgentId: mockFindByAgentId,
     findByIds: mockFindByIds,
     findEnabledByPlatform: mockFindEnabledByPlatform,
+    findEnabledByPlatformAndAppId: mockFindEnabledByPlatformAndAppId,
   },
 }));
 
@@ -76,6 +81,7 @@ vi.mock('../runtimeStatus', () => ({
     queued: 'queued',
     starting: 'starting',
   },
+  getBotRuntimeStatus: mockGetBotRuntimeStatus,
   updateBotRuntimeStatus: mockUpdateBotRuntimeStatus,
 }));
 
@@ -104,7 +110,9 @@ describe('GatewayService', () => {
     mockGetServerDB.mockResolvedValue({});
     mockInitWithEnvKey.mockResolvedValue({});
     mockFindEnabledByPlatform.mockResolvedValue([]);
+    mockFindByAgentId.mockResolvedValue([]);
     mockFindByIds.mockResolvedValue([]);
+    mockFindEnabledByPlatformAndAppId.mockResolvedValue(null);
     // Default: admin snapshot unavailable → sync falls back to per-connection
     // getStatus and skips stale-connection cleanup (matches pre-reconciliation behavior).
     mockGatewayClient.getStats.mockRejectedValue(new Error('stats unavailable'));
@@ -112,6 +120,7 @@ describe('GatewayService', () => {
     mockUpdateBotRuntimeStatus.mockResolvedValue({});
     mockIsBotFeatureAccessAllowed.mockResolvedValue(true);
     mockGetBotFeatureBlockedMessage.mockReturnValue('This bot channel requires a paid plan.');
+    mockGetBotRuntimeStatus.mockResolvedValue({});
     service = new GatewayService();
   });
 
@@ -126,6 +135,55 @@ describe('GatewayService', () => {
     it('returns true when client is enabled', () => {
       mockGatewayClient.isEnabled = true;
       expect(service.useMessageGateway).toBe(true);
+    });
+  });
+
+  describe('runtime status refresh', () => {
+    beforeEach(() => {
+      mockGatewayClient.isEnabled = true;
+      mockResolveConnectionMode.mockReturnValue('websocket');
+    });
+
+    it('preserves gateway error codes during a single refresh', async () => {
+      mockFindEnabledByPlatformAndAppId.mockResolvedValue({ id: 'prov-1', settings: {} });
+      mockGatewayClient.getStatus.mockResolvedValue({
+        state: { error: 'invalid token', errorCode: 'invalid_credentials', status: 'error' },
+      });
+
+      await service.refreshBotRuntimeStatus('discord', 'app-1');
+
+      expect(mockUpdateBotRuntimeStatus).toHaveBeenCalledWith({
+        applicationId: 'app-1',
+        errorCode: 'invalid_credentials',
+        errorMessage: 'invalid token',
+        platform: 'discord',
+        status: 'failed',
+      });
+    });
+
+    it('preserves gateway error codes during an agent-wide refresh', async () => {
+      mockFindByAgentId.mockResolvedValue([
+        {
+          applicationId: 'app-1',
+          enabled: true,
+          id: 'prov-1',
+          platform: 'discord',
+          settings: {},
+        },
+      ]);
+      mockGatewayClient.getStatus.mockResolvedValue({
+        state: { error: 'invalid token', errorCode: 'invalid_credentials', status: 'error' },
+      });
+
+      await service.refreshBotRuntimeStatusesByAgent('agent-1');
+
+      expect(mockUpdateBotRuntimeStatus).toHaveBeenCalledWith({
+        applicationId: 'app-1',
+        errorCode: 'invalid_credentials',
+        errorMessage: 'invalid token',
+        platform: 'discord',
+        status: 'failed',
+      });
     });
   });
 

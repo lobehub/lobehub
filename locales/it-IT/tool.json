@@ -17,6 +17,7 @@
   "agentGroupManagement.executeTask.tokens": "Utilizzo Token",
   "agentGroupManagement.executeTasks.intervention.instructionPlaceholder": "Istruzioni dettagliate per l'agente per eseguire questo compito...",
   "agentGroupManagement.executeTasks.intervention.titlePlaceholder": "Titolo del compito...",
+  "agentGroupManagement.executeTasks.results": "Risultati",
   "agentMarketplace.category.businessStrategy": "Business & Strategia",
   "agentMarketplace.category.contentCreation": "Creazione di Contenuti",
   "agentMarketplace.category.creatorEconomy": "Economia dei Creatori",

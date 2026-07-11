@@ -1,4 +1,6 @@
 {
+  "features.agentGraphConfig.desc": "Hiển thị cấu hình thời gian chạy đồ thị trong cài đặt nâng cao của hồ sơ tác nhân.",
+  "features.agentGraphConfig.title": "Cấu Hình Thời Gian Chạy Đồ Thị Tác Nhân",
   "features.agentSelfIteration.desc": "Cho phép trợ lý tự phản tư, xây dựng khả năng tự nhận thức và liên tục cải thiện thông qua các nỗ lực và tương tác đang diễn ra.",
   "features.agentSelfIteration.title": "Tự lặp của tác nhân",
   "features.assistantMessageGroup.desc": "Nhóm các tin nhắn của tác nhân và kết quả gọi công cụ lại với nhau để hiển thị",
@@ -13,6 +15,8 @@
   "features.imessage.title": "Kênh iMessage",
   "features.inputMarkdown.desc": "Hiển thị Markdown trong khu vực nhập liệu theo thời gian thực (văn bản in đậm, khối mã, bảng, v.v.).",
   "features.inputMarkdown.title": "Hiển Thị Markdown Trong Ô Nhập",
+  "features.messageTextSelectionActions.desc": "Hiển thị hành động nhanh khi chọn văn bản trong tin nhắn trò chuyện để văn bản được chọn có thể được thêm vào ngữ cảnh cuộc trò chuyện tiếp theo.",
+  "features.messageTextSelectionActions.title": "Hành Động Chọn Văn Bản Tin Nhắn",
   "features.platformAgent.desc": "Hiển thị mục \"Kết nối Agent\" trong menu tạo. Các agent được kết nối (ví dụ: OpenClaw, Hermes) chạy trên thiết bị của bạn và giao tiếp lại thông qua lh connect.",
   "features.platformAgent.title": "Kết nối Agent",
   "features.taskVerify.desc": "Thêm phần chấp nhận giao hàng vào chi tiết nhiệm vụ: mô tả chấp nhận trong một câu và để AI tạo tiêu chí xác minh có thể chỉnh sửa.",

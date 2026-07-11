@@ -1,18 +1,26 @@
-import type { AgentRuntimeHost, LLMCallExecuteInput } from '../transport';
+import type { AgentRuntimeHost, LLMTurnInput } from '../transport';
 import type { AgentInstruction, CallLLMPayload, InstructionExecutor } from '../types';
 
 const CONVERSATION_PARENT_MISSING_ERROR_TYPE = 'ConversationParentMissing';
 
 interface LLMCallTransport {
-  executeCall: (input: LLMCallExecuteInput) => ReturnType<InstructionExecutor>;
+  executeTurn: (input: LLMTurnInput) => ReturnType<InstructionExecutor>;
 }
 
 const requireLLMCallTransport = (host: AgentRuntimeHost) => {
   const llm = host.transports.llm;
-  if (!llm?.executeCall) {
-    throw new Error('LLMTransport.executeCall is required for call_llm executor');
+  if (!llm?.executeTurn) {
+    throw new Error('LLMTransport.executeTurn is required for call_llm executor');
   }
   return llm as NonNullable<AgentRuntimeHost['transports']['llm']> & LLMCallTransport;
+};
+
+const requireContextBuilder = (host: AgentRuntimeHost) => {
+  const context = host.transports.context;
+  if (!context) {
+    throw new Error('ContextBuilder is required for call_llm executor');
+  }
+  return context;
 };
 
 const createConversationParentMissingError = (parentId: string) => {
@@ -65,17 +73,18 @@ const buildAssistantMessageSeed = (
 });
 
 /**
- * `call_llm` executor — transitional transport-backed entry point.
+ * Package-owned `call_llm` executor entry point.
  *
  * The server-specific implementation still lives behind the LLM transport while
- * the remaining context/stream/persist internals are broken into package-owned
- * ports. This removes the direct server executor registration first, matching
- * the migration shape used by the other runtime executors.
+ * the remaining context/stream/persist internals are broken into narrower
+ * package-owned ports. The transport executes a prepared turn rather than
+ * masquerading as another instruction executor.
  */
 export const callLlm =
   (host: AgentRuntimeHost): InstructionExecutor =>
   async (instruction, state) => {
     const { operation, transports } = host;
+    const contextBuilder = requireContextBuilder(host);
     const llm = requireLLMCallTransport(host);
     const { payload } = instruction as Extract<AgentInstruction, { type: 'call_llm' }>;
     const llmPayload = payload as CallLLMPayload & {
@@ -134,9 +143,25 @@ export const callLlm =
       type: 'stream_start',
     });
 
-    return llm.executeCall({
+    const context = await contextBuilder
+      .build({
+        model,
+        payload: llmPayload,
+        provider,
+        state,
+      })
+      .catch(async (error) => {
+        await transports.stream.publishError?.({
+          error,
+          phase: 'llm_execution',
+          stepIndex: operation.stepIndex,
+        });
+        throw error;
+      });
+
+    return llm.executeTurn({
       assistantMessage,
-      instruction: instruction as Extract<AgentInstruction, { type: 'call_llm' }>,
+      context,
       model,
       provider,
       state,

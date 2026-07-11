@@ -70,6 +70,7 @@
   "workingDirectory.removeWorktreeAction": "작업 트리 삭제",
   "workingDirectory.removeWorktreeConfirm": "작업 트리 “{{name}}”을(를) 삭제하시겠습니까? 작업 트리 디렉토리는 삭제되지만 브랜치는 유지됩니다. Git은 커밋되지 않은 변경 사항이 있는 경우 삭제를 거부합니다.",
   "workingDirectory.removeWorktreeFailed": "작업 트리 삭제 실패",
+  "workingDirectory.removeWorktreePending": "작업 트리 “{{name}}” 삭제 중…",
   "workingDirectory.removeWorktreeSuccess": "작업 트리가 삭제되었습니다",
   "workingDirectory.removeWorktreeTitle": "작업 트리 삭제",
   "workingDirectory.removed": "“{{name}}”이(가) 삭제되었습니다",

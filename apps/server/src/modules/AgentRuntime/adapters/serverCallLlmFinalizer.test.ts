@@ -23,16 +23,16 @@ const createStreamOutput = (
     contentParts: Array<{ image: string; type: 'image' } | { text: string; type: 'text' }>;
     hasContentImages: boolean;
     hasReasoningImages: boolean;
+    reasoning: string;
     reasoningParts: Array<{ image: string; type: 'image' } | { text: string; type: 'text' }>;
-    thinkingContent: string;
   }>,
 ) => ({
   content: 'Answer',
   contentParts: [],
   hasContentImages: false,
   hasReasoningImages: false,
+  reasoning: 'Reasoning',
   reasoningParts: [],
-  thinkingContent: 'Reasoning',
   ...overrides,
 });
 
@@ -160,7 +160,7 @@ describe('serverCallLlmFinalizer', () => {
           { text: 'Visual reasoning', type: 'text' },
           { image: 'https://example.com/reasoning.png', type: 'image' },
         ],
-        thinkingContent: 'Visual reasoning',
+        reasoning: 'Visual reasoning',
       }),
       toolCalls: [],
       toolsCalling: [],
@@ -199,7 +199,7 @@ describe('serverCallLlmFinalizer', () => {
       assistantMessageId: 'assistant-empty',
       messageModel,
       operationLogId: 'operation-1:0',
-      streamOutput: createStreamOutput({ content: '', thinkingContent: '' }),
+      streamOutput: createStreamOutput({ content: '', reasoning: '' }),
       toolsCalling: [],
     });
     expect(update).not.toHaveBeenCalled();
@@ -210,7 +210,7 @@ describe('serverCallLlmFinalizer', () => {
       currentStepUsage: { totalOutputTokens: 4 },
       messageModel,
       operationLogId: 'operation-1:0',
-      streamOutput: createStreamOutput({ content: 'Partial', thinkingContent: 'Thinking' }),
+      streamOutput: createStreamOutput({ content: 'Partial', reasoning: 'Thinking' }),
       toolsCalling: [],
     });
 

@@ -1,4 +1,4 @@
-import type { AgentEvent } from '@lobechat/agent-runtime';
+import type { AgentEvent, BlobStore, LLMAttemptOutput } from '@lobechat/agent-runtime';
 import { ToolNameResolver } from '@lobechat/context-engine';
 import type { ChatStreamPayload, ModelRuntime } from '@lobechat/model-runtime';
 import {
@@ -26,6 +26,7 @@ import type { ServerCallLlmTooling } from './serverCallLlmTooling';
 
 interface CreateServerCallLlmAttemptInput {
   attempt: number;
+  blobStore?: BlobStore;
   chatPayload: ChatStreamPayload;
   ctx: RuntimeExecutorContext;
   events: AgentEvent[];
@@ -57,19 +58,13 @@ const createStreamExecutionError = (errorData: unknown) => {
 };
 
 export class ServerCallLlmAttempt {
-  answerSalvagedFromReasoning = false;
-  finishReason?: string;
-  grounding: GroundingSearch | null = null;
-  readonly imageList: ChatImageItem[] = [];
-  speed?: ModelPerformance;
-  readonly streamSink: ServerCallLlmStreamSink;
-  toolCalls: MessageToolCall[] = [];
-  toolsCalling: ChatToolPayload[] = [];
-  usage?: ModelUsage;
-
+  private answerSalvagedFromReasoning = false;
   private readonly attempt: number;
   private readonly chatPayload: ChatStreamPayload;
   private readonly ctx: RuntimeExecutorContext;
+  private finishReason?: string;
+  private grounding: GroundingSearch | null = null;
+  private readonly imageList: ChatImageItem[] = [];
   private readonly maxAttempts: number;
   private readonly messageCount: number;
   private readonly model: string;
@@ -78,12 +73,18 @@ export class ServerCallLlmAttempt {
   private readonly operationLogId: string;
   private readonly provider: string;
   private readonly resolved: ServerCallLlmTooling['resolved'];
+  private speed?: ModelPerformance;
+  private readonly streamSink: ServerCallLlmStreamSink;
   private streamError?: unknown;
+  private toolCalls: MessageToolCall[] = [];
+  private toolsCalling: ChatToolPayload[] = [];
   private readonly topicId?: string;
   private readonly trigger?: unknown;
+  private usage?: ModelUsage;
 
   constructor({
     attempt,
+    blobStore,
     chatPayload,
     ctx,
     events,
@@ -109,7 +110,12 @@ export class ServerCallLlmAttempt {
     this.operationLogId = operationLogId;
     this.provider = provider;
     this.resolved = resolved;
-    this.streamSink = createServerCallLlmStreamSink({ ctx, events, operationLogId });
+    this.streamSink = createServerCallLlmStreamSink({
+      blobStore,
+      ctx,
+      events,
+      operationLogId,
+    });
     this.topicId = topicId;
     this.trigger = trigger;
   }
@@ -230,6 +236,29 @@ export class ServerCallLlmAttempt {
     await this.assertNonEmptyCompletion();
     this.salvageAnswerFromReasoning();
     this.logResult();
+  }
+
+  clearBuffers() {
+    this.streamSink.clearBuffers();
+  }
+
+  snapshot(): LLMAttemptOutput {
+    return {
+      answerSalvagedFromReasoning: this.answerSalvagedFromReasoning,
+      content: this.streamSink.content,
+      contentParts: [...this.streamSink.contentParts],
+      finishReason: this.finishReason,
+      grounding: this.grounding,
+      hasContentImages: this.streamSink.hasContentImages,
+      hasReasoningImages: this.streamSink.hasReasoningImages,
+      imageList: [...this.imageList],
+      reasoning: this.streamSink.thinkingContent,
+      reasoningParts: [...this.streamSink.reasoningParts],
+      speed: this.speed,
+      toolCalls: [...this.toolCalls],
+      toolsCalling: [...this.toolsCalling],
+      usage: this.usage,
+    };
   }
 
   private async assertNonEmptyCompletion() {

@@ -1,4 +1,4 @@
-import { type AgentState, UsageCounter } from '@lobechat/agent-runtime';
+import { type AgentState, type LLMAttemptOutput, UsageCounter } from '@lobechat/agent-runtime';
 import type {
   ChatImageItem,
   ChatToolPayload,
@@ -14,16 +14,15 @@ import { sanitizeToolCallArguments, serializePartsForStorage } from '@lobechat/u
 import type { RuntimeExecutorContext } from '../context';
 import { log } from '../executorHelpers';
 import { VISIBLE_OUTPUT_END_PUBLISHED_STEP_INDEX_METADATA_KEY } from '../visibleOutputEnd';
-import type { ServerCallLlmStreamSink } from './serverCallLlmStreamSink';
 
 type ServerCallLlmCollectedOutput = Pick<
-  ServerCallLlmStreamSink,
+  LLMAttemptOutput,
   | 'content'
   | 'contentParts'
   | 'hasContentImages'
   | 'hasReasoningImages'
+  | 'reasoning'
   | 'reasoningParts'
-  | 'thinkingContent'
 >;
 
 interface ServerCallLlmMessageMetadata extends MessageMetadata {
@@ -94,7 +93,7 @@ const buildFinalReasoning = (
     };
   }
 
-  return streamOutput.thinkingContent ? { content: streamOutput.thinkingContent } : undefined;
+  return streamOutput.reasoning ? { content: streamOutput.reasoning } : undefined;
 };
 
 const sanitizePersistedTools = (toolsCalling: ChatToolPayload[]) =>
@@ -205,7 +204,7 @@ export const persistInterruptedServerCallLlmResult = async ({
   streamOutput,
   toolsCalling,
 }: PersistInterruptedServerCallLlmResultInput): Promise<void> => {
-  if (!streamOutput.content && !streamOutput.thinkingContent && toolsCalling.length === 0) return;
+  if (!streamOutput.content && !streamOutput.reasoning && toolsCalling.length === 0) return;
 
   try {
     await messageModel.update(assistantMessageId, {
@@ -215,16 +214,14 @@ export const persistInterruptedServerCallLlmResult = async ({
         currentStepUsage,
         interruptedMidStream: true,
       }),
-      reasoning: streamOutput.thinkingContent
-        ? { content: streamOutput.thinkingContent }
-        : undefined,
+      reasoning: streamOutput.reasoning ? { content: streamOutput.reasoning } : undefined,
       tools: sanitizePersistedTools(toolsCalling),
     });
     log(
       '[%s] Interrupted finalize: persisted partial content (c=%d r=%d tools=%d)',
       operationLogId,
       streamOutput.content.length,
-      streamOutput.thinkingContent.length,
+      streamOutput.reasoning.length,
       toolsCalling.length,
     );
   } catch (error) {

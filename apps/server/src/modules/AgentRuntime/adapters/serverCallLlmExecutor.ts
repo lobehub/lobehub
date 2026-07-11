@@ -1,16 +1,17 @@
 import {
   type AgentEvent,
-  type AgentInstruction,
-  type CallLLMPayload,
+  type AgentState,
+  type ContextBuildOutput,
   type GeneralAgentCallLLMResultPayload,
   getLLMRetryDelayMs,
-  type InstructionExecutor,
+  type InstructionExecutionResult,
+  type LLMTransport,
   resolveLLMMaxAttempts,
   resolveLLMRetryBudget,
   shouldRetryLLM,
 } from '@lobechat/agent-runtime';
 import { BRANDING_PROVIDER } from '@lobechat/business-const';
-import { type ChatStreamPayload, ModelEmptyError } from '@lobechat/model-runtime';
+import { ModelEmptyError } from '@lobechat/model-runtime';
 import {
   context as otelContext,
   SpanKind,
@@ -24,26 +25,23 @@ import {
   tracer as agentRuntimeTracer,
 } from '@lobechat/observability-otel/modules/agent-runtime';
 
-import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
-
 import { type RuntimeExecutorContext } from '../context';
 import { isOperationInterrupted, log, sleep } from '../executorHelpers';
 import { formatErrorEventData } from '../formatErrorEventData';
 import { classifyLLMError } from '../llmErrorClassification';
-import { createServerCallLlmAttempt } from './serverCallLlmAttempt';
-import { buildServerCallLlmContext } from './serverCallLlmContextBuilder';
 import {
   finalizeServerCallLlmResult,
   persistInterruptedServerCallLlmResult,
 } from './serverCallLlmFinalizer';
-import type { ServerCallLlmTooling } from './serverCallLlmTooling';
 
 interface ServerCallLlmExecutionContext {
   assistantMessage: { id: string };
+  context: ContextBuildOutput;
   model: string;
   provider: string;
+  runAttempt: NonNullable<LLMTransport['runAttempt']>;
+  state: AgentState;
   stepLabel?: string;
-  tooling: ServerCallLlmTooling;
 }
 
 const SERVER_LLM_RETRY_POLICY = {
@@ -51,22 +49,29 @@ const SERVER_LLM_RETRY_POLICY = {
   noRetryProviders: [BRANDING_PROVIDER],
 };
 
-export const callLlm =
-  (ctx: RuntimeExecutorContext, prepared: ServerCallLlmExecutionContext): InstructionExecutor =>
-  async (instruction, state) => {
-    const { payload } = instruction as Extract<AgentInstruction, { type: 'call_llm' }>;
-    const llmPayload = payload as CallLLMPayload;
+class ServerCallLlmTurn {
+  constructor(
+    private readonly ctx: RuntimeExecutorContext,
+    private readonly prepared: ServerCallLlmExecutionContext,
+  ) {}
+
+  async execute(): Promise<InstructionExecutionResult> {
+    const { ctx, prepared } = this;
+    const { state } = prepared;
     const { operationId, stepIndex, streamManager } = ctx;
     const events: AgentEvent[] = [];
     let visibleOutputEndPublishedStepIndex: number | undefined;
     const {
       assistantMessage: assistantMessageItem,
+      context,
       model,
       provider,
+      runAttempt,
       stepLabel,
-      tooling,
     } = prepared;
-    const { resolved, tools } = tooling;
+    const { messages: preparedMessages, replayAssistantReasoning: shouldReplayAssistantReasoning } =
+      context;
+    const processedMessages = preparedMessages as Array<{ role?: string }>;
     const operationLogId = `${operationId}:${stepIndex}`;
     log(
       '[%s][call_llm] Starting operation with prepared assistant message: %s',
@@ -75,19 +80,9 @@ export const callLlm =
     );
 
     try {
-      const {
-        preserveThinkingForPayload,
-        processedMessages,
-        resolvedExtendParams,
-        shouldReplayAssistantReasoning,
-      } = await buildServerCallLlmContext({
-        ctx,
-        llmPayload,
-        model,
-        provider,
-        state,
-        tooling,
-      });
+      if (!context.resolvedTools) {
+        throw new Error('Resolved tools are required for a server LLM turn');
+      }
 
       // A turn must carry at least one non-system message. Anthropic-compatible
       // providers (anthropic / deepseek) move `role: system` into a separate
@@ -105,29 +100,7 @@ export const callLlm =
         );
       }
 
-      // Initialize ModelRuntime (read user's keyVaults from database)
-      const modelRuntime = await initModelRuntimeFromDB(
-        ctx.serverDB,
-        ctx.userId!,
-        provider,
-        ctx.workspaceId,
-      );
-
-      // Construct ChatStreamPayload
       const stream = ctx.stream ?? true;
-      const chatPayload = {
-        messages: processedMessages,
-        model,
-        stream,
-        tools,
-        // ModelExtendParams keeps provider-specific effort/thinking values as loose
-        // strings (e.g. hy3's 'no_think'); the runtime payload narrows them, so cast.
-        ...(resolvedExtendParams as Partial<ChatStreamPayload>),
-        ...(typeof preserveThinkingForPayload === 'boolean' && {
-          preserveThinking: preserveThinkingForPayload,
-        }),
-      };
-
       const maxAttempts = resolveLLMMaxAttempts(provider, SERVER_LLM_RETRY_POLICY);
 
       // OTel chat span — wraps all retry attempts; TTFT recorded on the first
@@ -154,32 +127,27 @@ export const callLlm =
       try {
         return await otelContext.with(chatCtx, async () => {
           for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-            const llmAttempt = createServerCallLlmAttempt({
+            const execution = await runAttempt({
               attempt,
-              chatPayload,
-              ctx,
+              context,
               events,
               maxAttempts,
-              messageCount: processedMessages.length,
               model,
-              modelRuntime,
               onFirstChunk,
-              operationLogId,
               provider,
-              resolved,
-              topicId: state.metadata?.topicId,
-              trigger: state.metadata?.trigger,
+              state,
             });
+            const llmAttempt = execution.output;
 
             try {
-              await llmAttempt.execute();
+              if (!execution.ok) throw execution.error;
+
               const {
                 answerSalvagedFromReasoning,
                 finishReason: currentStepFinishReason,
                 grounding,
                 imageList,
                 speed: currentStepSpeed,
-                streamSink,
                 toolCalls: tool_calls,
                 toolsCalling,
                 usage: currentStepUsage,
@@ -188,9 +156,9 @@ export const callLlm =
               // Add a complete llm_stream event (including all streaming chunks)
               events.push({
                 result: {
-                  content: streamSink.content,
+                  content: llmAttempt.content,
                   finishReason: currentStepFinishReason,
-                  reasoning: streamSink.thinkingContent,
+                  reasoning: llmAttempt.reasoning,
                   tool_calls,
                   usage: currentStepUsage,
                 },
@@ -200,11 +168,11 @@ export const callLlm =
               // Publish stream end event
               await streamManager.publishStreamEvent(operationId, {
                 data: {
-                  finalContent: streamSink.content,
+                  finalContent: llmAttempt.content,
                   grounding,
                   ...(stepLabel && { stepLabel }),
                   imageList: imageList.length > 0 ? imageList : undefined,
-                  reasoning: streamSink.thinkingContent || undefined,
+                  reasoning: llmAttempt.reasoning || undefined,
                   toolsCalling,
                   usage: currentStepUsage,
                 },
@@ -250,7 +218,7 @@ export const callLlm =
                 shouldReplayAssistantReasoning,
                 state,
                 stepLabel,
-                streamOutput: streamSink,
+                streamOutput: llmAttempt,
                 toolCalls: tool_calls,
                 toolsCalling,
                 visibleOutputEndPublishedStepIndex,
@@ -276,7 +244,7 @@ export const callLlm =
                     hasToolsCalling: toolsCalling.length > 0,
                     // Pass assistant message ID as parentMessageId for tool calls
                     parentMessageId: assistantMessageItem.id,
-                    result: { content: streamSink.content, tool_calls },
+                    result: { content: llmAttempt.content, tool_calls },
                     toolsCalling,
                   } as GeneralAgentCallLLMResultPayload,
                   phase: 'llm_result' as const,
@@ -291,8 +259,6 @@ export const callLlm =
                 },
               };
             } catch (error) {
-              llmAttempt.streamSink.clearBuffers();
-
               const classified = classifyLLMError(error);
               const interrupted = await isOperationInterrupted(ctx);
 
@@ -358,7 +324,7 @@ export const callLlm =
                   currentStepUsage: llmAttempt.usage,
                   messageModel: ctx.messageModel,
                   operationLogId,
-                  streamOutput: llmAttempt.streamSink,
+                  streamOutput: llmAttempt,
                   toolsCalling: llmAttempt.toolsCalling,
                 });
               }
@@ -393,4 +359,10 @@ export const callLlm =
       );
       throw error;
     }
-  };
+  }
+}
+
+export const executeServerCallLlmTurn = (
+  ctx: RuntimeExecutorContext,
+  prepared: ServerCallLlmExecutionContext,
+): Promise<InstructionExecutionResult> => new ServerCallLlmTurn(ctx, prepared).execute();

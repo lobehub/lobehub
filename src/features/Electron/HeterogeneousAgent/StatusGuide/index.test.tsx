@@ -17,8 +17,16 @@ vi.mock('@lobehub/icons', () => ({
 vi.mock('@lobehub/ui', () => ({
   Avatar: ({ avatar }: { avatar?: ReactNode }) => <div>{avatar}</div>,
   Block: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  Button: ({ children, onClick }: { children?: ReactNode; onClick?: () => void }) => (
-    <button type="button" onClick={onClick}>
+  Button: ({
+    children,
+    onClick,
+    type,
+  }: {
+    children?: ReactNode;
+    onClick?: () => void;
+    type?: string;
+  }) => (
+    <button data-variant={type} type="button" onClick={onClick}>
       {children}
     </button>
   ),
@@ -34,6 +42,8 @@ vi.mock('@lobehub/ui', () => ({
 }));
 
 vi.mock('antd-style', () => ({
+  createStaticStyles: (factory: (helpers: { css: () => string }) => Record<string, string>) =>
+    factory({ css: () => 'mock-class' }),
   cssVar: {
     colorBgElevated: 'transparent',
     colorFillQuaternary: 'transparent',
@@ -56,7 +66,13 @@ vi.mock('react-i18next', () => ({
     },
     t: (
       key: string,
-      options?: { count?: number; duration?: string; message?: string; name?: string },
+      options?: {
+        count?: number;
+        duration?: string;
+        message?: string;
+        name?: string;
+        resetAt?: string;
+      },
     ) => {
       if (key === 'cliRateLimitGuide.relative.day') {
         return `${options?.count ?? 0} ${(options?.count ?? 0) === 1 ? 'day' : 'days'}`;
@@ -71,7 +87,11 @@ vi.mock('react-i18next', () => ({
       }
 
       if (key === 'cliRateLimitGuide.resetInApprox') {
-        return `Resets in about ${options?.duration ?? ''}`;
+        return `About ${options?.duration ?? ''}`;
+      }
+
+      if (key === 'cliRateLimitGuide.afterReset') {
+        return `This account has reached its weekly usage limit. You can continue after ${options?.resetAt ?? ''}.`;
       }
 
       if (key === 'cliOverloadedGuide.autoRetry.status') {
@@ -100,14 +120,16 @@ vi.mock('react-i18next', () => ({
               'Wait a few seconds and retry. If it keeps failing, the provider may be having a wider incident.',
             'cliOverloadedGuide.title': `${options?.name ?? ''} is temporarily overloaded`,
             'cliRateLimitGuide.actions.openSystemTools': 'Open System Tools',
-            'cliRateLimitGuide.afterReset':
-              'Wait until the reset time, then retry your message. If you are using API authorization, you can also check your provider quota and billing status.',
+            'cliRateLimitGuide.actions.retry': 'Retry message',
             'cliRateLimitGuide.desc': `${options?.name ?? ''} has reached its current usage limit and cannot continue this run right now.`,
-            'cliRateLimitGuide.limitType': 'Limit window',
-            'cliRateLimitGuide.limitTypes.weekCycle': 'Week cycle',
+            'cliRateLimitGuide.limitType': 'Quota cycle',
+            'cliRateLimitGuide.limitTypes.weekCycle': 'Weekly',
+            'cliRateLimitGuide.relative.resetComplete': 'Reset complete',
             'cliRateLimitGuide.relative.soon': 'Resets soon',
-            'cliRateLimitGuide.resetAt': 'Resets at',
-            'cliRateLimitGuide.title': `${options?.name ?? ''} usage limit reached`,
+            'cliRateLimitGuide.resetAt': 'Reset time',
+            'cliRateLimitGuide.resetIn': 'Time remaining',
+            'cliRateLimitGuide.resetUnknown': 'the quota resets',
+            'cliRateLimitGuide.title': `${options?.name ?? ''} is temporarily unavailable`,
             'claudeCodeInstallGuide.actions.openDocs': 'Open Install Guide',
             'claudeCodeInstallGuide.actions.openSystemTools': 'Open System Tools',
             'claudeCodeInstallGuide.afterInstall':
@@ -234,6 +256,7 @@ describe('HeterogeneousAgentStatusGuide', () => {
   it('renders rate-limit guidance with structured metadata', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-04-23T13:27:00+08:00'));
+    const onRetry = vi.fn();
 
     try {
       render(
@@ -248,14 +271,15 @@ describe('HeterogeneousAgentStatusGuide', () => {
               resetsAt: 1_776_992_400,
             },
           }}
+          onRetry={onRetry}
         />,
       );
 
-      expect(screen.getByText('Claude Code usage limit reached')).toBeInTheDocument();
-      expect(screen.getByText(/Resets in about 19 hours 33 minutes/)).toBeInTheDocument();
+      expect(screen.getByText('Claude Code is temporarily unavailable')).toBeInTheDocument();
+      expect(screen.getByText('About 19 hours 33 minutes')).toBeInTheDocument();
       expect(
         screen.getByText(
-          'Wait until the reset time, then retry your message. If you are using API authorization, you can also check your provider quota and billing status.',
+          /This account has reached its weekly usage limit. You can continue after .*\./,
         ),
       ).toBeInTheDocument();
       expect(
@@ -263,13 +287,50 @@ describe('HeterogeneousAgentStatusGuide', () => {
           'Claude Code has reached its current usage limit and cannot continue this run right now.',
         ),
       ).not.toBeInTheDocument();
-      expect(screen.getByText('Resets at')).toBeInTheDocument();
-      expect(screen.getByText('Limit window')).toBeInTheDocument();
-      expect(screen.getByText('Week cycle')).toBeInTheDocument();
-      expect(screen.getByText(/Fri 9:00 AM \(Asia\/Shanghai\)/)).toBeInTheDocument();
-      expect(screen.getByText(/Asia\/Shanghai/)).toBeInTheDocument();
+      expect(screen.getByText('Reset time')).toBeInTheDocument();
+      expect(screen.getByText('Time remaining')).toBeInTheDocument();
+      expect(screen.getByText('Quota cycle')).toBeInTheDocument();
+      expect(screen.getByText('Weekly')).toBeInTheDocument();
+      expect(screen.getAllByText(/Fri, Apr 24, 9:00 AM \(Asia\/Shanghai\)/)).toHaveLength(2);
       expect(screen.queryByText('Open Install Guide')).not.toBeInTheDocument();
       expect(screen.queryByText('Recommended install')).not.toBeInTheDocument();
+      const retryButton = screen.getByRole('button', { name: 'Retry message' });
+      expect(retryButton).not.toHaveAttribute('data-variant', 'primary');
+      retryButton.click();
+      expect(onRetry).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('allows retry after the quota reset time has passed', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-04-25T13:27:00+08:00'));
+    const onRetry = vi.fn();
+
+    try {
+      render(
+        <HeterogeneousAgentStatusGuide
+          agentType={'claude-code'}
+          error={{
+            agentType: 'claude-code',
+            code: HeterogeneousAgentSessionErrorCode.RateLimit,
+            message: "You've hit your limit",
+            rateLimitInfo: {
+              rateLimitType: 'seven_day',
+              resetsAt: 1_776_992_400,
+            },
+          }}
+          onRetry={onRetry}
+        />,
+      );
+
+      const retryButton = screen.getByRole('button', { name: 'Retry message' });
+      expect(screen.getByText('Reset complete')).toBeInTheDocument();
+      expect(screen.queryByText('Resets soon')).not.toBeInTheDocument();
+      expect(retryButton).toHaveAttribute('data-variant', 'primary');
+      retryButton.click();
+      expect(onRetry).toHaveBeenCalledTimes(1);
     } finally {
       vi.useRealTimers();
     }
@@ -391,7 +452,7 @@ describe('HeterogeneousAgentStatusGuide', () => {
         />,
       );
 
-      expect(screen.getByText(/Fri 9:00 AM \(Asia\/Shanghai\)/)).toBeInTheDocument();
+      expect(screen.getAllByText(/Fri 9:00 AM \(Asia\/Shanghai\)/)).toHaveLength(2);
       expect(dateTimeFormatSpy).toHaveBeenCalledWith(
         'en-US',
         expect.objectContaining({

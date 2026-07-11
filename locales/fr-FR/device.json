@@ -70,6 +70,7 @@
   "workingDirectory.removeWorktreeAction": "Supprimer le worktree",
   "workingDirectory.removeWorktreeConfirm": "Supprimer le worktree « {{name}} » ? Cela supprime le répertoire du worktree mais conserve sa branche. Git refusera si des modifications non validées sont présentes.",
   "workingDirectory.removeWorktreeFailed": "Échec de la suppression du worktree",
+  "workingDirectory.removeWorktreePending": "Suppression de l'arborescence de travail « {{name}} » en cours…",
   "workingDirectory.removeWorktreeSuccess": "Worktree supprimé",
   "workingDirectory.removeWorktreeTitle": "Supprimer le worktree",
   "workingDirectory.removed": "Supprimé « {{name}} »",

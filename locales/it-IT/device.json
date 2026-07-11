@@ -70,6 +70,7 @@
   "workingDirectory.removeWorktreeAction": "Elimina worktree",
   "workingDirectory.removeWorktreeConfirm": "Eliminare il worktree “{{name}}”? Questo rimuove la directory del worktree ma mantiene il suo ramo. Git rifiuterà se ci sono modifiche non salvate.",
   "workingDirectory.removeWorktreeFailed": "Eliminazione del worktree fallita",
+  "workingDirectory.removeWorktreePending": "Eliminazione della worktree “{{name}}”…",
   "workingDirectory.removeWorktreeSuccess": "Worktree eliminato",
   "workingDirectory.removeWorktreeTitle": "Elimina worktree",
   "workingDirectory.removed": "Eliminato “{{name}}”",

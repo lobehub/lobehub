@@ -7,6 +7,24 @@
 
 ---
 
+## Case 18 — Treating a status badge as proof that the error message rendered
+
+**Wrong approach**: marking an error-state UI case as passed because the platform page showed
+the `Failed` badge, while the screenshot only contained an unrelated configuration reminder
+and did not show the error alert or its translated message.
+
+**Why it's wrong**: the badge proves only that a failed runtime state reached the page. It does
+not prove that `errorCode` was translated and presented to the user, which is the core assertion
+of an error-message verification.
+
+**What it breaks**: a report can claim that users receive an actionable explanation while its
+visual evidence shows no explanation at all.
+
+**Correct approach**: for an error-presentation case, visually require all three signals in the
+same screenshot: the target platform, the failed status, and the error alert containing the
+expected user-facing message. Any unrelated warning or setup reminder does not satisfy the
+error-message assertion.
+
 ## Case 1 — Judging `passed` from heuristics instead of looking at the screenshot
 
 **Wrong approach**: after navigating to a surface, deciding "renders fine /

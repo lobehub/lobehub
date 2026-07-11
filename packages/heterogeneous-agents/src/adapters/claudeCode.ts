@@ -12,6 +12,7 @@
  *   {type: 'assistant', message: {id, content: [{type: 'tool_use', id, name, input}], ...}}
  *   {type: 'user', message: {content: [{type: 'tool_result', tool_use_id, content}]}}
  *   {type: 'assistant', message: {id: <NEW>, content: [{type: 'text', text}], ...}}
+ *   {type: 'system', subtype: 'api_retry', api_error_status, attempt, max_attempts, ...}
  *   {type: 'result', is_error, result, ...}
  *   {type: 'rate_limit_event', ...}
  *
@@ -274,6 +275,125 @@ const getCliResultMessage = (result: unknown): string | undefined => {
   } catch {
     return undefined;
   }
+};
+
+const asRecord = (value: unknown): Record<string, unknown> | undefined =>
+  value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+
+const getPathValue = (raw: Record<string, unknown>, path: string[]): unknown => {
+  let current: unknown = raw;
+  for (const key of path) {
+    const record = asRecord(current);
+    if (!record || !(key in record)) return undefined;
+    current = record[key];
+  }
+  return current;
+};
+
+const toFiniteNumber = (value: unknown): number | undefined => {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+};
+
+const pickNumber = (raw: Record<string, unknown>, paths: string[][]): number | undefined => {
+  for (const path of paths) {
+    const value = toFiniteNumber(getPathValue(raw, path));
+    if (value !== undefined) return value;
+  }
+};
+
+const pickString = (raw: Record<string, unknown>, paths: string[][]): string | undefined => {
+  for (const path of paths) {
+    const value = getPathValue(raw, path);
+    if (typeof value === 'string' && value.trim()) return value;
+  }
+};
+
+const getApiRetryError = (
+  raw: Record<string, unknown>,
+  errorStatus?: number,
+): string | undefined => {
+  const errorType = pickString(raw, [
+    ['error', 'error', 'type'],
+    ['error', 'type'],
+    ['error_type'],
+    ['errorType'],
+    ['kind'],
+    ['code'],
+  ]);
+  const message = pickString(raw, [
+    ['error', 'error', 'message'],
+    ['error', 'message'],
+    ['message'],
+    ['result'],
+  ]);
+  const errorText = errorType || message;
+
+  if (
+    errorStatus === 529 ||
+    (!!errorText && CLI_OVERLOADED_PATTERNS.some((pattern) => pattern.test(errorText)))
+  ) {
+    return 'overloaded';
+  }
+
+  return errorText;
+};
+
+const getApiRetryData = (rawValue: unknown) => {
+  const raw = asRecord(rawValue);
+  if (!raw) {
+    return { agentType: 'claude-code' };
+  }
+
+  const errorStatus = pickNumber(raw, [
+    ['api_error_status'],
+    ['apiErrorStatus'],
+    ['status'],
+    ['status_code'],
+    ['statusCode'],
+    ['error', 'status'],
+    ['error', 'status_code'],
+    ['error', 'statusCode'],
+    ['error', 'code'],
+    ['error', 'error', 'status'],
+    ['error', 'error', 'status_code'],
+    ['error', 'error', 'statusCode'],
+    ['error', 'error', 'code'],
+  ]);
+
+  return {
+    agentType: 'claude-code',
+    attempt: pickNumber(raw, [
+      ['attempt'],
+      ['retry_attempt'],
+      ['retryAttempt'],
+      ['retry', 'attempt'],
+    ]),
+    delayMs: pickNumber(raw, [
+      ['delay_ms'],
+      ['delayMs'],
+      ['retry_delay_ms'],
+      ['retryDelayMs'],
+      ['retry_after_ms'],
+      ['retryAfterMs'],
+      ['retry', 'delay_ms'],
+      ['retry', 'delayMs'],
+    ]),
+    error: getApiRetryError(raw, errorStatus),
+    errorStatus,
+    maxAttempts: pickNumber(raw, [
+      ['max_attempts'],
+      ['maxAttempts'],
+      ['retry', 'max_attempts'],
+      ['retry', 'maxAttempts'],
+    ]),
+    provider: typeof raw.provider === 'string' ? raw.provider : 'claude-code',
+  };
 };
 
 const getAuthRequiredTerminalError = (
@@ -742,6 +862,10 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
   // ─── Private handlers ───
 
   private handleSystem(raw: any): HeterogeneousAgentEvent[] {
+    if (raw.subtype === 'api_retry') {
+      return [this.makeEvent('stream_retry', getApiRetryData(raw))];
+    }
+
     // CC's long-running task lifecycle (Monitor, etc., ).
     // `task_started` registers a task that may fire callback turns;
     // `task_notification` (terminal) drops it. While a task is alive,

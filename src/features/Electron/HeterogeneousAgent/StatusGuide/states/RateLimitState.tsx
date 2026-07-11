@@ -1,10 +1,27 @@
-import { Flexbox, Text } from '@lobehub/ui';
+import { Text } from '@lobehub/ui';
+import { createStaticStyles } from 'antd-style';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import GuideActions from '../GuideActions';
 import GuideShell from '../GuideShell';
 import type { HeterogeneousAgentGuideStateProps } from '../types';
+
+const styles = createStaticStyles(({ css }) => ({
+  details: css`
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: 8px 12px;
+    align-items: baseline;
+  `,
+  label: css`
+    font-size: 12px;
+    white-space: nowrap;
+  `,
+  value: css`
+    min-width: 0;
+  `,
+}));
 
 const extractTimezoneLabel = (value?: string) => {
   if (!value) return;
@@ -13,28 +30,25 @@ const extractTimezoneLabel = (value?: string) => {
   return match?.[1];
 };
 
-const RateLimitState = ({
-  config,
-  error,
-  onOpenSystemTools,
-  onRetry,
-  variant,
-}: HeterogeneousAgentGuideStateProps) => {
+const RateLimitState = ({ config, error, onRetry, variant }: HeterogeneousAgentGuideStateProps) => {
   const { t, i18n } = useTranslation('chat');
   const rawErrorDetails = error?.stderr || error?.message;
+  const resetsAt = error?.rateLimitInfo?.resetsAt;
+  const canRetry = !resetsAt || resetsAt * 1000 <= Date.now();
   const dateLocale = i18n.resolvedLanguage || i18n.language || undefined;
   const timezoneLabel = useMemo(
     () => extractTimezoneLabel(rawErrorDetails) || Intl.DateTimeFormat().resolvedOptions().timeZone,
     [rawErrorDetails],
   );
   const formattedResetAt = useMemo(() => {
-    const resetsAt = error?.rateLimitInfo?.resetsAt;
     if (!resetsAt) return;
 
     try {
       return new Intl.DateTimeFormat(dateLocale, {
+        day: 'numeric',
         hour: 'numeric',
         minute: '2-digit',
+        month: 'short',
         ...(timezoneLabel ? { timeZone: timezoneLabel } : {}),
         weekday: 'short',
       }).format(new Date(resetsAt * 1000));
@@ -48,7 +62,7 @@ const RateLimitState = ({
         return;
       }
     }
-  }, [dateLocale, error?.rateLimitInfo?.resetsAt, timezoneLabel]);
+  }, [dateLocale, resetsAt, timezoneLabel]);
   const rateLimitTypeLabel = useMemo(() => {
     const rateLimitType = error?.rateLimitInfo?.rateLimitType;
     if (!rateLimitType) return;
@@ -60,14 +74,13 @@ const RateLimitState = ({
     return rateLimitType.replaceAll('_', ' ');
   }, [error?.rateLimitInfo?.rateLimitType, t]);
   const relativeResetText = useMemo(() => {
-    const resetsAt = error?.rateLimitInfo?.resetsAt;
     if (!resetsAt) return;
 
     const now = Date.now();
     const diffMs = Math.max(0, resetsAt * 1000 - now);
     const totalMinutes = Math.floor(diffMs / 60_000);
 
-    if (totalMinutes <= 0) return t('cliRateLimitGuide.relative.soon');
+    if (totalMinutes <= 0) return t('cliRateLimitGuide.relative.resetComplete');
 
     const days = Math.floor(totalMinutes / (24 * 60));
     const hours = Math.floor((totalMinutes % (24 * 60)) / 60);
@@ -82,56 +95,61 @@ const RateLimitState = ({
 
     return parts.length > 0
       ? t('cliRateLimitGuide.resetInApprox', { duration: parts.slice(0, 2).join(' ') })
-      : t('cliRateLimitGuide.relative.soon');
-  }, [error?.rateLimitInfo?.resetsAt, t]);
+      : t('cliRateLimitGuide.relative.resetComplete');
+  }, [resetsAt, t]);
 
   return (
     <GuideShell
-      headerDescription={<Text type="secondary">{t('cliRateLimitGuide.afterReset')}</Text>}
       icon={<config.icon size={24} />}
       title={t('cliRateLimitGuide.title', { name: config.title })}
       variant={variant}
       actions={
         <GuideActions
           retryLabel={t('cliRateLimitGuide.actions.retry')}
-          openSystemToolsLabel={
-            onRetry ? undefined : t('cliRateLimitGuide.actions.openSystemTools')
-          }
-          onOpenSystemTools={onRetry ? undefined : onOpenSystemTools}
+          retryPrimary={canRetry}
           onRetry={onRetry}
         />
       }
+      headerDescription={
+        <Text type="secondary">
+          {t('cliRateLimitGuide.afterReset', {
+            resetAt: formattedResetAt
+              ? `${formattedResetAt}${timezoneLabel ? ` (${timezoneLabel})` : ''}`
+              : t('cliRateLimitGuide.resetUnknown'),
+          })}
+        </Text>
+      }
     >
-      <Flexbox gap={8}>
+      <div className={styles.details}>
         {formattedResetAt && (
-          <Flexbox horizontal gap={8} style={{ alignItems: 'baseline' }}>
-            <Text strong style={{ fontSize: 12 }}>
+          <>
+            <Text strong className={styles.label}>
               {t('cliRateLimitGuide.resetAt')}
             </Text>
-            <Flexbox
-              horizontal
-              gap={8}
-              style={{ alignItems: 'baseline', flexWrap: 'nowrap', whiteSpace: 'nowrap' }}
-            >
+            <div className={styles.value}>
               <Text>{`${formattedResetAt}${timezoneLabel ? ` (${timezoneLabel})` : ''}`}</Text>
-              {relativeResetText && (
-                <Text style={{ fontSize: 12, whiteSpace: 'nowrap' }} type="secondary">
-                  {relativeResetText}
-                </Text>
-              )}
-            </Flexbox>
-          </Flexbox>
+            </div>
+          </>
+        )}
+
+        {relativeResetText && (
+          <>
+            <Text strong className={styles.label}>
+              {t('cliRateLimitGuide.resetIn')}
+            </Text>
+            <Text className={styles.value}>{relativeResetText}</Text>
+          </>
         )}
 
         {rateLimitTypeLabel && (
-          <Flexbox horizontal align="center" gap={8}>
-            <Text strong style={{ fontSize: 12 }}>
+          <>
+            <Text strong className={styles.label}>
               {t('cliRateLimitGuide.limitType')}
             </Text>
-            <Text>{rateLimitTypeLabel}</Text>
-          </Flexbox>
+            <Text className={styles.value}>{rateLimitTypeLabel}</Text>
+          </>
         )}
-      </Flexbox>
+      </div>
     </GuideShell>
   );
 };

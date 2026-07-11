@@ -137,6 +137,7 @@ const styles = createStaticStyles(({ css }) => ({
     font-weight: 500;
     color: ${cssVar.colorText};
     text-overflow: ellipsis;
+    text-transform: none;
     white-space: nowrap;
   `,
   count: css`
@@ -165,17 +166,6 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   iconPinned: css`
     color: ${cssVar.colorInfo};
-  `,
-  fixedIndicator: css`
-    display: inline-flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-
-    width: 24px;
-    height: 24px;
-
-    color: ${cssVar.colorTextQuaternary};
   `,
   policyButton: css`
     cursor: pointer;
@@ -343,25 +333,6 @@ const styles = createStaticStyles(({ css }) => ({
     width: 100%;
     min-width: 0;
   `,
-  toolRowDisabled: css`
-    opacity: 0.5;
-  `,
-  disabledTag: css`
-    display: inline-flex;
-    flex: none;
-    gap: 3px;
-    align-items: center;
-
-    padding-block: 1px;
-    padding-inline: 4px;
-    border: 1px solid ${cssVar.colorErrorBorder};
-    border-radius: 4px;
-
-    font-size: 12px;
-    color: ${cssVar.colorError};
-
-    background: ${cssVar.colorErrorBg};
-  `,
   toolTrailing: css`
     display: inline-flex;
     flex: none;
@@ -430,6 +401,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   const { updateAgentChatConfig } = useUpdateAgentConfig();
   const [pinnedOpen, setPinnedOpen] = useState(true);
   const [autoOpen, setAutoOpen] = useState(true);
+  const [disabledOpen, setDisabledOpen] = useState(true);
   const [policyOpenId, setPolicyOpenId] = useState<string | null>(null);
   const [searchKeyword, setSearchKeyword] = useState('');
   const [autoModeLoading, setAutoModeLoading] = useState(false);
@@ -466,9 +438,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   ]);
   const checkedSet = useMemo(() => new Set(checked), [checked]);
   // Disabled identifiers, read from the raw (unfiltered) plugins config —
-  // needed to grey out an Auto-group item and to offer the third policy-menu
-  // option. Disabled items stay in the Auto group (no separate group), so
-  // `allPinnedItems`/`allAutoItems` below keep splitting on `checkedSet` alone.
+  // needed to render the dedicated Disabled group and policy-menu state.
   const rawPlugins = useAgentStore(
     (s) => agentByIdSelectors.getAgentConfigById(agentId)(s)?.plugins,
   );
@@ -531,12 +501,14 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
       // connected yet (pending auth / re-authorize), where activation is
       // meaningless but the user still needs a way to remove the entry.
       deleteOnly = false,
+      supportedModes: SkillPolicyMode[] = ['pinned', 'auto', 'disabled'],
+      defaultMode: SkillPolicyMode = 'auto',
     ) => {
       const mode: SkillPolicyMode = checkedSet.has(id)
         ? 'pinned'
         : disabledIdSet.has(id)
           ? 'disabled'
-          : 'auto';
+          : defaultMode;
       const renderCheck = (value: SkillPolicyMode) =>
         mode === value ? (
           <span className={cx(styles.policyCheck)}>
@@ -571,6 +543,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
           onContextMenu={(event) => event.stopPropagation()}
         >
           {!deleteOnly &&
+            supportedModes.includes('pinned') &&
             renderPolicyItem(
               'pinned',
               <Icon
@@ -580,6 +553,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
               />,
             )}
           {!deleteOnly &&
+            supportedModes.includes('auto') &&
             renderPolicyItem(
               'auto',
               <Icon
@@ -589,6 +563,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
               />,
             )}
           {!deleteOnly &&
+            supportedModes.includes('disabled') &&
             renderPolicyItem(
               'disabled',
               <Icon
@@ -705,39 +680,27 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
       badge?: ReactNode,
       icon?: ReactNode,
       extraTag?: ReactNode,
-    ) => {
-      // Disabled items stay in the Auto group (no separate group) — greyed out
-      // + relabeled in place, per the confirmed UI plan.
-      const isDisabled = disabledIdSet.has(id);
-
-      return (
-        <span
-          className={cx(styles.toolRow, isDisabled && styles.toolRowDisabled)}
-          onContextMenu={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            openSkillPolicyMenu(id);
-          }}
-        >
-          <span className={cx(styles.toolLabel)}>
-            {icon}
-            <span className={cx(styles.toolLabelText)}>{label}</span>
-            {isDisabled && (
-              <span className={cx(styles.disabledTag)}>
-                <Icon icon={Ban} size={11} />
-                {t('tools.activation.disabled')}
-              </span>
-            )}
-            {extraTag}
-          </span>
-          <span className={cx(styles.toolTrailing)}>
-            {badge && <span className={cx(styles.typeTag)}>{badge}</span>}
-            {action}
-          </span>
+    ) => (
+      <span
+        className={cx(styles.toolRow)}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          openSkillPolicyMenu(id);
+        }}
+      >
+        <span className={cx(styles.toolLabel)}>
+          {icon}
+          <span className={cx(styles.toolLabelText)}>{label}</span>
+          {extraTag}
         </span>
-      );
-    },
-    [openSkillPolicyMenu, disabledIdSet, t],
+        <span className={cx(styles.toolTrailing)}>
+          {badge && <span className={cx(styles.typeTag)}>{badge}</span>}
+          {action}
+        </span>
+      </span>
+    ),
+    [openSkillPolicyMenu],
   );
 
   const createManagedSkillItem = useCallback(
@@ -749,16 +712,20 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
       icon,
       id,
       popoverContent,
+      defaultMode,
+      supportedModes,
       searchText,
       title,
     }: {
       badge?: ReactNode;
       configureConfig?: SkillConfigureConfig;
+      defaultMode?: SkillPolicyMode;
       deleteConfig?: SkillDeleteConfig;
       extraTag?: ReactNode;
       icon: ReactNode;
       id: string;
       popoverContent?: ReactNode;
+      supportedModes?: SkillPolicyMode[];
       searchText?: string;
       title: ReactNode;
     }): SkillMenuItem =>
@@ -768,7 +735,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
         label: renderToolLabel(
           id,
           title,
-          renderPolicyMenu(id, deleteConfig, configureConfig),
+          renderPolicyMenu(id, deleteConfig, configureConfig, false, supportedModes, defaultMode),
           badge,
           icon,
           extraTag,
@@ -1141,9 +1108,8 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     [filteredBuiltinList, t, createManagedSkillItem, uninstallBuiltinTool],
   );
 
-  // Application-fixed tool items (read-only). Always-on tools owned by the runtime
-  // (lobe-agent + always-on infra), so they get a fixed indicator instead of the policy
-  // menu and can't be switched to "auto" or uninstalled.
+  // Builtin runtime tools support an explicit pinned/disabled policy. They intentionally
+  // do not support "auto": when enabled, these foundational capabilities stay pinned.
   const fixedItems = useMemo(
     () =>
       fixedDisplayList.map((item) => {
@@ -1178,33 +1144,19 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
           />
         );
 
-        return {
-          closeOnClick: false,
-          key: item.identifier,
-          label: (
-            <span className={cx(styles.toolRow)}>
-              <span className={cx(styles.toolLabel)}>
-                {icon}
-                <span className={cx(styles.toolLabelText)}>{title}</span>
-                {officialTag}
-              </span>
-              <span className={cx(styles.toolTrailing)}>
-                <span className={cx(styles.typeTag)}>
-                  <Icon icon={Wrench} size={12} />
-                </span>
-                <Tooltip placement={'top'} title={t('tools.activation.fixed.hint')}>
-                  <span className={cx(styles.fixedIndicator)}>
-                    <Icon icon={Pin} size={15} />
-                  </span>
-                </Tooltip>
-              </span>
-            </span>
-          ),
+        return createManagedSkillItem({
+          badge: <Icon icon={Wrench} size={12} />,
+          defaultMode: 'pinned',
+          extraTag: officialTag,
+          icon,
+          id: item.identifier,
           popoverContent,
           searchText: `${title} ${item.identifier}`,
-        } as SkillMenuItem;
+          supportedModes: ['pinned', 'disabled'],
+          title,
+        });
       }),
-    [fixedDisplayList, t],
+    [createManagedSkillItem, fixedDisplayList, t],
   );
 
   // Builtin Agent Skills list items (grouped under LobeHub)
@@ -1511,10 +1463,17 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     );
   };
   const allPinnedItems = allSkillItems.filter((item) => checkedSet.has(String(item.key)));
-  const allAutoItems = allSkillItems.filter((item) => !checkedSet.has(String(item.key)));
-  // App-fixed tools always lead the pinned section, ahead of user-pinned plugins.
-  const pinnedItems = filterBySearch([...fixedItems, ...allPinnedItems]);
+  const allAutoItems = allSkillItems.filter(
+    (item) => !checkedSet.has(String(item.key)) && !disabledIdSet.has(String(item.key)),
+  );
+  const allDisabledItems = allSkillItems.filter((item) => disabledIdSet.has(String(item.key)));
+  const fixedPinnedItems = fixedItems.filter((item) => !disabledIdSet.has(String(item.key)));
+  const fixedDisabledItems = fixedItems.filter((item) => disabledIdSet.has(String(item.key)));
+  // Enabled builtin tools lead the pinned section. All disabled tools and skills live in
+  // their own section so "Auto" remains semantically accurate.
+  const pinnedItems = filterBySearch([...fixedPinnedItems, ...allPinnedItems]);
   const autoItems = filterBySearch(allAutoItems);
+  const disabledItems = filterBySearch([...fixedDisabledItems, ...allDisabledItems]);
 
   const renderActivationGroupLabel = ({
     autoSwitch,
@@ -1636,7 +1595,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
             children: pinnedOpen ? pinnedItems : [],
             key: 'pinned',
             label: renderActivationGroupLabel({
-              count: allPinnedItems.length,
+              count: fixedPinnedItems.length + allPinnedItems.length,
               icon: <Icon icon={Pin} size={14} />,
               open: pinnedOpen,
               title: t('tools.activation.pinned'),
@@ -1666,6 +1625,30 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
               open: autoOpen,
               title: t('tools.activation.auto'),
               onToggle: () => setAutoOpen((open) => !open),
+            }),
+            type: 'group' as const,
+          } as ItemType,
+        ]
+      : []),
+    ...(disabledItems.length > 0 && (pinnedItems.length > 0 || autoItems.length > 0)
+      ? [
+          {
+            key: 'skill-disabled-divider',
+            type: 'divider' as const,
+          } as ItemType,
+        ]
+      : []),
+    ...(disabledItems.length > 0
+      ? [
+          {
+            children: disabledOpen ? disabledItems : [],
+            key: 'disabled',
+            label: renderActivationGroupLabel({
+              count: fixedDisabledItems.length + allDisabledItems.length,
+              icon: <Icon icon={Ban} size={14} />,
+              open: disabledOpen,
+              title: t('tools.activation.disabled'),
+              onToggle: () => setDisabledOpen((open) => !open),
             }),
             type: 'group' as const,
           } as ItemType,
@@ -2037,6 +2020,6 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     marketFooter,
     marketHeader,
     marketItems,
-    pinnedCount: allPinnedItems.length + fixedItems.length,
+    pinnedCount: allPinnedItems.length + fixedPinnedItems.length,
   };
 };

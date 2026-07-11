@@ -102,15 +102,38 @@ const mapResponseFormatToResponsesText = (
   };
 };
 
+/**
+ * Payload handlers shared with the `supergrok` provider, which talks to the
+ * same api.x.ai endpoint (authenticated via OAuth instead of an API key).
+ */
+export const handleXAIChatCompletionPayload = (payload: ChatStreamPayload) =>
+  ({
+    ...pruneUnsupportedChatCompletionParameters(payload),
+    apiMode: 'responses',
+    stream: payload.stream ?? true,
+  }) as any;
+
+export const handleXAIResponsesPayload = (payload: ChatStreamPayload) => {
+  const { enabledSearch, response_format, text, tools, ...rest } =
+    stripUnsupportedPenaltyParameters(payload);
+  const sanitizedTools = sanitizeXAITools(tools);
+
+  const xaiTools = enabledSearch
+    ? [...(sanitizedTools || []), { type: 'web_search' }, { type: 'x_search' }]
+    : sanitizedTools;
+
+  return {
+    ...rest,
+    tools: xaiTools,
+    text: mapResponseFormatToResponsesText(response_format, text),
+    include: ['reasoning.encrypted_content'],
+  } as any;
+};
+
 export const LobeXAI = createOpenAICompatibleRuntime({
   baseURL: 'https://api.x.ai/v1',
   chatCompletion: {
-    handlePayload: (payload) =>
-      ({
-        ...pruneUnsupportedChatCompletionParameters(payload),
-        apiMode: 'responses',
-        stream: payload.stream ?? true,
-      }) as any,
+    handlePayload: handleXAIChatCompletionPayload,
     useResponse: true,
   },
   createImage: createXAIImage,
@@ -134,21 +157,6 @@ export const LobeXAI = createOpenAICompatibleRuntime({
   },
   provider: ModelProvider.XAI,
   responses: {
-    handlePayload: (payload) => {
-      const { enabledSearch, response_format, text, tools, ...rest } =
-        stripUnsupportedPenaltyParameters(payload);
-      const sanitizedTools = sanitizeXAITools(tools);
-
-      const xaiTools = enabledSearch
-        ? [...(sanitizedTools || []), { type: 'web_search' }, { type: 'x_search' }]
-        : sanitizedTools;
-
-      return {
-        ...rest,
-        tools: xaiTools,
-        text: mapResponseFormatToResponsesText(response_format, text),
-        include: ['reasoning.encrypted_content'],
-      } as any;
-    },
+    handlePayload: handleXAIResponsesPayload,
   },
 });

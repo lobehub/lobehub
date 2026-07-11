@@ -466,6 +466,10 @@ export class ChatPortalActionImpl {
     this.#get().pushPortalView({ artifact, type: PortalViewType.Artifact });
   };
 
+  openAgentDetail = (agentId: string): void => {
+    this.#get().pushPortalView({ agentId, type: PortalViewType.AgentDetail });
+  };
+
   openDocument = (documentId: string, agentDocumentId?: string): void => {
     this.#get().pushPortalView({ agentDocumentId, documentId, type: PortalViewType.Document });
   };

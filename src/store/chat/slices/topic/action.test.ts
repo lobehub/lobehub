@@ -839,11 +839,11 @@ describe('topic action', () => {
     });
   });
   describe('switchTopic', () => {
-    it('should update activeTopicId and call refreshMessages', async () => {
+    it('should update activeTopicId and softly revalidate messages', async () => {
       const topicId = 'topic-id';
       const { result } = renderHook(() => useChatStore());
 
-      const refreshMessagesSpy = vi.spyOn(result.current, 'refreshMessages');
+      const revalidateMessagesSpy = vi.spyOn(result.current, 'revalidateMessages');
       // Call the switchTopic action with the topicId
       await act(async () => {
         await result.current.switchTopic(topicId);
@@ -853,14 +853,14 @@ describe('topic action', () => {
       expect(useChatStore.getState().activeTopicId).toBe(topicId);
 
       // Verify that the refreshMessages was called to update the messages
-      expect(refreshMessagesSpy).toHaveBeenCalled();
+      expect(revalidateMessagesSpy).toHaveBeenCalled();
     });
 
     it('should support options object as second parameter', async () => {
       const topicId = 'topic-id';
       const { result } = renderHook(() => useChatStore());
 
-      const refreshMessagesSpy = vi.spyOn(result.current, 'refreshMessages');
+      const revalidateMessagesSpy = vi.spyOn(result.current, 'revalidateMessages');
 
       // Call with options object (new API)
       await act(async () => {
@@ -868,7 +868,7 @@ describe('topic action', () => {
       });
 
       expect(useChatStore.getState().activeTopicId).toBe(topicId);
-      expect(refreshMessagesSpy).not.toHaveBeenCalled();
+      expect(revalidateMessagesSpy).not.toHaveBeenCalled();
     });
 
     it('should clear new key data when switching to null (main scope)', async () => {
@@ -1070,9 +1070,11 @@ describe('topic action', () => {
       expect(useChatStore.getState().activeTopicId).toBe('new-created-topic-id');
     });
 
-    it('should skip refreshMessages for superseded overlapping switches', async () => {
+    it('should skip revalidateMessages for superseded overlapping switches', async () => {
       const { result } = renderHook(() => useChatStore());
-      const refreshSpy = vi.spyOn(result.current, 'refreshMessages').mockResolvedValue(undefined);
+      const revalidateSpy = vi
+        .spyOn(result.current, 'revalidateMessages')
+        .mockResolvedValue(undefined);
 
       // Fire two overlapping switches: the sync body of both runs before
       // either yields, so by the microtask boundary the second has already
@@ -1083,7 +1085,7 @@ describe('topic action', () => {
         await Promise.all([p1, p2]);
       });
 
-      expect(refreshSpy).toHaveBeenCalledTimes(1);
+      expect(revalidateSpy).toHaveBeenCalledTimes(1);
       expect(useChatStore.getState().activeTopicId).toBe('topic-b');
     });
   });

@@ -44,6 +44,13 @@ export interface OAuthDeviceFlowConfig {
    */
   deviceCodeEndpoint: string;
   /**
+   * Whether the provider issues a refresh_token (e.g. via `offline_access`
+   * scope) that the server should use to renew the access token before it
+   * expires. Providers with rotating refresh tokens (e.g. xAI) rely on the
+   * server-side refresh pipeline persisting the rotated pair on every renewal.
+   */
+  refreshTokenGrant?: boolean;
+  /**
    * OAuth scopes
    */
   scopes: string[];
@@ -73,6 +80,11 @@ export interface OAuthDeviceFlowKeyVault {
    * OAuth access token (e.g., GitHub's ghu_xxx)
    */
   oauthAccessToken?: string;
+  /**
+   * OAuth refresh token. May rotate on every refresh (e.g. xAI) — always
+   * persist the value returned by the latest refresh response.
+   */
+  oauthRefreshToken?: string;
   /**
    * OAuth token expiration timestamp (ms)
    */
@@ -203,6 +215,7 @@ const OAuthDeviceFlowConfigSchema = z.object({
   clientId: z.string(),
   defaultPollingInterval: z.number().optional(),
   deviceCodeEndpoint: z.string(),
+  refreshTokenGrant: z.boolean().optional(),
   scopes: z.array(z.string()),
   tokenEndpoint: z.string(),
   tokenExchangeEndpoint: z.string().optional(),

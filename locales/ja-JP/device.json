@@ -70,6 +70,7 @@
   "workingDirectory.removeWorktreeAction": "ワークツリーを削除",
   "workingDirectory.removeWorktreeConfirm": "ワークツリー「{{name}}」を削除しますか？これによりワークツリーディレクトリは削除されますが、ブランチは保持されます。未コミットの変更がある場合、Gitは拒否します。",
   "workingDirectory.removeWorktreeFailed": "ワークツリーの削除に失敗しました",
+  "workingDirectory.removeWorktreePending": "ワークツリー「{{name}}」を削除しています…",
   "workingDirectory.removeWorktreeSuccess": "ワークツリーが削除されました",
   "workingDirectory.removeWorktreeTitle": "ワークツリーを削除",
   "workingDirectory.removed": "「{{name}}」を削除しました",

@@ -17,6 +17,7 @@
   "agentGroupManagement.executeTask.tokens": "トークン消費",
   "agentGroupManagement.executeTasks.intervention.instructionPlaceholder": "このタスクを実行するための詳細な指示を入力してください...",
   "agentGroupManagement.executeTasks.intervention.titlePlaceholder": "タスクのタイトルを入力してください...",
+  "agentGroupManagement.executeTasks.results": "結果",
   "agentMarketplace.category.businessStrategy": "ビジネスと戦略",
   "agentMarketplace.category.contentCreation": "コンテンツ作成",
   "agentMarketplace.category.creatorEconomy": "クリエイター経済",

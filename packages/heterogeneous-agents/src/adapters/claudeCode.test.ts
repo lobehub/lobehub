@@ -71,6 +71,35 @@ describe('ClaudeCodeAdapter', () => {
       expect(events.map((e) => e.type)).toEqual(['stream_end', 'visible_output_end']);
     });
 
+    it('emits stream_retry for Claude Code canary system api_retry 529 events', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ model: 'claude-sonnet-4-6', subtype: 'init', type: 'system' });
+
+      const events = adapter.adapt({
+        api_error_status: 529,
+        attempt: 6,
+        delay_ms: 1000,
+        error: {
+          error: { message: 'Overloaded', type: 'overloaded_error' },
+          type: 'error',
+        },
+        max_attempts: 10,
+        subtype: 'api_retry',
+        type: 'system',
+      });
+
+      expect(events.map((e) => e.type)).toEqual(['stream_retry']);
+      expect(events[0].data).toMatchObject({
+        agentType: 'claude-code',
+        attempt: 6,
+        delayMs: 1000,
+        error: 'overloaded',
+        errorStatus: 529,
+        maxAttempts: 10,
+        provider: 'claude-code',
+      });
+    });
+
     it('classifies auth failures from failed result events', () => {
       const adapter = new ClaudeCodeAdapter();
       const rawError =

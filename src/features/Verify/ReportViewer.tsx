@@ -29,7 +29,6 @@ import {
   Check,
   ChevronRight,
   CircleHelp,
-  ClipboardList,
   Clock3,
   ExternalLink,
   FileText,
@@ -39,7 +38,6 @@ import {
   Image as ImageIcon,
   Layers,
   RefreshCw,
-  ShieldCheck,
   Target,
   Terminal,
   Video,
@@ -80,110 +78,6 @@ const styles = createStaticStyles(({ css }) => ({
     margin-inline: auto;
     padding-block: 32px 64px;
     padding-inline: 32px;
-  `,
-
-  reportLayout: css`
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 280px;
-    gap: 24px;
-    align-items: start;
-
-    /* Reclaim the rail's track when it hides — a hidden child leaves the column behind. */
-    @media (width <= 1120px) {
-      grid-template-columns: minmax(0, 1fr);
-    }
-  `,
-  reportMain: css`
-    min-width: 0;
-  `,
-  sideRail: css`
-    position: sticky;
-    inset-block-start: 32px;
-
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-
-    min-width: 0;
-
-    @media (width <= 1120px) {
-      position: static;
-      display: none;
-    }
-  `,
-  overviewCard: css`
-    padding-block: 14px;
-    padding-inline: 14px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  overviewTitle: css`
-    display: flex;
-    gap: 7px;
-    align-items: center;
-
-    margin-block-end: 12px;
-
-    font-size: 13px;
-    font-weight: 600;
-    color: ${cssVar.colorTextSecondary};
-
-    svg {
-      color: ${cssVar.colorTextTertiary};
-    }
-  `,
-  overviewGrid: css`
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
-  `,
-  overviewMetric: css`
-    min-width: 0;
-    padding-block: 12px 10px;
-    padding-inline: 12px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  overviewMetricValue: css`
-    font-size: 22px;
-    font-weight: 700;
-    font-variant-numeric: tabular-nums;
-    line-height: 1.1;
-    color: ${cssVar.colorText};
-  `,
-  overviewMetricLabel: css`
-    margin-block-start: 5px;
-    font-size: 12px;
-    line-height: 1.35;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  nextList: css`
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  `,
-  nextItem: css`
-    display: grid;
-    grid-template-columns: 16px minmax(0, 1fr);
-    gap: 8px;
-    align-items: start;
-
-    font-size: 12px;
-    line-height: 1.55;
-    color: ${cssVar.colorTextSecondary};
-
-    svg {
-      margin-block-start: 2px;
-    }
-  `,
-  nextEmpty: css`
-    font-size: 12px;
-    line-height: 1.55;
-    color: ${cssVar.colorTextTertiary};
   `,
 
   /* hero */
@@ -1631,80 +1525,6 @@ const CodingScopeCard = memo<{ context: VerifyCodingScope | null | undefined }>(
 
 CodingScopeCard.displayName = 'CodingScopeCard';
 
-const CheckOverviewPanel = memo<{
-  failed: number;
-  passed: number;
-  total: number;
-  uncertain: number;
-}>(({ failed, passed, total, uncertain }) => {
-  const { t } = useTranslation('verify');
-  const hasBlockingItems = failed > 0 || uncertain > 0;
-  const metrics = [
-    { key: 'total', label: t('report.overview.total'), value: total },
-    { color: cssVar.colorError, key: 'failed', label: t('report.overview.failed'), value: failed },
-    {
-      color: cssVar.colorWarning,
-      key: 'uncertain',
-      label: t('report.overview.uncertain'),
-      value: uncertain,
-    },
-    {
-      color: cssVar.colorSuccess,
-      key: 'passed',
-      label: t('report.overview.passed'),
-      value: passed,
-    },
-  ];
-
-  return (
-    <aside aria-label={t('report.overview.title')} className={styles.sideRail}>
-      <section className={styles.overviewCard}>
-        <div className={styles.overviewTitle}>
-          <Icon icon={ClipboardList} size={14} />
-          {t('report.overview.title')}
-        </div>
-        <div className={styles.overviewGrid}>
-          {metrics.map((item) => (
-            <div className={styles.overviewMetric} key={item.key}>
-              <div className={styles.overviewMetricValue} style={{ color: item.color }}>
-                {item.value}
-              </div>
-              <div className={styles.overviewMetricLabel}>{item.label}</div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className={styles.overviewCard}>
-        <div className={styles.overviewTitle}>
-          <Icon icon={ShieldCheck} size={14} />
-          {t('report.overview.nextTitle')}
-        </div>
-        {hasBlockingItems ? (
-          <div className={styles.nextList}>
-            {failed > 0 && (
-              <div className={styles.nextItem}>
-                <Icon icon={CircleHelp} size={14} style={{ color: cssVar.colorError }} />
-                <span>{t('report.overview.nextFailed')}</span>
-              </div>
-            )}
-            {uncertain > 0 && (
-              <div className={styles.nextItem}>
-                <Icon icon={CircleHelp} size={14} style={{ color: cssVar.colorWarning }} />
-                <span>{t('report.overview.nextUncertain')}</span>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className={styles.nextEmpty}>{t('report.overview.nextPassed')}</div>
-        )}
-      </section>
-    </aside>
-  );
-});
-
-CheckOverviewPanel.displayName = 'CheckOverviewPanel';
-
 /**
  * The report detail pane. Renders the verdict hero, a sticky verdict-filter bar,
  * every check as a severity-ordered expandable row (failed rows open by default),
@@ -1803,105 +1623,101 @@ const ReportViewer = memo(() => {
   return (
     <div className={styles.scroll}>
       <div className={styles.page}>
-        <div className={styles.reportLayout}>
-          <main className={styles.reportMain}>
-            <Flexbox gap={12}>
-              <div className={styles.heroLine}>
-                {verdict && (
-                  <span
-                    className={styles.pill}
-                    style={{
-                      background: VERDICT_META[verdict].bg,
-                      color: VERDICT_META[verdict].color,
-                    }}
-                  >
-                    <Icon icon={VERDICT_META[verdict].icon} size={15} />
-                    {t(`report.verdict.${verdict}`)}
-                  </span>
-                )}
-                <Text as={'h1'} style={{ fontSize: 24, lineHeight: 1.3, margin: 0 }}>
-                  {run.title || t('report.titleFallback')}
-                </Text>
-              </div>
-
-              {!isCodingReport && run.goal && <Text className={styles.summary}>{run.goal}</Text>}
-              {report?.summary && <Text className={styles.summary}>{report.summary}</Text>}
-
-              {isCodingReport && <CodingScopeCard context={run.context} />}
-
-              {liveStatus && (
-                <div className={styles.liveBanner}>
-                  <Icon icon={Clock3} size={14} />
-                  {t(liveStatusLabelKey[liveStatus])}
-                </div>
-              )}
-            </Flexbox>
-
-            <div className={styles.stats}>
-              {chips.map((c) => (
-                <button
-                  className={styles.chip}
-                  data-active={filter === c.key}
-                  key={c.key}
-                  type={'button'}
-                  onClick={() => setFilter(c.key)}
+        <main>
+          <Flexbox gap={12}>
+            <div className={styles.heroLine}>
+              {verdict && (
+                <span
+                  className={styles.pill}
+                  style={{
+                    background: VERDICT_META[verdict].bg,
+                    color: VERDICT_META[verdict].color,
+                  }}
                 >
-                  {c.dot && <span className={styles.dot} style={{ background: c.dot }} />}
-                  {c.label} <b>{c.count}</b>
-                </button>
-              ))}
-              {typeof report?.overallConfidence === 'number' && (
-                <span className={`${styles.chip} ${styles.score}`}>
-                  {t('report.stats.confidence')}{' '}
-                  <b>{Math.round(report.overallConfidence * 100)}%</b>
+                  <Icon icon={VERDICT_META[verdict].icon} size={15} />
+                  {t(`report.verdict.${verdict}`)}
                 </span>
               )}
+              <Text as={'h1'} style={{ fontSize: 24, lineHeight: 1.3, margin: 0 }}>
+                {run.title || t('report.titleFallback')}
+              </Text>
             </div>
 
-            {visible.length > 0 ? (
-              <div className={styles.checks}>
-                {visible.map((r) => (
-                  <CheckRow
-                    key={r.id}
-                    result={r}
-                    defaultOpen={
-                      checkVerdict(r) === 'failed' || r.evidence.some(isInlineVisualEvidence)
-                    }
-                  />
-                ))}
+            {!isCodingReport && run.goal && <Text className={styles.summary}>{run.goal}</Text>}
+            {report?.summary && <Text className={styles.summary}>{report.summary}</Text>}
+
+            {isCodingReport && <CodingScopeCard context={run.context} />}
+
+            {liveStatus && (
+              <div className={styles.liveBanner}>
+                <Icon icon={Clock3} size={14} />
+                {t(liveStatusLabelKey[liveStatus])}
               </div>
-            ) : (
-              <Block align={'center'} padding={24}>
-                <Text type={'secondary'}>{t('report.filterEmpty')}</Text>
-              </Block>
             )}
+          </Flexbox>
 
-            {report?.content && (
-              <details className={styles.narrative}>
-                <summary className={styles.narrativeSummary}>
-                  <Icon icon={ChevronRight} size={13} />
-                  {t('report.sections.details')}
-                </summary>
-                <div className={styles.narrativeBody}>
-                  <Markdown>{report.content}</Markdown>
-                </div>
-              </details>
+          <div className={styles.stats}>
+            {chips.map((c) => (
+              <button
+                className={styles.chip}
+                data-active={filter === c.key}
+                key={c.key}
+                type={'button'}
+                onClick={() => setFilter(c.key)}
+              >
+                {c.dot && <span className={styles.dot} style={{ background: c.dot }} />}
+                {c.label} <b>{c.count}</b>
+              </button>
+            ))}
+            {typeof report?.overallConfidence === 'number' && (
+              <span className={`${styles.chip} ${styles.score}`}>
+                {t('report.stats.confidence')} <b>{Math.round(report.overallConfidence * 100)}%</b>
+              </span>
             )}
+          </div>
 
-            {interactionCost && (
-              <details className={styles.narrative}>
-                <summary className={styles.narrativeSummary}>
-                  <Icon icon={ChevronRight} size={13} />
-                  {t('report.interaction.title')}
-                </summary>
-                <div className={styles.interactionCostBody}>
-                  <InteractionCostPanel cost={interactionCost} />
-                </div>
-              </details>
-            )}
-          </main>
-          <CheckOverviewPanel failed={failed} passed={passed} total={total} uncertain={uncertain} />
-        </div>
+          {visible.length > 0 ? (
+            <div className={styles.checks}>
+              {visible.map((r) => (
+                <CheckRow
+                  key={r.id}
+                  result={r}
+                  defaultOpen={
+                    checkVerdict(r) === 'failed' || r.evidence.some(isInlineVisualEvidence)
+                  }
+                />
+              ))}
+            </div>
+          ) : (
+            <Block align={'center'} padding={24}>
+              <Text type={'secondary'}>{t('report.filterEmpty')}</Text>
+            </Block>
+          )}
+
+          {report?.content && (
+            <details className={styles.narrative}>
+              <summary className={styles.narrativeSummary}>
+                <Icon icon={ChevronRight} size={13} />
+                {t('report.sections.details')}
+              </summary>
+              <div className={styles.narrativeBody}>
+                <Markdown>{report.content}</Markdown>
+              </div>
+            </details>
+          )}
+
+          {interactionCost && (
+            <details className={styles.narrative}>
+              <summary className={styles.narrativeSummary}>
+                <Icon icon={ChevronRight} size={13} />
+                {t('report.interaction.title')}
+              </summary>
+              <div className={styles.interactionCostBody}>
+                <InteractionCostPanel cost={interactionCost} />
+              </div>
+            </details>
+          )}
+        </main>
       </div>
     </div>
   );

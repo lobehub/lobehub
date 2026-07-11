@@ -70,6 +70,7 @@
   "workingDirectory.removeWorktreeAction": "Изтриване на работно дърво",
   "workingDirectory.removeWorktreeConfirm": "Да изтрия работното дърво „{{name}}“? Това ще премахне директорията на работното дърво, но ще запази клона му. Git ще откаже, ако има непотвърдени промени.",
   "workingDirectory.removeWorktreeFailed": "Неуспешно изтриване на работно дърво",
+  "workingDirectory.removeWorktreePending": "Изтриване на работното дърво „{{name}}“…",
   "workingDirectory.removeWorktreeSuccess": "Работното дърво е изтрито",
   "workingDirectory.removeWorktreeTitle": "Изтриване на работно дърво",
   "workingDirectory.removed": "Премахнато „{{name}}“",

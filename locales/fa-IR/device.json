@@ -70,6 +70,7 @@
   "workingDirectory.removeWorktreeAction": "حذف ورک‌تری",
   "workingDirectory.removeWorktreeConfirm": "آیا می‌خواهید ورک‌تری «{{name}}» را حذف کنید؟ این کار دایرکتوری ورک‌تری را حذف می‌کند اما شاخه آن را نگه می‌دارد. گیت در صورت وجود تغییرات ذخیره‌نشده اجازه این کار را نمی‌دهد.",
   "workingDirectory.removeWorktreeFailed": "حذف ورک‌تری ناموفق بود",
+  "workingDirectory.removeWorktreePending": "در حال حذف شاخه کاری «{{name}}»…",
   "workingDirectory.removeWorktreeSuccess": "ورک‌تری حذف شد",
   "workingDirectory.removeWorktreeTitle": "حذف ورک‌تری",
   "workingDirectory.removed": "«{{name}}» حذف شد",

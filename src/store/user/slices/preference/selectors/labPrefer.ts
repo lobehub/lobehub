@@ -9,6 +9,7 @@ export const labPreferSelectors = {
     false,
   enableAgentSelfIteration: (s: UserState): boolean =>
     s.preference.lab?.enableAgentSelfIteration ?? false,
+  enableClaudeCodeSdk: (s: UserState): boolean => s.preference.lab?.enableClaudeCodeSdk ?? false,
   enableFleet: (s: UserState): boolean => s.preference.lab?.enableFleet ?? false,
   enableFoldFinishedTurn: (s: UserState): boolean =>
     s.preference.lab?.enableFoldFinishedTurn ?? false,

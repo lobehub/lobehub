@@ -5,6 +5,8 @@
   "features.agentSelfIteration.title": "Agent 自我迭代",
   "features.assistantMessageGroup.desc": "将代理消息及其工具调用结果组合在一起显示",
   "features.assistantMessageGroup.title": "代理消息分组",
+  "features.claudeCodeSdk.desc": "通过 Claude Agent SDK 运行 Claude Code 会话，替代 CLI 进程方式，提供更丰富的流式输出与会话控制。",
+  "features.claudeCodeSdk.title": "Claude Code SDK 运行时",
   "features.fleet.desc": "在标题栏显示 Fleet 入口——把当前账号下所有运行中的任务并排展示的看板。",
   "features.fleet.title": "Fleet 并排视图",
   "features.foldFinishedTurn.desc": "当最终回答可见后，将已完成回合的过程（推理与工具调用）折叠进「已处理」标题；点击可展开过程。",

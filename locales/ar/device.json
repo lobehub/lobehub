@@ -70,6 +70,7 @@
   "workingDirectory.removeWorktreeAction": "حذف مساحة العمل",
   "workingDirectory.removeWorktreeConfirm": "هل تريد حذف مساحة العمل “{{name}}”؟ سيؤدي ذلك إلى إزالة دليل مساحة العمل مع الاحتفاظ بالفرع الخاص بها. سيرفض Git إذا كانت هناك تغييرات غير ملتزمة.",
   "workingDirectory.removeWorktreeFailed": "فشل حذف مساحة العمل",
+  "workingDirectory.removeWorktreePending": "جارٍ حذف مساحة العمل «{{name}}»…",
   "workingDirectory.removeWorktreeSuccess": "تم حذف مساحة العمل",
   "workingDirectory.removeWorktreeTitle": "حذف مساحة العمل",
   "workingDirectory.removed": "تم حذف “{{name}}”",

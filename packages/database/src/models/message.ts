@@ -2213,6 +2213,10 @@ export class MessageModel {
       metadata || usageToWrite
         ? { ...metadata, ...(usageToWrite && { usage: usageToWrite }) }
         : undefined;
+    // A patch that matches no row is a lost write, not a no-op: the caller asked
+    // to persist content onto `id` and it went nowhere. Batched writers key their
+    // retry ledger off this flag, so reporting success here silently drops data.
+    let matchedRow = false;
     try {
       await runTimedStage(
         timing,
@@ -2269,6 +2273,8 @@ export class MessageModel {
               { hasMetadata: !!metadataPatch, valueKeys: Object.keys(message) },
             );
 
+            matchedRow = !!updated;
+
             if (
               updated?.topicId && // When this write carries token usage (assistant finalize / hetero
               // step), recompute the topic's denormalized usage rollup from its
@@ -2290,6 +2296,11 @@ export class MessageModel {
           valueKeys: Object.keys(message),
         },
       );
+
+      if (!matchedRow) {
+        console.error(`Update message error: no message matched id ${id}`);
+        return { success: false };
+      }
 
       return { success: true };
     } catch (error) {
@@ -2427,6 +2438,10 @@ export class MessageModel {
   ): Promise<{ success: boolean }> => {
     const { content, metadata, pluginState, pluginError } = params;
 
+    // `undefined` while no branch has looked for the row yet; see `update` above
+    // for why a write that matches nothing must not report success.
+    let matchedRow: boolean | undefined;
+
     try {
       await this.db.transaction(async (trx) => {
         // Update messages table (content, metadata)
@@ -2446,10 +2461,13 @@ export class MessageModel {
           }
 
           if (Object.keys(messageUpdateData).length > 0) {
-            await trx
+            const [updated] = await trx
               .update(messages)
               .set(messageUpdateData)
-              .where(and(eq(messages.id, id), this.ownership()));
+              .where(and(eq(messages.id, id), this.ownership()))
+              .returning({ id: messages.id });
+
+            matchedRow = !!updated;
           }
         }
 
@@ -2458,6 +2476,10 @@ export class MessageModel {
           const pluginItem = await trx.query.messagePlugins.findFirst({
             where: and(eq(messagePlugins.id, id), this.pluginsOwnership()),
           });
+
+          // A plugin-only patch never touches `messages`, so the plugin row is
+          // the only evidence the tool message exists.
+          if (matchedRow === undefined) matchedRow = !!pluginItem;
 
           if (pluginItem) {
             const pluginUpdateData: Record<string, any> = {};
@@ -2479,6 +2501,11 @@ export class MessageModel {
           }
         }
       });
+
+      if (matchedRow === false) {
+        console.error(`Update tool message error: no tool message matched id ${id}`);
+        return { success: false };
+      }
 
       return { success: true };
     } catch (error) {

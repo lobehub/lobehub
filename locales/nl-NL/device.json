@@ -70,6 +70,7 @@
   "workingDirectory.removeWorktreeAction": "Verwijder werkboom",
   "workingDirectory.removeWorktreeConfirm": "Werkboom “{{name}}” verwijderen? Dit verwijdert de werkboommap maar behoudt de branch. Git weigert als er niet-gecommitteerde wijzigingen zijn.",
   "workingDirectory.removeWorktreeFailed": "Verwijderen van werkboom mislukt",
+  "workingDirectory.removeWorktreePending": "Worktree “{{name}}” wordt verwijderd…",
   "workingDirectory.removeWorktreeSuccess": "Werkboom verwijderd",
   "workingDirectory.removeWorktreeTitle": "Werkboom verwijderen",
   "workingDirectory.removed": "Verwijderd “{{name}}”",

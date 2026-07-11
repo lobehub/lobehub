@@ -22,6 +22,7 @@ export interface MessageGatewayConnectionStatus {
   config: { connectionId: string; platform: string } | null;
   state: {
     connectedAt?: number;
+    errorCode?: string;
     error?: string;
     platform: string;
     status: 'connected' | 'connecting' | 'disconnected' | 'dormant' | 'error';

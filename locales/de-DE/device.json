@@ -70,6 +70,7 @@
   "workingDirectory.removeWorktreeAction": "Worktree löschen",
   "workingDirectory.removeWorktreeConfirm": "Worktree „{{name}}“ löschen? Dies entfernt das Worktree-Verzeichnis, behält jedoch dessen Branch. Git verweigert dies, wenn es nicht eingereichte Änderungen gibt.",
   "workingDirectory.removeWorktreeFailed": "Worktree-Löschung fehlgeschlagen",
+  "workingDirectory.removeWorktreePending": "Arbeitsbaum „{{name}}“ wird gelöscht…",
   "workingDirectory.removeWorktreeSuccess": "Worktree gelöscht",
   "workingDirectory.removeWorktreeTitle": "Worktree löschen",
   "workingDirectory.removed": "„{{name}}“ entfernt",
