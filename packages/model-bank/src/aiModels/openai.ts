@@ -46,7 +46,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_050_000,
     description:
-      "GPT-5.6 Sol is OpenAI's frontier model for complex reasoning, coding, and long-horizon agentic work. The gpt-5.6 alias routes to Sol.",
+      "GPT-5.6 Sol is OpenAI's latest flagship and most capable model, the top choice in the GPT family for coding and agentic work.",
     displayName: 'GPT-5.6 Sol',
     enabled: true,
     family: 'gpt',
@@ -240,7 +240,8 @@ export const openaiChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 1_050_000,
-    description: 'GPT-5.5 is our newest frontier model for the most complex professional work.',
+    description:
+      "GPT-5.5 is OpenAI's previous-generation frontier model for complex professional work.",
     displayName: 'GPT-5.5',
     enabled: true,
     family: 'gpt',
