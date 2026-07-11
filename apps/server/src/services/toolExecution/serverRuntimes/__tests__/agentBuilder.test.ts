@@ -2,18 +2,24 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { agentBuilderRuntime } from '../agentBuilder';
 
-const { mockGetAgentConfigById, mockUpdateConfig, mockFindById, mockCreatePlugin } = vi.hoisted(
-  () => ({
-    mockCreatePlugin: vi.fn(),
-    mockFindById: vi.fn(),
-    mockGetAgentConfigById: vi.fn(),
-    mockUpdateConfig: vi.fn(),
-  }),
-);
+const {
+  mockCreatePlugin,
+  mockFindById,
+  mockGetAgentConfigById,
+  mockUpdateAgent,
+  mockUpdateConfig,
+} = vi.hoisted(() => ({
+  mockCreatePlugin: vi.fn(),
+  mockFindById: vi.fn(),
+  mockGetAgentConfigById: vi.fn(),
+  mockUpdateAgent: vi.fn(),
+  mockUpdateConfig: vi.fn(),
+}));
 
 vi.mock('@/database/models/agent', () => ({
   AgentModel: vi.fn(() => ({
     getAgentConfigById: mockGetAgentConfigById,
+    update: mockUpdateAgent,
     updateConfig: mockUpdateConfig,
   })),
 }));
@@ -57,6 +63,7 @@ describe('agentBuilderRuntime', () => {
       );
 
       expect(result.success).toBe(true);
+      expect(result.state).toMatchObject({ agentId: 'agent-1' });
       expect(mockUpdateConfig).toHaveBeenCalledWith('agent-1', {
         plugins: ['plugin-a', { identifier: 'plugin-b', mode: 'pinned' }],
       });
@@ -75,6 +82,7 @@ describe('agentBuilderRuntime', () => {
       );
 
       expect(result.success).toBe(true);
+      expect(result.state).toMatchObject({ agentId: 'agent-1' });
       expect(mockUpdateConfig).toHaveBeenCalledWith('agent-1', {
         plugins: ['plugin-a', { identifier: 'plugin-b', mode: 'pinned' }],
       });
@@ -93,7 +101,50 @@ describe('agentBuilderRuntime', () => {
       );
 
       expect(result.success).toBe(true);
+      expect(result.state).toMatchObject({ agentId: 'agent-1' });
       expect(mockUpdateConfig).toHaveBeenCalledWith('agent-1', { plugins: ['plugin-a'] });
+    });
+
+    it('returns the invocation target for a successful no-op', async () => {
+      mockGetAgentConfigById.mockResolvedValue({ id: 'agent-1', plugins: [] });
+
+      const runtime = createRuntime();
+      const result = await runtime.updateConfig(
+        {},
+        { editingAgentId: 'agent-1', toolManifestMap: {} },
+      );
+
+      expect(result).toMatchObject({
+        state: { agentId: 'agent-1', success: true },
+        success: true,
+      });
+    });
+  });
+
+  describe('updatePrompt', () => {
+    it('writes and returns the editing agent captured by the invocation', async () => {
+      const runtime = createRuntime();
+      const result = await runtime.updatePrompt(
+        { prompt: 'run-scoped prompt' },
+        {
+          agentId: 'builder-agent',
+          editingAgentId: 'target-agent',
+          toolManifestMap: {},
+        },
+      );
+
+      expect(mockUpdateAgent).toHaveBeenCalledWith('target-agent', {
+        editorData: null,
+        systemRole: 'run-scoped prompt',
+      });
+      expect(result).toMatchObject({
+        state: {
+          agentId: 'target-agent',
+          newPrompt: 'run-scoped prompt',
+          success: true,
+        },
+        success: true,
+      });
     });
   });
 
@@ -111,6 +162,7 @@ describe('agentBuilderRuntime', () => {
       );
 
       expect(result.success).toBe(true);
+      expect(result.state).toMatchObject({ agentId: 'agent-1' });
       expect(mockUpdateConfig).toHaveBeenCalledWith('agent-1', {
         plugins: [{ identifier: 'lobe-web-browsing', mode: 'pinned' }],
       });
@@ -129,6 +181,7 @@ describe('agentBuilderRuntime', () => {
       );
 
       expect(result.success).toBe(true);
+      expect(result.state).toMatchObject({ agentId: 'agent-1' });
       expect(mockUpdateConfig).not.toHaveBeenCalled();
     });
 
@@ -146,6 +199,7 @@ describe('agentBuilderRuntime', () => {
       );
 
       expect(result.success).toBe(true);
+      expect(result.state).toMatchObject({ agentId: 'agent-1' });
       expect(mockUpdateConfig).toHaveBeenCalledWith('agent-1', {
         plugins: [{ identifier: 'market-plugin', mode: 'pinned' }],
       });
