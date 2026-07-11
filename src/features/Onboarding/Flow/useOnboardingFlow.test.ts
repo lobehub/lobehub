@@ -11,10 +11,19 @@ const mocks = vi.hoisted(() => ({
   navigate: vi.fn(),
   persistedStep: undefined as number | undefined,
   setOnboardingStep: vi.fn().mockResolvedValue(undefined),
+  trackOnboardingCompleted: vi.fn(),
+  trackOnboardingStepCompleted: vi.fn(),
+  trackOnboardingStepViewed: vi.fn(),
 }));
 
 vi.mock('react-router', () => ({
   useNavigate: () => mocks.navigate,
+}));
+
+vi.mock('@/services/onboardingMetrics', () => ({
+  trackOnboardingCompleted: mocks.trackOnboardingCompleted,
+  trackOnboardingStepCompleted: mocks.trackOnboardingStepCompleted,
+  trackOnboardingStepViewed: mocks.trackOnboardingStepViewed,
 }));
 
 vi.mock('@/store/user', () => ({
@@ -62,6 +71,32 @@ describe('useOnboardingFlow', () => {
     ]);
   });
 
+  it('fires step viewed once for the initial step', () => {
+    renderHook(() => useOnboardingFlow());
+
+    expect(mocks.trackOnboardingStepViewed).toHaveBeenCalledTimes(1);
+    expect(mocks.trackOnboardingStepViewed).toHaveBeenCalledWith({
+      flow: 'web',
+      step: 'welcome',
+      stepIndex: OnboardingStep.Welcome,
+    });
+  });
+
+  it('fires step viewed again when the current step changes', () => {
+    const { rerender } = renderHook(() => useOnboardingFlow());
+    mocks.trackOnboardingStepViewed.mockClear();
+
+    mocks.persistedStep = OnboardingStep.ChiefAgent;
+    rerender();
+
+    expect(mocks.trackOnboardingStepViewed).toHaveBeenCalledTimes(1);
+    expect(mocks.trackOnboardingStepViewed).toHaveBeenCalledWith({
+      flow: 'web',
+      step: 'chief_agent',
+      stepIndex: OnboardingStep.ChiefAgent,
+    });
+  });
+
   it('resumes on the nearest visible step for a hidden persisted step', () => {
     mocks.persistedStep = OnboardingStep.ConnectApps;
 
@@ -79,6 +114,12 @@ describe('useOnboardingFlow', () => {
 
     expect(mocks.setOnboardingStep).toHaveBeenCalledWith(OnboardingStep.ChiefAgent);
     expect(mocks.finishOnboarding).not.toHaveBeenCalled();
+    expect(mocks.trackOnboardingStepCompleted).toHaveBeenCalledTimes(1);
+    expect(mocks.trackOnboardingStepCompleted).toHaveBeenCalledWith({
+      flow: 'web',
+      step: 'welcome',
+      stepIndex: OnboardingStep.Welcome,
+    });
   });
 
   it('next() finishes onboarding on the last visible step', async () => {
@@ -95,6 +136,16 @@ describe('useOnboardingFlow', () => {
     expect(mocks.finishOnboarding).toHaveBeenCalled();
     expect(mocks.setOnboardingStep).not.toHaveBeenCalled();
     expect(mocks.navigate).toHaveBeenCalledWith('/chat');
+    expect(mocks.trackOnboardingStepCompleted).toHaveBeenCalledWith({
+      flow: 'web',
+      step: 'chief_agent',
+      stepIndex: OnboardingStep.ChiefAgent,
+    });
+    expect(mocks.trackOnboardingCompleted).toHaveBeenCalledTimes(1);
+    expect(mocks.trackOnboardingCompleted).toHaveBeenCalledWith({
+      flow: 'web',
+      targetUrl: '/chat',
+    });
   });
 
   it('next() falls back to "/" when there is no stashed callback url', async () => {
@@ -130,6 +181,23 @@ describe('useOnboardingFlow', () => {
     });
 
     expect(mocks.setOnboardingStep).toHaveBeenCalledWith(OnboardingStep.Welcome);
+  });
+
+  it('finish() fires onboarding completed directly, e.g. for a global skip', async () => {
+    mocks.consumeOnboardingCallbackUrl.mockReturnValue('/chat');
+
+    const { result } = renderHook(() => useOnboardingFlow());
+
+    await act(async () => {
+      await result.current.finish();
+    });
+
+    expect(mocks.trackOnboardingCompleted).toHaveBeenCalledTimes(1);
+    expect(mocks.trackOnboardingCompleted).toHaveBeenCalledWith({
+      flow: 'web',
+      targetUrl: '/chat',
+    });
+    expect(mocks.trackOnboardingStepCompleted).not.toHaveBeenCalled();
   });
 
   it('includes the full step set when every capability is enabled', () => {

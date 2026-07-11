@@ -1,7 +1,13 @@
-import type { OnboardingStep } from '@lobechat/types';
-import { useCallback, useMemo } from 'react';
+import { OnboardingStep } from '@lobechat/types';
+import { useCallback, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router';
 
+import {
+  type OnboardingStep as OnboardingMetricsStep,
+  trackOnboardingCompleted,
+  trackOnboardingStepCompleted,
+  trackOnboardingStepViewed,
+} from '@/services/onboardingMetrics';
 import { useUserStore } from '@/store/user';
 import { consumeOnboardingCallbackUrl } from '@/utils/onboardingRedirect';
 
@@ -13,6 +19,18 @@ import {
   resolveVisibleStep,
 } from './steps';
 import { useOnboardingCapabilities } from './useOnboardingCapabilities';
+
+const ONBOARDING_METRICS_FLOW = 'web';
+
+const ONBOARDING_STEP_METRIC_ID: Record<OnboardingStep, OnboardingMetricsStep> = {
+  [OnboardingStep.Welcome]: 'welcome',
+  [OnboardingStep.ConnectApps]: 'connect_apps',
+  [OnboardingStep.LearnYourWorld]: 'learn_your_world',
+  [OnboardingStep.Profile]: 'profile',
+  [OnboardingStep.ChiefAgent]: 'chief_agent',
+  [OnboardingStep.Messenger]: 'messenger',
+  [OnboardingStep.StarterTasks]: 'starter_tasks',
+};
 
 export interface OnboardingFlowController {
   back: () => Promise<void>;
@@ -37,13 +55,28 @@ export const useOnboardingFlow = (): OnboardingFlowController => {
   const isLast = isLastVisibleStep(currentStep, visibleSteps);
   const hasPrevious = getPreviousOnboardingStep(currentStep, visibleSteps) !== undefined;
 
+  useEffect(() => {
+    trackOnboardingStepViewed({
+      flow: ONBOARDING_METRICS_FLOW,
+      step: ONBOARDING_STEP_METRIC_ID[currentStep],
+      stepIndex: currentStep,
+    });
+  }, [currentStep]);
+
   const finish = useCallback(async () => {
     await finishOnboarding();
     const targetUrl = consumeOnboardingCallbackUrl() || '/';
+    trackOnboardingCompleted({ flow: ONBOARDING_METRICS_FLOW, targetUrl });
     navigate(targetUrl);
   }, [finishOnboarding, navigate]);
 
   const next = useCallback(async () => {
+    trackOnboardingStepCompleted({
+      flow: ONBOARDING_METRICS_FLOW,
+      step: ONBOARDING_STEP_METRIC_ID[currentStep],
+      stepIndex: currentStep,
+    });
+
     if (isLastVisibleStep(currentStep, visibleSteps)) {
       await finish();
       return;

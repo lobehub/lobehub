@@ -27,6 +27,27 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     background-size: cover;
   `,
 
+  bannerAvatar: css`
+    flex: none;
+  `,
+
+  bannerContent: css`
+    position: absolute;
+    inset: 0;
+    padding: 24px;
+  `,
+
+  bannerQuote: css`
+    font-size: 15px;
+    font-weight: 500;
+    line-height: 1.5;
+    color: ${cssVar.colorText};
+  `,
+
+  bannerQuoteHighlight: css`
+    font-weight: 700;
+  `,
+
   body: css`
     padding: 24px;
   `,
