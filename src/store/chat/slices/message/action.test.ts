@@ -7,6 +7,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { mutate } from '@/libs/swr';
 import { messageService } from '@/services/message';
+import {
+  clearMessageListClientCacheState,
+  isMessageListServerVerified,
+  messageListKey,
+  runMessageListQuery,
+} from '@/services/message/cache';
 import { topicService } from '@/services/topic';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
@@ -51,6 +57,7 @@ vi.mock('@/services/topic', () => ({
 }));
 
 const realRefreshMessages = useChatStore.getState().refreshMessages;
+const realRevalidateMessages = useChatStore.getState().revalidateMessages;
 // Mock state
 const mockState = {
   activeAgentId: 'session-id',
@@ -64,6 +71,7 @@ const mockState = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  clearMessageListClientCacheState();
   useChatStore.setState(mockState, false);
 });
 
@@ -594,12 +602,15 @@ describe('chatMessage actions', () => {
       });
 
       expect(clearSpy).toHaveBeenCalled();
-      expect(result.current.refreshMessages).toHaveBeenCalled();
+      expect(messageService.removeMessagesByAssistant).toHaveBeenCalledWith(
+        mockState.activeAgentId,
+        mockState.activeTopicId,
+      );
       expect(result.current.refreshTopic).toHaveBeenCalled();
       expect(switchTopicSpy).toHaveBeenCalled();
     });
 
-    it('should remove messages from the active session and topic, then refresh topics and messages', async () => {
+    it('should remove messages from the active session and topic, then refresh topics', async () => {
       const { result } = renderHook(() => useChatStore());
       const switchTopicSpy = vi.spyOn(result.current, 'switchTopic');
       const refreshTopicSpy = vi.spyOn(result.current, 'refreshTopic');
@@ -608,7 +619,6 @@ describe('chatMessage actions', () => {
         await result.current.clearMessage();
       });
 
-      expect(mockState.refreshMessages).toHaveBeenCalled();
       expect(refreshTopicSpy).toHaveBeenCalled();
       expect(switchTopicSpy).toHaveBeenCalled();
 
@@ -627,7 +637,6 @@ describe('chatMessage actions', () => {
 
       expect(mockState.activeTopicId).not.toBeUndefined(); // 确保在测试前 activeTopicId 存在
       expect(refreshTopicSpy).toHaveBeenCalled();
-      expect(mockState.refreshMessages).toHaveBeenCalled();
       expect(topicService.removeTopic).toHaveBeenCalledWith(mockState.activeTopicId);
       expect(switchTopicSpy).toHaveBeenCalled();
     });
@@ -756,19 +765,22 @@ describe('chatMessage actions', () => {
       const { result } = renderHook(() => useChatStore());
       const activeAgentId = useChatStore.getState().activeAgentId;
       const activeTopicId = useChatStore.getState().activeTopicId;
+      const context = { agentId: activeAgentId, topicId: activeTopicId };
+      await runMessageListQuery(context, async () => []);
+      expect(isMessageListServerVerified(context)).toBe(true);
 
       await act(async () => {
         await result.current.refreshMessages();
       });
+
+      expect(isMessageListServerVerified(context)).toBe(false);
 
       // refreshMessages now mutates with a single matcher targeting the
       // accurate `message:list` key for this agent+topic.
       expect(mutate).toHaveBeenCalledTimes(1);
       const matcher = (mutate as any).mock.calls[0][0];
       expect(typeof matcher).toBe('function');
-      expect(matcher(['message:list', { agentId: activeAgentId, topicId: activeTopicId }, 1])).toBe(
-        true,
-      );
+      expect(matcher(messageListKey(context))).toBe(true);
       // other domains / other topics are not matched
       expect(matcher(['topic:list', 'container', {}])).toBe(false);
       expect(matcher(['message:list', { agentId: activeAgentId, topicId: 'other' }, 1])).toBe(
@@ -790,6 +802,36 @@ describe('chatMessage actions', () => {
 
       // 确保恢复 mutate 的模拟，以免影响其他测试
       (mutate as Mock).mockReset();
+    });
+
+    it('keeps soft revalidation silent after a successful prefetch verification', async () => {
+      useChatStore.setState({ revalidateMessages: realRevalidateMessages });
+      const context = { agentId: 'session-id', topicId: 'topic-id' };
+      await runMessageListQuery(context, async () => []);
+
+      await act(async () => {
+        await useChatStore.getState().revalidateMessages(context);
+      });
+
+      expect(isMessageListServerVerified(context)).toBe(true);
+      expect(mutate).not.toHaveBeenCalled();
+    });
+
+    it('softly revalidates only the exact canonical conversation context', async () => {
+      useChatStore.setState({ revalidateMessages: realRevalidateMessages });
+      const context = {
+        agentId: 'session-id',
+        groupId: 'group-id',
+        threadId: 'thread-id',
+        topicId: 'topic-id',
+      };
+
+      await act(async () => {
+        await useChatStore.getState().revalidateMessages(context);
+      });
+
+      expect(mutate).toHaveBeenCalledTimes(1);
+      expect(mutate).toHaveBeenCalledWith(messageListKey(context));
     });
   });
 
@@ -1247,19 +1289,13 @@ describe('chatMessage actions', () => {
       });
 
       expect(mutate).toHaveBeenCalledTimes(1);
-      const [matcher, dataArg, options] = (mutate as Mock).mock.calls[0];
+      const [swrKey, dataArg, options] = (mutate as Mock).mock.calls[0];
 
       // seeds, never refetches
       expect(options).toEqual({ revalidate: false });
       expect(dataArg).toEqual(messages);
-
-      // matcher targets exactly this bucket, not other buckets / domains
-      expect(typeof matcher).toBe('function');
-      expect(matcher(['message:list', context, 1])).toBe(true);
-      // workspace-augmented variant of the same bucket still matches
-      expect(matcher(['message:list', context, 1, 'workspace-1'])).toBe(true);
-      expect(matcher(['message:list', { agentId: 'wt-agent', topicId: 'other' }, 1])).toBe(false);
-      expect(matcher(['topic:list', 'container', {}])).toBe(false);
+      expect(swrKey).toEqual(messageListKey(context));
+      expect(isMessageListServerVerified(context)).toBe(false);
     });
 
     it('skips write-through for the useFetchMessages onData sync path', async () => {
@@ -1322,10 +1358,10 @@ describe('chatMessage actions', () => {
       expect(result.current.messagesMap[key]).toBeUndefined();
       // ...but the cache is still seeded so a later switch-back is not stale
       expect(mutate).toHaveBeenCalledTimes(1);
-      const [matcher, dataArg, options] = (mutate as Mock).mock.calls[0];
+      const [swrKey, dataArg, options] = (mutate as Mock).mock.calls[0];
       expect(options).toEqual({ revalidate: false });
       expect(dataArg).toEqual(messages);
-      expect(matcher(['message:list', context, 1])).toBe(true);
+      expect(swrKey).toEqual(messageListKey(context));
     });
   });
 
@@ -1352,15 +1388,37 @@ describe('chatMessage actions', () => {
       });
 
       const key = messageMapKey(context);
-      expect(messageService.getMessages).toHaveBeenCalledWith(context);
+      expect(messageService.getMessages).toHaveBeenCalledWith({
+        agentId: 'prefetch-agent',
+        groupId: null,
+        threadId: null,
+        topicId: 'prefetch-topic',
+      });
       expect(result.current.dbMessagesMap[key]).toEqual(messages);
       expect(result.current.messagesMap[key]).toHaveLength(1);
 
       expect(mutate).toHaveBeenCalledTimes(1);
       const [swrKey, dataArg, options] = (mutate as Mock).mock.calls[0];
-      expect(swrKey).toEqual(['message:list', context, 1]);
+      expect(swrKey).toEqual(messageListKey(context));
       await expect(dataArg).resolves.toEqual(messages);
       expect(options).toEqual({ revalidate: false });
+    });
+
+    it('skips prefetch when the canonical message cache is fresh', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const context = {
+        agentId: 'prefetch-agent',
+        scope: 'main' as const,
+        topicId: 'fresh-topic',
+      };
+      await runMessageListQuery(context, async () => []);
+
+      await act(async () => {
+        await result.current.prefetchMessages(context);
+      });
+
+      expect(messageService.getMessages).not.toHaveBeenCalled();
+      expect(mutate).not.toHaveBeenCalled();
     });
 
     it('refreshes an already hydrated bucket with the completed server snapshot', async () => {
@@ -1387,7 +1445,12 @@ describe('chatMessage actions', () => {
         await result.current.prefetchMessages(context);
       });
 
-      expect(messageService.getMessages).toHaveBeenCalledWith(context);
+      expect(messageService.getMessages).toHaveBeenCalledWith({
+        agentId: 'prefetch-agent',
+        groupId: null,
+        threadId: null,
+        topicId: 'cached-topic',
+      });
       expect(result.current.dbMessagesMap[key]).toEqual(serverMessages);
       expect(mutate).toHaveBeenCalledTimes(1);
     });
@@ -1412,6 +1475,7 @@ describe('chatMessage actions', () => {
       const firstPrefetch = result.current.prefetchMessages(context);
       const secondPrefetch = result.current.prefetchMessages(context);
 
+      await Promise.resolve();
       expect(messageService.getMessages).toHaveBeenCalledTimes(1);
 
       await act(async () => {
@@ -1421,6 +1485,37 @@ describe('chatMessage actions', () => {
       });
 
       expect(result.current.dbMessagesMap[messageMapKey(context)]).toEqual(messages);
+    });
+
+    it('shares an in-flight prefetch with the mounted canonical query', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const context = {
+        agentId: 'prefetch-agent',
+        scope: 'main' as const,
+        threadId: 'thread-id',
+        topicId: 'mount-topic',
+      };
+      const mountedContext = { ...context, documentId: 'ui-only-field' };
+      const messages = [{ id: 'shared-message', role: 'user', content: 'hi' }] as any;
+      let resolveRequest!: (value: UIChatMessage[]) => void;
+      const serverRequest = new Promise<UIChatMessage[]>((resolve) => {
+        resolveRequest = resolve;
+      });
+      (messageService.getMessages as Mock).mockReturnValue(serverRequest);
+
+      const prefetchPromise = result.current.prefetchMessages(context);
+      const mountedQuery = runMessageListQuery(mountedContext, messageService.getMessages);
+
+      await Promise.resolve();
+      expect(messageService.getMessages).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        resolveRequest(messages);
+        await Promise.all([prefetchPromise, mountedQuery]);
+      });
+
+      expect(messageService.getMessages).toHaveBeenCalledTimes(1);
+      await expect(mountedQuery).resolves.toEqual(messages);
     });
   });
 

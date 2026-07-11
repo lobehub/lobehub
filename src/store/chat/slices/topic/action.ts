@@ -1138,12 +1138,15 @@ export class ChatTopicActionImpl {
 
     // Yield a microtask so any switchTopic calls queued behind us can run
     // their sync bodies (and bump #switchTopicEpoch) before we commit to a
-    // refresh. On the other side of the yield, an epoch mismatch means a
-    // newer switch has taken over — skip the redundant SWR mutate.
+    // revalidation. On the other side of the yield, an epoch mismatch means a
+    // newer switch has taken over — skip the redundant SWR mutate. Navigation
+    // uses a soft ensure so a completed or in-flight sidebar prefetch is not
+    // invalidated by the switch itself; explicit refresh signals still go
+    // through refreshMessages and advance the request generation.
     await Promise.resolve();
     if (epoch !== this.#switchTopicEpoch) return;
 
-    await this.#get().refreshMessages();
+    await this.#get().revalidateMessages();
   };
 
   removeSessionTopics = async (): Promise<void> => {

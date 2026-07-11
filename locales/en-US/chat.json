@@ -61,7 +61,7 @@
   "builtinCopilot": "Built-in Copilot",
   "chatList.expandMessage": "Expand Message",
   "chatList.longMessageDetail": "View Details",
-  "chatList.refreshing": "Fetching latest messages...",
+  "chatList.refreshError": "Couldn't refresh messages",
   "chatMode.agent": "Agent",
   "chatMode.agentCap.env": "Runtime env",
   "chatMode.agentCap.files": "File access",
