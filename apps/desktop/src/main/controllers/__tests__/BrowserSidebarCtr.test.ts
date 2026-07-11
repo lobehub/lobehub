@@ -76,7 +76,7 @@ const createGuestWebContents = (overrides?: Partial<WebContents>): WebContents =
   guest.id = 2;
   guest.canGoBack = vi.fn(() => false);
   guest.canGoForward = vi.fn(() => false);
-  guest.capturePage = vi.fn(async () => 'image');
+  guest.capturePage = vi.fn(async () => 'image') as unknown as WebContents['capturePage'];
   guest.getTitle = vi.fn(() => 'Example');
   guest.getURL = vi.fn(() => 'https://example.com');
   guest.isDestroyed = vi.fn(() => false);
