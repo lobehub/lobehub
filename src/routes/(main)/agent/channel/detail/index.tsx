@@ -153,7 +153,11 @@ const PlatformDetail = memo<PlatformDetailProps>(
           }
           case BOT_RUNTIME_STATUSES.failed: {
             return {
-              errorDetail: runtimeStatus.errorMessage,
+              errorDetail: runtimeStatus.errorCode
+                ? t(`channel.connectionError.${runtimeStatus.errorCode}`, {
+                    defaultValue: runtimeStatus.errorMessage || t('channel.connectFailed'),
+                  })
+                : runtimeStatus.errorMessage,
               title: t('channel.connectFailed'),
               type: 'error',
             };
