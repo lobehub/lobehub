@@ -5,18 +5,32 @@ import { getIdFromIdentifier } from '@/utils/identifier';
 const ROUTE_ROOTS = new Set(['agent', 'page', 'task', 'tasks']);
 
 export type InternalLinkReference =
-  | { agentId: string; pathname: string; type: 'agent' }
-  | { agentId?: string; documentId: string; pathname: string; type: 'document' }
+  | { agentId: string; pathname: string; type: 'agent'; workspaceSlug?: string }
+  | {
+      agentId?: string;
+      documentId: string;
+      pathname: string;
+      type: 'document';
+      workspaceSlug?: string;
+    }
   | { pathname: string; type: 'route' }
-  | { agentId?: string; pathname: string; taskId: string; type: 'task' };
+  | {
+      agentId?: string;
+      pathname: string;
+      taskId: string;
+      type: 'task';
+      workspaceSlug?: string;
+    };
 
-const getRouteSegments = (pathname: string) => {
+const getRouteSegments = (pathname: string, workspaceSlugs: ReadonlySet<string>) => {
   const segments = pathname.split('/').filter(Boolean);
-  const routeRootIndex = segments.findIndex((segment) => ROUTE_ROOTS.has(segment));
 
-  if (routeRootIndex < 0) return null;
+  if (ROUTE_ROOTS.has(segments[0])) return { segments, workspaceSlug: undefined };
+  if (workspaceSlugs.has(segments[0]) && ROUTE_ROOTS.has(segments[1])) {
+    return { segments: segments.slice(1), workspaceSlug: segments[0] };
+  }
 
-  return segments.slice(routeRootIndex);
+  return null;
 };
 
 const isInternalHost = (url: URL, currentOrigin?: string) => {
@@ -36,6 +50,7 @@ const isInternalHost = (url: URL, currentOrigin?: string) => {
 export const parseInternalLink = (
   href: string | undefined,
   currentOrigin?: string,
+  workspaceSlugs: readonly string[] = [],
 ): InternalLinkReference | null => {
   if (!href) return null;
 
@@ -50,17 +65,29 @@ export const parseInternalLink = (
 
   if (!isRootRelative && !isInternalHost(url, currentOrigin)) return null;
 
-  const segments = getRouteSegments(url.pathname);
+  const route = getRouteSegments(url.pathname, new Set(workspaceSlugs));
   const pathname = `${url.pathname}${url.search}${url.hash}`;
 
-  if (!segments) return { pathname, type: 'route' };
+  if (!route) return { pathname, type: 'route' };
+
+  const { segments, workspaceSlug } = route;
 
   if (segments[0] === 'page' && segments[1]) {
-    return { documentId: getIdFromIdentifier(segments[1], 'docs'), pathname, type: 'document' };
+    return {
+      documentId: getIdFromIdentifier(segments[1], 'docs'),
+      pathname,
+      type: 'document',
+      ...(workspaceSlug ? { workspaceSlug } : {}),
+    };
   }
 
   if (segments[0] === 'task' && segments[1]) {
-    return { pathname, taskId: segments[1], type: 'task' };
+    return {
+      pathname,
+      taskId: segments[1],
+      type: 'task',
+      ...(workspaceSlug ? { workspaceSlug } : {}),
+    };
   }
 
   if (segments[0] === 'agent' && segments[1]) {
@@ -72,14 +99,23 @@ export const parseInternalLink = (
         documentId: getIdFromIdentifier(segments[3], 'docs'),
         pathname,
         type: 'document',
+        ...(workspaceSlug ? { workspaceSlug } : {}),
       };
     }
 
     if (segments[2] === 'task' && segments[3]) {
-      return { agentId, pathname, taskId: segments[3], type: 'task' };
+      return {
+        agentId,
+        pathname,
+        taskId: segments[3],
+        type: 'task',
+        ...(workspaceSlug ? { workspaceSlug } : {}),
+      };
     }
 
-    if (segments.length === 2) return { agentId, pathname, type: 'agent' };
+    if (segments.length === 2) {
+      return { agentId, pathname, type: 'agent', ...(workspaceSlug ? { workspaceSlug } : {}) };
+    }
   }
 
   return { pathname, type: 'route' };

@@ -73,6 +73,11 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ label, refere
 
       event.preventDefault();
 
+      if ('workspaceSlug' in reference && reference.workspaceSlug) {
+        navigate(reference.pathname, { escape: true });
+        return;
+      }
+
       switch (reference.type) {
         case 'agent': {
           openAgentDetail(reference.agentId);

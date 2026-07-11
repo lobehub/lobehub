@@ -4,6 +4,7 @@ import { Github } from '@lobehub/icons';
 import { Mail } from 'lucide-react';
 import { memo } from 'react';
 
+import { useWorkspaces } from '@/business/client/hooks/useWorkspaces';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
@@ -27,11 +28,13 @@ interface LobeLinkProperties {
 const Render = memo<MarkdownElementProps<LobeLinkProperties>>(({ node }) => {
   const { linkHref, linkKind, linkLabel, linkDomain } = node?.properties || {};
   const showIcon = useUserStore(userGeneralSettingsSelectors.enableMessageLinkIcon);
+  const workspaces = useWorkspaces();
 
   const label = linkLabel || linkHref || '';
   const internalReference = parseInternalLink(
     linkHref,
     typeof window === 'undefined' ? undefined : window.location.origin,
+    workspaces.map((workspace) => workspace.slug),
   );
 
   if (linkHref && internalReference) {

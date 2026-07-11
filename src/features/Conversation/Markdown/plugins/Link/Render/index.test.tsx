@@ -15,6 +15,10 @@ const mockOpenAgentDetail = vi.fn();
 const mockOpenDocument = vi.fn();
 const mockOpenTaskDetail = vi.fn();
 
+vi.mock('@/business/client/hooks/useWorkspaces', () => ({
+  useWorkspaces: () => [{ id: 'ws-1', slug: 'lobe-team' }],
+}));
+
 vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
   useWorkspaceAwareNavigate: () => mockNavigate,
 }));
@@ -183,5 +187,18 @@ describe('Link Render — internal entities', () => {
     fireEvent.click(getByRole('link', { name: 'Profile settings' }));
 
     expect(mockNavigate).toHaveBeenCalledWith('/settings/profile', { escape: true });
+  });
+
+  it('navigates workspace-qualified entities before opening a scoped portal', () => {
+    const { getByRole } = renderLink({
+      linkHref: '/lobe-team/task/T-198',
+      linkKind: 'generic',
+      linkLabel: 'Workspace task',
+    });
+
+    fireEvent.click(getByRole('link', { name: 'Workspace task' }));
+
+    expect(mockNavigate).toHaveBeenCalledWith('/lobe-team/task/T-198', { escape: true });
+    expect(mockOpenTaskDetail).not.toHaveBeenCalled();
   });
 });

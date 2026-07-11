@@ -37,11 +37,14 @@ describe('parseInternalLink', () => {
   });
 
   it('parses workspace-prefixed entity paths', () => {
-    expect(parseInternalLink('/lobe-team/agent/agt_agent/docs/docs_document')).toEqual({
+    expect(
+      parseInternalLink('/lobe-team/agent/agt_agent/docs/docs_document', undefined, ['lobe-team']),
+    ).toEqual({
       agentId: 'agt_agent',
       documentId: 'docs_document',
       pathname: '/lobe-team/agent/agt_agent/docs/docs_document',
       type: 'document',
+      workspaceSlug: 'lobe-team',
     });
   });
 
@@ -74,6 +77,10 @@ describe('parseInternalLink', () => {
     });
     expect(parseInternalLink('https://app.lobehub.com/settings/profile')).toEqual({
       pathname: '/settings/profile',
+      type: 'route',
+    });
+    expect(parseInternalLink('/api/agent/stream')).toEqual({
+      pathname: '/api/agent/stream',
       type: 'route',
     });
   });
