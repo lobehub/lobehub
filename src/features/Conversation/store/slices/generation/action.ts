@@ -507,6 +507,13 @@ export const generationSlice: StateCreator<
       executionTarget: agentConfig?.agencyConfig?.executionTarget,
       heterogeneousProvider,
       isGatewayMode: chatStore.isGatewayModeEnabled(context.agentId),
+      // Workspace agents never run in-process on this member's desktop — a
+      // local/unset target coerces to sandbox/device. Omitting this would
+      // classify the retry as local hetero and spawn the CLI on the wrong
+      // machine; with it, gateway-routed runs take the whole-turn fallback.
+      isWorkspaceAgent: agentByIdSelectors.isWorkspaceAgentById(context.agentId)(
+        getAgentStoreState(),
+      ),
     });
     const agentId = context.agentId;
 

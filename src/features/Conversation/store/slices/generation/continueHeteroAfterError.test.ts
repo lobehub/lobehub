@@ -18,11 +18,16 @@ vi.mock(
   }),
 );
 
+// Mirrors the real routing rule that matters here: a workspace-scoped agent's
+// local/unset target coerces away from in-process execution (→ gateway), so the
+// test fails if `continueHeteroAfterError` stops passing `isWorkspaceAgent`.
+const mockSelectRuntimeType = vi.fn((ctx: any) => (ctx?.isWorkspaceAgent ? 'gateway' : 'hetero'));
 vi.mock('@/store/chat/slices/agentRun/actions/dispatch/agentDispatcher', () => ({
-  selectRuntimeType: () => 'hetero',
+  selectRuntimeType: (ctx: any) => mockSelectRuntimeType(ctx),
 }));
 
 let mockResumeSessionId: string | undefined = 'sess-1';
+let mockIsWorkspaceAgent = false;
 vi.mock('@/store/chat/slices/agentRun/actions/transports/hetero/heteroResume', () => ({
   resolveHeteroResume: () => ({ cwdChanged: false, resumeSessionId: mockResumeSessionId }),
 }));
@@ -55,7 +60,7 @@ vi.mock('@/store/agent', () => ({ getAgentStoreState: () => ({}) }));
 vi.mock('@/store/agent/selectors', () => ({
   agentByIdSelectors: {
     getAgentWorkingDirectoryById: () => () => '/work/dir',
-    isWorkspaceAgentById: () => () => false,
+    isWorkspaceAgentById: () => () => mockIsWorkspaceAgent,
   },
   agentSelectors: {
     getAgentConfigById: () => () => ({
@@ -80,6 +85,7 @@ vi.mock('@/components/AntdStaticMethods', () => ({
 }));
 
 const mockChatDeleteMessage = vi.fn(async () => {});
+const mockExecuteGatewayAgent = vi.fn(async () => {});
 const noop = vi.fn();
 vi.mock('@/store/chat', () => ({
   useChatStore: {
@@ -90,6 +96,7 @@ vi.mock('@/store/chat', () => ({
       associateMessageWithOperation: noop,
       completeOperation: noop,
       deleteMessage: (...args: any[]) => mockChatDeleteMessage(...(args as [])),
+      executeGatewayAgent: (...args: any[]) => mockExecuteGatewayAgent(...(args as [])),
       failOperation: noop,
       internal_updateTopicLoading: noop,
       isGatewayModeEnabled: () => false,
@@ -135,6 +142,7 @@ describe('continueHeteroAfterError', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockResumeSessionId = 'sess-1';
+    mockIsWorkspaceAgent = false;
   });
 
   it('keeps a tail step that did work: clears its error and chains the continuation onto it', async () => {
@@ -214,6 +222,36 @@ describe('continueHeteroAfterError', () => {
     expect(mockChatDeleteMessage).toHaveBeenCalledWith('step-1', { operationId: 'op-id' });
     expect(mockRemoveMessages).not.toHaveBeenCalled();
     expect(executorParams().message).toBe(USER_MESSAGE.content);
+  });
+
+  it('routes a workspace-scoped agent through the whole-turn fallback, never the local executor', async () => {
+    // Workspace agents never execute in-process on this member's desktop:
+    // selectRuntimeType must see the workspace scope (→ gateway) so the retry
+    // neither mutates the preserved steps locally nor spawns the local CLI.
+    mockIsWorkspaceAgent = true;
+    const store = buildGroupStore([
+      { content: 'looking', id: 'step-1', tools: [{ id: 'call-1' }] },
+      { content: '', error: HETERO_RATE_LIMIT, id: 'step-2' },
+    ]);
+
+    await act(async () => {
+      await store.getState().continueHeteroAfterError('step-1');
+    });
+
+    // The routing decision saw the workspace scope.
+    expect(mockSelectRuntimeType).toHaveBeenCalledWith(
+      expect.objectContaining({ isWorkspaceAgent: true }),
+    );
+    // No local mutation of the failed run's steps.
+    expect(mockUpdateMessage).not.toHaveBeenCalled();
+    expect(mockRemoveMessages).not.toHaveBeenCalled();
+    // Whole-turn fallback: the turn is replaced and regenerated via the
+    // gateway with the ORIGINAL user prompt — the local executor never runs.
+    expect(mockChatDeleteMessage).toHaveBeenCalledWith('step-1', { operationId: 'op-id' });
+    expect(mockExecuteGatewayAgent).toHaveBeenCalledWith(
+      expect.objectContaining({ message: USER_MESSAGE.content }),
+    );
+    expect(mockExecuteHeterogeneousAgent).not.toHaveBeenCalled();
   });
 
   it('ignores a tail error that is not a heterogeneous-agent status error', async () => {
