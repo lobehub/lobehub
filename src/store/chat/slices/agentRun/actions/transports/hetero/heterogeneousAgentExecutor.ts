@@ -2202,17 +2202,14 @@ export const executeHeterogeneousAgent = async (
     });
 
     // Send the prompt — blocks until process exits
-    if (systemContext) {
-      await heterogeneousAgentService.sendPrompt(
-        agentSessionId,
-        message,
-        operationId,
-        imageList,
-        systemContext,
-      );
-    } else {
-      await heterogeneousAgentService.sendPrompt(agentSessionId, message, operationId, imageList);
-    }
+    await heterogeneousAgentService.sendPrompt(
+      agentSessionId,
+      message,
+      operationId,
+      imageList,
+      systemContext || undefined,
+      context.agentId,
+    );
     await waitForCompletionCallback();
 
     // Persist heterogeneous-agent session id + the cwd it was created under,

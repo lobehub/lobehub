@@ -76,7 +76,34 @@ export interface StartedServer {
   url: string;
 }
 
+/** MCP tool-result content blocks (text and/or base64 image). */
+export interface McpToolResult {
+  content: Array<
+    { text: string; type: 'text' } | { data: string; mimeType: string; type: 'image' }
+  >;
+  isError?: boolean;
+}
+
+/**
+ * An additional tool the producer mounts on this MCP server next to
+ * `ask_user_question`. The handler receives the operationId resolved from the
+ * MCP session (same `?op=<opId>` routing as the ask-user tool), so one
+ * process-wide server serves per-op tool calls without per-op listeners.
+ */
+export interface McpExtraTool {
+  description: string;
+  handler: (operationId: string, args: Record<string, unknown>) => Promise<McpToolResult>;
+  inputSchema: z.ZodRawShape;
+  name: string;
+  title?: string;
+}
+
 export interface AskUserMcpServerOptions {
+  /**
+   * Additional tools registered on every MCP session alongside
+   * `ask_user_question` (e.g. the desktop's in-app browser control tools).
+   */
+  extraTools?: McpExtraTool[];
   /**
    * Per-call timeout passed to `bridge.pending()`. Default 5 minutes —
    * matches the issue's UX requirement and the tested CC keepalive ceiling.
@@ -336,6 +363,7 @@ export class AskUserMcpServer {
       { capabilities: { tools: {} } },
     );
     this.registerAskUserTool(mcp);
+    for (const tool of this.options.extraTools ?? []) this.registerExtraTool(mcp, tool);
 
     const transport: StreamableHTTPServerTransport = new StreamableHTTPServerTransport({
       onsessionclosed: (sessionId: string) => {
@@ -356,6 +384,41 @@ export class AskUserMcpServer {
     // called by the caller.
     void mcp.connect(transport);
     return transport;
+  }
+
+  /**
+   * Mount a producer-supplied tool with the same op routing as ask-user:
+   * `extra.sessionId` → `sessionIdToOpId` → handler(operationId, args).
+   */
+  private registerExtraTool(mcp: McpServer, tool: McpExtraTool) {
+    const registerTool = mcp.registerTool.bind(mcp) as (
+      name: string,
+      config: { description: string; inputSchema: z.ZodRawShape; title: string },
+      cb: (args: unknown, extra: AskUserToolExtra) => Promise<unknown>,
+    ) => void;
+
+    registerTool(
+      tool.name,
+      {
+        description: tool.description,
+        inputSchema: tool.inputSchema,
+        title: tool.title ?? tool.name,
+      },
+      async (args, extra) => {
+        const sessionId = extra.sessionId;
+        const operationId = sessionId ? this.sessionIdToOpId.get(sessionId) : undefined;
+        if (!operationId) {
+          return errorResult(
+            "Missing 'op' query parameter on MCP server URL — producer should append ?op=<operationId>",
+          );
+        }
+        try {
+          return await tool.handler(operationId, (args ?? {}) as Record<string, unknown>);
+        } catch (error) {
+          return errorResult(String((error as Error)?.message ?? error));
+        }
+      },
+    );
   }
 
   private registerAskUserTool(mcp: McpServer) {

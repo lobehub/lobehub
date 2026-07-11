@@ -20,6 +20,8 @@ export {
 export {
   AskUserMcpServer,
   type AskUserMcpServerOptions,
+  type McpExtraTool,
+  type McpToolResult,
   type StartedServer,
 } from './AskUserMcpServer';
 export {
