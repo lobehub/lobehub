@@ -63,6 +63,7 @@ import { execa } from 'execa';
 
 import ContentSearchService from '@/services/contentSearchSrv';
 import FileSearchService from '@/services/fileSearchSrv';
+import RemoteFileUploadService from '@/services/remoteFileUploadSrv';
 import { createLogger } from '@/utils/logger';
 import { netFetch } from '@/utils/net-fetch';
 
@@ -75,7 +76,7 @@ const SAFE_PATH_PREFIXES = ['/tmp', '/var/tmp'] as const;
 const PROJECT_FILE_GLOB_LIMIT = 5000;
 
 /**
- * Image extensions `readFile` returns as base64 bytes instead of refusing as
+ * Image extensions `readFile` uploads to file storage instead of refusing as
  * binary. The agent then sees the image (vision) via an `image_url` part,
  * rather than hitting "Unsupported binary file".
  *
@@ -421,17 +422,21 @@ export default class LocalFileCtr extends ControllerModule {
 
     // Image files: `local-file-shell` refuses binary, and the agent should be
     // able to actually *see* the image (vision) rather than hit "Unsupported
-    // binary file type". Return the raw bytes as base64; the renderer uploads
-    // them to file storage before persistence (same convention as the hetero
-    // CC Read-on-image echo) and the MessageContent processor turns the
-    // uploaded URL into an `image_url` part for the LLM.
+    // binary file type". Upload the bytes to file storage right here in main
+    // (same convention as the hetero CLI's Read-on-image echo, #16786) and
+    // return a durable { fileId, url } — base64 never crosses IPC and never
+    // reaches the DB; the MessageContent processor turns the uploaded URL into
+    // an `image_url` part for the LLM.
     const ext = path.extname(params.path).toLowerCase().replace('.', '');
     const imageMimeType = LOCAL_IMAGE_EXT_TO_MIME[ext];
     if (imageMimeType) {
       const filePath = resolveAgainstCwd(params.path, params.cwd) ?? params.path;
       const filename = path.basename(filePath);
 
-      const buildImageError = (content: string): LocalReadFileResult => ({
+      const buildImageResult = (
+        content: string,
+        extra: Partial<LocalReadFileResult> = {},
+      ): LocalReadFileResult => ({
         charCount: 0,
         content,
         createdTime: new Date(),
@@ -443,41 +448,53 @@ export default class LocalFileCtr extends ControllerModule {
         modifiedTime: new Date(),
         totalCharCount: 0,
         totalLineCount: 0,
+        ...extra,
       });
 
       let fileStat;
       try {
         fileStat = await stat(filePath);
       } catch (error) {
-        return buildImageError(`Error accessing or processing file: ${(error as Error).message}`);
+        return buildImageResult(`Error accessing or processing file: ${(error as Error).message}`);
       }
 
       if (!fileStat.isFile()) {
-        return buildImageError(`Error: Not a regular file: ${filePath}`);
+        return buildImageResult(`Error: Not a regular file: ${filePath}`);
       }
 
       if (fileStat.size > MAX_IMAGE_READ_BYTES) {
-        return buildImageError(
+        return buildImageResult(
           `Error: Image file is too large to preview (${fileStat.size} bytes, limit ${MAX_IMAGE_READ_BYTES}).`,
         );
       }
 
       const buffer = await readFile(filePath);
 
-      return {
-        charCount: 0,
-        content: `[Image: ${filename}]`,
-        createdTime: fileStat.birthtime,
-        fileType: imageMimeType,
-        filename,
-        imageData: buffer.toString('base64'),
-        isImage: true,
-        lineCount: 0,
-        loc: [0, 0],
-        modifiedTime: fileStat.mtime,
-        totalCharCount: 0,
-        totalLineCount: 0,
-      };
+      try {
+        const record = await this.app
+          .getService(RemoteFileUploadService)
+          .uploadFileBuffer({ buffer, fileName: filename, fileType: imageMimeType });
+
+        if (record?.url) {
+          return buildImageResult(`[Image: ${filename}]`, {
+            createdTime: fileStat.birthtime,
+            imageFileId: record.id,
+            imageUrl: record.url,
+            modifiedTime: fileStat.mtime,
+          });
+        }
+
+        logger.warn('Image upload declined (no active remote session):', { filePath });
+      } catch (error) {
+        logger.warn('Image upload failed:', { error, filePath });
+      }
+
+      // Degrade: the placeholder tells the model an image exists that it
+      // cannot inspect, instead of failing the read outright.
+      return buildImageResult(
+        `[Image: ${filename}] (upload unavailable — the model cannot view this image)`,
+        { createdTime: fileStat.birthtime, modifiedTime: fileStat.mtime },
+      );
     }
 
     return readLocalFile(params);

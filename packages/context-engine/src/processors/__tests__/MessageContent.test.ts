@@ -432,8 +432,8 @@ describe('MessageContentProcessor', () => {
           id: 'tool-1',
           pluginState: {
             images: [
-              // Pre-upload entry that never got rewritten (upload failed).
-              { data: 'aGVsbG8=', mediaType: 'image/png' },
+              // Malformed entry without a url — must never reach the payload.
+              { mediaType: 'image/png' },
               // Legacy desktop-only preview URL — unfetchable by the send path.
               { mediaType: 'image/png', url: 'localfile://file/tmp/cat.png?token=abc' },
             ],

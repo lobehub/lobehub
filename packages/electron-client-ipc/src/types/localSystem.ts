@@ -183,16 +183,22 @@ export interface LocalReadFileResult {
   filename: string;
   fileType: string;
   /**
-   * Base64-encoded bytes of an image result. Present only when
-   * {@link LocalReadFileResult.isImage} is true. The renderer uploads the
-   * bytes to file storage before persistence (base64 never reaches the DB)
-   * and forwards the uploaded URL to vision models.
+   * File record id of the uploaded image. Present only when
+   * {@link LocalReadFileResult.isImage} is true and the main process
+   * successfully uploaded the bytes to file storage.
    */
-  imageData?: string;
+  imageFileId?: string;
   /**
-   * True when the path resolves to an image file. The binary is NOT placed in
-   * `content`; instead {@link LocalReadFileResult.imageData} carries the
-   * base64 bytes so vision models can inspect the image after upload.
+   * Durable URL of the uploaded image. The main process uploads image reads
+   * to file storage directly (base64 never crosses IPC or reaches the DB);
+   * the tool layer forwards this URL to vision models. Absent when the
+   * upload was declined/failed — `content` then carries a placeholder.
+   */
+  imageUrl?: string;
+  /**
+   * True when the path resolves to an image file. The binary is NOT placed
+   * in `content`; instead {@link LocalReadFileResult.imageUrl} references
+   * the uploaded bytes so vision models can inspect the image.
    */
   isImage?: boolean;
   /**
