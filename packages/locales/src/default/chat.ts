@@ -526,6 +526,15 @@ export default {
   'cliRateLimitGuide.resetAt': 'Reset time',
   'cliRateLimitGuide.resetIn': 'Time remaining',
   'cliRateLimitGuide.resetInApprox': 'About {{duration}}',
+  'cliRateLimitGuide.schedule.cancel': 'Cancel auto-continue',
+  'cliRateLimitGuide.schedule.continueAfter': 'Continue in ~{{duration}}',
+  'cliRateLimitGuide.schedule.continueAfterReset': 'Continue after reset',
+  'cliRateLimitGuide.schedule.retryNow': 'Retry now',
+  'cliRateLimitGuide.schedule.runNow': 'Run now',
+  'cliRateLimitGuide.schedule.scheduledAfterReset':
+    'Scheduled. This run will continue automatically once the limit resets.',
+  'cliRateLimitGuide.schedule.scheduledForApprox':
+    'Scheduled. This run will continue automatically in about {{duration}}.',
   'cliRateLimitGuide.resetUnknown': 'the quota resets',
   'cliRateLimitGuide.title': '{{name}} is temporarily unavailable',
   'codexInstallGuide.actions.openDocs': 'Open Install Guide',

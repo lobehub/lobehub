@@ -14,7 +14,6 @@ const otherUserId = 'topic-model-test-other-user';
 
 const topicModel = new TopicModel(serverDB, userId);
 
-const now = () => new Date();
 const minutesAgo = (n: number) => new Date(Date.now() - n * 60 * 1000);
 
 describe('TopicModel', () => {
@@ -636,6 +635,90 @@ describe('TopicModel', () => {
       ]);
 
       expect(await topicModel.countTopicsForMemoryExtractor()).toBe(1);
+    });
+  });
+
+  describe('scheduled continuation', () => {
+    const scheduledRun = {
+      createdAt: '2026-07-12T00:00:00.000Z',
+      failedAssistantMessageId: 'assistant-failed',
+      rateLimit: { resetsAt: 100 },
+      reason: 'rate_limit' as const,
+      source: 'heterogeneous_agent' as const,
+      updatedAt: '2026-07-12T00:00:00.000Z',
+      userMessageId: 'user-message',
+    };
+
+    it('returns only due scheduled topics and atomically grants one live claim', async () => {
+      await serverDB.insert(topics).values([
+        {
+          id: 'scheduled-due',
+          metadata: { scheduledRun },
+          status: 'scheduled',
+          title: 'due',
+          userId,
+        },
+        {
+          id: 'scheduled-future',
+          metadata: { scheduledRun: { ...scheduledRun, rateLimit: { resetsAt: 300 } } },
+          status: 'scheduled',
+          title: 'future',
+          userId,
+        },
+      ]);
+
+      const due = await TopicModel.getDueScheduledTopics(serverDB, new Date(200_000));
+      expect(due.map((topic) => topic.id)).toEqual(['scheduled-due']);
+
+      const claim = {
+        claimedAt: '2026-07-12T00:00:00.000Z',
+        expiresAt: '2026-07-12T00:05:00.000Z',
+        id: 'claim-1',
+      };
+      expect(
+        await TopicModel.claimScheduledTopic(
+          serverDB,
+          'scheduled-due',
+          claim,
+          new Date('2026-07-12T00:01:00.000Z'),
+        ),
+      ).toBe(true);
+      expect(
+        await TopicModel.claimScheduledTopic(
+          serverDB,
+          'scheduled-due',
+          { ...claim, id: 'claim-2' },
+          new Date('2026-07-12T00:01:00.000Z'),
+        ),
+      ).toBe(false);
+    });
+
+    it('does not let a stale dispatcher clear a cancelled or re-claimed schedule', async () => {
+      await serverDB.insert(topics).values({
+        id: 'scheduled-claimed',
+        metadata: {
+          scheduledRun: { ...scheduledRun, claim: { claimedAt: '', expiresAt: '', id: 'new' } },
+        },
+        status: 'scheduled',
+        title: 'claimed',
+        userId,
+      });
+
+      await TopicModel.clearScheduledRun(serverDB, 'scheduled-claimed', 'running', 'old');
+      const [unchanged] = await serverDB
+        .select()
+        .from(topics)
+        .where(eq(topics.id, 'scheduled-claimed'));
+      expect(unchanged.status).toBe('scheduled');
+      expect(unchanged.metadata?.scheduledRun?.claim?.id).toBe('new');
+
+      await TopicModel.clearScheduledRun(serverDB, 'scheduled-claimed', 'running', 'new');
+      const [cleared] = await serverDB
+        .select()
+        .from(topics)
+        .where(eq(topics.id, 'scheduled-claimed'));
+      expect(cleared.status).toBe('running');
+      expect(cleared.metadata?.scheduledRun).toBeNull();
     });
   });
 });

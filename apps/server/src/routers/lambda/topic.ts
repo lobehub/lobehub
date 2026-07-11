@@ -725,6 +725,37 @@ export const topicRouter = router({
             .nullable()
             .optional(),
           repos: z.array(z.string()).optional(),
+          // Backend-scheduled continuation after a rate limit. `null` clears it
+          // (paired with a status flip back to a normal state by the caller).
+          scheduledRun: z
+            .object({
+              claim: z
+                .object({
+                  claimedAt: z.string(),
+                  expiresAt: z.string(),
+                  id: z.string(),
+                })
+                .optional(),
+              createdAt: z.string(),
+              failedAssistantMessageId: z.string(),
+              rateLimit: z
+                .object({
+                  rateLimitType: z.string().optional(),
+                  resetsAt: z.number().optional(),
+                })
+                .optional(),
+              reason: z.literal('rate_limit'),
+              resume: z
+                .object({
+                  sessionId: z.string().optional(),
+                  workingDirectory: z.string().optional(),
+                })
+                .optional(),
+              source: z.literal('heterogeneous_agent'),
+              updatedAt: z.string(),
+              userMessageId: z.string(),
+            })
+            .nullish(),
           workingDirectory: z.string().optional(),
           workingDirectoryConfig: workingDirConfigSchema.optional(),
         }),

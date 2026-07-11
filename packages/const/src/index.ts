@@ -9,6 +9,7 @@ export * from './editor';
 export * from './empty';
 export * from './fetch';
 export * from './file';
+export * from './heterogeneousAgent';
 export * from './interests';
 export * from './layoutTokens';
 export * from './llmGenerationTracing';
