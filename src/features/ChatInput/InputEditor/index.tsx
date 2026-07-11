@@ -26,6 +26,7 @@ import { aiChatService } from '@/services/aiChat';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
+import { useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import {
   labPreferSelectors,
@@ -79,6 +80,7 @@ const InputEditor = memo<{
   placeholderVariant?: PlaceholderVariant;
 }>(({ defaultRows = 2, placeholder, placeholderVariant }) => {
   const { t } = useTranslation('chat');
+  const mobile = useServerConfigStore((s) => s.isMobile);
   const [
     editor,
     slashMenuRef,
@@ -560,6 +562,7 @@ const InputEditor = memo<{
           )
         }
         style={{
+          fontSize: mobile ? 16 : undefined,
           minHeight: defaultRows > 1 ? defaultRows * 23 : undefined,
         }}
         onCompositionEnd={({ event }) => compositionProps.onCompositionEnd(event)}
