@@ -253,7 +253,6 @@ const Header = memo(() => {
           {activeAgentId && (
             <AgentBreadcrumb agentId={activeAgentId} title={t('tab.profile', { ns: 'chat' })} />
           )}
-          <AutoSaveHint />
           <AgentStatusTag />
           <AgentVersionReviewTag />
           <AgentForkTag />
@@ -261,6 +260,7 @@ const Header = memo(() => {
       }
       right={
         <Flexbox horizontal align={'center'} gap={4}>
+          <AutoSaveHint />
           <DropdownMenu items={menuItems}>
             <ActionIcon icon={MoreHorizontal} size={DESKTOP_HEADER_ICON_SMALL_SIZE} />
           </DropdownMenu>

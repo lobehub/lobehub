@@ -7,7 +7,7 @@ import { setScopedMutate } from '@/libs/swr';
 import { agentConfigKeys } from '@/libs/swr/keys';
 import { agentService } from '@/services/agent';
 import { agentDocumentService } from '@/services/agentDocument';
-import { type LobeAgentConfig } from '@/types/agent';
+import type { LobeAgentConfig } from '@/types/agent';
 import { withSWR } from '~test-utils';
 
 import { useAgentStore } from '../../store';
@@ -66,11 +66,15 @@ vi.mock('swr', async (importOriginal) => {
 beforeEach(() => {
   vi.clearAllMocks();
   setScopedMutate(vi.fn() as any);
+  useAgentStore.getState().setActiveAgentId('__test-reset__');
+  useAgentStore.getState().setActiveAgentId(undefined);
   useAgentStore.setState({
     activeAgentId: undefined,
     agentMap: {},
     builtinAgentIdMap: {},
     availableAgents: undefined,
+    lastUpdatedTime: null,
+    saveStatus: 'idle',
     updateAgentConfigSignal: undefined,
     agentDocumentsMap: {},
     streamingSystemRole: undefined,
@@ -538,7 +542,36 @@ describe('AgentSlice Actions', () => {
       expect(message.error).toHaveBeenCalled();
       // Optimistic value must not survive a rejected write — refetch server truth.
       expect(refreshSpy).toHaveBeenCalledWith('agent-1');
-      expect(result.current.saveStatus).toBe('idle');
+      expect(result.current.saveStatus).toBe('failed');
+    });
+
+    it('should retry the latest failed config save', async () => {
+      const { result } = renderHook(() => useAgentStore());
+
+      vi.mocked(agentService.updateAgentConfig)
+        .mockRejectedValueOnce(new Error('save failed'))
+        .mockResolvedValueOnce({
+          agent: { model: 'gpt-4' } as any,
+          success: true,
+        });
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      act(() => {
+        useAgentStore.setState({ activeAgentId: 'agent-1' });
+      });
+
+      await act(async () => {
+        await result.current.updateAgentConfig({ model: 'gpt-4' });
+      });
+
+      expect(result.current.saveStatus).toBe('failed');
+
+      await act(async () => {
+        await result.current.retryAgentSave();
+      });
+
+      expect(agentService.updateAgentConfig).toHaveBeenCalledTimes(2);
+      expect(result.current.saveStatus).toBe('saved');
     });
   });
 
@@ -633,6 +666,23 @@ describe('AgentSlice Actions', () => {
         resolveAgentA?.({ agent: { id: 'agent-a' } as any, success: true });
         await saveAgentA;
       });
+    });
+
+    it('should keep a failed metadata save visible', async () => {
+      const { result } = renderHook(() => useAgentStore());
+
+      vi.mocked(agentService.updateAgentMeta).mockRejectedValue(new Error('save failed'));
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      act(() => {
+        useAgentStore.setState({ activeAgentId: 'agent-1' });
+      });
+
+      await act(async () => {
+        await result.current.updateAgentMeta({ title: 'New Title' });
+      });
+
+      expect(result.current.saveStatus).toBe('failed');
     });
   });
 

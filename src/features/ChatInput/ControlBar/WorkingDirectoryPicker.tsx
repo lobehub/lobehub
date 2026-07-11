@@ -537,7 +537,7 @@ const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) =
 
   const displayName = selectedDir
     ? (getWorkingDirectoryName(selectedDir) ?? selectedDir)
-    : t('workingDirectory.notSet');
+    : t('workingDirectory.title');
 
   const trigger = (
     <div className={styles.button}>
@@ -564,7 +564,7 @@ const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) =
         {open ? (
           trigger
         ) : (
-          <Tooltip title={selectedDir || t('workingDirectory.notSet')}>{trigger}</Tooltip>
+          <Tooltip title={selectedDir || t('workingDirectory.title')}>{trigger}</Tooltip>
         )}
       </div>
     </Popover>
