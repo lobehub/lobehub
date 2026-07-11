@@ -957,3 +957,19 @@ nodeintegration, plugins, disablewebsecurity, allowpopups, preload, …`). The h
 - **Works**: temporary probes use `console.log('[AGENT-TEST] …')` (always reaches the instance
   log via stdout); confirm the rebuilt bundle actually contains the probe string
   (`grep "<probe>" apps/desktop/dist/main/index.js`) before interpreting silence.
+
+### D15. Host-page CDP screenshot renders the `<webview>` region BLACK intermittently — guest DOM eval is ground truth
+
+- **Situation**: capturing evidence of an Electron in-app browser (`<webview>` in a sidebar).
+  Early `Page.captureScreenshot` shots of the host page included the guest's pixels; minutes
+  later the same command on the same target returned the webview region uniformly black
+  (byte-identical output across retries), while the app chrome around it rendered fine.
+- **Doesn't work**: concluding the embedded page went blank/failed from the host screenshot,
+  or retrying the host capture. The guest was healthy the whole time: an `agent-browser`
+  session following the webview target (E16) read `document.title` = the expected page and
+  full body text.
+- **Works**: treat the guest target as the source of truth — eval `title`/`innerText` in the
+  webview target for the assertion, and capture the guest's own pixels via a session pinned
+  to the `webview` target (`agent-browser screenshot` there) when the embedded page's visual
+  matters. Use host-page screenshots only for the app chrome around the webview. Cause of the
+  black compositing not established (OOPIF surface not composited into the host capture).
