@@ -1,10 +1,8 @@
 import type * as LobeChatConst from '@lobechat/const';
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type * as LucideReact from 'lucide-react';
 import type { PropsWithChildren, ReactNode } from 'react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-
-import type { SaveStatus } from '@/types/saveState';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import Header from './index';
 
@@ -22,10 +20,7 @@ const mocks = vi.hoisted(() => ({
       tags: ['test'],
       title: 'Test Agent',
     },
-    retryAgentSave: vi.fn(),
-    saveStatus: 'idle' as SaveStatus,
     systemRole: 'You are helpful.',
-    updateSaveStatus: vi.fn(),
   },
   globalState: {
     isStatusInit: true,
@@ -84,14 +79,6 @@ vi.mock('@lobehub/ui', () => ({
   ),
   Flexbox: ({ children }: PropsWithChildren) => <div>{children}</div>,
   Icon: () => <span />,
-  Tag: ({ children, onClick }: PropsWithChildren<{ onClick?: () => void }>) =>
-    onClick ? (
-      <button type="button" onClick={onClick}>
-        {children}
-      </button>
-    ) : (
-      <span>{children}</span>
-    ),
 }));
 
 vi.mock('@lobehub/ui/base-ui', () => ({
@@ -162,8 +149,8 @@ vi.mock('@/features/AgentBreadcrumb', () => ({
 vi.mock('@/features/NavHeader', () => ({
   default: ({ left, right }: { left?: ReactNode; right?: ReactNode }) => (
     <header>
-      <div data-testid="nav-header-left">{left}</div>
-      <div data-testid="nav-header-right">{right}</div>
+      {left}
+      {right}
     </header>
   ),
 }));
@@ -227,61 +214,13 @@ vi.mock('./AgentVersionReviewTag', () => ({
 
 describe('Agent profile Header', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:agent-profile');
     vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
     mocks.agentState.isCurrentAgentHeterogeneous = false;
-    mocks.agentState.saveStatus = 'idle';
     mocks.agentState.systemRole = 'You are helpful.';
     mocks.agentState.config.plugins = ['lobe-web-browsing'];
     mocks.profileState.editor = undefined;
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  it('should hide save feedback while the profile is idle', () => {
-    render(<Header />);
-
-    expect(screen.queryByText('autoSave.latest')).not.toBeInTheDocument();
-  });
-
-  it('should render save feedback in the header action area', () => {
-    mocks.agentState.saveStatus = 'saving';
-
-    render(<Header />);
-
-    expect(
-      within(screen.getByTestId('nav-header-right')).getByText('autoSave.saving'),
-    ).toBeInTheDocument();
-    expect(
-      within(screen.getByTestId('nav-header-left')).queryByText('autoSave.saving'),
-    ).not.toBeInTheDocument();
-  });
-
-  it('should briefly confirm a successful save and then return to idle', () => {
-    vi.useFakeTimers();
-    mocks.agentState.saveStatus = 'saved';
-
-    render(<Header />);
-
-    expect(screen.getByText('autoSave.saved')).toBeInTheDocument();
-
-    act(() => vi.advanceTimersByTime(2000));
-
-    expect(mocks.agentState.updateSaveStatus).toHaveBeenCalledWith('idle');
-  });
-
-  it('should keep a failed save visible and allow retrying it', () => {
-    mocks.agentState.saveStatus = 'failed';
-
-    render(<Header />);
-
-    fireEvent.click(screen.getByRole('button', { name: 'autoSave.failed · autoSave.retry' }));
-
-    expect(mocks.agentState.retryAgentSave).toHaveBeenCalledTimes(1);
   });
 
   it('should show the markdown export action', () => {

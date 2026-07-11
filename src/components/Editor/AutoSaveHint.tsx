@@ -3,11 +3,11 @@
 import { Icon, Tag } from '@lobehub/ui';
 import dayjs from 'dayjs';
 import { CloudIcon, Loader2Icon, TriangleAlertIcon } from 'lucide-react';
-import type { CSSProperties } from 'react';
+import { type CSSProperties } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { SaveStatus } from '@/types/saveState';
+import { type SaveStatus } from '@/types/saveState';
 
 interface AutoSaveHintProps {
   lastUpdatedTime?: string | Date | null;
@@ -47,11 +47,10 @@ const AutoSaveHint = memo<AutoSaveHintProps>(({ style, saveStatus, lastUpdatedTi
       </Tag>
     );
 
-  if (saveStatus === 'saved')
+  if (saveStatus === 'saved' && lastUpdatedTime)
     return (
       <Tag icon={<Icon icon={CloudIcon} />} style={style}>
-        {t('autoSave.saved')}
-        {lastUpdatedTime ? ` ${dayjs(lastUpdatedTime).fromNow()}` : ''}
+        {t('autoSave.saved')} {dayjs(lastUpdatedTime).fromNow()}
       </Tag>
     );
 

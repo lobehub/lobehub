@@ -36,7 +36,6 @@ import { selectors as profileSelectors, useProfileStore } from '../store';
 import AgentForkTag from './AgentForkTag';
 import AgentStatusTag from './AgentStatusTag';
 import AgentVersionReviewTag from './AgentVersionReviewTag';
-import AutoSaveHint from './AutoSaveHint';
 
 type HeaderTranslation = TFunction<
   readonly ['setting', 'chat', 'file', 'common', 'spend'],
@@ -260,7 +259,6 @@ const Header = memo(() => {
       }
       right={
         <Flexbox horizontal align={'center'} gap={4}>
-          <AutoSaveHint />
           <DropdownMenu items={menuItems}>
             <ActionIcon icon={MoreHorizontal} size={DESKTOP_HEADER_ICON_SMALL_SIZE} />
           </DropdownMenu>

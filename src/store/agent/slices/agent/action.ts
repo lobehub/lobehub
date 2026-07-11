@@ -83,7 +83,6 @@ export class AgentSliceActionImpl {
   readonly #pendingAgentDocuments = new Map<string, Promise<AgentContextDocument[] | undefined>>();
   readonly #updateAgentConfigControllers = new Map<string, AbortController>();
   readonly #updateAgentMetaControllers = new Map<string, AbortController>();
-  #retrySaveTask?: () => Promise<void>;
 
   constructor(set: Setter, get: () => AgentStore, _api?: unknown) {
     void _api;
@@ -177,11 +176,8 @@ export class AgentSliceActionImpl {
   };
 
   setActiveAgentId = (agentId?: string): void => {
-    if (this.#get().activeAgentId === agentId) return;
-
-    this.#retrySaveTask = undefined;
     this.#set(
-      { activeAgentId: agentId, lastUpdatedTime: null, saveStatus: 'idle' },
+      (state) => (state.activeAgentId === agentId ? state : { activeAgentId: agentId }),
       false,
       'setActiveAgentId',
     );
@@ -358,10 +354,6 @@ export class AgentSliceActionImpl {
       false,
       'updateSaveStatus',
     );
-  };
-
-  retryAgentSave = async (): Promise<void> => {
-    await this.#retrySaveTask?.();
   };
 
   useFetchAgentConfig = (
@@ -566,9 +558,6 @@ export class AgentSliceActionImpl {
   ): Promise<void> => {
     const { internal_dispatchAgentMap, updateSaveStatus } = this.#get();
     const mergedData = this.#mergeLatestAgencyConfigPatch(id, data);
-    const retrySave = () => this.#get().updateAgentConfigById(id, data);
-
-    this.#retrySaveTask = retrySave;
 
     // 1. Optimistic update (instant UI feedback)
     internal_dispatchAgentMap(id, mergedData);
@@ -586,19 +575,13 @@ export class AgentSliceActionImpl {
         await this.#get().internal_refreshAgentConfig(id);
         this.#get().invalidateAvailableAgents();
       }
-      if (this.#retrySaveTask === retrySave) {
-        this.#retrySaveTask = undefined;
-        updateSaveStatus('saved');
-      }
+      updateSaveStatus('saved');
     } catch (error: any) {
       if (error?.name === 'AbortError' || error?.message?.includes('aborted')) {
-        if (this.#retrySaveTask === retrySave) {
-          this.#retrySaveTask = undefined;
-          updateSaveStatus('idle');
-        }
+        updateSaveStatus('idle');
       } else {
         console.error('[AgentStore] Failed to save config:', error);
-        if (this.#retrySaveTask === retrySave) updateSaveStatus('failed');
+        updateSaveStatus('idle');
         // A swallowed failure reads as saved and surfaces later as mysterious
         // data loss (the next refetch reverts the optimistic value) — tell the
         // user right away.
@@ -620,9 +603,6 @@ export class AgentSliceActionImpl {
     signal?: AbortSignal,
   ): Promise<void> => {
     const { internal_dispatchAgentMap, updateSaveStatus } = this.#get();
-    const retrySave = () => this.#get().updateAgentMetaById(id, meta);
-
-    this.#retrySaveTask = retrySave;
 
     // 1. Optimistic update - meta fields are at the top level of agent config
     internal_dispatchAgentMap(id, meta as PartialDeep<LobeAgentConfig>);
@@ -637,19 +617,13 @@ export class AgentSliceActionImpl {
         internal_dispatchAgentMap(id, result.agent);
         this.#get().invalidateAvailableAgents();
       }
-      if (this.#retrySaveTask === retrySave) {
-        this.#retrySaveTask = undefined;
-        updateSaveStatus('saved');
-      }
+      updateSaveStatus('saved');
     } catch (error: any) {
       if (error?.name === 'AbortError' || error?.message?.includes('aborted')) {
-        if (this.#retrySaveTask === retrySave) {
-          this.#retrySaveTask = undefined;
-          updateSaveStatus('idle');
-        }
+        updateSaveStatus('idle');
       } else {
         console.error('[AgentStore] Failed to save meta:', error);
-        if (this.#retrySaveTask === retrySave) updateSaveStatus('failed');
+        updateSaveStatus('idle');
       }
     }
   };

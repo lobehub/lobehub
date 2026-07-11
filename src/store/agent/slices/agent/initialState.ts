@@ -1,16 +1,15 @@
 import type { AgentContextDocument } from '@lobechat/context-engine';
 import type { PartialDeep } from 'type-fest';
 
-import type { AgentSettingsInstance } from '@/features/AgentSetting';
-import type { AvailableAgentItem } from '@/services/agent';
-import type { AgentItem } from '@/types/agent';
-import type { MetaData } from '@/types/meta';
-import type { SaveStatus } from '@/types/saveState';
+import { type AgentSettingsInstance } from '@/features/AgentSetting';
+import { type AvailableAgentItem } from '@/services/agent';
+import { type AgentItem } from '@/types/agent';
+import { type MetaData } from '@/types/meta';
 
 import { readAllLocalAgentWorkingDirectories } from '../../utils/localAgentWorkingDirectoryStorage';
 
 export type LoadingState = Record<Partial<keyof MetaData> | string, boolean>;
-export type { SaveStatus } from '@/types/saveState';
+export type SaveStatus = 'idle' | 'saving' | 'saved';
 
 export interface AgentSliceState {
   activeAgentId?: string;
