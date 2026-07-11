@@ -1,34 +1,9 @@
 import type { TaskStatus } from '@lobechat/types';
 import { ActionIcon } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
-import type { LucideIcon } from 'lucide-react';
-import {
-  CircleCheck,
-  CircleDashed,
-  CircleDot,
-  CircleSlash,
-  CircleX,
-  Clock,
-  HandIcon,
-} from 'lucide-react';
 import { memo } from 'react';
 
+import { TASK_STATUS_VISUALS } from '@/components/ExecutionStatus';
 import { taskListSelectors } from '@/store/task/selectors';
-
-interface StatusMeta {
-  color: string;
-  icon: LucideIcon;
-}
-
-const STATUS_META: Record<TaskStatus, StatusMeta> = {
-  backlog: { color: cssVar.colorTextQuaternary, icon: CircleDashed },
-  canceled: { color: cssVar.colorTextSecondary, icon: CircleSlash },
-  completed: { color: cssVar.colorSuccess, icon: CircleCheck },
-  failed: { color: cssVar.colorError, icon: CircleX },
-  paused: { color: cssVar.colorInfo, icon: HandIcon },
-  running: { color: cssVar.colorWarning, icon: CircleDot },
-  scheduled: { color: cssVar.colorWarning, icon: Clock },
-};
 
 interface TaskStatusIconProps {
   size?: number;
@@ -37,7 +12,7 @@ interface TaskStatusIconProps {
 
 const TaskStatusIcon = memo<TaskStatusIconProps>(({ size = 16, status }) => {
   const displayStatus = taskListSelectors.getDisplayStatus(status);
-  const meta = STATUS_META[status as TaskStatus] ?? STATUS_META.backlog;
+  const meta = TASK_STATUS_VISUALS[status as TaskStatus] ?? TASK_STATUS_VISUALS.backlog;
 
   return (
     <ActionIcon
