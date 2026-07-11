@@ -96,14 +96,14 @@ describe('LocalSystemExecutionRuntime.globFiles', () => {
 });
 
 describe('LocalSystemExecutionRuntime.readFile', () => {
-  it('routes image results onto state.images with the preview URL', async () => {
+  it('routes image results onto state.images as pre-upload base64 entries', async () => {
     const service = createService({
       readLocalFile: vi.fn().mockResolvedValue({
         content: '[Image: cat.png]',
         fileType: 'image/png',
         filename: 'cat.png',
+        imageData: 'aGVsbG8=',
         isImage: true,
-        previewUrl: 'http://127.0.0.1:9999/cat.png?token=abc',
       }),
     });
     const runtime = new LocalSystemExecutionRuntime(service);
@@ -111,11 +111,9 @@ describe('LocalSystemExecutionRuntime.readFile', () => {
     const output = await runtime.readFile({ path: '/tmp/cat.png' });
 
     expect(output.success).toBe(true);
-    // The preview URL flows onto state.images so the MessageContent tool-message
-    // processor can turn it into an image_url part for vision models.
-    expect(output.state?.images).toEqual([
-      { mediaType: 'image/png', url: 'http://127.0.0.1:9999/cat.png?token=abc' },
-    ]);
+    // The base64 bytes flow onto state.images as a pre-upload entry — the
+    // client uploads it and rewrites to { fileId, url } before persistence.
+    expect(output.state?.images).toEqual([{ data: 'aGVsbG8=', mediaType: 'image/png' }]);
     expect(output.content).toBe('[Image: cat.png]');
   });
 

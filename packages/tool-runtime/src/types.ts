@@ -114,12 +114,22 @@ export interface ListFilesState {
   totalCount?: number;
 }
 
+/**
+ * An image produced by a tool result. Same lifecycle as the hetero
+ * `HeterogeneousToolResultImage`: the runtime emits `{ data, mediaType }`
+ * (base64), the client uploads it to file storage and rewrites the entry to
+ * `{ fileId, url, mediaType }` BEFORE persistence — raw base64 must never
+ * reach the DB, and entries without a `url` must never reach the LLM.
+ */
 export interface ToolResultImage {
+  /** Base64 payload — present pre-upload; stripped once `fileId`/`url` are set. */
+  data?: string;
+  /** File record id after upload to the file store. */
   fileId?: string;
   /** MIME type, e.g. `image/png`. */
   mediaType: string;
-  /** Fetchable URL (uploaded or desktop preview URL). */
-  url: string;
+  /** Remote URL after upload. */
+  url?: string;
 }
 
 export interface ReadFileState {

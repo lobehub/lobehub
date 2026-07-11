@@ -263,9 +263,9 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
             filename: raw.filename,
             // Image results: set by LocalFileCtr when the path resolves to an
             // image, so ComputerRuntime can route them to `state.images`.
+            imageData: raw.imageData,
             isImage: raw.isImage,
             loc: raw.loc,
-            previewUrl: raw.previewUrl,
             totalCharCount: raw.totalCharCount,
             totalLineCount: raw.totalLineCount,
           },

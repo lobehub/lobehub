@@ -20,6 +20,7 @@ import { safeParseJSON } from '@/utils/safeParseJSON';
 import { dbMessageSelectors } from '../../message/selectors';
 import { type RemoteToolExecutor } from './exector';
 import { composioExecutor, lobehubSkillExecutor } from './exector';
+import { uploadToolResultImages } from './uploadToolResultImages';
 
 const log = debug('lobe-store:plugin-types');
 
@@ -65,7 +66,10 @@ export class PluginTypesActionImpl {
     }
 
     if (effectiveSource === 'composio') {
-      return await this.#get().invokeComposioTypePlugin(id, { ...payload, source: effectiveSource });
+      return await this.#get().invokeComposioTypePlugin(id, {
+        ...payload,
+        source: effectiveSource,
+      });
     }
 
     if (effectiveSource === 'lobehubSkill') {
@@ -237,6 +241,11 @@ export class PluginTypesActionImpl {
         topicId,
       });
 
+      // Pre-upload image entries (base64 `data`) must become durable
+      // `{ fileId, url }` references before persistence — see
+      // uploadToolResultImages for the degrade semantics.
+      const pluginState = await uploadToolResultImages(result.state);
+
       // Use optimisticUpdateToolMessage to batch update content, state, error, metadata
       await optimisticUpdateToolMessage(
         id,
@@ -250,7 +259,7 @@ export class PluginTypesActionImpl {
                 type: result.error.type as any,
               }
             : undefined,
-          pluginState: result.state,
+          pluginState,
         },
         context,
       );

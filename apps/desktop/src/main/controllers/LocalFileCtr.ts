@@ -54,6 +54,7 @@ import {
   moveLocalFiles,
   readLocalFile,
   renameLocalFile,
+  resolveAgainstCwd,
   type SearchOptions,
   writeLocalFile,
 } from '@lobechat/local-file-shell';
@@ -74,25 +75,26 @@ const SAFE_PATH_PREFIXES = ['/tmp', '/var/tmp'] as const;
 const PROJECT_FILE_GLOB_LIMIT = 5000;
 
 /**
- * Image extensions `readFile` resolves to a preview URL instead of refusing as
+ * Image extensions `readFile` returns as base64 bytes instead of refusing as
  * binary. The agent then sees the image (vision) via an `image_url` part,
- * rather than reading a base64 text dump or hitting "Unsupported binary file".
+ * rather than hitting "Unsupported binary file".
+ *
+ * Limited to the formats vision providers accept (Anthropic/OpenAI:
+ * png/jpeg/gif/webp) — anything else would be silently dropped by the
+ * model-runtime builders, which is worse than the binary refusal. SVG is
+ * intentionally absent: it's text, and reading the source is more useful to
+ * the model than a rasterization we can't produce here.
  */
 const LOCAL_IMAGE_EXT_TO_MIME: Record<string, string> = {
-  avif: 'image/avif',
-  bmp: 'image/bmp',
   gif: 'image/gif',
-  heic: 'image/heic',
-  heif: 'image/heif',
-  ico: 'image/x-icon',
   jpeg: 'image/jpeg',
   jpg: 'image/jpeg',
   png: 'image/png',
-  svg: 'image/svg+xml',
-  tif: 'image/tiff',
-  tiff: 'image/tiff',
   webp: 'image/webp',
 };
+
+/** Refuse to load image bytes beyond this size — providers reject them anyway. */
+const MAX_IMAGE_READ_BYTES = 10 * 1024 * 1024;
 
 const TEXT_PREVIEW_MIME_TYPES = new Set([
   'application/graphql',
@@ -419,38 +421,19 @@ export default class LocalFileCtr extends ControllerModule {
 
     // Image files: `local-file-shell` refuses binary, and the agent should be
     // able to actually *see* the image (vision) rather than hit "Unsupported
-    // binary file type". Resolve a desktop local-file preview URL; the tool
-    // layer carries it on `state.images` and the MessageContent processor turns
-    // it into an `image_url` part (fetching base64 at send time) for the LLM.
+    // binary file type". Return the raw bytes as base64; the renderer uploads
+    // them to file storage before persistence (same convention as the hetero
+    // CC Read-on-image echo) and the MessageContent processor turns the
+    // uploaded URL into an `image_url` part for the LLM.
     const ext = path.extname(params.path).toLowerCase().replace('.', '');
     const imageMimeType = LOCAL_IMAGE_EXT_TO_MIME[ext];
     if (imageMimeType) {
-      const filename = path.basename(params.path);
-      const workspaceRoot = params.cwd ?? path.dirname(params.path);
-      const url = await this.app.localFileProtocolManager.createPreviewUrl({
-        filePath: params.path,
-        workspaceRoot,
-      });
+      const filePath = resolveAgainstCwd(params.path, params.cwd) ?? params.path;
+      const filename = path.basename(filePath);
 
-      if (!url) {
-        return {
-          charCount: 0,
-          content: `Error: Image file is outside the approved workspace and cannot be previewed: ${params.path}`,
-          createdTime: new Date(),
-          fileType: imageMimeType,
-          filename,
-          isImage: true,
-          lineCount: 0,
-          loc: [0, 0],
-          modifiedTime: new Date(),
-          totalCharCount: 0,
-          totalLineCount: 0,
-        };
-      }
-
-      return {
+      const buildImageError = (content: string): LocalReadFileResult => ({
         charCount: 0,
-        content: `[Image: ${filename}]`,
+        content,
         createdTime: new Date(),
         fileType: imageMimeType,
         filename,
@@ -458,7 +441,40 @@ export default class LocalFileCtr extends ControllerModule {
         lineCount: 0,
         loc: [0, 0],
         modifiedTime: new Date(),
-        previewUrl: url,
+        totalCharCount: 0,
+        totalLineCount: 0,
+      });
+
+      let fileStat;
+      try {
+        fileStat = await stat(filePath);
+      } catch (error) {
+        return buildImageError(`Error accessing or processing file: ${(error as Error).message}`);
+      }
+
+      if (!fileStat.isFile()) {
+        return buildImageError(`Error: Not a regular file: ${filePath}`);
+      }
+
+      if (fileStat.size > MAX_IMAGE_READ_BYTES) {
+        return buildImageError(
+          `Error: Image file is too large to preview (${fileStat.size} bytes, limit ${MAX_IMAGE_READ_BYTES}).`,
+        );
+      }
+
+      const buffer = await readFile(filePath);
+
+      return {
+        charCount: 0,
+        content: `[Image: ${filename}]`,
+        createdTime: fileStat.birthtime,
+        fileType: imageMimeType,
+        filename,
+        imageData: buffer.toString('base64'),
+        isImage: true,
+        lineCount: 0,
+        loc: [0, 0],
+        modifiedTime: fileStat.mtime,
         totalCharCount: 0,
         totalLineCount: 0,
       };

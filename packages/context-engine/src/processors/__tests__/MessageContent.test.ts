@@ -415,6 +415,42 @@ describe('MessageContentProcessor', () => {
       expect(result.messages[0].content).toBe('plain text result');
       expect(result.messages[0].tool_call_id).toBe('call_abc');
     });
+
+    it('should ignore image entries without a fetchable URL', async () => {
+      mockIsCanUseVision.mockReturnValue(true);
+
+      const processor = new MessageContentProcessor({
+        model: 'gpt-4-vision',
+        provider: 'openai',
+        isCanUseVision: mockIsCanUseVision,
+        fileContext: { enabled: false },
+      });
+
+      const messages: UIChatMessage[] = [
+        {
+          content: '[Image: cat.png]',
+          id: 'tool-1',
+          pluginState: {
+            images: [
+              // Pre-upload entry that never got rewritten (upload failed).
+              { data: 'aGVsbG8=', mediaType: 'image/png' },
+              // Legacy desktop-only preview URL — unfetchable by the send path.
+              { mediaType: 'image/png', url: 'localfile://file/tmp/cat.png?token=abc' },
+            ],
+          },
+          role: 'tool',
+          tool_call_id: 'call_abc',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        } as any,
+      ];
+
+      const result = await processor.process(createContext(messages));
+
+      // No usable image: the tool message passes through as plain text.
+      expect(result.messages[0].content).toBe('[Image: cat.png]');
+      expect(result.messages[0].tool_call_id).toBe('call_abc');
+    });
   });
 
   describe('File context processing', () => {

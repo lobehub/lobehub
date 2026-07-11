@@ -183,10 +183,16 @@ export interface LocalReadFileResult {
   filename: string;
   fileType: string;
   /**
+   * Base64-encoded bytes of an image result. Present only when
+   * {@link LocalReadFileResult.isImage} is true. The renderer uploads the
+   * bytes to file storage before persistence (base64 never reaches the DB)
+   * and forwards the uploaded URL to vision models.
+   */
+  imageData?: string;
+  /**
    * True when the path resolves to an image file. The binary is NOT placed in
-   * `content`; instead {@link LocalReadFileResult.previewUrl} carries a
-   * fetchable desktop preview URL that the tool layer turns into an
-   * `image_url` part so vision models can inspect the image.
+   * `content`; instead {@link LocalReadFileResult.imageData} carries the
+   * base64 bytes so vision models can inspect the image after upload.
    */
   isImage?: boolean;
   /**
@@ -195,12 +201,6 @@ export interface LocalReadFileResult {
   lineCount: number;
   loc: [number, number];
   modifiedTime: Date;
-  /**
-   * Desktop local-file preview URL for an image result. Present only when
-   * {@link LocalReadFileResult.isImage} is true; consumers fetch base64 from
-   * it at send time to forward to vision models.
-   */
-  previewUrl?: string;
   /**
    * Total character count of the entire file.
    */

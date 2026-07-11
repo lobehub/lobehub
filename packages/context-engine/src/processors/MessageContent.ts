@@ -464,11 +464,20 @@ export class MessageContentProcessor extends BaseProcessor {
    * result with the originating tool call by it.
    */
   private async processToolMessage(message: any): Promise<any> {
-    const images = message.pluginState?.images;
-    const hasImages = Array.isArray(images) && images.length > 0;
+    const rawImages = message.pluginState?.images;
 
-    // Fast path: no images — plain text tool result passes through unchanged.
-    if (!hasImages) return message;
+    // Only forward entries with a durable, fetchable URL. Pre-upload entries
+    // (base64 `data`, no `url`) must never reach the LLM payload, and legacy
+    // non-http(s) URLs (e.g. desktop-only `localfile://` previews) can't be
+    // fetched by the send path.
+    const images = Array.isArray(rawImages)
+      ? rawImages.filter(
+          (image: any) => typeof image?.url === 'string' && /^(?:data:|https?:)/.test(image.url),
+        )
+      : [];
+
+    // Fast path: no usable images — plain text tool result passes through unchanged.
+    if (images.length === 0) return message;
 
     const canUseVision = !!this.config.isCanUseVision?.(this.config.model, this.config.provider);
 

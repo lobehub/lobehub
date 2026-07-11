@@ -136,6 +136,64 @@ describe('LocalFileCtr — readFile / readFiles (real fs)', () => {
     });
   });
 
+  describe('readFile — image files', () => {
+    const pngBytes = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
+
+    it('should return base64 image data with a text placeholder', async () => {
+      const filePath = path.join(tmpDir, 'cat.png');
+      await writeFile(filePath, pngBytes);
+
+      const result = await localFileCtr.readFile({ path: filePath });
+
+      expect(result.isImage).toBe(true);
+      expect(result.fileType).toBe('image/png');
+      expect(result.imageData).toBe(pngBytes.toString('base64'));
+      expect(result.content).toBe('[Image: cat.png]');
+    });
+
+    it('should resolve a relative image path against cwd', async () => {
+      await mkdir(path.join(tmpDir, 'assets'), { recursive: true });
+      const filePath = path.join(tmpDir, 'assets', 'nested.jpg');
+      await writeFile(filePath, pngBytes);
+
+      const result = await localFileCtr.readFile({ cwd: tmpDir, path: 'assets/nested.jpg' });
+
+      expect(result.isImage).toBe(true);
+      expect(result.fileType).toBe('image/jpeg');
+      expect(result.imageData).toBe(pngBytes.toString('base64'));
+    });
+
+    it('should return a readable error for a missing image', async () => {
+      const result = await localFileCtr.readFile({ path: path.join(tmpDir, 'missing.png') });
+
+      expect(result.isImage).toBe(true);
+      expect(result.imageData).toBeUndefined();
+      expect(result.content).toContain('Error accessing or processing file');
+    });
+
+    it('should refuse oversized images instead of loading them', async () => {
+      const filePath = path.join(tmpDir, 'huge.png');
+      await writeFile(filePath, Buffer.alloc(10 * 1024 * 1024 + 1));
+
+      const result = await localFileCtr.readFile({ path: filePath });
+
+      expect(result.isImage).toBe(true);
+      expect(result.imageData).toBeUndefined();
+      expect(result.content).toContain('too large');
+    });
+
+    it('should read svg as text, not as an image', async () => {
+      const filePath = path.join(tmpDir, 'icon.svg');
+      const svg = '<svg xmlns="http://www.w3.org/2000/svg"></svg>';
+      await writeFile(filePath, svg);
+
+      const result = await localFileCtr.readFile({ path: filePath });
+
+      expect(result.isImage).toBeUndefined();
+      expect(result.content).toContain('<svg');
+    });
+  });
+
   describe('readFiles', () => {
     it('should read multiple files successfully', async () => {
       const file1 = path.join(tmpDir, 'a.txt');

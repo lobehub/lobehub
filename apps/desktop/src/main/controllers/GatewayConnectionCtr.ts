@@ -354,7 +354,18 @@ export default class GatewayConnectionCtr extends ControllerModule {
         killCommand: (p) => shell.handleKillCommand(p),
         listLocalFiles: (p) => local.listLocalFiles(p),
         moveLocalFiles: (p) => local.handleMoveFiles(p),
-        readLocalFile: (p) => local.readFile(p),
+        readLocalFile: async (p) => {
+          const result = await local.readFile(p);
+          // The gateway ingest path has no upload client in main (same
+          // constraint that deferred the hetero direct-spawn echo in #16786):
+          // strip pre-upload image bytes so raw base64 never reaches the
+          // sinks; the `[Image: …]` placeholder in content is the degrade.
+          if (result.imageData) {
+            const { imageData: _stripped, ...rest } = result;
+            return rest;
+          }
+          return result;
+        },
         readLocalFiles: (p) => local.readFiles(p),
         renameLocalFile: (p) => local.handleRenameFile(p),
         runCommand: (p) => shell.handleRunCommand(p),
