@@ -10,6 +10,7 @@ import type { EnabledProviderWithModels } from '@/types/aiProvider';
 import type { FormattedUnitPrice } from '../hooks/useModelDetailPanel';
 import { UNIT_ICON_MAP, useModelDetailPanel } from '../hooks/useModelDetailPanel';
 import type { PricingMode } from '../types';
+import { openBenchmarkModal } from './BenchmarkModal';
 import type { RadarDimensionDatum } from './ModelRatingRadar';
 import ModelRatingRadar, {
   RADAR_MIN_DIMENSIONS,
@@ -36,6 +37,15 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     line-height: 1.5;
     overflow-wrap: anywhere;
     white-space: pre-wrap;
+  `,
+  radarClickable: css`
+    cursor: pointer;
+    border-radius: 8px;
+    transition: background 0.2s ${cssVar.motionEaseInOut};
+
+    &:hover {
+      background: ${cssVar.colorFillTertiary};
+    }
   `,
   ratingScoreLink: css`
     display: inline-flex;
@@ -194,7 +204,18 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
               >
                 <Flexbox gap={4}>
                   {ratedDimensions.length >= RADAR_MIN_DIMENSIONS ? (
-                    <ModelRatingRadar dimensions={ratingDimensions} />
+                    <Tooltip title={t('ModelSwitchPanel.detail.rating.clickHint')}>
+                      <div
+                        className={styles.radarClickable}
+                        role={'button'}
+                        tabIndex={0}
+                        onClick={() => {
+                          if (provider) openBenchmarkModal({ modelId: model.id, provider });
+                        }}
+                      >
+                        <ModelRatingRadar dimensions={ratingDimensions} />
+                      </div>
+                    </Tooltip>
                   ) : (
                     <Flexbox gap={4}>
                       {ratedDimensions.map((dimension) => (

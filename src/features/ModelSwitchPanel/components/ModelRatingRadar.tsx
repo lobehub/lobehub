@@ -194,8 +194,11 @@ const ModelRatingRadar: FC<ModelRatingRadarProps> = memo(({ dimensions }) => {
             className={styles.labelLink}
             href={dimension.sourceUrl}
             key={dimension.key}
+            // the whole radar can be a click target (benchmark modal) — a source
+            // link click must not bubble into it
             rel={'noreferrer'}
             target={'_blank'}
+            onClick={(e) => e.stopPropagation()}
           >
             {label}
           </a>

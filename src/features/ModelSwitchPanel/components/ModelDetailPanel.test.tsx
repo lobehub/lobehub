@@ -17,9 +17,15 @@ vi.mock('antd-style', () => ({
     description: 'description',
     originalPriceText: 'originalPriceText',
     priceValue: 'priceValue',
+    radarClickable: 'radarClickable',
     row: 'row',
     titleText: 'titleText',
   }),
+}));
+
+// keep the panel test free of the modal's own dependency chain (@lobehub/ui/base-ui, i18next)
+vi.mock('./BenchmarkModal', () => ({
+  openBenchmarkModal: vi.fn(),
 }));
 
 vi.mock('@lobehub/ui', () => ({
