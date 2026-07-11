@@ -39,22 +39,24 @@ const Error = memo<ErrorProps>(({ error, onClick }) => {
       }
       subTitle={
         <Balancer>
-          <Trans i18nKey="importModal.error.desc" ns={'common'}>
-            非常抱歉，数据库升级过程发生异常。请重试升级，或
-            <a
-              aria-label={'issue'}
-              href={GITHUB_ISSUES}
-              rel="noreferrer"
-              target="_blank"
-              onClick={(e) => {
-                e.preventDefault();
-                githubService.submitImportError(error!);
-              }}
-            >
-              提交问题
-            </a>
-            我们将会第一时间帮你排查问题。
-          </Trans>
+          <Trans
+            i18nKey="importModal.error.desc"
+            ns={'common'}
+            components={[
+              <span key="0" />,
+              <a
+                aria-label={'issue'}
+                href={GITHUB_ISSUES}
+                key="1"
+                rel="noreferrer"
+                target="_blank"
+                onClick={(e) => {
+                  e.preventDefault();
+                  githubService.submitImportError(error!);
+                }}
+              />,
+            ]}
+          />
         </Balancer>
       }
     />
