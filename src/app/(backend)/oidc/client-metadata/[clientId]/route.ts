@@ -1,3 +1,4 @@
+import { getUserAuth } from '@lobechat/utils/server';
 import debug from 'debug';
 import { type NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
@@ -12,6 +13,12 @@ export async function GET(_request: NextRequest, props: { params: Promise<{ clie
   if (!authEnv.ENABLE_OIDC) {
     log('OIDC is not enabled');
     return new NextResponse(null, { status: 404 });
+  }
+
+  const { userId } = await getUserAuth();
+  if (!userId) {
+    log('Unauthenticated request rejected');
+    return new NextResponse(null, { status: 401 });
   }
 
   const { clientId } = await props.params;
