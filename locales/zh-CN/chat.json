@@ -497,6 +497,7 @@
   "messageForward.deleteConfirm.success": "已删除 {{count}} 条消息",
   "messageForward.deleteConfirm.title": "删除消息",
   "messageForward.empty": "请至少选择一条消息进行转发",
+  "messageForward.failed": "部分消息转发失败",
   "messageForward.modal.empty": "没有可转发的其他智能体",
   "messageForward.modal.moreMessages": "还有 +{{count}} 条消息",
   "messageForward.modal.noRecipients": "从左侧选择要转发到的智能体",

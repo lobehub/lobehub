@@ -497,6 +497,7 @@
   "messageForward.deleteConfirm.success": "Deleted {{count}} messages",
   "messageForward.deleteConfirm.title": "Delete messages",
   "messageForward.empty": "Select at least one message to forward",
+  "messageForward.failed": "Some messages could not be forwarded",
   "messageForward.modal.empty": "No other agents available",
   "messageForward.modal.moreMessages": "+{{count}} more messages",
   "messageForward.modal.noRecipients": "Pick agents on the left to forward to",

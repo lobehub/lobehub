@@ -94,7 +94,7 @@ describe('forwardDispatch', () => {
       );
     });
 
-    it('flattens assistantGroup child blocks into one block', () => {
+    it('excludes tool and assistantGroup messages', () => {
       const content = buildForwardedContent(
         [
           msg({
@@ -105,11 +105,13 @@ describe('forwardDispatch', () => {
             content: '',
             role: 'assistantGroup',
           }),
+          msg({ content: 'tool output', role: 'tool' }),
+          msg({ content: 'kept', role: 'assistant' }),
         ],
         { header: 'H', roleLabel },
       );
 
-      expect(content).toBe('H\n\n---\n\n**Assistant**\n\npart one\n\npart two');
+      expect(content).toBe('H\n\n---\n\n**Assistant**\n\nkept');
     });
 
     it('skips messages with empty content', () => {
