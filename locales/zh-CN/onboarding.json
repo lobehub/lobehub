@@ -85,6 +85,7 @@
   "flow.steps.chiefAgent.defaultName": "土豆",
   "flow.steps.chiefAgent.hint": "自定义你的首席 Agent",
   "flow.steps.chiefAgent.hire": "雇佣这位 Agent",
+  "flow.steps.chiefAgent.hireError": "雇佣失败，请重试",
   "flow.steps.chiefAgent.mbti": "INTJ",
   "flow.steps.chiefAgent.namePlaceholder": "给你的 Agent 起个名字",
   "flow.steps.chiefAgent.title": "认识你的首席 Agent",

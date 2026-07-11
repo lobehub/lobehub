@@ -85,6 +85,7 @@
   "flow.steps.chiefAgent.defaultName": "Potato",
   "flow.steps.chiefAgent.hint": "Custom your chief agent operator",
   "flow.steps.chiefAgent.hire": "Hire this agent",
+  "flow.steps.chiefAgent.hireError": "Failed to hire this agent, please try again",
   "flow.steps.chiefAgent.mbti": "INTJ",
   "flow.steps.chiefAgent.namePlaceholder": "Name your agent",
   "flow.steps.chiefAgent.title": "Meet your Chief Agent",

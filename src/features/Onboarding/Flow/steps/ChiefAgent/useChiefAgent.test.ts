@@ -7,8 +7,14 @@ const mocks = vi.hoisted(() => ({
   agentState: {
     agentMap: {} as Record<string, { avatar?: string; title?: string }>,
     optimisticUpdateAgentMeta: vi.fn().mockResolvedValue(undefined),
+    saveStatus: 'saved' as 'idle' | 'saving' | 'saved',
     useInitBuiltinAgent: vi.fn(),
   },
+  toastError: vi.fn(),
+}));
+
+vi.mock('@lobehub/ui/base-ui', () => ({
+  toast: { error: mocks.toastError },
 }));
 
 vi.mock('@/store/agent', () => {
@@ -32,8 +38,12 @@ vi.mock('react-i18next', () => ({
 
 beforeEach(() => {
   mocks.agentState.agentMap = {};
-  mocks.agentState.optimisticUpdateAgentMeta.mockClear();
+  mocks.agentState.saveStatus = 'saved';
+  mocks.agentState.optimisticUpdateAgentMeta.mockClear().mockImplementation(async () => {
+    mocks.agentState.saveStatus = 'saved';
+  });
   mocks.agentState.useInitBuiltinAgent.mockClear();
+  mocks.toastError.mockClear();
 });
 
 describe('useChiefAgent', () => {
@@ -103,5 +113,45 @@ describe('useChiefAgent', () => {
     });
 
     expect(result.current.hiring).toBe(false);
+  });
+
+  it('does not advance and shows a toast when the persist fails', async () => {
+    mocks.agentState.optimisticUpdateAgentMeta.mockImplementation(async () => {
+      mocks.agentState.saveStatus = 'idle';
+    });
+    const next = vi.fn().mockResolvedValue(undefined);
+    const { result } = renderHook(() => useChiefAgent({ next }));
+
+    await act(async () => {
+      await result.current.hire();
+    });
+
+    expect(next).not.toHaveBeenCalled();
+    expect(mocks.toastError).toHaveBeenCalledTimes(1);
+    expect(result.current.hiring).toBe(false);
+  });
+
+  it('does not advance and shows a toast when next() rejects', async () => {
+    const next = vi.fn().mockRejectedValue(new Error('navigation failed'));
+    const { result } = renderHook(() => useChiefAgent({ next }));
+
+    await act(async () => {
+      await result.current.hire();
+    });
+
+    expect(mocks.toastError).toHaveBeenCalledTimes(1);
+    expect(result.current.hiring).toBe(false);
+  });
+
+  it('keeps a user edit made before the inbox agent meta resolves', () => {
+    const { result, rerender } = renderHook(() => useChiefAgent({ next: vi.fn() }));
+
+    act(() => result.current.setName('My Custom Name'));
+
+    mocks.agentState.agentMap.inbox = { avatar: '🦊', title: 'Rusty' };
+    rerender();
+
+    expect(result.current.name).toBe('My Custom Name');
+    expect(result.current.avatar).not.toBe('🦊');
   });
 });

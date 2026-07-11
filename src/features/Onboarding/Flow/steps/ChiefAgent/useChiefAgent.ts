@@ -1,5 +1,6 @@
 import { INBOX_SESSION_ID } from '@lobechat/const';
-import { useCallback, useEffect, useState } from 'react';
+import { toast } from '@lobehub/ui/base-ui';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAgentStore } from '@/store/agent';
@@ -25,15 +26,26 @@ export const useChiefAgent = ({ next }: UseChiefAgentOptions) => {
   const [avatar, setAvatar] = useState(() => meta.avatar || CHIEF_AGENT_AVATAR_PRESETS[0]);
   const [seeded, setSeeded] = useState(() => !!meta.title || !!meta.avatar);
   const [hiring, setHiring] = useState(false);
+  const dirtyRef = useRef(false);
 
   useEffect(() => {
-    if (seeded) return;
+    if (seeded || dirtyRef.current) return;
     if (!meta.title && !meta.avatar) return;
 
     setName(meta.title || defaultName);
     setAvatar(meta.avatar || CHIEF_AGENT_AVATAR_PRESETS[0]);
     setSeeded(true);
   }, [seeded, meta.title, meta.avatar, defaultName]);
+
+  const handleSetName = useCallback((value: string) => {
+    dirtyRef.current = true;
+    setName(value);
+  }, []);
+
+  const handleSetAvatar = useCallback((value: string) => {
+    dirtyRef.current = true;
+    setAvatar(value);
+  }, []);
 
   const handle = `${slugifyAgentName(name || defaultName)}@lobe.id`;
 
@@ -43,11 +55,28 @@ export const useChiefAgent = ({ next }: UseChiefAgentOptions) => {
     setHiring(true);
     try {
       await useAgentStore.getState().optimisticUpdateAgentMeta(INBOX_SESSION_ID, { avatar, title });
+
+      if (useAgentStore.getState().saveStatus !== 'saved') {
+        toast.error(t('flow.steps.chiefAgent.hireError'));
+        return;
+      }
+
       await next();
+    } catch {
+      toast.error(t('flow.steps.chiefAgent.hireError'));
     } finally {
       setHiring(false);
     }
-  }, [avatar, name, defaultName, next]);
+  }, [avatar, name, defaultName, next, t]);
 
-  return { avatar, defaultName, handle, hire, hiring, name, setAvatar, setName };
+  return {
+    avatar,
+    defaultName,
+    handle,
+    hire,
+    hiring,
+    name,
+    setAvatar: handleSetAvatar,
+    setName: handleSetName,
+  };
 };
