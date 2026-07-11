@@ -195,9 +195,9 @@
               "tps": 50
             },
             "usage": {
-              "totalInputTokens": 156,
-              "totalOutputTokens": 134,
-              "totalTokens": 290,
+              "totalInputTokens": 180,
+              "totalOutputTokens": 172,
+              "totalTokens": 352,
               "cost": 0.001056
             }
           }

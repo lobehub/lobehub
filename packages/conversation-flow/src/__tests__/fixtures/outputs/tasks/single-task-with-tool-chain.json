@@ -218,9 +218,9 @@
         "tps": 51.254999999999995
       },
       "usage": {
-        "totalInputTokens": 13059,
-        "totalOutputTokens": 74,
-        "totalTokens": 13133,
+        "totalInputTokens": 26063,
+        "totalOutputTokens": 648,
+        "totalTokens": 26711,
         "cost": 0.035531
       }
     }

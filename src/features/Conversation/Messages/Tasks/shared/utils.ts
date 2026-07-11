@@ -75,25 +75,17 @@ export const isProcessingStatus = (status?: ThreadStatus): boolean => {
 };
 
 /**
- * Resolve display usage for a multi-step run.
- *
- * Token fields come from the LAST block that reports usage — every step
- * resends the full context, so summing them counts the same context once per
- * step and massively overstates the context size (LOBE-11585). Cost and
- * `cumulativeTokens` ARE summed: billing is per-request, so those totals are real.
+ * Accumulate usage from all blocks
  */
-export const resolveRunUsage = (
-  blocks: AssistantContentBlock[],
-): { cumulativeTokens?: number; usage?: ModelUsage } => {
-  const usages = blocks.map((block) => block.usage).filter(Boolean) as ModelUsage[];
-  if (usages.length === 0) return {};
-
-  const cost = usages.reduce((sum, usage) => sum + (usage.cost || 0), 0);
-  const cumulativeTokens = usages.reduce((sum, usage) => sum + (usage.totalTokens || 0), 0);
-  const last = usages.at(-1)!;
-
-  return {
-    cumulativeTokens,
-    usage: cost ? { ...last, cost } : { ...last },
-  };
+export const accumulateUsage = (blocks: AssistantContentBlock[]): ModelUsage => {
+  return blocks.reduce((acc, block) => {
+    const usage = block.usage;
+    if (!usage) return acc;
+    return {
+      cost: (acc.cost || 0) + (usage.cost || 0),
+      totalInputTokens: (acc.totalInputTokens || 0) + (usage.totalInputTokens || 0),
+      totalOutputTokens: (acc.totalOutputTokens || 0) + (usage.totalOutputTokens || 0),
+      totalTokens: (acc.totalTokens || 0) + (usage.totalTokens || 0),
+    };
+  }, {} as ModelUsage);
 };

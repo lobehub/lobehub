@@ -97,12 +97,7 @@ export class MessageTransformer {
 
   /**
    * Aggregate metadata from multiple children
-   * - Token fields: taken from the LAST child that reports usage. In a
-   *   multi-step agent run every step resends the full context, so summing
-   *   input-side tokens counts the same context once per step (e.g. 15 steps
-   *   × ~55K read as "827K" while the real context was ~75K — see LOBE-11585).
-   *   The final step's usage IS the context watermark of the whole run.
-   * - Sums costs (billing is per-request, so the sum is the real spend)
+   * - Sums token counts and costs
    * - Takes first ttft
    * - Averages tps
    * - Sums duration and latency
@@ -111,27 +106,45 @@ export class MessageTransformer {
     performance?: ModelPerformance;
     usage?: ModelUsage;
   } {
-    let usage: ModelUsage = {};
+    const usage: ModelUsage = {};
     const performance: ModelPerformance = {};
     let hasUsageData = false;
     let hasPerformanceData = false;
     let tpsSum = 0;
     let tpsCount = 0;
-    let costSum = 0;
-    let hasCost = false;
 
     children.forEach((child) => {
       if (child.usage) {
-        const { cost, ...tokens } = child.usage;
+        const tokenFields = [
+          'acceptedPredictionTokens',
+          'inputAudioTokens',
+          'inputCacheMissTokens',
+          'inputCachedTokens',
+          'inputCitationTokens',
+          'inputImageTokens',
+          'inputTextTokens',
+          'inputVideoTokens',
+          'inputToolTokens',
+          'inputWriteCacheTokens',
+          'outputAudioTokens',
+          'outputImageTokens',
+          'outputReasoningTokens',
+          'outputTextTokens',
+          'rejectedPredictionTokens',
+          'totalInputTokens',
+          'totalOutputTokens',
+          'totalTokens',
+        ] as const;
 
-        if (Object.keys(tokens).length > 0) {
-          usage = { ...tokens };
-          hasUsageData = true;
-        }
+        tokenFields.forEach((field) => {
+          if (typeof child.usage![field] === 'number') {
+            (usage as any)[field] = ((usage as any)[field] || 0) + child.usage![field]!;
+            hasUsageData = true;
+          }
+        });
 
-        if (typeof cost === 'number') {
-          costSum += cost;
-          hasCost = true;
+        if (typeof child.usage.cost === 'number') {
+          usage.cost = (usage.cost || 0) + child.usage.cost;
           hasUsageData = true;
         }
       }
@@ -168,8 +181,6 @@ export class MessageTransformer {
     if (tpsCount > 0) {
       performance.tps = tpsSum / tpsCount;
     }
-
-    if (hasCost) usage.cost = costSum;
 
     return {
       performance: hasPerformanceData ? performance : undefined,

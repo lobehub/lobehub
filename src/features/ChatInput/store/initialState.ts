@@ -30,13 +30,6 @@ export type SlashPlacement = 'top' | 'bottom';
 
 export interface ContextWindowMessage {
   content: string;
-  /**
-   * Real API-metered totalTokens of the request that produced this message
-   * (assistant messages only). Used by TokenTag to calibrate the context-size
-   * estimate — the local tokenizer only sees plain-text content, so tool-call
-   * args/results are invisible to it and the estimate can be far too low (LOBE-11585).
-   */
-  totalTokens?: number;
 }
 
 export interface ChatInputFeature {

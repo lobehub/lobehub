@@ -1100,12 +1100,12 @@ describe('parse', () => {
       expect(result.flatList[0]?.usage).toEqual(topLevelUsage);
     });
 
-    it('should surface the last step usage across an assistantGroup chain', () => {
+    it('should aggregate per-step nested metadata.usage across an assistantGroup chain', () => {
       // Hetero-agent (Claude Code) writes per-turn usage to `metadata.usage` on
-      // each step assistant message. The assistantGroup virtual message keeps
-      // the LAST step's token snapshot (the run's context watermark) — summing
-      // would count the resent context once per step (LOBE-11585). Costs are
-      // still summed since billing is per-request.
+      // each step assistant message. The assistantGroup virtual message must
+      // sum them — without this, the UI shows only one step's tokens (typically
+      // the last step, which gets surfaced via the lone metadata.usage that
+      // survived Object.assign collapse).
       const step1Usage = {
         inputCachedTokens: 100,
         totalInputTokens: 200,
@@ -1154,7 +1154,12 @@ describe('parse', () => {
 
       const result = parse(input as any[]);
       const group = result.flatList.find((m) => m.role === 'assistantGroup');
-      expect(group?.usage).toEqual(step2Usage);
+      expect(group?.usage).toEqual({
+        inputCachedTokens: 400,
+        totalInputTokens: 600,
+        totalOutputTokens: 130,
+        totalTokens: 730,
+      });
     });
   });
 

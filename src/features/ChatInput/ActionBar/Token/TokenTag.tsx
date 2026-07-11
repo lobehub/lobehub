@@ -150,19 +150,8 @@ const Token = memo(() => {
   const systemRoleToken = useTokenCount(systemRole);
   const historySummaryToken = useTokenCount(historySummary);
 
-  // Local estimate — only sees plain-text content, so tool-call args/results
-  // (often the bulk of an agent run) are invisible to it.
-  const estimatedToken = systemRoleToken + historySummaryToken + toolsToken + chatsToken;
-
-  // Calibrate with the real API-metered usage when available: the last
-  // assistant message's totalTokens already covers system role, tools and the
-  // whole history as the provider actually counted them (LOBE-11585).
-  const lastMeteredTokens = contextWindowMessages?.findLast((m) => !!m.totalTokens)?.totalTokens;
-  const totalToken = lastMeteredTokens ? lastMeteredTokens + inputTokenCount : estimatedToken;
-
-  // The calibration gap, surfaced in the dev breakdown so the stacked items
-  // still sum up to the displayed total.
-  const untrackedToken = Math.max(0, totalToken - estimatedToken);
+  // Total token
+  const totalToken = systemRoleToken + historySummaryToken + toolsToken + chatsToken;
 
   const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
 
@@ -221,12 +210,6 @@ const Token = memo(() => {
               id: 'chats',
               title: t('tokenDetails.chats'),
               value: chatsToken,
-            },
-            {
-              color: cssVar.colorFillSecondary,
-              id: 'untracked',
-              title: t('tokenDetails.untracked'),
-              value: untrackedToken,
             },
           ]}
         />

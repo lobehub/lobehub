@@ -136,9 +136,9 @@
         }
       ],
       "usage": {
-        "totalInputTokens": 7604,
-        "totalOutputTokens": 584,
-        "totalTokens": 8188
+        "totalInputTokens": 11045,
+        "totalOutputTokens": 770,
+        "totalTokens": 11815
       }
     }
   ],
