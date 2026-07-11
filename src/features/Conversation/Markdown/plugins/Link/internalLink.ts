@@ -3,7 +3,7 @@ import { OFFICIAL_URL } from '@lobechat/const';
 import { getIdFromIdentifier } from '@/utils/identifier';
 
 const ROUTE_ROOTS = new Set(['agent', 'page', 'task', 'tasks']);
-const NON_SPA_ROUTE_ROOTS = new Set(['_next', 'api', 'webapi']);
+const NON_SPA_ROUTE_ROOTS = new Set(['_next', 'api', 'f', 'oidc', 'trpc', 'webapi']);
 
 export type InternalLinkReference =
   | { agentId: string; pathname: string; type: 'agent'; workspaceSlug?: string }

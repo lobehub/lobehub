@@ -83,6 +83,9 @@ describe('parseInternalLink', () => {
 
   it('leaves same-origin backend and framework links to the browser', () => {
     expect(parseInternalLink('/api/agent/stream?operationId=op_1')).toBeNull();
+    expect(parseInternalLink('/f/generated-file-id')).toBeNull();
+    expect(parseInternalLink('https://app.lobehub.com/f/generated-file-id')).toBeNull();
+    expect(parseInternalLink('/trpc/lambda')).toBeNull();
     expect(parseInternalLink('/webapi/chat')).toBeNull();
     expect(parseInternalLink('/_next/static/chunks/app.js')).toBeNull();
   });
