@@ -1,4 +1,4 @@
-import { AgentRuntime } from '@lobechat/agent-runtime';
+import { AgentRuntime, type LLMAttemptOutput } from '@lobechat/agent-runtime';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { RuntimeExecutorContext } from '../context';
@@ -17,22 +17,25 @@ const createMessageModel = () => {
   };
 };
 
+type FinalizerAttemptOutput = Pick<
+  LLMAttemptOutput,
+  | 'content'
+  | 'contentParts'
+  | 'hasContentImages'
+  | 'hasReasoningImages'
+  | 'reasoningParts'
+  | 'thinkingContent'
+>;
+
 const createStreamOutput = (
-  overrides?: Partial<{
-    content: string;
-    contentParts: Array<{ image: string; type: 'image' } | { text: string; type: 'text' }>;
-    hasContentImages: boolean;
-    hasReasoningImages: boolean;
-    reasoning: string;
-    reasoningParts: Array<{ image: string; type: 'image' } | { text: string; type: 'text' }>;
-  }>,
-) => ({
+  overrides?: Partial<FinalizerAttemptOutput>,
+): FinalizerAttemptOutput => ({
   content: 'Answer',
   contentParts: [],
   hasContentImages: false,
   hasReasoningImages: false,
-  reasoning: 'Reasoning',
   reasoningParts: [],
+  thinkingContent: 'Reasoning',
   ...overrides,
 });
 
@@ -160,7 +163,7 @@ describe('serverCallLlmFinalizer', () => {
           { text: 'Visual reasoning', type: 'text' },
           { image: 'https://example.com/reasoning.png', type: 'image' },
         ],
-        reasoning: 'Visual reasoning',
+        thinkingContent: 'Visual reasoning',
       }),
       toolCalls: [],
       toolsCalling: [],
@@ -199,7 +202,7 @@ describe('serverCallLlmFinalizer', () => {
       assistantMessageId: 'assistant-empty',
       messageModel,
       operationLogId: 'operation-1:0',
-      streamOutput: createStreamOutput({ content: '', reasoning: '' }),
+      streamOutput: createStreamOutput({ content: '', thinkingContent: '' }),
       toolsCalling: [],
     });
     expect(update).not.toHaveBeenCalled();
@@ -210,7 +213,7 @@ describe('serverCallLlmFinalizer', () => {
       currentStepUsage: { totalOutputTokens: 4 },
       messageModel,
       operationLogId: 'operation-1:0',
-      streamOutput: createStreamOutput({ content: 'Partial', reasoning: 'Thinking' }),
+      streamOutput: createStreamOutput({ content: 'Partial', thinkingContent: 'Thinking' }),
       toolsCalling: [],
     });
 

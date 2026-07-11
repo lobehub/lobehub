@@ -120,7 +120,7 @@ describe('ServerCallLlmAttempt', () => {
     const snapshot = attempt.snapshot();
 
     expect(snapshot.content).toBe('Visible answer');
-    expect(snapshot.reasoning).toBe('Reasoning');
+    expect(snapshot.thinkingContent).toBe('Reasoning');
     expect(snapshot.grounding).toEqual({ searchQueries: ['docs'] });
     expect(snapshot.finishReason).toBe('tool_use');
     expect(snapshot.speed).toEqual({ tps: 20, ttft: 100 });
@@ -198,7 +198,7 @@ describe('ServerCallLlmAttempt', () => {
       expect.objectContaining({
         answerSalvagedFromReasoning: true,
         content: 'Final answer from reasoning',
-        reasoning: '',
+        thinkingContent: '',
       }),
     );
   });
