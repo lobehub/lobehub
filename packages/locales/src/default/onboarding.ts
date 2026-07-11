@@ -84,6 +84,13 @@ export default {
   'flow.footer.continue': 'Continue',
   'flow.footer.hint': '💡 You can edit this later',
   'flow.skip': 'Skip',
+  'flow.steps.chiefAgent.avatarUpload': 'Upload your own avatar',
+  'flow.steps.chiefAgent.birthday': 'Born {{date}}',
+  'flow.steps.chiefAgent.defaultName': 'Potato',
+  'flow.steps.chiefAgent.hint': 'Custom your chief agent operator',
+  'flow.steps.chiefAgent.hire': 'Hire this agent',
+  'flow.steps.chiefAgent.mbti': 'INTJ',
+  'flow.steps.chiefAgent.namePlaceholder': 'Name your agent',
   'flow.steps.chiefAgent.title': 'Meet your Chief Agent',
   'flow.steps.connectApps.apps.github.description':
     'We analyze your repos and contributions to understand your tech stack, skills, and work style',
