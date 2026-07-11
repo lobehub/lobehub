@@ -19,6 +19,7 @@ import { default as cloudflare } from './cloudflare';
 import { default as cohere } from './cohere';
 import { default as cometapi } from './cometapi';
 import { default as comfyui } from './comfyui';
+import { default as daoxe } from './daoxe';
 import { default as deepseek } from './deepseek';
 import { default as fal } from './fal';
 import { default as fireworksai } from './fireworksai';
@@ -127,6 +128,7 @@ const staticModelMap: ModelsMap = {
   cohere,
   cometapi,
   comfyui,
+  daoxe,
   deepseek,
   fal,
   fireworksai,
@@ -241,6 +243,7 @@ export { default as cloudflare } from './cloudflare';
 export { default as cohere } from './cohere';
 export { default as cometapi } from './cometapi';
 export { default as comfyui } from './comfyui';
+export { default as daoxe } from './daoxe';
 export { default as deepseek } from './deepseek';
 export { default as fal, fluxSchnellParamsSchema } from './fal';
 export { default as fireworksai } from './fireworksai';

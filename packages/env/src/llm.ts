@@ -219,6 +219,9 @@ export const getLLMConfig = () => {
       ENABLED_COMETAPI: z.boolean(),
       COMETAPI_KEY: z.string().optional(),
 
+      ENABLED_DAOXE: z.boolean(),
+      DAOXE_API_KEY: z.string().optional(),
+
       ENABLED_AIHUBMIX: z.boolean(),
       AIHUBMIX_API_KEY: z.string().optional(),
       AIHUBMIX_PROXY_URL: z.string().optional(),
@@ -469,6 +472,9 @@ export const getLLMConfig = () => {
 
       ENABLED_COMETAPI: !!process.env.COMETAPI_KEY,
       COMETAPI_KEY: process.env.COMETAPI_KEY,
+
+      ENABLED_DAOXE: !!process.env.DAOXE_API_KEY,
+      DAOXE_API_KEY: process.env.DAOXE_API_KEY,
 
       ENABLED_AIHUBMIX: !!process.env.AIHUBMIX_API_KEY,
       AIHUBMIX_API_KEY: process.env.AIHUBMIX_API_KEY,
