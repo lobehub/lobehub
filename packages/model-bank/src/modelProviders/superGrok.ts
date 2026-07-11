@@ -34,7 +34,6 @@ const SuperGrok: ModelProviderCard = {
     sdkType: 'openai',
     showApiKey: false,
     showChecker: true,
-    supportResponsesApi: true,
   },
   url: 'https://x.ai/grok',
 };
