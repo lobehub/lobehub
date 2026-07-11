@@ -44,11 +44,6 @@
       "count": 1
     }
   },
-  "src/components/InvalidAPIKey/__tests__/ComfyUIForm.test.tsx": {
-    "no-restricted-imports": {
-      "count": 1
-    }
-  },
   "src/components/InvalidAPIKey/index.tsx": {
     "no-restricted-imports": {
       "count": 1

@@ -6,7 +6,7 @@ packages:
   - apps/server
 
 minimumReleaseAgeExclude:
-  - '@lobehub/ui@5.19.0'
+  - '@lobehub/ui@5.20.2'
 
 onlyBuiltDependencies:
   - '@google/genai'
