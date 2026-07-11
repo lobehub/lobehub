@@ -755,6 +755,8 @@ table devices {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   user_id text [not null]
   workspace_id text
+  visibility text [not null, default: 'private']
+  shared_from_device_id varchar(64)
   device_id varchar(64) [not null]
   identity_source varchar(20) [not null]
   hostname text
@@ -774,6 +776,7 @@ table devices {
     (workspace_id, device_id) [name: 'devices_workspace_id_device_id_unique', unique]
     user_id [name: 'devices_user_id_idx']
     workspace_id [name: 'devices_workspace_id_idx']
+    (workspace_id, visibility, user_id) [name: 'devices_workspace_visibility_idx']
   }
 }
 
@@ -2701,6 +2704,20 @@ table workspace_members {
   indexes {
     (workspace_id, user_id) [pk]
     user_id [name: 'workspace_members_user_id_idx']
+  }
+}
+
+table workspace_user_settings {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  workspace_id text [not null]
+  user_id text [not null]
+  preference jsonb [not null, default: `{}`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (workspace_id, user_id) [name: 'workspace_user_settings_workspace_id_user_id_unique', unique]
+    user_id [name: 'workspace_user_settings_user_id_idx']
   }
 }
 
