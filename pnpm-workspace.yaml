@@ -1,3 +1,4 @@
+lockfile: false
 packages:
   - packages/**
   - .
