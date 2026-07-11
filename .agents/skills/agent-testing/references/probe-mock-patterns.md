@@ -919,3 +919,41 @@ agents. Set` `agentRules: false` `in next.config to disable.` and leaves the wor
 - **Works**: name the ignored directory explicitly (`grep -rl "agentRules" node_modules`), which
   overrides the ignore, or call `/usr/bin/grep` directly. Before asserting "X exists nowhere",
   re-run the search with an explicit path into the dependency tree.
+
+### E14. Electron `will-attach-webview` params carry NO custom attributes — identity via data-\* never arrives
+
+- **Situation**: a main-process controller needs to know WHICH renderer feature a mounting
+  `<webview>` belongs to (e.g. a per-conversation session id), and the renderer put it in a
+  custom `data-*` attribute on the element.
+- **Doesn't work**: reading `params['data-…']` in `will-attach-webview`. Measured live: params
+  only contains the standard set (`instanceId, partition, src, httpreferrer, useragent,
+nodeintegration, plugins, disablewebsecurity, allowpopups, preload, …`). The handler silently
+  no-ops and — trap — a unit test that mocks params WITH the custom key passes green.
+- **Works**: two-channel design. (1) Recognition/hardening keyed off the **`partition`
+  attribute** set by the renderer (it IS forwarded); (2) identity bound after mount via an
+  explicit IPC — renderer listens for the webview's `dom-ready`, calls
+  `attach({ sessionId, webContentsId: el.getWebContentsId() })`, main process
+  `webContents.fromId()` + validates the guest's session belongs to the expected partition.
+
+### E16. agent-browser session silently re-targets to a newly created `<webview>` guest
+
+- **Situation**: driving an Electron app over CDP while the app itself spawns a `<webview>`
+  (in-app browser). After the guest mounts, `eval` on the SAME session suddenly returns the
+  guest page's DOM (`__LOBE_STORES` undefined, app selectors empty) — looks like the app broke.
+- **Doesn't work**: assuming a session stays pinned to the app target; also assuming
+  `document.querySelectorAll('webview').length === 0` means "no webview" (you may be evaluating
+  INSIDE the guest).
+- **Works**: `curl -s localhost:<cdp>/json/list` to see targets (`page` = app, `webview` =
+  guest), then use **separate session names** per target (`--session app-x` re-picks the `page`
+  target; the old session keeps following the guest — handy for driving the embedded page).
+  Verify with `get url` (`app://` vs the site URL) before trusting any eval result.
+
+### E17. Dev-mode main-process `logger.warn/debug` is invisible without DEBUG env — probe with console.log
+
+- **Situation**: adding a temporary probe log in Electron main code and watching the dev
+  instance log; nothing prints, which reads as "code path never runs".
+- **Doesn't work**: `createLogger(ns).warn/debug` in development — it routes to the `debug`
+  package, which is silent unless `DEBUG=<ns>` was set when the process started.
+- **Works**: temporary probes use `console.log('[AGENT-TEST] …')` (always reaches the instance
+  log via stdout); confirm the rebuilt bundle actually contains the probe string
+  (`grep "<probe>" apps/desktop/dist/main/index.js`) before interpreting silence.
