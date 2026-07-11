@@ -18,6 +18,7 @@ export default {
   'workingDirectory.checkoutFailed': 'Checkout failed',
   'workingDirectory.chooseDifferentFolder': 'Choose a folder...',
   'workingDirectory.clear': 'Reset to default',
+  'workingDirectory.clearDefault': 'Clear default',
   'workingDirectory.clean': 'clean',
   'workingDirectory.createBranchAction': 'Checkout new branch…',
   'workingDirectory.createBranchTitle': 'Create new branch',
@@ -27,6 +28,7 @@ export default {
   'workingDirectory.createWorktreeTitle': 'Create new worktree',
   'workingDirectory.current': 'Current working directory',
   'workingDirectory.defaultBadge': 'Default',
+  'workingDirectory.defaultUpdateFailed': 'Couldn’t update the default working directory',
   'workingDirectory.deleteBranchAction': 'Delete branch',
   'workingDirectory.deleteBranchConfirm':
     'Delete branch “{{name}}”? This permanently removes it, including any unmerged commits.',
