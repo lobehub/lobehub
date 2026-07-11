@@ -124,7 +124,7 @@ export const parseInternalLink = (
   if (segments[0] === 'agent' && segments[1]) {
     if (BUILTIN_AGENT_SLUG_SET.has(segments[1])) return { pathname, type: 'route' };
 
-    const agentId = getIdFromIdentifier(segments[1], 'agt');
+    const agentId = segments[1];
 
     if (segments[2] === 'docs' && segments[3]) {
       return {

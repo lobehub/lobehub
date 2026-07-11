@@ -29,7 +29,7 @@ describe('parseInternalLink', () => {
       type: 'task',
     });
     expect(parseInternalLink('/agent/agent-1/task/T-199')).toEqual({
-      agentId: 'agt_agent-1',
+      agentId: 'agent-1',
       pathname: '/agent/agent-1/task/T-199',
       taskId: 'T-199',
       type: 'task',
@@ -78,9 +78,15 @@ describe('parseInternalLink', () => {
 
   it('parses agent roots and keeps deeper routes as SPA routes', () => {
     expect(parseInternalLink('/agent/agent-1')).toEqual({
-      agentId: 'agt_agent-1',
+      agentId: 'agent-1',
       pathname: '/agent/agent-1',
       type: 'agent',
+    });
+    expect(parseInternalLink('/agent/custom-agent-id-123/docs/foo')).toEqual({
+      agentId: 'custom-agent-id-123',
+      documentId: 'docs_foo',
+      pathname: '/agent/custom-agent-id-123/docs/foo',
+      type: 'document',
     });
     expect(parseInternalLink('/agent/agent-1/topics')).toEqual({
       pathname: '/agent/agent-1/topics',
