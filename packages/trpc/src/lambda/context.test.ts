@@ -110,6 +110,12 @@ describe('createContextInner', () => {
     expect(context.marketAccessToken).toBe('mp-token-xyz');
   });
 
+  it('should create context with oidcClientId', async () => {
+    const context = await createContextInner({ oidcClientId: 'lca_client_1' });
+
+    expect(context.oidcClientId).toBe('lca_client_1');
+  });
+
   it('should create context with OIDC auth data', async () => {
     const oidcAuth = {
       sub: 'oidc-user-123',
@@ -246,6 +252,32 @@ describe('createLambdaContext', () => {
     expect(context.oidcAuth?.sub).toBe('oidc-user');
     expect(mockAssertOIDCUserActive).toHaveBeenCalledWith(expect.any(Object), 'oidc-user');
     expect(mockGetSession).not.toHaveBeenCalled();
+  });
+
+  it('should carry oidcClientId from the validated OIDC JWT', async () => {
+    mockValidateOIDCJWT.mockResolvedValueOnce({
+      clientId: 'lca_dev_app_1',
+      tokenData: { client_id: 'lca_dev_app_1', sub: 'oidc-user' },
+      userId: 'oidc-user',
+    });
+
+    const request = new NextRequest('https://example.com/trpc/lambda', {
+      headers: { 'Oidc-Auth': 'oidc-token' },
+    });
+
+    const context = await createLambdaContext(request);
+
+    expect(context.oidcClientId).toBe('lca_dev_app_1');
+  });
+
+  it('should leave oidcClientId undefined when the JWT has no client_id', async () => {
+    const request = new NextRequest('https://example.com/trpc/lambda', {
+      headers: { 'Oidc-Auth': 'oidc-token' },
+    });
+
+    const context = await createLambdaContext(request);
+
+    expect(context.oidcClientId).toBeUndefined();
   });
 
   it('should reject inactive OIDC auth without falling back to session', async () => {

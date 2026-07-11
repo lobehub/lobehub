@@ -74,6 +74,7 @@ export interface AuthContext {
   marketAccessToken?: string;
   // Add OIDC authentication information
   oidcAuth?: OIDCAuth | null;
+  oidcClientId?: string;
   resHeaders?: Headers;
   traceContext?: OtContext;
   userAgent?: string;
@@ -89,6 +90,7 @@ export const createContextInner = async (params?: {
   clientIp?: string | null;
   marketAccessToken?: string;
   oidcAuth?: OIDCAuth | null;
+  oidcClientId?: string;
   traceContext?: OtContext;
   userAgent?: string;
   userId?: string | null;
@@ -101,6 +103,7 @@ export const createContextInner = async (params?: {
     clientIp: params?.clientIp,
     marketAccessToken: params?.marketAccessToken,
     oidcAuth: params?.oidcAuth,
+    oidcClientId: params?.oidcClientId,
     resHeaders: responseHeaders,
     traceContext: params?.traceContext,
     userAgent: params?.userAgent,
@@ -200,10 +203,14 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
         await assertOIDCUserActive(db, userId);
         log('OIDC authentication successful, userId: %s', userId);
 
+        const oidcClientId =
+          typeof tokenInfo.clientId === 'string' ? tokenInfo.clientId : undefined;
+
         // If OIDC authentication is successful, return context immediately
         log('OIDC authentication successful, creating context and returning');
         return createContextInner({
           oidcAuth,
+          oidcClientId,
           ...commonContext,
           traceContext,
           userId,
