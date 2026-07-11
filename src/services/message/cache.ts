@@ -19,7 +19,7 @@ interface ActiveMessageListRequest {
 }
 
 interface MessageListClientState {
-  activeRequestGenerations: Map<number, number>;
+  activeRequestGenerations: Set<number>;
   cacheScope: string;
   context: CanonicalMessageListContext;
   currentRequest?: ActiveMessageListRequest;
@@ -42,13 +42,10 @@ const touchState = (state: MessageListClientState) => {
   messageListClientStates.set(state.identity, state);
 };
 
-const activeRequestCount = (state: MessageListClientState) =>
-  [...state.activeRequestGenerations.values()].reduce((total, count) => total + count, 0);
+const activeRequestCount = (state: MessageListClientState) => state.activeRequestGenerations.size;
 
 const hasOlderActiveRequest = (state: MessageListClientState, generation: number) =>
-  [...state.activeRequestGenerations].some(
-    ([activeGeneration, count]) => activeGeneration < generation && count > 0,
-  );
+  [...state.activeRequestGenerations].some((activeGeneration) => activeGeneration < generation);
 
 const pruneClientStates = () => {
   while (messageListClientStates.size > MAX_MESSAGE_LIST_CLIENT_STATES) {
@@ -70,7 +67,7 @@ const getOrCreateState = (
   if (existing) return existing;
 
   const state: MessageListClientState = {
-    activeRequestGenerations: new Map(),
+    activeRequestGenerations: new Set(),
     cacheScope,
     context: normalizedContext,
     generation: 0,
@@ -118,10 +115,7 @@ const startCurrentGenerationQuery = (
   // a real query begins, failure must leave this identity eligible for retry.
   state.verifiedAt = undefined;
   const requestGeneration = state.generation;
-  state.activeRequestGenerations.set(
-    requestGeneration,
-    (state.activeRequestGenerations.get(requestGeneration) ?? 0) + 1,
-  );
+  state.activeRequestGenerations.add(requestGeneration);
 
   const request: Promise<UIChatMessage[]> = Promise.resolve()
     .then(async () => {
@@ -148,9 +142,7 @@ const startCurrentGenerationQuery = (
       return messages;
     })
     .finally(() => {
-      const generationRequestCount = state.activeRequestGenerations.get(requestGeneration) ?? 0;
-      if (generationRequestCount <= 1) state.activeRequestGenerations.delete(requestGeneration);
-      else state.activeRequestGenerations.set(requestGeneration, generationRequestCount - 1);
+      state.activeRequestGenerations.delete(requestGeneration);
 
       if (state.currentRequest?.promise === request) state.currentRequest.settled = true;
       if (

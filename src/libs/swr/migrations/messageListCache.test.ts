@@ -204,6 +204,30 @@ describe('migrateMessageListCache', () => {
     expect(batchSpy).not.toHaveBeenCalled();
   });
 
+  it('recovers an original-key-less message:listLegacy row from its message identities', async () => {
+    const legacyKey = ['message:listLegacy', { agentId: 'agent-1', topicId: 'topic-1' }];
+    const legacyWithoutOriginalKey: ScopeEntry = {
+      data: { data: messages },
+      key: unstable_serialize(legacyKey),
+      updatedAt: 2,
+      version: PROVIDER_VERSION,
+    };
+
+    const result = await migrateMessageListCache({
+      entries: [legacyWithoutOriginalKey],
+      providerVersion: PROVIDER_VERSION,
+      scope: PERSONAL_SCOPE,
+    });
+
+    expect(result).toEqual([
+      expect.objectContaining({
+        key: unstable_serialize(
+          messageKeys.list({ agentId: 'agent-1', threadId: null, topicId: 'topic-1' }),
+        ),
+      }),
+    ]);
+  });
+
   it('recovers an original-key-less workspace row only when every message identity agrees', async () => {
     const legacyKey = [
       messageKeys.list.root,

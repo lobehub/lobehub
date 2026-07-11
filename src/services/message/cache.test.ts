@@ -232,4 +232,16 @@ describe('message list client cache', () => {
     await expect(oldCaller).resolves.toBe(messages);
     expect(isMessageListServerVerified(context)).toBe(true);
   });
+
+  it('prunes the oldest settled verification state after the client cache reaches its limit', async () => {
+    for (let index = 0; index <= 500; index += 1) {
+      await runMessageListQuery(
+        { agentId: 'agent-1', topicId: `topic-${index}` },
+        async () => messages,
+      );
+    }
+
+    expect(isMessageListServerVerified({ agentId: 'agent-1', topicId: 'topic-0' })).toBe(false);
+    expect(isMessageListServerVerified({ agentId: 'agent-1', topicId: 'topic-500' })).toBe(true);
+  });
 });

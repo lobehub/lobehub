@@ -5,7 +5,7 @@ import { act, renderHook } from '@testing-library/react';
 import { type Mock } from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { mutate } from '@/libs/swr';
+import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
 import { messageService } from '@/services/message';
 import {
   clearMessageListClientCacheState,
@@ -24,6 +24,7 @@ vi.mock('@/libs/swr', async () => {
   return {
     ...actual,
     mutate: vi.fn(),
+    useClientDataSWRWithSync: vi.fn(),
   };
 });
 
@@ -1451,6 +1452,36 @@ describe('chatMessage actions', () => {
     });
   });
 
+  describe('useFetchMessages action', () => {
+    it('binds the canonical key, coordinated fetcher, and fetched-data sync', async () => {
+      const context = { agentId: 'fetch-agent', topicId: 'fetch-topic' };
+      const messages = [{ id: 'fetch-message', role: 'user', content: 'hi' }] as any;
+      (messageService.getMessages as Mock).mockResolvedValue(messages);
+
+      renderHook(() =>
+        useChatStore.getState().useFetchMessages(context, { revalidateOnFocus: false }),
+      );
+
+      expect(useClientDataSWRWithSync).toHaveBeenCalledTimes(1);
+      const [key, fetcher, options] = (useClientDataSWRWithSync as Mock).mock.calls[0];
+      expect(key).toEqual(messageListKey(context));
+      await expect(fetcher()).resolves.toEqual(messages);
+
+      act(() => {
+        options.onData(messages);
+      });
+
+      expect(useChatStore.getState().dbMessagesMap[messageMapKey(context)]).toEqual(messages);
+      expect(options).toEqual(
+        expect.objectContaining({
+          dedupingInterval: expect.any(Number),
+          revalidateIfStale: true,
+          revalidateOnFocus: false,
+        }),
+      );
+    });
+  });
+
   describe('prefetchMessages action', () => {
     beforeEach(() => {
       (mutate as Mock).mockClear();
@@ -1488,6 +1519,28 @@ describe('chatMessage actions', () => {
       expect(swrKey).toEqual(messageListKey(context));
       await expect(dataArg).resolves.toEqual(messages);
       expect(options).toEqual({ revalidate: false });
+    });
+
+    it('swallows a failed background prefetch and allows the same context to retry', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const context = {
+        agentId: 'prefetch-agent',
+        scope: 'main' as const,
+        topicId: 'failed-topic',
+      };
+
+      (messageService.getMessages as Mock).mockRejectedValueOnce(new Error('offline'));
+
+      await act(async () => {
+        await result.current.prefetchMessages(context);
+      });
+
+      (messageService.getMessages as Mock).mockResolvedValueOnce([]);
+      await act(async () => {
+        await result.current.prefetchMessages(context);
+      });
+
+      expect(messageService.getMessages).toHaveBeenCalledTimes(2);
     });
 
     it('skips prefetch when the canonical message cache is fresh', async () => {
