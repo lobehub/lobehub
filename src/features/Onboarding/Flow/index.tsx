@@ -4,6 +4,8 @@ import { OnboardingStep } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
+import OnBoardingContainer from '@/routes/onboarding/_layout';
+
 import ChiefAgent from './steps/ChiefAgent';
 import ConnectApps from './steps/ConnectApps';
 import LearnYourWorld from './steps/LearnYourWorld';
@@ -28,9 +30,11 @@ const OnboardingFlowPage = memo(() => {
   const StepComponent = STEP_COMPONENTS[flow.currentStep];
 
   return (
-    <Flexbox style={{ maxWidth: 600, width: '100%' }}>
-      <StepComponent {...flow} />
-    </Flexbox>
+    <OnBoardingContainer>
+      <Flexbox style={{ maxWidth: 600, width: '100%' }}>
+        <StepComponent {...flow} />
+      </Flexbox>
+    </OnBoardingContainer>
   );
 });
 

@@ -42,7 +42,7 @@ const Welcome = memo<OnboardingFlowController>(({ next }) => {
     <StepCard
       continueLoading={isSubmitting}
       description={t('telemetry.desc')}
-      title={t('telemetry.title', { name: 'Lobe AI' })}
+      title={t('telemetry.title', { name: BRANDING_NAME })}
       onContinue={handleContinue}
     >
       <Flexbox gap={8}>

@@ -228,7 +228,7 @@ const renderFooter = async ({
     <MemoryRouter initialEntries={['/']}>
       <Routes>
         <Route element={<Footer />} path="/" />
-        <Route element={<div>Agent onboarding route</div>} path="/onboarding/agent" />
+        <Route element={<div>Onboarding route</div>} path="/onboarding" />
       </Routes>
     </MemoryRouter>,
   );
@@ -290,7 +290,7 @@ describe('Footer agent onboarding promotion', () => {
     expect(
       (mockGlobalState.status as { readNotificationSlugs: string[] }).readNotificationSlugs,
     ).toContain('agent-onboarding-promo-v1');
-    expect(screen.getByText('Agent onboarding route')).toBeInTheDocument();
+    expect(screen.getByText('Onboarding route')).toBeInTheDocument();
     expect(analyticsTrack).toHaveBeenCalledWith({
       name: 'agent_onboarding_promo_clicked',
       properties: {

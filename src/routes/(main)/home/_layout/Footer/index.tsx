@@ -249,7 +249,7 @@ const Footer = memo(() => {
     trackPromotionEvent('agent_onboarding_promo_clicked', {
       spm: 'homepage.agent_onboarding_promo.clicked',
     });
-    navigate('/onboarding/agent');
+    navigate('/onboarding');
   }, [markNotificationRead, navigate, trackPromotionEvent]);
 
   const handleOpenProductHuntCard = useCallback(() => {
