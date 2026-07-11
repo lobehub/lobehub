@@ -218,7 +218,7 @@ describe('Link Render — internal entities', () => {
   });
 
   it('navigates workspace-qualified entities before opening a scoped portal', () => {
-    const { getByRole } = renderLink({
+    const { getByRole, queryByRole } = renderLink({
       linkHref: '/lobe-team/task/T-198',
       linkKind: 'generic',
       linkLabel: 'Workspace task',
@@ -228,6 +228,7 @@ describe('Link Render — internal entities', () => {
 
     expect(mockNavigate).toHaveBeenCalledWith('/lobe-team/task/T-198', { escape: true });
     expect(mockOpenTaskDetail).not.toHaveBeenCalled();
+    expect(queryByRole('dialog')).not.toBeInTheDocument();
   });
 
   it('preserves a different agent context for agent-scoped document links', () => {

@@ -152,7 +152,7 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, 
     </a>
   );
 
-  if (reference.type === 'route') return link;
+  if (reference.type === 'route' || reference.workspaceSlug) return link;
 
   return (
     <InternalEntityPreview fallbackTitle={label} reference={reference}>
