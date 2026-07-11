@@ -29,7 +29,8 @@ interface UseOAuthDeviceFlowResult {
   cancelAuth: () => void;
   deviceCodeInfo?: DeviceCodeInfo;
   error?: string;
-  startAuth: () => Promise<void>;
+  /** Returns the device code info on success so callers can e.g. auto-open the verification page */
+  startAuth: () => Promise<DeviceCodeInfo | undefined>;
   state: AuthState;
 }
 
@@ -158,6 +159,8 @@ export function useOAuthDeviceFlow({
           startPolling(info.deviceCode, info.interval);
         }
       }, 2000);
+
+      return info;
     } catch {
       setState('error');
       setError('authError');
