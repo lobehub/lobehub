@@ -16,6 +16,7 @@ export const createOnboardingSlice = (set: Setter, get: () => UserStore, _api?: 
 export class OnboardingActionImpl {
   readonly #get: () => UserStore;
   readonly #set: Setter;
+  #writeChain: Promise<unknown> = Promise.resolve();
 
   constructor(set: Setter, get: () => UserStore, _api?: unknown) {
     void _api;
@@ -23,96 +24,61 @@ export class OnboardingActionImpl {
     this.#get = get;
   }
 
+  #enqueueOnboardingWrite = (task: () => Promise<unknown>): Promise<unknown> => {
+    const run = this.#writeChain.then(task, task);
+    this.#writeChain = run.catch(() => undefined);
+    return run;
+  };
+
   finishOnboarding = async (): Promise<void> => {
     const currentStep = onboardingSelectors.currentStep(this.#get());
+    const finishedAt = new Date().toISOString();
 
-    await userService.updateOnboarding({
-      currentStep,
-      finishedAt: new Date().toISOString(),
-      version: CURRENT_ONBOARDING_VERSION,
-    });
+    this.#set(
+      {
+        onboarding: {
+          ...this.#get().onboarding,
+          currentStep,
+          finishedAt,
+          version: CURRENT_ONBOARDING_VERSION,
+        },
+      },
+      false,
+      'finishOnboarding/optimistic',
+    );
+
+    await this.#enqueueOnboardingWrite(() =>
+      userService.updateOnboarding({
+        currentStep,
+        finishedAt,
+        version: CURRENT_ONBOARDING_VERSION,
+      }),
+    );
 
     await this.#get().refreshUserState();
   };
 
   resetOnboarding = async (): Promise<void> => {
-    this.#set(
-      {
-        isProcessingStepQueue: false,
-        localOnboardingStep: 1,
-        stepUpdateQueue: [],
-      },
-      false,
-      'resetOnboarding/optimistic',
+    this.#set({ localOnboardingStep: 1 }, false, 'resetOnboarding/optimistic');
+
+    await this.#enqueueOnboardingWrite(() =>
+      userService.updateOnboarding({ currentStep: 1, version: CURRENT_ONBOARDING_VERSION }),
     );
 
-    await userService.updateOnboarding({
-      currentStep: 1,
-      version: CURRENT_ONBOARDING_VERSION,
-    });
-
     await this.#get().refreshUserState();
-  };
-
-  internal_processStepUpdateQueue = async (): Promise<void> => {
-    const { isProcessingStepQueue, stepUpdateQueue } = this.#get();
-    if (isProcessingStepQueue || stepUpdateQueue.length === 0) return;
-
-    this.#set({ isProcessingStepQueue: true }, false, 'processStepUpdateQueue/start');
-
-    while (this.#get().stepUpdateQueue.length > 0) {
-      const step = this.#get().stepUpdateQueue[0];
-      const finishedAt = onboardingSelectors.finishedAt(this.#get());
-
-      try {
-        await userService.updateOnboarding({
-          currentStep: step,
-          finishedAt,
-          version: CURRENT_ONBOARDING_VERSION,
-        });
-      } catch (error) {
-        console.error('Failed to update onboarding step:', error);
-      }
-
-      // Remove the completed task
-      this.#set(
-        { stepUpdateQueue: this.#get().stepUpdateQueue.slice(1) },
-        false,
-        'processStepUpdateQueue/shift',
-      );
-    }
-
-    this.#set({ isProcessingStepQueue: false }, false, 'processStepUpdateQueue/end');
-
-    // Sync with server state after all updates complete
-    await this.#get().refreshUserState();
-  };
-
-  internal_queueStepUpdate = (step: number): void => {
-    const { stepUpdateQueue } = this.#get();
-
-    if (stepUpdateQueue.length === 0) {
-      // Queue is empty, add task and start processing
-      this.#set({ stepUpdateQueue: [step] }, false, 'queueStepUpdate/push');
-      this.#get().internal_processStepUpdateQueue();
-    } else if (stepUpdateQueue.length === 1) {
-      // One task is executing, add as pending
-      this.#set({ stepUpdateQueue: [...stepUpdateQueue, step] }, false, 'queueStepUpdate/push');
-    } else {
-      // Queue is full (length >= 2), replace the pending task
-      this.#set({ stepUpdateQueue: [stepUpdateQueue[0], step] }, false, 'queueStepUpdate/replace');
-    }
   };
 
   setOnboardingStep = async (step: number): Promise<void> => {
     // Optimistic update
     this.#set({ localOnboardingStep: step }, false, 'setOnboardingStep/optimistic');
 
-    const finishedAt = onboardingSelectors.finishedAt(this.#get());
-    await userService.updateOnboarding({
-      currentStep: step,
-      finishedAt,
-      version: CURRENT_ONBOARDING_VERSION,
+    await this.#enqueueOnboardingWrite(() => {
+      const finishedAt = onboardingSelectors.finishedAt(this.#get());
+      return userService.updateOnboarding({
+        currentStep: step,
+        finishedAt,
+        version: CURRENT_ONBOARDING_VERSION,
+      });
     });
 
     await this.#get().refreshUserState();
