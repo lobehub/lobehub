@@ -23,6 +23,18 @@ vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
   useWorkspaceAwareNavigate: () => mockNavigate,
 }));
 
+vi.mock('@/libs/swr', () => ({
+  useClientDataSWR: () => ({
+    data: [{ documentId: 'docs_doc1', id: 'agent-document-1' }],
+    mutate: vi.fn(),
+  }),
+}));
+
+vi.mock('@/services/agentDocument', () => ({
+  agentDocumentService: { listDocuments: vi.fn() },
+  agentDocumentSWRKeys: { documentsList: (agentId: string) => ['agent-documents', agentId] },
+}));
+
 vi.mock('@/store/agent', () => ({
   useAgentStore: (selector: (state: unknown) => unknown) => selector({ activeAgentId: 'agt_1' }),
 }));
@@ -142,10 +154,10 @@ describe('Link Render — internal entities', () => {
 
     fireEvent.click(getByRole('link', { name: 'Research notes' }));
 
-    expect(mockOpenDocument).toHaveBeenCalledWith('docs_doc1');
+    expect(mockOpenDocument).toHaveBeenCalledWith('docs_doc1', 'agent-document-1');
     expect(getByRole('link', { name: 'Research notes' })).toHaveAttribute(
       'href',
-      '/agent/agt_1/docs/doc1',
+      'https://app.lobehub.com/agent/agt_1/docs/doc1',
     );
     expect(mockNavigate).not.toHaveBeenCalled();
   });

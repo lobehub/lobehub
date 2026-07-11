@@ -88,5 +88,8 @@ describe('parseInternalLink', () => {
     expect(parseInternalLink('/trpc/lambda')).toBeNull();
     expect(parseInternalLink('/webapi/chat')).toBeNull();
     expect(parseInternalLink('/_next/static/chunks/app.js')).toBeNull();
+    expect(parseInternalLink('/favicon.ico')).toBeNull();
+    expect(parseInternalLink('/manifest.webmanifest')).toBeNull();
+    expect(parseInternalLink('/.well-known/assetlinks.json')).toBeNull();
   });
 });

@@ -4,6 +4,22 @@ import { getIdFromIdentifier } from '@/utils/identifier';
 
 const ROUTE_ROOTS = new Set(['agent', 'page', 'task', 'tasks']);
 const NON_SPA_ROUTE_ROOTS = new Set(['_next', 'api', 'f', 'oidc', 'trpc', 'webapi']);
+const SPA_ROUTE_ROOTS = new Set([
+  'agent',
+  'community',
+  'downloads',
+  'eval',
+  'fleet',
+  'group',
+  'image',
+  'memory',
+  'page',
+  'resource',
+  'settings',
+  'task',
+  'tasks',
+  'video',
+]);
 
 export type InternalLinkReference =
   | { agentId: string; pathname: string; type: 'agent'; workspaceSlug?: string }
@@ -72,7 +88,13 @@ export const parseInternalLink = (
   if (!route) {
     const rootSegment = url.pathname.split('/').find(Boolean);
 
-    if (rootSegment && NON_SPA_ROUTE_ROOTS.has(rootSegment)) return null;
+    if (
+      !rootSegment ||
+      NON_SPA_ROUTE_ROOTS.has(rootSegment) ||
+      (!SPA_ROUTE_ROOTS.has(rootSegment) && !workspaceSlugs.includes(rootSegment))
+    ) {
+      return null;
+    }
 
     return { pathname, type: 'route' };
   }

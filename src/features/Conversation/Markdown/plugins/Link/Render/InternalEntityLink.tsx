@@ -7,6 +7,8 @@ import type { MouseEvent } from 'react';
 import { memo, useCallback } from 'react';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useClientDataSWR } from '@/libs/swr';
+import { agentDocumentService, agentDocumentSWRKeys } from '@/services/agentDocument';
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
 
@@ -54,11 +56,12 @@ const ENTITY_ICONS = {
 } as const;
 
 interface InternalEntityLinkProps {
+  href: string;
   label: string;
   reference: InternalLinkReference;
 }
 
-export const InternalEntityLink = memo<InternalEntityLinkProps>(({ label, reference }) => {
+export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, reference }) => {
   const navigate = useWorkspaceAwareNavigate();
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   const [openAgentDetail, openDocument, openTaskDetail] = useChatStore((s) => [
@@ -66,9 +69,15 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ label, refere
     s.openDocument,
     s.openTaskDetail,
   ]);
+  const linkedAgentId = reference.type === 'document' ? reference.agentId : undefined;
+  const shouldResolveAgentDocument = !!linkedAgentId && linkedAgentId === activeAgentId;
+  const { data: agentDocuments, mutate: resolveAgentDocuments } = useClientDataSWR(
+    shouldResolveAgentDocument ? agentDocumentSWRKeys.documentsList(linkedAgentId) : null,
+    () => agentDocumentService.listDocuments({ agentId: linkedAgentId! }),
+  );
 
   const handleClick = useCallback(
-    (event: MouseEvent<HTMLAnchorElement>) => {
+    async (event: MouseEvent<HTMLAnchorElement>) => {
       if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
         return;
       }
@@ -95,7 +104,14 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ label, refere
           break;
         }
         case 'document': {
-          openDocument(reference.documentId);
+          const documents = shouldResolveAgentDocument
+            ? (agentDocuments ?? (await resolveAgentDocuments()))
+            : undefined;
+          const agentDocumentId = documents?.find(
+            (document) => document.documentId === reference.documentId,
+          )?.id;
+
+          openDocument(reference.documentId, agentDocumentId);
           break;
         }
         case 'task': {
@@ -108,7 +124,17 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ label, refere
         }
       }
     },
-    [activeAgentId, navigate, openAgentDetail, openDocument, openTaskDetail, reference],
+    [
+      activeAgentId,
+      agentDocuments,
+      navigate,
+      openAgentDetail,
+      openDocument,
+      openTaskDetail,
+      reference,
+      resolveAgentDocuments,
+      shouldResolveAgentDocument,
+    ],
   );
 
   const icon = reference.type === 'route' ? undefined : ENTITY_ICONS[reference.type];
@@ -116,7 +142,7 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ label, refere
   const link = (
     <a
       className={styles.link}
-      href={reference.pathname}
+      href={href}
       rel="noopener noreferrer"
       target="_blank"
       onClick={handleClick}

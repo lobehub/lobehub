@@ -38,7 +38,7 @@ const Render = memo<MarkdownElementProps<LobeLinkProperties>>(({ node }) => {
   );
 
   if (linkHref && internalReference) {
-    return <InternalEntityLink label={label} reference={internalReference} />;
+    return <InternalEntityLink href={linkHref} label={label} reference={internalReference} />;
   }
 
   if (!showIcon) {
