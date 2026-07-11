@@ -136,7 +136,6 @@ describe('callLlm executor', () => {
       assistantMessage: { id: 'assistant-1' },
       instruction: instructionWithParent,
       model: 'gpt-4',
-      parentId: 'parent-1',
       provider: 'openai',
       state,
       stepLabel: undefined,

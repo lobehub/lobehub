@@ -138,7 +138,6 @@ export const callLlm =
       assistantMessage,
       instruction: instruction as Extract<AgentInstruction, { type: 'call_llm' }>,
       model,
-      parentId,
       provider,
       state,
       stepLabel,

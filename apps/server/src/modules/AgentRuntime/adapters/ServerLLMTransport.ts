@@ -33,7 +33,6 @@ export class ServerLLMTransport implements LLMTransport {
     return createServerCallLlmExecutor(this.ctx, {
       assistantMessage: input.assistantMessage,
       model: input.model,
-      parentId: input.parentId,
       provider: input.provider,
       stepLabel: input.stepLabel,
       tooling: resolveServerCallLlmTooling(

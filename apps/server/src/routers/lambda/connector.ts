@@ -64,7 +64,7 @@ const oidcConfigSchema = z.object({
 const connectorCredentialsInputSchema = z.discriminatedUnion('type', [
   z.object({ token: z.string().min(1), type: z.literal('bearer') }),
   z.object({ apiKey: z.string().min(1), type: z.literal('apikey') }),
-  z.object({ headers: z.record(z.string()), type: z.literal('header') }),
+  z.object({ headers: z.record(z.string(), z.string()), type: z.literal('header') }),
 ]);
 
 const createConnectorSchema = z.object({
@@ -83,10 +83,10 @@ const createConnectorSchema = z.object({
     .object({
       args: z.array(z.string()).optional(),
       command: z.string(),
-      env: z.record(z.string()).optional(),
+      env: z.record(z.string(), z.string()).optional(),
     })
     .optional(),
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
   name: z.string().min(1).max(255),
   oidcConfig: oidcConfigSchema.optional(),
   sourceType: z.enum([
@@ -415,7 +415,7 @@ export const connectorRouter = router({
         tools: z.array(
           z.object({
             description: z.string().optional(),
-            inputSchema: z.record(z.unknown()).optional(),
+            inputSchema: z.record(z.string(), z.unknown()).optional(),
             toolName: z.string(),
           }),
         ),

@@ -119,7 +119,7 @@ const metaSchema = z
 
 // Schema for sandbox tool execution request
 const execInSandboxSchema = z.object({
-  params: z.record(z.any()),
+  params: z.record(z.string(), z.any()),
   toolName: z.string(),
   topicId: z.string(),
   userId: z.string().optional(), // Optional: fallback to ctx.userId if not provided
@@ -134,7 +134,7 @@ const exportAndUploadFileSchema = z.object({
 
 // Schema for cloud MCP endpoint call
 const callCloudMcpEndpointSchema = z.object({
-  apiParams: z.record(z.any()),
+  apiParams: z.record(z.string(), z.any()),
   identifier: z.string(),
   meta: metaSchema,
   toolName: z.string(),
@@ -408,7 +408,7 @@ export const marketRouter = router({
   connectCallTool: lobehubSkillAuthProcedure
     .input(
       z.object({
-        args: z.record(z.any()).optional(),
+        args: z.record(z.string(), z.any()).optional(),
         provider: z.string(),
         toolName: z.string(),
         topicId: z.string().optional(),

@@ -9,7 +9,7 @@ import { z } from 'zod';
  * persisted hook back casts up to it.
  */
 export const agentHookWebhookSchema = z.object({
-  body: z.record(z.unknown()).optional(),
+  body: z.record(z.string(), z.unknown()).optional(),
   delivery: z.enum(['fetch', 'qstash']).optional(),
   eventFields: z.array(z.string()).optional(),
   url: z.string(),

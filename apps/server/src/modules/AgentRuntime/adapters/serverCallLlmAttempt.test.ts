@@ -1,0 +1,197 @@
+import type { AgentEvent } from '@lobechat/agent-runtime';
+import { ToolNameResolver } from '@lobechat/context-engine';
+import type { ChatMethodOptions, ModelRuntime } from '@lobechat/model-runtime';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import type { RuntimeExecutorContext } from '../context';
+import { createServerCallLlmAttempt } from './serverCallLlmAttempt';
+import type { ServerCallLlmTooling } from './serverCallLlmTooling';
+
+vi.mock('@lobechat/model-runtime', async () => {
+  const { isEmptyModelCompletion, ModelEmptyError } =
+    await import('../../../../../../packages/model-runtime/src/errors/modelEmptyCompletion');
+  const { consumeStreamUntilDone } =
+    await import('../../../../../../packages/model-runtime/src/utils/consumeStream');
+
+  return { consumeStreamUntilDone, isEmptyModelCompletion, ModelEmptyError };
+});
+
+vi.mock('@/envs/file', () => ({
+  fileEnv: { NEXT_PUBLIC_S3_FILE_PATH: 'files' },
+}));
+
+vi.mock('@/server/services/file', () => ({
+  FileService: vi.fn().mockImplementation(() => ({
+    uploadBase64: vi.fn(),
+  })),
+}));
+
+const toolName = new ToolNameResolver().generate('workspace', 'search', 'builtin');
+const resolved = {
+  enabledToolIds: ['workspace'],
+  executorMap: { workspace: 'server' },
+  manifestMap: {},
+  promptManifestMap: {},
+  sourceMap: { workspace: 'builtin' },
+  tools: [
+    {
+      function: {
+        description: 'Search the workspace',
+        name: toolName,
+        parameters: { type: 'object' },
+      },
+      type: 'function',
+    },
+  ],
+} as ServerCallLlmTooling['resolved'];
+
+const createAttempt = (runCallbacks: (options: ChatMethodOptions) => Promise<void>) => {
+  const publishStreamChunk = vi.fn().mockResolvedValue('event-1');
+  const streamManager = {
+    publishStreamChunk,
+    publishStreamEvent: vi.fn().mockResolvedValue('event-2'),
+  } as unknown as RuntimeExecutorContext['streamManager'];
+  const ctx = {
+    messageModel: {} as RuntimeExecutorContext['messageModel'],
+    operationId: 'operation-1',
+    serverDB: {} as RuntimeExecutorContext['serverDB'],
+    stepIndex: 2,
+    streamManager,
+    toolExecutionService: {} as RuntimeExecutorContext['toolExecutionService'],
+    userId: 'user-1',
+  } satisfies RuntimeExecutorContext;
+  const chat = vi.fn(async (_payload, options?: ChatMethodOptions) => {
+    await runCallbacks(options!);
+    return new Response('done');
+  });
+  const events: AgentEvent[] = [];
+  const onFirstChunk = vi.fn();
+  const attempt = createServerCallLlmAttempt({
+    attempt: 1,
+    chatPayload: {
+      messages: [{ content: 'Question', role: 'user' }],
+      model: 'test-model',
+      stream: true,
+      tools: resolved.tools,
+    },
+    ctx,
+    events,
+    maxAttempts: 3,
+    messageCount: 1,
+    model: 'test-model',
+    modelRuntime: { chat } as unknown as Pick<ModelRuntime, 'chat'>,
+    onFirstChunk,
+    operationLogId: 'operation-1:2',
+    provider: 'test-provider',
+    resolved,
+    topicId: 'topic-1',
+    trigger: 'user',
+  });
+
+  return { attempt, chat, events, onFirstChunk, publishStreamChunk };
+};
+
+describe('ServerCallLlmAttempt', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('collects callback output and exposes a completed attempt snapshot', async () => {
+    const rawToolCall = {
+      function: { arguments: '{"query":"docs"}', name: toolName },
+      id: 'call-1',
+      type: 'function' as const,
+    };
+    const { attempt, events, onFirstChunk, publishStreamChunk } = createAttempt(
+      async ({ callback }) => {
+        await callback?.onText?.('Visible answer');
+        await callback?.onThinking?.('Reasoning');
+        await callback?.onGrounding?.({ searchQueries: ['docs'] });
+        await callback?.onToolsCalling?.({ chunk: [], toolsCalling: [rawToolCall] });
+        await callback?.onCompletion?.({
+          finishReason: 'tool_use',
+          speed: { tps: 20, ttft: 100 },
+          text: '',
+          usage: { totalInputTokens: 10, totalOutputTokens: 5, totalTokens: 15 },
+        });
+      },
+    );
+
+    await attempt.execute();
+
+    expect(attempt.streamSink.content).toBe('Visible answer');
+    expect(attempt.streamSink.thinkingContent).toBe('Reasoning');
+    expect(attempt.grounding).toEqual({ searchQueries: ['docs'] });
+    expect(attempt.finishReason).toBe('tool_use');
+    expect(attempt.speed).toEqual({ tps: 20, ttft: 100 });
+    expect(attempt.usage).toEqual({
+      totalInputTokens: 10,
+      totalOutputTokens: 5,
+      totalTokens: 15,
+    });
+    expect(attempt.toolCalls).toEqual([rawToolCall]);
+    expect(attempt.toolsCalling).toEqual([
+      expect.objectContaining({
+        apiName: 'search',
+        executor: 'server',
+        id: 'call-1',
+        identifier: 'workspace',
+        source: 'builtin',
+      }),
+    ]);
+    expect(onFirstChunk).toHaveBeenCalledTimes(2);
+    expect(events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ chunk: { text: 'Visible answer', type: 'text' } }),
+        expect.objectContaining({ chunk: { text: 'Reasoning', type: 'reasoning' } }),
+      ]),
+    );
+    expect(publishStreamChunk).toHaveBeenCalledWith(
+      'operation-1',
+      2,
+      expect.objectContaining({ chunkType: 'tools_calling' }),
+    );
+  });
+
+  it('keeps partial output and usage readable after a stream error', async () => {
+    const { attempt } = createAttempt(async ({ callback }) => {
+      await callback?.onText?.('Partial answer');
+      await callback?.onCompletion?.({
+        text: '',
+        usage: { totalOutputTokens: 3 },
+      });
+      await callback?.onError?.({
+        errorType: 'ProviderBizError',
+        message: 'provider stream failed',
+        status: 503,
+      });
+    });
+
+    await expect(attempt.execute()).rejects.toMatchObject({
+      errorType: 'ProviderBizError',
+      message: 'LLM stream error: provider stream failed',
+      status: 503,
+    });
+    attempt.streamSink.clearBuffers();
+
+    expect(attempt.streamSink.content).toBe('Partial answer');
+    expect(attempt.usage).toEqual({ totalOutputTokens: 3 });
+  });
+
+  it('salvages a natural-stop answer emitted only in reasoning', async () => {
+    const { attempt } = createAttempt(async ({ callback }) => {
+      await callback?.onThinking?.('Final answer from reasoning');
+      await callback?.onCompletion?.({
+        finishReason: 'stop',
+        text: '',
+        usage: { totalOutputTokens: 5 },
+      });
+    });
+
+    await attempt.execute();
+
+    expect(attempt.answerSalvagedFromReasoning).toBe(true);
+    expect(attempt.streamSink.content).toBe('Final answer from reasoning');
+    expect(attempt.streamSink.thinkingContent).toBe('');
+  });
+});

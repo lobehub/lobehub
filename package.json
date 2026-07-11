@@ -348,7 +348,7 @@
     "diff": "^8.0.4",
     "discord-api-types": "^0.38.49",
     "drizzle-orm": "^0.45.2",
-    "drizzle-zod": "^0.5.1",
+    "drizzle-zod": "^0.8.3",
     "epub2": "^3.0.2",
     "es-toolkit": "^1.49.0",
     "expo-server-sdk": "^6.1.0",
@@ -452,8 +452,7 @@
     "xast-util-to-xml": "^4.0.0",
     "xastscript": "^4.0.0",
     "yaml": "^2.9.0",
-    "zod": "^3.25.76",
-    "zod-to-json-schema": "^3.25.2",
+    "zod": "^4.4.3",
     "zustand": "5.0.4",
     "zustand-utils": "^2.1.1"
   },

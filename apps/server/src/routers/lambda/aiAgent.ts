@@ -209,7 +209,7 @@ const ExecAgentSchema = z
         /** ID of the pending `role='tool'` message this result targets. */
         parentMessageId: z.string(),
         /** Optional plugin state to persist on the tool message. */
-        pluginState: z.record(z.unknown()).optional(),
+        pluginState: z.record(z.string(), z.unknown()).optional(),
         /** tool_call_id of the pending tool call being answered. */
         toolCallId: z.string(),
       })

@@ -58,7 +58,7 @@ instead of hand-rolling `__LOBE_STORES` eval snippets** for these common needs:
 ```bash
 PROBE=".agents/skills/agent-testing/scripts/app-probe.sh"
 
-$PROBE auth           # login check (Step 0.3) → { isSignedIn, userId }
+$PROBE auth           # login check (Step 2.4) → { isSignedIn, userId }
 $PROBE route          # current SPA route
 $PROBE ops            # running chat operations (type / startTime)
 $PROBE goto /settings # jump the SPA straight to a route (full reload)

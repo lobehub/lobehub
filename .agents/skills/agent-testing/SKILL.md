@@ -15,14 +15,23 @@ description: >
 # Agent Testing (Agentic End-to-End Verification)
 
 One skill for all agentic end-to-end testing — local-first today, designed to
-also run as full cloud automation. Every test session follows the same
-contract:
+also run as full cloud automation. Every test session follows three phases:
 
 ```text
-Step -2: Read the two living logs → Step -1: Plan approval → Step 0: Env + Auth → Step 1: Pick surface → Step 2: Run → Step 3: Structured report → Step 4: Publish to LobeHub → Step 5: Teardown
+PLAN (Steps 0–2) → EXECUTE (Steps 3–6) → FINISH (Step 7)
 ```
 
-## Step -2 — Read the two living logs (mandatory, before every run)
+Do not enter Execute until Plan has confirmed both the environment state and the
+execution plan. Treat Steps 3–6 as one continuous execution phase: select the
+surface, run the cases, produce the report, and publish it. Always end with
+Finish unless the user explicitly asks to keep the environment running.
+
+## Phase 1 — Plan
+
+Confirm what will run and whether the environment is ready before changing or
+starting anything.
+
+### Step 0 — Read the two living logs (mandatory, before every run)
 
 Before doing anything else, read both of these in full and hold them in mind for
 this run:
@@ -54,31 +63,24 @@ this run:
   superproject's own skills/notes instead, and genericize anything worth
   keeping here.
 
-## Step -1 — Plan approval for non-trivial tests
+### Step 1 — Prepare the execution plan
 
-Skip directly to Step 0 if: the test is a single re-run after a fix, the plan
+Skip directly to Step 2 if: the test is a single re-run after a fix, the plan
 was already agreed on, or the user gave exact commands.
 
-Otherwise, propose a test plan (surface, cases, expected evidence, assumptions)
-and use the runtime structured question tool (`request_user_input` /
-ask-user-question equivalent) with two fixed choices:
+Prepare the proposed surface, cases, expected evidence, assumptions, and report
+deliverable. Do not ask for approval yet: Step 2 must establish the real
+environment state first so the user can approve one complete, evidence-backed
+plan instead of separate plan and environment prompts.
 
-1. `Start (Recommended)` — the plan looks good, begin executing
-2. `Discuss first` — the plan has issues, let's talk it over first
+### Step 2 — Confirm environment state and auth (mandatory)
 
-(Match the button labels to the user's conversation language at runtime, but
-keep this skill file in English.)
-
-Wait for the user's choice before proceeding.
-
-## Step 0 — Environment setup + auth check (mandatory)
-
-Step 0 is about getting the environment ready: **dependencies are healthy**
+Step 2 is about getting the environment ready: **dependencies are healthy**
 and **auth is green**. A test run that dies halfway on a missing dependency or
 a login wall wastes the whole session — clear both gates BEFORE writing a
 single test step.
 
-### 0.0 Resolve the current test environment
+#### 2.0 Resolve the current test environment
 
 Before starting a dev server, checking auth, opening agent-browser, or writing
 test steps, print and confirm the current local test environment:
@@ -108,7 +110,7 @@ eval "$(./.agents/skills/agent-testing/scripts/test-env.sh --exports)"
 Do not rely on hard-coded port tables. If the printed values do not match the
 running dev server, fix/export the env first, then continue.
 
-### 0.1 Dependencies are installed — root AND standalone apps
+#### 2.1 Dependencies are installed — root AND standalone apps
 
 The root pnpm workspace does **NOT** cover every app: `pnpm-workspace.yaml`
 lists `packages/**`, `e2e`, `apps/server`, and only `apps/desktop/src/main` —
@@ -126,7 +128,7 @@ Symptom of a stale standalone install: the build/launch fails to resolve a
 recently added workspace package — `Rolldown failed to resolve import
 "@lobechat/<pkg>"` (Electron) or `Cannot find module '@lobechat/<pkg>'` (CLI).
 
-### 0.2 Run scripts from the repo root
+#### 2.2 Run scripts from the repo root
 
 All paths in this skill (`./.agents/skills/agent-testing/...`) are
 repo-root-relative, and background commands inherit the current working
@@ -134,7 +136,7 @@ directory — a script launched while `cwd` is `apps/desktop` fails with
 `No such file or directory`. Verify `pwd` is the repo root before launching
 long-running scripts.
 
-### 0.3 Init local dev env without `.env`
+#### 2.3 Init local dev env without `.env`
 
 For Web smoke against local code, start a **normal local dev environment**.
 First check the repo root for `.env`:
@@ -256,7 +258,7 @@ eval "$(../.agents/skills/agent-testing/scripts/init-dev-env.sh env)"
 BASE_URL=http://localhost:3010 HEADLESS=true bun run test:smoke
 ```
 
-### 0.4 Auth is green for the selected surface
+#### 2.4 Auth is green for the selected surface
 
 **Auth is the gate for automated testing, but the gate is surface-scoped.**
 Pick the intended surface first when it is already clear from the task, then
@@ -288,7 +290,7 @@ do not open a login page; verify agent-browser first, then request the Network
 `Cookie:` header only if that verification fails. Full background and failure modes:
 [references/auth.md](./references/auth.md).
 
-### 0.5 — Screen-recording preflight (OS-capture surfaces only)
+#### 2.5 — Screen-recording preflight (OS-capture surfaces only)
 
 macOS `screencapture` / osascript / bot-channel captures come out **entirely
 black** when Screen Recording (TCC) permission is missing OR — just as often —
@@ -314,7 +316,29 @@ the display can sleep mid-run, keep it awake for the whole capture session:
 caffeinate -dimsu & # prevent display/idle sleep for the test run; kill when done
 ```
 
-## Step 1 — Pick the surface by change scope
+#### Phase 1 approval gate — report environment + plan to the user
+
+At the end of Step 2, always send one user-facing Plan feedback before entering
+Execute. Read and follow [references/plan.md](./references/plan.md). It requires:
+
+- an overall environment verdict with concrete checks and evidence;
+- the proposed execution plan, cases, and expected evidence;
+- every unresolved prerequisite, clearly assigned to Codex or the user;
+- an explicit statement that nothing is needed from the user when that is true;
+- one structured confirmation question after the feedback.
+
+Resolve safe, agent-owned environment mechanics before presenting the gate. Ask
+the user only for prerequisites that genuinely require their authority, secret,
+device action, or product decision. Do not enter Phase 2 until the user approves
+the plan and all blocking user-owned prerequisites are satisfied.
+
+## Phase 2 — Execute
+
+Carry the approved plan through surface selection, verification, reporting, and
+publication without reopening environment decisions unless observed state
+invalidates the plan.
+
+### Step 3 — Pick the surface by change scope
 
 | Change scope                                            | Default surface                      | Why                                                               | Guide                              |
 | ------------------------------------------------------- | ------------------------------------ | ----------------------------------------------------------------- | ---------------------------------- |
@@ -336,7 +360,7 @@ a server `agent_operations` row, the QStash `/api/agent/run` steps, or server-on
 log lines. If the UI won't take the server path, drive it directly (call the
 server TRPC mutation / endpoint) so the server runtime actually executes.
 
-### Environment support (local macOS vs cloud Linux)
+#### Environment support (local macOS vs cloud Linux)
 
 The decisive constraint per surface is **how evidence (screenshots) is
 captured**: CDP-based capture (`agent-browser screenshot`) renders from the
@@ -353,7 +377,7 @@ osascript) is macOS-only.
 When a test must stay cloud-portable, prefer CDP-based evidence over
 OS-level capture wherever both exist.
 
-### Bot platforms
+#### Bot platforms
 
 | Platform      | Guide                                            | Quick switcher        |
 | ------------- | ------------------------------------------------ | --------------------- |
@@ -378,7 +402,7 @@ New to osascript automation? Read
 macOS-automation asset (activate, type, paste, screenshot, accessibility reads,
 gotchas), not bot-specific.
 
-## Step 2 — Run
+### Step 4 — Run
 
 Surface guides above carry the detailed workflows. Shared infrastructure:
 
@@ -390,7 +414,7 @@ Surface guides above carry the detailed workflows. Shared infrastructure:
 | Local gateway closed loop + probing  | [references/agent-gateway.md](./references/agent-gateway.md)         |
 | Screen recording                     | [references/record-app-screen.md](./references/record-app-screen.md) |
 
-### Scripts
+#### Scripts
 
 All under `.agents/skills/agent-testing/scripts/`:
 
@@ -403,7 +427,7 @@ All under `.agents/skills/agent-testing/scripts/`:
 | `agent-browser-klm.mjs`         | Wrap `agent-browser`, run the real action, and append a GOMS-KLM interaction atom JSONL     |
 | `agent-browser-klm-analyze.mjs` | Summarize interaction JSONL into `result.json.interactionCost` / markdown cost output       |
 | `record-gif.sh`                 | Frame-sequence → GIF for time-based behavior (streaming, timers, animations)                |
-| `report-init.sh`                | Scaffold a structured test report (Step 3)                                                  |
+| `report-init.sh`                | Scaffold a structured test report (Step 5)                                                  |
 | `check-screen-recording.sh`     | Preflight: OS screen-capture works (macOS Screen Recording + display awake)                 |
 | `electron-dev.sh`               | Manage Electron dev env (start/stop/status/restart, CDP 9222)                               |
 | `cdp-screenshot.sh`             | Electron/Chrome screenshot via RAW CDP (bypasses agent-browser daemon); `--check` preflight |
@@ -418,7 +442,7 @@ current route, running operations, and `goto <path>` quick navigation
 jump straight to the state under test instead of clicking through the UI. See
 [ui/electron.md](./ui/electron.md#lobehub-probes--quick-navigation) for usage.
 
-### Agent-browser interaction-cost tracing
+#### Agent-browser interaction-cost tracing
 
 For UI verification runs, drive cost-bearing browser actions through the KLM
 wrapper so the same action also records a user-equivalent interaction atom:
@@ -452,7 +476,7 @@ This writes `result.json.interactionCost`; `verify ingest-report` stores it on
 the verify run metadata so the report can render a separate interaction-cost
 section.
 
-## Step 3 — Structured report (mandatory deliverable)
+### Step 5 — Structured report (mandatory deliverable)
 
 Every automated test session ends with a structured, evidence-backed report —
 not a chat-only summary. Scaffold it up front and fill it as you test:
@@ -504,7 +528,7 @@ Two hard rules worth front-loading:
   animations), record it with `scripts/record-gif.sh` and attach the GIF as that
   case's `evidence` — a static screenshot cannot prove the behavior.
 
-## Step 4 — Publish to LobeHub (mandatory)
+### Step 6 — Publish to LobeHub (mandatory)
 
 The local report under `.records/reports/` is the working artifact; the
 **deliverable is the report opened in LobeHub**. Do not stop at local files —
@@ -554,7 +578,7 @@ inline screenshot/text evidence). On production that resolves to
 `https://app.lobehub.com/verify/<verifyRunId>`. **Include that full production
 link in the final chat reply** alongside the local report dir.
 
-### Re-verifying the same case updates the report in place (don't spawn a new one)
+#### Re-verifying the same case updates the report in place (don't spawn a new one)
 
 When you iterate on one change — fix → re-verify → fix again — **keep reusing the
 same report dir (`$DIR`)**. `ingest-report` records the session it created in a
@@ -591,7 +615,11 @@ Notes:
   report. If the evidence must appear, publish against an env with real storage
   (e.g. production) or attach it inline with `verify evidence upload --content`.
 
-## Step 5 — Teardown (default: stop what you started)
+## Phase 3 — Finish
+
+Close the run cleanly and leave behind only intentional, auditable artifacts.
+
+### Step 7 — Teardown and handoff (default: stop what you started)
 
 A test run leaves processes and code edits behind. Clean them up by default once
 the report is published — a dev server left listening or an injection left in a
@@ -604,8 +632,10 @@ service file silently corrupts the next run (and the next agent's mental model).
   ./.agents/skills/agent-testing/scripts/init-dev-env.sh clean # stop dev server; keep DB/Redis
   ```
 
-  `clean` stops the Next + Vite processes on the resolved `SERVER_PORT` / `SPA_PORT`
-  and the `bun run dev` supervisor, and **leaves the managed Postgres/Redis
+  `clean` stops only the recorded dev-server PID tree after verifying its PID
+  start time, command, and working directory. It never uses a global process-name
+  match and never kills an arbitrary listener merely because it owns a persisted
+  port. It **leaves the managed Postgres/Redis
   containers running** (they are idempotently reused across runs — `setup-db` is a
   no-op when they're up). Use `clean-db` only when you deliberately want the
   containers gone, or `stop-dev` for just the server with no note. If the user

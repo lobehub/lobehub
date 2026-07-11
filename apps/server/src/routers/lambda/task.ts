@@ -76,8 +76,8 @@ const updateSchema = z.object({
   assigneeAgentId: z.string().nullish(),
   assigneeUserId: z.string().nullish(),
   automationMode: z.enum(['heartbeat', 'schedule']).nullish(),
-  config: z.record(z.unknown()).optional(),
-  context: z.record(z.unknown()).optional(),
+  config: z.record(z.string(), z.unknown()).optional(),
+  context: z.record(z.string(), z.unknown()).optional(),
   description: z.string().optional(),
   editorData: z.unknown().optional(),
   // 0 clears the interval (disables heartbeat); any positive value must be
@@ -884,8 +884,8 @@ export const taskRouter = router({
             maxIterations: z.number().min(1).max(10).default(3),
             rubrics: z.array(
               z.object({
-                config: z.record(z.unknown()),
-                extractor: z.record(z.unknown()).optional(),
+                config: z.record(z.string(), z.unknown()),
+                extractor: z.record(z.string(), z.unknown()).optional(),
                 id: z.string(),
                 name: z.string(),
                 threshold: z.number().min(0).max(1).optional(),
@@ -1195,7 +1195,7 @@ export const taskRouter = router({
   }),
 
   updateConfig: taskProcedureWrite
-    .input(idInput.merge(z.object({ config: z.record(z.unknown()) })))
+    .input(idInput.merge(z.object({ config: z.record(z.string(), z.unknown()) })))
     .mutation(async ({ input, ctx }) => {
       const { id, config } = input;
       try {
