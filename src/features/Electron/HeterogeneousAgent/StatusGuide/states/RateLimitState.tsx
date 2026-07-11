@@ -80,7 +80,7 @@ const RateLimitState = ({ config, error, onRetry, variant }: HeterogeneousAgentG
     const diffMs = Math.max(0, resetsAt * 1000 - now);
     const totalMinutes = Math.floor(diffMs / 60_000);
 
-    if (totalMinutes <= 0) return t('cliRateLimitGuide.relative.soon');
+    if (totalMinutes <= 0) return t('cliRateLimitGuide.relative.resetComplete');
 
     const days = Math.floor(totalMinutes / (24 * 60));
     const hours = Math.floor((totalMinutes % (24 * 60)) / 60);
@@ -95,7 +95,7 @@ const RateLimitState = ({ config, error, onRetry, variant }: HeterogeneousAgentG
 
     return parts.length > 0
       ? t('cliRateLimitGuide.resetInApprox', { duration: parts.slice(0, 2).join(' ') })
-      : t('cliRateLimitGuide.relative.soon');
+      : t('cliRateLimitGuide.relative.resetComplete');
   }, [resetsAt, t]);
 
   return (
@@ -105,9 +105,9 @@ const RateLimitState = ({ config, error, onRetry, variant }: HeterogeneousAgentG
       variant={variant}
       actions={
         <GuideActions
-          retryPrimary
           retryLabel={t('cliRateLimitGuide.actions.retry')}
-          onRetry={canRetry ? onRetry : undefined}
+          retryPrimary={canRetry}
+          onRetry={onRetry}
         />
       }
       headerDescription={

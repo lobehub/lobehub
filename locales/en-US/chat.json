@@ -111,6 +111,7 @@
   "cliRateLimitGuide.relative.hour_other": "{{count}} hours",
   "cliRateLimitGuide.relative.minute_one": "{{count}} minute",
   "cliRateLimitGuide.relative.minute_other": "{{count}} minutes",
+  "cliRateLimitGuide.relative.resetComplete": "Reset complete",
   "cliRateLimitGuide.relative.soon": "Resets soon",
   "cliRateLimitGuide.resetAt": "Reset time",
   "cliRateLimitGuide.resetIn": "Time remaining",

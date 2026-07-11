@@ -124,6 +124,7 @@ vi.mock('react-i18next', () => ({
             'cliRateLimitGuide.desc': `${options?.name ?? ''} has reached its current usage limit and cannot continue this run right now.`,
             'cliRateLimitGuide.limitType': 'Quota cycle',
             'cliRateLimitGuide.limitTypes.weekCycle': 'Weekly',
+            'cliRateLimitGuide.relative.resetComplete': 'Reset complete',
             'cliRateLimitGuide.relative.soon': 'Resets soon',
             'cliRateLimitGuide.resetAt': 'Reset time',
             'cliRateLimitGuide.resetIn': 'Time remaining',
@@ -293,9 +294,10 @@ describe('HeterogeneousAgentStatusGuide', () => {
       expect(screen.getAllByText(/Fri, Apr 24, 9:00 AM \(Asia\/Shanghai\)/)).toHaveLength(2);
       expect(screen.queryByText('Open Install Guide')).not.toBeInTheDocument();
       expect(screen.queryByText('Recommended install')).not.toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: 'Retry message' })).not.toBeInTheDocument();
-      expect(screen.queryByRole('button')).not.toBeInTheDocument();
-      expect(onRetry).not.toHaveBeenCalled();
+      const retryButton = screen.getByRole('button', { name: 'Retry message' });
+      expect(retryButton).not.toHaveAttribute('data-variant', 'primary');
+      retryButton.click();
+      expect(onRetry).toHaveBeenCalledTimes(1);
     } finally {
       vi.useRealTimers();
     }
@@ -324,6 +326,8 @@ describe('HeterogeneousAgentStatusGuide', () => {
       );
 
       const retryButton = screen.getByRole('button', { name: 'Retry message' });
+      expect(screen.getByText('Reset complete')).toBeInTheDocument();
+      expect(screen.queryByText('Resets soon')).not.toBeInTheDocument();
       expect(retryButton).toHaveAttribute('data-variant', 'primary');
       retryButton.click();
       expect(onRetry).toHaveBeenCalledTimes(1);

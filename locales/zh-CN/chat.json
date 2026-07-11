@@ -111,6 +111,7 @@
   "cliRateLimitGuide.relative.hour_other": "{{count}} 小时",
   "cliRateLimitGuide.relative.minute_one": "{{count}} 分钟",
   "cliRateLimitGuide.relative.minute_other": "{{count}} 分钟",
+  "cliRateLimitGuide.relative.resetComplete": "已重置",
   "cliRateLimitGuide.relative.soon": "即将重置",
   "cliRateLimitGuide.resetAt": "恢复时间",
   "cliRateLimitGuide.resetIn": "剩余时间",
