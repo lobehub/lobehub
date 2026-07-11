@@ -31,10 +31,12 @@ const isPersonalPath = (to: string): boolean => PERSONAL_PATH_REGEX.test(to);
  */
 export const WORKSPACE_SETTINGS_TABS: ReadonlySet<string> = new Set([
   'apikey',
+  'audit-log',
   'billing',
   'connector',
   'creds',
   'credits',
+  'devices',
   'general',
   'members',
   'messenger',
@@ -43,6 +45,7 @@ export const WORKSPACE_SETTINGS_TABS: ReadonlySet<string> = new Set([
   'service-model',
   'skill',
   'stats',
+  'storage',
   'usage',
 ]);
 
