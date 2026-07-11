@@ -14,10 +14,23 @@ history so the menu provides useful navigation alongside explicit application ac
 - Quick Composer remains an explicit menu item and keeps its existing configurable global
   shortcut. The tray icon itself does not start screen capture.
 - Pinned and Recent entries navigate the main window to their stored URL.
+- Recent Agents shows at most three recently used agents. Selecting one restores that agent's
+  most recent working route; it does not create a new topic.
 - The initial menu shows at most three Pinned entries and five Recent entries.
-- A More item opens the existing in-app Recently Viewed surface when additional entries exist.
-- Static actions remain available: Quick Composer, Quick Chat, Open LobeHub, Settings, and Quit.
-- Empty Pinned or Recent sections are omitted instead of rendering disabled empty-state rows.
+- A More item opens the existing in-app Recently Viewed surface when additional entries exist;
+  More Agents opens the in-app agent list.
+- Static actions remain available: Quick Composer, Quick Chat, New Chat, Open LobeHub, Settings,
+  and Quit.
+- Empty Pinned, Recent Agents, or Recent sections are omitted instead of rendering disabled
+  empty-state rows.
+
+The complete menu is divided into five semantic layers:
+
+1. Pinned: two or three explicitly pinned pages or tasks.
+2. Recent Agents: up to three agents ordered by recent use, followed by More Agents when needed.
+3. Recent: three to five recently visited working surfaces, followed by More when needed.
+4. Quick Actions: Quick Composer, Quick Chat, and New Chat.
+5. Application: Open LobeHub, Settings, and Quit, with Quit separated as the terminal action.
 
 ## Architecture
 
@@ -36,13 +49,27 @@ interface TrayNavigationItem {
   url: string;
 }
 
+interface TrayAgentItem {
+  id: string;
+  title: string;
+  url: string;
+}
+
 interface TrayNavigationSnapshot {
+  agents: TrayAgentItem[];
   pinned: TrayNavigationItem[];
   recent: TrayNavigationItem[];
 }
 ```
 
 The main process must not reconstruct titles from SPA routes or query application databases.
+
+Recent Agents is derived in the renderer from the existing workspace-scoped sidebar agent data,
+which is already ordered by `agents.updatedAt`. The renderer associates each agent with its most
+recent matching navigation entry when available; otherwise it uses the agent's canonical route.
+This preserves workspace visibility and route ownership without adding a tray-specific server
+query. Agent usage ranking by topic count is intentionally not used because it represents
+frequency rather than recency.
 
 ### IPC boundary
 
@@ -60,12 +87,13 @@ Move tray menu composition behind one shared builder instead of duplicating dyna
 macOS, Windows, and Linux templates. Platform menu implementations may retain platform-specific
 labels, but all platforms consume the same navigation snapshot and action callbacks.
 
-The native Electron menu uses disabled section labels for Pinned and Recent, normal actionable
-items for pages, separators between sections, and a submenu or navigation command for More.
+The native Electron menu uses disabled section labels for Pinned, Recent Agents, and Recent;
+normal actionable items for agents and pages; separators between semantic layers; and navigation
+commands for More and More Agents. Empty dynamic sections are omitted.
 
 ## Navigation Flow
 
-Selecting a Pinned or Recent item:
+Selecting a Pinned, Recent Agent, or Recent item:
 
 1. Shows the existing main browser window.
 2. Broadcasts the existing typed `navigate` event with the stored URL and `escape: true`.
@@ -75,6 +103,10 @@ Selecting a Pinned or Recent item:
 The More command shows the main window and opens the existing Recently Viewed popover through a
 new typed broadcast. It does not reproduce the full list inside a nested native menu.
 
+More Agents shows the main window and navigates to the existing agent browsing surface. New Chat
+is the only tray action in this design that creates a new conversation, keeping restoration and
+creation semantics distinct.
+
 ## Testing
 
 Behavior-oriented tests cover:
@@ -82,10 +114,11 @@ Behavior-oriented tests cover:
 - left-click and right-click both opening the stored menu;
 - click and double-click never starting Quick Composer or unexpectedly showing the main window;
 - snapshot updates rebuilding the menu;
-- section omission and item limits;
+- dynamic section omission and Pinned, Recent Agents, and Recent item limits;
+- Recent Agent selection restoring its route without creating a topic;
 - navigation items showing the main window and broadcasting their URL;
-- static actions remaining available without renderer data;
-- renderer synchronization emitting resolved titles and URLs.
+- static actions, including New Chat, remaining available without renderer data;
+- renderer synchronization emitting resolved page and agent titles and URLs.
 
 Tests must avoid snapshots of the entire menu template. Assertions target visible labels,
 callbacks, limits, and navigation outcomes.
