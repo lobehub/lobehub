@@ -1093,7 +1093,6 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
 
         return createManagedSkillItem({
           badge: <Icon icon={Wrench} size={12} />,
-          defaultMode: 'pinned',
           deleteConfig: {
             displayName: title,
             onDelete: () => uninstallBuiltinTool(item.identifier),

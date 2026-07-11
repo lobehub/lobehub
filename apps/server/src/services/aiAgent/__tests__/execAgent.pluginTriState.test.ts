@@ -257,4 +257,19 @@ describe('AiAgentService.execAgent - three-state plugin config (pinned/auto/disa
     expect(toolManifestMapArg()).not.toHaveProperty('composio-disabled');
     expect(toolManifestMapArg()).not.toHaveProperty('skill-disabled');
   });
+
+  it('excludes a disabled builtin from the activator-discovery toolManifestMap', async () => {
+    mockGetAgentConfig.mockResolvedValue({
+      chatConfig: {},
+      id: 'agent-1',
+      model: 'gpt-4',
+      plugins: [{ identifier: 'lobe-agent', mode: 'disabled' }],
+      provider: 'openai',
+      systemRole: 'You are a helper',
+    });
+
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' } as any);
+
+    expect(toolManifestMapArg()).not.toHaveProperty('lobe-agent');
+  });
 });
