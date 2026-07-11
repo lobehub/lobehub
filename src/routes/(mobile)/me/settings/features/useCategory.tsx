@@ -1,5 +1,6 @@
 import { SkillsIcon } from '@lobehub/ui/icons';
 import {
+  AppWindowIcon,
   Blocks,
   Brain,
   BrainCircuit,
@@ -122,6 +123,12 @@ export const useCategory = (): CategoryGroup[] => {
       makeItem({ icon: Database, key: SettingsTabs.Storage, label: t('setting:tab.storage') }),
       isDevMode &&
         makeItem({ icon: KeyIcon, key: SettingsTabs.APIKey, label: t('auth:tab.apikey') }),
+      isDevMode &&
+        makeItem({
+          icon: AppWindowIcon,
+          key: SettingsTabs.OAuthApps,
+          label: t('auth:tab.oauthApps'),
+        }),
       makeItem({
         icon: EllipsisIcon,
         key: SettingsTabs.Advanced,
