@@ -161,6 +161,35 @@ describe('useOnboardingFlow', () => {
     expect(mocks.navigate).toHaveBeenCalledWith('/');
   });
 
+  it('next() does not fire step completed when setOnboardingStep rejects', async () => {
+    mocks.setOnboardingStep.mockRejectedValueOnce(new Error('network error'));
+
+    const { result } = renderHook(() => useOnboardingFlow());
+
+    await expect(
+      act(async () => {
+        await result.current.next();
+      }),
+    ).rejects.toThrow('network error');
+
+    expect(mocks.trackOnboardingStepCompleted).not.toHaveBeenCalled();
+  });
+
+  it('next() does not fire step completed when finish() rejects on the last step', async () => {
+    mocks.persistedStep = OnboardingStep.ChiefAgent;
+    mocks.finishOnboarding.mockRejectedValueOnce(new Error('network error'));
+
+    const { result } = renderHook(() => useOnboardingFlow());
+
+    await expect(
+      act(async () => {
+        await result.current.next();
+      }),
+    ).rejects.toThrow('network error');
+
+    expect(mocks.trackOnboardingStepCompleted).not.toHaveBeenCalled();
+  });
+
   it('back() is a no-op on the first visible step', async () => {
     const { result } = renderHook(() => useOnboardingFlow());
 

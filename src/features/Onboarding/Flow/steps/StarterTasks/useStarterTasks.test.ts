@@ -85,6 +85,23 @@ describe('useStarterTasks', () => {
     expect(onFinished).toHaveBeenCalledTimes(1);
   });
 
+  it('submit() with N=0 toasts and stays on the step when onFinished rejects', async () => {
+    const onFinished = vi.fn().mockRejectedValue(new Error('not implemented'));
+    const { result } = renderHook(() => useStarterTasks(onFinished));
+
+    act(() => {
+      result.current.toggle('a');
+    });
+    expect(result.current.selectedCount).toBe(0);
+
+    await act(async () => {
+      await result.current.submit();
+    });
+
+    expect(mocks.toastError).toHaveBeenCalledTimes(1);
+    expect(result.current.submitting).toBe(false);
+  });
+
   it('submit() with N>0 calls createTasks with selected ids then advances', async () => {
     const onFinished = vi.fn().mockResolvedValue(undefined);
     const { result } = renderHook(() => useStarterTasks(onFinished));

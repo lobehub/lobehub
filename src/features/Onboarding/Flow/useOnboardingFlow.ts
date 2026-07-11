@@ -71,19 +71,23 @@ export const useOnboardingFlow = (): OnboardingFlowController => {
   }, [finishOnboarding, navigate]);
 
   const next = useCallback(async () => {
-    trackOnboardingStepCompleted({
-      flow: ONBOARDING_METRICS_FLOW,
-      step: ONBOARDING_STEP_METRIC_ID[currentStep],
-      stepIndex: currentStep,
-    });
-
     if (isLastVisibleStep(currentStep, visibleSteps)) {
       await finish();
+      trackOnboardingStepCompleted({
+        flow: ONBOARDING_METRICS_FLOW,
+        step: ONBOARDING_STEP_METRIC_ID[currentStep],
+        stepIndex: currentStep,
+      });
       return;
     }
 
     const target = getNextOnboardingStep(currentStep, visibleSteps);
     if (target !== undefined) await setOnboardingStep(target);
+    trackOnboardingStepCompleted({
+      flow: ONBOARDING_METRICS_FLOW,
+      step: ONBOARDING_STEP_METRIC_ID[currentStep],
+      stepIndex: currentStep,
+    });
   }, [currentStep, visibleSteps, finish, setOnboardingStep]);
 
   const back = useCallback(async () => {

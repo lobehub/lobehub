@@ -61,7 +61,14 @@ export const useStarterTasks = (onFinished: () => Promise<void>) => {
 
   const submit = useCallback(async () => {
     if (selectedCount === 0) {
-      await onFinished();
+      setSubmitting(true);
+      try {
+        await onFinished();
+      } catch {
+        toast.error(t('flow.steps.starterTasks.createError', { ns: 'onboarding' }));
+      } finally {
+        setSubmitting(false);
+      }
       return;
     }
 
