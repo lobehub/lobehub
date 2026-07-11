@@ -26,10 +26,7 @@ const isFinished = (s: UserStore) => !!s.onboarding?.finishedAt;
 const needsOnboarding = (s: Pick<UserStore, 'agentOnboarding' | 'onboarding'>) => {
   if (agentOnboardingSelectors.isFinished(s)) return false;
 
-  return (
-    !s.onboarding?.finishedAt ||
-    (s.onboarding?.version && s.onboarding.version < CURRENT_ONBOARDING_VERSION)
-  );
+  return !s.onboarding?.finishedAt;
 };
 
 /**
