@@ -110,6 +110,7 @@ export type ModelDetailPanelExpandedKey = (typeof MODEL_DETAIL_PANEL_EXPANDED_KE
 
 export const DEFAULT_MODEL_DETAIL_PANEL_EXPANDED_KEYS = [
   'rating',
+  'abilities',
   'pricing',
   'config',
 ] as const satisfies readonly ModelDetailPanelExpandedKey[];

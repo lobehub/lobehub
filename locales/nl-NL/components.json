@@ -168,7 +168,6 @@
   "ModelSwitchPanel.detail.rating.dimension.price": "Prijs",
   "ModelSwitchPanel.detail.rating.dimension.speed": "Snelheid",
   "ModelSwitchPanel.detail.rating.dimension.writing": "Schrijven",
-  "ModelSwitchPanel.detail.rating.source": "Gegevens",
   "ModelSwitchPanel.detail.releasedAt": "Uitgebracht op {{date}}",
   "ModelSwitchPanel.emptyModel": "Geen ingeschakeld model. Ga naar instellingen om er een in te schakelen.",
   "ModelSwitchPanel.emptyProvider": "Geen ingeschakelde providers. Ga naar instellingen om er een in te schakelen.",

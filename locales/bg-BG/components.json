@@ -168,7 +168,6 @@
   "ModelSwitchPanel.detail.rating.dimension.price": "Цена",
   "ModelSwitchPanel.detail.rating.dimension.speed": "Скорост",
   "ModelSwitchPanel.detail.rating.dimension.writing": "Писане",
-  "ModelSwitchPanel.detail.rating.source": "Данни",
   "ModelSwitchPanel.detail.releasedAt": "Пуснат на {{date}}",
   "ModelSwitchPanel.emptyModel": "Няма активиран модел. Моля, отидете в настройките, за да активирате.",
   "ModelSwitchPanel.emptyProvider": "Няма активирани доставчици. Моля, отидете в настройките, за да активирате такъв.",

@@ -168,7 +168,6 @@
   "ModelSwitchPanel.detail.rating.dimension.price": "Цена",
   "ModelSwitchPanel.detail.rating.dimension.speed": "Скорость",
   "ModelSwitchPanel.detail.rating.dimension.writing": "Письмо",
-  "ModelSwitchPanel.detail.rating.source": "Данные",
   "ModelSwitchPanel.detail.releasedAt": "Выпущено {{date}}",
   "ModelSwitchPanel.emptyModel": "Нет включённых моделей. Перейдите в настройки, чтобы включить.",
   "ModelSwitchPanel.emptyProvider": "Нет включённых провайдеров. Перейдите в настройки, чтобы включить одного из них.",

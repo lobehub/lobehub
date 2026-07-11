@@ -168,7 +168,6 @@
   "ModelSwitchPanel.detail.rating.dimension.price": "السعر",
   "ModelSwitchPanel.detail.rating.dimension.speed": "السرعة",
   "ModelSwitchPanel.detail.rating.dimension.writing": "الكتابة",
-  "ModelSwitchPanel.detail.rating.source": "البيانات",
   "ModelSwitchPanel.detail.releasedAt": "تم الإصدار في {{date}}",
   "ModelSwitchPanel.emptyModel": "لا يوجد نموذج مفعل. يرجى الذهاب إلى الإعدادات لتفعيله.",
   "ModelSwitchPanel.emptyProvider": "لا يوجد مزود مفعل. يرجى الذهاب إلى الإعدادات لتفعيل أحدهم.",

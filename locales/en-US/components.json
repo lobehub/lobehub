@@ -168,7 +168,6 @@
   "ModelSwitchPanel.detail.rating.dimension.price": "Price",
   "ModelSwitchPanel.detail.rating.dimension.speed": "Speed",
   "ModelSwitchPanel.detail.rating.dimension.writing": "Writing",
-  "ModelSwitchPanel.detail.rating.source": "Data",
   "ModelSwitchPanel.detail.releasedAt": "Released {{date}}",
   "ModelSwitchPanel.emptyModel": "No enabled model. Please go to settings to enable.",
   "ModelSwitchPanel.emptyProvider": "No enabled providers. Please go to settings to enable one.",

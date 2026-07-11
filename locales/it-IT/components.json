@@ -168,7 +168,6 @@
   "ModelSwitchPanel.detail.rating.dimension.price": "Prezzo",
   "ModelSwitchPanel.detail.rating.dimension.speed": "Velocità",
   "ModelSwitchPanel.detail.rating.dimension.writing": "Scrittura",
-  "ModelSwitchPanel.detail.rating.source": "Dati",
   "ModelSwitchPanel.detail.releasedAt": "Rilasciato il {{date}}",
   "ModelSwitchPanel.emptyModel": "Nessun modello abilitato. Vai alle impostazioni per abilitarne uno.",
   "ModelSwitchPanel.emptyProvider": "Nessun provider abilitato. Vai alle impostazioni per abilitarne uno.",

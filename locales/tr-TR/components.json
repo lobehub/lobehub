@@ -168,7 +168,6 @@
   "ModelSwitchPanel.detail.rating.dimension.price": "Fiyat",
   "ModelSwitchPanel.detail.rating.dimension.speed": "Hız",
   "ModelSwitchPanel.detail.rating.dimension.writing": "Yazma",
-  "ModelSwitchPanel.detail.rating.source": "Veri",
   "ModelSwitchPanel.detail.releasedAt": "{{date}} tarihinde yayınlandı",
   "ModelSwitchPanel.emptyModel": "Etkinleştirilmiş model yok. Lütfen ayarlardan etkinleştirin.",
   "ModelSwitchPanel.emptyProvider": "Etkinleştirilmiş sağlayıcı yok. Lütfen ayarlardan birini etkinleştirin.",

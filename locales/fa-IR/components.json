@@ -168,7 +168,6 @@
   "ModelSwitchPanel.detail.rating.dimension.price": "قیمت",
   "ModelSwitchPanel.detail.rating.dimension.speed": "سرعت",
   "ModelSwitchPanel.detail.rating.dimension.writing": "نوشتن",
-  "ModelSwitchPanel.detail.rating.source": "داده‌ها",
   "ModelSwitchPanel.detail.releasedAt": "منتشر شده در {{date}}",
   "ModelSwitchPanel.emptyModel": "مدلی فعال نیست. لطفاً به تنظیمات بروید و فعال کنید.",
   "ModelSwitchPanel.emptyProvider": "ارائه‌دهنده‌ای فعال نیست. لطفاً به تنظیمات بروید و یکی را فعال کنید.",

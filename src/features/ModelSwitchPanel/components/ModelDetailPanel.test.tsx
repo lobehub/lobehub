@@ -108,7 +108,6 @@ const translations: Record<string, string> = {
   'ModelSwitchPanel.detail.rating.dimension.price': 'Price',
   'ModelSwitchPanel.detail.rating.dimension.speed': 'Speed',
   'ModelSwitchPanel.detail.rating.dimension.writing': 'Writing',
-  'ModelSwitchPanel.detail.rating.source': 'Data',
   'test-model.description': 'Localized model description.',
 };
 
@@ -331,6 +330,7 @@ describe('ModelDetailPanel rating', () => {
     expect(container).toHaveTextContent('100');
     // agentic has no data: label greyed with a dash placeholder
     expect(container).toHaveTextContent('Agentic');
+    // attribution lives in the per-dimension tooltip now that the footer is gone
     expect(container).toHaveTextContent('Artificial Analysis');
   });
 

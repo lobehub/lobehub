@@ -1,9 +1,8 @@
 import { Accordion, AccordionItem, Flexbox, Icon, Tag, Text, Tooltip } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { ArrowDownToDot, ArrowUpFromDot, CircleFadingArrowUp } from 'lucide-react';
-import type { ModelRatingSource } from 'model-bank';
 import type { FC } from 'react';
-import { Fragment, memo } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { EnabledProviderWithModels } from '@/types/aiProvider';
@@ -37,20 +36,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     line-height: 1.5;
     overflow-wrap: anywhere;
     white-space: pre-wrap;
-  `,
-  ratingAttribution: css`
-    padding-block: 2px;
-    padding-inline: 8px;
-    font-size: 11px;
-    color: ${cssVar.colorTextTertiary};
-
-    a {
-      color: ${cssVar.colorTextTertiary};
-
-      &:hover {
-        color: ${cssVar.colorPrimary};
-      }
-    }
   `,
   ratingScoreLink: css`
     display: inline-flex;
@@ -166,16 +151,6 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
       : [];
     const ratedDimensions = ratingDimensions.filter((item) => item.score !== undefined);
     const hasRating = ratedDimensions.length > 0;
-    const ratingSources = rating
-      ? [
-          ...new Map(
-            RATING_DIMENSION_ORDER.flatMap((key) => {
-              const dimension = rating[key];
-              return dimension ? [[dimension.source, dimension.sourceUrl] as const] : [];
-            }),
-          ),
-        ]
-      : [];
 
     const description = model.description
       ? String(
@@ -249,17 +224,6 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
                       ))}
                     </Flexbox>
                   )}
-                  <Flexbox horizontal className={styles.ratingAttribution} gap={4} wrap={'wrap'}>
-                    <span>{t('ModelSwitchPanel.detail.rating.source')}:</span>
-                    {ratingSources.map(([source, sourceUrl], index) => (
-                      <Fragment key={source}>
-                        {index > 0 && <span>·</span>}
-                        <a href={sourceUrl} rel={'noreferrer'} target={'_blank'}>
-                          {RATING_SOURCE_NAMES[source as ModelRatingSource]}
-                        </a>
-                      </Fragment>
-                    ))}
-                  </Flexbox>
                 </Flexbox>
               </AccordionItem>
             )}

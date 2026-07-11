@@ -168,7 +168,6 @@
   "ModelSwitchPanel.detail.rating.dimension.price": "Cena",
   "ModelSwitchPanel.detail.rating.dimension.speed": "Szybkość",
   "ModelSwitchPanel.detail.rating.dimension.writing": "Pisanie",
-  "ModelSwitchPanel.detail.rating.source": "Dane",
   "ModelSwitchPanel.detail.releasedAt": "Wydano {{date}}",
   "ModelSwitchPanel.emptyModel": "Brak włączonych modeli. Przejdź do ustawień, aby je włączyć.",
   "ModelSwitchPanel.emptyProvider": "Brak włączonych dostawców. Przejdź do ustawień, aby włączyć jednego.",

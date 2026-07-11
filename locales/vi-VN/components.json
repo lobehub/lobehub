@@ -168,7 +168,6 @@
   "ModelSwitchPanel.detail.rating.dimension.price": "Giá cả",
   "ModelSwitchPanel.detail.rating.dimension.speed": "Tốc độ",
   "ModelSwitchPanel.detail.rating.dimension.writing": "Viết",
-  "ModelSwitchPanel.detail.rating.source": "Dữ liệu",
   "ModelSwitchPanel.detail.releasedAt": "Phát hành vào {{date}}",
   "ModelSwitchPanel.emptyModel": "Không có mô hình nào được bật. Vui lòng vào cài đặt để bật.",
   "ModelSwitchPanel.emptyProvider": "Không có nhà cung cấp nào được bật. Vui lòng vào cài đặt để bật.",
