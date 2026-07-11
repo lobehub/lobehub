@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { sessionGroups, users } from '../../schemas';
+import { sessionGroups, users, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { SessionGroupModel } from '../sessionGroup';
 
@@ -144,6 +144,132 @@ describe('SessionGroupModel', () => {
 
       expect(updatedGroup1?.sort).toBe(3);
       expect(updatedGroup2?.sort).toBe(4);
+    });
+  });
+
+  describe('workspace visibility', () => {
+    const wsId = 'session-group-ws';
+    const ownerId = userId;
+    const memberId = 'user2';
+    const ownerModel = new SessionGroupModel(serverDB, ownerId, wsId);
+    const memberModel = new SessionGroupModel(serverDB, memberId, wsId);
+
+    beforeEach(async () => {
+      await serverDB.insert(workspaces).values({
+        id: wsId,
+        name: 'Session Group WS',
+        slug: 'session-group-ws',
+        primaryOwnerId: ownerId,
+      });
+    });
+
+    afterEach(async () => {
+      await serverDB.delete(workspaces).where(eq(workspaces.id, wsId));
+    });
+
+    describe('create with visibility', () => {
+      it('should persist private visibility when explicitly requested', async () => {
+        const result = await ownerModel.create({ name: 'Private Folder', visibility: 'private' });
+
+        const row = await serverDB.query.sessionGroups.findFirst({
+          where: eq(sessionGroups.id, result.id),
+        });
+        expect(row?.visibility).toBe('private');
+        expect(row?.workspaceId).toBe(wsId);
+        expect(row?.userId).toBe(ownerId);
+      });
+
+      it('should default to public visibility when omitted', async () => {
+        const result = await ownerModel.create({ name: 'Public Folder' });
+
+        const row = await serverDB.query.sessionGroups.findFirst({
+          where: eq(sessionGroups.id, result.id),
+        });
+        expect(row?.visibility).toBe('public');
+      });
+    });
+
+    describe('ownership visibility filter', () => {
+      it('should let another member see public folders but not the owner’s private folder', async () => {
+        const ownerPrivate = await ownerModel.create({
+          name: 'Owner Private',
+          visibility: 'private',
+        });
+        const ownerPublic = await ownerModel.create({
+          name: 'Owner Public',
+          visibility: 'public',
+        });
+        const memberPrivate = await memberModel.create({
+          name: 'Member Private',
+          visibility: 'private',
+        });
+
+        const seenByMember = await memberModel.query();
+        const ids = seenByMember.map((row) => row.id).sort();
+
+        expect(ids).toContain(ownerPublic.id);
+        expect(ids).toContain(memberPrivate.id);
+        expect(ids).not.toContain(ownerPrivate.id);
+      });
+
+      it('should return undefined when a member reads another member’s private folder by id', async () => {
+        const ownerPrivate = await ownerModel.create({
+          name: 'Owner Private',
+          visibility: 'private',
+        });
+
+        const found = await memberModel.findById(ownerPrivate.id);
+        expect(found).toBeUndefined();
+      });
+    });
+
+    describe('publishToWorkspace', () => {
+      it('should flip the creator’s own private folder to public', async () => {
+        const created = await ownerModel.create({
+          name: 'To Publish',
+          visibility: 'private',
+        });
+
+        await ownerModel.publishToWorkspace(created.id);
+
+        const row = await serverDB.query.sessionGroups.findFirst({
+          where: eq(sessionGroups.id, created.id),
+        });
+        expect(row?.visibility).toBe('public');
+      });
+
+      it('should be a no-op when the row is already public', async () => {
+        const created = await ownerModel.create({
+          name: 'Already Public',
+          visibility: 'public',
+        });
+        const before = await serverDB.query.sessionGroups.findFirst({
+          where: eq(sessionGroups.id, created.id),
+        });
+
+        await ownerModel.publishToWorkspace(created.id);
+
+        const after = await serverDB.query.sessionGroups.findFirst({
+          where: eq(sessionGroups.id, created.id),
+        });
+        expect(after?.visibility).toBe('public');
+        expect(after?.updatedAt).toEqual(before?.updatedAt);
+      });
+
+      it('should refuse to publish another member’s private folder', async () => {
+        const owned = await ownerModel.create({
+          name: 'Owner Private',
+          visibility: 'private',
+        });
+
+        await memberModel.publishToWorkspace(owned.id);
+
+        const row = await serverDB.query.sessionGroups.findFirst({
+          where: eq(sessionGroups.id, owned.id),
+        });
+        expect(row?.visibility).toBe('private');
+        expect(row?.userId).toBe(ownerId);
+      });
     });
   });
 });

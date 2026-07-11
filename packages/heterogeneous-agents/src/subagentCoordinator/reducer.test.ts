@@ -278,6 +278,9 @@ describe('subagent reducer', () => {
         messageId: 'msg_2',
         model: 'claude',
         provider: 'claude-code',
+        // Carried so recordUsage's wholesale metadata overwrite re-stamps
+        // heteroMessageId instead of wiping it.
+        subagentMessageId: 'm1',
         threadId: 'thd_1',
         usage,
       },

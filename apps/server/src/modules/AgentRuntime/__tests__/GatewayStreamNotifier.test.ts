@@ -29,6 +29,7 @@ function createMockInner(): IStreamEventManager & { calls: Record<string, any[][
     publishAgentRuntimeInit: track('publishAgentRuntimeInit') as any,
     publishStreamChunk: track('publishStreamChunk') as any,
     publishStreamEvent: track('publishStreamEvent') as any,
+    readEventsOnce: track('readEventsOnce') as any,
     subscribeStreamEvents: track('subscribeStreamEvents') as any,
   };
 }
@@ -77,6 +78,39 @@ describe('GatewayStreamNotifier', () => {
           method: 'POST',
         }),
       );
+    });
+
+    it('awaits stream_end gateway push before resolving', async () => {
+      let resolveFetch!: () => void;
+      mockFetch.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveFetch = () => resolve({ ok: true, text: () => Promise.resolve('') });
+          }),
+      );
+
+      const result = notifier.publishStreamEvent('op-1', {
+        data: { finalContent: 'final answer' },
+        stepIndex: 0,
+        type: 'stream_end' as const,
+      });
+      let resolved = false;
+      void result.then(() => {
+        resolved = true;
+      });
+
+      await Promise.resolve();
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        `${gatewayUrl}/api/operations/push-event`,
+        expect.objectContaining({ method: 'POST' }),
+      );
+      expect(resolved).toBe(false);
+
+      resolveFetch();
+
+      await expect(result).resolves.toBe('publishStreamEvent-result');
+      expect(resolved).toBe(true);
     });
 
     it('still returns inner result even if gateway fails', async () => {

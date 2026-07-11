@@ -22,7 +22,7 @@ import { scheduleToolCallReport } from './_helpers';
 // Define Zod schemas for MCP Client parameters
 const httpParamsSchema = z.object({
   auth: StreamableHTTPAuthSchema,
-  headers: z.record(z.string()).optional(),
+  headers: z.record(z.string(), z.string()).optional(),
   name: z.string().min(1),
   type: z.literal('http'),
   url: z.string().url(),

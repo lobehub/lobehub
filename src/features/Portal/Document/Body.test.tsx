@@ -95,8 +95,18 @@ const docChatTopicState = vi.hoisted(() => ({
     topicId: 'doc-topic-1' as string | undefined,
   },
 }));
+// Record the params so a test can assert the topic lookup never fires — passing
+// `undefined` is what keeps `getOrCreateChatTopic` from hitting the network.
+const docChatTopicCalls = vi.hoisted(() => ({ current: [] as Record<string, unknown>[] }));
 vi.mock('@/features/FloatingChatPanel/useDocumentChatTopic', () => ({
-  useDocumentChatTopic: () => docChatTopicState.current,
+  // Mirror the real hook's `enabled` gate: with either id missing it never fetches,
+  // so it can only ever return `topicId: undefined`.
+  useDocumentChatTopic: (params: Record<string, unknown>) => {
+    docChatTopicCalls.current.push(params);
+    if (!params.agentId || !params.documentId)
+      return { error: undefined, isLoading: false, topicId: undefined };
+    return docChatTopicState.current;
+  },
 }));
 
 const mockChatState = vi.hoisted(() => ({
@@ -104,7 +114,7 @@ const mockChatState = vi.hoisted(() => ({
     activeTopicId: 'topic-1',
     portalStack: [
       {
-        agentDocumentId: 'agent-document-1',
+        agentDocumentId: 'agent-document-1' as string | undefined,
         documentId: 'document-1',
         type: 'document',
       },
@@ -118,7 +128,7 @@ vi.mock('@/store/chat', () => ({
 
 const mockAgentState = vi.hoisted(() => ({
   current: {
-    activeAgentId: 'agent-1',
+    activeAgentId: 'agent-1' as string | undefined,
   },
 }));
 
@@ -140,26 +150,13 @@ vi.mock('@/store/document', () => ({
   useDocumentStore: (selector: any) => selector(mockDocumentState.current),
 }));
 
-const mockUserState = vi.hoisted(() => ({
-  current: {
-    preference: {
-      lab: {
-        enableAgentDocumentFloatingChatPanel: false,
-      },
-    },
-  },
-}));
-
-vi.mock('@/store/user', () => ({
-  useUserStore: (selector: any) => selector(mockUserState.current),
-}));
-
 describe('DocumentBody', () => {
   beforeEach(() => {
     mockAgentState.current.activeAgentId = 'agent-1';
-    mockUserState.current.preference.lab.enableAgentDocumentFloatingChatPanel = false;
+    mockChatState.current.portalStack[0].agentDocumentId = 'agent-document-1';
     mockDocumentMeta.current = { content: '', filename: 'doc.md' };
     mockUpdateDocument.mockClear();
+    docChatTopicCalls.current = [];
     docChatTopicState.current = {
       error: undefined,
       isLoading: false,
@@ -172,27 +169,51 @@ describe('DocumentBody', () => {
     vi.useRealTimers();
   });
 
-  it('does not render FloatingChatPanel when the lab feature is disabled', () => {
-    render(<DocumentBody />);
-
-    expect(screen.queryByTestId('floating-chat-panel')).toBeNull();
-  });
-
-  it('renders FloatingChatPanel when the lab feature is enabled and the doc topic resolves', () => {
-    mockUserState.current.preference.lab.enableAgentDocumentFloatingChatPanel = true;
-
+  it('renders FloatingChatPanel once the doc topic resolves', () => {
     render(<DocumentBody />);
 
     expect(screen.getByTestId('floating-chat-panel')).toBeDefined();
   });
 
   it('holds the panel until the doc-anchored topic id resolves', () => {
-    mockUserState.current.preference.lab.enableAgentDocumentFloatingChatPanel = true;
     docChatTopicState.current = { error: undefined, isLoading: true, topicId: undefined };
 
     render(<DocumentBody />);
 
     expect(screen.queryByTestId('floating-chat-panel')).toBeNull();
+  });
+
+  it('does not render FloatingChatPanel without an active agent', () => {
+    mockAgentState.current.activeAgentId = undefined;
+
+    render(<DocumentBody />);
+
+    expect(screen.queryByTestId('floating-chat-panel')).toBeNull();
+  });
+
+  // A plain notebook document is opened as `openDocument(document.id)` — no
+  // agentDocumentId. It has no `agent_documents` row, so `getOrCreateChatTopic`
+  // would throw NOT_FOUND. The panel must not render *and* must not look up a topic.
+  it('does not render FloatingChatPanel for a plain document with no agentDocumentId', () => {
+    mockChatState.current.portalStack[0].agentDocumentId = undefined;
+
+    render(<DocumentBody />);
+
+    expect(screen.queryByTestId('floating-chat-panel')).toBeNull();
+    expect(docChatTopicCalls.current.length).toBeGreaterThan(0);
+    for (const call of docChatTopicCalls.current) {
+      expect(call.agentId).toBeUndefined();
+      expect(call.documentId).toBeUndefined();
+    }
+  });
+
+  it('looks up the doc topic for an agent document', () => {
+    render(<DocumentBody />);
+
+    expect(docChatTopicCalls.current.at(-1)).toMatchObject({
+      agentId: 'agent-1',
+      documentId: 'document-1',
+    });
   });
 
   it('renders highlight editor for non-markdown files', () => {

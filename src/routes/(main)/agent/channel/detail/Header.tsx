@@ -21,6 +21,7 @@ interface HeaderProps {
   platformDef: SerializedPlatformDefinition;
   refreshingStatus?: boolean;
   runtimeStatus?: BotRuntimeStatus;
+  toggleDisabled?: boolean;
   toggleLoading?: boolean;
 }
 
@@ -42,6 +43,7 @@ const Header = memo<HeaderProps>(
     onToggleEnable,
     refreshingStatus,
     runtimeStatus,
+    toggleDisabled,
     toggleLoading,
   }) => {
     const { t } = useTranslation('agent');
@@ -92,6 +94,13 @@ const Header = memo<HeaderProps>(
         <Flexbox horizontal align="center" gap={8}>
           {ColorIcon && <ColorIcon size={32} />}
           {platformDef.name}
+          {platformDef.access?.requiredPlan === 'paid' && (
+            <Tag color="gold" size={'small'}>
+              {platformDef.access.rolloutMode === 'notice'
+                ? t('channel.paidFeature.noticeBadge')
+                : t('channel.paidFeature.badge')}
+            </Tag>
+          )}
           {statusLabel && (
             <Tag color={statusColor} size={'small'}>
               {statusLabel}
@@ -128,7 +137,7 @@ const Header = memo<HeaderProps>(
           {currentConfig && (
             <Switch
               checked={effectiveEnabled}
-              disabled={disabled}
+              disabled={toggleDisabled ?? disabled}
               loading={toggleLoading}
               onChange={onToggleEnable}
             />

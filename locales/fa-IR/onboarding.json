@@ -122,6 +122,7 @@
   "responseLanguage.auto": "خودکار (مطابق زبان سیستم)",
   "responseLanguage.desc": "زبان پاسخ‌گویی عامل را انتخاب کن",
   "responseLanguage.hint": "بعد از انتخاب زبان، پاسخ‌های هوش مصنوعی به همان زبان خواهد بود و زبان رابط کاربری هم هماهنگ می‌شود",
+  "responseLanguage.saveFailed": "ذخیره‌سازی انجام نشد. لطفاً دوباره تلاش کنید.",
   "responseLanguage.title": "با چه زبانی با هم صحبت کنیم؟",
   "responseLanguage.title2": "با زبان شروع کنیم، تا درک واقعی بسازیم.",
   "responseLanguage.title3": "بذار واضح صحبت کنم و بهتر درکت کنم~",

@@ -5,6 +5,7 @@ import debug from 'debug';
 import { type AgentOperationMetadata, type StepResult } from './AgentStateManager';
 import { createAgentStateManager, createStreamEventManager } from './factory';
 import { type IAgentStateManager, type IStreamEventManager } from './types';
+import { hasVisibleOutputEndPublished } from './visibleOutputEnd';
 
 const log = debug('lobe-server:agent-runtime:coordinator');
 
@@ -147,6 +148,25 @@ export class AgentRuntimeCoordinator {
     }
   }
 
+  private async publishVisibleOutputEnd(
+    operationId: string,
+    state: AgentState,
+    stepIndex: number,
+  ): Promise<void> {
+    try {
+      await this.streamEventManager.publishStreamEvent(operationId, {
+        data: { reason: state.status },
+        stepIndex,
+        type: 'visible_output_end',
+      });
+    } catch (error) {
+      // Example: a transient Redis write failure may drop the early UI hint.
+      // Keep publishing agent_runtime_end because it is the authoritative
+      // terminal event that drains queues and reconciles final state.
+      console.error('Failed to publish visible_output_end:', error);
+    }
+  }
+
   /**
    * Save Agent state and handle corresponding events
    */
@@ -159,11 +179,15 @@ export class AgentRuntimeCoordinator {
 
       // Send a terminal event once the operation first enters a terminal state.
       if (hasEnteredStreamEndState(previousState?.status, state.status)) {
+        const stepIndex = state.stepCount ?? previousState?.stepCount ?? 0;
+        if (!hasVisibleOutputEndPublished(state)) {
+          await this.publishVisibleOutputEnd(operationId, state, stepIndex);
+        }
         await this.streamEventManager.publishAgentRuntimeEnd({
           finalState: state,
           operationId,
           reason: state.status,
-          stepIndex: state.stepCount ?? previousState?.stepCount ?? 0,
+          stepIndex,
           uiMessages: await this.resolveUiMessages(state),
         });
         log('[%s] Agent runtime reached terminal state: %s', operationId, state.status);
@@ -187,12 +211,19 @@ export class AgentRuntimeCoordinator {
 
       // This ensures agent_runtime_end is sent after all step events.
       if (hasEnteredStreamEndState(previousState?.status, stepResult.newState.status)) {
+        // Example: call_llm step 3 can early-publish visible_output_end, then
+        // finish step 4 enters done. Keep terminal stepIndex for end payloads,
+        // but suppress visible_output_end once the operation marker exists.
+        const stepIndex =
+          stepResult.stepIndex ?? stepResult.newState.stepCount ?? previousState?.stepCount ?? 0;
+        if (!hasVisibleOutputEndPublished(stepResult.newState)) {
+          await this.publishVisibleOutputEnd(operationId, stepResult.newState, stepIndex);
+        }
         await this.streamEventManager.publishAgentRuntimeEnd({
           finalState: stepResult.newState,
           operationId,
           reason: stepResult.newState.status,
-          stepIndex:
-            stepResult.newState.stepCount ?? stepResult.stepIndex ?? previousState?.stepCount ?? 0,
+          stepIndex,
           uiMessages: await this.resolveUiMessages(stepResult.newState),
         });
         log(
@@ -277,15 +308,28 @@ export class AgentRuntimeCoordinator {
     operationId: string,
     stepIndex: number,
     ttlSeconds?: number,
+    ownerId?: string,
   ): Promise<boolean> {
-    return this.stateManager.tryClaimStep(operationId, stepIndex, ttlSeconds);
+    return this.stateManager.tryClaimStep(operationId, stepIndex, ttlSeconds, ownerId);
   }
 
   /**
    * Release the step execution lock.
    */
-  async releaseStepLock(operationId: string, stepIndex: number): Promise<void> {
-    return this.stateManager.releaseStepLock(operationId, stepIndex);
+  async releaseStepLock(operationId: string, stepIndex: number, ownerId?: string): Promise<void> {
+    return this.stateManager.releaseStepLock(operationId, stepIndex, ownerId);
+  }
+
+  /**
+   * Extend the step execution lock if it is still owned by this worker.
+   */
+  async refreshStepLock(
+    operationId: string,
+    stepIndex: number,
+    ttlSeconds: number,
+    ownerId?: string,
+  ): Promise<boolean> {
+    return this.stateManager.refreshStepLock(operationId, stepIndex, ttlSeconds, ownerId);
   }
 
   /**

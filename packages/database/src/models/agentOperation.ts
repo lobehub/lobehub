@@ -1,3 +1,4 @@
+import type { VerifyRunStatus } from '@lobechat/types';
 import { and, eq, gte, isNotNull, sql } from 'drizzle-orm';
 
 import { today } from '@/utils/time';
@@ -12,15 +13,12 @@ import { agentOperations } from '../schemas/agentOperations';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspaceWhere } from '../utils/workspace';
 
-/** Verify rollup states, mirrors the `verify_status` enum column. */
-export type VerifyStatus =
-  | 'unverified'
-  | 'planned'
-  | 'verifying'
-  | 'passed'
-  | 'failed'
-  | 'repairing'
-  | 'delivered';
+/**
+ * Verify rollup states. Aliases the single `VerifyRunStatus` source of truth in
+ * `@lobechat/types` (which also backs the `verify_status` column enum and
+ * `verify_runs.status`) so the three never drift.
+ */
+export type VerifyStatus = VerifyRunStatus;
 
 export interface RecordOperationStartParams {
   agentId?: string | null;
@@ -67,12 +65,7 @@ export interface RecordOperationCompletionParams {
   /** Backfill the executed provider — see {@link RecordOperationCompletionParams.model}. */
   provider?: string | null;
   status:
-    | 'running'
-    | 'waiting_for_human'
-    | 'waiting_for_async_tool'
-    | 'done'
-    | 'error'
-    | 'interrupted';
+    'running' | 'waiting_for_human' | 'waiting_for_async_tool' | 'done' | 'error' | 'interrupted';
   stepCount?: number | null;
   toolCalls?: number | null;
   totalCost?: number | null;

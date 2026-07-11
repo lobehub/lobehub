@@ -1,6 +1,5 @@
 import type * as LobeChatConst from '@lobechat/const';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import type * as Antd from 'antd';
 import type * as LucideReact from 'lucide-react';
 import type { PropsWithChildren, ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -86,8 +85,13 @@ vi.mock('@lobehub/ui/base-ui', () => ({
   confirmModal: vi.fn(),
 }));
 
+interface AntdMockModule {
+  App: Record<PropertyKey, unknown>;
+  Modal: Record<PropertyKey, unknown>;
+}
+
 vi.mock('antd', async (importOriginal) => {
-  const actual = await importOriginal<typeof Antd>();
+  const actual = await importOriginal<AntdMockModule>();
 
   return {
     ...actual,
@@ -136,6 +140,10 @@ vi.mock('@/components/AntdStaticMethods', () => ({
 
 vi.mock('@/const/layoutTokens', () => ({
   DESKTOP_HEADER_ICON_SMALL_SIZE: 24,
+}));
+
+vi.mock('@/features/AgentBreadcrumb', () => ({
+  default: () => null,
 }));
 
 vi.mock('@/features/NavHeader', () => ({
@@ -215,6 +223,7 @@ describe('Agent profile Header', () => {
     vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
     mocks.agentState.isCurrentAgentHeterogeneous = false;
     mocks.agentState.systemRole = 'You are helpful.';
+    mocks.agentState.config.plugins = ['lobe-web-browsing'];
     mocks.profileState.editor = undefined;
   });
 
@@ -239,6 +248,25 @@ describe('Agent profile Header', () => {
     await expect(exportedBlob.text()).resolves.toContain('You are helpful.');
     expect(HTMLAnchorElement.prototype.click).toHaveBeenCalled();
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:agent-profile');
+  });
+
+  it('excludes disabled entries from the exported markdown plugin list, in a mixed-shape array', async () => {
+    mocks.agentState.config.plugins = [
+      'lobe-web-browsing',
+      { identifier: 'lobe-image-generation', mode: 'disabled' } as any,
+    ];
+
+    render(<Header />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'pageEditor.menu.export.markdown' }));
+
+    await waitFor(() => expect(URL.createObjectURL).toHaveBeenCalled());
+
+    const exportedBlob = getLatestExportedBlob();
+    const exportedMarkdown = await exportedBlob.text();
+
+    expect(exportedMarkdown).toContain('lobe-web-browsing');
+    expect(exportedMarkdown).not.toContain('lobe-image-generation');
   });
 
   it('should preserve an empty prompt from the mounted editor when exporting markdown', async () => {

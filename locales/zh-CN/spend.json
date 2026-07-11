@@ -54,6 +54,7 @@
   "usageStats.cards.token": "Token",
   "usageStats.cards.tokenDesc": "输入 {{input}} · 输出 {{output}}",
   "usageStats.chart.cacheWrite": "缓存写入",
+  "usageStats.chart.cachedInput": "缓存输入",
   "usageStats.chart.input": "输入",
   "usageStats.chart.output": "输出",
   "usageStats.chart.spend": "费用",

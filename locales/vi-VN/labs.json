@@ -1,6 +1,4 @@
 {
-  "features.agentDocumentFloatingChatPanel.desc": "Hiển thị bảng trò chuyện nổi trong chế độ xem trước tài liệu của đại lý chỉ khi tính năng thử nghiệm này được bật.",
-  "features.agentDocumentFloatingChatPanel.title": "Bảng Trò Chuyện Nổi Tài Liệu Đại Lý",
   "features.agentSelfIteration.desc": "Cho phép trợ lý tự phản tư, xây dựng khả năng tự nhận thức và liên tục cải thiện thông qua các nỗ lực và tương tác đang diễn ra.",
   "features.agentSelfIteration.title": "Tự lặp của tác nhân",
   "features.assistantMessageGroup.desc": "Nhóm các tin nhắn của tác nhân và kết quả gọi công cụ lại với nhau để hiển thị",

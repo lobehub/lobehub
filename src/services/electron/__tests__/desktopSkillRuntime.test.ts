@@ -92,6 +92,64 @@ describe('desktopSkillRuntimeService', () => {
     expect(result).toBe('/tmp/demo-skill');
   });
 
+  // id-less builtin/filesystem activations reach the desktop runtime since the
+  // shared extractor keeps them — they never resolve to a packaged skill and
+  // must not shadow one activated before/after them (last resolvable wins).
+  it('should skip id-less unresolvable activations and use the last packaged skill', async () => {
+    getByIdMock.mockResolvedValue({
+      id: 'skill-1',
+      name: 'demo-skill',
+      zipFileHash: 'zip-hash-1',
+    });
+    getByNameMock.mockResolvedValue(undefined);
+    getZipUrlMock.mockResolvedValue({
+      name: 'demo-skill',
+      url: 'https://example.com/demo-skill.zip',
+    });
+    prepareSkillDirectoryMock.mockResolvedValue({
+      extractedDir: '/tmp/demo-skill',
+      success: true,
+      zipPath: '/tmp/demo-skill.zip',
+    });
+
+    const result = await desktopSkillRuntimeService.resolveExecutionDirectory([
+      { name: 'builtin-skill' },
+      { id: 'skill-1', name: 'demo-skill' },
+      { name: 'project-skill' },
+    ]);
+
+    expect(getByNameMock).toHaveBeenCalledWith('project-skill');
+    expect(getByIdMock).toHaveBeenCalledWith('skill-1');
+    expect(result).toBe('/tmp/demo-skill');
+    // The walk stops at the packaged skill — earlier activations are not resolved.
+    expect(getByNameMock).not.toHaveBeenCalledWith('builtin-skill');
+  });
+
+  it('should prepare the most recently activated packaged skill when several resolve', async () => {
+    getByIdMock.mockImplementation(async (id: string) =>
+      id === 'skill-1'
+        ? { id: 'skill-1', name: 'first-skill', zipFileHash: 'zip-hash-1' }
+        : { id: 'skill-2', name: 'second-skill', zipFileHash: 'zip-hash-2' },
+    );
+    getZipUrlMock.mockResolvedValue({
+      name: 'second-skill',
+      url: 'https://example.com/second-skill.zip',
+    });
+    prepareSkillDirectoryMock.mockResolvedValue({
+      extractedDir: '/tmp/second-skill',
+      success: true,
+      zipPath: '/tmp/second-skill.zip',
+    });
+
+    const result = await desktopSkillRuntimeService.resolveExecutionDirectory([
+      { id: 'skill-1', name: 'first-skill' },
+      { id: 'skill-2', name: 'second-skill' },
+    ]);
+
+    expect(getZipUrlMock).toHaveBeenCalledWith('skill-2');
+    expect(result).toBe('/tmp/second-skill');
+  });
+
   it('should return undefined when the skill has no packaged zip', async () => {
     getByIdMock.mockResolvedValue({
       id: 'skill-1',

@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 
 import { agentEvalService } from '@/services/agentEval';
 
-import { DATASET_PRESETS, getPresetsByCategory } from '../../config/datasetPresets';
+import { getPresetsByCategory } from '../../config/datasetPresets';
 
 const CATEGORY_LABELS: Record<string, string> = {
   'custom': 'Custom',
@@ -66,8 +66,8 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   presetGrid: css`
     display: grid;
-    gap: 8px;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
   `,
   presetIcon: css`
     border: 1px solid ${cssVar.colorBorderSecondary};

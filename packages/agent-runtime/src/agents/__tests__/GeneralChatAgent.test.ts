@@ -94,6 +94,7 @@ describe('GeneralChatAgent', () => {
           messages: state.messages,
           model: 'gpt-4o-mini',
           provider: 'openai',
+          tools: undefined,
         },
       });
     });
@@ -119,8 +120,43 @@ describe('GeneralChatAgent', () => {
         payload: {
           messages: state.messages,
           message: { role: 'user', content: 'What is the weather?' },
+          tools: undefined,
         },
       });
+    });
+
+    it('should not infer allowedToolNames from normal state tools', async () => {
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+      const state = createMockState({
+        messages: [{ role: 'user', content: 'Use tools if needed' }] as any,
+        tools: [{ function: { name: 'workspace____read' }, type: 'function' }] as any,
+      });
+
+      const result = await agent.runner(createMockContext('user_input'), state);
+
+      expect((result as any).payload).not.toHaveProperty('allowedToolNames');
+      expect((result as any).payload.tools).toBe(state.tools);
+    });
+
+    it('should pass explicit allowedToolNames from config', async () => {
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        allowedToolNames: ['workspace____read'],
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+        tools: [{ function: { name: 'workspace____read' }, type: 'function' }],
+      });
+      const state = createMockState({
+        messages: [{ role: 'user', content: 'Use read only' }] as any,
+      });
+
+      const result = await agent.runner(createMockContext('user_input'), state);
+
+      expect((result as any).payload.allowedToolNames).toEqual(['workspace____read']);
     });
 
     it('should trigger compression using thresholdRatio from compressionConfig', async () => {
@@ -667,6 +703,7 @@ describe('GeneralChatAgent', () => {
         expect(result).toEqual({
           type: 'call_llm',
           payload: {
+            assistantMessageId: undefined,
             messages: state.messages,
             model: 'gpt-4o-mini',
             parentMessageId: 'tool-msg-1',
@@ -702,6 +739,7 @@ describe('GeneralChatAgent', () => {
         expect(result).toEqual({
           type: 'call_llm',
           payload: {
+            assistantMessageId: undefined,
             messages: state.messages,
             model: 'gpt-4o-mini',
             parentMessageId: 'tool-msg-1',
@@ -737,6 +775,45 @@ describe('GeneralChatAgent', () => {
       expect(result).toEqual({
         type: 'call_llm',
         payload: {
+          assistantMessageId: undefined,
+          messages: state.messages,
+          model: 'gpt-4o-mini',
+          parentMessageId: 'tool-msg-1',
+          provider: 'openai',
+          tools: undefined,
+        },
+      });
+    });
+
+    // Resume-seeded placeholder reuse: when an operation resumes by executing a
+    // tool first (e.g. the tools activator auto-approved via human_approved_tool),
+    // the seeded assistant placeholder is stashed on state.pendingAssistantMessageId.
+    // The first call_llm after the tool result must carry it so the LLM turn fills
+    // that placeholder instead of creating a new message and orphaning the seed.
+    it('should reuse the seeded assistant placeholder for the first call_llm after a tool result', async () => {
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+
+      const state = createMockState({
+        messages: [
+          { role: 'user', content: 'Hello' },
+          { role: 'assistant', content: '', tools: [] },
+          { role: 'tool', content: 'Successfully activated tools', tool_call_id: 'call-1' },
+        ] as any,
+        pendingAssistantMessageId: 'msg_seeded_placeholder',
+      });
+
+      const context = createMockContext('tool_result', { parentMessageId: 'tool-msg-1' });
+
+      const result = await agent.runner(context, state);
+
+      expect(result).toEqual({
+        type: 'call_llm',
+        payload: {
+          assistantMessageId: 'msg_seeded_placeholder',
           messages: state.messages,
           model: 'gpt-4o-mini',
           parentMessageId: 'tool-msg-1',
@@ -1062,6 +1139,7 @@ describe('GeneralChatAgent', () => {
       expect(result).toEqual({
         type: 'call_llm',
         payload: {
+          assistantMessageId: undefined,
           messages: state.messages,
           model: 'gpt-4o-mini',
           parentMessageId: 'tool-msg-2',
@@ -1625,7 +1703,7 @@ describe('GeneralChatAgent', () => {
         messages: [
           { role: 'user', content: 'Execute task' },
           { role: 'assistant', content: '' },
-          { role: 'task', content: 'Task result', metadata: { instruction: 'Do task' } },
+          { role: 'tool', content: 'Task result', tool_call_id: 'call-sub-agent-1' },
         ] as any,
       });
 
@@ -1633,7 +1711,6 @@ describe('GeneralChatAgent', () => {
         parentMessageId: 'task-parent-msg',
         result: {
           success: true,
-          taskMessageId: 'task-1',
           threadId: 'thread-1',
           result: 'Task result',
         },
@@ -1664,7 +1741,7 @@ describe('GeneralChatAgent', () => {
         messages: [
           { role: 'user', content: 'Execute task' },
           { role: 'assistant', content: '' },
-          { role: 'task', content: 'Task failed: timeout', metadata: { instruction: 'Do task' } },
+          { role: 'tool', content: 'Task failed: timeout', tool_call_id: 'call-sub-agent-1' },
         ] as any,
       });
 
@@ -1672,7 +1749,6 @@ describe('GeneralChatAgent', () => {
         parentMessageId: 'task-parent-msg',
         result: {
           success: false,
-          taskMessageId: 'task-1',
           threadId: 'thread-1',
           error: 'Task timeout after 1800000ms',
         },
@@ -1699,7 +1775,7 @@ describe('GeneralChatAgent', () => {
         messages: [
           { role: 'user', content: 'Execute task' },
           { role: 'assistant', content: '' },
-          { role: 'task', content: 'Task result', metadata: { instruction: 'Do task' } },
+          { role: 'tool', content: 'Task result', tool_call_id: 'call-sub-agent-1' },
         ] as any,
       });
 
@@ -1725,16 +1801,16 @@ describe('GeneralChatAgent', () => {
         messages: [
           { role: 'user', content: 'Execute tasks' },
           { role: 'assistant', content: '' },
-          { role: 'task', content: 'Task 1 result', metadata: { instruction: 'Do task 1' } },
-          { role: 'task', content: 'Task 2 result', metadata: { instruction: 'Do task 2' } },
+          { role: 'tool', content: 'Task 1 result', tool_call_id: 'call-sub-agent-1' },
+          { role: 'tool', content: 'Task 2 result', tool_call_id: 'call-sub-agent-2' },
         ] as any,
       });
 
       const context = createMockContext('sub_agents_batch_result', {
         parentMessageId: 'task-parent-msg',
         results: [
-          { success: true, taskMessageId: 'task-1', threadId: 'thread-1', result: 'Task 1 result' },
-          { success: true, taskMessageId: 'task-2', threadId: 'thread-2', result: 'Task 2 result' },
+          { success: true, threadId: 'thread-1', result: 'Task 1 result' },
+          { success: true, threadId: 'thread-2', result: 'Task 2 result' },
         ],
       });
 
@@ -1770,18 +1846,17 @@ describe('GeneralChatAgent', () => {
         messages: [
           { role: 'user', content: 'Execute tasks' },
           { role: 'assistant', content: '' },
-          { role: 'task', content: 'Task 1 result', metadata: { instruction: 'Do task 1' } },
-          { role: 'task', content: 'Task failed: timeout', metadata: { instruction: 'Do task 2' } },
+          { role: 'tool', content: 'Task 1 result', tool_call_id: 'call-sub-agent-1' },
+          { role: 'tool', content: 'Task failed: timeout', tool_call_id: 'call-sub-agent-2' },
         ] as any,
       });
 
       const context = createMockContext('sub_agents_batch_result', {
         parentMessageId: 'task-parent-msg',
         results: [
-          { success: true, taskMessageId: 'task-1', threadId: 'thread-1', result: 'Task 1 result' },
+          { success: true, threadId: 'thread-1', result: 'Task 1 result' },
           {
             success: false,
-            taskMessageId: 'task-2',
             threadId: 'thread-2',
             error: 'Task timeout after 1800000ms',
           },
@@ -1816,8 +1891,8 @@ describe('GeneralChatAgent', () => {
         messages: [
           { role: 'user', content: 'Execute tasks' },
           { role: 'assistant', content: '' },
-          { role: 'task', content: 'Task 1 result', metadata: { instruction: 'Do task 1' } },
-          { role: 'task', content: 'Task 2 result', metadata: { instruction: 'Do task 2' } },
+          { role: 'tool', content: 'Task 1 result', tool_call_id: 'call-sub-agent-1' },
+          { role: 'tool', content: 'Task 2 result', tool_call_id: 'call-sub-agent-2' },
         ] as any,
       });
 
@@ -1876,6 +1951,49 @@ describe('GeneralChatAgent', () => {
           tools: state.tools,
         },
       });
+    });
+
+    // High-context tool-first resume: when the first post-tool turn compresses
+    // before running, the seeded placeholder must still be reused after
+    // compression rather than orphaned by createAssistantMessage.
+    it('should reuse the seeded assistant placeholder instead of forcing a new message', async () => {
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+
+      const compressedMessages = [
+        { content: 'Compressed summary', id: 'group-1', role: 'compressedGroup' },
+        { content: 'Latest user follow-up', role: 'user' },
+      ] as any;
+
+      const state = createMockState({
+        pendingAssistantMessageId: 'msg_seeded_placeholder',
+        tools: [{ name: 'search' }] as any,
+      });
+
+      const context = createMockContext('compression_result', {
+        compressedMessages,
+        parentMessageId: 'tool-msg-1',
+        skipped: false,
+      });
+
+      const result = await agent.runner(context, state);
+
+      expect(result).toEqual({
+        type: 'call_llm',
+        payload: {
+          assistantMessageId: 'msg_seeded_placeholder',
+          messages: compressedMessages,
+          model: 'gpt-4o-mini',
+          parentMessageId: 'tool-msg-1',
+          provider: 'openai',
+          tools: state.tools,
+        },
+      });
+      // Must not also force a brand-new message when reusing the placeholder.
+      expect((result as any).payload.createAssistantMessage).toBeUndefined();
     });
   });
 
@@ -1958,6 +2076,73 @@ describe('GeneralChatAgent', () => {
           type: 'request_human_approve',
           pendingToolsCalling: [toolCall],
           reason: 'human_intervention_required',
+        },
+      ]);
+    });
+
+    it('should execute dynamic required tools when user approvalMode is auto-run', async () => {
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        dynamicInterventionAudits: {
+          pathScopeAudit: async (toolArgs, metadata) => {
+            const workingDirectory = metadata?.workingDirectory as string | undefined;
+            if (!workingDirectory) return false;
+            const path = toolArgs.path as string;
+            return !path.startsWith(workingDirectory);
+          },
+        },
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+
+      const toolCall: ChatToolPayload = {
+        id: 'call-1',
+        identifier: 'local-system',
+        apiName: 'readLocalFile',
+        arguments: '{"path":"/etc/passwd"}',
+        type: 'builtin',
+      };
+
+      const state = createMockState({
+        metadata: { workingDirectory: '/workspace' },
+        toolManifestMap: {
+          'local-system': {
+            identifier: 'local-system',
+            api: [
+              {
+                name: 'readLocalFile',
+                humanIntervention: {
+                  dynamic: {
+                    default: 'never',
+                    policy: 'required',
+                    type: 'pathScopeAudit',
+                  },
+                },
+              },
+            ],
+          },
+        },
+        userInterventionConfig: {
+          approvalMode: 'auto-run',
+          allowList: [],
+        },
+      });
+
+      const context = createMockContext('llm_result', {
+        hasToolsCalling: true,
+        toolsCalling: [toolCall],
+        parentMessageId: 'msg-1',
+      });
+
+      const result = await agent.runner(context, state);
+
+      expect(result).toEqual([
+        {
+          type: 'call_tool',
+          payload: {
+            parentMessageId: 'msg-1',
+            toolCalling: toolCall,
+          },
         },
       ]);
     });

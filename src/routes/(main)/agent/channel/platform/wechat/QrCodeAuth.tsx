@@ -1,8 +1,8 @@
 'use client';
 
 import { InfoCircleOutlined } from '@ant-design/icons';
-import { createModal, useModalContext } from '@lobehub/ui/base-ui';
-import { Alert, Button, type ButtonProps, QRCode, Spin, Typography } from 'antd';
+import { Button, type ButtonProps, createModal, useModalContext } from '@lobehub/ui/base-ui';
+import { Alert, QRCode, Spin, Typography } from 'antd';
 import { t as i18nT } from 'i18next';
 import { QrCode, RefreshCw } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';

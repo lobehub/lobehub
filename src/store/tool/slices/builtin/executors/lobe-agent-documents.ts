@@ -6,6 +6,8 @@ import { isDesktop } from '@lobechat/const';
 
 import { getActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { agentDocumentService } from '@/services/agentDocument';
+import { invalidateDocumentMutation } from '@/services/document/invalidation';
+import { useAgentStore } from '@/store/agent';
 import { useElectronStore } from '@/store/electron';
 import { electronSyncSelectors } from '@/store/electron/selectors';
 
@@ -49,12 +51,13 @@ const runtime = new AgentDocumentsExecutionRuntime(
         topicId,
         trigger,
       }),
-    listDocuments: async ({ agentId, sourceType }) => {
+    listDocuments: async ({ agentId, parentId, sourceType }) => {
       // The agent listing tool surfaces archived `.tool-results` so the model can
       // discover them; user-facing lists keep the default (filtered) behavior.
       const docs = await agentDocumentService.listDocuments({
         agentId,
         includeArchivedToolResults: true,
+        parentId,
         sourceType,
       });
       return docs.map((d) => ({
@@ -64,10 +67,11 @@ const runtime = new AgentDocumentsExecutionRuntime(
         title: d.title,
       }));
     },
-    listTopicDocuments: async ({ agentId, sourceType, topicId }) => {
+    listTopicDocuments: async ({ agentId, parentId, sourceType, topicId }) => {
       const docs = await agentDocumentService.listDocuments({
         agentId,
         includeArchivedToolResults: true,
+        parentId,
         scope: 'currentTopic',
         sourceType,
         topicId,
@@ -105,6 +109,15 @@ const runtime = new AgentDocumentsExecutionRuntime(
       buildAgentDocumentUrl(getAppOrigin(), agentId, documentId, {
         workspaceSlug: getActiveWorkspaceSlug(),
       }),
+    // Revalidate the documents list after the agent mutates it. `onAfterCall`
+    // carries no agentId, so resolve the active chat agent — the one whose run
+    // just produced the tool call. Covers the server-runtime path where the
+    // client service layer never invalidates.
+    onDocumentsMutated: async () => {
+      const agentId = useAgentStore.getState().activeAgentId;
+      if (!agentId) return;
+      await invalidateDocumentMutation({ agentId, cause: 'agent-document' });
+    },
   },
 );
 

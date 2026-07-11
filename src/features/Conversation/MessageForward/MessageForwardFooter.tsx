@@ -10,8 +10,8 @@ interface MessageForwardFooterProps {
 }
 
 /**
- * Wraps the chat composer: while multi-selecting it hides the input and shows
- * the selection action bar in its place (WeChat-style). The input stays mounted
+ * Wraps the chat composer: while multi-selecting it hides the input and docks
+ * the selection action bar at the bottom in its place. The input stays mounted
  * but display:none so the editor/draft state survives toggling selection mode.
  */
 const MessageForwardFooter = memo<MessageForwardFooterProps>(({ children }) => {

@@ -40,6 +40,14 @@ export default defineFixtures({
       name: 'Edit',
     },
     {
+      description: 'Create a new git worktree or enter an existing one.',
+      name: 'EnterWorktree',
+    },
+    {
+      description: 'Leave the active Claude Code worktree and optionally remove it.',
+      name: 'ExitWorktree',
+    },
+    {
       description: 'Find files by glob pattern.',
       name: 'Glob',
     },
@@ -54,6 +62,10 @@ export default defineFixtures({
     {
       description: 'Schedule when to resume work.',
       name: 'ScheduleWakeup',
+    },
+    {
+      description: 'Send a message to a peer agent.',
+      name: 'SendMessage',
     },
     {
       description: 'Run a Claude Code skill.',
@@ -109,6 +121,76 @@ export default defineFixtures({
     },
   ],
   fixtures: {
+    askUserQuestion: variants([
+      {
+        args: {
+          questions: [
+            {
+              header: 'Audit level',
+              options: [
+                {
+                  description:
+                    'Fastest, offline, full-coverage baseline. Scans structural issues (missing states / branches / patterns) from code alone.',
+                  label: 'L1 only (read code)',
+                },
+                {
+                  description:
+                    'Also boots the app and screenshots key surfaces to confirm visual hierarchy and rendered states. Medium cost.',
+                  label: 'L1 + L2 (screenshots)',
+                },
+                {
+                  description:
+                    'Adds a real user journey with performance traces (CLS/LCP). Needs a running environment and login. High cost.',
+                  label: 'L1 + L2 + L3',
+                },
+              ],
+              question: 'How deep should this audit round go?',
+            },
+            {
+              header: 'Scope',
+              multiSelect: true,
+              options: [
+                {
+                  description: 'The chat conversation pane and message renders.',
+                  label: 'Chat surface',
+                },
+                {
+                  description: 'Settings pages, providers, and model configuration.',
+                  label: 'Settings',
+                },
+                {
+                  description: 'Onboarding and first-run flows.',
+                  label: 'Onboarding',
+                },
+              ],
+              question: 'Which surfaces should the audit cover?',
+            },
+          ],
+        },
+        label: 'Multi question',
+      },
+      {
+        args: {
+          questions: [
+            {
+              header: 'Approach',
+              options: [
+                {
+                  description: 'Ship the minimal fix now and file a follow-up for the refactor.',
+                  label: 'Minimal fix',
+                },
+                {
+                  description: 'Refactor the module properly before fixing. Slower but cleaner.',
+                  label: 'Refactor first',
+                },
+              ],
+              question: 'How should I handle the legacy module?',
+            },
+          ],
+        },
+        label: 'Single question',
+      },
+    ]),
     Agent: single({
       args: {
         prompt:
@@ -168,6 +250,44 @@ export default defineFixtures({
         old_string: "path: 'tasks',",
       },
     }),
+    EnterWorktree: variants([
+      {
+        args: { name: 'worktree-icon-in-worktree' },
+        content:
+          'Created worktree at /workspace/.claude/worktrees/worktree-icon-in-worktree on branch worktree-worktree-icon-in-worktree.',
+        label: 'Create named',
+      },
+      {
+        args: {
+          path: '/workspace/.claude/worktrees/existing-feature-with-a-long-descriptive-name',
+        },
+        content:
+          'Entered existing worktree at /workspace/.claude/worktrees/existing-feature-with-a-long-descriptive-name.',
+        label: 'Enter existing',
+      },
+      {
+        args: {},
+        content: 'Created worktree with a generated name.',
+        label: 'Create generated',
+      },
+    ]),
+    ExitWorktree: variants([
+      {
+        args: { action: 'keep' },
+        content: 'Left the worktree. The worktree and branch remain on disk.',
+        label: 'Keep on disk',
+      },
+      {
+        args: { action: 'remove' },
+        content: 'Removed the worktree and branch.',
+        label: 'Remove clean',
+      },
+      {
+        args: { action: 'remove', discard_changes: true },
+        content: 'Removed the worktree and discarded 3 files and 1 commit.',
+        label: 'Discard changes',
+      },
+    ]),
     Glob: single({
       args: { path: 'src/routes', pattern: '**/index.tsx' },
       content: 'src/routes/(main)/agent/index.tsx\nsrc/routes/(main)/devtools/index.tsx',
@@ -196,6 +316,33 @@ export default defineFixtures({
         reason: 'Recheck the failing build once dependencies finish installing.',
       },
     }),
+    SendMessage: variants([
+      {
+        args: {
+          content:
+            'Please return your full findings now: the context engine entry/pipeline (file paths, function names, line numbers) so I can synthesize the report.',
+          message:
+            'Please return your full findings now: the context engine entry/pipeline (file paths, function names, line numbers) so I can synthesize the report.',
+          recipient: 'a48b23013d11aacd4',
+          summary: 'Retrieve context engine findings',
+          to: 'a48b23013d11aacd4',
+          type: 'message',
+        },
+        content: JSON.stringify({
+          message: 'Message queued for delivery to a48b23013d11aacd4 at its next tool round.',
+          success: true,
+        }),
+        label: 'Queued for delivery',
+      },
+      {
+        args: {
+          message: 'Wrap up when you can — no rush, just checking in on the migration status.',
+          to: 'context-engine',
+        },
+        content: '',
+        label: 'No summary, no result yet',
+      },
+    ]),
     Skill: single({
       args: { skill: 'codebase-search' },
       content: 'Use ripgrep first, then open only the relevant files to keep context sharp.',

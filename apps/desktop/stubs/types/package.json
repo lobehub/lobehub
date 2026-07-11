@@ -5,5 +5,9 @@
   "exports": {
     ".": "./src/index.ts"
   },
-  "main": "./src/index.ts"
+  "main": "./src/index.ts",
+  "dependencies": {
+    "ajv": "^8.20.0",
+    "zod": "^3.25.76"
+  }
 }

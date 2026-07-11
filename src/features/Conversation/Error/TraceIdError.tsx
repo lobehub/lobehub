@@ -1,7 +1,8 @@
 import { SOCIAL_URL } from '@lobechat/business-const';
 import { copyToClipboard, Icon } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { DiscordIcon } from '@lobehub/ui/icons';
-import { Button, message } from 'antd';
+import { message } from 'antd';
 import { cssVar } from 'antd-style';
 import { AlertTriangle, Copy, RotateCw } from 'lucide-react';
 import { memo, useCallback } from 'react';

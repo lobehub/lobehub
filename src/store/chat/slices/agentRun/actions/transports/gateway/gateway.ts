@@ -4,10 +4,20 @@ import {
   type AgentStreamEvent,
   type ConnectionStatus,
 } from '@lobechat/agent-gateway-client';
-import type { ConversationContext, ExecAgentResult, MessageMetadata } from '@lobechat/types';
+import type {
+  ChatTopicMetadata,
+  ConversationContext,
+  ExecAgentResult,
+  MessageMetadata,
+  RuntimeMentionedAgent,
+} from '@lobechat/types';
 
 import { isDesktop } from '@/const/version';
-import { aiAgentService, type ResumeApprovalParam } from '@/services/aiAgent';
+import {
+  aiAgentService,
+  type ResumeApprovalParam,
+  type ResumeToolResultParam,
+} from '@/services/aiAgent';
 import { gatewayConnectionService } from '@/services/electron/gatewayConnection';
 import { messageService } from '@/services/message';
 import { topicService } from '@/services/topic';
@@ -367,7 +377,7 @@ export class GatewayActionImpl {
     /** Called when the gateway session completes (agent finished running) */
     onComplete?: () => void;
     /** Temporary sidebar topic inserted by sendMessage before the server creates the real topic. */
-    optimisticTopic?: { id: string; title: string };
+    optimisticTopic?: { id: string; metadata?: ChatTopicMetadata; title: string };
     /** Parent message ID for regeneration/continue (skip user message creation, branch from this message) */
     parentMessageId?: string;
     /**
@@ -387,6 +397,30 @@ export class GatewayActionImpl {
      */
     resumeApproval?: ResumeApprovalParam;
     /**
+     * Resume a paused op waiting on a human-intervention tool (e.g. lobe-agent
+     * `askUserQuestion`). Forwarded to `aiAgentService.execAgentTask` so the new
+     * server-side op writes the human answer as the tool result and resumes from
+     * `phase: 'tool_result'` WITHOUT re-executing the tool.
+     */
+    resumeToolResult?: ResumeToolResultParam;
+    /**
+     * Tool identifiers the user @-mentioned in this message. Forwarded to the
+     * server as `selectedToolIds` so the server runtime enables them for this
+     * run (mirrors the client runtime's mention → callable-tool wiring). Lets a
+     * user invoke a tool that isn't pinned to the agent (e.g. a custom MCP
+     * connector picked from the @ list).
+     */
+    selectedToolIds?: string[];
+    /**
+     * Agents the user @-mentioned in this message (multi-mention). Forwarded to
+     * the server so the supervisor run enables the callAgent tool and injects the
+     * mentioned-agents delegation context — mirrors the client runtime's
+     * `initialContext.mentionedAgents` + injected callAgent manifest. Without
+     * this the gateway supervisor never sees the mention and answers itself
+     * instead of delegating.
+     */
+    mentionedAgents?: RuntimeMentionedAgent[];
+    /**
      * Temporary message IDs created during the initial sendMessage phase.
      * These are associated with the new gateway operation so the UI doesn't
      * show a blank loading state while waiting for the first `step_start`
@@ -404,6 +438,9 @@ export class GatewayActionImpl {
       parentMessageId,
       parentOperationId,
       resumeApproval,
+      resumeToolResult,
+      selectedToolIds,
+      mentionedAgents,
       tempMessageIds,
     } = params;
 
@@ -421,7 +458,11 @@ export class GatewayActionImpl {
       isCreateNewTopic && context.agentId ? getPendingTopicRepos(context.agentId) : [];
     const initialTopicMetadata =
       pendingRepos.length > 0
-        ? { repos: pendingRepos, workingDirectory: pendingRepos[0] }
+        ? {
+            repos: pendingRepos,
+            workingDirectory: pendingRepos[0],
+            workingDirectoryConfig: { path: pendingRepos[0], repoType: 'github' as const },
+          }
         : undefined;
 
     // Honour user-initiated cancel during phase-1 init: while we await the
@@ -469,9 +510,12 @@ export class GatewayActionImpl {
         },
         deviceId: localDeviceId,
         fileIds,
+        mentionedAgents,
         parentMessageId,
         prompt: message,
         resumeApproval,
+        resumeToolResult,
+        selectedToolIds,
         trigger: metadata?.trigger,
         userInterventionConfig,
       },
@@ -492,12 +536,14 @@ export class GatewayActionImpl {
       // Topic created successfully — now safe to clear the pending repo selection.
       if (context.agentId) consumePendingTopicRepos(context.agentId);
       if (optimisticTopic) {
+        const topicMetadata = optimisticTopic.metadata ?? initialTopicMetadata;
         this.#get().internal_replaceTopicId({
           agentId: context.agentId,
           groupId: context.groupId,
           nextId: result.topicId,
           previousId: optimisticTopic.id,
           value: {
+            ...(topicMetadata ? { metadata: topicMetadata } : {}),
             ...(context.groupId ? {} : { sessionId: context.agentId }),
             title: optimisticTopic.title,
           },
@@ -537,7 +583,6 @@ export class GatewayActionImpl {
     this.#get().moveQueuedMessages(messageMapKey(context), messageMapKey(execContext));
 
     if (result.topicId) {
-      if (!optimisticTopic) this.#get().internal_updateTopicLoading(result.topicId, true);
       void this.#get().updateTopicStatus?.({
         agentId: context.agentId,
         groupId: context.groupId,
@@ -650,7 +695,6 @@ export class GatewayActionImpl {
         // terminal-missing fallback so the op never sticks `running`.
         if (!terminalReceived) this.#get().completeOperation(gatewayOpId);
         if (result.topicId) {
-          this.#get().internal_updateTopicLoading(result.topicId, false);
           // A clean completion the user isn't watching is owned by
           // `markTopicUnread` (status: 'unread'); skip the 'active' write so
           // the two never race over the status field. Every other case (viewing,
@@ -802,8 +846,6 @@ export class GatewayActionImpl {
       gatewayUrl: agentGatewayUrl,
       onEvent: eventRouter,
       onSessionComplete: ({ succeeded, terminalReceived, authFailed }) => {
-        this.#get().internal_updateTopicLoading(topicId, false);
-
         // A reconnect is a passive re-subscribe — it must not END a run it merely
         // re-subscribed to. Only finalize when the close PROVES the op is over:
         //   - terminalReceived: a real agent_runtime_end / error streamed in, or

@@ -109,7 +109,7 @@ export const naive: CrawlImpl = async (url, { filterOptions }) => {
       url,
     } satisfies CrawlSuccessResult;
   } catch (error) {
-    console.error(error);
+    console.error('[naive]', error);
   }
 
   return;

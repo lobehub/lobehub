@@ -2,6 +2,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { major, minor } from 'semver';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import * as activeWorkspaceModule from '@/business/client/hooks/useActiveWorkspaceId';
 import { CURRENT_VERSION } from '@/const/version';
 import { globalService } from '@/services/global';
 import { useGlobalStore } from '@/store/global/index';
@@ -486,6 +487,86 @@ describe('createPreferenceSlice', () => {
       });
 
       expect(useGlobalStore.getState().status.workingSidebarRevealRequest).toBeUndefined();
+    });
+  });
+
+  describe('workspace overlay routing', () => {
+    // The lobehub-side `useActiveWorkspaceId` returns null by default; the
+    // cloud build overrides it. Stub the sync getter so we can exercise
+    // workspace-mode routing without booting a workspace store.
+    const setActiveWorkspace = (id: string | null) => {
+      vi.spyOn(activeWorkspaceModule, 'getActiveWorkspaceId').mockReturnValue(id);
+    };
+
+    beforeEach(() => {
+      useGlobalStore.setState({ isStatusInit: true });
+    });
+
+    it('routes whitelisted writes into status.workspace when inside a workspace', () => {
+      setActiveWorkspace('ws-1');
+      const { result } = renderHook(() => useGlobalStore());
+
+      act(() => {
+        result.current.updateSystemStatus({
+          hiddenSidebarSections: ['recents'],
+          sidebarItems: ['agent'],
+        });
+      });
+
+      expect(result.current.status.workspace?.hiddenSidebarSections).toEqual(['recents']);
+      expect(result.current.status.workspace?.sidebarItems).toEqual(['agent']);
+      // Top-level (personal mode) values stay untouched
+      expect(result.current.status.hiddenSidebarSections).toBeUndefined();
+      expect(result.current.status.sidebarItems).toBeUndefined();
+    });
+
+    it('keeps non-whitelisted writes at the top level when inside a workspace', () => {
+      setActiveWorkspace('ws-1');
+      const { result } = renderHook(() => useGlobalStore());
+
+      act(() => {
+        result.current.updateSystemStatus({ leftPanelWidth: 360 });
+      });
+
+      expect(result.current.status.leftPanelWidth).toBe(360);
+      expect(result.current.status.workspace).toBeUndefined();
+    });
+
+    it('writes whitelisted fields to the top level when not in a workspace', () => {
+      setActiveWorkspace(null);
+      const { result } = renderHook(() => useGlobalStore());
+
+      act(() => {
+        result.current.updateSystemStatus({ hiddenSidebarSections: ['memory'] });
+      });
+
+      expect(result.current.status.hiddenSidebarSections).toEqual(['memory']);
+      expect(result.current.status.workspace?.hiddenSidebarSections).toBeUndefined();
+    });
+
+    it('toggleExpandSessionGroup composes off the workspace overlay when inside a workspace', () => {
+      setActiveWorkspace('ws-1');
+      // Seed: personal has ['pinned','default'], workspace overlay has ['ws-only']
+      useGlobalStore.setState({
+        isStatusInit: true,
+        status: {
+          ...initialState.status,
+          expandSessionGroupKeys: ['pinned', 'default'],
+          workspace: { expandSessionGroupKeys: ['ws-only'] },
+        },
+      });
+      const { result } = renderHook(() => useGlobalStore());
+
+      act(() => {
+        result.current.toggleExpandSessionGroup('new-group', true);
+      });
+
+      // New key was appended to the workspace overlay, not to the personal list.
+      expect(result.current.status.workspace?.expandSessionGroupKeys).toEqual([
+        'ws-only',
+        'new-group',
+      ]);
+      expect(result.current.status.expandSessionGroupKeys).toEqual(['pinned', 'default']);
     });
   });
 });

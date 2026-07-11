@@ -60,9 +60,9 @@ Related discussions:
 - Type: Optional
 - Description: Used to control the model list, use `+` to add a model, use `-` to hide a model, use `model_name=display_name` to customize the display name of a model, separated by commas. Definition syntax rules see [model-list][model-list]
 - Default: `-`
-- Example: `+qwen-7b-chat,+glm-6b,-gpt-3.5-turbo,gpt-4-0125-preview=gpt-4-turbo`
+- Example: `+qwen-7b-chat,+glm-6b,-gpt-3.5-turbo,gpt-4-turbo=gpt-4o`
 
-The above example adds `qwen-7b-chat` and `glm-6b` to the model list, removes `gpt-3.5-turbo` from the list, and displays the name of `gpt-4-0125-preview` as `gpt-4-turbo`. If you want to disable all models first and then enable specific models, you can use `-all,+gpt-3.5-turbo`, which means only `gpt-3.5-turbo` will be enabled.
+The above example adds `qwen-7b-chat` and `glm-6b` to the model list, removes `gpt-3.5-turbo` from the list, and displays the name of `gpt-4-turbo` as `gpt-4o`. If you want to disable all models first and then enable specific models, you can use `-all,+gpt-3.5-turbo`, which means only `gpt-3.5-turbo` will be enabled.
 
 You can find all current model names in [modelProviders](https://github.com/lobehub/lobehub/tree/main/src/config/modelProviders).
 
@@ -119,7 +119,7 @@ If you need to use Azure OpenAI to provide model services, you can refer to the 
 - Type: Optional
 - Description: Used to control the model list, use `+` to add a model, use `-` to hide a model, use `model_name=display_name` to customize the display name of a model, separated by commas. Definition syntax rules see [model-list][model-list]
 - Default: `-`
-- Example: `-all,+gemini-1.5-flash-latest,+gemini-1.5-pro-latest`
+- Example: `-all,+gemini-2.5-flash,+gemini-2.5-pro`
 
 ## Vertex AI
 
@@ -149,7 +149,7 @@ If you need to use Azure OpenAI to provide model services, you can refer to the 
 - Type: Optional
 - Description: Used to control the model list, use `+` to add a model, use `-` to hide a model, use `model_name=display_name` to customize the display name of a model, separated by commas. Definition syntax rules see [model-list][model-list]
 - Default: `-`
-- Example: `-all,+gemini-1.5-flash-latest,+gemini-1.5-pro-latest`
+- Example: `-all,+gemini-2.5-flash,+gemini-2.5-pro`
 
 ## Anthropic AI
 
@@ -210,7 +210,7 @@ If you need to use Azure OpenAI to provide model services, you can refer to the 
 
 - Type: Optional
 - Description: If you manually configure the DeepSeek API proxy, you can use this configuration item to override the default DeepSeek API request base URL
-- Default: `https://api.deepseek.com`
+- Default: `https://api.deepseek.com/v1`
 - Example: `https://my-deepseek-proxy.com`
 
 ### `DEEPSEEK_API_KEY`
@@ -323,7 +323,7 @@ If you need to use Azure OpenAI to provide model services, you can refer to the 
 - Type: Optional
 - Description: Used to control the model list, use `+` to add a model, use `-` to hide a model, use `model_name=display_name` to customize the display name of a model, separated by commas. Definition syntax rules see [model-list][model-list]
 - Default: `-`
-- Example: `-all,+accounts/fireworks/models/firefunction-v2,+accounts/fireworks/models/firefunction-v1`
+- Example: `-all,+accounts/fireworks/models/llama-v3p3-70b-instruct,+accounts/fireworks/models/deepseek-v3`
 
 ## Ollama
 
@@ -385,7 +385,7 @@ If you need to use Azure OpenAI to provide model services, you can refer to the 
 - Type: Optional
 - Description: Used to control the model list, use `+` to add a model, use `-` to hide a model, use `model_name=display_name` to customize the display name of a model, separated by commas. Definition syntax rules see
 - Default: `-`
-- Example: `-all,+llama-3.1-sonar-small-128k-online,+llama-3.1-sonar-small-128k-chat`
+- Example: `-all,+sonar-pro,+sonar`
 
 ## Minimax AI
 
@@ -426,7 +426,7 @@ If you need to use Azure OpenAI to provide model services, you can refer to the 
 - Type: Optional
 - Description: Used to control the model list, use `+` to add a model, use `-` to hide a model, use `model_name=display_name` to customize the display name of a model, separated by commas. Definition syntax rules see [model-list][model-list]
 - Default: `-`
-- Example: `-all,+gemma2-9b-it,+llama-3.1-8b-instant`
+- Example: `-all,+llama-3.3-70b-versatile,+llama-3.1-8b-instant`
 
 ## ZHIPU AI
 
@@ -442,7 +442,7 @@ If you need to use Azure OpenAI to provide model services, you can refer to the 
 - Type: Optional
 - Description: Used to control the model list, use `+` to add a model, use `-` to hide a model, use `model_name=display_name` to customize the display name of a model, separated by commas. Definition syntax rules see [model-list][model-list]
 - Default: `-`
-- Example: `-all,+glm-4-alltools,+glm-4-plus`
+- Example: `-all,+glm-4.6,+glm-4-plus`
 
 ## 01.AI
 
@@ -480,8 +480,8 @@ If you need to use Azure OpenAI to provide model services, you can refer to the 
 
 - Type: Optional
 - Description: If you manually configure the Qiniu API proxy, you can use this configuration item to override the default Qiniu API request base URL
-- Default: `https://api.qnaigc.com/v1`
-- Example: `https://my-qnaigc.com/v1`
+- Default: `https://openai.qiniu.com/v1`
+- Example: `https://my-qiniu-proxy.com/v1`
 
 ## Qwen
 
@@ -529,7 +529,7 @@ If you need to use Azure OpenAI to provide model services, you can refer to the 
 - Type: Optional
 - Description: Used to control the model list, use `+` to add a model, use `-` to hide a model, use `model_name=display_name` to customize the display name of a model, separated by commas. Definition syntax rules see [model-list][model-list]
 - Default: `-`
-- Example: `-all,+meta-llama/llama-3.1-8b-instruct,+meta-llama/llama-3.1-70b-instruct`
+- Example: `-all,+meta-llama/llama-3.1-8b-instruct,+meta-llama/llama-3.3-70b-instruct`
 
 ## BAICHUAN
 
@@ -622,7 +622,7 @@ If you need to use Azure OpenAI to provide model services, you can refer to the 
 - Type: Optional
 - Description: Used to control the model list, use `+` to add a model, use `-` to hide a model, use `model_name=display_name` to customize the display name of a model, separated by commas. Definition syntax rules see [model-list][model-list]
 - Default: `-`
-- Example: `-all,+hunyuan-lite,+hunyuan-standard`
+- Example: `-all,+hunyuan-2.0-instruct-20251111,+hunyuan-2.0-thinking-20251109`
 
 ## Volcengine
 

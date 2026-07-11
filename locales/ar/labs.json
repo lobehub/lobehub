@@ -1,6 +1,4 @@
 {
-  "features.agentDocumentFloatingChatPanel.desc": "عرض لوحة الدردشة العائمة في معاينة مستند الوكيل فقط عند تمكين هذه الميزة التجريبية.",
-  "features.agentDocumentFloatingChatPanel.title": "لوحة الدردشة العائمة لمستند الوكيل",
   "features.agentSelfIteration.desc": "السماح للمساعد بالتفكير الذاتي، وبناء الوعي الذاتي، والاستمرار في التطوير عبر المحاولات والتفاعلات المتواصلة.",
   "features.agentSelfIteration.title": "التكرار الذاتي للوكيل",
   "features.assistantMessageGroup.desc": "تجميع رسائل الوكيل ونتائج استدعاء الأدوات معًا للعرض",

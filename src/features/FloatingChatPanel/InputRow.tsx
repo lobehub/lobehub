@@ -5,6 +5,7 @@ import { type FocusEvent, memo, useCallback, useEffect, useRef, useState } from 
 import { flushSync } from 'react-dom';
 
 import { ChatInput } from '@/features/Conversation';
+import { inputSelectors, useConversationStore } from '@/features/Conversation/store';
 
 import HoverExpandBar from './HoverExpandBar';
 
@@ -26,29 +27,42 @@ const InputRowViewTransitionStyle = createGlobalStyle`
   }
 `;
 
+interface ViewTransitionLike {
+  finished: Promise<void>;
+}
+
+type DocumentWithVT = Document & {
+  startViewTransition?: (cb: () => void) => ViewTransitionLike;
+};
+
 const supportsViewTransition =
   typeof document !== 'undefined' &&
-  typeof (document as Document & { startViewTransition?: unknown }).startViewTransition ===
-    'function';
-
-const startViewTransition = (callback: () => void) => {
-  (document as Document & { startViewTransition: (cb: () => void) => unknown }).startViewTransition(
-    callback,
-  );
-};
+  typeof (document as DocumentWithVT).startViewTransition === 'function';
 
 // View Transition snapshots the DOM before and after this callback. The DOM mutation
 // must commit synchronously inside it, otherwise the "after" snapshot is identical
 // to the "before" one and nothing animates.
+//
+// Setting `view-transition-name: none` on <html> for the duration of the transition
+// suppresses the default root snapshot, so only the named `floating-chat-panel-input`
+// element participates. Elements outside the panel keep their native CSS animations
+// instead of being frozen under the root crossfade.
 const commitWithViewTransition = (commit: () => void) => {
   if (!supportsViewTransition) {
     commit();
     return;
   }
-  startViewTransition(() => {
+  const root = document.documentElement;
+  const previousViewTransitionName = root.style.viewTransitionName;
+  root.style.viewTransitionName = 'none';
+  const transition = (document as DocumentWithVT).startViewTransition!(() => {
     // eslint-disable-next-line @eslint-react/dom/no-flush-sync
     flushSync(commit);
   });
+  const restore = () => {
+    root.style.viewTransitionName = previousViewTransitionName;
+  };
+  transition.finished.then(restore, restore);
 };
 
 const EMPTY_ACTIONS: never[] = [];
@@ -65,6 +79,7 @@ const InputRow = memo<InputRowProps>(({ isCollapsed, onExpand }) => {
   const [renderedCollapsed, setRenderedCollapsed] = useState(isCollapsed);
   const [focused, setFocused] = useState(false);
   const focusedRef = useRef(false);
+  const overlayHeight = useConversationStore(inputSelectors.chatInputOverlayHeight);
 
   useEffect(() => {
     if (renderedCollapsed === isCollapsed) return;
@@ -100,7 +115,11 @@ const InputRow = memo<InputRowProps>(({ isCollapsed, onExpand }) => {
         onBlur={handleBlur}
         onFocus={handleFocus}
       >
-        <HoverExpandBar visible={isCollapsed && focused} onExpand={onExpand} />
+        <HoverExpandBar
+          bottomOffset={overlayHeight}
+          visible={isCollapsed && focused}
+          onExpand={onExpand}
+        />
         <div className={s.surface}>
           <ChatInput
             allowExpand={false}

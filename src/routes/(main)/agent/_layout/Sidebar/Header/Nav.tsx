@@ -22,6 +22,7 @@ import { topicActionKeys } from '@/libs/swr/keys';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
+import { topicSelectors } from '@/store/chat/selectors';
 import { useGlobalStore } from '@/store/global';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 
@@ -49,10 +50,11 @@ const Nav = memo(() => {
     hideProfile || (!!heterogeneousProviderType && heterogeneousProviderType !== 'claude-code');
   const switchTopic = useChatStore((s) => s.switchTopic);
   const [openNewTopicOrSaveTopic] = useChatStore((s) => [s.openNewTopicOrSaveTopic]);
+  const isNewTopicSendInFlight = useChatStore(topicSelectors.isNewTopicSendInFlight);
 
   const { mutate } = useActionSWR(topicActionKeys.openNewOrSave(), openNewTopicOrSaveTopic);
   const handleNewTopic = () => {
-    if (!canCreateTopic) return;
+    if (!canCreateTopic || isNewTopicSendInFlight) return;
     // Always navigate to the bare agent chat URL — drops any sub-route
     // (/profile, /channel, /page, /cron/:cronId, …) and any `:topicId`
     // segment so the new topic isn't conflated with the previous URL.
@@ -65,7 +67,7 @@ const Nav = memo(() => {
   return (
     <Flexbox gap={1} paddingInline={4}>
       <NavItem
-        disabled={!canCreateTopic}
+        disabled={!canCreateTopic || isNewTopicSendInFlight}
         icon={MessageSquarePlusIcon}
         title={tTopic('actions.addNewTopic')}
         onClick={handleNewTopic}

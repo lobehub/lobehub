@@ -2,31 +2,22 @@
 
 import { AccordionItem, Center, Flexbox, Icon, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import { CircleDashed, CircleDot, HandIcon, type LucideIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
+import { EXECUTION_STATUS_VISUALS, type ExecutionStatusVisual } from '@/components/ExecutionStatus';
 import type { TaskGroupItem } from '@/store/task/slices/list/initialState';
 
 import TaskItem from './TaskItem';
 
-const STATUS_META: Record<string, { color: string; icon: LucideIcon; titleKey: string }> = {
-  backlog: {
-    color: cssVar.colorTextQuaternary,
-    icon: CircleDashed,
-    titleKey: 'taskList.kanban.backlog',
-  },
+const STATUS_META: Record<string, ExecutionStatusVisual & { titleKey: string }> = {
+  backlog: { ...EXECUTION_STATUS_VISUALS.backlog, titleKey: 'taskList.kanban.backlog' },
   needsInput: {
-    color: cssVar.colorInfo,
-    icon: HandIcon,
+    ...EXECUTION_STATUS_VISUALS.waitingForHuman,
     titleKey: 'taskList.kanban.needsInput',
   },
-  running: {
-    color: cssVar.colorWarning,
-    icon: CircleDot,
-    titleKey: 'taskList.kanban.running',
-  },
+  running: { ...EXECUTION_STATUS_VISUALS.running, titleKey: 'taskList.kanban.running' },
 };
 
 interface StatusGroupProps {

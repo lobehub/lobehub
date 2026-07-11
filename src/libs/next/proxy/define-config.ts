@@ -89,15 +89,18 @@ export function defineConfig() {
       locale,
     });
 
-    // Share pages are responsive on their own; always serve the desktop bundle
+    // These pages are responsive on their own; always serve the desktop bundle
     // so mobile UA does not land on mobile-specific routes.
-    const isSharePath = url.pathname === '/share' || url.pathname.startsWith('/share/');
+    const desktopOnlyPaths = ['/share', '/verify'];
+    const isDesktopOnlyPath = desktopOnlyPaths.some(
+      (path) => url.pathname === path || url.pathname.startsWith(`${path}/`),
+    );
 
     const safeLocale = toSafeLocale(locale);
 
     // 2. Create normalized preference values
     const route = RouteVariants.serializeVariants({
-      isMobile: !isSharePath && device.type === 'mobile',
+      isMobile: !isDesktopOnlyPath && device.type === 'mobile',
       locale: safeLocale,
     });
 

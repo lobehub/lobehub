@@ -1,6 +1,4 @@
 {
-  "features.agentDocumentFloatingChatPanel.desc": "僅在啟用此實驗功能時，於代理文件預覽中顯示浮動聊天面板。",
-  "features.agentDocumentFloatingChatPanel.title": "代理文件浮動聊天面板",
   "features.agentSelfIteration.desc": "允許助理進行反思、建立自我認知，並透過持續的嘗試與互動不斷迭代提升。",
   "features.agentSelfIteration.title": "代理自我迭代",
   "features.assistantMessageGroup.desc": "將助手訊息及其工具調用結果彙整成群組顯示",

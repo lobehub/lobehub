@@ -15,11 +15,17 @@ export interface MessageEditingAction {
    */
   exitSelectionMode: () => void;
   /**
-   * Select every selectable message from the top of the conversation down to
-   * the anchor (the message selection started from), inclusive. Mirrors
-   * WeChat's "选择到这里".
+   * Shift-click range select: add every selectable message between the current
+   * anchor and `id` (inclusive) to the selection, then move the anchor to `id`.
+   * Falls back to a plain toggle when there is no anchor yet.
    */
-  selectToHere: () => void;
+  selectRange: (id: string) => void;
+  /**
+   * Select every selectable message from the top of the conversation down to
+   * `targetId` (inclusive) — the "here" marker line. Falls back to the anchor
+   * when no target is given. Mirrors WeChat's "选择到这里".
+   */
+  selectToHere: (targetId?: string) => void;
   /**
    * Toggle message editing state
    */
@@ -68,10 +74,42 @@ export const messageEditingSlice: StateCreator<
       'exitSelectionMode',
     );
   },
-  selectToHere: () => {
-    const { displayMessages, selectionAnchorId } = get();
+  selectRange: (id) => {
+    const { displayMessages, selectionAnchorId, selectedMessageIds } = get();
     const anchorIndex = selectionAnchorId
       ? displayMessages.findIndex((m) => m.id === selectionAnchorId)
+      : -1;
+    const targetIndex = displayMessages.findIndex((m) => m.id === id);
+    // No anchor yet (or target missing): behave like a plain select-on.
+    if (targetIndex < 0 || anchorIndex < 0) {
+      set(
+        {
+          selectedMessageIds: toggleBooleanList(selectedMessageIds, id, true),
+          selectionAnchorId: id,
+        },
+        false,
+        'selectRange',
+      );
+      return;
+    }
+
+    const [lo, hi] =
+      anchorIndex <= targetIndex ? [anchorIndex, targetIndex] : [targetIndex, anchorIndex];
+    const rangeIds = displayMessages
+      .slice(lo, hi + 1)
+      .filter((m) => isSelectableRole(m.role))
+      .map((m) => m.id);
+
+    const next = new Set(selectedMessageIds);
+    for (const rangeId of rangeIds) next.add(rangeId);
+
+    set({ selectedMessageIds: [...next], selectionAnchorId: id }, false, 'selectRange');
+  },
+  selectToHere: (targetId) => {
+    const { displayMessages, selectionAnchorId } = get();
+    const anchorId = targetId ?? selectionAnchorId;
+    const anchorIndex = anchorId
+      ? displayMessages.findIndex((m) => m.id === anchorId)
       : displayMessages.length - 1;
     if (anchorIndex < 0) return;
 
@@ -93,7 +131,9 @@ export const messageEditingSlice: StateCreator<
     const current = get().selectedMessageIds;
     const next = selected ?? !current.includes(id);
     set(
-      { selectedMessageIds: toggleBooleanList(current, id, next) },
+      // Move the anchor to the last interacted message so Shift-range and
+      // "select to here" both reference the user's current focus.
+      { selectedMessageIds: toggleBooleanList(current, id, next), selectionAnchorId: id },
       false,
       'toggleMessageSelected',
     );

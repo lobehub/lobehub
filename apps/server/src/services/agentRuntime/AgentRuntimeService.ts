@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import type {
   Agent,
   AgentRuntimeContext,
@@ -42,6 +44,7 @@ import { appEnv } from '@/envs/app';
 import { type AgentRuntimeCoordinatorOptions } from '@/server/modules/AgentRuntime';
 import { AgentRuntimeCoordinator, createStreamEventManager } from '@/server/modules/AgentRuntime';
 import { formatErrorForState } from '@/server/modules/AgentRuntime/formatErrorForState';
+import { hasNonPersistedMessage } from '@/server/modules/AgentRuntime/messagePersistence';
 import {
   createRuntimeExecutors,
   type RuntimeExecutorContext,
@@ -111,6 +114,9 @@ const ASYNC_TOOL_VERIFY_MAX_ATTEMPTS = 5;
 /** Hard ceiling on a single backoff delay so late attempts don't overshoot. */
 const ASYNC_TOOL_VERIFY_MAX_DELAY_MS = 240_000;
 
+const STEP_LOCK_TTL_SECONDS = 120;
+const STEP_LOCK_HEARTBEAT_MS = 30_000;
+
 /**
  * Exponential backoff delay for the Nth (1-based) watchdog re-check:
  * 15s, 30s, 60s, 120s, 240s, capped at {@link ASYNC_TOOL_VERIFY_MAX_DELAY_MS}.
@@ -120,6 +126,9 @@ const asyncToolVerifyDelayMs = (attempt: number): number =>
     ASYNC_TOOL_VERIFY_DELAY_MS * 2 ** (Math.max(1, attempt) - 1),
     ASYNC_TOOL_VERIFY_MAX_DELAY_MS,
   );
+
+const createStepLockOwner = (operationId: string, stepIndex: number): string =>
+  `${operationId}:${stepIndex}:${process.pid}:${Date.now()}:${randomUUID()}`;
 
 /**
  * Format error for storage in message pluginError metadata.
@@ -335,6 +344,34 @@ export class AgentRuntimeService {
 
     // Setup local execution callback for LocalQueueServiceImpl
     this.setupLocalExecutionCallback();
+  }
+
+  private startStepLockHeartbeat(
+    operationId: string,
+    stepIndex: number,
+    ownerId: string,
+  ): () => void {
+    const timer = setInterval(() => {
+      this.coordinator
+        .refreshStepLock(operationId, stepIndex, STEP_LOCK_TTL_SECONDS, ownerId)
+        .then((refreshed) => {
+          if (!refreshed) {
+            log(
+              '[%s][%d] Step lock heartbeat did not refresh; ownership may have changed',
+              operationId,
+              stepIndex,
+            );
+          }
+        })
+        .catch((error) => {
+          log('[%s][%d] Step lock heartbeat failed: %O', operationId, stepIndex, error);
+        });
+    }, STEP_LOCK_HEARTBEAT_MS);
+
+    const timerWithUnref = timer as { unref?: () => void };
+    timerWithUnref.unref?.();
+
+    return () => clearInterval(timer);
   }
 
   /**
@@ -699,8 +736,42 @@ export class AgentRuntimeService {
     }
 
     // ===== Distributed lock: prevent duplicate execution from QStash retries =====
-    const claimed = await this.coordinator.tryClaimStep(operationId, stepIndex, 35);
+    const stepLockOwner = createStepLockOwner(operationId, stepIndex);
+    const claimed = await this.coordinator.tryClaimStep(
+      operationId,
+      stepIndex,
+      STEP_LOCK_TTL_SECONDS,
+      stepLockOwner,
+    );
     if (!claimed) {
+      let currentState: AgentState | null | undefined = null;
+      try {
+        currentState = await this.coordinator.loadAgentState(operationId);
+      } catch (error) {
+        log(
+          '[%s][%d] Failed to load state while handling step lock conflict: %O',
+          operationId,
+          stepIndex,
+          error,
+        );
+      }
+
+      const currentStepCount = currentState?.stepCount;
+      if (currentState && typeof currentStepCount === 'number' && currentStepCount > stepIndex) {
+        log(
+          '[%s][%d] Step lock conflict is stale (stepCount=%d), skipping',
+          operationId,
+          stepIndex,
+          currentStepCount,
+        );
+        return {
+          nextStepScheduled: false,
+          state: currentState,
+          stepResult: null,
+          success: true,
+        };
+      }
+
       log(
         '[%s][%d] Step lock conflict — another instance is executing this step, returning locked',
         operationId,
@@ -713,6 +784,12 @@ export class AgentRuntimeService {
         success: false,
       };
     }
+
+    const stopStepLockHeartbeat = this.startStepLockHeartbeat(
+      operationId,
+      stepIndex,
+      stepLockOwner,
+    );
 
     // Hoisted so the error-path snapshot finalize can record an
     // approximate startedAt for the failing step. The inner `startAt` at the
@@ -759,10 +836,18 @@ export class AgentRuntimeService {
           externalRetryCount,
         };
 
+        // Rehydrate `messages` from the DB at every step entry. Each step is a
+        // separate invocation that loads state fresh from Redis, so this makes
+        // the DB the single source of truth for the conversation on every path
+        // — not just the async-tool / human-intervention resumes that already
+        // refresh below. With this in place the Redis-persisted state no longer
+        // needs to carry the (potentially multi-MB) `messages` array, which is
+        // what trips Upstash's 10MB single-request limit and drops the op.
+        await this.rehydrateStateMessagesFromDB(agentState);
+
         // Enrich invoke_agent span with agent identity now that state is loaded.
         const stateAgentConfig = agentState.metadata?.agentConfig as
-          | { description?: string | null; title?: string | null }
-          | undefined;
+          { description?: string | null; title?: string | null } | undefined;
         const stateModel =
           agentState.modelRuntimeConfig?.model ?? agentState.metadata?.modelRuntimeConfig?.model;
         const stateProvider =
@@ -1246,6 +1331,7 @@ export class AgentRuntimeService {
             error: newStateError
               ? {
                   attribution: newStateError.attribution,
+                  body: newStateError.body,
                   category: newStateError.category,
                   countAsFailure: newStateError.countAsFailure,
                   httpStatus: newStateError.httpStatus,
@@ -1356,6 +1442,7 @@ export class AgentRuntimeService {
         completionReason: 'error',
         error: {
           attribution: formattedError.attribution,
+          body: formattedError.body,
           category: formattedError.category,
           countAsFailure: formattedError.countAsFailure,
           httpStatus: formattedError.httpStatus,
@@ -1365,17 +1452,19 @@ export class AgentRuntimeService {
           severity: formattedError.severity,
           type: String(formattedError.type),
         },
-        failedStep: { startedAt: stepStartAt, stepIndex },
+        failedStep: {
+          startedAt: stepStartAt,
+          stepIndex,
+          stepType: formattedError.category === 'provider' ? 'call_llm' : 'call_tool',
+        },
         state: finalStateWithError,
       });
 
       throw error;
     } finally {
       invokeAgentSpan.end();
-      // Release lock so legitimate retries or next operations can proceed.
-      // If Vercel force-kills the process, this won't execute — the lock
-      // auto-expires after TTL (35s), allowing QStash retries to self-heal.
-      await this.coordinator.releaseStepLock(operationId, stepIndex);
+      stopStepLockHeartbeat();
+      await this.coordinator.releaseStepLock(operationId, stepIndex, stepLockOwner);
     }
   }
 
@@ -1971,6 +2060,23 @@ export class AgentRuntimeService {
     // `updateToolMessage` swallows transaction errors into `success: false`,
     // so the flag must be checked — an unfulfilled message would hold the
     // parent's barrier forever while the callback acked with 200.
+    //
+    // A state loaded via the fallback above arrives without `messages` (the
+    // persisted Redis blob no longer carries them — see
+    // AgentStateManager.serializeStateForPersist), so rehydrate from the DB
+    // before reading the sub-agent's final answer. An in-process
+    // params.finalState already carries them and skips this.
+    if (!failed && finalState && !Array.isArray(finalState.messages)) {
+      try {
+        finalState.messages = await this.refreshMessagesFromDB(finalState);
+      } catch (error) {
+        console.error(
+          '[%s] sub-agent bridge: failed to refresh messages from DB: %O',
+          operationId,
+          error,
+        );
+      }
+    }
     const messages = Array.isArray(finalState?.messages) ? finalState.messages : [];
     const lastAssistant = [...messages]
       .reverse()
@@ -2141,6 +2247,22 @@ export class AgentRuntimeService {
     );
 
     // 1. Backfill this member's anchor.
+    // The member's textual answer is only read in delegate mode below; a state
+    // loaded via the fallback above arrives without `messages` (dropped from
+    // the persisted Redis blob — see AgentStateManager.serializeStateForPersist),
+    // so rehydrate from the DB when we actually need them. An in-process
+    // params.finalState already carries them and skips this.
+    if (!failed && mode !== 'in_group' && finalState && !Array.isArray(finalState.messages)) {
+      try {
+        finalState.messages = await this.refreshMessagesFromDB(finalState);
+      } catch (error) {
+        console.error(
+          '[%s] group-member bridge: failed to refresh messages from DB: %O',
+          operationId,
+          error,
+        );
+      }
+    }
     const messages = Array.isArray(finalState?.messages) ? finalState.messages : [];
     const lastAssistant = [...messages]
       .reverse()
@@ -2325,6 +2447,40 @@ export class AgentRuntimeService {
     return flatList as AgentState['messages'];
   }
 
+  /**
+   * Overwrite `state.messages` in place with the canonical DB conversation at
+   * step entry, making the DB the single source of truth for messages.
+   *
+   * Guarded against regressions:
+   * - Ops carrying a non-persisted (ephemeral / suppressed) message — e.g. the
+   *   group-member supervisor instruction, which has no DB row — keep their
+   *   full working set in Redis (see `AgentStateManager.serializeStateForPersist`),
+   *   so leave the loaded array intact instead of clobbering it with a DB-only
+   *   view that would drop the prompt.
+   * - `state.messages` is guaranteed to end up an array, so a missing-identifier
+   *   early return or an empty/failed read never hands `undefined` to downstream
+   *   consumers (e.g. `shouldCompress(state.messages)`).
+   * - A populated working set is never replaced with an empty one or on a DB
+   *   error, so a transient read miss can't blank the conversation mid-op.
+   */
+  private async rehydrateStateMessagesFromDB(state: AgentState): Promise<void> {
+    if (hasNonPersistedMessage(state.messages)) return;
+
+    if (!Array.isArray(state.messages)) state.messages = [];
+
+    if (!state.metadata?.agentId || !state.metadata?.topicId) return;
+
+    try {
+      const refreshed = await this.refreshMessagesFromDB(state);
+      if (refreshed.length > 0) state.messages = refreshed;
+    } catch (error) {
+      console.error(
+        '[rehydrateStateMessagesFromDB] failed, keeping Redis state snapshot: %O',
+        error,
+      );
+    }
+  }
+
   private resolveAsyncToolResumeParentMessageId(
     messages: AgentState['messages'],
     pendingTools: ChatToolPayload[],
@@ -2424,6 +2580,7 @@ export class AgentRuntimeService {
     // Create streaming executor context
     const executorContext: RuntimeExecutorContext = {
       agentConfig: metadata?.agentConfig,
+      allowEarlyFinalAnswerVisibleOutputEnd: !this.agentFactory,
       botContext: metadata?.botContext,
       botPlatformContext: metadata?.botPlatformContext,
       discordContext: metadata?.discordContext,
@@ -2479,8 +2636,7 @@ export class AgentRuntimeService {
               activeDeviceId,
               devicePlatform: msg.pluginState?.metadata?.devicePlatform as string | undefined,
               deviceSystemInfo: msg.pluginState?.metadata?.deviceSystemInfo as
-                | Record<string, string>
-                | undefined,
+                Record<string, string> | undefined,
             };
           }
         },

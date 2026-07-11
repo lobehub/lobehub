@@ -124,6 +124,19 @@ export const documents = pgTable(
 
     workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
+    /**
+     * Visibility within the owning workspace. `public` (default) means every
+     * workspace member can see the document; `private` constrains it to the
+     * creator (`user_id`). Within a documents tree (folder/Page hierarchy) the
+     * value is kept strongly consistent across the whole subtree by the service
+     * layer — children mirror the root's visibility, and the only legal
+     * transition is `private → public` via `publishToWorkspace`. Ignored in
+     * personal mode where the row is implicitly private to its owner.
+     */
+    visibility: text('visibility', { enum: ['private', 'public'] })
+      .default('public')
+      .notNull(),
+
     // Timestamps
     ...timestamps,
   },
@@ -140,6 +153,11 @@ export const documents = pgTable(
       .on(table.slug, table.userId)
       .where(sql`${table.workspaceId} IS NULL AND ${table.slug} IS NOT NULL`),
     index('documents_workspace_id_idx').on(table.workspaceId),
+    index('documents_workspace_visibility_idx').on(
+      table.workspaceId,
+      table.visibility,
+      table.userId,
+    ),
     uniqueIndex('documents_slug_workspace_id_unique')
       .on(table.workspaceId, table.slug)
       .where(isNotNull(table.workspaceId)),
@@ -189,6 +207,17 @@ export const files = pgTable(
 
     workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
+    /**
+     * Visibility within the owning workspace. `public` (default) means every
+     * workspace member can see the file; `private` constrains it to the
+     * creator (`user_id`). The only legal transition is `private → public`
+     * via `publishToWorkspace`. Ignored in personal mode (`workspace_id IS NULL`)
+     * where the row is implicitly private to its owner.
+     */
+    visibility: text('visibility', { enum: ['private', 'public'] })
+      .default('public')
+      .notNull(),
+
     ...timestamps,
   },
   (table) => {
@@ -203,6 +232,11 @@ export const files = pgTable(
         table.userId,
       ),
       workspaceIdIdx: index('files_workspace_id_idx').on(table.workspaceId),
+      workspaceVisibilityIdx: index('files_workspace_visibility_idx').on(
+        table.workspaceId,
+        table.visibility,
+        table.userId,
+      ),
     };
   },
 );
@@ -233,12 +267,28 @@ export const knowledgeBases = pgTable(
 
     workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
+    /**
+     * Visibility within the owning workspace. `public` (default) means every
+     * workspace member sees the KB in their sidebar; `private` constrains
+     * discoverability to the creator (`user_id`). The only legal transition is
+     * `private → public` via `publishKnowledgeBaseToWorkspace`. Ignored in
+     * personal mode (`workspace_id IS NULL`).
+     *
+     * Independent of `isPublic` (marketplace discovery) and `files.visibility`
+     * (file-level workspace visibility). This column only gates *KB list*
+     * enumeration; retrieval via a known KB id still goes through `ownership()`.
+     */
+    visibility: text('visibility', { enum: ['private', 'public'] })
+      .default('public')
+      .notNull(),
+
     ...timestamps,
   },
   (t) => [
     uniqueIndex('knowledge_bases_client_id_user_id_unique').on(t.clientId, t.userId),
     index('knowledge_bases_user_id_idx').on(t.userId),
     index('knowledge_bases_workspace_id_idx').on(t.workspaceId),
+    index('knowledge_bases_workspace_visibility_idx').on(t.workspaceId, t.visibility, t.userId),
   ],
 );
 

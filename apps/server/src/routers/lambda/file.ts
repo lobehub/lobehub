@@ -4,7 +4,6 @@ import {
   DERIVED_DOCUMENT_SOURCE_TYPE,
 } from '@lobechat/const';
 import { TRPCError } from '@trpc/server';
-import { and, eq, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 
 import {
@@ -20,22 +19,16 @@ import { ChunkModel } from '@/database/models/chunk';
 import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
 import { KnowledgeRepo } from '@/database/repositories/knowledge';
-import { workspaceMembers } from '@/database/schemas';
-import { appEnv } from '@/envs/app';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { DocumentService } from '@/server/services/document';
 import { FileService } from '@/server/services/file';
+import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
 import { AsyncTaskStatus, AsyncTaskType, type IAsyncTaskError } from '@/types/asyncTask';
 import type { FileListItem, KnowledgeItemStatus } from '@/types/files';
 import { QueryFileListSchema, UploadFileSchema } from '@/types/files';
 import { TransferErrorCode } from '@/types/transferError';
 
-/**
- * Generate file proxy URL
- * Returns a unified proxy URL format: ${APP_URL}/f/:id
- */
-const getFileProxyUrl = (fileId: string): string => `${appEnv.APP_URL}/f/${fileId}`;
 const fileTransferEntityTypeSchema = z.enum(['document', 'file', 'folder']);
 
 const filterKnowledgeItems = <
@@ -174,6 +167,7 @@ export const fileRouter = router({
       UploadFileSchema.omit({ url: true }).extend({
         parentId: z.string().optional(),
         url: z.string(),
+        visibility: z.enum(['private', 'public']).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -182,12 +176,28 @@ export const fileRouter = router({
 
       // Resolve parentId if it's a slug
       let resolvedParentId = input.parentId;
+      let parentVisibility: 'private' | 'public' | undefined;
       if (input.parentId) {
         const docBySlug = await ctx.documentModel.findBySlug(input.parentId);
         if (docBySlug) {
           resolvedParentId = docBySlug.id;
+          parentVisibility = docBySlug.visibility;
+        } else {
+          const docById = await ctx.documentModel.findById(input.parentId);
+          if (docById) parentVisibility = docById.visibility;
         }
       }
+
+      // Visibility precedence (workspace mode only — personal mode ignores the
+      // column entirely):
+      //   1. Explicit caller value wins.
+      //   2. Otherwise inherit the parent document's visibility so a file
+      //      uploaded inside a private folder stays private.
+      //   3. Otherwise default top-level uploads to 'private' so new content
+      //      starts in the creator's private space (mirrors the Pages spec).
+      const resolvedVisibility: 'private' | 'public' | undefined = ctx.workspaceId
+        ? (input.visibility ?? parentVisibility ?? 'private')
+        : undefined;
 
       let actualSize = input.size;
       try {
@@ -254,6 +264,7 @@ export const fileRouter = router({
             parentId: resolvedParentId,
             size: actualSize,
             url: input.url,
+            ...(resolvedVisibility ? { visibility: resolvedVisibility } : {}),
           },
           // if the file is not exist in global file, create a new one
           !isExist,
@@ -322,6 +333,8 @@ export const fileRouter = router({
         sourceType: 'file' as const,
         updatedAt: item.updatedAt,
         url: await ctx.fileService.getFileAccessUrl(item),
+        userId: item.userId,
+        visibility: item.visibility,
       };
     }),
 
@@ -384,20 +397,21 @@ export const fileRouter = router({
     const fileItems = filteredItems.filter((item) => item.sourceType === 'file');
     const statusMap = await getKnowledgeItemStatusMap(ctx, fileItems);
 
-    // Combine all items with their metadata
-    const resultItems = [] as any[];
-    for (const item of filteredItems) {
-      if (item.sourceType === 'file') {
-        const status = statusMap.get(item.id)!;
-        resultItems.push({
-          ...item,
-          editorData: null,
-          url: await ctx.fileService.getFileAccessUrl(item),
-          ...status,
-        } as FileListItem);
-      } else {
-        // Document item - no chunk processing needed, includes editorData
-        const documentItem = {
+    // Resolve file access URLs in parallel: in local dev each call goes through
+    // Redis + a possible S3 presign, so a serial loop stacks up N RTTs on
+    // larger result sets (visible when switching from Private to Workspace).
+    const resultItems = await Promise.all(
+      filteredItems.map(async (item) => {
+        if (item.sourceType === 'file') {
+          const status = statusMap.get(item.id)!;
+          return {
+            ...item,
+            editorData: null,
+            url: await ctx.fileService.getFileAccessUrl(item),
+            ...status,
+          } as FileListItem;
+        }
+        return {
           ...item,
           chunkCount: null,
           chunkingError: null,
@@ -406,9 +420,8 @@ export const fileRouter = router({
           embeddingStatus: null,
           finishEmbedding: false,
         } as FileListItem;
-        resultItems.push(documentItem);
-      }
-    }
+      }),
+    );
 
     return {
       hasMore,
@@ -576,25 +589,6 @@ export const fileRouter = router({
         .slice(0, limit);
     }),
 
-  removeAllFiles: fileProcedure
-    .use(withScopedPermission('file:delete'))
-    .mutation(async ({ ctx }) => {
-      // Get all file IDs for this user
-      const allFiles = await ctx.fileModel.query({ showFilesInKnowledgeBase: true });
-      const fileIds = allFiles.map((f) => f.id);
-
-      // Use deleteMany to properly handle shared files (globalFiles reference counting)
-      const needToRemoveFileList = await ctx.fileModel.deleteMany(
-        fileIds,
-        serverDBEnv.REMOVE_GLOBAL_FILE,
-      );
-
-      // Delete S3 files only if no other users reference them
-      if (needToRemoveFileList && needToRemoveFileList.length > 0) {
-        await ctx.fileService.deleteFiles(needToRemoveFileList.map((file) => file.url!));
-      }
-    }),
-
   removeFile: fileProcedure
     .use(withScopedPermission('file:delete'))
     .input(z.object({ id: z.string() }))
@@ -685,12 +679,78 @@ export const fileRouter = router({
       return { success: true };
     }),
 
+  publishFileToWorkspace: fileProcedure
+    .use(withScopedPermission('file:update'))
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      // Personal mode has no notion of workspace visibility — publish is only
+      // meaningful inside a team workspace.
+      if (!ctx.workspaceId) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Cannot publish a file outside of a workspace',
+        });
+      }
+
+      const file = await ctx.fileModel.findById(input.id);
+      if (!file) throw new TRPCError({ code: 'NOT_FOUND', message: 'File not found' });
+
+      if (file.userId !== ctx.userId) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Only the creator can publish a private file to the workspace',
+        });
+      }
+
+      if (file.visibility === 'public') return { success: true };
+
+      await ctx.fileModel.publishToWorkspace(input.id);
+      return { success: true };
+    }),
+
+  /**
+   * Toggle a file's workspace visibility. Creator-only. Personal mode has no
+   * workspace visibility concept, so the call is rejected there.
+   */
+  setFileVisibility: fileProcedure
+    .use(withScopedPermission('file:update'))
+    .input(
+      z.object({
+        id: z.string(),
+        visibility: z.enum(['private', 'public']),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (!ctx.workspaceId) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'File visibility only applies inside a workspace',
+        });
+      }
+
+      const file = await ctx.fileModel.findById(input.id);
+      if (!file) throw new TRPCError({ code: 'NOT_FOUND', message: 'File not found' });
+
+      if (file.userId !== ctx.userId) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Only the creator can change a file’s visibility',
+        });
+      }
+
+      if (file.visibility === input.visibility) return { success: true };
+
+      await ctx.fileModel.setVisibility(input.id, input.visibility);
+      return { success: true };
+    }),
+
   transferEntity: fileProcedure
     .use(withScopedPermission('file:upload'))
     .input(
       z.object({
         entityType: fileTransferEntityTypeSchema,
         id: z.string(),
+        targetVisibility: z.enum(['private', 'public']).optional(),
         targetWorkspaceId: z.string().nullable(),
       }),
     )
@@ -704,18 +764,13 @@ export const fileRouter = router({
       }
 
       if (input.targetWorkspaceId) {
-        const [targetMembership] = await ctx.serverDB
-          .select({ role: workspaceMembers.role })
-          .from(workspaceMembers)
-          .where(
-            and(
-              eq(workspaceMembers.workspaceId, input.targetWorkspaceId),
-              eq(workspaceMembers.userId, ctx.userId),
-              isNull(workspaceMembers.deletedAt),
-            ),
-          )
-          .limit(1);
-        if (!targetMembership || targetMembership.role === 'viewer') {
+        const canWriteTarget = await hasWorkspaceScopedPermission({
+          action: 'FILE_UPLOAD',
+          db: ctx.serverDB,
+          userId: ctx.userId,
+          workspaceId: input.targetWorkspaceId,
+        });
+        if (!canWriteTarget) {
           throw new TRPCError({
             cause: { data: { code: TransferErrorCode.TargetNoWriteAccess } },
             code: 'FORBIDDEN',
@@ -739,7 +794,12 @@ export const fileRouter = router({
           targetUserId: ctx.userId,
           targetWorkspaceId: input.targetWorkspaceId,
         });
-        return ctx.documentModel.transferTo(input.id, input.targetWorkspaceId, ctx.userId);
+        return ctx.documentModel.transferTo(
+          input.id,
+          input.targetWorkspaceId,
+          ctx.userId,
+          input.targetVisibility,
+        );
       }
 
       const file = await ctx.fileModel.findById(input.id);
@@ -754,7 +814,12 @@ export const fileRouter = router({
         targetUserId: ctx.userId,
         targetWorkspaceId: input.targetWorkspaceId,
       });
-      return ctx.fileModel.transferTo(input.id, input.targetWorkspaceId, ctx.userId);
+      return ctx.fileModel.transferTo(
+        input.id,
+        input.targetWorkspaceId,
+        ctx.userId,
+        input.targetVisibility,
+      );
     }),
 
   copyEntityToWorkspace: fileProcedure
@@ -763,23 +828,19 @@ export const fileRouter = router({
       z.object({
         entityType: fileTransferEntityTypeSchema,
         id: z.string(),
+        targetVisibility: z.enum(['private', 'public']).optional(),
         targetWorkspaceId: z.string().nullable(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
       if (input.targetWorkspaceId) {
-        const [targetMembership] = await ctx.serverDB
-          .select({ role: workspaceMembers.role })
-          .from(workspaceMembers)
-          .where(
-            and(
-              eq(workspaceMembers.workspaceId, input.targetWorkspaceId),
-              eq(workspaceMembers.userId, ctx.userId),
-              isNull(workspaceMembers.deletedAt),
-            ),
-          )
-          .limit(1);
-        if (!targetMembership || targetMembership.role === 'viewer') {
+        const canWriteTarget = await hasWorkspaceScopedPermission({
+          action: 'FILE_UPLOAD',
+          db: ctx.serverDB,
+          userId: ctx.userId,
+          workspaceId: input.targetWorkspaceId,
+        });
+        if (!canWriteTarget) {
           throw new TRPCError({
             cause: { data: { code: TransferErrorCode.TargetNoWriteAccess } },
             code: 'FORBIDDEN',
@@ -803,7 +864,12 @@ export const fileRouter = router({
           targetUserId: ctx.userId,
           targetWorkspaceId: input.targetWorkspaceId,
         });
-        return ctx.documentModel.copyToWorkspace(input.id, input.targetWorkspaceId, ctx.userId);
+        return ctx.documentModel.copyToWorkspace(
+          input.id,
+          input.targetWorkspaceId,
+          ctx.userId,
+          input.targetVisibility,
+        );
       }
 
       const file = await ctx.fileModel.findById(input.id);
@@ -818,7 +884,12 @@ export const fileRouter = router({
         targetUserId: ctx.userId,
         targetWorkspaceId: input.targetWorkspaceId,
       });
-      return ctx.fileModel.copyToWorkspace(input.id, input.targetWorkspaceId, ctx.userId);
+      return ctx.fileModel.copyToWorkspace(
+        input.id,
+        input.targetWorkspaceId,
+        ctx.userId,
+        input.targetVisibility,
+      );
     }),
 });
 

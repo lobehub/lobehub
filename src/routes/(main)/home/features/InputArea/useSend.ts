@@ -1,7 +1,9 @@
 import { AGENT_CHAT_TOPIC_URL, AGENT_CHAT_URL } from '@lobechat/const';
 import { useCallback } from 'react';
 
+import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import type { SendButtonHandler } from '@/features/ChatInput/store/initialState';
+import { buildMessageContextSelections } from '@/features/ChatInput/utils/contextSelections';
 import { useHomeDailyBrief } from '@/hooks/useHomeDailyBrief';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { agentService } from '@/services/agent';
@@ -36,6 +38,7 @@ const ensureAgentConfigLoaded = async (agentId: string): Promise<void> => {
 
 export const useSend = () => {
   const router = useQueryRoute();
+  const activeWorkspaceSlug = useActiveWorkspaceSlug();
   const sendMessage = useChatStore((s) => s.sendMessage);
   const clearChatUploadFileList = useFileStore((s) => s.clearChatUploadFileList);
   const clearChatContextSelections = useFileStore((s) => s.clearChatContextSelections);
@@ -90,19 +93,39 @@ export const useSend = () => {
       if (!message && fileList.length === 0 && contextList.length === 0) return;
 
       try {
+        const { contextSelections, pageSelections } = buildMessageContextSelections(contextList);
+
         switch (inputActiveMode) {
           case 'agent': {
-            await sendAsAgent({ editorData, message });
+            await sendAsAgent({
+              contextSelections,
+              editorData,
+              message,
+              pageSelections,
+              workspaceSlug: activeWorkspaceSlug,
+            });
             break;
           }
 
           case 'group': {
-            await sendAsGroup({ editorData, message });
+            await sendAsGroup({
+              contextSelections,
+              editorData,
+              message,
+              pageSelections,
+              workspaceSlug: activeWorkspaceSlug,
+            });
             break;
           }
 
           case 'write': {
-            await sendAsWrite({ editorData, message });
+            await sendAsWrite({
+              contextSelections,
+              editorData,
+              message,
+              pageSelections,
+              workspaceSlug: activeWorkspaceSlug,
+            });
             break;
           }
 
@@ -121,7 +144,12 @@ export const useSend = () => {
             await ensureAgentConfigLoaded(activeAgentId);
 
             sendMessage({
-              context: { agentId: activeAgentId, isolatedTopic: true },
+              context: {
+                agentId: activeAgentId,
+                isolatedTopic: true,
+                ...(activeWorkspaceSlug ? { workspaceSlug: activeWorkspaceSlug } : {}),
+              },
+              contextSelections,
               contexts: contextList,
               editorData,
               files: fileList,
@@ -129,6 +157,7 @@ export const useSend = () => {
               onTopicCreated: (topicId) => {
                 router.replace(AGENT_CHAT_TOPIC_URL(activeAgentId, topicId, false));
               },
+              pageSelections,
             });
 
             router.push(AGENT_CHAT_URL(activeAgentId, false));
@@ -143,6 +172,7 @@ export const useSend = () => {
     },
     [
       activeAgentId,
+      activeWorkspaceSlug,
       sendMessage,
       clearChatContextSelections,
       clearChatUploadFileList,

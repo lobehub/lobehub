@@ -16,6 +16,7 @@
     "build:run-unpack": "electron .",
     "dev": "electron-vite dev",
     "dev:static": "cross-env DESKTOP_RENDERER_STATIC=1 npm run dev",
+    "fix:electron": "node scripts/fix-electron-runtime.mjs",
     "format": "prettier --write ",
     "i18n": "tsx scripts/i18nWorkflow/index.ts && lobe-i18n",
     "postinstall": "electron-builder install-app-deps",
@@ -112,7 +113,7 @@
     "uuid": "^14.0.1",
     "vite": "8.0.14",
     "vitest": "3.2.6",
-    "zod": "^3.25.76"
+    "zod": "^4.4.3"
   },
   "optionalDependencies": {
     "node-mac-permissions": "^2.5.0"

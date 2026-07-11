@@ -1,14 +1,13 @@
 'use client';
 
-import { ActionIcon, Flexbox, SearchBar, Text } from '@lobehub/ui';
-import { Button, Modal } from '@lobehub/ui/base-ui';
-import { Input } from 'antd';
+import { Flexbox, SearchBar, Text, TextArea } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import isEqual from 'fast-deep-equal';
-import { X } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import ImperativeModal from '@/components/ImperativeModal';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
 import AgentAvatar from '@/routes/(main)/home/_layout/Body/Agent/List/AgentItem/Avatar';
 import { useHomeStore } from '@/store/home';
@@ -33,16 +32,26 @@ const styles = createStaticStyles(({ css }) => ({
     margin-inline: -4px;
     padding-inline: 4px;
   `,
+  // Shared container holding the message preview and the note input, split by a
+  // divider above the input.
   preview: css`
-    overflow-y: auto;
-    flex: 1;
-
-    padding-block: 10px;
-    padding-inline: 12px;
+    overflow: hidden;
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
-
     background: ${cssVar.colorFillQuaternary};
+  `,
+  previewLines: css`
+    overflow-y: auto;
+    flex: 1;
+    padding-block: 12px;
+    padding-inline: 12px;
+  `,
+  note: css`
+    background: transparent;
+  `,
+  noteDivider: css`
+    block-size: 1px;
+    background: ${cssVar.colorBorderSecondary};
   `,
   previewLine: css`
     overflow: hidden;
@@ -52,8 +61,10 @@ const styles = createStaticStyles(({ css }) => ({
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
-  recipientRemove: css`
-    opacity: 0;
+  previewMore: css`
+    padding-block-start: 2px;
+    font-size: 12px;
+    color: ${cssVar.colorTextTertiary};
   `,
   row: css`
     cursor: pointer;
@@ -67,10 +78,6 @@ const styles = createStaticStyles(({ css }) => ({
 
     &:hover {
       background-color: ${cssVar.colorFillTertiary};
-
-      [data-remove] {
-        opacity: 1;
-      }
     }
   `,
   rowSelected: css`
@@ -99,8 +106,7 @@ const ForwardModal = memo<ForwardModalProps>(({ open, onClose }) => {
     return {
       count: msgs.length,
       lines: msgs.slice(0, 6).map((m) => ({
-        role:
-          m.role === 'user' ? t('messageForward.role.user') : t('messageForward.role.assistant'),
+        role: m.role === 'user' ? t('messageForward.role.user') : t('messageForward.role.agent'),
         text: (m.content ?? '').replaceAll(/\s+/g, ' ').slice(0, 60),
       })),
     };
@@ -143,7 +149,7 @@ const ForwardModal = memo<ForwardModalProps>(({ open, onClose }) => {
   const avatarOf = (avatar: unknown) => (typeof avatar === 'string' ? avatar : undefined);
 
   return (
-    <Modal
+    <ImperativeModal
       destroyOnHidden
       footer={null}
       open={open}
@@ -160,7 +166,7 @@ const ForwardModal = memo<ForwardModalProps>(({ open, onClose }) => {
             value={keyword}
             onChange={(e) => setKeyword(e.target.value)}
           />
-          <Flexbox className={styles.list} gap={2}>
+          <Flexbox className={styles.list} gap={4}>
             {candidates.length === 0 ? (
               <Flexbox align={'center'} justify={'center'} padding={24}>
                 <Text type={'secondary'}>{t('messageForward.modal.empty')}</Text>
@@ -173,7 +179,7 @@ const ForwardModal = memo<ForwardModalProps>(({ open, onClose }) => {
                     horizontal
                     align={'center'}
                     className={cx(styles.row, checked && styles.rowSelected)}
-                    gap={10}
+                    gap={8}
                     key={agent.id}
                     onClick={() => toggle(agent.id)}
                   >
@@ -191,53 +197,40 @@ const ForwardModal = memo<ForwardModalProps>(({ open, onClose }) => {
 
         <div className={styles.divider} />
 
-        {/* Right: recipients + forwarded content + note */}
-        <Flexbox flex={1} gap={10} style={{ minWidth: 0 }}>
-          <Text strong>{t('messageForward.modal.recipients', { count: selectedIds.length })}</Text>
-          <Flexbox gap={2} style={{ maxHeight: 140, minHeight: 44, overflowY: 'auto' }}>
-            {selectedAgents.length === 0 ? (
-              <Text style={{ fontSize: 12, padding: '8px 0' }} type={'secondary'}>
-                {t('messageForward.modal.noRecipients')}
-              </Text>
-            ) : (
-              selectedAgents.map((agent) => (
-                <Flexbox horizontal align={'center'} className={styles.row} gap={10} key={agent.id}>
-                  <AgentAvatar avatar={avatarOf(agent.avatar)} />
-                  <Text ellipsis style={{ flex: 1 }}>
-                    {agent.title || t('untitledAgent')}
-                  </Text>
-                  <ActionIcon
-                    data-remove
-                    className={styles.recipientRemove}
-                    icon={X}
-                    size={'small'}
-                    onClick={() => toggle(agent.id)}
-                  />
-                </Flexbox>
-              ))
-            )}
+        {/* Right: forwarded content preview + note */}
+        <Flexbox flex={1} gap={8} style={{ minWidth: 0 }}>
+          <Text style={{ fontSize: 12 }} type={'secondary'}>
+            {t('messageForward.transcript.header', { count: preview.count })}
+          </Text>
+          <Flexbox className={styles.preview} flex={1}>
+            <Flexbox className={styles.previewLines} flex={1} gap={4}>
+              {preview.lines.map((line, i) => (
+                <div className={styles.previewLine} key={i}>
+                  <Text strong style={{ fontSize: 12 }}>
+                    {line.role}:
+                  </Text>{' '}
+                  {line.text}
+                </div>
+              ))}
+              {preview.count > preview.lines.length && (
+                <div className={styles.previewMore}>
+                  {t('messageForward.modal.moreMessages', {
+                    count: preview.count - preview.lines.length,
+                  })}
+                </div>
+              )}
+            </Flexbox>
+            <div className={styles.noteDivider} />
+            <TextArea
+              autoSize={{ maxRows: 4, minRows: 2 }}
+              className={styles.note}
+              placeholder={t('messageForward.modal.notePlaceholder')}
+              resize={false}
+              value={note}
+              variant={'borderless'}
+              onChange={(e) => setNote(e.target.value)}
+            />
           </Flexbox>
-
-          <Flexbox className={styles.preview} gap={3}>
-            <Text style={{ fontSize: 12 }} type={'secondary'}>
-              {t('messageForward.transcript.header', { count: preview.count })}
-            </Text>
-            {preview.lines.map((line, i) => (
-              <div className={styles.previewLine} key={i}>
-                <Text strong style={{ fontSize: 12 }}>
-                  {line.role}:
-                </Text>{' '}
-                {line.text}
-              </div>
-            ))}
-          </Flexbox>
-
-          <Input.TextArea
-            autoSize={{ maxRows: 4, minRows: 2 }}
-            placeholder={t('messageForward.modal.notePlaceholder')}
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-          />
 
           <Flexbox horizontal gap={8} justify={'flex-end'}>
             <Button onClick={handleClose}>{t('messageForward.bar.cancel')}</Button>
@@ -249,7 +242,7 @@ const ForwardModal = memo<ForwardModalProps>(({ open, onClose }) => {
           </Flexbox>
         </Flexbox>
       </Flexbox>
-    </Modal>
+    </ImperativeModal>
   );
 });
 

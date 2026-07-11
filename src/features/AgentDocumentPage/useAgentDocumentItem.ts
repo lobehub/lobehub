@@ -17,7 +17,7 @@ import {
  * bundle rename.
  */
 export const useAgentDocumentItem = (agentId: string | undefined, documentId: string) => {
-  const { data, mutate } = useClientDataSWR(
+  const { data, error, mutate } = useClientDataSWR(
     agentId ? agentDocumentSWRKeys.documentsList(agentId) : null,
     () => agentDocumentService.listDocuments({ agentId: agentId! }),
   );
@@ -29,5 +29,13 @@ export const useAgentDocumentItem = (agentId: string | undefined, documentId: st
       ? data?.find((d) => d.documentId === item.parentId)
       : undefined;
 
-  return { item, mutate, skillBundle };
+  // The list resolved successfully (`data` defined, no `error`) but this
+  // documentId isn't in it → the doc genuinely doesn't exist for this agent.
+  // Distinct from a fetch failure (`error`) and from still-loading
+  // (`data === undefined`). The header title is sourced from this same list, so
+  // gating not-found here keeps the whole module consistent instead of letting
+  // the breadcrumb render a placeholder title over a 404 body.
+  const isNotFound = !!agentId && data !== undefined && !error && !item;
+
+  return { error, isNotFound, item, mutate, skillBundle };
 };

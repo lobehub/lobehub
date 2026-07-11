@@ -144,6 +144,14 @@ export class DeprecatedDataImporterRepos {
             .values(
               shouldInsertSessionAgents.map(({ config, meta }) => ({
                 ...config,
+                // `config` is the `@lobechat/types` LobeAgentConfig shape
+                // (plugins: AgentPluginEntry[]); the `agents` table's
+                // `plugins` column is intentionally left typed `string[]`
+                // (only the domain types are widened for the tri-state
+                // rollout, not the JSONB column's compile-time annotation).
+                // Legacy import payloads only ever contain bare strings
+                // anyway.
+                plugins: config.plugins as unknown as string[] | undefined,
                 ...meta,
                 userId: this.userId,
                 workspaceId: this.workspaceId ?? null,

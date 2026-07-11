@@ -327,6 +327,33 @@ describe('FileService', () => {
         expect.any(Boolean),
       );
     });
+
+    it('should use explicit file type for non-image base64 uploads', async () => {
+      vi.mocked(service['impl'].uploadMedia).mockResolvedValue({
+        key: 'files/mcp/audio/2026-07-07/voice.mp3',
+      });
+
+      await service.uploadBase64(
+        Buffer.from('audio content').toString('base64'),
+        'files/mcp/audio/2026-07-07/voice.mp3',
+        { fileType: 'audio/mpeg' },
+      );
+
+      expect(service['impl'].uploadMedia).toHaveBeenCalledWith(
+        'files/mcp/audio/2026-07-07/voice.mp3',
+        Buffer.from('audio content'),
+      );
+      expect(mockFileModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          fileType: 'audio/mpeg',
+          metadata: expect.objectContaining({
+            filename: 'voice.mp3',
+            path: 'files/mcp/audio/2026-07-07/voice.mp3',
+          }),
+        }),
+        expect.any(Boolean),
+      );
+    });
   });
 
   describe('uploadFromBuffer', () => {

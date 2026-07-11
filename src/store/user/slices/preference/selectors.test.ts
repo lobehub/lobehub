@@ -68,16 +68,16 @@ describe('preferenceSelectors', () => {
   });
 
   describe('labPreferSelectors', () => {
-    it('returns false for agent document floating chat panel by default', () => {
+    it('returns false for message text selection actions by default', () => {
       store.preference.lab = undefined;
 
-      expect(labPreferSelectors.enableAgentDocumentFloatingChatPanel(store)).toBe(false);
+      expect(labPreferSelectors.enableMessageTextSelectionActions(store)).toBe(false);
     });
 
-    it('returns the configured agent document floating chat panel preference', () => {
-      store.preference.lab = { enableAgentDocumentFloatingChatPanel: true };
+    it('returns the configured message text selection actions preference', () => {
+      store.preference.lab = { enableMessageTextSelectionActions: true };
 
-      expect(labPreferSelectors.enableAgentDocumentFloatingChatPanel(store)).toBe(true);
+      expect(labPreferSelectors.enableMessageTextSelectionActions(store)).toBe(true);
     });
   });
 });

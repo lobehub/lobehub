@@ -1,102 +1,65 @@
 'use client';
 
-import { Center, Flexbox, Icon, Text } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon, Text } from '@lobehub/ui';
+import { Button, confirmModal } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { Forward, type LucideIcon, Trash2, X } from 'lucide-react';
-import { type FC, memo, useState } from 'react';
+import { createStaticStyles, cssVar } from 'antd-style';
+import { Forward, Trash2, X } from 'lucide-react';
+import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { messageStateSelectors, useConversationStore } from '../store';
 import ForwardModal from './ForwardModal';
 
 const styles = createStaticStyles(({ css }) => ({
-  action: css`
-    cursor: pointer;
-    user-select: none;
-
-    &:hover [data-icon-box] {
-      background: ${cssVar.colorFillSecondary};
-    }
-  `,
-  actionDisabled: css`
-    cursor: not-allowed;
-    opacity: 0.35;
-
-    &:hover [data-icon-box] {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
+  // Full-width bar docked at the bottom in place of the composer (hidden by
+  // MessageForwardFooter while selecting). Count on the leading edge, actions on
+  // the trailing edge.
   bar: css`
-    min-block-size: 92px;
+    position: relative;
+
+    inline-size: 100%;
     padding-block: 12px;
     padding-inline: 16px;
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
 
     background: ${cssVar.colorBgContainer};
   `,
+  // Pinned to the side so the actions stay centered regardless of the count.
   count: css`
     position: absolute;
-    inset-block-start: 12px;
+    inset-block-start: 50%;
     inset-inline-start: 16px;
-  `,
-  iconBox: css`
-    inline-size: 46px;
-    block-size: 46px;
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorFillTertiary};
-
-    transition: background-color 0.1s ${cssVar.motionEaseInOut};
-  `,
-  iconBoxDanger: css`
-    color: ${cssVar.colorError};
+    transform: translateY(-50%);
   `,
 }));
 
-interface ActionColumnProps {
-  danger?: boolean;
-  disabled?: boolean;
-  icon: LucideIcon;
-  label: string;
-  onClick: () => void;
-}
-
-const ActionColumn: FC<ActionColumnProps> = ({ icon, label, onClick, disabled, danger }) => (
-  <Flexbox
-    align={'center'}
-    className={cx(styles.action, disabled && styles.actionDisabled)}
-    gap={6}
-    onClick={disabled ? undefined : onClick}
-  >
-    <Center data-icon-box className={cx(styles.iconBox, danger && styles.iconBoxDanger)}>
-      <Icon icon={icon} size={20} />
-    </Center>
-    <Text
-      style={{ color: danger ? cssVar.colorError : undefined, fontSize: 12 }}
-      type={'secondary'}
-    >
-      {label}
-    </Text>
-  </Flexbox>
-);
-
 /**
- * Bottom action bar that replaces the chat input while multi-selecting. Styled
- * like WeChat's forward toolbar: a row of labelled icon buttons at a height
- * close to the composer it stands in for.
+ * Bottom action bar shown while multi-selecting: selection count on the leading
+ * edge, Cancel / Delete / Forward on the trailing edge. Replaces the chat
+ * composer (hidden by MessageForwardFooter).
  */
 const SelectionFooterBar = memo(() => {
   const { t } = useTranslation('chat');
   const { message } = App.useApp();
-  const [modalOpen, setModalOpen] = useState(false);
+  const [forwardOpen, setForwardOpen] = useState(false);
   const selectedCount = useConversationStore(messageStateSelectors.selectedMessageCount);
   const selectedMessageIds = useConversationStore((s) => s.selectedMessageIds);
   const exitSelectionMode = useConversationStore((s) => s.exitSelectionMode);
   const deleteMessages = useConversationStore((s) => s.deleteMessages);
 
   const disabled = selectedCount === 0;
+
+  // Esc exits selection mode. When the forward dialog is open, its own Esc
+  // handler closes it first — skip so a single Esc doesn't do both.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || forwardOpen) return;
+      exitSelectionMode();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [forwardOpen, exitSelectionMode]);
 
   const handleDelete = () => {
     confirmModal({
@@ -115,37 +78,34 @@ const SelectionFooterBar = memo(() => {
 
   return (
     <>
-      <Flexbox
-        align={'center'}
-        className={styles.bar}
-        justify={'center'}
-        style={{ position: 'relative' }}
-      >
+      <Flexbox horizontal align={'center'} className={styles.bar} justify={'center'}>
         <Text className={styles.count} type={'secondary'}>
           {t('messageForward.bar.selected', { count: selectedCount })}
         </Text>
-        <Flexbox horizontal align={'center'} gap={44} justify={'center'}>
-          <ActionColumn
-            disabled={disabled}
-            icon={Forward}
-            label={t('messageForward.bar.forward')}
-            onClick={() => setModalOpen(true)}
-          />
-          <ActionColumn
+        <Flexbox horizontal align={'center'} gap={4}>
+          <Button icon={<Icon icon={X} />} type={'text'} onClick={exitSelectionMode}>
+            {t('messageForward.bar.cancel')}
+          </Button>
+          <Button
             danger
             disabled={disabled}
-            icon={Trash2}
-            label={t('messageForward.bar.delete')}
+            icon={<Icon icon={Trash2} />}
+            type={'text'}
             onClick={handleDelete}
-          />
-          <ActionColumn
-            icon={X}
-            label={t('messageForward.bar.cancel')}
-            onClick={exitSelectionMode}
-          />
+          >
+            {t('messageForward.bar.delete')}
+          </Button>
+          <Button
+            disabled={disabled}
+            icon={<Icon icon={Forward} />}
+            type={'text'}
+            onClick={() => setForwardOpen(true)}
+          >
+            {t('messageForward.bar.forward')}
+          </Button>
         </Flexbox>
       </Flexbox>
-      <ForwardModal open={modalOpen} onClose={() => setModalOpen(false)} />
+      <ForwardModal open={forwardOpen} onClose={() => setForwardOpen(false)} />
     </>
   );
 });

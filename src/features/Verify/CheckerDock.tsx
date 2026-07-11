@@ -197,6 +197,7 @@ const CheckerDock = memo<CheckerDockProps>(({ operationId, embedded }) => {
   const subText = (() => {
     const map: Record<string, string> = {
       draft: t('status.draft', { total: plan.length }),
+      errored: t('status.errored'),
       failed: t('status.failed'),
       passed: t('status.passed', { passed: counts.passed, total: counts.total }),
       repairing: t('status.repairing'),
@@ -367,7 +368,12 @@ const CheckerDock = memo<CheckerDockProps>(({ operationId, embedded }) => {
   // Merged verify card: just the checker body (items + actions), no dock chrome.
   if (embedded) return body;
 
-  const headIcon = phase === 'passed' ? Check : phase === 'failed' ? ShieldAlert : ShieldCheck;
+  const headIcon =
+    phase === 'passed'
+      ? Check
+      : phase === 'failed' || phase === 'errored'
+        ? ShieldAlert
+        : ShieldCheck;
 
   return (
     <div className={styles.dock}>

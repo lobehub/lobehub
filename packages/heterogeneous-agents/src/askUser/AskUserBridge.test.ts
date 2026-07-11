@@ -74,7 +74,7 @@ describe('AskUserBridge', () => {
       bridge.resolve('not-a-real-id', { result: 'x' });
 
       // Promise should still be unresolved — fast-forward past timeout to confirm.
-      vi.advanceTimersByTime(5 * 60 * 1000 + 1);
+      vi.advanceTimersByTime(10 * 60 * 1000 + 1);
       const answer = await pending;
       expect(answer.cancelled).toBe(true);
       expect(answer.cancelReason).toBe('timeout');
@@ -109,12 +109,12 @@ describe('AskUserBridge', () => {
       drain.stop();
     });
 
-    it('resolves with cancelled=true on timeout (default 5 min)', async () => {
+    it('resolves with cancelled=true on timeout (default 10 min)', async () => {
       const bridge = new AskUserBridge('op-1');
       const drain = drainEvents(bridge);
       const pending = bridge.pending({ arguments: {} });
 
-      vi.advanceTimersByTime(5 * 60 * 1000 - 1);
+      vi.advanceTimersByTime(10 * 60 * 1000 - 1);
       const stillPending = await Promise.race([pending, Promise.resolve('not-yet')]);
       expect(stillPending).toBe('not-yet');
 

@@ -87,6 +87,25 @@ async function createTestAgent(title: string = 'Test Agent'): Promise<string> {
   }
 }
 
+async function waitForAgentItem(this: CustomWorld, agentId: string) {
+  const selector = `a[href$="/agent/${agentId}"]`;
+  const agentItem = this.page.locator(selector).first();
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      await expect(agentItem).toBeVisible({ timeout: WAIT_TIMEOUT });
+      return { agentItem, selector };
+    } catch (error) {
+      if (attempt === 2) throw error;
+      console.log(`   ↻ Agent ${agentId} not visible yet, reloading Home page...`);
+      await this.page.reload({ waitUntil: 'domcontentloaded' });
+      await this.page.waitForTimeout(1000);
+    }
+  }
+
+  return { agentItem, selector };
+}
+
 // ============================================
 // Given Steps
 // ============================================
@@ -102,14 +121,15 @@ Given('用户在 Home 页面有一个 Agent', { timeout: 30_000 }, async functio
   await this.page.waitForTimeout(1000);
 
   console.log('   📍 Step: 查找新创建的 Agent...');
-  // Look for the newly created agent in the sidebar by its specific ID
-  const agentItem = this.page.locator(`a[href="/agent/${agentId}"]`).first();
-  await expect(agentItem).toBeVisible({ timeout: WAIT_TIMEOUT });
+  // Look for the newly created agent in the sidebar by its specific ID. Use a
+  // suffix match so workspace-prefixed links (e.g. /:workspaceSlug/agent/:id)
+  // are accepted as well.
+  const { agentItem, selector } = await waitForAgentItem.call(this, agentId);
 
   // Store agent reference for later use
   const agentLabel = await agentItem.getAttribute('aria-label');
   this.testContext.targetItemId = agentLabel || agentId;
-  this.testContext.targetItemSelector = `a[href="/agent/${agentId}"]`;
+  this.testContext.targetItemSelector = selector;
   this.testContext.targetType = 'agent';
 
   console.log(`   ✅ 找到 Agent: ${agentLabel}, id: ${agentId}`);

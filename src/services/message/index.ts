@@ -31,12 +31,60 @@ export interface MessageQueryContext {
   topicShareId?: string;
 }
 
+interface MessageReadQueryContext {
+  agentId?: string | null;
+  groupId?: string | null;
+  threadId?: string | null;
+  topicId?: string | null;
+  topicShareId?: string;
+}
+
+export type MessageBatchOperation =
+  | {
+      message: CreateMessageParams;
+      type: 'createMessage';
+    }
+  | {
+      id: string;
+      type: 'updateMessage';
+      value: Partial<UpdateMessageParams>;
+    }
+  | {
+      id: string;
+      type: 'updateToolMessage';
+      value: {
+        content?: string;
+        metadata?: Record<string, any>;
+        pluginError?: any;
+        pluginState?: Record<string, any>;
+      };
+    };
+
 export class MessageService {
+  batchMutate = async (operations: MessageBatchOperation[]) => {
+    return lambdaClient.message.batchMutate.mutate({
+      operations: operations.map((operation) => {
+        if (operation.type === 'createMessage') {
+          return {
+            message: operation.message,
+            type: operation.type,
+          };
+        }
+
+        return {
+          id: operation.id,
+          type: operation.type,
+          value: operation.value,
+        };
+      }),
+    } as any);
+  };
+
   createMessage = async (params: CreateMessageParams): Promise<CreateMessageResult> => {
     return lambdaClient.message.createMessage.mutate(params as any);
   };
 
-  getMessages = async (params: MessageQueryContext): Promise<UIChatMessage[]> => {
+  getMessages = async (params: MessageReadQueryContext): Promise<UIChatMessage[]> => {
     const data = await lambdaClient.message.getMessages.query(params);
 
     return data as unknown as UIChatMessage[];
@@ -202,10 +250,6 @@ export class MessageService {
 
   removeMessagesByGroup = async (groupId: string, topicId?: string) => {
     return lambdaClient.message.removeMessagesByGroup.mutate({ groupId, topicId });
-  };
-
-  removeAllMessages = async () => {
-    return lambdaClient.message.removeAllMessages.mutate();
   };
 
   /**

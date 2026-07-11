@@ -25,7 +25,7 @@ import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
 import { selfFeedbackIntentManifest } from '@lobechat/builtin-tool-self-iteration';
 import { SkillMaintainerManifest } from '@lobechat/builtin-tool-skill-maintainer';
 import { SkillStoreManifest } from '@lobechat/builtin-tool-skill-store';
-import { SkillsManifest } from '@lobechat/builtin-tool-skills';
+import { resolveSkillsManifest, SkillsManifest } from '@lobechat/builtin-tool-skills';
 import { TaskManifest } from '@lobechat/builtin-tool-task';
 import { TopicReferenceManifest } from '@lobechat/builtin-tool-topic-reference';
 import { UserInteractionManifest } from '@lobechat/builtin-tool-user-interaction';
@@ -169,6 +169,10 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
     hidden: true,
     identifier: SkillsManifest.identifier,
     manifest: SkillsManifest,
+    // Context-aware: prefixes exec-class API descriptions with the run's
+    // actual execution environment (cloud sandbox as fallback / offline
+    // degradation), so the model never assumes they run on the user's machine.
+    resolveManifest: resolveSkillsManifest,
     type: 'builtin',
   },
   {

@@ -35,11 +35,21 @@ export const generationTopics = pgTable(
     /** Topic type: 'image' or 'video' */
     type: varchar('type', { length: 32 }).notNull().default('image'),
 
+    /**
+     * Visibility within the owning workspace. `public` keeps historical shared
+     * generation topics visible to workspace members; `private` constrains the
+     * topic and its batches/generations to the creator. Ignored in personal mode.
+     */
+    visibility: text('visibility', { enum: ['private', 'public'] })
+      .default('public')
+      .notNull(),
+
     ...timestamps,
   },
   (t) => [
     index('generation_topics_user_id_idx').on(t.userId),
     index('generation_topics_workspace_id_idx').on(t.workspaceId),
+    index('generation_topics_workspace_visibility_idx').on(t.workspaceId, t.visibility, t.userId),
   ],
 );
 

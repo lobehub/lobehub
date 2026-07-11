@@ -1,7 +1,8 @@
 'use client';
 
 import { BRANDING_NAME } from '@lobechat/business-const';
-import { Button, Form, type FormGroupItemType, Icon } from '@lobehub/ui';
+import type { FormGroupItemType } from '@lobehub/ui';
+import { Button, Form, Icon } from '@lobehub/ui';
 import { Switch } from 'antd';
 import { HardDriveDownload, HardDriveUpload } from 'lucide-react';
 import { memo } from 'react';
@@ -48,17 +49,6 @@ const WorkspaceStorageContent = memo(() => {
         ),
         desc: t('workspaceSetting.storage.comingSoon'),
         label: t('storage.actions.export.title'),
-        layout: 'horizontal',
-        minWidth: undefined,
-      },
-      {
-        children: (
-          <Button danger disabled type={'primary'}>
-            {t('danger.clear.action')}
-          </Button>
-        ),
-        desc: t('workspaceSetting.storage.danger.clear.desc'),
-        label: t('workspaceSetting.storage.danger.clear.title'),
         layout: 'horizontal',
         minWidth: undefined,
       },

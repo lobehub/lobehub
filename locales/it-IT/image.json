@@ -48,7 +48,9 @@
   "generation.actions.seedApplyFailed": "Applicazione del seed non riuscita",
   "generation.actions.seedCopied": "Seed copiato negli appunti",
   "generation.actions.seedCopyFailed": "Copia del seed non riuscita",
+  "generation.metadata.by": "da {{name}}",
   "generation.metadata.count": "{{count}} immagini",
+  "generation.metadata.createdAt": "Creato il {{time}}",
   "generation.status.failed": "Generazione fallita",
   "generation.status.generating": "Generazione in corso...",
   "notSupportGuide.desc": "La modalità di distribuzione attuale non supporta la generazione di immagini AI. Passa alla <1>modalità di distribuzione con database server</1> oppure utilizza <3>LobeHub Cloud</3>.",
@@ -60,9 +62,13 @@
   "notSupportGuide.features.multiProviders.title": "Supporto multi-fornitore",
   "notSupportGuide.title": "La modalità di distribuzione attuale non supporta la generazione di immagini AI",
   "topic.createNew": "Crea Nuovo Argomento",
+  "topic.createdBy": "Creato da {{name}}",
   "topic.deleteConfirm": "Elimina argomento di generazione",
   "topic.deleteConfirmDesc": "Stai per eliminare questo argomento di generazione. Questa azione è irreversibile, procedi con cautela.",
   "topic.empty": "Nessun argomento di generazione",
+  "topic.privateTitle": "Privato",
   "topic.title": "Tema del dipinto",
-  "topic.untitled": "Argomento predefinito"
+  "topic.untitled": "Argomento predefinito",
+  "topic.visibility.existingLocked": "La visibilità è fissata per l'argomento corrente. Crea un nuovo argomento per scegliere uno spazio diverso.",
+  "topic.workspaceTitle": "Spazio di lavoro"
 }

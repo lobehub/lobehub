@@ -1,3 +1,4 @@
+import { GeneralChatAgent, GraphAgent } from '@lobechat/agent-runtime';
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import { SELF_FEEDBACK_INTENT_IDENTIFIER } from '@lobechat/builtin-tool-self-iteration';
 import { RequestTrigger } from '@lobechat/types';
@@ -5,6 +6,7 @@ import type * as ModelBankModule from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createServerAgentToolsEngine } from '@/server/modules/Mecha';
+import { AgentRuntimeService } from '@/server/services/agentRuntime';
 
 import { AiAgentService } from '../index';
 
@@ -46,6 +48,8 @@ vi.mock('@/libs/trusted-client', () => ({
 vi.mock('@/database/models/message', () => ({
   MessageModel: vi.fn().mockImplementation(() => ({
     create: mockMessageCreate,
+    getLatestNonToolMessageId: vi.fn().mockResolvedValue(undefined),
+    getLatestSpineMessageId: vi.fn().mockResolvedValue(undefined),
     query: mockMessageQuery,
     update: vi.fn().mockResolvedValue({}),
   })),
@@ -197,6 +201,13 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
   let service: AiAgentService;
   const mockDb = {} as any;
   const userId = 'test-user-id';
+  const minimalGraph = {
+    edges: [{ from: '__root__', instruction: 'Answer with the graph runtime.', to: 'answer' }],
+    fields: {},
+    name: 'answer-graph',
+    nodes: { answer: { type: 'llm' } },
+    terminal: 'answer',
+  };
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -218,6 +229,73 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
     });
     mockGetBuiltinAgent.mockResolvedValue(null);
     service = new AiAgentService(mockDb, userId);
+  });
+
+  describe('graph runtime factory', () => {
+    const getLatestAgentFactory = () => {
+      const options = vi.mocked(AgentRuntimeService).mock.calls.at(-1)?.[2] as any;
+      const agentFactory = options?.agentFactory;
+
+      expect(agentFactory).toEqual(expect.any(Function));
+
+      return agentFactory as (config: any) => unknown;
+    };
+
+    it('creates GraphAgent when graph mode is enabled with a valid graph snapshot', () => {
+      service = new AiAgentService(mockDb, userId);
+
+      const agent = getLatestAgentFactory()({
+        agentConfig: {
+          chatConfig: {
+            enableGraphMode: true,
+            graph: minimalGraph,
+          },
+        },
+        operationId: 'op-graph',
+      });
+
+      expect(agent).toBeInstanceOf(GraphAgent);
+    });
+
+    it('falls back to GeneralChatAgent when the graph snapshot is invalid', () => {
+      service = new AiAgentService(mockDb, userId);
+
+      const agent = getLatestAgentFactory()({
+        agentConfig: {
+          chatConfig: {
+            enableGraphMode: true,
+            graph: { ...minimalGraph, edges: [] },
+          },
+        },
+        operationId: 'op-invalid-graph',
+      });
+
+      expect(agent).toBeInstanceOf(GeneralChatAgent);
+    });
+
+    it('keeps an upstream runtime agent factory authoritative', () => {
+      const upstreamAgent = { runner: vi.fn() };
+      const upstreamFactory = vi.fn(() => upstreamAgent);
+      service = new AiAgentService(mockDb, userId, {
+        runtimeOptions: {
+          agentFactory: upstreamFactory,
+        },
+      } as any);
+
+      const config = {
+        agentConfig: {
+          chatConfig: {
+            enableGraphMode: true,
+            graph: minimalGraph,
+          },
+        },
+        operationId: 'op-upstream',
+      };
+      const agent = getLatestAgentFactory()(config);
+
+      expect(agent).toBe(upstreamAgent);
+      expect(upstreamFactory).toHaveBeenCalledWith(config);
+    });
   });
 
   it('materializes a builtin agent addressed by slug when no row exists yet', async () => {
@@ -276,7 +354,9 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
     expect(mockCreateOperation).toHaveBeenCalledTimes(1);
     const callArgs = mockCreateOperation.mock.calls[0][0];
     expect(callArgs.agentConfig.systemRole).toContain('You are Lobe');
-    expect(callArgs.agentConfig.systemRole).toContain('{{model}}');
+    // Model identity is injected by ModelInfoProvider now, not the `{{model}}`
+    // template placeholder; `{{date}}` still proves the runtime template merged.
+    expect(callArgs.agentConfig.systemRole).toContain('{{date}}');
   });
 
   it('should pass user response language into web onboarding runtime systemRole', async () => {

@@ -71,6 +71,17 @@ describe('googleModelId', () => {
       'gemini-3.5-pro-image-preview',
       'google/gemini-3.5-pro-image-preview-free',
       'nano-banana-pro-preview',
+      // Real Nano Banana model ids (Google): every one is an image-output model
+      // and must request the Image response modality. `gemini-3.1-flash-lite-image`
+      // (Nano Banana 2 Lite) is the id that surfaced the base64-as-text bug.
+      'gemini-3.1-flash-lite-image',
+      'gemini-3.1-flash-lite-image:image',
+      'gemini-3.1-flash-image',
+      'gemini-3-pro-image',
+      // Bare nanoBanana-family aliases (no `gemini-*-image` shape) are covered too.
+      'nano-banana',
+      'nano-banana-lite',
+      'google/nano-banana-lite',
     ])('detects image-response model %s', (model) => {
       expect(isGoogleImageResponseModel(model)).toBe(true);
     });

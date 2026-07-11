@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PROTOTYPE_TITLE</title>
+    <style>
+      body {
+        margin: 0;
+      }
+      #boot {
+        font:
+          13px/1.6 ui-monospace,
+          monospace;
+        color: #888;
+        padding: 24px;
+      }
+    </style>
+
+    <!-- The prototype runtime: react + @lobehub/ui(+base-ui) + antd + antd-style +
+     lucide-react, bundled once from this repo's node_modules (production versions).
+     Build both files next to this HTML:
+       bash .agents/skills/design-prototype/scripts/build-runtime.sh <this-dir> -->
+    <script src="./lobe-prototype-runtime.js"></script>
+    <script>
+      // Map bare module specifiers onto the bundled namespaces, so the code below
+      // keeps production-style `import { X } from '@lobehub/ui'`.
+      window.require = (name) => {
+        const m = __PROTO_DEPS_NS__.default[name];
+        if (!m)
+          throw new Error(
+            'prototype runtime is missing module: ' + name + ' — add it to entry.mjs and rebuild',
+          );
+        return m;
+      };
+      window.exports = {};
+      window.module = { exports: window.exports };
+    </script>
+    <script src="./babel.min.js"></script>
+  </head>
+  <body>
+    <div id="boot">booting prototype runtime…</div>
+    <div id="root"></div>
+
+    <script type="text/babel" data-presets="react" data-plugins="transform-modules-commonjs">
+      // Production-style React from here on. Real tokens, real components.
+      import { Button, Center, Empty, Flexbox, Text, ThemeProvider } from '@lobehub/ui';
+      import { createStyles } from 'antd-style';
+      import React, { memo, useState } from 'react';
+      import { createRoot } from 'react-dom/client';
+
+      const useStyles = createStyles(({ css, token }) => ({
+        page: css`
+          min-height: 100dvh;
+          background: ${token.colorBgLayout};
+        `,
+      }));
+
+      const App = memo(() => {
+        const { styles } = useStyles();
+        // Prototypes must demo at least one non-happy-path state (ux skill ground
+        // rule) — wire a state toggle like this instead of hardcoding the happy path.
+        const [state, setState] = useState('data');
+
+        return (
+          <Flexbox className={styles.page} gap={24} padding={32}>
+            <Flexbox horizontal gap={8}>
+              {['data', 'empty', 'loading', 'error'].map((s) => (
+                <Button
+                  key={s}
+                  size="small"
+                  type={state === s ? 'primary' : 'default'}
+                  onClick={() => setState(s)}
+                >
+                  {s}
+                </Button>
+              ))}
+            </Flexbox>
+            <Center flex={1}>
+              {state === 'data' && <Text>Replace me with the real surface.</Text>}
+              {state === 'empty' && <Empty description="Nothing here yet" />}
+              {state === 'loading' && (
+                <Text type="secondary">skeleton / NeuralNetworkLoading here…</Text>
+              )}
+              {state === 'error' && (
+                <Flexbox align="center" gap={8}>
+                  <Text type="danger">Failed to load.</Text>
+                  <Button size="small">Retry</Button>
+                </Flexbox>
+              )}
+            </Center>
+          </Flexbox>
+        );
+      });
+
+      document.querySelector('#boot').remove();
+      createRoot(document.querySelector('#root')).render(
+        <ThemeProvider themeMode="auto">
+          <App />
+        </ThemeProvider>,
+      );
+    </script>
+  </body>
+</html>

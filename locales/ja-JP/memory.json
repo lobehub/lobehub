@@ -34,6 +34,8 @@
   "context.description": "説明",
   "context.empty": "コンテキストメモリはありません",
   "context.source": "出典",
+  "detail.notFound.desc": "このメモリーは削除されたか、もう利用できない可能性があります。",
+  "detail.notFound.title": "メモリーが見つかりません",
   "empty.description": "記憶の抽出は段階的なプロセスです。より多くのトピックを蓄積し、記憶の内容を豊かにしましょう。アシスタントとの対話を深めることで、より価値のある情報を捉え、保存しやすくなります。",
   "empty.search": "一致する記憶が見つかりませんでした",
   "empty.title": "記憶がありません",

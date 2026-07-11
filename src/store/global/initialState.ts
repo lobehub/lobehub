@@ -23,11 +23,11 @@ export enum SidebarTabKey {
 
 export enum ChatSettingsTabs {
   Connector = 'connector',
+  Graph = 'graph',
   Opening = 'opening',
   Plugin = 'plugin',
   Prompt = 'prompt',
   SelfIteration = 'selfIteration',
-  TTS = 'tts',
 }
 
 export enum GroupSettingsTabs {
@@ -37,6 +37,13 @@ export enum GroupSettingsTabs {
 }
 
 export type WorkingSidebarTab = 'files' | 'params' | 'resources' | 'review';
+
+export const DEFAULT_RESOURCE_MANAGER_COLUMN_WIDTHS = {
+  date: 160,
+  name: 574,
+  size: 140,
+  uploader: 180,
+};
 
 export enum SettingsTabs {
   About = 'about',
@@ -50,6 +57,7 @@ export enum SettingsTabs {
   ChatAppearance = 'chat-appearance',
   /** @deprecated Use Appearance instead */
   Common = 'common',
+  Connector = 'connector',
   Credits = 'credits',
   Creds = 'creds',
   Devices = 'devices',
@@ -104,7 +112,7 @@ export const DEFAULT_MODEL_DETAIL_PANEL_EXPANDED_KEYS = [
   'config',
 ] as const satisfies readonly ModelDetailPanelExpandedKey[];
 
-export const DEFAULT_HOME_SIDEBAR_EXPANDED_KEYS = ['recents', 'agent'];
+export const DEFAULT_HOME_SIDEBAR_EXPANDED_KEYS = ['recents', 'agent', 'private'];
 
 export interface SystemStatus {
   /**
@@ -199,6 +207,10 @@ export interface SystemStatus {
    */
   pagePageSize?: number;
   portalWidth: number;
+  /**
+   * number of private agents (ungrouped) to display in the Private sidebar bucket
+   */
+  privateAgentPageSize?: number;
   readNotificationSlugs?: string[];
   /**
    * number of recent items to display
@@ -211,6 +223,7 @@ export interface SystemStatus {
     date: number;
     name: number;
     size: number;
+    uploader: number;
   };
   /**
    * Visibility of the Agent profile right-side Agent Builder panel.
@@ -241,6 +254,11 @@ export interface SystemStatus {
    * Independent from `showRightPanel` so toggling it does not affect other pages.
    */
   showTaskAgentPanel?: boolean;
+  /**
+   * Visibility of the Verify workspace left-side report-list panel.
+   * Independent from the nav rail so collapsing the report list does not affect other pages.
+   */
+  showVerifyReportPanel?: boolean;
   showVideoPanel?: boolean;
   showVideoTopicPanel?: boolean;
   /**
@@ -284,6 +302,10 @@ export interface SystemStatus {
    * number of topics to display per page
    */
   topicPageSize?: number;
+  /**
+   * Width of the Verify workspace left-side report-list panel.
+   */
+  verifyReportPanelWidth: number;
   videoPanelWidth: number;
   videoTopicPanelWidth?: number;
   videoTopicViewMode?: 'grid' | 'list';
@@ -294,7 +316,34 @@ export interface SystemStatus {
    * can switch the panel to "review" when revealing the right panel.
    */
   workingSidebarTab?: WorkingSidebarTab;
+  /**
+   * Workspace-mode overlay for sidebar layout/visibility preferences.
+   * When the user is inside a workspace (see `useActiveWorkspaceId`), reads
+   * fall back to these values instead of the top-level fields, and writes
+   * to whitelisted fields land here. Top-level fields stay as the personal
+   * (no-workspace) preference, so switching modes does not bleed state.
+   * Single shared bucket across all workspaces — not keyed by workspaceId.
+   */
+  workspace?: Partial<Pick<SystemStatus, WorkspaceOverridableField>>;
 }
+
+/**
+ * Fields whose preference is meaningfully different between personal mode
+ * and workspace mode (e.g. workspace-only sidebar entries like the Private
+ * group, or product-driven defaults like hiding Recents in a workspace).
+ * Writes to these fields are routed to `status.workspace.*` when the user is
+ * inside a workspace; reads fall back to the top-level value when the
+ * overlay is empty.
+ */
+export type WorkspaceOverridableField =
+  'expandSessionGroupKeys' | 'hiddenSidebarSections' | 'sidebarExpandedKeys' | 'sidebarItems';
+
+export const WORKSPACE_OVERRIDABLE_FIELDS = [
+  'expandSessionGroupKeys',
+  'hiddenSidebarSections',
+  'sidebarExpandedKeys',
+  'sidebarItems',
+] as const satisfies readonly WorkspaceOverridableField[];
 
 export interface GlobalNavigationRef {
   current: NavigateFunction | null;
@@ -339,6 +388,7 @@ export interface GlobalState {
 export const INITIAL_STATUS = {
   agentBuilderPanelWidth: 360,
   agentPageSize: 5,
+  privateAgentPageSize: 5,
   chatInputHeight: 64,
   recentPageSize: 5,
   taskListViewOptions: {
@@ -366,7 +416,7 @@ export const INITIAL_STATUS = {
   imageTopicViewMode: 'grid' as const,
   imageTopicPanelWidth: 80,
   knowledgeBaseModalViewMode: 'list' as const,
-  leftPanelWidth: 320,
+  leftPanelWidth: 280,
   mobileShowTopic: false,
   modelDetailPanelExpandedKeys: [...DEFAULT_MODEL_DETAIL_PANEL_EXPANDED_KEYS],
   modelSwitchPanelGroupMode: 'byProvider',
@@ -376,11 +426,7 @@ export const INITIAL_STATUS = {
   pagePageSize: 20,
   portalWidth: 400,
   readNotificationSlugs: [],
-  resourceManagerColumnWidths: {
-    date: 160,
-    name: 574,
-    size: 140,
-  },
+  resourceManagerColumnWidths: DEFAULT_RESOURCE_MANAGER_COLUMN_WIDTHS,
   showCommandMenu: false,
   showFilePanel: true,
   showFleetPanel: true,
@@ -393,12 +439,14 @@ export const INITIAL_STATUS = {
   showRightPanel: false,
   showSystemRole: false,
   showTaskAgentPanel: false,
+  showVerifyReportPanel: true,
   showVideoPanel: true,
   showVideoTopicPanel: true,
   sidebarExpandedKeys: [...DEFAULT_HOME_SIDEBAR_EXPANDED_KEYS],
   systemRoleExpandedMap: {},
   tokenDisplayFormatShort: true,
   topicPageSize: 20,
+  verifyReportPanelWidth: 300,
   videoPanelWidth: 320,
   videoTopicViewMode: 'grid' as const,
   videoTopicPanelWidth: 80,

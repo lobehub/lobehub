@@ -1,9 +1,23 @@
 import debug from 'debug';
 
+import { OtelQstashClient } from '@/libs/qstash';
+
 import { type HealthCheckResult, type QueueMessage, type QueueStats } from '../types';
 import { type QueueServiceImpl } from './type';
 
 const log = debug('lobe-server:service:queue:qstash');
+
+/**
+ * QStash's `delay` option is second-granularity — the `Duration` string form
+ * (`10s`, `1m`, `2h`, `1d`) has no millisecond unit, and a bare number is
+ * treated as seconds (so `100` would mean 100s, not 100ms). Positive
+ * sub-second delays are rounded up to 1s.
+ */
+const toQStashDelaySeconds = (delayMs: number): number | undefined => {
+  if (delayMs <= 0) return undefined;
+
+  return Math.max(1, Math.round(delayMs / 1000));
+};
 
 /**
  * QStash queue service implementation
@@ -33,10 +47,10 @@ export class QStashQueueServiceImpl implements QueueServiceImpl {
     } = message;
 
     try {
-      const { Client } = await import('@upstash/qstash');
       log('Initialized QStash queue service');
-      const qstashClient = new Client({ token: this.config.qstashToken });
-      const response = await qstashClient.publishJSON({
+      const qstashClient = new OtelQstashClient({ token: this.config.qstashToken });
+      const qstashDelay = toQStashDelaySeconds(delay);
+      const request = {
         body: {
           context,
           operationId,
@@ -45,7 +59,7 @@ export class QStashQueueServiceImpl implements QueueServiceImpl {
           stepIndex,
           timestamp: Date.now(),
         },
-        delay: Math.ceil(delay / 1000), // Convert milliseconds to seconds
+        ...(qstashDelay === undefined ? {} : { delay: qstashDelay }),
         headers: {
           'Content-Type': 'application/json',
           'X-Agent-Operation-Id': operationId,
@@ -55,7 +69,8 @@ export class QStashQueueServiceImpl implements QueueServiceImpl {
         retryDelay,
         retries,
         url: endpoint,
-      });
+      };
+      const response = await qstashClient.publishJSON(request);
 
       log(
         `[${operationId}] Scheduled step %d to %s with %dms delay (messageId: %s)`,

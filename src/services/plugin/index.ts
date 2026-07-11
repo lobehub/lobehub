@@ -41,10 +41,6 @@ export class PluginService {
     await lambdaClient.plugin.updatePlugin.mutate({ id, manifest });
   };
 
-  removeAllPlugins = async (): Promise<void> => {
-    await lambdaClient.plugin.removeAllPlugins.mutate();
-  };
-
   updatePluginSettings = async (id: string, settings: any, signal?: AbortSignal): Promise<void> => {
     await lambdaClient.plugin.updatePlugin.mutate({ id, settings }, { signal });
   };

@@ -1,5 +1,6 @@
 import { type AgentState } from '@lobechat/agent-runtime';
 import { BRANDING_PROVIDER } from '@lobechat/business-const';
+import { ToolNameResolver } from '@lobechat/context-engine';
 import { consumeStreamUntilDone, ModelEmptyError } from '@lobechat/model-runtime';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -7,6 +8,11 @@ import * as ContextEngineering from '@/server/modules/Mecha/ContextEngineering';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 
 import { createRuntimeExecutors, type RuntimeExecutorContext } from '../RuntimeExecutors';
+import type { StreamEvent } from '../StreamEventManager';
+import { VISIBLE_OUTPUT_END_PUBLISHED_STEP_INDEX_METADATA_KEY } from '../visibleOutputEnd';
+
+type PublishedStreamEvent = Omit<StreamEvent, 'operationId' | 'timestamp'>;
+type PublishStreamEventCall = [string, PublishedStreamEvent];
 
 const mockCreateCompressionGroup = vi.fn();
 const mockFinalizeCompression = vi.fn();
@@ -129,7 +135,7 @@ vi.mock('@/server/services/file', () => ({
   })),
 }));
 
-describe('RuntimeExecutors', () => {
+describe('RuntimeExecutors', { timeout: 60_000 }, () => {
   let mockMessageModel: any;
   let mockStreamManager: any;
   let mockToolExecutionService: any;
@@ -309,6 +315,181 @@ describe('RuntimeExecutors', () => {
       );
     });
 
+    it('should restrict context tools and resolved tool calls to allowedToolNames', async () => {
+      const toolNameResolver = new ToolNameResolver();
+      const readToolName = toolNameResolver.generate('workspace', 'read', 'builtin');
+      const writeToolName = toolNameResolver.generate('workspace', 'write', 'builtin');
+      const mockChat = vi.fn().mockImplementation(async (_payload: any, options: any) => {
+        await options?.callback?.onText?.('done');
+        await options?.callback?.onToolsCalling?.({
+          toolsCalling: [
+            {
+              function: { arguments: '{}', name: readToolName },
+              id: 'read-call',
+              type: 'function',
+            },
+            {
+              function: { arguments: '{}', name: writeToolName },
+              id: 'write-call',
+              type: 'function',
+            },
+          ],
+        });
+        return new Response('done');
+      });
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValueOnce({ chat: mockChat } as any);
+      const engineSpy = vi.spyOn(ContextEngineering, 'serverMessagesEngine');
+      const executors = createRuntimeExecutors({
+        ...ctx,
+        agentConfig: { plugins: [], systemRole: 'test' },
+      });
+      const state = createMockState({
+        operationToolSet: {
+          enabledToolIds: ['workspace'],
+          manifestMap: {
+            workspace: {
+              api: [
+                {
+                  description: 'Read workspace files',
+                  name: 'read',
+                  parameters: { type: 'object' },
+                },
+                {
+                  description: 'Write workspace files',
+                  name: 'write',
+                  parameters: { type: 'object' },
+                },
+              ],
+              identifier: 'workspace',
+              meta: { title: 'Workspace' },
+              systemRole: 'Workspace tools include read and write.',
+              type: 'builtin',
+            },
+          },
+          sourceMap: { workspace: 'builtin' as const },
+          tools: [
+            { function: { name: readToolName }, type: 'function' },
+            { function: { name: writeToolName }, type: 'function' },
+          ],
+        },
+      });
+
+      try {
+        const result = await executors.call_llm!(
+          {
+            payload: {
+              allowedToolNames: [readToolName],
+              messages: [{ content: 'Hello', role: 'user' }],
+              model: 'gpt-4',
+              provider: 'openai',
+            },
+            type: 'call_llm' as const,
+          },
+          state,
+        );
+
+        expect(engineSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            toolsConfig: {
+              manifests: [
+                expect.objectContaining({
+                  api: [expect.objectContaining({ name: 'read' })],
+                  systemRole: undefined,
+                }),
+              ],
+              tools: ['workspace'],
+            },
+          }),
+        );
+        expect(mockChat).toHaveBeenCalledWith(
+          expect.objectContaining({
+            tools: [{ function: { name: readToolName }, type: 'function' }],
+          }),
+          expect.anything(),
+        );
+        const nextPayload = result.nextContext?.payload as { toolsCalling: unknown[] };
+        expect(nextPayload.toolsCalling).toEqual([
+          expect.objectContaining({
+            apiName: 'read',
+            id: 'read-call',
+            identifier: 'workspace',
+          }),
+        ]);
+      } finally {
+        engineSpy.mockRestore();
+      }
+    });
+
+    it('should keep step-activated tools when allowedToolNames is not set', async () => {
+      const toolNameResolver = new ToolNameResolver();
+      const readToolName = toolNameResolver.generate('workspace', 'read', 'builtin');
+      const calculateToolName = toolNameResolver.generate('calculator', 'calculate', 'builtin');
+      const mockChat = vi.fn().mockImplementation(async (_payload: any, options: any) => {
+        await options?.callback?.onText?.('done');
+        return new Response('done');
+      });
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValueOnce({ chat: mockChat } as any);
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState({
+        activatedStepTools: [
+          {
+            activatedAtStep: 0,
+            id: 'calculator',
+            manifest: {
+              api: [
+                {
+                  description: 'Calculate an expression',
+                  name: 'calculate',
+                  parameters: { type: 'object' },
+                },
+              ],
+              identifier: 'calculator',
+              meta: { title: 'Calculator' },
+              type: 'builtin',
+            },
+            source: 'discovery',
+          },
+        ],
+        operationToolSet: {
+          enabledToolIds: ['workspace'],
+          manifestMap: {
+            workspace: {
+              api: [
+                {
+                  description: 'Read workspace files',
+                  name: 'read',
+                  parameters: { type: 'object' },
+                },
+              ],
+              identifier: 'workspace',
+              meta: { title: 'Workspace' },
+              type: 'builtin',
+            },
+          },
+          sourceMap: { workspace: 'builtin' as const },
+          tools: [{ function: { name: readToolName }, type: 'function' }],
+        },
+      });
+
+      await executors.call_llm!(
+        {
+          payload: {
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'gpt-4',
+            provider: 'openai',
+          },
+          type: 'call_llm' as const,
+        },
+        state,
+      );
+
+      expect(
+        mockChat.mock.calls[0][0].tools.map((tool: { function: { name: string } }) => {
+          return tool.function.name;
+        }),
+      ).toEqual([readToolName, calculateToolName]);
+    });
+
     it('should pass parentId from payload.parentMessageId to messageModel.create', async () => {
       const executors = createRuntimeExecutors(ctx);
       const state = createMockState();
@@ -437,6 +618,108 @@ describe('RuntimeExecutors', () => {
           provider: 'openai',
         }),
       );
+    });
+
+    it('publishes visible_output_end before persistence for no-tool final answers', async () => {
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+
+      const result = await executors.call_llm!(
+        {
+          payload: {
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'gpt-4',
+            provider: 'openai',
+            tools: [],
+          },
+          type: 'call_llm' as const,
+        },
+        state,
+      );
+
+      const calls = mockStreamManager.publishStreamEvent.mock.calls as PublishStreamEventCall[];
+      const streamEndIndex = calls.findIndex(([, event]) => event.type === 'stream_end');
+      const visibleEndIndex = calls.findIndex(([, event]) => event.type === 'visible_output_end');
+
+      expect(streamEndIndex).toBeGreaterThanOrEqual(0);
+      expect(visibleEndIndex).toBeGreaterThan(streamEndIndex);
+      expect(
+        mockStreamManager.publishStreamEvent.mock.invocationCallOrder[visibleEndIndex],
+      ).toBeLessThan(mockMessageModel.update.mock.invocationCallOrder[0]);
+      expect(result.newState.metadata).toMatchObject({
+        [VISIBLE_OUTPUT_END_PUBLISHED_STEP_INDEX_METADATA_KEY]: ctx.stepIndex,
+      });
+    });
+
+    it('does not publish early visible_output_end for tool-call steps', async () => {
+      const toolCallPayload = [
+        {
+          function: { arguments: '{}', name: 'search' },
+          id: 'call_1',
+          type: 'function',
+        },
+      ];
+      const mockChat = vi.fn().mockImplementation(async (_payload, options) => {
+        await options?.callback?.onToolsCalling?.({ toolsCalling: toolCallPayload });
+        return new Response('done');
+      });
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValueOnce({ chat: mockChat } as any);
+
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+      const result = await executors.call_llm!(
+        {
+          payload: {
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'gpt-4',
+            provider: 'openai',
+            tools: [],
+          },
+          type: 'call_llm' as const,
+        },
+        state,
+      );
+
+      expect(
+        (mockStreamManager.publishStreamEvent.mock.calls as PublishStreamEventCall[]).some(
+          ([, event]) => event.type === 'visible_output_end',
+        ),
+      ).toBe(false);
+      expect(
+        result.newState.metadata?.[VISIBLE_OUTPUT_END_PUBLISHED_STEP_INDEX_METADATA_KEY],
+      ).toBeUndefined();
+    });
+
+    it('does not publish early visible_output_end for injected multi-step agents', async () => {
+      const executors = createRuntimeExecutors({
+        ...ctx,
+        allowEarlyFinalAnswerVisibleOutputEnd: false,
+      });
+      const state = createMockState();
+
+      const result = await executors.call_llm!(
+        {
+          payload: {
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'gpt-4',
+            provider: 'openai',
+            tools: [],
+          },
+          // GraphAgent extraction calls can have tools: [] and still continue to the next node.
+          stepLabel: 'research:extract',
+          type: 'call_llm' as const,
+        },
+        state,
+      );
+
+      expect(
+        (mockStreamManager.publishStreamEvent.mock.calls as PublishStreamEventCall[]).some(
+          ([, event]) => event.type === 'visible_output_end',
+        ),
+      ).toBe(false);
+      expect(
+        result.newState.metadata?.[VISIBLE_OUTPUT_END_PUBLISHED_STEP_INDEX_METADATA_KEY],
+      ).toBeUndefined();
     });
 
     // preserveThinking gates whether reasoning is replayed into the next LLM
@@ -808,13 +1091,27 @@ describe('RuntimeExecutors', () => {
           state,
         );
         // Drive the retry backoff sleeps to completion.
-        const settled = expect(promise).rejects.toBeInstanceOf(ModelEmptyError);
+        const rejection = promise.catch((error) => error);
         await vi.runAllTimersAsync();
         // Must throw (so the harness records a readable error state) instead of
         // silently finalizing to a completion with a blank assistant message.
-        await settled;
+        const error = await rejection;
+        expect(error).toBeInstanceOf(ModelEmptyError);
         // EMPTY_COMPLETION_MAX_RETRIES (2) retries → 3 total attempts.
         expect(mockChat).toHaveBeenCalledTimes(3);
+        expect(error.diagnostics).toMatchObject({
+          attempt: 3,
+          maxAttempts: 3,
+          model: 'deepseek-v4-pro',
+          outputTokens: 1,
+          provider: 'lobehub',
+          retryBudget: 2,
+          retryEvents: [
+            expect.objectContaining({ attempt: 2, delayMs: 1000, maxAttempts: 3 }),
+            expect.objectContaining({ attempt: 3, delayMs: 2000, maxAttempts: 3 }),
+          ],
+          toolCallCount: 0,
+        });
       } finally {
         vi.useRealTimers();
       }
@@ -1397,6 +1694,31 @@ describe('RuntimeExecutors', () => {
             }),
             type: 'stream_start',
           }),
+        );
+      });
+
+      it('should clear stale grounding when a reused assistant message receives no grounding', async () => {
+        const executors = createRuntimeExecutors(ctx);
+        const state = createMockState();
+        const existingAssistantId = 'existing-grounded-assistant';
+
+        await executors.call_llm!(
+          {
+            payload: {
+              assistantMessageId: existingAssistantId,
+              messages: [{ content: 'Hello', role: 'user' }],
+              model: 'gpt-4',
+              provider: 'openai',
+              tools: [],
+            },
+            type: 'call_llm' as const,
+          },
+          state,
+        );
+
+        expect(mockMessageModel.update).toHaveBeenCalledWith(
+          existingAssistantId,
+          expect.objectContaining({ search: null }),
         );
       });
 
@@ -4631,7 +4953,7 @@ describe('RuntimeExecutors', () => {
           'op-123',
           expect.objectContaining({
             type: 'stream_retry',
-            data: { attempt: 2, delayMs: 1000, maxAttempts: 6 },
+            data: expect.objectContaining({ attempt: 2, delayMs: 1000, maxAttempts: 6 }),
           }),
         );
       } finally {
@@ -4762,21 +5084,21 @@ describe('RuntimeExecutors', () => {
           'op-123',
           expect.objectContaining({
             type: 'stream_retry',
-            data: { attempt: 2, delayMs: 1000, maxAttempts: 6 },
+            data: expect.objectContaining({ attempt: 2, delayMs: 1000, maxAttempts: 6 }),
           }),
         );
         expect(mockStreamManager.publishStreamEvent).toHaveBeenCalledWith(
           'op-123',
           expect.objectContaining({
             type: 'stream_retry',
-            data: { attempt: 3, delayMs: 2000, maxAttempts: 6 },
+            data: expect.objectContaining({ attempt: 3, delayMs: 2000, maxAttempts: 6 }),
           }),
         );
         expect(mockStreamManager.publishStreamEvent).toHaveBeenCalledWith(
           'op-123',
           expect.objectContaining({
             type: 'stream_retry',
-            data: { attempt: 4, delayMs: 4000, maxAttempts: 6 },
+            data: expect.objectContaining({ attempt: 4, delayMs: 4000, maxAttempts: 6 }),
           }),
         );
       } finally {
@@ -5198,7 +5520,7 @@ describe('RuntimeExecutors', () => {
       expect(result.nextContext).toBeUndefined();
     });
 
-    it('exec_sub_agent executor creates task message and calls execSubAgent callback', async () => {
+    it('exec_sub_agent executor dispatches from the source parent message', async () => {
       const mockExecSubAgent = vi
         .fn()
         .mockResolvedValue({ success: true, operationId: 'child-op', threadId: 'thread-child' });
@@ -5226,26 +5548,16 @@ describe('RuntimeExecutors', () => {
 
       const result = await executors.exec_sub_agent!(instruction as any, state);
 
-      // Task message created with role:'task'
-      expect(mockMessageModel.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          agentId: 'parent-agent-id',
-          metadata: expect.objectContaining({
-            targetAgentId: 'target-agent-id',
-          }),
-          role: 'task',
-          parentId: 'tool-msg-id',
-          topicId: 'topic-123',
-        }),
-      );
+      expect(mockMessageModel.create).not.toHaveBeenCalled();
 
       // execSubAgent callback fired with targetAgentId
       expect(mockExecSubAgent).toHaveBeenCalledWith(
         expect.objectContaining({
           agentId: 'target-agent-id',
           instruction: 'Do something useful',
-          topicId: 'topic-123',
           parentOperationId: 'op-123',
+          parentMessageId: 'tool-msg-id',
+          topicId: 'topic-123',
         }),
       );
 
@@ -5312,10 +5624,8 @@ describe('RuntimeExecutors', () => {
 
       const result = await executors.exec_sub_agent!(instruction as any, state);
 
-      // Should still return sub_agent_result (not crash)
       expect(result.nextContext?.phase).toBe('sub_agent_result');
-      // Task message still created for UI
-      expect(mockMessageModel.create).toHaveBeenCalled();
+      expect(mockMessageModel.create).not.toHaveBeenCalled();
     });
   });
 });

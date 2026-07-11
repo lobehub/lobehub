@@ -210,6 +210,15 @@ export const isGoogleImageResponseModel = (model: string): boolean => {
   const parsed = parseGoogleModelId(model);
   if (!parsed) return false;
 
+  // Every Nano Banana model is a native image-output model and needs
+  // `responseModalities: ['Text', 'Image']`. Without it Vertex/Gemini returns
+  // the generated image as base64 *text* instead of an inlineData part, which
+  // bypasses the upload pipeline and blows up the context. The family check
+  // below only matches `gemini-*-image` ids, so nanoBanana-family aliases
+  // (e.g. `nano-banana-lite`) must be recognized explicitly — mirroring why
+  // `nano-banana-pro-preview` was pinned into IMAGE_RESPONSE_MODEL_ALIASES.
+  if (parsed.family === 'nanoBanana') return true;
+
   return (
     parsed.family === 'gemini' &&
     hasModifier(parsed, 'image') &&

@@ -1,4 +1,4 @@
-import { ActionIcon, CopyButton, Flexbox, Text } from '@lobehub/ui';
+import { ActionIcon, CopyButton, Flexbox } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { X } from 'lucide-react';
 import { memo } from 'react';
@@ -21,8 +21,8 @@ const styles = createStaticStyles(({ css }) => ({
     font-size: ${cssVar.fontSizeSM};
     font-weight: 600;
     color: ${cssVar.colorTextTertiary};
-    letter-spacing: 0.02em;
     text-transform: uppercase;
+    letter-spacing: 0.02em;
   `,
   fieldValue: css`
     padding-block: 8px;

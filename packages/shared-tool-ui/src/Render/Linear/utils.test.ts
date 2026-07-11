@@ -195,4 +195,28 @@ describe('buildLinearRenderModel', () => {
 
     expect(model.resultText).toBe('No matching Linear issues found.');
   });
+
+  it('flags an empty list wrapper instead of dumping raw JSON', () => {
+    const model = buildLinearRenderModel({
+      apiName: 'mcp__claude_ai_Linear__list_comments',
+      args: { issueId: 'TEST-123' },
+      content: JSON.stringify({ comments: [], hasNextPage: false }),
+    });
+
+    expect(model.emptyCollectionKey).toBe('comments');
+    expect(model.resultEntities).toHaveLength(0);
+    // The whole point: no raw `{ "comments": [] }` block for an empty list.
+    expect(model.rawResultJson).toBeUndefined();
+  });
+
+  it('does not flag a get_* entity that merely embeds an empty sub-collection', () => {
+    const model = buildLinearRenderModel({
+      apiName: 'mcp__claude_ai_Linear__get_issue',
+      args: { id: 'TEST-456' },
+      content: JSON.stringify({ comments: [], id: 'TEST-456', title: 'Mock issue title' }),
+    });
+
+    expect(model.emptyCollectionKey).toBeUndefined();
+    expect(model.resultEntities).toHaveLength(1);
+  });
 });

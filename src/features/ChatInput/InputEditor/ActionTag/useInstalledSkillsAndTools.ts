@@ -9,6 +9,7 @@ import {
   lobehubSkillStoreSelectors,
   pluginSelectors,
 } from '@/store/tool/selectors';
+import { connectorSelectors } from '@/store/tool/slices/connector';
 
 import type { ActionTagData } from './types';
 
@@ -19,6 +20,7 @@ import type { ActionTagData } from './types';
  */
 export const useInstalledSkillsAndTools = (): ActionTagData[] => {
   const builtinSkills = useToolStore(builtinToolSelectors.installedBuiltinSkills, isEqual);
+  const customConnectors = useToolStore(connectorSelectors.customConnectors, isEqual);
   const installedPlugins = useToolStore(pluginSelectors.installedPluginMetaList, isEqual);
   const composioServers = useToolStore(composioStoreSelectors.getServers, isEqual);
   const lobehubSkillServers = useToolStore(lobehubSkillStoreSelectors.getServers, isEqual);
@@ -63,6 +65,19 @@ export const useInstalledSkillsAndTools = (): ActionTagData[] => {
     // --- Build tool set, excluding identifiers already classified as skills ---
     const toolMap = new Map<string, { icon?: string; label: string }>();
 
+    // Custom connectors (user-added MCP servers) first: they take priority over
+    // a legacy plugin sharing the same identifier, mirroring toolEngineering's
+    // connector-over-plugin rule. Only enabled connectors with synced tools are
+    // in the tools engine (buildClientConnectorManifests), so match that here —
+    // otherwise the picker would offer a mention that resolves to nothing.
+    for (const item of customConnectors) {
+      if (!item.isEnabled || (item.tools?.length ?? 0) === 0) continue;
+      if (skillMap.has(item.identifier)) continue;
+      if (!toolMap.has(item.identifier)) {
+        toolMap.set(item.identifier, { label: item.name || item.identifier });
+      }
+    }
+
     for (const item of installedPlugins) {
       // Skip entries that are actually skills (lobehub skill, agent skill, builtin skill)
       if (skillMap.has(item.identifier)) continue;
@@ -91,6 +106,7 @@ export const useInstalledSkillsAndTools = (): ActionTagData[] => {
     return items;
   }, [
     builtinSkills,
+    customConnectors,
     installedPlugins,
     composioServers,
     lobehubSkillServers,

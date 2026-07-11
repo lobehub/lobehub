@@ -36,12 +36,11 @@ export class PageSelectionsInjector extends BaseEveryUserContentProvider {
     message: Message,
     index: number,
   ): { content: string; contextType: string } | null {
-    // Skip if not enabled
     if (!this.config.enabled) {
       return null;
     }
 
-    // Check if message has pageSelections in metadata
+    // Check if message has legacy pageSelections in metadata
     const pageSelections = message.metadata?.pageSelections as PageSelection[] | undefined;
 
     if (!pageSelections || pageSelections.length === 0) {

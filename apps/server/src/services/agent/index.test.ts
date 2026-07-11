@@ -651,4 +651,25 @@ describe('AgentService', () => {
       });
     });
   });
+
+  describe('updateAgentConfig', () => {
+    it('should throw when the updated agent cannot be read back', async () => {
+      const mockAgentModel = {
+        getAgentConfigById: vi.fn().mockResolvedValue(null),
+        updateConfig: vi.fn().mockResolvedValue(undefined),
+      };
+
+      (AgentModel as any).mockImplementation(() => mockAgentModel);
+      (parseAgentConfig as any).mockReturnValue({});
+
+      const newService = new AgentService(mockDb, mockUserId);
+
+      await expect(
+        newService.updateAgentConfig('missing-agent', { systemRole: 'new prompt' }),
+      ).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+        message: 'Agent not found',
+      });
+    });
+  });
 });

@@ -185,7 +185,61 @@ describe('cliAgentBinaries', () => {
       expect(status.resolvedPathEnv).toBeUndefined();
     });
 
-    it('falls back to the Codex.app bundled CLI when `codex` is not on any PATH', async () => {
+    it('falls back to a user-local Claude install when `claude` is not on PATH', async () => {
+      const originalPath = process.env.PATH;
+      const originalShell = process.env.SHELL;
+      process.env.PATH = '/usr/bin:/bin';
+      delete process.env.SHELL;
+
+      try {
+        callExecFileError(new Error('not found')); // which claude
+        callExecFile('2.1.196 (Claude Code)'); // ~/.local/bin/claude --version
+
+        const { claudeCodeBinary } = await import('../cliAgentBinaries');
+        const status = await claudeCodeBinary.detect();
+
+        expect(status.available).toBe(true);
+        expect(status.path).toBe(path.join(os.homedir(), '.local', 'bin', 'claude'));
+        expect(status.version).toBe('2.1.196 (Claude Code)');
+
+        expect(execFileMock).toHaveBeenCalledTimes(2);
+        expect(execFileMock.mock.calls[0]![0]).toBe('which');
+        expect(execFileMock.mock.calls[1]![0]).toBe(
+          path.join(os.homedir(), '.local', 'bin', 'claude'),
+        );
+      } finally {
+        process.env.PATH = originalPath;
+        if (originalShell === undefined) delete process.env.SHELL;
+        else process.env.SHELL = originalShell;
+      }
+    });
+
+    it('does not fall back to well-known Claude paths for a custom command', async () => {
+      const originalPath = process.env.PATH;
+      const originalShell = process.env.SHELL;
+      process.env.PATH = '/usr/bin:/bin';
+      delete process.env.SHELL;
+
+      try {
+        callExecFileError(new Error('not found')); // which claude-beta
+
+        const { detectHeterogeneousCliCommand } = await import('../cliAgentBinaries');
+        const status = await detectHeterogeneousCliCommand('claude-code', 'claude-beta');
+
+        expect(status.available).toBe(false);
+        // Only the custom command's own `which` runs — the ~/.local/bin/claude
+        // fallback must NOT, or a missing `claude-beta` would silently resolve
+        // to stock `claude` instead of reporting the configured command missing.
+        expect(execFileMock).toHaveBeenCalledTimes(1);
+        expect(execFileMock.mock.calls[0]![0]).toBe('which');
+      } finally {
+        process.env.PATH = originalPath;
+        if (originalShell === undefined) delete process.env.SHELL;
+        else process.env.SHELL = originalShell;
+      }
+    });
+
+    it('falls back to the ChatGPT.app bundled CLI when `codex` is not on any PATH', async () => {
       const originalPath = process.env.PATH;
       const originalShell = process.env.SHELL;
       // Deterministic env: no SHELL → no login-shell lookup, merged PATH
@@ -201,13 +255,13 @@ describe('cliAgentBinaries', () => {
         const status = await codexBinary.detect();
 
         expect(status.available).toBe(true);
-        expect(status.path).toBe('/Applications/Codex.app/Contents/Resources/codex');
+        expect(status.path).toBe('/Applications/ChatGPT.app/Contents/Resources/codex');
         expect(status.version).toBe('codex-cli 0.138.0');
 
         expect(execFileMock).toHaveBeenCalledTimes(2);
         expect(execFileMock.mock.calls[0]![0]).toBe('which');
         expect(execFileMock.mock.calls[1]![0]).toBe(
-          '/Applications/Codex.app/Contents/Resources/codex',
+          '/Applications/ChatGPT.app/Contents/Resources/codex',
         );
       } finally {
         process.env.PATH = originalPath;
@@ -224,15 +278,17 @@ describe('cliAgentBinaries', () => {
 
       try {
         callExecFileError(new Error('not found')); // which codex
-        callExecFileError(new Error('ENOENT')); // /Applications candidate
-        callExecFileError(new Error('ENOENT')); // ~/Applications candidate
+        callExecFileError(new Error('ENOENT')); // /Applications/ChatGPT.app
+        callExecFileError(new Error('ENOENT')); // ~/Applications/ChatGPT.app
+        callExecFileError(new Error('ENOENT')); // /Applications/Codex.app
+        callExecFileError(new Error('ENOENT')); // ~/Applications/Codex.app
 
         const { codexBinary } = await import('../cliAgentBinaries');
         const status = await codexBinary.detect();
 
         expect(status.available).toBe(false);
-        expect(execFileMock).toHaveBeenCalledTimes(3);
-        expect(execFileMock.mock.calls[2]![0]).toBe(
+        expect(execFileMock).toHaveBeenCalledTimes(5);
+        expect(execFileMock.mock.calls[4]![0]).toBe(
           path.join(os.homedir(), 'Applications', 'Codex.app', 'Contents', 'Resources', 'codex'),
         );
       } finally {

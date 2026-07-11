@@ -1,5 +1,5 @@
 import { AgentRuntimeErrorType, RequestTrigger } from '@lobechat/types';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { LobeRuntimeAI } from '../BaseAI';
 import { createRouterRuntime } from './createRuntime';
@@ -7,6 +7,11 @@ import { createRouterRuntime } from './createRuntime';
 describe('createRouterRuntime', () => {
   beforeEach(() => {
     vi.resetModules();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
   });
 
   describe('initialization', () => {
@@ -138,7 +143,7 @@ describe('createRouterRuntime', () => {
         ],
       });
 
-      const runtime = new Runtime();
+      const runtime = new Runtime({ userId: 'user-1' });
       const metadata: Record<string, unknown> = { traceId: 'trace-1', trigger: 'chat' };
 
       await runtime.chat({ messages: [], model: 'gpt-4', temperature: 0.7 }, { metadata });
@@ -153,6 +158,133 @@ describe('createRouterRuntime', () => {
           totalOptions: 1,
         }),
       );
+    });
+
+    it('should throw in development when lobehub route attempt is missing trigger', async () => {
+      vi.stubEnv('NODE_ENV', 'development');
+      const mockChat = vi.fn().mockResolvedValue('chat-response');
+
+      class MockRuntime implements LobeRuntimeAI {
+        chat = mockChat;
+      }
+
+      const Runtime = createRouterRuntime({
+        id: 'lobehub',
+        routers: [
+          {
+            apiType: 'openai',
+            models: ['gpt-4'],
+            options: { id: 'channel-1' },
+            runtime: MockRuntime as any,
+          },
+        ],
+      });
+
+      const runtime = new Runtime({ userId: 'user-1' });
+
+      await expect(
+        runtime.chat({ messages: [], model: 'gpt-4', temperature: 0.7 }),
+      ).rejects.toThrow('"missingTrigger":true');
+      expect(mockChat).not.toHaveBeenCalled();
+    });
+
+    it('should throw in development when lobehub route attempt is missing user', async () => {
+      vi.stubEnv('NODE_ENV', 'development');
+      const mockChat = vi.fn().mockResolvedValue('chat-response');
+
+      class MockRuntime implements LobeRuntimeAI {
+        chat = mockChat;
+      }
+
+      const Runtime = createRouterRuntime({
+        id: 'lobehub',
+        routers: [
+          {
+            apiType: 'openai',
+            models: ['gpt-4'],
+            options: { id: 'channel-1' },
+            runtime: MockRuntime as any,
+          },
+        ],
+      });
+
+      const runtime = new Runtime();
+      const metadata = { trigger: RequestTrigger.Chat };
+
+      await expect(
+        runtime.chat({ messages: [], model: 'gpt-4', temperature: 0.7 }, { metadata }),
+      ).rejects.toThrow('"missingUser":true');
+      expect(mockChat).not.toHaveBeenCalled();
+    });
+
+    it('should accept per-call user as the route attempt user in development', async () => {
+      vi.stubEnv('NODE_ENV', 'development');
+      const mockChat = vi.fn().mockResolvedValue('chat-response');
+      const onRouteAttempt = vi.fn().mockResolvedValue(undefined);
+
+      class MockRuntime implements LobeRuntimeAI {
+        chat = mockChat;
+      }
+
+      const Runtime = createRouterRuntime({
+        id: 'lobehub',
+        onRouteAttempt,
+        routers: [
+          {
+            apiType: 'openai',
+            models: ['gpt-4'],
+            options: { id: 'channel-1' },
+            runtime: MockRuntime as any,
+          },
+        ],
+      });
+
+      const runtime = new Runtime();
+      const metadata = { trigger: RequestTrigger.Chat };
+
+      await runtime.chat(
+        { messages: [], model: 'gpt-4', temperature: 0.7 },
+        { metadata, user: 'user-1' },
+      );
+
+      expect(mockChat).toHaveBeenCalled();
+      expect(onRouteAttempt).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: 'user-1',
+        }),
+      );
+    });
+
+    it('should not log missing route attempt context outside development', async () => {
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const mockChat = vi.fn().mockResolvedValue('chat-response');
+
+      class MockRuntime implements LobeRuntimeAI {
+        chat = mockChat;
+      }
+
+      const Runtime = createRouterRuntime({
+        id: 'lobehub',
+        routers: [
+          {
+            apiType: 'openai',
+            models: ['claude-3-sonnet'],
+            options: { id: 'channel-1' },
+            runtime: MockRuntime as any,
+          },
+        ],
+      });
+
+      const runtime = new Runtime();
+      const result = await runtime.chat({
+        messages: [{ content: 'do-not-log', role: 'user' }],
+        model: 'claude-3-sonnet',
+        temperature: 0.7,
+        tools: [{ function: { name: 'secret_tool' }, type: 'function' }],
+      });
+
+      expect(result).toBe('chat-response');
+      expect(consoleError).not.toHaveBeenCalled();
     });
 
     it('should not attach route attempt metadata for non-lobehub runtime', async () => {
@@ -1339,8 +1471,11 @@ describe('createRouterRuntime', () => {
         ],
       });
 
-      const runtime = new OuterRuntime();
-      await runtime.chat({ messages: [], model: 'deepseek-v4-pro', temperature: 0.7 });
+      const runtime = new OuterRuntime({ userId: 'user-1' });
+      await runtime.chat(
+        { messages: [], model: 'deepseek-v4-pro', temperature: 0.7 },
+        { metadata: { trigger: RequestTrigger.Chat } },
+      );
 
       expect(constructorOptions[0]).toEqual(expect.objectContaining({ id: 'lobehub' }));
     });

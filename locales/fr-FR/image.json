@@ -48,7 +48,9 @@
   "generation.actions.seedApplyFailed": "Échec de l'application de la graine",
   "generation.actions.seedCopied": "Graine copiée dans le presse-papiers",
   "generation.actions.seedCopyFailed": "Échec de la copie de la graine",
+  "generation.metadata.by": "par {{name}}",
   "generation.metadata.count": "{{count}} images",
+  "generation.metadata.createdAt": "Créé à {{time}}",
   "generation.status.failed": "Échec de la génération",
   "generation.status.generating": "Génération en cours...",
   "notSupportGuide.desc": "Le mode de déploiement actuel ne prend pas en charge la génération d'images IA. Passez au <1>mode de déploiement avec base de données serveur</1>, ou utilisez <3>LobeHub Cloud</3>.",
@@ -60,9 +62,13 @@
   "notSupportGuide.features.multiProviders.title": "Prise en charge multi-fournisseurs",
   "notSupportGuide.title": "Le mode de déploiement actuel ne prend pas en charge la génération d'images IA",
   "topic.createNew": "Créer un nouveau sujet",
+  "topic.createdBy": "Créé par {{name}}",
   "topic.deleteConfirm": "Supprimer le sujet de génération",
   "topic.deleteConfirmDesc": "Vous êtes sur le point de supprimer ce sujet de génération. Cette action est irréversible, veuillez procéder avec prudence.",
   "topic.empty": "Aucun sujet de génération",
+  "topic.privateTitle": "Privé",
   "topic.title": "Thème de peinture",
-  "topic.untitled": "Sujet par défaut"
+  "topic.untitled": "Sujet par défaut",
+  "topic.visibility.existingLocked": "La visibilité est fixée pour le sujet actuel. Créez un nouveau sujet pour choisir un espace différent.",
+  "topic.workspaceTitle": "Espace de travail"
 }

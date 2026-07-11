@@ -22,24 +22,3 @@ export interface ModalConfig {
   title: string;
   width?: number;
 }
-
-// List of trusted third-party marketplaces
-export const TRUSTED_MARKETPLACES = {
-  higress: {
-    description: 'Enterprise-grade MCP plugins for cloud-native applications',
-    name: 'Higress Marketplace',
-    website: 'https://higress.ai',
-  },
-  mcprouter: {
-    description: 'Community-driven MCP plugin marketplace',
-    name: 'MCPRouter',
-    website: 'https://mcprouter.com',
-  },
-  smithery: {
-    description: 'Professional MCP plugins and tools',
-    name: 'Smithery',
-    website: 'https://smithery.ai',
-  },
-} as const;
-
-export type TrustedMarketplaceId = keyof typeof TRUSTED_MARKETPLACES;

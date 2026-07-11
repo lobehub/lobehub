@@ -62,7 +62,12 @@ export interface ExecuteVerifyParams {
 
 const verdictToStatus = (verdict: VerifyVerdict): VerifyCheckResultStatus =>
   verdict === 'passed' ? 'passed' : 'failed';
-const terminalResultStatuses = new Set<VerifyCheckResultStatus>(['passed', 'failed', 'skipped']);
+const terminalResultStatuses = new Set<VerifyCheckResultStatus>([
+  'passed',
+  'failed',
+  'errored',
+  'skipped',
+]);
 
 /** Group a run's evidence rows by the plan item they back, for judge injection. */
 type EvidenceByItem = Map<string, JudgeEvidence[]>;
@@ -266,11 +271,21 @@ export class VerifyExecutorService {
       });
 
       if (!spawned?.verifierOperationId) {
+        // The runner resolved without an operation id — the spawn never
+        // persisted an operation. Log the returned shape at error level (this
+        // path lands in production runtime logs, unlike the debug-only `log`).
+        console.error(
+          '[verify] agent verifier returned no operation id for item %s: %O',
+          item.id,
+          spawned,
+        );
         await this.resultModel.updateByCheckItem(verifyRunId, item.id, {
           completedAt: new Date(),
-          status: 'failed',
-          toulmin: { limitation: 'Agent verifier failed to start.' },
-          verdict: 'uncertain',
+          // Infra failure, not a delivery verdict: the verifier never started, so
+          // there is nothing to judge. `errored` (no verdict) keeps this out of
+          // the delivery gate and the auto-repair set.
+          status: 'errored',
+          toulmin: { limitation: 'Agent verifier failed to start (no operation id returned).' },
         });
         return;
       }
@@ -286,12 +301,21 @@ export class VerifyExecutorService {
         verifierOperationId: spawned.verifierOperationId,
       });
     } catch (error) {
-      log('agent verifier spawn failed for item %s: %O', item.id, error);
+      // Surface the real cause: the spawn throws during agent startup (before
+      // the verifier operation is persisted), and this catch previously only
+      // emitted a debug-level line + a generic limitation — so in production the
+      // actual error was invisible and the check just read "failed to start".
+      // Log at error level (reaches runtime logs) and thread the message into
+      // the verdict limitation so it is queryable from verify_check_results.
+      const detail = error instanceof Error ? error.message : String(error);
+      console.error('[verify] agent verifier spawn failed for item %s: %O', item.id, error);
       await this.resultModel.updateByCheckItem(verifyRunId, item.id, {
         completedAt: new Date(),
-        status: 'failed',
-        toulmin: { limitation: 'Agent verifier failed to start.' },
-        verdict: 'uncertain',
+        // Infra failure (spawn threw before the verifier op was persisted), not a
+        // delivery verdict — mark `errored` so it neither gates delivery nor seeds
+        // a repair round.
+        status: 'errored',
+        toulmin: { limitation: `Agent verifier failed to start: ${detail}` },
       });
     }
   }

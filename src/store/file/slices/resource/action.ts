@@ -116,6 +116,7 @@ export class ResourceActionImpl {
     ...(params.sourceType === 'file'
       ? {
           url: params.url,
+          ...(params.visibility !== undefined ? { visibility: params.visibility } : {}),
         }
       : {
           content: params.content,

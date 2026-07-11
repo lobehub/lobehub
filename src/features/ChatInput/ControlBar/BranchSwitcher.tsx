@@ -1,3 +1,4 @@
+import type { DeviceGitWorktreeListItem } from '@lobechat/types';
 import { Icon, Input, Tooltip } from '@lobehub/ui';
 import {
   confirmModal,
@@ -7,12 +8,14 @@ import {
   DropdownMenuPositioner,
   DropdownMenuRoot,
   DropdownMenuTrigger,
+  toast,
 } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import {
   CheckIcon,
   GitBranchIcon,
   GitBranchPlusIcon,
+  GitForkIcon,
   LoaderIcon,
   PencilIcon,
   RefreshCwIcon,
@@ -26,24 +29,30 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
-import { message } from '@/components/AntdStaticMethods';
 import { deviceKeys } from '@/libs/swr/keys';
 import { gitService } from '@/services/git';
 import { useFetchGitWorkingTreeStatus } from '@/store/device';
 
 import { openCreateBranchModal } from './CreateBranchModal';
 import { openRenameBranchModal } from './RenameBranchModal';
+import { useSwitchWorktree } from './useSwitchWorktree';
+import { findWorktreeForBranch, getPathName } from './worktreeHelpers';
 
 const styles = createStaticStyles(({ css }) => ({
   branchLabel: css`
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  `,
+  triggerAnchor: css`
+    display: inline-flex;
+    flex: none;
   `,
   container: css`
     display: flex;
@@ -205,6 +214,7 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 interface BranchSwitcherProps {
+  agentId: string;
   children: ReactElement;
   currentBranch?: string;
   /**
@@ -212,6 +222,7 @@ interface BranchSwitcherProps {
    * device). Omit for the local machine, which talks to Electron over IPC.
    */
   deviceId?: string;
+  isGithub: boolean;
   onAfterCheckout?: () => void;
   onExternalRefresh?: () => void | Promise<void>;
   onOpenChange: (open: boolean) => void;
@@ -219,24 +230,34 @@ interface BranchSwitcherProps {
   onOptimisticCheckout?: (branch: string) => void;
   open: boolean;
   path: string;
+  /** The repo the conversation is anchored to (worktrees hang off it). */
+  sourcePath: string;
+  /** Used to route a checkout into the worktree that already holds the branch. */
+  worktrees: DeviceGitWorktreeListItem[];
 }
 
 const BranchSwitcher = memo<BranchSwitcherProps>(
   ({
+    agentId,
     path,
     currentBranch,
     deviceId,
+    isGithub,
     open,
     onOpenChange,
     onAfterCheckout,
     onExternalRefresh,
     onOptimisticCheckout,
+    sourcePath,
+    worktrees,
     children,
   }) => {
     const { t } = useTranslation('device');
     const { t: tCommon } = useTranslation('common');
     const [search, setSearch] = useState('');
     const [busyBranch, setBusyBranch] = useState<string | null>(null);
+    const currentRowRef = useRef<HTMLDivElement>(null);
+    const switchWorktree = useSwitchWorktree({ agentId, isGithub, sourcePath });
 
     const {
       data: branches = [],
@@ -272,6 +293,32 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
       if (!open) setSearch('');
     }, [open]);
 
+    // Surface a branch-list load failure as a Toast with Retry (base-ui Toast
+    // carries an action; antd `message` can't). Reopening the dropdown also
+    // refetches, but Retry recovers without closing.
+    useEffect(() => {
+      if (open && branchesError) {
+        toast.error({
+          actions: [
+            { label: tCommon('retry'), onClick: () => void mutateBranches(), variant: 'text' },
+          ],
+          title: t('workingDirectory.branchesLoadFailed'),
+        });
+      }
+    }, [open, branchesError, mutateBranches, t, tCommon]);
+
+    // Scroll the current branch into view each time the dropdown opens — the
+    // popup mounts at scrollTop=0, so a checked branch below the fold would read
+    // as "nothing selected". Keyed on branches.length so it fires once the async
+    // list has painted.
+    useEffect(() => {
+      if (!open) return;
+      const raf = requestAnimationFrame(() => {
+        currentRowRef.current?.scrollIntoView({ block: 'nearest' });
+      });
+      return () => cancelAnimationFrame(raf);
+    }, [open, branches.length, currentBranch]);
+
     const filtered = useMemo(() => {
       const query = search.trim().toLowerCase();
       if (!query) return branches;
@@ -285,6 +332,23 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
           onOpenChange(false);
           return;
         }
+
+        // Git refuses to check out a branch another worktree already holds. That
+        // worktree's HEAD is on the branch, so switching into it is what the user
+        // asked for — route there instead of surfacing git's error.
+        const owner = create ? undefined : findWorktreeForBranch(worktrees, branch);
+        if (owner) {
+          setBusyBranch(branch);
+          onOpenChange(false);
+          try {
+            await switchWorktree(owner.path);
+          } finally {
+            onAfterCheckout?.();
+            setBusyBranch(null);
+          }
+          return;
+        }
+
         setBusyBranch(branch);
         // Reflect the switch instantly and close; the checkout + revalidate
         // reconcile in the background (a failure rolls the label back).
@@ -293,7 +357,7 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
         try {
           const result = await gitService.checkoutGitBranch({ branch, create, deviceId, path });
           if (!result.success) {
-            message.error(result.error || t('workingDirectory.checkoutFailed'));
+            toast.error(result.error || t('workingDirectory.checkoutFailed'));
           }
         } finally {
           onAfterCheckout?.();
@@ -308,7 +372,9 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
         onOptimisticCheckout,
         onOpenChange,
         path,
+        switchWorktree,
         t,
+        worktrees,
       ],
     );
 
@@ -381,7 +447,7 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
             const result = await gitService.deleteGitBranch({ branch, deviceId, path });
             onAfterCheckout?.();
             if (!result.success) {
-              message.error(result.error || t('workingDirectory.deleteFailed'));
+              toast.error(result.error || t('workingDirectory.deleteFailed'));
             }
           },
           title: t('workingDirectory.deleteBranchTitle'),
@@ -392,7 +458,9 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
 
     return (
       <DropdownMenuRoot open={open} onOpenChange={onOpenChange}>
-        <DropdownMenuTrigger>{children}</DropdownMenuTrigger>
+        <DropdownMenuTrigger className={styles.triggerAnchor}>
+          <div>{children}</div>
+        </DropdownMenuTrigger>
         <DropdownMenuPortal>
           <DropdownMenuPositioner placement="topLeft" sideOffset={8}>
             <DropdownMenuPopup>
@@ -428,7 +496,7 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
 
                   {!isLoading && branchesError && (
                     <div className={styles.emptyState}>
-                      {(branchesError as Error)?.message || t('workingDirectory.branchesEmpty')}
+                      {t('workingDirectory.branchesLoadFailed')}
                     </div>
                   )}
 
@@ -443,16 +511,20 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
                   {filtered.map((branch) => {
                     const isCurrent = branch.name === currentBranch;
                     const isBusy = busyBranch === branch.name;
+                    // A branch another worktree holds can't be checked out here
+                    // (clicking routes into that worktree) and can't be deleted.
+                    const owner = findWorktreeForBranch(worktrees, branch.name);
                     return (
                       <DropdownMenuItem
                         className={styles.item}
                         closeOnClick={false}
                         key={branch.name}
+                        ref={isCurrent ? currentRowRef : undefined}
                         onClick={() => handleCheckout(branch.name)}
                       >
                         <Icon
                           className={cx(styles.itemIcon, isBusy && styles.spinning)}
-                          icon={isBusy ? LoaderIcon : GitBranchIcon}
+                          icon={isBusy ? LoaderIcon : owner ? GitForkIcon : GitBranchIcon}
                           size={14}
                         />
                         <div className={styles.itemMain}>
@@ -461,6 +533,13 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
                             <div className={styles.itemMeta}>
                               {t('workingDirectory.uncommittedChanges', {
                                 count: workingStatus.total,
+                              })}
+                            </div>
+                          )}
+                          {owner && (
+                            <div className={styles.itemMeta}>
+                              {t('workingDirectory.branchInWorktree', {
+                                name: getPathName(owner.path),
                               })}
                             </div>
                           )}
@@ -482,7 +561,7 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
                               <Icon icon={PencilIcon} size={13} />
                             </div>
                           </Tooltip>
-                          {!isCurrent && (
+                          {!isCurrent && !owner && (
                             <Tooltip title={t('workingDirectory.deleteBranchAction')}>
                               <div
                                 className={cx(styles.rowAction, styles.rowActionDanger)}

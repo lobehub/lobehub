@@ -17,7 +17,7 @@ const briefWriteProcedure = briefProcedure.use(withScopedPermission('task:update
 const idInput = z.object({ id: z.string() });
 
 const createSchema = z.object({
-  actions: z.array(z.record(z.unknown())).optional(),
+  actions: z.array(z.record(z.string(), z.unknown())).optional(),
   agentId: z.string().optional(),
   artifacts: z.array(z.string()).optional(),
   cronJobId: z.string().optional(),

@@ -1,4 +1,5 @@
 import {
+  addGitWorktree,
   checkoutGitBranch,
   deleteGitBranch,
   getGitAheadBehind,
@@ -10,21 +11,26 @@ import {
   getLinkedPullRequest,
   listGitBranches,
   listGitRemoteBranches,
+  listGitWorktrees,
   moveLocalFiles,
   pullGitBranch,
   pushGitBranch,
+  removeGitWorktree,
   renameGitBranch,
   renameLocalFile,
   revertGitFile,
   writeLocalFile,
 } from '@lobechat/local-file-shell';
 
+import { prepareSkillDirectory } from './skillDirectory';
 import type {
   DeviceControlDeps,
   InitWorkspaceParams,
   ListProjectSkillsParams,
   LocalFilePreviewUrlParams,
+  PrepareSkillDirectoryParams,
   ProjectFileIndexParams,
+  ProjectFileSearchParams,
 } from './types';
 import { initWorkspace, listProjectSkills, statPath } from './workspace';
 
@@ -37,8 +43,10 @@ import { initWorkspace, listProjectSkills, statPath } from './workspace';
 export const DEVICE_RPC_METHODS = [
   'initWorkspace',
   'listProjectSkills',
+  'prepareSkillDirectory',
   'statPath',
   'getProjectFileIndex',
+  'searchProjectFiles',
   'getLocalFilePreview',
   'moveLocalFiles',
   'renameLocalFile',
@@ -52,9 +60,12 @@ export const DEVICE_RPC_METHODS = [
   'getGitAheadBehind',
   'listGitBranches',
   'listGitRemoteBranches',
+  'listGitWorktrees',
   'checkoutGitBranch',
   'renameGitBranch',
   'deleteGitBranch',
+  'removeGitWorktree',
+  'addGitWorktree',
   'pullGitBranch',
   'pushGitBranch',
   'revertGitFile',
@@ -87,12 +98,20 @@ export const executeDeviceRpc = async (
       return listProjectSkills(params as ListProjectSkillsParams, deps);
     }
 
+    case 'prepareSkillDirectory': {
+      return prepareSkillDirectory(params as PrepareSkillDirectoryParams, deps);
+    }
+
     case 'statPath': {
       return statPath(params as { path: string });
     }
 
     case 'getProjectFileIndex': {
       return deps.getProjectFileIndex(params as ProjectFileIndexParams);
+    }
+
+    case 'searchProjectFiles': {
+      return deps.searchProjectFiles(params as ProjectFileSearchParams);
     }
 
     case 'getLocalFilePreview': {
@@ -116,7 +135,9 @@ export const executeDeviceRpc = async (
     }
 
     case 'getLinkedPullRequest': {
-      return getLinkedPullRequest(params as { branch: string; path: string });
+      return getLinkedPullRequest(
+        params as { branch: string; path: string; pullRequestNumber?: number },
+      );
     }
 
     case 'getGitWorkingTreeStatus': {
@@ -147,6 +168,10 @@ export const executeDeviceRpc = async (
       return listGitRemoteBranches((params as { path: string }).path);
     }
 
+    case 'listGitWorktrees': {
+      return listGitWorktrees((params as { path: string }).path);
+    }
+
     case 'checkoutGitBranch': {
       return checkoutGitBranch(params as { branch: string; create?: boolean; path: string });
     }
@@ -157,6 +182,14 @@ export const executeDeviceRpc = async (
 
     case 'deleteGitBranch': {
       return deleteGitBranch(params as { branch: string; path: string });
+    }
+
+    case 'removeGitWorktree': {
+      return removeGitWorktree(params as { path: string; worktreePath: string });
+    }
+
+    case 'addGitWorktree': {
+      return addGitWorktree(params as { branch: string; path: string; worktreePath: string });
     }
 
     case 'pullGitBranch': {

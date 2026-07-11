@@ -31,6 +31,56 @@ describe('UserModel', () => {
     vi.clearAllMocks();
   });
 
+  describe('getUserActivitySummary', () => {
+    it('returns the user creation time and latest user-authored message', async () => {
+      const userCreatedAt = new Date('2026-01-01T00:00:00.000Z');
+      const latestUserMessageAt = new Date('2026-03-01T00:00:00.000Z');
+      await serverDB.update(users).set({ createdAt: userCreatedAt }).where(eq(users.id, userId));
+      await serverDB.insert(messages).values([
+        {
+          content: 'older',
+          createdAt: new Date('2026-02-01T00:00:00.000Z'),
+          id: 'activity-user-old',
+          role: 'user',
+          userId,
+        },
+        {
+          content: 'ignored assistant',
+          createdAt: new Date('2026-04-01T00:00:00.000Z'),
+          id: 'activity-assistant',
+          role: 'assistant',
+          userId,
+        },
+        {
+          content: 'latest',
+          createdAt: latestUserMessageAt,
+          id: 'activity-user-latest',
+          role: 'user',
+          userId,
+        },
+        {
+          content: 'other user',
+          createdAt: new Date('2026-05-01T00:00:00.000Z'),
+          id: 'activity-other-user',
+          role: 'user',
+          userId: otherUserId,
+        },
+      ]);
+
+      await expect(userModel.getUserActivitySummary()).resolves.toEqual({
+        lastUserMessageAt: latestUserMessageAt,
+        userCreatedAt,
+      });
+    });
+
+    it('returns a null message time when the user has never sent a message', async () => {
+      const result = await userModel.getUserActivitySummary();
+
+      expect(result.lastUserMessageAt).toBeNull();
+      expect(result.userCreatedAt).toBeInstanceOf(Date);
+    });
+  });
+
   describe('getUserRegistrationDuration', () => {
     it('should return registration duration for existing user', async () => {
       const thirtyDaysAgo = new Date();

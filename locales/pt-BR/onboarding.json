@@ -122,6 +122,7 @@
   "responseLanguage.auto": "Automático (Seguir idioma do sistema)",
   "responseLanguage.desc": "Escolha o idioma das respostas do Agente",
   "responseLanguage.hint": "Após selecionar um idioma, as respostas da IA serão nesse idioma, e a interface também será sincronizada",
+  "responseLanguage.saveFailed": "Falha ao salvar. Por favor, tente novamente.",
   "responseLanguage.title": "Em qual idioma devemos nos comunicar?",
   "responseLanguage.title2": "Comece pelo idioma, construa uma compreensão verdadeira.",
   "responseLanguage.title3": "Deixe-me falar com clareza e te entender melhor~",

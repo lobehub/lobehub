@@ -3135,9 +3135,11 @@ describe('MessageModel Query Tests', () => {
     it('scopes the main thread to threadId IS NULL (ignores thread messages)', async () => {
       await serverDB.insert(sessions).values([{ id: 'session1', userId }]);
       await serverDB.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
-      await serverDB.insert(threads).values([
-        { id: 'thread1', userId, topicId: 'topic1', sourceMessageId: 'm1', type: 'standalone' },
-      ]);
+      await serverDB
+        .insert(threads)
+        .values([
+          { id: 'thread1', userId, topicId: 'topic1', sourceMessageId: 'm1', type: 'standalone' },
+        ]);
       await serverDB.insert(messages).values([
         {
           id: 'm1',
@@ -3187,6 +3189,174 @@ describe('MessageModel Query Tests', () => {
       expect(await otherModel.getLatestSpineMessageId({ topicId: 'topic1' })).toBeUndefined();
       // unknown topic yields undefined
       expect(await messageModel.getLatestSpineMessageId({ topicId: 'nope' })).toBeUndefined();
+    });
+  });
+
+  // Fallback anchor used when `getLatestSpineMessageId` comes back empty. Without
+  // it a new user turn is persisted as a second root and the renderer emits the
+  // newest reply above older messages (LOBE-11489).
+  describe('getLatestNonToolMessageId', () => {
+    it('returns a toolless signal turn that the spine query skips', async () => {
+      await serverDB.insert(sessions).values([{ id: 'session1', userId }]);
+      await serverDB.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
+      await serverDB.insert(messages).values([
+        {
+          id: 'sig-1',
+          userId,
+          topicId: 'topic1',
+          role: 'assistant',
+          content: 'monitor callback',
+          metadata: { signal: { type: 'monitor' } } as any,
+          createdAt: new Date('2023-01-01T00:00:00'),
+        },
+      ]);
+
+      // the spine query finds nothing to anchor on...
+      expect(await messageModel.getLatestSpineMessageId({ topicId: 'topic1' })).toBeUndefined();
+      // ...so the fallback keeps the next turn off a second root
+      expect(await messageModel.getLatestNonToolMessageId({ topicId: 'topic1' })).toBe('sig-1');
+    });
+
+    it('never anchors on a tool result, even when it is the newest row', async () => {
+      await serverDB.insert(sessions).values([{ id: 'session1', userId }]);
+      await serverDB.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
+      await serverDB.insert(messages).values([
+        {
+          id: 'sig-1',
+          userId,
+          topicId: 'topic1',
+          role: 'assistant',
+          content: 'callback',
+          metadata: { signal: { type: 'monitor' } } as any,
+          createdAt: new Date('2023-01-01T00:00:00'),
+        },
+        {
+          id: 'tool-1',
+          userId,
+          topicId: 'topic1',
+          role: 'tool',
+          parentId: 'sig-1',
+          content: 'result',
+          createdAt: new Date('2023-01-01T00:00:01'),
+        },
+      ]);
+
+      expect(await messageModel.getLatestNonToolMessageId({ topicId: 'topic1' })).toBe('sig-1');
+    });
+
+    it('scopes to thread, user, and returns undefined for an empty topic', async () => {
+      const otherModel = new MessageModel(serverDB, otherUserId);
+      await serverDB.insert(sessions).values([{ id: 'session1', userId }]);
+      await serverDB.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
+      await serverDB
+        .insert(threads)
+        .values([
+          { id: 'thread1', userId, topicId: 'topic1', sourceMessageId: 'm1', type: 'standalone' },
+        ]);
+      await serverDB.insert(messages).values([
+        {
+          id: 'm1',
+          userId,
+          topicId: 'topic1',
+          role: 'user',
+          threadId: null,
+          content: 'main tail',
+          createdAt: new Date('2023-01-01T00:00:00'),
+        },
+        {
+          id: 't1',
+          userId,
+          topicId: 'topic1',
+          role: 'assistant',
+          threadId: 'thread1',
+          content: 'thread tail',
+          createdAt: new Date('2023-01-01T00:00:01'),
+        },
+      ]);
+
+      expect(await messageModel.getLatestNonToolMessageId({ topicId: 'topic1' })).toBe('m1');
+      expect(
+        await messageModel.getLatestNonToolMessageId({ topicId: 'topic1', threadId: 'thread1' }),
+      ).toBe('t1');
+      expect(await otherModel.getLatestNonToolMessageId({ topicId: 'topic1' })).toBeUndefined();
+      expect(await messageModel.getLatestNonToolMessageId({ topicId: 'nope' })).toBeUndefined();
+    });
+  });
+
+  // Regression for the signal-tag exclusion predicate. It used to be
+  // `metadata -> 'signal' IS NULL`, which crashes the production serverless
+  // Postgres engine when used as a WHERE qual (rt_fetch out-of-bounds, SQLSTATE
+  // XX000) and made the agent verifier fail to start. It was rewritten to
+  // `NOT COALESCE(jsonb_exists(metadata, 'signal'), false)`; these lock in the
+  // three metadata shapes the rewrite must handle. Server-DB (node-postgres)
+  // only — the client PGlite path is skipped.
+  describe.skipIf(!isServerDB)('getLatestSpineMessageId — signal predicate regression', () => {
+    it('keeps null and signal-free object metadata, excludes only signal-tagged', async () => {
+      await serverDB.insert(sessions).values([{ id: 'session1', userId }]);
+      await serverDB.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
+      await serverDB.insert(messages).values([
+        {
+          // null metadata — a spine candidate, must not be dropped by the predicate
+          id: 'null-meta',
+          userId,
+          topicId: 'topic1',
+          role: 'assistant',
+          content: 'plain',
+          createdAt: new Date('2023-01-01T00:00:00'),
+        },
+        {
+          // object metadata without a `signal` key — also a spine candidate
+          id: 'obj-meta',
+          userId,
+          topicId: 'topic1',
+          role: 'assistant',
+          content: 'has usage',
+          metadata: { usage: { totalTokens: 10 } } as any,
+          createdAt: new Date('2023-01-01T00:00:01'),
+        },
+        {
+          // newest, but signal-tagged — the only row the predicate must exclude
+          id: 'sig-meta',
+          userId,
+          topicId: 'topic1',
+          role: 'assistant',
+          content: 'callback',
+          metadata: { signal: { type: 'monitor' } } as any,
+          createdAt: new Date('2023-01-01T00:00:02'),
+        },
+      ]);
+
+      // latest non-signal spine row is the signal-free object, not the newer
+      // signal-tagged callback
+      expect(await messageModel.getLatestSpineMessageId({ topicId: 'topic1' })).toBe('obj-meta');
+    });
+
+    it('returns the null-metadata row when it is the only spine candidate', async () => {
+      await serverDB.insert(sessions).values([{ id: 'session1', userId }]);
+      await serverDB.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
+      await serverDB.insert(messages).values([
+        {
+          id: 'null-only',
+          userId,
+          topicId: 'topic1',
+          role: 'assistant',
+          content: 'plain',
+          createdAt: new Date('2023-01-01T00:00:00'),
+        },
+        {
+          id: 'sig-newer',
+          userId,
+          topicId: 'topic1',
+          role: 'assistant',
+          content: 'callback',
+          metadata: { signal: { type: 'monitor' } } as any,
+          createdAt: new Date('2023-01-01T00:00:01'),
+        },
+      ]);
+
+      // guards the COALESCE: a naive `NOT jsonb_exists(metadata, 'signal')` yields
+      // NULL for null metadata and would wrongly drop this row
+      expect(await messageModel.getLatestSpineMessageId({ topicId: 'topic1' })).toBe('null-only');
     });
   });
 });

@@ -1,4 +1,5 @@
-import { SessionDefaultGroup } from '@lobechat/types';
+import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
+import { SessionDefaultGroup, type SidebarVisibility } from '@lobechat/types';
 import { type MenuProps } from '@lobehub/ui';
 import { Icon } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
@@ -6,7 +7,9 @@ import { App } from 'antd';
 import isEqual from 'fast-deep-equal';
 import {
   Check,
+  EyeOffIcon,
   FolderInputIcon,
+  GlobeIcon,
   LucideCopy,
   LucidePlus,
   Pen,
@@ -18,12 +21,20 @@ import {
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useAgentTransferMenuItem } from '@/business/client/hooks/useAgentTransferMenuItem';
+import { useIsWorkspaceOwner } from '@/business/client/hooks/useIsWorkspaceOwner';
 import { openEditingPopover } from '@/features/EditingPopover/store';
+import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { usePermission } from '@/hooks/usePermission';
+import { agentService } from '@/services/agent';
 import { useGlobalStore } from '@/store/global';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
+import { useUserStore } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
+
+const BUILTIN_SLUGS = new Set<string>(Object.values(BUILTIN_AGENT_SLUGS));
 
 interface UseAgentDropdownMenuParams {
   anchor: HTMLElement | null;
@@ -33,7 +44,10 @@ interface UseAgentDropdownMenuParams {
   id: string;
   openCreateGroupModal: () => void;
   pinned: boolean;
+  slug?: string | null;
   title: string;
+  userId?: string | null;
+  visibility?: SidebarVisibility;
 }
 
 export const useAgentDropdownMenu = ({
@@ -44,19 +58,50 @@ export const useAgentDropdownMenu = ({
   id,
   openCreateGroupModal,
   pinned,
+  slug,
   title,
+  userId,
+  visibility,
 }: UseAgentDropdownMenuParams): (() => MenuProps['items']) => {
   const { t } = useTranslation(['chat', 'common']);
   const { message } = App.useApp();
 
   const openAgentInNewWindow = useGlobalStore((s) => s.openAgentInNewWindow);
-  const sessionCustomGroups = useHomeStore(homeAgentListSelectors.agentGroups, isEqual);
+  // Pick the group bucket that matches this agent's visibility so the
+  // "Move to group" picker only offers same-scope targets — moving a private
+  // agent into a public group (or vice versa) would orphan it from the view
+  // it currently lives in.
+  const sessionCustomGroups = useHomeStore(
+    visibility === 'private'
+      ? homeAgentListSelectors.privateAgentGroups
+      : homeAgentListSelectors.agentGroups,
+    isEqual,
+  );
+  const refreshAgentList = useHomeStore((s) => s.refreshAgentList);
   const [pinAgent, duplicateAgent, updateAgentGroup, removeAgent] = useHomeStore((s) => [
     s.pinAgent,
     s.duplicateAgent,
     s.updateAgentGroup,
     s.removeAgent,
   ]);
+
+  // Visibility actions are only meaningful inside a workspace: in personal
+  // mode every row is implicitly owner-private. "Publish to Workspace"
+  // appears on private agents; the inverse "Make private" (LOBE-11551)
+  // appears on published agents, but only for the creator or a workspace
+  // owner, and never on builtin agents (LobeAI etc.). The server enforces
+  // the same rules as a backstop.
+  const activeWorkspaceId = useActiveWorkspaceId();
+  const isWorkspaceOwner = useIsWorkspaceOwner();
+  const currentUserId = useUserStore(userProfileSelectors.userId);
+  const isPrivate = visibility === 'private';
+  const isBuiltin = !!slug && BUILTIN_SLUGS.has(slug);
+  const showPublishAction = Boolean(activeWorkspaceId) && isPrivate;
+  const showMakePrivateAction =
+    Boolean(activeWorkspaceId) &&
+    visibility === 'public' &&
+    !isBuiltin &&
+    (isWorkspaceOwner || (!!currentUserId && userId === currentUserId));
 
   // Viewer has no write permissions on agents — disable every mutating menu
   // item (pin/rename/duplicate/move/delete) while keeping the menu visible
@@ -149,6 +194,79 @@ export const useAgentDropdownMenu = ({
         { type: 'divider' },
         ...(transferMenuItems ?? []),
         ...(transferMenuItems?.length ? [{ type: 'divider' as const }] : []),
+        ...(showPublishAction
+          ? [
+              {
+                disabled: !canEdit,
+                icon: <Icon icon={GlobeIcon} />,
+                key: 'publishToWorkspace',
+                label: t('agent.publishToWorkspace', { defaultValue: 'Publish to Workspace' }),
+                onClick: async ({ domEvent }: any) => {
+                  domEvent?.stopPropagation();
+                  if (!canEdit) return;
+                  confirmModal({
+                    cancelText: t('cancel', { ns: 'common' }),
+                    content: <VisibilityConfirmContent variant="publish" />,
+                    okText: t('agent.publishToWorkspace', {
+                      defaultValue: 'Publish to Workspace',
+                    }),
+                    onOk: async () => {
+                      try {
+                        await agentService.publishAgentToWorkspace(id);
+                        await refreshAgentList();
+                        message.success(
+                          t('agent.publishToWorkspaceSuccess', {
+                            defaultValue: 'Published to workspace',
+                          }),
+                        );
+                      } catch (error) {
+                        console.error('Failed to publish agent:', error);
+                        message.error(
+                          t('error', { ns: 'common', defaultValue: 'Operation failed' }),
+                        );
+                      }
+                    },
+                    title: t('agent.publishToWorkspace', {
+                      defaultValue: 'Publish to Workspace',
+                    }),
+                  });
+                },
+              },
+              { type: 'divider' as const },
+            ]
+          : []),
+        ...(showMakePrivateAction
+          ? [
+              {
+                disabled: !canEdit,
+                icon: <Icon icon={EyeOffIcon} />,
+                key: 'makePrivate',
+                label: t('makePrivate', { ns: 'common' }),
+                onClick: async ({ domEvent }: any) => {
+                  domEvent?.stopPropagation();
+                  if (!canEdit) return;
+                  confirmModal({
+                    cancelText: t('cancel', { ns: 'common' }),
+                    content: <VisibilityConfirmContent variant="makePrivate" />,
+                    okButtonProps: { danger: true },
+                    okText: t('makePrivate.confirm.ok', { ns: 'common' }),
+                    onOk: async () => {
+                      try {
+                        await agentService.setAgentVisibility(id, 'private');
+                        await refreshAgentList();
+                        message.success(t('makePrivate.success', { ns: 'common' }));
+                      } catch (error) {
+                        console.error('Failed to make agent private:', error);
+                        message.error(t('makePrivate.error', { ns: 'common' }));
+                      }
+                    },
+                    title: t('makePrivate.confirm.title', { ns: 'common' }),
+                  });
+                },
+              },
+              { type: 'divider' as const },
+            ]
+          : []),
         {
           danger: true,
           disabled: !canEdit,
@@ -186,6 +304,10 @@ export const useAgentDropdownMenu = ({
       openCreateGroupModal,
       message,
       transferMenuItems,
+      showPublishAction,
+      showMakePrivateAction,
+      refreshAgentList,
+      t,
     ],
   );
 };

@@ -1,4 +1,3 @@
-import type { HeterogeneousAgentSessionError } from '@lobechat/electron-client-ipc';
 import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
 import { type ILobeAgentRuntimeErrorType } from '@lobechat/model-runtime';
 import { AgentRuntimeErrorType, getErrorCodeSpec } from '@lobechat/model-runtime';
@@ -23,7 +22,12 @@ import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfi
 import { getRuntimeErrorMessage } from '@/utils/locale/runtimeErrorMessage';
 
 import ChatInvalidAPIKey from './ChatInvalidApiKey';
+import { isHeterogeneousAgentStatusGuideError } from './heterogeneous';
 import { useHeterogeneousAutoRetry } from './useHeterogeneousAutoRetry';
+
+// Re-export so existing barrel consumers (ContentBlock, message action bar) can
+// keep importing the guard from '@/features/Conversation/Error'.
+export { isHeterogeneousAgentStatusGuideError } from './heterogeneous';
 
 interface ErrorMessageData {
   error?: ChatMessageError | null;
@@ -88,13 +92,6 @@ const QuotaLimitError = dynamic(() => import('./QuotaLimitError'), { loading, ss
 
 const TraceIdError = dynamic(() => import('./TraceIdError'), { loading, ssr: false });
 
-const HETEROGENEOUS_AGENT_STATUS_GUIDE_ERROR_CODES = new Set<string>([
-  HeterogeneousAgentSessionErrorCode.AuthRequired,
-  HeterogeneousAgentSessionErrorCode.CliNotFound,
-  HeterogeneousAgentSessionErrorCode.Overloaded,
-  HeterogeneousAgentSessionErrorCode.RateLimit,
-]);
-
 // `UnknownChatFetchError` is excluded: its localized copy is a generic
 // "unknown error" message, so the trace-id report UI is strictly more useful.
 const LEGACY_LOCALIZED_ERROR_TYPES = new Set<string>(
@@ -154,20 +151,6 @@ const shouldShowTraceIdError = (
   if (spec?.isFallback) return true;
 
   return !hasLocalizedErrorMessage(errorType);
-};
-
-export const isHeterogeneousAgentStatusGuideError = (
-  value: unknown,
-): value is HeterogeneousAgentSessionError => {
-  if (!value || typeof value !== 'object') return false;
-
-  const { agentType, code } = value as Partial<HeterogeneousAgentSessionError>;
-
-  return (
-    (agentType === 'claude-code' || agentType === 'codex') &&
-    typeof code === 'string' &&
-    HETEROGENEOUS_AGENT_STATUS_GUIDE_ERROR_CODES.has(code)
-  );
 };
 
 // Config for the errorMessage display

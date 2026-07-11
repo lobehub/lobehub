@@ -18,7 +18,6 @@ import { chatPortalSelectors } from '@/store/chat/selectors';
 import { createLocalFileTabId } from '@/store/chat/slices/portal/helpers';
 import {
   parseSkillMarkdownFrontmatter,
-  parseSkillMarkdownFrontmatterFields,
   parseSkillMarkdownMetadata,
   type SkillMarkdownMetadataItem,
 } from '@/utils/skillMarkdown';
@@ -122,6 +121,31 @@ type TextPreviewMode = 'render' | 'raw';
 
 const NO_TOPIC_KEY = '__no_topic__';
 
+const floatingControlsStyles = createStaticStyles(({ css }) => ({
+  container: css`
+    position: absolute;
+    z-index: 2;
+    inset-block-start: 8px;
+    inset-inline-end: 12px;
+
+    padding: 4px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: 8px;
+
+    opacity: 0.55;
+    background: ${cssVar.colorBgElevated};
+    backdrop-filter: blur(8px);
+    box-shadow: ${cssVar.boxShadowTertiary};
+
+    transition: opacity 0.15s ease;
+
+    &:hover,
+    &:focus-within {
+      opacity: 1;
+    }
+  `,
+}));
+
 interface TextPreviewPaneProps {
   activeTopicId?: string | null;
   content: string;
@@ -211,17 +235,10 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
       () => (isMarkdown ? parseSkillMarkdownFrontmatter(editingValue) : { body: editingValue }),
       [isMarkdown, editingValue],
     );
-    const frontmatterFields = useMemo(
-      () => (frontmatter ? parseSkillMarkdownFrontmatterFields(frontmatter) : {}),
-      [frontmatter],
-    );
     const frontmatterMetadata = useMemo(
       () => (frontmatter ? parseSkillMarkdownMetadata(frontmatter) : []),
       [frontmatter],
     );
-    const previewTitle = isMarkdown
-      ? (frontmatterFields.name ?? '')
-      : (filePath.split('/').at(-1) ?? filePath);
     const markdownComponents = useMemo(
       () =>
         ({
@@ -254,19 +271,13 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
     }, [onReload]);
 
     return (
-      <Flexbox flex={1} height={'100%'} style={{ minHeight: 0, overflow: 'hidden' }}>
+      <Flexbox
+        flex={1}
+        height={'100%'}
+        style={{ minHeight: 0, overflow: 'hidden', position: 'relative' }}
+      >
         {canRender && (
-          <Flexbox
-            horizontal
-            align={'center'}
-            gap={8}
-            paddingBlock={6}
-            paddingInline={12}
-            style={{ flexShrink: 0 }}
-          >
-            <Text ellipsis style={{ flex: 1, fontSize: 13, fontWeight: 500, minWidth: 0 }}>
-              {previewTitle}
-            </Text>
+          <Flexbox horizontal align={'center'} className={floatingControlsStyles.container} gap={4}>
             {isHtml && (
               <ActionIcon
                 icon={RefreshCwIcon}

@@ -192,8 +192,7 @@ export const buildDefaultAnthropicPayload = async (
   }
 
   let postTools = buildAnthropicTools(tools, { enabledContextCaching }) as
-    | AnthropicTools[]
-    | undefined;
+    AnthropicTools[] | undefined;
 
   if (enabledSearch) {
     const webSearchTool = buildSearchTool();

@@ -39,13 +39,17 @@ export type UserGuide = z.infer<typeof UserGuideSchema>;
 
 export const UserLabSchema = z.object({
   /**
+   * enable graph runtime configuration for agents
+   */
+  enableAgentGraphConfig: z.boolean().optional(),
+  /**
    * enable agent self-iteration feedback capture and policy execution
    */
   enableAgentSelfIteration: z.boolean().optional(),
   /**
-   * enable the floating chat panel in agent document preview
+   * run Claude Code hetero sessions through the Claude Agent SDK instead of CLI spawn
    */
-  enableAgentDocumentFloatingChatPanel: z.boolean().optional(),
+  enableClaudeCodeSdk: z.boolean().optional(),
   /**
    * enable the Fleet view (side-by-side running-task dashboard)
    */
@@ -66,6 +70,10 @@ export const UserLabSchema = z.object({
    * enable markdown rendering in chat input editor
    */
   enableInputMarkdown: z.boolean().optional(),
+  /**
+   * enable selecting message text and adding it to the next conversation context
+   */
+  enableMessageTextSelectionActions: z.boolean().optional(),
   /**
    * show the "Add Platform Agent" entry in the create menu
    */
@@ -115,11 +123,7 @@ export interface UserPreference {
 }
 
 export type ReferralStatusString =
-  | 'pending_reward'
-  | 'registered'
-  | 'suspected'
-  | 'rewarded'
-  | 'revoked';
+  'pending_reward' | 'registered' | 'suspected' | 'rewarded' | 'revoked';
 
 export interface UserInitializationState {
   agentOnboarding?: UserAgentOnboarding;

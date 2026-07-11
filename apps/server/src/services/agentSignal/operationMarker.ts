@@ -5,9 +5,10 @@
  * The `agent.execution.completed` source payload only carries
  * `agentId / operationId / topicId`. Async self-iteration & memory tools need
  * more: the originating source id, the review window / local date (for evidence
- * re-derivation and brief/receipt writes), and the message anchors used to
- * attach receipts back to the right assistant message. Rather than a side
- * channel, this travels on the operation row itself.
+ * re-derivation and brief/receipt writes), and optional message ids for receipt
+ * projection. `triggerMessageId` is the causal source. `anchorMessageId` is an
+ * explicit display anchor and should only point at a known assistant message.
+ * Rather than a side channel, this travels on the operation row itself.
  */
 
 import type { AgentSignalOperationKind, AgentSignalOperationMarker } from '@lobechat/types';

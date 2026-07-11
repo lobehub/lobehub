@@ -79,6 +79,18 @@ interface AgentDocumentToolTriggerInput {
 const CURRENT_PAGE_DOCUMENT_WRITE_ERROR_CODE = 'CURRENT_PAGE_DOCUMENT_WRITE_FORBIDDEN';
 const CURRENT_PAGE_DOCUMENT_WRITE_ERROR_TYPE = 'CurrentPageDocumentWriteForbidden';
 
+/**
+ * Upper bound on the characters a single readDocument result feeds back into the
+ * model context. Agent documents can hold whole email/newsletter archives that
+ * run into the millions of characters; returning one whole once pushed a task
+ * past the model's context window — a lone tool result reached ~591k tokens and
+ * the next completion 400'd with ExceededContextWindow. The client Inspector
+ * still renders the full document from `state`, so only the LLM-facing `content`
+ * is capped. ~200k chars is roughly 50k tokens per field — generous for a real
+ * document read while leaving ample room in the window.
+ */
+const MAX_READ_DOCUMENT_CONTENT_CHARS = 200_000;
+
 type MaybePromise<T> = T | Promise<T>;
 
 export interface AgentDocumentsRuntimeService {
@@ -151,6 +163,14 @@ export interface AgentDocumentsRuntimeOptions {
     agentId: string;
     documentId: string;
   }) => MaybePromise<string | undefined>;
+  /**
+   * Fired after a document-mutating tool call finishes (create / remove /
+   * rename / copy) so the host can invalidate client-side caches. This is the
+   * only refresh signal for the server-runtime path — where the tool executes
+   * on the gateway and the client service layer (which normally invalidates)
+   * never runs. Invoked from the executor's `onAfterCall` lifecycle hook.
+   */
+  onDocumentsMutated?: () => MaybePromise<void>;
 }
 
 export class AgentDocumentsExecutionRuntime {
@@ -158,6 +178,17 @@ export class AgentDocumentsExecutionRuntime {
     private service: AgentDocumentsRuntimeService,
     private options: AgentDocumentsRuntimeOptions = {},
   ) {}
+
+  /**
+   * Notify the host that the document set changed so it can refresh client
+   * state (e.g. the agent documents list). Invoked from the executor's
+   * `onAfterCall` hook, which fires on `tool_end` regardless of whether the
+   * mutation ran client- or server-side — covering the server-runtime path the
+   * inline client service invalidation can't reach.
+   */
+  notifyMutated(): Promise<void> {
+    return Promise.resolve(this.options.onDocumentsMutated?.());
+  }
 
   private resolveAgentId(context?: AgentDocumentOperationContext) {
     if (!context?.agentId) return;
@@ -233,12 +264,41 @@ export class AgentDocumentsExecutionRuntime {
     return doc.documentId === currentDocumentId;
   }
 
+  /**
+   * Cap a single field so one oversized document can't blow the model's context
+   * window. Truncation is byte-cheap `slice` on characters (not tokens), so the
+   * cap is deliberately conservative; the trailing marker tells the model the
+   * document was cut and to work with a smaller/targeted read instead of
+   * assuming it saw the whole thing.
+   */
+  private capReadContent(content: string) {
+    if (content.length <= MAX_READ_DOCUMENT_CONTENT_CHARS) return content;
+
+    // Avoid splitting a UTF-16 surrogate pair: if the cutoff lands right after a
+    // high surrogate (e.g. half of an emoji), step back one code unit. Otherwise
+    // JSON.stringify emits a lone `\uD83D`-style escape, which some upstream
+    // providers (DeepSeek, Anthropic) reject — which would re-break the exact
+    // large-document requests this cap is meant to protect.
+    let cutoff = MAX_READ_DOCUMENT_CONTENT_CHARS;
+    const lastCharCode = content.charCodeAt(cutoff - 1);
+    if (lastCharCode >= 0xd8_00 && lastCharCode <= 0xdb_ff) cutoff -= 1;
+
+    const omitted = content.length - cutoff;
+    return (
+      content.slice(0, cutoff) +
+      `\n\n[... document truncated to fit the context window: ${omitted} of ${content.length} ` +
+      `characters omitted. This is only the beginning of the document — do not assume it is ` +
+      `complete. Read a smaller/specific document, or list and target sections instead of ` +
+      `loading the whole file.]`
+    );
+  }
+
   private formatDocumentReadContent(
     doc: AgentDocumentRecord,
     format: 'xml' | 'markdown' | 'both' = 'xml',
   ) {
-    const markdown = doc.content || '';
-    const xml = doc.litexml || '';
+    const markdown = this.capReadContent(doc.content || '');
+    const xml = this.capReadContent(doc.litexml || '');
 
     if (format === 'markdown') return markdown;
     if (format === 'both') return JSON.stringify({ markdown, xml });
@@ -260,6 +320,7 @@ export class AgentDocumentsExecutionRuntime {
 
     const scope = args.scope ?? 'agent';
     const sourceType = args.sourceType ?? 'all';
+    const parentId = args.parentId;
     const topicId = this.resolveTopicId(context);
     if (scope === 'currentTopic' && !topicId) {
       return {
@@ -270,8 +331,14 @@ export class AgentDocumentsExecutionRuntime {
 
     const docs =
       scope === 'currentTopic'
-        ? await this.service.listTopicDocuments({ agentId, scope, sourceType, topicId: topicId! })
-        : await this.service.listDocuments({ agentId, scope, sourceType });
+        ? await this.service.listTopicDocuments({
+            agentId,
+            parentId,
+            scope,
+            sourceType,
+            topicId: topicId!,
+          })
+        : await this.service.listDocuments({ agentId, parentId, scope, sourceType });
     const list = await Promise.all(
       docs.map(async (d) => {
         const url = await this.buildDocumentUrl(agentId, d.documentId);

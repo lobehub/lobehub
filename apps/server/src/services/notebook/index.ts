@@ -19,6 +19,12 @@ interface DocumentServiceResult {
 }
 
 export interface NotebookRuntimeServiceOptions {
+  /**
+   * Visibility of the agent that triggered this notebook side-effect. When
+   * set, newly-created documents inherit it so private-agent output lands in
+   * the caller's private Pages bucket rather than the workspace bucket.
+   */
+  callerAgentVisibility?: 'private' | 'public' | null;
   serverDB: LobeChatDatabase;
   userId: string;
   workspaceId?: string;
@@ -52,14 +58,22 @@ export class NotebookRuntimeService {
   private documentService: DocumentService;
   private documentModel: DocumentModel;
   private topicDocumentModel: TopicDocumentModel;
+  private callerAgentVisibility?: 'private' | 'public' | null;
 
   constructor(options: NotebookRuntimeServiceOptions) {
+    this.callerAgentVisibility = options.callerAgentVisibility;
     this.documentService = new DocumentService(
       options.serverDB,
       options.userId,
       options.workspaceId,
+      options.callerAgentVisibility,
     );
-    this.documentModel = new DocumentModel(options.serverDB, options.userId, options.workspaceId);
+    this.documentModel = new DocumentModel(
+      options.serverDB,
+      options.userId,
+      options.workspaceId,
+      options.callerAgentVisibility,
+    );
     this.topicDocumentModel = new TopicDocumentModel(
       options.serverDB,
       options.userId,
@@ -80,7 +94,12 @@ export class NotebookRuntimeService {
     totalCharCount: number;
     totalLineCount: number;
   }): Promise<DocumentServiceResult> => {
-    const doc = await this.documentModel.create(params);
+    const doc = await this.documentModel.create({
+      ...params,
+      ...(this.callerAgentVisibility === 'private' || this.callerAgentVisibility === 'public'
+        ? { visibility: this.callerAgentVisibility }
+        : {}),
+    });
     return toServiceResult(doc);
   };
 

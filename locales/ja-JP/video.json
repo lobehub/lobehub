@@ -27,8 +27,12 @@
   "generation.status.generating": "生成中...",
   "generation.validation.endFrameRequiresStartFrame": "終了フレームを使用するには、開始フレームを設定してください。",
   "topic.createNew": "新しいトピックを作成",
+  "topic.createdBy": "{{name}} によって作成されました",
   "topic.deleteConfirm": "ビデオトピックを削除",
   "topic.deleteConfirmDesc": "このビデオトピックを削除しようとしています。この操作は元に戻せません。",
+  "topic.privateTitle": "非公開",
   "topic.title": "ビデオトピック",
-  "topic.untitled": "デフォルトのトピック"
+  "topic.untitled": "デフォルトのトピック",
+  "topic.visibility.existingLocked": "現在のトピックの可視性は固定されています。別のスペースを選択するには、新しいトピックを作成してください。",
+  "topic.workspaceTitle": "ワークスペース"
 }

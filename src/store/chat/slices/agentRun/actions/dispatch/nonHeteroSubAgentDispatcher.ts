@@ -31,6 +31,8 @@ export interface NonHeteroSubAgentDispatchContext {
   inPortalThread?: boolean;
   /** Current gateway mode status (`chatStore.isGatewayModeEnabled()`). */
   isGatewayMode: boolean;
+  /** Parent agent is workspace-scoped — see `RuntimeSelectionContext.isWorkspaceAgent`. */
+  isWorkspaceAgent?: boolean;
   /**
    * Messages passed to the client-side runner.
    * Typically the current conversation messages plus a virtual instruction
@@ -78,6 +80,7 @@ export async function dispatchNonHeteroSubAgent(
     boundDeviceId: ctx.boundDeviceId,
     heterogeneousProvider: ctx.heterogeneousProvider,
     isGatewayMode: ctx.isGatewayMode,
+    isWorkspaceAgent: ctx.isWorkspaceAgent,
     parentRuntime: ctx.parentRuntime,
   });
 

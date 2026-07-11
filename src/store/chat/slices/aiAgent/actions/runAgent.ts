@@ -264,6 +264,19 @@ export class AgentActionImpl {
         break;
       }
 
+      case 'visible_output_end': {
+        // Example: no-tool answers can finish visible text several seconds
+        // before agent_runtime_end reconciles cache, queue, unread, and
+        // notification side effects. Retire only visible loading here.
+        this.#get().updateOperationMetadata(operationId, { visibleLoadingDone: true });
+        if (operation.parentOperationId) {
+          this.#get().updateOperationMetadata(operation.parentOperationId, {
+            visibleLoadingDone: true,
+          });
+        }
+        break;
+      }
+
       case 'step_start': {
         const { phase, toolCall, pendingToolsCalling, requiresApproval, uiMessages } =
           event.data || {};
@@ -288,6 +301,20 @@ export class AgentActionImpl {
           });
 
           await notifyDesktopHumanApprovalRequired(this.#get, operation.context);
+          if (operation.context.topicId) {
+            const statusWrite = this.#get().updateTopicStatus?.({
+              agentId: operation.context.agentId,
+              groupId: operation.context.groupId,
+              ...(operation.context.scope === 'group' || operation.context.scope === 'group_agent'
+                ? { scope: operation.context.scope }
+                : {}),
+              status: 'waitingForHuman',
+              topicId: operation.context.topicId,
+            });
+            void statusWrite?.catch((error) => {
+              console.error('[runAgent] updateTopicStatus failed:', error);
+            });
+          }
 
           // Stop loading state, waiting for human intervention
           log(`Stopping loading for human approval: ${assistantId}`);

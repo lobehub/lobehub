@@ -16,12 +16,18 @@
 #   init-dev-env.sh migrate          # run DB migrations against the configured DB
 #   init-dev-env.sh seed-user        # seed the baseline test user + CLI API key
 #   init-dev-env.sh qstash           # run local Upstash QStash dev server
+#   init-dev-env.sh s3               # run local s3rver object storage
+#   init-dev-env.sh preflight        # check agent-runtime prerequisites (QStash + S3)
 #   init-dev-env.sh dev-next         # exec `pnpm run dev:next` with this env
 #   init-dev-env.sh dev              # exec `bun run dev` with this env
+#   init-dev-env.sh stop-dev         # stop the dev server (Next + Vite) started by `dev`
+#   init-dev-env.sh clean            # teardown: stop dev server (DB/Redis/S3 data kept)
+#   init-dev-env.sh clean-s3         # remove local S3 test data
 #   init-dev-env.sh clean-db         # remove the managed Postgres/Redis containers
 #
 # Overrides:
-#   SERVER_PORT=3010 DB_PORT=5433 DB_CONTAINER=lobehub-agent-testing-postgres REDIS_PORT=6380 REDIS_CONTAINER=lobehub-agent-testing-redis QSTASH_DEV_PORT=8080
+#   SERVER_PORT=3010 DB_PORT=5433 DB_CONTAINER=lobehub-agent-testing-postgres REDIS_PORT=6380 REDIS_CONTAINER=lobehub-agent-testing-redis QSTASH_DEV_PORT=8080 S3_DEV_PORT=29000
+#   AGENT_TESTING_DEV_STATE_FILE=.records/runtime/agent-testing-dev.state
 
 set -euo pipefail
 
@@ -47,6 +53,7 @@ fi
 # seed-user, dev, web-seed) and test-env.sh all agree on the same port. Delete
 # the ports file (or pass SERVER_PORT=... explicitly) to re-allocate.
 PORTS_FILE="${AGENT_TESTING_PORTS_FILE:-$WORKSPACE_ROOT/.records/env/agent-testing-ports.env}"
+DEV_STATE_FILE="${AGENT_TESTING_DEV_STATE_FILE:-$WORKSPACE_ROOT/.records/runtime/agent-testing-dev.state}"
 
 _port_in_use() { lsof -iTCP:"$1" -sTCP:LISTEN > /dev/null 2>&1; }
 _pick_free_port() {
@@ -100,10 +107,40 @@ QSTASH_DEV_PORT="${QSTASH_DEV_PORT:-8080}"
 QSTASH_LOCAL_TOKEN="${QSTASH_LOCAL_TOKEN:-eyJVc2VySUQiOiJkZWZhdWx0VXNlciIsIlBhc3N3b3JkIjoiZGVmYXVsdFBhc3N3b3JkIn0=}"
 QSTASH_LOCAL_CURRENT_SIGNING_KEY="${QSTASH_LOCAL_CURRENT_SIGNING_KEY:-sig_7kYjw48mhY7kAjqNGcy6cr29RJ6r}"
 QSTASH_LOCAL_NEXT_SIGNING_KEY="${QSTASH_LOCAL_NEXT_SIGNING_KEY:-sig_5ZB6DVzB1wjE8S6rZ7eenA8Pdnhs}"
+S3_DEV_PORT="${S3_DEV_PORT:-29000}"
+S3_DATA_DIR="${S3_DATA_DIR:-$WORKSPACE_ROOT/.records/data/agent-testing-s3}"
 
 ok() { printf '  \033[32m✔\033[0m %s\n' "$1"; }
 bad() { printf '  \033[31m✘\033[0m %s\n' "$1"; }
 note() { printf '      %s\n' "$1"; }
+
+# A URL is "reachable" when it answers with any HTTP status. Connection refused
+# / no route yields curl code 000. Used for the dev server, where any listener
+# on the port is the thing we mean.
+_http_reachable() {
+  local url="$1" code
+  command -v curl > /dev/null 2>&1 || return 2
+  code="$(curl -s -o /dev/null -m 3 -w '%{http_code}' "$url" 2>/dev/null || true)"
+  [[ -n "$code" && "$code" != "000" ]]
+}
+
+# QStash-specific probe. 8080 is a common dev port, so "something answers HTTP"
+# is not enough — a foreign listener would make preflight green while `agent
+# run` later publishes to a non-QStash endpoint and fails. Key on QStash's REST
+# contract instead: `/v2/schedules` rejects a tokenless request with 401 and
+# answers the configured bearer with 200. A bare/foreign server fails one leg
+# (catch-all 200 servers don't 401; 404/other servers don't 200), and a wrong
+# token also fails (surfacing auth misconfig). Returns 2 when curl is absent.
+_qstash_reachable() {
+  command -v curl > /dev/null 2>&1 || return 2
+  local base="${QSTASH_URL%/}" unauth auth
+  unauth="$(curl -s -o /dev/null -m 3 -w '%{http_code}' "$base/v2/schedules" 2>/dev/null || true)"
+  [[ "$unauth" == "401" ]] || return 1
+  auth="$(curl -s -o /dev/null -m 3 \
+    -H "Authorization: Bearer ${QSTASH_TOKEN:-}" \
+    -w '%{http_code}' "$base/v2/schedules" 2>/dev/null || true)"
+  [[ "$auth" == "200" ]]
+}
 
 guard_no_root_env() {
   if [[ -f "$ROOT_ENV_FILE" ]]; then
@@ -132,10 +169,16 @@ apply_env() {
   export QSTASH_TOKEN="${QSTASH_TOKEN:-$QSTASH_LOCAL_TOKEN}"
   export QSTASH_URL="${QSTASH_URL:-http://127.0.0.1:${QSTASH_DEV_PORT}}"
   export REDIS_URL
-  export S3_ACCESS_KEY_ID="${S3_ACCESS_KEY_ID:-agent-testing-access-key}"
+  export S3_ACCESS_KEY_ID="${S3_ACCESS_KEY_ID:-S3RVER}"
   export S3_BUCKET="${S3_BUCKET:-agent-testing-bucket}"
-  export S3_ENDPOINT="${S3_ENDPOINT:-https://agent-testing-s3.localhost}"
-  export S3_SECRET_ACCESS_KEY="${S3_SECRET_ACCESS_KEY:-agent-testing-secret-key}"
+  export S3_DATA_DIR
+  export S3_DEV_PORT
+  export S3_ENABLE_PATH_STYLE="${S3_ENABLE_PATH_STYLE:-1}"
+  export S3_ENDPOINT="${S3_ENDPOINT:-http://127.0.0.1:${S3_DEV_PORT}}"
+  export S3_PUBLIC_DOMAIN="${S3_PUBLIC_DOMAIN:-${S3_ENDPOINT}/${S3_BUCKET}}"
+  export S3_REGION="${S3_REGION:-us-east-1}"
+  export S3_SECRET_ACCESS_KEY="${S3_SECRET_ACCESS_KEY:-S3RVER}"
+  export S3_SET_ACL="${S3_SET_ACL:-0}"
   export SPA_PORT
   export VITE_DEV_PORT="${VITE_DEV_PORT:-$SPA_PORT}"
   # Bypass cloud chat-security UA/headless fingerprint checks for local e2e only.
@@ -165,8 +208,14 @@ env_keys() {
     REDIS_URL \
     S3_ACCESS_KEY_ID \
     S3_BUCKET \
+    S3_DATA_DIR \
+    S3_DEV_PORT \
+    S3_ENABLE_PATH_STYLE \
     S3_ENDPOINT \
+    S3_PUBLIC_DOMAIN \
+    S3_REGION \
     S3_SECRET_ACCESS_KEY \
+    S3_SET_ACL \
     SPA_PORT \
     VITE_DEV_PORT \
     AGENT_TESTING_DISABLE_CHAT_SECURITY
@@ -449,6 +498,68 @@ cmd_status() {
   else
     bad "docker CLI is not available"
   fi
+  if _qstash_reachable; then
+    ok "QStash reachable: $QSTASH_URL"
+  else
+    note "QStash is not answering as QStash at $QSTASH_URL (needed for agent-runtime / queue mode)"
+  fi
+  if node "$REPO_ROOT/.agents/skills/agent-testing/scripts/check-s3.mjs" > /dev/null 2>&1; then
+    ok "S3 reachable and writable: $S3_ENDPOINT/$S3_BUCKET"
+  else
+    note "S3 is not ready at $S3_ENDPOINT (start it with: $0 s3)"
+  fi
+}
+
+# Prerequisite gate for agent-runtime tests. In queue mode (the default here and
+# in production) creating an agent operation POSTs to QStash; if QStash is down
+# the run fails with `ECONNREFUSED 127.0.0.1:8080 / fetch failed` at operation
+# creation — before any LLM call, so no trace is ever recorded. Run this before
+# `lh agent run` (or any durable-op path) and start `qstash` if it fails.
+cmd_preflight() {
+  apply_env
+  local failed=0
+  echo "agent-runtime preflight (AGENT_RUNTIME_MODE=$AGENT_RUNTIME_MODE):"
+
+  if command -v docker > /dev/null 2>&1 &&
+    docker ps --format '{{.Names}}' | grep -Fxq "$REDIS_CONTAINER"; then
+    ok "Redis running: $REDIS_CONTAINER (queue-mode state)"
+  else
+    bad "Redis not running: $REDIS_CONTAINER"
+    note "start it with: $0 setup-db"
+    failed=1
+  fi
+
+  if [[ "$AGENT_RUNTIME_MODE" == "queue" ]]; then
+    if _qstash_reachable; then
+      ok "QStash reachable: $QSTASH_URL (operation dispatch)"
+    else
+      bad "QStash NOT answering as QStash at $QSTASH_URL — agent runs will fail with 'fetch failed' (ECONNREFUSED) or auth errors"
+      note "start it in a separate terminal: $0 qstash"
+      failed=1
+    fi
+  else
+    note "AGENT_RUNTIME_MODE=$AGENT_RUNTIME_MODE (not queue) — QStash not required"
+  fi
+
+  if node "$REPO_ROOT/.agents/skills/agent-testing/scripts/check-s3.mjs" > /dev/null 2>&1; then
+    ok "S3 read/write/delete passed: $S3_ENDPOINT/$S3_BUCKET"
+  else
+    bad "S3 preflight failed at $S3_ENDPOINT/$S3_BUCKET"
+    note "start it in a separate terminal: $0 s3"
+    failed=1
+  fi
+
+  if _http_reachable "$APP_URL"; then
+    ok "dev server reachable: $APP_URL"
+  else
+    note "dev server not reachable at $APP_URL — start it with: $0 dev"
+  fi
+
+  if [[ "$failed" == 1 ]]; then
+    bad "preflight failed — resolve the above before running agent-runtime tests"
+    return 1
+  fi
+  ok "preflight passed — safe to run agent-runtime tests"
 }
 
 cmd_qstash() {
@@ -459,6 +570,94 @@ cmd_qstash() {
   exec pnpm run qstash -- -port "$QSTASH_DEV_PORT"
 }
 
+process_start() {
+  ps -p "$1" -o lstart= 2>/dev/null | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
+}
+
+process_cwd() {
+  lsof -a -p "$1" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -1
+}
+
+write_dev_state() {
+  local mode="$1" start
+  start="$(process_start "$$")"
+  mkdir -p "$(dirname "$DEV_STATE_FILE")"
+  {
+    printf 'PID=%q\n' "$$"
+    printf 'PROCESS_START=%q\n' "$start"
+    printf 'MODE=%q\n' "$mode"
+    printf 'REPO_ROOT=%q\n' "$REPO_ROOT"
+    printf 'SERVER_PORT=%q\n' "$SERVER_PORT"
+    printf 'SPA_PORT=%q\n' "$SPA_PORT"
+  } > "$DEV_STATE_FILE"
+  note "recorded dev server ownership: $DEV_STATE_FILE (pid $$)"
+}
+
+prepare_dev_state() {
+  local PID PROCESS_START MODE REPO_ROOT SERVER_PORT SPA_PORT
+  [[ -f "$DEV_STATE_FILE" ]] || return 0
+  # shellcheck disable=SC1090
+  source "$DEV_STATE_FILE"
+  if state_owns_process "$PID" "$PROCESS_START" "$REPO_ROOT" "$MODE"; then
+    bad "an owned $MODE dev server is already running (pid $PID)"
+    note "stop it first with: $0 stop-dev"
+    return 1
+  fi
+  note "replacing stale dev ownership state: $DEV_STATE_FILE"
+  rm -f "$DEV_STATE_FILE"
+}
+
+collect_descendants() {
+  local parent="$1" child
+  while IFS= read -r child; do
+    [[ -n "$child" ]] || continue
+    collect_descendants "$child"
+    printf '%s\n' "$child"
+  done < <(pgrep -P "$parent" 2>/dev/null || true)
+}
+
+state_owns_process() {
+  local pid="$1" expected_start="$2" expected_root="$3" mode="$4"
+  local actual_start actual_cwd command
+  kill -0 "$pid" 2>/dev/null || return 1
+  actual_start="$(process_start "$pid")"
+  [[ -n "$actual_start" && "$actual_start" == "$expected_start" ]] || return 1
+  actual_cwd="$(process_cwd "$pid")"
+  [[ "$actual_cwd" == "$expected_root" || "$actual_cwd" == "$expected_root/"* ]] || return 1
+  command="$(ps -p "$pid" -o command= 2>/dev/null || true)"
+  case "$mode" in
+    dev) [[ "$command" == *"bun"* && "$command" == *"run dev"* ]] ;;
+    dev-next) [[ "$command" == *"next"* && "$command" == *"dev"* ]] ;;
+    *) return 1 ;;
+  esac
+}
+
+stop_owned_process_tree() {
+  local root_pid="$1" descendants pid
+  descendants="$(collect_descendants "$root_pid")"
+  for pid in $descendants; do
+    kill -TERM "$pid" 2>/dev/null || true
+  done
+  kill -TERM "$root_pid" 2>/dev/null || true
+  for _ in $(seq 1 20); do
+    kill -0 "$root_pid" 2>/dev/null || return 0
+    sleep 0.1
+  done
+  for pid in $descendants; do
+    kill -KILL "$pid" 2>/dev/null || true
+  done
+  kill -KILL "$root_pid" 2>/dev/null || true
+}
+
+cmd_s3() {
+  apply_env
+  cd "$REPO_ROOT"
+  note "starting local S3 server at $S3_ENDPOINT"
+  note "bucket=$S3_BUCKET; data=$S3_DATA_DIR"
+  note "keep this process running while testing file uploads"
+  exec node .agents/skills/agent-testing/scripts/start-s3.mjs
+}
+
 cmd_dev_next() {
   apply_env
   cd "$REPO_ROOT"
@@ -467,12 +666,16 @@ cmd_dev_next() {
   # SERVER_PORT was auto-allocated to something else. apply_env already exported
   # every env this needs (there is no .env to load in this mode), so invoking
   # next directly is equivalent and port-correct in both cloud and submodule.
+  prepare_dev_state
+  write_dev_state dev-next
   exec pnpm exec next dev -p "$SERVER_PORT"
 }
 
 cmd_dev() {
   apply_env
   cd "$REPO_ROOT"
+  prepare_dev_state
+  write_dev_state dev
   exec bun run dev
 }
 
@@ -498,8 +701,46 @@ cmd_clean_db() {
   fi
 }
 
+cmd_stop_dev() {
+  local PID PROCESS_START MODE REPO_ROOT SERVER_PORT SPA_PORT
+  if [[ ! -f "$DEV_STATE_FILE" ]]; then
+    note "no owned dev server state found: $DEV_STATE_FILE"
+    return 0
+  fi
+  # shellcheck disable=SC1090
+  source "$DEV_STATE_FILE"
+  if ! state_owns_process "$PID" "$PROCESS_START" "$REPO_ROOT" "$MODE"; then
+    bad "refusing to stop PID $PID: ownership metadata no longer matches the live process"
+    note "stale state removed; inspect listeners manually if cleanup is still needed"
+    rm -f "$DEV_STATE_FILE"
+    return 1
+  fi
+  stop_owned_process_tree "$PID"
+  rm -f "$DEV_STATE_FILE"
+  ok "stopped owned $MODE process tree (root pid $PID)"
+}
+
+cmd_clean() {
+  # Default teardown after a test run: stop the dev server. The managed
+  # Postgres/Redis containers are intentionally reused across runs (setup-db is
+  # idempotent), so they are left running — remove them explicitly with clean-db.
+  cmd_stop_dev
+  note "managed DB/Redis containers and S3 data left in place for reuse"
+  note "remove DB/Redis with: $0 clean-db; remove S3 data with: $0 clean-s3"
+}
+
+cmd_clean_s3() {
+  apply_env
+  if [[ -d "$S3_DATA_DIR" ]]; then
+    rm -rf "$S3_DATA_DIR"
+    ok "removed local S3 data: $S3_DATA_DIR"
+  else
+    note "local S3 data not found: $S3_DATA_DIR"
+  fi
+}
+
 usage() {
-  sed -n '3,24p' "$0" >&2
+  sed -n '3,27p' "$0" >&2
 }
 
 COMMAND="${1:-status}"
@@ -520,9 +761,14 @@ case "$COMMAND" in
   migrate) migrate_db ;;
   seed-user) seed_user ;;
   qstash) cmd_qstash ;;
+  s3) cmd_s3 ;;
+  preflight) cmd_preflight ;;
   dev-next) cmd_dev_next ;;
   dev) cmd_dev ;;
+  stop-dev | stop) cmd_stop_dev ;;
+  clean) cmd_clean ;;
   clean-db) cmd_clean_db ;;
+  clean-s3) cmd_clean_s3 ;;
   status) cmd_status ;;
   *)
     usage

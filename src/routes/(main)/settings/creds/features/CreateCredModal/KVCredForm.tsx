@@ -8,7 +8,7 @@ import { Minus, Plus } from 'lucide-react';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useCredsApi } from '../useCredsApi';
+import { type CredsApi } from '../useCredsApi';
 
 const styles = createStaticStyles(({ css }) => ({
   footer: css`
@@ -25,6 +25,7 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 interface KVCredFormProps {
+  credsApi: CredsApi;
   disabled?: boolean;
   onBack: () => void;
   onSuccess: () => void;
@@ -38,10 +39,9 @@ interface FormValues {
   name: string;
 }
 
-const KVCredForm: FC<KVCredFormProps> = ({ type, disabled, onBack, onSuccess }) => {
+const KVCredForm: FC<KVCredFormProps> = ({ credsApi, type, disabled, onBack, onSuccess }) => {
   const { t } = useTranslation('setting');
   const [form] = Form.useForm<FormValues>();
-  const credsApi = useCredsApi();
 
   const createMutation = useMutation({
     mutationFn: async (values: FormValues) => {

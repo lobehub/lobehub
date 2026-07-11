@@ -4,7 +4,7 @@ import type { BuiltinRenderProps } from '@lobechat/types';
 import { fromNow } from '@lobechat/utils/time';
 import { Block, Flexbox, Highlighter, Icon, Markdown, Tag, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { ExternalLink, Link2 } from 'lucide-react';
+import { ExternalLink, Inbox, Link2 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -31,6 +31,21 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     padding-inline: 10px;
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: 6px;
+
+    background: ${cssVar.colorFillQuaternary};
+  `,
+  empty: css`
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    justify-content: center;
+
+    padding-block: 16px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: 6px;
+
+    font-size: 13px;
+    color: ${cssVar.colorTextTertiary};
 
     background: ${cssVar.colorFillQuaternary};
   `,
@@ -254,12 +269,16 @@ EntityCard.displayName = 'LinearRenderEntityCard';
 
 const LinearRender = memo<BuiltinRenderProps<Record<string, unknown>, unknown, unknown>>(
   ({ apiName, args, content, pluginError }) => {
+    const { t } = useTranslation('plugin');
     const model = useMemo(
       () => buildLinearRenderModel({ apiName, args, content, pluginError }),
       [apiName, args, content, pluginError],
     );
     const hasResult =
-      hasItems(model.resultEntities) || Boolean(model.resultText) || Boolean(model.rawResultJson);
+      hasItems(model.resultEntities) ||
+      Boolean(model.resultText) ||
+      Boolean(model.rawResultJson) ||
+      Boolean(model.emptyCollectionKey);
 
     // Request args are intentionally not rendered here — the Inspector already
     // surfaces the tool inputs, so duplicating them in the render is redundant.
@@ -276,6 +295,14 @@ const LinearRender = memo<BuiltinRenderProps<Record<string, unknown>, unknown, u
               />
             ))}
           </Flexbox>
+        )}
+        {model.emptyCollectionKey && (
+          <div className={styles.empty}>
+            <Icon icon={Inbox} size={14} />
+            <span>
+              {t('builtins.linear.render.empty', { collection: model.emptyCollectionKey })}
+            </span>
+          </div>
         )}
         {model.resultText && (
           <Highlighter

@@ -214,9 +214,12 @@ vi.mock('./plugins', () => ({
   createChatInputRichPlugins: () => [],
 }));
 vi.mock('./ReferTopic', () => ({ INSERT_REFER_TOPIC_COMMAND: 'insert-refer-topic' }));
-vi.mock('./useLocalFileMention', () => ({
-  useLocalFileMention: () => ({
-    enableLocalFileMention: false,
+vi.mock('./LocalFileTag', () => ({
+  INSERT_LOCAL_FILE_TAG_COMMAND: 'insert-local-file-tag',
+}));
+vi.mock('./useLocalFileTag', () => ({
+  useLocalFileTag: () => ({
+    enableLocalFileTag: false,
     searchLocalFiles: vi.fn(async () => []),
   }),
 }));

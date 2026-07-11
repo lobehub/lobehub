@@ -48,7 +48,9 @@
   "generation.actions.seedApplyFailed": "Seed konnte nicht angewendet werden",
   "generation.actions.seedCopied": "Seed in die Zwischenablage kopiert",
   "generation.actions.seedCopyFailed": "Seed konnte nicht kopiert werden",
+  "generation.metadata.by": "von {{name}}",
   "generation.metadata.count": "{{count}} Bilder",
+  "generation.metadata.createdAt": "Erstellt am {{time}}",
   "generation.status.failed": "Generierung fehlgeschlagen",
   "generation.status.generating": "Generiere...",
   "notSupportGuide.desc": "Der aktuelle Bereitstellungsmodus unterstützt keine KI-Bilderzeugung. Wechseln Sie in den <1>Server-Datenbank-Bereitstellungsmodus</1> oder nutzen Sie <3>LobeHub Cloud</3>.",
@@ -60,9 +62,13 @@
   "notSupportGuide.features.multiProviders.title": "Unterstützung mehrerer Anbieter",
   "notSupportGuide.title": "Aktueller Bereitstellungsmodus unterstützt keine KI-Bilderzeugung",
   "topic.createNew": "Neues Thema erstellen",
+  "topic.createdBy": "Erstellt von {{name}}",
   "topic.deleteConfirm": "Generierungsthema löschen",
   "topic.deleteConfirmDesc": "Sie sind dabei, dieses Generierungsthema zu löschen. Diese Aktion kann nicht rückgängig gemacht werden. Bitte seien Sie vorsichtig.",
   "topic.empty": "Keine Generierungsthemen",
+  "topic.privateTitle": "Privat",
   "topic.title": "Thema des Gemäldes",
-  "topic.untitled": "Standardthema"
+  "topic.untitled": "Standardthema",
+  "topic.visibility.existingLocked": "Die Sichtbarkeit ist für das aktuelle Thema festgelegt. Erstellen Sie ein neues Thema, um einen anderen Bereich auszuwählen.",
+  "topic.workspaceTitle": "Arbeitsbereich"
 }

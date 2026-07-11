@@ -27,8 +27,12 @@
   "generation.status.generating": "생성 중...",
   "generation.validation.endFrameRequiresStartFrame": "종료 프레임을 사용하려면 시작 프레임이 필요합니다. 먼저 시작 프레임을 설정하세요.",
   "topic.createNew": "새 주제 만들기",
+  "topic.createdBy": "{{name}}에 의해 생성됨",
   "topic.deleteConfirm": "비디오 주제 삭제",
   "topic.deleteConfirmDesc": "이 비디오 주제를 삭제하려고 합니다. 이 작업은 되돌릴 수 없습니다.",
+  "topic.privateTitle": "비공개",
   "topic.title": "비디오 주제",
-  "topic.untitled": "기본 주제"
+  "topic.untitled": "기본 주제",
+  "topic.visibility.existingLocked": "현재 주제의 가시성이 고정되어 있습니다. 다른 공간을 선택하려면 새 주제를 생성하세요.",
+  "topic.workspaceTitle": "워크스페이스"
 }

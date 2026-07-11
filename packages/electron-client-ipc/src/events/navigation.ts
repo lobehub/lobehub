@@ -50,5 +50,5 @@ export interface NavigationBroadcastEvents {
   /**
    * Ask renderer to navigate within the SPA without reloading the whole page.
    */
-  navigate: (data: { path: string; replace?: boolean }) => void;
+  navigate: (data: { escape?: boolean; path: string; replace?: boolean }) => void;
 }

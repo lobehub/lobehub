@@ -1,6 +1,6 @@
 # LobeHub Development Guidelines
 
-Guidelines for using AI coding agents in this LobeHub repository.
+Guidelines for using AI coding agents in this opensource LobeHub repository.
 
 ## Tech Stack
 
@@ -23,28 +23,24 @@ lobehub/
 ├── packages/               # Shared packages (@lobechat/*)
 │   ├── database/           # Database schemas, models, repositories
 │   ├── agent-runtime/      # Agent runtime
+│   ├── locales/            # i18n source: packages/locales/src/default/
+│   ├── env/                # env schemas (@/envs/* → packages/env/src/*)
 │   └── ...
 ├── src/
-│   ├── app/                # Next.js App Router (backend API + auth)
-│   │   ├── (backend)/     # API routes (trpc, webapi, etc.)
+│   ├── app/                # Next.js App Router (backend API + auth shell)
+│   │   ├── (backend)/      # API routes (trpc, webapi, etc.)
 │   │   ├── spa/            # SPA HTML template service
-│   │   └── [variants]/(auth)/  # Auth pages (SSR required)
-│   ├── routes/             # SPA page components (Vite)
-│   │   ├── (main)/         # Desktop pages
-│   │   ├── (mobile)/       # Mobile pages
-│   │   ├── (desktop)/      # Desktop-specific pages
-│   │   ├── (popup)/        # Popup window pages
-│   │   ├── onboarding/     # Onboarding pages
-│   │   └── share/          # Share pages
+│   │   └── spa-auth/       # Auth HTML shell (SSR)
+│   ├── routes/             # SPA page segments (thin — delegate to features/)
+│   │   ├── (main)/ (mobile)/ (desktop)/ (popup)/
+│   │   ├── auth/           # Auth page segments (signin, signup, …)
+│   │   ├── onboarding/ share/
 │   ├── spa/                # SPA entry points and router config
-│   │   ├── entry.web.tsx   # Web entry
-│   │   ├── entry.mobile.tsx
-│   │   ├── entry.desktop.tsx
-│   │   ├── entry.popup.tsx
+│   │   ├── entry.{web,mobile,desktop,popup}.tsx
 │   │   └── router/         # React Router configuration
 │   ├── store/              # Zustand stores
 │   ├── services/           # Client services
-│   ├── server/             # Server services and routers
+│   ├── server/             # standalone-Hono pieces only (main backend: apps/server)
 │   └── ...
 └── e2e/                    # E2E tests (Cucumber + Playwright)
 ```
@@ -68,7 +64,7 @@ When adding or changing SPA routes:
 3. In route files, use `import { X } from '@/features/<Domain>'` (or `import Y from '@/features/<Domain>/...'`). Do not add new `features/` folders inside `src/routes/`.
 4. **Register the desktop route tree in both configs:** `src/spa/router/desktopRouter.config.tsx` and `src/spa/router/desktopRouter.config.desktop.tsx` must stay in sync (same paths and nesting). Updating only one can cause **blank screens** if the other build path expects the route. `desktopRouter.sync.test.tsx` guards this invariant — keep it passing.
 
-See the **spa-routes** skill (`.agents/skills/spa-routes/SKILL.md`) for the full convention and file-division rules.
+See the **spa-routes** skill for the full convention and file-division rules.
 
 ## Development
 
@@ -104,30 +100,23 @@ Open this URL to develop locally against the production backend (app.lobehub.com
 - `bun` to run npm scripts
 - `bunx` for executable npm packages
 
-### Testing
+### Quality Check
 
 ```bash
-# Run specific test (NEVER run `bun run test` - takes ~10 minutes)
-bunx vitest run --silent='passed-only' '[file-path]'
-
-# Database package
-cd packages/database && bunx vitest run --silent='passed-only' '[file]'
+bun run check [changed-files...]
 ```
 
-- Prefer `vi.spyOn` over `vi.mock`
-
-### Type Checking
-
-```bash
-bun run type-check
-```
+- No selector = **lint + test in a single pass** — run it once; don't fire a separate pass per selector. `--lint` / `--test` / `--type` narrow scope and are composable within one run. Default files = all working-tree changes (staged + unstaged + untracked); explicit paths override.
+- `--lint` auto-fixes the given files and prints the applied fixes as a diff, so you can review what changed.
+- `--test` auto-discovers the related tests for the given source files and runs them under the nearest owning vitest config (e.g. `packages/database`) — no need to `cd` into packages.
+- `--type` runs the full type-check. NEVER run `bun run test` — the full suite takes \~10 minutes.
+- To run tests manually (e.g. a single file or unusual flags), `cd` into the owning package first: `cd packages/database && bunx vitest run --silent='passed-only' '[file-path]'`.
 
 ### i18n
 
-- Add keys to a namespace file under `src/locales/default/` (e.g. `agent.ts`, `auth.ts`)
-- Ship en-US and zh-CN by hand in the same PR: write the English source in `src/locales/default/*.ts` and mirror it to `locales/en-US/`; hand-translate `locales/zh-CN/`. Leave all other locales to CI.
-- Don't run `pnpm i18n` manually by default — a daily CI workflow (`auto-i18n.yml`) runs it and opens an automated translation PR for any missing keys.
-- Run `pnpm i18n` manually only when your branch needs the translated locales immediately, instead of waiting for the daily job (slow; requires `OPENAI_API_KEY`). Note it only fills keys missing from other locales — value-only edits never need it.
+- Add keys to a namespace file under `packages/locales/src/default/` (e.g. `agent.ts`, `auth.ts`)
+- Hand-write en-US + zh-CN for dev preview: author the English source in `packages/locales/src/default/*.ts`, mirror it to `locales/en-US/`, and hand-translate `locales/zh-CN/`.
+- Before opening the PR, run `bun run i18n` (slow) to fill the remaining locales with the script — don't hand-translate those.
 
 ### Code Style
 
@@ -135,6 +124,6 @@ bun run type-check
 
 ### Code Review
 
-Before reviewing a PR / diff / branch change, read the **review-checklist** skill (`.agents/skills/review-checklist/SKILL.md`) — it lists the recurring mistakes specific to this codebase.
+Before reviewing a PR / diff / branch change, read the **deep-review** skill. Ordinary review requests use its light mode (inline review against the dimension quick checklists); the full multi-subagent deep mode runs only on explicit invocation.
 
-When designing or reviewing user-facing flows (empty/loading/error states, confirmations, async feedback, button hierarchy, lists at scale, pickers), follow the **ux** skill (`.agents/skills/ux/SKILL.md`) — LobeHub's design values (自然 / 意义感 / 确定性) plus per-aspect execution checklists.
+When designing or reviewing user-facing flows (empty/loading/error states, confirmations, async feedback, button hierarchy, lists at scale, pickers), follow LobeHub's design values in [`DESIGN.md`](./DESIGN.md) — Natural / Meaningful / Certainty / Growth (自然 / 意义感 / 确定性 / 成长).

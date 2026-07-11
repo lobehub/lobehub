@@ -27,8 +27,12 @@
   "generation.status.generating": "Создание...",
   "generation.validation.endFrameRequiresStartFrame": "Конечный кадр нельзя использовать без начального. Пожалуйста, сначала задайте начальный кадр.",
   "topic.createNew": "Создать новую тему",
+  "topic.createdBy": "Создано {{name}}",
   "topic.deleteConfirm": "Удалить тему видео",
   "topic.deleteConfirmDesc": "Вы собираетесь удалить эту тему видео. Это действие необратимо.",
+  "topic.privateTitle": "Приватный",
   "topic.title": "Темы видео",
-  "topic.untitled": "Тема по умолчанию"
+  "topic.untitled": "Тема по умолчанию",
+  "topic.visibility.existingLocked": "Видимость зафиксирована для текущей темы. Создайте новую тему, чтобы выбрать другое пространство.",
+  "topic.workspaceTitle": "Рабочая область"
 }

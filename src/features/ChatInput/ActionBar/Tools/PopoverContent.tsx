@@ -185,7 +185,7 @@ const PopoverContent = memo<PopoverContentProps>(
               type="button"
               onClick={() => {
                 closePopover();
-                navigate('/settings/skill');
+                navigate('/settings/connector');
               }}
             >
               <Icon icon={Settings} size={14} />

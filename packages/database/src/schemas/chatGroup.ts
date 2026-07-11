@@ -49,6 +49,15 @@ export const chatGroups = pgTable(
 
     pinned: boolean('pinned').default(false),
 
+    /**
+     * Visibility within the owning workspace. `public` (default) means every
+     * workspace member can see and use the chat group; `private` constrains it
+     * to the creator (`user_id`). Ignored in personal mode.
+     */
+    visibility: text('visibility', { enum: ['private', 'public'] })
+      .default('public')
+      .notNull(),
+
     ...timestamps,
   },
   (t) => [
@@ -56,6 +65,7 @@ export const chatGroups = pgTable(
     index('chat_groups_user_id_idx').on(t.userId),
     index('chat_groups_group_id_idx').on(t.groupId),
     index('chat_groups_workspace_id_idx').on(t.workspaceId),
+    index('chat_groups_workspace_visibility_idx').on(t.workspaceId, t.visibility, t.userId),
   ],
 );
 

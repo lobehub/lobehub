@@ -1,12 +1,13 @@
 'use client';
 
-import { Button, Modal } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { Upload, X } from 'lucide-react';
 import { type FC } from 'react';
 import React, { memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import ImperativeModal from '@/components/ImperativeModal';
 import Image from '@/libs/next/Image';
 import { useUploadFilesValidation } from '@/routes/(main)/(create)/image/features/ConfigPanel/hooks/useUploadFilesValidation';
 
@@ -244,7 +245,7 @@ const ImageManageModal: FC<ImageManageModalProps> = memo(
         });
         setImageItems([]); // Clear items when modal closes
       }
-    }, [open]);
+    }, [imageItems, open]);
 
     const selectedItem = imageItems[selectedIndex];
 
@@ -354,7 +355,7 @@ const ImageManageModal: FC<ImageManageModalProps> = memo(
     };
 
     return (
-      <Modal
+      <ImperativeModal
         centered
         className={styles.modal}
         footer={null}
@@ -421,7 +422,7 @@ const ImageManageModal: FC<ImageManageModalProps> = memo(
             {t('MultiImagesUpload.modal.complete')}
           </Button>
         </div>
-      </Modal>
+      </ImperativeModal>
     );
   },
 );

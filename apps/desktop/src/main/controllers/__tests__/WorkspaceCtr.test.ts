@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type App } from '@/core/App';
 
@@ -28,6 +28,10 @@ vi.mock('node:fs/promises', () => ({
   readdir: vi.fn(),
 }));
 
+vi.mock('@lobechat/local-file-shell', () => ({
+  detectRepoType: vi.fn(async () => undefined),
+}));
+
 const mockLocalFileProtocolManager = {
   approveIndexedProjectRoot: vi.fn(),
 };
@@ -42,8 +46,13 @@ describe('WorkspaceCtr', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    vi.stubEnv('HOME', '/device-home');
     mockFsPromises = await import('node:fs/promises');
     workspaceCtr = new WorkspaceCtr(mockApp);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   const dirent = (name: string, kind: 'dir' | 'file') => ({
@@ -108,6 +117,43 @@ describe('WorkspaceCtr', () => {
         description: 'from agents',
         path: '/proj/.agents/skills/shared/SKILL.md',
       });
+    });
+
+    it('merges execution-device skills and keeps project skills first on duplicate names', async () => {
+      vi.mocked(mockFsPromises.readdir).mockImplementation(async (dir: string) => {
+        if (dir === '/proj/.agents/skills') return [dirent('shared', 'dir')];
+        if (dir === '/proj/.agents/skills/shared') return [dirent('SKILL.md', 'file')];
+        if (dir === '/device-home/.agents/skills')
+          return [dirent('device-writer', 'dir'), dirent('shared', 'dir')];
+        if (dir === '/device-home/.agents/skills/device-writer')
+          return [dirent('SKILL.md', 'file')];
+        if (dir === '/device-home/.agents/skills/shared') return [dirent('SKILL.md', 'file')];
+        throw new Error('ENOENT');
+      });
+      vi.mocked(mockFsPromises.readFile).mockImplementation(async (file: string) => {
+        if (file === '/proj/.agents/skills/shared/SKILL.md')
+          return frontmatter('shared', 'from project');
+        if (file === '/device-home/.agents/skills/device-writer/SKILL.md')
+          return frontmatter('device-writer', 'from device');
+        if (file === '/device-home/.agents/skills/shared/SKILL.md')
+          return frontmatter('shared', 'from device');
+        throw new Error('ENOENT');
+      });
+
+      const result = await workspaceCtr.listProjectSkills({ scope: '/proj' });
+
+      expect(result.skills.map((skill) => `${skill.name}:${skill.scope}`)).toEqual([
+        'device-writer:device',
+        'shared:project',
+      ]);
+      expect(result.skills.find((skill) => skill.name === 'device-writer')).toMatchObject({
+        previewRoot: '/device-home/.agents/skills',
+        scope: 'device',
+      });
+      expect(mockLocalFileProtocolManager.approveIndexedProjectRoot).toHaveBeenCalledWith('/proj');
+      expect(mockLocalFileProtocolManager.approveIndexedProjectRoot).toHaveBeenCalledWith(
+        '/device-home/.agents/skills',
+      );
     });
 
     it('caps instruction file content', async () => {

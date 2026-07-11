@@ -320,7 +320,6 @@ export class LobehubSkillStoreActionImpl {
         });
       },
       {
-        fallbackData: [],
         onSuccess: (data) => {
           if (data.length > 0) {
             this.#set(

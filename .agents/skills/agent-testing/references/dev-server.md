@@ -6,7 +6,7 @@ surfaces (CLI, Electron, Web) hit.
 ## Resolve ports first
 
 Run `test-env.sh` as described in
-[SKILL.md Step 0.0](../SKILL.md#00-resolve-the-current-test-environment)
+[SKILL.md Step 2.0](../SKILL.md#20-resolve-the-current-test-environment)
 before starting or probing any local test surface.
 
 ## Ports & modes
@@ -64,11 +64,10 @@ AGENT_RUNTIME_MODE=queue bun run dev
 # Local QStash. Run in a separate terminal only when testing workflow paths.
 ./.agents/skills/agent-testing/scripts/init-dev-env.sh qstash
 
-# Restart — required to pick up server-side code changes
-lsof -ti:"$PORT" | xargs kill
-pnpm run dev:next
-# or, when no root .env exists:
-# ./.agents/skills/agent-testing/scripts/init-dev-env.sh dev-next
+# Restart — required to pick up server-side code changes.
+# For a no-.env server started by init-dev-env.sh, stop only its owned process tree:
+./.agents/skills/agent-testing/scripts/init-dev-env.sh stop-dev
+./.agents/skills/agent-testing/scripts/init-dev-env.sh dev-next
 ```
 
 ## When a server restart is needed
@@ -87,14 +86,14 @@ in doubt.
 
 ## Troubleshooting
 
-| Issue                     | Solution                                                                                      |
-| ------------------------- | --------------------------------------------------------------------------------------------- |
-| `ECONNREFUSED`            | Server not running — start it                                                                 |
-| `EADDRINUSE` on the port  | Already running — `lsof -ti:<port> \| xargs kill` first                                       |
-| Stale data / old behavior | Server needs a restart to pick up code changes                                                |
-| Agent call runs inline    | Set `AGENT_RUNTIME_MODE=queue`, make sure `REDIS_URL` is configured, then restart the server  |
-| Queue mode needs Redis    | Run `init-dev-env.sh setup-db`, or provide `REDIS_URL=redis://...` for an existing Redis      |
-| QStash workflow failures  | Start `init-dev-env.sh qstash` and make sure dev server inherited the script's `QSTASH_*` env |
+| Issue                     | Solution                                                                                        |
+| ------------------------- | ----------------------------------------------------------------------------------------------- |
+| `ECONNREFUSED`            | Server not running — start it                                                                   |
+| `EADDRINUSE` on the port  | Inspect the listener; stop it only if this run owns it. Never kill an unknown PID by port alone |
+| Stale data / old behavior | Server needs a restart to pick up code changes                                                  |
+| Agent call runs inline    | Set `AGENT_RUNTIME_MODE=queue`, make sure `REDIS_URL` is configured, then restart the server    |
+| Queue mode needs Redis    | Run `init-dev-env.sh setup-db`, or provide `REDIS_URL=redis://...` for an existing Redis        |
+| QStash workflow failures  | Start `init-dev-env.sh qstash` and make sure dev server inherited the script's `QSTASH_*` env   |
 
 Marketplace/community endpoints are not part of the local agent-testing auth
 gate. Do not block local product-chain verification on marketplace API auth

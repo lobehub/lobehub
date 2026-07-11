@@ -37,7 +37,7 @@ interface SelectCircleProps {
  */
 const SelectCircle = memo<SelectCircleProps>(({ checked, className }) => (
   <Center className={cx(styles.circle, checked && styles.checked, className)}>
-    {checked && <Icon icon={Check} size={13} />}
+    {checked && <Icon icon={Check} size={14} />}
   </Center>
 ));
 

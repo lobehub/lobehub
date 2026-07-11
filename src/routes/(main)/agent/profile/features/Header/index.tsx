@@ -1,4 +1,5 @@
 import { isDesktop } from '@lobechat/const';
+import { getActivePluginIds } from '@lobechat/types';
 import { ActionIcon, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
 import { confirmModal, type ModalInstance } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
@@ -18,6 +19,7 @@ import { useAgentTransferMenuItem } from '@/business/client/hooks/useAgentTransf
 import { useBusinessAgentImportMenuItem } from '@/business/client/hooks/useBusinessAgentImportMenuItem';
 import { message } from '@/components/AntdStaticMethods';
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
+import AgentBreadcrumb from '@/features/AgentBreadcrumb';
 import NavHeader from '@/features/NavHeader';
 import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -131,7 +133,9 @@ const Header = memo(() => {
       const profileMarkdown = buildAgentProfileMarkdown({
         description: meta?.description,
         model: config.model,
-        plugins: config.plugins,
+        // Pinned identifiers only — a disabled plugin shouldn't be advertised
+        // as "enabled" in the exported markdown.
+        plugins: getActivePluginIds(config.plugins),
         provider: config.provider,
         systemRole: editorMarkdown ?? systemRole,
         t,
@@ -243,8 +247,12 @@ const Header = memo(() => {
 
   return (
     <NavHeader
+      styles={{ left: { paddingInlineStart: 24 } }}
       left={
         <Flexbox horizontal align={'center'} gap={8}>
+          {activeAgentId && (
+            <AgentBreadcrumb agentId={activeAgentId} title={t('tab.profile', { ns: 'chat' })} />
+          )}
           <AutoSaveHint />
           <AgentStatusTag />
           <AgentVersionReviewTag />

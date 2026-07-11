@@ -106,7 +106,7 @@ describe('Advanced settings page', () => {
     expect(screen.getByText('tab.advanced.appUpdates.title')).toBeDefined();
   });
 
-  it('renders the agent document floating chat panel lab toggle', () => {
+  it('renders the message text selection actions lab toggle', () => {
     useUserStore.setState({
       isUserStateInit: true,
       setSettings: vi.fn(),
@@ -115,6 +115,18 @@ describe('Advanced settings page', () => {
 
     render(<Page />, { wrapper: createWrapper() });
 
-    expect(screen.getByText('features.agentDocumentFloatingChatPanel.title')).toBeDefined();
+    expect(screen.getByText('features.messageTextSelectionActions.title')).toBeDefined();
+  });
+
+  it('does not render released task verify as a lab toggle', () => {
+    useUserStore.setState({
+      isUserStateInit: true,
+      setSettings: vi.fn(),
+      updateLab: vi.fn(),
+    });
+
+    render(<Page />, { wrapper: createWrapper() });
+
+    expect(screen.queryByText('features.taskVerify.title')).toBeNull();
   });
 });

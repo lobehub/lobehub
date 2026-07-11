@@ -70,7 +70,7 @@ sequenceDiagram
 ### 1. Client Initiates Request
 
 After the user sends a message, `sendMessage()`
-(`src/store/chat/slices/aiChat/actions/conversationLifecycle.ts`)
+(`src/store/chat/slices/agentRun/actions/entries/conversationLifecycle.ts`)
 creates the user message and assistant message placeholder,
 then calls `executeClientAgent()`.
 
@@ -82,7 +82,7 @@ of the entire chat flow. Every chat interaction
 is driven by the `AgentRuntime.step()` loop.
 
 **Initialization**
-(`src/store/chat/slices/aiChat/actions/streamingExecutor.ts`):
+(`src/store/chat/slices/agentRun/actions/transports/client/streamingExecutor.ts`):
 
 1. Resolve agent config (model, provider, plugin list, etc.)
 2. Create the tool registry via `createAgentToolsEngine()`
@@ -132,7 +132,7 @@ the executor calls ChatService:
   receives the request
 - Calls `initModelRuntimeFromDB` to read user's provider
   config from the database and initialize ModelRuntime
-- A tRPC route `src/server/routers/lambda/aiChat.ts`
+- A tRPC route `apps/server/src/routers/lambda/aiChat.ts`
   also exists for server-side message sending
   and structured output scenarios
 
@@ -326,14 +326,14 @@ depends on the scenario:
   continue generation, group orchestration decisions.
   The loop runs in the browser, entry point is
   `executeClientAgent()`
-  (`src/store/chat/slices/aiChat/actions/streamingExecutor.ts`)
+  (`src/store/chat/slices/agentRun/actions/transports/client/streamingExecutor.ts`)
 - **Server-side loop** (queue/local):
   Group chat supervisor agent, sub-agent tasks,
   API/Cron triggers. The loop runs on the server,
   streaming events to the client via SSE, entry point is
   `AgentRuntimeService.executeStep()`
-  (`src/server/services/agentRuntime/AgentRuntimeService.ts`),
-  tRPC route at `src/server/routers/lambda/aiAgent.ts`
+  (`apps/server/src/services/agentRuntime/AgentRuntimeService.ts`),
+  tRPC route at `apps/server/src/routers/lambda/aiAgent.ts`
 
 ## Model Runtime
 

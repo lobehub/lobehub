@@ -122,6 +122,7 @@
   "responseLanguage.auto": "自动（跟随系统语言）",
   "responseLanguage.desc": "选择助理的回复语言",
   "responseLanguage.hint": "切换后，助理回复语言会同步更新；界面语言也会随之切换",
+  "responseLanguage.saveFailed": "保存失败，请重试。",
   "responseLanguage.title": "我们用哪种语言协作？",
   "responseLanguage.title2": "从语言开始，建立理解",
   "responseLanguage.title3": "说得清楚，听得明白",

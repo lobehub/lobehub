@@ -5,8 +5,12 @@ import { type SWRResponse } from 'swr';
 import { type StateCreator } from 'zustand/vanilla';
 
 import { useClientDataSWRWithSync } from '@/libs/swr';
-import { messageKeys } from '@/libs/swr/keys';
 import { messageService } from '@/services/message';
+import {
+  getMessageListFetchPolicy,
+  messageListKey,
+  runMessageListQuery,
+} from '@/services/message/cache';
 import { getChatStoreState } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
@@ -209,11 +213,15 @@ export const dataSlice: StateCreator<
     );
 
     return useClientDataSWRWithSync<UIChatMessage[]>(
-      shouldFetch ? messageKeys.list(context) : null,
+      shouldFetch ? messageListKey(context) : null,
 
-      () => messageService.getMessages(context),
+      () => runMessageListQuery(context, messageService.getMessages),
       {
+        ...getMessageListFetchPolicy(context),
         ...(revalidateOnFocus !== undefined && { revalidateOnFocus }),
+        // Fresh in-memory or prefetched data can render without an immediate
+        // switch-time revalidation. Missing cache data still fetches because
+        // SWR always loads when `data` is undefined.
         onData: (data) => {
           if (!data) return;
           if (!context.topicId) return;

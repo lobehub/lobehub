@@ -21,10 +21,10 @@ export const pluginRouter = router({
     .use(withScopedPermission('agent:update'))
     .input(
       z.object({
-        customParams: z.any(),
+        customParams: z.any().optional(),
         identifier: z.string(),
         manifest: z.any(),
-        settings: z.any(),
+        settings: z.any().optional(),
         type: z.enum(['plugin', 'customPlugin']),
       }),
     )
@@ -52,9 +52,9 @@ export const pluginRouter = router({
     .use(withScopedPermission('agent:update'))
     .input(
       z.object({
-        customParams: z.any(),
+        customParams: z.any().optional(),
         identifier: z.string(),
-        manifest: z.any(),
+        manifest: z.any().optional(),
         type: z.enum(['plugin', 'customPlugin']),
       }),
     )
@@ -74,12 +74,6 @@ export const pluginRouter = router({
 
     return pluginModel.query();
   }),
-
-  removeAllPlugins: pluginProcedure
-    .use(withScopedPermission('agent:update'))
-    .mutation(async ({ ctx }) => {
-      return ctx.pluginModel.deleteAll();
-    }),
 
   removePlugin: pluginProcedure
     .use(withScopedPermission('agent:update'))

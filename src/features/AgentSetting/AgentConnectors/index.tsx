@@ -1,3 +1,4 @@
+import { getActivePluginIds } from '@lobechat/types';
 import { Switch } from 'antd';
 import { LinkIcon } from 'lucide-react';
 import { memo, useEffect } from 'react';
@@ -12,7 +13,7 @@ const AgentConnectors = memo(() => {
   const { t } = useTranslation('setting');
 
   const [userEnabledPlugins, toggleAgentPlugin] = useStore((s) => [
-    s.config.plugins ?? [],
+    getActivePluginIds(s.config.plugins),
     s.toggleAgentPlugin,
   ]);
 

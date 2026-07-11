@@ -3,6 +3,8 @@ import type { CheckpointConfig, TaskAutomationMode, TaskDetailData } from '@lobe
 import { taskService } from '@/services/task';
 import type { StoreSetter } from '@/store/types';
 import { OptimisticEngine } from '@/store/utils/optimisticEngine';
+import { runMutation } from '@/store/utils/runMutation';
+import { saveToast } from '@/store/utils/saveToast';
 
 import type { TaskStore } from '../../store';
 
@@ -142,17 +144,21 @@ export class TaskConfigSliceActionImpl {
       type: 'updateTaskDetail',
       value: { config: { ...this.#get().taskDetailMap[id]?.config, ...modelConfig } },
     });
-    this.#set({ taskSaveStatus: 'saving' }, false, 'updateTaskModelConfig/saving');
-
-    try {
-      await taskService.updateConfig(id, modelConfig);
-      this.#set({ taskSaveStatus: 'saved' }, false, 'updateTaskModelConfig/saved');
-      await this.#get().internal_refreshTaskDetail(id);
-    } catch (error) {
-      console.error('[TaskStore] Failed to update task model config:', error);
-      this.#set({ taskSaveStatus: 'idle' }, false, 'updateTaskModelConfig/error');
-      await this.#get().internal_refreshTaskDetail(id);
-    }
+    await runMutation(this.#set, this.#get, {
+      mutate: async () => {
+        await taskService.updateConfig(id, modelConfig);
+        await this.#get().internal_refreshTaskDetail(id);
+      },
+      name: 'updateTaskModelConfig',
+      onError: async (error) => {
+        console.error('[TaskStore] Failed to update task model config:', error);
+        await this.#get().internal_refreshTaskDetail(id);
+        saveToast(error, { retry: () => void this.#get().updateTaskModelConfig(id, modelConfig) });
+      },
+      // Best-effort toggle — the toast + refetch surface the failure, callers don't rethrow.
+      rethrow: false,
+      setStatus: (status) => this.#get().internal_setTaskSaveStatus(id, status),
+    });
   };
 
   // Configure periodic execution interval (heartbeatInterval in seconds).

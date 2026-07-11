@@ -6,9 +6,12 @@ export default {
   'DragUpload.dragFileDesc':
     'Drag and drop images and files here to upload multiple images and files.',
   'DragUpload.dragFileTitle': 'Upload Files',
-  'DragUpload.dragFolderDesc': 'Drop the folder to reference it as @mention in the chat input.',
+  'DragUpload.dragFolderDesc': 'Drop the folder to reference it in the chat input.',
   'DragUpload.dragFolderTitle': 'Reference Folder',
-  'DragUpload.dragMixedDesc': 'Folders are inserted as @mentions; files are uploaded.',
+  'DragUpload.dragLocalPathDesc':
+    'Drop files or folders to reference their local paths in the chat input.',
+  'DragUpload.dragLocalPathTitle': 'Reference Local Paths',
+  'DragUpload.dragMixedDesc': 'Folders are inserted as references; files are uploaded.',
   'DragUpload.dragMixedTitle': 'Reference Folder & Upload Files',
   'DragUpload.dragTitle': 'Upload Images',
   'FileManager.actions.addToLibrary': 'Add to Library',
@@ -63,6 +66,7 @@ export default {
   'FileManager.title.createdAt': 'Created At',
   'FileManager.title.size': 'Size',
   'FileManager.title.title': 'File',
+  'FileManager.title.uploader': 'Uploader',
   'FileManager.total.allSelectedCount': 'All {{count}} items are selected.',
   'FileManager.total.allSelectedFallback': 'All results are selected.',
   'FileManager.total.fileCount': 'Total {{count}} items',

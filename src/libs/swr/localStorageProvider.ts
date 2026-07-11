@@ -23,7 +23,11 @@
  * </SWRConfig>
  * ```
  */
+import { bootTiming } from '@/libs/bootTiming';
+
 import { buildLocalDataKey, localDataCache } from './localDataCache';
+import { migrateMessageListCache } from './migrations/messageListCache';
+import { isScopeTrusted } from './useCacheScope';
 
 interface CacheEntry<T = unknown> {
   /** Cached data */
@@ -43,6 +47,17 @@ export interface CacheProviderOptions {
   getScope?: () => string;
   /** SWR key patterns persisted to the IndexedDB tier. */
   idbPatterns?: string[];
+  /**
+   * Predicate marking a scope as *provisional* — writes made while it is active
+   * must never be persisted. On desktop the identity round-trip can complete (or
+   * the CacheHydrationGate timeout backstop can fire) before `userId` resolves,
+   * briefly making the scope anonymous. Data fetched + flushed during that
+   * window lands in the `anon` partition and is orphaned the instant the real
+   * user scope resolves (`reloadScope`), surfacing as a stale-loading cache miss
+   * on the next boot. Keeping the in-memory cache but skipping persistence for
+   * these scopes closes that leak.
+   */
+  isEphemeralScope?: (scope: string) => boolean;
   /** SWR key patterns persisted to the localStorage tier. */
   localPatterns?: string[];
   /** Max localStorage-tier entries, defaults to 50. */
@@ -113,6 +128,7 @@ export function createCacheProvider(options: CacheProviderOptions = {}): ScopedS
     debounceMs = 2000,
     getScope = () => 'default',
     idbPatterns = [],
+    isEphemeralScope,
     localPatterns = [],
     ttl = 7 * 24 * 60 * 60 * 1000, // 7 days
     maxLocalEntries = 50,
@@ -143,10 +159,18 @@ export function createCacheProvider(options: CacheProviderOptions = {}): ScopedS
     return null;
   };
 
+  /**
+   * Whether the *current* scope may be written to persistence. Provisional
+   * scopes (see `isEphemeralScope`) stay memory-only so their transient boot
+   * data never leaks into a partition that gets orphaned on the next scope flip.
+   */
+  const isPersistableScope = (): boolean => !isEphemeralScope?.(getScope());
+
   let cacheMapInstance: TieredCacheMap | null = null;
   let hydratedScope: string | null = null;
   let hydrationEpoch = 0;
   let pendingHydration: { promise: Promise<void>; scope: string } | null = null;
+  let cacheHydrationSpanRecorded = false;
 
   // --- localStorage tier (synchronous snapshot) ----------------------------
   let localTimer: ReturnType<typeof setTimeout> | null = null;
@@ -170,6 +194,7 @@ export function createCacheProvider(options: CacheProviderOptions = {}): ScopedS
 
   const saveLocal = () => {
     if (!cacheMapInstance) return;
+    if (!isPersistableScope()) return;
     const key = getScopedCacheKey(getScope());
     try {
       const entries = Array.from(cacheMapInstance.entries())
@@ -213,6 +238,7 @@ export function createCacheProvider(options: CacheProviderOptions = {}): ScopedS
   const flushIdb = () => {
     if (!cacheMapInstance) return;
     const scope = getScope();
+    if (isEphemeralScope?.(scope)) return;
     const writes = [...dirtyIdb];
     const dels = [...deletedIdb];
     dirtyIdb.clear();
@@ -230,9 +256,16 @@ export function createCacheProvider(options: CacheProviderOptions = {}): ScopedS
     idbTimer = setTimeout(flushIdb, debounceMs);
   };
 
-  const loadIdb = async (scope: string, epoch: number) => {
+  const loadIdb = async (scope: string, epoch: number, hydrationStart?: number) => {
+    let succeeded = false;
     try {
       const entries = await localDataCache.entriesByScope(scope);
+      const migratedEntries = await migrateMessageListCache({
+        entries,
+        onError,
+        providerVersion: version,
+        scope,
+      });
       // The IndexedDB tier holds read-heavy / write-light business entities
       // (messages, topics, …): once written, a row rarely changes. We never drop
       // these by age — a stale row hydrates for an instant first paint and SWR's
@@ -241,15 +274,24 @@ export function createCacheProvider(options: CacheProviderOptions = {}): ScopedS
       // so legacy/unversioned rows (which the age check used to bound) are dropped
       // and a version bump still evicts everyone. TTL governs the localStorage
       // tier only (see `loadLocal`).
-      const valid = entries.filter((e) => e.version === version);
+      const valid = migratedEntries.filter((e) => e.version === version);
       // Map may have changed scope while we awaited; only apply if still current.
       if (cacheMapInstance && getScope() === scope && hydrationEpoch === epoch) {
         cacheMapInstance.hydrate(valid.map((e) => [e.key, e.data]));
         hydratedScope = scope;
       }
+      succeeded = true;
     } catch (error) {
       onError(error as Error);
     } finally {
+      if (hydrationStart !== undefined && succeeded && !cacheHydrationSpanRecorded) {
+        cacheHydrationSpanRecorded = true;
+        bootTiming.recordSpan(
+          'cache-hydration',
+          hydrationStart,
+          performance.now() - hydrationStart,
+        );
+      }
       onScopeHydrated?.(scope);
       if (pendingHydration?.scope === scope && hydrationEpoch === epoch) {
         pendingHydration = null;
@@ -259,6 +301,10 @@ export function createCacheProvider(options: CacheProviderOptions = {}): ScopedS
 
   // --- write routing -------------------------------------------------------
   const onSet = (key: string) => {
+    // Provisional scope → memory only; never schedule a persist (see
+    // `isEphemeralScope`). The post-flip global revalidation re-writes keys
+    // under the resolved scope, so nothing is lost.
+    if (!isPersistableScope()) return;
     const tier = tierOf(key);
     if (tier === 'local') debouncedSaveLocal();
     else if (tier === 'idb') {
@@ -269,6 +315,7 @@ export function createCacheProvider(options: CacheProviderOptions = {}): ScopedS
   };
 
   const onDelete = (key: string) => {
+    if (!isPersistableScope()) return;
     const tier = tierOf(key);
     if (tier === 'local') debouncedSaveLocal();
     else if (tier === 'idb') {
@@ -367,7 +414,8 @@ export function createCacheProvider(options: CacheProviderOptions = {}): ScopedS
     if (pendingHydration?.scope === scope) return pendingHydration.promise;
 
     const epoch = ++hydrationEpoch;
-    const promise = loadIdb(scope, epoch);
+    const start = !cacheHydrationSpanRecorded ? performance.now() : undefined;
+    const promise = loadIdb(scope, epoch, start);
     pendingHydration = { promise, scope };
     return promise;
   };
@@ -469,6 +517,15 @@ export const swrCacheProvider = (
   return createCacheProvider({
     getScope,
     idbPatterns: [...CACHE_TIERS.idb],
+    // Quarantine writes until the session check resolves (`isScopeTrusted`).
+    // The active scope is optimistic (persisted last-known user) before the
+    // session confirms it, so a write made then could land in the wrong
+    // partition on an account switch / first-ever boot and get orphaned. Once the
+    // session resolves the scope is definitive and writes persist — including
+    // no-auth, where the check completes to "not signed in" and the anonymous
+    // scope is a legitimate durable context. `reloadScope` clears the dirty set
+    // on a real scope flip, so quarantined writes never survive a switch.
+    isEphemeralScope: () => !isScopeTrusted(),
     localPatterns: [...CACHE_TIERS.local],
     onScopeHydrated,
     // Governs the localStorage tier only (recents-style shells); the IndexedDB
