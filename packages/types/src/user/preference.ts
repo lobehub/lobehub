@@ -47,6 +47,10 @@ export const UserLabSchema = z.object({
    */
   enableAgentSelfIteration: z.boolean().optional(),
   /**
+   * run Claude Code hetero sessions through the Claude Agent SDK instead of CLI spawn
+   */
+  enableClaudeCodeSdk: z.boolean().optional(),
+  /**
    * enable the Fleet view (side-by-side running-task dashboard)
    */
   enableFleet: z.boolean().optional(),

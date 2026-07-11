@@ -17,6 +17,7 @@ class HeterogeneousAgentService {
     cwd?: string;
     env?: Record<string, string>;
     resumeSessionId?: string;
+    useClaudeCodeSdk?: boolean;
   }) {
     return this.ipc.heterogeneousAgent.startSession(params);
   }

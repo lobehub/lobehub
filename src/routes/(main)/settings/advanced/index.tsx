@@ -53,6 +53,7 @@ const Page = memo(() => {
     enablePlatformAgent,
     enableImessage,
     enableFleet,
+    enableClaudeCodeSdk,
     enableFoldFinishedTurn,
     enableMessageTextSelectionActions,
     updateLab,
@@ -63,6 +64,7 @@ const Page = memo(() => {
     labPreferSelectors.enablePlatformAgent(s),
     labPreferSelectors.enableImessage(s),
     labPreferSelectors.enableFleet(s),
+    labPreferSelectors.enableClaudeCodeSdk(s),
     labPreferSelectors.enableFoldFinishedTurn(s),
     labPreferSelectors.enableMessageTextSelectionActions(s),
     s.updateLab,
@@ -237,6 +239,19 @@ const Page = memo(() => {
             className: styles.labItem,
             desc: tLabs('features.fleet.desc'),
             label: tLabs('features.fleet.title'),
+            minWidth: undefined,
+          } satisfies FormItemProps,
+          {
+            children: (
+              <Switch
+                checked={enableClaudeCodeSdk}
+                loading={!isPreferenceInit}
+                onChange={(checked: boolean) => updateLab({ enableClaudeCodeSdk: checked })}
+              />
+            ),
+            className: styles.labItem,
+            desc: tLabs('features.claudeCodeSdk.desc'),
+            label: tLabs('features.claudeCodeSdk.title'),
             minWidth: undefined,
           } satisfies FormItemProps,
         ]
