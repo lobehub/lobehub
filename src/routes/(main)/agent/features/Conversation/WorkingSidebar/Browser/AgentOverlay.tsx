@@ -154,12 +154,21 @@ const AgentOverlay = memo<AgentOverlayProps>(({ sessionId }) => {
         >
           {clickSeq > 0 && <div className={styles.ripple} key={clickSeq} />}
           <svg className={styles.cursorSvg} fill="none" height={22} viewBox="0 0 24 24" width={22}>
+            {/* White halo underneath the body. */}
+            <path
+              d="M5 3l14 8-6.5 1.5L9 19 5 3z"
+              stroke="#fff"
+              strokeLinejoin="round"
+              strokeWidth={2.2}
+            />
+            {/* A same-color round-joined stroke softens the arrow's sharp
+                vertices with a ~0.4 corner radius (radius = width / 2). */}
             <path
               d="M5 3l14 8-6.5 1.5L9 19 5 3z"
               fill="currentColor"
-              stroke="#fff"
+              stroke="currentColor"
               strokeLinejoin="round"
-              strokeWidth={1.5}
+              strokeWidth={0.8}
             />
           </svg>
           <div className={styles.cursorLabel}>{t('workingPanel.browser.agentCursor')}</div>
