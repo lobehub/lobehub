@@ -4,6 +4,7 @@ import type {
   NetworkProxySettings,
   UpdateChannel,
 } from '@lobechat/electron-client-ipc';
+import type { HeteroSessionDirPref } from '@lobechat/types';
 
 export interface ElectronMainStore {
   appTrayVisible: boolean;
@@ -36,6 +37,12 @@ export interface ElectronMainStore {
    * traced to disk even in packaged production builds. Dev builds always trace
    * regardless of this flag. Exposed via the Help menu checkbox.
    */
+  /**
+   * Per-directory import preferences for local CLI session import, keyed by
+   * `${source}::${workingDirectory}`. Machine-local by nature (paths only make
+   * sense on this device), so it lives here instead of the server DB.
+   */
+  heteroSessionDirPrefs: Record<string, HeteroSessionDirPref>;
   heteroTracingEnabled: boolean;
   imessageBridgeConfigs: ImessageBridgeConfig[];
   locale: string;

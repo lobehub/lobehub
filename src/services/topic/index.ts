@@ -1,3 +1,9 @@
+import type {
+  HeteroSessionImportPayload,
+  HeteroSessionImportResult,
+  HeteroSessionImportStatus,
+} from '@lobechat/types';
+
 import { INBOX_SESSION_ID } from '@/const/session';
 import { lambdaClient } from '@/libs/trpc/client';
 import { type BatchTaskResult } from '@/types/service';
@@ -54,6 +60,20 @@ export class TopicService {
     groupId?: string | null;
   }): Promise<{ messageCount: number; topicId: string }> => {
     return lambdaClient.topic.importTopic.mutate(params);
+  };
+
+  getHeteroSessionImportStatus = (
+    sessions: { sessionId: string; topicClientId: string }[],
+  ): Promise<HeteroSessionImportStatus> => {
+    return lambdaClient.topic.getHeteroSessionImportStatus.query({ sessions });
+  };
+
+  importHeteroSessions = (params: {
+    agentId: string;
+    groupId?: string | null;
+    sessions: HeteroSessionImportPayload[];
+  }): Promise<HeteroSessionImportResult[]> => {
+    return lambdaClient.topic.importHeteroSessions.mutate(params);
   };
 
   getTopics = async (params: QueryTopicParams): Promise<{ items: ChatTopic[]; total: number }> => {

@@ -103,6 +103,10 @@ export const UserLabSchema = z.object({
    */
   enableClaudeCodeSdk: z.boolean().optional(),
   /**
+   * one-click import of local Claude Code / Codex CLI sessions as topics (desktop only)
+   */
+  enableHeteroSessionImport: z.boolean().optional(),
+  /**
    * enable multi-agent group chat mode
    */
   enableGroupChat: z.boolean().optional(),

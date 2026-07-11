@@ -17,6 +17,9 @@ export default {
   'features.claudeCodeSdk.desc':
     'Run Claude Code sessions through the Claude Agent SDK instead of spawning the CLI. Enables richer streaming and session control.',
   'features.claudeCodeSdk.title': 'Claude Code SDK Runtime',
+  'features.heteroSessionImport.desc':
+    'Add an "Import Local Agent Sessions" entry to the topic list menu: scan local Claude Code / Codex CLI transcripts and import them as topics, with incremental sync on re-import.',
+  'features.heteroSessionImport.title': 'Local Agent Session Import',
   'features.imessage.desc':
     'Connect agents to iMessage through the local LobeHub Desktop BlueBubbles bridge.',
   'features.imessage.title': 'iMessage Channel',
