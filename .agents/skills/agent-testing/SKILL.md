@@ -171,6 +171,7 @@ Bootstrap flow when no `.env` exists:
 ```bash
 # From repo root. Managed Postgres/Redis flow requires Docker Desktop.
 ./.agents/skills/agent-testing/scripts/init-dev-env.sh setup-db
+./.agents/skills/agent-testing/scripts/init-dev-env.sh s3 # terminal B — keep running
 ./.agents/skills/agent-testing/scripts/init-dev-env.sh seed-user
 ./.agents/skills/agent-testing/scripts/init-dev-env.sh dev
 ```
@@ -199,9 +200,32 @@ Useful subcommands:
 ./.agents/skills/agent-testing/scripts/init-dev-env.sh migrate   # migrations only
 ./.agents/skills/agent-testing/scripts/init-dev-env.sh seed-user # seed user + CLI API key
 ./.agents/skills/agent-testing/scripts/init-dev-env.sh qstash    # local QStash for workflow paths
-./.agents/skills/agent-testing/scripts/init-dev-env.sh preflight # gate agent-runtime tests (QStash up in queue mode)
+./.agents/skills/agent-testing/scripts/init-dev-env.sh s3        # local S3-compatible file storage
+./.agents/skills/agent-testing/scripts/init-dev-env.sh preflight # gate agent-runtime tests (QStash + S3)
 ./.agents/skills/agent-testing/scripts/init-dev-env.sh clean-db  # remove managed DB container
+./.agents/skills/agent-testing/scripts/init-dev-env.sh clean-s3  # remove persisted local S3 objects
 ```
+
+#### Local file storage: s3rver MUST be up
+
+The no-`.env` bootstrap points the app at a local `s3rver` instance so browser
+uploads, presigned URLs, attachments, and generated files exercise a real S3
+HTTP round trip instead of a placeholder endpoint. Start it in a separate
+terminal before the dev server:
+
+```bash
+./.agents/skills/agent-testing/scripts/init-dev-env.sh s3
+```
+
+The command creates `agent-testing-bucket`, configures CORS for the allocated
+local app/SPA origins, and persists objects under
+`.records/data/agent-testing-s3`. The fixed `S3RVER` credentials are required by
+the emulator's presigned-URL validation. `preflight` performs HeadBucket plus a
+real Put/Get/Delete round trip; a listening port alone is not considered ready.
+
+Keep this storage local to the product-under-test. Step 4 report publishing
+still runs in a clean production CLI environment and uploads evidence to
+production storage.
 
 #### Agent-runtime prerequisite: QStash MUST be up (queue mode)
 
@@ -240,7 +264,7 @@ Default script env:
   in a separate terminal for **any agent-runtime test** (see the agent-runtime
   prerequisite above), not only workflow paths.
 - `KEY_VAULTS_SECRET`, `AUTH_SECRET`, auth verification off
-- S3 mock vars
+- Local S3-compatible storage vars (`s3rver`; start with the `s3` subcommand)
 - Managed DB container: `lobehub-agent-testing-postgres`
 - Managed Redis container: `lobehub-agent-testing-redis`
 
@@ -422,7 +446,7 @@ All under `.agents/skills/agent-testing/scripts/`:
 | ------------------------------- | ------------------------------------------------------------------------------------------- |
 | `test-env.sh`                   | Print/export the resolved local test env and ports                                          |
 | `setup-auth.sh`                 | One-stop auth setup & status check (`status` / `cli` / `web`)                               |
-| `init-dev-env.sh`               | Self-contained local dev env (`setup-db` / `seed-user` / `dev-next` / `dev`)                |
+| `init-dev-env.sh`               | Self-contained local dev env (`setup-db` / `s3` / `seed-user` / `dev-next` / `dev`)         |
 | `app-probe.sh`                  | LobeHub app probes: `auth` / `route` / `ops` / `goto <path>` / `errors`                     |
 | `agent-browser-klm.mjs`         | Wrap `agent-browser`, run the real action, and append a GOMS-KLM interaction atom JSONL     |
 | `agent-browser-klm-analyze.mjs` | Summarize interaction JSONL into `result.json.interactionCost` / markdown cost output       |

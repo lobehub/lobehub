@@ -16,15 +16,17 @@
 #   init-dev-env.sh migrate          # run DB migrations against the configured DB
 #   init-dev-env.sh seed-user        # seed the baseline test user + CLI API key
 #   init-dev-env.sh qstash           # run local Upstash QStash dev server
-#   init-dev-env.sh preflight        # check agent-runtime prerequisites (QStash up in queue mode)
+#   init-dev-env.sh s3               # run local s3rver object storage
+#   init-dev-env.sh preflight        # check agent-runtime prerequisites (QStash + S3)
 #   init-dev-env.sh dev-next         # exec `pnpm run dev:next` with this env
 #   init-dev-env.sh dev              # exec `bun run dev` with this env
 #   init-dev-env.sh stop-dev         # stop the dev server (Next + Vite) started by `dev`
-#   init-dev-env.sh clean            # teardown: stop dev server (DB/Redis containers kept)
+#   init-dev-env.sh clean            # teardown: stop dev server (DB/Redis/S3 data kept)
+#   init-dev-env.sh clean-s3         # remove local S3 test data
 #   init-dev-env.sh clean-db         # remove the managed Postgres/Redis containers
 #
 # Overrides:
-#   SERVER_PORT=3010 DB_PORT=5433 DB_CONTAINER=lobehub-agent-testing-postgres REDIS_PORT=6380 REDIS_CONTAINER=lobehub-agent-testing-redis QSTASH_DEV_PORT=8080
+#   SERVER_PORT=3010 DB_PORT=5433 DB_CONTAINER=lobehub-agent-testing-postgres REDIS_PORT=6380 REDIS_CONTAINER=lobehub-agent-testing-redis QSTASH_DEV_PORT=8080 S3_DEV_PORT=29000
 #   AGENT_TESTING_DEV_STATE_FILE=.records/runtime/agent-testing-dev.state
 
 set -euo pipefail
@@ -105,6 +107,8 @@ QSTASH_DEV_PORT="${QSTASH_DEV_PORT:-8080}"
 QSTASH_LOCAL_TOKEN="${QSTASH_LOCAL_TOKEN:-eyJVc2VySUQiOiJkZWZhdWx0VXNlciIsIlBhc3N3b3JkIjoiZGVmYXVsdFBhc3N3b3JkIn0=}"
 QSTASH_LOCAL_CURRENT_SIGNING_KEY="${QSTASH_LOCAL_CURRENT_SIGNING_KEY:-sig_7kYjw48mhY7kAjqNGcy6cr29RJ6r}"
 QSTASH_LOCAL_NEXT_SIGNING_KEY="${QSTASH_LOCAL_NEXT_SIGNING_KEY:-sig_5ZB6DVzB1wjE8S6rZ7eenA8Pdnhs}"
+S3_DEV_PORT="${S3_DEV_PORT:-29000}"
+S3_DATA_DIR="${S3_DATA_DIR:-$WORKSPACE_ROOT/.records/data/agent-testing-s3}"
 
 ok() { printf '  \033[32m✔\033[0m %s\n' "$1"; }
 bad() { printf '  \033[31m✘\033[0m %s\n' "$1"; }
@@ -165,10 +169,16 @@ apply_env() {
   export QSTASH_TOKEN="${QSTASH_TOKEN:-$QSTASH_LOCAL_TOKEN}"
   export QSTASH_URL="${QSTASH_URL:-http://127.0.0.1:${QSTASH_DEV_PORT}}"
   export REDIS_URL
-  export S3_ACCESS_KEY_ID="${S3_ACCESS_KEY_ID:-agent-testing-access-key}"
+  export S3_ACCESS_KEY_ID="${S3_ACCESS_KEY_ID:-S3RVER}"
   export S3_BUCKET="${S3_BUCKET:-agent-testing-bucket}"
-  export S3_ENDPOINT="${S3_ENDPOINT:-https://agent-testing-s3.localhost}"
-  export S3_SECRET_ACCESS_KEY="${S3_SECRET_ACCESS_KEY:-agent-testing-secret-key}"
+  export S3_DATA_DIR
+  export S3_DEV_PORT
+  export S3_ENABLE_PATH_STYLE="${S3_ENABLE_PATH_STYLE:-1}"
+  export S3_ENDPOINT="${S3_ENDPOINT:-http://127.0.0.1:${S3_DEV_PORT}}"
+  export S3_PUBLIC_DOMAIN="${S3_PUBLIC_DOMAIN:-${S3_ENDPOINT}/${S3_BUCKET}}"
+  export S3_REGION="${S3_REGION:-us-east-1}"
+  export S3_SECRET_ACCESS_KEY="${S3_SECRET_ACCESS_KEY:-S3RVER}"
+  export S3_SET_ACL="${S3_SET_ACL:-0}"
   export SPA_PORT
   export VITE_DEV_PORT="${VITE_DEV_PORT:-$SPA_PORT}"
   # Bypass cloud chat-security UA/headless fingerprint checks for local e2e only.
@@ -198,8 +208,14 @@ env_keys() {
     REDIS_URL \
     S3_ACCESS_KEY_ID \
     S3_BUCKET \
+    S3_DATA_DIR \
+    S3_DEV_PORT \
+    S3_ENABLE_PATH_STYLE \
     S3_ENDPOINT \
+    S3_PUBLIC_DOMAIN \
+    S3_REGION \
     S3_SECRET_ACCESS_KEY \
+    S3_SET_ACL \
     SPA_PORT \
     VITE_DEV_PORT \
     AGENT_TESTING_DISABLE_CHAT_SECURITY
@@ -487,6 +503,11 @@ cmd_status() {
   else
     note "QStash is not answering as QStash at $QSTASH_URL (needed for agent-runtime / queue mode)"
   fi
+  if node "$REPO_ROOT/.agents/skills/agent-testing/scripts/check-s3.mjs" > /dev/null 2>&1; then
+    ok "S3 reachable and writable: $S3_ENDPOINT/$S3_BUCKET"
+  else
+    note "S3 is not ready at $S3_ENDPOINT (start it with: $0 s3)"
+  fi
 }
 
 # Prerequisite gate for agent-runtime tests. In queue mode (the default here and
@@ -518,6 +539,14 @@ cmd_preflight() {
     fi
   else
     note "AGENT_RUNTIME_MODE=$AGENT_RUNTIME_MODE (not queue) — QStash not required"
+  fi
+
+  if node "$REPO_ROOT/.agents/skills/agent-testing/scripts/check-s3.mjs" > /dev/null 2>&1; then
+    ok "S3 read/write/delete passed: $S3_ENDPOINT/$S3_BUCKET"
+  else
+    bad "S3 preflight failed at $S3_ENDPOINT/$S3_BUCKET"
+    note "start it in a separate terminal: $0 s3"
+    failed=1
   fi
 
   if _http_reachable "$APP_URL"; then
@@ -620,6 +649,15 @@ stop_owned_process_tree() {
   kill -KILL "$root_pid" 2>/dev/null || true
 }
 
+cmd_s3() {
+  apply_env
+  cd "$REPO_ROOT"
+  note "starting local S3 server at $S3_ENDPOINT"
+  note "bucket=$S3_BUCKET; data=$S3_DATA_DIR"
+  note "keep this process running while testing file uploads"
+  exec node .agents/skills/agent-testing/scripts/start-s3.mjs
+}
+
 cmd_dev_next() {
   apply_env
   cd "$REPO_ROOT"
@@ -687,7 +725,18 @@ cmd_clean() {
   # Postgres/Redis containers are intentionally reused across runs (setup-db is
   # idempotent), so they are left running — remove them explicitly with clean-db.
   cmd_stop_dev
-  note "managed DB/Redis containers left running (reused across runs); remove with: $0 clean-db"
+  note "managed DB/Redis containers and S3 data left in place for reuse"
+  note "remove DB/Redis with: $0 clean-db; remove S3 data with: $0 clean-s3"
+}
+
+cmd_clean_s3() {
+  apply_env
+  if [[ -d "$S3_DATA_DIR" ]]; then
+    rm -rf "$S3_DATA_DIR"
+    ok "removed local S3 data: $S3_DATA_DIR"
+  else
+    note "local S3 data not found: $S3_DATA_DIR"
+  fi
 }
 
 usage() {
@@ -712,12 +761,14 @@ case "$COMMAND" in
   migrate) migrate_db ;;
   seed-user) seed_user ;;
   qstash) cmd_qstash ;;
+  s3) cmd_s3 ;;
   preflight) cmd_preflight ;;
   dev-next) cmd_dev_next ;;
   dev) cmd_dev ;;
   stop-dev | stop) cmd_stop_dev ;;
   clean) cmd_clean ;;
   clean-db) cmd_clean_db ;;
+  clean-s3) cmd_clean_s3 ;;
   status) cmd_status ;;
   *)
     usage
