@@ -213,6 +213,7 @@ export class MessageQueryActionImpl {
     messages: UIChatMessage[],
     action?: string,
   ): void => {
+    if (!ctx.agentId || !ctx.topicId) return;
     if (operationSelectors.isAgentRuntimeRunningByContext(ctx)(this.#get())) return;
     if (action === 'useFetchMessages' || action === 'prefetchMessages') return;
 

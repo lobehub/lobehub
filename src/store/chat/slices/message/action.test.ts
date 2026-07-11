@@ -1298,6 +1298,18 @@ describe('chatMessage actions', () => {
       expect(isMessageListServerVerified(context)).toBe(false);
     });
 
+    it('skips write-through when the conversation has no persisted topic', async () => {
+      const { result } = renderHook(() => useChatStore());
+
+      await act(async () => {
+        result.current.replaceMessages([{ id: 'm-new', role: 'user', content: 'hi' }] as any, {
+          context: { agentId: 'wt-agent-new', topicId: null },
+        });
+      });
+
+      expect(mutate).not.toHaveBeenCalled();
+    });
+
     it('skips write-through for the useFetchMessages onData sync path', async () => {
       const { result } = renderHook(() => useChatStore());
 
