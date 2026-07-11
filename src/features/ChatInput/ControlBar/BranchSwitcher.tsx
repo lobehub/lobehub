@@ -82,12 +82,14 @@ const styles = createStaticStyles(({ css }) => ({
     gap: 8px;
     align-items: center;
 
-    padding-block: 2px;
+    height: auto;
+    min-height: 32px;
+    padding-block: 4px;
     padding-inline: 8px;
     border-radius: 4px;
 
-    font-size: 13px;
-    line-height: 1.3;
+    font-size: 14px;
+    line-height: 20px;
     color: ${cssVar.colorText};
 
     /* Swap the checkmark for the row actions while hovering the row. */
@@ -145,8 +147,8 @@ const styles = createStaticStyles(({ css }) => ({
     min-width: 0;
   `,
   itemMeta: css`
-    margin-block-start: 1px;
-    font-size: 11px;
+    font-size: 12px;
+    line-height: 16px;
     color: ${cssVar.colorTextTertiary};
   `,
   list: css`
