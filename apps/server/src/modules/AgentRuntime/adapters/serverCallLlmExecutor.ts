@@ -30,22 +30,20 @@ import { type RuntimeExecutorContext } from '../context';
 import { isOperationInterrupted, log, sleep } from '../executorHelpers';
 import { formatErrorEventData } from '../formatErrorEventData';
 import { classifyLLMError } from '../llmErrorClassification';
-import { createConversationParentMissingError } from '../messagePersistErrors';
 import { createServerCallLlmAttempt } from './serverCallLlmAttempt';
 import { buildServerCallLlmContext } from './serverCallLlmContextBuilder';
 import {
   finalizeServerCallLlmResult,
   persistInterruptedServerCallLlmResult,
 } from './serverCallLlmFinalizer';
-import { resolveServerCallLlmTooling, type ServerCallLlmTooling } from './serverCallLlmTooling';
+import type { ServerCallLlmTooling } from './serverCallLlmTooling';
 
-interface PreparedCallLLMContext {
+interface ServerCallLlmExecutionContext {
   assistantMessage: { id: string };
   model: string;
-  parentId?: string;
   provider: string;
   stepLabel?: string;
-  tooling?: ServerCallLlmTooling;
+  tooling: ServerCallLlmTooling;
 }
 
 const SERVER_LLM_RETRY_POLICY = {
@@ -54,119 +52,27 @@ const SERVER_LLM_RETRY_POLICY = {
 };
 
 export const callLlm =
-  (ctx: RuntimeExecutorContext, prepared?: PreparedCallLLMContext): InstructionExecutor =>
+  (ctx: RuntimeExecutorContext, prepared: ServerCallLlmExecutionContext): InstructionExecutor =>
   async (instruction, state) => {
     const { payload } = instruction as Extract<AgentInstruction, { type: 'call_llm' }>;
     const llmPayload = payload as CallLLMPayload;
     const { operationId, stepIndex, streamManager } = ctx;
     const events: AgentEvent[] = [];
     let visibleOutputEndPublishedStepIndex: number | undefined;
-
-    // Fallback to state's modelRuntimeConfig if not in payload
-    const model = prepared?.model ?? llmPayload.model ?? state.modelRuntimeConfig?.model;
-    const provider =
-      prepared?.provider ?? llmPayload.provider ?? state.modelRuntimeConfig?.provider;
-    const tooling =
-      prepared?.tooling ?? resolveServerCallLlmTooling(ctx, state, llmPayload.allowedToolNames);
+    const {
+      assistantMessage: assistantMessageItem,
+      model,
+      provider,
+      stepLabel,
+      tooling,
+    } = prepared;
     const { resolved, tools } = tooling;
-
-    if (!model || !provider) {
-      throw new Error('Model and provider are required for call_llm instruction');
-    }
-
-    // Type assertion to ensure payload correctness
     const operationLogId = `${operationId}:${stepIndex}`;
-
-    const stagePrefix = `[${operationLogId}][call_llm]`;
-
-    log(`${stagePrefix} Starting operation`);
-
-    // Get parentId from payload (parentId or parentMessageId depending on payload type)
-    const parentId =
-      prepared?.parentId ?? llmPayload.parentId ?? (llmPayload as any).parentMessageId;
-
-    // Parent existence preflight ():
-    // If the parent was deleted concurrently (e.g. user deleted topic mid-run),
-    // assistant message creation below would hit a PG FK violation AFTER we've
-    // already done the LLM call and spent tokens. Check first — fail fast,
-    // save cost, and surface a typed error the frontend can act on instead of
-    // a raw SQL error.
-    if (!prepared && parentId) {
-      const parentExists = await ctx.messageModel.findById(parentId);
-      if (!parentExists) {
-        const error = createConversationParentMissingError(parentId);
-        await streamManager.publishStreamEvent(operationId, {
-          data: formatErrorEventData(error, 'parent_message_preflight'),
-          stepIndex,
-          type: 'error',
-        });
-        throw error;
-      }
-    }
-
-    // Get or create assistant message
-    // If assistantMessageId is provided in payload, use existing message instead of creating new one
-    const existingAssistantMessageId = (llmPayload as any).assistantMessageId;
-    let assistantMessageItem: { id: string };
-    // Seed fields for the client to insert this message into its local store.
-    // The step_start uiMessages snapshot is resolved BEFORE this row exists,
-    // so the client has no other way to learn about it until the next DB
-    // refetch — chunks would silently no-op against the missing id (LOBE-11501).
-    let assistantMessageSeed: Record<string, unknown> | undefined;
-
-    if (prepared) {
-      assistantMessageItem = prepared.assistantMessage;
-      log(`${stagePrefix} Using prepared assistant message: %s`, assistantMessageItem.id);
-    } else if (existingAssistantMessageId) {
-      // Use existing assistant message (created by execAgent)
-      assistantMessageItem = { id: existingAssistantMessageId };
-      log(`${stagePrefix} Using existing assistant message: %s`, existingAssistantMessageId);
-      const existingRow = await ctx.messageModel.findById(existingAssistantMessageId);
-      if (existingRow) assistantMessageSeed = existingRow;
-    } else {
-      // Create new assistant message (legacy behavior)
-      assistantMessageItem = await ctx.messageModel.create({
-        agentId: state.metadata!.agentId!,
-        content: '',
-        groupId: state.metadata?.groupId ?? undefined,
-        model,
-        parentId,
-        provider,
-        role: 'assistant',
-        threadId: state.metadata?.threadId,
-        topicId: state.metadata?.topicId,
-      });
-      assistantMessageSeed = assistantMessageItem as Record<string, unknown>;
-      log(`${stagePrefix} Created new assistant message: %s`, assistantMessageItem.id);
-    }
-
-    // Publish stream start event
-    const stepLabel = prepared?.stepLabel ?? (instruction as any).stepLabel;
-    if (!prepared) {
-      await streamManager.publishStreamEvent(operationId, {
-        data: {
-          // Only the seed fields the client needs — not the whole DB row.
-          assistantMessage: {
-            id: assistantMessageItem.id,
-            ...(assistantMessageSeed && {
-              agentId: assistantMessageSeed.agentId,
-              groupId: assistantMessageSeed.groupId,
-              model: assistantMessageSeed.model,
-              parentId: assistantMessageSeed.parentId,
-              provider: assistantMessageSeed.provider,
-              role: assistantMessageSeed.role,
-              threadId: assistantMessageSeed.threadId,
-              topicId: assistantMessageSeed.topicId,
-            }),
-          },
-          model,
-          provider,
-          ...(stepLabel && { stepLabel }),
-        },
-        stepIndex,
-        type: 'stream_start',
-      });
-    }
+    log(
+      '[%s][call_llm] Starting operation with prepared assistant message: %s',
+      operationLogId,
+      assistantMessageItem.id,
+    );
 
     try {
       const {

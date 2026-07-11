@@ -42,7 +42,6 @@ export interface LLMCallExecuteInput {
   assistantMessage: RuntimeMessageRef;
   instruction: AgentInstructionCallLlm;
   model: string;
-  parentId?: string;
   provider: string;
   state: AgentState;
   stepLabel?: string;
