@@ -7,6 +7,7 @@ import type { MouseEvent } from 'react';
 import { memo, useCallback } from 'react';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
 
 import type { InternalLinkReference } from '../internalLink';
@@ -59,6 +60,7 @@ interface InternalEntityLinkProps {
 
 export const InternalEntityLink = memo<InternalEntityLinkProps>(({ label, reference }) => {
   const navigate = useWorkspaceAwareNavigate();
+  const activeAgentId = useAgentStore((s) => s.activeAgentId);
   const [openAgentDetail, openDocument, openTaskDetail] = useChatStore((s) => [
     s.openAgentDetail,
     s.openDocument,
@@ -74,6 +76,15 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ label, refere
       event.preventDefault();
 
       if ('workspaceSlug' in reference && reference.workspaceSlug) {
+        navigate(reference.pathname, { escape: true });
+        return;
+      }
+
+      if (
+        reference.type === 'document' &&
+        reference.agentId &&
+        reference.agentId !== activeAgentId
+      ) {
         navigate(reference.pathname, { escape: true });
         return;
       }
@@ -97,7 +108,7 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ label, refere
         }
       }
     },
-    [navigate, openAgentDetail, openDocument, openTaskDetail, reference],
+    [activeAgentId, navigate, openAgentDetail, openDocument, openTaskDetail, reference],
   );
 
   const icon = reference.type === 'route' ? undefined : ENTITY_ICONS[reference.type];

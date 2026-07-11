@@ -23,6 +23,10 @@ vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
   useWorkspaceAwareNavigate: () => mockNavigate,
 }));
 
+vi.mock('@/store/agent', () => ({
+  useAgentStore: (selector: (state: unknown) => unknown) => selector({ activeAgentId: 'agt_1' }),
+}));
+
 vi.mock('@/store/chat', () => ({
   useChatStore: (selector: (state: unknown) => unknown) =>
     selector({
@@ -200,5 +204,18 @@ describe('Link Render — internal entities', () => {
 
     expect(mockNavigate).toHaveBeenCalledWith('/lobe-team/task/T-198', { escape: true });
     expect(mockOpenTaskDetail).not.toHaveBeenCalled();
+  });
+
+  it('preserves a different agent context for agent-scoped document links', () => {
+    const { getByRole } = renderLink({
+      linkHref: '/agent/agt_other/docs/docs_1',
+      linkKind: 'generic',
+      linkLabel: 'Another agent document',
+    });
+
+    fireEvent.click(getByRole('link', { name: 'Another agent document' }));
+
+    expect(mockNavigate).toHaveBeenCalledWith('/agent/agt_other/docs/docs_1', { escape: true });
+    expect(mockOpenDocument).not.toHaveBeenCalled();
   });
 });
