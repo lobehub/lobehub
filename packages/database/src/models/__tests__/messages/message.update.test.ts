@@ -1635,8 +1635,7 @@ describe('MessageModel Update Tests', () => {
 
       const [row] = await serverDB.select().from(messages).where(eq(messages.id, 'promote-msg'));
       expect(row.usage).toEqual(usage);
-      // metadata.usage stays written for backward-compatible reads
-      expect((row.metadata as any).usage).toEqual(usage);
+      expect((row.metadata as any).usage).toBeUndefined();
     });
 
     it('prefers a top-level usage over metadata.usage', async () => {
@@ -1654,11 +1653,10 @@ describe('MessageModel Update Tests', () => {
 
       const [row] = await serverDB.select().from(messages).where(eq(messages.id, 'prefer-msg'));
       expect(row.usage).toEqual(topLevel);
-      // metadata.usage is kept consistent with the column
-      expect((row.metadata as any).usage).toEqual(topLevel);
+      expect((row.metadata as any).usage).toBeUndefined();
     });
 
-    it('dual-writes metadata.usage when usage arrives as a top-level param only', async () => {
+    it('writes top-level usage without duplicating it into metadata', async () => {
       await serverDB.insert(messages).values({
         id: 'top-only-msg',
         metadata: { tps: 1 }, // pre-existing non-usage metadata must be preserved
@@ -1672,8 +1670,7 @@ describe('MessageModel Update Tests', () => {
 
       const [row] = await serverDB.select().from(messages).where(eq(messages.id, 'top-only-msg'));
       expect(row.usage).toEqual(usage);
-      // legacy readers / rollback paths still see metadata.usage
-      expect((row.metadata as any).usage).toEqual(usage);
+      expect((row.metadata as any).usage).toBeUndefined();
       expect((row.metadata as any).tps).toBe(1);
     });
 
@@ -1685,7 +1682,7 @@ describe('MessageModel Update Tests', () => {
 
       const [row] = await serverDB.select().from(messages).where(eq(messages.id, 'meta-msg'));
       expect(row.usage).toEqual(usage);
-      expect((row.metadata as any).usage).toEqual(usage);
+      expect((row.metadata as any).usage).toBeUndefined();
     });
   });
 });
