@@ -1,3 +1,4 @@
+import { BrowserManifest } from '@lobechat/builtin-tool-browser';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
 import { builtinTools } from '@lobechat/builtin-tools';
@@ -10,15 +11,20 @@ import {
 } from './deviceToolRegistry';
 
 describe('deviceToolRegistry', () => {
-  it('pins the device tool set to exactly local-system + remote-device', () => {
+  it('pins the device tool set to exactly local-system + remote-device + browser', () => {
     expect([...DEVICE_TOOL_IDENTIFIERS].sort()).toEqual(
-      [LocalSystemManifest.identifier, RemoteDeviceManifest.identifier].sort(),
+      [
+        LocalSystemManifest.identifier,
+        RemoteDeviceManifest.identifier,
+        BrowserManifest.identifier,
+      ].sort(),
     );
   });
 
-  it('isDeviceToolIdentifier recognises both device tools', () => {
+  it('isDeviceToolIdentifier recognises the device tools', () => {
     expect(isDeviceToolIdentifier(LocalSystemManifest.identifier)).toBe(true);
     expect(isDeviceToolIdentifier(RemoteDeviceManifest.identifier)).toBe(true);
+    expect(isDeviceToolIdentifier(BrowserManifest.identifier)).toBe(true);
     expect(isDeviceToolIdentifier('web-browsing')).toBe(false);
     expect(isDeviceToolIdentifier('')).toBe(false);
   });

@@ -4,6 +4,7 @@ import { Maximize2, Minimize2 } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useTopicGroupCollapse } from '@/hooks/useTopicGroupCollapse';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 import { useGlobalStore } from '@/store/global';
@@ -17,22 +18,23 @@ const ToggleGroups = memo(() => {
   const { t } = useTranslation('topic');
   const topicPageSize = useGlobalStore(systemStatusSelectors.topicPageSize);
   const topicSortBy = useUserStore(preferenceSelectors.topicSortBy);
+  const topicIncludeCompleted = useUserStore(preferenceSelectors.topicIncludeCompleted);
   const { topicGroupMode } = useAgentTopicGroupMode();
 
   const groupSelector = useMemo(
-    () => topicSelectors.groupedTopicsForSidebar(topicPageSize, topicSortBy, topicGroupMode),
-    [topicPageSize, topicSortBy, topicGroupMode],
+    () =>
+      topicSelectors.groupedTopicsForSidebar(
+        topicPageSize,
+        topicSortBy,
+        topicGroupMode,
+        topicIncludeCompleted,
+      ),
+    [topicPageSize, topicSortBy, topicGroupMode, topicIncludeCompleted],
   );
   const groupTopics = useChatStore(groupSelector, isEqual);
 
-  const [topicGroupKeys, updateSystemStatus] = useGlobalStore((s) => [
-    systemStatusSelectors.topicGroupKeys(s),
-    s.updateSystemStatus,
-  ]);
-
   const groupIds = useMemo(() => groupTopics.map((group) => group.id), [groupTopics]);
-  // undefined means "default all expanded", so treat it as fully expanded
-  const expandedKeys = topicGroupKeys ?? groupIds;
+  const { expandedKeys, setExpandedKeys } = useTopicGroupCollapse(topicGroupMode, groupIds);
   const isAllCollapsed = expandedKeys.length === 0;
 
   // flat mode renders FlatMode (no accordion), so the toggle has nothing to affect;
@@ -44,7 +46,7 @@ const ToggleGroups = memo(() => {
       icon={isAllCollapsed ? Maximize2 : Minimize2}
       size={'small'}
       title={isAllCollapsed ? t('sidebar.expandAll') : t('sidebar.collapseAll')}
-      onClick={() => updateSystemStatus({ expandTopicGroupKeys: isAllCollapsed ? groupIds : [] })}
+      onClick={() => setExpandedKeys(isAllCollapsed ? groupIds : [])}
     />
   );
 });

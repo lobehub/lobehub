@@ -1,11 +1,11 @@
 import {
+  chatTopicMetadataUpdateSchema,
   chatTopicStatusSchema,
   type HeteroSessionImportPayload,
   heteroSessionImportPayloadSchema,
   type RecentTopic,
   type RecentTopicGroup,
   type RecentTopicGroupMember,
-  serializedAgentHookSchema,
 } from '@lobechat/types';
 import { cleanObject } from '@lobechat/utils';
 import { inArray } from 'drizzle-orm';
@@ -14,9 +14,11 @@ import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
+import { serverDBEnv } from '@/config/db';
 import { AgentModel } from '@/database/models/agent';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { ChatGroupModel } from '@/database/models/chatGroup';
+import { FileModel } from '@/database/models/file';
 import { MessageModel } from '@/database/models/message';
 import { TopicModel } from '@/database/models/topic';
 import { TopicShareModel } from '@/database/models/topicShare';
@@ -26,6 +28,7 @@ import { TopicImporterRepo } from '@/database/repositories/topicImporter';
 import { chatGroups } from '@/database/schemas';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { FileService } from '@/server/services/file';
 import { type BatchTaskResult } from '@/types/service';
 
 import {
@@ -34,7 +37,6 @@ import {
   resolveContext,
 } from './_helpers/resolveContext';
 import { basicContextSchema } from './_schema/context';
-import { workingDirConfigSchema } from './workingDirSchema';
 
 const topicProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -580,9 +582,31 @@ export const topicRouter = router({
 
   removeTopic: topicProcedure
     .use(withScopedPermission('topic:delete'))
-    .input(z.object({ id: z.string() }))
+    .input(z.object({ id: z.string(), removeFiles: z.boolean().optional() }))
     .mutation(async ({ input, ctx }) => {
-      return ctx.topicModel.delete(input.id);
+      if (!input.removeFiles) return ctx.topicModel.delete(input.id);
+
+      const wsId = ctx.workspaceId ?? undefined;
+      const fileModel = new FileModel(ctx.serverDB, ctx.userId, wsId);
+
+      // Collect the topic's deletable attachments BEFORE deleting it — the lookup
+      // joins messages, which are cascade-deleted along with the topic. Files
+      // still referenced by another topic or the session are intentionally kept.
+      const fileIds = await fileModel.findDeletableFilesByTopicId(input.id);
+
+      const result = await ctx.topicModel.delete(input.id);
+
+      if (fileIds.length > 0) {
+        const needToRemove = await fileModel.deleteMany(fileIds, serverDBEnv.REMOVE_GLOBAL_FILE);
+        // deleteMany returns only files whose underlying object is no longer
+        // referenced by any other file, so the S3 cleanup is reference-safe.
+        if (needToRemove && needToRemove.length > 0) {
+          const fileService = new FileService(ctx.serverDB, ctx.userId, wsId);
+          await fileService.deleteFiles(needToRemove.map((file) => file.url!));
+        }
+      }
+
+      return result;
     }),
 
   searchTopics: topicProcedure
@@ -676,58 +700,7 @@ export const topicRouter = router({
     .input(
       z.object({
         id: z.string(),
-        metadata: z.object({
-          boundDeviceId: z.string().optional(),
-          heteroSessionId: z.string().optional(),
-          heteroSessionIdByWorkingDirectory: z.record(z.string(), z.string()).optional(),
-          model: z.string().optional(),
-          onboardingFeedback: z
-            .object({
-              comment: z.string().max(500).optional(),
-              rating: z.enum(['good', 'bad']),
-              submittedAt: z.string(),
-            })
-            .optional(),
-          onboardingSession: z
-            .object({
-              agentIdentityCompletedAt: z.string().optional(),
-              agentMarketplacePick: z
-                .object({
-                  categoryHints: z.array(z.string()),
-                  installedAgentIds: z.array(z.string()).optional(),
-                  requestId: z.string(),
-                  resolvedAt: z.string(),
-                  selectedTemplateIds: z.array(z.string()).optional(),
-                  skipReason: z.string().optional(),
-                  skippedAgentIds: z.array(z.string()).optional(),
-                  status: z.enum(['cancelled', 'skipped', 'submitted']),
-                })
-                .optional(),
-              discoveryCompletedAt: z.string().optional(),
-              finalAgentNames: z.array(z.string()).optional(),
-              finishedAt: z.string().optional(),
-              lastActiveAt: z.string().optional(),
-              phase: z.enum(['agent_identity', 'user_identity', 'discovery', 'summary']).optional(),
-              startedAt: z.string().optional(),
-              userIdentityCompletedAt: z.string().optional(),
-              version: z.number().optional(),
-            })
-            .optional(),
-          provider: z.string().optional(),
-          runningOperation: z
-            .object({
-              assistantMessageId: z.string(),
-              hooks: z.array(serializedAgentHookSchema).optional(),
-              operationId: z.string(),
-              scope: z.string().optional(),
-              threadId: z.string().nullish(),
-            })
-            .nullable()
-            .optional(),
-          repos: z.array(z.string()).optional(),
-          workingDirectory: z.string().optional(),
-          workingDirectoryConfig: workingDirConfigSchema.optional(),
-        }),
+        metadata: chatTopicMetadataUpdateSchema,
       }),
     )
     .mutation(async ({ input, ctx }) => {

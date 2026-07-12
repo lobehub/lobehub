@@ -1,5 +1,6 @@
 import type {
   BrowserSidebarAttachParams,
+  BrowserSidebarImportResult,
   BrowserSidebarNavigateParams,
   BrowserSidebarResult,
   BrowserSidebarSessionParams,
@@ -31,6 +32,10 @@ class ElectronBrowserSidebarService {
 
   goForward(params: BrowserSidebarSessionParams): Promise<BrowserSidebarResult> {
     return this.ipc.browserSidebar.goForward(params);
+  }
+
+  importChromeLoginData(): Promise<BrowserSidebarImportResult> {
+    return this.ipc.browserSidebar.importChromeLoginData();
   }
 
   navigate(params: BrowserSidebarNavigateParams): Promise<BrowserSidebarResult> {

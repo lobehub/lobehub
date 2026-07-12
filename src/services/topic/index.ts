@@ -118,8 +118,8 @@ export class TopicService {
     return lambdaClient.topic.disableSharing.mutate({ topicId });
   };
 
-  removeTopic = (id: string) => {
-    return lambdaClient.topic.removeTopic.mutate({ id });
+  removeTopic = (id: string, removeFiles?: boolean) => {
+    return lambdaClient.topic.removeTopic.mutate({ id, removeFiles });
   };
 
   removeTopics = (sessionId: string) => {

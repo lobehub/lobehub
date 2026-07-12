@@ -11,6 +11,7 @@ import BrowserSidebarCtr from '../BrowserSidebarCtr';
 const {
   appOnMock,
   clipboardWriteImageMock,
+  importChromeLoginDataMock,
   ipcHandlers,
   ipcMainHandleMock,
   sessionFromPartitionMock,
@@ -27,6 +28,7 @@ const {
   return {
     appOnMock: vi.fn(),
     clipboardWriteImageMock: vi.fn(),
+    importChromeLoginDataMock: vi.fn(),
     ipcHandlers: handlers,
     ipcMainHandleMock: handle,
     sessionFromPartitionMock: vi.fn(),
@@ -42,6 +44,10 @@ vi.mock('@/utils/logger', () => ({
     info: vi.fn(),
     warn: vi.fn(),
   }),
+}));
+
+vi.mock('@/modules/browser/importChromeLoginData', () => ({
+  importChromeLoginData: importChromeLoginDataMock,
 }));
 
 vi.mock('electron', () => ({
@@ -247,5 +253,25 @@ describe('BrowserSidebarCtr', () => {
     ).resolves.toEqual({ success: true });
     expect(guest.capturePage).toHaveBeenCalled();
     expect(clipboardWriteImageMock).toHaveBeenCalledWith('image');
+  });
+
+  it('should import Chrome login information into the browser session', async () => {
+    importChromeLoginDataMock.mockResolvedValue(12);
+
+    await expect(invokeIpc('browserSidebar.importChromeLoginData')).resolves.toEqual({
+      importedCount: 12,
+      success: true,
+    });
+    expect(importChromeLoginDataMock).toHaveBeenCalledWith(mockSession);
+  });
+
+  it('should return a recoverable error when Chrome login import fails', async () => {
+    importChromeLoginDataMock.mockRejectedValue(new Error('Chrome profile was not found'));
+
+    await expect(invokeIpc('browserSidebar.importChromeLoginData')).resolves.toEqual({
+      error: 'Chrome profile was not found',
+      importedCount: 0,
+      success: false,
+    });
   });
 });

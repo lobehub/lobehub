@@ -4,6 +4,7 @@ import { type MigrationSQL, type MigrationTableItem } from '@/types/clientDB';
 import { DatabaseLoadingState } from '@/types/clientDB';
 import { type LocaleMode } from '@/types/locale';
 import { SessionDefaultGroup } from '@/types/session';
+import { type TopicGroupMode } from '@/types/topic';
 import { AsyncLocalStorage } from '@/utils/localStorage';
 
 export enum SidebarTabKey {
@@ -127,6 +128,14 @@ export interface SystemStatus {
    */
   agentPageSize?: number;
   chatInputHeight?: number;
+  /**
+   * Which topicGroups are collapsed, bucketed by group mode. We persist the
+   * collapsed keys rather than the expanded ones so a group that shows up later
+   * (a new project directory, a new month bucket) starts expanded; and bucketing
+   * per mode keeps `project:*` keys from leaking into byTime, where nothing would
+   * match and every group would render collapsed.
+   */
+  collapsedTopicGroupKeysByMode?: Partial<Record<TopicGroupMode, string[]>>;
   disabledModelProvidersSortType?: string;
   disabledModelsSortType?: string;
   /**
@@ -145,8 +154,6 @@ export interface SystemStatus {
   expandInputActionbar?: boolean;
   // which sessionGroup should expand
   expandSessionGroupKeys: string[];
-  // which topicGroup should expand
-  expandTopicGroupKeys?: string[];
   fileManagerViewMode?: 'list' | 'masonry';
   filePanelWidth: number;
   /**

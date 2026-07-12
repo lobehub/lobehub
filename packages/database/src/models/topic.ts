@@ -144,11 +144,12 @@ const STATUS_SORT_RANK = sql`CASE ${topics.status}
   WHEN 'failed' THEN 1
   WHEN 'unread' THEN 2
   WHEN 'running' THEN 3
-  WHEN 'active' THEN 4
-  WHEN 'paused' THEN 5
-  WHEN 'completed' THEN 6
-  WHEN 'archived' THEN 7
-  ELSE 4 END`;
+  WHEN 'scheduled' THEN 4
+  WHEN 'active' THEN 5
+  WHEN 'paused' THEN 6
+  WHEN 'completed' THEN 7
+  WHEN 'archived' THEN 8
+  ELSE 5 END`;
 
 // Favorites always float to the top; the rest are ordered by the requested
 // strategy. `status` adds the priority bucket before the recency tiebreaker.
@@ -1235,4 +1236,111 @@ export class TopicModel {
 
     return result[0]?.total ?? 0;
   };
+
+  // **************** Scheduled continuation (backend cron) *************** //
+
+  /**
+   * Topics awaiting a backend-scheduled continuation after a rate limit.
+   * System-level sweep (no ownership filter) used by the cron dispatcher.
+   *
+   * Due = `status = 'scheduled'` AND the rate-limit window has passed
+   * (`scheduledRun.rateLimit.resetsAt` is absent, or `<= now`) AND there is no
+   * live claim (`scheduledRun.claim.expiresAt` is absent, or already expired) —
+   * so a topic another replica is mid-dispatch on is skipped.
+   */
+  static async getDueScheduledTopics(
+    db: LobeChatDatabase,
+    now: Date = new Date(),
+  ): Promise<TopicItem[]> {
+    const nowEpochSeconds = Math.floor(now.getTime() / 1000);
+    const nowIso = now.toISOString();
+    return db
+      .select()
+      .from(topics)
+      .where(
+        and(
+          eq(topics.status, 'scheduled'),
+          // resetsAt absent OR already passed
+          or(
+            sql`(${topics.metadata}#>>'{scheduledRun,rateLimit,resetsAt}') IS NULL`,
+            sql`(${topics.metadata}#>>'{scheduledRun,rateLimit,resetsAt}')::numeric <= ${nowEpochSeconds}`,
+          ),
+          // no claim OR the claim lease has expired
+          or(
+            sql`(${topics.metadata}#>>'{scheduledRun,claim,expiresAt}') IS NULL`,
+            sql`(${topics.metadata}#>>'{scheduledRun,claim,expiresAt}') <= ${nowIso}`,
+          ),
+        ),
+      );
+  }
+
+  /**
+   * Atomically claim a scheduled topic before dispatch, so two concurrent cron
+   * ticks can't trigger the same continuation twice. Serializes on the row with
+   * `SELECT … FOR UPDATE` (mirrors {@link updateMetadata}) and only writes the
+   * lease if the topic is still `scheduled` and not already claimed by a live
+   * lease. Returns `true` when this caller won the claim.
+   */
+  static async claimScheduledTopic(
+    db: LobeChatDatabase,
+    id: string,
+    claim: { claimedAt: string; expiresAt: string; id: string },
+    now: Date = new Date(),
+  ): Promise<boolean> {
+    return db.transaction(async (tx) => {
+      const [row] = await tx
+        .select({ metadata: topics.metadata, status: topics.status })
+        .from(topics)
+        .where(eq(topics.id, id))
+        .for('update');
+
+      if (!row || row.status !== 'scheduled') return false;
+
+      const scheduledRun = row.metadata?.scheduledRun;
+      if (!scheduledRun) return false;
+
+      const existingClaim = scheduledRun.claim;
+      const claimLive = existingClaim && new Date(existingClaim.expiresAt) > now;
+      if (claimLive) return false;
+
+      await tx
+        .update(topics)
+        .set({
+          metadata: {
+            ...row.metadata,
+            scheduledRun: { ...scheduledRun, claim },
+          } as ChatTopicMetadata,
+        })
+        .where(eq(topics.id, id));
+
+      return true;
+    });
+  }
+
+  /**
+   * Clear the scheduled continuation and restore a normal status. Used both when
+   * a continuation is successfully dispatched/executed and when it is cancelled.
+   */
+  static async clearScheduledRun(
+    db: LobeChatDatabase,
+    id: string,
+    nextStatus: ChatTopicStatus = 'active',
+    expectedClaimId?: string,
+  ): Promise<void> {
+    await db.transaction(async (tx) => {
+      const [row] = await tx
+        .select({ metadata: topics.metadata, status: topics.status })
+        .from(topics)
+        .where(eq(topics.id, id))
+        .for('update');
+      if (!row || row.status !== 'scheduled') return;
+      if (expectedClaimId && row.metadata?.scheduledRun?.claim?.id !== expectedClaimId) return;
+
+      const nextMetadata = { ...row.metadata, scheduledRun: null } as ChatTopicMetadata;
+      await tx
+        .update(topics)
+        .set({ metadata: nextMetadata, status: nextStatus })
+        .where(eq(topics.id, id));
+    });
+  }
 }

@@ -7,6 +7,7 @@ import type {
   AgentInstructionExecSubAgent,
   AgentInstructionExecSubAgents,
   AgentRuntimeContext,
+  AgentRuntimeHost,
   GeneralAgentCallingToolInstructionPayload,
   GeneralAgentCallLLMInstructionPayload,
   GeneralAgentCallLLMResultPayload,
@@ -17,7 +18,12 @@ import type {
   SubAgentsBatchResultPayload,
   SubAgentTask,
 } from '@lobechat/agent-runtime';
-import { UsageCounter } from '@lobechat/agent-runtime';
+import {
+  finish as createFinishExecutor,
+  requestHumanApprove as createRequestHumanApproveExecutor,
+  resolveAbortedTools as createResolveAbortedToolsExecutor,
+  UsageCounter,
+} from '@lobechat/agent-runtime';
 import { countContextTokens, type ToolsEngine } from '@lobechat/context-engine';
 import { chainCompressContext } from '@lobechat/prompts';
 import {
@@ -45,6 +51,7 @@ import { getFileStoreState } from '@/store/file/store';
 import { sleep } from '@/utils/sleep';
 
 import { StreamingHandler } from './StreamingHandler';
+import { buildClientRuntimeHost } from './transports/buildClientRuntimeHost';
 import { type StreamChunk } from './types/streaming';
 
 const log = debug('lobe-store:agent-executors');
@@ -210,6 +217,18 @@ export const createAgentExecutors = (context: {
     }
     return null;
   };
+
+  const usePackageExecutor =
+    (factory: (host: AgentRuntimeHost) => InstructionExecutor): InstructionExecutor =>
+    (instruction, state, runtimeContext) =>
+      factory(
+        buildClientRuntimeHost({
+          get: context.get,
+          messageKey: context.messageKey,
+          operationId: context.operationId,
+          stepIndex: state.stepCount,
+        }),
+      )(instruction, state, runtimeContext);
 
   const executors: Partial<Record<AgentInstruction['type'], InstructionExecutor>> = {
     /**
@@ -1115,207 +1134,11 @@ export const createAgentExecutors = (context: {
       }
     },
 
-    /** Create human approve executor */
-    request_human_approve: async (instruction, state) => {
-      const { pendingToolsCalling, reason, skipCreateToolMessage } = instruction as Extract<
-        AgentInstruction,
-        { type: 'request_human_approve' }
-      >;
-      const newState = structuredClone(state);
-      const events: AgentEvent[] = [];
-      const sessionLogId = `${state.operationId}:${state.stepCount}`;
+    finish: usePackageExecutor(createFinishExecutor),
 
-      log(
-        '[%s][request_human_approve] Executor start, pending tools count: %d, reason: %s',
-        sessionLogId,
-        pendingToolsCalling.length,
-        reason || 'human_intervention_required',
-      );
+    request_human_approve: usePackageExecutor(createRequestHumanApproveExecutor),
 
-      // Update state to waiting_for_human
-      newState.lastModified = new Date().toISOString();
-      newState.status = 'waiting_for_human';
-      newState.pendingToolsCalling = pendingToolsCalling;
-
-      // Get assistant message to extract groupId and parentId
-      const latestMessages = context.get().dbMessagesMap[context.messageKey] || [];
-      const assistantMessage = latestMessages.findLast((m) => m.role === 'assistant');
-
-      if (!assistantMessage) {
-        log('[%s][request_human_approve] ERROR: No assistant message found', sessionLogId);
-        throw new Error('No assistant message found for intervention');
-      }
-
-      log(
-        '[%s][request_human_approve] Found assistant message: %s',
-        sessionLogId,
-        assistantMessage.id,
-      );
-
-      if (skipCreateToolMessage) {
-        // Resumption mode: Tool messages already exist, just verify them
-        log('[%s][request_human_approve] Resuming with existing tool messages', sessionLogId);
-      } else {
-        // Get context from operation
-        const opContext = getOperationContext();
-        // Get effective agentId (subAgentId for group orchestration)
-        const effectiveAgentId = getEffectiveAgentId();
-
-        // Create tool messages for each pending tool call with intervention status
-        await pMap(pendingToolsCalling, async (toolPayload) => {
-          const toolName = `${toolPayload.identifier}/${toolPayload.apiName}`;
-          log(
-            '[%s][request_human_approve] Creating tool message for %s with tool_call_id: %s',
-            sessionLogId,
-            toolName,
-            toolPayload.id,
-          );
-
-          const toolMessageParams: CreateMessageParams = {
-            content: '',
-            groupId: assistantMessage.groupId,
-            parentId: assistantMessage.id,
-            plugin: {
-              ...toolPayload,
-            },
-            pluginIntervention: { status: 'pending' },
-            role: 'tool',
-            agentId: effectiveAgentId!,
-            threadId: opContext.threadId,
-            tool_call_id: toolPayload.id,
-            topicId: opContext.topicId ?? undefined,
-          };
-
-          const createResult = await context
-            .get()
-            .optimisticCreateMessage(toolMessageParams, { operationId: context.operationId });
-
-          if (!createResult) {
-            log(
-              '[%s][request_human_approve] ERROR: Failed to create tool message for %s',
-              sessionLogId,
-              toolName,
-            );
-            throw new Error(`Failed to create tool message for ${toolName}`);
-          }
-
-          log(
-            '[%s][request_human_approve] Created tool message: %s for %s',
-            sessionLogId,
-            createResult.id,
-            toolName,
-          );
-        });
-      }
-
-      log(
-        '[%s][request_human_approve] All tool messages created, emitting human_approve_required event',
-        sessionLogId,
-      );
-
-      events.push({
-        operationId: newState.operationId,
-        pendingToolsCalling,
-        type: 'human_approve_required',
-      });
-
-      return { events, newState };
-    },
-
-    /**
-     * Resolve aborted tools executor
-     * Creates tool messages with 'aborted' intervention status for cancelled tools
-     */
-    resolve_aborted_tools: async (instruction, state) => {
-      const { parentMessageId, toolsCalling } = (
-        instruction as Extract<AgentInstruction, { type: 'resolve_aborted_tools' }>
-      ).payload;
-
-      const events: AgentEvent[] = [];
-      const sessionLogId = `${state.operationId}:${state.stepCount}`;
-      const newState = structuredClone(state);
-
-      log(
-        '[%s][resolve_aborted_tools] Resolving %d aborted tools',
-        sessionLogId,
-        toolsCalling.length,
-      );
-
-      // Get context from operation
-      const opContext = getOperationContext();
-      // Get effective agentId (subAgentId for group orchestration)
-      const effectiveAgentId = getEffectiveAgentId();
-
-      // Create tool messages for each aborted tool
-      await pMap(toolsCalling, async (toolPayload) => {
-        const toolName = `${toolPayload.identifier}/${toolPayload.apiName}`;
-        log(
-          '[%s][resolve_aborted_tools] Creating aborted tool message for %s',
-          sessionLogId,
-          toolName,
-        );
-
-        const toolMessageParams: CreateMessageParams = {
-          content: 'Tool execution was aborted by user.',
-          groupId: opContext.groupId,
-          parentId: parentMessageId,
-          plugin: toolPayload,
-          pluginIntervention: { status: 'aborted' },
-          role: 'tool',
-          agentId: effectiveAgentId!,
-          threadId: opContext.threadId,
-          tool_call_id: toolPayload.id,
-          topicId: opContext.topicId ?? undefined,
-        };
-
-        const createResult = await context
-          .get()
-          .optimisticCreateMessage(toolMessageParams, { operationId: context.operationId });
-
-        if (createResult) {
-          log(
-            '[%s][resolve_aborted_tools] Created aborted tool message: %s for %s',
-            sessionLogId,
-            createResult.id,
-            toolName,
-          );
-        }
-      });
-
-      log('[%s][resolve_aborted_tools] All aborted tool messages created', sessionLogId);
-
-      // Mark state as done since we're finishing after abort
-      newState.lastModified = new Date().toISOString();
-      newState.status = 'done';
-
-      events.push({
-        finalState: newState,
-        reason: 'user_aborted',
-        reasonDetail: 'User aborted operation with pending tool calls',
-        type: 'done',
-      });
-
-      return { events, newState };
-    },
-
-    /**
-     * Finish executor
-     * Completes the runtime execution
-     */
-    finish: async (instruction, state) => {
-      const { reason, reasonDetail } = instruction as Extract<AgentInstruction, { type: 'finish' }>;
-      const sessionLogId = `${state.operationId}:${state.stepCount}`;
-
-      log(`[${sessionLogId}] Finishing execution: (%s)`, reason);
-
-      const newState = structuredClone(state);
-      newState.lastModified = new Date().toISOString();
-      newState.status = 'done';
-
-      const events: AgentEvent[] = [{ finalState: newState, reason, reasonDetail, type: 'done' }];
-
-      return { events, newState };
-    },
+    resolve_aborted_tools: usePackageExecutor(createResolveAbortedToolsExecutor),
 
     /**
      * exec_sub_agent executor

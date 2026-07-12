@@ -126,6 +126,7 @@ import { ProviderDetailPage, ProviderLayout } from '@/routes/(main)/settings/pro
 import TaskDetailRoute from '@/routes/(main)/task/[taskId]';
 import AllTasksPage from '@/routes/(main)/tasks';
 import SharePagePage from '@/routes/share/page/[id]';
+import { sharePageRouteMeta } from '@/routes/share/page/[id]/routeMeta';
 import ShareTopicPage from '@/routes/share/t/[id]';
 import ShareTopicLayout from '@/routes/share/t/[id]/_layout';
 import { shareTopicRouteMeta } from '@/routes/share/t/[id]/routeMeta';
@@ -770,6 +771,7 @@ export const desktopRoutes: RouteObject[] = [
     children: [
       {
         element: <SharePagePage />,
+        handle: { meta: sharePageRouteMeta },
         path: ':id',
       },
     ],

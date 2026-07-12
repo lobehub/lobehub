@@ -21,7 +21,8 @@ import {
   HeterogeneousAgentSessionErrorCode,
 } from '@lobechat/electron-client-ipc';
 import type { AskUserBridge } from '@lobechat/heterogeneous-agents/askUser';
-import { AskUserMcpServer } from '@lobechat/heterogeneous-agents/askUser';
+import type { McpToolResult } from '@lobechat/heterogeneous-agents/builtinMcp';
+import { LobeBuiltinMcpServer } from '@lobechat/heterogeneous-agents/builtinMcp';
 import type {
   AgentContentBlock,
   HeteroExecImageRef,
@@ -44,6 +45,7 @@ import { app as electronApp, BrowserWindow } from 'electron';
 import { HETERO_AGENT_FILES_DIR, HETERO_AGENT_TRACING_DIR } from '@/const/heteroAgent';
 import { detectHeterogeneousCliCommand } from '@/modules/binaries';
 import { getHeterogeneousAgentDriver } from '@/modules/heterogeneousAgent';
+import { buildBrowserMcpTools } from '@/modules/heterogeneousAgent/browserMcpTools';
 import { fetchClaudeCodeQuota } from '@/modules/heterogeneousAgent/claudeCodeQuota';
 import { fetchCodexQuota } from '@/modules/heterogeneousAgent/codexQuota';
 import { createLambdaFileStorePort } from '@/modules/heterogeneousAgent/fileStorePort';
@@ -54,6 +56,7 @@ import type {
 import { buildProxyEnv } from '@/modules/networkProxy/envBuilder';
 import { createLogger } from '@/utils/logger';
 
+import BrowserControlCtr from './BrowserControlCtr';
 import { ControllerModule, IpcMethod } from './index';
 import RemoteServerConfigCtr from './RemoteServerConfigCtr';
 
@@ -143,6 +146,11 @@ interface StartSessionResult {
 }
 
 interface SendPromptParams {
+  /**
+   * Agent this run belongs to. Binds the op to its in-app browser session
+   * (`agent:<agentId>`) so the browser MCP tools act on the right webview.
+   */
+  agentId?: string;
   /** Image attachments to include in the prompt (downloaded from url, cached by id) */
   imageList?: HeterogeneousAgentImageAttachment[];
   /**
@@ -278,9 +286,11 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
    * fire many ops over its lifetime).
    */
   private opIdToIntervention = new Map<string, InterventionSlot>();
+  /** Op → agent binding for browser MCP tool session resolution. */
+  private opIdToAgentId = new Map<string, string>();
   /** Lazy single MCP server, started on first claude-code prompt. */
-  private askUserMcpServer?: AskUserMcpServer;
-  private askUserMcpStartPromise?: Promise<AskUserMcpServer>;
+  private builtinMcpServer?: LobeBuiltinMcpServer;
+  private builtinMcpStartPromise?: Promise<LobeBuiltinMcpServer>;
 
   private get remoteServerConfigCtr() {
     return this.app.getController(RemoteServerConfigCtr);
@@ -782,23 +792,29 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
    * the same listener. Concurrent first-callers de-dupe via the in-flight
    * promise so we don't bind two ports.
    */
-  private async ensureAskUserMcpServerStarted(): Promise<AskUserMcpServer> {
-    if (this.askUserMcpServer) return this.askUserMcpServer;
-    if (!this.askUserMcpStartPromise) {
-      this.askUserMcpStartPromise = (async () => {
-        const server = new AskUserMcpServer();
+  private async ensureBuiltinMcpServerStarted(): Promise<LobeBuiltinMcpServer> {
+    if (this.builtinMcpServer) return this.builtinMcpServer;
+    if (!this.builtinMcpStartPromise) {
+      this.builtinMcpStartPromise = (async () => {
+        const server = new LobeBuiltinMcpServer({
+          // In-app browser control tools ride the same per-op MCP server so
+          // CC can drive the browser sidebar (LOBE-11712 M3, hetero path).
+          extraTools: buildBrowserMcpTools((operationId, apiName, args) =>
+            this.runBrowserMcpTool(operationId, apiName, args),
+          ),
+        });
         await server.start();
-        this.askUserMcpServer = server;
+        this.builtinMcpServer = server;
         logger.info('AskUserQuestion MCP server started:', server.url);
         return server;
       })().catch((err) => {
         // Reset so a later sendPrompt can retry; surface the error.
-        this.askUserMcpStartPromise = undefined;
+        this.builtinMcpStartPromise = undefined;
         logger.error('Failed to start AskUserQuestion MCP server:', err);
         throw err;
       });
     }
-    return this.askUserMcpStartPromise;
+    return this.builtinMcpStartPromise;
   }
 
   /**
@@ -809,9 +825,11 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
    */
   private async setupInterventionForOp(
     operationId: string,
+    agentId?: string,
   ): Promise<{ bridge: AskUserBridge; cleanup: () => Promise<void>; tmpConfigPath: string }> {
-    const server = await this.ensureAskUserMcpServerStarted();
+    const server = await this.ensureBuiltinMcpServerStarted();
     const bridge = server.registerOperation(operationId);
+    if (agentId) this.opIdToAgentId.set(operationId, agentId);
     const tmpConfigPath = path.join(os.tmpdir(), `lobe-cc-mcp-${operationId}.json`);
 
     // `alwaysLoad: true` is the undocumented CC flag that promotes our
@@ -835,15 +853,60 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     const cleanup = async () => {
       // Unregistering on the server cancels all bridge pendings AND closes
       // the events iterator (cancelAll fires from within unregisterOperation).
-      this.askUserMcpServer?.unregisterOperation(operationId);
+      this.builtinMcpServer?.unregisterOperation(operationId);
       await slot.pumpDone;
       this.opIdToIntervention.delete(operationId);
+      this.opIdToAgentId.delete(operationId);
       await unlink(tmpConfigPath).catch(() => {
         /* file may already be gone if app crashed mid-prompt */
       });
     };
 
     return { bridge, cleanup, tmpConfigPath };
+  }
+
+  /**
+   * Execute one in-app browser api call on behalf of a CC MCP tool. Forwards
+   * through `BrowserControlCtr.runGatewayToolCall` — the same funnel cloud
+   * gateway calls use — so the renderer-side `browserExecutor` (webview
+   * mount, snapshot refs, cursor overlay) stays the single source of truth.
+   */
+  private async runBrowserMcpTool(
+    operationId: string,
+    apiName: string,
+    args: Record<string, unknown>,
+  ): Promise<McpToolResult> {
+    const agentId = this.opIdToAgentId.get(operationId);
+    if (!agentId) {
+      return {
+        content: [
+          {
+            text: 'The in-app browser is not available for this run (no agent binding). Continue without it.',
+            type: 'text',
+          },
+        ],
+        isError: true,
+      };
+    }
+
+    const result = await this.app
+      .getController(BrowserControlCtr)
+      .runGatewayToolCall(apiName, { ...args, __agentId: agentId });
+
+    const text =
+      result.content ?? result.error?.message ?? (result.success ? 'OK' : 'Browser action failed');
+    const content: McpToolResult['content'] = [{ text, type: 'text' }];
+
+    // Screenshot: hand the image back as an MCP image block so CC can
+    // actually see the page (unlike the homogeneous runtime's text-only echo).
+    if (apiName === 'screenshot') {
+      const dataUrl = (result.state as { dataUrl?: string } | undefined)?.dataUrl;
+      const match =
+        typeof dataUrl === 'string' ? dataUrl.match(/^data:(image\/[\w.+-]+);base64,(.+)$/) : null;
+      if (match) content.push({ data: match[2], mimeType: match[1], type: 'image' });
+    }
+
+    return { content, isError: !result.success };
   }
 
   // ─── File cache ───
@@ -992,7 +1055,7 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     // into `--mcp-config`. Codex / future agents skip this entirely.
     const intervention =
       session.agentType === 'claude-code'
-        ? await this.setupInterventionForOp(params.operationId).catch((err) => {
+        ? await this.setupInterventionForOp(params.operationId, params.agentId).catch((err) => {
             logger.warn('Failed to set up AskUserQuestion bridge — proceeding without it:', err);
             return undefined;
           })
@@ -1666,7 +1729,7 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
       // CC's stdio close races shutdown we'd leave the MCP server bound to
       // a port. Stopping it here cancels every still-pending bridge with
       // `session_ended` and closes the listener.
-      void this.askUserMcpServer?.stop().catch((err) => {
+      void this.builtinMcpServer?.stop().catch((err) => {
         logger.warn('AskUserQuestion MCP server stop error:', err);
       });
     });

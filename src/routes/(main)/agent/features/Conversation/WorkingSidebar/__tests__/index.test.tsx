@@ -10,6 +10,7 @@ import AgentWorkingSidebar from '../index';
 
 interface CapturedRightPanelProps {
   children?: ReactNode;
+  maxWidth?: number | string;
   onSizeChange?: (size?: { height?: number | string; width?: number | string }) => void;
   width?: number | string;
 }
@@ -81,6 +82,12 @@ describe('AgentWorkingSidebar — controlled panel width', () => {
     render(<AgentWorkingSidebar />);
 
     expect(rightPanel.current?.width).toBe(360);
+  });
+
+  it('allows the panel to grow across wide displays without consuming the full viewport', () => {
+    render(<AgentWorkingSidebar />);
+
+    expect(rightPanel.current?.maxWidth).toBe(1200);
   });
 
   // Regression: DraggablePanel reports the dragged width as a `"480px"` string on

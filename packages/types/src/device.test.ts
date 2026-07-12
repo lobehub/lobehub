@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { workingDirConfigSchema } from '../workingDirSchema';
+import { workingDirConfigSchema } from './device';
 
 describe('workingDirConfigSchema', () => {
   it('preserves GitHub PR metadata under git.github', () => {

@@ -19,11 +19,16 @@
  *      because the manifest was still resolvable in the engine even when
  *      the rule-layer gate denied it).
  */
+import { BrowserManifest } from '@lobechat/builtin-tool-browser';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
 import { builtinTools } from '@lobechat/builtin-tools';
 
-export const DEVICE_TOOL_MANIFESTS = [LocalSystemManifest, RemoteDeviceManifest] as const;
+export const DEVICE_TOOL_MANIFESTS = [
+  LocalSystemManifest,
+  RemoteDeviceManifest,
+  BrowserManifest,
+] as const;
 
 export const DEVICE_TOOL_IDENTIFIERS: ReadonlySet<string> = new Set(
   DEVICE_TOOL_MANIFESTS.map((m) => m.identifier),

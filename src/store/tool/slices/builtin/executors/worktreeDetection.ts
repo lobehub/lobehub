@@ -3,6 +3,8 @@ import type { DeviceGitLinkedPullRequest, WorkingDirConfig } from '@lobechat/typ
 import { getWorkingDirSourcePath } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
 
+import { mutate } from '@/libs/swr';
+import { deviceKeys } from '@/libs/swr/keys';
 import { gitService } from '@/services/git';
 import { topicSelectors } from '@/store/chat/selectors';
 import { getChatStoreState } from '@/store/chat/store';
@@ -875,8 +877,21 @@ export const recordGitCommandEffects = async (params: {
     nextConfig = applyPullRequestToConfig(nextConfig, source, prCreate);
   }
 
-  if (isEqual(currentConfig, nextConfig)) return;
-  await state.updateTopicMetadata(topicId, { workingDirectoryConfig: nextConfig });
+  if (!isEqual(currentConfig, nextConfig)) {
+    await state.updateTopicMetadata(topicId, { workingDirectoryConfig: nextConfig });
+  }
+
+  // A checkout performed inside the heterogeneous CLI bypasses ChatInput's
+  // BranchSwitcher, which normally refreshes this cache itself. Revalidate the
+  // shared branch key so the control bar (and its branch-keyed PR lookup) follows
+  // the repository's actual HEAD immediately after the tool call completes.
+  if (branchSwitch) {
+    const boundDeviceId = topic?.metadata?.boundDeviceId;
+    const currentDeviceId = getElectronStoreState().gatewayDeviceInfo?.deviceId;
+    const cacheDeviceId =
+      currentDeviceId && boundDeviceId === currentDeviceId ? 'local' : boundDeviceId;
+    await mutate(deviceKeys.gitBranch(cacheDeviceId ?? 'local', source));
+  }
 };
 
 /**

@@ -1,15 +1,18 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
+import { getWorkingDirEffectivePath } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils';
 import { memo } from 'react';
 
 import SafeBoundary from '@/components/ErrorBoundary';
 import { resolveTargetDeviceId } from '@/helpers/agentWorkingDirectory';
-import { getWorkingDirectoryPathString } from '@/helpers/workingDirectoryPath';
+import { getConfigRepoType, getWorkingDirectoryPathString } from '@/helpers/workingDirectoryPath';
 import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
+import { useChatStore } from '@/store/chat';
+import { topicSelectors } from '@/store/chat/selectors';
 import { deviceSelectors, useDeviceStore } from '@/store/device';
 import { useElectronStore } from '@/store/electron';
 
@@ -44,6 +47,22 @@ const WorkingDirectorySectionInner = memo<WorkingDirectorySectionProps>(({ agent
   const rawEffectiveWorkingDirectory = useEffectiveWorkingDirectory(agentId);
   const effectiveWorkingDirectory = getWorkingDirectoryPathString(rawEffectiveWorkingDirectory);
 
+  // Live probes (fs / cached device dirs) can't resolve repoType for a worktree
+  // path that was never registered as a device working dir — so fall back to the
+  // repoType persisted on the topic (the same snapshot the meta hover card reads).
+  // Without this the whole GitStatus is gated out and branch/worktree/PR chips
+  // vanish even though the topic clearly carries git context.
+  const topicWorkingDirectoryConfig = useChatStore(
+    (s) => topicSelectors.currentTopicMetadata(s)?.workingDirectoryConfig,
+  );
+  // Only trust the persisted config when it actually describes the directory we
+  // resolved — the topic override wins in `useEffectiveWorkingDirectory`, so this
+  // holds whenever the config is what produced `effectiveWorkingDirectory`.
+  const topicConfigMatchesEffective =
+    !!effectiveWorkingDirectory &&
+    getWorkingDirEffectivePath(topicWorkingDirectoryConfig) === effectiveWorkingDirectory;
+  const persistedConfig = topicConfigMatchesEffective ? topicWorkingDirectoryConfig : undefined;
+
   // Local machine probes the filesystem for repoType; a remote device's repoType
   // comes from the cached `workingDirs` entry (we can't probe a remote fs here).
   const localRepoType = useRepoType(isLocalDevice ? effectiveWorkingDirectory : undefined);
@@ -51,14 +70,23 @@ const WorkingDirectorySectionInner = memo<WorkingDirectorySectionProps>(({ agent
   const currentEntry = effectiveWorkingDirectory
     ? deviceDirs.find((entry) => getEntryEffectivePath(entry) === effectiveWorkingDirectory)
     : undefined;
-  const sourceWorkingDirectory =
-    (isRecord(currentEntry) ? getWorkingDirectoryPathString(currentEntry.path) : undefined) ??
-    effectiveWorkingDirectory;
   const remoteRepoType =
     currentEntry?.repoType === 'git' || currentEntry?.repoType === 'github'
       ? currentEntry.repoType
       : undefined;
-  const repoType = isLocalDevice ? localRepoType : remoteRepoType;
+
+  // The SOURCE repo, not the checkout. A persisted-worktree topic has no matching
+  // `workingDirs` entry (that's exactly why the repoType probe misses), so without
+  // the persisted `config.path` this would collapse to the worktree path — and
+  // WorktreeSwitcher commits `sourcePath` as the WorkingDirEntry.path, rewriting
+  // the topic's repo source to the linked worktree and breaking later switches.
+  const sourceWorkingDirectory =
+    (isRecord(currentEntry) ? getWorkingDirectoryPathString(currentEntry.path) : undefined) ??
+    getWorkingDirectoryPathString(persistedConfig?.path) ??
+    effectiveWorkingDirectory;
+
+  const repoType =
+    (isLocalDevice ? localRepoType : remoteRepoType) ?? getConfigRepoType(persistedConfig);
 
   return (
     <>

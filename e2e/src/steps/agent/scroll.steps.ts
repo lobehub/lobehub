@@ -155,8 +155,14 @@ async function setAutoScrollEnabled(world: CustomWorld, desired: boolean): Promi
   const currentChecked = (await target.getAttribute('aria-checked')) === 'true';
   if (currentChecked !== desired) {
     await target.click();
-    // Give the optimistic update + debounced server call a moment to settle.
-    await world.page.waitForTimeout(400);
+    await expect(target).toHaveAttribute('aria-checked', String(desired));
+
+    // Navigating while the async settings request is still in flight can
+    // abort it and make the next page reload the previous value. Wait for the
+    // UI's save-state contract instead of relying on a fixed delay.
+    await expect(world.page.getByText(/Saved|\u5DF2\u4FDD\u5B58/).last()).toBeVisible({
+      timeout: 15_000,
+    });
   }
 }
 

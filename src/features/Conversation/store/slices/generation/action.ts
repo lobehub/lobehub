@@ -1,5 +1,5 @@
 import { AgentManagementIdentifier } from '@lobechat/builtin-tool-agent-management';
-import { LOADING_FLAT } from '@lobechat/const';
+import { HETERO_CONTINUE_PROMPT, LOADING_FLAT } from '@lobechat/const';
 import type {
   ChatImageItem,
   ConversationContext,
@@ -94,9 +94,6 @@ const settleGenerationEntry = (
  * completed step (we resume the same session id), so the instruction only has to
  * stop the model from redoing them. Not localized: it is model input, not UI.
  */
-const HETERO_CONTINUE_PROMPT =
-  'Continue the task from where it stopped. The transcript above shows the work already completed — do not redo it.';
-
 /**
  * Where a hetero (Claude Code / Codex) run should execute, and whether it can
  * pick up the topic's existing CLI session.
@@ -209,12 +206,21 @@ const runHeterogeneousFromExistingMessage = async (
   return assistantMsg.id;
 };
 
+export interface HeteroContinuationScheduleParams {
+  failedAssistantMessageId: string;
+  rateLimit?: {
+    rateLimitType?: string;
+    resetsAt?: number;
+  };
+}
+
 /**
  * Generation Actions
  *
  * Handles generation control (stop, cancel, regenerate, continue)
  */
 export interface GenerationAction {
+  cancelHeteroContinuation: () => Promise<void>;
   /**
    * Cancel a specific operation
    */
@@ -332,6 +338,8 @@ export interface GenerationAction {
    */
   resetHeteroOverloadRetry: (scopeId: string) => void;
 
+  scheduleHeteroContinuation: (params: HeteroContinuationScheduleParams) => Promise<void>;
+
   /**
    * Stop current generation
    */
@@ -359,6 +367,14 @@ export const generationSlice: StateCreator<
   [],
   GenerationAction
 > = (set, get) => ({
+  cancelHeteroContinuation: async () => {
+    const topicId = get().context.topicId;
+    if (!topicId) return;
+
+    const chatStore = useChatStore.getState();
+    await chatStore.updateTopicStatus({ status: 'failed', topicId });
+    await chatStore.updateTopicMetadata(topicId, { scheduledRun: null });
+  },
   cancelOperation: (operationId: string, reason?: string) => {
     const state = get();
     const { hooks } = state;
@@ -583,6 +599,41 @@ export const generationSlice: StateCreator<
       });
       throw error;
     }
+  },
+
+  scheduleHeteroContinuation: async ({ failedAssistantMessageId, rateLimit }) => {
+    const { context, dbMessages } = get();
+    const topicId = context.topicId;
+    if (!topicId) return;
+
+    const messagesById = new Map(dbMessages.map((message) => [message.id, message]));
+    let ancestor = messagesById.get(failedAssistantMessageId);
+    while (ancestor?.parentId && ancestor.role !== 'user') {
+      ancestor = messagesById.get(ancestor.parentId);
+    }
+    const userMessageId = ancestor?.role === 'user' ? ancestor.id : undefined;
+    if (!userMessageId) return;
+
+    const chatStore = useChatStore.getState();
+    const topic = topicSelectors.getTopicById(topicId)(chatStore);
+    const now = new Date().toISOString();
+
+    await chatStore.updateTopicMetadata(topicId, {
+      scheduledRun: {
+        createdAt: now,
+        failedAssistantMessageId,
+        rateLimit,
+        reason: 'rate_limit',
+        resume: {
+          sessionId: topic?.metadata?.heteroSessionId,
+          workingDirectory: topic?.metadata?.workingDirectory,
+        },
+        source: 'heterogeneous_agent',
+        updatedAt: now,
+        userMessageId,
+      },
+    });
+    await chatStore.updateTopicStatus({ status: 'scheduled', topicId });
   },
 
   delAndRegenerateMessage: async (messageId: string) => {
