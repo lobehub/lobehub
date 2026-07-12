@@ -539,6 +539,14 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
           <span className={cx(styles.policyCheck)} />
         );
 
+      // Right-click / "..." menu is an action list (Pin / Auto / Disable), not a
+      // status readout — group headers still use the state labels below.
+      const policyActionKey: Record<SkillPolicyMode, string> = {
+        auto: 'tools.activation.action.auto',
+        disabled: 'tools.activation.action.disable',
+        pinned: 'tools.activation.action.pin',
+      };
+
       const renderPolicyItem = (value: SkillPolicyMode, icon: ReactNode) => (
         <button
           className={cx(styles.policyItem)}
@@ -552,7 +560,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
           }}
         >
           <span className={cx(styles.policyItemIcon)}>{icon}</span>
-          <span className={cx(styles.policyText)}>{t(`tools.activation.${value}`)}</span>
+          <span className={cx(styles.policyText)}>{t(policyActionKey[value])}</span>
           {renderCheck(value)}
         </button>
       );
