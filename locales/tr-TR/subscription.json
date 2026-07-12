@@ -227,6 +227,7 @@
   "limitation.insufficientBudget.rescue.topup.title": "{{quantity}}M kredi yükle",
   "limitation.insufficientBudget.rescue.upgrade.badge": "En iyi değer",
   "limitation.insufficientBudget.rescue.upgrade.benefit": "Aylık {{credits}} kredi, istediğiniz zaman iptal edebilirsiniz",
+  "limitation.insufficientBudget.rescue.upgrade.benefitWithRuns": "{{credits}} kredi/ay ≈ {{runs}}+ bu tür istekler",
   "limitation.insufficientBudget.rescue.upgrade.cta": "Yükselt ve devam et",
   "limitation.insufficientBudget.rescue.upgrade.price": "ayda ${{price}}'dan başlayan fiyatlarla",
   "limitation.insufficientBudget.rescue.upgrade.title": "{{plan}} planına yükselt",

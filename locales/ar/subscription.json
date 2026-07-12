@@ -227,6 +227,7 @@
   "limitation.insufficientBudget.rescue.topup.title": "اشحن {{quantity}} مليون اعتماد",
   "limitation.insufficientBudget.rescue.upgrade.badge": "أفضل قيمة",
   "limitation.insufficientBudget.rescue.upgrade.benefit": "{{credits}} اعتماد شهريًا، يمكنك الإلغاء في أي وقت",
+  "limitation.insufficientBudget.rescue.upgrade.benefitWithRuns": "{{credits}} رصيد شهري ≈ {{runs}}+ طلبات مثل هذا",
   "limitation.insufficientBudget.rescue.upgrade.cta": "قم بالترقية واستمر",
   "limitation.insufficientBudget.rescue.upgrade.price": "ابتداءً من ${{price}}/شهر",
   "limitation.insufficientBudget.rescue.upgrade.title": "قم بالترقية إلى {{plan}}",

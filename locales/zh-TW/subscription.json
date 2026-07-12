@@ -227,6 +227,7 @@
   "limitation.insufficientBudget.rescue.topup.title": "充值 {{quantity}}M 點數",
   "limitation.insufficientBudget.rescue.upgrade.badge": "最佳價值",
   "limitation.insufficientBudget.rescue.upgrade.benefit": "每月 {{credits}} 點數，隨時可取消",
+  "limitation.insufficientBudget.rescue.upgrade.benefitWithRuns": "{{credits}} 點數每月 ≈ {{runs}}+ 次類似請求",
   "limitation.insufficientBudget.rescue.upgrade.cta": "升級並繼續",
   "limitation.insufficientBudget.rescue.upgrade.price": "每月僅需 ${{price}} 起",
   "limitation.insufficientBudget.rescue.upgrade.title": "升級至 {{plan}}",

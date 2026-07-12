@@ -227,6 +227,7 @@
   "limitation.insufficientBudget.rescue.topup.title": "Recarregar {{quantity}}M créditos",
   "limitation.insufficientBudget.rescue.upgrade.badge": "Melhor valor",
   "limitation.insufficientBudget.rescue.upgrade.benefit": "{{credits}} créditos por mês, cancele a qualquer momento",
+  "limitation.insufficientBudget.rescue.upgrade.benefitWithRuns": "{{credits}} créditos por mês ≈ {{runs}}+ solicitações como esta",
   "limitation.insufficientBudget.rescue.upgrade.cta": "Atualizar e continuar",
   "limitation.insufficientBudget.rescue.upgrade.price": "a partir de ${{price}}/mês",
   "limitation.insufficientBudget.rescue.upgrade.title": "Atualizar para {{plan}}",

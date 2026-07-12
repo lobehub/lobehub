@@ -227,6 +227,7 @@
   "limitation.insufficientBudget.rescue.topup.title": "充值 {{quantity}}M 积分",
   "limitation.insufficientBudget.rescue.upgrade.badge": "最划算",
   "limitation.insufficientBudget.rescue.upgrade.benefit": "每月 {{credits}} 积分，随时可取消",
+  "limitation.insufficientBudget.rescue.upgrade.benefitWithRuns": "每月 {{credits}} 积分 ≈ {{runs}}+ 次这样的请求",
   "limitation.insufficientBudget.rescue.upgrade.cta": "升级并继续",
   "limitation.insufficientBudget.rescue.upgrade.price": "${{price}}/月起",
   "limitation.insufficientBudget.rescue.upgrade.title": "升级至 {{plan}}",

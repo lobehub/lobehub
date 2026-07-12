@@ -247,6 +247,8 @@ export default {
   'limitation.insufficientBudget.rescue.upgrade.badge': 'Best value',
   'limitation.insufficientBudget.rescue.upgrade.benefit':
     '{{credits}} credits per month, cancel anytime',
+  'limitation.insufficientBudget.rescue.upgrade.benefitWithRuns':
+    '{{credits}} credits per month ≈ {{runs}}+ requests like this',
   'limitation.insufficientBudget.rescue.upgrade.cta': 'Upgrade & continue',
   'limitation.insufficientBudget.rescue.upgrade.price': 'from ${{price}}/mo',
   'limitation.insufficientBudget.rescue.upgrade.title': 'Upgrade to {{plan}}',

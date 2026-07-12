@@ -227,6 +227,7 @@
   "limitation.insufficientBudget.rescue.topup.title": "شارژ {{quantity}} میلیون اعتبار",
   "limitation.insufficientBudget.rescue.upgrade.badge": "بهترین ارزش",
   "limitation.insufficientBudget.rescue.upgrade.benefit": "{{credits}} اعتبار در ماه، لغو در هر زمان",
+  "limitation.insufficientBudget.rescue.upgrade.benefitWithRuns": "{{credits}} اعتبار در ماه ≈ {{runs}}+ درخواست مشابه",
   "limitation.insufficientBudget.rescue.upgrade.cta": "ارتقا دهید و ادامه دهید",
   "limitation.insufficientBudget.rescue.upgrade.price": "از ${{price}}/ماه",
   "limitation.insufficientBudget.rescue.upgrade.title": "ارتقا به {{plan}}",

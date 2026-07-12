@@ -227,6 +227,7 @@
   "limitation.insufficientBudget.rescue.topup.title": "{{quantity}}M 크레딧 충전",
   "limitation.insufficientBudget.rescue.upgrade.badge": "최고의 가치",
   "limitation.insufficientBudget.rescue.upgrade.benefit": "월 {{credits}} 크레딧, 언제든지 취소 가능",
+  "limitation.insufficientBudget.rescue.upgrade.benefitWithRuns": "{{credits}} 크레딧/월 ≈ {{runs}}+ 요청과 동일",
   "limitation.insufficientBudget.rescue.upgrade.cta": "업그레이드하고 계속하기",
   "limitation.insufficientBudget.rescue.upgrade.price": "월 ${{price}}부터",
   "limitation.insufficientBudget.rescue.upgrade.title": "{{plan}}으로 업그레이드",
