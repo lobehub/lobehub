@@ -1,7 +1,9 @@
 import { z } from 'zod';
 
 import type { SerializedAgentHook } from '../agentHook';
+import { serializedAgentHookSchema } from '../agentHook';
 import type { WorkingDirConfig } from '../device';
+import { workingDirConfigSchema } from '../device';
 import type { BaseDataModel } from '../meta';
 
 // Type definitions
@@ -220,6 +222,77 @@ export interface ChatTopicMetadata {
    */
   workingDirectoryConfig?: WorkingDirConfig;
 }
+
+/** Metadata patch accepted by the topic update API. */
+export const chatTopicMetadataUpdateSchema = z.object({
+  boundDeviceId: z.string().optional(),
+  heteroSessionId: z.string().optional(),
+  heteroSessionIdByWorkingDirectory: z.record(z.string(), z.string()).optional(),
+  model: z.string().optional(),
+  onboardingFeedback: z
+    .object({
+      comment: z.string().max(500).optional(),
+      rating: z.enum(['good', 'bad']),
+      submittedAt: z.string(),
+    })
+    .optional(),
+  onboardingSession: z
+    .object({
+      agentIdentityCompletedAt: z.string().optional(),
+      agentMarketplacePick: z
+        .object({
+          categoryHints: z.array(z.string()),
+          installedAgentIds: z.array(z.string()).optional(),
+          requestId: z.string(),
+          resolvedAt: z.string(),
+          selectedTemplateIds: z.array(z.string()).optional(),
+          skipReason: z.string().optional(),
+          skippedAgentIds: z.array(z.string()).optional(),
+          status: z.enum(['cancelled', 'skipped', 'submitted']),
+        })
+        .optional(),
+      discoveryCompletedAt: z.string().optional(),
+      finalAgentNames: z.array(z.string()).optional(),
+      finishedAt: z.string().optional(),
+      lastActiveAt: z.string().optional(),
+      phase: z.enum(['agent_identity', 'user_identity', 'discovery', 'summary']).optional(),
+      startedAt: z.string().optional(),
+      userIdentityCompletedAt: z.string().optional(),
+      version: z.number().optional(),
+    })
+    .optional(),
+  provider: z.string().optional(),
+  repos: z.array(z.string()).optional(),
+  runningOperation: z
+    .object({
+      assistantMessageId: z.string(),
+      hooks: z.array(serializedAgentHookSchema).optional(),
+      operationId: z.string(),
+      scope: z.string().optional(),
+      threadId: z.string().nullish(),
+    })
+    .nullable()
+    .optional(),
+  scheduledRun: z
+    .object({
+      claim: z.object({ claimedAt: z.string(), expiresAt: z.string(), id: z.string() }).optional(),
+      createdAt: z.string(),
+      failedAssistantMessageId: z.string(),
+      rateLimit: z
+        .object({ rateLimitType: z.string().optional(), resetsAt: z.number().optional() })
+        .optional(),
+      reason: z.literal('rate_limit'),
+      resume: z
+        .object({ sessionId: z.string().optional(), workingDirectory: z.string().optional() })
+        .optional(),
+      source: z.literal('heterogeneous_agent'),
+      updatedAt: z.string(),
+      userMessageId: z.string(),
+    })
+    .nullish(),
+  workingDirectory: z.string().optional(),
+  workingDirectoryConfig: workingDirConfigSchema.optional(),
+});
 
 /**
  * Backend-scheduled continuation of a pure (non-Task) heterogeneous topic after
