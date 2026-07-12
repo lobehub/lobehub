@@ -51,10 +51,12 @@ vi.mock('@/services/message', () => ({
 
 // threadService — subagent Thread creation (CC `Task` tool_use)
 const mockCreateThread = vi.fn();
+const mockGetThreads = vi.fn();
 const mockUpdateThread = vi.fn();
 vi.mock('@/services/thread', () => ({
   threadService: {
     createThread: (...args: unknown[]) => mockCreateThread(...args),
+    getThreads: (...args: unknown[]) => mockGetThreads(...args),
     updateThread: (...args: unknown[]) => mockUpdateThread(...args),
   },
 }));
@@ -497,6 +499,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       agentSessionId: ipc.getAdapterSessionId(sessionId),
     }));
     mockGetMessages.mockResolvedValue([]);
+    mockGetThreads.mockResolvedValue([]);
     // Honor a caller-provided `id` like the real messageService does — the
     // main + subagent coordinators PRE-ALLOCATE message ids so their intents can
     // carry concrete parentId chains. A mock that minted its own id would break
@@ -3367,6 +3370,59 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
   // ────────────────────────────────────────────────────
 
   describe('CC subagent thread-container', () => {
+    it('does not recreate a finalized subagent Thread after a client executor restart', async () => {
+      mockGetThreads.mockResolvedValue([
+        {
+          id: 'thread-existing',
+          metadata: { sourceToolCallId: 'toolu_task' },
+          status: ThreadStatus.Active,
+          type: 'isolation',
+        },
+      ]);
+
+      await runWithEvents([
+        ccInit(),
+        ccSubagentText('msg_sub', 'toolu_task', 'replayed late event'),
+        ccResult(),
+      ]);
+
+      expect(mockCreateThread).not.toHaveBeenCalled();
+    });
+
+    it('reattaches a continuing subagent to its existing Processing Thread', async () => {
+      mockGetThreads.mockResolvedValue([
+        {
+          id: 'thread-existing',
+          metadata: { sourceToolCallId: 'toolu_task' },
+          status: ThreadStatus.Processing,
+          type: 'isolation',
+        },
+      ]);
+      mockGetMessages.mockResolvedValue([
+        {
+          id: 'assistant-existing',
+          metadata: { subagentMessageId: 'msg_sub' },
+          role: 'assistant',
+          threadId: 'thread-existing',
+          topicId: 'topic-1',
+        },
+      ]);
+
+      await runWithEvents([
+        ccInit(),
+        ccSubagentText('msg_sub', 'toolu_task', 'continued event'),
+        ccSubagentSpawnResult('toolu_task', 'done'),
+        ccResult(),
+      ]);
+
+      expect(mockCreateThread).not.toHaveBeenCalled();
+      expect(mockUpdateMessage.mock.calls).toContainEqual([
+        'assistant-existing',
+        expect.objectContaining({ content: 'continued event' }),
+        undefined,
+      ]);
+    });
+
     it('does NOT create a Thread on Task tool_use alone (lazy creation)', async () => {
       // Task tool_use without any subagent events should NOT trigger
       // Thread creation — we only know the spawn is real once the

@@ -15,7 +15,9 @@ import {
   type MainAgentReduceCtx,
   type MainAgentRunState,
   reduceMainAgent,
+  rehydrateSubagentRunsState,
   type SubagentIntent,
+  type SubagentRunSnapshot,
 } from '@lobechat/heterogeneous-agents';
 import { formatContextSelections, formatPageSelections } from '@lobechat/prompts';
 import type {
@@ -1219,6 +1221,69 @@ export const executeHeterogeneousAgent = async (
     };
   };
 
+  const getSubagentThread = (threadId: string) => {
+    const existing = subagentThreads.get(threadId);
+    if (existing) return existing;
+
+    const created = beginSubagentRun(threadId);
+    subagentThreads.set(threadId, created);
+    return created;
+  };
+
+  const rehydrateClientSubagentRuns = async (): Promise<void> => {
+    if (!context.topicId) return;
+
+    try {
+      const threads = await threadService.getThreads(context.topicId);
+      const snapshots: SubagentRunSnapshot[] = [];
+      const finalizedParents: string[] = [];
+
+      for (const thread of threads) {
+        if (thread.type !== ThreadType.Isolation) continue;
+        const parentToolCallId = thread.metadata?.sourceToolCallId;
+        if (!parentToolCallId) continue;
+
+        if (thread.status !== ThreadStatus.Processing) {
+          finalizedParents.push(parentToolCallId);
+          continue;
+        }
+
+        const messages = await messageService.getMessages({
+          threadId: thread.id,
+          topicId: context.topicId,
+        });
+        const currentAssistant = messages.findLast((message) => message.role === 'assistant');
+        if (!currentAssistant) continue;
+
+        const toolRows = messages.filter(
+          (message) => message.role === 'tool' && message.tool_call_id,
+        );
+        for (const message of toolRows) {
+          toolMsgIdByCallId.set(message.tool_call_id!, message.id);
+        }
+
+        snapshots.push({
+          currentAssistantId: currentAssistant.id,
+          currentSubagentMessageId:
+            typeof currentAssistant.metadata?.subagentMessageId === 'string'
+              ? currentAssistant.metadata.subagentMessageId
+              : undefined,
+          lastChainParentId: currentAssistant.id,
+          lifetimeToolCallIds: toolRows.map((message) => message.tool_call_id!),
+          parentToolCallId,
+          threadId: thread.id,
+        });
+      }
+
+      mainState = {
+        ...mainState,
+        subagents: rehydrateSubagentRunsState(snapshots, finalizedParents),
+      };
+    } catch (err) {
+      console.error('[HeterogeneousAgent] Failed to rehydrate client subagent runs:', err);
+    }
+  };
+
   /**
    * Mark a per-spawn sub-operation completed. Wrapper around
    * `completeOperation` so the coordinator interpreter (`finalizeThread`)
@@ -1249,6 +1314,7 @@ export const executeHeterogeneousAgent = async (
           await threadService.createThread({
             id: intent.threadId,
             metadata: {
+              operationId,
               sourceToolCallId: intent.sourceToolCallId,
               startedAt: new Date().toISOString(),
               subagentType: intent.subagentType,
@@ -1273,7 +1339,7 @@ export const executeHeterogeneousAgent = async (
       }
 
       case 'createMessage': {
-        const t = subagentThreads.get(intent.threadId);
+        const t = getSubagentThread(intent.threadId);
         const subMetadata = heteroProvenance(intent.subagentMessageId);
         const msg = {
           agentId: intent.agentId ?? undefined,
@@ -1301,7 +1367,7 @@ export const executeHeterogeneousAgent = async (
       // Live token-level UI only — no DB write (durable content lands via
       // persistContent / persistToolBatch). Mirrors the old text-chunk path.
       case 'streamContent': {
-        const t = subagentThreads.get(intent.threadId);
+        const t = getSubagentThread(intent.threadId);
         const value: Partial<UIChatMessage> = {};
         if (intent.content !== undefined) value.content = intent.content;
         if (intent.reasoning !== undefined)
@@ -1311,7 +1377,7 @@ export const executeHeterogeneousAgent = async (
       }
 
       case 'persistContent': {
-        const t = subagentThreads.get(intent.threadId);
+        const t = getSubagentThread(intent.threadId);
         const update: Record<string, any> = {};
         if (intent.content) update.content = intent.content;
         if (intent.reasoning) update.reasoning = { content: intent.reasoning };
@@ -1338,7 +1404,7 @@ export const executeHeterogeneousAgent = async (
       }
 
       case 'persistToolBatch': {
-        const t = subagentThreads.get(intent.threadId);
+        const t = getSubagentThread(intent.threadId);
         const buildUpdate = (withResult: boolean): Record<string, any> => {
           const update: Record<string, any> = {
             tools: intent.tools.map((x) =>
@@ -1423,7 +1489,7 @@ export const executeHeterogeneousAgent = async (
       }
 
       case 'resolveToolResult': {
-        const t = subagentThreads.get(intent.threadId);
+        const t = getSubagentThread(intent.threadId);
         const toolMsgId = toolMsgIdByCallId.get(intent.toolCallId);
         if (toolMsgId) {
           const update: ToolMessageUpdateOperation['value'] = {
@@ -1442,7 +1508,7 @@ export const executeHeterogeneousAgent = async (
       }
 
       case 'recordUsage': {
-        const t = subagentThreads.get(intent.threadId);
+        const t = getSubagentThread(intent.threadId);
         const update = {
           // Wholesale metadata overwrite — re-stamp the session + message
           // provenance the createMessage write put there, or usage would wipe it.
@@ -1471,7 +1537,7 @@ export const executeHeterogeneousAgent = async (
         } catch (err) {
           console.error('[HeterogeneousAgent] Failed to mark subagent thread complete:', err);
         }
-        const t = subagentThreads.get(intent.threadId);
+        const t = getSubagentThread(intent.threadId);
         if (t) completeSubagentOp(t.subOperationId);
         return;
       }
@@ -1761,6 +1827,8 @@ export const executeHeterogeneousAgent = async (
     }
     mainState = next;
   };
+
+  await rehydrateClientSubagentRuns();
 
   try {
     // Start session (pass resumeSessionId for multi-turn --resume)
