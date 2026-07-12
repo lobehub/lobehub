@@ -326,6 +326,44 @@ describe('AgentRuntimeService', () => {
       );
     });
 
+    it('should restore tools activated in a previous operation into initial state', async () => {
+      const taskManifest = { identifier: 'lobe-task' } as any;
+      const initialMessages = [
+        {
+          content: 'Successfully activated tools: lobe-task',
+          id: 'tool-message-1',
+          plugin: { apiName: 'activateTools', identifier: 'lobe-activator' },
+          pluginState: { activatedTools: [{ identifier: 'lobe-task' }] },
+          role: 'tool',
+        },
+      ] as any;
+
+      await service.createOperation({
+        ...mockParams,
+        autoStart: false,
+        initialMessages,
+        initialStepCount: 3,
+        toolSet: {
+          ...mockParams.toolSet,
+          manifestMap: { 'lobe-task': taskManifest },
+        },
+      });
+
+      expect(mockCoordinator.saveAgentState).toHaveBeenCalledWith(
+        'test-operation-1',
+        expect.objectContaining({
+          activatedStepTools: [
+            {
+              activatedAtStep: 3,
+              id: 'lobe-task',
+              manifest: taskManifest,
+              source: 'discovery',
+            },
+          ],
+        }),
+      );
+    });
+
     it('should abort before creating operation when signal is already aborted', async () => {
       const controller = new AbortController();
       controller.abort(new Error('startup aborted'));
