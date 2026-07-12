@@ -2,7 +2,13 @@ import type { ChatToolPayload } from '@lobechat/types';
 
 import { UsageCounter } from '../core';
 import type { AgentRuntimeHost, ToolRunContext, ToolRunResult } from '../transport';
-import type { AgentEvent, AgentInstruction, AgentState, InstructionExecutor } from '../types';
+import type {
+  AgentEvent,
+  AgentInstruction,
+  AgentRuntimeContext,
+  AgentState,
+  InstructionExecutor,
+} from '../types';
 import { extractActivatedSkillsFromMessages } from '../utils';
 
 const TOOL_EXECUTION_PHASE = 'tool_execution';
@@ -107,13 +113,17 @@ const createRunContext = ({
   host,
   mode,
   parentMessageId,
+  reuseExistingMessage,
   state,
+  stepContext,
   tool,
 }: {
   host: AgentRuntimeHost;
   mode: ToolRunContext['mode'];
   parentMessageId: string;
+  reuseExistingMessage?: boolean;
   state: AgentState;
+  stepContext?: AgentRuntimeContext['stepContext'];
   tool: ChatToolPayload;
 }): ToolRunContext => {
   const toolName = toolNameOf(tool);
@@ -123,19 +133,21 @@ const createRunContext = ({
 
   return {
     activatedSkills: extractActivatedSkillsFromMessages(state.messages),
-    agentId: state.metadata?.agentId,
+    agentId: host.operation.agentId ?? state.metadata?.agentId,
     assistantMessageId: parentMessageId,
     callIndex: resolveCallIndex(state, toolName),
     effectiveManifestMap: buildEffectiveManifestMap(state),
-    groupId: state.metadata?.groupId,
+    groupId: host.operation.groupId ?? state.metadata?.groupId,
     messageId: state.metadata?.sourceMessageId,
     mode,
     operationId: host.operation.operationId,
     parentMessageId,
     parsedArgs: parseToolArgs(tool),
+    reuseExistingMessage,
     state,
     stepIndex: host.operation.stepIndex,
-    threadId: state.metadata?.threadId,
+    stepContext,
+    threadId: host.operation.threadId ?? state.metadata?.threadId,
     toolName,
     toolResultMaxLength: agentConfig?.chatConfig?.toolResultMaxLength,
     toolSource,
@@ -221,19 +233,26 @@ const createToolMessage = async ({
   tool: ChatToolPayload;
 }) => {
   try {
+    const agentId = host.operation.agentId ?? state.metadata?.agentId;
+    if (!agentId) {
+      throw new Error(
+        `[call_tool] Missing agentId for tool message (op=${host.operation.operationId})`,
+      );
+    }
+
     return await host.transports.messages.createToolMessage({
-      agentId: state.metadata!.agentId!,
+      agentId,
       content: result.content,
-      groupId: state.metadata?.groupId ?? undefined,
+      groupId: host.operation.groupId ?? state.metadata?.groupId ?? undefined,
       metadata: { toolExecutionTimeMs: result.executionTime ?? 0 },
       parentId: parentMessageId,
       plugin: tool as any,
       pluginError: result.error,
       pluginState: result.state,
       role: 'tool',
-      threadId: state.metadata?.threadId,
+      threadId: host.operation.threadId ?? state.metadata?.threadId,
       tool_call_id: tool.id,
-      topicId: state.metadata?.topicId,
+      topicId: host.operation.topicId ?? state.metadata?.topicId,
     });
   } catch (error) {
     await publishError(host, error, TOOL_MESSAGE_PERSIST_PHASE);
@@ -300,7 +319,7 @@ const persistActivatedTools = ({
 
 export const callTool =
   (host: AgentRuntimeHost): InstructionExecutor =>
-  async (instruction, state) => {
+  async (instruction, state, runtimeContext) => {
     const { payload } = instruction as Extract<AgentInstruction, { type: 'call_tool' }>;
     const tools = requireToolTransport(host);
     const tool = payload.toolCalling;
@@ -309,7 +328,9 @@ export const callTool =
       host,
       mode: 'single',
       parentMessageId: payload.parentMessageId,
+      reuseExistingMessage: payload.skipCreateToolMessage,
       state,
+      stepContext: runtimeContext?.stepContext,
       tool,
     });
 
@@ -319,7 +340,7 @@ export const callTool =
       type: 'tool_start',
     });
 
-    if (runContext.toolSource === 'client') {
+    if (runContext.toolSource === 'client' && !tools.canRunClientTools) {
       return pauseForTools({
         host,
         instruction,
@@ -331,6 +352,10 @@ export const callTool =
 
     try {
       const execution = await tools.run(tool, runContext);
+
+      if (execution.interrupted) {
+        return { events, newState: state };
+      }
 
       if (execution.result.deferred) {
         return pauseForTools({
@@ -360,7 +385,12 @@ export const callTool =
       });
 
       let toolMessageId: string;
-      if (payload.skipCreateToolMessage) {
+      if (execution.toolMessageId) {
+        toolMessageId = execution.toolMessageId;
+        if (!execution.resultPersisted) {
+          await updateExistingToolMessage({ host, result: executionResult, toolMessageId });
+        }
+      } else if (payload.skipCreateToolMessage) {
         toolMessageId = payload.parentMessageId;
         await updateExistingToolMessage({ host, result: executionResult, toolMessageId });
       } else {
@@ -375,13 +405,22 @@ export const callTool =
       }
 
       const newState = structuredClone(state);
-      newState.messages.push({
-        content: executionResult.content,
-        plugin: tool,
-        pluginState: executionResult.state,
-        role: 'tool',
-        tool_call_id: tool.id,
-      });
+      if (execution.resultPersisted) {
+        newState.messages = await host.transports.messages.query({
+          agentId: runContext.agentId,
+          groupId: runContext.groupId,
+          threadId: runContext.threadId,
+          topicId: runContext.topicId,
+        });
+      } else {
+        newState.messages.push({
+          content: executionResult.content,
+          plugin: tool,
+          pluginState: executionResult.state,
+          role: 'tool',
+          tool_call_id: tool.id,
+        });
+      }
       newState.lastModified = nowIso();
 
       events.push({ id: tool.id, result: executionResult, type: 'tool_result' });
@@ -417,7 +456,14 @@ export const callTool =
       const legacyAgentInvocationStateType = executionResult.state?.type as string | undefined;
       const isLegacyAgentInvocationState =
         legacyAgentInvocationStateType === 'execSubAgent' ||
-        legacyAgentInvocationStateType === 'execSubAgents';
+        legacyAgentInvocationStateType === 'execSubAgents' ||
+        legacyAgentInvocationStateType === 'execClientSubAgent' ||
+        legacyAgentInvocationStateType === 'execClientSubAgents';
+
+      if (executionResult.stop && !isLegacyAgentInvocationState) {
+        newState.status = 'done';
+        return { events, newState };
+      }
 
       return {
         events,
@@ -475,7 +521,8 @@ export const callToolsBatch =
     const serverTools: ChatToolPayload[] = [];
 
     for (const tool of toolsCalling) {
-      if (resolveToolSource(state, tool) === 'client') clientTools.push(tool);
+      if (resolveToolSource(state, tool) === 'client' && !tools.canRunClientTools)
+        clientTools.push(tool);
       else serverTools.push(tool);
     }
 

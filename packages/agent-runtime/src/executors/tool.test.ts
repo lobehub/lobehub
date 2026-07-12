@@ -174,6 +174,100 @@ describe('tool executors', () => {
     );
   });
 
+  it('executes client-source tools when the transport supports local execution', async () => {
+    host.transports.tools!.canRunClientTools = true;
+    const instruction: Extract<AgentInstruction, { type: 'call_tool' }> = {
+      payload: {
+        parentMessageId: 'assistant-msg-1',
+        toolCalling: createToolCall('client-call', 'client-tool'),
+      },
+      type: 'call_tool',
+    };
+
+    const result = await callTool(host)(
+      instruction,
+      createState({ toolSourceMap: { 'client-tool': 'client' as any } }),
+    );
+
+    expect(runTool).toHaveBeenCalledOnce();
+    expect(result.newState.status).toBe('running');
+    expect(result.nextContext?.phase).toBe('tool_result');
+  });
+
+  it('uses a tool message already persisted by the transport', async () => {
+    runTool.mockResolvedValueOnce({
+      attempts: 1,
+      result: { content: 'Client result', executionTime: 10, success: true },
+      resultPersisted: true,
+      toolMessageId: 'client-tool-msg',
+    });
+    const instruction: Extract<AgentInstruction, { type: 'call_tool' }> = {
+      payload: { parentMessageId: 'assistant-msg-1', toolCalling: createToolCall() },
+      type: 'call_tool',
+    };
+
+    const result = await callTool(host)(instruction, createState());
+
+    expect(createToolMessage).not.toHaveBeenCalled();
+    expect(query).toHaveBeenCalledWith({
+      agentId: 'agent-1',
+      groupId: undefined,
+      threadId: 'thread-1',
+      topicId: 'topic-1',
+    });
+    expect(result.nextContext?.payload).toMatchObject({ parentMessageId: 'client-tool-msg' });
+  });
+
+  it('does not advance after the transport reports cancellation', async () => {
+    runTool.mockResolvedValueOnce({
+      attempts: 0,
+      interrupted: true,
+      result: { content: 'Cancelled', success: false },
+      resultPersisted: true,
+      toolMessageId: 'cancelled-tool-msg',
+    });
+    const instruction: Extract<AgentInstruction, { type: 'call_tool' }> = {
+      payload: { parentMessageId: 'assistant-msg-1', toolCalling: createToolCall() },
+      type: 'call_tool',
+    };
+    const state = createState();
+
+    const result = await callTool(host)(instruction, state);
+
+    expect(result).toEqual({ events: [], newState: state });
+    expect(createToolMessage).not.toHaveBeenCalled();
+  });
+
+  it('returns client sub-agent stop states to the agent but terminates other stop results', async () => {
+    const instruction: Extract<AgentInstruction, { type: 'call_tool' }> = {
+      payload: { parentMessageId: 'assistant-msg-1', toolCalling: createToolCall() },
+      type: 'call_tool',
+    };
+
+    runTool.mockResolvedValueOnce({
+      attempts: 1,
+      result: {
+        content: 'Dispatch client sub-agent',
+        state: { type: 'execClientSubAgent' },
+        stop: true,
+        success: true,
+      },
+    });
+    const delegated = await callTool(host)(instruction, createState());
+
+    expect(delegated.newState.status).toBe('running');
+    expect(delegated.nextContext?.payload).toMatchObject({ stop: true });
+
+    runTool.mockResolvedValueOnce({
+      attempts: 1,
+      result: { content: 'Spoken', state: { type: 'speak' }, stop: true, success: true },
+    });
+    const stopped = await callTool(host)(instruction, createState());
+
+    expect(stopped.newState.status).toBe('done');
+    expect(stopped.nextContext).toBeUndefined();
+  });
+
   it('executes server tools in a mixed batch then parks for client tools', async () => {
     const instruction: Extract<AgentInstruction, { type: 'call_tools_batch' }> = {
       payload: {
