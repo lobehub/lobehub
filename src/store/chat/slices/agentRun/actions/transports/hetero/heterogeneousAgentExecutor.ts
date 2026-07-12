@@ -1426,15 +1426,17 @@ export const executeHeterogeneousAgent = async (
         const t = subagentThreads.get(intent.threadId);
         const toolMsgId = toolMsgIdByCallId.get(intent.toolCallId);
         if (toolMsgId) {
-          const update: Partial<UIChatMessage> = { content: intent.content };
-          if (intent.pluginState) (update as any).pluginState = intent.pluginState;
-          if (intent.isError) (update as any).pluginError = { message: intent.content };
+          const update: ToolMessageUpdateOperation['value'] = {
+            content: intent.content,
+            pluginError: intent.isError ? { message: intent.content } : undefined,
+            pluginState: intent.pluginState,
+          };
           try {
             await mutateMessageBatch([{ id: toolMsgId, type: 'updateToolMessage', value: update }]);
           } catch (err) {
             console.error('[HeterogeneousAgent] Failed to persist subagent tool result:', err);
           }
-          t?.stream.update(toolMsgId, update);
+          t?.stream.update(toolMsgId, update as Partial<UIChatMessage>);
         }
         return;
       }

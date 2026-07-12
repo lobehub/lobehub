@@ -3666,7 +3666,14 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         ([id, val]: any) => id !== 'ast-initial' && val.content === 'Here is the summary.',
       );
       expect(threadAssistantContentWrites.length).toBeGreaterThan(0);
-      expect(threadAssistantContentWrites[0][2]).toMatchObject({ topicId: 'topic-1' });
+      expect(mockBatchMutate.mock.calls).toContainEqual([
+        expect.arrayContaining([
+          expect.objectContaining({
+            type: 'updateMessage',
+            value: expect.objectContaining({ content: 'Here is the summary.' }),
+          }),
+        ]),
+      ]);
       // Sanity — the in-thread assistants exist under the right thread.
       const threadAssistants = mockCreateMessage.mock.calls.filter(
         ([p]: any) => p.role === 'assistant' && p.threadId === threadId,
