@@ -9,6 +9,7 @@ import { Book, Download, MoreHorizontal, Trash2, Upload } from 'lucide-react';
 import { memo, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { channelDocUrl } from '@/const/url';
 import { useAgentStore } from '@/store/agent';
 import type { BotProviderItem } from '@/store/agent/slices/bot/action';
 
@@ -315,7 +316,7 @@ const PlatformList = memo<PlatformListProps>(
           }}
         >
           <a
-            href="https://lobehub.com/docs/usage/channels/overview"
+            href={channelDocUrl('overview')}
             rel="noopener noreferrer"
             target="_blank"
             style={{

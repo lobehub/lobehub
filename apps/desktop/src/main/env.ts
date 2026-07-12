@@ -1,3 +1,4 @@
+import { OFFICIAL_URL } from '@lobechat/const/url';
 import { createEnv } from '@t3-oss/env-core';
 import { memoize } from 'es-toolkit';
 import { z } from 'zod';
@@ -100,7 +101,7 @@ export const getDesktopEnv = memoize(() =>
       NODE_ENV: z.enum(['development', 'production', 'test']).optional(),
 
       // cloud server url (can be overridden for selfhost/dev)
-      OFFICIAL_CLOUD_SERVER: z.string().optional().default('https://app.lobehub.com'),
+      OFFICIAL_CLOUD_SERVER: z.string().optional().default(OFFICIAL_URL),
 
       // updater
       // process.env.xxx will replace in build stage

@@ -24,6 +24,7 @@ import {
 import { memo, type ReactNode, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { DOWNLOAD_URL } from '@/const/url';
 import { useSelectExecutionTarget } from '@/features/ChatInput/hooks/useSelectExecutionTarget';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
@@ -568,7 +569,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
         ) : (
           <a
             className={styles.headerLink}
-            href="https://lobehub.com/downloads"
+            href={DOWNLOAD_URL.default}
             rel="noreferrer"
             target="_blank"
           >
@@ -661,7 +662,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
       {showWebDownloadCard ? (
         <a
           className={styles.downloadCard}
-          href="https://lobehub.com/downloads"
+          href={DOWNLOAD_URL.default}
           rel="noreferrer"
           target="_blank"
         >
