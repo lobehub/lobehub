@@ -107,7 +107,17 @@ describe('WorkModel · github', () => {
     const byOperation = await workModel.listSummariesByRootOperations({
       rootOperationIds: ['op-github-issue-create', 'op-github-issue-edit'],
     });
-    expect(byOperation['op-github-issue-create']).toEqual([]);
+    // Both operations surface their own event; each summary carries the
+    // current version snapshot.
+    const createSummary = expectGithubSummaryItem(byOperation['op-github-issue-create']?.[0]);
+    expect(createSummary.event).toMatchObject({
+      role: 'created',
+      rootOperationId: 'op-github-issue-create',
+    });
+    expect(createSummary.github).toMatchObject({
+      repo: 'lobehub/lobehub',
+      state: 'closed',
+    });
     const issueSummary = expectGithubSummaryItem(byOperation['op-github-issue-edit']?.[0]);
     expect(issueSummary.github).toMatchObject({
       repo: 'lobehub/lobehub',

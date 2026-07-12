@@ -182,7 +182,17 @@ describe('WorkModel · linear', () => {
     const byOperation = await workModel.listSummariesByRootOperations({
       rootOperationIds: ['op-linear-issue-create', 'op-linear-issue-edit'],
     });
-    expect(byOperation['op-linear-issue-create']).toEqual([]);
+    // Both operations surface their own event; each summary carries the
+    // current version snapshot.
+    const createSummary = expectLinearSummaryItem(byOperation['op-linear-issue-create']?.[0]);
+    expect(createSummary.event).toMatchObject({
+      role: 'created',
+      rootOperationId: 'op-linear-issue-create',
+    });
+    expect(createSummary.linear).toMatchObject({
+      identifier: 'LOBE-10966',
+      status: 'In Progress',
+    });
     const issueSummary = expectLinearSummaryItem(byOperation['op-linear-issue-edit']?.[0]);
     expect(issueSummary.linear).toMatchObject({
       identifier: 'LOBE-10966',
