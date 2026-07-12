@@ -1261,13 +1261,13 @@ export const executeHeterogeneousAgent = async (
         for (const message of toolRows) {
           toolMsgIdByCallId.set(message.tool_call_id!, message.id);
         }
+        const subagentMessageId = (currentAssistant.metadata as Record<string, unknown> | null)
+          ?.subagentMessageId;
 
         snapshots.push({
           currentAssistantId: currentAssistant.id,
           currentSubagentMessageId:
-            typeof currentAssistant.metadata?.subagentMessageId === 'string'
-              ? currentAssistant.metadata.subagentMessageId
-              : undefined,
+            typeof subagentMessageId === 'string' ? subagentMessageId : undefined,
           lastChainParentId: currentAssistant.id,
           lifetimeToolCallIds: toolRows.map((message) => message.tool_call_id!),
           parentToolCallId,
