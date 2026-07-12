@@ -298,7 +298,7 @@ class OIDCAdapter {
           return undefined;
         }
         log('[Client] Converting client record to expected format');
-        return {
+        const clientMetadata: Record<string, any> = {
           application_type: model.applicationType,
           client_id: model.id,
           client_secret: model.clientSecret,
@@ -313,6 +313,14 @@ class OIDCAdapter {
           token_endpoint_auth_method: model.tokenEndpointAuthMethod,
           tos_uri: model.tosUri,
         };
+        // oidc-provider's client schema treats any non-undefined value as "provided" and
+        // rejects null for optional string fields (`must be a non-empty string if provided`),
+        // so nullable DB columns must be stripped instead of passed through.
+        for (const key of Object.keys(clientMetadata)) {
+          if (clientMetadata[key] === null || clientMetadata[key] === undefined)
+            delete clientMetadata[key];
+        }
+        return clientMetadata;
       }
 
       // If record has expired, return undefined

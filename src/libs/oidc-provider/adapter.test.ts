@@ -85,6 +85,30 @@ describe('OIDCAdapter (DrizzleAdapter)', () => {
 
       expect(result).toBeUndefined();
     });
+
+    it('omits null optional fields so oidc-provider client schema accepts the metadata', async () => {
+      const db = createSelectDb([
+        {
+          ...clientRow,
+          clientUri: null,
+          logoUri: null,
+          policyUri: null,
+          tokenEndpointAuthMethod: 'none',
+          tosUri: null,
+        },
+      ]);
+      const adapter = new DrizzleAdapter('Client', db as any);
+
+      const result = (await adapter.find('lca_client_1')) as Record<string, unknown>;
+
+      for (const key of ['client_secret', 'client_uri', 'logo_uri', 'policy_uri', 'tos_uri']) {
+        expect(result).not.toHaveProperty(key);
+      }
+      expect(result).toMatchObject({
+        client_id: 'lca_client_1',
+        token_endpoint_auth_method: 'none',
+      });
+    });
   });
 
   describe('lastUsedAt stamping', () => {
