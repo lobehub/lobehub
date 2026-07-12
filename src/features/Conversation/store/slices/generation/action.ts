@@ -5,6 +5,7 @@ import type {
   ConversationContext,
   HeterogeneousProviderConfig,
 } from '@lobechat/types';
+import { resolveAgencyConfig } from '@lobechat/types';
 import { t } from 'i18next';
 import { type StateCreator } from 'zustand';
 
@@ -22,6 +23,7 @@ import {
   parseSelectedSkillsFromEditorData,
   parseSelectedToolsFromEditorData,
 } from '@/store/chat/slices/agentRun/actions/entries/commandBus';
+import { resolveDeviceOverrideForAgent } from '@/store/chat/slices/agentRun/actions/entries/conversationLifecycle';
 import { resolveHeteroResume } from '@/store/chat/slices/agentRun/actions/transports/hetero/heteroResume';
 import { operationSelectors } from '@/store/chat/slices/operation/selectors';
 import { INPUT_LOADING_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
@@ -442,9 +444,15 @@ export const generationSlice: StateCreator<
     }
 
     const agentConfig = agentSelectors.getAgentConfigById(context.agentId)(getAgentStoreState());
+    // Mirror `conversationLifecycle` runtime selection: honor a personal/workspace
+    // per-source-device override even though `agentConfig.agencyConfig` is untouched.
+    const effectiveAgencyConfig = resolveAgencyConfig(
+      agentConfig?.agencyConfig,
+      resolveDeviceOverrideForAgent(context.agentId) ?? null,
+    );
     const runtimeType = selectRuntimeType({
-      boundDeviceId: agentConfig?.agencyConfig?.boundDeviceId,
-      executionTarget: agentConfig?.agencyConfig?.executionTarget,
+      boundDeviceId: effectiveAgencyConfig?.boundDeviceId,
+      executionTarget: effectiveAgencyConfig?.executionTarget,
       heterogeneousProvider: agentConfig?.agencyConfig?.heterogeneousProvider,
       isGatewayMode: chatStore.isGatewayModeEnabled(context.agentId),
       isWorkspaceAgent: agentByIdSelectors.isWorkspaceAgentById(context.agentId)(
@@ -896,9 +904,14 @@ export const generationSlice: StateCreator<
 
       const agentConfig = agentSelectors.getAgentConfigById(context.agentId)(getAgentStoreState());
       const heterogeneousProvider = agentConfig?.agencyConfig?.heterogeneousProvider;
+      // Honor a personal/workspace per-source-device override here too.
+      const effectiveAgencyConfig = resolveAgencyConfig(
+        agentConfig?.agencyConfig,
+        resolveDeviceOverrideForAgent(context.agentId) ?? null,
+      );
       const runtimeType = selectRuntimeType({
-        boundDeviceId: agentConfig?.agencyConfig?.boundDeviceId,
-        executionTarget: agentConfig?.agencyConfig?.executionTarget,
+        boundDeviceId: effectiveAgencyConfig?.boundDeviceId,
+        executionTarget: effectiveAgencyConfig?.executionTarget,
         heterogeneousProvider,
         isGatewayMode: chatStore.isGatewayModeEnabled(context.agentId),
         isWorkspaceAgent: agentByIdSelectors.isWorkspaceAgentById(context.agentId)(

@@ -59,9 +59,19 @@ export const useSelectExecutionTarget = (agentId: string) => {
       const sourceDeviceId = isDesktop ? currentDeviceId : getSourceDeviceId();
       const sourceKey = sourceDeviceId || '*';
 
+      // A legacy flat override (`{ executionTarget, boundDeviceId }`) reads as a
+      // whole-object override in `resolveOverrideBySource`, so it would shadow
+      // the new per-source entry. Normalize it to a `'*'` source key first.
+      const normalizeBySource = (
+        raw: Record<string, any> | undefined,
+      ): Record<string, any> | undefined =>
+        raw && ('executionTarget' in raw || 'boundDeviceId' in raw) ? { '*': raw } : raw;
+
       if (isWorkspaceAgent) {
-        const bySource = workspaceUserPreference.agentDeviceOverrides?.[agentId] as
-          Record<string, any> | undefined;
+        const bySource = normalizeBySource(
+          workspaceUserPreference.agentDeviceOverrides?.[agentId] as
+            Record<string, any> | undefined,
+        );
         const nextOverrides = {
           ...workspaceUserPreference.agentDeviceOverrides,
           [agentId]: { ...bySource, [sourceKey]: override },
@@ -71,8 +81,9 @@ export const useSelectExecutionTarget = (agentId: string) => {
       }
 
       // Personal agent
-      const bySource = userPreference.personalDeviceOverrides?.[agentId] as
-        Record<string, any> | undefined;
+      const bySource = normalizeBySource(
+        userPreference.personalDeviceOverrides?.[agentId] as Record<string, any> | undefined,
+      );
       const nextOverrides = {
         ...userPreference.personalDeviceOverrides,
         [agentId]: { ...bySource, [sourceKey]: override },

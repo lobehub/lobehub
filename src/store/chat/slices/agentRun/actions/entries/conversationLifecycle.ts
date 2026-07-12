@@ -154,7 +154,7 @@ export const conversationLifecycle = (set: Setter, get: () => ChatStore, _api?: 
  * switcher wrote. Used by runtime selection so a device picker change takes
  * effect on the next send even though `agentConfig.agencyConfig` is untouched.
  */
-const resolveDeviceOverrideForAgent = (
+export const resolveDeviceOverrideForAgent = (
   agentId: string,
 ): { boundDeviceId?: string; executionTarget?: string } | undefined => {
   const userStore = useUserStore.getState();
@@ -1126,7 +1126,16 @@ export class ConversationLifecycleActionImpl {
       );
 
     try {
-      const { model, provider } = agentSelectors.getAgentConfigById(agentId)(getAgentStoreState());
+      const agentConfigForMsg = agentSelectors.getAgentConfigById(agentId)(getAgentStoreState());
+      // In client mode the local run resolves the topic `modelOverride` (see
+      // `streamingExecutor`/withTopicModelOverride), so the persisted assistant
+      // message must carry that override too, not just the agent's base model.
+      const topicModelOverride = operationContext.topicId
+        ? topicSelectors.getTopicById(operationContext.topicId)(this.#get())?.metadata
+            ?.modelOverride
+        : undefined;
+      const model = topicModelOverride?.model ?? agentConfigForMsg?.model;
+      const provider = topicModelOverride?.provider ?? agentConfigForMsg?.provider;
 
       const topicId = operationContext.topicId;
 
