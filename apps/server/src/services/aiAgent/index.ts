@@ -3049,7 +3049,16 @@ export class AiAgentService {
     ): Promise<Record<string, string>> => {
       if (!deviceId) return {};
       try {
-        const systemInfo = await deviceGateway.queryDeviceSystemInfo(this.userId, deviceId);
+        // Gateway principal must match the device pool that owns the connection.
+        // Workspace devices live under `workspace:<id>`; a workspace run that
+        // routes to a personal override (LOBE-11689) must keep the personal
+        // principal (`undefined`) so `(userId, deviceId)` resolves correctly.
+        // `activeDeviceScope` is the sole source of truth for that choice.
+        const systemInfo = await deviceGateway.queryDeviceSystemInfo(
+          this.userId,
+          deviceId,
+          activeDeviceScope === 'workspace' ? this.workspaceId : undefined,
+        );
         if (!systemInfo) return {};
         const device = onlineDevices.find((d) => d.deviceId === deviceId);
         log('execAgent: fetched device system info for %s', deviceId);

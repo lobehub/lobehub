@@ -15,6 +15,7 @@ const {
   mockMessageCreate,
   mockPluginQuery,
   mockQueryDeviceList,
+  mockQueryDeviceSystemInfo,
 } = vi.hoisted(() => ({
   mockCreateOperation: vi.fn(),
   mockCreateServerAgentToolsEngine: vi.fn(),
@@ -25,6 +26,7 @@ const {
   mockMessageCreate: vi.fn(),
   mockPluginQuery: vi.fn(),
   mockQueryDeviceList: vi.fn(),
+  mockQueryDeviceSystemInfo: vi.fn(),
 }));
 
 vi.mock('@/libs/trusted-client', () => ({
@@ -47,6 +49,20 @@ vi.mock('@/database/models/agent', () => ({
   AgentModel: vi.fn().mockImplementation(() => ({
     getAgentConfig: vi.fn(),
     queryAgents: vi.fn().mockResolvedValue([]),
+  })),
+}));
+
+// Empty DB-side device rows so getScopedOnlineDevices falls through to the
+// gateway list as transient devices. Returning [] (not rejecting) for
+// queryWorkspaceHiddenDeviceIds is required — a failed/null hidden lookup
+// suppresses all workspace-scope transients.
+vi.mock('@/database/models/device', () => ({
+  DeviceModel: vi.fn().mockImplementation(() => ({
+    findByDeviceId: vi.fn().mockResolvedValue(undefined),
+    findWorkspaceDeviceById: vi.fn().mockResolvedValue(undefined),
+    queryPersonal: vi.fn().mockResolvedValue([]),
+    queryWorkspaceDevices: vi.fn().mockResolvedValue([]),
+    queryWorkspaceHiddenDeviceIds: vi.fn().mockResolvedValue([]),
   })),
 }));
 
@@ -137,7 +153,7 @@ vi.mock('@/server/services/deviceGateway', () => ({
       return false;
     },
     queryDeviceList: mockQueryDeviceList,
-    queryDeviceSystemInfo: vi.fn().mockResolvedValue(null),
+    queryDeviceSystemInfo: mockQueryDeviceSystemInfo,
   },
 }));
 
@@ -181,6 +197,7 @@ describe('AiAgentService.execAgent - device tool pipeline ()', () => {
       success: true,
     });
     mockQueryDeviceList.mockResolvedValue([]);
+    mockQueryDeviceSystemInfo.mockResolvedValue(null);
     mockPluginQuery.mockResolvedValue([]);
     mockGenerateToolsDetailed.mockReturnValue({ enabledToolIds: [], tools: [] });
     mockGetEnabledPluginManifests.mockReturnValue(new Map());
@@ -506,6 +523,120 @@ describe('AiAgentService.execAgent - device tool pipeline ()', () => {
       expect(manifestMap['test-tool']).toBe(mockManifest);
       // manifestMap also includes discoverable builtin tools for activator discovery
       expect(Object.keys(manifestMap)).toContain('test-tool');
+    });
+  });
+
+  describe('device system info template injection (workspace scope)', () => {
+    const systemInfoFixture = {
+      arch: 'arm64',
+      desktopPath: '/Users/me/Desktop',
+      documentsPath: '/Users/me/Documents',
+      downloadsPath: '/Users/me/Downloads',
+      homePath: '/Users/me',
+      musicPath: '/Users/me/Music',
+      picturesPath: '/Users/me/Pictures',
+      userDataPath: '/Users/me/Library/Application Support',
+      videosPath: '/Users/me/Movies',
+      workingDirectory: '/',
+    };
+
+    it('should query system info with workspace id and inject into createOperation for workspace devices', async () => {
+      const workspaceId = 'ws-1';
+      service = new AiAgentService(mockDb, userId, { workspaceId });
+
+      const { deviceGateway } = await import('@/server/services/deviceGateway');
+      vi.spyOn(deviceGateway, 'isConfigured', 'get').mockReturnValue(true);
+      // Single online device under the workspace principal → auto-activates.
+      // getScopedOnlineDevices tags scope from the workspaceId argument.
+      mockQueryDeviceList.mockResolvedValue([
+        { deviceId: 'ws-dev-1', hostname: 'workspace-mac', online: true, platform: 'darwin' },
+      ]);
+      mockQueryDeviceSystemInfo.mockResolvedValue(systemInfoFixture);
+
+      mockGetAgentConfig.mockResolvedValue(
+        createBaseAgentConfig({ agencyConfig: { executionTarget: 'auto' } }),
+      );
+
+      await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
+
+      expect(mockQueryDeviceSystemInfo).toHaveBeenCalledWith(userId, 'ws-dev-1', workspaceId);
+
+      const createOpArgs = mockCreateOperation.mock.calls[0][0];
+      expect(createOpArgs.activeDeviceId).toBe('ws-dev-1');
+      expect(createOpArgs.activeDeviceScope).toBe('workspace');
+      expect(createOpArgs.deviceSystemInfo).toMatchObject({
+        arch: 'arm64',
+        homePath: '/Users/me',
+        hostname: 'workspace-mac',
+        platform: 'darwin',
+      });
+    });
+
+    it('should query system info without workspace id when workspace run uses personal device override', async () => {
+      const workspaceId = 'ws-1';
+      service = new AiAgentService(mockDb, userId, { workspaceId });
+
+      const { deviceGateway } = await import('@/server/services/deviceGateway');
+      vi.spyOn(deviceGateway, 'isConfigured', 'get').mockReturnValue(true);
+
+      // Workspace pool empty; personal pool holds the bound override device.
+      // getScopedOnlineDevices(userId, workspaceId) vs getScopedOnlineDevices(userId)
+      // both call queryDeviceList with the corresponding second argument.
+      mockQueryDeviceList.mockImplementation(async (_uid: string, wsId?: string) => {
+        if (wsId) return [];
+        return [
+          {
+            deviceId: 'personal-dev-1',
+            hostname: 'personal-mac',
+            online: true,
+            platform: 'darwin',
+          },
+        ];
+      });
+      mockQueryDeviceSystemInfo.mockResolvedValue(systemInfoFixture);
+
+      mockGetAgentConfig.mockResolvedValue(
+        createBaseAgentConfig({
+          agencyConfig: {
+            boundDeviceId: 'personal-dev-1',
+            executionTarget: 'device',
+          },
+        }),
+      );
+
+      await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
+
+      // Personal principal: third arg must stay undefined (not this.workspaceId).
+      expect(mockQueryDeviceSystemInfo).toHaveBeenCalledWith(userId, 'personal-dev-1', undefined);
+
+      const createOpArgs = mockCreateOperation.mock.calls[0][0];
+      expect(createOpArgs.activeDeviceId).toBe('personal-dev-1');
+      expect(createOpArgs.activeDeviceScope).toBe('personal');
+      expect(createOpArgs.deviceSystemInfo).toMatchObject({
+        arch: 'arm64',
+        homePath: '/Users/me',
+        hostname: 'personal-mac',
+        platform: 'darwin',
+      });
+    });
+
+    it('should not fail createOperation when system info query returns null', async () => {
+      const { deviceGateway } = await import('@/server/services/deviceGateway');
+      vi.spyOn(deviceGateway, 'isConfigured', 'get').mockReturnValue(true);
+      mockQueryDeviceList.mockResolvedValue([
+        { deviceId: 'dev-1', hostname: 'My PC', online: true, platform: 'win32' },
+      ]);
+      mockQueryDeviceSystemInfo.mockResolvedValue(null);
+
+      mockGetAgentConfig.mockResolvedValue(
+        createBaseAgentConfig({ agencyConfig: { executionTarget: 'auto' } }),
+      );
+
+      await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
+
+      expect(mockCreateOperation).toHaveBeenCalled();
+      const createOpArgs = mockCreateOperation.mock.calls[0][0];
+      expect(createOpArgs.deviceSystemInfo).toBeUndefined();
     });
   });
 });
