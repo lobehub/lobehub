@@ -10,7 +10,11 @@ import {
 } from '@/store/serverConfig';
 
 import { useCategory } from '../hooks/useCategory';
-import { SETTINGS_SEARCH_ITEMS, type SettingsSearchContext } from './items';
+import {
+  SETTINGS_SEARCH_ITEMS,
+  type SettingsSearchContext,
+  TAB_SEARCH_KEYWORDS_KEYS,
+} from './items';
 
 export interface SettingsSearchResult {
   /** Present on item-level results; used as the URL hash for scroll targeting */
@@ -31,6 +35,13 @@ interface IndexedEntry extends SettingsSearchResult {
 
 export const getTabUrl = (tab: SettingsTabs) =>
   tab === SettingsTabs.Provider ? '/settings/provider/all' : `/settings/${tab}`;
+
+/** Split a localized comma-separated keyword string (supports CJK commas) */
+const splitKeywords = (text: string) =>
+  text
+    .split(/[,、]/)
+    .map((keyword) => keyword.trim().toLowerCase())
+    .filter(Boolean);
 
 /**
  * Search visible settings by the current-locale label text plus registered
@@ -74,9 +85,14 @@ export const useSettingsSearch = (query: string): SettingsSearchResult[] => {
             url,
           });
 
+        const keywordsKey = TAB_SEARCH_KEYWORDS_KEYS[item.key];
+
         entries.push({
           breadcrumb: group.title,
-          haystack: [item.label.toLowerCase()],
+          haystack: [
+            item.label.toLowerCase(),
+            ...(keywordsKey ? splitKeywords(t(keywordsKey as never) as string) : []),
+          ],
           icon: item.icon,
           key: `tab-${group.key}-${item.key}`,
           label: item.label,

@@ -29,6 +29,31 @@ export interface SettingsSearchItem {
 }
 
 /**
+ * Localized synonym keywords for tab-level entries (i18n keys in the `setting`
+ * namespace, comma-separated values). Tab labels alone miss common synonyms —
+ * e.g. searching "充值" (top up) should hit the Credits tab whose label is just
+ * "积分", and "文件" (files) should hit Storage ("数据存储"). Each locale
+ * carries its own synonym set.
+ */
+export const TAB_SEARCH_KEYWORDS_KEYS: Partial<Record<SettingsTabs, string>> = {
+  [SettingsTabs.Advanced]: 'settingsSearch.tabKeywords.advanced',
+  [SettingsTabs.APIKey]: 'settingsSearch.tabKeywords.apikey',
+  [SettingsTabs.Appearance]: 'settingsSearch.tabKeywords.appearance',
+  [SettingsTabs.Billing]: 'settingsSearch.tabKeywords.billing',
+  [SettingsTabs.Credits]: 'settingsSearch.tabKeywords.credits',
+  [SettingsTabs.Devices]: 'settingsSearch.tabKeywords.devices',
+  [SettingsTabs.Hotkey]: 'settingsSearch.tabKeywords.hotkey',
+  [SettingsTabs.Notification]: 'settingsSearch.tabKeywords.notification',
+  [SettingsTabs.Plans]: 'settingsSearch.tabKeywords.plans',
+  [SettingsTabs.Profile]: 'settingsSearch.tabKeywords.profile',
+  [SettingsTabs.Provider]: 'settingsSearch.tabKeywords.provider',
+  [SettingsTabs.Proxy]: 'settingsSearch.tabKeywords.proxy',
+  [SettingsTabs.Referral]: 'settingsSearch.tabKeywords.referral',
+  [SettingsTabs.Storage]: 'settingsSearch.tabKeywords.storage',
+  [SettingsTabs.Usage]: 'settingsSearch.tabKeywords.usage',
+};
+
+/**
  * Hand-curated searchable settings entries below the tab level. Tab-level
  * entries are derived from `useCategory` at runtime and need no registration
  * here. Keep this list in sync when moving or removing the referenced items —
