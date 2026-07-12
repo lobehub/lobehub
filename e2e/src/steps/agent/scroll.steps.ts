@@ -275,15 +275,21 @@ When('用户在流式响应进行中向上滚动 {int} 像素', async function (
   await this.page.waitForTimeout(400);
 });
 
-When('等待流式响应结束', { timeout: 30_000 }, async function (this: CustomWorld) {
+When('等待流式响应结束', { timeout: 60_000 }, async function (this: CustomWorld) {
   const assistantMessage = this.page
     .locator('.message-wrapper')
     .filter({ has: this.page.locator('text=Lobe AI') })
     .last();
 
+  // With the slowed mock (streamDelay 60ms × 8-char chunks) a long article
+  // genuinely streams for ~25s now that the mock delivers real token-by-token
+  // SSE. Returning before the stream ends makes the next send get queued
+  // instead of appended, so exhaust the deadline and fail loudly instead of
+  // silently moving on.
+  const deadline = Date.now() + 55_000;
   let prevLen = 0;
   let stableTicks = 0;
-  for (let i = 0; i < 60; i++) {
+  while (Date.now() < deadline) {
     const len =
       (await assistantMessage
         .innerText()
@@ -292,9 +298,11 @@ When('等待流式响应结束', { timeout: 30_000 }, async function (this: Cust
     if (len > 200 && len === prevLen) stableTicks += 1;
     else stableTicks = 0;
     prevLen = len;
-    if (stableTicks >= 3) break;
+    if (stableTicks >= 3) return;
     await this.page.waitForTimeout(250);
   }
+
+  throw new Error(`streaming did not settle before deadline (last length: ${prevLen})`);
 });
 
 // ---------------------------------------------------------------------------
