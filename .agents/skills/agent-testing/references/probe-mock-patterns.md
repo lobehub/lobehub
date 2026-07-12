@@ -986,6 +986,19 @@ nodeintegration, plugins, disablewebsecurity, allowpopups, preload, …`). The h
 - **Doesn't work**: `sessionStore.createSession({...})` — the desktop app doesn't use the classic session store (`sessions` is `[]`, `activeId` is `'inbox'`); agents are a server-backed model in `agentStore.agentMap` keyed by `agt_...`. The created session never becomes the active agent.
 - **Works**: back up the active agent's full config (`model`, `provider`, `agencyConfig`, relevant `chatConfig`), reconfigure it in place (`updateAgentConfigById` + `updateAgentChatConfigById`), run the test, then restore every field and clear any injected key-vault entry. Also: `chat.sendMessage` requires `context: { agentId, topicId, isNew }` or it throws `Cannot destructure property 'agentId' of 'context'`. Reads right after an `updateAgent*` can be stale — re-read after \~1.5s to confirm persistence.
 
+### C7. DB-seeded task rows need a `task_`-prefixed id or `resolve()` silently misses them
+
+- **Situation**: seeding a `tasks` row directly in SQL for a router probe, with a
+  hand-written id like `tsk_foo`, then calling a task procedure — it 404s
+  ("Task not found") even though the row exists and the caller is a member.
+- **Doesn't work**: any id not starting with `task_`. `TaskModel.resolve()`
+  (`packages/database/src/models/task.ts:220-223`) only treats the input as a row
+  id when it starts with `task_`; everything else is upper-cased and looked up as
+  a workspace `identifier` (e.g. `T-1`), so `tsk_foo` becomes the identifier
+  lookup `TSK_FOO` → null.
+- **Works**: use the idGenerator prefix (`task_<suffix>`) for seeded ids, or pass
+  the row's `identifier` (`T-<seq>`) to the procedure instead.
+
 ### F1. Seeding a shared topic by raw SQL: messages MUST carry `agent_id`, or the share page renders skeletons forever
 
 - **Situation**: fixture-seeding a `/share/t/<id>` page (topics + messages + `topic_shares`

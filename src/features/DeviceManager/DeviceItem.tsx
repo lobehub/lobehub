@@ -29,6 +29,8 @@ import { useTranslation } from 'react-i18next';
 
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { lambdaQuery } from '@/libs/trpc/client';
+import { useUserStore } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
 
 import { refreshDeviceList } from './const';
 import { getDeviceIcon } from './getDeviceIcon';
@@ -175,6 +177,7 @@ const DeviceItem = memo<DeviceItemProps>(
     const { t } = useTranslation('setting');
     const { t: tCommon } = useTranslation('common');
     const canEdit = useCanEditDevice()(device);
+    const currentUserId = useUserStore(userProfileSelectors.userId);
 
     // Workspace devices are self-or-owner-gated + workspace-scoped on the
     // server; personal devices stay userId-scoped. Route by the device's own
@@ -233,9 +236,13 @@ const DeviceItem = memo<DeviceItemProps>(
       });
 
     // Only persisted workspace rows carry a visibility to toggle — ghosts
-    // (unregistered) and personal devices don't.
+    // (unregistered) and personal devices don't. The toggle is enroller-only
+    // (LOBE-11760): an owner demoting another member's public device would
+    // move it into that member's private list, appropriating their data. The
+    // server rejects non-enroller writes as the backstop.
+    const isEnroller = !!currentUserId && device.enroller?.userId === currentUserId;
     const visibilityItems =
-      device.scope === 'workspace' && device.registered
+      device.scope === 'workspace' && device.registered && isEnroller
         ? device.visibility === 'private'
           ? [
               {
