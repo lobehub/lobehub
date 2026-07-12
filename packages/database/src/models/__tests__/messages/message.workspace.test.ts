@@ -3,7 +3,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
 import {
+  chunks,
+  fileChunks,
   files,
+  messageQueries,
+  messageQueryChunks,
   messages,
   messagesFiles,
   sessions,
@@ -144,6 +148,49 @@ describe('MessageModel workspace scope', () => {
       expect(memberMessage.fileList).toEqual([
         expect.objectContaining({ id: 'shared-file', name: 'quarterly-report.pdf' }),
       ]);
+    });
+
+    describe('RAG reference chunks', () => {
+      beforeEach(async () => {
+        const [chunk] = await serverDB
+          .insert(chunks)
+          .values({ text: 'secret chunk text', userId, workspaceId })
+          .returning();
+        await serverDB
+          .insert(fileChunks)
+          .values({ chunkId: chunk.id, fileId: 'shared-file', userId, workspaceId });
+        const [query] = await serverDB
+          .insert(messageQueries)
+          .values({ messageId: 'shared-message', userId, workspaceId })
+          .returning();
+        await serverDB.insert(messageQueryChunks).values({
+          chunkId: chunk.id,
+          messageId: 'shared-message',
+          queryId: query.id,
+          similarity: '0.90000',
+          userId,
+          workspaceId,
+        });
+      });
+
+      it('drops reference chunks for a member once the owner flips the file back to private', async () => {
+        await serverDB.update(files).set({ visibility: 'private' });
+
+        const [memberMessage] = await new MessageModel(serverDB, memberId, workspaceId).query({
+          sessionId: 'workspace-session',
+          topicId: 'workspace-topic',
+        });
+        expect(memberMessage.chunksList).toEqual([]);
+
+        // Owner always sees chunks of their own private file.
+        const [ownerMessage] = await new MessageModel(serverDB, userId, workspaceId).query({
+          sessionId: 'workspace-session',
+          topicId: 'workspace-topic',
+        });
+        expect(ownerMessage.chunksList).toEqual([
+          expect.objectContaining({ fileId: 'shared-file', text: 'secret chunk text' }),
+        ]);
+      });
     });
   });
 });

@@ -925,7 +925,17 @@ export class MessageModel {
           .from(messageQueryChunks)
           .leftJoin(chunks, eq(chunks.id, messageQueryChunks.chunkId))
           .leftJoin(fileChunks, eq(fileChunks.chunkId, chunks.id))
-          .innerJoin(files, eq(fileChunks.fileId, files.id))
+          // Guard the referenced file like queryMessageFileRelations: in a
+          // shared conversation, RAG reference chunks of a file its owner
+          // switched back to private must not leak filename/url/text to other
+          // members. The inner join drops those chunk rows entirely.
+          .innerJoin(
+            files,
+            and(
+              eq(fileChunks.fileId, files.id),
+              buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, files),
+            ),
+          )
           .where(inArray(messageQueryChunks.messageId, messageIds)),
       { messageCount: messageIds.length },
     );
