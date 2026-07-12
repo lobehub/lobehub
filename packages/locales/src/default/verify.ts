@@ -1,4 +1,8 @@
 export default {
+  'report.actions.copyLink': 'Copy link',
+  'report.actions.copyLinkSuccess': 'Link copied',
+  'report.actions.openFullPage': 'Open full page',
+  'report.actions.openInNewWindow': 'Open in a new window',
   'badge.errored': 'Check could not run',
   'badge.failed': 'Check failed',
   'badge.passed': 'Check passed',
