@@ -678,14 +678,21 @@ export class MessageModel {
               fileList: fileList
                 .filter((relation) => relation.messageId === item.id)
 
-                .map<ChatFileItem>(({ id, url, size, fileType, name }) => ({
-                  content: documentsMap[id],
-                  fileType: fileType!,
-                  id,
-                  name: name!,
-                  size: size!,
-                  url,
-                })),
+                .map<ChatFileItem>(({ id, url, size, fileType, name }) =>
+                  // Nulled by the visibility guard: the viewer lost access to
+                  // the referenced file. Emit a tombstone (id only) so the UI
+                  // renders a no-access placeholder.
+                  name === null
+                    ? { fileType: '', id, inaccessible: true, name: '', size: 0, url: '' }
+                    : {
+                        content: documentsMap[id],
+                        fileType: fileType!,
+                        id,
+                        name,
+                        size: size!,
+                        url,
+                      },
+                ),
               imageList: imageList
                 .filter((relation) => relation.messageId === item.id)
 
@@ -818,7 +825,19 @@ export class MessageModel {
             url: files.url,
           })
           .from(messagesFiles)
-          .leftJoin(files, eq(files.id, messagesFiles.fileId))
+          // Guard the referenced file, not just the relation: in a shared
+          // conversation (chat group / workspace task) the message is visible
+          // to every member, but a file its owner switched back to private
+          // must degrade to a tombstone (id only) instead of leaking
+          // name/size/url. Same anti-leak join pattern as the agent knowledge
+          // reads in agent.ts.
+          .leftJoin(
+            files,
+            and(
+              eq(files.id, messagesFiles.fileId),
+              buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, files),
+            ),
+          )
           .where(inArray(messagesFiles.messageId, messageIds)),
       { messageCount: messageIds.length },
     );
@@ -831,20 +850,29 @@ export class MessageModel {
       'db.message.queryWithWhere.relatedFiles.postProcess',
       () =>
         Promise.all(
-          rawRelatedFileList.map(async (file) => ({
-            ...file,
-            url: postProcessUrl
-              ? await postProcessUrl(
-                  file.url,
-                  file as unknown as { fileType: string; id?: string | null },
-                )
-              : (file.url as string),
-          })),
+          rawRelatedFileList.map(async (file) => {
+            // Tombstoned by the visibility guard above — nothing to presign.
+            if (file.name === null) return { ...file, url: '' };
+            return {
+              ...file,
+              url: postProcessUrl
+                ? await postProcessUrl(
+                    file.url,
+                    file as unknown as { fileType: string; id?: string | null },
+                  )
+                : (file.url as string),
+            };
+          }),
         ),
       { fileCount: rawRelatedFileList.length },
     );
 
-    const fileIds = relatedFileList.map((file) => file.id).filter(Boolean);
+    // Exclude tombstoned files — their parsed document content must not leak
+    // through the unguarded documents join below.
+    const fileIds = relatedFileList
+      .filter((file) => file.name !== null)
+      .map((file) => file.id)
+      .filter(Boolean);
 
     if (fileIds.length === 0) return { documentsMap: {}, relatedFileList };
 
@@ -1086,7 +1114,15 @@ export class MessageModel {
           url: files.url,
         })
         .from(messagesFiles)
-        .leftJoin(files, eq(files.id, messagesFiles.fileId))
+        // Same anti-leak guard as queryMessageFileRelations: tombstone files
+        // the viewer lost access to instead of leaking name/size/url.
+        .leftJoin(
+          files,
+          and(
+            eq(files.id, messagesFiles.fileId),
+            buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, files),
+          ),
+        )
         .where(inArray(messagesFiles.messageId, messageIds)),
 
       // 2b. Get related file chunks
@@ -1143,19 +1179,27 @@ export class MessageModel {
 
     // 3. Process file results
     const relatedFileList = await Promise.all(
-      rawRelatedFileList.map(async (file) => ({
-        ...file,
-        url: postProcessUrl
-          ? await postProcessUrl(
-              file.url,
-              file as unknown as { fileType: string; id?: string | null },
-            )
-          : (file.url as string),
-      })),
+      rawRelatedFileList.map(async (file) => {
+        // Tombstoned by the visibility guard above — nothing to presign.
+        if (file.name === null) return { ...file, url: '' };
+        return {
+          ...file,
+          url: postProcessUrl
+            ? await postProcessUrl(
+                file.url,
+                file as unknown as { fileType: string; id?: string | null },
+              )
+            : (file.url as string),
+        };
+      }),
     );
 
-    // Get associated document content
-    const fileIds = relatedFileList.map((file) => file.id).filter(Boolean);
+    // Get associated document content. Exclude tombstoned files — their parsed
+    // document content must not leak through the unguarded documents join.
+    const fileIds = relatedFileList
+      .filter((file) => file.name !== null)
+      .map((file) => file.id)
+      .filter(Boolean);
 
     let documentsMap: Record<string, string> = {};
 
@@ -1235,14 +1279,21 @@ export class MessageModel {
           },
           fileList: fileList
             .filter((relation) => relation.messageId === item.id)
-            .map<ChatFileItem>(({ id, url, size, fileType, name }) => ({
-              content: documentsMap[id],
-              fileType: fileType!,
-              id,
-              name: name!,
-              size: size!,
-              url,
-            })),
+            .map<ChatFileItem>(({ id, url, size, fileType, name }) =>
+              // Nulled by the visibility guard: the viewer lost access to the
+              // referenced file. Emit a tombstone (id only) so the UI renders
+              // a no-access placeholder.
+              name === null
+                ? { fileType: '', id, inaccessible: true, name: '', size: 0, url: '' }
+                : {
+                    content: documentsMap[id],
+                    fileType: fileType!,
+                    id,
+                    name,
+                    size: size!,
+                    url,
+                  },
+            ),
           imageList: imageList
             .filter((relation) => relation.messageId === item.id)
             .map<ChatImageItem>(({ id, url, name }) => ({ alt: name!, id, url })),

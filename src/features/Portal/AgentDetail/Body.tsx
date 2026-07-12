@@ -6,8 +6,9 @@ import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
 import Loading from '@/components/Loading/BrandTextLoading';
+import { AgentNotFound } from '@/features/AgentNotFound';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 
@@ -20,8 +21,19 @@ const Body = memo(() => {
   const openingMessage = useAgentStore(
     (s) => agentSelectors.getAgentConfigById(agentId)(s)?.openingMessage,
   );
+  const isNotFound = useAgentStore(agentByIdSelectors.isAgentNotFoundById(agentId));
 
   if (!agentId) return null;
+
+  // The fetch settled on `null` — the agent was deleted or made private by
+  // its owner. A terminal 404, distinct from the retryable transport error.
+  if (isNotFound) {
+    return (
+      <Flexbox flex={1} style={{ overflowY: 'auto' }}>
+        <AgentNotFound />
+      </Flexbox>
+    );
+  }
 
   if (error) {
     return (

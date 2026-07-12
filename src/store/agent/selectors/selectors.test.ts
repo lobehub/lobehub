@@ -422,6 +422,36 @@ describe('agentSelectors', () => {
 
       expect(agentSelectors.isAgentConfigLoading(state)).toBe(false);
     });
+
+    it('should return false when agent is marked not-found (settled, not loading)', () => {
+      const state = createState({
+        activeAgentId: 'agent-1',
+        agentMap: {},
+        agentNotFoundMap: { 'agent-1': true },
+      });
+
+      expect(agentSelectors.isAgentConfigLoading(state)).toBe(false);
+    });
+  });
+
+  describe('isCurrentAgentNotFound', () => {
+    it('should return false when no activeAgentId', () => {
+      const state = createState({ agentNotFoundMap: { 'agent-1': true } });
+
+      expect(agentSelectors.isCurrentAgentNotFound(state)).toBe(false);
+    });
+
+    it('should reflect the active agent not-found flag', () => {
+      const state = createState({
+        activeAgentId: 'agent-1',
+        agentNotFoundMap: { 'agent-1': true },
+      });
+
+      expect(agentSelectors.isCurrentAgentNotFound(state)).toBe(true);
+      expect(agentSelectors.isCurrentAgentNotFound(createState({ activeAgentId: 'agent-1' }))).toBe(
+        false,
+      );
+    });
   });
 
   describe('currentKnowledgeIds', () => {

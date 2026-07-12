@@ -54,6 +54,9 @@ export default {
   'generation.metadata.createdAt': 'Created at {{time}}',
   'generation.status.failed': 'Generation hit a problem. Adjust the prompt and try again',
   'generation.status.generating': 'Generating...',
+  'generationTopic.notFound.desc':
+    'This generation does not exist or is no longer accessible — it may have been deleted or set to private by its owner.',
+  'generationTopic.notFound.title': 'Generation Unavailable',
   'notSupportGuide.desc':
     'The current deployment mode does not support AI image generation. Switch to the <1>server database deployment mode</1>, or use <3>LobeHub Cloud</3>.',
   'notSupportGuide.features.fileIntegration.desc':

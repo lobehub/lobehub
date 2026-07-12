@@ -82,6 +82,8 @@
   "menu.allFiles": "全部文件",
   "menu.allPages": "全部文稿",
   "networkError": "获取资源库失败，请检测网络连接后重试",
+  "notFound.desc": "该文件不存在或您已无权访问，可能已被删除或被其所有者设为私人。",
+  "notFound.title": "文件不可用",
   "notSupportGuide.desc": "当前部署模式不支持文件管理功能。请切换到<1>服务端数据库部署模式</1>，或直接使用 <3>LobeHub Cloud</3>",
   "notSupportGuide.features.allKind.desc": "支持主流文件类型，包括 Word、PPT、Excel、PDF、TXT 等常见文档格式，以及 JS、Python 等主流代码文件",
   "notSupportGuide.features.allKind.title": "多种文件类型解析",

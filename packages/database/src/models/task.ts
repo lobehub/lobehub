@@ -1040,7 +1040,16 @@ export class TaskModel {
         title: documents.title,
       })
       .from(taskDocuments)
-      .innerJoin(documents, eq(taskDocuments.documentId, documents.id))
+      // Guard the referenced document too: the junction's visibility column is
+      // a write-time mirror of the TASK, so a document independently switched
+      // back to private would otherwise still leak its title here.
+      .innerJoin(
+        documents,
+        and(
+          eq(taskDocuments.documentId, documents.id),
+          buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, documents),
+        ),
+      )
       .where(
         and(
           eq(taskDocuments.taskId, taskId),
@@ -1064,6 +1073,15 @@ export class TaskModel {
       ? sql`td.workspace_id = ${this.workspaceId}
             AND (td.visibility = 'public' OR td.user_id = ${this.userId})`
       : sql`td.user_id = ${this.userId} AND td.workspace_id IS NULL`;
+    // Guard the referenced document row itself: `td.visibility` is a
+    // write-time mirror of the TASK's visibility, so a document independently
+    // switched back to private would otherwise still leak its title/metadata
+    // through this join. A guarded-out document keeps its junction row but
+    // joins as NULL → surfaced as an inaccessible tombstone node.
+    const documentVisibility = this.workspaceId
+      ? sql`d.workspace_id = ${this.workspaceId}
+            AND (d.visibility IS NULL OR d.visibility = 'public' OR d.user_id = ${this.userId})`
+      : sql`d.user_id = ${this.userId} AND d.workspace_id IS NULL`;
     const result = await this.db.execute(sql`
       WITH RECURSIVE task_tree AS (
         SELECT id, identifier FROM tasks WHERE id = ${rootTaskId} AND ${rootOwnership}
@@ -1073,11 +1091,12 @@ export class TaskModel {
         WHERE ${recursiveOwnership}
       )
       SELECT td.*, tt.id as source_task_id, tt.identifier as source_task_identifier,
+             d.id as document_ref_id,
              d.title as document_title, d.file_type as document_file_type, d.parent_id as document_parent_id,
              d.total_char_count as document_char_count, d.updated_at as document_updated_at
       FROM task_documents td
       JOIN task_tree tt ON td.task_id = tt.id
-      LEFT JOIN documents d ON td.document_id = d.id
+      LEFT JOIN documents d ON td.document_id = d.id AND ${documentVisibility}
       WHERE ${docsOwnership}
       ORDER BY td.created_at
     `);
@@ -1089,17 +1108,22 @@ export class TaskModel {
 
     for (const row of result.rows as any[]) {
       const docId = row.document_id;
+      // Join miss = the viewer lost access to the document (switched back to
+      // private) or it was deleted. Emit a titleless tombstone so the UI can
+      // render a no-access placeholder instead of leaking the title.
+      const inaccessible = row.document_ref_id === null;
       docIds.add(docId);
       nodeMap[docId] = {
-        charCount: row.document_char_count,
+        charCount: inaccessible ? null : row.document_char_count,
         createdAt: row.created_at,
-        fileType: row.document_file_type,
-        parentId: row.document_parent_id,
+        fileType: inaccessible ? '' : row.document_file_type,
+        inaccessible: inaccessible || undefined,
+        parentId: inaccessible ? null : row.document_parent_id,
         pinnedBy: row.pinned_by,
         sourceTaskId: row.source_task_id,
         sourceTaskIdentifier: row.source_task_id !== rootTaskId ? row.source_task_identifier : null,
-        title: row.document_title || 'Untitled',
-        updatedAt: row.document_updated_at,
+        title: inaccessible ? '' : row.document_title || 'Untitled',
+        updatedAt: inaccessible ? null : row.document_updated_at,
       };
     }
 

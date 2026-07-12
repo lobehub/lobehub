@@ -39,6 +39,13 @@ export interface ChatFileItem {
   content?: string;
   fileType: string;
   id: string;
+  /**
+   * The viewer lost access to the referenced file (e.g. its owner switched a
+   * workspace-shared file back to private after it was used in a shared
+   * conversation). The server tombstones the row — id only, no name/url — and
+   * the UI renders a no-access placeholder card instead of the file card.
+   */
+  inaccessible?: boolean;
   name: string;
   size: number;
   url: string;
