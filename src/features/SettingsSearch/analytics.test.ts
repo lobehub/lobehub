@@ -134,6 +134,24 @@ describe('useSettingsSearchAnalytics', () => {
     });
   });
 
+  it('redacts secrets embedded in surrounding text', () => {
+    renderHook(() =>
+      useSettingsSearchAnalytics('{"apiKey": "sk-proj-abc123def456"}', [makeResult('tab-a-b')]),
+    );
+    vi.advanceTimersByTime(1000);
+
+    expect(eventsByName('settings_search_query')[0].properties!.query).toBe('[redacted]');
+  });
+
+  it('does not redact hyphenated words containing a prefix substring', () => {
+    renderHook(() => useSettingsSearchAnalytics('risk-control settings', [makeResult('tab-a-b')]));
+    vi.advanceTimersByTime(1000);
+
+    expect(eventsByName('settings_search_query')[0].properties!.query).toBe(
+      'risk-control settings',
+    );
+  });
+
   it('does not redact ordinary short queries', () => {
     renderHook(() => useSettingsSearchAnalytics('dark mode', [makeResult('tab-a-b')]));
     vi.advanceTimersByTime(1000);

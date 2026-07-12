@@ -29,10 +29,14 @@ const MAX_QUERY_LENGTH = 100;
  * Secret-looking input must never reach analytics: telemetry is default-on and
  * users may paste an API key into the search box by accident. Real settings
  * queries are short human words, so redact anything that looks like a
- * credential — known key prefixes, or a long unbroken ASCII token (including
- * base64/JWT punctuation `+ / = .`).
+ * credential — a known key prefix at any token boundary (covers pastes with
+ * surrounding text like `apiKey=sk-...` or JSON snippets), or a long unbroken
+ * ASCII token (including base64/JWT punctuation `+ / = .`). This is
+ * defense-in-depth for the accidental-paste scenario, not an exhaustive secret
+ * scanner — blocklist completeness is a non-goal; users can also disable
+ * telemetry entirely.
  */
-const TOKEN_LIKE_QUERY = /^(?:sk-|pk-|ghp_|gho_|xox|akia|bearer\s)|^[\w+/=.-]{16,}$/i;
+const TOKEN_LIKE_QUERY = /(?:^|[^\w-])(?:sk-|pk-|ghp_|gho_|xox|akia|bearer\s)|^[\w+/=.-]{16,}$/i;
 
 const REDACTED_QUERY = '[redacted]';
 
