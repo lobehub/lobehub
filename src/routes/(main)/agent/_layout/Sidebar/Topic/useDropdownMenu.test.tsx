@@ -139,7 +139,8 @@ describe('useTopicActionsDropdownMenu', () => {
     const { result } = renderHook(() => useTopicActionsDropdownMenu());
     const item = getMenuItem(result.current!, 'archiveMergedPullRequests');
 
-    await item?.onClick?.({} as never);
+    expect(item && 'onClick' in item).toBe(true);
+    if (item && 'onClick' in item) await item.onClick?.({} as never);
 
     expect(chatStoreMock.updateTopicStatus).toHaveBeenCalledOnce();
     expect(chatStoreMock.updateTopicStatus).toHaveBeenCalledWith({
