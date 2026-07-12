@@ -1,5 +1,20 @@
 import type { UserInterventionConfig } from '../../tool';
 
+/**
+ * User-level web browsing (search / crawl) channel preferences.
+ *
+ * Both lists are ordered by priority: index 0 is tried first. Ids must be a
+ * subset of the server-enabled channels (`SEARCH_PROVIDERS` / `CRAWLER_IMPLS`);
+ * unknown or disabled ids are ignored at runtime. An empty or missing list
+ * falls back to the server default order.
+ */
+export interface UserWebBrowsingConfig {
+  /** Ordered crawler impl ids, e.g. ['jina', 'naive'] */
+  crawlerImpls?: string[];
+  /** Ordered search provider ids, e.g. ['searxng', 'exa'] */
+  searchProviders?: string[];
+}
+
 export interface UserToolConfig {
   humanIntervention?: UserInterventionConfig;
   /**
@@ -18,4 +33,5 @@ export interface UserToolConfig {
    * default state), not the user's personal `uninstalledBuiltinTools`.
    */
   uninstalledBuiltinToolsByWorkspace?: Record<string, string[]>;
+  webBrowsing?: UserWebBrowsingConfig;
 }
