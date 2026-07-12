@@ -13,6 +13,7 @@ import {
   varchar,
 } from 'drizzle-orm/pg-core';
 import { createInsertSchema } from 'drizzle-zod';
+import { z } from 'zod';
 
 import type { LobeDocumentPage } from '@/types/document';
 import type { FileSource } from '@/types/files';
@@ -292,7 +293,10 @@ export const knowledgeBases = pgTable(
   ],
 );
 
-export const insertKnowledgeBasesSchema = createInsertSchema(knowledgeBases);
+// See insertSessionGroupSchema: Zod 4 + drizzle-zod text-enum inference pollution
+export const insertKnowledgeBasesSchema = createInsertSchema(knowledgeBases, {
+  visibility: z.enum(['private', 'public']),
+});
 
 export type NewKnowledgeBase = typeof knowledgeBases.$inferInsert;
 export type KnowledgeBaseItem = typeof knowledgeBases.$inferSelect;

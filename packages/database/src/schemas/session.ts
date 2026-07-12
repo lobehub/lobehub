@@ -1,6 +1,7 @@
 import { isNotNull, isNull } from 'drizzle-orm';
 import { boolean, index, integer, pgTable, text, uniqueIndex, varchar } from 'drizzle-orm/pg-core';
 import { createInsertSchema } from 'drizzle-zod';
+import { z } from 'zod';
 
 import { idGenerator, randomSlug } from '../utils/idGenerator';
 import { timestamps } from './_helpers';
@@ -51,7 +52,13 @@ export const sessionGroups = pgTable(
   }),
 );
 
-export const insertSessionGroupSchema = createInsertSchema(sessionGroups);
+// Explicit z.enum overrides: drizzle-zod + Zod 4 maps text(..., { enum }) to a
+// ZodEnum whose inferred output pollutes with String prototype members
+// (e.g. `"private" | "public" | 2 | (() => string) | ...`), which breaks
+// assignability to Drizzle `$inferSelect` partials used by model.update.
+export const insertSessionGroupSchema = createInsertSchema(sessionGroups, {
+  visibility: z.enum(['private', 'public']),
+});
 
 export type NewSessionGroup = typeof sessionGroups.$inferInsert;
 export type SessionGroupItem = typeof sessionGroups.$inferSelect;
@@ -99,7 +106,9 @@ export const sessions = pgTable(
   ],
 );
 
-export const insertSessionSchema = createInsertSchema(sessions);
+export const insertSessionSchema = createInsertSchema(sessions, {
+  type: z.enum(['agent', 'group']),
+});
 // export const selectSessionSchema = createSelectSchema(sessions);
 
 export type NewSession = typeof sessions.$inferInsert;

@@ -10,7 +10,8 @@ import {
   text,
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
-import { createInsertSchema } from 'drizzle-zod';
+import { createInsertSchema, createUpdateSchema } from 'drizzle-zod';
+import { z } from 'zod';
 
 import { createNanoId, idGenerator } from '../utils/idGenerator';
 import { amountNumeric, createdAt, timestamps, timestamptz } from './_helpers';
@@ -165,7 +166,29 @@ export const threads = pgTable(
 
 export type NewThread = typeof threads.$inferInsert;
 export type ThreadItem = typeof threads.$inferSelect;
-export const insertThreadSchema = createInsertSchema(threads);
+const threadSchemaRefine = {
+  metadata: z.custom<ThreadMetadata>().optional(),
+  status: z.enum([
+    'active',
+    'processing',
+    'pending',
+    'inReview',
+    'todo',
+    'cancel',
+    'completed',
+    'failed',
+  ]),
+  type: z.enum(['continuation', 'standalone', 'isolation', 'eval']),
+} as const;
+
+// Explicit enum/jsonb overrides: plain createInsertSchema(threads) hits TS2589
+// (excessively deep instantiation) under Zod 4 because of self-ref parentThreadId
+// plus multi-value text enums; overrides keep inference shallow and correct.
+export const insertThreadSchema = createInsertSchema(threads, threadSchemaRefine);
+
+// Prefer createUpdateSchema over insertThreadSchema.partial() — .partial() on the
+// insert schema still blows the instantiation depth limit (TS2589) under Zod 4.
+export const updateThreadSchema = createUpdateSchema(threads, threadSchemaRefine);
 
 /**
  * Document-Topic association table - Implements many-to-many relationship between documents and topics

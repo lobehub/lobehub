@@ -106,6 +106,8 @@ export const insertAgentSchema = createInsertSchema(agents, {
   agencyConfig: z.custom<LobeAgentAgencyConfig>().nullish(),
   // Override chatConfig type to use the proper schema
   chatConfig: AgentChatConfigSchema.nullish(),
+  // See insertSessionGroupSchema: Zod 4 + drizzle-zod text-enum inference pollution
+  visibility: z.enum(['private', 'public']),
 });
 
 export type NewAgent = typeof agents.$inferInsert;
