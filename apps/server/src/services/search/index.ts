@@ -2,7 +2,7 @@ import type {
   SearchParams,
   SearchQuery,
   UniformSearchResponse,
-  UserWebBrowsingConfig,
+  UserChannelPreferences,
 } from '@lobechat/types';
 import type { Crawler, CrawlImplType, CrawlUniformResult } from '@lobechat/web-crawler';
 import debug from 'debug';
@@ -75,7 +75,7 @@ export interface SearchServiceOptions {
    * Each list is intersected with the server-enabled set and reordered by the
    * user's priority; missing or fully-filtered lists fall back to the env order.
    */
-  userChannels?: UserWebBrowsingConfig;
+  userChannels?: UserChannelPreferences;
 }
 
 const buildSearchParams = ({
@@ -116,7 +116,7 @@ const getMemorySnapshot = () => {
  */
 export class SearchService {
   private searchImpList: SearchServiceImpl[];
-  private userChannels?: UserWebBrowsingConfig;
+  private userChannels?: UserChannelPreferences;
 
   private get crawlerImpls() {
     const enabledFromEnv = parseImplEnv(toolsEnv.CRAWLER_IMPLS);

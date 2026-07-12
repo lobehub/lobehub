@@ -3,7 +3,7 @@ import { WebBrowsingExecutionRuntime } from '@lobechat/builtin-tool-web-browsing
 
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
 import { SearchService } from '@/server/services/search';
-import { getUserWebBrowsingConfig } from '@/server/services/search/userChannels';
+import { getUserChannelPreferences } from '@/server/services/search/userChannels';
 import { WebBrowsingDocumentService } from '@/server/services/webBrowsing';
 
 import { type ServerRuntimeRegistration } from './types';
@@ -17,7 +17,7 @@ export const webBrowsingRuntime: ServerRuntimeRegistration = {
     // Only reachable when both userId and serverDB are present; otherwise the
     // service falls back to the server default channel order.
     const userChannels =
-      userId && serverDB ? await getUserWebBrowsingConfig(serverDB, userId) : undefined;
+      userId && serverDB ? await getUserChannelPreferences(serverDB, userId) : undefined;
 
     return new WebBrowsingExecutionRuntime({
       documentService: canSaveDocuments

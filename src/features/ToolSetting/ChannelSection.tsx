@@ -3,11 +3,11 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import ChannelItem from './ChannelItem';
-import { type ChannelRow, useChannelRows, type WebBrowsingChannelKey } from './useChannelRows';
+import { type ChannelKey, type ChannelRow, useChannelRows } from './useChannelRows';
 
 interface ChannelSectionProps {
   availableIds: string[];
-  channelKey: WebBrowsingChannelKey;
+  channelKey: ChannelKey;
   desc: string;
   title: string;
 }

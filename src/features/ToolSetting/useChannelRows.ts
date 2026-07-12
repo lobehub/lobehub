@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/slices/settings/selectors';
 
-export type WebBrowsingChannelKey = 'crawlerImpls' | 'searchProviders';
+export type ChannelKey = 'crawlerImpls' | 'searchProviders';
 
 export interface ChannelRow {
   enabled: boolean;
@@ -42,11 +42,11 @@ const buildRows = (availableIds: string[], savedOrder: string[] | undefined): Ch
 };
 
 /**
- * Manage the local order + enabled state for a single web-browsing channel
- * list and persist changes to `settings.tool.webBrowsing`.
+ * Manage the local order + enabled state for a single channel list and persist
+ * changes to the corresponding top-level `settings.tool.<channelKey>` field.
  *
  * Only enabled ids are persisted (as an ordered array = priority). Disabled
- * ids are simply absent, matching the `UserWebBrowsingConfig` contract.
+ * ids are simply absent, matching the `UserChannelPreferences` contract.
  *
  * Local UI state is seeded ONCE from `availableIds` + `savedOrder` on mount and
  * is intentionally NOT re-synced afterwards (avoids the write-back → re-render →
@@ -55,19 +55,18 @@ const buildRows = (availableIds: string[], savedOrder: string[] | undefined): Ch
  * settings store has hydrated (`isUserStateInit`) — otherwise `savedOrder` reads
  * as `undefined` at mount and the saved priority order is lost on a hard refresh.
  */
-export const useChannelRows = (channelKey: WebBrowsingChannelKey, availableIds: string[]) => {
-  const savedOrder = useUserStore(
-    (s) => settingsSelectors.currentSettings(s).tool?.webBrowsing?.[channelKey],
-  );
+export const useChannelRows = (channelKey: ChannelKey, availableIds: string[]) => {
+  const savedOrder = useUserStore((s) => settingsSelectors.currentSettings(s).tool?.[channelKey]);
   const setSettings = useUserStore((s) => s.setSettings);
 
   const [rows, setRows] = useState<ChannelRow[]>(() => buildRows(availableIds, savedOrder));
 
   const persist = (nextRows: ChannelRow[]) => {
     const enabledIds = nextRows.filter((row) => row.enabled).map((row) => row.id);
-    // The merge util replaces arrays wholesale, so this stores the ordered
-    // enabled ids as-is rather than index-merging with the previous value.
-    return setSettings({ tool: { webBrowsing: { [channelKey]: enabledIds } } });
+    // The merge util deep-merges and replaces arrays wholesale, so writing a
+    // single top-level channel field stores the ordered enabled ids as-is and
+    // leaves the sibling channel field untouched.
+    return setSettings({ tool: { [channelKey]: enabledIds } });
   };
 
   const reorder = (nextRows: ChannelRow[]) => {
