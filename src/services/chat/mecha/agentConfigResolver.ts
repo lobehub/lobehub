@@ -106,6 +106,14 @@ export interface AgentConfigResolverContext {
   scope?: MessageMapScope;
   /** Target agent config for agent-builder */
   targetAgentConfig?: LobeAgentConfig;
+
+  /**
+   * Topic-level model/provider override.
+   * When set, overrides the agent's model/provider so each topic can use a
+   * different model. The caller (streamingExecutor) reads this from
+   * `topic.metadata.model` / `topic.metadata.provider`.
+   */
+  topicModelOverride?: { model: string; provider: string };
 }
 
 /**
@@ -144,6 +152,18 @@ export interface ResolvedAgentConfig {
  *
  * For regular agents, this simply returns the config from the store.
  */
+/**
+ * Apply topic-level model override onto the resolved agent config.
+ * Returns a new object when the override is present, otherwise the input.
+ */
+const withTopicModelOverride = (
+  config: LobeAgentConfig,
+  override: { model: string; provider: string } | undefined,
+): LobeAgentConfig => {
+  if (!override) return config;
+  return { ...config, model: override.model, provider: override.provider };
+};
+
 export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAgentConfig => {
   const { agentId, model, documentContent, plugins, targetAgentConfig, isSubAgent, disableTools } =
     ctx;
@@ -297,7 +317,7 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
       };
 
       return {
-        agentConfig: finalAgentConfig,
+        agentConfig: withTopicModelOverride(finalAgentConfig, ctx.topicModelOverride),
         chatConfig: finalChatConfig,
         isBuiltinAgent: false,
         plugins: applyPluginFilters(pageAgentPlugins),
@@ -322,7 +342,7 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
       };
 
       return {
-        agentConfig: finalAgentConfig,
+        agentConfig: withTopicModelOverride(finalAgentConfig, ctx.topicModelOverride),
         chatConfig: finalChatConfig,
         isBuiltinAgent: false,
         plugins: applyPluginFilters(taskAgentPlugins),
@@ -331,7 +351,7 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
 
     // Not in page scope - return standard config
     return {
-      agentConfig: finalAgentConfig,
+      agentConfig: withTopicModelOverride(finalAgentConfig, ctx.topicModelOverride),
       chatConfig: finalChatConfig,
       isBuiltinAgent: false,
       plugins: applyPluginFilters(finalPlugins),
@@ -478,7 +498,7 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
   });
 
   return {
-    agentConfig: finalAgentConfig,
+    agentConfig: withTopicModelOverride(finalAgentConfig, ctx.topicModelOverride),
     chatConfig: resolvedChatConfig,
     isBuiltinAgent: true,
     plugins: applyPluginFilters(finalPlugins),

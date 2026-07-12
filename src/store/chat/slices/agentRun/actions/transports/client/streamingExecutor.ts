@@ -157,6 +157,18 @@ export class StreamingExecutorActionImpl {
     const scope = operation?.context.scope;
     const groupId = operation?.context.groupId;
 
+    // Read topic-level model/provider override from active topic metadata
+    let topicModelOverride: { model: string; provider: string } | undefined;
+    if (topicId) {
+      const topic = topicSelectors.getTopicById(topicId)(this.#get());
+      if (topic?.metadata?.model) {
+        topicModelOverride = {
+          model: topic.metadata.model,
+          provider: topic.metadata.provider || '',
+        };
+      }
+    }
+
     // Resolve agent config with builtin agent runtime config merged
     // This ensures runtime plugins (e.g., 'lobe-agent-builder' for Agent Builder) are included
     // - isSubAgent: filters out lobe-agent tool to prevent nested sub-agent creation
@@ -167,6 +179,7 @@ export class StreamingExecutorActionImpl {
       groupId, // Pass groupId for supervisor detection
       isSubAgent, // Filter out lobe-agent in sub-agent context
       scope, // Pass scope from operation context
+      topicModelOverride, // Pass topic-level model override
     });
 
     const { agentConfig: agentConfigData, plugins: pluginIds } = agentConfig;

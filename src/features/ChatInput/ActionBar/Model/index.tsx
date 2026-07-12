@@ -8,6 +8,8 @@ import ModelSwitchPanel from '@/features/ModelSwitchPanel';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
+import { useChatStore } from '@/store/chat';
+import { topicSelectors } from '@/store/chat/selectors';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import { useActionBarContext } from '../context';
@@ -53,20 +55,48 @@ const ModelSwitch = memo(() => {
   const { allowed: canCreateContent, reason } = usePermission('create_content');
 
   const agentId = useAgentId();
-  const [model, provider, updateAgentConfigById] = useAgentStore((s) => [
-    agentByIdSelectors.getAgentModelById(agentId)(s),
-    agentByIdSelectors.getAgentModelProviderById(agentId)(s),
-    s.updateAgentConfigById,
-  ]);
+  const agentModel = useAgentStore(agentByIdSelectors.getAgentModelById(agentId));
+  const agentProvider = useAgentStore(agentByIdSelectors.getAgentModelProviderById(agentId));
+  const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
   const applyBusinessModelModeConfig = useBusinessModelModeConfig();
+
+  const [activeTopicId, updateTopicMetadata] = useChatStore((s) => [
+    s.activeTopicId,
+    s.updateTopicMetadata,
+  ]);
+  const topicModelOverride = useChatStore((s) => {
+    if (!activeTopicId) return undefined;
+    const topic = topicSelectors.getTopicById(activeTopicId)(s);
+    if (!topic?.metadata?.model) return undefined;
+    return { model: topic.metadata.model, provider: topic.metadata.provider || '' };
+  });
+
+  const model = topicModelOverride?.model || agentModel;
+  const provider = topicModelOverride?.provider || agentProvider;
 
   const handleModelChange = useCallback(
     async (params: { model: string; provider: string }) => {
       if (!canCreateContent) return;
 
-      await updateAgentConfigById(agentId, applyBusinessModelModeConfig(params));
+      const config = applyBusinessModelModeConfig(params);
+
+      if (activeTopicId) {
+        await updateTopicMetadata(activeTopicId, {
+          model: config.model,
+          provider: config.provider,
+        });
+      } else {
+        await updateAgentConfigById(agentId, config);
+      }
     },
-    [agentId, applyBusinessModelModeConfig, canCreateContent, updateAgentConfigById],
+    [
+      activeTopicId,
+      agentId,
+      applyBusinessModelModeConfig,
+      canCreateContent,
+      updateAgentConfigById,
+      updateTopicMetadata,
+    ],
   );
 
   const trigger = (
