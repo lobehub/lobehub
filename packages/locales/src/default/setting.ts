@@ -915,6 +915,8 @@ export default {
     'Always on for Lobe AI while Self-Iteration is available.',
   'settingSelfIteration.enabled.title': 'Enable Self-Iteration',
   'settingSelfIteration.title': 'Self-Iteration',
+  'settingsSearch.empty': 'No settings found for "{{keyword}}"',
+  'settingsSearch.placeholder': 'Search settings...',
   'settingSystem.oauth.info.desc': 'Logged in',
   'settingSystem.oauth.info.title': 'Account Information',
   'settingSystem.oauth.signin.action': 'Sign In',

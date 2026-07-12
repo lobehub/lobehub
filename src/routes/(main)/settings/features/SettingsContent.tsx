@@ -8,6 +8,7 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { SettingsTabs } from '@/store/global/initialState';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 
+import { useSettingsAnchorScroll } from '../search/anchor';
 import { componentMap } from './componentMap';
 
 const REDIRECT_MAP: Record<string, string> = {
@@ -26,6 +27,8 @@ interface SettingsContentProps {
 const SettingsContent = ({ mobile, activeTab }: SettingsContentProps) => {
   const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
   const navigate = useWorkspaceAwareNavigate();
+
+  useSettingsAnchorScroll();
 
   useEffect(() => {
     if (activeTab && REDIRECT_MAP[activeTab]) {

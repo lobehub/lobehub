@@ -12,6 +12,7 @@ import { HOTKEYS_REGISTRATION } from '@/const/hotkeys';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import { useSaveState } from '@/hooks/useSaveState';
 import hotkeyMeta from '@/locales/default/hotkey';
+import { SettingsSearchAnchor } from '@/routes/(main)/settings/search/anchor';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
 import { type HotkeyItem } from '@/types/hotkey';
@@ -64,7 +65,11 @@ const HotkeySetting = memo(() => {
       (item) => mapHotkeyItem(item),
     ),
     extra: <AutoSaveHint lastUpdatedTime={lastSavedAt} saveStatus={saveStatus} onRetry={retry} />,
-    title: t('hotkey.group.essential'),
+    title: (
+      <SettingsSearchAnchor id={'hotkey-essential'}>
+        {t('hotkey.group.essential')}
+      </SettingsSearchAnchor>
+    ),
   };
 
   return (

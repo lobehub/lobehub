@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import AutoSaveHint from '@/components/Editor/AutoSaveHint';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import { useSaveState } from '@/hooks/useSaveState';
+import { SettingsSearchAnchor } from '@/routes/(main)/settings/search/anchor';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/slices/settings/selectors';
 
@@ -33,14 +34,22 @@ const Appearance = memo(() => {
       {
         children: <ThemeSwatchesPrimary />,
         desc: t('settingAppearance.primaryColor.desc'),
-        label: t('settingAppearance.primaryColor.title'),
+        label: (
+          <SettingsSearchAnchor id={'appearance-primary-color'}>
+            {t('settingAppearance.primaryColor.title')}
+          </SettingsSearchAnchor>
+        ),
         minWidth: undefined,
         name: 'primaryColor',
       },
       {
         children: <ThemeSwatchesNeutral />,
         desc: t('settingAppearance.neutralColor.desc'),
-        label: t('settingAppearance.neutralColor.title'),
+        label: (
+          <SettingsSearchAnchor id={'appearance-neutral-color'}>
+            {t('settingAppearance.neutralColor.title')}
+          </SettingsSearchAnchor>
+        ),
         minWidth: undefined,
         name: 'neutralColor',
       },

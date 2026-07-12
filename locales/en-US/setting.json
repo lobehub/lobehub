@@ -880,6 +880,8 @@
   "settingTTS.voice.desc": "Select a voice for the current agent, different TTS services support different voices",
   "settingTTS.voice.preview": "Voice Preview",
   "settingTTS.voice.title": "Text-to-Speech Voice",
+  "settingsSearch.empty": "No settings found for \"{{keyword}}\"",
+  "settingsSearch.placeholder": "Search settings...",
   "skillGroup.builtinSkills": "Built-in Skills",
   "skillGroup.builtinTools": "Built-in Tools",
   "skillGroup.communityConnectors": "OAuth Connectors",

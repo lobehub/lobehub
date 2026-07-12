@@ -15,6 +15,7 @@ import { useTranslation } from 'react-i18next';
 
 import AutoSaveHint from '@/components/Editor/AutoSaveHint';
 import { useSaveState } from '@/hooks/useSaveState';
+import { SettingsSearchAnchor } from '@/routes/(main)/settings/search/anchor';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
 
@@ -121,7 +122,6 @@ const ChatAppearance = memo(() => {
         collapsible={false}
         desc={t('settingChatAppearance.fontSize.desc')}
         gap={16}
-        title={t('settingChatAppearance.fontSize.title')}
         variant={'filled'}
         extra={
           <Flexbox horizontal align={'center'} gap={8}>
@@ -160,6 +160,11 @@ const ChatAppearance = memo(() => {
               onChange={(value) => handleChange('fontSize', value)}
             />
           </Flexbox>
+        }
+        title={
+          <SettingsSearchAnchor id={'appearance-font-size'}>
+            {t('settingChatAppearance.fontSize.title')}
+          </SettingsSearchAnchor>
         }
       >
         <ChatPreview fontSize={general.fontSize} />
