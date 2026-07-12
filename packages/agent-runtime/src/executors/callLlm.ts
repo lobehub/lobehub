@@ -1,23 +1,44 @@
 import type {
   AgentRuntimeHost,
+  ContextBuildOutput,
   LLMAttemptOutput,
-  LLMTurnInput,
-  LLMTurnSession,
+  LLMRetryPolicy,
+  LLMTrace,
+  LLMTransport,
 } from '../transport';
-import type { AgentEvent, AgentInstruction, CallLLMPayload, InstructionExecutor } from '../types';
+import type {
+  AgentEvent,
+  AgentInstruction,
+  AgentState,
+  CallLLMPayload,
+  InstructionExecutor,
+} from '../types';
 import { getLLMRetryDelayMs, shouldRetryLLM } from '../utils/runtimeRetry';
 import { finalizeCallLlmTurn, persistInterruptedCallLlmResult } from './callLlmFinalizer';
 
 const CONVERSATION_PARENT_MISSING_ERROR_TYPE = 'ConversationParentMissing';
 
 interface LLMCallTransport {
-  openTurn: (input: LLMTurnInput) => Promise<LLMTurnSession> | LLMTurnSession;
+  retryPolicy: LLMRetryPolicy;
+  runAttempt: NonNullable<LLMTransport['runAttempt']>;
+}
+
+interface PreparedCallLlmInput {
+  assistantMessageId: string;
+  context: ContextBuildOutput;
+  model: string;
+  provider: string;
+  state: AgentState;
+  stepLabel?: string;
 }
 
 const requireLLMCallTransport = (host: AgentRuntimeHost) => {
   const llm = host.transports.llm;
-  if (!llm?.openTurn) {
-    throw new Error('LLMTransport.openTurn is required for call_llm executor');
+  if (!llm?.runAttempt) {
+    throw new Error('LLMTransport.runAttempt is required for call_llm executor');
+  }
+  if (!llm.retryPolicy) {
+    throw new Error('LLMTransport.retryPolicy is required for call_llm executor');
   }
   return llm as NonNullable<AgentRuntimeHost['transports']['llm']> & LLMCallTransport;
 };
@@ -40,39 +61,56 @@ const isOperationInterrupted = async (host: AgentRuntimeHost) => {
   }
 };
 
-const executeTurnSession = async (
+const runWithTrace = <T>(trace: LLMTrace | undefined, task: () => Promise<T>) =>
+  trace ? trace.run(task) : task();
+
+const executePreparedCall = async (
   host: AgentRuntimeHost,
-  session: LLMTurnSession,
-  turn: LLMTurnInput,
+  llm: LLMCallTransport,
+  prepared: PreparedCallLlmInput,
+  trace?: LLMTrace,
 ) => {
   const events: AgentEvent[] = [];
+  const { retryPolicy } = llm;
+  const maxAttempts = retryPolicy.maxAttempts(prepared.provider);
   let errorHandled = false;
   let lastOutput: LLMAttemptOutput | undefined;
   let terminalError: unknown;
 
   try {
-    for (let attempt = 1; attempt <= session.maxAttempts; attempt++) {
-      const execution = await session.runAttempt({ attempt, events });
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      const execution = await runWithTrace(trace, () =>
+        llm.runAttempt({
+          attempt,
+          context: prepared.context,
+          events,
+          maxAttempts,
+          model: prepared.model,
+          onFirstChunk: trace?.onFirstChunk.bind(trace),
+          provider: prepared.provider,
+          state: prepared.state,
+        }),
+      );
       lastOutput = execution.output;
 
       if (execution.ok) {
         return await finalizeCallLlmTurn({
-          assistantMessageId: turn.assistantMessage.id,
+          assistantMessageId: prepared.assistantMessageId,
           events,
           host,
-          model: turn.model,
+          model: prepared.model,
           output: execution.output,
-          provider: turn.provider,
-          recordResult: session.recordResult?.bind(session),
-          shouldReplayAssistantReasoning: turn.context.replayAssistantReasoning,
-          state: turn.state,
-          stepLabel: turn.stepLabel,
+          provider: prepared.provider,
+          recordResult: trace?.recordResult?.bind(trace),
+          shouldReplayAssistantReasoning: prepared.context.replayAssistantReasoning,
+          state: prepared.state,
+          stepLabel: prepared.stepLabel,
         });
       }
 
       const { error } = execution;
-      const classified = session.classifyError(error);
-      const retryBudget = session.resolveRetryBudget(error);
+      const classified = retryPolicy.classifyError(error);
+      const retryBudget = retryPolicy.resolveRetryBudget(prepared.provider, error);
       let interrupted = await isOperationInterrupted(host);
 
       if (!interrupted && shouldRetryLLM(classified.kind, attempt, retryBudget)) {
@@ -83,24 +121,24 @@ const executeTurnSession = async (
             delayMs,
             errorType: classified.code,
             kind: classified.kind,
-            maxAttempts: session.maxAttempts,
+            maxAttempts,
           },
           type: 'stream_retry',
         };
         events.push(retryEvent);
 
-        await session.onRetry?.({
+        await retryPolicy.onRetry?.({
           attempt,
           delayMs,
           error: classified,
-          maxAttempts: session.maxAttempts,
+          maxAttempts,
         });
         await host.transports.stream.publishEvent({
           data: retryEvent.data,
           stepIndex: host.operation.stepIndex,
           type: 'stream_retry',
         });
-        await (session.waitForRetry ?? waitForRetry)(delayMs);
+        await (retryPolicy.waitForRetry ?? waitForRetry)(delayMs);
 
         interrupted = await isOperationInterrupted(host);
         if (!interrupted) continue;
@@ -109,17 +147,19 @@ const executeTurnSession = async (
       errorHandled = true;
       if (interrupted) {
         await persistInterruptedCallLlmResult({
-          assistantMessageId: turn.assistantMessage.id,
+          assistantMessageId: prepared.assistantMessageId,
           host,
           output: execution.output,
         });
       }
-      await session.handleError({
-        error,
-        events,
-        interrupted,
-        output: execution.output,
-        retryBudget,
+      await runWithTrace(trace, async () => {
+        await retryPolicy.onError?.({
+          error,
+          events,
+          interrupted,
+          output: execution.output,
+          retryBudget,
+        });
       });
       throw error;
     }
@@ -131,21 +171,23 @@ const executeTurnSession = async (
       const interrupted = await isOperationInterrupted(host);
       if (interrupted && lastOutput) {
         await persistInterruptedCallLlmResult({
-          assistantMessageId: turn.assistantMessage.id,
+          assistantMessageId: prepared.assistantMessageId,
           host,
           output: lastOutput,
         });
       }
-      await session.handleError({
-        error,
-        events,
-        interrupted,
-        output: lastOutput,
+      await runWithTrace(trace, async () => {
+        await retryPolicy.onError?.({
+          error,
+          events,
+          interrupted,
+          output: lastOutput,
+        });
       });
     }
     throw error;
   } finally {
-    await session.close(terminalError);
+    await trace?.close(terminalError);
   }
 };
 
@@ -155,6 +197,23 @@ const requireContextBuilder = (host: AgentRuntimeHost) => {
     throw new Error('ContextBuilder is required for call_llm executor');
   }
   return context;
+};
+
+const assertPreparedCallContext = (
+  prepared: Pick<PreparedCallLlmInput, 'context' | 'model' | 'provider' | 'state'>,
+  stepIndex: number,
+) => {
+  if (!prepared.context.resolvedTools) {
+    throw new Error('Resolved tools are required for call_llm');
+  }
+
+  const messages = prepared.context.messages as Array<{ role?: string }>;
+  if (!messages.some((message) => message.role !== 'system')) {
+    throw new Error(
+      `call_llm produced no non-system messages for ${prepared.provider}/${prepared.model} ` +
+        `(topic=${prepared.state.metadata?.topicId ?? 'n/a'}, step=${stepIndex}); refusing to dispatch`,
+    );
+  }
 };
 
 const createConversationParentMissingError = (parentId: string) => {
@@ -293,16 +352,22 @@ export const callLlm =
       });
 
     try {
-      const turn: LLMTurnInput = {
-        assistantMessage,
+      const prepared: PreparedCallLlmInput = {
+        assistantMessageId: assistantMessage.id,
         context,
         model,
         provider,
         state,
         stepLabel,
       };
-      const session = await llm.openTurn(turn);
-      return await executeTurnSession(host, session, turn);
+      assertPreparedCallContext(prepared, operation.stepIndex);
+      const trace = llm.createTrace?.({
+        assistantMessageId: assistantMessage.id,
+        conversationId: state.metadata?.topicId,
+        model,
+        provider,
+      });
+      return await executePreparedCall(host, llm, prepared, trace);
     } catch (error) {
       await transports.stream.publishError?.({
         error,

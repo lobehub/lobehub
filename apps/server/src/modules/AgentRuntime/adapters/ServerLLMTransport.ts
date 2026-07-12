@@ -2,23 +2,43 @@ import type {
   BlobStore,
   LLMAttemptExecution,
   LLMAttemptInput,
+  LLMAttemptOutput,
+  LLMCallErrorInput,
+  LLMRetryInput,
+  LLMRetryPolicy,
   LLMStreamPayload,
   LLMStreamResult,
+  LLMTrace,
+  LLMTraceInput,
   LLMTransport,
-  LLMTurnInput,
-  LLMTurnSession,
 } from '@lobechat/agent-runtime';
+import { resolveLLMMaxAttempts, resolveLLMRetryBudget } from '@lobechat/agent-runtime';
+import { BRANDING_PROVIDER } from '@lobechat/business-const';
 import {
   type ChatStreamPayload,
   consumeStreamUntilDone,
+  ModelEmptyError,
   type ModelRuntime,
 } from '@lobechat/model-runtime';
+import {
+  context as otelContext,
+  SpanKind,
+  SpanStatusCode,
+  trace as otelTrace,
+} from '@lobechat/observability-otel/api';
+import {
+  buildChatRequestAttributes,
+  buildChatResponseAttributes,
+  chatSpanName,
+  tracer as agentRuntimeTracer,
+} from '@lobechat/observability-otel/modules/agent-runtime';
 
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 
 import type { RuntimeExecutorContext } from '../context';
+import { log, sleep } from '../executorHelpers';
+import { classifyLLMError } from '../llmErrorClassification';
 import { createServerCallLlmAttempt } from './serverCallLlmAttempt';
-import { openServerCallLlmTurn } from './serverCallLlmExecutor';
 
 const getErrorMessage = (error: unknown): string => {
   if (error instanceof Error && error.message) return error.message;
@@ -30,34 +50,152 @@ const getErrorMessage = (error: unknown): string => {
   return JSON.stringify(error);
 };
 
+const SERVER_LLM_RETRY_POLICY = {
+  isEmptyCompletionError: (error: unknown) => error instanceof ModelEmptyError,
+  noRetryProviders: [BRANDING_PROVIDER],
+};
+
+class ServerLLMRetryPolicy implements LLMRetryPolicy {
+  constructor(private readonly ctx: RuntimeExecutorContext) {}
+
+  classifyError(error: unknown) {
+    return classifyLLMError(error);
+  }
+
+  maxAttempts(provider: string) {
+    return resolveLLMMaxAttempts(provider, SERVER_LLM_RETRY_POLICY);
+  }
+
+  onError({ error, events, retryBudget }: LLMCallErrorInput) {
+    if (error instanceof ModelEmptyError && error.diagnostics) {
+      error.diagnostics.retryBudget = retryBudget;
+      error.diagnostics.retryEvents = events
+        .filter((event) => event.type === 'stream_retry')
+        .map((event) => event.data);
+    }
+
+    console.error(
+      `[StreamingLLMExecutor][${this.ctx.operationId}:${this.ctx.stepIndex}] LLM execution failed:`,
+      error,
+    );
+  }
+
+  onRetry({ attempt, delayMs, error, maxAttempts }: LLMRetryInput) {
+    log(
+      '[%s:%d] LLM call failed with kind=%s (attempt %d/%d), retrying in %dms ...',
+      this.ctx.operationId,
+      this.ctx.stepIndex,
+      error.kind,
+      attempt,
+      maxAttempts,
+      delayMs,
+    );
+  }
+
+  resolveRetryBudget(provider: string, error: unknown) {
+    return resolveLLMRetryBudget(provider, error, SERVER_LLM_RETRY_POLICY);
+  }
+
+  async waitForRetry(delayMs: number): Promise<void> {
+    await sleep(delayMs);
+  }
+}
+
+class ServerLLMTrace implements LLMTrace {
+  private readonly chatContext: ReturnType<typeof otelTrace.setSpan>;
+  private readonly chatSpan: ReturnType<typeof agentRuntimeTracer.startSpan>;
+  private firstChunkAt?: number;
+  private readonly llmStartTime = Date.now();
+  private readonly operationLogId: string;
+
+  constructor(
+    private readonly ctx: RuntimeExecutorContext,
+    input: LLMTraceInput,
+  ) {
+    this.operationLogId = `${ctx.operationId}:${ctx.stepIndex}`;
+    log(
+      '[%s][call_llm] Starting operation with prepared assistant message: %s',
+      this.operationLogId,
+      input.assistantMessageId,
+    );
+
+    this.chatSpan = agentRuntimeTracer.startSpan(chatSpanName(input.model), {
+      attributes: buildChatRequestAttributes({
+        conversationId: input.conversationId,
+        operationId: ctx.operationId,
+        provider: input.provider,
+        requestModel: input.model,
+        stepIndex: ctx.stepIndex,
+        stream: ctx.stream ?? true,
+      }),
+      kind: SpanKind.CLIENT,
+    });
+    this.chatContext = otelTrace.setSpan(otelContext.active(), this.chatSpan);
+  }
+
+  close(error?: unknown) {
+    if (error) {
+      this.chatSpan.recordException(error as Error);
+      this.chatSpan.setStatus({
+        code: SpanStatusCode.ERROR,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+    this.chatSpan.end();
+  }
+
+  onFirstChunk() {
+    if (this.firstChunkAt === undefined) {
+      this.firstChunkAt = Date.now() - this.llmStartTime;
+    }
+  }
+
+  recordResult(output: LLMAttemptOutput) {
+    return this.run(async () => {
+      log('[%s] call_llm completed', this.operationLogId);
+      this.chatSpan.setAttributes(
+        buildChatResponseAttributes({
+          cacheReadInputTokens: output.usage?.inputCachedTokens,
+          finishReasons: output.finishReason ? [output.finishReason] : undefined,
+          inputTokens: output.usage?.totalInputTokens,
+          outputTokens: output.usage?.totalOutputTokens,
+          reasoningOutputTokens: output.usage?.outputReasoningTokens,
+          timeToFirstChunkMs: this.firstChunkAt,
+        }),
+      );
+    });
+  }
+
+  run<T>(task: () => Promise<T>): Promise<T> {
+    return otelContext.with(this.chatContext, task);
+  }
+}
+
 /**
  * Server {@link LLMTransport} adapter — wraps model-runtime streaming and
  * returns the aggregated content/usage that package executors need.
  */
 export class ServerLLMTransport implements LLMTransport {
+  readonly retryPolicy: LLMRetryPolicy;
+
+  private readonly modelRuntimePromises = new Map<
+    string,
+    ReturnType<ServerLLMTransport['createModelRuntime']>
+  >();
+
   constructor(
     private readonly ctx: RuntimeExecutorContext,
     private readonly blobStore?: BlobStore,
-  ) {}
+  ) {
+    this.retryPolicy = new ServerLLMRetryPolicy(ctx);
+  }
 
-  openTurn(input: LLMTurnInput): LLMTurnSession {
-    let modelRuntimePromise: ReturnType<ServerLLMTransport['createModelRuntime']> | undefined;
-
-    return openServerCallLlmTurn(this.ctx, {
-      assistantMessage: input.assistantMessage,
-      context: input.context,
-      model: input.model,
-      provider: input.provider,
-      runAttempt: async (attemptInput) => {
-        modelRuntimePromise ??= this.createModelRuntime(input.provider);
-        return this.runAttemptWithRuntime(attemptInput, await modelRuntimePromise);
-      },
-      state: input.state,
-    });
+  createTrace(input: LLMTraceInput): LLMTrace {
+    return new ServerLLMTrace(this.ctx, input);
   }
 
   async runAttempt(input: LLMAttemptInput): Promise<LLMAttemptExecution> {
-    const modelRuntime = await this.createModelRuntime(input.provider);
+    const modelRuntime = await this.getModelRuntime(input.provider);
     return this.runAttemptWithRuntime(input, modelRuntime);
   }
 
@@ -106,6 +244,15 @@ export class ServerLLMTransport implements LLMTransport {
       provider,
       this.ctx.workspaceId,
     );
+  }
+
+  private getModelRuntime(provider: string) {
+    let promise = this.modelRuntimePromises.get(provider);
+    if (!promise) {
+      promise = this.createModelRuntime(provider);
+      this.modelRuntimePromises.set(provider, promise);
+    }
+    return promise;
   }
 
   private async runAttemptWithRuntime(
