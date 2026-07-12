@@ -57,7 +57,10 @@ export class TopicShareModel {
       .insert(topicShares)
       .values({
         topicId,
-        userId: this.userId,
+        // Keep the topic creator as the share owner even when a workspace
+        // admin manages the share — downstream access checks treat this
+        // column as ownerId for private-share visibility.
+        userId: topic.userId,
         visibility,
         workspaceId: this.workspaceId ?? null,
       })

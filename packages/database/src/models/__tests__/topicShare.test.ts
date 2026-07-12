@@ -272,6 +272,17 @@ describe('TopicShareModel', () => {
       expect(info!.visibility).toBe('link');
     });
 
+    it('create keeps the topic creator as share owner when another member creates the share', async () => {
+      // Regression: a workspace admin creating a share for a member's topic used
+      // to insert their own id as topic_shares.user_id, which downstream access
+      // checks treat as ownerId — locking the actual creator out of a private share.
+      const adminShareModel = new TopicShareModel(serverDB, userId2, workspaceId);
+
+      const created = await adminShareModel.create(wsTopicId, 'private');
+
+      expect(created!.userId).toBe(userId);
+    });
+
     it('updateVisibility can switch a link share back to private', async () => {
       await wsShareModel.create(wsTopicId, 'link');
 
