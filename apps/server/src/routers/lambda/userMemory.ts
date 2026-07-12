@@ -54,8 +54,12 @@ const userMemoryProcedure = wsCompatProcedure.use(serverDatabase).use(async (opt
 });
 const userMemoryWriteProcedure = userMemoryProcedure.use(withScopedPermission('message:create'));
 
+const preferredLanguageSchema = z.string().trim().min(1).max(32).optional();
+const PREFERRED_LANGUAGE_PATTERN = /^(?:auto|[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*)$/;
+
 const userMemoryExtractionInputSchema = z.object({
   fromDate: z.coerce.date().optional(),
+  preferredLanguage: preferredLanguageSchema,
   toDate: z.coerce.date().optional(),
 });
 
@@ -224,6 +228,13 @@ export const userMemoryRouter = router({
   requestMemoryFromChatTopic: userMemoryWriteProcedure
     .input(userMemoryExtractionInputSchema)
     .mutation(async ({ ctx, input }) => {
+      if (input.preferredLanguage && !PREFERRED_LANGUAGE_PATTERN.test(input.preferredLanguage)) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Invalid preferred memory language',
+        });
+      }
+
       if (input.fromDate && input.toDate && input.fromDate > input.toDate) {
         throw new TRPCError({
           code: 'BAD_REQUEST',
@@ -248,7 +259,9 @@ export const userMemoryRouter = router({
         ignoreExtracted: false,
         startDate: input.fromDate,
       });
+      const preferredLanguage = input.preferredLanguage;
       const metadata = initUserMemoryExtractionMetadata({
+        preferredLanguage,
         progress: {
           completedTopics: 0,
           totalTopics,
@@ -289,6 +302,7 @@ export const userMemoryRouter = router({
               forceTopics: false,
               fromDate: input.fromDate,
               mode: 'workflow',
+              preferredLanguage,
               sources: [MemorySourceType.ChatTopic],
               toDate: input.toDate,
               userIds: [ctx.userId],

@@ -146,6 +146,7 @@ export interface UserMemoryExtractionMetadata {
       workflowRunIds?: string[];
     };
   };
+  preferredLanguage?: string;
   progress: UserMemoryExtractionProgress;
   range?: {
     from?: string;

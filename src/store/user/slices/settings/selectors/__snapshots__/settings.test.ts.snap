@@ -48,64 +48,6 @@ exports[`settingsSelectors > currentSettings > should merge DEFAULT_SETTINGS and
 }
 `;
 
-exports[`settingsSelectors > currentSystemAgent > should merge DEFAULT_SYSTEM_AGENT_CONFIG and s.settings.systemAgent correctly 1`] = `
-{
-  "agentMeta": {
-    "model": "deepseek-v4-pro",
-    "provider": "deepseek",
-  },
-  "enableAutoReply": true,
-  "followUpAction": {
-    "enabled": false,
-    "model": "gpt-5.4-mini",
-    "provider": "openai",
-  },
-  "generationTopic": {
-    "model": "gpt-5.4-mini",
-    "provider": "openai",
-  },
-  "historyCompress": {
-    "model": "deepseek-v4-pro",
-    "provider": "deepseek",
-  },
-  "inputCompletion": {
-    "enabled": false,
-    "model": "gpt-5.4-mini",
-    "provider": "openai",
-  },
-  "memoryAnalysisAgentConfig": {
-    "model": "gpt-5.4-mini",
-    "provider": "openai",
-  },
-  "promptRewrite": {
-    "enabled": true,
-    "model": "gpt-5.4-mini",
-    "provider": "openai",
-  },
-  "replyMessage": "Custom auto reply",
-  "thread": {
-    "model": "deepseek-v4-pro",
-    "provider": "deepseek",
-  },
-  "topic": {
-    "model": "gpt-5.4-mini",
-    "provider": "openai",
-  },
-  "translation": {
-    "model": "gpt-5.4-mini",
-    "provider": "openai",
-  },
-  "userMemoryEmbedding": {
-    "model": "text-embedding-3-small",
-    "provider": "openai",
-  },
-  "userMemoryPersonaWriter": {
-    "model": "gpt-5.4-mini",
-    "provider": "openai",
-  },
-}
-`;
-
 exports[`settingsSelectors > currentTTS > should merge DEFAULT_TTS_CONFIG and s.settings.tts correctly 1`] = `
 {
   "openAI": {

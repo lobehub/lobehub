@@ -586,6 +586,12 @@ export default {
     'Allow LobeHub to extract preferences and info from conversations and use them later. You can view, edit, or clear memory anytime.',
   'memory.enabled.title': 'Enable Memory',
   'memory.manageEntry': 'Manage memories',
+  'memory.preferredLanguage.auto': 'Auto',
+  'memory.preferredLanguage.desc':
+    'Controls the language used when Lobe generates or updates user memories. Leave unset to follow the global response language.',
+  'memory.preferredLanguage.followResponse': 'Follow response language',
+  'memory.preferredLanguage.placeholder': 'Follow response language',
+  'memory.preferredLanguage.title': 'Memory preferred language',
   'memory.title': 'Memory Settings',
   'message.success': 'Update successful',
   'notification.enabled': 'Enabled',

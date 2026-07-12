@@ -4,7 +4,13 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { type MemoryExtractionPrivateConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
 
-import { makeTaskErrorItem, MemoryExtractionExecutor } from '../extract';
+import {
+  makeTaskErrorItem,
+  MemoryExtractionExecutor,
+  memoryExtractionPayloadSchema,
+  normalizeMemoryExtractionPayload,
+  resolveMemoryExtractionLanguage,
+} from '../extract';
 
 const createRuntimeState = (models: EnabledAiModel[], keyVaults: Record<string, any>) =>
   ({
@@ -65,6 +71,39 @@ const resolveRuntimeKeyVaults = async (
 
   return (executor as any).resolveRuntimeKeyVaults(runtimeState, memoryServiceConfig);
 };
+
+describe('memory extraction preferred language payload', () => {
+  it('normalizes preferredLanguage into workflow payload params', () => {
+    const payload = normalizeMemoryExtractionPayload({
+      baseUrl: 'https://example.com',
+      preferredLanguage: 'zh-CN',
+      userIds: ['user-1'],
+    });
+
+    expect(payload.preferredLanguage).toBe('zh-CN');
+  });
+
+  it('accepts auto as preferredLanguage', () => {
+    const parsed = memoryExtractionPayloadSchema.parse({
+      baseUrl: 'https://example.com',
+      preferredLanguage: 'auto',
+    });
+
+    expect(parsed.preferredLanguage).toBe('auto');
+  });
+});
+
+describe('resolveMemoryExtractionLanguage', () => {
+  it('uses the task snapshot before mutable user settings', () => {
+    expect(resolveMemoryExtractionLanguage('ja-JP', 'zh-CN', 'en-US')).toBe('ja-JP');
+  });
+
+  it('turns auto into a prompt instruction', () => {
+    expect(resolveMemoryExtractionLanguage('auto', 'zh-CN', 'en-US')).toBe(
+      'the most appropriate language inferred from the conversation and user context',
+    );
+  });
+});
 
 describe('MemoryExtractionExecutor.resolveRuntimeKeyVaults', () => {
   it('drops fallback credentials when user memory provider is overridden', () => {

@@ -31,6 +31,11 @@ const currentImageSettings = (s: UserStore) => currentSettings(s).image;
 const currentMemorySettings = (s: UserStore) =>
   merge(DEFAULT_MEMORY_SETTINGS, currentSettings(s).memory);
 
+const currentMemoryPreferredLanguage = (s: UserStore) => {
+  const settings = currentSettings(s);
+  return settings.memory?.preferredLanguage || settings.general?.responseLanguage || undefined;
+};
+
 const memoryEnabled = (s: UserStore) => currentMemorySettings(s).enabled !== false;
 
 const currentTTS = (s: UserStore) => merge(DEFAULT_TTS_CONFIG, currentSettings(s).tts);
@@ -50,6 +55,7 @@ const getHotkeyById = (id: HotkeyId) => (s: UserStore) =>
 
 export const settingsSelectors = {
   currentImageSettings,
+  currentMemoryPreferredLanguage,
   currentMemorySettings,
   currentSettings,
   currentSystemAgent,

@@ -15,6 +15,7 @@ export interface MemoryExtractionTask {
 
 export interface RequestMemoryExtractionParams {
   fromDate?: Date;
+  preferredLanguage?: string;
   toDate?: Date;
 }
 

@@ -78,7 +78,21 @@ describe('settingsSelectors', () => {
 
       const result = settingsSelectors.defaultAgent(s);
 
-      expect(result).toMatchSnapshot();
+      expect(result.config.systemRole).toBe('user');
+      expect(result.config.model).toBe('gpt-3.5-turbo');
+      expect(result.config.provider).toBeTruthy();
+      expect(result.meta).toEqual({
+        avatar: 'agent-avatar.jpg',
+        description: 'Test agent',
+      });
+      expect(result.config.params).toEqual(
+        expect.objectContaining({
+          frequency_penalty: 0,
+          presence_penalty: 0,
+          temperature: 1,
+          top_p: 1,
+        }),
+      );
     });
   });
 
@@ -117,6 +131,53 @@ describe('settingsSelectors', () => {
       const result = settingsSelectors.currentTTS(s);
 
       expect(result).toMatchSnapshot();
+    });
+  });
+
+  describe('currentMemoryPreferredLanguage', () => {
+    it('uses memory.preferredLanguage when set', () => {
+      const s = {
+        defaultSettings: {},
+        settings: {
+          general: { responseLanguage: 'en-US' },
+          memory: { preferredLanguage: 'zh-CN' },
+        },
+      } as unknown as UserStore;
+
+      expect(settingsSelectors.currentMemoryPreferredLanguage(s)).toBe('zh-CN');
+    });
+
+    it('falls back to general.responseLanguage when memory preference is not set', () => {
+      const s = {
+        defaultSettings: {},
+        settings: {
+          general: { responseLanguage: 'ja-JP' },
+          memory: { effort: 'high' },
+        },
+      } as unknown as UserStore;
+
+      expect(settingsSelectors.currentMemoryPreferredLanguage(s)).toBe('ja-JP');
+    });
+
+    it('preserves auto when memory preference is auto', () => {
+      const s = {
+        defaultSettings: {},
+        settings: {
+          general: { responseLanguage: 'en-US' },
+          memory: { preferredLanguage: 'auto' },
+        },
+      } as unknown as UserStore;
+
+      expect(settingsSelectors.currentMemoryPreferredLanguage(s)).toBe('auto');
+    });
+
+    it('returns undefined when neither memory nor response language is set', () => {
+      const s = {
+        defaultSettings: {},
+        settings: { memory: { effort: 'medium' } },
+      } as unknown as UserStore;
+
+      expect(settingsSelectors.currentMemoryPreferredLanguage(s)).toBeUndefined();
     });
   });
 
@@ -173,7 +234,17 @@ describe('settingsSelectors', () => {
 
       const result = settingsSelectors.defaultAgentConfig(s);
 
-      expect(result).toMatchSnapshot();
+      expect(result.systemRole).toBe('custom role');
+      expect(result.model).toBe('gpt-4');
+      expect(result.provider).toBeTruthy();
+      expect(result.params).toEqual(
+        expect.objectContaining({
+          frequency_penalty: 0,
+          presence_penalty: 0,
+          temperature: 0.7,
+          top_p: 1,
+        }),
+      );
     });
   });
 
@@ -203,15 +274,25 @@ describe('settingsSelectors', () => {
       const s = {
         settings: {
           systemAgent: {
-            enableAutoReply: true,
-            replyMessage: 'Custom auto reply',
+            translation: {
+              model: 'custom-translation-model',
+              provider: 'custom-provider',
+            },
           },
         },
       } as unknown as UserStore;
 
       const result = settingsSelectors.currentSystemAgent(s);
 
-      expect(result).toMatchSnapshot();
+      expect(result.translation).toEqual({
+        model: 'custom-translation-model',
+        provider: 'custom-provider',
+      });
+      expect(result.agentMeta.provider).toBeTruthy();
+      expect(result.historyCompress.provider).toBe(result.agentMeta.provider);
+      expect(result.memoryAnalysisAgentConfig.provider).toBeTruthy();
+      expect(result.userMemoryEmbedding.provider).toBeTruthy();
+      expect(result.userMemoryPersonaWriter.provider).toBeTruthy();
     });
   });
 

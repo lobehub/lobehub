@@ -1,7 +1,13 @@
 'use client';
 
 import { Flexbox, Text } from '@lobehub/ui';
-import { Button, createModal, type ModalInstance, useModalContext } from '@lobehub/ui/base-ui';
+import {
+  Button,
+  createModal,
+  type ModalInstance,
+  Select,
+  useModalContext,
+} from '@lobehub/ui/base-ui';
 import { App, DatePicker } from 'antd';
 import { type RangePickerProps } from 'antd/es/date-picker';
 import dayjs from 'dayjs';
@@ -9,15 +15,22 @@ import { t as i18nT } from 'i18next';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { localeOptions } from '@/locales/resources';
 import { useMemoryAnalysisAsyncTask } from '@/routes/(main)/memory/features/MemoryAnalysis/useTask';
 import { memoryExtractionService } from '@/services/userMemory/extraction';
+import { useUserStore } from '@/store/user';
+import { settingsSelectors } from '@/store/user/selectors';
 
 const DateRangeContent = memo(() => {
   const { t } = useTranslation('memory');
   const { close } = useModalContext();
   const { message } = App.useApp();
   const { refresh } = useMemoryAnalysisAsyncTask();
+  const effectiveMemoryLanguage = useUserStore(settingsSelectors.currentMemoryPreferredLanguage);
   const [range, setRange] = useState<[Date | null, Date | null]>([null, null]);
+  const [preferredLanguage, setPreferredLanguage] = useState<string | undefined>(
+    effectiveMemoryLanguage,
+  );
   const [submitting, setSubmitting] = useState(false);
 
   const disabledDate = useCallback<NonNullable<RangePickerProps['disabledDate']>>(
@@ -45,6 +58,7 @@ const DateRangeContent = memo(() => {
       const [from, to] = range;
       const result = await memoryExtractionService.requestFromChatTopics({
         fromDate: from ?? undefined,
+        preferredLanguage,
         toDate: to ?? undefined,
       });
 
@@ -73,6 +87,22 @@ const DateRangeContent = memo(() => {
             setRange([values?.[0]?.toDate() ?? null, values?.[1]?.toDate() ?? null])
           }
         />
+        <Flexbox gap={8}>
+          <Text type={'secondary'}>{t('analysis.modal.language.label')}</Text>
+          <Select
+            allowClear
+            placeholder={t('analysis.modal.language.placeholder')}
+            value={preferredLanguage}
+            options={[
+              { label: t('analysis.modal.language.auto'), value: 'auto' },
+              ...localeOptions,
+            ]}
+            onChange={(value) => setPreferredLanguage(value ?? undefined)}
+          />
+          <Text fontSize={12} type={'secondary'}>
+            {t('analysis.modal.language.desc')}
+          </Text>
+        </Flexbox>
         <Text fontSize={12} type={'secondary'}>
           {footerNote}
         </Text>

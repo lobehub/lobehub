@@ -13,6 +13,11 @@ export default {
   'analysis.modal.cancel': 'Cancel',
   'analysis.modal.helper':
     "By default Lobe AI will analyze all unprocessed conversations. It's optional to select a date range to analyze.",
+  'analysis.modal.language.auto': 'Auto',
+  'analysis.modal.language.desc':
+    'This choice only applies to the analysis request you are about to start.',
+  'analysis.modal.language.label': 'Memory language',
+  'analysis.modal.language.placeholder': 'Select memory language',
   'analysis.modal.rangePlaceholder': 'No range selected; all conversations will be analyzed.',
   'analysis.modal.rangeSelected': 'Analyzing conversations from {{start}} to {{end}}',
   'analysis.modal.submit': 'Request memory analysis',

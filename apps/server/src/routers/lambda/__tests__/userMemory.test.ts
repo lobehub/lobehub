@@ -159,6 +159,35 @@ describe('userMemoryRouter.requestMemoryFromChatTopic', () => {
     });
   });
 
+  it('stores preferred language in metadata and workflow payload', async () => {
+    mockFindActiveByType.mockResolvedValue(undefined);
+    mockCreate.mockResolvedValue('new-task');
+    mockCountTopicsForMemoryExtractor.mockResolvedValue(2);
+
+    const caller = createCaller();
+    const result = await caller.requestMemoryFromChatTopic({
+      preferredLanguage: 'zh-CN',
+    });
+
+    expect(mockCreate).toHaveBeenCalledWith({
+      metadata: {
+        preferredLanguage: 'zh-CN',
+        progress: { completedTopics: 0, totalTopics: 2 },
+        range: { from: undefined, to: undefined },
+        source: 'chat_topic',
+      },
+      status: AsyncTaskStatus.Pending,
+      type: AsyncTaskType.UserMemoryExtractionWithChatTopic,
+    });
+    expect(mockTriggerProcessUsers).toHaveBeenCalledWith(
+      expect.objectContaining({
+        preferredLanguage: 'zh-CN',
+      }),
+      { extraHeaders: { 'x-test': 'ok' } },
+    );
+    expect(result.metadata.preferredLanguage).toBe('zh-CN');
+  });
+
   it('returns success immediately when no topics', async () => {
     mockFindActiveByType.mockResolvedValue(undefined);
     mockCountTopicsForMemoryExtractor.mockResolvedValue(0);
@@ -188,6 +217,19 @@ describe('userMemoryRouter.requestMemoryFromChatTopic', () => {
         toDate: new Date('2024-01-01'),
       }),
     ).rejects.toBeInstanceOf(TRPCError);
+  });
+
+  it('rejects invalid preferred language values', async () => {
+    const caller = createCaller();
+
+    await expect(
+      caller.requestMemoryFromChatTopic({
+        preferredLanguage: '../evil',
+      }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: 'Invalid preferred memory language',
+    });
   });
 });
 
