@@ -109,6 +109,12 @@ export interface ChatTopicMetadata {
   boundDeviceId?: string;
   cronJobId?: string;
   /**
+   * Topic-level device override. When set, wins over platform-level overrides
+   * and the agent's `agencyConfig`. Allows each topic to pin a specific
+   * execution target and/or device.
+   */
+  deviceOverride?: { executionTarget?: string; boundDeviceId?: string };
+  /**
    * Scoped pointer to the currently active assistant message for a running
    * heterogeneous agent operation. Includes `operationId` so cold-start
    * replicas only use the value when it belongs to the current operation —

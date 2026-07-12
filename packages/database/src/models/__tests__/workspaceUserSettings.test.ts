@@ -39,7 +39,7 @@ describe('WorkspaceUserSettingsModel', () => {
     const model = new WorkspaceUserSettingsModel(serverDB, userA, workspaceId);
     await model.updatePreference({
       agentDeviceOverrides: {
-        agentX: { boundDeviceId: 'device-1', executionTarget: 'device' },
+        agentX: { '*': { boundDeviceId: 'device-1', executionTarget: 'device' } },
       },
     });
 
@@ -47,7 +47,7 @@ describe('WorkspaceUserSettingsModel', () => {
     expect(row).toBeDefined();
     expect(row?.preference).toEqual({
       agentDeviceOverrides: {
-        agentX: { boundDeviceId: 'device-1', executionTarget: 'device' },
+        agentX: { '*': { boundDeviceId: 'device-1', executionTarget: 'device' } },
       },
     });
   });
@@ -55,41 +55,40 @@ describe('WorkspaceUserSettingsModel', () => {
   it('merges subsequent patches into the same row instead of replacing (UPSERT update branch)', async () => {
     const model = new WorkspaceUserSettingsModel(serverDB, userA, workspaceId);
     await model.updatePreference({
-      agentDeviceOverrides: { agentX: { executionTarget: 'sandbox' } },
+      agentDeviceOverrides: { agentX: { '*': { executionTarget: 'sandbox' } } },
     });
-    // Patch adds a second agent — the first agent's override must survive.
     await model.updatePreference({
       agentDeviceOverrides: {
-        agentX: { executionTarget: 'sandbox' },
-        agentY: { boundDeviceId: 'device-Y', executionTarget: 'device' },
+        agentX: { '*': { executionTarget: 'sandbox' } },
+        agentY: { '*': { boundDeviceId: 'device-Y', executionTarget: 'device' } },
       },
     });
 
     const preference = await model.getPreference();
     expect(preference.agentDeviceOverrides).toEqual({
-      agentX: { executionTarget: 'sandbox' },
-      agentY: { boundDeviceId: 'device-Y', executionTarget: 'device' },
+      agentX: { '*': { executionTarget: 'sandbox' } },
+      agentY: { '*': { boundDeviceId: 'device-Y', executionTarget: 'device' } },
     });
   });
 
   it('deep-merges agentDeviceOverrides so a single-agent patch never drops other agents', async () => {
     const model = new WorkspaceUserSettingsModel(serverDB, userA, workspaceId);
     await model.updatePreference({
-      agentDeviceOverrides: { agentX: { executionTarget: 'sandbox' } },
+      agentDeviceOverrides: { agentX: { '*': { executionTarget: 'sandbox' } } },
     });
 
     // A client with a stale/empty local copy patches ONLY agentY — agentX's
     // saved choice must survive the write.
     await model.updatePreference({
       agentDeviceOverrides: {
-        agentY: { boundDeviceId: 'device-Y', executionTarget: 'device' },
+        agentY: { '*': { boundDeviceId: 'device-Y', executionTarget: 'device' } },
       },
     });
 
     const preference = await model.getPreference();
     expect(preference.agentDeviceOverrides).toEqual({
-      agentX: { executionTarget: 'sandbox' },
-      agentY: { boundDeviceId: 'device-Y', executionTarget: 'device' },
+      agentX: { '*': { executionTarget: 'sandbox' } },
+      agentY: { '*': { boundDeviceId: 'device-Y', executionTarget: 'device' } },
     });
   });
 
@@ -98,21 +97,25 @@ describe('WorkspaceUserSettingsModel', () => {
     const modelB = new WorkspaceUserSettingsModel(serverDB, userB, workspaceId);
 
     await modelA.updatePreference({
-      agentDeviceOverrides: { shared: { boundDeviceId: 'A-device', executionTarget: 'device' } },
+      agentDeviceOverrides: {
+        shared: { '*': { boundDeviceId: 'A-device', executionTarget: 'device' } },
+      },
     });
     await modelB.updatePreference({
-      agentDeviceOverrides: { shared: { boundDeviceId: 'B-device', executionTarget: 'device' } },
+      agentDeviceOverrides: {
+        shared: { '*': { boundDeviceId: 'B-device', executionTarget: 'device' } },
+      },
     });
 
     const [prefA, prefB] = await Promise.all([modelA.getPreference(), modelB.getPreference()]);
-    expect(prefA.agentDeviceOverrides?.shared?.boundDeviceId).toBe('A-device');
-    expect(prefB.agentDeviceOverrides?.shared?.boundDeviceId).toBe('B-device');
+    expect(prefA.agentDeviceOverrides?.shared?.['*']?.boundDeviceId).toBe('A-device');
+    expect(prefB.agentDeviceOverrides?.shared?.['*']?.boundDeviceId).toBe('B-device');
   });
 
   it('cascades on workspace delete — FK removes every row for that workspace', async () => {
     const model = new WorkspaceUserSettingsModel(serverDB, userA, workspaceId);
     await model.updatePreference({
-      agentDeviceOverrides: { a: { executionTarget: 'sandbox' } },
+      agentDeviceOverrides: { a: { '*': { executionTarget: 'sandbox' } } },
     });
     expect(await model.get()).toBeDefined();
 
@@ -123,7 +126,7 @@ describe('WorkspaceUserSettingsModel', () => {
   it('cascades on user delete — FK removes every row for that user', async () => {
     const model = new WorkspaceUserSettingsModel(serverDB, userA, workspaceId);
     await model.updatePreference({
-      agentDeviceOverrides: { a: { executionTarget: 'sandbox' } },
+      agentDeviceOverrides: { a: { '*': { executionTarget: 'sandbox' } } },
     });
     expect(await model.get()).toBeDefined();
 

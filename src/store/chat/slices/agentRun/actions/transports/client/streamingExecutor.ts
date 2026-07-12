@@ -56,6 +56,7 @@ import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/lobe-pag
 import { type StoreSetter } from '@/store/types';
 import { toolInterventionSelectors } from '@/store/user/selectors';
 import { getUserStoreState } from '@/store/user/store';
+import { getSourceDeviceId } from '@/utils/sourceDevice';
 
 import { buildRunLifecycle } from '../../lifecycle/buildRunLifecycle';
 import type { RunParkedReason, RunScope } from '../../lifecycle/types';
@@ -159,6 +160,7 @@ export class StreamingExecutorActionImpl {
 
     // Read topic-level model/provider override from active topic metadata
     let topicModelOverride: { model: string; provider: string } | undefined;
+    let topicDeviceOverride: { executionTarget?: string; boundDeviceId?: string } | undefined;
     if (topicId) {
       const topic = topicSelectors.getTopicById(topicId)(this.#get());
       if (topic?.metadata?.model) {
@@ -167,7 +169,17 @@ export class StreamingExecutorActionImpl {
           provider: topic.metadata.provider || '',
         };
       }
+      if (topic?.metadata?.deviceOverride) {
+        topicDeviceOverride = topic.metadata.deviceOverride;
+      }
     }
+
+    // Determine source deviceId for per-source-device override resolution
+    // On desktop this is the local machine's gateway deviceId; on web/mobile
+    // it's a localStorage-based anonymous device ID unique per machine.
+    const sourceDeviceId: string | undefined = isDesktop
+      ? getElectronStoreState()?.gatewayDeviceInfo?.deviceId
+      : getSourceDeviceId();
 
     // Resolve agent config with builtin agent runtime config merged
     // This ensures runtime plugins (e.g., 'lobe-agent-builder' for Agent Builder) are included
@@ -180,6 +192,8 @@ export class StreamingExecutorActionImpl {
       isSubAgent, // Filter out lobe-agent in sub-agent context
       scope, // Pass scope from operation context
       topicModelOverride, // Pass topic-level model override
+      topicDeviceOverride, // Pass topic-level device override
+      sourceDeviceId, // Pass current source deviceId for per-device override
     });
 
     const { agentConfig: agentConfigData, plugins: pluginIds } = agentConfig;

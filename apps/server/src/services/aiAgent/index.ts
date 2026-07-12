@@ -64,6 +64,7 @@ import {
   ReasoningGraphSchema,
   RequestTrigger,
   resolveAgencyConfig,
+  resolveOverrideBySource,
   ThreadStatus,
   ThreadType,
 } from '@lobechat/types';
@@ -1140,8 +1141,11 @@ export class AiAgentService {
           this.workspaceId,
         );
         const preference = await workspaceUserSettings.getPreference();
-        const override = preference.agentDeviceOverrides?.[resolvedAgentId];
-        agentConfig.agencyConfig = resolveAgencyConfig(agentConfig.agencyConfig, override);
+        const bySource = preference.agentDeviceOverrides?.[resolvedAgentId];
+        // Server doesn't know the sourceDeviceId (which machine the request came from),
+        // so use '*' as fallback — the user's last-set generic override.
+        const override = resolveOverrideBySource(bySource, '*');
+        agentConfig.agencyConfig = resolveAgencyConfig(agentConfig.agencyConfig, override ?? null);
       } catch (error) {
         // Losing the override is non-fatal: dispatch falls back to the shared
         // agencyConfig, which is exactly the pre-LOBE-11689 behaviour.
