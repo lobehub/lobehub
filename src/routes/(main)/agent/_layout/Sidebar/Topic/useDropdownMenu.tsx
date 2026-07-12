@@ -50,7 +50,12 @@ export const useTopicActionsDropdownMenu = (
       const pullRequest = topic.metadata?.workingDirectoryConfig?.git?.github?.pullRequest;
       const isMerged = !!pullRequest?.mergedAt || pullRequest?.state?.toLowerCase() === 'merged';
 
-      return isMerged && topic.status !== 'completed' && topic.status !== 'archived';
+      return (
+        isMerged &&
+        topic.status !== 'completed' &&
+        topic.status !== 'archived' &&
+        topic.status !== 'unread'
+      );
     });
 
     if (mergedTopics.length === 0) {

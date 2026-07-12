@@ -135,6 +135,13 @@ describe('group useTopicActionsDropdownMenu', () => {
         },
         status: 'completed',
       },
+      {
+        id: 'unread',
+        metadata: {
+          workingDirectoryConfig: { git: { github: { pullRequest: { state: 'MERGED' } } } },
+        },
+        status: 'unread',
+      },
     ];
 
     const { result } = renderHook(() => useTopicActionsDropdownMenu());
