@@ -72,6 +72,11 @@ const styles = createStaticStyles(({ css }) => ({
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 1;
   `,
+  /* Reserve space for the absolutely positioned checkbox (18px + gap)
+     so long titles don't run underneath it. */
+  titleRow: css`
+    padding-inline-end: 28px;
+  `,
 }));
 
 interface TopicCardProps {
@@ -138,7 +143,7 @@ const TopicCard = memo<TopicCardProps>(({ topic, agentId }) => {
         />
       </div>
 
-      <Flexbox horizontal align={'center'} gap={6}>
+      <Flexbox horizontal align={'center'} className={styles.titleRow} gap={6}>
         {topic.favorite && (
           <Icon icon={Star} size={13} style={{ color: cssVar.colorWarning, flexShrink: 0 }} />
         )}

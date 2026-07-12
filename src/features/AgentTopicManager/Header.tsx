@@ -22,17 +22,21 @@ const Header = memo<HeaderProps>(({ agentId }) => {
   return (
     <NavHeader
       left={<AgentBreadcrumb agentId={agentId} title={t('management.title')} />}
-      styles={{ center: { maxWidth: 560, paddingInline: 16 }, left: { paddingInlineStart: 24 } }}
-    >
-      <Input
-        placeholder={t('management.searchPlaceholder')}
-        prefix={<Icon icon={Search} size={'small'} style={{ marginInlineEnd: 4 }} />}
-        size={'small'}
-        value={search}
-        variant={'filled'}
-        onChange={(e) => setSearch(e.target.value)}
-      />
-    </NavHeader>
+      right={
+        <Input
+          placeholder={t('searchPlaceholder')}
+          prefix={<Icon icon={Search} size={'small'} style={{ marginInlineEnd: 4 }} />}
+          size={'small'}
+          value={search}
+          variant={'filled'}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+      }
+      styles={{
+        left: { paddingInlineStart: 16 },
+        right: { flex: 1, maxWidth: 400, paddingInline: 16 },
+      }}
+    />
   );
 });
 
