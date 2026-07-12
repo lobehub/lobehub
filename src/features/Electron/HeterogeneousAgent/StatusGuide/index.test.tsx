@@ -41,6 +41,22 @@ vi.mock('@lobehub/ui', () => ({
   Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
 }));
 
+vi.mock('@lobehub/ui/base-ui', () => ({
+  Button: ({
+    children,
+    onClick,
+    type,
+  }: {
+    children?: ReactNode;
+    onClick?: () => void;
+    type?: string;
+  }) => (
+    <button data-variant={type} type="button" onClick={onClick}>
+      {children}
+    </button>
+  ),
+}));
+
 vi.mock('antd-style', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>;
 
