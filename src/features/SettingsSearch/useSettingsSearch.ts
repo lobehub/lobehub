@@ -1,6 +1,6 @@
 import { isDesktop } from '@lobechat/const';
 import { DEFAULT_MODEL_PROVIDER_LIST } from 'model-bank/modelProviders';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useCategory } from '@/routes/(main)/settings/hooks/useCategory';
@@ -16,6 +16,8 @@ import {
   type SettingsSearchContext,
   TAB_SEARCH_KEYWORDS_KEYS,
 } from './items';
+import { createSettingsSearchFuse, MAX_SEARCH_RESULTS } from './matcher';
+import { containsHan, loadPinyinTexts, type PinyinTexts } from './pinyin';
 
 export interface SettingsSearchResult {
   /** Present on item-level results; used as the URL hash for scroll targeting */
@@ -32,6 +34,12 @@ export interface SettingsSearchResult {
 interface IndexedEntry extends SettingsSearchResult {
   /** Lowercased searchable texts (label / desc / keywords / …) */
   haystack: string[];
+  /**
+   * Label/keyword texts that get pinyin variants appended once the dict loads.
+   * Descriptions are excluded — their pinyin strings are long and only add
+   * fuzzy-match noise.
+   */
+  pinyinBase: string[];
 }
 
 export const getTabUrl = (tab: SettingsTabs) =>
@@ -46,9 +54,10 @@ const splitKeywords = (text: string) =>
 
 /**
  * Search visible settings by the current-locale label text plus registered
- * keywords. Tab-level entries derive from `useCategory` (inheriting its
- * feature-flag / platform gating and `href` overrides); item-level entries come
- * from `SETTINGS_SEARCH_ITEMS` and are dropped when their tab is not visible.
+ * keywords, fuzzy-matched via Fuse and pinyin-augmented for Han labels. Tab
+ * entries derive from `useCategory` (inheriting its feature-flag / platform
+ * gating and `href` overrides); item-level entries come from
+ * `SETTINGS_SEARCH_ITEMS` and are dropped when their tab is not visible.
  */
 export const useSettingsSearch = (query: string): SettingsSearchResult[] => {
   const { t } = useTranslation(['setting', 'labs', 'electron', 'subscription', 'spend']);
@@ -56,10 +65,11 @@ export const useSettingsSearch = (query: string): SettingsSearchResult[] => {
   const { enableSTT, hideDocs, showAiImage } = useServerConfigStore(featureFlagsSelectors);
   const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
   const enableGatewayMode = useServerConfigStore(serverConfigSelectors.enableGatewayMode);
+  const [pinyinTexts, setPinyinTexts] = useState<PinyinTexts | null>(null);
 
   // The translated index only depends on locale / visibility inputs — build it
   // once, not on every keystroke.
-  const index = useMemo(() => {
+  const baseIndex = useMemo(() => {
     const ctx: SettingsSearchContext = {
       enableBusinessFeatures: !!enableBusinessFeatures,
       enableGatewayMode: !!enableGatewayMode,
@@ -91,16 +101,18 @@ export const useSettingsSearch = (query: string): SettingsSearchResult[] => {
           });
 
         const keywordsKey = TAB_SEARCH_KEYWORDS_KEYS[item.key];
+        const texts = [
+          item.label.toLowerCase(),
+          ...(keywordsKey ? splitKeywords(t(keywordsKey as never) as string) : []),
+        ];
 
         entries.push({
           breadcrumb: group.title,
-          haystack: [
-            item.label.toLowerCase(),
-            ...(keywordsKey ? splitKeywords(t(keywordsKey as never) as string) : []),
-          ],
+          haystack: texts,
           icon: item.icon,
           key: `tab-${group.key}-${item.key}`,
           label: item.label,
+          pinyinBase: texts,
           tab: item.key,
           url,
         });
@@ -115,16 +127,16 @@ export const useSettingsSearch = (query: string): SettingsSearchResult[] => {
       const ns = def.ns ?? 'setting';
       const label = t(def.labelKey as never, { ns }) as string;
       const desc = def.descKey ? (t(def.descKey as never, { ns }) as string) : undefined;
+      const keywordTexts = (def.keywords ?? []).map((text) => text.toLowerCase());
 
       entries.push({
         anchor: def.anchor,
         breadcrumb: `${tabInfo.groupTitle} › ${tabInfo.label}`,
-        haystack: [label, desc, ...(def.keywords ?? [])]
-          .filter(Boolean)
-          .map((text) => text!.toLowerCase()),
+        haystack: [label.toLowerCase(), ...(desc ? [desc.toLowerCase()] : []), ...keywordTexts],
         icon: tabInfo.icon,
         key: `item-${def.anchor}`,
         label,
+        pinyinBase: [label.toLowerCase(), ...keywordTexts],
         tab: def.tab,
         url: `${tabInfo.url}#${def.anchor}`,
       });
@@ -142,6 +154,7 @@ export const useSettingsSearch = (query: string): SettingsSearchResult[] => {
           icon: providerTab.icon,
           key: `provider-${provider.id}`,
           label: provider.name,
+          pinyinBase: [],
           tab: SettingsTabs.Provider,
           url: `/settings/provider/${provider.id}`,
         });
@@ -158,12 +171,43 @@ export const useSettingsSearch = (query: string): SettingsSearchResult[] => {
     showAiImage,
   ]);
 
+  // Load the pinyin dict only when the index actually contains Han text, so
+  // non-CJK locales never download it.
+  const needsPinyin = useMemo(
+    () => baseIndex.some((entry) => entry.pinyinBase.some((text) => containsHan(text))),
+    [baseIndex],
+  );
+
+  useEffect(() => {
+    if (!needsPinyin || pinyinTexts) return;
+
+    let active = true;
+    loadPinyinTexts().then((fn) => {
+      if (active && fn) setPinyinTexts(() => fn);
+    });
+    return () => {
+      active = false;
+    };
+  }, [needsPinyin, pinyinTexts]);
+
+  const fuse = useMemo(() => {
+    const index = pinyinTexts
+      ? baseIndex.map((entry) =>
+          entry.pinyinBase.some((text) => containsHan(text))
+            ? { ...entry, haystack: [...entry.haystack, ...entry.pinyinBase.flatMap(pinyinTexts)] }
+            : entry,
+        )
+      : baseIndex;
+
+    return createSettingsSearchFuse(index);
+  }, [baseIndex, pinyinTexts]);
+
   return useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = query.trim();
     if (!q) return [];
 
-    return index
-      .filter((entry) => entry.haystack.some((text) => text.includes(q)))
-      .map(({ haystack: _, ...result }) => result);
-  }, [query, index]);
+    return fuse
+      .search(q, { limit: MAX_SEARCH_RESULTS })
+      .map(({ item: { haystack: _h, pinyinBase: _p, ...result } }) => result);
+  }, [query, fuse]);
 };
