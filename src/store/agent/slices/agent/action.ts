@@ -47,6 +47,13 @@ type AgentMetaUpdate = Partial<
 >;
 type AgencyConfigPatch = PartialDeep<LobeAgentAgencyConfig>;
 
+interface AgentConfigUpdateOptions {
+  /** Propagate the persistence failure so a scoped editor can render failed + Retry. */
+  rethrow?: boolean;
+  /** Keep generic error messaging for ordinary config controls. @default true */
+  showErrorMessage?: boolean;
+}
+
 const preserveWorkingDirDeleteMarkers = (
   merged: LobeAgentAgencyConfig,
   patch: AgencyConfigPatch,
@@ -271,6 +278,7 @@ export class AgentSliceActionImpl {
   updateAgentConfigById = async (
     agentId: string,
     config: PartialDeep<LobeAgentConfig>,
+    options?: AgentConfigUpdateOptions,
   ): Promise<void> => {
     if (!agentId) return;
 
@@ -280,7 +288,7 @@ export class AgentSliceActionImpl {
     );
 
     try {
-      await this.#get().optimisticUpdateAgentConfig(agentId, config, controller.signal);
+      await this.#get().optimisticUpdateAgentConfig(agentId, config, controller.signal, options);
     } finally {
       if (this.#updateAgentConfigControllers.get(agentId) === controller) {
         this.#updateAgentConfigControllers.delete(agentId);
@@ -555,6 +563,7 @@ export class AgentSliceActionImpl {
     id: string,
     data: PartialDeep<LobeAgentConfig>,
     signal?: AbortSignal,
+    options?: AgentConfigUpdateOptions,
   ): Promise<void> => {
     const { internal_dispatchAgentMap, updateSaveStatus } = this.#get();
     const mergedData = this.#mergeLatestAgencyConfigPatch(id, data);
@@ -585,7 +594,9 @@ export class AgentSliceActionImpl {
         // A swallowed failure reads as saved and surfaces later as mysterious
         // data loss (the next refetch reverts the optimistic value) — tell the
         // user right away.
-        message.error(t('saveAgentConfigFail', { ns: 'common' }));
+        if (options?.showErrorMessage !== false) {
+          message.error(t('saveAgentConfigFail', { ns: 'common' }));
+        }
         // Roll back only agencyConfig patches: those are discrete picks the
         // server actively validates (e.g. a workspace agent binding a
         // non-workspace device is rejected), so keeping the optimistic value
@@ -594,6 +605,7 @@ export class AgentSliceActionImpl {
         // form edits on a transient failure (see #16337).
         if (data.agencyConfig) await this.#get().internal_refreshAgentConfig(id);
       }
+      if (options?.rethrow) throw error;
     }
   };
 

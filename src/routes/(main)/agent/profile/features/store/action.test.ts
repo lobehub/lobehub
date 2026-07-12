@@ -21,6 +21,7 @@ describe('agent profile store actions', () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     vi.useRealTimers();
   });
 
@@ -45,6 +46,8 @@ describe('agent profile store actions', () => {
       editorData: { root: { children: ['agent-b'] } },
       systemRole: 'agent-b draft',
     });
+    expect(profileStore.getState().promptSaveStatus).toBe('saved');
+    expect(profileStore.getState().promptLastUpdatedTime).toBeInstanceOf(Date);
   });
 
   it('serializes saves emitted by one editor store', async () => {
@@ -69,6 +72,11 @@ describe('agent profile store actions', () => {
     expect(updateConfigById).toHaveBeenLastCalledWith('agent-a', expect.any(Object));
 
     resolveAgentA?.();
+    await Promise.resolve();
+
+    // Agent A's older completion must not mark the newer Agent B draft as saved.
+    expect(profileStore.getState().promptSaveStatus).toBe('saving');
+
     await profileStore.getState().flushSave();
 
     expect(updateConfigById).toHaveBeenCalledTimes(2);
@@ -95,5 +103,34 @@ describe('agent profile store actions', () => {
       editorData: { root: { children: ['agent-a delayed'] } },
       systemRole: 'agent-a delayed draft',
     });
+  });
+
+  it('keeps a failed Prompt save visible and retries the same draft', async () => {
+    const profileStore = createStore({ editor });
+    const updateConfigById = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('save failed'))
+      .mockResolvedValueOnce(undefined);
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    profileStore.getState().handleContentChange('agent-a', updateConfigById);
+
+    expect(profileStore.getState().promptSaveStatus).toBe('saving');
+
+    await vi.advanceTimersByTimeAsync(EDITOR_DEBOUNCE_TIME);
+    await profileStore.getState().flushSave();
+
+    expect(profileStore.getState().promptSaveStatus).toBe('failed');
+    expect(profileStore.getState().promptLastUpdatedTime).toBeNull();
+
+    await profileStore.getState().retryPromptSave();
+
+    expect(updateConfigById).toHaveBeenCalledTimes(2);
+    expect(updateConfigById).toHaveBeenLastCalledWith('agent-a', {
+      editorData: { root: { children: ['agent-a'] } },
+      systemRole: 'agent-a draft',
+    });
+    expect(profileStore.getState().promptSaveStatus).toBe('saved');
+    expect(profileStore.getState().promptLastUpdatedTime).toBeInstanceOf(Date);
   });
 });
