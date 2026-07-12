@@ -199,7 +199,7 @@ describe('buildConnectorPayloadFromLegacy', () => {
       if (!r.ok) throw new Error('expected ok');
       expect(r.payload.credentials).toEqual({
         headers: {
-          Authorization: 'Bearer sk-xyz',
+          'Authorization': 'Bearer sk-xyz',
           'X-Tenant': 'acme',
           'X-Trace': 'on',
         },
@@ -387,6 +387,7 @@ describe('executeLegacyMigrationSave', () => {
     }) as LobeToolCustomPlugin;
 
   let createConnector: ReturnType<typeof vi.fn>;
+  let deleteConnector: ReturnType<typeof vi.fn>;
   let syncConnectorTools: ReturnType<typeof vi.fn>;
   let uninstallCustomPlugin: ReturnType<typeof vi.fn>;
   let calls: string[];
@@ -397,6 +398,9 @@ describe('executeLegacyMigrationSave', () => {
     createConnector = vi.fn(async () => {
       calls.push('createConnector');
       return 'new-conn-id';
+    });
+    deleteConnector = vi.fn(async () => {
+      calls.push('deleteConnector');
     });
     syncConnectorTools = vi.fn(async () => {
       calls.push('syncConnectorTools');
@@ -414,6 +418,7 @@ describe('executeLegacyMigrationSave', () => {
   it('runs create → sync → uninstall in exact order on the happy path', async () => {
     const result = await executeLegacyMigrationSave(legacy(), legacy(), {
       createConnector,
+      deleteConnector,
       syncConnectorTools,
       uninstallCustomPlugin,
     });
@@ -432,6 +437,7 @@ describe('executeLegacyMigrationSave', () => {
 
     await executeLegacyMigrationSave(legacy('agent-x'), value, {
       createConnector,
+      deleteConnector,
       syncConnectorTools,
       uninstallCustomPlugin,
     });
@@ -452,6 +458,7 @@ describe('executeLegacyMigrationSave', () => {
     // identifier regardless of what the form ended up with.
     await executeLegacyMigrationSave(legacy('legacy-id'), legacy('renamed-in-form'), {
       createConnector,
+      deleteConnector,
       syncConnectorTools,
       uninstallCustomPlugin,
     });
@@ -470,6 +477,7 @@ describe('executeLegacyMigrationSave', () => {
     } as LobeToolCustomPlugin;
     const result = await executeLegacyMigrationSave(broken, broken, {
       createConnector,
+      deleteConnector,
       syncConnectorTools,
       uninstallCustomPlugin,
     });
@@ -486,27 +494,54 @@ describe('executeLegacyMigrationSave', () => {
     await expect(
       executeLegacyMigrationSave(legacy(), legacy(), {
         createConnector,
+        deleteConnector,
         syncConnectorTools,
         uninstallCustomPlugin,
       }),
     ).rejects.toThrow('boom: bad network');
     expect(syncConnectorTools).not.toHaveBeenCalled();
     expect(uninstallCustomPlugin).not.toHaveBeenCalled();
+    // Nothing was created, so there is nothing to roll back.
+    expect(deleteConnector).not.toHaveBeenCalled();
   });
 
-  it('rethrows syncConnectorTools failure and leaves legacy plugin in place', async () => {
+  it('rolls back the created connector when tool sync fails, leaving legacy plugin in place', async () => {
     // Most likely failure in practice — MCP server unreachable at sync time.
-    // The user keeps a working legacy plugin and can retry the save later.
+    // The half-created connector must be deleted so it does not linger as a
+    // tool-less duplicate; the legacy plugin row is left untouched so the user
+    // can retry the save once the endpoint is healthy.
     syncConnectorTools.mockRejectedValueOnce(new Error('mcp tools/list timeout'));
     await expect(
       executeLegacyMigrationSave(legacy(), legacy(), {
         createConnector,
+        deleteConnector,
         syncConnectorTools,
         uninstallCustomPlugin,
       }),
     ).rejects.toThrow('mcp tools/list timeout');
-    expect(createConnector).toHaveBeenCalledTimes(1);
+    // `syncConnectorTools` is invoked but its mock rejects without recording a
+    // call, so `calls` shows create → rollback delete.
     expect(syncConnectorTools).toHaveBeenCalledTimes(1);
+    expect(calls).toEqual(['createConnector', 'deleteConnector']);
+    expect(deleteConnector).toHaveBeenCalledWith('new-conn-id');
+    expect(uninstallCustomPlugin).not.toHaveBeenCalled();
+  });
+
+  it('still rethrows the sync error even if the rollback delete also fails', async () => {
+    syncConnectorTools.mockRejectedValueOnce(new Error('mcp tools/list timeout'));
+    deleteConnector.mockRejectedValueOnce(new Error('rollback network error'));
+    await expect(
+      executeLegacyMigrationSave(legacy(), legacy(), {
+        createConnector,
+        deleteConnector,
+        syncConnectorTools,
+        uninstallCustomPlugin,
+      }),
+    ).rejects.toThrow('mcp tools/list timeout');
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      '[connector-migration] rollback after failed sync failed',
+      expect.any(Error),
+    );
     expect(uninstallCustomPlugin).not.toHaveBeenCalled();
   });
 
@@ -514,34 +549,40 @@ describe('executeLegacyMigrationSave', () => {
     uninstallCustomPlugin.mockRejectedValueOnce(new Error('legacy delete failed'));
     const result = await executeLegacyMigrationSave(legacy(), legacy(), {
       createConnector,
+      deleteConnector,
       syncConnectorTools,
       uninstallCustomPlugin,
     });
     // Migration is still considered SUCCESSFUL — the runtime dedupes by
     // identifier and the connector wins, so the leaked legacy row is harmless.
+    // Sync succeeded, so the connector is NOT rolled back.
     expect(result).toEqual({ connectorId: 'new-conn-id', ok: true });
+    expect(deleteConnector).not.toHaveBeenCalled();
     expect(consoleErrorSpy).toHaveBeenCalledWith(
       '[connector-migration] uninstall legacy plugin failed',
       expect.any(Error),
     );
   });
 
-  it('idempotent retry: re-running after a failed sync repeats all steps cleanly', async () => {
-    // First attempt: sync fails.
+  it('idempotent retry: re-running after a rolled-back sync repeats all steps cleanly', async () => {
+    // First attempt: sync fails → the created connector is rolled back.
     syncConnectorTools.mockRejectedValueOnce(new Error('first attempt fails'));
     await expect(
       executeLegacyMigrationSave(legacy(), legacy(), {
         createConnector,
+        deleteConnector,
         syncConnectorTools,
         uninstallCustomPlugin,
       }),
     ).rejects.toThrow('first attempt fails');
+    expect(calls).toEqual(['createConnector', 'deleteConnector']);
 
     // Reset call log; retry. Server-side `connector.create` is idempotent on
     // (user_id, identifier), so the second create is an UPDATE.
     calls.length = 0;
     const result = await executeLegacyMigrationSave(legacy(), legacy(), {
       createConnector,
+      deleteConnector,
       syncConnectorTools,
       uninstallCustomPlugin,
     });

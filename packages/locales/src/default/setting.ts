@@ -2759,6 +2759,9 @@ When I am ___, I need ___
   'tools.add': 'Add Skill',
   'tools.addSkillOrConnector': 'Add Skills / Connectors',
   'tools.noConfigurablePermissions': 'This skill does not expose configurable tool permissions.',
+  'tools.legacyConnector.configure': 'Configure',
+  'tools.legacyConnector.upgradeDesc':
+    'This connector still uses the legacy plugin format. Configure it to finish upgrading, then manage its tool permissions here.',
   'tools.builtins.groupName': 'Built-ins',
   'tools.builtins.install': 'Install',
   'tools.builtins.installed': 'Installed',

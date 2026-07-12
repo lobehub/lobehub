@@ -5,16 +5,17 @@ import { Avatar, Markdown, Skeleton } from '@lobehub/ui';
 import { Button, confirmModal } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
-import { Plus, SquareArrowOutUpRight, Trash2, Unplug } from 'lucide-react';
+import { Plus, SquareArrowOutUpRight, Trash2, Unplug, Wrench } from 'lucide-react';
 import { lazy, memo, Suspense, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { ConnectorDetail } from '@/features/Connectors';
+import { ConnectorDetail, CustomConnectorModal } from '@/features/Connectors';
 import { useSkillConnect } from '@/features/SkillStore/SkillList/LobeHub/useSkillConnect';
 import { usePermission } from '@/hooks/usePermission';
 import { useToolStore } from '@/store/tool';
 import { builtinToolSelectors, lobehubSkillStoreSelectors } from '@/store/tool/selectors';
 import { connectorSelectors } from '@/store/tool/slices/connector';
+import { pluginSelectors } from '@/store/tool/slices/plugin/selectors';
 
 import { getLocalizedBuiltinSkillDetail, getNoPermissionsTitle } from './localization';
 
@@ -149,6 +150,7 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
   const { t: ts } = useTranslation('setting');
   const [syncing, setSyncing] = useState(false);
   const [noManifest, setNoManifest] = useState(false);
+  const [migrateOpen, setMigrateOpen] = useState(false);
 
   const { allowed: canCreate } = usePermission('create_content');
   const { allowed: canEdit } = usePermission('edit_own_content');
@@ -161,6 +163,14 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
   const uninstallBuiltinTool = useToolStore((s) => s.uninstallBuiltinTool);
   const deleteAgentSkill = useToolStore((s) => s.deleteAgentSkill);
   const connector = useToolStore(connectorSelectors.connectorByIdentifier(identifier));
+
+  // Legacy `user_installed_plugins` custom MCP that was never migrated to a
+  // connector. Such a row has no `user_connectors` entry, so the panel falls
+  // into the "no configurable permissions" empty state. We offer to upgrade it
+  // in place via the connector migration flow instead of leaving a dead end.
+  const legacyPlugin = useToolStore(pluginSelectors.getCustomPluginById(identifier), isEqual);
+  const canMigrateLegacy =
+    (type === 'mcp-connector' || type === 'plugin') && Boolean(legacyPlugin?.customParams?.mcp);
 
   // For lobehub-connector: get the server's tool list from the store
   const lobehubServer = useToolStore(lobehubSkillStoreSelectors.getServerByIdentifier(identifier));
@@ -367,9 +377,41 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
           <div className={styles.noPermissionsTitle}>
             {type === 'lobehub-connector' ? lobehubLabel : noPermissionsTitle}
           </div>
-          {renderLobehubConnectorAction()}
+          {canMigrateLegacy ? (
+            <Button
+              disabled={!canCreate || !canEdit}
+              icon={<Wrench size={14} />}
+              size="small"
+              type="primary"
+              onClick={() => {
+                if (!canCreate || !canEdit) return;
+                setMigrateOpen(true);
+              }}
+            >
+              {ts('tools.legacyConnector.configure')}
+            </Button>
+          ) : (
+            renderLobehubConnectorAction()
+          )}
         </div>
-        {ts('tools.noConfigurablePermissions')}
+        {canMigrateLegacy
+          ? ts('tools.legacyConnector.upgradeDesc')
+          : ts('tools.noConfigurablePermissions')}
+        {canMigrateLegacy && legacyPlugin && (
+          <CustomConnectorModal
+            legacyPlugin={legacyPlugin}
+            open={migrateOpen}
+            onClose={() => setMigrateOpen(false)}
+            onEditSuccess={async () => {
+              setMigrateOpen(false);
+              setNoManifest(false);
+              // The migration created a `user_connectors` row keyed by the same
+              // identifier; refresh so this panel resolves it and swaps to the
+              // permission editor.
+              await fetchConnectors();
+            }}
+          />
+        )}
       </div>
     );
   }

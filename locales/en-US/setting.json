@@ -1255,6 +1255,8 @@
   "tools.composio.tools": "tools",
   "tools.composio.verifyAuth": "I have completed authentication",
   "tools.disabled": "The current model does not support function calls and cannot use the skill",
+  "tools.legacyConnector.configure": "Configure",
+  "tools.legacyConnector.upgradeDesc": "This connector still uses the legacy plugin format. Configure it to finish upgrading, then manage its tool permissions here.",
   "tools.lobehubSkill.authorize": "Authorize",
   "tools.lobehubSkill.connect": "Connect",
   "tools.lobehubSkill.connected": "Connected",

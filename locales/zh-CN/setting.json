@@ -1255,6 +1255,8 @@
   "tools.composio.tools": "个工具",
   "tools.composio.verifyAuth": "我已完成认证",
   "tools.disabled": "当前模型不支持函数调用，无法使用技能",
+  "tools.legacyConnector.configure": "配置",
+  "tools.legacyConnector.upgradeDesc": "此连接器仍在使用旧的插件格式。点击「配置」完成升级后，即可在此管理它的工具权限。",
   "tools.lobehubSkill.authorize": "授权",
   "tools.lobehubSkill.connect": "连接",
   "tools.lobehubSkill.connected": "已连接",
