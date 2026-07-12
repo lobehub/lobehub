@@ -16,8 +16,8 @@ const setCollapsed = (byMode: Record<string, string[]>) => {
 };
 
 beforeEach(() => {
-  vi.spyOn(useGlobalStore.getState().statusStorage, 'saveToLocalStorage').mockImplementation(
-    () => {},
+  vi.spyOn(useGlobalStore.getState().statusStorage, 'saveToLocalStorage').mockResolvedValue(
+    undefined,
   );
   setCollapsed({});
 });
