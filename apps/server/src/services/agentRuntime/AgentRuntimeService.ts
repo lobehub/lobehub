@@ -517,14 +517,17 @@ export class AgentRuntimeService {
 
       // Initialize operation state - create state before saving
       const activatableToolIds = new Set(operationToolSet.activatableToolIds ?? []);
-      const activatedStepTools = extractActivatedToolIdsFromMessages(initialMessages)
-        ?.filter((id) => activatableToolIds.has(id))
-        .map((id) => ({
-          activatedAtStep: initialStepCount,
-          id,
-          manifest: operationToolSet.manifestMap[id],
-          source: 'discovery' as const,
-        }));
+      const restoredActivatedToolIds = extractActivatedToolIdsFromMessages(initialMessages)?.filter(
+        (id) => activatableToolIds.has(id),
+      );
+      const activatedStepTools = restoredActivatedToolIds?.length
+        ? restoredActivatedToolIds.map((id) => ({
+            activatedAtStep: initialStepCount,
+            id,
+            manifest: operationToolSet.manifestMap[id],
+            source: 'discovery' as const,
+          }))
+        : undefined;
 
       const initialState = {
         activatedStepTools,

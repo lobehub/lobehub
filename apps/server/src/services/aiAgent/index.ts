@@ -3305,7 +3305,7 @@ export class AiAgentService {
     // gates. manifestMap is intentionally broader for discovery and must not
     // by itself authorize a tool in chat/custom mode or without function calls.
     const historicalActivatedToolIds = extractActivatedToolIdsFromMessages(allMessages) ?? [];
-    const activatableToolIds = toolsEngine
+    const activatableToolIds = toolsEngine && historicalActivatedToolIds.length > 0
       ? toolsEngine.generateToolsDetailed({
           context: { isExplicitActivation: true },
           model,
