@@ -4,7 +4,7 @@
  * Intercepts /webapi/chat/[provider] requests and returns mock SSE responses.
  * This allows E2E tests to run without real LLM API calls.
  */
-import type { Page, Route } from 'playwright';
+import type { Page } from 'playwright';
 
 // ============================================
 // Types
@@ -28,6 +28,14 @@ export interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
 }
 
+interface LLMStreamPlan {
+  chunks: string[];
+  responseDelay: number;
+  streamDelay: number;
+}
+
+const LLM_MOCK_BINDING = '__lobehubE2ELLMMock';
+
 // ============================================
 // Default Configuration
 // ============================================
@@ -48,7 +56,7 @@ const defaultConfig: LLMMockConfig = {
  * Build SSE formatted response chunks
  * Follows LobeChat's actual streaming format
  */
-function buildSSEChunks(content: string, chunkSize: number): string[] {
+export function buildSSEChunks(content: string, chunkSize: number): string[] {
   const chunks: string[] = [];
   const id = `msg_mock_${Date.now()}`;
 
@@ -68,7 +76,7 @@ function buildSSEChunks(content: string, chunkSize: number): string[] {
   // Split content into chunks and send as text events
   for (let i = 0; i < content.length; i += chunkSize) {
     const chunk = content.slice(i, i + chunkSize);
-    chunks.push(`id: ${id}\nevent: text\ndata: "${chunk.replaceAll('"', '\\"')}"\n\n`);
+    chunks.push(`id: ${id}\nevent: text\ndata: ${JSON.stringify(chunk)}\n\n`);
   }
 
   // Stop event
@@ -97,8 +105,8 @@ function buildSSEChunks(content: string, chunkSize: number): string[] {
 
 export class LLMMockManager {
   private config: LLMMockConfig;
+  private customResponseFragments: Map<string, string> = new Map();
   private customResponses: Map<string, string> = new Map();
-  private page: Page | null = null;
 
   constructor(config: Partial<LLMMockConfig> = {}) {
     this.config = { ...defaultConfig, ...config };
@@ -109,6 +117,14 @@ export class LLMMockManager {
    */
   setResponse(userMessage: string, response: string): void {
     this.customResponses.set(userMessage.toLowerCase().trim(), response);
+  }
+
+  /**
+   * Set a response for requests whose final user message contains a fragment.
+   * Useful for system-generated prompts that wrap the original user content.
+   */
+  setResponseContaining(userMessageFragment: string, response: string): void {
+    this.customResponseFragments.set(userMessageFragment.toLowerCase().trim(), response);
   }
 
   /**
@@ -132,6 +148,7 @@ export class LLMMockManager {
    */
   clearResponses(): void {
     this.customResponses.clear();
+    this.customResponseFragments.clear();
   }
 
   /**
@@ -146,6 +163,10 @@ export class LLMMockManager {
       if (this.customResponses.has(key)) {
         return this.customResponses.get(key)!;
       }
+
+      for (const [fragment, response] of this.customResponseFragments) {
+        if (key.includes(fragment)) return response;
+      }
     }
 
     return this.config.defaultResponse;
@@ -155,67 +176,132 @@ export class LLMMockManager {
    * Setup LLM mock handlers for a page
    */
   async setup(page: Page): Promise<void> {
-    this.page = page;
-
     if (!this.config.enabled) {
       console.log('   🔇 LLM mocks disabled');
       return;
     }
 
-    // Intercept all LLM chat API requests (openai, anthropic, etc.)
-    await page.route('**/webapi/chat/**', async (route) => {
-      await this.handleChatRequest(route);
+    await page.exposeFunction(LLM_MOCK_BINDING, (requestBody: string) =>
+      this.createStreamPlan(requestBody),
+    );
+
+    // Playwright's route.fulfill buffers the entire body, so it cannot model
+    // token-by-token SSE delivery. Install a browser-side fetch interceptor
+    // that returns a real ReadableStream and honors the configured delays.
+    // Use raw JavaScript instead of a function argument: tsx decorates named
+    // functions with a module-scoped helper that does not exist in the page.
+    await page.addInitScript({
+      content: `
+        (() => {
+          if (window.__lobehubE2ELLMFetchInstalled) return;
+
+          const bindingName = ${JSON.stringify(LLM_MOCK_BINDING)};
+          const originalFetch = window.fetch.bind(window);
+          const abortError = () => new DOMException('The operation was aborted', 'AbortError');
+          const wait = (delay, signal) =>
+            new Promise((resolve, reject) => {
+              if (signal.aborted) {
+                reject(signal.reason || abortError());
+                return;
+              }
+
+              if (delay <= 0) {
+                resolve();
+                return;
+              }
+
+              const onAbort = () => {
+                window.clearTimeout(timeout);
+                reject(signal.reason || abortError());
+              };
+              const timeout = window.setTimeout(() => {
+                signal.removeEventListener('abort', onAbort);
+                resolve();
+              }, delay);
+
+              signal.addEventListener('abort', onAbort, { once: true });
+            });
+
+          window.fetch = async (input, init) => {
+            const normalizedInput =
+              input instanceof Request ? input : new URL(String(input), window.location.href);
+            const request = new Request(normalizedInput, init);
+            const url = new URL(request.url);
+
+            if (!url.pathname.startsWith('/webapi/chat/')) {
+              return originalFetch(input, init);
+            }
+
+            const createStreamPlan = window[bindingName];
+            if (!createStreamPlan) throw new Error('LLM mock binding is not available');
+
+            const plan = await createStreamPlan(await request.clone().text());
+            await wait(plan.responseDelay, request.signal);
+
+            const encoder = new TextEncoder();
+            let cancelled = false;
+            const body = new ReadableStream({
+              cancel() {
+                cancelled = true;
+              },
+              start(controller) {
+                void (async () => {
+                  try {
+                    for (let index = 0; index < plan.chunks.length; index += 1) {
+                      if (cancelled) return;
+                      if (request.signal.aborted) throw request.signal.reason || abortError();
+
+                      controller.enqueue(encoder.encode(plan.chunks[index]));
+
+                      if (index < plan.chunks.length - 1) {
+                        await wait(plan.streamDelay, request.signal);
+                      }
+                    }
+
+                    if (!cancelled) controller.close();
+                  } catch (error) {
+                    if (!cancelled) controller.error(error);
+                  }
+                })();
+              },
+            });
+
+            return new Response(body, {
+              headers: {
+                'Cache-Control': 'no-cache',
+                'Content-Type': 'text/event-stream',
+              },
+              status: 200,
+            });
+          };
+
+          window.__lobehubE2ELLMFetchInstalled = true;
+        })();
+      `,
     });
 
     console.log('   ✓ LLM mocks registered (all providers)');
   }
 
   /**
-   * Handle intercepted chat request
+   * Build the stream plan requested by the browser-side fetch interceptor.
    */
-  private async handleChatRequest(route: Route): Promise<void> {
-    const request = route.request();
+  private createStreamPlan(requestBody: string): LLMStreamPlan {
+    const body = JSON.parse(requestBody) as { messages?: ChatMessage[] };
+    const messages = body.messages || [];
 
-    try {
-      // Parse request body
-      const body = request.postDataJSON();
-      const messages: ChatMessage[] = body?.messages || [];
+    console.log(`   🤖 LLM Request intercepted (${messages.length} messages)`);
 
-      console.log(`   🤖 LLM Request intercepted (${messages.length} messages)`);
+    const responseContent = this.getResponse(messages);
+    const chunks = buildSSEChunks(responseContent, this.config.streamChunkSize);
 
-      // Get response content
-      const responseContent = this.getResponse(messages);
+    console.log(`   ✅ LLM Response streaming (${responseContent.length} chars)`);
 
-      // Build SSE chunks
-      const chunks = buildSSEChunks(responseContent, this.config.streamChunkSize);
-
-      // Simulate initial delay
-      await new Promise((resolve) => {
-        setTimeout(resolve, this.config.responseDelay);
-      });
-
-      // Create streaming response
-      const stream = chunks.join('');
-
-      await route.fulfill({
-        body: stream,
-        headers: {
-          'Cache-Control': 'no-cache',
-          'Connection': 'keep-alive',
-          'Content-Type': 'text/event-stream',
-        },
-        status: 200,
-      });
-
-      console.log(`   ✅ LLM Response sent (${responseContent.length} chars)`);
-    } catch (error) {
-      console.error('   ❌ LLM Mock error:', error);
-      await route.fulfill({
-        body: JSON.stringify({ error: 'Mock error' }),
-        headers: { 'Content-Type': 'application/json' },
-        status: 500,
-      });
-    }
+    return {
+      chunks,
+      responseDelay: this.config.responseDelay,
+      streamDelay: this.config.streamDelay,
+    };
   }
 
   /**
