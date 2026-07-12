@@ -191,6 +191,22 @@ describe('MessageModel workspace scope', () => {
           expect.objectContaining({ fileId: 'shared-file', text: 'secret chunk text' }),
         ]);
       });
+
+      it('drops reference chunks in queryByIds once the owner flips the file back to private', async () => {
+        await serverDB.update(files).set({ visibility: 'private' });
+
+        const [memberMessage] = await new MessageModel(serverDB, memberId, workspaceId).queryByIds([
+          'shared-message',
+        ]);
+        expect(memberMessage.chunksList).toEqual([]);
+
+        const [ownerMessage] = await new MessageModel(serverDB, userId, workspaceId).queryByIds([
+          'shared-message',
+        ]);
+        expect(ownerMessage.chunksList).toEqual([
+          expect.objectContaining({ fileId: 'shared-file', text: 'secret chunk text' }),
+        ]);
+      });
     });
   });
 });

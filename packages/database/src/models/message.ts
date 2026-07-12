@@ -1135,23 +1135,8 @@ export class MessageModel {
         )
         .where(inArray(messagesFiles.messageId, messageIds)),
 
-      // 2b. Get related file chunks
-      this.db
-        .select({
-          fileId: files.id,
-          fileType: files.fileType,
-          fileUrl: files.url,
-          filename: files.name,
-          id: chunks.id,
-          messageId: messageQueryChunks.messageId,
-          similarity: messageQueryChunks.similarity,
-          text: chunks.text,
-        })
-        .from(messageQueryChunks)
-        .leftJoin(chunks, eq(chunks.id, messageQueryChunks.chunkId))
-        .leftJoin(fileChunks, eq(fileChunks.chunkId, chunks.id))
-        .innerJoin(files, eq(fileChunks.fileId, files.id))
-        .where(inArray(messageQueryChunks.messageId, messageIds)),
+      // 2b. Get related file chunks (visibility-guarded like queryWithWhere)
+      this.queryMessageChunkRelations(messageIds),
 
       // 2c. Get related message queries (RAG)
       this.db
