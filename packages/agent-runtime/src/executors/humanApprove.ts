@@ -20,6 +20,10 @@ export const requestHumanApprove =
     >;
     const { operation, transports, lifecycle } = host;
     const { operationId, stepIndex, userId } = operation;
+    const agentId = operation.agentId ?? state.metadata?.agentId;
+    const groupId = operation.groupId ?? state.metadata?.groupId;
+    const threadId = operation.threadId ?? state.metadata?.threadId;
+    const topicId = operation.topicId ?? state.metadata?.topicId;
 
     // Publish human approval request event
     await transports.stream.publishEvent({
@@ -63,12 +67,12 @@ export const requestHumanApprove =
       // tool_call_id so we can still ship the mapping to the client.
       try {
         const dbMessages = await transports.messages.query({
-          agentId: state.metadata?.agentId,
+          agentId,
           // Group runs need groupId or the query returns no group messages, so
           // the existing tool-message lookup on resume would find nothing.
-          groupId: state.metadata?.groupId,
-          threadId: state.metadata?.threadId,
-          topicId: state.metadata?.topicId,
+          groupId,
+          threadId,
+          topicId,
         });
         for (const toolPayload of pendingToolsCalling) {
           const existing = dbMessages.find(
@@ -85,48 +89,55 @@ export const requestHumanApprove =
       // Find parent assistant message. Prefer state.messages (already in
       // memory from call_llm); fall back to a query if the runtime has been
       // rehydrated without recent messages.
-      let parentAssistantId: string | undefined = (state.messages ?? [])
+      let parentAssistant = (state.messages ?? [])
         .slice()
         .reverse()
-        .find((m: any) => m.role === 'assistant' && m.id)?.id;
+        .find((m: any) => m.role === 'assistant' && m.id) as
+        { groupId?: string | null; id: string } | undefined;
 
-      if (!parentAssistantId) {
+      if (!parentAssistant) {
         try {
           const dbMessages = await transports.messages.query({
-            agentId: state.metadata?.agentId,
+            agentId,
             // Group runs need groupId or the query returns no group messages, so
             // the parent-assistant fallback lookup would find nothing.
-            groupId: state.metadata?.groupId,
-            threadId: state.metadata?.threadId,
-            topicId: state.metadata?.topicId,
+            groupId,
+            threadId,
+            topicId,
           });
-          parentAssistantId = dbMessages
+          parentAssistant = dbMessages
             .slice()
             .reverse()
-            .find((m: any) => m.role === 'assistant')?.id;
+            .find((m: any) => m.role === 'assistant');
         } catch {
           // fall through to the missing-parent guard below
         }
       }
 
-      if (!parentAssistantId) {
+      if (!parentAssistant) {
         throw new Error(
-          `[request_human_approve] No assistant message found as parent for pending tool messages (op=${operationId})`,
+          `[request_human_approve] No assistant message found for intervention (op=${operationId})`,
+        );
+      }
+
+      if (!agentId) {
+        throw new Error(
+          `[request_human_approve] Missing agentId for pending tool messages (op=${operationId})`,
         );
       }
 
       for (const toolPayload of pendingToolsCalling) {
         const toolMessage = await transports.messages.createToolMessage({
-          agentId: state.metadata!.agentId!,
+          agentId,
           content: '',
-          groupId: state.metadata?.groupId ?? undefined,
-          parentId: parentAssistantId,
+          groupId: groupId ?? parentAssistant.groupId ?? undefined,
+          parentId: parentAssistant.id,
           plugin: toolPayload as any,
           pluginIntervention: { status: 'pending' },
           role: 'tool',
-          threadId: state.metadata?.threadId,
+          threadId,
           tool_call_id: toolPayload.id,
-          topicId: state.metadata?.topicId,
+          topicId,
         });
 
         toolMessageIds[toolPayload.id] = toolMessage.id;
