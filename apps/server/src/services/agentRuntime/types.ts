@@ -19,6 +19,8 @@ import { type AgentHook } from './hooks/types';
 // ==================== Operation Tool Set ====================
 
 export interface OperationToolSet {
+  /** Tool IDs that may be restored from historical explicit activations for this run. */
+  activatableToolIds?: string[];
   enabledToolIds?: string[];
   executorMap?: Record<string, ToolExecutor>;
   manifestMap: Record<string, LobeToolManifest>;
