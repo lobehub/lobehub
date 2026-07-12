@@ -373,6 +373,21 @@ Re-tested end-to-end against the running dev server. The previous claim ("blocks
 
 ## C. Probing app / store runtime state
 
+### C0. A picker backed by a list store may need fixture hydration after direct-route entry
+
+- **Situation**: a modal reads candidate entities from a list store, while the test enters a
+  detail route directly. The detail route can render from its own entity/config store without
+  ever mounting the list fetcher, so the picker correctly renders an empty candidate list even
+  though fixture rows exist in the database.
+- **Doesn't work**: inserting database rows alone, or refreshing the detail store. Neither
+  hydrates a separate list store that has not mounted its fetch hook.
+- **Works**: first enter the canonical list/home surface and let its real fetch settle. If the
+  fixture deliberately bypasses normal creation and the list API still does not expose it,
+  use the existing C1b dev-only `setState` exposer to hydrate the list store with the exact
+  fixture shape, then exercise the real picker component and remove the exposer patch after
+  capture. Keep the report explicit that fixture hydration was test setup; validate the actual
+  mutation and created entity through the database or network boundary.
+
 ### C1. `window.__LOBE_STORES.<name>` has no `.getState` — CALL it instead
 
 - **Doesn't work**: `window.__LOBE_STORES.page.getState()`. The exposed value is neither the

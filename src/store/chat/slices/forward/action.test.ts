@@ -1,7 +1,9 @@
 import type { UIChatMessage } from '@lobechat/types';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { agentService } from '@/services/agent';
 import { messageService } from '@/services/message';
+import { useAgentStore } from '@/store/agent';
 
 import { ChatForwardActionImpl } from './action';
 
@@ -9,6 +11,13 @@ const message = (role: UIChatMessage['role'], content: string): UIChatMessage =>
   ({ content, id: `${role}-${content}`, role }) as UIChatMessage;
 
 describe('ChatForwardAction', () => {
+  beforeEach(() => {
+    useAgentStore.setState({ agentMap: {} });
+    vi.spyOn(agentService, 'getAgentConfigById').mockImplementation(
+      async (id) => ({ id }) as never,
+    );
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
   });
@@ -37,6 +46,7 @@ describe('ChatForwardAction', () => {
     });
 
     expect(sendMessage).toHaveBeenCalledTimes(2);
+    expect(agentService.getAgentConfigById).toHaveBeenCalledTimes(2);
     expect(sendMessage.mock.calls[0][0].message).toBe(
       'Forwarded\n\n---\n\n**user**\n\nquestion\n\n---\n\n**assistant**\n\nanswer',
     );
@@ -45,6 +55,21 @@ describe('ChatForwardAction', () => {
     expect(result.succeeded).toEqual([{ agentId: 'agent-a', topicId: 'topic-a' }]);
     expect(result.failed).toHaveLength(1);
     expect(result.failed[0].agentId).toBe('agent-b');
+  });
+
+  it('treats a send without a created topic as a failure', async () => {
+    const sendMessage = vi.fn().mockResolvedValue(undefined);
+    const action = new ChatForwardActionImpl(vi.fn() as never, () => ({ sendMessage }) as never);
+
+    const result = await action.forwardMessages({
+      header: 'Forwarded',
+      messages: [message('user', 'question')],
+      roleLabel: (role) => role,
+      targets: [{ id: 'agent-a' }],
+    });
+
+    expect(result.succeeded).toEqual([]);
+    expect(result.failed).toHaveLength(1);
   });
 
   it('loads topic messages before forwarding them', async () => {

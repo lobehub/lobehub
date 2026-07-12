@@ -1,6 +1,9 @@
 import type { UIChatMessage } from '@lobechat/types';
 
+import { agentService } from '@/services/agent';
 import { messageService } from '@/services/message';
+import { getAgentStoreState } from '@/store/agent';
+import { agentSelectors } from '@/store/agent/selectors';
 import type { ChatStore } from '@/store/chat/store';
 import type { StoreSetter } from '@/store/types';
 
@@ -61,14 +64,20 @@ export class ChatForwardActionImpl {
     const settled = await Promise.allSettled(
       targets.map(async (target) => {
         const { id } = target;
+        if (!agentSelectors.getAgentConfigById(id)(getAgentStoreState())) {
+          const config = await agentService.getAgentConfigById(id);
+          getAgentStoreState().internal_dispatchAgentMap(id, config);
+        }
+
         const result = await this.#get().sendMessage({
           context: { agentId: id, isNew: true, isolatedTopic: true, scope: 'main' },
           message: content,
           messages: [],
           onTopicCreated: (topicId) => onTopicCreated?.(target, topicId),
         });
+        if (!result?.createdTopicId) throw new Error(`Forwarding did not create a topic for ${id}`);
 
-        return { agentId: id, topicId: result?.createdTopicId };
+        return { agentId: id, topicId: result.createdTopicId };
       }),
     );
 
