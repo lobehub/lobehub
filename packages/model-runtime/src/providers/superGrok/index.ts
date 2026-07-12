@@ -9,23 +9,26 @@ import {
 } from '../xai';
 
 /**
- * SuperGrok / X Premium subscription access to Grok models.
+ * SuperGrok / X Premium subscription access to Grok models via the Grok Build
+ * CLI inference proxy (`cli-chat-proxy.grok.com/v1`). This gives access to
+ * Grok Build and Composer models not exposed on the public xAI API.
  *
- * Talks to the exact same OpenAI-compatible `https://api.x.ai/v1` endpoint as
- * the `xai` provider (payload handling is shared), but authenticates with an
- * OAuth access token instead of an API key. The token is refreshed and
- * injected server-side (see `apps/server` oauthDeviceFlow refresh service) —
- * this runtime stays a stateless bearer client, receiving the fresh token as
- * `apiKey`.
- *
- * Chat only: image/video generation is not exposed through the subscription
- * OAuth scope.
+ * Authenticates with an OAuth access token (refreshed server-side via
+ * `apps/server` oauthDeviceFlow), same as before — only the endpoint changes.
  */
 export const LobeSuperGrokAI = createOpenAICompatibleRuntime({
-  baseURL: 'https://api.x.ai/v1',
+  baseURL: 'https://cli-chat-proxy.grok.com/v1',
   chatCompletion: {
     handlePayload: handleXAIChatCompletionPayload,
     useResponse: true,
+  },
+  constructorOptions: {
+    defaultHeaders: {
+      'User-Agent': 'grok-pager/0.2.93 grok-shell/0.2.93 (linux; x86_64)',
+      'X-XAI-Token-Auth': 'xai-grok-cli',
+      'x-grok-client-identifier': 'grok-pager',
+      'x-grok-client-version': '0.2.93',
+    },
   },
   debug: {
     chatCompletion: () => process.env.DEBUG_SUPERGROK_CHAT_COMPLETION === '1',

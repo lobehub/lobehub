@@ -2,9 +2,9 @@ import type { ModelProviderCard } from '@/types/llm';
 
 /**
  * SuperGrok / X Premium subscription access to Grok models via xAI OAuth
- * device flow (RFC 8628). Requests hit the same OpenAI-compatible
- * `https://api.x.ai/v1` endpoint as the `xai` provider, but authenticate
- * with a rotating OAuth token pair instead of an API key.
+ * device flow (RFC 8628). Requests hit the Grok Build CLI inference proxy at
+ * `https://cli-chat-proxy.grok.com/v1` instead of the public xAI API, giving
+ * access to Grok Build and Composer models not exposed on the public endpoint.
  *
  * The client_id below is xAI's public Grok-CLI OAuth client — the same one
  * used by opencode, officially endorsed by xAI: https://x.ai/news/grok-opencode
