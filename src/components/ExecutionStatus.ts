@@ -62,6 +62,7 @@ export const TOPIC_STATUS_VISUALS: Record<ChatTopicStatus, ExecutionStatusVisual
   failed: VISUALS.failed,
   paused: VISUALS.paused,
   running: VISUALS.running,
+  scheduled: VISUALS.scheduled,
   // `unread` rows render a custom ripple dot; this is the fallback glyph.
   unread: { color: cssVar.colorInfo, icon: CircleDot },
   waitingForHuman: VISUALS.waitingForHuman,

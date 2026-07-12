@@ -329,6 +329,11 @@ export default class BrowserSidebarCtr extends ControllerModule {
     return webContents;
   }
 
+  /** Guest accessor for sibling controllers (BrowserControlCtr drives it). */
+  getSessionWebContents(sessionId: string): WebContents | undefined {
+    return this.getLiveWebContents(sessionId);
+  }
+
   private snapshot(sessionId: string): BrowserSidebarState {
     const page = this.ensurePage(sessionId);
     const webContents = this.getLiveWebContents(sessionId);

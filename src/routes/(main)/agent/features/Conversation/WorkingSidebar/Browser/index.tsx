@@ -18,6 +18,7 @@ import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { electronBrowserSidebarService } from '@/services/electron/browserSidebar';
 import { useGlobalStore } from '@/store/global';
 
+import AgentOverlay from './AgentOverlay';
 import { BROWSER_WEBVIEW_PARTITION, BROWSER_WEBVIEW_SESSION_ATTRIBUTE } from './const';
 import { useBrowserSidebarState } from './useBrowserSidebarState';
 import { normalizeBrowserUrl } from './utils';
@@ -228,6 +229,7 @@ const BrowserPane = memo<BrowserPaneProps>(({ sessionId }) => {
         />
       </Flexbox>
       <Flexbox className={styles.container}>
+        <AgentOverlay sessionId={sessionId} />
         {initialUrl ? (
           <webview
             className={styles.webview}

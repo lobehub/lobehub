@@ -2,6 +2,7 @@ import type { CreateServicesResult, IpcServiceConstructor, MergeIpcService } fro
 
 import AuthCtr from './AuthCtr';
 import BinaryCtr from './BinaryCtr';
+import BrowserControlCtr from './BrowserControlCtr';
 import BrowserSidebarCtr from './BrowserSidebarCtr';
 import BrowserWindowsCtr from './BrowserWindowsCtr';
 import CliCtr from './CliCtr';
@@ -30,6 +31,7 @@ import WorkspaceCtr from './WorkspaceCtr';
 export const controllerIpcConstructors = [
   HeterogeneousAgentCtr,
   AuthCtr,
+  BrowserControlCtr,
   BrowserSidebarCtr,
   BrowserWindowsCtr,
   CliCtr,

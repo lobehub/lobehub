@@ -72,7 +72,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   toolName: css`
     overflow: hidden;
 
-    font-family: var(--font-mono, monospace);
+    font-family: ${cssVar.fontFamilyCode};
     font-size: 13px;
     color: ${cssVar.colorText};
     text-overflow: ellipsis;

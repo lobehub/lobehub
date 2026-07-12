@@ -56,6 +56,7 @@ type HeteroReasoningEffort =
 type SelectableHeteroProviderType = 'claude-code' | 'codex';
 
 const CLAUDE_CODE_MODEL_OPTIONS = [
+  { label: 'Fable 5', value: 'fable' },
   { label: 'Opus 4.8', value: 'opus' },
   { label: 'Sonnet 4.6', value: 'sonnet' },
   { label: 'Haiku 4.5', value: 'haiku' },

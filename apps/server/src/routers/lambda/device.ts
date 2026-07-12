@@ -6,7 +6,7 @@ import type {
   DeviceWorkspaceShare,
   WorkingDirEntry,
 } from '@lobechat/types';
-import { deriveWorktreePath } from '@lobechat/types';
+import { deriveWorktreePath, workingDirConfigSchema } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -25,7 +25,6 @@ import { type DeviceAttachment, deviceGateway } from '@/server/services/deviceGa
 
 import { preserveWorkspaceCache } from './deviceWorkingDirs';
 import { assertWorkspaceDeviceVisible, assertWorkspaceRootApproved } from './deviceWorkspaceGuard';
-import { workingDirConfigSchema } from './workingDirSchema';
 
 // Derive the zod enum from the canonical config so new platforms are
 // automatically covered without touching this file.

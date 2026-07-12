@@ -50,7 +50,7 @@ interface MessageApiHandler {
 }
 
 interface ToolCallHandler {
-  (apiName: string, args: unknown): Promise<ToolCallResult>;
+  (identifier: string | undefined, apiName: string, args: unknown): Promise<ToolCallResult>;
 }
 
 /**
@@ -783,7 +783,7 @@ export default class GatewayConnectionService extends ServiceModule {
           throw new Error('No tool call handler configured');
         }
         const args = JSON.parse(argsStr);
-        result = await this.toolCallHandler(apiName, args);
+        result = await this.toolCallHandler(identifier, apiName, args);
       }
 
       // Forward the typed envelope unchanged. Critically, do NOT stringify the

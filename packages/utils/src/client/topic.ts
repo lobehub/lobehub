@@ -132,18 +132,24 @@ const normalizeOptionalWorkingDirectory = (dir: string | undefined): string | un
   return normalized || undefined;
 };
 
+// Prefer the structured `workingDirectoryConfig`; fall back to the raw
+// `workingDirectory`. `workingDirectory` is typed as a string, but a malformed
+// topic may have persisted a `WorkingDirConfig` object into it (see #17050).
+// Routing the whole thing through the extractor (which accepts `string |
+// WorkingDirConfig`) yields the path for either shape instead of crashing
+// `normalizeWorkingDirectory` with `dir.trim is not a function`.
 export const getTopicMetadataWorkingDirectorySourcePath = (
   metadata?: ChatTopicMetadata,
 ): string | undefined =>
   normalizeOptionalWorkingDirectory(
-    getWorkingDirSourcePath(metadata?.workingDirectoryConfig) ?? metadata?.workingDirectory,
+    getWorkingDirSourcePath(metadata?.workingDirectoryConfig ?? metadata?.workingDirectory),
   );
 
 export const getTopicMetadataWorkingDirectoryEffectivePath = (
   metadata?: ChatTopicMetadata,
 ): string | undefined =>
   normalizeOptionalWorkingDirectory(
-    getWorkingDirEffectivePath(metadata?.workingDirectoryConfig) ?? metadata?.workingDirectory,
+    getWorkingDirEffectivePath(metadata?.workingDirectoryConfig ?? metadata?.workingDirectory),
   );
 
 export const getTopicWorkingDirectorySourcePath = (topic: ChatTopic): string | undefined =>
@@ -200,7 +206,7 @@ export const groupTopicsByProject = (
 // the sidebar surfaces "needs attention" in one place. The remaining buckets map
 // 1:1 to a status. The group `id` resolves its title via `groupTitle.byStatus.<id>`.
 export type TopicStatusBucket =
-  'pending' | 'running' | 'active' | 'paused' | 'completed' | 'archived';
+  'pending' | 'running' | 'scheduled' | 'active' | 'paused' | 'completed' | 'archived';
 
 // Fixed priority order: `pending` (needs attention) comes first, then running,
 // then active; the remaining states fall below. Topics without a status are
@@ -215,6 +221,7 @@ export type TopicStatusBucket =
 export const STATUS_GROUP_ORDER: TopicStatusBucket[] = [
   'pending',
   'running',
+  'scheduled',
   'active',
   'paused',
   'completed',
@@ -236,6 +243,9 @@ const resolveStatusBucket = (
   if (topic.status === 'waitingForHuman' || topic.status === 'failed' || topic.status === 'unread')
     return 'pending';
   if (loadingTopicIds?.has(topic.id) || topic.status === 'running') return 'running';
+  // `scheduled` (backend will auto-continue after a rate limit) is its own bucket:
+  // it must NOT collapse into `pending`, so users don't read it as "needs manual action".
+  if (topic.status === 'scheduled') return 'scheduled';
   const status: ChatTopicStatus = topic.status ?? 'active';
   if (status === 'paused' || status === 'completed' || status === 'archived') return status;
   return 'active';

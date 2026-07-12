@@ -5,8 +5,9 @@ import type {
   ContextBuilder,
   ContextBuildOutput,
   LLMAttemptOutput,
+  LLMRetryPolicy,
+  LLMTrace,
   LLMTransport,
-  LLMTurnSession,
   MessageTransport,
   OperationStore,
   StreamSink,
@@ -84,6 +85,13 @@ const createStreamSink = (): StreamSink => ({
 const contextOutput: ContextBuildOutput = {
   messages: [{ content: 'prepared hello', role: 'user' }],
   replayAssistantReasoning: false,
+  resolvedTools: {
+    enabledToolIds: [],
+    manifestMap: {},
+    promptManifestMap: {},
+    sourceMap: {},
+    tools: [],
+  },
 };
 
 const createContextBuilder = (): ContextBuilder => ({
@@ -104,17 +112,42 @@ const createAttemptOutput = (content = 'answer'): LLMAttemptOutput => ({
   toolsCalling: [],
 });
 
-const createTurnSession = (overrides: Partial<LLMTurnSession> = {}): LLMTurnSession => ({
+const createRetryPolicy = (overrides: Partial<LLMRetryPolicy> = {}): LLMRetryPolicy => ({
   classifyError: vi.fn().mockReturnValue({ kind: 'stop', message: 'failed' }),
-  close: vi.fn(),
-  handleError: vi.fn().mockResolvedValue(undefined),
-  maxAttempts: 3,
-  recordResult: vi.fn(),
+  maxAttempts: vi.fn().mockReturnValue(3),
+  onError: vi.fn().mockResolvedValue(undefined),
   resolveRetryBudget: vi.fn().mockReturnValue(2),
-  runAttempt: vi.fn().mockResolvedValue({ ok: true, output: createAttemptOutput() }),
   waitForRetry: vi.fn().mockResolvedValue(undefined),
   ...overrides,
 });
+
+const createTrace = (overrides: Partial<LLMTrace> = {}): LLMTrace => ({
+  close: vi.fn(),
+  onFirstChunk: vi.fn(),
+  recordResult: vi.fn(),
+  run: vi.fn((task) => task()),
+  ...overrides,
+});
+
+const createCallTransport = ({
+  policy = createRetryPolicy(),
+  runAttempt = vi.fn().mockResolvedValue({ ok: true, output: createAttemptOutput() }),
+  trace = createTrace(),
+}: {
+  policy?: LLMRetryPolicy;
+  runAttempt?: ReturnType<typeof vi.fn>;
+  trace?: LLMTrace;
+} = {}) => {
+  const createTraceScope = vi.fn().mockReturnValue(trace);
+  const llm: LLMTransport = {
+    createTrace: createTraceScope,
+    retryPolicy: policy,
+    runAttempt,
+    stream: vi.fn(),
+  };
+
+  return { createTrace: createTraceScope, llm, policy, runAttempt, trace };
+};
 
 const createHost = (
   llm: LLMTransport,
@@ -136,20 +169,11 @@ const createHost = (
 describe('callLlm executor', () => {
   it('prepares the assistant message and delegates call_llm execution to the LLM transport', async () => {
     const state = createState();
-    const session = createTurnSession();
-    const openTurn = vi.fn().mockReturnValue(session);
+    const transport = createCallTransport();
     const messages = createMessageTransport();
     const stream = createStreamSink();
     const context = createContextBuilder();
-    const host = createHost(
-      {
-        openTurn,
-        stream: vi.fn(),
-      },
-      messages,
-      stream,
-      context,
-    );
+    const host = createHost(transport.llm, messages, stream, context);
     const instructionWithParent: AgentInstructionCallLlm = {
       payload: {
         ...instruction.payload,
@@ -187,18 +211,23 @@ describe('callLlm executor', () => {
       provider: 'openai',
       state,
     });
-    expect(openTurn).toHaveBeenCalledWith({
-      assistantMessage: { id: 'assistant-1' },
-      context: contextOutput,
+    expect(transport.createTrace).toHaveBeenCalledWith({
+      assistantMessageId: 'assistant-1',
+      conversationId: 'topic-1',
       model: 'gpt-4',
       provider: 'openai',
-      state,
-      stepLabel: undefined,
     });
-    expect(session.runAttempt).toHaveBeenCalledWith({
-      attempt: 1,
-      events: [expect.objectContaining({ type: 'llm_result' })],
-    });
+    expect(transport.runAttempt).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attempt: 1,
+        context: contextOutput,
+        events: [expect.objectContaining({ type: 'llm_result' })],
+        maxAttempts: 3,
+        model: 'gpt-4',
+        provider: 'openai',
+        state,
+      }),
+    );
     expect(messages.update).toHaveBeenCalledWith(
       'assistant-1',
       expect.objectContaining({ content: 'answer', search: null }),
@@ -208,22 +237,15 @@ describe('callLlm executor', () => {
       id: 'assistant-1',
       role: 'assistant',
     });
-    expect(session.recordResult).toHaveBeenCalledWith(createAttemptOutput());
-    expect(session.close).toHaveBeenCalledWith(undefined);
+    expect(transport.trace.recordResult).toHaveBeenCalledWith(createAttemptOutput());
+    expect(transport.trace.close).toHaveBeenCalledWith(undefined);
   });
 
   it('reuses an existing assistant message without creating a new one', async () => {
     const state = createState();
-    const session = createTurnSession();
-    const openTurn = vi.fn().mockReturnValue(session);
+    const transport = createCallTransport();
     const messages = createMessageTransport();
-    const host = createHost(
-      {
-        openTurn,
-        stream: vi.fn(),
-      },
-      messages,
-    );
+    const host = createHost(transport.llm, messages);
     const reuseInstruction: AgentInstructionCallLlm = {
       payload: {
         ...instruction.payload,
@@ -236,34 +258,50 @@ describe('callLlm executor', () => {
       newState: { messages: [expect.objectContaining({ id: 'assistant-existing' })] },
     });
     expect(messages.createAssistantMessage).not.toHaveBeenCalled();
-    expect(openTurn).toHaveBeenCalledWith(
+    expect(transport.createTrace).toHaveBeenCalledWith(
       expect.objectContaining({
-        assistantMessage: { id: 'assistant-existing' },
+        assistantMessageId: 'assistant-existing',
       }),
     );
   });
 
-  it('throws when the LLM transport does not provide openTurn', async () => {
+  it('throws when the LLM transport does not provide runAttempt', async () => {
     const host = createHost({
+      retryPolicy: createRetryPolicy(),
       stream: vi.fn(),
     });
 
     await expect(callLlm(host)(instruction, createState())).rejects.toThrow(
-      'LLMTransport.openTurn is required for call_llm executor',
+      'LLMTransport.runAttempt is required for call_llm executor',
     );
+  });
+
+  it('throws when the LLM transport does not provide retryPolicy', async () => {
+    const host = createHost({ runAttempt: vi.fn(), stream: vi.fn() });
+
+    await expect(callLlm(host)(instruction, createState())).rejects.toThrow(
+      'LLMTransport.retryPolicy is required for call_llm executor',
+    );
+  });
+
+  it('executes without an optional tracing adapter', async () => {
+    const transport = createCallTransport();
+    delete transport.llm.createTrace;
+
+    await expect(
+      callLlm(createHost(transport.llm))(instruction, createState()),
+    ).resolves.toMatchObject({
+      newState: { messages: [expect.objectContaining({ content: 'answer' })] },
+    });
+    expect(transport.runAttempt).toHaveBeenCalledTimes(1);
   });
 
   it('publishes context build failures without executing the model turn', async () => {
     const error = new Error('context failed');
     const context: ContextBuilder = { build: vi.fn().mockRejectedValue(error) };
-    const openTurn = vi.fn();
+    const transport = createCallTransport();
     const stream = createStreamSink();
-    const host = createHost(
-      { openTurn, stream: vi.fn() },
-      createMessageTransport(),
-      stream,
-      context,
-    );
+    const host = createHost(transport.llm, createMessageTransport(), stream, context);
 
     await expect(callLlm(host)(instruction, createState())).rejects.toBe(error);
     expect(stream.publishError).toHaveBeenCalledWith({
@@ -271,21 +309,47 @@ describe('callLlm executor', () => {
       phase: 'llm_execution',
       stepIndex: 0,
     });
-    expect(openTurn).not.toHaveBeenCalled();
+    expect(transport.runAttempt).not.toHaveBeenCalled();
+  });
+
+  it('rejects prepared context without resolved tools before creating a trace', async () => {
+    const transport = createCallTransport();
+    const context: ContextBuilder = {
+      build: vi.fn().mockResolvedValue({
+        ...contextOutput,
+        resolvedTools: undefined,
+      }),
+    };
+
+    await expect(
+      callLlm(createHost(transport.llm, undefined, undefined, context))(instruction, createState()),
+    ).rejects.toThrow('Resolved tools are required for call_llm');
+    expect(transport.createTrace).not.toHaveBeenCalled();
+    expect(transport.runAttempt).not.toHaveBeenCalled();
+  });
+
+  it('rejects prepared context containing only system messages', async () => {
+    const transport = createCallTransport();
+    const context: ContextBuilder = {
+      build: vi.fn().mockResolvedValue({
+        ...contextOutput,
+        messages: [{ content: 'system only', role: 'system' }],
+      }),
+    };
+
+    await expect(
+      callLlm(createHost(transport.llm, undefined, undefined, context))(instruction, createState()),
+    ).rejects.toThrow('call_llm produced no non-system messages for openai/gpt-4');
+    expect(transport.createTrace).not.toHaveBeenCalled();
+    expect(transport.runAttempt).not.toHaveBeenCalled();
   });
 
   it('fails before creating an assistant message when the parent message is missing', async () => {
     const messages = createMessageTransport();
     vi.mocked(messages.findById).mockResolvedValue(undefined);
     const stream = createStreamSink();
-    const host = createHost(
-      {
-        openTurn: vi.fn(),
-        stream: vi.fn(),
-      },
-      messages,
-      stream,
-    );
+    const transport = createCallTransport();
+    const host = createHost(transport.llm, messages, stream);
     const instructionWithParent: AgentInstructionCallLlm = {
       payload: {
         ...instruction.payload,
@@ -321,22 +385,22 @@ describe('callLlm executor', () => {
       .mockResolvedValueOnce({ error, ok: false, output: firstOutput })
       .mockResolvedValueOnce({ ok: true, output: finalOutput });
     const onRetry = vi.fn();
-    const session = createTurnSession({
+    const policy = createRetryPolicy({
       classifyError: vi.fn().mockReturnValue({
         code: 'UPSTREAM_TIMEOUT',
         kind: 'retry',
         message: error.message,
       }),
       onRetry,
-      runAttempt,
     });
+    const transport = createCallTransport({ policy, runAttempt });
     const stream = createStreamSink();
     const operationStore: OperationStore = {
       clearRunningMark: vi.fn(),
       loadState: vi.fn().mockResolvedValue(null),
     };
     const host = createHost(
-      { openTurn: vi.fn().mockReturnValue(session), stream: vi.fn() },
+      transport.llm,
       createMessageTransport(),
       stream,
       createContextBuilder(),
@@ -355,14 +419,22 @@ describe('callLlm executor', () => {
       },
       type: 'stream_retry' as const,
     };
-    expect(runAttempt).toHaveBeenNthCalledWith(1, {
-      attempt: 1,
-      events: [retryEvent, expect.objectContaining({ type: 'llm_result' })],
-    });
-    expect(runAttempt).toHaveBeenNthCalledWith(2, {
-      attempt: 2,
-      events: [retryEvent, expect.objectContaining({ type: 'llm_result' })],
-    });
+    expect(runAttempt).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        attempt: 1,
+        events: [retryEvent, expect.objectContaining({ type: 'llm_result' })],
+        maxAttempts: 3,
+      }),
+    );
+    expect(runAttempt).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        attempt: 2,
+        events: [retryEvent, expect.objectContaining({ type: 'llm_result' })],
+        maxAttempts: 3,
+      }),
+    );
     expect(onRetry).toHaveBeenCalledWith({
       attempt: 1,
       delayMs: 1000,
@@ -378,21 +450,22 @@ describe('callLlm executor', () => {
       stepIndex: 0,
       type: 'stream_retry',
     });
-    expect(session.waitForRetry).toHaveBeenCalledWith(1000);
+    expect(policy.waitForRetry).toHaveBeenCalledWith(1000);
     expect(result.newState.messages.at(-1)).toMatchObject({ content: 'complete' });
-    expect(session.recordResult).toHaveBeenCalledWith(finalOutput);
-    expect(session.handleError).not.toHaveBeenCalled();
-    expect(session.close).toHaveBeenCalledWith(undefined);
+    expect(transport.trace.recordResult).toHaveBeenCalledWith(finalOutput);
+    expect(policy.onError).not.toHaveBeenCalled();
+    expect(transport.trace.close).toHaveBeenCalledWith(undefined);
   });
 
   it('stops retrying and persists the partial attempt when the operation is interrupted', async () => {
     const state = createState();
     const error = new Error('stream aborted');
     const output = createAttemptOutput('partial');
-    const session = createTurnSession({
+    const policy = createRetryPolicy({
       classifyError: vi.fn().mockReturnValue({ kind: 'retry', message: error.message }),
-      runAttempt: vi.fn().mockResolvedValue({ error, ok: false, output }),
     });
+    const runAttempt = vi.fn().mockResolvedValue({ error, ok: false, output });
+    const transport = createCallTransport({ policy, runAttempt });
     const operationStore: OperationStore = {
       clearRunningMark: vi.fn(),
       loadState: vi.fn().mockResolvedValue({ ...state, status: 'interrupted' }),
@@ -400,7 +473,7 @@ describe('callLlm executor', () => {
     const stream = createStreamSink();
     const messages = createMessageTransport();
     const host = createHost(
-      { openTurn: vi.fn().mockReturnValue(session), stream: vi.fn() },
+      transport.llm,
       messages,
       stream,
       createContextBuilder(),
@@ -409,8 +482,8 @@ describe('callLlm executor', () => {
 
     await expect(callLlm(host)(instruction, state)).rejects.toBe(error);
 
-    expect(session.runAttempt).toHaveBeenCalledTimes(1);
-    expect(session.waitForRetry).not.toHaveBeenCalled();
+    expect(runAttempt).toHaveBeenCalledTimes(1);
+    expect(policy.waitForRetry).not.toHaveBeenCalled();
     expect(messages.update).toHaveBeenCalledWith(
       'assistant-1',
       expect.objectContaining({
@@ -418,14 +491,14 @@ describe('callLlm executor', () => {
         metadata: expect.objectContaining({ interruptedMidStream: true }),
       }),
     );
-    expect(session.handleError).toHaveBeenCalledWith({
+    expect(policy.onError).toHaveBeenCalledWith({
       error,
       events: [],
       interrupted: true,
       output,
       retryBudget: 2,
     });
-    expect(session.close).toHaveBeenCalledWith(error);
+    expect(transport.trace.close).toHaveBeenCalledWith(error);
     expect(stream.publishError).toHaveBeenCalledWith({
       error,
       phase: 'llm_execution',

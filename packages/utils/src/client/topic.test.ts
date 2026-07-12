@@ -292,6 +292,23 @@ describe('working directory topic helpers', () => {
     expect(getTopicWorkingDirectoryEffectivePath(topic)).toBe('/repo-fix');
   });
 
+  it('tolerates a legacy object-form workingDirectory without crashing', () => {
+    // Some heterogeneous (Claude Code) topics persisted a `WorkingDirConfig`
+    // object into `workingDirectory` even though the field is typed as a string.
+    // The helpers must extract its path instead of calling `dir.trim()` on it.
+    const topic = createTopic('legacy-object', {
+      workingDirectory: { path: '/Users/xxx/项目目录', repoType: 'git' },
+    } as unknown as ChatTopic['metadata']);
+
+    expect(getTopicWorkingDirectorySourcePath(topic)).toBe('/Users/xxx/项目目录');
+    expect(getTopicWorkingDirectoryEffectivePath(topic)).toBe('/Users/xxx/项目目录');
+    expect(() => groupTopicsByProject([topic], 'updatedAt')).not.toThrow();
+    expect(groupTopicsByProject([topic], 'updatedAt')[0]).toMatchObject({
+      id: 'project:/Users/xxx/项目目录',
+      title: '项目目录',
+    });
+  });
+
   it('groups worktree topics under the source project', () => {
     const topics = [
       createTopic(

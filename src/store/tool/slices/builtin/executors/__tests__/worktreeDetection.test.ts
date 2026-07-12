@@ -19,6 +19,12 @@ const gitServiceMocks = vi.hoisted(() => ({
   listGitWorktrees: vi.fn(),
 }));
 
+const swrMocks = vi.hoisted(() => ({
+  mutate: vi.fn(),
+}));
+
+vi.mock('@/libs/swr', () => swrMocks);
+
 vi.mock('@/store/chat/store', () => ({
   getChatStoreState: () => chatMocks,
 }));
@@ -246,6 +252,44 @@ describe('recordWorktreeAdd', () => {
 });
 
 describe('recordGitCommandEffects', () => {
+  it('refreshes the local branch cache when the run is bound to this device', async () => {
+    chatMocks.topics = {
+      t1: {
+        metadata: {
+          boundDeviceId: 'device-1',
+          workingDirectoryConfig: {
+            git: { branch: 'canary' },
+            path: '/repo',
+            repoType: 'github',
+          },
+        },
+      },
+    };
+
+    await recordGitCommandEffects({ command: 'git switch fix/topic', topicId: 't1' });
+
+    expect(swrMocks.mutate).toHaveBeenCalledWith(['device:gitBranch', 'local', '/repo']);
+  });
+
+  it('refreshes the remote-device branch cache after a branch switch', async () => {
+    chatMocks.topics = {
+      t1: {
+        metadata: {
+          boundDeviceId: 'remote-device',
+          workingDirectoryConfig: {
+            git: { branch: 'canary' },
+            path: '/repo',
+            repoType: 'github',
+          },
+        },
+      },
+    };
+
+    await recordGitCommandEffects({ command: 'git switch fix/topic', topicId: 't1' });
+
+    expect(swrMocks.mutate).toHaveBeenCalledWith(['device:gitBranch', 'remote-device', '/repo']);
+  });
+
   it('updates the topic branch when the agent switches branch with git switch', async () => {
     chatMocks.topics = {
       t1: {

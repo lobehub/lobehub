@@ -50,6 +50,7 @@ export const topics = pgTable(
         'running',
         'paused',
         'waitingForHuman',
+        'scheduled',
         'failed',
         'completed',
         'archived',

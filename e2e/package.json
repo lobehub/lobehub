@@ -5,13 +5,14 @@
   "description": "E2E tests for LobeChat using Cucumber and Playwright",
   "scripts": {
     "build": "cd .. && bun run build",
-    "test": "cucumber-js --config cucumber.config.js",
+    "test": "bun run test:unit && cucumber-js --config cucumber.config.js",
     "test:ci": "bun run build && bun run test",
     "test:community": "cucumber-js --config cucumber.config.js src/features/community/",
     "test:headed": "cross-env HEADLESS=false cucumber-js --config cucumber.config.js",
     "test:routes": "cucumber-js --config cucumber.config.js --tags '@routes'",
     "test:routes:ci": "cucumber-js --config cucumber.config.js --tags '@routes and not @ci-skip'",
-    "test:smoke": "cucumber-js --config cucumber.config.js --tags '@smoke'"
+    "test:smoke": "cucumber-js --config cucumber.config.js --tags '@smoke'",
+    "test:unit": "vitest run --config vitest.config.mts --silent='passed-only'"
   },
   "dependencies": {
     "@cucumber/cucumber": "^12.2.0",

@@ -1,11 +1,11 @@
 import {
+  chatTopicMetadataUpdateSchema,
   chatTopicStatusSchema,
   type HeteroSessionImportPayload,
   heteroSessionImportPayloadSchema,
   type RecentTopic,
   type RecentTopicGroup,
   type RecentTopicGroupMember,
-  serializedAgentHookSchema,
 } from '@lobechat/types';
 import { cleanObject } from '@lobechat/utils';
 import { inArray } from 'drizzle-orm';
@@ -34,7 +34,6 @@ import {
   resolveContext,
 } from './_helpers/resolveContext';
 import { basicContextSchema } from './_schema/context';
-import { workingDirConfigSchema } from './workingDirSchema';
 
 const topicProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -676,58 +675,7 @@ export const topicRouter = router({
     .input(
       z.object({
         id: z.string(),
-        metadata: z.object({
-          boundDeviceId: z.string().optional(),
-          heteroSessionId: z.string().optional(),
-          heteroSessionIdByWorkingDirectory: z.record(z.string(), z.string()).optional(),
-          model: z.string().optional(),
-          onboardingFeedback: z
-            .object({
-              comment: z.string().max(500).optional(),
-              rating: z.enum(['good', 'bad']),
-              submittedAt: z.string(),
-            })
-            .optional(),
-          onboardingSession: z
-            .object({
-              agentIdentityCompletedAt: z.string().optional(),
-              agentMarketplacePick: z
-                .object({
-                  categoryHints: z.array(z.string()),
-                  installedAgentIds: z.array(z.string()).optional(),
-                  requestId: z.string(),
-                  resolvedAt: z.string(),
-                  selectedTemplateIds: z.array(z.string()).optional(),
-                  skipReason: z.string().optional(),
-                  skippedAgentIds: z.array(z.string()).optional(),
-                  status: z.enum(['cancelled', 'skipped', 'submitted']),
-                })
-                .optional(),
-              discoveryCompletedAt: z.string().optional(),
-              finalAgentNames: z.array(z.string()).optional(),
-              finishedAt: z.string().optional(),
-              lastActiveAt: z.string().optional(),
-              phase: z.enum(['agent_identity', 'user_identity', 'discovery', 'summary']).optional(),
-              startedAt: z.string().optional(),
-              userIdentityCompletedAt: z.string().optional(),
-              version: z.number().optional(),
-            })
-            .optional(),
-          provider: z.string().optional(),
-          runningOperation: z
-            .object({
-              assistantMessageId: z.string(),
-              hooks: z.array(serializedAgentHookSchema).optional(),
-              operationId: z.string(),
-              scope: z.string().optional(),
-              threadId: z.string().nullish(),
-            })
-            .nullable()
-            .optional(),
-          repos: z.array(z.string()).optional(),
-          workingDirectory: z.string().optional(),
-          workingDirectoryConfig: workingDirConfigSchema.optional(),
-        }),
+        metadata: chatTopicMetadataUpdateSchema,
       }),
     )
     .mutation(async ({ input, ctx }) => {

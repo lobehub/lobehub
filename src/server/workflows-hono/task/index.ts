@@ -4,6 +4,7 @@ import { qstashAuth } from '../middlewares/qstashAuth';
 import { heartbeatTick } from './handlers/heartbeatTick';
 import { onTopicComplete } from './handlers/onTopicComplete';
 import { scheduleDispatch } from './handlers/scheduleDispatch';
+import { scheduledTopicDispatch } from './handlers/scheduledTopicDispatch';
 import { scheduleExecute } from './handlers/scheduleExecute';
 import { watchdog } from './handlers/watchdog';
 
@@ -13,6 +14,7 @@ app.post('/on-topic-complete', qstashAuth(), onTopicComplete);
 app.post('/heartbeat-tick', qstashAuth(), heartbeatTick);
 app.post('/schedule-dispatch', qstashAuth(), scheduleDispatch);
 app.post('/schedule-execute', qstashAuth(), scheduleExecute);
+app.post('/scheduled-topic-dispatch', qstashAuth(), scheduledTopicDispatch);
 app.post('/watchdog', qstashAuth(), watchdog);
 
 export default app;
