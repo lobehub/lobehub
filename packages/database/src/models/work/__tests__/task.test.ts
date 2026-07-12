@@ -249,7 +249,7 @@ describe('WorkModel · task', () => {
     expect(updatedVersion.sourceMessageId).toBe('msg-tool-edit');
   });
 
-  it('summarizes a task work on each operation it touched with total version cost', async () => {
+  it('summarizes a task work on its latest operation with total version cost', async () => {
     const taskModel = new TaskModel(serverDB, userId);
     const workModel = new WorkModel(serverDB, userId);
     const task = await taskModel.create({
@@ -288,17 +288,7 @@ describe('WorkModel · task', () => {
     const byOperation = await workModel.listSummariesByRootOperations({
       rootOperationIds: ['op-summary-create', 'op-summary-edit'],
     });
-    // Each operation that touched the Work surfaces its own event, and every
-    // summary carries the current version snapshot regardless of which event
-    // anchored it.
-    expect(byOperation['op-summary-create']).toHaveLength(1);
-    const createSummary = expectTaskSummaryItem(byOperation['op-summary-create']?.[0]);
-    expect(createSummary).toMatchObject({
-      event: expect.objectContaining({ role: 'created', rootOperationId: 'op-summary-create' }),
-      id: first?.id,
-      task: expect.objectContaining({ name: 'Updated title' }),
-      version: expect.objectContaining({ version: 2 }),
-    });
+    expect(byOperation['op-summary-create']).toEqual([]);
     expect(byOperation['op-summary-edit']).toHaveLength(1);
     const summary = expectTaskSummaryItem(byOperation['op-summary-edit']?.[0]);
     expect(summary).toMatchObject({

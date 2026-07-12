@@ -94,13 +94,14 @@ describe('WorkModel · queries', () => {
     }
   });
 
-  it('keeps a summary for every operation touching the same work', async () => {
+  it('surfaces a shared work only on the latest operation touching it', async () => {
     const taskModel = new TaskModel(serverDB, userId);
     const workModel = new WorkModel(serverDB, userId);
     const task = await taskModel.create({ instruction: 'Shared work', name: 'Shared work' });
 
-    // Turn A creates the task, turn B updates the same task: each operation's
-    // anchor card must surface its own event instead of only the newest one.
+    // Turn A creates the task, turn B updates the same task: only the last
+    // touching round's anchor card surfaces the Work — earlier rounds drop the
+    // chip instead of repeating the same artifact every turn.
     await workModel.registerTask({
       role: 'created',
       rootOperationId: 'op-shared-create',
@@ -122,12 +123,12 @@ describe('WorkModel · queries', () => {
       rootOperationIds: ['op-shared-create', 'op-shared-update'],
     });
 
-    expect(summaries['op-shared-create']).toHaveLength(1);
+    expect(summaries['op-shared-create']).toEqual([]);
     expect(summaries['op-shared-update']).toHaveLength(1);
-    expect(summaries['op-shared-create'][0].event.rootOperationId).toBe('op-shared-create');
-    expect(summaries['op-shared-update'][0].event.rootOperationId).toBe('op-shared-update');
-    // Both summaries point at the same Work row.
-    expect(summaries['op-shared-create'][0].id).toBe(summaries['op-shared-update'][0].id);
+    expect(summaries['op-shared-update'][0].event).toMatchObject({
+      role: 'updated',
+      rootOperationId: 'op-shared-update',
+    });
   });
 
   it('clamps the summary over-fetch limit while still returning results for large id batches', async () => {

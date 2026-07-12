@@ -164,15 +164,15 @@ export const listSummariesByRootOperations = async (
     .flat()
     .sort((a, b) => b.event.createdAt.getTime() - a.event.createdAt.getTime());
 
-  // Dedupe to the latest event per Work WITHIN each root operation, not
-  // globally: one page can carry several operations touching the same Work
-  // (turn A creates a task, turn B updates it), and each turn's anchor card
-  // must still surface its own event.
-  const seenWorksByOperation: Record<string, Set<string>> = {};
+  // Dedupe to the latest event per Work GLOBALLY across the requested
+  // operations: when several rounds touch the same Work (turn A creates a
+  // task, turn B updates it), only the last touching round's anchor card
+  // should surface it — earlier rounds drop the chip instead of repeating
+  // the same artifact every turn.
+  const seenWorks = new Set<string>();
   for (const summary of summaries) {
     const rootOperationId = summary.event.rootOperationId;
     if (!rootOperationId || !(rootOperationId in result)) continue;
-    const seenWorks = (seenWorksByOperation[rootOperationId] ??= new Set());
     if (seenWorks.has(summary.id)) continue;
     seenWorks.add(summary.id);
     if (result[rootOperationId].length >= limit) continue;
