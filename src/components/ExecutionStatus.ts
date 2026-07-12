@@ -13,6 +13,7 @@ import {
   Clock,
   HandIcon,
   StarIcon,
+  TriangleAlert,
 } from 'lucide-react';
 
 export interface ExecutionStatusVisual {
@@ -59,7 +60,10 @@ export const TOPIC_STATUS_VISUALS: Record<ChatTopicStatus, ExecutionStatusVisual
   // Topic lists are mostly history: mute completed to keep long lists quiet,
   // unlike task boards where a green check marks an achievement.
   completed: { ...VISUALS.completed, color: cssVar.colorTextDescription },
-  failed: VISUALS.failed,
+  // A failed topic is an alert the user should act on, not a terminal outcome
+  // like a failed task run — the warning triangle reads that way, the circled X
+  // reads as "closed/rejected".
+  failed: { ...VISUALS.failed, icon: TriangleAlert },
   paused: VISUALS.paused,
   running: VISUALS.running,
   scheduled: VISUALS.scheduled,
