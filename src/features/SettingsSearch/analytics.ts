@@ -1,3 +1,4 @@
+import { uuid } from '@lobechat/utils';
 import { useEffect, useMemo, useRef } from 'react';
 
 import { trackProductUsageEvent } from '@/libs/analytics/productUsageEvent';
@@ -77,7 +78,9 @@ interface SearchSession {
 export const useSettingsSearchAnalytics = (query: string, results: SettingsSearchResult[]) => {
   const sessionRef = useRef<SearchSession>({
     clicked: false,
-    id: crypto.randomUUID(),
+    // Not crypto.randomUUID: it is secure-context-only, and this initializer
+    // runs on every render — self-hosted plain-http deployments would crash.
+    id: uuid(),
     lastQuery: '',
     lastResultCount: 0,
     queryCount: 0,
