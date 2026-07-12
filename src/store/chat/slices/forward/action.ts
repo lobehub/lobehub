@@ -26,6 +26,7 @@ export interface ForwardResult {
 export interface ForwardMessagesParams extends ForwardContentOptions {
   messages: UIChatMessage[];
   note?: string;
+  onTopicCreated?: (target: ForwardTarget, topicId: string) => void;
   targets: ForwardTarget[];
 }
 
@@ -49,6 +50,7 @@ export class ChatForwardActionImpl {
     header,
     messages,
     note,
+    onTopicCreated,
     roleLabel,
     targets,
   }: ForwardMessagesParams): Promise<ForwardResult> => {
@@ -57,11 +59,13 @@ export class ChatForwardActionImpl {
     const transcript = buildForwardedContent(messages, { header, roleLabel });
     const content = note?.trim() ? `${transcript}\n\n${note.trim()}` : transcript;
     const settled = await Promise.allSettled(
-      targets.map(async ({ id }) => {
+      targets.map(async (target) => {
+        const { id } = target;
         const result = await this.#get().sendMessage({
           context: { agentId: id, isNew: true, isolatedTopic: true, scope: 'main' },
           message: content,
           messages: [],
+          onTopicCreated: (topicId) => onTopicCreated?.(target, topicId),
         });
 
         return { agentId: id, topicId: result?.createdTopicId };

@@ -43,7 +43,7 @@ const data = { id: 'group-1', role: 'assistantGroup', tools: [] } as unknown as 
 const renderBar = (props: { contentId?: string }) =>
   render(<GroupActionsBar data={data} id="group-1" {...props} />);
 
-describe('GroupActionsBar — hetero (assistantGroup) forward/select gating', () => {
+describe('GroupActionsBar — assistantGroup action gating', () => {
   it('still generating with no text block → only delete', () => {
     storeMock.isGenerating = true;
     renderBar({ contentId: undefined });
@@ -53,28 +53,25 @@ describe('GroupActionsBar — hetero (assistantGroup) forward/select gating', ()
     expect(bar).toHaveAttribute('data-menu', '');
   });
 
-  it('finished but last block is a tool call → exposes share + select (forward entry) + delete', () => {
+  it('finished but last block is a tool call → exposes share and delete without select', () => {
     storeMock.isGenerating = false;
     renderBar({ contentId: undefined });
 
     const bar = screen.getByTestId('action-bar');
-    // This is the heterogeneous-agent gap: a completed CC/Codex turn that ends on
-    // a tool block used to fall into the delete-only "in progress" bar, hiding the
-    // forward (`select`) and `share` entries. It must now surface them.
     const menu = bar.getAttribute('data-menu') ?? '';
-    expect(menu.split(',')).toContain('select');
+    expect(menu.split(',')).not.toContain('select');
     expect(menu.split(',')).toContain('share');
     expect(menu.split(',')).toContain('del');
     expect(bar).toHaveAttribute('data-bar', 'delAndRegenerate');
   });
 
-  it('finished with a trailing text block → full menu (unchanged native behavior)', () => {
+  it('finished with a trailing text block → full menu without select', () => {
     storeMock.isGenerating = false;
     renderBar({ contentId: 'block-text' });
 
     const bar = screen.getByTestId('action-bar');
     const menu = bar.getAttribute('data-menu') ?? '';
-    expect(menu.split(',')).toContain('select');
+    expect(menu.split(',')).not.toContain('select');
     expect(menu.split(',')).toContain('share');
     expect(menu.split(',')).toContain('edit');
   });

@@ -1,9 +1,10 @@
+import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
 import { App } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useNavigateToAgent } from '@/hooks/useNavigateToAgent';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useChatStore } from '@/store/chat';
 import type { ForwardTarget } from '@/store/chat/slices/forward/action';
 
@@ -19,8 +20,9 @@ export type { ForwardTarget } from '@/store/chat/slices/forward/action';
 export const useForwardMessages = () => {
   const { t } = useTranslation('chat');
   const { message } = App.useApp();
-  const navigateToAgent = useNavigateToAgent();
+  const navigate = useWorkspaceAwareNavigate();
   const forwardMessages = useChatStore((s) => s.forwardMessages);
+  const clearPortalStack = useChatStore((s) => s.clearPortalStack);
   const exitSelectionMode = useConversationStore((s) => s.exitSelectionMode);
 
   // The conversation store is context-scoped (no global getState), so read the
@@ -38,29 +40,32 @@ export const useForwardMessages = () => {
       }
       if (targets.length === 0) return;
 
-      const result = await forwardMessages({
+      const primaryTarget = targets[0];
+      exitSelectionMode();
+
+      void forwardMessages({
         header: t('messageForward.transcript.header', { count: selectedMessages.length }),
         messages: selectedMessages,
         note,
+        onTopicCreated: (target, topicId) => {
+          if (target.id !== primaryTarget.id) return;
+          clearPortalStack();
+          navigate(AGENT_CHAT_TOPIC_URL(target.id, topicId));
+        },
         roleLabel: (role) =>
           role === 'user' ? t('messageForward.role.user') : t('messageForward.role.assistant'),
         targets,
+      }).then((result) => {
+        if (result.succeeded.length > 0) {
+          message.success(
+            targets.length === 1
+              ? t('messageForward.success', { title: primaryTarget.title || '' })
+              : t('messageForward.successMulti', { count: result.succeeded.length }),
+          );
+        }
+        if (result.failed.length > 0) message.error(t('messageForward.failed'));
       });
-
-      exitSelectionMode();
-      const primary = result.succeeded[0];
-      if (primary) navigateToAgent(primary.agentId);
-
-      if (result.succeeded.length > 0) {
-        const primaryTarget = targets.find((target) => target.id === primary?.agentId);
-        message.success(
-          targets.length === 1
-            ? t('messageForward.success', { title: primaryTarget?.title || '' })
-            : t('messageForward.successMulti', { count: result.succeeded.length }),
-        );
-      }
-      if (result.failed.length > 0) message.error(t('messageForward.failed'));
     },
-    [t, message, navigateToAgent, forwardMessages, exitSelectionMode, selectedMessages],
+    [t, message, navigate, clearPortalStack, forwardMessages, exitSelectionMode, selectedMessages],
   );
 };

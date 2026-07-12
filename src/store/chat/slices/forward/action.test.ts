@@ -14,9 +14,13 @@ describe('ChatForwardAction', () => {
   });
 
   it('forwards only user and assistant text into isolated topics', async () => {
+    const onTopicCreated = vi.fn();
     const sendMessage = vi
       .fn()
-      .mockResolvedValueOnce({ createdTopicId: 'topic-a' })
+      .mockImplementationOnce(async ({ onTopicCreated: notifyTopicCreated }) => {
+        notifyTopicCreated('topic-a');
+        return { createdTopicId: 'topic-a' };
+      })
       .mockRejectedValueOnce(new Error('failed'));
     const action = new ChatForwardActionImpl(vi.fn() as never, () => ({ sendMessage }) as never);
 
@@ -27,6 +31,7 @@ describe('ChatForwardAction', () => {
         message('tool', 'private tool output'),
         message('assistant', 'answer'),
       ],
+      onTopicCreated,
       roleLabel: (role) => role,
       targets: [{ id: 'agent-a' }, { id: 'agent-b' }],
     });
@@ -36,6 +41,7 @@ describe('ChatForwardAction', () => {
       'Forwarded\n\n---\n\n**user**\n\nquestion\n\n---\n\n**assistant**\n\nanswer',
     );
     expect(sendMessage.mock.calls[0][0].message).not.toContain('private tool output');
+    expect(onTopicCreated).toHaveBeenCalledWith({ id: 'agent-a' }, 'topic-a');
     expect(result.succeeded).toEqual([{ agentId: 'agent-a', topicId: 'topic-a' }]);
     expect(result.failed).toHaveLength(1);
     expect(result.failed[0].agentId).toBe('agent-b');
