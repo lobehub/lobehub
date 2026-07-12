@@ -26,6 +26,7 @@ const buildDevice = (overrides: Partial<DeviceListItem> = {}): DeviceListItem =>
   platform: null,
   registered: true,
   scope: 'personal',
+  visibility: null,
   workingDirs: [],
   ...overrides,
 });
