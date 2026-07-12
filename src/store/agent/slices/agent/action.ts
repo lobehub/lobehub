@@ -437,10 +437,21 @@ export class AgentSliceActionImpl {
   };
 
   #markAgentNotFound = (agentId: string) => {
-    if (this.#get().agentNotFoundMap[agentId]) return;
+    const { agentNotFoundMap, agentMap } = this.#get();
+    if (agentNotFoundMap[agentId] && !agentMap[agentId]) return;
 
     this.#set(
-      (state) => ({ agentNotFoundMap: { ...state.agentNotFoundMap, [agentId]: true } }),
+      (state) => {
+        // Also drop the previously cached config: surfaces reading `agentMap`
+        // (title/avatar in the sidebar or header) must not keep showing an
+        // agent the viewer lost access to next to the 404 content area.
+        const nextAgentMap = { ...state.agentMap };
+        delete nextAgentMap[agentId];
+        return {
+          agentMap: nextAgentMap,
+          agentNotFoundMap: { ...state.agentNotFoundMap, [agentId]: true },
+        };
+      },
       false,
       'markAgentNotFound',
     );

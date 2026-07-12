@@ -963,6 +963,24 @@ describe('AgentSlice Actions', () => {
       expect(useAgentStore.getState().agentMap['agent-private']).toBeUndefined();
     });
 
+    it('should drop the cached config when a previously loaded agent turns not-found', async () => {
+      // Loaded once, then the owner flips it back to private: the stale
+      // title/avatar in agentMap must not outlive the 404 state.
+      useAgentStore.setState({
+        agentMap: { 'agent-private': { model: 'gpt-4' } },
+      });
+      vi.mocked(agentService.getAgentConfigById).mockResolvedValueOnce(null as any);
+
+      renderHook(() => useAgentStore().useFetchAgentConfig(true, 'agent-private'), {
+        wrapper: withSWR,
+      });
+
+      await waitFor(() =>
+        expect(useAgentStore.getState().agentNotFoundMap['agent-private']).toBe(true),
+      );
+      expect(useAgentStore.getState().agentMap['agent-private']).toBeUndefined();
+    });
+
     it('should clear agentNotFoundMap once a later fetch succeeds (agent made public again)', async () => {
       useAgentStore.setState({ agentNotFoundMap: { 'agent-1': true } });
 
