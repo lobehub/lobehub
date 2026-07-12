@@ -316,6 +316,13 @@ export const mobileRoutes: RouteObject[] = [
             ),
             path: ':tab',
           },
+          {
+            element: dynamicElement(
+              () => import('@/routes/(main)/settings'),
+              'Mobile > Settings > Tab > Sub',
+            ),
+            path: ':tab/:sub',
+          },
         ],
         element: dynamicLayout(
           () => import('@/routes/(mobile)/settings/_layout'),

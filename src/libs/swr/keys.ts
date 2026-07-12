@@ -878,6 +878,7 @@ export const ollamaKeys = {
 };
 export const authKeys = {
   oauthAppById: def('auth:oauthAppById', (id: string) => ['auth:oauthAppById', id]),
+  oauthAppList: def('auth:oauthAppList', () => ['auth:oauthAppList']),
   oidcClientMetadata: def('auth:oidcClientMetadata', (clientId: string) => [
     'auth:oidcClientMetadata',
     clientId,
