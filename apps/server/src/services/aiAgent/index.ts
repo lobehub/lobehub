@@ -3054,7 +3054,14 @@ export class AiAgentService {
     ): Promise<Record<string, string>> => {
       if (!deviceId) return {};
       try {
-        const systemInfo = await deviceGateway.queryDeviceSystemInfo(this.userId, deviceId);
+        // Scope the gateway lookup to the principal that owns the connection:
+        // workspace devices need workspaceId; personal devices (including a
+        // workspace run routed to the caller's own machine) must not.
+        const systemInfo = await deviceGateway.queryDeviceSystemInfo(
+          this.userId,
+          deviceId,
+          activeDeviceScope === 'workspace' ? this.workspaceId : undefined,
+        );
         if (!systemInfo) return {};
         const device = onlineDevices.find((d) => d.deviceId === deviceId);
         log('execAgent: fetched device system info for %s', deviceId);
