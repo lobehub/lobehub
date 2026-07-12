@@ -1632,7 +1632,14 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         imageList,
       });
 
-      expect(mockSendPrompt).toHaveBeenCalledWith('ipc-sess-1', 'test prompt', 'op-1', imageList);
+      expect(mockSendPrompt).toHaveBeenCalledWith(
+        'ipc-sess-1',
+        'test prompt',
+        'op-1',
+        imageList,
+        undefined,
+        'agent-1',
+      );
     });
 
     it('should forward context selections as heterogeneous system context', async () => {
@@ -1659,6 +1666,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         'op-1',
         undefined,
         expect.stringContaining('<user_context_selections count="1">'),
+        'agent-1',
       );
       expect(mockSendPrompt.mock.calls[0][4]).toContain('filePath="src/example.ts"');
       expect(mockSendPrompt.mock.calls[0][4]).toContain('lines="7-7"');

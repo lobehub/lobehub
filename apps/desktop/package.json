@@ -54,7 +54,6 @@
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/tsconfig": "^2.0.0",
     "@electron-toolkit/utils": "^4.0.0",
-    "@lobechat/builtin-tool-browser": "workspace:*",
     "@lobechat/chat-adapter-imessage": "workspace:*",
     "@lobechat/desktop-bridge": "workspace:*",
     "@lobechat/device-control": "workspace:*",

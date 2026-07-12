@@ -28,7 +28,6 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@lobechat/builtin-tool-browser": "workspace:*",
     "@lobechat/types": "workspace:*"
   }
 }
