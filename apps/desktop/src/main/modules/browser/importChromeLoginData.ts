@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
+import { once } from 'node:events';
 import { constants } from 'node:fs';
-import { access, cp, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { access, cp, mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { homedir, platform, tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -9,6 +10,7 @@ import type { Cookie, Session } from 'electron';
 const DEFAULT_CHROME_PROFILE = 'Default';
 const DEVTOOLS_PORT_FILE = 'DevToolsActivePort';
 const DEVTOOLS_TIMEOUT = 15_000;
+const COOKIE_PATHS = ['Network/Cookies', 'Cookies'];
 
 interface CdpCookie extends Omit<Cookie, 'domain' | 'expirationDate' | 'sameSite'> {
   domain: string;
@@ -52,6 +54,19 @@ const chromeLocations = () => {
       };
     }
   }
+};
+
+const findCookiePath = async (profilePath: string) => {
+  for (const relativePath of COOKIE_PATHS) {
+    try {
+      await access(path.join(profilePath, relativePath), constants.R_OK);
+      return relativePath;
+    } catch {
+      // Chrome moved the cookie database between the profile root and Network/.
+    }
+  }
+
+  throw new Error('Chrome cookie database was not found');
 };
 
 const waitForDevTools = async (userData: string) => {
@@ -124,20 +139,18 @@ export const importChromeLoginData = async (browserSession: Session): Promise<nu
     access(path.join(userData, profile), constants.R_OK),
   ]);
 
+  const sourceProfile = path.join(userData, profile);
+  const cookiePath = await findCookiePath(sourceProfile);
   const temporaryUserData = await mkdtemp(path.join(tmpdir(), 'lobehub-chrome-import-'));
   const temporaryProfile = path.join(temporaryUserData, profile);
   let chromeProcess: ReturnType<typeof spawn> | undefined;
 
   try {
+    await mkdir(path.dirname(path.join(temporaryProfile, cookiePath)), { recursive: true });
     await Promise.all([
       cp(localStatePath, path.join(temporaryUserData, 'Local State')),
-      cp(path.join(userData, profile), temporaryProfile, {
-        filter: (source) =>
-          !['Cache', 'Code Cache', 'GPUCache', 'LOCK', 'SingletonCookie', 'SingletonLock'].includes(
-            path.basename(source),
-          ),
-        recursive: true,
-      }),
+      cp(path.join(sourceProfile, 'Preferences'), path.join(temporaryProfile, 'Preferences')),
+      cp(path.join(sourceProfile, cookiePath), path.join(temporaryProfile, cookiePath)),
     ]);
 
     chromeProcess = spawn(
@@ -180,7 +193,13 @@ export const importChromeLoginData = async (browserSession: Session): Promise<nu
     await browserSession.cookies.flushStore();
     return imported;
   } finally {
-    chromeProcess?.kill('SIGTERM');
-    await rm(temporaryUserData, { force: true, recursive: true });
+    if (chromeProcess && !chromeProcess.killed) {
+      chromeProcess.kill('SIGTERM');
+      await Promise.race([
+        once(chromeProcess, 'exit'),
+        new Promise((resolve) => setTimeout(resolve, 2000)),
+      ]);
+    }
+    await rm(temporaryUserData, { force: true, maxRetries: 3, recursive: true, retryDelay: 100 });
   }
 };

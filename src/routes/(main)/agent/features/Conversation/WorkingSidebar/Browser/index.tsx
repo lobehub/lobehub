@@ -178,7 +178,7 @@ const BrowserPane = memo<BrowserPaneProps>(({ sessionId }) => {
     try {
       const result = await electronBrowserSidebarService.importChromeLoginData();
       if (!result.success) {
-        message.error(result.error || t('workingPanel.browser.import.failed'));
+        message.error(t('workingPanel.browser.import.failed'));
         return;
       }
 
