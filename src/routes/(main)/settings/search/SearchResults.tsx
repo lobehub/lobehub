@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 
+import { useSettingsSearchAnalytics } from './analytics';
 import { useSettingsSearch } from './useSettingsSearch';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -35,6 +36,7 @@ const SearchResults = memo<{ query: string }>(({ query }) => {
   const { t } = useTranslation('setting');
   const navigate = useWorkspaceAwareNavigate();
   const results = useSettingsSearch(query);
+  const { trackResultClick } = useSettingsSearchAnalytics(query, results);
   const keyword = query.trim();
 
   if (results.length === 0)
@@ -48,7 +50,7 @@ const SearchResults = memo<{ query: string }>(({ query }) => {
 
   return (
     <Flexbox gap={1} paddingBlock={4}>
-      {results.map((result) => (
+      {results.map((result, index) => (
         <NavItem
           href={result.url}
           icon={result.icon}
@@ -59,7 +61,10 @@ const SearchResults = memo<{ query: string }>(({ query }) => {
               {result.breadcrumb}
             </Text>
           }
-          onClick={() => navigate(result.url)}
+          onClick={() => {
+            trackResultClick(result, index + 1);
+            navigate(result.url);
+          }}
         />
       ))}
     </Flexbox>
