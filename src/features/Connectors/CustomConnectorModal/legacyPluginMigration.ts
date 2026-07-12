@@ -138,8 +138,10 @@ export const buildConnectorPayloadFromLegacy = (legacy: LobeToolCustomPlugin): M
  *      a half-baked marketplace connector from the old `syncPluginTools` path
  *      becomes an UPDATE, no client-side collision branch needed.
  *   3. `syncConnectorTools` — fail-loud. On failure (the MCP endpoint is
- *      unreachable / 500s), ROLL BACK the connector created in step 2 before
- *      rethrowing. Leaving it behind would strand the user: the tool-less
+ *      unreachable / 500s), ROLL BACK the connector — but only when step 2
+ *      actually CREATED it (see `hasExistingConnector`), never when it merely
+ *      updated a pre-existing row. Leaving a freshly-created one behind would
+ *      strand the user: the tool-less
  *      connector now shadows the legacy row, so it renders as a duplicate in
  *      the connector list AND `connectorByIdentifier` starts resolving it,
  *      which removes the "Configure to migrate" entry point (that only shows
@@ -157,6 +159,12 @@ export const buildConnectorPayloadFromLegacy = (legacy: LobeToolCustomPlugin): M
 export interface MigrationSaveDeps {
   createConnector: (payload: MigrationCreatePayload) => Promise<string>;
   deleteConnector: (id: string) => Promise<void>;
+  /**
+   * Whether a `user_connectors` row already exists for this identifier BEFORE
+   * the create call. `createConnector` is an idempotent upsert, so on the sync
+   * failure path we must NOT delete a row we merely updated — only one we created.
+   */
+  hasExistingConnector: (identifier: string) => boolean;
   syncConnectorTools: (id: string) => Promise<void>;
   uninstallCustomPlugin: (id: string) => Promise<void>;
 }
@@ -185,6 +193,10 @@ export const executeLegacyMigrationSave = async (
     identifier: legacyPlugin.identifier,
   };
 
+  // Capture pre-existence BEFORE the upsert so the rollback below only ever
+  // deletes a connector THIS migration created (see MigrationSaveDeps).
+  const connectorAlreadyExisted = deps.hasExistingConnector(payload.identifier);
+
   const newConnectorId = await deps.createConnector(payload);
 
   try {
@@ -194,10 +206,17 @@ export const executeLegacyMigrationSave = async (
     // connector back so we don't leave a tool-less duplicate alongside the
     // surviving legacy plugin (see step 3 above), then rethrow so the modal
     // surfaces the failure and the legacy row stays as the single source.
-    try {
-      await deps.deleteConnector(newConnectorId);
-    } catch (rollbackError) {
-      console.error('[connector-migration] rollback after failed sync failed', rollbackError);
+    //
+    // Skip rollback when a connector already existed for this identifier: the
+    // upsert UPDATED that row (it did not create one), so deleting it would
+    // destroy a working connector's synced tools/credentials — e.g. a prior
+    // successful migration whose best-effort legacy uninstall had failed.
+    if (!connectorAlreadyExisted) {
+      try {
+        await deps.deleteConnector(newConnectorId);
+      } catch (rollbackError) {
+        console.error('[connector-migration] rollback after failed sync failed', rollbackError);
+      }
     }
     throw syncError;
   }

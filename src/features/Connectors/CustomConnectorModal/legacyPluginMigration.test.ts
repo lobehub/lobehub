@@ -388,6 +388,7 @@ describe('executeLegacyMigrationSave', () => {
 
   let createConnector: ReturnType<typeof vi.fn>;
   let deleteConnector: ReturnType<typeof vi.fn>;
+  let hasExistingConnector: ReturnType<typeof vi.fn>;
   let syncConnectorTools: ReturnType<typeof vi.fn>;
   let uninstallCustomPlugin: ReturnType<typeof vi.fn>;
   let calls: string[];
@@ -402,6 +403,8 @@ describe('executeLegacyMigrationSave', () => {
     deleteConnector = vi.fn(async () => {
       calls.push('deleteConnector');
     });
+    // Default: no pre-existing connector (the common fresh-migration case).
+    hasExistingConnector = vi.fn(() => false);
     syncConnectorTools = vi.fn(async () => {
       calls.push('syncConnectorTools');
     });
@@ -419,6 +422,7 @@ describe('executeLegacyMigrationSave', () => {
     const result = await executeLegacyMigrationSave(legacy(), legacy(), {
       createConnector,
       deleteConnector,
+      hasExistingConnector,
       syncConnectorTools,
       uninstallCustomPlugin,
     });
@@ -438,6 +442,7 @@ describe('executeLegacyMigrationSave', () => {
     await executeLegacyMigrationSave(legacy('agent-x'), value, {
       createConnector,
       deleteConnector,
+      hasExistingConnector,
       syncConnectorTools,
       uninstallCustomPlugin,
     });
@@ -459,6 +464,7 @@ describe('executeLegacyMigrationSave', () => {
     await executeLegacyMigrationSave(legacy('legacy-id'), legacy('renamed-in-form'), {
       createConnector,
       deleteConnector,
+      hasExistingConnector,
       syncConnectorTools,
       uninstallCustomPlugin,
     });
@@ -478,6 +484,7 @@ describe('executeLegacyMigrationSave', () => {
     const result = await executeLegacyMigrationSave(broken, broken, {
       createConnector,
       deleteConnector,
+      hasExistingConnector,
       syncConnectorTools,
       uninstallCustomPlugin,
     });
@@ -495,6 +502,7 @@ describe('executeLegacyMigrationSave', () => {
       executeLegacyMigrationSave(legacy(), legacy(), {
         createConnector,
         deleteConnector,
+        hasExistingConnector,
         syncConnectorTools,
         uninstallCustomPlugin,
       }),
@@ -515,6 +523,7 @@ describe('executeLegacyMigrationSave', () => {
       executeLegacyMigrationSave(legacy(), legacy(), {
         createConnector,
         deleteConnector,
+        hasExistingConnector,
         syncConnectorTools,
         uninstallCustomPlugin,
       }),
@@ -527,6 +536,26 @@ describe('executeLegacyMigrationSave', () => {
     expect(uninstallCustomPlugin).not.toHaveBeenCalled();
   });
 
+  it('does NOT roll back on sync failure when a connector already existed (idempotent update)', async () => {
+    // `createConnector` is an upsert: a pre-existing row for this identifier is
+    // UPDATED, not created. A transient sync failure must not delete it —
+    // that would destroy a working connector's synced tools/credentials (e.g. a
+    // prior successful migration whose best-effort legacy uninstall had failed).
+    hasExistingConnector.mockReturnValue(true);
+    syncConnectorTools.mockRejectedValueOnce(new Error('mcp tools/list timeout'));
+    await expect(
+      executeLegacyMigrationSave(legacy(), legacy(), {
+        createConnector,
+        deleteConnector,
+        hasExistingConnector,
+        syncConnectorTools,
+        uninstallCustomPlugin,
+      }),
+    ).rejects.toThrow('mcp tools/list timeout');
+    expect(deleteConnector).not.toHaveBeenCalled();
+    expect(uninstallCustomPlugin).not.toHaveBeenCalled();
+  });
+
   it('still rethrows the sync error even if the rollback delete also fails', async () => {
     syncConnectorTools.mockRejectedValueOnce(new Error('mcp tools/list timeout'));
     deleteConnector.mockRejectedValueOnce(new Error('rollback network error'));
@@ -534,6 +563,7 @@ describe('executeLegacyMigrationSave', () => {
       executeLegacyMigrationSave(legacy(), legacy(), {
         createConnector,
         deleteConnector,
+        hasExistingConnector,
         syncConnectorTools,
         uninstallCustomPlugin,
       }),
@@ -550,6 +580,7 @@ describe('executeLegacyMigrationSave', () => {
     const result = await executeLegacyMigrationSave(legacy(), legacy(), {
       createConnector,
       deleteConnector,
+      hasExistingConnector,
       syncConnectorTools,
       uninstallCustomPlugin,
     });
@@ -571,6 +602,7 @@ describe('executeLegacyMigrationSave', () => {
       executeLegacyMigrationSave(legacy(), legacy(), {
         createConnector,
         deleteConnector,
+        hasExistingConnector,
         syncConnectorTools,
         uninstallCustomPlugin,
       }),
@@ -583,6 +615,7 @@ describe('executeLegacyMigrationSave', () => {
     const result = await executeLegacyMigrationSave(legacy(), legacy(), {
       createConnector,
       deleteConnector,
+      hasExistingConnector,
       syncConnectorTools,
       uninstallCustomPlugin,
     });

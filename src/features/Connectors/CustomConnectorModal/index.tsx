@@ -224,6 +224,10 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
         const result = await executeLegacyMigrationSave(legacyPlugin, value, {
           createConnector,
           deleteConnector,
+          // Read fresh so the rollback only deletes a connector this migration
+          // created, never one the idempotent upsert merely updated.
+          hasExistingConnector: (id) =>
+            Boolean(connectorSelectors.connectorByIdentifier(id)(useToolStore.getState())),
           syncConnectorTools,
           uninstallCustomPlugin,
         });
