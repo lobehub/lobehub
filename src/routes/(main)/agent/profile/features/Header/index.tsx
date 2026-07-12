@@ -18,7 +18,7 @@ import { useTranslation } from 'react-i18next';
 import { useAgentTransferMenuItem } from '@/business/client/hooks/useAgentTransferMenuItem';
 import { useBusinessAgentImportMenuItem } from '@/business/client/hooks/useBusinessAgentImportMenuItem';
 import { message } from '@/components/AntdStaticMethods';
-import { CONVERSATION_MIN_WIDTH, DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
+import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
 import NavHeader from '@/features/NavHeader';
 import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton';
@@ -273,7 +273,7 @@ const Header = memo(() => {
       }
       styles={{
         left: {
-          paddingInlineStart: `max(8px, calc((100% - ${CONVERSATION_MIN_WIDTH}px) / 2 + 16px))`,
+          paddingInlineStart: 8,
         },
       }}
     />

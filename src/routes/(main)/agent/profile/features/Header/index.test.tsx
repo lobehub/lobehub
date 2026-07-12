@@ -139,7 +139,6 @@ vi.mock('@/components/AntdStaticMethods', () => ({
 }));
 
 vi.mock('@/const/layoutTokens', () => ({
-  CONVERSATION_MIN_WIDTH: 960,
   DESKTOP_HEADER_ICON_SMALL_SIZE: 24,
 }));
 
@@ -231,16 +230,20 @@ describe('Agent profile Header', () => {
     mocks.agentState.isCurrentAgentHeterogeneous = false;
     mocks.agentState.systemRole = 'You are helpful.';
     mocks.agentState.config.plugins = ['lobe-web-browsing'];
+    mocks.globalState.showAgentBuilderPanel = false;
     mocks.profileState.editor = undefined;
   });
 
-  it('aligns the breadcrumb with the responsive profile content column', () => {
-    render(<Header />);
+  it.each([false, true])(
+    'keeps the breadcrumb aligned with the left content inset when builder expanded is %s',
+    (showAgentBuilderPanel) => {
+      mocks.globalState.showAgentBuilderPanel = showAgentBuilderPanel;
 
-    expect(screen.getByTestId('nav-header-left').style.paddingInlineStart).toBe(
-      'max(8px, calc((100% - 960px) / 2 + 16px))',
-    );
-  });
+      render(<Header />);
+
+      expect(screen.getByTestId('nav-header-left').style.paddingInlineStart).toBe('8px');
+    },
+  );
 
   it('should show the markdown export action', () => {
     render(<Header />);
