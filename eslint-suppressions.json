@@ -1,9 +1,4 @@
 {
-  "src/components/InvalidAPIKey/__tests__/ComfyUIForm.test.tsx": {
-    "no-restricted-imports": {
-      "count": 1
-    }
-  },
   "src/features/Conversation/Error/index.test.tsx": {
     "no-restricted-imports": {
       "count": 1
