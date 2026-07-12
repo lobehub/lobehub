@@ -8,6 +8,7 @@ import type {
 } from '@lobechat/agent-runtime';
 import {
   AgentRuntime,
+  extractActivatedToolIdsFromMessages,
   findInMessages,
   GeneralChatAgent,
   isParkedStatus,
@@ -515,7 +516,17 @@ export class AgentRuntimeService {
       );
 
       // Initialize operation state - create state before saving
+      const activatedStepTools = extractActivatedToolIdsFromMessages(initialMessages)?.map(
+        (id) => ({
+          activatedAtStep: initialStepCount,
+          id,
+          manifest: operationToolSet.manifestMap[id],
+          source: 'discovery' as const,
+        }),
+      );
+
       const initialState = {
+        activatedStepTools,
         createdAt: new Date().toISOString(),
         // Store initialContext for executeSync to use
         initialContext,
