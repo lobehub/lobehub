@@ -813,6 +813,9 @@ export const createGatewayEventHandler = (
                   type: 'updatePluginState',
                   value: {
                     model: progress.model,
+                    totalCost: progress.totalCost,
+                    totalInputTokens: progress.totalInputTokens,
+                    totalOutputTokens: progress.totalOutputTokens,
                     totalTokens: progress.totalTokens,
                     totalToolCalls: progress.totalToolCalls,
                   },

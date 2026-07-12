@@ -64,6 +64,17 @@ export interface CallSubAgentParams {
 export interface SubAgentRunStats {
   /** Model the sub-agent ran on */
   model?: string;
+  /**
+   * Cost of the sub-agent run. Carried here (rather than only on the child's own
+   * messages) because the parent's usage tray sums per-message usage, and the
+   * sub-agent's messages live in an isolation thread the parent never loads —
+   * this tool message is where the child's spend enters the parent's ledger.
+   */
+  totalCost?: number;
+  /** Input tokens consumed by the sub-agent run */
+  totalInputTokens?: number;
+  /** Output tokens produced by the sub-agent run */
+  totalOutputTokens?: number;
   /** Total tokens consumed by the sub-agent run */
   totalTokens?: number;
   /** Number of tool calls the sub-agent made */
