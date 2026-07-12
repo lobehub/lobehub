@@ -1399,16 +1399,6 @@
       "count": 1
     }
   },
-  "src/routes/share/t/[id]/features/ActionBar.tsx": {
-    "no-restricted-imports": {
-      "count": 1
-    }
-  },
-  "src/routes/share/t/[id]/index.tsx": {
-    "no-restricted-imports": {
-      "count": 1
-    }
-  },
   "src/store/chat/slices/message/action.test.ts": {
     "no-restricted-imports": {
       "count": 1
