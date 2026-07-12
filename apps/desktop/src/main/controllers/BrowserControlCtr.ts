@@ -65,8 +65,18 @@ const SNAPSHOT_SCRIPT = `(() => {
     if (el.isContentEditable) return 'textbox';
     return tagRoles[el.tagName] || null;
   };
+  // Never serialize the value of secret fields (autofilled passwords, card
+  // numbers, OTPs) into the snapshot — it goes to the model and is persisted
+  // in the tool result.
+  const isSensitive = (el) => {
+    if (el.tagName !== 'INPUT') return false;
+    const type = (el.getAttribute('type') || '').toLowerCase();
+    if (type === 'password') return true;
+    if (/(cc-number|cc-csc|cc-exp|current-password|new-password|one-time-code)/i.test(el.getAttribute('autocomplete') || '')) return true;
+    return /(password|passwd|pwd|secret|token|otp|cvv|pin)/i.test((el.getAttribute('name') || '') + ' ' + (el.id || ''));
+  };
   const nameOf = (el) =>
-    (el.getAttribute('aria-label') || el.innerText || el.value || el.placeholder || el.title || el.getAttribute('alt') || '')
+    (el.getAttribute('aria-label') || el.innerText || (isSensitive(el) ? '' : el.value) || el.placeholder || el.title || el.getAttribute('alt') || '')
       .trim().replaceAll(/\\s+/g, ' ').slice(0, 80);
   const candidates = document.querySelectorAll('a,button,input,select,textarea,summary,h1,h2,h3,[role],[onclick],[contenteditable=true]');
   const seen = new Set();
@@ -83,7 +93,7 @@ const SNAPSHOT_SCRIPT = `(() => {
     refs[ref] = el;
     let line = '- ' + role + ' "' + name + '" [ref=' + ref + ']';
     if (el.disabled) line += ' [disabled]';
-    if (role === 'textbox' && el.value) line += ' [value="' + String(el.value).slice(0, 40) + '"]';
+    if (role === 'textbox' && el.value) line += isSensitive(el) ? ' [value=<redacted>]' : ' [value="' + String(el.value).slice(0, 40) + '"]';
     if ((role === 'checkbox' || role === 'radio') && el.checked) line += ' [checked]';
     lines.push(line);
   }

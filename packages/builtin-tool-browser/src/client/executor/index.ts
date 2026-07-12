@@ -36,8 +36,28 @@ class BrowserExecutor extends BaseExecutor<typeof BrowserApiEnum> {
   readonly identifier = BrowserIdentifier;
   protected readonly apiEnum = BrowserApiEnum;
 
+  /**
+   * Every execution path funnels through this executor (local runtime, the
+   * DesktopBrowserGatewayBridge for cloud runs, and the CC MCP bridge), so a
+   * single Labs-toggle gate here covers them all: with the in-app browser lab
+   * off, the sidebar tab is hidden and driving it would be invisible to the
+   * user.
+   */
+  private async labDisabledFailure(): Promise<BuiltinToolResult | undefined> {
+    const [{ useUserStore }, { labPreferSelectors }] = await Promise.all([
+      import('@/store/user'),
+      import('@/store/user/selectors'),
+    ]);
+    if (labPreferSelectors.enableInAppBrowser(useUserStore.getState())) return undefined;
+    return this.failure(
+      'The in-app browser is disabled. Ask the user to enable "In-App Browser" under Settings → Advanced → Labs, then retry.',
+    );
+  }
+
   navigate = async (params: BrowserNavigateArgs, ctx?: BuiltinToolContext) => {
     try {
+      const disabled = await this.labDisabledFailure();
+      if (disabled) return disabled;
       const sessionId = this.sessionIdOf(ctx);
       const { electronBrowserSidebarService } = await import('@/services/electron/browserSidebar');
 
@@ -77,6 +97,8 @@ class BrowserExecutor extends BaseExecutor<typeof BrowserApiEnum> {
 
   snapshot = async (_params: object, ctx?: BuiltinToolContext) => {
     try {
+      const disabled = await this.labDisabledFailure();
+      if (disabled) return disabled;
       const { electronBrowserControlService } = await import('@/services/electron/browserControl');
       const result = await electronBrowserControlService.snapshot({
         sessionId: this.sessionIdOf(ctx),
@@ -97,6 +119,8 @@ class BrowserExecutor extends BaseExecutor<typeof BrowserApiEnum> {
 
   click = async (params: BrowserClickArgs, ctx?: BuiltinToolContext) => {
     try {
+      const disabled = await this.labDisabledFailure();
+      if (disabled) return disabled;
       await this.revealBrowserTab();
       const { electronBrowserControlService } = await import('@/services/electron/browserControl');
       const result = await electronBrowserControlService.click({
@@ -118,6 +142,8 @@ class BrowserExecutor extends BaseExecutor<typeof BrowserApiEnum> {
 
   fill = async (params: BrowserFillArgs, ctx?: BuiltinToolContext) => {
     try {
+      const disabled = await this.labDisabledFailure();
+      if (disabled) return disabled;
       await this.revealBrowserTab();
       const { electronBrowserControlService } = await import('@/services/electron/browserControl');
       const result = await electronBrowserControlService.fill({
@@ -138,6 +164,8 @@ class BrowserExecutor extends BaseExecutor<typeof BrowserApiEnum> {
 
   press = async (params: BrowserPressArgs, ctx?: BuiltinToolContext) => {
     try {
+      const disabled = await this.labDisabledFailure();
+      if (disabled) return disabled;
       const { electronBrowserControlService } = await import('@/services/electron/browserControl');
       const result = await electronBrowserControlService.press({
         key: params.key,
@@ -152,6 +180,8 @@ class BrowserExecutor extends BaseExecutor<typeof BrowserApiEnum> {
 
   scroll = async (params: BrowserScrollArgs, ctx?: BuiltinToolContext) => {
     try {
+      const disabled = await this.labDisabledFailure();
+      if (disabled) return disabled;
       const { electronBrowserControlService } = await import('@/services/electron/browserControl');
       const result = await electronBrowserControlService.scroll({
         dx: params.dx,
@@ -167,6 +197,8 @@ class BrowserExecutor extends BaseExecutor<typeof BrowserApiEnum> {
 
   screenshot = async (_params: object, ctx?: BuiltinToolContext) => {
     try {
+      const disabled = await this.labDisabledFailure();
+      if (disabled) return disabled;
       await this.revealBrowserTab();
       const { electronBrowserControlService } = await import('@/services/electron/browserControl');
       const result = await electronBrowserControlService.screenshot({
@@ -186,6 +218,8 @@ class BrowserExecutor extends BaseExecutor<typeof BrowserApiEnum> {
 
   readPage = async (_params: object, ctx?: BuiltinToolContext) => {
     try {
+      const disabled = await this.labDisabledFailure();
+      if (disabled) return disabled;
       const { electronBrowserControlService } = await import('@/services/electron/browserControl');
       const result = await electronBrowserControlService.readPage({
         sessionId: this.sessionIdOf(ctx),
