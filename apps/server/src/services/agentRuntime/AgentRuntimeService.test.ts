@@ -345,6 +345,7 @@ describe('AgentRuntimeService', () => {
         initialStepCount: 3,
         toolSet: {
           ...mockParams.toolSet,
+          activatableToolIds: ['lobe-task'],
           manifestMap: { 'lobe-task': taskManifest },
         },
       });
@@ -361,6 +362,34 @@ describe('AgentRuntimeService', () => {
             },
           ],
         }),
+      );
+    });
+
+    it('should not restore historical tools that current run gates reject', async () => {
+      await service.createOperation({
+        ...mockParams,
+        autoStart: false,
+        initialMessages: [
+          {
+            content: 'Successfully activated tools: lobe-task',
+            id: 'tool-message-1',
+            plugin: { apiName: 'activateTools', identifier: 'lobe-activator' },
+            pluginState: { activatedTools: [{ identifier: 'lobe-task' }] },
+            role: 'tool',
+          },
+        ] as any,
+        toolSet: {
+          ...mockParams.toolSet,
+          // The broad discovery map may still contain the manifest in chat/custom
+          // mode or for a model without function calling support.
+          activatableToolIds: [],
+          manifestMap: { 'lobe-task': { identifier: 'lobe-task' } as any },
+        },
+      });
+
+      expect(mockCoordinator.saveAgentState).toHaveBeenCalledWith(
+        'test-operation-1',
+        expect.objectContaining({ activatedStepTools: undefined }),
       );
     });
 
