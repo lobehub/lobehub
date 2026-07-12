@@ -1043,3 +1043,52 @@ nodeintegration, plugins, disablewebsecurity, allowpopups, preload, …`). The h
 - **Works**: seed an `agents` row and set `topics.agent_id` (and `messages.agent_id`)
   before opening the share page. Verify the fetch actually fired via
   `agent-browser network requests | grep getMessages`, not by waiting on the UI.
+### E15. ✅ Next dev does NOT hot-reload `apps/server/**` — you are testing STALE compiled server code
+
+- **Situation**: verifying a working-tree change inside `apps/server/src/**` (an agent-runtime
+  service, a tool executor, a router) against a `bun run dev` server that was started before the
+  edit. The app behaves normally, the feature simply does nothing.
+- **Doesn't work**: assuming HMR covers it because `@/server/*` maps to `apps/server/src/*` in
+  `tsconfig.json` (source, no `dist`), so it "should" recompile. It does not, at least for large
+  service files. Measured: a `console.error` added at the top of a code path that demonstrably ran
+  (child ops were created, the DB rows appeared) printed **zero** lines across four separate runs;
+  after a dev-server restart, the same line printed on the first run. The whole feature under test
+  had never executed once.
+- **Why this is a trap and not a nuisance**: the failure mode is silent and looks exactly like a
+  logic bug. You will go hunting in your own diff for a fault that is not there.
+- **Works**: after ANY edit under `apps/server/**`, restart the dev server before drawing a
+  conclusion. If a run "should" have hit your code and didn't, prove the server is running your
+  code FIRST — drop a `console.error` on the path and restart — before debugging the code itself.
+
+### E16. ✅ `source`-ing an unquoted JSON env var silently corrupts it (JWKS\_KEY → gateway auth\_failed)
+
+- **Situation**: writing an env file for the local gateway loop with
+  `JWKS_KEY={"keys":[{"kty":"RSA",...}]}` on one line, then `set -a; source that-file`.
+- **Doesn't work**: the shell strips every double quote from an unquoted assignment, so the process
+  receives `{keys:[{kty:RSA,...}]}` — invalid JSON. `getJwksKey()` (`packages/trpc/src/utils/internalJwt.ts:13-20`)
+  throws on `JSON.parse`, `signUserJWT` throws, and the server hands the client an **empty** gateway
+  token. The browser sends `{"token":"","type":"auth"}` and the gateway answers `auth_failed`.
+- **What makes it genuinely deceptive**: `local-gateway-setup.sh` and `local-gateway-probe.mjs` read
+  `JWKS_KEY` out of the file with a **regex**, not by sourcing it — so both are unaffected. The probe
+  cheerfully prints `✅ auth_success` while the real browser path is broken. A green probe is NOT
+  evidence the app's own token works.
+- **Works**: single-quote the value in the env file (`export JWKS_KEY='{"keys":[...]}'`) and prove the
+  round-trip before starting the server:
+  ```bash
+  (source env-file && node -e 'JSON.parse(process.env.JWKS_KEY); console.log("ok")')
+  ```
+  To diagnose an `auth_failed`, hook `ws.send` in the page and read the token the client actually
+  sends — an empty string means the SERVER failed to sign, not that the gateway rejected a signature.
+
+### E17. The chat input silently refuses to send when the agent's model is retired
+
+- **Situation**: driving a real turn (store `sendMessage` or type+Enter). The call resolves, no error
+  is thrown, `activeTopicId` stays `null`, and no `agent_operations` row appears. Nothing in the dev
+  server log — the request is never even issued.
+- **Cause**: the composer shows a small inline warning ("当前模型已下线。请选择其他模型后继续使用。")
+  and disables send. A model id that was valid a while ago (e.g. `deepseek-chat`) can be retired from
+  the model bank while the agent row still points at it.
+- **Works**: read the actually-enabled models out of the store before configuring a fixture agent —
+  `window.__LOBE_STORES.aiInfra().enabledChatModelList` → `[{id: provider, children: [{id: model}]}]` —
+  and pick one from there. Also: a send that "resolves fine but creates no operation" is a UI-gate
+  symptom; **screenshot the composer** instead of re-reading your store call.

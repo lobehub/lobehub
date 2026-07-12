@@ -3312,15 +3312,16 @@ export class AiAgentService {
     // gates. manifestMap is intentionally broader for discovery and must not
     // by itself authorize a tool in chat/custom mode or without function calls.
     const historicalActivatedToolIds = extractActivatedToolIdsFromMessages(allMessages) ?? [];
-    const activatableToolIds = toolsEngine && historicalActivatedToolIds.length > 0
-      ? toolsEngine.generateToolsDetailed({
-          context: { isExplicitActivation: true },
-          model,
-          provider,
-          skipDefaultTools: true,
-          toolIds: historicalActivatedToolIds,
-        }).enabledToolIds
-      : [];
+    const activatableToolIds =
+      toolsEngine && historicalActivatedToolIds.length > 0
+        ? toolsEngine.generateToolsDetailed({
+            context: { isExplicitActivation: true },
+            model,
+            provider,
+            skipDefaultTools: true,
+            toolIds: historicalActivatedToolIds,
+          }).enabledToolIds
+        : [];
 
     log('execAgent: prepared evalContext for executor');
 
@@ -3694,6 +3695,10 @@ export class AiAgentService {
           orchestrationRole: appContext?.orchestrationRole,
           scope: appContext?.scope,
           sourceMessageId: userMessageRecord?.id ?? parentMessageId ?? undefined,
+          // Live-progress anchor for a callSubAgent child — carries the parked
+          // parent's operationId + placeholder tool message so the child's step
+          // loop can stream its running totals down the parent's gateway channel.
+          subAgentProgress: appContext?.subAgentProgress,
           taskId: operationTaskId,
           threadId: appContext?.threadId,
           topicId,
@@ -4207,10 +4212,20 @@ export class AiAgentService {
       }
     }
 
+    // Live progress for a `callSubAgent` child: its per-step totals ride down the
+    // parked parent's gateway channel (see `appContext.subAgentProgress`). Group
+    // members are excluded — their whole stream is already mirrored onto the
+    // supervisor's channel via `mirrorToOperationId`.
+    const subAgentProgress =
+      options.resumeParentOnComplete && parentOperationId && options.orchestrationRole !== 'member'
+        ? { parentOperationId, toolMessageId: parentMessageId }
+        : undefined;
+
     const appContext: NonNullable<InternalExecAgentParams['appContext']> = {
       groupId,
       isSubAgent: options.isSubAgent,
       orchestrationRole: options.orchestrationRole,
+      subAgentProgress,
       threadId: thread.id,
       topicId,
     };

@@ -268,6 +268,99 @@ describe('tool executors', () => {
     expect(stopped.nextContext).toBeUndefined();
   });
 
+  // A deferred tool (callSubAgent) parks the parent WITHOUT a tool_end, so the
+  // pause chunk is the only thing that can tell the client its placeholder row
+  // exists. Drop `toolMessageIds` and the row never enters the client store —
+  // every later update addressed at it silently no-ops.
+  it('advertises a deferred tool placeholder id on the pause chunk', async () => {
+    runTool.mockResolvedValue({
+      attempts: 1,
+      result: {
+        content: '',
+        deferred: true,
+        state: { status: 'pending', threadId: 'thread-9', toolMessageId: 'tool-msg-deferred' },
+        success: true,
+      },
+    });
+
+    const instruction: Extract<AgentInstruction, { type: 'call_tool' }> = {
+      payload: {
+        parentMessageId: 'assistant-msg-1',
+        toolCalling: createToolCall('sub-agent-call', 'lobe-agent'),
+      },
+      type: 'call_tool',
+    };
+
+    const result = await callTool(host)(instruction, createState());
+
+    expect(publishChunk).toHaveBeenCalledWith(
+      expect.objectContaining({
+        chunkType: 'tools_calling',
+        toolMessageIds: { 'sub-agent-call': 'tool-msg-deferred' },
+      }),
+    );
+    // No tool_end for a deferred tool — the completion bridge resolves it later.
+    expect(publishEvent).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'tool_end' }));
+    expect(result.newState.status).toBe('waiting_for_async_tool');
+    expect(result.events).toContainEqual(
+      expect.objectContaining({ reason: 'async_tool', type: 'interrupted' }),
+    );
+  });
+
+  it('omits toolMessageIds when a deferred tool reports no placeholder', async () => {
+    runTool.mockResolvedValue({
+      attempts: 1,
+      result: { content: '', deferred: true, state: { status: 'pending' }, success: true },
+    });
+
+    await callTool(host)(
+      {
+        payload: {
+          parentMessageId: 'assistant-msg-1',
+          toolCalling: createToolCall('sub-agent-call', 'lobe-agent'),
+        },
+        type: 'call_tool',
+      },
+      createState(),
+    );
+
+    expect(publishChunk).toHaveBeenCalledWith(
+      expect.not.objectContaining({ toolMessageIds: expect.anything() }),
+    );
+  });
+
+  it('collects placeholder ids for every deferred tool in a batch', async () => {
+    runTool.mockImplementation(async (tool: { id: string }) => ({
+      attempts: 1,
+      result: {
+        content: '',
+        deferred: true,
+        state: { status: 'pending', toolMessageId: `msg-for-${tool.id}` },
+        success: true,
+      },
+    }));
+
+    await callToolsBatch(host)(
+      {
+        payload: {
+          parentMessageId: 'assistant-msg-1',
+          toolsCalling: [
+            createToolCall('sub-a', 'lobe-agent'),
+            createToolCall('sub-b', 'lobe-agent'),
+          ],
+        },
+        type: 'call_tools_batch',
+      },
+      createState(),
+    );
+
+    expect(publishChunk).toHaveBeenCalledWith(
+      expect.objectContaining({
+        toolMessageIds: { 'sub-a': 'msg-for-sub-a', 'sub-b': 'msg-for-sub-b' },
+      }),
+    );
+  });
+
   it('executes server tools in a mixed batch then parks for client tools', async () => {
     const instruction: Extract<AgentInstruction, { type: 'call_tools_batch' }> = {
       payload: {

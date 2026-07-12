@@ -356,6 +356,19 @@ export interface OperationCreationParams {
     scope?: string | null;
     /** Source user message ID used for same-turn Agent Signal procedure suppression. */
     sourceMessageId?: string;
+    /**
+     * Live-progress anchor for a `callSubAgent` child, spread onto
+     * `state.metadata.subAgentProgress`.
+     *
+     * The child runs on its own operationId, but the client only ever subscribes
+     * to the PARENT's gateway channel — which stays open across the sub-agent run
+     * because `waiting_for_async_tool` is excluded from `STREAM_END_STATUSES`.
+     * So the child's step loop publishes its running totals onto the parent's
+     * channel, addressed at the placeholder tool message by `toolMessageId`.
+     * Without this the client sees nothing until `completeSubAgentBridge`
+     * backfills `pluginState` at the very end.
+     */
+    subAgentProgress?: { parentOperationId: string; toolMessageId: string };
     taskId?: string;
     threadId?: string | null;
     topicId?: string | null;

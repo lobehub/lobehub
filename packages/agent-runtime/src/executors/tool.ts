@@ -175,22 +175,43 @@ const publishError = async (host: AgentRuntimeHost, error: unknown, phase: strin
   });
 };
 
+/**
+ * A deferred tool's runtime has already created the row its result will be
+ * backfilled into (e.g. `callSubAgent`'s pending placeholder) and hands the id
+ * back on the execution state. Lift it out so the pause chunk can advertise it.
+ */
+const deferredToolMessageId = (result: { state?: unknown }): string | undefined => {
+  const state = result.state as { toolMessageId?: unknown } | undefined;
+  return typeof state?.toolMessageId === 'string' ? state.toolMessageId : undefined;
+};
+
 const pauseForTools = async ({
   host,
   instruction,
   reason,
   state,
+  toolMessageIds,
   toolsCalling,
 }: {
   host: AgentRuntimeHost;
   instruction?: AgentInstruction;
   reason: string;
   state: AgentState;
+  /**
+   * `tool_call_id → tool message id`, for pending tools whose row the server has
+   * already created (today: deferred async tools such as `callSubAgent`). Tells
+   * the client to pull those rows in — without it the parked parent's placeholder
+   * never reaches the store, and anything addressed at it silently no-ops.
+   * Same optional field the human-approval pause chunk carries; legacy consumers
+   * ignore it.
+   */
+  toolMessageIds?: Record<string, string>;
   toolsCalling: ChatToolPayload[];
 }) => {
   await host.transports.stream.publishChunk({
     chunkType: 'tools_calling',
     stepIndex: host.operation.stepIndex,
+    ...(toolMessageIds && Object.keys(toolMessageIds).length > 0 && { toolMessageIds }),
     toolsCalling,
   });
 
@@ -358,10 +379,12 @@ export const callTool =
       }
 
       if (execution.result.deferred) {
+        const deferredId = deferredToolMessageId(execution.result);
         return pauseForTools({
           host,
           reason: 'async_tool',
           state,
+          toolMessageIds: deferredId ? { [tool.id]: deferredId } : undefined,
           toolsCalling: [tool],
         });
       }
@@ -538,6 +561,8 @@ export const callToolsBatch =
     const toolMessageIds: string[] = [];
     const toolResults: ToolResultEntry[] = [];
     const deferredTools: ChatToolPayload[] = [];
+    // `tool_call_id → placeholder message id` for the deferred tools in this batch.
+    const deferredToolMessageIds: Record<string, string> = {};
     const toolsToExecute = serverTools.length > 0 ? serverTools : toolsCalling;
 
     await Promise.all(
@@ -555,6 +580,8 @@ export const callToolsBatch =
 
           if (execution.result.deferred) {
             deferredTools.push(tool);
+            const deferredId = deferredToolMessageId(execution.result);
+            if (deferredId) deferredToolMessageIds[tool.id] = deferredId;
             return;
           }
 
@@ -662,6 +689,7 @@ export const callToolsBatch =
         host,
         reason: pauseReason,
         state: newState,
+        toolMessageIds: deferredToolMessageIds,
         toolsCalling: pendingTools,
       });
 

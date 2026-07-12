@@ -3,6 +3,7 @@ import type {
   StepCompleteData,
   StreamChunkData,
   StreamStartData,
+  SubAgentProgressData,
   ToolEndData,
   ToolExecuteData,
   ToolStartData,
@@ -782,6 +783,31 @@ export const createGatewayEventHandler = (
 
       case 'step_complete': {
         const data = event.data as StepCompleteData | undefined;
+
+        // A parked `callSubAgent` child reporting its running totals. Patch them
+        // onto the placeholder tool message in memory only — the persisted values
+        // are written once, by `completeSubAgentBridge`, when the child finishes.
+        // Kept under a `progress` key so a DB refetch can never leave a stale live
+        // number sitting where the authoritative one belongs.
+        if (data?.phase === 'subagent_progress') {
+          const progress = event.data as SubAgentProgressData;
+          if (progress.toolMessageId) {
+            get().internal_dispatchMessage(
+              {
+                id: progress.toolMessageId,
+                key: 'progress',
+                type: 'updatePluginState',
+                value: {
+                  model: progress.model,
+                  totalTokens: progress.totalTokens,
+                  totalToolCalls: progress.totalToolCalls,
+                },
+              },
+              dispatchContext,
+            );
+          }
+          break;
+        }
 
         // Refresh on execution_complete to ensure final step state is consistent
         if (data?.phase === 'execution_complete') {

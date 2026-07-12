@@ -46,6 +46,14 @@ export interface ServerSubAgentRunResult {
   subOperationId?: string;
   /** The isolation thread holding the sub-agent's full message trace. */
   threadId: string;
+  /**
+   * The placeholder tool message the child was anchored to. Surfaced back up to
+   * the runtime so the `pauseForTools` chunk can carry `toolMessageIds` — that is
+   * what makes the client refetch and actually put this row in its store, which
+   * in turn is what lets live sub-agent progress patch onto it while the parent
+   * is parked.
+   */
+  toolMessageId?: string;
 }
 
 /**

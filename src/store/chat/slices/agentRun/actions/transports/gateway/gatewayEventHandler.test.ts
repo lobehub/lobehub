@@ -165,6 +165,57 @@ describe('createGatewayEventHandler', () => {
     expect(store.replaceMessages).not.toHaveBeenCalled();
   });
 
+  it('patches live sub-agent progress onto the placeholder tool message, in memory only', async () => {
+    const getMessages = vi
+      .spyOn(messageService, 'getMessages')
+      .mockResolvedValue([] as unknown as UIChatMessage[]);
+    const store = createStore();
+    const handler = createGatewayEventHandler(() => store, {
+      assistantMessageId: 'seed-msg',
+      context,
+      operationId: 'op-1',
+    });
+
+    handler(
+      makeEvent('step_complete', {
+        model: 'claude-sonnet-5',
+        phase: 'subagent_progress',
+        toolMessageId: 'tool-msg-sub',
+        totalTokens: 4321,
+        totalToolCalls: 3,
+      }),
+    );
+    await flush();
+
+    expect(store.internal_dispatchMessage).toHaveBeenCalledWith(
+      {
+        id: 'tool-msg-sub',
+        key: 'progress',
+        type: 'updatePluginState',
+        value: { model: 'claude-sonnet-5', totalTokens: 4321, totalToolCalls: 3 },
+      },
+      { operationId: 'op-1' },
+    );
+    // Live progress is advisory — the completion bridge owns the persisted value,
+    // so this must never trigger a DB read or write.
+    expect(getMessages).not.toHaveBeenCalled();
+    expect(store.replaceMessages).not.toHaveBeenCalled();
+  });
+
+  it('ignores a sub-agent progress event with no tool message anchor', async () => {
+    const store = createStore();
+    const handler = createGatewayEventHandler(() => store, {
+      assistantMessageId: 'seed-msg',
+      context,
+      operationId: 'op-1',
+    });
+
+    handler(makeEvent('step_complete', { phase: 'subagent_progress', totalTokens: 10 }));
+    await flush();
+
+    expect(store.internal_dispatchMessage).not.toHaveBeenCalled();
+  });
+
   it('preserves existing result_msg_id when a tools_calling chunk omits result links', async () => {
     const store = createStore({
       key: [
