@@ -14,6 +14,7 @@ import {
   resolveCodexModel,
   resolveCodexReasoningEffort,
   resolveCodexSpeedMode,
+  resolveOverrideBySource,
 } from './agencyConfig';
 
 describe('pruneWorkingDirByDeviceDeletes', () => {
@@ -454,5 +455,31 @@ describe('resolveAgencyConfig', () => {
     expect(resolveAgencyConfig(shared, { executionTarget: 'none' })).toEqual({
       executionTarget: 'none',
     });
+  });
+});
+
+describe('resolveOverrideBySource', () => {
+  it('returns undefined when bySource is nullish', () => {
+    expect(resolveOverrideBySource(undefined, 'd1')).toBeUndefined();
+    expect(resolveOverrideBySource(null, 'd1')).toBeUndefined();
+  });
+
+  it('matches the exact sourceDeviceId', () => {
+    const bySource = {
+      'd1': { executionTarget: 'device' as const },
+      '*': { executionTarget: 'none' as const },
+    };
+    expect(resolveOverrideBySource(bySource, 'd1')).toEqual({ executionTarget: 'device' });
+  });
+
+  it('falls back to the wildcard key', () => {
+    const bySource = { '*': { executionTarget: 'local' as const } };
+    expect(resolveOverrideBySource(bySource, 'd1')).toEqual({ executionTarget: 'local' });
+  });
+
+  it('honors the legacy flat override format', () => {
+    // Pre-per-source map shape stored the override directly on the agent key.
+    const flat = { executionTarget: 'sandbox' as const, boundDeviceId: 'dev-1' };
+    expect(resolveOverrideBySource(flat as any, 'd1')).toEqual(flat);
   });
 });

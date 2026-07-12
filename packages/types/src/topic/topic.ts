@@ -232,6 +232,12 @@ export interface ChatTopicMetadata {
 /** Metadata patch accepted by the topic update API. */
 export const chatTopicMetadataUpdateSchema = z.object({
   boundDeviceId: z.string().optional(),
+  deviceOverride: z
+    .object({
+      boundDeviceId: z.string().optional(),
+      executionTarget: z.enum(['auto', 'device', 'local', 'none', 'sandbox']).optional(),
+    })
+    .optional(),
   heteroSessionId: z.string().optional(),
   heteroSessionIdByWorkingDirectory: z.record(z.string(), z.string()).optional(),
   model: z.string().optional(),

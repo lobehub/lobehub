@@ -22,11 +22,21 @@ const testState = vi.hoisted(() => ({
   getDeviceInfo: vi.fn(),
   isDesktop: false,
   user: {
+    preference: {
+      personalDeviceOverrides: undefined as
+        | Record<string, Record<string, { boundDeviceId?: string; executionTarget?: string }>>
+        | undefined,
+    },
+    updatePreference: vi.fn(),
     updateWorkspaceUserPreference: vi.fn(),
     workspaceUserPreference: {} as {
       agentDeviceOverrides?: Record<string, { boundDeviceId?: string; executionTarget?: string }>;
     },
   },
+}));
+
+vi.mock('@/utils/sourceDevice', () => ({
+  getSourceDeviceId: () => 'web-device-1',
 }));
 
 vi.mock('@lobechat/const', () => ({
@@ -70,20 +80,25 @@ describe('useSelectExecutionTarget', () => {
     testState.electron.gatewayDeviceInfo = undefined;
     testState.getDeviceInfo = vi.fn();
     testState.isDesktop = false;
+    testState.user.preference = { personalDeviceOverrides: undefined };
+    testState.user.updatePreference = vi.fn();
     testState.user.workspaceUserPreference = {};
     testState.user.updateWorkspaceUserPreference = vi.fn();
   });
 
-  describe('personal agent — writes to the shared agencyConfig', () => {
+  describe('personal agent — writes to users.preference.personalDeviceOverrides (per source device)', () => {
     it('persists the target as-is when switching to sandbox, keeping any existing boundDeviceId', async () => {
       testState.agent.agencyConfig = { boundDeviceId: 'device-1', executionTarget: 'local' };
       const { result } = renderHook(() => useSelectExecutionTarget('agent-id'));
 
       await result.current('sandbox');
 
-      expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith('agent-id', {
-        agencyConfig: { boundDeviceId: 'device-1', executionTarget: 'sandbox' },
+      expect(testState.user.updatePreference).toHaveBeenCalledWith({
+        personalDeviceOverrides: {
+          'agent-id': { 'web-device-1': { boundDeviceId: 'device-1', executionTarget: 'sandbox' } },
+        },
       });
+      expect(testState.agent.updateAgentConfigById).not.toHaveBeenCalled();
       expect(testState.user.updateWorkspaceUserPreference).not.toHaveBeenCalled();
     });
 
@@ -92,9 +107,12 @@ describe('useSelectExecutionTarget', () => {
 
       await result.current('device', 'device-2');
 
-      expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith('agent-id', {
-        agencyConfig: { boundDeviceId: 'device-2', executionTarget: 'device' },
+      expect(testState.user.updatePreference).toHaveBeenCalledWith({
+        personalDeviceOverrides: {
+          'agent-id': { 'web-device-1': { boundDeviceId: 'device-2', executionTarget: 'device' } },
+        },
       });
+      expect(testState.agent.updateAgentConfigById).not.toHaveBeenCalled();
     });
 
     it("stores 'local' verbatim (not pre-resolved to 'device') to preserve the in-process IPC path", async () => {
@@ -105,8 +123,12 @@ describe('useSelectExecutionTarget', () => {
       await result.current('local');
 
       expect(testState.getDeviceInfo).not.toHaveBeenCalled();
-      expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith('agent-id', {
-        agencyConfig: { boundDeviceId: 'this-machine', executionTarget: 'local' },
+      expect(testState.user.updatePreference).toHaveBeenCalledWith({
+        personalDeviceOverrides: {
+          'agent-id': {
+            'this-machine': { boundDeviceId: 'this-machine', executionTarget: 'local' },
+          },
+        },
       });
     });
 
@@ -118,8 +140,10 @@ describe('useSelectExecutionTarget', () => {
       await result.current('local');
 
       expect(testState.getDeviceInfo).toHaveBeenCalled();
-      expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith('agent-id', {
-        agencyConfig: { boundDeviceId: 'resolved-device', executionTarget: 'local' },
+      expect(testState.user.updatePreference).toHaveBeenCalledWith({
+        personalDeviceOverrides: {
+          'agent-id': { '*': { boundDeviceId: 'resolved-device', executionTarget: 'local' } },
+        },
       });
     });
 
@@ -130,8 +154,10 @@ describe('useSelectExecutionTarget', () => {
 
       await result.current('local');
 
-      expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith('agent-id', {
-        agencyConfig: { boundDeviceId: 'stale-device', executionTarget: 'local' },
+      expect(testState.user.updatePreference).toHaveBeenCalledWith({
+        personalDeviceOverrides: {
+          'agent-id': { 'web-device-1': { executionTarget: 'local' } },
+        },
       });
     });
 
@@ -142,8 +168,24 @@ describe('useSelectExecutionTarget', () => {
 
       await result.current('local');
 
-      expect(testState.agent.updateAgentConfigById).not.toHaveBeenCalled();
+      expect(testState.user.updatePreference).not.toHaveBeenCalled();
       expect(testState.user.updateWorkspaceUserPreference).not.toHaveBeenCalled();
+    });
+
+    it('merges into an existing personalDeviceOverrides without dropping other agents', async () => {
+      testState.user.preference.personalDeviceOverrides = {
+        'other-agent': { '*': { executionTarget: 'sandbox' } },
+      };
+      const { result } = renderHook(() => useSelectExecutionTarget('agent-id'));
+
+      await result.current('device', 'device-3');
+
+      expect(testState.user.updatePreference).toHaveBeenCalledWith({
+        personalDeviceOverrides: {
+          'other-agent': { '*': { executionTarget: 'sandbox' } },
+          'agent-id': { 'web-device-1': { boundDeviceId: 'device-3', executionTarget: 'device' } },
+        },
+      });
     });
   });
 
@@ -159,7 +201,9 @@ describe('useSelectExecutionTarget', () => {
 
       expect(testState.user.updateWorkspaceUserPreference).toHaveBeenCalledWith({
         agentDeviceOverrides: {
-          'agent-id': { boundDeviceId: 'ws-device-1', executionTarget: 'device' },
+          'agent-id': {
+            'web-device-1': { boundDeviceId: 'ws-device-1', executionTarget: 'device' },
+          },
         },
       });
       expect(testState.agent.updateAgentConfigById).not.toHaveBeenCalled();
@@ -174,7 +218,9 @@ describe('useSelectExecutionTarget', () => {
 
       expect(testState.user.updateWorkspaceUserPreference).toHaveBeenCalledWith({
         agentDeviceOverrides: {
-          'agent-id': { boundDeviceId: 'this-machine', executionTarget: 'local' },
+          'agent-id': {
+            'this-machine': { boundDeviceId: 'this-machine', executionTarget: 'local' },
+          },
         },
       });
       expect(testState.agent.updateAgentConfigById).not.toHaveBeenCalled();
@@ -193,7 +239,7 @@ describe('useSelectExecutionTarget', () => {
       expect(testState.user.updateWorkspaceUserPreference).toHaveBeenCalledWith({
         agentDeviceOverrides: {
           'other-agent': { boundDeviceId: 'other-device', executionTarget: 'device' },
-          'agent-id': { executionTarget: 'sandbox' },
+          'agent-id': { 'web-device-1': { executionTarget: 'sandbox' } },
         },
       });
     });
@@ -205,7 +251,7 @@ describe('useSelectExecutionTarget', () => {
       await result.current('sandbox');
 
       expect(testState.user.updateWorkspaceUserPreference).toHaveBeenCalledWith({
-        agentDeviceOverrides: { 'agent-id': { executionTarget: 'sandbox' } },
+        agentDeviceOverrides: { 'agent-id': { 'web-device-1': { executionTarget: 'sandbox' } } },
       });
     });
   });

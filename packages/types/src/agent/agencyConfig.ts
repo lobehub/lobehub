@@ -614,6 +614,11 @@ export const resolveOverrideBySource = (
   sourceDeviceId?: string | null,
 ): Pick<LobeAgentAgencyConfig, 'boundDeviceId' | 'executionTarget'> | undefined => {
   if (!bySource) return undefined;
+  // Backward-compat: the pre-per-source map format stored the override
+  // directly (a flat AgentDeviceOverride), not a per-sourceDeviceId map.
+  if ('executionTarget' in bySource || 'boundDeviceId' in bySource) {
+    return bySource as Pick<LobeAgentAgencyConfig, 'boundDeviceId' | 'executionTarget'>;
+  }
   if (sourceDeviceId && bySource[sourceDeviceId]) return bySource[sourceDeviceId];
   if (bySource['*']) return bySource['*'];
   return undefined;

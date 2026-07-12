@@ -135,6 +135,13 @@ export interface SSOProvider {
   providerAccountId: string;
 }
 
+const agentDeviceOverrideSchema = z.object({
+  boundDeviceId: z.string().optional(),
+  executionTarget: z.enum(['auto', 'device', 'local', 'none', 'sandbox']).optional(),
+});
+
+const agentDeviceOverridesBySourceSchema = z.record(z.string(), agentDeviceOverrideSchema);
+
 export const UserPreferenceSchema = z
   .object({
     defaultOpenInApp: z.string().optional(),
@@ -142,6 +149,7 @@ export const UserPreferenceSchema = z
     hideSyncAlert: z.boolean().optional(),
     lab: UserLabSchema.optional(),
     lastWorkspaceId: z.string().nullish(),
+    personalDeviceOverrides: z.record(z.string(), agentDeviceOverridesBySourceSchema).optional(),
     telemetry: z.boolean().nullable(),
     topicGroupMode: z.enum(['byTime', 'byProject', 'flat', 'byStatus']).optional(),
     topicIncludeCompleted: z.boolean().optional(),

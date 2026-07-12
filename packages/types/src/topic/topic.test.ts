@@ -34,4 +34,15 @@ describe('chatTopicMetadataUpdateSchema', () => {
 
     expect(result.success).toBe(false);
   });
+
+  it('accepts a topic-level deviceOverride patch', () => {
+    const metadata = {
+      deviceOverride: { boundDeviceId: 'dev-1', executionTarget: 'device' },
+    };
+
+    expect(chatTopicMetadataUpdateSchema.parse(metadata)).toEqual(metadata);
+    expect(
+      chatTopicMetadataUpdateSchema.parse({ deviceOverride: { executionTarget: 'local' } }),
+    ).toEqual({ deviceOverride: { executionTarget: 'local' } });
+  });
 });
