@@ -3912,6 +3912,14 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
           payload.content === spawnResult,
       );
       expect(terminalCreate).toBeDefined();
+      expect(mockBatchMutate.mock.calls).toContainEqual([
+        expect.arrayContaining([
+          expect.objectContaining({
+            message: expect.objectContaining({ content: spawnResult, role: 'assistant', threadId }),
+            type: 'createMessage',
+          }),
+        ]),
+      ]);
 
       // Terminal message chains off the in-thread assistant (the subagent
       // spine), with the child tool inline, so the transcript flows
@@ -3921,6 +3929,15 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         ([payload]: any) => payload.role === 'tool' && payload.tool_call_id === 'toolu_child',
       );
       expect(toolCreate).toBeDefined();
+      expect(mockBatchMutate.mock.calls).toContainEqual([
+        expect.arrayContaining([
+          expect.objectContaining({ type: 'updateMessage' }),
+          expect.objectContaining({
+            message: expect.objectContaining({ tool_call_id: 'toolu_child' }),
+            type: 'createMessage',
+          }),
+        ]),
+      ]);
       const firstAssistantCreate = mockCreateMessage.mock.calls.find(
         ([payload]: any) => payload.role === 'assistant' && payload.threadId === threadId,
       );
