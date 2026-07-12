@@ -1,3 +1,4 @@
+import { LOADING_FLAT } from '@lobechat/const';
 import { type UIChatMessage } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
@@ -29,6 +30,7 @@ const DEFAULT_MENU: MessageActionSlot[] = [
   'del',
 ];
 const ERROR_BAR: MessageActionSlot[] = ['regenerate', 'del'];
+const ERROR_MENU: MessageActionSlot[] = ['edit', 'copy', 'divider', 'del'];
 
 interface AssistantActionsBarProps {
   actionsConfig?: MessageActionsConfig;
@@ -39,12 +41,16 @@ interface AssistantActionsBarProps {
 export const AssistantActionsBar = memo<AssistantActionsBarProps>(({ actionsConfig, id, data }) => {
   const ctx = useMemo<MessageActionContext>(() => ({ data, id, role: 'assistant' }), [data, id]);
 
-  const { error, tools } = data;
+  const { content, error, tools } = data;
 
-  // Error messages render an interception card, not user-authored content —
-  // editing or copying them makes no sense, so no overflow menu is offered
+  // Empty error messages render only an interception card — nothing to edit
+  // or copy, so no overflow menu. When the turn streamed content before
+  // erroring, keep edit/copy so the partial reply stays salvageable.
   if (error) {
-    return <MessageActionBar bar={ERROR_BAR} ctx={ctx} />;
+    const hasContent = !!content && content !== LOADING_FLAT && String(content).trim() !== '';
+    return (
+      <MessageActionBar bar={ERROR_BAR} ctx={ctx} menu={hasContent ? ERROR_MENU : undefined} />
+    );
   }
 
   const defaultBar = tools ? DEFAULT_BAR_WITH_TOOLS : DEFAULT_BAR;
