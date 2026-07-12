@@ -2,6 +2,7 @@ import { SettingsTabs } from '@/store/global/initialState';
 
 export interface SettingsSearchContext {
   enableBusinessFeatures: boolean;
+  enableGatewayMode: boolean;
   enableSTT: boolean;
   hideDocs: boolean;
   isDesktop: boolean;
@@ -21,7 +22,7 @@ export interface SettingsSearchItem {
   /** i18n key of the item label */
   labelKey: string;
   /** i18n namespace of `labelKey` / `descKey`, defaults to `setting` */
-  ns?: 'labs' | 'setting';
+  ns?: 'electron' | 'labs' | 'setting';
   tab: SettingsTabs;
   /**
    * Extra visibility gate mirroring the target item's own render condition
@@ -146,6 +147,7 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     keywords: ['gateway', 'agent runtime'],
     labelKey: 'tab.advanced.gatewayMode.title',
     tab: SettingsTabs.Advanced,
+    visible: (ctx) => ctx.enableGatewayMode,
   },
   {
     anchor: 'advanced-update-channel',
@@ -229,6 +231,7 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     descKey: 'proxy.enableDesc',
     keywords: ['proxy', 'network'],
     labelKey: 'proxy.enable',
+    ns: 'electron',
     tab: SettingsTabs.Proxy,
   },
   {
@@ -236,6 +239,7 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     descKey: 'proxy.authDesc',
     keywords: ['authentication', 'username', 'password'],
     labelKey: 'proxy.auth',
+    ns: 'electron',
     tab: SettingsTabs.Proxy,
   },
   {
@@ -243,6 +247,7 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     descKey: 'proxy.testDescription',
     keywords: ['test', 'connection', 'check'],
     labelKey: 'proxy.testUrl',
+    ns: 'electron',
     tab: SettingsTabs.Proxy,
   },
   // Hotkey

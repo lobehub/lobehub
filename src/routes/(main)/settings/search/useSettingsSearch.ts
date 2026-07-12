@@ -51,16 +51,18 @@ const splitKeywords = (text: string) =>
  * from `SETTINGS_SEARCH_ITEMS` and are dropped when their tab is not visible.
  */
 export const useSettingsSearch = (query: string): SettingsSearchResult[] => {
-  const { t } = useTranslation(['setting', 'labs']);
+  const { t } = useTranslation(['setting', 'labs', 'electron']);
   const categoryGroups = useCategory();
   const { enableSTT, hideDocs, showAiImage } = useServerConfigStore(featureFlagsSelectors);
   const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
+  const enableGatewayMode = useServerConfigStore(serverConfigSelectors.enableGatewayMode);
 
   // The translated index only depends on locale / visibility inputs — build it
   // once, not on every keystroke.
   const index = useMemo(() => {
     const ctx: SettingsSearchContext = {
       enableBusinessFeatures: !!enableBusinessFeatures,
+      enableGatewayMode: !!enableGatewayMode,
       enableSTT: !!enableSTT,
       hideDocs: !!hideDocs,
       isDesktop,
@@ -146,7 +148,15 @@ export const useSettingsSearch = (query: string): SettingsSearchResult[] => {
       }
 
     return entries;
-  }, [categoryGroups, t, enableBusinessFeatures, hideDocs]);
+  }, [
+    categoryGroups,
+    t,
+    enableBusinessFeatures,
+    enableGatewayMode,
+    enableSTT,
+    hideDocs,
+    showAiImage,
+  ]);
 
   return useMemo(() => {
     const q = query.trim().toLowerCase();
