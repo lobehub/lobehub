@@ -133,4 +133,32 @@ describe('WorkspaceUserSettingsModel', () => {
     await serverDB.delete(users);
     expect(await model.get()).toBeUndefined();
   });
+
+  it('merges per source device so a single-source patch never drops other devices', async () => {
+    const model = new WorkspaceUserSettingsModel(serverDB, userA, workspaceId);
+    await model.updatePreference({
+      agentDeviceOverrides: {
+        agentX: {
+          deviceA: { boundDeviceId: 'device-A', executionTarget: 'device' },
+          deviceB: { boundDeviceId: 'device-B', executionTarget: 'device' },
+        },
+      },
+    });
+
+    // A client with a stale/partial local copy patches ONLY deviceB for agentX —
+    // deviceA's saved choice must survive the write.
+    await model.updatePreference({
+      agentDeviceOverrides: {
+        agentX: { deviceB: { executionTarget: 'sandbox' } },
+      },
+    });
+
+    const preference = await model.getPreference();
+    expect(preference.agentDeviceOverrides).toEqual({
+      agentX: {
+        deviceA: { boundDeviceId: 'device-A', executionTarget: 'device' },
+        deviceB: { boundDeviceId: 'device-B', executionTarget: 'sandbox' },
+      },
+    });
+  });
 });

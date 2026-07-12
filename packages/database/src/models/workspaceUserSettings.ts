@@ -68,11 +68,14 @@ export class WorkspaceUserSettingsModel {
    */
   updatePreference = async (patch: Partial<WorkspaceUserPreference>) => {
     const current = (await this.getPreference()) ?? {};
-    // `agentDeviceOverrides` merges one level deeper: clients patch a single
-    // agent's override built from their LOCAL copy of the map, which may be
-    // stale or empty (picker used before the preference fetch settled), and a
-    // top-level replace would silently drop this user's saved choices for
-    // every other agent. Individual per-agent entries still replace wholesale.
+    // `agentDeviceOverrides` merges per source device, not per agent. Clients
+    // patch a single agent's override built from their LOCAL copy of the
+    // per-source map, which may be stale or partial (e.g. the picker was opened
+    // before the preference fetch settled, or another tab saved a different
+    // source device). A shallow per-agent replace would silently drop this
+    // user's saved choices for *other* source devices, breaking the per-source
+    // isolation. So merge one level deeper: each agent's source map is combined
+    // key-by-key with what's already persisted.
     const next: WorkspaceUserPreference = {
       ...current,
       ...patch,
@@ -80,7 +83,12 @@ export class WorkspaceUserSettingsModel {
         ? {
             agentDeviceOverrides: {
               ...current.agentDeviceOverrides,
-              ...patch.agentDeviceOverrides,
+              ...Object.fromEntries(
+                Object.entries(patch.agentDeviceOverrides).map(([agentId, bySource]) => [
+                  agentId,
+                  { ...current.agentDeviceOverrides?.[agentId], ...bySource },
+                ]),
+              ),
             },
           }
         : {}),

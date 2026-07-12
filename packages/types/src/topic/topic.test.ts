@@ -45,4 +45,12 @@ describe('chatTopicMetadataUpdateSchema', () => {
       chatTopicMetadataUpdateSchema.parse({ deviceOverride: { executionTarget: 'local' } }),
     ).toEqual({ deviceOverride: { executionTarget: 'local' } });
   });
+
+  it('accepts a topic-level modelOverride patch', () => {
+    const metadata = {
+      modelOverride: { model: 'gpt-5', provider: 'openai' },
+    };
+
+    expect(chatTopicMetadataUpdateSchema.parse(metadata)).toEqual(metadata);
+  });
 });

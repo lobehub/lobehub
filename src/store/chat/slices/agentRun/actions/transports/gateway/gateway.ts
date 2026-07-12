@@ -482,6 +482,12 @@ export class GatewayActionImpl {
       allowList: toolInterventionSelectors.allowList(useUserStore.getState()),
     };
 
+    // Forward the active topic's model override so the server run uses the
+    // topic's pinned model/provider instead of the agent default.
+    const topicModelOverride = context.topicId
+      ? topicSelectors.getTopicById(context.topicId)(this.#get())?.metadata?.modelOverride
+      : undefined;
+
     const result = await aiAgentService.execAgentTask(
       {
         agentId: context.agentId,
@@ -511,7 +517,9 @@ export class GatewayActionImpl {
         deviceId: localDeviceId,
         fileIds,
         mentionedAgents,
+        ...(topicModelOverride ? { model: topicModelOverride.model } : {}),
         parentMessageId,
+        ...(topicModelOverride ? { provider: topicModelOverride.provider } : {}),
         prompt: message,
         resumeApproval,
         resumeToolResult,

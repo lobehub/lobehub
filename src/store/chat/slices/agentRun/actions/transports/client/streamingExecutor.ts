@@ -163,11 +163,8 @@ export class StreamingExecutorActionImpl {
     let topicDeviceOverride: { executionTarget?: string; boundDeviceId?: string } | undefined;
     if (topicId) {
       const topic = topicSelectors.getTopicById(topicId)(this.#get());
-      if (topic?.metadata?.model) {
-        topicModelOverride = {
-          model: topic.metadata.model,
-          provider: topic.metadata.provider || '',
-        };
+      if (topic?.metadata?.modelOverride) {
+        topicModelOverride = topic.metadata.modelOverride;
       }
       if (topic?.metadata?.deviceOverride) {
         topicDeviceOverride = topic.metadata.deviceOverride;

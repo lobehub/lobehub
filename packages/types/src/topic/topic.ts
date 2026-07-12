@@ -161,6 +161,18 @@ export interface ChatTopicMetadata {
   importedFrom?: string;
   model?: string;
   /**
+   * Topic-level model override. When set, the chat-input model selector and
+   * the client/server exec paths use this model+provider instead of the
+   * agent's default for every message in this topic.
+   *
+   * Kept separate from the top-level `model`/`provider` because history
+   * compression (`internal_summaryHistory`) also writes `metadata.model` /
+   * `metadata.provider` with the *summarizer* agent — reusing those would make
+   * subsequent sends silently switch to the summarizer model. This dedicated
+   * field is the only thing the model-override path reads.
+   */
+  modelOverride?: { model: string; provider: string };
+  /**
    * Free-form feedback collected after agent onboarding completion.
    * Comment text is stored only here (not analytics) and is length-capped server-side.
    */
@@ -241,6 +253,7 @@ export const chatTopicMetadataUpdateSchema = z.object({
   heteroSessionId: z.string().optional(),
   heteroSessionIdByWorkingDirectory: z.record(z.string(), z.string()).optional(),
   model: z.string().optional(),
+  modelOverride: z.object({ model: z.string(), provider: z.string() }).optional(),
   onboardingFeedback: z
     .object({
       comment: z.string().max(500).optional(),

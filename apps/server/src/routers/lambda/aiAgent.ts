@@ -171,8 +171,12 @@ const ExecAgentSchema = z
     existingMessageIds: z.array(z.string()).optional().default([]),
     /** File IDs of already-uploaded attachments to attach to the new user message */
     fileIds: z.array(z.string()).optional(),
+    /** Topic-level model override; forwarded to the agent run so the topic's pinned model wins. */
+    model: z.string().optional(),
     /** Parent message ID for regeneration/continue (skip user message creation, branch from this message) */
     parentMessageId: z.string().optional(),
+    /** Topic-level provider override; forwarded alongside `model`. */
+    provider: z.string().optional(),
     /** The user input/prompt */
     prompt: z.string(),
     /**
@@ -717,7 +721,9 @@ export const aiAgentRouter = router({
       existingMessageIds = [],
       fileIds,
       mentionedAgents,
+      model,
       parentMessageId,
+      provider,
       resumeApproval,
       resumeToolResult,
       selectedToolIds,
@@ -736,8 +742,10 @@ export const aiAgentRouter = router({
         existingMessageIds,
         fileIds,
         mentionedAgents,
+        model,
         parentMessageId,
         prompt,
+        provider,
         // When parentMessageId is provided, this is a regeneration/continue or a
         // human-approval resume — either way, skip user message creation.
         resume: !!parentMessageId,
