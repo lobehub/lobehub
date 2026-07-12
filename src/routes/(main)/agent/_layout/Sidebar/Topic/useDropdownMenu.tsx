@@ -36,9 +36,14 @@ export const useTopicActionsDropdownMenu = (
   const { allowed: canEditTopic } = usePermission('edit_own_content');
 
   const topics = useChatStore(topicSelectors.currentTopics);
-  const [removeUnstarredTopic, removeAllTopic, importTopic, updateTopicStatus] = useChatStore(
-    (s) => [s.removeUnstarredTopic, s.removeSessionTopics, s.importTopic, s.updateTopicStatus],
-  );
+  const [removeUnstarredTopic, removeAllTopic, importTopic, updateTopicStatus, refreshTopic] =
+    useChatStore((s) => [
+      s.removeUnstarredTopic,
+      s.removeSessionTopics,
+      s.importTopic,
+      s.updateTopicStatus,
+      s.refreshTopic,
+    ]);
 
   const handleArchiveMergedPullRequests = useCallback(async () => {
     const mergedTopics = (topics ?? []).filter((topic) => {
@@ -56,8 +61,9 @@ export const useTopicActionsDropdownMenu = (
     await Promise.all(
       mergedTopics.map(({ id }) => updateTopicStatus({ status: 'completed', topicId: id })),
     );
+    await refreshTopic();
     message.success(t('actions.archiveMergedPullRequestsSuccess', { count: mergedTopics.length }));
-  }, [message, t, topics, updateTopicStatus]);
+  }, [message, refreshTopic, t, topics, updateTopicStatus]);
 
   const handleImport = useCallback(
     async (file: File) => {

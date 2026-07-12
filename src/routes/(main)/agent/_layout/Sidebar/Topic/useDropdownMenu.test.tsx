@@ -13,6 +13,7 @@ const permissionMock = vi.hoisted(() => ({
 }));
 
 const chatStoreMock = vi.hoisted(() => ({
+  refreshTopic: vi.fn(),
   topics: [] as Array<Record<string, unknown>>,
   updateTopicStatus: vi.fn(),
 }));
@@ -57,6 +58,7 @@ vi.mock('@/store/chat', () => ({
       importTopic: vi.fn(),
       removeSessionTopics: vi.fn(),
       removeUnstarredTopic: vi.fn(),
+      refreshTopic: chatStoreMock.refreshTopic,
       topics: chatStoreMock.topics,
       updateTopicStatus: chatStoreMock.updateTopicStatus,
     }),
@@ -90,6 +92,7 @@ describe('useTopicActionsDropdownMenu', () => {
     permissionMock.create_content = true;
     permissionMock.edit_own_content = true;
     chatStoreMock.topics = [];
+    chatStoreMock.refreshTopic.mockReset();
     chatStoreMock.updateTopicStatus.mockReset();
     messageMock.info.mockReset();
     messageMock.success.mockReset();
@@ -147,6 +150,7 @@ describe('useTopicActionsDropdownMenu', () => {
       status: 'completed',
       topicId: 'merged',
     });
+    expect(chatStoreMock.refreshTopic).toHaveBeenCalledOnce();
     expect(messageMock.success).toHaveBeenCalledWith('actions.archiveMergedPullRequestsSuccess');
   });
 });
