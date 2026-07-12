@@ -81,6 +81,8 @@ export default {
   'downgradePlans.desc': 'The plan change will take effect after the current plan expires.',
   'downgradePlans.success': 'Subscription cancelled successfully',
   'downgradePlans.title': 'Switch to {{plan}}',
+  'credits.autoTopUp.cardBindingGiftHint':
+    '🎁 Add your first payment method and get 0.5M credits free',
   'credits.autoTopUp.currentBalance': 'Current Balance',
   'credits.autoTopUp.desc': 'Ensure your credits never run out',
   'credits.autoTopUp.noCustomerHint':
@@ -184,6 +186,8 @@ export default {
   'credits.topUp.cancel': 'Cancel',
   'credits.topUp.custom': 'Custom',
   'credits.topUp.freeFeeHint': 'Free plan top-ups include a {{fee}} service fee per 1M credits.',
+  'credits.topUp.firstTopUpGift.hint':
+    '🎁 First top-up bonus: get +0.5M free on the 10M pack, or +5M free on the 100M pack',
   'credits.topUp.limitedOffer': '🔥 Limited',
   'credits.topUp.maxAmountError': 'Single purchase amount cannot exceed ${{max}}',
   'credits.topUp.originalPriceFormat': 'Original ${{price}}',
