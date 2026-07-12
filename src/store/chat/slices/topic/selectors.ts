@@ -136,14 +136,18 @@ const sortTopics = (topics: ChatTopic[], sortBy: TopicSortBy): ChatTopic[] => {
 
 // Limit topics for sidebar display based on user's page size preference
 const displayTopicsForSidebar =
-  (pageSize: number, sortBy: TopicSortBy = 'updatedAt') =>
+  (pageSize: number, sortBy: TopicSortBy = 'updatedAt', includeCompleted = true) =>
   (s: ChatStoreState): ChatTopic[] | undefined => {
     const topics = currentTopicsWithoutCron(s);
     if (!topics) return undefined;
 
+    const visibleTopics = includeCompleted
+      ? topics
+      : topics.filter((topic) => topic.status !== 'completed');
+
     // Favorites first, then sorted by the chosen timestamp, then page-sliced
-    const favTopics = topics.filter((t) => t.favorite);
-    const rest = topics.filter((t) => !t.favorite);
+    const favTopics = visibleTopics.filter((t) => t.favorite);
+    const rest = visibleTopics.filter((t) => !t.favorite);
     return [...sortTopics(favTopics, sortBy), ...sortTopics(rest, sortBy)].slice(0, pageSize);
   };
 
@@ -205,9 +209,14 @@ const groupedTopicsSelector =
   };
 
 const groupedTopicsForSidebar =
-  (pageSize: number, sortBy: TopicSortBy = 'updatedAt', groupMode: TopicGroupMode = 'byTime') =>
+  (
+    pageSize: number,
+    sortBy: TopicSortBy = 'updatedAt',
+    groupMode: TopicGroupMode = 'byTime',
+    includeCompleted = true,
+  ) =>
   (s: ChatStoreState): GroupedTopic[] => {
-    const limitedTopics = displayTopicsForSidebar(pageSize, sortBy)(s);
+    const limitedTopics = displayTopicsForSidebar(pageSize, sortBy, includeCompleted)(s);
     if (!limitedTopics) return [];
     // Topics actively streaming on this client surface under "running" even
     // though their persisted status says otherwise — that's the one client-only

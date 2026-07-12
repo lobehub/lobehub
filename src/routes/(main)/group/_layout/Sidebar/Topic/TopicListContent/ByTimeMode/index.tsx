@@ -22,6 +22,7 @@ const ByTimeMode = memo(() => {
   const topicPageSize = useGlobalStore(systemStatusSelectors.topicPageSize);
   const topicSortBy = useUserStore(preferenceSelectors.topicSortBy);
   const topicGroupMode = useUserStore(preferenceSelectors.topicGroupMode);
+  const topicIncludeCompleted = useUserStore(preferenceSelectors.topicIncludeCompleted);
 
   const [hasMore, isExpandingPageSize, openAllTopicsDrawer] = useChatStore((s) => [
     topicSelectors.hasMoreTopicsForSidebar(s),
@@ -31,8 +32,14 @@ const ByTimeMode = memo(() => {
   const [activeTopicId, activeThreadId] = useChatStore((s) => [s.activeTopicId, s.activeThreadId]);
 
   const groupSelector = useMemo(
-    () => topicSelectors.groupedTopicsForSidebar(topicPageSize, topicSortBy, topicGroupMode),
-    [topicPageSize, topicSortBy, topicGroupMode],
+    () =>
+      topicSelectors.groupedTopicsForSidebar(
+        topicPageSize,
+        topicSortBy,
+        topicGroupMode,
+        topicIncludeCompleted,
+      ),
+    [topicPageSize, topicSortBy, topicGroupMode, topicIncludeCompleted],
   );
   const groupTopics = useChatStore(groupSelector, isEqual);
 
