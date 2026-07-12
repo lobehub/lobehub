@@ -154,7 +154,11 @@ const RateLimitState = ({
             ? relativeDuration
               ? t('cliRateLimitGuide.schedule.scheduledForApprox', { duration: relativeDuration })
               : t('cliRateLimitGuide.schedule.scheduledAfterReset')
-            : t('cliRateLimitGuide.afterReset')}
+            : t('cliRateLimitGuide.afterReset', {
+                resetAt: formattedResetAt
+                  ? `${formattedResetAt}${timezoneLabel ? ` (${timezoneLabel})` : ''}`
+                  : t('cliRateLimitGuide.resetUnknown'),
+              })}
         </Text>
       }
     >

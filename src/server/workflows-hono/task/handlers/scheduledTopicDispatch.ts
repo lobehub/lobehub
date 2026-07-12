@@ -84,7 +84,7 @@ export async function scheduledTopicDispatch(c: Context) {
         // the assistant-chain tail with the shared continuation instruction.
         // Do not delete the failed turn before dispatch; a dispatch failure must
         // leave the user's error card and retry entry intact.
-        await new AiAgentService(db, topic.userId, { workspaceId }).execAgent({
+        const result = await new AiAgentService(db, topic.userId, { workspaceId }).execAgent({
           agentId: topic.agentId ?? undefined,
           appContext: { topicId: topic.id },
           parentMessageId: failedMessage.id,
@@ -92,6 +92,11 @@ export async function scheduledTopicDispatch(c: Context) {
           resume: true,
           trigger: RequestTrigger.Cron,
         });
+        if (!result.success) {
+          throw new Error(
+            result.error || result.message || 'Scheduled continuation dispatch failed',
+          );
+        }
 
         // Success — execAgent now owns the run; clear the scheduled state.
         await TopicModel.clearScheduledRun(db, topic.id, 'running', claim.id);

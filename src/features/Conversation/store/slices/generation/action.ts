@@ -206,6 +206,14 @@ const runHeterogeneousFromExistingMessage = async (
   return assistantMsg.id;
 };
 
+export interface HeteroContinuationScheduleParams {
+  failedAssistantMessageId: string;
+  rateLimit?: {
+    rateLimitType?: string;
+    resetsAt?: number;
+  };
+}
+
 /**
  * Generation Actions
  *
