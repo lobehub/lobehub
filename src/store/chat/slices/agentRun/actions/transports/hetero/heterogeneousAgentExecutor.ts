@@ -597,6 +597,18 @@ const createMessageWriteBatcher = (deps: {
   };
 };
 
+interface MessageBatchMutationResult {
+  results?: Array<{ index: number; success: boolean }>;
+  success?: boolean;
+}
+
+class MessageBatchMutationError extends Error {
+  constructor(public readonly result: MessageBatchMutationResult) {
+    const failedCount = result.results?.filter((item) => !item.success).length;
+    super(`messageService.batchMutate failed for ${failedCount || 'unknown'} operation(s)`);
+  }
+}
+
 const mutateMessageBatch = async (operations: MessageBatchOperation[]): Promise<void> => {
   const batchMutate = (
     messageService as { batchMutate?: (operations: MessageBatchOperation[]) => Promise<any> }
@@ -612,14 +624,12 @@ const mutateMessageBatch = async (operations: MessageBatchOperation[]): Promise<
     return;
   }
 
-  const result = await batchMutate(operations);
+  const result = (await batchMutate(operations)) as MessageBatchMutationResult;
   const failed = (result?.results ?? []).filter(
     (item: { success?: boolean }) => item.success === false,
   );
   if (result?.success === false || failed.length > 0) {
-    throw new Error(
-      `messageService.batchMutate failed for ${failed.length || operations.length} operation(s)`,
-    );
+    throw new MessageBatchMutationError(result);
   }
 };
 
@@ -1347,7 +1357,11 @@ export const executeHeterogeneousAgent = async (
             value: buildUpdate(false),
           },
         ];
-        const newToolMessages: Array<{ message: UIChatMessage; toolCallId: string }> = [];
+        const newToolMessages: Array<{
+          message: UIChatMessage;
+          operationIndex: number;
+          toolCallId: string;
+        }> = [];
 
         for (const x of intent.tools) {
           if (!x.isNew) continue;
@@ -1370,7 +1384,11 @@ export const executeHeterogeneousAgent = async (
             topicId: context.topicId,
           };
           operations.push({ message: toolMsg, type: 'createMessage' });
-          newToolMessages.push({ message: toolMsg as UIChatMessage, toolCallId: x.payload.id });
+          newToolMessages.push({
+            message: toolMsg as UIChatMessage,
+            operationIndex: operations.length - 1,
+            toolCallId: x.payload.id,
+          });
         }
         operations.push({
           id: intent.assistantMessageId,
@@ -1378,14 +1396,22 @@ export const executeHeterogeneousAgent = async (
           value: buildUpdate(true),
         });
 
+        let persistedToolMessages = newToolMessages;
         try {
           await mutateMessageBatch(operations);
         } catch (err) {
           console.error('[HeterogeneousAgent] Failed to persist subagent tool batch:', err);
-          return;
+          if (!(err instanceof MessageBatchMutationError)) return;
+
+          const succeededIndexes = new Set(
+            err.result.results?.filter((item) => item.success).map((item) => item.index) ?? [],
+          );
+          persistedToolMessages = newToolMessages.filter(({ operationIndex }) =>
+            succeededIndexes.has(operationIndex),
+          );
         }
 
-        for (const { message, toolCallId } of newToolMessages) {
+        for (const { message, toolCallId } of persistedToolMessages) {
           toolMsgIdByCallId.set(toolCallId, message.id);
           t?.stream.create(message);
           await replayPendingInterventionsForToolCall(toolCallId);

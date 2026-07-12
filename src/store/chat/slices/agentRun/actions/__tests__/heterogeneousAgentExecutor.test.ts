@@ -3464,6 +3464,43 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(subAssistantMsg![0]).toMatchObject({ threadId });
     });
 
+    it('preserves subagent tool ids when a later batch operation fails', async () => {
+      const defaultBatchMutate = mockBatchMutate.getMockImplementation()!;
+      mockBatchMutate.mockImplementation(async (operations: any[]) => {
+        const result = await defaultBatchMutate(operations);
+        const hasSubagentToolCreate = operations.some(
+          (operation) =>
+            operation.type === 'createMessage' && operation.message?.tool_call_id === 'toolu_child',
+        );
+        if (!hasSubagentToolCreate) return result;
+
+        const finalIndex = operations.length - 1;
+        return {
+          results: result.results.map((item: any) =>
+            item.index === finalIndex ? { ...item, success: false } : item,
+          ),
+          success: false,
+        };
+      });
+
+      await runWithEvents([
+        ccInit(),
+        ccToolUse('msg_main', 'toolu_task', 'Task', {
+          description: 'inspect',
+          subagent_type: 'Explore',
+        }),
+        ccSubagentToolUse('msg_sub_1', 'toolu_task', 'toolu_child', 'Bash', { command: 'ls' }),
+        ccToolResult('toolu_child', 'ls output'),
+        ccResult(),
+      ]);
+
+      expect(mockUpdateToolMessage.mock.calls).toContainEqual([
+        expect.any(String),
+        expect.objectContaining({ content: 'ls output' }),
+        undefined,
+      ]);
+    });
+
     it('opens a NEW in-thread assistant when subagentMessageId changes (turn boundary)', async () => {
       await runWithEvents([
         ccInit(),
