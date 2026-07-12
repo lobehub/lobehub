@@ -20,6 +20,7 @@
   "actions.duplicate": "复制",
   "actions.export": "导出话题",
   "actions.favorite": "收藏",
+  "actions.forwardToAgent": "转发给其他助手",
   "actions.import": "导入对话",
   "actions.markCompleted": "归档",
   "actions.moveToAgent": "移动到其他助手",

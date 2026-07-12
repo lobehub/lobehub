@@ -20,6 +20,7 @@ export default {
   'actions.copyWorkingDirectorySuccess': 'Working directory copied',
   'actions.duplicate': 'Duplicate',
   'actions.moveToAgent': 'Move to another agent',
+  'actions.forwardToAgent': 'Forward to another agent',
   'actions.favorite': 'Favorite',
   'actions.unfavorite': 'Unfavorite',
   'actions.markCompleted': 'Archive',

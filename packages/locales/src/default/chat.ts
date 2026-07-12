@@ -419,6 +419,13 @@ export default {
   'messageForward.successMulti': 'Forwarded to {{count}} agents',
   'messageForward.transcript.header':
     'The following {{count}} messages were forwarded from another conversation. Please use them as context and continue:',
+  'messageForward.topic.context': 'Topic context',
+  'messageForward.topic.description':
+    'The user and assistant messages in this topic will be sent as context. Tool messages are excluded.',
+  'messageForward.topic.header':
+    'The following topic was forwarded from another conversation. Please use it as context and continue:',
+  'messageForward.topic.loadFailed': 'Could not load this topic for forwarding',
+  'messageForward.topic.modalTitle': 'Forward topic to Agent',
   'messageLongCollapse.collapse': 'Show less',
   'messageLongCollapse.expand': 'Show more',
   'messages.dm.sentTo': 'Visible only to {{name}}',

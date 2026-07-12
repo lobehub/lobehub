@@ -8,6 +8,7 @@ import {
   ArchiveRestore,
   ExternalLink,
   FolderInput,
+  Forward,
   Hash,
   Link2,
   LucideCopy,
@@ -26,6 +27,7 @@ import { openRenameModal } from '@/components/RenameModal';
 import { isDesktop } from '@/const/version';
 import { createMoveTopicsModal } from '@/features/AgentTopicManager/MoveTopicsModal';
 import { confirmRemoveTopic } from '@/features/DeleteTopicConfirm';
+import { createTopicForwardModal } from '@/features/Conversation/MessageForward/TopicForwardModal';
 import { openShareModal } from '@/features/ShareModal';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
@@ -202,6 +204,16 @@ export const useTopicItemDropdownMenu = ({
         label: t('actions.duplicate'),
         onClick: () => {
           duplicateTopic(id);
+        },
+      },
+      {
+        disabled: !canCreateTopic || !activeAgentId,
+        icon: <Icon icon={Forward} />,
+        key: 'forwardToAgent',
+        label: t('actions.forwardToAgent'),
+        onClick: () => {
+          if (!activeAgentId) return;
+          createTopicForwardModal({ sourceAgentId: activeAgentId, topicId: id, topicTitle: title });
         },
       },
       {

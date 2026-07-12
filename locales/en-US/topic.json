@@ -20,6 +20,7 @@
   "actions.duplicate": "Duplicate",
   "actions.export": "Export Topics",
   "actions.favorite": "Favorite",
+  "actions.forwardToAgent": "Forward to another agent",
   "actions.import": "Import Topics",
   "actions.markCompleted": "Archive",
   "actions.moveToAgent": "Move to another agent",
