@@ -226,6 +226,76 @@ describe('agentDocumentsRuntime auto-pin to task', () => {
   });
 });
 
+describe('agentDocumentsRuntime Work registration intent', () => {
+  const newDoc = {
+    documentId: 'documents-row-id',
+    filename: 'daily-brief',
+    id: 'agent-doc-assoc-id',
+    title: 'Daily Brief',
+  };
+
+  let serviceImpl: Record<string, ReturnType<typeof vi.fn>>;
+
+  beforeEach(() => {
+    agentDocumentToolOutcomeMocks.emitAgentDocumentToolOutcomeSafely.mockClear();
+    serviceImpl = {
+      createDocument: vi.fn().mockResolvedValue(newDoc),
+      getDocumentById: vi.fn().mockResolvedValue(newDoc),
+      removeDocumentById: vi.fn().mockResolvedValue(true),
+    };
+    vi.mocked(AgentDocumentsService).mockImplementation(() => serviceImpl as any);
+    vi.mocked(TaskModel).mockImplementation(() => ({ pinDocument: vi.fn() }) as any);
+    vi.mocked(WorkspaceModel).mockImplementation(
+      () => ({ findById: vi.fn().mockResolvedValue({ slug: 'lobe-team' }) }) as any,
+    );
+  });
+
+  const buildContext = (onWorkRegistration: ReturnType<typeof vi.fn>) => ({
+    onWorkRegistration,
+    serverDB: {} as never,
+    toolManifestMap: {},
+    userId: 'user-1',
+    workspaceId: 'workspace-1',
+  });
+
+  it('emits a register intent (no cost — stamped later by the agent runtime) on create', async () => {
+    const onWorkRegistration = vi.fn();
+    const runtime = agentDocumentsRuntime.factory(buildContext(onWorkRegistration));
+
+    await runtime.createDocument({ content: 'body', title: 'Daily Brief' }, { agentId: 'agent-1' });
+
+    expect(onWorkRegistration).toHaveBeenCalledWith({
+      action: 'register',
+      document: {
+        agentDocumentId: 'agent-doc-assoc-id',
+        agentId: 'agent-1',
+        documentId: 'documents-row-id',
+        role: 'created',
+        source: 'createDocument',
+        url: 'https://app.example.com/lobe-team/agent/agent-1/docs/documents-row-id',
+      },
+      type: 'document',
+    });
+  });
+
+  it('emits a delete intent on remove', async () => {
+    const onWorkRegistration = vi.fn();
+    const runtime = agentDocumentsRuntime.factory(buildContext(onWorkRegistration));
+
+    await runtime.removeDocument({ id: 'agent-doc-assoc-id' }, { agentId: 'agent-1' });
+
+    expect(onWorkRegistration).toHaveBeenCalledWith({
+      action: 'delete',
+      document: {
+        agentDocumentId: 'agent-doc-assoc-id',
+        agentId: 'agent-1',
+        documentId: 'documents-row-id',
+      },
+      type: 'document',
+    });
+  });
+});
+
 describe('AgentDocumentsExecutionRuntime.createDocument', () => {
   const makeStub = () => ({
     copyDocument: vi.fn(),

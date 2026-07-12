@@ -58,17 +58,31 @@ export interface TaskRuntimeDeps {
   // resolved workspaceId); when absent (unit tests) links fall back to the bare
   // app origin.
   resolveLinkBaseUrl?: () => Promise<string>;
+  // Root runtime operation used to aggregate Works produced during one run.
+  rootOperationId?: string;
   scope?: string | null;
   taskCaller: ReturnType<typeof taskRouter.createCaller>;
   taskId?: string;
   taskModel: TaskModel;
   taskService: TaskService;
+  threadId?: string | null;
   toolCallId?: string;
-  topicId?: string;
+  // Source tool result message id, when the runtime already has one.
+  toolMessageId?: string;
+  topicId?: string | null;
 }
 
 export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
-  const { agentId, assistantMessageId, operationId, scope, taskId, toolCallId, topicId } = deps;
+  const {
+    agentId,
+    assistantMessageId,
+    operationId,
+    rootOperationId,
+    scope,
+    taskId,
+    toolCallId,
+    topicId,
+  } = deps;
   // Models are read through `deps` (not destructured) so callers can swap them
   // in lazily — e.g. after async workspace resolution in the runtime factory.
   const agentModel = () => deps.agentModel;
@@ -107,7 +121,7 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
 
   const createTaskImpl = async (
     args: CreateTaskArgs,
-  ): Promise<{ content: string; identifier?: string; success: boolean }> => {
+  ): Promise<{ content: string; identifier?: string; success: boolean; taskId?: string }> => {
     let parentLabel: string | undefined;
 
     // Pre-resolve parent identifier so we can surface a tool-friendly error
@@ -128,9 +142,16 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
     // bridge the handoff result back to the creator conversation.
     // Only persist the pocket when we actually have a creator agent + topic;
     // tasks created outside an agent turn (e.g. via API) have no origin.
+    const originOperationId = rootOperationId ?? operationId;
     const origin =
       agentId && topicId
-        ? { agentId, messageId: assistantMessageId, operationId, toolCallId, topicId }
+        ? {
+            agentId,
+            messageId: assistantMessageId,
+            operationId: originOperationId,
+            toolCallId,
+            topicId,
+          }
         : undefined;
 
     const task = await taskService().createTask({
@@ -159,6 +180,7 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
       }),
       identifier: task.identifier,
       success: true,
+      taskId: task.id,
     };
   };
 
@@ -191,12 +213,16 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
     },
 
     createTask: async (args: CreateTaskArgs) => {
-      const { identifier, ...rest } = await createTaskImpl(args);
+      const result = await createTaskImpl(args);
+      const { identifier, taskId: createdTaskId, ...rest } = result;
       // Surface the created task identifier as plugin state (mirrors the client
       // executor's `{ identifier, success }`) so the inline render can link to
-      // the task detail. Without this the tool message persists no state and the
-      // card has nothing to open.
-      return identifier ? { ...rest, state: { identifier, success: rest.success } } : rest;
+      // the task detail, AND so the dispatch-layer Work registration can read the
+      // created task identity from `result.state`. Without this the tool message
+      // persists no state and the card has nothing to open.
+      return identifier
+        ? { ...rest, state: { identifier, success: rest.success, taskId: createdTaskId } }
+        : rest;
     },
 
     createTasks: async (args: { tasks: CreateTaskArgs[] }) => {
@@ -222,12 +248,17 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
         }
       }
 
-      const failed = results.filter((r) => !r.success).length;
+      const succeeded = results.filter((r) => r.success).length;
+      const failed = results.length - succeeded;
 
       return {
         // Absolute, workspace-scoped links so the summary stays clickable when
         // pushed to IM / mobile.
         content: formatTasksCreated(results, await taskLinkBaseUrl()),
+        // State parity with the client executor (`{ failed, results, succeeded }`)
+        // so the dispatch-layer Work registration can read per-item identity +
+        // success from `result.state.results` for partial-failure batches.
+        state: { failed, results, succeeded },
         success: failed === 0,
       };
     },
@@ -240,6 +271,10 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
 
       return {
         content: formatTaskDeleted(task.identifier, task.name),
+        // Surface the deleted task's internal id so the dispatch-layer Work
+        // deletion (`work: { action: 'delete' }`) can locate the Work by
+        // `works.resourceId = taskId` after the task row is gone.
+        state: { identifier: task.identifier, success: true, taskId: task.id },
         success: true,
       };
     },
@@ -356,6 +391,10 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
               changes.push(formatDependencyRemoved(task.identifier, depIdentifier)),
           ),
         );
+      }
+
+      if (ops.length === 0 && depResults.length === 0) {
+        return { content: 'No fields provided; nothing to update.', success: false };
       }
 
       const [, depErrors] = await Promise.all([Promise.all(ops), Promise.all(depResults)]);
@@ -698,8 +737,16 @@ export const taskRuntime: ServerRuntimeRegistration = {
 
     const db = context.serverDB;
     const userId = context.userId;
-    const { agentId, assistantMessageId, operationId, taskId, toolCallId, topicId, scope } =
-      context;
+    const {
+      agentId,
+      assistantMessageId,
+      operationId,
+      taskId,
+      threadId,
+      toolCallId,
+      topicId,
+      scope,
+    } = context;
 
     // Workspace slug for deep-links: resolved once (memoized) from the workspace
     // owning the created task (`workspaceId` is set by `ensureModels` below),
@@ -725,10 +772,13 @@ export const taskRuntime: ServerRuntimeRegistration = {
       agentId,
       assistantMessageId,
       operationId,
+      rootOperationId: context.rootOperationId ?? operationId,
       resolveLinkBaseUrl,
       scope,
       taskId,
+      threadId,
       toolCallId,
+      toolMessageId: context.toolMessageId,
       topicId,
       // Initial personal-mode models cover the no-task-context case. Replaced
       // before the first call when `taskId` is set.

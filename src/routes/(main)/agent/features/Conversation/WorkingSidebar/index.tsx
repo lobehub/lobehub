@@ -31,6 +31,7 @@ import Files from './Files';
 import ProgressSection from './ProgressSection';
 import ResourcesSection from './ResourcesSection';
 import Review from './Review';
+import WorksSection from './WorksSection';
 
 const ParamsSection = lazy(() => import('./ParamsSection'));
 const BrowserPane = lazy(() => import('./Browser'));
@@ -175,6 +176,7 @@ const AgentWorkingSidebar = memo(() => {
 
   const availableTabs = new Set<string>([
     'resources',
+    'works',
     ...(reviewAvailable ? ['review'] : []),
     ...(filesAvailable ? ['files'] : []),
     ...(browserAvailable ? ['browser'] : []),
@@ -257,6 +259,13 @@ const AgentWorkingSidebar = memo(() => {
               onClick={() => setWorkingSidebarTab('resources')}
             >
               {t('workingPanel.space')}
+            </button>
+            <button
+              className={`${styles.tab} ${activeTab === 'works' ? styles.tabActive : ''}`}
+              type="button"
+              onClick={() => setWorkingSidebarTab('works')}
+            >
+              {t('workingPanel.works.title')}
             </button>
             {reviewAvailable && (
               <button
@@ -349,6 +358,9 @@ const AgentWorkingSidebar = memo(() => {
               deviceId={remoteDeviceId}
               enabled={showRightPanel && activeTab === 'resources'}
             />
+          </Flexbox>
+          <Flexbox className={activeTab === 'works' ? styles.pane : styles.paneHidden}>
+            <WorksSection active={showRightPanel && activeTab === 'works'} />
           </Flexbox>
         </Flexbox>
       </Flexbox>

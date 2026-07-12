@@ -5,7 +5,7 @@ import isEqual from 'fast-deep-equal';
 import { type SWRResponse } from 'swr';
 
 import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
-import { messageKeys } from '@/libs/swr/keys';
+import { isMessageListKey } from '@/libs/swr/keys';
 import { messageService } from '@/services/message';
 import {
   getMessageListCacheIdentity,
@@ -69,11 +69,11 @@ export class MessageQueryActionImpl {
     // verification window and any older in-flight generation.
     invalidateMessageListClientState((ctx) => ctx.agentId === agentId && ctx.topicId === topicId);
 
-    await mutate((key) => {
-      if (!Array.isArray(key) || key[0] !== messageKeys.list.root) return false;
-      const ctx = key[1] as ConversationContext | undefined;
-      return !!ctx && ctx.agentId === agentId && ctx.topicId === topicId;
-    });
+    // Invalidate every `message:list` entry for this agent+topic (any scope /
+    // thread / page-size variant).
+    await mutate((key) =>
+      isMessageListKey(key, (ctx) => ctx.agentId === agentId && ctx.topicId === topicId),
+    );
   };
 
   prefetchMessages = async (context: ConversationContext): Promise<void> => {

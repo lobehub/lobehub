@@ -7,9 +7,11 @@ import SideBarLayout from '@/features/NavPanel/SideBarLayout';
 
 import SidebarBody from './Body';
 import Header from './Header';
+import WorkBody from './WorkBody';
 
 export enum GroupKey {
   Library = 'library',
+  Work = 'work',
 }
 
 const ResourceSidebarContent = memo(() => (
@@ -17,8 +19,9 @@ const ResourceSidebarContent = memo(() => (
     header={<Header />}
     body={
       <Flexbox paddingBlock={8} paddingInline={4}>
-        <Accordion defaultExpandedKeys={[GroupKey.Library]} gap={8}>
+        <Accordion defaultExpandedKeys={[GroupKey.Library, GroupKey.Work]} gap={8}>
           <SidebarBody itemKey={GroupKey.Library} />
+          <WorkBody itemKey={GroupKey.Work} />
         </Accordion>
       </Flexbox>
     }

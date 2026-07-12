@@ -99,7 +99,10 @@ describe('internal_executeClientTool', () => {
       });
       const { action, sendToolResult } = setup();
 
-      await action.internal_executeClientTool(makeData(), { operationId: 'op-1' });
+      await action.internal_executeClientTool(
+        makeData({ assistantMessageId: 'msg-assistant', toolMessageId: 'msg-tool' }),
+        { operationId: 'op-1' },
+      );
 
       expect(invokeExecutorMock).toHaveBeenCalledWith(
         'local-system',
@@ -107,10 +110,14 @@ describe('internal_executeClientTool', () => {
         { path: '/tmp/a.txt' },
         expect.objectContaining({
           agentId: 'agent-1',
+          anchorMessageId: 'msg-assistant',
           documentId: 'documents-row-id',
-          messageId: 'call_1',
+          messageId: 'msg-tool',
           operationId: 'op-1',
+          rootOperationId: 'op-1',
           scope: 'page',
+          toolCallId: 'call_1',
+          toolMessageId: 'msg-tool',
           topicId: 'topic-1',
         }),
       );
@@ -120,6 +127,70 @@ describe('internal_executeClientTool', () => {
         success: true,
         toolCallId: 'call_1',
       });
+    });
+
+    it('uses server payload context when the gateway connection id differs from the local operation id', async () => {
+      hasExecutorMock.mockReturnValue(true);
+      invokeExecutorMock.mockResolvedValue({
+        content: 'task created',
+        success: true,
+      });
+      const { action, sendToolResult, state } = setup();
+      state.gatewayConnections['gw-op-server'] = state.gatewayConnections['op-1'];
+      delete state.gatewayConnections['op-1'];
+      state.operations['op-local'] = {
+        abortController: { abort: vi.fn(), signal: { aborted: false } },
+        context: {
+          agentId: 'local-agent',
+          scope: 'session',
+          topicId: 'local-topic',
+        },
+      };
+      delete state.operations['op-1'];
+
+      await action.internal_executeClientTool(
+        makeData({
+          agentId: 'agent-from-server',
+          assistantMessageId: 'msg-assistant',
+          documentId: 'doc-from-server',
+          groupId: 'group-from-server',
+          rootOperationId: 'op-root-server',
+          scope: 'thread',
+          sourceMessageId: 'msg-user',
+          taskId: 'task-from-server',
+          threadId: 'thread-from-server',
+          toolMessageId: 'msg-tool',
+          topicId: 'topic-from-server',
+        }),
+        { localOperationId: 'op-local', operationId: 'gw-op-server' },
+      );
+
+      expect(invokeExecutorMock).toHaveBeenCalledWith(
+        'local-system',
+        'readFile',
+        { path: '/tmp/a.txt' },
+        expect.objectContaining({
+          agentId: 'agent-from-server',
+          documentId: 'doc-from-server',
+          groupId: 'group-from-server',
+          messageId: 'msg-tool',
+          operationId: 'gw-op-server',
+          rootOperationId: 'op-root-server',
+          scope: 'thread',
+          sourceMessageId: 'msg-user',
+          taskId: 'task-from-server',
+          threadId: 'thread-from-server',
+          toolCallId: 'call_1',
+          topicId: 'topic-from-server',
+        }),
+      );
+      expect(sendToolResult).toHaveBeenCalledWith(
+        expect.objectContaining({
+          content: 'task created',
+          success: true,
+          toolCallId: 'call_1',
+        }),
+      );
     });
 
     it('sends a failure tool_result when the executor reports error', async () => {

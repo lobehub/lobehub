@@ -104,7 +104,9 @@ describe('AgentDocumentsExecutionRuntime', () => {
         agentId: 'agent-1',
         messageId: 'user-msg-1',
         operationId: 'op-client-1',
+        threadId: 'thread-1',
         toolCallId: 'call-create-doc-1',
+        toolMessageId: 'tool-msg-1',
         topicId: 'topic-1',
       },
     );
@@ -116,7 +118,56 @@ describe('AgentDocumentsExecutionRuntime', () => {
       toolContext: {
         messageId: 'user-msg-1',
         operationId: 'op-client-1',
+        threadId: 'thread-1',
         toolCallId: 'call-create-doc-1',
+        toolMessageId: 'tool-msg-1',
+        topicId: 'topic-1',
+      },
+      trigger: 'tool',
+    });
+  });
+
+  it('forwards tool trigger metadata when mutating documents with same-turn tool context', async () => {
+    const readDocument = vi.fn().mockResolvedValue({
+      documentId: 'backing-doc-1',
+      id: 'agent-doc-1',
+      title: 'Research Notes',
+    });
+    const renameDocument = vi.fn().mockResolvedValue({
+      documentId: 'backing-doc-1',
+      id: 'agent-doc-1',
+      title: 'Renamed Notes',
+    });
+    const runtime = createRuntime({ readDocument, renameDocument });
+
+    await runtime.renameDocument(
+      {
+        id: 'agent-doc-1',
+        newTitle: 'Renamed Notes',
+      },
+      {
+        agentId: 'agent-1',
+        messageId: 'user-msg-1',
+        operationId: 'op-client-1',
+        rootOperationId: 'op-root-1',
+        threadId: 'thread-1',
+        toolCallId: 'call-rename-doc-1',
+        toolMessageId: 'tool-msg-rename-1',
+        topicId: 'topic-1',
+      },
+    );
+
+    expect(renameDocument).toHaveBeenCalledWith({
+      agentId: 'agent-1',
+      id: 'agent-doc-1',
+      newTitle: 'Renamed Notes',
+      toolContext: {
+        messageId: 'user-msg-1',
+        operationId: 'op-client-1',
+        rootOperationId: 'op-root-1',
+        threadId: 'thread-1',
+        toolCallId: 'call-rename-doc-1',
+        toolMessageId: 'tool-msg-rename-1',
         topicId: 'topic-1',
       },
       trigger: 'tool',

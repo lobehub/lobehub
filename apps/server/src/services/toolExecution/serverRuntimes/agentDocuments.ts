@@ -1,27 +1,15 @@
 import type { DocumentLoadRule } from '@lobechat/agent-templates';
-import {
-  AgentDocumentsIdentifier,
-  buildAgentDocumentUrl,
-} from '@lobechat/builtin-tool-agent-documents';
+import { AgentDocumentsIdentifier } from '@lobechat/builtin-tool-agent-documents';
 import { AgentDocumentsExecutionRuntime } from '@lobechat/builtin-tool-agent-documents/executionRuntime';
 import { eq } from 'drizzle-orm';
 
 import { TaskModel } from '@/database/models/task';
-import { WorkspaceModel } from '@/database/models/workspace';
 import { tasks } from '@/database/schemas';
-import { appEnv } from '@/envs/app';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
+import { createDocumentWorkRegistrar } from '@/server/services/agentDocuments/documentWork';
 import { emitAgentDocumentToolOutcomeSafely } from '@/server/services/agentDocuments/toolOutcome';
 
 import { type ServerRuntimeRegistration } from './types';
-
-const getAgentDocumentAppUrl = (): string | undefined => {
-  try {
-    return appEnv.APP_URL;
-  } catch {
-    return process.env.APP_URL;
-  }
-};
 
 export const agentDocumentsRuntime: ServerRuntimeRegistration = {
   factory: (context) => {
@@ -38,7 +26,12 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
       context.agentVisibility,
     );
     const { taskId } = context;
-    let workspaceSlugPromise: Promise<string | undefined> | undefined;
+    const workRegistrar = createDocumentWorkRegistrar({
+      db,
+      logPrefix: '[agentDocumentsRuntime]',
+      userId,
+      workspaceId: context.workspaceId,
+    });
     const emitDocumentOutcome = async (input: {
       agentId?: string;
       agentDocumentId?: string;
@@ -128,24 +121,57 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
       return doc;
     };
 
-    const resolveWorkspaceSlugForUrl = async (): Promise<string | undefined> => {
-      if (!context.workspaceId) return undefined;
+    // Emit a Work-registration intent instead of writing the version inline: the
+    // agent runtime persists it ONCE, stamping the tool call's cumulative cost at
+    // insert time (cost is known only after execution). The intent rides out on
+    // the tool result via the executor's `onWorkRegistration` sink. The document
+    // URL is still resolved here because the workspace-slug lookup lives in this
+    // request's registrar.
+    const registerDocumentWork = async (input: {
+      agentDocumentId?: string;
+      agentId: string;
+      documentId?: string;
+      role: 'created' | 'updated';
+      source: string;
+    }) => {
+      if (!input.documentId) return;
 
-      workspaceSlugPromise ??= new WorkspaceModel(db, userId)
-        .findById(context.workspaceId)
-        .then((workspace) => workspace?.slug)
-        .catch((error) => {
-          console.error('[agentDocumentsRuntime] Failed to resolve workspace slug:', error);
-          return undefined;
-        });
+      context.onWorkRegistration?.({
+        action: 'register',
+        document: {
+          agentDocumentId: input.agentDocumentId,
+          agentId: input.agentId,
+          documentId: input.documentId,
+          role: input.role,
+          source: input.source,
+          url: await workRegistrar.buildRegisteredDocumentUrl(input.agentId, input.documentId),
+        },
+        type: 'document',
+      });
+    };
 
-      return workspaceSlugPromise;
+    const deleteDocumentWork = async (input: {
+      agentDocumentId?: string;
+      agentId: string;
+      documentId?: string;
+    }) => {
+      if (!input.documentId) return;
+
+      context.onWorkRegistration?.({
+        action: 'delete',
+        document: {
+          agentDocumentId: input.agentDocumentId,
+          agentId: input.agentId,
+          documentId: input.documentId,
+        },
+        type: 'document',
+      });
     };
 
     return new AgentDocumentsExecutionRuntime(
       {
-        copyDocument: async ({ agentId, id, newTitle }) =>
-          pinToTask(
+        copyDocument: async ({ agentId, id, newTitle }) => {
+          const doc = await pinToTask(
             await withDocumentOutcome(
               {
                 agentId,
@@ -157,9 +183,18 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
               },
               () => service.copyDocumentById(id, newTitle, agentId),
             ),
-          ),
-        createDocument: async ({ agentId, content, hintIsSkill, title }) =>
-          pinToTask(
+          );
+          await registerDocumentWork({
+            agentDocumentId: doc?.id,
+            agentId,
+            documentId: doc?.documentId,
+            role: 'created',
+            source: 'copyDocument',
+          });
+          return doc;
+        },
+        createDocument: async ({ agentId, content, hintIsSkill, title }) => {
+          const doc = await pinToTask(
             await withDocumentOutcome(
               {
                 agentId,
@@ -172,9 +207,18 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
               },
               () => service.createDocument(agentId, title, content, { hintIsSkill }),
             ),
-          ),
-        createTopicDocument: async ({ agentId, content, hintIsSkill, title, topicId }) =>
-          pinToTask(
+          );
+          await registerDocumentWork({
+            agentDocumentId: doc?.id,
+            agentId,
+            documentId: doc?.documentId,
+            role: 'created',
+            source: 'createDocument',
+          });
+          return doc;
+        },
+        createTopicDocument: async ({ agentId, content, hintIsSkill, title, topicId }) => {
+          const doc = await pinToTask(
             await withDocumentOutcome(
               {
                 agentId,
@@ -187,7 +231,16 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
               },
               () => service.createForTopic(agentId, title, content, topicId, { hintIsSkill }),
             ),
-          ),
+          );
+          await registerDocumentWork({
+            agentDocumentId: doc?.id,
+            agentId,
+            documentId: doc?.documentId,
+            role: 'created',
+            source: 'createTopicDocument',
+          });
+          return doc;
+        },
         listDocuments: async ({ agentId, parentId, sourceType }) => {
           // Agents discover archived tool results via this path (see
           // `excludeArchivedToolResults`), so keep the `.tool-results` archive visible.
@@ -216,8 +269,8 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
             title: d.title,
           }));
         },
-        modifyNodes: ({ agentId, id, operations }) =>
-          withDocumentOutcome(
+        modifyNodes: async ({ agentId, id, operations }) => {
+          const doc = await withDocumentOutcome(
             {
               agentId,
               apiName: 'modifyNodes',
@@ -227,10 +280,20 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
               toolAction: 'edit',
             },
             () => service.modifyDocumentNodesById(id, operations, agentId),
-          ),
+          );
+          await registerDocumentWork({
+            agentDocumentId: id,
+            agentId,
+            documentId: doc?.documentId,
+            role: 'updated',
+            source: 'modifyNodes',
+          });
+          return doc;
+        },
         readDocument: ({ agentId, id }) => service.getDocumentSnapshotById(id, agentId),
-        removeDocument: ({ agentId, id }) =>
-          withDocumentOutcome(
+        removeDocument: async ({ agentId, id }) => {
+          const existing = await service.getDocumentById(id, agentId);
+          const deleted = await withDocumentOutcome(
             {
               agentId,
               apiName: 'removeDocument',
@@ -240,9 +303,18 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
               toolAction: 'remove',
             },
             () => service.removeDocumentById(id, agentId),
-          ),
-        renameDocument: ({ agentId, id, newTitle }) =>
-          withDocumentOutcome(
+          );
+          if (deleted) {
+            await deleteDocumentWork({
+              agentDocumentId: id,
+              agentId,
+              documentId: existing?.documentId,
+            });
+          }
+          return deleted;
+        },
+        renameDocument: async ({ agentId, id, newTitle }) => {
+          const doc = await withDocumentOutcome(
             {
               agentId,
               apiName: 'renameDocument',
@@ -252,9 +324,18 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
               toolAction: 'rename',
             },
             () => service.renameDocumentById(id, newTitle, agentId),
-          ),
-        replaceDocumentContent: ({ agentId, content, id }) =>
-          withDocumentOutcome(
+          );
+          await registerDocumentWork({
+            agentDocumentId: id,
+            agentId,
+            documentId: doc?.documentId,
+            role: 'updated',
+            source: 'renameDocument',
+          });
+          return doc;
+        },
+        replaceDocumentContent: async ({ agentId, content, id }) => {
+          const doc = await withDocumentOutcome(
             {
               agentId,
               apiName: 'replaceDocumentContent',
@@ -264,7 +345,16 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
               toolAction: 'replace',
             },
             () => service.replaceDocumentContentById(id, content, agentId),
-          ),
+          );
+          await registerDocumentWork({
+            agentDocumentId: id,
+            agentId,
+            documentId: doc?.documentId,
+            role: 'updated',
+            source: 'replaceDocumentContent',
+          });
+          return doc;
+        },
         updateLoadRule: ({ agentId, id, rule }) =>
           withDocumentOutcome(
             {
@@ -284,14 +374,8 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
           ),
       },
       {
-        getDocumentUrl: async ({ agentId, documentId }) => {
-          const workspaceSlug = await resolveWorkspaceSlugForUrl();
-          if (context.workspaceId && !workspaceSlug) return undefined;
-
-          return buildAgentDocumentUrl(getAgentDocumentAppUrl(), agentId, documentId, {
-            workspaceSlug,
-          });
-        },
+        getDocumentUrl: ({ agentId, documentId }) =>
+          workRegistrar.buildRegisteredDocumentUrl(agentId, documentId),
       },
     );
   },

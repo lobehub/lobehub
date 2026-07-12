@@ -3,9 +3,14 @@ import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
 import { resolveSubAgentModel } from '@lobechat/const';
 import { type OperationToolSet } from '@lobechat/context-engine';
 import { type ToolType } from '@lobechat/observability-otel/modules/agent-runtime';
-import { type ChatToolPayload, type LobeAgentConfig } from '@lobechat/types';
+import {
+  type ChatToolPayload,
+  type LobeAgentConfig,
+  type WorkRegistrationIntent,
+} from '@lobechat/types';
 import debug from 'debug';
 
+import { WorkModel } from '@/database/models/work';
 import { type LobeChatDatabase } from '@/database/type';
 import { FileService } from '@/server/services/file';
 import {
@@ -14,6 +19,7 @@ import {
   type ToolExecutionResultResponse,
 } from '@/server/services/toolExecution';
 import { archiveToolResultIfNeeded } from '@/server/services/toolExecution/archiveToolResult';
+import { buildWorkVersionCumulativeUsage } from '@/utils/workCumulativeUsage';
 
 import { type RuntimeExecutorContext } from './context';
 
@@ -65,6 +71,126 @@ export const archiveRuntimeToolResult = async (
   });
 
   return archive.content === result.content ? result : { ...result, content: archive.content };
+};
+
+/**
+ * Persist a Work version from the executor's registration intent, stamping the
+ * tool call's cumulative cost/usage onto the row at insert time. Replaces the
+ * old "register cost-less in the executor, back-fill cost later" two-step: the
+ * executor now only resolves the intent, and the runtime writes it once here,
+ * after `accumulateTool` has computed the cumulative cost.
+ *
+ * Best-effort: any failure is swallowed so Work bookkeeping never breaks the
+ * tool result. Runs AFTER `tool_end` publishes (cost is known only then), so
+ * the Work row becomes durable slightly later than the tool_end event — the
+ * conversation view self-heals from the tool message metadata; the works
+ * sidebar refresh gap is tracked as a follow-up.
+ */
+export const registerWorkFromIntent = async ({
+  actorAgentId,
+  intent,
+  rootOperationId,
+  serverDB,
+  sourceMessageId,
+  sourceToolCallId,
+  sourceToolName,
+  state,
+  threadId,
+  topicId,
+  userId,
+  workspaceId,
+}: {
+  actorAgentId?: string | null;
+  intent: WorkRegistrationIntent;
+  rootOperationId?: string;
+  serverDB: LobeChatDatabase;
+  sourceMessageId?: string;
+  sourceToolCallId?: string;
+  /** Fallback `source` for task Works (the API name); skills use their own toolName. */
+  sourceToolName: string;
+  state: Pick<AgentState, 'cost' | 'usage'>;
+  threadId?: string | null;
+  topicId?: string;
+  userId?: string;
+  workspaceId?: string;
+}) => {
+  if (!userId) return;
+
+  const cumulative = buildWorkVersionCumulativeUsage({ cost: state.cost, usage: state.usage });
+
+  try {
+    const workModel = new WorkModel(serverDB, userId, workspaceId);
+
+    if (intent.type === 'task') {
+      const { action, role, targets } = intent;
+
+      if (action === 'delete') {
+        await Promise.all(
+          targets.map((target) =>
+            target.taskId ? workModel.deleteTaskWork({ taskId: target.taskId }) : undefined,
+          ),
+        );
+        return;
+      }
+
+      if (!role) return;
+
+      await Promise.all(
+        targets.map((target) =>
+          workModel.registerTask({
+            actorAgentId,
+            role,
+            rootOperationId,
+            source: sourceToolName,
+            sourceMessageId,
+            sourceToolCallId,
+            taskId: target.taskId,
+            taskIdentifier: target.taskIdentifier,
+            threadId,
+            topicId,
+            ...cumulative,
+          }),
+        ),
+      );
+      return;
+    }
+
+    if (intent.type === 'document') {
+      if (intent.action === 'delete') {
+        await workModel.deleteDocumentWork(intent.document);
+        return;
+      }
+
+      await workModel.registerDocument({
+        ...intent.document,
+        ...cumulative,
+        actorAgentId,
+        rootOperationId,
+        sourceMessageId,
+        sourceToolCallId,
+        threadId,
+        topicId,
+      });
+      return;
+    }
+
+    // skill (linear / github): normalize the untruncated payload into a Work
+    await workModel.handleSkillToolResult({
+      actorAgentId,
+      args: intent.args,
+      data: intent.data,
+      provider: intent.provider,
+      rootOperationId,
+      sourceMessageId,
+      sourceToolCallId,
+      threadId,
+      toolName: intent.toolName,
+      topicId,
+      ...cumulative,
+    });
+  } catch (error) {
+    log('registerWorkFromIntent failed for toolCallId=%s: %O', sourceToolCallId, error);
+  }
 };
 
 // Builds a postProcessUrl callback that resolves keys in file-backed fields

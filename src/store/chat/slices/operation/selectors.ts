@@ -74,6 +74,24 @@ const getOperationContextFromMessage =
   };
 
 /**
+ * Walk up the parent chain from an operation until the owning AI runtime
+ * operation (see AI_RUNTIME_OPERATION_TYPES) is found. Returns undefined when
+ * the chain has no runtime ancestor (e.g. a standalone tool operation).
+ */
+const findRootRuntimeOperation =
+  (operationId: string) =>
+  (s: ChatStoreState): Operation | undefined => {
+    let currentOp: Operation | undefined = s.operations[operationId];
+    while (currentOp) {
+      if (AI_RUNTIME_OPERATION_TYPES.includes(currentOp.type)) return currentOp;
+
+      const parentId: string | undefined = currentOp.parentOperationId;
+      currentOp = parentId ? s.operations[parentId] : undefined;
+    }
+    return undefined;
+  };
+
+/**
  * Get operations by message ID
  */
 const getOperationsByMessage =
@@ -820,6 +838,7 @@ const getQueuedMessages = (context: MessageMapKeyInput) => (s: ChatStoreState) =
 export const operationSelectors = {
   canInterrupt,
   canSendMessage,
+  findRootRuntimeOperation,
   getActiveOperationTypes,
   getAllOperations,
   getCurrentContextOperations,

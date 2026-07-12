@@ -1495,6 +1495,7 @@ export class ConversationLifecycleActionImpl {
             parentOperationId: operationId,
             inPortalThread: !!data.createdThreadId,
             skipCreateFirstMessage: true,
+            userMessageId: data.userMessageId,
           });
         }
 

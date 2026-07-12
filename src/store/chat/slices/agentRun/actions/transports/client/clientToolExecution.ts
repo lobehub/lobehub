@@ -63,10 +63,27 @@ export class ClientToolExecutionActionImpl {
 
   internal_executeClientTool = async (
     data: ToolExecuteData,
-    context: { operationId: string },
+    context: { localOperationId?: string; operationId: string },
   ): Promise<void> => {
-    const { toolCallId, identifier, apiName, arguments: argsString, executionTimeoutMs } = data;
-    const { operationId } = context;
+    const {
+      apiName,
+      agentId,
+      arguments: argsString,
+      assistantMessageId,
+      documentId,
+      executionTimeoutMs,
+      groupId,
+      identifier,
+      rootOperationId,
+      scope,
+      sourceMessageId,
+      taskId,
+      threadId,
+      toolCallId,
+      toolMessageId,
+      topicId,
+    } = data;
+    const { localOperationId, operationId } = context;
 
     log(
       '[internal_executeClientTool] start toolCallId=%s identifier=%s apiName=%s op=%s timeout=%dms',
@@ -129,22 +146,28 @@ export class ClientToolExecutionActionImpl {
         params = parsed ?? {};
       }
 
-      const operation = this.#get().operations[operationId];
+      const operation = this.#get().operations[localOperationId ?? operationId];
 
       // ─── Builtin dispatch (via registry) ───
       if (hasExecutor(identifier, apiName)) {
         const ctx: BuiltinToolContext = {
-          agentId: operation?.context?.agentId,
-          documentId: operation?.context?.documentId,
-          groupId: operation?.context?.groupId,
+          agentId: agentId ?? operation?.context?.agentId,
+          anchorMessageId: assistantMessageId,
+          documentId: documentId ?? operation?.context?.documentId,
+          groupId: groupId ?? operation?.context?.groupId,
           // Gateway-side tool messages are persisted on the server; the client
           // has no local message id, so reuse toolCallId as the context key.
-          messageId: toolCallId,
+          messageId: toolMessageId ?? toolCallId,
           operationId,
-          scope: operation?.context?.scope,
+          rootOperationId: rootOperationId ?? operationId,
+          scope: scope ?? operation?.context?.scope,
           signal: operation?.abortController?.signal,
-          sourceMessageId: operation?.context?.messageId,
-          topicId: operation?.context?.topicId ?? undefined,
+          sourceMessageId: sourceMessageId ?? operation?.context?.messageId,
+          taskId,
+          threadId: threadId ?? operation?.context?.threadId,
+          topicId: topicId ?? operation?.context?.topicId,
+          toolCallId,
+          toolMessageId,
         };
 
         log('[ClientToolCall] execute:start', {

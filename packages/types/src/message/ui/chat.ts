@@ -1,5 +1,6 @@
 import type { GroundingSearch } from '../../search';
 import type { ThreadStatus } from '../../topic/thread';
+import type { WorkSummaryItem } from '../../work';
 import type {
   ChatImageItem,
   ChatMessageError,
@@ -345,4 +346,12 @@ export interface UIChatMessage {
    */
   usage?: ModelUsage;
   videoList?: ChatVideoItem[];
+  /**
+   * Work summaries produced by this message's root operation, resolved
+   * server-side and attached by `metadata.work.rootOperationId`. Rides the
+   * message-list payload so the in-message Works chips and the sidebar's
+   * summary view read from one source instead of a separate work-summary
+   * fetch. Empty/omitted when the message produced no Work.
+   */
+  works?: WorkSummaryItem[];
 }

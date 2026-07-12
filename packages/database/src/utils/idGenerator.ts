@@ -37,7 +37,8 @@ const prefixes = {
   workspaceAuditLogs: 'wal',
   workspaceInvitations: 'wsi',
   workspaces: 'ws',
-  works: 'wk',
+  workVersions: 'wver',
+  works: 'work',
 } as const;
 
 export const idGenerator = (namespace: keyof typeof prefixes, size = 12) => {

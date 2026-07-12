@@ -33,6 +33,7 @@ import { topicReferenceExecutor } from './lobe-topic-reference';
 import { userInteractionExecutor } from './lobe-user-interaction';
 import { webBrowsing } from './lobe-web-browsing';
 import { webOnboardingExecutor } from './lobe-web-onboarding';
+import { stashBuiltinToolWorkIntent } from './workRegistration';
 
 /**
  * Registry structure: Map<identifier, executor instance>
@@ -121,7 +122,15 @@ export const invokeExecutor = async (
     };
   }
 
-  return executor.invoke(apiName, params, ctx);
+  const result = await executor.invoke(apiName, params, ctx);
+
+  // Manifest-driven Work registration (best-effort; a no-op unless the API
+  // declares a `work` config). Only STASH the intent here — `call_tool` drains
+  // it and writes the Work version once the tool call's cumulative cost is known
+  // (write-once instead of register-then-backfill).
+  stashBuiltinToolWorkIntent(identifier, apiName, params, ctx, result);
+
+  return result;
 };
 
 /**

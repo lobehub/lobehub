@@ -246,13 +246,20 @@ export class TaskModel {
     return updated[0] || null;
   }
 
+  /**
+   * Delete a task. This does NOT touch the task's Work artifact: the Work
+   * lifecycle is driven by the deleteTask tool call at the tool-execution
+   * dispatch layer (which calls `WorkModel.deleteTaskWork`), so non-tool deletes
+   * (UI / CLI / deleteAll) deliberately leave the Work as an orphan for the UI
+   * to render as "resource deleted" from its version snapshot. See LOBE-11606.
+   */
   async delete(id: string): Promise<boolean> {
-    const result = await this.db
+    const deleted = await this.db
       .delete(tasks)
       .where(and(eq(tasks.id, id), this.ownership()))
-      .returning();
+      .returning({ id: tasks.id });
 
-    return result.length > 0;
+    return deleted.length > 0;
   }
 
   /**
@@ -395,6 +402,7 @@ export class TaskModel {
     return result.rows.length > 0;
   }
 
+  /** See {@link delete}: bulk task deletion likewise leaves Work artifacts intact. */
   async deleteAll(options?: { restrictToCreator?: boolean }): Promise<number> {
     // `restrictToCreator` narrows the workspace-wide sweep to rows the caller
     // created (non-owner members); owners/personal mode keep the full scope.

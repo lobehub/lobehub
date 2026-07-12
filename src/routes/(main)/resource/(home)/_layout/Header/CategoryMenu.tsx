@@ -19,6 +19,10 @@ const CategoryMenu = memo(() => {
   const navigate = useWorkspaceAwareNavigate();
   const businessCategories = useBusinessResourceCategories();
   const location = useLocation();
+  // In Work-gallery mode (`?works=`) no file category is selected, so suppress
+  // the category highlight — otherwise "All" reads as active alongside the
+  // active Work entry.
+  const worksActive = new URLSearchParams(location.search).has('works');
 
   const items = useMemo(
     () => [
@@ -68,7 +72,9 @@ const CategoryMenu = memo(() => {
     <Flexbox gap={1} paddingInline={4}>
       {items.map((item) => {
         const isBusinessRoute = item.url.startsWith('/resource/');
-        const isActive = isBusinessRoute ? location.pathname === item.url : activeKey === item.key;
+        const isActive =
+          !worksActive &&
+          (isBusinessRoute ? location.pathname === item.url : activeKey === item.key);
         return (
           <Link
             key={item.key}

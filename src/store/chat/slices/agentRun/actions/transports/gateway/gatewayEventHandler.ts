@@ -18,6 +18,7 @@ import { AgentRuntimeErrorType } from '@lobechat/types';
 import { isRecord, pickNonEmptyString, toRecord } from '@lobechat/utils/object';
 
 import { messageService } from '@/services/message';
+import { didToolMutateWorkView, workService } from '@/services/work';
 import { emitClientAgentSignalSourceEvent } from '@/store/chat/slices/agentRun/actions/lifecycle/agentSignalBridge';
 import type {
   AgentRunLifecycle,
@@ -394,6 +395,7 @@ export const createGatewayEventHandler = (
   // Mutable — switches to new assistant message ID on each stream_start
   let currentAssistantMessageId = params.assistantMessageId;
   let terminalState: 'completed' | 'error' | undefined;
+  let shouldRefreshWorkViews = false;
 
   // Accumulated content from stream chunks (reset on each stream_start)
   let accumulatedContent = '';
@@ -768,7 +770,10 @@ export const createGatewayEventHandler = (
         // — NOT the local `operationId` used for `dispatchContext`.
         const data = event.data as ToolExecuteData | undefined;
         if (!data) break;
-        void get().internal_executeClientTool(data, { operationId: gatewayOperationId });
+        void get().internal_executeClientTool(data, {
+          localOperationId: operationId,
+          operationId: gatewayOperationId,
+        });
         break;
       }
 
@@ -778,10 +783,27 @@ export const createGatewayEventHandler = (
           const maybeRefresh = shouldSkipMessageFetch(event, runtimeType)
             ? Promise.resolve()
             : fetchAndReplaceMessages(get, context).catch(console.error);
+          const payload = unwrapToolPayload(data?.payload);
+          const result = data?.result as
+            { state?: unknown; workRegistration?: unknown } | undefined;
+          if (
+            didToolMutateWorkView({
+              apiName: typeof payload?.apiName === 'string' ? payload.apiName : undefined,
+              identifier: typeof payload?.identifier === 'string' ? payload.identifier : undefined,
+              result,
+              succeeded: data?.isSuccess === true,
+              workRegistration: Boolean(result?.workRegistration),
+            })
+          ) {
+            shouldRefreshWorkViews = true;
+          }
+
           await Promise.all([
             maybeRefresh,
             dispatchOnAfterCall(data, context.topicId ?? undefined).catch(console.error),
           ]);
+          // Message-backed summaries refresh with the normal tool payload. Lazy
+          // Work views settle once at runtime-end when a mutating tool was seen.
         });
         break;
       }
@@ -911,6 +933,12 @@ export const createGatewayEventHandler = (
             // refetch to be reconciled with the server-side rows.
           } else {
             await fetchAndReplaceMessages(get, context).catch(console.error);
+          }
+
+          if (runtimeType === 'gateway' && shouldRefreshWorkViews) {
+            await workService
+              .refreshConversationViews(context.topicId, context.threadId)
+              .catch(console.error);
           }
 
           // Terminal run lifecycle. `isCompletedRuntimeEnd` is the clean-vs-not

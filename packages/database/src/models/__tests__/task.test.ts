@@ -5,8 +5,10 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { getTestDB } from '../../core/getTestDB';
 import { agents, briefs, documents, tasks, topics, users, workspaces } from '../../schemas';
 import { taskTopics } from '../../schemas/task';
+import { works } from '../../schemas/work';
 import type { LobeChatDatabase } from '../../type';
 import { TaskModel } from '../task';
+import { WorkModel } from '../work';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
@@ -239,6 +241,26 @@ describe('TaskModel', () => {
       const task = await model1.create({ instruction: 'User 1 task' });
       const deleted = await model2.delete(task.id);
       expect(deleted).toBe(false);
+    });
+
+    // Non-tool deletion (UI / CLI) must leave the Work artifact orphaned so the
+    // UI can render it as "resource deleted" from its snapshot. Tool-driven
+    // deletion removes the Work separately at the dispatch layer (LOBE-11606).
+    it('should NOT delete the task Work artifact', async () => {
+      const model = new TaskModel(serverDB, userId);
+      const workModel = new WorkModel(serverDB, userId);
+      const task = await model.create({ instruction: 'Keep my Work' });
+      await workModel.registerTask({
+        role: 'created',
+        source: 'createTask',
+        sourceToolCallId: 'tool-call-task-keep',
+        taskId: task.id,
+      });
+
+      await model.delete(task.id);
+
+      const workRows = await serverDB.select().from(works).where(eq(works.resourceId, task.id));
+      expect(workRows).toHaveLength(1);
     });
   });
 
