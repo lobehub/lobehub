@@ -20,6 +20,7 @@ const DEFAULT_MENU: MessageActionSlot[] = [
   'collapse',
   'divider',
   'share',
+  'select',
   'divider',
   'regenerate',
   'del',
@@ -28,10 +29,10 @@ const IN_PROGRESS_BAR: MessageActionSlot[] = ['del'];
 // Finished turn whose last child block is a tool call (typical for heterogeneous
 // CC/Codex turns, which end on a Bash/Read/Edit/Task block with no trailing text).
 // There's no text block to edit/copy, but the turn IS complete — it can still be
-// shared as a complete reply, but not forwarded because forwarding is limited
-// to canonical user/assistant messages.
+// shared and multi-selected/forwarded as one aggregated assistant reply. The
+// forward serializer keeps child text while excluding child tool payloads.
 const NO_TEXT_BLOCK_BAR: MessageActionSlot[] = ['delAndRegenerate'];
-const NO_TEXT_BLOCK_MENU: MessageActionSlot[] = ['share', 'divider', 'del'];
+const NO_TEXT_BLOCK_MENU: MessageActionSlot[] = ['share', 'select', 'divider', 'del'];
 
 interface GroupActionsProps {
   actionsConfig?: MessageActionsConfig;
@@ -59,7 +60,7 @@ export const GroupActionsBar = memo<GroupActionsProps>(
         return <MessageActionBar bar={IN_PROGRESS_BAR} ctx={ctx} />;
       }
       // Finished, but the turn ends on a tool-call block — no text to edit/copy,
-      // yet it's a complete reply that can still be shared.
+      // yet it's a complete reply that can still be shared and selected.
       return <MessageActionBar bar={NO_TEXT_BLOCK_BAR} ctx={ctx} menu={NO_TEXT_BLOCK_MENU} />;
     }
 

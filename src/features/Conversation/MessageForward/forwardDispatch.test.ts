@@ -94,12 +94,12 @@ describe('forwardDispatch', () => {
       );
     });
 
-    it('excludes tool and assistantGroup messages', () => {
+    it('flattens assistantGroup child text without serializing tool payloads', () => {
       const content = buildForwardedContent(
         [
           msg({
             children: [
-              { content: 'part one' },
+              { content: 'part one', tools: [{ id: 'tool-1' }] },
               { content: 'part two' },
             ] as UIChatMessage['children'],
             content: '',
@@ -111,7 +111,10 @@ describe('forwardDispatch', () => {
         { header: 'H', roleLabel },
       );
 
-      expect(content).toBe('H\n\n---\n\n**Assistant**\n\nkept');
+      expect(content).toBe(
+        'H\n\n---\n\n**Assistant**\n\npart one\n\npart two\n\n---\n\n**Assistant**\n\nkept',
+      );
+      expect(content).not.toContain('tool-1');
     });
 
     it('skips messages with empty content', () => {

@@ -43,7 +43,7 @@ const data = { id: 'group-1', role: 'assistantGroup', tools: [] } as unknown as 
 const renderBar = (props: { contentId?: string }) =>
   render(<GroupActionsBar data={data} id="group-1" {...props} />);
 
-describe('GroupActionsBar — assistantGroup action gating', () => {
+describe('GroupActionsBar — hetero (assistantGroup) forward/select gating', () => {
   it('still generating with no text block → only delete', () => {
     storeMock.isGenerating = true;
     renderBar({ contentId: undefined });
@@ -53,25 +53,25 @@ describe('GroupActionsBar — assistantGroup action gating', () => {
     expect(bar).toHaveAttribute('data-menu', '');
   });
 
-  it('finished but last block is a tool call → exposes share and delete without select', () => {
+  it('finished but last block is a tool call → exposes share, select, and delete', () => {
     storeMock.isGenerating = false;
     renderBar({ contentId: undefined });
 
     const bar = screen.getByTestId('action-bar');
     const menu = bar.getAttribute('data-menu') ?? '';
-    expect(menu.split(',')).not.toContain('select');
+    expect(menu.split(',')).toContain('select');
     expect(menu.split(',')).toContain('share');
     expect(menu.split(',')).toContain('del');
     expect(bar).toHaveAttribute('data-bar', 'delAndRegenerate');
   });
 
-  it('finished with a trailing text block → full menu without select', () => {
+  it('finished with a trailing text block → full menu', () => {
     storeMock.isGenerating = false;
     renderBar({ contentId: 'block-text' });
 
     const bar = screen.getByTestId('action-bar');
     const menu = bar.getAttribute('data-menu') ?? '';
-    expect(menu.split(',')).not.toContain('select');
+    expect(menu.split(',')).toContain('select');
     expect(menu.split(',')).toContain('share');
     expect(menu.split(',')).toContain('edit');
   });
