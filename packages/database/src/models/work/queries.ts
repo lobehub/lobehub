@@ -66,20 +66,6 @@ const WORK_TYPE_FANOUT = 4;
  */
 const MAX_SUMMARY_ROW_LIMIT = 1000;
 
-const latestSummaryItemsByWork = (items: WorkSummaryItem[], limit?: number) => {
-  const seen = new Set<string>();
-  const latestItems: WorkSummaryItem[] = [];
-
-  for (const item of items) {
-    if (seen.has(item.id)) continue;
-    seen.add(item.id);
-    latestItems.push(item);
-    if (limit && latestItems.length >= limit) break;
-  }
-
-  return latestItems;
-};
-
 export const listByRootOperation = async (
   ctx: WorkContext,
   params: {
@@ -167,22 +153,28 @@ export const listSummariesByRootOperations = async (
     listLinearWorkSummaryRows(ctx, filters, rowLimit),
     listGithubWorkSummaryRows(ctx, filters, rowLimit),
   ]);
-  const summaries = latestSummaryItemsByWork(
-    (
-      await Promise.all([
-        toTaskWorkSummaries(ctx, taskRows),
-        toDocumentWorkSummaries(ctx, documentRows),
-        toLinearWorkSummaries(ctx, linearRows),
-        toGithubWorkSummaries(ctx, githubRows),
-      ])
-    )
-      .flat()
-      .sort((a, b) => b.event.createdAt.getTime() - a.event.createdAt.getTime()),
-  );
+  const summaries = (
+    await Promise.all([
+      toTaskWorkSummaries(ctx, taskRows),
+      toDocumentWorkSummaries(ctx, documentRows),
+      toLinearWorkSummaries(ctx, linearRows),
+      toGithubWorkSummaries(ctx, githubRows),
+    ])
+  )
+    .flat()
+    .sort((a, b) => b.event.createdAt.getTime() - a.event.createdAt.getTime());
 
+  // Dedupe to the latest event per Work WITHIN each root operation, not
+  // globally: one page can carry several operations touching the same Work
+  // (turn A creates a task, turn B updates it), and each turn's anchor card
+  // must still surface its own event.
+  const seenWorksByOperation: Record<string, Set<string>> = {};
   for (const summary of summaries) {
     const rootOperationId = summary.event.rootOperationId;
     if (!rootOperationId || !(rootOperationId in result)) continue;
+    const seenWorks = (seenWorksByOperation[rootOperationId] ??= new Set());
+    if (seenWorks.has(summary.id)) continue;
+    seenWorks.add(summary.id);
     if (result[rootOperationId].length >= limit) continue;
     result[rootOperationId].push(summary);
   }
