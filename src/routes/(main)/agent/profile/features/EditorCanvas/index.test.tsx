@@ -34,6 +34,7 @@ const handleContentChange = vi.fn();
 const flushSave = vi.fn().mockResolvedValue(undefined);
 const retryPromptSave = vi.fn().mockResolvedValue(undefined);
 const setHasEdited = vi.fn();
+const messageError = vi.fn();
 const permissionState = {
   allowed: false,
 };
@@ -104,6 +105,12 @@ vi.mock('@/components/Editor/AutoSaveHint', () => ({
   }),
 }));
 
+vi.mock('@/components/AntdStaticMethods', () => ({
+  message: {
+    error: (...args: unknown[]) => messageError(...args),
+  },
+}));
+
 vi.mock('@/features/ChatInput/InputEditor/plugins', () => ({
   createChatInputRichPlugins: () => [],
 }));
@@ -136,6 +143,9 @@ vi.mock('../ProfileEditor/MentionList', () => ({
 
 vi.mock('../store', () => ({
   useProfileStore: (selector: any) => selector(profileStoreState),
+  useStoreApi: () => ({
+    getState: () => profileStoreState,
+  }),
 }));
 
 vi.mock('./TypoBar', () => ({
@@ -319,6 +329,32 @@ describe('Agent profile EditorCanvas', () => {
     expect(screen.getByTestId('prompt-save-status')).toHaveTextContent('failed');
     fireEvent.click(screen.getByTestId('prompt-save-status'));
     expect(retryPromptSave).toHaveBeenCalledTimes(1);
+  });
+
+  it('falls back to a global toast when an unmounted flush fails', async () => {
+    permissionState.allowed = true;
+    flushSave.mockImplementation(async () => {
+      profileStoreState.promptSaveStatus = 'failed';
+    });
+
+    const { unmount } = render(<EditorCanvas />);
+    unmount();
+
+    await waitFor(() => expect(flushSave).toHaveBeenCalledWith('agent-a'));
+    await waitFor(() => expect(messageError).toHaveBeenCalledWith('saveAgentConfigFail'));
+  });
+
+  it('does not toast on unmount when the flush succeeds', async () => {
+    permissionState.allowed = true;
+    flushSave.mockImplementation(async () => {
+      profileStoreState.promptSaveStatus = 'saved';
+    });
+
+    const { unmount } = render(<EditorCanvas />);
+    unmount();
+
+    await waitFor(() => expect(flushSave).toHaveBeenCalledWith('agent-a'));
+    expect(messageError).not.toHaveBeenCalled();
   });
 
   it('hides Prompt save feedback before the first edit', () => {

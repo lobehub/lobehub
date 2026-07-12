@@ -9,6 +9,7 @@ import isEqual from 'fast-deep-equal';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { message } from '@/components/AntdStaticMethods';
 import AutoSaveHint from '@/components/Editor/AutoSaveHint';
 import { createChatInputRichPlugins } from '@/features/ChatInput/InputEditor/plugins';
 import { EditingIndicator } from '@/features/EditLock';
@@ -17,7 +18,7 @@ import { EMPTY_EDITOR_STATE } from '@/libs/editor/constants';
 import { useAgentStore } from '@/store/agent';
 
 import { useMentionOptions } from '../ProfileEditor/MentionList';
-import { useProfileStore } from '../store';
+import { useProfileStore, useStoreApi } from '../store';
 import { type UpdateConfigById } from '../store/action';
 import { selectors as profileSelectors } from '../store/selectors';
 import TypoBar from './TypoBar';
@@ -363,16 +364,29 @@ const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId }) => {
 });
 
 const EditorCanvas = memo(() => {
+  const { t } = useTranslation();
   const agentId = useAgentStore((s) => s.activeAgentId);
   const flushSave = useProfileStore((s) => s.flushSave);
+  // Capture the store API in the cleanup closure so the final status check
+  // still works after this provider/editor unmounts.
+  const storeApi = useStoreApi();
 
   // Flush the departing agent's own debouncer before this keyed editor is
   // replaced. The store keeps the save target and payload isolated by agentId.
+  // After unmount AutoSaveHint is gone, so a failed flush must fall back to a
+  // global toast. This is reliable because flushSave awaits saveQueue, and
+  // enqueueSave writes promptSaveStatus: 'failed' before the queue promise
+  // resolves — with no further revision overwrites after unmount.
   useEffect(
     () => () => {
-      if (agentId) void flushSave(agentId);
+      if (!agentId) return;
+      void flushSave(agentId).then(() => {
+        if (storeApi.getState().promptSaveStatus === 'failed') {
+          message.error(t('saveAgentConfigFail', { ns: 'common' }));
+        }
+      });
     },
-    [agentId, flushSave],
+    [agentId, flushSave, storeApi, t],
   );
 
   if (!agentId) return null;
