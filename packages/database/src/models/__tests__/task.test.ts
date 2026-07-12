@@ -251,7 +251,7 @@ describe('TaskModel', () => {
       const workModel = new WorkModel(serverDB, userId);
       const task = await model.create({ instruction: 'Keep my Work' });
       await workModel.registerTask({
-        role: 'created',
+        changeType: 'created',
         source: 'createTask',
         sourceToolCallId: 'tool-call-task-keep',
         taskId: task.id,

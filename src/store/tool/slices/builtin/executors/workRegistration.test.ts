@@ -47,13 +47,13 @@ describe('stashBuiltinToolWorkIntent (client dispatch)', () => {
 
     expect(takeWorkIntent(ctx.toolCallId)).toEqual({
       action: 'create',
-      role: 'created',
+      changeType: 'created',
       targets: [{ taskId: 'task_1', taskIdentifier: 'T-1' }],
       type: 'task',
     });
   });
 
-  it('stashes an update intent (role "updated") resolved via args.identifier', () => {
+  it('stashes an update intent (changeType "updated") resolved via args.identifier', () => {
     stashBuiltinToolWorkIntent(
       'lobe-task',
       'editTask',
@@ -67,7 +67,7 @@ describe('stashBuiltinToolWorkIntent (client dispatch)', () => {
 
     expect(takeWorkIntent(ctx.toolCallId)).toEqual({
       action: 'update',
-      role: 'updated',
+      changeType: 'updated',
       targets: [{ taskId: undefined, taskIdentifier: 'T-9' }],
       type: 'task',
     });
@@ -89,7 +89,7 @@ describe('stashBuiltinToolWorkIntent (client dispatch)', () => {
 
     expect(takeWorkIntent(ctx.toolCallId)).toEqual({
       action: 'create',
-      role: 'created',
+      changeType: 'created',
       targets: [{ taskId: undefined, taskIdentifier: 'T-A' }],
       type: 'task',
     });

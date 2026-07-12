@@ -95,7 +95,7 @@ describe('call_tool executor', () => {
       // while the tool runs; `call_tool` drains it AFTER cost is accumulated.
       stashWorkIntent('tool_call_usage', {
         action: 'create',
-        role: 'created',
+        changeType: 'created',
         targets: [{ taskId: 'task_1', taskIdentifier: 'task-one' }],
         type: 'task',
       });
@@ -200,7 +200,7 @@ describe('call_tool executor', () => {
 
       stashWorkIntent('tool_call_blocking', {
         action: 'create',
-        role: 'created',
+        changeType: 'created',
         targets: [{ taskId: 'task_blocking' }],
         type: 'task',
       });
