@@ -30,10 +30,11 @@ import type {
   AgentManagementContext,
   BotPlatformContext,
   LobeToolManifest,
+  SkillEngine,
   ToolExecutor,
+  type ToolsEngine,
   ToolSource,
 } from '@lobechat/context-engine';
-import { SkillEngine, type ToolsEngine } from '@lobechat/context-engine';
 import type { LobeChatDatabase } from '@lobechat/database';
 import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import { buildTaskManagerDefaultsPrompt } from '@lobechat/prompts';
@@ -980,6 +981,34 @@ export class AiAgentService {
    *   → ServerMechaModule.ContextEngineering(input, config, messages)
    *   → AgentRuntimeService.createOperation(...)
    */
+  /**
+   * Resolve the caller's per-source-device execution override for `agentId`,
+   * mirroring the client resolver. Workspace agents read
+   * `workspace_user_settings.agentDeviceOverrides`; personal agents read
+   * `users.preference.personalDeviceOverrides`. Returns `undefined` when no
+   * override is set, so the shared `agencyConfig` is used as-is.
+   */
+  private async resolveCallerDeviceOverride(
+    agentId: string,
+    sourceDeviceId?: string,
+  ): Promise<{ boundDeviceId?: string; executionTarget?: string } | undefined> {
+    if (this.workspaceId) {
+      const workspaceUserSettings = new WorkspaceUserSettingsModel(
+        this.db,
+        this.userId,
+        this.workspaceId,
+      );
+      const preference = await workspaceUserSettings.getPreference();
+      const bySource = preference.agentDeviceOverrides?.[agentId];
+      return resolveOverrideBySource(bySource, sourceDeviceId ?? '*');
+    }
+
+    const userModel = new UserModel(this.db, this.userId);
+    const preference = await userModel.getUserPreference();
+    const bySource = preference?.personalDeviceOverrides?.[agentId];
+    return resolveOverrideBySource(bySource, sourceDeviceId ?? '*');
+  }
+
   async execAgent(params: InternalExecAgentParams): Promise<ExecAgentResult> {
     const {
       additionalPluginIds,
@@ -990,6 +1019,7 @@ export class AiAgentService {
       autoStart = true,
       botContext,
       deviceId: requestedDeviceId,
+      sourceDeviceId,
       botPlatformContext,
       discordContext,
       existingMessageIds = [],
@@ -1092,34 +1122,40 @@ export class AiAgentService {
     // Use actual agent ID from config for subsequent operations
     const resolvedAgentId = agentConfig.id;
 
-    // Layer this caller's per-user device override (LOBE-11689) over the shared
-    // agencyConfig so THIS user's Cloud Sandbox / workspace-device / local pick
-    // drives dispatch instead of whichever choice landed on the shared row.
-    // Only applied for workspace agents — personal agents already have a single
-    // owner whose choice IS the shared config. The override lives in the
-    // dedicated `workspace_user_settings` table (per-(workspace, user)) so it
-    // stays orthogonal to member-list queries and cascades on either identity
-    // delete. `resolveAgencyConfig` is a no-op when no override exists, so a
-    // first-open (or a member who hasn't touched the switcher) transparently
-    // sees the shared default.
-    if (this.workspaceId) {
-      try {
-        const workspaceUserSettings = new WorkspaceUserSettingsModel(
-          this.db,
-          this.userId,
-          this.workspaceId,
-        );
-        const preference = await workspaceUserSettings.getPreference();
-        const bySource = preference.agentDeviceOverrides?.[resolvedAgentId];
-        // Server doesn't know the sourceDeviceId (which machine the request came from),
-        // so use '*' as fallback — the user's last-set generic override.
-        const override = resolveOverrideBySource(bySource, '*');
-        agentConfig.agencyConfig = resolveAgencyConfig(agentConfig.agencyConfig, override ?? null);
-      } catch (error) {
-        // Losing the override is non-fatal: dispatch falls back to the shared
-        // agencyConfig, which is exactly the pre-LOBE-11689 behaviour.
-        log('execAgent: failed to load caller workspace_user_settings override: %O', error);
+    // Layer this caller's per-user device override over the shared agencyConfig
+    // so THIS user's Cloud Sandbox / workspace-device / local pick drives
+    // dispatch instead of whichever choice landed on the shared row. Mirrors the
+    // client resolver (agentConfigResolver.withDeviceOverride):
+    //   topic override → source-device override → shared agencyConfig
+    // - Workspace agents read `workspace_user_settings.agentDeviceOverrides`.
+    // - Personal agents read `users.preference.personalDeviceOverrides` (their
+    //   choice is no longer written to the shared config).
+    // `resolveOverrideBySource`/`resolveAgencyConfig` are no-ops when no override
+    // exists, so a first-open (or a member who hasn't touched the switcher)
+    // transparently sees the shared default.
+    try {
+      const sourceOverride = await this.resolveCallerDeviceOverride(
+        resolvedAgentId,
+        sourceDeviceId,
+      );
+
+      agentConfig.agencyConfig = resolveAgencyConfig(
+        agentConfig.agencyConfig,
+        sourceOverride ?? null,
+      );
+
+      // Topic-level device override wins over the source-device override.
+      if (appContext?.topicId) {
+        const topic = await this.topicModel.findById(appContext.topicId);
+        const topicOverride = topic?.metadata?.deviceOverride;
+        if (topicOverride) {
+          agentConfig.agencyConfig = resolveAgencyConfig(agentConfig.agencyConfig, topicOverride);
+        }
       }
+    } catch (error) {
+      // Losing the override is non-fatal: dispatch falls back to the shared
+      // agencyConfig, which is exactly the pre-LOBE-11689 behaviour.
+      log('execAgent: failed to resolve caller device override: %O', error);
     }
 
     // Persistence-attribution agent id. Background Agent Signal runs (memory /
@@ -3316,15 +3352,16 @@ export class AiAgentService {
     // gates. manifestMap is intentionally broader for discovery and must not
     // by itself authorize a tool in chat/custom mode or without function calls.
     const historicalActivatedToolIds = extractActivatedToolIdsFromMessages(allMessages) ?? [];
-    const activatableToolIds = toolsEngine && historicalActivatedToolIds.length > 0
-      ? toolsEngine.generateToolsDetailed({
-          context: { isExplicitActivation: true },
-          model,
-          provider,
-          skipDefaultTools: true,
-          toolIds: historicalActivatedToolIds,
-        }).enabledToolIds
-      : [];
+    const activatableToolIds =
+      toolsEngine && historicalActivatedToolIds.length > 0
+        ? toolsEngine.generateToolsDetailed({
+            context: { isExplicitActivation: true },
+            model,
+            provider,
+            skipDefaultTools: true,
+            toolIds: historicalActivatedToolIds,
+          }).enabledToolIds
+        : [];
 
     log('execAgent: prepared evalContext for executor');
 

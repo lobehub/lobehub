@@ -161,6 +161,12 @@ export interface ExecAgentParams {
   provider?: string;
   /** The agent slug to run (either agentId or slug is required) */
   slug?: string;
+  /**
+   * Source device id of the machine making this request, used to resolve the
+   * caller's per-source-device execution override. Mirrors the key the UI
+   * switcher writes; falls back to `'*'` on the server when omitted.
+   */
+  sourceDeviceId?: string;
 }
 
 /**

@@ -27,9 +27,11 @@ import { consumePendingTopicRepos, getPendingTopicRepos } from '@/store/chat/pen
 import { topicSelectors } from '@/store/chat/selectors';
 import type { ChatStore } from '@/store/chat/store';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+import { getElectronStoreState } from '@/store/electron';
 import type { StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors, toolInterventionSelectors } from '@/store/user/selectors';
+import { getSourceDeviceId } from '@/utils/sourceDevice';
 
 import { buildRunLifecycle } from '../../lifecycle/buildRunLifecycle';
 import type { RunScope } from '../../lifecycle/types';
@@ -488,6 +490,12 @@ export class GatewayActionImpl {
       ? topicSelectors.getTopicById(context.topicId)(this.#get())?.metadata?.modelOverride
       : undefined;
 
+    // Source device id of this machine, so the server resolves the caller's
+    // per-source-device execution override (matches the key the switcher wrote).
+    const sourceDeviceId = isDesktop
+      ? getElectronStoreState()?.gatewayDeviceInfo?.deviceId
+      : getSourceDeviceId();
+
     const result = await aiAgentService.execAgentTask(
       {
         agentId: context.agentId,
@@ -524,6 +532,7 @@ export class GatewayActionImpl {
         resumeApproval,
         resumeToolResult,
         selectedToolIds,
+        ...(sourceDeviceId ? { sourceDeviceId } : {}),
         trigger: metadata?.trigger,
         userInterventionConfig,
       },

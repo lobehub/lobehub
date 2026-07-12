@@ -79,6 +79,8 @@ export interface ExecAgentTaskParams {
   /** Tool identifiers the user @-mentioned in this message; the server enables them for this run. */
   selectedToolIds?: string[];
   slug?: string;
+  /** Source device id of the requesting machine, forwarded for per-source override resolution. */
+  sourceDeviceId?: string;
   /**
    * Override what initiated this operation. Server defaults to `'chat'` when
    * omitted. Pass a more specific value (`'cli'`, `'openapi'`, …) so the

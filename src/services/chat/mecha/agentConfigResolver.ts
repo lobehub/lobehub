@@ -127,7 +127,9 @@ export interface AgentConfigResolverContext {
    * Topic-level model/provider override.
    * When set, overrides the agent's model/provider so each topic can use a
    * different model. The caller (streamingExecutor) reads this from
-   * `topic.metadata.model` / `topic.metadata.provider`.
+   * `topic.metadata.modelOverride` — a dedicated field, kept separate from the
+   * top-level `metadata.model`/`provider` that history compression writes with
+   * the *summarizer* model.
    */
   topicModelOverride?: { model: string; provider: string };
 }

@@ -64,8 +64,8 @@ const ModelLabel = memo(() => {
   const topicModelOverride = useChatStore((s) => {
     if (!activeTopicId) return undefined;
     const topic = topicSelectors.getTopicById(activeTopicId)(s);
-    if (!topic?.metadata?.model) return undefined;
-    return { model: topic.metadata.model, provider: topic.metadata.provider || '' };
+    if (!topic?.metadata?.modelOverride) return undefined;
+    return topic.metadata.modelOverride;
   });
 
   const model = topicModelOverride?.model || agentModel;
@@ -82,8 +82,7 @@ const ModelLabel = memo(() => {
 
       if (activeTopicId) {
         await updateTopicMetadata(activeTopicId, {
-          model: config.model,
-          provider: config.provider,
+          modelOverride: { model: config.model, provider: config.provider },
         });
       } else {
         await updateAgentConfigById(agentId, config);

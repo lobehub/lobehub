@@ -167,6 +167,8 @@ const ExecAgentSchema = z
     autoStart: z.boolean().optional().default(true),
     /** Explicit device ID to bind to the topic and activate for this run */
     deviceId: z.string().optional(),
+    /** Source device id of the requesting machine, for per-source override resolution. */
+    sourceDeviceId: z.string().optional(),
     /** Optional existing message IDs to include in context */
     existingMessageIds: z.array(z.string()).optional().default([]),
     /** File IDs of already-uploaded attachments to attach to the new user message */
@@ -719,6 +721,7 @@ export const aiAgentRouter = router({
       autoStart = true,
       deviceId,
       existingMessageIds = [],
+      sourceDeviceId,
       fileIds,
       mentionedAgents,
       model,
@@ -740,6 +743,7 @@ export const aiAgentRouter = router({
         autoStart,
         deviceId,
         existingMessageIds,
+        sourceDeviceId,
         fileIds,
         mentionedAgents,
         model,

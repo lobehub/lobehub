@@ -84,10 +84,20 @@ export class WorkspaceUserSettingsModel {
             agentDeviceOverrides: {
               ...current.agentDeviceOverrides,
               ...Object.fromEntries(
-                Object.entries(patch.agentDeviceOverrides).map(([agentId, bySource]) => [
-                  agentId,
-                  { ...current.agentDeviceOverrides?.[agentId], ...bySource },
-                ]),
+                Object.entries(patch.agentDeviceOverrides).map(([agentId, bySource]) => {
+                  // Normalize a legacy flat override (`{ executionTarget,
+                  // boundDeviceId }`) into the per-source map shape before
+                  // merging, so it doesn't shadow the new keyed entry — the
+                  // resolver treats any object with top-level executionTarget /
+                  // boundDeviceId as legacy flat and returns it as-is, skipping
+                  // source keys.
+                  const existing = current.agentDeviceOverrides?.[agentId];
+                  const normalizedExisting =
+                    existing && ('executionTarget' in existing || 'boundDeviceId' in existing)
+                      ? { '*': existing }
+                      : existing;
+                  return [agentId, { ...normalizedExisting, ...bySource }];
+                }),
               ),
             },
           }

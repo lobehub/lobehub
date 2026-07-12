@@ -20,7 +20,12 @@ import type {
   SendMessageServerResponse,
   UIChatMessage,
 } from '@lobechat/types';
-import { getWorkingDirEffectivePath, getWorkingDirSourcePath } from '@lobechat/types';
+import {
+  getWorkingDirEffectivePath,
+  getWorkingDirSourcePath,
+  resolveAgencyConfig,
+  resolveOverrideBySource,
+} from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
 import { TRPCClientError } from '@trpc/client';
 import { t } from 'i18next';
@@ -72,8 +77,10 @@ import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/lobe-page-agent';
 import { type StoreSetter } from '@/store/types';
+import { useUserStore } from '@/store/user';
 import { useUserMemoryStore } from '@/store/userMemory';
 import { markdownToTxt } from '@/utils/markdownToTxt';
+import { getSourceDeviceId } from '@/utils/sourceDevice';
 
 import { materializeLocalSystemToolSnapshots } from '../transports/client/localSystemToolSnapshots';
 import type { CommandSendOverrides, SingleAgentMentionDirectRoute } from './commandBus';
@@ -140,6 +147,30 @@ interface OptimisticTopicPlaceholder {
 type Setter = StoreSetter<ChatStore>;
 export const conversationLifecycle = (set: Setter, get: () => ChatStore, _api?: unknown) =>
   new ConversationLifecycleActionImpl(set, get, _api);
+
+/**
+ * Resolve the effective per-source-device execution override for an agent from
+ * the current user's preference (personal or workspace), matching the key the
+ * switcher wrote. Used by runtime selection so a device picker change takes
+ * effect on the next send even though `agentConfig.agencyConfig` is untouched.
+ */
+const resolveDeviceOverrideForAgent = (
+  agentId: string,
+): { boundDeviceId?: string; executionTarget?: string } | undefined => {
+  const userStore = useUserStore.getState();
+  const agentState = getAgentStoreState();
+  const isWorkspace = Boolean(agentState.agentMap[agentId]?.workspaceId);
+  const bySource = isWorkspace
+    ? userStore.workspaceUserPreference.agentDeviceOverrides?.[agentId]
+    : userStore.preference?.personalDeviceOverrides?.[agentId];
+  const sourceDeviceId = isDesktop
+    ? getElectronStoreState()?.gatewayDeviceInfo?.deviceId
+    : getSourceDeviceId();
+  return resolveOverrideBySource(
+    bySource as Record<string, { boundDeviceId?: string; executionTarget?: string }> | undefined,
+    sourceDeviceId,
+  );
+};
 
 const isAbortError = (error: unknown, abortController?: AbortController) =>
   !!abortController?.signal.aborted ||
@@ -267,10 +298,19 @@ export class ConversationLifecycleActionImpl {
     if (!agentId) return;
 
     const agentConfig = agentSelectors.getAgentConfigById(agentId)(getAgentStoreState());
+    // Runtime selection must honour the user's per-source-device execution
+    // override (personal or workspace), not just the shared `agencyConfig` —
+    // the switcher writes those overrides out-of-band, so reading only
+    // `agencyConfig` would route the next send to the stale local/cloud target.
+    const deviceOverride = resolveDeviceOverrideForAgent(agentId);
+    const effectiveAgencyConfig = resolveAgencyConfig(
+      agentConfig?.agencyConfig,
+      deviceOverride ?? null,
+    );
     const heterogeneousProvider = agentConfig?.agencyConfig?.heterogeneousProvider;
     const runtimeType = selectRuntimeType({
-      boundDeviceId: agentConfig?.agencyConfig?.boundDeviceId,
-      executionTarget: agentConfig?.agencyConfig?.executionTarget,
+      boundDeviceId: effectiveAgencyConfig?.boundDeviceId,
+      executionTarget: effectiveAgencyConfig?.executionTarget,
       heterogeneousProvider,
       isGatewayMode: this.#get().isGatewayModeEnabled(agentId),
       isWorkspaceAgent: agentByIdSelectors.isWorkspaceAgentById(agentId)(getAgentStoreState()),
