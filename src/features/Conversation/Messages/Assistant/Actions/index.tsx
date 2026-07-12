@@ -29,7 +29,6 @@ const DEFAULT_MENU: MessageActionSlot[] = [
   'del',
 ];
 const ERROR_BAR: MessageActionSlot[] = ['regenerate', 'del'];
-const ERROR_MENU: MessageActionSlot[] = ['edit', 'copy', 'divider', 'del'];
 
 interface AssistantActionsBarProps {
   actionsConfig?: MessageActionsConfig;
@@ -42,8 +41,10 @@ export const AssistantActionsBar = memo<AssistantActionsBarProps>(({ actionsConf
 
   const { error, tools } = data;
 
+  // Error messages render an interception card, not user-authored content —
+  // editing or copying them makes no sense, so no overflow menu is offered
   if (error) {
-    return <MessageActionBar bar={ERROR_BAR} ctx={ctx} menu={ERROR_MENU} />;
+    return <MessageActionBar bar={ERROR_BAR} ctx={ctx} />;
   }
 
   const defaultBar = tools ? DEFAULT_BAR_WITH_TOOLS : DEFAULT_BAR;
