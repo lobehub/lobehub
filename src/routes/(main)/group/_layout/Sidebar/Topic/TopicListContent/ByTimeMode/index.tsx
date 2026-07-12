@@ -3,11 +3,12 @@
 import { Accordion, Flexbox } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { MoreHorizontal } from 'lucide-react';
-import { memo, useEffect, useMemo } from 'react';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
+import { useTopicGroupCollapse } from '@/hooks/useTopicGroupCollapse';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 import { useGlobalStore } from '@/store/global';
@@ -36,19 +37,8 @@ const ByTimeMode = memo(() => {
   );
   const groupTopics = useChatStore(groupSelector, isEqual);
 
-  const [topicGroupKeys, updateSystemStatus] = useGlobalStore((s) => [
-    systemStatusSelectors.topicGroupKeys(s),
-    s.updateSystemStatus,
-  ]);
-
-  // Reset expanded keys when grouping changes so all groups start expanded
-  useEffect(() => {
-    updateSystemStatus({ expandTopicGroupKeys: undefined });
-  }, [topicSortBy, topicGroupMode, updateSystemStatus]);
-
-  const expandedKeys = useMemo(() => {
-    return topicGroupKeys || groupTopics.map((group) => group.id);
-  }, [topicGroupKeys, groupTopics]);
+  const groupIds = useMemo(() => groupTopics.map((group) => group.id), [groupTopics]);
+  const { expandedKeys, setExpandedKeys } = useTopicGroupCollapse(topicGroupMode, groupIds);
 
   return (
     <Flexbox gap={2}>
@@ -56,7 +46,7 @@ const ByTimeMode = memo(() => {
       <Accordion
         expandedKeys={expandedKeys}
         gap={2}
-        onExpandedChange={(keys) => updateSystemStatus({ expandTopicGroupKeys: keys as any })}
+        onExpandedChange={(keys) => setExpandedKeys(keys as string[])}
       >
         {groupTopics.map((group) => (
           <GroupItem
