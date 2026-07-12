@@ -1009,3 +1009,16 @@ nodeintegration, plugins, disablewebsecurity, allowpopups, preload, …`). The h
 - **Works**: set `agent_id` on every seeded message row (matching the topic's `agent_id`).
   Probe the endpoint directly before blaming the UI:
   `/trpc/lambda/message.getMessages?input={"json":{"topicId":..,"topicShareId":..,"agentId":..}}`.
+
+### F2. Seeded share topics also need `topics.agent_id`, or the client never fires the message fetch
+
+- **Situation**: same setup as F1, but the failure is one layer earlier — metadata (title)
+  renders while `message.getMessages` never even appears in network requests.
+- **Doesn't work**: assuming the fetch failed — it was never fired. `useFetchMessages`
+  gates on `!!context.agentId && !!context.topicId`
+  (`src/store/chat/slices/message/actions/query.ts:268`), and the share page passes
+  `agentId: data.agentId ?? ''` — a topic seeded without `agent_id` yields `''` → SWR key
+  is null → no request, silent skeleton (a Case-1 lookalike with no error anywhere).
+- **Works**: seed an `agents` row and set `topics.agent_id` (and `messages.agent_id`)
+  before opening the share page. Verify the fetch actually fired via
+  `agent-browser network requests | grep getMessages`, not by waiting on the UI.
