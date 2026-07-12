@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { isModifierClick } from '@/utils/navigation';
 
 import { useSettingsSearchAnalytics } from './analytics';
 import { useSettingsSearch } from './useSettingsSearch';
@@ -61,8 +62,11 @@ const SearchResults = memo<{ query: string }>(({ query }) => {
               {result.breadcrumb}
             </Text>
           }
-          onClick={() => {
+          onClick={(e) => {
             trackResultClick(result, index + 1);
+            // Modifier clicks (cmd/ctrl) open a new tab via the href; don't also
+            // navigate the current tab.
+            if (isModifierClick(e)) return;
             navigate(result.url);
           }}
         />

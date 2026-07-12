@@ -72,7 +72,7 @@ interface SearchSession {
 export const useSettingsSearchAnalytics = (query: string, results: SettingsSearchResult[]) => {
   const sessionRef = useRef<SearchSession>({
     clicked: false,
-    id: Math.random().toString(36).slice(2, 10),
+    id: crypto.randomUUID(),
     lastQuery: '',
     lastResultCount: 0,
     queryCount: 0,
