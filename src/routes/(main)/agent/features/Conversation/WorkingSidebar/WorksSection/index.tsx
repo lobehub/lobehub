@@ -28,7 +28,7 @@ import { workKeys } from '@/libs/swr/keys';
 import { workService } from '@/services/work';
 import { useChatStore } from '@/store/chat';
 import { dbMessageSelectors, operationSelectors } from '@/store/chat/selectors';
-import { formatWorkVersionCost } from '@/utils/workVersionCost';
+import { computeWorkVersionCostDeltas, formatWorkVersionCost } from '@/utils/workVersionCost';
 
 const TASK_STATUS_SET = new Set<TaskStatus>([
   'backlog',
@@ -142,10 +142,14 @@ const VersionList = memo<{ workId: string }>(({ workId }) => {
     );
   }
 
+  // cumulativeCost is a per-operation running snapshot; diff it so each row
+  // shows the version's own spend and the rows visibly sum to the card total.
+  const costDeltas = computeWorkVersionCostDeltas(data);
+
   return (
     <Flexbox className={styles.versionList}>
       {data.map((version) => {
-        const cost = formatWorkVersionCost(version.cumulativeCost);
+        const cost = formatWorkVersionCost(costDeltas.get(version.id));
         const time = formatTaskItemDate(version.createdAt, {
           formatOtherYear: t('time.formatOtherYear', { ns: 'common' }),
           formatThisYear: t('time.formatThisYear', { ns: 'common' }),
@@ -169,7 +173,7 @@ const VersionList = memo<{ workId: string }>(({ workId }) => {
                     code
                     className={styles.versionCost}
                     fontSize={12}
-                    title={t('workingPanel.works.cumulativeCost', { cost })}
+                    title={t('workingPanel.works.versionCost', { cost })}
                   >
                     {cost}
                   </Text>

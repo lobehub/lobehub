@@ -162,7 +162,7 @@ const WorkSummaryCard = memo<WorkSummaryCardProps>(({ className, item, onOpen })
               code
               className={styles.cost}
               fontSize={12}
-              title={t('workingPanel.works.cumulativeCost', { cost })}
+              title={t('workingPanel.works.totalCost', { cost })}
             >
               {cost}
             </Text>
