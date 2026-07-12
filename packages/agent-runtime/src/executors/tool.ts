@@ -576,14 +576,23 @@ export const callToolsBatch =
             type: 'tool_end',
           });
 
-          const toolMessage = await createToolMessage({
-            host,
-            parentMessageId,
-            result: executionResult,
-            state,
-            tool,
-          });
-          toolMessageIds.push(toolMessage.id);
+          let toolMessageId: string;
+          if (execution.toolMessageId) {
+            toolMessageId = execution.toolMessageId;
+            if (!execution.resultPersisted) {
+              await updateExistingToolMessage({ host, result: executionResult, toolMessageId });
+            }
+          } else {
+            const toolMessage = await createToolMessage({
+              host,
+              parentMessageId,
+              result: executionResult,
+              state,
+              tool,
+            });
+            toolMessageId = toolMessage.id;
+          }
+          toolMessageIds.push(toolMessageId);
 
           const resultEntry: ToolResultEntry = {
             data: executionResult,

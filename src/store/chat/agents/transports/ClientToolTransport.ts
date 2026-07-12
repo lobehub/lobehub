@@ -255,7 +255,7 @@ export class ClientToolTransport implements ToolTransport {
       content:
         typeof rawResult.content === 'string' ? rawResult.content : JSON.stringify(rawResult),
       executionTime,
-      success: !rawResult.error,
+      success: typeof rawResult.success === 'boolean' ? rawResult.success : !rawResult.error,
     };
   }
 }

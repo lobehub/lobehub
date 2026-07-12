@@ -305,6 +305,32 @@ describe('tool executors', () => {
     );
   });
 
+  it('uses tool messages already persisted by the transport in a batch', async () => {
+    host.transports.tools!.canRunClientTools = true;
+    runTool.mockResolvedValueOnce({
+      attempts: 1,
+      result: { content: 'Client result', executionTime: 10, success: true },
+      resultPersisted: true,
+      toolMessageId: 'client-tool-msg',
+    });
+    const instruction: Extract<AgentInstruction, { type: 'call_tools_batch' }> = {
+      payload: {
+        parentMessageId: 'assistant-msg-1',
+        toolsCalling: [createToolCall('client-call', 'client-tool')],
+      },
+      type: 'call_tools_batch',
+    };
+
+    const result = await callToolsBatch(host)(
+      instruction,
+      createState({ toolSourceMap: { 'client-tool': 'client' as any } }),
+    );
+
+    expect(createToolMessage).not.toHaveBeenCalled();
+    expect(host.transports.messages.updateToolMessage).not.toHaveBeenCalled();
+    expect(result.nextContext?.payload).toMatchObject({ parentMessageId: 'client-tool-msg' });
+  });
+
   it('publishes and rethrows tool-message persist errors', async () => {
     const error = new Error('database failed');
     createToolMessage.mockRejectedValueOnce(error);
