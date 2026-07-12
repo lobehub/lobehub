@@ -2,8 +2,8 @@
 
 import { ModelIcon } from '@lobehub/icons';
 import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
-import { Tabs } from '@lobehub/ui/base-ui';
-import { Divider, Switch } from 'antd';
+import { Switch, Tabs } from '@lobehub/ui/base-ui';
+import { Divider } from 'antd';
 import { Images } from 'lucide-react';
 import { memo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';

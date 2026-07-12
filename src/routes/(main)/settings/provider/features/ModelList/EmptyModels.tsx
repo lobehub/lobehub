@@ -1,4 +1,5 @@
-import { Button, Center, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { Center, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { BrainIcon, LucideRefreshCcwDot, PlusIcon } from 'lucide-react';

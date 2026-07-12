@@ -1,5 +1,5 @@
 import { Ollama } from '@lobehub/icons';
-import { Button } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { memo } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
@@ -29,9 +29,12 @@ const OllamaDesktopSetupGuide = memo<{ id?: string }>(({ id }) => {
       }
       desc={
         <Trans
-          components={[<span key="0" />, <a href={'https://ollama.com/download'} key="1" rel="noreferrer" target="_blank" />]}
           i18nKey={'OllamaSetupGuide.install.description'}
           ns={'components'}
+          components={[
+            <span key="0" />,
+            <a href={'https://ollama.com/download'} key="1" rel="noreferrer" target="_blank" />,
+          ]}
         />
       }
     />

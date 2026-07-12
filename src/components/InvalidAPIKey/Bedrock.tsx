@@ -1,6 +1,6 @@
 import { Aws } from '@lobehub/icons';
-import { Button, Icon, InputPassword, Select } from '@lobehub/ui';
-import { Tabs, type TabsItem } from '@lobehub/ui/base-ui';
+import { Icon, InputPassword } from '@lobehub/ui';
+import { Button, Select, Tabs, type TabsItem } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { Network, ShieldPlus } from 'lucide-react';
 import { ModelProvider } from 'model-bank';

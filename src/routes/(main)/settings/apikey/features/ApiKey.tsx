@@ -2,9 +2,9 @@
 
 import { type ActionType, type ProColumns } from '@ant-design/pro-components';
 import { ProTable } from '@ant-design/pro-components';
-import { Button } from '@lobehub/ui';
+import { Button, Switch } from '@lobehub/ui/base-ui';
 import { useMutation } from '@tanstack/react-query';
-import { Popconfirm, Switch } from 'antd';
+import { Popconfirm } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { Trash } from 'lucide-react';
 import { type FC } from 'react';

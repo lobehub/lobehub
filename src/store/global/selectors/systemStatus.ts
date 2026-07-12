@@ -1,3 +1,5 @@
+import { type TopicGroupMode } from '@/types/topic';
+
 import type {
   GlobalState,
   ModelDetailPanelExpandedKey,
@@ -83,7 +85,10 @@ const sessionGroupKeys =
     return value || INITIAL_STATUS.expandSessionGroupKeys;
   };
 
-const topicGroupKeys = (s: GlobalState): string[] | undefined => s.status.expandTopicGroupKeys;
+const collapsedTopicGroupKeys =
+  (mode: TopicGroupMode) =>
+  (s: GlobalState): string[] | undefined =>
+    s.status.collapsedTopicGroupKeysByMode?.[mode];
 
 const agentSidebarSections =
   (agentId: string | undefined) =>
@@ -484,7 +489,7 @@ export const systemStatusSelectors = {
   systemStatus,
   verifyReportPanelWidth,
   tokenDisplayFormatShort,
-  topicGroupKeys,
+  collapsedTopicGroupKeys,
   topicPageSize,
   videoPanelWidth,
   videoTopicViewMode,

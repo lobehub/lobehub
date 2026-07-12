@@ -1,4 +1,5 @@
-import { ActionIcon, Button, Flexbox, toast } from '@lobehub/ui';
+import { ActionIcon, Flexbox, toast } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
   GripHorizontal,

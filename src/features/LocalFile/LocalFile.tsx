@@ -1,4 +1,5 @@
-import { Button, Flexbox, Popover } from '@lobehub/ui';
+import { Flexbox, Popover } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { Space } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ExternalLink, FolderOpen } from 'lucide-react';
@@ -45,7 +46,12 @@ interface LocalFileProps {
   readonly?: boolean;
 }
 
-export const LocalFile = ({ name, path, isDirectory = false, readonly = false }: LocalFileProps) => {
+export const LocalFile = ({
+  name,
+  path,
+  isDirectory = false,
+  readonly = false,
+}: LocalFileProps) => {
   const { t } = useTranslation('components');
 
   const handleOpenFile = () => {

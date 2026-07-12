@@ -25,3 +25,7 @@ export interface BrowserSidebarResult {
   error?: string;
   success: boolean;
 }
+
+export interface BrowserSidebarImportResult extends BrowserSidebarResult {
+  importedCount: number;
+}

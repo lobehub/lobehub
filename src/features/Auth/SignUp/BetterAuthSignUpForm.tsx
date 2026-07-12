@@ -1,7 +1,8 @@
 'use client';
 
 import { BRANDING_NAME } from '@lobechat/business-const';
-import { Button, Icon, Text } from '@lobehub/ui';
+import { Icon, Text } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { Form, Input, type InputRef } from 'antd';
 import { Lock, Mail } from 'lucide-react';
 import { useEffect, useRef } from 'react';

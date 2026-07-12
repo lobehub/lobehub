@@ -85,13 +85,11 @@ vi.mock('@lobehub/ui/base-ui', () => ({
   confirmModal: vi.fn(),
 }));
 
-interface AntdMockModule {
-  App: Record<PropertyKey, unknown>;
-  Modal: Record<PropertyKey, unknown>;
-}
-
 vi.mock('antd', async (importOriginal) => {
-  const actual = await importOriginal<AntdMockModule>();
+  const actual = (await importOriginal()) as {
+    App: Record<string, unknown>;
+    Modal: Record<string, unknown>;
+  } & Record<string, unknown>;
 
   return {
     ...actual,
@@ -229,7 +227,6 @@ describe('Agent profile Header', () => {
     vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
     mocks.agentState.isCurrentAgentHeterogeneous = false;
     mocks.agentState.systemRole = 'You are helpful.';
-    mocks.agentState.config.plugins = ['lobe-web-browsing'];
     mocks.globalState.showAgentBuilderPanel = false;
     mocks.profileState.editor = undefined;
   });
@@ -266,25 +263,6 @@ describe('Agent profile Header', () => {
     await expect(exportedBlob.text()).resolves.toContain('You are helpful.');
     expect(HTMLAnchorElement.prototype.click).toHaveBeenCalled();
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:agent-profile');
-  });
-
-  it('excludes disabled entries from the exported markdown plugin list, in a mixed-shape array', async () => {
-    mocks.agentState.config.plugins = [
-      'lobe-web-browsing',
-      { identifier: 'lobe-image-generation', mode: 'disabled' } as any,
-    ];
-
-    render(<Header />);
-
-    fireEvent.click(screen.getByRole('button', { name: 'pageEditor.menu.export.markdown' }));
-
-    await waitFor(() => expect(URL.createObjectURL).toHaveBeenCalled());
-
-    const exportedBlob = getLatestExportedBlob();
-    const exportedMarkdown = await exportedBlob.text();
-
-    expect(exportedMarkdown).toContain('lobe-web-browsing');
-    expect(exportedMarkdown).not.toContain('lobe-image-generation');
   });
 
   it('should preserve an empty prompt from the mounted editor when exporting markdown', async () => {

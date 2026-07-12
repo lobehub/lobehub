@@ -1,5 +1,5 @@
-import { type SelectProps } from '@lobehub/ui';
-import { ActionIcon, Select } from '@lobehub/ui';
+import { ActionIcon } from '@lobehub/ui';
+import { Select, type SelectProps } from '@lobehub/ui/base-ui';
 import { isString } from 'es-toolkit/compat';
 import { Wand2 } from 'lucide-react';
 import { memo } from 'react';

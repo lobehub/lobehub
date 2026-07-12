@@ -3,8 +3,8 @@
 import { type NetworkProxySettings } from '@lobechat/electron-client-ipc';
 import { type FormGroupItemType } from '@lobehub/ui';
 import { Form, Skeleton, toast } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
-import { Form as AntdForm, Input, Radio, Space, Switch } from 'antd';
+import { Button, Switch } from '@lobehub/ui/base-ui';
+import { Form as AntdForm, Input, Radio, Space } from 'antd';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

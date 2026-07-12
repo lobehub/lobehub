@@ -1,7 +1,7 @@
 'use client';
 
-import { ActionIcon, Button, DropdownMenu, Flexbox } from '@lobehub/ui';
-import { type ModalInstance } from '@lobehub/ui/base-ui';
+import { ActionIcon, DropdownMenu, Flexbox } from '@lobehub/ui';
+import { Button, type ModalInstance } from '@lobehub/ui/base-ui';
 import { Divider } from 'antd';
 import { useTheme } from 'antd-style';
 import { MoreHorizontalIcon, PlayIcon, Settings2Icon } from 'lucide-react';

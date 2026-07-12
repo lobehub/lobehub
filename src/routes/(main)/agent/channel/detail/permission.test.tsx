@@ -18,10 +18,6 @@ const mocks = vi.hoisted(() => ({
   navigate: vi.fn(),
 }));
 
-interface AntdMockModule {
-  App: Record<PropertyKey, unknown>;
-}
-
 vi.mock('react-i18next', () => ({
   Trans: ({ i18nKey }: { i18nKey: string }) => <span>{i18nKey}</span>,
   useTranslation: () => ({
@@ -31,7 +27,10 @@ vi.mock('react-i18next', () => ({
 }));
 
 vi.mock('antd', async (importOriginal) => {
-  const actual = await importOriginal<AntdMockModule>();
+  const actual = (await importOriginal()) as { App: Record<string, unknown> } & Record<
+    string,
+    unknown
+  >;
 
   return {
     ...actual,

@@ -1,5 +1,5 @@
-import { ActionIcon, Button, DropdownMenu, Flexbox, Tag } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
+import { ActionIcon, DropdownMenu, Flexbox, Tag } from '@lobehub/ui';
+import { Button, confirmModal } from '@lobehub/ui/base-ui';
 import { App, Card } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ArrowRight, ChevronRight, Database, Ellipsis, Pencil, Play, Trash2 } from 'lucide-react';
@@ -24,8 +24,8 @@ const styles = createStaticStyles(({ css }) => ({
   // test-case count — given mono weight so it reads as a result at a glance.
   caseCount: css`
     display: flex;
-    flex-shrink: 0;
     flex-direction: column;
+    flex-shrink: 0;
     gap: 2px;
     align-items: flex-end;
 
@@ -49,9 +49,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   chevron: css`
     flex-shrink: 0;
-
     color: ${cssVar.colorTextTertiary};
-
     transition: transform 0.15s ease;
 
     @media (prefers-reduced-motion: reduce) {
@@ -290,7 +288,7 @@ const DatasetCard = memo<DatasetCardProps>(
                 className={styles.footerLink}
                 to={`/eval/bench/${benchmarkId}/datasets/${dataset.id}`}
               >
-                <Button icon={ArrowRight} iconPosition="end" size="small" variant="text">
+                <Button icon={ArrowRight} iconPosition="end" size="small" type="text">
                   {t('dataset.detail.viewDetail')}
                 </Button>
               </WorkspaceLink>

@@ -85,6 +85,7 @@ type Tab = 'browser' | 'files' | 'params' | 'review' | 'resources';
 
 const REVIEW_TREE_STORAGE_KEY = 'lobechat-review-tree';
 const DEFAULT_PANEL_WIDTH = 360;
+const MAX_PANEL_WIDTH = 1200;
 // Two-pane Review (diff list + file-tree rail) is cramped below this.
 const TWO_PANE_MIN_WIDTH = 560;
 
@@ -190,7 +191,7 @@ const AgentWorkingSidebar = memo(() => {
     <RightPanel
       stableLayout
       defaultWidth={DEFAULT_PANEL_WIDTH}
-      maxWidth={720}
+      maxWidth={MAX_PANEL_WIDTH}
       minWidth={300}
       width={panelWidth}
       onSizeChange={(size) => {

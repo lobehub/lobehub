@@ -51,10 +51,12 @@ vi.mock('@/services/message', () => ({
 
 // threadService — subagent Thread creation (CC `Task` tool_use)
 const mockCreateThread = vi.fn();
+const mockGetThreads = vi.fn();
 const mockUpdateThread = vi.fn();
 vi.mock('@/services/thread', () => ({
   threadService: {
     createThread: (...args: unknown[]) => mockCreateThread(...args),
+    getThreads: (...args: unknown[]) => mockGetThreads(...args),
     updateThread: (...args: unknown[]) => mockUpdateThread(...args),
   },
 }));
@@ -497,6 +499,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       agentSessionId: ipc.getAdapterSessionId(sessionId),
     }));
     mockGetMessages.mockResolvedValue([]);
+    mockGetThreads.mockResolvedValue([]);
     // Honor a caller-provided `id` like the real messageService does — the
     // main + subagent coordinators PRE-ALLOCATE message ids so their intents can
     // carry concrete parentId chains. A mock that minted its own id would break
@@ -1632,7 +1635,14 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         imageList,
       });
 
-      expect(mockSendPrompt).toHaveBeenCalledWith('ipc-sess-1', 'test prompt', 'op-1', imageList);
+      expect(mockSendPrompt).toHaveBeenCalledWith(
+        'ipc-sess-1',
+        'test prompt',
+        'op-1',
+        imageList,
+        undefined,
+        'agent-1',
+      );
     });
 
     it('should forward context selections as heterogeneous system context', async () => {
@@ -1659,6 +1669,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         'op-1',
         undefined,
         expect.stringContaining('<user_context_selections count="1">'),
+        'agent-1',
       );
       expect(mockSendPrompt.mock.calls[0][4]).toContain('filePath="src/example.ts"');
       expect(mockSendPrompt.mock.calls[0][4]).toContain('lines="7-7"');
@@ -3367,6 +3378,59 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
   // ────────────────────────────────────────────────────
 
   describe('CC subagent thread-container', () => {
+    it('does not recreate a finalized subagent Thread after a client executor restart', async () => {
+      mockGetThreads.mockResolvedValue([
+        {
+          id: 'thread-existing',
+          metadata: { sourceToolCallId: 'toolu_task' },
+          status: ThreadStatus.Active,
+          type: 'isolation',
+        },
+      ]);
+
+      await runWithEvents([
+        ccInit(),
+        ccSubagentText('msg_sub', 'toolu_task', 'replayed late event'),
+        ccResult(),
+      ]);
+
+      expect(mockCreateThread).not.toHaveBeenCalled();
+    });
+
+    it('reattaches a continuing subagent to its existing Processing Thread', async () => {
+      mockGetThreads.mockResolvedValue([
+        {
+          id: 'thread-existing',
+          metadata: { sourceToolCallId: 'toolu_task' },
+          status: ThreadStatus.Processing,
+          type: 'isolation',
+        },
+      ]);
+      mockGetMessages.mockResolvedValue([
+        {
+          id: 'assistant-existing',
+          metadata: { subagentMessageId: 'msg_sub' },
+          role: 'assistant',
+          threadId: 'thread-existing',
+          topicId: 'topic-1',
+        },
+      ]);
+
+      await runWithEvents([
+        ccInit(),
+        ccSubagentText('msg_sub', 'toolu_task', 'continued event'),
+        ccSubagentSpawnResult('toolu_task', 'done'),
+        ccResult(),
+      ]);
+
+      expect(mockCreateThread).not.toHaveBeenCalled();
+      expect(mockUpdateMessage.mock.calls).toContainEqual([
+        'assistant-existing',
+        expect.objectContaining({ content: 'continued event' }),
+        undefined,
+      ]);
+    });
+
     it('does NOT create a Thread on Task tool_use alone (lazy creation)', async () => {
       // Task tool_use without any subagent events should NOT trigger
       // Thread creation — we only know the spawn is real once the
@@ -3462,6 +3526,43 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(subToolCreate![0].parentId).not.toBe('ast-initial');
       // The in-thread assistant + tool messages share the same threadId.
       expect(subAssistantMsg![0]).toMatchObject({ threadId });
+    });
+
+    it('preserves subagent tool ids when a later batch operation fails', async () => {
+      const defaultBatchMutate = mockBatchMutate.getMockImplementation()!;
+      mockBatchMutate.mockImplementation(async (operations: any[]) => {
+        const result = await defaultBatchMutate(operations);
+        const hasSubagentToolCreate = operations.some(
+          (operation) =>
+            operation.type === 'createMessage' && operation.message?.tool_call_id === 'toolu_child',
+        );
+        if (!hasSubagentToolCreate) return result;
+
+        const finalIndex = operations.length - 1;
+        return {
+          results: result.results.map((item: any) =>
+            item.index === finalIndex ? { ...item, success: false } : item,
+          ),
+          success: false,
+        };
+      });
+
+      await runWithEvents([
+        ccInit(),
+        ccToolUse('msg_main', 'toolu_task', 'Task', {
+          description: 'inspect',
+          subagent_type: 'Explore',
+        }),
+        ccSubagentToolUse('msg_sub_1', 'toolu_task', 'toolu_child', 'Bash', { command: 'ls' }),
+        ccToolResult('toolu_child', 'ls output'),
+        ccResult(),
+      ]);
+
+      expect(mockUpdateToolMessage.mock.calls).toContainEqual([
+        expect.any(String),
+        expect.objectContaining({ content: 'ls output' }),
+        undefined,
+      ]);
     });
 
     it('opens a NEW in-thread assistant when subagentMessageId changes (turn boundary)', async () => {
@@ -3629,7 +3730,14 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         ([id, val]: any) => id !== 'ast-initial' && val.content === 'Here is the summary.',
       );
       expect(threadAssistantContentWrites.length).toBeGreaterThan(0);
-      expect(threadAssistantContentWrites[0][2]).toMatchObject({ topicId: 'topic-1' });
+      expect(mockBatchMutate.mock.calls).toContainEqual([
+        expect.arrayContaining([
+          expect.objectContaining({
+            type: 'updateMessage',
+            value: expect.objectContaining({ content: 'Here is the summary.' }),
+          }),
+        ]),
+      ]);
       // Sanity — the in-thread assistants exist under the right thread.
       const threadAssistants = mockCreateMessage.mock.calls.filter(
         ([p]: any) => p.role === 'assistant' && p.threadId === threadId,
@@ -3912,6 +4020,14 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
           payload.content === spawnResult,
       );
       expect(terminalCreate).toBeDefined();
+      expect(mockBatchMutate.mock.calls).toContainEqual([
+        expect.arrayContaining([
+          expect.objectContaining({
+            message: expect.objectContaining({ content: spawnResult, role: 'assistant', threadId }),
+            type: 'createMessage',
+          }),
+        ]),
+      ]);
 
       // Terminal message chains off the in-thread assistant (the subagent
       // spine), with the child tool inline, so the transcript flows
@@ -3921,6 +4037,15 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         ([payload]: any) => payload.role === 'tool' && payload.tool_call_id === 'toolu_child',
       );
       expect(toolCreate).toBeDefined();
+      expect(mockBatchMutate.mock.calls).toContainEqual([
+        expect.arrayContaining([
+          expect.objectContaining({ type: 'updateMessage' }),
+          expect.objectContaining({
+            message: expect.objectContaining({ tool_call_id: 'toolu_child' }),
+            type: 'createMessage',
+          }),
+        ]),
+      ]);
       const firstAssistantCreate = mockCreateMessage.mock.calls.find(
         ([payload]: any) => payload.role === 'assistant' && payload.threadId === threadId,
       );

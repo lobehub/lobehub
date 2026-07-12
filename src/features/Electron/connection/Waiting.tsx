@@ -1,7 +1,8 @@
 'use client';
 
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
-import { Button, Flexbox, Highlighter, Icon, Text } from '@lobehub/ui';
+import { Flexbox, Highlighter, Icon, Text } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { ShieldX } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';

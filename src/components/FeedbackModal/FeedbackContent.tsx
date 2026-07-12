@@ -1,8 +1,8 @@
 'use client';
 
 import { BRANDING_EMAIL } from '@lobechat/business-const';
-import { Button, Flexbox, Icon } from '@lobehub/ui';
-import { useModalContext } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { Button, useModalContext } from '@lobehub/ui/base-ui';
 import { App, Form, Input, Upload } from 'antd';
 import { ImagePlus, Send } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';

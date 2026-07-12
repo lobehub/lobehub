@@ -1,6 +1,7 @@
 'use client';
 
-import { Button, Flexbox, Icon, Input, Text } from '@lobehub/ui';
+import { Flexbox, Icon, Input, Text } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { type InputRef } from 'antd';
 import { Loader2Icon } from 'lucide-react';
 import { type ChangeEvent } from 'react';
@@ -101,7 +102,6 @@ const UsernameRow = () => {
         {dirty && !saving && (
           <Button
             size="small"
-            variant="outlined"
             onMouseDown={(e) => {
               e.preventDefault();
               handleCancel();

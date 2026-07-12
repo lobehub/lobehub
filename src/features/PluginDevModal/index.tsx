@@ -1,7 +1,8 @@
 import { isDesktop } from '@lobechat/const';
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
 import { type LobeToolCustomPlugin } from '@lobechat/types';
-import { Button, Drawer, Flexbox } from '@lobehub/ui';
+import { Drawer, Flexbox } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { App, Form, Popconfirm } from 'antd';
 import { useResponsive } from 'antd-style';
 import { memo, useEffect, useRef, useState } from 'react';

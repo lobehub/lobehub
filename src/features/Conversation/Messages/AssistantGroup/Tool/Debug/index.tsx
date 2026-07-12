@@ -1,6 +1,6 @@
 import { type ToolIntervention } from '@lobechat/types';
-import { type TabsProps } from '@lobehub/ui';
-import { Block, Highlighter, Icon, Tabs } from '@lobehub/ui';
+import { Block, Highlighter, Icon } from '@lobehub/ui';
+import { Tabs, type TabsProps } from '@lobehub/ui/base-ui';
 import {
   BracesIcon,
   CircleAlertIcon,
@@ -153,11 +153,11 @@ const Debug = memo<DebugProps>(
     return (
       <Block variant={'outlined'}>
         <Tabs
-          compact
           items={items}
-          tabPlacement={'start'}
+          orientation={'vertical'}
+          size={'small'}
           styles={{
-            content: {
+            panel: {
               height: 300,
               padding: 0,
             },

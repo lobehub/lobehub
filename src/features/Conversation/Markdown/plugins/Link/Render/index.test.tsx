@@ -14,6 +14,7 @@ const mockNavigate = vi.fn();
 const mockOpenAgentDetail = vi.fn();
 const mockOpenDocument = vi.fn();
 const mockOpenTaskDetail = vi.fn();
+const mockOpenVerifyReport = vi.fn();
 
 vi.mock('@/business/client/hooks/useWorkspaces', () => ({
   useWorkspaces: () => [{ id: 'ws-1', slug: 'lobe-team' }],
@@ -45,6 +46,7 @@ vi.mock('@/store/chat', () => ({
       openAgentDetail: mockOpenAgentDetail,
       openDocument: mockOpenDocument,
       openTaskDetail: mockOpenTaskDetail,
+      openVerifyReport: mockOpenVerifyReport,
     }),
 }));
 
@@ -179,6 +181,19 @@ describe('Link Render — internal entities', () => {
     });
     fireEvent.click(agent.getByRole('link', { name: 'Research agent' }));
     expect(mockOpenAgentDetail).toHaveBeenCalledWith('agt_1');
+  });
+
+  it('opens a verify link for the active workspace in the report portal', () => {
+    const { getByRole } = renderLink({
+      linkHref: '/lobe-team/verify/run-1',
+      linkKind: 'generic',
+      linkLabel: 'LobeHub Verify',
+    });
+
+    fireEvent.click(getByRole('link', { name: 'LobeHub Verify' }));
+
+    expect(mockOpenVerifyReport).toHaveBeenCalledWith('run-1');
+    expect(mockNavigate).not.toHaveBeenCalled();
   });
 
   it('preserves modifier-click browser behavior', () => {

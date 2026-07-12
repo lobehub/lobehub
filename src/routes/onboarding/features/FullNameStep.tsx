@@ -1,7 +1,8 @@
 'use client';
 
 import { SendButton } from '@lobehub/editor/react';
-import { Button, Flexbox, Icon, Input } from '@lobehub/ui';
+import { Flexbox, Icon, Input } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { SignatureIcon, Undo2Icon } from 'lucide-react';
 import { memo, useCallback, useRef, useState } from 'react';

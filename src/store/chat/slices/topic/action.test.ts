@@ -1212,10 +1212,28 @@ describe('topic action', () => {
         await result.current.removeTopic(topicId);
       });
 
-      expect(topicService.removeTopic).toHaveBeenCalledWith(topicId);
+      expect(topicService.removeTopic).toHaveBeenCalledWith(topicId, undefined);
       expect(refreshTopicSpy).toHaveBeenCalled();
       expect(switchTopicSpy).toHaveBeenCalled();
     });
+    it('should forward removeFiles so the topic attachments are deleted', async () => {
+      const topicId = 'topic-1';
+      const { result } = renderHook(() => useChatStore());
+      const activeAgentId = 'test-session-id';
+
+      await act(async () => {
+        useChatStore.setState({ activeAgentId, activeTopicId: topicId });
+      });
+
+      vi.spyOn(result.current, 'refreshTopic').mockResolvedValue(undefined);
+
+      await act(async () => {
+        await result.current.removeTopic(topicId, true);
+      });
+
+      expect(topicService.removeTopic).toHaveBeenCalledWith(topicId, true);
+    });
+
     it('should remove a specific topic and its messages, then not switch topic if not active', async () => {
       const topicId = 'topic-1';
       const { result } = renderHook(() => useChatStore());
@@ -1232,7 +1250,7 @@ describe('topic action', () => {
         await result.current.removeTopic(topicId);
       });
 
-      expect(topicService.removeTopic).toHaveBeenCalledWith(topicId);
+      expect(topicService.removeTopic).toHaveBeenCalledWith(topicId, undefined);
       expect(refreshTopicSpy).toHaveBeenCalled();
       expect(switchTopicSpy).not.toHaveBeenCalled();
     });
@@ -1253,7 +1271,7 @@ describe('topic action', () => {
         await result.current.removeTopic(topicId);
       });
 
-      expect(topicService.removeTopic).toHaveBeenCalledWith(topicId);
+      expect(topicService.removeTopic).toHaveBeenCalledWith(topicId, undefined);
       expect(refreshTopicSpy).toHaveBeenCalled();
       expect(switchTopicSpy).toHaveBeenCalled();
     });
@@ -1310,7 +1328,7 @@ describe('topic action', () => {
       const topicData =
         useChatStore.getState().topicDataMap[topicMapKey({ agentId: activeAgentId })];
 
-      expect(topicService.removeTopic).toHaveBeenCalledWith(topicId);
+      expect(topicService.removeTopic).toHaveBeenCalledWith(topicId, undefined);
       expect(topicData).toMatchObject({
         currentPage: 1,
         hasMore: true,

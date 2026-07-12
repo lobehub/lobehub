@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./askUser": "./src/askUser/index.ts",
+    "./builtinMcp": "./src/builtinMcp/index.ts",
     "./client": "./src/client/index.ts",
     "./protocol": "./src/protocol/index.ts",
     "./resolveCliCommand": "./src/spawn/resolveCliCommand.ts",

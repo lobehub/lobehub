@@ -1,8 +1,8 @@
 'use client';
 
 import { ProviderIcon } from '@lobehub/icons';
-import { Button, Flexbox, Input, InputPassword, Text, TextArea } from '@lobehub/ui';
-import { Select, useModalContext } from '@lobehub/ui/base-ui';
+import { Flexbox, Input, InputPassword, Text, TextArea } from '@lobehub/ui';
+import { Button, Select, useModalContext } from '@lobehub/ui/base-ui';
 import { App, Form } from 'antd';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

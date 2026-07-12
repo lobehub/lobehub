@@ -1,7 +1,8 @@
 'use client';
 
 import { AGENT_CHAT_URL } from '@lobechat/const';
-import { Button, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Flexbox, Icon, Text } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { MessagesSquare } from 'lucide-react';
 import { memo } from 'react';

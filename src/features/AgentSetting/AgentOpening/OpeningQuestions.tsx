@@ -1,6 +1,7 @@
 'use client';
 
-import { ActionIcon, Button, Empty, Flexbox, Input, SortableList } from '@lobehub/ui';
+import { ActionIcon, Empty, Flexbox, Input, SortableList } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { Space } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { MessageCircle, PlusIcon, Trash } from 'lucide-react';

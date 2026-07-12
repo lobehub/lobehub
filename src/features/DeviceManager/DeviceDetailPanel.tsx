@@ -2,18 +2,8 @@
 
 import { isDesktop } from '@lobechat/const';
 import type { DeviceListItem, DeviceWorkspaceShare } from '@lobechat/types';
-import {
-  ActionIcon,
-  Avatar,
-  Button,
-  Flexbox,
-  Icon,
-  Input,
-  SortableList,
-  Tag,
-  Text,
-} from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
+import { ActionIcon, Avatar, Flexbox, Icon, Input, SortableList, Tag, Text } from '@lobehub/ui';
+import { Button, confirmModal } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import dayjs from 'dayjs';
 import { FolderOpenIcon, FolderPlusIcon, LockIcon, XIcon } from 'lucide-react';

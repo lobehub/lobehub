@@ -1,86 +1,47 @@
 'use client';
 
-import { Center, Flexbox } from '@lobehub/ui';
-import { cx } from 'antd-style';
-import NextLink from 'next/link';
 import { type PropsWithChildren } from 'react';
 import { memo, Suspense } from 'react';
-import { Link, Outlet } from 'react-router';
+import { Outlet, useParams } from 'react-router';
+import useSWR from 'swr';
 
-import { ProductLogo } from '@/components/Branding';
+import ShareShell from '@/business/client/features/ShareShell';
 import Loading from '@/components/Loading/BrandTextLoading';
 import { RouteMetaBridge } from '@/features/RouteMeta';
-import { trackLoginOrSignupClicked } from '@/features/User/UserLoginOrSignup/trackLoginOrSignupClicked';
-import { useIsDark } from '@/hooks/useIsDark';
-import { useUserStore } from '@/store/user';
-import { authSelectors } from '@/store/user/slices/auth/selectors';
+import { shareKeys } from '@/libs/swr/keys';
+import { lambdaClient } from '@/libs/trpc/client';
 
 import SharePortal from '../features/Portal';
-import HeaderMenu from './HeaderMenu';
-import { styles } from './style';
-import Title from './Title';
+import TopicAvatar from '../features/TopicAvatar';
+import { useSyncSharedTopicMeta } from '../useSyncSharedTopicMeta';
 
 const ShareTopicLayout = memo<PropsWithChildren>(({ children }) => {
-  const isDarkMode = useIsDark();
-  const isLogin = useUserStore(authSelectors.isLogin);
+  const { id } = useParams<{ id: string }>();
+
+  const { data, error, isLoading } = useSWR(
+    id ? shareKeys.topic(id) : null,
+    () => lambdaClient.share.getSharedTopic.query({ shareId: id! }),
+    { revalidateOnFocus: false },
+  );
+
+  useSyncSharedTopicMeta(data);
+
+  const marketIdentifier = data?.agentMeta?.marketIdentifier;
+  const openUrl = marketIdentifier ? `/community/agent/${marketIdentifier}` : '/community/agent';
 
   return (
-    <Flexbox className={styles.outerContainer} height={'100%'} padding={8} width={'100%'}>
+    <>
       <RouteMetaBridge />
-      <Flexbox
-        className={cx(isDarkMode ? styles.innerContainerDark : styles.innerContainerLight)}
-        height={'100%'}
-        width={'100%'}
+      <ShareShell
+        aside={<SharePortal />}
+        error={error}
+        loading={!error && isLoading}
+        share={{ avatar: data ? <TopicAvatar data={data} /> : undefined, openUrl }}
+        title={data?.title}
       >
-        <Flexbox
-          horizontal
-          align={'center'}
-          gap={8}
-          justify={'space-between'}
-          padding={8}
-          width={'100%'}
-        >
-          <Flexbox horizontal align="center" flex={1} gap={12}>
-            {isLogin ? (
-              <Link style={{ color: 'inherit' }} to="/">
-                <ProductLogo size={32} />
-              </Link>
-            ) : (
-              <NextLink
-                href="/signin"
-                style={{ color: 'inherit' }}
-                onClick={(event) => {
-                  event.preventDefault();
-                  void trackLoginOrSignupClicked({ spm: 'share.logo_to_signin.click' }).finally(
-                    () => {
-                      window.location.href = '/signin';
-                    },
-                  );
-                }}
-              >
-                <ProductLogo size={32} />
-              </NextLink>
-            )}
-          </Flexbox>
-          <Center horizontal flex={2} gap={12}>
-            <Suspense>
-              <Title />
-            </Suspense>
-          </Center>
-          <Flexbox horizontal align="center" flex={1} gap={12} justify={'flex-end'}>
-            <HeaderMenu />
-          </Flexbox>
-        </Flexbox>
-        <Flexbox horizontal className={styles.content} style={{ overflow: 'hidden' }}>
-          <Flexbox flex={1} style={{ overflow: 'hidden' }}>
-            <Suspense fallback={<Loading debugId="share layout" />}>
-              {children ?? <Outlet />}
-            </Suspense>
-          </Flexbox>
-          <SharePortal />
-        </Flexbox>
-      </Flexbox>
-    </Flexbox>
+        <Suspense fallback={<Loading debugId="share layout" />}>{children ?? <Outlet />}</Suspense>
+      </ShareShell>
+    </>
   );
 });
 

@@ -1,4 +1,5 @@
-import { ActionIcon, Button, Flexbox } from '@lobehub/ui';
+import { ActionIcon, Flexbox } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { ChevronLeftIcon } from 'lucide-react';
 import { type MouseEvent, type PropsWithChildren, type ReactNode, useCallback } from 'react';

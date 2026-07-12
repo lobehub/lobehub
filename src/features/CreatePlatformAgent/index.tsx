@@ -4,9 +4,10 @@ import {
   REMOTE_HETEROGENEOUS_AGENT_CONFIGS,
   type RemoteHeterogeneousAgentType,
 } from '@lobechat/heterogeneous-agents';
-import { Button, Flexbox, Icon } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
 import {
   Button as BaseButton,
+  Button,
   createModal,
   type ModalInstance,
   Select,

@@ -1,4 +1,5 @@
-import { Avatar, Button, Flexbox } from '@lobehub/ui';
+import { Avatar, Flexbox } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -91,7 +92,7 @@ const AgentSummary = memo(() => {
         shape={'round'}
         size={'small'}
         style={{ color: cssVar.colorTextTertiary, width: 'fit-content' }}
-        variant={'filled'}
+        type={'fill'}
         onClick={() => activeAgentId && navigate(`/agent/${activeAgentId}/profile`)}
       >
         {t('user.editProfile', { ns: 'discover' })}

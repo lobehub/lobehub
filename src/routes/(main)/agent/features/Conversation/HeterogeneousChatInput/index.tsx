@@ -5,7 +5,8 @@ import {
   isRemoteHeterogeneousType,
 } from '@lobechat/heterogeneous-agents';
 import { type ChatInputActionsProps } from '@lobehub/editor/react';
-import { Alert, Button, Flexbox } from '@lobehub/ui';
+import { Alert, Flexbox } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { memo, type ReactNode, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router';
@@ -163,7 +164,7 @@ const HeterogeneousChatInput = memo(() => {
         title={title}
         action={
           <Flexbox horizontal gap={4}>
-            <Button size={'small'} variant={'filled'} onClick={refresh}>
+            <Button size={'small'} type={'fill'} onClick={refresh}>
               {t('platformAgent.deviceGuard.refresh')}
             </Button>
             <Button size={'small'} type={'primary'} onClick={goToAgentProfile}>

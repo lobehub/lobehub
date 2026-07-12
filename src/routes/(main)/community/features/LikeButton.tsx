@@ -1,4 +1,5 @@
-import { Button, Flexbox, Icon, Tooltip, TooltipGroup } from '@lobehub/ui';
+import { Flexbox, Icon, Tooltip, TooltipGroup } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { Space } from 'antd';
 import { ThumbsDownIcon, ThumbsUpIcon } from 'lucide-react';
 import { memo } from 'react';

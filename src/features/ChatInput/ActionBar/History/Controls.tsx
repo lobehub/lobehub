@@ -1,6 +1,7 @@
 import { type FormItemProps } from '@lobehub/ui';
 import { Form, SliderWithInput } from '@lobehub/ui';
-import { Form as AntdForm, Switch } from 'antd';
+import { Switch } from '@lobehub/ui/base-ui';
+import { Form as AntdForm } from 'antd';
 import { debounce } from 'es-toolkit/compat';
 import { memo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';

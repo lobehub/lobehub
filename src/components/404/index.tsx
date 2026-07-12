@@ -1,6 +1,7 @@
 'use client';
 
-import { Button, Flexbox, FluentEmoji } from '@lobehub/ui';
+import { Flexbox, FluentEmoji } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { type ReactNode } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

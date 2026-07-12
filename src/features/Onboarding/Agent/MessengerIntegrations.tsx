@@ -1,6 +1,7 @@
 'use client';
 
-import { Button, Flexbox, Popover, Skeleton, Text } from '@lobehub/ui';
+import { Flexbox, Popover, Skeleton, Text } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { Discord, Slack, Telegram } from '@lobehub/ui/icons';
 import { Divider, QRCode } from 'antd';
 import { createStaticStyles } from 'antd-style';

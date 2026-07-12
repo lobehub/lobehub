@@ -61,6 +61,22 @@ the page. It carries only the non-duplicate narrative (仍需跟进 / 本轮验�
      Embed it like an image: `![case 2](assets/case2-streaming.gif)`. Verify
      at least the first/last frames visually (Read the GIF) before citing.
 
+   - UI (before/after comparison): capture and visually verify both original
+     screenshots. Do not ask the agent to compose them into a new image. In the
+     case's `evidence` array, pair them with a shared comparison id:
+
+     ```json
+     "evidence": [
+       { "path": "assets/before.png", "comparison": { "id": "layout", "role": "before" } },
+       { "path": "assets/after.png", "comparison": { "id": "layout", "role": "after" } }
+     ]
+     ```
+
+     The verify page renders a complete pair side by side with Before / After
+     headings. `comparison.label` may override either heading. A group contains
+     exactly one `before` and one `after`; incomplete groups render as ordinary
+     evidence.
+
    - CLI: exact command + trimmed output (`$CLI task list | tee "$DIR/assets/task-list.txt"`).
 
    - Network: `agent-browser network requests` dumps or HAR files.

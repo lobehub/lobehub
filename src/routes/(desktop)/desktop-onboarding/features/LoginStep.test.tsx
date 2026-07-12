@@ -53,13 +53,19 @@ vi.mock('antd', () => ({
   Divider: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));
 
-vi.mock('antd-style', () => ({
-  cssVar: {
-    colorFillSecondary: '#eee',
-    colorTextDescription: '#888',
-    colorTextSecondary: '#666',
-  },
-}));
+vi.mock('antd-style', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>;
+
+  return {
+    ...actual,
+    createStaticStyles: () => ({}),
+    cssVar: {
+      colorFillSecondary: '#eee',
+      colorTextDescription: '#888',
+      colorTextSecondary: '#666',
+    },
+  };
+});
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({

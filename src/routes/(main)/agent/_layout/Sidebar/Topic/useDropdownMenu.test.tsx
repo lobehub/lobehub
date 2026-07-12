@@ -12,6 +12,14 @@ const permissionMock = vi.hoisted(() => ({
   edit_own_content: true,
 }));
 
+const chatStoreMock = vi.hoisted(() => ({
+  refreshTopic: vi.fn(),
+  topics: [] as Array<Record<string, unknown>>,
+  updateTopicStatus: vi.fn(),
+}));
+
+const messageMock = vi.hoisted(() => ({ info: vi.fn(), success: vi.fn() }));
+
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string) => key,
@@ -26,6 +34,7 @@ vi.mock('antd', () => {
   return {
     App: {
       useApp: () => ({
+        message: messageMock,
         modal: {
           confirm: vi.fn(),
           error: vi.fn(),
@@ -49,7 +58,14 @@ vi.mock('@/store/chat', () => ({
       importTopic: vi.fn(),
       removeSessionTopics: vi.fn(),
       removeUnstarredTopic: vi.fn(),
+      refreshTopic: chatStoreMock.refreshTopic,
+      topics: chatStoreMock.topics,
+      updateTopicStatus: chatStoreMock.updateTopicStatus,
     }),
+}));
+
+vi.mock('@/store/chat/selectors', () => ({
+  topicSelectors: { currentTopics: (s: { topics: Array<Record<string, unknown>> }) => s.topics },
 }));
 
 vi.mock('@/store/global', () => ({
@@ -75,6 +91,11 @@ describe('useTopicActionsDropdownMenu', () => {
   beforeEach(() => {
     permissionMock.create_content = true;
     permissionMock.edit_own_content = true;
+    chatStoreMock.topics = [];
+    chatStoreMock.refreshTopic.mockReset();
+    chatStoreMock.updateTopicStatus.mockReset();
+    messageMock.info.mockReset();
+    messageMock.success.mockReset();
   });
 
   it('disables topic write management actions for workspace viewers', () => {
@@ -84,7 +105,59 @@ describe('useTopicActionsDropdownMenu', () => {
     const { result } = renderHook(() => useTopicActionsDropdownMenu());
 
     expect(getMenuItem(result.current!, 'import')).toMatchObject({ disabled: true });
+    expect(getMenuItem(result.current!, 'archiveMergedPullRequests')).toMatchObject({
+      disabled: true,
+    });
     expect(getMenuItem(result.current!, 'deleteUnstarred')).toMatchObject({ disabled: true });
     expect(getMenuItem(result.current!, 'deleteAll')).toMatchObject({ disabled: true });
+  });
+
+  it('archives only unfinished topics whose pull requests are merged', async () => {
+    chatStoreMock.topics = [
+      {
+        id: 'merged',
+        metadata: {
+          workingDirectoryConfig: { git: { github: { pullRequest: { state: 'MERGED' } } } },
+        },
+        status: 'active',
+      },
+      {
+        id: 'open',
+        metadata: {
+          workingDirectoryConfig: { git: { github: { pullRequest: { state: 'OPEN' } } } },
+        },
+        status: 'active',
+      },
+      {
+        id: 'completed',
+        metadata: {
+          workingDirectoryConfig: {
+            git: { github: { pullRequest: { mergedAt: '2026-07-10T00:00:00Z' } } },
+          },
+        },
+        status: 'completed',
+      },
+      {
+        id: 'unread',
+        metadata: {
+          workingDirectoryConfig: { git: { github: { pullRequest: { state: 'MERGED' } } } },
+        },
+        status: 'unread',
+      },
+    ];
+
+    const { result } = renderHook(() => useTopicActionsDropdownMenu());
+    const item = getMenuItem(result.current!, 'archiveMergedPullRequests');
+
+    expect(item && 'onClick' in item).toBe(true);
+    if (item && 'onClick' in item) await item.onClick?.({} as never);
+
+    expect(chatStoreMock.updateTopicStatus).toHaveBeenCalledOnce();
+    expect(chatStoreMock.updateTopicStatus).toHaveBeenCalledWith({
+      status: 'completed',
+      topicId: 'merged',
+    });
+    expect(chatStoreMock.refreshTopic).toHaveBeenCalledOnce();
+    expect(messageMock.success).toHaveBeenCalledWith('actions.archiveMergedPullRequestsSuccess');
   });
 });

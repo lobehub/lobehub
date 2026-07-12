@@ -7,9 +7,13 @@ import type { AgentState } from '../types';
  * request; `stepIndex` advances per step.
  */
 export interface RuntimeOperationContext {
+  /** Effective message owner for this operation (group member when applicable). */
+  agentId?: string;
   allowEarlyFinalAnswerVisibleOutputEnd?: boolean;
+  groupId?: string;
   operationId: string;
   stepIndex: number;
+  threadId?: string;
   topicId?: string;
   userId?: string;
   workspaceId?: string;

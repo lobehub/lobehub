@@ -2,18 +2,8 @@
 
 import { AGENT_CHAT_URL, DEFAULT_INBOX_AVATAR } from '@lobechat/const';
 import { Claude, Cline, Cursor, OpenAI } from '@lobehub/icons';
-import {
-  Avatar,
-  Block,
-  Button,
-  Flexbox,
-  Highlighter,
-  Icon,
-  Markdown,
-  Select,
-  Text,
-} from '@lobehub/ui';
-import { Tabs } from '@lobehub/ui/base-ui';
+import { Avatar, Block, Flexbox, Highlighter, Icon, Markdown, Text } from '@lobehub/ui';
+import { Button, Select, Tabs } from '@lobehub/ui/base-ui';
 import { Divider } from 'antd';
 import { createStaticStyles, cx } from 'antd-style';
 import { BotIcon, UserRoundIcon } from 'lucide-react';

@@ -1,5 +1,6 @@
 import { ChatInput, ChatInputActionBar, SendButton, useEditor } from '@lobehub/editor/react';
-import { Button, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { $getRoot } from 'lexical';
 import { ChevronDownIcon, MessageCirclePlus } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
@@ -86,7 +87,7 @@ const FeedbackInput = memo(() => {
     return (
       <Flexbox gap={8}>
         <OpStatusTray seamless />
-        <Button block icon={MessageCirclePlus} variant={'filled'} onClick={() => setExpanded(true)}>
+        <Button block icon={MessageCirclePlus} type={'fill'} onClick={() => setExpanded(true)}>
           {t('taskDetail.sendFollowUp')}
         </Button>
       </Flexbox>

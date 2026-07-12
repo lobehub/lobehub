@@ -1,9 +1,9 @@
 'use client';
 
 import { ActionIcon, Avatar, Checkbox, Flexbox, List, SearchBar, Text, Tooltip } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Button, Switch } from '@lobehub/ui/base-ui';
 import { useHover } from 'ahooks';
-import { List as AntdList, Switch } from 'antd';
+import { List as AntdList } from 'antd';
 import { createStaticStyles, cx } from 'antd-style';
 import { X } from 'lucide-react';
 import { type ChangeEvent } from 'react';

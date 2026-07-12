@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox, Form, Highlighter } from '@lobehub/ui';
-import { Switch } from 'antd';
+import { Switch } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { snakeCase } from 'es-toolkit/compat';
 import { ListRestartIcon } from 'lucide-react';

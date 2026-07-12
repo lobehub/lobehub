@@ -3,7 +3,8 @@
 import { isDesktop } from '@lobechat/const';
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
 import { type SkillResourceTreeNode } from '@lobechat/types';
-import { Button, Drawer, Flexbox } from '@lobehub/ui';
+import { Drawer, Flexbox } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { Alert, App, Form as AForm, Popconfirm, Skeleton } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { memo, useMemo, useState } from 'react';

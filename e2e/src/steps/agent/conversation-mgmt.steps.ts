@@ -435,7 +435,7 @@ When('用户确认删除', async function (this: CustomWorld) {
 
   const confirmButton = this.page
     .getByRole('dialog')
-    .getByRole('button', { name: /^(ok|delete|删除|确认|确定)$/i });
+    .getByRole('button', { name: /^(ok|delete( topic)?|删除(话题)?|确认|确定)$/i });
 
   await expect(confirmButton).toBeVisible({ timeout: 5000 });
   await confirmButton.click();

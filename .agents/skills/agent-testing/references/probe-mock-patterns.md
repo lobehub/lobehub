@@ -973,6 +973,7 @@ nodeintegration, plugins, disablewebsecurity, allowpopups, preload, …`). The h
   to the `webview` target (`agent-browser screenshot` there) when the embedded page's visual
   matters. Use host-page screenshots only for the app chrome around the webview. Cause of the
   black compositing not established (OOPIF surface not composited into the host capture).
+
 ### E18. Cloud-connected desktop routes even `local` agents to the SERVER runtime — force client with `disableGatewayMode`
 
 - **Situation**: verifying a **client-only** builtin tool (`executors: ['client']`) via a real agent turn on the desktop. The agent's `executionTarget` is `local` and the tool-enable gate (`isLocalSystemEnabled` = runtime `local`) passes, so it _looks_ like it will run client-side.
@@ -984,3 +985,14 @@ nodeintegration, plugins, disablewebsecurity, allowpopups, preload, …`). The h
 - **Situation**: wanting a throwaway agent for a real-turn test without polluting the user's agent.
 - **Doesn't work**: `sessionStore.createSession({...})` — the desktop app doesn't use the classic session store (`sessions` is `[]`, `activeId` is `'inbox'`); agents are a server-backed model in `agentStore.agentMap` keyed by `agt_...`. The created session never becomes the active agent.
 - **Works**: back up the active agent's full config (`model`, `provider`, `agencyConfig`, relevant `chatConfig`), reconfigure it in place (`updateAgentConfigById` + `updateAgentChatConfigById`), run the test, then restore every field and clear any injected key-vault entry. Also: `chat.sendMessage` requires `context: { agentId, topicId, isNew }` or it throws `Cannot destructure property 'agentId' of 'context'`. Reads right after an `updateAgent*` can be stale — re-read after \~1.5s to confirm persistence.
+
+### F1. Seeding a shared topic by raw SQL: messages MUST carry `agent_id`, or the share page renders skeletons forever
+
+- **Situation**: fixture-seeding a `/share/t/<id>` page (topics + messages + `topic_shares`
+  rows inserted directly). `share.getSharedTopic` returns fine, but the message list stays on
+  skeletons; `message.getMessages` with `topicShareId` returns `[]`.
+- **Cause**: the client passes `agentId` in the query context and `MessageModel.query` filters
+  on it — messages inserted with `agent_id` NULL are silently excluded (no error anywhere).
+- **Works**: set `agent_id` on every seeded message row (matching the topic's `agent_id`).
+  Probe the endpoint directly before blaming the UI:
+  `/trpc/lambda/message.getMessages?input={"json":{"topicId":..,"topicShareId":..,"agentId":..}}`.

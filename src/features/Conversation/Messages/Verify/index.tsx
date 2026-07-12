@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
 
@@ -11,12 +11,12 @@ import { phaseCardBackground, phaseFromStatus } from '@/features/Verify/utils';
 
 import { dataSelectors, useConversationStore } from '../../store';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   card: css`
     overflow: hidden;
-    border: 1px solid ${token.colorBorderSecondary};
+    border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: 16px;
-    background: ${token.colorBgElevated};
+    background: ${cssVar.colorBgElevated};
   `,
 }));
 
@@ -33,7 +33,6 @@ interface VerifyMessageProps {
  * group (no avatar bubble).
  */
 const VerifyMessage = memo<VerifyMessageProps>(({ id }) => {
-  const { styles, theme } = useStyles();
   const item = useConversationStore(dataSelectors.getDisplayMessageById(id), isEqual);
   const operationId = item?.metadata?.verifyOperationId;
   // Sequence number among all verify messages in the thread (not the repair round).
@@ -46,7 +45,7 @@ const VerifyMessage = memo<VerifyMessageProps>(({ id }) => {
 
   return (
     <Flexbox paddingBlock={8}>
-      <div className={styles.card} style={{ background: phaseCardBackground(phase, theme) }}>
+      <div className={styles.card} style={{ background: phaseCardBackground(phase, cssVar) }}>
         <RunResult embedded operationId={operationId} round={ordinal} />
         <CheckerDock embedded operationId={operationId} />
       </div>

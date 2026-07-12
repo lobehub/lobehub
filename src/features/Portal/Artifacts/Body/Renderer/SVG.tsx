@@ -1,6 +1,7 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
 import { copyImageToClipboard, sanitizeSVGContent } from '@lobechat/utils/client';
-import { Button, Center, DropdownMenu, Flexbox, Tooltip } from '@lobehub/ui';
+import { Center, DropdownMenu, Flexbox, Tooltip } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { snapdom } from '@zumer/snapdom';
 import { App, Space } from 'antd';
 import { css, cx } from 'antd-style';

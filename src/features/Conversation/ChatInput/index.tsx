@@ -2,7 +2,8 @@
 
 import { type SlashOptions } from '@lobehub/editor';
 import { type ChatInputActionsProps } from '@lobehub/editor/react';
-import { Alert, Button, Flexbox, type MenuProps } from '@lobehub/ui';
+import { Alert, Flexbox, type MenuProps } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { type ReactNode } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';

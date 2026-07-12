@@ -1,7 +1,8 @@
 'use client';
 
 import { EDITOR_DEBOUNCE_TIME, EDITOR_MAX_WAIT } from '@lobechat/const';
-import { ActionIcon, Button, Flexbox, Text, TextArea } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Text, TextArea } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { debounce } from 'es-toolkit/compat';
 import { CheckIcon, PencilIcon, XIcon } from 'lucide-react';
@@ -156,7 +157,7 @@ const SkillFrontmatterBlock = memo<SkillFrontmatterBlockProps>(({ documentId, fr
         <Text type="secondary">{t('skillFrontmatter.title')}</Text>
         {editing ? (
           <Flexbox horizontal gap={8}>
-            <Button icon={XIcon} size="small" variant="outlined" onClick={handleCancel}>
+            <Button icon={XIcon} size="small" onClick={handleCancel}>
               {t('cancel')}
             </Button>
             <Button

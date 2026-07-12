@@ -1,5 +1,6 @@
 import { isDesktop } from '@lobechat/const';
-import { ActionIcon, Center, Empty, Flexbox, Input } from '@lobehub/ui';
+import { ActionIcon, Center, Empty, Flexbox, Icon, Input, Text } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import {
   Camera,
@@ -7,6 +8,7 @@ import {
   ChevronRight,
   ExternalLink,
   Globe,
+  Import,
   RefreshCw,
   XCircle,
 } from 'lucide-react';
@@ -14,6 +16,7 @@ import { memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { message } from '@/components/AntdStaticMethods';
+import { BrowserIcon } from '@/components/BrowserIcon';
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { electronBrowserSidebarService } from '@/services/electron/browserSidebar';
 import { useGlobalStore } from '@/store/global';
@@ -39,9 +42,39 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   toolbar: css`
     flex-shrink: 0;
-    padding-block: 4px;
-    padding-inline: 8px;
+    min-height: 56px;
+    padding-inline: 16px;
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+  `,
+  address: css`
+    position: absolute;
+    inset-inline-start: 50%;
+    transform: translateX(-50%);
+    width: min(48%, 520px);
+
+    input {
+      text-align: center;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      transition: none;
+    }
+  `,
+  importBanner: css`
+    flex-shrink: 0;
+
+    min-height: 72px;
+    padding-block: 12px;
+    padding-inline: 16px;
+    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+
+    background: ${cssVar.colorBgContainer};
+  `,
+  importCopy: css`
+    min-width: 0;
+  `,
+  toolbarActions: css`
+    margin-inline-start: auto;
   `,
   webview: css`
     position: absolute;
@@ -70,6 +103,8 @@ const BrowserPane = memo<BrowserPaneProps>(({ sessionId }) => {
   const state = useBrowserSidebarState(sessionId, initialUrl);
   const [address, setAddress] = useState('');
   const [isEditing, setIsEditing] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [showImportBanner, setShowImportBanner] = useState(true);
   const browserRequest = useGlobalStore((s) => s.status.workingSidebarBrowserRequest);
   const consumedNonce = useRef<number>(undefined);
   const webviewRef = useRef<WebviewElement>(null);
@@ -138,6 +173,28 @@ const BrowserPane = memo<BrowserPaneProps>(({ sessionId }) => {
     void runAction(() => electronBrowserSidebarService.navigate({ sessionId, url }));
   };
 
+  const handleImportChromeLoginData = async () => {
+    setIsImporting(true);
+    try {
+      const result = await electronBrowserSidebarService.importChromeLoginData();
+      if (!result.success) {
+        message.error(t('workingPanel.browser.import.failed'));
+        return;
+      }
+
+      message.success(t('workingPanel.browser.import.success', { count: result.importedCount }));
+      setShowImportBanner(false);
+      if (state.attached) {
+        void runAction(() => electronBrowserSidebarService.reload({ sessionId }));
+      }
+    } catch (error) {
+      console.error('[BrowserSidebar] Failed to import Chrome login information:', error);
+      message.error(t('workingPanel.browser.import.failed'));
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
   // External open requests (web-browsing search results, store action) arrive as
   // one-shot nonces; the pane may mount after the request was fired, so consume
   // whatever is pending on mount too.
@@ -158,42 +215,45 @@ const BrowserPane = memo<BrowserPaneProps>(({ sessionId }) => {
   return (
     <Flexbox height={'100%'} width={'100%'}>
       <Flexbox horizontal align={'center'} className={styles.toolbar} gap={4}>
-        <ActionIcon
-          disabled={!state.canGoBack}
-          icon={ChevronLeft}
-          size={DESKTOP_HEADER_ICON_SMALL_SIZE}
-          title={t('workingPanel.browser.actions.back')}
-          onClick={() => runAction(() => electronBrowserSidebarService.goBack({ sessionId }))}
-        />
-        <ActionIcon
-          disabled={!state.canGoForward}
-          icon={ChevronRight}
-          size={DESKTOP_HEADER_ICON_SMALL_SIZE}
-          title={t('workingPanel.browser.actions.forward')}
-          onClick={() => runAction(() => electronBrowserSidebarService.goForward({ sessionId }))}
-        />
-        <ActionIcon
-          disabled={!state.attached}
-          icon={state.isLoading ? XCircle : RefreshCw}
-          size={DESKTOP_HEADER_ICON_SMALL_SIZE}
-          title={
-            state.isLoading
-              ? t('workingPanel.browser.actions.stop')
-              : t('workingPanel.browser.actions.reload')
-          }
-          onClick={() =>
-            runAction(() =>
+        <Flexbox horizontal align={'center'} gap={4}>
+          <ActionIcon
+            disabled={!state.canGoBack}
+            icon={ChevronLeft}
+            size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+            title={t('workingPanel.browser.actions.back')}
+            onClick={() => runAction(() => electronBrowserSidebarService.goBack({ sessionId }))}
+          />
+          <ActionIcon
+            disabled={!state.canGoForward}
+            icon={ChevronRight}
+            size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+            title={t('workingPanel.browser.actions.forward')}
+            onClick={() => runAction(() => electronBrowserSidebarService.goForward({ sessionId }))}
+          />
+          <ActionIcon
+            disabled={!state.attached}
+            icon={state.isLoading ? XCircle : RefreshCw}
+            size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+            title={
               state.isLoading
-                ? electronBrowserSidebarService.stop({ sessionId })
-                : electronBrowserSidebarService.reload({ sessionId }),
-            )
-          }
-        />
+                ? t('workingPanel.browser.actions.stop')
+                : t('workingPanel.browser.actions.reload')
+            }
+            onClick={() =>
+              runAction(() =>
+                state.isLoading
+                  ? electronBrowserSidebarService.stop({ sessionId })
+                  : electronBrowserSidebarService.reload({ sessionId }),
+              )
+            }
+          />
+        </Flexbox>
         <Input
+          className={styles.address}
           placeholder={t('workingPanel.browser.addressPlaceholder')}
           size={'small'}
-          style={{ flex: 1, minWidth: 80 }}
           value={address}
+          variant={'borderless'}
           onBlur={() => setIsEditing(false)}
           onFocus={() => setIsEditing(true)}
           onChange={(event) => {
@@ -205,29 +265,57 @@ const BrowserPane = memo<BrowserPaneProps>(({ sessionId }) => {
             openUrl(address);
           }}
         />
-        <ActionIcon
-          disabled={!state.attached}
-          icon={ExternalLink}
-          size={DESKTOP_HEADER_ICON_SMALL_SIZE}
-          title={t('workingPanel.browser.actions.openExternal')}
-          onClick={() => runAction(() => electronBrowserSidebarService.openExternal({ sessionId }))}
-        />
-        <ActionIcon
-          disabled={!state.attached}
-          icon={Camera}
-          size={DESKTOP_HEADER_ICON_SMALL_SIZE}
-          title={t('workingPanel.browser.actions.capture')}
-          onClick={() =>
-            runAction(async () => {
-              const result = await electronBrowserSidebarService.captureScreenshotToClipboard({
-                sessionId,
-              });
-              if (result.success) message.success(t('workingPanel.browser.actions.captured'));
-              return result;
-            })
-          }
-        />
+        <Flexbox horizontal align={'center'} className={styles.toolbarActions} gap={4}>
+          <ActionIcon
+            disabled={!state.attached}
+            icon={ExternalLink}
+            size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+            title={t('workingPanel.browser.actions.openExternal')}
+            onClick={() =>
+              runAction(() => electronBrowserSidebarService.openExternal({ sessionId }))
+            }
+          />
+          <ActionIcon
+            disabled={!state.attached}
+            icon={Camera}
+            size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+            title={t('workingPanel.browser.actions.capture')}
+            onClick={() =>
+              runAction(async () => {
+                const result = await electronBrowserSidebarService.captureScreenshotToClipboard({
+                  sessionId,
+                });
+                if (result.success) message.success(t('workingPanel.browser.actions.captured'));
+                return result;
+              })
+            }
+          />
+        </Flexbox>
       </Flexbox>
+      {showImportBanner && (
+        <Flexbox horizontal align={'center'} className={styles.importBanner} gap={12}>
+          <BrowserIcon browser={'Chrome'} size={32} />
+          <Flexbox className={styles.importCopy} gap={0}>
+            <Text strong>{t('workingPanel.browser.import.title')}</Text>
+            <Text ellipsis type={'secondary'}>
+              {t('workingPanel.browser.import.desc')}
+            </Text>
+          </Flexbox>
+          <Button
+            icon={<Icon icon={Import} />}
+            loading={isImporting}
+            onClick={handleImportChromeLoginData}
+          >
+            {t('workingPanel.browser.import.action')}
+          </Button>
+          <ActionIcon
+            icon={XCircle}
+            size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+            title={t('workingPanel.browser.import.dismiss')}
+            onClick={() => setShowImportBanner(false)}
+          />
+        </Flexbox>
+      )}
       <Flexbox className={styles.container}>
         <AgentOverlay sessionId={sessionId} />
         {initialUrl ? (

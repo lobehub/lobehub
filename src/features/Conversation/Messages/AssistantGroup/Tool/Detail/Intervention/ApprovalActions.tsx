@@ -1,4 +1,5 @@
-import { Button, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { CornerDownLeft } from 'lucide-react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
@@ -117,11 +118,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorTextTertiary};
   `,
   submitButton: css`
-    &.ant-btn {
-      min-width: 88px;
-      height: 36px;
-      border-radius: calc(${cssVar.borderRadiusLG} - 2px);
-    }
+    min-width: 88px;
+    height: 36px;
+    border-radius: calc(${cssVar.borderRadiusLG} - 2px);
   `,
 }));
 

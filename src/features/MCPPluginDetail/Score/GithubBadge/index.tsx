@@ -1,4 +1,5 @@
-import { Markdown, Select, Snippet, Tag } from '@lobehub/ui';
+import { Markdown, Snippet, Tag } from '@lobehub/ui';
+import { Select } from '@lobehub/ui/base-ui';
 import { Divider } from 'antd';
 import { cssVar } from 'antd-style';
 import { memo, useState } from 'react';
@@ -58,7 +59,7 @@ const GithubBadge = memo(() => {
       <Snippet language={'md'} style={{ fontSize: 12 }} variant={'outlined'}>
         {badgeLite}
       </Snippet>
-      { }
+      {}
       <img
         alt="MCP Badge"
         height={selectedStyle === 'for-the-badge' ? 28 : 20}
@@ -74,7 +75,7 @@ const GithubBadge = memo(() => {
       <Snippet language={'md'} style={{ fontSize: 12 }} variant={'outlined'}>
         {badge}
       </Snippet>
-      { }
+      {}
       <img alt="MCP Badge" src={styledBadgeFullUrl} />
     </>
   );

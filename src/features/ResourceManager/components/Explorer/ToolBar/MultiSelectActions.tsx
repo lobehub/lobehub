@@ -1,5 +1,5 @@
-import { Button, Checkbox, Flexbox, Icon, Skeleton } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
+import { Checkbox, Flexbox, Icon, Skeleton } from '@lobehub/ui';
+import { Button, confirmModal } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { BookMinusIcon, BookPlusIcon, FileBoxIcon, Trash2Icon } from 'lucide-react';
@@ -104,10 +104,9 @@ const MultiSelectActions = memo<MultiSelectActionsProps>(
                   {t('FileManager.actions.removeFromLibrary')}
                 </Button>
                 <Button
-                  color={'default'}
                   icon={<Icon icon={BookPlusIcon} />}
                   size={'small'}
-                  variant={'filled'}
+                  type={'fill'}
                   onClick={() => {
                     onActionClick('moveToOtherKnowledgeBase');
                   }}
@@ -117,10 +116,9 @@ const MultiSelectActions = memo<MultiSelectActionsProps>(
               </>
             ) : (
               <Button
-                color={'default'}
                 icon={<Icon icon={BookPlusIcon} />}
                 size={'small'}
-                variant={'filled'}
+                type={'fill'}
                 onClick={() => {
                   onActionClick('addToKnowledgeBase');
                 }}
@@ -129,10 +127,9 @@ const MultiSelectActions = memo<MultiSelectActionsProps>(
               </Button>
             )}
             <Button
-              color={'default'}
               icon={<Icon icon={FileBoxIcon} />}
               size={'small'}
-              variant={'filled'}
+              type={'fill'}
               onClick={async () => {
                 await onActionClick('batchChunking');
               }}
@@ -141,10 +138,9 @@ const MultiSelectActions = memo<MultiSelectActionsProps>(
             </Button>
             <Button
               danger
-              color={'danger'}
               icon={<Icon icon={Trash2Icon} />}
               size={'small'}
-              variant={'filled'}
+              type={'fill'}
               onClick={async () => {
                 confirmModal({
                   cancelText: t('cancel', { ns: 'common' }),
