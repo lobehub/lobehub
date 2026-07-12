@@ -13,6 +13,7 @@ import { useAgentGroupStore } from '../store';
 // Mock dependencies
 vi.mock('@/services/chatGroup', () => ({
   chatGroupService: {
+    getGroupDetail: vi.fn(),
     updateGroup: vi.fn(),
   },
 }));
@@ -126,22 +127,31 @@ describe('ChatGroupCurdSlice', () => {
   });
 
   describe('useFetchGroupDetail', () => {
-    it('should remove stale local group data when detail revalidation reports not found', () => {
+    it('should remove stale local group data and mark not-found when detail revalidation reports not found', async () => {
+      vi.mocked(chatGroupService.getGroupDetail).mockResolvedValue(null as any);
+
       const { result } = renderHook(() => useAgentGroupStore());
 
       act(() => {
         result.current.useFetchGroupDetail(true, 'group-1');
       });
 
-      const swrOptions = vi.mocked(useClientDataSWRWithSync).mock.calls.at(-1)?.[2];
-      const onError = swrOptions?.onError as ((error: Error) => void) | undefined;
+      const swrCall = vi.mocked(useClientDataSWRWithSync).mock.calls.at(-1);
+      const fetcher = swrCall?.[1] as (() => Promise<unknown>) | undefined;
+      const swrOptions = swrCall?.[2];
+      const onData = swrOptions?.onData as ((data: unknown) => void) | undefined;
 
+      // "Gone / no access" resolves to null (settled 404 state) instead of throwing.
+      await act(async () => {
+        await expect(fetcher?.()).resolves.toBeNull();
+      });
       act(() => {
-        onError?.(new Error('Group group-1 not found'));
+        onData?.(null);
       });
 
       expect(result.current.groupMap['group-1']).toBeUndefined();
       expect(result.current.groups.some((group) => group.id === 'group-1')).toBe(false);
+      expect(result.current.groupNotFoundMap['group-1']).toBe(true);
     });
   });
 
