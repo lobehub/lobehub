@@ -17,7 +17,7 @@ import {
 import { checkGuard, ensureWorkflowStarted } from './runGuard';
 
 const TOPIC_PAGE_SIZE = 50;
-const TOPIC_BATCH_SIZE = 4;
+const TOPIC_BATCH_SIZE = 20;
 const WORKFLOW_PATH = 'api/workflows/memory-user-memory/pipelines/chat-topic/process-user-topics';
 const PROCESS_USER_TOPICS_FLOW_CONTROL_KEY =
   'memory-user-memory.pipelines.chat-topic.process-user-topics';

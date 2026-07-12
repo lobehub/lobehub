@@ -16,7 +16,7 @@ import { checkGuard, ensureWorkflowStarted } from './runGuard';
 import { serializeWorkflowCursor } from './utils';
 
 const USER_PAGE_SIZE = 50;
-const USER_BATCH_SIZE = 10;
+const USER_BATCH_SIZE = 20;
 const WORKFLOW_PATH = 'api/workflows/memory-user-memory/pipelines/chat-topic/process-users';
 const PROCESS_USERS_FLOW_CONTROL_KEY = 'memory-user-memory.pipelines.chat-topic.process-users';
 
@@ -85,6 +85,16 @@ export const processUsersHandler = async (
   const cursor = 'cursor' in userBatch ? userBatch.cursor : undefined;
 
   const batches = chunk(ids, USER_BATCH_SIZE);
+  if (params.dryRun) {
+    return {
+      batches: batches.length,
+      dryRun: true,
+      nextCursor: cursor ? cursor.id : null,
+      processedUsers: ids.length,
+      scheduledBatches: 0,
+    };
+  }
+
   for (const [index, userIds] of batches.entries()) {
     const stepName = `memory:user-memory:extract:users:process-topic-batches:${index}`;
     const guard = await checkGuard(context, WORKFLOW_PATH, { stepName });

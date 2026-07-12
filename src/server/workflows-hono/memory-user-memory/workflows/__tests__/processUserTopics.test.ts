@@ -5,6 +5,7 @@ import { processUserTopicsHandler } from '../processUserTopics';
 
 const mocks = vi.hoisted(() => ({
   createExecutor: vi.fn(),
+  filterTopicIdsForUser: vi.fn(),
   getTopicsForUser: vi.fn(),
   triggerProcessTopics: vi.fn(),
   triggerProcessUserTopics: vi.fn(),
@@ -60,7 +61,11 @@ const basePayload = {
 describe('processUserTopicsHandler per-user fan-out ceiling', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.createExecutor.mockResolvedValue({ getTopicsForUser: mocks.getTopicsForUser });
+    mocks.createExecutor.mockResolvedValue({
+      filterTopicIdsForUser: mocks.filterTopicIdsForUser,
+      getTopicsForUser: mocks.getTopicsForUser,
+    });
+    mocks.filterTopicIdsForUser.mockImplementation(async (_userId, topicIds: string[]) => topicIds);
     mocks.triggerProcessTopics.mockResolvedValue({ workflowRunId: 'process-topics-run' });
     mocks.triggerProcessUserTopics.mockResolvedValue({ workflowRunId: 'next-page-run' });
   });
@@ -112,6 +117,22 @@ describe('processUserTopicsHandler per-user fan-out ceiling', () => {
         topicCursor: { createdAt: '2024-07-02T09:36:44.073Z', id: 'cursor1', userId: 'u1' },
         topicFanoutCount: 2,
       }),
+      { extraHeaders: {} },
+    );
+  });
+
+  it('keeps explicit topic id batches under the standard fan-out chunk size together', async () => {
+    const topicIds = ['t1', 't2', 't3', 't4', 't5'];
+
+    await processUserTopicsHandler({
+      requestPayload: { ...basePayload, topicIds },
+      ...createContext(),
+    } as never);
+
+    expect(mocks.triggerProcessTopics).toHaveBeenCalledTimes(1);
+    expect(mocks.triggerProcessTopics).toHaveBeenCalledWith(
+      'u1',
+      expect.objectContaining({ topicIds }),
       { extraHeaders: {} },
     );
   });

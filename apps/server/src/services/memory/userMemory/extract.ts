@@ -128,6 +128,7 @@ export interface MemoryExtractionHourlyWorkflowPayload {
 export interface MemoryExtractionNormalizedPayload {
   asyncTaskId?: string;
   baseUrl: string;
+  dryRun: boolean;
   forceAll: boolean;
   forceTopics: boolean;
   from?: Date;
@@ -154,6 +155,7 @@ export interface MemoryExtractionNormalizedPayload {
 export const memoryExtractionPayloadSchema = z.object({
   asyncTaskId: z.string().uuid().optional(),
   baseUrl: z.string().url().optional(),
+  dryRun: z.boolean().optional(),
   forceAll: z.boolean().optional(),
   forceTopics: z.boolean().optional(),
   fromDate: z.coerce.date().optional(),
@@ -219,6 +221,7 @@ export const normalizeMemoryExtractionPayload = (
   return {
     asyncTaskId: parsed.asyncTaskId,
     baseUrl,
+    dryRun: parsed.dryRun ?? false,
     forceAll: parsed.forceAll ?? false,
     forceTopics: parsed.forceTopics ?? false,
     from: parsed.fromDate,
@@ -258,6 +261,7 @@ export const buildWorkflowPayloadInput = (
 ): MemoryExtractionPayloadInput => ({
   asyncTaskId: payload.asyncTaskId,
   baseUrl: payload.baseUrl,
+  dryRun: payload.dryRun,
   forceAll: payload.forceAll,
   forceTopics: payload.forceTopics,
   fromDate: payload.from,
