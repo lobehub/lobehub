@@ -2041,6 +2041,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     autoCount: allAutoItems.length,
     editPluginDrawer,
     installedPluginItems,
+    isPolicyMenuOpen: policyOpenId !== null,
     marketFooter,
     marketHeader,
     marketItems,

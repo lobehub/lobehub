@@ -445,3 +445,21 @@ live branch, measure the target URL/bundle, and use that path if it renders curr
 code. Only keep a harness as supporting evidence; the primary UI evidence must come
 from the product surface, or the report must clearly fail/block after every known
 path is measured.
+
+---
+
+## Case 17 — Using a fixed timeout to arbitrate competing nested popovers
+
+**Wrong approach**: when a row-level hover popover competes with a nested action
+popover, closing the hover surface and suppressing it for an arbitrary number of
+milliseconds.
+
+**Why it's wrong**: pointer travel time varies. After the timeout expires, the hover
+surface can reopen while the action menu is still active and consume the interaction.
+
+**What it breaks**: menu actions become intermittently unclickable; destructive
+actions can disappear before their confirmation surface opens.
+
+**Correct approach**: coordinate both surfaces through explicit shared state. Keep
+the hover surface disabled for the complete lifetime of the nested action popover,
+then restore it only after that popover closes.
