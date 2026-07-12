@@ -886,7 +886,11 @@ export const recordGitCommandEffects = async (params: {
   // shared branch key so the control bar (and its branch-keyed PR lookup) follows
   // the repository's actual HEAD immediately after the tool call completes.
   if (branchSwitch) {
-    await mutate(deviceKeys.gitBranch(topic?.metadata?.boundDeviceId ?? 'local', source));
+    const boundDeviceId = topic?.metadata?.boundDeviceId;
+    const currentDeviceId = getElectronStoreState().gatewayDeviceInfo?.deviceId;
+    const cacheDeviceId =
+      currentDeviceId && boundDeviceId === currentDeviceId ? 'local' : boundDeviceId;
+    await mutate(deviceKeys.gitBranch(cacheDeviceId ?? 'local', source));
   }
 };
 

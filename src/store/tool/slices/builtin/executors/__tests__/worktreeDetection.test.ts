@@ -252,6 +252,25 @@ describe('recordWorktreeAdd', () => {
 });
 
 describe('recordGitCommandEffects', () => {
+  it('refreshes the local branch cache when the run is bound to this device', async () => {
+    chatMocks.topics = {
+      t1: {
+        metadata: {
+          boundDeviceId: 'device-1',
+          workingDirectoryConfig: {
+            git: { branch: 'canary' },
+            path: '/repo',
+            repoType: 'github',
+          },
+        },
+      },
+    };
+
+    await recordGitCommandEffects({ command: 'git switch fix/topic', topicId: 't1' });
+
+    expect(swrMocks.mutate).toHaveBeenCalledWith(['device:gitBranch', 'local', '/repo']);
+  });
+
   it('refreshes the remote-device branch cache after a branch switch', async () => {
     chatMocks.topics = {
       t1: {
