@@ -19,14 +19,19 @@ export interface ChannelRow {
  *   filtered to still-available ids), then the remaining available channels as
  *   disabled, in server order.
  *
- * An empty saved array is treated as "unconfigured" (all enabled), matching the
- * server-side `resolveOrderedChannels` fallback and defending against legacy
- * dirty data that persisted an empty list.
+ * An empty saved array — or a saved array whose ids no longer intersect the
+ * available set (e.g. the configured providers were disabled/renamed on the
+ * server) — is treated as "unconfigured" (all enabled). This matches the
+ * server-side `resolveOrderedChannels` fallback (empty intersection → default
+ * order), keeps the "at least one enabled" invariant, and avoids rendering every
+ * channel as disabled while search/crawl actually runs on the default set.
  */
 const buildRows = (availableIds: string[], savedOrder: string[] | undefined): ChannelRow[] => {
   if (!savedOrder?.length) return availableIds.map((id) => ({ enabled: true, id }));
 
   const enabledIds = savedOrder.filter((id) => availableIds.includes(id));
+  if (enabledIds.length === 0) return availableIds.map((id) => ({ enabled: true, id }));
+
   const enabledSet = new Set(enabledIds);
   const disabledIds = availableIds.filter((id) => !enabledSet.has(id));
 
