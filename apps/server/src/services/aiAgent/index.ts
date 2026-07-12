@@ -3049,11 +3049,9 @@ export class AiAgentService {
     ): Promise<Record<string, string>> => {
       if (!deviceId) return {};
       try {
-        // Gateway principal must match the device pool that owns the connection.
-        // Workspace devices live under `workspace:<id>`; a workspace run that
-        // routes to a personal override (LOBE-11689) must keep the personal
-        // principal (`undefined`) so `(userId, deviceId)` resolves correctly.
-        // `activeDeviceScope` is the sole source of truth for that choice.
+        // Scope the gateway lookup to the principal that owns the connection:
+        // workspace devices need workspaceId; personal devices (including a
+        // workspace run routed to the caller's own machine) must not.
         const systemInfo = await deviceGateway.queryDeviceSystemInfo(
           this.userId,
           deviceId,
