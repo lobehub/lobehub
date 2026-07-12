@@ -10,6 +10,7 @@ const permissionMock = vi.hoisted(() => ({
   create_content: true,
   edit_own_content: true,
 }));
+const favoriteTopicMock = vi.hoisted(() => vi.fn());
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -69,6 +70,7 @@ vi.mock('@/store/chat', () => ({
     selector({
       autoRenameTopicTitle: vi.fn(),
       duplicateTopic: vi.fn(),
+      favoriteTopic: favoriteTopicMock,
       markTopicCompleted: vi.fn(),
       removeTopic: vi.fn(),
       unmarkTopicCompleted: vi.fn(),
@@ -94,6 +96,7 @@ describe('group useTopicItemDropdownMenu', () => {
   beforeEach(() => {
     permissionMock.create_content = true;
     permissionMock.edit_own_content = true;
+    favoriteTopicMock.mockClear();
   });
 
   it('disables topic management actions for workspace viewers', () => {
@@ -108,11 +111,35 @@ describe('group useTopicItemDropdownMenu', () => {
     );
     const items = result.current();
 
-    for (const key of ['markCompleted', 'autoRename', 'rename', 'duplicate', 'delete']) {
+    for (const key of [
+      'markCompleted',
+      'favorite',
+      'autoRename',
+      'rename',
+      'duplicate',
+      'delete',
+    ]) {
       expect(getMenuItem(items, key)).toMatchObject({ disabled: true });
     }
 
     expect(getMenuItem(items, 'copySessionId')).not.toMatchObject({ disabled: true });
     expect(getMenuItem(items, 'copyLink')).not.toMatchObject({ disabled: true });
+  });
+
+  it('toggles the group topic favorite state', () => {
+    const { result } = renderHook(() =>
+      useTopicItemDropdownMenu({
+        fav: false,
+        id: 'topic-1',
+        toggleEditing: vi.fn(),
+      }),
+    );
+
+    const favoriteItem = getMenuItem(result.current(), 'favorite') as
+      { label?: string; onClick?: () => void } | undefined;
+
+    expect(favoriteItem?.label).toBe('actions.favorite');
+    favoriteItem?.onClick?.();
+    expect(favoriteTopicMock).toHaveBeenCalledWith('topic-1', true);
   });
 });
