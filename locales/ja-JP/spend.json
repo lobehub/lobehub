@@ -54,6 +54,7 @@
   "usageStats.cards.token": "トークン",
   "usageStats.cards.tokenDesc": "入力 {{input}} · 出力 {{output}}",
   "usageStats.chart.cacheWrite": "キャッシュ書き込み",
+  "usageStats.chart.cachedInput": "キャッシュされた入力",
   "usageStats.chart.input": "入力",
   "usageStats.chart.output": "出力",
   "usageStats.chart.spend": "コスト",

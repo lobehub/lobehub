@@ -1,4 +1,5 @@
 export * from './callLlm';
+export * from './callLlmFinalizer';
 export * from './compressContext';
 export * from './finish';
 export * from './humanApprove';

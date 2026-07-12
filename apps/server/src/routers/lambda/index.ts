@@ -81,6 +81,7 @@ import { userMemoryRouter } from './userMemory';
 import { verifyRouter } from './verify';
 import { videoRouter } from './video';
 import { webBrowsingRouter } from './webBrowsing';
+import { workspaceUserSettingsRouter } from './workspaceUserSettings';
 
 export const lambdaRouter = router({
   agent: agentRouter,
@@ -155,6 +156,7 @@ export const lambdaRouter = router({
   workspaceData: workspaceDataRouter,
   workspaceMember: workspaceMemberRouter,
   workspaceUsage: workspaceUsageRouter,
+  workspaceUserSettings: workspaceUserSettingsRouter,
   accountDeletion: accountDeletionRouter,
   pageShare: pageShareRouter,
   referral: referralRouter,

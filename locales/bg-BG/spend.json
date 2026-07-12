@@ -54,6 +54,7 @@
   "usageStats.cards.token": "Токен",
   "usageStats.cards.tokenDesc": "Вход {{input}} · Изход {{output}}",
   "usageStats.chart.cacheWrite": "Запис в кеш",
+  "usageStats.chart.cachedInput": "Кеширан вход",
   "usageStats.chart.input": "Вход",
   "usageStats.chart.output": "Изход",
   "usageStats.chart.spend": "Разход",

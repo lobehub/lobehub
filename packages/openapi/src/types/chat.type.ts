@@ -26,7 +26,7 @@ export const ChatServiceParamsSchema = z.object({
       z.object({
         content: z.string().min(1, 'Message content cannot be empty'),
         role: z.enum(['user', 'assistant', 'system'], {
-          required_error: 'Role must be user, assistant, or system',
+          error: 'Role must be user, assistant, or system',
         }),
       }),
     )

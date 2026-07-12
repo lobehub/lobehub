@@ -39,6 +39,15 @@ export async function botCallback(c: Context): Promise<Response> {
     return c.json({ error: `Unknown callback type: ${type}` }, 400);
   }
 
+  // console (not debug) for completions only: arrival of the final-reply
+  // callback must be provable from production logs (LOBE-11632) — the debug
+  // namespace above is not enabled in production, and steps are too chatty.
+  if (type === 'completion') {
+    console.info(
+      `[botCallback] completion received (operationId=${body.operationId}, thread=${platformThreadId}, reason=${body.reason}, contentLen=${typeof body.lastAssistantContent === 'string' ? body.lastAssistantContent.length : 0})`,
+    );
+  }
+
   try {
     const serverDB = await getServerDB();
     const service = new BotCallbackService(serverDB);

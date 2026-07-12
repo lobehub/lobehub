@@ -6,6 +6,7 @@ import debug from 'debug';
 import { memo, Suspense, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useBusinessConversationAnalytics } from '@/business/client/hooks/useBusinessConversationAnalytics';
 import AgentHome from '@/features/AgentHome';
 import ChatMiniMap from '@/features/ChatMiniMap';
 import { ChatList, ConversationProvider } from '@/features/Conversation';
@@ -85,8 +86,12 @@ const Conversation = memo(() => {
     threadId: context.threadId ?? undefined,
     topicId: context.topicId ?? undefined,
   });
+  const businessAnalyticsHooks = useBusinessConversationAnalytics(context);
 
-  const hooks = useMemo(() => mergeConversationHooks(chatFollowUpHooks), [chatFollowUpHooks]);
+  const hooks = useMemo(
+    () => mergeConversationHooks(businessAnalyticsHooks, chatFollowUpHooks),
+    [businessAnalyticsHooks, chatFollowUpHooks],
+  );
 
   return (
     <ConversationProvider

@@ -2,11 +2,11 @@
 
 import { DEFAULT_AVATAR, EDITOR_DEBOUNCE_TIME } from '@lobechat/const';
 import { Block, Flexbox, Icon, Input, Skeleton, Tooltip } from '@lobehub/ui';
-import { useDebounceFn } from 'ahooks';
 import { message } from 'antd';
+import { debounce } from 'es-toolkit/compat';
 import isEqual from 'fast-deep-equal';
 import { PaletteIcon } from 'lucide-react';
-import { memo, Suspense, useCallback, useEffect, useState } from 'react';
+import { memo, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import EmojiPicker from '@/components/EmojiPicker';
@@ -41,7 +41,7 @@ const AgentHeader = memo<AgentHeaderProps>(({ readOnly, disabled: disabledProp }
 
   // Get agent meta by agentId
   const agentMeta = useAgentStore(agentSelectors.getAgentMetaById(agentId), isEqual);
-  const optimisticUpdateAgentMeta = useAgentStore((s) => s.optimisticUpdateAgentMeta);
+  const updateAgentMetaById = useAgentStore((s) => s.updateAgentMetaById);
 
   // File upload
   const uploadWithProgress = useFileStore((s) => s.uploadWithProgress);
@@ -53,23 +53,33 @@ const AgentHeader = memo<AgentHeaderProps>(({ readOnly, disabled: disabledProp }
   // Sync local state when meta changes from external source
   useEffect(() => {
     setLocalTitle(agentMeta.title || '');
-  }, [agentMeta.title]);
+  }, [agentId, agentMeta.title]);
 
   // Debounced save for title - save to agent store
-  const { run: debouncedSaveTitle } = useDebounceFn(
-    (value: string) => {
-      if (disabled) return;
+  const debouncedSaveTitle = useMemo(
+    () =>
+      debounce((targetAgentId: string, value: string) => {
+        updateAgentMetaById(targetAgentId, { title: value });
+      }, EDITOR_DEBOUNCE_TIME),
+    [updateAgentMetaById],
+  );
 
-      optimisticUpdateAgentMeta(agentId, { title: value });
+  // Flush before the selected member changes or this profile unmounts. Keeping
+  // flush and cancel in the same cleanup avoids ahooks' cancel-before-flush
+  // unmount ordering and preserves the title for the member that was edited.
+  useEffect(
+    () => () => {
+      debouncedSaveTitle.flush();
+      debouncedSaveTitle.cancel();
     },
-    { wait: EDITOR_DEBOUNCE_TIME },
+    [agentId, debouncedSaveTitle],
   );
 
   // Handle avatar change (immediate save) - save to agent store (supervisor agent)
   const handleAvatarChange = (emoji: string) => {
     if (disabled) return;
 
-    optimisticUpdateAgentMeta(agentId, { avatar: emoji });
+    updateAgentMetaById(agentId, { avatar: emoji });
   };
 
   // Handle avatar upload
@@ -86,28 +96,28 @@ const AgentHeader = memo<AgentHeaderProps>(({ readOnly, disabled: disabledProp }
       try {
         const result = await uploadWithProgress({ file });
         if (result?.url) {
-          optimisticUpdateAgentMeta(agentId, { avatar: result.url });
+          updateAgentMetaById(agentId, { avatar: result.url });
         }
       } finally {
         setUploading(false);
       }
     },
-    [disabled, uploadWithProgress, optimisticUpdateAgentMeta, agentId, t],
+    [agentId, disabled, t, updateAgentMetaById, uploadWithProgress],
   );
 
   // Handle avatar delete
   const handleAvatarDelete = useCallback(() => {
     if (disabled) return;
 
-    optimisticUpdateAgentMeta(agentId, { avatar: null });
-  }, [disabled, optimisticUpdateAgentMeta, agentId]);
+    updateAgentMetaById(agentId, { avatar: null });
+  }, [agentId, disabled, updateAgentMetaById]);
 
   // Handle background color change (immediate save) - save to agent store (supervisor agent)
   const handleBackgroundColorChange = (color?: string) => {
     if (disabled) return;
 
     if (color !== undefined) {
-      optimisticUpdateAgentMeta(agentId, { backgroundColor: color });
+      updateAgentMetaById(agentId, { backgroundColor: color });
     }
   };
 
@@ -228,9 +238,9 @@ const AgentHeader = memo<AgentHeaderProps>(({ readOnly, disabled: disabledProp }
         }}
         onChange={(e) => {
           setLocalTitle(e.target.value);
-          if (disabled) return;
+          if (!agentId || disabled) return;
 
-          debouncedSaveTitle(e.target.value);
+          debouncedSaveTitle(agentId, e.target.value);
         }}
       />
     </Flexbox>

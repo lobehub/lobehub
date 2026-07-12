@@ -241,7 +241,7 @@ export const StreamableHTTPAuthSchema = z
  */
 export const GetStreamableMcpServerManifestInputSchema = z.object({
   auth: StreamableHTTPAuthSchema,
-  headers: z.record(z.string()).optional(),
+  headers: z.record(z.string(), z.string()).optional(),
   identifier: z.string(),
   metadata: z
     .object({

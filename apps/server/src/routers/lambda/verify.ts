@@ -90,7 +90,7 @@ const checkItemSchema = z.object({
   sourceCriterionId: z.string().nullish(),
   sourceRubricId: z.string().nullish(),
   title: z.string(),
-  verifierConfig: z.record(z.unknown()),
+  verifierConfig: z.record(z.string(), z.unknown()),
   verifierType: verifierTypeSchema,
 });
 
@@ -126,7 +126,7 @@ const runContextSchema = z.object({
   testedAt: z.string().optional(),
 });
 
-const runMetadataSchema = z.record(z.unknown());
+const runMetadataSchema = z.record(z.string(), z.unknown());
 
 const updateRunInputSchema = verifyRunIdInputSchema.extend({
   // Every field optional — a re-ingest may refresh only the context/goal while
@@ -232,7 +232,7 @@ export const verifyRouter = router({
         onFail: onFailSchema.optional(),
         required: z.boolean().optional(),
         title: z.string(),
-        verifierConfig: z.record(z.unknown()).optional(),
+        verifierConfig: z.record(z.string(), z.unknown()).optional(),
         verifierType: verifierTypeSchema,
       }),
     )
@@ -254,7 +254,7 @@ export const verifyRouter = router({
           onFail: onFailSchema.optional(),
           required: z.boolean().optional(),
           title: z.string().optional(),
-          verifierConfig: z.record(z.unknown()).optional(),
+          verifierConfig: z.record(z.string(), z.unknown()).optional(),
           verifierType: verifierTypeSchema.optional(),
         }),
       }),
@@ -361,7 +361,7 @@ export const verifyRouter = router({
             onFail: onFailSchema.optional(),
             required: z.boolean().optional(),
             title: z.string().min(1),
-            verifierConfig: z.record(z.unknown()).optional(),
+            verifierConfig: z.record(z.string(), z.unknown()).optional(),
             verifierType: verifierTypeSchema.optional(),
           }),
         ),

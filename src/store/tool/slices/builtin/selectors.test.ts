@@ -153,6 +153,7 @@ describe('builtinToolSelectors', () => {
 
       // Only fixed-display ids are returned; lobe-agent leads the list, unrelated tools excluded.
       expect(result.map((item) => item.identifier)).toContain('lobe-agent');
+      expect(result.map((item) => item.identifier)).not.toContain('lobe-activator');
       expect(result.map((item) => item.identifier)).not.toContain('tool-1');
       expect(result[0].identifier).toBe('lobe-agent');
     });

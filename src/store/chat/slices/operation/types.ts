@@ -156,11 +156,27 @@ export interface OperationMetadata {
   startTime: number;
 
   /**
+   * Upstream stream retry state surfaced by heterogeneous agents while no
+   * assistant output has arrived yet.
+   */
+  streamRetry?: StreamRetryMetadata;
+
+  /**
    * The model text stream has finished and there is no visible follow-up phase
    * to wait for, but the runtime operation still needs its terminal lifecycle
    * (`agent_runtime_end`) for cache, queue, unread, and notification effects.
    */
   visibleLoadingDone?: boolean;
+}
+
+export interface StreamRetryMetadata {
+  agentType?: string;
+  attempt?: number;
+  delayMs?: number;
+  error?: string;
+  errorStatus?: number;
+  maxAttempts?: number;
+  provider?: string;
 }
 
 /**

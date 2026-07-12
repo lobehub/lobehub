@@ -1,2 +1,2 @@
-export { ClaudeCodeAdapter } from './claudeCode';
+export { ClaudeCodeAdapter, ClaudeCodeSdkAdapter } from './claudeCode';
 export { CodexAdapter } from './codex';

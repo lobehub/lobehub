@@ -276,10 +276,14 @@ export interface MessageMetadata {
   duration?: number;
   finishType?: string;
   /**
-   * The CC-native `message.id` of the hetero-agent (Claude Code) turn that
-   * produced this message. Forensic provenance stamped by both the server
-   * persistence handler and the renderer executor, so a diff can tie a row
-   * back to its CC turn.
+   * The native id of this message inside the hetero agent (Claude Code /
+   * Codex) that produced it — forensic provenance tying a row back to its
+   * source.
+   *
+   * - live runs: the CC API `message.id` of the turn (all the stream exposes),
+   *   stamped by the server persistence handler and the renderer executor
+   * - imported transcripts: the record's own id in the source file (CC session
+   *   record `uuid`; codex call item `fc_...` / `ctc_...` id)
    */
   heteroMessageId?: string;
   /**

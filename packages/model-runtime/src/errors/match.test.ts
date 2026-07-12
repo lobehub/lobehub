@@ -30,6 +30,11 @@ describe('matchErrorPattern', () => {
     ).toBe(AgentRuntimeErrorType.ExceededContextWindow);
   });
 
+  it('classifies free-plan context limit residues as ExceededContextWindow', () => {
+    const message = 'Free plan effective context limit reached. Please reduce the conversation.';
+    expect(matchErrorPattern({ message })?.code).toBe(AgentRuntimeErrorType.ExceededContextWindow);
+  });
+
   it('disambiguates 429-class rate limit from balance-class quota', () => {
     expect(matchErrorPattern({ message: 'rate_limit_exceeded' })?.code).toBe(
       AgentRuntimeErrorType.RateLimitExceeded,

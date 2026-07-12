@@ -12,6 +12,7 @@
  *   {type: 'assistant', message: {id, content: [{type: 'tool_use', id, name, input}], ...}}
  *   {type: 'user', message: {content: [{type: 'tool_result', tool_use_id, content}]}}
  *   {type: 'assistant', message: {id: <NEW>, content: [{type: 'text', text}], ...}}
+ *   {type: 'system', subtype: 'api_retry', api_error_status, attempt, max_attempts, ...}
  *   {type: 'result', is_error, result, ...}
  *   {type: 'rate_limit_event', ...}
  *
@@ -35,6 +36,7 @@
  * - `tool_result` blocks are in `type: 'user'` events, not assistant events
  */
 
+import { imagePlaceholder } from '../imageEcho';
 import type {
   AgentEventAdapter,
   ExternalSignalContext,
@@ -49,7 +51,6 @@ import type {
   ToolResultData,
   UsageData,
 } from '../types';
-import { imagePlaceholder } from '../imageEcho';
 
 /**
  * The CC tool_use `name` we synthesize `pluginState.todos` for. Inlined here
@@ -106,6 +107,21 @@ const TASK_UPDATE_RESULT_PATTERN = /^Updated task #\d+/;
  * back to the subject text, same as TodoWrite's content-fallback.
  */
 const TASK_LIST_LINE_PATTERN = /^#(\d+) \[(pending|in_progress|completed)\] (.+)$/;
+
+/**
+ * `system init` tags the model id with a beta marker (`claude-opus-4-8[1m]`)
+ * that no other event — and no model-bank entry — uses. Strip it so the id the
+ * run opens with is the same canonical one `turn_metadata` later confirms;
+ * otherwise the assistant renders the tagged id until the first turn ends.
+ *
+ * Sliced rather than matched: an unanchored `/\[[^\]]*\]$/` rescans from every
+ * start offset, which is quadratic on a `[[[[…` input (CodeQL flags it).
+ */
+const stripModelBetaMarker = (model?: string) => {
+  if (!model?.endsWith(']')) return model;
+  const markerStart = model.lastIndexOf('[');
+  return markerStart === -1 ? model : model.slice(0, markerStart);
+};
 
 /**
  * Tool name CC sees for the LobeHub-hosted MCP `ask_user_question` server.
@@ -221,6 +237,25 @@ const CLI_OVERLOADED_PATTERNS = [
 ] as const;
 
 /**
+ * CC streams a synthetic assistant text turn when the underlying API call
+ * fails mid-run — e.g. `API Error: Connection closed mid-response. The
+ * response above may be incomplete.`. The paired terminal `result` event
+ * usually carries NO `result` text for these failures (`subtype:
+ * 'error_during_execution'` and nothing else), so that streamed line is the
+ * only human-readable reason available to the terminal error card.
+ */
+const CC_SYNTHETIC_API_ERROR_PATTERN = /^API Error\b/;
+
+/**
+ * Human-readable fallbacks for CC's terminal error subtypes, used when
+ * neither the result event nor the stream carried any message text.
+ */
+const CLI_ERROR_SUBTYPE_MESSAGES: Record<string, string> = {
+  error_during_execution: 'Claude Code hit an error mid-run and exited without reporting a reason.',
+  error_max_turns: 'Claude Code stopped after reaching its maximum number of turns for this run.',
+};
+
+/**
  * Discriminates a user-side plan/quota limit from everything else.
  *
  * Two signals must BOTH hold:
@@ -261,6 +296,125 @@ const getCliResultMessage = (result: unknown): string | undefined => {
   }
 };
 
+const asRecord = (value: unknown): Record<string, unknown> | undefined =>
+  value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+
+const getPathValue = (raw: Record<string, unknown>, path: string[]): unknown => {
+  let current: unknown = raw;
+  for (const key of path) {
+    const record = asRecord(current);
+    if (!record || !(key in record)) return undefined;
+    current = record[key];
+  }
+  return current;
+};
+
+const toFiniteNumber = (value: unknown): number | undefined => {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+};
+
+const pickNumber = (raw: Record<string, unknown>, paths: string[][]): number | undefined => {
+  for (const path of paths) {
+    const value = toFiniteNumber(getPathValue(raw, path));
+    if (value !== undefined) return value;
+  }
+};
+
+const pickString = (raw: Record<string, unknown>, paths: string[][]): string | undefined => {
+  for (const path of paths) {
+    const value = getPathValue(raw, path);
+    if (typeof value === 'string' && value.trim()) return value;
+  }
+};
+
+const getApiRetryError = (
+  raw: Record<string, unknown>,
+  errorStatus?: number,
+): string | undefined => {
+  const errorType = pickString(raw, [
+    ['error', 'error', 'type'],
+    ['error', 'type'],
+    ['error_type'],
+    ['errorType'],
+    ['kind'],
+    ['code'],
+  ]);
+  const message = pickString(raw, [
+    ['error', 'error', 'message'],
+    ['error', 'message'],
+    ['message'],
+    ['result'],
+  ]);
+  const errorText = errorType || message;
+
+  if (
+    errorStatus === 529 ||
+    (!!errorText && CLI_OVERLOADED_PATTERNS.some((pattern) => pattern.test(errorText)))
+  ) {
+    return 'overloaded';
+  }
+
+  return errorText;
+};
+
+const getApiRetryData = (rawValue: unknown) => {
+  const raw = asRecord(rawValue);
+  if (!raw) {
+    return { agentType: 'claude-code' };
+  }
+
+  const errorStatus = pickNumber(raw, [
+    ['api_error_status'],
+    ['apiErrorStatus'],
+    ['status'],
+    ['status_code'],
+    ['statusCode'],
+    ['error', 'status'],
+    ['error', 'status_code'],
+    ['error', 'statusCode'],
+    ['error', 'code'],
+    ['error', 'error', 'status'],
+    ['error', 'error', 'status_code'],
+    ['error', 'error', 'statusCode'],
+    ['error', 'error', 'code'],
+  ]);
+
+  return {
+    agentType: 'claude-code',
+    attempt: pickNumber(raw, [
+      ['attempt'],
+      ['retry_attempt'],
+      ['retryAttempt'],
+      ['retry', 'attempt'],
+    ]),
+    delayMs: pickNumber(raw, [
+      ['delay_ms'],
+      ['delayMs'],
+      ['retry_delay_ms'],
+      ['retryDelayMs'],
+      ['retry_after_ms'],
+      ['retryAfterMs'],
+      ['retry', 'delay_ms'],
+      ['retry', 'delayMs'],
+    ]),
+    error: getApiRetryError(raw, errorStatus),
+    errorStatus,
+    maxAttempts: pickNumber(raw, [
+      ['max_attempts'],
+      ['maxAttempts'],
+      ['retry', 'max_attempts'],
+      ['retry', 'maxAttempts'],
+    ]),
+    provider: typeof raw.provider === 'string' ? raw.provider : 'claude-code',
+  };
+};
+
 const getAuthRequiredTerminalError = (
   result: unknown,
 ): HeterogeneousTerminalErrorData | undefined => {
@@ -278,6 +432,47 @@ const getAuthRequiredTerminalError = (
     message:
       'Claude Code could not authenticate. Sign in again or refresh its credentials, then retry.',
     stderr: rawMessage,
+  };
+};
+
+/**
+ * Last-resort terminal error for `is_error` results that no structured
+ * classifier (rate-limit / overloaded / auth) claimed. CC's error results
+ * frequently carry NO `result` text at all — a mid-response network drop
+ * yields `{subtype: 'error_during_execution', is_error: true}` and nothing
+ * else — which used to surface as an opaque `Agent execution failed`.
+ * Prefer, in order: the CLI's own result text, the synthetic `API Error:`
+ * line captured off the stream, then a subtype-specific description — and
+ * attach the result event's diagnostic fields so the error card's details
+ * pane says what actually happened.
+ */
+const buildFallbackTerminalError = (
+  raw: any,
+  streamedApiError?: string,
+): HeterogeneousTerminalErrorData => {
+  const subtype =
+    typeof raw.subtype === 'string' && raw.subtype !== 'success' ? raw.subtype : undefined;
+  const message =
+    getCliResultMessage(raw.result) ||
+    streamedApiError ||
+    (subtype && CLI_ERROR_SUBTYPE_MESSAGES[subtype]) ||
+    'Agent execution failed';
+
+  const details: Record<string, unknown> = {
+    ...(raw.api_error_status == null ? {} : { apiErrorStatus: raw.api_error_status }),
+    ...(typeof raw.duration_ms === 'number' ? { durationMs: raw.duration_ms } : {}),
+    ...(streamedApiError && streamedApiError !== message ? { lastApiError: streamedApiError } : {}),
+    ...(typeof raw.num_turns === 'number' ? { numTurns: raw.num_turns } : {}),
+    ...(typeof raw.session_id === 'string' ? { sessionId: raw.session_id } : {}),
+    ...(subtype ? { subtype } : {}),
+  };
+
+  return {
+    agentType: 'claude-code',
+    ...(subtype ? { code: subtype } : {}),
+    ...(Object.keys(details).length > 0 ? { details } : {}),
+    error: message,
+    message,
   };
 };
 
@@ -459,7 +654,28 @@ const toUsageData = (
 
 // ─── Adapter ───
 
+interface ClaudeCodeAdapterOptions {
+  /**
+   * CLI print-mode treats `result` as the end of the whole process. The Agent
+   * SDK streaming transport can emit multiple `result` messages from one Query,
+   * so runtime completion must be emitted by the transport when the Query closes.
+   */
+  runtimeEndStrategy?: 'on-result' | 'on-transport-close';
+  /**
+   * Background Bash tasks may have no intermediate callback turns: the first
+   * model turn starts the task, and the next model turn is triggered only after
+   * `task_notification`. Treat that final turn as a task-completion signal.
+   */
+  signalBackgroundTaskCompletion?: boolean;
+}
+
+const DEFAULT_ADAPTER_OPTIONS: Required<ClaudeCodeAdapterOptions> = {
+  runtimeEndStrategy: 'on-result',
+  signalBackgroundTaskCompletion: false,
+};
+
 export class ClaudeCodeAdapter implements AgentEventAdapter {
+  private readonly options: Required<ClaudeCodeAdapterOptions>;
   sessionId?: string;
   private pendingRateLimitInfo?: HeterogeneousRateLimitInfo;
 
@@ -496,6 +712,13 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
    * authoritative usage on `message_delta`.
    */
   private currentStreamEventModel: string | undefined;
+  /**
+   * Latest synthetic `API Error: …` assistant text seen on the main stream
+   * (see {@link CC_SYNTHETIC_API_ERROR_PATTERN}). Feeds the terminal error
+   * classifiers / fallback in `handleResult` when the error result event
+   * itself carries no text; cleared at end of run.
+   */
+  private lastApiErrorText?: string;
   /** Cumulative text streamed via partial-message deltas, keyed by message.id. */
   private streamedTextByMessageId = new Map<string, string>();
   /** Cumulative thinking streamed via partial-message deltas, keyed by message.id. */
@@ -615,7 +838,12 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
    */
   private activeTasks = new Map<
     string,
-    { callbackCount: number; sourceToolName: string; toolUseId: string }
+    {
+      callbackCount: number;
+      shouldSignalCompletion: boolean;
+      sourceToolName: string;
+      toolUseId: string;
+    }
   >();
   /**
    * True after a `user` event has been seen but the next turn hasn't yet
@@ -653,6 +881,10 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
    * the preceding callbacks instead of letting it spawn a separate group.
    */
   private pendingTaskCompletion: { sourceToolCallId: string; sourceToolName: string } | undefined;
+
+  constructor(options: ClaudeCodeAdapterOptions = {}) {
+    this.options = { ...DEFAULT_ADAPTER_OPTIONS, ...options };
+  }
 
   adapt(raw: any): HeterogeneousAgentEvent[] {
     if (!raw || typeof raw !== 'object') return [];
@@ -697,6 +929,10 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
   // ─── Private handlers ───
 
   private handleSystem(raw: any): HeterogeneousAgentEvent[] {
+    if (raw.subtype === 'api_retry') {
+      return [this.makeEvent('stream_retry', getApiRetryData(raw))];
+    }
+
     // CC's long-running task lifecycle (Monitor, etc., ).
     // `task_started` registers a task that may fire callback turns;
     // `task_notification` (terminal) drops it. While a task is alive,
@@ -704,8 +940,12 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
     // callback in `openMainMessage`.
     if (raw.subtype === 'task_started' && raw.task_id && raw.tool_use_id) {
       const toolUseId: string = raw.tool_use_id;
+      const toolInput = this.mainToolInputsById.get(toolUseId);
+      const shouldSignalCompletion =
+        this.options.signalBackgroundTaskCompletion && toolInput?.run_in_background === true;
       this.activeTasks.set(raw.task_id, {
         callbackCount: 0,
+        shouldSignalCompletion,
         sourceToolName: this.mainToolNamesById.get(toolUseId) ?? 'unknown',
         toolUseId,
       });
@@ -729,7 +969,7 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
       // normal main chain. Tagging that turn `task-completion` mis-anchors it and
       // drops it from the rendered chain — so leave it untagged.
       const ending = this.activeTasks.get(raw.task_id);
-      if (ending && ending.callbackCount > 0) {
+      if (ending && (ending.callbackCount > 0 || ending.shouldSignalCompletion)) {
         this.pendingTaskCompletion = {
           sourceToolCallId: ending.toolUseId,
           sourceToolName: ending.sourceToolName,
@@ -748,7 +988,7 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
     this.started = true;
     return [
       this.makeEvent('stream_start', {
-        model: raw.model,
+        model: stripModelBetaMarker(raw.model),
         provider: 'claude-code',
         // The CC session id every message this run produces belongs to. A
         // change in this value across a topic means CC forked a new session.
@@ -813,7 +1053,11 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
     for (const block of content) {
       switch (block.type) {
         case 'text': {
-          if (block.text) textParts.push(block.text);
+          if (block.text) {
+            textParts.push(block.text);
+            const trimmed = block.text.trim();
+            if (CC_SYNTHETIC_API_ERROR_PATTERN.test(trimmed)) this.lastApiErrorText = trimmed;
+          }
           break;
         }
         case 'thinking': {
@@ -1019,7 +1263,11 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
     for (const block of content) {
       switch (block.type) {
         case 'text': {
-          if (block.text) textParts.push(block.text);
+          if (block.text) {
+            textParts.push(block.text);
+            const trimmed = block.text.trim();
+            if (CC_SYNTHETIC_API_ERROR_PATTERN.test(trimmed)) this.lastApiErrorText = trimmed;
+          }
           break;
         }
         case 'thinking': {
@@ -1427,25 +1675,31 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
       );
     }
 
-    const resultMessage = getCliResultMessage(raw.result) || 'Agent execution failed';
-    const rateLimitError = getRateLimitTerminalError(raw.result, this.pendingRateLimitInfo);
-    const finalEvent: HeterogeneousAgentEvent = raw.is_error
+    // Classifiers read the result text; a mid-run API failure often ships an
+    // EMPTY result (`subtype: 'error_during_execution'` and nothing else), so
+    // fall back to the synthetic `API Error:` line captured off the stream —
+    // an auth / overload failure that died mid-response still classifies to
+    // its dedicated guide instead of the generic fallback.
+    const classifiableResult = getCliResultMessage(raw.result) || this.lastApiErrorText;
+    const rateLimitError = getRateLimitTerminalError(classifiableResult, this.pendingRateLimitInfo);
+    const finalEvent: HeterogeneousAgentEvent | undefined = raw.is_error
       ? this.makeEvent(
           'error',
           rateLimitError ||
             getOverloadedTerminalError(
-              raw.result,
+              classifiableResult,
               raw.api_error_status,
               this.pendingRateLimitInfo,
             ) ||
-            getAuthRequiredTerminalError(raw.result) || {
-              error: resultMessage,
-              message: resultMessage,
-            },
+            getAuthRequiredTerminalError(classifiableResult) ||
+            buildFallbackTerminalError(raw, this.lastApiErrorText),
         )
-      : this.makeEvent('agent_runtime_end', {});
+      : this.options.runtimeEndStrategy === 'on-result'
+        ? this.makeEvent('agent_runtime_end', {})
+        : undefined;
 
     this.pendingRateLimitInfo = undefined;
+    this.lastApiErrorText = undefined;
     this.streamedTextByMessageId.clear();
     this.streamedThinkingByMessageId.clear();
     // Drop any unconsumed task-completion lineage so the next LLM run
@@ -1453,11 +1707,14 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
     // wrongly inherit the previous run's task-completion tag).
     this.pendingTaskCompletion = undefined;
 
+    const shouldEmitVisibleOutputEnd =
+      this.options.runtimeEndStrategy === 'on-result' || this.activeTasks.size === 0;
+
     return [
       ...events,
       this.makeEvent('stream_end', {}),
-      this.makeEvent('visible_output_end', {}),
-      finalEvent,
+      ...(shouldEmitVisibleOutputEnd ? [this.makeEvent('visible_output_end', {})] : []),
+      ...(finalEvent ? [finalEvent] : []),
     ];
   }
 
@@ -1716,5 +1973,14 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
 
   private makeChunkEvent(data: StreamChunkData): HeterogeneousAgentEvent {
     return { data, stepIndex: this.stepIndex, timestamp: Date.now(), type: 'stream_chunk' };
+  }
+}
+
+export class ClaudeCodeSdkAdapter extends ClaudeCodeAdapter {
+  constructor() {
+    super({
+      runtimeEndStrategy: 'on-transport-close',
+      signalBackgroundTaskCompletion: true,
+    });
   }
 }

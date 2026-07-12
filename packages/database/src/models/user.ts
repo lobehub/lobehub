@@ -8,7 +8,7 @@ import type {
 } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import dayjs from 'dayjs';
-import { and, asc, eq, gt, inArray, or, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, max, or, sql } from 'drizzle-orm';
 import type { PartialDeep } from 'type-fest';
 
 import { merge } from '@/utils/merge';
@@ -60,6 +60,26 @@ export class UserModel {
     this.userId = userId;
     this.db = db;
   }
+
+  getUserActivitySummary = async (): Promise<{
+    lastUserMessageAt: Date | null;
+    userCreatedAt: Date | null;
+  }> => {
+    const [summary] = await this.db
+      .select({
+        lastUserMessageAt: max(messages.createdAt),
+        userCreatedAt: users.createdAt,
+      })
+      .from(users)
+      .leftJoin(messages, and(eq(messages.userId, users.id), eq(messages.role, 'user')))
+      .where(eq(users.id, this.userId))
+      .groupBy(users.createdAt);
+
+    return {
+      lastUserMessageAt: summary?.lastUserMessageAt ?? null,
+      userCreatedAt: summary?.userCreatedAt ?? null,
+    };
+  };
 
   getUserRegistrationDuration = async (): Promise<{
     createdAt: string;
@@ -232,8 +252,7 @@ export class UserModel {
     `);
 
     const row = result.rows[0] as
-      | { previousLastActiveAt: Date | string; userCreatedAt: Date | string }
-      | undefined;
+      { previousLastActiveAt: Date | string; userCreatedAt: Date | string } | undefined;
     if (!row) return;
 
     return {

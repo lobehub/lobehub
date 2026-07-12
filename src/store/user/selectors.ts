@@ -10,3 +10,4 @@ export {
   userGeneralSettingsSelectors,
   userUsageSettingsSelectors,
 } from './slices/settings/selectors';
+export { workspaceUserSettingsSelectors } from './slices/workspaceUserSettings/selectors';

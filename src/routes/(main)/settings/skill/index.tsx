@@ -31,15 +31,19 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-const Page = memo(() => {
+interface ToolSettingsProps {
+  /**
+   * Which surface to manage. Fixed per-route now that skills and connectors
+   * each own a dedicated settings page (`/settings/skill` and
+   * `/settings/connector`) instead of sharing one tab-switched page.
+   */
+  viewMode: SkillViewMode;
+}
+
+export const ToolSettings = memo<ToolSettingsProps>(({ viewMode }) => {
   const [searchParams] = useSearchParams();
-  const queryViewMode: SkillViewMode =
-    searchParams.get('tab') === 'skill' || searchParams.get('view') === 'skill'
-      ? 'skill'
-      : 'connector';
   const querySkillIdentifier = searchParams.get('skill');
   const [selected, setSelected] = useState<SelectedTool | null>(null);
-  const [viewMode, setViewMode] = useState<SkillViewMode>(queryViewMode);
 
   const builtinTools = useToolStore((s) => s.builtinTools, isEqual);
   const builtinSkills = useToolStore((s) => s.builtinSkills, isEqual);
@@ -49,14 +53,6 @@ const Page = memo(() => {
     (s) => builtinToolSelectors.installedAllMetaList(s).map((tool) => tool.identifier),
     isEqual,
   );
-
-  useEffect(() => {
-    setSelected(null);
-  }, [viewMode]);
-
-  useEffect(() => {
-    setViewMode(queryViewMode);
-  }, [queryViewMode]);
 
   useEffect(() => {
     if (selected) return;
@@ -98,7 +94,6 @@ const Page = memo(() => {
           viewMode={viewMode}
           onDeleteSelected={() => setSelected(null)}
           onSelect={handleSelect}
-          onViewModeChange={setViewMode}
         />
 
         {selected && (
@@ -114,6 +109,10 @@ const Page = memo(() => {
     </>
   );
 });
+
+ToolSettings.displayName = 'ToolSettings';
+
+const Page = memo(() => <ToolSettings viewMode="skill" />);
 
 Page.displayName = 'SkillSettings';
 

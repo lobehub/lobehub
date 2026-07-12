@@ -1,8 +1,11 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import type { RouteObject } from 'react-router';
 import { matchRoutes } from 'react-router';
 import { describe, expect, it } from 'vitest';
+
+import { WORKSPACE_SETTINGS_TABS } from '@/features/Workspace/workspaceAwarePath';
 
 import { desktopRoutes } from './desktopRouter.config';
 
@@ -14,7 +17,28 @@ const KNOWN_DIVERGENCES: Record<string, string> = {
   '/desktop-onboarding': '/onboarding',
 };
 
-const WEB_ONLY_PATHS = new Set(['/onboarding', '/onboarding/agent', '/onboarding/classic']);
+/**
+ * Web-only routes intentionally absent from Electron (no in-app entry points there).
+ * Paths are flat `path: '...'` literals extracted from both configs.
+ */
+const WEB_ONLY_PATHS = new Set([
+  '/onboarding',
+  '/onboarding/agent',
+  '/onboarding/classic',
+  // Verify report workspace + messenger link flow — web/CLI only
+  '/verify',
+  '/verify-im',
+  ':runId',
+]);
+
+/** Extra `index: true` routes present only on web (verify empty detail). */
+const WEB_ONLY_INDEX_DELTA = 1;
+
+/** handle.meta blobs present only on web. */
+const WEB_ONLY_HANDLE_METAS = new Set([
+  '{ meta: verifyRouteMeta }',
+  '{ meta: verifyReportsRouteMeta }',
+]);
 
 function extractIndexCount(source: string) {
   return [...source.matchAll(/index:\s*true/g)].length;
@@ -87,14 +111,16 @@ describe('desktopRouter config sync', () => {
     expect(missingInSync, `Missing in desktop config: ${missingInSync.join(', ')}`).toEqual([]);
     expect(extraInSync, `Extra in desktop config: ${extraInSync.join(', ')}`).toEqual([]);
     expect(syncIndexCount, 'Desktop config index route count must match async config').toBe(
-      asyncIndexCount,
+      asyncIndexCount - WEB_ONLY_INDEX_DELTA,
     );
   });
 
   it('route handle.meta declarations must match between web and desktop configs', async () => {
     const [asyncSource, syncSource] = await readDesktopRouterSources();
 
-    const asyncMetas = extractHandleMetas(asyncSource);
+    const asyncMetas = extractHandleMetas(asyncSource).filter(
+      (meta) => !WEB_ONLY_HANDLE_METAS.has(meta),
+    );
     const syncMetas = extractHandleMetas(syncSource);
 
     expect(asyncMetas.length, 'Async config must declare at least one handle.meta').toBeGreaterThan(
@@ -117,6 +143,7 @@ describe('desktopRouter config sync', () => {
       '@/routes/(main)/[workspaceSlug]/settings/credits',
       '@/routes/(main)/[workspaceSlug]/settings/usage',
       '@/routes/(main)/[workspaceSlug]/settings/skill',
+      '@/routes/(main)/[workspaceSlug]/settings/connector',
       '@/routes/(main)/[workspaceSlug]/settings/audit-log',
     ];
 
@@ -135,6 +162,28 @@ describe('desktopRouter config sync', () => {
     // `path: 'billing'` block under `:workspaceSlug` is preserved as redirects)
     expect(asyncSource).toContain("redirectElement('../settings/plans')");
     expect(syncSource).toContain("redirectElement('../settings/plans')");
+  });
+
+  it('workspace-aware navigation recognizes every registered workspace settings tab', () => {
+    const rootRoute = desktopRoutes.find((route) => route.path === '/');
+    const workspaceRoute = rootRoute?.children?.find((route) => route.path === ':workspaceSlug');
+    const settingsRoute = workspaceRoute?.children?.find((route) => route.path === 'settings');
+
+    expect(settingsRoute, 'Workspace settings route must exist').toBeDefined();
+
+    const collectPaths = (routes: RouteObject[]): string[] =>
+      routes.flatMap((route) =>
+        route.path
+          ? [route.path, ...collectPaths(route.children ?? [])]
+          : collectPaths(route.children ?? []),
+      );
+    const registeredTabs = collectPaths(settingsRoute?.children ?? []);
+    const missingTabs = registeredTabs.filter((tab) => !WORKSPACE_SETTINGS_TABS.has(tab));
+
+    expect(
+      missingTabs,
+      `Add workspace settings tabs to WORKSPACE_SETTINGS_TABS: ${missingTabs.join(', ')}`,
+    ).toEqual([]);
   });
 
   it('task list and detail desktop routes share one workspace layout', async () => {

@@ -2,10 +2,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { claudeCodeExecutor, codexExecutor } from '../heteroCli';
 
-const detectMocks = vi.hoisted(() => ({ recordGitCommandEffects: vi.fn() }));
+const detectMocks = vi.hoisted(() => ({
+  recordGitCommandEffects: vi.fn(),
+  recordWorktreeEnter: vi.fn(),
+  recordWorktreeExit: vi.fn(),
+}));
 
 vi.mock('../worktreeDetection', () => ({
   recordGitCommandEffects: detectMocks.recordGitCommandEffects,
+  recordWorktreeEnter: detectMocks.recordWorktreeEnter,
+  recordWorktreeExit: detectMocks.recordWorktreeExit,
 }));
 
 const call = (over: Record<string, any> = {}) => ({
@@ -93,5 +99,60 @@ describe('heteroCli executors', () => {
       call({ params: { content: 'git worktree add /wt', file_path: 'a.md' } }),
     );
     expect(detectMocks.recordGitCommandEffects).not.toHaveBeenCalled();
+  });
+
+  describe("CC's native worktree tools", () => {
+    it('routes EnterWorktree to the enter recorder with the result message', async () => {
+      const content = 'Created worktree at /repo/wt. The session is now working in the worktree.';
+      await claudeCodeExecutor.onAfterCall!(
+        call({
+          apiName: 'EnterWorktree',
+          params: { name: 'wt' },
+          result: { content, success: true },
+        }),
+      );
+
+      expect(detectMocks.recordWorktreeEnter).toHaveBeenCalledWith({ content, topicId: 't1' });
+      // The worktree tools never shell out — no command sniffing.
+      expect(detectMocks.recordGitCommandEffects).not.toHaveBeenCalled();
+    });
+
+    it('routes ExitWorktree to the exit recorder', async () => {
+      const content = 'Exited and removed worktree at /repo/wt. Session is now back in /repo.';
+      await claudeCodeExecutor.onAfterCall!(
+        call({
+          apiName: 'ExitWorktree',
+          params: { action: 'remove' },
+          result: { content, success: true },
+        }),
+      );
+
+      expect(detectMocks.recordWorktreeExit).toHaveBeenCalledWith({ content, topicId: 't1' });
+    });
+
+    it('does NOT clear the worktree when ExitWorktree was refused', async () => {
+      // CC refuses to remove a dirty worktree — a validation failure, not an exit.
+      await claudeCodeExecutor.onAfterCall!(
+        call({
+          apiName: 'ExitWorktree',
+          params: { action: 'remove' },
+          result: { content: 'Worktree has 3 uncommitted files.', success: false },
+        }),
+      );
+
+      expect(detectMocks.recordWorktreeExit).not.toHaveBeenCalled();
+    });
+
+    it('ignores the worktree tools for Codex, which has none', async () => {
+      await codexExecutor.onAfterCall!(
+        call({
+          apiName: 'EnterWorktree',
+          identifier: 'codex',
+          result: { content: 'Created worktree at /repo/wt. The session is now…', success: true },
+        }),
+      );
+
+      expect(detectMocks.recordWorktreeEnter).not.toHaveBeenCalled();
+    });
   });
 });

@@ -1,19 +1,13 @@
 import { AGENT_CHAT_URL } from '@lobechat/const';
 import { AccordionItem, ActionIcon, Center, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx, keyframes } from 'antd-style';
-import {
-  FolderClosedIcon,
-  FolderOpenIcon,
-  HandIcon,
-  type LucideIcon,
-  PlusIcon,
-  TriangleAlertIcon,
-} from 'lucide-react';
+import { FolderClosedIcon, FolderOpenIcon, type LucideIcon, PlusIcon } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
+import { TOPIC_STATUS_VISUALS } from '@/components/ExecutionStatus';
 import RingLoadingIcon from '@/components/RingLoading';
 import { isDesktop } from '@/const/version';
 import { useCommitWorkingDirectory } from '@/features/ChatInput/ControlBar/useCommitWorkingDirectory';
@@ -154,13 +148,13 @@ const CollapsedStatusBadges = memo<{ counts: ProjectTopicStatusCounts }>(({ coun
     {
       className: styles.statusBadgeWaiting,
       count: counts.waitingForHuman,
-      icon: HandIcon,
+      icon: TOPIC_STATUS_VISUALS.waitingForHuman.icon,
       label: t('projectStatus.waitingForHuman', { count: counts.waitingForHuman }),
     },
     {
       className: styles.statusBadgeError,
       count: counts.failed,
-      icon: TriangleAlertIcon,
+      icon: TOPIC_STATUS_VISUALS.failed.icon,
       label: t('projectStatus.failed', { count: counts.failed }),
     },
   ].filter((item) => item.count > 0);

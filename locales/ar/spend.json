@@ -54,6 +54,7 @@
   "usageStats.cards.token": "الرمز",
   "usageStats.cards.tokenDesc": "الإدخال {{input}} · الإخراج {{output}}",
   "usageStats.chart.cacheWrite": "كتابة التخزين المؤقت",
+  "usageStats.chart.cachedInput": "الإدخال المخزن مؤقتًا",
   "usageStats.chart.input": "الإدخال",
   "usageStats.chart.output": "الإخراج",
   "usageStats.chart.spend": "التكلفة",

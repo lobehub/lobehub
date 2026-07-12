@@ -54,6 +54,7 @@
   "usageStats.cards.token": "Token",
   "usageStats.cards.tokenDesc": "Invoer {{input}} · Uitvoer {{output}}",
   "usageStats.chart.cacheWrite": "Cache schrijven",
+  "usageStats.chart.cachedInput": "Gecachte invoer",
   "usageStats.chart.input": "Invoer",
   "usageStats.chart.output": "Uitvoer",
   "usageStats.chart.spend": "Kosten",

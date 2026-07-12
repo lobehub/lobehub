@@ -127,6 +127,15 @@ export interface ToolExecutionContext {
   activatedSkills?: StepActivatedSkill[];
   /** Target device ID for device proxy tool calls */
   activeDeviceId?: string;
+  /**
+   * Principal pool `activeDeviceId` lives in. `personal` when a workspace run
+   * was routed to the caller's own device via a per-user `local` override —
+   * `resolveRunWorkspaceId` then addresses gateway calls through the personal
+   * `(userId, deviceId)` pool instead of the `workspace:<id>` pool, where that
+   * device has no connection. Absent on runs without a run-start device (a
+   * mid-run activation always picks from the workspace pool).
+   */
+  activeDeviceScope?: 'personal' | 'workspace';
   /** Agent ID executing the tool call */
   agentId?: string;
   /**

@@ -1,5 +1,11 @@
 import { REMOTE_HETEROGENEOUS_AGENT_CONFIGS } from '@lobechat/heterogeneous-agents';
-import type { DeviceChannel, DeviceListItem, DeviceScope, WorkingDirEntry } from '@lobechat/types';
+import type {
+  DeviceChannel,
+  DeviceListItem,
+  DeviceScope,
+  DeviceWorkspaceShare,
+  WorkingDirEntry,
+} from '@lobechat/types';
 import { deriveWorktreePath } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
@@ -10,7 +16,7 @@ import {
   wsCompatProcedure,
   wsProcedure,
 } from '@/business/server/trpc-middlewares/workspaceAuth';
-import { DeviceModel } from '@/database/models/device';
+import { DeviceModel, WorkspaceDevicePrivateConflictError } from '@/database/models/device';
 import { UserModel } from '@/database/models/user';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
@@ -18,7 +24,7 @@ import { signWorkspaceDeviceToken } from '@/libs/trpc/utils/internalJwt';
 import { type DeviceAttachment, deviceGateway } from '@/server/services/deviceGateway';
 
 import { preserveWorkspaceCache } from './deviceWorkingDirs';
-import { assertWorkspaceRootApproved } from './deviceWorkspaceGuard';
+import { assertWorkspaceDeviceVisible, assertWorkspaceRootApproved } from './deviceWorkspaceGuard';
 import { workingDirConfigSchema } from './workingDirSchema';
 
 // Derive the zod enum from the canonical config so new platforms are
@@ -60,13 +66,25 @@ const wsWritableProcedure = wsProcedure.use(requireWorkspaceRole('member'));
 // Workspace-aware (compat): with an `X-Workspace-Id` header the device list also
 // surfaces the workspace's shared devices; without it, the personal path is
 // unchanged (`ctx.workspaceId === undefined`).
+//
+// Every route below that takes a `deviceId` input also passes the workspace
+// visibility gate — see `assertWorkspaceDeviceVisible` for why filtering the
+// list paths alone is not enough.
 const deviceProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
   const wsId = ctx.workspaceId ?? undefined;
+  const deviceModel = new DeviceModel(ctx.serverDB, ctx.userId, wsId);
+
+  if (wsId) {
+    const raw = (await opts.getRawInput()) as { deviceId?: unknown } | undefined;
+    if (typeof raw?.deviceId === 'string') {
+      await assertWorkspaceDeviceVisible(deviceModel, raw.deviceId);
+    }
+  }
 
   return opts.next({
     ctx: {
-      deviceModel: new DeviceModel(ctx.serverDB, ctx.userId, wsId),
+      deviceModel,
       userId: ctx.userId,
       workspaceId: wsId,
     },
@@ -686,12 +704,40 @@ export const deviceRouter = router({
 
     // Personal devices resolve under the user principal; workspace devices under
     // the `workspace:<id>` principal (a separate gateway pool). Fetch both.
-    const [personalRows, workspaceRows, personalOnline, workspaceOnline] = await Promise.all([
+    // `hiddenWorkspaceIds` (other members' private enrollments) is needed because
+    // the gateway pool is visibility-blind: without it a private device would
+    // resurface below as an online "ghost".
+    const [
+      personalRows,
+      workspaceRows,
+      hiddenWorkspaceIds,
+      sharedRows,
+      personalOnline,
+      workspaceOnline,
+    ] = await Promise.all([
       ctx.deviceModel.queryPersonal(),
       wsId ? ctx.deviceModel.queryWorkspaceDevices() : Promise.resolve([]),
+      wsId ? ctx.deviceModel.queryWorkspaceHiddenDeviceIds() : Promise.resolve([]),
+      ctx.deviceModel.querySharedWorkspaceDevices(),
       deviceGateway.queryDeviceList(ctx.userId),
       wsId ? deviceGateway.queryDeviceList(ctx.userId, wsId) : Promise.resolve([]),
     ]);
+
+    // Shares the caller created from their personal device list, grouped by the
+    // source personal deviceId — attached to personal rows below so the list can
+    // render "shared to N workspaces" and revoke individual shares.
+    const sharesByPersonalId = new Map<string, DeviceWorkspaceShare[]>();
+    for (const s of sharedRows) {
+      if (!s.sharedFromDeviceId || !s.workspaceId) continue;
+      const list = sharesByPersonalId.get(s.sharedFromDeviceId) ?? [];
+      list.push({
+        deviceId: s.deviceId,
+        visibility: s.visibility,
+        workspaceId: s.workspaceId,
+        workspaceName: s.workspaceName ?? null,
+      });
+      sharesByPersonalId.set(s.sharedFromDeviceId, list);
+    }
 
     // Resolve display info for every enroller in a single roundtrip, so each
     // row can ship a self-contained `enroller` for the picker / settings UI.
@@ -740,9 +786,16 @@ export const deviceRouter = router({
       rows: Awaited<ReturnType<typeof ctx.deviceModel.queryPersonal>>,
       onlineList: DeviceAttachment[],
       scope: DeviceScope,
+      hiddenIds: string[] = [],
     ): DeviceListItem[] => {
+      const hidden = new Set(hiddenIds);
       const channelsByDevice = new Map<string, DeviceChannel[]>();
-      for (const conn of onlineList) channelsByDevice.set(conn.deviceId, toChannels(conn));
+      for (const conn of onlineList) {
+        // Another member's private device: online in the workspace gateway pool
+        // but not visible to the caller — must not leak as a ghost row.
+        if (hidden.has(conn.deviceId)) continue;
+        channelsByDevice.set(conn.deviceId, toChannels(conn));
+      }
 
       const seen = new Set<string>();
       const fromDb = rows.map((d): DeviceListItem => {
@@ -773,6 +826,16 @@ export const deviceRouter = router({
           platform: d.platform ?? live?.platform ?? null,
           registered: true,
           scope,
+          // Workspace rows only: member-shared (via the personal share flow)
+          // vs directly enrolled — drives the "Shared by {name}" tag.
+          sharedFromPersonal: scope === 'workspace' ? !!d.sharedFromDeviceId : undefined,
+          // Personal rows only: the workspaces this machine was shared into
+          // from the personal list (undefined for workspace rows and machines
+          // never shared).
+          sharedWorkspaces: scope === 'personal' ? sharesByPersonalId.get(d.deviceId) : undefined,
+          // Personal rows have no workspace-visibility dimension; the column's
+          // default is meaningless there, so normalise to null.
+          visibility: scope === 'workspace' ? d.visibility : null,
           // Strip the heavy `workspace` scan (AGENTS.md + project skills, up to
           // ~30KB per dir) from the list payload. It's a server-owned cache for
           // the agent runtime (restored from the DB row on run start, never from
@@ -800,6 +863,7 @@ export const deviceRouter = router({
           platform: channels[0]?.platform ?? null,
           registered: false,
           scope,
+          visibility: null,
           workingDirs: [] as WorkingDirEntry[],
         }));
 
@@ -808,7 +872,7 @@ export const deviceRouter = router({
 
     return [
       ...buildItems(personalRows, personalOnline, 'personal'),
-      ...buildItems(workspaceRows, workspaceOnline, 'workspace'),
+      ...buildItems(workspaceRows, workspaceOnline, 'workspace', hiddenWorkspaceIds),
     ];
   }),
 
@@ -845,11 +909,222 @@ export const deviceRouter = router({
         hostname: z.string().nullish(),
         identitySource: z.enum(['machine-id', 'fallback']),
         platform: z.string().max(20).nullish(),
+        // 'private' enrolls the device for the calling member only (settings
+        // page "Private" tab / `lh connect --workspace <id> --private`);
+        // defaults to the shared pool. Preserved on re-enroll — see
+        // `DeviceModel.registerWorkspaceDevice`.
+        visibility: z.enum(['private', 'public']).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
       const model = new DeviceModel(ctx.serverDB, ctx.userId, ctx.workspaceId);
-      return model.registerWorkspaceDevice({ ...input, workspaceId: ctx.workspaceId });
+      try {
+        return await model.registerWorkspaceDevice({ ...input, workspaceId: ctx.workspaceId });
+      } catch (error) {
+        if (error instanceof WorkspaceDevicePrivateConflictError) {
+          throw new TRPCError({ code: 'CONFLICT', message: error.message });
+        }
+        throw error;
+      }
+    }),
+
+  /**
+   * Share one of the caller's PERSONAL devices into the current workspace
+   * without touching the machine: dispatch an `enrollWorkspace` RPC over the
+   * device's live personal connection (it derives its workspace-scoped
+   * deviceId and opens a second gateway connection with the minted token),
+   * then register the workspace row here — linked back to the personal device
+   * via `sharedFromDeviceId` so the personal list can render and revoke the
+   * share. Requires the device to be ONLINE; an offline device fails with
+   * PRECONDITION_FAILED and the UI keeps its share action disabled.
+   *
+   * Same write gate as enrolling on the machine (`wsWritableProcedure`:
+   * member+, viewers blocked). Visibility defaults to 'private' — see
+   * `DeviceModel.registerWorkspaceDevice`.
+   *
+   * The machine may ALREADY be enrolled in this workspace (e.g. via
+   * `lh connect --workspace`, which the personal share map can't link to).
+   * Silently upserting would discard the caller's explicit visibility choice
+   * (the conflict branch preserves the existing value), so instead the first
+   * call reports `alreadyEnrolled` without writing; a `confirmOverwrite`
+   * retry applies the requested visibility and links the row back to the
+   * personal device.
+   */
+  shareDeviceToWorkspace: wsWritableProcedure
+    .use(serverDatabase)
+    .input(
+      z.object({
+        confirmOverwrite: z.boolean().optional(),
+        deviceId: z.string().min(1).max(64),
+        visibility: z.enum(['private', 'public']).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const model = new DeviceModel(ctx.serverDB, ctx.userId, ctx.workspaceId);
+      const personal = await model.findByDeviceId(input.deviceId);
+      // findByDeviceId is (userId, deviceId)-scoped; exclude workspace rows the
+      // caller enrolled so only true personal devices are shareable.
+      if (!personal || personal.workspaceId) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Personal device not found.' });
+      }
+
+      const token = await signWorkspaceDeviceToken(ctx.workspaceId);
+      // Identity-only probe: learn the machine's workspace deviceId WITHOUT the
+      // device opening or persisting a share connection, so backing out of the
+      // overwrite confirmation leaves the device untouched. Older clients
+      // ignore the flag and enroll here — that degrades to the pre-flag
+      // behaviour, never worse.
+      const probe = await deviceGateway.enrollWorkspace({
+        deviceId: personal.deviceId,
+        identityOnly: true,
+        token,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
+      if (!probe.success || !probe.identity) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: probe.error ?? 'Device is offline or does not support workspace sharing.',
+        });
+      }
+
+      // Fail a cross-user PRIVATE collision NOW, before the machine opens and
+      // persists a workspace share connection — rejecting only at the later
+      // row write would leave the device connected (and auto-reconnecting)
+      // under the very id the rejection protects.
+      try {
+        await model.assertNoCrossUserPrivateConflict(probe.identity.deviceId);
+      } catch (error) {
+        if (error instanceof WorkspaceDevicePrivateConflictError) {
+          throw new TRPCError({ code: 'CONFLICT', message: error.message });
+        }
+        throw error;
+      }
+
+      // Caller-invisible rows (another member's private enrollment) were
+      // rejected above, so an undefined here really means "no row yet".
+      const existing = await model.findWorkspaceDeviceById(probe.identity.deviceId);
+      if (existing) {
+        if (!input.confirmOverwrite) {
+          return {
+            alreadyEnrolled: true as const,
+            deviceId: existing.deviceId,
+            success: false as const,
+            visibility: existing.visibility,
+          };
+        }
+        const role = (ctx as { workspaceRole?: WorkspaceRole }).workspaceRole;
+        if (!canEditWorkspaceDevice(role, ctx.userId, existing.userId)) {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: 'Only the enrolling member or a workspace owner can overwrite this device.',
+          });
+        }
+      }
+
+      // Real enrollment — only after the caller is committed (no pending
+      // confirmation and permission checks passed).
+      const result = await deviceGateway.enrollWorkspace({
+        deviceId: personal.deviceId,
+        token,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
+      if (!result.success || !result.identity) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: result.error ?? 'Device is offline or does not support workspace sharing.',
+        });
+      }
+
+      if (existing) {
+        const row = await model.overwriteSharedWorkspaceDevice(existing.deviceId, {
+          sharedFromDeviceId: personal.deviceId,
+          visibility: input.visibility ?? 'private',
+        });
+        if (personal.friendlyName && !row?.friendlyName) {
+          await model.updateWorkspaceDevice(existing.deviceId, {
+            friendlyName: personal.friendlyName,
+          });
+        }
+        return {
+          deviceId: existing.deviceId,
+          success: true as const,
+          visibility: row?.visibility ?? input.visibility ?? 'private',
+        };
+      }
+
+      let row;
+      try {
+        row = await model.registerWorkspaceDevice({
+          deviceId: result.identity.deviceId,
+          hostname: personal.hostname,
+          identitySource: result.identity.identitySource,
+          platform: personal.platform,
+          sharedFromDeviceId: personal.deviceId,
+          visibility: input.visibility,
+          workspaceId: ctx.workspaceId,
+        });
+      } catch (error) {
+        // The machine has already opened and persisted a share connection
+        // above, and this (private-by-default) row is what hides it from other
+        // members — on ANY write failure (conflict race, transient DB error),
+        // best-effort roll the connection back so it doesn't linger as an
+        // unregistered workspace ghost, then surface the original error.
+        await deviceGateway.unenrollWorkspace({
+          deviceId: result.identity.deviceId,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        });
+        if (error instanceof WorkspaceDevicePrivateConflictError) {
+          throw new TRPCError({ code: 'CONFLICT', message: error.message });
+        }
+        throw error;
+      }
+      // Carry the personal alias over on first share so the workspace list shows
+      // the machine under the name its owner gave it; never clobber a name a
+      // re-share conflict-preserved.
+      if (personal.friendlyName && !row.friendlyName) {
+        await model.updateWorkspaceDevice(row.deviceId, { friendlyName: personal.friendlyName });
+      }
+
+      return { deviceId: row.deviceId, success: true as const, visibility: row.visibility };
+    }),
+
+  /**
+   * Publish a private workspace device to the shared pool, or pull a public one
+   * back to private. Mirrors the agent/file `setVisibility` contract:
+   *   - the enrolling member may toggle their own device both ways;
+   *   - a workspace owner may demote any *visible* (public) device — other
+   *     members' private devices are invisible to owners by design (the lookup
+   *     below already fails closed with NOT_FOUND), so publishing someone
+   *     else's private device is impossible.
+   */
+  setWorkspaceDeviceVisibility: wsWritableProcedure
+    .use(serverDatabase)
+    .input(
+      z.object({
+        deviceId: z.string(),
+        visibility: z.enum(['private', 'public']),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const model = new DeviceModel(ctx.serverDB, ctx.userId, ctx.workspaceId);
+      const row = await model.findWorkspaceDeviceById(input.deviceId);
+      if (!row) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Workspace device not found.' });
+      }
+      if (row.visibility === input.visibility) return { success: true };
+      const role = (ctx as { workspaceRole?: WorkspaceRole }).workspaceRole;
+      if (!canEditWorkspaceDevice(role, ctx.userId, row.userId)) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message:
+            'Only the enrolling member or a workspace owner can change this device visibility.',
+        });
+      }
+      await model.setWorkspaceDeviceVisibility(input.deviceId, input.visibility);
+      return { success: true };
     }),
 
   /**
@@ -909,6 +1184,32 @@ export const deviceRouter = router({
           code: 'FORBIDDEN',
           message: 'Only the enrolling member or a workspace owner can remove this device.',
         });
+      }
+      // Tell a live device to drop its workspace connection and stop
+      // auto-reconnecting, so removal doesn't leave an online ghost. For most
+      // rows this stays best-effort — an offline device simply stops resolving.
+      const unenrolled = await deviceGateway.unenrollWorkspace({
+        deviceId: input.deviceId,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
+      // But never delete the row under a still-live socket that did not
+      // acknowledge the unenroll (old client without the handler, RPC error):
+      // for a PRIVATE row that would resurface the machine to other members
+      // (the row is the only thing `queryWorkspaceHiddenDeviceIds` hides it
+      // by), and for ANY row it leaves an unregistered ghost that members can
+      // still dispatch to yet can no longer remove — there is no row left to
+      // delete. Fail the removal while the socket is demonstrably alive; a
+      // dead socket can't ghost, so an offline device still deletes fine.
+      if (!unenrolled.success) {
+        const online = await deviceGateway.queryDeviceList(ctx.userId, ctx.workspaceId);
+        if (online.some((d) => d.deviceId === input.deviceId)) {
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message:
+              'The device is still connected but did not acknowledge the unenroll — retry once it has disconnected or updated its client.',
+          });
+        }
       }
       await model.deleteWorkspaceDevice(input.deviceId);
       return { success: true };

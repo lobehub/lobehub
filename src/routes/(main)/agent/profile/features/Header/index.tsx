@@ -18,7 +18,7 @@ import { useTranslation } from 'react-i18next';
 import { useAgentTransferMenuItem } from '@/business/client/hooks/useAgentTransferMenuItem';
 import { useBusinessAgentImportMenuItem } from '@/business/client/hooks/useBusinessAgentImportMenuItem';
 import { message } from '@/components/AntdStaticMethods';
-import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
+import { CONVERSATION_MIN_WIDTH, DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
 import NavHeader from '@/features/NavHeader';
 import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton';
@@ -36,7 +36,6 @@ import { selectors as profileSelectors, useProfileStore } from '../store';
 import AgentForkTag from './AgentForkTag';
 import AgentStatusTag from './AgentStatusTag';
 import AgentVersionReviewTag from './AgentVersionReviewTag';
-import AutoSaveHint from './AutoSaveHint';
 
 type HeaderTranslation = TFunction<
   readonly ['setting', 'chat', 'file', 'common', 'spend'],
@@ -247,13 +246,11 @@ const Header = memo(() => {
 
   return (
     <NavHeader
-      styles={{ left: { paddingInlineStart: 24 } }}
       left={
         <Flexbox horizontal align={'center'} gap={8}>
           {activeAgentId && (
             <AgentBreadcrumb agentId={activeAgentId} title={t('tab.profile', { ns: 'chat' })} />
           )}
-          <AutoSaveHint />
           <AgentStatusTag />
           <AgentVersionReviewTag />
           <AgentForkTag />
@@ -274,6 +271,11 @@ const Header = memo(() => {
           )}
         </Flexbox>
       }
+      styles={{
+        left: {
+          paddingInlineStart: `max(8px, calc((100% - ${CONVERSATION_MIN_WIDTH}px) / 2 + 16px))`,
+        },
+      }}
     />
   );
 });

@@ -48,23 +48,27 @@ const Page = memo(() => {
 
   const [
     isPreferenceInit,
-    enableAgentDocumentFloatingChatPanel,
+    enableAgentGraphConfig,
     enableInputMarkdown,
     enablePlatformAgent,
     enableImessage,
     enableFleet,
+    enableClaudeCodeSdk,
     enableFoldFinishedTurn,
     enableMessageTextSelectionActions,
+    enableInAppBrowser,
     updateLab,
   ] = useUserStore((s) => [
     preferenceSelectors.isPreferenceInit(s),
-    labPreferSelectors.enableAgentDocumentFloatingChatPanel(s),
+    labPreferSelectors.enableAgentGraphConfig(s),
     labPreferSelectors.enableInputMarkdown(s),
     labPreferSelectors.enablePlatformAgent(s),
     labPreferSelectors.enableImessage(s),
     labPreferSelectors.enableFleet(s),
+    labPreferSelectors.enableClaudeCodeSdk(s),
     labPreferSelectors.enableFoldFinishedTurn(s),
     labPreferSelectors.enableMessageTextSelectionActions(s),
+    labPreferSelectors.enableInAppBrowser(s),
     s.updateLab,
   ]);
 
@@ -162,16 +166,16 @@ const Page = memo(() => {
     {
       children: (
         <Switch
-          checked={enableAgentDocumentFloatingChatPanel}
+          checked={enableAgentGraphConfig}
           loading={!isPreferenceInit}
-          onChange={(checked) => updateLab({ enableAgentDocumentFloatingChatPanel: checked })}
+          onChange={(checked: boolean) => updateLab({ enableAgentGraphConfig: checked })}
         />
       ),
       className: styles.labItem,
-      desc: tLabs('features.agentDocumentFloatingChatPanel.desc'),
-      label: tLabs('features.agentDocumentFloatingChatPanel.title'),
+      desc: tLabs('features.agentGraphConfig.desc'),
+      label: tLabs('features.agentGraphConfig.title'),
       minWidth: undefined,
-    },
+    } satisfies FormItemProps,
     {
       children: (
         <Switch
@@ -239,6 +243,19 @@ const Page = memo(() => {
             label: tLabs('features.fleet.title'),
             minWidth: undefined,
           } satisfies FormItemProps,
+          {
+            children: (
+              <Switch
+                checked={enableClaudeCodeSdk}
+                loading={!isPreferenceInit}
+                onChange={(checked: boolean) => updateLab({ enableClaudeCodeSdk: checked })}
+              />
+            ),
+            className: styles.labItem,
+            desc: tLabs('features.claudeCodeSdk.desc'),
+            label: tLabs('features.claudeCodeSdk.title'),
+            minWidth: undefined,
+          } satisfies FormItemProps,
         ]
       : []),
     ...(hasGatewayUrl
@@ -254,6 +271,24 @@ const Page = memo(() => {
             className: styles.labItem,
             desc: tLabs('features.platformAgent.desc'),
             label: tLabs('features.platformAgent.title'),
+            minWidth: undefined,
+          } satisfies FormItemProps,
+        ]
+      : []),
+    // The in-app browser rides on the Electron <webview> tag — desktop only.
+    ...(isDesktop
+      ? [
+          {
+            children: (
+              <Switch
+                checked={enableInAppBrowser}
+                loading={!isPreferenceInit}
+                onChange={(checked: boolean) => updateLab({ enableInAppBrowser: checked })}
+              />
+            ),
+            className: styles.labItem,
+            desc: tLabs('features.inAppBrowser.desc'),
+            label: tLabs('features.inAppBrowser.title'),
             minWidth: undefined,
           } satisfies FormItemProps,
         ]

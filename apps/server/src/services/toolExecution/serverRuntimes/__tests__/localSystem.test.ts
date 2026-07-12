@@ -143,6 +143,35 @@ describe('localSystemRuntime', () => {
       );
     });
 
+    it('addresses a personal-scope active device via the personal pool even in a workspace run', async () => {
+      // Workspace agent + per-user `local` override (LOBE-11689): the routed
+      // device only has a connection under the personal principal, so the
+      // workspace id must NOT be forwarded to the gateway call.
+      const context: ToolExecutionContext = {
+        activeDeviceId: 'device-personal',
+        activeDeviceScope: 'personal',
+        toolManifestMap: {},
+        userId: 'user-1',
+        workspaceId: 'ws-42',
+      };
+
+      mockExecuteToolCall.mockResolvedValue({ content: '', success: true });
+
+      const proxy = localSystemRuntime.factory(context);
+      const apiName = LocalSystemManifest.api[0].name;
+
+      await proxy[apiName]({ path: '/tmp' });
+
+      expect(mockExecuteToolCall).toHaveBeenCalledWith(
+        { deviceId: 'device-personal', userId: 'user-1', workspaceId: undefined },
+        expect.objectContaining({
+          apiName,
+          identifier: LocalSystemIdentifier,
+        }),
+        undefined,
+      );
+    });
+
     it('recovers the workspace scope from the running agent when context.workspaceId is missing', async () => {
       // Minimal drizzle-like chain resolving the agent's workspace_id.
       const serverDB = {

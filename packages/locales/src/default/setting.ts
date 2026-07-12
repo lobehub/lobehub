@@ -189,6 +189,7 @@ export default {
   'agentSkillModal.url.title': 'Import from URL',
   'agentSkillModal.url.urlPlaceholder': 'https://example.com/path/to/SKILL.md',
   'agentSkillTag': 'Agent Skill',
+  'agentTab.graph': 'Graph Runtime',
   'agentTab.opening': 'Opening Settings',
   'agentTab.plugin': 'Skill Settings',
   'agentTab.prompt': 'Agent Profile',
@@ -348,6 +349,7 @@ export default {
   'creds.view.values': 'Credential Values',
   'creds.view.warning': 'These values are sensitive. Do not share them with others.',
   'devices.actions.edit': 'Edit',
+  'devices.actions.refresh': 'Refresh',
   'devices.actions.remove': 'Remove',
   'devices.actions.removeSelected': 'Remove ({{count}})',
   'devices.channel.connected': 'Connected {{time}}',
@@ -422,10 +424,57 @@ export default {
     "This includes the device you're using right now — removing it disconnects your current session.",
   'devices.selection.selected': '{{count}} selected',
   'devices.selection.total': '{{count}} devices',
+  'devices.share.alreadyShared': 'Shared',
+  'devices.share.badge': 'Shared to {{count}} workspaces',
+  'devices.share.confirm': 'Share',
+  'devices.share.detailLabel': 'Shared to workspaces',
+  'devices.share.done': 'Done',
+  'devices.share.empty': "You haven't joined any workspace yet.",
+  'devices.share.goToTarget': 'Go to {{name}}',
+  'devices.share.menu': 'Share to Workspace…',
+  'devices.share.modalDesc':
+    'Pick a workspace to share this device into. Members can dispatch agent runs to it while it stays online.',
+  'devices.share.modalTitle': 'Share Device to Workspace',
+  'devices.share.offlineDesc': 'The device must be online to share',
+  'devices.share.overwriteConfirmDesc':
+    'This machine is already enrolled in this workspace with {{current}} access. Continue to change it to {{next}} and link it to this device.',
+  'devices.share.overwriteConfirmOk': 'Overwrite',
+  'devices.share.overwriteConfirmTitle': 'Already in {{name}} — overwrite?',
+  'devices.share.revoke': 'Unshare',
+  'devices.share.revokeConfirmDesc':
+    'This removes the device from that workspace. Members can no longer dispatch runs to it; you can share it again anytime.',
+  'devices.share.revokeConfirmTitle': 'Unshare from {{name}}?',
+  'devices.share.selectPlaceholder': 'Select a workspace',
+  'devices.share.sharedByTag': 'Shared by {{name}}',
+  'devices.share.success': 'Device shared to {{name}}',
+  'devices.share.targetLabel': 'Share to',
+  'devices.share.viewerHint': 'Viewers cannot share devices',
+  'devices.share.visibilityTag.private': 'Private',
+  'devices.share.visibilityTag.public': 'Workspace',
   'devices.status.offline': 'Offline',
   'devices.status.online': 'Online',
   'devices.title': 'My Devices',
+  'devices.visibility.publish': 'Publish to Workspace',
+  'devices.visibility.publishConfirmTitle': 'Publish this device to the workspace?',
+  'devices.visibilityTabs.private': 'Private',
+  'devices.visibilityTabs.workspace': 'Workspace',
   'devices.workingDirectory': 'Working dir: {{path}}',
+  'downloads.desktop.cta': 'Download desktop app',
+  'downloads.desktop.desc':
+    'Use the native desktop app for local files, system tools, and focused work on your computer.',
+  'downloads.desktop.title': 'Desktop App',
+  'downloads.messenger.cta': 'Open Messenger settings',
+  'downloads.messenger.desc':
+    'Connect LobeHub to the messaging platforms you already use, with quick setup or your own bot configuration.',
+  'downloads.messenger.quickSetup': 'Quick setup',
+  'downloads.messenger.quickSetupTooltip':
+    'You can chat with the official LobeHub account on this platform or manually set up your own.',
+  'downloads.messenger.title': 'Messenger integration',
+  'downloads.mobile.cta': 'Get Mobile App',
+  'downloads.mobile.desc':
+    'Start conversations from your phone and keep LobeHub available when you are away from the desk.',
+  'downloads.mobile.title': 'Mobile App',
+  'downloads.title': 'Discover more ways to use LobeHub',
   'checkingPermissions': 'Checking permissions...',
   'danger.reset.action': 'Reset Now',
   'danger.reset.confirm': 'Reset all settings?',
@@ -847,6 +896,19 @@ export default {
   'settingOpening.openingQuestions.title': 'Opening Questions',
   'settingOpening.title': 'Opening Settings',
   'settingPlugin.title': 'Skill List',
+  'settingGraphRuntime.enabled.desc':
+    'Route this agent through the graph runtime using the snapshot stored below.',
+  'settingGraphRuntime.enabled.title': 'Enable Graph Runtime',
+  'settingGraphRuntime.snapshot.desc':
+    'Paste the complete ReasoningGraph JSON snapshot. It is stored with this agent and used directly at runtime.',
+  'settingGraphRuntime.snapshot.placeholder':
+    'Paste a ReasoningGraph JSON snapshot, for example: {"name":"...","nodes":{...},"terminal":"...","edges":[]}',
+  'settingGraphRuntime.snapshot.title': 'Graph Snapshot',
+  'settingGraphRuntime.validation.invalidGraph': 'Invalid graph snapshot: {{error}}',
+  'settingGraphRuntime.validation.invalidJson': 'Graph snapshot must be valid JSON.',
+  'settingGraphRuntime.validation.required':
+    'A graph snapshot is required before enabling graph runtime.',
+  'settingGraphRuntime.validation.unknown': 'Unknown graph validation error',
   'settingSelfIteration.enabled.desc':
     'Allow this assistant to review recent signals and improve its own skills when the self-iteration workflow runs.',
   'settingSelfIteration.enabled.managedDesc':
@@ -1163,6 +1225,7 @@ When I am ___, I need ___
   'tab.appearance': 'Appearance',
   'tab.chatAppearance': 'Chat Appearance',
   'tab.common': 'Appearance',
+  'tab.connector': 'Connectors',
   'tab.creds': 'Credentials',
   'tab.devices': 'Devices',
   'tab.experiment': 'Experiment',
@@ -2669,7 +2732,10 @@ When I am ___, I need ___
   'workspaceSetting.devices.enrollTitle': 'Add a device',
   'workspaceSetting.devices.heroDesc':
     'Enroll a shared machine — a build server or a team Mac — and every member can run agents on it: read/write files, run commands, and call system tools.',
+  'workspaceSetting.devices.heroDescPrivate':
+    "Enroll a machine for your own use in this workspace — other members can't see or use it. Run agents on it: read/write files, run commands, and call system tools.",
   'workspaceSetting.devices.heroTitle': 'Connect your first workspace device',
+  'workspaceSetting.devices.heroTitlePrivate': 'Connect your first private device',
   'workspaceSetting.devices.offline': 'Offline',
   'workspaceSetting.devices.online': 'Online',
   'workspaceSetting.devices.readonlyHint':
@@ -2688,10 +2754,14 @@ When I am ___, I need ___
   'workspaceSetting.storage.telemetry.desc':
     'Help us improve {{appName}} with anonymous workspace usage data',
   'workspaceSetting.storage.telemetry.title': 'Send Anonymous Workspace Usage Data',
+  'workspaceSetting.tab.connector': 'Connectors',
   'workspaceSetting.tab.skill': 'Skills',
   'tools.add': 'Add Skill',
   'tools.addSkillOrConnector': 'Add Skills / Connectors',
   'tools.noConfigurablePermissions': 'This skill does not expose configurable tool permissions.',
+  'tools.legacyConnector.configure': 'Configure',
+  'tools.legacyConnector.upgradeDesc':
+    'This connector still uses the legacy plugin format. Configure it to finish upgrading, then manage its tool permissions here.',
   'tools.builtins.groupName': 'Built-ins',
   'tools.builtins.install': 'Install',
   'tools.builtins.installed': 'Installed',

@@ -170,6 +170,11 @@ const DevModal = memo<DevModalProps>(
           push={false}
           title={t(isEditMode ? 'dev.title.skillSettings' : 'dev.title.create')}
           width={mobile ? '100%' : 800}
+          // Sit above @lobehub/ui's base-ui floating layer (Popover/Dropdown/Tooltip = 1100).
+          // antd Drawer defaults to ~1000, so a config panel opened from the Tools skill
+          // popover would otherwise mount *behind* the still-open popover and look like it
+          // "didn't open". 1200 = the base-ui modal tier.
+          zIndex={1200}
           styles={{
             body: {
               padding: 0,

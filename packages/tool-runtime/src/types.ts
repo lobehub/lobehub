@@ -114,6 +114,21 @@ export interface ListFilesState {
   totalCount?: number;
 }
 
+/**
+ * An image produced by a tool result — always an already-uploaded reference
+ * (the producer uploads to file storage before emitting; raw base64 must
+ * never reach the DB). Same shape as the hetero
+ * `HeterogeneousToolResultImage` post-upload.
+ */
+export interface ToolResultImage {
+  /** File record id in the file store. */
+  fileId?: string;
+  /** MIME type, e.g. `image/png`. */
+  mediaType: string;
+  /** Durable, fetchable URL. */
+  url: string;
+}
+
 export interface ReadFileState {
   /** Character count of the returned content */
   charCount?: number;
@@ -123,6 +138,13 @@ export interface ReadFileState {
   filename?: string;
   /** Detected file type (e.g., 'ts', 'md', 'json') */
   fileType?: string;
+  /**
+   * Images produced by reading an image file. Carried in `pluginState.images`
+   * on the tool message; the MessageContent tool-message processor turns each
+   * into an `image_url` part so vision-capable models can actually inspect the
+   * file the agent read. Empty/absent for text files.
+   */
+  images?: ToolResultImage[];
   /** Line range as tuple [start, end] */
   loc?: [number, number];
   path: string;

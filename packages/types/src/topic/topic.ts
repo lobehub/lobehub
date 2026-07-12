@@ -142,6 +142,15 @@ export interface ChatTopicMetadata {
    * readers; this map lets the UI restore the right id when switching back.
    */
   heteroSessionIdByWorkingDirectory?: Record<string, string>;
+  /**
+   * For topics imported from local CLI transcripts: the source transcript's
+   * last message timestamp at import time. The import picker compares it with
+   * a fresh scan's endAt to detect "the transcript grew since last import"
+   * (message counts are not comparable across transcript records and DB rows).
+   */
+  heteroSourceEndAt?: string;
+  /** origin marker for imported topics, e.g. `claude-code-local` / `codex-local` */
+  importedFrom?: string;
   model?: string;
   /**
    * Free-form feedback collected after agent onboarding completion.

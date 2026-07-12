@@ -65,7 +65,10 @@ export class PluginTypesActionImpl {
     }
 
     if (effectiveSource === 'composio') {
-      return await this.#get().invokeComposioTypePlugin(id, { ...payload, source: effectiveSource });
+      return await this.#get().invokeComposioTypePlugin(id, {
+        ...payload,
+        source: effectiveSource,
+      });
     }
 
     if (effectiveSource === 'lobehubSkill') {

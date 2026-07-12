@@ -59,6 +59,35 @@ describe('localDataCache', () => {
     expect(await localDataCache.get(key)).toBeUndefined();
   });
 
+  it('atomically puts replacement rows before deleting their sources', async () => {
+    const sourceKey = buildLocalDataKey(scope, 'source');
+    const targetKey = buildLocalDataKey(scope, 'target');
+    await localDataCache.set(sourceKey, { value: 'legacy' }, '1.0.0');
+
+    await localDataCache.applyBatch({
+      deleteKeys: [sourceKey],
+      putEntries: [
+        {
+          data: { value: 'canonical' },
+          key: targetKey,
+          updatedAt: 123,
+          version: '1.0.0',
+        },
+      ],
+    });
+
+    expect(await localDataCache.get(sourceKey)).toBeUndefined();
+    expect(await localDataCache.get(targetKey)).toEqual({ value: 'canonical' });
+    expect(await localDataCache.entriesByScope(scope)).toEqual([
+      {
+        data: { value: 'canonical' },
+        key: 'target',
+        updatedAt: 123,
+        version: '1.0.0',
+      },
+    ]);
+  });
+
   it('clearScope removes only the given scope', async () => {
     const otherScope = 'user-other:personal';
     const keyA = buildLocalDataKey(scope, 'a');

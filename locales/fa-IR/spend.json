@@ -54,6 +54,7 @@
   "usageStats.cards.token": "توکن",
   "usageStats.cards.tokenDesc": "ورودی {{input}} · خروجی {{output}}",
   "usageStats.chart.cacheWrite": "نوشتن در کش",
+  "usageStats.chart.cachedInput": "ورودی ذخیره‌شده",
   "usageStats.chart.input": "ورودی",
   "usageStats.chart.output": "خروجی",
   "usageStats.chart.spend": "هزینه",

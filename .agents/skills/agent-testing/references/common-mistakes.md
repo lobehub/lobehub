@@ -7,6 +7,24 @@
 
 ---
 
+## Case 18 — Treating a status badge as proof that the error message rendered
+
+**Wrong approach**: marking an error-state UI case as passed because the platform page showed
+the `Failed` badge, while the screenshot only contained an unrelated configuration reminder
+and did not show the error alert or its translated message.
+
+**Why it's wrong**: the badge proves only that a failed runtime state reached the page. It does
+not prove that `errorCode` was translated and presented to the user, which is the core assertion
+of an error-message verification.
+
+**What it breaks**: a report can claim that users receive an actionable explanation while its
+visual evidence shows no explanation at all.
+
+**Correct approach**: for an error-presentation case, visually require all three signals in the
+same screenshot: the target platform, the failed status, and the error alert containing the
+expected user-facing message. Any unrelated warning or setup reminder does not satisfy the
+error-message assertion.
+
 ## Case 1 — Judging `passed` from heuristics instead of looking at the screenshot
 
 **Wrong approach**: after navigating to a surface, deciding "renders fine /
@@ -208,6 +226,39 @@ it by opening the PNG, and publish the `/verify` report. Only surface a
 plan-approval question when the _product decision_ is ambiguous (what to test),
 never for _environment mechanics_ (how to render it). Env obstacles are the
 skill's job to solve and then iterate back into these logs.
+
+---
+
+## Case 8b — Handing the user the sign-in click when the app under test is signed out
+
+**Wrong approach**: an isolated Electron instance came up signed out (its userData had been wiped by an
+earlier `electron-dev.sh stop`, and the golden profile's refresh token was rejected → `invalid_grant`), so
+the run stopped and offered the user a choice: "I click Sign in and you authorize in the browser" vs
+"skip the screenshot".
+
+**Why it's wrong**: this is Case 8 wearing a different hat. `auth.md` says "Electron: log in once manually
+in the app" — that line is addressed to the **agent**, not the user. Auth is environment mechanics, and the
+standing rule is that the skill owns those end to end. The user's words: " 你以后都自己点 sign in 授权，不应
+该让我操作 ".
+
+**What it breaks**: burns a round on a question the user doesn't want, and stalls a UI-touching change
+(Case 9 / Case 10) one click short of its screenshot.
+
+**Correct approach**: drive the sign-in yourself — click the app's own "Sign in" entry, follow the OAuth
+flow in the browser it opens, and get back into the app. Only escalate when a step genuinely needs
+something you cannot supply (a 2FA push on their phone), and then name the exact blocking step instead of
+offering to drop the evidence.
+
+**What this run changed**: `electron-dev.sh stop <id>` used to delete the instance's userData and its login
+with it, so every run re-entered the sign-in flow. It now snapshots the login into
+`~/.lobehub/agent-testing/electron-login` first, and `start` seeds new instances from that snapshot
+(`login-status` shows the source + expiry; `save-login <id>` captures a live instance before anything
+risky, since a _killed_ instance loses its rotated refresh token).
+
+**Corollary**: never assume a profile is signed in because it exists — probe for a real signed-in state
+(`user().user?.id`, or a cheap authed mutation) before building a fixture on top of it. A rendered sidebar
+is not proof: the signed-out onboarding screen has text too, so `innerText.length > 50` passes while
+`createAgent` returns `UNAUTHORIZED`.
 
 ---
 

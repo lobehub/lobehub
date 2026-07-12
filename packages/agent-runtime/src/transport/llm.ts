@@ -1,11 +1,16 @@
-import type { ModelUsage, OpenAIChatMessage } from '@lobechat/types';
-
 import type {
-  AgentInstructionCallLlm,
-  AgentState,
-  CallLLMPayload,
-  InstructionExecutor,
-} from '../types';
+  ChatImageItem,
+  ChatToolPayload,
+  GroundingSearch,
+  MessageToolCall,
+  ModelPerformance,
+  ModelUsage,
+  OpenAIChatMessage,
+} from '@lobechat/types';
+
+import type { AgentEvent, AgentState, CallLLMPayload } from '../types';
+import type { ClassifiedLLMError } from '../utils';
+import type { ContextBuildOutput } from './context';
 import type { RuntimeMessageRef } from './message';
 
 export interface LLMStreamPayload {
@@ -38,14 +43,81 @@ export interface LLMStreamHandlers {
   onText?: (text: string) => void;
 }
 
-export interface LLMCallExecuteInput {
-  assistantMessage: RuntimeMessageRef;
-  instruction: AgentInstructionCallLlm;
+export type LLMAttemptContentPart =
+  { image: string; type: 'image' } | { text: string; type: 'text' };
+
+export interface LLMAttemptOutput {
+  answerSalvagedFromReasoning: boolean;
+  content: string;
+  contentParts: LLMAttemptContentPart[];
+  finishReason?: string;
+  grounding: GroundingSearch | null;
+  hasContentImages: boolean;
+  hasReasoningImages: boolean;
+  imageList: ChatImageItem[];
+  reasoningParts: LLMAttemptContentPart[];
+  speed?: ModelPerformance;
+  /** Raw streamed thinking text; finalization converts it to the message reasoning object. */
+  thinkingContent: string;
+  toolCalls: MessageToolCall[];
+  toolsCalling: ChatToolPayload[];
+  usage?: ModelUsage;
+}
+
+export interface LLMAttemptInput {
+  attempt: number;
+  context: ContextBuildOutput;
+  events: AgentEvent[];
+  maxAttempts: number;
   model: string;
-  parentId?: string;
+  onFirstChunk?: () => void;
+  provider: string;
+  state: AgentState;
+}
+
+export type LLMAttemptExecution =
+  { error: unknown; ok: false; output: LLMAttemptOutput } | { ok: true; output: LLMAttemptOutput };
+
+export interface LLMTurnInput {
+  assistantMessage: RuntimeMessageRef;
+  context: ContextBuildOutput;
+  model: string;
   provider: string;
   state: AgentState;
   stepLabel?: string;
+}
+
+export interface LLMTurnAttemptInput {
+  attempt: number;
+  events: AgentEvent[];
+}
+
+export interface LLMTurnErrorInput {
+  error: unknown;
+  events: AgentEvent[];
+  interrupted: boolean;
+  output?: LLMAttemptOutput;
+  retryBudget?: number;
+}
+
+export interface LLMTurnRetryInput {
+  attempt: number;
+  delayMs: number;
+  error: ClassifiedLLMError;
+  maxAttempts: number;
+}
+
+/** Host-bound lifecycle for one logical model turn across all retry attempts. */
+export interface LLMTurnSession {
+  classifyError: (error: unknown) => ClassifiedLLMError;
+  close: (error?: unknown) => Promise<void> | void;
+  handleError: (input: LLMTurnErrorInput) => Promise<void>;
+  maxAttempts: number;
+  onRetry?: (input: LLMTurnRetryInput) => Promise<void> | void;
+  recordResult?: (output: LLMAttemptOutput) => Promise<void> | void;
+  resolveRetryBudget: (error: unknown) => number;
+  runAttempt: (input: LLMTurnAttemptInput) => Promise<LLMAttemptExecution>;
+  waitForRetry?: (delayMs: number) => Promise<void>;
 }
 
 /**
@@ -59,12 +131,12 @@ export interface LLMCallExecuteInput {
  */
 export interface LLMTransport {
   /**
-   * Executes a full agent `call_llm` instruction. This is a transitional port:
-   * the server adapter can keep provider/context/persistence specifics while
-   * the package owns the executor registration point. The internals are split
-   * into smaller context/stream/persist ports in the next migration slices.
+   * Opens a host-bound turn session. The package owns turn orchestration and
+   * finalization while the session retains provider policy and tracing hooks.
    */
-  executeCall?: (input: LLMCallExecuteInput) => ReturnType<InstructionExecutor>;
+  openTurn?: (input: LLMTurnInput) => Promise<LLMTurnSession> | LLMTurnSession;
+  /** Executes one model attempt and returns both successful or partial output. */
+  runAttempt?: (input: LLMAttemptInput) => Promise<LLMAttemptExecution>;
   stream: (
     payload: LLMStreamPayload,
     handlers?: LLMStreamHandlers,

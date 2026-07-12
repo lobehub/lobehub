@@ -8,6 +8,7 @@ import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Virtuoso } from 'react-virtuoso';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import AsyncError from '@/components/AsyncError';
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { useClientDataSWR } from '@/libs/swr';
@@ -42,7 +43,10 @@ const SearchResultsOverlay = memo(() => {
   const columnCount = useMasonryColumnCount();
 
   const isActive = !!searchQuery && searchQuery.length > 0;
-  const showUploader = listVisibility !== 'private';
+  // Personal account has only one uploader (the user themselves), so hide the
+  // column entirely there — it only makes sense in a workspace with multiple members.
+  const activeWorkspaceId = useActiveWorkspaceId();
+  const showUploader = !!activeWorkspaceId && listVisibility !== 'private';
   const visibility = listVisibility === 'private' ? ('private' as const) : ('public' as const);
 
   const {

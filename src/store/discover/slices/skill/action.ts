@@ -35,8 +35,15 @@ export class SkillActionImpl {
   }): SWRResponse<DiscoverSkillDetail> => {
     const locale = globalHelpers.getCurrentLanguage();
 
+    // Skills imported from a raw URL get a synthetic `url.<host>.<path>`
+    // identifier (see server skill importer `url.${host}.${pathPart}`), not a
+    // marketplace slug — the market detail lookup can only 404 for them and
+    // would otherwise spam the console with 500s + SWR retries. Skip the request
+    // and let callers fall back to the locally stored name/description/icon.
+    const isMarketIdentifier = !!identifier && !identifier.startsWith('url.');
+
     return useClientDataSWR(
-      !identifier ? null : discoverKeys.skillDetail(locale, identifier, version),
+      !isMarketIdentifier ? null : discoverKeys.skillDetail(locale, identifier, version),
       async () => discoverService.getSkillDetail({ identifier: identifier!, version }),
     );
   };

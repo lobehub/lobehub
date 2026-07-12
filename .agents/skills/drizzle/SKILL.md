@@ -31,8 +31,8 @@ Location: `packages/database/src/schemas/_helpers.ts`
 
 ## Naming Conventions
 
-- **Tables**: Plural snake_case (`users`, `session_groups`)
-- **Columns**: snake_case (`user_id`, `created_at`)
+- **Tables**: Plural snake\_case (`users`, `session_groups`)
+- **Columns**: snake\_case (`user_id`, `created_at`)
 - **New tables**: Check nearby existing tables before naming a new one. Preserve
   the established noun family and suffix. For example, if the user-scoped table
   is `user_xxx_logs`, the workspace-scoped counterpart should be
@@ -72,6 +72,35 @@ id: serial('id').primaryKey(),
 ```
 
 ID prefixes make entity types distinguishable. For internal tables, use `uuid`.
+
+Do not use composite primary keys on new tables. Give every table a single-column
+surrogate PK and carry business uniqueness in a `uniqueIndex` instead. PK columns
+cannot be nullable, so when the uniqueness scope later grows by a nullable
+dimension the composite PK must be torn down and rebuilt — exactly what happened
+when `ai_providers` / `ai_models` were workspace-scoped (migration 0110 replaced
+their composite PKs with a surrogate `_id` plus partial unique indexes). A unique
+index still works as the arbiter for `onConflictDoUpdate` upserts.
+
+```typescript
+// ✅ Good: surrogate PK; uniqueness scope can evolve without a PK rebuild.
+export const workspaceUserSettings = pgTable(
+  'workspace_user_settings',
+  {
+    id: uuid('id').defaultRandom().notNull().primaryKey(),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }).notNull(),
+    userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex('workspace_user_settings_workspace_id_user_id_unique').on(t.workspaceId, t.userId)],
+);
+
+// ❌ Bad: locked to exactly these columns; adding a nullable scope column
+// (workspaceId, deviceId, …) later forces a full PK rebuild migration.
+(t) => [primaryKey({ columns: [t.workspaceId, t.userId] })],
+```
+
+Existing composite PKs are legacy — leave them alone unless they block a scope
+change, then migrate them the 0110 way.
 
 ### Foreign Keys
 
@@ -219,10 +248,15 @@ export const agents = pgTable(
 
 ### Junction Tables (Many-to-Many)
 
+The surrogate-PK rule above applies to junction tables too — pair uniqueness
+goes in a `uniqueIndex`, not a composite PK (many existing junction tables
+still use composite PKs; that is legacy, not the template):
+
 ```typescript
 export const agentsKnowledgeBases = pgTable(
   'agents_knowledge_bases',
   {
+    id: uuid('id').defaultRandom().notNull().primaryKey(),
     agentId: text('agent_id')
       .references(() => agents.id, { onDelete: 'cascade' })
       .notNull(),
@@ -235,7 +269,12 @@ export const agentsKnowledgeBases = pgTable(
     enabled: boolean('enabled').default(true),
     ...timestamps,
   },
-  (t) => [primaryKey({ columns: [t.agentId, t.knowledgeBaseId] })],
+  (t) => [
+    uniqueIndex('agents_knowledge_bases_agent_id_knowledge_base_id_unique').on(
+      t.agentId,
+      t.knowledgeBaseId,
+    ),
+  ],
 );
 ```
 

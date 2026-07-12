@@ -1,32 +1,21 @@
 import { AccordionItem, Center, Flexbox, Icon, Text } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
-import {
-  Archive,
-  CheckCircle2,
-  CircleAlert,
-  CircleDot,
-  Loader,
-  type LucideIcon,
-  PauseCircle,
-  Star,
-} from 'lucide-react';
 import { memo } from 'react';
+
+import {
+  type ExecutionStatusVisual,
+  TOPIC_GROUP_VISUALS,
+  TOPIC_STATUS_VISUALS,
+} from '@/components/ExecutionStatus';
 
 import TopicItem from '../../List/Item';
 import { type GroupItemComponentProps } from '../GroupedAccordion';
 
-// Map each status-group id to its icon + color, mirroring the per-topic status
-// glyphs in `List/Item`. `pending` collapses the attention-needing states
-// (awaiting input / failed / unread completion) into one group; `favorite` is
-// the synthetic group split out by `buildGroupedTopics`, so it gets a star.
-const STATUS_ICON: Record<string, { color: string; icon: LucideIcon }> = {
-  active: { color: cssVar.colorTextTertiary, icon: CircleDot },
-  archived: { color: cssVar.colorTextDescription, icon: Archive },
-  completed: { color: cssVar.colorTextDescription, icon: CheckCircle2 },
-  favorite: { color: cssVar.colorWarning, icon: Star },
-  paused: { color: cssVar.colorTextDescription, icon: PauseCircle },
-  pending: { color: cssVar.colorWarning, icon: CircleAlert },
-  running: { color: cssVar.colorWarning, icon: Loader },
+// Status-group ids map 1:1 to a topic status except the synthetic `favorite`
+// and `pending` buckets — all visuals come from the shared execution-status
+// set so group headers, topic rows and task surfaces stay consistent.
+const STATUS_ICON: Record<string, ExecutionStatusVisual> = {
+  ...TOPIC_STATUS_VISUALS,
+  ...TOPIC_GROUP_VISUALS,
 };
 
 const GroupItem = memo<GroupItemComponentProps>(({ group, activeTopicId, activeThreadId }) => {

@@ -2,6 +2,7 @@
 
 import {
   BrainCircuit,
+  Download,
   FilePenIcon,
   Home,
   Image,
@@ -706,6 +707,14 @@ export const desktopRoutes: RouteObject[] = [
     children: [
       ...sharedMainAreaChildren,
 
+      // Downloads page (personal-only — never mirrored under /:workspaceSlug)
+      {
+        element: dynamicElement(() => import('@/routes/(main)/downloads'), 'Desktop > Downloads'),
+        errorElement: <ErrorBoundary />,
+        handle: { meta: routeMeta({ icon: Download, titleKey: 'navigation.downloads' }) },
+        path: 'downloads',
+      },
+
       // Settings routes (personal-only — never mirrored under /:workspaceSlug)
       {
         children: [
@@ -813,6 +822,13 @@ export const desktopRoutes: RouteObject[] = [
                   'Desktop > Workspace > Settings > Skill',
                 ),
                 path: 'skill',
+              },
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/connector'),
+                  'Desktop > Workspace > Settings > Connector',
+                ),
+                path: 'connector',
               },
               // Padded tabs share a centered, max-width container layout.
               {

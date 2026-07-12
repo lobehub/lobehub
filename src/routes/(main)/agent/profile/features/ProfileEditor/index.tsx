@@ -44,15 +44,16 @@ const styles = createStaticStyles(({ css }) => ({
 const ProfileEditor = memo(() => {
   const { t } = useTranslation('setting');
   const { allowed: canEdit } = usePermission('edit_own_content');
-  const config = useAgentStore(agentSelectors.currentAgentConfig, isEqual);
-  const updateConfig = useAgentStore((s) => s.updateAgentConfig);
+  const agentId = useAgentStore((s) => s.activeAgentId || '');
+  const config = useAgentStore(agentSelectors.getAgentConfigById(agentId), isEqual);
+  const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
   const isHeterogeneous = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
   const heterogeneousProvider = config.agencyConfig?.heterogeneousProvider;
 
   const updateHeterogeneousCommand = async (command: string) => {
     if (!canEdit) return;
     if (!heterogeneousProvider) return;
-    await updateConfig({
+    await updateAgentConfigById(agentId, {
       agencyConfig: {
         heterogeneousProvider: { ...heterogeneousProvider, command },
       },
@@ -62,7 +63,7 @@ const ProfileEditor = memo(() => {
   const updateHeterogeneousEnv = async (env: Record<string, string>) => {
     if (!canEdit) return;
     if (!heterogeneousProvider) return;
-    await updateConfig({
+    await updateAgentConfigById(agentId, {
       agencyConfig: {
         heterogeneousProvider: { ...heterogeneousProvider, env },
       },
@@ -70,7 +71,9 @@ const ProfileEditor = memo(() => {
   };
 
   const updateBoundDeviceId = async (boundDeviceId: string) => {
-    await updateConfig({ agencyConfig: { ...config.agencyConfig, boundDeviceId } });
+    await updateAgentConfigById(agentId, {
+      agencyConfig: { ...config.agencyConfig, boundDeviceId },
+    });
   };
 
   const isRemoteHetero =
@@ -149,7 +152,7 @@ const ProfileEditor = memo(() => {
                   onChange={(value) => {
                     if (!canEdit) return;
 
-                    updateConfig(value);
+                    updateAgentConfigById(agentId, value);
                   }}
                 />
                 <AgentTool />

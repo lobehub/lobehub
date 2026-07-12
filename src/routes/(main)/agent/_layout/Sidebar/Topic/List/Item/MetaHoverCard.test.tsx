@@ -63,4 +63,34 @@ describe('MetaHoverCard', () => {
     expect(screen.getByText('repo-fix')).toBeInTheDocument();
     expect(screen.queryByText('metaCard.branchNote')).not.toBeInTheDocument();
   });
+
+  it('renders the PR number ahead of the title so the ellipsis never eats it', () => {
+    const metadata: ChatTopicMetadata = {
+      workingDirectory: '/repo',
+      workingDirectoryConfig: {
+        git: {
+          branch: 'perf/active-scope-key',
+          github: {
+            pullRequest: {
+              ciStatus: 'success',
+              mergedAt: '2026-07-09T00:00:00.000Z',
+              number: 16_951,
+              state: 'closed',
+              title: 'perf(swr): persist activeScopeKey',
+              url: 'https://github.com/lobehub/lobehub/pull/16951',
+            },
+          },
+        },
+        path: '/repo',
+        repoType: 'git',
+      },
+    };
+
+    render(<MetaHoverCard metadata={metadata} title="Topic" />);
+
+    const link = screen.getByRole('link');
+    expect(link).toHaveAttribute('href', 'https://github.com/lobehub/lobehub/pull/16951');
+    expect(link).toHaveTextContent('metaCard.pr.merged · #16951 perf(swr): persist activeScopeKey');
+    expect(screen.getByTitle('#16951 perf(swr): persist activeScopeKey')).toBeInTheDocument();
+  });
 });

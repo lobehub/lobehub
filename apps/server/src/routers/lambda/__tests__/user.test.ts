@@ -59,6 +59,26 @@ describe('userRouter', () => {
     vi.mocked(onUserActivityForBusiness).mockResolvedValue(undefined);
   });
 
+  describe('getUserActivitySummary', () => {
+    it('returns the user-level activity summary', async () => {
+      const summary = {
+        lastUserMessageAt: new Date('2026-06-01T00:00:00.000Z'),
+        userCreatedAt: new Date('2026-01-01T00:00:00.000Z'),
+      };
+      vi.mocked(UserModel).mockImplementation(
+        () =>
+          ({
+            getUserActivitySummary: vi.fn().mockResolvedValue(summary),
+          }) as any,
+      );
+
+      const result = await userRouter.createCaller({ ...mockCtx }).getUserActivitySummary();
+
+      expect(result).toEqual(summary);
+      expect(UserModel).toHaveBeenCalledWith(serverDB, mockUserId);
+    });
+  });
+
   describe('getUserRegistrationDuration', () => {
     it('should return registration duration', async () => {
       const mockDuration = { duration: 100, createdAt: '2023-01-01', updatedAt: '2023-01-02' };

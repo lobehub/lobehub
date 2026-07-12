@@ -54,4 +54,20 @@ declare global {
 
   /** Vite define: desktop app version injected by electron-vite renderer build */
   const __MAIN_VERSION__: string;
+
+  namespace React {
+    namespace JSX {
+      interface IntrinsicElements {
+        /** Electron `<webview>` tag — desktop-only, hosts the in-app browser sidebar */
+        webview: React.DetailedHTMLProps<
+          React.HTMLAttributes<HTMLElement> & {
+            allowpopups?: string;
+            partition?: string;
+            src?: string;
+          },
+          HTMLElement
+        >;
+      }
+    }
+  }
 }

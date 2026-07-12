@@ -333,6 +333,21 @@ describe('chatDockSlice', () => {
     });
   });
 
+  describe('openAgentDetail', () => {
+    it('should push AgentDetail view and open portal', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.openAgentDetail('agt_1');
+      });
+
+      expect(result.current.portalStack).toEqual([
+        { agentId: 'agt_1', type: PortalViewType.AgentDetail },
+      ]);
+      expect(result.current.showPortal).toBe(true);
+    });
+  });
+
   describe('openLocalFile', () => {
     it('should add entry to openLocalFiles, set active, and push LocalFile view', () => {
       const { result } = renderHook(() => useChatStore());

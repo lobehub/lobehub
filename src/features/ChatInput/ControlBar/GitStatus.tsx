@@ -39,6 +39,12 @@ const styles = createStaticStyles(({ css }) => {
     behindStat: css`
       color: ${cssVar.colorError};
     `,
+    branchGroup: css`
+      display: flex;
+      flex: none;
+      gap: 2px;
+      align-items: center;
+    `,
     branchLabel: css`
       overflow: hidden;
       max-width: 160px;
@@ -334,10 +340,14 @@ const GitStatus = memo<GitStatusProps>(({ agentId, path, sourcePath, isGithub, d
   ) : (
     // Local switches over IPC; a remote device switches over RPC (deviceId set).
     <BranchSwitcher
+      agentId={agentId}
       currentBranch={branch}
       deviceId={deviceId}
+      isGithub={isGithub}
       open={switcherOpen}
       path={path}
+      sourcePath={sourcePath ?? path}
+      worktrees={worktrees}
       onExternalRefresh={refreshAfterSync}
       onOpenChange={setSwitcherOpen}
       onOptimisticCheckout={handleOptimisticCheckout}
@@ -424,8 +434,12 @@ const GitStatus = memo<GitStatusProps>(({ agentId, path, sourcePath, isGithub, d
   return (
     <>
       <div className={styles.separator} />
-      {worktreeNode}
-      {branchNode}
+      {/* The worktree icon and the branch name name one thing — which checkout
+       * you're on — so they sit closer to each other than to their neighbours. */}
+      <div className={styles.branchGroup}>
+        {worktreeNode}
+        {branchNode}
+      </div>
       {pullNode}
       {pushNode}
       {diffNode}

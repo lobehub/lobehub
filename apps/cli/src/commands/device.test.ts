@@ -70,6 +70,53 @@ describe('device command', () => {
     return program;
   }
 
+  describe('list', () => {
+    it('should list under the personal context without --workspace', async () => {
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'device', 'list', '--json']);
+
+      expect(mockGetTrpcClient).toHaveBeenCalledWith(undefined);
+      const printed = JSON.parse(consoleSpy.mock.calls.at(-1)![0]);
+      expect(printed.map((d: any) => d.deviceId)).toEqual(['d1', 'd2', '8040798a77ae']);
+    });
+
+    it('should filter to workspace-scope devices when --workspace is set', async () => {
+      mockTrpcClient.device.listDevices.query.mockResolvedValue([
+        { deviceId: 'p1', scope: 'personal' },
+        { deviceId: 'ws1', scope: 'workspace' },
+        { deviceId: 'ws2', scope: 'workspace' },
+      ]);
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'device',
+        'list',
+        '--json',
+        '--workspace',
+        'ws-abc',
+      ]);
+
+      expect(mockGetTrpcClient).toHaveBeenCalledWith('ws-abc');
+      const printed = JSON.parse(consoleSpy.mock.calls.at(-1)![0]);
+      expect(printed.map((d: any) => d.deviceId)).toEqual(['ws1', 'ws2']);
+    });
+
+    it('should keep the personal+workspace union when the context is ambient (no flag)', async () => {
+      mockTrpcClient.device.listDevices.query.mockResolvedValue([
+        { deviceId: 'p1', scope: 'personal' },
+        { deviceId: 'ws1', scope: 'workspace' },
+      ]);
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'device', 'list', '--json']);
+
+      const printed = JSON.parse(consoleSpy.mock.calls.at(-1)![0]);
+      expect(printed.map((d: any) => d.deviceId)).toEqual(['p1', 'ws1']);
+    });
+  });
+
   describe('delete', () => {
     it('should remove a device with --yes (no prompt)', async () => {
       mockTrpcClient.device.removeDevice.mutate.mockResolvedValue({ success: true });
@@ -148,6 +195,30 @@ describe('device command', () => {
         deviceId: 'ws1',
       });
       expect(mockTrpcClient.device.removeDevice.mutate).not.toHaveBeenCalled();
+    });
+
+    it('should resolve the client under the workspace context when --workspace is set', async () => {
+      mockTrpcClient.device.listDevices.query.mockResolvedValue([
+        { deviceId: 'ws1', scope: 'workspace' },
+      ]);
+      mockTrpcClient.device.removeWorkspaceDevice.mutate.mockResolvedValue({ success: true });
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'device',
+        'delete',
+        'ws1',
+        '--yes',
+        '--workspace',
+        'ws-abc',
+      ]);
+
+      expect(mockGetTrpcClient).toHaveBeenCalledWith('ws-abc');
+      expect(mockTrpcClient.device.removeWorkspaceDevice.mutate).toHaveBeenCalledWith({
+        deviceId: 'ws1',
+      });
     });
 
     it('should error + exit(1) without deleting when the device is not in the list', async () => {

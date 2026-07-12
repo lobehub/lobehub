@@ -11,6 +11,12 @@ describe('buildWorkspaceAwarePath', () => {
   it('prefixes absolute paths with the active workspace slug', () => {
     expect(buildWorkspaceAwarePath('/memory', 'acme')).toBe('/acme/memory');
     expect(buildWorkspaceAwarePath('/agent/inbox', 'acme')).toBe('/acme/agent/inbox');
+    expect(buildWorkspaceAwarePath('/image?model=image-model', 'acme')).toBe(
+      '/acme/image?model=image-model',
+    );
+    expect(buildWorkspaceAwarePath('/video?model=video-model', 'acme')).toBe(
+      '/acme/video?model=video-model',
+    );
     expect(buildWorkspaceAwarePath('/community/agent/jailbreak', 'acme')).toBe(
       '/acme/community/agent/jailbreak',
     );
@@ -65,6 +71,10 @@ describe('buildWorkspaceAwarePath', () => {
     expect(buildWorkspaceAwarePath('/settings/credits', 'acme')).toBe('/acme/settings/credits');
     expect(buildWorkspaceAwarePath('/settings/usage', 'acme')).toBe('/acme/settings/usage');
     expect(buildWorkspaceAwarePath('/settings/skill', 'acme')).toBe('/acme/settings/skill');
+    expect(buildWorkspaceAwarePath('/settings/connector', 'acme')).toBe('/acme/settings/connector');
+    expect(buildWorkspaceAwarePath('/settings/devices', 'acme')).toBe('/acme/settings/devices');
+    expect(buildWorkspaceAwarePath('/settings/audit-log', 'acme')).toBe('/acme/settings/audit-log');
+    expect(buildWorkspaceAwarePath('/settings/storage', 'acme')).toBe('/acme/settings/storage');
     expect(buildWorkspaceAwarePath('/settings/messenger', 'acme')).toBe('/acme/settings/messenger');
     expect(buildWorkspaceAwarePath('/settings/creds', 'acme')).toBe('/acme/settings/creds');
     expect(buildWorkspaceAwarePath('/settings/provider/openai', 'acme')).toBe(

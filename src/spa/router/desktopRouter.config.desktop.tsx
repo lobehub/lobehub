@@ -2,6 +2,7 @@
 
 import {
   BrainCircuit,
+  Download,
   FilePenIcon,
   Home,
   Image,
@@ -19,7 +20,6 @@ import { agentDocumentRouteMeta } from '@/features/AgentDocumentPage/routeMeta';
 import { taskRouteMeta, tasksRouteMeta } from '@/features/AgentTasks/routeMeta';
 import { fleetRouteMeta } from '@/features/Fleet/routeMeta';
 import { pageRouteMeta } from '@/features/Pages/routeMeta';
-import { verifyReportsRouteMeta, verifyRouteMeta } from '@/features/Verify/routeMeta';
 import { workspaceHomeRouteMeta } from '@/features/Workspace/routeMeta';
 import DesktopOnboarding from '@/routes/(desktop)/desktop-onboarding';
 // Layouts — sync import (Electron local, no network overhead)
@@ -36,6 +36,7 @@ import WorkspaceSlugSettingsLayout from '@/routes/(main)/[workspaceSlug]/setting
 import WorkspaceSlugSettingsApiKeyPage from '@/routes/(main)/[workspaceSlug]/settings/apikey';
 import WorkspaceSlugSettingsAuditLogPage from '@/routes/(main)/[workspaceSlug]/settings/audit-log';
 import WorkspaceSlugSettingsBillingPage from '@/routes/(main)/[workspaceSlug]/settings/billing';
+import WorkspaceSlugSettingsConnectorPage from '@/routes/(main)/[workspaceSlug]/settings/connector';
 import WorkspaceSlugSettingsCreditsPage from '@/routes/(main)/[workspaceSlug]/settings/credits';
 import WorkspaceSlugSettingsCredsPage from '@/routes/(main)/[workspaceSlug]/settings/creds';
 import WorkspaceSlugSettingsDevicesPage from '@/routes/(main)/[workspaceSlug]/settings/devices';
@@ -88,6 +89,7 @@ import CommunityListSkillLayout from '@/routes/(main)/community/(list)/skill/_la
 import DevtoolsIndexPage from '@/routes/(main)/devtools';
 import DevtoolsLayout from '@/routes/(main)/devtools/_layout';
 import DevtoolsToolPage from '@/routes/(main)/devtools/[identifier]';
+import DownloadsPage from '@/routes/(main)/downloads';
 import EvalOverviewPage from '@/routes/(main)/eval';
 import EvalLayout from '@/routes/(main)/eval/_layout';
 import EvalHomeLayout from '@/routes/(main)/eval/(home)/_layout';
@@ -123,14 +125,10 @@ import { settingsRouteMeta } from '@/routes/(main)/settings/features/routeMeta';
 import { ProviderDetailPage, ProviderLayout } from '@/routes/(main)/settings/provider';
 import TaskDetailRoute from '@/routes/(main)/task/[taskId]';
 import AllTasksPage from '@/routes/(main)/tasks';
-import VerifyWorkspace from '@/routes/(main)/verify';
-import VerifyEmptyDetail from '@/routes/(main)/verify/empty';
 import SharePagePage from '@/routes/share/page/[id]';
 import ShareTopicPage from '@/routes/share/t/[id]';
 import ShareTopicLayout from '@/routes/share/t/[id]/_layout';
 import { shareTopicRouteMeta } from '@/routes/share/t/[id]/routeMeta';
-import VerifyReportPage from '@/routes/verify/[runId]';
-import VerifyImPage from '@/routes/verify-im';
 import { routeMeta } from '@/spa/router/routeMeta';
 import { SettingsTabs } from '@/store/global/initialState';
 import { ErrorBoundary, redirectElement } from '@/utils/router';
@@ -615,6 +613,14 @@ export const desktopRoutes: RouteObject[] = [
     children: [
       ...sharedMainAreaChildren,
 
+      // Downloads page (personal-only — never mirrored under /:workspaceSlug)
+      {
+        element: <DownloadsPage />,
+        errorElement: <ErrorBoundary />,
+        handle: { meta: routeMeta({ icon: Download, titleKey: 'navigation.downloads' }) },
+        path: 'downloads',
+      },
+
       // Settings routes (personal-only — never mirrored under /:workspaceSlug)
       {
         children: [
@@ -685,6 +691,7 @@ export const desktopRoutes: RouteObject[] = [
               // shell (sidebar + outlet) — they own their internal layout.
               { element: <WorkspaceSlugSettingsProviderPage />, path: 'provider' },
               { element: <WorkspaceSlugSettingsSkillPage />, path: 'skill' },
+              { element: <WorkspaceSlugSettingsConnectorPage />, path: 'connector' },
               // Padded tabs share a centered, max-width container layout.
               {
                 children: [
@@ -767,32 +774,6 @@ export const desktopRoutes: RouteObject[] = [
       },
     ],
     path: '/share/page',
-  },
-
-  // Messenger verify route (outside main layout)
-  {
-    element: <VerifyImPage />,
-    errorElement: <ErrorBoundary />,
-    path: '/verify-im',
-  },
-
-  // Verify report workspace — standalone master-detail (outside main layout)
-  {
-    children: [
-      {
-        element: <VerifyEmptyDetail />,
-        index: true,
-      },
-      {
-        element: <VerifyReportPage />,
-        handle: { meta: verifyRouteMeta },
-        path: ':runId',
-      },
-    ],
-    element: <VerifyWorkspace />,
-    errorElement: <ErrorBoundary />,
-    handle: { meta: verifyReportsRouteMeta },
-    path: '/verify',
   },
 
   // Devtools route (outside main layout, dev-only)

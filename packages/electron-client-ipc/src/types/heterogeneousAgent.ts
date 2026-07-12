@@ -94,6 +94,8 @@ export interface HeterogeneousAgentSessionError {
   agentType?: string;
   code?: HeterogeneousAgentSessionErrorCode | string;
   command?: string;
+  /** Diagnostic context from the CLI's terminal event (subtype, HTTP status, turn count, …). */
+  details?: Record<string, unknown>;
   docsUrl?: string;
   installCommands?: readonly string[];
   message: string;
@@ -101,4 +103,27 @@ export interface HeterogeneousAgentSessionError {
   resumeSessionId?: string;
   stderr?: string;
   workingDirectory?: string;
+}
+
+export type HeterogeneousAgentRuntimeState =
+  'starting' | 'running' | 'monitoring' | 'idle' | 'stale' | 'closing' | 'closed' | 'error';
+
+export interface HeterogeneousAgentRuntimeTask {
+  description?: string;
+  lastEventAt: number;
+  startedAt: number;
+  taskId: string;
+  toolUseId?: string;
+  type?: string;
+}
+
+export interface HeterogeneousAgentRuntimeStatus {
+  activeTasks: HeterogeneousAgentRuntimeTask[];
+  idleDeadlineAt?: number;
+  lastEventAt: number;
+  operationId?: string;
+  sessionId: string;
+  staleDeadlineAt?: number;
+  state: HeterogeneousAgentRuntimeState;
+  transport: 'claude-sdk' | 'cli-spawn';
 }

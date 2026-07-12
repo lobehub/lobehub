@@ -101,6 +101,32 @@ describe('MessageModel Update Tests', () => {
       expect(result[0].content).toBe('message 1');
     });
 
+    it('should report success when a row was actually updated', async () => {
+      await serverDB
+        .insert(messages)
+        .values([{ id: '1', userId, role: 'user', content: 'message 1' }]);
+
+      const result = await messageModel.update('1', { content: 'updated message' });
+
+      expect(result).toEqual({ success: true });
+    });
+
+    it('should report failure when no message matches the id', async () => {
+      const result = await messageModel.update('does-not-exist', { content: 'updated message' });
+
+      expect(result).toEqual({ success: false });
+    });
+
+    it('should report failure when the message belongs to another user', async () => {
+      await serverDB
+        .insert(messages)
+        .values([{ id: '1', userId: otherUserId, role: 'user', content: 'message 1' }]);
+
+      const result = await messageModel.update('1', { content: 'updated message' });
+
+      expect(result).toEqual({ success: false });
+    });
+
     it('should update message tools', async () => {
       // Create test data
       await serverDB.insert(messages).values([
@@ -560,6 +586,22 @@ describe('MessageModel Update Tests', () => {
       expect(dbResult[0].content).toBe('updated content');
     });
 
+    it('should report failure when no tool message matches the id', async () => {
+      const result = await messageModel.updateToolMessage('tool-msg-missing', {
+        content: 'updated content',
+      });
+
+      expect(result.success).toBe(false);
+    });
+
+    it('should report failure when a plugin-only patch matches no plugin row', async () => {
+      const result = await messageModel.updateToolMessage('tool-msg-missing', {
+        pluginState: { key: 'value' },
+      });
+
+      expect(result.success).toBe(false);
+    });
+
     it('should update metadata only and merge with existing', async () => {
       await serverDB.insert(messages).values({
         id: 'tool-msg-2',
@@ -745,7 +787,8 @@ describe('MessageModel Update Tests', () => {
         content: 'hacked content',
       });
 
-      expect(result.success).toBe(true);
+      // Ownership filters the row out, so the patch lands nowhere — a lost write.
+      expect(result.success).toBe(false);
 
       // Verify content was NOT updated
       const dbResult = await serverDB
@@ -780,15 +823,13 @@ describe('MessageModel Update Tests', () => {
     });
 
     it('should return success false on error', async () => {
-      // Don't create any message - this should cause the transaction to succeed
-      // but not update anything (which is still success)
+      // The transaction itself succeeds, but the update matches no row. Batched
+      // writers key their retry ledger off `success`, so this must not be true.
       const result = await messageModel.updateToolMessage('non-existent-id', {
         content: 'content',
       });
 
-      // The method returns success: true even for non-existent messages
-      // because the update query doesn't fail, it just doesn't match any rows
-      expect(result.success).toBe(true);
+      expect(result.success).toBe(false);
     });
 
     it('should handle empty params gracefully', async () => {
@@ -1594,8 +1635,7 @@ describe('MessageModel Update Tests', () => {
 
       const [row] = await serverDB.select().from(messages).where(eq(messages.id, 'promote-msg'));
       expect(row.usage).toEqual(usage);
-      // metadata.usage stays written for backward-compatible reads
-      expect((row.metadata as any).usage).toEqual(usage);
+      expect((row.metadata as any).usage).toBeUndefined();
     });
 
     it('prefers a top-level usage over metadata.usage', async () => {
@@ -1613,11 +1653,10 @@ describe('MessageModel Update Tests', () => {
 
       const [row] = await serverDB.select().from(messages).where(eq(messages.id, 'prefer-msg'));
       expect(row.usage).toEqual(topLevel);
-      // metadata.usage is kept consistent with the column
-      expect((row.metadata as any).usage).toEqual(topLevel);
+      expect((row.metadata as any).usage).toBeUndefined();
     });
 
-    it('dual-writes metadata.usage when usage arrives as a top-level param only', async () => {
+    it('writes top-level usage without duplicating it into metadata', async () => {
       await serverDB.insert(messages).values({
         id: 'top-only-msg',
         metadata: { tps: 1 }, // pre-existing non-usage metadata must be preserved
@@ -1631,8 +1670,7 @@ describe('MessageModel Update Tests', () => {
 
       const [row] = await serverDB.select().from(messages).where(eq(messages.id, 'top-only-msg'));
       expect(row.usage).toEqual(usage);
-      // legacy readers / rollback paths still see metadata.usage
-      expect((row.metadata as any).usage).toEqual(usage);
+      expect((row.metadata as any).usage).toBeUndefined();
       expect((row.metadata as any).tps).toBe(1);
     });
 
@@ -1644,7 +1682,7 @@ describe('MessageModel Update Tests', () => {
 
       const [row] = await serverDB.select().from(messages).where(eq(messages.id, 'meta-msg'));
       expect(row.usage).toEqual(usage);
-      expect((row.metadata as any).usage).toEqual(usage);
+      expect((row.metadata as any).usage).toBeUndefined();
     });
   });
 });

@@ -25,12 +25,14 @@ import {
 import { prepareSkillDirectory } from './skillDirectory';
 import type {
   DeviceControlDeps,
+  EnrollWorkspaceParams,
   InitWorkspaceParams,
   ListProjectSkillsParams,
   LocalFilePreviewUrlParams,
   PrepareSkillDirectoryParams,
   ProjectFileIndexParams,
   ProjectFileSearchParams,
+  UnenrollWorkspaceParams,
 } from './types';
 import { initWorkspace, listProjectSkills, statPath } from './workspace';
 
@@ -41,6 +43,8 @@ import { initWorkspace, listProjectSkills, statPath } from './workspace';
  * handler, with no per-method gateway route.
  */
 export const DEVICE_RPC_METHODS = [
+  'enrollWorkspace',
+  'unenrollWorkspace',
   'initWorkspace',
   'listProjectSkills',
   'prepareSkillDirectory',
@@ -90,6 +94,21 @@ export const executeDeviceRpc = async (
   deps: DeviceControlDeps,
 ): Promise<unknown> => {
   switch (method) {
+    // Remote workspace share: the host owns the gateway connections, so both
+    // handlers are host-injected. A host that can't manage a second connection
+    // rejects with a stable reason the server surfaces to the user.
+    case 'enrollWorkspace': {
+      if (!deps.enrollWorkspace)
+        throw new Error('This device client does not support workspace sharing');
+      return deps.enrollWorkspace(params as EnrollWorkspaceParams);
+    }
+
+    case 'unenrollWorkspace': {
+      if (!deps.unenrollWorkspace)
+        throw new Error('This device client does not support workspace sharing');
+      return deps.unenrollWorkspace(params as UnenrollWorkspaceParams);
+    }
+
     case 'initWorkspace': {
       return initWorkspace(params as InitWorkspaceParams, deps);
     }

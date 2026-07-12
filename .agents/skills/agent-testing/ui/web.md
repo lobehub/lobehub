@@ -10,7 +10,7 @@ backend-only changes prefer [../cli/index.md](../cli/index.md).
 
 ## Prerequisites
 
-- Complete [Step 0.0](../SKILL.md#00-resolve-the-current-test-environment) (resolve ports) and [Step -1](../SKILL.md#step--1--plan-approval-for-non-trivial-tests) (plan approval) first.
+- Complete [Step 2.0](../SKILL.md#20-resolve-the-current-test-environment) (resolve ports) and the [Phase 1 approval gate](../SKILL.md#phase-1-approval-gate--report-environment--plan-to-the-user) first.
 - Local dev server running — [../references/dev-server.md](../references/dev-server.md)
 - Web auth verified in agent-browser — prefer `setup-auth.sh web-seed`, see [auth decision flow](../references/auth.md#web--decision-flow).
 

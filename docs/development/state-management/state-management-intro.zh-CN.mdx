@@ -129,19 +129,26 @@ src/store/session
 ├── store.ts                           # SessionStore 的创建和使用
 ├── helpers.ts                         # 辅助函数
 └── slices                             # 各个独立的功能切片
-    ├── agent                          # 助理 Slice
-    │   ├── action.ts
-    │   ├── index.ts
-    │   └── selectors.ts
-    └── session                        # 会话 Slice
-        ├── action.ts
-        ├── helpers.ts
-        ├── initialState.ts
-        └── selectors
-            ├── export.ts
-            ├── list.ts
-            └── index.ts
-
+    ├── session                        # 会话 Slice
+    │   ├── action.ts
+    │   ├── action.test.ts
+    │   ├── helpers.ts
+    │   ├── initialState.ts
+    │   ├── reducers.ts
+    │   ├── reducers.test.ts
+    │   └── selectors
+    │       ├── index.ts
+    │       ├── list.ts
+    │       ├── list.test.ts
+    │       ├── meta.ts
+    │       └── meta.test.ts
+    └── sessionGroup                   # 会话分组 Slice
+        ├── action.ts
+        ├── action.test.ts
+        ├── initialState.ts
+        ├── reducer.ts
+        ├── reducer.test.ts
+        └── selectors.ts
 ```
 
 ## SessionStore 的实现
@@ -151,62 +158,60 @@ src/store/session
 ### store.ts
 
 ```ts
-import { PersistOptions, devtools, persist, subscribeWithSelector } from 'zustand/middleware';
+import { subscribeWithSelector } from 'zustand/middleware';
 import { shallow } from 'zustand/shallow';
-import { devtools } from 'zustand/middleware';
 import { createWithEqualityFn } from 'zustand/traditional';
+import { type StateCreator } from 'zustand/vanilla';
 
-import { SessionStoreState, initialState } from './initialState';
-import { AgentAction, createAgentSlice } from './slices/agent/action';
-import { SessionAction, createSessionSlice } from './slices/session/action';
+import { isDev } from '@/utils/env';
+
+import { createDevtools } from '../middleware/createDevtools';
+import { flattenActions } from '../utils/flattenActions';
+import { type SessionStoreState, initialState } from './initialState';
+import { type SessionAction, createSessionSlice } from './slices/session/action';
+import { type SessionGroupAction, createSessionGroupSlice } from './slices/sessionGroup/action';
 
 //  ===============  聚合 createStoreFn ============ //
 
-export type SessionStore = SessionAction & AgentAction & SessionStoreState;
+export interface SessionStore extends SessionAction, SessionGroupAction, SessionStoreState {}
+
 const createStore: StateCreator<SessionStore, [['zustand/devtools', never]]> = (...parameters) => ({
   ...initialState,
-  ...createAgentSlice(...parameters),
-  ...createSessionSlice(...parameters),
+  ...flattenActions([createSessionSlice(...parameters), createSessionGroupSlice(...parameters)]),
 });
 
 //  ===============  实装 useStore ============ //
+const devtools = createDevtools('session');
 
 export const useSessionStore = createWithEqualityFn<SessionStore>()(
-  persist(
-    subscribeWithSelector(
-      devtools(createStore, {
-        name: 'LobeHub_Session' + (isDev ? '_DEV' : ''),
-      }),
-    ),
-    persistOptions,
+  subscribeWithSelector(
+    devtools(createStore, {
+      name: 'LobeChat_Session' + (isDev ? '_DEV' : ''),
+    }),
   ),
   shallow,
 );
-
 ```
 
-在这个 `store.ts` 文件中，我们创建了一个 `useSessionStore` 钩子，它使用 `zustand` 库来创建一个全局状态管理器。我们将 initialState 和每个 Slice 的动作合并，以创建完整的 SessionStore。
+在这个 `store.ts` 文件中，我们创建了一个 `useSessionStore` 钩子，它使用 `zustand` 库来创建一个全局状态管理器。我们通过共享的 `flattenActions` 工具函数，将 initialState 和每个 Slice 的动作合并，以创建完整的 SessionStore。这里没有使用 `persist` 中间件：SessionStore 的数据通过 SWR 从服务端获取，而不是持久化到本地存储。
 
 ### slices/session/action.ts
 
 ```ts
-import { StateCreator } from 'zustand';
+import { type SWRResponse } from 'swr';
 
-import { SessionStore } from '@/store/session';
+import { type SessionStore } from '@/store/session';
+import { type StoreSetter } from '@/store/types';
 
-export interface SessionActions {
+export interface SessionAction {
   /**
    * A custom hook that uses SWR to fetch sessions data.
    */
   useFetchSessions: () => SWRResponse<any>;
 }
 
-export const createSessionSlice: StateCreator<
-  SessionStore,
-  [['zustand/devtools', never]],
-  [],
-  SessionAction
-> = (set, get) => ({
+type Setter = StoreSetter<SessionStore>;
+export const createSessionSlice = (set: Setter, get: () => SessionStore): SessionAction => ({
   useFetchSessions: () => {
     // ...初始化会话的逻辑
   },
@@ -214,6 +219,6 @@ export const createSessionSlice: StateCreator<
 });
 ```
 
-在 `action.ts` 文件中，我们定义了一个 `SessionActions` 接口来描述会话相关的动作，并且实现了一个 `useFetchSessions` 函数来创建这些动作。然后，我们将这些动作与初始状态合并，以形成会话相关的 Slice。
+在 `action.ts` 文件中，我们定义了一个 `SessionAction` 接口来描述会话相关的动作，并且实现了一个 `useFetchSessions` 函数来创建这些动作。然后，我们将这些动作与初始状态合并，以形成会话相关的 Slice。
 
 通过这种结构分层和模块化的方法，我们可以确保 LobeHub 的 SessionStore 是清晰、可维护的，同时也便于扩展和测试。

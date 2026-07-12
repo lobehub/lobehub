@@ -20,6 +20,12 @@ export type HeterogeneousEventType =
   | 'stream_chunk'
   | 'stream_end'
   /**
+   * Producer is retrying the upstream model request after a transient failure.
+   * Mirrors the server/gateway `stream_retry` event so renderer-side running
+   * operation metadata can surface the otherwise silent wait.
+   */
+  | 'stream_retry'
+  /**
    * Producer-side boundary meaning this operation will not emit more visible
    * assistant/tool output. The operation may still wait for `agent_runtime_end`
    * to finish terminal bookkeeping.
@@ -275,6 +281,10 @@ export interface UsageData {
   inputCacheMissTokens: number;
   /** Input tokens written into the prompt cache (cache creation). */
   inputWriteCacheTokens?: number;
+  /** Output tokens used for model reasoning. */
+  outputReasoningTokens?: number;
+  /** Non-reasoning output tokens. */
+  outputTextTokens?: number;
   totalInputTokens: number;
   totalOutputTokens: number;
   totalTokens: number;
@@ -320,6 +330,13 @@ export interface HeterogeneousTerminalErrorData {
   agentType?: string;
   clearEchoedContent?: boolean;
   code?: string;
+  /**
+   * Diagnostic context from the CLI's terminal event (subtype, HTTP status,
+   * turn count, session id, …). Persisted verbatim into the error body so the
+   * error card's details pane explains the failure even when the CLI reported
+   * no message text.
+   */
+  details?: Record<string, unknown>;
   docsUrl?: string;
   error?: string;
   installCommands?: readonly string[];

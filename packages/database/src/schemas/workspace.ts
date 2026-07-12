@@ -1,3 +1,4 @@
+import type { WorkspaceUserPreference } from '@lobechat/types';
 import {
   boolean,
   index,
@@ -6,6 +7,7 @@ import {
   primaryKey,
   text,
   uniqueIndex,
+  uuid,
   varchar,
 } from 'drizzle-orm/pg-core';
 
@@ -134,3 +136,54 @@ export const workspaceAuditLogs = pgTable(
 
 export type WorkspaceAuditLogItem = typeof workspaceAuditLogs.$inferSelect;
 export type NewWorkspaceAuditLog = typeof workspaceAuditLogs.$inferInsert;
+
+/**
+ * Per-user preferences scoped to a specific workspace — the workspace-scoped
+ * counterpart to `user_settings`. One row per (workspace, user), lazily
+ * upserted the first time the caller saves any workspace-scoped preference
+ * (device picker, future workspace-scoped UI prefs, …). Members that never
+ * customize anything simply have no row and fall through to defaults.
+ *
+ * Independent FK cascades to `workspaces` and `users` — the two identity
+ * anchors: destroying either takes every row with them. The `workspace_members`
+ * membership record is *not* the FK anchor deliberately, so a member who
+ * leaves and later rejoins the same workspace still sees their old
+ * preferences (workspace_members can be soft-deleted; this table is real
+ * user-owned data that the caller should get back on re-entry). Orphan rows
+ * left behind after a leave without rejoin are read-blocked by the
+ * membership guard at every API path and can be swept periodically if needed.
+ */
+export const workspaceUserSettings = pgTable(
+  'workspace_user_settings',
+  {
+    /**
+     * Surrogate primary key. Business uniqueness lives in the
+     * (workspace_id, user_id) unique index instead of a composite PK, so the
+     * uniqueness scope can grow by nullable dimensions later without a PK
+     * rebuild (see the ai_providers/ai_models migration 0110 lesson).
+     */
+    id: uuid('id').defaultRandom().notNull().primaryKey(),
+    workspaceId: text('workspace_id')
+      .references(() => workspaces.id, { onDelete: 'cascade' })
+      .notNull(),
+    userId: text('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    /**
+     * The full bag of workspace-scoped user preferences for this (workspace,
+     * user) pair. Single jsonb (matching how `users.preference` scales) —
+     * split into typed columns once a family (à la `user_settings.hotkey`)
+     * grows large enough to justify a migration.
+     */
+    preference: jsonb('preference').$type<WorkspaceUserPreference>().notNull().default({}),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex('workspace_user_settings_workspace_id_user_id_unique').on(t.workspaceId, t.userId),
+    index('workspace_user_settings_user_id_idx').on(t.userId),
+  ],
+);
+
+export type WorkspaceUserSettingsItem = typeof workspaceUserSettings.$inferSelect;
+export type NewWorkspaceUserSettings = typeof workspaceUserSettings.$inferInsert;

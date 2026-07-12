@@ -15,14 +15,24 @@ import {
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import dayjs from 'dayjs';
-import { FolderIcon, MoreVerticalIcon, Trash2Icon, TriangleAlertIcon } from 'lucide-react';
+import {
+  EyeOffIcon,
+  FolderIcon,
+  GlobeIcon,
+  MoreVerticalIcon,
+  Share2Icon,
+  Trash2Icon,
+  TriangleAlertIcon,
+} from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { lambdaQuery } from '@/libs/trpc/client';
 
 import { refreshDeviceList } from './const';
 import { getDeviceIcon } from './getDeviceIcon';
+import { openShareDeviceModal } from './ShareDeviceModal';
 import { useCanEditDevice } from './useCanEditDevice';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -163,6 +173,7 @@ interface DeviceItemProps {
 const DeviceItem = memo<DeviceItemProps>(
   ({ checked, device, isCurrent, onCheckChange, onSelect, selected, selectionActive }) => {
     const { t } = useTranslation('setting');
+    const { t: tCommon } = useTranslation('common');
     const canEdit = useCanEditDevice()(device);
 
     // Workspace devices are self-or-owner-gated + workspace-scoped on the
@@ -191,6 +202,75 @@ const DeviceItem = memo<DeviceItemProps>(
     // Keep the checkbox/glyph swap pinned open when selection is active so it
     // reads as a stable mode rather than a hover-only affordance.
     const pinSelect = !!onCheckChange && (checked || selectionActive);
+
+    // Publish / make-private for workspace enrollments (LOBE-11690). Reuses the
+    // shared visibility-confirm body so the consequences copy matches agents /
+    // files. Success feedback is the row itself moving to the other tab after
+    // the list refresh.
+    const setVisibility = lambdaQuery.device.setWorkspaceDeviceVisibility.useMutation({
+      onSuccess: () => refreshDeviceList(),
+    });
+
+    const handlePublish = () =>
+      confirmModal({
+        content: <VisibilityConfirmContent variant={'publish'} />,
+        okText: t('devices.visibility.publish'),
+        onOk: async () => {
+          await setVisibility.mutateAsync({ deviceId: device.deviceId, visibility: 'public' });
+        },
+        title: t('devices.visibility.publishConfirmTitle'),
+      });
+
+    const handleMakePrivate = () =>
+      confirmModal({
+        content: <VisibilityConfirmContent variant={'makePrivate'} />,
+        okButtonProps: { danger: true },
+        okText: tCommon('makePrivate.confirm.ok'),
+        onOk: async () => {
+          await setVisibility.mutateAsync({ deviceId: device.deviceId, visibility: 'private' });
+        },
+        title: tCommon('makePrivate.confirm.title'),
+      });
+
+    // Only persisted workspace rows carry a visibility to toggle — ghosts
+    // (unregistered) and personal devices don't.
+    const visibilityItems =
+      device.scope === 'workspace' && device.registered
+        ? device.visibility === 'private'
+          ? [
+              {
+                icon: <Icon icon={GlobeIcon} />,
+                key: 'publish',
+                label: t('devices.visibility.publish'),
+                onClick: handlePublish,
+              },
+            ]
+          : [
+              {
+                icon: <Icon icon={EyeOffIcon} />,
+                key: 'makePrivate',
+                label: tCommon('makePrivate'),
+                onClick: handleMakePrivate,
+              },
+            ]
+        : [];
+
+    // Share-to-workspace entry for personal enrollments (LOBE-11699). The share
+    // handshake needs a live connection to mint the workspace identity, so the
+    // item stays disabled (with an explanatory desc) while the device is offline.
+    const shareItems =
+      device.scope === 'personal' && device.registered
+        ? [
+            {
+              desc: online ? undefined : t('devices.share.offlineDesc'),
+              disabled: !online,
+              icon: <Icon icon={Share2Icon} />,
+              key: 'share',
+              label: t('devices.share.menu'),
+              onClick: () => openShareDeviceModal(device),
+            },
+          ]
+        : [];
 
     const handleRemove = () =>
       confirmModal({
@@ -255,6 +335,23 @@ const DeviceItem = memo<DeviceItemProps>(
               <span className={online ? styles.statusOnline : styles.statusOffline} />
             </Tooltip>
             {isCurrent && <Tag>{t('devices.currentBadge')}</Tag>}
+            {device.scope === 'workspace' && device.sharedFromPersonal && (
+              // Member-shared machine (vs directly enrolled infra) — mirrors the
+              // "Shared by {name}" tag on workspace connectors/credentials.
+              <Tag>
+                {t('devices.share.sharedByTag', {
+                  name:
+                    device.enroller?.fullName ||
+                    device.enroller?.username ||
+                    t('workspaceSetting.devices.unknownEnroller'),
+                })}
+              </Tag>
+            )}
+            {device.scope === 'personal' && !!device.sharedWorkspaces?.length && (
+              // At-a-glance "this machine also lives in N workspaces" marker;
+              // the per-workspace list (and revoke) sits in the detail panel.
+              <Tag>{t('devices.share.badge', { count: device.sharedWorkspaces.length })}</Tag>
+            )}
             {isFallback && (
               <Tooltip title={t('devices.fallbackTooltip')}>
                 <Tag icon={<Icon icon={TriangleAlertIcon} />}>{t('devices.fallbackBadge')}</Tag>
@@ -293,6 +390,8 @@ const DeviceItem = memo<DeviceItemProps>(
             <span onClick={(e) => e.stopPropagation()}>
               <DropdownMenu
                 items={[
+                  ...visibilityItems,
+                  ...shareItems,
                   {
                     danger: true,
                     icon: <Icon icon={Trash2Icon} />,

@@ -49,7 +49,7 @@ This problem typically occurs when using a proxy server with a self-signed certi
 To resolve this issue, you can bypass Node.js certificate validation by adding an environment variable when starting the application. Specifically, you can add `NODE_TLS_REJECT_UNAUTHORIZED=0` to the startup command. For example:
 
 ```bash
-NODE_TLS_REJECT_UNAUTHORIZED=0 npm run start
+NODE_TLS_REJECT_UNAUTHORIZED=0 bun run start
 ```
 
 Alternatively, when running in a Docker container, you can set the environment variable in the Dockerfile or docker-compose.yml:
