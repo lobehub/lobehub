@@ -166,29 +166,29 @@ export const threads = pgTable(
 
 export type NewThread = typeof threads.$inferInsert;
 export type ThreadItem = typeof threads.$inferSelect;
-const threadSchemaRefine = {
-  metadata: z.custom<ThreadMetadata>().optional(),
-  status: z.enum([
-    'active',
-    'processing',
-    'pending',
-    'inReview',
-    'todo',
-    'cancel',
-    'completed',
-    'failed',
-  ]),
-  type: z.enum(['continuation', 'standalone', 'isolation', 'eval']),
-} as const;
-
 // Explicit enum/jsonb overrides: plain createInsertSchema(threads) hits TS2589
 // (excessively deep instantiation) under Zod 4 because of self-ref parentThreadId
 // plus multi-value text enums; overrides keep inference shallow and correct.
-export const insertThreadSchema = createInsertSchema(threads, threadSchemaRefine);
+// Preserve insert nullability: `type` is notNull (required), `status` is nullable.
+export const insertThreadSchema = createInsertSchema(threads, {
+  metadata: z.custom<ThreadMetadata>().optional(),
+  status: z
+    .enum(['active', 'processing', 'pending', 'inReview', 'todo', 'cancel', 'completed', 'failed'])
+    .nullish(),
+  type: z.enum(['continuation', 'standalone', 'isolation', 'eval']),
+});
 
 // Prefer createUpdateSchema over insertThreadSchema.partial() — .partial() on the
 // insert schema still blows the instantiation depth limit (TS2589) under Zod 4.
-export const updateThreadSchema = createUpdateSchema(threads, threadSchemaRefine);
+// All refined fields must be optional: bare z.enum refinements are NOT auto-wrapped
+// by createUpdateSchema and would require type/status on every partial update.
+export const updateThreadSchema = createUpdateSchema(threads, {
+  metadata: z.custom<ThreadMetadata>().optional(),
+  status: z
+    .enum(['active', 'processing', 'pending', 'inReview', 'todo', 'cancel', 'completed', 'failed'])
+    .nullish(),
+  type: z.enum(['continuation', 'standalone', 'isolation', 'eval']).optional(),
+});
 
 /**
  * Document-Topic association table - Implements many-to-many relationship between documents and topics

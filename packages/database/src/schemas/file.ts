@@ -293,9 +293,10 @@ export const knowledgeBases = pgTable(
   ],
 );
 
-// See insertSessionGroupSchema: Zod 4 + drizzle-zod text-enum inference pollution
+// See insertSessionGroupSchema: Zod 4 + drizzle-zod text-enum inference pollution.
+// `.optional()` preserves defaulted-column omit semantics at runtime.
 export const insertKnowledgeBasesSchema = createInsertSchema(knowledgeBases, {
-  visibility: z.enum(['private', 'public']),
+  visibility: z.enum(['private', 'public']).optional(),
 });
 
 export type NewKnowledgeBase = typeof knowledgeBases.$inferInsert;

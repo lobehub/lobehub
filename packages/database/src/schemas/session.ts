@@ -56,8 +56,10 @@ export const sessionGroups = pgTable(
 // ZodEnum whose inferred output pollutes with String prototype members
 // (e.g. `"private" | "public" | 2 | (() => string) | ...`), which breaks
 // assignability to Drizzle `$inferSelect` partials used by model.update.
+// Keep `.optional()` so defaulted columns stay omit-able (bare z.enum would
+// make them required and change runtime insert validation).
 export const insertSessionGroupSchema = createInsertSchema(sessionGroups, {
-  visibility: z.enum(['private', 'public']),
+  visibility: z.enum(['private', 'public']).optional(),
 });
 
 export type NewSessionGroup = typeof sessionGroups.$inferInsert;
@@ -107,7 +109,8 @@ export const sessions = pgTable(
 );
 
 export const insertSessionSchema = createInsertSchema(sessions, {
-  type: z.enum(['agent', 'group']),
+  // column is nullable + default — match drizzle-zod insert optionality
+  type: z.enum(['agent', 'group']).nullish(),
 });
 // export const selectSessionSchema = createSelectSchema(sessions);
 
