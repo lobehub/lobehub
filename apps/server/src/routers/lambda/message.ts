@@ -290,6 +290,9 @@ export const messageRouter = router({
         groupId: z.string().nullish(),
         pageSize: z.number().optional(),
         sessionId: z.string().nullish(),
+        // Mid-stream refetches skip the Work-summary assembly — see
+        // `QueryMessageParams.skipWorks`.
+        skipWorks: z.boolean().optional(),
         threadId: z.string().nullish(),
         topicId: z.string().nullish(),
         topicShareId: z.string().optional(),

@@ -144,8 +144,10 @@ describe('createGatewayEventHandler', () => {
     handler(makeEvent('tool_end', { isSuccess: true, skipMessageFetch: true }));
     await flush();
 
-    expect(getMessages).toHaveBeenCalledWith(context);
-    expect(store.replaceMessages).toHaveBeenCalledWith([], { context });
+    // Mid-stream tool_end refetches skip the Work-summary assembly and graft
+    // previously rendered works back via `preserveWorks`.
+    expect(getMessages).toHaveBeenCalledWith({ ...context, skipWorks: true });
+    expect(store.replaceMessages).toHaveBeenCalledWith([], { context, preserveWorks: true });
   });
 
   it('skips hetero execution_complete DB refetch when frontend state is the snapshot', async () => {

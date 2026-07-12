@@ -34,6 +34,12 @@ export interface MessageQueryContext {
 interface MessageReadQueryContext {
   agentId?: string | null;
   groupId?: string | null;
+  /**
+   * Skip the Work-summary assembly on the server — set by mid-stream
+   * refetches (tool_end / step_complete) so each tool round doesn't re-run
+   * the per-type Work queries. See `QueryMessageParams.skipWorks`.
+   */
+  skipWorks?: boolean;
   threadId?: string | null;
   topicId?: string | null;
   topicShareId?: string;

@@ -57,9 +57,25 @@ const loadGetExecutor = async () => {
  * This updates the ConversationArea component via React subscription:
  *   dbMessagesMap → ConversationArea (messages prop) → ConversationStore → UI
  */
-const fetchAndReplaceMessages = async (get: () => ChatStore, context: ConversationContext) => {
-  const messages = await messageService.getMessages(context);
-  get().replaceMessages(messages, { context });
+const fetchAndReplaceMessages = async (
+  get: () => ChatStore,
+  context: ConversationContext,
+  options?: {
+    /**
+     * Mid-stream refetches (stream_start / tool_end / step_complete) skip the
+     * server-side Work-summary assembly — each tool round would otherwise
+     * re-run the per-type Work queries. `preserveWorks` grafts the
+     * already-rendered works back so chips don't flicker; the terminal
+     * agent_runtime_end refetch recomputes them for real.
+     */
+    skipWorks?: boolean;
+  },
+) => {
+  const skipWorks = options?.skipWorks;
+  const messages = await messageService.getMessages(
+    skipWorks ? { ...context, skipWorks } : context,
+  );
+  get().replaceMessages(messages, { context, preserveWorks: skipWorks });
   return messages;
 };
 
@@ -506,7 +522,9 @@ export const createGatewayEventHandler = (
                 // Older servers send only `{ id }` — fall back to a DB read.
                 // The row is inserted before stream_start is published, so the
                 // fetch is guaranteed to bring it into the store.
-                await fetchAndReplaceMessages(get, context).catch(console.error);
+                await fetchAndReplaceMessages(get, context, { skipWorks: true }).catch(
+                  console.error,
+                );
               }
             }
           }
@@ -535,7 +553,9 @@ export const createGatewayEventHandler = (
           // dispatch to it, and (b) resolves the next-step assistant id for
           // the `newStep` fallback.
           if (!newAssistantMessageId) {
-            const messages = await fetchAndReplaceMessages(get, context).catch((error) => {
+            const messages = await fetchAndReplaceMessages(get, context, {
+              skipWorks: true,
+            }).catch((error) => {
               console.error(error);
               return undefined;
             });
@@ -642,7 +662,7 @@ export const createGatewayEventHandler = (
             // lands — a fire-and-forget fetch would let the next event overtake
             // it and dispatch onto a message the store doesn't have yet.
             if ((data as any).toolMessageIds) {
-              await fetchAndReplaceMessages(get, context).catch(console.error);
+              await fetchAndReplaceMessages(get, context, { skipWorks: true }).catch(console.error);
             }
           }
         });
@@ -733,7 +753,13 @@ export const createGatewayEventHandler = (
         // assistant placeholder while DB fan-out is still in flight, which
         // clobbers the in-memory streamed assistantGroup.
         if (Array.isArray(data?.uiMessages)) {
-          get().replaceMessages(data.uiMessages, { action: 'gateway/step_start', context });
+          // step_start snapshots are fetched with `skipWorks` server-side —
+          // graft the already-rendered works back so chips don't flicker.
+          get().replaceMessages(data.uiMessages, {
+            action: 'gateway/step_start',
+            context,
+            preserveWorks: true,
+          });
         }
 
         if (data?.phase === 'human_approval' && data.requiresApproval && data.pendingToolsCalling) {
@@ -782,7 +808,7 @@ export const createGatewayEventHandler = (
         enqueue(async () => {
           const maybeRefresh = shouldSkipMessageFetch(event, runtimeType)
             ? Promise.resolve()
-            : fetchAndReplaceMessages(get, context).catch(console.error);
+            : fetchAndReplaceMessages(get, context, { skipWorks: true }).catch(console.error);
           const payload = unwrapToolPayload(data?.payload);
           const result = data?.result as
             { state?: unknown; workRegistration?: unknown } | undefined;
@@ -863,7 +889,7 @@ export const createGatewayEventHandler = (
               sourceType: 'client.gateway.step_complete',
             });
             if (!shouldSkipMessageFetch(event, runtimeType)) {
-              await fetchAndReplaceMessages(get, context).catch(console.error);
+              await fetchAndReplaceMessages(get, context, { skipWorks: true }).catch(console.error);
             }
           });
         }
