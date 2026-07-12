@@ -54,7 +54,7 @@ const registerTaskSchema = z.object({
 
 const registerSkillToolResultSchema = z.object({
   actorAgentId: z.string().nullable().optional(),
-  args: z.record(z.unknown()).optional(),
+  args: z.record(z.string(), z.unknown()).optional(),
   cumulativeCost: z.number().nullable().optional(),
   cumulativeUsage: cumulativeUsageSchema.nullable().optional(),
   data: z.unknown().optional(),
@@ -124,7 +124,7 @@ export const workRouter = router({
     .input(
       z.object({
         limit: z.number().min(1).max(50).default(20),
-        rootOperationIds: z.array(z.string()).nullable().optional(),
+        rootOperationIds: z.array(z.string()).max(100).nullable().optional(),
       }),
     )
     .query(async ({ ctx, input }) =>

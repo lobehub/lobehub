@@ -42,6 +42,18 @@ interface ToolResultEntry {
 
 const nowIso = () => new Date().toISOString();
 
+/**
+ * Skill work-registration intents carry the UNTRUNCATED tool payload
+ * (`data`/`args`) solely for server-side Work registration. Strip it before
+ * publishing stream events: clients only read `workRegistration` as a presence
+ * flag (see gatewayEventHandler), so keep the key truthy but drop the raw
+ * payload that would otherwise ride every realtime `tool_end` event.
+ */
+const redactResultForStream = (result: ToolRunResult): ToolRunResult =>
+  result.workRegistration?.type === 'skill'
+    ? { ...result, workRegistration: { ...result.workRegistration, args: undefined, data: null } }
+    : result;
+
 const markPersistFatal = <T>(error: T): T => {
   if (error && typeof error === 'object') persistFatalErrors.add(error);
   return error;
@@ -414,7 +426,7 @@ export const callTool =
           maxAttempts: (tools.maxRetries ?? DEFAULT_TOOL_MAX_RETRIES) + 1,
           payload,
           phase: TOOL_EXECUTION_PHASE,
-          result: executionResult,
+          result: redactResultForStream(executionResult),
         },
         stepIndex: host.operation.stepIndex,
         type: 'tool_end',
@@ -627,7 +639,7 @@ export const callToolsBatch =
               maxAttempts: (tools.maxRetries ?? DEFAULT_TOOL_MAX_RETRIES) + 1,
               payload: { parentMessageId, toolCalling: tool },
               phase: TOOL_EXECUTION_PHASE,
-              result: executionResult,
+              result: redactResultForStream(executionResult),
             },
             stepIndex: host.operation.stepIndex,
             type: 'tool_end',
