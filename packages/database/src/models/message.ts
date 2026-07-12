@@ -2248,7 +2248,7 @@ export class MessageModel {
                     .where(and(eq(messages.id, id), this.ownership())),
               );
               mergedMetadata = merge(existingMessage?.metadata || {}, metadataPatch);
-              if (usageToWrite) delete mergedMetadata.usage;
+              if (usageToWrite && mergedMetadata) delete mergedMetadata.usage;
             }
             const metadataToWrite = mergedMetadata;
 
