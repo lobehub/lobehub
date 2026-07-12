@@ -567,9 +567,13 @@ export interface LobeAgentAgencyConfig {
  * inherently a *single* execution decision for the whole workspace. Real users
  * want each member to pick their own machine independently (see
  * `UserPreference.agentDeviceOverrides`). This helper merges the shared
- * baseline with the caller's per-agent override so every code path — client
- * device switcher, server dispatch, workingDir resolution — sees one
- * consistent "effective" config.
+ * baseline with the caller's per-agent per-platform override so every code
+ * path — client device switcher, server dispatch, workingDir resolution —
+ * sees one consistent "effective" config.
+ *
+ * When `overridesByPlatform` is provided, the correct override for `platform`
+ * is looked up first; if not found, falls back to the `'*'` key (if any).
+ * If neither exists, only `agencyConfig` is returned.
  *
  * Rules:
  * - `override.executionTarget` wins when set; falls back to shared
@@ -595,6 +599,24 @@ export const resolveAgencyConfig = (
     ...(hasTarget ? { executionTarget: override.executionTarget } : {}),
     ...(hasDevice ? { boundDeviceId: override.boundDeviceId } : {}),
   };
+};
+
+/**
+ * Resolve the best override for a given sourceDeviceId from a
+ * `AgentDeviceOverridesBySource` map. Falls back to `'*'` if no exact
+ * match. Returns `undefined` when nothing is set.
+ */
+export const resolveOverrideBySource = (
+  bySource:
+    | Record<string, Pick<LobeAgentAgencyConfig, 'boundDeviceId' | 'executionTarget'>>
+    | null
+    | undefined,
+  sourceDeviceId?: string | null,
+): Pick<LobeAgentAgencyConfig, 'boundDeviceId' | 'executionTarget'> | undefined => {
+  if (!bySource) return undefined;
+  if (sourceDeviceId && bySource[sourceDeviceId]) return bySource[sourceDeviceId];
+  if (bySource['*']) return bySource['*'];
+  return undefined;
 };
 
 /**

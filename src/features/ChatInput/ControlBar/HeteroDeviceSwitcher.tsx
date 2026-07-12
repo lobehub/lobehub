@@ -4,7 +4,7 @@ import { SiApple, SiLinux } from '@icons-pack/react-simple-icons';
 import { isDesktop } from '@lobechat/const';
 import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import type { DeviceExecutionTarget } from '@lobechat/types';
-import { resolveAgencyConfig } from '@lobechat/types';
+import { resolveAgencyConfig, resolveOverrideBySource } from '@lobechat/types';
 import { Microsoft } from '@lobehub/icons';
 import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
@@ -34,6 +34,7 @@ import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useElectronStore } from '@/store/electron';
 import { useUserStore } from '@/store/user';
 import { workspaceUserSettingsSelectors } from '@/store/user/selectors';
+import { getSourceDeviceId } from '@/utils/sourceDevice';
 
 const styles = createStaticStyles(({ css }) => ({
   button: css`
@@ -359,7 +360,27 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   const { isLoading: isWorkspacePreferenceLoading } = useUserStore(
     (s) => s.useFetchWorkspaceUserPreference,
   )();
-  const override = useUserStore(workspaceUserSettingsSelectors.agentDeviceOverrideById(agentId));
+
+  const { data: devices, isLoading } = lambdaQuery.device.listDevices.useQuery(undefined, {
+    staleTime: 30_000,
+  });
+
+  // The current machine's own gateway deviceId (desktop only)
+  useElectronStore((s) => s.useFetchGatewayDeviceInfo)();
+  const gatewayDeviceInfo = useElectronStore((s) => s.gatewayDeviceInfo);
+  const currentDeviceId = isDesktop ? gatewayDeviceInfo?.deviceId : undefined;
+
+  // Per-source-device override resolution
+  const sourceDeviceId = isDesktop ? currentDeviceId : getSourceDeviceId();
+  const workspaceOverride = useUserStore(
+    workspaceUserSettingsSelectors.agentDeviceOverrideById(agentId, sourceDeviceId),
+  );
+  const personalOverride = useUserStore((s) => {
+    if (isWorkspaceAgent) return undefined;
+    const bySource = s.preference?.personalDeviceOverrides?.[agentId];
+    return resolveOverrideBySource(bySource, sourceDeviceId);
+  });
+  const override = isWorkspaceAgent ? workspaceOverride : personalOverride;
   const agencyConfig = resolveAgencyConfig(sharedAgencyConfig, override);
 
   const heteroType = agencyConfig?.heterogeneousProvider?.type;
@@ -370,17 +391,6 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   // (plain chat, no execution environment) isn't a valid target for them: hide
   // the option and never fall back to / honour a stale stored `'none'`.
   const isHetero = !!heteroType;
-
-  const { data: devices, isLoading } = lambdaQuery.device.listDevices.useQuery(undefined, {
-    staleTime: 30_000,
-  });
-
-  // The current machine's own gateway deviceId (desktop only), used to badge the
-  // matching device row with a "This device" tag and show the local-process
-  // description instead of the generic online/offline status.
-  useElectronStore((s) => s.useFetchGatewayDeviceInfo)();
-  const gatewayDeviceInfo = useElectronStore((s) => s.gatewayDeviceInfo);
-  const currentDeviceId = isDesktop ? gatewayDeviceInfo?.deviceId : undefined;
 
   // Effective target: `resolveExecutionTarget` runs over the *merged*
   // `agencyConfig` (shared + this user's LOBE-11689 override), so what the

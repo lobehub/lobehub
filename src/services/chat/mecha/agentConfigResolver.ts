@@ -6,9 +6,11 @@ import { type LobeToolManifest } from '@lobechat/context-engine';
 import {
   type ChatCompletionTool,
   getActivePluginIds,
+  type LobeAgentAgencyConfig,
   type LobeAgentChatConfig,
   type LobeAgentConfig,
   type MessageMapScope,
+  resolveOverrideBySource,
 } from '@lobechat/types';
 import debug from 'debug';
 import { produce } from 'immer';
@@ -104,8 +106,22 @@ export interface AgentConfigResolverContext {
 
   /** Message map scope (e.g., 'page', 'main', 'thread') */
   scope?: MessageMapScope;
+  /**
+   * Source deviceId identifying the physical machine the user is currently on.
+   * On desktop this is the local gateway deviceId; on web it's undefined or
+   * a synthetic key. Used to look up per-source-device overrides in
+   * `users.preference.agentDeviceOverrides[agentId][sourceDeviceId]`.
+   */
+  sourceDeviceId?: string;
+
   /** Target agent config for agent-builder */
   targetAgentConfig?: LobeAgentConfig;
+
+  /**
+   * Topic-level device override. When set, wins over source-device overrides
+   * and the agent's agencyConfig.
+   */
+  topicDeviceOverride?: { executionTarget?: string; boundDeviceId?: string };
 
   /**
    * Topic-level model/provider override.
@@ -162,6 +178,73 @@ const withTopicModelOverride = (
 ): LobeAgentConfig => {
   if (!override) return config;
   return { ...config, model: override.model, provider: override.provider };
+};
+
+/**
+ * Apply topic-level + source-device-level device overrides onto the resolved
+ * agency config. Resolution order: topic override → source-device override →
+ * existing agencyConfig.
+ *
+ * Reads from `useUserStore.getState()` and `getAgentStoreState()` — safe to
+ * call outside React since they are plain zustand getters.
+ */
+const withDeviceOverride = (
+  config: LobeAgentConfig,
+  ctx: {
+    agentId?: string;
+    sourceDeviceId?: string;
+    topicDeviceOverride?: { executionTarget?: string; boundDeviceId?: string };
+  },
+): LobeAgentConfig => {
+  const topicOverride = ctx.topicDeviceOverride;
+
+  // Read source-device-level override from user preference
+  let sourceOverride: { executionTarget?: string; boundDeviceId?: string } | undefined;
+  if (ctx.agentId) {
+    try {
+      const userStore = useUserStore.getState();
+      const agentStore = getAgentStoreState();
+      const isWorkspace = Boolean(agentStore.agentMap[ctx.agentId]?.workspaceId);
+
+      const bySource = isWorkspace
+        ? userStore.workspaceUserPreference.agentDeviceOverrides?.[ctx.agentId]
+        : userStore.preference?.personalDeviceOverrides?.[ctx.agentId];
+
+      sourceOverride = resolveOverrideBySource(
+        bySource as
+          | Record<string, Pick<LobeAgentAgencyConfig, 'boundDeviceId' | 'executionTarget'>>
+          | undefined,
+        ctx.sourceDeviceId,
+      );
+    } catch {
+      // Non-fatal — fall through to agencyConfig
+    }
+  }
+
+  if (!topicOverride && !sourceOverride) return config;
+
+  const existingAgencyConfig = config.agencyConfig;
+  const merged: Record<string, string | undefined> = {
+    executionTarget: existingAgencyConfig?.executionTarget,
+    boundDeviceId: existingAgencyConfig?.boundDeviceId,
+  };
+
+  // Source-device override (medium priority)
+  if (sourceOverride?.executionTarget !== undefined)
+    merged.executionTarget = sourceOverride.executionTarget;
+  if (sourceOverride?.boundDeviceId !== undefined)
+    merged.boundDeviceId = sourceOverride.boundDeviceId;
+
+  // Topic override (highest priority)
+  if (topicOverride?.executionTarget !== undefined)
+    merged.executionTarget = topicOverride.executionTarget;
+  if (topicOverride?.boundDeviceId !== undefined)
+    merged.boundDeviceId = topicOverride.boundDeviceId;
+
+  return {
+    ...config,
+    agencyConfig: { ...existingAgencyConfig, ...merged },
+  };
 };
 
 export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAgentConfig => {
@@ -317,7 +400,14 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
       };
 
       return {
-        agentConfig: withTopicModelOverride(finalAgentConfig, ctx.topicModelOverride),
+        agentConfig: withDeviceOverride(
+          withTopicModelOverride(finalAgentConfig, ctx.topicModelOverride),
+          {
+            agentId: ctx.agentId,
+            sourceDeviceId: ctx.sourceDeviceId,
+            topicDeviceOverride: ctx.topicDeviceOverride,
+          },
+        ),
         chatConfig: finalChatConfig,
         isBuiltinAgent: false,
         plugins: applyPluginFilters(pageAgentPlugins),
@@ -342,7 +432,14 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
       };
 
       return {
-        agentConfig: withTopicModelOverride(finalAgentConfig, ctx.topicModelOverride),
+        agentConfig: withDeviceOverride(
+          withTopicModelOverride(finalAgentConfig, ctx.topicModelOverride),
+          {
+            agentId: ctx.agentId,
+            sourceDeviceId: ctx.sourceDeviceId,
+            topicDeviceOverride: ctx.topicDeviceOverride,
+          },
+        ),
         chatConfig: finalChatConfig,
         isBuiltinAgent: false,
         plugins: applyPluginFilters(taskAgentPlugins),
@@ -351,7 +448,14 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
 
     // Not in page scope - return standard config
     return {
-      agentConfig: withTopicModelOverride(finalAgentConfig, ctx.topicModelOverride),
+      agentConfig: withDeviceOverride(
+        withTopicModelOverride(finalAgentConfig, ctx.topicModelOverride),
+        {
+          agentId: ctx.agentId,
+          sourceDeviceId: ctx.sourceDeviceId,
+          topicDeviceOverride: ctx.topicDeviceOverride,
+        },
+      ),
       chatConfig: finalChatConfig,
       isBuiltinAgent: false,
       plugins: applyPluginFilters(finalPlugins),
@@ -498,7 +602,14 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
   });
 
   return {
-    agentConfig: withTopicModelOverride(finalAgentConfig, ctx.topicModelOverride),
+    agentConfig: withDeviceOverride(
+      withTopicModelOverride(finalAgentConfig, ctx.topicModelOverride),
+      {
+        agentId: ctx.agentId,
+        sourceDeviceId: ctx.sourceDeviceId,
+        topicDeviceOverride: ctx.topicDeviceOverride,
+      },
+    ),
     chatConfig: resolvedChatConfig,
     isBuiltinAgent: true,
     plugins: applyPluginFilters(finalPlugins),

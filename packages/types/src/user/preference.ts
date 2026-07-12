@@ -9,13 +9,7 @@ import type { UserOnboarding } from './onboarding';
 import type { UserSettings } from './settings';
 
 /**
- * Per-agent override for the device execution decision. Stored on
- * `workspace_user_settings.preference.agentDeviceOverrides` (see
- * {@link WorkspaceUserPreference}) and merged over `agents.agencyConfig` at
- * read time so each workspace member's Cloud Sandbox / workspace-device /
- * local-machine choice is independent — one member's pick never traps
- * another. See `resolveAgencyConfig` in
- * `packages/types/src/agent/agencyConfig.ts` for the merge implementation.
+ * Per-agent override for the device execution decision.
  *
  * Two fields only, deliberately: `executionTarget` + `boundDeviceId`.
  * `heterogeneousProvider`, `verifyRubricId`, and `workingDirByDevice` remain
@@ -28,24 +22,22 @@ export interface AgentDeviceOverride {
 }
 
 /**
+ * Per-source-device device overrides for a single agent.
+ * Key = sourceDeviceId of the physical machine the user is on
+ * (gateway deviceId on desktop, localStorage anonymous ID on web).
+ * `'*'` = fallback when no source-device-specific override exists.
+ */
+export type AgentDeviceOverridesBySource = Record<string, AgentDeviceOverride>;
+
+/**
  * Per-user preferences that only make sense inside a specific workspace.
  *
  * Stored in its own DB table (`workspace_user_settings`, PK
  * `(workspace_id, user_id)`) — the workspace-scoped counterpart to
- * `user_settings`. The dedicated table lets:
- *   - workspace / user delete cascade take out every trace in one shot;
- *   - member-list queries stay leak-free (they hit `workspace_members`, not
- *     this table);
- *   - the "workspace-scoped user preference" boundary be obvious at the
- *     schema layer.
- *
- * A single jsonb `preference` column holds this shape today (matches how
- * `users.preference` scales); if a future family grows large enough to
- * deserve its own column (à la `user_settings.hotkey` / `user_settings.tts`),
- * split it out at that point.
+ * `user_settings`.
  */
 export interface WorkspaceUserPreference {
-  agentDeviceOverrides?: Record<string /* agentId */, AgentDeviceOverride>;
+  agentDeviceOverrides?: Record<string /* agentId */, AgentDeviceOverridesBySource>;
 }
 
 export interface LobeUser {
@@ -60,110 +52,49 @@ export interface LobeUser {
 }
 
 export const UserGuideSchema = z.object({
-  /**
-   * Move the settings button to the avatar dropdown
-   */
   moveSettingsToAvatar: z.boolean().optional(),
-
-  /**
-   * Topic Guide
-   */
   topic: z.boolean().optional(),
-
-  /**
-   * tell user that uploaded files can be found in knowledge base
-   */
   uploadFileInKnowledgeBase: z.boolean().optional(),
 });
 
 export type UserGuide = z.infer<typeof UserGuideSchema>;
 
 export const UserLabSchema = z.object({
-  /**
-   * enable graph runtime configuration for agents
-   */
   enableAgentGraphConfig: z.boolean().optional(),
-  /**
-   * enable agent self-iteration feedback capture and policy execution
-   */
   enableAgentSelfIteration: z.boolean().optional(),
-  /**
-   * run Claude Code hetero sessions through the Claude Agent SDK instead of CLI spawn
-   */
   enableClaudeCodeSdk: z.boolean().optional(),
-  /**
-   * enable the Fleet view (side-by-side running-task dashboard)
-   */
   enableFleet: z.boolean().optional(),
-  /**
-   * fold a finished agent turn's process under a "已处理" header when its final answer is visible
-   */
   enableFoldFinishedTurn: z.boolean().optional(),
-  /**
-   * enable multi-agent group chat mode
-   */
   enableGroupChat: z.boolean().optional(),
-  /**
-   * enable the iMessage channel (BlueBubbles Desktop bridge)
-   */
   enableImessage: z.boolean().optional(),
-  /**
-   * show the in-app Browser tab in the conversation WorkingSidebar (desktop only)
-   */
   enableInAppBrowser: z.boolean().optional(),
-  /**
-   * enable markdown rendering in chat input editor
-   */
   enableInputMarkdown: z.boolean().optional(),
-  /**
-   * enable selecting message text and adding it to the next conversation context
-   */
   enableMessageTextSelectionActions: z.boolean().optional(),
-  /**
-   * show the "Add Platform Agent" entry in the create menu
-   */
   enablePlatformAgent: z.boolean().optional(),
-  /**
-   * enable the task delivery-acceptance (verify) config UI on the task detail
-   */
   enableTaskVerify: z.boolean().optional(),
 });
 
 export type UserLab = z.infer<typeof UserLabSchema>;
 
 export interface UserPreference {
-  /** Last-used app for "Open working directory in…" split button. Empty/unknown values fall back to platform default. */
   defaultOpenInApp?: string;
-  /**
-   * disable markdown rendering in chat input editor
-   * @deprecated Use lab.enableInputMarkdown instead
-   */
+
   disableInputMarkdownRender?: boolean;
+
   guide?: UserGuide;
   hideSyncAlert?: boolean;
-  /**
-   * lab experimental features
-   */
   lab?: UserLab;
-  /**
-   * Last active workspace id. Used on cloud to land the user back in the
-   * workspace they last used when they open `/` — `null` means personal
-   * context. Stored as id (not slug) so workspace renames don't invalidate it.
-   */
   lastWorkspaceId?: string | null;
   /**
-   * @deprecated Use settings.general.telemetry instead
+   * Per-agent per-source-device device overrides for personal agents.
+   * Same structure as WorkspaceUserPreference.agentDeviceOverrides.
+   * Persisted to `users.preference` JSONB column.
    */
+  personalDeviceOverrides?: Record<string /* agentId */, AgentDeviceOverridesBySource>;
   telemetry?: boolean | null;
   topicGroupMode?: TopicGroupMode;
-  /**
-   * whether to include completed topics in the topic list
-   */
   topicIncludeCompleted?: boolean;
   topicSortBy?: TopicSortBy;
-  /**
-   * whether to use cmd + enter to send message
-   */
   useCmdEnterToSend?: boolean;
 }
 
@@ -181,14 +112,10 @@ export interface UserInitializationState {
   hasConversation?: boolean;
   interests?: string[];
   isFreePlan?: boolean;
-  /** @deprecated Use onboarding field instead */
   isOnboard?: boolean;
   lastName?: string;
   onboarding?: UserOnboarding;
   preference: UserPreference;
-  /**
-   * Referral lifecycle status for the current user (invitee side).
-   */
   referralStatus?: ReferralStatusString;
   settings: PartialDeep<UserSettings>;
   subscriptionPlan?: Plans;
@@ -201,12 +128,8 @@ export const OAuthAccountSchema = z.object({
   providerAccountId: z.string(),
 });
 
-/**
- * SSO Provider info displayed in profile page
- */
 export interface SSOProvider {
   email?: string;
-  /** Expiration time - Date for better-auth */
   expiresAt?: Date | number | null;
   provider: string;
   providerAccountId: string;
