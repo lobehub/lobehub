@@ -1,5 +1,6 @@
 import type {
   BrowserSidebarAttachParams,
+  BrowserSidebarImportResult,
   BrowserSidebarNavigateParams,
   BrowserSidebarResult,
   BrowserSidebarSessionParams,
@@ -14,6 +15,7 @@ import {
   webContents as electronWebContents,
 } from 'electron';
 
+import { importChromeLoginData } from '@/modules/browser/importChromeLoginData';
 import { createLogger } from '@/utils/logger';
 
 import { ControllerModule, IpcMethod } from './index';
@@ -117,6 +119,22 @@ export default class BrowserSidebarCtr extends ControllerModule {
   @IpcMethod()
   getState(params: BrowserSidebarSessionParams): BrowserSidebarState {
     return this.snapshot(params.sessionId);
+  }
+
+  @IpcMethod()
+  async importChromeLoginData(): Promise<BrowserSidebarImportResult> {
+    try {
+      const browserSession = electronSession.fromPartition(BROWSER_PARTITION);
+      const importedCount = await importChromeLoginData(browserSession);
+      return { importedCount, success: true };
+    } catch (error) {
+      logger.error('Failed to import Chrome login information:', error);
+      return {
+        error: error instanceof Error ? error.message : String(error),
+        importedCount: 0,
+        success: false,
+      };
+    }
   }
 
   @IpcMethod()
