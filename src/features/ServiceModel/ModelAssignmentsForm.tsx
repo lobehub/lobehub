@@ -14,6 +14,7 @@ import { FORM_STYLE } from '@/const/layoutTokens';
 import ModelSelect from '@/features/ModelSelect';
 import { usePermission } from '@/hooks/usePermission';
 import { useSaveState } from '@/hooks/useSaveState';
+import { SettingsSearchAnchor } from '@/routes/(main)/settings/search/anchor';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
 import type { SystemAgentItem, UserServiceModelConfigKey } from '@/types/user/settings';
@@ -270,19 +271,31 @@ const ModelAssignmentsForm = memo(() => {
   const modelAssignments: FormGroupItemType = {
     children: [defaultAgentItem, ...systemModelItems],
     extra: renderSaveHint('assignments'),
-    title: t('serviceModel.modelAssignments.title'),
+    title: (
+      <SettingsSearchAnchor id={'service-model-assignments'}>
+        {t('serviceModel.modelAssignments.title')}
+      </SettingsSearchAnchor>
+    ),
   };
 
   const optionalFeatures: FormGroupItemType = {
     children: optionalFeatureItems,
     extra: renderSaveHint('optional'),
-    title: t('serviceModel.optionalFeatures.title'),
+    title: (
+      <SettingsSearchAnchor id={'service-model-optional-features'}>
+        {t('serviceModel.optionalFeatures.title')}
+      </SettingsSearchAnchor>
+    ),
   };
 
   const memoryModels: FormGroupItemType = {
     children: memoryModelItems,
     extra: renderSaveHint('memory'),
-    title: t('serviceModel.memoryModels.title'),
+    title: (
+      <SettingsSearchAnchor id={'service-model-memory'}>
+        {t('serviceModel.memoryModels.title')}
+      </SettingsSearchAnchor>
+    ),
   };
 
   return (

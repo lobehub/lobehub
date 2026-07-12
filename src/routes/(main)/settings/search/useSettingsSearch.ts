@@ -1,4 +1,5 @@
 import { isDesktop } from '@lobechat/const';
+import { DEFAULT_MODEL_PROVIDER_LIST } from 'model-bank/modelProviders';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -52,7 +53,7 @@ const splitKeywords = (text: string) =>
 export const useSettingsSearch = (query: string): SettingsSearchResult[] => {
   const { t } = useTranslation(['setting', 'labs']);
   const categoryGroups = useCategory();
-  const { hideDocs } = useServerConfigStore(featureFlagsSelectors);
+  const { enableSTT, hideDocs, showAiImage } = useServerConfigStore(featureFlagsSelectors);
   const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
 
   // The translated index only depends on locale / visibility inputs — build it
@@ -60,8 +61,10 @@ export const useSettingsSearch = (query: string): SettingsSearchResult[] => {
   const index = useMemo(() => {
     const ctx: SettingsSearchContext = {
       enableBusinessFeatures: !!enableBusinessFeatures,
+      enableSTT: !!enableSTT,
       hideDocs: !!hideDocs,
       isDesktop,
+      showAiImage: !!showAiImage,
     };
 
     // Tab-level entries first so they rank above item-level matches.
@@ -124,6 +127,23 @@ export const useSettingsSearch = (query: string): SettingsSearchResult[] => {
         url: `${tabInfo.url}#${def.anchor}`,
       });
     }
+
+    // Model providers rank last: builtin names/ids (e.g. "OpenAI") link straight
+    // to the provider detail page. Custom providers need an async store fetch and
+    // are intentionally not indexed.
+    const providerTab = visibleTabs.get(SettingsTabs.Provider);
+    if (providerTab)
+      for (const provider of DEFAULT_MODEL_PROVIDER_LIST) {
+        entries.push({
+          breadcrumb: `${providerTab.groupTitle} › ${providerTab.label}`,
+          haystack: [provider.name.toLowerCase(), provider.id.toLowerCase()],
+          icon: providerTab.icon,
+          key: `provider-${provider.id}`,
+          label: provider.name,
+          tab: SettingsTabs.Provider,
+          url: `/settings/provider/${provider.id}`,
+        });
+      }
 
     return entries;
   }, [categoryGroups, t, enableBusinessFeatures, hideDocs]);

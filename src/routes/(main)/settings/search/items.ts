@@ -2,8 +2,10 @@ import { SettingsTabs } from '@/store/global/initialState';
 
 export interface SettingsSearchContext {
   enableBusinessFeatures: boolean;
+  enableSTT: boolean;
   hideDocs: boolean;
   isDesktop: boolean;
+  showAiImage: boolean;
 }
 
 export interface SettingsSearchItem {
@@ -36,20 +38,29 @@ export interface SettingsSearchItem {
  * carries its own synonym set.
  */
 export const TAB_SEARCH_KEYWORDS_KEYS: Partial<Record<SettingsTabs, string>> = {
+  [SettingsTabs.About]: 'settingsSearch.tabKeywords.about',
   [SettingsTabs.Advanced]: 'settingsSearch.tabKeywords.advanced',
   [SettingsTabs.APIKey]: 'settingsSearch.tabKeywords.apikey',
   [SettingsTabs.Appearance]: 'settingsSearch.tabKeywords.appearance',
   [SettingsTabs.Billing]: 'settingsSearch.tabKeywords.billing',
+  [SettingsTabs.Connector]: 'settingsSearch.tabKeywords.connector',
   [SettingsTabs.Credits]: 'settingsSearch.tabKeywords.credits',
+  [SettingsTabs.Creds]: 'settingsSearch.tabKeywords.creds',
   [SettingsTabs.Devices]: 'settingsSearch.tabKeywords.devices',
   [SettingsTabs.Hotkey]: 'settingsSearch.tabKeywords.hotkey',
+  [SettingsTabs.Memory]: 'settingsSearch.tabKeywords.memory',
+  [SettingsTabs.Messenger]: 'settingsSearch.tabKeywords.messenger',
   [SettingsTabs.Notification]: 'settingsSearch.tabKeywords.notification',
   [SettingsTabs.Plans]: 'settingsSearch.tabKeywords.plans',
   [SettingsTabs.Profile]: 'settingsSearch.tabKeywords.profile',
   [SettingsTabs.Provider]: 'settingsSearch.tabKeywords.provider',
   [SettingsTabs.Proxy]: 'settingsSearch.tabKeywords.proxy',
   [SettingsTabs.Referral]: 'settingsSearch.tabKeywords.referral',
+  [SettingsTabs.ServiceModel]: 'settingsSearch.tabKeywords.serviceModel',
+  [SettingsTabs.Skill]: 'settingsSearch.tabKeywords.skill',
+  [SettingsTabs.Stats]: 'settingsSearch.tabKeywords.stats',
   [SettingsTabs.Storage]: 'settingsSearch.tabKeywords.storage',
+  [SettingsTabs.SystemTools]: 'settingsSearch.tabKeywords.systemTools',
   [SettingsTabs.Usage]: 'settingsSearch.tabKeywords.usage',
 };
 
@@ -150,6 +161,40 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     labelKey: 'title',
     ns: 'labs',
     tab: SettingsTabs.Advanced,
+  },
+  // Service Model
+  {
+    anchor: 'service-model-assignments',
+    keywords: ['model assignment', 'topic naming', 'translation', 'default model'],
+    labelKey: 'serviceModel.modelAssignments.title',
+    tab: SettingsTabs.ServiceModel,
+  },
+  {
+    anchor: 'service-model-memory',
+    keywords: ['memory', 'embedding', 'vector'],
+    labelKey: 'serviceModel.memoryModels.title',
+    tab: SettingsTabs.ServiceModel,
+  },
+  {
+    anchor: 'service-model-optional-features',
+    keywords: ['follow up', 'input completion', 'prompt rewrite', 'suggestion'],
+    labelKey: 'serviceModel.optionalFeatures.title',
+    tab: SettingsTabs.ServiceModel,
+  },
+  {
+    anchor: 'service-model-tts',
+    keywords: ['tts', 'voice', 'speech', 'text to speech'],
+    labelKey: 'settingTTS.openai.ttsModel',
+    tab: SettingsTabs.ServiceModel,
+    visible: (ctx) => ctx.enableSTT,
+  },
+  {
+    anchor: 'service-model-image',
+    descKey: 'settingImage.defaultCount.desc',
+    keywords: ['image', 'image generation', 'ai image'],
+    labelKey: 'settingImage.defaultCount.title',
+    tab: SettingsTabs.ServiceModel,
+    visible: (ctx) => ctx.showAiImage,
   },
   // Storage
   {
