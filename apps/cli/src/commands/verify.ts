@@ -75,12 +75,37 @@ function inlineTextEvidenceForFile(file: string, type: EvidenceType | string): s
 }
 
 /** Normalize a case's `evidence` field (string | string[] | {path}[]) to path strings. */
-function evidencePaths(evidence: unknown): string[] {
+interface ReportEvidenceInput {
+  comparison?: { id?: string; label?: string; role?: 'after' | 'before' };
+  description?: string;
+  path: string;
+}
+
+function reportEvidence(evidence: unknown): ReportEvidenceInput[] {
   if (!evidence) return [];
   const arr = Array.isArray(evidence) ? evidence : [evidence];
   return arr
-    .map((e) => (typeof e === 'string' ? e : (e?.path ?? e?.file)))
-    .filter((p): p is string => typeof p === 'string' && p.length > 0);
+    .map((e): ReportEvidenceInput | null => {
+      if (typeof e === 'string') return { path: e };
+      const value = objectValue(e);
+      const evidencePath = value && firstString(value.path, value.file);
+      if (!evidencePath) return null;
+      const comparison = objectValue(value.comparison);
+      const role = comparison?.role;
+      return {
+        comparison:
+          comparison && (role === 'before' || role === 'after')
+            ? {
+                id: firstString(comparison.id),
+                label: firstString(comparison.label),
+                role,
+              }
+            : undefined,
+        description: firstString(value.description, value.desc),
+        path: evidencePath,
+      };
+    })
+    .filter((item): item is ReportEvidenceInput => item !== null);
 }
 
 function firstString(...values: unknown[]): string | undefined {
@@ -1190,7 +1215,8 @@ export function registerVerifyCommand(program: Command) {
             }
           }
 
-          for (const rel of evidencePaths(c.evidence)) {
+          for (const evidenceInput of reportEvidence(c.evidence)) {
+            const rel = evidenceInput.path;
             const abs = path.isAbsolute(rel) ? rel : path.join(dir, rel);
             if (!existsSync(abs)) {
               log.warn(`evidence not found, skipping: ${rel}`);
@@ -1206,8 +1232,11 @@ export function registerVerifyCommand(program: Command) {
                 // The filename, not the case title — the title already heads the
                 // check card, so reusing it here just triples the same text.
                 content,
-                description: path.basename(abs),
+                description: evidenceInput.description ?? path.basename(abs),
                 fileId: file?.id,
+                metadata: evidenceInput.comparison
+                  ? { comparison: evidenceInput.comparison }
+                  : undefined,
                 type,
               });
               evidenceCount += 1;

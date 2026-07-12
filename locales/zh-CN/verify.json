@@ -52,6 +52,8 @@
   "report.evidence.category.file": "文件",
   "report.evidence.category.image": "图片",
   "report.evidence.category.video": "视频",
+  "report.evidence.comparison.after": "优化后",
+  "report.evidence.comparison.before": "优化前",
   "report.evidence.count": "{{count}} 条证据",
   "report.evidence.inlineFallback": "内联证据 {{index}}",
   "report.evidence.openDetail": "打开 {{name}}",

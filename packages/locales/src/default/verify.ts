@@ -64,6 +64,8 @@ export default {
   'report.evidence.category.video': 'Video',
   'report.evidence.count': '{{count}} evidence',
   'report.evidence.inlineFallback': 'Inline evidence {{index}}',
+  'report.evidence.comparison.after': 'After',
+  'report.evidence.comparison.before': 'Before',
   'report.evidence.openDetail': 'Open {{name}}',
   'report.evidence.view': 'View evidence ({{count}})',
   'report.filter.all': 'All',

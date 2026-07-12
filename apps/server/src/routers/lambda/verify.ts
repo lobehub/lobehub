@@ -159,6 +159,7 @@ const uploadEvidenceInputSchema = z
     content: z.string().min(1).optional(),
     description: z.string().optional(),
     fileId: z.string().min(1).optional(),
+    metadata: z.unknown().optional(),
     type: evidenceTypeSchema,
   })
   .refine((data) => Boolean(data.content) !== Boolean(data.fileId), {
@@ -666,6 +667,7 @@ export const verifyRouter = router({
         content: input.content ?? null,
         description: input.description ?? null,
         fileId: input.fileId ?? null,
+        metadata: input.metadata ?? null,
         type: input.type,
       });
     }),
