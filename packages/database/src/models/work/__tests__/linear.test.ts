@@ -32,7 +32,7 @@ describe('WorkModel · linear', () => {
       ...baseParams,
       description: 'Original description',
       patchFields: ['title', 'status', 'description'],
-      role: 'created',
+      changeType: 'created',
       rootOperationId: 'op-race-create',
       sourceToolCallId: 'tool-call-race-create',
       status: 'Backlog',
@@ -56,7 +56,7 @@ describe('WorkModel · linear', () => {
       await workModel.registerLinear({
         ...baseParams,
         patchFields: ['title'],
-        role: 'updated',
+        changeType: 'updated',
         rootOperationId: 'op-race-winner',
         sourceToolCallId: 'tool-call-race-winner',
         title: 'Winner title',
@@ -71,7 +71,7 @@ describe('WorkModel · linear', () => {
       await workModel.registerLinear({
         ...baseParams,
         patchFields: ['status'],
-        role: 'updated',
+        changeType: 'updated',
         rootOperationId: 'op-race-loser',
         sourceToolCallId: 'tool-call-race-loser',
         status: 'In Progress',
@@ -147,14 +147,14 @@ describe('WorkModel · linear', () => {
     expect(replay?.id).toBe(first?.id);
     expect(second).toMatchObject({
       resourceId: 'issue-uuid-10966',
-      resourceIdentifier: 'LOBE-10966',
+      resourceLabel: 'LOBE-10966',
       resourceType: 'linear_issue',
       type: 'linear',
     });
 
     const versions = await workModel.listVersions(first!.id);
     expect(versions.map((item) => item.version)).toEqual([2, 1]);
-    expect(versions[0].role).toBe('updated');
+    expect(versions[0].changeType).toBe('updated');
     expect(expectLinearSnapshot(versions[0].snapshot)).toMatchObject({
       description: 'Track Linear issue as Work',
       id: 'issue-uuid-10966',
@@ -289,15 +289,15 @@ describe('WorkModel · linear', () => {
 
     expect(document).toMatchObject({
       resourceId: 'doc-1',
-      resourceIdentifier: 'linear-document',
+      resourceLabel: 'linear-document',
       resourceType: 'linear_document',
       type: 'linear',
     });
     expect(editedDocument).toMatchObject({
-      resourceIdentifier: 'linear-document-8298fa69b2e3',
+      resourceLabel: 'linear-document-8298fa69b2e3',
     });
     expect(partialDocumentUpdate).toMatchObject({
-      resourceIdentifier: 'linear-document-8298fa69b2e3',
+      resourceLabel: 'linear-document-8298fa69b2e3',
     });
 
     const documentVersions = await workModel.listVersions(document!.id);

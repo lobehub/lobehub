@@ -32,7 +32,7 @@ import {
   messageStateSelectors,
   useConversationStore,
 } from '../../store';
-import { getOperationFinalRootId } from '../../store/slices/data/workRootOperationIds';
+import { getOperationFinalRootId } from '../../store/slices/data/workSummaries';
 import InterruptedHint from '../Assistant/components/InterruptedHint';
 import Usage from '../components/Extras/Usage';
 import MessageBranch from '../components/MessageBranch';

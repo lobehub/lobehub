@@ -62,7 +62,7 @@ describe('registerClientWorkFromIntent', () => {
         ...base,
         intent: {
           action: 'create',
-          role: 'created',
+          changeType: 'created',
           targets: [{ taskId: 'task_1', taskIdentifier: 'T-1' }],
           type: 'task',
         },
@@ -75,7 +75,7 @@ describe('registerClientWorkFromIntent', () => {
           cumulativeUsage: expect.objectContaining({
             cost: expect.objectContaining({ total: 0.011 }),
           }),
-          role: 'created',
+          changeType: 'created',
           rootOperationId: 'op-root',
           source: 'createTask',
           sourceMessageId: 'msg-tool-1',
@@ -101,10 +101,10 @@ describe('registerClientWorkFromIntent', () => {
       expect(mocks.refreshConversation).not.toHaveBeenCalled();
     });
 
-    it('is a no-op for a create/update intent without a role', async () => {
+    it('is a no-op for a create/update intent without a changeType', async () => {
       await registerClientWorkFromIntent({
         ...base,
-        // deliberately malformed: create intent missing role
+        // deliberately malformed: create intent missing changeType
         intent: { action: 'create', targets: [{ taskId: 'task_1' }], type: 'task' },
       });
 
@@ -120,7 +120,7 @@ describe('registerClientWorkFromIntent', () => {
           ...base,
           intent: {
             action: 'create',
-            role: 'created',
+            changeType: 'created',
             targets: [{ taskId: 'task_1' }],
             type: 'task',
           },
@@ -139,7 +139,7 @@ describe('registerClientWorkFromIntent', () => {
           document: {
             agentId: 'agent-1',
             documentId: 'doc_1',
-            role: 'created',
+            changeType: 'created',
             source: 'createDocument',
             url: 'https://example.com/doc_1',
           },
@@ -151,7 +151,7 @@ describe('registerClientWorkFromIntent', () => {
         expect.objectContaining({
           cumulativeCost: 0.011,
           documentId: 'doc_1',
-          role: 'created',
+          changeType: 'created',
           rootOperationId: 'op-root',
           source: 'createDocument',
           sourceToolCallId: 'tool-call-1',

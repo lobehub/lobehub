@@ -154,7 +154,7 @@ export const createVersion = async (
             cumulativeCost: params.cumulativeCost ?? null,
             cumulativeUsage: params.cumulativeUsage ?? null,
             metadata: metadata ?? null,
-            role: params.role,
+            changeType: params.changeType,
             rootOperationId: params.rootOperationId ?? null,
             snapshot,
             source: params.source,

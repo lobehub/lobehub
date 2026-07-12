@@ -417,9 +417,10 @@ const createRegisterOperation = (
         ),
       ),
       resourceId: id,
-      resourceIdentifier: identifier,
+      resourceLabel: identifier,
       resourceType: linearResourceType(entityType),
-      role: LINEAR_CREATE_TOOLS.has(params.toolName) && !params.args?.id ? 'created' : 'updated',
+      changeType:
+        LINEAR_CREATE_TOOLS.has(params.toolName) && !params.args?.id ? 'created' : 'updated',
       status: patch(
         'status',
         firstDefined(

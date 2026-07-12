@@ -34,12 +34,12 @@ const MAX_GITHUB_SNAPSHOT_TEXT_LENGTH = 4000;
  */
 const GITHUB_WORK_TOOLS: Record<
   string,
-  { entityType: GithubWorkEntityType; role: 'created' | 'updated' }
+  { entityType: GithubWorkEntityType; changeType: 'created' | 'updated' }
 > = {
-  create_issue: { entityType: 'issue', role: 'created' },
-  create_pull_request: { entityType: 'pull_request', role: 'created' },
-  update_issue: { entityType: 'issue', role: 'updated' },
-  update_pull_request: { entityType: 'pull_request', role: 'updated' },
+  create_issue: { entityType: 'issue', changeType: 'created' },
+  create_pull_request: { entityType: 'pull_request', changeType: 'created' },
+  update_issue: { entityType: 'issue', changeType: 'updated' },
+  update_pull_request: { entityType: 'pull_request', changeType: 'updated' },
 };
 
 const GITHUB_CLI_TOOLS = new Set(['runCommand', 'run_command']);
@@ -206,7 +206,7 @@ const githubResourceType = (entityType: GithubWorkEntityType): GithubWorkResourc
 
 const buildParams = (
   params: RegisterGithubToolResultWorkParams,
-  tool: { entityType: GithubWorkEntityType; role: 'created' | 'updated' },
+  tool: { entityType: GithubWorkEntityType; changeType: 'created' | 'updated' },
   record: Record<string, unknown>,
 ): Omit<RegisterGithubWorkParams, 'resourceId'> => {
   const args = params.args ?? {};
@@ -272,9 +272,9 @@ const buildParams = (
     ),
     number,
     repo,
-    resourceIdentifier: repo && number !== null ? `${repo}#${number}` : null,
+    resourceLabel: repo && number !== null ? `${repo}#${number}` : null,
     resourceType: githubResourceType(tool.entityType),
-    role: tool.role,
+    changeType: tool.changeType,
     rootOperationId: params.rootOperationId ?? null,
     source: params.toolName,
     sourceMessageId: params.sourceMessageId ?? null,
@@ -654,9 +654,9 @@ const normalizeGithubCliResult = (
       number: ref.number,
       repo: ref.repo,
       resourceId: identifier,
-      resourceIdentifier: identifier,
+      resourceLabel: identifier,
       resourceType: githubResourceType(ref.entityType),
-      role: parsed.action === 'create' ? 'created' : 'updated',
+      changeType: parsed.action === 'create' ? 'created' : 'updated',
       rootOperationId: params.rootOperationId ?? null,
       source: params.toolName,
       sourceMessageId: params.sourceMessageId ?? null,
@@ -694,7 +694,7 @@ export const normalizeGithubToolResult = (
   // `owner/repo#number` is the canonical github Work identity — the CLI
   // surface never returns node_id, so REST-shaped results must dedupe against
   // CLI-created rows through the same key. Unidentifiable results are skipped.
-  if (!base.resourceIdentifier) return null;
+  if (!base.resourceLabel) return null;
 
-  return { params: { ...base, resourceId: base.resourceIdentifier }, type: 'register' };
+  return { params: { ...base, resourceId: base.resourceLabel }, type: 'register' };
 };

@@ -111,7 +111,7 @@ describe('agentDocumentsExecutor', () => {
           agentId: 'agent-1',
           description: 'A daily brief',
           documentId: 'document-1',
-          role: 'created',
+          changeType: 'created',
           source: 'createDocument',
         }),
         type: 'document',

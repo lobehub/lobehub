@@ -30,7 +30,7 @@ describe('WorkModel · queries', () => {
     });
 
     await workModel.registerTask({
-      role: 'created',
+      changeType: 'created',
       rootOperationId: 'op-first',
       source: 'createTask',
       sourceToolCallId: 'tool-call-1',
@@ -38,7 +38,7 @@ describe('WorkModel · queries', () => {
       topicId,
     });
     await workModel.registerTask({
-      role: 'created',
+      changeType: 'created',
       rootOperationId: 'op-second',
       source: 'createTask',
       sourceToolCallId: 'tool-call-2',
@@ -62,7 +62,7 @@ describe('WorkModel · queries', () => {
     const secondTask = await taskModel.create({ instruction: 'Batch 2', name: 'Batch two' });
 
     await workModel.registerTask({
-      role: 'created',
+      changeType: 'created',
       rootOperationId: 'op-batch-1',
       source: 'createTask',
       sourceToolCallId: 'tool-call-batch-1',
@@ -70,7 +70,7 @@ describe('WorkModel · queries', () => {
       topicId,
     });
     await workModel.registerTask({
-      role: 'created',
+      changeType: 'created',
       rootOperationId: 'op-batch-2',
       source: 'createTask',
       sourceToolCallId: 'tool-call-batch-2',
@@ -103,7 +103,7 @@ describe('WorkModel · queries', () => {
     // touching round's anchor card surfaces the Work — earlier rounds drop the
     // chip instead of repeating the same artifact every turn.
     await workModel.registerTask({
-      role: 'created',
+      changeType: 'created',
       rootOperationId: 'op-shared-create',
       source: 'createTask',
       sourceToolCallId: 'tool-call-shared-1',
@@ -111,7 +111,7 @@ describe('WorkModel · queries', () => {
       topicId,
     });
     await workModel.registerTask({
-      role: 'updated',
+      changeType: 'updated',
       rootOperationId: 'op-shared-update',
       source: 'updateTask',
       sourceToolCallId: 'tool-call-shared-2',
@@ -126,7 +126,7 @@ describe('WorkModel · queries', () => {
     expect(summaries['op-shared-create']).toEqual([]);
     expect(summaries['op-shared-update']).toHaveLength(1);
     expect(summaries['op-shared-update'][0].event).toMatchObject({
-      role: 'updated',
+      changeType: 'updated',
       rootOperationId: 'op-shared-update',
     });
   });
@@ -142,7 +142,7 @@ describe('WorkModel · queries', () => {
       agentDocumentId: doc.id,
       agentId,
       documentId: doc.documentId,
-      role: 'created',
+      changeType: 'created',
       rootOperationId: 'op-doc-clamp',
       source: 'createDocument',
       sourceToolCallId: 'tool-call-doc-clamp',

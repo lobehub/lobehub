@@ -1,5 +1,6 @@
 import { type AgentState } from '@lobechat/agent-runtime';
 import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
+import { dispatchWorkRegistrationIntent } from '@lobechat/builtin-tools/workRegistration';
 import { resolveSubAgentModel } from '@lobechat/const';
 import { type OperationToolSet } from '@lobechat/context-engine';
 import { type ToolType } from '@lobechat/observability-otel/modules/agent-runtime';
@@ -80,6 +81,10 @@ export const archiveRuntimeToolResult = async (
  * executor now only resolves the intent, and the runtime writes it once here,
  * after `accumulateTool` has computed the cumulative cost.
  *
+ * Thin server wrapper around the shared {@link dispatchWorkRegistrationIntent}:
+ * builds `WorkModel`-backed ports (all five, incl. `deleteDocumentWork`) and
+ * per-call provenance, then delegates all branch logic.
+ *
  * Best-effort: any failure is swallowed so Work bookkeeping never breaks the
  * tool result. Runs AFTER `tool_end` publishes (cost is known only then), so
  * the Work row becomes durable slightly later than the tool_end event — the
@@ -121,73 +126,26 @@ export const registerWorkFromIntent = async ({
   try {
     const workModel = new WorkModel(serverDB, userId, workspaceId);
 
-    if (intent.type === 'task') {
-      const { action, role, targets } = intent;
-
-      if (action === 'delete') {
-        await Promise.all(
-          targets.map((target) =>
-            target.taskId ? workModel.deleteTaskWork({ taskId: target.taskId }) : undefined,
-          ),
-        );
-        return;
-      }
-
-      if (!role) return;
-
-      await Promise.all(
-        targets.map((target) =>
-          workModel.registerTask({
-            actorAgentId,
-            role,
-            rootOperationId,
-            source: sourceToolName,
-            sourceMessageId,
-            sourceToolCallId,
-            taskId: target.taskId,
-            taskIdentifier: target.taskIdentifier,
-            threadId,
-            topicId,
-            ...cumulative,
-          }),
-        ),
-      );
-      return;
-    }
-
-    if (intent.type === 'document') {
-      if (intent.action === 'delete') {
-        await workModel.deleteDocumentWork(intent.document);
-        return;
-      }
-
-      await workModel.registerDocument({
-        ...intent.document,
-        ...cumulative,
+    await dispatchWorkRegistrationIntent(
+      intent,
+      {
+        deleteDocumentWork: (params) => workModel.deleteDocumentWork(params),
+        deleteTaskWork: (params) => workModel.deleteTaskWork(params),
+        handleSkillToolResult: (params) => workModel.handleSkillToolResult(params),
+        registerDocument: (params) => workModel.registerDocument(params),
+        registerTask: (params) => workModel.registerTask(params),
+      },
+      {
         actorAgentId,
+        ...cumulative,
         rootOperationId,
         sourceMessageId,
         sourceToolCallId,
+        sourceToolName,
         threadId,
         topicId,
-      });
-      return;
-    }
-
-    // skill (linear / github): normalize the untruncated payload into a Work
-    await workModel.handleSkillToolResult({
-      actorAgentId,
-      args: intent.args,
-      data: intent.data,
-      provider: intent.provider,
-      rootOperationId,
-      sourceMessageId,
-      sourceToolCallId,
-      threadId,
-      toolName: intent.toolName,
-      topicId,
-      ...cumulative,
-    });
+      },
+    );
   } catch (error) {
     log('registerWorkFromIntent failed for toolCallId=%s: %O', sourceToolCallId, error);
   }

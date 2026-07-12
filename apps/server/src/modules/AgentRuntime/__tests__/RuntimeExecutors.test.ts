@@ -3009,7 +3009,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         success: true,
         workRegistration: {
           action: 'create',
-          role: 'created',
+          changeType: 'created',
           targets: [{ taskId: 'task_x', taskIdentifier: 'T-X' }],
           type: 'task',
         },
@@ -3038,7 +3038,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
           cumulativeUsage: expect.objectContaining({
             cost: expect.objectContaining({ total: 0.02 }),
           }),
-          role: 'created',
+          changeType: 'created',
           source: 'createTask',
           sourceMessageId: 'msg-123',
           sourceToolCallId: 'tool-call-intent',
@@ -3719,13 +3719,13 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
             payload.id === 'tool-call-1'
               ? {
                   action: 'create',
-                  role: 'created',
+                  changeType: 'created',
                   targets: [{ taskId: 'task_1', taskIdentifier: 'T-1' }],
                   type: 'task',
                 }
               : {
                   action: 'update',
-                  role: 'updated',
+                  changeType: 'updated',
                   targets: [{ taskId: 'task_2', taskIdentifier: 'T-2' }],
                   type: 'task',
                 },
@@ -3766,14 +3766,14 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         expect.arrayContaining([
           expect.objectContaining({
             cumulativeUsage: expect.objectContaining({ cost: expect.any(Object) }),
-            role: 'created',
+            changeType: 'created',
             source: 'createTask',
             sourceMessageId: expect.stringMatching(/^tool-msg-/),
             sourceToolCallId: 'tool-call-1',
             taskId: 'task_1',
           }),
           expect.objectContaining({
-            role: 'updated',
+            changeType: 'updated',
             source: 'updateTask',
             sourceMessageId: expect.stringMatching(/^tool-msg-/),
             sourceToolCallId: 'tool-call-2',

@@ -270,7 +270,7 @@ describe('agentDocumentsRuntime Work registration intent', () => {
         agentDocumentId: 'agent-doc-assoc-id',
         agentId: 'agent-1',
         documentId: 'documents-row-id',
-        role: 'created',
+        changeType: 'created',
         source: 'createDocument',
         url: 'https://app.example.com/lobe-team/agent/agent-1/docs/documents-row-id',
       },

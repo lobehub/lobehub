@@ -1,6 +1,4 @@
 import type {
-  DocumentWorkSummaryItem,
-  DocumentWorkVersionEventItem,
   DocumentWorkVersionSnapshot,
   RegisterDocumentWorkParams,
   WorkItem,
@@ -14,13 +12,8 @@ import { agentDocuments } from '../../schemas/agentDocuments';
 import { type DocumentItem, documents } from '../../schemas/file';
 import { works } from '../../schemas/work';
 import { agentDocumentOwnership, documentOwnership, type WorkContext } from './context';
-import { getTotalCostByWorkIds } from './cost';
-import {
-  listSnapshotVersionEventRows,
-  listSnapshotWorkSummaryRows,
-  type SnapshotWorkSummaryQueryRow,
-  truncateSummaryText,
-} from './internal';
+import { truncateSummaryText } from './internal';
+import { createSnapshotWorkAdapter } from './snapshotWork';
 import { createVersion, findById, resolveWorkUpsertConflict } from './writes';
 
 export const documentSnapshot = (
@@ -73,7 +66,7 @@ const resolveDocument = async (
 const upsertDocumentWork = async (ctx: WorkContext, doc: DocumentItem): Promise<WorkItem> => {
   const values = {
     resourceId: doc.id,
-    resourceIdentifier: doc.filename,
+    resourceLabel: doc.filename,
     resourceType: 'document' as const,
     type: 'document' as const,
     userId: ctx.userId,
@@ -88,7 +81,7 @@ const upsertDocumentWork = async (ctx: WorkContext, doc: DocumentItem): Promise<
     .onConflictDoUpdate({
       ...conflict,
       set: {
-        resourceIdentifier: doc.filename,
+        resourceLabel: doc.filename,
         updatedAt: new Date(),
       },
     })
@@ -108,6 +101,12 @@ const createDocumentVersion = async (
     snapshot: documentSnapshot(doc, params),
   }));
 
+/**
+ * Document keeps a custom register (unlike the linear/github factory path):
+ * it must resolve + ownership-check the backing `documents` row (and the
+ * optional `agentDocuments` binding) before any Work is written, and it stamps
+ * the binding into version metadata.
+ */
 export const registerDocumentWork = async (
   ctx: WorkContext,
   params: RegisterDocumentWorkParams,
@@ -121,46 +120,7 @@ export const registerDocumentWork = async (
   return findById(ctx, work.id);
 };
 
-export const listDocumentVersionEvents = async (
-  ctx: WorkContext,
-  filters: SQL[],
-  limit = 20,
-): Promise<DocumentWorkVersionEventItem[]> => {
-  const rows = await listSnapshotVersionEventRows<DocumentWorkVersionSnapshot>(
-    ctx,
-    'document',
-    filters,
-    limit,
-  );
-
-  return rows.map((row) => ({
-    ...row.work,
-    document: row.snapshot,
-    resourceType: 'document' as const,
-    type: 'document' as const,
-    version: row.version,
-  }));
-};
-
-export const listDocumentWorkSummaryRows = (ctx: WorkContext, filters: SQL[], rowLimit: number) =>
-  listSnapshotWorkSummaryRows<DocumentWorkVersionSnapshot>(ctx, 'document', filters, rowLimit);
-
-export const toDocumentWorkSummaries = async (
-  ctx: WorkContext,
-  rows: SnapshotWorkSummaryQueryRow<DocumentWorkVersionSnapshot>[],
-): Promise<DocumentWorkSummaryItem[]> => {
-  const costByWorkId = await getTotalCostByWorkIds(
-    ctx,
-    rows.map((row) => row.work.id),
-  );
-
-  return rows.map((row) => ({
-    ...row.work,
-    document: row.snapshot,
-    event: row.event,
-    resourceType: 'document' as const,
-    totalCost: costByWorkId.get(row.work.id) ?? null,
-    type: 'document' as const,
-    version: row.version,
-  }));
-};
+/** Document snapshots are already card-sized (description trimmed at write time), so no summary slimmer. */
+export const documentWorkAdapter = createSnapshotWorkAdapter<DocumentWorkVersionSnapshot>({
+  type: 'document',
+});

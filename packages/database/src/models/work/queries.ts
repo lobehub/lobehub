@@ -1,13 +1,4 @@
 import type {
-  DocumentWorkListItem,
-  DocumentWorkVersionSnapshot,
-  GithubWorkListItem,
-  GithubWorkSummaryItem,
-  GithubWorkVersionSnapshot,
-  LinearWorkListItem,
-  LinearWorkSummaryItem,
-  LinearWorkVersionSnapshot,
-  TaskWorkListItem,
   WorkItem,
   WorkListItem,
   WorkSummaryItem,
@@ -22,42 +13,18 @@ import { and, desc, eq, inArray, isNull, lt, or } from 'drizzle-orm';
 
 import { tasks } from '../../schemas/task';
 import { works, workVersions } from '../../schemas/work';
-import { versionOwnership, type WorkContext, workOwnership } from './context';
+import { type WorkContext, workOwnership } from './context';
 import { getTotalCostByWorkIds } from './cost';
-import {
-  listDocumentVersionEvents,
-  listDocumentWorkSummaryRows,
-  toDocumentWorkSummaries,
-} from './document';
-import {
-  listGithubVersionEvents,
-  listGithubWorkSummaryRows,
-  toGithubWorkSummaries,
-} from './github';
-import {
-  currentVersions,
-  slimGithubSnapshotForSummary,
-  slimLinearSnapshotForSummary,
-  snapshotField,
-  type SnapshotWorkType,
-  taskSummaryFields,
-  taskSummaryJoin,
-  truncateSummaryText,
-} from './internal';
-import {
-  listLinearVersionEvents,
-  listLinearWorkSummaryRows,
-  toLinearWorkSummaries,
-} from './linear';
-import { listTaskVersionEvents, listTaskWorkSummaryRows, toTaskWorkSummaries } from './task';
+import { currentVersions, taskSummaryFields, taskSummaryJoin } from './internal';
+import { WORK_TYPE_ADAPTERS, workTypeAdapters } from './registry';
 
 /**
- * Over-fetch multiplier for list/summary queries: one per Work provider type
- * (task / document / linear / github). Rows are fetched per type and deduped
- * to the latest item per work in JS, so each query over-fetches by this factor
- * before results are trimmed back down to `limit`.
+ * Over-fetch multiplier for list/summary queries: one per registered Work
+ * type. Rows are fetched per type and deduped to the latest item per work in
+ * JS, so each query over-fetches by this factor before results are trimmed
+ * back down to `limit`.
  */
-const WORK_TYPE_FANOUT = 4;
+const WORK_TYPE_FANOUT = workTypeAdapters.length;
 /**
  * Hard ceiling for the summary-row over-fetch LIMIT: `rootOperationIds` length
  * is caller-controlled (the tRPC schema caps only `limit`), so without a clamp
@@ -99,22 +66,19 @@ export const listByRootOperations = async (
   const result: WorkVersionEventMap = Object.fromEntries(
     rootOperationIds.map((rootOperationId) => [rootOperationId, []]),
   );
-  // One batched query per work type across all ids (instead of 4 queries per
-  // id); rows are re-partitioned per rootOperationId below. Each per-type
+  // One batched query per work type across all ids (instead of one per type
+  // per id); rows are re-partitioned per rootOperationId below. Each per-type
   // query over-fetches up to `limit` rows per id, clamped like the sibling
   // listSummariesByRootOperations.
   const filters = [inArray(workVersions.rootOperationId, rootOperationIds)];
   const rowLimit = Math.min(rootOperationIds.length * limit, MAX_SUMMARY_ROW_LIMIT);
-  const [taskItems, documentItems, linearItems, githubItems] = await Promise.all([
-    listTaskVersionEvents(ctx, filters, rowLimit),
-    listDocumentVersionEvents(ctx, filters, rowLimit),
-    listLinearVersionEvents(ctx, filters, rowLimit),
-    listGithubVersionEvents(ctx, filters, rowLimit),
-  ]);
-
-  const items = [...taskItems, ...documentItems, ...linearItems, ...githubItems].sort(
-    (a, b) => b.version.createdAt.getTime() - a.version.createdAt.getTime(),
+  const itemsByType = await Promise.all(
+    workTypeAdapters.map((adapter) => adapter.listVersionEvents(ctx, filters, rowLimit)),
   );
+
+  const items = itemsByType
+    .flat()
+    .sort((a, b) => b.version.createdAt.getTime() - a.version.createdAt.getTime());
 
   for (const item of items) {
     const rootOperationId = item.version.rootOperationId;
@@ -147,21 +111,24 @@ export const listSummariesByRootOperations = async (
     rootOperationIds.length * limit * WORK_TYPE_FANOUT,
     MAX_SUMMARY_ROW_LIMIT,
   );
-  const [taskRows, documentRows, linearRows, githubRows] = await Promise.all([
-    listTaskWorkSummaryRows(ctx, filters, rowLimit),
-    listDocumentWorkSummaryRows(ctx, filters, rowLimit),
-    listLinearWorkSummaryRows(ctx, filters, rowLimit),
-    listGithubWorkSummaryRows(ctx, filters, rowLimit),
-  ]);
-  const summaries = (
-    await Promise.all([
-      toTaskWorkSummaries(ctx, taskRows),
-      toDocumentWorkSummaries(ctx, documentRows),
-      toLinearWorkSummaries(ctx, linearRows),
-      toGithubWorkSummaries(ctx, githubRows),
-    ])
-  )
-    .flat()
+  const rowsByType = await Promise.all(
+    workTypeAdapters.map(async (adapter) => ({
+      adapter,
+      rows: await adapter.listSummaryRows(ctx, filters, rowLimit),
+    })),
+  );
+
+  // ONE cost query across every type's rows (cumulative snapshots aggregated
+  // per work in cost.ts), instead of one per type.
+  const costByWorkId = await getTotalCostByWorkIds(
+    ctx,
+    rowsByType.flatMap(({ rows }) => rows.map((row) => row.work.id)),
+  );
+
+  const summaries = rowsByType
+    .flatMap(({ adapter, rows }) =>
+      rows.map((row) => adapter.mapSummaryRow(row, costByWorkId.get(row.work.id) ?? null)),
+    )
     .sort((a, b) => b.event.createdAt.getTime() - a.event.createdAt.getTime());
 
   // Dedupe to the latest event per Work GLOBALLY across the requested
@@ -197,103 +164,22 @@ export const listByConversation = async (
     ? eq(workVersions.threadId, params.threadId)
     : isNull(workVersions.threadId);
 
-  const taskRows = await ctx.db
-    .select({
-      eventCreatedAt: workVersions.createdAt,
-      // LEFT JOIN so orphaned task Works still surface; live columns coalesce
-      // onto the current-version snapshot and `tasks.id is null` flags deletion.
-      ...taskSummaryFields(currentVersions.snapshot),
-      work: works,
-    })
-    .from(workVersions)
-    .innerJoin(works, and(eq(workVersions.workId, works.id), workOwnership(ctx)))
-    .innerJoin(currentVersions, eq(works.currentVersionId, currentVersions.id))
-    .leftJoin(tasks, taskSummaryJoin(ctx))
-    .where(
-      and(
-        versionOwnership(ctx),
-        eq(workVersions.topicId, params.topicId),
+  const rowsByType = await Promise.all(
+    workTypeAdapters.map((adapter) =>
+      adapter.listConversationRows(ctx, {
+        rowLimit: limit * WORK_TYPE_FANOUT,
         threadFilter,
-        eq(works.type, 'task'),
-      ),
-    )
-    .orderBy(desc(workVersions.createdAt), desc(works.updatedAt))
-    .limit(limit * WORK_TYPE_FANOUT);
+        topicId: params.topicId!,
+      }),
+    ),
+  );
 
-  const snapshotRows = <Snapshot>(type: SnapshotWorkType) =>
-    ctx.db
-      .select({
-        eventCreatedAt: workVersions.createdAt,
-        snapshot: snapshotField<Snapshot>(currentVersions.snapshot, type),
-        work: works,
-      })
-      .from(workVersions)
-      .innerJoin(works, and(eq(workVersions.workId, works.id), workOwnership(ctx)))
-      .innerJoin(currentVersions, eq(works.currentVersionId, currentVersions.id))
-      .where(
-        and(
-          versionOwnership(ctx),
-          eq(workVersions.topicId, params.topicId!),
-          threadFilter,
-          eq(works.type, type),
-        ),
-      )
-      .orderBy(desc(workVersions.createdAt), desc(works.updatedAt))
-      .limit(limit * WORK_TYPE_FANOUT);
-
-  const [documentRows, linearRows, githubRows] = await Promise.all([
-    snapshotRows<DocumentWorkVersionSnapshot>('document'),
-    snapshotRows<LinearWorkVersionSnapshot>('linear'),
-    snapshotRows<GithubWorkVersionSnapshot>('github'),
-  ]);
+  const rows = rowsByType
+    .flat()
+    .sort((a, b) => b.eventCreatedAt.getTime() - a.eventCreatedAt.getTime());
 
   const seen = new Set<string>();
   const items: WorkListItem[] = [];
-  const rows = [
-    ...taskRows.map((row) => ({
-      eventCreatedAt: row.eventCreatedAt,
-      item: {
-        ...row.work,
-        resourceType: 'task' as const,
-        task: {
-          instruction: truncateSummaryText(row.task.instruction),
-          name: row.task.name,
-          priority: row.task.priority,
-          status: row.task.status,
-        },
-        taskDeleted: row.task.deleted,
-        type: 'task' as const,
-      } satisfies TaskWorkListItem,
-    })),
-    ...documentRows.map((row) => ({
-      eventCreatedAt: row.eventCreatedAt,
-      item: {
-        ...row.work,
-        document: row.snapshot,
-        resourceType: 'document' as const,
-        type: 'document' as const,
-      } satisfies DocumentWorkListItem,
-    })),
-    ...linearRows.map((row) => ({
-      eventCreatedAt: row.eventCreatedAt,
-      item: {
-        ...row.work,
-        linear: slimLinearSnapshotForSummary(row.snapshot),
-        resourceType: row.work.resourceType as LinearWorkListItem['resourceType'],
-        type: 'linear' as const,
-      } satisfies LinearWorkListItem,
-    })),
-    ...githubRows.map((row) => ({
-      eventCreatedAt: row.eventCreatedAt,
-      item: {
-        ...row.work,
-        github: slimGithubSnapshotForSummary(row.snapshot),
-        resourceType: row.work.resourceType as GithubWorkListItem['resourceType'],
-        type: 'github' as const,
-      } satisfies GithubWorkListItem,
-    })),
-  ].sort((a, b) => b.eventCreatedAt.getTime() - a.eventCreatedAt.getTime());
-
   for (const row of rows) {
     if (seen.has(row.item.id)) continue;
     seen.add(row.item.id);
@@ -361,8 +247,9 @@ const decodeWorkCursor = (cursor: string): { id: string; updatedAt: Date } | nul
  * Workspace-wide (cross-topic) Work list for the resource page's 产物 group.
  * Unlike the conversation/root-operation queries, this pages off `works` as the
  * primary table (not `work_versions` events), so `event`/`version` both reflect
- * the Work's current version. `type` optionally narrows to one entry (task /
- * document / linear / github); omitting it powers the combined 全部 view.
+ * the Work's current version. `type` optionally narrows to one registry entry;
+ * omitting it powers the combined 全部 view. One query serves every type — the
+ * per-type differences live in each adapter's `mapWorkspaceRow`.
  */
 export const listByWorkspace = async (
   ctx: WorkContext,
@@ -391,11 +278,11 @@ export const listByWorkspace = async (
       // Global view has no mutation event to anchor on, so the current version
       // doubles as the surfacing event (mirrors the summary row shape).
       event: {
+        changeType: currentVersions.changeType,
         createdAt: currentVersions.createdAt,
         cumulativeCost: currentVersions.cumulativeCost,
         id: currentVersions.id,
         metadata: currentVersions.metadata,
-        role: currentVersions.role,
         rootOperationId: currentVersions.rootOperationId,
         source: currentVersions.source,
         sourceMessageId: currentVersions.sourceMessageId,
@@ -426,62 +313,9 @@ export const listByWorkspace = async (
     pageRows.map((row) => row.work.id),
   );
 
-  const items = pageRows.map((row): WorkSummaryItem => {
-    const base = {
-      ...row.work,
-      event: row.event,
-      totalCost: costByWorkId.get(row.work.id) ?? null,
-      version: row.version,
-    };
-
-    switch (row.work.type) {
-      case 'document': {
-        return {
-          ...base,
-          document: (row.snapshot as { document: DocumentWorkVersionSnapshot }).document,
-          resourceType: 'document',
-          type: 'document',
-        };
-      }
-
-      case 'linear': {
-        return {
-          ...base,
-          linear: slimLinearSnapshotForSummary(
-            (row.snapshot as { linear: LinearWorkVersionSnapshot }).linear,
-          ),
-          resourceType: row.work.resourceType as LinearWorkSummaryItem['resourceType'],
-          type: 'linear',
-        };
-      }
-
-      case 'github': {
-        return {
-          ...base,
-          github: slimGithubSnapshotForSummary(
-            (row.snapshot as { github: GithubWorkVersionSnapshot }).github,
-          ),
-          resourceType: row.work.resourceType as GithubWorkSummaryItem['resourceType'],
-          type: 'github',
-        };
-      }
-
-      default: {
-        return {
-          ...base,
-          resourceType: 'task',
-          task: {
-            instruction: truncateSummaryText(row.task.instruction),
-            name: row.task.name,
-            priority: row.task.priority,
-            status: row.task.status,
-          },
-          taskDeleted: row.task.deleted,
-          type: 'task',
-        };
-      }
-    }
-  });
+  const items = pageRows.map((row) =>
+    WORK_TYPE_ADAPTERS[row.work.type].mapWorkspaceRow(row, costByWorkId.get(row.work.id) ?? null),
+  );
 
   return { items, nextCursor: hasMore ? encodeWorkCursor(pageRows.at(-1)!.work) : null };
 };

@@ -131,7 +131,7 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
       agentDocumentId?: string;
       agentId: string;
       documentId?: string;
-      role: 'created' | 'updated';
+      changeType: 'created' | 'updated';
       source: string;
     }) => {
       if (!input.documentId) return;
@@ -142,7 +142,7 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
           agentDocumentId: input.agentDocumentId,
           agentId: input.agentId,
           documentId: input.documentId,
-          role: input.role,
+          changeType: input.changeType,
           source: input.source,
           url: await workRegistrar.buildRegisteredDocumentUrl(input.agentId, input.documentId),
         },
@@ -188,7 +188,7 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
             agentDocumentId: doc?.id,
             agentId,
             documentId: doc?.documentId,
-            role: 'created',
+            changeType: 'created',
             source: 'copyDocument',
           });
           return doc;
@@ -212,7 +212,7 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
             agentDocumentId: doc?.id,
             agentId,
             documentId: doc?.documentId,
-            role: 'created',
+            changeType: 'created',
             source: 'createDocument',
           });
           return doc;
@@ -236,7 +236,7 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
             agentDocumentId: doc?.id,
             agentId,
             documentId: doc?.documentId,
-            role: 'created',
+            changeType: 'created',
             source: 'createTopicDocument',
           });
           return doc;
@@ -285,7 +285,7 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
             agentDocumentId: id,
             agentId,
             documentId: doc?.documentId,
-            role: 'updated',
+            changeType: 'updated',
             source: 'modifyNodes',
           });
           return doc;
@@ -329,7 +329,7 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
             agentDocumentId: id,
             agentId,
             documentId: doc?.documentId,
-            role: 'updated',
+            changeType: 'updated',
             source: 'renameDocument',
           });
           return doc;
@@ -350,7 +350,7 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
             agentDocumentId: id,
             agentId,
             documentId: doc?.documentId,
-            role: 'updated',
+            changeType: 'updated',
             source: 'replaceDocumentContent',
           });
           return doc;

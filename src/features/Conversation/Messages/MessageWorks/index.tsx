@@ -8,7 +8,7 @@ import { ClipboardListIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import WorkSummaryCard from '@/features/AgentTasks/features/WorkSummaryCard';
+import WorkSummaryCard from '@/features/Work/WorkSummaryCard';
 
 import { dataSelectors, useConversationStore } from '../../store';
 

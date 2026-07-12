@@ -348,7 +348,7 @@ describe('BuiltinToolsExecutor manifest-driven Work registration', () => {
     // action + targets.
     expect(result.workRegistration).toEqual({
       action: 'create',
-      role: 'created',
+      changeType: 'created',
       targets: [{ taskId: 'task_1', taskIdentifier: 'T-1' }],
       type: 'task',
     });
@@ -375,7 +375,7 @@ describe('BuiltinToolsExecutor manifest-driven Work registration', () => {
 
     expect(result.workRegistration).toEqual({
       action: 'create',
-      role: 'created',
+      changeType: 'created',
       targets: [{ taskIdentifier: 'T-A' }],
       type: 'task',
     });
@@ -420,7 +420,7 @@ describe('BuiltinToolsExecutor manifest-driven Work registration', () => {
     expect(result.success).toBe(true);
     expect(result.workRegistration).toEqual({
       action: 'update',
-      role: 'updated',
+      changeType: 'updated',
       targets: [{ taskIdentifier: 'T-1' }],
       type: 'task',
     });

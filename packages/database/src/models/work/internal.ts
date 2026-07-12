@@ -6,6 +6,9 @@ import type {
   TaskWorkListItem,
   TaskWorkSummaryItem,
   WorkItem,
+  WorkListItem,
+  WorkSummaryItem,
+  WorkVersionEventItem,
   WorkVersionPreview,
   WorkVersionSnapshot,
 } from '@lobechat/types';
@@ -70,7 +73,7 @@ export type WorkVersionEventParams = Pick<
   | 'actorAgentId'
   | 'cumulativeCost'
   | 'cumulativeUsage'
-  | 'role'
+  | 'changeType'
   | 'rootOperationId'
   | 'source'
   | 'sourceMessageId'
@@ -91,7 +94,7 @@ export const versionEventSelection = {
   cumulativeCost: workVersions.cumulativeCost,
   id: workVersions.id,
   metadata: workVersions.metadata,
-  role: workVersions.role,
+  changeType: workVersions.changeType,
   rootOperationId: workVersions.rootOperationId,
   source: workVersions.source,
   sourceMessageId: workVersions.sourceMessageId,
@@ -210,3 +213,67 @@ export const listSnapshotWorkSummaryRows = <Snapshot>(
     .where(and(versionOwnership(ctx), ...filters, eq(works.type, type)))
     .orderBy(desc(workVersions.createdAt), desc(works.updatedAt))
     .limit(rowLimit);
+
+/**
+ * One current-version row surfaced by the conversation-scoped list query,
+ * paired with the mutation-event timestamp used for cross-type ordering.
+ */
+export interface WorkConversationRow {
+  eventCreatedAt: Date;
+  item: WorkListItem;
+}
+
+export interface WorkConversationRowParams {
+  rowLimit: number;
+  threadFilter: SQL;
+  topicId: string;
+}
+
+/**
+ * Workspace-wide list row shape shared by every type (one query, no per-type
+ * fan-out): the full current-version snapshot JSON plus the coalesced task
+ * columns (nulled for non-task rows by the LEFT JOIN).
+ */
+export interface WorkspaceSummaryQueryRow {
+  event: WorkVersionPreview;
+  snapshot: WorkVersionSnapshot;
+  task: TaskWorkSummaryQueryRow['task'];
+  version: TaskWorkSummaryItem['version'];
+  work: WorkItem;
+}
+
+/**
+ * Per-type query/mapping strategy consumed by the aggregate queries in
+ * `queries.ts`. The aggregates iterate `WORK_TYPE_ADAPTERS` (see registry.ts),
+ * so adding a Work type means registering ONE adapter — there is no hand-written
+ * per-type fan-out left to forget, which would silently drop that type's rows.
+ *
+ * `Row` is the type-specific summary row; it round-trips within one adapter
+ * (`listSummaryRows` produces it, `mapSummaryRow` consumes it), so the registry
+ * can hold adapters as `WorkTypeAdapter<{ work: WorkItem }>` without losing
+ * per-adapter safety. METHOD signatures are required here — methods stay
+ * bivariant under strictFunctionTypes, which is what lets an adapter with a
+ * narrower `Row` conform to the registry's widened constraint; the
+ * property-arrow style the lint rule prefers is contravariant and breaks the
+ * `satisfies Record<WorkType, …>` check in registry.ts.
+ */
+/* eslint-disable @typescript-eslint/method-signature-style */
+export interface WorkTypeAdapter<Row extends { work: WorkItem }> {
+  /** Current-version rows for the conversation sidebar list (summary-slimmed snapshots). */
+  listConversationRows(
+    ctx: WorkContext,
+    params: WorkConversationRowParams,
+  ): Promise<WorkConversationRow[]>;
+  /** Current-version summary rows anchored on mutation events (message-list chips). */
+  listSummaryRows(ctx: WorkContext, filters: SQL[], rowLimit: number): Promise<Row[]>;
+  /** Version-event rows carrying the FULL (unslimmed) event snapshot. */
+  listVersionEvents(
+    ctx: WorkContext,
+    filters: SQL[],
+    limit: number,
+  ): Promise<WorkVersionEventItem[]>;
+  mapSummaryRow(row: Row, totalCost: number | null): WorkSummaryItem;
+  /** Map one shared workspace-list row (full snapshot JSON) onto this type's summary item. */
+  mapWorkspaceRow(row: WorkspaceSummaryQueryRow, totalCost: number | null): WorkSummaryItem;
+}
+/* eslint-enable @typescript-eslint/method-signature-style */

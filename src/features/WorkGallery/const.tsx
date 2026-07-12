@@ -4,7 +4,7 @@ import type { IconProps } from '@lobehub/ui';
 import { ClipboardListIcon, FileTextIcon, LayoutPanelTopIcon } from 'lucide-react';
 import type { ComponentProps, FC } from 'react';
 
-import RawLinearIcon from '@/features/AgentTasks/features/icons/LinearIcon';
+import RawLinearIcon from '@/features/Work/icons/LinearIcon';
 
 /**
  * `@lobehub/ui`'s `<Icon>` (used by NavItem) injects `fill="transparent"` — the

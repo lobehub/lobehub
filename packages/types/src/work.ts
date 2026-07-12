@@ -8,9 +8,9 @@ export type WorkResourceType =
 /**
  * How a version changed the Work. Not derivable from `version === 1`: updating
  * an external resource that was never registered before yields a v1 row with
- * role='updated'.
+ * changeType='updated'.
  */
-export type WorkVersionRole = 'created' | 'updated';
+export type WorkVersionChangeType = 'created' | 'updated';
 
 export interface TaskWorkVersionSnapshot {
   assigneeAgentId: string | null;
@@ -137,7 +137,7 @@ export interface WorkItem {
   currentVersionId: string | null;
   id: string;
   resourceId: string;
-  resourceIdentifier: string | null;
+  resourceLabel: string | null;
   resourceType: WorkResourceType;
   type: WorkType;
   updatedAt: Date;
@@ -147,12 +147,12 @@ export interface WorkItem {
 
 export interface WorkVersionItem {
   actorAgentId: string | null;
+  changeType: WorkVersionChangeType;
   createdAt: Date;
   cumulativeCost: number | null;
   cumulativeUsage: WorkVersionCumulativeUsage | null;
   id: string;
   metadata: WorkVersionMetadata | null;
-  role: WorkVersionRole;
   rootOperationId: string | null;
   snapshot: WorkVersionSnapshot;
   source: string;
@@ -173,7 +173,7 @@ export type WorkVersionPreview = Pick<
   | 'cumulativeCost'
   | 'id'
   | 'metadata'
-  | 'role'
+  | 'changeType'
   | 'rootOperationId'
   | 'source'
   | 'sourceMessageId'
@@ -280,11 +280,11 @@ export interface RegisterDocumentWorkParams {
   actorAgentId?: string | null;
   agentDocumentId?: string | null;
   agentId?: string | null;
+  changeType: WorkVersionChangeType;
   cumulativeCost?: number | null;
   cumulativeUsage?: WorkVersionCumulativeUsage | null;
   description?: string | null;
   documentId: string;
-  role: WorkVersionRole;
   rootOperationId?: string | null;
   source: string;
   sourceMessageId?: string | null;
@@ -309,6 +309,7 @@ export interface RegisterLinearWorkParams {
   actorAgentId?: string | null;
   assignee?: string | null;
   assigneeId?: string | null;
+  changeType: WorkVersionChangeType;
   color?: string | null;
   content?: string | null;
   createdAt?: string | null;
@@ -327,9 +328,8 @@ export interface RegisterLinearWorkParams {
   project?: string | null;
   projectId?: string | null;
   resourceId: string;
-  resourceIdentifier?: string | null;
+  resourceLabel?: string | null;
   resourceType: LinearWorkResourceType;
-  role: WorkVersionRole;
   rootOperationId?: string | null;
   slugId?: string | null;
   source: string;
@@ -355,6 +355,7 @@ export interface RegisterGithubWorkParams {
   author?: string | null;
   baseRef?: string | null;
   body?: string | null;
+  changeType: WorkVersionChangeType;
   closedAt?: string | null;
   createdAt?: string | null;
   cumulativeCost?: number | null;
@@ -368,9 +369,8 @@ export interface RegisterGithubWorkParams {
   patchFields?: GithubWorkPatchField[];
   repo?: string | null;
   resourceId: string;
-  resourceIdentifier?: string | null;
+  resourceLabel?: string | null;
   resourceType: GithubWorkResourceType;
-  role: WorkVersionRole;
   rootOperationId?: string | null;
   source: string;
   sourceMessageId?: string | null;
@@ -422,9 +422,9 @@ export type RegisterGithubToolResultWorkParams = Omit<
 
 export interface RegisterTaskWorkParams {
   actorAgentId?: string | null;
+  changeType: WorkVersionChangeType;
   cumulativeCost?: number | null;
   cumulativeUsage?: WorkVersionCumulativeUsage | null;
-  role: WorkVersionRole;
   rootOperationId?: string | null;
   source: string;
   sourceMessageId?: string | null;
@@ -458,7 +458,7 @@ export interface WorkTaskTarget {
 export type WorkRegistrationIntent =
   | {
       action: 'create' | 'update' | 'delete';
-      role?: WorkVersionRole;
+      changeType?: WorkVersionChangeType;
       targets: WorkTaskTarget[];
       type: 'task';
     }
@@ -476,7 +476,7 @@ export type WorkRegistrationIntent =
         agentId?: string | null;
         description?: string | null;
         documentId: string;
-        role: WorkVersionRole;
+        changeType: WorkVersionChangeType;
         source: string;
         url?: string | null;
       };

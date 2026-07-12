@@ -7,8 +7,9 @@ import { PackageOpenIcon, TriangleAlertIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import WorkSummaryCard from '@/features/AgentTasks/features/WorkSummaryCard';
 import DocumentPreviewModal from '@/features/DocumentModal/Preview';
+import { getWorkTypeDescriptor } from '@/features/Work/descriptors';
+import WorkSummaryCard from '@/features/Work/WorkSummaryCard';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useDocumentStore } from '@/store/document';
 
@@ -140,23 +141,23 @@ const WorkGallery = memo<WorkGalleryProps>(({ galleryKey }) => {
 
   const handleOpen = useCallback(
     (item: WorkSummaryItem) => {
-      switch (item.type) {
+      const openTarget = getWorkTypeDescriptor(item).getOpenTarget(item);
+      if (!openTarget) return;
+
+      switch (openTarget.kind) {
         case 'document': {
-          openDocumentPreview(item.document.id);
+          openDocumentPreview(openTarget.documentId);
           return;
         }
-        case 'linear': {
-          if (item.linear.url) window.open(item.linear.url, '_blank', 'noopener,noreferrer');
-          return;
-        }
-        case 'github': {
-          if (item.github.url) window.open(item.github.url, '_blank', 'noopener,noreferrer');
+        // linear / github: external link (URL-less cards yield no target above).
+        case 'external': {
+          window.open(openTarget.url, '_blank', 'noopener,noreferrer');
           return;
         }
         // task: no external URL — the standalone detail route resolves the same
         // identifier-or-id the chat portal uses.
-        default: {
-          navigate(`/task/${item.resourceIdentifier ?? item.resourceId}`);
+        case 'task': {
+          navigate(`/task/${openTarget.identifier}`);
         }
       }
     },

@@ -48,7 +48,7 @@ describe('WorkModel · task', () => {
     ]);
 
     const work = await workModel.registerTask({
-      role: 'created',
+      changeType: 'created',
       rootOperationId: 'op-root',
       source: 'createTask',
       sourceMessageId: 'msg-tool',
@@ -60,13 +60,13 @@ describe('WorkModel · task', () => {
 
     expect(work).toBeDefined();
     expect(work?.resourceId).toBe(task.id);
-    expect(work?.resourceIdentifier).toBe(task.identifier);
+    expect(work?.resourceLabel).toBe(task.identifier);
     expect(work?.currentVersionId).toBeTruthy();
 
     const versions = await workModel.listVersions(work!.id);
     expect(versions).toHaveLength(1);
     expect(versions[0]).toMatchObject({
-      role: 'created',
+      changeType: 'created',
       rootOperationId: 'op-root',
       source: 'createTask',
       sourceMessageId: 'msg-tool',
@@ -125,7 +125,7 @@ describe('WorkModel · task', () => {
         cost: { total: 0.03 },
         usage: { llm: { tokens: { input: 1200, output: 300, total: 1500 } } },
       },
-      role: 'created',
+      changeType: 'created',
       rootOperationId: 'op-cumulative',
       source: 'createTask',
       sourceToolCallId: 'tool-call-first',
@@ -133,7 +133,7 @@ describe('WorkModel · task', () => {
       topicId,
     });
     const secondWork = await workModel.registerTask({
-      role: 'created',
+      changeType: 'created',
       rootOperationId: 'op-cumulative',
       source: 'createTask',
       sourceToolCallId: 'tool-call-second',
@@ -177,7 +177,7 @@ describe('WorkModel · task', () => {
         cost: { total: 0.042 },
         usage: { llm: { tokens: { input: 900, output: 100, total: 1000 } } },
       },
-      role: 'created',
+      changeType: 'created',
       rootOperationId: 'op-insert-cost',
       source: 'createTask',
       sourceToolCallId: 'tool-call-insert-cost',
@@ -207,7 +207,7 @@ describe('WorkModel · task', () => {
     });
 
     const first = await workModel.registerTask({
-      role: 'created',
+      changeType: 'created',
       rootOperationId: 'op-create',
       source: 'createTask',
       sourceToolCallId: 'tool-call-create',
@@ -221,7 +221,7 @@ describe('WorkModel · task', () => {
     });
 
     const second = await workModel.registerTask({
-      role: 'updated',
+      changeType: 'updated',
       rootOperationId: 'op-edit',
       source: 'editTask',
       sourceMessageId: 'msg-tool-edit',
@@ -237,7 +237,7 @@ describe('WorkModel · task', () => {
 
     const versions = await workModel.listVersions(first!.id);
     expect(versions.map((item) => item.version)).toEqual([2, 1]);
-    expect(versions[0].role).toBe('updated');
+    expect(versions[0].changeType).toBe('updated');
     expect(versions[0].id).toBeTruthy();
     expect(expectTaskSnapshot(versions[0].snapshot).instruction).toBe('Updated instruction');
     expect(expectTaskSnapshot(versions[0].snapshot).name).toBe('Updated title');
@@ -260,7 +260,7 @@ describe('WorkModel · task', () => {
 
     const first = await workModel.registerTask({
       cumulativeCost: 0.000_295,
-      role: 'created',
+      changeType: 'created',
       rootOperationId: 'op-summary-create',
       source: 'createTask',
       sourceToolCallId: 'tool-call-summary-create',
@@ -276,7 +276,7 @@ describe('WorkModel · task', () => {
 
     await workModel.registerTask({
       cumulativeCost: 0.000_692,
-      role: 'updated',
+      changeType: 'updated',
       rootOperationId: 'op-summary-edit',
       source: 'editTask',
       sourceToolCallId: 'tool-call-summary-edit',
@@ -292,7 +292,7 @@ describe('WorkModel · task', () => {
     expect(byOperation['op-summary-edit']).toHaveLength(1);
     const summary = expectTaskSummaryItem(byOperation['op-summary-edit']?.[0]);
     expect(summary).toMatchObject({
-      event: expect.objectContaining({ role: 'updated', rootOperationId: 'op-summary-edit' }),
+      event: expect.objectContaining({ changeType: 'updated', rootOperationId: 'op-summary-edit' }),
       id: first?.id,
       task: expect.objectContaining({ name: 'Updated title' }),
       version: expect.objectContaining({ version: 2 }),
@@ -313,7 +313,7 @@ describe('WorkModel · task', () => {
     });
 
     await workModel.registerTask({
-      role: 'created',
+      changeType: 'created',
       rootOperationId: 'op-instruction-preview',
       source: 'createTask',
       sourceToolCallId: 'tool-call-instruction-preview',
@@ -348,7 +348,7 @@ describe('WorkModel · task', () => {
     // all three snapshots.
     await workModel.registerTask({
       cumulativeCost: 0.01,
-      role: 'created',
+      changeType: 'created',
       rootOperationId: 'op-cost-same',
       source: 'createTask',
       sourceToolCallId: 'tool-call-cost-create',
@@ -357,7 +357,7 @@ describe('WorkModel · task', () => {
     });
     await workModel.registerTask({
       cumulativeCost: 0.016,
-      role: 'updated',
+      changeType: 'updated',
       rootOperationId: 'op-cost-same',
       source: 'editTask',
       sourceToolCallId: 'tool-call-cost-edit',
@@ -366,7 +366,7 @@ describe('WorkModel · task', () => {
     });
     await workModel.registerTask({
       cumulativeCost: 0.005,
-      role: 'updated',
+      changeType: 'updated',
       rootOperationId: 'op-cost-other',
       source: 'editTask',
       sourceToolCallId: 'tool-call-cost-other',
@@ -387,7 +387,7 @@ describe('WorkModel · task', () => {
     const task = await taskModel.create({ instruction: 'Private task' });
 
     const work = await otherWorkModel.registerTask({
-      role: 'created',
+      changeType: 'created',
       source: 'createTask',
       sourceToolCallId: 'tool-call-other-user',
       taskIdentifier: task.identifier,
@@ -411,7 +411,7 @@ describe('WorkModel · task', () => {
     });
 
     await otherWorkModel.registerTask({
-      role: 'created',
+      changeType: 'created',
       rootOperationId: 'op-other-summary',
       source: 'createTask',
       sourceToolCallId: 'tool-call-other-summary',
@@ -430,7 +430,7 @@ describe('WorkModel · task', () => {
     const task = await taskModel.create({ instruction: 'Delete task work', name: 'Delete me' });
 
     const work = await workModel.registerTask({
-      role: 'created',
+      changeType: 'created',
       rootOperationId: 'op-delete-task',
       source: 'createTask',
       sourceToolCallId: 'tool-call-delete-task',
@@ -462,7 +462,7 @@ describe('WorkModel · task', () => {
     const task = await taskModel.create({ instruction: 'Non-tool delete', name: 'Keep my Work' });
 
     const work = await workModel.registerTask({
-      role: 'created',
+      changeType: 'created',
       rootOperationId: 'op-orphan-task',
       source: 'createTask',
       sourceToolCallId: 'tool-call-orphan-task',
@@ -504,13 +504,13 @@ describe('WorkModel · task', () => {
     const otherTask = await otherTaskModel.create({ instruction: 'Other owner task' });
 
     const work = await workModel.registerTask({
-      role: 'created',
+      changeType: 'created',
       source: 'createTask',
       sourceToolCallId: 'tool-call-owner-clear',
       taskId: task.id,
     });
     const otherWork = await otherWorkModel.registerTask({
-      role: 'created',
+      changeType: 'created',
       source: 'createTask',
       sourceToolCallId: 'tool-call-other-clear',
       taskId: otherTask.id,
@@ -539,7 +539,7 @@ describe('WorkModel · task', () => {
     const task = await taskModel.create({ instruction: 'Topic scoped task' });
 
     const work = await workModel.registerTask({
-      role: 'created',
+      changeType: 'created',
       source: 'createTask',
       sourceToolCallId: 'tool-call-topic-delete',
       taskId: task.id,

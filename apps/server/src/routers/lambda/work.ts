@@ -25,7 +25,7 @@ const workProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => 
 
 const workProcedureWrite = workProcedure.use(withScopedPermission('agent:update'));
 
-const versionRoleSchema = z.enum(['created', 'updated']);
+const versionChangeTypeSchema = z.enum(['created', 'updated']);
 
 const cumulativeUsageSchema = z.object({
   capturedAt: z.string(),
@@ -41,7 +41,7 @@ const registerTaskSchema = z.object({
   actorAgentId: z.string().nullable().optional(),
   cumulativeCost: z.number().nullable().optional(),
   cumulativeUsage: cumulativeUsageSchema.nullable().optional(),
-  role: versionRoleSchema,
+  changeType: versionChangeTypeSchema,
   rootOperationId: z.string().nullable().optional(),
   source: z.string().min(1),
   sourceMessageId: z.string().nullable().optional(),
@@ -75,7 +75,7 @@ const registerDocumentSchema = z.object({
   cumulativeUsage: cumulativeUsageSchema.nullable().optional(),
   description: z.string().nullable().optional(),
   documentId: z.string().min(1),
-  role: versionRoleSchema,
+  changeType: versionChangeTypeSchema,
   rootOperationId: z.string().nullable().optional(),
   source: z.string().min(1),
   sourceMessageId: z.string().nullable().optional(),

@@ -23,8 +23,8 @@ describe('normalizeGithubToolResult (gh runCommand parsing)', () => {
     expect(operation?.params).toMatchObject({
       number: 123,
       repo: 'lobehub/lobehub',
-      resourceIdentifier: 'lobehub/lobehub#123',
-      role: 'created',
+      resourceLabel: 'lobehub/lobehub#123',
+      changeType: 'created',
       title: 'Fix: "quoted" bug report',
       url: 'https://github.com/lobehub/lobehub/issues/123',
     });
@@ -44,7 +44,7 @@ describe('normalizeGithubToolResult (gh runCommand parsing)', () => {
 
     expect(operation?.params).toMatchObject({
       number: 42,
-      role: 'updated',
+      changeType: 'updated',
       title: 'Fix the bug',
     });
   });
@@ -94,7 +94,7 @@ describe('normalizeGithubToolResult (gh runCommand parsing)', () => {
       baseRef: 'main',
       number: 88,
       resourceType: 'github_pull_request',
-      role: 'created',
+      changeType: 'created',
       title: 'New PR',
     });
   });
@@ -107,7 +107,7 @@ describe('normalizeGithubToolResult (gh runCommand parsing)', () => {
     expect(operation?.params).toMatchObject({
       number: 7,
       repo: 'lobehub/lobehub',
-      role: 'updated',
+      changeType: 'updated',
       title: 'Second',
     });
   });

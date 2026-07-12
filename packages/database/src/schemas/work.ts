@@ -1,9 +1,9 @@
 import type {
   WorkResourceType,
   WorkType,
+  WorkVersionChangeType,
   WorkVersionCumulativeUsage,
   WorkVersionMetadata,
-  WorkVersionRole,
   WorkVersionSnapshot,
 } from '@lobechat/types';
 import { isNotNull, isNull } from 'drizzle-orm';
@@ -46,7 +46,7 @@ export const works = pgTable(
      */
     resourceId: text('resource_id').notNull(),
     /** Human-readable external identifier for display, e.g. `LOBE-123` or `owner/repo#456`. */
-    resourceIdentifier: text('resource_identifier'),
+    resourceLabel: text('resource_label'),
 
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
@@ -100,9 +100,9 @@ export const workVersions = pgTable(
     /**
      * How this version changed the Work: 'created' | 'updated'. Not derivable
      * from `version === 1`: updating an external resource that was never
-     * registered before yields a v1 row with role='updated'.
+     * registered before yields a v1 row with changeType='updated'.
      */
-    role: text('role').$type<WorkVersionRole>().notNull(),
+    changeType: text('change_type').$type<WorkVersionChangeType>().notNull(),
     /** Concrete tool that produced this version, e.g. 'createTask'. */
     source: text('source').notNull(),
 

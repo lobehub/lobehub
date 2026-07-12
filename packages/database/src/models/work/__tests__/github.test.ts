@@ -79,14 +79,14 @@ describe('WorkModel · github', () => {
     // returns node_id, so both surfaces must share this dedup key.
     expect(second).toMatchObject({
       resourceId: 'lobehub/lobehub#123',
-      resourceIdentifier: 'lobehub/lobehub#123',
+      resourceLabel: 'lobehub/lobehub#123',
       resourceType: 'github_issue',
       type: 'github',
     });
 
     const versions = await workModel.listVersions(first!.id);
     expect(versions.map((item) => item.version)).toEqual([2, 1]);
-    expect(versions[0].role).toBe('updated');
+    expect(versions[0].changeType).toBe('updated');
     // Partial update responses keep prior snapshot fields (title/body/labels).
     expect(expectGithubSnapshot(versions[0].snapshot)).toMatchObject({
       assignees: ['arvinxx'],
@@ -173,7 +173,7 @@ describe('WorkModel · github', () => {
 
     expect(pullRequest).toMatchObject({
       resourceId: 'lobehub/lobehub#456',
-      resourceIdentifier: 'lobehub/lobehub#456',
+      resourceLabel: 'lobehub/lobehub#456',
       resourceType: 'github_pull_request',
       type: 'github',
     });
@@ -265,7 +265,7 @@ describe('WorkModel · github', () => {
 
     expect(created).toMatchObject({
       resourceId: 'lobehub-biz/lobehub-cloud#952',
-      resourceIdentifier: 'lobehub-biz/lobehub-cloud#952',
+      resourceLabel: 'lobehub-biz/lobehub-cloud#952',
       resourceType: 'github_issue',
       type: 'github',
     });
@@ -288,7 +288,7 @@ describe('WorkModel · github', () => {
 
     const versions = await workModel.listVersions(created!.id);
     expect(versions.map((item) => item.version)).toEqual([2, 1]);
-    expect(versions[0].role).toBe('updated');
+    expect(versions[0].changeType).toBe('updated');
     // Patch merge keeps create-time title/state while applying the new body.
     expect(expectGithubSnapshot(versions[0].snapshot)).toMatchObject({
       body: 'updated body',

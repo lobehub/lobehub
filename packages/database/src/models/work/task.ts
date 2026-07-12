@@ -1,8 +1,8 @@
 import type {
   RegisterTaskWorkParams,
   TaskItem,
+  TaskWorkListItem,
   TaskWorkSummaryItem,
-  TaskWorkVersionEventItem,
   TaskWorkVersionSnapshot,
   WorkItem,
   WorkVersionItem,
@@ -14,7 +14,6 @@ import { and, desc, eq, or } from 'drizzle-orm';
 import { tasks } from '../../schemas/task';
 import { works, workVersions } from '../../schemas/work';
 import { taskOwnership, versionOwnership, type WorkContext, workOwnership } from './context';
-import { getTotalCostByWorkIds } from './cost';
 import {
   currentVersions,
   taskSummaryFields,
@@ -22,6 +21,7 @@ import {
   type TaskWorkSummaryQueryRow,
   truncateSummaryText,
   versionEventSelection,
+  type WorkTypeAdapter,
 } from './internal';
 import { createVersion, findById, resolveWorkUpsertConflict } from './writes';
 
@@ -94,7 +94,7 @@ const resolveTask = async (
 const upsertTaskWork = async (ctx: WorkContext, task: TaskItem): Promise<WorkItem> => {
   const values = {
     resourceId: task.id,
-    resourceIdentifier: task.identifier,
+    resourceLabel: task.identifier,
     resourceType: 'task' as const,
     type: 'task' as const,
     userId: ctx.userId,
@@ -109,7 +109,7 @@ const upsertTaskWork = async (ctx: WorkContext, task: TaskItem): Promise<WorkIte
     .onConflictDoUpdate({
       ...conflict,
       set: {
-        resourceIdentifier: task.identifier,
+        resourceLabel: task.identifier,
         updatedAt: new Date(),
       },
     })
@@ -141,85 +141,119 @@ export const registerTaskWork = async (
   return findById(ctx, work.id);
 };
 
-export const listTaskVersionEvents = async (
-  ctx: WorkContext,
-  filters: SQL[],
-  limit = 20,
-): Promise<TaskWorkVersionEventItem[]> => {
-  const rows = await ctx.db
-    .select({
-      ...taskSummaryFields(workVersions.snapshot),
-      version: versionEventSelection,
-      work: works,
-    })
-    .from(workVersions)
-    .innerJoin(works, and(eq(workVersions.workId, works.id), workOwnership(ctx)))
-    .leftJoin(tasks, taskSummaryJoin(ctx))
-    .where(and(versionOwnership(ctx), ...filters, eq(works.type, 'task')))
-    .orderBy(desc(workVersions.createdAt))
-    .limit(limit);
+/** Card-facing task fields from the live-coalesced `taskSummaryFields` projection. */
+const toTaskCardFields = (
+  task: TaskWorkSummaryQueryRow['task'],
+): Pick<TaskWorkListItem, 'task' | 'taskDeleted'> => ({
+  task: {
+    instruction: truncateSummaryText(task.instruction),
+    name: task.name,
+    priority: task.priority,
+    status: task.status,
+  },
+  taskDeleted: task.deleted,
+});
 
-  return rows.map((row) => ({
+/**
+ * Task keeps bespoke adapter queries (unlike the snapshot factory types):
+ * every projection LEFT JOINs the live `tasks` row so cards render live
+ * name/status, falling back to the version snapshot only when the task row
+ * was deleted outside the tool path (see `taskSummaryFields`).
+ */
+export const taskWorkAdapter: WorkTypeAdapter<TaskWorkSummaryQueryRow> = {
+  listConversationRows: async (ctx, params) => {
+    const rows = await ctx.db
+      .select({
+        eventCreatedAt: workVersions.createdAt,
+        ...taskSummaryFields(currentVersions.snapshot),
+        work: works,
+      })
+      .from(workVersions)
+      .innerJoin(works, and(eq(workVersions.workId, works.id), workOwnership(ctx)))
+      .innerJoin(currentVersions, eq(works.currentVersionId, currentVersions.id))
+      .leftJoin(tasks, taskSummaryJoin(ctx))
+      .where(
+        and(
+          versionOwnership(ctx),
+          eq(workVersions.topicId, params.topicId),
+          params.threadFilter,
+          eq(works.type, 'task'),
+        ),
+      )
+      .orderBy(desc(workVersions.createdAt), desc(works.updatedAt))
+      .limit(params.rowLimit);
+
+    return rows.map((row) => ({
+      eventCreatedAt: row.eventCreatedAt,
+      item: {
+        ...row.work,
+        ...toTaskCardFields(row.task),
+        resourceType: 'task' as const,
+        type: 'task' as const,
+      } satisfies TaskWorkListItem,
+    }));
+  },
+
+  listSummaryRows: (ctx, filters, rowLimit) =>
+    ctx.db
+      .select({
+        event: versionEventSelection,
+        ...taskSummaryFields(currentVersions.snapshot),
+        version: {
+          createdAt: currentVersions.createdAt,
+          id: currentVersions.id,
+          version: currentVersions.version,
+        },
+        work: works,
+      })
+      .from(workVersions)
+      .innerJoin(works, and(eq(workVersions.workId, works.id), workOwnership(ctx)))
+      .innerJoin(currentVersions, eq(works.currentVersionId, currentVersions.id))
+      .leftJoin(tasks, taskSummaryJoin(ctx))
+      .where(and(versionOwnership(ctx), ...filters, eq(works.type, 'task')))
+      .orderBy(desc(workVersions.createdAt), desc(works.updatedAt))
+      .limit(rowLimit),
+
+  listVersionEvents: async (ctx, filters, limit) => {
+    const rows = await ctx.db
+      .select({
+        ...taskSummaryFields(workVersions.snapshot),
+        version: versionEventSelection,
+        work: works,
+      })
+      .from(workVersions)
+      .innerJoin(works, and(eq(workVersions.workId, works.id), workOwnership(ctx)))
+      .leftJoin(tasks, taskSummaryJoin(ctx))
+      .where(and(versionOwnership(ctx), ...filters, eq(works.type, 'task')))
+      .orderBy(desc(workVersions.createdAt))
+      .limit(limit);
+
+    return rows.map((row) => ({
+      ...row.work,
+      ...toTaskCardFields(row.task),
+      resourceType: 'task' as const,
+      type: 'task' as const,
+      version: row.version,
+    }));
+  },
+
+  mapSummaryRow: (row, totalCost): TaskWorkSummaryItem => ({
     ...row.work,
-    resourceType: 'task' as const,
-    task: {
-      instruction: truncateSummaryText(row.task.instruction),
-      name: row.task.name,
-      priority: row.task.priority,
-      status: row.task.status,
-    },
-    taskDeleted: row.task.deleted,
-    type: 'task' as const,
-    version: row.version,
-  }));
-};
-
-export const listTaskWorkSummaryRows = async (
-  ctx: WorkContext,
-  filters: SQL[],
-  rowLimit: number,
-): Promise<TaskWorkSummaryQueryRow[]> =>
-  ctx.db
-    .select({
-      event: versionEventSelection,
-      ...taskSummaryFields(currentVersions.snapshot),
-      version: {
-        createdAt: currentVersions.createdAt,
-        id: currentVersions.id,
-        version: currentVersions.version,
-      },
-      work: works,
-    })
-    .from(workVersions)
-    .innerJoin(works, and(eq(workVersions.workId, works.id), workOwnership(ctx)))
-    .innerJoin(currentVersions, eq(works.currentVersionId, currentVersions.id))
-    .leftJoin(tasks, taskSummaryJoin(ctx))
-    .where(and(versionOwnership(ctx), ...filters, eq(works.type, 'task')))
-    .orderBy(desc(workVersions.createdAt), desc(works.updatedAt))
-    .limit(rowLimit);
-
-export const toTaskWorkSummaries = async (
-  ctx: WorkContext,
-  rows: TaskWorkSummaryQueryRow[],
-): Promise<TaskWorkSummaryItem[]> => {
-  const costByWorkId = await getTotalCostByWorkIds(
-    ctx,
-    rows.map((row) => row.work.id),
-  );
-
-  return rows.map((row) => ({
-    ...row.work,
+    ...toTaskCardFields(row.task),
     event: row.event,
     resourceType: 'task' as const,
-    task: {
-      instruction: truncateSummaryText(row.task.instruction),
-      name: row.task.name,
-      priority: row.task.priority,
-      status: row.task.status,
-    },
-    taskDeleted: row.task.deleted,
-    totalCost: costByWorkId.get(row.work.id) ?? null,
+    totalCost,
     type: 'task' as const,
     version: row.version,
-  }));
+  }),
+
+  mapWorkspaceRow: (row, totalCost): TaskWorkSummaryItem => ({
+    ...row.work,
+    ...toTaskCardFields(row.task),
+    event: row.event,
+    resourceType: 'task' as const,
+    totalCost,
+    type: 'task' as const,
+    version: row.version,
+  }),
 };

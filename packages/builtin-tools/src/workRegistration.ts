@@ -1,10 +1,16 @@
 import type {
   BuiltinToolResult,
+  DeleteDocumentWorkParams,
+  DeleteTaskWorkParams,
   LobeBuiltinTool,
   PluginApiWorkAction,
   PluginApiWorkConfig,
+  RegisterDocumentWorkParams,
+  RegisterSkillToolResultWorkParams,
+  RegisterTaskWorkParams,
   WorkRegistrationIntent,
-  WorkVersionRole,
+  WorkVersionChangeType,
+  WorkVersionCumulativeUsage,
 } from '@lobechat/types';
 
 /**
@@ -30,12 +36,12 @@ export interface TaskWorkTarget {
 /**
  * A resolved Work registration plan. Discriminated by `action` so each dispatch
  * layer branches "persist a version" (create/update, which carry a version
- * `role`) vs "delete the Work" (which carries no role — a deletion has no
- * version to write). Keeping delete out of the role-bearing variant is what
- * eliminates the old `action: 'delete' → role: 'updated'` silent mis-mapping.
+ * `changeType`) vs "delete the Work" (which carries no changeType — a deletion has no
+ * version to write). Keeping delete out of the changeType-bearing variant is what
+ * eliminates the old `action: 'delete' → changeType: 'updated'` silent mis-mapping.
  */
 export type ResolvedWorkRegistration =
-  | { action: 'create' | 'update'; role: WorkVersionRole; targets: TaskWorkTarget[] }
+  | { action: 'create' | 'update'; changeType: WorkVersionChangeType; targets: TaskWorkTarget[] }
   | { action: 'delete'; targets: TaskWorkTarget[] };
 
 /**
@@ -54,13 +60,13 @@ export const getApiWorkConfig = (
     ?.manifest.api.find((api) => api.name === apiName)?.work;
 
 /**
- * Map a version-producing Work action onto the persisted version role. Only
+ * Map a version-producing Work action onto the persisted version changeType. Only
  * `create` / `update` reach this — `delete` writes no version, so it is
  * deliberately excluded from the input type rather than silently mapped.
  */
-export const workRoleFromAction = (
+export const workChangeTypeFromAction = (
   action: Exclude<PluginApiWorkAction, 'delete'>,
-): WorkVersionRole => (action === 'create' ? 'created' : 'updated');
+): WorkVersionChangeType => (action === 'create' ? 'created' : 'updated');
 
 const asString = (value: unknown): string | undefined =>
   typeof value === 'string' && value.length > 0 ? value : undefined;
@@ -146,17 +152,17 @@ export const resolveWorkRegistration = (
   if (targets.length === 0) return undefined;
 
   // `delete` locates the Work by `state.taskId` (the task row is already gone),
-  // so it reuses the same target extraction but writes no version role.
+  // so it reuses the same target extraction but writes no version changeType.
   if (config.action === 'delete') return { action: 'delete', targets };
 
-  return { action: config.action, role: workRoleFromAction(config.action), targets };
+  return { action: config.action, changeType: workChangeTypeFromAction(config.action), targets };
 };
 
 /**
  * Tag a resolved task registration plan as the `task` variant of the runtime's
  * {@link WorkRegistrationIntent} union. Shared so both dispatch layers (server
  * `resolveBuiltinToolWorkIntent`, client `stashBuiltinToolWorkIntent`) emit the
- * exact same intent shape from one place — `delete` stays role-less, so the
+ * exact same intent shape from one place — `delete` stays changeType-less, so the
  * discriminant is preserved end to end.
  */
 export const toWorkRegistrationIntent = (
@@ -164,4 +170,157 @@ export const toWorkRegistrationIntent = (
 ): WorkRegistrationIntent =>
   resolved.action === 'delete'
     ? { action: 'delete', targets: resolved.targets, type: 'task' }
-    : { action: resolved.action, role: resolved.role, targets: resolved.targets, type: 'task' };
+    : {
+        action: resolved.action,
+        changeType: resolved.changeType,
+        targets: resolved.targets,
+        type: 'task',
+      };
+
+/**
+ * Side-of-the-wire persistence operations the dispatcher drives; the server
+ * backs them with `WorkModel` methods, the client with `workService` methods.
+ */
+export interface WorkRegistrationPorts {
+  /**
+   * Optional: the client deliberately does NOT handle document deletes (they
+   * stay a lambda-side effect of the `removeDocument` mutation — a deletion
+   * carries no cost, so it needs no cost-stamping defer). Leaving the port
+   * undefined makes the document-delete intent a no-op.
+   */
+  deleteDocumentWork?: (params: DeleteDocumentWorkParams) => Promise<unknown>;
+  deleteTaskWork: (params: DeleteTaskWorkParams) => Promise<unknown>;
+  handleSkillToolResult: (params: RegisterSkillToolResultWorkParams) => Promise<unknown>;
+  registerDocument: (params: RegisterDocumentWorkParams) => Promise<unknown>;
+  registerTask: (params: RegisterTaskWorkParams) => Promise<unknown>;
+}
+
+/**
+ * Runtime-supplied provenance stamped onto every persisted Work version. The
+ * cumulative cost/usage are stamped by the caller (not resolved here) because
+ * they are known only AFTER the tool call's `accumulateTool` step has computed
+ * the cumulative cost — see the wrapper JSDoc for why persistence is deferred
+ * until then.
+ */
+export interface WorkRegistrationProvenance {
+  actorAgentId?: string | null;
+  cumulativeCost?: number | null;
+  cumulativeUsage?: WorkVersionCumulativeUsage | null;
+  rootOperationId?: string;
+  sourceMessageId?: string;
+  sourceToolCallId?: string;
+  /** Fallback `source` for task Works (the API name); skills/documents carry their own. */
+  sourceToolName: string;
+  threadId?: string | null;
+  topicId?: string;
+}
+
+/**
+ * The single "how to route a Work registration intent" implementation, consumed
+ * by BOTH persistence dispatch layers — the server runtime
+ * (`registerWorkFromIntent`, backed by `WorkModel`) and the legacy client
+ * runtime (`registerClientWorkFromIntent`, backed by `workService`). Each layer
+ * only supplies its own {@link WorkRegistrationPorts} and per-call
+ * {@link WorkRegistrationProvenance}; the branch logic (task create/update/delete,
+ * document register/delete, skill) lives here exactly once.
+ *
+ * Cost stamping happens in the wrappers, not here: the cumulative cost of a tool
+ * call is known only after `accumulateTool` runs, so each wrapper computes
+ * `cumulativeCost` / `cumulativeUsage` and passes them in via provenance. This
+ * dispatcher stays dependency-light (type-only `@lobechat/types` imports) so it
+ * can be pulled into either bundle cheaply.
+ *
+ * Multi-target fan-out uses `Promise.allSettled` so one target's failure never
+ * kills its siblings. This function does NOT swallow errors at the top level —
+ * the two wrappers keep their own try/catch + debug logging.
+ */
+export const dispatchWorkRegistrationIntent = async (
+  intent: WorkRegistrationIntent,
+  ports: WorkRegistrationPorts,
+  provenance: WorkRegistrationProvenance,
+): Promise<void> => {
+  const {
+    actorAgentId,
+    cumulativeCost,
+    cumulativeUsage,
+    rootOperationId,
+    sourceMessageId,
+    sourceToolCallId,
+    sourceToolName,
+    threadId,
+    topicId,
+  } = provenance;
+
+  if (intent.type === 'task') {
+    const { action, changeType, targets } = intent;
+
+    if (action === 'delete') {
+      await Promise.allSettled(
+        targets
+          .filter((target) => target.taskId)
+          .map((target) => ports.deleteTaskWork({ taskId: target.taskId! })),
+      );
+      return;
+    }
+
+    if (!changeType) return;
+
+    await Promise.allSettled(
+      targets.map((target) =>
+        ports.registerTask({
+          actorAgentId,
+          changeType,
+          cumulativeCost,
+          cumulativeUsage,
+          rootOperationId,
+          source: sourceToolName,
+          sourceMessageId,
+          sourceToolCallId,
+          taskId: target.taskId,
+          taskIdentifier: target.taskIdentifier,
+          threadId,
+          topicId,
+        }),
+      ),
+    );
+    return;
+  }
+
+  if (intent.type === 'document') {
+    if (intent.action === 'delete') {
+      // No-op when the port is absent (client): document deletes stay a
+      // lambda-side effect of the removeDocument mutation.
+      await ports.deleteDocumentWork?.(intent.document);
+      return;
+    }
+
+    await ports.registerDocument({
+      ...intent.document,
+      actorAgentId,
+      cumulativeCost,
+      cumulativeUsage,
+      rootOperationId,
+      sourceMessageId,
+      sourceToolCallId,
+      threadId,
+      topicId,
+    });
+    return;
+  }
+
+  // skill (linear / github): normalize the untruncated payload into a Work.
+  await ports.handleSkillToolResult({
+    actorAgentId,
+    args: intent.args,
+    cumulativeCost,
+    cumulativeUsage,
+    data: intent.data,
+    provider: intent.provider,
+    rootOperationId,
+    sourceMessageId,
+    sourceToolCallId,
+    threadId,
+    toolName: intent.toolName,
+    topicId,
+  });
+};

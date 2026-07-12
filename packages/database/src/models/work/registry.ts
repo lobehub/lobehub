@@ -1,0 +1,27 @@
+import type { WorkItem, WorkType } from '@lobechat/types';
+
+import { documentWorkAdapter } from './document';
+import { githubWorkAdapter } from './github';
+import type { WorkTypeAdapter } from './internal';
+import { linearWorkAdapter } from './linear';
+import { taskWorkAdapter } from './task';
+
+/**
+ * The single registry the aggregate queries fan out over. Adding a Work type =
+ * adding one entry here (the `Record<WorkType, …>` constraint turns a missing
+ * entry into a compile error, not a silently missing result set) plus its type
+ * unions in `@lobechat/types`.
+ */
+export const WORK_TYPE_ADAPTERS = {
+  document: documentWorkAdapter,
+  github: githubWorkAdapter,
+  linear: linearWorkAdapter,
+  task: taskWorkAdapter,
+} satisfies Record<WorkType, WorkTypeAdapter<{ work: WorkItem }>>;
+
+export const WORK_TYPES = Object.keys(WORK_TYPE_ADAPTERS) as WorkType[];
+
+/** Type-erased adapter list for uniform iteration in the aggregate queries. */
+export const workTypeAdapters = Object.values(WORK_TYPE_ADAPTERS) as WorkTypeAdapter<{
+  work: WorkItem;
+}>[];

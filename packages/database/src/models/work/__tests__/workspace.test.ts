@@ -34,7 +34,7 @@ const seedTaskWorks = async (workModel: WorkModel, taskModel: TaskModel, count: 
       name: `Task ${index}`,
     });
     const work = await workModel.registerTask({
-      role: 'created',
+      changeType: 'created',
       rootOperationId: `op-workspace-${index}`,
       source: 'createTask',
       sourceToolCallId: `tool-call-workspace-${index}`,
@@ -57,7 +57,7 @@ describe('WorkModel · listByWorkspace', () => {
 
     const firstTask = await taskModel.create({ instruction: 'First', name: 'First task' });
     const firstWork = await workModel.registerTask({
-      role: 'created',
+      changeType: 'created',
       rootOperationId: 'op-cross-1',
       source: 'createTask',
       sourceToolCallId: 'tool-call-cross-1',
@@ -72,7 +72,7 @@ describe('WorkModel · listByWorkspace', () => {
       agentDocumentId: doc.id,
       agentId,
       documentId: doc.documentId,
-      role: 'created',
+      changeType: 'created',
       rootOperationId: 'op-cross-doc',
       source: 'createDocument',
       sourceToolCallId: 'tool-call-cross-doc',
@@ -95,7 +95,7 @@ describe('WorkModel · listByWorkspace', () => {
 
     const task = await taskModel.create({ instruction: 'Typed', name: 'Typed task' });
     await workModel.registerTask({
-      role: 'created',
+      changeType: 'created',
       rootOperationId: 'op-typed-task',
       source: 'createTask',
       sourceToolCallId: 'tool-call-typed-task',
@@ -110,7 +110,7 @@ describe('WorkModel · listByWorkspace', () => {
       agentDocumentId: doc.id,
       agentId,
       documentId: doc.documentId,
-      role: 'created',
+      changeType: 'created',
       rootOperationId: 'op-typed-doc',
       source: 'createDocument',
       sourceToolCallId: 'tool-call-typed-doc',
@@ -152,7 +152,7 @@ describe('WorkModel · listByWorkspace', () => {
 
     const otherTask = await otherTaskModel.create({ instruction: 'Private', name: 'Private task' });
     await otherWorkModel.registerTask({
-      role: 'created',
+      changeType: 'created',
       rootOperationId: 'op-private',
       source: 'createTask',
       sourceToolCallId: 'tool-call-private',
@@ -170,7 +170,7 @@ describe('WorkModel · listByWorkspace', () => {
     const task = await taskModel.create({ instruction: 'Orphan', name: 'Orphan task' });
 
     await workModel.registerTask({
-      role: 'created',
+      changeType: 'created',
       rootOperationId: 'op-orphan-workspace',
       source: 'createTask',
       sourceToolCallId: 'tool-call-orphan-workspace',

@@ -1,17 +1,16 @@
 'use client';
 
 import type { WorkSummaryItem } from '@lobechat/types';
-import { Github } from '@lobehub/icons';
 import { Flexbox, Tag, Text } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
-import { ClipboardListIcon, FileTextIcon, Trash2Icon } from 'lucide-react';
+import { Trash2Icon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useChatStore } from '@/store/chat';
 import { formatWorkVersionCost } from '@/utils/workVersionCost';
 
-import LinearIcon from './icons/LinearIcon';
+import { getWorkTypeDescriptor } from './descriptors';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   card: css`
@@ -76,62 +75,38 @@ const WorkSummaryCard = memo<WorkSummaryCardProps>(({ className, item, onOpen })
   const openDocument = useChatStore((s) => s.openDocument);
   const openTaskDetail = useChatStore((s) => s.openTaskDetail);
   const cost = formatWorkVersionCost(item.totalCost);
-  const isDocument = item.type === 'document';
-  const isLinear = item.type === 'linear';
-  const isGithub = item.type === 'github';
-  // Display name comes straight from the resource snapshot (task name is live
-  // from the tasks join). No synthesized fallback title: a nameless resource
-  // deliberately shows its bare identifier so data gaps stay visible.
-  const snapshotTitle = isDocument
-    ? item.document.title
-    : isLinear
-      ? item.linear.title
-      : isGithub
-        ? item.github.title
-        : item.task.name;
-  const title = snapshotTitle?.trim() || item.resourceIdentifier || item.resourceId;
-  // Summary payloads slim long free-text (linear content / github body / task
-  // instruction capped server-side); prefer description, then short
-  // body/status — never full docs.
-  const description = isDocument
-    ? item.document.description?.trim()
-    : isLinear
-      ? (item.linear.description || item.linear.status)?.trim()
-      : isGithub
-        ? (item.github.body || item.github.state)?.trim()
-        : item.task.instruction?.trim();
-  const Icon = isDocument
-    ? FileTextIcon
-    : isLinear
-      ? LinearIcon
-      : isGithub
-        ? Github
-        : ClipboardListIcon;
-  // Linear/github works registered from CLI results may carry no URL — those
-  // cards have nothing to open, so drop the click affordance entirely.
-  const externalUrl = isLinear ? item.linear.url : isGithub ? item.github.url : undefined;
+
+  const descriptor = getWorkTypeDescriptor(item);
+  const Icon = descriptor.Icon;
+  const title = descriptor.getTitle(item)?.trim() || item.resourceLabel || item.resourceId;
+  const description = descriptor.getDescription(item);
+  const openTarget = descriptor.getOpenTarget(item);
   // The backing task was deleted outside the tool path: the Work lingers as an
   // orphan rendered from its snapshot, and opening the gone task detail 404s, so
   // strip the click affordance and surface a "task deleted" badge.
   const taskDeleted = item.resourceType === 'task' && item.taskDeleted;
-  const clickable = (isDocument || (!isLinear && !isGithub) || !!externalUrl) && !taskDeleted;
+  const clickable = !!openTarget && !taskDeleted;
+
   const handleOpen = () => {
     if (onOpen) {
       onOpen(item);
       return;
     }
+    if (!openTarget) return;
 
-    if (isDocument) {
-      openDocument(item.document.id, item.event.metadata?.agentDocumentId);
-      return;
+    switch (openTarget.kind) {
+      case 'document': {
+        openDocument(openTarget.documentId, openTarget.agentDocumentId);
+        return;
+      }
+      case 'external': {
+        window.open(openTarget.url, '_blank', 'noopener,noreferrer');
+        return;
+      }
+      case 'task': {
+        openTaskDetail(openTarget.identifier);
+      }
     }
-
-    if (isLinear || isGithub) {
-      if (externalUrl) window.open(externalUrl, '_blank', 'noopener,noreferrer');
-      return;
-    }
-
-    openTaskDetail(item.resourceIdentifier ?? item.resourceId);
   };
 
   return (
