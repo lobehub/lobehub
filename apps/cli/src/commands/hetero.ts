@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import type { AskUserBridge } from '@lobechat/heterogeneous-agents/askUser';
-import { AskUserMcpServer } from '@lobechat/heterogeneous-agents/askUser';
+import { LobeBuiltinMcpServer } from '@lobechat/heterogeneous-agents/builtinMcp';
 import { resolveHeteroSpawnCommand } from '@lobechat/heterogeneous-agents/resolveCliCommand';
 import type {
   AgentContentBlock,
@@ -517,12 +517,12 @@ const exec = async (options: ExecOptions): Promise<void> => {
   // The bridge's own 5-min timeout is the backstop, so a dropped poll or an
   // absent user never strands CC.
   const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
-  let askServer: AskUserMcpServer | undefined;
+  let askServer: LobeBuiltinMcpServer | undefined;
   let askBridge: AskUserBridge | undefined;
   let askMcpConfigPath: string | undefined;
   const askPollAbort = new AbortController();
   if (serverIngest && agentType === 'claude-code' && serverIngester) {
-    askServer = new AskUserMcpServer();
+    askServer = new LobeBuiltinMcpServer();
     await askServer.start();
     askBridge = askServer.registerOperation(operationId);
     askMcpConfigPath = path.join(os.tmpdir(), `lobe-cc-mcp-${operationId}.json`);
