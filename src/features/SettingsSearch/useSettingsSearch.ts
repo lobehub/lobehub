@@ -51,7 +51,7 @@ const splitKeywords = (text: string) =>
  * from `SETTINGS_SEARCH_ITEMS` and are dropped when their tab is not visible.
  */
 export const useSettingsSearch = (query: string): SettingsSearchResult[] => {
-  const { t } = useTranslation(['setting', 'labs', 'electron']);
+  const { t } = useTranslation(['setting', 'labs', 'electron', 'subscription', 'spend']);
   const categoryGroups = useCategory();
   const { enableSTT, hideDocs, showAiImage } = useServerConfigStore(featureFlagsSelectors);
   const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);

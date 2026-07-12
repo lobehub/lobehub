@@ -22,7 +22,7 @@ export interface SettingsSearchItem {
   /** i18n key of the item label */
   labelKey: string;
   /** i18n namespace of `labelKey` / `descKey`, defaults to `setting` */
-  ns?: 'electron' | 'labs' | 'setting';
+  ns?: 'electron' | 'labs' | 'setting' | 'spend' | 'subscription';
   tab: SettingsTabs;
   /**
    * Extra visibility gate mirroring the target item's own render condition
@@ -280,5 +280,149 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     labelKey: 'hotkey.group.desktop',
     tab: SettingsTabs.Hotkey,
     visible: (ctx) => ctx.isDesktop,
+  },
+  // Business pages below are rendered by business slots (cloud implementation);
+  // their tabs only appear when the business build provides them, so tab
+  // visibility via useCategory is the effective gate — no per-item gate needed.
+  // Billing
+  {
+    anchor: 'billing-summary',
+    keywords: ['payment method', 'next payment', 'card'],
+    labelKey: 'summary.title',
+    ns: 'subscription',
+    tab: SettingsTabs.Billing,
+  },
+  {
+    anchor: 'billing-current-plan',
+    keywords: ['plan', 'subscription', 'cancel'],
+    labelKey: 'currentPlan.title',
+    ns: 'subscription',
+    tab: SettingsTabs.Billing,
+  },
+  {
+    anchor: 'billing-history',
+    keywords: ['invoice', 'receipt', 'payment history'],
+    labelKey: 'billing.history',
+    ns: 'subscription',
+    tab: SettingsTabs.Billing,
+  },
+  // Credits
+  {
+    anchor: 'credits-balance',
+    keywords: ['balance', 'credits'],
+    labelKey: 'balance.title',
+    ns: 'subscription',
+    tab: SettingsTabs.Credits,
+  },
+  {
+    anchor: 'credits-top-up',
+    keywords: ['top up', 'topup', 'buy credits', 'recharge'],
+    labelKey: 'credits.topUp.title',
+    ns: 'subscription',
+    tab: SettingsTabs.Credits,
+  },
+  {
+    anchor: 'credits-cost-estimate-hint',
+    descKey: 'credits.costEstimateHint.desc',
+    keywords: ['cost estimate'],
+    labelKey: 'credits.costEstimateHint.title',
+    ns: 'subscription',
+    tab: SettingsTabs.Credits,
+  },
+  {
+    anchor: 'credits-auto-top-up',
+    descKey: 'credits.autoTopUp.desc',
+    keywords: ['auto top up', 'automatic recharge'],
+    labelKey: 'credits.autoTopUp.title',
+    ns: 'subscription',
+    tab: SettingsTabs.Credits,
+  },
+  {
+    anchor: 'credits-packages',
+    keywords: ['package', 'budget'],
+    labelKey: 'credits.packages.title',
+    ns: 'subscription',
+    tab: SettingsTabs.Credits,
+  },
+  // Plans
+  {
+    anchor: 'plans-model-pricing',
+    keywords: ['model pricing', 'price'],
+    labelKey: 'modelPricing.title',
+    ns: 'subscription',
+    tab: SettingsTabs.Plans,
+  },
+  {
+    anchor: 'plans-qa',
+    keywords: ['faq', 'question'],
+    labelKey: 'qa.title',
+    ns: 'subscription',
+    tab: SettingsTabs.Plans,
+  },
+  // Referral
+  {
+    anchor: 'referral-invite-link',
+    keywords: ['invite link', 'share'],
+    labelKey: 'referral.inviteLink.title',
+    ns: 'subscription',
+    tab: SettingsTabs.Referral,
+  },
+  {
+    anchor: 'referral-invite-code',
+    keywords: ['invite code', 'referral code'],
+    labelKey: 'referral.inviteCode.title',
+    ns: 'subscription',
+    tab: SettingsTabs.Referral,
+  },
+  {
+    anchor: 'referral-stats',
+    keywords: ['rewards', 'invites'],
+    labelKey: 'referral.stats.title',
+    ns: 'subscription',
+    tab: SettingsTabs.Referral,
+  },
+  {
+    anchor: 'referral-table',
+    keywords: ['referral history'],
+    labelKey: 'referral.table.title',
+    ns: 'subscription',
+    tab: SettingsTabs.Referral,
+  },
+  {
+    anchor: 'referral-rules',
+    descKey: 'referral.rules.description',
+    keywords: ['rules'],
+    labelKey: 'referral.rules.title',
+    ns: 'subscription',
+    tab: SettingsTabs.Referral,
+  },
+  // Usage
+  {
+    anchor: 'usage-spend',
+    descKey: 'table.desc',
+    keywords: ['spend', 'cost'],
+    labelKey: 'table.title',
+    ns: 'spend',
+    tab: SettingsTabs.Usage,
+  },
+  {
+    anchor: 'usage-overview',
+    keywords: ['usage', 'quota'],
+    labelKey: 'usage.title',
+    ns: 'subscription',
+    tab: SettingsTabs.Usage,
+  },
+  // Notification
+  {
+    anchor: 'notification-email',
+    keywords: ['email'],
+    labelKey: 'notification.email.title',
+    tab: SettingsTabs.Notification,
+  },
+  {
+    anchor: 'notification-push',
+    keywords: ['push'],
+    labelKey: 'notification.push.title',
+    tab: SettingsTabs.Notification,
   },
 ];
