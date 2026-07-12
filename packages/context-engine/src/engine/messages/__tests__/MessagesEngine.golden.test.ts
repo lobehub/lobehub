@@ -21,7 +21,9 @@ import type { MessagesEngineParams } from '../types';
 
 const at = 1_700_000_000_000; // fixed timestamps keep snapshots stable
 
-const msg = (partial: Partial<UIChatMessage>): UIChatMessage =>
+// object (not Partial<UIChatMessage>) so fixtures can carry OpenAI-shape fields like
+// tool_calls that UIChatMessage doesn't declare — same as the inline casts in MessagesEngine.test.ts
+const msg = (partial: object): UIChatMessage =>
   ({ createdAt: at, updatedAt: at, ...partial }) as UIChatMessage;
 
 const payloadTokens = (messages: Array<{ content?: unknown; tool_calls?: unknown }>) =>
