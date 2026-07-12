@@ -121,6 +121,19 @@ describe('useSettingsSearchAnalytics', () => {
     expect(clickEvents[0].properties!.query).toBe('[redacted]');
   });
 
+  it('redacts punctuated secrets like JWTs and base64 tokens', () => {
+    const jwt = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.sflKxwRJSMeKKF2QT4fwpM';
+    renderHook(() => useSettingsSearchAnalytics(jwt, []));
+    vi.advanceTimersByTime(1000);
+
+    const queryEvents = eventsByName('settings_search_query');
+    expect(queryEvents).toHaveLength(1);
+    expect(queryEvents[0].properties).toMatchObject({
+      query: '[redacted]',
+      query_length: jwt.length,
+    });
+  });
+
   it('does not redact ordinary short queries', () => {
     renderHook(() => useSettingsSearchAnalytics('dark mode', [makeResult('tab-a-b')]));
     vi.advanceTimersByTime(1000);
