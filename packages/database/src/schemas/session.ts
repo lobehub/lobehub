@@ -8,6 +8,12 @@ import { timestamps } from './_helpers';
 import { users } from './user';
 import { workspaces } from './workspace';
 
+/** Session-group visibility — shared by column def and insert schema. */
+export const SESSION_GROUP_VISIBILITY = ['private', 'public'] as const;
+
+/** Session type — shared by column def and insert schema. */
+export const SESSION_TYPE = ['agent', 'group'] as const;
+
 //  ======= sessionGroups ======= //
 
 export const sessionGroups = pgTable(
@@ -31,9 +37,7 @@ export const sessionGroups = pgTable(
      * workspace member can see the folder; `private` constrains it to the
      * creator (`user_id`). Ignored in personal mode.
      */
-    visibility: text('visibility', { enum: ['private', 'public'] })
-      .default('public')
-      .notNull(),
+    visibility: text('visibility', { enum: SESSION_GROUP_VISIBILITY }).default('public').notNull(),
 
     ...timestamps,
   },
@@ -58,8 +62,9 @@ export const sessionGroups = pgTable(
 // assignability to Drizzle `$inferSelect` partials used by model.update.
 // Keep `.optional()` so defaulted columns stay omit-able (bare z.enum would
 // make them required and change runtime insert validation).
+// Enum values from SESSION_GROUP_VISIBILITY so column def and schema stay in sync.
 export const insertSessionGroupSchema = createInsertSchema(sessionGroups, {
-  visibility: z.enum(['private', 'public']).optional(),
+  visibility: z.enum(SESSION_GROUP_VISIBILITY).optional(),
 });
 
 export type NewSessionGroup = typeof sessionGroups.$inferInsert;
@@ -81,7 +86,7 @@ export const sessions = pgTable(
     avatar: text('avatar'),
     backgroundColor: text('background_color'),
 
-    type: text('type', { enum: ['agent', 'group'] }).default('agent'),
+    type: text('type', { enum: SESSION_TYPE }).default('agent'),
 
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
@@ -110,7 +115,7 @@ export const sessions = pgTable(
 
 export const insertSessionSchema = createInsertSchema(sessions, {
   // column is nullable + default — match drizzle-zod insert optionality
-  type: z.enum(['agent', 'group']).nullish(),
+  type: z.enum(SESSION_TYPE).nullish(),
 });
 // export const selectSessionSchema = createSelectSchema(sessions);
 

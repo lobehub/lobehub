@@ -107,6 +107,21 @@ export const topics = pgTable(
 export type NewTopic = typeof topics.$inferInsert;
 export type TopicItem = typeof topics.$inferSelect;
 
+/** Single source of truth for thread `type` — column def + zod schemas share this. */
+export const THREAD_TYPE = ['continuation', 'standalone', 'isolation', 'eval'] as const;
+
+/** Single source of truth for thread `status` — column def + zod schemas share this. */
+export const THREAD_STATUS = [
+  'active',
+  'processing',
+  'pending',
+  'inReview',
+  'todo',
+  'cancel',
+  'completed',
+  'failed',
+] as const;
+
 // @ts-ignore
 export const threads = pgTable(
   'threads',
@@ -118,19 +133,8 @@ export const threads = pgTable(
     title: text('title'),
     content: text('content'),
     editor_data: jsonb('editor_data'),
-    type: text('type', { enum: ['continuation', 'standalone', 'isolation', 'eval'] }).notNull(),
-    status: text('status', {
-      enum: [
-        'active',
-        'processing',
-        'pending',
-        'inReview',
-        'todo',
-        'cancel',
-        'completed',
-        'failed',
-      ],
-    }),
+    type: text('type', { enum: THREAD_TYPE }).notNull(),
+    status: text('status', { enum: THREAD_STATUS }),
 
     topicId: text('topic_id')
       .references(() => topics.id, { onDelete: 'cascade' })
@@ -170,12 +174,11 @@ export type ThreadItem = typeof threads.$inferSelect;
 // (excessively deep instantiation) under Zod 4 because of self-ref parentThreadId
 // plus multi-value text enums; overrides keep inference shallow and correct.
 // Preserve insert nullability: `type` is notNull (required), `status` is nullable.
+// Enum values come from THREAD_TYPE / THREAD_STATUS so column def and schema can't drift.
 export const insertThreadSchema = createInsertSchema(threads, {
   metadata: z.custom<ThreadMetadata>().optional(),
-  status: z
-    .enum(['active', 'processing', 'pending', 'inReview', 'todo', 'cancel', 'completed', 'failed'])
-    .nullish(),
-  type: z.enum(['continuation', 'standalone', 'isolation', 'eval']),
+  status: z.enum(THREAD_STATUS).nullish(),
+  type: z.enum(THREAD_TYPE),
 });
 
 // Prefer createUpdateSchema over insertThreadSchema.partial() — .partial() on the
@@ -184,10 +187,8 @@ export const insertThreadSchema = createInsertSchema(threads, {
 // by createUpdateSchema and would require type/status on every partial update.
 export const updateThreadSchema = createUpdateSchema(threads, {
   metadata: z.custom<ThreadMetadata>().optional(),
-  status: z
-    .enum(['active', 'processing', 'pending', 'inReview', 'todo', 'cancel', 'completed', 'failed'])
-    .nullish(),
-  type: z.enum(['continuation', 'standalone', 'isolation', 'eval']).optional(),
+  status: z.enum(THREAD_STATUS).nullish(),
+  type: z.enum(THREAD_TYPE).optional(),
 });
 
 /**
