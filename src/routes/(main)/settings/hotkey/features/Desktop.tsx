@@ -10,8 +10,8 @@ import { useTranslation } from 'react-i18next';
 
 import { DESKTOP_HOTKEYS_REGISTRATION } from '@/const/desktopGlobalShortcuts';
 import { FORM_STYLE } from '@/const/layoutTokens';
+import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
 import hotkeyMeta from '@/locales/default/hotkey';
-import { SettingsSearchAnchor } from '@/routes/(main)/settings/search/anchor';
 import { useElectronStore } from '@/store/electron';
 import { desktopHotkeysSelectors } from '@/store/electron/selectors';
 import { type DesktopHotkeyItem } from '@/types/hotkey';

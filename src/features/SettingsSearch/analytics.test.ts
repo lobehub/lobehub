@@ -26,11 +26,14 @@ const eventsByName = (name: string) =>
 describe('useSettingsSearchAnalytics', () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    // Clear in beforeEach, not afterEach: testing-library's auto-cleanup unmounts
+    // hooks AFTER our afterEach, and that unmount can emit an abandoned event
+    // which would otherwise leak into the next test's assertions.
+    vi.clearAllMocks();
   });
 
   afterEach(() => {
     vi.useRealTimers();
-    vi.clearAllMocks();
   });
 
   it('reports a settled query once, skipping intermediate keystrokes', () => {
@@ -98,6 +101,31 @@ describe('useSettingsSearchAnalytics', () => {
     unmountClicked();
 
     expect(eventsByName('settings_search_abandoned')).toHaveLength(0);
+  });
+
+  it('redacts token-like queries but keeps real length metadata', () => {
+    const secret = 'sk-proj-Abc123XyzSecretValue';
+    const results = [makeResult('tab-system-apikey')];
+    const { result } = renderHook(() => useSettingsSearchAnalytics(secret, results));
+    vi.advanceTimersByTime(1000);
+
+    const queryEvents = eventsByName('settings_search_query');
+    expect(queryEvents).toHaveLength(1);
+    expect(queryEvents[0].properties).toMatchObject({
+      query: '[redacted]',
+      query_length: secret.length,
+    });
+
+    result.current.trackResultClick(results[0], 1);
+    const clickEvents = eventsByName('settings_search_result_clicked');
+    expect(clickEvents[0].properties!.query).toBe('[redacted]');
+  });
+
+  it('does not redact ordinary short queries', () => {
+    renderHook(() => useSettingsSearchAnalytics('dark mode', [makeResult('tab-a-b')]));
+    vi.advanceTimersByTime(1000);
+
+    expect(eventsByName('settings_search_query')[0].properties!.query).toBe('dark mode');
   });
 
   it('does not report abandonment when no query ever settled', () => {

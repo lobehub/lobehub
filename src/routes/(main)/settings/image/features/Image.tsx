@@ -10,8 +10,8 @@ import { useTranslation } from 'react-i18next';
 import { FormSliderWithInput } from '@/components/FormInput';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import { MAX_DEFAULT_IMAGE_NUM, MIN_DEFAULT_IMAGE_NUM } from '@/const/settings';
+import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
 import { usePermission } from '@/hooks/usePermission';
-import { SettingsSearchAnchor } from '@/routes/(main)/settings/search/anchor';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/slices/settings/selectors';
 

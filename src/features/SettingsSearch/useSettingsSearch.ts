@@ -3,6 +3,7 @@ import { DEFAULT_MODEL_PROVIDER_LIST } from 'model-bank/modelProviders';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useCategory } from '@/routes/(main)/settings/hooks/useCategory';
 import { SettingsTabs } from '@/store/global/initialState';
 import {
   featureFlagsSelectors,
@@ -10,7 +11,6 @@ import {
   useServerConfigStore,
 } from '@/store/serverConfig';
 
-import { useCategory } from '../hooks/useCategory';
 import {
   SETTINGS_SEARCH_ITEMS,
   type SettingsSearchContext,

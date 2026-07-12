@@ -4,11 +4,11 @@ import { Fragment, useEffect } from 'react';
 
 import NavHeader from '@/features/NavHeader';
 import SettingContainer from '@/features/Setting/SettingContainer';
+import { useSettingsAnchorScroll } from '@/features/SettingsSearch/anchor';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { SettingsTabs } from '@/store/global/initialState';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 
-import { useSettingsAnchorScroll } from '../search/anchor';
 import { componentMap } from './componentMap';
 
 const REDIRECT_MAP: Record<string, string> = {

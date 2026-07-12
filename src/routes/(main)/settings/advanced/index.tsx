@@ -12,8 +12,8 @@ import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
 import { FORM_STYLE } from '@/const/layoutTokens';
+import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
 import SettingHeader from '@/routes/(main)/settings/features/SettingHeader';
-import { SettingsSearchAnchor } from '@/routes/(main)/settings/search/anchor';
 import { autoUpdateService } from '@/services/electron/autoUpdate';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';

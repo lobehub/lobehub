@@ -13,7 +13,7 @@ import AccountDeletion from '@/business/client/features/AccountDeletion';
 import { useTransferAgentsFormItem } from '@/business/client/hooks/useTransferAgentsFormItem';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import DataImporter from '@/features/DataImporter';
-import { SettingsSearchAnchor } from '@/routes/(main)/settings/search/anchor';
+import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
 import { configService } from '@/services/config';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { featureFlagsSelectors, serverConfigSelectors } from '@/store/serverConfig/selectors';

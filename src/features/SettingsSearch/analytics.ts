@@ -25,6 +25,21 @@ const QUERY_SETTLE_MS = 1000;
 /** Cap recorded query length: enough for analysis, avoids logging pasted blobs */
 const MAX_QUERY_LENGTH = 100;
 
+/**
+ * Secret-looking input must never reach analytics: telemetry is default-on and
+ * users may paste an API key into the search box by accident. Real settings
+ * queries are short human words, so redact anything that looks like a
+ * credential — known key prefixes, or a long unbroken ASCII token.
+ */
+const TOKEN_LIKE_QUERY = /^(?:sk-|pk-|ghp_|gho_|xox|akia|bearer\s)|^[\w-]{16,}$/i;
+
+const REDACTED_QUERY = '[redacted]';
+
+const sanitizeQuery = (query: string) => {
+  const normalized = query.trim().toLowerCase().slice(0, MAX_QUERY_LENGTH);
+  return TOKEN_LIKE_QUERY.test(normalized) ? REDACTED_QUERY : normalized;
+};
+
 type SettingsSearchResultType = 'item' | 'provider' | 'tab';
 
 /** Result keys are prefixed by their index source: `tab-*` / `item-*` / `provider-*` */
@@ -33,8 +48,6 @@ const getResultType = (resultKey: string): SettingsSearchResultType => {
   if (resultKey.startsWith('provider-')) return 'provider';
   return 'tab';
 };
-
-const normalizeQuery = (query: string) => query.trim().toLowerCase().slice(0, MAX_QUERY_LENGTH);
 
 interface SearchSession {
   clicked: boolean;
@@ -65,26 +78,28 @@ export const useSettingsSearchAnalytics = (query: string, results: SettingsSearc
     queryCount: 0,
   });
 
-  const normalizedQuery = normalizeQuery(query);
+  const sanitizedQuery = sanitizeQuery(query);
+  // Real length of what the user typed (capped), even when the content is redacted
+  const queryLength = Math.min(query.trim().length, MAX_QUERY_LENGTH);
   const resultCount = results.length;
 
   useEffect(() => {
-    if (!normalizedQuery) return;
+    if (!sanitizedQuery) return;
 
     const timer = setTimeout(() => {
       const session = sessionRef.current;
       // Skip repeats (e.g. re-render with the same settled query)
-      if (normalizedQuery === session.lastQuery) return;
+      if (sanitizedQuery === session.lastQuery) return;
 
       session.queryCount += 1;
-      session.lastQuery = normalizedQuery;
+      session.lastQuery = sanitizedQuery;
       session.lastResultCount = resultCount;
 
       trackProductUsageEvent({
         name: SETTINGS_SEARCH_EVENTS.QUERY,
         properties: {
-          query: normalizedQuery,
-          query_length: normalizedQuery.length,
+          query: sanitizedQuery,
+          query_length: queryLength,
           result_count: resultCount,
           sequence: session.queryCount,
           session_id: session.id,
@@ -94,7 +109,7 @@ export const useSettingsSearchAnalytics = (query: string, results: SettingsSearc
     }, QUERY_SETTLE_MS);
 
     return () => clearTimeout(timer);
-  }, [normalizedQuery, resultCount]);
+  }, [sanitizedQuery, queryLength, resultCount]);
 
   // Session end = component unmount. Report abandonment only when at least one
   // query settled and nothing was ever clicked.
@@ -130,7 +145,7 @@ export const useSettingsSearchAnalytics = (query: string, results: SettingsSearc
             // The click may land before the settle timer, so report the live
             // query, not the last settled one.
             position,
-            query: normalizeQuery(query),
+            query: sanitizeQuery(query),
             query_count: session.queryCount,
             result_count: resultCount,
             result_key: result.key,
