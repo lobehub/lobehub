@@ -1,7 +1,7 @@
 import { BrowserManifest } from '@lobechat/builtin-tool-browser';
 import { describe, expect, it } from 'vitest';
 
-import { BROWSER_MCP_TOOLS } from '../../../../apps/desktop/src/main/modules/heterogeneousAgent/browserMcpTools';
+import { BROWSER_MCP_TOOLS } from './browserMcpTools';
 
 /**
  * Cross-instance zod introspection: the mirror's shapes are built by the
