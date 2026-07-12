@@ -107,9 +107,9 @@ const createAttemptOutput = (content = 'answer'): LLMAttemptOutput => ({
 const createTurnSession = (overrides: Partial<LLMTurnSession> = {}): LLMTurnSession => ({
   classifyError: vi.fn().mockReturnValue({ kind: 'stop', message: 'failed' }),
   close: vi.fn(),
-  finalize: vi.fn().mockResolvedValue({ events: [], newState: createState() }),
   handleError: vi.fn().mockResolvedValue(undefined),
   maxAttempts: 3,
+  recordResult: vi.fn(),
   resolveRetryBudget: vi.fn().mockReturnValue(2),
   runAttempt: vi.fn().mockResolvedValue({ ok: true, output: createAttemptOutput() }),
   waitForRetry: vi.fn().mockResolvedValue(undefined),
@@ -136,11 +136,7 @@ const createHost = (
 describe('callLlm executor', () => {
   it('prepares the assistant message and delegates call_llm execution to the LLM transport', async () => {
     const state = createState();
-    const expected = {
-      events: [],
-      newState: state,
-    };
-    const session = createTurnSession({ finalize: vi.fn().mockResolvedValue(expected) });
+    const session = createTurnSession();
     const openTurn = vi.fn().mockReturnValue(session);
     const messages = createMessageTransport();
     const stream = createStreamSink();
@@ -162,7 +158,7 @@ describe('callLlm executor', () => {
       type: 'call_llm',
     };
 
-    await expect(callLlm(host)(instructionWithParent, state)).resolves.toBe(expected);
+    const result = await callLlm(host)(instructionWithParent, state);
     expect(messages.findById).toHaveBeenCalledWith('parent-1');
     expect(messages.createAssistantMessage).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -199,21 +195,26 @@ describe('callLlm executor', () => {
       state,
       stepLabel: undefined,
     });
-    expect(session.runAttempt).toHaveBeenCalledWith({ attempt: 1, events: [] });
-    expect(session.finalize).toHaveBeenCalledWith({
-      events: [],
-      output: createAttemptOutput(),
+    expect(session.runAttempt).toHaveBeenCalledWith({
+      attempt: 1,
+      events: [expect.objectContaining({ type: 'llm_result' })],
     });
+    expect(messages.update).toHaveBeenCalledWith(
+      'assistant-1',
+      expect.objectContaining({ content: 'answer', search: null }),
+    );
+    expect(result.newState.messages.at(-1)).toMatchObject({
+      content: 'answer',
+      id: 'assistant-1',
+      role: 'assistant',
+    });
+    expect(session.recordResult).toHaveBeenCalledWith(createAttemptOutput());
     expect(session.close).toHaveBeenCalledWith(undefined);
   });
 
   it('reuses an existing assistant message without creating a new one', async () => {
     const state = createState();
-    const expected = {
-      events: [],
-      newState: state,
-    };
-    const session = createTurnSession({ finalize: vi.fn().mockResolvedValue(expected) });
+    const session = createTurnSession();
     const openTurn = vi.fn().mockReturnValue(session);
     const messages = createMessageTransport();
     const host = createHost(
@@ -231,7 +232,9 @@ describe('callLlm executor', () => {
       type: 'call_llm',
     };
 
-    await expect(callLlm(host)(reuseInstruction, state)).resolves.toBe(expected);
+    await expect(callLlm(host)(reuseInstruction, state)).resolves.toMatchObject({
+      newState: { messages: [expect.objectContaining({ id: 'assistant-existing' })] },
+    });
     expect(messages.createAssistantMessage).not.toHaveBeenCalled();
     expect(openTurn).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -313,7 +316,6 @@ describe('callLlm executor', () => {
     const error = new Error('temporary outage');
     const firstOutput = createAttemptOutput('partial');
     const finalOutput = createAttemptOutput('complete');
-    const expected = { events: [], newState: state };
     const runAttempt = vi
       .fn()
       .mockResolvedValueOnce({ error, ok: false, output: firstOutput })
@@ -325,7 +327,6 @@ describe('callLlm executor', () => {
         kind: 'retry',
         message: error.message,
       }),
-      finalize: vi.fn().mockResolvedValue(expected),
       onRetry,
       runAttempt,
     });
@@ -342,7 +343,7 @@ describe('callLlm executor', () => {
       operationStore,
     );
 
-    await expect(callLlm(host)(instruction, state)).resolves.toBe(expected);
+    const result = await callLlm(host)(instruction, state);
 
     const retryEvent = {
       data: {
@@ -354,8 +355,14 @@ describe('callLlm executor', () => {
       },
       type: 'stream_retry' as const,
     };
-    expect(runAttempt).toHaveBeenNthCalledWith(1, { attempt: 1, events: [retryEvent] });
-    expect(runAttempt).toHaveBeenNthCalledWith(2, { attempt: 2, events: [retryEvent] });
+    expect(runAttempt).toHaveBeenNthCalledWith(1, {
+      attempt: 1,
+      events: [retryEvent, expect.objectContaining({ type: 'llm_result' })],
+    });
+    expect(runAttempt).toHaveBeenNthCalledWith(2, {
+      attempt: 2,
+      events: [retryEvent, expect.objectContaining({ type: 'llm_result' })],
+    });
     expect(onRetry).toHaveBeenCalledWith({
       attempt: 1,
       delayMs: 1000,
@@ -372,7 +379,8 @@ describe('callLlm executor', () => {
       type: 'stream_retry',
     });
     expect(session.waitForRetry).toHaveBeenCalledWith(1000);
-    expect(session.finalize).toHaveBeenCalledWith({ events: [retryEvent], output: finalOutput });
+    expect(result.newState.messages.at(-1)).toMatchObject({ content: 'complete' });
+    expect(session.recordResult).toHaveBeenCalledWith(finalOutput);
     expect(session.handleError).not.toHaveBeenCalled();
     expect(session.close).toHaveBeenCalledWith(undefined);
   });
@@ -390,9 +398,10 @@ describe('callLlm executor', () => {
       loadState: vi.fn().mockResolvedValue({ ...state, status: 'interrupted' }),
     };
     const stream = createStreamSink();
+    const messages = createMessageTransport();
     const host = createHost(
       { openTurn: vi.fn().mockReturnValue(session), stream: vi.fn() },
-      createMessageTransport(),
+      messages,
       stream,
       createContextBuilder(),
       operationStore,
@@ -402,6 +411,13 @@ describe('callLlm executor', () => {
 
     expect(session.runAttempt).toHaveBeenCalledTimes(1);
     expect(session.waitForRetry).not.toHaveBeenCalled();
+    expect(messages.update).toHaveBeenCalledWith(
+      'assistant-1',
+      expect.objectContaining({
+        content: 'partial',
+        metadata: expect.objectContaining({ interruptedMidStream: true }),
+      }),
+    );
     expect(session.handleError).toHaveBeenCalledWith({
       error,
       events: [],

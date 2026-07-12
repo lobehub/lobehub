@@ -617,7 +617,7 @@ export class CompletionLifecycle {
       if (!raw?.trim()) return undefined;
 
       // Multimodal rows store `content` as serialized MessageContentPart[]
-      // (see serverCallLlmFinalizer / serializePartsForStorage) — sending
+      // (see callLlmFinalizer / serializePartsForStorage) — sending
       // that verbatim would deliver raw JSON to the bot channel. Gate on the
       // row's `metadata.isMultimodal` flag (the same signal the app UI uses
       // in DisplayContent) rather than sniffing the string, so a legitimate

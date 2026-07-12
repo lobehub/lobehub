@@ -53,7 +53,6 @@ export class ServerLLMTransport implements LLMTransport {
         return this.runAttemptWithRuntime(attemptInput, await modelRuntimePromise);
       },
       state: input.state,
-      stepLabel: input.stepLabel,
     });
   }
 

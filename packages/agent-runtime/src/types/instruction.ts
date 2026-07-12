@@ -45,6 +45,7 @@ export interface AgentRuntimeContext {
 
   /** Session info (kept for backward compatibility, will be optional in the future) */
   session?: {
+    eventCount?: number;
     messageCount: number;
     sessionId: string;
     status: AgentState['status'];

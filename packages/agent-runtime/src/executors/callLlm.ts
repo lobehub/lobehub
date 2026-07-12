@@ -5,7 +5,8 @@ import type {
   LLMTurnSession,
 } from '../transport';
 import type { AgentEvent, AgentInstruction, CallLLMPayload, InstructionExecutor } from '../types';
-import { getLLMRetryDelayMs, shouldRetryLLM } from '../utils';
+import { getLLMRetryDelayMs, shouldRetryLLM } from '../utils/runtimeRetry';
+import { finalizeCallLlmTurn, persistInterruptedCallLlmResult } from './callLlmFinalizer';
 
 const CONVERSATION_PARENT_MISSING_ERROR_TYPE = 'ConversationParentMissing';
 
@@ -39,7 +40,11 @@ const isOperationInterrupted = async (host: AgentRuntimeHost) => {
   }
 };
 
-const executeTurnSession = async (host: AgentRuntimeHost, session: LLMTurnSession) => {
+const executeTurnSession = async (
+  host: AgentRuntimeHost,
+  session: LLMTurnSession,
+  turn: LLMTurnInput,
+) => {
   const events: AgentEvent[] = [];
   let errorHandled = false;
   let lastOutput: LLMAttemptOutput | undefined;
@@ -50,7 +55,20 @@ const executeTurnSession = async (host: AgentRuntimeHost, session: LLMTurnSessio
       const execution = await session.runAttempt({ attempt, events });
       lastOutput = execution.output;
 
-      if (execution.ok) return await session.finalize({ events, output: execution.output });
+      if (execution.ok) {
+        return await finalizeCallLlmTurn({
+          assistantMessageId: turn.assistantMessage.id,
+          events,
+          host,
+          model: turn.model,
+          output: execution.output,
+          provider: turn.provider,
+          recordResult: session.recordResult?.bind(session),
+          shouldReplayAssistantReasoning: turn.context.replayAssistantReasoning,
+          state: turn.state,
+          stepLabel: turn.stepLabel,
+        });
+      }
 
       const { error } = execution;
       const classified = session.classifyError(error);
@@ -89,6 +107,13 @@ const executeTurnSession = async (host: AgentRuntimeHost, session: LLMTurnSessio
       }
 
       errorHandled = true;
+      if (interrupted) {
+        await persistInterruptedCallLlmResult({
+          assistantMessageId: turn.assistantMessage.id,
+          host,
+          output: execution.output,
+        });
+      }
       await session.handleError({
         error,
         events,
@@ -103,10 +128,18 @@ const executeTurnSession = async (host: AgentRuntimeHost, session: LLMTurnSessio
   } catch (error) {
     terminalError = error;
     if (!errorHandled) {
+      const interrupted = await isOperationInterrupted(host);
+      if (interrupted && lastOutput) {
+        await persistInterruptedCallLlmResult({
+          assistantMessageId: turn.assistantMessage.id,
+          host,
+          output: lastOutput,
+        });
+      }
       await session.handleError({
         error,
         events,
-        interrupted: await isOperationInterrupted(host),
+        interrupted,
         output: lastOutput,
       });
     }
@@ -176,9 +209,9 @@ const buildAssistantMessageSeed = (
 /**
  * Package-owned `call_llm` executor entry point.
  *
- * The package prepares the turn and owns retry/interruption orchestration. The
- * host-bound session temporarily retains model execution, tracing, and result
- * persistence until those responsibilities move onto narrower ports.
+ * The package prepares and finalizes the turn, including retry, interruption,
+ * persistence, and state updates. The host-bound session retains provider
+ * policy, model attempt execution, and tracing hooks.
  */
 export const callLlm =
   (host: AgentRuntimeHost): InstructionExecutor =>
@@ -260,15 +293,16 @@ export const callLlm =
       });
 
     try {
-      const session = await llm.openTurn({
+      const turn: LLMTurnInput = {
         assistantMessage,
         context,
         model,
         provider,
         state,
         stepLabel,
-      });
-      return await executeTurnSession(host, session);
+      };
+      const session = await llm.openTurn(turn);
+      return await executeTurnSession(host, session, turn);
     } catch (error) {
       await transports.stream.publishError?.({
         error,

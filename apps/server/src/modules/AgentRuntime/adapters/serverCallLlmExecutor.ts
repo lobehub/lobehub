@@ -1,12 +1,10 @@
 import {
   type AgentState,
   type ContextBuildOutput,
-  type GeneralAgentCallLLMResultPayload,
-  type InstructionExecutionResult,
+  type LLMAttemptOutput,
   type LLMTransport,
   type LLMTurnAttemptInput,
   type LLMTurnErrorInput,
-  type LLMTurnFinalizeInput,
   type LLMTurnRetryInput,
   type LLMTurnSession,
   resolveLLMMaxAttempts,
@@ -30,10 +28,6 @@ import {
 import { type RuntimeExecutorContext } from '../context';
 import { log, sleep } from '../executorHelpers';
 import { classifyLLMError } from '../llmErrorClassification';
-import {
-  finalizeServerCallLlmResult,
-  persistInterruptedServerCallLlmResult,
-} from './serverCallLlmFinalizer';
 
 interface ServerCallLlmExecutionContext {
   assistantMessage: { id: string };
@@ -42,7 +36,6 @@ interface ServerCallLlmExecutionContext {
   provider: string;
   runAttempt: NonNullable<LLMTransport['runAttempt']>;
   state: AgentState;
-  stepLabel?: string;
 }
 
 const SERVER_LLM_RETRY_POLICY = {
@@ -113,142 +106,13 @@ class ServerCallLlmTurnSession implements LLMTurnSession {
     this.chatSpan.end();
   }
 
-  async finalize({ events, output }: LLMTurnFinalizeInput): Promise<InstructionExecutionResult> {
-    return otelContext.with(this.chatContext, async () => {
-      const { ctx, prepared } = this;
-      const { operationId, stepIndex, streamManager } = ctx;
-      const { assistantMessage, model, provider, state, stepLabel } = prepared;
-      const {
-        answerSalvagedFromReasoning,
-        finishReason,
-        grounding,
-        imageList,
-        speed,
-        thinkingContent,
-        toolCalls,
-        toolsCalling,
-        usage,
-      } = output;
-
-      events.push({
-        result: {
-          content: output.content,
-          finishReason,
-          reasoning: thinkingContent,
-          tool_calls: toolCalls,
-          usage,
-        },
-        type: 'llm_result',
-      });
-
-      await streamManager.publishStreamEvent(operationId, {
-        data: {
-          finalContent: output.content,
-          grounding,
-          ...(stepLabel && { stepLabel }),
-          imageList: imageList.length > 0 ? imageList : undefined,
-          reasoning: thinkingContent || undefined,
-          toolsCalling,
-          usage,
-        },
-        stepIndex,
-        type: 'stream_end',
-      });
-
-      let visibleOutputEndPublishedStepIndex: number | undefined;
-      const canPublishEarlyFinalAnswerVisibleEnd =
-        ctx.allowEarlyFinalAnswerVisibleOutputEnd ?? true;
-      if (
-        canPublishEarlyFinalAnswerVisibleEnd &&
-        toolsCalling.length === 0 &&
-        toolCalls.length === 0
-      ) {
-        try {
-          await streamManager.publishStreamEvent(operationId, {
-            data: { reason: 'final_answer' },
-            stepIndex,
-            type: 'visible_output_end',
-          });
-          visibleOutputEndPublishedStepIndex = stepIndex;
-        } catch (error) {
-          console.error('Failed to publish visible_output_end:', error);
-        }
-      }
-
-      log('[%s:%d] call_llm completed', operationId, stepIndex);
-      const newState = await finalizeServerCallLlmResult({
-        answerSalvagedFromReasoning,
-        assistantMessageId: assistantMessage.id,
-        currentStepSpeed: speed,
-        currentStepUsage: usage,
-        grounding,
-        imageList,
-        messageModel: ctx.messageModel,
-        model,
-        provider,
-        shouldReplayAssistantReasoning: prepared.context.replayAssistantReasoning,
-        state,
-        stepLabel,
-        streamOutput: output,
-        toolCalls,
-        toolsCalling,
-        visibleOutputEndPublishedStepIndex,
-      });
-
-      this.chatSpan.setAttributes(
-        buildChatResponseAttributes({
-          cacheReadInputTokens: usage?.inputCachedTokens,
-          finishReasons: finishReason ? [finishReason] : undefined,
-          inputTokens: usage?.totalInputTokens,
-          outputTokens: usage?.totalOutputTokens,
-          reasoningOutputTokens: usage?.outputReasoningTokens,
-          timeToFirstChunkMs: this.firstChunkAt,
-        }),
-      );
-
-      return {
-        events,
-        newState,
-        nextContext: {
-          payload: {
-            hasToolsCalling: toolsCalling.length > 0,
-            parentMessageId: assistantMessage.id,
-            result: { content: output.content, tool_calls: toolCalls },
-            toolsCalling,
-          } as GeneralAgentCallLLMResultPayload,
-          phase: 'llm_result' as const,
-          session: {
-            eventCount: events.length,
-            messageCount: newState.messages.length,
-            sessionId: operationId,
-            status: 'running' as const,
-            stepCount: state.stepCount + 1,
-          },
-          stepUsage: usage,
-        },
-      };
-    });
-  }
-
-  async handleError({ error, events, interrupted, output, retryBudget }: LLMTurnErrorInput) {
+  async handleError({ error, events, retryBudget }: LLMTurnErrorInput) {
     await otelContext.with(this.chatContext, async () => {
       if (error instanceof ModelEmptyError && error.diagnostics) {
         error.diagnostics.retryBudget = retryBudget;
         error.diagnostics.retryEvents = events
           .filter((event) => event.type === 'stream_retry')
           .map((event) => event.data);
-      }
-
-      if (interrupted && output) {
-        await persistInterruptedServerCallLlmResult({
-          assistantMessageId: this.prepared.assistantMessage.id,
-          currentStepSpeed: output.speed,
-          currentStepUsage: output.usage,
-          messageModel: this.ctx.messageModel,
-          operationLogId: this.operationLogId,
-          streamOutput: output,
-          toolsCalling: output.toolsCalling,
-        });
       }
 
       console.error(
@@ -271,6 +135,22 @@ class ServerCallLlmTurnSession implements LLMTurnSession {
       maxAttempts,
       delayMs,
     );
+  }
+
+  recordResult(output: LLMAttemptOutput) {
+    return otelContext.with(this.chatContext, () => {
+      log('[%s] call_llm completed', this.operationLogId);
+      this.chatSpan.setAttributes(
+        buildChatResponseAttributes({
+          cacheReadInputTokens: output.usage?.inputCachedTokens,
+          finishReasons: output.finishReason ? [output.finishReason] : undefined,
+          inputTokens: output.usage?.totalInputTokens,
+          outputTokens: output.usage?.totalOutputTokens,
+          reasoningOutputTokens: output.usage?.outputReasoningTokens,
+          timeToFirstChunkMs: this.firstChunkAt,
+        }),
+      );
+    });
   }
 
   runAttempt({ attempt, events }: LLMTurnAttemptInput) {

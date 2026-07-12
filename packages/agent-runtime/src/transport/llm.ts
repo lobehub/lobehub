@@ -8,7 +8,7 @@ import type {
   OpenAIChatMessage,
 } from '@lobechat/types';
 
-import type { AgentEvent, AgentState, CallLLMPayload, InstructionExecutionResult } from '../types';
+import type { AgentEvent, AgentState, CallLLMPayload } from '../types';
 import type { ClassifiedLLMError } from '../utils';
 import type { ContextBuildOutput } from './context';
 import type { RuntimeMessageRef } from './message';
@@ -100,11 +100,6 @@ export interface LLMTurnErrorInput {
   retryBudget?: number;
 }
 
-export interface LLMTurnFinalizeInput {
-  events: AgentEvent[];
-  output: LLMAttemptOutput;
-}
-
 export interface LLMTurnRetryInput {
   attempt: number;
   delayMs: number;
@@ -116,10 +111,10 @@ export interface LLMTurnRetryInput {
 export interface LLMTurnSession {
   classifyError: (error: unknown) => ClassifiedLLMError;
   close: (error?: unknown) => Promise<void> | void;
-  finalize: (input: LLMTurnFinalizeInput) => Promise<InstructionExecutionResult>;
   handleError: (input: LLMTurnErrorInput) => Promise<void>;
   maxAttempts: number;
   onRetry?: (input: LLMTurnRetryInput) => Promise<void> | void;
+  recordResult?: (output: LLMAttemptOutput) => Promise<void> | void;
   resolveRetryBudget: (error: unknown) => number;
   runAttempt: (input: LLMTurnAttemptInput) => Promise<LLMAttemptExecution>;
   waitForRetry?: (delayMs: number) => Promise<void>;
@@ -136,8 +131,8 @@ export interface LLMTurnSession {
  */
 export interface LLMTransport {
   /**
-   * Opens a host-bound turn session. The package owns retry orchestration while
-   * the session retains host-specific tracing and finalization temporarily.
+   * Opens a host-bound turn session. The package owns turn orchestration and
+   * finalization while the session retains provider policy and tracing hooks.
    */
   openTurn?: (input: LLMTurnInput) => Promise<LLMTurnSession> | LLMTurnSession;
   /** Executes one model attempt and returns both successful or partial output. */

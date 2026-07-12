@@ -7,6 +7,7 @@ import type { AgentState } from '../types';
  * request; `stepIndex` advances per step.
  */
 export interface RuntimeOperationContext {
+  allowEarlyFinalAnswerVisibleOutputEnd?: boolean;
   operationId: string;
   stepIndex: number;
   topicId?: string;
