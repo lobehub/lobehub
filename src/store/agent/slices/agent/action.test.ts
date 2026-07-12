@@ -540,6 +540,26 @@ describe('AgentSlice Actions', () => {
       expect(refreshSpy).toHaveBeenCalledWith('agent-1');
       expect(result.current.saveStatus).toBe('idle');
     });
+
+    it('should let a scoped editor own config failure feedback', async () => {
+      const { result } = renderHook(() => useAgentStore());
+
+      vi.mocked(agentService.updateAgentConfig).mockRejectedValue(new Error('save failed'));
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      await act(async () => {
+        await expect(
+          result.current.updateAgentConfigById(
+            'agent-1',
+            { editorData: {}, systemRole: 'draft' },
+            { rethrow: true, showErrorMessage: false },
+          ),
+        ).rejects.toThrow('save failed');
+      });
+
+      expect(message.error).not.toHaveBeenCalled();
+      expect(result.current.saveStatus).toBe('idle');
+    });
   });
 
   describe('updateAgentMeta', () => {

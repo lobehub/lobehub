@@ -1,12 +1,17 @@
 /**
  * @vitest-environment happy-dom
  */
-import { act, render, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { type SaveStatus } from '@/types/saveState';
 
 import EditorCanvas from './index';
 
 const editorProps = vi.hoisted(() => ({
+  last: undefined as any,
+}));
+const autoSaveHintProps = vi.hoisted(() => ({
   last: undefined as any,
 }));
 
@@ -27,7 +32,9 @@ const editor = {
 
 const handleContentChange = vi.fn();
 const flushSave = vi.fn().mockResolvedValue(undefined);
+const retryPromptSave = vi.fn().mockResolvedValue(undefined);
 const setHasEdited = vi.fn();
+const messageError = vi.fn();
 const permissionState = {
   allowed: false,
 };
@@ -53,6 +60,17 @@ const agentStoreMock = vi.hoisted(() => {
 });
 const { state: agentStoreState } = agentStoreMock;
 const { updateAgentConfigById } = agentStoreState;
+const profileStoreState = {
+  editor,
+  flushSave,
+  handleContentChange,
+  hasEdited: false,
+  lockState: { holderId: null, lockedByOther: false, pending: false },
+  promptLastUpdatedTime: null as Date | null,
+  promptSaveStatus: 'idle' as SaveStatus,
+  retryPromptSave,
+  setHasEdited,
+};
 
 type UseSyncExternalStore = <Snapshot>(
   subscribe: (onStoreChange: () => void) => () => void,
@@ -74,6 +92,23 @@ vi.mock('@lobehub/editor', () => ({
   ReactMentionPlugin: vi.fn(),
   ReactTablePlugin: vi.fn(),
   ReactToolbarPlugin: vi.fn(),
+}));
+
+vi.mock('@/components/Editor/AutoSaveHint', () => ({
+  default: vi.fn((props: any) => {
+    autoSaveHintProps.last = props;
+    return (
+      <button data-testid="prompt-save-status" type="button" onClick={props.onRetry}>
+        {props.saveStatus}
+      </button>
+    );
+  }),
+}));
+
+vi.mock('@/components/AntdStaticMethods', () => ({
+  message: {
+    error: (...args: unknown[]) => messageError(...args),
+  },
 }));
 
 vi.mock('@/features/ChatInput/InputEditor/plugins', () => ({
@@ -107,15 +142,10 @@ vi.mock('../ProfileEditor/MentionList', () => ({
 }));
 
 vi.mock('../store', () => ({
-  useProfileStore: (selector: any) =>
-    selector({
-      editor,
-      flushSave,
-      handleContentChange,
-      hasEdited: false,
-      lockState: { holderId: null, lockedByOther: false, pending: false },
-      setHasEdited,
-    }),
+  useProfileStore: (selector: any) => selector(profileStoreState),
+  useStoreApi: () => ({
+    getState: () => profileStoreState,
+  }),
 }));
 
 vi.mock('./TypoBar', () => ({
@@ -134,6 +164,7 @@ describe('Agent profile EditorCanvas', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     editorProps.last = undefined;
+    autoSaveHintProps.last = undefined;
     permissionState.allowed = false;
     agentStoreMock.listeners.clear();
     agentStoreState.activeAgentId = 'agent-a';
@@ -146,8 +177,11 @@ describe('Agent profile EditorCanvas', () => {
     agentStoreState.streamingSystemRole = undefined;
     agentStoreState.streamingSystemRoleAgentId = undefined;
     agentStoreState.streamingSystemRoleInProgress = false;
+    profileStoreState.promptLastUpdatedTime = null;
+    profileStoreState.promptSaveStatus = 'idle';
     editorDocuments.json = undefined;
     editorDocuments.markdown = '';
+    updateAgentConfigById.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -185,7 +219,21 @@ describe('Agent profile EditorCanvas', () => {
     editorDocuments.json = { root: { children: ['agent-a edited'] } };
     editorDocuments.markdown = 'agent-a edited';
     act(() => editorProps.last?.onTextChange(editor));
-    expect(handleContentChange).toHaveBeenCalledWith('agent-a', updateAgentConfigById, editor);
+    expect(handleContentChange).toHaveBeenCalledWith('agent-a', expect.any(Function), editor);
+
+    const savePrompt = handleContentChange.mock.calls.at(-1)?.[1];
+    await savePrompt('agent-a', {
+      editorData: editorDocuments.json,
+      systemRole: editorDocuments.markdown,
+    });
+    expect(updateAgentConfigById).toHaveBeenCalledWith(
+      'agent-a',
+      {
+        editorData: editorDocuments.json,
+        systemRole: editorDocuments.markdown,
+      },
+      { rethrow: true, showErrorMessage: false },
+    );
 
     act(() => {
       agentStoreState.activeAgentId = 'agent-b';
@@ -269,7 +317,50 @@ describe('Agent profile EditorCanvas', () => {
     });
 
     expect(editor.setDocument).not.toHaveBeenCalled();
-    expect(handleContentChange).toHaveBeenCalledWith('agent-a', updateAgentConfigById, editor);
+    expect(handleContentChange).toHaveBeenCalledWith('agent-a', expect.any(Function), editor);
+  });
+
+  it('shows failed Prompt save feedback with a local Retry action', () => {
+    permissionState.allowed = true;
+    profileStoreState.promptSaveStatus = 'failed';
+
+    render(<EditorCanvas />);
+
+    expect(screen.getByTestId('prompt-save-status')).toHaveTextContent('failed');
+    fireEvent.click(screen.getByTestId('prompt-save-status'));
+    expect(retryPromptSave).toHaveBeenCalledTimes(1);
+  });
+
+  it('falls back to a global toast when an unmounted flush fails', async () => {
+    permissionState.allowed = true;
+    flushSave.mockImplementation(async () => {
+      profileStoreState.promptSaveStatus = 'failed';
+    });
+
+    const { unmount } = render(<EditorCanvas />);
+    unmount();
+
+    await waitFor(() => expect(flushSave).toHaveBeenCalledWith('agent-a'));
+    await waitFor(() => expect(messageError).toHaveBeenCalledWith('saveAgentConfigFail'));
+  });
+
+  it('does not toast on unmount when the flush succeeds', async () => {
+    permissionState.allowed = true;
+    flushSave.mockImplementation(async () => {
+      profileStoreState.promptSaveStatus = 'saved';
+    });
+
+    const { unmount } = render(<EditorCanvas />);
+    unmount();
+
+    await waitFor(() => expect(flushSave).toHaveBeenCalledWith('agent-a'));
+    expect(messageError).not.toHaveBeenCalled();
+  });
+
+  it('hides Prompt save feedback before the first edit', () => {
+    render(<EditorCanvas />);
+
+    expect(screen.queryByTestId('prompt-save-status')).not.toBeInTheDocument();
   });
 
   it('ignores a stream inherited from the previously active agent', async () => {

@@ -5,6 +5,8 @@
   "features.agentSelfIteration.title": "Agenten-Selbstiteration",
   "features.assistantMessageGroup.desc": "Agenten-Nachrichten und deren Tool-Ergebnisse gemeinsam anzeigen",
   "features.assistantMessageGroup.title": "Agenten-Nachrichten gruppieren",
+  "features.claudeCodeSdk.desc": "Führen Sie Claude Code-Sitzungen über das Claude Agent SDK aus, anstatt die CLI zu starten. Ermöglicht reichhaltigeres Streaming und Sitzungssteuerung.",
+  "features.claudeCodeSdk.title": "Claude Code SDK-Laufzeit",
   "features.fleet.desc": "Zeigt den Fleet-Eintrag in der Titelleiste an – ein nebeneinander angeordnetes Dashboard aller laufenden Aufgaben über Ihre Agenten hinweg.",
   "features.fleet.title": "Flottenansicht",
   "features.foldFinishedTurn.desc": "Klappen Sie den Prozess (Argumentation und Werkzeugaufrufe) abgeschlossener, nicht letzter Agenten-Züge unter einer \"Verarbeitet\"-Überschrift zusammen. Die endgültige Antwort bleibt sichtbar; klicken Sie, um den Prozess zu erweitern.",

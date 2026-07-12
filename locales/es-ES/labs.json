@@ -5,6 +5,8 @@
   "features.agentSelfIteration.title": "Autoiteración del agente",
   "features.assistantMessageGroup.desc": "Agrupa los mensajes del agente y los resultados de sus herramientas para mostrarlos juntos",
   "features.assistantMessageGroup.title": "Agrupación de Mensajes del Agente",
+  "features.claudeCodeSdk.desc": "Ejecuta sesiones de Claude Code a través del SDK de Claude Agent en lugar de iniciar la CLI. Permite una transmisión más rica y un mejor control de las sesiones.",
+  "features.claudeCodeSdk.title": "Entorno de Ejecución del SDK de Claude Code",
   "features.fleet.desc": "Mostrar la entrada de Fleet en la barra de título: un panel de control lado a lado de todas las tareas en ejecución en tus agentes.",
   "features.fleet.title": "Vista de Fleet",
   "features.foldFinishedTurn.desc": "Colapsa el proceso (razonamiento y llamadas a herramientas) de los turnos de agente finalizados y no más recientes bajo un encabezado \"Procesado\". La respuesta final permanece visible; haz clic para expandir el proceso.",

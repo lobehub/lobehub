@@ -1939,6 +1939,8 @@ export class MessageModel {
   ) => {
     // Ensure group message does not populate sessionId
     const normalizedMessage = message.groupId ? { ...message, sessionId: null } : message;
+    const { usage: legacyUsage, ...metadata } =
+      (normalizedMessage.metadata as Record<string, any> | undefined) || {};
 
     return buildWorkspacePayload(
       { userId: this.userId, workspaceId: this.workspaceId },
@@ -1949,14 +1951,13 @@ export class MessageModel {
         // TODO: remove this when the client is updated
         createdAt: createdAt ? new Date(createdAt) : undefined,
         id,
+        metadata: normalizedMessage.metadata ? metadata : undefined,
         model: fromModel,
         provider: fromProvider,
         updatedAt: updatedAt ? new Date(updatedAt) : undefined,
         // Promote token usage into the dedicated `usage` column, preferring a
         // top-level `usage` over the legacy `metadata.usage`.
-        usage:
-          normalizedMessage.usage ??
-          (normalizedMessage.metadata as { usage?: ModelUsage } | undefined)?.usage,
+        usage: normalizedMessage.usage ?? (legacyUsage as ModelUsage | undefined),
       },
     );
   };
@@ -2200,19 +2201,11 @@ export class MessageModel {
     { imageList, metadata, usage, ...message }: Partial<UpdateMessageParams>,
     timing?: ModelTimingContext,
   ): Promise<{ success: boolean }> => {
-    // Promote token usage into the dedicated `usage` column. Prefer a top-level
-    // `usage` payload, falling back to `metadata.usage` so existing writers
-    // (Gateway / hetero-agent executors) keep populating the column without
-    // changes. `metadata.usage` is still written for backward-compatible reads.
-    const usageToWrite = usage ?? (metadata as { usage?: ModelUsage } | undefined)?.usage;
-    // Keep `metadata.usage` dual-written even when usage arrives as a top-level
-    // param (with no metadata payload) — legacy readers / rollback paths still
-    // consume it during the transition. Folding the resolved usage into the
-    // patch also keeps it consistent with the column when both are sent.
-    const metadataPatch =
-      metadata || usageToWrite
-        ? { ...metadata, ...(usageToWrite && { usage: usageToWrite }) }
-        : undefined;
+    // Accept legacy callers that still send `metadata.usage`, but persist usage
+    // exclusively in the dedicated top-level column.
+    const { usage: legacyUsage, ...metadataPatch } = (metadata as Record<string, any>) || {};
+    const usageToWrite = usage ?? (legacyUsage as ModelUsage | undefined);
+    const shouldUpdateMetadata = !!metadata || !!usageToWrite;
     // A patch that matches no row is a lost write, not a no-op: the caller asked
     // to persist content onto `id` and it went nowhere. Batched writers key their
     // retry ledger off this flag, so reporting success here silently drops data.
@@ -2241,10 +2234,10 @@ export class MessageModel {
               );
             }
 
-            // 2. Handle metadata merge if there's a metadata payload or a
-            // top-level usage to fold back into `metadata.usage`.
+            // 2. Merge non-usage metadata. A usage-bearing update also removes
+            // any legacy `metadata.usage` left on the existing row.
             let mergedMetadata: Record<string, any> | undefined;
-            if (metadataPatch) {
+            if (shouldUpdateMetadata) {
               const [existingMessage] = await runTimedStage(
                 timing,
                 'db.message.update.metadata.select',
@@ -2255,6 +2248,7 @@ export class MessageModel {
                     .where(and(eq(messages.id, id), this.ownership())),
               );
               mergedMetadata = merge(existingMessage?.metadata || {}, metadataPatch);
+              if (usageToWrite && mergedMetadata) delete mergedMetadata.usage;
             }
             const metadataToWrite = mergedMetadata;
 
@@ -2293,7 +2287,7 @@ export class MessageModel {
           }),
         {
           hasImageList: !!imageList?.length,
-          hasMetadata: !!metadataPatch,
+          hasMetadata: shouldUpdateMetadata,
           valueKeys: Object.keys(message),
         },
       );
@@ -2317,10 +2311,9 @@ export class MessageModel {
 
     if (!item) return;
 
-    const mergedMetadata = merge(item.metadata || {}, metadata);
-    // Keep the dedicated `usage` column in sync when the merged metadata carries
-    // token usage, preferring it over the existing column value.
-    const usageToWrite = (metadata as { usage?: ModelUsage } | undefined)?.usage;
+    const { usage: usageToWrite, ...metadataPatch } = metadata as Record<string, any>;
+    const mergedMetadata = merge(item.metadata || {}, metadataPatch);
+    if (usageToWrite) delete mergedMetadata.usage;
 
     return this.db
       .update(messages)

@@ -10,13 +10,16 @@ import { type UserPreferenceState } from './slices/preference/initialState';
 import { initialPreferenceState } from './slices/preference/initialState';
 import { type UserSettingsState } from './slices/settings/initialState';
 import { initialSettingsState } from './slices/settings/initialState';
+import { type WorkspaceUserSettingsState } from './slices/workspaceUserSettings/initialState';
+import { initialWorkspaceUserSettingsState } from './slices/workspaceUserSettings/initialState';
 
 export type UserState = UserSettingsState &
   UserPreferenceState &
   UserAuthState &
   CommonState &
   AgentOnboardingState &
-  OnboardingState;
+  OnboardingState &
+  WorkspaceUserSettingsState;
 
 export const initialState: UserState = {
   ...initialSettingsState,
@@ -25,4 +28,5 @@ export const initialState: UserState = {
   ...initialCommonState,
   ...initialAgentOnboardingState,
   ...initialOnboardingState,
+  ...initialWorkspaceUserSettingsState,
 };

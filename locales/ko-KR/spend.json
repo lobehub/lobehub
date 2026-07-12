@@ -54,6 +54,7 @@
   "usageStats.cards.token": "토큰",
   "usageStats.cards.tokenDesc": "입력 {{input}} · 출력 {{output}}",
   "usageStats.chart.cacheWrite": "캐시 쓰기",
+  "usageStats.chart.cachedInput": "캐시된 입력",
   "usageStats.chart.input": "입력",
   "usageStats.chart.output": "출력",
   "usageStats.chart.spend": "비용",

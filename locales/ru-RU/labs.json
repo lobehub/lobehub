@@ -5,6 +5,8 @@
   "features.agentSelfIteration.title": "Самоитерация агента",
   "features.assistantMessageGroup.desc": "Группируйте сообщения агента и результаты вызова инструментов для совместного отображения",
   "features.assistantMessageGroup.title": "Группировка сообщений агента",
+  "features.claudeCodeSdk.desc": "Запускайте сеансы Claude Code через Claude Agent SDK вместо запуска CLI. Обеспечивает более богатую потоковую передачу и управление сеансами.",
+  "features.claudeCodeSdk.title": "Среда выполнения Claude Code SDK",
   "features.fleet.desc": "Показывать запись Fleet в заголовке — панель управления, отображающая все выполняемые задачи на ваших агентах бок о бок.",
   "features.fleet.title": "Просмотр Fleet",
   "features.foldFinishedTurn.desc": "Свернуть процесс (рассуждения и вызовы инструментов) завершённых, не последних ходов агента под заголовком «Обработано». Окончательный ответ остаётся видимым; нажмите, чтобы развернуть процесс.",

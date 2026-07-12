@@ -523,6 +523,42 @@ describe('topic action', () => {
       expect(updateFavoriteSpy).toHaveBeenCalledWith(topicId, { favorite: favState });
     });
   });
+  describe('updateTopicStatus', () => {
+    // Unique ids: updateTopicStatus registers a TTL-bounded pending status-write
+    // in a private map that beforeEach's state reset can't clear, so a shared id
+    // would bleed status onto other tests' fetched-topic fixtures.
+    it('stamps completedAt when archiving (status: completed)', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const topicId = 'update-status-completed-topic';
+
+      const updateSpy = vi.spyOn(topicService, 'updateTopic').mockResolvedValue(undefined as any);
+
+      await act(async () => {
+        await result.current.updateTopicStatus({ status: 'completed', topicId });
+      });
+
+      // "Archive" persists the completion timestamp alongside the status so the
+      // bulk/stale archive matches the single-item markTopicCompleted.
+      expect(updateSpy).toHaveBeenCalledWith(topicId, {
+        completedAt: expect.any(Date),
+        status: 'completed',
+      });
+    });
+
+    it('does not touch completedAt for non-completed transitions', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const topicId = 'update-status-running-topic';
+
+      const updateSpy = vi.spyOn(topicService, 'updateTopic').mockResolvedValue(undefined as any);
+
+      await act(async () => {
+        await result.current.updateTopicStatus({ status: 'running', topicId });
+      });
+
+      // Agent-run status writes must stay a pure status update — no completedAt.
+      expect(updateSpy).toHaveBeenCalledWith(topicId, { status: 'running' });
+    });
+  });
   describe('useFetchTopics', () => {
     it('should fetch topics for a given session id', async () => {
       const sessionId = 'test-session-id';

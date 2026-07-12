@@ -15,6 +15,8 @@
   "features.groupChat.title": "群聊（多代理）",
   "features.imessage.desc": "通过本地 LobeHub 桌面 BlueBubbles 桥接器将代理连接到 iMessage。",
   "features.imessage.title": "iMessage 渠道",
+  "features.inAppBrowser.desc": "在会话侧边栏显示「浏览器」标签页:内嵌浏览器可就地打开搜索结果,并让 Agent 的浏览操作实时可见。",
+  "features.inAppBrowser.title": "内置浏览器",
   "features.inputMarkdown.desc": "在输入区域实时渲染 Markdown（粗体、代码块、表格等）",
   "features.inputMarkdown.title": "输入框 Markdown 渲染",
   "features.messageTextSelectionActions.desc": "在聊天消息中选中文本时显示快捷操作，可将选中的文本加入下一次对话上下文。",

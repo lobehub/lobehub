@@ -19,6 +19,8 @@ import { type AgentHook } from './hooks/types';
 // ==================== Operation Tool Set ====================
 
 export interface OperationToolSet {
+  /** Tool IDs that may be restored from historical explicit activations for this run. */
+  activatableToolIds?: string[];
   enabledToolIds?: string[];
   executorMap?: Record<string, ToolExecutor>;
   manifestMap: Record<string, LobeToolManifest>;
@@ -317,6 +319,13 @@ export interface ExecGroupMemberResult {
 
 export interface OperationCreationParams {
   activeDeviceId?: string;
+  /**
+   * Principal pool the routed `activeDeviceId` lives in. `personal` when a
+   * workspace run was routed to the caller's own device via a per-user
+   * `local` override — device runtimes must then address it through the
+   * personal `(userId, deviceId)` pool instead of the `workspace:<id>` pool.
+   */
+  activeDeviceScope?: 'personal' | 'workspace';
   agentConfig?: any;
   /**
    * Multi-agent group (or bot-conversation fallback) context, resolved once at

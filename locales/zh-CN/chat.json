@@ -321,7 +321,7 @@
   "heteroAgent.executionTarget.noneDesc": "不启用任何设备",
   "heteroAgent.executionTarget.offline": "离线",
   "heteroAgent.executionTarget.online": "在线",
-  "heteroAgent.executionTarget.personalGroup": "个人设备",
+  "heteroAgent.executionTarget.personalGroup": "私人设备",
   "heteroAgent.executionTarget.sandbox": "云端沙箱",
   "heteroAgent.executionTarget.sandboxDesc": "在临时云端沙箱中运行",
   "heteroAgent.executionTarget.title": "执行设备",

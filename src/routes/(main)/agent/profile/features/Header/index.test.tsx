@@ -1,7 +1,7 @@
 import type * as LobeChatConst from '@lobechat/const';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type * as LucideReact from 'lucide-react';
-import type { PropsWithChildren, ReactNode } from 'react';
+import type { CSSProperties, PropsWithChildren, ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import Header from './index';
@@ -139,6 +139,7 @@ vi.mock('@/components/AntdStaticMethods', () => ({
 }));
 
 vi.mock('@/const/layoutTokens', () => ({
+  CONVERSATION_MIN_WIDTH: 960,
   DESKTOP_HEADER_ICON_SMALL_SIZE: 24,
 }));
 
@@ -147,9 +148,19 @@ vi.mock('@/features/AgentBreadcrumb', () => ({
 }));
 
 vi.mock('@/features/NavHeader', () => ({
-  default: ({ left, right }: { left?: ReactNode; right?: ReactNode }) => (
+  default: ({
+    left,
+    right,
+    styles,
+  }: {
+    left?: ReactNode;
+    right?: ReactNode;
+    styles?: { left?: CSSProperties };
+  }) => (
     <header>
-      {left}
+      <div data-testid="nav-header-left" style={styles?.left}>
+        {left}
+      </div>
       {right}
     </header>
   ),
@@ -221,6 +232,14 @@ describe('Agent profile Header', () => {
     mocks.agentState.systemRole = 'You are helpful.';
     mocks.agentState.config.plugins = ['lobe-web-browsing'];
     mocks.profileState.editor = undefined;
+  });
+
+  it('aligns the breadcrumb with the responsive profile content column', () => {
+    render(<Header />);
+
+    expect(screen.getByTestId('nav-header-left').style.paddingInlineStart).toBe(
+      'max(8px, calc((100% - 960px) / 2 + 16px))',
+    );
   });
 
   it('should show the markdown export action', () => {

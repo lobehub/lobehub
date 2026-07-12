@@ -14,6 +14,7 @@ export const labPreferSelectors = {
   enableFoldFinishedTurn: (s: UserState): boolean =>
     s.preference.lab?.enableFoldFinishedTurn ?? false,
   enableImessage: (s: UserState): boolean => s.preference.lab?.enableImessage ?? false,
+  enableInAppBrowser: (s: UserState): boolean => s.preference.lab?.enableInAppBrowser ?? false,
   enableInputMarkdown: (s: UserState): boolean =>
     s.preference.lab?.enableInputMarkdown ?? DEFAULT_PREFERENCE.lab?.enableInputMarkdown ?? true,
   enableMessageTextSelectionActions: (s: UserState): boolean =>

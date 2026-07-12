@@ -227,3 +227,31 @@ export const extractActivatedSkillsFromMessages = (
 
   return skillsMap.size > 0 ? [...skillsMap.values()] : undefined;
 };
+
+/**
+ * Accumulate tool identifiers activated by lobe-activator across conversation
+ * turns. A new operation uses these identifiers to restore its step-level tool
+ * state, keeping discovered tools callable after the operation boundary.
+ */
+export const extractActivatedToolIdsFromMessages = (
+  messages: UIChatMessage[],
+): string[] | undefined => {
+  const toolIds = new Set<string>();
+
+  for (const msg of messages) {
+    for (const invocation of collectToolInvocations(msg)) {
+      if (
+        invocation.identifier !== ACTIVATOR_IDENTIFIER ||
+        invocation.apiName !== 'activateTools' ||
+        !Array.isArray(invocation.state?.activatedTools)
+      )
+        continue;
+
+      for (const tool of invocation.state.activatedTools as Array<{ identifier?: string }>) {
+        if (tool.identifier) toolIds.add(tool.identifier);
+      }
+    }
+  }
+
+  return toolIds.size > 0 ? [...toolIds] : undefined;
+};

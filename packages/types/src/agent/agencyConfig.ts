@@ -563,6 +563,41 @@ export interface LobeAgentAgencyConfig {
 }
 
 /**
+ * The workspace-shared `agencyConfig` on the agent row is one row per agent —
+ * inherently a *single* execution decision for the whole workspace. Real users
+ * want each member to pick their own machine independently (see
+ * `UserPreference.agentDeviceOverrides`). This helper merges the shared
+ * baseline with the caller's per-agent override so every code path — client
+ * device switcher, server dispatch, workingDir resolution — sees one
+ * consistent "effective" config.
+ *
+ * Rules:
+ * - `override.executionTarget` wins when set; falls back to shared
+ * - `override.boundDeviceId` wins when set; falls back to shared
+ * - Nothing else (heterogeneousProvider, verifyRubricId, workingDirByDevice)
+ *   is overridable — those describe the agent, not this user's routing
+ *
+ * A `null`-ish `override` is a no-op — safe to call on personal agents (where
+ * no override ever exists) or on paths that don't yet know about the current
+ * user's preference.
+ */
+export const resolveAgencyConfig = (
+  agencyConfig: LobeAgentAgencyConfig | null | undefined,
+  override: Pick<LobeAgentAgencyConfig, 'boundDeviceId' | 'executionTarget'> | null | undefined,
+): LobeAgentAgencyConfig | undefined => {
+  const base = agencyConfig ?? undefined;
+  if (!override) return base;
+  const hasTarget = override.executionTarget !== undefined;
+  const hasDevice = override.boundDeviceId !== undefined;
+  if (!hasTarget && !hasDevice) return base;
+  return {
+    ...base,
+    ...(hasTarget ? { executionTarget: override.executionTarget } : {}),
+    ...(hasDevice ? { boundDeviceId: override.boundDeviceId } : {}),
+  };
+};
+
+/**
  * Apply "undefined means delete" semantics to a `workingDirByDevice` patch.
  *
  * Deep-merge (used by both the client optimistic store and the server persist

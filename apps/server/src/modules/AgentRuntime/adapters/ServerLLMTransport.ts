@@ -6,6 +6,7 @@ import type {
   LLMStreamResult,
   LLMTransport,
   LLMTurnInput,
+  LLMTurnSession,
 } from '@lobechat/agent-runtime';
 import {
   type ChatStreamPayload,
@@ -17,7 +18,7 @@ import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 
 import type { RuntimeExecutorContext } from '../context';
 import { createServerCallLlmAttempt } from './serverCallLlmAttempt';
-import { executeServerCallLlmTurn } from './serverCallLlmExecutor';
+import { openServerCallLlmTurn } from './serverCallLlmExecutor';
 
 const getErrorMessage = (error: unknown): string => {
   if (error instanceof Error && error.message) return error.message;
@@ -39,10 +40,10 @@ export class ServerLLMTransport implements LLMTransport {
     private readonly blobStore?: BlobStore,
   ) {}
 
-  executeTurn(input: LLMTurnInput): ReturnType<NonNullable<LLMTransport['executeTurn']>> {
+  openTurn(input: LLMTurnInput): LLMTurnSession {
     let modelRuntimePromise: ReturnType<ServerLLMTransport['createModelRuntime']> | undefined;
 
-    return executeServerCallLlmTurn(this.ctx, {
+    return openServerCallLlmTurn(this.ctx, {
       assistantMessage: input.assistantMessage,
       context: input.context,
       model: input.model,
@@ -52,7 +53,6 @@ export class ServerLLMTransport implements LLMTransport {
         return this.runAttemptWithRuntime(attemptInput, await modelRuntimePromise);
       },
       state: input.state,
-      stepLabel: input.stepLabel,
     });
   }
 

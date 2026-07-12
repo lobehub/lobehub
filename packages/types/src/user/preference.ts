@@ -108,6 +108,10 @@ export const UserLabSchema = z.object({
    */
   enableImessage: z.boolean().optional(),
   /**
+   * show the in-app Browser tab in the conversation WorkingSidebar (desktop only)
+   */
+  enableInAppBrowser: z.boolean().optional(),
+  /**
    * enable markdown rendering in chat input editor
    */
   enableInputMarkdown: z.boolean().optional(),

@@ -1,7 +1,5 @@
 'use client';
 
-import { Button, Icon } from '@lobehub/ui';
-import { MonitorUpIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -20,18 +18,9 @@ const Page = memo(() => {
 
   return (
     <>
-      <SettingHeader
-        title={t('devices.title')}
-        extra={
-          <Button
-            icon={<Icon icon={MonitorUpIcon} />}
-            size={'small'}
-            onClick={() => handleConnect()}
-          >
-            {t('devices.connectWizard.button')}
-          </Button>
-        }
-      />
+      {/* "Connect device" moved into the device list header (next to Refresh) —
+          keep the page header to the title only. */}
+      <SettingHeader title={t('devices.title')} />
 
       <DeviceManager scope={'personal'} onConnect={handleConnect} />
 

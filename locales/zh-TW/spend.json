@@ -54,6 +54,7 @@
   "usageStats.cards.token": "代幣",
   "usageStats.cards.tokenDesc": "輸入 {{input}} · 輸出 {{output}}",
   "usageStats.chart.cacheWrite": "快取寫入",
+  "usageStats.chart.cachedInput": "快取輸入",
   "usageStats.chart.input": "輸入",
   "usageStats.chart.output": "輸出",
   "usageStats.chart.spend": "成本",

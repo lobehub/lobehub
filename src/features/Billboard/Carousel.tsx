@@ -61,9 +61,22 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   closeButton: css`
     position: absolute;
-    z-index: 2;
+    z-index: 10;
     inset-block-start: 8px;
     inset-inline-end: 8px;
+
+    /* Sits over the cover image (140px band) — give it its own opaque surface so
+       the icon reads on any image, and lift z-index above the carousel dots /
+       slick internals. */
+    color: #fff;
+
+    background: rgb(0 0 0 / 45%);
+    backdrop-filter: blur(4px);
+
+    &:hover {
+      color: #fff;
+      background: rgb(0 0 0 / 60%);
+    }
   `,
   description: css`
     overflow: hidden;

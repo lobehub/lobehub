@@ -54,6 +54,7 @@
   "usageStats.cards.token": "Token",
   "usageStats.cards.tokenDesc": "Đầu vào {{input}} · Đầu ra {{output}}",
   "usageStats.chart.cacheWrite": "Ghi vào bộ nhớ đệm",
+  "usageStats.chart.cachedInput": "Đầu vào được lưu trữ",
   "usageStats.chart.input": "Đầu vào",
   "usageStats.chart.output": "Đầu ra",
   "usageStats.chart.spend": "Chi phí",

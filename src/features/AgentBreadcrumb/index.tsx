@@ -2,6 +2,7 @@
 
 import { Icon, Text } from '@lobehub/ui';
 import { Breadcrumb as AntBreadcrumb } from 'antd';
+import { createStaticStyles } from 'antd-style';
 import { ChevronRight } from 'lucide-react';
 import { memo, type ReactNode, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -16,6 +17,21 @@ import {
 } from '@/routes/(main)/agent/_layout/Sidebar/utils/agentPathname';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
+
+const styles = createStaticStyles(({ css }) => ({
+  breadcrumb: css`
+    ol {
+      align-items: center;
+    }
+
+    li,
+    .ant-breadcrumb-link,
+    .ant-breadcrumb-link > a {
+      display: flex;
+      align-items: center;
+    }
+  `,
+}));
 
 interface AgentBreadcrumbProps {
   agentId: string;
@@ -47,12 +63,13 @@ const AgentBreadcrumb = memo<AgentBreadcrumbProps>(({ agentId, title }) => {
 
   return (
     <AntBreadcrumb
+      className={styles.breadcrumb}
       separator={<Icon icon={ChevronRight} size={14} />}
       items={[
         {
           title: (
             <Link to={agentHomePath}>
-              <Text ellipsis color={'inherit'} style={{ maxWidth: 200 }} weight={500}>
+              <Text ellipsis as={'span'} color={'inherit'} style={{ maxWidth: 200 }} weight={500}>
                 {displayTitle}
               </Text>
             </Link>
@@ -60,7 +77,7 @@ const AgentBreadcrumb = memo<AgentBreadcrumbProps>(({ agentId, title }) => {
         },
         {
           title: (
-            <Text color={'inherit'} weight={500}>
+            <Text as={'span'} color={'inherit'} weight={500}>
               {title}
             </Text>
           ),

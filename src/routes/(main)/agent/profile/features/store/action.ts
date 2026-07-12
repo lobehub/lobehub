@@ -10,11 +10,12 @@ type SaveConfigPayload = {
   systemRole: string;
 };
 
-type UpdateConfigById = (agentId: string, payload: SaveConfigPayload) => Promise<void>;
+export type UpdateConfigById = (agentId: string, payload: SaveConfigPayload) => Promise<void>;
 
 interface PendingSave {
   agentId: string;
   payload: SaveConfigPayload;
+  revision: number;
   updateConfigById: UpdateConfigById;
 }
 
@@ -33,6 +34,8 @@ export interface Action {
     updateConfigById: UpdateConfigById,
     sourceEditor?: State['editor'],
   ) => void;
+  /** Retry the latest failed Prompt autosave. */
+  retryPromptSave: () => Promise<void>;
   /** Latch edit-intent so the lock driver acquires the lock on first real edit. */
   setHasEdited: (value: boolean) => void;
   /** Publish the latest edit-lock state from the always-mounted lock driver. */
@@ -51,13 +54,31 @@ export const store: (initState?: Partial<State>) => StateCreator<Store> =
     // save concurrently because AgentStore now owns independent abort signals
     // per agent.
     let saveQueue = Promise.resolve();
+    let latestSaveRevision = 0;
+    let failedSave: PendingSave | undefined;
 
-    const enqueueSave = ({ agentId, payload, updateConfigById }: PendingSave) => {
+    const createPendingSave = (pendingSave: Omit<PendingSave, 'revision'>): PendingSave => {
+      const nextSave = { ...pendingSave, revision: ++latestSaveRevision };
+      failedSave = undefined;
+      set({ promptSaveStatus: 'saving' });
+      return nextSave;
+    };
+
+    const enqueueSave = (pendingSave: PendingSave) => {
+      const { agentId, payload, revision, updateConfigById } = pendingSave;
       saveQueue = saveQueue.then(async () => {
         try {
           await updateConfigById(agentId, payload);
+          if (revision === latestSaveRevision) {
+            failedSave = undefined;
+            set({ promptLastUpdatedTime: new Date(), promptSaveStatus: 'saved' });
+          }
         } catch (error) {
           console.error('[ProfileEditor] Failed to save:', error);
+          if (revision === latestSaveRevision) {
+            failedSave = pendingSave;
+            set({ promptSaveStatus: 'failed' });
+          }
         }
       });
 
@@ -127,14 +148,16 @@ export const store: (initState?: Partial<State>) => StateCreator<Store> =
 
         // Save to config
         try {
-          await enqueueSave({
-            agentId,
-            payload: {
-              editorData: structuredClone(editorData || {}),
-              systemRole: finalContent,
-            },
-            updateConfigById,
-          });
+          await enqueueSave(
+            createPendingSave({
+              agentId,
+              payload: {
+                editorData: structuredClone(editorData || {}),
+                systemRole: finalContent,
+              },
+              updateConfigById,
+            }),
+          );
         } catch (error) {
           console.error('[ProfileEditor] Failed to save streaming content:', error);
         }
@@ -163,17 +186,27 @@ export const store: (initState?: Partial<State>) => StateCreator<Store> =
           const markdownContent = (editor.getDocument('markdown') as unknown as string) || '';
           const jsonContent = editor.getDocument('json') as unknown as Record<string, unknown>;
 
-          getDebouncedSave(agentId)({
-            agentId,
-            payload: {
-              editorData: structuredClone(jsonContent || {}),
-              systemRole: markdownContent || '',
-            },
-            updateConfigById,
-          });
+          getDebouncedSave(agentId)(
+            createPendingSave({
+              agentId,
+              payload: {
+                editorData: structuredClone(jsonContent || {}),
+                systemRole: markdownContent || '',
+              },
+              updateConfigById,
+            }),
+          );
         } catch (error) {
           console.error('[ProfileEditor] Failed to read editor content:', error);
         }
+      },
+      retryPromptSave: async () => {
+        const pendingSave = failedSave;
+        if (!pendingSave) return;
+
+        failedSave = undefined;
+        set({ promptSaveStatus: 'saving' });
+        await enqueueSave(pendingSave);
       },
       setHasEdited: (value) => {
         if (get().hasEdited !== value) set({ hasEdited: value });

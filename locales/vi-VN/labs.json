@@ -5,6 +5,8 @@
   "features.agentSelfIteration.title": "Tự lặp của tác nhân",
   "features.assistantMessageGroup.desc": "Nhóm các tin nhắn của tác nhân và kết quả gọi công cụ lại với nhau để hiển thị",
   "features.assistantMessageGroup.title": "Nhóm Tin Nhắn Tác Nhân",
+  "features.claudeCodeSdk.desc": "Chạy các phiên Claude Code thông qua Claude Agent SDK thay vì khởi chạy CLI. Cho phép truyền tải phong phú hơn và kiểm soát phiên làm việc.",
+  "features.claudeCodeSdk.title": "Thời gian chạy Claude Code SDK",
   "features.fleet.desc": "Hiển thị mục Fleet trong thanh tiêu đề — một bảng điều khiển song song của tất cả các tác vụ đang chạy trên các tác nhân của bạn.",
   "features.fleet.title": "Chế Độ Xem Fleet",
   "features.foldFinishedTurn.desc": "Thu gọn quy trình (lập luận và các cuộc gọi công cụ) của các lượt tác nhân đã hoàn thành, không phải lượt mới nhất, dưới tiêu đề \"Đã xử lý\". Câu trả lời cuối cùng vẫn hiển thị; nhấp để mở rộng quy trình.",

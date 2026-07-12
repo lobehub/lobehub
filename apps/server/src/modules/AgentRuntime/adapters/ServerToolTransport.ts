@@ -153,6 +153,7 @@ export class ServerToolTransport implements ToolTransport {
             toolExecutionService.executeTool(chatToolPayload, {
               activatedSkills: context.activatedSkills as any,
               activeDeviceId: resolveRunActiveDeviceId(context.state.metadata),
+              activeDeviceScope: context.state.metadata?.activeDeviceScope,
               agentId: context.state.metadata?.agentId,
               agentMember: buildServerAgentMemberRunner(
                 this.ctx,

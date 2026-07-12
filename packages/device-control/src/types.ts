@@ -187,10 +187,52 @@ export interface WorkspaceScanDeps {
  *   (`defaultGetLocalFilePreview`, `defaultGetProjectFileIndex`).
  */
 export interface DeviceControlDeps extends SkillDirectoryDeps, WorkspaceScanDeps {
+  /**
+   * Enroll this machine into a workspace pool: derive the workspace-scoped
+   * deviceId and open a second gateway connection authenticated with `token`
+   * (a short-lived workspace-device connect token minted server-side), then
+   * return the derived identity so the server can register the workspace row.
+   * Optional — hosts that manage a single fixed connection (e.g. a CLI daemon
+   * already running in workspace mode) may omit it; the dispatcher then fails
+   * the RPC with a clear reason.
+   */
+  enrollWorkspace?: (params: EnrollWorkspaceParams) => Promise<EnrollWorkspaceResult>;
   /** Read a local file preview (host-gated on desktop; disk read on CLI). */
   getLocalFilePreview: (params: LocalFilePreviewUrlParams) => Promise<LocalFilePreviewResult>;
   /** Build the project file index. */
   getProjectFileIndex: (params: ProjectFileIndexParams) => Promise<ProjectFileIndexResult>;
   /** Search project files without shipping the whole index to the caller. */
   searchProjectFiles: (params: ProjectFileSearchParams) => Promise<ProjectFileSearchResult>;
+  /**
+   * Drop this machine's enrollment in a workspace pool: close the
+   * workspace-principal connection and clear any persisted auto-reconnect
+   * state. Optional, mirroring {@link DeviceControlDeps.enrollWorkspace}.
+   */
+  unenrollWorkspace?: (params: UnenrollWorkspaceParams) => Promise<{ success: boolean }>;
+}
+
+// ─── Workspace enrollment (remote share) ───
+
+export interface EnrollWorkspaceParams {
+  /**
+   * Only derive and return the workspace identity — do NOT open a share
+   * connection or persist enrollment state. Lets the server check for an
+   * existing enrollment (and ask the user to confirm an overwrite) before the
+   * device mutates anything. Older clients ignore this flag and enroll on the
+   * probe, which degrades to the pre-flag behaviour.
+   */
+  identityOnly?: boolean;
+  /** Short-lived workspace-device connect token (carries the workspace claim). */
+  token: string;
+  workspaceId: string;
+}
+
+export interface EnrollWorkspaceResult {
+  /** The workspace-scoped deviceId this machine derived for the pool. */
+  deviceId: string;
+  identitySource: 'fallback' | 'machine-id';
+}
+
+export interface UnenrollWorkspaceParams {
+  workspaceId: string;
 }

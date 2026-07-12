@@ -20,6 +20,9 @@ export default {
   'features.imessage.desc':
     'Connect agents to iMessage through the local LobeHub Desktop BlueBubbles bridge.',
   'features.imessage.title': 'iMessage Channel',
+  'features.inAppBrowser.desc':
+    'Show the Browser tab in the conversation side panel: an embedded browser that opens search results in place and lets agents browse visibly.',
+  'features.inAppBrowser.title': 'In-App Browser',
   'features.groupChat.desc': 'Enable multi-agent group chat coordination.',
   'features.groupChat.title': 'Group Chat (Multi-Agent)',
   'features.inputMarkdown.desc':

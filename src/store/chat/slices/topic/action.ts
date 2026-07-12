@@ -473,6 +473,13 @@ export class ChatTopicActionImpl {
     // Already at the target status — both the in-memory and DB writes are no-ops.
     if (topic?.status === status) return;
 
+    // "Archive" in the UI writes status:'completed'. Stamp `completedAt` on that
+    // transition so bulk/stale archive records when the topic was completed,
+    // matching the single-item `markTopicCompleted`. Other status transitions
+    // (agent runs → running/active/unread/…) leave `completedAt` untouched.
+    const patch: Partial<ChatTopic> =
+      status === 'completed' ? { completedAt: new Date(), status } : { status };
+
     this.#pendingTopicStatusWrites.set(topicId, { expiresAt: Date.now() + 15_000, status });
 
     // Scope on the payload routes the write to the owning bucket inside
@@ -481,13 +488,13 @@ export class ChatTopicActionImpl {
     state.internal_dispatchTopic({
       type: 'updateTopic',
       id: topicId,
-      value: { status },
+      value: patch,
       agentId,
       groupId,
       scope,
     });
 
-    await topicService.updateTopic(topicId, { status }).catch((err) => {
+    await topicService.updateTopic(topicId, patch).catch((err) => {
       console.error('[updateTopicStatus] persist failed:', err);
       // The DB never got the write — stop pinning it over fetched rows.
       this.#pendingTopicStatusWrites.delete(topicId);

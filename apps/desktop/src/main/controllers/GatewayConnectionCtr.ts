@@ -221,6 +221,14 @@ export default class GatewayConnectionCtr extends ControllerModule {
     // Wire up device registrar (persists this device to the server registry)
     srv.setDeviceRegistrar((info) => this.registerDevice(info));
 
+    // Wire up the workspace-share hooks: connect-token minting (startup restore
+    // + token expiry) and the "row still registered?" probe that keeps a share
+    // revoked while offline from resurrecting as a ghost device.
+    srv.setWorkspaceTokenProvider((workspaceId) => this.mintWorkspaceConnectToken(workspaceId));
+    srv.setWorkspaceDeviceChecker((workspaceId, deviceId) =>
+      this.checkWorkspaceDeviceRegistered(workspaceId, deviceId),
+    );
+
     // Auto-connect if already logged in
     this.tryAutoConnect();
   }
@@ -381,9 +389,13 @@ export default class GatewayConnectionCtr extends ControllerModule {
           logger.error(`Failed to approve project preview root ${root}:`, error);
         }
       },
+      // Workspace share (server-driven enroll/unenroll RPCs): the service owns
+      // the gateway connections, so both handlers route straight to it.
+      enrollWorkspace: (params) => this.service.enrollWorkspace(params),
       getLocalFilePreview: (params) => this.localFileCtr.getLocalFilePreview(params),
       getProjectFileIndex: (params) => this.localFileCtr.getProjectFileIndex(params),
       searchProjectFiles: (params) => this.localFileCtr.searchProjectFiles(params),
+      unenrollWorkspace: (params) => this.service.unenrollWorkspace(params),
       // Skill-archive cache (`prepareSkillDirectory` RPC): reuse LocalFileCtr's
       // deps so gateway-prepared skills share one cache with the renderer-IPC path.
       ...this.localFileCtr.getSkillDirectoryDeps(),
@@ -1112,6 +1124,85 @@ export default class GatewayConnectionCtr extends ControllerModule {
       headers,
       method: 'POST',
     });
+  }
+
+  /**
+   * Build the auth headers for a workspace-scoped server call. The
+   * `X-Workspace-Id` header is what routes the request through the workspace
+   * (member+) procedures — same convention as `sendNotify` above.
+   */
+  private async buildWorkspaceHeaders(
+    workspaceId: string,
+  ): Promise<{ headers: Record<string, string>; serverUrl: string } | null> {
+    const [serverUrl, token] = await Promise.all([
+      this.remoteServerConfigCtr.getRemoteServerUrl(),
+      this.remoteServerConfigCtr.getAccessToken(),
+    ]);
+    if (!serverUrl || !token) return null;
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Oidc-Auth': token,
+      'X-Workspace-Id': workspaceId,
+    };
+    setDesktopUserAgentHeader(headers);
+    return { headers, serverUrl };
+  }
+
+  /**
+   * Mint a workspace-device connect token via `device.mintWorkspaceConnectToken`.
+   * Used by the gateway service when restoring persisted share connections and
+   * when a workspace connection's token expires. Returns null when the desktop
+   * has no usable auth (logged out) — the service treats that as "skip".
+   */
+  private async mintWorkspaceConnectToken(workspaceId: string): Promise<string | null> {
+    const auth = await this.buildWorkspaceHeaders(workspaceId);
+    if (!auth) return null;
+
+    const res = await fetch(`${auth.serverUrl}/trpc/lambda/device.mintWorkspaceConnectToken`, {
+      // The mutation takes no input; `{json: null}` is the superjson-encoded
+      // empty payload the tRPC HTTP handler expects.
+      body: JSON.stringify({ json: null }),
+      headers: auth.headers,
+      method: 'POST',
+    });
+    if (!res.ok) throw new Error(`mintWorkspaceConnectToken failed: HTTP ${res.status}`);
+
+    const payload = (await res.json()) as { result?: { data?: { json?: { token?: unknown } } } };
+    const minted = payload?.result?.data?.json?.token;
+    return typeof minted === 'string' ? minted : null;
+  }
+
+  /**
+   * Probe whether the workspace-scoped deviceId still has a registered row via
+   * `device.listDevices`. Returns `false` only on a definitive "row gone"
+   * answer; `undefined` on any failure — the service must not clear persisted
+   * enrollments off an inconclusive check.
+   */
+  private async checkWorkspaceDeviceRegistered(
+    workspaceId: string,
+    deviceId: string,
+  ): Promise<boolean | undefined> {
+    try {
+      const auth = await this.buildWorkspaceHeaders(workspaceId);
+      if (!auth) return undefined;
+
+      const res = await fetch(`${auth.serverUrl}/trpc/lambda/device.listDevices`, {
+        headers: auth.headers,
+      });
+      if (!res.ok) return undefined;
+
+      const payload = (await res.json()) as { result?: { data?: { json?: unknown } } };
+      const devices = payload?.result?.data?.json;
+      if (!Array.isArray(devices)) return undefined;
+
+      return devices.some(
+        (d: { deviceId?: unknown; registered?: unknown }) =>
+          d?.deviceId === deviceId && d?.registered === true,
+      );
+    } catch {
+      return undefined;
+    }
   }
 
   // ─── Platform Agent Helpers ───

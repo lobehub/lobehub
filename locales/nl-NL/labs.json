@@ -5,6 +5,8 @@
   "features.agentSelfIteration.title": "Agent-zelfiteratie",
   "features.assistantMessageGroup.desc": "Groepeer berichten van de agent en de resultaten van hun tool-aanroepen samen voor weergave",
   "features.assistantMessageGroup.title": "Agentberichtengroepering",
+  "features.claudeCodeSdk.desc": "Voer Claude Code-sessies uit via de Claude Agent SDK in plaats van de CLI te starten. Biedt rijkere streaming en sessiebeheer.",
+  "features.claudeCodeSdk.title": "Claude Code SDK Runtime",
   "features.fleet.desc": "Toon de Fleet-invoer in de titelbalk — een zij-aan-zij dashboard van alle lopende taken over uw agents.",
   "features.fleet.title": "Fleet-weergave",
   "features.foldFinishedTurn.desc": "Vouw het proces (redenering en hulpmiddeloproepen) van voltooide, niet-laatste agentbeurten onder een kop \"Verwerkt\". Het uiteindelijke antwoord blijft zichtbaar; klik om het proces uit te vouwen.",

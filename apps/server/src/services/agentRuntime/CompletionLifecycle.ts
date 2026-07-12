@@ -1,4 +1,6 @@
 import { isParkedStatus } from '@lobechat/agent-runtime';
+import type { MessageContentPart } from '@lobechat/types';
+import { deserializeParts } from '@lobechat/utils';
 import debug from 'debug';
 
 import {
@@ -476,13 +478,37 @@ export class CompletionLifecycle {
     const isAsyncToolPark = reason === 'waiting_for_async_tool';
 
     try {
-      const { event, metadata } = this.buildLifecycleEvent(operationId, state, reason);
+      const { assistantMessageId, event, metadata } = this.buildLifecycleEvent(
+        operationId,
+        state,
+        reason,
+      );
 
       // Finalize the agent_operations row before user hooks fire so
       // downstream consumers see the row in its terminal shape.
       await this.persistCompletion(operationId, state, reason);
 
       if (isAsyncToolPark) return;
+
+      // `lastAssistantContent` comes off the Redis-backed `state.messages`,
+      // while the assistant message row is persisted through a separate
+      // `messageModel.update` path. When the two diverge (state entry empty
+      // but the DB row holds the full reply — LOBE-11632: bot completions
+      // arrived with no content while the app showed the reply), consumers
+      // like the IM bot callback silently drop the reply. Recover from the DB
+      // row — the same source of truth the app UI renders — before dispatch.
+      if (
+        (reason === 'done' || reason === 'max_steps' || reason === 'cost_limit') &&
+        !event.lastAssistantContent?.trim() &&
+        !event.attachments?.length
+      ) {
+        const recovered = await this.recoverLastAssistantContent(
+          operationId,
+          assistantMessageId,
+          metadata?.userId || this.userId,
+        );
+        if (recovered) event.lastAssistantContent = recovered;
+      }
 
       await hookDispatcher.dispatch(operationId, 'onComplete', event, metadata._hooks);
 
@@ -565,6 +591,59 @@ export class CompletionLifecycle {
         // Kept across an async-tool park: the op resumes under the same id.
         this.verifyPlanInstantiations.delete(operationId);
       }
+    }
+  }
+
+  /**
+   * Load the final assistant message row from the DB and return its text
+   * content, for completions whose Redis-side state carried no assistant
+   * text (see the LOBE-11632 note in {@link dispatchHooks}). Non-fatal: any
+   * failure just leaves the event as-built.
+   */
+  private async recoverLastAssistantContent(
+    operationId: string,
+    assistantMessageId: string | undefined,
+    userId: string,
+  ): Promise<string | undefined> {
+    if (!assistantMessageId) return undefined;
+
+    try {
+      const messageModel =
+        userId === this.userId
+          ? this.messageModel
+          : new MessageModel(this.serverDB, userId, this.workspaceId);
+      const row = await messageModel.findById(assistantMessageId);
+      const raw = typeof row?.content === 'string' ? row.content : undefined;
+      if (!raw?.trim()) return undefined;
+
+      // Multimodal rows store `content` as serialized MessageContentPart[]
+      // (see callLlmFinalizer / serializePartsForStorage) — sending
+      // that verbatim would deliver raw JSON to the bot channel. Gate on the
+      // row's `metadata.isMultimodal` flag (the same signal the app UI uses
+      // in DisplayContent) rather than sniffing the string, so a legitimate
+      // plain-text reply that happens to be a JSON array is preserved as-is.
+      // Extract only the text parts; an image-only row recovers nothing.
+      const isMultimodal =
+        (row?.metadata as { isMultimodal?: boolean } | null | undefined)?.isMultimodal === true;
+      const parts = isMultimodal ? deserializeParts(raw) : null;
+      const content = parts
+        ? parts
+            .filter((p): p is Extract<MessageContentPart, { type: 'text' }> => p.type === 'text')
+            .map((p) => p.text)
+            .join('')
+        : raw;
+      if (!content.trim()) return undefined;
+
+      // console (not debug) so state/DB divergence stays visible in
+      // production logs — the silent variant of this is what made
+      // LOBE-11632 hard to diagnose.
+      console.warn(
+        `[CompletionLifecycle][${operationId}] completion event had no assistant text; recovered ${content.length} chars from message ${assistantMessageId}`,
+      );
+      return content;
+    } catch (error) {
+      log('[%s] recoverLastAssistantContent failed (non-fatal): %O', operationId, error);
+      return undefined;
     }
   }
 

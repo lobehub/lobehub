@@ -884,11 +884,6 @@
       "count": 1
     }
   },
-  "src/routes/(main)/[workspaceSlug]/settings/devices/index.tsx": {
-    "no-restricted-imports": {
-      "count": 1
-    }
-  },
   "src/routes/(main)/agent/features/Conversation/AgentWelcome/ToolAuthAlert.tsx": {
     "no-restricted-imports": {
       "count": 2
@@ -1265,11 +1260,6 @@
     }
   },
   "src/routes/(main)/settings/creds/index.tsx": {
-    "no-restricted-imports": {
-      "count": 1
-    }
-  },
-  "src/routes/(main)/settings/devices/index.tsx": {
     "no-restricted-imports": {
       "count": 1
     }

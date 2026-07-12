@@ -64,6 +64,7 @@
   "stepfun.description": "Stepfun 모델은 멀티모달 및 복잡한 추론 능력, 장문 문맥 이해, 강력한 자율 검색 조정 기능을 제공합니다.",
   "straico.description": "Straico는 최고의 텍스트, 이미지 및 오디오 생성 AI 모델을 하나로 통합한 통합 작업 공간을 제공하여 마케터, 기업가 및 열정적인 사용자들이 다양한 AI 도구에 원활하게 접근할 수 있도록 지원합니다.",
   "streamlake.description": "StreamLake는 엔터프라이즈급 모델 서비스와 AI 컴퓨팅 클라우드를 제공하는 플랫폼으로, 고성능 모델 추론, 저비용 모델 커스터마이징, 완전 관리형 서비스를 통합하여 기업이 복잡한 인프라 운영이나 비용 부담 없이 AI 애플리케이션 혁신에 집중할 수 있도록 지원합니다.",
+  "supergrok.description": "SuperGrok 또는 X 프리미엄 구독으로 Grok 모델에 액세스하세요. API 키가 필요하지 않습니다.",
   "taichu.description": "Taichu는 CASIA와 우한 인공지능연구원이 공동 개발한 차세대 멀티모달 모델로, 다중 회차 QA, 작문, 이미지 생성, 3D 이해, 신호 분석 등에서 뛰어난 인지력과 창의성을 발휘합니다.",
   "tencentcloud.description": "LLM 지식 엔진 Atomic Power는 문서 파싱, 청킹, 임베딩, 다중 회차 재작성 등 모듈형 서비스를 통해 기업과 개발자를 위한 맞춤형 AI 솔루션을 제공합니다.",
   "togetherai.description": "Together AI는 혁신적인 모델, 폭넓은 커스터마이징, 빠른 확장성, 간편한 배포를 통해 기업의 요구에 맞는 최고의 성능을 제공합니다.",

@@ -7,6 +7,8 @@ import { memo } from 'react';
 
 import WebFavicon from '@/components/WebFavicon';
 import { useGlobalStore } from '@/store/global';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
 
 const styles = createStaticStyles(({ css }) => ({
   container: css`
@@ -25,9 +27,12 @@ const SearchResultItem = memo<UniformSearchResult & { style?: CSSProperties }>(
     const urlObj = new URL(url);
     const host = urlObj.hostname;
     const openInBrowserTab = useGlobalStore((s) => s.openInBrowserTab);
+    const enableInAppBrowser = useUserStore(labPreferSelectors.enableInAppBrowser);
 
     const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
-      if (!isDesktop) return;
+      // Without the in-app browser lab flag the anchor's default behavior
+      // opens the system browser.
+      if (!isDesktop || !enableInAppBrowser) return;
 
       event.preventDefault();
       openInBrowserTab(url);

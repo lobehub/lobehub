@@ -54,6 +54,7 @@
   "usageStats.cards.token": "Jeton",
   "usageStats.cards.tokenDesc": "Girdi {{input}} · Çıktı {{output}}",
   "usageStats.chart.cacheWrite": "Önbellek yazma",
+  "usageStats.chart.cachedInput": "Önbelleğe alınmış giriş",
   "usageStats.chart.input": "Girdi",
   "usageStats.chart.output": "Çıktı",
   "usageStats.chart.spend": "Maliyet",

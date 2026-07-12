@@ -54,6 +54,7 @@
   "usageStats.cards.token": "Token",
   "usageStats.cards.tokenDesc": "Wejście {{input}} · Wyjście {{output}}",
   "usageStats.chart.cacheWrite": "Zapis do pamięci podręcznej",
+  "usageStats.chart.cachedInput": "Buforowane dane wejściowe",
   "usageStats.chart.input": "Wejście",
   "usageStats.chart.output": "Wyjście",
   "usageStats.chart.spend": "Koszt",

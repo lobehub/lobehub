@@ -9,6 +9,8 @@ import isEqual from 'fast-deep-equal';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { message } from '@/components/AntdStaticMethods';
+import AutoSaveHint from '@/components/Editor/AutoSaveHint';
 import { createChatInputRichPlugins } from '@/features/ChatInput/InputEditor/plugins';
 import { EditingIndicator } from '@/features/EditLock';
 import { usePermission } from '@/hooks/usePermission';
@@ -16,7 +18,8 @@ import { EMPTY_EDITOR_STATE } from '@/libs/editor/constants';
 import { useAgentStore } from '@/store/agent';
 
 import { useMentionOptions } from '../ProfileEditor/MentionList';
-import { useProfileStore } from '../store';
+import { useProfileStore, useStoreApi } from '../store';
+import { type UpdateConfigById } from '../store/action';
 import { selectors as profileSelectors } from '../store/selectors';
 import TypoBar from './TypoBar';
 import { useSlashItems } from './useSlashItems';
@@ -67,6 +70,11 @@ const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId }) => {
   const editorData = config?.editorData;
   const systemRole = config?.systemRole;
   const updateConfigById = useAgentStore((s) => s.updateAgentConfigById);
+  const updatePromptConfigById = useCallback<UpdateConfigById>(
+    (targetAgentId, payload) =>
+      updateConfigById(targetAgentId, payload, { rethrow: true, showErrorMessage: false }),
+    [updateConfigById],
+  );
   const [initialLoad] = useState(
     editorData === undefined || editorData?.root === undefined ? EMPTY_EDITOR_STATE : editorData,
   );
@@ -104,6 +112,9 @@ const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId }) => {
   const lockedByOther = useProfileStore(profileSelectors.lockedByOther);
   const lockHolderId = useProfileStore(profileSelectors.lockHolderId);
   const lockPending = useProfileStore(profileSelectors.lockPending);
+  const promptLastUpdatedTime = useProfileStore(profileSelectors.promptLastUpdatedTime);
+  const promptSaveStatus = useProfileStore(profileSelectors.promptSaveStatus);
+  const retryPromptSave = useProfileStore((s) => s.retryPromptSave);
   const setHasEdited = useProfileStore((s) => s.setHasEdited);
   // Read-only until the lock resolves, so the user can't start typing on an agent
   // that turns out to be locked and get bounced mid-edit.
@@ -152,7 +163,7 @@ const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId }) => {
       // edit. Streaming systemRole writes are programmatic and skipped above.
       localEditRef.current = true;
       setHasEdited(true);
-      handleContentChange(agentId, updateConfigById, sourceEditor);
+      handleContentChange(agentId, updatePromptConfigById, sourceEditor);
     },
     [
       agentId,
@@ -161,7 +172,7 @@ const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId }) => {
       isProgrammaticChange,
       setHasEdited,
       streamingInProgress,
-      updateConfigById,
+      updatePromptConfigById,
     ],
   );
 
@@ -199,7 +210,7 @@ const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId }) => {
       // Streaming just ended, wait for editor to update its internal state then save
       // This ensures editorData (json) is properly updated from the markdown content
       const timer = setTimeout(() => {
-        handleContentChange(agentId, updateConfigById);
+        handleContentChange(agentId, updatePromptConfigById);
       }, 100);
       return () => clearTimeout(timer);
     }
@@ -212,7 +223,7 @@ const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId }) => {
     handleContentChange,
     streamingSystemRoleAgentId,
     streamingInProgress,
-    updateConfigById,
+    updatePromptConfigById,
   ]);
 
   useEffect(() => {
@@ -300,7 +311,16 @@ const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId }) => {
   return (
     <Flexbox className={styles.root} gap={16}>
       <Flexbox className={styles.header} gap={4}>
-        <div className={styles.title}>{t('settingAgent.prompt.title')}</div>
+        <Flexbox horizontal align={'center'} distribution={'space-between'} gap={8}>
+          <div className={styles.title}>{t('settingAgent.prompt.title')}</div>
+          {promptSaveStatus !== 'idle' && (
+            <AutoSaveHint
+              lastUpdatedTime={promptLastUpdatedTime}
+              saveStatus={promptSaveStatus}
+              onRetry={editable ? () => void retryPromptSave() : undefined}
+            />
+          )}
+        </Flexbox>
         <div className={styles.desc}>{t('settingAgent.prompt.desc')}</div>
       </Flexbox>
       <div
@@ -344,16 +364,29 @@ const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId }) => {
 });
 
 const EditorCanvas = memo(() => {
+  const { t } = useTranslation();
   const agentId = useAgentStore((s) => s.activeAgentId);
   const flushSave = useProfileStore((s) => s.flushSave);
+  // Capture the store API in the cleanup closure so the final status check
+  // still works after this provider/editor unmounts.
+  const storeApi = useStoreApi();
 
   // Flush the departing agent's own debouncer before this keyed editor is
   // replaced. The store keeps the save target and payload isolated by agentId.
+  // After unmount AutoSaveHint is gone, so a failed flush must fall back to a
+  // global toast. This is reliable because flushSave awaits saveQueue, and
+  // enqueueSave writes promptSaveStatus: 'failed' before the queue promise
+  // resolves — with no further revision overwrites after unmount.
   useEffect(
     () => () => {
-      if (agentId) void flushSave(agentId);
+      if (!agentId) return;
+      void flushSave(agentId).then(() => {
+        if (storeApi.getState().promptSaveStatus === 'failed') {
+          message.error(t('saveAgentConfigFail', { ns: 'common' }));
+        }
+      });
     },
-    [agentId, flushSave],
+    [agentId, flushSave, storeApi, t],
   );
 
   if (!agentId) return null;

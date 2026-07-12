@@ -21,6 +21,8 @@ import {
 } from '@/store/agent/selectors';
 import { useElectronStore } from '@/store/electron';
 import { useGlobalStore } from '@/store/global';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
 
 import Files from './Files';
 import ProgressSection from './ProgressSection';
@@ -143,8 +145,10 @@ const AgentWorkingSidebar = memo(() => {
   const reviewAvailable =
     (isLocalSystemEnabled || isDeviceMode) && !!workingDirectory && !!repoType;
   const paramsAvailable = !isHetero;
-  // The in-app browser rides on the Electron <webview> tag — desktop only.
-  const browserAvailable = isDesktop;
+  // The in-app browser rides on the Electron <webview> tag — desktop only,
+  // and gated behind the Labs toggle while the feature matures.
+  const enableInAppBrowser = useUserStore(labPreferSelectors.enableInAppBrowser);
+  const browserAvailable = isDesktop && enableInAppBrowser;
   const browserSessionId = `agent:${activeAgentId ?? 'default'}`;
   const resolveActiveTab = (): Tab => {
     if (storedTab === 'params' && paramsAvailable) return 'params';

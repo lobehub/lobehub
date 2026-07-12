@@ -104,8 +104,7 @@ describe('MessageModel Create Tests', () => {
       });
 
       expect(result.usage).toEqual(usage);
-      // metadata.usage stays written for backward-compatible reads
-      expect((result.metadata as any).usage).toEqual(usage);
+      expect((result.metadata as any).usage).toBeUndefined();
     });
 
     it('prefers a top-level usage over metadata.usage on create', async () => {
@@ -119,6 +118,7 @@ describe('MessageModel Create Tests', () => {
       });
 
       expect(result.usage).toEqual(topLevel);
+      expect((result.metadata as any).usage).toBeUndefined();
     });
 
     it('should generate message ID automatically', async () => {

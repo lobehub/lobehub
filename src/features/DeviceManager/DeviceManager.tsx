@@ -1,8 +1,8 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import type { DeviceScope } from '@lobechat/types';
-import { Button, Checkbox, Flexbox, Icon, Skeleton, Text } from '@lobehub/ui';
+import type { DeviceScope, DeviceVisibility } from '@lobechat/types';
+import { ActionIcon, Button, Checkbox, Flexbox, Icon, Skeleton, Text } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
@@ -10,6 +10,8 @@ import {
   FolderCogIcon,
   type LucideIcon,
   MonitorDownIcon,
+  MonitorUpIcon,
+  RefreshCwIcon,
   ServerIcon,
   TerminalIcon,
   Trash2Icon,
@@ -273,18 +275,25 @@ const ListSkeleton = memo(() => (
 ));
 
 interface DeviceManagerProps {
-  /** Open the enrollment wizard (the modal is owned by the route, by the header button). */
+  /** Open the enrollment wizard (the modal is owned by the route). */
   onConnect: (tab?: 'cli' | 'desktop') => void;
   /** Which device pool this surface manages. */
   scope: DeviceScope;
+  /**
+   * Workspace scope only: narrow the list to one visibility tab — 'public'
+   * (shared pool) or 'private' (the caller's own private enrollments). Omitted
+   * → no visibility filtering (personal page).
+   */
+  visibility?: DeviceVisibility;
 }
 
 /**
  * Master-detail device manager shared by the personal (`/settings/devices`) and
  * workspace (`/:slug/settings/devices`) pages — list + detail panel + onboarding
- * empty state, filtered to the given `scope`.
+ * empty state, filtered to the given `scope` (and, for workspace, the active
+ * visibility tab).
  */
-const DeviceManager = memo<DeviceManagerProps>(({ onConnect, scope }) => {
+const DeviceManager = memo<DeviceManagerProps>(({ onConnect, scope, visibility }) => {
   const { t } = useTranslation('setting');
   const isWorkspace = scope === 'workspace';
 
@@ -296,13 +305,18 @@ const DeviceManager = memo<DeviceManagerProps>(({ onConnect, scope }) => {
   // Devices come from an authed lambda procedure, so only query once signed in
   // (desktop always queries — it lists the local device's registered cwd).
   const isLogin = useUserStore(authSelectors.isLogin);
-  const { data, isLoading, error, mutate } = useClientDataSWR(
+  const { data, isLoading, error, mutate, isValidating } = useClientDataSWR(
     isLogin || isDesktop ? [DEVICE_LIST_SWR_KEY] : null,
     () => deviceService.listDevices(),
   );
   // `listDevices` is workspace-aware and returns both pools — keep each surface
-  // to its own scope.
-  const devices = (data ?? []).filter((d) => d.scope === scope);
+  // to its own scope (and visibility tab). Ghost rows (`visibility: null`,
+  // online but unregistered) belong to the shared pool: the server already
+  // strips other members' private devices, so an unclaimed live connection can
+  // only be a public-pool machine.
+  const devices = (data ?? []).filter(
+    (d) => d.scope === scope && (!visibility || (d.visibility ?? 'public') === visibility),
+  );
 
   // The machine the user is on right now (desktop only) — personal pool only;
   // a workspace device is never "this machine" in the personal sense.
@@ -327,18 +341,34 @@ const DeviceManager = memo<DeviceManagerProps>(({ onConnect, scope }) => {
   // Now gated by AsyncBoundary so a *failed* device fetch renders a failure +
   // Retry instead of this "connect your first device" onboarding (which falsely
   // told the user they own no devices — ux Read §1.1 error-as-empty trap).
+  // Workspace scope shows two pools behind tabs — the shared hero copy ("every
+  // member can run agents on it") is wrong for the Private tab, which holds the
+  // caller's own enrollments that other members never see.
+  const isPrivatePool = isWorkspace && visibility === 'private';
   const emptyState = (
     <Flexbox gap={32}>
       <Flexbox className={styles.emptyCard}>
         <Flexbox align={'center'} className={styles.emptyHero} gap={12}>
           <span className={styles.heroIcon}>
-            <Icon icon={isWorkspace ? ServerIcon : MonitorDownIcon} size={28} />
+            <Icon icon={isWorkspace && !isPrivatePool ? ServerIcon : MonitorDownIcon} size={28} />
           </span>
           <Text fontSize={18} weight={600}>
-            {t(isWorkspace ? 'workspaceSetting.devices.heroTitle' : 'devices.empty.title')}
+            {t(
+              isWorkspace
+                ? isPrivatePool
+                  ? 'workspaceSetting.devices.heroTitlePrivate'
+                  : 'workspaceSetting.devices.heroTitle'
+                : 'devices.empty.title',
+            )}
           </Text>
           <Text style={{ maxWidth: 440 }} type={'secondary'}>
-            {t(isWorkspace ? 'workspaceSetting.devices.heroDesc' : 'devices.empty.desc')}
+            {t(
+              isWorkspace
+                ? isPrivatePool
+                  ? 'workspaceSetting.devices.heroDescPrivate'
+                  : 'workspaceSetting.devices.heroDesc'
+                : 'devices.empty.desc',
+            )}
           </Text>
         </Flexbox>
 
@@ -450,17 +480,33 @@ const DeviceManager = memo<DeviceManagerProps>(({ onConnect, scope }) => {
                   : t('devices.selection.total', { count: devices.length })}
               </Text>
             </Flexbox>
-            {selectionActive && (
+            <Flexbox horizontal align={'center'} gap={8}>
+              {selectionActive && (
+                <Button
+                  danger
+                  icon={<Icon icon={Trash2Icon} />}
+                  loading={removeMutation.isPending}
+                  size={'small'}
+                  onClick={handleBulkRemove}
+                >
+                  {t('devices.actions.removeSelected', { count: checkedCount })}
+                </Button>
+              )}
               <Button
-                danger
-                icon={<Icon icon={Trash2Icon} />}
-                loading={removeMutation.isPending}
+                icon={<Icon icon={MonitorUpIcon} />}
                 size={'small'}
-                onClick={handleBulkRemove}
+                onClick={() => onConnect()}
               >
-                {t('devices.actions.removeSelected', { count: checkedCount })}
+                {t('devices.connectWizard.button')}
               </Button>
-            )}
+              <ActionIcon
+                icon={RefreshCwIcon}
+                loading={isValidating}
+                size={'small'}
+                title={t('devices.actions.refresh')}
+                onClick={() => mutate()}
+              />
+            </Flexbox>
           </Flexbox>
           <Flexbox className={styles.listScroll} gap={2} padding={4}>
             {devices.map((device) => {

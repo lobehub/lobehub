@@ -5,8 +5,8 @@ import { Icon } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import {
-  CheckCircle2,
-  Circle,
+  Archive,
+  ArchiveRestore,
   ExternalLink,
   Hash,
   Link2,
@@ -91,7 +91,7 @@ export const useDropdownMenu = ({
       [
         {
           disabled: !canEditTopic,
-          icon: <Icon icon={isCompleted ? Circle : CheckCircle2} />,
+          icon: <Icon icon={isCompleted ? ArchiveRestore : Archive} />,
           key: 'markCompleted',
           label: isCompleted
             ? t('actions.unmarkCompleted', { ns: 'topic' })

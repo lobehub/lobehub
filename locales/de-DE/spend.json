@@ -54,6 +54,7 @@
   "usageStats.cards.token": "Token",
   "usageStats.cards.tokenDesc": "Eingabe {{input}} · Ausgabe {{output}}",
   "usageStats.chart.cacheWrite": "Cache-Schreiben",
+  "usageStats.chart.cachedInput": "Zwischengespeicherte Eingabe",
   "usageStats.chart.input": "Eingabe",
   "usageStats.chart.output": "Ausgabe",
   "usageStats.chart.spend": "Kosten",
