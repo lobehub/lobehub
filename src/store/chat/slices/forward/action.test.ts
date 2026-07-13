@@ -72,6 +72,24 @@ describe('ChatForwardAction', () => {
     expect(result.failed).toHaveLength(1);
   });
 
+  it('treats a missing target agent as a failure without sending', async () => {
+    vi.mocked(agentService.getAgentConfigById).mockResolvedValueOnce(null);
+    const sendMessage = vi.fn();
+    const action = new ChatForwardActionImpl(vi.fn() as never, () => ({ sendMessage }) as never);
+
+    const result = await action.forwardMessages({
+      header: 'Forwarded',
+      messages: [message('user', 'question')],
+      roleLabel: (role) => role,
+      targets: [{ id: 'missing-agent' }],
+    });
+
+    expect(sendMessage).not.toHaveBeenCalled();
+    expect(result.succeeded).toEqual([]);
+    expect(result.failed).toHaveLength(1);
+    expect(result.failed[0].agentId).toBe('missing-agent');
+  });
+
   it('loads topic messages before forwarding them', async () => {
     vi.spyOn(messageService, 'getMessages').mockResolvedValue([message('user', 'from topic')]);
     const sendMessage = vi.fn().mockResolvedValue({ createdTopicId: 'new-topic' });

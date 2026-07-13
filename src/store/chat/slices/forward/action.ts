@@ -66,6 +66,8 @@ export class ChatForwardActionImpl {
         const { id } = target;
         if (!agentSelectors.getAgentConfigById(id)(getAgentStoreState())) {
           const config = await agentService.getAgentConfigById(id);
+          if (!config) throw new Error(`Forwarding target agent not found: ${id}`);
+
           getAgentStoreState().internal_dispatchAgentMap(id, config);
         }
 
