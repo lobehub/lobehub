@@ -44,12 +44,15 @@ const nowIso = () => new Date().toISOString();
 
 /**
  * Skill work-registration intents carry the UNTRUNCATED tool payload
- * (`data`/`args`) solely for server-side Work registration. Strip it before
- * publishing stream events: clients only read `workRegistration` as a presence
- * flag (see gatewayEventHandler), so keep the key truthy but drop the raw
- * payload that would otherwise ride every realtime `tool_end` event.
+ * (`data`/`args`) solely for server-side Work registration, which reads it
+ * off the in-process `executionResult` before anything leaves the executor.
+ * Strip it from every copy that DOES leave: realtime `tool_end` stream events
+ * (clients only read `workRegistration` as a presence flag, see
+ * gatewayEventHandler) and the recorded step `tool_result` events
+ * (AgentStateManager serializes those into Redis, where the raw payload would
+ * bloat the capped event blob).
  */
-const redactResultForStream = (result: ToolRunResult): ToolRunResult =>
+const redactResultForEvents = (result: ToolRunResult): ToolRunResult =>
   result.workRegistration?.type === 'skill'
     ? { ...result, workRegistration: { ...result.workRegistration, args: undefined, data: null } }
     : result;
@@ -426,7 +429,7 @@ export const callTool =
           maxAttempts: (tools.maxRetries ?? DEFAULT_TOOL_MAX_RETRIES) + 1,
           payload,
           phase: TOOL_EXECUTION_PHASE,
-          result: redactResultForStream(executionResult),
+          result: redactResultForEvents(executionResult),
         },
         stepIndex: host.operation.stepIndex,
         type: 'tool_end',
@@ -471,7 +474,11 @@ export const callTool =
       }
       newState.lastModified = nowIso();
 
-      events.push({ id: tool.id, result: executionResult, type: 'tool_result' });
+      events.push({
+        id: tool.id,
+        result: redactResultForEvents(executionResult),
+        type: 'tool_result',
+      });
 
       const toolCost = tools.getCost?.(runContext.toolName) ?? 0;
       const { usage, cost } = UsageCounter.accumulateTool({
@@ -640,7 +647,7 @@ export const callToolsBatch =
               maxAttempts: (tools.maxRetries ?? DEFAULT_TOOL_MAX_RETRIES) + 1,
               payload: { parentMessageId, toolCalling: tool },
               phase: TOOL_EXECUTION_PHASE,
-              result: redactResultForStream(executionResult),
+              result: redactResultForEvents(executionResult),
             },
             stepIndex: host.operation.stepIndex,
             type: 'tool_end',
@@ -677,7 +684,11 @@ export const callToolsBatch =
             workRegistration: executionResult.workRegistration,
           };
 
-          events.push({ id: tool.id, result: executionResult, type: 'tool_result' });
+          events.push({
+            id: tool.id,
+            result: redactResultForEvents(executionResult),
+            type: 'tool_result',
+          });
 
           const toolCost = tools.getCost?.(runContext.toolName) ?? 0;
           resultEntry.usageParams = {
