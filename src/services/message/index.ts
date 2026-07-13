@@ -60,6 +60,23 @@ export type MessageBatchOperation =
       };
     };
 
+export interface MessageBatchMutationResult {
+  results?: Array<{
+    id?: string;
+    index: number;
+    success: boolean;
+    type: MessageBatchOperation['type'];
+  }>;
+  success?: boolean;
+}
+
+export class MessageBatchMutationError extends Error {
+  constructor(public readonly result: MessageBatchMutationResult) {
+    const failedCount = result.results?.filter((item) => !item.success).length;
+    super(`Message batch mutation failed for ${failedCount || 'unknown'} operation(s)`);
+  }
+}
+
 export class MessageService {
   batchMutate = async (operations: MessageBatchOperation[]) => {
     return lambdaClient.message.batchMutate.mutate({
@@ -78,6 +95,18 @@ export class MessageService {
         };
       }),
     } as any);
+  };
+
+  batchMutateOrThrow = async (operations: MessageBatchOperation[]) => {
+    const result = (await this.batchMutate(operations)) as MessageBatchMutationResult;
+    const hasFailedOperation = result.results?.some((item) => !item.success) ?? false;
+    const hasCompleteResults = result.results?.length === operations.length;
+
+    if (result.success !== true || !hasCompleteResults || hasFailedOperation) {
+      throw new MessageBatchMutationError(result);
+    }
+
+    return result;
   };
 
   createMessage = async (params: CreateMessageParams): Promise<CreateMessageResult> => {

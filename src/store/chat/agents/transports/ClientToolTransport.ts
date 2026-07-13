@@ -8,6 +8,8 @@ import type { ChatToolPayload, CreateMessageParams } from '@lobechat/types';
 
 import type { ChatStore } from '@/store/chat/store';
 
+import type { ClientMessageTransport } from './ClientMessageTransport';
+
 const TOOL_PRICING: Record<string, number> = {
   'lobe-web-browsing/craw': 0.002,
   'lobe-web-browsing/search': 0.001,
@@ -24,6 +26,7 @@ export class ClientToolTransport implements ToolTransport {
     private readonly get: () => ChatStore,
     private readonly messageKey: string,
     private readonly operationId: string,
+    private readonly messages: ClientMessageTransport,
   ) {}
 
   getCost(toolName: string) {
@@ -187,19 +190,19 @@ export class ClientToolTransport implements ToolTransport {
       tool_call_id: input.call.id,
       topicId: rootContext.topicId ?? undefined,
     };
-    const createPromise = store.optimisticCreateMessage(params, {
-      operationId: createOperationId,
-    });
+    const createPromise = this.messages.createToolMessageForOperation(params, createOperationId);
     store.updateOperationMetadata(createOperationId, { createMessagePromise: createPromise });
 
-    const createResult = await createPromise;
-    if (!createResult) {
-      const error = {
-        message: `Failed to create tool message for tool_call_id: ${input.call.id}`,
-        type: 'CreateMessageError',
-      };
-      store.failOperation(createOperationId, error);
-      throw new Error(error.message);
+    let createResult: Awaited<typeof createPromise>;
+    try {
+      createResult = await createPromise;
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : `Failed to create tool message for tool_call_id: ${input.call.id}`;
+      store.failOperation(createOperationId, { message, type: 'CreateMessageError' });
+      throw error;
     }
 
     store.completeOperation(createOperationId);
