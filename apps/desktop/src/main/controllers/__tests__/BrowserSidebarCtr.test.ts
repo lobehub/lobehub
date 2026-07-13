@@ -29,26 +29,29 @@ interface FakeView {
   webContents: FakeWebContents;
 }
 
-interface FakeWindow {
+/** A stand-in for a real app window (main app, or a standalone `chatSingle`). */
+interface FakeWindow extends EventEmitter {
   contentView: {
     addChildView: ReturnType<typeof vi.fn>;
     removeChildView: ReturnType<typeof vi.fn>;
   };
   destroy: ReturnType<typeof vi.fn>;
+  id: number;
   isDestroyed: () => boolean;
-  once: ReturnType<typeof vi.fn>;
+  /** The renderer webContents that sends IPC from this window. */
+  sender: { id: number; isDestroyed: () => boolean };
   setIgnoreMouseEvents: ReturnType<typeof vi.fn>;
   setPosition: ReturnType<typeof vi.fn>;
   showInactive: ReturnType<typeof vi.fn>;
   webContents: { getZoomFactor: ReturnType<typeof vi.fn> };
 }
 
-let viewSeq = 0;
+let seq = 0;
+const nextId = () => (seq += 1);
 
 const createWebContents = (): FakeWebContents => {
-  viewSeq += 1;
   const wc = new EventEmitter() as FakeWebContents;
-  wc.id = viewSeq;
+  wc.id = nextId();
   wc.canGoBack = vi.fn(() => false);
   wc.canGoForward = vi.fn(() => false);
   wc.capturePage = vi.fn(async () => 'image');
@@ -65,43 +68,46 @@ const createWebContents = (): FakeWebContents => {
   return wc;
 };
 
-const createWindow = (zoomFactor = 1): FakeWindow => {
+const createWindow = (): FakeWindow => {
   let destroyed = false;
-  return {
-    contentView: { addChildView: vi.fn(), removeChildView: vi.fn() },
-    destroy: vi.fn(() => {
-      destroyed = true;
-    }),
-    isDestroyed: () => destroyed,
-    once: vi.fn(),
-    setIgnoreMouseEvents: vi.fn(),
-    setPosition: vi.fn(),
-    showInactive: vi.fn(),
-    webContents: { getZoomFactor: vi.fn(() => zoomFactor) },
-  };
+  const win = new EventEmitter() as FakeWindow;
+  win.id = nextId();
+  win.contentView = { addChildView: vi.fn(), removeChildView: vi.fn() };
+  win.destroy = vi.fn(() => {
+    destroyed = true;
+    win.emit('closed');
+  });
+  win.isDestroyed = () => destroyed;
+  win.sender = { id: nextId(), isDestroyed: () => destroyed };
+  win.setIgnoreMouseEvents = vi.fn();
+  win.setPosition = vi.fn();
+  win.showInactive = vi.fn();
+  win.webContents = { getZoomFactor: vi.fn(() => 1) };
+  return win;
 };
 
 const {
   appOnMock,
-  browserWindowCtorMock,
   clipboardWriteImageMock,
   createdViews,
   createdWindows,
+  fromWebContentsMock,
+  getAllWindowsMock,
   importChromeLoginDataMock,
   ipcHandlers,
   ipcMainHandleMock,
   sessionFromPartitionMock,
   shellOpenExternalMock,
-  webContentsViewCtorMock,
 } = vi.hoisted(() => {
   const handlers = new Map<string, (event: unknown, ...args: unknown[]) => unknown>();
 
   return {
     appOnMock: vi.fn(),
-    browserWindowCtorMock: vi.fn(),
     clipboardWriteImageMock: vi.fn(),
     createdViews: [] as unknown[],
     createdWindows: [] as unknown[],
+    fromWebContentsMock: vi.fn(),
+    getAllWindowsMock: vi.fn(() => [] as unknown[]),
     importChromeLoginDataMock: vi.fn(),
     ipcHandlers: handlers,
     ipcMainHandleMock: vi.fn(
@@ -111,7 +117,6 @@ const {
     ),
     sessionFromPartitionMock: vi.fn(),
     shellOpenExternalMock: vi.fn().mockResolvedValue(undefined),
-    webContentsViewCtorMock: vi.fn(),
   };
 });
 
@@ -127,32 +132,22 @@ vi.mock('electron', () => ({
   app: { on: appOnMock },
   BrowserWindow: Object.assign(
     class {
-      constructor(opts: Record<string, unknown>) {
-        browserWindowCtorMock(opts);
-
+      constructor() {
         return createdWindows.at(-1) as object;
       }
     },
-    { fromWebContents: vi.fn() },
+    { fromWebContents: fromWebContentsMock, getAllWindows: getAllWindowsMock },
   ),
   clipboard: { writeImage: clipboardWriteImageMock },
   ipcMain: { handle: ipcMainHandleMock },
   session: { fromPartition: sessionFromPartitionMock },
   shell: { openExternal: shellOpenExternalMock },
   WebContentsView: class {
-    constructor(opts: Record<string, unknown>) {
-      webContentsViewCtorMock(opts);
-
+    constructor() {
       return createdViews.at(-1) as object;
     }
   },
 }));
-
-const invokeIpc = async <T = unknown>(channel: string, payload?: unknown): Promise<T> => {
-  const handler = ipcHandlers.get(channel);
-  if (!handler) throw new Error(`IPC handler for ${channel} not found`);
-  return handler({ sender: { id: 'test' } }, payload) as Promise<T>;
-};
 
 describe('BrowserSidebarCtr', () => {
   const broadcastToAllWindows = vi.fn();
@@ -174,26 +169,40 @@ describe('BrowserSidebarCtr', () => {
   };
 
   /** Hand out a fresh fake for the next `new BrowserWindow()` (the parking lot). */
-  const queueWindow = (): FakeWindow => {
+  const queueParkingWindow = (): FakeWindow => {
     const win = createWindow();
     createdWindows.push(win);
     return win;
   };
 
-  const mockApp = () =>
-    ({
-      browserManager: {
-        broadcastToAllWindows,
-        browsers: new Map([['app', { webContents: { isDestroyed: () => false } }]]),
-      },
-    }) as unknown as App;
+  /** An app window whose renderer can send IPC — the main one, or a standalone chat window. */
+  const appWindow = (): FakeWindow => {
+    const win = createWindow();
+    fromWebContentsMock.mockImplementation((sender: unknown) =>
+      [mainWindow, win].find((candidate) => candidate?.sender === sender),
+    );
+    return win;
+  };
 
-  beforeEach(async () => {
+  /** Invoke an IPC channel as if it came from `from`'s renderer. */
+  const invokeIpc = async <T = unknown>(
+    channel: string,
+    payload?: unknown,
+    from: FakeWindow = mainWindow,
+  ): Promise<T> => {
+    const handler = ipcHandlers.get(channel);
+    if (!handler) throw new Error(`IPC handler for ${channel} not found`);
+    return handler({ sender: from.sender }, payload) as Promise<T>;
+  };
+
+  const mockApp = () => ({ browserManager: { broadcastToAllWindows } }) as unknown as App;
+
+  beforeEach(() => {
     vi.clearAllMocks();
     ipcHandlers.clear();
     createdViews.length = 0;
     createdWindows.length = 0;
-    viewSeq = 0;
+    seq = 0;
     (
       IpcHandler.getInstance() as unknown as { registeredChannels?: Set<string> }
     ).registeredChannels?.clear();
@@ -201,8 +210,9 @@ describe('BrowserSidebarCtr', () => {
     sessionFromPartitionMock.mockReturnValue(mockSession);
 
     mainWindow = createWindow();
-    const { BrowserWindow } = await import('electron');
-    (BrowserWindow.fromWebContents as ReturnType<typeof vi.fn>).mockReturnValue(mainWindow);
+    fromWebContentsMock.mockImplementation((sender: unknown) =>
+      mainWindow.sender === sender ? mainWindow : undefined,
+    );
 
     controller = new BrowserSidebarCtr(mockApp());
     controller.beforeAppReady();
@@ -210,7 +220,7 @@ describe('BrowserSidebarCtr', () => {
 
   it('creates a page and loads the URL on navigate, without any renderer round-trip', async () => {
     const view = queueView();
-    queueWindow();
+    queueParkingWindow();
 
     const result = await invokeIpc('browserSidebar.navigate', {
       sessionId: 'agent:a',
@@ -227,11 +237,11 @@ describe('BrowserSidebarCtr', () => {
 
   it('gives each session its own page, so a background agent never drives the visible one', async () => {
     const viewA = queueView();
-    queueWindow();
+    queueParkingWindow();
     await invokeIpc('browserSidebar.navigate', { sessionId: 'agent:a', url: 'https://a.com' });
 
     // agent:a is what the user is looking at.
-    invokeIpc('browserSidebar.setViewport', {
+    await invokeIpc('browserSidebar.setViewport', {
       rect: { height: 600, width: 400, x: 10, y: 20 },
       sessionId: 'agent:a',
     });
@@ -243,24 +253,108 @@ describe('BrowserSidebarCtr', () => {
 
     expect(viewB).not.toBe(viewA);
     expect(viewB.webContents.loadURL).toHaveBeenCalledWith('https://b.com');
-    // The visible page was neither navigated again nor removed from the window.
+    // The visible page was neither navigated again nor taken out of the window.
     expect(viewA.webContents.loadURL).toHaveBeenCalledTimes(1);
     expect(mainWindow.contentView.removeChildView).not.toHaveBeenCalled();
   });
 
+  it('hosts the view in the window that reported the rect, not the main window', async () => {
+    // The agent route also renders in standalone `chatSingle` windows. Hosting in
+    // the main window would leave the standalone panel blank and paint the page
+    // over the wrong window.
+    const standalone = appWindow();
+    const view = queueView();
+    queueParkingWindow();
+
+    await invokeIpc(
+      'browserSidebar.navigate',
+      { sessionId: 'agent:a', url: 'https://a.com' },
+      standalone,
+    );
+    await invokeIpc(
+      'browserSidebar.setViewport',
+      { rect: { height: 600, width: 400, x: 10, y: 20 }, sessionId: 'agent:a' },
+      standalone,
+    );
+
+    expect(standalone.contentView.addChildView).toHaveBeenCalledWith(view);
+    expect(mainWindow.contentView.addChildView).not.toHaveBeenCalled();
+  });
+
+  it('lets two windows each show a page at the same time', async () => {
+    const standalone = appWindow();
+    const viewA = queueView();
+    const parking = queueParkingWindow();
+    await invokeIpc('browserSidebar.navigate', { sessionId: 'agent:a', url: 'https://a.com' });
+    await invokeIpc('browserSidebar.setViewport', {
+      rect: { height: 600, width: 400, x: 0, y: 0 },
+      sessionId: 'agent:a',
+    });
+
+    expect(mainWindow.contentView.addChildView).toHaveBeenCalledWith(viewA);
+    // Every page is born in the parking lot, so only calls from here on say
+    // anything about whether showing B parked A.
+    parking.contentView.addChildView.mockClear();
+
+    const viewB = queueView();
+    await invokeIpc(
+      'browserSidebar.navigate',
+      { sessionId: 'agent:b', url: 'https://b.com' },
+      standalone,
+    );
+    await invokeIpc(
+      'browserSidebar.setViewport',
+      { rect: { height: 600, width: 400, x: 0, y: 0 }, sessionId: 'agent:b' },
+      standalone,
+    );
+
+    expect(standalone.contentView.addChildView).toHaveBeenCalledWith(viewB);
+    // Showing B in another window must not park A — display is per-window.
+    expect(parking.contentView.addChildView).not.toHaveBeenCalledWith(viewA);
+    expect(mainWindow.contentView.removeChildView).not.toHaveBeenCalled();
+  });
+
+  it('parks a page when its host window closes, instead of letting it die with the window', async () => {
+    // Child views are destroyed with the window that holds them, so a page shown
+    // in a standalone chat window would be torn down when the user closes it —
+    // even if an agent is still driving it.
+    const standalone = appWindow();
+    const view = queueView();
+    const parking = queueParkingWindow();
+
+    await invokeIpc(
+      'browserSidebar.navigate',
+      { sessionId: 'agent:a', url: 'https://a.com' },
+      standalone,
+    );
+    await invokeIpc(
+      'browserSidebar.setViewport',
+      { rect: { height: 600, width: 400, x: 0, y: 0 }, sessionId: 'agent:a' },
+      standalone,
+    );
+    parking.contentView.addChildView.mockClear();
+
+    standalone.emit('close');
+
+    expect(standalone.contentView.removeChildView).toHaveBeenCalledWith(view);
+    expect(parking.contentView.addChildView).toHaveBeenCalledWith(view);
+    expect(view.webContents.close).not.toHaveBeenCalled();
+  });
+
   it('parks a page instead of destroying it when the panel stops showing it', async () => {
     const view = queueView();
-    const parking = queueWindow();
+    const parking = queueParkingWindow();
     await invokeIpc('browserSidebar.navigate', { sessionId: 'agent:a', url: 'https://a.com' });
 
-    invokeIpc('browserSidebar.setViewport', {
+    await invokeIpc('browserSidebar.setViewport', {
       rect: { height: 600, width: 400, x: 0, y: 0 },
       sessionId: 'agent:a',
     });
     expect(mainWindow.contentView.addChildView).toHaveBeenCalledWith(view);
+    parking.contentView.addChildView.mockClear();
 
     // A zero-sized rect is what `display: none` reports when another tab is active.
-    invokeIpc('browserSidebar.setViewport', {
+    await invokeIpc('browserSidebar.setViewport', {
       rect: { height: 0, width: 0, x: 0, y: 0 },
       sessionId: 'agent:a',
     });
@@ -273,13 +367,13 @@ describe('BrowserSidebarCtr', () => {
 
   it('scales the panel rect by the app zoom factor', async () => {
     const view = queueView();
-    queueWindow();
+    queueParkingWindow();
     await invokeIpc('browserSidebar.navigate', { sessionId: 'agent:a', url: 'https://a.com' });
 
     // The renderer reports CSS px; setBounds wants DIP. At zoom 1.25 the page
     // would otherwise be laid out 25% too small and offset from the panel.
     mainWindow.webContents.getZoomFactor.mockReturnValue(1.25);
-    invokeIpc('browserSidebar.setViewport', {
+    await invokeIpc('browserSidebar.setViewport', {
       rect: { height: 400, width: 200, x: 100, y: 40 },
       sessionId: 'agent:a',
     });
@@ -289,32 +383,37 @@ describe('BrowserSidebarCtr', () => {
 
   it('shows the parking window: a `show: false` window would leave its pages with no compositing surface', async () => {
     queueView();
-    const parking = queueWindow();
+    const parking = queueParkingWindow();
 
     await invokeIpc('browserSidebar.navigate', { sessionId: 'agent:a', url: 'https://a.com' });
 
     expect(parking.showInactive).toHaveBeenCalled();
-    expect(parking.setPosition).toHaveBeenCalledWith(expect.any(Number), expect.any(Number));
     const [x, y] = parking.setPosition.mock.calls[0];
     expect(x).toBeLessThan(0);
     expect(y).toBeLessThan(0);
   });
 
-  it('destroys the parking window on quit, so `window-all-closed` can still fire', async () => {
+  it('destroys the parking window once the last app window closes, so `window-all-closed` can fire', async () => {
     queueView();
-    const parking = queueWindow();
+    const parking = queueParkingWindow();
     await invokeIpc('browserSidebar.navigate', { sessionId: 'agent:a', url: 'https://a.com' });
 
-    const beforeQuit = appOnMock.mock.calls.find(([event]) => event === 'before-quit')?.[1];
-    expect(beforeQuit).toBeTypeOf('function');
-    beforeQuit();
+    // The controller watches every window Electron creates.
+    const onWindowCreated = appOnMock.mock.calls.find(
+      ([event]) => event === 'browser-window-created',
+    )?.[1];
+    onWindowCreated({}, mainWindow);
+
+    // Last app window gone; only the pool's own parking window is left standing.
+    getAllWindowsMock.mockReturnValue([parking]);
+    mainWindow.destroy();
 
     expect(parking.destroy).toHaveBeenCalled();
   });
 
   it('keeps window.open navigations inside the page', async () => {
     const view = queueView();
-    queueWindow();
+    queueParkingWindow();
     await invokeIpc('browserSidebar.navigate', { sessionId: 'agent:a', url: 'https://a.com' });
 
     const handler = view.webContents.setWindowOpenHandler.mock.calls[0][0];
@@ -324,7 +423,7 @@ describe('BrowserSidebarCtr', () => {
 
   it('sends free text to a search engine rather than navigating to it', async () => {
     const view = queueView();
-    queueWindow();
+    queueParkingWindow();
 
     await invokeIpc('browserSidebar.navigate', {
       sessionId: 'agent:a',

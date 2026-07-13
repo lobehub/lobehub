@@ -16,10 +16,10 @@ import {
   shell,
 } from 'electron';
 
-import { BrowsersIdentifiers } from '@/appBrowsers';
 import type { AgentOverlayLabels } from '@/modules/browser/agentOverlayScript';
 import { BrowserPagePool } from '@/modules/browser/BrowserPagePool';
 import { importChromeLoginData } from '@/modules/browser/importChromeLoginData';
+import { getIpcContext } from '@/utils/ipc/base';
 import { createLogger } from '@/utils/logger';
 
 import { ControllerModule, IpcMethod } from './index';
@@ -75,7 +75,7 @@ const isSupportedNavigationUrl = (url: string): boolean => {
  * `navigate` ends up hijacking whichever page the user is looking at.
  *
  * The renderer only reports where the panel is on screen (`setViewport`); the
- * pool moves the matching view in and out of the main window.
+ * pool hosts the matching view in the window that reported it.
  */
 export default class BrowserSidebarCtr extends ControllerModule {
   static override readonly groupName = 'browserSidebar';
@@ -85,9 +85,20 @@ export default class BrowserSidebarCtr extends ControllerModule {
   private overlayLabels: AgentOverlayLabels = DEFAULT_OVERLAY_LABELS;
 
   beforeAppReady() {
-    // The parking window is a real BrowserWindow, so leaving it alive would
-    // suppress `window-all-closed` and keep the app running on Windows/Linux.
-    electronApp.on('before-quit', () => this.pagePool?.dispose());
+    electronApp.on('before-quit', () => this.disposePool());
+
+    // The parking window is a real BrowserWindow, so while it is alive the app
+    // never sees `window-all-closed` — and never quits on Windows/Linux. Tear the
+    // pool down once the last app window has gone.
+    electronApp.on('browser-window-created', (_event, window) => {
+      window.once('closed', () => {
+        if (!this.pagePool) return;
+        const appWindows = ElectronBrowserWindow.getAllWindows().filter(
+          (candidate) => !candidate.isDestroyed() && !this.pagePool!.isParkingWindow(candidate),
+        );
+        if (appWindows.length === 0) this.disposePool();
+      });
+    });
   }
 
   @IpcMethod()
@@ -193,20 +204,26 @@ export default class BrowserSidebarCtr extends ControllerModule {
   }
 
   /**
-   * The renderer reports the panel rect (in window coordinates) on every layout
-   * change; a missing/degenerate rect means "nobody is looking at this page",
-   * which parks it rather than destroying it.
+   * The renderer reports the panel rect (in its own window's coordinates) on every
+   * layout change; a missing/degenerate rect means "nobody is looking at this
+   * page", which parks it rather than destroying it.
+   *
+   * The rect is hosted in the *sender's* window, not the main one: the agent route
+   * also renders in standalone `chatSingle` windows, and placing the view in the
+   * main window would leave the standalone panel blank and paint the page over the
+   * wrong window.
    */
   @IpcMethod()
   setViewport(params: BrowserSidebarViewportParams): BrowserSidebarResult {
     const { rect, sessionId } = params;
+    const host = this.getSenderWindow();
 
-    if (!rect || rect.width < 1 || rect.height < 1) {
+    if (!rect || rect.width < 1 || rect.height < 1 || !host) {
       this.pool.park(sessionId);
       return { success: true };
     }
 
-    this.pool.show(sessionId, rect);
+    this.pool.show(sessionId, rect, host);
     return { success: true };
   }
 
@@ -231,27 +248,23 @@ export default class BrowserSidebarCtr extends ControllerModule {
 
     this.configureBrowserSession();
     this.pagePool = new BrowserPagePool({
-      getMainWindow: () => this.getMainBrowserWindow(),
       onPageChanged: (sessionId) => this.updateSnapshot(sessionId),
       partition: BROWSER_PARTITION,
-    });
-
-    // Pages belong to the main window's lifetime: tearing them down with it also
-    // releases the parking window, which `window-all-closed` waits on.
-    this.getMainBrowserWindow()?.once('closed', () => {
-      this.pagePool?.dispose();
-      this.pagePool = undefined;
     });
 
     return this.pagePool;
   }
 
-  private getMainBrowserWindow(): BrowserWindow | undefined {
-    // Deliberately not `browserManager.getMainWindow().browserWindow` — that
-    // getter *creates* a window when none exists.
-    const webContents = this.app.browserManager.browsers.get(BrowsersIdentifiers.app)?.webContents;
-    if (!webContents || webContents.isDestroyed()) return undefined;
-    return ElectronBrowserWindow.fromWebContents(webContents) ?? undefined;
+  private disposePool(): void {
+    this.pagePool?.dispose();
+    this.pagePool = undefined;
+  }
+
+  /** The window whose renderer made the current IPC call. */
+  private getSenderWindow(): BrowserWindow | undefined {
+    const sender = getIpcContext()?.sender;
+    if (!sender || sender.isDestroyed()) return undefined;
+    return ElectronBrowserWindow.fromWebContents(sender) ?? undefined;
   }
 
   private configureBrowserSession(): void {

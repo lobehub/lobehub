@@ -22,9 +22,12 @@ const DEFAULT_PAGE_SIZE = { height: 800, width: 1200 };
 
 export interface BrowserPage {
   error?: string;
+  /**
+   * The window currently showing this page. `undefined` means it sits in the
+   * parking window — never "attached to nothing", which would kill the surface.
+   */
+  host?: BrowserWindow;
   isLoading: boolean;
-  /** Which window currently hosts the view. Never 'none' — that would kill the surface. */
-  location: 'main' | 'parking';
   sessionId: string;
   /** Viewport the page is laid out at; preserved across parking so refs stay valid. */
   size: { height: number; width: number };
@@ -34,7 +37,6 @@ export interface BrowserPage {
 }
 
 interface BrowserPagePoolOptions {
-  getMainWindow: () => BrowserWindow | undefined;
   /** Called whenever a page's observable state (url/title/loading/error) changes. */
   onPageChanged: (sessionId: string) => void;
   /** Hardened persistent partition the pages live in. */
@@ -51,13 +53,15 @@ const clampToParking = (size: { height: number; width: number }) => ({
 export class BrowserPagePool {
   private pages = new Map<string, BrowserPage>();
   private parkingWindow?: BrowserWindow;
-  private displayedSessionId?: string;
+  /**
+   * Which page each window is showing. Per-window, not global: the agent route
+   * also renders in standalone `chatSingle` windows, so two windows can each
+   * show a page of their own at the same time.
+   */
+  private displayedByWindow = new Map<number, string>();
+  private watchedWindows = new Set<number>();
 
   constructor(private options: BrowserPagePoolOptions) {}
-
-  has(sessionId: string): boolean {
-    return this.pages.has(sessionId);
-  }
 
   get(sessionId: string): BrowserPage | undefined {
     return this.pages.get(sessionId);
@@ -67,6 +71,11 @@ export class BrowserPagePool {
     const view = this.pages.get(sessionId)?.view;
     if (!view || view.webContents.isDestroyed()) return undefined;
     return view.webContents;
+  }
+
+  /** True for the pool's own off-screen window, which must not count as an app window. */
+  isParkingWindow(window: BrowserWindow): boolean {
+    return !!this.parkingWindow && this.parkingWindow.id === window.id;
   }
 
   /** Creates the page (parked) if it doesn't exist yet. */
@@ -86,7 +95,6 @@ export class BrowserPagePool {
 
     const page: BrowserPage = {
       isLoading: false,
-      location: 'parking',
       sessionId,
       size: { ...DEFAULT_PAGE_SIZE },
       title: '',
@@ -106,21 +114,31 @@ export class BrowserPagePool {
     return page;
   }
 
-  /** Show the page in the main window at `rect`; parks whatever was displayed before. */
-  show(sessionId: string, rect: Rectangle): void {
-    const main = this.options.getMainWindow();
-    if (!main || main.isDestroyed()) return;
+  /**
+   * Show the page inside `host` at `rect`. `host` is the window that reported the
+   * rect — the agent route renders in standalone windows too, so hard-coding the
+   * main window would place the view over the wrong one.
+   */
+  show(sessionId: string, rect: Rectangle, host: BrowserWindow): void {
+    if (host.isDestroyed()) return;
 
     const page = this.ensure(sessionId);
 
-    if (this.displayedSessionId && this.displayedSessionId !== sessionId) {
-      this.park(this.displayedSessionId);
+    // One page per window: whatever this window was showing goes back to parking.
+    const previous = this.displayedByWindow.get(host.id);
+    if (previous && previous !== sessionId) this.park(previous);
+
+    if (page.host?.id !== host.id) {
+      this.detach(page);
+      host.contentView.addChildView(page.view);
+      page.host = host;
+      this.watchHost(host);
     }
 
     // The renderer measures in CSS px but `setBounds` takes DIP, and the two only
     // agree at zoom factor 1 — the old <webview> was laid out by CSS and followed
     // the zoom for free, a view has to be scaled by hand or it drifts off the panel.
-    const zoom = main.webContents.getZoomFactor() || 1;
+    const zoom = host.webContents.getZoomFactor() || 1;
     const bounds: Rectangle = {
       height: Math.max(1, Math.round(rect.height * zoom)),
       width: Math.max(1, Math.round(rect.width * zoom)),
@@ -128,45 +146,28 @@ export class BrowserPagePool {
       y: Math.round(rect.y * zoom),
     };
 
-    if (page.location !== 'main') {
-      this.parkingWindow?.contentView.removeChildView(page.view);
-      main.contentView.addChildView(page.view);
-      page.location = 'main';
-    }
-
     page.view.setBounds(bounds);
     page.size = clampToParking({ height: bounds.height, width: bounds.width });
-    this.displayedSessionId = sessionId;
+    this.displayedByWindow.set(host.id, sessionId);
   }
 
   /** Move the page back to the off-screen window, where it keeps running. */
   park(sessionId: string): void {
     const page = this.pages.get(sessionId);
-    if (!page || page.view.webContents.isDestroyed()) return;
-    if (this.displayedSessionId === sessionId) this.displayedSessionId = undefined;
-    if (page.location === 'parking') return;
+    if (!page || page.view.webContents.isDestroyed() || !page.host) return;
 
-    const main = this.options.getMainWindow();
-    if (main && !main.isDestroyed()) main.contentView.removeChildView(page.view);
-
+    this.detach(page);
     const parking = this.ensureParkingWindow();
     parking.contentView.addChildView(page.view);
     page.view.setBounds({ x: 0, y: 0, ...page.size });
-    page.location = 'parking';
   }
 
   close(sessionId: string): void {
     const page = this.pages.get(sessionId);
     if (!page) return;
 
+    this.detach(page);
     this.pages.delete(sessionId);
-    if (this.displayedSessionId === sessionId) this.displayedSessionId = undefined;
-
-    const host =
-      page.location === 'main'
-        ? this.options.getMainWindow()
-        : (this.parkingWindow as BrowserWindow);
-    if (host && !host.isDestroyed()) host.contentView.removeChildView(page.view);
     if (!page.view.webContents.isDestroyed()) page.view.webContents.close();
   }
 
@@ -179,7 +180,41 @@ export class BrowserPagePool {
     for (const sessionId of this.pages.keys()) this.close(sessionId);
     if (this.parkingWindow && !this.parkingWindow.isDestroyed()) this.parkingWindow.destroy();
     this.parkingWindow = undefined;
-    this.displayedSessionId = undefined;
+    this.displayedByWindow.clear();
+    this.watchedWindows.clear();
+  }
+
+  /** Take the view out of whichever window holds it, leaving it attached to nothing. */
+  private detach(page: BrowserPage): void {
+    if (page.host) {
+      if (!page.host.isDestroyed()) page.host.contentView.removeChildView(page.view);
+      if (this.displayedByWindow.get(page.host.id) === page.sessionId) {
+        this.displayedByWindow.delete(page.host.id);
+      }
+      page.host = undefined;
+      return;
+    }
+
+    if (this.parkingWindow && !this.parkingWindow.isDestroyed()) {
+      this.parkingWindow.contentView.removeChildView(page.view);
+    }
+  }
+
+  /**
+   * Child views are destroyed with the window that holds them, so a page shown in
+   * a standalone chat window would die with it. Park on `close` (which fires
+   * *before* teardown) to keep the page — and any agent still driving it — alive.
+   */
+  private watchHost(host: BrowserWindow): void {
+    if (this.watchedWindows.has(host.id)) return;
+    this.watchedWindows.add(host.id);
+
+    host.once('close', () => {
+      this.watchedWindows.delete(host.id);
+      for (const page of this.pages.values()) {
+        if (page.host?.id === host.id) this.park(page.sessionId);
+      }
+    });
   }
 
   private ensureParkingWindow(): BrowserWindow {
