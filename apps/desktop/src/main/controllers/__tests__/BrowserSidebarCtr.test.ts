@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { App } from '@/core/App';
 import { IpcHandler } from '@/utils/ipc/base';
 
+import BrowserControlCtr from '../BrowserControlCtr';
 import BrowserSidebarCtr from '../BrowserSidebarCtr';
 
 interface FakeWebContents extends EventEmitter {
@@ -51,6 +52,9 @@ const nextId = () => (seq += 1);
 
 const createWebContents = (): FakeWebContents => {
   const wc = new EventEmitter() as FakeWebContents;
+  // Track the loaded URL: the pool folds `getURL()` back into the page record, so
+  // a fake that always answers the same URL hides which page is which.
+  let url = 'about:blank';
   wc.id = nextId();
   wc.canGoBack = vi.fn(() => false);
   wc.canGoForward = vi.fn(() => false);
@@ -58,10 +62,12 @@ const createWebContents = (): FakeWebContents => {
   wc.close = vi.fn();
   wc.executeJavaScript = vi.fn(async () => undefined);
   wc.getTitle = vi.fn(() => 'Example');
-  wc.getURL = vi.fn(() => 'https://example.com');
+  wc.getURL = vi.fn(() => url);
   wc.isDestroyed = vi.fn(() => false);
   wc.isLoading = vi.fn(() => false);
-  wc.loadURL = vi.fn(async () => undefined);
+  wc.loadURL = vi.fn(async (next: string) => {
+    url = next;
+  });
   wc.reload = vi.fn();
   wc.setWindowOpenHandler = vi.fn();
   wc.stop = vi.fn();
@@ -195,7 +201,13 @@ describe('BrowserSidebarCtr', () => {
     return handler({ sender: from.sender }, payload) as Promise<T>;
   };
 
-  const mockApp = () => ({ browserManager: { broadcastToAllWindows } }) as unknown as App;
+  // BrowserControlCtr is wired in too, so the "a tool call keeps the page alive"
+  // test exercises the real path (withGuest → touchPage) rather than a stand-in.
+  const mockApp = () =>
+    ({
+      browserManager: { broadcastToAllWindows },
+      getController: (Ctor: unknown) => (Ctor === BrowserSidebarCtr ? controller : undefined),
+    }) as unknown as App;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -214,8 +226,12 @@ describe('BrowserSidebarCtr', () => {
       mainWindow.sender === sender ? mainWindow : undefined,
     );
 
-    controller = new BrowserSidebarCtr(mockApp());
+    const app = mockApp();
+    controller = new BrowserSidebarCtr(app);
     controller.beforeAppReady();
+    // Registers the browserControl.* channels against the same pool.
+
+    new BrowserControlCtr(app);
   });
 
   it('creates a page and loads the URL on navigate, without any renderer round-trip', async () => {
@@ -431,6 +447,133 @@ describe('BrowserSidebarCtr', () => {
     mainWindow.destroy();
 
     expect(parking.destroy).toHaveBeenCalled();
+  });
+
+  describe('memory cap', () => {
+    // Each live page is a full renderer process (90–345 MB measured), so the pool
+    // is capped. These pin what may and may not be thrown away.
+    const navigateN = async (count: number, from = 0) => {
+      const views: FakeView[] = [];
+      for (let i = from; i < from + count; i += 1) {
+        views.push(queueView());
+
+        await invokeIpc('browserSidebar.navigate', {
+          sessionId: `agent:${i}`,
+          url: `https://site-${i}.com`,
+        });
+      }
+      return views;
+    };
+
+    it('discards the coldest idle page once the pool is over its cap', async () => {
+      vi.useFakeTimers();
+      queueParkingWindow();
+
+      const views = await navigateN(6);
+      // Age them past the in-use window so they are eligible.
+      vi.advanceTimersByTime(120_000);
+
+      queueView();
+      await invokeIpc('browserSidebar.navigate', {
+        sessionId: 'agent:6',
+        url: 'https://site-6.com',
+      });
+
+      // agent:0 was the coldest.
+      expect(views[0].webContents.close).toHaveBeenCalled();
+      expect(views[1].webContents.close).not.toHaveBeenCalled();
+      vi.useRealTimers();
+    });
+
+    it('keeps a discarded page addressable, and reloads it where it left off', async () => {
+      vi.useFakeTimers();
+      queueParkingWindow();
+      const views = await navigateN(6);
+      vi.advanceTimersByTime(120_000);
+
+      queueView();
+      await invokeIpc('browserSidebar.navigate', {
+        sessionId: 'agent:6',
+        url: 'https://site-6.com',
+      });
+      expect(views[0].webContents.close).toHaveBeenCalled();
+
+      // The panel still knows where that session was.
+      const state = await invokeIpc<{ attached: boolean; url: string }>('browserSidebar.getState', {
+        sessionId: 'agent:0',
+      });
+      expect(state.url).toBe('https://site-0.com');
+      expect(state.attached).toBe(false);
+
+      // Coming back rebuilds the view on the same URL rather than a blank page.
+      const revived = queueView();
+      await invokeIpc('browserSidebar.setViewport', {
+        rect: { height: 600, width: 400, x: 0, y: 0 },
+        sessionId: 'agent:0',
+      });
+      expect(revived.webContents.loadURL).toHaveBeenCalledWith('https://site-0.com');
+      vi.useRealTimers();
+    });
+
+    it('never discards a page an agent is still driving, even over the cap', async () => {
+      vi.useFakeTimers();
+      queueParkingWindow();
+      const views = await navigateN(6);
+      vi.advanceTimersByTime(120_000);
+
+      // A tool call on the coldest page counts as use.
+      await invokeIpc('browserControl.snapshot', { sessionId: 'agent:0' });
+
+      queueView();
+      await invokeIpc('browserSidebar.navigate', {
+        sessionId: 'agent:6',
+        url: 'https://site-6.com',
+      });
+
+      // agent:0 is in use, so agent:1 — the next coldest — goes instead.
+      expect(views[0].webContents.close).not.toHaveBeenCalled();
+      expect(views[1].webContents.close).toHaveBeenCalled();
+      vi.useRealTimers();
+    });
+
+    it('sweeps back down to the cap after a burst goes idle, with no new page to trigger it', async () => {
+      // The real failure this guards: 10 agents open pages at once, so nothing is
+      // evictable (all "in use") — and if eviction only ran on create, the pool
+      // would stay at 10 forever. Verified against the live app.
+      vi.useFakeTimers();
+      queueParkingWindow();
+      const views = await navigateN(10);
+
+      // Nothing is evictable yet: everything was just used.
+      for (const view of views) expect(view.webContents.close).not.toHaveBeenCalled();
+
+      // Nobody creates another page — the sweep has to do it.
+      await vi.advanceTimersByTimeAsync(150_000);
+
+      const closed = views.filter((view) => view.webContents.close.mock.calls.length > 0);
+      expect(closed).toHaveLength(4);
+      // Oldest first: agent:0..3 go, agent:6..9 stay.
+      expect(views[0].webContents.close).toHaveBeenCalled();
+      expect(views[3].webContents.close).toHaveBeenCalled();
+      expect(views[9].webContents.close).not.toHaveBeenCalled();
+      vi.useRealTimers();
+    });
+
+    it('stays over the cap rather than discard a page that is on screen or in use', async () => {
+      vi.useFakeTimers();
+      queueParkingWindow();
+      const views = await navigateN(6);
+      // No time passes: every page is within the in-use window.
+
+      queueView();
+      await invokeIpc('browserSidebar.navigate', {
+        sessionId: 'agent:6',
+        url: 'https://site-6.com',
+      });
+
+      for (const view of views) expect(view.webContents.close).not.toHaveBeenCalled();
+      vi.useRealTimers();
+    });
   });
 
   it('keeps window.open navigations inside the page', async () => {

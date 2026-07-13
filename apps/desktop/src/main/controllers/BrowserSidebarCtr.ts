@@ -239,6 +239,11 @@ export default class BrowserSidebarCtr extends ControllerModule {
     return this.pagePool?.webContentsOf(sessionId);
   }
 
+  /** Mark a page as in use so the memory cap doesn't discard it mid-automation. */
+  touchPage(sessionId: string): void {
+    this.pagePool?.touch(sessionId);
+  }
+
   getOverlayLabels(): AgentOverlayLabels {
     return this.overlayLabels;
   }
@@ -294,6 +299,10 @@ export default class BrowserSidebarCtr extends ControllerModule {
   private snapshot(sessionId: string): BrowserSidebarState {
     const page = this.pagePool?.get(sessionId);
     const webContents = this.getSessionWebContents(sessionId);
+    // A page the pool discarded to stay under its memory cap still reports its
+    // URL, so the panel keeps showing it and the next visit reloads it there
+    // rather than dropping the user on a blank pane.
+    const discarded = this.pagePool?.discardedRecord(sessionId);
 
     return {
       attached: !!webContents,
@@ -302,8 +311,8 @@ export default class BrowserSidebarCtr extends ControllerModule {
       error: page?.error,
       isLoading: webContents?.isLoading() ?? page?.isLoading ?? false,
       sessionId,
-      title: webContents?.getTitle() || page?.title || '',
-      url: webContents?.getURL() || page?.url || DEFAULT_BROWSER_URL,
+      title: webContents?.getTitle() || page?.title || discarded?.title || '',
+      url: webContents?.getURL() || page?.url || discarded?.url || DEFAULT_BROWSER_URL,
     };
   }
 

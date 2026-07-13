@@ -20,6 +20,26 @@ const PARKING_ORIGIN = { x: -8000, y: -8000 };
 const PARKING_SIZE = { height: 1200, width: 1920 };
 const DEFAULT_PAGE_SIZE = { height: 800, width: 1200 };
 
+/**
+ * Every live page is a full renderer process — measured at 90–345 MB each, so an
+ * unbounded pool would trade the old `<webview>` design's single page for
+ * gigabytes. Pages past this count get discarded (their URL is remembered and
+ * reloaded on next use), oldest-idle first.
+ */
+const MAX_LIVE_PAGES = 6;
+/**
+ * A page an agent touched this recently is treated as in use and never discarded
+ * mid-run, even over the cap: breaking a running automation is far worse than
+ * holding one more process.
+ */
+const IN_USE_MS = 90_000;
+/**
+ * Eviction has to be a sweep, not just a create-time check: a burst of agents all
+ * opening pages at once leaves nothing evictable (everything is "in use"), and if
+ * no further page is ever created, the pool would sit over the cap forever.
+ */
+const SWEEP_MS = 30_000;
+
 export interface BrowserPage {
   error?: string;
   /**
@@ -28,6 +48,8 @@ export interface BrowserPage {
    */
   host?: BrowserWindow;
   isLoading: boolean;
+  /** Last time the user or an agent did anything with this page (for eviction). */
+  lastUsedAt: number;
   sessionId: string;
   /** Viewport the page is laid out at; preserved across parking so refs stay valid. */
   size: { height: number; width: number };
@@ -68,11 +90,23 @@ export class BrowserPagePool {
    */
   private lastRequestByWindow = new Map<number, { rect: Rectangle; sessionId: string }>();
   private watchedWindows = new Set<number>();
+  /**
+   * URLs of pages discarded by the cap. The session keeps looking like it has a
+   * page (the panel still shows its address), and the next use rebuilds the view
+   * on the same URL — a reload, not a silent reset to blank.
+   */
+  private discarded = new Map<string, { title: string; url: string }>();
+  private sweepTimer?: NodeJS.Timeout;
 
   constructor(private options: BrowserPagePoolOptions) {}
 
   get(sessionId: string): BrowserPage | undefined {
     return this.pages.get(sessionId);
+  }
+
+  /** Where a page discarded by the cap left off, so the panel can still show it. */
+  discardedRecord(sessionId: string): { title: string; url: string } | undefined {
+    return this.discarded.get(sessionId);
   }
 
   webContentsOf(sessionId: string): WebContents | undefined {
@@ -89,7 +123,10 @@ export class BrowserPagePool {
   /** Creates the page (parked) if it doesn't exist yet. */
   ensure(sessionId: string): BrowserPage {
     const existing = this.pages.get(sessionId);
-    if (existing && !existing.view.webContents.isDestroyed()) return existing;
+    if (existing && !existing.view.webContents.isDestroyed()) {
+      existing.lastUsedAt = Date.now();
+      return existing;
+    }
 
     const view = new WebContentsView({
       webPreferences: {
@@ -101,12 +138,16 @@ export class BrowserPagePool {
       },
     });
 
+    const restored = this.discarded.get(sessionId);
+    this.discarded.delete(sessionId);
+
     const page: BrowserPage = {
       isLoading: false,
+      lastUsedAt: Date.now(),
       sessionId,
       size: { ...DEFAULT_PAGE_SIZE },
-      title: '',
-      url: 'about:blank',
+      title: restored?.title ?? '',
+      url: restored?.url ?? 'about:blank',
       view,
     };
     this.pages.set(sessionId, page);
@@ -118,8 +159,58 @@ export class BrowserPagePool {
     view.setBounds({ x: 0, y: 0, ...page.size });
 
     this.wirePage(page);
+
+    // Coming back to a page the cap discarded reloads it where it left off.
+    if (restored && restored.url !== 'about:blank') {
+      view.webContents.loadURL(restored.url).catch((error: Error) => {
+        logger.debug(`Failed to restore discarded page ${sessionId}: ${error.message}`);
+      });
+    }
+
     logger.debug(`Created browser page for ${sessionId}`);
+    this.startSweep();
+    this.evictColdPages();
     return page;
+  }
+
+  private startSweep(): void {
+    if (this.sweepTimer) return;
+    this.sweepTimer = setInterval(() => this.evictColdPages(), SWEEP_MS);
+    // Never hold the app open just to run the sweep.
+    this.sweepTimer.unref?.();
+  }
+
+  /** Record that the page was just used, so the cap discards something colder. */
+  touch(sessionId: string): void {
+    const page = this.pages.get(sessionId);
+    if (page) page.lastUsedAt = Date.now();
+  }
+
+  /**
+   * Hold the pool to MAX_LIVE_PAGES by discarding the coldest pages. A page that
+   * is on screen, or that an agent touched within IN_USE_MS, is never a candidate
+   * — we would rather sit over the cap than kill a page mid-automation.
+   */
+  private evictColdPages(): void {
+    while (this.pages.size > MAX_LIVE_PAGES) {
+      const now = Date.now();
+      const candidates = [...this.pages.values()]
+        .filter((page) => !page.host && now - page.lastUsedAt > IN_USE_MS)
+        .sort((a, b) => a.lastUsedAt - b.lastUsedAt);
+
+      const coldest = candidates[0];
+      if (!coldest) {
+        logger.debug(
+          `${this.pages.size} browser pages live, all in use — staying over the cap of ${MAX_LIVE_PAGES}`,
+        );
+        return;
+      }
+
+      logger.debug(`Discarding cold browser page ${coldest.sessionId} (${coldest.url})`);
+      this.discarded.set(coldest.sessionId, { title: coldest.title, url: coldest.url });
+      this.close(coldest.sessionId);
+      this.options.onPageChanged(coldest.sessionId);
+    }
   }
 
   /**
@@ -192,6 +283,8 @@ export class BrowserPagePool {
    * Windows/Linux.
    */
   dispose(): void {
+    if (this.sweepTimer) clearInterval(this.sweepTimer);
+    this.sweepTimer = undefined;
     for (const sessionId of this.pages.keys()) this.close(sessionId);
     if (this.parkingWindow && !this.parkingWindow.isDestroyed()) this.parkingWindow.destroy();
     this.parkingWindow = undefined;

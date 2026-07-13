@@ -351,6 +351,10 @@ export default class BrowserControlCtr extends ControllerModule {
       } as T;
     }
 
+    // Every tool call counts as use, so the pool's memory cap never discards a
+    // page an agent is in the middle of driving.
+    this.sidebar.touchPage(sessionId);
+
     try {
       return await action(guest);
     } catch (error) {
