@@ -370,3 +370,14 @@ unquoted vars` — stashing `S="--session x --cdp 9226"` then `agent-browser $S`
   you must not kill. Terminate the run, report the exact error, and ask the user to
   clean up other processes — do not change watch mode, fall back to a static build, or
   publish a report from a degraded surface.
+- **E7. The default `lobehub-dev` browser session is shared — a parallel run can steal your
+  tab.** `agent-browser` sessions are keyed by name, not by workspace, so two runs both using
+  `--session lobehub-dev` drive the **same** browser. The other run navigates the tab to _its_
+  dev server, after which your `eval` reads that page while `screenshot` may still show yours —
+  a screenshot that renders your fixture next to a `document.body.innerText` from the same
+  moment containing none of its strings, every assertion `false`. It reads like a product bug;
+  it is two runs sharing one browser. **Works**: give every run its own session name, seed auth
+  into it, and confirm the tab is yours before asserting — `agent-browser --session <name> tab
+  list` must print YOUR port and path. Same applies to ports: a worktree allocates its own
+  `SERVER_PORT`/`SPA_PORT`, so re-run `test-env.sh` inside the worktree you are testing rather
+  than assuming another checkout's ports.
