@@ -50,10 +50,27 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     position: absolute;
     inset-inline-start: 50%;
     transform: translateX(-50%);
+
     width: min(48%, 520px);
+    border-radius: ${cssVar.borderRadius};
+
+    transition:
+      background-color ${cssVar.motionDurationMid} ${cssVar.motionEaseInOut},
+      box-shadow ${cssVar.motionDurationMid} ${cssVar.motionEaseInOut};
 
     input {
       text-align: center;
+    }
+
+    /* borderless inputs carry antd's transparent :hover/:focus rules, so the
+       hover fill and focus ring need a class-doubled selector to win. */
+    &&:hover {
+      background: ${cssVar.colorFillTertiary};
+    }
+
+    &&:focus-within {
+      background: ${cssVar.colorFillQuaternary};
+      box-shadow: 0 0 0 1px ${cssVar.colorBorder};
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -71,6 +88,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     background: ${cssVar.colorBgContainer};
   `,
   importCopy: css`
+    flex: 1;
     min-width: 0;
   `,
   toolbarActions: css`
