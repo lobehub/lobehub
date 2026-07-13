@@ -5,6 +5,9 @@ export default {
   'features.agentSelfIteration.desc':
     'Allow the agent to reflect, build self-awareness, and continuously iterate through ongoing attempts and interactions.',
   'features.agentSelfIteration.title': 'Agent Self-iteration',
+  'features.artifactDeployment.desc':
+    'Publish artifacts to a hosted URL and manage releases from the conversation sidebar',
+  'features.artifactDeployment.title': 'Artifact Deployments',
   'features.assistantMessageGroup.desc':
     'Group agent messages and their tool call results together for display',
   'features.assistantMessageGroup.title': 'Agent Message Grouping',
