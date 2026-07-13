@@ -55,8 +55,10 @@ interface FooterProps {
   disabled?: boolean;
   form: FormInstance<ChannelFormValues>;
   hasConfig: boolean;
+  isDirty: boolean;
   onCopied: () => void;
   onDelete: () => void;
+  onDiscard: () => void;
   onSave: () => void;
   onTestConnection: () => void;
   platformDef: SerializedPlatformDefinition;
@@ -73,6 +75,7 @@ const Footer = memo<FooterProps>(
     currentConfig,
     form,
     hasConfig,
+    isDirty,
     connectResult,
     connecting,
     disabled,
@@ -83,6 +86,7 @@ const Footer = memo<FooterProps>(
     writeDisabled,
     onSave,
     onDelete,
+    onDiscard,
     onTestConnection,
     onCopied,
   }) => {
@@ -151,6 +155,11 @@ const Footer = memo<FooterProps>(
                 onClick={onTestConnection}
               >
                 {t('channel.testConnection')}
+              </Button>
+            )}
+            {isDirty && (
+              <Button disabled={writeDisabled || saving || connecting} onClick={onDiscard}>
+                {t('channel.discard')}
               </Button>
             )}
             <Button

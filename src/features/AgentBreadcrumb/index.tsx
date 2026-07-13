@@ -35,6 +35,8 @@ const styles = createStaticStyles(({ css }) => ({
 
 interface AgentBreadcrumbProps {
   agentId: string;
+  /** Additional breadcrumb items appended after the current section. */
+  extraItems?: ReactNode[];
   /**
    * The current section under the agent, e.g. 话题 / 助理档案 / 用量与成本.
    */
@@ -45,7 +47,7 @@ interface AgentBreadcrumbProps {
  * Breadcrumb for pages that live under an agent: `<AgentName> › <Section>`.
  * The agent name links back to the agent home; the section is the current page.
  */
-const AgentBreadcrumb = memo<AgentBreadcrumbProps>(({ agentId, title }) => {
+const AgentBreadcrumb = memo<AgentBreadcrumbProps>(({ agentId, extraItems, title }) => {
   const { t } = useTranslation(['chat', 'common']);
   const { pathname } = useLocation();
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
@@ -82,6 +84,14 @@ const AgentBreadcrumb = memo<AgentBreadcrumbProps>(({ agentId, title }) => {
             </Text>
           ),
         },
+        ...(extraItems ?? []).map((item, index) => ({
+          key: `extra-${index}`,
+          title: (
+            <Text as={'span'} color={'inherit'} weight={500}>
+              {item}
+            </Text>
+          ),
+        })),
       ]}
     />
   );

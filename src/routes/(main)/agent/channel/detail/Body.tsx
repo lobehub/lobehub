@@ -381,11 +381,12 @@ interface BodyProps {
     applicationId: string;
     credentials: Record<string, string>;
   }) => void;
+  onValuesChange?: (values: ChannelFormValues) => void;
   platformDef: SerializedPlatformDefinition;
 }
 
 const Body = memo<BodyProps>(
-  ({ platformDef, form, hasConfig, currentConfig, onAuthenticated, disabled }) => {
+  ({ platformDef, form, hasConfig, currentConfig, onAuthenticated, onValuesChange, disabled }) => {
     const { t: _t } = useTranslation('agent');
     const t = _t as (key: string) => string;
 
@@ -421,7 +422,8 @@ const Body = memo<BodyProps>(
       form.setFieldsValue({
         settings: extractSettingsDefaults(platformDef.schema) as Record<string, {} | undefined>,
       });
-    }, [form, platformDef.schema]);
+      onValuesChange?.(form.getFieldsValue(true) as ChannelFormValues);
+    }, [form, onValuesChange, platformDef.schema]);
 
     return (
       <Form
@@ -432,6 +434,7 @@ const Body = memo<BodyProps>(
         requiredMark={false}
         style={{ maxWidth: 1024, padding: '16px 0', width: '100%' }}
         variant={'borderless'}
+        onValuesChange={(_, values) => onValuesChange?.(values as ChannelFormValues)}
       >
         {CustomCredentialBody ? (
           <CustomCredentialBody
