@@ -116,18 +116,22 @@ export const buildServerVirtualSubAgentRunner = (
   const topicId = ctx.topicId ?? state.metadata?.topicId;
   if (!agentId || !topicId) return undefined;
 
-  // Resolve the sub-agent's model HERE, at the spawn site, from the parent
-  // agent's config (carried on the runtime state). The child run is then handed
-  // an explicit model/provider, so the execution side never re-reads the
-  // parent's `agencyConfig.subagent` — and runs that merely *look* like
-  // sub-agents (isolated group members) keep their own model.
   const parentAgentConfig = state.metadata?.agentConfig as LobeAgentConfig | undefined;
-  const { model: subAgentModel, provider: subAgentProvider } = resolveSubAgentModel(
-    parentAgentConfig?.agencyConfig?.subagent,
-  );
 
   return {
     run: async ({ agentId: targetAgentId, description, instruction, timeout }) => {
+      // This runner serves two tools, and only one of them may swap the model:
+      //   - `callSubAgent` names no agent, so the child is an anonymous clone of
+      //     the parent — it takes the parent's `agencyConfig.subagent` model.
+      //   - `callAgent` names an existing agent, which carries a model the user
+      //     configured on it. Overriding that would discard a deliberate choice,
+      //     the same way forcing a group member onto the sub-agent default would.
+      // Resolved here at the spawn site so the execution side never has to
+      // re-derive it from the parent config.
+      const subAgentModel = targetAgentId
+        ? undefined
+        : resolveSubAgentModel(parentAgentConfig?.agencyConfig?.subagent);
+
       // 1. Create the pending placeholder tool message (mirrors the normal
       //    tool-message shape in call_tool) that anchors the isolation thread
       //    and renders a loading state until the bridge backfills it.
@@ -151,10 +155,10 @@ export const buildServerVirtualSubAgentRunner = (
         agentId: targetAgentId ?? agentId,
         groupId: state.metadata?.groupId ?? undefined,
         instruction,
-        model: subAgentModel,
+        model: subAgentModel?.model,
         parentMessageId: placeholder.id,
         parentOperationId: ctx.operationId,
-        provider: subAgentProvider,
+        provider: subAgentModel?.provider,
         timeout,
         title: description,
         topicId,
