@@ -84,6 +84,17 @@ describe('tool display names', () => {
     expect(getToolDisplayName('mcp__claude_ai_Linear__save_issue')).toBe('Linear · Save issue');
     expect(getToolDisplayName('mcp__linear-server__get_issue')).toBe('Linear · Get issue');
   });
+
+  it('uses friendly labels for the in-app browser MCP tool names', () => {
+    // Title-casing the wire name yields "Mcp  lobe cc  browser navigate".
+    expect(getToolDisplayName('mcp__lobe_cc__browser_navigate')).toBe('Open page');
+    expect(getToolDisplayName('mcp__lobe_cc__browser_screenshot')).toBe('Screenshot page');
+    expect(getToolDisplayName('mcp__lobe_cc__browser_read_page')).toBe('Read page text');
+  });
+
+  it('leaves unknown MCP tools on the title-case fallback', () => {
+    expect(getToolDisplayName('mcp__lobe_cc__something_else')).toBe('Mcp__lobe_cc__something_else');
+  });
 });
 
 describe('shapeProseForWorkflowHeadline', () => {
