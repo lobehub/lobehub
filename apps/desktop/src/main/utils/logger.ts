@@ -33,10 +33,15 @@ export const createLogger = (namespace: string) => {
       debugLogger(message, ...args);
     },
     error: (message, ...args) => {
-      // Always persist: a packaged build has no console anyone can read, and an
-      // error that only ever reached stderr is an error nobody can diagnose.
-      // electron-log's console transport still prints it during development.
-      electronLog.error(`[${namespace}]`, message, ...args);
+      // A packaged build has no console anyone can read, so its errors must reach
+      // the log file. Development keeps `console.error` — the terminal is where a
+      // dev reads them, and electron-log's console transport would print a second
+      // copy of every line.
+      if (isPackagedBuild()) {
+        electronLog.error(`[${namespace}]`, message, ...args);
+      } else {
+        console.error(message, ...args);
+      }
     },
     info: (message, ...args) => {
       if (isPackagedBuild()) {
