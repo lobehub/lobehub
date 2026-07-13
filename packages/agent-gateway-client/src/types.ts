@@ -267,6 +267,14 @@ export interface ToolResultMessage {
   success: boolean;
   toolCallId: string;
   type: 'tool_result';
+  /**
+   * In-memory relay of the client-side Work registration intent (a
+   * `WorkRegistrationIntent`, kept opaque here to preserve this package's
+   * zero-`@lobechat` dependency surface — mirrors how `state` is typed). The
+   * server registers the Work version from it and NEVER persists it with the
+   * tool message.
+   */
+  workRegistration?: any;
 }
 
 export type ClientMessage =

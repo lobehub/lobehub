@@ -159,5 +159,8 @@ function projectToExecutionResult(
     executionTime,
     state: payload.state,
     success: payload.success,
+    // Forward the client-relayed Work registration intent so the agent runtime
+    // loop calls `registerWork` (the persist path strips it — never hits the DB).
+    workRegistration: payload.workRegistration,
   };
 }

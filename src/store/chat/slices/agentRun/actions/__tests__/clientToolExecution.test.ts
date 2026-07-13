@@ -1,6 +1,8 @@
 import type { ToolExecuteData } from '@lobechat/agent-gateway-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { stashWorkIntent, takeWorkIntent } from '@/utils/clientWorkIntentStash';
+
 import { ClientToolExecutionActionImpl } from '../transports/client/clientToolExecution';
 
 // ─── Hoisted mocks ───
@@ -227,6 +229,58 @@ describe('internal_executeClientTool', () => {
         {},
         expect.anything(),
       );
+    });
+  });
+
+  describe('Work registration relay', () => {
+    it('relays the stashed Work intent on the tool_result and drains the stash', async () => {
+      const intent = { action: 'create', targets: [{ taskId: 't-1' }], type: 'task' } as const;
+      hasExecutorMock.mockReturnValue(true);
+      // Mirror `invokeExecutor` → `stashBuiltinToolWorkIntent`: the executor
+      // stashes the Work intent keyed by toolCallId during execution.
+      invokeExecutorMock.mockImplementation(async (_id, _api, _params, ctx: any) => {
+        stashWorkIntent(ctx.toolCallId, intent);
+        return { content: 'task created', success: true };
+      });
+      const { action, sendToolResult } = setup();
+
+      await action.internal_executeClientTool(makeData(), { operationId: 'op-1' });
+
+      expect(sendToolResult).toHaveBeenCalledWith(
+        expect.objectContaining({
+          content: 'task created',
+          success: true,
+          toolCallId: 'call_1',
+          workRegistration: intent,
+        }),
+      );
+      // The action drained the intent — nothing left in the module-level stash.
+      expect(takeWorkIntent('call_1')).toBeUndefined();
+    });
+
+    it('frees a stashed Work intent via the finally leak guard when the executor throws', async () => {
+      const intent = { action: 'create', targets: [{ taskId: 't-2' }], type: 'task' } as const;
+      hasExecutorMock.mockReturnValue(true);
+      invokeExecutorMock.mockImplementation(async () => {
+        // Stash before throwing, as a mid-execution side-effect would; the normal
+        // drain point is never reached on the throw path.
+        stashWorkIntent('call_1', intent);
+        throw new Error('ipc died');
+      });
+      const { action, sendToolResult } = setup();
+
+      await action.internal_executeClientTool(makeData(), { operationId: 'op-1' });
+
+      // Error result is sent (no workRegistration relayed on the throw path).
+      expect(sendToolResult).toHaveBeenCalledWith(
+        expect.objectContaining({
+          error: expect.objectContaining({ type: 'client_tool_execution_error' }),
+          success: false,
+          toolCallId: 'call_1',
+        }),
+      );
+      // Leak guard in the finally block drained the orphaned entry.
+      expect(takeWorkIntent('call_1')).toBeUndefined();
     });
   });
 

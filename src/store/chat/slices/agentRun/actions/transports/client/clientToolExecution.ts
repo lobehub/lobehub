@@ -7,6 +7,7 @@ import { mcpService } from '@/services/mcp';
 import { type ChatStore } from '@/store/chat/store';
 import { hasExecutor, invokeExecutor } from '@/store/tool/slices/builtin/executors';
 import { type StoreSetter } from '@/store/types';
+import { takeWorkIntent } from '@/utils/clientWorkIntentStash';
 import { safeParseJSON } from '@/utils/safeParseJSON';
 
 const log = debug('lobe-store:client-tool-execution');
@@ -196,6 +197,14 @@ export class ClientToolExecutionActionImpl {
           toolCallId,
         });
 
+        // Drain the Work-registration intent the builtin executor stashed during
+        // `invokeExecutor` and relay it on the result — mirrors
+        // `ClientToolTransport.run`, which attaches the drained intent to the
+        // result whenever one exists (success OR failure). The server registers
+        // the Work version from it once cumulative cost is known; the tool
+        // message persist path never writes this field.
+        const workRegistration = takeWorkIntent(toolCallId);
+
         if (result.error) {
           send({
             content: result.content ?? result.error.message ?? null,
@@ -203,6 +212,7 @@ export class ClientToolExecutionActionImpl {
             state: result.state,
             success: false,
             toolCallId,
+            workRegistration,
           });
         } else {
           send({
@@ -210,6 +220,7 @@ export class ClientToolExecutionActionImpl {
             state: result.state,
             success: !!result.success,
             toolCallId,
+            workRegistration,
           });
         }
         return;
@@ -318,6 +329,10 @@ export class ClientToolExecutionActionImpl {
           toolCallId,
         });
       }
+      // Leak guard: free any Work intent still stashed for this toolCallId (e.g.
+      // the executor threw before the normal drain). Take-on-read is idempotent,
+      // so a double take after a successful drain is a harmless no-op.
+      takeWorkIntent(toolCallId);
       this.#setPending(toolCallId, false);
     }
   };
