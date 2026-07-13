@@ -37,6 +37,7 @@ const {
     setFullScreen: vi.fn(),
     setPosition: vi.fn(),
     setTitleBarOverlay: vi.fn(),
+    setVibrancy: vi.fn(),
     show: vi.fn(),
     unmaximize: vi.fn(),
     webContents: {
@@ -563,6 +564,27 @@ describe('Browser', () => {
         expect(mockBrowserWindow.webContents.send).toHaveBeenCalledWith('windowFullscreenChanged', {
           isFullScreen: false,
         });
+      });
+
+      it('should disable macOS vibrancy in fullscreen and restore it after leaving', () => {
+        mockEnv.isMac = true;
+        mockEnv.isWindows = false;
+        mockBrowserWindow.on.mockClear();
+
+        new Browser(defaultOptions, mockApp);
+
+        const enterHandler = mockBrowserWindow.on.mock.calls.find(
+          (call) => call[0] === 'enter-full-screen',
+        )?.[1];
+        const leaveHandler = mockBrowserWindow.on.mock.calls.find(
+          (call) => call[0] === 'leave-full-screen',
+        )?.[1];
+
+        enterHandler();
+        expect(mockBrowserWindow.setVibrancy).toHaveBeenLastCalledWith(null);
+
+        leaveHandler();
+        expect(mockBrowserWindow.setVibrancy).toHaveBeenLastCalledWith('sidebar');
       });
     });
 

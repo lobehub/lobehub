@@ -334,10 +334,12 @@ export default class Browser {
     logger.debug(`[${this.identifier}] Setting up fullscreen event listeners.`);
 
     browserWindow.on('enter-full-screen', () => {
+      this.themeManager.handleFullscreenChange(true);
       this.broadcast('windowFullscreenChanged', { isFullScreen: true });
     });
 
     browserWindow.on('leave-full-screen', () => {
+      this.themeManager.handleFullscreenChange(false);
       this.broadcast('windowFullscreenChanged', { isFullScreen: false });
     });
   }
