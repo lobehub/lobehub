@@ -4,11 +4,12 @@ import {
 } from '@lobechat/heterogeneous-agents';
 import { type ModelPerformance, type ModelUsage } from '@lobechat/types';
 import { ModelIcon } from '@lobehub/icons';
-import { Center, Flexbox, Icon } from '@lobehub/ui';
+import { Center, Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { CircleDollarSignIcon } from 'lucide-react';
 import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
@@ -16,6 +17,7 @@ import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { isDev } from '@/utils/env';
+import { formatNumber } from '@/utils/format';
 
 import { contextSelectors, useConversationStore } from '../../../../store';
 import TokenDetail from './UsageDetail';
@@ -41,6 +43,7 @@ interface UsageProps {
 }
 
 const Usage = memo<UsageProps>(({ model, usage, performance, provider }) => {
+  const { t } = useTranslation('chat');
   const onboardingAgentId = useAgentStore(builtinAgentSelectors.webOnboardingAgentId);
   const conversationAgentId = useConversationStore(contextSelectors.agentId);
   // Credit mode already expresses cost in credits — showing USD alongside would conflict.
@@ -76,6 +79,25 @@ const Usage = memo<UsageProps>(({ model, usage, performance, provider }) => {
       </Center>
 
       <Center horizontal gap={8}>
+        {/* Spelled-out labels rather than icons: at 12px a gauge and a timer glyph
+            are indistinguishable from each other and from the coin, so the reader
+            can't tell which number is which without hovering. */}
+        {!!performance?.tps && (
+          <Tooltip title={t('messages.tokenDetails.speed.tps.tooltip')}>
+            <Center horizontal gap={4}>
+              <span>{t('messages.tokenDetails.speed.tps.title')}</span>
+              <span>{formatNumber(performance.tps, 1)}</span>
+            </Center>
+          </Tooltip>
+        )}
+        {!!performance?.ttft && (
+          <Tooltip title={t('messages.tokenDetails.speed.ttft.tooltip')}>
+            <Center horizontal gap={4}>
+              <span>{t('messages.tokenDetails.speed.ttft.title')}</span>
+              <span>{formatNumber(performance.ttft / 1000, 1)}s</span>
+            </Center>
+          </Tooltip>
+        )}
         {!!usage?.totalTokens && (
           <TokenDetail
             model={model as string}
