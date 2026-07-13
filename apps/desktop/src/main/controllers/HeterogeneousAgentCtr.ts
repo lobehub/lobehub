@@ -23,19 +23,17 @@ import {
 import type { AskUserBridge } from '@lobechat/heterogeneous-agents/askUser';
 import type { McpToolResult } from '@lobechat/heterogeneous-agents/builtinMcp';
 import { LobeBuiltinMcpServer } from '@lobechat/heterogeneous-agents/builtinMcp';
-import type {
-  AgentContentBlock,
-  HeteroExecImageRef,
+import type { HeteroExecImageRef } from '@lobechat/heterogeneous-agents/protocol';
+import {
+  buildHeteroExecStdinPayload,
+  buildHeterogeneousPrompt,
 } from '@lobechat/heterogeneous-agents/protocol';
-import { buildHeteroExecStdinPayload } from '@lobechat/heterogeneous-agents/protocol';
 import type { AgentStreamEvent, UsageData } from '@lobechat/heterogeneous-agents/spawn';
 import {
   AgentStreamPipeline,
   buildAgentInput,
   ClaudeAgentSdkSession,
   createFileStoreImageUploader,
-  materializeImageToPath,
-  normalizeImage,
   readCodexSessionModel,
   resolveCliSpawnPlan,
   resolveCodexInitialModel,
@@ -916,82 +914,20 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   }
 
   /**
-   * Convert a desktop image attachment list into shared content blocks. Each
-   * attachment's id is preserved as the cache key so repeated prompts hit the
-   * same on-disk entries.
-   */
-  private toImageContentBlocks(
-    imageList: HeterogeneousAgentImageAttachment[],
-  ): AgentContentBlock[] {
-    return imageList.map((image) => ({
-      source: { id: image.id, type: 'url', url: image.url },
-      type: 'image',
-    }));
-  }
-
-  /**
    * Build a Claude Code stream-json user message with text + base64 images.
-   * Delegates to the shared `buildAgentInput`; the desktop wrapper exists only
-   * to preserve the helper signature consumed by existing drivers.
+   * Semantic context is assembled by the shared prompt engine before the
+   * provider-specific serializer runs.
    */
   private async buildStreamJsonInput(
     prompt: string,
     imageList: HeterogeneousAgentImageAttachment[] = [],
     systemContext?: string,
   ): Promise<string> {
-    const blocks: AgentContentBlock[] = [];
-    if (systemContext && systemContext.length > 0)
-      blocks.push({ text: systemContext, type: 'text' });
-    if (prompt && prompt.length > 0) blocks.push({ text: prompt, type: 'text' });
-    blocks.push(...this.toImageContentBlocks(imageList));
-
-    const plan = await buildAgentInput('claude-code', blocks, { cacheDir: this.fileCacheDir });
+    const promptInput = buildHeterogeneousPrompt({ imageList, prompt, systemContext });
+    const plan = await buildAgentInput('claude-code', promptInput, {
+      cacheDir: this.fileCacheDir,
+    });
     return plan.stdin;
-  }
-
-  /**
-   * Materialize image attachments into stable filesystem paths for path-mode
-   * agents (Codex `--image <file>`). Fails the prompt if any image cannot be
-   * fetched / decoded — partially-attached prompts confuse the agent more
-   * than they help.
-   */
-  private async resolveCliImagePaths(
-    imageList: HeterogeneousAgentImageAttachment[] = [],
-  ): Promise<string[]> {
-    if (imageList.length === 0) return [];
-
-    const cacheDir = this.fileCacheDir;
-    const results = await Promise.allSettled(
-      imageList.map(async (image) => {
-        const normalized = await normalizeImage(
-          { id: image.id, type: 'url', url: image.url },
-          { cacheDir },
-        );
-        return materializeImageToPath(normalized, cacheDir);
-      }),
-    );
-
-    const imagePaths: string[] = [];
-    const failures: string[] = [];
-
-    for (const [index, result] of results.entries()) {
-      const imageId = imageList[index]?.id ?? `image-${index + 1}`;
-
-      if (result.status === 'fulfilled') {
-        imagePaths.push(result.value);
-        continue;
-      }
-
-      const message = this.getErrorMessage(result.reason) || 'Unknown error';
-      logger.error(`Failed to materialize image ${imageId} for CLI:`, result.reason);
-      failures.push(`${imageId}: ${message}`);
-    }
-
-    if (failures.length > 0) {
-      throw new Error(`Failed to attach image(s) to CLI: ${failures.join('; ')}`);
-    }
-
-    return imagePaths;
   }
 
   // ─── IPC methods ───
@@ -1068,18 +1004,29 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     let spawnEnv: NodeJS.ProcessEnv;
     try {
       const driver = getHeterogeneousAgentDriver(session.agentType);
+      const promptInput = buildHeterogeneousPrompt({
+        imageList: params.imageList,
+        prompt: params.prompt,
+        systemContext: params.systemContext,
+      });
       spawnPlan = await driver.buildSpawnPlan({
         args: session.args,
         helpers: {
-          buildClaudeStreamJsonInput: (prompt, imageList) =>
-            this.buildStreamJsonInput(prompt, imageList, params.systemContext),
-          resolveCliImagePaths: (imageList) => this.resolveCliImagePaths(imageList),
+          buildAgentInput: async (agentType, input) => {
+            try {
+              return await buildAgentInput(agentType, input, { cacheDir: this.fileCacheDir });
+            } catch (error) {
+              logger.error('Failed to prepare heterogeneous agent input:', error);
+              throw new Error(
+                `Failed to attach image(s) to CLI: ${this.getErrorMessage(error) || 'Unknown error'}`,
+                { cause: error },
+              );
+            }
+          },
         },
-        imageList: params.imageList ?? [],
         mcpConfigPath: intervention?.tmpConfigPath,
-        prompt: params.prompt,
+        promptInput,
         resumeSessionId: session.agentSessionId,
-        systemContext: params.systemContext,
       });
 
       // Fall back to the user's Desktop so the process never inherits

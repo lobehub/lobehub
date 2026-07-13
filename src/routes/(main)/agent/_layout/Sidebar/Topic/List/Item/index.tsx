@@ -9,7 +9,7 @@ import { Flexbox, Icon, Popover, Skeleton, Tag, Text, Tooltip } from '@lobehub/u
 import { createStaticStyles, cssVar, keyframes, useTheme } from 'antd-style';
 import dayjs from 'dayjs';
 import { HashIcon, MessageSquareDashed } from 'lucide-react';
-import type { CSSProperties } from 'react';
+import type { CSSProperties, DragEvent } from 'react';
 import { memo, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -20,6 +20,7 @@ import RingLoadingIcon from '@/components/RingLoading';
 import { isDesktop } from '@/const/version';
 import DirIcon from '@/features/ChatInput/ControlBar/DirIcon';
 import { useHasDraft } from '@/features/ChatInput/draftStorage';
+import { writeTopicDragData } from '@/features/ChatInput/InputEditor/ReferTopic/topicDragData';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { getWorkingDirectoryName } from '@/helpers/workingDirectoryPath';
@@ -249,6 +250,15 @@ const TopicItem = memo<TopicItemProps>(
 
     const shouldShowThreadList = Boolean(id && id === urlTopicId);
 
+    const handleDragStart = useCallback(
+      (event: DragEvent) => {
+        if (!id) return;
+        cancelPendingSingleClick();
+        writeTopicDragData(event.dataTransfer, { topicId: id, topicTitle: title });
+      },
+      [id, title],
+    );
+
     const toggleEditing = useCallback(
       (visible?: boolean) => {
         useChatStore.setState({ topicRenamingId: visible && id ? id : '' });
@@ -395,6 +405,7 @@ const TopicItem = memo<TopicItemProps>(
         contextMenuItems={dropdownMenu}
         description={workingDirectoryNode}
         disabled={editing}
+        draggable={!editing}
         extra={<RunningElapsedTime agentId={activeAgentId} topicId={id} />}
         href={href}
         slots={{ titlePrefix: draftPrefix }}
@@ -484,6 +495,7 @@ const TopicItem = memo<TopicItemProps>(
         })()}
         onClick={handleClick}
         onDoubleClick={() => void handleDoubleClick()}
+        onDragStart={handleDragStart}
       />
     );
 

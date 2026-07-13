@@ -94,11 +94,18 @@ const resolveCodexImagePaths = async (
     options.cacheDir ||
     path.join(tmpdir(), 'lobehub-hetero-agent-images');
 
-  const normalized: NormalizedImage[] = await Promise.all(
-    imageBlocks.map((b) => normalizeImage(b.source, options)),
+  const results = await Promise.allSettled(
+    imageBlocks.map(async (block) => {
+      const image: NormalizedImage = await normalizeImage(block.source, options);
+      return materializeImageToPath(image, materializeDir);
+    }),
   );
+  const failure = results.find(
+    (result): result is PromiseRejectedResult => result.status === 'rejected',
+  );
+  if (failure) throw failure.reason;
 
-  return Promise.all(normalized.map((img) => materializeImageToPath(img, materializeDir)));
+  return results.map((result) => (result as PromiseFulfilledResult<string>).value);
 };
 
 const buildCodexInput = async (
