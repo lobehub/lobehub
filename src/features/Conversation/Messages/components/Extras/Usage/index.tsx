@@ -79,25 +79,6 @@ const Usage = memo<UsageProps>(({ model, usage, performance, provider }) => {
       </Center>
 
       <Center horizontal gap={8}>
-        {/* Spelled-out labels rather than icons: at 12px a gauge and a timer glyph
-            are indistinguishable from each other and from the coin, so the reader
-            can't tell which number is which without hovering. */}
-        {!!performance?.tps && (
-          <Tooltip title={t('messages.tokenDetails.speed.tps.tooltip')}>
-            <Center horizontal gap={4}>
-              <span>{t('messages.tokenDetails.speed.tps.title')}</span>
-              <span>{formatNumber(performance.tps, 1)}</span>
-            </Center>
-          </Tooltip>
-        )}
-        {!!performance?.ttft && (
-          <Tooltip title={t('messages.tokenDetails.speed.ttft.tooltip')}>
-            <Center horizontal gap={4}>
-              <span>{t('messages.tokenDetails.speed.ttft.title')}</span>
-              <span>{formatNumber(performance.ttft / 1000, 1)}s</span>
-            </Center>
-          </Tooltip>
-        )}
         {!!usage?.totalTokens && (
           <TokenDetail
             model={model as string}
@@ -105,6 +86,30 @@ const Usage = memo<UsageProps>(({ model, usage, performance, provider }) => {
             provider={provider}
             usage={usage}
           />
+        )}
+        {/* A spelled-out "TPS" label rather than an icon: at 12px a gauge glyph is
+            indistinguishable from the neighbouring coin, so the reader can't tell
+            what the number measures. TTFT rides in the hover instead of taking a
+            second inline slot — it's a diagnostic, not an at-a-glance metric. */}
+        {!!performance?.tps && (
+          <Tooltip
+            title={
+              <Flexbox gap={6}>
+                <span>{t('messages.tokenDetails.speed.tps.tooltip')}</span>
+                {!!performance.ttft && (
+                  <Flexbox horizontal gap={12} justify={'space-between'}>
+                    <span>{t('messages.tokenDetails.speed.ttft.title')}</span>
+                    <span>{formatNumber(performance.ttft / 1000, 2)}s</span>
+                  </Flexbox>
+                )}
+              </Flexbox>
+            }
+          >
+            <Center horizontal gap={4}>
+              <span>{t('messages.tokenDetails.speed.tps.title')}</span>
+              <span>{formatNumber(performance.tps, 1)}</span>
+            </Center>
+          </Tooltip>
         )}
         {!isShowCredit && !!usage?.cost && usage.cost >= MIN_DISPLAY_COST && (
           <Center horizontal gap={2}>
