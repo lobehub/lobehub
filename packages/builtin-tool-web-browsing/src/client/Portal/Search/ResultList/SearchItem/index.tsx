@@ -1,4 +1,5 @@
 import { isDesktop } from '@lobechat/const';
+import { RENDERER_HANDLED_LINK_ATTR } from '@lobechat/desktop-bridge';
 import type { UniformSearchResult } from '@lobechat/types';
 import { Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
@@ -65,19 +66,23 @@ const SearchItem = memo<SearchResultProps>((props) => {
   const openInBrowserTab = useGlobalStore((s) => s.openInBrowserTab);
   const enableInAppBrowser = useUserStore(labPreferSelectors.enableInAppBrowser);
 
+  // Only claim the click when this onClick will actually handle it. Otherwise the
+  // anchor's default behavior — and the desktop preload's external-link branch —
+  // opens the system browser.
+  const handlesClick = isDesktop && enableInAppBrowser && !!url;
+
   const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
-    // Without the in-app browser lab flag the anchor's default behavior
-    // opens the system browser.
-    if (!isDesktop || !enableInAppBrowser || !url) return;
+    if (!handlesClick) return;
 
     event.preventDefault();
-    openInBrowserTab(url);
+    openInBrowserTab(url!);
   };
 
   if (category === 'videos') return <Video {...props} />;
 
   return (
     <a
+      {...(handlesClick ? { [RENDERER_HANDLED_LINK_ATTR]: 'true' } : {})}
       className={styles.container}
       href={url!}
       rel="noreferrer"

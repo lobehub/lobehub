@@ -4,6 +4,7 @@ import {
   type ComposioAppType,
   getLobehubSkillProviderById,
   type LobehubSkillProviderType,
+  OFFICIAL_SITE,
 } from '@lobechat/const';
 import { type DiscoverPluginDetail, type PluginSource } from '@lobechat/types';
 import { Avatar, Block, Flexbox, Icon, Image, Skeleton, Tag, Text } from '@lobehub/ui';
@@ -124,7 +125,7 @@ const PluginItem = memo<PluginItemProps>(({ identifier }) => {
         category: undefined,
         createdAt: '',
         description: lobehubSkill.description,
-        homepage: lobehubSkill.authorUrl || 'https://lobehub.com',
+        homepage: lobehubSkill.authorUrl || OFFICIAL_SITE,
         identifier: lobehubSkill.id,
         manifest: undefined,
         related: [],
@@ -143,7 +144,7 @@ const PluginItem = memo<PluginItemProps>(({ identifier }) => {
         category: undefined,
         createdAt: '',
         description: builtinTool.description || '',
-        homepage: 'https://lobehub.com',
+        homepage: OFFICIAL_SITE,
         identifier: builtinTool.identifier,
         manifest: undefined,
         related: [],

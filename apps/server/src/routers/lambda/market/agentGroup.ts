@@ -1,3 +1,4 @@
+import { discoverUrl } from '@lobechat/const';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { customAlphabet } from 'nanoid/non-secure';
@@ -587,7 +588,7 @@ export const agentGroupRouter = router({
           category: group.category,
           createdAt: group.createdAt,
           description: group.description || '',
-          homepage: `https://lobehub.com/discover/group_agent/${group.identifier}`,
+          homepage: discoverUrl('group_agent', group.identifier),
           identifier: group.identifier,
           installCount: group.installCount || 0,
           isFeatured: group.isFeatured || false,

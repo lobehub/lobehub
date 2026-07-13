@@ -47,17 +47,15 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
   address: css`
-    position: absolute;
-    inset-inline-start: 50%;
-    transform: translateX(-50%);
-    width: min(48%, 520px);
+    flex: 1;
+    min-width: 0;
+    max-width: 720px;
 
-    input {
-      text-align: center;
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      transition: none;
+    /* The filled variant keeps its tinted fill while focused; lift it to the
+       container surface so the focus ring reads as an editable field. Doubling
+       the class outranks antd's own :focus rule. */
+    &&:focus {
+      background: ${cssVar.colorBgContainer};
     }
   `,
   importBanner: css`
@@ -71,6 +69,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     background: ${cssVar.colorBgContainer};
   `,
   importCopy: css`
+    flex: 1;
     min-width: 0;
   `,
   toolbarActions: css`
@@ -251,9 +250,8 @@ const BrowserPane = memo<BrowserPaneProps>(({ sessionId }) => {
         <Input
           className={styles.address}
           placeholder={t('workingPanel.browser.addressPlaceholder')}
-          size={'small'}
           value={address}
-          variant={'borderless'}
+          variant={'filled'}
           onBlur={() => setIsEditing(false)}
           onFocus={() => setIsEditing(true)}
           onChange={(event) => {

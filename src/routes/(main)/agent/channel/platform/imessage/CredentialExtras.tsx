@@ -2,15 +2,16 @@
 
 import { isDesktop } from '@lobechat/const';
 import type { ImessageBridgeConfig, ImessageBridgeStatus } from '@lobechat/electron-client-ipc';
-import { Flexbox, FormItem, Tag, Text } from '@lobehub/ui';
+import { Flexbox, FormItem, Icon, Tag, Text } from '@lobehub/ui';
 import { Button, Switch } from '@lobehub/ui/base-ui';
 import { App, Form as AntdForm } from 'antd';
 import { createStaticStyles } from 'antd-style';
-import { Info, Wrench } from 'lucide-react';
+import { KeyRound, Link2, Wrench } from 'lucide-react';
 import { memo, use, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { FormInput, FormPassword } from '@/components/FormInput';
+import InfoTooltip from '@/components/InfoTooltip';
 import { useClientDataSWR } from '@/libs/swr';
 import { imessageKeys } from '@/libs/swr/keys';
 import { gatewayConnectionService } from '@/services/electron/gatewayConnection';
@@ -27,6 +28,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     background: ${cssVar.colorBgContainer};
   `,
+  fieldIcon: css`
+    flex: none;
+    color: ${cssVar.colorTextSecondary};
+  `,
   headerIcon: css`
     overflow: hidden;
     flex: none;
@@ -41,16 +46,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       height: 100%;
       object-fit: contain;
     }
-  `,
-  infoBox: css`
-    padding-block: 8px;
-    padding-inline: 12px;
-    border-radius: ${cssVar.borderRadius};
-
-    line-height: 1.6;
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillQuaternary};
   `,
   statusCard: css`
     padding: 12px;
@@ -261,35 +256,40 @@ const CredentialExtras = memo(() => {
 
       {/* Middle: the credential fields the operator fills in. */}
       <FormItem
-        desc={t('channel.imessage.blueBubblesServerUrlHint')}
-        label={t('channel.imessage.blueBubblesServerUrl')}
+        avatar={<Icon className={styles.fieldIcon} icon={Link2} size={20} />}
         minWidth={'max(50%, 360px)'}
-        variant="borderless"
-      >
-        <Flexbox gap={8}>
-          <FormInput
-            placeholder="http://127.0.0.1:1234"
-            value={serverUrlInput}
-            onChange={(value) => {
-              setServerUrlInput(value);
-              setServerUrlDirty(true);
-              setTestStatus('idle');
-            }}
-          />
-          <Flexbox horizontal align="flex-start" className={styles.infoBox} gap={8}>
-            <Info size={14} style={{ flex: 'none', marginBlockStart: 3 }} />
-            <Text fontSize={12} type="secondary">
-              {t('channel.imessage.blueBubblesServerUrlTip')}
-            </Text>
+        variant="outlined"
+        label={
+          <Flexbox horizontal align="center" gap={8}>
+            {t('channel.imessage.blueBubblesServerUrl')}
+            <InfoTooltip
+              size={'small'}
+              title={`${t('channel.imessage.blueBubblesServerUrlHint')} ${t('channel.imessage.blueBubblesServerUrlTip')}`}
+            />
           </Flexbox>
-        </Flexbox>
+        }
+      >
+        <FormInput
+          placeholder="http://127.0.0.1:1234"
+          value={serverUrlInput}
+          onChange={(value) => {
+            setServerUrlInput(value);
+            setServerUrlDirty(true);
+            setTestStatus('idle');
+          }}
+        />
       </FormItem>
       <FormItem
         divider
-        desc={t('channel.imessage.blueBubblesPasswordHint')}
-        label={t('channel.imessage.blueBubblesPassword')}
+        avatar={<Icon className={styles.fieldIcon} icon={KeyRound} size={20} />}
         minWidth={'max(50%, 360px)'}
-        variant="borderless"
+        variant="outlined"
+        label={
+          <Flexbox horizontal align="center" gap={8}>
+            {t('channel.imessage.blueBubblesPassword')}
+            <InfoTooltip size={'small'} title={t('channel.imessage.blueBubblesPasswordHint')} />
+          </Flexbox>
+        }
       >
         <FormPassword
           autoComplete="new-password"

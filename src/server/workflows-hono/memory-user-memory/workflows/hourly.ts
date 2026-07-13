@@ -13,7 +13,12 @@ import {
 } from '@/server/services/memory/userMemory/extract';
 
 import { checkGuard, ensureWorkflowStarted } from './runGuard';
-import { serializeWorkflowCursor } from './utils';
+import {
+  appendHourlyWorkflowRunId,
+  isHourlyMemoryExtractionCancelled,
+  markHourlyMemoryExtractionSuccess,
+  serializeWorkflowCursor,
+} from './utils';
 
 const USER_PAGE_SIZE = 200;
 const USER_BATCH_SIZE = 20;
@@ -28,7 +33,7 @@ export const hourlyWorkflowHandler = async (
 ) => {
   await ensureWorkflowStarted(context, WORKFLOW_PATH);
 
-  const { cursor, dryRun } = context.requestPayload || {};
+  const { cursor, dryRun, hourlyTaskId } = context.requestPayload || {};
 
   // NOTICE: A run guard match must terminate the workflow by returning, never by throwing.
   // Throwing before the first step makes Upstash re-enqueue the run, turning a "disable" guard
@@ -41,6 +46,55 @@ export const hourlyWorkflowHandler = async (
   const baseUrl = resolveBaseUrl();
   if (!baseUrl) {
     throw new Error('Missing baseUrl for hourly memory extraction workflow');
+  }
+
+  if (!hourlyTaskId) {
+    const stepName = 'memory:user-memory:hourly:create-tracked-task';
+    const guard = await checkGuard(context, WORKFLOW_PATH, {
+      response: { processedUsers: 0 },
+      stepName,
+    });
+    if (!guard.result) return guard.response;
+
+    const result = await context.run(stepName, () =>
+      MemoryExtractionWorkflowService.triggerHourlyTracked(
+        {
+          baseUrl,
+          cursor,
+          dryRun,
+        },
+        {
+          entryWorkflowRunId: context.workflowRunId,
+          extraHeaders: upstashWorkflowExtraHeaders,
+        },
+      ),
+    );
+
+    return {
+      dryRun: !!dryRun,
+      message: 'Tracked hourly memory extraction task scheduled.',
+      scheduled: true,
+      taskId: result.taskId,
+      workflowRunId: result.workflowRunId,
+    };
+  }
+
+  const cancellationStepName = 'memory:user-memory:hourly:cancel-check';
+  const cancellationGuard = await checkGuard(context, WORKFLOW_PATH, {
+    response: { processedUsers: 0 },
+    stepName: cancellationStepName,
+  });
+  if (!cancellationGuard.result) return cancellationGuard.response;
+
+  const cancelled = await context.run(cancellationStepName, () =>
+    isHourlyMemoryExtractionCancelled(hourlyTaskId),
+  );
+  if (cancelled) {
+    return {
+      message: 'Hourly memory extraction task cancellation requested, skip hourly fan-out.',
+      processedUsers: 0,
+      skipped: true,
+    };
   }
 
   const parsedCursor = cursor
@@ -64,6 +118,12 @@ export const hourlyWorkflowHandler = async (
 
   const userIds = userBatch.ids;
   if (userIds.length === 0) {
+    await markHourlyMemoryExtractionSuccess(hourlyTaskId, {
+      processedUsers: 0,
+      scheduledBatches: 0,
+      scheduledChildRuns: 0,
+    });
+
     return { message: 'No eligible users for hourly memory extraction.', processedUsers: 0 };
   }
 
@@ -74,8 +134,8 @@ export const hourlyWorkflowHandler = async (
       )
     : undefined;
 
+  const batches = dryRun ? [] : chunk(userIds, USER_BATCH_SIZE);
   if (!dryRun) {
-    const batches = chunk(userIds, USER_BATCH_SIZE);
     for (const [index, batchUserIds] of batches.entries()) {
       const stepName = `memory:user-memory:hourly:trigger-users:${index}`;
       const guard = await checkGuard(context, WORKFLOW_PATH, {
@@ -84,11 +144,12 @@ export const hourlyWorkflowHandler = async (
       });
       if (!guard.result) return guard.response;
 
-      await context.run(stepName, () =>
+      const result = await context.run(stepName, () =>
         MemoryExtractionWorkflowService.triggerProcessUsers(
           buildWorkflowPayloadInput(
             normalizeMemoryExtractionPayload({
               baseUrl,
+              hourlyTaskId,
               mode: 'workflow',
               sources: [MemorySourceType.ChatTopic],
               userIds: batchUserIds,
@@ -97,10 +158,29 @@ export const hourlyWorkflowHandler = async (
           { extraHeaders: upstashWorkflowExtraHeaders },
         ),
       );
+      await appendHourlyWorkflowRunId(hourlyTaskId, result.workflowRunId);
     }
   }
 
   if (nextCursor) {
+    const cancellationStepName = 'memory:user-memory:hourly:cancel-check:next-page';
+    const cancellationGuard = await checkGuard(context, WORKFLOW_PATH, {
+      response: { processedUsers: 0 },
+      stepName: cancellationStepName,
+    });
+    if (!cancellationGuard.result) return cancellationGuard.response;
+
+    const cancelled = await context.run(cancellationStepName, () =>
+      isHourlyMemoryExtractionCancelled(hourlyTaskId),
+    );
+    if (cancelled) {
+      return {
+        message: 'Hourly memory extraction task cancellation requested, skip next hourly page.',
+        processedUsers: userIds.length,
+        skipped: true,
+      };
+    }
+
     const stepName = 'memory:user-memory:hourly:schedule-next-page';
     const guard = await checkGuard(context, WORKFLOW_PATH, {
       response: { processedUsers: 0 },
@@ -108,23 +188,33 @@ export const hourlyWorkflowHandler = async (
     });
     if (!guard.result) return guard.response;
 
-    await context.run(stepName, () =>
+    const result = await context.run(stepName, () =>
       MemoryExtractionWorkflowService.triggerHourly(
         {
           baseUrl,
           cursor: nextCursor,
           dryRun,
+          hourlyTaskId,
         },
         { extraHeaders: upstashWorkflowExtraHeaders },
       ),
     );
+    await appendHourlyWorkflowRunId(hourlyTaskId, result.workflowRunId);
+  }
+
+  if (!nextCursor) {
+    await markHourlyMemoryExtractionSuccess(hourlyTaskId, {
+      processedUsers: userIds.length,
+      scheduledBatches: batches.length,
+      scheduledChildRuns: batches.length,
+    });
   }
 
   return {
     dryRun: !!dryRun,
     hasNextPage: !!nextCursor,
     processedUsers: userIds.length,
-    scheduledBatches: dryRun ? 0 : chunk(userIds, USER_BATCH_SIZE).length,
+    scheduledBatches: batches.length,
   };
 };
 

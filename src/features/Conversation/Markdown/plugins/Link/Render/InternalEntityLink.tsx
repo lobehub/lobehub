@@ -1,5 +1,7 @@
 'use client';
 
+import { isDesktop } from '@lobechat/const';
+import { RENDERER_HANDLED_LINK_ATTR } from '@lobechat/desktop-bridge';
 import { Icon } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { BotIcon, CheckCircleIcon, CheckSquareIcon, FileTextIcon } from 'lucide-react';
@@ -80,9 +82,13 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, 
 
   const handleClick = useCallback(
     async (event: MouseEvent<HTMLAnchorElement>) => {
-      if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
-        return;
-      }
+      if (event.button !== 0) return;
+
+      // On the web a modifier-click means "open in a new tab", so let the browser
+      // handle it. Desktop has no tabs: falling through would hand the OS an
+      // `app://renderer/...` URL, which silently opens nothing.
+      const modifierClick = event.metaKey || event.ctrlKey || event.shiftKey || event.altKey;
+      if (!isDesktop && modifierClick) return;
 
       event.preventDefault();
 
@@ -148,6 +154,7 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, 
 
   const link = (
     <a
+      {...{ [RENDERER_HANDLED_LINK_ATTR]: 'true' }}
       className={styles.link}
       href={href}
       rel="noopener noreferrer"

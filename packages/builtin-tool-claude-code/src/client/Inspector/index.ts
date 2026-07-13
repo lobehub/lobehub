@@ -10,6 +10,7 @@ import type { BuiltinInspector } from '@lobechat/types';
 import { ClaudeCodeApiName } from '../../types';
 import { AgentInspector } from './Agent';
 import { AskUserQuestionInspector } from './AskUserQuestion';
+import { BrowserMcpInspectors } from './BrowserMcp';
 import { EditInspector } from './Edit';
 import { LinearMcpInspectors } from './LinearMcp';
 import { MonitorInspector } from './Monitor';
@@ -71,12 +72,14 @@ const FixedClaudeCodeInspectors = {
   [ClaudeCodeApiName.WebFetch]: WebFetchInspector,
   [ClaudeCodeApiName.WebSearch]: WebSearchInspector,
   [ClaudeCodeApiName.Write]: WriteInspector,
+  ...BrowserMcpInspectors,
   ...LinearMcpInspectors,
 };
 
 export const ClaudeCodeInspectors = new Proxy(FixedClaudeCodeInspectors, {
   get: (target, prop) => {
     if (typeof prop !== 'string') return undefined;
-    return prop in target ? target[prop as keyof typeof target] : LinearMcpInspectors[prop];
+    if (prop in target) return target[prop as keyof typeof target];
+    return BrowserMcpInspectors[prop] ?? LinearMcpInspectors[prop];
   },
 }) as unknown as Record<string, BuiltinInspector>;

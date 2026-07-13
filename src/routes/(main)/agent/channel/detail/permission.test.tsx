@@ -1,16 +1,16 @@
 /**
  * @vitest-environment happy-dom
  */
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { Form } from 'antd';
 import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { SerializedPlatformDefinition } from '@/server/services/bot/platforms/types';
 
+import Header from '../Header';
 import Body from './Body';
 import Footer from './Footer';
-import Header from './Header';
 import PlatformDetail from './index';
 
 const mocks = vi.hoisted(() => ({
@@ -24,6 +24,11 @@ vi.mock('react-i18next', () => ({
     t: (key: string, options?: Record<string, string>) =>
       options?.name ? `${key}:${options.name}` : key,
   }),
+}));
+
+vi.mock('react-router', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  Link: ({ children }: { children?: ReactNode }) => <a>{children}</a>,
 }));
 
 vi.mock('antd', async (importOriginal) => {
@@ -59,6 +64,33 @@ vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
   useWorkspaceAwareNavigate: () => mocks.navigate,
 }));
 
+vi.mock('@/features/NavHeader', () => ({
+  default: ({
+    children,
+    left,
+    right,
+  }: {
+    children?: ReactNode;
+    left?: ReactNode;
+    right?: ReactNode;
+  }) => (
+    <header>
+      {left}
+      {children}
+      {right}
+    </header>
+  ),
+}));
+
+vi.mock('@/features/AgentBreadcrumb', () => ({
+  default: ({ extraItems, title }: { extraItems?: ReactNode[]; title?: ReactNode }) => (
+    <nav>
+      {title}
+      {extraItems}
+    </nav>
+  ),
+}));
+
 vi.mock('@/services/agentBotProvider', () => ({
   agentBotProviderService: {
     getRuntimeStatus: vi.fn(async () => ({ status: 'connected' })),
@@ -72,6 +104,7 @@ vi.mock('@/store/agent', () => ({
     selector({
       connectBot: vi.fn(),
       createBotProvider: vi.fn(),
+      deleteAllBotProviders: vi.fn(),
       deleteBotProvider: vi.fn(),
       refreshBotRuntimeStatus: vi.fn(),
       testConnection: vi.fn(),
@@ -113,29 +146,46 @@ vi.mock('@lobehub/ui', () => ({
       <div data-testid="channel-paid-alert-description">{description}</div>
     </div>
   ),
+  Block: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   Flexbox: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => (
     <div {...props}>{children}</div>
   ),
   Form: ({
     children,
     form,
+    onValuesChange,
   }: {
     children?: ReactNode;
     form?: ReturnType<typeof Form.useForm>[0];
-  }) => <Form form={form}>{children}</Form>,
+    onValuesChange?: (changedValues: unknown, values: unknown) => void;
+  }) => (
+    <Form form={form} onValuesChange={onValuesChange}>
+      {children}
+    </Form>
+  ),
   FormGroup: ({
+    active,
     children,
     extra,
+    onCollapse,
     title,
   }: {
+    active?: boolean;
     children?: ReactNode;
     extra?: ReactNode;
+    onCollapse?: (active: boolean) => void;
     title?: ReactNode;
   }) => (
     <section>
-      <h2>{title}</h2>
-      {extra}
-      {children}
+      <div
+        className="ant-collapse-header"
+        data-testid="settings-collapse-header"
+        onClick={() => onCollapse?.(!active)}
+      >
+        <span className="ant-collapse-title">{title}</span>
+        <div className="ant-collapse-extra">{extra}</div>
+      </div>
+      {active && children}
     </section>
   ),
   FormItem: ({
@@ -155,6 +205,7 @@ vi.mock('@lobehub/ui', () => ({
       {children}
     </Form.Item>
   ),
+  Icon: () => null,
   Tag: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
   Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
 }));
@@ -172,6 +223,20 @@ vi.mock('@lobehub/ui/base-ui', () => ({
       {icon}
       {children}
     </button>
+  ),
+  DropdownMenu: ({
+    children,
+    items,
+  }: {
+    children?: ReactNode;
+    items?: { key?: string; label?: ReactNode }[];
+  }) => (
+    <div>
+      {children}
+      {items?.map((item, index) => (
+        <span key={item.key ?? index}>{item.label}</span>
+      ))}
+    </div>
   ),
   Switch: ({
     checked,
@@ -197,7 +262,9 @@ vi.mock('@/components/FormInput', () => ({
 }));
 
 vi.mock('@/components/InfoTooltip', () => ({
-  default: ({ title }: { title?: string }) => <span>{title}</span>,
+  default: ({ title }: { title?: string }) => (
+    <span aria-hidden="true" data-testid="info-tooltip" title={title} />
+  ),
 }));
 
 vi.mock('../const', () => ({
@@ -279,6 +346,7 @@ const FooterHarness = ({ disabled }: { disabled?: boolean }) => {
   return (
     <Footer
       hasConfig
+      isDirty
       connecting={false}
       currentConfig={currentConfig}
       disabled={disabled}
@@ -289,6 +357,7 @@ const FooterHarness = ({ disabled }: { disabled?: boolean }) => {
       writeDisabled={disabled}
       onCopied={vi.fn()}
       onDelete={vi.fn()}
+      onDiscard={vi.fn()}
       onSave={vi.fn()}
       onTestConnection={vi.fn()}
     />
@@ -305,9 +374,23 @@ describe('Agent channel permission gates', () => {
     render(<BodyHarness disabled />);
 
     expect(screen.getByRole('textbox', { name: 'channel.applicationId' })).toBeDisabled();
+    expect(screen.queryByTestId('info-tooltip')).not.toBeInTheDocument();
     expect(screen.getByLabelText('channel.botToken')).toBeDisabled();
     expect(screen.getByRole('spinbutton', { name: 'channel.charLimit' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'channel.settingsResetDefault' })).toBeDisabled();
+  });
+
+  it('toggles advanced settings from the full header row', () => {
+    render(<BodyHarness />);
+
+    const header = screen.getByTestId('settings-collapse-header');
+    expect(screen.getByRole('spinbutton', { name: 'channel.charLimit' })).toBeInTheDocument();
+
+    fireEvent.click(header);
+    expect(screen.queryByRole('spinbutton', { name: 'channel.charLimit' })).not.toBeInTheDocument();
+
+    fireEvent.click(header);
+    expect(screen.getByRole('spinbutton', { name: 'channel.charLimit' })).toBeInTheDocument();
   });
 
   it('disables mutating channel actions when editing is denied', () => {
@@ -315,18 +398,39 @@ describe('Agent channel permission gates', () => {
 
     expect(screen.getByRole('button', { name: 'channel.removeChannel' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'channel.testConnection' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'channel.discard' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'channel.save' })).toBeDisabled();
+  });
+
+  it('discards form edits and restores the persisted configuration', async () => {
+    render(
+      <PlatformDetail agentId="agent-id" currentConfig={currentConfig} platformDef={platformDef} />,
+    );
+
+    const applicationId = screen.getByRole('textbox', { name: 'channel.applicationId' });
+    await waitFor(() => expect(applicationId).toHaveValue('app-id'));
+    expect(screen.queryByRole('button', { name: 'channel.discard' })).not.toBeInTheDocument();
+
+    fireEvent.change(applicationId, { target: { value: 'edited-app-id' } });
+    expect(applicationId).toHaveValue('edited-app-id');
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'channel.discard' })).toBeInTheDocument(),
+    );
+    screen.getByRole('button', { name: 'channel.discard' }).click();
+    await waitFor(() =>
+      expect(screen.getByRole('textbox', { name: 'channel.applicationId' })).toHaveValue('app-id'),
+    );
   });
 
   it('disables the channel enable switch and status refresh when editing is denied', () => {
     render(
       <Header
         disabled
+        agentId="agent-id"
         currentConfig={currentConfig}
         platformDef={platformDef}
         runtimeStatus="connected"
-        onRefreshStatus={vi.fn()}
-        onToggleEnable={vi.fn()}
       />,
     );
 
@@ -334,9 +438,30 @@ describe('Agent channel permission gates', () => {
     expect(screen.getByRole('button', { name: 'channel.refreshStatus' })).toBeDisabled();
   });
 
+  it('moves the platform links into the trailing overflow menu', () => {
+    render(
+      <Header
+        agentId="agent-id"
+        platformDef={{
+          ...platformDef,
+          documentation: {
+            portalUrl: 'https://discord.com/developers/applications',
+            setupGuideUrl: 'https://lobehub.com/docs/usage/channels/discord',
+          },
+        }}
+      />,
+    );
+
+    expect(screen.getByRole('banner')).toHaveTextContent('Discord');
+    expect(screen.getByRole('banner')).toHaveTextContent('channel.documentation');
+    expect(screen.getByRole('banner')).toHaveTextContent('channel.openPlatform');
+    expect(screen.getByRole('banner')).toHaveTextContent('channel.exportConfig');
+    expect(screen.getByRole('banner')).toHaveTextContent('channel.importConfig');
+  });
+
   it('keeps the enable switch usable to turn off a paid-blocked channel that is still enabled', () => {
     render(
-      <PlatformDetail
+      <Header
         agentId="agent-id"
         currentConfig={currentConfig}
         platformDef={{
@@ -358,7 +483,7 @@ describe('Agent channel permission gates', () => {
 
   it('blocks re-enabling a paid-blocked channel once it is disabled', () => {
     render(
-      <PlatformDetail
+      <Header
         agentId="agent-id"
         currentConfig={{ ...currentConfig, enabled: false }}
         platformDef={{
@@ -377,7 +502,7 @@ describe('Agent channel permission gates', () => {
     expect(screen.getByRole('switch')).toBeDisabled();
   });
 
-  it('renders the paid-feature alert with the platform name and spacing below the header divider', () => {
+  it('renders the paid-feature alert with the platform name and top spacing', () => {
     render(
       <PlatformDetail
         agentId="agent-id"

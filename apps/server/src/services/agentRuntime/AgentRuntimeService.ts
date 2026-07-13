@@ -1131,6 +1131,8 @@ export class AgentRuntimeService {
           type: 'step_complete',
         });
 
+        await this.publishSubAgentProgress(stepResult.newState, stepIndex);
+
         // Build enhanced step completion log & presentation data
         const { presentation: stepPresentationData, summary: stepSummary } = buildStepPresentation(
           stepResult,
@@ -2032,6 +2034,47 @@ export class AgentRuntimeService {
         parentOperationId,
         error,
       );
+    }
+  }
+
+  /**
+   * Stream a `callSubAgent` child's running totals to the client, once per step.
+   *
+   * Addressed to the PARENT's operationId, not the child's: the client opens one
+   * WebSocket per operation and never subscribes to the child's channel. The
+   * parent's channel is still live because parking at `waiting_for_async_tool`
+   * deliberately does not publish a stream-end event (see
+   * `AgentRuntimeCoordinator.STREAM_END_STATUSES`).
+   *
+   * Rides `step_complete` rather than a new event type because `AgentStreamEventType`
+   * is a closed union shared with the out-of-repo gateway worker; `phase` is the
+   * established discriminator and unknown phases are ignored by older clients.
+   *
+   * The three stat fields are read from exactly the same state paths that
+   * `completeSubAgentBridge` uses for its final backfill, so the live numbers
+   * converge on the persisted ones instead of jumping when the run ends.
+   *
+   * Best-effort: a publish failure must not fail the sub-agent's step.
+   */
+  private async publishSubAgentProgress(state: AgentState, stepIndex: number): Promise<void> {
+    const anchor = state?.metadata?.subAgentProgress as
+      { parentOperationId: string; toolMessageId: string } | undefined;
+    if (!anchor?.parentOperationId || !anchor.toolMessageId) return;
+
+    try {
+      await this.streamManager.publishStreamEvent(anchor.parentOperationId, {
+        data: {
+          model: state?.modelRuntimeConfig?.model,
+          phase: 'subagent_progress',
+          toolMessageId: anchor.toolMessageId,
+          totalTokens: state?.usage?.llm?.tokens?.total,
+          totalToolCalls: state?.usage?.tools?.totalCalls,
+        },
+        stepIndex,
+        type: 'step_complete',
+      });
+    } catch (error) {
+      log('[%s] failed to publish sub-agent progress (non-fatal): %O', state?.operationId, error);
     }
   }
 

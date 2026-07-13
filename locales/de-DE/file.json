@@ -82,6 +82,8 @@
   "menu.allFiles": "Alle Dateien",
   "menu.allPages": "Alle Seiten",
   "networkError": "Bibliotheken konnten nicht abgerufen werden. Bitte überprüfen Sie Ihre Netzwerkverbindung und versuchen Sie es erneut.",
+  "notFound.desc": "Diese Datei existiert nicht oder ist nicht mehr zugänglich — sie wurde möglicherweise vom Besitzer gelöscht oder auf privat gesetzt.",
+  "notFound.title": "Datei nicht verfügbar",
   "notSupportGuide.desc": "Der aktuelle Bereitstellungsmodus unterstützt keine Dateiverwaltung. Wechseln Sie zum <1>Server-Datenbank-Bereitstellungsmodus</1> oder nutzen Sie <3>LobeHub Cloud</3>.",
   "notSupportGuide.features.allKind.desc": "Unterstützt gängige Dateitypen, einschließlich üblicher Seitenformate wie Word, PPT, Excel, PDF, TXT sowie beliebte Code-Dateien wie JS und Python.",
   "notSupportGuide.features.allKind.title": "Vielfältige Dateitypen",

@@ -1,6 +1,7 @@
 import type { RenderDisplayControl } from '@lobechat/types';
 
 import { ClaudeCodeApiName } from '../../types';
+import { parseBrowserMcpApi } from '../Inspector/browserMcpLabels';
 import {
   isLinearMcpApiName,
   LINEAR_MCP_PREFIX,
@@ -47,18 +48,26 @@ const hasUploadedImage = (pluginState?: unknown): boolean => {
  * Display control for a CC tool, refined by the tool_result when the static map
  * alone can't decide.
  *
- * `Read` is the one API whose output shape depends on its target: on an image
- * file it renders uploaded thumbnails, on anything else the source text. A
- * thumbnail is the whole point of the card, so expand it; source text stays
- * collapsed rather than dumping a file into the transcript. `pluginState` is
- * undefined while the call is still in flight, so the card only pops open once
- * the image has actually landed.
+ * Two APIs are image-bearing, and for both the image IS the payload — so the
+ * card opens itself rather than making the user unfold it:
+ *
+ *  - `Read` on an image file renders uploaded thumbnails; on anything else it's
+ *    source text, which stays collapsed rather than dumping a file into the
+ *    transcript.
+ *  - the in-app browser's `screenshot` renders the captured page.
+ *
+ * Both gate on an actually-uploaded image: `pluginState` is undefined while the
+ * call is in flight, and a failed upload leaves no `url` — in either case the
+ * card would pop open empty, so it stays collapsed instead.
  */
 export const resolveClaudeCodeRenderDisplayControl = (
   apiName: string,
   pluginState?: unknown,
 ): RenderDisplayControl | undefined => {
   if (apiName === ClaudeCodeApiName.Read && hasUploadedImage(pluginState)) return 'expand';
+
+  if (parseBrowserMcpApi(apiName) === 'screenshot' && hasUploadedImage(pluginState))
+    return 'expand';
 
   return ClaudeCodeRenderDisplayControls[apiName];
 };

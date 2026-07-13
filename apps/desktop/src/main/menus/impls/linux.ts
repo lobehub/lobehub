@@ -1,5 +1,6 @@
 import path from 'node:path';
 
+import { GITHUB, OFFICIAL_SITE } from '@lobechat/const/url';
 import type { TrayNavigationSnapshot } from '@lobechat/electron-client-ipc';
 import type { MenuItemConstructorOptions } from 'electron';
 import { app, clipboard, dialog, Menu, shell } from 'electron';
@@ -199,13 +200,13 @@ export class LinuxMenu extends BaseMenuPlatform implements IMenuPlatform {
         submenu: [
           {
             click: async () => {
-              await shell.openExternal('https://lobehub.com');
+              await shell.openExternal(OFFICIAL_SITE);
             },
             label: t('help.visitWebsite'),
           },
           {
             click: async () => {
-              await shell.openExternal('https://github.com/lobehub/lobe-chat');
+              await shell.openExternal(GITHUB);
             },
             label: t('help.githubRepo'),
           },

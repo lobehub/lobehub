@@ -15,6 +15,8 @@
   "features.groupChat.title": "گفت‌وگوی گروهی (چندعاملی)",
   "features.imessage.desc": "اتصال نمایندگان به iMessage از طریق پل BlueBubbles دسکتاپ LobeHub محلی.",
   "features.imessage.title": "کانال iMessage",
+  "features.inAppBrowser.desc": "نمایش تب مرورگر در پانل کناری مکالمه: یک مرورگر داخلی که نتایج جستجو را در همانجا باز می‌کند و به نمایندگان اجازه می‌دهد به صورت قابل مشاهده مرور کنند.",
+  "features.inAppBrowser.title": "مرورگر داخلی",
   "features.inputMarkdown.desc": "نمایش زنده Markdown در ناحیه ورودی (متن پررنگ، بلوک‌های کد، جدول‌ها و غیره).",
   "features.inputMarkdown.title": "نمایش Markdown در ورودی",
   "features.messageTextSelectionActions.desc": "نمایش یک اقدام سریع هنگام انتخاب متن در پیام‌های چت تا متن انتخاب شده به زمینه مکالمه بعدی اضافه شود.",

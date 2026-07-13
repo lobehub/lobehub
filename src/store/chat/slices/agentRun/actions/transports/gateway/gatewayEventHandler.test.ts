@@ -40,9 +40,11 @@ const createStore = (dbMessagesMap: Record<string, UIChatMessage[]> = {}) =>
   }) as unknown as ChatStore;
 
 // The handler enqueues work on an internal promise chain; flush the microtask
-// queue so async event handlers settle before assertions.
+// queue so async event handlers settle before assertions. Each `await` inside a
+// queued handler costs a tick, so keep this comfortably above the longest chain
+// rather than tuned to today's exact hop count.
 const flush = async () => {
-  for (let i = 0; i < 5; i += 1) await Promise.resolve();
+  for (let i = 0; i < 50; i += 1) await Promise.resolve();
 };
 
 describe('createGatewayEventHandler', () => {
@@ -163,6 +165,114 @@ describe('createGatewayEventHandler', () => {
 
     expect(getMessages).not.toHaveBeenCalled();
     expect(store.replaceMessages).not.toHaveBeenCalled();
+  });
+
+  // The placeholder tool row only reaches the store via the `toolMessageIds`
+  // refetch queued by the preceding tools_calling chunk. A fast sub-agent emits
+  // its progress event while that fetch is still in flight — dispatched inline it
+  // would land on a row that doesn't exist yet and no-op away the whole live
+  // readout (a single-step child has no later sample to self-heal with).
+  it('queues sub-agent progress behind the placeholder refetch it depends on', async () => {
+    const order: string[] = [];
+    let resolveFetch: (() => void) | undefined;
+    vi.spyOn(messageService, 'getMessages').mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveFetch = () => {
+            order.push('fetch');
+            resolve([] as unknown as UIChatMessage[]);
+          };
+        }),
+    );
+
+    const store = createStore();
+    (store.internal_dispatchMessage as ReturnType<typeof vi.fn>).mockImplementation(
+      (payload: { type?: string }) => {
+        if (payload?.type === 'updatePluginState') order.push('progress');
+      },
+    );
+
+    const handler = createGatewayEventHandler(() => store, {
+      assistantMessageId: 'seed-msg',
+      context,
+      operationId: 'op-1',
+    });
+
+    handler(
+      makeEvent('stream_chunk', {
+        chunkType: 'tools_calling',
+        toolMessageIds: { 'call-1': 'tool-msg-sub' },
+        toolsCalling: [{ apiName: 'callSubAgent', id: 'call-1' }],
+      }),
+    );
+    handler(
+      makeEvent('step_complete', {
+        phase: 'subagent_progress',
+        toolMessageId: 'tool-msg-sub',
+        totalTokens: 4321,
+        totalToolCalls: 3,
+      }),
+    );
+
+    await flush();
+    // The fetch is still pending, so the progress patch must not have run yet.
+    expect(order).toEqual([]);
+
+    resolveFetch?.();
+    await flush();
+
+    expect(order).toEqual(['fetch', 'progress']);
+  });
+
+  it('patches live sub-agent progress onto the placeholder tool message, in memory only', async () => {
+    const getMessages = vi
+      .spyOn(messageService, 'getMessages')
+      .mockResolvedValue([] as unknown as UIChatMessage[]);
+    const store = createStore();
+    const handler = createGatewayEventHandler(() => store, {
+      assistantMessageId: 'seed-msg',
+      context,
+      operationId: 'op-1',
+    });
+
+    handler(
+      makeEvent('step_complete', {
+        model: 'claude-sonnet-5',
+        phase: 'subagent_progress',
+        toolMessageId: 'tool-msg-sub',
+        totalTokens: 4321,
+        totalToolCalls: 3,
+      }),
+    );
+    await flush();
+
+    expect(store.internal_dispatchMessage).toHaveBeenCalledWith(
+      {
+        id: 'tool-msg-sub',
+        key: 'progress',
+        type: 'updatePluginState',
+        value: { model: 'claude-sonnet-5', totalTokens: 4321, totalToolCalls: 3 },
+      },
+      { operationId: 'op-1' },
+    );
+    // Live progress is advisory — the completion bridge owns the persisted value,
+    // so this must never trigger a DB read or write.
+    expect(getMessages).not.toHaveBeenCalled();
+    expect(store.replaceMessages).not.toHaveBeenCalled();
+  });
+
+  it('ignores a sub-agent progress event with no tool message anchor', async () => {
+    const store = createStore();
+    const handler = createGatewayEventHandler(() => store, {
+      assistantMessageId: 'seed-msg',
+      context,
+      operationId: 'op-1',
+    });
+
+    handler(makeEvent('step_complete', { phase: 'subagent_progress', totalTokens: 10 }));
+    await flush();
+
+    expect(store.internal_dispatchMessage).not.toHaveBeenCalled();
   });
 
   it('preserves existing result_msg_id when a tools_calling chunk omits result links', async () => {

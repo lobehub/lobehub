@@ -12,8 +12,14 @@
     "agent-tracing": "./src/cli/index.ts",
     "at": "./src/cli/index.ts"
   },
+  "scripts": {
+    "test": "vitest run"
+  },
   "dependencies": {
     "commander": "^13.1.0",
     "gpt-tokenizer": "^3.4.0"
+  },
+  "devDependencies": {
+    "vitest": "^3.2.4"
   }
 }

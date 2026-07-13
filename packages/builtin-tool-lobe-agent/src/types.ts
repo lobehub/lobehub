@@ -78,6 +78,14 @@ export interface SubAgentRunStats {
  * Inspector row.
  */
 export interface CallSubAgentState extends SubAgentRunStats {
+  /**
+   * Live totals streamed from the running sub-agent, patched into the store in
+   * memory only (never persisted). Held in its own key so it can't be mistaken
+   * for the authoritative flat stats, which are written exactly once — by the
+   * completion bridge — when the run finishes.
+   */
+  progress?: SubAgentRunStats;
+  status?: 'pending' | 'completed' | 'error';
   threadId: string;
 }
 

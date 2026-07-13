@@ -15,6 +15,8 @@
   "features.groupChat.title": "グループチャット（マルチアシスタント）",
   "features.imessage.desc": "LobeHub Desktop BlueBubblesブリッジを介してエージェントをiMessageに接続します。",
   "features.imessage.title": "iMessageチャンネル",
+  "features.inAppBrowser.desc": "会話サイドパネルにブラウザータブを表示します: 検索結果をその場で開き、エージェントが目に見える形でブラウズできる埋め込みブラウザー。",
+  "features.inAppBrowser.title": "インアプリブラウザー",
   "features.inputMarkdown.desc": "入力エリアでMarkdown（太字、コードブロック、表など）をリアルタイムでレンダリングします。",
   "features.inputMarkdown.title": "入力欄のMarkdownレンダリング",
   "features.messageTextSelectionActions.desc": "チャットメッセージ内のテキストを選択すると、次の会話コンテキストに選択したテキストを追加できるクイックアクションを表示します。",

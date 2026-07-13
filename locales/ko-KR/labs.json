@@ -15,6 +15,8 @@
   "features.groupChat.title": "그룹 채팅 (다중 도우미)",
   "features.imessage.desc": "로컬 LobeHub Desktop BlueBubbles 브리지를 통해 에이전트를 iMessage에 연결합니다.",
   "features.imessage.title": "iMessage 채널",
+  "features.inAppBrowser.desc": "대화 사이드 패널에 브라우저 탭을 표시합니다: 검색 결과를 해당 위치에서 열고 상담원이 눈에 보이게 탐색할 수 있는 내장 브라우저입니다.",
+  "features.inAppBrowser.title": "인앱 브라우저",
   "features.inputMarkdown.desc": "입력 영역에서 실시간으로 Markdown을 렌더링합니다 (굵은 글씨, 코드 블록, 표 등).",
   "features.inputMarkdown.title": "입력창 Markdown 렌더링",
   "features.messageTextSelectionActions.desc": "채팅 메시지에서 텍스트를 선택할 때 빠른 작업을 표시하여 선택한 텍스트를 다음 대화 컨텍스트에 추가할 수 있습니다.",

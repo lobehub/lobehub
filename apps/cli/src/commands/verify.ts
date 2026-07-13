@@ -76,12 +76,17 @@ function inlineTextEvidenceForFile(file: string, type: EvidenceType | string): s
 
 /** Normalize a case's `evidence` field (string | string[] | {path}[]) to path strings. */
 interface ReportEvidenceInput {
-  comparison?: { id?: string; label?: string; role?: 'after' | 'before' };
+  comparison?: {
+    id: string;
+    label?: string;
+    layout?: 'horizontal' | 'vertical';
+    role: 'after' | 'before';
+  };
   description?: string;
   path: string;
 }
 
-function reportEvidence(evidence: unknown): ReportEvidenceInput[] {
+export function reportEvidence(evidence: unknown): ReportEvidenceInput[] {
   if (!evidence) return [];
   const arr = Array.isArray(evidence) ? evidence : [evidence];
   return arr
@@ -92,14 +97,20 @@ function reportEvidence(evidence: unknown): ReportEvidenceInput[] {
       if (!evidencePath) return null;
       const comparison = objectValue(value.comparison);
       const role = comparison?.role;
+      const id = firstString(comparison?.id);
+      // The report viewer pairs on `id` and drops any comparison lacking one, so
+      // an id-less half could never render side by side. Warn rather than upload
+      // a comparison that is silently downgraded to an ordinary image.
+      if (comparison && !(id && (role === 'before' || role === 'after'))) {
+        log.warn(
+          `evidence ${evidencePath}: comparison needs both a string "id" and role "before"/"after" — ignoring it`,
+        );
+      }
+      const layout = comparison?.layout === 'vertical' ? 'vertical' : undefined;
       return {
         comparison:
-          comparison && (role === 'before' || role === 'after')
-            ? {
-                id: firstString(comparison.id),
-                label: firstString(comparison.label),
-                role,
-              }
+          id && (role === 'before' || role === 'after')
+            ? { id, label: firstString(comparison?.label), layout, role }
             : undefined,
         description: firstString(value.description, value.desc),
         path: evidencePath,

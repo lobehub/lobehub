@@ -135,7 +135,12 @@ describe('call_tool executor', () => {
       expect(result.events).toHaveLength(1);
       expect(result.events[0].type).toBe('tool_result');
       const toolResultEvent = result.events[0] as any;
-      expect(toolResultEvent.result).toEqual({ data: 'search results', error: null });
+      expect(toolResultEvent.result).toMatchObject({
+        data: 'search results',
+        error: null,
+        success: true,
+      });
+      expect(toolResultEvent.result.content).toContain('search results');
     });
   });
 
@@ -322,7 +327,7 @@ describe('call_tool executor', () => {
       const state = createInitialState();
 
       // When
-      const result = await executeWithMockContext({
+      await executeWithMockContext({
         executor: 'call_tool',
         instruction,
         state,
@@ -702,7 +707,7 @@ describe('call_tool executor', () => {
       });
 
       // When
-      const result = await executeWithMockContext({
+      await executeWithMockContext({
         executor: 'call_tool',
         instruction,
         state,
@@ -1366,7 +1371,7 @@ describe('call_tool executor', () => {
       expect(result.newState.operationId).toBe('preserve-session');
       expect(result.newState.stepCount).toBe(15);
       expect(result.newState.status).toBe('running');
-      expect(result.newState.lastModified).toBe('2024-01-01T00:00:00.000Z');
+      expect(result.newState.lastModified).not.toBe('2024-01-01T00:00:00.000Z');
     });
 
     it('should not mutate original state', async () => {
@@ -1379,7 +1384,7 @@ describe('call_tool executor', () => {
 
       const instruction = createCallToolInstruction();
       const state = createInitialState({ operationId: 'immutable-test', stepCount: 5 });
-      const originalState = JSON.parse(JSON.stringify(state));
+      const originalState = structuredClone(state);
 
       // When
       await executeWithMockContext({
@@ -1589,7 +1594,7 @@ describe('call_tool executor', () => {
       const state = createInitialState();
 
       // When
-      const result = await executeWithMockContext({
+      await executeWithMockContext({
         executor: 'call_tool',
         instruction,
         state,
@@ -1664,7 +1669,7 @@ describe('call_tool executor', () => {
       const state = createInitialState();
 
       // When
-      const result = await executeWithMockContext({
+      await executeWithMockContext({
         executor: 'call_tool',
         instruction,
         state,
@@ -1898,8 +1903,7 @@ describe('call_tool executor', () => {
 
       // Track cancel handler registration
       let executeToolCancelHandler:
-        | ((context: OperationCancelContext) => void | Promise<void>)
-        | undefined;
+        ((context: OperationCancelContext) => void | Promise<void>) | undefined;
       const originalOnOperationCancel = mockStore.onOperationCancel;
       mockStore.onOperationCancel = vi.fn(
         (opId: string, handler: (context: OperationCancelContext) => void | Promise<void>) => {

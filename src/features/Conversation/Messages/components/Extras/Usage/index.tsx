@@ -4,11 +4,12 @@ import {
 } from '@lobechat/heterogeneous-agents';
 import { type ModelPerformance, type ModelUsage } from '@lobechat/types';
 import { ModelIcon } from '@lobehub/icons';
-import { Center, Flexbox, Icon } from '@lobehub/ui';
+import { Center, Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { CircleDollarSignIcon } from 'lucide-react';
 import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
@@ -16,6 +17,7 @@ import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { isDev } from '@/utils/env';
+import { formatNumber } from '@/utils/format';
 
 import { contextSelectors, useConversationStore } from '../../../../store';
 import TokenDetail from './UsageDetail';
@@ -24,6 +26,11 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     font-size: 12px;
     color: ${cssVar.colorTextQuaternary};
+  `,
+  separator: css`
+    /* The row's gap alone reads as a gutter between unrelated items; the dot binds
+       the token count and the speed into one metrics run. */
+    margin-inline: -2px;
   `,
 }));
 
@@ -41,6 +48,7 @@ interface UsageProps {
 }
 
 const Usage = memo<UsageProps>(({ model, usage, performance, provider }) => {
+  const { t } = useTranslation('chat');
   const onboardingAgentId = useAgentStore(builtinAgentSelectors.webOnboardingAgentId);
   const conversationAgentId = useConversationStore(contextSelectors.agentId);
   // Credit mode already expresses cost in credits — showing USD alongside would conflict.
@@ -83,6 +91,33 @@ const Usage = memo<UsageProps>(({ model, usage, performance, provider }) => {
             provider={provider}
             usage={usage}
           />
+        )}
+        {/* A spelled-out "TPS" unit rather than an icon: at 12px a gauge glyph is
+            indistinguishable from the neighbouring coin, so the reader can't tell
+            what the number measures. TTFT rides in the hover instead of taking a
+            second inline slot — it's a diagnostic, not an at-a-glance metric. */}
+        {!!performance?.tps && (
+          <>
+            {!!usage?.totalTokens && <span className={styles.separator}>·</span>}
+            <Tooltip
+              title={
+                <Flexbox gap={6}>
+                  <span>{t('messages.tokenDetails.speed.tps.tooltip')}</span>
+                  {!!performance.ttft && (
+                    <Flexbox horizontal gap={12} justify={'space-between'}>
+                      <span>{t('messages.tokenDetails.speed.ttft.title')}</span>
+                      <span>{formatNumber(performance.ttft / 1000, 2)}s</span>
+                    </Flexbox>
+                  )}
+                </Flexbox>
+              }
+            >
+              <Center horizontal gap={4}>
+                <span>{formatNumber(performance.tps, 1)}</span>
+                <span>{t('messages.tokenDetails.speed.tps.title')}</span>
+              </Center>
+            </Tooltip>
+          </>
         )}
         {!isShowCredit && !!usage?.cost && usage.cost >= MIN_DISPLAY_COST && (
           <Center horizontal gap={2}>

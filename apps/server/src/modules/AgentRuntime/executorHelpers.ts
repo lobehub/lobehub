@@ -174,6 +174,7 @@ export const buildServerVirtualSubAgentRunner = (
         started: true,
         subOperationId: result?.operationId,
         threadId: result?.threadId ?? '',
+        toolMessageId: placeholder.id,
       };
     },
   };

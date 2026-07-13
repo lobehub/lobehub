@@ -11,6 +11,7 @@ export type {
   StreamChunkData,
   StreamChunkType,
   StreamStartData,
+  SubAgentProgressData,
   ToolEndData,
   ToolExecuteData,
   ToolResultMessage,

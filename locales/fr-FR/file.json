@@ -82,6 +82,8 @@
   "menu.allFiles": "Tous les fichiers",
   "menu.allPages": "Toutes les pages",
   "networkError": "Échec de la récupération des bibliothèques. Veuillez vérifier votre connexion réseau et réessayer.",
+  "notFound.desc": "Ce fichier n'existe pas ou n'est plus accessible — il a peut-être été supprimé ou rendu privé par son propriétaire.",
+  "notFound.title": "Fichier Indisponible",
   "notSupportGuide.desc": "Le mode de déploiement actuel ne prend pas en charge la gestion des fichiers. Passez en <1>mode de déploiement avec base de données serveur</1>, ou utilisez <3>LobeHub Cloud</3>.",
   "notSupportGuide.features.allKind.desc": "Prend en charge les types de fichiers courants, y compris les formats de page comme Word, PPT, Excel, PDF, TXT, ainsi que les fichiers de code populaires comme JS et Python.",
   "notSupportGuide.features.allKind.title": "Prise en charge de plusieurs types de fichiers",

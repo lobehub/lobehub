@@ -132,6 +132,28 @@ export interface StepCompleteData {
 }
 
 /**
+ * `step_complete` carrying `phase: 'subagent_progress'` — a `callSubAgent`
+ * child's running totals, emitted once per child step.
+ *
+ * Published onto the PARENT operation's channel, because the client opens one
+ * WebSocket per operation and never subscribes to the child's. Rides
+ * `step_complete` rather than a new `AgentStreamEventType` so the out-of-repo
+ * gateway worker needs no change, and so older clients (which only act on
+ * `phase: 'execution_complete'`) ignore it.
+ *
+ * Advisory only — the authoritative stats are backfilled onto the tool
+ * message's `pluginState` by `completeSubAgentBridge` when the child finishes.
+ */
+export interface SubAgentProgressData extends StepCompleteData {
+  model?: string;
+  phase: 'subagent_progress';
+  /** The parked parent's placeholder tool message these stats belong to. */
+  toolMessageId: string;
+  totalTokens?: number;
+  totalToolCalls?: number;
+}
+
+/**
  * Producer → consumer: structured-input request the user must answer
  * directly (no tool execution involved). The producer's tool handler stays
  * blocked until a matching `agent_intervention_response` (correlated by

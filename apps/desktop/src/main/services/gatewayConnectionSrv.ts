@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import os from 'node:os';
 
+import { OFFICIAL_DEVICE_GATEWAY_URL } from '@lobechat/const/url';
 import type {
   EnrollWorkspaceParams,
   EnrollWorkspaceResult,
@@ -30,7 +31,7 @@ import { ServiceModule } from './index';
 
 const logger = createLogger('services:GatewayConnectionSrv');
 
-const DEFAULT_GATEWAY_URL = 'https://device-gateway.lobehub.com';
+const DEFAULT_GATEWAY_URL = OFFICIAL_DEVICE_GATEWAY_URL;
 
 /**
  * Result envelope a tool-call handler must return. Mirrors

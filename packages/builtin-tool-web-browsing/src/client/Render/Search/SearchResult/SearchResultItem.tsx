@@ -1,4 +1,5 @@
 import { isDesktop } from '@lobechat/const';
+import { RENDERER_HANDLED_LINK_ATTR } from '@lobechat/desktop-bridge';
 import type { UniformSearchResult } from '@lobechat/types';
 import { Block, Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
@@ -29,17 +30,25 @@ const SearchResultItem = memo<UniformSearchResult & { style?: CSSProperties }>(
     const openInBrowserTab = useGlobalStore((s) => s.openInBrowserTab);
     const enableInAppBrowser = useUserStore(labPreferSelectors.enableInAppBrowser);
 
+    // Only claim the click when this onClick will actually handle it. Otherwise the
+    // anchor's default behavior — and the desktop preload's external-link branch —
+    // opens the system browser.
+    const handlesClick = isDesktop && enableInAppBrowser;
+
     const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
-      // Without the in-app browser lab flag the anchor's default behavior
-      // opens the system browser.
-      if (!isDesktop || !enableInAppBrowser) return;
+      if (!handlesClick) return;
 
       event.preventDefault();
       openInBrowserTab(url);
     };
 
     return (
-      <a href={url} target={'_blank'} onClick={handleClick}>
+      <a
+        {...(handlesClick ? { [RENDERER_HANDLED_LINK_ATTR]: 'true' } : {})}
+        href={url}
+        target={'_blank'}
+        onClick={handleClick}
+      >
         <Block
           clickable
           className={styles.container}

@@ -114,6 +114,13 @@ export const sharedMainAreaChildren: RouteObject[] = [
           },
           {
             element: dynamicElement(
+              () => import('@/routes/(main)/agent/channel/[platform]'),
+              'Desktop > Chat > Channel Platform',
+            ),
+            path: 'channel/:platform',
+          },
+          {
+            element: dynamicElement(
               () => import('@/routes/(main)/agent/topics'),
               'Desktop > Chat > Topics',
             ),

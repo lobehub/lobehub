@@ -82,6 +82,8 @@
   "menu.allFiles": "Tüm Dosyalar",
   "menu.allPages": "Tüm Sayfalar",
   "networkError": "Kütüphaneler alınamadı. Lütfen ağ bağlantınızı kontrol edip tekrar deneyin.",
+  "notFound.desc": "Bu dosya mevcut değil veya artık erişilebilir değil — sahibi tarafından silinmiş veya özel olarak ayarlanmış olabilir.",
+  "notFound.title": "Dosya Kullanılamıyor",
   "notSupportGuide.desc": "Mevcut dağıtım modu dosya yönetimini desteklemiyor. <1>sunucu veritabanı dağıtım moduna</1> geçin veya <3>LobeHub Cloud</3> kullanın.",
   "notSupportGuide.features.allKind.desc": "Word, PPT, Excel, PDF, TXT gibi yaygın sayfa biçimleri ve JS, Python gibi popüler kod dosyaları dahil olmak üzere ana dosya türlerini destekler.",
   "notSupportGuide.features.allKind.title": "Çoklu Dosya Türü Desteği",
