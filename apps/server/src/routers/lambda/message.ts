@@ -317,7 +317,10 @@ export const messageRouter = router({
         const fileService = new FileService(ctx.serverDB, share.ownerId, shareWorkspaceId);
 
         return messageModel.query(
-          { ...queryParams, topicId: share.topicId },
+          // Force skipWorks: Work summaries join LIVE task/version state (not a
+          // share-time snapshot), so serving them here would leak post-share
+          // mutations to anonymous visitors. Share pages render no Work chips.
+          { ...queryParams, skipWorks: true, topicId: share.topicId },
           {
             postProcessUrl: (path, file) =>
               fileService.getFileAccessUrl({ id: file.id, url: path }),

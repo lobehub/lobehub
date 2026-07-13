@@ -2,11 +2,12 @@
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { messages, topics, works, workVersions } from '../../../schemas';
+import { messages, tasks, topics, works, workspaces, workVersions } from '../../../schemas';
 import { TaskModel } from '../../task';
 import { WorkModel } from '..';
 import {
   cleanupWorkTestData,
+  expectTaskListItem,
   expectTaskSnapshot,
   expectTaskSummaryItem,
   seedWorkTestData,
@@ -558,5 +559,151 @@ describe('WorkModel · task', () => {
     expect(versionRows).toHaveLength(1);
     // topic FK on work_versions is ON DELETE SET NULL — the event row survives.
     expect(versionRows[0].topicId).toBeNull();
+  });
+});
+
+describe('WorkModel · workspace task visibility', () => {
+  const workspaceId = 'work-test-workspace-id';
+
+  const seedWorkspace = async () => {
+    await serverDB.insert(workspaces).values({
+      id: workspaceId,
+      name: 'Work Test Workspace',
+      primaryOwnerId: userId,
+      slug: workspaceId,
+    });
+  };
+
+  it('hides another member private-task Work from every list path', async () => {
+    await seedWorkspace();
+    const ownerTasks = new TaskModel(serverDB, userId, workspaceId);
+    const ownerWorks = new WorkModel(serverDB, userId, workspaceId);
+    const memberWorks = new WorkModel(serverDB, userId2, workspaceId);
+
+    const task = await ownerTasks.create({
+      instruction: 'Secret instruction',
+      name: 'Secret task',
+      visibility: 'private',
+    });
+    const work = await ownerWorks.registerTask({
+      changeType: 'created',
+      rootOperationId: 'op-private-visibility',
+      sourceToolCallId: 'tool-call-private-visibility',
+      sourceToolName: 'createTask',
+      taskId: task.id,
+      topicId,
+    });
+
+    // The registrant keeps full access.
+    expect(await ownerWorks.listByConversation({ topicId })).toHaveLength(1);
+
+    // The other member sees nothing on any list path.
+    expect(await memberWorks.listByConversation({ topicId })).toHaveLength(0);
+    expect((await memberWorks.listByWorkspace({})).items).toHaveLength(0);
+    expect(
+      await memberWorks.listSummariesByRootOperations({
+        rootOperationIds: ['op-private-visibility'],
+      }),
+    ).toEqual({ 'op-private-visibility': [] });
+    expect(await memberWorks.listVersions(work!.id)).toHaveLength(0);
+  });
+
+  it('keeps public-task Works member-visible until the task flips private', async () => {
+    await seedWorkspace();
+    const ownerTasks = new TaskModel(serverDB, userId, workspaceId);
+    const ownerWorks = new WorkModel(serverDB, userId, workspaceId);
+    const memberWorks = new WorkModel(serverDB, userId2, workspaceId);
+
+    const task = await ownerTasks.create({
+      instruction: 'Shared instruction',
+      name: 'Shared task',
+      visibility: 'public',
+    });
+    await ownerWorks.registerTask({
+      changeType: 'created',
+      rootOperationId: 'op-public-visibility',
+      sourceToolCallId: 'tool-call-public-visibility',
+      sourceToolName: 'createTask',
+      taskId: task.id,
+      topicId,
+    });
+
+    const memberView = await memberWorks.listByConversation({ topicId });
+    expect(memberView).toHaveLength(1);
+    expect(expectTaskListItem(memberView[0]).task.name).toBe('Shared task');
+
+    // The guard reads live visibility, so flipping the task private hides the
+    // existing Work (and its versions) from other members immediately.
+    await serverDB.update(tasks).set({ visibility: 'private' }).where(eq(tasks.id, task.id));
+
+    expect(await memberWorks.listByConversation({ topicId })).toHaveLength(0);
+    expect(await ownerWorks.listByConversation({ topicId })).toHaveLength(1);
+  });
+
+  it('does not let a member register a Work against another member private task', async () => {
+    await seedWorkspace();
+    const ownerTasks = new TaskModel(serverDB, userId, workspaceId);
+    const memberWorks = new WorkModel(serverDB, userId2, workspaceId);
+
+    const privateTask = await ownerTasks.create({
+      instruction: 'Private register target',
+      visibility: 'private',
+    });
+    const publicTask = await ownerTasks.create({
+      instruction: 'Public register target',
+      visibility: 'public',
+    });
+
+    expect(
+      await memberWorks.registerTask({
+        changeType: 'updated',
+        sourceToolCallId: 'tool-call-member-private',
+        sourceToolName: 'updateTask',
+        taskId: privateTask.id,
+        topicId,
+      }),
+    ).toBeNull();
+
+    expect(
+      await memberWorks.registerTask({
+        changeType: 'updated',
+        sourceToolCallId: 'tool-call-member-public',
+        sourceToolName: 'updateTask',
+        taskId: publicTask.id,
+        topicId,
+      }),
+    ).not.toBeNull();
+  });
+
+  it('hides an orphaned private-task Work from other members but keeps it for the registrant', async () => {
+    await seedWorkspace();
+    const ownerTasks = new TaskModel(serverDB, userId, workspaceId);
+    const ownerWorks = new WorkModel(serverDB, userId, workspaceId);
+    const memberWorks = new WorkModel(serverDB, userId2, workspaceId);
+
+    const task = await ownerTasks.create({
+      instruction: 'Orphan candidate',
+      name: 'Orphan task',
+      visibility: 'private',
+    });
+    await ownerWorks.registerTask({
+      changeType: 'created',
+      rootOperationId: 'op-orphan-visibility',
+      sourceToolCallId: 'tool-call-orphan-visibility',
+      sourceToolName: 'createTask',
+      taskId: task.id,
+      topicId,
+    });
+
+    // Hard-delete outside the tool path: the Work survives as an orphan. The
+    // deleted row no longer carries visibility, so only the registrant keeps
+    // the orphan card — its snapshot title must not leak to other members.
+    await ownerTasks.delete(task.id);
+
+    const ownerView = await ownerWorks.listByConversation({ topicId });
+    expect(ownerView).toHaveLength(1);
+    expect(expectTaskListItem(ownerView[0]).taskDeleted).toBe(true);
+
+    expect(await memberWorks.listByConversation({ topicId })).toHaveLength(0);
   });
 });

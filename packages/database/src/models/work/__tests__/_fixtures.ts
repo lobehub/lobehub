@@ -5,8 +5,10 @@ import type {
   GithubWorkVersionSnapshot,
   LinearWorkSummaryItem,
   LinearWorkVersionSnapshot,
+  TaskWorkListItem,
   TaskWorkSummaryItem,
   TaskWorkVersionSnapshot,
+  WorkListItem,
   WorkSummaryItem,
   WorkVersionSnapshot,
 } from '@lobechat/types';
@@ -92,6 +94,16 @@ export const expectGithubSnapshot = (snapshot: WorkVersionSnapshot): GithubWorkV
   }
 
   return snapshot.github;
+};
+
+export const expectTaskListItem = (item?: WorkListItem): TaskWorkListItem => {
+  expect(item).toBeDefined();
+
+  if (!item || item.type !== 'task') {
+    throw new Error('Expected task work list item');
+  }
+
+  return item;
 };
 
 export const expectTaskSummaryItem = (item?: WorkSummaryItem): TaskWorkSummaryItem => {
