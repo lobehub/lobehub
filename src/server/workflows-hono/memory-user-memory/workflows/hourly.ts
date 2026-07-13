@@ -16,6 +16,7 @@ import { checkGuard, ensureWorkflowStarted } from './runGuard';
 import {
   appendHourlyWorkflowRunId,
   isHourlyMemoryExtractionCancelled,
+  markHourlyMemoryExtractionSuccess,
   serializeWorkflowCursor,
 } from './utils';
 
@@ -117,6 +118,12 @@ export const hourlyWorkflowHandler = async (
 
   const userIds = userBatch.ids;
   if (userIds.length === 0) {
+    await markHourlyMemoryExtractionSuccess(hourlyTaskId, {
+      processedUsers: 0,
+      scheduledBatches: 0,
+      scheduledChildRuns: 0,
+    });
+
     return { message: 'No eligible users for hourly memory extraction.', processedUsers: 0 };
   }
 
@@ -127,8 +134,8 @@ export const hourlyWorkflowHandler = async (
       )
     : undefined;
 
+  const batches = dryRun ? [] : chunk(userIds, USER_BATCH_SIZE);
   if (!dryRun) {
-    const batches = chunk(userIds, USER_BATCH_SIZE);
     for (const [index, batchUserIds] of batches.entries()) {
       const stepName = `memory:user-memory:hourly:trigger-users:${index}`;
       const guard = await checkGuard(context, WORKFLOW_PATH, {
@@ -195,11 +202,19 @@ export const hourlyWorkflowHandler = async (
     await appendHourlyWorkflowRunId(hourlyTaskId, result.workflowRunId);
   }
 
+  if (!nextCursor) {
+    await markHourlyMemoryExtractionSuccess(hourlyTaskId, {
+      processedUsers: userIds.length,
+      scheduledBatches: batches.length,
+      scheduledChildRuns: batches.length,
+    });
+  }
+
   return {
     dryRun: !!dryRun,
     hasNextPage: !!nextCursor,
     processedUsers: userIds.length,
-    scheduledBatches: dryRun ? 0 : chunk(userIds, USER_BATCH_SIZE).length,
+    scheduledBatches: batches.length,
   };
 };
 

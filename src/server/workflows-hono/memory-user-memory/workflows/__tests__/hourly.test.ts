@@ -1,3 +1,4 @@
+import { AsyncTaskStatus } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { hourlyWorkflowHandler } from '../hourly';
@@ -7,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   createExecutor: vi.fn(),
   getUsersForHourlyExtraction: vi.fn(),
   isHourlyMemoryExtractionCancellationRequested: vi.fn(),
+  markHourlyMemoryExtractionSuccess: vi.fn(),
   triggerHourly: vi.fn(),
   triggerHourlyTracked: vi.fn(),
   triggerProcessUsers: vi.fn(),
@@ -44,6 +46,7 @@ vi.mock('@/database/models/asyncTask', () => ({
     appendUserMemoryWorkflowRunIds: mocks.appendUserMemoryWorkflowRunIds,
     isHourlyMemoryExtractionCancellationRequested:
       mocks.isHourlyMemoryExtractionCancellationRequested,
+    markHourlyMemoryExtractionSuccess: mocks.markHourlyMemoryExtractionSuccess,
   })),
 }));
 
@@ -70,6 +73,7 @@ describe('hourlyWorkflowHandler', () => {
     });
     mocks.appendUserMemoryWorkflowRunIds.mockResolvedValue(undefined);
     mocks.isHourlyMemoryExtractionCancellationRequested.mockResolvedValue(false);
+    mocks.markHourlyMemoryExtractionSuccess.mockResolvedValue(undefined);
     mocks.triggerHourly.mockResolvedValue({ workflowRunId: 'next-page-run' });
     mocks.triggerHourlyTracked.mockResolvedValue({
       taskId: '00000000-0000-4000-8000-000000000001',
@@ -212,5 +216,31 @@ describe('hourlyWorkflowHandler', () => {
       skipped: true,
     });
     expect(mocks.triggerProcessUsers).not.toHaveBeenCalled();
+  });
+
+  it('marks the hourly task as success when the final user page has been scheduled', async () => {
+    mocks.getUsersForHourlyExtraction.mockResolvedValue({
+      ids: Array.from({ length: 21 }, (_, index) => `user-${index + 1}`),
+    });
+
+    const context = {
+      requestPayload: { hourlyTaskId: '00000000-0000-4000-8000-000000000001' },
+      run: vi.fn((_name: string, callback: () => unknown) => callback()),
+    };
+
+    await expect(hourlyWorkflowHandler(context as never)).resolves.toMatchObject({
+      processedUsers: 21,
+      scheduledBatches: 2,
+    });
+
+    expect(mocks.markHourlyMemoryExtractionSuccess).toHaveBeenCalledWith(
+      '00000000-0000-4000-8000-000000000001',
+      {
+        processedUsers: 21,
+        scheduledBatches: 2,
+        scheduledChildRuns: 2,
+        status: AsyncTaskStatus.Success,
+      },
+    );
   });
 });

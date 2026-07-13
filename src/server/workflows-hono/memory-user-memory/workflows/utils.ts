@@ -1,3 +1,4 @@
+import { AsyncTaskStatus } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 
 import { AsyncTaskModel } from '@/database/models/asyncTask';
@@ -120,4 +121,30 @@ export const appendHourlyWorkflowRunId = async (
   } catch (error) {
     console.error('[memory-user-memory] failed to append hourly workflow run id', error);
   }
+};
+
+export const markHourlyMemoryExtractionSuccess = async (
+  hourlyTaskId: string | undefined,
+  progress: {
+    processedUsers: number;
+    scheduledBatches: number;
+    scheduledChildRuns: number;
+  },
+) => {
+  if (!hourlyTaskId) return;
+
+  const db = await getServerDB();
+  const task = await db.query.asyncTasks.findFirst({
+    where: eq(asyncTasks.id, hourlyTaskId),
+  });
+  if (!task) return;
+
+  await new AsyncTaskModel(
+    db,
+    task.userId,
+    task.workspaceId ?? undefined,
+  ).markHourlyMemoryExtractionSuccess(hourlyTaskId, {
+    ...progress,
+    status: AsyncTaskStatus.Success,
+  });
 };

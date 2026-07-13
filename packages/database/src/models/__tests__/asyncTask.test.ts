@@ -540,6 +540,48 @@ describe('AsyncTaskModel', () => {
     });
   });
 
+  describe('markHourlyMemoryExtractionSuccess', () => {
+    it('should mark an hourly task as success and persist final scheduling progress', async () => {
+      const task = await serverDB
+        .insert(asyncTasks)
+        .values({
+          metadata: {
+            progress: {
+              processedUsers: 0,
+              scheduledBatches: 0,
+              scheduledChildRuns: 0,
+            },
+            source: 'hourly_chat_topic',
+            startedAt: '2026-07-06T00:00:00.000Z',
+          },
+          status: AsyncTaskStatus.Pending,
+          type: AsyncTaskType.UserMemoryExtractionHourly,
+          userId,
+        })
+        .returning()
+        .then((res) => res[0]);
+
+      await asyncTaskModel.markHourlyMemoryExtractionSuccess(task.id, {
+        processedUsers: 21,
+        scheduledBatches: 2,
+        scheduledChildRuns: 2,
+        status: AsyncTaskStatus.Success,
+      });
+
+      const updated = await serverDB.query.asyncTasks.findFirst({
+        where: eq(asyncTasks.id, task.id),
+      });
+      const metadata = updated?.metadata as HourlyUserMemoryExtractionMetadata | undefined;
+
+      expect(updated?.status).toBe(AsyncTaskStatus.Success);
+      expect(metadata?.progress).toEqual({
+        processedUsers: 21,
+        scheduledBatches: 2,
+        scheduledChildRuns: 2,
+      });
+    });
+  });
+
   describe('isHourlyMemoryExtractionCancellationRequested', () => {
     it('should return true for a cancelled hourly memory extraction task', async () => {
       /**

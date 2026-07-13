@@ -1,6 +1,7 @@
 import { ASYNC_TASK_TIMEOUT } from '@lobechat/business-config/server';
 import type {
   HourlyUserMemoryExtractionMetadata,
+  HourlyUserMemoryExtractionProgress,
   UserMemoryExtractionMetadata,
 } from '@lobechat/types';
 import {
@@ -187,6 +188,49 @@ export class AsyncTaskModel {
         updatedAt: new Date(),
       })
       .where(and(eq(asyncTasks.id, taskId), this.ownership()));
+  };
+
+  markHourlyMemoryExtractionSuccess = async (
+    taskId: string,
+    progress: HourlyUserMemoryExtractionProgress & { status: AsyncTaskStatus.Success },
+  ) => {
+    await this.db
+      .update(asyncTasks)
+      .set({
+        metadata: sql`
+          jsonb_set(
+            jsonb_set(
+              jsonb_set(
+                ${asyncTasks.metadata},
+                '{progress,processedUsers}',
+                to_jsonb(${progress.processedUsers}::int),
+                true
+              ),
+              '{progress,scheduledBatches}',
+              to_jsonb(${progress.scheduledBatches}::int),
+              true
+            ),
+            '{progress,scheduledChildRuns}',
+            to_jsonb(${progress.scheduledChildRuns}::int),
+            true
+          )
+        `,
+        status: sql`
+          CASE
+            WHEN ${asyncTasks.status} = ${AsyncTaskStatus.Error} OR ${asyncTasks.error} IS NOT NULL
+              THEN ${AsyncTaskStatus.Error}
+            ELSE ${progress.status}
+          END
+        `,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(asyncTasks.id, taskId),
+          eq(asyncTasks.type, AsyncTaskType.UserMemoryExtractionHourly),
+          this.ownership(),
+        ),
+      );
   };
 
   isHourlyMemoryExtractionCancellationRequested = async (taskId: string) => {
