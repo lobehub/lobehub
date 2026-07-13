@@ -17,13 +17,12 @@ output):
 ```
 
 **`result.json` is the report — `report.md` is just its tail.** The published
-verify page (`/verify/<id>`) renders itself from `result.json`: the scope header
-from `scenario` + `context` (branch / commit / surfaces / entry / focus), the
-per-check table from `cases[]`, the overall conclusion from `summary.conclusion`
-(shown at the top under the scope block), and the stats from `summary`. So
-`report.md` must NOT repeat the scope block or a 用例 table — those double up on
-the page. It carries only the non-duplicate narrative (仍需跟进 / 本轮验证 /
-评分), rendered as the page's collapsible "Details".
+verify page (`/verify/<id>`) renders itself from `result.json`: one line of
+provenance (PR / branch / commit / date / surfaces), the overall conclusion from
+`summary.conclusion` directly under the title, and the check list from `plan[]`
+paired with `cases[]`. So `report.md` must NOT repeat the scope block or a 用例
+table — those double up on the page. It carries only the non-duplicate narrative
+(仍需跟进 / 本轮验证 / 评分), rendered as the page's collapsible "Details".
 
 ## Workflow
 
@@ -110,21 +109,32 @@ the page. It carries only the non-duplicate narrative (仍需跟进 / 本轮验�
 
    - Network: `agent-browser network requests` dumps or HAR files.
 
-3. **Fill `result.json` as you go** — it is the report. Each tested behavior is
+3. **Write `plan[]` BEFORE you run anything.** The approved plan from Step 1 is
+   part of the report, not scaffolding you throw away: each item is
+   `{ id, title, verifier, method, expected, requiredEvidence }` — what you will
+   check, how it is judged, how you will exercise it, what would make it pass,
+   and the artifact it must produce. `verifier` and `requiredEvidence` are closed
+   sets the pipeline acts on (see the schema below); `method` / `expected` are
+   prose. `cases[]` later reuses the same `id`s, which is what lets the report
+   pair intent against outcome. A planned item that never produces a case renders
+   as **未执行** rather than vanishing, so cut coverage in the open — silently
+   dropping a check now shows up as a hole in the report.
+
+4. **Fill `result.json` as you go** — it is the report. Each tested behavior is
    one entry in `cases[]` (`{ id, name, result, observation, evidence }`), where
    `evidence` is a path under `assets/` (screenshot / GIF / transcript). Set the
-   scope fields (`scenario: "coding"`, `branch`, `commit`, `surfaces`, `entry`,
-   `focus`) and write the one-paragraph verdict into `summary.conclusion`. The
-   page pairs each check with its evidence inline, so you don't hand-build a
-   table. `report.md` holds only the narrative tail (跟进 / 本轮验证 / 评分).
+   scope fields (`scenario: "coding"`, `branch`, `commit`, `surfaces`, `entry`)
+   and write the one-paragraph verdict into `summary.conclusion`. The page pairs
+   each check with its evidence inline, so you don't hand-build a table.
+   `report.md` holds only the narrative tail (跟进 / 本轮验证 / 评分).
 
-4. **Set the verdict** in both `report.md` and `result.json`, then link the
+5. **Set the verdict** in both `report.md` and `result.json`, then link the
    report directory in your final answer to the user. If UI evidence exists,
    list the key screenshot/GIF links in the final chat response. Use Markdown
    link text as the evidence caption, for example:
    `[Image #1 - observed outcome](<report-dir>/assets/case1.png)`.
 
-5. **Publish to LobeHub** (Step 4 of the skill) — upload the finished session so
+6. **Publish to LobeHub** (Step 4 of the skill) — upload the finished session so
    it's viewable in-app, not just on disk. **Publish to PRODUCTION
    (`app.lobehub.com`) with the user's real login, NOT the local dev CLI** —
    strip the local dev overrides so `lh` uses its production defaults:
@@ -239,6 +249,21 @@ missing; a blocked case is not a pass).
     "operators": { "K": 1, "P": 2, "H": 0, "M": 2, "T_chars": 5, "R_ms": 2000 },
     "phases": []
   },
+  "plan": [
+    {
+      "id": "1",
+      "title": "task tree returns nested children",
+      "verifier": "program",
+      "method": "lh task list --tree against a 3-level fixture",
+      "expected": "root shows 3 nested children at depth 2",
+      "requiredEvidence": ["text"]
+    }
+  ],
+  "pullRequest": {
+    "number": 17152,
+    "title": "feat(task): nested task tree",
+    "url": "https://github.com/lobehub/lobe-chat/pull/17152"
+  },
   "summary": {
     "total": 1,
     "passed": 1,
@@ -251,6 +276,43 @@ missing; a blocked case is not a pass).
   "title": "Verify task tree API"
 }
 ```
+
+`plan[]` is the checks you committed to **before running them**, and it shares
+`id`s with `cases[]`. Only `id` and `title` are required. A plan item with no
+matching case renders as **未执行**: cutting coverage is allowed, hiding that you
+cut it is not.
+
+Two of its fields are a **closed vocabulary**, because the pipeline acts on them
+— they are not labels:
+
+| field              | values                                                                       | what it does                                                                                                               |
+| ------------------ | ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `verifier`         | `program` \| `agent` \| `llm` (default `agent`)                              | How the verdict is reached. A command-asserted check is `program`; calling it `agent` hides what actually judged it.       |
+| `requiredEvidence` | `screenshot` \| `gif` \| `video` \| `text` \| `dom_snapshot` \| `transcript` | The artifact this check **must** produce. The executor's coverage gate **fails** an item whose required medium is missing. |
+
+An out-of-vocabulary value in either fails the ingest — an unrecognized medium
+would silently gate on nothing, which is worse than no gate at all.
+
+`method` (how you would exercise it) and `expected` (what would make it pass)
+stay **free prose** — they carry intent no enum can, and both render under the
+check on the page next to the outcome.
+
+`surfaces` is a **closed set** — `web` | `desktop` | `cli` | `mobile` | `bot` —
+and names the product surface a check ran **on**. `electron` is accepted and
+normalized to `desktop`. Anything else fails the ingest, so don't reach for it:
+
+- A **test kind** is not a surface. `unit`, `backend`, `database`, `type-check`
+  do not belong here; a backend change verified through the CLI has surface
+  `cli`.
+- A **runtime mode** is not a surface. "packaged build (app.isPackaged=true)",
+  "CDP dev instance" — that detail belongs on the plan item's `method`.
+
+`entry` is the command or URL exercised (`lh task list --tree`,
+`/chat/settings`) — **not** a PR title and not a description of the change.
+
+`pullRequest` is optional: when it is absent, the ingest asks `gh` for the PR of
+`branch` and fills it in. Write it explicitly only when the report verifies a PR
+that isn't the branch's own.
 
 `score` is optional — use it when the verdict has a subjective component (UI
 polish, copy quality); omit it for purely binary runs. `verdict` is the single

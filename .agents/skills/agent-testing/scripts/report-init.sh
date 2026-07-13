@@ -40,9 +40,16 @@ cat > "$DIR/report.md" << EOF
 EOF
 
 # result.json drives the structured page. \`summary.conclusion\` is the overall
-# conclusion shown at the top (under the scope block); \`summary.score\` (0-100)
-# becomes the \`score\` stat; \`scenario\`/\`context\` fields
-# (branch/commit/surfaces/entry/focus) render the scope header.
+# conclusion shown at the top (under the title); \`summary.score\` (0-100) becomes
+# the \`score\` stat; branch/commit/surfaces/entry render the one-line provenance.
+#
+# \`plan\` is filled BEFORE the run: {id, title, method, expected} per check. It
+# shares ids with \`cases\`, so the page pairs intent against outcome and shows a
+# planned item that never ran as 未执行 rather than dropping it.
+#
+# \`surfaces\` is a closed set: web | desktop | cli | mobile | bot. It is where a
+# check RAN — not a test kind (unit/backend) and not a runtime mode (packaged
+# build / CDP dev instance; that goes on the plan item's \`method\`).
 cat > "$DIR/result.json" << EOF
 {
   "title": "$TITLE",
@@ -52,7 +59,7 @@ cat > "$DIR/result.json" << EOF
   "commit": "$COMMIT",
   "surfaces": [],
   "entry": "",
-  "focus": "",
+  "plan": [],
   "cases": [],
   "interactionCost": null,
   "summary": { "total": 0, "passed": 0, "failed": 0, "blocked": 0, "verdict": "pending", "conclusion": "", "score": null }

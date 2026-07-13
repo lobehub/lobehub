@@ -72,6 +72,7 @@ import type { RunScope } from '../../lifecycle/types';
 import { createGatewayEventHandler, isCompletedRuntimeEnd } from '../gateway/gatewayEventHandler';
 import { createMessageWriteBatcher, type ToolMessageUpdateOperation } from './messageWriteBatcher';
 import { createPendingCreateLedger } from './pendingCreateLedger';
+import { buildLobeHubSessionEnv } from './sessionEnv';
 
 /** Mirrors `idGenerator('threads', 16)` on the server so sync-allocated ids have the same shape. */
 const generateThreadId = () => `thd_${createNanoId(16)()}`;
@@ -1676,7 +1677,19 @@ export const executeHeterogeneousAgent = async (
       args: buildHeteroSpawnArgs(heterogeneousProvider),
       command: heterogeneousProvider.command || (adapterType === 'codex' ? 'codex' : 'claude'),
       cwd: workingDirectory,
-      env: heterogeneousProvider.env,
+      env: {
+        // Tell the CLI which LobeHub conversation it is running inside. The child
+        // (and every subprocess it spawns, e.g. `lh`) inherits these, so a tool
+        // running under the agent can attribute its output back to this topic
+        // without the agent having to pass ids it can't see. User-configured env
+        // wins — this is provenance, never an override the user can't escape.
+        ...buildLobeHubSessionEnv({
+          agentId: context.agentId,
+          operationId,
+          topicId: context.topicId,
+        }),
+        ...heterogeneousProvider.env,
+      },
       resumeSessionId,
       useClaudeCodeSdk: labPreferSelectors.enableClaudeCodeSdk(useUserStore.getState()),
     });

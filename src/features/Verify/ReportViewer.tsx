@@ -1,11 +1,16 @@
 'use client';
 
 import type {
+  VerifyAgentPlanConfig,
+  VerifyCheckItem,
   VerifyCodingScope,
   VerifyEvidenceType,
   VerifyInteractionCost,
   VerifyInteractionCostOperators,
   VerifyInteractionCostPhase,
+  VerifyRunOrigin,
+  VerifySurface,
+  VerifyVerdict,
 } from '@lobechat/types';
 import { toRecord } from '@lobechat/utils/object';
 import {
@@ -25,9 +30,11 @@ import { createStaticStyles, cssVar, cx } from 'antd-style';
 import type { TFunction } from 'i18next';
 import {
   AlertTriangle,
+  Bot,
   CalendarClock,
   Check,
   ChevronRight,
+  CircleDashed,
   CircleHelp,
   Clock3,
   ExternalLink,
@@ -35,10 +42,12 @@ import {
   GitBranch,
   GitCommit,
   GitPullRequest,
+  Globe,
   Image as ImageIcon,
-  Layers,
+  MessagesSquare,
+  Monitor,
   RefreshCw,
-  Target,
+  Smartphone,
   Terminal,
   Video,
   X,
@@ -49,13 +58,13 @@ import { useParams } from 'react-router';
 
 import Loading from '@/components/Loading/BrandTextLoading';
 import { useTextFileLoader } from '@/features/FileViewer/hooks/useTextFileLoader';
-import type { VerifyEvidenceWithUrl, VerifyResultWithEvidence } from '@/services/verify';
+import type { VerifyEvidenceWithUrl } from '@/services/verify';
 import { getLanguageFromFilename } from '@/utils/fileLanguage';
 
 import { useVerifyReportBundle } from './hooks';
+import { buildCheckRows, type CheckRowData, type CheckState, renderableSurfaces } from './utils';
 
-type Verdict = 'passed' | 'failed' | 'uncertain';
-type Filter = 'all' | Verdict;
+type Filter = 'all' | CheckState;
 
 /** Best-effort filename from a (possibly signed) file URL, for syntax highlighting. */
 const filenameFromUrl = (url: string): string => {
@@ -77,7 +86,10 @@ const styles = createStaticStyles(({ css }) => ({
     max-width: 880px;
     margin-inline: auto;
     padding-block: 32px 64px;
-    padding-inline: 32px;
+
+    /* Start-aligned with the 46px gutter a check row's body sits at, so the hero
+       prose and the expanded check prose share one text edge. */
+    padding-inline: 46px 32px;
   `,
 
   /* hero */
@@ -325,21 +337,34 @@ const styles = createStaticStyles(({ css }) => ({
     font-variant-numeric: tabular-nums;
     color: ${cssVar.colorTextTertiary};
   `,
+  /* Provenance: where the code came from. Reference material the reader scans,
+     so it stays visually subordinate to the verdict + summary above it. */
   codingScope: css`
     display: flex;
     flex-direction: column;
     gap: 6px;
 
+    min-width: 0;
     max-width: 100%;
-    margin-block-start: 8px;
+    margin-block-start: 4px;
   `,
-  codingScopeMain: css`
+  /* The PR gets its own line. It is the one outbound link a reader actually
+     follows, and its title is long enough that sharing a row with branch/commit
+     would either push them onto a second line anyway or truncate the title to
+     nothing. */
+  scopePullRequestLine: css`
+    display: flex;
+    min-width: 0;
+    max-width: 100%;
+  `,
+  scopeMetaLine: css`
     display: flex;
     flex-wrap: wrap;
     gap: 6px 14px;
     align-items: center;
 
     min-width: 0;
+    max-width: 100%;
   `,
   branchChip: css`
     display: inline-flex;
@@ -396,8 +421,9 @@ const styles = createStaticStyles(({ css }) => ({
     gap: 6px;
     align-items: center;
 
+    /* Owns its own line, so the title gets the full column before ellipsizing. */
     min-width: 0;
-    max-width: 420px;
+    max-width: 100%;
 
     font-size: 12px;
     color: ${cssVar.colorTextSecondary};
@@ -430,14 +456,6 @@ const styles = createStaticStyles(({ css }) => ({
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
-  scopeMetaRow: css`
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px 14px;
-    align-items: center;
-
-    min-width: 0;
-  `,
   scopeMetaItem: css`
     display: inline-flex;
     gap: 6px;
@@ -461,17 +479,29 @@ const styles = createStaticStyles(({ css }) => ({
       text-overflow: ellipsis;
       white-space: nowrap;
     }
+
+    svg {
+      flex: 0 0 auto;
+      color: ${cssVar.colorTextQuaternary};
+    }
   `,
-  scopeFocus: css`
-    display: inline-flex;
-    gap: 6px;
-    align-items: flex-start;
+  /* The command / URL under test. Can be long; it must never push the rest of
+     the provenance line onto a second row. */
+  scopeEntry: css`
+    max-width: 260px;
+  `,
+  originLink: css`
+    cursor: pointer;
+    color: ${cssVar.colorTextTertiary};
+    text-decoration: none;
 
-    max-width: 72ch;
+    &:hover {
+      color: ${cssVar.colorLink};
+    }
 
-    font-size: 13px;
-    line-height: 1.45;
-    color: ${cssVar.colorTextSecondary};
+    &:hover svg {
+      color: ${cssVar.colorLink};
+    }
   `,
   surfaceList: css`
     display: flex;
@@ -479,6 +509,10 @@ const styles = createStaticStyles(({ css }) => ({
     gap: 4px;
   `,
   surfaceChip: css`
+    display: inline-flex;
+    gap: 4px;
+    align-items: center;
+
     padding-block: 1px;
     padding-inline: 6px;
     border-radius: ${cssVar.borderRadiusSM};
@@ -487,6 +521,10 @@ const styles = createStaticStyles(({ css }) => ({
     color: ${cssVar.colorTextSecondary};
 
     background: ${cssVar.colorFillTertiary};
+
+    svg {
+      color: ${cssVar.colorTextTertiary};
+    }
   `,
 
   /* sticky filter chips */
@@ -636,19 +674,37 @@ const styles = createStaticStyles(({ css }) => ({
     padding-inline: 46px 16px;
   `,
   reasoning: css`
-    max-width: 70ch;
     font-size: 13px;
     line-height: 1.6;
     color: ${cssVar.colorTextSecondary};
   `,
   suggestion: css`
-    max-width: 70ch;
     padding-inline-start: 10px;
     border-inline-start: 2px solid ${cssVar.colorBorder};
 
     font-size: 13px;
     line-height: 1.6;
     color: ${cssVar.colorTextSecondary};
+  `,
+  /* What the run said it would do, before it did it — read above the outcome so
+     intent and result sit together and a gap between them is visible. */
+  planDetail: css`
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 4px 8px;
+
+    font-size: 13px;
+    line-height: 1.6;
+    color: ${cssVar.colorTextTertiary};
+  `,
+  planDetailLabel: css`
+    color: ${cssVar.colorTextQuaternary};
+    white-space: nowrap;
+  `,
+  notExecutedHint: css`
+    font-size: 13px;
+    line-height: 1.6;
+    color: ${cssVar.colorTextTertiary};
   `,
 
   /* narrative */
@@ -698,7 +754,7 @@ const styles = createStaticStyles(({ css }) => ({
     gap: 6px;
     align-items: flex-start;
 
-    max-width: 70ch;
+    width: 100%;
   `,
   comparison: css`
     display: grid;
@@ -866,7 +922,7 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 const VERDICT_META: Record<
-  Verdict,
+  CheckState,
   { bg: string; color: string; dot: string; icon: typeof Check; labelKey: string }
 > = {
   failed: {
@@ -875,6 +931,13 @@ const VERDICT_META: Record<
     dot: cssVar.colorError,
     icon: X,
     labelKey: 'report.verdict.failed',
+  },
+  not_executed: {
+    bg: cssVar.colorFillTertiary,
+    color: cssVar.colorTextTertiary,
+    dot: cssVar.colorTextQuaternary,
+    icon: CircleDashed,
+    labelKey: 'report.verdict.notExecuted',
   },
   passed: {
     bg: cssVar.colorSuccessBg,
@@ -890,6 +953,15 @@ const VERDICT_META: Record<
     icon: CircleHelp,
     labelKey: 'report.verdict.uncertain',
   },
+};
+
+/** Each surface reads as a badge, so it needs a mark, not just a word. */
+const SURFACE_ICON: Record<VerifySurface, typeof Check> = {
+  bot: Bot,
+  cli: Terminal,
+  desktop: Monitor,
+  mobile: Smartphone,
+  web: Globe,
 };
 
 const imageEvidenceTypes = new Set(['gif', 'screenshot']);
@@ -1051,15 +1123,6 @@ const phaseOperatorSegments = (
     const seconds = operatorSeconds(key, value, timingSeconds);
     return seconds > 0 ? [{ key, seconds, value }] : [];
   });
-
-/** Severity-first sort: failed → uncertain → passed. */
-const SEVERITY_RANK: Record<Verdict, number> = { failed: 0, passed: 2, uncertain: 1 };
-
-const checkVerdict = (result: VerifyResultWithEvidence): Verdict => {
-  const v = result.verdict ?? result.status;
-  if (v === 'passed' || v === 'failed' || v === 'uncertain') return v;
-  return 'uncertain';
-};
 
 const evidenceDisplayName = (
   evidence: VerifyEvidenceWithUrl,
@@ -1410,122 +1473,172 @@ EvidenceComparisonView.displayName = 'EvidenceComparisonView';
 EvidenceDrawer.displayName = 'EvidenceDrawer';
 
 /** One check — an expandable row; evidence opens one artifact at a time. */
-const CheckRow = memo<{ defaultOpen: boolean; result: VerifyResultWithEvidence }>(
-  ({ defaultOpen, result }) => {
-    const { t } = useTranslation('verify');
-    const [open, setOpen] = useState(defaultOpen);
-    const [selectedEvidenceId, setSelectedEvidenceId] = useState<string | null>(null);
-    const verdict = checkVerdict(result);
-    const meta = VERDICT_META[verdict];
-    const evidenceCount = result.evidence.length;
-    const categoryCounts = result.evidence.reduce(
-      (acc, e) => {
-        acc[evidenceCategory(e.type)] += 1;
-        return acc;
-      },
-      { file: 0, image: 0, video: 0 } as Record<EvidenceCategory, number>,
-    );
-    const hasBody =
-      Boolean(result.toulmin?.evidence) || Boolean(result.suggestion) || evidenceCount > 0;
-    const selectedEvidenceIndex = selectedEvidenceId
-      ? result.evidence.findIndex((e) => e.id === selectedEvidenceId)
-      : -1;
-    const selectedEvidence =
-      selectedEvidenceIndex >= 0 ? result.evidence[selectedEvidenceIndex] : null;
-    const comparisonGroups = new Map<
-      string,
-      Partial<Record<'after' | 'before', VerifyEvidenceWithUrl>>
-    >();
-    for (const evidence of result.evidence) {
-      const comparison = evidenceComparison(evidence);
-      if (!comparison) continue;
-      const group = comparisonGroups.get(comparison.id) ?? {};
-      group[comparison.role] = evidence;
-      comparisonGroups.set(comparison.id, group);
-    }
-    const pairedEvidenceIds = new Set(
-      [...comparisonGroups.values()]
-        .filter((group) => group.before && group.after)
-        .flatMap((group) => [group.before!.id, group.after!.id]),
-    );
+const CheckRow = memo<{ defaultOpen: boolean; row: CheckRowData }>(({ defaultOpen, row }) => {
+  const { t } = useTranslation('verify');
+  const { planItem, result, state } = row;
+  const [open, setOpen] = useState(defaultOpen);
+  const [selectedEvidenceId, setSelectedEvidenceId] = useState<string | null>(null);
+  const meta = VERDICT_META[state];
+  const evidence = result?.evidence ?? [];
+  const evidenceCount = evidence.length;
+  // An agent-authored plan item records how it meant to check this and what it
+  // expected to see (prose), plus the evidence media it is required to produce
+  // (a closed set the executor's coverage gate enforces).
+  const planConfig = (planItem?.verifierConfig ?? {}) as VerifyAgentPlanConfig;
+  const requiredEvidence = planConfig.requiredEvidence ?? [];
+  const categoryCounts = evidence.reduce(
+    (acc, e) => {
+      acc[evidenceCategory(e.type)] += 1;
+      return acc;
+    },
+    { file: 0, image: 0, video: 0 } as Record<EvidenceCategory, number>,
+  );
+  // `required` lives on the result when there is one, on the plan item otherwise
+  // — a check that never ran still knows whether it was optional.
+  const required = result?.required ?? planItem?.required ?? true;
+  const hasBody =
+    Boolean(result?.toulmin?.evidence) ||
+    Boolean(result?.suggestion) ||
+    Boolean(planConfig.method) ||
+    Boolean(planConfig.expected) ||
+    requiredEvidence.length > 0 ||
+    state === 'not_executed' ||
+    evidenceCount > 0;
+  const selectedEvidenceIndex = selectedEvidenceId
+    ? evidence.findIndex((e) => e.id === selectedEvidenceId)
+    : -1;
+  const selectedEvidence = selectedEvidenceIndex >= 0 ? evidence[selectedEvidenceIndex] : null;
+  const comparisonGroups = new Map<
+    string,
+    Partial<Record<'after' | 'before', VerifyEvidenceWithUrl>>
+  >();
+  for (const item of evidence) {
+    const comparison = evidenceComparison(item);
+    if (!comparison) continue;
+    const group = comparisonGroups.get(comparison.id) ?? {};
+    group[comparison.role] = item;
+    comparisonGroups.set(comparison.id, group);
+  }
+  const pairedEvidenceIds = new Set(
+    [...comparisonGroups.values()]
+      .filter((group) => group.before && group.after)
+      .flatMap((group) => [group.before!.id, group.after!.id]),
+  );
 
-    return (
-      <div className={styles.row}>
-        <button
-          className={styles.rowHead}
-          type={'button'}
-          onClick={() => hasBody && setOpen((o) => !o)}
-        >
-          <span style={{ color: meta.dot, display: 'flex' }}>
-            <Icon icon={meta.icon} size={16} />
-          </span>
-          <span className={styles.rowTitle} data-failed={verdict === 'failed'}>
-            {result.checkItemTitle || result.checkItemId}
-          </span>
-          <span className={styles.rowSide}>
-            {CATEGORY_ORDER.map((cat) =>
-              categoryCounts[cat] > 0 ? (
-                <span
-                  className={styles.evChip}
-                  key={cat}
-                  title={`${t(`report.evidence.category.${cat}`)} × ${categoryCounts[cat]}`}
-                >
-                  <Icon icon={CATEGORY_ICON[cat]} size={12} />
-                  {categoryCounts[cat]}
-                </span>
-              ) : null,
-            )}
-            {!result.required && (
-              <span className={styles.softTag}>{t('report.check.optional')}</span>
-            )}
-            {hasBody && (
-              <Icon className={styles.chev} data-open={open} icon={ChevronRight} size={14} />
-            )}
-          </span>
-        </button>
-        {open && hasBody && (
-          <div className={styles.rowBody}>
-            {result.toulmin?.evidence && (
-              <p className={styles.reasoning}>{result.toulmin.evidence}</p>
-            )}
-            {result.suggestion && <p className={styles.suggestion}>{result.suggestion}</p>}
-            {evidenceCount > 0 && (
-              <>
-                <div className={styles.evidenceList}>
-                  {[...comparisonGroups.entries()].map(([id, group]) =>
-                    group.before && group.after ? (
-                      <EvidenceComparisonView after={group.after} before={group.before} key={id} />
-                    ) : null,
-                  )}
-                  {result.evidence.map((e, index) =>
-                    pairedEvidenceIds.has(e.id) ? null : isInlineEvidence(e) ? (
-                      <EvidenceItem evidence={e} index={index + 1} key={e.id} />
-                    ) : (
-                      <EvidenceFileButton
-                        evidence={e}
-                        index={index + 1}
-                        key={e.id}
-                        onClick={() => setSelectedEvidenceId(e.id)}
-                      />
-                    ),
-                  )}
-                </div>
-                {selectedEvidence && (
-                  <EvidenceDrawer
-                    evidence={[selectedEvidence]}
-                    open={Boolean(selectedEvidence)}
-                    title={evidenceDisplayName(selectedEvidence, t, selectedEvidenceIndex + 1)}
-                    onClose={() => setSelectedEvidenceId(null)}
-                  />
+  return (
+    <div className={styles.row}>
+      <button
+        className={styles.rowHead}
+        type={'button'}
+        onClick={() => hasBody && setOpen((o) => !o)}
+      >
+        <span style={{ color: meta.dot, display: 'flex' }}>
+          <Icon icon={meta.icon} size={16} />
+        </span>
+        <span className={styles.rowTitle} data-failed={state === 'failed'}>
+          {result?.checkItemTitle || planItem?.title || row.id}
+        </span>
+        <span className={styles.rowSide}>
+          {CATEGORY_ORDER.map((cat) =>
+            categoryCounts[cat] > 0 ? (
+              <span
+                className={styles.evChip}
+                key={cat}
+                title={`${t(`report.evidence.category.${cat}`)} × ${categoryCounts[cat]}`}
+              >
+                <Icon icon={CATEGORY_ICON[cat]} size={12} />
+                {categoryCounts[cat]}
+              </span>
+            ) : null,
+          )}
+          {state === 'not_executed' && (
+            <span className={styles.softTag}>{t('report.verdict.notExecuted')}</span>
+          )}
+          {!required && <span className={styles.softTag}>{t('report.check.optional')}</span>}
+          {hasBody && (
+            <Icon className={styles.chev} data-open={open} icon={ChevronRight} size={14} />
+          )}
+        </span>
+      </button>
+      {open && hasBody && (
+        <div className={styles.rowBody}>
+          {(planConfig.method || planConfig.expected || requiredEvidence.length > 0) && (
+            <div className={styles.planDetail}>
+              {planConfig.method && (
+                <>
+                  <span className={styles.planDetailLabel}>{t('report.plan.method')}</span>
+                  <span>{planConfig.method}</span>
+                </>
+              )}
+              {planConfig.expected && (
+                <>
+                  <span className={styles.planDetailLabel}>{t('report.plan.expected')}</span>
+                  <span>{planConfig.expected}</span>
+                </>
+              )}
+              {/* The media this item is *required* to produce. Not decoration: a
+                  missing one fails the item through the executor's coverage gate,
+                  so a reader can see what the check was contractually owed. */}
+              {requiredEvidence.length > 0 && (
+                <>
+                  <span className={styles.planDetailLabel}>
+                    {t('report.plan.requiredEvidence')}
+                  </span>
+                  <span className={styles.surfaceList}>
+                    {requiredEvidence.map((spec) => (
+                      <span className={styles.surfaceChip} key={spec.type} title={spec.hint}>
+                        <Icon icon={CATEGORY_ICON[evidenceCategory(spec.type)]} size={12} />
+                        {t(`report.evidence.medium.${spec.type}`)}
+                      </span>
+                    ))}
+                  </span>
+                </>
+              )}
+            </div>
+          )}
+          {state === 'not_executed' && (
+            <p className={styles.notExecutedHint}>{t('report.plan.notExecutedHint')}</p>
+          )}
+          {result?.toulmin?.evidence && (
+            <p className={styles.reasoning}>{result.toulmin.evidence}</p>
+          )}
+          {result?.suggestion && <p className={styles.suggestion}>{result.suggestion}</p>}
+          {evidenceCount > 0 && (
+            <>
+              <div className={styles.evidenceList}>
+                {[...comparisonGroups.entries()].map(([id, group]) =>
+                  group.before && group.after ? (
+                    <EvidenceComparisonView after={group.after} before={group.before} key={id} />
+                  ) : null,
                 )}
-              </>
-            )}
-          </div>
-        )}
-      </div>
-    );
-  },
-);
+                {evidence.map((e, index) =>
+                  pairedEvidenceIds.has(e.id) ? null : isInlineEvidence(e) ? (
+                    <EvidenceItem evidence={e} index={index + 1} key={e.id} />
+                  ) : (
+                    <EvidenceFileButton
+                      evidence={e}
+                      index={index + 1}
+                      key={e.id}
+                      onClick={() => setSelectedEvidenceId(e.id)}
+                    />
+                  ),
+                )}
+              </div>
+              {selectedEvidence && (
+                <EvidenceDrawer
+                  evidence={[selectedEvidence]}
+                  open={Boolean(selectedEvidence)}
+                  title={evidenceDisplayName(selectedEvidence, t, selectedEvidenceIndex + 1)}
+                  onClose={() => setSelectedEvidenceId(null)}
+                />
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+});
 
 CheckRow.displayName = 'CheckRow';
 
@@ -1570,23 +1683,34 @@ const pullRequestLabel = (
   });
 };
 
-const CodingScopeCard = memo<{ context: VerifyCodingScope | null | undefined }>(({ context }) => {
+/**
+ * One line of provenance: the PR, the code, when, and where it ran. Reference
+ * material — the reader scans it to place the report, then moves on — so it
+ * stays subordinate to the verdict and the summary above it, and never grows
+ * into a stack of labelled rows.
+ */
+const CodingScopeCard = memo<{
+  context: VerifyCodingScope | null | undefined;
+  origin?: VerifyRunOrigin;
+}>(({ context, origin }) => {
   const { t } = useTranslation('verify');
   if (!context) return null;
 
-  const { branch, commit, entry, focus, pullRequest, surfaces, testedAt } = context;
+  const { branch, commit, entry, pullRequest, testedAt } = context;
   const hasPullRequest = Boolean(
     pullRequest && (pullRequest.number !== undefined || pullRequest.title || pullRequest.url),
   );
   const date = formatScopeDate(testedAt);
+  const surfaces = renderableSurfaces(context.surfaces);
+  const originTopicId = origin?.topicId;
   const hasScope =
     Boolean(branch) ||
     Boolean(commit) ||
     Boolean(entry) ||
-    Boolean(focus) ||
     hasPullRequest ||
-    Boolean(surfaces?.length) ||
-    Boolean(date);
+    surfaces.length > 0 ||
+    Boolean(date) ||
+    Boolean(originTopicId);
 
   if (!hasScope) return null;
 
@@ -1604,75 +1728,77 @@ const CodingScopeCard = memo<{ context: VerifyCodingScope | null | undefined }>(
 
   return (
     <div className={styles.codingScope}>
-      {(hasPullRequest || branch || commit || date) && (
-        <div className={styles.codingScopeMain}>
-          {pullRequestContent &&
-            (pullRequestUrl ? (
-              <a
-                className={styles.prChip}
-                data-link={true}
-                href={pullRequestUrl}
-                rel="noreferrer"
-                target="_blank"
-                title={pullRequest?.title ?? pullRequestUrl}
-              >
-                {pullRequestContent}
-              </a>
-            ) : (
-              <span className={styles.prChip} title={pullRequest?.title}>
-                {pullRequestContent}
+      {pullRequestContent && (
+        <div className={styles.scopePullRequestLine}>
+          {pullRequestUrl ? (
+            <a
+              className={styles.prChip}
+              data-link={true}
+              href={pullRequestUrl}
+              rel="noreferrer"
+              target="_blank"
+              title={pullRequest?.title ?? pullRequestUrl}
+            >
+              {pullRequestContent}
+            </a>
+          ) : (
+            <span className={styles.prChip} title={pullRequest?.title}>
+              {pullRequestContent}
+            </span>
+          )}
+        </div>
+      )}
+
+      <div className={styles.scopeMetaLine}>
+        {branch && (
+          <span className={styles.branchChip} title={branch}>
+            <Icon icon={GitBranch} size={15} />
+            <code>{branch}</code>
+          </span>
+        )}
+        {commit && (
+          <span className={styles.commitChip} title={commit}>
+            <Icon icon={GitCommit} size={14} />
+            <code>{shortCommit}</code>
+          </span>
+        )}
+        {date && (
+          <span className={styles.scopeMetaItem}>
+            <Icon icon={CalendarClock} size={13} />
+            <span>{date}</span>
+          </span>
+        )}
+        {surfaces.length > 0 && (
+          <span className={styles.surfaceList}>
+            {surfaces.map((surface) => (
+              <span className={styles.surfaceChip} key={surface}>
+                <Icon icon={SURFACE_ICON[surface]} size={12} />
+                {t(`report.surface.${surface}`)}
               </span>
             ))}
-          {branch && (
-            <span className={styles.branchChip} title={branch}>
-              <Icon icon={GitBranch} size={15} />
-              <code>{branch}</code>
-            </span>
-          )}
-          {commit && (
-            <span className={styles.commitChip} title={commit}>
-              <Icon icon={GitCommit} size={14} />
-              <code>{shortCommit}</code>
-            </span>
-          )}
-          {date && (
-            <span className={styles.scopeMetaItem}>
-              <Icon icon={CalendarClock} size={13} />
-              <span>{date}</span>
-            </span>
-          )}
-        </div>
-      )}
-
-      {(surfaces?.length || entry) && (
-        <div className={styles.scopeMetaRow}>
-          {surfaces && surfaces.length > 0 && (
-            <span className={styles.scopeMetaItem}>
-              <Icon icon={Layers} size={13} />
-              <span className={styles.surfaceList}>
-                {surfaces.map((surface) => (
-                  <span className={styles.surfaceChip} key={surface}>
-                    {surface}
-                  </span>
-                ))}
-              </span>
-            </span>
-          )}
-          {entry && (
-            <span className={styles.scopeMetaItem} title={entry}>
-              <Icon icon={Terminal} size={13} />
-              <code>{entry}</code>
-            </span>
-          )}
-        </div>
-      )}
-
-      {focus && (
-        <div className={styles.scopeFocus}>
-          <Icon icon={Target} size={13} />
-          <span>{focus}</span>
-        </div>
-      )}
+          </span>
+        )}
+        {entry && (
+          <span className={cx(styles.scopeMetaItem, styles.scopeEntry)} title={entry}>
+            <Icon icon={Terminal} size={13} />
+            <code>{entry}</code>
+          </span>
+        )}
+        {/* Only ever rendered for the report's author — the server redacts `origin`
+            from a bundle fetched by anyone else holding the shared link. */}
+        {originTopicId && (
+          <a
+            className={cx(styles.scopeMetaItem, styles.originLink)}
+            href={`/chat?topic=${originTopicId}`}
+            rel="noreferrer"
+            target="_blank"
+            title={t('report.scope.origin')}
+          >
+            <Icon icon={MessagesSquare} size={13} />
+            <Icon icon={ExternalLink} size={11} />
+          </a>
+        )}
+      </div>
     </div>
   );
 });
@@ -1705,9 +1831,7 @@ const ReportViewer = memo<ReportViewerProps>(({ runId: explicitRunId }) => {
 
   const ordered = useMemo(() => {
     if (!data) return [];
-    return [...data.results].sort(
-      (a, b) => SEVERITY_RANK[checkVerdict(a)] - SEVERITY_RANK[checkVerdict(b)],
-    );
+    return buildCheckRows((data.run.plan as VerifyCheckItem[] | null) ?? null, data.results);
   }, [data]);
 
   if (!verifyRunId) {
@@ -1751,20 +1875,28 @@ const ReportViewer = memo<ReportViewerProps>(({ runId: explicitRunId }) => {
       : null;
 
   const counts = ordered.reduce(
-    (acc, r) => {
-      acc[checkVerdict(r)] += 1;
+    (acc, row) => {
+      acc[row.state] += 1;
       return acc;
     },
-    { failed: 0, passed: 0, uncertain: 0 } as Record<Verdict, number>,
+    { failed: 0, not_executed: 0, passed: 0, uncertain: 0 } as Record<CheckState, number>,
   );
-  const total = report?.totalChecks ?? ordered.length;
-  const passed = report?.passedChecks ?? counts.passed;
-  const failed = report?.failedChecks ?? counts.failed;
-  const uncertain = report?.uncertainChecks ?? counts.uncertain;
-  const verdict = (report?.verdict as Verdict | null) ?? null;
-  const visible = filter === 'all' ? ordered : ordered.filter((r) => checkVerdict(r) === filter);
+  // A chip's count is a promise about the rows behind it, so whenever there are
+  // rows they are the truth — the report's own stats count the cases it ingested
+  // and know nothing about a planned check that never produced one. Only an
+  // empty list falls back to them (a report can exist before any result does).
+  const hasRows = ordered.length > 0;
+  const total = hasRows ? ordered.length : (report?.totalChecks ?? 0);
+  const passed = hasRows ? counts.passed : (report?.passedChecks ?? 0);
+  const failed = hasRows ? counts.failed : (report?.failedChecks ?? 0);
+  const uncertain = hasRows ? counts.uncertain : (report?.uncertainChecks ?? 0);
+  const verdict = (report?.verdict as VerifyVerdict | null) ?? null;
+  const visible = filter === 'all' ? ordered : ordered.filter((row) => row.state === filter);
   const isCodingReport = run.scenario === 'coding';
   const interactionCost = readInteractionCost(run.metadata);
+  // The server strips `origin` for anyone but the author; `isOwner` keeps the
+  // affordance off the page for a visitor even if that ever regressed.
+  const origin = data.isOwner ? run.metadata?.origin : undefined;
 
   const chips: { count: number; dot?: string; key: Filter; label: string }[] = [
     { count: total, key: 'all', label: t('report.filter.all') },
@@ -1775,6 +1907,18 @@ const ReportViewer = memo<ReportViewerProps>(({ runId: explicitRunId }) => {
       key: 'uncertain',
       label: t('report.filter.uncertain'),
     },
+    // Only a report with a stored plan can have these, so the chip appears only
+    // when there is something to filter to.
+    ...(counts.not_executed > 0
+      ? [
+          {
+            count: counts.not_executed,
+            dot: cssVar.colorTextQuaternary,
+            key: 'not_executed' as const,
+            label: t('report.filter.notExecuted'),
+          },
+        ]
+      : []),
     { count: passed, dot: cssVar.colorSuccess, key: 'passed', label: t('report.filter.passed') },
   ];
 
@@ -1804,7 +1948,7 @@ const ReportViewer = memo<ReportViewerProps>(({ runId: explicitRunId }) => {
             {!isCodingReport && run.goal && <Text className={styles.summary}>{run.goal}</Text>}
             {report?.summary && <Text className={styles.summary}>{report.summary}</Text>}
 
-            {isCodingReport && <CodingScopeCard context={run.context} />}
+            {isCodingReport && <CodingScopeCard context={run.context} origin={origin} />}
 
             {liveStatus && (
               <div className={styles.liveBanner}>
@@ -1836,12 +1980,14 @@ const ReportViewer = memo<ReportViewerProps>(({ runId: explicitRunId }) => {
 
           {visible.length > 0 ? (
             <div className={styles.checks}>
-              {visible.map((r) => (
+              {visible.map((row) => (
                 <CheckRow
-                  key={r.id}
-                  result={r}
+                  key={row.id}
+                  row={row}
                   defaultOpen={
-                    checkVerdict(r) === 'failed' || r.evidence.some(isInlineVisualEvidence)
+                    row.state === 'failed' ||
+                    row.state === 'not_executed' ||
+                    (row.result?.evidence ?? []).some(isInlineVisualEvidence)
                   }
                 />
               ))}

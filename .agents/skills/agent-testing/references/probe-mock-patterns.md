@@ -1237,3 +1237,33 @@ nodeintegration, plugins, disablewebsecurity, allowpopups, preload, …`). The h
   ```
   Tag the resolved element with a `data-probe` attribute and drive it with `agent-browser click '[data-probe=...]'` (trusted CDP input, D18).
 - **Corollary**: the phantom also owns the tooltip text of whatever component it duplicates, so an `innerText`/aria grep can "find" a control that the user cannot see. Assert on `getBoundingClientRect()` before believing a control is present.
+### C8. ✅ An agent-browser session can silently LOSE its seeded cookies — a 401, not `document.cookie`, is the signal
+
+- **Situation**: verifying an owner-only affordance (a link the server renders only for the
+  report's author). The page rendered without it, and the bundle came back `isOwner: false`
+  even though the row's `userId` matched the seeded user — which reads exactly like a bug in
+  the ownership check.
+- **Doesn't work**: `document.cookie` as the auth probe. Better Auth's session cookie is
+  **httpOnly**, so `document.cookie` is legitimately `[]` on a fully authenticated page —
+  `cookieCount: 0` proves nothing either way.
+- **Doesn't work**: trusting `setup-auth.sh web-seed`'s success line for the rest of the run.
+  It verified the session at `/`; the session can still be empty later (this run's page had
+  also drifted to `about:blank` at one point — see D14).
+- **Works**: probe the SERVER, not the document — call any authed procedure from the page and
+  read the status. `401` = no session reached the server; `200` = you are really signed in.
+  ```js
+  const r = await fetch(
+    base +
+      '/trpc/lambda/user.getUserState?input=' +
+      encodeURIComponent(JSON.stringify({ json: {} })),
+    { credentials: 'include' },
+  );
+  r.status; // 401 → re-seed; 200 → the session is live
+  ```
+  Recover with `agent-browser close --all` + `setup-auth.sh web-seed`, then re-open the route.
+  After re-seeding, the same bundle returned `isOwner: true` with the owner-only link rendered —
+  the code was correct all along.
+- **Why it matters**: an auth-scoped assertion (owner-only / permission-gated UI) fails
+  IDENTICALLY whether the gate is broken or the session is missing. Always establish that the
+  session is live (a 200 from an authed procedure) BEFORE concluding the gate is wrong —
+  otherwise you publish a false bug against your own change.

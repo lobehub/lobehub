@@ -1,6 +1,9 @@
+import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
+import type { VerifyRunOrigin, VerifySurface } from '@lobechat/types';
+import { normalizeVerifySurface, verifyEvidenceTypes, verifySurfaces } from '@lobechat/types';
 import type { Command } from 'commander';
 import pc from 'picocolors';
 
@@ -18,6 +21,8 @@ type Decision = 'accepted' | 'overridden' | 'rejected';
 const VERIFIER_TYPES: VerifierType[] = ['program', 'agent', 'llm'];
 const ON_FAIL: OnFail[] = ['manual', 'auto_repair'];
 const DECISIONS: Decision[] = ['accepted', 'rejected', 'overridden'];
+/** The evidence media a plan item may require — the same closed set the executor gates on. */
+const EVIDENCE_TYPES = verifyEvidenceTypes;
 
 function parseConfig(raw?: string): Record<string, unknown> | undefined {
   if (!raw) return undefined;
@@ -166,20 +171,203 @@ function pullRequestFromResult(result: Record<string, unknown>) {
   return entries.length > 0 ? Object.fromEntries(entries) : undefined;
 }
 
+/**
+ * The PR for a branch, asked of `gh`. A report almost always verifies a branch
+ * that already has one, but the author has to remember to write it down — and
+ * mostly doesn't, so the report loses its single most useful outbound link.
+ * Best-effort by design: no `gh`, not a repo, not authenticated, or no PR for
+ * the branch all mean "no PR", never a failed publish.
+ */
+function pullRequestFromBranch(branch: string | undefined) {
+  if (!branch) return undefined;
+
+  try {
+    const raw = execFileSync(
+      'gh',
+      ['pr', 'view', branch, '--json', 'number,title,url'],
+      // `gh` writes its "no pull requests found" diagnostics to stderr; keep them
+      // off the CLI's own output.
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 10_000 },
+    );
+    const parsed = objectValue(JSON.parse(raw));
+    const url = safeWebUrl(firstString(parsed?.url));
+    const number = firstStringOrNumber(parsed?.number);
+    const title = firstString(parsed?.title);
+    const entries = Object.entries({ number, title, url }).filter(([, v]) => v !== undefined);
+
+    return entries.length > 0 ? Object.fromEntries(entries) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The surfaces the report says it exercised, as canonical values.
+ *
+ * Strict on purpose: an unrecognized surface is a hard error, not a silently
+ * dropped value. Free-form surfaces are how the field rotted — prose, runtime
+ * modes ("packaged build") and test kinds ("unit", "type-check") all ended up in
+ * it, and none of them render. Failing here puts the fix in the author's hands
+ * while they still have the context to make it.
+ */
+export function surfacesFromResult(result: Record<string, unknown>): VerifySurface[] | undefined {
+  if (!Array.isArray(result.surfaces)) return undefined;
+
+  const raw = result.surfaces.filter((s: unknown): s is string => typeof s === 'string');
+  const canonical: VerifySurface[] = [];
+  const rejected: string[] = [];
+
+  for (const value of raw) {
+    const surface = normalizeVerifySurface(value);
+    if (surface) {
+      if (!canonical.includes(surface)) canonical.push(surface);
+    } else {
+      rejected.push(value);
+    }
+  }
+
+  if (rejected.length > 0) {
+    log.error(
+      `result.json "surfaces" must name the product surface a check ran on, one of: ${verifySurfaces.join(', ')}`,
+    );
+    log.error(`  rejected: ${rejected.map((v) => JSON.stringify(v)).join(', ')}`);
+    log.error(
+      '  Runtime detail ("packaged build", "CDP dev instance") belongs on a plan item\'s "method"; a test kind ("unit", "backend") is not a surface — a backend change verified through the CLI has surface "cli".',
+    );
+    process.exit(1);
+  }
+
+  return canonical.length > 0 ? canonical : undefined;
+}
+
+/** Reject an out-of-vocabulary plan value rather than storing a word nothing reads. */
+function assertPlanEnum<T extends string>(
+  value: string,
+  allowed: readonly T[],
+  field: string,
+  itemId: string,
+): T {
+  if ((allowed as readonly string[]).includes(value)) return value as T;
+
+  log.error(`result.json plan item "${itemId}": "${field}" must be one of: ${allowed.join(', ')}`);
+  log.error(`  rejected: ${JSON.stringify(value)}`);
+  process.exit(1);
+}
+
+/**
+ * The checks the run set out to make, as frozen plan items.
+ *
+ * Two of the fields are a closed vocabulary, not free text, because the pipeline
+ * actually acts on them:
+ *
+ * - `verifier` → {@link VerifyCheckItem.verifierType} (`program | agent | llm`):
+ *   how the item is judged. Defaults to `agent`, but a command-asserted check is
+ *   `program` and mislabelling it hides what actually produced the verdict.
+ * - `requiredEvidence` → `verifierConfig.requiredEvidence`
+ *   ({@link RequiredEvidenceSpec}, medium from {@link verifyEvidenceTypes}):
+ *   the artifact the item MUST produce. The executor's coverage gate fails an
+ *   item whose required medium is missing, so this is enforcement, not a label —
+ *   an unknown medium would silently gate on nothing.
+ *
+ * `method` / `expected` stay prose: they are the author's intent in words, which
+ * no enum can carry. Everything else the frozen {@link VerifyCheckItem} needs is
+ * filled in here, so an author writes only `{ id, title }` plus what they mean.
+ */
+export function planFromResult(result: Record<string, unknown>) {
+  if (!Array.isArray(result.plan)) return undefined;
+
+  const items = result.plan.flatMap((entry: unknown, index: number) => {
+    const item = objectValue(entry);
+    const title = firstString(item?.title, item?.name);
+    // An item with no title names no check — it can't be rendered or paired.
+    if (!item || !title) return [];
+
+    const id = String(item.id ?? `case-${index + 1}`);
+    const method = firstString(item.method, item.how);
+    const expected = firstString(item.expected, item.expectation);
+
+    const verifierRaw = firstString(item.verifier, item.verifierType);
+    const verifierType = verifierRaw
+      ? assertPlanEnum(verifierRaw, VERIFIER_TYPES, 'verifier', id)
+      : ('agent' as const);
+
+    const requiredEvidence = Array.isArray(item.requiredEvidence)
+      ? item.requiredEvidence.flatMap((spec: unknown) => {
+          // Accept the bare medium (`"screenshot"`) or the full spec object.
+          const record = objectValue(spec);
+          const raw = typeof spec === 'string' ? spec : firstString(record?.type);
+          if (!raw) return [];
+
+          return [
+            {
+              hint: firstString(record?.hint),
+              type: assertPlanEnum(raw, EVIDENCE_TYPES, 'requiredEvidence', id),
+            },
+          ];
+        })
+      : [];
+
+    return [
+      {
+        description: firstString(item.description),
+        id,
+        index,
+        onFail: 'manual' as const,
+        required: typeof item.required === 'boolean' ? item.required : true,
+        title,
+        verifierConfig: {
+          ...(method === undefined ? {} : { method }),
+          ...(expected === undefined ? {} : { expected }),
+          ...(requiredEvidence.length > 0 ? { requiredEvidence } : {}),
+        },
+        verifierType,
+      },
+    ];
+  });
+
+  return items.length > 0 ? items : undefined;
+}
+
+/**
+ * The LobeHub conversation this harness is running inside, read off the env the
+ * agent runtime echoes into the child process. Lets a report published from an
+ * in-app agent link back to the session that produced it with no flags to
+ * remember. Absent (a plain terminal) → no origin, which is not an error.
+ */
+export function originFromEnv(operationOverride?: string): VerifyRunOrigin | undefined {
+  const origin: VerifyRunOrigin = {
+    agentId: firstString(process.env.LOBEHUB_AGENT_ID),
+    operationId: firstString(operationOverride, process.env.LOBEHUB_OPERATION_ID),
+    topicId: firstString(process.env.LOBEHUB_TOPIC_ID),
+  };
+
+  return Object.values(origin).some(Boolean) ? origin : undefined;
+}
+
 function metadataForReport(
   result: Record<string, unknown>,
   existingMetadata?: unknown,
+  origin?: VerifyRunOrigin,
 ): Record<string, unknown> | undefined {
-  if (!Object.prototype.hasOwnProperty.call(result, 'interactionCost')) return undefined;
+  const hasInteractionCost = Object.prototype.hasOwnProperty.call(result, 'interactionCost');
+  // Nothing to write is not the same as writing an empty bag — leave the run's
+  // metadata untouched so a re-ingest from a plain terminal can't wipe the
+  // origin a previous in-app round recorded.
+  if (!hasInteractionCost && !origin) return undefined;
 
   const metadata = { ...objectValue(existingMetadata) };
-  const interactionCost = objectValue(result.interactionCost);
 
-  if (interactionCost) {
-    metadata.interactionCost = interactionCost;
-  } else {
-    delete metadata.interactionCost;
+  if (hasInteractionCost) {
+    const interactionCost = objectValue(result.interactionCost);
+
+    if (interactionCost) {
+      metadata.interactionCost = interactionCost;
+    } else {
+      delete metadata.interactionCost;
+    }
   }
+
+  if (origin) metadata.origin = origin;
 
   return metadata;
 }
@@ -1116,20 +1304,24 @@ export function registerVerifyCommand(program: Command) {
 
         // The scenario's context for the report's scope header, lifted from
         // result.json's top-level fields. Drop empty keys so the bag stays clean.
-        const surfaces = Array.isArray(result.surfaces)
-          ? result.surfaces.filter((s: unknown) => typeof s === 'string')
-          : undefined;
-        const pullRequest = pullRequestFromResult(result);
+        const branch = typeof result.branch === 'string' ? result.branch : undefined;
+        const surfaces = surfacesFromResult(result);
+        // An authored PR wins; otherwise ask `gh` what the branch's PR is, so the
+        // report links to it without the author having to remember the field.
+        const pullRequest = pullRequestFromResult(result) ?? pullRequestFromBranch(branch);
         const contextEntries = Object.entries({
-          branch: typeof result.branch === 'string' ? result.branch : undefined,
+          branch,
           commit: typeof result.commit === 'string' ? result.commit : undefined,
           entry: typeof result.entry === 'string' ? result.entry : undefined,
-          focus: typeof result.focus === 'string' ? result.focus : options.goal,
           pullRequest,
-          surfaces: surfaces && surfaces.length > 0 ? surfaces : undefined,
+          surfaces,
           testedAt: typeof result.createdAt === 'string' ? result.createdAt : undefined,
         }).filter(([, v]) => v !== undefined);
         const context = contextEntries.length > 0 ? Object.fromEntries(contextEntries) : undefined;
+
+        // What the run set out to check, written before it ran. Paired with the
+        // results by `id`, so the report can show a planned item that never ran.
+        const plan = planFromResult(result);
 
         // The harness verifies software changes; tag the run so the viewer renders
         // the coding scope header. Overridable via result.json `scenario`.
@@ -1138,7 +1330,9 @@ export function registerVerifyCommand(program: Command) {
         const client = await getTrpcClient();
         const goal = options.goal ?? (typeof result.focus === 'string' ? result.focus : undefined);
         const title = options.title ?? result.title;
-        const newRunMetadata = metadataForReport(result);
+        // The in-app conversation that ran this harness, if any (env-supplied).
+        const origin = originFromEnv(options.operation);
+        const newRunMetadata = metadataForReport(result, undefined, origin);
 
         // Resolve the target session. Reuse the one this report dir already
         // created (recorded in the sidecar) so re-verifying the same case
@@ -1153,10 +1347,10 @@ export function registerVerifyCommand(program: Command) {
           if (existing) {
             reused = true;
             runId = existing.id;
-            const metadata = metadataForReport(result, existing.metadata);
-            // 1a. Refresh the scope header / title / goal in place.
+            const metadata = metadataForReport(result, existing.metadata, origin);
+            // 1a. Refresh the scope header / plan / title / goal in place.
             await client.verify.updateRun.mutate({
-              value: { context, goal, metadata, scenario, title },
+              value: { context, goal, metadata, plan, scenario, title },
               verifyRunId: runId,
             });
           } else if (options.run) {
@@ -1178,6 +1372,7 @@ export function registerVerifyCommand(program: Command) {
             goal,
             metadata: newRunMetadata,
             operationId: options.operation,
+            plan,
             scenario,
             source: options.source as any,
             title,
@@ -1307,14 +1502,24 @@ export function registerVerifyCommand(program: Command) {
         //    same dir updates it in place instead of creating a new one.
         writeSidecarRunId(dir, runId);
 
+        // A case with no matching plan item means the run checked something it
+        // never planned — worth saying out loud, but not a failure.
+        const unplanned = plan
+          ? [...seenCheckItemIds].filter((id) => !plan.some((item) => item.id === id))
+          : [];
+
         if (options.json !== undefined) {
           outputJson(
             {
               cases: cases.length,
               evidence: evidenceCount,
               inlined,
+              origin,
+              planItems: plan?.length ?? 0,
               pruned,
+              pullRequest,
               reused,
+              unplanned,
               verifyRunId: runId,
             },
             typeof options.json === 'string' ? options.json : undefined,
@@ -1328,6 +1533,16 @@ export function registerVerifyCommand(program: Command) {
             `${inlined > 0 ? `, ${pc.bold(String(inlined))} inline` : ''}` +
             `${pruned > 0 ? `, pruned ${pc.bold(String(pruned))} stale case(s)` : ''}`,
         );
+        if (plan) {
+          const unexecuted = plan.filter((item) => !seenCheckItemIds.has(item.id));
+          console.log(
+            `${pc.bold('plan')}: ${plan.length} item(s)` +
+              `${unexecuted.length > 0 ? pc.yellow(` — ${unexecuted.length} planned but not executed`) : ''}` +
+              `${unplanned.length > 0 ? pc.dim(` — ${unplanned.length} unplanned case(s)`) : ''}`,
+          );
+        }
+        if (pullRequest?.url) console.log(`${pc.bold('pr')}: ${pullRequest.url}`);
+        if (origin?.topicId) console.log(`${pc.bold('origin topic')}: ${origin.topicId}`);
         console.log(
           `${pc.bold('verifyRunId')}: ${runId}${reused ? pc.dim(' (updated in place)') : ''}`,
         );

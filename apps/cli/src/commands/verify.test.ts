@@ -5,7 +5,13 @@ import path from 'node:path';
 import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { registerVerifyCommand, reportEvidence } from './verify';
+import {
+  originFromEnv,
+  planFromResult,
+  registerVerifyCommand,
+  reportEvidence,
+  surfacesFromResult,
+} from './verify';
 
 const { mockTrpcClient } = vi.hoisted(() => ({
   mockTrpcClient: {
@@ -293,5 +299,160 @@ describe('reportEvidence — comparison normalization', () => {
     expect(
       reportEvidence([{ desc: 'a shot', file: 'a.png' }, { comparison: { id: 'x' } }]),
     ).toEqual([{ comparison: undefined, description: 'a shot', path: 'a.png' }]);
+  });
+});
+
+describe('surfacesFromResult — surface normalization', () => {
+  let exitSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+      throw new Error('process.exit');
+    }) as never);
+  });
+
+  afterEach(() => {
+    exitSpy.mockRestore();
+  });
+
+  it('canonicalizes known aliases and dedupes', () => {
+    expect(surfacesFromResult({ surfaces: ['electron', 'cli', 'desktop'] })).toEqual([
+      'desktop',
+      'cli',
+    ]);
+  });
+
+  it('rejects a value that names no surface instead of silently dropping it', () => {
+    // Free-form surfaces are how the field rotted: prose, runtime modes and test
+    // kinds all ended up in it. Failing here puts the fix in the author's hands
+    // while they still have the context to make it.
+    expect(() =>
+      surfacesFromResult({ surfaces: ['Electron 打包版（app.isPackaged=true）'] }),
+    ).toThrow('process.exit');
+    expect(() => surfacesFromResult({ surfaces: ['unit'] })).toThrow('process.exit');
+  });
+
+  it('returns undefined when the report names no surfaces at all', () => {
+    expect(surfacesFromResult({})).toBeUndefined();
+    expect(surfacesFromResult({ surfaces: [] })).toBeUndefined();
+  });
+});
+
+describe('planFromResult — plan item normalization', () => {
+  let exitSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+      throw new Error('process.exit');
+    }) as never);
+  });
+
+  afterEach(() => {
+    exitSpy.mockRestore();
+  });
+
+  it('fills every frozen-item field the author does not write', () => {
+    expect(planFromResult({ plan: [{ id: '1', title: 'logs are persisted' }] })).toEqual([
+      {
+        description: undefined,
+        id: '1',
+        index: 0,
+        onFail: 'manual',
+        required: true,
+        title: 'logs are persisted',
+        verifierConfig: {},
+        verifierType: 'agent',
+      },
+    ]);
+  });
+
+  it('honors the declared verifier instead of assuming every check is agent-judged', () => {
+    const [item] = planFromResult({
+      plan: [{ id: '1', title: 'cli returns a tree', verifier: 'program' }],
+    })!;
+
+    expect(item.verifierType).toBe('program');
+  });
+
+  it('carries requiredEvidence, which the executor coverage gate actually enforces', () => {
+    const [item] = planFromResult({
+      plan: [
+        {
+          id: '1',
+          requiredEvidence: ['screenshot', { hint: 'the raw command output', type: 'text' }],
+          title: 'ui renders',
+        },
+      ],
+    })!;
+
+    expect(item.verifierConfig).toEqual({
+      requiredEvidence: [
+        { hint: undefined, type: 'screenshot' },
+        { hint: 'the raw command output', type: 'text' },
+      ],
+    });
+  });
+
+  it('rejects an out-of-vocabulary verifier or evidence medium', () => {
+    // An unrecognized medium would gate on nothing — silently weaker than no gate.
+    expect(() => planFromResult({ plan: [{ id: '1', title: 't', verifier: 'eyeball' }] })).toThrow(
+      'process.exit',
+    );
+    expect(() =>
+      planFromResult({ plan: [{ id: '1', requiredEvidence: ['vibes'], title: 't' }] }),
+    ).toThrow('process.exit');
+  });
+
+  it('carries how the check would be made and what it expected', () => {
+    const [item] = planFromResult({
+      plan: [{ expected: 'the file exists', id: '1', method: 'tail the log', title: 'logs' }],
+    })!;
+
+    expect(item.verifierConfig).toEqual({ expected: 'the file exists', method: 'tail the log' });
+  });
+
+  it('keys items by the same id the cases use, so results pair back to them', () => {
+    const items = planFromResult({ plan: [{ id: 'case-a', title: 'a' }, { title: 'b' }] })!;
+
+    expect(items.map((i) => i.id)).toEqual(['case-a', 'case-2']);
+  });
+
+  it('drops an item that names no check and returns undefined for no plan', () => {
+    expect(planFromResult({ plan: [{ id: '1' }] })).toBeUndefined();
+    expect(planFromResult({})).toBeUndefined();
+  });
+});
+
+describe('originFromEnv — in-app provenance', () => {
+  const saved = { ...process.env };
+
+  afterEach(() => {
+    process.env = { ...saved };
+  });
+
+  it('reads the conversation the agent runtime echoed into the child env', () => {
+    process.env.LOBEHUB_AGENT_ID = 'agt_1';
+    process.env.LOBEHUB_TOPIC_ID = 'tpc_1';
+    process.env.LOBEHUB_OPERATION_ID = 'op_1';
+
+    expect(originFromEnv()).toEqual({
+      agentId: 'agt_1',
+      operationId: 'op_1',
+      topicId: 'tpc_1',
+    });
+  });
+
+  it('lets an explicit --operation win over the env', () => {
+    process.env.LOBEHUB_OPERATION_ID = 'op_env';
+
+    expect(originFromEnv('op_flag')?.operationId).toBe('op_flag');
+  });
+
+  it('is undefined outside a LobeHub-spawned agent — a plain terminal is not an error', () => {
+    delete process.env.LOBEHUB_AGENT_ID;
+    delete process.env.LOBEHUB_TOPIC_ID;
+    delete process.env.LOBEHUB_OPERATION_ID;
+
+    expect(originFromEnv()).toBeUndefined();
   });
 });

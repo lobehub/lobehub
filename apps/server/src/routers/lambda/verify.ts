@@ -1,5 +1,6 @@
 import { VerifySkill } from '@lobechat/builtin-skills';
 import type { VerifyCheckItem } from '@lobechat/types';
+import { normalizeVerifySurface, verifySurfaces } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { asc, eq } from 'drizzle-orm';
 import { z } from 'zod';
@@ -83,6 +84,7 @@ const rubricConfigSchema = z.object({
 });
 
 const checkItemSchema = z.object({
+  description: z.string().optional(),
   id: z.string(),
   index: z.number(),
   onFail: onFailSchema,
@@ -116,13 +118,34 @@ const pullRequestContextSchema = z.object({
   url: webUrlSchema.optional(),
 });
 
+/**
+ * A surface, canonicalized at the door.
+ *
+ * Not a bare `z.enum`: `lh` is installed independently of this server, so an
+ * older CLI still posts the historical spellings — `electron` alone accounts for
+ * most of the surfaces ever written. Rejecting those would break ingest for
+ * every client that hasn't upgraded, to no benefit, since they name a surface we
+ * can resolve. So known spellings are normalized (`electron` → `desktop`) and
+ * only a value that names no surface at all is rejected — the column still ends
+ * up with nothing but the closed set.
+ */
+const surfaceSchema = z.string().transform((value, ctx) => {
+  const surface = normalizeVerifySurface(value);
+  if (surface) return surface;
+
+  ctx.addIssue({
+    code: 'custom',
+    message: `"${value}" is not a product surface. Expected one of: ${verifySurfaces.join(', ')}. A test kind ("unit", "backend") or a runtime mode ("packaged build") is not a surface.`,
+  });
+  return z.NEVER;
+});
+
 const runContextSchema = z.object({
   branch: z.string().optional(),
   commit: z.string().optional(),
   entry: z.string().optional(),
-  focus: z.string().optional(),
   pullRequest: pullRequestContextSchema.optional(),
-  surfaces: z.array(z.string()).optional(),
+  surfaces: z.array(surfaceSchema).optional(),
   testedAt: z.string().optional(),
 });
 
@@ -135,6 +158,7 @@ const updateRunInputSchema = verifyRunIdInputSchema.extend({
     context: runContextSchema.optional(),
     goal: z.string().optional(),
     metadata: runMetadataSchema.optional(),
+    plan: z.array(checkItemSchema).optional(),
     scenario: z.enum(['coding']).optional(),
     title: z.string().trim().min(1).max(200).optional(),
   }),
@@ -500,6 +524,9 @@ export const verifyRouter = router({
         goal: z.string().optional(),
         metadata: runMetadataSchema.optional(),
         operationId: z.string().optional(),
+        // The checks the run set out to make, authored before it ran. Kept next
+        // to the results so a planned-but-never-executed item stays visible.
+        plan: z.array(checkItemSchema).optional(),
         scenario: z.enum(['coding']).optional(),
         source: runSourceSchema.optional(),
         title: z.string().optional(),
@@ -511,6 +538,7 @@ export const verifyRouter = router({
         goal: input.goal,
         metadata: input.metadata,
         operationId: input.operationId,
+        plan: input.plan,
         scenario: input.scenario,
         source: input.source ?? 'agent-testing',
         title: input.title,
@@ -585,6 +613,7 @@ export const verifyRouter = router({
         context: input.value.context,
         goal: input.value.goal,
         metadata: input.value.metadata,
+        plan: input.value.plan,
         scenario: input.value.scenario,
         title: input.value.title,
       }),
@@ -852,14 +881,25 @@ export const verifyRouter = router({
    * One-shot payload for the standalone report viewer: the session, its report,
    * and every check result with its evidence — addressed purely by verifyRunId
    * (no operation / chat context required).
+   *
+   * Public: a report URL is shareable, so anyone with the id gets the checks and
+   * evidence. `isOwner` gates what only the author may see — today the origin
+   * conversation, which is redacted for everyone else.
    */
   getReportBundle: publicVerifyReportProcedure
     .input(verifyRunIdInputSchema)
     .query(async ({ ctx, input }) => {
-      const run = await ctx.serverDB.query.verifyRuns.findFirst({
+      const found = await ctx.serverDB.query.verifyRuns.findFirst({
         where: eq(verifyRuns.id, input.verifyRunId),
       });
-      if (!run) return null;
+      if (!found) return null;
+
+      const isOwner = Boolean(ctx.userId) && ctx.userId === found.userId;
+      // `origin` points at the author's private topic/agent — never hand it to a
+      // visitor holding nothing but the shared link.
+      const { origin: _origin, ...publicMetadata } = found.metadata ?? {};
+      const run =
+        isOwner || !found.metadata?.origin ? found : { ...found, metadata: publicMetadata };
       const [report, results] = await Promise.all([
         ctx.serverDB.query.verifyReports.findFirst({
           where: eq(verifyReports.verifyRunId, input.verifyRunId),
@@ -929,6 +969,6 @@ export const verifyRouter = router({
           };
         }),
       );
-      return { report: report ?? null, results: resultsWithEvidence, run };
+      return { isOwner, report: report ?? null, results: resultsWithEvidence, run };
     }),
 });

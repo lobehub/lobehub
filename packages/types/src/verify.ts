@@ -81,6 +81,38 @@ export const verifyRunScenarios = ['coding'] as const;
 export type VerifyRunScenario = (typeof verifyRunScenarios)[number];
 
 /**
+ * The product surface a check was exercised on — *where* it ran, never *what
+ * kind* of test it was. `unit` / `backend` / `type-check` are test kinds and do
+ * not belong here; a backend change verified through the CLI has surface `cli`.
+ *
+ * A closed set on purpose: free-form surfaces drifted into 76 distinct values
+ * (long prose, runtime modes, tool names), which no viewer can render as a
+ * legible badge. Runtime detail ("packaged build", "CDP dev instance") belongs
+ * on the plan item's `method`, not here.
+ */
+export const verifySurfaces = ['web', 'desktop', 'cli', 'mobile', 'bot'] as const;
+export type VerifySurface = (typeof verifySurfaces)[number];
+
+/**
+ * Historical spellings that name a surface in this set. Only unambiguous
+ * synonyms — anything else is a rejected value, not a guess.
+ */
+const VERIFY_SURFACE_ALIASES: Record<string, VerifySurface> = {
+  android: 'mobile',
+  browser: 'web',
+  electron: 'desktop',
+  ios: 'mobile',
+  terminal: 'cli',
+};
+
+/** Canonical surface for a raw value, or null when it names no known surface. */
+export const normalizeVerifySurface = (value: string): VerifySurface | null => {
+  const key = value.trim().toLowerCase();
+  if ((verifySurfaces as readonly string[]).includes(key)) return key as VerifySurface;
+  return VERIFY_SURFACE_ALIASES[key] ?? null;
+};
+
+/**
  * Coding-scenario scope: where the code under test came from and how it ran.
  * Rendered as the report's scope header so the verify page reads as the final
  * report.
@@ -101,12 +133,10 @@ export interface VerifyCodingScope {
   commit?: string;
   /** Entry point / command exercised, e.g. "lh verify ingest-report". */
   entry?: string;
-  /** The focus / key risk of this round (free text). */
-  focus?: string;
   /** Associated pull request, when the verification run has one. */
   pullRequest?: VerifyCodingPullRequest;
-  /** Test surfaces exercised, e.g. ["cli", "web"]. */
-  surfaces?: string[];
+  /** Product surfaces the checks ran on. */
+  surfaces?: VerifySurface[];
   /** When the report was authored (ISO 8601) — distinct from the row's createdAt (ingest time). */
   testedAt?: string;
 }
@@ -176,6 +206,19 @@ export interface VerifyRubricConfig {
 }
 
 /**
+ * The LobeHub conversation an ingested report was authored in. Lets the report
+ * link back to (and later resume) the agent session that produced it.
+ */
+export interface VerifyRunOrigin {
+  /** The agent that ran the verification. */
+  agentId?: string;
+  /** The agent operation (one execution) that produced the report. */
+  operationId?: string;
+  /** The topic to reopen to continue from this report. */
+  topicId?: string;
+}
+
+/**
  * Generic per-run extension bag (`verify_runs.metadata`) — cross-scenario knobs
  * we don't model as columns. Kept open so new policy switches don't require a
  * migration; the active scenario's input lives in `context`, not here.
@@ -191,6 +234,17 @@ export interface VerifyRunMetadata {
    * time via {@link DEFAULT_MAX_REPAIR_ROUNDS} fallback.
    */
   maxRepairRounds?: number;
+  /**
+   * Where this report came from — the LobeHub conversation whose agent produced
+   * it. Set when the harness runs inside a LobeHub-spawned agent (the runtime
+   * echoes the ids into the child env; see {@link VerifyRunOrigin}).
+   *
+   * Deliberately *not* `verify_runs.operation_id`: that column means "this
+   * session verifies that Agent Run" and is uniquely indexed, so one agent
+   * publishing two reports would collide. Origin is the inverse relation — the
+   * run that *authored* the report — and is many-to-one.
+   */
+  origin?: VerifyRunOrigin;
 }
 
 /**
@@ -220,6 +274,27 @@ export interface VerifyCheckItem {
   title: string;
   verifierConfig: Record<string, unknown>;
   verifierType: VerifierType;
+}
+
+/**
+ * `verifierConfig` of a plan item authored by a harness before its run.
+ *
+ * Note what is NOT here: *how the item is judged* is `verifierType`
+ * (program / agent / llm), and *what artifact it must produce* is
+ * {@link RequiredEvidenceSpec} under `requiredEvidence` — both closed sets, and
+ * the latter is enforced (a missing required artifact fails the item through the
+ * executor's coverage gate). `method` and `expected` are the human-readable
+ * complement to those two, not a replacement: prose the author writes down
+ * *before* the run so a reader can weigh intent against outcome, and so a
+ * planned-but-never-executed item stays legible instead of vanishing.
+ */
+export interface VerifyAgentPlanConfig {
+  /** The observable outcome that would make this item pass. Prose. */
+  expected?: string;
+  /** How the item would be exercised (steps / command / probe). Prose. */
+  method?: string;
+  /** Evidence media this item must produce — gated, not decorative. */
+  requiredEvidence?: RequiredEvidenceSpec[];
 }
 
 /**

@@ -80,6 +80,12 @@ export type VerifyResultWithEvidence = VerifyCheckResultItem & {
 
 /** Everything the standalone report viewer needs for one verification session. */
 export interface VerifyReportBundle {
+  /**
+   * Whether the viewer authored this run. Report URLs are public, so
+   * author-only affordances (the origin conversation) gate on this — the server
+   * redacts `run.metadata.origin` for everyone else.
+   */
+  isOwner: boolean;
   report: VerifyReport | null;
   results: VerifyResultWithEvidence[];
   run: VerifyRunItem;

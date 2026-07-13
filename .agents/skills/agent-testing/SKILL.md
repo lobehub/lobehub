@@ -592,9 +592,19 @@ env -u LOBEHUB_SERVER -u LOBE_API_KEY -u LOBEHUB_CLI_API_KEY -u LOBEHUB_CLI_HOME
 `verify ingest-report` reads `$DIR` and, in one call, creates a standalone
 verification session and uploads everything:
 
-- `result.json.cases[]` → one check result each (verdict + key observation)
+- `result.json.plan[]` → the frozen check plan (what this round set out to verify)
+- `result.json.cases[]` → one check result each (verdict + key observation),
+  paired back to its plan item by `id`; a planned item with no case renders as
+  **未执行** instead of silently disappearing
 - each case's `evidence` file(s) → uploaded to storage and attached to that result
 - `report.md` → the session's full report body, plus the `summary` stats
+
+Two links are attached for you, no flags needed: the branch's **pull request**
+(asked of `gh`) and — when the harness is running inside a LobeHub-spawned agent
+— the **conversation that produced the report**, read from the `LOBEHUB_TOPIC_ID`
+/ `LOBEHUB_AGENT_ID` / `LOBEHUB_OPERATION_ID` the runtime echoes into the child
+env. The origin conversation is shown to the report's author only, never to
+someone holding the shared link.
 
 It prints the `verifyRunId` and, with `--open`, the in-app path
 `/verify/<verifyRunId>` — the report viewer (verdict, stats, every check, and the
