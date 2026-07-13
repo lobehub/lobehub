@@ -11,6 +11,8 @@ import {
   serverConfigSelectors,
   useServerConfigStore,
 } from '@/store/serverConfig';
+import { useUserStore } from '@/store/user';
+import { authSelectors } from '@/store/user/selectors';
 
 import {
   SETTINGS_SEARCH_ITEMS,
@@ -73,11 +75,14 @@ export const useSettingsSearch = (
   isIndexing: boolean;
   results: SettingsSearchResult[];
 } => {
-  const { t } = useTranslation(['setting', 'labs', 'electron', 'subscription', 'spend']);
+  const { t } = useTranslation(['setting', 'labs', 'electron', 'subscription', 'spend', 'auth']);
   const categoryGroups = useCategory();
   const { enableSTT, hideDocs, showAiImage } = useServerConfigStore(featureFlagsSelectors);
   const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
   const enableGatewayMode = useServerConfigStore(serverConfigSelectors.enableGatewayMode);
+  const enableComposio = useServerConfigStore(serverConfigSelectors.enableComposio);
+  const disableEmailPassword = useServerConfigStore(serverConfigSelectors.disableEmailPassword);
+  const isLogin = useUserStore(authSelectors.isLogin);
   const [pinyin, setPinyin] = useState<{ settled: boolean; texts: PinyinTexts | null }>({
     settled: false,
     texts: null,
@@ -87,11 +92,14 @@ export const useSettingsSearch = (
   // once, not on every keystroke.
   const baseIndex = useMemo(() => {
     const ctx: SettingsSearchContext = {
+      disableEmailPassword: !!disableEmailPassword,
       enableBusinessFeatures: !!enableBusinessFeatures,
+      enableComposio: !!enableComposio,
       enableGatewayMode: !!enableGatewayMode,
       enableSTT: !!enableSTT,
       hideDocs: !!hideDocs,
       isDesktop,
+      isLogin: !!isLogin,
       showAiImage: !!showAiImage,
     };
 
@@ -204,10 +212,13 @@ export const useSettingsSearch = (
   }, [
     categoryGroups,
     t,
+    disableEmailPassword,
     enableBusinessFeatures,
+    enableComposio,
     enableGatewayMode,
     enableSTT,
     hideDocs,
+    isLogin,
     showAiImage,
   ]);
 

@@ -5,6 +5,12 @@ import { memo, type PropsWithChildren, useEffect } from 'react';
 import { useLocation } from 'react-router';
 
 export const SETTINGS_ANCHOR_ATTR = 'data-settings-anchor';
+/**
+ * Marks the row container to flash-highlight for anchors inside non-antd rows
+ * (e.g. profile ProfileRow) — the highlight lookup falls back to this attribute
+ * when no `.ant-form-item` ancestor exists.
+ */
+export const SETTINGS_ANCHOR_ROW_ATTR = 'data-settings-anchor-row';
 
 const HIGHLIGHT_DURATION = 2400;
 const POLL_INTERVAL = 100;
@@ -78,7 +84,8 @@ export const scrollToSettingsAnchor = (anchor: string) => {
 
     // Highlight the whole form row / group header instead of the bare label
     // text so the flash is visible at a glance.
-    const target = el.closest('.ant-form-item, .ant-collapse-header') ?? el;
+    const target =
+      el.closest(`.ant-form-item, .ant-collapse-header, [${SETTINGS_ANCHOR_ROW_ATTR}]`) ?? el;
     target.classList.add(styles.highlight);
     setTimeout(() => target.classList.remove(styles.highlight), HIGHLIGHT_DURATION);
   };

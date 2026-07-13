@@ -116,6 +116,7 @@ const EmailRow = () => {
 
   return (
     <ProfileRow
+      anchor={'profile-email'}
       label={t('profile.email')}
       action={
         !isEditing && (

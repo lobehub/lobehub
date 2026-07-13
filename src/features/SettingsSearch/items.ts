@@ -1,11 +1,14 @@
 import { SettingsTabs } from '@/store/global/initialState';
 
 export interface SettingsSearchContext {
+  disableEmailPassword: boolean;
   enableBusinessFeatures: boolean;
+  enableComposio: boolean;
   enableGatewayMode: boolean;
   enableSTT: boolean;
   hideDocs: boolean;
   isDesktop: boolean;
+  isLogin: boolean;
   showAiImage: boolean;
 }
 
@@ -22,7 +25,7 @@ export interface SettingsSearchItem {
   /** i18n key of the item label */
   labelKey: string;
   /** i18n namespace of `labelKey` / `descKey`, defaults to `setting` */
-  ns?: 'electron' | 'labs' | 'setting' | 'spend' | 'subscription';
+  ns?: 'auth' | 'electron' | 'labs' | 'setting' | 'spend' | 'subscription';
   tab: SettingsTabs;
   /**
    * Extra visibility gate mirroring the target item's own render condition
@@ -157,6 +160,78 @@ export const TAB_SEARCH_KEYWORDS_KEYS: Partial<Record<SettingsTabs, string>> = {
  * automatically, but a stale anchor silently degrades to a plain tab switch.
  */
 export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
+  // Profile
+  {
+    anchor: 'profile-avatar',
+    keywords: ['avatar', 'photo', 'profile picture'],
+    labelKey: 'profile.avatar',
+    ns: 'auth',
+    tab: SettingsTabs.Profile,
+  },
+  {
+    anchor: 'profile-full-name',
+    keywords: ['full name', 'fullname', 'display name', 'nickname'],
+    labelKey: 'profile.fullName',
+    ns: 'auth',
+    tab: SettingsTabs.Profile,
+  },
+  {
+    anchor: 'profile-username',
+    keywords: ['username', 'handle', 'user name'],
+    labelKey: 'profile.username',
+    ns: 'auth',
+    tab: SettingsTabs.Profile,
+  },
+  {
+    anchor: 'profile-interests',
+    keywords: ['interests', 'topics', 'personalization'],
+    labelKey: 'profile.interests',
+    ns: 'auth',
+    tab: SettingsTabs.Profile,
+  },
+  {
+    anchor: 'profile-password',
+    keywords: ['password', 'change password', 'set password', 'reset password'],
+    labelKey: 'profile.password',
+    ns: 'auth',
+    tab: SettingsTabs.Profile,
+    visible: (ctx) => ctx.isLogin && !ctx.isDesktop && !ctx.disableEmailPassword,
+  },
+  {
+    anchor: 'profile-email',
+    keywords: ['email', 'email address', 'update email', 'change email'],
+    labelKey: 'profile.email',
+    ns: 'auth',
+    tab: SettingsTabs.Profile,
+    visible: (ctx) => ctx.isLogin,
+  },
+  {
+    anchor: 'profile-connected-accounts',
+    keywords: [
+      'connected accounts',
+      'linked accounts',
+      'sso',
+      'oauth',
+      'github',
+      'google',
+      'apple',
+    ],
+    labelKey: 'profile.sso.providers',
+    ns: 'auth',
+    tab: SettingsTabs.Profile,
+    visible: (ctx) => ctx.isLogin && !ctx.isDesktop,
+  },
+  {
+    anchor: 'profile-authorizations',
+    keywords: ['authorizations', 'manage authorizations', 'composio', 'revoke access'],
+    labelKey: 'profile.authorizations.title',
+    ns: 'auth',
+    tab: SettingsTabs.Profile,
+    // The row additionally requires at least one connected Composio server —
+    // async user data intentionally not mirrored; a miss degrades to a plain
+    // tab switch.
+    visible: (ctx) => ctx.enableComposio,
+  },
   // Appearance
   {
     anchor: 'appearance-theme-mode',
