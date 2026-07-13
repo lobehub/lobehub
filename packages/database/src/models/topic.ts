@@ -165,6 +165,34 @@ const buildTopicOrderBy = (topicActivityAt: SQL, sortBy?: TopicQuerySortBy): SQL
     ? [desc(topics.favorite), asc(STATUS_SORT_RANK), desc(topicActivityAt)]
     : [desc(topics.favorite), desc(topicActivityAt)];
 
+/**
+ * NEVER null-test a jsonb arrow / path expression inside a WHERE clause:
+ *
+ * ```sql
+ * (metadata ->> 'cronJobId')          IS NULL          -- 💥
+ * (metadata #>> '{a,b}')              IS NOT NULL      -- 💥
+ * (metadata ->> 'status')             IS DISTINCT FROM 'done'  -- 💥
+ * ```
+ *
+ * The engine backing production is not stock Postgres, and this query *shape*
+ * crashes it outright — `rt_fetch used out-of-bounds`, SQLSTATE XX000, thrown
+ * before any row is read (a table with zero matching rows crashes just the same,
+ * so no test on real Postgres will ever catch it). Drizzle then reports it as a
+ * bare `Failed query:`, with the real cause only in the driver's `[cause]`.
+ *
+ * COALESCE the extracted value to a sentinel instead — same semantics, a shape
+ * the engine survives:
+ *
+ * ```sql
+ * COALESCE(metadata ->> 'cronJobId', '') = ''                     -- "is null"
+ * COALESCE((metadata #>> '{a,b}')::numeric, 0) <= $1              -- numeric gate
+ * COALESCE(metadata ->> 'status', '') <> 'done'                   -- IS DISTINCT FROM
+ * ```
+ *
+ * This has now bitten twice: `getLatestSpineMessageId` (LOBE-11376, #16693) and
+ * `getDueScheduledTopics` (#17077 — the scheduled-run cron crashed on every tick
+ * from the day it shipped, so rate-limit continuations never once resumed).
+ */
 export class TopicModel {
   private userId: string;
   private db: LobeChatDatabase;
@@ -1142,7 +1170,7 @@ export class TopicModel {
           this.ownership(),
           eq(topics.agentId, agentId),
           eq(topics.trigger, 'cron'),
-          sql`(${topics.metadata}->>'cronJobId') IS NOT NULL`,
+          sql`COALESCE(${topics.metadata}->>'cronJobId', '') <> ''`,
         ),
       )
       .orderBy(desc(topics.createdAt));
@@ -1237,10 +1265,10 @@ export class TopicModel {
         options.endDate ? lte(topics.createdAt, options.endDate) : undefined,
         options.ignoreExtracted
           ? undefined
-          : or(
-              isNull(topics.metadata),
-              sql`(${topics.metadata}->>'userMemoryExtractStatus') IS DISTINCT FROM 'completed'`,
-            ),
+          : // COALESCE, not `IS DISTINCT FROM`: a null test on a jsonb arrow
+            // expression crashes the production engine (see the note on the class).
+            // A null `metadata` extracts to '' here too, so this covers it.
+            sql`COALESCE(${topics.metadata}->>'userMemoryExtractStatus', '') <> 'completed'`,
         cursorCondition,
       ),
     });
@@ -1263,10 +1291,7 @@ export class TopicModel {
           options.endDate ? lte(topics.createdAt, options.endDate) : undefined,
           options.ignoreExtracted
             ? undefined
-            : or(
-                isNull(topics.metadata),
-                sql`(${topics.metadata}->>'userMemoryExtractStatus') IS DISTINCT FROM 'completed'`,
-              ),
+            : sql`COALESCE(${topics.metadata}->>'userMemoryExtractStatus', '') <> 'completed'`,
         ),
       );
 
@@ -1299,6 +1324,12 @@ export class TopicModel {
   ): Promise<TopicItem[]> {
     const nowIso = now.toISOString();
     const nowEpochSeconds = Math.floor(now.getTime() / 1000);
+
+    // Every jsonb path below is COALESCE'd to a sentinel rather than null-tested:
+    // `#>> … IS NULL` in a WHERE clause takes the production engine down. See the
+    // note on the class.
+    const runAt = sql`COALESCE(${topics.metadata}#>>'{scheduledRun,runAt}', '')`;
+
     return db
       .select()
       .from(topics)
@@ -1306,23 +1337,21 @@ export class TopicModel {
         and(
           eq(topics.status, 'scheduled'),
           or(
-            sql`(${topics.metadata}#>>'{scheduledRun,runAt}') <= ${nowIso}`,
+            // `''` is the absent-runAt sentinel, and it never satisfies this pair —
+            // an absent gate must not read as "due now", which is what keeps a
+            // half-written schedule parked.
+            and(sql`${runAt} <> ''`, sql`${runAt} <= ${nowIso}`),
             // Legacy (pre-`kind`) payload: no `runAt`, gated on the rate-limit
-            // reset, and an absent reset read as "due now".
+            // reset, and an absent reset read as "due now" (hence the 0 default).
             and(
-              sql`(${topics.metadata}#>>'{scheduledRun,runAt}') IS NULL`,
-              sql`(${topics.metadata}#>>'{scheduledRun,reason}') = 'rate_limit'`,
-              or(
-                sql`(${topics.metadata}#>>'{scheduledRun,rateLimit,resetsAt}') IS NULL`,
-                sql`(${topics.metadata}#>>'{scheduledRun,rateLimit,resetsAt}')::numeric <= ${nowEpochSeconds}`,
-              ),
+              sql`${runAt} = ''`,
+              sql`COALESCE(${topics.metadata}#>>'{scheduledRun,reason}', '') = 'rate_limit'`,
+              sql`COALESCE((${topics.metadata}#>>'{scheduledRun,rateLimit,resetsAt}')::numeric, 0) <= ${nowEpochSeconds}`,
             ),
           ),
-          // no claim OR the claim lease has expired
-          or(
-            sql`(${topics.metadata}#>>'{scheduledRun,claim,expiresAt}') IS NULL`,
-            sql`(${topics.metadata}#>>'{scheduledRun,claim,expiresAt}') <= ${nowIso}`,
-          ),
+          // No claim, or the lease has expired. `''` (no claim) sorts before every
+          // ISO timestamp, so the same comparison covers both.
+          sql`COALESCE(${topics.metadata}#>>'{scheduledRun,claim,expiresAt}', '') <= ${nowIso}`,
         ),
       );
   }
