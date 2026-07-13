@@ -15,7 +15,7 @@ import {
 import type { DropdownItem } from '@lobehub/ui/base-ui';
 import { confirmModal, DropdownMenu } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
-import { createStaticStyles, cssVar, useResponsive } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import dayjs from 'dayjs';
 import isEqual from 'fast-deep-equal';
 import {
@@ -45,6 +45,7 @@ import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
 import { useVerifyReportSummariesInfinite } from '../hooks';
+import type { ReportPanelExpand } from './useReportPanelExpand';
 
 const PANEL_MIN = 260;
 const PANEL_MAX = 420;
@@ -462,10 +463,9 @@ const ReportListItem = memo<{
 
 ReportListItem.displayName = 'ReportListItem';
 
-const ReportListPanel = memo(() => {
+const ReportListPanel = memo<ReportPanelExpand>(({ expand, isNarrow, setExpand }) => {
   const { t } = useTranslation('verify');
   const { runId } = useParams<{ runId: string }>();
-  const { md = true } = useResponsive();
 
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
@@ -478,8 +478,7 @@ const ReportListPanel = memo(() => {
   const { items, error, hasMore, isLoadingInitial, isLoadingMore, loadMore, reload } =
     useVerifyReportSummariesInfinite(debouncedQuery);
 
-  const [showPanel, panelWidth, updateSystemStatus] = useGlobalStore((s) => [
-    systemStatusSelectors.showVerifyReportPanel(s),
+  const [panelWidth, updateSystemStatus] = useGlobalStore((s) => [
     systemStatusSelectors.verifyReportPanelWidth(s),
     s.updateSystemStatus,
   ]);
@@ -514,13 +513,13 @@ const ReportListPanel = memo(() => {
     <DraggablePanel
       className={styles.panel}
       defaultSize={{ width: tmpWidth }}
-      expand={showPanel}
+      expand={expand}
       maxWidth={PANEL_MAX}
       minWidth={PANEL_MIN}
-      mode={md ? 'fixed' : 'float'}
+      mode={isNarrow ? 'float' : 'fixed'}
       placement={'left'}
       size={{ height: '100%', width: panelWidth }}
-      onExpandChange={(expand) => updateSystemStatus({ showVerifyReportPanel: expand })}
+      onExpandChange={setExpand}
       onSizeChange={handleSizeChange}
     >
       <DraggablePanelContainer style={{ flex: 'none', height: '100%', minWidth: PANEL_MIN }}>
@@ -534,7 +533,7 @@ const ReportListPanel = memo(() => {
               className={styles.collapseBtn}
               title={t('workspace.collapse')}
               type={'button'}
-              onClick={() => updateSystemStatus({ showVerifyReportPanel: false })}
+              onClick={() => setExpand(false)}
             >
               <Icon icon={PanelLeftClose} size={16} />
             </button>
