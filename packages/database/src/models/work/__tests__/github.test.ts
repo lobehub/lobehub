@@ -79,7 +79,6 @@ describe('WorkModel · github', () => {
     // returns node_id, so both surfaces must share this dedup key.
     expect(second).toMatchObject({
       resourceId: 'lobehub/lobehub#123',
-      resourceLabel: 'lobehub/lobehub#123',
       resourceType: 'github_issue',
       type: 'github',
     });
@@ -87,22 +86,17 @@ describe('WorkModel · github', () => {
     const versions = await workModel.listVersions(first!.id);
     expect(versions.map((item) => item.version)).toEqual([2, 1]);
     expect(versions[0].changeType).toBe('updated');
-    // Partial update responses keep prior snapshot fields (title/body/labels).
-    expect(expectGithubSnapshot(versions[0].snapshot)).toMatchObject({
-      assignees: ['arvinxx'],
-      author: 'yutengjing',
-      body: 'Track GitHub issue as Work',
-      id: 'lobehub/lobehub#123',
-      labels: ['enhancement'],
+    // Partial update responses keep prior snapshot fields (title/description).
+    expect(expectGithubSnapshot(versions[0].snapshot)).toEqual({
+      description: 'Track GitHub issue as Work',
+      identifier: 'lobehub/lobehub#123',
       number: 123,
       repo: 'lobehub/lobehub',
-      state: 'closed',
-      stateReason: 'completed',
+      status: 'closed',
       title: 'GitHub Work issue',
-      updatedAt: '2026-07-02T09:30:00Z',
       url: 'https://github.com/lobehub/lobehub/issues/123',
     });
-    expect(expectGithubSnapshot(versions[1].snapshot).state).toBe('open');
+    expect(expectGithubSnapshot(versions[1].snapshot).status).toBe('open');
 
     const byOperation = await workModel.listSummariesByRootOperations({
       rootOperationIds: ['op-github-issue-create', 'op-github-issue-edit'],
@@ -111,7 +105,7 @@ describe('WorkModel · github', () => {
     const issueSummary = expectGithubSummaryItem(byOperation['op-github-issue-edit']?.[0]);
     expect(issueSummary.github).toMatchObject({
       repo: 'lobehub/lobehub',
-      state: 'closed',
+      status: 'closed',
     });
 
     const byConversation = await workModel.listByConversation({ topicId });
@@ -173,7 +167,6 @@ describe('WorkModel · github', () => {
 
     expect(pullRequest).toMatchObject({
       resourceId: 'lobehub/lobehub#456',
-      resourceLabel: 'lobehub/lobehub#456',
       resourceType: 'github_pull_request',
       type: 'github',
     });
@@ -198,13 +191,13 @@ describe('WorkModel · github', () => {
 
     const versions = await workModel.listVersions(pullRequest!.id);
     expect(versions.map((item) => item.version)).toEqual([2, 1]);
+    // The merge response ({ merged, sha }) collapses onto status='merged' while
+    // the create-time display metadata survives the patch merge.
     expect(expectGithubSnapshot(versions[0].snapshot)).toMatchObject({
-      baseRef: 'canary',
-      body: 'Adds the Work registry',
-      headRef: 'feat/work-registry',
-      merged: true,
+      description: 'Adds the Work registry',
       number: 456,
       repo: 'lobehub/lobehub',
+      status: 'merged',
       title: 'feat: add work registry',
     });
 
@@ -265,7 +258,6 @@ describe('WorkModel · github', () => {
 
     expect(created).toMatchObject({
       resourceId: 'lobehub-biz/lobehub-cloud#952',
-      resourceLabel: 'lobehub-biz/lobehub-cloud#952',
       resourceType: 'github_issue',
       type: 'github',
     });
@@ -289,12 +281,12 @@ describe('WorkModel · github', () => {
     const versions = await workModel.listVersions(created!.id);
     expect(versions.map((item) => item.version)).toEqual([2, 1]);
     expect(versions[0].changeType).toBe('updated');
-    // Patch merge keeps create-time title/state while applying the new body.
+    // Patch merge keeps create-time title/status while applying the new body.
     expect(expectGithubSnapshot(versions[0].snapshot)).toMatchObject({
-      body: 'updated body',
+      description: 'updated body',
       number: 952,
       repo: 'lobehub-biz/lobehub-cloud',
-      state: 'open',
+      status: 'open',
       title: 'CLI Issue',
       url: 'https://github.com/lobehub-biz/lobehub-cloud/issues/952',
     });
@@ -316,11 +308,10 @@ describe('WorkModel · github', () => {
       resourceType: 'github_pull_request',
     });
     const prVersions = await workModel.listVersions(pullRequest!.id);
+    // `--draft` collapses onto the unified status field on create.
     expect(expectGithubSnapshot(prVersions[0].snapshot)).toMatchObject({
-      baseRef: 'main',
-      draft: true,
-      headRef: 'feat/cli',
-      state: 'open',
+      description: 'pr body',
+      status: 'draft',
       title: 'CLI PR',
     });
 

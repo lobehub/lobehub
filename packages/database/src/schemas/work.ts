@@ -45,8 +45,6 @@ export const works = pgTable(
      * (the gh CLI surface never returns a node_id, so both github surfaces share this key).
      */
     resourceId: text('resource_id').notNull(),
-    /** Human-readable external identifier for display, e.g. `LOBE-123` or `owner/repo#456`. */
-    resourceLabel: text('resource_label'),
 
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
@@ -104,7 +102,7 @@ export const workVersions = pgTable(
      */
     changeType: text('change_type').$type<WorkVersionChangeType>().notNull(),
     /** Concrete tool that produced this version, e.g. 'createTask'. */
-    source: text('source').notNull(),
+    sourceToolName: text('source_tool_name').notNull(),
 
     /** Conversation where the mutation happened; set-null keeps history after topic deletion. */
     topicId: text('topic_id').references(() => topics.id, { onDelete: 'set null' }),

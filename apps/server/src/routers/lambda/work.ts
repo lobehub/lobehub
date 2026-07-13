@@ -43,7 +43,7 @@ const registerTaskSchema = z.object({
   cumulativeUsage: cumulativeUsageSchema.nullable().optional(),
   changeType: versionChangeTypeSchema,
   rootOperationId: z.string().nullable().optional(),
-  source: z.string().min(1),
+  sourceToolName: z.string().min(1),
   sourceMessageId: z.string().nullable().optional(),
   sourceToolCallId: z.string().nullable().optional(),
   taskId: z.string().optional(),
@@ -77,12 +77,11 @@ const registerDocumentSchema = z.object({
   documentId: z.string().min(1),
   changeType: versionChangeTypeSchema,
   rootOperationId: z.string().nullable().optional(),
-  source: z.string().min(1),
+  sourceToolName: z.string().min(1),
   sourceMessageId: z.string().nullable().optional(),
   sourceToolCallId: z.string().nullable().optional(),
   threadId: z.string().nullable().optional(),
   topicId: z.string().nullable().optional(),
-  url: z.string().nullable().optional(),
 }) satisfies z.ZodType<RegisterDocumentWorkParams>;
 
 export const workRouter = router({

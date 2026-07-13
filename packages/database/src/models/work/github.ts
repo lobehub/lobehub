@@ -4,7 +4,6 @@ import type {
   RegisterGithubWorkParams,
 } from '@lobechat/types';
 
-import { slimGithubSnapshotForSummary } from './internal';
 import { createSnapshotWorkAdapter, createSnapshotWorkRegister } from './snapshotWork';
 
 export const githubSnapshot = (
@@ -20,24 +19,12 @@ export const githubSnapshot = (
 
   return {
     github: {
-      assignees: pick('assignees', params.assignees, []),
-      author: pick('author', params.author, null),
-      baseRef: pick('baseRef', params.baseRef, null),
-      body: pick('body', params.body, null),
-      closedAt: pick('closedAt', params.closedAt, null),
-      createdAt: pick('createdAt', params.createdAt, null),
-      draft: pick('draft', params.draft, null),
-      headRef: pick('headRef', params.headRef, null),
-      id: params.resourceId,
-      labels: pick('labels', params.labels, []),
-      merged: pick('merged', params.merged, null),
-      mergedAt: pick('mergedAt', params.mergedAt, null),
+      description: pick('description', params.description, null),
+      identifier: pick('identifier', params.identifier, null),
       number: pick('number', params.number, null),
       repo: pick('repo', params.repo, null),
-      state: pick('state', params.state, null),
-      stateReason: pick('stateReason', params.stateReason, null),
+      status: pick('status', params.status, null),
       title: pick('title', params.title, null),
-      updatedAt: pick('updatedAt', params.updatedAt, null),
       url: pick('url', params.url, null),
     } satisfies GithubWorkVersionSnapshot,
   };
@@ -52,6 +39,5 @@ export const registerGithubWork = createSnapshotWorkRegister<
 });
 
 export const githubWorkAdapter = createSnapshotWorkAdapter<GithubWorkVersionSnapshot>({
-  slimForSummary: slimGithubSnapshotForSummary,
   type: 'github',
 });

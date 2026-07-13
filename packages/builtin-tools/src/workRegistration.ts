@@ -209,7 +209,7 @@ export interface WorkRegistrationProvenance {
   rootOperationId?: string;
   sourceMessageId?: string;
   sourceToolCallId?: string;
-  /** Fallback `source` for task Works (the API name); skills/documents carry their own. */
+  /** Fallback `sourceToolName` for task Works (the API name); skills/documents carry their own. */
   sourceToolName: string;
   threadId?: string | null;
   topicId?: string;
@@ -273,9 +273,9 @@ export const dispatchWorkRegistrationIntent = async (
           cumulativeCost,
           cumulativeUsage,
           rootOperationId,
-          source: sourceToolName,
           sourceMessageId,
           sourceToolCallId,
+          sourceToolName,
           taskId: target.taskId,
           taskIdentifier: target.taskIdentifier,
           threadId,

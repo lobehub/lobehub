@@ -17,7 +17,8 @@ import {
 
 const LINEAR_CREATE_TOOLS = new Set(['create_document', 'save_document', 'save_issue']);
 const LINEAR_ISSUE_IDENTIFIER_PATTERN = /^[A-Z][A-Z0-9]+-\d+$/u;
-const MAX_LINEAR_SNAPSHOT_TEXT_LENGTH = 4000;
+/** Snapshots store card-preview text only; cap free-text fields at write time. */
+const MAX_LINEAR_SNAPSHOT_TEXT_LENGTH = 300;
 
 interface LinearToolRegisterOperation {
   params: RegisterLinearWorkParams;
@@ -34,9 +35,6 @@ const snapshotText = (value: unknown): string | null => {
     ? `${text.slice(0, MAX_LINEAR_SNAPSHOT_TEXT_LENGTH)}...`
     : text;
 };
-
-const numberValue = (value: unknown): number | null =>
-  typeof value === 'number' && Number.isFinite(value) ? value : null;
 
 const firstDefined = <T>(...values: Array<T | null | undefined>): T | null | undefined =>
   values.find((value) => value !== undefined);
@@ -77,23 +75,6 @@ const optionalTextFromRecord = (
   return undefined;
 };
 
-const optionalNumberFromRecord = (
-  record: Record<string, unknown>,
-  keys: string[],
-): number | null | undefined => {
-  for (const key of keys) {
-    if (!hasOwn(record, key)) continue;
-
-    const raw = record[key];
-    if (raw === null) return null;
-
-    const value = numberValue(raw);
-    if (value !== null) return value;
-  }
-
-  return undefined;
-};
-
 const optionalStringFromNestedRecord = (
   record: Record<string, unknown>,
   key: string,
@@ -106,20 +87,6 @@ const optionalStringFromNestedRecord = (
   if (!nested) return undefined;
 
   return optionalStringFromRecord(nested, keys) ?? null;
-};
-
-const optionalNumberFromNestedRecord = (
-  record: Record<string, unknown>,
-  key: string,
-  keys: string[],
-): number | null | undefined => {
-  if (!hasOwn(record, key)) return undefined;
-  if (record[key] === null) return null;
-
-  const nested = toRecord(record[key]);
-  if (!nested) return undefined;
-
-  return optionalNumberFromRecord(nested, keys) ?? null;
 };
 
 const nestedRecord = (record: Record<string, unknown>, keys: string[]) => {
@@ -141,17 +108,6 @@ const unwrapData = (data: unknown, keys: string[]) => {
   return nestedRecord(record, keys);
 };
 
-const extractLabels = (value: unknown): string[] => {
-  if (!Array.isArray(value)) return [];
-
-  return value
-    .map((item) => {
-      const record = toRecord(item);
-      return record ? fromRecord(record, ['name', 'id']) : stringValue(item);
-    })
-    .filter((label): label is string => !!label);
-};
-
 const isIssueIdentifier = (value: string | null) =>
   value ? LINEAR_ISSUE_IDENTIFIER_PATTERN.test(value) : false;
 
@@ -165,112 +121,6 @@ const urlSegmentAfter = (url: string | null, segmentName: string) => {
   } catch {
     return null;
   }
-};
-
-const firstValue = (...values: Array<string | null | undefined>) =>
-  values.find((value): value is string => !!value) ?? null;
-
-const resolveTarget = (
-  params: RegisterLinearToolResultWorkParams,
-  record: Record<string, unknown>,
-) => {
-  const args = params.args ?? {};
-  const issue = toRecord(record.issue);
-  const document = toRecord(record.document);
-  const initiative = toRecord(record.initiative);
-  const milestone = toRecord(record.milestone);
-  const project = toRecord(record.project);
-
-  const issueId =
-    fromRecord(record, ['issueId']) ?? fromRecord(issue ?? {}, ['id']) ?? stringValue(args.issueId);
-  const documentId =
-    fromRecord(record, ['documentId']) ??
-    fromRecord(document ?? {}, ['id', 'slugId', 'slug']) ??
-    stringValue(args.documentId);
-  const initiativeId =
-    fromRecord(record, ['initiativeId']) ??
-    fromRecord(initiative ?? {}, ['id']) ??
-    stringValue(args.initiativeId);
-  const milestoneId =
-    fromRecord(record, ['milestoneId']) ??
-    fromRecord(milestone ?? {}, ['id']) ??
-    stringValue(args.milestoneId);
-  const projectId =
-    fromRecord(record, ['projectId']) ??
-    fromRecord(project ?? {}, ['id', 'slug']) ??
-    stringValue(args.projectId);
-
-  const issueIdentifier = firstValue(
-    fromRecord(record, ['issueIdentifier', 'issueKey']),
-    fromRecord(issue ?? {}, ['identifier', 'key']),
-    isIssueIdentifier(issueId) ? issueId : null,
-  );
-  const documentIdentifier =
-    fromRecord(document ?? {}, ['slug', 'slugId', 'title', 'name']) ??
-    (documentId ? stringValue(args.documentId) : null);
-  const projectIdentifier =
-    fromRecord(project ?? {}, ['slug', 'name', 'id']) ??
-    (projectId ? stringValue(args.projectId) : null);
-
-  if (issueId) {
-    return {
-      issueId,
-      issueIdentifier,
-      targetId: issueId,
-      targetIdentifier: issueIdentifier,
-      targetType: 'issue' as const,
-    };
-  }
-
-  if (documentId) {
-    return {
-      issueId: null,
-      issueIdentifier: null,
-      targetId: documentId,
-      targetIdentifier: documentIdentifier,
-      targetType: 'document' as const,
-    };
-  }
-
-  if (initiativeId) {
-    return {
-      issueId: null,
-      issueIdentifier: null,
-      targetId: initiativeId,
-      targetIdentifier:
-        fromRecord(initiative ?? {}, ['name', 'id']) ?? stringValue(args.initiativeId),
-      targetType: 'initiative' as const,
-    };
-  }
-
-  if (milestoneId) {
-    return {
-      issueId: null,
-      issueIdentifier: null,
-      targetId: milestoneId,
-      targetIdentifier:
-        fromRecord(milestone ?? {}, ['name', 'id']) ?? stringValue(args.milestoneId),
-      targetType: 'milestone' as const,
-    };
-  }
-
-  if (projectId) {
-    return {
-      issueId: null,
-      issueIdentifier: null,
-      targetId: projectId,
-      targetIdentifier: projectIdentifier,
-      targetType: 'project' as const,
-    };
-  }
-
-  return {
-    issueId: null,
-    issueIdentifier: null,
-    targetId: null,
-    targetIdentifier: null,
-    targetType: null,
-  };
 };
 
 const resolveResourceIdentifier = (params: {
@@ -317,9 +167,9 @@ const contextParams = (
   | 'cumulativeCost'
   | 'cumulativeUsage'
   | 'rootOperationId'
-  | 'source'
   | 'sourceMessageId'
   | 'sourceToolCallId'
+  | 'sourceToolName'
   | 'threadId'
   | 'topicId'
 > => ({
@@ -327,9 +177,9 @@ const contextParams = (
   cumulativeCost: params.cumulativeCost ?? null,
   cumulativeUsage: params.cumulativeUsage ?? null,
   rootOperationId: params.rootOperationId ?? null,
-  source: params.toolName,
   sourceMessageId: params.sourceMessageId ?? null,
   sourceToolCallId: params.sourceToolCallId ?? null,
+  sourceToolName: params.toolName,
   threadId: params.threadId ?? null,
   topicId: params.topicId ?? null,
 });
@@ -343,8 +193,6 @@ const createRegisterOperation = (
   if (!id) return null;
 
   const url = fromRecord(record, ['url', 'appUrl']);
-  const title = optionalStringFromRecord(record, ['title', 'name', 'subject']);
-  const target = resolveTarget(params, record);
   const identifier = resolveResourceIdentifier({ entityType, id, record, url });
   const patchFields = new Set<LinearWorkPatchField>();
   const patch = <T>(field: LinearWorkPatchField, value: T | null | undefined) => {
@@ -353,74 +201,23 @@ const createRegisterOperation = (
   };
 
   if (identifier) patchFields.add('identifier');
-  if (target.issueId) patchFields.add('issueId');
-  if (target.issueIdentifier) patchFields.add('issueIdentifier');
-  if (target.targetId) patchFields.add('targetId');
-  if (target.targetIdentifier) patchFields.add('targetIdentifier');
-  if (target.targetType) patchFields.add('targetType');
 
   return {
     params: {
       ...contextParams(params),
-      assignee: patch(
-        'assignee',
-        firstDefined(
-          optionalStringFromRecord(record, ['assignee']),
-          optionalStringFromNestedRecord(record, 'assignee', ['name', 'id']),
-        ),
-      ),
-      assigneeId: patch(
-        'assigneeId',
-        firstDefined(
-          optionalStringFromRecord(record, ['assigneeId']),
-          optionalStringFromNestedRecord(record, 'assignee', ['id']),
-        ),
-      ),
-      color: patch('color', optionalStringFromRecord(record, ['color'])),
-      content: patch('content', optionalTextFromRecord(record, ['content'])),
-      createdAt: patch('createdAt', optionalStringFromRecord(record, ['createdAt'])),
-      description: patch('description', optionalTextFromRecord(record, ['description'])),
-      dueDate: patch('dueDate', optionalStringFromRecord(record, ['dueDate'])),
-      icon: patch('icon', optionalStringFromRecord(record, ['icon'])),
-      issueId: target.issueId,
-      issueIdentifier: target.issueIdentifier,
-      labels:
-        patch('labels', hasOwn(record, 'labels') ? extractLabels(record.labels) : undefined) ??
-        undefined,
-      parentId: patch('parentId', optionalStringFromRecord(record, ['parentId'])),
-      priority: patch(
-        'priority',
-        firstDefined(
-          optionalStringFromRecord(record, ['priority']),
-          optionalStringFromNestedRecord(record, 'priority', ['name']),
-        ),
-      ),
-      priorityValue: patch(
-        'priorityValue',
-        firstDefined(
-          optionalNumberFromRecord(record, ['priority']),
-          optionalNumberFromNestedRecord(record, 'priority', ['value']),
-        ),
-      ),
-      project: patch(
-        'project',
-        firstDefined(
-          optionalStringFromRecord(record, ['project']),
-          optionalStringFromNestedRecord(record, 'project', ['name', 'slug', 'id']),
-        ),
-      ),
-      projectId: patch(
-        'projectId',
-        firstDefined(
-          optionalStringFromRecord(record, ['projectId']),
-          optionalStringFromNestedRecord(record, 'project', ['id']),
-        ),
-      ),
-      resourceId: id,
-      resourceLabel: identifier,
-      resourceType: linearResourceType(entityType),
       changeType:
         LINEAR_CREATE_TOOLS.has(params.toolName) && !params.args?.id ? 'created' : 'updated',
+      // Documents carry their preview in `content`; issues in `description`.
+      description: patch(
+        'description',
+        firstDefined(
+          optionalTextFromRecord(record, ['description']),
+          optionalTextFromRecord(record, ['content']),
+        ),
+      ),
+      identifier,
+      resourceId: id,
+      resourceType: linearResourceType(entityType),
       status: patch(
         'status',
         firstDefined(
@@ -428,34 +225,10 @@ const createRegisterOperation = (
           optionalStringFromNestedRecord(record, 'state', ['name', 'type']),
         ),
       ),
-      statusType: patch(
-        'statusType',
-        firstDefined(
-          optionalStringFromRecord(record, ['statusType']),
-          optionalStringFromNestedRecord(record, 'state', ['type']),
-        ),
-      ),
-      slugId: patch('slugId', optionalStringFromRecord(record, ['slugId'])),
-      targetId: target.targetId,
-      targetIdentifier: target.targetIdentifier,
-      targetType: target.targetType,
-      team: patch(
-        'team',
-        firstDefined(
-          optionalStringFromRecord(record, ['team']),
-          optionalStringFromNestedRecord(record, 'team', ['name', 'key', 'id']),
-        ),
-      ),
-      teamId: patch(
-        'teamId',
-        firstDefined(
-          optionalStringFromRecord(record, ['teamId']),
-          optionalStringFromNestedRecord(record, 'team', ['id']),
-        ),
-      ),
-      title: patch('title', title),
-      updatedAt: patch('updatedAt', optionalStringFromRecord(record, ['updatedAt'])),
+      title: patch('title', optionalStringFromRecord(record, ['title', 'name', 'subject'])),
       url: patch('url', optionalStringFromRecord(record, ['url', 'appUrl'])),
+      // Evaluated last: every patch() call above must run before the set is
+      // materialized (object literal properties evaluate in order).
       patchFields: Array.from(patchFields),
     },
     type: 'register',

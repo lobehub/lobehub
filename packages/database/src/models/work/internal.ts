@@ -1,7 +1,5 @@
 import type {
   DocumentWorkSummaryItem,
-  GithubWorkVersionSnapshot,
-  LinearWorkVersionSnapshot,
   RegisterTaskWorkParams,
   TaskWorkListItem,
   TaskWorkSummaryItem,
@@ -44,29 +42,6 @@ export const truncateSummaryText = (value: string | null | undefined): string | 
     : normalized;
 };
 
-/**
- * Strip Linear full-document `content` and cap description for summary/list
- * rows so message-list and gallery payloads stay small.
- */
-export const slimLinearSnapshotForSummary = (
-  linear: LinearWorkVersionSnapshot,
-): LinearWorkVersionSnapshot => ({
-  ...linear,
-  content: null,
-  description: truncateSummaryText(linear.description || linear.content),
-});
-
-/**
- * Cap GitHub issue/PR `body` for summary/list rows (cards only show a one-line
- * preview; full body remains on the version snapshot in DB).
- */
-export const slimGithubSnapshotForSummary = (
-  github: GithubWorkVersionSnapshot,
-): GithubWorkVersionSnapshot => ({
-  ...github,
-  body: truncateSummaryText(github.body),
-});
-
 /** Provenance fields shared by all four Register*WorkParams shapes. */
 export type WorkVersionEventParams = Pick<
   RegisterTaskWorkParams,
@@ -75,9 +50,9 @@ export type WorkVersionEventParams = Pick<
   | 'cumulativeUsage'
   | 'changeType'
   | 'rootOperationId'
-  | 'source'
   | 'sourceMessageId'
   | 'sourceToolCallId'
+  | 'sourceToolName'
   | 'threadId'
   | 'topicId'
 >;
@@ -96,9 +71,9 @@ export const versionEventSelection = {
   metadata: workVersions.metadata,
   changeType: workVersions.changeType,
   rootOperationId: workVersions.rootOperationId,
-  source: workVersions.source,
   sourceMessageId: workVersions.sourceMessageId,
   sourceToolCallId: workVersions.sourceToolCallId,
+  sourceToolName: workVersions.sourceToolName,
   version: workVersions.version,
 };
 
@@ -132,11 +107,12 @@ export const snapshotField = <Snapshot>(
 /**
  * Task live-column projection shared by every task summary/list query. `tasks`
  * columns take priority; a LEFT JOIN miss (task deleted without the tool path)
- * nulls the whole `tasks` row, so name/priority/status coalesce onto
- * `snapshotColumn` (the version snapshot) and `tasks.id is null` becomes the
- * orphan-deletion signal. `instruction` (NOT NULL on live rows) is the card
- * preview text — the optional short `description` is deliberately not
- * surfaced. `snapshotColumn` is `workVersions.snapshot` for event rows or
+ * nulls the whole `tasks` row, so title/identifier coalesce onto
+ * `snapshotColumn` (the minimal display snapshot) and `tasks.id is null`
+ * becomes the orphan-deletion signal. `instruction` (NOT NULL on live rows) is
+ * the card preview text; instruction/priority/status are live-only — a deleted
+ * task's card renders title + identifier + deleted badge from the snapshot.
+ * `snapshotColumn` is `workVersions.snapshot` for event rows or
  * `currentVersions.snapshot` for summary rows.
  */
 export const taskSummaryFields = (
@@ -144,14 +120,13 @@ export const taskSummaryFields = (
 ) => ({
   task: {
     deleted: sql<boolean>`${tasks.id} is null`,
-    instruction: sql<
+    identifier: sql<
       string | null
-    >`coalesce(${tasks.instruction}, ${snapshotColumn}->'task'->>'instruction')`,
-    name: sql<string | null>`coalesce(${tasks.name}, ${snapshotColumn}->'task'->>'name')`,
-    priority: sql<
-      number | null
-    >`coalesce(${tasks.priority}, (${snapshotColumn}->'task'->>'priority')::integer)`,
-    status: sql<string | null>`coalesce(${tasks.status}, ${snapshotColumn}->'task'->>'status')`,
+    >`coalesce(${tasks.identifier}, ${snapshotColumn}->'task'->>'identifier')`,
+    instruction: sql<string | null>`${tasks.instruction}`,
+    name: sql<string | null>`coalesce(${tasks.name}, ${snapshotColumn}->'task'->>'title')`,
+    priority: sql<number | null>`${tasks.priority}`,
+    status: sql<string | null>`${tasks.status}`,
   },
 });
 

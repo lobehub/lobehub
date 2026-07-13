@@ -2709,7 +2709,7 @@ table work_versions {
   version integer [not null]
   snapshot jsonb [not null]
   change_type text [not null]
-  source text [not null]
+  source_tool_name text [not null]
   topic_id text
   thread_id text
   source_message_id text
@@ -2743,7 +2743,6 @@ table works {
   current_version_id text
   resource_type text [not null]
   resource_id text [not null]
-  resource_label text
   user_id text [not null]
   workspace_id text
   created_at "timestamp with time zone" [not null, default: `now()`]

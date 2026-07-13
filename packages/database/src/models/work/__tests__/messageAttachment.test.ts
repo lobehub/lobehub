@@ -47,7 +47,7 @@ describe('MessageModel · work summary attachment', () => {
     const work = await workModel.registerTask({
       changeType: 'created',
       rootOperationId: 'op-root',
-      source: 'createTask',
+      sourceToolName: 'createTask',
       sourceMessageId: 'msg-tool',
       sourceToolCallId: 'tool-call-create',
       taskId: task.id,

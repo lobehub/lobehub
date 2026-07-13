@@ -61,12 +61,12 @@ const WorkVersionHistoryCard = memo<{ work: WorkListItem }>(({ work }) => {
   const [expanded, setExpanded] = useState(false);
   const [openDocument, openTaskDetail] = useChatStore((s) => [s.openDocument, s.openTaskDetail]);
   const ToggleIcon = expanded ? ChevronDownIcon : ChevronRightIcon;
-  const label = work.resourceLabel ?? work.resourceId;
   // The underlying task was deleted outside the tool path — the Work survives as
   // an orphan rendered from its snapshot, and opening the (gone) task detail 404s.
   const taskDeleted = work.type === 'task' && work.taskDeleted;
 
   const descriptor = getWorkTypeDescriptor(work);
+  const label = descriptor.getIdentifier(work) ?? work.resourceId;
   const TypeIcon = descriptor.Icon;
   const title = descriptor.getTitle(work)?.trim();
   const openTarget = descriptor.getOpenTarget(work);

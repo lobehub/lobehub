@@ -47,7 +47,6 @@ const findCurrentSnapshot = async <Snapshot>(
 /** Resource identity params every snapshot-work registration carries. */
 export interface SnapshotWorkRegisterParams extends WorkVersionEventParams {
   resourceId: string;
-  resourceLabel?: string | null;
   resourceType: WorkResourceType;
 }
 
@@ -71,7 +70,6 @@ export const createSnapshotWorkRegister =
       .insert(works)
       .values({
         resourceId: params.resourceId,
-        resourceLabel: params.resourceLabel ?? null,
         resourceType: params.resourceType,
         type: config.type,
         userId: ctx.userId,
@@ -79,11 +77,7 @@ export const createSnapshotWorkRegister =
       })
       .onConflictDoUpdate({
         ...conflict,
-        set: {
-          // A later partial result may omit the label; never null out one we have.
-          resourceLabel: sql`COALESCE(${params.resourceLabel ?? null}, ${works.resourceLabel})`,
-          updatedAt: new Date(),
-        },
+        set: { updatedAt: new Date() },
       })
       .returning();
 
@@ -100,19 +94,13 @@ export const createSnapshotWorkRegister =
 
 /**
  * Build the `WorkTypeAdapter` for a snapshot-backed work type. All query
- * shapes are shared (see internal.ts); the per-type differences reduce to the
- * snapshot key and an optional summary slimmer.
+ * shapes are shared (see internal.ts); the per-type difference reduces to the
+ * snapshot key. Snapshots are card-sized at WRITE time (free text truncated by
+ * the normalizers), so no read-side slimming exists.
  */
 export const createSnapshotWorkAdapter = <Snapshot>(config: {
-  /**
-   * Trim heavy free-text fields for card payloads (summary chips, sidebar,
-   * gallery). Version-event rows keep the FULL snapshot. Omit for types whose
-   * snapshots are already card-sized (document).
-   */
-  slimForSummary?: (snapshot: Snapshot) => Snapshot;
   type: SnapshotWorkType;
 }): WorkTypeAdapter<SnapshotWorkSummaryQueryRow<Snapshot>> => {
-  const slim = config.slimForSummary ?? ((snapshot: Snapshot) => snapshot);
   // The `[type]: snapshot` computed key + `resourceType` widening defeat the
   // tagged-union inference, so the cast lives here, once, instead of in every
   // per-type module.
@@ -148,7 +136,7 @@ export const createSnapshotWorkAdapter = <Snapshot>(config: {
 
       return rows.map((row) => ({
         eventCreatedAt: row.eventCreatedAt,
-        item: toListItem(row.work, slim(row.snapshot)),
+        item: toListItem(row.work, row.snapshot),
       }));
     },
 
@@ -169,7 +157,7 @@ export const createSnapshotWorkAdapter = <Snapshot>(config: {
 
     mapSummaryRow: (row, totalCost) =>
       ({
-        ...toListItem(row.work, slim(row.snapshot)),
+        ...toListItem(row.work, row.snapshot),
         event: row.event,
         totalCost,
         version: row.version,
@@ -177,10 +165,7 @@ export const createSnapshotWorkAdapter = <Snapshot>(config: {
 
     mapWorkspaceRow: (row, totalCost) =>
       ({
-        ...toListItem(
-          row.work,
-          slim((row.snapshot as unknown as Record<string, Snapshot>)[config.type]),
-        ),
+        ...toListItem(row.work, (row.snapshot as unknown as Record<string, Snapshot>)[config.type]),
         event: row.event,
         totalCost,
         version: row.version,

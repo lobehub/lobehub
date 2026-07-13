@@ -36,7 +36,7 @@ const seedTaskWorks = async (workModel: WorkModel, taskModel: TaskModel, count: 
     const work = await workModel.registerTask({
       changeType: 'created',
       rootOperationId: `op-workspace-${index}`,
-      source: 'createTask',
+      sourceToolName: 'createTask',
       sourceToolCallId: `tool-call-workspace-${index}`,
       taskId: task.id,
       topicId,
@@ -59,7 +59,7 @@ describe('WorkModel · listByWorkspace', () => {
     const firstWork = await workModel.registerTask({
       changeType: 'created',
       rootOperationId: 'op-cross-1',
-      source: 'createTask',
+      sourceToolName: 'createTask',
       sourceToolCallId: 'tool-call-cross-1',
       taskId: firstTask.id,
       topicId,
@@ -74,7 +74,7 @@ describe('WorkModel · listByWorkspace', () => {
       documentId: doc.documentId,
       changeType: 'created',
       rootOperationId: 'op-cross-doc',
-      source: 'createDocument',
+      sourceToolName: 'createDocument',
       sourceToolCallId: 'tool-call-cross-doc',
       // Deliberately on a different topic to prove the query is cross-topic.
       topicId: otherTopicId,
@@ -97,7 +97,7 @@ describe('WorkModel · listByWorkspace', () => {
     await workModel.registerTask({
       changeType: 'created',
       rootOperationId: 'op-typed-task',
-      source: 'createTask',
+      sourceToolName: 'createTask',
       sourceToolCallId: 'tool-call-typed-task',
       taskId: task.id,
       topicId,
@@ -112,7 +112,7 @@ describe('WorkModel · listByWorkspace', () => {
       documentId: doc.documentId,
       changeType: 'created',
       rootOperationId: 'op-typed-doc',
-      source: 'createDocument',
+      sourceToolName: 'createDocument',
       sourceToolCallId: 'tool-call-typed-doc',
       topicId,
     });
@@ -154,7 +154,7 @@ describe('WorkModel · listByWorkspace', () => {
     await otherWorkModel.registerTask({
       changeType: 'created',
       rootOperationId: 'op-private',
-      source: 'createTask',
+      sourceToolName: 'createTask',
       sourceToolCallId: 'tool-call-private',
       taskId: otherTask.id,
       topicId: otherTopicId,
@@ -172,7 +172,7 @@ describe('WorkModel · listByWorkspace', () => {
     await workModel.registerTask({
       changeType: 'created',
       rootOperationId: 'op-orphan-workspace',
-      source: 'createTask',
+      sourceToolName: 'createTask',
       sourceToolCallId: 'tool-call-orphan-workspace',
       taskId: task.id,
       topicId,

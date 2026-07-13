@@ -55,9 +55,6 @@ const withWorkRefresh = async <T>(operation: Promise<T>, context?: DocumentWorkR
  * tool call's cumulative cost is known — replacing the old lambda-side inline
  * (cost-less) registration + client cost back-fill. Deletes are NOT stashed:
  * they remain a lambda side-effect of removeDocument (a delete carries no cost).
- *
- * The share URL is resolved here (the client already builds it for the tool
- * result), so the lambda register endpoint stays a thin passthrough.
  */
 const stashDocumentRegisterIntent = (input: {
   agentDocumentId?: string;
@@ -65,7 +62,7 @@ const stashDocumentRegisterIntent = (input: {
   description?: string | null;
   documentId?: string;
   changeType: 'created' | 'updated';
-  source: string;
+  sourceToolName: string;
   toolCallId?: string;
 }) => {
   if (!input.toolCallId || !input.documentId) return;
@@ -78,8 +75,7 @@ const stashDocumentRegisterIntent = (input: {
       description: input.description,
       documentId: input.documentId,
       changeType: input.changeType,
-      source: input.source,
-      url: buildDocumentShareUrl(input.agentId, input.documentId),
+      sourceToolName: input.sourceToolName,
     },
     type: 'document',
   });
@@ -101,7 +97,7 @@ const runtime = new AgentDocumentsExecutionRuntime(
         description: doc?.description,
         documentId: doc?.documentId,
         changeType: 'created',
-        source: 'copyDocument',
+        sourceToolName: 'copyDocument',
         toolCallId: toolContext?.toolCallId,
       });
       return doc;
@@ -121,7 +117,7 @@ const runtime = new AgentDocumentsExecutionRuntime(
         description: doc?.description,
         documentId: doc?.documentId,
         changeType: 'created',
-        source: 'createDocument',
+        sourceToolName: 'createDocument',
         toolCallId: toolContext?.toolCallId,
       });
       return doc;
@@ -150,7 +146,7 @@ const runtime = new AgentDocumentsExecutionRuntime(
         description: doc?.description,
         documentId: doc?.documentId,
         changeType: 'created',
-        source: 'createForTopic',
+        sourceToolName: 'createForTopic',
         toolCallId: toolContext?.toolCallId,
       });
       return doc;
@@ -201,7 +197,7 @@ const runtime = new AgentDocumentsExecutionRuntime(
         description: doc?.description,
         documentId: doc?.documentId,
         changeType: 'updated',
-        source: 'modifyNodes',
+        sourceToolName: 'modifyNodes',
         toolCallId: toolContext?.toolCallId,
       });
       return doc;
@@ -232,7 +228,7 @@ const runtime = new AgentDocumentsExecutionRuntime(
         description: doc?.description,
         documentId: doc?.documentId,
         changeType: 'updated',
-        source: 'renameDocument',
+        sourceToolName: 'renameDocument',
         toolCallId: toolContext?.toolCallId,
       });
       return doc;
@@ -251,7 +247,7 @@ const runtime = new AgentDocumentsExecutionRuntime(
         description: doc?.description,
         documentId: doc?.documentId,
         changeType: 'updated',
-        source: 'replaceDocumentContent',
+        sourceToolName: 'replaceDocumentContent',
         toolCallId: toolContext?.toolCallId,
       });
       return doc;

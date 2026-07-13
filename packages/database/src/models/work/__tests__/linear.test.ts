@@ -24,7 +24,7 @@ describe('WorkModel · linear', () => {
     const baseParams = {
       resourceId: 'issue-race',
       resourceType: 'linear_issue' as const,
-      source: 'save_issue',
+      sourceToolName: 'save_issue',
       topicId,
     };
 
@@ -147,7 +147,6 @@ describe('WorkModel · linear', () => {
     expect(replay?.id).toBe(first?.id);
     expect(second).toMatchObject({
       resourceId: 'issue-uuid-10966',
-      resourceLabel: 'LOBE-10966',
       resourceType: 'linear_issue',
       type: 'linear',
     });
@@ -155,28 +154,18 @@ describe('WorkModel · linear', () => {
     const versions = await workModel.listVersions(first!.id);
     expect(versions.map((item) => item.version)).toEqual([2, 1]);
     expect(versions[0].changeType).toBe('updated');
-    expect(expectLinearSnapshot(versions[0].snapshot)).toMatchObject({
+    // The partial edit ({ id, state }) patch-merges over v1's display metadata.
+    expect(expectLinearSnapshot(versions[0].snapshot)).toEqual({
       description: 'Track Linear issue as Work',
-      id: 'issue-uuid-10966',
       identifier: 'LOBE-10966',
-      labels: ['claude code'],
-      priority: 'High',
-      priorityValue: 2,
       status: 'In Progress',
-      statusType: 'started',
-      team: 'Engineering',
-      teamId: 'team-1',
       title: 'Linear Work issue',
-      updatedAt: '2026-07-01T13:23:10.614Z',
+      url: 'https://linear.app/lobehub/issue/LOBE-10966/linear-work-issue',
     });
-    expect(expectLinearSnapshot(versions[0].snapshot)).not.toHaveProperty('raw');
     expect(expectLinearSnapshot(versions[1].snapshot).status).toBe('Backlog');
     expect(expectLinearSnapshot(versions[1].snapshot)).toMatchObject({
-      labels: ['claude code'],
-      priority: 'High',
-      priorityValue: 2,
-      team: 'Engineering',
-      teamId: 'team-1',
+      identifier: 'LOBE-10966',
+      title: 'Linear Work issue',
     });
 
     const byOperation = await workModel.listSummariesByRootOperations({
@@ -186,10 +175,8 @@ describe('WorkModel · linear', () => {
     const issueSummary = expectLinearSummaryItem(byOperation['op-linear-issue-edit']?.[0]);
     expect(issueSummary.linear).toMatchObject({
       identifier: 'LOBE-10966',
-      labels: ['claude code'],
-      priority: 'High',
       status: 'In Progress',
-      team: 'Engineering',
+      title: 'Linear Work issue',
     });
 
     const byConversation = await workModel.listByConversation({ topicId });
@@ -289,28 +276,23 @@ describe('WorkModel · linear', () => {
 
     expect(document).toMatchObject({
       resourceId: 'doc-1',
-      resourceLabel: 'linear-document',
       resourceType: 'linear_document',
       type: 'linear',
     });
-    expect(editedDocument).toMatchObject({
-      resourceLabel: 'linear-document-8298fa69b2e3',
-    });
-    expect(partialDocumentUpdate).toMatchObject({
-      resourceLabel: 'linear-document-8298fa69b2e3',
-    });
+    expect(editedDocument?.id).toBe(document!.id);
+    expect(partialDocumentUpdate?.id).toBe(document!.id);
 
     const documentVersions = await workModel.listVersions(document!.id);
     expect(documentVersions.map((item) => item.version)).toEqual([3, 2, 1]);
+    // Document previews land in `description` (from `content`); the partial
+    // update keeps the identifier/title merged from the earlier full edit.
     expect(expectLinearSnapshot(documentVersions[0].snapshot)).toMatchObject({
-      content: 'Partial body',
-      id: 'doc-1',
+      description: 'Partial body',
       identifier: 'linear-document-8298fa69b2e3',
-      slugId: '8298fa69b2e3',
       title: 'Linear document updated',
     });
     expect(expectLinearSnapshot(documentVersions[1].snapshot)).toMatchObject({
-      content: 'Updated body',
+      description: 'Updated body',
       identifier: 'linear-document-8298fa69b2e3',
     });
 

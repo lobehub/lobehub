@@ -15,7 +15,8 @@ import {
   toRecord,
 } from './toolResultParsing';
 
-const MAX_GITHUB_SNAPSHOT_TEXT_LENGTH = 4000;
+/** Snapshots store card-preview text only; cap free-text fields at write time. */
+const MAX_GITHUB_SNAPSHOT_TEXT_LENGTH = 300;
 
 /**
  * Only successful create/edit results become Works (LOBE-10967): read-only
@@ -88,20 +89,6 @@ const numberFromRecord = (record: Record<string, unknown>, keys: string[]) => {
   }
 
   return null;
-};
-
-const hasAnyKey = (record: Record<string, unknown>, keys: string[]) =>
-  keys.some((key) => hasOwn(record, key));
-
-const extractNamedList = (value: unknown, nameKeys: string[]): string[] => {
-  if (!Array.isArray(value)) return [];
-
-  return value
-    .map((item) => {
-      const record = toRecord(item);
-      return record ? fromRecord(record, nameKeys) : stringValue(item);
-    })
-    .filter((name): name is string => !!name);
 };
 
 /** Join MCP-style content parts (`{ content: [{ text }] }`) back into one string. */
@@ -201,6 +188,21 @@ const resolveUrl = (record: Record<string, unknown>): string | null => {
   return url && /^https?:\/\/github\.com\//i.test(url) ? url : null;
 };
 
+/**
+ * Collapse GitHub's state/merged/draft triplet into one display status:
+ * merged and draft win over the raw `state` ('open' | 'closed').
+ */
+const resolveStatus = (record: Record<string, unknown>): string | null => {
+  if (record.merged === true) return 'merged';
+  if (record.draft === true) return 'draft';
+  return fromRecord(record, ['state']);
+};
+
+const hasStatusSignal = (record: Record<string, unknown>) =>
+  hasOwn(record, 'state') ||
+  typeof record.merged === 'boolean' ||
+  typeof record.draft === 'boolean';
+
 const githubResourceType = (entityType: GithubWorkEntityType): GithubWorkResourceType =>
   entityType === 'issue' ? 'github_issue' : 'github_pull_request';
 
@@ -219,81 +221,30 @@ const buildParams = (
 
   if (repo) patchFields.add('repo');
   if (number !== null) patchFields.add('number');
+  if (repo && number !== null) patchFields.add('identifier');
   if (url) patchFields.add('url');
 
   return {
     actorAgentId: params.actorAgentId ?? null,
-    assignees: patch(
-      'assignees',
-      hasOwn(record, 'assignees'),
-      extractNamedList(record.assignees, ['login', 'name']),
-    ),
-    author: patch(
-      'author',
-      hasAnyKey(record, ['user', 'author']),
-      fromRecord(toRecord(record.user) ?? toRecord(record.author) ?? {}, ['login', 'name']),
-    ),
-    baseRef: patch(
-      'baseRef',
-      hasAnyKey(record, ['base', 'base_ref', 'baseRef']),
-      fromRecord(toRecord(record.base) ?? {}, ['ref']) ??
-        fromRecord(record, ['base_ref', 'baseRef']),
-    ),
-    body: patch('body', hasOwn(record, 'body'), snapshotText(record.body)),
-    closedAt: patch(
-      'closedAt',
-      hasAnyKey(record, ['closed_at', 'closedAt']),
-      fromRecord(record, ['closed_at', 'closedAt']),
-    ),
-    createdAt: patch(
-      'createdAt',
-      hasAnyKey(record, ['created_at', 'createdAt']),
-      fromRecord(record, ['created_at', 'createdAt']),
-    ),
+    changeType: tool.changeType,
     cumulativeCost: params.cumulativeCost ?? null,
     cumulativeUsage: params.cumulativeUsage ?? null,
-    draft: patch('draft', typeof record.draft === 'boolean', record.draft as boolean),
-    headRef: patch(
-      'headRef',
-      hasAnyKey(record, ['head', 'head_ref', 'headRef']),
-      fromRecord(toRecord(record.head) ?? {}, ['ref']) ??
-        fromRecord(record, ['head_ref', 'headRef']),
-    ),
-    labels: patch(
-      'labels',
-      hasOwn(record, 'labels'),
-      extractNamedList(record.labels, ['name', 'id']),
-    ),
-    merged: patch('merged', typeof record.merged === 'boolean', record.merged as boolean),
-    mergedAt: patch(
-      'mergedAt',
-      hasAnyKey(record, ['merged_at', 'mergedAt']),
-      fromRecord(record, ['merged_at', 'mergedAt']),
-    ),
+    description: patch('description', hasOwn(record, 'body'), snapshotText(record.body)),
+    identifier: repo && number !== null ? `${repo}#${number}` : null,
     number,
     repo,
-    resourceLabel: repo && number !== null ? `${repo}#${number}` : null,
     resourceType: githubResourceType(tool.entityType),
-    changeType: tool.changeType,
     rootOperationId: params.rootOperationId ?? null,
-    source: params.toolName,
     sourceMessageId: params.sourceMessageId ?? null,
     sourceToolCallId: params.sourceToolCallId ?? null,
-    state: patch('state', hasOwn(record, 'state'), fromRecord(record, ['state'])),
-    stateReason: patch(
-      'stateReason',
-      hasAnyKey(record, ['state_reason', 'stateReason']),
-      fromRecord(record, ['state_reason', 'stateReason']),
-    ),
+    sourceToolName: params.toolName,
+    status: patch('status', hasStatusSignal(record), resolveStatus(record)),
     threadId: params.threadId ?? null,
     title: patch('title', hasOwn(record, 'title'), stringValue(record.title)),
     topicId: params.topicId ?? null,
-    updatedAt: patch(
-      'updatedAt',
-      hasAnyKey(record, ['updated_at', 'updatedAt']),
-      fromRecord(record, ['updated_at', 'updatedAt']),
-    ),
     url,
+    // Evaluated last: every patch() call above must run before the set is
+    // materialized (object literal properties evaluate in order).
     patchFields: Array.from(patchFields),
   };
 };
@@ -463,12 +414,9 @@ const parseGithubEntityUrls = (text: string | null): GithubEntityRef[] => {
 
 interface ParsedGhCommand {
   action: 'create' | 'edit';
-  baseRef: string | null;
   body: string | null;
   draft: boolean;
   entityType: GithubWorkEntityType;
-  headRef: string | null;
-  labels: string[];
   repo: string | null;
   targetNumber: number | null;
   targetRef: GithubEntityRef | null;
@@ -483,13 +431,10 @@ const parseGhSegment = (segment: string[]): ParsedGhCommand | null => {
   if (noun !== 'issue' && noun !== 'pr') return null;
   if (action !== 'create' && action !== 'edit') return null;
 
-  let baseRef: string | null = null;
   let body: string | null = null;
   let draft = false;
-  let headRef: string | null = null;
   let repoFlag: string | null = null;
   let title: string | null = null;
-  const labels: string[] = [];
   const positionals: string[] = [];
 
   for (let i = 3; i < segment.length; i++) {
@@ -523,33 +468,9 @@ const parseGhSegment = (segment: string[]): ParsedGhCommand | null => {
         body = value;
         break;
       }
-      case '-B':
-      case '--base': {
-        baseRef = value;
-        break;
-      }
-      case '-H':
-      case '--head': {
-        headRef = value;
-        break;
-      }
       case '-R':
       case '--repo': {
         repoFlag = value;
-        break;
-      }
-      // `--add-label` on edit is additive — patching it as the full label set
-      // would clobber existing labels, so only plain `--label` is captured.
-      case '-l':
-      case '--label': {
-        if (value) {
-          labels.push(
-            ...value
-              .split(',')
-              .map((label) => label.trim())
-              .filter(Boolean),
-          );
-        }
         break;
       }
       case '-d':
@@ -578,12 +499,9 @@ const parseGhSegment = (segment: string[]): ParsedGhCommand | null => {
 
   return {
     action,
-    baseRef,
     body,
     draft,
     entityType: noun === 'issue' ? 'issue' : 'pull_request',
-    headRef,
-    labels,
     repo,
     targetNumber,
     targetRef,
@@ -633,35 +551,27 @@ const normalizeGithubCliResult = (
 
   const identifier = `${ref.repo}#${ref.number}`;
 
-  const patchFields = new Set<GithubWorkPatchField>(['number', 'repo']);
+  const patchFields = new Set<GithubWorkPatchField>(['identifier', 'number', 'repo']);
   const patch = makePatch(patchFields);
 
   return {
     params: {
       actorAgentId: params.actorAgentId ?? null,
-      baseRef: patch('baseRef', parsed.baseRef !== null, parsed.baseRef),
-      body: patch('body', parsed.body !== null, snapshotText(parsed.body)),
+      changeType: parsed.action === 'create' ? 'created' : 'updated',
       cumulativeCost: params.cumulativeCost ?? null,
       cumulativeUsage: params.cumulativeUsage ?? null,
-      // gh only exposes --draft on create; an edit can't flip draft state.
-      draft: patch('draft', parsed.action === 'create' && parsed.draft, true),
-      headRef: patch('headRef', parsed.headRef !== null, parsed.headRef),
-      labels: patch(
-        'labels',
-        parsed.action === 'create' && parsed.labels.length > 0,
-        parsed.labels,
-      ),
+      description: patch('description', parsed.body !== null, snapshotText(parsed.body)),
+      identifier,
       number: ref.number,
       repo: ref.repo,
       resourceId: identifier,
-      resourceLabel: identifier,
       resourceType: githubResourceType(ref.entityType),
-      changeType: parsed.action === 'create' ? 'created' : 'updated',
       rootOperationId: params.rootOperationId ?? null,
-      source: params.toolName,
       sourceMessageId: params.sourceMessageId ?? null,
       sourceToolCallId: params.sourceToolCallId ?? null,
-      state: patch('state', parsed.action === 'create', 'open'),
+      sourceToolName: params.toolName,
+      // gh only exposes --draft on create; an edit carries no status signal.
+      status: patch('status', parsed.action === 'create', parsed.draft ? 'draft' : 'open'),
       threadId: params.threadId ?? null,
       title: patch('title', parsed.title !== null, stringValue(parsed.title)),
       topicId: params.topicId ?? null,
@@ -694,7 +604,7 @@ export const normalizeGithubToolResult = (
   // `owner/repo#number` is the canonical github Work identity — the CLI
   // surface never returns node_id, so REST-shaped results must dedupe against
   // CLI-created rows through the same key. Unidentifiable results are skipped.
-  if (!base.resourceLabel) return null;
+  if (!base.identifier) return null;
 
-  return { params: { ...base, resourceId: base.resourceLabel }, type: 'register' };
+  return { params: { ...base, resourceId: base.identifier }, type: 'register' };
 };

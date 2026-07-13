@@ -271,8 +271,7 @@ describe('agentDocumentsRuntime Work registration intent', () => {
         agentId: 'agent-1',
         documentId: 'documents-row-id',
         changeType: 'created',
-        source: 'createDocument',
-        url: 'https://app.example.com/lobe-team/agent/agent-1/docs/documents-row-id',
+        sourceToolName: 'createDocument',
       },
       type: 'document',
     });

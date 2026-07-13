@@ -35,16 +35,14 @@ describe('WorkModel · document', () => {
       documentId: doc.documentId,
       changeType: 'created',
       rootOperationId: 'op-doc-create',
-      source: 'createDocument',
+      sourceToolName: 'createDocument',
       sourceToolCallId: 'tool-call-doc-create',
       topicId,
-      url: 'https://app.example.com/agent/agent-1/docs/doc-1',
     });
 
     expect(work).toBeDefined();
     expect(work).toMatchObject({
       resourceId: doc.documentId,
-      resourceLabel: 'research.md',
       resourceType: 'document',
       type: 'document',
     });
@@ -54,9 +52,8 @@ describe('WorkModel · document', () => {
     expect(versions[0].snapshot).toMatchObject({
       document: {
         description: 'Research notes',
-        id: doc.documentId,
+        identifier: 'research.md',
         title: 'Research Notes',
-        url: 'https://app.example.com/agent/agent-1/docs/doc-1',
       },
     });
     expect(versions[0]).toMatchObject({
@@ -67,7 +64,7 @@ describe('WorkModel · document', () => {
 
     const byOperation = await workModel.listByRootOperation({ rootOperationId: 'op-doc-create' });
     expect(byOperation[0]).toMatchObject({
-      document: expect.objectContaining({ id: doc.documentId, title: 'Research Notes' }),
+      document: expect.objectContaining({ identifier: 'research.md', title: 'Research Notes' }),
       id: work?.id,
       type: 'document',
     });
@@ -76,7 +73,10 @@ describe('WorkModel · document', () => {
       rootOperationIds: ['op-doc-create'],
     });
     expect(summaries['op-doc-create']?.[0]).toMatchObject({
-      document: expect.objectContaining({ description: 'Research notes', id: doc.documentId }),
+      document: expect.objectContaining({
+        description: 'Research notes',
+        identifier: 'research.md',
+      }),
       event: expect.objectContaining({
         metadata: { agentDocumentId: doc.id },
       }),
@@ -105,7 +105,7 @@ describe('WorkModel · document', () => {
       documentId: doc.documentId,
       changeType: 'created',
       rootOperationId: 'op-doc-empty-description',
-      source: 'createDocument',
+      sourceToolName: 'createDocument',
       sourceToolCallId: 'tool-call-doc-empty-description',
       topicId,
     });
@@ -145,7 +145,7 @@ describe('WorkModel · document', () => {
       documentId: doc.documentId,
       changeType: 'created',
       rootOperationId: 'op-doc-create',
-      source: 'createDocument',
+      sourceToolName: 'createDocument',
       sourceToolCallId: 'tool-call-doc-create',
       topicId,
     });
@@ -158,7 +158,7 @@ describe('WorkModel · document', () => {
       documentId: doc.documentId,
       changeType: 'updated',
       rootOperationId: 'op-doc-rename',
-      source: 'renameDocument',
+      sourceToolName: 'renameDocument',
       sourceToolCallId: 'tool-call-doc-rename',
       topicId,
     });
@@ -169,7 +169,7 @@ describe('WorkModel · document', () => {
       documentId: doc.documentId,
       changeType: 'updated',
       rootOperationId: 'op-doc-rename',
-      source: 'renameDocument',
+      sourceToolName: 'renameDocument',
       sourceToolCallId: 'tool-call-doc-rename',
       topicId,
     });
@@ -186,7 +186,7 @@ describe('WorkModel · document', () => {
     const versions = await workModel.listVersions(first!.id);
     expect(versions.map((item) => item.version)).toEqual([2, 1]);
     expect(versions[0].snapshot).toMatchObject({
-      document: { id: doc.documentId, title: 'Renamed Draft' },
+      document: { title: 'Renamed Draft' },
     });
   });
 
@@ -202,7 +202,7 @@ describe('WorkModel · document', () => {
       agentId,
       documentId: doc.documentId,
       changeType: 'created',
-      source: 'createDocument',
+      sourceToolName: 'createDocument',
       sourceToolCallId: 'tool-call-doc-delete',
     });
 
@@ -233,7 +233,7 @@ describe('WorkModel · document', () => {
       agentId,
       documentId: doc.documentId,
       changeType: 'created',
-      source: 'createDocument',
+      sourceToolName: 'createDocument',
       sourceToolCallId: 'tool-call-other-doc-user',
       topicId,
     });

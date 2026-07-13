@@ -18,7 +18,7 @@ import { createVersion, findById, resolveWorkUpsertConflict } from './writes';
 
 export const documentSnapshot = (
   doc: DocumentItem,
-  params: Pick<RegisterDocumentWorkParams, 'description' | 'url'>,
+  params: Pick<RegisterDocumentWorkParams, 'description'>,
 ): WorkVersionSnapshot => {
   const description =
     params.description?.trim() || doc.description?.trim() || truncateSummaryText(doc.content);
@@ -26,9 +26,8 @@ export const documentSnapshot = (
   return {
     document: {
       description,
-      id: doc.id,
+      identifier: doc.filename,
       title: doc.title,
-      url: params.url ?? null,
     } satisfies DocumentWorkVersionSnapshot,
   };
 };
@@ -66,7 +65,6 @@ const resolveDocument = async (
 const upsertDocumentWork = async (ctx: WorkContext, doc: DocumentItem): Promise<WorkItem> => {
   const values = {
     resourceId: doc.id,
-    resourceLabel: doc.filename,
     resourceType: 'document' as const,
     type: 'document' as const,
     userId: ctx.userId,
@@ -80,10 +78,7 @@ const upsertDocumentWork = async (ctx: WorkContext, doc: DocumentItem): Promise<
     .values(values)
     .onConflictDoUpdate({
       ...conflict,
-      set: {
-        resourceLabel: doc.filename,
-        updatedAt: new Date(),
-      },
+      set: { updatedAt: new Date() },
     })
     .returning();
 

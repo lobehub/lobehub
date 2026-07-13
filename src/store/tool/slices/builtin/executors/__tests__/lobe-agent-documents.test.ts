@@ -112,7 +112,7 @@ describe('agentDocumentsExecutor', () => {
           description: 'A daily brief',
           documentId: 'document-1',
           changeType: 'created',
-          source: 'createDocument',
+          sourceToolName: 'createDocument',
         }),
         type: 'document',
       }),

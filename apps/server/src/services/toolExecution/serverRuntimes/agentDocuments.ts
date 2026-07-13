@@ -124,15 +124,13 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
     // Emit a Work-registration intent instead of writing the version inline: the
     // agent runtime persists it ONCE, stamping the tool call's cumulative cost at
     // insert time (cost is known only after execution). The intent rides out on
-    // the tool result via the executor's `onWorkRegistration` sink. The document
-    // URL is still resolved here because the workspace-slug lookup lives in this
-    // request's registrar.
+    // the tool result via the executor's `onWorkRegistration` sink.
     const registerDocumentWork = async (input: {
       agentDocumentId?: string;
       agentId: string;
       documentId?: string;
       changeType: 'created' | 'updated';
-      source: string;
+      sourceToolName: string;
     }) => {
       if (!input.documentId) return;
 
@@ -143,8 +141,7 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
           agentId: input.agentId,
           documentId: input.documentId,
           changeType: input.changeType,
-          source: input.source,
-          url: await workRegistrar.buildRegisteredDocumentUrl(input.agentId, input.documentId),
+          sourceToolName: input.sourceToolName,
         },
         type: 'document',
       });
@@ -189,7 +186,7 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
             agentId,
             documentId: doc?.documentId,
             changeType: 'created',
-            source: 'copyDocument',
+            sourceToolName: 'copyDocument',
           });
           return doc;
         },
@@ -213,7 +210,7 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
             agentId,
             documentId: doc?.documentId,
             changeType: 'created',
-            source: 'createDocument',
+            sourceToolName: 'createDocument',
           });
           return doc;
         },
@@ -237,7 +234,7 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
             agentId,
             documentId: doc?.documentId,
             changeType: 'created',
-            source: 'createTopicDocument',
+            sourceToolName: 'createTopicDocument',
           });
           return doc;
         },
@@ -286,7 +283,7 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
             agentId,
             documentId: doc?.documentId,
             changeType: 'updated',
-            source: 'modifyNodes',
+            sourceToolName: 'modifyNodes',
           });
           return doc;
         },
@@ -330,7 +327,7 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
             agentId,
             documentId: doc?.documentId,
             changeType: 'updated',
-            source: 'renameDocument',
+            sourceToolName: 'renameDocument',
           });
           return doc;
         },
@@ -351,7 +348,7 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
             agentId,
             documentId: doc?.documentId,
             changeType: 'updated',
-            source: 'replaceDocumentContent',
+            sourceToolName: 'replaceDocumentContent',
           });
           return doc;
         },

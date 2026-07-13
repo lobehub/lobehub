@@ -31,32 +31,15 @@ const normalizeTaskLookup = (value?: string) => {
   return trimmed.startsWith('task_') ? trimmed : trimmed.toUpperCase();
 };
 
+/**
+ * Minimal display snapshot: live data stays on the `tasks` row (joined by every
+ * query); the snapshot only keeps what a card needs to render after the task
+ * row is deleted outside the tool path.
+ */
 export const taskSnapshot = (task: TaskItem): WorkVersionSnapshot => ({
   task: {
-    assigneeAgentId: task.assigneeAgentId,
-    assigneeUserId: task.assigneeUserId,
-    automationMode: task.automationMode,
-    config: task.config,
-    context: task.context,
-    createdByAgentId: task.createdByAgentId,
-    currentTopicId: task.currentTopicId,
-    description: task.description,
-    editorData: task.editorData,
-    error: task.error,
-    heartbeatInterval: task.heartbeatInterval,
-    heartbeatTimeout: task.heartbeatTimeout,
-    id: task.id,
     identifier: task.identifier,
-    instruction: task.instruction,
-    maxTopics: task.maxTopics,
-    name: task.name,
-    parentTaskId: task.parentTaskId,
-    priority: task.priority,
-    schedulePattern: task.schedulePattern,
-    scheduleTimezone: task.scheduleTimezone,
-    sortOrder: task.sortOrder,
-    status: task.status,
-    totalTopics: task.totalTopics,
+    title: task.name,
   } satisfies TaskWorkVersionSnapshot,
 });
 
@@ -94,7 +77,6 @@ const resolveTask = async (
 const upsertTaskWork = async (ctx: WorkContext, task: TaskItem): Promise<WorkItem> => {
   const values = {
     resourceId: task.id,
-    resourceLabel: task.identifier,
     resourceType: 'task' as const,
     type: 'task' as const,
     userId: ctx.userId,
@@ -108,10 +90,7 @@ const upsertTaskWork = async (ctx: WorkContext, task: TaskItem): Promise<WorkIte
     .values(values)
     .onConflictDoUpdate({
       ...conflict,
-      set: {
-        resourceLabel: task.identifier,
-        updatedAt: new Date(),
-      },
+      set: { updatedAt: new Date() },
     })
     .returning();
 
@@ -146,6 +125,7 @@ const toTaskCardFields = (
   task: TaskWorkSummaryQueryRow['task'],
 ): Pick<TaskWorkListItem, 'task' | 'taskDeleted'> => ({
   task: {
+    identifier: task.identifier,
     instruction: truncateSummaryText(task.instruction),
     name: task.name,
     priority: task.priority,

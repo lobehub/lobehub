@@ -32,7 +32,7 @@ describe('WorkModel · queries', () => {
     await workModel.registerTask({
       changeType: 'created',
       rootOperationId: 'op-first',
-      source: 'createTask',
+      sourceToolName: 'createTask',
       sourceToolCallId: 'tool-call-1',
       taskId: firstTask.id,
       topicId,
@@ -40,7 +40,7 @@ describe('WorkModel · queries', () => {
     await workModel.registerTask({
       changeType: 'created',
       rootOperationId: 'op-second',
-      source: 'createTask',
+      sourceToolName: 'createTask',
       sourceToolCallId: 'tool-call-2',
       taskId: secondTask.id,
       topicId,
@@ -64,7 +64,7 @@ describe('WorkModel · queries', () => {
     await workModel.registerTask({
       changeType: 'created',
       rootOperationId: 'op-batch-1',
-      source: 'createTask',
+      sourceToolName: 'createTask',
       sourceToolCallId: 'tool-call-batch-1',
       taskId: firstTask.id,
       topicId,
@@ -72,7 +72,7 @@ describe('WorkModel · queries', () => {
     await workModel.registerTask({
       changeType: 'created',
       rootOperationId: 'op-batch-2',
-      source: 'createTask',
+      sourceToolName: 'createTask',
       sourceToolCallId: 'tool-call-batch-2',
       taskId: secondTask.id,
       topicId,
@@ -105,7 +105,7 @@ describe('WorkModel · queries', () => {
     await workModel.registerTask({
       changeType: 'created',
       rootOperationId: 'op-shared-create',
-      source: 'createTask',
+      sourceToolName: 'createTask',
       sourceToolCallId: 'tool-call-shared-1',
       taskId: task.id,
       topicId,
@@ -113,7 +113,7 @@ describe('WorkModel · queries', () => {
     await workModel.registerTask({
       changeType: 'updated',
       rootOperationId: 'op-shared-update',
-      source: 'updateTask',
+      sourceToolName: 'updateTask',
       sourceToolCallId: 'tool-call-shared-2',
       taskId: task.id,
       topicId,
@@ -144,7 +144,7 @@ describe('WorkModel · queries', () => {
       documentId: doc.documentId,
       changeType: 'created',
       rootOperationId: 'op-doc-clamp',
-      source: 'createDocument',
+      sourceToolName: 'createDocument',
       sourceToolCallId: 'tool-call-doc-clamp',
       topicId,
     });
@@ -159,7 +159,8 @@ describe('WorkModel · queries', () => {
     expect(Object.keys(summaries)).toHaveLength(601);
     expect(summaries['op-doc-clamp']).toHaveLength(1);
     expect(summaries['op-doc-clamp'][0]).toMatchObject({
-      document: expect.objectContaining({ id: doc.documentId }),
+      document: expect.objectContaining({ identifier: 'clamp.md' }),
+      resourceId: doc.documentId,
     });
     expect(summaries[syntheticIds[0]]).toEqual([]);
   });

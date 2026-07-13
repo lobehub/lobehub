@@ -21,9 +21,10 @@ describe('normalizeGithubToolResult (gh runCommand parsing)', () => {
     );
 
     expect(operation?.params).toMatchObject({
+      identifier: 'lobehub/lobehub#123',
       number: 123,
       repo: 'lobehub/lobehub',
-      resourceLabel: 'lobehub/lobehub#123',
+      resourceId: 'lobehub/lobehub#123',
       changeType: 'created',
       title: 'Fix: "quoted" bug report',
       url: 'https://github.com/lobehub/lobehub/issues/123',
@@ -36,7 +37,7 @@ describe('normalizeGithubToolResult (gh runCommand parsing)', () => {
       'https://github.com/lobehub/lobehub/issues/7',
     );
 
-    expect(operation?.params.body).toBe('He said "hi" for $5');
+    expect(operation?.params.description).toBe('He said "hi" for $5');
   });
 
   it('honors backslash escapes outside quotes', () => {
@@ -91,7 +92,6 @@ describe('normalizeGithubToolResult (gh runCommand parsing)', () => {
     );
 
     expect(operation?.params).toMatchObject({
-      baseRef: 'main',
       number: 88,
       resourceType: 'github_pull_request',
       changeType: 'created',

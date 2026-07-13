@@ -26,6 +26,12 @@ interface WorkTypeDescriptor<Item extends WorkListItem | WorkSummaryItem> {
    * description, then a short body/status — never a full document.
    */
   getDescription: (item: Item) => string | null;
+  /**
+   * Short human reference (`TASK-1`, filename, `ENG-123`, `owner/repo#42`) used
+   * as the card-title fallback when the resource has no title. Cards fall back
+   * further to `resourceId` when this is also null.
+   */
+  getIdentifier: (item: Item) => string | null;
   /** Where a click should lead, or `null` when the Work is not clickable. */
   getOpenTarget: (item: Item) => WorkOpenTarget | null;
   /**
@@ -43,18 +49,21 @@ export const WORK_TYPE_DESCRIPTORS: {
   document: {
     Icon: FileTextIcon,
     getDescription: (item) => item.document.description?.trim() ?? null,
+    getIdentifier: (item) => item.document.identifier,
     getOpenTarget: (item) => ({
       // WorkListItem carries no `event`; only summary rows can supply the
       // agentDocumentId that scopes the chat portal's document view.
       agentDocumentId: 'event' in item ? item.event?.metadata?.agentDocumentId : undefined,
-      documentId: item.document.id,
+      // For `document` works the resource identity IS the document id.
+      documentId: item.resourceId,
       kind: 'document',
     }),
     getTitle: (item) => item.document.title,
   },
   github: {
     Icon: Github,
-    getDescription: (item) => (item.github.body || item.github.state)?.trim() ?? null,
+    getDescription: (item) => (item.github.description || item.github.status)?.trim() ?? null,
+    getIdentifier: (item) => item.github.identifier,
     // Github works registered from CLI/tool results may carry no URL — those
     // cards have nothing to open, so drop the click affordance entirely.
     getOpenTarget: (item) => (item.github.url ? { kind: 'external', url: item.github.url } : null),
@@ -63,6 +72,7 @@ export const WORK_TYPE_DESCRIPTORS: {
   linear: {
     Icon: LinearIcon,
     getDescription: (item) => (item.linear.description || item.linear.status)?.trim() ?? null,
+    getIdentifier: (item) => item.linear.identifier,
     // Linear works registered from CLI/tool results may carry no URL — those
     // cards have nothing to open, so drop the click affordance entirely.
     getOpenTarget: (item) => (item.linear.url ? { kind: 'external', url: item.linear.url } : null),
@@ -71,11 +81,15 @@ export const WORK_TYPE_DESCRIPTORS: {
   task: {
     Icon: ClipboardListIcon,
     getDescription: (item) => item.task.instruction?.trim() ?? null,
-    // Resolve the task detail by its human label when present, else its id — the
-    // same identifier the chat portal and standalone route both accept. The
-    // task-deleted orphan case is gated by the call site (it also renders a
-    // badge), not stripped here.
-    getOpenTarget: (item) => ({ identifier: item.resourceLabel ?? item.resourceId, kind: 'task' }),
+    getIdentifier: (item) => item.task.identifier,
+    // Resolve the task detail by its human identifier (`TASK-1`, live-coalesced
+    // with the snapshot) when present, else its id — the same identifier the
+    // chat portal and standalone route both accept. The task-deleted orphan case
+    // is gated by the call site (it also renders a badge), not stripped here.
+    getOpenTarget: (item) => ({
+      identifier: item.task.identifier ?? item.resourceId,
+      kind: 'task',
+    }),
     getTitle: (item) => item.task.name,
   },
 };

@@ -1,4 +1,4 @@
-import type { TaskAutomationMode, TaskStatus } from './task';
+import type { TaskStatus } from './task';
 
 export type WorkType = 'document' | 'github' | 'linear' | 'task';
 export type LinearWorkResourceType = 'linear_document' | 'linear_issue';
@@ -12,101 +12,54 @@ export type WorkResourceType =
  */
 export type WorkVersionChangeType = 'created' | 'updated';
 
+/**
+ * Snapshots store ONLY the display metadata Work cards need (unified
+ * vocabulary: `title` / `identifier` / `description`). Free-text fields are
+ * truncated at WRITE time; live/full data stays on the owning tables (tasks,
+ * documents) or the external service. Versions are an audit log of change
+ * events, not a content-version store.
+ */
 export interface TaskWorkVersionSnapshot {
-  assigneeAgentId: string | null;
-  assigneeUserId: string | null;
-  automationMode: TaskAutomationMode | null;
-  config: unknown;
-  context: unknown;
-  createdByAgentId: string | null;
-  currentTopicId: string | null;
-  description: string | null;
-  editorData: unknown;
-  error: string | null;
-  heartbeatInterval: number | null;
-  heartbeatTimeout: number | null;
-  id: string;
+  /** Short reference for display, e.g. `TASK-1`. */
   identifier: string;
-  instruction: string;
-  maxTopics: number | null;
-  name: string | null;
-  parentTaskId: string | null;
-  priority: number | null;
-  schedulePattern: string | null;
-  scheduleTimezone: string | null;
-  sortOrder: number | null;
-  status: TaskStatus | string;
-  totalTopics: number | null;
+  /** Task name at the time of this version; deletion fallback for the card. */
+  title: string | null;
 }
 
 export interface DocumentWorkVersionSnapshot {
   description: string | null;
-  id: string;
+  /** Filename at the time of this version. */
+  identifier: string | null;
   title: string | null;
-  url: string | null;
 }
 
 export type LinearWorkEntityType = 'document' | 'issue';
 
 export interface LinearWorkVersionSnapshot {
-  assignee: string | null;
-  assigneeId: string | null;
-  color: string | null;
-  content: string | null;
-  createdAt: string | null;
   description: string | null;
-  dueDate: string | null;
-  icon: string | null;
-  id: string;
+  /** Issue identifier (`ENG-123`) or document slug for display. */
   identifier: string | null;
-  issueId: string | null;
-  issueIdentifier: string | null;
-  labels: string[];
-  parentId: string | null;
-  priority: string | null;
-  priorityValue: number | null;
-  project: string | null;
-  projectId: string | null;
-  slugId: string | null;
   status: string | null;
-  statusType: string | null;
-  targetId: string | null;
-  targetIdentifier: string | null;
-  targetType: LinearWorkEntityType | 'initiative' | 'milestone' | 'project' | null;
-  team: string | null;
-  teamId: string | null;
   title: string | null;
-  updatedAt: string | null;
   url: string | null;
 }
 
-export type LinearWorkPatchField = keyof Omit<LinearWorkVersionSnapshot, 'id'>;
+export type LinearWorkPatchField = keyof LinearWorkVersionSnapshot;
 
 export type GithubWorkEntityType = 'issue' | 'pull_request';
 
 export interface GithubWorkVersionSnapshot {
-  assignees: string[];
-  author: string | null;
-  baseRef: string | null;
-  body: string | null;
-  closedAt: string | null;
-  createdAt: string | null;
-  draft: boolean | null;
-  headRef: string | null;
-  id: string;
-  labels: string[];
-  merged: boolean | null;
-  mergedAt: string | null;
+  description: string | null;
+  /** `owner/repo#number` for display. */
+  identifier: string | null;
   number: number | null;
   repo: string | null;
-  state: string | null;
-  stateReason: string | null;
+  status: string | null;
   title: string | null;
-  updatedAt: string | null;
   url: string | null;
 }
 
-export type GithubWorkPatchField = keyof Omit<GithubWorkVersionSnapshot, 'id'>;
+export type GithubWorkPatchField = keyof GithubWorkVersionSnapshot;
 
 export type WorkVersionSnapshot =
   | {
@@ -137,7 +90,6 @@ export interface WorkItem {
   currentVersionId: string | null;
   id: string;
   resourceId: string;
-  resourceLabel: string | null;
   resourceType: WorkResourceType;
   type: WorkType;
   updatedAt: Date;
@@ -155,9 +107,10 @@ export interface WorkVersionItem {
   metadata: WorkVersionMetadata | null;
   rootOperationId: string | null;
   snapshot: WorkVersionSnapshot;
-  source: string;
   sourceMessageId: string | null;
   sourceToolCallId: string | null;
+  /** Concrete tool that produced this version, e.g. 'createTask'. */
+  sourceToolName: string;
   threadId: string | null;
   topicId: string | null;
   userId: string;
@@ -175,9 +128,9 @@ export type WorkVersionPreview = Pick<
   | 'metadata'
   | 'changeType'
   | 'rootOperationId'
-  | 'source'
   | 'sourceMessageId'
   | 'sourceToolCallId'
+  | 'sourceToolName'
   | 'version'
 >;
 
@@ -188,6 +141,8 @@ export interface TaskWorkListItem extends WorkItem {
      * Card preview text: the task's instruction (NOT NULL on live rows),
      * truncated server-side — never the full text.
      */
+    /** Short reference (`TASK-1`), live-coalesced like the other fields; card display + open target. */
+    identifier: string | null;
     instruction: string | null;
     name: string | null;
     priority: number | null;
@@ -286,12 +241,11 @@ export interface RegisterDocumentWorkParams {
   description?: string | null;
   documentId: string;
   rootOperationId?: string | null;
-  source: string;
   sourceMessageId?: string | null;
   sourceToolCallId?: string | null;
+  sourceToolName: string;
   threadId?: string | null;
   topicId?: string | null;
-  url?: string | null;
 }
 
 export interface DeleteDocumentWorkParams {
@@ -307,80 +261,45 @@ export interface DeleteTaskWorkParams {
 
 export interface RegisterLinearWorkParams {
   actorAgentId?: string | null;
-  assignee?: string | null;
-  assigneeId?: string | null;
   changeType: WorkVersionChangeType;
-  color?: string | null;
-  content?: string | null;
-  createdAt?: string | null;
   cumulativeCost?: number | null;
   cumulativeUsage?: WorkVersionCumulativeUsage | null;
   description?: string | null;
-  dueDate?: string | null;
-  icon?: string | null;
-  issueId?: string | null;
-  issueIdentifier?: string | null;
-  labels?: string[];
-  parentId?: string | null;
+  identifier?: string | null;
   patchFields?: LinearWorkPatchField[];
-  priority?: string | null;
-  priorityValue?: number | null;
-  project?: string | null;
-  projectId?: string | null;
   resourceId: string;
-  resourceLabel?: string | null;
   resourceType: LinearWorkResourceType;
   rootOperationId?: string | null;
-  slugId?: string | null;
-  source: string;
   sourceMessageId?: string | null;
   sourceToolCallId?: string | null;
+  sourceToolName: string;
   status?: string | null;
-  statusType?: string | null;
-  targetId?: string | null;
-  targetIdentifier?: string | null;
-  targetType?: LinearWorkEntityType | 'initiative' | 'milestone' | 'project' | null;
-  team?: string | null;
-  teamId?: string | null;
   threadId?: string | null;
   title?: string | null;
   topicId?: string | null;
-  updatedAt?: string | null;
   url?: string | null;
 }
 
 export interface RegisterGithubWorkParams {
   actorAgentId?: string | null;
-  assignees?: string[];
-  author?: string | null;
-  baseRef?: string | null;
-  body?: string | null;
   changeType: WorkVersionChangeType;
-  closedAt?: string | null;
-  createdAt?: string | null;
   cumulativeCost?: number | null;
   cumulativeUsage?: WorkVersionCumulativeUsage | null;
-  draft?: boolean | null;
-  headRef?: string | null;
-  labels?: string[];
-  merged?: boolean | null;
-  mergedAt?: string | null;
+  description?: string | null;
+  identifier?: string | null;
   number?: number | null;
   patchFields?: GithubWorkPatchField[];
   repo?: string | null;
   resourceId: string;
-  resourceLabel?: string | null;
   resourceType: GithubWorkResourceType;
   rootOperationId?: string | null;
-  source: string;
   sourceMessageId?: string | null;
   sourceToolCallId?: string | null;
-  state?: string | null;
-  stateReason?: string | null;
+  sourceToolName: string;
+  status?: string | null;
   threadId?: string | null;
   title?: string | null;
   topicId?: string | null;
-  updatedAt?: string | null;
   url?: string | null;
 }
 
@@ -426,9 +345,9 @@ export interface RegisterTaskWorkParams {
   cumulativeCost?: number | null;
   cumulativeUsage?: WorkVersionCumulativeUsage | null;
   rootOperationId?: string | null;
-  source: string;
   sourceMessageId?: string | null;
   sourceToolCallId?: string | null;
+  sourceToolName: string;
   taskId?: string;
   taskIdentifier?: string;
   threadId?: string | null;
@@ -477,8 +396,7 @@ export type WorkRegistrationIntent =
         description?: string | null;
         documentId: string;
         changeType: WorkVersionChangeType;
-        source: string;
-        url?: string | null;
+        sourceToolName: string;
       };
       type: 'document';
     }
