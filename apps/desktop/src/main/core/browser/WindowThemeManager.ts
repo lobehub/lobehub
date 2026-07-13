@@ -17,7 +17,7 @@ import {
 
 const logger = createLogger('core:WindowThemeManager');
 
-const MACOS_VIBRANCY: NonNullable<BrowserWindowConstructorOptions['vibrancy']> = 'sidebar';
+const MACOS_VIBRANCY = 'sidebar';
 
 interface WindowsThemeConfig {
   backgroundColor: string;
