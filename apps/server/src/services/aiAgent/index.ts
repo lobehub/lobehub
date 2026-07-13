@@ -25,15 +25,16 @@ import {
 import { TaskIdentifier } from '@lobechat/builtin-tool-task';
 import { builtinTools, manualModeExcludeToolIds } from '@lobechat/builtin-tools';
 import { LOADING_FLAT } from '@lobechat/const';
-import type {
-  AgentGroupConfig,
-  AgentManagementContext,
-  BotPlatformContext,
-  LobeToolManifest,
-  ToolExecutor,
-  ToolSource,
+import {
+  type AgentGroupConfig,
+  type AgentManagementContext,
+  type BotPlatformContext,
+  type LobeToolManifest,
+  SkillEngine,
+  type ToolExecutor,
+  type ToolsEngine,
+  type ToolSource,
 } from '@lobechat/context-engine';
-import { SkillEngine, type ToolsEngine } from '@lobechat/context-engine';
 import type { LobeChatDatabase } from '@lobechat/database';
 import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import { buildTaskManagerDefaultsPrompt } from '@lobechat/prompts';
@@ -3522,7 +3523,25 @@ export class AiAgentService {
       }));
       const skillModel = new AgentSkillModel(this.db, this.userId, this.workspaceId);
       const { data: dbSkills } = await skillModel.findAll();
+
+      // Pinned skills need their SKILL.md body injected into context directly,
+      // not lazily via the `activateSkill` tool. `findAll` uses `skillListColumns`
+      // (no `content`), so fetch the bodies only for the pinned subset — keyed by
+      // the operation's enabled plugin ids (`agentPlugins`) — to keep the
+      // op-param payload bounded. Non-pinned skills stay content-less here and
+      // remain lazily activatable via `activateSkill`. Content lives in the DB
+      // `content` column already (SKILL.md body), so no zip unpack is needed.
+      const pinnedIdSet = new Set(agentPlugins);
+      const pinnedDbSkillIds = dbSkills
+        .filter((s) => pinnedIdSet.has(s.identifier))
+        .map((s) => s.id);
+      const pinnedDbContent = new Map(
+        (await skillModel.findByIds(pinnedDbSkillIds)).map(
+          (s) => [s.identifier, s.content ?? undefined] as const,
+        ),
+      );
       const dbMetas = dbSkills.map((s) => ({
+        content: pinnedDbContent.get(s.identifier),
         description: s.description ?? '',
         identifier: s.identifier,
         name: s.name,
@@ -3537,6 +3556,10 @@ export class AiAgentService {
       // carry the same value.
       const agentSkills = await this.agentDocumentsService.getAgentSkills(resolvedAgentId);
       const agentSkillMetas = agentSkills.map((skill) => ({
+        // `getAgentSkills` already resolves the bundle body, so pinned
+        // agent-document skills inject directly without an extra fetch; only
+        // attach it for the pinned subset to keep the payload lean.
+        content: pinnedIdSet.has(skill.identifier) ? skill.content : undefined,
         description: skill.description,
         identifier: skill.identifier,
         name: skill.name,
