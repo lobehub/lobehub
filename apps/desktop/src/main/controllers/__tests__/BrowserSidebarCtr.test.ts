@@ -314,6 +314,28 @@ describe('BrowserSidebarCtr', () => {
     expect(mainWindow.contentView.removeChildView).not.toHaveBeenCalled();
   });
 
+  it('reclaims the page when a window that lost it regains focus', async () => {
+    // One session can be open in two windows (main + its standalone chat window)
+    // but there is only one page. The window that loses it never re-reports — its
+    // rect didn't change — so without this its panel stays empty forever.
+    const standalone = appWindow();
+    const view = queueView();
+    queueParkingWindow();
+
+    const rect = { height: 600, width: 400, x: 0, y: 0 };
+    await invokeIpc('browserSidebar.navigate', { sessionId: 'agent:a', url: 'https://a.com' });
+    await invokeIpc('browserSidebar.setViewport', { rect, sessionId: 'agent:a' });
+    await invokeIpc('browserSidebar.setViewport', { rect, sessionId: 'agent:a' }, standalone);
+
+    expect(standalone.contentView.addChildView).toHaveBeenCalledWith(view);
+    mainWindow.contentView.addChildView.mockClear();
+
+    mainWindow.emit('focus');
+
+    expect(standalone.contentView.removeChildView).toHaveBeenCalledWith(view);
+    expect(mainWindow.contentView.addChildView).toHaveBeenCalledWith(view);
+  });
+
   it('parks a page when its host window closes, instead of letting it die with the window', async () => {
     // Child views are destroyed with the window that holds them, so a page shown
     // in a standalone chat window would be torn down when the user closes it —

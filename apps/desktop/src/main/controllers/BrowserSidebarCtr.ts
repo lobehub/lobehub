@@ -219,7 +219,7 @@ export default class BrowserSidebarCtr extends ControllerModule {
     const host = this.getSenderWindow();
 
     if (!rect || rect.width < 1 || rect.height < 1 || !host) {
-      this.pool.park(sessionId);
+      this.pool.hide(sessionId, host);
       return { success: true };
     }
 

@@ -221,19 +221,14 @@ const BrowserPane = memo<BrowserPaneProps>(({ sessionId }) => {
 
     frame = requestAnimationFrame(tick);
 
-    // The same agent can be open in both the main window and its standalone chat
-    // window, but there is only one page and it can only live in one of them.
-    // Re-report on focus so it follows the window you are actually looking at —
-    // otherwise the rect never changes, nothing is sent, and the window you
-    // switched to shows an empty panel forever.
-    const handleFocus = () => {
-      lastKey = '';
-    };
-    window.addEventListener('focus', handleFocus);
+    // Nothing here handles "the same agent is open in another window, which took
+    // the page": the rect never changes, so this loop stays silent. The main
+    // process reclaims the page on the window's own `focus` event — a renderer
+    // `focus` listener does not fire when you switch between two windows of the
+    // same app (measured), so it cannot be the trigger.
 
     return () => {
       cancelAnimationFrame(frame);
-      window.removeEventListener('focus', handleFocus);
       // Park rather than close: the agent may still be driving this page.
       void electronBrowserSidebarService.setViewport({ sessionId });
     };

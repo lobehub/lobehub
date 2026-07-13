@@ -59,6 +59,14 @@ export class BrowserPagePool {
    * show a page of their own at the same time.
    */
   private displayedByWindow = new Map<number, string>();
+  /**
+   * The last page each window asked to show, kept even after another window takes
+   * that page away. A page can only live in one window, so when the same session
+   * is open twice the loser's panel would otherwise sit empty forever: its rect
+   * never changes, so its renderer never re-reports. Replaying this on window
+   * focus makes the page follow whichever window you are actually looking at.
+   */
+  private lastRequestByWindow = new Map<number, { rect: Rectangle; sessionId: string }>();
   private watchedWindows = new Set<number>();
 
   constructor(private options: BrowserPagePoolOptions) {}
@@ -149,6 +157,13 @@ export class BrowserPagePool {
     page.view.setBounds(bounds);
     page.size = clampToParking({ height: bounds.height, width: bounds.width });
     this.displayedByWindow.set(host.id, sessionId);
+    this.lastRequestByWindow.set(host.id, { rect, sessionId });
+  }
+
+  /** The window's panel no longer wants a page (another tab, or the panel closed). */
+  hide(sessionId: string, host?: BrowserWindow): void {
+    if (host) this.lastRequestByWindow.delete(host.id);
+    this.park(sessionId);
   }
 
   /** Move the page back to the off-screen window, where it keeps running. */
@@ -200,20 +215,35 @@ export class BrowserPagePool {
     }
   }
 
-  /**
-   * Child views are destroyed with the window that holds them, so a page shown in
-   * a standalone chat window would die with it. Park on `close` (which fires
-   * *before* teardown) to keep the page — and any agent still driving it — alive.
-   */
   private watchHost(host: BrowserWindow): void {
     if (this.watchedWindows.has(host.id)) return;
     this.watchedWindows.add(host.id);
 
+    /**
+     * Child views are destroyed with the window that holds them, so a page shown
+     * in a standalone chat window would die with it. Park on `close` (which fires
+     * *before* teardown) to keep the page — and any agent still driving it — alive.
+     */
     host.once('close', () => {
       this.watchedWindows.delete(host.id);
+      this.lastRequestByWindow.delete(host.id);
       for (const page of this.pages.values()) {
         if (page.host?.id === host.id) this.park(page.sessionId);
       }
+    });
+
+    // Reclaim the page this window last asked for. The renderer's own `focus`
+    // event is not a usable signal here: switching between two windows of the
+    // same app leaves the previous document reporting `hasFocus() === true` and
+    // fires no `focus` on the one you switch to (measured), so a page handed to
+    // another window would never come back.
+    host.on('focus', () => {
+      const request = this.lastRequestByWindow.get(host.id);
+      if (!request) return;
+      const page = this.pages.get(request.sessionId);
+      if (!page || page.host?.id === host.id) return;
+      logger.debug(`Reclaiming ${request.sessionId} into window ${host.id} on focus`);
+      this.show(request.sessionId, request.rect, host);
     });
   }
 
