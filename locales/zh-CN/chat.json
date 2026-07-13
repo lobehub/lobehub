@@ -512,9 +512,7 @@
   "messageForward.success": "已转发给 {{title}}",
   "messageForward.successMulti": "已转发给 {{count}} 个智能体",
   "messageForward.transcript.header": "以下 {{count}} 条消息转发自另一段对话，请将其作为上下文并继续处理：",
-  "messageLink": {
-    "openInSideBrowser": "在侧边浏览器中打开"
-  },
+  "messageLink.openInSideBrowser": "在侧边浏览器中打开",
   "messageLongCollapse.collapse": "收起",
   "messageLongCollapse.expand": "展开全部",
   "messages.dm.sentTo": "仅对 {{name}} 可见",
