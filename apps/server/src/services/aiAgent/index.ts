@@ -37,7 +37,7 @@ import {
 } from '@lobechat/context-engine';
 import type { LobeChatDatabase } from '@lobechat/database';
 import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
-import { buildTaskManagerDefaultsPrompt } from '@lobechat/prompts';
+import { buildTaskManagerDefaultsPrompt, resourcesTreePrompt } from '@lobechat/prompts';
 import type {
   ChatAudioItem,
   ChatFileItem,
@@ -3525,20 +3525,30 @@ export class AiAgentService {
       const { data: dbSkills } = await skillModel.findAll();
 
       // Pinned skills need their SKILL.md body injected into context directly,
-      // not lazily via the `activateSkill` tool. `findAll` uses `skillListColumns`
-      // (no `content`), so fetch the bodies only for the pinned subset — keyed by
-      // the operation's enabled plugin ids (`agentPlugins`) — to keep the
-      // op-param payload bounded. Non-pinned skills stay content-less here and
-      // remain lazily activatable via `activateSkill`. Content lives in the DB
-      // `content` column already (SKILL.md body), so no zip unpack is needed.
-      const pinnedIdSet = new Set(agentPlugins);
+      // not lazily via the `activateSkill` tool. Gate on the agent's genuinely
+      // pinned entries (`getActivePluginIds(agentConfig.plugins)`), NOT the
+      // fully-expanded `agentPlugins`: the latter also carries turn-scoped tool
+      // ids (mentions, selected tools, `lobe-topic-reference`, …), which would
+      // eager-activate an auto-mode skill whose identifier merely collides with
+      // one of them. `findAll` uses `skillListColumns` (no `content`), so fetch
+      // bodies only for the pinned subset to keep the op-param payload bounded.
+      // Non-pinned skills stay content-less here and remain lazily activatable.
+      // Content lives in the DB `content` column already (SKILL.md body), so no
+      // zip unpack is needed; mirror `activateSkill` by appending the resource
+      // tree so pinned ZIP/GitHub skills keep their `readReference` paths.
+      const pinnedSkillIds = new Set(getActivePluginIds(agentConfig.plugins));
       const pinnedDbSkillIds = dbSkills
-        .filter((s) => pinnedIdSet.has(s.identifier))
+        .filter((s) => pinnedSkillIds.has(s.identifier))
         .map((s) => s.id);
       const pinnedDbContent = new Map(
-        (await skillModel.findByIds(pinnedDbSkillIds)).map(
-          (s) => [s.identifier, s.content ?? undefined] as const,
-        ),
+        (await skillModel.findByIds(pinnedDbSkillIds)).map((s) => {
+          const hasResources = !!(s.resources && Object.keys(s.resources).length > 0);
+          const content =
+            hasResources && s.resources
+              ? `${s.content ?? ''}\n\n${resourcesTreePrompt(s.name, s.resources)}`
+              : (s.content ?? undefined);
+          return [s.identifier, content] as const;
+        }),
       );
       const dbMetas = dbSkills.map((s) => ({
         content: pinnedDbContent.get(s.identifier),
@@ -3559,7 +3569,7 @@ export class AiAgentService {
         // `getAgentSkills` already resolves the bundle body, so pinned
         // agent-document skills inject directly without an extra fetch; only
         // attach it for the pinned subset to keep the payload lean.
-        content: pinnedIdSet.has(skill.identifier) ? skill.content : undefined,
+        content: pinnedSkillIds.has(skill.identifier) ? skill.content : undefined,
         description: skill.description,
         identifier: skill.identifier,
         name: skill.name,

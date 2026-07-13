@@ -163,10 +163,17 @@ vi.mock('model-bank', async (importOriginal) => {
 });
 
 // SKILL.md bodies live in the `content` column already (frontmatter stripped),
-// so `findByIds` returns them with no zip unpack.
+// so `findByIds` returns them with no zip unpack. `resources` is carried by
+// `skillItemColumns` too (used by the eager resource-tree injection).
 const DB_SKILL_ROWS = [
-  { content: 'PINNED SKILL BODY', id: 'sk-1', identifier: 'db-skill-pinned' },
-  { content: 'AUTO SKILL BODY', id: 'sk-2', identifier: 'db-skill-auto' },
+  { content: 'PINNED SKILL BODY', id: 'sk-1', identifier: 'db-skill-pinned', resources: {} },
+  { content: 'AUTO SKILL BODY', id: 'sk-2', identifier: 'db-skill-auto', resources: {} },
+  {
+    content: 'ZIP SKILL BODY',
+    id: 'sk-3',
+    identifier: 'db-skill-with-resources',
+    resources: { 'refs/guide.md': { fileHash: 'abc', size: 10 } },
+  },
 ];
 
 const operationSkillSetArg = () =>
@@ -288,5 +295,50 @@ describe('AiAgentService.execAgent - pinned skill content injection', () => {
     expect(skillById('db-skill-pinned')?.content).toBeUndefined();
     expect(skillById('db-skill-auto')?.content).toBeUndefined();
     expect(mockSkillFindByIds).toHaveBeenCalledWith([]);
+  });
+
+  it('does not eager-inject an auto skill whose identifier collides with a turn-scoped tool id', async () => {
+    mockGetAgentConfig.mockResolvedValue({
+      chatConfig: {},
+      id: 'agent-1',
+      model: 'gpt-4',
+      // Nothing pinned — db-skill-auto is in auto mode.
+      plugins: [],
+      provider: 'openai',
+      systemRole: 'You are a helper',
+    });
+
+    // db-skill-auto lands in the expanded operation tool list (`agentPlugins`)
+    // via a turn-scoped @-mention pick, but it is NOT pinned on the agent.
+    await service.execAgent({
+      agentId: 'agent-1',
+      prompt: 'Hello',
+      selectedToolIds: ['db-skill-auto'],
+    } as any);
+
+    // Eager injection must gate on the pinned set, not the expanded tool list,
+    // so the colliding auto skill stays content-less (lazily activatable).
+    expect(skillById('db-skill-auto')?.content).toBeUndefined();
+    expect(mockSkillFindByIds).toHaveBeenCalledWith([]);
+  });
+
+  it('appends the resource tree to a pinned skill body, mirroring activateSkill', async () => {
+    mockGetAgentConfig.mockResolvedValue({
+      chatConfig: {},
+      id: 'agent-1',
+      model: 'gpt-4',
+      plugins: ['db-skill-with-resources'],
+      provider: 'openai',
+      systemRole: 'You are a helper',
+    });
+
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' } as any);
+
+    const injected = skillById('db-skill-with-resources')?.content;
+    // Body plus the readReference resource tree — so a pinned ZIP/GitHub skill
+    // keeps its resource paths even though it's removed from <available_skills>.
+    expect(injected).toContain('ZIP SKILL BODY');
+    expect(injected).toContain('Available Resources');
+    expect(injected).toContain('guide.md');
   });
 });
