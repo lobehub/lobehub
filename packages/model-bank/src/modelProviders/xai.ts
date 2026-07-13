@@ -9,7 +9,7 @@ const XAI: ModelProviderCard = {
   id: 'xai',
   modelList: { showModelFetcher: true },
   modelsUrl: 'https://docs.x.ai/docs#models',
-  name: 'xAI (Grok)',
+  name: 'xAI',
   settings: {
     disableBrowserRequest: true,
     proxyUrl: {
