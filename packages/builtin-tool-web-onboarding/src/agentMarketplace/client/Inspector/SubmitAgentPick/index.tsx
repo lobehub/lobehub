@@ -45,6 +45,4 @@ export const SubmitAgentPickInspector = memo<
   );
 });
 
-SubmitAgentPickInspector.displayName = 'SubmitAgentPickInspector';
-
 export default SubmitAgentPickInspector;

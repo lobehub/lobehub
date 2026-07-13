@@ -111,6 +111,4 @@ export const SearchAgentRender = memo<BuiltinRenderProps<SearchAgentParams, Sear
   },
 );
 
-SearchAgentRender.displayName = 'SearchAgentRender';
-
 export default SearchAgentRender;

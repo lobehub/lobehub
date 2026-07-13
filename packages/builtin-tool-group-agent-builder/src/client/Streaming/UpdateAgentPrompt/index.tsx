@@ -22,6 +22,4 @@ export const UpdateAgentPromptStreaming = memo<BuiltinStreamingProps<UpdateAgent
   },
 );
 
-UpdateAgentPromptStreaming.displayName = 'UpdateAgentPromptStreaming';
-
 export default UpdateAgentPromptStreaming;

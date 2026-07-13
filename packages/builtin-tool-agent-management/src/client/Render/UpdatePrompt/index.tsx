@@ -38,6 +38,4 @@ export const UpdatePromptRender = memo<BuiltinRenderProps<UpdatePromptParams>>((
   );
 });
 
-UpdatePromptRender.displayName = 'UpdatePromptRender';
-
 export default UpdatePromptRender;

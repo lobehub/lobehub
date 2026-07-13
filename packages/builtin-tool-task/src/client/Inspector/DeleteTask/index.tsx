@@ -50,6 +50,4 @@ export const DeleteTaskInspector = memo<BuiltinInspectorProps<DeleteTaskParams, 
   },
 );
 
-DeleteTaskInspector.displayName = 'DeleteTaskInspector';
-
 export default DeleteTaskInspector;

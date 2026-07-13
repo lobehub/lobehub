@@ -111,5 +111,3 @@ export const ToolSearchInspector = memo<BuiltinInspectorProps<ToolSearchArgs>>(
     );
   },
 );
-
-ToolSearchInspector.displayName = 'ClaudeCodeToolSearchInspector';

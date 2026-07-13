@@ -61,6 +61,4 @@ export const GenerateVerifyPlanInspector = memo<
   );
 });
 
-GenerateVerifyPlanInspector.displayName = 'GenerateVerifyPlanInspector';
-
 export default GenerateVerifyPlanInspector;

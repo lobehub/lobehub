@@ -85,6 +85,4 @@ export const UpdateTaskStatusInspector = memo<
   );
 });
 
-UpdateTaskStatusInspector.displayName = 'UpdateTaskStatusInspector';
-
 export default UpdateTaskStatusInspector;

@@ -49,8 +49,6 @@ const SafeBoundary = memo<SafeBoundaryProps>(
   },
 );
 
-SafeBoundary.displayName = 'SafeBoundary';
-
 export function withErrorBoundary<P extends object>(
   Component: ComponentType<P>,
   options?: { alertTitle?: string; minHeight?: number; variant?: ErrorBoundaryVariant },

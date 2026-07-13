@@ -35,4 +35,3 @@ const SharedInspector = createReadLocalFileInspector(ClaudeCodeApiName.Read);
 export const ReadInspector = memo<BuiltinInspectorProps<CCReadArgs>>((props) => (
   <SharedInspector {...props} args={mapArgs(props.args)} partialArgs={mapArgs(props.partialArgs)} />
 ));
-ReadInspector.displayName = 'ClaudeCodeReadInspector';

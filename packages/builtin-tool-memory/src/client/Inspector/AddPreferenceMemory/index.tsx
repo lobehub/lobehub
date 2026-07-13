@@ -55,6 +55,4 @@ export const AddPreferenceMemoryInspector = memo<
   );
 });
 
-AddPreferenceMemoryInspector.displayName = 'AddPreferenceMemoryInspector';
-
 export default AddPreferenceMemoryInspector;

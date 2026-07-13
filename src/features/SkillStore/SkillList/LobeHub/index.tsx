@@ -216,6 +216,4 @@ export const LobeHubList = memo<LobeHubListProps>(({ keywords }) => {
   );
 });
 
-LobeHubList.displayName = 'LobeHubList';
-
 export default LobeHubList;

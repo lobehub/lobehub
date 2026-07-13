@@ -26,5 +26,3 @@ export const MinimapIndicator = memo<MinimapIndicatorProps>(
     );
   },
 );
-
-MinimapIndicator.displayName = 'MinimapIndicator';

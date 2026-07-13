@@ -112,6 +112,4 @@ export const CreateTaskInspector = memo<BuiltinInspectorProps<CreateTaskParams, 
   },
 );
 
-CreateTaskInspector.displayName = 'CreateTaskInspector';
-
 export default CreateTaskInspector;

@@ -110,8 +110,6 @@ export const ToolSettings = memo<ToolSettingsProps>(({ viewMode }) => {
   );
 });
 
-ToolSettings.displayName = 'ToolSettings';
-
 const Page = memo(() => <ToolSettings viewMode="skill" />);
 
 Page.displayName = 'SkillSettings';

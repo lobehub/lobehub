@@ -243,5 +243,3 @@ export const InternalEntityPreview = memo<InternalEntityPreviewProps>(
     );
   },
 );
-
-InternalEntityPreview.displayName = 'InternalEntityPreview';

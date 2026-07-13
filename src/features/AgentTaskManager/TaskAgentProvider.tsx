@@ -100,5 +100,3 @@ export const TaskAgentProvider = memo<TaskAgentProviderProps>(({ children }) => 
     </TaskAgentSelectionContext>
   );
 });
-
-TaskAgentProvider.displayName = 'TaskAgentProvider';

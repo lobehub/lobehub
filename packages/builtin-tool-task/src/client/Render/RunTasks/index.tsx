@@ -154,6 +154,4 @@ export const RunTasksRender = memo<BuiltinRenderProps<RunTasksParams, RunTasksSt
   },
 );
 
-RunTasksRender.displayName = 'RunTasksRender';
-
 export default RunTasksRender;

@@ -34,8 +34,6 @@ const WorkspaceSettingsContentLayout: FC = memo(() => {
   );
 });
 
-WorkspaceSettingsContentLayout.displayName = 'WorkspaceSettingsContentLayout';
-
 export { WorkspaceSettingsContentLayout };
 
 export default WorkspaceSettingsLayout;

@@ -43,5 +43,3 @@ export const MinimapPreview = memo<MinimapPreviewProps>(
     );
   },
 );
-
-MinimapPreview.displayName = 'MinimapPreview';

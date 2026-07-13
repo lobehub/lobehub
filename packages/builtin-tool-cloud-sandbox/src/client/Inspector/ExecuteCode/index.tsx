@@ -60,5 +60,3 @@ export const ExecuteCodeInspector = memo<
     </div>
   );
 });
-
-ExecuteCodeInspector.displayName = 'ExecuteCodeInspector';

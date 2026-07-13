@@ -70,6 +70,4 @@ export const InviteAgentInspector = memo<
   );
 });
 
-InviteAgentInspector.displayName = 'InviteAgentInspector';
-
 export default InviteAgentInspector;

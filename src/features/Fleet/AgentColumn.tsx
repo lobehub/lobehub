@@ -338,8 +338,6 @@ export const ColumnDragPreview = memo<{
   );
 });
 
-ColumnDragPreview.displayName = 'FleetColumnDragPreview';
-
 interface AgentColumnProps {
   column: FleetColumn;
   status: ChatTopicStatus | undefined;

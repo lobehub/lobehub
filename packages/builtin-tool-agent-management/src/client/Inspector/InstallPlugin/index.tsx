@@ -54,6 +54,4 @@ export const InstallPluginInspector = memo<BuiltinInspectorProps<InstallPluginPa
   },
 );
 
-InstallPluginInspector.displayName = 'InstallPluginInspector';
-
 export default InstallPluginInspector;

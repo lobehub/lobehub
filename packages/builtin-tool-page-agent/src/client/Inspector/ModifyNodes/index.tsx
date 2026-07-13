@@ -116,6 +116,4 @@ export const ModifyNodesInspector = memo<BuiltinInspectorProps<ModifyNodesArgs, 
   },
 );
 
-ModifyNodesInspector.displayName = 'ModifyNodesInspector';
-
 export default ModifyNodesInspector;

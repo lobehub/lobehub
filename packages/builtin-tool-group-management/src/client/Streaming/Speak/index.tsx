@@ -35,6 +35,4 @@ export const SpeakStreaming = memo<BuiltinStreamingProps<SpeakParams>>(({ args }
   );
 });
 
-SpeakStreaming.displayName = 'SpeakStreaming';
-
 export default SpeakStreaming;

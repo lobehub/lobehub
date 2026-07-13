@@ -42,6 +42,4 @@ export const CreatePlanInspector = memo<BuiltinInspectorProps<CreatePlanParams, 
   },
 );
 
-CreatePlanInspector.displayName = 'CreatePlanInspector';
-
 export default CreatePlanInspector;

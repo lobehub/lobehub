@@ -62,6 +62,4 @@ export const AnalyzeVisualMediaInspector = memo<
   );
 });
 
-AnalyzeVisualMediaInspector.displayName = 'AnalyzeVisualMediaInspector';
-
 export default AnalyzeVisualMediaInspector;

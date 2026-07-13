@@ -55,6 +55,4 @@ export const AddContextMemoryInspector = memo<
   );
 });
 
-AddContextMemoryInspector.displayName = 'AddContextMemoryInspector';
-
 export default AddContextMemoryInspector;

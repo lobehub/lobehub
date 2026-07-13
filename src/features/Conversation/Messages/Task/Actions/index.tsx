@@ -60,5 +60,3 @@ export const AssistantActionsBar = memo<AssistantActionsBarProps>(({ actionsConf
     />
   );
 });
-
-AssistantActionsBar.displayName = 'TaskAssistantActionsBar';

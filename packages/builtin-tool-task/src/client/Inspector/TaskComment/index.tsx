@@ -110,19 +110,14 @@ export const TaskCommentInspector = memo<TaskCommentInspectorProps>(
   },
 );
 
-TaskCommentInspector.displayName = 'TaskCommentInspector';
-
 export const AddTaskCommentInspector = (
   props: BuiltinInspectorProps<AddTaskCommentParams, AddTaskCommentState>,
 ) => <TaskCommentInspector {...props} apiName={TaskApiName.addTaskComment} />;
-AddTaskCommentInspector.displayName = 'AddTaskCommentInspector';
 
 export const UpdateTaskCommentInspector = (
   props: BuiltinInspectorProps<UpdateTaskCommentParams, UpdateTaskCommentState>,
 ) => <TaskCommentInspector {...props} apiName={TaskApiName.updateTaskComment} />;
-UpdateTaskCommentInspector.displayName = 'UpdateTaskCommentInspector';
 
 export const DeleteTaskCommentInspector = (
   props: BuiltinInspectorProps<DeleteTaskCommentParams, DeleteTaskCommentState>,
 ) => <TaskCommentInspector {...props} apiName={TaskApiName.deleteTaskComment} />;
-DeleteTaskCommentInspector.displayName = 'DeleteTaskCommentInspector';

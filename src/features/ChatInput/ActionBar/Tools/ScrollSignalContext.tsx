@@ -55,8 +55,6 @@ export const ScrollSignalProvider = ({
   );
 };
 
-ScrollSignalProvider.displayName = 'ScrollSignalProvider';
-
 /**
  * Subscribe to scroll events of the nearest ScrollSignalProvider ancestor.
  * If no provider is present this is a no-op.

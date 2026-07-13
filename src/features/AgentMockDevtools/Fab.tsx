@@ -99,5 +99,3 @@ export const Fab = memo(() => {
     </Tooltip>
   );
 });
-
-Fab.displayName = 'AgentMockFab';

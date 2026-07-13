@@ -55,6 +55,4 @@ export const AddExperienceMemoryInspector = memo<
   );
 });
 
-AddExperienceMemoryInspector.displayName = 'AddExperienceMemoryInspector';
-
 export default AddExperienceMemoryInspector;

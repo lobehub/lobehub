@@ -145,6 +145,4 @@ export const CommunityList = memo(() => {
   return renderContent();
 });
 
-CommunityList.displayName = 'CommunityList';
-
 export default CommunityList;

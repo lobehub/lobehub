@@ -98,8 +98,6 @@ export const EditLocalFileInspector = memo<EditLocalFileInspectorProps>(
   },
 );
 
-EditLocalFileInspector.displayName = 'EditLocalFileInspector';
-
 export const createEditLocalFileInspector = (translationKey: string) => {
   const Inspector = memo<BuiltinInspectorProps<any, any>>((props) => (
     <EditLocalFileInspector {...props} translationKey={translationKey} />

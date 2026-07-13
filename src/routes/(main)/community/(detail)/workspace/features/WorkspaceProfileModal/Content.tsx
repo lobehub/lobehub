@@ -463,5 +463,3 @@ export const Content = memo<ContentProps>(({ user, onSuccess }) => {
     </Flexbox>
   );
 });
-
-Content.displayName = 'WorkspaceProfileModalContent';

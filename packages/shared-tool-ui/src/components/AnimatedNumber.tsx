@@ -67,5 +67,3 @@ export const AnimatedNumber = memo<AnimatedNumberProps>(({ value, duration = 500
 
   return formatter ? formatter(displayValue) : Math.round(displayValue).toLocaleString();
 });
-
-AnimatedNumber.displayName = 'AnimatedNumber';

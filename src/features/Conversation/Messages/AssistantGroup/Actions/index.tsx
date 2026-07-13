@@ -77,5 +77,3 @@ export const GroupActionsBar = memo<GroupActionsProps>(
     );
   },
 );
-
-GroupActionsBar.displayName = 'GroupActionsBar';

@@ -42,5 +42,3 @@ export const ReadReferenceInspector = memo<
     </div>
   );
 });
-
-ReadReferenceInspector.displayName = 'ReadReferenceInspector';

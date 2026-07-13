@@ -358,6 +358,4 @@ export const PreferenceMemoryCard = memo<PreferenceMemoryCardProps>(({ data, loa
   );
 });
 
-PreferenceMemoryCard.displayName = 'PreferenceMemoryCard';
-
 export default PreferenceMemoryCard;

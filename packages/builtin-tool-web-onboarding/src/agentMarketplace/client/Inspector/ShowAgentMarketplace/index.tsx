@@ -59,6 +59,4 @@ export const ShowAgentMarketplaceInspector = memo<
   );
 });
 
-ShowAgentMarketplaceInspector.displayName = 'ShowAgentMarketplaceInspector';
-
 export default ShowAgentMarketplaceInspector;

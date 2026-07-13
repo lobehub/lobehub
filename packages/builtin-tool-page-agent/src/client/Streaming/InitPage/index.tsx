@@ -107,6 +107,4 @@ export const InitPageStreaming = memo<BuiltinStreamingProps<InitDocumentArgs>>((
   );
 });
 
-InitPageStreaming.displayName = 'PageAgentInitPageStreaming';
-
 export default InitPageStreaming;

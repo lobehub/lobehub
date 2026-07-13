@@ -101,6 +101,4 @@ export const CreateTasksInspector = memo<
   );
 });
 
-CreateTasksInspector.displayName = 'CreateTasksInspector';
-
 export default CreateTasksInspector;

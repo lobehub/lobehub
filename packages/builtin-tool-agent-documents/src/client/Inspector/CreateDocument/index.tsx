@@ -49,6 +49,4 @@ export const CreateDocumentInspector = memo<
   );
 });
 
-CreateDocumentInspector.displayName = 'CreateDocumentInspector';
-
 export default CreateDocumentInspector;

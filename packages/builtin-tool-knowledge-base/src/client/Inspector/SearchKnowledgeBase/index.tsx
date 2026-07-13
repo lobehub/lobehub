@@ -60,5 +60,3 @@ export const SearchKnowledgeBaseInspector = memo<
     </div>
   );
 });
-
-SearchKnowledgeBaseInspector.displayName = 'SearchKnowledgeBaseInspector';

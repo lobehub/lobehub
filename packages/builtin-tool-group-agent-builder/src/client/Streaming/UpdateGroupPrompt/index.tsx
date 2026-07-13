@@ -30,6 +30,4 @@ export const UpdateGroupPromptStreaming = memo<BuiltinStreamingProps<UpdateGroup
   },
 );
 
-UpdateGroupPromptStreaming.displayName = 'UpdateGroupPromptStreaming';
-
 export default UpdateGroupPromptStreaming;

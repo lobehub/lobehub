@@ -91,5 +91,3 @@ export const TimelineView = memo(() => {
     </div>
   );
 });
-
-TimelineView.displayName = 'AgentMockTimelineView';

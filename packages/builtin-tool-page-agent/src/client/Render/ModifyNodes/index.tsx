@@ -128,6 +128,4 @@ export const ModifyNodesRender = memo<BuiltinRenderProps<ModifyNodesArgs, Modify
   },
 );
 
-ModifyNodesRender.displayName = 'ModifyNodesRender';
-
 export default ModifyNodesRender;

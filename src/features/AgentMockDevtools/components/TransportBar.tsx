@@ -208,5 +208,3 @@ export const TransportBar = memo(() => {
     </Flexbox>
   );
 });
-
-TransportBar.displayName = 'AgentMockTransportBar';

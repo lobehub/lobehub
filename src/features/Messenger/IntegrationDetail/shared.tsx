@@ -109,7 +109,6 @@ export const ConnectionRow = memo<ConnectionRowProps>(
     );
   },
 );
-ConnectionRow.displayName = 'MessengerConnectionRow';
 
 const ConnectionsSkeleton = memo<{ withNestedContent?: boolean }>(
   ({ withNestedContent = false }) => (
@@ -166,7 +165,6 @@ export const IntegrationDetailSkeleton = memo<{ withNestedContent?: boolean }>(
     </Flexbox>
   ),
 );
-IntegrationDetailSkeleton.displayName = 'MessengerIntegrationDetailSkeleton';
 
 interface DetailLayoutProps {
   children?: ReactNode;
@@ -219,7 +217,6 @@ export const DetailLayout = memo<DetailLayoutProps>(
     );
   },
 );
-DetailLayout.displayName = 'MessengerDetailLayout';
 
 interface UserLinkLike {
   activeAgentId: string | null;
@@ -381,7 +378,6 @@ export const UserAgentConnection = memo<UserAgentConnectionProps>(
     );
   },
 );
-UserAgentConnection.displayName = 'MessengerUserAgentConnection';
 
 export const useMessengerData = (platform: MessengerPlatform) => {
   const linksSWR = useSWR(messengerKeys.listMyLinks(), () => messengerService.listMyLinks());

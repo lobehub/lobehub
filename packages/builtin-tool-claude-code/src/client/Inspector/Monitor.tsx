@@ -131,5 +131,3 @@ export const MonitorInspector = memo<BuiltinInspectorProps<MonitorArgs>>(
     );
   },
 );
-
-MonitorInspector.displayName = 'ClaudeCodeMonitorInspector';

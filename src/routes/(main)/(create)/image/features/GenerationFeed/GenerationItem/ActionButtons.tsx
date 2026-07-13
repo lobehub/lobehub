@@ -59,5 +59,3 @@ export const ActionButtons = memo<ActionButtonsProps>(
     );
   },
 );
-
-ActionButtons.displayName = 'ActionButtons';

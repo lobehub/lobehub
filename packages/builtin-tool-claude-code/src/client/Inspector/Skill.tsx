@@ -69,5 +69,3 @@ export const SkillInspector = memo<BuiltinInspectorProps<SkillArgs>>(
     );
   },
 );
-
-SkillInspector.displayName = 'ClaudeCodeSkillInspector';

@@ -56,6 +56,4 @@ export const WriteDocumentInspector = memo<
   );
 });
 
-WriteDocumentInspector.displayName = 'WriteDocumentInspector';
-
 export default WriteDocumentInspector;

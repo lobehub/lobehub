@@ -41,5 +41,3 @@ export const ExportFileInspector = memo<BuiltinInspectorProps<ExportFileArgs, Ex
     );
   },
 );
-
-ExportFileInspector.displayName = 'ExportFileInspector';

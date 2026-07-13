@@ -93,6 +93,4 @@ export const MCPList = memo(() => {
   );
 });
 
-MCPList.displayName = 'MCPList';
-
 export default MCPList;

@@ -106,5 +106,3 @@ export const ActivateSkillInspector = memo<
     </div>
   );
 });
-
-ActivateSkillInspector.displayName = 'ActivateSkillInspector';

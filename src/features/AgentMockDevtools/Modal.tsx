@@ -32,5 +32,3 @@ export const Modal = memo(() => {
 
   return null;
 });
-
-Modal.displayName = 'AgentMockModal';

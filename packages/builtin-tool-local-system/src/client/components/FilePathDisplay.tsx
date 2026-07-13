@@ -65,5 +65,3 @@ export const FilePathDisplay = memo<FilePathDisplayProps>(({ filePath, isDirecto
     </>
   );
 });
-
-FilePathDisplay.displayName = 'FilePathDisplay';

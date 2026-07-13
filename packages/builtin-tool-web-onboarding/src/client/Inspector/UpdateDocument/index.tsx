@@ -52,6 +52,4 @@ export const UpdateDocumentInspector = memo<
   );
 });
 
-UpdateDocumentInspector.displayName = 'UpdateDocumentInspector';
-
 export default UpdateDocumentInspector;

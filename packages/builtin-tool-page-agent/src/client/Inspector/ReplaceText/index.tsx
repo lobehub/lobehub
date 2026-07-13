@@ -71,6 +71,4 @@ export const ReplaceTextInspector = memo<BuiltinInspectorProps<ReplaceTextArgs, 
   },
 );
 
-ReplaceTextInspector.displayName = 'ReplaceTextInspector';
-
 export default ReplaceTextInspector;

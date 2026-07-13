@@ -66,6 +66,4 @@ export const CreateGroupInspector = memo<
   );
 });
 
-CreateGroupInspector.displayName = 'CreateGroupInspector';
-
 export default CreateGroupInspector;

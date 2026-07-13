@@ -31,6 +31,4 @@ export const UpdateAgentPromptRender = memo<
   );
 });
 
-UpdateAgentPromptRender.displayName = 'UpdateAgentPromptRender';
-
 export default UpdateAgentPromptRender;

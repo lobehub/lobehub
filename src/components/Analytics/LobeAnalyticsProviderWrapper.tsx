@@ -43,5 +43,3 @@ export const LobeAnalyticsProviderWrapper = memo<Props>(({ children }) => {
     </LobeAnalyticsProvider>
   );
 });
-
-LobeAnalyticsProviderWrapper.displayName = 'LobeAnalyticsProviderWrapper';

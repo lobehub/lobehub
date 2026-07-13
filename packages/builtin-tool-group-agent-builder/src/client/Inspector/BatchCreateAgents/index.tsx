@@ -105,6 +105,4 @@ export const BatchCreateAgentsInspector = memo<
   );
 });
 
-BatchCreateAgentsInspector.displayName = 'BatchCreateAgentsInspector';
-
 export default BatchCreateAgentsInspector;

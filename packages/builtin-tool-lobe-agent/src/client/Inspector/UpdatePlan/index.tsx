@@ -54,6 +54,4 @@ export const UpdatePlanInspector = memo<BuiltinInspectorProps<UpdatePlanParams, 
   },
 );
 
-UpdatePlanInspector.displayName = 'UpdatePlanInspector';
-
 export default UpdatePlanInspector;

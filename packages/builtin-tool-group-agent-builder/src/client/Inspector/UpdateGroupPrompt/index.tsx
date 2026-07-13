@@ -94,6 +94,4 @@ export const UpdateGroupPromptInspector = memo<
   );
 });
 
-UpdateGroupPromptInspector.displayName = 'UpdateGroupPromptInspector';
-
 export default UpdateGroupPromptInspector;

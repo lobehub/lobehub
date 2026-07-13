@@ -59,6 +59,4 @@ export const SearchMarketToolsInspector = memo<
   );
 });
 
-SearchMarketToolsInspector.displayName = 'SearchMarketToolsInspector';
-
 export default SearchMarketToolsInspector;

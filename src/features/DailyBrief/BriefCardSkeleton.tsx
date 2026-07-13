@@ -43,6 +43,4 @@ const BriefCardSkeleton = memo(() => {
   );
 });
 
-BriefCardSkeleton.displayName = 'BriefCardSkeleton';
-
 export { BriefCardSkeleton };

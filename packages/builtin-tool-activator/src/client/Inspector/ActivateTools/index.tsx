@@ -121,5 +121,3 @@ export const ActivateToolsInspector = memo<
     </Flexbox>
   );
 });
-
-ActivateToolsInspector.displayName = 'ActivateToolsInspector';

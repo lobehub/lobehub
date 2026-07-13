@@ -120,7 +120,6 @@ export const IconRow = memo<{ platform: MessengerPlatform }>(({ platform }) => (
     <PlatformBubble platform={platform} />
   </div>
 ));
-IconRow.displayName = 'MessengerVerifyIconRow';
 
 export const Heading = memo<{ subtitle?: string; title: string }>(({ subtitle, title }) => (
   <Flexbox align="center" gap={12}>
@@ -138,7 +137,6 @@ export const Heading = memo<{ subtitle?: string; title: string }>(({ subtitle, t
     )}
   </Flexbox>
 ));
-Heading.displayName = 'MessengerVerifyHeading';
 
 export interface InfoRow {
   label: string;
@@ -324,7 +322,6 @@ export const ConfirmCard = memo<ConfirmCardProps>(
     );
   },
 );
-ConfirmCard.displayName = 'MessengerVerifyConfirmCard';
 
 export interface SuccessCardProps {
   /** Pre-built deep link back to the bot. When omitted, the CTA is hidden. */
@@ -354,7 +351,6 @@ export const SuccessCard = memo<SuccessCardProps>(({ openBotUrl, platformLabel }
     </Flexbox>
   );
 });
-SuccessCard.displayName = 'MessengerVerifySuccessCard';
 
 export interface PeekedToken {
   linkedToEmail?: string | null;

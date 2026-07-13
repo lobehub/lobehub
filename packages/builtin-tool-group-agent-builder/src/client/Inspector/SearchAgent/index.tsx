@@ -61,6 +61,4 @@ export const SearchAgentInspector = memo<
   );
 });
 
-SearchAgentInspector.displayName = 'SearchAgentInspector';
-
 export default SearchAgentInspector;

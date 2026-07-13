@@ -51,6 +51,4 @@ export const ListTasksInspector = memo<BuiltinInspectorProps<ListTasksParams, Li
   },
 );
 
-ListTasksInspector.displayName = 'ListTasksInspector';
-
 export default ListTasksInspector;

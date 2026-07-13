@@ -204,5 +204,3 @@ export const AgentInspector = memo<BuiltinInspectorProps<AgentArgs>>(
     );
   },
 );
-
-AgentInspector.displayName = 'ClaudeCodeAgentInspector';

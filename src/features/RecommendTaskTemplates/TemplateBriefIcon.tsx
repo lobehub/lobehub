@@ -46,5 +46,3 @@ export const TemplateBriefIcon = memo<TemplateBriefIconProps>(({ spec, tileSize 
     </Block>
   );
 });
-
-TemplateBriefIcon.displayName = 'TemplateBriefIcon';

@@ -78,5 +78,3 @@ export const ScheduleWakeupInspector = memo<BuiltinInspectorProps<ScheduleWakeup
     );
   },
 );
-
-ScheduleWakeupInspector.displayName = 'ClaudeCodeScheduleWakeupInspector';

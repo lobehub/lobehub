@@ -22,8 +22,6 @@ export const AgentNotFound = memo(() => {
   return <NotFound hideWatermark desc={t('agentNotFound.desc')} title={t('agentNotFound.title')} />;
 });
 
-AgentNotFound.displayName = 'AgentNotFound';
-
 /**
  * Replaces children with the 404 card when the routed agent (`:aid`) resolved
  * to not-found / no-access. Builtin slugs are skipped: they are not real agent
@@ -42,5 +40,3 @@ export const AgentNotFoundGuard: FC<PropsWithChildren> = memo(({ children }) => 
 
   return children;
 });
-
-AgentNotFoundGuard.displayName = 'AgentNotFoundGuard';

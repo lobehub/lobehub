@@ -89,6 +89,4 @@ export const UpdateConfigInspector = memo<
   );
 });
 
-UpdateConfigInspector.displayName = 'UpdateConfigInspector';
-
 export default UpdateConfigInspector;

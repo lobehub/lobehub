@@ -194,8 +194,6 @@ export const TaskResultCard = memo<TaskResultCardProps>(
   },
 );
 
-TaskResultCard.displayName = 'TaskResultCard';
-
 /** A scalar detail row: muted label followed by an inline value. */
 export const InlineField = memo<{ children: ReactNode; label: ReactNode }>(
   ({ children, label }) => (
@@ -206,8 +204,6 @@ export const InlineField = memo<{ children: ReactNode; label: ReactNode }>(
   ),
 );
 
-InlineField.displayName = 'InlineField';
-
 /** A stacked detail block: muted label above long-form content. */
 export const SectionField = memo<{ children: ReactNode; label: ReactNode }>(
   ({ children, label }) => (
@@ -217,8 +213,6 @@ export const SectionField = memo<{ children: ReactNode; label: ReactNode }>(
     </div>
   ),
 );
-
-SectionField.displayName = 'SectionField';
 
 /** An agent avatar + display name, resolved from the agent registry. */
 export const AssigneeInline = memo<{ agentId: string }>(({ agentId }) => {
@@ -232,7 +226,5 @@ export const AssigneeInline = memo<{ agentId: string }>(({ agentId }) => {
     </span>
   );
 });
-
-AssigneeInline.displayName = 'AssigneeInline';
 
 export const monoChipClassName = styles.mono;

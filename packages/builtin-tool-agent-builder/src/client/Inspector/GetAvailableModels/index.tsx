@@ -61,6 +61,4 @@ export const GetAvailableModelsInspector = memo<
   );
 });
 
-GetAvailableModelsInspector.displayName = 'GetAvailableModelsInspector';
-
 export default GetAvailableModelsInspector;

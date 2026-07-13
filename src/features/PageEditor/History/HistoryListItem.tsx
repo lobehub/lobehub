@@ -226,5 +226,3 @@ export const HistoryListItem = memo<HistoryListItemProps>(({ historyId, onCompar
     </div>
   );
 });
-
-HistoryListItem.displayName = 'HistoryListItem';

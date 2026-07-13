@@ -51,6 +51,4 @@ export const DuplicateAgentRender = memo<
   );
 });
 
-DuplicateAgentRender.displayName = 'DuplicateAgentRender';
-
 export default DuplicateAgentRender;

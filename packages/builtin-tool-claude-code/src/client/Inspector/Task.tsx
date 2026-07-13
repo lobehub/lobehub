@@ -337,5 +337,3 @@ export const TaskInspector = memo<BuiltinInspectorProps<TaskInspectorArgs, TaskP
     );
   },
 );
-
-TaskInspector.displayName = 'ClaudeCodeTaskInspector';

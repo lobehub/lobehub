@@ -174,5 +174,3 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, 
     </InternalEntityPreview>
   );
 });
-
-InternalEntityLink.displayName = 'InternalEntityLink';

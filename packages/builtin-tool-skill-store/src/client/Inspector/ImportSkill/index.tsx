@@ -55,5 +55,3 @@ export const ImportSkillInspector = memo<
     </div>
   );
 });
-
-ImportSkillInspector.displayName = 'ImportSkillInspector';

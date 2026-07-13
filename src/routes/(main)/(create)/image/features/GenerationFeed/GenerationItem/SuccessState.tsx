@@ -54,5 +54,3 @@ export const SuccessState = memo<SuccessStateProps>(
     );
   },
 );
-
-SuccessState.displayName = 'SuccessState';

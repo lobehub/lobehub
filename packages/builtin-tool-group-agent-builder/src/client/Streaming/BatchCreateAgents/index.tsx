@@ -98,6 +98,4 @@ export const BatchCreateAgentsStreaming = memo<BuiltinStreamingProps<BatchCreate
   },
 );
 
-BatchCreateAgentsStreaming.displayName = 'BatchCreateAgentsStreaming';
-
 export default BatchCreateAgentsStreaming;

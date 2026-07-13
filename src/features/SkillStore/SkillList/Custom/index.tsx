@@ -64,6 +64,4 @@ export const CustomList = memo(() => {
   );
 });
 
-CustomList.displayName = 'CustomList';
-
 export default CustomList;

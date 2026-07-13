@@ -39,5 +39,3 @@ export const WriteFileStreaming = memo<BuiltinStreamingProps<WriteLocalFileParam
     </Highlighter>
   );
 });
-
-WriteFileStreaming.displayName = 'WriteFileStreaming';

@@ -140,5 +140,3 @@ export const TodoWriteInspector = memo<BuiltinInspectorProps<TodoWriteArgs>>(
     );
   },
 );
-
-TodoWriteInspector.displayName = 'ClaudeCodeTodoWriteInspector';

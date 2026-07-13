@@ -57,5 +57,3 @@ export const SendMessageInspector = memo<BuiltinInspectorProps<SendMessageArgs>>
     );
   },
 );
-
-SendMessageInspector.displayName = 'ClaudeCodeSendMessageInspector';

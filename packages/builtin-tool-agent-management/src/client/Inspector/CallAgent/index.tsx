@@ -77,6 +77,4 @@ export const CallAgentInspector = memo<BuiltinInspectorProps<CallAgentParams>>(
   },
 );
 
-CallAgentInspector.displayName = 'CallAgentInspector';
-
 export default CallAgentInspector;

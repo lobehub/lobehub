@@ -112,6 +112,4 @@ export const GetAgentDetailRender = memo<
   );
 });
 
-GetAgentDetailRender.displayName = 'GetAgentDetailRender';
-
 export default GetAgentDetailRender;

@@ -117,6 +117,4 @@ export const RunTasksInspector = memo<BuiltinInspectorProps<RunTasksParams, RunT
   },
 );
 
-RunTasksInspector.displayName = 'RunTasksInspector';
-
 export default RunTasksInspector;

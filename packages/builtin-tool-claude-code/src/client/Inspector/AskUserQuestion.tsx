@@ -59,5 +59,3 @@ export const AskUserQuestionInspector = memo<BuiltinInspectorProps<AskUserQuesti
     );
   },
 );
-
-AskUserQuestionInspector.displayName = 'ClaudeCodeAskUserQuestionInspector';

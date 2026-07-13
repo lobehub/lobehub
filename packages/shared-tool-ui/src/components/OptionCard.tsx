@@ -107,6 +107,4 @@ export const OptionCard = memo<OptionCardProps>(
   ),
 );
 
-OptionCard.displayName = 'OptionCard';
-
 export default OptionCard;

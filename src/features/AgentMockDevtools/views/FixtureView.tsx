@@ -72,5 +72,3 @@ export const FixtureView = memo(() => {
     </div>
   );
 });
-
-FixtureView.displayName = 'AgentMockFixtureView';

@@ -57,5 +57,3 @@ export const SearchSkillInspector = memo<
     </div>
   );
 });
-
-SearchSkillInspector.displayName = 'SearchSkillInspector';

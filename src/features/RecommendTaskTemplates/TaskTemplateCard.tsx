@@ -157,5 +157,3 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
     );
   },
 );
-
-TaskTemplateCard.displayName = 'TaskTemplateCard';

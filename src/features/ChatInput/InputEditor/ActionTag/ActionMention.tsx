@@ -105,5 +105,3 @@ export const ActionMention = memo<ActionMentionProps>(
     );
   },
 );
-
-ActionMention.displayName = 'ActionMention';

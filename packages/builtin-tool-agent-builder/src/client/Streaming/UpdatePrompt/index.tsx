@@ -22,6 +22,4 @@ export const UpdatePromptStreaming = memo<BuiltinStreamingProps<UpdatePromptPara
   },
 );
 
-UpdatePromptStreaming.displayName = 'UpdatePromptStreaming';
-
 export default UpdatePromptStreaming;

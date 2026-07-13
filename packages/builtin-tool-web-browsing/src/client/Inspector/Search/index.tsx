@@ -55,6 +55,4 @@ export const SearchInspector = memo<BuiltinInspectorProps<SearchQuery, UniformSe
   },
 );
 
-SearchInspector.displayName = 'SearchInspector';
-
 export default SearchInspector;

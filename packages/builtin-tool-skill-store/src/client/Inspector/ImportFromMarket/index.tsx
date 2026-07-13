@@ -55,5 +55,3 @@ export const ImportFromMarketInspector = memo<
     </div>
   );
 });
-
-ImportFromMarketInspector.displayName = 'ImportFromMarketInspector';

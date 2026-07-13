@@ -55,6 +55,4 @@ export const RemoveIdentityMemoryInspector = memo<
   );
 });
 
-RemoveIdentityMemoryInspector.displayName = 'RemoveIdentityMemoryInspector';
-
 export default RemoveIdentityMemoryInspector;

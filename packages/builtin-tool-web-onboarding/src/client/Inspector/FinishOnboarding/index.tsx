@@ -35,6 +35,4 @@ export const FinishOnboardingInspector = memo<
   );
 });
 
-FinishOnboardingInspector.displayName = 'FinishOnboardingInspector';
-
 export default FinishOnboardingInspector;

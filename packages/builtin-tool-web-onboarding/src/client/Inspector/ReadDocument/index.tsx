@@ -48,6 +48,4 @@ export const ReadDocumentInspector = memo<
   );
 });
 
-ReadDocumentInspector.displayName = 'ReadDocumentInspector';
-
 export default ReadDocumentInspector;

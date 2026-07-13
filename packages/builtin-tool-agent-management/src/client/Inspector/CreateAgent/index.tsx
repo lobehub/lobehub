@@ -65,6 +65,4 @@ export const CreateAgentInspector = memo<BuiltinInspectorProps<CreateAgentParams
   },
 );
 
-CreateAgentInspector.displayName = 'CreateAgentInspector';
-
 export default CreateAgentInspector;

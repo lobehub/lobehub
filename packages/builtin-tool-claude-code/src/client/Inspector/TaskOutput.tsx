@@ -57,5 +57,3 @@ export const TaskOutputInspector = memo<BuiltinInspectorProps<TaskOutputArgs>>(
     );
   },
 );
-
-TaskOutputInspector.displayName = 'ClaudeCodeTaskOutputInspector';

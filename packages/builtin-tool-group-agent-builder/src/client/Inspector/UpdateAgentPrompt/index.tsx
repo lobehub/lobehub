@@ -125,6 +125,4 @@ export const UpdateAgentPromptInspector = memo<
   );
 });
 
-UpdateAgentPromptInspector.displayName = 'UpdateAgentPromptInspector';
-
 export default UpdateAgentPromptInspector;

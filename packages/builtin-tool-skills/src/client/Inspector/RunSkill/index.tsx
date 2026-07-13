@@ -121,5 +121,3 @@ export const RunSkillInspector = memo<
     </div>
   );
 });
-
-RunSkillInspector.displayName = 'RunSkillInspector';

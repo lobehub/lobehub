@@ -118,6 +118,4 @@ export const QuestionPanel = memo<QuestionPanelProps>(
   },
 );
 
-QuestionPanel.displayName = 'AskUserQuestionPanel';
-
 export default QuestionPanel;

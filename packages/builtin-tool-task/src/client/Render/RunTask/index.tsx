@@ -71,6 +71,4 @@ export const RunTaskRender = memo<BuiltinRenderProps<RunTaskParams, RunTaskState
   },
 );
 
-RunTaskRender.displayName = 'RunTaskRender';
-
 export default RunTaskRender;

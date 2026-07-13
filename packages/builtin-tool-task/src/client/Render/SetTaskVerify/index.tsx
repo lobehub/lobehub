@@ -80,6 +80,4 @@ export const SetTaskVerifyRender = memo<
   );
 });
 
-SetTaskVerifyRender.displayName = 'SetTaskVerifyRender';
-
 export default SetTaskVerifyRender;

@@ -39,5 +39,3 @@ export const ErrorDisplay = memo<ErrorDisplayProps>(({ error, identifier, apiNam
     />
   );
 });
-
-ErrorDisplay.displayName = 'ToolErrorDisplay';

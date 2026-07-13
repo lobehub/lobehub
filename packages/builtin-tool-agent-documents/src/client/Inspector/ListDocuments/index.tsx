@@ -48,6 +48,4 @@ export const ListDocumentsInspector = memo<
   );
 });
 
-ListDocumentsInspector.displayName = 'ListDocumentsInspector';
-
 export default ListDocumentsInspector;

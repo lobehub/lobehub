@@ -44,5 +44,3 @@ export const ReferTopicView = memo<ReferTopicViewProps>(({ topicId, fallbackTitl
     </span>
   );
 });
-
-ReferTopicView.displayName = 'ReferTopicView';

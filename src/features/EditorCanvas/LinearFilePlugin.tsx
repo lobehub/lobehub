@@ -137,8 +137,6 @@ export const LinearFileCard = memo<LinearFileCardProps>(({ node }) => {
   );
 });
 
-LinearFileCard.displayName = 'LinearFileCard';
-
 interface LinearFilePluginProps {
   handleUpload: (file: File) => Promise<{ url: string }>;
   /**

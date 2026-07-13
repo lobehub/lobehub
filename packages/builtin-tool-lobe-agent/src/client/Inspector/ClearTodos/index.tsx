@@ -51,6 +51,4 @@ export const ClearTodosInspector = memo<BuiltinInspectorProps<ClearTodosParams, 
   },
 );
 
-ClearTodosInspector.displayName = 'ClearTodosInspector';
-
 export default ClearTodosInspector;

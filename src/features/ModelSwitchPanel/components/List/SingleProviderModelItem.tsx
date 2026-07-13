@@ -24,5 +24,3 @@ export const SingleProviderModelItem = memo<SingleProviderModelItemProps>(
     );
   },
 );
-
-SingleProviderModelItem.displayName = 'SingleProviderModelItem';

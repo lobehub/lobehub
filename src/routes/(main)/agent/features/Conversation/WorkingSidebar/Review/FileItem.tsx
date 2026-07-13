@@ -303,8 +303,6 @@ export const FileItemHeader = memo<FileItemHeaderProps>(
   },
 );
 
-FileItemHeader.displayName = 'ReviewFileItemHeader';
-
 interface FileItemBodyProps {
   /** Whether the Collapse panel is expanded — gates the heavy PatchDiff render. */
   expanded: boolean;

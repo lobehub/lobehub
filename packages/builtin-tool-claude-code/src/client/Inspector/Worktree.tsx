@@ -142,8 +142,6 @@ export const EnterWorktreeInspector = memo<BuiltinInspectorProps<EnterWorktreeAr
   },
 );
 
-EnterWorktreeInspector.displayName = 'ClaudeCodeEnterWorktreeInspector';
-
 export const ExitWorktreeInspector = memo<BuiltinInspectorProps<ExitWorktreeArgs>>(
   ({ args, partialArgs, isArgumentsStreaming, isLoading, result }) => {
     const { t } = useTranslation('plugin');
@@ -175,5 +173,3 @@ export const ExitWorktreeInspector = memo<BuiltinInspectorProps<ExitWorktreeArgs
     );
   },
 );
-
-ExitWorktreeInspector.displayName = 'ClaudeCodeExitWorktreeInspector';

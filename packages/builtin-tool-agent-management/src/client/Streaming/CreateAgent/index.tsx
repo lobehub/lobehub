@@ -80,6 +80,4 @@ export const CreateAgentStreaming = memo<BuiltinStreamingProps<CreateAgentParams
   );
 });
 
-CreateAgentStreaming.displayName = 'CreateAgentStreaming';
-
 export default CreateAgentStreaming;

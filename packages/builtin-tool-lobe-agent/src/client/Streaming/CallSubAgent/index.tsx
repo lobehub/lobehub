@@ -42,6 +42,4 @@ export const CallSubAgentStreaming = memo<BuiltinStreamingProps<CallSubAgentPara
   );
 });
 
-CallSubAgentStreaming.displayName = 'CallSubAgentStreaming';
-
 export default CallSubAgentStreaming;

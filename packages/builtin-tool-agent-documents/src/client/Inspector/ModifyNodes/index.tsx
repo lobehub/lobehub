@@ -57,6 +57,4 @@ export const ModifyNodesInspector = memo<
   );
 });
 
-ModifyNodesInspector.displayName = 'ModifyNodesInspector';
-
 export default ModifyNodesInspector;

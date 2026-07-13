@@ -33,6 +33,4 @@ export const SpeakRender = memo<BuiltinRenderProps<SpeakParams>>(({ args }) => {
   );
 });
 
-SpeakRender.displayName = 'SpeakRender';
-
 export default SpeakRender;

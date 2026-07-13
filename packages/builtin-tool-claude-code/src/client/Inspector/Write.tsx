@@ -30,4 +30,3 @@ const SharedInspector = createWriteLocalFileInspector(ClaudeCodeApiName.Write);
 export const WriteInspector = memo<BuiltinInspectorProps<CCWriteArgs>>((props) => (
   <SharedInspector {...props} args={mapArgs(props.args)} partialArgs={mapArgs(props.partialArgs)} />
 ));
-WriteInspector.displayName = 'ClaudeCodeWriteInspector';

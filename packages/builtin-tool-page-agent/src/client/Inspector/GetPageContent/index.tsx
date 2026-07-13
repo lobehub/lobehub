@@ -28,6 +28,4 @@ export const GetPageContentInspector = memo<BuiltinInspectorProps>(({ isArgument
   );
 });
 
-GetPageContentInspector.displayName = 'GetPageContentInspector';
-
 export default GetPageContentInspector;

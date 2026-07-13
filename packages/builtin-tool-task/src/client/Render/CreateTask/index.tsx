@@ -156,6 +156,4 @@ export const CreateTaskRender = memo<BuiltinRenderProps<CreateTaskParams, Create
   },
 );
 
-CreateTaskRender.displayName = 'CreateTaskRender';
-
 export default CreateTaskRender;

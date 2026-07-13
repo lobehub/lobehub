@@ -54,6 +54,4 @@ export const UpdatePromptInspector = memo<BuiltinInspectorProps<UpdatePromptPara
   },
 );
 
-UpdatePromptInspector.displayName = 'UpdatePromptInspector';
-
 export default UpdatePromptInspector;

@@ -162,5 +162,3 @@ export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
     );
   },
 );
-
-MultipleProvidersModelItem.displayName = 'MultipleProvidersModelItem';

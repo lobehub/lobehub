@@ -175,6 +175,4 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
   );
 });
 
-AskUserQuestionView.displayName = 'AskUserQuestionView';
-
 export default AskUserQuestionView;

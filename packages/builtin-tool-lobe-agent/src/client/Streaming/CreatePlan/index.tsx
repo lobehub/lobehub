@@ -66,6 +66,4 @@ export const CreatePlanStreaming = memo<BuiltinStreamingProps<CreatePlanParams>>
   );
 });
 
-CreatePlanStreaming.displayName = 'CreatePlanStreaming';
-
 export default CreatePlanStreaming;

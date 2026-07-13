@@ -147,5 +147,3 @@ export const GenerationItem = memo<GenerationItemProps>(
     );
   },
 );
-
-GenerationItem.displayName = 'GenerationItem';

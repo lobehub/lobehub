@@ -50,6 +50,4 @@ export const CrawlMultiPagesInspector = memo<BuiltinInspectorProps<CrawlMultiPag
   },
 );
 
-CrawlMultiPagesInspector.displayName = 'CrawlMultiPagesInspector';
-
 export default CrawlMultiPagesInspector;

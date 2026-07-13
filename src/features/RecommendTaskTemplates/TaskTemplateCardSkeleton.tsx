@@ -67,5 +67,3 @@ export const TaskTemplateCardSkeleton = memo<TaskTemplateCardSkeletonProps>(
     );
   },
 );
-
-TaskTemplateCardSkeleton.displayName = 'TaskTemplateCardSkeleton';

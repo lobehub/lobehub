@@ -59,8 +59,6 @@ export const SettingsSearchAnchor = memo<PropsWithChildren<{ id: string }>>(({ i
   </span>
 ));
 
-SettingsSearchAnchor.displayName = 'SettingsSearchAnchor';
-
 /**
  * Scroll the anchor into view and flash-highlight its enclosing form row (or
  * group header). Safe to call before the target tab finishes rendering.

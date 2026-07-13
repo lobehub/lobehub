@@ -40,5 +40,3 @@ export const LoadingState = memo<LoadingStateProps>(
     );
   },
 );
-
-LoadingState.displayName = 'LoadingState';

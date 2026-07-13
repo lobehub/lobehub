@@ -47,6 +47,4 @@ export const RenameDocumentInspector = memo<
   );
 });
 
-RenameDocumentInspector.displayName = 'RenameDocumentInspector';
-
 export default RenameDocumentInspector;

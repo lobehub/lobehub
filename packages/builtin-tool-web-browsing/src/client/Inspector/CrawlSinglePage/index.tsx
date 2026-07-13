@@ -38,6 +38,4 @@ export const CrawlSinglePageInspector = memo<BuiltinInspectorProps<CrawlSinglePa
   },
 );
 
-CrawlSinglePageInspector.displayName = 'CrawlSinglePageInspector';
-
 export default CrawlSinglePageInspector;

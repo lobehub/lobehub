@@ -51,6 +51,4 @@ export const RemoveDocumentInspector = memo<
   );
 });
 
-RemoveDocumentInspector.displayName = 'RemoveDocumentInspector';
-
 export default RemoveDocumentInspector;

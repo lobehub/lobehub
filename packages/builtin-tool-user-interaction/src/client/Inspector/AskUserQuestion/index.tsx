@@ -67,6 +67,4 @@ export const AskUserQuestionInspector = memo<BuiltinInspectorProps<AskUserQuesti
   },
 );
 
-AskUserQuestionInspector.displayName = 'AskUserQuestionInspector';
-
 export default AskUserQuestionInspector;

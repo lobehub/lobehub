@@ -128,5 +128,3 @@ export const ConversationProvider = memo<ConversationProviderProps>(
   },
   isEqual,
 );
-
-ConversationProvider.displayName = 'ConversationProvider';

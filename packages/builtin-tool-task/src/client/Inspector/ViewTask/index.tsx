@@ -46,6 +46,4 @@ export const ViewTaskInspector = memo<BuiltinInspectorProps<ViewTaskParams, View
   },
 );
 
-ViewTaskInspector.displayName = 'ViewTaskInspector';
-
 export default ViewTaskInspector;

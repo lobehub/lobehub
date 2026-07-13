@@ -78,5 +78,3 @@ export const StatsStrip = memo(() => {
     </Flexbox>
   );
 });
-
-StatsStrip.displayName = 'AgentMockStatsStrip';

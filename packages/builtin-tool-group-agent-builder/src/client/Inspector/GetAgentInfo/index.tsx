@@ -63,6 +63,4 @@ export const GetAgentInfoInspector = memo<
   );
 });
 
-GetAgentInfoInspector.displayName = 'GetAgentInfoInspector';
-
 export default GetAgentInfoInspector;

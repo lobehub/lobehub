@@ -138,8 +138,6 @@ export const RunCommandInspector = memo<RunCommandInspectorProps>(
   },
 );
 
-RunCommandInspector.displayName = 'RunCommandInspector';
-
 /**
  * Factory to create a RunCommandInspector with a bound translation key.
  * Use this in each package's inspector registry to avoid wrapper components.

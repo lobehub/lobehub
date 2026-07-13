@@ -252,5 +252,3 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
     }
   },
 );
-
-ListItemRenderer.displayName = 'ListItemRenderer';

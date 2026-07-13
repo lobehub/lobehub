@@ -99,5 +99,3 @@ export const EventRow = memo<Props>(({ event, index, cumulativeMs, isActive, onC
     </div>
   );
 });
-
-EventRow.displayName = 'AgentMockEventRow';

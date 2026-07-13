@@ -64,6 +64,4 @@ export const ExecuteTaskStreaming = memo<BuiltinStreamingProps<ExecuteTaskParams
   );
 });
 
-ExecuteTaskStreaming.displayName = 'ExecuteTaskStreaming';
-
 export default ExecuteTaskStreaming;

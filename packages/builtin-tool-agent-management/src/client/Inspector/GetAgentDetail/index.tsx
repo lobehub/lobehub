@@ -74,6 +74,4 @@ export const GetAgentDetailInspector = memo<
   );
 });
 
-GetAgentDetailInspector.displayName = 'GetAgentDetailInspector';
-
 export default GetAgentDetailInspector;

@@ -30,5 +30,3 @@ export const RichContentRenderer = memo<RichContentRendererProps>(({ parts }) =>
     </Flexbox>
   );
 });
-
-RichContentRenderer.displayName = 'RichContentRenderer';

@@ -33,6 +33,4 @@ export const CallAgentRender = memo<BuiltinRenderProps<CallAgentParams>>(({ args
   );
 });
 
-CallAgentRender.displayName = 'CallAgentRender';
-
 export default CallAgentRender;

@@ -71,8 +71,6 @@ export const MemoryAnalysisStatus = memo<StatusProps>(({ task }) => {
   );
 });
 
-MemoryAnalysisStatus.displayName = 'MemoryAnalysisStatus';
-
 const Status = memo(() => {
   const { data } = useMemoryAnalysisAsyncTask();
 

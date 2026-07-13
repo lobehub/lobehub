@@ -118,6 +118,4 @@ export const UpdateTodosInspector = memo<
   );
 });
 
-UpdateTodosInspector.displayName = 'UpdateTodosInspector';
-
 export default UpdateTodosInspector;

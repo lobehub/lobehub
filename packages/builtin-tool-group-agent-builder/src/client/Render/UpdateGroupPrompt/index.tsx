@@ -31,6 +31,4 @@ export const UpdateGroupPromptRender = memo<
   );
 });
 
-UpdateGroupPromptRender.displayName = 'UpdateGroupPromptRender';
-
 export default UpdateGroupPromptRender;

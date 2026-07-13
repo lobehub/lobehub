@@ -108,8 +108,6 @@ const TodoListUI = memo<TodoListUIProps>(({ items }) => {
   );
 });
 
-TodoListUI.displayName = 'TodoListUI';
-
 /**
  * TodoList Render component for the lobe-agent tool
  * Read-only display of todo items matching the style of AddTodoIntervention

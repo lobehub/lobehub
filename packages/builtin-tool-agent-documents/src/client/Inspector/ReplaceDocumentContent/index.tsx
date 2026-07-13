@@ -49,6 +49,4 @@ export const ReplaceDocumentContentInspector = memo<
   );
 });
 
-ReplaceDocumentContentInspector.displayName = 'ReplaceDocumentContentInspector';
-
 export default ReplaceDocumentContentInspector;

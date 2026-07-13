@@ -77,6 +77,4 @@ export const SpeakInspector = memo<BuiltinInspectorProps<SpeakParams>>(
   },
 );
 
-SpeakInspector.displayName = 'SpeakInspector';
-
 export default SpeakInspector;

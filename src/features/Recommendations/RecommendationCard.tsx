@@ -91,5 +91,3 @@ export const RecommendationCard = memo<RecommendationCardProps>(
     );
   },
 );
-
-RecommendationCard.displayName = 'RecommendationCard';

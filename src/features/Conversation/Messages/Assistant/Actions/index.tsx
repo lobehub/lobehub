@@ -66,5 +66,3 @@ export const AssistantActionsBar = memo<AssistantActionsBarProps>(({ actionsConf
     </Flexbox>
   );
 });
-
-AssistantActionsBar.displayName = 'AssistantActionsBar';

@@ -29,5 +29,3 @@ export const RunCommandStreaming = memo<BuiltinStreamingProps<RunCommandParams>>
     </Highlighter>
   );
 });
-
-RunCommandStreaming.displayName = 'RunCommandStreaming';

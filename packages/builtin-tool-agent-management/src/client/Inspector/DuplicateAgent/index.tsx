@@ -55,6 +55,4 @@ export const DuplicateAgentInspector = memo<BuiltinInspectorProps<DuplicateAgent
   },
 );
 
-DuplicateAgentInspector.displayName = 'DuplicateAgentInspector';
-
 export default DuplicateAgentInspector;

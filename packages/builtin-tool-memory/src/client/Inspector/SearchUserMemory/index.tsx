@@ -67,6 +67,4 @@ export const SearchUserMemoryInspector = memo<
   );
 });
 
-SearchUserMemoryInspector.displayName = 'SearchUserMemoryInspector';
-
 export default SearchUserMemoryInspector;

@@ -47,6 +47,4 @@ export const CopyDocumentInspector = memo<
   );
 });
 
-CopyDocumentInspector.displayName = 'CopyDocumentInspector';
-
 export default CopyDocumentInspector;

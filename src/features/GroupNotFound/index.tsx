@@ -18,8 +18,6 @@ export const GroupNotFound = memo(() => {
   return <NotFound hideWatermark desc={t('groupNotFound.desc')} title={t('groupNotFound.title')} />;
 });
 
-GroupNotFound.displayName = 'GroupNotFound';
-
 /**
  * Replaces children with the 404 card when the routed group (`:gid`) resolved
  * to not-found / no-access. The flag is cleared by any later successful fetch
@@ -36,5 +34,3 @@ export const GroupNotFoundGuard: FC<PropsWithChildren> = memo(({ children }) => 
 
   return children;
 });
-
-GroupNotFoundGuard.displayName = 'GroupNotFoundGuard';

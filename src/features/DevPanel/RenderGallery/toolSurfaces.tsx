@@ -109,8 +109,6 @@ export const ToolInspectorSlot = memo<ToolInspectorSlotProps>(
   },
 );
 
-ToolInspectorSlot.displayName = 'ToolInspectorSlot';
-
 interface InterventionConversationHostProps {
   api: ApiEntry;
   children: ReactNode;
@@ -273,5 +271,3 @@ export const ToolBodySlot = memo<ToolBodySlotProps>(
     }
   },
 );
-
-ToolBodySlot.displayName = 'ToolBodySlot';

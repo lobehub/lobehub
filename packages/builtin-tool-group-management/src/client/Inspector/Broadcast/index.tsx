@@ -84,6 +84,4 @@ export const BroadcastInspector = memo<BuiltinInspectorProps<BroadcastParams>>(
   },
 );
 
-BroadcastInspector.displayName = 'BroadcastInspector';
-
 export default BroadcastInspector;

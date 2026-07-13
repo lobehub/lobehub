@@ -58,6 +58,4 @@ export const InstallPluginInspector = memo<
   );
 });
 
-InstallPluginInspector.displayName = 'InstallPluginInspector';
-
 export default InstallPluginInspector;

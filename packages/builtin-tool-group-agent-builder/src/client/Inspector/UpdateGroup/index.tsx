@@ -82,6 +82,4 @@ export const UpdateGroupInspector = memo<
   );
 });
 
-UpdateGroupInspector.displayName = 'UpdateGroupInspector';
-
 export default UpdateGroupInspector;

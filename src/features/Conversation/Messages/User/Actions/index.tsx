@@ -46,8 +46,6 @@ export const UserActionsBar = memo<UserActionsProps>(({ actionsConfig, id, data 
   );
 });
 
-UserActionsBar.displayName = 'UserActionsBar';
-
 interface ActionsProps {
   data: UIChatMessage;
   disableEditing?: boolean;

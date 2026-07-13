@@ -120,7 +120,5 @@ export const MessageActionBar = memo<MessageActionBarProps>(({ ctx, bar, menu })
   return <ActionIconGroup items={items} menu={menuStripped} onActionClick={handleAction} />;
 });
 
-MessageActionBar.displayName = 'MessageActionBar';
-
 export type { MessageActionContext, MessageActionSlot } from './types';
 export { DIVIDER_KEY } from './types';

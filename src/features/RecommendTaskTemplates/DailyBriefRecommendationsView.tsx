@@ -36,5 +36,3 @@ export const DailyBriefRecommendationsView = memo<DailyBriefRecommendationsViewP
     );
   },
 );
-
-DailyBriefRecommendationsView.displayName = 'DailyBriefRecommendationsView';

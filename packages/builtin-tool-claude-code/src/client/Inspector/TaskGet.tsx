@@ -30,5 +30,3 @@ export const TaskGetInspector = memo<BuiltinInspectorProps<TaskGetArgs>>(
     );
   },
 );
-
-TaskGetInspector.displayName = 'ClaudeCodeTaskGetInspector';

@@ -83,6 +83,4 @@ export const CallSubAgentInspector = memo<
   );
 });
 
-CallSubAgentInspector.displayName = 'CallSubAgentInspector';
-
 export default CallSubAgentInspector;

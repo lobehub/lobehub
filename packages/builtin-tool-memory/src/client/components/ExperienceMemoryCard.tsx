@@ -231,6 +231,4 @@ export const ExperienceMemoryCard = memo<ExperienceMemoryCardProps>(({ data, loa
   );
 });
 
-ExperienceMemoryCard.displayName = 'ExperienceMemoryCard';
-
 export default ExperienceMemoryCard;

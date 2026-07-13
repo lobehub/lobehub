@@ -54,6 +54,4 @@ export const UpdateAgentInspector = memo<BuiltinInspectorProps<UpdateAgentParams
   },
 );
 
-UpdateAgentInspector.displayName = 'UpdateAgentInspector';
-
 export default UpdateAgentInspector;

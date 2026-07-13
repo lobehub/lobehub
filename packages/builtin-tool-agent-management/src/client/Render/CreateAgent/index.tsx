@@ -151,6 +151,4 @@ export const CreateAgentRender = memo<BuiltinRenderProps<CreateAgentParams, Crea
   },
 );
 
-CreateAgentRender.displayName = 'CreateAgentRender';
-
 export default CreateAgentRender;

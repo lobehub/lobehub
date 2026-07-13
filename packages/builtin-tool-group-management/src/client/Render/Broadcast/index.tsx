@@ -33,6 +33,4 @@ export const BroadcastRender = memo<BuiltinRenderProps<BroadcastParams>>(({ args
   );
 });
 
-BroadcastRender.displayName = 'BroadcastRender';
-
 export default BroadcastRender;

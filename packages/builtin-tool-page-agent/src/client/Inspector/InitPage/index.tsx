@@ -91,6 +91,4 @@ export const InitPageInspector = memo<BuiltinInspectorProps<InitDocumentArgs, In
   },
 );
 
-InitPageInspector.displayName = 'InitPageInspector';
-
 export default InitPageInspector;

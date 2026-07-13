@@ -67,5 +67,3 @@ export const ExecScriptInspector = memo<BuiltinInspectorProps<ExecScriptParams, 
     );
   },
 );
-
-ExecScriptInspector.displayName = 'ExecScriptInspector';

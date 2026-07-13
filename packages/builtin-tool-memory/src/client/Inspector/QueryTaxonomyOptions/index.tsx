@@ -69,6 +69,4 @@ export const QueryTaxonomyOptionsInspector = memo<
   );
 });
 
-QueryTaxonomyOptionsInspector.displayName = 'QueryTaxonomyOptionsInspector';
-
 export default QueryTaxonomyOptionsInspector;

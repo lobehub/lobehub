@@ -37,5 +37,3 @@ export const WebSearchInspector = memo<BuiltinInspectorProps<WebSearchArgs>>(
     );
   },
 );
-
-WebSearchInspector.displayName = 'ClaudeCodeWebSearchInspector';

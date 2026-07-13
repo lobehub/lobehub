@@ -52,5 +52,3 @@ export const RenameLocalFileInspector = memo<
     </div>
   );
 });
-
-RenameLocalFileInspector.displayName = 'RenameLocalFileInspector';

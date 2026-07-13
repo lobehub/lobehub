@@ -217,6 +217,4 @@ export const ClaimResourcesModal = memo<ClaimResourcesModalProps>(
   },
 );
 
-ClaimResourcesModal.displayName = 'ClaimResourcesModal';
-
 export default ClaimResourcesModal;

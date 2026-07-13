@@ -225,5 +225,3 @@ export const CaseTrigger = memo<CaseTriggerProps>(({ children, placement = 'bott
     </Popover>
   );
 });
-
-CaseTrigger.displayName = 'AgentMockCaseTrigger';

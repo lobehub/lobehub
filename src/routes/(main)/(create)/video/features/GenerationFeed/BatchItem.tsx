@@ -293,5 +293,3 @@ export const VideoGenerationBatchItem = memo<VideoGenerationBatchItemProps>(({ b
     </Block>
   );
 });
-
-VideoGenerationBatchItem.displayName = 'VideoGenerationBatchItem';

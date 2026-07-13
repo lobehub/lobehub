@@ -67,6 +67,4 @@ export const CreateAgentInspector = memo<
   );
 });
 
-CreateAgentInspector.displayName = 'CreateAgentInspector';
-
 export default CreateAgentInspector;

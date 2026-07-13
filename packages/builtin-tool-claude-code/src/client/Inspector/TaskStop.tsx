@@ -57,5 +57,3 @@ export const TaskStopInspector = memo<BuiltinInspectorProps<TaskStopArgs>>(
     );
   },
 );
-
-TaskStopInspector.displayName = 'ClaudeCodeTaskStopInspector';

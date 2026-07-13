@@ -65,6 +65,4 @@ export const ConnectorAuthRow = memo<ConnectorAuthRowProps>(({ disabled, spec, o
   );
 });
 
-ConnectorAuthRow.displayName = 'ConnectorAuthRow';
-
 export { ConnectorConnectionMarketAuthRequiredError, ConnectorConnectionPopupBlockedError };

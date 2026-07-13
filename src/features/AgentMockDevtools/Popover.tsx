@@ -470,5 +470,3 @@ export const Popover = memo(() => {
     </div>
   );
 });
-
-Popover.displayName = 'AgentMockPopover';

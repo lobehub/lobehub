@@ -37,5 +37,3 @@ export const ExecuteCodeStreaming = memo<BuiltinStreamingProps<ExecuteCodeParams
     </Highlighter>
   );
 });
-
-ExecuteCodeStreaming.displayName = 'ExecuteCodeStreaming';

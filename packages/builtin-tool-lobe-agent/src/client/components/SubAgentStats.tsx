@@ -47,6 +47,4 @@ export const SubAgentStats = memo<SubAgentRunStats>(({ model, totalToolCalls, to
   return <span className={styles.root}>{items.join(' · ')}</span>;
 });
 
-SubAgentStats.displayName = 'SubAgentStats';
-
 export default SubAgentStats;

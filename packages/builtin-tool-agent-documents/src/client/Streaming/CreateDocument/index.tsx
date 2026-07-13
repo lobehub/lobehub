@@ -68,6 +68,4 @@ export const CreateDocumentStreaming = memo<BuiltinStreamingProps<CreateDocument
   },
 );
 
-CreateDocumentStreaming.displayName = 'AgentDocumentsCreateDocumentStreaming';
-
 export default CreateDocumentStreaming;

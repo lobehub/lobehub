@@ -55,6 +55,4 @@ export const AddIdentityMemoryInspector = memo<
   );
 });
 
-AddIdentityMemoryInspector.displayName = 'AddIdentityMemoryInspector';
-
 export default AddIdentityMemoryInspector;

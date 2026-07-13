@@ -70,6 +70,4 @@ export const RemoveAgentInspector = memo<
   );
 });
 
-RemoveAgentInspector.displayName = 'RemoveAgentInspector';
-
 export default RemoveAgentInspector;

@@ -67,5 +67,3 @@ export const StatusPill = memo<StatusPillProps>(({ playback, speed }) => {
     </Flexbox>
   );
 });
-
-StatusPill.displayName = 'AgentMockStatusPill';

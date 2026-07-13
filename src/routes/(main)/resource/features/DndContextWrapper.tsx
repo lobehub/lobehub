@@ -324,5 +324,3 @@ export const DndContextWrapper = memo<PropsWithChildren>(({ children }) => {
     </DragActiveContext>
   );
 });
-
-DndContextWrapper.displayName = 'DndContextWrapper';

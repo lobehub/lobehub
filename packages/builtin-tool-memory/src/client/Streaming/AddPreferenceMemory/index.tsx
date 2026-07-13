@@ -12,6 +12,4 @@ export const AddPreferenceMemoryStreaming = memo<BuiltinStreamingProps<AddPrefer
   },
 );
 
-AddPreferenceMemoryStreaming.displayName = 'AddPreferenceMemoryStreaming';
-
 export default AddPreferenceMemoryStreaming;

@@ -117,5 +117,3 @@ export const FaviconProvider = memo<{ children: ReactNode }>(({ children }) => {
     </FaviconStateContext>
   );
 });
-
-FaviconProvider.displayName = 'FaviconProvider';

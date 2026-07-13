@@ -150,6 +150,4 @@ export const EditTaskRender = memo<BuiltinRenderProps<EditTaskParams, EditTaskSt
   },
 );
 
-EditTaskRender.displayName = 'EditTaskRender';
-
 export default EditTaskRender;

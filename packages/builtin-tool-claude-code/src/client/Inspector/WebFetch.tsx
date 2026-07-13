@@ -73,5 +73,3 @@ export const WebFetchInspector = memo<BuiltinInspectorProps<WebFetchArgs>>(
     );
   },
 );
-
-WebFetchInspector.displayName = 'ClaudeCodeWebFetchInspector';

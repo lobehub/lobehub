@@ -47,6 +47,4 @@ export const UpdateLoadRuleInspector = memo<
   );
 });
 
-UpdateLoadRuleInspector.displayName = 'UpdateLoadRuleInspector';
-
 export default UpdateLoadRuleInspector;

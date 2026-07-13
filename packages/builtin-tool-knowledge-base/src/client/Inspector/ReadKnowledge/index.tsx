@@ -81,5 +81,3 @@ export const ReadKnowledgeInspector = memo<
     </div>
   );
 });
-
-ReadKnowledgeInspector.displayName = 'ReadKnowledgeInspector';

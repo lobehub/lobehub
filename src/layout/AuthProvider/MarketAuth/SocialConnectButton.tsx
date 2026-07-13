@@ -110,6 +110,4 @@ export const SocialConnectButton = memo<SocialConnectButtonProps>(
   },
 );
 
-SocialConnectButton.displayName = 'SocialConnectButton';
-
 export default SocialConnectButton;

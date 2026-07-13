@@ -360,5 +360,3 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
     );
   },
 );
-
-HierarchyNode.displayName = 'HierarchyNode';

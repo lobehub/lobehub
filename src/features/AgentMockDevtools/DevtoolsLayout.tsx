@@ -163,5 +163,3 @@ export const DevtoolsLayout = memo(() => {
     </div>
   );
 });
-
-DevtoolsLayout.displayName = 'AgentMockDevtoolsLayout';

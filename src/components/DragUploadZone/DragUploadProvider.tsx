@@ -99,5 +99,3 @@ export const DragUploadProvider = memo<DragUploadProviderProps>(({ children }) =
     </DragUploadContext>
   );
 });
-
-DragUploadProvider.displayName = 'DragUploadProvider';

@@ -210,5 +210,3 @@ export const GenerationBatchItem = memo<GenerationBatchItemProps>(({ batch }) =>
     </Block>
   );
 });
-
-GenerationBatchItem.displayName = 'GenerationBatchItem';

@@ -37,6 +37,4 @@ export const UpdateIdentityMemoryInspector = memo<
   );
 });
 
-UpdateIdentityMemoryInspector.displayName = 'UpdateIdentityMemoryInspector';
-
 export default UpdateIdentityMemoryInspector;

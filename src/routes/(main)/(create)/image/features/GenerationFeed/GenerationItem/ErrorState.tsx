@@ -124,5 +124,3 @@ export const ErrorState = memo<ErrorStateProps>(
     );
   },
 );
-
-ErrorState.displayName = 'ErrorState';

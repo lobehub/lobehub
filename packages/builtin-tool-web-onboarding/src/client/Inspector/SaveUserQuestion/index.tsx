@@ -57,6 +57,4 @@ export const SaveUserQuestionInspector = memo<
   );
 });
 
-SaveUserQuestionInspector.displayName = 'SaveUserQuestionInspector';
-
 export default SaveUserQuestionInspector;

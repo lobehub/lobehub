@@ -52,8 +52,6 @@ export const MetricItem = memo<MetricItemProps>(({ icon, label, value }) => (
   </Tag>
 ));
 
-MetricItem.displayName = 'MetricItem';
-
 interface MetricsRowProps {
   formattedCost?: string | null;
   formattedDuration?: string | null;

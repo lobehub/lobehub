@@ -35,6 +35,4 @@ export const BroadcastStreaming = memo<BuiltinStreamingProps<BroadcastParams>>((
   );
 });
 
-BroadcastStreaming.displayName = 'BroadcastStreaming';
-
 export default BroadcastStreaming;

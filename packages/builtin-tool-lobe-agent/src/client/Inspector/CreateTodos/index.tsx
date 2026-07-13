@@ -48,6 +48,4 @@ export const CreateTodosInspector = memo<
   );
 });
 
-CreateTodosInspector.displayName = 'CreateTodosInspector';
-
 export default CreateTodosInspector;

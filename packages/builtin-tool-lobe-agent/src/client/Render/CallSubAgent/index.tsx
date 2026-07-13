@@ -136,6 +136,4 @@ export const CallSubAgentRender = memo<
   );
 });
 
-CallSubAgentRender.displayName = 'CallSubAgentRender';
-
 export default CallSubAgentRender;

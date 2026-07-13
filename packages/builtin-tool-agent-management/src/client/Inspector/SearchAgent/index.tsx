@@ -69,6 +69,4 @@ export const SearchAgentInspector = memo<BuiltinInspectorProps<SearchAgentParams
   },
 );
 
-SearchAgentInspector.displayName = 'SearchAgentInspector';
-
 export default SearchAgentInspector;

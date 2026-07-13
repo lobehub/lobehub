@@ -37,8 +37,6 @@ export const ProviderLayout = memo(() => {
   );
 });
 
-ProviderLayout.displayName = 'ProviderLayout';
-
 // Detail page component that receives providerId from route params
 export const ProviderDetailPage = memo(() => {
   const params = useParams<{ providerId: string }>();
@@ -55,8 +53,6 @@ export const ProviderDetailPage = memo(() => {
     />
   );
 });
-
-ProviderDetailPage.displayName = 'ProviderDetailPage';
 
 // Default export for backward compatibility (used by SettingsContent)
 type ProviderPageType = {

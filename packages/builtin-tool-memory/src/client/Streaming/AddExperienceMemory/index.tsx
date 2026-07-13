@@ -12,6 +12,4 @@ export const AddExperienceMemoryStreaming = memo<BuiltinStreamingProps<AddExperi
   },
 );
 
-AddExperienceMemoryStreaming.displayName = 'AddExperienceMemoryStreaming';
-
 export default AddExperienceMemoryStreaming;

@@ -60,6 +60,4 @@ export const InstallPluginRender = memo<
   );
 });
 
-InstallPluginRender.displayName = 'InstallPluginRender';
-
 export default InstallPluginRender;

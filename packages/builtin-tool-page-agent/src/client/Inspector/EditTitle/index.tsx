@@ -35,6 +35,4 @@ export const EditTitleInspector = memo<BuiltinInspectorProps<EditTitleArgs, Edit
   },
 );
 
-EditTitleInspector.displayName = 'EditTitleInspector';
-
 export default EditTitleInspector;

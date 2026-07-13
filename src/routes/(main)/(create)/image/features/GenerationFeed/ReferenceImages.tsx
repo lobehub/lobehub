@@ -81,5 +81,3 @@ export const ReferenceImages = memo<ReferenceImagesProps>(({ imageUrl, imageUrls
     </Image.PreviewGroup>
   );
 });
-
-ReferenceImages.displayName = 'ReferenceImages';

@@ -70,6 +70,4 @@ export const SetTaskScheduleInspector = memo<
   );
 });
 
-SetTaskScheduleInspector.displayName = 'SetTaskScheduleInspector';
-
 export default SetTaskScheduleInspector;

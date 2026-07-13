@@ -91,6 +91,4 @@ export const UpdatePromptInspector = memo<
   );
 });
 
-UpdatePromptInspector.displayName = 'UpdatePromptInspector';
-
 export default UpdatePromptInspector;

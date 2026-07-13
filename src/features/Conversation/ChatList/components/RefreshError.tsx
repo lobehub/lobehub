@@ -49,5 +49,3 @@ export const RefreshError = memo<RefreshErrorProps>(({ error, onRetry, retrying 
     </Flexbox>
   );
 });
-
-RefreshError.displayName = 'ConversationRefreshError';

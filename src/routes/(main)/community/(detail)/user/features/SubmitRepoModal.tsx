@@ -106,6 +106,4 @@ export const SubmitRepoModal = memo<SubmitRepoModalProps>(
   },
 );
 
-SubmitRepoModal.displayName = 'SubmitRepoModal';
-
 export default SubmitRepoModal;

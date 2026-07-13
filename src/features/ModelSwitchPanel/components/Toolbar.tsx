@@ -74,5 +74,3 @@ export const Toolbar = memo<ToolbarProps>(
     );
   },
 );
-
-Toolbar.displayName = 'Toolbar';

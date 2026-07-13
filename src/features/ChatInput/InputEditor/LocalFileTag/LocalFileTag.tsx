@@ -342,5 +342,3 @@ export const LocalFileTag = memo<LocalFileTagProps>(({ className, editor, file, 
     </Popover>
   );
 });
-
-LocalFileTag.displayName = 'LocalFileTag';

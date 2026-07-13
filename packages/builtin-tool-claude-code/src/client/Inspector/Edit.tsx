@@ -83,4 +83,3 @@ export const EditInspector = memo<BuiltinInspectorProps<CCEditArgs, SynthesizedE
     return <SharedInspector {...rest} args={args} pluginState={synthesized} />;
   },
 );
-EditInspector.displayName = 'ClaudeCodeEditInspector';

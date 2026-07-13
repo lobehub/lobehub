@@ -154,8 +154,6 @@ export const FolderTreeItemComponent = memo<FolderTreeItemProps>(
   },
 );
 
-FolderTreeItemComponent.displayName = 'FolderTreeItemComponent';
-
 interface FolderTreeProps {
   expandedFolders: Set<string>;
   items: FolderTreeItem[];

@@ -111,6 +111,4 @@ export const DeclareSelfFeedbackIntentInspector = memo<
   );
 });
 
-DeclareSelfFeedbackIntentInspector.displayName = 'DeclareSelfFeedbackIntentInspector';
-
 export default DeclareSelfFeedbackIntentInspector;

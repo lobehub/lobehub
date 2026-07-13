@@ -88,6 +88,4 @@ export const UpdateAgentRender = memo<BuiltinRenderProps<UpdateAgentParams>>(({ 
   );
 });
 
-UpdateAgentRender.displayName = 'UpdateAgentRender';
-
 export default UpdateAgentRender;

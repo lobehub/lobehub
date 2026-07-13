@@ -46,6 +46,4 @@ export const SetTaskVerifyInspector = memo<
   );
 });
 
-SetTaskVerifyInspector.displayName = 'SetTaskVerifyInspector';
-
 export default SetTaskVerifyInspector;

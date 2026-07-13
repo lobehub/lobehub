@@ -259,6 +259,4 @@ export const EditTaskInspector = memo<BuiltinInspectorProps<EditTaskParams, Edit
   },
 );
 
-EditTaskInspector.displayName = 'EditTaskInspector';
-
 export default EditTaskInspector;
