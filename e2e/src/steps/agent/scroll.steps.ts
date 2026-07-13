@@ -33,46 +33,93 @@ interface ScrollSnapshot {
 // DOM helpers (executed inside the page)
 // ---------------------------------------------------------------------------
 
-// Find the scrollable ancestor of the first `.message-wrapper`. This is the
-// virtua VList's inner scroll container — product code doesn't add a stable
-// data-testid to it, but the structure is reliable enough for an e2e test.
+// The chat list's scroll viewport is virtua's own root element and carries no
+// test id, so every helper below resolves it the way the DOM exposes it: the
+// nearest scrollable ancestor of a mounted message.
 async function getScrollSnapshot(world: CustomWorld): Promise<ScrollSnapshot | null> {
-  return world.page.evaluate(() => {
-    const msg = document.querySelector('.message-wrapper');
-    let el: HTMLElement | null = (msg?.parentElement as HTMLElement) || null;
-    while (el) {
-      const style = window.getComputedStyle(el);
-      if (style.overflowY === 'auto' || style.overflowY === 'scroll') {
-        const bottomCompensationHeight = Math.max(
-          0,
-          ...Array.from(el.querySelectorAll<HTMLElement>('div[aria-hidden="true"]'))
-            .filter((node) => {
-              const nodeStyle = window.getComputedStyle(node);
-              return nodeStyle.pointerEvents === 'none' && node.offsetWidth > 0;
-            })
-            .map((node) => node.getBoundingClientRect().height),
-        );
+  const anyMessage = world.page.locator('.message-wrapper').first();
+  if ((await anyMessage.count()) === 0) return null;
 
-        return {
-          bottomCompensationHeight,
-          clientHeight: el.clientHeight,
-          distanceToBottom: el.scrollHeight - el.scrollTop - el.clientHeight,
-          scrollHeight: el.scrollHeight,
-          scrollTop: el.scrollTop,
-        };
-      }
+  return anyMessage.evaluate((node) => {
+    let el: HTMLElement | null = node.parentElement;
+    while (el) {
+      const { overflowY } = window.getComputedStyle(el);
+      if (overflowY === 'auto' || overflowY === 'scroll') break;
       el = el.parentElement;
     }
-    return null;
+    if (!el) return null;
+
+    const bottomCompensationHeight = Math.max(
+      0,
+      ...Array.from(el.querySelectorAll<HTMLElement>('div[aria-hidden="true"]'))
+        .filter((candidate) => {
+          const nodeStyle = window.getComputedStyle(candidate);
+          return nodeStyle.pointerEvents === 'none' && candidate.offsetWidth > 0;
+        })
+        .map((candidate) => candidate.getBoundingClientRect().height),
+    );
+
+    return {
+      bottomCompensationHeight,
+      clientHeight: el.clientHeight,
+      distanceToBottom: el.scrollHeight - el.scrollTop - el.clientHeight,
+      scrollHeight: el.scrollHeight,
+      scrollTop: el.scrollTop,
+    };
   });
 }
 
 async function sendPrompt(world: CustomWorld, prompt: string, response: string): Promise<void> {
   llmMockManager.setResponse(prompt, response);
 
+  const existingMessageIds = new Set(
+    await world.page
+      .locator('.message-wrapper')
+      .evaluateAll((messages) =>
+        messages.flatMap((message) => message.getAttribute('data-message-id') || []),
+      ),
+  );
+
+  const input = world.page
+    .locator(
+      '[data-testid="chat-input"] [contenteditable="true"], [data-testid="chat-input"] textarea',
+    )
+    .filter({ visible: true })
+    .first();
+  await expect(input, `chat input is not available before sending: ${prompt}`).toBeVisible();
+  await expect(input, `chat input is not editable before sending: ${prompt}`).toBeEditable();
+  // Click to focus rather than relying on ambient focus (the previous send may
+  // have left it anywhere), then type for real: `fill()` writes straight to the
+  // DOM, which the Lexical editor does not pick up as editor state, so Enter
+  // would submit an empty message.
+  await input.click();
   await world.page.keyboard.type(prompt, { delay: 20 });
-  await world.page.waitForTimeout(200);
+  await expect(input, `chat input did not receive prompt text: ${prompt}`).toContainText(prompt);
   await world.page.keyboard.press('Enter');
+
+  const sentMessage = world.page.locator('.message-wrapper').filter({ hasText: prompt });
+  let messageId: string | undefined;
+  await expect
+    .poll(
+      async () => {
+        const matchingIds = await sentMessage.evaluateAll((messages) =>
+          messages.flatMap((message) => message.getAttribute('data-message-id') || []),
+        );
+        // The optimistic message renders under a `tmp_` id and is re-keyed to the
+        // persisted id a moment later. Anchoring the assertion to the temp id
+        // would leave it pointing at a node that no longer exists, which reads as
+        // "the pin never landed" no matter where the viewport actually is.
+        messageId = matchingIds.find((id) => !existingMessageIds.has(id) && !id.startsWith('tmp_'));
+        return messageId;
+      },
+      {
+        message: `user message was not persisted after sending prompt: ${prompt}`,
+        timeout: 15_000,
+      },
+    )
+    .toBeTruthy();
+
+  world.testContext.lastSentUserMessageId = messageId;
 }
 
 async function waitForAssistantMessageToSettle(
@@ -86,36 +133,44 @@ async function waitForAssistantMessageToSettle(
 
   await expect(assistantMessage).toBeVisible({ timeout: 15_000 });
 
-  let prevLen = 0;
+  // Settle on the rendered reply itself: its length has to clear `minLength` and
+  // then hold steady for a few ticks. Bailing out early would let the next send
+  // land while the run is still active, where it gets queued instead of appended.
+  const deadline = Date.now() + 45_000;
+  let previousLength = 0;
   let stableTicks = 0;
-  for (let i = 0; i < 60; i++) {
-    const len =
-      (await assistantMessage
-        .innerText()
-        .then((t) => t.length)
-        .catch(() => 0)) || 0;
-    if (len > minLength && len === prevLen) stableTicks += 1;
-    else stableTicks = 0;
-    prevLen = len;
-    if (stableTicks >= 3) break;
+  while (Date.now() < deadline) {
+    const length = await assistantMessage
+      .innerText()
+      .then((text) => text.length)
+      .catch(() => 0);
+
+    stableTicks = length > minLength && length === previousLength ? stableTicks + 1 : 0;
+    previousLength = length;
+    if (stableTicks >= 3) return;
+
     await world.page.waitForTimeout(250);
   }
+
+  throw new Error(`assistant response did not settle in time (last length: ${previousLength})`);
 }
 
 async function scrollBy(world: CustomWorld, deltaY: number): Promise<void> {
-  await world.page.evaluate((dy) => {
-    const msg = document.querySelector('.message-wrapper');
-    let el: HTMLElement | null = (msg?.parentElement as HTMLElement) || null;
-    while (el) {
-      const style = window.getComputedStyle(el);
-      if (style.overflowY === 'auto' || style.overflowY === 'scroll') {
-        el.scrollTop = Math.max(0, el.scrollTop + dy);
-        el.dispatchEvent(new Event('scroll', { bubbles: true }));
-        return;
+  await world.page
+    .locator('.message-wrapper')
+    .first()
+    .evaluate((node, dy) => {
+      let el: HTMLElement | null = node.parentElement;
+      while (el) {
+        const { overflowY } = window.getComputedStyle(el);
+        if (overflowY === 'auto' || overflowY === 'scroll') {
+          el.scrollTop = Math.max(0, el.scrollTop + dy);
+          el.dispatchEvent(new Event('scroll', { bubbles: true }));
+          return;
+        }
+        el = el.parentElement;
       }
-      el = el.parentElement;
-    }
-  }, deltaY);
+    }, deltaY);
 }
 
 // ---------------------------------------------------------------------------
@@ -187,9 +242,14 @@ Given(
 );
 
 Given('流式响应被放慢以模拟长文输出', async function (this: CustomWorld) {
-  // A ~1.5s head-delay gives the test room to interact (manual scroll) while
-  // the assistant placeholder is mounted but no tokens have streamed yet.
-  llmMockManager.setConfig({ responseDelay: 1500, streamChunkSize: 8, streamDelay: 60 });
+  // The pin is only observable while the reply is short enough that the spacer
+  // still holds the user message at the top; once the reply outgrows the
+  // viewport the spacer collapses and auto-scroll (on by default) takes over.
+  // So the stable window to assert against is the *head delay*, where the
+  // assistant placeholder is mounted but no tokens have streamed yet. Make that
+  // window generous and keep the stream itself brisk — a slow per-chunk stream
+  // would push a full turn past `等待流式响应结束`'s timeout on a loaded CI box.
+  llmMockManager.setConfig({ responseDelay: 4000, streamChunkSize: 40, streamDelay: 25 });
   this.testContext.scrollMockAdjusted = true;
 });
 
@@ -276,33 +336,7 @@ When('用户在流式响应进行中向上滚动 {int} 像素', async function (
 });
 
 When('等待流式响应结束', { timeout: 60_000 }, async function (this: CustomWorld) {
-  const assistantMessage = this.page
-    .locator('.message-wrapper')
-    .filter({ has: this.page.locator('text=Lobe AI') })
-    .last();
-
-  // With the slowed mock (streamDelay 60ms × 8-char chunks) a long article
-  // genuinely streams for ~25s now that the mock delivers real token-by-token
-  // SSE. Returning before the stream ends makes the next send get queued
-  // instead of appended, so exhaust the deadline and fail loudly instead of
-  // silently moving on.
-  const deadline = Date.now() + 55_000;
-  let prevLen = 0;
-  let stableTicks = 0;
-  while (Date.now() < deadline) {
-    const len =
-      (await assistantMessage
-        .innerText()
-        .then((t) => t.length)
-        .catch(() => 0)) || 0;
-    if (len > 200 && len === prevLen) stableTicks += 1;
-    else stableTicks = 0;
-    prevLen = len;
-    if (stableTicks >= 3) return;
-    await this.page.waitForTimeout(250);
-  }
-
-  throw new Error(`streaming did not settle before deadline (last length: ${prevLen})`);
+  await waitForAssistantMessageToSettle(this, 200);
 });
 
 // ---------------------------------------------------------------------------
@@ -340,23 +374,24 @@ Then('用户消息不应固定在聊天列表顶部', async function (this: Cust
   expect(Math.abs(rect!.delta)).toBeGreaterThan(150);
 });
 
-// Measures the user message (penultimate `.message-wrapper`) top relative to
-// its scroll container top. Slack is allowed because virtua lays out with some
-// padding and the header can stick.
 async function measurePinDelta(world: CustomWorld) {
-  return world.page.evaluate(() => {
-    const wrappers = Array.from(document.querySelectorAll('.message-wrapper'));
-    if (wrappers.length < 2) return null;
-    const userWrapper = wrappers.at(-2) as HTMLElement;
-    let scrollParent: HTMLElement | null = userWrapper.parentElement;
-    while (scrollParent) {
-      const style = window.getComputedStyle(scrollParent);
-      if (style.overflowY === 'auto' || style.overflowY === 'scroll') break;
-      scrollParent = scrollParent.parentElement;
+  const messageId = world.testContext.lastSentUserMessageId as string | undefined;
+  expect(messageId, 'missing the latest sent user message id').toBeDefined();
+
+  const userMessage = world.page.locator(`.message-wrapper[data-message-id="${messageId}"]`);
+  await expect(userMessage, `latest user message ${messageId} is not mounted`).toBeVisible();
+
+  return userMessage.evaluate((message) => {
+    let el: HTMLElement | null = message.parentElement;
+    while (el) {
+      const { overflowY } = window.getComputedStyle(el);
+      if (overflowY === 'auto' || overflowY === 'scroll') break;
+      el = el.parentElement;
     }
-    if (!scrollParent) return null;
-    const wrapperRect = userWrapper.getBoundingClientRect();
-    const parentRect = scrollParent.getBoundingClientRect();
+    if (!el) return null;
+
+    const wrapperRect = message.getBoundingClientRect();
+    const parentRect = el.getBoundingClientRect();
     return {
       delta: wrapperRect.top - parentRect.top,
       parentTop: parentRect.top,
@@ -374,16 +409,18 @@ Then('用户消息应固定在聊天列表顶部', async function (this: CustomW
   // never lands, the loop exhausts and the final assertion still fails with the
   // real delta — so a true regression is not masked.
   const PIN_SLACK = 150;
-  const deadline = Date.now() + 5000;
-  let rect = await measurePinDelta(this);
-  while ((!rect || Math.abs(rect.delta) > PIN_SLACK) && Date.now() < deadline) {
-    await this.page.waitForTimeout(100);
-    rect = await measurePinDelta(this);
-  }
-
-  expect(rect, 'failed to resolve user message + scroll parent').not.toBeNull();
-  // Pin anchors with `align: 'start'` — tolerate ~150 px of slack for headers.
-  expect(Math.abs(rect!.delta)).toBeLessThanOrEqual(PIN_SLACK);
+  await expect
+    .poll(
+      async () => {
+        const rect = await measurePinDelta(this);
+        return rect ? Math.abs(rect.delta) : null;
+      },
+      {
+        message: 'latest user message did not reach the pinned position',
+        timeout: 5000,
+      },
+    )
+    .toBeLessThanOrEqual(PIN_SLACK);
 });
 
 Then('聊天列表底部补偿区域高度不应收缩', async function (this: CustomWorld) {
