@@ -584,3 +584,46 @@ tree, confirmed via one structured question and labeled as a guess (never
 executed on unconfirmed — Case 3) > an open question only as last resort. Read
 the living logs once the target is known, and never narrate skill-internal
 setup — the first visible message is about the user's test.
+
+---
+
+## Case 23 — Building an elaborate mock before checking whether the env already has the real thing
+
+**Wrong approach**: needing a working LLM for an agent-runtime test and finding no provider key in
+the shell env, I built an OpenAI-compatible mock server, wrote a key-vault encryption script, and
+seeded `user_settings.key_vaults` to point `deepseek` at it — then ran the agent and watched the
+mock receive **zero** requests while the run produced real, rich LLM output.
+
+**Why it's wrong**: the seeded test user _already had a real DeepSeek key_ configured — in
+`ai_providers`, which is what the runtime actually reads (not `user_settings.keyVaults`). Two
+wasted assumptions stacked: that no credential existed, and that I knew which table supplies it.
+Neither was measured; both were inferred from an `env | grep`.
+
+**What it breaks**: a chunk of the run spent building an apparatus the test didn't need, plus a
+fixture (mock server + an encrypted row) that had to be torn down afterwards. Worse, had the mock
+_partially_ worked, the run would have silently verified a fake path.
+
+**Correct approach**: before constructing any mock, **probe the env for the real capability** —
+query the provider tables (`select id, key_vaults is not null from ai_providers where user_id=…`),
+or just fire one cheap real turn and see whether it completes. Only mock what is provably absent.
+And when a mock records nothing while the feature clearly works, do not shrug — that is the signal
+that the mock is _not in the path_, and everything you "verified" through it is unverified.
+
+---
+
+## Case 24 — Asserting a fixture landed because the DB write succeeded
+
+**Wrong approach**: writing `agents.agency_config = NULL` directly in Postgres, reloading the page,
+and reading the "sub-agent model" the UI displayed — then treating the stale value it showed as a
+product bug in the fallback logic.
+
+**Why it's wrong**: the client's persisted SWR cache (IndexedDB + localStorage) kept serving the old
+`agencyConfig`, and even `internal_refreshAgentConfig` did not dislodge it. `UPDATE 1` in psql proves
+the row changed; it proves nothing about what the app _is running on_. A fixture bug in
+product-bug costume is the most expensive kind — I nearly filed my own fixture as a regression.
+
+**Correct approach**: after any direct-DB fixture write, cold-load (clear localStorage /
+sessionStorage / IndexedDB / caches, re-seed auth, reopen) and then **assert the fixture in the store
+before asserting anything downstream of it** (`__LOBE_STORES.agent().agentMap[id]`). See
+probe-mock-patterns C11. Rule of thumb: the DB is where you _wrote_ it; the store is where the
+behavior _reads_ it — verify at the layer the behavior reads.

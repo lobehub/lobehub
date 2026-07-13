@@ -1329,3 +1329,28 @@ nodeintegration, plugins, disablewebsecurity, allowpopups, preload, …`). The h
   clearing with `undefined` is a **no-op** and the field must be set to `null`.
 - **Test for it**: assert the field is `null` (not `undefined`) after the consume action; a test that
   only checks "the request was acted on" passes in both the broken and fixed versions.
+
+### E30. ✅ "Failed to fetch dynamically imported module" points at the WRONG file — the failure is downstream
+
+- **Situation**: the SPA renders as a Case-1 blank page; console names a dynamic-import route module.
+- **Doesn't work**: investigating only the named module. It may return 200 because the actual failure
+  is in its transitive import graph; changing `?t=` values are ordinary HMR invalidation.
+- **Works**: take and read a screenshot. Vite's HMR overlay contains the real transform/import error.
+  After a rebase or pull, refresh dependencies and restart before treating the blank SPA as a code bug.
+
+### C11. Persisted SWR cache serves a STALE agent config after a direct DB write
+
+- **Situation**: seeding `agents.agency_config` or `agents.model` directly in Postgres, then using
+  the app to drive an assertion.
+- **Doesn't work**: reload or `internal_refreshAgentConfig`; IndexedDB/localStorage can retain the
+  previous config and make a fixture issue look like a product regression.
+- **Works**: cold-load by clearing browser storage/caches, re-seed auth, reopen, and assert the
+  fixture in `__LOBE_STORES.agent().agentMap[id]` before testing downstream behavior.
+
+### E31. Web agent turns run the CLIENT runtime — no `agent_operations` row will appear
+
+- **Situation**: driving a real web turn and polling `agent_operations` for the run.
+- **Doesn't work**: waiting for a server operation when the web surface dispatched the client runtime.
+- **Works**: use client observables (`messages.model`, thread ids, and chat-store operations) for web;
+  use CLI/server execution and `agent_operations` for the server runtime. A change affecting both paths
+  needs evidence from both paths.
