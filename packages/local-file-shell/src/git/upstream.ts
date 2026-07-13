@@ -267,3 +267,44 @@ export const getDefaultRemote = async (dirPath: string): Promise<string | undefi
   if (remotes.includes('origin')) return 'origin';
   return remotes[0];
 };
+
+/** Exit-status-only probe — `runGit` cannot tell success-with-no-output from failure. */
+const gitSucceeds = async (args: string[], cwd: string): Promise<boolean> => {
+  try {
+    await execFileAsync('git', args, { cwd, timeout: GIT_TIMEOUT });
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * May GitHub be asked which PR carries this commit?
+ *
+ * Only for a commit that is the branch's OWN work. GitHub's
+ * `/commits/{sha}/pulls` answers "which PR introduced this commit", so for a commit
+ * already contained in the default branch it hands back the PR that merged it — a
+ * stranger's. And a branch carrying no commits of its own still points at the commit
+ * it forked from, which is exactly such a commit: asking about it would staple an
+ * unrelated merged PR onto a brand-new topic.
+ *
+ * Answers `false` whenever that cannot be ruled out — including when the default
+ * branch is unknown (`refs/remotes/<remote>/HEAD` is only written by `git clone`).
+ * The cost of a false negative is the status quo, no PR link; the cost of a false
+ * positive is a topic showing someone else's PR.
+ */
+export const isCommitSafeForPullRequestLookup = async (
+  dirPath: string,
+  sha: string,
+): Promise<boolean> => {
+  const remote = await getDefaultRemote(dirPath);
+  if (!remote) return false;
+
+  const defaultBranch = await getDefaultRemoteBranch(dirPath, remote);
+  if (!defaultBranch) return false;
+
+  return !(await gitSucceeds(
+    ['merge-base', '--is-ancestor', sha, `refs/remotes/${defaultBranch}`],
+    dirPath,
+  ));
+};

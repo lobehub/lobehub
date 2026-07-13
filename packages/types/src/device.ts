@@ -691,6 +691,14 @@ export const workingDirConfigSchema = z.object({
         })
         .optional(),
       isWorktree: z.boolean().optional(),
+      // Mirrors `WorkingDirGitState.upstream`. A field missing here is not merely
+      // unvalidated — zod strips it, so it would never survive a write.
+      upstream: z
+        .object({
+          branch: z.string(),
+          remote: z.string(),
+        })
+        .optional(),
     })
     .optional(),
   path: z.string(),

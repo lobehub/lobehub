@@ -53,6 +53,8 @@ const NORMALIZED_PULL_REQUEST = {
 interface ShellFixture {
   /** `for-each-ref refs/heads/<branch>` → `<sha>\t<upstream remote>\t<upstream ref>`. */
   branchRef?: string;
+  /** The branch's commit is already contained in the remote default branch (fork point). */
+  commitOnDefault?: boolean;
   /** `gh api repos/{owner}/{repo}/commits/<sha>/pulls`. */
   commitPulls?: unknown[];
   defaultBranch?: Record<string, string>;
@@ -82,8 +84,9 @@ const publishedAs = (ref: string) => ({
 
 const mockShell = ({
   branchRef = '',
+  commitOnDefault = false,
   commitPulls,
-  defaultBranch = {},
+  defaultBranch = { origin: 'origin/canary' },
   prList = [],
   prView,
   pushedRefs = [],
@@ -95,6 +98,11 @@ const mockShell = ({
     if (cmd === 'git') {
       const [subcommand] = args;
       if (subcommand === 'remote') return ok(remotes.join('\n'));
+      if (subcommand === 'merge-base') {
+        // `--is-ancestor` reports through the exit status: 0 = contained, 1 = not.
+        if (!commitOnDefault) throw Object.assign(new Error('not an ancestor'), { code: 1 });
+        return ok('');
+      }
       if (subcommand === 'reflog') {
         const ref = args[2];
         return ok(pushedRefs.includes(ref) ? `abc1234 ${ref}@{0}: update by push` : '');
@@ -240,6 +248,39 @@ describe('getLinkedPullRequest', () => {
       branch: 'feat/hetero-session-import-ui',
       remote: 'origin',
     });
+  });
+
+  // `/commits/{sha}/pulls` answers "which PR INTRODUCED this commit". A branch with no
+  // commits of its own sits on the commit it forked from — already merged into canary —
+  // so asking about it would staple a stranger's merged PR onto a brand-new topic.
+  it('never asks GitHub about a commit that is just the fork point', async () => {
+    mockShell({
+      branchRef: 'sha1\t\t',
+      commitOnDefault: true,
+      commitPulls: [{ head: { ref: 'someone-elses-branch' }, number: 999 }],
+      prList: [],
+    });
+
+    const result = await getLinkedPullRequest({ branch: 'worktree-fresh', path: '/repo' });
+
+    expect(ghCalls().some((args) => args[0] === 'api')).toBe(false);
+    expect(result).toEqual({ pullRequest: null, status: 'ok' });
+  });
+
+  // `refs/remotes/<remote>/HEAD` is only written by `git clone`. Without it the fork
+  // point cannot be ruled out, and a wrong PR is worse than no PR.
+  it('never asks GitHub when the remote default branch is unknown', async () => {
+    mockShell({
+      branchRef: 'sha1\t\t',
+      commitPulls: [{ head: { ref: 'someone-elses-branch' }, number: 999 }],
+      defaultBranch: {},
+      prList: [],
+    });
+
+    const result = await getLinkedPullRequest({ branch: 'worktree-fresh', path: '/repo' });
+
+    expect(ghCalls().some((args) => args[0] === 'api')).toBe(false);
+    expect(result).toEqual({ pullRequest: null, status: 'ok' });
   });
 
   // `gh pr list` already proved gh is healthy, so a failing fallback means "no PR",

@@ -14,7 +14,7 @@ import type {
   GitUpstreamRef,
   GitWorkingTreeStatus,
 } from './types';
-import { getDefaultRemote, resolveUpstream } from './upstream';
+import { getDefaultRemote, isCommitSafeForPullRequestLookup, resolveUpstream } from './upstream';
 
 const log = createLogger('local-file-shell:git');
 const execFileAsync = promisify(execFile);
@@ -282,8 +282,9 @@ export const getLinkedPullRequest = async (payload: {
 
     // Empty. With a resolved remote ref that is a real answer — the branch has no PR.
     // Without one, the head we just queried was only the local NAME, a guess, so the
-    // empty list proves nothing: ask GitHub by commit instead.
-    if (!localUpstream && sha) {
+    // empty list proves nothing: ask GitHub by commit instead — but only about a commit
+    // that is the branch's own work, never one it merely forked from.
+    if (!localUpstream && sha && (await isCommitSafeForPullRequestLookup(dirPath, sha))) {
       const recovered = await findPullRequestByCommit(dirPath, sha);
       if (recovered) {
         const upstream = await toUpstreamRef(dirPath, recovered.headRefName);
