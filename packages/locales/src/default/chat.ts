@@ -1491,7 +1491,6 @@ export default {
   'workingPanel.browser.import.success_other': 'Imported {{count}} browser sessions from Chrome',
   'workingPanel.browser.import.title': 'Import login information from Chrome',
   'workingPanel.browser.loading': 'Loading page',
-  'workingPanel.browser.loadingHost': 'Loading {{host}}…',
   'workingPanel.browser.title': 'Browser',
   'workingPanel.browser.tool.click': 'Clicked element',
   'workingPanel.browser.tool.elements_one': '{{count}} element',

@@ -51,9 +51,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     overflow: hidden;
 
-    height: 3px;
-
-    background: ${cssVar.colorFillSecondary};
+    height: 2px;
 
     &::after {
       content: '';
@@ -85,28 +83,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
         animation: none;
       }
     }
-  `,
-  loadingStatus: css`
-    pointer-events: none;
-
-    position: absolute;
-    z-index: 3;
-    inset-block-start: 12px;
-    inset-inline-start: 50%;
-    transform: translateX(-50%);
-
-    overflow: hidden;
-
-    max-width: calc(100% - 32px);
-    padding-block: 4px;
-    padding-inline: 8px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusSM};
-
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorBgElevated};
-    box-shadow: ${cssVar.boxShadowTertiary};
   `,
   container: css`
     position: relative;
@@ -141,7 +117,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     }
   `,
   importBanner: css`
+    container-type: inline-size;
     flex-shrink: 0;
+    flex-wrap: wrap;
 
     min-height: 72px;
     padding-block: 12px;
@@ -153,6 +131,15 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   importCopy: css`
     flex: 1;
     min-width: 0;
+  `,
+  importActions: css`
+    margin-inline-start: auto;
+
+    @container (max-width: 480px) {
+      flex-basis: 100%;
+      justify-content: flex-end;
+      margin-inline-start: 44px;
+    }
   `,
   toolbarActions: css`
     margin-inline-start: auto;
@@ -192,13 +179,6 @@ const BrowserPane = memo<BrowserPaneProps>(({ sessionId }) => {
   const browserRequest = useGlobalStore((s) => s.status.workingSidebarBrowserRequest);
   const consumedNonce = useRef<number>(undefined);
   const webviewRef = useRef<WebviewElement>(null);
-  const loadingHost = (() => {
-    try {
-      return new URL(state.url).hostname;
-    } catch {
-      return state.url;
-    }
-  })();
 
   // will-attach-webview only sees standard attributes, so the main process
   // can't learn the sessionId there — bind it explicitly once the guest exists.
@@ -460,34 +440,31 @@ const BrowserPane = memo<BrowserPaneProps>(({ sessionId }) => {
               {t('workingPanel.browser.import.desc')}
             </Text>
           </Flexbox>
-          <Button
-            icon={<Icon icon={Import} />}
-            loading={isImporting}
-            onClick={handleImportChromeLoginData}
-          >
-            {t('workingPanel.browser.import.action')}
-          </Button>
-          <ActionIcon
-            icon={XCircle}
-            size={DESKTOP_HEADER_ICON_SMALL_SIZE}
-            title={t('workingPanel.browser.import.dismiss')}
-            onClick={() => setIsImportBannerDismissed(true)}
-          />
+          <Flexbox horizontal align={'center'} className={styles.importActions} gap={4}>
+            <Button
+              icon={<Icon icon={Import} />}
+              loading={isImporting}
+              onClick={handleImportChromeLoginData}
+            >
+              {t('workingPanel.browser.import.action')}
+            </Button>
+            <ActionIcon
+              icon={XCircle}
+              size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+              title={t('workingPanel.browser.import.dismiss')}
+              onClick={() => setIsImportBannerDismissed(true)}
+            />
+          </Flexbox>
         </Flexbox>
       )}
       <Flexbox className={styles.container}>
         {state.isLoading && (
-          <>
-            <div
-              aria-label={t('workingPanel.browser.loading')}
-              aria-valuetext={t('workingPanel.browser.loading')}
-              className={styles.loadingBar}
-              role="progressbar"
-            />
-            <Text ellipsis className={styles.loadingStatus} fontSize={12}>
-              {t('workingPanel.browser.loadingHost', { host: loadingHost })}
-            </Text>
-          </>
+          <div
+            aria-label={t('workingPanel.browser.loading')}
+            aria-valuetext={t('workingPanel.browser.loading')}
+            className={styles.loadingBar}
+            role="progressbar"
+          />
         )}
         <AgentOverlay sessionId={sessionId} />
         {initialUrl ? (
