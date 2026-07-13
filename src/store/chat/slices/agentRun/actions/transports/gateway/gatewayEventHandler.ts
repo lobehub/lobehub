@@ -572,7 +572,7 @@ export const createGatewayEventHandler = (
       }
 
       case 'stream_chunk': {
-        enqueue(() => {
+        enqueue(async () => {
           const data = event.data as StreamChunkData | undefined;
           if (!data) return;
 
@@ -630,12 +630,17 @@ export const createGatewayEventHandler = (
             );
 
             // If the server attached a `toolMessageIds` map, it has persisted
-            // pending tool messages (human approval path). Fetch the latest
-            // messages so ApprovalActions can read them by id instead of
-            // waiting for `agent_runtime_end` (which won't fire while paused
-            // in `waiting_for_human`).
+            // pending tool messages (human approval, deferred async tools).
+            // Fetch the latest messages so ApprovalActions can read them by id
+            // instead of waiting for `agent_runtime_end` (which won't fire while
+            // paused in `waiting_for_human` / `waiting_for_async_tool`).
+            //
+            // AWAITED so the fetch is actually part of the queued work. Anything
+            // enqueued behind this chunk addresses rows that only exist once it
+            // lands — a fire-and-forget fetch would let the next event overtake
+            // it and dispatch onto a message the store doesn't have yet.
             if ((data as any).toolMessageIds) {
-              fetchAndReplaceMessages(get, context).catch(console.error);
+              await fetchAndReplaceMessages(get, context).catch(console.error);
             }
           }
         });
@@ -789,22 +794,32 @@ export const createGatewayEventHandler = (
         // are written once, by `completeSubAgentBridge`, when the child finishes.
         // Kept under a `progress` key so a DB refetch can never leave a stale live
         // number sitting where the authoritative one belongs.
+        //
+        // ENQUEUED, not dispatched inline: the placeholder row only enters the
+        // store via the `toolMessageIds` refetch that the preceding `tools_calling`
+        // chunk queued. A fast child can emit its first progress event while that
+        // fetch is still in flight, and `updatePluginState` against a row the store
+        // doesn't have is a silent no-op — for a single-step sub-agent that lone
+        // sample is the whole live readout, so there is nothing later to self-heal
+        // it. Queueing puts this behind the fetch that creates its target.
         if (data?.phase === 'subagent_progress') {
           const progress = event.data as SubAgentProgressData;
           if (progress.toolMessageId) {
-            get().internal_dispatchMessage(
-              {
-                id: progress.toolMessageId,
-                key: 'progress',
-                type: 'updatePluginState',
-                value: {
-                  model: progress.model,
-                  totalTokens: progress.totalTokens,
-                  totalToolCalls: progress.totalToolCalls,
+            enqueue(() => {
+              get().internal_dispatchMessage(
+                {
+                  id: progress.toolMessageId,
+                  key: 'progress',
+                  type: 'updatePluginState',
+                  value: {
+                    model: progress.model,
+                    totalTokens: progress.totalTokens,
+                    totalToolCalls: progress.totalToolCalls,
+                  },
                 },
-              },
-              dispatchContext,
-            );
+                dispatchContext,
+              );
+            });
           }
           break;
         }
