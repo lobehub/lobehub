@@ -296,6 +296,25 @@ const getCliResultMessage = (result: unknown): string | undefined => {
   }
 };
 
+/**
+ * CC reports the reason for a failed run in the result event's `errors` array
+ * — a stale `--resume` id, for instance, yields `subtype:
+ * 'error_during_execution'` with an EMPTY `result` but `errors: ['No
+ * conversation found with session ID: …']`. Reading only `result` therefore
+ * threw away the one line that says what actually happened, leaving the error
+ * card to claim CC "exited without reporting a reason".
+ */
+const getCliResultErrors = (raw: any): string | undefined => {
+  if (!Array.isArray(raw?.errors)) return undefined;
+
+  const text = raw.errors
+    .map((entry: unknown) => getCliResultMessage(entry))
+    .filter((entry?: string): entry is string => !!entry?.trim())
+    .join('\n');
+
+  return text || undefined;
+};
+
 const asRecord = (value: unknown): Record<string, unknown> | undefined =>
   value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -441,10 +460,10 @@ const getAuthRequiredTerminalError = (
  * frequently carry NO `result` text at all — a mid-response network drop
  * yields `{subtype: 'error_during_execution', is_error: true}` and nothing
  * else — which used to surface as an opaque `Agent execution failed`.
- * Prefer, in order: the CLI's own result text, the synthetic `API Error:`
- * line captured off the stream, then a subtype-specific description — and
- * attach the result event's diagnostic fields so the error card's details
- * pane says what actually happened.
+ * Prefer, in order: the CLI's own result text, its `errors` array, the
+ * synthetic `API Error:` line captured off the stream, then a subtype-specific
+ * description — and attach the result event's diagnostic fields so the error
+ * card's details pane says what actually happened.
  */
 const buildFallbackTerminalError = (
   raw: any,
@@ -454,6 +473,7 @@ const buildFallbackTerminalError = (
     typeof raw.subtype === 'string' && raw.subtype !== 'success' ? raw.subtype : undefined;
   const message =
     getCliResultMessage(raw.result) ||
+    getCliResultErrors(raw) ||
     streamedApiError ||
     (subtype && CLI_ERROR_SUBTYPE_MESSAGES[subtype]) ||
     'Agent execution failed';
@@ -1677,10 +1697,12 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
 
     // Classifiers read the result text; a mid-run API failure often ships an
     // EMPTY result (`subtype: 'error_during_execution'` and nothing else), so
-    // fall back to the synthetic `API Error:` line captured off the stream —
-    // an auth / overload failure that died mid-response still classifies to
-    // its dedicated guide instead of the generic fallback.
-    const classifiableResult = getCliResultMessage(raw.result) || this.lastApiErrorText;
+    // fall back to CC's own `errors` array and then to the synthetic `API
+    // Error:` line captured off the stream — an auth / overload failure that
+    // died mid-response still classifies to its dedicated guide instead of the
+    // generic fallback.
+    const classifiableResult =
+      getCliResultMessage(raw.result) || getCliResultErrors(raw) || this.lastApiErrorText;
     const rateLimitError = getRateLimitTerminalError(classifiableResult, this.pendingRateLimitInfo);
     const finalEvent: HeterogeneousAgentEvent | undefined = raw.is_error
       ? this.makeEvent(

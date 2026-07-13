@@ -141,6 +141,25 @@ describe('ClaudeCodeAdapter', () => {
       expect(errorEvent.data).toMatchObject({ code: 'auth_required', stderr: apiError });
     });
 
+    it('surfaces the reason CC reports in the result `errors` array', () => {
+      const adapter = new ClaudeCodeAdapter();
+      const reason = 'No conversation found with session ID: 4f3a6a4a-2ac2-4a8e-b513-5cff081f3ae6';
+
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      const events = adapter.adapt({
+        duration_ms: 0,
+        errors: [reason],
+        is_error: true,
+        num_turns: 0,
+        subtype: 'error_during_execution',
+        type: 'result',
+      });
+
+      const errorEvent = events.at(-1)!;
+      expect(errorEvent.type).toBe('error');
+      expect(errorEvent.data.message).toBe(reason);
+    });
+
     it('does NOT let a stale streamed API error leak into the next run', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt({ subtype: 'init', type: 'system' });
