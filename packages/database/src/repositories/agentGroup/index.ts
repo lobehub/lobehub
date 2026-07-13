@@ -349,7 +349,11 @@ export class AgentGroupRepository {
       if (isSupervisor) {
         supervisorAgentId = row.agent.id;
       }
-      if (!row.visible) continue;
+      // The supervisor is a group-owned synthetic agent: anyone who can read
+      // the group needs it to run group chat, and `publishToWorkspace` keeps
+      // its visibility in sync with the group. Skipping an out-of-sync legacy
+      // row would strand `supervisorAgentId` without a matching agent entry.
+      if (!row.visible && !isSupervisor) continue;
       agentItems.push(
         cleanObject({
           ...row.agent,

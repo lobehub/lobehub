@@ -401,6 +401,67 @@ describe('ChatGroupModel', () => {
     });
   });
 
+  describe('publishToWorkspace', () => {
+    it('publishes the private supervisor agent together with the group', async () => {
+      const ownerModel = new ChatGroupModel(serverDB, userId, workspaceId);
+
+      await serverDB.insert(chatGroups).values({
+        id: 'publish-group',
+        title: 'Publish group',
+        userId,
+        visibility: 'private',
+        workspaceId,
+      });
+      await serverDB.insert(agentsTable).values([
+        {
+          id: 'publish-supervisor',
+          title: 'Supervisor',
+          userId,
+          virtual: true,
+          visibility: 'private',
+          workspaceId,
+        },
+        {
+          id: 'publish-private-member',
+          title: 'Private member',
+          userId,
+          visibility: 'private',
+          workspaceId,
+        },
+      ]);
+      await serverDB.insert(chatGroupsAgents).values([
+        {
+          agentId: 'publish-supervisor',
+          chatGroupId: 'publish-group',
+          order: -1,
+          role: 'supervisor',
+          userId,
+          workspaceId,
+        },
+        {
+          agentId: 'publish-private-member',
+          chatGroupId: 'publish-group',
+          order: 0,
+          role: 'participant',
+          userId,
+          workspaceId,
+        },
+      ]);
+
+      const result = await ownerModel.publishToWorkspace('publish-group');
+      expect(result.visibility).toBe('public');
+
+      const rows = await serverDB
+        .select({ id: agentsTable.id, visibility: agentsTable.visibility })
+        .from(agentsTable);
+      const byId = Object.fromEntries(rows.map((r) => [r.id, r.visibility]));
+      // Supervisor visibility follows the group; a private member agent keeps
+      // its own visibility (its owner demoted/kept it private on purpose).
+      expect(byId['publish-supervisor']).toBe('public');
+      expect(byId['publish-private-member']).toBe('private');
+    });
+  });
+
   describe('addAgentToGroup', () => {
     it('should add agent to group', async () => {
       // Create test data

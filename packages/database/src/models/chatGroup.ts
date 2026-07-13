@@ -257,6 +257,28 @@ export class ChatGroupModel {
       throw new Error('Chat group not found, already published, or access denied');
     }
 
+    // The synthetic supervisor mirrors the group's visibility at creation
+    // (private group → private supervisor). Publish it together with the
+    // group, otherwise other members would receive a `supervisorAgentId`
+    // whose agent row their roster reads filter out.
+    await this.db
+      .update(agents)
+      .set({ updatedAt: new Date(), visibility: 'public' })
+      .where(
+        and(
+          eq(agents.visibility, 'private'),
+          inArray(
+            agents.id,
+            this.db
+              .select({ id: chatGroupsAgents.agentId })
+              .from(chatGroupsAgents)
+              .where(
+                and(eq(chatGroupsAgents.chatGroupId, id), eq(chatGroupsAgents.role, 'supervisor')),
+              ),
+          ),
+        ),
+      );
+
     return result;
   }
 

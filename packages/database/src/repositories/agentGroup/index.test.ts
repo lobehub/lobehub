@@ -446,7 +446,8 @@ describe('AgentGroupRepository', () => {
       });
 
       it('does not auto-create a duplicate supervisor when the supervisor row is not visible', async () => {
-        // Pathological pre-guard data: the supervisor itself was demoted.
+        // Out-of-sync legacy data: a group published while its supervisor row
+        // stayed private (publishToWorkspace now keeps them in sync).
         await serverDB
           .update(agents)
           .set({ visibility: 'private' })
@@ -456,9 +457,10 @@ describe('AgentGroupRepository', () => {
         const result = await viewerRepo.findByIdWithAgents('ws-demotion-group');
 
         // Supervisor existence is judged on raw rows: no duplicate is created,
-        // the roster just omits the non-visible supervisor's config.
+        // and the group-owned supervisor stays in the roster so that
+        // `supervisorAgentId` always resolves to a member entry.
         expect(result!.supervisorAgentId).toBe('ws-supervisor');
-        expect(result!.agents.map((a) => a.id)).toEqual(['ws-public-member']);
+        expect(result!.agents.map((a) => a.id)).toEqual(['ws-supervisor', 'ws-public-member']);
 
         const supervisorRows = await serverDB
           .select()
