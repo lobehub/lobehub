@@ -53,7 +53,7 @@ export const messageSlice: StateCreator<
   addAIMessage: async (content: string) => {
     const state = get();
     const { context, hooks } = state;
-    const { agentId, topicId, threadId } = context;
+    const { agentId, groupId, topicId, threadId } = context;
 
     // Get parent message ID
     const displayMessages = state.displayMessages;
@@ -62,6 +62,7 @@ export const messageSlice: StateCreator<
     const id = await state.createMessage({
       agentId,
       content,
+      groupId,
       parentId,
       role: 'assistant',
       threadId: threadId ?? undefined,
@@ -77,8 +78,8 @@ export const messageSlice: StateCreator<
         }
       }
 
-      // Clear input after successful creation
-      set({ inputMessage: '' });
+      // Do not erase a newer draft typed while message creation was pending.
+      if (get().inputMessage === content) set({ inputMessage: '' });
     }
 
     return id;
