@@ -298,7 +298,6 @@ describe('dispatchWorkRegistrationIntent', () => {
           changeType: 'created',
           documentId: 'doc_1',
           sourceToolName: 'createDocument',
-          url: 'https://example.com/doc_1',
         },
         type: 'document',
       };
@@ -314,7 +313,6 @@ describe('dispatchWorkRegistrationIntent', () => {
           rootOperationId: 'op-root',
           sourceToolName: 'createDocument',
           sourceToolCallId: 'tool-call-1',
-          url: 'https://example.com/doc_1',
         }),
       );
     });
