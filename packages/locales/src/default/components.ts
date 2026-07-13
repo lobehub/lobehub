@@ -14,8 +14,6 @@ export default {
   'DragUpload.dragMixedDesc': 'Folders are inserted as references; files are uploaded.',
   'DragUpload.dragMixedTitle': 'Reference Folder & Upload Files',
   'DragUpload.dragTitle': 'Upload Images',
-  'DropZone.topicDesc': 'Drop the Topic to reference it in your message.',
-  'DropZone.topicTitle': 'Reference Topic',
   'FileManager.actions.addToLibrary': 'Add to Library',
   'FileManager.actions.batchChunking': 'Batch Chunking',
   'FileManager.actions.chunking': 'Chunking',
