@@ -121,49 +121,12 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
       return doc;
     };
 
-    // Emit a Work-registration intent instead of writing the version inline: the
-    // agent runtime persists it ONCE, stamping the tool call's cumulative cost at
-    // insert time (cost is known only after execution). The intent rides out on
-    // the tool result via the executor's `onWorkRegistration` sink.
-    const registerDocumentWork = async (input: {
-      agentDocumentId?: string;
-      agentId: string;
-      documentId?: string;
-      changeType: 'created' | 'updated';
-      sourceToolName: string;
-    }) => {
-      if (!input.documentId) return;
-
-      context.onWorkRegistration?.({
-        action: 'register',
-        document: {
-          agentDocumentId: input.agentDocumentId,
-          agentId: input.agentId,
-          documentId: input.documentId,
-          changeType: input.changeType,
-          sourceToolName: input.sourceToolName,
-        },
-        type: 'document',
-      });
-    };
-
-    const deleteDocumentWork = async (input: {
-      agentDocumentId?: string;
-      agentId: string;
-      documentId?: string;
-    }) => {
-      if (!input.documentId) return;
-
-      context.onWorkRegistration?.({
-        action: 'delete',
-        document: {
-          agentDocumentId: input.agentDocumentId,
-          agentId: input.agentId,
-          documentId: input.documentId,
-        },
-        type: 'document',
-      });
-    };
+    // Work registration is now manifest-driven: each mutating API declares a
+    // `work` config in the agent-documents manifest and stamps a uniform identity
+    // block into its result `state`. The tool-execution dispatch layer resolves
+    // the Work intent from that config + state (see `resolveBuiltinToolWorkIntent`
+    // / `stashBuiltinToolWorkIntent`), so this runtime no longer emits intents
+    // imperatively via `context.onWorkRegistration`.
 
     return new AgentDocumentsExecutionRuntime(
       {
@@ -181,13 +144,6 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
               () => service.copyDocumentById(id, newTitle, agentId),
             ),
           );
-          await registerDocumentWork({
-            agentDocumentId: doc?.id,
-            agentId,
-            documentId: doc?.documentId,
-            changeType: 'created',
-            sourceToolName: 'copyDocument',
-          });
           return doc;
         },
         createDocument: async ({ agentId, content, hintIsSkill, title }) => {
@@ -205,13 +161,6 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
               () => service.createDocument(agentId, title, content, { hintIsSkill }),
             ),
           );
-          await registerDocumentWork({
-            agentDocumentId: doc?.id,
-            agentId,
-            documentId: doc?.documentId,
-            changeType: 'created',
-            sourceToolName: 'createDocument',
-          });
           return doc;
         },
         createTopicDocument: async ({ agentId, content, hintIsSkill, title, topicId }) => {
@@ -229,13 +178,6 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
               () => service.createForTopic(agentId, title, content, topicId, { hintIsSkill }),
             ),
           );
-          await registerDocumentWork({
-            agentDocumentId: doc?.id,
-            agentId,
-            documentId: doc?.documentId,
-            changeType: 'created',
-            sourceToolName: 'createTopicDocument',
-          });
           return doc;
         },
         listDocuments: async ({ agentId, parentId, sourceType }) => {
@@ -278,19 +220,11 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
             },
             () => service.modifyDocumentNodesById(id, operations, agentId),
           );
-          await registerDocumentWork({
-            agentDocumentId: id,
-            agentId,
-            documentId: doc?.documentId,
-            changeType: 'updated',
-            sourceToolName: 'modifyNodes',
-          });
           return doc;
         },
         readDocument: ({ agentId, id }) => service.getDocumentSnapshotById(id, agentId),
-        removeDocument: async ({ agentId, id }) => {
-          const existing = await service.getDocumentById(id, agentId);
-          const deleted = await withDocumentOutcome(
+        removeDocument: ({ agentId, id }) =>
+          withDocumentOutcome(
             {
               agentId,
               apiName: 'removeDocument',
@@ -300,16 +234,7 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
               toolAction: 'remove',
             },
             () => service.removeDocumentById(id, agentId),
-          );
-          if (deleted) {
-            await deleteDocumentWork({
-              agentDocumentId: id,
-              agentId,
-              documentId: existing?.documentId,
-            });
-          }
-          return deleted;
-        },
+          ),
         renameDocument: async ({ agentId, id, newTitle }) => {
           const doc = await withDocumentOutcome(
             {
@@ -322,13 +247,6 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
             },
             () => service.renameDocumentById(id, newTitle, agentId),
           );
-          await registerDocumentWork({
-            agentDocumentId: id,
-            agentId,
-            documentId: doc?.documentId,
-            changeType: 'updated',
-            sourceToolName: 'renameDocument',
-          });
           return doc;
         },
         replaceDocumentContent: async ({ agentId, content, id }) => {
@@ -343,13 +261,6 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
             },
             () => service.replaceDocumentContentById(id, content, agentId),
           );
-          await registerDocumentWork({
-            agentDocumentId: id,
-            agentId,
-            documentId: doc?.documentId,
-            changeType: 'updated',
-            sourceToolName: 'replaceDocumentContent',
-          });
           return doc;
         },
         updateLoadRule: ({ agentId, id, rule }) =>

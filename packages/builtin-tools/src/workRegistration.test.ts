@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   dispatchWorkRegistrationIntent,
+  extractDocumentWorkTarget,
   extractTaskWorkTargets,
   getApiWorkConfig,
   resolveWorkRegistration,
@@ -21,6 +22,17 @@ const registry = [
         { name: 'editTask', work: { action: 'update', resourceType: 'task' } },
         { name: 'deleteTask', work: { action: 'delete', resourceType: 'task' } },
         { name: 'listTasks' },
+      ],
+    },
+  },
+  {
+    identifier: 'lobe-agent-documents',
+    manifest: {
+      api: [
+        { name: 'createDocument', work: { action: 'create', resourceType: 'document' } },
+        { name: 'replaceDocumentContent', work: { action: 'update', resourceType: 'document' } },
+        { name: 'removeDocument', work: { action: 'delete', resourceType: 'document' } },
+        { name: 'readDocument' },
       ],
     },
   },
@@ -135,6 +147,7 @@ describe('resolveWorkRegistration', () => {
       action: 'create',
       changeType: 'created',
       targets: [{ taskId: 'task_1', taskIdentifier: 'T-1' }],
+      type: 'task',
     });
 
     expect(
@@ -146,6 +159,7 @@ describe('resolveWorkRegistration', () => {
       action: 'update',
       changeType: 'updated',
       targets: [{ taskId: undefined, taskIdentifier: 'T-9' }],
+      type: 'task',
     });
   });
 
@@ -158,6 +172,7 @@ describe('resolveWorkRegistration', () => {
     ).toEqual({
       action: 'delete',
       targets: [{ taskId: 'task_1', taskIdentifier: 'T-1' }],
+      type: 'task',
     });
   });
 
@@ -175,6 +190,126 @@ describe('resolveWorkRegistration', () => {
       resolveWorkRegistration(registry, 'lobe-task', 'listTasks', {
         args: {},
         result: { success: true },
+      }),
+    ).toBeUndefined();
+  });
+
+  it('resolves a document create/update into a changeType-bearing plan carrying the identity', () => {
+    expect(
+      resolveWorkRegistration(registry, 'lobe-agent-documents', 'createDocument', {
+        args: {},
+        result: {
+          state: { agentDocumentId: 'assoc_1', agentId: 'agent-1', documentId: 'doc_1' },
+          success: true,
+        },
+      }),
+    ).toEqual({
+      action: 'create',
+      changeType: 'created',
+      document: { agentDocumentId: 'assoc_1', agentId: 'agent-1', documentId: 'doc_1' },
+      sourceToolName: 'createDocument',
+      type: 'document',
+    });
+
+    expect(
+      resolveWorkRegistration(registry, 'lobe-agent-documents', 'replaceDocumentContent', {
+        args: { id: 'assoc_1' },
+        result: {
+          state: { agentDocumentId: 'assoc_1', agentId: 'agent-1', documentId: 'doc_1' },
+          success: true,
+        },
+      }),
+    ).toEqual({
+      action: 'update',
+      changeType: 'updated',
+      document: { agentDocumentId: 'assoc_1', agentId: 'agent-1', documentId: 'doc_1' },
+      sourceToolName: 'replaceDocumentContent',
+      type: 'document',
+    });
+  });
+
+  it('resolves a document delete into a changeType-less plan keyed off state.documentId', () => {
+    expect(
+      resolveWorkRegistration(registry, 'lobe-agent-documents', 'removeDocument', {
+        args: { id: 'assoc_1' },
+        result: {
+          state: { agentDocumentId: 'assoc_1', agentId: 'agent-1', documentId: 'doc_1' },
+          success: true,
+        },
+      }),
+    ).toEqual({
+      action: 'delete',
+      document: { agentDocumentId: 'assoc_1', agentId: 'agent-1', documentId: 'doc_1' },
+      type: 'document',
+    });
+  });
+
+  it('returns undefined for a document API without a work config (readDocument)', () => {
+    expect(
+      resolveWorkRegistration(registry, 'lobe-agent-documents', 'readDocument', {
+        args: { id: 'assoc_1' },
+        result: {
+          state: { agentDocumentId: 'assoc_1', agentId: 'agent-1', documentId: 'doc_1' },
+          success: true,
+        },
+      }),
+    ).toBeUndefined();
+  });
+
+  it('returns undefined for a failed document call', () => {
+    expect(
+      resolveWorkRegistration(registry, 'lobe-agent-documents', 'createDocument', {
+        args: {},
+        result: {
+          state: { agentDocumentId: 'assoc_1', agentId: 'agent-1', documentId: 'doc_1' },
+          success: false,
+        },
+      }),
+    ).toBeUndefined();
+  });
+
+  it('returns undefined for a document call missing documentId in state', () => {
+    expect(
+      resolveWorkRegistration(registry, 'lobe-agent-documents', 'createDocument', {
+        args: {},
+        result: { state: { agentDocumentId: 'assoc_1', agentId: 'agent-1' }, success: true },
+      }),
+    ).toBeUndefined();
+  });
+});
+
+describe('extractDocumentWorkTarget', () => {
+  it('extracts the identity block from a successful mutation state', () => {
+    expect(
+      extractDocumentWorkTarget({
+        result: {
+          state: { agentDocumentId: 'assoc_1', agentId: 'agent-1', documentId: 'doc_1' },
+          success: true,
+        },
+      }),
+    ).toEqual({ agentDocumentId: 'assoc_1', agentId: 'agent-1', documentId: 'doc_1' });
+  });
+
+  it('returns undefined when the call failed', () => {
+    expect(
+      extractDocumentWorkTarget({
+        result: {
+          state: { agentDocumentId: 'assoc_1', agentId: 'agent-1', documentId: 'doc_1' },
+          success: false,
+        },
+      }),
+    ).toBeUndefined();
+  });
+
+  it('returns undefined when documentId or agentId is missing', () => {
+    expect(
+      extractDocumentWorkTarget({
+        result: { state: { agentDocumentId: 'assoc_1', agentId: 'agent-1' }, success: true },
+      }),
+    ).toBeUndefined();
+    expect(
+      extractDocumentWorkTarget({
+        result: { state: { agentDocumentId: 'assoc_1', documentId: 'doc_1' }, success: true },
       }),
     ).toBeUndefined();
   });

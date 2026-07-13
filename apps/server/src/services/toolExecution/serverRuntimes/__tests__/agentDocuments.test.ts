@@ -226,7 +226,13 @@ describe('agentDocumentsRuntime auto-pin to task', () => {
   });
 });
 
-describe('agentDocumentsRuntime Work registration intent', () => {
+describe('agentDocumentsRuntime Work registration state', () => {
+  // Work registration is now manifest-driven: the runtime no longer emits intents
+  // via `context.onWorkRegistration`. Instead every mutating API stamps a uniform
+  // identity block (`agentDocumentId` / `agentId` / `documentId`) into its result
+  // `state`, which the generic dispatch-layer resolver reads. These tests assert
+  // the runtime surfaces that block (create + delete-via-pre-read) and does NOT
+  // call the legacy sink.
   const newDoc = {
     documentId: 'documents-row-id',
     filename: 'daily-brief',
@@ -240,7 +246,7 @@ describe('agentDocumentsRuntime Work registration intent', () => {
     agentDocumentToolOutcomeMocks.emitAgentDocumentToolOutcomeSafely.mockClear();
     serviceImpl = {
       createDocument: vi.fn().mockResolvedValue(newDoc),
-      getDocumentById: vi.fn().mockResolvedValue(newDoc),
+      getDocumentSnapshotById: vi.fn().mockResolvedValue(newDoc),
       removeDocumentById: vi.fn().mockResolvedValue(true),
     };
     vi.mocked(AgentDocumentsService).mockImplementation(() => serviceImpl as any);
@@ -250,7 +256,7 @@ describe('agentDocumentsRuntime Work registration intent', () => {
     );
   });
 
-  const buildContext = (onWorkRegistration: ReturnType<typeof vi.fn>) => ({
+  const buildContext = (onWorkRegistration?: ReturnType<typeof vi.fn>) => ({
     onWorkRegistration,
     serverDB: {} as never,
     toolManifestMap: {},
@@ -258,39 +264,41 @@ describe('agentDocumentsRuntime Work registration intent', () => {
     workspaceId: 'workspace-1',
   });
 
-  it('emits a register intent (no cost — stamped later by the agent runtime) on create', async () => {
+  it('surfaces the document identity block in create state without emitting an intent', async () => {
     const onWorkRegistration = vi.fn();
     const runtime = agentDocumentsRuntime.factory(buildContext(onWorkRegistration));
 
-    await runtime.createDocument({ content: 'body', title: 'Daily Brief' }, { agentId: 'agent-1' });
+    const result = await runtime.createDocument(
+      { content: 'body', title: 'Daily Brief' },
+      { agentId: 'agent-1' },
+    );
 
-    expect(onWorkRegistration).toHaveBeenCalledWith({
-      action: 'register',
-      document: {
-        agentDocumentId: 'agent-doc-assoc-id',
-        agentId: 'agent-1',
-        documentId: 'documents-row-id',
-        changeType: 'created',
-        sourceToolName: 'createDocument',
-      },
-      type: 'document',
+    expect(result.state).toMatchObject({
+      agentDocumentId: 'agent-doc-assoc-id',
+      agentId: 'agent-1',
+      documentId: 'documents-row-id',
     });
+    expect(onWorkRegistration).not.toHaveBeenCalled();
   });
 
-  it('emits a delete intent on remove', async () => {
-    const onWorkRegistration = vi.fn();
-    const runtime = agentDocumentsRuntime.factory(buildContext(onWorkRegistration));
+  it('surfaces the document identity block in remove state via the pre-read', async () => {
+    const runtime = agentDocumentsRuntime.factory(buildContext());
 
-    await runtime.removeDocument({ id: 'agent-doc-assoc-id' }, { agentId: 'agent-1' });
+    const result = await runtime.removeDocument(
+      { id: 'agent-doc-assoc-id' },
+      { agentId: 'agent-1' },
+    );
 
-    expect(onWorkRegistration).toHaveBeenCalledWith({
-      action: 'delete',
-      document: {
-        agentDocumentId: 'agent-doc-assoc-id',
-        agentId: 'agent-1',
-        documentId: 'documents-row-id',
-      },
-      type: 'document',
+    expect(serviceImpl.getDocumentSnapshotById).toHaveBeenCalledWith(
+      'agent-doc-assoc-id',
+      'agent-1',
+    );
+    expect(result.success).toBe(true);
+    expect(result.state).toMatchObject({
+      agentDocumentId: 'agent-doc-assoc-id',
+      agentId: 'agent-1',
+      deleted: true,
+      documentId: 'documents-row-id',
     });
   });
 });
@@ -328,6 +336,7 @@ describe('AgentDocumentsExecutionRuntime.createDocument', () => {
     expect(result.success).toBe(true);
     expect(result.state).toEqual({
       agentDocumentId: 'agent-doc-assoc-id',
+      agentId: 'agent-1',
       documentId: 'documents-row-id',
     });
   });
@@ -387,6 +396,7 @@ describe('AgentDocumentsExecutionRuntime.createDocument', () => {
     expect(result.success).toBe(true);
     expect(result.state).toEqual({
       agentDocumentId: 'agent-doc-assoc-id',
+      agentId: 'agent-1',
       documentId: 'documents-row-id',
     });
     expect(stub.createTopicDocument).toHaveBeenCalledWith({

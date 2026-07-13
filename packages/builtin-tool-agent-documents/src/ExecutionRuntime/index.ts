@@ -411,7 +411,7 @@ export class AgentDocumentsExecutionRuntime {
 
     return {
       content: formatCreateDocumentResult({ id: created.id, title, url }),
-      state: { agentDocumentId: created.id, documentId: created.documentId },
+      state: { agentDocumentId: created.id, agentId, documentId: created.documentId },
       success: true,
     };
   }
@@ -474,7 +474,13 @@ export class AgentDocumentsExecutionRuntime {
         title: doc.title ?? existing.title,
         url,
       }),
-      state: { id: args.id, updated: true },
+      state: {
+        agentDocumentId: args.id,
+        agentId,
+        documentId: doc.documentId ?? existing.documentId,
+        id: args.id,
+        updated: true,
+      },
       success: true,
     };
   }
@@ -526,6 +532,9 @@ export class AgentDocumentsExecutionRuntime {
         url,
       }),
       state: {
+        agentDocumentId: args.id,
+        agentId,
+        documentId: updated.documentId ?? existing.documentId,
         id: args.id,
         results,
         successCount: results.length,
@@ -547,6 +556,13 @@ export class AgentDocumentsExecutionRuntime {
       };
     }
 
+    // Pre-read the backing `documents` row id so the deleted document's Work can
+    // be located from `state` after the row is gone. Mirrors the replace / rename
+    // / modify pre-read and keeps the total query count flat (the server service
+    // impl previously ran this lookup imperatively for the delete registration).
+    const existing = await this.service.readDocument({ agentId, id: args.id });
+    if (!existing) return { content: `Document not found: ${args.id}`, success: false };
+
     const deleted = await this.service.removeDocument({
       ...args,
       ...this.buildToolTriggerInput(context),
@@ -556,7 +572,13 @@ export class AgentDocumentsExecutionRuntime {
 
     return {
       content: formatRemoveDocumentResult({ id: args.id }),
-      state: { deleted: true, id: args.id },
+      state: {
+        agentDocumentId: args.id,
+        agentId,
+        deleted: true,
+        documentId: existing.documentId,
+        id: args.id,
+      },
       success: true,
     };
   }
@@ -591,7 +613,14 @@ export class AgentDocumentsExecutionRuntime {
 
     return {
       content: formatRenameDocumentResult({ id: args.id, title: args.newTitle, url }),
-      state: { id: args.id, newTitle: args.newTitle, renamed: true },
+      state: {
+        agentDocumentId: args.id,
+        agentId,
+        documentId: doc.documentId ?? existing.documentId,
+        id: args.id,
+        newTitle: args.newTitle,
+        renamed: true,
+      },
       success: true,
     };
   }
@@ -624,7 +653,13 @@ export class AgentDocumentsExecutionRuntime {
         title: copied.title,
         url,
       }),
-      state: { copiedFromId: args.id, newDocumentId: copied.id },
+      state: {
+        agentDocumentId: copied.id,
+        agentId,
+        copiedFromId: args.id,
+        documentId: copied.documentId,
+        newDocumentId: copied.id,
+      },
       success: true,
     };
   }

@@ -44,8 +44,42 @@ describe('AgentDocumentsExecutionRuntime', () => {
     });
     expect(result.state).toMatchObject({
       agentDocumentId: 'agent-doc-1',
+      agentId: 'agent-1',
       documentId: 'backing-doc-1',
     });
+  });
+
+  it('surfaces the identity block and pre-reads documentId when removing a document', async () => {
+    const readDocument = vi.fn().mockResolvedValue({
+      documentId: 'backing-doc-1',
+      id: 'agent-doc-1',
+      title: 'Doomed',
+    });
+    const removeDocument = vi.fn().mockResolvedValue(true);
+    const runtime = createRuntime({ readDocument, removeDocument });
+
+    const result = await runtime.removeDocument({ id: 'agent-doc-1' }, { agentId: 'agent-1' });
+
+    expect(readDocument).toHaveBeenCalledWith({ agentId: 'agent-1', id: 'agent-doc-1' });
+    expect(result.success).toBe(true);
+    expect(result.state).toMatchObject({
+      agentDocumentId: 'agent-doc-1',
+      agentId: 'agent-1',
+      deleted: true,
+      documentId: 'backing-doc-1',
+    });
+  });
+
+  it('returns a not-found result when removeDocument pre-read misses', async () => {
+    const readDocument = vi.fn().mockResolvedValue(undefined);
+    const removeDocument = vi.fn();
+    const runtime = createRuntime({ readDocument, removeDocument });
+
+    const result = await runtime.removeDocument({ id: 'missing' }, { agentId: 'agent-1' });
+
+    expect(result.success).toBe(false);
+    expect(result.content).toBe('Document not found: missing');
+    expect(removeDocument).not.toHaveBeenCalled();
   });
 
   it('awaits an async document URL builder', async () => {

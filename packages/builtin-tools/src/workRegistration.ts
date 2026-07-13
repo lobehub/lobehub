@@ -34,15 +34,41 @@ export interface TaskWorkTarget {
 }
 
 /**
- * A resolved Work registration plan. Discriminated by `action` so each dispatch
- * layer branches "persist a version" (create/update, which carry a version
- * `changeType`) vs "delete the Work" (which carries no changeType — a deletion has no
- * version to write). Keeping delete out of the changeType-bearing variant is what
- * eliminates the old `action: 'delete' → changeType: 'updated'` silent mis-mapping.
+ * A resolved document Work target extracted from a tool result's `state`.
+ * Documents have no batch operation, so there is exactly one target per call.
+ */
+export interface DocumentWorkTarget {
+  agentDocumentId?: string;
+  agentId: string;
+  documentId: string;
+}
+
+/**
+ * A resolved Work registration plan. Discriminated first by `type` (task vs
+ * document) then by `action`: for tasks each layer branches "persist a version"
+ * (create/update, which carry a version `changeType`) vs "delete the Work"
+ * (which carries no changeType — a deletion has no version to write). Keeping
+ * delete out of the changeType-bearing variant is what eliminates the old
+ * `action: 'delete' → changeType: 'updated'` silent mis-mapping. Document
+ * variants mirror the same create/update-vs-delete split but carry a single
+ * {@link DocumentWorkTarget} plus the `sourceToolName` the register intent needs.
  */
 export type ResolvedWorkRegistration =
-  | { action: 'create' | 'update'; changeType: WorkVersionChangeType; targets: TaskWorkTarget[] }
-  | { action: 'delete'; targets: TaskWorkTarget[] };
+  | {
+      action: 'create' | 'update';
+      changeType: WorkVersionChangeType;
+      targets: TaskWorkTarget[];
+      type: 'task';
+    }
+  | { action: 'delete'; targets: TaskWorkTarget[]; type: 'task' }
+  | {
+      action: 'create' | 'update';
+      changeType: WorkVersionChangeType;
+      document: DocumentWorkTarget;
+      sourceToolName: string;
+      type: 'document';
+    }
+  | { action: 'delete'; document: DocumentWorkTarget; type: 'document' };
 
 /**
  * Look up the declarative `work` config for a tool API from a builtin-tool
@@ -147,6 +173,34 @@ export const extractTaskWorkTargets = ({
 };
 
 /**
+ * Extract the single document identity to register from a `resourceType:
+ * 'document'` API result. The document runtime stamps a uniform identity block
+ * (`agentDocumentId` / `agentId` / `documentId`) into `state` for every mutating
+ * API, so extraction is a flat read off `result.state`.
+ *
+ * Returns `undefined` unless the call SUCCEEDED and both `documentId` (the Work
+ * resource identity — the backing `documents` row) and `agentId` (the owning
+ * agent, stamped in state to avoid sub-agent attribution ambiguity) are present.
+ * `agentDocumentId` is optional metadata and does not gate registration.
+ */
+export const extractDocumentWorkTarget = ({
+  result,
+}: {
+  result: Pick<BuiltinToolResult, 'state' | 'success'>;
+}): DocumentWorkTarget | undefined => {
+  if (!result.success) return undefined;
+
+  const stateRecord = isRecord(result.state) ? result.state : undefined;
+  const agentDocumentId = optionalStringFromRecord(stateRecord, 'agentDocumentId');
+  const agentId = optionalStringFromRecord(stateRecord, 'agentId');
+  const documentId = optionalStringFromRecord(stateRecord, 'documentId');
+
+  if (!documentId || !agentId) return undefined;
+
+  return { agentDocumentId, agentId, documentId };
+};
+
+/**
  * Resolve the manifest-driven Work registration plan for a tool API call, or
  * `undefined` when nothing should be registered (no `work` config, an
  * unsupported `resourceType`, or no extractable targets).
@@ -164,31 +218,77 @@ export const resolveWorkRegistration = (
   const config = getApiWorkConfig(tools, identifier, apiName);
   if (!config) return undefined;
 
-  // `task` is the only resourceType wired through the dispatch layer today;
-  // agentDocuments (`document`) follows in a later slice.
-  if (config.resourceType !== 'task') return undefined;
+  if (config.resourceType === 'document') {
+    const document = extractDocumentWorkTarget(payload);
+    if (!document) return undefined;
+
+    // `delete` locates the Work by `state.documentId` (the row is already gone),
+    // so it reuses the same identity but writes no version changeType.
+    if (config.action === 'delete') return { action: 'delete', document, type: 'document' };
+
+    return {
+      action: config.action,
+      changeType: workChangeTypeFromAction(config.action),
+      document,
+      // The concrete API name is the document Work's source tool.
+      sourceToolName: apiName,
+      type: 'document',
+    };
+  }
 
   const targets = extractTaskWorkTargets(payload);
   if (targets.length === 0) return undefined;
 
   // `delete` locates the Work by `state.taskId` (the task row is already gone),
   // so it reuses the same target extraction but writes no version changeType.
-  if (config.action === 'delete') return { action: 'delete', targets };
+  if (config.action === 'delete') return { action: 'delete', targets, type: 'task' };
 
-  return { action: config.action, changeType: workChangeTypeFromAction(config.action), targets };
+  return {
+    action: config.action,
+    changeType: workChangeTypeFromAction(config.action),
+    targets,
+    type: 'task',
+  };
 };
 
 /**
- * Tag a resolved task registration plan as the `task` variant of the runtime's
+ * Tag a resolved registration plan as the matching variant of the runtime's
  * {@link WorkRegistrationIntent} union. Shared so both dispatch layers (server
  * `resolveBuiltinToolWorkIntent`, client `stashBuiltinToolWorkIntent`) emit the
  * exact same intent shape from one place — `delete` stays changeType-less, so the
- * discriminant is preserved end to end.
+ * discriminant is preserved end to end. Document create/update map to the intent's
+ * `action: 'register'` (its only version-producing document action).
  */
 export const toWorkRegistrationIntent = (
   resolved: ResolvedWorkRegistration,
-): WorkRegistrationIntent =>
-  resolved.action === 'delete'
+): WorkRegistrationIntent => {
+  if (resolved.type === 'document') {
+    if (resolved.action === 'delete') {
+      return {
+        action: 'delete',
+        document: {
+          agentDocumentId: resolved.document.agentDocumentId,
+          agentId: resolved.document.agentId,
+          documentId: resolved.document.documentId,
+        },
+        type: 'document',
+      };
+    }
+
+    return {
+      action: 'register',
+      document: {
+        agentDocumentId: resolved.document.agentDocumentId,
+        agentId: resolved.document.agentId,
+        changeType: resolved.changeType,
+        documentId: resolved.document.documentId,
+        sourceToolName: resolved.sourceToolName,
+      },
+      type: 'document',
+    };
+  }
+
+  return resolved.action === 'delete'
     ? { action: 'delete', targets: resolved.targets, type: 'task' }
     : {
         action: resolved.action,
@@ -196,6 +296,7 @@ export const toWorkRegistrationIntent = (
         targets: resolved.targets,
         type: 'task',
       };
+};
 
 /**
  * Side-of-the-wire persistence operations the dispatcher drives; the server
