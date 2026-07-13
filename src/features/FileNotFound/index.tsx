@@ -13,7 +13,7 @@ import NotFound from '@/components/404';
 const FileNotFound = memo(() => {
   const { t } = useTranslation('file');
 
-  return <NotFound desc={t('notFound.desc')} title={t('notFound.title')} />;
+  return <NotFound hideWatermark desc={t('notFound.desc')} title={t('notFound.title')} />;
 });
 
 FileNotFound.displayName = 'FileNotFound';

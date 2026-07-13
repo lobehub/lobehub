@@ -19,7 +19,7 @@ const BUILTIN_SLUG_SET = new Set<string>(Object.values(BUILTIN_AGENT_SLUGS));
 export const AgentNotFound = memo(() => {
   const { t } = useTranslation('chat');
 
-  return <NotFound desc={t('agentNotFound.desc')} title={t('agentNotFound.title')} />;
+  return <NotFound hideWatermark desc={t('agentNotFound.desc')} title={t('agentNotFound.title')} />;
 });
 
 AgentNotFound.displayName = 'AgentNotFound';

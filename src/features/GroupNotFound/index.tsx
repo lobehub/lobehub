@@ -15,7 +15,7 @@ import { agentGroupByIdSelectors, useAgentGroupStore } from '@/store/agentGroup'
 export const GroupNotFound = memo(() => {
   const { t } = useTranslation('chat');
 
-  return <NotFound desc={t('groupNotFound.desc')} title={t('groupNotFound.title')} />;
+  return <NotFound hideWatermark desc={t('groupNotFound.desc')} title={t('groupNotFound.title')} />;
 });
 
 GroupNotFound.displayName = 'GroupNotFound';

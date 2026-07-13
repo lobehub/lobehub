@@ -11,25 +11,28 @@ import { MAX_WIDTH } from '@/const/layoutTokens';
 const NotFound = memo<{
   desc?: string;
   extra?: ReactNode;
+  hideWatermark?: boolean;
   status?: number | string;
   title?: string;
-}>(({ extra, status = 404, title, desc }) => {
+}>(({ extra, hideWatermark, status = 404, title, desc }) => {
   const { t } = useTranslation('error');
   return (
     <Flexbox align={'center'} justify={'center'} style={{ minHeight: '100%', width: '100%' }}>
-      <h1
-        style={{
-          filter: 'blur(8px)',
-          fontSize: `min(${MAX_WIDTH / 3}px, 50vw)`,
-          fontWeight: 'bolder',
-          margin: 0,
-          opacity: 0.12,
-          position: 'absolute',
-          zIndex: 0,
-        }}
-      >
-        {status}
-      </h1>
+      {!hideWatermark && (
+        <h1
+          style={{
+            filter: 'blur(8px)',
+            fontSize: `min(${MAX_WIDTH / 3}px, 50vw)`,
+            fontWeight: 'bolder',
+            margin: 0,
+            opacity: 0.12,
+            position: 'absolute',
+            zIndex: 0,
+          }}
+        >
+          {status}
+        </h1>
+      )}
       <FluentEmoji emoji={'👀'} size={64} />
       <h2 style={{ fontWeight: 'bold', marginTop: '1em', textAlign: 'center' }}>
         {title || t('notFound.title')}
