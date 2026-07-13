@@ -391,6 +391,7 @@ export default {
   'messageAction.reaction': 'Add Reaction',
   'messageAction.regenerate': 'Regenerate',
   'messageAction.select': 'Select',
+  'messageLink.openInSideBrowser': 'Open in side browser',
   'messageForward.bar.cancel': 'Cancel',
   'messageForward.bar.delete': 'Delete',
   'messageForward.bar.forward': 'Forward',

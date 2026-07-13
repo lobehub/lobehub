@@ -1,4 +1,5 @@
 import { isDesktop } from '@lobechat/const';
+import { RENDERER_HANDLED_LINK_ATTR } from '@lobechat/desktop-bridge';
 import type { UniformSearchResult } from '@lobechat/types';
 import { Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
@@ -78,6 +79,7 @@ const SearchItem = memo<SearchResultProps>((props) => {
 
   return (
     <a
+      {...{ [RENDERER_HANDLED_LINK_ATTR]: 'true' }}
       className={styles.container}
       href={url!}
       rel="noreferrer"

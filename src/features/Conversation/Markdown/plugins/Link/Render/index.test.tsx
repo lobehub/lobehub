@@ -20,6 +20,8 @@ vi.mock('@lobechat/const', async (importOriginal) => ({
 // selector's return value through this module-level flag so each case can flip
 // the "Link Icon" setting on/off without a real store.
 let mockShowIcon = true;
+let mockEnableInAppBrowser = false;
+const mockOpenInBrowserTab = vi.fn();
 const mockNavigate = vi.fn();
 const mockOpenAgentDetail = vi.fn();
 const mockOpenDocument = vi.fn();
@@ -65,9 +67,17 @@ vi.mock('@/store/user', () => ({
 }));
 
 vi.mock('@/store/user/selectors', () => ({
+  labPreferSelectors: {
+    enableInAppBrowser: () => mockEnableInAppBrowser,
+  },
   userGeneralSettingsSelectors: {
     enableMessageLinkIcon: () => mockShowIcon,
   },
+}));
+
+vi.mock('@/store/global', () => ({
+  useGlobalStore: (selector: (s: unknown) => unknown) =>
+    selector({ openInBrowserTab: mockOpenInBrowserTab }),
 }));
 
 const renderLink = (properties: Record<string, unknown>) =>
@@ -80,6 +90,7 @@ const renderLink = (properties: Record<string, unknown>) =>
 afterEach(() => {
   mockShowIcon = true;
   mockIsDesktop = false;
+  mockEnableInAppBrowser = false;
 });
 
 beforeEach(() => {
@@ -260,6 +271,90 @@ describe('Link Render — desktop preload contract', () => {
     });
 
     expect(container.querySelector('a')).not.toHaveAttribute(RENDERER_HANDLED_LINK_ATTR);
+  });
+});
+
+describe('Link Render — open an external link in the side browser', () => {
+  const renderExternal = () =>
+    renderLink({
+      linkDomain: 'localhost',
+      linkHref: 'http://localhost:3022/observability/context',
+      linkKind: 'generic',
+      linkLabel: 'http://localhost:3022/observability/context',
+    });
+
+  it('offers the side-browser action on desktop when the in-app browser is enabled', () => {
+    mockIsDesktop = true;
+    mockEnableInAppBrowser = true;
+
+    const { container } = renderExternal();
+    const action = container.querySelector('[data-side-browser]')!;
+    expect(action).toBeTruthy();
+
+    fireEvent.click(action);
+
+    expect(mockOpenInBrowserTab).toHaveBeenCalledWith(
+      'http://localhost:3022/observability/context',
+    );
+  });
+
+  it('keeps the action OUTSIDE the anchor, or the preload would swallow its click', () => {
+    mockIsDesktop = true;
+    mockEnableInAppBrowser = true;
+
+    const { container } = renderExternal();
+
+    // The preload intercepts clicks via closest('a') in the capture phase, so an
+    // action nested inside the link would never reach React.
+    expect(container.querySelector('a [data-side-browser]')).toBeNull();
+    expect(container.querySelector('[data-side-browser]')!.closest('a')).toBeNull();
+  });
+
+  it('leaves the anchor itself untouched, so a plain click still opens the system browser', () => {
+    mockIsDesktop = true;
+    mockEnableInAppBrowser = true;
+
+    const { container } = renderExternal();
+    const anchor = container.querySelector('a')!;
+
+    expect(anchor).not.toHaveAttribute(RENDERER_HANDLED_LINK_ATTR);
+    expect(anchor).toHaveAttribute('target', '_blank');
+
+    fireEvent.click(anchor);
+    expect(mockOpenInBrowserTab).not.toHaveBeenCalled();
+  });
+
+  it('hides the action on web, and on desktop with the lab flag off', () => {
+    mockIsDesktop = false;
+    mockEnableInAppBrowser = true;
+    const web = renderExternal();
+    expect(web.container.querySelector('[data-side-browser]')).toBeNull();
+    web.unmount();
+
+    mockIsDesktop = true;
+    mockEnableInAppBrowser = false;
+    const flagOff = renderExternal();
+    expect(flagOff.container.querySelector('[data-side-browser]')).toBeNull();
+  });
+
+  it('hides the action for non-web links (mailto) and for portal-bound internal links', () => {
+    mockIsDesktop = true;
+    mockEnableInAppBrowser = true;
+
+    const email = renderLink({
+      linkHref: 'mailto:a@b.com',
+      linkKind: 'email',
+      linkLabel: 'a@b.com',
+    });
+    expect(email.container.querySelector('[data-side-browser]')).toBeNull();
+    email.unmount();
+
+    const internal = renderLink({
+      linkHref: '/verify/run-1',
+      linkKind: 'generic',
+      linkLabel: 'Verify report',
+    });
+    expect(internal.container.querySelector('[data-side-browser]')).toBeNull();
   });
 
   it('navigates non-entity app routes without leaving the SPA', () => {

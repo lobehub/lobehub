@@ -512,6 +512,9 @@
   "messageForward.success": "Forwarded to {{title}}",
   "messageForward.successMulti": "Forwarded to {{count}} agents",
   "messageForward.transcript.header": "The following {{count}} messages were forwarded from another conversation. Please use them as context and continue:",
+  "messageLink": {
+    "openInSideBrowser": "Open in side browser"
+  },
   "messageLongCollapse.collapse": "Show less",
   "messageLongCollapse.expand": "Show more",
   "messages.dm.sentTo": "Visible only to {{name}}",

@@ -1,4 +1,5 @@
 import { isDesktop } from '@lobechat/const';
+import { RENDERER_HANDLED_LINK_ATTR } from '@lobechat/desktop-bridge';
 import type { UniformSearchResult } from '@lobechat/types';
 import { Block, Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
@@ -39,7 +40,12 @@ const SearchResultItem = memo<UniformSearchResult & { style?: CSSProperties }>(
     };
 
     return (
-      <a href={url} target={'_blank'} onClick={handleClick}>
+      <a
+        {...{ [RENDERER_HANDLED_LINK_ATTR]: 'true' }}
+        href={url}
+        target={'_blank'}
+        onClick={handleClick}
+      >
         <Block
           clickable
           className={styles.container}
