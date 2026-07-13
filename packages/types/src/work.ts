@@ -137,12 +137,12 @@ export type WorkVersionPreview = Pick<
 export interface TaskWorkListItem extends WorkItem {
   resourceType: 'task';
   task: {
+    /** Short reference (`TASK-1`), live-coalesced like the other fields; card display + open target. */
+    identifier: string | null;
     /**
      * Card preview text: the task's instruction (NOT NULL on live rows),
      * truncated server-side — never the full text.
      */
-    /** Short reference (`TASK-1`), live-coalesced like the other fields; card display + open target. */
-    identifier: string | null;
     instruction: string | null;
     name: string | null;
     priority: number | null;

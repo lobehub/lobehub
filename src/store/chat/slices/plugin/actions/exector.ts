@@ -10,16 +10,8 @@ import { safeParseJSON } from '@/utils/safeParseJSON';
  * Context for remote tool execution, derived from the invoking message
  */
 export interface RemoteToolExecutorContext {
-  /** Agent ID that triggered this tool call */
-  agentId?: string | null;
-  /** Root operation ID for Work aggregation */
-  rootOperationId?: string;
-  /** Tool result message ID */
-  sourceMessageId?: string;
   /** Stable tool call ID */
   sourceToolCallId?: string;
-  /** Thread ID from the message that triggered this tool call */
-  threadId?: string | null;
   /** Topic ID from the message that triggered this tool call */
   topicId?: string;
 }

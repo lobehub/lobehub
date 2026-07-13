@@ -163,8 +163,6 @@ export interface ToolExecutionContext {
    * `null` when the agent is missing or not visible to the caller.
    */
   agentVisibility?: 'private' | 'public' | null;
-  /** Assistant message that owns this tool call. */
-  anchorMessageId?: string;
   /**
    * The assistant message that carries this tool call (the runtime's
    * `payload.parentMessageId`). Distinct from `messageId`, which is the source

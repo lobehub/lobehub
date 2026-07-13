@@ -197,7 +197,6 @@ export class ServerToolTransport implements ToolTransport {
               ),
               ...(agentVisibility !== undefined && { agentVisibility }),
               // Assistant message owning this tool call (≠ source user message).
-              anchorMessageId: context.parentMessageId,
               assistantMessageId: context.parentMessageId,
               deviceCapable: context.state.metadata?.executionPlan
                 ? isDeviceCapablePlan(context.state.metadata.executionPlan)
