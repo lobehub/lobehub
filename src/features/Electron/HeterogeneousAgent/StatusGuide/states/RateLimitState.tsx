@@ -62,6 +62,10 @@ const RateLimitState = ({
       return t('cliRateLimitGuide.limitTypes.weekCycle');
     }
 
+    if (rateLimitType === 'five_hour') {
+      return t('cliRateLimitGuide.limitTypes.fiveHourCycle');
+    }
+
     return rateLimitType.replaceAll('_', ' ');
   }, [error?.rateLimitInfo?.rateLimitType, t]);
   // The "~X h Y m" duration string, reused both for the header hint and the
@@ -154,11 +158,17 @@ const RateLimitState = ({
             ? relativeDuration
               ? t('cliRateLimitGuide.schedule.scheduledForApprox', { duration: relativeDuration })
               : t('cliRateLimitGuide.schedule.scheduledAfterReset')
-            : t('cliRateLimitGuide.afterReset', {
-                resetAt: formattedResetAt
-                  ? `${formattedResetAt}${timezoneLabel ? ` (${timezoneLabel})` : ''}`
-                  : t('cliRateLimitGuide.resetUnknown'),
-              })}
+            : t(
+                rateLimitTypeLabel
+                  ? 'cliRateLimitGuide.afterResetWithLimitType'
+                  : 'cliRateLimitGuide.afterReset',
+                {
+                  limitType: rateLimitTypeLabel,
+                  resetAt: formattedResetAt
+                    ? `${formattedResetAt}${timezoneLabel ? ` (${timezoneLabel})` : ''}`
+                    : t('cliRateLimitGuide.resetUnknown'),
+                },
+              )}
         </Text>
       }
     >
