@@ -26,7 +26,26 @@ export class ClientMessageTransport implements MessageTransport {
   ) {}
 
   createAssistantMessage(params: CreateMessageParams): Promise<RuntimeMessageRef> {
-    return this.createMessage(params);
+    const operation = this.get().operations[this.operationId];
+    if (!operation) throw new Error(`Operation not found: ${this.operationId}`);
+
+    const { agentId, groupId, isSupervisor, scope, subAgentId, threadId, topicId } =
+      operation.context;
+    const effectiveAgentId = subAgentId && scope !== 'sub_agent' ? subAgentId : agentId;
+    const metadata = {
+      ...params.metadata,
+      ...(isSupervisor && { isSupervisor: true }),
+      ...(scope === 'sub_agent' && subAgentId && { scope, subAgentId }),
+    };
+
+    return this.createMessage({
+      ...params,
+      ...(effectiveAgentId && { agentId: effectiveAgentId }),
+      ...(groupId && { groupId }),
+      ...(Object.keys(metadata).length > 0 && { metadata }),
+      ...(threadId && { threadId }),
+      ...(topicId && { topicId }),
+    });
   }
 
   createToolMessage(params: CreateMessageParams): Promise<RuntimeMessageRef> {
@@ -120,7 +139,7 @@ export class ClientMessageTransport implements MessageTransport {
     const optimisticContext = { operationId };
 
     store.internal_dispatchMessage(
-      { id, type: 'createMessage', value: message },
+      { id, type: 'createMessage', value: { ...message } },
       optimisticContext,
     );
 

@@ -27,6 +27,7 @@ type CallLlmCollectedOutput = Pick<
   | 'contentParts'
   | 'hasContentImages'
   | 'hasReasoningImages'
+  | 'reasoning'
   | 'reasoningParts'
   | 'thinkingContent'
 >;
@@ -59,18 +60,21 @@ const buildMessageMetadata = ({
   answerSalvagedFromReasoning,
   currentStepSpeed,
   currentStepUsage,
+  finishType,
   hasContentImages,
   interruptedMidStream,
 }: {
   answerSalvagedFromReasoning?: boolean;
   currentStepSpeed?: ModelPerformance;
   currentStepUsage?: ModelUsage;
+  finishType?: string;
   hasContentImages?: boolean;
   interruptedMidStream?: boolean;
 }): CallLlmMessageMetadata | undefined => {
   const metadata: CallLlmMessageMetadata = {
     ...(currentStepUsage && { ...currentStepUsage, usage: currentStepUsage }),
     ...(currentStepSpeed && { ...currentStepSpeed, performance: currentStepSpeed }),
+    ...(finishType && { finishType }),
     ...(hasContentImages && { isMultimodal: true }),
     ...(answerSalvagedFromReasoning && { answerSalvagedFromReasoning: true }),
     ...(interruptedMidStream && { interruptedMidStream: true }),
@@ -84,6 +88,13 @@ const buildFinalReasoning = (output: CallLlmCollectedOutput): ModelReasoning | u
     return {
       content: serializePartsForStorage(output.reasoningParts),
       isMultimodal: true,
+    };
+  }
+
+  if (output.reasoning) {
+    return {
+      ...output.reasoning,
+      content: output.thinkingContent || output.reasoning.content,
     };
   }
 
@@ -125,6 +136,7 @@ const persistFinalMessage = async ({
     answerSalvagedFromReasoning: output.answerSalvagedFromReasoning,
     currentStepSpeed: output.speed,
     currentStepUsage: output.usage,
+    finishType: output.finishReason,
     hasContentImages: output.hasContentImages,
   });
 
@@ -133,9 +145,11 @@ const persistFinalMessage = async ({
       content: finalContent,
       imageList: output.imageList.length > 0 ? output.imageList : undefined,
       metadata,
+      observationId: output.observationId,
       reasoning: finalReasoning,
       search: output.grounding,
       tools: sanitizePersistedTools(output.toolsCalling),
+      traceId: output.traceId,
     });
   } catch (error) {
     console.error('[call_llm] Failed to update message:', error);
@@ -237,6 +251,7 @@ export const finalizeCallLlmTurn = async ({
     operation.allowEarlyFinalAnswerVisibleOutputEnd ?? true;
   if (
     canPublishEarlyFinalAnswerVisibleEnd &&
+    output.finishReason !== 'abort' &&
     output.toolsCalling.length === 0 &&
     output.toolCalls.length === 0
   ) {
@@ -266,6 +281,31 @@ export const finalizeCallLlmTurn = async ({
   });
 
   await recordResult?.(output);
+
+  if (output.finishReason === 'abort') {
+    return {
+      events,
+      newState,
+      nextContext: {
+        payload: {
+          hasToolsCalling: output.toolsCalling.length > 0,
+          parentMessageId: assistantMessageId,
+          reason: 'user_cancelled',
+          result: { content: output.content, tool_calls: output.toolCalls },
+          toolsCalling: output.toolsCalling,
+        },
+        phase: 'human_abort',
+        session: {
+          eventCount: events.length,
+          messageCount: newState.messages.length,
+          sessionId: operation.operationId,
+          status: 'running',
+          stepCount: state.stepCount + 1,
+        },
+        stepUsage: output.usage,
+      },
+    };
+  }
 
   return {
     events,

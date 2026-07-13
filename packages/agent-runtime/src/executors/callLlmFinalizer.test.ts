@@ -255,6 +255,44 @@ describe('callLlmFinalizer', () => {
     });
   });
 
+  it('preserves structured client metadata and maps abort completion to human_abort', async () => {
+    const messages = createMessageTransport();
+
+    const result = await finalizeCallLlmTurn({
+      assistantMessageId: 'assistant-1',
+      events: [],
+      host: createHost(messages),
+      model: 'claude',
+      output: createOutput({
+        content: 'Partial answer',
+        finishReason: 'abort',
+        observationId: 'observation-1',
+        reasoning: { content: 'Reasoning', duration: 120, signature: 'signature-1' },
+        traceId: 'trace-1',
+      }),
+      provider: 'anthropic',
+      shouldReplayAssistantReasoning: true,
+      state: AgentRuntime.createInitialState({ operationId: 'operation-1' }),
+    });
+
+    expect(messages.update).toHaveBeenCalledWith(
+      'assistant-1',
+      expect.objectContaining({
+        metadata: { finishType: 'abort' },
+        observationId: 'observation-1',
+        reasoning: { content: 'Reasoning', duration: 120, signature: 'signature-1' },
+        traceId: 'trace-1',
+      }),
+    );
+    expect(result.nextContext).toMatchObject({
+      payload: {
+        parentMessageId: 'assistant-1',
+        reason: 'user_cancelled',
+      },
+      phase: 'human_abort',
+    });
+  });
+
   it('persists partial interrupted output and skips empty interruptions', async () => {
     const messages = createMessageTransport();
     const host = createHost(messages);

@@ -4,6 +4,7 @@ import type {
   GroundingSearch,
   MessageToolCall,
   ModelPerformance,
+  ModelReasoning,
   ModelUsage,
   OpenAIChatMessage,
 } from '@lobechat/types';
@@ -51,12 +52,16 @@ export interface LLMAttemptOutput {
   hasContentImages: boolean;
   hasReasoningImages: boolean;
   imageList: ChatImageItem[];
+  observationId?: string;
+  /** Adapter-produced structured reasoning metadata such as duration and signature. */
+  reasoning?: ModelReasoning;
   reasoningParts: LLMAttemptContentPart[];
   speed?: ModelPerformance;
   /** Raw streamed thinking text; finalization converts it to the message reasoning object. */
   thinkingContent: string;
   toolCalls: MessageToolCall[];
   toolsCalling: ChatToolPayload[];
+  traceId?: string;
   usage?: ModelUsage;
 }
 

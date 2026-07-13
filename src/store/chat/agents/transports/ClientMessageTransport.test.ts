@@ -10,6 +10,11 @@ const createStore = () =>
   ({
     dbMessagesMap: { 'message-key': [] },
     internal_dispatchMessage: vi.fn(),
+    operations: {
+      'operation-1': {
+        context: { agentId: 'agent-1', topicId: 'topic-1' },
+      },
+    },
     optimisticCreateMessage: vi.fn(),
     optimisticUpdatePluginState: vi.fn(),
     optimisticUpdateToolMessage: vi.fn(),

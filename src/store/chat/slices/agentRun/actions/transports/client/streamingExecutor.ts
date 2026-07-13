@@ -294,13 +294,17 @@ export class StreamingExecutorActionImpl {
     const workingDirectory = topicWorkingDirectory ?? agentWorkingDirectory;
 
     // Create initial state or use provided state
-    const state =
+    const baseState =
       initialState ||
       AgentRuntime.createInitialState({
         maxSteps: 400,
         messages,
         metadata: {
+          agentId,
+          groupId,
           sessionId: agentId,
+          scope,
+          subAgentId: paramSubAgentId,
           threadId,
           topicId,
           workingDirectory,
@@ -316,6 +320,18 @@ export class StreamingExecutorActionImpl {
         toolManifestMap,
         userInterventionConfig,
       });
+    const state: AgentState = {
+      ...baseState,
+      metadata: {
+        ...baseState.metadata,
+        agentId,
+        groupId,
+        scope,
+        subAgentId: paramSubAgentId,
+        threadId,
+        topicId,
+      },
+    };
 
     // Build initialContext for page editor if lobe-page-agent is enabled
     let runtimeInitialContext: RuntimeInitialContext | undefined;
@@ -549,6 +565,14 @@ export class StreamingExecutorActionImpl {
       isSubAgent, // Pass isSubAgent to filter out lobe-agent tool in sub-agent context
     });
 
+    if (params.skipCreateFirstMessage) {
+      initialAgentState.pendingAssistantMessageId = params.parentMessageId;
+      initialAgentContext.payload = {
+        ...(initialAgentContext.payload as Record<string, unknown>),
+        assistantMessageId: params.parentMessageId,
+      };
+    }
+
     // Use model/provider from resolved agentConfig
     const { agentConfig: agentConfigData } = agentConfig;
     const model = agentConfigData.model;
@@ -589,7 +613,6 @@ export class StreamingExecutorActionImpl {
         messageKey,
         operationId,
         parentId: params.parentMessageId,
-        skipCreateFirstMessage: params.skipCreateFirstMessage,
         toolsEngine, // Pass toolsEngine for dynamic tool injection via activateTools
       }),
       getOperation: (opId: string) => {

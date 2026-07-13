@@ -1,14 +1,11 @@
 import type {
   AgentEvent,
   AgentInstruction,
-  AgentInstructionCallLlm,
   AgentInstructionCompressContext,
   AgentInstructionExecSubAgent,
   AgentInstructionExecSubAgents,
   AgentRuntimeContext,
   AgentRuntimeHost,
-  GeneralAgentCallLLMInstructionPayload,
-  GeneralAgentCallLLMResultPayload,
   GeneralAgentCompressionResultPayload,
   InstructionExecutor,
   SubAgentResultPayload,
@@ -16,39 +13,27 @@ import type {
   SubAgentTask,
 } from '@lobechat/agent-runtime';
 import {
+  callLlm as createCallLlmExecutor,
   callTool as createCallToolExecutor,
   finish as createFinishExecutor,
   requestHumanApprove as createRequestHumanApproveExecutor,
   resolveAbortedTools as createResolveAbortedToolsExecutor,
-  UsageCounter,
 } from '@lobechat/agent-runtime';
 import { countContextTokens, type ToolsEngine } from '@lobechat/context-engine';
 import { chainCompressContext } from '@lobechat/prompts';
-import {
-  type ChatMessageError,
-  type MessageMetadata,
-  type MessageToolCall,
-  type ModelUsage,
-  TraceNameMap,
-} from '@lobechat/types';
-import { dedupeBy } from '@lobechat/utils';
+import { type MessageMetadata } from '@lobechat/types';
 import debug from 'debug';
-import { t } from 'i18next';
 import pMap from 'p-map';
 
-import { LOADING_FLAT } from '@/const/message';
 import { aiAgentService } from '@/services/aiAgent';
 import { chatService } from '@/services/chat';
 import { type ResolvedAgentConfig } from '@/services/chat/mecha';
 import { messageService } from '@/services/message';
 import { type ChatStore } from '@/store/chat/store';
 import { getCompressionCandidateMessageIds } from '@/store/chat/utils/compression';
-import { getFileStoreState } from '@/store/file/store';
 import { sleep } from '@/utils/sleep';
 
-import { StreamingHandler } from './StreamingHandler';
 import { buildClientRuntimeHost } from './transports/buildClientRuntimeHost';
-import { type StreamChunk } from './types/streaming';
 
 const log = debug('lobe-store:agent-executors');
 
@@ -61,69 +46,6 @@ const isAbortError = (error: unknown, abortController?: AbortController) =>
 
 const createAbortError = () =>
   Object.assign(new Error('Compression cancelled'), { name: 'AbortError' });
-
-const getGoogleBlockedReason = (error: ChatMessageError): string | undefined => {
-  const body = error.body as
-    | {
-        context?: {
-          finishReason?: unknown;
-          promptFeedback?: {
-            blockReason?: unknown;
-          };
-        };
-        provider?: unknown;
-      }
-    | undefined;
-
-  if (body?.provider !== 'google') return undefined;
-
-  const promptFeedbackReason = body.context?.promptFeedback?.blockReason;
-  if (typeof promptFeedbackReason === 'string') return promptFeedbackReason;
-
-  const finishReason = body.context?.finishReason;
-  if (typeof finishReason === 'string') return finishReason;
-
-  return undefined;
-};
-
-const localizeGoogleBlockedError = (error: ChatMessageError): ChatMessageError => {
-  const blockReason = getGoogleBlockedReason(error);
-  if (!blockReason) return error;
-
-  const translationKey = `response.GoogleAIBlockReason.${blockReason}`;
-  const localized = t(translationKey as any, {
-    defaultValue: error.message ?? '',
-    ns: 'error',
-  }).trim();
-
-  if (!localized || localized === translationKey) return error;
-
-  const normalizedBody =
-    error.body && typeof error.body === 'object' ? (error.body as Record<string, any>) : {};
-
-  return {
-    ...error,
-    body: {
-      ...normalizedBody,
-      message: localized,
-    },
-    message: localized,
-  };
-};
-
-const localizeError = (error: ChatMessageError): ChatMessageError => {
-  const body = error.body as
-    | {
-        provider?: unknown;
-      }
-    | undefined;
-
-  if (body?.provider === 'google') {
-    return localizeGoogleBlockedError(error);
-  }
-
-  return error;
-};
 
 const formatSubAgentBatchResultContent = (
   tasks: SubAgentTask[],
@@ -148,7 +70,6 @@ const formatSubAgentBatchResultContent = (
  * @param context.get - Store getter function
  * @param context.messageKey - Message map key
  * @param context.parentId - Parent message ID
- * @param context.skipCreateFirstMessage - Skip first message creation
  */
 export const createAgentExecutors = (context: {
   /** Pre-resolved agent config with isSubAgent filtering applied */
@@ -158,12 +79,9 @@ export const createAgentExecutors = (context: {
   messageKey: string;
   operationId: string;
   parentId: string;
-  skipCreateFirstMessage?: boolean;
   /** ToolsEngine for expanding dynamically activated tools */
   toolsEngine?: ToolsEngine;
 }) => {
-  let shouldSkipCreateMessage = context.skipCreateFirstMessage;
-
   /**
    * Get operation context via closure
    * Returns the business context (agentId, topicId, etc.) captured by the operation
@@ -193,499 +111,24 @@ export const createAgentExecutors = (context: {
       : opContext.agentId;
   };
 
-  /**
-   * Get subAgentId and scope for metadata (when scope is 'sub_agent')
-   */
-  const getMetadataForSubAgent = () => {
-    const opContext = getOperationContext();
-
-    if (opContext.scope === 'sub_agent' && opContext.subAgentId) {
-      return {
-        subAgentId: opContext.subAgentId,
-        scope: opContext.scope,
-      };
-    }
-    return null;
-  };
-
   const usePackageExecutor =
     (factory: (host: AgentRuntimeHost) => InstructionExecutor): InstructionExecutor =>
     (instruction, state, runtimeContext) =>
       factory(
         buildClientRuntimeHost({
+          agentConfig: context.agentConfig,
           get: context.get,
+          metadata: context.metadata,
           messageKey: context.messageKey,
           operationId: context.operationId,
+          runtimeContext,
           stepIndex: state.stepCount,
+          toolsEngine: context.toolsEngine,
         }),
       )(instruction, state, runtimeContext);
 
   const executors: Partial<Record<AgentInstruction['type'], InstructionExecutor>> = {
-    /**
-     * Custom call_llm executor
-     * Creates assistant message and calls internal_fetchAIChatMessage
-     */
-    call_llm: async (instruction, state, runtimeContext) => {
-      const sessionLogId = `${state.operationId}:${state.stepCount}`;
-      const stagePrefix = `[${sessionLogId}][call_llm]`;
-
-      const llmPayload = (instruction as AgentInstructionCallLlm)
-        .payload as GeneralAgentCallLLMInstructionPayload;
-
-      log(
-        `${stagePrefix} Starting session. Input: state.messages=%d, llmPayload.messages=%d, messageKey=%s`,
-        state.messages.length,
-        llmPayload.messages.length,
-        context.messageKey,
-      );
-
-      let assistantMessageId: string;
-
-      // Check if we should skip message creation:
-      // - shouldSkipCreateMessage is true (e.g., regenerate mode)
-      // - BUT if createAssistantMessage is explicitly true, always create new message
-      //   (e.g., after compression we need a new assistant message)
-      if (shouldSkipCreateMessage && !llmPayload.createAssistantMessage) {
-        // Skip first creation, subsequent calls will not skip
-        assistantMessageId = context.parentId;
-        shouldSkipCreateMessage = false;
-      } else {
-        // Get context from operation
-        const opContext = getOperationContext();
-        // Get effective agentId (depends on scope)
-        const effectiveAgentId = getEffectiveAgentId();
-        // Get subAgentId metadata (for sub_agent scope)
-        const subAgentMetadata = getMetadataForSubAgent();
-
-        // If this is the first regenerated creation of userMessage, llmPayload doesn't have parentMessageId
-        // So we assign it this way
-        // TODO: Maybe this should be implemented with an init method in the future
-        if (!llmPayload.parentMessageId) {
-          llmPayload.parentMessageId = context.parentId;
-        }
-
-        // Build metadata
-        const metadata: Record<string, any> = {};
-        if (opContext.isSupervisor) {
-          metadata.isSupervisor = true;
-        }
-        if (subAgentMetadata) {
-          // Store subAgentId and scope in metadata for sub_agent mode
-          // This will be used by conversation-flow to transform agentId for display
-          Object.assign(metadata, subAgentMetadata);
-        }
-
-        // Create assistant message (following server-side pattern)
-        const assistantMessageItem = await context.get().optimisticCreateMessage(
-          {
-            content: LOADING_FLAT,
-            groupId: opContext.groupId,
-            metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
-            model: llmPayload.model,
-            parentId: llmPayload.parentMessageId,
-            provider: llmPayload.provider,
-            role: 'assistant',
-            agentId: effectiveAgentId!,
-            threadId: opContext.threadId,
-            topicId: opContext.topicId ?? undefined,
-          },
-          { operationId: context.operationId },
-        );
-
-        if (!assistantMessageItem) {
-          throw new Error('Failed to create assistant message');
-        }
-        assistantMessageId = assistantMessageItem.id;
-
-        // Associate the assistant message with the operation for UI loading states
-        context.get().associateMessageWithOperation(assistantMessageId, context.operationId);
-      }
-
-      log(`${stagePrefix} Created assistant message, id: %s`, assistantMessageId);
-
-      log(
-        `${stagePrefix} calling model-runtime chat (model: %s, messages: %d, tools: %d)`,
-        llmPayload.model,
-        llmPayload.messages.length,
-        llmPayload.tools?.length ?? 0,
-      );
-
-      // ======== Inlined streaming logic (previously internal_fetchAIChatMessage) ========
-      const {
-        optimisticUpdateMessageContent,
-        internal_dispatchMessage,
-        internal_toggleToolCallingStreaming,
-      } = context.get();
-
-      // Get agentId, topicId, groupId and abortController from operation
-      const operation = context.get().operations[context.operationId];
-      if (!operation) {
-        throw new Error(`Operation not found: ${context.operationId}`);
-      }
-      const { subAgentId, groupId, topicId } = operation.context;
-      const abortController = operation.abortController;
-
-      // In group orchestration, subAgentId is the actual responding agent
-      const agentId = groupId && subAgentId ? subAgentId : operation.context.agentId!;
-
-      const traceId = operation.metadata?.traceId;
-
-      const fetchContext = { ...operation.context, agentId };
-
-      const { agentConfig: agentConfigData } = context.agentConfig;
-
-      let finalUsage: ModelUsage | undefined;
-      let finalToolCalls: MessageToolCall[] | undefined;
-
-      // Expand dynamically activated tools (from lobe-activator activateTools API)
-      // and merge them into the agent config for this LLM call.
-      // Built before the StreamingHandler so we can bind the offered tool
-      // names into the transformToolCalls callback ().
-      const activatedToolIds = runtimeContext?.stepContext?.activatedToolIds;
-      let resolvedAgentConfig = context.agentConfig;
-
-      if (activatedToolIds?.length && context.toolsEngine) {
-        const additional = context.toolsEngine.generateToolsDetailed({
-          context: { isExplicitActivation: true },
-          model: agentConfigData.model,
-          provider: agentConfigData.provider!,
-          skipDefaultTools: true,
-          toolIds: activatedToolIds,
-        });
-
-        if (additional.tools?.length) {
-          const mergedEnabledManifests = dedupeBy(
-            [...(context.agentConfig.enabledManifests || []), ...additional.enabledManifests],
-            (manifest) => manifest.identifier,
-          );
-          const mergedEnabledToolIds = [
-            ...new Set([
-              ...(context.agentConfig.enabledToolIds || []),
-              ...additional.enabledToolIds,
-            ]),
-          ];
-          const mergedTools = dedupeBy(
-            [...(context.agentConfig.tools || []), ...additional.tools],
-            (tool) => tool.function.name,
-          );
-
-          resolvedAgentConfig = {
-            ...context.agentConfig,
-            enabledManifests: mergedEnabledManifests,
-            enabledToolIds: mergedEnabledToolIds,
-            tools: mergedTools,
-          };
-
-          log(
-            `${stagePrefix} Injected %d activated tools: %o`,
-            activatedToolIds.length,
-            activatedToolIds,
-          );
-        }
-      }
-
-      // Names of tools actually sent to the LLM this turn. Passed to the
-      // resolver's missing-prefix fallback so a model can't reach tools that
-      // weren't enabled, and disabled duplicates can't shadow enabled calls.
-      const offeredToolNames = (resolvedAgentConfig.tools ?? []).map((tool) => tool.function.name);
-
-      // Create streaming handler with callbacks
-      const handler = new StreamingHandler(
-        {
-          messageId: assistantMessageId,
-          operationId: context.operationId,
-          agentId,
-          groupId,
-          topicId,
-        },
-        {
-          onContentUpdate: (content, reasoning, contentMetadata) => {
-            internal_dispatchMessage(
-              {
-                id: assistantMessageId,
-                type: 'updateMessage',
-                value: {
-                  content,
-                  reasoning,
-                  ...(contentMetadata && {
-                    metadata: {
-                      isMultimodal: contentMetadata.isMultimodal,
-                      tempDisplayContent: contentMetadata.tempDisplayContent,
-                    },
-                  }),
-                },
-              },
-              { operationId: context.operationId },
-            );
-          },
-          onReasoningUpdate: (reasoning) => {
-            internal_dispatchMessage(
-              {
-                id: assistantMessageId,
-                type: 'updateMessage',
-                value: { reasoning },
-              },
-              { operationId: context.operationId },
-            );
-          },
-          onToolCallsUpdate: (tools) => {
-            internal_dispatchMessage(
-              {
-                id: assistantMessageId,
-                type: 'updateMessage',
-                value: { tools },
-              },
-              { operationId: context.operationId },
-            );
-          },
-          onGroundingUpdate: (grounding) => {
-            internal_dispatchMessage(
-              {
-                id: assistantMessageId,
-                type: 'updateMessage',
-                value: { search: grounding },
-              },
-              { operationId: context.operationId },
-            );
-          },
-          onImagesUpdate: (images) => {
-            internal_dispatchMessage(
-              {
-                id: assistantMessageId,
-                type: 'updateMessage',
-                value: { imageList: images },
-              },
-              { operationId: context.operationId },
-            );
-          },
-          onReasoningStart: () => {
-            const { operationId: reasoningOpId } = context.get().startOperation({
-              type: 'reasoning',
-              context: { ...fetchContext, messageId: assistantMessageId },
-              parentOperationId: context.operationId,
-            });
-            context.get().associateMessageWithOperation(assistantMessageId, reasoningOpId);
-            return reasoningOpId;
-          },
-          onReasoningComplete: (opId) => context.get().completeOperation(opId),
-          uploadBase64Image: (data) =>
-            getFileStoreState()
-              .uploadBase64FileWithProgress(data)
-              .then((file) => ({
-                id: file?.id,
-                url: file?.url,
-                alt: file?.filename || file?.id,
-              })),
-          transformToolCalls: (calls) =>
-            context.get().internal_transformToolCalls(calls, offeredToolNames),
-          toggleToolCallingStreaming: internal_toggleToolCallingStreaming,
-        },
-      );
-
-      const messages = llmPayload.messages.filter((message) => message.id !== assistantMessageId);
-
-      await chatService.createAssistantMessageStream({
-        abortController,
-        params: {
-          agentId: agentId || undefined,
-          groupId,
-          messages,
-          model: llmPayload.model,
-          provider: llmPayload.provider,
-          resolvedAgentConfig,
-          topicId: topicId ?? undefined,
-          ...agentConfigData.params,
-        },
-        initialContext: runtimeContext?.initialContext,
-        metadata: context.metadata,
-        stepContext: runtimeContext?.stepContext,
-        trace: {
-          traceId,
-          topicId: topicId ?? undefined,
-          traceName: TraceNameMap.Conversation,
-        },
-        onErrorHandle: async (error) => {
-          const enrichedError = {
-            ...error,
-            body: {
-              ...error.body,
-              traceId: traceId ?? error.body?.traceId,
-            },
-          };
-          const localizedError = localizeError(enrichedError);
-
-          await context.get().optimisticUpdateMessageError(assistantMessageId, localizedError, {
-            operationId: context.operationId,
-          });
-        },
-        onFinish: async (
-          _content,
-          { traceId, observationId, toolCalls, reasoning, grounding, usage, speed, type },
-        ) => {
-          void _content;
-
-          if (traceId) {
-            messageService.updateMessage(
-              assistantMessageId,
-              { traceId, observationId: observationId ?? undefined },
-              { agentId, groupId, topicId },
-            );
-          }
-
-          const result = await handler.handleFinish({
-            traceId,
-            observationId,
-            toolCalls,
-            reasoning,
-            grounding,
-            usage,
-            speed,
-            type,
-          });
-
-          finalUsage = result.usage;
-          finalToolCalls = result.toolCalls;
-
-          await optimisticUpdateMessageContent(
-            assistantMessageId,
-            result.content,
-            {
-              tools: result.tools,
-              reasoning: result.metadata.reasoning,
-              search: result.metadata.search,
-              imageList: result.metadata.imageList,
-              metadata: {
-                ...result.metadata.usage,
-                ...result.metadata.performance,
-                performance: result.metadata.performance,
-                usage: result.metadata.usage,
-                finishType: result.metadata.finishType,
-                ...(result.metadata.isMultimodal && { isMultimodal: true }),
-              },
-            },
-            { operationId: context.operationId },
-          );
-        },
-        onMessageHandle: async (chunk) => {
-          handler.handleChunk(chunk as StreamChunk);
-        },
-      });
-
-      const isFunctionCall = handler.getIsFunctionCall();
-      const content = handler.getOutput();
-      const tools = handler.getTools();
-      const currentStepUsage = finalUsage;
-      const tool_calls = finalToolCalls;
-      const finishType = handler.getFinishType();
-
-      log(`[${sessionLogId}] finish model-runtime calling`);
-
-      // Get latest messages from store (already updated by internal_fetchAIChatMessage)
-      const latestMessages = context.get().dbMessagesMap[context.messageKey] || [];
-
-      log(
-        `${stagePrefix} After fetch: dbMessagesMap[${context.messageKey}]=%d messages, available keys=%o`,
-        latestMessages.length,
-        Object.keys(context.get().dbMessagesMap),
-      );
-
-      // Get updated assistant message to extract usage/cost information
-      const assistantMessage = latestMessages.find((m) => m.id === assistantMessageId);
-
-      const toolCalls = tools || [];
-
-      // Log llm result
-      if (content) {
-        log(`[${sessionLogId}][content]`, content);
-      }
-      if (assistantMessage?.reasoning?.content) {
-        log(`[${sessionLogId}][reasoning]`, assistantMessage.reasoning.content);
-      }
-      if (toolCalls.length > 0) {
-        log(`[${sessionLogId}][toolsCalling] `, toolCalls);
-      }
-
-      // Log usage
-      if (currentStepUsage) {
-        log(`[${sessionLogId}][usage] %O`, currentStepUsage);
-      }
-
-      log(
-        '[%s:%d] call_llm completed, finishType: %s, outputMessages: %d',
-        state.operationId,
-        state.stepCount,
-        finishType,
-        latestMessages.length,
-      );
-
-      // Accumulate usage and cost to state
-      const newState = { ...state, messages: latestMessages };
-
-      if (currentStepUsage) {
-        // Use UsageCounter to accumulate LLM usage and cost
-        const { usage, cost } = UsageCounter.accumulateLLM({
-          cost: state.cost,
-          model: llmPayload.model,
-          modelUsage: currentStepUsage,
-          provider: llmPayload.provider,
-          usage: state.usage,
-        });
-
-        newState.usage = usage;
-        if (cost) newState.cost = cost;
-      }
-
-      // If operation was aborted, enter human_abort phase to let agent decide how to handle
-      if (finishType === 'abort') {
-        log(
-          '[%s:%d] call_llm aborted by user, entering human_abort phase',
-          state.operationId,
-          state.stepCount,
-        );
-
-        return {
-          events: [],
-          newState,
-          nextContext: {
-            payload: {
-              reason: 'user_cancelled',
-              parentMessageId: assistantMessageId,
-              hasToolsCalling: isFunctionCall,
-              toolsCalling: toolCalls,
-              result: { content, tool_calls },
-            },
-            phase: 'human_abort',
-            session: {
-              messageCount: newState.messages.length,
-              sessionId: state.operationId,
-              status: 'running',
-              stepCount: state.stepCount + 1,
-            },
-          } as AgentRuntimeContext,
-        };
-      }
-
-      return {
-        events: [],
-        newState,
-        nextContext: {
-          payload: {
-            hasToolsCalling: isFunctionCall,
-            parentMessageId: assistantMessageId,
-            result: { content, tool_calls },
-            toolsCalling: toolCalls,
-          } as GeneralAgentCallLLMResultPayload,
-          phase: 'llm_result',
-          session: {
-            messageCount: newState.messages.length,
-            sessionId: state.operationId,
-            status: 'running',
-            stepCount: state.stepCount + 1,
-          },
-          stepUsage: currentStepUsage,
-        } as AgentRuntimeContext,
-      };
-    },
+    call_llm: usePackageExecutor(createCallLlmExecutor),
 
     call_tool: usePackageExecutor(createCallToolExecutor),
 
