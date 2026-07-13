@@ -874,7 +874,6 @@ const Controls = memo<ControlsProps>(({ setUpdating, updating, variant = 'popove
               >
                 <ModelSelect
                   disabled={!canCreate}
-                  size={'small'}
                   style={{ width: '100%' }}
                   value={subAgentModelValue}
                   onChange={handleSubAgentModelChange}
