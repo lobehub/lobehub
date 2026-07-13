@@ -42,6 +42,7 @@ interface FakeWindow extends EventEmitter {
   /** The renderer webContents that sends IPC from this window. */
   sender: { id: number; isDestroyed: () => boolean };
   setIgnoreMouseEvents: ReturnType<typeof vi.fn>;
+  setOpacity: ReturnType<typeof vi.fn>;
   setPosition: ReturnType<typeof vi.fn>;
   showInactive: ReturnType<typeof vi.fn>;
   webContents: { getZoomFactor: ReturnType<typeof vi.fn> };
@@ -86,6 +87,7 @@ const createWindow = (): FakeWindow => {
   win.isDestroyed = () => destroyed;
   win.sender = { id: nextId(), isDestroyed: () => destroyed };
   win.setIgnoreMouseEvents = vi.fn();
+  win.setOpacity = vi.fn();
   win.setPosition = vi.fn();
   win.showInactive = vi.fn();
   win.webContents = { getZoomFactor: vi.fn(() => 1) };
@@ -419,13 +421,20 @@ describe('BrowserSidebarCtr', () => {
     expect(view.setBounds).toHaveBeenLastCalledWith({ height: 500, width: 250, x: 125, y: 50 });
   });
 
-  it('shows the parking window: a `show: false` window would leave its pages with no compositing surface', async () => {
+  it('keeps the parking window shown but fully transparent', async () => {
     queueView();
     const parking = queueParkingWindow();
 
     await invokeIpc('browserSidebar.navigate', { sessionId: 'agent:a', url: 'https://a.com' });
 
+    // It must be SHOWN — `show: false` leaves its pages with no compositing
+    // surface, which is the whole reason this window exists.
     expect(parking.showInactive).toHaveBeenCalled();
+    // And invisible by opacity, not by position: the OS clamps a window it thinks
+    // is reachable (macOS dragged -8000,-8000 back to the screen edge, where a
+    // plain white window showed up over the app).
+    expect(parking.setOpacity).toHaveBeenCalledWith(0);
+    expect(parking.setIgnoreMouseEvents).toHaveBeenCalledWith(true);
     const [x, y] = parking.setPosition.mock.calls[0];
     expect(x).toBeLessThan(0);
     expect(y).toBeLessThan(0);

@@ -347,7 +347,12 @@ export class BrowserPagePool {
       closable: false,
       focusable: false,
       frame: false,
+      hasShadow: false,
       height: PARKING_SIZE.height,
+      // Invisibility comes from opacity, NOT from `show: false` — a hidden window
+      // gives its views no compositing surface, which is the whole problem this
+      // window exists to avoid.
+      opacity: 0,
       show: false,
       skipTaskbar: true,
       width: PARKING_SIZE.width,
@@ -357,13 +362,17 @@ export class BrowserPagePool {
 
     win.setIgnoreMouseEvents(true);
     if (process.platform === 'darwin') win.excludedFromShownWindowsMenu = true;
-    // Must be *shown* — a `show: false` window gives its views no compositing
-    // surface. Off-display coordinates are what make it invisible.
+
     win.showInactive();
+    // Off-display coordinates are only defence in depth: the OS clamps a window
+    // it considers reachable (macOS pulled -8000,-8000 back to the screen edge,
+    // where a plain white window was visible over the app). `opacity: 0` is what
+    // actually makes it invisible, and it keeps the compositing surface alive.
     win.setPosition(PARKING_ORIGIN.x, PARKING_ORIGIN.y);
+    win.setOpacity(0);
 
     this.parkingWindow = win;
-    logger.debug('Created off-screen browser parking window');
+    logger.debug('Created transparent off-screen browser parking window');
     return win;
   }
 
