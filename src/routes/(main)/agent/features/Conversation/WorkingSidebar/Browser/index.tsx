@@ -47,34 +47,15 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
   address: css`
-    position: absolute;
-    inset-inline-start: 50%;
-    transform: translateX(-50%);
+    flex: 1;
+    min-width: 0;
+    max-width: 720px;
 
-    width: min(48%, 520px);
-    border-radius: ${cssVar.borderRadius};
-
-    transition:
-      background-color ${cssVar.motionDurationMid} ${cssVar.motionEaseInOut},
-      box-shadow ${cssVar.motionDurationMid} ${cssVar.motionEaseInOut};
-
-    input {
-      text-align: center;
-    }
-
-    /* borderless inputs carry antd's transparent :hover/:focus rules, so the
-       hover fill and focus ring need a class-doubled selector to win. */
-    &&:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-
-    &&:focus-within {
-      background: ${cssVar.colorFillQuaternary};
-      box-shadow: 0 0 0 1px ${cssVar.colorBorder};
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      transition: none;
+    /* The filled variant keeps its tinted fill while focused; lift it to the
+       container surface so the focus ring reads as an editable field. Doubling
+       the class outranks antd's own :focus rule. */
+    &&:focus {
+      background: ${cssVar.colorBgContainer};
     }
   `,
   importBanner: css`
@@ -269,9 +250,8 @@ const BrowserPane = memo<BrowserPaneProps>(({ sessionId }) => {
         <Input
           className={styles.address}
           placeholder={t('workingPanel.browser.addressPlaceholder')}
-          size={'small'}
           value={address}
-          variant={'borderless'}
+          variant={'filled'}
           onBlur={() => setIsEditing(false)}
           onFocus={() => setIsEditing(true)}
           onChange={(event) => {
