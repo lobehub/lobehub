@@ -613,7 +613,10 @@ export default {
   'summary.dueBy': 'Due on {{date}}',
   'summary.nextMonthlyPayment': 'Your Next Monthly Payment',
   'summary.nextPayment': 'Your Next Payment',
+  'summary.oneTimePaymentDesc':
+    'This plan was purchased with a one-time payment and will not renew automatically.',
   'summary.paymentInformation': 'Billing Information',
+  'summary.planValidUntil': 'Plan Valid Until',
   'summary.storageSettings': 'Storage pay-as-you-go',
   'summary.storageMonthlyDesc':
     'This amount covers storage overage for the current monthly billing period.',
