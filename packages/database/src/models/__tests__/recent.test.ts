@@ -239,6 +239,34 @@ describe('RecentModel', () => {
         const result = await recentModel.queryRecent();
         expect(result[0].metadata).toEqual({ bot: { platform: 'slack' } });
       });
+
+      it('returns favorite state and normalizes null favorites to false', async () => {
+        await serverDB.insert(agents).values({ id: 'agent-inbox', userId, slug: 'inbox' });
+        await serverDB.insert(topics).values([
+          {
+            id: 'topic-favorite',
+            userId,
+            agentId: 'agent-inbox',
+            favorite: true,
+            title: 'favorite topic',
+            updatedAt: minutesAgo(1),
+          },
+          {
+            id: 'topic-null-favorite',
+            userId,
+            agentId: 'agent-inbox',
+            favorite: null,
+            title: 'null favorite topic',
+            updatedAt: now(),
+          },
+        ]);
+
+        const result = await recentModel.queryRecent();
+        const byId = Object.fromEntries(result.map((row) => [row.id, row.favorite]));
+
+        expect(byId['topic-favorite']).toBe(true);
+        expect(byId['topic-null-favorite']).toBe(false);
+      });
     });
 
     describe('documents arm', () => {

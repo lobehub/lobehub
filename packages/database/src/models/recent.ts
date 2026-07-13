@@ -7,6 +7,7 @@ import type { LobeChatDatabase } from '../type';
 import { buildWorkspaceWhere } from '../utils/workspace';
 
 export interface RecentDbItem {
+  favorite: boolean;
   id: string;
   metadata?: any;
   routeGroupId: string | null;
@@ -51,6 +52,7 @@ export class RecentModel {
 
     const topicArm = this.db
       .select({
+        favorite: topics.favorite,
         id: topics.id,
         metadata: sql<any>`${topics.metadata}`.as('metadata'),
         routeGroupId: sql<string | null>`${topics.groupId}`.as('route_group_id'),
@@ -76,6 +78,7 @@ export class RecentModel {
 
     const documentArm = this.db
       .select({
+        favorite: sql<boolean>`false`.as('favorite'),
         id: documents.id,
         metadata: sql<any>`NULL`.as('metadata'),
         routeGroupId: sql<string | null>`NULL`.as('route_group_id'),
@@ -100,6 +103,7 @@ export class RecentModel {
 
     const taskArm = this.db
       .select({
+        favorite: sql<boolean>`false`.as('favorite'),
         id: tasks.id,
         metadata: sql<any>`NULL`.as('metadata'),
         routeGroupId: sql<string | null>`NULL`.as('route_group_id'),
@@ -119,6 +123,7 @@ export class RecentModel {
       .limit(limit);
 
     return rows.map((row) => ({
+      favorite: row.favorite ?? false,
       id: row.id,
       metadata: row.metadata ?? undefined,
       routeGroupId: row.routeGroupId,

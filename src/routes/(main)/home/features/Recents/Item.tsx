@@ -1,6 +1,6 @@
 import { ActionIcon, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import { FileTextIcon, HashIcon, MoreHorizontalIcon } from 'lucide-react';
+import { FileTextIcon, MoreHorizontalIcon, StarIcon } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 
 import InlineRename from '@/components/InlineRename';
@@ -15,11 +15,10 @@ import { useRecentItemDropdownMenu } from './useDropdownMenu';
 
 const TYPE_ICON_MAP: Partial<Record<'document' | 'task' | 'topic', typeof FileTextIcon>> = {
   document: FileTextIcon,
-  topic: HashIcon,
 };
 
 const RecentListItem = memo<RecentItem>((item) => {
-  const { title, type, agentId, id, metadata, status } = item;
+  const { title, type, agentId, id, metadata, status, favorite } = item;
   const IconComponent = TYPE_ICON_MAP[type] || FileTextIcon;
   const [editing, setEditing] = useState(false);
   const prefetchAgent = usePrefetchAgent();
@@ -61,11 +60,21 @@ const RecentListItem = memo<RecentItem>((item) => {
             return <TaskStatusIcon size={16} status={status ?? 'backlog'} />;
           }
 
-          if (type === 'topic' && metadata?.bot?.platform) {
+          if (type === 'topic' && !favorite && metadata?.bot?.platform) {
             const ProviderIcon = getPlatformIcon(metadata.bot.platform);
             if (ProviderIcon) {
               return <ProviderIcon color={cssVar.colorTextDescription} size={16} />;
             }
+          }
+          if (type === 'topic') {
+            return (
+              <Icon
+                fill={favorite ? cssVar.colorWarning : 'transparent'}
+                icon={StarIcon}
+                size={'small'}
+                style={{ color: favorite ? cssVar.colorWarning : cssVar.colorTextDescription }}
+              />
+            );
           }
           return (
             <Icon

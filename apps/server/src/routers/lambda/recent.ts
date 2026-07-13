@@ -10,6 +10,7 @@ import type { ChatTopicMetadata } from '@/types/topic';
 
 export interface RecentItem {
   agentId?: string | null;
+  favorite: boolean;
   icon: string;
   id: string;
   metadata?: ChatTopicMetadata;
@@ -66,6 +67,7 @@ export const recentRouter = router({
 
         return {
           agentId: item.routeId,
+          favorite: item.favorite,
           icon: item.type,
           id: item.id,
           metadata: item.metadata as ChatTopicMetadata | undefined,
