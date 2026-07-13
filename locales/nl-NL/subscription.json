@@ -145,7 +145,6 @@
   "credits.topUp.bestValue.title": "{{plan}} jaarlijks biedt het laagste opwaardeertarief: ${{price}} / 1M {{creditLabel}}",
   "credits.topUp.cancel": "Annuleren",
   "credits.topUp.custom": "Aangepast",
-  "credits.topUp.firstTopUpGift.hint": "🎁 Eerste opwaardeerbonus: ontvang +0,5M gratis bij het 10M-pakket, of +5M gratis bij het 100M-pakket",
   "credits.topUp.freeFeeHint": "Gratis plan-opwaarderingen omvatten een servicekosten van {{fee}} per 1M credits.",
   "credits.topUp.limitedOffer": "🔥 Beperkt",
   "credits.topUp.maxAmountError": "Het aankoopbedrag mag niet hoger zijn dan ${{max}}",

@@ -145,7 +145,6 @@
   "credits.topUp.bestValue.title": "{{plan}} Jahresabo bietet den niedrigsten Aufladepreis: ${{price}} / 1M {{creditLabel}}",
   "credits.topUp.cancel": "Abbrechen",
   "credits.topUp.custom": "Benutzerdefiniert",
-  "credits.topUp.firstTopUpGift.hint": "🎁 Erster Aufladebonus: Erhalten Sie +0,5M kostenlos beim 10M-Paket oder +5M kostenlos beim 100M-Paket",
   "credits.topUp.freeFeeHint": "Aufladungen im kostenlosen Tarif beinhalten eine {{fee}} Servicegebühr pro 1M Credits.",
   "credits.topUp.limitedOffer": "🔥 Begrenztes Angebot",
   "credits.topUp.maxAmountError": "Der Betrag einer einzelnen Aufladung darf ${{max}} nicht überschreiten",

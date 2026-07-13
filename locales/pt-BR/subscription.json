@@ -145,7 +145,6 @@
   "credits.topUp.bestValue.title": "{{plan}} anual desbloqueia a menor taxa de recarga: ${{price}} / 1M {{creditLabel}}",
   "credits.topUp.cancel": "Cancelar",
   "credits.topUp.custom": "Personalizado",
-  "credits.topUp.firstTopUpGift.hint": "🎁 Bônus de primeiro carregamento: ganhe +0,5M grátis no pacote de 10M, ou +5M grátis no pacote de 100M",
   "credits.topUp.freeFeeHint": "Recargas do plano gratuito incluem uma taxa de serviço de {{fee}} por 1M de créditos.",
   "credits.topUp.limitedOffer": "🔥 Oferta Limitada",
   "credits.topUp.maxAmountError": "O valor de compra única não pode exceder ${{max}}",

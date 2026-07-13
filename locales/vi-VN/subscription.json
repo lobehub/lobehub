@@ -145,7 +145,6 @@
   "credits.topUp.bestValue.title": "{{plan}} hàng năm mở khóa mức nạp thấp nhất: ${{price}} / 1M {{creditLabel}}",
   "credits.topUp.cancel": "Hủy",
   "credits.topUp.custom": "Tùy chỉnh",
-  "credits.topUp.firstTopUpGift.hint": "🎁 Ưu đãi nạp tiền lần đầu: nhận thêm +0.5M miễn phí với gói 10M, hoặc +5M miễn phí với gói 100M",
   "credits.topUp.freeFeeHint": "Nạp tiền gói miễn phí bao gồm phí dịch vụ {{fee}} cho mỗi 1M tín dụng.",
   "credits.topUp.limitedOffer": "🔥 Ưu đãi giới hạn",
   "credits.topUp.maxAmountError": "Số tiền mua một lần không được vượt quá ${{max}}",

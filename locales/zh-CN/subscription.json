@@ -147,7 +147,6 @@
   "credits.topUp.bestValue.title": "升级 {{plan}} 年费,积分低至 ${{price}} / 每百万 {{creditLabel}}",
   "credits.topUp.cancel": "取消",
   "credits.topUp.custom": "自定义",
-  "credits.topUp.firstTopUpGift.hint": "🎁 首充加赠：充 10M 送 0.5M，充 100M 送 5M",
   "credits.topUp.freeFeeHint": "免费计划充值每百万积分包含 {{fee}} 手续费。",
   "credits.topUp.limitedOffer": "🔥 限时优惠",
   "credits.topUp.maxAmountError": "单次购买金额不能超过 ${{max}}",

@@ -145,7 +145,6 @@
   "credits.topUp.bestValue.title": "الخطة السنوية {{plan}} تتيح أقل معدل شحن: ${{price}} / 1M {{creditLabel}}",
   "credits.topUp.cancel": "إلغاء",
   "credits.topUp.custom": "مخصص",
-  "credits.topUp.firstTopUpGift.hint": "🎁 مكافأة أول تعبئة: احصل على +0.5 مليون مجانًا عند شراء حزمة 10 مليون، أو +5 مليون مجانًا عند شراء حزمة 100 مليون",
   "credits.topUp.freeFeeHint": "تشمل تعبئة الخطة المجانية رسوم خدمة بقيمة {{fee}} لكل مليون رصيد.",
   "credits.topUp.limitedOffer": "🔥 عرض محدود",
   "credits.topUp.maxAmountError": "لا يمكن أن يتجاوز مبلغ الشراء الواحد ${{max}}",

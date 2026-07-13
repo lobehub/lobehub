@@ -145,7 +145,6 @@
   "credits.topUp.bestValue.title": "{{plan}}年間プランで最安のチャージレートを解放: ${{price}} / 1M {{creditLabel}}",
   "credits.topUp.cancel": "キャンセル",
   "credits.topUp.custom": "カスタム",
-  "credits.topUp.firstTopUpGift.hint": "🎁 初回チャージ特典: 10Mパックで+0.5M無料、または100Mパックで+5M無料を獲得",
   "credits.topUp.freeFeeHint": "無料プランのチャージには、1Mクレジットごとに{{fee}}のサービス料が含まれます。",
   "credits.topUp.limitedOffer": "🔥 限定",
   "credits.topUp.maxAmountError": "1回の購入金額は ${{max}} を超えることはできません",

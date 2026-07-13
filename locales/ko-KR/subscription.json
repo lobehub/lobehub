@@ -145,7 +145,6 @@
   "credits.topUp.bestValue.title": "{{plan}} 연간 플랜은 최저 충전 요금을 제공합니다: ${{price}} / 1M {{creditLabel}}",
   "credits.topUp.cancel": "취소",
   "credits.topUp.custom": "사용자 지정",
-  "credits.topUp.firstTopUpGift.hint": "🎁 첫 충전 보너스: 1000만 팩에 50만 무료 크레딧 추가, 또는 1억 팩에 500만 무료 크레딧 추가",
   "credits.topUp.freeFeeHint": "무료 플랜 충전에는 1M 크레딧당 {{fee}} 서비스 수수료가 포함됩니다.",
   "credits.topUp.limitedOffer": "🔥 한정",
   "credits.topUp.maxAmountError": "1회 구매 금액은 ${{max}}를 초과할 수 없습니다",

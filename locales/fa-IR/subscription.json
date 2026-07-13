@@ -145,7 +145,6 @@
   "credits.topUp.bestValue.title": "{{plan}} سالانه کمترین نرخ شارژ را باز می‌کند: ${{price}} / 1M {{creditLabel}}",
   "credits.topUp.cancel": "لغو",
   "credits.topUp.custom": "سفارشی",
-  "credits.topUp.firstTopUpGift.hint": "🎁 هدیه اولین شارژ: ۰.۵ میلیون اعتبار رایگان با بسته ۱۰ میلیون یا ۵ میلیون اعتبار رایگان با بسته ۱۰۰ میلیون دریافت کنید",
   "credits.topUp.freeFeeHint": "شارژ طرح رایگان شامل هزینه خدمات {{fee}} به ازای هر ۱ میلیون اعتبار است.",
   "credits.topUp.limitedOffer": "🔥 محدود",
   "credits.topUp.maxAmountError": "مبلغ خرید نمی‌تواند بیش از ${{max}} باشد",

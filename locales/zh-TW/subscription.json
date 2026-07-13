@@ -145,7 +145,6 @@
   "credits.topUp.bestValue.title": "{{plan}} 年度計劃解鎖最低充值費率：${{price}} / 1M {{creditLabel}}",
   "credits.topUp.cancel": "取消",
   "credits.topUp.custom": "自訂",
-  "credits.topUp.firstTopUpGift.hint": "🎁 首次充值優惠：購買 10M 套餐可免費獲得 +0.5M 點數，或購買 100M 套餐可免費獲得 +5M 點數",
   "credits.topUp.freeFeeHint": "免費方案充值每 1M 點數需支付 {{fee}} 手續費。",
   "credits.topUp.limitedOffer": "🔥 限時優惠",
   "credits.topUp.maxAmountError": "單次購買金額不得超過 ${{max}}",

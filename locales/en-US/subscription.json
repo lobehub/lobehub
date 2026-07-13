@@ -145,7 +145,6 @@
   "credits.topUp.bestValue.title": "Upgrade to {{plan}} annual — credits as low as ${{price}} / 1M {{creditLabel}}",
   "credits.topUp.cancel": "Cancel",
   "credits.topUp.custom": "Custom",
-  "credits.topUp.firstTopUpGift.hint": "🎁 First top-up bonus: get +0.5M free on the 10M pack, or +5M free on the 100M pack",
   "credits.topUp.freeFeeHint": "Free plan top-ups include a {{fee}} service fee per 1M credits.",
   "credits.topUp.limitedOffer": "🔥 Limited",
   "credits.topUp.maxAmountError": "Single purchase amount cannot exceed ${{max}}",
