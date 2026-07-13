@@ -241,12 +241,34 @@ describe('reportEvidence — comparison normalization', () => {
 
   it('keeps a comparison that carries both an id and a before/after role', () => {
     const [before, after] = reportEvidence([
-      { comparison: { id: 'layout', role: 'before' }, path: 'before.png' },
-      { comparison: { id: 'layout', label: '改后', role: 'after' }, path: 'after.png' },
+      { comparison: { id: 'row', role: 'before' }, path: 'before.png' },
+      { comparison: { id: 'row', label: '改后', role: 'after' }, path: 'after.png' },
     ]);
 
-    expect(before.comparison).toEqual({ id: 'layout', label: undefined, role: 'before' });
-    expect(after.comparison).toEqual({ id: 'layout', label: '改后', role: 'after' });
+    expect(before.comparison).toEqual({
+      id: 'row',
+      label: undefined,
+      layout: undefined,
+      role: 'before',
+    });
+    expect(after.comparison).toEqual({
+      id: 'row',
+      label: '改后',
+      layout: undefined,
+      role: 'after',
+    });
+  });
+
+  it('passes a vertical layout through and ignores any other value', () => {
+    const forLayout = (layout: unknown) =>
+      reportEvidence([{ comparison: { id: 'row', layout, role: 'before' }, path: 'a.png' }])[0]
+        .comparison?.layout;
+
+    expect(forLayout('vertical')).toBe('vertical');
+    // Side by side is the default, so anything unrecognized simply falls back to it.
+    expect(forLayout('horizontal')).toBeUndefined();
+    expect(forLayout('diagonal')).toBeUndefined();
+    expect(forLayout(undefined)).toBeUndefined();
   });
 
   // The report viewer pairs on `id`, so an id-less comparison could never render

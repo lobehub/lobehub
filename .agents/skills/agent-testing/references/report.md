@@ -67,16 +67,44 @@ the page. It carries only the non-duplicate narrative (仍需跟进 / 本轮验�
 
      ```json
      "evidence": [
-       { "path": "assets/before.png", "comparison": { "id": "layout", "role": "before" } },
-       { "path": "assets/after.png", "comparison": { "id": "layout", "role": "after" } }
+       {
+         "path": "assets/before.png",
+         "comparison": {
+           "id": "topic-row",
+           "role": "before",
+           "layout": "vertical",
+           "label": "副标题 11px，行高 40px"
+         }
+       },
+       {
+         "path": "assets/after.png",
+         "comparison": {
+           "id": "topic-row",
+           "role": "after",
+           "layout": "vertical",
+           "label": "副标题 12px，行高 44px"
+         }
+       }
      ]
      ```
 
-     The verify page renders a complete pair side by side with Before / After
-     headings. `comparison.label` may override either heading. A group contains
-     exactly one `before` and one `after`, and **both halves need the same string
-     `id`** — a half without an `id` can never pair. Incomplete groups render as
-     ordinary evidence.
+     The verify page renders a complete pair with each screenshot under its own
+     tinted band — red for `before`, green for `after` — so which state you are
+     looking at survives a glance. A group contains exactly one `before` and one
+     `after`, and **both halves need the same string `id`**; a half without an `id`
+     can never pair. Incomplete groups render as ordinary evidence.
+
+     Two fields are worth setting on every pair:
+
+     - **`layout`** — `horizontal` (default, side by side) or `vertical` (stacked).
+       Pick by the shape of the crop: a tall, narrow capture (a sidebar, a form,
+       a list) reads well side by side; a **wide, short strip** (a toolbar, a
+       one-line footer) must be `vertical`, because two of them in a two-column
+       grid become illegible slivers. Set it on both halves.
+     - **`label`** — the caption shown next to the role word in the band. This is
+       where the before/after contrast is actually _stated_: put the measured
+       delta on each side (`"11px，行高 40px"` vs `"12px，行高 44px"`), so the two
+       captions read as a comparison rather than repeating the case title.
 
      ⚠️ **`comparison` needs a CLI newer than the published `lh`.** Support landed
      in `9fc8c77805` (2026-07-12); the npm release on `PATH` (0.0.41) predates it

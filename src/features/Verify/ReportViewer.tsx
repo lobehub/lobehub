@@ -21,7 +21,7 @@ import {
   Text,
 } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import type { TFunction } from 'i18next';
 import {
   AlertTriangle,
@@ -710,6 +710,11 @@ const styles = createStaticStyles(({ css }) => ({
       grid-template-columns: 1fr;
     }
   `,
+  /* Wide, short captures (a toolbar, a one-line footer) get halved into
+     illegible slivers by the two-column grid — stack them instead. */
+  comparisonVertical: css`
+    grid-template-columns: 1fr;
+  `,
   comparisonItem: css`
     overflow: hidden;
 
@@ -719,16 +724,38 @@ const styles = createStaticStyles(({ css }) => ({
 
     background: ${cssVar.colorBgContainer};
   `,
+  /* The role rides on a tinted band fused to its own screenshot, so which state
+     you're looking at survives being read at a glance — a neutral heading above
+     the image reads as a caption for the whole pair. */
   comparisonLabel: css`
-    display: block;
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
 
     padding-block: 7px;
     padding-inline: 10px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
 
     font-size: 12px;
+  `,
+  comparisonLabelBefore: css`
+    border-block-end: 1px solid ${cssVar.colorErrorBorder};
+    color: ${cssVar.colorErrorText};
+    background: ${cssVar.colorErrorBg};
+  `,
+  comparisonLabelAfter: css`
+    border-block-end: 1px solid ${cssVar.colorSuccessBorder};
+    color: ${cssVar.colorSuccessText};
+    background: ${cssVar.colorSuccessBg};
+  `,
+  comparisonRole: css`
+    flex: none;
     font-weight: 600;
-    color: ${cssVar.colorTextSecondary};
+  `,
+  /* The two captions are themselves a before/after contrast, so they must stay
+     readable side by side — wrap rather than ellipsize. */
+  comparisonCaption: css`
+    min-width: 0;
+    opacity: 0.85;
   `,
   evidenceFile: css`
     cursor: pointer;
@@ -1047,6 +1074,13 @@ const evidenceDisplayName = (
 interface EvidenceComparison {
   id: string;
   label?: string;
+  /**
+   * How the pair is arranged. Side by side reads best for tall, narrow captures
+   * (a sidebar, a form); stacking is the only way a wide, short strip (a toolbar,
+   * a one-line footer) stays legible, since two of them side by side halve an
+   * already-thin band. Authors pick per pair; defaults to side by side.
+   */
+  layout: 'horizontal' | 'vertical';
   role: 'after' | 'before';
 }
 
@@ -1068,6 +1102,7 @@ const evidenceComparison = (evidence: VerifyEvidenceWithUrl): EvidenceComparison
   return {
     id: comparison.id,
     label: typeof comparison.label === 'string' ? comparison.label : undefined,
+    layout: comparison.layout === 'vertical' ? 'vertical' : 'horizontal',
     role,
   };
 };
@@ -1338,15 +1373,30 @@ const EvidenceComparisonView = memo<{
 }>(({ after, before }) => {
   const { t } = useTranslation('verify');
 
+  // Either half may carry the layout; the `before` one wins so a pair can't
+  // render as two different arrangements.
+  const layout = evidenceComparison(before)?.layout ?? evidenceComparison(after)?.layout;
+
   return (
-    <div className={styles.comparison}>
+    <div className={cx(styles.comparison, layout === 'vertical' && styles.comparisonVertical)}>
       {[before, after].map((evidence, index) => {
         const comparison = evidenceComparison(evidence)!;
+        const isBefore = comparison.role === 'before';
         return (
           <div className={styles.comparisonItem} key={evidence.id}>
-            <span className={styles.comparisonLabel}>
-              {comparison.label ?? t(`report.evidence.comparison.${comparison.role}`)}
-            </span>
+            <div
+              className={cx(
+                styles.comparisonLabel,
+                isBefore ? styles.comparisonLabelBefore : styles.comparisonLabelAfter,
+              )}
+            >
+              <span className={styles.comparisonRole}>
+                {t(`report.evidence.comparison.${comparison.role}`)}
+              </span>
+              {comparison.label && (
+                <span className={styles.comparisonCaption}>{comparison.label}</span>
+              )}
+            </div>
             <EvidenceItem evidence={evidence} index={index + 1} />
           </div>
         );

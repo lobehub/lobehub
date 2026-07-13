@@ -76,7 +76,12 @@ function inlineTextEvidenceForFile(file: string, type: EvidenceType | string): s
 
 /** Normalize a case's `evidence` field (string | string[] | {path}[]) to path strings. */
 interface ReportEvidenceInput {
-  comparison?: { id: string; label?: string; role: 'after' | 'before' };
+  comparison?: {
+    id: string;
+    label?: string;
+    layout?: 'horizontal' | 'vertical';
+    role: 'after' | 'before';
+  };
   description?: string;
   path: string;
 }
@@ -101,10 +106,11 @@ export function reportEvidence(evidence: unknown): ReportEvidenceInput[] {
           `evidence ${evidencePath}: comparison needs both a string "id" and role "before"/"after" — ignoring it`,
         );
       }
+      const layout = comparison?.layout === 'vertical' ? 'vertical' : undefined;
       return {
         comparison:
           id && (role === 'before' || role === 'after')
-            ? { id, label: firstString(comparison?.label), role }
+            ? { id, label: firstString(comparison?.label), layout, role }
             : undefined,
         description: firstString(value.description, value.desc),
         path: evidencePath,
