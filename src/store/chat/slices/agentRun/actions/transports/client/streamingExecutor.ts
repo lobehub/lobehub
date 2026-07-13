@@ -15,7 +15,7 @@ import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
 import { createPathScopeAudit } from '@lobechat/builtin-tool-local-system';
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import { manualModeExcludeToolIds } from '@lobechat/builtin-tools';
-import { DEFAULT_SUB_AGENT_MODEL, DEFAULT_SUB_AGENT_PROVIDER, isDesktop } from '@lobechat/const';
+import { isDesktop, resolveSubAgentModel } from '@lobechat/const';
 import { type ToolsEngine } from '@lobechat/context-engine';
 import { buildTaskDetailPrompt, buildTaskListPrompt } from '@lobechat/prompts';
 import {
@@ -118,6 +118,7 @@ export class StreamingExecutorActionImpl {
     operationId,
     subAgentId: paramSubAgentId,
     isSubAgent,
+    modelOverride,
   }: {
     messages: UIChatMessage[];
     parentMessageId: string;
@@ -135,6 +136,8 @@ export class StreamingExecutorActionImpl {
      */
     subAgentId?: string;
     isSubAgent?: boolean;
+    /** Model/provider the run is forced onto, resolved by the caller that spawns it. */
+    modelOverride?: { model: string; provider: string };
   }): {
     state: AgentState;
     context: AgentRuntimeContext;
@@ -169,24 +172,16 @@ export class StreamingExecutorActionImpl {
       scope, // Pass scope from operation context
     });
 
-    // Sub-agents run on a dedicated, separately-configurable default model
-    // (`agencyConfig.subagent`) instead of inheriting the parent agent's main
-    // model. Falls back to the global default (deepseek-v4-flash) when unset.
+    // A model/provider override resolved by the spawn site (see runClientSubAgent),
+    // not re-derived here: `isSubAgent` is also set for isolated group members —
+    // which must keep their own model — so it cannot gate this on its own.
     // resolveAgentConfig returns an immer-frozen config, so build a new object
     // rather than mutating in place.
     const agentConfig: ResolvedAgentConfig =
-      isSubAgent && resolvedAgentConfig.agentConfig
+      modelOverride && resolvedAgentConfig.agentConfig
         ? {
             ...resolvedAgentConfig,
-            agentConfig: {
-              ...resolvedAgentConfig.agentConfig,
-              model:
-                resolvedAgentConfig.agentConfig.agencyConfig?.subagent?.model ||
-                DEFAULT_SUB_AGENT_MODEL,
-              provider:
-                resolvedAgentConfig.agentConfig.agencyConfig?.subagent?.provider ||
-                DEFAULT_SUB_AGENT_PROVIDER,
-            },
+            agentConfig: { ...resolvedAgentConfig.agentConfig, ...modelOverride },
           }
         : resolvedAgentConfig;
 
@@ -478,6 +473,13 @@ export class StreamingExecutorActionImpl {
     parentOperationId?: string;
     skipCreateFirstMessage?: boolean;
     isSubAgent?: boolean;
+    /**
+     * Forces the run onto a specific model, overriding the resolved agent config.
+     * Resolved by the spawn site — `runClientSubAgent` passes the parent's
+     * `agencyConfig.subagent` here. Group members deliberately don't, so they
+     * keep their own model.
+     */
+    modelOverride?: { model: string; provider: string };
   }): Promise<{ cost?: Cost; model?: string; provider?: string; usage?: Usage } | void> => {
     const {
       disableTools,
@@ -605,6 +607,7 @@ export class StreamingExecutorActionImpl {
       operationId,
       subAgentId, // Pass subAgentId for agent config retrieval (behavior depends on scope)
       isSubAgent, // Pass isSubAgent to filter out lobe-agent tool in sub-agent context
+      modelOverride: params.modelOverride,
     });
 
     if (params.skipCreateFirstMessage) {
@@ -993,11 +996,16 @@ export class StreamingExecutorActionImpl {
         this.#get().replaceMessages(subMessages, { context: subContext });
       }
 
-      // 6. Run the sub-agent with the current client runtime
+      // 6. Run the sub-agent with the current client runtime.
+      //    A sub-agent runs on its own model rather than inheriting the parent's
+      //    main one, resolved here at the spawn site from the parent's
+      //    `agencyConfig.subagent` (mirrors the server's callSubAgent runner).
+      const parentAgentConfig = agentSelectors.getAgentConfigById(agentId)(getAgentStoreState());
       const runtimeResult = await this.#get().executeClientAgent({
         context: subContext,
         isSubAgent: true,
         messages: subMessages,
+        modelOverride: resolveSubAgentModel(parentAgentConfig?.agencyConfig?.subagent),
         operationId: taskOperationId,
         parentMessageId: userMessageId,
         parentMessageType: 'user',

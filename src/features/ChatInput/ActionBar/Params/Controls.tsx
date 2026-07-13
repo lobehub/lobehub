@@ -1,8 +1,4 @@
-import {
-  DEFAULT_AGENT_CONFIG,
-  DEFAULT_SUB_AGENT_MODEL,
-  DEFAULT_SUB_AGENT_PROVIDER,
-} from '@lobechat/const';
+import { DEFAULT_AGENT_CONFIG, resolveSubAgentModel } from '@lobechat/const';
 import { Flexbox, Icon, SliderWithInput, TextArea } from '@lobehub/ui';
 import { Select, Switch } from '@lobehub/ui/base-ui';
 import { Form as AntdForm } from 'antd';
@@ -629,12 +625,10 @@ const Controls = memo<ControlsProps>(({ setUpdating, updating, variant = 'popove
     ? t('settingModel.params.panel.agentTitle')
     : t('settingModel.params.panel.title');
 
-  // Default model for sub-agents this agent spawns via callSubAgent. Falls back
-  // to the global default (deepseek-v4-flash) for display when unconfigured.
-  const subAgentModelValue = {
-    model: config.agencyConfig?.subagent?.model || DEFAULT_SUB_AGENT_MODEL,
-    provider: config.agencyConfig?.subagent?.provider || DEFAULT_SUB_AGENT_PROVIDER,
-  };
+  // Model the sub-agents this agent spawns via callSubAgent run on. Resolved
+  // through the same helper the runtime uses, so the panel can't show a model
+  // the run won't actually use.
+  const subAgentModelValue = resolveSubAgentModel(config.agencyConfig?.subagent);
 
   const handleToggle = useCallback(
     async (key: ParamKey, enabled: boolean) => {
