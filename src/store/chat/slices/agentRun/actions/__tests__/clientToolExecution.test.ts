@@ -1,4 +1,5 @@
 import type { ToolExecuteData } from '@lobechat/agent-gateway-client';
+import type { WorkRegistrationIntent } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { stashWorkIntent, takeWorkIntent } from '@/utils/clientWorkIntentStash';
@@ -234,7 +235,11 @@ describe('internal_executeClientTool', () => {
 
   describe('Work registration relay', () => {
     it('relays the stashed Work intent on the tool_result and drains the stash', async () => {
-      const intent = { action: 'create', targets: [{ taskId: 't-1' }], type: 'task' } as const;
+      const intent: WorkRegistrationIntent = {
+        action: 'create',
+        targets: [{ taskId: 't-1' }],
+        type: 'task',
+      };
       hasExecutorMock.mockReturnValue(true);
       // Mirror `invokeExecutor` → `stashBuiltinToolWorkIntent`: the executor
       // stashes the Work intent keyed by toolCallId during execution.
@@ -259,7 +264,11 @@ describe('internal_executeClientTool', () => {
     });
 
     it('frees a stashed Work intent via the finally leak guard when the executor throws', async () => {
-      const intent = { action: 'create', targets: [{ taskId: 't-2' }], type: 'task' } as const;
+      const intent: WorkRegistrationIntent = {
+        action: 'create',
+        targets: [{ taskId: 't-2' }],
+        type: 'task',
+      };
       hasExecutorMock.mockReturnValue(true);
       invokeExecutorMock.mockImplementation(async () => {
         // Stash before throwing, as a mid-execution side-effect would; the normal

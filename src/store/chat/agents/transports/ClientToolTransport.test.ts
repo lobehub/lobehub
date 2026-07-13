@@ -110,7 +110,15 @@ describe('ClientToolTransport', () => {
       startOperation: vi.fn(() => ({ operationId: `child-operation-${++operationIndex}` })),
       updateOperationMetadata: vi.fn(),
     } as unknown as ChatStore;
-    const transport = new ClientToolTransport(() => store, 'message-key', 'root-operation');
+    const messages = {
+      createToolMessageForOperation: vi.fn().mockResolvedValue({ id: 'tool-message' }),
+    } as unknown as ClientMessageTransport;
+    const transport = new ClientToolTransport(
+      () => store,
+      'message-key',
+      'root-operation',
+      messages,
+    );
     const call: ChatToolPayload = {
       apiName: 'run',
       arguments: '{}',
