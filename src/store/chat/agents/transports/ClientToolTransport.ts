@@ -12,7 +12,6 @@ import type { ChatStore } from '@/store/chat/store';
 import { takeWorkIntent } from '@/utils/clientWorkIntentStash';
 
 import { registerClientWorkFromIntent } from '../registerClientWorkFromIntent';
-
 import type { ClientMessageTransport } from './ClientMessageTransport';
 
 const TOOL_PRICING: Record<string, number> = {
