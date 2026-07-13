@@ -90,7 +90,7 @@ export class MessageGatewayClient {
   async connect(
     config: MessageGatewayConnectionConfig,
     options?: { ensure?: boolean },
-  ): Promise<{ status: string }> {
+  ): Promise<{ status: MessageGatewayConnectionStatus['state']['status'] }> {
     log('Connecting %s:%s (platform=%s)', config.connectionId, config.userId, config.platform);
 
     const res = await this.post('/api/connections', { config, ensure: options?.ensure });

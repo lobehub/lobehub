@@ -250,14 +250,16 @@ export class GatewayService {
           );
 
           // Gateway returns "connecting" for async persistent connections
-          // (e.g. Discord WebSocket), "connected" for sync webhook-mode.
+          // (e.g. Discord WebSocket), "connected" for sync webhook-mode. An
+          // `ensure` reconcile can also legitimately return "dormant" (the DO is
+          // sparse-polling and won't send a correcting callback), so map through
+          // the shared helper instead of collapsing every non-connected result
+          // to "starting" — otherwise a dormant connection is persisted as
+          // starting and never corrected.
           await updateBotRuntimeStatus({
             applicationId: provider.applicationId,
             platform,
-            status:
-              result.status === 'connected'
-                ? BOT_RUNTIME_STATUSES.connected
-                : BOT_RUNTIME_STATUSES.starting,
+            status: mapGatewayStatusToRuntimeStatus(result.status),
           });
 
           connected++;
