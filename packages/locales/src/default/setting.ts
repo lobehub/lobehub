@@ -26,10 +26,27 @@ export default {
   'accountDeletion.confirmTitle': 'Delete Account?',
   'accountDeletion.desc':
     'Permanently delete your account and all associated data. This action cannot be undone.',
+  'accountDeletion.detailPlaceholder': 'Tell us more (optional) — details help us improve',
+  'accountDeletion.divert.accountIssue':
+    'You may not need to delete your account — you can change your email or link more sign-in methods in <0>Profile Settings</0>.',
+  'accountDeletion.divert.bug':
+    'Sorry about that! Come tell us in our <0>Discord</0> community and we’ll follow up.',
   'accountDeletion.pendingDesc': 'Your account is scheduled for deletion',
   'accountDeletion.pendingMessage': 'Your account will be deleted in {{hours}} hours',
-  'accountDeletion.reasonPlaceholder': 'Please tell us why you want to delete your account...',
-  'accountDeletion.reasonRequired': 'Please provide a reason for deletion',
+  'accountDeletion.reasonLabel': 'Why are you leaving?',
+  'accountDeletion.reasonOption.account_issue':
+    'Account issues (duplicate account / changing email)',
+  'accountDeletion.reasonOption.bug': 'I ran into a specific bug',
+  'accountDeletion.reasonOption.hard_to_use': 'Hard to use or confusing',
+  'accountDeletion.reasonOption.missing_feature': 'Missing features I need',
+  'accountDeletion.reasonOption.no_longer_needed': 'I no longer need it',
+  'accountDeletion.reasonOption.other': 'Other',
+  'accountDeletion.reasonOption.privacy': 'Privacy concerns',
+  'accountDeletion.reasonOption.self_host': 'I want to self-host',
+  'accountDeletion.reasonOption.switch_competitor': 'Switching to another product',
+  'accountDeletion.reasonOption.too_expensive': 'Too expensive',
+  'accountDeletion.reregisterNotice':
+    'After deletion completes, the same email cannot be used to sign up again for {{days}} days.',
   'accountDeletion.requestButton': 'Request Account Deletion',
   'accountDeletion.requestFailed': 'Failed to request account deletion',
   'accountDeletion.requestSuccess': 'Deletion request submitted',
