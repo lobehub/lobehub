@@ -23,7 +23,7 @@ export default {
   'billing.pay': 'Pay Now',
   'billing.paymentGateway': 'Payment Gateway',
   'billing.paymentMethod': 'Payment Method',
-  'billing.paymentMethod.addWithGift': '🎁 Add payment method · Get 0.5M credits free',
+  'billing.paymentMethod.addWithGift': '🎁 Add payment method · Get 1M credits free',
   'billing.paymentMethod.openFailed': 'Failed to open payment method setup',
   'billing.price': 'Subscription Price',
   'billing.startDate': 'Start Date',
@@ -84,7 +84,7 @@ export default {
   'downgradePlans.success': 'Subscription cancelled successfully',
   'downgradePlans.title': 'Switch to {{plan}}',
   'credits.autoTopUp.cardBindingGiftHint':
-    '🎁 Add your first payment method and get 0.5M credits free',
+    '🎁 Add your first payment method and get 1M credits free',
   'credits.autoTopUp.currentBalance': 'Current Balance',
   'credits.autoTopUp.desc': 'Ensure your credits never run out',
   'credits.autoTopUp.noCustomerHint':
@@ -543,6 +543,10 @@ export default {
   'recurring.threeMonth': 'Three Months',
   'recurring.title': 'Billing Cycle',
   'recurring.yearly': 'Yearly Billing',
+  'referral.cardBindingGift.cta': 'Claim now',
+  'referral.cardBindingGift.description':
+    'Add your first payment method and 1M credits land in your account instantly — no charge, no subscription required.',
+  'referral.cardBindingGift.title': '🎁 Add a payment method, get 1M credits',
   'referral.copy.codeSuccess': 'Invite code copied',
   'referral.copy.linkSuccess': 'Invite link copied',
   'referral.edit.button': 'Edit',

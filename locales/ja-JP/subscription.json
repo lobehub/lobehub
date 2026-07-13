@@ -53,7 +53,7 @@
   "compareAllPlans": "すべてのプランを見る",
   "comparePlans": "プランを見る",
   "createSubscriptionError": "サブスクリプションの作成に失敗しました",
-  "credits.autoTopUp.cardBindingGiftHint": "🎁 初めての支払い方法を追加して、無料で0.5Mクレジットを獲得しましょう",
+  "credits.autoTopUp.cardBindingGiftHint": "🎁 初めての支払い方法を追加して、無料で1Mクレジットを獲得しましょう",
   "credits.autoTopUp.currentBalance": "現在の残高",
   "credits.autoTopUp.desc": "クレジットがなくならないようにしましょう",
   "credits.autoTopUp.monthlyLimit": "月間制限",

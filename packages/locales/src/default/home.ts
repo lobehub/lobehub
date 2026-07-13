@@ -42,7 +42,7 @@ export default {
   'brief.viewRun': 'View run',
   'cardBindingPromoBanner.cta': 'Claim now',
   'cardBindingPromoBanner.dismiss': 'Dismiss',
-  'cardBindingPromoBanner.label': 'Add your first payment method and get 0.5M credits free',
+  'cardBindingPromoBanner.label': 'Add your first payment method and get 1M credits free',
   'homePromoBanner.cta': 'Try now',
   'homePromoBanner.dismiss': 'Dismiss',
   'homePromoBanner.label': '{{model}} is now available',
