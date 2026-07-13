@@ -1377,6 +1377,7 @@
   "workingPanel.browser.import.success_other": "已从 Chrome 导入 {{count}} 个浏览器会话",
   "workingPanel.browser.import.title": "从 Chrome 导入登录信息",
   "workingPanel.browser.loading": "正在加载页面",
+  "workingPanel.browser.loadingHost": "正在加载 {{host}}…",
   "workingPanel.browser.title": "浏览器",
   "workingPanel.browser.tool.click": "点击了元素",
   "workingPanel.browser.tool.elements_one": "{{count}} 个元素",

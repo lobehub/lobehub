@@ -45,13 +45,15 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     pointer-events: none;
 
     position: absolute;
-    z-index: 1;
-    inset-block-end: -1px;
+    z-index: 3;
+    inset-block-start: 0;
     inset-inline: 0;
 
     overflow: hidden;
 
-    height: 2px;
+    height: 3px;
+
+    background: ${cssVar.colorFillSecondary};
 
     &::after {
       content: '';
@@ -83,6 +85,28 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
         animation: none;
       }
     }
+  `,
+  loadingStatus: css`
+    pointer-events: none;
+
+    position: absolute;
+    z-index: 3;
+    inset-block-start: 12px;
+    inset-inline-start: 50%;
+    transform: translateX(-50%);
+
+    overflow: hidden;
+
+    max-width: calc(100% - 32px);
+    padding-block: 4px;
+    padding-inline: 8px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusSM};
+
+    color: ${cssVar.colorTextSecondary};
+
+    background: ${cssVar.colorBgElevated};
+    box-shadow: ${cssVar.boxShadowTertiary};
   `,
   container: css`
     position: relative;
@@ -168,6 +192,13 @@ const BrowserPane = memo<BrowserPaneProps>(({ sessionId }) => {
   const browserRequest = useGlobalStore((s) => s.status.workingSidebarBrowserRequest);
   const consumedNonce = useRef<number>(undefined);
   const webviewRef = useRef<WebviewElement>(null);
+  const loadingHost = (() => {
+    try {
+      return new URL(state.url).hostname;
+    } catch {
+      return state.url;
+    }
+  })();
 
   // will-attach-webview only sees standard attributes, so the main process
   // can't learn the sessionId there — bind it explicitly once the guest exists.
@@ -419,14 +450,6 @@ const BrowserPane = memo<BrowserPaneProps>(({ sessionId }) => {
             }
           />
         </Flexbox>
-        {state.isLoading && (
-          <div
-            aria-label={t('workingPanel.browser.loading')}
-            aria-valuetext={t('workingPanel.browser.loading')}
-            className={styles.loadingBar}
-            role="progressbar"
-          />
-        )}
       </Flexbox>
       {!isImportBannerDismissed && (
         <Flexbox horizontal align={'center'} className={styles.importBanner} gap={12}>
@@ -453,6 +476,19 @@ const BrowserPane = memo<BrowserPaneProps>(({ sessionId }) => {
         </Flexbox>
       )}
       <Flexbox className={styles.container}>
+        {state.isLoading && (
+          <>
+            <div
+              aria-label={t('workingPanel.browser.loading')}
+              aria-valuetext={t('workingPanel.browser.loading')}
+              className={styles.loadingBar}
+              role="progressbar"
+            />
+            <Text ellipsis className={styles.loadingStatus} fontSize={12}>
+              {t('workingPanel.browser.loadingHost', { host: loadingHost })}
+            </Text>
+          </>
+        )}
         <AgentOverlay sessionId={sessionId} />
         {initialUrl ? (
           <webview
