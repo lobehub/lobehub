@@ -41,3 +41,35 @@ export const isApplicationError = (data: unknown) => {
   const record = toRecord(parseMaybeJSON(data));
   return record?.isError === true;
 };
+
+/**
+ * Allowlist an external Work URL to the `http`/`https` schemes before it is
+ * persisted into a Work snapshot.
+ *
+ * Work URLs are member-controlled free text: Linear results carry a `url` /
+ * `appUrl` field and GitHub URLs are parsed out of `gh` CLI stdout, so a
+ * workspace member can plant an arbitrary scheme (`javascript:`, `data:`,
+ * `file:`, custom protocols). Another member later clicking that Work card in
+ * the desktop (Electron) app hits `window.open` → `shell.openExternal`, which
+ * would turn the stored string into script execution or local-file access.
+ * Rejecting non-http(s) URLs here is the authoritative write-time boundary;
+ * render-time guards add defense in depth.
+ *
+ * @returns the trimmed URL when it parses via `new URL()` and uses the
+ *   `http:`/`https:` protocol, otherwise `undefined` (so the caller skips it).
+ */
+export const sanitizeExternalUrl = (value: unknown): string | undefined => {
+  if (typeof value !== 'string') return undefined;
+
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+
+  try {
+    const { protocol } = new URL(trimmed);
+    if (protocol === 'http:' || protocol === 'https:') return trimmed;
+  } catch {
+    return undefined;
+  }
+
+  return undefined;
+};

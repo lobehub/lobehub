@@ -7,8 +7,9 @@ import { PackageOpenIcon, TriangleAlertIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
 import DocumentPreviewModal from '@/features/DocumentModal/Preview';
-import { getWorkTypeDescriptor } from '@/features/Work/descriptors';
+import { getWorkTypeDescriptor, isSafeExternalUrl } from '@/features/Work/descriptors';
 import WorkSummaryCard from '@/features/Work/WorkSummaryCard';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useDocumentStore } from '@/store/document';
@@ -151,13 +152,15 @@ const WorkGallery = memo<WorkGalleryProps>(({ galleryKey }) => {
         }
         // linear / github: external link (URL-less cards yield no target above).
         case 'external': {
-          window.open(openTarget.url, '_blank', 'noopener,noreferrer');
+          // Defense in depth: only ever hand http(s) to shell.openExternal.
+          if (isSafeExternalUrl(openTarget.url))
+            window.open(openTarget.url, '_blank', 'noopener,noreferrer');
           return;
         }
         // task: no external URL — the standalone detail route resolves the same
         // identifier-or-id the chat portal uses.
         case 'task': {
-          navigate(`/task/${openTarget.identifier}`);
+          navigate(taskDetailPath(openTarget.identifier));
         }
       }
     },

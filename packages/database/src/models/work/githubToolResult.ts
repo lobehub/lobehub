@@ -11,6 +11,7 @@ import {
   hasOwn,
   isApplicationError,
   parseMaybeJSON,
+  sanitizeExternalUrl,
   stringValue,
   toRecord,
 } from './toolResultParsing';
@@ -214,7 +215,9 @@ const buildParams = (
   const args = params.args ?? {};
   const repo = resolveRepo(record, args);
   const number = resolveNumber(record, args);
-  const url = resolveUrl(record);
+  // Allowlist http(s) only: a tool-result `html_url` is member-controlled and
+  // the persisted url reaches shell.openExternal on desktop.
+  const url = sanitizeExternalUrl(resolveUrl(record));
 
   const patchFields = new Set<GithubWorkPatchField>();
   const patch = makePatch(patchFields);
@@ -551,6 +554,10 @@ const normalizeGithubCliResult = (
 
   const identifier = `${ref.repo}#${ref.number}`;
 
+  // Allowlist http(s) only: the url is parsed from member-controlled `gh`
+  // stdout and reaches shell.openExternal on desktop.
+  const safeUrl = sanitizeExternalUrl(ref.url);
+
   const patchFields = new Set<GithubWorkPatchField>(['identifier', 'number', 'repo']);
   const patch = makePatch(patchFields);
 
@@ -575,7 +582,7 @@ const normalizeGithubCliResult = (
       threadId: params.threadId ?? null,
       title: patch('title', parsed.title !== null, stringValue(parsed.title)),
       topicId: params.topicId ?? null,
-      url: patch('url', !!ref.url, ref.url),
+      url: patch('url', !!safeUrl, safeUrl),
       // Evaluated last: every patch() call above must run before the set is
       // materialized (object literal properties evaluate in order).
       patchFields: Array.from(patchFields),

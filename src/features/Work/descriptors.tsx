@@ -15,6 +15,26 @@ export type WorkOpenTarget =
   | { identifier: string; kind: 'task' }
   | { kind: 'external'; url: string };
 
+/**
+ * Client-side allowlist for external Work URLs (defense in depth over the
+ * authoritative write-time `sanitizeExternalUrl` in the database package —
+ * frontend code must not import that package). Work URLs are member-controlled
+ * (Linear payloads, parsed `gh` stdout), so an old snapshot could still hold a
+ * `javascript:`/`data:`/`file:`/custom scheme. On desktop (Electron) opening a
+ * Work card runs `window.open` → `shell.openExternal`, so only ever hand off
+ * http(s) URLs.
+ */
+export const isSafeExternalUrl = (url?: string | null): url is string => {
+  if (!url) return false;
+
+  try {
+    const { protocol } = new URL(url);
+    return protocol === 'http:' || protocol === 'https:';
+  } catch {
+    return false;
+  }
+};
+
 /** Narrow a Work list/summary union member to the variants of a single type. */
 type WorkItemOfType<T extends WorkType> =
   Extract<WorkListItem, { type: T }> | Extract<WorkSummaryItem, { type: T }>;
@@ -64,18 +84,22 @@ export const WORK_TYPE_DESCRIPTORS: {
     Icon: Github,
     getDescription: (item) => (item.github.description || item.github.status)?.trim() ?? null,
     getIdentifier: (item) => item.github.identifier,
-    // Github works registered from CLI/tool results may carry no URL — those
-    // cards have nothing to open, so drop the click affordance entirely.
-    getOpenTarget: (item) => (item.github.url ? { kind: 'external', url: item.github.url } : null),
+    // Github works registered from CLI/tool results may carry no URL (or a
+    // member-planted non-http(s) scheme) — those cards have nothing safe to
+    // open, so drop the click affordance entirely.
+    getOpenTarget: (item) =>
+      isSafeExternalUrl(item.github.url) ? { kind: 'external', url: item.github.url } : null,
     getTitle: (item) => item.github.title,
   },
   linear: {
     Icon: LinearIcon,
     getDescription: (item) => (item.linear.description || item.linear.status)?.trim() ?? null,
     getIdentifier: (item) => item.linear.identifier,
-    // Linear works registered from CLI/tool results may carry no URL — those
-    // cards have nothing to open, so drop the click affordance entirely.
-    getOpenTarget: (item) => (item.linear.url ? { kind: 'external', url: item.linear.url } : null),
+    // Linear works registered from CLI/tool results may carry no URL (or a
+    // member-planted non-http(s) scheme) — those cards have nothing safe to
+    // open, so drop the click affordance entirely.
+    getOpenTarget: (item) =>
+      isSafeExternalUrl(item.linear.url) ? { kind: 'external', url: item.linear.url } : null,
     getTitle: (item) => item.linear.title,
   },
   task: {

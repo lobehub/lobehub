@@ -11,6 +11,7 @@ import {
   hasOwn,
   isApplicationError,
   parseMaybeJSON,
+  sanitizeExternalUrl,
   stringValue,
   toRecord,
 } from './toolResultParsing';
@@ -226,7 +227,9 @@ const createRegisterOperation = (
         ),
       ),
       title: patch('title', optionalStringFromRecord(record, ['title', 'name', 'subject'])),
-      url: patch('url', optionalStringFromRecord(record, ['url', 'appUrl'])),
+      // Allowlist http(s) only: the persisted url reaches shell.openExternal on
+      // desktop, and a member could plant a `javascript:`/`file:` scheme here.
+      url: patch('url', sanitizeExternalUrl(optionalStringFromRecord(record, ['url', 'appUrl']))),
       // Evaluated last: every patch() call above must run before the set is
       // materialized (object literal properties evaluate in order).
       patchFields: Array.from(patchFields),

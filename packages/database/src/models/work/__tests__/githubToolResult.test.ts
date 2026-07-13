@@ -112,3 +112,53 @@ describe('normalizeGithubToolResult (gh runCommand parsing)', () => {
     });
   });
 });
+
+/**
+ * The persisted url reaches shell.openExternal on desktop, and gh stdout is
+ * member-controlled free text, so only http(s) URLs may be stored.
+ */
+describe('normalizeGithubToolResult (url scheme allowlist)', () => {
+  const editWithStdoutUrl = (url: string) =>
+    // `gh issue edit 5` supplies repo+number identity; the stdout URL is the
+    // attacker-controlled value under test.
+    runCommand(`gh issue edit 5 --repo lobehub/lobehub`, url);
+
+  it.each([
+    ['javascript:alert(1)', 'javascript'],
+    ['data:text/html,x', 'data'],
+    ['file:///etc/passwd', 'file'],
+  ])('drops the persisted url for a %s scheme', (url) => {
+    // A non-github scheme never matches the entity-URL regex, so the ref falls
+    // back to the command's edit target (number 5) and carries no url.
+    const operation = editWithStdoutUrl(url);
+
+    expect(operation?.params.number).toBe(5);
+    expect(operation?.params.url).toBeUndefined();
+  });
+
+  it('keeps a plain https github url', () => {
+    const operation = runCommand(
+      `gh issue create --repo lobehub/lobehub --title 'ok'`,
+      'https://github.com/lobehub/lobehub/issues/321',
+    );
+
+    expect(operation?.params.url).toBe('https://github.com/lobehub/lobehub/issues/321');
+  });
+
+  it('keeps a structured-result html_url only when it is http(s)', () => {
+    const good = normalizeGithubToolResult({
+      data: { html_url: 'https://github.com/lobehub/lobehub/issues/9', number: 9 },
+      args: { owner: 'lobehub', repo: 'lobehub' },
+      toolName: 'create_issue',
+    });
+    expect(good?.params.url).toBe('https://github.com/lobehub/lobehub/issues/9');
+
+    const bad = normalizeGithubToolResult({
+      data: { html_url: 'javascript:alert(1)', number: 9 },
+      args: { owner: 'lobehub', repo: 'lobehub' },
+      toolName: 'create_issue',
+    });
+    expect(bad?.params.identifier).toBe('lobehub/lobehub#9');
+    expect(bad?.params.url).toBeUndefined();
+  });
+});

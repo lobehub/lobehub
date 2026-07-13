@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { topics, works } from '../../../schemas';
 import { WorkModel } from '..';
+import { normalizeLinearToolResult } from '../linearToolResult';
 import {
   cleanupWorkTestData,
   expectLinearSnapshot,
@@ -365,5 +366,40 @@ describe('WorkModel · linear', () => {
       linear: expect.objectContaining({ title: 'Other user issue title' }),
       type: 'linear',
     });
+  });
+});
+
+/**
+ * The persisted url reaches shell.openExternal on desktop, and Linear tool
+ * payloads are member-controlled, so only http(s) URLs may be stored.
+ */
+describe('normalizeLinearToolResult (url scheme allowlist)', () => {
+  const registerIssueWithUrl = (url: string) =>
+    normalizeLinearToolResult({
+      data: { id: 'issue-uuid', identifier: 'LOBE-1', title: 'T', url },
+      toolName: 'save_issue',
+    });
+
+  it.each([['javascript:alert(1)'], ['data:text/html,x'], ['file:///etc/passwd']])(
+    'drops the persisted url for %s',
+    (url) => {
+      const operation = registerIssueWithUrl(url);
+
+      // Identity is still resolved from the payload; only the unsafe url is dropped.
+      expect(operation?.params.identifier).toBe('LOBE-1');
+      expect(operation?.params.url).toBeUndefined();
+    },
+  );
+
+  it('keeps a whitespace-padded https url after trimming', () => {
+    const operation = registerIssueWithUrl('  https://linear.app/lobehub/issue/LOBE-1  ');
+
+    expect(operation?.params.url).toBe('https://linear.app/lobehub/issue/LOBE-1');
+  });
+
+  it('keeps a plain https url', () => {
+    const operation = registerIssueWithUrl('https://linear.app/lobehub/issue/LOBE-1');
+
+    expect(operation?.params.url).toBe('https://linear.app/lobehub/issue/LOBE-1');
   });
 });

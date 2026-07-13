@@ -23,7 +23,23 @@ const workProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => 
   });
 });
 
-const workProcedureWrite = workProcedure.use(withScopedPermission('agent:update'));
+// Task-domain write gate. Task mutations elsewhere (see the task router's
+// `taskProcedureWrite`) gate on `agent:update`, so a Work registration that
+// records a task mutation must require the same permission — otherwise a role
+// that can't mutate tasks could still forge (or be denied) task provenance.
+const taskWorkProcedureWrite = workProcedure.use(withScopedPermission('agent:update'));
+
+// Document-domain write gate. Document mutations (see the document router)
+// gate on `document:update`; the document Work registration is the provenance
+// side of the same mutation and must align, so a role with `agent:update` but
+// without `document:update` can't forge document provenance, and a document-only
+// role's legitimate registration isn't rejected.
+const documentWorkProcedureWrite = workProcedure.use(withScopedPermission('document:update'));
+
+// Skill tool results (linear/github) touch no first-class workspace resource
+// with its own permission domain, so there is no narrower gate to align with;
+// keep the general `agent:update` workspace-write gate.
+const skillWorkProcedureWrite = workProcedure.use(withScopedPermission('agent:update'));
 
 const versionChangeTypeSchema = z.enum(['created', 'updated']);
 
@@ -137,19 +153,19 @@ export const workRouter = router({
     .input(z.object({ workId: z.string().min(1) }))
     .query(async ({ ctx, input }) => ctx.workModel.listVersions(input.workId)),
 
-  deleteTaskWork: workProcedureWrite
+  deleteTaskWork: taskWorkProcedureWrite
     .input(z.object({ taskId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => ctx.workModel.deleteTaskWork(input)),
 
-  registerTask: workProcedureWrite
+  registerTask: taskWorkProcedureWrite
     .input(registerTaskSchema)
     .mutation(async ({ ctx, input }) => ctx.workModel.registerTask(input)),
 
-  registerDocument: workProcedureWrite
+  registerDocument: documentWorkProcedureWrite
     .input(registerDocumentSchema)
     .mutation(async ({ ctx, input }) => ctx.workModel.registerDocument(input)),
 
-  handleSkillToolResult: workProcedureWrite
+  handleSkillToolResult: skillWorkProcedureWrite
     .input(registerSkillToolResultSchema)
     .mutation(async ({ ctx, input }) => ctx.workModel.handleSkillToolResult(input)),
 });

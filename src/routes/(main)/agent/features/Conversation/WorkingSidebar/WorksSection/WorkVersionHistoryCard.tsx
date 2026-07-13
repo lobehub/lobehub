@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 
 import TaskPriorityTag from '@/features/AgentTasks/features/TaskPriorityTag';
 import TaskStatusTag from '@/features/AgentTasks/features/TaskStatusTag';
-import { getWorkTypeDescriptor } from '@/features/Work/descriptors';
+import { getWorkTypeDescriptor, isSafeExternalUrl } from '@/features/Work/descriptors';
 import { useChatStore } from '@/store/chat';
 
 import VersionList from './VersionList';
@@ -81,7 +81,10 @@ const WorkVersionHistoryCard = memo<{ work: WorkListItem }>(({ work }) => {
         return () => openDocument(openTarget.documentId);
       }
       case 'external': {
-        return () => window.open(openTarget.url, '_blank', 'noopener,noreferrer');
+        // Defense in depth: only ever hand http(s) to shell.openExternal.
+        return isSafeExternalUrl(openTarget.url)
+          ? () => window.open(openTarget.url, '_blank', 'noopener,noreferrer')
+          : undefined;
       }
       case 'task': {
         return taskDeleted ? undefined : () => openTaskDetail(openTarget.identifier);

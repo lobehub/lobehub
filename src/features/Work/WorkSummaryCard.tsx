@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { useChatStore } from '@/store/chat';
 import { formatWorkVersionCost } from '@/utils/workVersionCost';
 
-import { getWorkTypeDescriptor } from './descriptors';
+import { getWorkTypeDescriptor, isSafeExternalUrl } from './descriptors';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   card: css`
@@ -101,7 +101,9 @@ const WorkSummaryCard = memo<WorkSummaryCardProps>(({ className, item, onOpen })
         return;
       }
       case 'external': {
-        window.open(openTarget.url, '_blank', 'noopener,noreferrer');
+        // Defense in depth: only ever hand http(s) to shell.openExternal.
+        if (isSafeExternalUrl(openTarget.url))
+          window.open(openTarget.url, '_blank', 'noopener,noreferrer');
         return;
       }
       case 'task': {
