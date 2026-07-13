@@ -600,14 +600,18 @@ const createMessageWriteBatcher = (deps: {
 };
 
 interface MessageBatchMutationResult {
-  results?: Array<{ index: number; success: boolean }>;
+  results?: Array<{ error?: string; index: number; success: boolean }>;
   success?: boolean;
 }
 
 class MessageBatchMutationError extends Error {
   constructor(public readonly result: MessageBatchMutationResult) {
-    const failedCount = result.results?.filter((item) => !item.success).length;
-    super(`messageService.batchMutate failed for ${failedCount || 'unknown'} operation(s)`);
+    const failed = result.results?.filter((item) => !item.success) ?? [];
+    const reasons = [...new Set(failed.map((item) => item.error).filter(Boolean))];
+    super(
+      `messageService.batchMutate failed for ${failed.length || 'unknown'} operation(s)` +
+        (reasons.length > 0 ? `: ${reasons.join('; ')}` : ''),
+    );
   }
 }
 
@@ -1308,6 +1312,17 @@ export const executeHeterogeneousAgent = async (
     // caller already guards, but this function is a separate closure). All
     // subagent rows are topic-scoped.
     if (!context.topicId) return;
+
+    // `createThread.sourceMessageId` and `createMessage.parentId` both point at the
+    // main assistant row, which `applyMainIntent` only *enqueues* into the write
+    // batcher. Subagent rows are written straight through, so without this drain
+    // they can reach the DB ahead of their parent — and `messages.parent_id` has an
+    // FK to `messages.id`, so the insert is rejected and the row is lost for good.
+    // No-op when the queue is already empty.
+    if (intent.kind === 'createThread' || intent.kind === 'createMessage') {
+      await messageWriteBatcher.flush('before-subagent-write');
+    }
+
     switch (intent.kind) {
       case 'createThread': {
         try {

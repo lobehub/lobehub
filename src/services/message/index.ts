@@ -62,6 +62,7 @@ export type MessageBatchOperation =
 
 export interface MessageBatchMutationResult {
   results?: Array<{
+    error?: string;
     id?: string;
     index: number;
     success: boolean;
@@ -72,8 +73,12 @@ export interface MessageBatchMutationResult {
 
 export class MessageBatchMutationError extends Error {
   constructor(public readonly result: MessageBatchMutationResult) {
-    const failedCount = result.results?.filter((item) => !item.success).length;
-    super(`Message batch mutation failed for ${failedCount || 'unknown'} operation(s)`);
+    const failed = result.results?.filter((item) => !item.success) ?? [];
+    const reasons = [...new Set(failed.map((item) => item.error).filter(Boolean))];
+    super(
+      `Message batch mutation failed for ${failed.length || 'unknown'} operation(s)` +
+        (reasons.length > 0 ? `: ${reasons.join('; ')}` : ''),
+    );
   }
 }
 

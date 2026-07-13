@@ -37,6 +37,25 @@ const logMessageTiming = (
 const createModelTiming = (options: QueryOptions | undefined, prefix: string) =>
   createPrefixedTimingContext(toTimingContext(options), prefix);
 
+/**
+ * Reduce a failed write to something the caller can act on. Drizzle wraps driver
+ * errors in a generic `Failed query: insert into ...` whose message is the whole
+ * statement plus its params — too noisy to return, and it may carry message
+ * content. The driver error underneath (`cause`) holds the actionable part: the
+ * SQLSTATE and the violated constraint.
+ */
+const describeBatchMutateError = (error: unknown): string => {
+  const cause = (error as { cause?: unknown } | undefined)?.cause;
+  const driverError = (cause ?? error) as
+    { code?: string; constraint?: string; message?: string } | undefined;
+
+  const detail = [driverError?.constraint, driverError?.code, driverError?.message]
+    .filter(Boolean)
+    .join(' | ');
+
+  return (detail || String(error)).slice(0, 300);
+};
+
 interface CreateMessageResult {
   id: string;
   messages: any[];
@@ -153,6 +172,7 @@ export class MessageService {
    */
   async batchMutate(operations: MessageBatchOperation[]): Promise<{
     results: {
+      error?: string;
       id?: string;
       index: number;
       success: boolean;
@@ -161,6 +181,7 @@ export class MessageService {
     success: boolean;
   }> {
     const results: {
+      error?: string;
       id?: string;
       index: number;
       success: boolean;
@@ -186,6 +207,7 @@ export class MessageService {
       } catch (error) {
         console.error('[MessageService] batchMutate operation failed:', error);
         results.push({
+          error: describeBatchMutateError(error),
           id: operation.type === 'createMessage' ? operation.message.id : operation.id,
           index,
           success: false,
