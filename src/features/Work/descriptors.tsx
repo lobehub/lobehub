@@ -78,9 +78,9 @@ interface WorkTypeDescriptor<Item extends WorkListItem | WorkSummaryItem> {
   /** Where a click should lead, or `null` when the Work is not clickable. */
   getOpenTarget: (item: Item) => WorkOpenTarget | null;
   /**
-   * Snapshot title straight from the resource (task name is live from the tasks
-   * join). No synthesized fallback here: a nameless resource deliberately falls
-   * through to its bare identifier at the call site so data gaps stay visible.
+   * Display title straight from the `works` row (task name is live from the
+   * tasks join). No synthesized fallback here: a nameless resource deliberately
+   * falls through to its bare identifier at the call site so data gaps stay visible.
    */
   getTitle: (item: Item) => string | null;
 }
@@ -89,47 +89,53 @@ export const WORK_TYPE_DESCRIPTORS: {
   [T in WorkType]: WorkTypeDescriptor<WorkItemOfType<T>>;
 } = {
   document: {
-    getDescription: (item) => item.document.description?.trim() ?? null,
+    getDescription: (item) => item.description?.trim() ?? null,
     getIcon: () => FileTextIcon,
-    getIdentifier: (item) => item.document.identifier,
-    getOpenTarget: (item) => ({
-      // WorkListItem carries no `event`; only summary rows can supply the
-      // agentDocumentId that scopes the chat portal's document view.
-      agentDocumentId: 'event' in item ? item.event?.metadata?.agentDocumentId : undefined,
-      // For `document` works the resource identity IS the document id.
-      documentId: item.resourceId,
-      kind: 'document',
-    }),
-    getTitle: (item) => item.document.title,
+    getIdentifier: (item) => item.identifier,
+    getOpenTarget: (item) =>
+      // For `document` works the resource identity IS the document id; a Work
+      // with no backing resource (nullable resourceId) has nothing to open.
+      item.resourceId
+        ? {
+            // WorkListItem carries no `event`; only summary rows can supply the
+            // agentDocumentId that scopes the chat portal's document view.
+            agentDocumentId: 'event' in item ? item.event?.metadata?.agentDocumentId : undefined,
+            documentId: item.resourceId,
+            kind: 'document',
+          }
+        : null,
+    getTitle: (item) => item.title,
   },
   external: {
-    getDescription: (item) => (item.external.description || item.external.status)?.trim() ?? null,
+    getDescription: (item) => (item.description || item.status)?.trim() ?? null,
     // Resolve the brand icon from the item's provider; unknown providers fall
     // back to a generic link glyph (forward-compat).
     getIcon: (item) => {
       const provider = workProviderOfResourceType(item.resourceType);
       return provider ? PROVIDER_ICONS[provider] : LinkIcon;
     },
-    getIdentifier: (item) => item.external.identifier,
+    getIdentifier: (item) => item.identifier,
     // External works registered from CLI/tool results may carry no URL (or a
     // member-planted non-http(s) scheme) — those cards have nothing safe to
     // open, so drop the click affordance entirely.
     getOpenTarget: (item) =>
-      isSafeExternalUrl(item.external.url) ? { kind: 'external', url: item.external.url } : null,
-    getTitle: (item) => item.external.title,
+      isSafeExternalUrl(item.url) ? { kind: 'external', url: item.url } : null,
+    getTitle: (item) => item.title,
   },
   task: {
     getDescription: (item) => item.task.instruction?.trim() ?? null,
     getIcon: () => ClipboardListIcon,
     getIdentifier: (item) => item.task.identifier,
     // Resolve the task detail by its human identifier (`TASK-1`, live-coalesced
-    // with the snapshot) when present, else its id — the same identifier the
-    // chat portal and standalone route both accept. The task-deleted orphan case
-    // is gated by the call site (it also renders a badge), not stripped here.
-    getOpenTarget: (item) => ({
-      identifier: item.task.identifier ?? item.resourceId,
-      kind: 'task',
-    }),
+    // with the persisted works column) when present, else its id — the same
+    // identifier the chat portal and standalone route both accept. The
+    // task-deleted orphan case is gated by the call site (it also renders a
+    // badge), not stripped here. A task Work always has a resourceId, but it is
+    // nullable on the base type, so drop the affordance when both are missing.
+    getOpenTarget: (item) => {
+      const identifier = item.task.identifier ?? item.resourceId;
+      return identifier ? { identifier, kind: 'task' } : null;
+    },
     getTitle: (item) => item.task.name,
   },
 };

@@ -36,6 +36,25 @@ describe('normalizeGithubToolResult (gh runCommand parsing)', () => {
     );
 
     expect(operation?.params.description).toBe('He said "hi" for $5');
+    // The full `--body` value is also emitted as `content`, and both fields are
+    // named in `patchFields`.
+    expect(operation?.params.content).toBe('He said "hi" for $5');
+    expect(operation?.params.patchFields).toEqual(
+      expect.arrayContaining(['content', 'description']),
+    );
+  });
+
+  it('emits the full --body as content while capping the description preview', () => {
+    const body = 'C'.repeat(300);
+    const operation = runCommand(
+      `gh issue create --repo lobehub/lobehub --title 'Long body' --body '${body}'`,
+      'https://github.com/lobehub/lobehub/issues/8',
+    );
+
+    // `content` keeps the full untruncated body; `description` is the ≤120 preview.
+    expect(operation?.params.content).toBe(body);
+    expect(operation?.params.description).toBe(`${'C'.repeat(120)}...`);
+    expect(operation?.params.patchFields).toContain('content');
   });
 
   it('honors backslash escapes outside quotes', () => {

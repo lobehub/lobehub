@@ -300,8 +300,7 @@ export const listByWorkspace = async (
         sourceToolName: currentVersions.sourceToolName,
         version: currentVersions.version,
       },
-      snapshot: currentVersions.snapshot,
-      ...taskSummaryFields(currentVersions.snapshot),
+      ...taskSummaryFields,
       version: {
         createdAt: currentVersions.createdAt,
         id: currentVersions.id,

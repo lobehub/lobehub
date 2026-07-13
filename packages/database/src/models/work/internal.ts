@@ -3,12 +3,12 @@ import type {
   RegisterTaskWorkParams,
   TaskWorkListItem,
   TaskWorkSummaryItem,
+  WorkDisplayField,
   WorkItem,
   WorkListItem,
   WorkSummaryItem,
   WorkVersionEventItem,
   WorkVersionPreview,
-  WorkVersionSnapshot,
 } from '@lobechat/types';
 import type { SQL } from 'drizzle-orm';
 import { and, desc, eq, sql } from 'drizzle-orm';
@@ -26,19 +26,21 @@ import { taskOwnership, versionOwnership, type WorkContext, workOwnership } from
 export const currentVersions = alias(workVersions, 'current_work_versions');
 
 /**
- * Max length for free-text fields on summary/list card payloads (message list,
- * sidebar summary, workspace gallery). Full bodies stay on version snapshots
- * in DB; only cards need a short preview.
+ * Write-time cap for the card-preview `description` column (message list,
+ * sidebar summary, workspace gallery). The full body lives untruncated in
+ * `works.content` (external Works) or on the owning table (documents); only the
+ * `description` preview is sliced. Single source of truth, also consumed by the
+ * provider normalizers.
  */
-export const SUMMARY_TEXT_PREFIX_LENGTH = 120;
+export const WORK_DESCRIPTION_PREVIEW_LENGTH = 120;
 
 /** Collapse whitespace and cap length for card-facing Work text fields. */
 export const truncateSummaryText = (value: string | null | undefined): string | null => {
   const normalized = value?.replaceAll(/\s+/g, ' ').trim();
   if (!normalized) return null;
 
-  return normalized.length > SUMMARY_TEXT_PREFIX_LENGTH
-    ? `${normalized.slice(0, SUMMARY_TEXT_PREFIX_LENGTH)}...`
+  return normalized.length > WORK_DESCRIPTION_PREVIEW_LENGTH
+    ? `${normalized.slice(0, WORK_DESCRIPTION_PREVIEW_LENGTH)}...`
     : normalized;
 };
 
@@ -52,15 +54,33 @@ export type WorkVersionEventParams = Pick<
   | 'rootOperationId'
   | 'sourceMessageId'
   | 'sourceToolCallId'
+  | 'sourceToolIdentifier'
   | 'sourceToolName'
   | 'threadId'
   | 'topicId'
 >;
 
+/** The display columns a registration writes onto the `works` row. */
+export interface WorkDisplayColumns {
+  content?: string | null;
+  description?: string | null;
+  identifier?: string | null;
+  status?: string | null;
+  title?: string | null;
+  url?: string | null;
+}
+
 /** Provider-specific inputs for one work-version insert attempt. */
 export interface CreateVersionInput {
+  /**
+   * Display columns to write onto the `works` row under the version lock. When
+   * `patchFields` is set, ONLY those named columns are updated (partial tool
+   * results must not wipe a concurrent registration's other columns); otherwise
+   * every display column is overwritten (task/document carry complete data).
+   */
+  display: WorkDisplayColumns;
   metadata?: (typeof workVersions.$inferInsert)['metadata'];
-  snapshot: WorkVersionSnapshot;
+  patchFields?: WorkDisplayField[];
 }
 
 /** Event-version columns embedded in list/summary rows (`WorkVersionPreview`). */
@@ -86,72 +106,64 @@ export interface TaskWorkSummaryQueryRow {
 }
 
 /**
- * Work types whose list rows are fully described by the version's snapshot
- * JSON (unlike `task`, which additionally joins the tasks table).
+ * Work types whose list rows are fully described by the `works` display columns
+ * (unlike `task`, which additionally joins the live tasks table).
  */
-export type SnapshotWorkType = 'document' | 'external';
+export type DisplayWorkType = 'document' | 'external';
 
-export interface SnapshotWorkSummaryQueryRow<Snapshot> {
+export interface DisplayWorkSummaryQueryRow {
   event: WorkVersionPreview;
-  snapshot: Snapshot;
   version: DocumentWorkSummaryItem['version'];
   work: WorkItem;
 }
 
-/** Project the per-type snapshot object out of a version row's snapshot JSON. */
-export const snapshotField = <Snapshot>(
-  snapshotColumn: (typeof workVersions)['snapshot'] | (typeof currentVersions)['snapshot'],
-  type: SnapshotWorkType,
-) => sql<Snapshot>`${snapshotColumn}->${sql.raw(`'${type}'`)}`;
+/** Version-event row for display-backed types (each mutation event, no live join). */
+export interface DisplayVersionEventRow {
+  version: WorkVersionPreview;
+  work: WorkItem;
+}
 
 /**
  * Task live-column projection shared by every task summary/list query. `tasks`
  * columns take priority; a LEFT JOIN miss (task deleted without the tool path)
- * nulls the whole `tasks` row, so title/identifier coalesce onto
- * `snapshotColumn` (the minimal display snapshot) and `tasks.id is null`
- * becomes the orphan-deletion signal. `instruction` (NOT NULL on live rows) is
- * the card preview text; instruction/priority/status are live-only — a deleted
- * task's card renders title + identifier + deleted badge from the snapshot.
- * `snapshotColumn` is `workVersions.snapshot` for event rows or
- * `currentVersions.snapshot` for summary rows.
+ * nulls the whole `tasks` row, so title/identifier coalesce onto the persisted
+ * `works` display columns and `tasks.id is null` becomes the orphan-deletion
+ * signal. `instruction` (NOT NULL on live rows) is the card preview text;
+ * instruction/priority/status are live-only — a deleted task's card renders
+ * title + identifier + deleted badge from the `works` columns.
  */
-export const taskSummaryFields = (
-  snapshotColumn: (typeof workVersions)['snapshot'] | (typeof currentVersions)['snapshot'],
-) => ({
+export const taskSummaryFields = {
   task: {
     deleted: sql<boolean>`${tasks.id} is null`,
-    identifier: sql<
-      string | null
-    >`coalesce(${tasks.identifier}, ${snapshotColumn}->'task'->>'identifier')`,
+    identifier: sql<string | null>`coalesce(${tasks.identifier}, ${works.identifier})`,
     instruction: sql<string | null>`${tasks.instruction}`,
-    name: sql<string | null>`coalesce(${tasks.name}, ${snapshotColumn}->'task'->>'title')`,
+    name: sql<string | null>`coalesce(${tasks.name}, ${works.title})`,
     priority: sql<number | null>`${tasks.priority}`,
     status: sql<string | null>`${tasks.status}`,
   },
-});
+};
 
 /**
  * LEFT JOIN condition pairing a Work row to its live `tasks` row (task type
  * only, owner-scoped). Callers use a LEFT JOIN (not INNER) so orphaned task
  * Works — the task deleted without the tool path — still surface; deletion is
- * then derived from the missing `tasks` row (see `taskSummaryFields`).
+ * then derived from the missing `tasks` row (see `taskSummaryColumns`).
  */
 export const taskSummaryJoin = (ctx: WorkContext) =>
   and(eq(works.resourceType, 'task'), eq(works.resourceId, tasks.id), taskOwnership(ctx));
 
 /**
- * Shared version-event query for snapshot-backed work types; `task` keeps
- * its own variant because it additionally joins the tasks table.
+ * Shared version-event query for display-backed work types; `task` keeps its
+ * own variant because it additionally joins the tasks table.
  */
-export const listSnapshotVersionEventRows = <Snapshot>(
+export const listDisplayVersionEventRows = (
   ctx: WorkContext,
-  type: SnapshotWorkType,
+  type: DisplayWorkType,
   filters: SQL[],
   limit: number,
-) =>
+): Promise<DisplayVersionEventRow[]> =>
   ctx.db
     .select({
-      snapshot: snapshotField<Snapshot>(workVersions.snapshot, type),
       version: versionEventSelection,
       work: works,
     })
@@ -162,19 +174,18 @@ export const listSnapshotVersionEventRows = <Snapshot>(
     .limit(limit);
 
 /**
- * Shared current-version summary query for snapshot-backed work types;
- * `task` keeps its own variant because it additionally joins the tasks table.
+ * Shared current-version summary query for display-backed work types; `task`
+ * keeps its own variant because it additionally joins the tasks table.
  */
-export const listSnapshotWorkSummaryRows = <Snapshot>(
+export const listDisplayWorkSummaryRows = (
   ctx: WorkContext,
-  type: SnapshotWorkType,
+  type: DisplayWorkType,
   filters: SQL[],
   rowLimit: number,
-): Promise<SnapshotWorkSummaryQueryRow<Snapshot>[]> =>
+): Promise<DisplayWorkSummaryQueryRow[]> =>
   ctx.db
     .select({
       event: versionEventSelection,
-      snapshot: snapshotField<Snapshot>(currentVersions.snapshot, type),
       version: {
         createdAt: currentVersions.createdAt,
         id: currentVersions.id,
@@ -206,12 +217,11 @@ export interface WorkConversationRowParams {
 
 /**
  * Workspace-wide list row shape shared by every type (one query, no per-type
- * fan-out): the full current-version snapshot JSON plus the coalesced task
- * columns (nulled for non-task rows by the LEFT JOIN).
+ * fan-out): the `works` display columns plus the coalesced task columns (nulled
+ * for non-task rows by the LEFT JOIN).
  */
 export interface WorkspaceSummaryQueryRow {
   event: WorkVersionPreview;
-  snapshot: WorkVersionSnapshot;
   task: TaskWorkSummaryQueryRow['task'];
   version: TaskWorkSummaryItem['version'];
   work: WorkItem;
@@ -234,21 +244,21 @@ export interface WorkspaceSummaryQueryRow {
  */
 /* eslint-disable @typescript-eslint/method-signature-style */
 export interface WorkTypeAdapter<Row extends { work: WorkItem }> {
-  /** Current-version rows for the conversation sidebar list (summary-slimmed snapshots). */
+  /** Current-version rows for the conversation sidebar list. */
   listConversationRows(
     ctx: WorkContext,
     params: WorkConversationRowParams,
   ): Promise<WorkConversationRow[]>;
   /** Current-version summary rows anchored on mutation events (message-list chips). */
   listSummaryRows(ctx: WorkContext, filters: SQL[], rowLimit: number): Promise<Row[]>;
-  /** Version-event rows carrying the FULL (unslimmed) event snapshot. */
+  /** Version-event rows carrying each mutation event. */
   listVersionEvents(
     ctx: WorkContext,
     filters: SQL[],
     limit: number,
   ): Promise<WorkVersionEventItem[]>;
   mapSummaryRow(row: Row, totalCost: number | null): WorkSummaryItem;
-  /** Map one shared workspace-list row (full snapshot JSON) onto this type's summary item. */
+  /** Map one shared workspace-list row onto this type's summary item. */
   mapWorkspaceRow(row: WorkspaceSummaryQueryRow, totalCost: number | null): WorkSummaryItem;
 }
 /* eslint-enable @typescript-eslint/method-signature-style */

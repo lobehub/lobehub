@@ -14,47 +14,15 @@ export type WorkResourceType = 'document' | ExternalWorkResourceType | 'task';
 export type WorkVersionChangeType = 'created' | 'updated';
 
 /**
- * Snapshots store ONLY the display metadata Work cards need (unified
- * vocabulary: `title` / `identifier` / `description`). Free-text fields are
- * truncated at WRITE time; live/full data stays on the owning tables (tasks,
- * documents) or the external service. Versions are an audit log of change
- * events, not a content-version store.
+ * The patchable Work display columns (now real columns on the `works` row,
+ * unified vocabulary). A partial tool result (e.g. Linear `{ id, state }`) names
+ * only the fields it carries in `patchFields`, so a concurrent registration's
+ * other columns are never overwritten. Free-text fields (`description`) are
+ * sliced at WRITE time; full/live data stays on the owning tables (tasks,
+ * documents) or in `works.content`.
  */
-export interface TaskWorkVersionSnapshot {
-  /** Short reference for display, e.g. `TASK-1`. */
-  identifier: string;
-  /** Task name at the time of this version; deletion fallback for the card. */
-  title: string | null;
-}
-
-export interface DocumentWorkVersionSnapshot {
-  description: string | null;
-  /** Filename at the time of this version. */
-  identifier: string | null;
-  title: string | null;
-}
-
-export interface ExternalWorkVersionSnapshot {
-  description: string | null;
-  /** Short human reference: `ENG-123`, `owner/repo#42`, or a document slug. */
-  identifier: string | null;
-  status: string | null;
-  title: string | null;
-  url: string | null;
-}
-
-export type ExternalWorkPatchField = keyof ExternalWorkVersionSnapshot;
-
-export type WorkVersionSnapshot =
-  | {
-      document: DocumentWorkVersionSnapshot;
-    }
-  | {
-      external: ExternalWorkVersionSnapshot;
-    }
-  | {
-      task: TaskWorkVersionSnapshot;
-    };
+export type WorkDisplayField =
+  'content' | 'description' | 'identifier' | 'status' | 'title' | 'url';
 
 export interface WorkVersionMetadata {
   agentDocumentId?: string;
@@ -67,13 +35,27 @@ export interface WorkVersionCumulativeUsage {
 }
 
 export interface WorkItem {
+  /** FULL untruncated text (layer 3). Null for document Works. */
+  content: string | null;
   createdAt: Date;
   currentVersionId: string | null;
+  /** Short preview text, sliced to 120 chars at write time (layer 2). */
+  description: string | null;
   id: string;
-  resourceId: string;
+  /** Short human reference: `TASK-1`, filename, `ENG-123`, `owner/repo#42`. */
+  identifier: string | null;
+  resourceId: string | null;
   resourceType: WorkResourceType;
+  /** Tool/plugin identifier that CREATED the Work (written once, never overwritten). */
+  sourceToolIdentifier: string | null;
+  /** Current resource status (external Works only). */
+  status: string | null;
+  /** Current display title (layer 1). */
+  title: string | null;
   type: WorkType;
   updatedAt: Date;
+  /** External link (sanitized to http(s) upstream). */
+  url: string | null;
   userId: string;
   workspaceId: string | null;
 }
@@ -87,9 +69,10 @@ export interface WorkVersionItem {
   id: string;
   metadata: WorkVersionMetadata | null;
   rootOperationId: string | null;
-  snapshot: WorkVersionSnapshot;
   sourceMessageId: string | null;
   sourceToolCallId: string | null;
+  /** Tool/plugin identifier that produced THIS version (per-mutation). */
+  sourceToolIdentifier: string | null;
   /** Concrete tool that produced this version, e.g. 'createTask'. */
   sourceToolName: string;
   threadId: string | null;
@@ -141,13 +124,11 @@ export interface TaskWorkListItem extends WorkItem {
 }
 
 export interface DocumentWorkListItem extends WorkItem {
-  document: DocumentWorkVersionSnapshot;
   resourceType: 'document';
   type: 'document';
 }
 
 export interface ExternalWorkListItem extends WorkItem {
-  external: ExternalWorkVersionSnapshot;
   resourceType: ExternalWorkResourceType;
   type: 'external';
 }
@@ -204,6 +185,8 @@ export interface RegisterDocumentWorkParams {
   rootOperationId?: string | null;
   sourceMessageId?: string | null;
   sourceToolCallId?: string | null;
+  /** Tool/plugin identifier that created the Work (stamped once on `works`). */
+  sourceToolIdentifier?: string | null;
   sourceToolName: string;
   threadId?: string | null;
   topicId?: string | null;
@@ -223,11 +206,13 @@ export interface DeleteTaskWorkParams {
 export interface RegisterExternalWorkParams {
   actorAgentId?: string | null;
   changeType: WorkVersionChangeType;
+  /** FULL untruncated body (layer 3); patched onto `works.content` when named in `patchFields`. */
+  content?: string | null;
   cumulativeCost?: number | null;
   cumulativeUsage?: WorkVersionCumulativeUsage | null;
   description?: string | null;
   identifier?: string | null;
-  patchFields?: ExternalWorkPatchField[];
+  patchFields?: WorkDisplayField[];
   /**
    * Canonical resource identity (`owner/repo#number`, a linear id, …). Required:
    * every normalizer resolves it before registering, so there is no partial
@@ -238,6 +223,8 @@ export interface RegisterExternalWorkParams {
   rootOperationId?: string | null;
   sourceMessageId?: string | null;
   sourceToolCallId?: string | null;
+  /** Tool/plugin identifier that created the Work (stamped once on `works`). */
+  sourceToolIdentifier?: string | null;
   sourceToolName: string;
   status?: string | null;
   threadId?: string | null;
@@ -315,6 +302,8 @@ export interface RegisterTaskWorkParams {
   rootOperationId?: string | null;
   sourceMessageId?: string | null;
   sourceToolCallId?: string | null;
+  /** Tool/plugin identifier that created the Work (stamped once on `works`). */
+  sourceToolIdentifier?: string | null;
   sourceToolName: string;
   taskId?: string;
   taskIdentifier?: string;

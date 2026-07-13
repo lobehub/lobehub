@@ -202,6 +202,7 @@ export class ClientToolTransport implements ToolTransport {
       rootOperationId: this.operationId,
       sourceMessageId: registration.sourceMessageId,
       sourceToolCallId: registration.sourceToolCallId,
+      sourceToolIdentifier: registration.sourceToolIdentifier,
       sourceToolName: registration.sourceToolName,
       state: registration.state,
       threadId: opContext?.threadId,

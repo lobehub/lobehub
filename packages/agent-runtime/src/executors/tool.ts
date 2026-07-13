@@ -496,6 +496,7 @@ export const callTool =
             intent: executionResult.workRegistration,
             sourceMessageId: toolMessageId,
             sourceToolCallId: tool.id,
+            sourceToolIdentifier: tool.identifier,
             sourceToolName: tool.apiName,
             state: { cost: newState.cost, usage: newState.usage },
           },
@@ -720,6 +721,7 @@ export const callToolsBatch =
           intent: result.workRegistration,
           sourceMessageId: result.sourceMessageId,
           sourceToolCallId: result.toolCallId,
+          sourceToolIdentifier: result.toolCall.identifier,
           sourceToolName: result.toolCall.apiName,
           state: { cost: newState.cost, usage: newState.usage },
         });

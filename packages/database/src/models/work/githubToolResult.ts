@@ -1,10 +1,11 @@
 import type {
-  ExternalWorkPatchField,
   GithubWorkResourceType,
   RegisterExternalWorkParams,
   SkillToolResultWorkInput,
+  WorkDisplayField,
 } from '@lobechat/types';
 
+import { WORK_DESCRIPTION_PREVIEW_LENGTH } from './internal';
 import {
   type ExternalToolWorkOperation,
   fromRecord,
@@ -18,9 +19,6 @@ import {
 
 /** GitHub entity vocabulary internal to this normalizer. */
 type GithubWorkEntityType = 'issue' | 'pull_request';
-
-/** Snapshots store card-preview text only; cap free-text fields at write time. */
-const MAX_GITHUB_SNAPSHOT_TEXT_LENGTH = 300;
 
 /**
  * Only successful create/edit results become Works (LOBE-10967): read-only
@@ -56,18 +54,19 @@ const GITHUB_CLI_TOOLS = new Set(['runCommand', 'run_command']);
  * Shared by the structured-tool and gh-CLI param builders.
  */
 const makePatch =
-  (patchFields: Set<ExternalWorkPatchField>) =>
-  <T>(field: ExternalWorkPatchField, present: boolean, value: T): T | undefined => {
+  (patchFields: Set<WorkDisplayField>) =>
+  <T>(field: WorkDisplayField, present: boolean, value: T): T | undefined => {
     if (present) patchFields.add(field);
     return present ? value : undefined;
   };
 
-const snapshotText = (value: unknown): string | null => {
+/** The card-preview `description` column stores capped text; the full body goes to `content`. */
+const previewText = (value: unknown): string | null => {
   const text = stringValue(value);
   if (!text) return null;
 
-  return text.length > MAX_GITHUB_SNAPSHOT_TEXT_LENGTH
-    ? `${text.slice(0, MAX_GITHUB_SNAPSHOT_TEXT_LENGTH)}...`
+  return text.length > WORK_DESCRIPTION_PREVIEW_LENGTH
+    ? `${text.slice(0, WORK_DESCRIPTION_PREVIEW_LENGTH)}...`
     : text;
 };
 
@@ -215,20 +214,22 @@ const buildParams = (
   // the persisted url reaches shell.openExternal on desktop.
   const url = sanitizeExternalUrl(resolveUrl(record));
 
-  const patchFields = new Set<ExternalWorkPatchField>();
+  const patchFields = new Set<WorkDisplayField>();
   const patch = makePatch(patchFields);
 
   // `owner/repo#number` is encoded into `identifier`; repo/number are no longer
-  // persisted as their own snapshot fields.
+  // persisted as their own display fields.
   if (repo && number !== null) patchFields.add('identifier');
   if (url) patchFields.add('url');
 
   return {
     actorAgentId: params.actorAgentId ?? null,
     changeType: tool.changeType,
+    // The FULL issue/PR body (layer 3); the card preview is the capped `description`.
+    content: patch('content', hasOwn(record, 'body'), stringValue(record.body)),
     cumulativeCost: params.cumulativeCost ?? null,
     cumulativeUsage: params.cumulativeUsage ?? null,
-    description: patch('description', hasOwn(record, 'body'), snapshotText(record.body)),
+    description: patch('description', hasOwn(record, 'body'), previewText(record.body)),
     identifier: repo && number !== null ? `${repo}#${number}` : null,
     resourceType: githubResourceType(tool.entityType),
     rootOperationId: params.rootOperationId ?? null,
@@ -552,16 +553,18 @@ const normalizeGithubCliResult = (
   // stdout and reaches shell.openExternal on desktop.
   const safeUrl = sanitizeExternalUrl(ref.url);
 
-  const patchFields = new Set<ExternalWorkPatchField>(['identifier']);
+  const patchFields = new Set<WorkDisplayField>(['identifier']);
   const patch = makePatch(patchFields);
 
   return {
     params: {
       actorAgentId: params.actorAgentId ?? null,
       changeType: parsed.action === 'create' ? 'created' : 'updated',
+      // The FULL `--body` value (layer 3); the card preview is the capped `description`.
+      content: patch('content', parsed.body !== null, parsed.body),
       cumulativeCost: params.cumulativeCost ?? null,
       cumulativeUsage: params.cumulativeUsage ?? null,
-      description: patch('description', parsed.body !== null, snapshotText(parsed.body)),
+      description: patch('description', parsed.body !== null, previewText(parsed.body)),
       identifier,
       resourceId: identifier,
       resourceType: githubResourceType(ref.entityType),

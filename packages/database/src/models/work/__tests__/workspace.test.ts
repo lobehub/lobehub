@@ -84,7 +84,7 @@ describe('WorkModel · listByWorkspace', () => {
 
     expect(nextCursor).toBeNull();
     expect(items.map((item) => item.id)).toEqual([docWork!.id, firstWork!.id]);
-    expect(expectDocumentSummaryItem(items[0]).document.title).toBe('Cross doc');
+    expect(expectDocumentSummaryItem(items[0]).title).toBe('Cross doc');
     expect(expectTaskSummaryItem(items[1]).task.name).toBe('First task');
   });
 

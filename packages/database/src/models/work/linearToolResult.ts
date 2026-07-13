@@ -1,10 +1,11 @@
 import type {
-  ExternalWorkPatchField,
   LinearWorkResourceType,
   RegisterExternalWorkParams,
   SkillToolResultWorkInput,
+  WorkDisplayField,
 } from '@lobechat/types';
 
+import { WORK_DESCRIPTION_PREVIEW_LENGTH } from './internal';
 import {
   type ExternalToolWorkOperation,
   fromRecord,
@@ -21,15 +22,14 @@ type LinearWorkEntityType = 'document' | 'issue';
 
 const LINEAR_CREATE_TOOLS = new Set(['create_document', 'save_document', 'save_issue']);
 const LINEAR_ISSUE_IDENTIFIER_PATTERN = /^[A-Z][A-Z0-9]+-\d+$/u;
-/** Snapshots store card-preview text only; cap free-text fields at write time. */
-const MAX_LINEAR_SNAPSHOT_TEXT_LENGTH = 300;
 
-const snapshotText = (value: unknown): string | null => {
+/** The card-preview `description` column stores capped text; the full body goes to `content`. */
+const previewText = (value: unknown): string | null => {
   const text = stringValue(value);
   if (!text) return null;
 
-  return text.length > MAX_LINEAR_SNAPSHOT_TEXT_LENGTH
-    ? `${text.slice(0, MAX_LINEAR_SNAPSHOT_TEXT_LENGTH)}...`
+  return text.length > WORK_DESCRIPTION_PREVIEW_LENGTH
+    ? `${text.slice(0, WORK_DESCRIPTION_PREVIEW_LENGTH)}...`
     : text;
 };
 
@@ -64,7 +64,7 @@ const optionalTextFromRecord = (
     const raw = record[key];
     if (raw === null) return null;
 
-    const value = snapshotText(raw);
+    const value = previewText(raw);
     if (value) return value;
     if (typeof raw === 'string') return null;
   }
@@ -191,8 +191,8 @@ const createRegisterOperation = (
 
   const url = fromRecord(record, ['url', 'appUrl']);
   const identifier = resolveResourceIdentifier({ entityType, id, record, url });
-  const patchFields = new Set<ExternalWorkPatchField>();
-  const patch = <T>(field: ExternalWorkPatchField, value: T | null | undefined) => {
+  const patchFields = new Set<WorkDisplayField>();
+  const patch = <T>(field: WorkDisplayField, value: T | null | undefined) => {
     if (value !== undefined) patchFields.add(field);
     return value;
   };
@@ -204,6 +204,14 @@ const createRegisterOperation = (
       ...contextParams(params),
       changeType:
         LINEAR_CREATE_TOOLS.has(params.toolName) && !params.args?.id ? 'created' : 'updated',
+      // The FULL body (layer 3); the card preview is the capped `description` below.
+      content: patch(
+        'content',
+        firstDefined(
+          optionalStringFromRecord(record, ['description']),
+          optionalStringFromRecord(record, ['content']),
+        ),
+      ),
       // Documents carry their preview in `content`; issues in `description`.
       description: patch(
         'description',

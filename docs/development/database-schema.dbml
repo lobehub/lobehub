@@ -2704,12 +2704,12 @@ table verify_runs {
 }
 
 table work_versions {
-  id text [pk, not null]
+  id uuid [pk, not null, default: `gen_random_uuid()`]
   work_id text [not null]
   version integer [not null]
-  snapshot jsonb [not null]
   change_type text [not null]
   source_tool_name text [not null]
+  source_tool_identifier text
   topic_id text
   thread_id text
   source_message_id text
@@ -2740,9 +2740,16 @@ table work_versions {
 table works {
   id text [pk, not null]
   type text [not null]
-  current_version_id text
+  current_version_id uuid
   resource_type text [not null]
-  resource_id text [not null]
+  resource_id text
+  source_tool_identifier text
+  title text
+  description text
+  content text
+  identifier text
+  status text
+  url text
   user_id text [not null]
   workspace_id text
   created_at "timestamp with time zone" [not null, default: `now()`]

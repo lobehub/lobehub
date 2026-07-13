@@ -7,7 +7,6 @@ import { WorkModel } from '..';
 import { normalizeLinearToolResult } from '../linearToolResult';
 import {
   cleanupWorkTestData,
-  expectExternalSnapshot,
   expectExternalSummaryItem,
   seedWorkTestData,
   serverDB,
@@ -19,8 +18,14 @@ import {
 beforeEach(seedWorkTestData);
 afterEach(cleanupWorkTestData);
 
+/** Re-query the current `works` row (the merged current display state). */
+const currentWorkRow = async (workId: string) => {
+  const [row] = await serverDB.select().from(works).where(eq(works.id, workId));
+  return row;
+};
+
 describe('WorkModel · linear', () => {
-  it('re-reads the current snapshot when a version-create retry follows a concurrent write', async () => {
+  it('keeps merged display columns when a version-create retry follows a concurrent write', async () => {
     const workModel = new WorkModel(serverDB, userId);
     const baseParams = {
       resourceId: 'issue-race',
@@ -84,12 +89,16 @@ describe('WorkModel · linear', () => {
     const versions = await workModel.listVersions(first!.id);
     expect(versions.map((item) => item.version)).toEqual([3, 2, 1]);
 
-    // Without re-reading inside the retry, the retried version would merge
-    // against the pre-race snapshot and revert the winner's committed title.
-    const latest = expectExternalSnapshot(versions[0].snapshot);
-    expect(latest.title).toBe('Winner title');
-    expect(latest.status).toBe('In Progress');
-    expect(latest.description).toBe('Original description');
+    // Without re-reading inside the retry, the retried version's status-only patch
+    // would run against the pre-race works row and revert the winner's committed
+    // title. The current row must keep the winner's title, the loser's status, and
+    // the original description untouched by both partial patches.
+    const current = await currentWorkRow(first!.id);
+    expect(current).toMatchObject({
+      description: 'Original description',
+      status: 'In Progress',
+      title: 'Winner title',
+    });
   });
 
   it('registers Linear issue creates and appends versions for edits', async () => {
@@ -146,35 +155,32 @@ describe('WorkModel · linear', () => {
 
     expect(second?.id).toBe(first?.id);
     expect(replay?.id).toBe(first?.id);
+    // The partial edit ({ id, state }) patch-updates only `status` on the current
+    // works row; every other display column keeps the create-time value, and the
+    // creator tool identifier is stamped from the provider.
     expect(second).toMatchObject({
+      content: 'Track Linear issue as Work',
+      description: 'Track Linear issue as Work',
+      identifier: 'LOBE-10966',
       resourceId: 'issue-uuid-10966',
       resourceType: 'linear_issue',
+      sourceToolIdentifier: 'linear',
+      status: 'In Progress',
+      title: 'Linear Work issue',
       type: 'external',
+      url: 'https://linear.app/lobehub/issue/LOBE-10966/linear-work-issue',
     });
 
     const versions = await workModel.listVersions(first!.id);
     expect(versions.map((item) => item.version)).toEqual([2, 1]);
     expect(versions[0].changeType).toBe('updated');
-    // The partial edit ({ id, state }) patch-merges over v1's display metadata.
-    expect(expectExternalSnapshot(versions[0].snapshot)).toEqual({
-      description: 'Track Linear issue as Work',
-      identifier: 'LOBE-10966',
-      status: 'In Progress',
-      title: 'Linear Work issue',
-      url: 'https://linear.app/lobehub/issue/LOBE-10966/linear-work-issue',
-    });
-    expect(expectExternalSnapshot(versions[1].snapshot).status).toBe('Backlog');
-    expect(expectExternalSnapshot(versions[1].snapshot)).toMatchObject({
-      identifier: 'LOBE-10966',
-      title: 'Linear Work issue',
-    });
 
     const byOperation = await workModel.listSummariesByRootOperations({
       rootOperationIds: ['op-linear-issue-create', 'op-linear-issue-edit'],
     });
     expect(byOperation['op-linear-issue-create']).toEqual([]);
     const issueSummary = expectExternalSummaryItem(byOperation['op-linear-issue-edit']?.[0]);
-    expect(issueSummary.external).toMatchObject({
+    expect(issueSummary).toMatchObject({
       identifier: 'LOBE-10966',
       status: 'In Progress',
       title: 'Linear Work issue',
@@ -183,7 +189,7 @@ describe('WorkModel · linear', () => {
     const byConversation = await workModel.listByConversation({ topicId });
     expect(byConversation).toHaveLength(1);
     expect(byConversation[0]).toMatchObject({
-      external: expect.objectContaining({ identifier: 'LOBE-10966' }),
+      identifier: 'LOBE-10966',
       resourceType: 'linear_issue',
       type: 'external',
     });
@@ -210,7 +216,7 @@ describe('WorkModel · linear', () => {
     expect(workRows).toHaveLength(1);
   });
 
-  it('registers Linear documents and keeps merged snapshots across partial updates', async () => {
+  it('registers Linear documents and keeps merged display columns across partial updates', async () => {
     const workModel = new WorkModel(serverDB, userId);
 
     const document = await workModel.handleSkillToolResult({
@@ -285,16 +291,14 @@ describe('WorkModel · linear', () => {
 
     const documentVersions = await workModel.listVersions(document!.id);
     expect(documentVersions.map((item) => item.version)).toEqual([3, 2, 1]);
-    // Document previews land in `description` (from `content`); the partial
-    // update keeps the identifier/title merged from the earlier full edit.
-    expect(expectExternalSnapshot(documentVersions[0].snapshot)).toMatchObject({
+    // Document previews land in `description` (from `content`); the partial update
+    // (content only) keeps the identifier/title merged from the earlier full edit
+    // on the current works row.
+    expect(partialDocumentUpdate).toMatchObject({
+      content: 'Partial body',
       description: 'Partial body',
       identifier: 'linear-document-8298fa69b2e3',
       title: 'Linear document updated',
-    });
-    expect(expectExternalSnapshot(documentVersions[1].snapshot)).toMatchObject({
-      description: 'Updated body',
-      identifier: 'linear-document-8298fa69b2e3',
     });
 
     await workModel.handleSkillToolResult({
@@ -356,14 +360,14 @@ describe('WorkModel · linear', () => {
     expect(ownerItems).toHaveLength(1);
     expect(ownerItems[0]).toMatchObject({
       id: ownerWork!.id,
-      external: expect.objectContaining({ title: 'Owner issue title' }),
       resourceId: 'shared-issue-uuid',
+      title: 'Owner issue title',
       type: 'external',
     });
     expect(otherItems).toHaveLength(1);
     expect(otherItems[0]).toMatchObject({
       id: otherWork!.id,
-      external: expect.objectContaining({ title: 'Other user issue title' }),
+      title: 'Other user issue title',
       type: 'external',
     });
   });

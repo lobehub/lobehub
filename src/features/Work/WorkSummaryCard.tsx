@@ -79,7 +79,10 @@ const WorkSummaryCard = memo<WorkSummaryCardProps>(({ className, item, onOpen })
   const descriptor = getWorkTypeDescriptor(item);
   const Icon = descriptor.getIcon(item);
   const title =
-    descriptor.getTitle(item)?.trim() || descriptor.getIdentifier(item) || item.resourceId;
+    descriptor.getTitle(item)?.trim() ||
+    descriptor.getIdentifier(item) ||
+    item.resourceId ||
+    item.id;
   const description = descriptor.getDescription(item);
   const openTarget = descriptor.getOpenTarget(item);
   // The backing task was deleted outside the tool path: the Work lingers as an

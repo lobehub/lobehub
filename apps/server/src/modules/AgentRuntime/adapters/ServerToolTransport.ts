@@ -57,6 +57,7 @@ export class ServerToolTransport implements ToolTransport {
       serverDB: this.ctx.serverDB,
       sourceMessageId: registration.sourceMessageId,
       sourceToolCallId: registration.sourceToolCallId,
+      sourceToolIdentifier: registration.sourceToolIdentifier,
       sourceToolName: registration.sourceToolName,
       state: registration.state,
       threadId: state.metadata?.threadId,

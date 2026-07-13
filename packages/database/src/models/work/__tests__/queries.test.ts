@@ -1,6 +1,8 @@
 // @vitest-environment node
+import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { works } from '../../../schemas';
 import { AgentDocumentModel } from '../../agentDocuments';
 import { TaskModel } from '../../task';
 import { WorkModel } from '..';
@@ -160,7 +162,7 @@ describe('WorkModel · queries', () => {
     expect(Object.keys(summaries)).toHaveLength(601);
     expect(summaries['op-doc-clamp']).toHaveLength(1);
     expect(summaries['op-doc-clamp'][0]).toMatchObject({
-      document: expect.objectContaining({ identifier: 'clamp.md' }),
+      identifier: 'clamp.md',
       resourceId: doc.documentId,
     });
     expect(summaries[syntheticIds[0]]).toEqual([]);
@@ -208,5 +210,23 @@ describe('WorkModel · queries', () => {
       'github_issue',
       'linear_issue',
     ]);
+  });
+
+  it('accepts a works row with a null resourceId', async () => {
+    // `works.resourceId` is nullable now: rows with no stable backing resource
+    // bypass the partial unique indexes (Postgres treats NULLs as distinct).
+    const [row] = await serverDB
+      .insert(works)
+      .values({
+        resourceType: 'document',
+        type: 'document',
+        userId,
+      })
+      .returning();
+
+    expect(row.resourceId).toBeNull();
+
+    const [stored] = await serverDB.select().from(works).where(eq(works.id, row.id));
+    expect(stored.resourceId).toBeNull();
   });
 });

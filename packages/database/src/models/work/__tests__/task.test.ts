@@ -8,7 +8,6 @@ import { WorkModel } from '..';
 import {
   cleanupWorkTestData,
   expectTaskListItem,
-  expectTaskSnapshot,
   expectTaskSummaryItem,
   seedWorkTestData,
   serverDB,
@@ -75,7 +74,16 @@ describe('WorkModel · task', () => {
       topicId,
       version: 1,
     });
-    expect(expectTaskSnapshot(versions[0].snapshot).identifier).toBe(task.identifier);
+    // Display data lives on the current works row now (no per-version snapshot):
+    // task name → title, task identifier → identifier, instruction → content +
+    // truncated description. `status` stays NULL (the live join is authoritative).
+    expect(work).toMatchObject({
+      content: 'Write the MVP plan',
+      description: 'Write the MVP plan',
+      identifier: task.identifier,
+      status: null,
+      title: 'Work MVP plan',
+    });
 
     const worksInConversation = await workModel.listByConversation({ threadId, topicId });
     expect(worksInConversation).toHaveLength(1);
@@ -101,6 +109,77 @@ describe('WorkModel · task', () => {
       }),
     });
     expect(byOperations['op-missing']).toEqual([]);
+  });
+
+  it('fills the works-row display columns from the task on registration', async () => {
+    const taskModel = new TaskModel(serverDB, userId);
+    const workModel = new WorkModel(serverDB, userId);
+    // A long instruction proves `content` keeps the full text while `description`
+    // is the ≤120 preview.
+    const instruction = 'B'.repeat(300);
+    const expectedDescription = `${'B'.repeat(120)}...`;
+    const task = await taskModel.create({ instruction, name: 'Fill display task' });
+
+    const work = await workModel.registerTask({
+      changeType: 'created',
+      rootOperationId: 'op-fill-display',
+      sourceToolName: 'createTask',
+      sourceToolCallId: 'tool-call-fill-display',
+      taskId: task.id,
+      topicId,
+    });
+
+    const [row] = await serverDB.select().from(works).where(eq(works.id, work!.id));
+    expect(row).toMatchObject({
+      content: instruction,
+      description: expectedDescription,
+      identifier: task.identifier,
+      // `status` stays NULL: the live tasks join is authoritative.
+      status: null,
+      title: 'Fill display task',
+    });
+  });
+
+  it('stamps works.sourceToolIdentifier once with the creator and keeps it per-version', async () => {
+    const taskModel = new TaskModel(serverDB, userId);
+    const workModel = new WorkModel(serverDB, userId);
+    const task = await taskModel.create({ instruction: 'Creator', name: 'Creator task' });
+
+    const created = await workModel.registerTask({
+      changeType: 'created',
+      rootOperationId: 'op-creator-create',
+      sourceToolName: 'createTask',
+      sourceToolCallId: 'tool-call-creator-create',
+      sourceToolIdentifier: 'lobe-task',
+      taskId: task.id,
+      topicId,
+    });
+    // On create, the creator tool identifier is stamped onto the works row.
+    expect(created?.sourceToolIdentifier).toBe('lobe-task');
+
+    await taskModel.update(task.id, { name: 'Creator task edited' });
+
+    // A later registration from a DIFFERENT tool must NOT overwrite the creator.
+    const edited = await workModel.registerTask({
+      changeType: 'updated',
+      rootOperationId: 'op-creator-edit',
+      sourceToolName: 'editTask',
+      sourceToolCallId: 'tool-call-creator-edit',
+      sourceToolIdentifier: 'some-other-tool',
+      taskId: task.id,
+      topicId,
+    });
+    expect(edited?.sourceToolIdentifier).toBe('lobe-task');
+
+    const [row] = await serverDB.select().from(works).where(eq(works.id, created!.id));
+    expect(row.sourceToolIdentifier).toBe('lobe-task');
+
+    // `work_versions.sourceToolIdentifier` is per-version: each version keeps the
+    // value passed at that registration.
+    const versions = await workModel.listVersions(created!.id);
+    const byToolCall = new Map(versions.map((v) => [v.sourceToolCallId, v.sourceToolIdentifier]));
+    expect(byToolCall.get('tool-call-creator-create')).toBe('lobe-task');
+    expect(byToolCall.get('tool-call-creator-edit')).toBe('some-other-tool');
   });
 
   it('writes cumulativeCost only on the version that carried it at insert time', async () => {
@@ -239,9 +318,13 @@ describe('WorkModel · task', () => {
     expect(versions.map((item) => item.version)).toEqual([2, 1]);
     expect(versions[0].changeType).toBe('updated');
     expect(versions[0].id).toBeTruthy();
-    // Snapshots hold display metadata only (title/identifier); instruction is live-only.
-    expect(expectTaskSnapshot(versions[0].snapshot).title).toBe('Updated title');
-    expect(expectTaskSnapshot(versions[0].snapshot).identifier).toBe(task.identifier);
+    // The current works row reflects the merged current state after the edit:
+    // title/identifier follow the live task, content is the full instruction.
+    expect(second).toMatchObject({
+      content: 'Updated instruction',
+      identifier: task.identifier,
+      title: 'Updated title',
+    });
 
     const [updatedVersion] = await serverDB
       .select()

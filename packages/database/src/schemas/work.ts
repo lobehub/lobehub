@@ -4,10 +4,9 @@ import type {
   WorkVersionChangeType,
   WorkVersionCumulativeUsage,
   WorkVersionMetadata,
-  WorkVersionSnapshot,
 } from '@lobechat/types';
 import { isNotNull, isNull } from 'drizzle-orm';
-import { index, integer, jsonb, pgTable, text, uniqueIndex } from 'drizzle-orm/pg-core';
+import { index, integer, jsonb, pgTable, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 
 import { idGenerator } from '../utils/idGenerator';
 import { amountNumeric, createdAt, updatedAt } from './_helpers';
@@ -28,14 +27,18 @@ export const works = pgTable(
       .primaryKey()
       .$defaultFn(() => idGenerator('works'))
       .notNull(),
-    /** Provider domain of the Work: 'task' | 'document' | 'linear' | 'github'. */
+    /** Provider domain of the Work: 'task' | 'document' | 'external'. */
     type: text('type').$type<WorkType>().notNull(),
     /**
      * Latest `work_versions` row. Soft reference (no FK): work_versions.workId
      * already references works, so a real FK here would create a circular
      * dependency between the two tables.
+     *
+     * Typed `uuid` to match `work_versions.id` (also uuid): every list/summary
+     * query joins `works.currentVersionId = work_versions.id`, and Postgres has
+     * no `text = uuid` operator, so a text column here breaks the join.
      */
-    currentVersionId: text('current_version_id'),
+    currentVersionId: uuid('current_version_id'),
 
     /** Fine-grained resource kind, e.g. 'task' | 'linear_issue' | 'github_pull_request'. */
     resourceType: text('resource_type').$type<WorkResourceType>().notNull(),
@@ -43,8 +46,40 @@ export const works = pgTable(
      * Stable dedup key of the underlying resource within (resourceType, user/workspace).
      * task: task id; linear: issue identifier or document id; github: `owner/repo#number`
      * (the gh CLI surface never returns a node_id, so both github surfaces share this key).
+     *
+     * Still the dedup key when present. Rows with a NULL `resourceId` bypass the
+     * partial unique indexes below (Postgres treats NULLs as distinct, so no two
+     * NULL-resource rows ever conflict) — deliberate, reserving room for future
+     * Works that have no stable backing resource to dedup against.
      */
-    resourceId: text('resource_id').notNull(),
+    resourceId: text('resource_id'),
+
+    /**
+     * Tool/plugin identifier that CREATED the Work, e.g. 'lobe-task',
+     * 'lobe-agent-documents', or the skill provider ('github' / 'linear'). Written
+     * once on insert and NOT overwritten by later registrations, so it always names
+     * the creator surface even after other tools mutate the resource.
+     */
+    sourceToolIdentifier: text('source_tool_identifier'),
+    /** Current display title (progressive disclosure layer 1). */
+    title: text('title'),
+    /** Short preview text, sliced to 120 chars at write time (layer 2). */
+    description: text('description'),
+    /**
+     * FULL untruncated text (layer 3; e.g. a complete github issue body). Null for
+     * document Works — the full document lives in `documents`, so layer 3 there is
+     * opening the document itself.
+     */
+    content: text('content'),
+    /** Short human reference: `TASK-1`, a filename, `ENG-123`, `owner/repo#42`. */
+    identifier: text('identifier'),
+    /**
+     * Current resource status (external Works only). Task status stays live-join
+     * only (a stale copy would mislead) and documents have no status.
+     */
+    status: text('status'),
+    /** External link (sanitized to http(s) upstream by the normalizers). */
+    url: text('url'),
 
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
@@ -79,21 +114,12 @@ export const works = pgTable(
 export const workVersions = pgTable(
   'work_versions',
   {
-    id: text('id')
-      .primaryKey()
-      .$defaultFn(() => idGenerator('workVersions'))
-      .notNull(),
+    id: uuid('id').primaryKey().defaultRandom(),
     workId: text('work_id')
       .references(() => works.id, { onDelete: 'cascade' })
       .notNull(),
     /** 1-based sequence within a Work, unique per (workId, version). */
     version: integer('version').notNull(),
-    /**
-     * Normalized, white-listed resource fields (never raw connector payloads).
-     * Partial tool results are patch-merged over the previous version's snapshot
-     * using the normalizer's `patchFields`.
-     */
-    snapshot: jsonb('snapshot').$type<WorkVersionSnapshot>().notNull(),
 
     /**
      * How this version changed the Work: 'created' | 'updated'. Not derivable
@@ -103,6 +129,12 @@ export const workVersions = pgTable(
     changeType: text('change_type').$type<WorkVersionChangeType>().notNull(),
     /** Concrete tool that produced this version, e.g. 'createTask'. */
     sourceToolName: text('source_tool_name').notNull(),
+    /**
+     * Tool/plugin identifier that produced THIS version. Unlike `works.sourceToolIdentifier`
+     * (the creator, written once), this is per-mutation, so it names whichever tool
+     * drove each individual version.
+     */
+    sourceToolIdentifier: text('source_tool_identifier'),
 
     /** Conversation where the mutation happened; set-null keeps history after topic deletion. */
     topicId: text('topic_id').references(() => topics.id, { onDelete: 'set null' }),

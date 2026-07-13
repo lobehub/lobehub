@@ -32,6 +32,12 @@ export interface ToolWorkRegistration {
   /** Tool message the Work version is anchored to. */
   sourceMessageId?: string;
   sourceToolCallId: string;
+  /**
+   * Tool/plugin identifier that produced this registration (the tool payload's
+   * `identifier`, e.g. 'lobe-task' / 'lobe-agent-documents'). Stamped onto the
+   * Work as the creator tool. Skills stamp their own provider DB-side instead.
+   */
+  sourceToolIdentifier: string;
   /** Fallback `source` for task Works (the API name); skills use their own toolName. */
   sourceToolName: string;
   /** Cumulative usage/cost as of this tool call. */

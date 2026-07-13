@@ -1,10 +1,4 @@
-import type {
-  DocumentWorkVersionSnapshot,
-  RegisterDocumentWorkParams,
-  WorkItem,
-  WorkVersionItem,
-  WorkVersionSnapshot,
-} from '@lobechat/types';
+import type { RegisterDocumentWorkParams, WorkItem, WorkVersionItem } from '@lobechat/types';
 import type { SQL } from 'drizzle-orm';
 import { and, eq, isNull } from 'drizzle-orm';
 
@@ -12,18 +6,18 @@ import { agentDocuments } from '../../schemas/agentDocuments';
 import { type DocumentItem, documents } from '../../schemas/file';
 import { works } from '../../schemas/work';
 import { agentDocumentOwnership, documentOwnership, type WorkContext } from './context';
-import { truncateSummaryText } from './internal';
-import { createSnapshotWorkAdapter } from './snapshotWork';
+import { createDisplayWorkAdapter } from './displayWork';
+import { truncateSummaryText, type WorkDisplayColumns } from './internal';
 import { createVersion, findById, resolveWorkUpsertConflict } from './writes';
 
-export const documentSnapshot = (
+export const documentDisplayColumns = (
   doc: DocumentItem,
   params: Pick<RegisterDocumentWorkParams, 'description'>,
-): WorkVersionSnapshot => {
+): WorkDisplayColumns => {
   // Run EVERY description source through the same card-sized truncation helper at
   // write time. Explicit `params.description` and the persisted
   // `documents.description` can each be multi-MB; without truncation that full
-  // body would be copied into every immutable work_version snapshot. Chaining
+  // body would be copied into the card-preview `description` column. Chaining
   // with `||` preserves the original precedence (explicit → persisted → content)
   // because `truncateSummaryText` returns `null` for empty/whitespace input.
   const description =
@@ -32,11 +26,13 @@ export const documentSnapshot = (
     truncateSummaryText(doc.content);
 
   return {
-    document: {
-      description,
-      identifier: doc.filename,
-      title: doc.title,
-    } satisfies DocumentWorkVersionSnapshot,
+    // Layer 3 for documents is opening the document itself; the full text lives
+    // in `documents`, so `content` stays NULL here.
+    content: null,
+    description,
+    identifier: doc.filename,
+    // Fall back to the filename so a null-title document keeps a display name.
+    title: doc.title ?? doc.filename,
   };
 };
 
@@ -100,8 +96,8 @@ const createDocumentVersion = async (
   params: RegisterDocumentWorkParams,
 ): Promise<WorkVersionItem> =>
   createVersion(ctx, work, params, () => ({
+    display: documentDisplayColumns(doc, params),
     metadata: params.agentDocumentId ? { agentDocumentId: params.agentDocumentId } : null,
-    snapshot: documentSnapshot(doc, params),
   }));
 
 /**
@@ -123,7 +119,5 @@ export const registerDocumentWork = async (
   return findById(ctx, work.id);
 };
 
-/** Document snapshots are already card-sized (description trimmed at write time), so no summary slimmer. */
-export const documentWorkAdapter = createSnapshotWorkAdapter<DocumentWorkVersionSnapshot>({
-  type: 'document',
-});
+/** Document display columns are card-sized at write time; the adapter reads them straight off `works`. */
+export const documentWorkAdapter = createDisplayWorkAdapter({ type: 'document' });

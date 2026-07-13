@@ -1,6 +1,7 @@
 import type {
   DeleteDocumentWorkParams,
   DeleteTaskWorkParams,
+  WorkDisplayField,
   WorkItem,
   WorkVersionItem,
 } from '@lobechat/types';
@@ -13,6 +14,16 @@ import { documentOwnership, versionOwnership, type WorkContext, workOwnership } 
 import type { CreateVersionInput, WorkVersionEventParams } from './internal';
 
 const MAX_VERSION_CREATE_RETRIES = 5;
+
+/** Every display column, written when a registration carries complete data. */
+const ALL_DISPLAY_FIELDS: WorkDisplayField[] = [
+  'content',
+  'description',
+  'identifier',
+  'status',
+  'title',
+  'url',
+];
 
 const isUniqueViolation = (error: unknown) => {
   const message = error instanceof Error ? error.message : String(error);
@@ -83,19 +94,43 @@ export const resolveWorkUpsertConflict = (ctx: WorkContext) =>
       };
 
 /**
+ * Compute the `works` display-column UPDATE applied under the version lock.
+ * `patchFields` present → set ONLY those columns (partial tool result: never
+ * clobber a concurrent registration's other columns); absent → overwrite every
+ * display column (task/document carry complete data). `sourceToolIdentifier` is
+ * the creator tool: written only when the column is still NULL (coalesce), so a
+ * later registration from a different tool never rewrites it.
+ */
+const buildWorksDisplaySet = (
+  input: CreateVersionInput,
+  params: WorkVersionEventParams,
+): Record<string, unknown> => {
+  const set: Record<string, unknown> = {
+    sourceToolIdentifier: sql`coalesce(${works.sourceToolIdentifier}, ${params.sourceToolIdentifier ?? null})`,
+  };
+
+  const fields = input.patchFields ?? ALL_DISPLAY_FIELDS;
+  for (const field of fields) set[field] = input.display[field] ?? null;
+
+  return set;
+};
+
+/**
  * Shared version-create pipeline: dedupe by sourceToolCallId, allocate the
- * next version number in a transaction, insert the version row, bump
- * works.currentVersionId, and retry on unique-violation races (either the
- * `(workId, version)` or the `(workId, sourceToolCallId)` unique index).
+ * next version number in a transaction, insert the version row, update the
+ * works display columns + bump works.currentVersionId, and retry on
+ * unique-violation races (either the `(workId, version)` or the
+ * `(workId, sourceToolCallId)` unique index).
  *
  * `buildInput` runs inside the transaction, after a `FOR UPDATE` lock on the
  * works row (same pattern as `TopicModel.updateMetadata`): a concurrent
- * registration holds that lock until its commit, so the merge base read here
- * (linear/github patch-merge against the previous snapshot) always sees the
- * winner's committed state. Without the lock, a stale merge could allocate the
- * next version number cleanly — never hitting the unique-violation retry — and
- * silently revert fields the concurrent registration just wrote. Callers must
- * do their reads through the tx-scoped context `buildInput` receives.
+ * registration holds that lock until its commit, so the patch-vs-overwrite
+ * display UPDATE here is serialized — a partial (patch) update only touches the
+ * columns it names, and unnamed columns keep the concurrent winner's committed
+ * value. Without the lock, a stale overwrite could allocate the next version
+ * number cleanly — never hitting the unique-violation retry — and silently
+ * revert fields the concurrent registration just wrote. Callers must do their
+ * reads through the tx-scoped context `buildInput` receives.
  */
 export const createVersion = async (
   ctx: WorkContext,
@@ -132,7 +167,7 @@ export const createVersion = async (
         );
         if (dedupedUnderLock) return dedupedUnderLock;
 
-        const { metadata, snapshot } = await buildInput(txCtx);
+        const input = await buildInput(txCtx);
 
         const now = new Date();
         const [next] = await tx
@@ -153,12 +188,13 @@ export const createVersion = async (
             // edits) that carry no cost.
             cumulativeCost: params.cumulativeCost ?? null,
             cumulativeUsage: params.cumulativeUsage ?? null,
-            metadata: metadata ?? null,
+            metadata: input.metadata ?? null,
             changeType: params.changeType,
             rootOperationId: params.rootOperationId ?? null,
-            snapshot,
             sourceMessageId: params.sourceMessageId ?? null,
             sourceToolCallId: params.sourceToolCallId ?? null,
+            // Per-version tool identifier (unlike works', which keeps the creator).
+            sourceToolIdentifier: params.sourceToolIdentifier ?? null,
             sourceToolName: params.sourceToolName,
             threadId: params.threadId ?? null,
             topicId: params.topicId ?? null,
@@ -169,9 +205,15 @@ export const createVersion = async (
           })
           .returning();
 
+        // Same lock, same statement class as the old currentVersionId bump:
+        // fold the display-column write (patch or overwrite) into it.
         await tx
           .update(works)
-          .set({ currentVersionId: version.id, updatedAt: now })
+          .set({
+            currentVersionId: version.id,
+            updatedAt: now,
+            ...buildWorksDisplaySet(input, params),
+          })
           .where(and(eq(works.id, work.id), workOwnership(ctx)));
 
         return version;

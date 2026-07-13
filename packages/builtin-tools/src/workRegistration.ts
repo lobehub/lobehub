@@ -330,6 +330,12 @@ export interface WorkRegistrationProvenance {
   rootOperationId?: string;
   sourceMessageId?: string;
   sourceToolCallId?: string;
+  /**
+   * Tool/plugin identifier that produced this registration (the tool payload's
+   * `identifier`). Stamped onto task/document Works as the creator tool; skills
+   * stamp their own provider DB-side, so this is unused for the skill branch.
+   */
+  sourceToolIdentifier?: string | null;
   /** Fallback `sourceToolName` for task Works (the API name); skills/documents carry their own. */
   sourceToolName: string;
   threadId?: string | null;
@@ -395,6 +401,7 @@ export const dispatchWorkRegistrationIntent = async (
     rootOperationId,
     sourceMessageId,
     sourceToolCallId,
+    sourceToolIdentifier,
     sourceToolName,
     threadId,
     topicId,
@@ -424,6 +431,7 @@ export const dispatchWorkRegistrationIntent = async (
           rootOperationId,
           sourceMessageId,
           sourceToolCallId,
+          sourceToolIdentifier,
           sourceToolName,
           taskId: target.taskId,
           taskIdentifier: target.taskIdentifier,
@@ -452,6 +460,7 @@ export const dispatchWorkRegistrationIntent = async (
       rootOperationId,
       sourceMessageId,
       sourceToolCallId,
+      sourceToolIdentifier,
       threadId,
       topicId,
     });

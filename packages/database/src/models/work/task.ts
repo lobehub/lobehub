@@ -3,10 +3,8 @@ import type {
   TaskItem,
   TaskWorkListItem,
   TaskWorkSummaryItem,
-  TaskWorkVersionSnapshot,
   WorkItem,
   WorkVersionItem,
-  WorkVersionSnapshot,
 } from '@lobechat/types';
 import type { SQL } from 'drizzle-orm';
 import { and, desc, eq, or } from 'drizzle-orm';
@@ -21,6 +19,7 @@ import {
   type TaskWorkSummaryQueryRow,
   truncateSummaryText,
   versionEventSelection,
+  type WorkDisplayColumns,
   type WorkTypeAdapter,
 } from './internal';
 import { createVersion, findById, resolveWorkUpsertConflict } from './writes';
@@ -32,15 +31,16 @@ const normalizeTaskLookup = (value?: string) => {
 };
 
 /**
- * Minimal display snapshot: live data stays on the `tasks` row (joined by every
- * query); the snapshot only keeps what a card needs to render after the task
- * row is deleted outside the tool path.
+ * Task display columns written onto the `works` row. Live data stays on the
+ * `tasks` row (joined by every query); these columns are the deletion fallback
+ * (title / identifier) plus the instruction preview/full-text. `status` stays
+ * NULL: the live join is authoritative, and a stale copy would mislead.
  */
-export const taskSnapshot = (task: TaskItem): WorkVersionSnapshot => ({
-  task: {
-    identifier: task.identifier,
-    title: task.name,
-  } satisfies TaskWorkVersionSnapshot,
+export const taskDisplayColumns = (task: TaskItem): WorkDisplayColumns => ({
+  content: task.instruction,
+  description: truncateSummaryText(task.instruction),
+  identifier: task.identifier,
+  title: task.name,
 });
 
 const resolveTask = async (
@@ -104,7 +104,7 @@ const createTaskVersion = async (
   params: RegisterTaskWorkParams,
 ): Promise<WorkVersionItem> =>
   createVersion(ctx, work, params, () => ({
-    snapshot: taskSnapshot(task),
+    display: taskDisplayColumns(task),
   }));
 
 export const registerTaskWork = async (
@@ -145,7 +145,7 @@ export const taskWorkAdapter: WorkTypeAdapter<TaskWorkSummaryQueryRow> = {
     const rows = await ctx.db
       .select({
         eventCreatedAt: workVersions.createdAt,
-        ...taskSummaryFields(currentVersions.snapshot),
+        ...taskSummaryFields,
         work: works,
       })
       .from(workVersions)
@@ -178,7 +178,7 @@ export const taskWorkAdapter: WorkTypeAdapter<TaskWorkSummaryQueryRow> = {
     ctx.db
       .select({
         event: versionEventSelection,
-        ...taskSummaryFields(currentVersions.snapshot),
+        ...taskSummaryFields,
         version: {
           createdAt: currentVersions.createdAt,
           id: currentVersions.id,
@@ -197,7 +197,7 @@ export const taskWorkAdapter: WorkTypeAdapter<TaskWorkSummaryQueryRow> = {
   listVersionEvents: async (ctx, filters, limit) => {
     const rows = await ctx.db
       .select({
-        ...taskSummaryFields(workVersions.snapshot),
+        ...taskSummaryFields,
         version: versionEventSelection,
         work: works,
       })

@@ -8,7 +8,6 @@ import { WorkModel } from '..';
 import {
   agentId,
   cleanupWorkTestData,
-  expectDocumentSnapshot,
   expectDocumentSummaryItem,
   seedWorkTestData,
   serverDB,
@@ -37,25 +36,27 @@ describe('WorkModel · document', () => {
       rootOperationId: 'op-doc-create',
       sourceToolName: 'createDocument',
       sourceToolCallId: 'tool-call-doc-create',
+      sourceToolIdentifier: 'lobe-agent-documents',
       topicId,
     });
 
     expect(work).toBeDefined();
+    // Display columns now live directly on the current `works` row: title from the
+    // document title, identifier from the filename, description from the metadata,
+    // and content stays NULL (the full text lives in `documents`).
     expect(work).toMatchObject({
+      content: null,
+      description: 'Research notes',
+      identifier: 'research.md',
       resourceId: doc.documentId,
       resourceType: 'document',
+      sourceToolIdentifier: 'lobe-agent-documents',
+      title: 'Research Notes',
       type: 'document',
     });
 
     const versions = await workModel.listVersions(work!.id);
     expect(versions).toHaveLength(1);
-    expect(versions[0].snapshot).toMatchObject({
-      document: {
-        description: 'Research notes',
-        identifier: 'research.md',
-        title: 'Research Notes',
-      },
-    });
     expect(versions[0]).toMatchObject({
       metadata: { agentDocumentId: doc.id },
       rootOperationId: 'op-doc-create',
@@ -64,8 +65,10 @@ describe('WorkModel · document', () => {
 
     const byOperation = await workModel.listByRootOperation({ rootOperationId: 'op-doc-create' });
     expect(byOperation[0]).toMatchObject({
-      document: expect.objectContaining({ identifier: 'research.md', title: 'Research Notes' }),
+      description: 'Research notes',
       id: work?.id,
+      identifier: 'research.md',
+      title: 'Research Notes',
       type: 'document',
     });
 
@@ -73,14 +76,12 @@ describe('WorkModel · document', () => {
       rootOperationIds: ['op-doc-create'],
     });
     expect(summaries['op-doc-create']?.[0]).toMatchObject({
-      document: expect.objectContaining({
-        description: 'Research notes',
-        identifier: 'research.md',
-      }),
+      description: 'Research notes',
       event: expect.objectContaining({
         metadata: { agentDocumentId: doc.id },
       }),
       id: work?.id,
+      identifier: 'research.md',
       type: 'document',
     });
   });
@@ -110,33 +111,28 @@ describe('WorkModel · document', () => {
       topicId,
     });
 
-    const versions = await workModel.listVersions(work!.id);
-    expect(expectDocumentSnapshot(versions[0].snapshot).description).toBe(expectedDescription);
+    expect(work?.description).toBe(expectedDescription);
 
     const byOperation = await workModel.listByRootOperation({
       rootOperationId: 'op-doc-empty-description',
     });
-    expect(byOperation[0]).toMatchObject({
-      document: expect.objectContaining({ description: expectedDescription }),
-    });
+    expect(byOperation[0]).toMatchObject({ description: expectedDescription });
 
     const summaries = await workModel.listSummariesByRootOperations({
       rootOperationIds: ['op-doc-empty-description'],
     });
     const documentSummary = expectDocumentSummaryItem(summaries['op-doc-empty-description']?.[0]);
-    expect(documentSummary.document.description).toBe(expectedDescription);
+    expect(documentSummary.description).toBe(expectedDescription);
 
     const byConversation = await workModel.listByConversation({ topicId });
-    expect(byConversation[0]).toMatchObject({
-      document: expect.objectContaining({ description: expectedDescription }),
-    });
+    expect(byConversation[0]).toMatchObject({ description: expectedDescription });
   });
 
-  it('truncates an oversized explicit description before writing the snapshot', async () => {
+  it('truncates an oversized explicit description before writing the works row', async () => {
     const agentDocumentModel = new AgentDocumentModel(serverDB, userId);
     const workModel = new WorkModel(serverDB, userId);
     // Simulate a multi-KB description that must never be copied verbatim into the
-    // immutable work_version snapshot.
+    // card-preview `description` column.
     const longDescription = 'A'.repeat(5000);
     const expectedDescription = `${'A'.repeat(120)}...`;
     const doc = await agentDocumentModel.create(agentId, 'long-description.md', 'Body', {
@@ -158,7 +154,7 @@ describe('WorkModel · document', () => {
 
     const versions = await workModel.listVersions(work!.id);
     expect(versions).toHaveLength(1);
-    expect(expectDocumentSnapshot(versions[0].snapshot).description).toBe(expectedDescription);
+    expect(work?.description).toBe(expectedDescription);
   });
 
   it('keeps one document work row and appends versions for document edits', async () => {
@@ -214,9 +210,8 @@ describe('WorkModel · document', () => {
 
     const versions = await workModel.listVersions(first!.id);
     expect(versions.map((item) => item.version)).toEqual([2, 1]);
-    expect(versions[0].snapshot).toMatchObject({
-      document: { title: 'Renamed Draft' },
-    });
+    // The rename is reflected on the current works row (the merged current state).
+    expect(second?.title).toBe('Renamed Draft');
   });
 
   it('deletes document work and cascades versions when agent document is removed', async () => {

@@ -1,14 +1,10 @@
 import type {
   DocumentWorkSummaryItem,
-  DocumentWorkVersionSnapshot,
   ExternalWorkSummaryItem,
-  ExternalWorkVersionSnapshot,
   TaskWorkListItem,
   TaskWorkSummaryItem,
-  TaskWorkVersionSnapshot,
   WorkListItem,
   WorkSummaryItem,
-  WorkVersionSnapshot,
 } from '@lobechat/types';
 import { expect } from 'vitest';
 
@@ -50,40 +46,6 @@ export const seedWorkTestData = async () => {
 
 export const cleanupWorkTestData = async () => {
   await serverDB.delete(users);
-};
-
-export const expectTaskSnapshot = (snapshot: WorkVersionSnapshot): TaskWorkVersionSnapshot => {
-  expect(snapshot).toHaveProperty('task');
-
-  if (!('task' in snapshot)) {
-    throw new Error('Expected task work snapshot');
-  }
-
-  return snapshot.task;
-};
-
-export const expectDocumentSnapshot = (
-  snapshot: WorkVersionSnapshot,
-): DocumentWorkVersionSnapshot => {
-  expect(snapshot).toHaveProperty('document');
-
-  if (!('document' in snapshot)) {
-    throw new Error('Expected document work snapshot');
-  }
-
-  return snapshot.document;
-};
-
-export const expectExternalSnapshot = (
-  snapshot: WorkVersionSnapshot,
-): ExternalWorkVersionSnapshot => {
-  expect(snapshot).toHaveProperty('external');
-
-  if (!('external' in snapshot)) {
-    throw new Error('Expected external work snapshot');
-  }
-
-  return snapshot.external;
 };
 
 export const expectTaskListItem = (item?: WorkListItem): TaskWorkListItem => {
