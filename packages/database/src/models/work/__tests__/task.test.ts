@@ -140,6 +140,27 @@ describe('WorkModel · task', () => {
     });
   });
 
+  it('caps works.content at WORK_CONTENT_MAX_LENGTH on write', async () => {
+    const taskModel = new TaskModel(serverDB, userId);
+    const workModel = new WorkModel(serverDB, userId);
+    // An instruction past the 65 536-char cap must not land verbatim on the
+    // works row (every list query selects that row).
+    const instruction = 'C'.repeat(70_000);
+    const task = await taskModel.create({ instruction, name: 'Capped content task' });
+
+    const work = await workModel.registerTask({
+      changeType: 'created',
+      rootOperationId: 'op-capped-content',
+      sourceToolName: 'createTask',
+      sourceToolCallId: 'tool-call-capped-content',
+      taskId: task.id,
+      topicId,
+    });
+
+    const [row] = await serverDB.select().from(works).where(eq(works.id, work!.id));
+    expect(row.content).toBe(`${'C'.repeat(65_536)}...`);
+  });
+
   it('stamps works.sourceToolIdentifier once with the creator and keeps it per-version', async () => {
     const taskModel = new TaskModel(serverDB, userId);
     const workModel = new WorkModel(serverDB, userId);

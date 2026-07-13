@@ -31,8 +31,9 @@ export const documentDisplayColumns = (
     content: null,
     description,
     identifier: doc.filename,
-    // Fall back to the filename so a null-title document keeps a display name.
-    title: doc.title ?? doc.filename,
+    // No synthesized fallback for a null title: the card falls through to the
+    // identifier at the call site so data gaps stay visible.
+    title: doc.title,
   };
 };
 

@@ -11,7 +11,11 @@ import { documents } from '../../schemas/file';
 import { works, workVersions } from '../../schemas/work';
 import type { LobeChatDatabase } from '../../type';
 import { documentOwnership, versionOwnership, type WorkContext, workOwnership } from './context';
-import type { CreateVersionInput, WorkVersionEventParams } from './internal';
+import {
+  type CreateVersionInput,
+  truncateContentText,
+  type WorkVersionEventParams,
+} from './internal';
 
 const MAX_VERSION_CREATE_RETRIES = 5;
 
@@ -110,7 +114,12 @@ const buildWorksDisplaySet = (
   };
 
   const fields = input.patchFields ?? ALL_DISPLAY_FIELDS;
-  for (const field of fields) set[field] = input.display[field] ?? null;
+  for (const field of fields) {
+    const value = input.display[field] ?? null;
+    // `content` is the only unbounded free-text column; cap it here, the single
+    // choke point every registration path writes the works row through.
+    set[field] = field === 'content' ? truncateContentText(value) : value;
+  }
 
   return set;
 };

@@ -27,12 +27,29 @@ export const currentVersions = alias(workVersions, 'current_work_versions');
 
 /**
  * Write-time cap for the card-preview `description` column (message list,
- * sidebar summary, workspace gallery). The full body lives untruncated in
- * `works.content` (external Works) or on the owning table (documents); only the
- * `description` preview is sliced. Single source of truth, also consumed by the
- * provider normalizers.
+ * sidebar summary, workspace gallery). The full body lives in `works.content`
+ * (external Works, capped at {@link WORK_CONTENT_MAX_LENGTH}) or on the owning
+ * table (documents); only the `description` preview is sliced. Single source of
+ * truth, also consumed by the provider normalizers.
  */
 export const WORK_DESCRIPTION_PREVIEW_LENGTH = 120;
+
+/**
+ * Write-time cap for the full-text `content` column (layer 3 of the display
+ * trio). Anchored to GitHub's 65 536-char issue-body limit; without a cap an
+ * agent-generated multi-MB body would land on the `works` row that every
+ * list/summary query selects.
+ */
+export const WORK_CONTENT_MAX_LENGTH = 65_536;
+
+/** Cap the full-text `content` column; no whitespace collapsing (it IS the full text). */
+export const truncateContentText = (value: string | null | undefined): string | null => {
+  if (!value) return null;
+
+  return value.length > WORK_CONTENT_MAX_LENGTH
+    ? `${value.slice(0, WORK_CONTENT_MAX_LENGTH)}...`
+    : value;
+};
 
 /** Collapse whitespace and cap length for card-facing Work text fields. */
 export const truncateSummaryText = (value: string | null | undefined): string | null => {
