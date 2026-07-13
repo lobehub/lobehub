@@ -1,5 +1,10 @@
 import { isDesktop } from '@lobechat/const';
-import type { ChatTopicMetadata, WorkingDirConfig, WorkingDirGithubState } from '@lobechat/types';
+import type {
+  ChatTopicMetadata,
+  DeviceGitUpstreamRef,
+  WorkingDirConfig,
+  WorkingDirGithubState,
+} from '@lobechat/types';
 import { getWorkingDirEffectivePath } from '@lobechat/types';
 
 import { resolveTargetDeviceId } from '@/helpers/agentWorkingDirectory';
@@ -82,11 +87,13 @@ export const mergeWorkingDirGithubState = ({
   currentConfig,
   github,
   path,
+  upstream,
 }: {
   branch: string;
   currentConfig?: WorkingDirConfig;
   github: WorkingDirGithubState;
   path: string;
+  upstream?: DeviceGitUpstreamRef;
 }): WorkingDirConfig => {
   const source = currentConfig?.path ?? path;
   const isWorktree = source !== path;
@@ -100,6 +107,12 @@ export const mergeWorkingDirGithubState = ({
   delete git.detached;
   if (isWorktree) git.activeWorktree = path;
   else delete git.activeWorktree;
+
+  // A probe that resolved no remote ref means the branch is unpushed or its trace is
+  // gone — not that a previously recorded ref is wrong. Keep the old one rather than
+  // erase the topic's only cross-device handle on a transient miss; the writers that
+  // know the branch MOVED (switch / worktree / push-to-a-new-ref) clear it explicitly.
+  if (upstream) git.upstream = upstream;
 
   return {
     ...currentConfig,
