@@ -15,6 +15,8 @@
   "features.groupChat.title": "دردشة جماعية (متعددة الوكلاء)",
   "features.imessage.desc": "ربط الوكلاء بـ iMessage من خلال جسر BlueBubbles المحلي لتطبيق LobeHub Desktop.",
   "features.imessage.title": "قناة iMessage",
+  "features.inAppBrowser.desc": "عرض علامة تبويب المتصفح في لوحة الجانب للمحادثة: متصفح مدمج يفتح نتائج البحث في المكان ويتيح للوكلاء التصفح بشكل مرئي.",
+  "features.inAppBrowser.title": "المتصفح داخل التطبيق",
   "features.inputMarkdown.desc": "عرض Markdown في منطقة الإدخال في الوقت الفعلي (نص عريض، كتل الشيفرة، جداول، إلخ).",
   "features.inputMarkdown.title": "عرض Markdown في الإدخال",
   "features.messageTextSelectionActions.desc": "عرض إجراء سريع عند تحديد نص في رسائل الدردشة بحيث يمكن إضافة النص المحدد إلى سياق المحادثة التالية.",

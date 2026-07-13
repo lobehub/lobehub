@@ -15,6 +15,8 @@
   "features.groupChat.title": "Chat Grupal (Multiagente)",
   "features.imessage.desc": "Conectar agentes a iMessage a través del puente local LobeHub Desktop BlueBubbles.",
   "features.imessage.title": "Canal de iMessage",
+  "features.inAppBrowser.desc": "Mostrar la pestaña del navegador en el panel lateral de la conversación: un navegador integrado que abre los resultados de búsqueda en el lugar y permite a los agentes navegar de forma visible.",
+  "features.inAppBrowser.title": "Navegador Integrado",
   "features.inputMarkdown.desc": "Renderiza Markdown en el área de entrada en tiempo real (texto en negrita, bloques de código, tablas, etc.).",
   "features.inputMarkdown.title": "Renderizado de Markdown en la Entrada",
   "features.messageTextSelectionActions.desc": "Mostrar una acción rápida al seleccionar texto en mensajes de chat para que el texto seleccionado se pueda agregar al contexto de la próxima conversación.",

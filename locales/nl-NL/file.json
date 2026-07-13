@@ -82,6 +82,8 @@
   "menu.allFiles": "Alle bestanden",
   "menu.allPages": "Alle pagina’s",
   "networkError": "Kan bibliotheken niet ophalen. Controleer je netwerkverbinding en probeer opnieuw.",
+  "notFound.desc": "Dit bestand bestaat niet of is niet langer toegankelijk — het kan zijn verwijderd of privé ingesteld door de eigenaar.",
+  "notFound.title": "Bestand Niet Beschikbaar",
   "notSupportGuide.desc": "De huidige implementatiemodus ondersteunt geen bestandsbeheer. Schakel over naar <1>serverdatabase-modus</1> of gebruik <3>LobeHub Cloud</3>.",
   "notSupportGuide.features.allKind.desc": "Ondersteunt gangbare bestandsformaten, waaronder paginaformaten zoals Word, PPT, Excel, PDF, TXT, en populaire codebestanden zoals JS en Python.",
   "notSupportGuide.features.allKind.title": "Ondersteuning voor meerdere bestandstypen",

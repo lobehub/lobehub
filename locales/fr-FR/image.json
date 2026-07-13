@@ -53,6 +53,8 @@
   "generation.metadata.createdAt": "Créé à {{time}}",
   "generation.status.failed": "Échec de la génération",
   "generation.status.generating": "Génération en cours...",
+  "generationTopic.notFound.desc": "Cette génération n'existe pas ou n'est plus accessible — elle a peut-être été supprimée ou définie comme privée par son propriétaire.",
+  "generationTopic.notFound.title": "Génération Indisponible",
   "notSupportGuide.desc": "Le mode de déploiement actuel ne prend pas en charge la génération d'images IA. Passez au <1>mode de déploiement avec base de données serveur</1>, ou utilisez <3>LobeHub Cloud</3>.",
   "notSupportGuide.features.fileIntegration.desc": "Intégration poussée avec le système de gestion de fichiers ; les images générées sont automatiquement enregistrées dans le système de fichiers pour une gestion et une organisation unifiées.",
   "notSupportGuide.features.fileIntegration.title": "Intégration au système de fichiers",
