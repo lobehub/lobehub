@@ -13,6 +13,7 @@ import AccountDeletion from '@/business/client/features/AccountDeletion';
 import { useTransferAgentsFormItem } from '@/business/client/hooks/useTransferAgentsFormItem';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import DataImporter from '@/features/DataImporter';
+import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
 import { configService } from '@/services/config';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { featureFlagsSelectors, serverConfigSelectors } from '@/store/serverConfig/selectors';
@@ -55,7 +56,11 @@ const AdvancedActions = () => {
           {t('storage.actions.export.button')}
         </Button>
       ),
-      label: t('storage.actions.export.title'),
+      label: (
+        <SettingsSearchAnchor id={'storage-export'}>
+          {t('storage.actions.export.title')}
+        </SettingsSearchAnchor>
+      ),
       layout: 'horizontal',
       minWidth: undefined,
     } as const;
@@ -71,7 +76,11 @@ const AdvancedActions = () => {
             </Button>
           </DataImporter>
         ),
-        label: t('storage.actions.import.title'),
+        label: (
+          <SettingsSearchAnchor id={'storage-import'}>
+            {t('storage.actions.import.title')}
+          </SettingsSearchAnchor>
+        ),
         layout: 'horizontal',
         minWidth: undefined,
       },
@@ -83,7 +92,11 @@ const AdvancedActions = () => {
           </Button>
         ),
         desc: t('danger.reset.desc'),
-        label: t('danger.reset.title'),
+        label: (
+          <SettingsSearchAnchor id={'storage-reset'}>
+            {t('danger.reset.title')}
+          </SettingsSearchAnchor>
+        ),
         layout: 'horizontal',
         minWidth: undefined,
       },
@@ -103,7 +116,11 @@ const AdvancedActions = () => {
           />
         ),
         desc: t('analytics.telemetry.desc', { appName: BRANDING_NAME }),
-        label: t('analytics.telemetry.title'),
+        label: (
+          <SettingsSearchAnchor id={'storage-telemetry'}>
+            {t('analytics.telemetry.title')}
+          </SettingsSearchAnchor>
+        ),
         minWidth: undefined,
         valuePropName: 'checked',
       },

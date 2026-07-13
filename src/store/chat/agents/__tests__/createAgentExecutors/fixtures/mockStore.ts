@@ -1,6 +1,7 @@
 import { nanoid } from '@lobechat/utils';
 import { vi } from 'vitest';
 
+import { messageService } from '@/services/message';
 import { type ChatStore } from '@/store/chat/store';
 
 /**
@@ -12,6 +13,7 @@ export const createMockStore = (overrides: Partial<ChatStore> = {}): ChatStore =
   const messageOperationMap: Record<string, string> = {};
   const operationsByMessage: Record<string, string[]> = {};
   const dbMessagesMap: Record<string, any[]> = {};
+  const optimisticCreates = new Map<string, Promise<unknown>>();
 
   const store = {
     // Other store properties (add as needed)
@@ -56,7 +58,12 @@ export const createMockStore = (overrides: Partial<ChatStore> = {}): ChatStore =
     }),
 
     // AI chat methods
-    internal_dispatchMessage: vi.fn(),
+    internal_dispatchMessage: vi.fn().mockImplementation((payload, context) => {
+      if (payload.type !== 'createMessage') return;
+
+      const createPromise = Promise.resolve(store.optimisticCreateMessage(payload.value, context));
+      optimisticCreates.set(payload.id, createPromise);
+    }),
 
     internal_invokeDifferentTypePlugin: vi.fn().mockResolvedValue({ error: null }),
 
@@ -89,7 +96,7 @@ export const createMockStore = (overrides: Partial<ChatStore> = {}): ChatStore =
 
     // Message management methods
     optimisticCreateMessage: vi.fn().mockImplementation(async (params) => {
-      const id = nanoid();
+      const id = params.id ?? nanoid();
       const message = { id, ...params, createdAt: Date.now(), updatedAt: Date.now() };
       return message;
     }),
@@ -147,6 +154,33 @@ export const createMockStore = (overrides: Partial<ChatStore> = {}): ChatStore =
 
     ...overrides,
   } as unknown as ChatStore;
+
+  vi.spyOn(messageService, 'batchMutate').mockImplementation(async (batch) => {
+    const results = [];
+
+    for (const [index, operation] of batch.entries()) {
+      let success = true;
+      if (operation.type === 'createMessage') {
+        const createResult = optimisticCreates.get(operation.message.id!);
+        if (createResult) {
+          try {
+            success = Boolean(await createResult);
+          } catch {
+            success = false;
+          }
+        }
+      }
+
+      results.push({
+        id: operation.type === 'createMessage' ? operation.message.id : operation.id,
+        index,
+        success,
+        type: operation.type,
+      });
+    }
+
+    return { results, success: results.every((item) => item.success) };
+  });
 
   return store;
 };

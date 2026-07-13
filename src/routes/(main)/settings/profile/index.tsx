@@ -112,7 +112,7 @@ const ProfileSetting = () => {
           {isLogin && !isDesktop && isLoadedAuthProviders && (
             <>
               <Divider style={{ margin: 0 }} />
-              <ProfileRow label={t('profile.sso.providers')}>
+              <ProfileRow anchor={'profile-connected-accounts'} label={t('profile.sso.providers')}>
                 <SSOProvidersList />
               </ProfileRow>
             </>
@@ -121,7 +121,10 @@ const ProfileSetting = () => {
           {enableComposio && isServersInit && connectedServers.length > 0 && (
             <>
               <Divider style={{ margin: 0 }} />
-              <ProfileRow label={t('profile.authorizations.title')}>
+              <ProfileRow
+                anchor={'profile-authorizations'}
+                label={t('profile.authorizations.title')}
+              >
                 <ComposioAuthorizationList servers={connectedServers} />
               </ProfileRow>
             </>

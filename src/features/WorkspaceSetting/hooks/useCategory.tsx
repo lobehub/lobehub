@@ -19,7 +19,6 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useIsWorkspaceOwner } from '@/business/client/hooks/useIsWorkspaceOwner';
-import { useShowWorkspaceApiKey } from '@/business/client/hooks/useShowWorkspaceApiKey';
 import { WorkspaceSettingsTabs } from '@/types/workspaceSettings';
 
 export enum WorkspaceSettingsGroupKey {
@@ -45,7 +44,6 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
   const { t } = useTranslation('setting');
   const { t: tAuth } = useTranslation('auth');
   const { t: tSubscription } = useTranslation('subscription');
-  const showApiKey = useShowWorkspaceApiKey();
   const isOwner = useIsWorkspaceOwner();
 
   return useMemo(
@@ -148,7 +146,7 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               key: WorkspaceSettingsTabs.Storage,
               label: t('tab.storage'),
             },
-            showApiKey && {
+            {
               icon: KeyIcon,
               key: WorkspaceSettingsTabs.APIKey,
               label: tAuth('tab.apikey'),
@@ -163,6 +161,6 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
           title: t('workspaceSetting.group.admin'),
         },
       ].filter(Boolean) as WorkspaceSettingCategoryGroup[],
-    [t, tAuth, tSubscription, showApiKey, isOwner],
+    [t, tAuth, tSubscription, isOwner],
   );
 };

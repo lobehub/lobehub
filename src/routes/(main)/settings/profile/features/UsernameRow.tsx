@@ -91,7 +91,7 @@ const UsernameRow = () => {
   }, [username]);
 
   return (
-    <ProfileRow label={t('profile.username')}>
+    <ProfileRow anchor={'profile-username'} label={t('profile.username')}>
       <Flexbox horizontal align="center" gap={8}>
         {saving && <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.5 }} />}
         {error && (

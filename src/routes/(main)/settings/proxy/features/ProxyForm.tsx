@@ -9,6 +9,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { FORM_STYLE } from '@/const/layoutTokens';
+import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
 import { desktopSettingsService } from '@/services/electron/settings';
 import { useElectronStore } from '@/store/electron';
 
@@ -212,7 +213,7 @@ const ProxyForm = () => {
       {
         children: <Switch />,
         desc: t('proxy.enableDesc'),
-        label: t('proxy.enable'),
+        label: <SettingsSearchAnchor id={'proxy-enable'}>{t('proxy.enable')}</SettingsSearchAnchor>,
         layout: 'horizontal',
         minWidth: undefined,
         name: 'enableProxy',
@@ -260,7 +261,7 @@ const ProxyForm = () => {
       {
         children: <Switch disabled={!isEnableProxy} />,
         desc: t('proxy.authDesc'),
-        label: t('proxy.auth'),
+        label: <SettingsSearchAnchor id={'proxy-auth'}>{t('proxy.auth')}</SettingsSearchAnchor>,
         layout: 'horizontal',
         minWidth: undefined,
         name: 'proxyRequireAuth',
@@ -308,7 +309,7 @@ const ProxyForm = () => {
           </Space.Compact>
         ),
         desc: t('proxy.testDescription'),
-        label: t('proxy.testUrl'),
+        label: <SettingsSearchAnchor id={'proxy-test'}>{t('proxy.testUrl')}</SettingsSearchAnchor>,
         minWidth: undefined,
       },
     ],

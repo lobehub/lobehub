@@ -190,6 +190,10 @@ describe('StreamingExecutor actions', () => {
 
       // Verify agent runtime executed successfully
       expect(streamSpy).toHaveBeenCalled();
+      expect(result.current.refreshMessages).toHaveBeenCalledWith({
+        agentId: TEST_IDS.SESSION_ID,
+        topicId: TEST_IDS.TOPIC_ID,
+      });
 
       // Verify operation was completed
       const operations = Object.values(result.current.operations);

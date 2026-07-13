@@ -27,11 +27,6 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     font-size: 12px;
     color: ${cssVar.colorTextQuaternary};
   `,
-  separator: css`
-    /* The row's gap alone reads as a gutter between unrelated items; the dot binds
-       the token count and the speed into one metrics run. */
-    margin-inline: -2px;
-  `,
 }));
 
 // Cheap messages don't need a cost callout — only surface it once it's
@@ -74,31 +69,24 @@ const Usage = memo<UsageProps>(({ model, usage, performance, provider }) => {
       gap={12}
       justify={'space-between'}
     >
-      <Center horizontal gap={4} style={{ fontSize: 12 }}>
-        {heteroName || (
-          <>
-            <ModelIcon model={model as string} type={'mono'} />
-            {modelCard?.displayName || model}
-          </>
-        )}
-      </Center>
-
-      <Center horizontal gap={8}>
-        {!!usage?.totalTokens && (
-          <TokenDetail
-            model={model as string}
-            performance={performance}
-            provider={provider}
-            usage={usage}
-          />
-        )}
-        {/* A spelled-out "TPS" unit rather than an icon: at 12px a gauge glyph is
-            indistinguishable from the neighbouring coin, so the reader can't tell
-            what the number measures. TTFT rides in the hover instead of taking a
-            second inline slot — it's a diagnostic, not an at-a-glance metric. */}
+      {/* The speed describes how this model ran, so it sits with the model name
+          rather than in the token/cost cluster. A spelled-out "TPS" unit rather
+          than an icon: at 12px a gauge glyph is indistinguishable from the
+          neighbouring coin, so the reader can't tell what the number measures.
+          TTFT rides in the hover instead of taking a second inline slot — it's a
+          diagnostic, not an at-a-glance metric. */}
+      <Center horizontal gap={6} style={{ fontSize: 12 }}>
+        <Center horizontal gap={4}>
+          {heteroName || (
+            <>
+              <ModelIcon model={model as string} type={'mono'} />
+              {modelCard?.displayName || model}
+            </>
+          )}
+        </Center>
         {!!performance?.tps && (
           <>
-            {!!usage?.totalTokens && <span className={styles.separator}>·</span>}
+            <span>·</span>
             <Tooltip
               title={
                 <Flexbox gap={6}>
@@ -118,6 +106,17 @@ const Usage = memo<UsageProps>(({ model, usage, performance, provider }) => {
               </Center>
             </Tooltip>
           </>
+        )}
+      </Center>
+
+      <Center horizontal gap={8}>
+        {!!usage?.totalTokens && (
+          <TokenDetail
+            model={model as string}
+            performance={performance}
+            provider={provider}
+            usage={usage}
+          />
         )}
         {!isShowCredit && !!usage?.cost && usage.cost >= MIN_DISPLAY_COST && (
           <Center horizontal gap={2}>

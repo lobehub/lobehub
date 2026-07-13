@@ -41,6 +41,7 @@ const PasswordRow = () => {
 
   return (
     <ProfileRow
+      anchor={'profile-password'}
       label={t('profile.password')}
       action={
         <Button loading={sending} size="small" onClick={handleChangePassword}>

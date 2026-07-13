@@ -91,10 +91,13 @@ const currentTopicWorkingDirectory = (s: ChatStoreState): string | undefined => 
   const activeTopic = currentActiveTopic(s);
   if (!activeTopic) return;
 
+  // Route the raw `workingDirectory` through the extractor too: it is typed as a
+  // string, but a malformed legacy topic may have persisted a `WorkingDirConfig`
+  // object into it (see #17050 and `getTopicMetadataWorkingDirectorySourcePath`),
+  // and this selector's declared `string | undefined` must hold at runtime.
   if (isDesktop) {
-    return (
-      getWorkingDirEffectivePath(activeTopic.metadata?.workingDirectoryConfig) ??
-      activeTopic.metadata?.workingDirectory
+    return getWorkingDirEffectivePath(
+      activeTopic.metadata?.workingDirectoryConfig ?? activeTopic.metadata?.workingDirectory,
     );
   }
 
@@ -102,8 +105,7 @@ const currentTopicWorkingDirectory = (s: ChatStoreState): string | undefined => 
   const meta = activeTopic.metadata;
   return (
     meta?.repos?.[0] ??
-    getWorkingDirEffectivePath(meta?.workingDirectoryConfig) ??
-    meta?.workingDirectory
+    getWorkingDirEffectivePath(meta?.workingDirectoryConfig ?? meta?.workingDirectory)
   );
 };
 

@@ -788,6 +788,10 @@ export class StreamingExecutorActionImpl {
       stepCount,
     );
 
+    // Runtime message transports persist through quiet batch mutations. Reconcile
+    // once at the run boundary instead of replacing the full list after every write.
+    await this.#get().refreshMessages(context);
+
     // Run-completion side effects are assembled once and invoked at
     // this boundary. The bodies are relocated verbatim into `buildRunLifecycle`,
     // so the streamingExecutor characterization net stays green (behavior-preserving).

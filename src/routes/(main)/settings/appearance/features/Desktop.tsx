@@ -8,6 +8,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { FORM_STYLE } from '@/const/layoutTokens';
+import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
 import { useElectronStore } from '@/store/electron';
 
 const Desktop = memo(() => {
@@ -41,7 +42,11 @@ const Desktop = memo(() => {
           />
         ),
         desc: t('settingAppearance.appTray.desc'),
-        label: t('settingAppearance.appTray.title'),
+        label: (
+          <SettingsSearchAnchor id={'appearance-app-tray'}>
+            {t('settingAppearance.appTray.title')}
+          </SettingsSearchAnchor>
+        ),
         minWidth: undefined,
       },
     ],

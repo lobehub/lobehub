@@ -7,6 +7,9 @@ import { MessageService } from '../index';
 vi.mock('@/libs/trpc/client', () => ({
   lambdaClient: {
     message: {
+      batchMutate: {
+        mutate: vi.fn(),
+      },
       updateMetadata: {
         mutate: vi.fn(),
       },
@@ -20,6 +23,58 @@ describe('MessageService - Race Condition Control', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     messageService = new MessageService();
+  });
+
+  describe('batch tool message update race condition', () => {
+    it('should cancel a stale batch update for the same tool message', async () => {
+      let firstRequestAborted = false;
+
+      vi.mocked(lambdaClient.message.batchMutate.mutate)
+        .mockImplementationOnce(
+          (_params, options) =>
+            new Promise((resolve, reject) => {
+              options?.signal?.addEventListener('abort', () => {
+                firstRequestAborted = true;
+                reject(new Error('Aborted'));
+              });
+            }),
+        )
+        .mockResolvedValueOnce({
+          results: [{ id: 'tool-1', index: 0, success: true, type: 'updateToolMessage' }],
+          success: true,
+        });
+
+      const firstPromise = messageService.batchMutateOrThrow([
+        {
+          id: 'tool-1',
+          type: 'updateToolMessage',
+          value: { content: 'stale result' },
+        },
+      ]);
+      const secondPromise = messageService.batchMutateOrThrow([
+        {
+          id: 'tool-1',
+          type: 'updateToolMessage',
+          value: { content: 'latest result' },
+        },
+      ]);
+
+      await expect(firstPromise).rejects.toThrow('Aborted');
+      await expect(secondPromise).resolves.toMatchObject({ success: true });
+      expect(firstRequestAborted).toBe(true);
+      expect(lambdaClient.message.batchMutate.mutate).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          operations: [
+            expect.objectContaining({
+              id: 'tool-1',
+              value: { content: 'latest result' },
+            }),
+          ],
+        }),
+        { signal: expect.any(AbortSignal) },
+      );
+    });
   });
 
   describe('updateMessageMetadata race condition', () => {

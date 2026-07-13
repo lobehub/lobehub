@@ -65,6 +65,17 @@ export const createMockAbortController = () => {
  * Setup spies for message service methods
  */
 export const spyOnMessageService = () => {
+  const batchMutateSpy = vi
+    .spyOn(messageService, 'batchMutate')
+    .mockImplementation(async (operations) => ({
+      results: operations.map((operation, index) => ({
+        id: operation.type === 'createMessage' ? operation.message.id : operation.id,
+        index,
+        success: true,
+        type: operation.type,
+      })),
+      success: true,
+    }));
   const createMessageSpy = vi
     .spyOn(messageService, 'createMessage')
     .mockResolvedValue({ id: TEST_IDS.NEW_MESSAGE_ID, messages: [] });
@@ -82,6 +93,7 @@ export const spyOnMessageService = () => {
     .mockResolvedValue(undefined as any);
 
   return {
+    batchMutateSpy,
     createMessageSpy,
     removeMessageSpy,
     updateMessageErrorSpy,

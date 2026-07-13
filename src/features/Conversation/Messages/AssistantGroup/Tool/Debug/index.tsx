@@ -151,15 +151,25 @@ const Debug = memo<DebugProps>(
     );
 
     return (
-      <Block variant={'outlined'}>
+      <Block style={{ overflow: 'hidden' }} variant={'outlined'}>
         <Tabs
           items={items}
           orientation={'vertical'}
-          size={'small'}
+          size={'middle'}
           styles={{
+            list: {
+              borderRadius: 0,
+            },
             panel: {
+              flex: 'auto',
               height: 300,
+              minHeight: 0,
+              minWidth: 0,
               padding: 0,
+            },
+            tab: {
+              justifyContent: 'flex-start',
+              textAlign: 'start',
             },
           }}
         />

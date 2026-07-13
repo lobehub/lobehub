@@ -1,14 +1,14 @@
-import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@lobechat/const';
+import { DESKTOP_HEADER_ICON_SMALL_SIZE, isDesktop } from '@lobechat/const';
 import { ActionIcon, copyToClipboard, Flexbox } from '@lobehub/ui';
 import { App } from 'antd';
-import { Copy, ExternalLink, Maximize2 } from 'lucide-react';
+import { Copy, ExternalLink } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
-import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
+import { electronSystemService } from '@/services/electron/system';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 
@@ -18,15 +18,15 @@ import Title from './Title';
 const VerifyReportHeader = memo(() => {
   const { message } = App.useApp();
   const { t } = useTranslation('verify');
-  const navigate = useWorkspaceAwareNavigate();
   const appOrigin = useAppOrigin();
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
   const runId = useChatStore(chatPortalSelectors.verifyReportRunId);
-  const clearPortalStack = useChatStore((s) => s.clearPortalStack);
   const reportPath = runId
     ? buildWorkspaceAwarePath(`/verify/${runId}`, activeWorkspaceSlug)
     : undefined;
   const reportUrl = reportPath ? `${appOrigin}${reportPath}` : undefined;
+  // Without an origin the URL is relative — the system browser has nothing to resolve it against.
+  const externalUrl = appOrigin && reportUrl ? reportUrl : undefined;
 
   return (
     <Header
@@ -45,24 +45,19 @@ const VerifyReportHeader = memo(() => {
             }}
           />
           <ActionIcon
-            disabled={!reportPath}
+            disabled={!externalUrl}
             icon={ExternalLink}
             size={DESKTOP_HEADER_ICON_SMALL_SIZE}
-            title={t('report.actions.openInNewWindow')}
+            title={t('report.actions.openInBrowser')}
             onClick={() => {
-              if (!reportPath) return;
-              window.open(reportPath, '_blank', 'noopener,noreferrer');
-            }}
-          />
-          <ActionIcon
-            disabled={!runId}
-            icon={Maximize2}
-            size={DESKTOP_HEADER_ICON_SMALL_SIZE}
-            title={t('report.actions.openFullPage')}
-            onClick={() => {
-              if (!runId) return;
-              navigate(`/verify/${runId}`);
-              clearPortalStack();
+              if (!externalUrl) return;
+              // In Electron a `window.open` is denied by the window-open handler,
+              // so hand the URL to the system browser through the main process.
+              if (isDesktop) {
+                void electronSystemService.openExternalLink(externalUrl);
+                return;
+              }
+              window.open(externalUrl, '_blank', 'noopener,noreferrer');
             }}
           />
         </Flexbox>

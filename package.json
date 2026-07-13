@@ -401,6 +401,7 @@
     "pdfjs-dist": "5.4.530",
     "pdfkit": "^0.17.2",
     "pg": "^8.22.0",
+    "pinyin-pro": "^3.28.1",
     "plaiceholder": "^3.0.0",
     "polished": "^4.3.1",
     "posthog-js": "~1.278.0",

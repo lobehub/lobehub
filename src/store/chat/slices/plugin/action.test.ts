@@ -34,6 +34,7 @@ vi.mock('zustand/traditional');
 // Mock messageService
 vi.mock('@/services/message', () => ({
   messageService: {
+    batchMutateOrThrow: vi.fn(),
     createMessage: vi.fn(),
     updateMessage: vi.fn(),
     updateMessageError: vi.fn(),
@@ -1333,16 +1334,13 @@ describe('ChatPluginAction', () => {
         );
       });
 
-      it('optimisticUpdateToolMessage should pass groupId via ctx', async () => {
+      it('optimisticUpdateToolMessage should persist through a quiet batch mutation', async () => {
         const { result } = renderHook(() => useChatStore());
         const messageId = 'message-id';
         const content = 'new content';
         const pluginState = { status: 'success' };
 
-        (messageService.updateToolMessage as Mock).mockResolvedValue({
-          success: true,
-          messages: [],
-        });
+        (messageService.batchMutateOrThrow as Mock).mockResolvedValue({ success: true });
 
         let operationId: string;
         await act(async () => {
@@ -1359,16 +1357,14 @@ describe('ChatPluginAction', () => {
           );
         });
 
-        // Now uses single updateToolMessage call instead of multiple parallel calls
-        expect(messageService.updateToolMessage).toHaveBeenCalledWith(
-          messageId,
-          { content, metadata: undefined, pluginError: undefined, pluginState },
-          expect.objectContaining({
-            agentId: groupContext.agentId,
-            groupId: groupContext.groupId,
-            topicId: groupContext.topicId,
-          }),
-        );
+        expect(messageService.batchMutateOrThrow).toHaveBeenCalledWith([
+          {
+            id: messageId,
+            type: 'updateToolMessage',
+            value: { content, metadata: undefined, pluginError: undefined, pluginState },
+          },
+        ]);
+        expect(messageService.updateToolMessage).not.toHaveBeenCalled();
       });
     });
   });

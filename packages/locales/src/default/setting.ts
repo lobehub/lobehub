@@ -915,6 +915,37 @@ export default {
     'Always on for Lobe AI while Self-Iteration is available.',
   'settingSelfIteration.enabled.title': 'Enable Self-Iteration',
   'settingSelfIteration.title': 'Self-Iteration',
+  'settingsSearch.empty': 'No settings found for "{{keyword}}"',
+  'settingsSearch.placeholder': 'Search settings...',
+  'settingsSearch.tabKeywords.about': 'about, version, changelog, feedback, help',
+  'settingsSearch.tabKeywords.advanced': 'advanced, developer, labs, experiment, beta',
+  'settingsSearch.tabKeywords.apikey': 'api key, apikey, token, secret',
+  'settingsSearch.tabKeywords.appearance':
+    'appearance, theme, dark mode, light mode, font, language, color',
+  'settingsSearch.tabKeywords.billing': 'billing, payment, invoice, card, transaction',
+  'settingsSearch.tabKeywords.connector': 'connectors, integrations, mcp',
+  'settingsSearch.tabKeywords.credits': 'credits, balance, top up, recharge, buy credits',
+  'settingsSearch.tabKeywords.creds': 'credentials, secrets, oauth',
+  'settingsSearch.tabKeywords.devices': 'devices, sessions, logged in devices',
+  'settingsSearch.tabKeywords.hotkey': 'hotkey, shortcut, keyboard',
+  'settingsSearch.tabKeywords.memory': 'memory, memories, personalization',
+  'settingsSearch.tabKeywords.messenger': 'messenger, chat platform, bot',
+  'settingsSearch.tabKeywords.notification': 'notification, email, push, alerts',
+  'settingsSearch.tabKeywords.plans': 'subscription, plan, upgrade, pricing, membership',
+  'settingsSearch.tabKeywords.profile':
+    'profile, account, avatar, username, password, email, sign out, logout',
+  'settingsSearch.tabKeywords.provider':
+    'provider, model, llm, api key, apikey, byok, bring your own key, endpoint',
+  'settingsSearch.tabKeywords.proxy': 'proxy, network, connection',
+  'settingsSearch.tabKeywords.referral': 'referral, invite, rewards, bonus',
+  'settingsSearch.tabKeywords.serviceModel':
+    'service model, model assignment, topic naming, translation, tts, voice, speech, image, image generation, embedding, prompt rewrite, suggestion',
+  'settingsSearch.tabKeywords.skill': 'skills, plugins, tools',
+  'settingsSearch.tabKeywords.stats': 'analytics, statistics, stats',
+  'settingsSearch.tabKeywords.storage':
+    'storage, files, import, export, backup, reset, clear data, account deletion, delete account',
+  'settingsSearch.tabKeywords.systemTools': 'system tools, built-in tools',
+  'settingsSearch.tabKeywords.usage': 'usage, consumption, quota, spend, statistics',
   'settingSystem.oauth.info.desc': 'Logged in',
   'settingSystem.oauth.info.title': 'Account Information',
   'settingSystem.oauth.signin.action': 'Sign In',
@@ -1813,6 +1844,19 @@ When I am ___, I need ___
   'workspace.billingPage.usage.trendTitle': 'Daily spend trend',
   'workspace.billingPage.usage.trendTooltip': '{{date}}: {{value}}',
   'workspace.billingPage.usage.type': 'Type',
+  'workspace.apiKey.upgrade.benefits.integration.desc':
+    'Call workspace agents and resources from your own systems via the LobeHub API.',
+  'workspace.apiKey.upgrade.benefits.integration.title': 'Programmatic access',
+  'workspace.apiKey.upgrade.benefits.security.desc':
+    'Requests run under workspace roles and permissions, and keys can be revoked centrally.',
+  'workspace.apiKey.upgrade.benefits.security.title': 'Workspace-scoped security',
+  'workspace.apiKey.upgrade.benefits.shared.desc':
+    'Keys belong to the workspace instead of one person, so automation survives member changes.',
+  'workspace.apiKey.upgrade.benefits.shared.title': 'Team-shared keys',
+  'workspace.apiKey.upgrade.cta': 'Upgrade to Pro',
+  'workspace.apiKey.upgrade.desc':
+    'Create workspace-scoped API keys to integrate workspace agents and data into your own workflows and services.',
+  'workspace.apiKey.upgrade.title': 'Unlock workspace API keys for programmatic access',
   'workspace.auditLog.actions.billing.default_payment_method_changed':
     'Default payment method changed',
   'workspace.auditLog.actions.billing.payment_method_added': 'Payment method added',
@@ -2556,6 +2600,7 @@ When I am ___, I need ___
   'workspace.wizard.step2.features.free.upgradable': 'Upgrade anytime for more seats',
   'workspace.wizard.step2.features.business.auditLog': 'Audit logs',
   'workspace.wizard.step2.features.pro.adminControls': 'Centralized billing and role management',
+  'workspace.wizard.step2.features.pro.apiKey': 'Workspace API keys',
   'workspace.wizard.step2.features.pro.collaboration': 'Invite members · share agents and files',
   'workspace.wizard.step2.features.pro.memberBudget': 'Per-member budget control',
   'workspace.wizard.step2.features.pro.onDemand':

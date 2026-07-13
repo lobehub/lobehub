@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { ChatStore } from '@/store/chat/store';
 
+import type { ClientMessageTransport } from './ClientMessageTransport';
 import { ClientToolTransport } from './ClientToolTransport';
 
 describe('ClientToolTransport', () => {
@@ -31,7 +32,14 @@ describe('ClientToolTransport', () => {
       startOperation: vi.fn(() => ({ operationId: `child-operation-${++operationIndex}` })),
       updateOperationMetadata: vi.fn(),
     } as unknown as ChatStore;
-    const transport = new ClientToolTransport(() => store, 'message-key', 'root-operation');
+    const createToolMessageForOperation = vi.fn().mockResolvedValue({ id: 'tool-message' });
+    const messages = { createToolMessageForOperation } as unknown as ClientMessageTransport;
+    const transport = new ClientToolTransport(
+      () => store,
+      'message-key',
+      'root-operation',
+      messages,
+    );
     const call: ChatToolPayload = {
       apiName: 'run',
       arguments: '{}',
@@ -62,5 +70,10 @@ describe('ClientToolTransport', () => {
       type: 'ToolExecutionError',
     });
     expect(completeOperation).not.toHaveBeenCalledWith('child-operation-1');
+    expect(createToolMessageForOperation).toHaveBeenCalledWith(
+      expect.objectContaining({ role: 'tool', tool_call_id: 'tool-call' }),
+      'child-operation-2',
+    );
+    expect(store.optimisticCreateMessage).not.toHaveBeenCalled();
   });
 });

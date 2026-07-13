@@ -1,4 +1,5 @@
 import type { ChatStreamPayload } from '@lobechat/model-runtime';
+import { mergeModelRuntimeHooks } from '@lobechat/model-runtime';
 import type { LobeAgentChatConfig, LobeAgentConfig, UserSystemAgentConfig } from '@lobechat/types';
 import { RequestTrigger } from '@lobechat/types';
 import { and, eq } from 'drizzle-orm';
@@ -10,6 +11,7 @@ import { agents, agentsToSessions, aiModels, aiProviders } from '@/database/sche
 import type { LobeChatDatabase } from '@/database/type';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { initModelRuntimeWithUserPayload } from '@/server/modules/ModelRuntime';
+import { createLLMGenerationTracingHook } from '@/server/services/llmGenerationTracing/hook';
 import { resolveSystemAgentModelConfig } from '@/server/services/systemAgent/modelConfig';
 
 import { BaseService } from '../common/base.service';
@@ -326,8 +328,12 @@ export class ChatService extends BaseService {
     try {
       const { apiKey } = JSON.parse(await this.getApiKey(provider));
 
-      // Create AgentRuntime instance
-      const hooks = getBusinessModelRuntimeHooks(this.userId!, provider);
+      // Create AgentRuntime instance. Pass workspaceId so workspace-key calls
+      // bill the workspace budget (not the key creator's personal budget) and
+      // trace under the workspace, matching initModelRuntimeFromDB.
+      const businessHooks = getBusinessModelRuntimeHooks(this.userId!, provider, this.workspaceId);
+      const tracingHooks = createLLMGenerationTracingHook(this.userId!, provider, this.workspaceId);
+      const hooks = mergeModelRuntimeHooks(businessHooks, tracingHooks);
       const modelRuntime = await initModelRuntimeWithUserPayload(
         provider,
         { apiKey, userId: this.userId! },
