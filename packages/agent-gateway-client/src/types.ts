@@ -149,6 +149,9 @@ export interface SubAgentProgressData extends StepCompleteData {
   phase: 'subagent_progress';
   /** The parked parent's placeholder tool message these stats belong to. */
   toolMessageId: string;
+  totalCost?: number;
+  totalInputTokens?: number;
+  totalOutputTokens?: number;
   totalTokens?: number;
   totalToolCalls?: number;
 }

@@ -7,6 +7,7 @@ import {
 } from '@lobechat/utils/client/topic';
 import { Flexbox, Icon, Popover, Skeleton, Tag, Text, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cssVar, keyframes, useTheme } from 'antd-style';
+import dayjs from 'dayjs';
 import { HashIcon, MessageSquareDashed } from 'lucide-react';
 import type { CSSProperties } from 'react';
 import { memo, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
@@ -286,9 +287,9 @@ const TopicItem = memo<TopicItemProps>(
       title,
     });
 
-    const isCompleted = status === 'completed';
     const isFailed = status === 'failed';
     const isRunning = status === 'running';
+    const isScheduled = status === 'scheduled';
     const isWaitingForHuman = status === 'waitingForHuman';
     // Post-visible-output tail: the user-visible answer is complete but the run
     // is still doing terminal bookkeeping (unread persist, title summary) —
@@ -400,6 +401,22 @@ const TopicItem = memo<TopicItemProps>(
         title={title === '...' ? <DotsLoading gap={3} size={4} /> : title}
         titleColor={cssVar.colorText}
         icon={(() => {
+          // A scheduled topic hasn't run yet — nothing else can be true of it,
+          // so its clock outranks the other states.
+          if (isScheduled) {
+            const visual = TOPIC_STATUS_VISUALS.scheduled;
+            const runAt = metadata?.scheduledRun?.runAt;
+            const icon = <Icon icon={visual.icon} size={'small'} style={{ color: visual.color }} />;
+            return runAt ? (
+              <Tooltip
+                title={t('scheduledStatusTip', { time: dayjs(runAt).format('MM-DD HH:mm') })}
+              >
+                {icon}
+              </Tooltip>
+            ) : (
+              icon
+            );
+          }
           if (isWaitingForHuman) {
             const visual = TOPIC_STATUS_VISUALS.waitingForHuman;
             return <Icon icon={visual.icon} size={'small'} style={{ color: visual.color }} />;
@@ -425,9 +442,18 @@ const TopicItem = memo<TopicItemProps>(
           // in `@lobechat/utils/client/topic`), so it ranks with its two siblings
           // above — and above the PR marker, which shares this single icon slot.
           if (hasUnread) return unreadIcon;
+          // Persisted execution state is the topic's primary status. Keep every
+          // non-idle state above git metadata so scheduled / paused / completed
+          // topics cannot be mistaken for merely open / merged / closed PRs.
+          // `running` is handled exclusively by shouldShowRunningIcon above so
+          // the masked post-output tail cannot fall back to a static running icon.
+          if (status && status !== 'active' && status !== 'running') {
+            const visual = TOPIC_STATUS_VISUALS[status];
+            return <Icon icon={visual.icon} size={'small'} style={{ color: visual.color }} />;
+          }
           // GitHub PR state marker (open=green, merged=purple, closed=red),
-          // like Codex. Sits below the attention/active states but above the
-          // idle default so an idle topic surfaces its linked PR at a glance.
+          // like Codex. It is secondary metadata, so only an idle topic uses it
+          // as the leading icon.
           if (metaCard?.pullRequest) {
             const prVisual = PR_STATE_VISUAL[getPullRequestState(metaCard.pullRequest)];
             return (
@@ -435,10 +461,6 @@ const TopicItem = memo<TopicItemProps>(
                 <Icon icon={prVisual.icon} size={'small'} style={{ color: prVisual.color }} />
               </Tooltip>
             );
-          }
-          if (isCompleted) {
-            const visual = TOPIC_STATUS_VISUALS.completed;
-            return <Icon icon={visual.icon} size={'small'} style={{ color: visual.color }} />;
           }
           if (metadata?.bot?.platform) {
             const ProviderIcon = getPlatformIcon(metadata.bot!.platform);

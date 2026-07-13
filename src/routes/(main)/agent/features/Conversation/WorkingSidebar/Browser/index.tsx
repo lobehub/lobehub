@@ -18,11 +18,16 @@ import { useTranslation } from 'react-i18next';
 import { message } from '@/components/AntdStaticMethods';
 import { BrowserIcon } from '@/components/BrowserIcon';
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
+import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import { electronBrowserSidebarService } from '@/services/electron/browserSidebar';
 import { useGlobalStore } from '@/store/global';
 
 import AgentOverlay from './AgentOverlay';
-import { BROWSER_WEBVIEW_PARTITION, BROWSER_WEBVIEW_SESSION_ATTRIBUTE } from './const';
+import {
+  BROWSER_IMPORT_BANNER_DISMISSED_STORAGE_KEY,
+  BROWSER_WEBVIEW_PARTITION,
+  BROWSER_WEBVIEW_SESSION_ATTRIBUTE,
+} from './const';
 import { useBrowserSidebarState } from './useBrowserSidebarState';
 import { normalizeBrowserUrl } from './utils';
 
@@ -103,7 +108,10 @@ const BrowserPane = memo<BrowserPaneProps>(({ sessionId }) => {
   const [address, setAddress] = useState('');
   const [isEditing, setIsEditing] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
-  const [showImportBanner, setShowImportBanner] = useState(true);
+  const [isImportBannerDismissed, setIsImportBannerDismissed] = useLocalStorageState(
+    BROWSER_IMPORT_BANNER_DISMISSED_STORAGE_KEY,
+    false,
+  );
   const browserRequest = useGlobalStore((s) => s.status.workingSidebarBrowserRequest);
   const consumedNonce = useRef<number>(undefined);
   const webviewRef = useRef<WebviewElement>(null);
@@ -182,7 +190,7 @@ const BrowserPane = memo<BrowserPaneProps>(({ sessionId }) => {
       }
 
       message.success(t('workingPanel.browser.import.success', { count: result.importedCount }));
-      setShowImportBanner(false);
+      setIsImportBannerDismissed(true);
       if (state.attached) {
         void runAction(() => electronBrowserSidebarService.reload({ sessionId }));
       }
@@ -290,7 +298,7 @@ const BrowserPane = memo<BrowserPaneProps>(({ sessionId }) => {
           />
         </Flexbox>
       </Flexbox>
-      {showImportBanner && (
+      {!isImportBannerDismissed && (
         <Flexbox horizontal align={'center'} className={styles.importBanner} gap={12}>
           <BrowserIcon browser={'Chrome'} size={32} />
           <Flexbox className={styles.importCopy} gap={0}>
@@ -310,7 +318,7 @@ const BrowserPane = memo<BrowserPaneProps>(({ sessionId }) => {
             icon={XCircle}
             size={DESKTOP_HEADER_ICON_SMALL_SIZE}
             title={t('workingPanel.browser.import.dismiss')}
-            onClick={() => setShowImportBanner(false)}
+            onClick={() => setIsImportBannerDismissed(true)}
           />
         </Flexbox>
       )}

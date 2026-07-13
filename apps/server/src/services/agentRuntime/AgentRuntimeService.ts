@@ -2068,6 +2068,9 @@ export class AgentRuntimeService {
           model: state?.modelRuntimeConfig?.model,
           phase: 'subagent_progress',
           toolMessageId: anchor.toolMessageId,
+          totalCost: state?.cost?.total,
+          totalInputTokens: state?.usage?.llm?.tokens?.input,
+          totalOutputTokens: state?.usage?.llm?.tokens?.output,
           totalTokens: state?.usage?.llm?.tokens?.total,
           totalToolCalls: state?.usage?.tools?.totalCalls,
         },
@@ -2157,6 +2160,14 @@ export class AgentRuntimeService {
         model: finalState?.modelRuntimeConfig?.model,
         status: failed ? 'error' : 'completed',
         threadId,
+        // The child's spend rides on this anchor row so the parent's usage tray can
+        // account for it. The tray sums per-MESSAGE usage, and the child's own
+        // assistant messages live in an isolation thread the parent never loads —
+        // this row is the only place the child's cost surfaces in the parent's own
+        // message list.
+        totalCost: finalState?.cost?.total,
+        totalInputTokens: finalState?.usage?.llm?.tokens?.input,
+        totalOutputTokens: finalState?.usage?.llm?.tokens?.output,
         totalToolCalls: finalState?.usage?.tools?.totalCalls,
         totalTokens: finalState?.usage?.llm?.tokens?.total,
       },
@@ -2346,6 +2357,14 @@ export class AgentRuntimeService {
         model: finalState?.modelRuntimeConfig?.model,
         status: failed ? 'error' : 'completed',
         threadId,
+        // The child's spend rides on this anchor row so the parent's usage tray can
+        // account for it. The tray sums per-MESSAGE usage, and the child's own
+        // assistant messages live in an isolation thread the parent never loads —
+        // this row is the only place the child's cost surfaces in the parent's own
+        // message list.
+        totalCost: finalState?.cost?.total,
+        totalInputTokens: finalState?.usage?.llm?.tokens?.input,
+        totalOutputTokens: finalState?.usage?.llm?.tokens?.output,
         totalToolCalls: finalState?.usage?.tools?.totalCalls,
         totalTokens: finalState?.usage?.llm?.tokens?.total,
       },

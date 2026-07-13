@@ -1,5 +1,9 @@
 import { isDesktop } from '@lobechat/const';
-import type { DeviceGitLinkedPullRequest, WorkingDirConfig } from '@lobechat/types';
+import type {
+  DeviceGitLinkedPullRequest,
+  DeviceGitUpstreamRef,
+  WorkingDirConfig,
+} from '@lobechat/types';
 import { getWorkingDirSourcePath } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
 
@@ -412,6 +416,126 @@ const parseGhPrCreate = (
 ): PullRequestCreateInfo | undefined =>
   findInCommand(command, (tokens, env) => parseGhPrCreateTokens(tokens, resultContent, env));
 
+/**
+ * One ref a `git push` moved, as the push itself reported it.
+ * `local` is the ref that was pushed (a branch name, or `HEAD`); `remote` the
+ * branch it landed on.
+ */
+interface PushRefMapping {
+  local: string;
+  remote: string;
+}
+
+/** `git push` options that consume the following token as their value. */
+const GIT_PUSH_VALUE_FLAGS = new Set(['--exec', '--push-option', '--receive-pack', '--repo', '-o']);
+
+/**
+ * A ref line from `git push`'s status table:
+ *
+ * ```
+ *  * [new branch]      worktree-feat+x -> feat/y
+ *  + 031bf96...f6b1c2a worktree-feat+x -> feat/y (forced update)
+ *    031bf96..f6b1c2a  worktree-feat+x -> feat/y
+ * ```
+ *
+ * Anchored to that exact shape (flag, then a bracketed status or a SHA range, then
+ * the mapping) so prose in a compound command's output — `git commit && git push`,
+ * a diff, a log line — can never be mistaken for a push result.
+ */
+const PUSH_REF_LINE =
+  /^\s*(?:\S\s+)?(\[[^\]]*\]|[\da-f]{4,40}\.{2,3}[\da-f]{4,40})\s+(\S+)\s+->\s+(\S+)(?:\s+\(.*\))?\s*$/i;
+
+/**
+ * Bracketed statuses that mean a branch is now published at the mapped ref. A SHA
+ * range says the same. Everything else — `[rejected]`, `[remote rejected]`,
+ * `[deleted]`, `[new tag]`, `[tag update]` — either failed or is not a branch, and
+ * an allowlist keeps a future git status from being silently read as a success.
+ */
+const PUSH_SUCCESS_STATUS = /^\[(?:new branch|new reference|up to date)\]$/i;
+
+const REMOTE_URL_PATTERN = /^\w[\w+.-]*:\/\/|^[^\s/][^\s/@]*@[^\s/]+:/;
+
+/** A `git push <target>` positional that is a URL, not a named remote — unnameable. */
+const isRemoteUrl = (value: string): boolean =>
+  REMOTE_URL_PATTERN.test(value) || value.startsWith('/') || value.startsWith('.');
+
+/**
+ * `git push` mappings, read out of the command's own output. This is the ONE place
+ * the local→remote mapping is stated for every push form — bare `git push`, `push -u
+ * origin HEAD`, and `push origin local:remote` alike. Parsing the command instead
+ * would only ever cover the explicit-refspec form.
+ */
+const parsePushRefMappings = (content?: string): PushRefMapping[] => {
+  if (!content) return [];
+
+  const mappings: PushRefMapping[] = [];
+  for (const line of content.split('\n')) {
+    const match = PUSH_REF_LINE.exec(line);
+    if (!match) continue;
+
+    const [, status, local, remote] = match;
+    if (status.startsWith('[') && !PUSH_SUCCESS_STATUS.test(status)) continue;
+    // `(none) -> x` is a branch deletion; a tag ref is not a branch.
+    if (local === '(none)' || local.startsWith('refs/tags/') || remote.startsWith('refs/tags/'))
+      continue;
+
+    mappings.push({ local, remote: remote.replace(/^refs\/heads\//, '') });
+  }
+  return mappings;
+};
+
+const parseGitPushTokens = (tokens: string[], env?: ShellEnv): { remote?: string } | undefined => {
+  const git = parseGitSubcommand(tokens);
+  if (!git || git.subcommand !== 'push') return undefined;
+
+  for (let i = 0; i < git.args.length; i += 1) {
+    const token = git.args[i];
+
+    const optionValue = getOptionValue(git.args, i, [...GIT_PUSH_VALUE_FLAGS], env);
+    if (optionValue.skipNext) {
+      i += 1;
+      continue;
+    }
+    if (optionValue.value !== undefined) continue;
+    if (token.startsWith('-')) continue;
+
+    // First positional is the push target. A URL target has no name we could record.
+    const target = resolveToken(token, env);
+    if (!target) continue;
+    return isRemoteUrl(target) ? {} : { remote: target };
+  }
+
+  // Bare `git push` — the remote is whatever the branch tracks, conventionally origin.
+  return {};
+};
+
+/**
+ * The remote ref a successful `git push` published the topic's branch to.
+ *
+ * Fails closed on ambiguity: when the branch is known, a mapping must name it (or
+ * `HEAD`), and a multi-ref push that leaves more than one candidate records nothing
+ * rather than pick.
+ */
+const parseGitPush = (
+  command: string | string[],
+  resultContent?: string,
+  branch?: string,
+): DeviceGitUpstreamRef | undefined => {
+  const push = findInCommand(command, parseGitPushTokens);
+  if (!push) return undefined;
+
+  const mappings = parsePushRefMappings(resultContent);
+  const candidates = branch
+    ? mappings.filter((mapping) => mapping.local === branch || mapping.local === 'HEAD')
+    : mappings;
+  if (candidates.length !== 1) return undefined;
+
+  const remoteBranch = normalizeBranch(candidates[0].remote);
+  if (!remoteBranch) return undefined;
+
+  return { branch: remoteBranch, remote: push.remote ?? 'origin' };
+};
+
 const applyBranchToConfig = (
   currentConfig: WorkingDirConfig | undefined,
   source: string,
@@ -424,7 +548,12 @@ const applyBranchToConfig = (
   };
 
   delete git.detached;
-  if (branchChanged) delete git.github;
+  // The old branch's remote ref and PR describe a branch the topic has left. Held
+  // onto, `upstream` would aim the PR lookup at the wrong head — worse than none.
+  if (branchChanged) {
+    delete git.github;
+    delete git.upstream;
+  }
 
   return {
     ...currentConfig,
@@ -445,6 +574,7 @@ const applyDetachedToConfig = (
 
   delete git.branch;
   delete git.github;
+  delete git.upstream;
 
   return {
     ...currentConfig,
@@ -479,6 +609,35 @@ const applyPullRequestToConfig = (
   };
 };
 
+/**
+ * Record where the branch now publishes to. This is what makes the PR lookup work at
+ * all for a worktree: its local branch name (`worktree-feat+x`) never exists on the
+ * remote, so only the ref the push actually created (`feat/y`) can find the PR.
+ */
+const applyPushToConfig = (
+  currentConfig: WorkingDirConfig | undefined,
+  source: string,
+  upstream: DeviceGitUpstreamRef,
+): WorkingDirConfig => {
+  const previous = currentConfig?.git?.upstream?.branch;
+  const git: NonNullable<WorkingDirConfig['git']> = {
+    ...currentConfig?.git,
+    upstream,
+  };
+
+  // Re-pointing the branch at a DIFFERENT remote ref orphans the PR bound to the old
+  // one. Only a change invalidates it — a first push must not drop a PR that a
+  // preceding `gh pr create` in the same run just recorded.
+  if (previous && previous !== upstream.branch) delete git.github;
+
+  return {
+    ...currentConfig,
+    git,
+    path: source,
+    ...(currentConfig?.repoType ? { repoType: currentConfig.repoType } : {}),
+  };
+};
+
 const applyWorktreeAddToConfig = (
   currentConfig: WorkingDirConfig | undefined,
   source: string,
@@ -493,7 +652,10 @@ const applyWorktreeAddToConfig = (
   };
 
   if (info.branch) delete git.detached;
-  if (branchChanged) delete git.github;
+  if (branchChanged) {
+    delete git.github;
+    delete git.upstream;
+  }
 
   return {
     ...currentConfig,
@@ -504,10 +666,11 @@ const applyWorktreeAddToConfig = (
 };
 
 /**
- * The session left the worktree and is back in the source repo. `branch` and the
- * linked `github` PR described the worktree's branch, not the source repo's, so they
- * are dropped rather than left pointing at a branch the topic is no longer on — the
- * source branch is unknown until the next `git switch` / `checkout` refreshes it.
+ * The session left the worktree and is back in the source repo. `branch`, its
+ * `upstream` ref and the linked `github` PR described the worktree's branch, not the
+ * source repo's, so they are dropped rather than left pointing at a branch the topic
+ * is no longer on — the source branch is unknown until the next `git switch` /
+ * `checkout` refreshes it.
  */
 const applyWorktreeExitToConfig = (
   currentConfig: WorkingDirConfig | undefined,
@@ -522,6 +685,7 @@ const applyWorktreeExitToConfig = (
   if (currentConfig?.git?.isWorktree) {
     delete git.branch;
     delete git.github;
+    delete git.upstream;
   }
 
   return {
@@ -838,6 +1002,7 @@ export const recordWorktreeAdd = async (params: {
  * Record successful heterogeneous CLI shell side effects onto the run topic:
  * - `git worktree add` selects the created worktree and explicit branch.
  * - `git switch` / confirmed `git checkout` updates the branch snapshot.
+ * - `git push` records the remote ref the branch publishes to.
  * - `gh pr create` binds the created PR URL to the topic.
  */
 export const recordGitCommandEffects = async (params: {
@@ -872,6 +1037,13 @@ export const recordGitCommandEffects = async (params: {
         : applyBranchToConfig(nextConfig, source, branchSwitch.branch);
   }
 
+  // After the branch switch, so a `git switch -c x && git push` chain matches the
+  // push against the branch it actually pushed rather than the one it left.
+  const pushUpstream = parseGitPush(command, resultContent, nextConfig?.git?.branch);
+  if (pushUpstream) {
+    nextConfig = applyPushToConfig(nextConfig, source, pushUpstream);
+  }
+
   const prCreate = parseGhPrCreate(command, resultContent);
   if (prCreate) {
     nextConfig = applyPullRequestToConfig(nextConfig, source, prCreate);
@@ -884,8 +1056,9 @@ export const recordGitCommandEffects = async (params: {
   // A checkout performed inside the heterogeneous CLI bypasses ChatInput's
   // BranchSwitcher, which normally refreshes this cache itself. Revalidate the
   // shared branch key so the control bar (and its branch-keyed PR lookup) follows
-  // the repository's actual HEAD immediately after the tool call completes.
-  if (branchSwitch) {
+  // the repository's actual HEAD immediately after the tool call completes. A push
+  // is refreshed too: it establishes the branch's remote ref, which this key carries.
+  if (branchSwitch || pushUpstream) {
     const boundDeviceId = topic?.metadata?.boundDeviceId;
     const currentDeviceId = getElectronStoreState().gatewayDeviceInfo?.deviceId;
     const cacheDeviceId =

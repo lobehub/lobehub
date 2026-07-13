@@ -15,6 +15,7 @@ import type { RouteObject } from 'react-router';
 import {
   BusinessDesktopRoutesWithMainLayout,
   BusinessDesktopRoutesWithoutMainLayout,
+  BusinessResourceRoutes,
 } from '@/business/client/BusinessDesktopRoutes';
 import { agentDocumentRouteMeta } from '@/features/AgentDocumentPage/routeMeta';
 import { taskRouteMeta, tasksRouteMeta } from '@/features/AgentTasks/routeMeta';
@@ -403,6 +404,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
             },
             index: true,
           },
+          ...BusinessResourceRoutes,
         ],
         element: <ResourceHomeLayout />,
       },

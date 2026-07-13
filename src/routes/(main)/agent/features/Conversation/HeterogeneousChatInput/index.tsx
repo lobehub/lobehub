@@ -26,15 +26,17 @@ import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 
 import HeteroControlBar from './HeteroControlBar';
+import HeteroPlus from './HeteroPlus';
+import ScheduledSendChip from './ScheduledSendChip';
 import { shouldShowHeteroModelSelector } from './shouldShowHeteroModelSelector';
 
 // Heterogeneous agents (e.g. Claude Code) bring their own toolchain and memory,
-// so most LobeHub-side pickers don't apply. Typo is kept so the user can still
-// toggle the rich-text formatting bar. The CLI model + thinking-effort selector
-// is injected right after it via `extraActionItems`, so it sits in the input's
-// bottom-left corner (consistent with where the model picker lives in a normal
-// agent chat), rather than off in the control-bar strip below the box.
-const leftActions: ActionKeys[] = ['typo'];
+// so most LobeHub-side pickers don't apply — no built-in left action fits, and
+// the bar is composed entirely from `extraActionItems`: a hetero-only `+` menu
+// (formatting toolbar + "Send later"), then the CLI model + thinking-effort
+// selector. Both sit in the input's bottom-left corner, where the agent composer
+// puts its `+` and model picker, rather than off in the control-bar strip below.
+const leftActions: ActionKeys[] = [];
 
 /**
  * GuardBanner
@@ -112,11 +114,21 @@ const HeterogeneousChatInput = memo(() => {
       executionTarget: agencyConfig?.executionTarget,
       isDesktopClient: isDesktop,
     });
+  // The armed-schedule chip sits immediately after the `+` that armed it, so the
+  // state and the control that produced it read as one unit.
   const extraActionItems = useMemo<ChatInputActionsProps['items']>(
-    () =>
-      showHeteroModel
-        ? [{ alwaysDisplay: true, children: <HeteroModel />, key: 'heteroModel' }]
-        : [],
+    () => [
+      { alwaysDisplay: true, children: <HeteroPlus />, key: 'heteroPlus' },
+      { alwaysDisplay: true, children: <ScheduledSendChip />, key: 'scheduledSendChip' },
+    ],
+    [],
+  );
+
+  // The model selector rides in the send-area prefix rather than the
+  // (left-aligned) action bar, so it sits right next to Send — it qualifies the
+  // run the send button is about to commit.
+  const sendAreaPrefix = useMemo(
+    () => (showHeteroModel ? <HeteroModel /> : undefined),
     [showHeteroModel],
   );
 
@@ -202,9 +214,11 @@ const HeterogeneousChatInput = memo(() => {
       {renderCloudConfigGuard()}
       {renderDeviceGuard()}
       <ChatInput
+        allowExpand={false}
         controlBarSlot={<HeteroControlBar />}
         extraActionItems={extraActionItems}
         leftActions={leftActions}
+        sendAreaPrefix={sendAreaPrefix}
         sendButtonProps={{ disabled: inputDisabled, shape: 'round' }}
         skipScrollMarginWithList={!hasGuard}
         onEditorReady={(instance) => {

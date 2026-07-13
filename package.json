@@ -216,6 +216,7 @@
     "@lobechat/agent-runtime": "workspace:*",
     "@lobechat/agent-signal": "workspace:*",
     "@lobechat/agent-templates": "workspace:*",
+    "@lobechat/artifact-template": "workspace:*",
     "@lobechat/builtin-agents": "workspace:*",
     "@lobechat/builtin-skills": "workspace:*",
     "@lobechat/builtin-tool-activator": "workspace:*",

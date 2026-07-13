@@ -838,6 +838,17 @@ export interface RunSubAgentResult {
   success: boolean;
   /** The isolation thread holding the sub-agent's full message trace */
   threadId: string;
+  /**
+   * Cost of the sub-agent run. Lands on the tool message's `pluginState`, which is
+   * how the parent's usage tray accounts for a sub-agent at all: the tray sums
+   * per-MESSAGE usage, and the child's own messages live in an isolation thread the
+   * parent never loads. Omit it and the tray reports the child as free.
+   */
+  totalCost?: number;
+  /** Input tokens consumed by the sub-agent run */
+  totalInputTokens?: number;
+  /** Output tokens produced by the sub-agent run */
+  totalOutputTokens?: number;
   /** Total tokens consumed by the sub-agent run */
   totalTokens?: number;
   /** Number of tool calls the sub-agent made */

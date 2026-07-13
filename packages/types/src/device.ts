@@ -95,6 +95,23 @@ export interface WorkingDirGithubState {
   pullRequestStatus?: DeviceGitLinkedPullRequestLookupStatus;
 }
 
+/**
+ * The remote ref a local branch publishes to.
+ *
+ * Recorded because the local branch name is a DEVICE-LOCAL label: a worktree
+ * generates its own (`worktree-feat+foo`), and a push with an explicit refspec
+ * (`git push origin local:remote`) renames the branch in flight. Carrying the
+ * local name to another machine — or to `gh pr list --head` — yields nothing.
+ * The remote ref is the only branch identity that survives leaving this machine,
+ * which also makes it the handle for re-fetching the topic's output elsewhere.
+ */
+export interface DeviceGitUpstreamRef {
+  /** Branch name ON the remote (`feat/x`), never the local name. */
+  branch: string;
+  /** Remote name (`origin`). */
+  remote: string;
+}
+
 export interface WorkingDirGitState {
   /**
    * Active checkout selected under this git source. When absent, the source
@@ -115,6 +132,12 @@ export interface WorkingDirGitState {
    * the source path itself.
    */
   isWorktree?: boolean;
+  /**
+   * Remote ref {@link branch} publishes to. Dropped alongside {@link github}
+   * whenever the branch changes — a stale remote ref would bind the topic to
+   * another branch's PR, which is worse than having none.
+   */
+  upstream?: DeviceGitUpstreamRef;
 }
 
 export interface WorkingDirConfig {
@@ -305,6 +328,8 @@ export interface DeviceGitBranchInfo {
   branch?: string;
   /** True when HEAD is detached (no branch ref). */
   detached?: boolean;
+  /** Remote ref the branch publishes to. Absent when unpushed or unresolvable. */
+  upstream?: DeviceGitUpstreamRef;
 }
 
 /**
@@ -318,6 +343,8 @@ export interface DeviceGitLinkedPullRequestResult {
   pullRequest: DeviceGitLinkedPullRequest | null;
   /** 'ok' — lookup succeeded; 'gh-missing' — gh CLI unavailable; 'error' — other failure. */
   status: DeviceGitLinkedPullRequestLookupStatus;
+  /** Remote ref the lookup queried under — the PR's own head ref when one was found. */
+  upstream?: DeviceGitUpstreamRef;
 }
 
 /**
@@ -664,6 +691,14 @@ export const workingDirConfigSchema = z.object({
         })
         .optional(),
       isWorktree: z.boolean().optional(),
+      // Mirrors `WorkingDirGitState.upstream`. A field missing here is not merely
+      // unvalidated — zod strips it, so it would never survive a write.
+      upstream: z
+        .object({
+          branch: z.string(),
+          remote: z.string(),
+        })
+        .optional(),
     })
     .optional(),
   path: z.string(),

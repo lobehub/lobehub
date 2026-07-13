@@ -258,6 +258,7 @@ export default {
   'searchFilePlaceholder': 'Search Files',
   'searchPagePlaceholder': 'Search Pages',
   'tab.all': 'All',
+  'tab.artifacts': 'Artifacts',
   'tab.audios': 'Audio',
   'tab.documents': 'Documents',
   'tab.home': 'Home',

@@ -373,6 +373,21 @@ Re-tested end-to-end against the running dev server. The previous claim ("blocks
 
 ## C. Probing app / store runtime state
 
+### C0. A picker backed by a list store may need fixture hydration after direct-route entry
+
+- **Situation**: a modal reads candidate entities from a list store, while the test enters a
+  detail route directly. The detail route can render from its own entity/config store without
+  ever mounting the list fetcher, so the picker correctly renders an empty candidate list even
+  though fixture rows exist in the database.
+- **Doesn't work**: inserting database rows alone, or refreshing the detail store. Neither
+  hydrates a separate list store that has not mounted its fetch hook.
+- **Works**: first enter the canonical list/home surface and let its real fetch settle. If the
+  fixture deliberately bypasses normal creation and the list API still does not expose it,
+  use the existing C1b dev-only `setState` exposer to hydrate the list store with the exact
+  fixture shape, then exercise the real picker component and remove the exposer patch after
+  capture. Keep the report explicit that fixture hydration was test setup; validate the actual
+  mutation and created entity through the database or network boundary.
+
 ### C1. `window.__LOBE_STORES.<name>` has no `.getState` — CALL it instead
 
 - **Doesn't work**: `window.__LOBE_STORES.page.getState()`. The exposed value is neither the
@@ -1150,3 +1165,75 @@ nodeintegration, plugins, disablewebsecurity, allowpopups, preload, …`). The h
   `scripts/test-env.sh` after the server is up, it reads the ports-file. And
   the `os error 35` agent-browser daemon wedge (D8) recovers with
   `agent-browser close --all` + re-running `setup-auth.sh web-seed`.
+
+### C7. `document.body.innerText` is ALWAYS 0 in this app — probe `#root`, and use textContent to tell a wedge from a blank
+
+- **Situation**: asserting rendered text with `document.body.innerText.includes(...)`. It returns `""` / length 0 even on a fully rendered page, so every text assertion silently fails and reads as "the page is blank".
+- **Works**: probe `document.getElementById('root').innerText`. (Cause not established — some ancestor of `#root` makes body's inner-text computation collapse; `#root` itself is fine.)
+- **Bonus diagnostic**: `innerText` needs layout, `textContent` does not. When `#root` gives `innerText === 0` but `textContent > 0`, the DOM is fine and the RENDERER is not painting (see D16) — as opposed to a genuinely empty DOM, where both are 0.
+
+### D16. Electron renderer compositor wedges after a mid-session Vite dep re-optimize — restart the instance
+
+- **Situation**: partway through a long Electron run the app stops painting: `cdp-screenshot.sh` returns `CAPTURED BUT BLACK`, `#root` `innerText` is 0 while `textContent` still holds the full DOM, and `document.visibilityState` reports `visible` with real `innerWidth/innerHeight`.
+- **Not the cause**: display sleep or Screen Recording permission (`check-screen-recording.sh` passes), and the window is not hidden — CDP capture would survive both (D9/D10).
+- **What precedes it**: the instance log shows Vite re-optimizing (`[vite] Re-optimizing dependencies because vite config has changed`) followed by `Failed to fetch dynamically imported module: .../node_modules/.vite/deps/…`. The renderer keeps its DOM but never composites another frame.
+- **Works**: `electron-dev.sh restart <id>`. `location.reload()` alone does NOT clear it. Login survives the restart (the userData dir is kept).
+
+### D17. Virtua message lists: driving `scrollTop` by hand blanks the conversation pane — use a SMALL fixture instead
+
+- **Situation**: hunting one specific message in a long imported conversation (400+ messages). Stepping `scrollContainer.scrollTop` in a loop to bring it into the virtualizer's window.
+- **Doesn't work**: the virtualizer unmounts the node as you scroll past it (a `TreeWalker` search then reports "not found" on a node that was there a second ago), and forcing `scrollTop` far outside the rendered window leaves the pane **completely blank** — the scroll container itself disappears from the DOM, which reads exactly like a render bug.
+- **Works**: pick a fixture with few messages so the target is on the first screen (for transcript-import tests: scan the corpus for a session with < \~15 messages that still has the feature under test). Cheaper and far more reliable than fighting the virtualizer.
+
+### D18. React controlled checkboxes ignore synthetic MouseEvents — use `agent-browser click <ref>` (trusted CDP input)
+
+- **Situation**: selecting a row in a modal list. `el.click()`, and even a full `pointerdown/mousedown/pointerup/mouseup/click` `dispatchEvent` sequence with correct coordinates, leave `checked === false` and the footer's primary button disabled.
+- **Cause**: the value is React-controlled; synthetic events are `isTrusted: false` and the component's state never updates.
+- **Works**: `agent-browser snapshot -i` for the ref, then `agent-browser click <ref>` — it goes through CDP `Input.dispatchMouseEvent`, which the page sees as a real user click. The same snapshot also tells you when a row is `[disabled]` (i.e. the app is deliberately refusing the selection), which a coordinate-click would never reveal.
+
+### E20. Killing the dev server mid-write corrupts `.next/dev` — every route 404s and `/` ↔ `/signin` ping-pong
+
+- **Situation**: after `init-dev-env.sh clean` (or any kill) and a restart, the whole app is broken: `/` 302s to `/signin`, `/signin` 307s back to `/` (`ERR_TOO_MANY_REDIRECTS` in the browser, `redirect count exceeded` in the dev server's own prewarm), and even API routes like `/api/auth/sign-in/email` return the app-router not-found. It looks like an auth/OIDC misconfiguration.
+- **Cause**: a corrupt Turbopack build in `.next/dev` — the route manifest is gone, so every path falls through to `GlobalNotFound`, whose redirect collides with the middleware's.
+- **Works**: `rm -rf .next` then restart. Diagnose it in one step: if `/signin` does not return 200, the routes are not compiled — stop debugging auth.
+
+### E21. ✅ WORKS — a QStash-protected workflow endpoint can't be curl'd; publish through local QStash to get a signed delivery
+
+- **Situation**: driving a cron-style workflow handler under `/api/workflows/**` (e.g. a dispatcher you want to fire on demand instead of waiting for its schedule).
+- **Doesn't work**: `curl -X POST <app>/api/workflows/<...>` → `{"error":"Invalid signature"}` / HTTP 401. The `qstashAuth` middleware verifies the Upstash signature whenever `QSTASH_CURRENT_SIGNING_KEY` is set — and `init-dev-env.sh` exports it, so the local env DOES verify. (Do not "fix" this by unsetting the key: you would then be testing an unauthenticated path that production doesn't have.)
+- **Works**: start local QStash (`init-dev-env.sh qstash`) and publish to the endpoint with the QStash client — QStash signs the delivery, so the handler sees exactly the production shape:
+  ```ts
+  // must live INSIDE the repo (a script under /tmp cannot resolve @upstash/qstash)
+  import { Client } from '@upstash/qstash';
+  const client = new Client({ baseUrl: process.env.QSTASH_URL!, token: process.env.QSTASH_TOKEN! });
+  await client.publishJSON({
+    body: { dryRun: false },
+    url: `${process.env.APP_URL}/api/workflows/<path>`,
+  });
+  ```
+  Run it with `eval "$(init-dev-env.sh env)" && bunx tsx ./scripts/<probe>.mts`, then read the outcome from **DB side effects**, not the HTTP body — QStash swallows the response. (A claim/lease row, a status transition, or new message rows are all observable; the handler's JSON return is not.)
+- **Time-travel a schedule instead of waiting**: for a "runs at T" feature, `UPDATE ... SET metadata = jsonb_set(metadata, '{...,runAt}', '"<past ISO>"')` and then fire the dispatcher. Cheaper and more deterministic than sleeping until the real due time.
+
+### E22. Local dev env has no `JWKS_KEY` — every hetero agent run dies at `signOperationJwt`
+
+- **Situation**: a real Claude Code / Codex run in the local no-`.env` env fails immediately with `Failed to sign operation JWT for hetero agent` (`apps/server/src/services/aiAgent/index.ts`). Nothing in the UI explains it; the topic just fails.
+- **Cause**: `signOperationJwt` → `getSigningKey()` → `getJwksKey()` needs the `JWKS_KEY` RSA JWK, and `init-dev-env.sh` does not export one.
+- **Works**: the repo ships a generator — `JWKS_KEY="$(node scripts/generate-oidc-jwk.mjs)" ./.agents/skills/agent-testing/scripts/init-dev-env.sh dev`. Must be present at dev-server **start** (it is read from `process.env`), so a running server has to be restarted.
+- **Note the failure is downstream-honest**: with `JWKS_KEY` set, the run proceeds and then fails at the hetero _sandbox_ (`Hetero sandbox spawn failed / unauthorized`) unless the agent has a real Claude Code token. Those are two different walls — don't read the second as the first.
+
+### D19. A hidden zero-size duplicate of the composer sits at (0,0) — `querySelector` grabs IT, not the visible one
+
+- **Situation**: driving the chat composer. `document.querySelector('[contenteditable]')` reads back `""` right after a successful `fill`, and `svg.lucide-plus` → `.closest('button')` resolves to a button whose click does nothing.
+- **Cause (measured, not guessed)**: the page renders a SECOND, hidden copy of the composer subtree at `x:0, y:0, width:0` — including its own contenteditable and its own action-bar buttons. It is first in DOM order, so every `querySelector` singular lookup picks the phantom. The real one is the second match. Cause of the duplicate not established (likely a measurement/offscreen render), but the fingerprint is unambiguous: a `getBoundingClientRect()` of all-zeros.
+- **Doesn't work**: `document.querySelector('[contenteditable]')`, `document.querySelector('svg.lucide-plus')` — both silently target the phantom. A `fill` that reports `✓ Done` can still leave the visible box empty-looking, and a click on the phantom button is a no-op with no error. This burned a full round chasing a "menu won't open" regression that did not exist.
+- **Works — always disambiguate by geometry or by an identifying attribute**:
+  ```js
+  // enumerate, never singular-select
+  [...document.querySelectorAll('[contenteditable]')]
+    .filter(e => e.getBoundingClientRect().width > 0)[0]
+  // or target by the component's own aria-label (survives DOM order)
+  [...document.querySelectorAll('[role=button],button')]
+    .find(b => b.getAttribute('aria-label') === '<the tooltip text>')
+  ```
+  Tag the resolved element with a `data-probe` attribute and drive it with `agent-browser click '[data-probe=...]'` (trusted CDP input, D18).
+- **Corollary**: the phantom also owns the tooltip text of whatever component it duplicates, so an `innerText`/aria grep can "find" a control that the user cannot see. Assert on `getBoundingClientRect()` before believing a control is present.

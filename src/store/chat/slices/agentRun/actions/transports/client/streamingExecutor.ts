@@ -946,13 +946,16 @@ export class StreamingExecutorActionImpl {
       const resultContent = lastAssistant?.content || 'Task completed';
       const totalToolCalls = subTaskMessages.filter((m) => m.role === 'tool').length;
       const { usage, cost, model } = runtimeResult || {};
+      const totalCost = cost?.total;
+      const totalInputTokens = usage?.llm?.tokens?.input;
+      const totalOutputTokens = usage?.llm?.tokens?.output;
       const totalTokens = usage?.llm?.tokens?.total;
 
       // 8. Persist final Thread status + metadata
       await aiAgentService.updateClientTaskThreadStatus({
         completionReason: 'done',
         metadata: {
-          totalCost: cost?.total,
+          totalCost,
           totalMessages: subTaskMessages.length,
           totalTokens,
           totalToolCalls,
@@ -964,7 +967,22 @@ export class StreamingExecutorActionImpl {
       this.#get().completeOperation(taskOperationId);
 
       log('[%s] Completed, result %d chars', logId, resultContent.length);
-      return { model, result: resultContent, success: true, threadId, totalToolCalls, totalTokens };
+      // Cost + the token split ride back to the caller, not just the total: they
+      // land on the tool message's pluginState, which is the only place the parent's
+      // usage tray can see a sub-agent's spend (its messages are in a thread the
+      // parent never loads). Returning tokens alone makes a client sub-agent read as
+      // free.
+      return {
+        model,
+        result: resultContent,
+        success: true,
+        threadId,
+        totalCost,
+        totalInputTokens,
+        totalOutputTokens,
+        totalToolCalls,
+        totalTokens,
+      };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       log('[%s] Error: %O', logId, error);

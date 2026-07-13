@@ -1410,6 +1410,7 @@ export class ChatTopicActionImpl {
       currentConfig: base.currentConfig,
       github,
       path: base.path,
+      upstream: prData?.upstream,
     });
 
     if (isEqual(base.currentConfig, nextConfig)) return;

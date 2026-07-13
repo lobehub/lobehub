@@ -54,6 +54,8 @@ import type {
   LobeAgentConfig,
   MessagePluginItem,
   RuntimeMentionedAgent,
+  ScheduleAgentRunParams,
+  ScheduleAgentRunResult,
   UserInterventionConfig,
   WorkspaceInitResult,
 } from '@lobechat/types';
@@ -965,6 +967,109 @@ export class AiAgentService {
   }
 
   /**
+   * Resolve an agent by id or slug, with default config merged.
+   *
+   * Builtin agents (inbox / page / task / self-iteration slugs) may be addressed
+   * purely by slug before a row exists — e.g. background self-iteration runs
+   * dispatched via `execAgent({ slug })`. Lazily materialize the virtual row from
+   * the builtin registry (mirrors the inbox/task `getBuiltinAgent` path) and
+   * re-resolve. No-op for ordinary agent ids (getBuiltinAgent returns null).
+   */
+  private async resolveAgentConfigOrThrow(identifier: string) {
+    let agentConfig = await this.agentService.getAgentConfig(identifier);
+    if (!agentConfig && (Object.values(BUILTIN_AGENT_SLUGS) as string[]).includes(identifier)) {
+      await this.agentModel.getBuiltinAgent(identifier);
+      agentConfig = await this.agentService.getAgentConfig(identifier);
+    }
+    if (!agentConfig) {
+      // `agentService.getAgentConfig` already routes through `AgentModel`'s
+      // workspace + visibility ownership predicate, so a cross-user private
+      // agent resolves to null here. Surface that as NOT_FOUND (not a generic
+      // 500) so callers — chat, bot, cron task, sub-agent, REST — return a
+      // uniform 404 and we never leak whether the id exists for another user.
+      throw new TRPCError({ code: 'NOT_FOUND', message: `Agent not found: ${identifier}` });
+    }
+
+    return agentConfig;
+  }
+
+  /**
+   * Defer an agent run to a future time ("send this in 3 hours").
+   *
+   * Creates the topic now, `scheduled` and empty, carrying the whole request in
+   * `metadata.scheduledRun`; the cron dispatcher replays it through `execAgent`
+   * once `runAt` passes. The prompt is deliberately NOT pre-persisted as a user
+   * message — storing the request whole keeps the dispatch identical to a user
+   * pressing send, and keeps editing / cancelling a pending run a single JSONB
+   * write.
+   *
+   * One-shot only: recurring execution belongs to `tasks.automationMode = 'schedule'`.
+   */
+  async scheduleAgentRun(params: ScheduleAgentRunParams): Promise<ScheduleAgentRunResult> {
+    const { agentId, slug, prompt, runAt, fileIds, groupId, model, provider } = params;
+
+    if (!agentId && !slug) throw new Error('Either agentId or slug must be provided');
+
+    const runAtDate = new Date(runAt);
+    if (Number.isNaN(runAtDate.getTime())) {
+      throw new TRPCError({ code: 'BAD_REQUEST', message: `Invalid runAt: ${runAt}` });
+    }
+    if (runAtDate.getTime() <= Date.now()) {
+      throw new TRPCError({ code: 'BAD_REQUEST', message: 'runAt must be in the future' });
+    }
+
+    const agentConfig = await this.resolveAgentConfigOrThrow(agentId || slug!);
+    const resolvedAgentId = agentConfig.id;
+
+    const titleSource = markdownToTxt(prompt);
+    const topic = await this.topicModel.create({
+      agentId: resolvedAgentId,
+      groupId,
+      // A scheduled run is still an ordinary user chat, just deferred — so it
+      // keeps the `chat` trigger and stays in the main sidebar (where its
+      // `scheduled` status renders a clock), unlike system-owned cron topics.
+      title: titleSource.slice(0, 50) + (titleSource.length > 50 ? '...' : ''),
+      trigger: 'chat',
+    });
+
+    // Persist the user turn now rather than stashing the prompt in metadata: the
+    // pending run then reads as the user's own words in the topic, and the message
+    // stays the single source of truth for the prompt (the dispatcher reads it
+    // back, so editing a pending run is just editing the message).
+    const userMessage = await this.messageModel.create({
+      agentId: resolvedAgentId,
+      content: prompt,
+      files: fileIds,
+      groupId: groupId ?? undefined,
+      metadata: { trigger: RequestTrigger.Scheduled },
+      role: 'user',
+      topicId: topic.id,
+    });
+
+    const now = new Date().toISOString();
+    await this.topicModel.armScheduledRun(topic.id, {
+      createdAt: now,
+      kind: 'delayed_start',
+      model,
+      provider,
+      // Normalize to UTC ISO: the dispatcher's due query compares this as text.
+      runAt: runAtDate.toISOString(),
+      updatedAt: now,
+      userMessageId: userMessage.id,
+    });
+
+    log(
+      'scheduleAgentRun: topic %s scheduled for %s (agent %s, message %s)',
+      topic.id,
+      runAtDate.toISOString(),
+      resolvedAgentId,
+      userMessage.id,
+    );
+
+    return { agentId: resolvedAgentId, runAt: runAtDate.toISOString(), topicId: topic.id };
+  }
+
+  /**
    * Execute agent with just a prompt
    *
    * This is a simplified API that requires agent identifier (id or slug) and prompt.
@@ -1067,24 +1172,7 @@ export class AiAgentService {
     throwIfAborted(signal, 'Agent execution aborted before startup');
 
     // 1. Get agent configuration with default config merged (supports both id and slug)
-    let agentConfig = await this.agentService.getAgentConfig(identifier);
-    // Builtin agents (inbox / page / task / self-iteration slugs) may be addressed
-    // purely by slug before a row exists — e.g. background self-iteration runs
-    // dispatched via execAgent({ slug }). Lazily materialize the virtual row from
-    // the builtin registry (mirrors the inbox/task `getBuiltinAgent` path) and
-    // re-resolve. No-op for ordinary agent ids (getBuiltinAgent returns null).
-    if (!agentConfig && (Object.values(BUILTIN_AGENT_SLUGS) as string[]).includes(identifier)) {
-      await this.agentModel.getBuiltinAgent(identifier);
-      agentConfig = await this.agentService.getAgentConfig(identifier);
-    }
-    if (!agentConfig) {
-      // `agentService.getAgentConfig` already routes through `AgentModel`'s
-      // workspace + visibility ownership predicate, so a cross-user private
-      // agent resolves to null here. Surface that as NOT_FOUND (not a generic
-      // 500) so callers — chat, bot, cron task, sub-agent, REST — return a
-      // uniform 404 and we never leak whether the id exists for another user.
-      throw new TRPCError({ code: 'NOT_FOUND', message: `Agent not found: ${identifier}` });
-    }
+    const agentConfig = await this.resolveAgentConfigOrThrow(identifier);
 
     // Use actual agent ID from config for subsequent operations
     const resolvedAgentId = agentConfig.id;

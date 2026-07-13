@@ -830,3 +830,256 @@ describe('recordWorktreeExit', () => {
     expect(chatMocks.updateTopicMetadata).not.toHaveBeenCalled();
   });
 });
+
+describe('recordGitCommandEffects — git push', () => {
+  /** The topic from the reported case: a worktree branch that never existed on the remote. */
+  const WORKTREE_TOPIC = {
+    metadata: {
+      workingDirectoryConfig: {
+        git: { branch: 'worktree-feat+claude-code-session-import' },
+        path: '/repo',
+        repoType: 'github',
+      },
+    },
+  };
+
+  const pushOutput = (table: string) =>
+    ['Enumerating objects: 5, done.', 'To github.com:lobehub/lobehub.git', table].join('\n');
+
+  const upstreamOf = () =>
+    chatMocks.updateTopicMetadata.mock.calls.at(-1)?.[1].workingDirectoryConfig.git.upstream;
+
+  // The exact push that broke PR linkage: an explicit refspec renames the branch in
+  // flight and sets no upstream, so only the push's own output states the mapping.
+  it('records the remote branch an explicit-refspec push landed on', async () => {
+    chatMocks.topics = { t1: WORKTREE_TOPIC };
+
+    await recordGitCommandEffects({
+      command:
+        'git push origin worktree-feat+claude-code-session-import:feat/hetero-session-import-ui --force',
+      resultContent: pushOutput(
+        ' + 031bf96...f6b1c2a worktree-feat+claude-code-session-import -> feat/hetero-session-import-ui (forced update)',
+      ),
+      topicId: 't1',
+    });
+
+    expect(chatMocks.updateTopicMetadata).toHaveBeenCalledWith('t1', {
+      workingDirectoryConfig: {
+        git: {
+          branch: 'worktree-feat+claude-code-session-import',
+          upstream: { branch: 'feat/hetero-session-import-ui', remote: 'origin' },
+        },
+        path: '/repo',
+        repoType: 'github',
+      },
+    });
+  });
+
+  it('resolves a HEAD refspec against the topic branch', async () => {
+    chatMocks.topics = { t1: WORKTREE_TOPIC };
+
+    await recordGitCommandEffects({
+      command: 'git push -u origin HEAD',
+      resultContent: pushOutput(
+        ' * [new branch]      HEAD -> worktree-feat+claude-code-session-import',
+      ),
+      topicId: 't1',
+    });
+
+    expect(upstreamOf()).toEqual({
+      branch: 'worktree-feat+claude-code-session-import',
+      remote: 'origin',
+    });
+  });
+
+  it('reads a bare push, whose mapping only appears as a SHA range', async () => {
+    chatMocks.topics = { t1: WORKTREE_TOPIC };
+
+    await recordGitCommandEffects({
+      command: 'git push',
+      resultContent: pushOutput(
+        '   031bf96..f6b1c2a  worktree-feat+claude-code-session-import -> feat/hetero-session-import-ui',
+      ),
+      topicId: 't1',
+    });
+
+    expect(upstreamOf()).toEqual({
+      branch: 'feat/hetero-session-import-ui',
+      remote: 'origin',
+    });
+  });
+
+  it('names the remote from the command rather than assuming origin', async () => {
+    chatMocks.topics = { t1: WORKTREE_TOPIC };
+
+    await recordGitCommandEffects({
+      command: 'git push -o ci.skip fork worktree-feat+claude-code-session-import:feat/y',
+      resultContent: pushOutput(
+        ' * [new branch]      worktree-feat+claude-code-session-import -> feat/y',
+      ),
+      topicId: 't1',
+    });
+
+    expect(upstreamOf()).toEqual({ branch: 'feat/y', remote: 'fork' });
+  });
+
+  it('ignores a rejected push', async () => {
+    chatMocks.topics = { t1: WORKTREE_TOPIC };
+
+    await recordGitCommandEffects({
+      command: 'git push origin worktree-feat+claude-code-session-import:feat/y',
+      resultContent: pushOutput(
+        ' ! [rejected]        worktree-feat+claude-code-session-import -> feat/y (fetch first)',
+      ),
+      topicId: 't1',
+    });
+
+    expect(chatMocks.updateTopicMetadata).not.toHaveBeenCalled();
+  });
+
+  it('ignores tag and branch-deletion lines', async () => {
+    chatMocks.topics = { t1: WORKTREE_TOPIC };
+
+    await recordGitCommandEffects({
+      command: 'git push origin --tags',
+      resultContent: pushOutput(' * [new tag]         v1.2.3 -> v1.2.3'),
+      topicId: 't1',
+    });
+    expect(chatMocks.updateTopicMetadata).not.toHaveBeenCalled();
+
+    await recordGitCommandEffects({
+      command: 'git push origin :feat/y',
+      resultContent: pushOutput(' - [deleted]         (none) -> feat/y'),
+      topicId: 't1',
+    });
+    expect(chatMocks.updateTopicMetadata).not.toHaveBeenCalled();
+  });
+
+  it('records nothing from a multi-ref push that never names the topic branch', async () => {
+    chatMocks.topics = { t1: WORKTREE_TOPIC };
+
+    await recordGitCommandEffects({
+      command: 'git push origin feat/a feat/b',
+      resultContent: pushOutput(
+        [' * [new branch]      feat/a -> feat/a', ' * [new branch]      feat/b -> feat/b'].join(
+          '\n',
+        ),
+      ),
+      topicId: 't1',
+    });
+
+    expect(chatMocks.updateTopicMetadata).not.toHaveBeenCalled();
+  });
+
+  it('never mistakes prose in the output for a push mapping', async () => {
+    chatMocks.topics = { t1: WORKTREE_TOPIC };
+
+    await recordGitCommandEffects({
+      command: 'git push origin worktree-feat+claude-code-session-import:feat/y',
+      resultContent: 'renaming worktree-feat+claude-code-session-import -> feat/y in the docs',
+      topicId: 't1',
+    });
+
+    expect(chatMocks.updateTopicMetadata).not.toHaveBeenCalled();
+  });
+
+  // Re-pointing the branch at a new remote ref orphans the PR bound to the old one.
+  it('drops the linked PR when the branch is re-pushed to a different remote ref', async () => {
+    chatMocks.topics = {
+      t1: {
+        metadata: {
+          workingDirectoryConfig: {
+            git: {
+              branch: 'worktree-feat+x',
+              github: {
+                pullRequest: {
+                  number: 1,
+                  state: 'OPEN',
+                  title: 'old',
+                  url: 'https://github.com/lobehub/lobehub/pull/1',
+                },
+                pullRequestStatus: 'ok',
+              },
+              upstream: { branch: 'feat/old', remote: 'origin' },
+            },
+            path: '/repo',
+            repoType: 'github',
+          },
+        },
+      },
+    };
+
+    await recordGitCommandEffects({
+      command: 'git push origin worktree-feat+x:feat/new',
+      resultContent: pushOutput(' * [new branch]      worktree-feat+x -> feat/new'),
+      topicId: 't1',
+    });
+
+    expect(chatMocks.updateTopicMetadata).toHaveBeenCalledWith('t1', {
+      workingDirectoryConfig: {
+        git: {
+          branch: 'worktree-feat+x',
+          upstream: { branch: 'feat/new', remote: 'origin' },
+        },
+        path: '/repo',
+        repoType: 'github',
+      },
+    });
+  });
+
+  // `gh pr create` then `git push` in one run must not erase the PR it just recorded.
+  it('keeps a freshly created PR on the first push to that ref', async () => {
+    const pullRequest = {
+      number: 17_101,
+      state: 'OPEN',
+      title: 'feat: import sessions',
+      url: 'https://github.com/lobehub/lobehub/pull/17101',
+    };
+    chatMocks.topics = {
+      t1: {
+        metadata: {
+          workingDirectoryConfig: {
+            git: {
+              branch: 'worktree-feat+x',
+              github: { pullRequest, pullRequestStatus: 'ok' },
+            },
+            path: '/repo',
+            repoType: 'github',
+          },
+        },
+      },
+    };
+
+    await recordGitCommandEffects({
+      command: 'git push origin worktree-feat+x:feat/y',
+      resultContent: pushOutput(' * [new branch]      worktree-feat+x -> feat/y'),
+      topicId: 't1',
+    });
+
+    expect(chatMocks.updateTopicMetadata).toHaveBeenCalledWith('t1', {
+      workingDirectoryConfig: {
+        git: {
+          branch: 'worktree-feat+x',
+          github: { pullRequest, pullRequestStatus: 'ok' },
+          upstream: { branch: 'feat/y', remote: 'origin' },
+        },
+        path: '/repo',
+        repoType: 'github',
+      },
+    });
+  });
+
+  it('refreshes the branch cache, which now carries the remote ref', async () => {
+    chatMocks.topics = { t1: WORKTREE_TOPIC };
+
+    await recordGitCommandEffects({
+      command: 'git push origin worktree-feat+claude-code-session-import:feat/y',
+      resultContent: pushOutput(
+        ' * [new branch]      worktree-feat+claude-code-session-import -> feat/y',
+      ),
+      topicId: 't1',
+    });
+
+    expect(swrMocks.mutate).toHaveBeenCalledWith(['device:gitBranch', 'local', '/repo']);
+  });
+});

@@ -33,7 +33,12 @@ import { fileChatSelectors, useFileStore } from '@/store/file';
 import { buildMessageContextSelections } from '../../ChatInput/utils/contextSelections';
 import WideScreenContainer from '../../WideScreenContainer';
 import InterventionBar from '../InterventionBar';
-import { dataSelectors, messageStateSelectors, useConversationStore } from '../store';
+import {
+  dataSelectors,
+  messageStateSelectors,
+  useConversationStore,
+  useConversationStoreApi,
+} from '../store';
 import TodoProgress from '../TodoProgress';
 import OpStatusTray from './OpStatusTray';
 import QueueTray from './QueueTray';
@@ -226,6 +231,7 @@ const ChatInput = memo<ChatInputProps>(
     const { t } = useTranslation('chat');
 
     // ConversationStore state
+    const storeApi = useConversationStoreApi();
     const dbMessages = useConversationStore(dataSelectors.dbMessages);
     const context = useConversationStore((s) => s.context);
     const draftKey = useMemo(() => messageMapKey(context), [context]);
@@ -354,10 +360,28 @@ const ChatInput = memo<ChatInputProps>(
         // Capture editor JSON state before clearing for rich text rendering
         const editorData = getEditorData();
 
+        const clearComposer = () => {
+          clearContent();
+          fileStore.clearChatUploadFileList();
+          fileStore.clearChatContextSelections();
+        };
+
+        // A deferred send was armed from the composer (see `scheduledSendAt`):
+        // park the turn as a `scheduled` topic instead of running it. Send stays
+        // the single commit action — picking a time never dispatches by itself.
+        //
+        // The composer is cleared only once the schedule is persisted, unlike the
+        // normal path below: a rejected schedule (the picked time just went past,
+        // the request failed) leaves no message row to recover the text from, so
+        // an up-front clear would simply lose it.
+        if (storeApi.getState().scheduledSendAt) {
+          const scheduled = await storeApi.getState().commitScheduledSend(message, currentFileList);
+          if (scheduled) clearComposer();
+          return;
+        }
+
         // Clear content immediately for responsive UX
-        clearContent();
-        fileStore.clearChatUploadFileList();
-        fileStore.clearChatContextSelections();
+        clearComposer();
 
         const { contextSelections, pageSelections } =
           buildMessageContextSelections(currentContextList);
@@ -371,7 +395,7 @@ const ChatInput = memo<ChatInputProps>(
           pageSelections,
         });
       },
-      [sendMessage, disableQueue, disableSend, isInputQueueBlocked],
+      [sendMessage, storeApi, disableQueue, disableSend, isInputQueueBlocked],
     );
 
     const sendButtonProps: SendButtonProps = {

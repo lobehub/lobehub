@@ -70,6 +70,8 @@ import { labPreferSelectors } from '@/store/user/selectors';
 import { buildRunLifecycle } from '../../lifecycle/buildRunLifecycle';
 import type { RunScope } from '../../lifecycle/types';
 import { createGatewayEventHandler, isCompletedRuntimeEnd } from '../gateway/gatewayEventHandler';
+import { createMessageWriteBatcher, type ToolMessageUpdateOperation } from './messageWriteBatcher';
+import { createPendingCreateLedger } from './pendingCreateLedger';
 
 /** Mirrors `idGenerator('threads', 16)` on the server so sync-allocated ids have the same shape. */
 const generateThreadId = () => `thd_${createNanoId(16)()}`;
@@ -394,46 +396,8 @@ interface SubagentStoreDispatcher {
   update: (id: string, value: Partial<UIChatMessage>) => void;
 }
 
-const HETERO_MESSAGE_WRITE_BATCH_IDLE_MS = 5_000;
-const HETERO_MESSAGE_WRITE_BATCH_MAX_OPS = 50;
 const HETERO_TERMINAL_PERSIST_DRAIN_TIMEOUT_MS = 10_000;
 const HETERO_TERMINAL_EVENT_GRACE_TIMEOUT_MS = 3_000;
-
-type MessageUpdateOperation = Extract<MessageBatchOperation, { type: 'updateMessage' }>;
-type ToolMessageUpdateOperation = Extract<MessageBatchOperation, { type: 'updateToolMessage' }>;
-
-type QueuedMessageWriteOperation =
-  | (Extract<MessageBatchOperation, { type: 'createMessage' }> & {
-      ctx?: never;
-      onFailure?: (error: unknown) => void;
-    })
-  | (MessageUpdateOperation & {
-      ctx?: MessageQueryContext;
-      onFailure?: (error: unknown) => void;
-    })
-  | (ToolMessageUpdateOperation & {
-      ctx?: MessageQueryContext;
-      onFailure?: (error: unknown) => void;
-    });
-
-const mergeMessageUpdateValue = (
-  previous: MessageUpdateOperation['value'],
-  next: MessageUpdateOperation['value'],
-): MessageUpdateOperation['value'] => {
-  const metadata =
-    previous.metadata || next.metadata
-      ? {
-          ...(previous.metadata as Record<string, any> | undefined),
-          ...(next.metadata as Record<string, any> | undefined),
-        }
-      : undefined;
-
-  return {
-    ...previous,
-    ...next,
-    ...(metadata ? { metadata } : {}),
-  };
-};
 
 const waitForPersistQueue = async (
   queue: Promise<void>,
@@ -467,147 +431,19 @@ const waitForPersistQueue = async (
   return true;
 };
 
-const createMessageWriteBatcher = (deps: {
-  batchMutate?: (operations: MessageBatchOperation[]) => Promise<any>;
-  createMessage: typeof messageService.createMessage;
-  updateMessage: typeof messageService.updateMessage;
-  updateToolMessage: typeof messageService.updateToolMessage;
-}) => {
-  let operations: QueuedMessageWriteOperation[] = [];
-  let flushChain: Promise<void> = Promise.resolve();
-  let idleTimer: ReturnType<typeof setTimeout> | undefined;
-
-  const clearIdleTimer = () => {
-    if (!idleTimer) return;
-    clearTimeout(idleTimer);
-    idleTimer = undefined;
-  };
-
-  const notifyFailure = (operation: QueuedMessageWriteOperation, error: unknown) => {
-    operation.onFailure?.(error);
-  };
-
-  const runIndividual = async (operation: QueuedMessageWriteOperation) => {
-    if (operation.type === 'createMessage') {
-      await deps.createMessage(operation.message);
-      return;
-    }
-
-    if (operation.type === 'updateToolMessage') {
-      const result = await deps.updateToolMessage(operation.id, operation.value, operation.ctx);
-      if (result?.success === false) notifyFailure(operation, result);
-      return;
-    }
-
-    const result = await deps.updateMessage(operation.id, operation.value, operation.ctx);
-    if (result?.success === false) notifyFailure(operation, result);
-  };
-
-  const runBatch = async (batch: QueuedMessageWriteOperation[]) => {
-    if (deps.batchMutate) {
-      try {
-        const result = await deps.batchMutate(batch as unknown as MessageBatchOperation[]);
-        const failedIndexes = new Set<number>(
-          (result?.results ?? [])
-            .filter((item: { index: number; success: boolean }) => !item.success)
-            .map((item: { index: number }) => item.index),
-        );
-
-        if (result?.success === false && failedIndexes.size === 0) {
-          for (const [index] of batch.entries()) failedIndexes.add(index);
-        }
-
-        for (const index of failedIndexes) {
-          notifyFailure(batch[index], result);
-        }
-        return;
-      } catch (err) {
-        console.error('[HeterogeneousAgent] Failed to flush message write batch:', err);
-        for (const operation of batch) notifyFailure(operation, err);
-        return;
-      }
-    }
-
-    for (const operation of batch) {
-      try {
-        await runIndividual(operation);
-      } catch (err) {
-        console.error('[HeterogeneousAgent] Failed to flush message write operation:', err);
-        notifyFailure(operation, err);
-      }
-    }
-  };
-
-  const flush = async (_reason: string) => {
-    clearIdleTimer();
-    flushChain = flushChain.then(async () => {
-      while (operations.length > 0) {
-        const batch = operations;
-        operations = [];
-        await runBatch(batch);
-      }
-    });
-    await flushChain;
-  };
-
-  const scheduleIdleFlush = () => {
-    clearIdleTimer();
-    idleTimer = setTimeout(() => {
-      void flush('idle');
-    }, HETERO_MESSAGE_WRITE_BATCH_IDLE_MS);
-  };
-
-  const enqueue = (operation: QueuedMessageWriteOperation) => {
-    const last = operations.at(-1);
-    if (
-      last?.type === 'updateMessage' &&
-      operation.type === 'updateMessage' &&
-      last.id === operation.id &&
-      !last.onFailure &&
-      !operation.onFailure
-    ) {
-      last.value = mergeMessageUpdateValue(last.value, operation.value);
-    } else {
-      operations.push(operation);
-    }
-
-    if (operations.length >= HETERO_MESSAGE_WRITE_BATCH_MAX_OPS) {
-      void flush('max-ops');
-    } else {
-      scheduleIdleFlush();
-    }
-  };
-
-  return {
-    enqueueCreateMessage: (
-      message: Extract<MessageBatchOperation, { type: 'createMessage' }>['message'],
-      onFailure?: (error: unknown) => void,
-    ) => enqueue({ message, onFailure, type: 'createMessage' }),
-    enqueueToolMessageUpdate: (
-      id: string,
-      value: ToolMessageUpdateOperation['value'],
-      ctx?: MessageQueryContext,
-      onFailure?: (error: unknown) => void,
-    ) => enqueue({ ctx, id, onFailure, type: 'updateToolMessage', value }),
-    enqueueUpdateMessage: (
-      id: string,
-      value: MessageUpdateOperation['value'],
-      ctx?: MessageQueryContext,
-      onFailure?: (error: unknown) => void,
-    ) => enqueue({ ctx, id, onFailure, type: 'updateMessage', value }),
-    flush,
-  };
-};
-
 interface MessageBatchMutationResult {
-  results?: Array<{ index: number; success: boolean }>;
+  results?: Array<{ error?: string; index: number; success: boolean }>;
   success?: boolean;
 }
 
 class MessageBatchMutationError extends Error {
   constructor(public readonly result: MessageBatchMutationResult) {
-    const failedCount = result.results?.filter((item) => !item.success).length;
-    super(`messageService.batchMutate failed for ${failedCount || 'unknown'} operation(s)`);
+    const failed = result.results?.filter((item) => !item.success) ?? [];
+    const reasons = [...new Set(failed.map((item) => item.error).filter(Boolean))];
+    super(
+      `messageService.batchMutate failed for ${failed.length || 'unknown'} operation(s)` +
+        (reasons.length > 0 ? `: ${reasons.join('; ')}` : ''),
+    );
   }
 }
 
@@ -822,21 +658,6 @@ export const executeHeterogeneousAgent = async (
    * be lost once the reducer clears `accContent` on terminal.
    */
   const pendingMainFlush = new Map<string, Record<string, any>>();
-  /**
-   * Retry ledger for every failed row create — assistants AND tool rows, in one
-   * Map on purpose. `messages.parent_id` is a real FK and the parent graph is
-   * not layered: a tool row hangs off its assistant, but a signal/reactive
-   * assistant hangs off the run's last TOOL row (see `computeTurnParentId`).
-   * Splitting the ledger by role would replay a tool-parented assistant before
-   * its parent tool row and lose the turn. Enqueue order IS dependency order —
-   * the reducer can only name a parent it has already emitted a create for —
-   * and `Map` preserves insertion order, so one in-order drain is correct with
-   * no knowledge of which parent kind any given row uses.
-   */
-  const pendingCreates = new Map<
-    string,
-    Extract<MessageBatchOperation, { type: 'createMessage' }>['message']
-  >();
   /** Retry ledger for tool result content / plugin state. */
   const pendingToolFlush = new Map<string, ToolMessageUpdateOperation['value']>();
 
@@ -1043,6 +864,13 @@ export const executeHeterogeneousAgent = async (
     updateMessage: messageService.updateMessage,
     updateToolMessage: messageService.updateToolMessage,
   });
+
+  /** Failed-create retry ledger + the FK-parent barrier for straight-through writes. */
+  const pendingCreateLedger = createPendingCreateLedger({
+    createMessage: messageService.createMessage,
+    flush: messageWriteBatcher.flush,
+  });
+
   const enqueueMainToolResult = (
     toolCallId: string,
     content: string,
@@ -1308,6 +1136,17 @@ export const executeHeterogeneousAgent = async (
     // caller already guards, but this function is a separate closure). All
     // subagent rows are topic-scoped.
     if (!context.topicId) return;
+
+    // Both of these hang off the main assistant row, which may still be sitting in
+    // the write batcher (or have failed to write at all). `createThread` is gated
+    // as well: its own `sourceMessageId` has no FK, but letting it through against
+    // a missing parent just buys an orphan thread whose seed `createMessage` fails
+    // a moment later.
+    if (intent.kind === 'createThread')
+      await pendingCreateLedger.ensureParentPersisted(intent.sourceMessageId);
+    if (intent.kind === 'createMessage')
+      await pendingCreateLedger.ensureParentPersisted(intent.parentId);
+
     switch (intent.kind) {
       case 'createThread': {
         try {
@@ -1573,7 +1412,7 @@ export const executeHeterogeneousAgent = async (
         } as any;
         messageWriteBatcher.enqueueCreateMessage(messageToCreate, (err) => {
           console.error('[HeterogeneousAgent] Failed to create step assistant:', err);
-          pendingCreates.set(intent.messageId, messageToCreate);
+          pendingCreateLedger.add(intent.messageId, messageToCreate);
         });
         get().internal_dispatchMessage(
           { id: intent.messageId, type: 'createMessage', value: messageToCreate },
@@ -1690,7 +1529,7 @@ export const executeHeterogeneousAgent = async (
           const toolMsg = buildToolMessage(x);
           messageWriteBatcher.enqueueCreateMessage(toolMsg, (err) => {
             console.error('[HeterogeneousAgent] Failed to create tool message:', err);
-            pendingCreates.set(x.toolMessageId, toolMsg);
+            pendingCreateLedger.add(x.toolMessageId, toolMsg);
           });
           toolMsgIdByCallId.set(x.payload.id, x.toolMessageId);
           mainToolCallIds.add(x.payload.id);
@@ -2135,14 +1974,7 @@ export const executeHeterogeneousAgent = async (
             // Order is load-bearing: rows first, in the order they were enqueued
             // (that is their FK dependency order), then the content patches —
             // an update against a row that does not exist yet matches zero rows.
-            for (const [messageId, messageToCreate] of pendingCreates) {
-              try {
-                await messageService.createMessage(messageToCreate);
-                pendingCreates.delete(messageId);
-              } catch (err) {
-                console.error('[HeterogeneousAgent] Failed to replay message create:', err);
-              }
-            }
+            await pendingCreateLedger.drain();
 
             for (const [messageId, update] of pendingMainFlush) {
               try {
