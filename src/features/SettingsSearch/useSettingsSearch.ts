@@ -1,4 +1,4 @@
-import { isDesktop } from '@lobechat/const';
+import { isDesktop, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
 import type { IconProps } from '@lobehub/ui';
 import { DEFAULT_MODEL_PROVIDER_LIST } from 'model-bank/modelProviders';
 import { useEffect, useMemo, useState } from 'react';
@@ -15,6 +15,7 @@ import {
 import {
   SETTINGS_SEARCH_ITEMS,
   type SettingsSearchContext,
+  TAB_SEARCH_EN_KEYWORDS,
   TAB_SEARCH_KEYWORDS_KEYS,
 } from './items';
 import { createSettingsSearchFuse, MAX_SEARCH_RESULTS } from './matcher';
@@ -116,10 +117,14 @@ export const useSettingsSearch = (
           });
 
         const keywordsKey = TAB_SEARCH_KEYWORDS_KEYS[item.key];
-        const texts = [
-          item.label.toLowerCase(),
-          ...(keywordsKey ? splitKeywords(t(keywordsKey as never) as string) : []),
-        ];
+        // English floor + localized enrichment (deduped: on en-US they overlap)
+        const texts = Array.from(
+          new Set([
+            item.label.toLowerCase(),
+            ...(TAB_SEARCH_EN_KEYWORDS[item.key] ?? []),
+            ...(keywordsKey ? splitKeywords(t(keywordsKey as never) as string) : []),
+          ]),
+        );
 
         entries.push({
           breadcrumb: group.title,
@@ -156,6 +161,26 @@ export const useSettingsSearch = (
         url: `${tabInfo.url}#${def.anchor}`,
       });
     }
+
+    // Builtin OAuth connectors (Notion, GitHub, …): searching a connector name
+    // should land on the connector page. The page has no per-connector deep
+    // link, so these navigate to the tab itself. Availability ultimately
+    // depends on the Market API, but this static catalog is what the page
+    // renders from.
+    const connectorTab = visibleTabs.get(SettingsTabs.Connector);
+    if (connectorTab)
+      for (const connector of LOBEHUB_SKILL_PROVIDERS) {
+        entries.push({
+          breadcrumb: `${connectorTab.groupTitle} › ${connectorTab.label}`,
+          haystack: [connector.label.toLowerCase(), connector.id.toLowerCase()],
+          icon: connectorTab.icon,
+          key: `connector-${connector.id}`,
+          label: connector.label,
+          pinyinBase: [],
+          tab: SettingsTabs.Connector,
+          url: connectorTab.url,
+        });
+      }
 
     // Model providers rank last: builtin names/ids (e.g. "OpenAI") link straight
     // to the provider detail page. Custom providers need an async store fetch and

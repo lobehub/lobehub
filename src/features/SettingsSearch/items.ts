@@ -32,11 +32,95 @@ export interface SettingsSearchItem {
 }
 
 /**
+ * Canonical English keywords per tab, indexed in every locale. The localized
+ * strings from TAB_SEARCH_KEYWORDS_KEYS are translations that usually replace
+ * the English terms (zh-CN: `用量,消耗,配额…`), which made English queries like
+ * `usage` or `skill` miss on non-English UIs. English is the lingua franca for
+ * technical terms — it must always stay searchable; localized keywords enrich
+ * on top of this floor.
+ */
+export const TAB_SEARCH_EN_KEYWORDS: Partial<Record<SettingsTabs, string[]>> = {
+  [SettingsTabs.About]: ['about', 'version', 'changelog', 'feedback', 'help'],
+  [SettingsTabs.Advanced]: ['advanced', 'developer', 'labs', 'experiment', 'beta'],
+  [SettingsTabs.APIKey]: ['api key', 'apikey', 'token', 'secret'],
+  [SettingsTabs.Appearance]: [
+    'appearance',
+    'theme',
+    'dark mode',
+    'light mode',
+    'font',
+    'language',
+    'color',
+  ],
+  [SettingsTabs.Billing]: ['billing', 'payment', 'invoice', 'card', 'transaction'],
+  [SettingsTabs.Connector]: ['connectors', 'integrations', 'mcp', 'oauth'],
+  [SettingsTabs.Credits]: ['credits', 'balance', 'top up', 'recharge', 'buy credits'],
+  [SettingsTabs.Creds]: ['credentials', 'secrets', 'oauth'],
+  [SettingsTabs.Devices]: ['devices', 'sessions', 'logged in devices'],
+  [SettingsTabs.Hotkey]: ['hotkey', 'shortcut', 'keyboard'],
+  [SettingsTabs.Memory]: ['memory', 'memories', 'personalization'],
+  [SettingsTabs.Messenger]: ['messenger', 'chat platform', 'bot'],
+  [SettingsTabs.Notification]: ['notification', 'email', 'push', 'alerts'],
+  [SettingsTabs.Plans]: ['subscription', 'plan', 'upgrade', 'pricing', 'membership'],
+  [SettingsTabs.Profile]: [
+    'profile',
+    'account',
+    'avatar',
+    'username',
+    'password',
+    'email',
+    'sign out',
+    'logout',
+  ],
+  [SettingsTabs.Provider]: [
+    'provider',
+    'model',
+    'llm',
+    'api key',
+    'apikey',
+    'byok',
+    'bring your own key',
+    'endpoint',
+  ],
+  [SettingsTabs.Proxy]: ['proxy', 'network', 'connection'],
+  [SettingsTabs.Referral]: ['referral', 'invite', 'rewards', 'bonus'],
+  [SettingsTabs.ServiceModel]: [
+    'service model',
+    'model assignment',
+    'topic naming',
+    'translation',
+    'tts',
+    'voice',
+    'speech',
+    'image',
+    'image generation',
+    'embedding',
+    'prompt rewrite',
+    'suggestion',
+  ],
+  [SettingsTabs.Skill]: ['skill', 'skills', 'plugins', 'tools'],
+  [SettingsTabs.Stats]: ['analytics', 'statistics', 'stats'],
+  [SettingsTabs.Storage]: [
+    'storage',
+    'files',
+    'import',
+    'export',
+    'backup',
+    'reset',
+    'clear data',
+    'account deletion',
+    'delete account',
+  ],
+  [SettingsTabs.SystemTools]: ['system tools', 'built-in tools'],
+  [SettingsTabs.Usage]: ['usage', 'consumption', 'quota', 'spend', 'statistics'],
+};
+
+/**
  * Localized synonym keywords for tab-level entries (i18n keys in the `setting`
  * namespace, comma-separated values). Tab labels alone miss common synonyms —
  * e.g. searching "充值" (top up) should hit the Credits tab whose label is just
  * "积分", and "文件" (files) should hit Storage ("数据存储"). Each locale
- * carries its own synonym set.
+ * carries its own synonym set, layered on top of TAB_SEARCH_EN_KEYWORDS.
  */
 export const TAB_SEARCH_KEYWORDS_KEYS: Partial<Record<SettingsTabs, string>> = {
   [SettingsTabs.About]: 'settingsSearch.tabKeywords.about',

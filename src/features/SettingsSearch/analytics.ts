@@ -46,12 +46,13 @@ const sanitizeQuery = (query: string) => {
   return TOKEN_LIKE_QUERY.test(normalized) ? REDACTED_QUERY : normalized;
 };
 
-type SettingsSearchResultType = 'item' | 'provider' | 'tab';
+type SettingsSearchResultType = 'connector' | 'item' | 'provider' | 'tab';
 
-/** Result keys are prefixed by their index source: `tab-*` / `item-*` / `provider-*` */
+/** Result keys are prefixed by their index source: `tab-*` / `item-*` / `provider-*` / `connector-*` */
 const getResultType = (resultKey: string): SettingsSearchResultType => {
   if (resultKey.startsWith('item-')) return 'item';
   if (resultKey.startsWith('provider-')) return 'provider';
+  if (resultKey.startsWith('connector-')) return 'connector';
   return 'tab';
 };
 
