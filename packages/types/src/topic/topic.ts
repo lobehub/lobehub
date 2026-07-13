@@ -194,8 +194,8 @@ export interface ChatTopicMetadata {
     threadId?: string | null;
   } | null;
   /**
-   * Backend-scheduled continuation after a rate limit. Present iff the topic
-   * status is `scheduled`. Set to `null` to clear it (same clear-convention as
+   * A deferred agent run on this topic. Present iff the topic status is
+   * `scheduled`. Set to `null` to clear it (same clear-convention as
    * `runningOperation`); every reader treats a nullish value as "not scheduled".
    */
   scheduledRun?: TopicScheduledRun | null;
@@ -222,6 +222,157 @@ export interface ChatTopicMetadata {
    */
   workingDirectoryConfig?: WorkingDirConfig;
 }
+
+/**
+ * What a {@link TopicScheduledRun} does when it comes due.
+ *
+ * - `resume_after_rate_limit`: a heterogeneous turn that hit a provider rate
+ *   limit; resumes the surviving CLI session from the failed assistant turn.
+ * - `delayed_start`: a run the user deliberately deferred ("send this in 3
+ *   hours"); replays a stored `execAgent` request as a fresh turn.
+ */
+export const TOPIC_SCHEDULED_RUN_KINDS = ['resume_after_rate_limit', 'delayed_start'] as const;
+
+export type TopicScheduledRunKind = (typeof TOPIC_SCHEDULED_RUN_KINDS)[number];
+
+/**
+ * Lease taken by the cron dispatcher before it dispatches a scheduled run, so
+ * two concurrent ticks / replicas never trigger the same run twice. Kind-agnostic.
+ */
+const topicScheduledRunClaimSchema = z.object({
+  claimedAt: z.string(),
+  expiresAt: z.string(),
+  id: z.string(),
+});
+
+const topicScheduledRunBaseSchema = z.object({
+  claim: topicScheduledRunClaimSchema.optional(),
+  createdAt: z.string(),
+  /**
+   * The single due gate — the cron dispatches a scheduled topic once
+   * `runAt <= now`, regardless of kind. Required: a scheduled run with no
+   * `runAt` would otherwise be indistinguishable from "due immediately".
+   *
+   * Must be a UTC ISO-8601 timestamp (`…Z`, what `Date#toISOString` emits). The
+   * dispatcher's due query compares it as text against `now().toISOString()`, so
+   * a zoned offset (`…+08:00`) would silently break the ordering.
+   */
+  runAt: z.string().datetime(),
+  updatedAt: z.string(),
+});
+
+const resumeAfterRateLimitRunSchema = topicScheduledRunBaseSchema.extend({
+  /** The failed assistant turn that hit the rate limit (regenerated in place). */
+  failedAssistantMessageId: z.string(),
+  kind: z.literal('resume_after_rate_limit'),
+  /** Diagnostics only — `runAt` is derived from `resetsAt` at write time. */
+  rateLimit: z
+    .object({ rateLimitType: z.string().optional(), resetsAt: z.number().optional() })
+    .optional(),
+  /** Resume snapshot; both fields are derivable from topic metadata but cached here. */
+  resume: z
+    .object({ sessionId: z.string().optional(), workingDirectory: z.string().optional() })
+    .optional(),
+  source: z.literal('heterogeneous_agent'),
+  /** The user message whose turn is being continued. */
+  userMessageId: z.string(),
+});
+
+const delayedStartRunSchema = topicScheduledRunBaseSchema.extend({
+  kind: z.literal('delayed_start'),
+  /** Model override captured at schedule time (the agent default is used if absent). */
+  model: z.string().optional(),
+  /** Provider override captured at schedule time. */
+  provider: z.string().optional(),
+  /**
+   * The user turn to run when due. Persisted as a real message at schedule time,
+   * so the pending prompt reads as the user's own words in the topic (and in any
+   * list rendering the last message) instead of hiding in metadata.
+   *
+   * This message — not a copy in this payload — is the single source of truth for
+   * the prompt: the dispatcher reads its content back, so editing a pending run
+   * is just editing the message.
+   */
+  userMessageId: z.string(),
+});
+
+/**
+ * A deferred agent run on a topic: *when* to run (`runAt`), a lease so only one
+ * replica dispatches it (`claim`), and *what* to run (the `kind` variant).
+ *
+ * Stored on `topic.metadata.scheduledRun` and paired with topic
+ * `status = 'scheduled'` — the two are written and cleared together, so a
+ * scheduled topic always carries a dispatchable payload. The cron dispatcher
+ * scans due topics and re-enters `AiAgentService.execAgent`; it does NOT enter
+ * TaskLifecycle. Recurrence is deliberately out of scope: repeated execution
+ * belongs to `tasks.automationMode = 'schedule'`.
+ */
+export const topicScheduledRunSchema = z.discriminatedUnion('kind', [
+  resumeAfterRateLimitRunSchema,
+  delayedStartRunSchema,
+]);
+
+export type TopicScheduledRunClaim = z.infer<typeof topicScheduledRunClaimSchema>;
+export type ResumeAfterRateLimitRun = z.infer<typeof resumeAfterRateLimitRunSchema>;
+export type DelayedStartRun = z.infer<typeof delayedStartRunSchema>;
+export type TopicScheduledRun = z.infer<typeof topicScheduledRunSchema>;
+
+/**
+ * The pre-`kind` payload, written by the first version of this mechanism (which
+ * only ever parked rate-limited hetero continuations). It has neither `kind` nor
+ * `runAt`: the due gate was `rateLimit.resetsAt` (epoch seconds), and an absent
+ * one meant "due now".
+ *
+ * Rows in this shape are sitting in the DB when this code deploys, so the reader
+ * upgrades them rather than a migration backfilling them — a scheduled run is
+ * cleared the moment it dispatches, so the legacy shape drains on its own.
+ */
+const legacyRateLimitRunSchema = z.object({
+  claim: topicScheduledRunClaimSchema.optional(),
+  createdAt: z.string(),
+  failedAssistantMessageId: z.string(),
+  // Legacy by definition — a payload that carries a `kind` but failed the union
+  // above is corrupt, and must be discarded rather than read as a rate limit.
+  kind: z.undefined().optional(),
+  rateLimit: z
+    .object({ rateLimitType: z.string().optional(), resetsAt: z.number().optional() })
+    .optional(),
+  reason: z.literal('rate_limit'),
+  resume: z
+    .object({ sessionId: z.string().optional(), workingDirectory: z.string().optional() })
+    .optional(),
+  source: z.literal('heterogeneous_agent'),
+  updatedAt: z.string(),
+  userMessageId: z.string(),
+});
+
+/**
+ * Read a stored `scheduledRun` in either the current or the legacy shape, or
+ * `null` when it is neither (the caller discards those — see the dispatcher).
+ *
+ * Pairs with the due query in `TopicModel.getDueScheduledTopics`, which carries
+ * the matching legacy fallback: the two must agree on what "due" means, or a row
+ * this upgrades would never be selected in the first place.
+ */
+export const parseTopicScheduledRun = (raw: unknown): TopicScheduledRun | null => {
+  const current = topicScheduledRunSchema.safeParse(raw);
+  if (current.success) return current.data;
+
+  const legacy = legacyRateLimitRunSchema.safeParse(raw);
+  if (!legacy.success) return null;
+
+  const { kind: _kind, reason: _reason, ...rest } = legacy.data;
+
+  return {
+    ...rest,
+    kind: 'resume_after_rate_limit',
+    // Reproduce the old gate exactly: the rate-limit reset if there was one, and
+    // otherwise "due immediately" — which `createdAt`, always in the past, is.
+    runAt: rest.rateLimit?.resetsAt
+      ? new Date(rest.rateLimit.resetsAt * 1000).toISOString()
+      : rest.createdAt,
+  };
+};
 
 /** Metadata patch accepted by the topic update API. */
 export const chatTopicMetadataUpdateSchema = z.object({
@@ -273,66 +424,10 @@ export const chatTopicMetadataUpdateSchema = z.object({
     })
     .nullable()
     .optional(),
-  scheduledRun: z
-    .object({
-      claim: z.object({ claimedAt: z.string(), expiresAt: z.string(), id: z.string() }).optional(),
-      createdAt: z.string(),
-      failedAssistantMessageId: z.string(),
-      rateLimit: z
-        .object({ rateLimitType: z.string().optional(), resetsAt: z.number().optional() })
-        .optional(),
-      reason: z.literal('rate_limit'),
-      resume: z
-        .object({ sessionId: z.string().optional(), workingDirectory: z.string().optional() })
-        .optional(),
-      source: z.literal('heterogeneous_agent'),
-      updatedAt: z.string(),
-      userMessageId: z.string(),
-    })
-    .nullish(),
+  scheduledRun: topicScheduledRunSchema.nullish(),
   workingDirectory: z.string().optional(),
   workingDirectoryConfig: workingDirConfigSchema.optional(),
 });
-
-/**
- * Backend-scheduled continuation of a pure (non-Task) heterogeneous topic after
- * a rate limit. Stored on `topic.metadata.scheduledRun` and paired with topic
- * `status = 'scheduled'`. The backend cron scans scheduled topics and re-dispatches
- * the continuation through the existing heterogeneous regenerate path — it does NOT
- * enter TaskLifecycle.
- *
- * MVP note: no dedicated `dueAt` field. The cron re-runs scheduled topics on each
- * tick; when `rateLimit.resetsAt` is present it is used as the "not before" gate,
- * otherwise the topic is dispatched on the next tick. `provider`/`model` are NOT
- * duplicated here — they are read from the topic's own `provider`/`model` columns
- * and `heteroSessionId` metadata.
- */
-export interface TopicScheduledRun {
-  /** Atomic lease taken by the cron before dispatch, to avoid double-trigger. */
-  claim?: {
-    claimedAt: string;
-    expiresAt: string;
-    id: string;
-  };
-  createdAt: string;
-  /** The failed assistant turn that hit the rate limit (regenerated in place). */
-  failedAssistantMessageId: string;
-  rateLimit?: {
-    rateLimitType?: string;
-    /** Epoch seconds when the rate-limit window resets; used as the due gate. */
-    resetsAt?: number;
-  };
-  reason: 'rate_limit';
-  /** Resume snapshot; both fields are derivable from topic metadata but cached here. */
-  resume?: {
-    sessionId?: string;
-    workingDirectory?: string;
-  };
-  source: 'heterogeneous_agent';
-  updatedAt: string;
-  /** The user message whose turn is being continued. */
-  userMessageId: string;
-}
 
 export interface ChatTopicSummary {
   content: string;

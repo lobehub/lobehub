@@ -306,9 +306,12 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
     const activeTopicScheduled = useChatStore(
       (s) => topicSelectors.currentActiveTopic(s)?.status === 'scheduled',
     );
-    const scheduledResetsAt = useChatStore(
-      (s) => topicSelectors.currentActiveTopic(s)?.metadata?.scheduledRun?.rateLimit?.resetsAt,
-    );
+    const scheduledResetsAt = useChatStore((s) => {
+      const scheduledRun = topicSelectors.currentActiveTopic(s)?.metadata?.scheduledRun;
+      return scheduledRun?.kind === 'resume_after_rate_limit'
+        ? scheduledRun.rateLimit?.resetsAt
+        : undefined;
+    });
 
     const isRateLimitError =
       canCreate &&

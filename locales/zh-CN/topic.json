@@ -179,6 +179,7 @@
   "projectStatus.waitingForHuman_other": "{{count}} 个等待处理的话题",
   "renameModal.description": "保持简短且易于识别。",
   "renameModal.title": "重命名话题",
+  "scheduledStatusTip": "将于 {{time}} 运行",
   "searchPlaceholder": "搜索话题…",
   "searchResultEmpty": "暂无搜索结果",
   "sidebar.collapseAll": "折叠所有分组",

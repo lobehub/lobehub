@@ -638,12 +638,13 @@ describe('TopicModel', () => {
     });
   });
 
-  describe('scheduled continuation', () => {
+  describe('scheduled run', () => {
     const scheduledRun = {
       createdAt: '2026-07-12T00:00:00.000Z',
       failedAssistantMessageId: 'assistant-failed',
+      kind: 'resume_after_rate_limit' as const,
       rateLimit: { resetsAt: 100 },
-      reason: 'rate_limit' as const,
+      runAt: '2026-07-12T00:00:00.000Z',
       source: 'heterogeneous_agent' as const,
       updatedAt: '2026-07-12T00:00:00.000Z',
       userMessageId: 'user-message',
@@ -660,15 +661,34 @@ describe('TopicModel', () => {
         },
         {
           id: 'scheduled-future',
-          metadata: { scheduledRun: { ...scheduledRun, rateLimit: { resetsAt: 300 } } },
+          metadata: { scheduledRun: { ...scheduledRun, runAt: '2026-07-12T06:00:00.000Z' } },
           status: 'scheduled',
           title: 'future',
           userId,
         },
+        // A delayed_start due at the same instant — the gate is kind-agnostic.
+        {
+          id: 'delayed-due',
+          metadata: {
+            scheduledRun: {
+              createdAt: '2026-07-12T00:00:00.000Z',
+              kind: 'delayed_start' as const,
+              runAt: '2026-07-12T00:00:00.000Z',
+              updatedAt: '2026-07-12T00:00:00.000Z',
+              userMessageId: 'user-scheduled',
+            },
+          },
+          status: 'scheduled',
+          title: 'delayed',
+          userId,
+        },
       ]);
 
-      const due = await TopicModel.getDueScheduledTopics(serverDB, new Date(200_000));
-      expect(due.map((topic) => topic.id)).toEqual(['scheduled-due']);
+      const due = await TopicModel.getDueScheduledTopics(
+        serverDB,
+        new Date('2026-07-12T00:01:00.000Z'),
+      );
+      expect(due.map((topic) => topic.id).sort()).toEqual(['delayed-due', 'scheduled-due']);
 
       const claim = {
         claimedAt: '2026-07-12T00:00:00.000Z',
@@ -691,6 +711,88 @@ describe('TopicModel', () => {
           new Date('2026-07-12T00:01:00.000Z'),
         ),
       ).toBe(false);
+    });
+
+    it('arms status and payload together, so a scheduled topic always has something to run', async () => {
+      const topic = await topicModel.create({ title: 'to schedule' });
+      expect(topic.status).toBeNull();
+
+      await topicModel.armScheduledRun(topic.id, {
+        createdAt: '2026-07-12T00:00:00.000Z',
+        kind: 'delayed_start',
+        runAt: '2026-07-12T03:00:00.000Z',
+        updatedAt: '2026-07-12T00:00:00.000Z',
+        userMessageId: 'user-scheduled',
+      });
+
+      const [armed] = await serverDB.select().from(topics).where(eq(topics.id, topic.id));
+      expect(armed.status).toBe('scheduled');
+      expect(armed.metadata?.scheduledRun).toMatchObject({
+        kind: 'delayed_start',
+        userMessageId: 'user-scheduled',
+      });
+    });
+
+    it('still finds a continuation parked by the pre-`kind` version, which gated on resetsAt', async () => {
+      // Upgrade day: these rows have no `runAt` at all. If the due query only
+      // understood `runAt`, they would sit at `scheduled` forever.
+      const legacy = {
+        createdAt: '2026-07-12T00:00:00.000Z',
+        failedAssistantMessageId: 'assistant-failed',
+        reason: 'rate_limit',
+        source: 'heterogeneous_agent',
+        updatedAt: '2026-07-12T00:00:00.000Z',
+        userMessageId: 'user-message',
+      };
+      await serverDB.insert(topics).values([
+        {
+          id: 'legacy-window-passed',
+          // resetsAt is epoch SECONDS, and this window closed long ago.
+          metadata: { scheduledRun: { ...legacy, rateLimit: { resetsAt: 1_768_000_000 } } as any },
+          status: 'scheduled',
+          title: 'legacy due',
+          userId,
+        },
+        {
+          id: 'legacy-no-reset',
+          // The provider reported no reset — the old gate read that as "due now".
+          metadata: { scheduledRun: legacy as any },
+          status: 'scheduled',
+          title: 'legacy no reset',
+          userId,
+        },
+        {
+          id: 'legacy-window-open',
+          metadata: { scheduledRun: { ...legacy, rateLimit: { resetsAt: 4_102_444_800 } } as any },
+          status: 'scheduled',
+          title: 'legacy not yet due',
+          userId,
+        },
+      ]);
+
+      const due = await TopicModel.getDueScheduledTopics(
+        serverDB,
+        new Date('2026-07-12T00:01:00Z'),
+      );
+      const ids = due.map((topic) => topic.id);
+
+      expect(ids).toContain('legacy-window-passed');
+      expect(ids).toContain('legacy-no-reset');
+      expect(ids).not.toContain('legacy-window-open');
+    });
+
+    it('never treats a scheduled topic with no runAt as due', async () => {
+      const { runAt: _runAt, ...noRunAt } = scheduledRun;
+      await serverDB.insert(topics).values({
+        id: 'scheduled-no-run-at',
+        metadata: { scheduledRun: noRunAt as any },
+        status: 'scheduled',
+        title: 'no runAt',
+        userId,
+      });
+
+      const due = await TopicModel.getDueScheduledTopics(serverDB, new Date('2030-01-01'));
+      expect(due.map((topic) => topic.id)).not.toContain('scheduled-no-run-at');
     });
 
     it('does not let a stale dispatcher clear a cancelled or re-claimed schedule', async () => {

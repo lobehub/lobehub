@@ -186,6 +186,7 @@ export default {
   'newTopic': 'New Topic',
   'renameModal.description': 'Keep it short and easy to recognize.',
   'renameModal.title': 'Rename Topic',
+  'scheduledStatusTip': 'Scheduled to run at {{time}}.',
   'searchPlaceholder': 'Search Topics...',
   'searchResultEmpty': 'No search results found.',
   'sidebar.collapseAll': 'Collapse all groups',

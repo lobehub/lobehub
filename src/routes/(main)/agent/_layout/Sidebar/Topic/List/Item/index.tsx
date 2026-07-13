@@ -7,6 +7,7 @@ import {
 } from '@lobechat/utils/client/topic';
 import { Flexbox, Icon, Popover, Skeleton, Tag, Text, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cssVar, keyframes, useTheme } from 'antd-style';
+import dayjs from 'dayjs';
 import { HashIcon, MessageSquareDashed } from 'lucide-react';
 import type { CSSProperties } from 'react';
 import { memo, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
@@ -289,6 +290,7 @@ const TopicItem = memo<TopicItemProps>(
     const isCompleted = status === 'completed';
     const isFailed = status === 'failed';
     const isRunning = status === 'running';
+    const isScheduled = status === 'scheduled';
     const isWaitingForHuman = status === 'waitingForHuman';
     // Post-visible-output tail: the user-visible answer is complete but the run
     // is still doing terminal bookkeeping (unread persist, title summary) —
@@ -400,6 +402,22 @@ const TopicItem = memo<TopicItemProps>(
         title={title === '...' ? <DotsLoading gap={3} size={4} /> : title}
         titleColor={cssVar.colorText}
         icon={(() => {
+          // A scheduled topic hasn't run yet — nothing else can be true of it,
+          // so its clock outranks the other states.
+          if (isScheduled) {
+            const visual = TOPIC_STATUS_VISUALS.scheduled;
+            const runAt = metadata?.scheduledRun?.runAt;
+            const icon = <Icon icon={visual.icon} size={'small'} style={{ color: visual.color }} />;
+            return runAt ? (
+              <Tooltip
+                title={t('scheduledStatusTip', { time: dayjs(runAt).format('MM-DD HH:mm') })}
+              >
+                {icon}
+              </Tooltip>
+            ) : (
+              icon
+            );
+          }
           if (isWaitingForHuman) {
             const visual = TOPIC_STATUS_VISUALS.waitingForHuman;
             return <Icon icon={visual.icon} size={'small'} style={{ color: visual.color }} />;

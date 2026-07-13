@@ -176,6 +176,43 @@ export interface ExecAgentParams {
 }
 
 /**
+ * Parameters for scheduleAgentRun — defer an agent run to a future time.
+ *
+ * Deliberately a subset of {@link ExecAgentParams}: a deferred run creates the
+ * topic now and replays the request later through `execAgent`, so anything tied
+ * to a live turn (`existingMessageIds`, `parentOperationId`, `autoStart`) has no
+ * meaning here. One-shot only — recurring execution belongs to
+ * `tasks.automationMode = 'schedule'`.
+ */
+export interface ScheduleAgentRunParams {
+  /** The agent ID to run (either agentId or slug is required) */
+  agentId?: string;
+  /** File IDs of already-uploaded attachments to attach when the run fires */
+  fileIds?: string[];
+  /** Group to file the topic under, when scheduling from a group conversation */
+  groupId?: string | null;
+  /** Override the agent's default model */
+  model?: string;
+  /** The user input/prompt, replayed verbatim when the run comes due */
+  prompt: string;
+  /** Override the agent's default provider */
+  provider?: string;
+  /** When to run. UTC ISO-8601 (`…Z`) — see `TopicScheduledRun.runAt`. */
+  runAt: string;
+  /** The agent slug to run (either agentId or slug is required) */
+  slug?: string;
+}
+
+export interface ScheduleAgentRunResult {
+  /** The resolved agent ID */
+  agentId: string;
+  /** Echoes the scheduled time, so callers don't re-derive it */
+  runAt: string;
+  /** The topic created to hold the deferred run (status `scheduled`) */
+  topicId: string;
+}
+
+/**
  * Response from execAgent
  */
 export interface ExecAgentResult {
