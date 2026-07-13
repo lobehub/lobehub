@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   addAIMessage: vi.fn(),
   addUserMessage: vi.fn(),
   clearContent: vi.fn(),
+  editorContent: '',
   focus: vi.fn(),
   inputMessage: '',
   updatePreference: vi.fn(),
@@ -31,7 +32,13 @@ vi.mock('react-i18next', () => ({
 
 vi.mock('@/features/Conversation', () => ({
   useConversationStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({ editor: { clearContent: mocks.clearContent, focus: mocks.focus } }),
+    selector({
+      editor: {
+        clearContent: mocks.clearContent,
+        focus: mocks.focus,
+        getMarkdownContent: () => mocks.editorContent,
+      },
+    }),
   useConversationStoreApi: () => ({
     getState: () => ({
       addAIMessage: mocks.addAIMessage,
@@ -65,12 +72,14 @@ describe.each([
   ['group', useGroupSendMenuItems],
 ])('%s conversation send menu', (_name, useSendMenuItems) => {
   beforeEach(() => {
+    mocks.editorContent = '';
     mocks.inputMessage = '';
     vi.clearAllMocks();
   });
 
   it('adds the current editor text as an assistant message', () => {
-    mocks.inputMessage = 'assistant content';
+    mocks.editorContent = 'assistant content';
+    mocks.inputMessage = 'stale cached content';
     const { result } = renderHook(() => useSendMenuItems());
 
     act(() => getAddAIAction(result.current)?.onClick?.());
