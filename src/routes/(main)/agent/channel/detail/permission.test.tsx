@@ -146,6 +146,7 @@ vi.mock('@lobehub/ui', () => ({
       <div data-testid="channel-paid-alert-description">{description}</div>
     </div>
   ),
+  Block: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   Flexbox: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => (
     <div {...props}>{children}</div>
   ),
@@ -163,18 +164,28 @@ vi.mock('@lobehub/ui', () => ({
     </Form>
   ),
   FormGroup: ({
+    active,
     children,
     extra,
+    onCollapse,
     title,
   }: {
+    active?: boolean;
     children?: ReactNode;
     extra?: ReactNode;
+    onCollapse?: (active: boolean) => void;
     title?: ReactNode;
   }) => (
     <section>
-      <h2>{title}</h2>
-      {extra}
-      {children}
+      <div
+        className="ant-collapse-header"
+        data-testid="settings-collapse-header"
+        onClick={() => onCollapse?.(!active)}
+      >
+        <span className="ant-collapse-title">{title}</span>
+        <div className="ant-collapse-extra">{extra}</div>
+      </div>
+      {active && children}
     </section>
   ),
   FormItem: ({
@@ -251,7 +262,9 @@ vi.mock('@/components/FormInput', () => ({
 }));
 
 vi.mock('@/components/InfoTooltip', () => ({
-  default: ({ title }: { title?: string }) => <span>{title}</span>,
+  default: ({ title }: { title?: string }) => (
+    <span aria-hidden="true" data-testid="info-tooltip" title={title} />
+  ),
 }));
 
 vi.mock('../const', () => ({
@@ -361,9 +374,23 @@ describe('Agent channel permission gates', () => {
     render(<BodyHarness disabled />);
 
     expect(screen.getByRole('textbox', { name: 'channel.applicationId' })).toBeDisabled();
+    expect(screen.queryByTestId('info-tooltip')).not.toBeInTheDocument();
     expect(screen.getByLabelText('channel.botToken')).toBeDisabled();
     expect(screen.getByRole('spinbutton', { name: 'channel.charLimit' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'channel.settingsResetDefault' })).toBeDisabled();
+  });
+
+  it('toggles advanced settings from the full header row', () => {
+    render(<BodyHarness />);
+
+    const header = screen.getByTestId('settings-collapse-header');
+    expect(screen.getByRole('spinbutton', { name: 'channel.charLimit' })).toBeInTheDocument();
+
+    fireEvent.click(header);
+    expect(screen.queryByRole('spinbutton', { name: 'channel.charLimit' })).not.toBeInTheDocument();
+
+    fireEvent.click(header);
+    expect(screen.getByRole('spinbutton', { name: 'channel.charLimit' })).toBeInTheDocument();
   });
 
   it('disables mutating channel actions when editing is denied', () => {

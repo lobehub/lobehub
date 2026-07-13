@@ -1,7 +1,8 @@
 'use client';
 
-import { Alert, Flexbox, FormItem } from '@lobehub/ui';
+import { Alert, Flexbox, FormItem, Icon } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
+import { Fingerprint, KeyRound, type LucideIcon, UserRound } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -9,33 +10,34 @@ import { FormInput, FormPassword } from '@/components/FormInput';
 
 import QrCodeAuth from './QrCodeAuth';
 
-const styles = createStaticStyles(({ css }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  fieldIcon: css`
+    flex: none;
+    color: ${cssVar.colorTextSecondary};
+  `,
   header: css`
     display: flex;
     align-items: center;
-    justify-content: space-between;
     margin-block-end: 16px;
   `,
 }));
 
 const ReadOnlyField = memo<{
-  description?: string;
   divider?: boolean;
+  icon: LucideIcon;
   label: string;
   password?: boolean;
-  tag: string;
   value?: string;
-}>(({ description, divider, label, password, tag, value }) => {
+}>(({ divider, icon, label, password, value }) => {
   const InputComponent = password ? FormPassword : FormInput;
 
   return (
     <FormItem
-      desc={description}
+      avatar={<Icon className={styles.fieldIcon} icon={icon} size={20} />}
       divider={divider}
       label={label}
       minWidth={'max(50%, 400px)'}
-      tag={tag}
-      variant="borderless"
+      variant="outlined"
     >
       <InputComponent readOnly value={value || ''} />
     </FormItem>
@@ -69,52 +71,47 @@ const WechatConnectedInfo = memo<WechatConnectedInfoProps>(
               {t('channel.wechatManagedCredentials')}
             </div>
           </Flexbox>
-          {onQrAuthenticated && (
-            <QrCodeAuth
-              buttonLabel={t('channel.wechatRebind')}
-              buttonType="default"
-              disabled={disabled}
-              showTips={false}
-              onAuthenticated={onQrAuthenticated}
-            />
-          )}
         </div>
+        {onQrAuthenticated && (
+          <QrCodeAuth
+            buttonType="default"
+            disabled={disabled}
+            showTips={false}
+            onAuthenticated={onQrAuthenticated}
+          />
+        )}
         <Alert
           showIcon
           message={t('channel.wechatIdleNotice')}
-          style={{ marginBlockEnd: 16 }}
+          style={{ marginBlock: '16px' }}
           type="info"
         />
         {shouldShowApplicationId && (
           <ReadOnlyField
-            description={t('channel.applicationIdHint')}
+            icon={Fingerprint}
             label={t('channel.applicationId')}
-            tag="applicationId"
             value={currentConfig.applicationId}
           />
         )}
         {__DEV__ && (
           <>
             <ReadOnlyField
-              description={t('channel.wechatBotIdHint')}
               divider={shouldShowApplicationId}
+              icon={Fingerprint}
               label={t('channel.wechatBotId')}
-              tag="botId"
               value={currentConfig.credentials.botId}
             />
             <ReadOnlyField
               divider
               password
-              description={t('channel.botTokenEncryptedHint')}
+              icon={KeyRound}
               label={t('channel.botToken')}
-              tag="botToken"
               value={currentConfig.credentials.botToken}
             />
             <ReadOnlyField
               divider
-              description={t('channel.wechatUserIdHint')}
+              icon={UserRound}
               label={t('channel.wechatUserId')}
-              tag="userId"
               value={currentConfig.credentials.userId}
             />
           </>

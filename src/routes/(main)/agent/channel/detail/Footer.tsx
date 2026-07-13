@@ -4,7 +4,7 @@ import { Alert, Flexbox, Tag } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { Form as AntdForm, type FormInstance } from 'antd';
 import { createStaticStyles } from 'antd-style';
-import { RefreshCw, Save, Trash2 } from 'lucide-react';
+import { RefreshCw, Trash2 } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
@@ -164,7 +164,6 @@ const Footer = memo<FooterProps>(
             )}
             <Button
               disabled={writeDisabled}
-              icon={<Save size={16} />}
               loading={saving || connecting}
               type="primary"
               onClick={onSave}

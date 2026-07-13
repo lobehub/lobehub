@@ -202,6 +202,7 @@ export default {
   'channel.wechat.description':
     'Connect this agent to WeChat via iLink Bot for private and group chats.',
   'channel.wechatQrExpired': 'QR code expired. Please refresh to get a new one.',
+  'channel.wechatQrLoadFailed': 'Failed to load the QR code. Please try again.',
   'channel.wechatQrRefresh': 'Refresh QR Code',
   'channel.wechatQrScaned': 'QR code scanned. Please confirm the login on WeChat.',
   'channel.wechatQrWait': 'Open WeChat and scan the QR code to connect.',
@@ -211,9 +212,9 @@ export default {
     'If no users send messages for over 7 days, this connection will be automatically paused. To resume, click "Rebind via QR Code".',
   'channel.wechatManagedCredentials':
     'This channel is already connected through QR code authorization. Credentials are managed automatically.',
+  'channel.wechatGenerateQrCode': 'Generate QR Code',
   'channel.wechatRebind': 'Rebind via QR Code',
   'channel.wechatScanTitle': 'Connect WeChat Bot',
-  'channel.wechatScanToConnect': 'Scan QR Code to Connect',
   'channel.wechatTips':
     'Please update WeChat to the latest version and restart it. The ClawBot plugin is in gradual rollout, so check Settings > Plugins to confirm access.',
   'channel.wechatUserId': 'WeChat User ID',
