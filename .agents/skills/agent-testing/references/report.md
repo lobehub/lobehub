@@ -106,23 +106,6 @@ the page. It carries only the non-duplicate narrative (仍需跟进 / 本轮验�
        delta on each side (`"11px，行高 40px"` vs `"12px，行高 44px"`), so the two
        captions read as a comparison rather than repeating the case title.
 
-     ⚠️ **`comparison` needs a CLI newer than the published `lh`.** Support landed
-     in `9fc8c77805` (2026-07-12); the npm release on `PATH` (0.0.41) predates it
-     and its `ingest-report` simply **never sends the `metadata` field** — the
-     upload succeeds, the page stacks the two images unlabeled, and nothing warns
-     you. Symptom: `lh verify evidence list <checkResultId> --json` shows
-     `"metadata": null`. Until a newer `lh` ships, publish a report that uses
-     `comparison` with the repo's CLI instead:
-
-     ```bash
-     cd apps/cli && env -u LOBEHUB_SERVER -u LOBE_API_KEY \
-       -u LOBEHUB_CLI_API_KEY -u LOBEHUB_CLI_HOME \
-       bun src/index.ts verify ingest-report "$DIR" --source agent-testing --json
-     ```
-
-     Re-ingesting the same `$DIR` updates the session in place, so a report already
-     published with the stale CLI can be fixed without a new `/verify` URL.
-
    - CLI: exact command + trimmed output (`$CLI task list | tee "$DIR/assets/task-list.txt"`).
 
    - Network: `agent-browser network requests` dumps or HAR files.
