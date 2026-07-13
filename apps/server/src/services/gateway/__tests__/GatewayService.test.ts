@@ -335,6 +335,7 @@ describe('GatewayService', () => {
           connectionId: 'prov-1',
           platform: 'discord',
         }),
+        { ensure: true },
       );
       expect(mockUpdateBotRuntimeStatus).toHaveBeenCalledWith(
         expect.objectContaining({ status: 'starting' }),
@@ -766,6 +767,7 @@ describe('GatewayService', () => {
       expect(mockGatewayClient.getStatus).not.toHaveBeenCalled();
       expect(mockGatewayClient.connect).toHaveBeenCalledWith(
         expect.objectContaining({ connectionId: 'prov-1', platform: 'discord' }),
+        { ensure: true },
       );
     });
 
