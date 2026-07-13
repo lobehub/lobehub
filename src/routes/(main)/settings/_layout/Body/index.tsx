@@ -1,12 +1,11 @@
 'use client';
 
-import { Accordion, AccordionItem, Flexbox, SearchBar, Text } from '@lobehub/ui';
-import { memo, useMemo, useState } from 'react';
-import { useTranslation } from 'react-i18next';
+import { Accordion, AccordionItem, Flexbox, Text } from '@lobehub/ui';
+import { memo, useMemo } from 'react';
 import { Link, useLocation } from 'react-router';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
-import { getTabUrl, SearchResults } from '@/features/SettingsSearch';
+import { getTabUrl, SearchSection } from '@/features/SettingsSearch';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { SettingsTabs } from '@/store/global/initialState';
 import { isModifierClick } from '@/utils/navigation';
@@ -14,11 +13,9 @@ import { isModifierClick } from '@/utils/navigation';
 import { SettingsGroupKey, useCategory } from '../../hooks/useCategory';
 
 const Body = memo(() => {
-  const { t } = useTranslation('setting');
   const categoryGroups = useCategory();
   const navigate = useWorkspaceAwareNavigate();
   const location = useLocation();
-  const [searchQuery, setSearchQuery] = useState('');
 
   // Extract current tab from pathname: /settings/profile -> profile
   const activeTab = useMemo(() => {
@@ -30,22 +27,9 @@ const Body = memo(() => {
     return SettingsTabs.Profile;
   }, [location.pathname]);
 
-  const showSearchResults = !!searchQuery.trim();
-
   return (
     <Flexbox gap={4} paddingInline={4}>
-      <Flexbox paddingInline={4}>
-        <SearchBar
-          allowClear
-          placeholder={t('settingsSearch.placeholder')}
-          value={searchQuery}
-          variant={'filled'}
-          onInputChange={setSearchQuery}
-        />
-      </Flexbox>
-      {showSearchResults ? (
-        <SearchResults query={searchQuery} />
-      ) : (
+      <SearchSection>
         <Accordion
           gap={8}
           defaultExpandedKeys={[
@@ -92,7 +76,7 @@ const Body = memo(() => {
             </AccordionItem>
           ))}
         </Accordion>
-      )}
+      </SearchSection>
     </Flexbox>
   );
 });

@@ -159,6 +159,25 @@ describe('useSettingsSearchAnalytics', () => {
     expect(eventsByName('settings_search_query')[0].properties!.query).toBe('dark mode');
   });
 
+  it('holds the settle timer while the index is loading and reports the final count', () => {
+    const { rerender } = renderHook(
+      ({ isIndexing, results }: { isIndexing: boolean; results: SettingsSearchResult[] }) =>
+        useSettingsSearchAnalytics('zhuti', results, isIndexing),
+      { initialProps: { isIndexing: true, results: [] as SettingsSearchResult[] } },
+    );
+
+    // Transient zero-result state during pinyin dict load must not be reported
+    vi.advanceTimersByTime(2000);
+    expect(eventsByName('settings_search_query')).toHaveLength(0);
+
+    rerender({ isIndexing: false, results: [makeResult('tab-general-appearance')] });
+    vi.advanceTimersByTime(1000);
+
+    const queryEvents = eventsByName('settings_search_query');
+    expect(queryEvents).toHaveLength(1);
+    expect(queryEvents[0].properties).toMatchObject({ query: 'zhuti', result_count: 1 });
+  });
+
   it('does not report abandonment when no query ever settled', () => {
     const { unmount } = renderHook(() => useSettingsSearchAnalytics('a', []));
     // Unmount before the settle timeout — e.g. user cleared input immediately

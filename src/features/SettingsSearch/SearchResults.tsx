@@ -1,7 +1,8 @@
 'use client';
 
-import { Flexbox, Text } from '@lobehub/ui';
+import { Flexbox, Icon, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
+import { Loader2Icon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -10,7 +11,7 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { isModifierClick } from '@/utils/navigation';
 
 import { useSettingsSearchAnalytics } from './analytics';
-import { useSettingsSearch } from './useSettingsSearch';
+import type { SettingsSearchResult } from './useSettingsSearch';
 
 const styles = createStaticStyles(({ css }) => ({
   match: css`
@@ -33,19 +34,35 @@ const HighlightMatch = memo<{ query: string; text: string }>(({ text, query }) =
 
 HighlightMatch.displayName = 'HighlightMatch';
 
-const SearchResults = memo<{ query: string }>(({ query }) => {
+interface SearchResultsProps {
+  isIndexing: boolean;
+  query: string;
+  results: SettingsSearchResult[];
+}
+
+/**
+ * Mounted only while the query is non-empty — the analytics hook relies on
+ * this lifecycle: unmount (input cleared / left settings) ends the search
+ * session and may emit the abandoned event.
+ */
+const SearchResults = memo<SearchResultsProps>(({ isIndexing, query, results }) => {
   const { t } = useTranslation('setting');
   const navigate = useWorkspaceAwareNavigate();
-  const results = useSettingsSearch(query);
-  const { trackResultClick } = useSettingsSearchAnalytics(query, results);
+  const { trackResultClick } = useSettingsSearchAnalytics(query, results, isIndexing);
   const keyword = query.trim();
 
   if (results.length === 0)
     return (
       <Flexbox align={'center'} paddingBlock={24} paddingInline={8}>
-        <Text fontSize={12} type={'secondary'}>
-          {t('settingsSearch.empty', { keyword })}
-        </Text>
+        {isIndexing ? (
+          // A zero-result answer is not authoritative while the pinyin dict is
+          // still loading — show a spinner instead of a false empty state.
+          <Icon spin color={cssVar.colorTextSecondary} icon={Loader2Icon} />
+        ) : (
+          <Text fontSize={12} type={'secondary'}>
+            {t('settingsSearch.empty', { keyword })}
+          </Text>
+        )}
       </Flexbox>
     );
 

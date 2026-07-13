@@ -1,4 +1,5 @@
 import { isDesktop } from '@lobechat/const';
+import type { IconProps } from '@lobehub/ui';
 import { DEFAULT_MODEL_PROVIDER_LIST } from 'model-bank/modelProviders';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -24,7 +25,7 @@ export interface SettingsSearchResult {
   anchor?: string;
   /** Where the result lives, e.g. `General › Appearance` */
   breadcrumb: string;
-  icon?: any;
+  icon?: IconProps['icon'];
   key: string;
   label: string;
   tab: SettingsTabs;
@@ -59,13 +60,27 @@ const splitKeywords = (text: string) =>
  * gating and `href` overrides); item-level entries come from
  * `SETTINGS_SEARCH_ITEMS` and are dropped when their tab is not visible.
  */
-export const useSettingsSearch = (query: string): SettingsSearchResult[] => {
+export const useSettingsSearch = (
+  query: string,
+): {
+  /**
+   * True while the pinyin dict chunk is still loading for a Han-text index —
+   * a zero-result answer is not authoritative yet (pinyin queries like `zhuti`
+   * can only match after the dict arrives). Settles to false on load success,
+   * failure (graceful non-pinyin degradation), or when no Han text is indexed.
+   */
+  isIndexing: boolean;
+  results: SettingsSearchResult[];
+} => {
   const { t } = useTranslation(['setting', 'labs', 'electron', 'subscription', 'spend']);
   const categoryGroups = useCategory();
   const { enableSTT, hideDocs, showAiImage } = useServerConfigStore(featureFlagsSelectors);
   const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
   const enableGatewayMode = useServerConfigStore(serverConfigSelectors.enableGatewayMode);
-  const [pinyinTexts, setPinyinTexts] = useState<PinyinTexts | null>(null);
+  const [pinyin, setPinyin] = useState<{ settled: boolean; texts: PinyinTexts | null }>({
+    settled: false,
+    texts: null,
+  });
 
   // The translated index only depends on locale / visibility inputs — build it
   // once, not on every keystroke.
@@ -83,7 +98,7 @@ export const useSettingsSearch = (query: string): SettingsSearchResult[] => {
     const entries: IndexedEntry[] = [];
     const visibleTabs = new Map<
       SettingsTabs,
-      { groupTitle: string; icon?: any; label: string; url: string }
+      { groupTitle: string; icon?: IconProps['icon']; label: string; url: string }
     >();
 
     for (const group of categoryGroups) {
@@ -179,18 +194,20 @@ export const useSettingsSearch = (query: string): SettingsSearchResult[] => {
   );
 
   useEffect(() => {
-    if (!needsPinyin || pinyinTexts) return;
+    if (!needsPinyin || pinyin.settled) return;
 
     let active = true;
+    // Settle even on load failure (texts stays null) so isIndexing can't stick.
     loadPinyinTexts().then((fn) => {
-      if (active && fn) setPinyinTexts(() => fn);
+      if (active) setPinyin({ settled: true, texts: fn });
     });
     return () => {
       active = false;
     };
-  }, [needsPinyin, pinyinTexts]);
+  }, [needsPinyin, pinyin.settled]);
 
   const fuse = useMemo(() => {
+    const pinyinTexts = pinyin.texts;
     const index = pinyinTexts
       ? baseIndex.map((entry) =>
           entry.pinyinBase.some((text) => containsHan(text))
@@ -200,9 +217,9 @@ export const useSettingsSearch = (query: string): SettingsSearchResult[] => {
       : baseIndex;
 
     return createSettingsSearchFuse(index);
-  }, [baseIndex, pinyinTexts]);
+  }, [baseIndex, pinyin.texts]);
 
-  return useMemo(() => {
+  const results = useMemo(() => {
     const q = query.trim();
     if (!q) return [];
 
@@ -210,4 +227,6 @@ export const useSettingsSearch = (query: string): SettingsSearchResult[] => {
       .search(q, { limit: MAX_SEARCH_RESULTS })
       .map(({ item: { haystack: _h, pinyinBase: _p, ...result } }) => result);
   }, [query, fuse]);
+
+  return { isIndexing: needsPinyin && !pinyin.settled, results };
 };

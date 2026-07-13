@@ -75,7 +75,16 @@ interface SearchSession {
  * - `settings_search_abandoned` — session ended without any click. Combined with
  *   `had_results` this separates "nothing matched" from "results were irrelevant".
  */
-export const useSettingsSearchAnalytics = (query: string, results: SettingsSearchResult[]) => {
+export const useSettingsSearchAnalytics = (
+  query: string,
+  results: SettingsSearchResult[],
+  /**
+   * While the search index is still loading (pinyin dict), result counts are
+   * not authoritative — hold the settle timer so a transient zero-result state
+   * is never reported as a missing-keyword signal.
+   */
+  isIndexing = false,
+) => {
   const sessionRef = useRef<SearchSession>({
     clicked: false,
     // Not crypto.randomUUID: it is secure-context-only, and this initializer
@@ -92,7 +101,7 @@ export const useSettingsSearchAnalytics = (query: string, results: SettingsSearc
   const resultCount = results.length;
 
   useEffect(() => {
-    if (!sanitizedQuery) return;
+    if (!sanitizedQuery || isIndexing) return;
 
     const timer = setTimeout(() => {
       const session = sessionRef.current;
@@ -117,7 +126,7 @@ export const useSettingsSearchAnalytics = (query: string, results: SettingsSearc
     }, QUERY_SETTLE_MS);
 
     return () => clearTimeout(timer);
-  }, [sanitizedQuery, queryLength, resultCount]);
+  }, [sanitizedQuery, queryLength, resultCount, isIndexing]);
 
   // Session end = component unmount. Report abandonment only when at least one
   // query settled and nothing was ever clicked.

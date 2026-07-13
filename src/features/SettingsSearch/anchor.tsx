@@ -32,6 +32,13 @@ const styles = createStaticStyles(({ css }) => ({
         background: ${cssVar.colorPrimaryBgHover};
       }
     }
+
+    @media (prefers-reduced-motion: reduce) {
+      /* Keep the locate cue, drop the flashing: a steady highlight that the
+         removal timer clears */
+      background: ${cssVar.colorPrimaryBgHover};
+      animation: none;
+    }
   `,
 }));
 
@@ -66,7 +73,8 @@ export const scrollToSettingsAnchor = (anchor: string) => {
       return;
     }
 
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    el.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'center' });
 
     // Highlight the whole form row / group header instead of the bare label
     // text so the flash is visible at a glance.
