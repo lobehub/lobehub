@@ -799,4 +799,28 @@ describe('Browser', () => {
       expect(mockShell.openExternal).not.toHaveBeenCalled();
     });
   });
+
+  describe('window open handling', () => {
+    let windowOpenHandler: (details: { url: string }) => { action: string };
+
+    beforeEach(() => {
+      windowOpenHandler = mockBrowserWindow.webContents.setWindowOpenHandler.mock.calls.at(-1)?.[0];
+    });
+
+    it('should open web URLs in the system browser', () => {
+      expect(windowOpenHandler).toBeDefined();
+
+      expect(windowOpenHandler({ url: 'https://github.com/lobehub/lobehub' })).toEqual({
+        action: 'deny',
+      });
+      expect(mockShell.openExternal).toHaveBeenCalledWith('https://github.com/lobehub/lobehub');
+    });
+
+    it('should deny renderer-origin URLs instead of handing them to the OS', () => {
+      expect(windowOpenHandler({ url: 'app://renderer/verify/run-1' })).toEqual({
+        action: 'deny',
+      });
+      expect(mockShell.openExternal).not.toHaveBeenCalled();
+    });
+  });
 });

@@ -1,10 +1,20 @@
 /**
  * @vitest-environment happy-dom
  */
+import { RENDERER_HANDLED_LINK_ATTR } from '@lobechat/desktop-bridge';
 import { fireEvent, render } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import Render from './index';
+
+let mockIsDesktop = false;
+
+vi.mock('@lobechat/const', async (importOriginal) => ({
+  ...((await importOriginal()) as Record<string, unknown>),
+  get isDesktop() {
+    return mockIsDesktop;
+  },
+}));
 
 // `enableMessageLinkIcon` is read via useUserStore(selector). We drive the
 // selector's return value through this module-level flag so each case can flip
@@ -69,6 +79,7 @@ const renderLink = (properties: Record<string, unknown>) =>
 
 afterEach(() => {
   mockShowIcon = true;
+  mockIsDesktop = false;
 });
 
 beforeEach(() => {
@@ -196,7 +207,7 @@ describe('Link Render — internal entities', () => {
     expect(mockNavigate).not.toHaveBeenCalled();
   });
 
-  it('preserves modifier-click browser behavior', () => {
+  it('preserves modifier-click browser behavior on web', () => {
     const { getByRole } = renderLink({
       linkHref: '/task/T-198',
       linkKind: 'generic',
@@ -206,6 +217,49 @@ describe('Link Render — internal entities', () => {
     fireEvent.click(getByRole('link', { name: 'T-198' }), { metaKey: true });
 
     expect(mockOpenTaskDetail).not.toHaveBeenCalled();
+  });
+
+  it('takes over modifier-clicks on desktop, which has no new tab to open', () => {
+    mockIsDesktop = true;
+
+    const { getByRole } = renderLink({
+      linkHref: '/task/T-198',
+      linkKind: 'generic',
+      linkLabel: 'T-198',
+    });
+
+    fireEvent.click(getByRole('link', { name: 'T-198' }), { metaKey: true });
+
+    expect(mockOpenTaskDetail).toHaveBeenCalledWith('T-198');
+  });
+});
+
+// The desktop preload intercepts every anchor click in the capture phase and, unless
+// the renderer has claimed the link, stops propagation before React's onClick runs.
+// Dropping this attribute would silently send internal links to the system browser.
+describe('Link Render — desktop preload contract', () => {
+  it('marks internal entity links as renderer-handled', () => {
+    const { getByRole } = renderLink({
+      linkHref: '/verify/run-1',
+      linkKind: 'generic',
+      linkLabel: 'Verify report',
+    });
+
+    expect(getByRole('link', { name: 'Verify report' })).toHaveAttribute(
+      RENDERER_HANDLED_LINK_ATTR,
+      'true',
+    );
+  });
+
+  it('leaves external links unclaimed so the preload opens them in the system browser', () => {
+    const { container } = renderLink({
+      linkDomain: 'github.com',
+      linkHref: 'https://github.com/lobehub/lobehub',
+      linkKind: 'github',
+      linkLabel: 'lobehub/lobehub',
+    });
+
+    expect(container.querySelector('a')).not.toHaveAttribute(RENDERER_HANDLED_LINK_ATTR);
   });
 
   it('navigates non-entity app routes without leaving the SPA', () => {
