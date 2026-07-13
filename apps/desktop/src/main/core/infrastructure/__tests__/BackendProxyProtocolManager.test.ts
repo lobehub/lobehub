@@ -230,7 +230,10 @@ describe('BackendProxyProtocolManager', () => {
     expect(response!.headers.get('Access-Control-Allow-Origin')).toBe('app://renderer');
     expect(response!.headers.get('Access-Control-Allow-Credentials')).toBe('true');
     expect(response!.headers.get('X-Src-Url')).toBe('https://remote.example.com/trpc/hello');
-    expect(await response!.text()).toBe('Backend Proxy Upstream Unavailable');
+    // The Chromium error (net::ERR_*) is the diagnosis — it must survive into the
+    // body and a header, or a packaged build gives us nothing to go on.
+    expect(response!.headers.get('X-Proxy-Error')).toBe('network down');
+    expect(await response!.text()).toContain('Backend Proxy Upstream Unavailable: network down');
   });
 
   it('broadcasts authorizationRequired when X-Auth-Required is set on HTTP 207 (batched tRPC)', async () => {
@@ -402,7 +405,7 @@ describe('BackendProxyProtocolManager', () => {
 
       expect(res).not.toBeNull();
       expect(res!.status).toBe(502);
-      expect(await res!.text()).toBe('Backend Proxy Unavailable');
+      expect(await res!.text()).toContain('Backend Proxy Unavailable');
     });
   });
 });

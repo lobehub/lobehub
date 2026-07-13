@@ -21,6 +21,9 @@ vi.mock('electron-log', () => ({
   },
 }));
 
+const mockApp = vi.hoisted(() => ({ isPackaged: false }));
+vi.mock('electron', () => ({ app: mockApp }));
+
 vi.mock('@/env', () => ({
   getDesktopEnv: vi.fn().mockReturnValue({
     NODE_ENV: undefined,
@@ -115,30 +118,15 @@ describe('logger', () => {
       const logger = createLogger('test:error');
       logger.error('error message', { error: 'details' });
 
-      expect(electronLog.error).toHaveBeenCalledWith('error message', { error: 'details' });
+      expect(electronLog.error).toHaveBeenCalledWith('[test:error]', 'error message', {
+        error: 'details',
+      });
       expect(mockDebugLogger).not.toHaveBeenCalled();
     });
 
-    it('should use console.error in development', () => {
-      mockGetDesktopEnv.mockReturnValue({
-        NODE_ENV: 'development',
-        DEBUG_VERBOSE: false,
-        DESKTOP_RENDERER_STATIC: false,
-        UPDATE_CHANNEL: undefined,
-        MCP_TOOL_TIMEOUT: 60000,
-        OFFICIAL_CLOUD_SERVER: 'https://lobechat.com',
-      });
-      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-      const logger = createLogger('test:error');
-      logger.error('error message', { error: 'details' });
-
-      expect(consoleErrorSpy).toHaveBeenCalledWith('error message', { error: 'details' });
-      expect(electronLog.error).not.toHaveBeenCalled();
-
-      consoleErrorSpy.mockRestore();
-    });
-
-    it('should default to console.error when NODE_ENV is not set', () => {
+    // Packaged builds carry no NODE_ENV, so an error gated on it never reached the
+    // log file — the one place a released app can report anything.
+    it('should persist errors when NODE_ENV is unset', () => {
       mockGetDesktopEnv.mockReturnValue({
         NODE_ENV: undefined,
         DEBUG_VERBOSE: false,
@@ -147,14 +135,51 @@ describe('logger', () => {
         MCP_TOOL_TIMEOUT: 60000,
         OFFICIAL_CLOUD_SERVER: 'https://lobechat.com',
       });
-      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       const logger = createLogger('test:error');
       logger.error('error message');
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith('error message');
-      expect(electronLog.error).not.toHaveBeenCalled();
+      expect(electronLog.error).toHaveBeenCalledWith('[test:error]', 'error message');
+    });
 
-      consoleErrorSpy.mockRestore();
+    it('should persist errors in development too', () => {
+      mockGetDesktopEnv.mockReturnValue({
+        NODE_ENV: 'development',
+        DEBUG_VERBOSE: false,
+        DESKTOP_RENDERER_STATIC: false,
+        UPDATE_CHANNEL: undefined,
+        MCP_TOOL_TIMEOUT: 60000,
+        OFFICIAL_CLOUD_SERVER: 'https://lobechat.com',
+      });
+      const logger = createLogger('test:error');
+      logger.error('error message', { error: 'details' });
+
+      expect(electronLog.error).toHaveBeenCalledWith('[test:error]', 'error message', {
+        error: 'details',
+      });
+    });
+  });
+
+  describe('packaged build detection', () => {
+    // The released app has no NODE_ENV — `app.isPackaged` is what must gate persistence.
+    it('should persist info/warn in a packaged build with no NODE_ENV', () => {
+      mockApp.isPackaged = true;
+      mockGetDesktopEnv.mockReturnValue({
+        NODE_ENV: undefined,
+        DEBUG_VERBOSE: false,
+        DESKTOP_RENDERER_STATIC: false,
+        UPDATE_CHANNEL: undefined,
+        MCP_TOOL_TIMEOUT: 60000,
+        OFFICIAL_CLOUD_SERVER: 'https://lobechat.com',
+      });
+
+      const logger = createLogger('test:packaged');
+      logger.info('info message');
+      logger.warn('warn message');
+
+      expect(electronLog.info).toHaveBeenCalledWith('[test:packaged]', 'info message');
+      expect(electronLog.warn).toHaveBeenCalledWith('[test:packaged]', 'warn message');
+
+      mockApp.isPackaged = false;
     });
   });
 
@@ -247,7 +272,9 @@ describe('logger', () => {
       const logger = createLogger('test:warn');
       logger.warn('warn message', { warning: 'details' });
 
-      expect(electronLog.warn).toHaveBeenCalledWith('warn message', { warning: 'details' });
+      expect(electronLog.warn).toHaveBeenCalledWith('[test:warn]', 'warn message', {
+        warning: 'details',
+      });
       expect(mockDebugLogger).toHaveBeenCalledWith('WARN: warn message', { warning: 'details' });
     });
 
@@ -288,7 +315,6 @@ describe('logger', () => {
     });
 
     it('should handle no additional arguments', () => {
-      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       const logger = createLogger('test:integration');
       logger.debug('message');
       logger.error('message');
@@ -298,16 +324,14 @@ describe('logger', () => {
 
       // debug method
       expect(mockDebugLogger).toHaveBeenCalledWith('message');
-      // error method uses console.error (not debug logger) in non-production
-      expect(consoleErrorSpy).toHaveBeenCalledWith('message');
+      // error method always persists through electronLog (not the debug logger)
+      expect(electronLog.error).toHaveBeenCalledWith('[test:integration]', 'message');
       // info method
       expect(mockDebugLogger).toHaveBeenCalledWith('INFO: message');
       // verbose method uses electronLog.verbose (not debug logger)
       expect(electronLog.verbose).toHaveBeenCalledWith('message');
       // warn method
       expect(mockDebugLogger).toHaveBeenCalledWith('WARN: message');
-
-      consoleErrorSpy.mockRestore();
     });
 
     it('should format messages consistently across different log levels', () => {
