@@ -77,9 +77,16 @@ export class MessageBatchMutationError extends Error {
   }
 }
 
+const getBatchMutationAbortKey = (operations: MessageBatchOperation[]) => {
+  if (operations.length !== 1) return;
+
+  const [operation] = operations;
+  if (operation.type === 'updateToolMessage') return `tool-message-${operation.id}`;
+};
+
 export class MessageService {
-  batchMutate = async (operations: MessageBatchOperation[]) => {
-    return lambdaClient.message.batchMutate.mutate({
+  batchMutate = async (operations: MessageBatchOperation[], signal?: AbortSignal) => {
+    const input = {
       operations: operations.map((operation) => {
         if (operation.type === 'createMessage') {
           return {
@@ -94,19 +101,31 @@ export class MessageService {
           value: operation.value,
         };
       }),
-    } as any);
+    } as any;
+
+    return signal
+      ? lambdaClient.message.batchMutate.mutate(input, { signal })
+      : lambdaClient.message.batchMutate.mutate(input);
   };
 
   batchMutateOrThrow = async (operations: MessageBatchOperation[]) => {
-    const result = (await this.batchMutate(operations)) as MessageBatchMutationResult;
-    const hasFailedOperation = result.results?.some((item) => !item.success) ?? false;
-    const hasCompleteResults = result.results?.length === operations.length;
+    const execute = async (signal?: AbortSignal) => {
+      const result = (await (signal
+        ? this.batchMutate(operations, signal)
+        : this.batchMutate(operations))) as MessageBatchMutationResult;
+      const hasFailedOperation = result.results?.some((item) => !item.success) ?? false;
+      const hasCompleteResults = result.results?.length === operations.length;
 
-    if (result.success !== true || !hasCompleteResults || hasFailedOperation) {
-      throw new MessageBatchMutationError(result);
-    }
+      if (result.success !== true || !hasCompleteResults || hasFailedOperation) {
+        throw new MessageBatchMutationError(result);
+      }
 
-    return result;
+      return result;
+    };
+
+    const abortKey = getBatchMutationAbortKey(operations);
+
+    return abortKey ? abortableRequest.execute(abortKey, execute) : execute();
   };
 
   createMessage = async (params: CreateMessageParams): Promise<CreateMessageResult> => {

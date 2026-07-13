@@ -76,20 +76,26 @@ describe('ClientMessageTransport', () => {
     expect(messageService.batchMutate).toHaveBeenNthCalledWith(1, [
       { id: 'assistant-1', type: 'updateMessage', value: { content: 'Answer' } },
     ]);
-    expect(messageService.batchMutate).toHaveBeenNthCalledWith(2, [
-      { id: 'tool-1', type: 'updateToolMessage', value: { pluginState: { todos: [] } } },
-    ]);
-    expect(messageService.batchMutate).toHaveBeenNthCalledWith(3, [
-      {
-        id: 'tool-1',
-        type: 'updateToolMessage',
-        value: {
-          content: 'Tool result',
-          pluginError: { message: 'Handled failure' },
-          pluginState: { success: false },
+    expect(messageService.batchMutate).toHaveBeenNthCalledWith(
+      2,
+      [{ id: 'tool-1', type: 'updateToolMessage', value: { pluginState: { todos: [] } } }],
+      expect.any(AbortSignal),
+    );
+    expect(messageService.batchMutate).toHaveBeenNthCalledWith(
+      3,
+      [
+        {
+          id: 'tool-1',
+          type: 'updateToolMessage',
+          value: {
+            content: 'Tool result',
+            pluginError: { message: 'Handled failure' },
+            pluginState: { success: false },
+          },
         },
-      },
-    ]);
+      ],
+      expect.any(AbortSignal),
+    );
     expect(store.optimisticUpdatePluginState).not.toHaveBeenCalled();
     expect(store.optimisticUpdateToolMessage).not.toHaveBeenCalled();
     expect(store.replaceMessages).not.toHaveBeenCalled();
