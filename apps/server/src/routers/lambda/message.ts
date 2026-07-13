@@ -16,6 +16,7 @@ import {
 import { MessageModel } from '@/database/models/message';
 import { TopicShareModel } from '@/database/models/topicShare';
 import { CompressionRepository } from '@/database/repositories/compression';
+import { TopicDoctorRepo } from '@/database/repositories/topicDoctor';
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { FileService } from '@/server/services/file';
@@ -36,6 +37,7 @@ const messageProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) 
       fileService: new FileService(ctx.serverDB, ctx.userId, wsId),
       messageModel: new MessageModel(ctx.serverDB, ctx.userId, wsId),
       messageService: new MessageService(ctx.serverDB, ctx.userId, wsId),
+      topicDoctorRepo: new TopicDoctorRepo(ctx.serverDB, ctx.userId, wsId),
     },
   });
 });
@@ -270,6 +272,28 @@ export const messageRouter = router({
       const { messageGroupId, content, ...params } = input;
 
       return ctx.messageService.finalizeCompression(messageGroupId, content, params);
+    }),
+
+  /**
+   * Report the messages this topic's tree keeps off screen, and what could be done about it.
+   * Read-only — the repair is a separate, explicit call.
+   */
+  diagnoseTopic: messageProcedure
+    .input(z.object({ agentId: z.string().nullish(), topicId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      return ctx.topicDoctorRepo.diagnose(input);
+    }),
+
+  /**
+   * Rewrite the minimum needed to put those messages back on screen. The patch is re-derived
+   * from the database here rather than taken from the client — this edits conversation
+   * history, so it runs off the server's own view of the tree.
+   */
+  repairTopic: messageProcedure
+    .use(withScopedPermission('message:update'))
+    .input(z.object({ agentId: z.string().nullish(), topicId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      return ctx.topicDoctorRepo.repair(input);
     }),
 
   getHeatmaps: messageProcedure.query(async ({ ctx }) => {

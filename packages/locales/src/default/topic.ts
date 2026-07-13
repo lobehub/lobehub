@@ -2,6 +2,7 @@ export default {
   'actions.addNewTopic': 'Start New Topic',
   'actions.addNewTopicInProject': 'Start new topic in {{directory}}',
   'actions.autoRename': 'Smart Rename',
+  'actions.diagnose': 'Check Message Chain',
   'actions.archiveMergedPullRequests': 'Archive Topics with Merged PRs',
   'actions.archiveMergedPullRequestsOwn': 'Archive My Topics with Merged PRs',
   'actions.archiveMergedPullRequestsWorkspace': 'Archive All Topics with Merged PRs',
@@ -53,6 +54,23 @@ export default {
   'actions.removeUnstarredOwn': 'Delete My Unstarred Topics',
   'actions.removeUnstarredWorkspace': 'Delete All Unstarred Topics',
   'defaultTitle': 'Default Topic',
+  'doctor.healthy': 'Every message in this topic is showing. Nothing to fix.',
+  'doctor.issue.concurrent-fork':
+    'A new question was sent while the previous run was still writing, so the conversation split in two and one side is hidden — {{count}} messages.',
+  'doctor.issue.lostContent':
+    '{{count}} messages were saved empty: their text never reached the database.',
+  'doctor.issue.orphan-signal-turn':
+    'A tool callback was attached to the wrong message, so it never shows up — {{count}} messages.',
+  'doctor.issue.stale-branch-index':
+    'An interrupted regenerate left this message pointing at a branch that does not exist, hiding every answer under it — {{count}} messages.',
+  'doctor.notRepairable': 'This cannot be undone — the content was never saved.',
+  'doctor.repair': 'Repair',
+  'doctor.repairFailed': 'Repair failed. Nothing was changed.',
+  'doctor.repaired_one': 'Restored {{count}} message.',
+  'doctor.repaired_other': 'Restored {{count}} messages.',
+  'doctor.summary_one': '{{count}} message exists in this topic but is not being shown.',
+  'doctor.summary_other': '{{count}} messages exist in this topic but are not being shown.',
+  'doctor.title': 'Message Chain Check',
   'displayItems': 'Display Items',
   'draft': '[Draft]',
   'duplicateLoading': 'Copying Topic...',

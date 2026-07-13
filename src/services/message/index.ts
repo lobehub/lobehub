@@ -149,6 +149,14 @@ export class MessageService {
     return data as unknown as UIChatMessage[];
   };
 
+  diagnoseTopic = async (params: { agentId?: string | null; topicId: string }) => {
+    return lambdaClient.message.diagnoseTopic.query(params);
+  };
+
+  repairTopic = async (params: { agentId?: string | null; topicId: string }) => {
+    return lambdaClient.message.repairTopic.mutate(params);
+  };
+
   countMessages = async (params?: {
     endDate?: string;
     range?: [string, string];
