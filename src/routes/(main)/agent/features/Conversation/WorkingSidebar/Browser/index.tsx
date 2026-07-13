@@ -62,7 +62,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
       width: 36%;
 
-      background: ${cssVar.colorPrimary};
+      background: ${cssVar.colorInfo};
 
       animation: browser-loading-progress 1.15s ease-in-out infinite;
     }
