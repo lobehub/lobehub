@@ -20,7 +20,9 @@ vi.mock('@lobehub/ui', () => ({
   Flexbox: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => (
     <div {...props}>{children}</div>
   ),
-  Icon: () => <div data-testid="topic-item-icon" />,
+  Icon: ({ icon }: { icon?: { displayName?: string } }) => (
+    <div data-icon={icon?.displayName} data-testid="topic-item-icon" />
+  ),
   Popover: ({ children }: { children?: ReactNode }) => <>{children}</>,
   Skeleton: {
     Button: (props: Record<string, unknown>) => <div {...props} />,
@@ -333,5 +335,23 @@ describe('TopicItem active state', () => {
 
     expect(screen.queryByTestId('topic-unread-dot')).not.toBeInTheDocument();
     expect(screen.getByTestId('topic-item-icon')).toBeInTheDocument();
+  });
+
+  it.each([
+    ['scheduled', 'Clock'],
+    ['paused', 'CirclePause'],
+    ['completed', 'CircleCheck'],
+  ] as const)('keeps the %s status above linked pull request metadata', (status, icon) => {
+    topicMetaCardMock.value = { pullRequest: { state: 'open' } };
+    useTopicNavigationMock.mockReturnValue({
+      isInAgentSubRoute: false,
+      isInTopicContextRoute: false,
+      navigateToTopic: vi.fn(),
+      routeTopicId: undefined,
+    });
+
+    render(<TopicItem id="tpc_test" status={status} title="Topic" />);
+
+    expect(screen.getByTestId('topic-item-icon')).toHaveAttribute('data-icon', icon);
   });
 });

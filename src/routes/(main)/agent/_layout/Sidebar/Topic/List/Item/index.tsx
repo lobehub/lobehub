@@ -286,7 +286,6 @@ const TopicItem = memo<TopicItemProps>(
       title,
     });
 
-    const isCompleted = status === 'completed';
     const isFailed = status === 'failed';
     const isRunning = status === 'running';
     const isWaitingForHuman = status === 'waitingForHuman';
@@ -425,9 +424,16 @@ const TopicItem = memo<TopicItemProps>(
           // in `@lobechat/utils/client/topic`), so it ranks with its two siblings
           // above — and above the PR marker, which shares this single icon slot.
           if (hasUnread) return unreadIcon;
+          // Persisted execution state is the topic's primary status. Keep every
+          // non-idle state above git metadata so scheduled / paused / completed
+          // topics cannot be mistaken for merely open / merged / closed PRs.
+          if (status && status !== 'active') {
+            const visual = TOPIC_STATUS_VISUALS[status];
+            return <Icon icon={visual.icon} size={'small'} style={{ color: visual.color }} />;
+          }
           // GitHub PR state marker (open=green, merged=purple, closed=red),
-          // like Codex. Sits below the attention/active states but above the
-          // idle default so an idle topic surfaces its linked PR at a glance.
+          // like Codex. It is secondary metadata, so only an idle topic uses it
+          // as the leading icon.
           if (metaCard?.pullRequest) {
             const prVisual = PR_STATE_VISUAL[getPullRequestState(metaCard.pullRequest)];
             return (
@@ -435,10 +441,6 @@ const TopicItem = memo<TopicItemProps>(
                 <Icon icon={prVisual.icon} size={'small'} style={{ color: prVisual.color }} />
               </Tooltip>
             );
-          }
-          if (isCompleted) {
-            const visual = TOPIC_STATUS_VISUALS.completed;
-            return <Icon icon={visual.icon} size={'small'} style={{ color: visual.color }} />;
           }
           if (metadata?.bot?.platform) {
             const ProviderIcon = getPlatformIcon(metadata.bot!.platform);
