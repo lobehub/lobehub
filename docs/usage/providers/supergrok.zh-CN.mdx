@@ -1,0 +1,155 @@
+---
+title: 在 LobeHub 中使用 SuperGrok 订阅
+description: >-
+  了解如何通过 xAI OAuth 将 SuperGrok 或符合条件的 X Premium 订阅连接到
+  LobeHub，无需 API 密钥。
+tags:
+  - LobeHub
+  - SuperGrok
+  - xAI
+  - X Premium
+  - OAuth
+---
+
+# 在 LobeHub 中使用 SuperGrok
+
+[SuperGrok](https://x.ai/pricing) 是 xAI 提供的订阅计划，可获得更高的 Grok 使用限额并访问前沿模型。LobeHub 的 SuperGrok 服务商允许你登录 xAI 账户，直接使用符合条件的 SuperGrok 或 X Premium 订阅，无需单独创建 xAI API 密钥。
+
+xAI 在 [OpenCode](https://x.ai/news/grok-opencode) 等第三方集成中也使用这种基于订阅的 OAuth 授权方式。LobeHub 采用设备授权流程：在浏览器中打开 xAI，并在需要时显示一个短代码，然后等待你批准访问。
+
+<Callout type={'info'}>
+  `SuperGrok` 与 `xAI` 是 LobeHub 中两个不同的服务商。希望通过 OAuth 使用现有订阅时，请选择 `SuperGrok`；希望使用 xAI Console 创建的 API 密钥并按 API 用量付费时，请选择 `xAI`。
+</Callout>
+
+## 使用前准备
+
+连接前请确保你拥有：
+
+- 有效的 [SuperGrok 计划](https://x.ai/pricing)，或符合条件的 [X Premium 订阅](https://help.x.com/en/using-x/x-premium)
+- 对订阅所属 xAI 账户的访问权限
+- 管理 LobeHub 账户或工作区 AI 服务商凭据的权限
+- 如果使用自部署 LobeHub，服务器可以访问 `auth.x.ai` 和 `api.x.ai`
+
+如果订阅是通过 X 购买的，请登录 [Grok](https://grok.com/)，进入 `Settings` > `Account`，连接拥有该订阅的 X 账户。xAI 会通过此关联识别 X 订阅权益。详情请参阅 [Grok 账户与订阅常见问题](https://docs.x.ai/grok/faq)。
+
+<Callout type={'warning'}>
+  订阅资格、模型权限、使用限额和地区可用性均由 xAI 控制，并可能因计划而异。如果授权成功后仍无法访问，请确认登录账户拥有当前有效的对应权益。
+</Callout>
+
+## 将 SuperGrok 连接到 LobeHub
+
+<Steps>
+  ### 步骤一：打开 SuperGrok 服务商
+
+  - 打开 LobeHub 的`设置`
+  - 选择 `AI 服务商`
+  - 找到并打开 `SuperGrok`
+  - 如果服务商当前未启用，请先将其启用
+
+  ### 步骤二：开始授权
+
+  点击`使用 SuperGrok 连接`。LobeHub 会申请一次性设备代码，并通常会在新的浏览器标签页中自动打开 xAI 授权页面。
+
+  如果页面没有自动打开，请点击`打开浏览器进行授权`。LobeHub 还会显示授权网址和可手动复制的短代码。
+
+  ### 步骤三：在 xAI 完成授权
+
+  - 使用拥有 SuperGrok 或符合条件的 X Premium 订阅的 xAI 账户登录
+  - 如果 xAI 要求输入代码，请填写 LobeHub 中显示的代码
+  - 查看并批准授权请求
+  - 返回 LobeHub，并在授权状态检查完成前保持服务商页面打开
+
+  xAI 完成授权后，LobeHub 会显示`已连接`。OAuth 访问令牌和刷新令牌会保存在 LobeHub 加密的服务商凭据保险库中，并在需要时自动刷新。
+
+  <Callout type={'info'}>
+    请勿在 SuperGrok 服务商中粘贴 xAI 账户密码或 API 密钥。账户登录只会在 xAI 的授权页面中进行。
+  </Callout>
+
+  ### 步骤四：选择 Grok 模型
+
+  打开对话中的模型选择器，在 `SuperGrok` 分类下选择模型。LobeHub 当前默认启用 `grok-4.5`，并可加载 xAI 向你的账户开放的其他模型。
+
+  最新的模型能力与可用性请参阅 [xAI 模型文档](https://docs.x.ai/developers/models)。
+</Steps>
+
+## 支持的能力
+
+SuperGrok 服务商主要用于 Grok 对话模型。根据所选模型，LobeHub 可以使用：
+
+- 文本与图片输入
+- 可配置的推理强度
+- 函数调用与智能体工具
+- 结构化输出
+- 启用搜索时使用网页和 X 搜索
+- 长上下文对话
+
+<Callout type={'warning'}>
+  LobeHub 中的 SuperGrok 服务商目前仅支持对话模型。Grok Imagine 图片或视频生成以及 Grok Voice 属于独立产品，暂不通过此服务商提供。如需这些能力，请使用对应的 xAI API 服务商或 Grok 官方应用。
+</Callout>
+
+## SuperGrok 与 xAI API 服务商的区别
+
+|               | SuperGrok 服务商        | xAI 服务商                   |
+| ------------- | -------------------- | ------------------------- |
+| 认证方式          | 通过浏览器使用 xAI OAuth 登录 | 使用 xAI Console 创建的 API 密钥 |
+| 计费方式          | 使用符合条件的订阅额度          | 按 API 用量计费                |
+| 是否需要 API 密钥   | 否                    | 是                         |
+| 模型权限          | 由订阅权益决定              | 由 xAI API 账户决定            |
+| LobeHub 浏览器请求 | 已禁用，请求通过服务器发送        | 取决于服务商配置                  |
+
+如果你已经在支付兼容的订阅，并希望使用最简单的登录流程，请选择 SuperGrok。如果需要 API 密钥计费、独立管理的 API 账户，或订阅集成未提供的 API，请参阅 [xAI 服务商指南](/docs/usage/providers/xai)。
+
+## 使用限额与计费
+
+SuperGrok 的使用由 xAI 订阅规则管理，而不是按 LobeHub Token 价格计费。xAI 当前将付费使用量展示为 Grok 产品之间共享的每周额度，可在 Grok 的 `Settings` > `Usage` 中查看用量和下次重置时间。限额规则可能变化，请以 [Grok 官方常见问题](https://docs.x.ai/grok/faq) 为准。
+
+订阅内额度用尽后，请求可能受到限制，直到额度重置、添加 Extra Usage Credits，或升级订阅。xAI Console 中单独购买的 API 额度属于 API 服务商，连接 SuperGrok 时不需要这些额度。
+
+## 断开连接或更换账户
+
+如需停止使用当前连接的账户：
+
+1. 打开`设置` > `AI 服务商` > `SuperGrok`
+2. 点击`断开连接`
+3. 确认操作
+
+断开连接会从 LobeHub 中移除已保存的 SuperGrok OAuth 凭据。如需更换账户，请先断开连接，再在已登录目标 xAI 账户的浏览器会话中重新执行`使用 SuperGrok 连接`。
+
+## 故障排查
+
+### 授权页面没有打开
+
+- 允许 LobeHub 站点打开弹出窗口
+- 点击`打开浏览器进行授权`
+- 如有需要，将显示的网址和代码复制到另一个浏览器标签页中
+
+### 授权代码已过期
+
+设备代码的有效时间较短。返回 SuperGrok 服务商，点击`重试`并完成新的授权请求。
+
+### xAI 未识别订阅
+
+- 确认登录方式与购买订阅时使用的 Apple、Google、邮箱或 X 账户一致
+- 如果使用 X 订阅，请在 Grok 的 `Settings` > `Account` 中连接该 X 账户
+- 在 Grok 中检查订阅状态和使用额度
+- 查看 xAI 的[账户与登录故障排查](https://docs.x.ai/grok/faq)
+
+### 连接后 LobeHub 显示 401 或 403 错误
+
+断开并重新连接服务商，以创建新的令牌对。如果问题仍然存在，请确认订阅有效，并且请求的模型已向你的账户和地区开放。你也可以查看 [xAI 服务状态](https://status.x.ai/)。
+
+### 找不到某个模型
+
+模型可用性由 xAI 根据已连接账户返回。连接后刷新服务商模型列表，并查看 [xAI 当前模型目录](https://docs.x.ai/developers/models)。某个模型已在 API 或 Grok 应用中发布，并不代表它包含在所有订阅等级中。
+
+### 使用一段时间后请求停止
+
+在 Grok 中查看 `Settings` > `Usage`。如果订阅额度已经用尽，请等待页面显示的重置时间、添加 Extra Usage Credits，或升级计划。
+
+## 官方资源
+
+- [SuperGrok 计划与价格](https://x.ai/pricing)
+- [Grok 账户、订阅与用量常见问题](https://docs.x.ai/grok/faq)
+- [xAI 模型目录](https://docs.x.ai/developers/models)
+- [xAI 的 SuperGrok OAuth 集成示例](https://x.ai/news/grok-opencode)
+- [X Premium 帮助](https://help.x.com/en/using-x/x-premium)
