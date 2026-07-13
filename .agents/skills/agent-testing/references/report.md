@@ -74,8 +74,26 @@ the page. It carries only the non-duplicate narrative (仍需跟进 / 本轮验�
 
      The verify page renders a complete pair side by side with Before / After
      headings. `comparison.label` may override either heading. A group contains
-     exactly one `before` and one `after`; incomplete groups render as ordinary
-     evidence.
+     exactly one `before` and one `after`, and **both halves need the same string
+     `id`** — a half without an `id` can never pair. Incomplete groups render as
+     ordinary evidence.
+
+     ⚠️ **`comparison` needs a CLI newer than the published `lh`.** Support landed
+     in `9fc8c77805` (2026-07-12); the npm release on `PATH` (0.0.41) predates it
+     and its `ingest-report` simply **never sends the `metadata` field** — the
+     upload succeeds, the page stacks the two images unlabeled, and nothing warns
+     you. Symptom: `lh verify evidence list <checkResultId> --json` shows
+     `"metadata": null`. Until a newer `lh` ships, publish a report that uses
+     `comparison` with the repo's CLI instead:
+
+     ```bash
+     cd apps/cli && env -u LOBEHUB_SERVER -u LOBE_API_KEY \
+       -u LOBEHUB_CLI_API_KEY -u LOBEHUB_CLI_HOME \
+       bun src/index.ts verify ingest-report "$DIR" --source agent-testing --json
+     ```
+
+     Re-ingesting the same `$DIR` updates the session in place, so a report already
+     published with the stale CLI can be fixed without a new `/verify` URL.
 
    - CLI: exact command + trimmed output (`$CLI task list | tee "$DIR/assets/task-list.txt"`).
 
