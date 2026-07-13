@@ -232,6 +232,22 @@ describe('TopicItem active state', () => {
     expect(screen.getByText('00:33')).toBeInTheDocument();
   });
 
+  it('preserves the masked running-tail icon state for the active topic', () => {
+    agentRuntimeRunningMock.value = true;
+    useTopicNavigationMock.mockReturnValue({
+      isInAgentSubRoute: false,
+      isInTopicContextRoute: true,
+      navigateToTopic: vi.fn(),
+      routeTopicId: 'tpc_test',
+      urlTopicId: 'tpc_test',
+    });
+
+    render(<TopicItem active id="tpc_test" status="running" title="Topic" />);
+
+    expect(screen.queryByTestId('ring-loading')).not.toBeInTheDocument();
+    expect(screen.getByTestId('topic-item-icon')).toHaveAttribute('data-icon', 'Hash');
+  });
+
   it('prefetches messages when a topic is an unread completion', async () => {
     topicUnreadCompletedMock.value = true;
     useTopicNavigationMock.mockReturnValue({

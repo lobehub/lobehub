@@ -427,7 +427,9 @@ const TopicItem = memo<TopicItemProps>(
           // Persisted execution state is the topic's primary status. Keep every
           // non-idle state above git metadata so scheduled / paused / completed
           // topics cannot be mistaken for merely open / merged / closed PRs.
-          if (status && status !== 'active') {
+          // `running` is handled exclusively by shouldShowRunningIcon above so
+          // the masked post-output tail cannot fall back to a static running icon.
+          if (status && status !== 'active' && status !== 'running') {
             const visual = TOPIC_STATUS_VISUALS[status];
             return <Icon icon={visual.icon} size={'small'} style={{ color: visual.color }} />;
           }
