@@ -1,8 +1,8 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
+import type { WorkingDirEntry } from '@lobechat/types';
 import { getWorkingDirEffectivePath } from '@lobechat/types';
-import { isRecord } from '@lobechat/utils';
 import { memo } from 'react';
 
 import SafeBoundary from '@/components/ErrorBoundary';
@@ -24,12 +24,9 @@ interface WorkingDirectorySectionProps {
   agentId: string;
 }
 
-const getEntryEffectivePath = (entry: unknown) => {
-  if (!isRecord(entry)) return;
-
+const getEntryEffectivePath = (entry: WorkingDirEntry) => {
   const sourcePath = getWorkingDirectoryPathString(entry.path);
-  const git = isRecord(entry.git) ? entry.git : undefined;
-  return getWorkingDirectoryPathString(git?.activeWorktree) ?? sourcePath;
+  return getWorkingDirectoryPathString(entry.git?.activeWorktree) ?? sourcePath;
 };
 
 /**
@@ -81,7 +78,7 @@ const WorkingDirectorySectionInner = memo<WorkingDirectorySectionProps>(({ agent
   // WorktreeSwitcher commits `sourcePath` as the WorkingDirEntry.path, rewriting
   // the topic's repo source to the linked worktree and breaking later switches.
   const sourceWorkingDirectory =
-    (isRecord(currentEntry) ? getWorkingDirectoryPathString(currentEntry.path) : undefined) ??
+    getWorkingDirectoryPathString(currentEntry?.path) ??
     getWorkingDirectoryPathString(persistedConfig?.path) ??
     effectiveWorkingDirectory;
 

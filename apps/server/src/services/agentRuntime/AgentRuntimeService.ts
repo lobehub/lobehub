@@ -32,6 +32,7 @@ import {
 import {
   type ChatToolPayload,
   type ExecSubAgentParams,
+  type ExecSubAgentResult,
   type ExecVirtualSubAgentParams,
   type UIChatMessage,
 } from '@lobechat/types';
@@ -202,13 +203,13 @@ export interface AgentRuntimeDelegate {
    * (AiAgentService.execSubAgent → execAgent: agent-config resolution, tool
    * engine, context engineering, createOperation).
    */
-  execSubAgent?: (params: ExecSubAgentParams) => Promise<unknown>;
+  execSubAgent?: (params: ExecSubAgentParams) => Promise<ExecSubAgentResult>;
   /**
    * Fork a `lobe-agent.callSubAgent` virtual child run. The child is marked as a
    * sub-agent and owns the completion bridge that backfills the parent tool
    * placeholder before resuming the parked parent operation.
    */
-  execVirtualSubAgent?: (params: ExecVirtualSubAgentParams) => Promise<unknown>;
+  execVirtualSubAgent?: (params: ExecVirtualSubAgentParams) => Promise<ExecSubAgentResult>;
 }
 
 export interface AgentRuntimeServiceOptions {

@@ -25,15 +25,16 @@ import {
 import { TaskIdentifier } from '@lobechat/builtin-tool-task';
 import { builtinTools, manualModeExcludeToolIds } from '@lobechat/builtin-tools';
 import { LOADING_FLAT } from '@lobechat/const';
-import type {
-  AgentGroupConfig,
-  AgentManagementContext,
-  BotPlatformContext,
-  LobeToolManifest,
-  ToolExecutor,
-  ToolSource,
+import {
+  type AgentGroupConfig,
+  type AgentManagementContext,
+  type BotPlatformContext,
+  type LobeToolManifest,
+  SkillEngine,
+  type ToolExecutor,
+  type ToolsEngine,
+  type ToolSource,
 } from '@lobechat/context-engine';
-import { SkillEngine, type ToolsEngine } from '@lobechat/context-engine';
 import type { LobeChatDatabase } from '@lobechat/database';
 import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import { buildTaskManagerDefaultsPrompt } from '@lobechat/prompts';
@@ -68,7 +69,6 @@ import {
   ThreadType,
 } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
-import { isRecord } from '@lobechat/utils/object';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 
@@ -172,9 +172,7 @@ const createGraphAwareAgentFactory =
       return upstreamFactory(config);
     }
 
-    const runtimeAgentConfig = isRecord(config.agentConfig)
-      ? (config.agentConfig as LobeAgentConfig)
-      : undefined;
+    const runtimeAgentConfig = config.agentConfig as LobeAgentConfig | undefined;
     const graph = runtimeAgentConfig?.chatConfig?.graph;
     if (runtimeAgentConfig?.chatConfig?.enableGraphMode && graph) {
       const graphResult = ReasoningGraphSchema.safeParse(graph);

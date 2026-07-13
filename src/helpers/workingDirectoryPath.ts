@@ -1,5 +1,4 @@
 import type { WorkingDirConfig, WorkingDirRepoType } from '@lobechat/types';
-import { pickString } from '@lobechat/utils';
 
 import { isDesktop } from '@/const/version';
 
@@ -23,14 +22,14 @@ export const getConfigRepoType = (config?: WorkingDirConfig): WorkingDirRepoType
   return config.repoType ?? (isDesktop ? undefined : 'github');
 };
 
-export const getWorkingDirectoryPathString = (path: unknown) => {
-  const value = pickString(path)?.trim();
+export const getWorkingDirectoryPathString = (path?: string | null) => {
+  const value = path?.trim();
   return value || undefined;
 };
 
 // Last non-empty path segment — the folder name. Also yields the repo name for
 // a web github URL (".../owner/repo" -> "repo").
-export const getWorkingDirectoryName = (path: unknown) => {
+export const getWorkingDirectoryName = (path?: string | null) => {
   const value = getWorkingDirectoryPathString(path);
   if (!value) return;
 
