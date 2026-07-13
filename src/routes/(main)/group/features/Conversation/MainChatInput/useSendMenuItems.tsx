@@ -34,8 +34,10 @@ export const useSendMenuItems = (): MenuProps['items'] => {
 
   const handleAddAIMessage = useCallback(() => {
     const store = storeApi.getState();
-    // Add empty AI message placeholder
-    store.addAIMessage('');
+    const message = store.inputMessage;
+    if (!message.trim()) return;
+
+    store.addAIMessage(message);
     // Clear and focus editor
     editor?.clearContent();
     editor?.focus();
