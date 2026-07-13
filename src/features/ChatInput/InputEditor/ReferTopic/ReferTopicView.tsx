@@ -38,7 +38,7 @@ export const ReferTopicView = memo<ReferTopicViewProps>(({ topicId, fallbackTitl
       }}
       onClick={handleClick}
     >
-      <Tag color="green" icon={<MessageSquarePlusIcon size={12} />} variant="filled">
+      <Tag color="blue" icon={<MessageSquarePlusIcon size={12} />} variant="filled">
         {title || t('defaultTitle')}
       </Tag>
     </span>

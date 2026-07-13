@@ -20,7 +20,7 @@ import RingLoadingIcon from '@/components/RingLoading';
 import { isDesktop } from '@/const/version';
 import DirIcon from '@/features/ChatInput/ControlBar/DirIcon';
 import { useHasDraft } from '@/features/ChatInput/draftStorage';
-import { writeTopicDragData } from '@/features/ChatInput/InputEditor/ReferTopic/topicDragData';
+import { startTopicDrag } from '@/features/ChatInput/InputEditor/ReferTopic/topicDragData';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { getWorkingDirectoryName } from '@/helpers/workingDirectoryPath';
@@ -254,7 +254,7 @@ const TopicItem = memo<TopicItemProps>(
       (event: DragEvent) => {
         if (!id) return;
         cancelPendingSingleClick();
-        writeTopicDragData(event.dataTransfer, { topicId: id, topicTitle: title });
+        startTopicDrag(event, { topicId: id, topicTitle: title });
       },
       [id, title],
     );

@@ -1,11 +1,12 @@
 'use client';
 
+import { TOPIC_DRAG_MIME } from '@lobechat/const';
 import { type ChatInputProps } from '@lobehub/editor/react';
 import { ChatInput, ChatInputActionBar } from '@lobehub/editor/react';
 import { Center, Flexbox, Skeleton, Text } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { type ReactNode, use } from 'react';
-import { memo, useEffect } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
@@ -24,6 +25,7 @@ import ControlBar from '../ControlBar';
 import InputEditor from '../InputEditor';
 import { useSkillDrop } from '../InputEditor/ActionTag/useSkillDrop';
 import { type PlaceholderVariant } from '../InputEditor/Placeholder';
+import TopicDropZone from '../InputEditor/ReferTopic/TopicDropZone';
 import { useTopicDrop } from '../InputEditor/ReferTopic/useTopicDrop';
 import { useWorkspaceFileDrop } from '../InputEditor/useWorkspaceFileDrop';
 import SendArea from '../SendArea';
@@ -32,6 +34,8 @@ import ContextContainer from './ContextContainer';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
+    position: relative;
+
     .show-on-hover {
       opacity: 0;
     }
@@ -149,18 +153,25 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
     const skillDrop = useSkillDrop();
     const topicDrop = useTopicDrop();
     const workspaceFileDrop = useWorkspaceFileDrop();
+    const [isTopicDragging, setIsTopicDragging] = useState(false);
 
     // Fan a single drag event out to every custom-MIME drop handler. Each one
     // no-ops unless its own MIME is present, so ordering is irrelevant.
     const handleDragOver = (event: React.DragEvent) => {
+      if (event.dataTransfer.types.includes(TOPIC_DRAG_MIME)) setIsTopicDragging(true);
       skillDrop.onDragOver(event);
       topicDrop.onDragOver(event);
       workspaceFileDrop.onDragOver(event);
     };
     const handleDrop = (event: React.DragEvent) => {
+      setIsTopicDragging(false);
       skillDrop.onDrop(event);
       topicDrop.onDrop(event);
       workspaceFileDrop.onDrop(event);
+    };
+    const handleDragLeave = (event: React.DragEvent) => {
+      if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+      setIsTopicDragging(false);
     };
 
     useEffect(() => {
@@ -214,9 +225,11 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
         gap={8}
         paddingBlock={expand ? 0 : showFootnote ? '0 12px' : '0 8px'}
         style={{ display: hidden ? 'none' : undefined }}
+        onDragLeave={handleDragLeave}
         onDragOver={handleDragOver}
         onDrop={handleDrop}
       >
+        {isTopicDragging && <TopicDropZone />}
         <ChatInput
           data-testid="chat-input"
           defaultHeight={chatInputHeight || 32}
