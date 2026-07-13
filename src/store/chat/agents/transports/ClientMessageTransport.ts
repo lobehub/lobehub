@@ -64,7 +64,14 @@ export class ClientMessageTransport implements MessageTransport {
   }
 
   async findById(id: string): Promise<RuntimeMessageRef | undefined> {
-    return this.getMessages().find((message) => message.id === id);
+    for (const message of this.getMessages()) {
+      if (message.id === id) return message;
+
+      const compressedMessage = message.compressedMessages?.find((item) => item.id === id);
+      if (compressedMessage) return compressedMessage;
+    }
+
+    return undefined;
   }
 
   async query(

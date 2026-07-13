@@ -166,6 +166,89 @@ describe('createAgentExecutors call_llm', () => {
     ]);
   });
 
+  it('accepts a parent message hidden inside a compressed group', async () => {
+    const compressedAssistant = {
+      content: 'Previous answer',
+      id: 'assistant-compressed',
+      role: 'assistant',
+    } as UIChatMessage;
+    const compressedGroup = {
+      compressedMessages: [compressedAssistant],
+      content: 'Conversation summary',
+      id: 'compressed-group-1',
+      role: 'compressedGroup',
+    } as UIChatMessage;
+    const { store } = createStore([compressedGroup]);
+    vi.spyOn(chatService, 'getChatCompletion').mockImplementation(async (_params, options) => {
+      options?.onMessageHandle?.({ text: 'Answer after compression', type: 'text' } as any);
+      await options?.onFinish?.('Answer after compression', { type: 'stop' });
+      return new Response();
+    });
+    const executor = createAgentExecutors({
+      agentConfig: createResolvedAgentConfig(),
+      get: () => store,
+      messageKey,
+      operationId,
+      parentId: compressedAssistant.id,
+    }).call_llm!;
+
+    const result = await executor(
+      createInstruction({
+        messages: [compressedGroup],
+        parentMessageId: compressedAssistant.id,
+      }),
+      createState([compressedGroup]),
+    );
+
+    expect(result.nextContext?.phase).toBe('llm_result');
+    expect(messageService.batchMutate).toHaveBeenNthCalledWith(1, [
+      expect.objectContaining({
+        message: expect.objectContaining({ parentId: compressedAssistant.id }),
+        type: 'createMessage',
+      }),
+    ]);
+  });
+
+  it('treats image content parts as a non-empty completion', async () => {
+    const userMessage = { content: 'Create an image', id: 'user-1', role: 'user' } as UIChatMessage;
+    const { store } = createStore([userMessage]);
+    const getChatCompletion = vi
+      .spyOn(chatService, 'getChatCompletion')
+      .mockImplementation(async (_params, options) => {
+        await options?.onMessageHandle?.({
+          content: 'base64data',
+          mimeType: 'image/png',
+          partType: 'image',
+          type: 'content_part',
+        } as any);
+        await options?.onFinish?.('', { type: 'stop' });
+        return new Response();
+      });
+    const executor = createAgentExecutors({
+      agentConfig: createResolvedAgentConfig(),
+      get: () => store,
+      messageKey,
+      operationId,
+      parentId: userMessage.id,
+    }).call_llm!;
+
+    const result = await executor(
+      createInstruction({ messages: [userMessage] }),
+      createState([userMessage]),
+    );
+
+    expect(result.nextContext?.phase).toBe('llm_result');
+    expect(getChatCompletion).toHaveBeenCalledTimes(1);
+    expect(messageService.batchMutate).toHaveBeenLastCalledWith([
+      expect.objectContaining({
+        type: 'updateMessage',
+        value: expect.objectContaining({
+          metadata: expect.objectContaining({ isMultimodal: true }),
+        }),
+      }),
+    ]);
+  });
+
   it('reuses a seeded assistant message without creating a duplicate', async () => {
     const userMessage = { content: 'Question', id: 'user-1', role: 'user' } as UIChatMessage;
     const assistantMessage = {
