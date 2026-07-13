@@ -15,6 +15,11 @@ import type {
 } from '@lobechat/electron-client-ipc';
 import type { WebContents } from 'electron';
 
+import {
+  OVERLAY_REMOVE_SCRIPT,
+  overlayControllingScript,
+  overlayCursorScript,
+} from '@/modules/browser/agentOverlayScript';
 import { createLogger } from '@/utils/logger';
 
 import BrowserSidebarCtr from './BrowserSidebarCtr';
@@ -234,8 +239,8 @@ export default class BrowserControlCtr extends ControllerModule {
         return { error: 'click needs a ref or x/y coordinates', success: false };
       }
 
-      this.markControlling(params.sessionId);
-      this.broadcastCursor(params.sessionId, x, y, true);
+      this.markControlling(params.sessionId, guest);
+      this.showCursor(guest, x, y, true);
       await sleep(CURSOR_TRAVEL_MS);
 
       guest.sendInputEvent({ type: 'mouseMove', x, y });
@@ -250,7 +255,7 @@ export default class BrowserControlCtr extends ControllerModule {
   @IpcMethod()
   async fill(params: BrowserControlFillParams): Promise<BrowserControlResult> {
     return this.withGuest(params.sessionId, async (guest) => {
-      this.markControlling(params.sessionId);
+      this.markControlling(params.sessionId, guest);
       const raw = await guest.executeJavaScript(fillScript(params.ref, params.text));
       const result = JSON.parse(raw);
       if (result.error) return { error: result.error, success: false };
@@ -267,7 +272,7 @@ export default class BrowserControlCtr extends ControllerModule {
   @IpcMethod()
   async press(params: BrowserControlPressParams): Promise<BrowserControlResult> {
     return this.withGuest(params.sessionId, (guest) => {
-      this.markControlling(params.sessionId);
+      this.markControlling(params.sessionId, guest);
       this.sendKey(guest, params.key);
       return { success: true };
     });
@@ -276,7 +281,7 @@ export default class BrowserControlCtr extends ControllerModule {
   @IpcMethod()
   async scroll(params: BrowserControlScrollParams): Promise<BrowserControlResult> {
     return this.withGuest(params.sessionId, async (guest) => {
-      this.markControlling(params.sessionId);
+      this.markControlling(params.sessionId, guest);
       await guest.executeJavaScript(
         `window.scrollBy({ behavior: 'smooth', left: ${Number(params.dx) || 0}, top: ${Number(params.dy) || 0} })`,
       );
@@ -288,6 +293,10 @@ export default class BrowserControlCtr extends ControllerModule {
   @IpcMethod()
   async screenshot(params: BrowserControlParams): Promise<BrowserControlScreenshotResult> {
     return this.withGuest(params.sessionId, async (guest) => {
+      // Strip the agent cursor/chip first — otherwise the model sees its own
+      // overlay in the frame it just asked for.
+      await guest.executeJavaScript(OVERLAY_REMOVE_SCRIPT).catch(() => {});
+
       let image = await guest.capturePage();
       const size = image.getSize();
       if (size.width > SCREENSHOT_MAX_WIDTH) image = image.resize({ width: SCREENSHOT_MAX_WIDTH });
@@ -357,32 +366,32 @@ export default class BrowserControlCtr extends ControllerModule {
     guest.sendInputEvent({ keyCode: key, type: 'keyUp' });
   }
 
-  private broadcastCursor(sessionId: string, x: number, y: number, click?: boolean) {
-    this.app.browserManager.broadcastToAllWindows('browserSidebarAgentCursor', {
-      click,
-      sessionId,
-      x,
-      y,
+  /**
+   * The overlay is injected into the page rather than drawn in renderer DOM: a
+   * WebContentsView always paints above the window's web contents, so nothing
+   * the renderer draws can sit on top of the page any more.
+   */
+  private inject(guest: WebContents, script: string) {
+    guest.executeJavaScript(script).catch((error: Error) => {
+      logger.debug(`Agent overlay injection failed: ${error.message}`);
     });
   }
 
-  private markControlling(sessionId: string) {
+  private showCursor(guest: WebContents, x: number, y: number, click: boolean) {
+    this.inject(guest, overlayCursorScript(this.sidebar.getOverlayLabels(), x, y, click));
+  }
+
+  private markControlling(sessionId: string, guest: WebContents) {
     const existing = this.idleTimers.get(sessionId);
     if (existing) clearTimeout(existing);
-    else
-      this.app.browserManager.broadcastToAllWindows('browserSidebarAgentState', {
-        active: true,
-        sessionId,
-      });
+    else this.inject(guest, overlayControllingScript(this.sidebar.getOverlayLabels(), true));
 
     this.idleTimers.set(
       sessionId,
       setTimeout(() => {
         this.idleTimers.delete(sessionId);
-        this.app.browserManager.broadcastToAllWindows('browserSidebarAgentState', {
-          active: false,
-          sessionId,
-        });
+        if (guest.isDestroyed()) return;
+        this.inject(guest, overlayControllingScript(this.sidebar.getOverlayLabels(), false));
       }, CONTROL_IDLE_MS),
     );
   }

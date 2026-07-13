@@ -1,10 +1,11 @@
 import type {
-  BrowserSidebarAttachParams,
   BrowserSidebarImportResult,
   BrowserSidebarNavigateParams,
+  BrowserSidebarOverlayLabelsParams,
   BrowserSidebarResult,
   BrowserSidebarSessionParams,
   BrowserSidebarState,
+  BrowserSidebarViewportParams,
 } from '@lobechat/electron-client-ipc';
 
 import { ensureElectronIpc } from '@/utils/electron/ipc';
@@ -12,10 +13,6 @@ import { ensureElectronIpc } from '@/utils/electron/ipc';
 class ElectronBrowserSidebarService {
   private get ipc() {
     return ensureElectronIpc();
-  }
-
-  attach(params: BrowserSidebarAttachParams): Promise<BrowserSidebarResult> {
-    return this.ipc.browserSidebar.attach(params);
   }
 
   captureScreenshotToClipboard(params: BrowserSidebarSessionParams): Promise<BrowserSidebarResult> {
@@ -48,6 +45,14 @@ class ElectronBrowserSidebarService {
 
   reload(params: BrowserSidebarSessionParams): Promise<BrowserSidebarResult> {
     return this.ipc.browserSidebar.reload(params);
+  }
+
+  setOverlayLabels(params: BrowserSidebarOverlayLabelsParams): Promise<BrowserSidebarResult> {
+    return this.ipc.browserSidebar.setOverlayLabels(params);
+  }
+
+  setViewport(params: BrowserSidebarViewportParams): Promise<BrowserSidebarResult> {
+    return this.ipc.browserSidebar.setViewport(params);
   }
 
   stop(params: BrowserSidebarSessionParams): Promise<BrowserSidebarResult> {

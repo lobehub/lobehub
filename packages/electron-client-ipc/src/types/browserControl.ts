@@ -85,15 +85,3 @@ export interface BrowserGatewayToolResultParams {
   requestId: string;
   result: BrowserToolCallResult;
 }
-
-export interface BrowserSidebarAgentStatePayload {
-  active: boolean;
-  sessionId: string;
-}
-
-export interface BrowserSidebarAgentCursorPayload {
-  click?: boolean;
-  sessionId: string;
-  x: number;
-  y: number;
-}

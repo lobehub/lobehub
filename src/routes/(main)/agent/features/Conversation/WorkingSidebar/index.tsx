@@ -91,18 +91,24 @@ const TWO_PANE_MIN_WIDTH = 560;
 
 const AgentWorkingSidebar = memo(() => {
   const { t } = useTranslation(['chat', 'setting']);
-  const [storedWidth, updateSystemStatus, toggleRightPanel, setWorkingSidebarTab, showRightPanel, storedTab] =
-    useGlobalStore((s) => [
-      systemStatusSelectors.workingSidebarWidth(s),
-      s.updateSystemStatus,
-      s.toggleRightPanel,
-      s.setWorkingSidebarTab,
-      // Panel open/collapsed state (drives the `<RightPanel>` expand). Used to gate
-      // the resources pane's document fetch so a collapsed sidebar doesn't pull the
-      // full agent-document list into the conversation's initial batch.
-      s.status.showRightPanel,
-      s.status.workingSidebarTab,
-    ]);
+  const [
+    storedWidth,
+    updateSystemStatus,
+    toggleRightPanel,
+    setWorkingSidebarTab,
+    showRightPanel,
+    storedTab,
+  ] = useGlobalStore((s) => [
+    systemStatusSelectors.workingSidebarWidth(s),
+    s.updateSystemStatus,
+    s.toggleRightPanel,
+    s.setWorkingSidebarTab,
+    // Panel open/collapsed state (drives the `<RightPanel>` expand). Used to gate
+    // the resources pane's document fetch so a collapsed sidebar doesn't pull the
+    // full agent-document list into the conversation's initial batch.
+    s.status.showRightPanel,
+    s.status.workingSidebarTab,
+  ]);
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   const topicId = useChatStore((s) => s.activeTopicId);
   const isLocalSystemEnabled = useAgentStore((s) =>
@@ -152,7 +158,7 @@ const AgentWorkingSidebar = memo(() => {
   const reviewAvailable =
     (isLocalSystemEnabled || isDeviceMode) && !!workingDirectory && !!repoType;
   const paramsAvailable = !isHetero;
-  // The in-app browser rides on the Electron <webview> tag — desktop only,
+  // The in-app browser pages are main-process WebContentsViews — desktop only,
   // and gated behind the Labs toggle while the feature matures.
   const enableInAppBrowser = useUserStore(labPreferSelectors.enableInAppBrowser);
   const browserAvailable = isDesktop && enableInAppBrowser;

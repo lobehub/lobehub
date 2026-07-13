@@ -1,6 +1,5 @@
 import { EventEmitter } from 'node:events';
 
-import type { WebContents } from 'electron';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { App } from '@/core/App';
@@ -8,42 +7,116 @@ import { IpcHandler } from '@/utils/ipc/base';
 
 import BrowserSidebarCtr from '../BrowserSidebarCtr';
 
+interface FakeWebContents extends EventEmitter {
+  canGoBack: ReturnType<typeof vi.fn>;
+  canGoForward: ReturnType<typeof vi.fn>;
+  capturePage: ReturnType<typeof vi.fn>;
+  close: ReturnType<typeof vi.fn>;
+  executeJavaScript: ReturnType<typeof vi.fn>;
+  getTitle: ReturnType<typeof vi.fn>;
+  getURL: ReturnType<typeof vi.fn>;
+  id: number;
+  isDestroyed: ReturnType<typeof vi.fn>;
+  isLoading: ReturnType<typeof vi.fn>;
+  loadURL: ReturnType<typeof vi.fn>;
+  reload: ReturnType<typeof vi.fn>;
+  setWindowOpenHandler: ReturnType<typeof vi.fn>;
+  stop: ReturnType<typeof vi.fn>;
+}
+
+interface FakeView {
+  setBounds: ReturnType<typeof vi.fn>;
+  webContents: FakeWebContents;
+}
+
+interface FakeWindow {
+  contentView: {
+    addChildView: ReturnType<typeof vi.fn>;
+    removeChildView: ReturnType<typeof vi.fn>;
+  };
+  destroy: ReturnType<typeof vi.fn>;
+  isDestroyed: () => boolean;
+  once: ReturnType<typeof vi.fn>;
+  setIgnoreMouseEvents: ReturnType<typeof vi.fn>;
+  setPosition: ReturnType<typeof vi.fn>;
+  showInactive: ReturnType<typeof vi.fn>;
+  webContents: { getZoomFactor: ReturnType<typeof vi.fn> };
+}
+
+let viewSeq = 0;
+
+const createWebContents = (): FakeWebContents => {
+  viewSeq += 1;
+  const wc = new EventEmitter() as FakeWebContents;
+  wc.id = viewSeq;
+  wc.canGoBack = vi.fn(() => false);
+  wc.canGoForward = vi.fn(() => false);
+  wc.capturePage = vi.fn(async () => 'image');
+  wc.close = vi.fn();
+  wc.executeJavaScript = vi.fn(async () => undefined);
+  wc.getTitle = vi.fn(() => 'Example');
+  wc.getURL = vi.fn(() => 'https://example.com');
+  wc.isDestroyed = vi.fn(() => false);
+  wc.isLoading = vi.fn(() => false);
+  wc.loadURL = vi.fn(async () => undefined);
+  wc.reload = vi.fn();
+  wc.setWindowOpenHandler = vi.fn();
+  wc.stop = vi.fn();
+  return wc;
+};
+
+const createWindow = (zoomFactor = 1): FakeWindow => {
+  let destroyed = false;
+  return {
+    contentView: { addChildView: vi.fn(), removeChildView: vi.fn() },
+    destroy: vi.fn(() => {
+      destroyed = true;
+    }),
+    isDestroyed: () => destroyed,
+    once: vi.fn(),
+    setIgnoreMouseEvents: vi.fn(),
+    setPosition: vi.fn(),
+    showInactive: vi.fn(),
+    webContents: { getZoomFactor: vi.fn(() => zoomFactor) },
+  };
+};
+
 const {
   appOnMock,
+  browserWindowCtorMock,
   clipboardWriteImageMock,
+  createdViews,
+  createdWindows,
   importChromeLoginDataMock,
   ipcHandlers,
   ipcMainHandleMock,
   sessionFromPartitionMock,
   shellOpenExternalMock,
-  webContentsFromIdMock,
+  webContentsViewCtorMock,
 } = vi.hoisted(() => {
   const handlers = new Map<string, (event: unknown, ...args: unknown[]) => unknown>();
-  const handle = vi.fn(
-    (channel: string, handler: (event: unknown, ...args: unknown[]) => unknown) => {
-      handlers.set(channel, handler);
-    },
-  );
 
   return {
     appOnMock: vi.fn(),
+    browserWindowCtorMock: vi.fn(),
     clipboardWriteImageMock: vi.fn(),
+    createdViews: [] as unknown[],
+    createdWindows: [] as unknown[],
     importChromeLoginDataMock: vi.fn(),
     ipcHandlers: handlers,
-    ipcMainHandleMock: handle,
+    ipcMainHandleMock: vi.fn(
+      (channel: string, handler: (event: unknown, ...args: unknown[]) => unknown) => {
+        handlers.set(channel, handler);
+      },
+    ),
     sessionFromPartitionMock: vi.fn(),
     shellOpenExternalMock: vi.fn().mockResolvedValue(undefined),
-    webContentsFromIdMock: vi.fn(),
+    webContentsViewCtorMock: vi.fn(),
   };
 });
 
 vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-  }),
+  createLogger: () => ({ debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() }),
 }));
 
 vi.mock('@/modules/browser/importChromeLoginData', () => ({
@@ -51,54 +124,33 @@ vi.mock('@/modules/browser/importChromeLoginData', () => ({
 }));
 
 vi.mock('electron', () => ({
-  app: {
-    on: appOnMock,
-  },
-  clipboard: {
-    writeImage: clipboardWriteImageMock,
-  },
-  ipcMain: {
-    handle: ipcMainHandleMock,
-  },
-  session: {
-    fromPartition: sessionFromPartitionMock,
-  },
-  shell: {
-    openExternal: shellOpenExternalMock,
-  },
-  webContents: {
-    fromId: webContentsFromIdMock,
+  app: { on: appOnMock },
+  BrowserWindow: Object.assign(
+    class {
+      constructor(opts: Record<string, unknown>) {
+        browserWindowCtorMock(opts);
+
+        return createdWindows.at(-1) as object;
+      }
+    },
+    { fromWebContents: vi.fn() },
+  ),
+  clipboard: { writeImage: clipboardWriteImageMock },
+  ipcMain: { handle: ipcMainHandleMock },
+  session: { fromPartition: sessionFromPartitionMock },
+  shell: { openExternal: shellOpenExternalMock },
+  WebContentsView: class {
+    constructor(opts: Record<string, unknown>) {
+      webContentsViewCtorMock(opts);
+
+      return createdViews.at(-1) as object;
+    }
   },
 }));
-
-const createOwnerWebContents = (id = 1): WebContents => {
-  const owner = new EventEmitter() as EventEmitter & { id: number };
-  owner.id = id;
-  return owner as unknown as WebContents;
-};
-
-const createGuestWebContents = (overrides?: Partial<WebContents>): WebContents => {
-  const guest = new EventEmitter() as EventEmitter & Partial<WebContents> & { id: number };
-  guest.id = 2;
-  guest.canGoBack = vi.fn(() => false);
-  guest.canGoForward = vi.fn(() => false);
-  guest.capturePage = vi.fn(async () => 'image') as unknown as WebContents['capturePage'];
-  guest.getTitle = vi.fn(() => 'Example');
-  guest.getURL = vi.fn(() => 'https://example.com');
-  guest.isDestroyed = vi.fn(() => false);
-  guest.isLoading = vi.fn(() => false);
-  guest.loadURL = vi.fn(async () => undefined);
-  guest.reload = vi.fn();
-  guest.setWindowOpenHandler = vi.fn();
-  guest.stop = vi.fn();
-  Object.assign(guest, overrides);
-  return guest as unknown as WebContents;
-};
 
 const invokeIpc = async <T = unknown>(channel: string, payload?: unknown): Promise<T> => {
   const handler = ipcHandlers.get(channel);
   if (!handler) throw new Error(`IPC handler for ${channel} not found`);
-
   return handler({ sender: { id: 'test' } }, payload) as Promise<T>;
 };
 
@@ -108,170 +160,196 @@ describe('BrowserSidebarCtr', () => {
     on: vi.fn(),
     setPermissionCheckHandler: vi.fn(),
     setPermissionRequestHandler: vi.fn(),
-    webRequest: {
-      onBeforeRequest: vi.fn(),
-    },
+    webRequest: { onBeforeRequest: vi.fn() },
   };
-  const mockApp = {
-    browserManager: {
-      broadcastToAllWindows,
-    },
-  } as unknown as App;
 
+  let mainWindow: FakeWindow;
   let controller: BrowserSidebarCtr;
 
-  const emitWillAttach = (owner: WebContents, params: Record<string, unknown>) => {
-    const webPreferences = {};
-    const event = { preventDefault: vi.fn() };
-    owner.emit('will-attach-webview', event, webPreferences, params);
-    return { event, webPreferences };
+  /** Hand out a fresh fake for the next `new WebContentsView()`. */
+  const queueView = (): FakeView => {
+    const view: FakeView = { setBounds: vi.fn(), webContents: createWebContents() };
+    createdViews.push(view);
+    return view;
   };
 
-  const setupOwner = () => {
-    controller.beforeAppReady();
-    const webContentsCreatedHandler = appOnMock.mock.calls.find(
-      ([eventName]) => eventName === 'web-contents-created',
-    )?.[1];
-    const owner = createOwnerWebContents();
-    webContentsCreatedHandler({}, owner);
-    return owner;
+  /** Hand out a fresh fake for the next `new BrowserWindow()` (the parking lot). */
+  const queueWindow = (): FakeWindow => {
+    const win = createWindow();
+    createdWindows.push(win);
+    return win;
   };
 
-  const attachGuest = async (guest: WebContents, sessionId = 'session-1') => {
-    // Guest must live in the hardened browser partition to be claimable.
-    (guest as unknown as { session: unknown }).session = mockSession;
-    webContentsFromIdMock.mockReturnValue(guest);
-    return invokeIpc('browserSidebar.attach', { sessionId, webContentsId: guest.id });
-  };
+  const mockApp = () =>
+    ({
+      browserManager: {
+        broadcastToAllWindows,
+        browsers: new Map([['app', { webContents: { isDestroyed: () => false } }]]),
+      },
+    }) as unknown as App;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
     ipcHandlers.clear();
-    ipcMainHandleMock.mockClear();
+    createdViews.length = 0;
+    createdWindows.length = 0;
+    viewSeq = 0;
     (
       IpcHandler.getInstance() as unknown as { registeredChannels?: Set<string> }
     ).registeredChannels?.clear();
+
     sessionFromPartitionMock.mockReturnValue(mockSession);
-    controller = new BrowserSidebarCtr(mockApp);
+
+    mainWindow = createWindow();
+    const { BrowserWindow } = await import('electron');
+    (BrowserWindow.fromWebContents as ReturnType<typeof vi.fn>).mockReturnValue(mainWindow);
+
+    controller = new BrowserSidebarCtr(mockApp());
+    controller.beforeAppReady();
   });
 
-  it('should harden webviews recognized by the browser partition attribute', () => {
-    const owner = setupOwner();
+  it('creates a page and loads the URL on navigate, without any renderer round-trip', async () => {
+    const view = queueView();
+    queueWindow();
 
-    const params = {
-      partition: 'persist:lobe-browser-app',
-      src: 'example.com',
-    };
-    const { webPreferences } = emitWillAttach(owner, params);
-
-    expect(params).toMatchObject({
-      partition: 'persist:lobe-browser-app',
-      src: 'https://example.com',
+    const result = await invokeIpc('browserSidebar.navigate', {
+      sessionId: 'agent:a',
+      url: 'https://example.com',
     });
-    expect(webPreferences).toMatchObject({
-      contextIsolation: true,
-      nodeIntegration: false,
-      partition: 'persist:lobe-browser-app',
-      sandbox: true,
-    });
-    expect(sessionFromPartitionMock).toHaveBeenCalledWith('persist:lobe-browser-app');
-    expect(mockSession.setPermissionRequestHandler).toHaveBeenCalled();
-    expect(mockSession.setPermissionCheckHandler).toHaveBeenCalled();
-    expect(mockSession.webRequest.onBeforeRequest).toHaveBeenCalled();
-  });
 
-  it('should ignore webviews without the browser partition', () => {
-    const owner = setupOwner();
-
-    const params = { partition: 'persist:other', src: 'https://example.com' };
-    const { webPreferences } = emitWillAttach(owner, params);
-
-    expect(webPreferences).toEqual({});
-    expect(sessionFromPartitionMock).not.toHaveBeenCalled();
-  });
-
-  it('should bind sessions through the attach IPC and broadcast state', async () => {
-    setupOwner();
-    const guest = createGuestWebContents();
-
-    await expect(attachGuest(guest)).resolves.toEqual({ success: true });
-
-    expect(guest.setWindowOpenHandler).toHaveBeenCalled();
+    expect(result).toEqual({ success: true });
+    expect(view.webContents.loadURL).toHaveBeenCalledWith('https://example.com');
     expect(broadcastToAllWindows).toHaveBeenCalledWith(
       'browserSidebarStateChanged',
-      expect.objectContaining({
-        attached: true,
-        sessionId: 'session-1',
-        title: 'Example',
-        url: 'https://example.com',
-      }),
+      expect.objectContaining({ attached: true, sessionId: 'agent:a' }),
     );
   });
 
-  it('should reject attaching webContents outside the browser partition', async () => {
-    setupOwner();
-    const guest = createGuestWebContents();
-    (guest as unknown as { session: unknown }).session = { notOurs: true };
-    webContentsFromIdMock.mockReturnValue(guest);
+  it('gives each session its own page, so a background agent never drives the visible one', async () => {
+    const viewA = queueView();
+    queueWindow();
+    await invokeIpc('browserSidebar.navigate', { sessionId: 'agent:a', url: 'https://a.com' });
 
-    await expect(
-      invokeIpc('browserSidebar.attach', { sessionId: 'session-1', webContentsId: guest.id }),
-    ).resolves.toMatchObject({ success: false });
-    expect(guest.setWindowOpenHandler).not.toHaveBeenCalled();
-  });
-
-  it('should keep window.open navigations inside the sidebar page', async () => {
-    setupOwner();
-    const guest = createGuestWebContents();
-    await attachGuest(guest);
-
-    const windowOpenHandler = vi.mocked(guest.setWindowOpenHandler).mock.calls[0][0];
-    const result = windowOpenHandler({ url: 'https://lobehub.com' } as never);
-
-    expect(result).toEqual({ action: 'deny' });
-    expect(guest.loadURL).toHaveBeenCalledWith('https://lobehub.com');
-    expect(shellOpenExternalMock).not.toHaveBeenCalled();
-  });
-
-  it('should navigate and capture the attached page through IPC methods', async () => {
-    setupOwner();
-    const guest = createGuestWebContents();
-    await attachGuest(guest);
-
-    await expect(
-      invokeIpc('browserSidebar.navigate', { sessionId: 'session-1', url: 'lobehub.com' }),
-    ).resolves.toEqual({ success: true });
-    expect(guest.loadURL).toHaveBeenCalledWith('https://lobehub.com');
-
-    await expect(
-      invokeIpc('browserSidebar.navigate', { sessionId: 'session-1', url: 'localhost:3000' }),
-    ).resolves.toEqual({ success: true });
-    expect(guest.loadURL).toHaveBeenCalledWith('http://localhost:3000');
-
-    await expect(
-      invokeIpc('browserSidebar.captureScreenshotToClipboard', { sessionId: 'session-1' }),
-    ).resolves.toEqual({ success: true });
-    expect(guest.capturePage).toHaveBeenCalled();
-    expect(clipboardWriteImageMock).toHaveBeenCalledWith('image');
-  });
-
-  it('should import Chrome login information into the browser session', async () => {
-    importChromeLoginDataMock.mockResolvedValue(12);
-
-    await expect(invokeIpc('browserSidebar.importChromeLoginData')).resolves.toEqual({
-      importedCount: 12,
-      success: true,
+    // agent:a is what the user is looking at.
+    invokeIpc('browserSidebar.setViewport', {
+      rect: { height: 600, width: 400, x: 10, y: 20 },
+      sessionId: 'agent:a',
     });
-    expect(importChromeLoginDataMock).toHaveBeenCalledWith(mockSession);
+    expect(mainWindow.contentView.addChildView).toHaveBeenCalledWith(viewA);
+
+    // A different agent navigates in the background.
+    const viewB = queueView();
+    await invokeIpc('browserSidebar.navigate', { sessionId: 'agent:b', url: 'https://b.com' });
+
+    expect(viewB).not.toBe(viewA);
+    expect(viewB.webContents.loadURL).toHaveBeenCalledWith('https://b.com');
+    // The visible page was neither navigated again nor removed from the window.
+    expect(viewA.webContents.loadURL).toHaveBeenCalledTimes(1);
+    expect(mainWindow.contentView.removeChildView).not.toHaveBeenCalled();
   });
 
-  it('should return a recoverable error when Chrome login import fails', async () => {
-    importChromeLoginDataMock.mockRejectedValue(new Error('Chrome profile was not found'));
+  it('parks a page instead of destroying it when the panel stops showing it', async () => {
+    const view = queueView();
+    const parking = queueWindow();
+    await invokeIpc('browserSidebar.navigate', { sessionId: 'agent:a', url: 'https://a.com' });
 
-    await expect(invokeIpc('browserSidebar.importChromeLoginData')).resolves.toEqual({
-      error: 'Chrome profile was not found',
-      importedCount: 0,
-      success: false,
+    invokeIpc('browserSidebar.setViewport', {
+      rect: { height: 600, width: 400, x: 0, y: 0 },
+      sessionId: 'agent:a',
     });
+    expect(mainWindow.contentView.addChildView).toHaveBeenCalledWith(view);
+
+    // A zero-sized rect is what `display: none` reports when another tab is active.
+    invokeIpc('browserSidebar.setViewport', {
+      rect: { height: 0, width: 0, x: 0, y: 0 },
+      sessionId: 'agent:a',
+    });
+
+    expect(mainWindow.contentView.removeChildView).toHaveBeenCalledWith(view);
+    expect(parking.contentView.addChildView).toHaveBeenCalledWith(view);
+    // Still live — the agent may still be driving it.
+    expect(view.webContents.close).not.toHaveBeenCalled();
+  });
+
+  it('scales the panel rect by the app zoom factor', async () => {
+    const view = queueView();
+    queueWindow();
+    await invokeIpc('browserSidebar.navigate', { sessionId: 'agent:a', url: 'https://a.com' });
+
+    // The renderer reports CSS px; setBounds wants DIP. At zoom 1.25 the page
+    // would otherwise be laid out 25% too small and offset from the panel.
+    mainWindow.webContents.getZoomFactor.mockReturnValue(1.25);
+    invokeIpc('browserSidebar.setViewport', {
+      rect: { height: 400, width: 200, x: 100, y: 40 },
+      sessionId: 'agent:a',
+    });
+
+    expect(view.setBounds).toHaveBeenLastCalledWith({ height: 500, width: 250, x: 125, y: 50 });
+  });
+
+  it('shows the parking window: a `show: false` window would leave its pages with no compositing surface', async () => {
+    queueView();
+    const parking = queueWindow();
+
+    await invokeIpc('browserSidebar.navigate', { sessionId: 'agent:a', url: 'https://a.com' });
+
+    expect(parking.showInactive).toHaveBeenCalled();
+    expect(parking.setPosition).toHaveBeenCalledWith(expect.any(Number), expect.any(Number));
+    const [x, y] = parking.setPosition.mock.calls[0];
+    expect(x).toBeLessThan(0);
+    expect(y).toBeLessThan(0);
+  });
+
+  it('destroys the parking window on quit, so `window-all-closed` can still fire', async () => {
+    queueView();
+    const parking = queueWindow();
+    await invokeIpc('browserSidebar.navigate', { sessionId: 'agent:a', url: 'https://a.com' });
+
+    const beforeQuit = appOnMock.mock.calls.find(([event]) => event === 'before-quit')?.[1];
+    expect(beforeQuit).toBeTypeOf('function');
+    beforeQuit();
+
+    expect(parking.destroy).toHaveBeenCalled();
+  });
+
+  it('keeps window.open navigations inside the page', async () => {
+    const view = queueView();
+    queueWindow();
+    await invokeIpc('browserSidebar.navigate', { sessionId: 'agent:a', url: 'https://a.com' });
+
+    const handler = view.webContents.setWindowOpenHandler.mock.calls[0][0];
+    expect(handler({ url: 'https://popup.example.com' })).toEqual({ action: 'deny' });
+    expect(view.webContents.loadURL).toHaveBeenCalledWith('https://popup.example.com');
+  });
+
+  it('sends free text to a search engine rather than navigating to it', async () => {
+    const view = queueView();
+    queueWindow();
+
+    await invokeIpc('browserSidebar.navigate', {
+      sessionId: 'agent:a',
+      url: 'how tall is everest',
+    });
+
+    expect(view.webContents.loadURL).toHaveBeenCalledWith(
+      expect.stringContaining('bing.com/search?q=how+tall+is+everest'),
+    );
+  });
+
+  it('imports Chrome login information into the browser session', async () => {
+    importChromeLoginDataMock.mockResolvedValue(7);
+
+    const result = await invokeIpc('browserSidebar.importChromeLoginData');
+
+    expect(sessionFromPartitionMock).toHaveBeenCalledWith('persist:lobe-browser-app');
+    expect(result).toEqual({ importedCount: 7, success: true });
+  });
+
+  it('returns a recoverable error when Chrome login import fails', async () => {
+    importChromeLoginDataMock.mockRejectedValue(new Error('locked'));
+
+    const result = await invokeIpc('browserSidebar.importChromeLoginData');
+
+    expect(result).toEqual({ error: 'locked', importedCount: 0, success: false });
   });
 });
