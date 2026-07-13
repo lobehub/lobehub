@@ -2,7 +2,7 @@
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { works, workVersions } from '../../../schemas';
+import { documents, works, workspaces, workVersions } from '../../../schemas';
 import { AgentDocumentModel } from '../../agentDocuments';
 import { WorkModel } from '..';
 import {
@@ -265,5 +265,92 @@ describe('WorkModel · document', () => {
     expect(work).toBeNull();
     const workRows = await serverDB.select().from(works);
     expect(workRows).toHaveLength(0);
+  });
+});
+
+describe('WorkModel · workspace document visibility', () => {
+  const workspaceId = 'work-test-doc-workspace-id';
+
+  const seedWorkspace = async () => {
+    await serverDB.insert(workspaces).values({
+      id: workspaceId,
+      name: 'Work Test Workspace',
+      primaryOwnerId: userId,
+      slug: workspaceId,
+    });
+  };
+
+  const registerWorkspaceDocument = async (visibility: 'private' | 'public') => {
+    const ownerDocuments = new AgentDocumentModel(serverDB, userId, workspaceId);
+    const ownerWorks = new WorkModel(serverDB, userId, workspaceId);
+
+    const doc = await ownerDocuments.create(agentId, 'shared.md', 'Shared body', {
+      metadata: { description: 'Shared description' },
+      title: 'Shared doc',
+    });
+    // `documents.visibility` is NOT NULL default 'public'; flip it directly to
+    // exercise the private branch of the guard.
+    if (visibility === 'private') {
+      await serverDB
+        .update(documents)
+        .set({ visibility: 'private' })
+        .where(eq(documents.id, doc.documentId));
+    }
+
+    const work = await ownerWorks.registerDocument({
+      agentDocumentId: doc.id,
+      agentId,
+      documentId: doc.documentId,
+      changeType: 'created',
+      rootOperationId: 'op-doc-visibility',
+      sourceToolName: 'createDocument',
+      sourceToolCallId: 'tool-call-doc-visibility',
+      topicId,
+    });
+
+    return { doc, work };
+  };
+
+  it('hides another member private-document Work but keeps it for the registrant', async () => {
+    await seedWorkspace();
+    const ownerWorks = new WorkModel(serverDB, userId, workspaceId);
+    const memberWorks = new WorkModel(serverDB, userId2, workspaceId);
+
+    const { work } = await registerWorkspaceDocument('private');
+
+    // The registrant keeps full access on every list path.
+    expect(await ownerWorks.listByConversation({ topicId })).toHaveLength(1);
+
+    // Another workspace member cannot see the private document's Work.
+    expect(await memberWorks.listByConversation({ topicId })).toHaveLength(0);
+    expect((await memberWorks.listByWorkspace({})).items).toHaveLength(0);
+    expect(await memberWorks.listVersions(work!.id)).toHaveLength(0);
+  });
+
+  it('keeps a public-document Work visible to other members', async () => {
+    await seedWorkspace();
+    const memberWorks = new WorkModel(serverDB, userId2, workspaceId);
+
+    await registerWorkspaceDocument('public');
+
+    const memberView = await memberWorks.listByConversation({ topicId });
+    expect(memberView).toHaveLength(1);
+    expect(memberView[0]).toMatchObject({ title: 'Shared doc', type: 'document' });
+  });
+
+  it('keeps an orphaned document Work (backing row deleted) visible to the registrant only', async () => {
+    await seedWorkspace();
+    const ownerWorks = new WorkModel(serverDB, userId, workspaceId);
+    const memberWorks = new WorkModel(serverDB, userId2, workspaceId);
+
+    const { doc } = await registerWorkspaceDocument('public');
+
+    // Hard-delete the backing document outside the tool path: the Work survives
+    // as an orphan. With no backing row the EXISTS guard fails, so only the
+    // registrant keeps the orphan card.
+    await serverDB.delete(documents).where(eq(documents.id, doc.documentId));
+
+    expect(await ownerWorks.listByConversation({ topicId })).toHaveLength(1);
+    expect(await memberWorks.listByConversation({ topicId })).toHaveLength(0);
   });
 });

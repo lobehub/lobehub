@@ -46,10 +46,32 @@ const taskVisibilityGuard = (ctx: WorkContext): SQL =>
     sql`exists (select 1 from ${tasks} where ${tasks.id} = ${works.resourceId} and (${tasks.visibility} is null or ${tasks.visibility} = 'public' or ${tasks.createdByUserId} = ${ctx.userId}))`,
   ) as SQL;
 
+/**
+ * Row-level guard for document Works, mirroring {@link taskVisibilityGuard}:
+ * `works` carries no visibility column, so without this any workspace member
+ * could read another member's private document's Work title/description. Visible
+ * iff the viewer registered the Work themselves OR can see the backing document
+ * under the public-or-owner rule.
+ *
+ * Unlike tasks, `documents.visibility` is NOT NULL default 'public', so there is
+ * no null branch to treat as public. Orphaned document Works (backing row
+ * hard-deleted outside the tool path) fall back to registrant-only — the same
+ * trade-off the task guard makes: an orphan of a formerly-private document never
+ * leaks to other members, at the cost of other members also losing orphan cards
+ * of public documents.
+ */
+const documentVisibilityGuard = (ctx: WorkContext): SQL =>
+  or(
+    ne(works.resourceType, 'document'),
+    eq(works.userId, ctx.userId),
+    sql`exists (select 1 from ${documents} where ${documents.id} = ${works.resourceId} and (${documents.visibility} = 'public' or ${documents.userId} = ${ctx.userId}))`,
+  ) as SQL;
+
 export const workOwnership = (ctx: WorkContext) =>
   and(
     buildWorkspaceWhere({ userId: ctx.userId, workspaceId: ctx.workspaceId }, works),
     taskVisibilityGuard(ctx),
+    documentVisibilityGuard(ctx),
   ) as SQL;
 
 export const versionOwnership = (ctx: WorkContext) =>
