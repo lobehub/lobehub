@@ -83,10 +83,10 @@ const upsertTaskWork = async (
     resourceId: task.id,
     resourceType: 'task' as const,
     // Creation provenance: stamped once at insert, never in the conflict `set`
-    // (see `works.topicId`/`threadId` schema JSDoc — write-once, like the
-    // creator `sourceToolIdentifier`).
-    threadId: params.threadId ?? null,
-    topicId: params.topicId ?? null,
+    // (see `works.sourceTopicId`/`sourceThreadId` schema JSDoc — write-once,
+    // like the creator `sourceToolIdentifier`).
+    sourceThreadId: params.threadId ?? null,
+    sourceTopicId: params.topicId ?? null,
     type: 'task' as const,
     userId: ctx.userId,
     workspaceId: ctx.workspaceId ?? null,

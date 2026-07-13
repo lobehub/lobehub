@@ -2743,8 +2743,8 @@ table works {
   current_version_id uuid
   resource_type text [not null]
   resource_id text
-  topic_id text
-  thread_id text
+  source_topic_id text
+  source_thread_id text
   source_tool_identifier text
   title text
   description text
@@ -2765,8 +2765,8 @@ table works {
     (resource_type, resource_id) [name: 'works_resource_idx']
     current_version_id [name: 'works_current_version_id_idx']
     updated_at [name: 'works_updated_at_idx']
-    topic_id [name: 'works_topic_id_idx']
-    thread_id [name: 'works_thread_id_idx']
+    source_topic_id [name: 'works_source_topic_id_idx']
+    source_thread_id [name: 'works_source_thread_id_idx']
   }
 }
 

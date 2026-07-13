@@ -111,7 +111,7 @@ describe('WorkModel · task', () => {
     expect(byOperations['op-missing']).toEqual([]);
   });
 
-  it('stamps works.topicId/threadId from the registration params', async () => {
+  it('stamps works.sourceTopicId/sourceThreadId from the registration params', async () => {
     const taskModel = new TaskModel(serverDB, userId);
     const workModel = new WorkModel(serverDB, userId);
     const task = await taskModel.create({ instruction: 'Provenance', name: 'Provenance task' });
@@ -127,11 +127,11 @@ describe('WorkModel · task', () => {
     });
 
     const [row] = await serverDB.select().from(works).where(eq(works.id, work!.id));
-    expect(row.topicId).toBe(topicId);
-    expect(row.threadId).toBe(threadId);
+    expect(row.sourceTopicId).toBe(topicId);
+    expect(row.sourceThreadId).toBe(threadId);
   });
 
-  it('keeps works.topicId/threadId at the first registration while later versions carry their own', async () => {
+  it('keeps works.sourceTopicId/sourceThreadId at the first registration while later versions carry their own', async () => {
     const otherTopicId = 'work-test-second-topic-id';
     await serverDB.insert(topics).values({ id: otherTopicId, userId });
     const taskModel = new TaskModel(serverDB, userId);
@@ -161,8 +161,8 @@ describe('WorkModel · task', () => {
     });
 
     const [row] = await serverDB.select().from(works).where(eq(works.id, edited!.id));
-    expect(row.topicId).toBe(topicId);
-    expect(row.threadId).toBe(threadId);
+    expect(row.sourceTopicId).toBe(topicId);
+    expect(row.sourceThreadId).toBe(threadId);
 
     // The new version row records the conversation of its own mutation.
     const [newVersion] = await serverDB

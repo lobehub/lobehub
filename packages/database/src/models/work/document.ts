@@ -75,8 +75,8 @@ const upsertDocumentWork = async (
   const values = {
     resourceId: doc.id,
     resourceType: 'document' as const,
-    threadId: params.threadId ?? null,
-    topicId: params.topicId ?? null,
+    sourceThreadId: params.threadId ?? null,
+    sourceTopicId: params.topicId ?? null,
     type: 'document' as const,
     userId: ctx.userId,
     workspaceId: ctx.workspaceId ?? null,

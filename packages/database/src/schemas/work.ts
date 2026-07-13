@@ -55,13 +55,15 @@ export const works = pgTable(
     resourceId: text('resource_id'),
 
     /**
-     * Conversation where the Work was FIRST registered (creation provenance),
-     * stamped once at insert and never overwritten by later registrations —
+     * Conversation where the Work was FIRST registered (creation provenance):
+     * stamped once at insert, never overwritten by later registrations —
      * per-mutation conversation lives on each `work_versions` row. Set-null so
      * deleting the conversation keeps the Work.
      */
-    topicId: text('topic_id').references(() => topics.id, { onDelete: 'set null' }),
-    threadId: text('thread_id').references(() => threads.id, { onDelete: 'set null' }),
+    sourceTopicId: text('source_topic_id').references(() => topics.id, { onDelete: 'set null' }),
+    sourceThreadId: text('source_thread_id').references(() => threads.id, {
+      onDelete: 'set null',
+    }),
 
     /**
      * Tool/plugin identifier that CREATED the Work, e.g. 'lobe-task',
@@ -111,8 +113,8 @@ export const works = pgTable(
     index('works_resource_idx').on(t.resourceType, t.resourceId),
     index('works_current_version_id_idx').on(t.currentVersionId),
     index('works_updated_at_idx').on(t.updatedAt),
-    index('works_topic_id_idx').on(t.topicId),
-    index('works_thread_id_idx').on(t.threadId),
+    index('works_source_topic_id_idx').on(t.sourceTopicId),
+    index('works_source_thread_id_idx').on(t.sourceThreadId),
   ],
 );
 

@@ -46,16 +46,16 @@ export interface WorkItem {
   identifier: string | null;
   resourceId: string | null;
   resourceType: WorkResourceType;
+  /** Thread where the Work was first registered (creation provenance; null outside a thread). */
+  sourceThreadId: string | null;
   /** Tool/plugin identifier that CREATED the Work (written once, never overwritten). */
   sourceToolIdentifier: string | null;
+  /** Topic where the Work was first registered (creation provenance; null outside a conversation). */
+  sourceTopicId: string | null;
   /** Current resource status (external Works only). */
   status: string | null;
-  /** Thread where the Work was first registered (creation provenance; null outside a thread). */
-  threadId: string | null;
   /** Current display title (layer 1). */
   title: string | null;
-  /** Topic where the Work was first registered (creation provenance; null outside a conversation). */
-  topicId: string | null;
   type: WorkType;
   updatedAt: Date;
   /** External link (sanitized to http(s) upstream). */
