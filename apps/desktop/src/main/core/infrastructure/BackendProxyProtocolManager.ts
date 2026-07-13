@@ -268,6 +268,12 @@ export class BackendProxyProtocolManager {
     try {
       upstreamResponse = await netFetch(rewrittenUrl, requestInit);
     } catch (error) {
+      // Drop this request from the gauge before snapshotting it: it has already
+      // settled (in failure), so counting it would report `pendingUpstream=1` for
+      // a lone failure with nothing else in flight — an inflation that reads like
+      // the very backlog the gauge exists to detect.
+      this.pendingUpstream -= 1;
+
       // The Chromium error (net::ERR_*) is the whole diagnosis — carry it into
       // the log, the body, and a header so it is readable from DevTools without
       // a debug build.
@@ -299,9 +305,11 @@ export class BackendProxyProtocolManager {
         status: 502,
         statusText: 'Bad Gateway',
       });
-    } finally {
-      this.pendingUpstream -= 1;
     }
+    // Headers are in: this request is no longer *pending*. The failure path above
+    // already decremented, so this must not run in a `finally` (that would double
+    // count and drive the gauge negative).
+    this.pendingUpstream -= 1;
 
     const responseHeaders = new Headers(upstreamResponse.headers);
     const allowOrigin = request.headers.get('Origin') || undefined;
