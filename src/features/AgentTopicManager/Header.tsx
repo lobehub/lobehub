@@ -33,8 +33,8 @@ const Header = memo<HeaderProps>(({ agentId }) => {
         />
       }
       styles={{
-        left: { paddingInlineStart: 16 },
-        right: { flex: 1, maxWidth: 400, paddingInline: 16 },
+        left: { paddingInlineStart: 8 },
+        right: { flex: 1, maxWidth: 400 },
       }}
     />
   );

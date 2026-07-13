@@ -328,8 +328,7 @@ const Header = memo<HeaderProps>(
             </Flexbox>
           }
           styles={{
-            left: { minWidth: 0, paddingInlineStart: 16 },
-            right: { paddingInline: 16 },
+            left: { minWidth: 0, paddingInlineStart: 8 },
           }}
         />
       </>
