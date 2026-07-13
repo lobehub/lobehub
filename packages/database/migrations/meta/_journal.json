@@ -833,6 +833,13 @@
       "when": 1783773134101,
       "tag": "0118_workspace_user_settings_surrogate_pk",
       "breakpoints": true
+    },
+    {
+      "idx": 119,
+      "version": "7",
+      "when": 1783938277063,
+      "tag": "0119_add_work_registry_tables",
+      "breakpoints": true
     }
   ],
   "version": "6"
