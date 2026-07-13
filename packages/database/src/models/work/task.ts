@@ -74,10 +74,19 @@ const resolveTask = async (
   return task ?? null;
 };
 
-const upsertTaskWork = async (ctx: WorkContext, task: TaskItem): Promise<WorkItem> => {
+const upsertTaskWork = async (
+  ctx: WorkContext,
+  task: TaskItem,
+  params: RegisterTaskWorkParams,
+): Promise<WorkItem> => {
   const values = {
     resourceId: task.id,
     resourceType: 'task' as const,
+    // Creation provenance: stamped once at insert, never in the conflict `set`
+    // (see `works.topicId`/`threadId` schema JSDoc — write-once, like the
+    // creator `sourceToolIdentifier`).
+    threadId: params.threadId ?? null,
+    topicId: params.topicId ?? null,
     type: 'task' as const,
     userId: ctx.userId,
     workspaceId: ctx.workspaceId ?? null,
@@ -114,7 +123,7 @@ export const registerTaskWork = async (
   const task = await resolveTask(ctx, params);
   if (!task) return null;
 
-  const work = await upsertTaskWork(ctx, task);
+  const work = await upsertTaskWork(ctx, task, params);
   await createTaskVersion(ctx, work, task, params);
 
   return findById(ctx, work.id);

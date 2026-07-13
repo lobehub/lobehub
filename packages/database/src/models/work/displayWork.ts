@@ -38,6 +38,8 @@ export const registerExternalWork = async (
     .values({
       resourceId: params.resourceId,
       resourceType: params.resourceType,
+      threadId: params.threadId ?? null,
+      topicId: params.topicId ?? null,
       type: 'external',
       userId: ctx.userId,
       workspaceId: ctx.workspaceId ?? null,

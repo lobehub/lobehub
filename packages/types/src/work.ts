@@ -50,8 +50,12 @@ export interface WorkItem {
   sourceToolIdentifier: string | null;
   /** Current resource status (external Works only). */
   status: string | null;
+  /** Thread where the Work was first registered (creation provenance; null outside a thread). */
+  threadId: string | null;
   /** Current display title (layer 1). */
   title: string | null;
+  /** Topic where the Work was first registered (creation provenance; null outside a conversation). */
+  topicId: string | null;
   type: WorkType;
   updatedAt: Date;
   /** External link (sanitized to http(s) upstream). */

@@ -111,6 +111,67 @@ describe('WorkModel · task', () => {
     expect(byOperations['op-missing']).toEqual([]);
   });
 
+  it('stamps works.topicId/threadId from the registration params', async () => {
+    const taskModel = new TaskModel(serverDB, userId);
+    const workModel = new WorkModel(serverDB, userId);
+    const task = await taskModel.create({ instruction: 'Provenance', name: 'Provenance task' });
+
+    const work = await workModel.registerTask({
+      changeType: 'created',
+      rootOperationId: 'op-provenance-create',
+      sourceToolName: 'createTask',
+      sourceToolCallId: 'tool-call-provenance-create',
+      taskId: task.id,
+      threadId,
+      topicId,
+    });
+
+    const [row] = await serverDB.select().from(works).where(eq(works.id, work!.id));
+    expect(row.topicId).toBe(topicId);
+    expect(row.threadId).toBe(threadId);
+  });
+
+  it('keeps works.topicId/threadId at the first registration while later versions carry their own', async () => {
+    const otherTopicId = 'work-test-second-topic-id';
+    await serverDB.insert(topics).values({ id: otherTopicId, userId });
+    const taskModel = new TaskModel(serverDB, userId);
+    const workModel = new WorkModel(serverDB, userId);
+    const task = await taskModel.create({ instruction: 'Creator topic', name: 'Creator topic' });
+
+    // First registration establishes the creation provenance.
+    await workModel.registerTask({
+      changeType: 'created',
+      rootOperationId: 'op-provenance-first',
+      sourceToolName: 'createTask',
+      sourceToolCallId: 'tool-call-provenance-first',
+      taskId: task.id,
+      threadId,
+      topicId,
+    });
+
+    // A later registration from a DIFFERENT conversation must NOT overwrite the
+    // write-once creation provenance on the works row.
+    const edited = await workModel.registerTask({
+      changeType: 'updated',
+      rootOperationId: 'op-provenance-second',
+      sourceToolName: 'editTask',
+      sourceToolCallId: 'tool-call-provenance-second',
+      taskIdentifier: task.identifier,
+      topicId: otherTopicId,
+    });
+
+    const [row] = await serverDB.select().from(works).where(eq(works.id, edited!.id));
+    expect(row.topicId).toBe(topicId);
+    expect(row.threadId).toBe(threadId);
+
+    // The new version row records the conversation of its own mutation.
+    const [newVersion] = await serverDB
+      .select()
+      .from(workVersions)
+      .where(eq(workVersions.sourceToolCallId, 'tool-call-provenance-second'));
+    expect(newVersion.topicId).toBe(otherTopicId);
+  });
+
   it('fills the works-row display columns from the task on registration', async () => {
     const taskModel = new TaskModel(serverDB, userId);
     const workModel = new WorkModel(serverDB, userId);

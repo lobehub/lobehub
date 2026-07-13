@@ -67,10 +67,16 @@ const resolveDocument = async (
   return agentDocument ? doc : null;
 };
 
-const upsertDocumentWork = async (ctx: WorkContext, doc: DocumentItem): Promise<WorkItem> => {
+const upsertDocumentWork = async (
+  ctx: WorkContext,
+  doc: DocumentItem,
+  params: RegisterDocumentWorkParams,
+): Promise<WorkItem> => {
   const values = {
     resourceId: doc.id,
     resourceType: 'document' as const,
+    threadId: params.threadId ?? null,
+    topicId: params.topicId ?? null,
     type: 'document' as const,
     userId: ctx.userId,
     workspaceId: ctx.workspaceId ?? null,
@@ -114,7 +120,7 @@ export const registerDocumentWork = async (
   const doc = await resolveDocument(ctx, params);
   if (!doc) return null;
 
-  const work = await upsertDocumentWork(ctx, doc);
+  const work = await upsertDocumentWork(ctx, doc, params);
   await createDocumentVersion(ctx, work, doc, params);
 
   return findById(ctx, work.id);
