@@ -6,6 +6,8 @@ export interface SettingsSearchContext {
   enableComposio: boolean;
   enableGatewayMode: boolean;
   enableSTT: boolean;
+  /** Whether the signed-in user has an email on their profile */
+  hasEmail: boolean;
   hideDocs: boolean;
   isDesktop: boolean;
   isLogin: boolean;
@@ -203,7 +205,7 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     labelKey: 'profile.email',
     ns: 'auth',
     tab: SettingsTabs.Profile,
-    visible: (ctx) => ctx.isLogin,
+    visible: (ctx) => ctx.isLogin && ctx.hasEmail,
   },
   {
     anchor: 'profile-connected-accounts',

@@ -12,7 +12,7 @@ import {
   useServerConfigStore,
 } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
-import { authSelectors } from '@/store/user/selectors';
+import { authSelectors, userProfileSelectors } from '@/store/user/selectors';
 
 import {
   SETTINGS_SEARCH_ITEMS,
@@ -83,6 +83,7 @@ export const useSettingsSearch = (
   const enableComposio = useServerConfigStore(serverConfigSelectors.enableComposio);
   const disableEmailPassword = useServerConfigStore(serverConfigSelectors.disableEmailPassword);
   const isLogin = useUserStore(authSelectors.isLogin);
+  const hasEmail = useUserStore((s) => !!userProfileSelectors.userProfile(s)?.email);
   const [pinyin, setPinyin] = useState<{ settled: boolean; texts: PinyinTexts | null }>({
     settled: false,
     texts: null,
@@ -97,6 +98,7 @@ export const useSettingsSearch = (
       enableComposio: !!enableComposio,
       enableGatewayMode: !!enableGatewayMode,
       enableSTT: !!enableSTT,
+      hasEmail,
       hideDocs: !!hideDocs,
       isDesktop,
       isLogin: !!isLogin,
@@ -112,17 +114,19 @@ export const useSettingsSearch = (
 
     for (const group of categoryGroups) {
       for (const item of group.items) {
-        const url = item.href ?? getTabUrl(item.key);
+        // The same tab may appear in multiple groups (e.g. APIKey in Agent and
+        // System when dev mode is on); index only the first occurrence,
+        // matching the sidebar's top-to-bottom order — otherwise one query
+        // shows duplicate results pointing at the same page.
+        if (visibleTabs.has(item.key)) continue;
 
-        // The same tab may appear in multiple groups (e.g. APIKey); keep the
-        // first occurrence, matching the sidebar's top-to-bottom order.
-        if (!visibleTabs.has(item.key))
-          visibleTabs.set(item.key, {
-            groupTitle: group.title,
-            icon: item.icon,
-            label: item.label,
-            url,
-          });
+        const url = item.href ?? getTabUrl(item.key);
+        visibleTabs.set(item.key, {
+          groupTitle: group.title,
+          icon: item.icon,
+          label: item.label,
+          url,
+        });
 
         const keywordsKey = TAB_SEARCH_KEYWORDS_KEYS[item.key];
         // English floor + localized enrichment (deduped: on en-US they overlap)
@@ -217,6 +221,7 @@ export const useSettingsSearch = (
     enableComposio,
     enableGatewayMode,
     enableSTT,
+    hasEmail,
     hideDocs,
     isLogin,
     showAiImage,
