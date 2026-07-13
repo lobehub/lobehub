@@ -295,7 +295,7 @@
     "@lobehub/charts": "^5.2.1",
     "@lobehub/desktop-ipc-typings": "workspace:*",
     "@lobehub/editor": "^4.19.1",
-    "@lobehub/icons": "^5.10.0",
+    "@lobehub/icons": "^5.11.0",
     "@lobehub/market-sdk": "0.39.2",
     "@lobehub/tts": "^5.1.2",
     "@lobehub/ui": "^5.20.2",
