@@ -120,17 +120,24 @@ export class ClientToolTransport implements ToolTransport {
       });
 
       const startedAt = performance.now();
-      const rawResult = await store.internal_invokeDifferentTypePlugin(
-        toolMessageId,
-        call,
-        context.stepContext,
-      );
-
-      // Drain the Work-registration intent stashed during tool execution right
-      // after the call returns — before the aborted/no-result early-outs — so
-      // the per-`toolCallId` stash entry is always freed. The actual write
-      // happens in `registerWork` once the executor knows the cumulative cost.
-      const workIntent = takeWorkIntent(call.id);
+      let rawResult: Awaited<ReturnType<typeof store.internal_invokeDifferentTypePlugin>>;
+      let workIntent: ReturnType<typeof takeWorkIntent>;
+      try {
+        rawResult = await store.internal_invokeDifferentTypePlugin(
+          toolMessageId,
+          call,
+          context.stepContext,
+        );
+      } finally {
+        // Drain the Work-registration intent stashed during tool execution in a
+        // `finally` so the per-`toolCallId` entry is ALWAYS freed — even when the
+        // invoke throws — otherwise a rejected tool call would leak its stash
+        // entry in the module-level Map forever. On the throw path the drained
+        // intent is simply discarded (the error propagates to the outer catch);
+        // on success the actual write happens later in `registerWork`, once the
+        // executor knows the cumulative cost.
+        workIntent = takeWorkIntent(call.id);
+      }
 
       if (store.operations[executeOperationId]?.abortController.signal.aborted) {
         return this.createInterruptedExecution(toolMessageId);

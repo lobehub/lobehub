@@ -71,6 +71,22 @@ export const workChangeTypeFromAction = (
 const asString = (value: unknown): string | undefined =>
   typeof value === 'string' && value.length > 0 ? value : undefined;
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null;
+
+/** Read a non-empty string field off an optional untrusted record. */
+const optionalStringFromRecord = (
+  record: Record<string, unknown> | undefined,
+  key: string,
+): string | undefined => (record ? asString(record[key]) : undefined);
+
+/** One task-identity candidate before success-filtering and identity mapping. */
+interface TaskWorkTargetCandidate {
+  identifier?: unknown;
+  success?: unknown;
+  taskId?: unknown;
+}
+
 /**
  * Extract the task identities to register from a `resourceType: 'task'` API
  * result. Works uniformly for server and client because both surface identity
@@ -95,7 +111,8 @@ export const extractTaskWorkTargets = ({
   args: unknown;
   result: Pick<BuiltinToolResult, 'state' | 'success'>;
 }): TaskWorkTarget[] => {
-  const state = result.state as Record<string, unknown> | undefined;
+  const stateRecord = isRecord(result.state) ? result.state : undefined;
+  const argsRecord = isRecord(args) ? args : undefined;
 
   // Normalize both shapes into one candidate list, then run a single
   // success-filter → identity-map → drop-empty pipeline:
@@ -105,23 +122,26 @@ export const extractTaskWorkTargets = ({
   // - Single (`createTask` / `editTask` / …): one synthetic item gated on the
   //   call's own `success`; the update identifier falls back to
   //   `args.identifier` when the server runtime returns no state.
-  const items: any[] = Array.isArray(state?.results)
-    ? state.results
+  const candidates: unknown[] = Array.isArray(stateRecord?.results)
+    ? stateRecord.results
     : result.success
       ? [
           {
-            identifier: asString(state?.identifier) ?? asString((args as any)?.identifier),
+            identifier:
+              optionalStringFromRecord(stateRecord, 'identifier') ??
+              optionalStringFromRecord(argsRecord, 'identifier'),
             success: true,
-            taskId: state?.taskId,
-          },
+            taskId: stateRecord?.taskId,
+          } satisfies TaskWorkTargetCandidate,
         ]
       : [];
 
-  return items
-    .filter((item) => item && item.success === true)
+  return candidates
+    .filter(isRecord)
+    .filter((item) => (item as TaskWorkTargetCandidate).success === true)
     .map((item) => ({
-      taskId: asString(item.taskId),
-      taskIdentifier: asString(item.identifier),
+      taskId: asString((item as TaskWorkTargetCandidate).taskId),
+      taskIdentifier: asString((item as TaskWorkTargetCandidate).identifier),
     }))
     .filter((target) => Boolean(target.taskId || target.taskIdentifier));
 };
@@ -216,6 +236,34 @@ export interface WorkRegistrationProvenance {
 }
 
 /**
+ * Log each rejected task-persistence result from a `Promise.allSettled` fan-out
+ * without breaking sibling-tolerance. The index correlates a settled result back
+ * to the target it was dispatched for (the two arrays are built in lockstep), so
+ * a failure carries enough sanitized context (action, task id/identifier,
+ * provenance ids, error) to be diagnosable — instead of silently vanishing.
+ */
+const logRejectedTaskWork = (
+  action: 'delete' | 'create' | 'update',
+  targets: TaskWorkTarget[],
+  results: PromiseSettledResult<unknown>[],
+  provenance: Pick<WorkRegistrationProvenance, 'rootOperationId' | 'sourceToolCallId'>,
+): void => {
+  results.forEach((result, index) => {
+    if (result.status !== 'rejected') return;
+    const target = targets[index];
+
+    console.error('[workRegistration] failed to persist task Work', {
+      action,
+      error: result.reason,
+      rootOperationId: provenance.rootOperationId,
+      sourceToolCallId: provenance.sourceToolCallId,
+      taskId: target?.taskId,
+      taskIdentifier: target?.taskIdentifier,
+    });
+  });
+};
+
+/**
  * The single "how to route a Work registration intent" implementation, consumed
  * by BOTH persistence dispatch layers — the server runtime
  * (`registerWorkFromIntent`, backed by `WorkModel`) and the legacy client
@@ -255,17 +303,17 @@ export const dispatchWorkRegistrationIntent = async (
     const { action, changeType, targets } = intent;
 
     if (action === 'delete') {
-      await Promise.allSettled(
-        targets
-          .filter((target) => target.taskId)
-          .map((target) => ports.deleteTaskWork({ taskId: target.taskId! })),
+      const deleteTargets = targets.filter((target) => target.taskId);
+      const results = await Promise.allSettled(
+        deleteTargets.map((target) => ports.deleteTaskWork({ taskId: target.taskId! })),
       );
+      logRejectedTaskWork('delete', deleteTargets, results, { rootOperationId, sourceToolCallId });
       return;
     }
 
     if (!changeType) return;
 
-    await Promise.allSettled(
+    const results = await Promise.allSettled(
       targets.map((target) =>
         ports.registerTask({
           actorAgentId,
@@ -283,6 +331,7 @@ export const dispatchWorkRegistrationIntent = async (
         }),
       ),
     );
+    logRejectedTaskWork(action, targets, results, { rootOperationId, sourceToolCallId });
     return;
   }
 

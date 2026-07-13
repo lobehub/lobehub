@@ -132,6 +132,35 @@ describe('WorkModel · document', () => {
     });
   });
 
+  it('truncates an oversized explicit description before writing the snapshot', async () => {
+    const agentDocumentModel = new AgentDocumentModel(serverDB, userId);
+    const workModel = new WorkModel(serverDB, userId);
+    // Simulate a multi-KB description that must never be copied verbatim into the
+    // immutable work_version snapshot.
+    const longDescription = 'A'.repeat(5000);
+    const expectedDescription = `${'A'.repeat(120)}...`;
+    const doc = await agentDocumentModel.create(agentId, 'long-description.md', 'Body', {
+      metadata: { description: 'Persisted description' },
+      title: 'Long Description',
+    });
+
+    const work = await workModel.registerDocument({
+      agentDocumentId: doc.id,
+      agentId,
+      description: longDescription,
+      documentId: doc.documentId,
+      changeType: 'created',
+      rootOperationId: 'op-doc-long-description',
+      sourceToolName: 'createDocument',
+      sourceToolCallId: 'tool-call-doc-long-description',
+      topicId,
+    });
+
+    const versions = await workModel.listVersions(work!.id);
+    expect(versions).toHaveLength(1);
+    expect(expectDocumentSnapshot(versions[0].snapshot).description).toBe(expectedDescription);
+  });
+
   it('keeps one document work row and appends versions for document edits', async () => {
     const agentDocumentModel = new AgentDocumentModel(serverDB, userId);
     const workModel = new WorkModel(serverDB, userId);

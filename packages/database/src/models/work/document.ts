@@ -20,8 +20,16 @@ export const documentSnapshot = (
   doc: DocumentItem,
   params: Pick<RegisterDocumentWorkParams, 'description'>,
 ): WorkVersionSnapshot => {
+  // Run EVERY description source through the same card-sized truncation helper at
+  // write time. Explicit `params.description` and the persisted
+  // `documents.description` can each be multi-MB; without truncation that full
+  // body would be copied into every immutable work_version snapshot. Chaining
+  // with `||` preserves the original precedence (explicit → persisted → content)
+  // because `truncateSummaryText` returns `null` for empty/whitespace input.
   const description =
-    params.description?.trim() || doc.description?.trim() || truncateSummaryText(doc.content);
+    truncateSummaryText(params.description) ||
+    truncateSummaryText(doc.description) ||
+    truncateSummaryText(doc.content);
 
   return {
     document: {

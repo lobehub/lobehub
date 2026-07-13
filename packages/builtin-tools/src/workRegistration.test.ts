@@ -286,6 +286,39 @@ describe('dispatchWorkRegistrationIntent', () => {
       ).resolves.toBeUndefined();
       expect(registerTask).toHaveBeenCalledTimes(2);
     });
+
+    it('logs a rejected registration with sanitized context while still resolving', async () => {
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      try {
+        const registerTask = vi.fn().mockRejectedValue(new Error('trpc died'));
+        const ports = buildPorts({ registerTask });
+        const intent: WorkRegistrationIntent = {
+          action: 'create',
+          changeType: 'created',
+          targets: [{ taskId: 'task_1', taskIdentifier: 'T-1' }],
+          type: 'task',
+        };
+
+        await expect(
+          dispatchWorkRegistrationIntent(intent, ports, provenance),
+        ).resolves.toBeUndefined();
+
+        expect(consoleError).toHaveBeenCalledTimes(1);
+        expect(consoleError).toHaveBeenCalledWith(
+          '[workRegistration] failed to persist task Work',
+          expect.objectContaining({
+            action: 'create',
+            error: expect.any(Error),
+            rootOperationId: 'op-root',
+            sourceToolCallId: 'tool-call-1',
+            taskId: 'task_1',
+            taskIdentifier: 'T-1',
+          }),
+        );
+      } finally {
+        consoleError.mockRestore();
+      }
+    });
   });
 
   describe('document', () => {
