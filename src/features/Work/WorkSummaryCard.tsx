@@ -77,7 +77,7 @@ const WorkSummaryCard = memo<WorkSummaryCardProps>(({ className, item, onOpen })
   const cost = formatWorkVersionCost(item.totalCost);
 
   const descriptor = getWorkTypeDescriptor(item);
-  const Icon = descriptor.Icon;
+  const Icon = descriptor.getIcon(item);
   const title =
     descriptor.getTitle(item)?.trim() || descriptor.getIdentifier(item) || item.resourceId;
   const description = descriptor.getDescription(item);

@@ -5,6 +5,7 @@ import type {
   RegisterTaskWorkParams,
   WorkItem,
   WorkListItem,
+  WorkSkillProvider,
   WorkSummaryItem,
   WorkType,
   WorkVersionEventItem,
@@ -64,6 +65,7 @@ class WorkService {
   listByWorkspace = async (params: {
     cursor?: string | null;
     limit?: number;
+    provider?: WorkSkillProvider;
     type?: WorkType | null;
   }): Promise<WorkSummaryPage> => lambdaClient.work.listByWorkspace.query(params);
 

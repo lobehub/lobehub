@@ -6,8 +6,8 @@ import { works } from '../../../schemas';
 import { WorkModel } from '..';
 import {
   cleanupWorkTestData,
-  expectGithubSnapshot,
-  expectGithubSummaryItem,
+  expectExternalSnapshot,
+  expectExternalSummaryItem,
   seedWorkTestData,
   serverDB,
   topicId,
@@ -80,40 +80,38 @@ describe('WorkModel · github', () => {
     expect(second).toMatchObject({
       resourceId: 'lobehub/lobehub#123',
       resourceType: 'github_issue',
-      type: 'github',
+      type: 'external',
     });
 
     const versions = await workModel.listVersions(first!.id);
     expect(versions.map((item) => item.version)).toEqual([2, 1]);
     expect(versions[0].changeType).toBe('updated');
     // Partial update responses keep prior snapshot fields (title/description).
-    expect(expectGithubSnapshot(versions[0].snapshot)).toEqual({
+    expect(expectExternalSnapshot(versions[0].snapshot)).toEqual({
       description: 'Track GitHub issue as Work',
       identifier: 'lobehub/lobehub#123',
-      number: 123,
-      repo: 'lobehub/lobehub',
       status: 'closed',
       title: 'GitHub Work issue',
       url: 'https://github.com/lobehub/lobehub/issues/123',
     });
-    expect(expectGithubSnapshot(versions[1].snapshot).status).toBe('open');
+    expect(expectExternalSnapshot(versions[1].snapshot).status).toBe('open');
 
     const byOperation = await workModel.listSummariesByRootOperations({
       rootOperationIds: ['op-github-issue-create', 'op-github-issue-edit'],
     });
     expect(byOperation['op-github-issue-create']).toEqual([]);
-    const issueSummary = expectGithubSummaryItem(byOperation['op-github-issue-edit']?.[0]);
-    expect(issueSummary.github).toMatchObject({
-      repo: 'lobehub/lobehub',
+    const issueSummary = expectExternalSummaryItem(byOperation['op-github-issue-edit']?.[0]);
+    expect(issueSummary.external).toMatchObject({
+      identifier: 'lobehub/lobehub#123',
       status: 'closed',
     });
 
     const byConversation = await workModel.listByConversation({ topicId });
     expect(byConversation).toHaveLength(1);
     expect(byConversation[0]).toMatchObject({
-      github: expect.objectContaining({ repo: 'lobehub/lobehub' }),
+      external: expect.objectContaining({ identifier: 'lobehub/lobehub#123' }),
       resourceType: 'github_issue',
-      type: 'github',
+      type: 'external',
     });
 
     // Read-only queries and failed results never register Works.
@@ -168,7 +166,7 @@ describe('WorkModel · github', () => {
     expect(pullRequest).toMatchObject({
       resourceId: 'lobehub/lobehub#456',
       resourceType: 'github_pull_request',
-      type: 'github',
+      type: 'external',
     });
 
     // Merge-style responses carry no node_id; the target still resolves to
@@ -193,10 +191,9 @@ describe('WorkModel · github', () => {
     expect(versions.map((item) => item.version)).toEqual([2, 1]);
     // The merge response ({ merged, sha }) collapses onto status='merged' while
     // the create-time display metadata survives the patch merge.
-    expect(expectGithubSnapshot(versions[0].snapshot)).toMatchObject({
+    expect(expectExternalSnapshot(versions[0].snapshot)).toMatchObject({
       description: 'Adds the Work registry',
-      number: 456,
-      repo: 'lobehub/lobehub',
+      identifier: 'lobehub/lobehub#456',
       status: 'merged',
       title: 'feat: add work registry',
     });
@@ -259,7 +256,7 @@ describe('WorkModel · github', () => {
     expect(created).toMatchObject({
       resourceId: 'lobehub-biz/lobehub-cloud#952',
       resourceType: 'github_issue',
-      type: 'github',
+      type: 'external',
     });
 
     // Chained commands: the trailing stdout URL identifies the edited entity.
@@ -282,10 +279,9 @@ describe('WorkModel · github', () => {
     expect(versions.map((item) => item.version)).toEqual([2, 1]);
     expect(versions[0].changeType).toBe('updated');
     // Patch merge keeps create-time title/status while applying the new body.
-    expect(expectGithubSnapshot(versions[0].snapshot)).toMatchObject({
+    expect(expectExternalSnapshot(versions[0].snapshot)).toMatchObject({
       description: 'updated body',
-      number: 952,
-      repo: 'lobehub-biz/lobehub-cloud',
+      identifier: 'lobehub-biz/lobehub-cloud#952',
       status: 'open',
       title: 'CLI Issue',
       url: 'https://github.com/lobehub-biz/lobehub-cloud/issues/952',
@@ -309,7 +305,7 @@ describe('WorkModel · github', () => {
     });
     const prVersions = await workModel.listVersions(pullRequest!.id);
     // `--draft` collapses onto the unified status field on create.
-    expect(expectGithubSnapshot(prVersions[0].snapshot)).toMatchObject({
+    expect(expectExternalSnapshot(prVersions[0].snapshot)).toMatchObject({
       description: 'pr body',
       status: 'draft',
       title: 'CLI PR',
@@ -349,7 +345,7 @@ describe('WorkModel · github', () => {
     expect(readOnly).toBeNull();
     expect(nonGh).toBeNull();
 
-    const workRows = await serverDB.select().from(works).where(eq(works.type, 'github'));
+    const workRows = await serverDB.select().from(works).where(eq(works.type, 'external'));
     expect(workRows).toHaveLength(2);
   });
 });

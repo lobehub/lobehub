@@ -1,12 +1,12 @@
 import type {
-  LinearWorkEntityType,
-  LinearWorkPatchField,
+  ExternalWorkPatchField,
   LinearWorkResourceType,
-  RegisterLinearToolResultWorkParams,
-  RegisterLinearWorkParams,
+  RegisterExternalWorkParams,
+  SkillToolResultWorkInput,
 } from '@lobechat/types';
 
 import {
+  type ExternalToolWorkOperation,
   fromRecord,
   hasOwn,
   isApplicationError,
@@ -16,17 +16,13 @@ import {
   toRecord,
 } from './toolResultParsing';
 
+/** Linear entity vocabulary internal to this normalizer. */
+type LinearWorkEntityType = 'document' | 'issue';
+
 const LINEAR_CREATE_TOOLS = new Set(['create_document', 'save_document', 'save_issue']);
 const LINEAR_ISSUE_IDENTIFIER_PATTERN = /^[A-Z][A-Z0-9]+-\d+$/u;
 /** Snapshots store card-preview text only; cap free-text fields at write time. */
 const MAX_LINEAR_SNAPSHOT_TEXT_LENGTH = 300;
-
-interface LinearToolRegisterOperation {
-  params: RegisterLinearWorkParams;
-  type: 'register';
-}
-
-export type LinearToolWorkOperation = LinearToolRegisterOperation;
 
 const snapshotText = (value: unknown): string | null => {
   const text = stringValue(value);
@@ -161,9 +157,9 @@ const linearResourceType = (entityType: LinearWorkEntityType): LinearWorkResourc
 };
 
 const contextParams = (
-  params: RegisterLinearToolResultWorkParams,
+  params: SkillToolResultWorkInput,
 ): Pick<
-  RegisterLinearWorkParams,
+  RegisterExternalWorkParams,
   | 'actorAgentId'
   | 'cumulativeCost'
   | 'cumulativeUsage'
@@ -186,17 +182,17 @@ const contextParams = (
 });
 
 const createRegisterOperation = (
-  params: RegisterLinearToolResultWorkParams,
+  params: SkillToolResultWorkInput,
   entityType: LinearWorkEntityType,
   record: Record<string, unknown>,
-): LinearToolRegisterOperation | null => {
+): ExternalToolWorkOperation | null => {
   const id = fromRecord(record, ['id', 'uuid', 'identifier', 'slug', 'slugId']);
   if (!id) return null;
 
   const url = fromRecord(record, ['url', 'appUrl']);
   const identifier = resolveResourceIdentifier({ entityType, id, record, url });
-  const patchFields = new Set<LinearWorkPatchField>();
-  const patch = <T>(field: LinearWorkPatchField, value: T | null | undefined) => {
+  const patchFields = new Set<ExternalWorkPatchField>();
+  const patch = <T>(field: ExternalWorkPatchField, value: T | null | undefined) => {
     if (value !== undefined) patchFields.add(field);
     return value;
   };
@@ -239,8 +235,8 @@ const createRegisterOperation = (
 };
 
 export const normalizeLinearToolResult = (
-  params: RegisterLinearToolResultWorkParams,
-): LinearToolWorkOperation | null => {
+  params: SkillToolResultWorkInput,
+): ExternalToolWorkOperation | null => {
   if (isApplicationError(params.data)) return null;
 
   switch (params.toolName) {

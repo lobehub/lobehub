@@ -1,12 +1,12 @@
 import type {
-  GithubWorkEntityType,
-  GithubWorkPatchField,
+  ExternalWorkPatchField,
   GithubWorkResourceType,
-  RegisterGithubToolResultWorkParams,
-  RegisterGithubWorkParams,
+  RegisterExternalWorkParams,
+  SkillToolResultWorkInput,
 } from '@lobechat/types';
 
 import {
+  type ExternalToolWorkOperation,
   fromRecord,
   hasOwn,
   isApplicationError,
@@ -15,6 +15,9 @@ import {
   stringValue,
   toRecord,
 } from './toolResultParsing';
+
+/** GitHub entity vocabulary internal to this normalizer. */
+type GithubWorkEntityType = 'issue' | 'pull_request';
 
 /** Snapshots store card-preview text only; cap free-text fields at write time. */
 const MAX_GITHUB_SNAPSHOT_TEXT_LENGTH = 300;
@@ -53,18 +56,11 @@ const GITHUB_CLI_TOOLS = new Set(['runCommand', 'run_command']);
  * Shared by the structured-tool and gh-CLI param builders.
  */
 const makePatch =
-  (patchFields: Set<GithubWorkPatchField>) =>
-  <T>(field: GithubWorkPatchField, present: boolean, value: T): T | undefined => {
+  (patchFields: Set<ExternalWorkPatchField>) =>
+  <T>(field: ExternalWorkPatchField, present: boolean, value: T): T | undefined => {
     if (present) patchFields.add(field);
     return present ? value : undefined;
   };
-
-interface GithubToolRegisterOperation {
-  params: RegisterGithubWorkParams;
-  type: 'register';
-}
-
-export type GithubToolWorkOperation = GithubToolRegisterOperation;
 
 const snapshotText = (value: unknown): string | null => {
   const text = stringValue(value);
@@ -208,10 +204,10 @@ const githubResourceType = (entityType: GithubWorkEntityType): GithubWorkResourc
   entityType === 'issue' ? 'github_issue' : 'github_pull_request';
 
 const buildParams = (
-  params: RegisterGithubToolResultWorkParams,
+  params: SkillToolResultWorkInput,
   tool: { entityType: GithubWorkEntityType; changeType: 'created' | 'updated' },
   record: Record<string, unknown>,
-): Omit<RegisterGithubWorkParams, 'resourceId'> => {
+): Omit<RegisterExternalWorkParams, 'resourceId'> => {
   const args = params.args ?? {};
   const repo = resolveRepo(record, args);
   const number = resolveNumber(record, args);
@@ -219,11 +215,11 @@ const buildParams = (
   // the persisted url reaches shell.openExternal on desktop.
   const url = sanitizeExternalUrl(resolveUrl(record));
 
-  const patchFields = new Set<GithubWorkPatchField>();
+  const patchFields = new Set<ExternalWorkPatchField>();
   const patch = makePatch(patchFields);
 
-  if (repo) patchFields.add('repo');
-  if (number !== null) patchFields.add('number');
+  // `owner/repo#number` is encoded into `identifier`; repo/number are no longer
+  // persisted as their own snapshot fields.
   if (repo && number !== null) patchFields.add('identifier');
   if (url) patchFields.add('url');
 
@@ -234,8 +230,6 @@ const buildParams = (
     cumulativeUsage: params.cumulativeUsage ?? null,
     description: patch('description', hasOwn(record, 'body'), snapshotText(record.body)),
     identifier: repo && number !== null ? `${repo}#${number}` : null,
-    number,
-    repo,
     resourceType: githubResourceType(tool.entityType),
     rootOperationId: params.rootOperationId ?? null,
     sourceMessageId: params.sourceMessageId ?? null,
@@ -513,8 +507,8 @@ const parseGhSegment = (segment: string[]): ParsedGhCommand | null => {
 };
 
 const normalizeGithubCliResult = (
-  params: RegisterGithubToolResultWorkParams,
-): GithubToolWorkOperation | null => {
+  params: SkillToolResultWorkInput,
+): ExternalToolWorkOperation | null => {
   const record = unwrapData(params.data);
   if (!record) return null;
 
@@ -558,7 +552,7 @@ const normalizeGithubCliResult = (
   // stdout and reaches shell.openExternal on desktop.
   const safeUrl = sanitizeExternalUrl(ref.url);
 
-  const patchFields = new Set<GithubWorkPatchField>(['identifier', 'number', 'repo']);
+  const patchFields = new Set<ExternalWorkPatchField>(['identifier']);
   const patch = makePatch(patchFields);
 
   return {
@@ -569,8 +563,6 @@ const normalizeGithubCliResult = (
       cumulativeUsage: params.cumulativeUsage ?? null,
       description: patch('description', parsed.body !== null, snapshotText(parsed.body)),
       identifier,
-      number: ref.number,
-      repo: ref.repo,
       resourceId: identifier,
       resourceType: githubResourceType(ref.entityType),
       rootOperationId: params.rootOperationId ?? null,
@@ -592,8 +584,8 @@ const normalizeGithubCliResult = (
 };
 
 export const normalizeGithubToolResult = (
-  params: RegisterGithubToolResultWorkParams,
-): GithubToolWorkOperation | null => {
+  params: SkillToolResultWorkInput,
+): ExternalToolWorkOperation | null => {
   // Payload apiNames sometimes carry the provider prefix (e.g. `github_create_issue`).
   const toolName = params.toolName.replace(/^github_/, '');
 

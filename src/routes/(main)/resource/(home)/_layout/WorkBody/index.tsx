@@ -10,10 +10,11 @@ import { parseWorkGalleryKey, WORK_GALLERY_ENTRIES } from '@/features/WorkGaller
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 
 /**
- * The 产物 sidebar group: five entries (all + task / document / linear / github)
- * that switch the resource content area to the cross-topic Work gallery via
- * `?works=<key>`. Parallel to the file "Library" group, but its entries are a
- * flat nav list (like the file category menu) rather than a fetched list.
+ * The 产物 sidebar group: five entries (all + task / document + the per-provider
+ * linear / github tabs) that switch the resource content area to the cross-topic
+ * Work gallery via `?works=<key>`. Parallel to the file "Library" group, but its
+ * entries are a flat nav list (like the file category menu) rather than a
+ * fetched list.
  */
 const WorkBody = memo<{ itemKey: string }>(({ itemKey }) => {
   const { t } = useTranslation('file');

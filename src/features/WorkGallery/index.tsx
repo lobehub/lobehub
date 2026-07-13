@@ -14,7 +14,7 @@ import WorkSummaryCard from '@/features/Work/WorkSummaryCard';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useDocumentStore } from '@/store/document';
 
-import { type WorkGalleryKey, workTypeFromKey } from './const';
+import type { WorkGalleryKey } from './const';
 import { useWorkspaceWorksInfinite } from './hooks';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -129,16 +129,15 @@ interface WorkGalleryProps {
  * flow of Work summaries for the active workspace / personal scope. Reuses
  * `WorkSummaryCard`, feeding it an `onOpen` that navigates without the chat
  * portal (task → standalone detail route, document → global preview modal,
- * linear / github → external link).
+ * external skill works (linear / github) → external link).
  */
 const WorkGallery = memo<WorkGalleryProps>(({ galleryKey }) => {
   const { t } = useTranslation('file');
   const navigate = useWorkspaceAwareNavigate();
   const openDocumentPreview = useDocumentStore((s) => s.openDocumentPreview);
 
-  const type = workTypeFromKey(galleryKey);
   const { items, error, hasMore, isLoadingInitial, isLoadingMore, loadMore, reload } =
-    useWorkspaceWorksInfinite(type);
+    useWorkspaceWorksInfinite(galleryKey);
 
   const handleOpen = useCallback(
     (item: WorkSummaryItem) => {
@@ -150,7 +149,8 @@ const WorkGallery = memo<WorkGalleryProps>(({ galleryKey }) => {
           openDocumentPreview(openTarget.documentId);
           return;
         }
-        // linear / github: external link (URL-less cards yield no target above).
+        // external skill works (linear / github): external link (URL-less cards
+        // yield no target above).
         case 'external': {
           // Defense in depth: only ever hand http(s) to shell.openExternal.
           if (isSafeExternalUrl(openTarget.url))

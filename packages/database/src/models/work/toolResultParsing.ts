@@ -1,3 +1,4 @@
+import type { RegisterExternalWorkParams } from '@lobechat/types';
 import { toRecord } from '@lobechat/utils';
 
 /**
@@ -7,6 +8,16 @@ import { toRecord } from '@lobechat/utils';
  */
 
 export { toRecord };
+
+/**
+ * The single register operation every provider normalizer emits. Providers only
+ * differ in how they parse their tool result into `RegisterExternalWorkParams`;
+ * the resulting operation shape is unified.
+ */
+export interface ExternalToolWorkOperation {
+  params: RegisterExternalWorkParams;
+  type: 'register';
+}
 
 export const parseMaybeJSON = (value: unknown): unknown => {
   if (typeof value !== 'string') return value;

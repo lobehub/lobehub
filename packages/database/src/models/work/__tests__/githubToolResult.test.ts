@@ -22,8 +22,6 @@ describe('normalizeGithubToolResult (gh runCommand parsing)', () => {
 
     expect(operation?.params).toMatchObject({
       identifier: 'lobehub/lobehub#123',
-      number: 123,
-      repo: 'lobehub/lobehub',
       resourceId: 'lobehub/lobehub#123',
       changeType: 'created',
       title: 'Fix: "quoted" bug report',
@@ -44,7 +42,7 @@ describe('normalizeGithubToolResult (gh runCommand parsing)', () => {
     const operation = runCommand(`gh issue edit 42 --repo lobehub/lobehub --title Fix\\ the\\ bug`);
 
     expect(operation?.params).toMatchObject({
-      number: 42,
+      identifier: 'lobehub/lobehub#42',
       changeType: 'updated',
       title: 'Fix the bug',
     });
@@ -72,7 +70,7 @@ describe('normalizeGithubToolResult (gh runCommand parsing)', () => {
       `gh issue edit 952 --repo lobehub/lobehub --milestone 'v2 launch'`,
     );
 
-    expect(operation?.params.number).toBe(952);
+    expect(operation?.params.identifier).toBe('lobehub/lobehub#952');
     // Milestone is consumed as the flag value, not snapshotted as a title.
     expect(operation?.params.title).toBeUndefined();
   });
@@ -92,7 +90,7 @@ describe('normalizeGithubToolResult (gh runCommand parsing)', () => {
     );
 
     expect(operation?.params).toMatchObject({
-      number: 88,
+      identifier: 'lobehub/lobehub#88',
       resourceType: 'github_pull_request',
       changeType: 'created',
       title: 'New PR',
@@ -105,8 +103,7 @@ describe('normalizeGithubToolResult (gh runCommand parsing)', () => {
     );
 
     expect(operation?.params).toMatchObject({
-      number: 7,
-      repo: 'lobehub/lobehub',
+      identifier: 'lobehub/lobehub#7',
       changeType: 'updated',
       title: 'Second',
     });
@@ -132,7 +129,7 @@ describe('normalizeGithubToolResult (url scheme allowlist)', () => {
     // back to the command's edit target (number 5) and carries no url.
     const operation = editWithStdoutUrl(url);
 
-    expect(operation?.params.number).toBe(5);
+    expect(operation?.params.identifier).toBe('lobehub/lobehub#5');
     expect(operation?.params.url).toBeUndefined();
   });
 

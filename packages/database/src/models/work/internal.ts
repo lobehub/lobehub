@@ -89,7 +89,7 @@ export interface TaskWorkSummaryQueryRow {
  * Work types whose list rows are fully described by the version's snapshot
  * JSON (unlike `task`, which additionally joins the tasks table).
  */
-export type SnapshotWorkType = 'document' | 'github' | 'linear';
+export type SnapshotWorkType = 'document' | 'external';
 
 export interface SnapshotWorkSummaryQueryRow<Snapshot> {
   event: WorkVersionPreview;

@@ -1,10 +1,11 @@
 import type { TaskStatus } from './task';
 
-export type WorkType = 'document' | 'github' | 'linear' | 'task';
+export type WorkType = 'document' | 'external' | 'task';
 export type LinearWorkResourceType = 'linear_document' | 'linear_issue';
 export type GithubWorkResourceType = 'github_issue' | 'github_pull_request';
-export type WorkResourceType =
-  'document' | GithubWorkResourceType | LinearWorkResourceType | 'task';
+/** Every resource type backed by the unified `external` Work type. */
+export type ExternalWorkResourceType = GithubWorkResourceType | LinearWorkResourceType;
+export type WorkResourceType = 'document' | ExternalWorkResourceType | 'task';
 /**
  * How a version changed the Work. Not derivable from `version === 1`: updating
  * an external resource that was never registered before yields a v1 row with
@@ -33,43 +34,23 @@ export interface DocumentWorkVersionSnapshot {
   title: string | null;
 }
 
-export type LinearWorkEntityType = 'document' | 'issue';
-
-export interface LinearWorkVersionSnapshot {
+export interface ExternalWorkVersionSnapshot {
   description: string | null;
-  /** Issue identifier (`ENG-123`) or document slug for display. */
+  /** Short human reference: `ENG-123`, `owner/repo#42`, or a document slug. */
   identifier: string | null;
   status: string | null;
   title: string | null;
   url: string | null;
 }
 
-export type LinearWorkPatchField = keyof LinearWorkVersionSnapshot;
-
-export type GithubWorkEntityType = 'issue' | 'pull_request';
-
-export interface GithubWorkVersionSnapshot {
-  description: string | null;
-  /** `owner/repo#number` for display. */
-  identifier: string | null;
-  number: number | null;
-  repo: string | null;
-  status: string | null;
-  title: string | null;
-  url: string | null;
-}
-
-export type GithubWorkPatchField = keyof GithubWorkVersionSnapshot;
+export type ExternalWorkPatchField = keyof ExternalWorkVersionSnapshot;
 
 export type WorkVersionSnapshot =
   | {
       document: DocumentWorkVersionSnapshot;
     }
   | {
-      github: GithubWorkVersionSnapshot;
-    }
-  | {
-      linear: LinearWorkVersionSnapshot;
+      external: ExternalWorkVersionSnapshot;
     }
   | {
       task: TaskWorkVersionSnapshot;
@@ -165,20 +146,13 @@ export interface DocumentWorkListItem extends WorkItem {
   type: 'document';
 }
 
-export interface LinearWorkListItem extends WorkItem {
-  linear: LinearWorkVersionSnapshot;
-  resourceType: LinearWorkResourceType;
-  type: 'linear';
+export interface ExternalWorkListItem extends WorkItem {
+  external: ExternalWorkVersionSnapshot;
+  resourceType: ExternalWorkResourceType;
+  type: 'external';
 }
 
-export interface GithubWorkListItem extends WorkItem {
-  github: GithubWorkVersionSnapshot;
-  resourceType: GithubWorkResourceType;
-  type: 'github';
-}
-
-export type WorkListItem =
-  DocumentWorkListItem | GithubWorkListItem | LinearWorkListItem | TaskWorkListItem;
+export type WorkListItem = DocumentWorkListItem | ExternalWorkListItem | TaskWorkListItem;
 
 export interface TaskWorkVersionEventItem extends TaskWorkListItem {
   version: WorkVersionPreview;
@@ -188,19 +162,12 @@ export interface DocumentWorkVersionEventItem extends DocumentWorkListItem {
   version: WorkVersionPreview;
 }
 
-export interface LinearWorkVersionEventItem extends LinearWorkListItem {
-  version: WorkVersionPreview;
-}
-
-export interface GithubWorkVersionEventItem extends GithubWorkListItem {
+export interface ExternalWorkVersionEventItem extends ExternalWorkListItem {
   version: WorkVersionPreview;
 }
 
 export type WorkVersionEventItem =
-  | DocumentWorkVersionEventItem
-  | GithubWorkVersionEventItem
-  | LinearWorkVersionEventItem
-  | TaskWorkVersionEventItem;
+  DocumentWorkVersionEventItem | ExternalWorkVersionEventItem | TaskWorkVersionEventItem;
 export type WorkVersionEventMap = Record<string, WorkVersionEventItem[]>;
 
 export interface TaskWorkSummaryItem extends TaskWorkListItem {
@@ -215,20 +182,14 @@ export interface DocumentWorkSummaryItem extends DocumentWorkListItem {
   version: Pick<WorkVersionItem, 'createdAt' | 'id' | 'version'> | null;
 }
 
-export interface LinearWorkSummaryItem extends LinearWorkListItem {
-  event: WorkVersionPreview;
-  totalCost: number | null;
-  version: Pick<WorkVersionItem, 'createdAt' | 'id' | 'version'> | null;
-}
-
-export interface GithubWorkSummaryItem extends GithubWorkListItem {
+export interface ExternalWorkSummaryItem extends ExternalWorkListItem {
   event: WorkVersionPreview;
   totalCost: number | null;
   version: Pick<WorkVersionItem, 'createdAt' | 'id' | 'version'> | null;
 }
 
 export type WorkSummaryItem =
-  DocumentWorkSummaryItem | GithubWorkSummaryItem | LinearWorkSummaryItem | TaskWorkSummaryItem;
+  DocumentWorkSummaryItem | ExternalWorkSummaryItem | TaskWorkSummaryItem;
 export type WorkSummaryMap = Record<string, WorkSummaryItem[]>;
 
 export interface RegisterDocumentWorkParams {
@@ -259,39 +220,21 @@ export interface DeleteTaskWorkParams {
   taskId: string;
 }
 
-export interface RegisterLinearWorkParams {
+export interface RegisterExternalWorkParams {
   actorAgentId?: string | null;
   changeType: WorkVersionChangeType;
   cumulativeCost?: number | null;
   cumulativeUsage?: WorkVersionCumulativeUsage | null;
   description?: string | null;
   identifier?: string | null;
-  patchFields?: LinearWorkPatchField[];
+  patchFields?: ExternalWorkPatchField[];
+  /**
+   * Canonical resource identity (`owner/repo#number`, a linear id, …). Required:
+   * every normalizer resolves it before registering, so there is no partial
+   * `Omit<…, 'resourceId'>` intermediate shape.
+   */
   resourceId: string;
-  resourceType: LinearWorkResourceType;
-  rootOperationId?: string | null;
-  sourceMessageId?: string | null;
-  sourceToolCallId?: string | null;
-  sourceToolName: string;
-  status?: string | null;
-  threadId?: string | null;
-  title?: string | null;
-  topicId?: string | null;
-  url?: string | null;
-}
-
-export interface RegisterGithubWorkParams {
-  actorAgentId?: string | null;
-  changeType: WorkVersionChangeType;
-  cumulativeCost?: number | null;
-  cumulativeUsage?: WorkVersionCumulativeUsage | null;
-  description?: string | null;
-  identifier?: string | null;
-  number?: number | null;
-  patchFields?: GithubWorkPatchField[];
-  repo?: string | null;
-  resourceId: string;
-  resourceType: GithubWorkResourceType;
+  resourceType: ExternalWorkResourceType;
   rootOperationId?: string | null;
   sourceMessageId?: string | null;
   sourceToolCallId?: string | null;
@@ -305,14 +248,46 @@ export interface RegisterGithubWorkParams {
 
 /**
  * LobeHub Skill providers whose tool results are adapted into the Work
- * registry. Client executors and the server BuiltinToolsExecutor both gate on
- * this list before calling `handleSkillToolResult`.
+ * registry. Single source of truth: it gates `handleSkillToolResult` (client
+ * executors + server BuiltinToolsExecutor), keys the DB normalizer registry
+ * (`SKILL_TOOL_RESULT_NORMALIZERS`), keys `WORK_PROVIDER_RESOURCE_TYPES`, and
+ * drives the WorkGallery provider list filters.
+ *
+ * Adding a provider = extend this list + `WORK_PROVIDER_RESOURCE_TYPES` below +
+ * add one normalizer in the DB registry.
  */
 export const WORK_SKILL_PROVIDERS = ['github', 'linear'] as const;
 export type WorkSkillProvider = (typeof WORK_SKILL_PROVIDERS)[number];
 
 export const isWorkSkillProvider = (provider?: string | null): provider is WorkSkillProvider =>
   !!provider && (WORK_SKILL_PROVIDERS as readonly string[]).includes(provider);
+
+/**
+ * The `external` resource types each skill provider owns. Single source of
+ * truth for the provider ⇄ resourceType relationship: the workspace list filter
+ * narrows by provider through this map, and `workProviderOfResourceType` derives
+ * the reverse lookup from it (never a second hand-written map).
+ */
+export const WORK_PROVIDER_RESOURCE_TYPES: Record<
+  WorkSkillProvider,
+  readonly ExternalWorkResourceType[]
+> = {
+  github: ['github_issue', 'github_pull_request'],
+  linear: ['linear_document', 'linear_issue'],
+};
+
+/** Reverse lookup of `WORK_PROVIDER_RESOURCE_TYPES`, built once at module scope. */
+const RESOURCE_TYPE_TO_PROVIDER = new Map<string, WorkSkillProvider>(
+  (
+    Object.entries(WORK_PROVIDER_RESOURCE_TYPES) as [WorkSkillProvider, readonly string[]][]
+  ).flatMap(([provider, resourceTypes]) =>
+    resourceTypes.map((resourceType) => [resourceType, provider]),
+  ),
+);
+
+/** Which skill provider owns an `external` resource type, or `undefined`. */
+export const workProviderOfResourceType = (resourceType: string): WorkSkillProvider | undefined =>
+  RESOURCE_TYPE_TO_PROVIDER.get(resourceType);
 
 export interface RegisterSkillToolResultWorkParams {
   actorAgentId?: string | null;
@@ -329,15 +304,8 @@ export interface RegisterSkillToolResultWorkParams {
   topicId?: string | null;
 }
 
-export type RegisterLinearToolResultWorkParams = Omit<
-  RegisterSkillToolResultWorkParams,
-  'provider'
->;
-
-export type RegisterGithubToolResultWorkParams = Omit<
-  RegisterSkillToolResultWorkParams,
-  'provider'
->;
+/** Provider-agnostic normalizer input: a skill tool result minus its provider tag. */
+export type SkillToolResultWorkInput = Omit<RegisterSkillToolResultWorkParams, 'provider'>;
 
 export interface RegisterTaskWorkParams {
   actorAgentId?: string | null;

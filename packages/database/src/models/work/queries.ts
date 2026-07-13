@@ -1,12 +1,14 @@
-import type {
-  WorkItem,
-  WorkListItem,
-  WorkSummaryItem,
-  WorkSummaryMap,
-  WorkType,
-  WorkVersionEventItem,
-  WorkVersionEventMap,
-  WorkVersionItem,
+import {
+  WORK_PROVIDER_RESOURCE_TYPES,
+  type WorkItem,
+  type WorkListItem,
+  type WorkSkillProvider,
+  type WorkSummaryItem,
+  type WorkSummaryMap,
+  type WorkType,
+  type WorkVersionEventItem,
+  type WorkVersionEventMap,
+  type WorkVersionItem,
 } from '@lobechat/types';
 import type { SQL } from 'drizzle-orm';
 import { and, desc, eq, inArray, isNull, lt, or } from 'drizzle-orm';
@@ -210,6 +212,8 @@ const WORKSPACE_WORK_LIMIT = 30;
 export interface ListByWorkspaceParams {
   cursor?: string | null;
   limit?: number;
+  /** Narrow the `external` type to a single skill provider's resource types. */
+  provider?: WorkSkillProvider | null;
   type?: WorkType | null;
 }
 
@@ -259,6 +263,13 @@ export const listByWorkspace = async (
 
   const filters: SQL[] = [workOwnership(ctx)];
   if (params.type) filters.push(eq(works.type, params.type));
+  // User-visible gallery tabs stay per-provider (Linear / GitHub) but filter by
+  // provider — its resource types — over the unified `external` Work type.
+  if (params.provider) {
+    filters.push(eq(works.type, 'external'));
+    // inArray needs a mutable array, so spread the readonly tuple.
+    filters.push(inArray(works.resourceType, [...WORK_PROVIDER_RESOURCE_TYPES[params.provider]]));
+  }
 
   if (params.cursor) {
     const decoded = decodeWorkCursor(params.cursor);

@@ -84,8 +84,9 @@ describe('WorkModel · queries', () => {
         rootOperationIds: ['op-batch-1', 'op-batch-2', 'op-batch-missing'],
       });
 
-      // One query per work type across all ids, not per (id x type).
-      expect(selectSpy).toHaveBeenCalledTimes(4);
+      // One query per work type across all ids, not per (id x type). Three
+      // registered types now: document / external / task.
+      expect(selectSpy).toHaveBeenCalledTimes(3);
       expect(byOperations['op-batch-1']?.map((item) => item.resourceId)).toEqual([firstTask.id]);
       expect(byOperations['op-batch-2']?.map((item) => item.resourceId)).toEqual([secondTask.id]);
       expect(byOperations['op-batch-missing']).toEqual([]);
@@ -163,5 +164,49 @@ describe('WorkModel · queries', () => {
       resourceId: doc.documentId,
     });
     expect(summaries[syntheticIds[0]]).toEqual([]);
+  });
+
+  it('filters the workspace list to one skill provider by its resource types', async () => {
+    const workModel = new WorkModel(serverDB, userId);
+
+    await workModel.registerExternal({
+      changeType: 'created',
+      identifier: 'ENG-1',
+      patchFields: ['identifier', 'title'],
+      resourceId: 'linear-issue-1',
+      resourceType: 'linear_issue',
+      sourceToolCallId: 'tool-call-linear-issue-1',
+      sourceToolName: 'save_issue',
+      title: 'Linear issue',
+      topicId,
+    });
+    await workModel.registerExternal({
+      changeType: 'created',
+      identifier: 'lobehub/lobehub#1',
+      patchFields: ['identifier', 'title'],
+      resourceId: 'lobehub/lobehub#1',
+      resourceType: 'github_issue',
+      sourceToolCallId: 'tool-call-github-issue-1',
+      sourceToolName: 'create_issue',
+      title: 'GitHub issue',
+      topicId,
+    });
+
+    // provider: 'linear' narrows the unified `external` type to linear_* rows,
+    // excluding the github row.
+    const linearOnly = await workModel.listByWorkspace({ provider: 'linear' });
+    expect(linearOnly.items).toHaveLength(1);
+    expect(linearOnly.items[0]).toMatchObject({
+      resourceId: 'linear-issue-1',
+      resourceType: 'linear_issue',
+      type: 'external',
+    });
+
+    // The unified `external` type still spans both providers.
+    const allExternal = await workModel.listByWorkspace({ type: 'external' });
+    expect(allExternal.items.map((item) => item.resourceType).sort()).toEqual([
+      'github_issue',
+      'linear_issue',
+    ]);
   });
 });

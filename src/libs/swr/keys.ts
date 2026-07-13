@@ -234,14 +234,17 @@ export const workKeys = {
     threadId ?? null,
   ]),
   versions: def('work:versions', (workId: string) => ['work:versions', workId]),
-  // Cross-topic Work gallery on the resource page: keyed by owner scope +
-  // optional type filter + keyset cursor (one entry per infinite-scroll page).
+  // Cross-topic Work gallery on the resource page: keyed by owner scope + the
+  // gallery filter key (type OR provider tab, e.g. `all` / `task` / `linear`) +
+  // keyset cursor (one entry per infinite-scroll page). The filter key (not the
+  // Work type) is the discriminator so the per-provider linear/github tabs,
+  // which share the `external` Work type, get distinct cache entries.
   workspace: def(
     'work:workspace',
-    (workspaceId: string | null | undefined, type: string | null, cursor?: string | null) => [
+    (workspaceId: string | null | undefined, filterKey: string, cursor?: string | null) => [
       'work:workspace',
       workspaceId ?? null,
-      type ?? 'all',
+      filterKey,
       cursor ?? null,
     ],
   ),

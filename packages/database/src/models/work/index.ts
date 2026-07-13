@@ -1,24 +1,40 @@
-import type {
-  DeleteDocumentWorkParams,
-  DeleteTaskWorkParams,
-  RegisterDocumentWorkParams,
-  RegisterGithubWorkParams,
-  RegisterLinearWorkParams,
-  RegisterSkillToolResultWorkParams,
-  RegisterTaskWorkParams,
-  WorkItem,
+import {
+  type DeleteDocumentWorkParams,
+  type DeleteTaskWorkParams,
+  isWorkSkillProvider,
+  type RegisterDocumentWorkParams,
+  type RegisterExternalWorkParams,
+  type RegisterSkillToolResultWorkParams,
+  type RegisterTaskWorkParams,
+  type SkillToolResultWorkInput,
+  type WorkItem,
+  type WorkSkillProvider,
 } from '@lobechat/types';
 
 import type { LobeChatDatabase } from '../../type';
 import type { WorkContext } from './context';
 import { registerDocumentWork } from './document';
-import { registerGithubWork } from './github';
+import { registerExternalWork } from './external';
 import { normalizeGithubToolResult } from './githubToolResult';
-import { registerLinearWork } from './linear';
 import { normalizeLinearToolResult } from './linearToolResult';
 import * as queries from './queries';
 import { registerTaskWork } from './task';
+import type { ExternalToolWorkOperation } from './toolResultParsing';
 import * as writes from './writes';
+
+/**
+ * Skill provider → tool-result normalizer. Keyed by `WorkSkillProvider`, so the
+ * `satisfies` turns a provider added to `WORK_SKILL_PROVIDERS` without a
+ * normalizer here into a compile error. Adding a provider = extend
+ * `WORK_SKILL_PROVIDERS` + `WORK_PROVIDER_RESOURCE_TYPES` + one entry here.
+ */
+const SKILL_TOOL_RESULT_NORMALIZERS = {
+  github: normalizeGithubToolResult,
+  linear: normalizeLinearToolResult,
+} satisfies Record<
+  WorkSkillProvider,
+  (input: SkillToolResultWorkInput) => ExternalToolWorkOperation | null
+>;
 
 /**
  * Facade over the per-type Work modules. Holds the `WorkContext` (db + owner
@@ -39,37 +55,19 @@ export class WorkModel {
   registerDocument = (params: RegisterDocumentWorkParams): Promise<WorkItem | null> =>
     registerDocumentWork(this.ctx, params);
 
-  registerLinear = (params: RegisterLinearWorkParams): Promise<WorkItem | null> =>
-    registerLinearWork(this.ctx, params);
-
-  registerGithub = (
-    params: Omit<RegisterGithubWorkParams, 'resourceId'> & { resourceId: string },
-  ): Promise<WorkItem | null> => registerGithubWork(this.ctx, params);
+  registerExternal = (params: RegisterExternalWorkParams): Promise<WorkItem | null> =>
+    registerExternalWork(this.ctx, params);
 
   handleSkillToolResult = async (
     params: RegisterSkillToolResultWorkParams,
   ): Promise<WorkItem | null> => {
     const { provider, ...rest } = params;
+    if (!isWorkSkillProvider(provider)) return null;
 
-    switch (provider) {
-      case 'github': {
-        const operation = normalizeGithubToolResult(rest);
-        if (!operation) return null;
+    const operation = SKILL_TOOL_RESULT_NORMALIZERS[provider](rest);
+    if (!operation) return null;
 
-        return this.registerGithub(operation.params);
-      }
-
-      case 'linear': {
-        const operation = normalizeLinearToolResult(rest);
-        if (!operation) return null;
-
-        return this.registerLinear(operation.params);
-      }
-
-      default: {
-        return null;
-      }
-    }
+    return this.registerExternal(operation.params);
   };
 
   deleteDocumentWork = (params: DeleteDocumentWorkParams): Promise<void> =>

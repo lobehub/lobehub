@@ -1,9 +1,8 @@
 import type { WorkItem, WorkType } from '@lobechat/types';
 
 import { documentWorkAdapter } from './document';
-import { githubWorkAdapter } from './github';
+import { externalWorkAdapter } from './external';
 import type { WorkTypeAdapter } from './internal';
-import { linearWorkAdapter } from './linear';
 import { taskWorkAdapter } from './task';
 
 /**
@@ -14,8 +13,7 @@ import { taskWorkAdapter } from './task';
  */
 export const WORK_TYPE_ADAPTERS = {
   document: documentWorkAdapter,
-  github: githubWorkAdapter,
-  linear: linearWorkAdapter,
+  external: externalWorkAdapter,
   task: taskWorkAdapter,
 } satisfies Record<WorkType, WorkTypeAdapter<{ work: WorkItem }>>;
 

@@ -1,9 +1,27 @@
-import type { WorkListItem, WorkSummaryItem, WorkType } from '@lobechat/types';
+import {
+  type WorkListItem,
+  workProviderOfResourceType,
+  type WorkSkillProvider,
+  type WorkSummaryItem,
+  type WorkType,
+} from '@lobechat/types';
 import { Github } from '@lobehub/icons';
-import { ClipboardListIcon, FileTextIcon } from 'lucide-react';
+import { ClipboardListIcon, FileTextIcon, LinkIcon } from 'lucide-react';
 import type { ComponentType } from 'react';
 
 import LinearIcon from './icons/LinearIcon';
+
+type WorkIcon = ComponentType<{ className?: string; size?: number }>;
+
+/**
+ * Brand icon per skill provider for the unified `external` Work type. An
+ * unmapped provider (a future provider whose resource type isn't in
+ * `WORK_PROVIDER_RESOURCE_TYPES` yet) falls back to a generic link glyph.
+ */
+const PROVIDER_ICONS: Record<WorkSkillProvider, WorkIcon> = {
+  github: Github,
+  linear: LinearIcon,
+};
 
 /**
  * Where opening a Work should lead. Components map this to their own action
@@ -47,6 +65,11 @@ interface WorkTypeDescriptor<Item extends WorkListItem | WorkSummaryItem> {
    */
   getDescription: (item: Item) => string | null;
   /**
+   * The icon for one item. Constant for document/task; the `external` type
+   * resolves a per-provider brand icon from the item's resourceType.
+   */
+  getIcon: (item: Item) => WorkIcon;
+  /**
    * Short human reference (`TASK-1`, filename, `ENG-123`, `owner/repo#42`) used
    * as the card-title fallback when the resource has no title. Cards fall back
    * further to `resourceId` when this is also null.
@@ -60,15 +83,14 @@ interface WorkTypeDescriptor<Item extends WorkListItem | WorkSummaryItem> {
    * through to its bare identifier at the call site so data gaps stay visible.
    */
   getTitle: (item: Item) => string | null;
-  Icon: ComponentType<{ className?: string; size?: number }>;
 }
 
 export const WORK_TYPE_DESCRIPTORS: {
   [T in WorkType]: WorkTypeDescriptor<WorkItemOfType<T>>;
 } = {
   document: {
-    Icon: FileTextIcon,
     getDescription: (item) => item.document.description?.trim() ?? null,
+    getIcon: () => FileTextIcon,
     getIdentifier: (item) => item.document.identifier,
     getOpenTarget: (item) => ({
       // WorkListItem carries no `event`; only summary rows can supply the
@@ -80,31 +102,25 @@ export const WORK_TYPE_DESCRIPTORS: {
     }),
     getTitle: (item) => item.document.title,
   },
-  github: {
-    Icon: Github,
-    getDescription: (item) => (item.github.description || item.github.status)?.trim() ?? null,
-    getIdentifier: (item) => item.github.identifier,
-    // Github works registered from CLI/tool results may carry no URL (or a
+  external: {
+    getDescription: (item) => (item.external.description || item.external.status)?.trim() ?? null,
+    // Resolve the brand icon from the item's provider; unknown providers fall
+    // back to a generic link glyph (forward-compat).
+    getIcon: (item) => {
+      const provider = workProviderOfResourceType(item.resourceType);
+      return provider ? PROVIDER_ICONS[provider] : LinkIcon;
+    },
+    getIdentifier: (item) => item.external.identifier,
+    // External works registered from CLI/tool results may carry no URL (or a
     // member-planted non-http(s) scheme) — those cards have nothing safe to
     // open, so drop the click affordance entirely.
     getOpenTarget: (item) =>
-      isSafeExternalUrl(item.github.url) ? { kind: 'external', url: item.github.url } : null,
-    getTitle: (item) => item.github.title,
-  },
-  linear: {
-    Icon: LinearIcon,
-    getDescription: (item) => (item.linear.description || item.linear.status)?.trim() ?? null,
-    getIdentifier: (item) => item.linear.identifier,
-    // Linear works registered from CLI/tool results may carry no URL (or a
-    // member-planted non-http(s) scheme) — those cards have nothing safe to
-    // open, so drop the click affordance entirely.
-    getOpenTarget: (item) =>
-      isSafeExternalUrl(item.linear.url) ? { kind: 'external', url: item.linear.url } : null,
-    getTitle: (item) => item.linear.title,
+      isSafeExternalUrl(item.external.url) ? { kind: 'external', url: item.external.url } : null,
+    getTitle: (item) => item.external.title,
   },
   task: {
-    Icon: ClipboardListIcon,
     getDescription: (item) => item.task.instruction?.trim() ?? null,
+    getIcon: () => ClipboardListIcon,
     getIdentifier: (item) => item.task.identifier,
     // Resolve the task detail by its human identifier (`TASK-1`, live-coalesced
     // with the snapshot) when present, else its id — the same identifier the

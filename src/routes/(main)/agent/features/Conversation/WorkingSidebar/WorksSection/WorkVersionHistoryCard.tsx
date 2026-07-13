@@ -67,12 +67,12 @@ const WorkVersionHistoryCard = memo<{ work: WorkListItem }>(({ work }) => {
 
   const descriptor = getWorkTypeDescriptor(work);
   const label = descriptor.getIdentifier(work) ?? work.resourceId;
-  const TypeIcon = descriptor.Icon;
+  const TypeIcon = descriptor.getIcon(work);
   const title = descriptor.getTitle(work)?.trim();
   const openTarget = descriptor.getOpenTarget(work);
 
-  // Mirrors WorkSummaryCard: linear/github rows without a URL get no title
-  // click affordance (openTarget is null) — the click just falls through to the
+  // Mirrors WorkSummaryCard: external skill rows (linear/github) without a URL
+  // get no title click affordance (openTarget is null) — the click falls to the
   // expand toggle. The history card opens documents without an agentDocumentId.
   const handleTitleClick = (() => {
     if (!openTarget) return undefined;

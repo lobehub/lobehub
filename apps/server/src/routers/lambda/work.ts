@@ -1,8 +1,9 @@
-import type {
-  RegisterDocumentWorkParams,
-  RegisterSkillToolResultWorkParams,
-  RegisterTaskWorkParams,
-  WorkVersionCumulativeUsage,
+import {
+  type RegisterDocumentWorkParams,
+  type RegisterSkillToolResultWorkParams,
+  type RegisterTaskWorkParams,
+  WORK_SKILL_PROVIDERS,
+  type WorkVersionCumulativeUsage,
 } from '@lobechat/types';
 import { z } from 'zod';
 
@@ -36,9 +37,9 @@ const taskWorkProcedureWrite = workProcedure.use(withScopedPermission('agent:upd
 // role's legitimate registration isn't rejected.
 const documentWorkProcedureWrite = workProcedure.use(withScopedPermission('document:update'));
 
-// Skill tool results (linear/github) touch no first-class workspace resource
-// with its own permission domain, so there is no narrower gate to align with;
-// keep the general `agent:update` workspace-write gate.
+// Skill tool results (external skill providers, e.g. linear/github) touch no
+// first-class workspace resource with its own permission domain, so there is no
+// narrower gate to align with; keep the general `agent:update` workspace-write gate.
 const skillWorkProcedureWrite = workProcedure.use(withScopedPermission('agent:update'));
 
 const versionChangeTypeSchema = z.enum(['created', 'updated']);
@@ -116,7 +117,8 @@ export const workRouter = router({
       z.object({
         cursor: z.string().nullable().optional(),
         limit: z.number().min(1).max(100).default(30),
-        type: z.enum(['task', 'document', 'linear', 'github']).nullable().optional(),
+        provider: z.enum(WORK_SKILL_PROVIDERS).optional(),
+        type: z.enum(['task', 'document', 'external']).nullable().optional(),
       }),
     )
     .query(async ({ ctx, input }) => ctx.workModel.listByWorkspace(input)),

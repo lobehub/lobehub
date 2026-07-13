@@ -1,4 +1,3 @@
-import type { WorkType } from '@lobechat/types';
 import { useCallback, useEffect } from 'react';
 import useSWRInfinite from 'swr/infinite';
 
@@ -7,24 +6,27 @@ import { workKeys } from '@/libs/swr/keys';
 import type { WorkSummaryPage } from '@/services/work';
 import { workService } from '@/services/work';
 
+import { workFilterFromKey, type WorkGalleryKey } from './const';
+
 const WORK_GALLERY_PAGE_SIZE = 30;
 
 /**
  * Cursor-paginated, infinite-scrolling Work summaries scoped to the active
- * workspace (or personal space). `type` narrows to one Work kind; pass null for
- * the combined view. Changing `type` collapses back to the first page. Mirrors
- * `useVerifyReportSummariesInfinite`.
+ * workspace (or personal space). `galleryKey` selects the filter (a Work type,
+ * a skill provider, or the combined `all` view). Changing it collapses back to
+ * the first page. Mirrors `useVerifyReportSummariesInfinite`.
  */
-export const useWorkspaceWorksInfinite = (type: WorkType | null) => {
+export const useWorkspaceWorksInfinite = (galleryKey: WorkGalleryKey) => {
   const workspaceId = useActiveWorkspaceId();
+  const filter = workFilterFromKey(galleryKey);
 
   const getKey = useCallback(
     (_index: number, previous: WorkSummaryPage | null) => {
       // Stop paging once the previous page reported no further cursor.
       if (previous && previous.nextCursor === null) return null;
-      return workKeys.workspace(workspaceId, type, previous?.nextCursor ?? undefined);
+      return workKeys.workspace(workspaceId, galleryKey, previous?.nextCursor ?? undefined);
     },
-    [type, workspaceId],
+    [galleryKey, workspaceId],
   );
 
   const { data, error, isLoading, isValidating, mutate, setSize, size } = useSWRInfinite(
@@ -33,16 +35,17 @@ export const useWorkspaceWorksInfinite = (type: WorkType | null) => {
       workService.listByWorkspace({
         cursor: cursor || undefined,
         limit: WORK_GALLERY_PAGE_SIZE,
-        type,
+        provider: filter.provider,
+        type: filter.type ?? null,
       }),
     { revalidateFirstPage: false },
   );
 
-  // A new type filter starts a fresh key series; collapse size back to 1 so we
+  // A new filter starts a fresh key series; collapse size back to 1 so we
   // don't cascade-fetch as many pages as the previous filter had loaded.
   useEffect(() => {
     setSize(1);
-  }, [type, setSize]);
+  }, [galleryKey, setSize]);
 
   const loadMore = useCallback(() => {
     void setSize((s) => s + 1);

@@ -1,10 +1,8 @@
 import type {
   DocumentWorkSummaryItem,
   DocumentWorkVersionSnapshot,
-  GithubWorkSummaryItem,
-  GithubWorkVersionSnapshot,
-  LinearWorkSummaryItem,
-  LinearWorkVersionSnapshot,
+  ExternalWorkSummaryItem,
+  ExternalWorkVersionSnapshot,
   TaskWorkListItem,
   TaskWorkSummaryItem,
   TaskWorkVersionSnapshot,
@@ -76,24 +74,16 @@ export const expectDocumentSnapshot = (
   return snapshot.document;
 };
 
-export const expectLinearSnapshot = (snapshot: WorkVersionSnapshot): LinearWorkVersionSnapshot => {
-  expect(snapshot).toHaveProperty('linear');
+export const expectExternalSnapshot = (
+  snapshot: WorkVersionSnapshot,
+): ExternalWorkVersionSnapshot => {
+  expect(snapshot).toHaveProperty('external');
 
-  if (!('linear' in snapshot)) {
-    throw new Error('Expected linear work snapshot');
+  if (!('external' in snapshot)) {
+    throw new Error('Expected external work snapshot');
   }
 
-  return snapshot.linear;
-};
-
-export const expectGithubSnapshot = (snapshot: WorkVersionSnapshot): GithubWorkVersionSnapshot => {
-  expect(snapshot).toHaveProperty('github');
-
-  if (!('github' in snapshot)) {
-    throw new Error('Expected github work snapshot');
-  }
-
-  return snapshot.github;
+  return snapshot.external;
 };
 
 export const expectTaskListItem = (item?: WorkListItem): TaskWorkListItem => {
@@ -126,21 +116,11 @@ export const expectDocumentSummaryItem = (item?: WorkSummaryItem): DocumentWorkS
   return item;
 };
 
-export const expectLinearSummaryItem = (item?: WorkSummaryItem): LinearWorkSummaryItem => {
+export const expectExternalSummaryItem = (item?: WorkSummaryItem): ExternalWorkSummaryItem => {
   expect(item).toBeDefined();
 
-  if (!item || item.type !== 'linear') {
-    throw new Error('Expected linear work summary');
-  }
-
-  return item;
-};
-
-export const expectGithubSummaryItem = (item?: WorkSummaryItem): GithubWorkSummaryItem => {
-  expect(item).toBeDefined();
-
-  if (!item || item.type !== 'github') {
-    throw new Error('Expected github work summary');
+  if (!item || item.type !== 'external') {
+    throw new Error('Expected external work summary');
   }
 
   return item;
