@@ -45,16 +45,23 @@ export const isBrowserMcpApiName = (apiName: string): boolean => !!parseBrowserM
  * English source strings, doubling as the `defaultValue` for the `chat` locale
  * keys — so a locale that hasn't been filled in yet still reads as a sentence
  * instead of `mcp__lobe_cc__browser_read_page`.
+ *
+ * Past tense, because every surface these appear on reports what the agent has
+ * already done: the inspector row of a finished call and the collapsed summary
+ * ("Ran 6 steps · Opened page, Captured screenshot"). An imperative ("Open
+ * page") reads as a button the user is being offered. The wire names also leak
+ * their implementation — `snapshot` returns the accessibility tree — so the
+ * label says what the agent got out of it instead.
  */
 const API_LABELS: Record<BrowserMcpApi, string> = {
-  click: 'Click element',
-  fill: 'Fill input',
-  navigate: 'Open page',
-  press: 'Press key',
+  click: 'Clicked element',
+  fill: 'Filled input',
+  navigate: 'Opened page',
+  press: 'Pressed key',
   readPage: 'Read page text',
-  screenshot: 'Screenshot page',
-  scroll: 'Scroll page',
-  snapshot: 'Snapshot page',
+  screenshot: 'Captured screenshot',
+  scroll: 'Scrolled page',
+  snapshot: 'Read page elements',
 };
 
 export const browserMcpLabelKey = (api: BrowserMcpApi): string =>

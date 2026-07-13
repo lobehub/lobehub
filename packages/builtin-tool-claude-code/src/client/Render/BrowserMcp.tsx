@@ -87,7 +87,11 @@ const Screenshot = memo<BrowserMcpRenderProps>(({ content, pluginState }) => {
         {images.map((image, index) => (
           <Block
             key={image.fileId || image.url || index}
-            style={{ alignSelf: 'flex-start', overflow: 'hidden', padding: 4 }}
+            // The border frames the capture, so it has to sit on the image's edge:
+            // any padding reads as a mat around the screenshot rather than a frame.
+            // `display: flex` also kills the inline-image baseline gap, which would
+            // otherwise leave a sliver of background under the picture.
+            style={{ alignSelf: 'flex-start', display: 'flex', overflow: 'hidden', padding: 0 }}
             variant={'outlined'}
           >
             {/* A full-page capture of the sidebar browser is tall (e.g. 720×1620), so
@@ -98,7 +102,7 @@ const Screenshot = memo<BrowserMcpRenderProps>(({ content, pluginState }) => {
               alt={'Browser screenshot'}
               maxHeight={600}
               src={image.url}
-              style={{ borderRadius: 4, maxWidth: '100%' }}
+              style={{ maxWidth: '100%' }}
             />
           </Block>
         ))}
