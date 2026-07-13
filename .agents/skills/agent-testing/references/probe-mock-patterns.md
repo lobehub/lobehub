@@ -255,6 +255,44 @@ Re-tested end-to-end against the running dev server. The previous claim ("blocks
   show `0` even though the agent owns them in the DB; click **清空筛选 / Clear filters** (or
   `setStatus('all')` + clear) to reveal them.
 
+### A9. ✅ WORKS — before/after visual diffing by checking out the OLD file, but HMR is NOT trustworthy for it
+
+- **Situation**: producing labeled before→after evidence for a UI/style change (Case 5 requires a
+  real "before" render, not a code-derived guess). The clean way is to write the pre-change version
+  of the file into the working tree (`git show <base>:<path> > <path>`), capture, then restore.
+- **Doesn't work — silently**: assuming Vite HMR applied the swap. In this run the FIRST swap
+  hot-applied fine, and the SECOND one did not: the file on disk was the old version while the
+  renderer kept the new computed styles for 24s+ of polling. Screenshots taken then would have been
+  the AFTER state mislabeled as BEFORE — a Case-5 failure that no screenshot review would catch,
+  because both look plausible.
+- **Works — gate every capture on a measured version signal, not on a sleep**: pick a property that
+  differs between the two versions and read it back with `getComputedStyle` before shooting.
+  ```bash
+  # after writing the old file, confirm the OLD css is actually live
+  agent-browser --cdp 9222 eval '(function(){var i=document.querySelector("<selector>");
+    var s=getComputedStyle(i);return JSON.stringify({pos:s.position,bg:s.backgroundColor})})()'
+  # expect the OLD values; if not, force a full reload and re-enter the surface
+  agent-browser --cdp 9222 eval 'location.reload(); 1'
+  ```
+  A full reload resets SPA state, so budget for re-navigating and re-establishing any fixture
+  (re-open the tab, re-drag a resizable panel, …). Restore the new file the same way and re-measure
+  before the AFTER shots.
+- **Corollary — a layout change may be invisible at the default size.** A `flex: 1` right-alignment
+  fix renders identically to the broken version in a narrow container (the content already fills the
+  row); the difference only appears once there is slack. Drive the app's own resize affordance with
+  real mouse events before concluding "no visual change":
+  ```bash
+  # DraggablePanel handle: .ant-draggable-panel-left-handle (find via getComputedStyle cursor: col-resize)
+  agent-browser --cdp 9222 mouse move < handleX > 500
+  agent-browser --cdp 9222 mouse down left
+  for X in 1050 900 750 600 420; do
+    agent-browser --cdp 9222 mouse move $X 500
+    sleep 0.2
+  done
+  agent-browser --cdp 9222 mouse up left
+  ```
+  (zsh does not word-split unquoted vars — inline the `--cdp` flags, don't stash them in `$AB`.)
+
 ---
 
 ## B. Cache / stale state that MASKS the failure
