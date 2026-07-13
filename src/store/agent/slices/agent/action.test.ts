@@ -946,6 +946,55 @@ describe('AgentSlice Actions', () => {
 
       expect(useAgentStore.getState().agentConfigErrorMap['agent-1']).toBeUndefined();
     });
+
+    it('should mark agentNotFoundMap when the fetch resolves to null (no access / deleted)', async () => {
+      // The backend resolves a cross-user private agent to null (not an error).
+      vi.mocked(agentService.getAgentConfigById).mockResolvedValueOnce(null as any);
+
+      renderHook(() => useAgentStore().useFetchAgentConfig(true, 'agent-private'), {
+        wrapper: withSWR,
+      });
+
+      await waitFor(() =>
+        expect(useAgentStore.getState().agentNotFoundMap['agent-private']).toBe(true),
+      );
+      // Settled — not an error, not loading, and never lands in agentMap.
+      expect(useAgentStore.getState().agentConfigErrorMap['agent-private']).toBeUndefined();
+      expect(useAgentStore.getState().agentMap['agent-private']).toBeUndefined();
+    });
+
+    it('should drop the cached config when a previously loaded agent turns not-found', async () => {
+      // Loaded once, then the owner flips it back to private: the stale
+      // title/avatar in agentMap must not outlive the 404 state.
+      useAgentStore.setState({
+        agentMap: { 'agent-private': { model: 'gpt-4' } },
+      });
+      vi.mocked(agentService.getAgentConfigById).mockResolvedValueOnce(null as any);
+
+      renderHook(() => useAgentStore().useFetchAgentConfig(true, 'agent-private'), {
+        wrapper: withSWR,
+      });
+
+      await waitFor(() =>
+        expect(useAgentStore.getState().agentNotFoundMap['agent-private']).toBe(true),
+      );
+      expect(useAgentStore.getState().agentMap['agent-private']).toBeUndefined();
+    });
+
+    it('should clear agentNotFoundMap once a later fetch succeeds (agent made public again)', async () => {
+      useAgentStore.setState({ agentNotFoundMap: { 'agent-1': true } });
+
+      const mockAgentConfig = { id: 'agent-1', model: 'gpt-4' } as LobeAgentConfig;
+      vi.mocked(agentService.getAgentConfigById).mockResolvedValueOnce(mockAgentConfig as any);
+
+      const { result } = renderHook(() => useAgentStore().useFetchAgentConfig(true, 'agent-1'), {
+        wrapper: withSWR,
+      });
+
+      await waitFor(() => expect(result.current.data).toEqual(mockAgentConfig));
+
+      expect(useAgentStore.getState().agentNotFoundMap['agent-1']).toBeUndefined();
+    });
   });
 
   describe('useHydrateAgentConfig', () => {
@@ -968,6 +1017,18 @@ describe('AgentSlice Actions', () => {
       expect(agentService.getAgentConfigById).toHaveBeenCalledWith('agent-1');
       expect(useAgentStore.getState().activeAgentId).toBe('agent-current');
       expect(useAgentStore.getState().agentMap['agent-1']).toBeDefined();
+    });
+
+    it('should mark agentNotFoundMap when the hydrate fetch resolves to null', async () => {
+      vi.mocked(agentService.getAgentConfigById).mockResolvedValueOnce(null as any);
+
+      renderHook(() => useAgentStore().useHydrateAgentConfig(true, 'agent-private'), {
+        wrapper: withSWR,
+      });
+
+      await waitFor(() =>
+        expect(useAgentStore.getState().agentNotFoundMap['agent-private']).toBe(true),
+      );
     });
   });
 });

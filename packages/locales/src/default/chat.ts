@@ -36,6 +36,14 @@ export default {
   'agentDocument.emptyTitle': 'No document open',
   'agentDocument.linkCopied': 'Link copied',
   'agentDocument.openAsPage': 'Open as full page',
+  'agentNotFound.desc':
+    'This agent does not exist or is no longer accessible — it may have been deleted or set to private by its owner.',
+  'agentNotFound.title': 'Agent Unavailable',
+  'groupNotFound.desc':
+    'This group does not exist or is no longer accessible — it may have been deleted or set to private by its owner.',
+  'groupNotFound.title': 'Group Unavailable',
+  'inaccessibleFile.desc': 'No access — it may have been set to private or deleted by its owner',
+  'inaccessibleFile.name': 'Unavailable file',
   'internalLink.agent.open': 'Open agent',
   'agentProfile.files_one': '{{count}} file',
   'agentProfile.files_other': '{{count}} files',
@@ -949,6 +957,7 @@ export default {
     'This artifact will no longer appear in this task workspace.',
   'taskDetail.artifactMenu.deleteConfirm.ok': 'Remove',
   'taskDetail.artifactMenu.deleteConfirm.title': 'Remove this artifact?',
+  'taskDetail.artifactInaccessible': 'Unavailable document — no access',
   'taskDetail.artifactSize': '{{value}} chars',
   'taskDetail.activities.agentTag': 'Agent',
   'taskDetail.activities.fallback.brief': 'posted a brief',

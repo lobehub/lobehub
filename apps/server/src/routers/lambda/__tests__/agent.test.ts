@@ -12,6 +12,7 @@ import { UserModel } from '@/database/models/user';
 import { AgentService } from '@/server/services/agent';
 import { EditLockService } from '@/server/services/editLock';
 import { publishResourceEvent } from '@/server/services/resourceEvents';
+import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
 import { KnowledgeType } from '@/types/knowledgeBase';
 
 import { agentRouter } from '../agent';
@@ -48,6 +49,10 @@ vi.mock('@/database/models/knowledgeBase', () => ({
 
 vi.mock('@/server/services/agent', () => ({
   AgentService: vi.fn(),
+}));
+
+vi.mock('@/server/services/workspacePermission', () => ({
+  hasWorkspaceScopedPermission: vi.fn(),
 }));
 
 describe('agentRouter', () => {
@@ -389,6 +394,54 @@ describe('agentRouter', () => {
 
       expect(result).toEqual({ success: true });
       expect(agentModelMock.setVisibility).toHaveBeenCalledWith('agent-1', 'private');
+    });
+
+    it('rejects demotion of another member agent even for a workspace owner (LOBE-11760)', async () => {
+      agentModelMock.getAgentVisibilityMeta.mockResolvedValue({
+        slug: null,
+        userId: 'other-member',
+        visibility: 'public',
+      });
+
+      const caller = agentRouter.createCaller(wsCtx());
+
+      await expect(
+        caller.setAgentVisibility({ id: 'agent-1', visibility: 'private' }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      // Creator-only: rejected before the owner-permission lookup even runs.
+      expect(hasWorkspaceScopedPermission).not.toHaveBeenCalled();
+      expect(agentModelMock.setVisibility).not.toHaveBeenCalled();
+    });
+
+    it('still allows a workspace owner to promote another member agent', async () => {
+      agentModelMock.getAgentVisibilityMeta.mockResolvedValue({
+        slug: null,
+        userId: 'other-member',
+        visibility: 'private',
+      });
+      vi.mocked(hasWorkspaceScopedPermission).mockResolvedValue(true);
+
+      const caller = agentRouter.createCaller(wsCtx());
+      const result = await caller.setAgentVisibility({ id: 'agent-1', visibility: 'public' });
+
+      expect(result).toEqual({ success: true });
+      expect(agentModelMock.setVisibility).toHaveBeenCalledWith('agent-1', 'public');
+    });
+
+    it('rejects promotion of another member agent for a plain member', async () => {
+      agentModelMock.getAgentVisibilityMeta.mockResolvedValue({
+        slug: null,
+        userId: 'other-member',
+        visibility: 'private',
+      });
+      vi.mocked(hasWorkspaceScopedPermission).mockResolvedValue(false);
+
+      const caller = agentRouter.createCaller(wsCtx());
+
+      await expect(
+        caller.setAgentVisibility({ id: 'agent-1', visibility: 'public' }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      expect(agentModelMock.setVisibility).not.toHaveBeenCalled();
     });
 
     it('does not run the public-task guard on promotion', async () => {

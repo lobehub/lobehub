@@ -18,6 +18,9 @@ export default {
   'detail.data.embeddingStatus': 'embedding',
   'empty': 'No files or folders have been uploaded yet.',
   'header.actions.builtInBlockList.filtered': '{{ignored}} files filtered (out of {{total}} total)',
+  'notFound.desc':
+    'This file does not exist or is no longer accessible — it may have been deleted or set to private by its owner.',
+  'notFound.title': 'File Unavailable',
   'header.actions.connect': 'Connect...',
   'header.actions.createFolderError': 'Failed to create folder',
   'header.actions.creatingFolder': 'Creating folder...',

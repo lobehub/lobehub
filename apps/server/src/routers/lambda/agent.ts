@@ -107,7 +107,7 @@ export const agentRouter = router({
    * Publish a private agent into the workspace. Only the creator of a
    * still-private agent can run this; the underlying SQL enforces both rules.
    * The inverse transition (public → private) goes through
-   * `setAgentVisibility`, which is gated to the creator or a workspace owner.
+   * `setAgentVisibility`, which is gated to the creator only (LOBE-11760).
    */
   publishAgentToWorkspace: agentProcedure
     .use(withScopedPermission('agent:update'))
@@ -120,9 +120,10 @@ export const agentRouter = router({
    * Bidirectional visibility switch (LOBE-11551). Rules:
    * - builtin agents (LobeAI etc., identified by slug) can never change
    *   visibility — the workspace copy must stay shared;
-   * - only the agent's creator or a workspace owner may pull a published
-   *   agent back to private; other members get FORBIDDEN. The UI hides the
-   *   entry for them, this is the server-side backstop.
+   * - only the agent's creator may pull a published agent back to private
+   *   (LOBE-11760): a workspace owner demoting another member's agent would
+   *   effectively appropriate it, so everyone else gets FORBIDDEN. The UI
+   *   hides the entry for them, this is the server-side backstop.
    */
   setAgentVisibility: agentProcedure
     .use(withScopedPermission('agent:update'))
@@ -141,6 +142,15 @@ export const agentRouter = router({
       if (meta.visibility === input.visibility) return { success: true };
 
       if (ctx.workspaceId && meta.userId !== ctx.userId) {
+        // Demoting to private stays creator-only even for owners: the agent
+        // would land in the creator's private list, not the actor's, so an
+        // owner-initiated demotion just appropriates another member's data.
+        if (input.visibility === 'private') {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: 'Only the agent creator can make this agent private',
+          });
+        }
         const canOverride = await hasWorkspaceScopedPermission({
           action: 'AGENT_UPDATE',
           db: ctx.serverDB,

@@ -381,7 +381,14 @@ export class AgentSliceActionImpl {
       },
       {
         onData: (data) => {
-          if (!data) return;
+          // A successful fetch that resolves to null means the agent doesn't
+          // exist or the caller lost access (e.g. a workspace agent switched
+          // back to private) — a settled state, not "still loading".
+          if (!data) {
+            this.#markAgentNotFound(agentId);
+            return;
+          }
+          this.#clearAgentNotFound(agentId);
           this.#get().internal_dispatchAgentMap(agentId, data);
           // Only adopt the fetched agent as the active one when nothing is
           // active yet. The active agent is owned by the route-level sync
@@ -429,6 +436,41 @@ export class AgentSliceActionImpl {
     );
   };
 
+  #markAgentNotFound = (agentId: string) => {
+    const { agentNotFoundMap, agentMap } = this.#get();
+    if (agentNotFoundMap[agentId] && !agentMap[agentId]) return;
+
+    this.#set(
+      (state) => {
+        // Also drop the previously cached config: surfaces reading `agentMap`
+        // (title/avatar in the sidebar or header) must not keep showing an
+        // agent the viewer lost access to next to the 404 content area.
+        const nextAgentMap = { ...state.agentMap };
+        delete nextAgentMap[agentId];
+        return {
+          agentMap: nextAgentMap,
+          agentNotFoundMap: { ...state.agentNotFoundMap, [agentId]: true },
+        };
+      },
+      false,
+      'markAgentNotFound',
+    );
+  };
+
+  #clearAgentNotFound = (agentId: string) => {
+    if (!this.#get().agentNotFoundMap[agentId]) return;
+
+    this.#set(
+      (state) => {
+        const next = { ...state.agentNotFoundMap };
+        delete next[agentId];
+        return { agentNotFoundMap: next };
+      },
+      false,
+      'clearAgentNotFound',
+    );
+  };
+
   #clearAgentConfigError = (agentId: string) => {
     if (!this.#get().agentConfigErrorMap[agentId]) return;
 
@@ -460,7 +502,11 @@ export class AgentSliceActionImpl {
       },
       {
         onData: (data) => {
-          if (!data) return;
+          if (!data) {
+            this.#markAgentNotFound(agentId);
+            return;
+          }
+          this.#clearAgentNotFound(agentId);
           this.#get().internal_dispatchAgentMap(agentId, data);
         },
       },
