@@ -23,6 +23,8 @@ export default {
   'billing.pay': 'Pay Now',
   'billing.paymentGateway': 'Payment Gateway',
   'billing.paymentMethod': 'Payment Method',
+  'billing.paymentMethod.addWithGift': '🎁 Add payment method · Get 0.5M credits free',
+  'billing.paymentMethod.openFailed': 'Failed to open payment method setup',
   'billing.price': 'Subscription Price',
   'billing.startDate': 'Start Date',
   'billing.status': 'Transaction Status',
