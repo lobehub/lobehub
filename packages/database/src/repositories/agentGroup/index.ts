@@ -1,7 +1,7 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import type { AgentGroupDetail, AgentGroupMember, AgentPluginEntry } from '@lobechat/types';
 import { cleanObject } from '@lobechat/utils';
-import { and, eq, inArray, not } from 'drizzle-orm';
+import { and, eq, inArray, not, sql } from 'drizzle-orm';
 
 import type {
   AgentItem,
@@ -322,12 +322,18 @@ export class AgentGroupRepository {
 
     if (!group) return null;
 
-    // 2. Find all agents associated with this group (including role info)
+    // 2. Find all agents associated with this group (including role info). The
+    // roster is fetched raw (no visibility filter) with a per-row `visible`
+    // flag: supervisor existence must be judged on the raw rows — otherwise a
+    // viewer who can't see the supervisor would auto-create a duplicate one
+    // below — while a member agent switched back to private must not leak its
+    // config to other members (LOBE-11772), so only visible rows are returned.
     const groupAgentsWithDetails = await this.db
       .select({
         agent: agents,
         order: chatGroupsAgents.order,
         role: chatGroupsAgents.role,
+        visible: sql<boolean>`(${this.agentOwnership()})`,
       })
       .from(chatGroupsAgents)
       .innerJoin(agents, eq(chatGroupsAgents.agentId, agents.id))
@@ -340,6 +346,10 @@ export class AgentGroupRepository {
 
     for (const row of groupAgentsWithDetails) {
       const isSupervisor = row.role === 'supervisor';
+      if (isSupervisor) {
+        supervisorAgentId = row.agent.id;
+      }
+      if (!row.visible) continue;
       agentItems.push(
         cleanObject({
           ...row.agent,
@@ -348,9 +358,6 @@ export class AgentGroupRepository {
           slug: isSupervisor ? BUILTIN_AGENT_SLUGS.groupSupervisor : row.agent.slug,
         }) as AgentGroupMember,
       );
-      if (isSupervisor) {
-        supervisorAgentId = row.agent.id;
-      }
     }
 
     // 4. If no supervisor exists, create a virtual supervisor agent
