@@ -34,11 +34,22 @@ const TopicDoctorContent = memo<TopicDoctorContentProps>(({ agentId, topicId }) 
 
   const [repairing, setRepairing] = useState(false);
 
-  const { data, isLoading } = useSWR(['topic-doctor', agentId, topicId], () =>
+  const { data, error, isLoading, mutate } = useSWR(['topic-doctor', agentId, topicId], () =>
     messageService.diagnoseTopic({ agentId, topicId }),
   );
 
-  if (isLoading || !data) return <Skeleton active paragraph={{ rows: 3 }} title={false} />;
+  if (isLoading) return <Skeleton active paragraph={{ rows: 3 }} title={false} />;
+
+  // Without this the check failing would leave the skeleton up forever: SWR clears `isLoading`
+  // but never produces `data`, so a `!data` skeleton has no way back.
+  if (error || !data)
+    return (
+      <Flexbox align={'center'} gap={12} paddingBlock={24}>
+        <Icon color={cssVar.colorError} icon={CircleAlert} size={32} />
+        <Text>{t('doctor.checkFailed')}</Text>
+        <Button onClick={() => mutate()}>{t('retry', { ns: 'common' })}</Button>
+      </Flexbox>
+    );
 
   const { hiddenCount, issues, patch } = data;
 

@@ -6,9 +6,11 @@ import { diagnoseTopic } from '../diagnose';
 
 interface Spec {
   content?: string;
+  error?: any;
   id: string;
   meta?: Record<string, any>;
   parent?: string;
+  reasoning?: any;
   role: 'user' | 'assistant' | 'tool';
   t: number;
   toolCallId?: string;
@@ -17,14 +19,16 @@ interface Spec {
 
 const build = (specs: Spec[]): Message[] =>
   specs.map(
-    ({ content, id, meta, parent, role, t, toolCallId, tools }) =>
+    ({ content, error, id, meta, parent, reasoning, role, t, toolCallId, tools }) =>
       ({
         agentId: 'agt_1',
         content: content ?? '',
         createdAt: t,
+        error,
         id,
         metadata: meta,
         parentId: parent,
+        reasoning,
         role,
         tool_call_id: toolCallId,
         tools: tools?.map((callId) => ({
@@ -201,6 +205,38 @@ describe('diagnoseTopic', () => {
 
       expect(renderedIds(single).has('a1')).toBe(true);
       expect(diagnoseTopic(single).issues).toHaveLength(0);
+    });
+  });
+
+  describe('a dropped message counts as restorable whenever the user would see it', () => {
+    // `hasSubstance` decides whether a repair is worth offering. It has to agree with what the
+    // renderer actually puts on screen — a message with no text but an error, or reasoning, is
+    // still visible, and reporting that topic as healthy would strand the message for good.
+    const branchesOf = (extra: Partial<Spec>) =>
+      build([
+        { id: 'u1', meta: { activeBranchIndex: 2 }, role: 'user', t: 0 },
+        { ...extra, id: 'a1', parent: 'u1', role: 'assistant', t: 10 },
+        { ...extra, id: 'a2', parent: 'u1', role: 'assistant', t: 100 },
+      ]);
+
+    it.each([
+      ['an error and no text', { error: { type: 'PluginServerError' } }],
+      ['reasoning and no text', { reasoning: { content: 'thinking…' } }],
+    ])('offers a repair for a message carrying %s', (_label, extra) => {
+      const messages = branchesOf(extra);
+
+      expect(renderedIds(messages).has('a2')).toBe(false);
+      expect(diagnoseTopic(messages).issues).toHaveLength(1);
+      expect(diagnoseTopic(messages).patch).toEqual([
+        { index: 1, messageId: 'u1', type: 'set-branch-index' },
+      ]);
+    });
+
+    it('stays quiet when the dropped messages carry only token usage', () => {
+      // Nothing to put back on screen — restoring a blank is not a repair.
+      const messages = branchesOf({ meta: { usage: { totalTokens: 12 } } });
+
+      expect(diagnoseTopic(messages).issues).toHaveLength(0);
     });
   });
 

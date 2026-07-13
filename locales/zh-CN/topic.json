@@ -47,6 +47,7 @@
   "actions.unmarkCompleted": "取消归档",
   "defaultTitle": "默认话题",
   "displayItems": "显示条目",
+  "doctor.checkFailed": "检查未能完成。",
   "doctor.healthy": "这个话题的消息都正常显示，无需修复。",
   "doctor.issue.concurrent-fork": "上一轮还在输出时你发了新问题，对话分成了两支，其中一支被隐藏了 —— 共 {{count}} 条消息。",
   "doctor.issue.lostContent": "有 {{count}} 条消息存进来时是空的：正文没能写入数据库。",

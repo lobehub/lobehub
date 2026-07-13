@@ -38,34 +38,39 @@ const getSignal = (message: Message): { sourceToolCallId?: string } | undefined 
 };
 
 /**
- * An assistant that carries nothing at all: the writer created the row but its content and
- * tool calls never landed. It still renders — as a blank bubble.
+ * Anything the user would actually see if this message were put back on screen. An error, a
+ * reasoning block or an audio clip is as visible as text — a message carrying only one of
+ * those is still worth restoring.
  *
- * Token accounting counts as carrying something: a turn-final assistant with usage but no
- * text is a legitimate shape (the group aggregates its tokens), and must never be dropped.
+ * Token accounting deliberately does not count: a turn-final assistant with usage but no
+ * text renders nothing.
+ */
+const hasSubstance = (message: Message): boolean =>
+  !!message.content?.trim() ||
+  !!message.reasoning ||
+  !!message.error ||
+  !!message.tools?.length ||
+  !!message.imageList?.length ||
+  !!message.fileList?.length ||
+  !!message.audioList?.length;
+
+/**
+ * An assistant that carries nothing at all: the writer created the row but its content and
+ * tool calls never landed. Derived from `hasSubstance` rather than restating it, so the two
+ * cannot drift — a shape counted as visible must never also be counted as an empty shell.
+ *
+ * Usage is the one exception: a turn-final assistant with tokens but no content is a
+ * legitimate shape (the group aggregates them), not a row that failed to be written.
  */
 const isEmptyShell = (message: Message): boolean =>
   message.role === 'assistant' &&
-  !message.content?.trim() &&
-  !message.reasoning &&
-  !message.error &&
-  !message.tools?.length &&
-  !message.imageList?.length &&
-  !message.fileList?.length &&
-  !message.audioList?.length &&
+  !hasSubstance(message) &&
   !message.usage &&
   !(message.metadata as { usage?: unknown } | null | undefined)?.usage;
 
 /** Mirrors the write-side anchor rule: tool messages and toolless signal turns are never a spine tail. */
 const canAnchor = (message: Message): boolean =>
   message.role !== 'tool' && !getSignal(message) && !isEmptyShell(message);
-
-/** Something the user would actually see if it were put back on screen. */
-const hasSubstance = (message: Message): boolean =>
-  !!message.content?.trim() ||
-  !!message.tools?.length ||
-  !!message.imageList?.length ||
-  !!message.fileList?.length;
 
 const timeSpan = (messages: Message[]): [number, number] => [
   Math.min(...messages.map((m) => m.createdAt)),
