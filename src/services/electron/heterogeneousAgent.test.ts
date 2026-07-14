@@ -63,12 +63,17 @@ describe('heterogeneousAgentService', () => {
       heterogeneousAgentService.startSession({ agentType: 'claude-code', command: 'claude' }),
     ).resolves.toEqual({ sessionId: 's1' });
 
-    await heterogeneousAgentService.sendPrompt('s1', 'hi', 'op1');
-    expect(mockHeterogeneousAgent.sendPrompt).toHaveBeenCalledWith({
-      imageList: undefined,
+    await heterogeneousAgentService.sendPrompt({
       operationId: 'op1',
       prompt: 'hi',
       sessionId: 's1',
+      topicId: 'topic-1',
+    });
+    expect(mockHeterogeneousAgent.sendPrompt).toHaveBeenCalledWith({
+      operationId: 'op1',
+      prompt: 'hi',
+      sessionId: 's1',
+      topicId: 'topic-1',
     });
 
     await heterogeneousAgentService.cancelSession('s1');

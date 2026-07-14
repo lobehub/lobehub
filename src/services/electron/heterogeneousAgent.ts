@@ -22,22 +22,16 @@ class HeterogeneousAgentService {
     return this.ipc.heterogeneousAgent.startSession(params);
   }
 
-  async sendPrompt(
-    sessionId: string,
-    prompt: string,
-    operationId: string,
-    imageList?: Array<{ id: string; url: string }>,
-    systemContext?: string,
-    agentId?: string,
-  ) {
-    return this.ipc.heterogeneousAgent.sendPrompt({
-      agentId,
-      imageList,
-      operationId,
-      prompt,
-      sessionId,
-      systemContext,
-    });
+  async sendPrompt(params: {
+    agentId?: string;
+    imageList?: Array<{ id: string; url: string }>;
+    operationId: string;
+    prompt: string;
+    sessionId: string;
+    systemContext?: string;
+    topicId?: string;
+  }) {
+    return this.ipc.heterogeneousAgent.sendPrompt(params);
   }
 
   async cancelSession(sessionId: string) {

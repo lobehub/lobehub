@@ -24,16 +24,22 @@ const DesktopBrowserGatewayBridge = memo(() => {
       apiName,
       args,
       requestId,
+      topicId,
     }: {
       agentId: string;
       apiName: string;
       args: Record<string, unknown>;
       requestId: string;
+      topicId: string;
     }) => {
       try {
+        // The executor keys the browser session off `topicId`, so it has to be
+        // rebuilt into the context here — the run's own topic, not the topic the
+        // user happens to be looking at.
         const result = await invokeExecutor(BROWSER_IDENTIFIER, apiName, args, {
           agentId,
           messageId: `gateway-${requestId}`,
+          topicId,
         });
         await electronBrowserControlService.reportGatewayToolResult({
           requestId,

@@ -143,10 +143,17 @@ interface StartSessionResult {
   sessionId: string;
 }
 
+/** Run identity the browser MCP tools need to reach the right in-app page. */
+interface BrowserRunBinding {
+  agentId?: string;
+  topicId?: string;
+}
+
 interface SendPromptParams {
   /**
-   * Agent this run belongs to. Binds the op to its in-app browser session
-   * (`agent:<agentId>`) so the browser MCP tools act on the right webview.
+   * Agent this run belongs to. Rides along to the renderer so it can tell
+   * whether revealing the browser panel would yank the user's view to a run
+   * they aren't watching.
    */
   agentId?: string;
   /** Image attachments to include in the prompt (downloaded from url, cached by id) */
@@ -161,6 +168,14 @@ interface SendPromptParams {
   sessionId: string;
   /** Extra context injected before the user prompt without mutating the prompt text. */
   systemContext?: string;
+  /**
+   * Topic this run belongs to. Binds the op to its in-app browser session
+   * (`topic:<topicId>`) so the browser MCP tools act on the right page.
+   *
+   * Not to be confused with `sessionId`, which is the CC/Codex agent session —
+   * a different namespace entirely.
+   */
+  topicId?: string;
 }
 
 interface CancelSessionParams {
@@ -284,8 +299,12 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
    * fire many ops over its lifetime).
    */
   private opIdToIntervention = new Map<string, InterventionSlot>();
-  /** Op → agent binding for browser MCP tool session resolution. */
-  private opIdToAgentId = new Map<string, string>();
+  /**
+   * Op → run identity for browser MCP tool session resolution. The main process
+   * otherwise has no idea which topic an operation belongs to, and the browser
+   * session is keyed by topic (`topic:<topicId>`).
+   */
+  private opIdToBrowserBinding = new Map<string, BrowserRunBinding>();
   /** Lazy single MCP server, started on first claude-code prompt. */
   private builtinMcpServer?: LobeBuiltinMcpServer;
   private builtinMcpStartPromise?: Promise<LobeBuiltinMcpServer>;
@@ -823,11 +842,13 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
    */
   private async setupInterventionForOp(
     operationId: string,
-    agentId?: string,
+    browserBinding?: BrowserRunBinding,
   ): Promise<{ bridge: AskUserBridge; cleanup: () => Promise<void>; tmpConfigPath: string }> {
     const server = await this.ensureBuiltinMcpServerStarted();
     const bridge = server.registerOperation(operationId);
-    if (agentId) this.opIdToAgentId.set(operationId, agentId);
+    if (browserBinding?.agentId || browserBinding?.topicId) {
+      this.opIdToBrowserBinding.set(operationId, browserBinding);
+    }
     const tmpConfigPath = path.join(os.tmpdir(), `lobe-cc-mcp-${operationId}.json`);
 
     // `alwaysLoad: true` is the undocumented CC flag that promotes our
@@ -854,7 +875,7 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
       this.builtinMcpServer?.unregisterOperation(operationId);
       await slot.pumpDone;
       this.opIdToIntervention.delete(operationId);
-      this.opIdToAgentId.delete(operationId);
+      this.opIdToBrowserBinding.delete(operationId);
       await unlink(tmpConfigPath).catch(() => {
         /* file may already be gone if app crashed mid-prompt */
       });
@@ -874,12 +895,12 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     apiName: string,
     args: Record<string, unknown>,
   ): Promise<McpToolResult> {
-    const agentId = this.opIdToAgentId.get(operationId);
-    if (!agentId) {
+    const binding = this.opIdToBrowserBinding.get(operationId);
+    if (!binding?.agentId || !binding.topicId) {
       return {
         content: [
           {
-            text: 'The in-app browser is not available for this run (no agent binding). Continue without it.',
+            text: 'The in-app browser is not available for this run (no topic binding). Continue without it.',
             type: 'text',
           },
         ],
@@ -887,9 +908,11 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
       };
     }
 
-    const result = await this.app
-      .getController(BrowserControlCtr)
-      .runGatewayToolCall(apiName, { ...args, __agentId: agentId });
+    const result = await this.app.getController(BrowserControlCtr).runGatewayToolCall(apiName, {
+      ...args,
+      __agentId: binding.agentId,
+      __topicId: binding.topicId,
+    });
 
     const text =
       result.content ?? result.error?.message ?? (result.success ? 'OK' : 'Browser action failed');
@@ -991,7 +1014,10 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     // into `--mcp-config`. Codex / future agents skip this entirely.
     const intervention =
       session.agentType === 'claude-code'
-        ? await this.setupInterventionForOp(params.operationId, params.agentId).catch((err) => {
+        ? await this.setupInterventionForOp(params.operationId, {
+            agentId: params.agentId,
+            topicId: params.topicId,
+          }).catch((err) => {
             logger.warn('Failed to set up AskUserQuestion bridge — proceeding without it:', err);
             return undefined;
           })
