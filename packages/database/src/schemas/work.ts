@@ -69,7 +69,7 @@ export const works = pgTable(
     /** Concrete tool that produced the current version, e.g. `createTask`. */
     toolName: text('tool_name').notNull(),
     /** Tool/plugin identifier that produced the current version, e.g. `lobe-task`. */
-    toolIdentifier: text('tool_identifier'),
+    toolIdentifier: text('tool_identifier').notNull(),
     /** Latest runtime operation that produced a version and therefore owns the current card. */
     rootOperationId: text('root_operation_id'),
 
@@ -151,7 +151,7 @@ export const workVersions = pgTable(
     /** Concrete tool that produced this version, e.g. `createTask`. */
     toolName: text('tool_name').notNull(),
     /** Tool/plugin identifier that produced this version, e.g. `lobe-task`. */
-    toolIdentifier: text('tool_identifier'),
+    toolIdentifier: text('tool_identifier').notNull(),
 
     /** Conversation where the mutation happened; set-null keeps history after topic deletion. */
     topicId: text('topic_id').references(() => topics.id, { onDelete: 'set null' }),

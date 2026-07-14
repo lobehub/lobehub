@@ -2715,7 +2715,7 @@ table work_versions {
   url text
   change_type text [not null]
   tool_name text [not null]
-  tool_identifier text
+  tool_identifier text [not null]
   topic_id text
   thread_id text
   message_id text
@@ -2751,7 +2751,7 @@ table works {
   status text
   url text
   tool_name text [not null]
-  tool_identifier text
+  tool_identifier text [not null]
   root_operation_id text
   user_id text [not null]
   workspace_id text

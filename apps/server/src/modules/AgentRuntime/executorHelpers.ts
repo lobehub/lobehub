@@ -113,7 +113,7 @@ export const registerWorkFromIntent = async ({
   sourceMessageId?: string;
   sourceToolCallId?: string;
   /** Tool/plugin identifier supplied by the runtime event that produced this version. */
-  sourceToolIdentifier?: string | null;
+  sourceToolIdentifier: string;
   /** Runtime event's concrete tool name; skills may override it with their own toolName. */
   sourceToolName: string;
   state: Pick<AgentState, 'cost' | 'usage'>;

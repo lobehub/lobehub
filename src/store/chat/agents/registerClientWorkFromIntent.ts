@@ -15,7 +15,7 @@ interface RegisterClientWorkFromIntentParams {
   sourceMessageId?: string;
   sourceToolCallId?: string;
   /** Tool/plugin identifier supplied by the runtime event that produced this version. */
-  sourceToolIdentifier?: string | null;
+  sourceToolIdentifier: string;
   /** Runtime event's concrete tool name; skills/documents may carry their own. */
   sourceToolName: string;
   state: Pick<AgentState, 'cost' | 'usage'>;

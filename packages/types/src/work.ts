@@ -49,7 +49,7 @@ export interface WorkItem {
   /** Denormalized current-version title used by Work list queries. */
   title: string | null;
   /** Tool/plugin identifier that produced the current version. */
-  toolIdentifier: string | null;
+  toolIdentifier: string;
   /** Concrete tool that produced the current version. */
   toolName: string;
   type: WorkType;
@@ -88,7 +88,7 @@ export interface WorkVersionItem {
   /** Runtime tool-call id used to deduplicate repeated registration. */
   toolCallId: string | null;
   /** Tool/plugin identifier that produced THIS version (per-mutation). */
-  toolIdentifier: string | null;
+  toolIdentifier: string;
   /** Concrete tool that produced this version, e.g. 'createTask'. */
   toolName: string;
   topicId: string | null;
@@ -202,7 +202,7 @@ export interface RegisterDocumentWorkParams {
   threadId?: string | null;
   toolCallId?: string | null;
   /** Tool/plugin identifier that produced this version. */
-  toolIdentifier?: string | null;
+  toolIdentifier: string;
   toolName: string;
   topicId?: string | null;
 }
@@ -242,7 +242,7 @@ export interface RegisterExternalWorkParams {
   title?: string | null;
   toolCallId?: string | null;
   /** Tool/plugin identifier that produced this version. */
-  toolIdentifier?: string | null;
+  toolIdentifier: string;
   toolName: string;
   topicId?: string | null;
   url?: string | null;
@@ -321,7 +321,7 @@ export interface RegisterTaskWorkParams {
   threadId?: string | null;
   toolCallId?: string | null;
   /** Tool/plugin identifier that produced this version. */
-  toolIdentifier?: string | null;
+  toolIdentifier: string;
   toolName: string;
   topicId?: string | null;
 }

@@ -303,7 +303,7 @@ export interface WorkRegistrationProvenance {
    * `identifier`). Skills stamp their own provider DB-side, so this is unused
    * for the skill branch.
    */
-  toolIdentifier?: string | null;
+  toolIdentifier: string;
   /** Fallback concrete tool name for task Works; skills/documents carry their own. */
   toolName: string;
   topicId?: string;

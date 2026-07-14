@@ -151,7 +151,7 @@ export const registerWorkVersion = async (
           .insert(works)
           .values({
             ...identity,
-            toolIdentifier: params.toolIdentifier ?? null,
+            toolIdentifier: params.toolIdentifier,
             toolName: params.toolName,
             userId: ctx.userId,
             workspaceId: ctx.workspaceId ?? null,
@@ -230,7 +230,7 @@ export const registerWorkVersion = async (
             title: snapshot.title,
             topicId: params.topicId ?? null,
             toolCallId: params.toolCallId ?? null,
-            toolIdentifier: params.toolIdentifier ?? null,
+            toolIdentifier: params.toolIdentifier,
             toolName: params.toolName,
             url: snapshot.url,
             version: Number(next.version),
@@ -248,7 +248,7 @@ export const registerWorkVersion = async (
             rootOperationId: params.rootOperationId ?? null,
             status: snapshot.status,
             title: snapshot.title,
-            toolIdentifier: params.toolIdentifier ?? null,
+            toolIdentifier: params.toolIdentifier,
             toolName: params.toolName,
             updatedAt: now,
             url: snapshot.url,

@@ -65,7 +65,7 @@ const registerTaskSchema = z.object({
   taskIdentifier: z.string().optional(),
   threadId: z.string().nullable().optional(),
   toolCallId: z.string().nullable().optional(),
-  toolIdentifier: z.string().nullable().optional(),
+  toolIdentifier: z.string().min(1),
   toolName: z.string().min(1),
   topicId: z.string().nullable().optional(),
 }) satisfies z.ZodType<RegisterTaskWorkParams>;
@@ -98,7 +98,7 @@ const registerDocumentSchema = z.object({
   rootOperationId: z.string().nullable().optional(),
   threadId: z.string().nullable().optional(),
   toolCallId: z.string().nullable().optional(),
-  toolIdentifier: z.string().nullable().optional(),
+  toolIdentifier: z.string().min(1),
   toolName: z.string().min(1),
   topicId: z.string().nullable().optional(),
 }) satisfies z.ZodType<RegisterDocumentWorkParams>;

@@ -206,7 +206,7 @@ const buildParams = (
   params: SkillToolResultWorkInput,
   tool: { entityType: GithubWorkEntityType; changeType: 'created' | 'updated' },
   record: Record<string, unknown>,
-): Omit<RegisterExternalWorkParams, 'resourceId'> => {
+): Omit<RegisterExternalWorkParams, 'resourceId' | 'toolIdentifier'> => {
   const args = params.args ?? {};
   const repo = resolveRepo(record, args);
   const number = resolveNumber(record, args);

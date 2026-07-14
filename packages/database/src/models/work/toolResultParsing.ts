@@ -15,7 +15,7 @@ export { toRecord };
  * the resulting operation shape is unified.
  */
 export interface ExternalToolWorkOperation {
-  params: RegisterExternalWorkParams;
+  params: Omit<RegisterExternalWorkParams, 'toolIdentifier'>;
   type: 'register';
 }
 

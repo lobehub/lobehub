@@ -252,8 +252,9 @@ describe('TaskModel', () => {
       const task = await model.create({ instruction: 'Keep my Work' });
       await workModel.registerTask({
         changeType: 'created',
-        sourceToolName: 'createTask',
-        sourceToolCallId: 'tool-call-task-keep',
+        toolCallId: 'tool-call-task-keep',
+        toolIdentifier: 'lobe-task',
+        toolName: 'createTask',
         taskId: task.id,
       });
 
@@ -338,7 +339,7 @@ describe('TaskModel', () => {
       const model = new TaskModel(serverDB, userId);
 
       // Create tasks with different statuses
-      const t1 = await model.create({ instruction: 'Backlog task' });
+      const _t1 = await model.create({ instruction: 'Backlog task' });
       const t2 = await model.create({ instruction: 'Running task' });
       await model.updateStatus(t2.id, 'running', { startedAt: new Date() });
       const t3 = await model.create({ instruction: 'Paused task' });

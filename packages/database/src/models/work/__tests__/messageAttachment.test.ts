@@ -48,6 +48,7 @@ describe('MessageModel · work summary attachment', () => {
       changeType: 'created',
       rootOperationId: 'op-root',
       toolName: 'createTask',
+      toolIdentifier: 'lobe-task',
       messageId: 'msg-tool',
       toolCallId: 'tool-call-create',
       taskId: task.id,

@@ -50,6 +50,7 @@ describe('workRouter — per-procedure write permission gates', () => {
       createCaller().registerDocument({
         changeType: 'created',
         documentId: 'doc-1',
+        toolIdentifier: 'lobe-agent-documents',
         toolName: 'tool',
       }),
     ).rejects.toThrow('GATE:document:update');
@@ -59,7 +60,11 @@ describe('workRouter — per-procedure write permission gates', () => {
 
   it('registerTask gates on agent:update (aligned with task mutations)', async () => {
     await expect(
-      createCaller().registerTask({ changeType: 'created', toolName: 'tool' }),
+      createCaller().registerTask({
+        changeType: 'created',
+        toolIdentifier: 'lobe-task',
+        toolName: 'tool',
+      }),
     ).rejects.toThrow('GATE:agent:update');
     expect(mockRegisterTask).not.toHaveBeenCalled();
   });

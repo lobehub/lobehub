@@ -34,6 +34,7 @@ describe('WorkModel · linear', () => {
     const baseParams = {
       resourceId: 'issue-race',
       resourceType: 'linear_issue' as const,
+      toolIdentifier: 'linear',
       toolName: 'save_issue',
       topicId,
     };
