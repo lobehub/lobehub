@@ -822,9 +822,8 @@ export const topicRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const topic = await ctx.topicModel.findById(input.id);
-      if (topic) assertWorkspaceRowManageable(ctx, topic.userId, 'topic');
-
+      // Intentionally no creator/owner gate: shared topics are co-editable by
+      // members (title/status/metadata); only delete/transfer is creator-scoped.
       const { agentId, ...restValue } = input.value;
 
       // If agentId is provided, resolve to sessionId

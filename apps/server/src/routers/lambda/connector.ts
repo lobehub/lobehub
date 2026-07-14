@@ -651,7 +651,10 @@ export const connectorRouter = router({
    * that already have their tool list available on the client side).
    * Idempotent — safe to call whenever the detail panel opens.
    */
-  syncToolsFromClient: connectorWriteProcedure
+  // Bootstrap syncs run on detail-panel open for every role; viewer
+  // restrictions are handled inside upsertConnectorEntry (read-only for
+  // existing rows, no creation).
+  syncToolsFromClient: connectorProcedure
     .input(
       z.object({
         identifier: z.string().min(1),
@@ -694,7 +697,7 @@ export const connectorRouter = router({
    * by reading its manifest from @lobechat/builtin-tools.
    * Idempotent — safe to call on every open of the detail panel.
    */
-  syncBuiltinTool: connectorWriteProcedure
+  syncBuiltinTool: connectorProcedure
     .input(z.object({ identifier: z.string().min(1) }))
     .mutation(async ({ input, ctx }) => {
       const { builtinTools } = await import('@lobechat/builtin-tools');
@@ -742,7 +745,7 @@ export const connectorRouter = router({
    * transport endpoint) and would also collide on the unique `(user_id,
    * identifier)` index when the migration later tries to upsert.
    */
-  syncPluginTools: connectorWriteProcedure
+  syncPluginTools: connectorProcedure
     .input(z.object({ identifier: z.string().min(1) }))
     .mutation(async ({ input, ctx }) => {
       const plugin = await ctx.pluginModel.findById(input.identifier);
@@ -826,15 +829,23 @@ async function upsertConnectorEntry(
   if (params.description) metadata.description = params.description;
   if (params.avatar) metadata.avatar = params.avatar;
 
+  // Viewers keep browse access: they resolve existing rows read-only below,
+  // but must never create or rewrite connector state.
+  const isViewer = !!ctx.workspaceId && ctx.workspaceRole === 'viewer';
+
   const existing = await ctx.connectorModel.queryByIdentifiers([params.identifier]);
   if (existing.length > 0) {
     const row = existing[0];
-    const writable = !isWorkspaceNonOwner(ctx) || row.userId === ctx.userId;
+    const writable = !isViewer && (!isWorkspaceNonOwner(ctx) || row.userId === ctx.userId);
     if (writable) {
       // Update metadata with latest description/avatar from manifest
       await ctx.connectorModel.update(row.id, { metadata });
     }
     return { connectorId: row.id, writable };
+  }
+
+  if (isViewer) {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'Viewers cannot install connectors' });
   }
 
   const created = await ctx.connectorModel.create({
