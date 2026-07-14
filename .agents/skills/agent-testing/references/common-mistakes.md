@@ -488,7 +488,7 @@ then restore it only after that popover closes.
 
 ---
 
-## Case 18 — Coordinator hand-driving a broken UI flow instead of re-delegating
+## Case 19 — Coordinator hand-driving a broken UI flow instead of re-delegating
 
 **Wrong approach**: after a delegated UI-verification subagent is killed mid-case,
 the coordinator takes over and drives the remaining flow inline — dozens of small
