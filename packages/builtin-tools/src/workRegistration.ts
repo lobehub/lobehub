@@ -179,8 +179,8 @@ export const extractTaskWorkTargets = ({
  * API, so extraction is a flat read off `result.state`.
  *
  * Returns `undefined` unless the call SUCCEEDED and both `documentId` (the Work
- * resource identity — the backing `documents` row) and `agentId` (the owning
- * agent, stamped in state to avoid sub-agent attribution ambiguity) are present.
+ * resource identity — the backing `documents` row) and `agentId` (the agent
+ * producing the version and validating the binding) are present.
  * `agentDocumentId` is optional metadata and does not gate registration.
  */
 export const extractDocumentWorkTarget = ({
@@ -291,7 +291,7 @@ export interface WorkRegistrationPorts {
  * until then.
  */
 export interface WorkRegistrationProvenance {
-  actorAgentId?: string | null;
+  agentId?: string | null;
   cumulativeCost?: number | null;
   cumulativeUsage?: WorkVersionCumulativeUsage | null;
   messageId?: string;
@@ -343,7 +343,7 @@ const dispatchTaskWorkIntent = async (
   provenance: WorkRegistrationProvenance,
 ): Promise<void> => {
   const {
-    actorAgentId,
+    agentId,
     cumulativeCost,
     cumulativeUsage,
     rootOperationId,
@@ -370,7 +370,7 @@ const dispatchTaskWorkIntent = async (
   const results = await Promise.allSettled(
     targets.map((target) =>
       ports.registerTask({
-        actorAgentId,
+        agentId,
         changeType,
         cumulativeCost,
         cumulativeUsage,
@@ -402,7 +402,7 @@ const dispatchDocumentWorkIntent = async (
   }
 
   const {
-    actorAgentId,
+    agentId: provenanceAgentId,
     cumulativeCost,
     cumulativeUsage,
     rootOperationId,
@@ -415,7 +415,7 @@ const dispatchDocumentWorkIntent = async (
 
   await ports.registerDocument({
     ...intent.document,
-    actorAgentId,
+    agentId: provenanceAgentId ?? intent.document.agentId,
     cumulativeCost,
     cumulativeUsage,
     rootOperationId,
@@ -433,7 +433,7 @@ const dispatchSkillWorkIntent = async (
   provenance: WorkRegistrationProvenance,
 ): Promise<void> => {
   const {
-    actorAgentId,
+    agentId,
     cumulativeCost,
     cumulativeUsage,
     rootOperationId,
@@ -445,7 +445,7 @@ const dispatchSkillWorkIntent = async (
 
   // Skill providers (Linear / GitHub) normalize the untruncated payload into a Work.
   await ports.handleSkillToolResult({
-    actorAgentId,
+    agentId,
     args: intent.args,
     cumulativeCost,
     cumulativeUsage,

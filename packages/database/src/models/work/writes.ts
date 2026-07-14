@@ -210,7 +210,7 @@ export const registerWorkVersion = async (
         const [version] = await tx
           .insert(workVersions)
           .values({
-            actorAgentId: params.actorAgentId ?? null,
+            agentId: params.agentId ?? null,
             content: snapshot.content,
             // Written once at insert time: the agent runtime resolves the tool
             // call's cumulative cost only AFTER execution (in `accumulateTool`),

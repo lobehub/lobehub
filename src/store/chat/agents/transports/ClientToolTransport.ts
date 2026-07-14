@@ -196,7 +196,7 @@ export class ClientToolTransport implements ToolTransport {
     const opContext = this.get().operations[this.operationId]?.context;
 
     await registerClientWorkFromIntent({
-      actorAgentId: opContext?.agentId,
+      agentId: opContext?.agentId,
       intent: registration.intent,
       rootOperationId: this.operationId,
       sourceMessageId: registration.sourceMessageId,

@@ -64,7 +64,8 @@ export interface WorkItem {
 export type WorkListBaseItem = WorkItem;
 
 export interface WorkVersionItem {
-  actorAgentId: string | null;
+  /** Agent that produced this version. */
+  agentId: string | null;
   changeType: WorkVersionChangeType;
   /** Full text captured by this version. Null for document Works. */
   content: string | null;
@@ -189,8 +190,8 @@ export type WorkSummaryItem =
 export type WorkSummaryMap = Record<string, WorkSummaryItem[]>;
 
 export interface RegisterDocumentWorkParams {
-  actorAgentId?: string | null;
   agentDocumentId?: string | null;
+  /** Agent that produced this version; also validates the agent-document binding when present. */
   agentId?: string | null;
   changeType: WorkVersionChangeType;
   cumulativeCost?: number | null;
@@ -219,7 +220,7 @@ export interface DeleteTaskWorkParams {
 }
 
 export interface RegisterExternalWorkParams {
-  actorAgentId?: string | null;
+  agentId?: string | null;
   changeType: WorkVersionChangeType;
   /** Full body captured in the next version when named in `patchFields`. */
   content?: string | null;
@@ -292,7 +293,7 @@ export const workProviderOfResourceType = (resourceType: string): WorkSkillProvi
   RESOURCE_TYPE_TO_PROVIDER.get(resourceType);
 
 export interface RegisterSkillToolResultWorkParams {
-  actorAgentId?: string | null;
+  agentId?: string | null;
   args?: Record<string, unknown>;
   cumulativeCost?: number | null;
   cumulativeUsage?: WorkVersionCumulativeUsage | null;
@@ -310,7 +311,7 @@ export interface RegisterSkillToolResultWorkParams {
 export type SkillToolResultWorkInput = Omit<RegisterSkillToolResultWorkParams, 'provider'>;
 
 export interface RegisterTaskWorkParams {
-  actorAgentId?: string | null;
+  agentId?: string | null;
   changeType: WorkVersionChangeType;
   cumulativeCost?: number | null;
   cumulativeUsage?: WorkVersionCumulativeUsage | null;
@@ -340,7 +341,7 @@ export interface WorkTaskTarget {
  * cost-less and back-filled by a second UPDATE.
  *
  * Carries only the type-specific resource identity; the runtime supplies
- * provenance (operation / message / tool-call ids, thread / topic, actor agent)
+ * provenance (operation / message / tool-call ids, thread / topic, agent)
  * and the cumulative usage snapshot at persist time. The `skill` variant also
  * carries the tool's UNTRUNCATED result payload (`data`), because the runtime
  * only ever sees the truncated `content` — the identity fields (issue/PR url,

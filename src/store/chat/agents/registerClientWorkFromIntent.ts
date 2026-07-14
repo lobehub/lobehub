@@ -9,7 +9,7 @@ import { buildWorkVersionCumulativeUsage } from '@/utils/workCumulativeUsage';
 const log = debug('lobe-store:client-work-registration');
 
 interface RegisterClientWorkFromIntentParams {
-  actorAgentId?: string | null;
+  agentId?: string | null;
   intent: WorkRegistrationIntent;
   rootOperationId?: string;
   sourceMessageId?: string;
@@ -41,7 +41,7 @@ interface RegisterClientWorkFromIntentParams {
  * race ahead of the persisted Work. No SWR cache is refreshed per tool.
  */
 export const registerClientWorkFromIntent = async ({
-  actorAgentId,
+  agentId,
   intent,
   rootOperationId,
   sourceMessageId,
@@ -68,7 +68,7 @@ export const registerClientWorkFromIntent = async ({
         registerTask: (params) => workService.registerTask(params),
       },
       {
-        actorAgentId,
+        agentId,
         ...cumulative,
         messageId: sourceMessageId,
         rootOperationId,

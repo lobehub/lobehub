@@ -55,7 +55,7 @@ const cumulativeUsageSchema = z.object({
 // registration (see registerClientWorkFromIntent), and `z.object` strips
 // undeclared keys — omitting them here silently stores cost-less versions.
 const registerTaskSchema = z.object({
-  actorAgentId: z.string().nullable().optional(),
+  agentId: z.string().nullable().optional(),
   cumulativeCost: z.number().nullable().optional(),
   cumulativeUsage: cumulativeUsageSchema.nullable().optional(),
   changeType: versionChangeTypeSchema,
@@ -71,7 +71,7 @@ const registerTaskSchema = z.object({
 }) satisfies z.ZodType<RegisterTaskWorkParams>;
 
 const registerSkillToolResultSchema = z.object({
-  actorAgentId: z.string().nullable().optional(),
+  agentId: z.string().nullable().optional(),
   args: z.record(z.string(), z.unknown()).optional(),
   cumulativeCost: z.number().nullable().optional(),
   cumulativeUsage: cumulativeUsageSchema.nullable().optional(),
@@ -86,7 +86,6 @@ const registerSkillToolResultSchema = z.object({
 }) satisfies z.ZodType<RegisterSkillToolResultWorkParams>;
 
 const registerDocumentSchema = z.object({
-  actorAgentId: z.string().nullable().optional(),
   agentDocumentId: z.string().nullable().optional(),
   agentId: z.string().nullable().optional(),
   cumulativeCost: z.number().nullable().optional(),

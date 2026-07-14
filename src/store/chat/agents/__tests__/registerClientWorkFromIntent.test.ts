@@ -36,7 +36,7 @@ const state: Pick<AgentState, 'cost' | 'usage'> = {
 };
 
 const base = {
-  actorAgentId: 'agent-1',
+  agentId: 'agent-1',
   rootOperationId: 'op-root',
   sourceMessageId: 'msg-tool-1',
   sourceToolCallId: 'tool-call-1',
@@ -70,7 +70,7 @@ describe('registerClientWorkFromIntent', () => {
 
       expect(mocks.registerTask).toHaveBeenCalledWith(
         expect.objectContaining({
-          actorAgentId: 'agent-1',
+          agentId: 'agent-1',
           cumulativeCost: 0.011,
           cumulativeUsage: expect.objectContaining({
             cost: expect.objectContaining({ total: 0.011 }),

@@ -160,7 +160,7 @@ const contextParams = (
   params: SkillToolResultWorkInput,
 ): Pick<
   RegisterExternalWorkParams,
-  | 'actorAgentId'
+  | 'agentId'
   | 'cumulativeCost'
   | 'cumulativeUsage'
   | 'messageId'
@@ -170,7 +170,7 @@ const contextParams = (
   | 'toolName'
   | 'topicId'
 > => ({
-  actorAgentId: params.actorAgentId ?? null,
+  agentId: params.agentId ?? null,
   cumulativeCost: params.cumulativeCost ?? null,
   cumulativeUsage: params.cumulativeUsage ?? null,
   messageId: params.messageId ?? null,

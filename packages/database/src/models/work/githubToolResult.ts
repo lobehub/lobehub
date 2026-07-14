@@ -223,7 +223,7 @@ const buildParams = (
   if (url) patchFields.add('url');
 
   return {
-    actorAgentId: params.actorAgentId ?? null,
+    agentId: params.agentId ?? null,
     changeType: tool.changeType,
     // The FULL issue/PR body (layer 3); the card preview is the capped `description`.
     content: patch('content', hasOwn(record, 'body'), stringValue(record.body)),
@@ -558,7 +558,7 @@ const normalizeGithubCliResult = (
 
   return {
     params: {
-      actorAgentId: params.actorAgentId ?? null,
+      agentId: params.agentId ?? null,
       changeType: parsed.action === 'create' ? 'created' : 'updated',
       // The FULL `--body` value (layer 3); the card preview is the capped `description`.
       content: patch('content', parsed.body !== null, parsed.body),

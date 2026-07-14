@@ -2721,7 +2721,7 @@ table work_versions {
   message_id text
   root_operation_id text
   tool_call_id text
-  actor_agent_id text
+  agent_id text
   metadata jsonb
   cumulative_cost "numeric(20, 6)"
   cumulative_usage jsonb
@@ -2732,7 +2732,7 @@ table work_versions {
     (work_id, tool_call_id) [name: 'work_versions_work_id_tool_call_id_unique', unique]
     thread_id [name: 'work_versions_thread_id_idx']
     message_id [name: 'work_versions_message_id_idx']
-    actor_agent_id [name: 'work_versions_actor_agent_id_idx']
+    agent_id [name: 'work_versions_agent_id_idx']
     (root_operation_id, created_at) [name: 'work_versions_root_operation_created_at_idx']
     (topic_id, created_at) [name: 'work_versions_topic_created_at_idx']
     (topic_id, thread_id, created_at) [name: 'work_versions_topic_thread_created_at_idx']

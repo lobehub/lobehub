@@ -325,7 +325,7 @@ describe('extractDocumentWorkTarget', () => {
 
 describe('dispatchWorkRegistrationIntent', () => {
   const provenance: WorkRegistrationProvenance = {
-    actorAgentId: 'agent-1',
+    agentId: 'agent-1',
     cumulativeCost: 0.011,
     cumulativeUsage: { capturedAt: '2026-06-30T08:00:00.000Z', cost: { total: 0.011 } },
     rootOperationId: 'op-root',
@@ -363,7 +363,7 @@ describe('dispatchWorkRegistrationIntent', () => {
 
       expect(ports.registerTask).toHaveBeenCalledTimes(2);
       expect(ports.registerTask).toHaveBeenNthCalledWith(1, {
-        actorAgentId: 'agent-1',
+        agentId: 'agent-1',
         changeType: 'created',
         cumulativeCost: 0.011,
         cumulativeUsage: provenance.cumulativeUsage,
@@ -484,7 +484,7 @@ describe('dispatchWorkRegistrationIntent', () => {
 
       expect(ports.registerDocument).toHaveBeenCalledWith(
         expect.objectContaining({
-          actorAgentId: 'agent-1',
+          agentId: 'agent-1',
           changeType: 'created',
           cumulativeCost: 0.011,
           documentId: 'doc_1',
@@ -542,7 +542,7 @@ describe('dispatchWorkRegistrationIntent', () => {
 
       expect(ports.handleSkillToolResult).toHaveBeenCalledWith(
         expect.objectContaining({
-          actorAgentId: 'agent-1',
+          agentId: 'agent-1',
           args: { title: 'x' },
           cumulativeCost: 0.011,
           data: { url: 'https://linear.app/x' },

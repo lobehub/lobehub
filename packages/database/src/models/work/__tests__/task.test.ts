@@ -240,7 +240,7 @@ describe('WorkModel · task', () => {
 
     await expect(
       workModel.registerTask({
-        actorAgentId: 'missing-agent-id',
+        agentId: 'missing-agent-id',
         changeType: 'created',
         rootOperationId: 'op-atomic-failure',
         taskId: task.id,

@@ -51,7 +51,7 @@ export class ServerToolTransport implements ToolTransport {
 
   async registerWork(registration: ToolWorkRegistration, state: AgentState): Promise<void> {
     await registerWorkFromIntent({
-      actorAgentId: state.metadata?.agentId ?? null,
+      agentId: state.metadata?.agentId ?? null,
       intent: registration.intent,
       rootOperationId: this.ctx.operationId,
       serverDB: this.ctx.serverDB,
