@@ -294,6 +294,18 @@ export const knowledgeBaseRouter = router({
         });
       }
       assertWorkspaceRowManageable(ctx, knowledgeBase.userId, 'knowledge base');
+      // The transfer rehomes every linked file/document — a non-owner member
+      // must not move teammates' rows along with their own KB.
+      if (
+        isWorkspaceNonOwner(ctx) &&
+        (await ctx.knowledgeBaseModel.hasForeignLinkedRows(input.id))
+      ) {
+        throw new TRPCError({
+          cause: { data: { code: TransferErrorCode.OwnerOnly } },
+          code: 'FORBIDDEN',
+          message: "Only workspace owners can transfer a knowledge base containing others' files",
+        });
+      }
 
       if (input.targetWorkspaceId) {
         const canWriteTarget = await hasWorkspaceScopedPermission({

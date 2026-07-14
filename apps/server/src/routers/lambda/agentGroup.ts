@@ -17,7 +17,10 @@ import { publishResourceEvent } from '@/server/services/resourceEvents';
 import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
 import { TransferErrorCode } from '@/types/transferError';
 
-import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
+import {
+  assertWorkspaceRowManageable,
+  isWorkspaceNonOwner,
+} from './_helpers/assertWorkspaceRowManageable';
 
 /**
  * Custom schema for agent member input, replacing drizzle-generated insertAgentSchema
@@ -378,6 +381,19 @@ export const agentGroupRouter = router({
           cause: { data: { code: TransferErrorCode.SameWorkspace } },
           code: 'BAD_REQUEST',
           message: 'Cannot transfer agent group to the same workspace',
+        });
+      }
+
+      // The transfer rehomes member agents and every group conversation — a
+      // non-owner member must not move teammates' rows along with their group.
+      if (
+        isWorkspaceNonOwner(ctx) &&
+        (await ctx.agentGroupRepo.transferHasForeignRows(input.groupId))
+      ) {
+        throw new TRPCError({
+          cause: { data: { code: TransferErrorCode.OwnerOnly } },
+          code: 'FORBIDDEN',
+          message: "Only workspace owners can transfer a group carrying others' content",
         });
       }
 

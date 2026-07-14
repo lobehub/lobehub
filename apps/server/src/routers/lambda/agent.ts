@@ -22,7 +22,10 @@ import { publishResourceEvent } from '@/server/services/resourceEvents';
 import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
 import { TransferErrorCode } from '@/types/transferError';
 
-import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
+import {
+  assertWorkspaceRowManageable,
+  isWorkspaceNonOwner,
+} from './_helpers/assertWorkspaceRowManageable';
 
 const agentProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -576,6 +579,20 @@ export const agentRouter = router({
           cause: { data: { code: TransferErrorCode.SameWorkspace } },
           code: 'BAD_REQUEST',
           message: 'Cannot transfer agent to the same workspace',
+        });
+      }
+
+      // 5. The transfer rehomes every linked topic/message/thread/task — a
+      //    non-owner member must not move teammates' conversations along with
+      //    their own agent.
+      if (
+        isWorkspaceNonOwner(ctx) &&
+        (await ctx.agentModel.transferHasForeignRows(input.agentId))
+      ) {
+        throw new TRPCError({
+          cause: { data: { code: TransferErrorCode.OwnerOnly } },
+          code: 'FORBIDDEN',
+          message: "Only workspace owners can transfer an agent carrying others' conversations",
         });
       }
 

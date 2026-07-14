@@ -1178,6 +1178,61 @@ export class AgentModel {
    * within that workspace (`private` = only the target user sees it,
    * `public` = every member does). Ignored when moving to a personal account.
    */
+  /**
+   * Whether the agent's transfer cascade (topics / messages / threads / tasks
+   * linked to it) contains rows created by someone else. Transfers rehome every
+   * cascaded row, so non-owner members must not move an agent that carries
+   * teammates' conversations.
+   */
+  transferHasForeignRows = async (agentId: string): Promise<boolean> => {
+    const links = await this.db
+      .select({ sessionId: agentsToSessions.sessionId })
+      .from(agentsToSessions)
+      .where(eq(agentsToSessions.agentId, agentId));
+    const sessionIds = links.map((link) => link.sessionId);
+
+    const topicWhere =
+      sessionIds.length > 0
+        ? or(inArray(topics.sessionId, sessionIds), eq(topics.agentId, agentId))
+        : eq(topics.agentId, agentId);
+    const [foreignTopic] = await this.db
+      .select({ id: topics.id })
+      .from(topics)
+      .where(and(topicWhere, ne(topics.userId, this.userId)))
+      .limit(1);
+    if (foreignTopic) return true;
+
+    const messageWhere =
+      sessionIds.length > 0
+        ? or(inArray(messages.sessionId, sessionIds), eq(messages.agentId, agentId))
+        : eq(messages.agentId, agentId);
+    const [foreignMessage] = await this.db
+      .select({ id: messages.id })
+      .from(messages)
+      .where(and(messageWhere, ne(messages.userId, this.userId)))
+      .limit(1);
+    if (foreignMessage) return true;
+
+    const [foreignThread] = await this.db
+      .select({ id: threads.id })
+      .from(threads)
+      .where(and(eq(threads.agentId, agentId), ne(threads.userId, this.userId)))
+      .limit(1);
+    if (foreignThread) return true;
+
+    const [foreignTask] = await this.db
+      .select({ id: tasks.id })
+      .from(tasks)
+      .where(
+        and(
+          or(eq(tasks.assigneeAgentId, agentId), eq(tasks.createdByAgentId, agentId)),
+          ne(tasks.createdByUserId, this.userId),
+        ),
+      )
+      .limit(1);
+    return !!foreignTask;
+  };
+
   transferAgent = async (
     agentId: string,
     targetWorkspaceId: string | null,

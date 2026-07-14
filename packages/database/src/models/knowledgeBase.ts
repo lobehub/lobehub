@@ -1,5 +1,5 @@
 import type { KnowledgeBaseItem } from '@lobechat/types';
-import { and, count, desc, eq, inArray, or, sum } from 'drizzle-orm';
+import { and, count, desc, eq, inArray, ne, or, sum } from 'drizzle-orm';
 
 import type { NewDocument, NewFile, NewKnowledgeBase } from '../schemas';
 import { documents, files, knowledgeBaseFiles, knowledgeBases } from '../schemas';
@@ -289,6 +289,39 @@ export class KnowledgeBaseModel {
     }
 
     return candidate;
+  };
+
+  /**
+   * Whether the KB's cascade (linked files + derived documents) contains rows
+   * created by someone else. Transfers rehome every cascaded row, so non-owner
+   * members must not move a KB that carries teammates' content.
+   */
+  hasForeignLinkedRows = async (id: string): Promise<boolean> => {
+    const fileLinks = await this.db
+      .select({ fileId: knowledgeBaseFiles.fileId })
+      .from(knowledgeBaseFiles)
+      .where(eq(knowledgeBaseFiles.knowledgeBaseId, id));
+    const fileIds = fileLinks.map((link) => link.fileId);
+
+    if (fileIds.length > 0) {
+      const [foreignFile] = await this.db
+        .select({ id: files.id })
+        .from(files)
+        .where(and(inArray(files.id, fileIds), ne(files.userId, this.userId)))
+        .limit(1);
+      if (foreignFile) return true;
+    }
+
+    const documentWhere =
+      fileIds.length > 0
+        ? or(eq(documents.knowledgeBaseId, id), inArray(documents.fileId, fileIds))
+        : eq(documents.knowledgeBaseId, id);
+    const [foreignDoc] = await this.db
+      .select({ id: documents.id })
+      .from(documents)
+      .where(and(documentWhere, ne(documents.userId, this.userId)))
+      .limit(1);
+    return !!foreignDoc;
   };
 
   transferTo = async (

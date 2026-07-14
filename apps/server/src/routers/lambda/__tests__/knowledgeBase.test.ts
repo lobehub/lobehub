@@ -12,6 +12,7 @@ const mockKnowledgeBaseModelCountFileUsage = vi.fn();
 const mockKnowledgeBaseModelCopyToWorkspace = vi.fn();
 const mockKnowledgeBaseModelFindById = vi.fn();
 const mockKnowledgeBaseModelTransferTo = vi.fn();
+const mockKnowledgeBaseModelHasForeignLinkedRows = vi.fn().mockResolvedValue(false);
 
 vi.mock('@/business/server/lambda-routers/file', () => ({
   businessFileTransferStorageCheck: routerMocks.businessFileTransferStorageCheck,
@@ -26,6 +27,7 @@ vi.mock('@/database/models/knowledgeBase', () => ({
     copyToWorkspace: mockKnowledgeBaseModelCopyToWorkspace,
     countFileUsage: mockKnowledgeBaseModelCountFileUsage,
     findById: mockKnowledgeBaseModelFindById,
+    hasForeignLinkedRows: mockKnowledgeBaseModelHasForeignLinkedRows,
     transferTo: mockKnowledgeBaseModelTransferTo,
   })),
 }));

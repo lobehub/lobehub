@@ -29,7 +29,10 @@ import type { FileListItem, KnowledgeItemStatus } from '@/types/files';
 import { QueryFileListSchema, UploadFileSchema } from '@/types/files';
 import { TransferErrorCode } from '@/types/transferError';
 
-import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
+import {
+  assertWorkspaceRowManageable,
+  isWorkspaceNonOwner,
+} from './_helpers/assertWorkspaceRowManageable';
 
 const fileTransferEntityTypeSchema = z.enum(['document', 'file', 'folder']);
 
@@ -811,6 +814,15 @@ export const fileRouter = router({
           });
         }
         assertWorkspaceRowManageable(ctx, document.userId, 'document');
+        // The transfer rehomes the entire subtree — a non-owner member must
+        // not move teammates' documents/files along with their own folder.
+        if (isWorkspaceNonOwner(ctx) && (await ctx.documentModel.subtreeHasForeignRows(input.id))) {
+          throw new TRPCError({
+            cause: { data: { code: TransferErrorCode.OwnerOnly } },
+            code: 'FORBIDDEN',
+            message: "Only workspace owners can transfer a folder containing others' content",
+          });
+        }
         const additionalSize = await ctx.documentModel.countFileUsageInSubtree(input.id);
         await businessFileTransferStorageCheck({
           additionalSize,

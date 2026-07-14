@@ -197,6 +197,7 @@ const mockDocumentModelCountFileUsageInSubtree = vi.fn();
 const mockDocumentModelCopyToWorkspace = vi.fn();
 const mockDocumentModelFindById = vi.fn();
 const mockDocumentModelTransferTo = vi.fn();
+const mockDocumentModelSubtreeHasForeignRows = vi.fn().mockResolvedValue(false);
 
 vi.mock('@/database/repositories/knowledge', () => ({
   KnowledgeRepo: vi.fn(() => ({
@@ -209,6 +210,7 @@ vi.mock('@/database/models/document', () => ({
     countFileUsageInSubtree: mockDocumentModelCountFileUsageInSubtree,
     copyToWorkspace: mockDocumentModelCopyToWorkspace,
     findById: mockDocumentModelFindById,
+    subtreeHasForeignRows: mockDocumentModelSubtreeHasForeignRows,
     transferTo: mockDocumentModelTransferTo,
   })),
 }));
