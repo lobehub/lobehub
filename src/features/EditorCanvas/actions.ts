@@ -16,12 +16,16 @@ export function openFileSelector(handleFiles: (files: FileList) => void, accept 
   input.multiple = false;
 
   // Listen for file selection events
-  input.addEventListener('change', (event) => {
+  const handleChange = (event: Event) => {
+    input.removeEventListener('change', handleChange);
+
     const files = (event.target as HTMLInputElement)?.files;
     if (files && files.length > 0) {
       handleFiles(files);
     }
-  });
+  };
+
+  input.addEventListener('change', handleChange);
 
   // Trigger file selector
   input.click();

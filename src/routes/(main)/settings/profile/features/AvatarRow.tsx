@@ -59,11 +59,26 @@ const AvatarRow = () => {
         try {
           setUploading(true);
           const img = new Image();
-          img.src = avatar;
 
-          await new Promise((resolve, reject) => {
-            img.addEventListener('load', resolve);
-            img.addEventListener('error', reject);
+          await new Promise<void>((resolve, reject) => {
+            const cleanup = () => {
+              img.removeEventListener('load', handleLoad);
+              img.removeEventListener('error', handleError);
+            };
+
+            const handleLoad = () => {
+              cleanup();
+              resolve();
+            };
+
+            const handleError = (error: Event) => {
+              cleanup();
+              reject(error);
+            };
+
+            img.addEventListener('load', handleLoad);
+            img.addEventListener('error', handleError);
+            img.src = avatar;
           });
 
           const webpBase64 = imageToBase64({ img, size: 256 });

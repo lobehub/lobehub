@@ -59,9 +59,12 @@ export const pickAndInsertAttachments = (editor: IEditor | undefined, accept?: s
   input.multiple = true;
   if (accept) input.accept = accept;
 
-  input.addEventListener('change', () => {
+  const handleChange = () => {
+    input.removeEventListener('change', handleChange);
     insertFilesIntoEditor(editor, Array.from(input.files ?? []));
-  });
+  };
+
+  input.addEventListener('change', handleChange);
 
   input.click();
 };

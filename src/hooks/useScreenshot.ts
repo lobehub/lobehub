@@ -72,16 +72,28 @@ export const getImageUrl = async ({
   // Convert blob to data URL using FileReader
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
-    reader.addEventListener('load', () => {
+    const cleanup = () => {
+      reader.removeEventListener('load', handleLoad);
+      reader.removeEventListener('error', handleError);
+    };
+
+    const handleLoad = () => {
+      cleanup();
+
       if (typeof reader.result === 'string') {
         resolve(reader.result);
       } else {
         reject(new Error('FileReader result is not a string'));
       }
-    });
-    reader.addEventListener('error', () =>
-      reject(reader.error || new Error('Failed to read blob as data URL')),
-    );
+    };
+
+    const handleError = () => {
+      cleanup();
+      reject(reader.error || new Error('Failed to read blob as data URL'));
+    };
+
+    reader.addEventListener('load', handleLoad);
+    reader.addEventListener('error', handleError);
     reader.readAsDataURL(blob);
   });
 };
