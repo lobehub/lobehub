@@ -150,19 +150,15 @@ export const useAgentDropdownMenu = ({
           onClick: () => pinAgent(id, !pinned),
         },
         {
-          disabled: !canEdit || !canManage,
+          // Renaming is config co-editing, which stays collaborative for
+          // shared agents — only delete below is creator/owner-scoped.
+          disabled: !canEdit,
           icon: <Icon icon={Pen} />,
           key: 'rename',
-          label: canManage ? (
-            t('rename', { ns: 'common' })
-          ) : (
-            <Tooltip title={t('manageOnlyCreator', { ns: 'common' })}>
-              <span>{t('rename', { ns: 'common' })}</span>
-            </Tooltip>
-          ),
+          label: t('rename', { ns: 'common' }),
           onClick: (info: any) => {
             info.domEvent?.stopPropagation();
-            if (!canEdit || !canManage) return;
+            if (!canEdit) return;
             if (anchor) {
               openEditingPopover({ anchor, avatar, id, title, type: 'agent' });
             }

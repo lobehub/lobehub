@@ -626,7 +626,11 @@ export class KnowledgeBaseModel {
     let deletedFiles: Array<{ id: string; url: string | null }> = [];
     if (fileIds.length > 0) {
       const fileModel = new FileModel(this.db, this.userId, this.workspaceId);
-      const result = await fileModel.deleteMany(fileIds, removeGlobalFile);
+      // Teammate-owned files can be linked into the caller's KBs; a narrowed
+      // clear-all must not take those file records/storage with it.
+      const result = await fileModel.deleteMany(fileIds, removeGlobalFile, {
+        restrictToCreator: options?.restrictToCreator,
+      });
       deletedFiles = (result || []).map((f) => ({ id: f.id, url: f.url }));
     }
 
