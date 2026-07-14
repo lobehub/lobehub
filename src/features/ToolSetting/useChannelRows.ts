@@ -1,5 +1,6 @@
 import { useState } from 'react';
 
+import type { SaveStateHandle } from '@/hooks/useSaveState';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/slices/settings/selectors';
 
@@ -55,7 +56,11 @@ const buildRows = (availableIds: string[], savedOrder: string[] | undefined): Ch
  * settings store has hydrated (`isUserStateInit`) — otherwise `savedOrder` reads
  * as `undefined` at mount and the saved priority order is lost on a hard refresh.
  */
-export const useChannelRows = (channelKey: ChannelKey, availableIds: string[]) => {
+export const useChannelRows = (
+  channelKey: ChannelKey,
+  availableIds: string[],
+  save: SaveStateHandle['save'],
+) => {
   const savedOrder = useUserStore((s) => settingsSelectors.currentSettings(s).tool?.[channelKey]);
   const setSettings = useUserStore((s) => s.setSettings);
 
@@ -71,13 +76,13 @@ export const useChannelRows = (channelKey: ChannelKey, availableIds: string[]) =
 
   const reorder = (nextRows: ChannelRow[]) => {
     setRows(nextRows);
-    void persist(nextRows);
+    void save(() => persist(nextRows));
   };
 
   const toggle = (id: string, enabled: boolean) => {
     const nextRows = rows.map((row) => (row.id === id ? { ...row, enabled } : row));
     setRows(nextRows);
-    void persist(nextRows);
+    void save(() => persist(nextRows));
   };
 
   return { reorder, rows, toggle };

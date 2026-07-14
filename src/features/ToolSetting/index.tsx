@@ -5,6 +5,8 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
+import AutoSaveHint from '@/components/Editor/AutoSaveHint';
+import { useSaveState } from '@/hooks/useSaveState';
 import { useClientDataSWR } from '@/libs/swr';
 import SettingHeader from '@/routes/(main)/settings/features/SettingHeader';
 import { searchService } from '@/services/search';
@@ -16,6 +18,7 @@ const FETCH_AVAILABLE_CHANNELS_KEY = 'FETCH_AVAILABLE_WEB_BROWSING_CHANNELS';
 
 const ToolSetting = memo(() => {
   const { t } = useTranslation('setting');
+  const { status: saveStatus, lastSavedAt, save, retry } = useSaveState();
 
   const { data, error, isLoading, mutate } = useClientDataSWR(FETCH_AVAILABLE_CHANNELS_KEY, () =>
     searchService.getAvailableChannels(),
@@ -36,7 +39,12 @@ const ToolSetting = memo(() => {
 
   return (
     <>
-      <SettingHeader title={t('tab.tools')} />
+      <SettingHeader
+        title={t('tab.tools')}
+        extra={
+          <AutoSaveHint lastUpdatedTime={lastSavedAt} saveStatus={saveStatus} onRetry={retry} />
+        }
+      />
       <AsyncBoundary
         data={isUserStateInit ? data : undefined}
         error={error ?? (isUserStateInit ? undefined : isUserStateInitError)}
@@ -51,12 +59,14 @@ const ToolSetting = memo(() => {
             availableIds={(data?.searchProviders ?? []).map((c) => c.id)}
             channelKey={'searchProviders'}
             desc={t('settingTool.search.desc')}
+            save={save}
             title={t('settingTool.search.title')}
           />
           <ChannelSection
             availableIds={(data?.crawlerImpls ?? []).map((c) => c.id)}
             channelKey={'crawlerImpls'}
             desc={t('settingTool.crawler.desc')}
+            save={save}
             title={t('settingTool.crawler.title')}
           />
         </Flexbox>

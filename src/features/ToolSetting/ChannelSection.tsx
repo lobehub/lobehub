@@ -2,6 +2,8 @@ import { Block, Empty, Flexbox, SortableList, Text } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import type { SaveStateHandle } from '@/hooks/useSaveState';
+
 import ChannelItem from './ChannelItem';
 import { type ChannelKey, type ChannelRow, useChannelRows } from './useChannelRows';
 
@@ -9,12 +11,14 @@ interface ChannelSectionProps {
   availableIds: string[];
   channelKey: ChannelKey;
   desc: string;
+  save: SaveStateHandle['save'];
   title: string;
 }
 
-const ChannelSection = memo<ChannelSectionProps>(({ channelKey, availableIds, title, desc }) => {
+const ChannelSection = memo<ChannelSectionProps>((props) => {
+  const { channelKey, availableIds, save, title, desc } = props;
   const { t } = useTranslation('setting');
-  const { rows, toggle, reorder } = useChannelRows(channelKey, availableIds);
+  const { rows, toggle, reorder } = useChannelRows(channelKey, availableIds, save);
 
   // Keep at least one channel enabled: once a single channel is left on, lock
   // its switch so users can't disable the whole section from here.
