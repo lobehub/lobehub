@@ -373,7 +373,13 @@ export const verifyRouter = router({
         verifyRubricId: z.string().nullish(),
       }),
     )
-    .mutation(async ({ ctx, input }) => ctx.planGenerator.generateDraftPlan(input)),
+    .mutation(async ({ ctx, input }) => {
+      // The generator ends with setPlan() on the operation's run — resolve it
+      // and gate on the run owner before writing (same as confirmPlan).
+      const run = await ctx.runModel.ensureForOperation(input.operationId);
+      assertWorkspaceRowManageable(ctx, run.userId, 'verify run');
+      return ctx.planGenerator.generateDraftPlan(input);
+    }),
 
   /**
    * Config-time: turn a one-sentence acceptance requirement into proposed
