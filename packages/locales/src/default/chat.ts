@@ -450,6 +450,7 @@ export default {
   'knowledgeBase.library.title': 'Files / Libraries',
   'knowledgeBase.files': 'Files',
   'knowledgeBase.libraries': 'Libraries',
+  'knowledgeBase.related.empty': 'No related files or libraries',
   'knowledgeBase.relativeFilesOrLibraries': 'Related Files/Libraries',
   'knowledgeBase.title': 'Library',
   'knowledgeBase.uploadGuide': "Uploaded files can be viewed in the 'Resources' section.",

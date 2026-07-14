@@ -457,6 +457,7 @@
   "knowledgeBase.library.action.detail": "详情",
   "knowledgeBase.library.action.remove": "移除",
   "knowledgeBase.library.title": "文件 / 资源库",
+  "knowledgeBase.related.empty": "暂无关联文件或资源库",
   "knowledgeBase.relativeFilesOrLibraries": "关联文件 / 资源库",
   "knowledgeBase.title": "资源库",
   "knowledgeBase.uploadGuide": "上传的文件可以在「资源」中查看",

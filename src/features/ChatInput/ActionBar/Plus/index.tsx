@@ -585,6 +585,7 @@ const PlusAction = memo(() => {
                   onClick: () => handleSelectSearch('provider'),
                 },
               ],
+              extra: <Icon className="lobe-submenu-chevron" icon={ChevronRight} size={16} />,
               icon: activeIcon(
                 activeSearchOption === 'off' ? GlobeOffIcon : Globe,
                 activeSearchOption !== 'off',
@@ -653,7 +654,13 @@ const PlusAction = memo(() => {
               ...uploadItems,
               ...(knowledgeItems.length > 0
                 ? [{ type: 'divider' as const }, ...knowledgeItems]
-                : []),
+                : [
+                    {
+                      disabled: true,
+                      key: 'knowledge-empty',
+                      label: t('knowledgeBase.related.empty'),
+                    },
+                  ]),
             ],
             // Trailing chevron (replaces base-ui's default triangle submenu arrow,
             // which is hidden via the .lobe-submenu-chevron rule in ActionDropdown).
