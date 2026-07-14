@@ -17,5 +17,4 @@ interface ChargeParams {
   workspaceId?: string;
 }
 
-// eslint-disable-next-line unused-imports/no-unused-vars
-export async function chargeAfterGenerate(params: ChargeParams): Promise<void> {}
+export async function chargeAfterGenerate(_params: ChargeParams): Promise<void> {}

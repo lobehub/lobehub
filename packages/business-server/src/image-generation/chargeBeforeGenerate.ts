@@ -23,9 +23,6 @@ type ChargeResult =
       success: true;
     };
 
-export async function chargeBeforeGenerate(
-  // eslint-disable-next-line unused-imports/no-unused-vars
-  params: ChargeParams,
-): Promise<ChargeResult> {
+export async function chargeBeforeGenerate(_params: ChargeParams): Promise<ChargeResult> {
   return undefined;
 }

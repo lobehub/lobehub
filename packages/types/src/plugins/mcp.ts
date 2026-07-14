@@ -6,7 +6,6 @@ import type { MCPErrorType } from '@/libs/mcp';
 import type { McpConnectionType } from '../discover/mcp';
 import type { CustomPluginMetadata } from '../tool/plugin';
 
-/* eslint-disable typescript-sort-keys/string-enum */
 export enum MCPInstallStep {
   CHECKING_INSTALLATION = 'CHECKING_INSTALLATION',
   COMPLETED = 'COMPLETED',

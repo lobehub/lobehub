@@ -15,7 +15,7 @@ import { AnthropicStream, OpenAIResponsesStream, OpenAIStream } from '../../core
 import { type ChatMethodOptions, type ChatStreamPayload } from '../../types';
 import { AgentRuntimeErrorType } from '../../types/error';
 import { AgentRuntimeError } from '../../utils/createError';
-import { debugResponse, debugStream } from '../../utils/debugStream';
+import { debugPayload, debugResponse, debugStream } from '../../utils/debugStream';
 import { getModelPricing } from '../../utils/getModelPricing';
 import { StreamingResponse } from '../../utils/response';
 import { assertToolLimits } from '../../utils/validateToolLimits';
@@ -206,10 +206,7 @@ export class LobeGithubCopilotAI implements LobeRuntimeAI {
         const finalPayload = { ...anthropicPayload, stream: shouldStream };
 
         if (debugParams.chatCompletion()) {
-          // eslint-disable-next-line no-console
-          console.log('[requestPayload]');
-          // eslint-disable-next-line no-console
-          console.log(JSON.stringify(finalPayload), '\n');
+          debugPayload(finalPayload);
         }
 
         const response = await anthropicClient.messages.create(
@@ -276,11 +273,11 @@ export class LobeGithubCopilotAI implements LobeRuntimeAI {
           max_tokens,
           verbosity,
           preserveThinking: _pt,
-          frequency_penalty,
-          presence_penalty,
-          top_p,
-          temperature,
-          apiMode,
+          frequency_penalty: _frequencyPenalty,
+          presence_penalty: _presencePenalty,
+          top_p: _topP,
+          temperature: _temperature,
+          apiMode: _apiMode,
           ...responseRest
         } = rest as any;
 
@@ -310,10 +307,7 @@ export class LobeGithubCopilotAI implements LobeRuntimeAI {
         };
 
         if (debugParams.responses()) {
-          // eslint-disable-next-line no-console
-          console.log('[requestPayload]');
-          // eslint-disable-next-line no-console
-          console.log(JSON.stringify(responsePayload), '\n');
+          debugPayload(responsePayload);
         }
 
         const response = await client.responses.create(responsePayload, {
@@ -369,10 +363,7 @@ export class LobeGithubCopilotAI implements LobeRuntimeAI {
       } as OpenAI.ChatCompletionCreateParamsStreaming;
 
       if (debugParams.chatCompletion()) {
-        // eslint-disable-next-line no-console
-        console.log('[requestPayload]');
-        // eslint-disable-next-line no-console
-        console.log(JSON.stringify(chatCompletionPayload), '\n');
+        debugPayload(chatCompletionPayload);
       }
 
       let response = await client.chat.completions.create(chatCompletionPayload, {

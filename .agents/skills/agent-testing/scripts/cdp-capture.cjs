@@ -9,8 +9,6 @@
 // Prints one line of JSON: {"ok":true,"bytes":N,"ms":N,"targetUrl":"..."} or {"ok":false,"error":"..."}
 // Exit 0 on success, non-zero on failure/timeout.
 
-/* eslint-disable @typescript-eslint/no-require-imports -- standalone CJS tooling script */
-
 const http = require('node:http');
 const fs = require('node:fs');
 const WebSocket = require('ws');

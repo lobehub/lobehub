@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -98,7 +97,7 @@ export function getModuleFilesConfig(modules) {
 export async function copyModulesToSource(modules, label) {
   const deps = getDependenciesForModules(modules);
 
-  console.log(`📦 Resolving ${deps.length} ${label} symlinks for packaging...`);
+  console.info(`📦 Resolving ${deps.length} ${label} symlinks for packaging...`);
 
   for (const dep of deps) {
     const modulePath = path.join(sourceNodeModules, dep);
@@ -108,18 +107,18 @@ export async function copyModulesToSource(modules, label) {
 
       if (stat.isSymbolicLink()) {
         const realPath = await fs.promises.realpath(modulePath);
-        console.log(`  📎 ${dep} (resolving symlink)`);
+        console.info(`  📎 ${dep} (resolving symlink)`);
 
         await fs.promises.rm(modulePath, { force: true, recursive: true });
         await fs.promises.mkdir(path.dirname(modulePath), { recursive: true });
         await copyDir(realPath, modulePath);
       }
     } catch (err) {
-      console.log(`  ⏭️  ${dep} (skipped: ${err.code || err.message})`);
+      console.info(`  ⏭️  ${dep} (skipped: ${err.code || err.message})`);
     }
   }
 
-  console.log(`✅ ${label} symlinks resolved`);
+  console.info(`✅ ${label} symlinks resolved`);
 }
 
 /**
@@ -131,7 +130,7 @@ export async function copyModulesToSource(modules, label) {
 export async function copyModulesToDirectory(modules, destNodeModules, label) {
   const deps = getDependenciesForModules(modules);
 
-  console.log(`📦 Copying ${deps.length} ${label} to unpacked directory...`);
+  console.info(`📦 Copying ${deps.length} ${label} to unpacked directory...`);
 
   for (const dep of deps) {
     const sourcePath = path.join(sourceNodeModules, dep);
@@ -142,21 +141,21 @@ export async function copyModulesToDirectory(modules, destNodeModules, label) {
 
       if (stat.isSymbolicLink()) {
         const realPath = await fs.promises.realpath(sourcePath);
-        console.log(`  📎 ${dep} (symlink -> ${path.relative(sourceNodeModules, realPath)})`);
+        console.info(`  📎 ${dep} (symlink -> ${path.relative(sourceNodeModules, realPath)})`);
 
         await fs.promises.mkdir(path.dirname(destPath), { recursive: true });
         await copyDir(realPath, destPath);
       } else if (stat.isDirectory()) {
-        console.log(`  📁 ${dep}`);
+        console.info(`  📁 ${dep}`);
         await fs.promises.mkdir(path.dirname(destPath), { recursive: true });
         await copyDir(sourcePath, destPath);
       }
     } catch (err) {
-      console.log(`  ⏭️  ${dep} (skipped: ${err.code || err.message})`);
+      console.info(`  ⏭️  ${dep} (skipped: ${err.code || err.message})`);
     }
   }
 
-  console.log(`✅ ${label} copied successfully`);
+  console.info(`✅ ${label} copied successfully`);
 }
 
 /**

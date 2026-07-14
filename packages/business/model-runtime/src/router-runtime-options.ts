@@ -22,8 +22,7 @@ interface LobehubRouterRuntimeOptions {
 export const lobehubRouterRuntimeOptions: LobehubRouterRuntimeOptions = {
   id: 'lobehub',
 
-  // eslint-disable-next-line unused-imports/no-unused-vars
-  routers: async (options, { model: _model }) => {
+  routers: async (_options, { model: _model }) => {
     return [];
   },
 };

@@ -1,6 +1,10 @@
 import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { loadSettings, saveSettings } from '../settings';
+import { log } from '../utils/logger';
+import { registerStatusCommand } from './status';
+
 // Mock resolveToken
 vi.mock('../auth/resolveToken', () => ({
   resolveToken: vi.fn().mockResolvedValue({
@@ -47,13 +51,6 @@ vi.mock('@lobechat/device-gateway-client', () => ({
     };
   }),
 }));
-
-// eslint-disable-next-line import-x/first
-import { loadSettings, saveSettings } from '../settings';
-// eslint-disable-next-line import-x/first
-import { log } from '../utils/logger';
-// eslint-disable-next-line import-x/first
-import { registerStatusCommand } from './status';
 
 describe('status command', () => {
   let exitSpy: ReturnType<typeof vi.spyOn>;
