@@ -168,8 +168,8 @@ export const workVersions = pgTable(
     rootOperationId: text('root_operation_id'),
     /** Runtime tool-call id that produced this version, used to dedupe repeated registration. */
     toolCallId: text('tool_call_id'),
-    /** Agent that triggered the Work change, when the source is agent/tool driven. */
-    actorAgentId: text('actor_agent_id').references(() => agents.id, { onDelete: 'set null' }),
+    /** Agent that produced this version, when the source is agent/tool driven. */
+    agentId: text('agent_id').references(() => agents.id, { onDelete: 'set null' }),
     /** Resource-specific tool provenance, such as the agent document binding used by a document tool. */
     metadata: jsonb('metadata').$type<WorkVersionMetadata>(),
 
@@ -196,7 +196,7 @@ export const workVersions = pgTable(
     /** Supports message provenance lookup and message-deletion SET NULL processing. */
     index('work_versions_message_id_idx').on(t.messageId),
     /** Supports agent-attribution lookup and agent-deletion SET NULL processing. */
-    index('work_versions_actor_agent_id_idx').on(t.actorAgentId),
+    index('work_versions_agent_id_idx').on(t.agentId),
     /** Powers operation-scoped event lists ordered by creation time. */
     index('work_versions_root_operation_created_at_idx').on(t.rootOperationId, t.createdAt),
     /** Powers topic-level event lists and topic-deletion SET NULL processing. */
