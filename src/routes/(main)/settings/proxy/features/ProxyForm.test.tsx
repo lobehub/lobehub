@@ -163,6 +163,7 @@ vi.mock('@lobehub/ui', async () => {
   );
 
   return {
+    Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
     Form: GroupedForm,
     Skeleton: () => <div>loading</div>,
     toast: {

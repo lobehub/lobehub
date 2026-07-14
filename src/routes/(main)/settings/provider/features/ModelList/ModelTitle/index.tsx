@@ -1,6 +1,6 @@
 import { ActionIcon, DropdownMenu, Flexbox, Skeleton, Text, Tooltip } from '@lobehub/ui';
 import { Button, confirmModal } from '@lobehub/ui/base-ui';
-import { App, Space } from 'antd';
+import { App } from 'antd';
 import { cssVar } from 'antd-style';
 import { CircleX, EllipsisVertical, LucideRefreshCcwDot, PlusIcon } from 'lucide-react';
 import { memo, use, useEffect, useState } from 'react';
@@ -105,7 +105,7 @@ const ModelTitle = memo<ModelFetcherProps>(
           {isLoading ? (
             <Skeleton.Button active size={'small'} style={{ width: 120 }} />
           ) : isEmpty ? null : (
-            <Flexbox horizontal gap={8}>
+            <Flexbox horizontal align={'center'} gap={8}>
               {!mobile && (
                 <Search
                   value={searchKeyword}
@@ -114,7 +114,7 @@ const ModelTitle = memo<ModelFetcherProps>(
                   }}
                 />
               )}
-              <Space.Compact>
+              <Flexbox horizontal gap={4}>
                 {showModelFetcher && (
                   <Tooltip title={canManageProvider ? '' : reason}>
                     <Button
@@ -191,7 +191,7 @@ const ModelTitle = memo<ModelFetcherProps>(
                 >
                   <Button icon={EllipsisVertical} size={'small'} />
                 </DropdownMenu>
-              </Space.Compact>
+              </Flexbox>
             </Flexbox>
           )}
         </Flexbox>
