@@ -14,6 +14,13 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     color: inherit;
     text-decoration: underline;
 
+    &:active,
+    &:focus,
+    &:hover,
+    &:visited {
+      text-decoration: underline;
+    }
+
     &:visited {
       color: ${cssVar.colorTextDescription};
     }
