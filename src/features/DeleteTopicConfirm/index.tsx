@@ -23,6 +23,9 @@ interface ConfirmRemoveTopicOptions {
  * before the dialog opens; the attachment option is shown only when at least
  * one selected topic contains an uploaded file. A failed lookup falls back to
  * showing the option so an unknown state is never mistaken for "no files".
+ *
+ * Cleanup stays enabled when the option is hidden: only an explicit uncheck
+ * opts out of file removal.
  */
 export const confirmRemoveTopic = async ({
   content,
@@ -46,7 +49,11 @@ export const confirmRemoveTopic = async ({
     if (timeoutId !== undefined) clearTimeout(timeoutId);
   }
 
-  const state = { removeFiles: hasFiles };
+  // Cleanup stays enabled even when the option is hidden: the precheck is a
+  // snapshot, and files attached between it and confirm would otherwise be
+  // orphaned. Server-side collection at confirm time is reference-safe and a
+  // no-op when the topic truly has no files.
+  const state = { removeFiles: true };
 
   confirmModal({
     cancelText: t('cancel', { ns: 'common' }),

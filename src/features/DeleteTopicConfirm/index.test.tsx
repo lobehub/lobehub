@@ -27,7 +27,7 @@ describe('confirmRemoveTopic', () => {
     vi.useRealTimers();
   });
 
-  it('hides the file option and confirms without file removal when topics have no files', async () => {
+  it('hides the file option but keeps cleanup enabled when topics have no files', async () => {
     vi.spyOn(topicService, 'hasTopicFiles').mockResolvedValue(false);
     const onConfirm = vi.fn();
 
@@ -36,8 +36,10 @@ describe('confirmRemoveTopic', () => {
     const config = confirmModalMock.mock.calls[0][0];
     expect(config.content.props.showRemoveFiles).toBe(false);
 
+    // Files attached between the precheck snapshot and confirm must still be
+    // cleaned up, so the hidden state confirms with removal enabled.
     await config.onOk();
-    expect(onConfirm).toHaveBeenCalledWith(false);
+    expect(onConfirm).toHaveBeenCalledWith(true);
   });
 
   it('shows the file option and defaults to file removal when a selected topic has files', async () => {
