@@ -1,8 +1,5 @@
 import { builtinTools } from '@lobechat/builtin-tools';
-import {
-  resolveWorkRegistration,
-  toWorkRegistrationIntent,
-} from '@lobechat/builtin-tools/workRegistration';
+import { resolveWorkRegistration } from '@lobechat/builtin-tools/workRegistration';
 import { type WorkRegistrationIntent } from '@lobechat/types';
 
 import { type ToolExecutionResult } from './types';
@@ -26,8 +23,5 @@ export const resolveBuiltinToolWorkIntent = (
   apiName: string,
   payload: { args: Record<string, any>; result: ToolExecutionResult },
 ): WorkRegistrationIntent | undefined => {
-  const resolved = resolveWorkRegistration(builtinTools, identifier, apiName, payload);
-  if (!resolved) return undefined;
-
-  return toWorkRegistrationIntent(resolved);
+  return resolveWorkRegistration(builtinTools, identifier, apiName, payload);
 };

@@ -194,7 +194,7 @@ describe('resolveWorkRegistration', () => {
     ).toBeUndefined();
   });
 
-  it('resolves a document create/update into a changeType-bearing plan carrying the identity', () => {
+  it('resolves a document create/update directly into the final register intent', () => {
     expect(
       resolveWorkRegistration(registry, 'lobe-agent-documents', 'createDocument', {
         args: {},
@@ -204,10 +204,14 @@ describe('resolveWorkRegistration', () => {
         },
       }),
     ).toEqual({
-      action: 'create',
-      changeType: 'created',
-      document: { agentDocumentId: 'assoc_1', agentId: 'agent-1', documentId: 'doc_1' },
-      sourceToolName: 'createDocument',
+      action: 'register',
+      document: {
+        agentDocumentId: 'assoc_1',
+        agentId: 'agent-1',
+        changeType: 'created',
+        documentId: 'doc_1',
+        sourceToolName: 'createDocument',
+      },
       type: 'document',
     });
 
@@ -220,10 +224,14 @@ describe('resolveWorkRegistration', () => {
         },
       }),
     ).toEqual({
-      action: 'update',
-      changeType: 'updated',
-      document: { agentDocumentId: 'assoc_1', agentId: 'agent-1', documentId: 'doc_1' },
-      sourceToolName: 'replaceDocumentContent',
+      action: 'register',
+      document: {
+        agentDocumentId: 'assoc_1',
+        agentId: 'agent-1',
+        changeType: 'updated',
+        documentId: 'doc_1',
+        sourceToolName: 'replaceDocumentContent',
+      },
       type: 'document',
     });
   });

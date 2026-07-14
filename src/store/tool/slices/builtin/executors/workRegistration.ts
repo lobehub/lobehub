@@ -1,8 +1,5 @@
 import { builtinTools } from '@lobechat/builtin-tools';
-import {
-  resolveWorkRegistration,
-  toWorkRegistrationIntent,
-} from '@lobechat/builtin-tools/workRegistration';
+import { resolveWorkRegistration } from '@lobechat/builtin-tools/workRegistration';
 
 import { stashWorkIntent } from '@/utils/clientWorkIntentStash';
 
@@ -28,11 +25,11 @@ export const stashBuiltinToolWorkIntent = (
   ctx: BuiltinToolContext | undefined,
   result: BuiltinToolResult,
 ): void => {
-  const resolved = resolveWorkRegistration(builtinTools, identifier, apiName, {
+  const intent = resolveWorkRegistration(builtinTools, identifier, apiName, {
     args: params,
     result,
   });
-  if (!resolved) return;
+  if (!intent) return;
 
-  stashWorkIntent(ctx?.toolCallId, toWorkRegistrationIntent(resolved));
+  stashWorkIntent(ctx?.toolCallId, intent);
 };

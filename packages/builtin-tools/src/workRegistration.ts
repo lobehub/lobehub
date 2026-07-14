@@ -5,6 +5,7 @@ import type {
   LobeBuiltinTool,
   PluginApiWorkAction,
   PluginApiWorkConfig,
+  PluginApiWorkResourceType,
   RegisterDocumentWorkParams,
   RegisterSkillToolResultWorkParams,
   RegisterTaskWorkParams,
@@ -43,32 +44,36 @@ export interface DocumentWorkTarget {
   documentId: string;
 }
 
-/**
- * A resolved Work registration plan. Discriminated first by `type` (task vs
- * document) then by `action`: for tasks each layer branches "persist a version"
- * (create/update, which carry a version `changeType`) vs "delete the Work"
- * (which carries no changeType — a deletion has no version to write). Keeping
- * delete out of the changeType-bearing variant is what eliminates the old
- * `action: 'delete' → changeType: 'updated'` silent mis-mapping. Document
- * variants mirror the same create/update-vs-delete split but carry a single
- * {@link DocumentWorkTarget} plus the `sourceToolName` the register intent needs.
- */
-export type ResolvedWorkRegistration =
-  | {
-      action: 'create' | 'update';
-      changeType: WorkVersionChangeType;
-      targets: TaskWorkTarget[];
-      type: 'task';
-    }
-  | { action: 'delete'; targets: TaskWorkTarget[]; type: 'task' }
-  | {
-      action: 'create' | 'update';
-      changeType: WorkVersionChangeType;
-      document: DocumentWorkTarget;
-      sourceToolName: string;
-      type: 'document';
-    }
-  | { action: 'delete'; document: DocumentWorkTarget; type: 'document' };
+type WorkRegistrationIntentType = WorkRegistrationIntent['type'];
+type WorkRegistrationIntentFor<Type extends WorkRegistrationIntentType> = Extract<
+  WorkRegistrationIntent,
+  { type: Type }
+>;
+
+interface WorkRegistrationResolveContext {
+  apiName: string;
+  config: PluginApiWorkConfig;
+  payload: { args: unknown; result: Pick<BuiltinToolResult, 'state' | 'success'> };
+}
+
+interface WorkRegistrationAdapter<Type extends WorkRegistrationIntentType> {
+  dispatch: (
+    intent: WorkRegistrationIntentFor<Type>,
+    ports: WorkRegistrationPorts,
+    provenance: WorkRegistrationProvenance,
+  ) => Promise<void>;
+  resolve?: (
+    context: WorkRegistrationResolveContext,
+  ) => WorkRegistrationIntentFor<Type> | undefined;
+}
+
+type WorkRegistrationAdapterRegistry = {
+  [Type in WorkRegistrationIntentType]: WorkRegistrationAdapter<Type>;
+} & {
+  [Type in PluginApiWorkResourceType]: WorkRegistrationAdapter<Type> & {
+    resolve: NonNullable<WorkRegistrationAdapter<Type>['resolve']>;
+  };
+};
 
 /**
  * Look up the declarative `work` config for a tool API from a builtin-tool
@@ -200,42 +205,10 @@ export const extractDocumentWorkTarget = ({
   return { agentDocumentId, agentId, documentId };
 };
 
-/**
- * Resolve the manifest-driven Work registration plan for a tool API call, or
- * `undefined` when nothing should be registered (no `work` config, an
- * unsupported `resourceType`, or no extractable targets).
- *
- * Both dispatch layers call this so the "what to register" policy — including
- * which `resourceType`s are wired up — lives in exactly one place; each layer
- * then only owns its side-of-the-wire "how to persist" step.
- */
-export const resolveWorkRegistration = (
-  tools: LobeBuiltinTool[],
-  identifier: string,
-  apiName: string,
-  payload: { args: unknown; result: Pick<BuiltinToolResult, 'state' | 'success'> },
-): ResolvedWorkRegistration | undefined => {
-  const config = getApiWorkConfig(tools, identifier, apiName);
-  if (!config) return undefined;
-
-  if (config.resourceType === 'document') {
-    const document = extractDocumentWorkTarget(payload);
-    if (!document) return undefined;
-
-    // `delete` locates the Work by `state.documentId` (the row is already gone),
-    // so it reuses the same identity but writes no version changeType.
-    if (config.action === 'delete') return { action: 'delete', document, type: 'document' };
-
-    return {
-      action: config.action,
-      changeType: workChangeTypeFromAction(config.action),
-      document,
-      // The concrete API name is the document Work's source tool.
-      sourceToolName: apiName,
-      type: 'document',
-    };
-  }
-
+const resolveTaskWorkIntent = ({
+  config,
+  payload,
+}: WorkRegistrationResolveContext): WorkRegistrationIntentFor<'task'> | undefined => {
   const targets = extractTaskWorkTargets(payload);
   if (targets.length === 0) return undefined;
 
@@ -251,51 +224,50 @@ export const resolveWorkRegistration = (
   };
 };
 
+const resolveDocumentWorkIntent = ({
+  apiName,
+  config,
+  payload,
+}: WorkRegistrationResolveContext): WorkRegistrationIntentFor<'document'> | undefined => {
+  const document = extractDocumentWorkTarget(payload);
+  if (!document) return undefined;
+
+  // `delete` locates the Work by `state.documentId` (the row is already gone),
+  // so it reuses the same identity but writes no version changeType.
+  if (config.action === 'delete') return { action: 'delete', document, type: 'document' };
+
+  return {
+    action: 'register',
+    document: {
+      ...document,
+      changeType: workChangeTypeFromAction(config.action),
+      // The concrete API name is the document Work's source tool.
+      sourceToolName: apiName,
+    },
+    type: 'document',
+  };
+};
+
 /**
- * Tag a resolved registration plan as the matching variant of the runtime's
- * {@link WorkRegistrationIntent} union. Shared so both dispatch layers (server
- * `resolveBuiltinToolWorkIntent`, client `stashBuiltinToolWorkIntent`) emit the
- * exact same intent shape from one place — `delete` stays changeType-less, so the
- * discriminant is preserved end to end. Document create/update map to the intent's
- * `action: 'register'` (its only version-producing document action).
+ * Resolve the manifest-driven Work registration intent for a tool API call, or
+ * `undefined` when nothing should be registered (no `work` config, an
+ * unsupported `resourceType`, or no extractable targets).
+ *
+ * The type adapter emits the FINAL serializable intent directly. There is no
+ * intermediate resolved-plan union or second type switch before the intent is
+ * handed to the runtime.
  */
-export const toWorkRegistrationIntent = (
-  resolved: ResolvedWorkRegistration,
-): WorkRegistrationIntent => {
-  if (resolved.type === 'document') {
-    if (resolved.action === 'delete') {
-      return {
-        action: 'delete',
-        document: {
-          agentDocumentId: resolved.document.agentDocumentId,
-          agentId: resolved.document.agentId,
-          documentId: resolved.document.documentId,
-        },
-        type: 'document',
-      };
-    }
+export const resolveWorkRegistration = (
+  tools: LobeBuiltinTool[],
+  identifier: string,
+  apiName: string,
+  payload: { args: unknown; result: Pick<BuiltinToolResult, 'state' | 'success'> },
+): WorkRegistrationIntent | undefined => {
+  const config = getApiWorkConfig(tools, identifier, apiName);
+  if (!config) return undefined;
 
-    return {
-      action: 'register',
-      document: {
-        agentDocumentId: resolved.document.agentDocumentId,
-        agentId: resolved.document.agentId,
-        changeType: resolved.changeType,
-        documentId: resolved.document.documentId,
-        sourceToolName: resolved.sourceToolName,
-      },
-      type: 'document',
-    };
-  }
-
-  return resolved.action === 'delete'
-    ? { action: 'delete', targets: resolved.targets, type: 'task' }
-    : {
-        action: resolved.action,
-        changeType: resolved.changeType,
-        targets: resolved.targets,
-        type: 'task',
-      };
+  const adapter = WORK_REGISTRATION_ADAPTERS[config.resourceType];
+  return adapter.resolve({ apiName, config, payload });
 };
 
 /**
@@ -370,14 +342,156 @@ const logRejectedTaskWork = (
   });
 };
 
+const dispatchTaskWorkIntent = async (
+  intent: WorkRegistrationIntentFor<'task'>,
+  ports: WorkRegistrationPorts,
+  provenance: WorkRegistrationProvenance,
+): Promise<void> => {
+  const {
+    actorAgentId,
+    cumulativeCost,
+    cumulativeUsage,
+    rootOperationId,
+    sourceMessageId,
+    sourceToolCallId,
+    sourceToolIdentifier,
+    sourceToolName,
+    threadId,
+    topicId,
+  } = provenance;
+  const { action, changeType, targets } = intent;
+
+  if (action === 'delete') {
+    const deleteTargets = targets.filter((target) => target.taskId);
+    const results = await Promise.allSettled(
+      deleteTargets.map((target) => ports.deleteTaskWork({ taskId: target.taskId! })),
+    );
+    logRejectedTaskWork('delete', deleteTargets, results, { rootOperationId, sourceToolCallId });
+    return;
+  }
+
+  if (!changeType) return;
+
+  const results = await Promise.allSettled(
+    targets.map((target) =>
+      ports.registerTask({
+        actorAgentId,
+        changeType,
+        cumulativeCost,
+        cumulativeUsage,
+        rootOperationId,
+        sourceMessageId,
+        sourceToolCallId,
+        sourceToolIdentifier,
+        sourceToolName,
+        taskId: target.taskId,
+        taskIdentifier: target.taskIdentifier,
+        threadId,
+        topicId,
+      }),
+    ),
+  );
+  logRejectedTaskWork(action, targets, results, { rootOperationId, sourceToolCallId });
+};
+
+const dispatchDocumentWorkIntent = async (
+  intent: WorkRegistrationIntentFor<'document'>,
+  ports: WorkRegistrationPorts,
+  provenance: WorkRegistrationProvenance,
+): Promise<void> => {
+  if (intent.action === 'delete') {
+    // No-op when the port is absent (client): document deletes stay a
+    // lambda-side effect of the removeDocument mutation.
+    await ports.deleteDocumentWork?.(intent.document);
+    return;
+  }
+
+  const {
+    actorAgentId,
+    cumulativeCost,
+    cumulativeUsage,
+    rootOperationId,
+    sourceMessageId,
+    sourceToolCallId,
+    sourceToolIdentifier,
+    threadId,
+    topicId,
+  } = provenance;
+
+  await ports.registerDocument({
+    ...intent.document,
+    actorAgentId,
+    cumulativeCost,
+    cumulativeUsage,
+    rootOperationId,
+    sourceMessageId,
+    sourceToolCallId,
+    sourceToolIdentifier,
+    threadId,
+    topicId,
+  });
+};
+
+const dispatchSkillWorkIntent = async (
+  intent: WorkRegistrationIntentFor<'skill'>,
+  ports: WorkRegistrationPorts,
+  provenance: WorkRegistrationProvenance,
+): Promise<void> => {
+  const {
+    actorAgentId,
+    cumulativeCost,
+    cumulativeUsage,
+    rootOperationId,
+    sourceMessageId,
+    sourceToolCallId,
+    threadId,
+    topicId,
+  } = provenance;
+
+  // Skill providers (Linear / GitHub) normalize the untruncated payload into a Work.
+  await ports.handleSkillToolResult({
+    actorAgentId,
+    args: intent.args,
+    cumulativeCost,
+    cumulativeUsage,
+    data: intent.data,
+    provider: intent.provider,
+    rootOperationId,
+    sourceMessageId,
+    sourceToolCallId,
+    threadId,
+    toolName: intent.toolName,
+    topicId,
+  });
+};
+
 /**
- * The single "how to route a Work registration intent" implementation, consumed
- * by BOTH persistence dispatch layers — the server runtime
+ * Single extension point for Work registration types. Each adapter owns both
+ * sides of the serializable intent boundary: builtin result resolution (when
+ * applicable) and post-cost persistence. Adding a new intent type therefore
+ * fails this exhaustive registry until its behavior is registered here.
+ */
+export const WORK_REGISTRATION_ADAPTERS = {
+  document: {
+    dispatch: dispatchDocumentWorkIntent,
+    resolve: resolveDocumentWorkIntent,
+  },
+  skill: {
+    dispatch: dispatchSkillWorkIntent,
+  },
+  task: {
+    dispatch: dispatchTaskWorkIntent,
+    resolve: resolveTaskWorkIntent,
+  },
+} satisfies WorkRegistrationAdapterRegistry;
+
+/**
+ * Dispatch a Work registration intent through the same adapter registry that
+ * produced builtin intents. Consumed by BOTH persistence layers — the server runtime
  * (`registerWorkFromIntent`, backed by `WorkModel`) and the legacy client
  * runtime (`registerClientWorkFromIntent`, backed by `workService`). Each layer
  * only supplies its own {@link WorkRegistrationPorts} and per-call
- * {@link WorkRegistrationProvenance}; the branch logic (task create/update/delete,
- * document register/delete, skill) lives here exactly once.
+ * {@link WorkRegistrationProvenance}; type-specific behavior lives in its adapter.
  *
  * Cost stamping happens in the wrappers, not here: the cumulative cost of a tool
  * call is known only after `accumulateTool` runs, so each wrapper computes
@@ -394,92 +508,15 @@ export const dispatchWorkRegistrationIntent = async (
   ports: WorkRegistrationPorts,
   provenance: WorkRegistrationProvenance,
 ): Promise<void> => {
-  const {
-    actorAgentId,
-    cumulativeCost,
-    cumulativeUsage,
-    rootOperationId,
-    sourceMessageId,
-    sourceToolCallId,
-    sourceToolIdentifier,
-    sourceToolName,
-    threadId,
-    topicId,
-  } = provenance;
+  // TypeScript cannot retain the correlation between a union discriminant and
+  // the matching mapped-registry value after indexed access. The registry key
+  // comes directly from the same intent, so this type erasure is localized and
+  // runtime-safe while every adapter remains strictly typed at declaration.
+  const dispatch = WORK_REGISTRATION_ADAPTERS[intent.type].dispatch as (
+    intent: WorkRegistrationIntent,
+    ports: WorkRegistrationPorts,
+    provenance: WorkRegistrationProvenance,
+  ) => Promise<void>;
 
-  if (intent.type === 'task') {
-    const { action, changeType, targets } = intent;
-
-    if (action === 'delete') {
-      const deleteTargets = targets.filter((target) => target.taskId);
-      const results = await Promise.allSettled(
-        deleteTargets.map((target) => ports.deleteTaskWork({ taskId: target.taskId! })),
-      );
-      logRejectedTaskWork('delete', deleteTargets, results, { rootOperationId, sourceToolCallId });
-      return;
-    }
-
-    if (!changeType) return;
-
-    const results = await Promise.allSettled(
-      targets.map((target) =>
-        ports.registerTask({
-          actorAgentId,
-          changeType,
-          cumulativeCost,
-          cumulativeUsage,
-          rootOperationId,
-          sourceMessageId,
-          sourceToolCallId,
-          sourceToolIdentifier,
-          sourceToolName,
-          taskId: target.taskId,
-          taskIdentifier: target.taskIdentifier,
-          threadId,
-          topicId,
-        }),
-      ),
-    );
-    logRejectedTaskWork(action, targets, results, { rootOperationId, sourceToolCallId });
-    return;
-  }
-
-  if (intent.type === 'document') {
-    if (intent.action === 'delete') {
-      // No-op when the port is absent (client): document deletes stay a
-      // lambda-side effect of the removeDocument mutation.
-      await ports.deleteDocumentWork?.(intent.document);
-      return;
-    }
-
-    await ports.registerDocument({
-      ...intent.document,
-      actorAgentId,
-      cumulativeCost,
-      cumulativeUsage,
-      rootOperationId,
-      sourceMessageId,
-      sourceToolCallId,
-      sourceToolIdentifier,
-      threadId,
-      topicId,
-    });
-    return;
-  }
-
-  // skill (linear / github): normalize the untruncated payload into a Work.
-  await ports.handleSkillToolResult({
-    actorAgentId,
-    args: intent.args,
-    cumulativeCost,
-    cumulativeUsage,
-    data: intent.data,
-    provider: intent.provider,
-    rootOperationId,
-    sourceMessageId,
-    sourceToolCallId,
-    threadId,
-    toolName: intent.toolName,
-    topicId,
-  });
+  await dispatch(intent, ports, provenance);
 };
