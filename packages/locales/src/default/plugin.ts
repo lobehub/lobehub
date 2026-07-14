@@ -63,9 +63,7 @@ export default {
   'builtins.lobe-claude-code.agent.result': 'Result',
   'builtins.lobe-claude-code.askUserQuestion.noAnswer':
     'No answer received — model continued without their input.',
-  'builtins.lobe-claude-code.askUserQuestion.question': 'Question',
-  'builtins.lobe-claude-code.askUserQuestion.reply': 'Reply',
-  'builtins.lobe-claude-code.askUserQuestion.selected': 'Selected',
+  'builtins.lobe-claude-code.askUserQuestion.notAnswered': 'Not answered',
   'builtins.lobe-claude-code.sendMessage.queued': 'Queued for delivery',
   'builtins.lobe-claude-code.sendMessage.title': 'Send message',
   'builtins.lobe-claude-code.task.create.completed': 'Task created: ',
