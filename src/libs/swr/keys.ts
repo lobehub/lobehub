@@ -213,6 +213,12 @@ export const briefKeys = {
   list: def('brief:list', (isLogin: boolean) => ['brief:list', isLogin]),
 };
 
+// ---- home inbox ---------------------------------------------------------
+export const homeInboxKeys = {
+  /** Account-wide topics powering the home inbox (running + unread + needs-input). */
+  topics: def('home:inboxTopics', (isLogin: boolean) => ['home:inboxTopics', isLogin]),
+};
+
 // ---- agent config / available / search ----------------------------------
 // (agentKeys.list defined above)
 export const agentConfigKeys = {

@@ -46,6 +46,11 @@ export default {
   'homePromoBanner.cta': 'Try now',
   'homePromoBanner.dismiss': 'Dismiss',
   'homePromoBanner.label': '{{model}} is now available',
+  'inbox.needsYou.title': 'Needs you',
+  'inbox.news.title': 'Worth knowing',
+  'inbox.running.title': '{{count}} task running',
+  'inbox.running.title_plural': '{{count}} tasks running',
+  'inbox.unread.title': 'Unread',
   'project.create': 'New project',
   'project.deleteConfirm':
     "This project will be deleted and can't be recovered. Confirm to continue.",

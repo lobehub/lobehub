@@ -13,6 +13,9 @@ export interface UnresolvedBriefRow {
   agentRowId: string | null;
   agentTitle: string | null;
   brief: BriefItem;
+  /** Workspace-scoped task ref (`T-12`), so an inbox row can name the task it belongs to. */
+  taskIdentifier: string | null;
+  taskName: string | null;
   taskStatus: string | null;
 }
 
@@ -103,6 +106,8 @@ export class BriefModel {
         agentSlug: agents.slug,
         agentTitle: agents.title,
         brief: briefs,
+        taskIdentifier: tasks.identifier,
+        taskName: tasks.name,
         taskStatus: tasks.status,
       })
       .from(briefs)
