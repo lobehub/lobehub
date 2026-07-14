@@ -2,16 +2,23 @@
 
 import { Text } from '@lobehub/ui';
 import { Checkbox, confirmModal } from '@lobehub/ui/base-ui';
-import { type CSSProperties, memo, useCallback, useState } from 'react';
+import { createStaticStyles } from 'antd-style';
+import { memo, useCallback, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
 import { PRIVACY_URL, TERMS_URL } from '@/const/url';
 
-const linkStyle: CSSProperties = {
-  color: 'inherit',
-  cursor: 'pointer',
-  textDecoration: 'underline',
-};
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  link: css`
+    cursor: pointer;
+    color: inherit;
+    text-decoration: underline;
+
+    &:visited {
+      color: ${cssVar.colorTextDescription};
+    }
+  `,
+}));
 
 type AuthAgreementProps =
   | {
@@ -39,12 +46,12 @@ const AgreementText = memo<AgreementTextProps>(({ i18nKey }) => {
       ns={'auth'}
       components={{
         privacy: (
-          <a href={PRIVACY_URL} rel="noopener noreferrer" style={linkStyle} target="_blank">
+          <a className={styles.link} href={PRIVACY_URL} rel="noopener noreferrer" target="_blank">
             {translate('footer.privacy')}
           </a>
         ),
         terms: (
-          <a href={TERMS_URL} rel="noopener noreferrer" style={linkStyle} target="_blank">
+          <a className={styles.link} href={TERMS_URL} rel="noopener noreferrer" target="_blank">
             {translate('footer.terms')}
           </a>
         ),
