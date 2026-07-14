@@ -24,10 +24,14 @@ import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManag
 
 const skillImportErrorToTRPCCode = (
   code: SkillImportError['code'],
-): 'CONFLICT' | 'BAD_REQUEST' | 'NOT_FOUND' | 'BAD_GATEWAY' => {
+): 'CONFLICT' | 'BAD_REQUEST' | 'NOT_FOUND' | 'BAD_GATEWAY' | 'FORBIDDEN' => {
   switch (code) {
     case 'CONFLICT': {
       return 'CONFLICT';
+    }
+
+    case 'FORBIDDEN': {
+      return 'FORBIDDEN';
     }
 
     case 'NOT_FOUND':
@@ -69,7 +73,9 @@ const skillProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =>
       fileModel: new FileModel(ctx.serverDB, ctx.userId, workspaceId),
       fileService: new FileService(ctx.serverDB, ctx.userId, workspaceId),
       marketService: new MarketService({ userInfo: { userId: ctx.userId } }),
-      skillImporter: new SkillImporter(ctx.serverDB, ctx.userId, workspaceId),
+      skillImporter: new SkillImporter(ctx.serverDB, ctx.userId, workspaceId, {
+        workspaceRole: (ctx as { workspaceRole?: string }).workspaceRole,
+      }),
       skillModel,
     },
   });

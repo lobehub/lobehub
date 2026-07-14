@@ -35,6 +35,11 @@ export const knowledgeBaseRouter = router({
     .use(withScopedPermission('knowledge_base:update'))
     .input(z.object({ ids: z.array(z.string()), knowledgeBaseId: z.string() }))
     .mutation(async ({ input, ctx }) => {
+      // KB file membership is not in the co-edit list — creator/owner only.
+      const kb = await ctx.knowledgeBaseModel.findById(input.knowledgeBaseId);
+      if (!kb) throw new TRPCError({ code: 'NOT_FOUND', message: 'Knowledge base not found' });
+      assertWorkspaceRowManageable(ctx, kb.userId, 'knowledge base');
+
       try {
         return await ctx.knowledgeBaseModel.addFilesToKnowledgeBase(
           input.knowledgeBaseId,
@@ -231,6 +236,11 @@ export const knowledgeBaseRouter = router({
     .use(withScopedPermission('knowledge_base:update'))
     .input(z.object({ ids: z.array(z.string()), knowledgeBaseId: z.string() }))
     .mutation(async ({ input, ctx }) => {
+      // KB file membership is not in the co-edit list — creator/owner only.
+      const kb = await ctx.knowledgeBaseModel.findById(input.knowledgeBaseId);
+      if (!kb) throw new TRPCError({ code: 'NOT_FOUND', message: 'Knowledge base not found' });
+      assertWorkspaceRowManageable(ctx, kb.userId, 'knowledge base');
+
       return ctx.knowledgeBaseModel.removeFilesFromKnowledgeBase(input.knowledgeBaseId, input.ids);
     }),
 
