@@ -339,6 +339,43 @@ describe('HeterogeneousAgentCtr', () => {
         }),
       });
     });
+
+    it('reuses automatic quota reads while explicit refresh bypasses the cache', async () => {
+      execFileMock.mockImplementation(
+        (
+          _file: string,
+          _args: string[],
+          optionsOrCallback: unknown,
+          callback?: (error: Error | null, result: { stderr: string; stdout: string }) => void,
+        ) => {
+          const resolvedCallback =
+            typeof optionsOrCallback === 'function' ? optionsOrCallback : callback;
+          resolvedCallback?.(null, { stderr: '', stdout: 'codex-cli 0.99.0' });
+        },
+      );
+      fetchCodexQuotaMock.mockResolvedValue({
+        error: null,
+        provider: 'codex',
+        session: { resetsAt: null, usedPercent: 8, windowMinutes: 300 },
+        status: 'ok',
+        updatedAt: Date.now(),
+        weekly: null,
+      });
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const params = { command: '/custom/bin/codex', env: { CODEX_HOME: '/tmp/codex-home' } };
+
+      await ctr.getCodexQuota(params);
+      await ctr.getCodexQuota(params);
+
+      expect(fetchCodexQuotaMock).toHaveBeenCalledTimes(1);
+
+      await ctr.getCodexQuota({ ...params, force: true });
+
+      expect(fetchCodexQuotaMock).toHaveBeenCalledTimes(2);
+    });
   });
 
   describe('sendPrompt (claude-code)', () => {

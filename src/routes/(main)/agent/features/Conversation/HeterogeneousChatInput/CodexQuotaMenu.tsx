@@ -9,7 +9,7 @@ import { useTranslation } from 'react-i18next';
 
 import { heterogeneousAgentService } from '@/services/electron/heterogeneousAgent';
 
-import type { QuotaMenuHelpers, QuotaWindowItem } from './QuotaMenu';
+import type { FetchQuotaOptions, QuotaMenuHelpers, QuotaWindowItem } from './QuotaMenu';
 import QuotaMenu, { createQuotaSourceKey } from './QuotaMenu';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -39,7 +39,12 @@ const CodexQuotaMenu = memo<CodexQuotaMenuProps>(({ command, env }) => {
   const sourceKey = createQuotaSourceKey('codex', command, env);
 
   const fetchQuota = useCallback(
-    () => heterogeneousAgentService.getCodexQuota({ command, env }),
+    (options?: FetchQuotaOptions) =>
+      heterogeneousAgentService.getCodexQuota({
+        command,
+        env,
+        ...(options?.force ? { force: true } : {}),
+      }),
     [command, env],
   );
 

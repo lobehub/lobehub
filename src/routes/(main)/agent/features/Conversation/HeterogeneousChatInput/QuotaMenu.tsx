@@ -128,9 +128,13 @@ export interface QuotaMenuHelpers {
   now: number;
 }
 
+export interface FetchQuotaOptions {
+  force?: boolean;
+}
+
 interface QuotaMenuProps<S extends QuotaSnapshotBase> {
   createErrorSnapshot: (error: unknown) => S;
-  fetchQuota: () => Promise<S>;
+  fetchQuota: (options?: FetchQuotaOptions) => Promise<S>;
   /** Localized explanation for `status: 'error'`; falls back to `error`. */
   getErrorText?: (quota: S) => string | undefined;
   /** Localized explanation for a manual refresh error when stale data is preserved. */
@@ -235,7 +239,7 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
       setLoading(true);
 
       try {
-        const nextQuota = await fetchQuota();
+        const nextQuota = await fetchQuota(options.manual ? { force: true } : undefined);
         applyQuotaResult(nextQuota, options, requestId, requestSourceKey);
       } catch (error) {
         console.error('Failed to fetch agent quota:', error);
@@ -317,8 +321,13 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
   const firstWindow = windows.find((item) => item.window)?.window;
   const compactLeftPercent = firstWindow ? clampPercent(100 - firstWindow.usedPercent) : undefined;
   const hasQuotaData = hasQuotaDataForSnapshot(quota);
-  const refreshErrorText =
+  const manualRefreshErrorText =
     refreshError && (getRefreshErrorText?.(refreshError) || t('heteroAgent.quota.refreshFailed'));
+  const staleSnapshotErrorText =
+    quota?.status === 'error' && hasQuotaData
+      ? getRefreshErrorText?.(quota) || t('heteroAgent.quota.refreshFailed')
+      : undefined;
+  const refreshErrorText = manualRefreshErrorText || staleSnapshotErrorText;
 
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
@@ -396,7 +405,7 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
         <div className={styles.emptyState}>
           {getUnavailableText?.(quota) || quota.error || t('heteroAgent.quota.unavailable')}
         </div>
-      ) : quota?.status === 'error' ? (
+      ) : quota?.status === 'error' && !hasQuotaData ? (
         <div className={styles.error}>
           {getErrorText?.(quota) || quota.error || t('heteroAgent.quota.unavailable')}
         </div>

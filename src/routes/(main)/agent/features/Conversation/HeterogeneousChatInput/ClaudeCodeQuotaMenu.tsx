@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 
 import { heterogeneousAgentService } from '@/services/electron/heterogeneousAgent';
 
-import type { QuotaWindowItem } from './QuotaMenu';
+import type { FetchQuotaOptions, QuotaWindowItem } from './QuotaMenu';
 import QuotaMenu, { createQuotaSourceKey } from './QuotaMenu';
 
 const createErrorSnapshot = (error: unknown): ClaudeCodeQuotaSnapshot => ({
@@ -30,7 +30,11 @@ const ClaudeCodeQuotaMenu = memo<ClaudeCodeQuotaMenuProps>(({ env }) => {
   const sourceKey = createQuotaSourceKey('claude-code', env);
 
   const fetchQuota = useCallback(
-    () => heterogeneousAgentService.getClaudeCodeQuota({ env }),
+    (options?: FetchQuotaOptions) =>
+      heterogeneousAgentService.getClaudeCodeQuota({
+        env,
+        ...(options?.force ? { force: true } : {}),
+      }),
     [env],
   );
 

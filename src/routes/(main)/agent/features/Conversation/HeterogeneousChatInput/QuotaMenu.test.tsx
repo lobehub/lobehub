@@ -150,6 +150,27 @@ describe('ClaudeCodeQuotaMenu', () => {
 
     fireEvent.click(screen.getByTestId('refresh'));
     expect(mockService.getClaudeCodeQuota).toHaveBeenCalledTimes(2);
+    expect(mockService.getClaudeCodeQuota).toHaveBeenLastCalledWith({
+      env: undefined,
+      force: true,
+    });
+  });
+
+  it('keeps cached windows visible when the main-process refresh is rate-limited', async () => {
+    mockService.getClaudeCodeQuota.mockResolvedValue(
+      claudeSnapshot({
+        error: 'Anthropic usage API returned 429',
+        session: { resetsAt: null, usedPercent: 8, windowMinutes: 300 },
+        status: 'error',
+        updatedAt: Date.now() - 5 * 60_000,
+      }),
+    );
+
+    render(<ClaudeCodeQuotaMenu />);
+
+    expect(await screen.findByText('heteroAgent.quota.left:92')).toBeTruthy();
+    expect(screen.getByText('heteroAgent.claudeQuota.refreshRateLimited')).toBeTruthy();
+    expect(screen.queryByText('heteroAgent.claudeQuota.errorRateLimited')).toBeNull();
   });
 
   it('renders an error snapshot when the quota request rejects', async () => {
@@ -310,6 +331,14 @@ describe('CodexQuotaMenu', () => {
     expect(await screen.findByText('heteroAgent.quota.left:81')).toBeTruthy();
     expect(screen.getByText('heteroAgent.codexQuota.resetCredits:4')).toBeTruthy();
     expect(mockService.getCodexQuota).toHaveBeenCalledWith({ command: 'codex', env: undefined });
+
+    fireEvent.click(screen.getByTestId('refresh'));
+    await waitFor(() => expect(mockService.getCodexQuota).toHaveBeenCalledTimes(2));
+    expect(mockService.getCodexQuota).toHaveBeenLastCalledWith({
+      command: 'codex',
+      env: undefined,
+      force: true,
+    });
   });
 
   it('renders the credits-unavailable footer when the RPC omits credits', async () => {

@@ -47,6 +47,10 @@ import { buildBrowserMcpTools } from '@/modules/heterogeneousAgent/browserMcpToo
 import { fetchClaudeCodeQuota } from '@/modules/heterogeneousAgent/claudeCodeQuota';
 import { fetchCodexQuota } from '@/modules/heterogeneousAgent/codexQuota';
 import { createLambdaFileStorePort } from '@/modules/heterogeneousAgent/fileStorePort';
+import {
+  createQuotaCacheKey,
+  QuotaSnapshotCache,
+} from '@/modules/heterogeneousAgent/quotaSnapshotCache';
 import type {
   HeterogeneousAgentBuildPlan,
   HeterogeneousAgentImageAttachment,
@@ -190,10 +194,12 @@ interface GetSessionInfoParams {
 interface GetCodexQuotaParams {
   command?: string;
   env?: Record<string, string>;
+  force?: boolean;
 }
 
 interface GetClaudeCodeQuotaParams {
   env?: Record<string, string>;
+  force?: boolean;
 }
 
 interface SessionInfo {
@@ -289,6 +295,8 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   /** Lazy single MCP server, started on first claude-code prompt. */
   private builtinMcpServer?: LobeBuiltinMcpServer;
   private builtinMcpStartPromise?: Promise<LobeBuiltinMcpServer>;
+  private readonly claudeCodeQuotaCache = new QuotaSnapshotCache<ClaudeCodeQuotaSnapshot>();
+  private readonly codexQuotaCache = new QuotaSnapshotCache<CodexQuotaSnapshot>();
 
   private get remoteServerConfigCtr() {
     return this.app.getController(RemoteServerConfigCtr);
@@ -1493,17 +1501,28 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   @IpcMethod()
   async getCodexQuota(params: GetCodexQuotaParams = {}): Promise<CodexQuotaSnapshot> {
     const command = params.command?.trim() || 'codex';
-    const status = await detectHeterogeneousCliCommand('codex', command);
-    const env = {
-      ...(status.resolvedPathEnv ? { PATH: status.resolvedPathEnv } : {}),
+    const sourceEnv = {
       ...buildProxyEnv(this.app.storeManager.get('networkProxy')),
       ...params.env,
     };
+    const sourceKey = createQuotaCacheKey('codex', command, sourceEnv);
 
-    return fetchCodexQuota({
-      command: status.available && status.path ? status.path : command,
-      env: Object.keys(env).length > 0 ? env : undefined,
-    });
+    return this.codexQuotaCache.get(
+      sourceKey,
+      async () => {
+        const status = await detectHeterogeneousCliCommand('codex', command);
+        const env = {
+          ...(status.resolvedPathEnv ? { PATH: status.resolvedPathEnv } : {}),
+          ...sourceEnv,
+        };
+
+        return fetchCodexQuota({
+          command: status.available && status.path ? status.path : command,
+          env: Object.keys(env).length > 0 ? env : undefined,
+        });
+      },
+      { force: params.force },
+    );
   }
 
   /**
@@ -1515,7 +1534,13 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   async getClaudeCodeQuota(
     params: GetClaudeCodeQuotaParams = {},
   ): Promise<ClaudeCodeQuotaSnapshot> {
-    return fetchClaudeCodeQuota({ env: params.env });
+    const sourceKey = createQuotaCacheKey('claude-code', params.env);
+
+    return this.claudeCodeQuotaCache.get(
+      sourceKey,
+      () => fetchClaudeCodeQuota({ env: params.env }),
+      { force: params.force },
+    );
   }
 
   /**

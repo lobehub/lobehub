@@ -55,12 +55,14 @@ class HeterogeneousAgentService {
   async getCodexQuota(params?: {
     command?: string;
     env?: Record<string, string>;
+    force?: boolean;
   }): Promise<CodexQuotaSnapshot> {
     return this.ipc.heterogeneousAgent.getCodexQuota(params);
   }
 
   async getClaudeCodeQuota(params?: {
     env?: Record<string, string>;
+    force?: boolean;
   }): Promise<ClaudeCodeQuotaSnapshot> {
     return this.ipc.heterogeneousAgent.getClaudeCodeQuota(params);
   }
