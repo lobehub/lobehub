@@ -1,6 +1,6 @@
 import { VerifySkill } from '@lobechat/builtin-skills';
+import { normalizeVerifySurface, verifySurfaces } from '@lobechat/const/verify';
 import type { VerifyCheckItem } from '@lobechat/types';
-import { normalizeVerifySurface, verifySurfaces } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { asc, eq } from 'drizzle-orm';
 import { z } from 'zod';

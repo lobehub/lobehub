@@ -1,11 +1,3 @@
-import type {
-  ToulminVerdict,
-  VerifyCheckItem,
-  VerifyRubricConfig,
-  VerifyRunContext,
-  VerifyRunMetadata,
-  VerifyRunScenario,
-} from '@lobechat/types';
 import {
   verifierTypes,
   verifyCheckResultStatuses,
@@ -16,6 +8,14 @@ import {
   verifyRunStatuses,
   verifyUserDecisions,
   verifyVerdicts,
+} from '@lobechat/const/verify';
+import type {
+  ToulminVerdict,
+  VerifyCheckItem,
+  VerifyRubricConfig,
+  VerifyRunContext,
+  VerifyRunMetadata,
+  VerifyRunScenario,
 } from '@lobechat/types';
 import {
   boolean,

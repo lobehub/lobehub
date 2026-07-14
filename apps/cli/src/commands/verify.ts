@@ -2,8 +2,12 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
-import type { VerifyRunOrigin, VerifySurface } from '@lobechat/types';
-import { normalizeVerifySurface, verifyEvidenceTypes, verifySurfaces } from '@lobechat/types';
+import type { VerifyRunOrigin, VerifySurface } from '@lobechat/const/verify';
+import {
+  normalizeVerifySurface,
+  verifyEvidenceTypes,
+  verifySurfaces,
+} from '@lobechat/const/verify';
 import type { Command } from 'commander';
 import pc from 'picocolors';
 

@@ -1,5 +1,5 @@
-import type { VerifyCheckItem, VerifyCodingScope, VerifySurface } from '@lobechat/types';
-import { normalizeVerifySurface } from '@lobechat/types';
+import { normalizeVerifySurface, type VerifySurface } from '@lobechat/const/verify';
+import type { VerifyCheckItem, VerifyCodingScope } from '@lobechat/types';
 
 import type { VerifyStatus } from '@/database/models/agentOperation';
 import type { VerifyCheckResultItem } from '@/database/schemas/verify';

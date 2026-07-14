@@ -1,6 +1,6 @@
 {
   "name": "@lobehub/cli",
-  "version": "0.0.40",
+  "version": "0.0.42",
   "type": "module",
   "bin": {
     "lh": "./dist/index.js",
@@ -29,6 +29,7 @@
   },
   "devDependencies": {
     "@lobechat/agent-gateway-client": "workspace:*",
+    "@lobechat/const": "workspace:*",
     "@lobechat/device-control": "workspace:*",
     "@lobechat/device-gateway-client": "workspace:*",
     "@lobechat/device-identity": "workspace:*",
