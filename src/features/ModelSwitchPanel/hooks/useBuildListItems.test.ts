@@ -6,7 +6,7 @@ import type { EnabledProviderWithModels } from '@/types/aiProvider';
 import { buildListItems } from './useBuildListItems';
 
 const model = (id: string, displayName = id) =>
-  ({ displayName, id, type: 'chat' }) as AiModelForSelect;
+  ({ abilities: {}, displayName, id }) satisfies AiModelForSelect;
 
 const provider = (id: string, children: AiModelForSelect[]): EnabledProviderWithModels => ({
   children,
