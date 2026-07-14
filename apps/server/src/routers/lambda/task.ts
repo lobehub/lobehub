@@ -1286,10 +1286,28 @@ export const taskRouter = router({
       }
     }),
 
-  // Cross-workspace task *transfer* is intentionally not exposed: moving a
-  // task drags its whole subtree plus history (dependencies, documents,
-  // comments) out of the workspace. Use `copyTaskToWorkspace`, which clones
-  // the task definition only.
+  // Cross-workspace task *transfer* is intentionally not supported anymore:
+  // moving a task drags its whole subtree plus history (dependencies,
+  // documents, comments) out of the workspace. Use `copyTaskToWorkspace`,
+  // which clones the task definition only. The procedure is kept as a
+  // compatibility stub so already-released clients get a stable business
+  // error instead of a procedure-not-found failure.
+  transferTask: taskProcedureWrite
+    .input(
+      z.object({
+        targetVisibility: z.enum(['private', 'public']).optional(),
+        targetWorkspaceId: z.string().nullable(),
+        taskId: z.string(),
+      }),
+    )
+    .mutation(async () => {
+      throw new TRPCError({
+        cause: { data: { code: TransferErrorCode.TransferNotSupported } },
+        code: 'PRECONDITION_FAILED',
+        message: 'Task transfer is no longer supported; use copyTaskToWorkspace instead',
+      });
+    }),
+
   copyTaskToWorkspace: taskProcedureWrite
     .input(
       z.object({
