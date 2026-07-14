@@ -15,7 +15,10 @@ import { DocumentService } from '@/server/services/document';
 import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
 import { TransferErrorCode } from '@/types/transferError';
 
-import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
+import {
+  assertWorkspaceRowManageable,
+  isWorkspaceNonOwner,
+} from './_helpers/assertWorkspaceRowManageable';
 import {
   compareDocumentHistoryItemsInputSchema,
   getDocumentHistoryItemInputSchema,
@@ -137,7 +140,11 @@ export const documentRouter = router({
       if (!existing) return;
       assertWorkspaceRowManageable(ctx, existing.userId, 'document');
 
-      return ctx.documentService.deleteDocument(input.id);
+      // Non-owner members may delete their own folder, but the recursive
+      // cascade must not take other members' descendants with it.
+      return ctx.documentService.deleteDocument(input.id, {
+        restrictToCreator: isWorkspaceNonOwner(ctx),
+      });
     }),
 
   deleteDocuments: documentProcedure
@@ -149,7 +156,9 @@ export const documentRouter = router({
         assertWorkspaceRowManageable(ctx, target.userId, 'document');
       }
 
-      return ctx.documentService.deleteDocuments(input.ids);
+      return ctx.documentService.deleteDocuments(input.ids, {
+        restrictToCreator: isWorkspaceNonOwner(ctx),
+      });
     }),
 
   getDocumentById: documentProcedure

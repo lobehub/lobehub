@@ -36,7 +36,10 @@ import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { FileService } from '@/server/services/file';
 import { type BatchTaskResult } from '@/types/service';
 
-import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
+import {
+  assertWorkspaceRowManageable,
+  isWorkspaceNonOwner,
+} from './_helpers/assertWorkspaceRowManageable';
 import {
   batchResolveAgentIdFromSessions,
   resolveAgentIdFromSession,
@@ -226,7 +229,7 @@ export const topicRouter = router({
     .mutation(async ({ input, ctx }) => {
       // Non-owner members may only sweep their own topics under the agent;
       // owners keep the full workspace-wide scope.
-      const restrictToCreator = !!ctx.workspaceId && ctx.workspaceRole !== 'owner';
+      const restrictToCreator = isWorkspaceNonOwner(ctx);
 
       return ctx.topicModel.batchDeleteByAgentId(input.agentId, { restrictToCreator });
     }),
@@ -249,7 +252,7 @@ export const topicRouter = router({
 
       // Non-owner members may only sweep their own topics under the session;
       // owners keep the full workspace-wide scope.
-      const restrictToCreator = !!ctx.workspaceId && ctx.workspaceRole !== 'owner';
+      const restrictToCreator = isWorkspaceNonOwner(ctx);
 
       return ctx.topicModel.batchDeleteBySessionId(resolved.sessionId, { restrictToCreator });
     }),

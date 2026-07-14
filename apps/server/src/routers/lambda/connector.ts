@@ -555,6 +555,12 @@ export const connectorRouter = router({
   syncTools: connectorWriteProcedure
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ input, ctx }) => {
+      const target = await ctx.connectorModel.findById(input.id);
+      if (!target) throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
+      // Syncing rewrites the connector's tool rows and refreshes OAuth tokens —
+      // an edit-class operation, so it gets the same creator/owner gate as
+      // update/delete/reset.
+      assertWorkspaceRowManageable(ctx, target.userId, 'connector');
       try {
         return await syncConnectorToolsById(input.id, ctx);
       } catch (err: any) {

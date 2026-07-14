@@ -33,3 +33,15 @@ export function assertWorkspaceRowManageable(
     });
   }
 }
+
+/**
+ * Whether the caller operates in a workspace without owner privileges — used
+ * to restrict bulk/sweep mutations to rows the caller created. Reads
+ * `workspaceRole` through the optional ctx field because the OSS
+ * `withScopedPermission` stub does not inject it (cloud's override does).
+ */
+export function isWorkspaceNonOwner(
+  ctx: Pick<WorkspaceRowCtx, 'workspaceId' | 'workspaceRole'>,
+): boolean {
+  return !!ctx.workspaceId && ctx.workspaceRole !== 'owner';
+}

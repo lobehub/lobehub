@@ -22,7 +22,10 @@ import { TaskRunnerService } from '@/server/services/taskRunner';
 import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
 import { TransferErrorCode } from '@/types/transferError';
 
-import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
+import {
+  assertWorkspaceRowManageable,
+  isWorkspaceNonOwner,
+} from './_helpers/assertWorkspaceRowManageable';
 
 const taskProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -411,7 +414,7 @@ export const taskRouter = router({
       const model = ctx.taskModel;
       // Non-owner members may only sweep their own tasks; owners keep the
       // full workspace-wide scope.
-      const restrictToCreator = !!ctx.workspaceId && ctx.workspaceRole !== 'owner';
+      const restrictToCreator = isWorkspaceNonOwner(ctx);
       const count = await model.deleteAll({ restrictToCreator });
       return { count, message: `${count} tasks deleted`, success: true };
     } catch (error) {

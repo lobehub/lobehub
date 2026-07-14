@@ -29,7 +29,10 @@ import type { FileListItem, KnowledgeItemStatus } from '@/types/files';
 import { QueryFileListSchema, UploadFileSchema } from '@/types/files';
 import { TransferErrorCode } from '@/types/transferError';
 
-import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
+import {
+  assertWorkspaceRowManageable,
+  isWorkspaceNonOwner,
+} from './_helpers/assertWorkspaceRowManageable';
 
 const fileTransferEntityTypeSchema = z.enum(['document', 'file', 'folder']);
 
@@ -464,7 +467,7 @@ export const fileRouter = router({
     .input(QueryFileListSchema)
     .mutation(async ({ ctx, input }): Promise<{ count: number }> => {
       // Non-owner members may only bulk-delete rows they created themselves.
-      const restrictToCreator = !!ctx.workspaceId && ctx.workspaceRole !== 'owner';
+      const restrictToCreator = isWorkspaceNonOwner(ctx);
 
       const fileIds: string[] = [];
       const documentIds: string[] = [];

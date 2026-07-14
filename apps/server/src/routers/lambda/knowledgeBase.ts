@@ -14,7 +14,10 @@ import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermiss
 import { type KnowledgeBaseItem } from '@/types/knowledgeBase';
 import { TransferErrorCode } from '@/types/transferError';
 
-import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
+import {
+  assertWorkspaceRowManageable,
+  isWorkspaceNonOwner,
+} from './_helpers/assertWorkspaceRowManageable';
 
 const knowledgeBaseProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -206,7 +209,7 @@ export const knowledgeBaseRouter = router({
     .use(withScopedPermission('knowledge_base:delete'))
     .mutation(async ({ ctx }) => {
       // Non-owner members may only clear knowledge bases they created themselves.
-      const restrictToCreator = !!ctx.workspaceId && ctx.workspaceRole !== 'owner';
+      const restrictToCreator = isWorkspaceNonOwner(ctx);
 
       const result = await ctx.knowledgeBaseModel.deleteAllWithFiles(
         serverDBEnv.REMOVE_GLOBAL_FILE,
