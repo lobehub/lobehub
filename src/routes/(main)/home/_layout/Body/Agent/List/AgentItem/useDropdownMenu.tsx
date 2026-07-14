@@ -112,12 +112,17 @@ export const useAgentDropdownMenu = ({
   const { allowed: canEdit } = usePermission('edit_own_content');
   const { allowed: canCreate } = usePermission('create_content');
 
-  // Cross-workspace Transfer to… / Copy to… items (null when workspace feature is off)
-  const transferMenuItems = useAgentTransferMenuItem(id, {
-    avatar,
-    backgroundColor,
-    title,
-  });
+  // Cross-workspace Transfer to… / Copy to… items (null when workspace
+  // feature is off or the viewer lacks permission for this agent)
+  const transferMenuItems = useAgentTransferMenuItem(
+    id,
+    {
+      avatar,
+      backgroundColor,
+      title,
+    },
+    { userId, visibility },
+  );
 
   const isDefault = group === SessionDefaultGroup.Default;
 

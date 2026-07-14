@@ -522,9 +522,11 @@ export const agentRouter = router({
         });
       }
 
-      // 2. In workspace mode, members can only transfer agents they created;
-      //    workspace owners can transfer any agent
-      if (ctx.workspaceId && agent.userId !== ctx.userId) {
+      // 2. In workspace mode, members can only transfer private agents they
+      //    created. Public (workspace-shared) agents carry every member's
+      //    conversations, so moving them out is owner-only — even for the
+      //    creator. Owner-level AGENT_UPDATE (scope ALL) overrides both.
+      if (ctx.workspaceId && (agent.visibility === 'public' || agent.userId !== ctx.userId)) {
         const canOverride = await hasWorkspaceScopedPermission({
           action: 'AGENT_UPDATE',
           db: ctx.serverDB,
@@ -537,7 +539,7 @@ export const agentRouter = router({
           throw new TRPCError({
             cause: { data: { code: TransferErrorCode.OwnerOnly } },
             code: 'FORBIDDEN',
-            message: 'Only workspace owners can transfer agents created by others',
+            message: 'Only workspace owners can transfer shared agents or agents created by others',
           });
         }
       }

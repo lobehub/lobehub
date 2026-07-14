@@ -1286,72 +1286,10 @@ export const taskRouter = router({
       }
     }),
 
-  transferTask: taskProcedureWrite
-    .input(
-      z.object({
-        targetVisibility: z.enum(['private', 'public']).optional(),
-        targetWorkspaceId: z.string().nullable(),
-        taskId: z.string(),
-      }),
-    )
-    .mutation(async ({ ctx, input }) => {
-      const task = await ctx.taskModel.resolve(input.taskId);
-      if (!task)
-        throw new TRPCError({
-          cause: { data: { code: TransferErrorCode.ResourceNotFound } },
-          code: 'NOT_FOUND',
-          message: 'Task not found',
-        });
-
-      if (ctx.workspaceId && task.createdByUserId !== ctx.userId) {
-        const canOverride = await hasWorkspaceScopedPermission({
-          action: 'AGENT_UPDATE',
-          db: ctx.serverDB,
-          scopes: ['ALL'],
-          userId: ctx.userId,
-          workspaceId: ctx.workspaceId,
-        });
-        if (!canOverride) {
-          throw new TRPCError({
-            cause: { data: { code: TransferErrorCode.OwnerOnly } },
-            code: 'FORBIDDEN',
-            message: 'Only workspace owners can transfer tasks created by others',
-          });
-        }
-      }
-
-      if (input.targetWorkspaceId === (ctx.workspaceId ?? null)) {
-        throw new TRPCError({
-          cause: { data: { code: TransferErrorCode.SameWorkspace } },
-          code: 'BAD_REQUEST',
-          message: 'Cannot transfer task to the same workspace',
-        });
-      }
-
-      if (input.targetWorkspaceId) {
-        const canWriteTarget = await hasWorkspaceScopedPermission({
-          action: 'AGENT_UPDATE',
-          db: ctx.serverDB,
-          userId: ctx.userId,
-          workspaceId: input.targetWorkspaceId,
-        });
-        if (!canWriteTarget) {
-          throw new TRPCError({
-            cause: { data: { code: TransferErrorCode.TargetNoWriteAccess } },
-            code: 'FORBIDDEN',
-            message: 'No write access to target workspace',
-          });
-        }
-      }
-
-      return ctx.taskModel.transferTo(
-        task.id,
-        input.targetWorkspaceId,
-        ctx.userId,
-        input.targetVisibility,
-      );
-    }),
-
+  // Cross-workspace task *transfer* is intentionally not exposed: moving a
+  // task drags its whole subtree plus history (dependencies, documents,
+  // comments) out of the workspace. Use `copyTaskToWorkspace`, which clones
+  // the task definition only.
   copyTaskToWorkspace: taskProcedureWrite
     .input(
       z.object({
@@ -1369,6 +1307,10 @@ export const taskRouter = router({
           message: 'Task not found',
         });
 
+      // No source-side creator gate: copy is non-destructive and clones the
+      // task definition only, so any member who can resolve the task (the
+      // visibility-aware `resolve` above already hides others' private tasks)
+      // may copy it.
       if (input.targetWorkspaceId) {
         const canWriteTarget = await hasWorkspaceScopedPermission({
           action: 'AGENT_UPDATE',

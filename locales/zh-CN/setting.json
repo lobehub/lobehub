@@ -2191,7 +2191,7 @@
   "workspace.general.transferAgents.modal.selectPlaceholder": "选择工作区或个人账户...",
   "workspace.general.transferAgents.modal.selectTarget": "您可以移动到有权限创建助理的个人账户或工作区。",
   "workspace.general.transferAgents.modal.selected": "已选",
-  "workspace.general.transferAgents.modal.selectedAgent": "此助理会移动到 {{target}}，并离开当前工作区。",
+  "workspace.general.transferAgents.modal.selectedAgent": "该助理将移动至 {{target}} 并离开当前空间。其全部关联数据会一并迁移：会话、话题与消息、文件与知识库关联、定时任务及关联任务——包括所有成员（包括您）与该助理的对话记录。",
   "workspace.general.transferAgents.modal.success": "{{count}} 个助理已移动",
   "workspace.general.transferAgents.modal.title": "移动助理",
   "workspace.general.transferAgents.modal.transfer": "移动 {{count}} 个助理",

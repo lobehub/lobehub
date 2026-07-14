@@ -2200,7 +2200,7 @@ When I am ___, I need ___
     'You can move to personal or workspaces that have permission to create an agent.',
   'workspace.general.transferAgents.modal.selected': 'selected',
   'workspace.general.transferAgents.modal.selectedAgent':
-    'This Agent will move to {{target}} and leave the current space.',
+    'This Agent will move to {{target}} and leave the current space. All associated data moves with it: sessions, topics and messages, file and knowledge base links, scheduled jobs, and related tasks — including every member’s conversations with this Agent.',
   'workspace.general.transferAgents.modal.success': '{{count}} agent(s) moved',
   'workspace.general.transferAgents.modal.title': 'Move Agents',
   'workspace.general.transferAgents.modal.transfer': 'Move {{count}} agent(s)',
