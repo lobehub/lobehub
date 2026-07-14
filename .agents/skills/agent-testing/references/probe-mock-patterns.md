@@ -1277,3 +1277,8 @@ nodeintegration, plugins, disablewebsecurity, allowpopups, preload, …`). The h
   (usually `/`) replaces the process command search path.
 - **Works**: name the field `cookie_path` (and similarly avoid other zsh special parameter names),
   then pass it to the cookie command. This is a shell failure, not an auth or browser failure.
+
+### E23. Vite throws `EMFILE` — terminate Agent Testing and ask the user for help
+
+- **Situation**: an isolated frontend-only Vite surface exits at startup with `EMFILE: too many open files, watch`, while the intended port is free and the shell can successfully create thousands of `fs.watch` handles in a control process.
+- **Required action**: immediately terminate Agent Testing and ask the user for help. Do not fall back to a one-shot static build or publish a Verify report from a degraded test surface.
