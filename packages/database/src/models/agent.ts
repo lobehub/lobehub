@@ -1191,6 +1191,18 @@ export class AgentModel {
       .where(eq(agentsToSessions.agentId, agentId));
     const sessionIds = links.map((link) => link.sessionId);
 
+    // A member who merely opened the shared agent already owns a linked
+    // session, even with no topics/messages yet — the transfer would rewrite
+    // that session row too.
+    if (sessionIds.length > 0) {
+      const [foreignSession] = await this.db
+        .select({ id: sessions.id })
+        .from(sessions)
+        .where(and(inArray(sessions.id, sessionIds), ne(sessions.userId, this.userId)))
+        .limit(1);
+      if (foreignSession) return true;
+    }
+
     const topicWhere =
       sessionIds.length > 0
         ? or(inArray(topics.sessionId, sessionIds), eq(topics.agentId, agentId))
