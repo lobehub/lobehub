@@ -1237,6 +1237,7 @@ nodeintegration, plugins, disablewebsecurity, allowpopups, preload, …`). The h
   ```
   Tag the resolved element with a `data-probe` attribute and drive it with `agent-browser click '[data-probe=...]'` (trusted CDP input, D18).
 - **Corollary**: the phantom also owns the tooltip text of whatever component it duplicates, so an `innerText`/aria grep can "find" a control that the user cannot see. Assert on `getBoundingClientRect()` before believing a control is present.
+
 ### C8. ✅ An agent-browser session can silently LOSE its seeded cookies — a 401, not `document.cookie`, is the signal
 
 - **Situation**: verifying an owner-only affordance (a link the server renders only for the
@@ -1283,3 +1284,48 @@ nodeintegration, plugins, disablewebsecurity, allowpopups, preload, …`). The h
 - **Situation**: an isolated frontend-only Vite surface exits at startup with `EMFILE: too many open files, watch`, while the intended port is free and the shell can successfully create thousands of `fs.watch` handles in a control process.
 - **Likely causes (not established)**: multiple LobeHub Cloud worktrees or clones are running file watchers; or a previously used workspace still has watchers owned by a surviving terminal process or a VS Code window, even after its visible terminal was closed.
 - **Required action**: immediately terminate Agent Testing, report the observed `EMFILE`, and ask the user to inspect and clean up other worktrees, terminal processes, or VS Code windows. Do not kill user-owned processes, close editor windows, change Vite watch mode, fall back to a one-shot static build, or publish a Verify report from a degraded surface.
+
+### D20. ✅ Main-process `WebContentsView` pages are their own CDP page targets — they hijack target selection, AND they are the best pool probe
+
+- **Situation**: verifying an in-app browser whose pages are owned by the MAIN process as
+  `WebContentsView`s (not renderer `<webview>` guests — that is E16/D15, a different shape).
+- **Doesn't work**: assuming any tool that "just connects to the CDP port" lands on the app.
+  Every live page shows up in `/json/list` as its own `type: page` target, so both
+  `agent-browser` and `scripts/cdp-screenshot.sh` can silently attach to a _web page the app
+  is hosting_ instead of the app itself. Measured: `cdp-screenshot.sh` reported
+  `targetUrl: https://example.com/` and wrote that page's pixels while the intended evidence
+  was the app window; an `agent-browser get url` on the same port hung.
+- **Works — pin the target by URL prefix.** Raw CDP, pick the target whose `url` starts with
+  `app://renderer`, and evaluate against that:
+  ```js
+  const list = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json();
+  const target = list.find((t) => t.type === 'page' && t.url.startsWith('app://renderer'));
+  new WebSocket(target.webSocketDebuggerUrl); // → Runtime.evaluate
+  ```
+- **Works — the same property is the cheapest page-pool probe there is.** One live page ==
+  one `page` target, so `/json/list` filtered to non-`app://` URLs _is_ the pool's contents.
+  Use it to assert per-session isolation (N sessions → N coexisting pages, and a page that
+  should have survived an action is still listed) without adding any IPC or store probe:
+  ```bash
+  curl -s --noproxy '*' http://127.0.0.1: < cdp > /json/list \
+    | python3 -c "import json,sys; print([t['url'] for t in json.load(sys.stdin) if t['type']=='page'])"
+  ```
+- **Pixels still need an OS capture.** A `WebContentsView` does not composite into the host
+  page's `Page.captureScreenshot`, so app-window evidence that must _show the embedded page_
+  has to come from `capture-app-window.sh` (macOS `screencapture -l <windowid>`), which does
+  not require bringing the window to the front.
+
+### C9. A component-scoped "consumed" ref is not a one-shot guard once the component can remount
+
+- **Situation**: a persisted store field carries a one-shot request (`{ nonce, url }`) and the
+  consuming component guards against re-consumption with a `useRef` holding the last nonce.
+- **Why it silently breaks**: the ref dies with the component. Any change that starts remounting
+  the consumer (e.g. giving it a `key` that now varies per topic/session) resurrects the guard as
+  `undefined`, so a request that is still sitting in _persisted_ state is re-consumed on every
+  remount — and, on a fresh boot, once more. The symptom looks nothing like the cause: a page the
+  agent had just loaded gets navigated to a URL from days ago.
+- **Works**: retire the request in the store the moment it is consumed, so the one-shot is one-shot
+  across mounts and restarts. Watch the merge semantics — if the store patches with lodash `merge`,
+  clearing with `undefined` is a **no-op** and the field must be set to `null`.
+- **Test for it**: assert the field is `null` (not `undefined`) after the consume action; a test that
+  only checks "the request was acted on" passes in both the broken and fixed versions.
