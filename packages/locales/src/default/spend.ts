@@ -59,7 +59,7 @@ export default {
   'usageStats.chart.input': 'Input',
   'usageStats.chart.output': 'Output',
   'usageStats.chart.spend': 'Cost',
-  'usageStats.chart.title': 'When this agent spent',
+  'usageStats.chart.title': 'Usage over time',
   'usageStats.chart.tokens': 'Token',
   'usageStats.dimension': 'Dimension',
   'usageStats.entry': 'Usage & Cost',
