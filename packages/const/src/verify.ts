@@ -1,16 +1,17 @@
 /**
- * Verify vocabulary — the closed sets every layer agrees on (schema, server,
- * CLI, store, UI), plus the small shapes that travel with them.
+ * Verify vocabulary — the runtime closed sets every layer agrees on (schema,
+ * server, CLI, store, UI), plus the small shapes that travel with them.
  *
  * Deliberately kept here rather than in `@lobechat/types`: these are runtime
  * values, and `@lobechat/types` is replaced by a hand-written stub inside the
  * isolated desktop workspace (`apps/desktop/stubs/types`), so a value imported
  * from it is unreachable for members of that workspace — `@lobehub/cli` among
- * them. This module has no imports, so it resolves from every workspace.
+ * them. This module imports nothing, so it resolves from every workspace.
  *
- * The domain model built on top of this vocabulary (plan items, Toulmin
- * narrative, evidence, reports) lives in `packages/types/src/verify.ts`, which
- * re-exports the derived types below.
+ * `packages/types/src/verify.ts` declares the same unions independently (it must
+ * not depend on `@lobechat/const`) and owns the domain model built on top of them
+ * — plan items, Toulmin narrative, evidence, reports. The two sides are pinned
+ * together by `./verify.test.ts`, which fails the type-check on any drift.
  */
 
 /**

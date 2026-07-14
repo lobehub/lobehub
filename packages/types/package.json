@@ -17,9 +17,6 @@
     "type-fest": "^4.41.0",
     "zustand": "5.0.4"
   },
-  "devDependencies": {
-    "@lobechat/const": "workspace:*"
-  },
   "peerDependencies": {
     "@lobehub/ui": "^5",
     "react": "*",

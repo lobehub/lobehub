@@ -4,41 +4,108 @@
  * DB schema) so every layer — schema, services, store, UI — depends on one
  * source of truth without reaching into the database package.
  *
- * The closed sets (verifier types, statuses, verdicts, surfaces, evidence media)
- * are runtime values, and this package is replaced by a hand-written stub inside
- * the isolated desktop workspace — so they live in `@lobechat/const/verify`,
- * which every workspace can resolve. Their derived types are re-exported here so
- * `@lobechat/types` stays the one-stop vocabulary for the domain.
+ * The unions below are declared here, and their runtime counterparts (the `as
+ * const` arrays a schema or a `<Select>` iterates) live in
+ * `@lobechat/const/verify`. The duplication is deliberate: this package is
+ * replaced by a hand-written stub inside the isolated desktop workspace, so a
+ * runtime value exported from here is unreachable for members of that workspace
+ * (`@lobehub/cli`), while `@lobechat/types` must stay dependency-free of
+ * `@lobechat/const`. `packages/const/src/verify.test.ts` fails the type-check the
+ * moment the two sides drift apart.
  */
-import type {
-  VerifierType,
-  VerifyCheckResultStatus,
-  VerifyEvidenceCapturedBy,
-  VerifyEvidenceType,
-  VerifyOnFailStrategy,
-  VerifyRunOrigin,
-  VerifyRunScenario,
-  VerifyRunSource,
-  VerifyRunStatus,
-  VerifySurface,
-  VerifyUserDecision,
-  VerifyVerdict,
-} from '@lobechat/const/verify';
 
-export type {
-  VerifierType,
-  VerifyCheckResultStatus,
-  VerifyEvidenceCapturedBy,
-  VerifyEvidenceType,
-  VerifyOnFailStrategy,
-  VerifyRunOrigin,
-  VerifyRunScenario,
-  VerifyRunSource,
-  VerifyRunStatus,
-  VerifySurface,
-  VerifyUserDecision,
-  VerifyVerdict,
-};
+/**
+ * How a single criterion is judged.
+ * - program: run a deterministic command / script
+ * - agent:   spawn a sub agent_operations to investigate
+ * - llm:     call generateObject and let an LLM judge produce a Toulmin verdict
+ */
+export type VerifierType = 'program' | 'agent' | 'llm';
+
+/** What to do when a check item fails. */
+export type VerifyOnFailStrategy = 'manual' | 'auto_repair';
+
+/**
+ * Lifecycle of a single check result.
+ * - errored: the verifier could not run (infra / startup failure) — NOT a
+ *   delivery judgment. Kept distinct from `failed` so a broken verifier never
+ *   reads as a rejected delivery and never seeds an auto-repair round.
+ */
+export type VerifyCheckResultStatus =
+  'pending' | 'running' | 'passed' | 'failed' | 'errored' | 'skipped';
+
+/** Toulmin Claim — the verifier's judgement. */
+export type VerifyVerdict = 'passed' | 'failed' | 'uncertain';
+
+/** Human feedback on a result, feeding the data flywheel. */
+export type VerifyUserDecision = 'accepted' | 'rejected' | 'overridden';
+
+/**
+ * Denormalized rollup of a verification session's pipeline state — mirrors the
+ * legacy `agent_operations.verify_status` set so the two stay interchangeable
+ * while results/reports migrate from being operation-anchored to run-anchored.
+ *
+ * `errored`: at least one required check errored (verifier couldn't run) and none
+ * genuinely failed — verification is inconclusive, not a rejected delivery.
+ */
+export type VerifyRunStatus =
+  | 'unverified'
+  | 'planned'
+  | 'verifying'
+  | 'passed'
+  | 'failed'
+  | 'errored'
+  | 'repairing'
+  | 'delivered';
+
+/**
+ * What produced a verification session.
+ * - agent:         verifying a real Agent Run (`verify_runs.operation_id` set)
+ * - agent-testing: a standalone session ingested from the agent-testing harness
+ *   (no Agent Run — `operation_id` is null)
+ */
+export type VerifyRunSource = 'agent' | 'agent-testing';
+
+/**
+ * The kind of thing a verification session checks. Orthogonal to `source` (which
+ * records what *produced* the run): `scenario` drives how the report renders its
+ * scope header and scenario-specific detail. Open-ended — new scenarios add a
+ * value here plus their own {@link VerifyRunContext} shape.
+ * - coding: verifying a software change (branch / commit / surfaces under test).
+ */
+export type VerifyRunScenario = 'coding';
+
+/**
+ * The product surface a check was exercised on — *where* it ran, never *what
+ * kind* of test it was. `unit` / `backend` / `type-check` are test kinds and do
+ * not belong here; a backend change verified through the CLI has surface `cli`.
+ *
+ * A closed set on purpose: free-form surfaces drifted into 76 distinct values
+ * (long prose, runtime modes, tool names), which no viewer can render as a
+ * legible badge. Runtime detail ("packaged build", "CDP dev instance") belongs
+ * on the plan item's `method`, not here.
+ */
+export type VerifySurface = 'web' | 'desktop' | 'cli' | 'mobile' | 'bot';
+
+/** The medium of a captured evidence artifact. */
+export type VerifyEvidenceType =
+  'screenshot' | 'gif' | 'video' | 'text' | 'dom_snapshot' | 'transcript';
+
+/** Who / what captured an evidence artifact (provenance). */
+export type VerifyEvidenceCapturedBy = 'agent-browser' | 'cdp' | 'cli' | 'program' | 'llm_judge';
+
+/**
+ * The LobeHub conversation an ingested report was authored in. Lets the report
+ * link back to (and later resume) the agent session that produced it.
+ */
+export interface VerifyRunOrigin {
+  /** The agent that ran the verification. */
+  agentId?: string;
+  /** The agent operation (one execution) that produced the report. */
+  operationId?: string;
+  /** The topic to reopen to continue from this report. */
+  topicId?: string;
+}
 
 /**
  * Coding-scenario scope: where the code under test came from and how it ran.
