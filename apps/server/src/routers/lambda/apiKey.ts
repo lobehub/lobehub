@@ -50,12 +50,14 @@ export const apiKeyRouter = router({
     }),
 
   getApiKey: apiKeyProcedure
+    .use(withScopedPermission('api_key:read'))
     .input(z.object({ apiKey: z.string() }))
     .query(async ({ input, ctx }) => {
       return ctx.apiKeyModel.findByKey(input.apiKey);
     }),
 
   getApiKeyById: apiKeyProcedure
+    .use(withScopedPermission('api_key:read'))
     .input(z.object({ id: z.string() }))
     .query(async ({ input, ctx }) => {
       const apiKey = await ctx.apiKeyModel.findById(input.id);
@@ -65,7 +67,7 @@ export const apiKeyRouter = router({
       return apiKey;
     }),
 
-  getApiKeys: apiKeyProcedure.query(async ({ ctx }) => {
+  getApiKeys: apiKeyProcedure.use(withScopedPermission('api_key:read')).query(async ({ ctx }) => {
     return ctx.apiKeyModel.query();
   }),
 

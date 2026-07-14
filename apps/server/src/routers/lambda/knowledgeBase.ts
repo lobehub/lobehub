@@ -243,6 +243,7 @@ export const knowledgeBaseRouter = router({
       const result = await ctx.knowledgeBaseModel.deleteWithFiles(
         input.id,
         serverDBEnv.REMOVE_GLOBAL_FILE,
+        { restrictToCreator: isWorkspaceNonOwner(ctx) },
       );
 
       if (result.deletedFiles.length > 0) {

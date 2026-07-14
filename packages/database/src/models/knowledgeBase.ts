@@ -559,13 +559,21 @@ export class KnowledgeBaseModel {
     return sharedFiles.filter((f) => Number(f.kbCount) === 1).map((f) => f.fileId);
   };
 
-  deleteWithFiles = async (id: string, removeGlobalFile: boolean = true) => {
+  deleteWithFiles = async (
+    id: string,
+    removeGlobalFile: boolean = true,
+    options?: { restrictToCreator?: boolean },
+  ) => {
     const exclusiveFileIds = await this.findExclusiveFileIds(id);
 
     let deletedFiles: Array<{ id: string; url: string | null }> = [];
     if (exclusiveFileIds.length > 0) {
       const fileModel = new FileModel(this.db, this.userId, this.workspaceId);
-      const result = await fileModel.deleteMany(exclusiveFileIds, removeGlobalFile);
+      // Teammate-owned files can be linked into this KB; a non-owner member's
+      // delete must not take those file records/storage with it.
+      const result = await fileModel.deleteMany(exclusiveFileIds, removeGlobalFile, {
+        restrictToCreator: options?.restrictToCreator,
+      });
       deletedFiles = (result || []).map((f) => ({ id: f.id, url: f.url }));
     }
 

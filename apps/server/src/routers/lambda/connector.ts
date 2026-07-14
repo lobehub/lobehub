@@ -33,7 +33,10 @@ import {
 } from '@/server/services/connector/stateStore';
 import { syncConnectorToolsById } from '@/server/services/connector/sync';
 
-import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
+import {
+  assertWorkspaceRowManageable,
+  isWorkspaceNonOwner,
+} from './_helpers/assertWorkspaceRowManageable';
 
 const connectorProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -665,11 +668,12 @@ export const connectorRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const connectorId = await upsertConnectorEntry(ctx.connectorModel, {
+      const { connectorId, writable } = await upsertConnectorEntry(ctx, {
         identifier: input.identifier,
         name: input.name,
         sourceType: input.sourceType,
       });
+      if (!writable) return { connectorId, toolCount: 0 };
 
       const syncInputs = input.tools.map((t) => ({
         crudType: inferCrudType(t.toolName),
@@ -700,13 +704,14 @@ export const connectorRouter = router({
         });
       }
 
-      const connectorId = await upsertConnectorEntry(ctx.connectorModel, {
+      const { connectorId, writable } = await upsertConnectorEntry(ctx, {
         avatar: tool.manifest.meta?.avatar,
         description: tool.manifest.meta?.description,
         identifier: input.identifier,
         name: tool.manifest.meta?.title || input.identifier,
         sourceType: ConnectorSourceType.builtin,
       });
+      if (!writable) return { connectorId, toolCount: 0 };
 
       const syncInputs = tool.manifest.api.map((api) => ({
         crudType: inferCrudType(api.name),
@@ -766,13 +771,14 @@ export const connectorRouter = router({
         });
       }
 
-      const connectorId = await upsertConnectorEntry(ctx.connectorModel, {
+      const { connectorId, writable } = await upsertConnectorEntry(ctx, {
         avatar: plugin.manifest.meta?.avatar,
         description: plugin.manifest.meta?.description,
         identifier: input.identifier,
         name: plugin.manifest.meta?.title || input.identifier,
         sourceType: ConnectorSourceType.marketplace,
       });
+      if (!writable) return { connectorId, toolCount: 0 };
 
       const apiList = plugin.manifest.api ?? [];
       const syncInputs = apiList.map((api: any) => ({
@@ -790,9 +796,21 @@ export const connectorRouter = router({
 
 // ── Private helpers ───────────────────────────────────────────────────────────
 
-/** Create connector entry if not exists (or update metadata), return connectorId */
+/**
+ * Create connector entry if not exists (or update metadata), return connectorId.
+ *
+ * These bootstrap syncs run whenever any member opens a shared skill's detail
+ * panel, so an existing row created by someone else must not be rewritten by a
+ * non-owner caller — the row is returned read-only (`writable: false`) and the
+ * caller skips the tool upsert instead of throwing, keeping browsing intact.
+ */
 async function upsertConnectorEntry(
-  connectorModel: ConnectorModel,
+  ctx: {
+    connectorModel: ConnectorModel;
+    userId: string;
+    workspaceId?: string | null;
+    workspaceRole?: string;
+  },
   params: {
     avatar?: string;
     description?: string;
@@ -800,19 +818,23 @@ async function upsertConnectorEntry(
     name: string;
     sourceType: string;
   },
-): Promise<string> {
+): Promise<{ connectorId: string; writable: boolean }> {
   const metadata: Record<string, unknown> = {};
   if (params.description) metadata.description = params.description;
   if (params.avatar) metadata.avatar = params.avatar;
 
-  const existing = await connectorModel.queryByIdentifiers([params.identifier]);
+  const existing = await ctx.connectorModel.queryByIdentifiers([params.identifier]);
   if (existing.length > 0) {
-    // Update metadata with latest description/avatar from manifest
-    await connectorModel.update(existing[0].id, { metadata });
-    return existing[0].id;
+    const row = existing[0];
+    const writable = !isWorkspaceNonOwner(ctx) || row.userId === ctx.userId;
+    if (writable) {
+      // Update metadata with latest description/avatar from manifest
+      await ctx.connectorModel.update(row.id, { metadata });
+    }
+    return { connectorId: row.id, writable };
   }
 
-  const created = await connectorModel.create({
+  const created = await ctx.connectorModel.create({
     identifier: params.identifier,
     isEnabled: true,
     metadata,
@@ -820,7 +842,7 @@ async function upsertConnectorEntry(
     sourceType: params.sourceType as any,
     status: ConnectorStatus.connected,
   });
-  return created.id;
+  return { connectorId: created.id, writable: true };
 }
 
 /** Map builtin manifest humanIntervention → default ConnectorToolPermission */
