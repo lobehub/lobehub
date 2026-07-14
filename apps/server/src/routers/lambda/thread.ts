@@ -12,6 +12,8 @@ import { type ThreadItem } from '@/types/topic/thread';
 import { createThreadSchema } from '@/types/topic/thread';
 import { markdownToTxt } from '@/utils/markdownToTxt';
 
+import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
+
 /**
  * `ThreadModel.create` uses `onConflictDoNothing()` and returns undefined when
  * the inserted id collides with an existing row. With server-generated 16-char
@@ -112,6 +114,9 @@ export const threadRouter = router({
     .use(withScopedPermission('topic:delete'))
     .input(z.object({ id: z.string(), removeChildren: z.boolean().optional() }))
     .mutation(async ({ input, ctx }) => {
+      const thread = await ctx.threadModel.findById(input.id);
+      if (thread) assertWorkspaceRowManageable(ctx, thread.userId, 'thread');
+
       return ctx.threadModel.delete(input.id);
     }),
 
@@ -124,6 +129,9 @@ export const threadRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      const thread = await ctx.threadModel.findById(input.id);
+      if (thread) assertWorkspaceRowManageable(ctx, thread.userId, 'thread');
+
       return ctx.threadModel.update(input.id, input.value);
     }),
 });

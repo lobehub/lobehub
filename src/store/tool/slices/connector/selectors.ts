@@ -56,11 +56,52 @@ const isSyncing =
   (s: ToolStore): boolean =>
     s.connectorSyncing[connectorId] ?? false;
 
+/** An agent's own tools (agent-owned + mounted), for the Agent Tools tab. */
+const agentConnectors =
+  (agentId: string) =>
+  (s: ToolStore): ConnectorWithTools[] =>
+    s.agentConnectors?.[agentId] ?? [];
+
+const isAgentConnectorsInit =
+  (agentId: string) =>
+  (s: ToolStore): boolean =>
+    s.agentConnectorsInit?.[agentId] ?? false;
+
+/**
+ * The badge kind of an agent tool, derived from its scope + whether a same-named
+ * user connector exists:
+ * - `agentOnly` — agent-owned, no user connector of the same identifier;
+ * - `copy` — agent-owned, and the user also has one of the same identifier;
+ * - `linked` — a user-owned row this agent has mounted (referenced + locked).
+ */
+type AgentToolBadge = 'agentOnly' | 'copy' | 'linked';
+const agentToolBadge =
+  (agentId: string, connector: ConnectorWithTools) =>
+  (s: ToolStore): AgentToolBadge => {
+    if (connector.agentId !== agentId) return 'linked'; // mounted user row
+    const hasUserSame = (s.connectors ?? []).some(
+      (c) => c.identifier === connector.identifier && !c.agentId,
+    );
+    return hasUserSame ? 'copy' : 'agentOnly';
+  };
+
+/** Identifiers of user connectors that an agent has overridden (owns a same-named tool). */
+const agentOverriddenIdentifiers =
+  (agentId: string) =>
+  (s: ToolStore): Set<string> => {
+    const owned = (s.agentConnectors?.[agentId] ?? []).filter((c) => c.agentId === agentId);
+    return new Set(owned.map((c) => c.identifier));
+  };
+
 export const connectorSelectors = {
+  agentConnectors,
+  agentOverriddenIdentifiers,
+  agentToolBadge,
   connectedConnectors,
   connectorById,
   connectorByIdentifier,
   connectorList,
+  isAgentConnectorsInit,
   connectorToolsGrouped,
   customConnectors,
   connectorToolsGroupedByIdentifier:

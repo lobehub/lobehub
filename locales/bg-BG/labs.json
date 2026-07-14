@@ -3,6 +3,8 @@
   "features.agentGraphConfig.title": "Конфигурация на графика за изпълнение на агент",
   "features.agentSelfIteration.desc": "Позволява на асистента да разсъждава, да изгражда самосъзнание и да извършва непрекъснати подобрения чрез последователни опити и взаимодействия.",
   "features.agentSelfIteration.title": "Само-итерация на агента",
+  "features.artifactDeployment.desc": "Публикувайте артефакти на хостван URL адрес и управлявайте изданията от страничната лента на разговора",
+  "features.artifactDeployment.title": "Деплоймент на артефакти",
   "features.assistantMessageGroup.desc": "Групиране на съобщенията от агента и резултатите от извикванията на инструменти заедно за показване",
   "features.assistantMessageGroup.title": "Групиране на съобщения от агент",
   "features.claudeCodeSdk.desc": "Изпълнявайте сесии на Claude Code чрез Claude Agent SDK вместо да стартирате CLI. Осигурява по-богато стрийминг изживяване и контрол на сесиите.",

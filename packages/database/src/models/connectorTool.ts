@@ -36,6 +36,15 @@ export class ConnectorToolModel {
   private ownership = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, userConnectorTools);
 
+  findById = async (toolId: string): Promise<UserConnectorToolItem | undefined> => {
+    const [row] = await this.db
+      .select()
+      .from(userConnectorTools)
+      .where(and(eq(userConnectorTools.id, toolId), this.ownership()));
+
+    return row;
+  };
+
   /**
    * Batch-upsert tools from a manifest sync.
    *

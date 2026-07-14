@@ -155,8 +155,8 @@ const ProfileEditor = memo(() => {
                     updateAgentConfigById(agentId, value);
                   }}
                 />
-                <AgentTool />
               </Flexbox>
+              <AgentTool />
             </Flexbox>
           </>
         )}

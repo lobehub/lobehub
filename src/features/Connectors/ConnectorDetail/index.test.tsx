@@ -51,6 +51,20 @@ vi.mock('@lobechat/const', () => ({
   getLobehubSkillProviderById: () => undefined,
 }));
 
+// The manage gate pulls in the user store chain — irrelevant to these render
+// tests, and it drags heavy module graphs into the unit env.
+vi.mock('@/hooks/useResourceManageable', () => ({
+  useResourceManageable: () => true,
+}));
+
+vi.mock('@lobehub/ui', () => ({
+  Tooltip: ({ children }: { children: ReactNode }) => children,
+}));
+
+vi.mock('antd', () => ({
+  App: { useApp: () => ({ message: { error: vi.fn() } }) },
+}));
+
 // Stub the base-ui Button to a native button — it needs a MotionProvider the
 // app sets up globally but the unit env doesn't.
 vi.mock('@lobehub/ui/base-ui', () => ({

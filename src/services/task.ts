@@ -173,13 +173,7 @@ class TaskService {
 
   markBriefRead = async (id: string) => lambdaClient.brief.markRead.mutate({ id });
 
-  // ── Transfer / Copy ──
-
-  transferTask = async (
-    taskId: string,
-    targetWorkspaceId: string | null,
-    targetVisibility?: 'private' | 'public',
-  ) => lambdaClient.task.transferTask.mutate({ targetVisibility, targetWorkspaceId, taskId });
+  // ── Copy ──
 
   copyTaskToWorkspace = async (
     taskId: string,

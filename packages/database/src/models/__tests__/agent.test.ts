@@ -74,6 +74,23 @@ afterEach(async () => {
 });
 
 describe('AgentModel', () => {
+  describe('existsOwnedById', () => {
+    it('is true only for the agent creator (edit-rights gate), not merely visibility', async () => {
+      const ownAgent = 'owned-agent-id';
+      const othersAgent = 'others-agent-id';
+      await serverDB.insert(agents).values([
+        { id: ownAgent, userId },
+        { id: othersAgent, userId: userId2 },
+      ]);
+
+      expect(await agentModel.existsOwnedById(ownAgent)).toBe(true);
+      // Another user's agent is not "owned" even if it were visible.
+      expect(await agentModel.existsOwnedById(othersAgent)).toBe(false);
+      // Its actual creator passes.
+      expect(await agentModel2.existsOwnedById(othersAgent)).toBe(true);
+    });
+  });
+
   describe('getAgentConfigById', () => {
     it('should return agent config with assigned knowledge', async () => {
       const agentId = 'test-agent-id';

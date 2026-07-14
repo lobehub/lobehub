@@ -1,5 +1,7 @@
 import { getComposioAppByIdentifier, getLobehubSkillProviderById } from '@lobechat/const';
+import { Tooltip } from '@lobehub/ui';
 import { Button, confirmModal } from '@lobehub/ui/base-ui';
+import { App } from 'antd';
 import { PencilIcon, RefreshCwIcon, Trash2 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { memo, useCallback, useState } from 'react';
@@ -7,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 
 import type { ConnectorToolPermission } from '@/database/schemas';
 import { ConnectorSourceType } from '@/database/schemas';
+import { useResourceManageable } from '@/hooks/useResourceManageable';
 import { useToolStore } from '@/store/tool';
 import { connectorSelectors } from '@/store/tool/slices/connector';
 
@@ -20,10 +23,25 @@ interface ConnectorDetailProps {
   onDelete?: () => void;
 }
 
+/**
+ * Tooltip wrapper for the manage gate. Disabled native buttons swallow hover
+ * events, so the tooltip needs an enabled wrapper element to anchor on; when
+ * there is no gate message, render children untouched.
+ */
+const ManageTooltip = ({ children, title }: { children: ReactNode; title?: string }) =>
+  title ? (
+    <Tooltip title={title}>
+      <span style={{ display: 'inline-flex' }}>{children}</span>
+    </Tooltip>
+  ) : (
+    children
+  );
+
 const ConnectorDetail = memo<ConnectorDetailProps>(
   ({ connectorId, lifecycleActions, onDelete }) => {
     const { t } = useTranslation('tool');
     const { t: ts } = useTranslation('setting');
+    const { message } = App.useApp();
     const [customModalOpen, setCustomModalOpen] = useState(false);
 
     const connector = useToolStore(connectorSelectors.connectorById(connectorId));
@@ -47,29 +65,74 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
     const isBuiltin = connector?.sourceType === ConnectorSourceType.builtin;
     const isMarketplace = connector?.sourceType === ConnectorSourceType.marketplace;
 
+    // Only the creator or a workspace owner may manage this connector — the
+    // server enforces the same rule, this keeps the UI honest about it.
+    const canManage = useResourceManageable(connector?.userId);
+    const manageTooltip = canManage
+      ? undefined
+      : t(
+          'connector.manageOnlyCreator',
+          'Only the creator or a workspace owner can manage this connector',
+        );
+
+    const notifyActionError = useCallback(
+      (error: unknown) => {
+        const httpStatus = (error as { data?: { httpStatus?: number } })?.data?.httpStatus;
+        message.error(
+          httpStatus === 403
+            ? t(
+                'connector.manageOnlyCreator',
+                'Only the creator or a workspace owner can manage this connector',
+              )
+            : t('connector.actionFailed', 'Operation failed, please try again'),
+        );
+      },
+      [message, t],
+    );
+
+    // Custom connector sync hits the remote MCP server with stored credentials
+    // and rewrites tool rows — creator/owner only (enforced server-side too).
+    // Builtin/marketplace bootstrap syncs are no-ops for non-managers.
+    const canSync = canManage || connector?.sourceType !== ConnectorSourceType.custom;
+
     const handleSync = useCallback(async () => {
       if (!connector) return;
-      if (connector.sourceType === ConnectorSourceType.builtin) {
-        await syncBuiltinTool(connector.identifier);
-      } else if (connector.sourceType === ConnectorSourceType.marketplace) {
-        await syncPluginTools(connector.identifier);
-      } else {
-        await syncConnectorTools(connectorId);
+      try {
+        if (connector.sourceType === ConnectorSourceType.builtin) {
+          await syncBuiltinTool(connector.identifier);
+        } else if (connector.sourceType === ConnectorSourceType.marketplace) {
+          await syncPluginTools(connector.identifier);
+        } else {
+          await syncConnectorTools(connectorId);
+        }
+      } catch (error) {
+        notifyActionError(error);
       }
-    }, [connector, connectorId, syncBuiltinTool, syncPluginTools, syncConnectorTools]);
+    }, [
+      connector,
+      connectorId,
+      notifyActionError,
+      syncBuiltinTool,
+      syncPluginTools,
+      syncConnectorTools,
+    ]);
 
     const handleUninstall = () => {
       if (!connector) return;
       confirmModal({
         okButtonProps: { danger: true },
         onOk: async () => {
-          if (isBuiltin) {
-            await uninstallBuiltinTool(connector.identifier);
-          } else if (isMarketplace) {
-            await uninstallMCPPlugin(connector.identifier);
+          try {
+            if (isBuiltin) {
+              await uninstallBuiltinTool(connector.identifier);
+            } else if (isMarketplace) {
+              await uninstallMCPPlugin(connector.identifier);
+            }
+            await deleteConnector(connectorId);
+            onDelete?.();
+          } catch (error) {
+            notifyActionError(error);
           }
-          await deleteConnector(connectorId);
-          onDelete?.();
         },
         title: t('connector.uninstallConfirm', 'Uninstall this tool?'),
       });
@@ -102,11 +165,23 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
       updateTools.length > 0 ||
       deleteTools.length > 0;
 
+    const handlePermissionChange = async (toolId: string, permission: ConnectorToolPermission) => {
+      try {
+        await updateToolPermission(toolId, permission);
+      } catch (error) {
+        notifyActionError(error);
+      }
+    };
+
     const handleBatchPermission = async (
       toolIds: string[],
       permission: ConnectorToolPermission,
     ) => {
-      await Promise.all(toolIds.map((id) => updateToolPermission(id, permission)));
+      try {
+        await Promise.all(toolIds.map((id) => updateToolPermission(id, permission)));
+      } catch (error) {
+        notifyActionError(error);
+      }
     };
 
     return (
@@ -127,27 +202,45 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
           <div style={{ fontSize: 14, fontWeight: 500 }}>{connectorName}</div>
           <div style={{ display: 'flex', gap: 8 }}>
             {/* Reset permissions: restore all tools to auto (fully open) */}
-            <Button size="small" onClick={() => resetConnectorPermissions(connectorId)}>
-              {t('connector.resetPermissions', 'Reset permissions')}
-            </Button>
+            <ManageTooltip title={manageTooltip}>
+              <Button
+                disabled={!canManage}
+                size="small"
+                onClick={async () => {
+                  try {
+                    await resetConnectorPermissions(connectorId);
+                  } catch (error) {
+                    notifyActionError(error);
+                  }
+                }}
+              >
+                {t('connector.resetPermissions', 'Reset permissions')}
+              </Button>
+            </ManageTooltip>
             {/* Sync/Refresh: re-sync tool list from manifest */}
-            <Button
-              icon={<RefreshCwIcon size={14} />}
-              loading={syncing}
-              size="small"
-              onClick={handleSync}
-            >
-              {syncLabel}
-            </Button>
+            <ManageTooltip title={canSync ? undefined : manageTooltip}>
+              <Button
+                disabled={!canSync}
+                icon={<RefreshCwIcon size={14} />}
+                loading={syncing}
+                size="small"
+                onClick={handleSync}
+              >
+                {syncLabel}
+              </Button>
+            </ManageTooltip>
             {/* Edit button for custom MCP connectors — only http type has a server URL to edit */}
             {isMcpConnector && connector?.mcpConnectionType === 'http' && (
-              <Button
-                icon={<PencilIcon size={14} />}
-                size="small"
-                onClick={() => setCustomModalOpen(true)}
-              >
-                {t('connector.edit', 'Edit')}
-              </Button>
+              <ManageTooltip title={manageTooltip}>
+                <Button
+                  disabled={!canManage}
+                  icon={<PencilIcon size={14} />}
+                  size="small"
+                  onClick={() => setCustomModalOpen(true)}
+                >
+                  {t('connector.edit', 'Edit')}
+                </Button>
+              </ManageTooltip>
             )}
             {lifecycleActions !== undefined ? (
               lifecycleActions
@@ -156,33 +249,61 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
                 {/* Disconnect / Delete for custom MCP connectors */}
                 {isMcpConnector && (
                   <>
-                    <Button danger size="small" onClick={() => disconnectConnector(connectorId)}>
-                      {t('connector.disconnect', 'Disconnect')}
-                    </Button>
-                    <Button
-                      danger
-                      icon={<Trash2 size={14} />}
-                      size="small"
-                      onClick={() => {
-                        confirmModal({
-                          okButtonProps: { danger: true },
-                          onOk: async () => {
-                            await deleteConnector(connectorId);
-                            onDelete?.();
-                          },
-                          title: t('connector.deleteConfirm', 'Delete this connector?'),
-                        });
-                      }}
-                    >
-                      {t('connector.delete', 'Delete')}
-                    </Button>
+                    <ManageTooltip title={manageTooltip}>
+                      <Button
+                        danger
+                        disabled={!canManage}
+                        size="small"
+                        onClick={async () => {
+                          try {
+                            await disconnectConnector(connectorId);
+                          } catch (error) {
+                            notifyActionError(error);
+                          }
+                        }}
+                      >
+                        {t('connector.disconnect', 'Disconnect')}
+                      </Button>
+                    </ManageTooltip>
+                    <ManageTooltip title={manageTooltip}>
+                      <Button
+                        danger
+                        disabled={!canManage}
+                        icon={<Trash2 size={14} />}
+                        size="small"
+                        onClick={() => {
+                          confirmModal({
+                            okButtonProps: { danger: true },
+                            onOk: async () => {
+                              try {
+                                await deleteConnector(connectorId);
+                                onDelete?.();
+                              } catch (error) {
+                                notifyActionError(error);
+                              }
+                            },
+                            title: t('connector.deleteConfirm', 'Delete this connector?'),
+                          });
+                        }}
+                      >
+                        {t('connector.delete', 'Delete')}
+                      </Button>
+                    </ManageTooltip>
                   </>
                 )}
                 {/* Uninstall for builtin and marketplace tools */}
                 {(isBuiltin || isMarketplace) && (
-                  <Button danger icon={<Trash2 size={14} />} size="small" onClick={handleUninstall}>
-                    {t('connector.uninstall', 'Uninstall')}
-                  </Button>
+                  <ManageTooltip title={manageTooltip}>
+                    <Button
+                      danger
+                      disabled={!canManage}
+                      icon={<Trash2 size={14} />}
+                      size="small"
+                      onClick={handleUninstall}
+                    >
+                      {t('connector.uninstall', 'Uninstall')}
+                    </Button>
+                  </ManageTooltip>
                 )}
               </>
             )}
@@ -216,28 +337,32 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
           {hasTools ? (
             <div style={{ flex: 1, overflowY: 'auto' }}>
               <ToolPermissionGroup
+                disabled={!canManage}
                 label={t('connector.readOnlyTools', 'Read-only tools')}
                 tools={readTools}
                 onBatchPermission={handleBatchPermission}
-                onPermissionChange={updateToolPermission}
+                onPermissionChange={handlePermissionChange}
               />
               <ToolPermissionGroup
+                disabled={!canManage}
                 label={t('connector.createTools', 'Create tools')}
                 tools={createTools}
                 onBatchPermission={handleBatchPermission}
-                onPermissionChange={updateToolPermission}
+                onPermissionChange={handlePermissionChange}
               />
               <ToolPermissionGroup
+                disabled={!canManage}
                 label={t('connector.updateTools', 'Update tools')}
                 tools={updateTools}
                 onBatchPermission={handleBatchPermission}
-                onPermissionChange={updateToolPermission}
+                onPermissionChange={handlePermissionChange}
               />
               <ToolPermissionGroup
+                disabled={!canManage}
                 label={t('connector.deleteTools', 'Delete tools')}
                 tools={deleteTools}
                 onBatchPermission={handleBatchPermission}
-                onPermissionChange={updateToolPermission}
+                onPermissionChange={handlePermissionChange}
               />
             </div>
           ) : (

@@ -3,6 +3,8 @@
   "features.agentGraphConfig.title": "Agent Grafiek Runtime-configuratie",
   "features.agentSelfIteration.desc": "De assistent kan hierdoor reflecteren, zelfinzicht opbouwen en zich continu blijven verbeteren via aanhoudende pogingen en interacties.",
   "features.agentSelfIteration.title": "Agent-zelfiteratie",
+  "features.artifactDeployment.desc": "Publiceer artefacten naar een gehoste URL en beheer releases vanuit de zijbalk van het gesprek",
+  "features.artifactDeployment.title": "Artefactimplementaties",
   "features.assistantMessageGroup.desc": "Groepeer berichten van de agent en de resultaten van hun tool-aanroepen samen voor weergave",
   "features.assistantMessageGroup.title": "Agentberichtengroepering",
   "features.claudeCodeSdk.desc": "Voer Claude Code-sessies uit via de Claude Agent SDK in plaats van de CLI te starten. Biedt rijkere streaming en sessiebeheer.",

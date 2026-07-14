@@ -16,6 +16,10 @@ import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermiss
 import { TransferErrorCode } from '@/types/transferError';
 
 import {
+  assertWorkspaceRowManageable,
+  isWorkspaceNonOwner,
+} from './_helpers/assertWorkspaceRowManageable';
+import {
   compareDocumentHistoryItemsInputSchema,
   getDocumentHistoryItemInputSchema,
   listDocumentHistoryInputSchema,
@@ -132,14 +136,29 @@ export const documentRouter = router({
     .use(withScopedPermission('document:delete'))
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      return ctx.documentService.deleteDocument(input.id);
+      const existing = await ctx.documentModel.findById(input.id);
+      if (!existing) return;
+      assertWorkspaceRowManageable(ctx, existing.userId, 'document');
+
+      // Non-owner members may delete their own folder, but the recursive
+      // cascade must not take other members' descendants with it.
+      return ctx.documentService.deleteDocument(input.id, {
+        restrictToCreator: isWorkspaceNonOwner(ctx),
+      });
     }),
 
   deleteDocuments: documentProcedure
     .use(withScopedPermission('document:delete'))
     .input(z.object({ ids: z.array(z.string()) }))
     .mutation(async ({ ctx, input }) => {
-      return ctx.documentService.deleteDocuments(input.ids);
+      const targets = await ctx.documentModel.findByIds(input.ids);
+      for (const target of targets) {
+        assertWorkspaceRowManageable(ctx, target.userId, 'document');
+      }
+
+      return ctx.documentService.deleteDocuments(input.ids, {
+        restrictToCreator: isWorkspaceNonOwner(ctx),
+      });
     }),
 
   getDocumentById: documentProcedure

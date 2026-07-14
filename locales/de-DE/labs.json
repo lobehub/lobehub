@@ -3,6 +3,8 @@
   "features.agentGraphConfig.title": "Laufzeitkonfiguration des Agenten-Graphen",
   "features.agentSelfIteration.desc": "Ermöglicht dem Assistenten, zu reflektieren, Selbstwahrnehmung aufzubauen und sich durch fortlaufende Versuche und Interaktionen kontinuierlich weiterzuentwickeln.",
   "features.agentSelfIteration.title": "Agenten-Selbstiteration",
+  "features.artifactDeployment.desc": "Veröffentlichen Sie Artefakte unter einer gehosteten URL und verwalten Sie Releases über die Seitenleiste der Unterhaltung",
+  "features.artifactDeployment.title": "Artefaktbereitstellungen",
   "features.assistantMessageGroup.desc": "Agenten-Nachrichten und deren Tool-Ergebnisse gemeinsam anzeigen",
   "features.assistantMessageGroup.title": "Agenten-Nachrichten gruppieren",
   "features.claudeCodeSdk.desc": "Führen Sie Claude Code-Sitzungen über das Claude Agent SDK aus, anstatt die CLI zu starten. Ermöglicht reichhaltigeres Streaming und Sitzungssteuerung.",

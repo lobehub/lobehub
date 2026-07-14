@@ -132,6 +132,8 @@ export interface SkillItem {
   resources?: Record<string, SkillResourceMeta> | null;
   source: SkillSource;
   updatedAt: Date;
+  /** Creator attribution — drives the workspace row-level manage gate. */
+  userId?: string | null;
   zipFileHash?: string | null;
 }
 
@@ -146,6 +148,8 @@ export interface SkillListItem {
   name: string;
   source: SkillSource;
   updatedAt: Date;
+  /** Creator attribution — drives the workspace row-level manage gate. */
+  userId?: string | null;
   zipFileHash?: string | null;
 }
 

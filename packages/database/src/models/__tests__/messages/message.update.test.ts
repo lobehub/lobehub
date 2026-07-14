@@ -1497,6 +1497,25 @@ describe('MessageModel Update Tests', () => {
       expect(result.success).toBe(false);
     });
 
+    it('should not attach files to a message the caller cannot see', async () => {
+      // Message belongs to another user in personal mode — invisible to messageModel
+      await serverDB.insert(messages).values({
+        id: 'msg-foreign',
+        userId: otherUserId,
+        role: 'user',
+        content: 'not yours',
+      });
+
+      const result = await messageModel.addFiles('msg-foreign', ['f1']);
+      expect(result.success).toBe(false);
+
+      const messageFiles = await serverDB
+        .select()
+        .from(messagesFiles)
+        .where(eq(messagesFiles.messageId, 'msg-foreign'));
+      expect(messageFiles).toHaveLength(0);
+    });
+
     it('should add multiple files at once', async () => {
       await serverDB
         .insert(files)

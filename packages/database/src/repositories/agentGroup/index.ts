@@ -1,7 +1,7 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import type { AgentGroupDetail, AgentGroupMember, AgentPluginEntry } from '@lobechat/types';
 import { cleanObject } from '@lobechat/utils';
-import { and, eq, inArray, not, sql } from 'drizzle-orm';
+import { and, eq, inArray, ne, not, sql } from 'drizzle-orm';
 
 import type {
   AgentItem,
@@ -762,6 +762,50 @@ export class AgentGroupRepository {
         supervisorAgentId: newSupervisor.id,
       };
     });
+  }
+
+  /**
+   * Whether the group's transfer cascade (member agents + group topics /
+   * threads / messages) contains rows created by someone else. Transfers
+   * rehome every cascaded row, so non-owner members must not move a group
+   * that carries teammates' agents or conversations.
+   */
+  async transferHasForeignRows(groupId: string): Promise<boolean> {
+    const agentLinks = await this.db
+      .select({ agentId: chatGroupsAgents.agentId })
+      .from(chatGroupsAgents)
+      .where(eq(chatGroupsAgents.chatGroupId, groupId));
+    const agentIds = agentLinks.map((link) => link.agentId);
+
+    if (agentIds.length > 0) {
+      const [foreignAgent] = await this.db
+        .select({ id: agents.id })
+        .from(agents)
+        .where(and(inArray(agents.id, agentIds), ne(agents.userId, this.userId)))
+        .limit(1);
+      if (foreignAgent) return true;
+    }
+
+    const [foreignTopic] = await this.db
+      .select({ id: topics.id })
+      .from(topics)
+      .where(and(eq(topics.groupId, groupId), ne(topics.userId, this.userId)))
+      .limit(1);
+    if (foreignTopic) return true;
+
+    const [foreignThread] = await this.db
+      .select({ id: threads.id })
+      .from(threads)
+      .where(and(eq(threads.groupId, groupId), ne(threads.userId, this.userId)))
+      .limit(1);
+    if (foreignThread) return true;
+
+    const [foreignMessage] = await this.db
+      .select({ id: messages.id })
+      .from(messages)
+      .where(and(eq(messages.groupId, groupId), ne(messages.userId, this.userId)))
+      .limit(1);
+    return !!foreignMessage;
   }
 
   async transferToWorkspace(

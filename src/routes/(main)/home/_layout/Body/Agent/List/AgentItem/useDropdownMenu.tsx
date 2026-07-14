@@ -1,7 +1,7 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { SessionDefaultGroup, type SidebarVisibility } from '@lobechat/types';
 import { type MenuProps } from '@lobehub/ui';
-import { Icon } from '@lobehub/ui';
+import { Icon, Tooltip } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import isEqual from 'fast-deep-equal';
@@ -26,12 +26,14 @@ import { useAgentTransferMenuItem } from '@/business/client/hooks/useAgentTransf
 import { openEditingPopover } from '@/features/EditingPopover/store';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { usePermission } from '@/hooks/usePermission';
+import { useResourceManageable } from '@/hooks/useResourceManageable';
 import { agentService } from '@/services/agent';
 import { useGlobalStore } from '@/store/global';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
+import { isForbiddenError } from '@/utils/forbiddenError';
 
 import { useRevealSidebarSection } from '../../../../hooks';
 
@@ -112,12 +114,22 @@ export const useAgentDropdownMenu = ({
   const { allowed: canEdit } = usePermission('edit_own_content');
   const { allowed: canCreate } = usePermission('create_content');
 
-  // Cross-workspace Transfer to… / Copy to… items (null when workspace feature is off)
-  const transferMenuItems = useAgentTransferMenuItem(id, {
-    avatar,
-    backgroundColor,
-    title,
-  });
+  // Row-level ownership: in workspace mode only the creator or a workspace
+  // owner may rename or delete a shared agent — mirrors the server-side
+  // enforcement.
+  const canManage = useResourceManageable(userId);
+
+  // Cross-workspace Transfer to… / Copy to… items (null when workspace
+  // feature is off or the viewer lacks permission for this agent)
+  const transferMenuItems = useAgentTransferMenuItem(
+    id,
+    {
+      avatar,
+      backgroundColor,
+      title,
+    },
+    { userId, visibility },
+  );
 
   const isDefault = group === SessionDefaultGroup.Default;
 
@@ -138,12 +150,15 @@ export const useAgentDropdownMenu = ({
           onClick: () => pinAgent(id, !pinned),
         },
         {
+          // Renaming is config co-editing, which stays collaborative for
+          // shared agents — only delete below is creator/owner-scoped.
           disabled: !canEdit,
           icon: <Icon icon={Pen} />,
           key: 'rename',
           label: t('rename', { ns: 'common' }),
           onClick: (info: any) => {
             info.domEvent?.stopPropagation();
+            if (!canEdit) return;
             if (anchor) {
               openEditingPopover({ anchor, avatar, id, title, type: 'agent' });
             }
@@ -279,20 +294,35 @@ export const useAgentDropdownMenu = ({
           : []),
         {
           danger: true,
-          disabled: !canEdit,
+          disabled: !canEdit || !canManage,
           icon: <Icon icon={Trash} />,
           key: 'delete',
-          label: t('delete', { ns: 'common' }),
+          label: canManage ? (
+            t('delete', { ns: 'common' })
+          ) : (
+            <Tooltip title={t('manageOnlyCreator', { ns: 'common' })}>
+              <span>{t('delete', { ns: 'common' })}</span>
+            </Tooltip>
+          ),
           onClick: ({ domEvent }: any) => {
             domEvent.stopPropagation();
+            if (!canEdit || !canManage) return;
             confirmModal({
               cancelText: t('cancel', { ns: 'common' }),
               content: t('confirmRemoveSessionItemAlert'),
               okButtonProps: { danger: true },
               okText: t('delete', { ns: 'common' }),
               onOk: async () => {
-                await removeAgent(id);
-                message.success(t('confirmRemoveSessionSuccess'));
+                try {
+                  await removeAgent(id);
+                  message.success(t('confirmRemoveSessionSuccess'));
+                } catch (error) {
+                  message.error(
+                    isForbiddenError(error)
+                      ? t('manageOnlyCreator', { ns: 'common' })
+                      : t('operationFailed', { ns: 'common' }),
+                  );
+                }
               },
               title: t('delete', { ns: 'common' }),
             });
@@ -303,6 +333,7 @@ export const useAgentDropdownMenu = ({
       anchor,
       canCreate,
       canEdit,
+      canManage,
       pinned,
       id,
       avatar,

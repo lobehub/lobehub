@@ -36,6 +36,7 @@ import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { FileService } from '@/server/services/file';
 import { type BatchTaskResult } from '@/types/service';
 
+import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
 import {
   batchResolveAgentIdFromSessions,
   resolveAgentIdFromSession,
@@ -211,6 +212,11 @@ export const topicRouter = router({
     .use(withScopedPermission('topic:delete'))
     .input(z.object({ ids: z.array(z.string()) }))
     .mutation(async ({ input, ctx }) => {
+      const rows = await ctx.topicModel.findOwnersByIds(input.ids);
+      for (const userId of new Set(rows.map((row) => row.userId))) {
+        assertWorkspaceRowManageable(ctx, userId, 'topic');
+      }
+
       return ctx.topicModel.batchDelete(input.ids);
     }),
 
@@ -218,7 +224,11 @@ export const topicRouter = router({
     .use(withScopedPermission('topic:delete'))
     .input(z.object({ agentId: z.string() }))
     .mutation(async ({ input, ctx }) => {
-      return ctx.topicModel.batchDeleteByAgentId(input.agentId);
+      // Workspace topic sweeps are caller-scoped for every role — owners
+      // included (bulk actions only affect caller-created content).
+      const restrictToCreator = !!ctx.workspaceId;
+
+      return ctx.topicModel.batchDeleteByAgentId(input.agentId, { restrictToCreator });
     }),
 
   batchDeleteBySessionId: topicProcedure
@@ -237,7 +247,11 @@ export const topicRouter = router({
         ctx.workspaceId ?? undefined,
       );
 
-      return ctx.topicModel.batchDeleteBySessionId(resolved.sessionId);
+      // Workspace topic sweeps are caller-scoped for every role — owners
+      // included (bulk actions only affect caller-created content).
+      const restrictToCreator = !!ctx.workspaceId;
+
+      return ctx.topicModel.batchDeleteBySessionId(resolved.sessionId, { restrictToCreator });
     }),
 
   batchMoveTopics: topicProcedure
@@ -249,6 +263,11 @@ export const topicRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      const rows = await ctx.topicModel.findOwnersByIds(input.topicIds);
+      for (const userId of new Set(rows.map((row) => row.userId))) {
+        assertWorkspaceRowManageable(ctx, userId, 'topic');
+      }
+
       return ctx.topicModel.batchMoveToAgent(input.topicIds, input.targetAgentId);
     }),
 
@@ -692,6 +711,9 @@ export const topicRouter = router({
     .use(withScopedPermission('topic:delete'))
     .input(z.object({ id: z.string(), removeFiles: z.boolean().optional() }))
     .mutation(async ({ input, ctx }) => {
+      const topic = await ctx.topicModel.findById(input.id);
+      if (topic) assertWorkspaceRowManageable(ctx, topic.userId, 'topic');
+
       if (!input.removeFiles) return ctx.topicModel.delete(input.id);
 
       // Collect the topic's deletable attachments BEFORE deleting it — the lookup
@@ -800,6 +822,8 @@ export const topicRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      // Intentionally no creator/owner gate: shared topics are co-editable by
+      // members (title/status/metadata); only delete/transfer is creator-scoped.
       const { agentId, ...restValue } = input.value;
 
       // If agentId is provided, resolve to sessionId
@@ -826,6 +850,9 @@ export const topicRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      // Intentionally no creator/owner gate: metadata follows the same
+      // co-editable path as updateTopic (chat/tool flows write fields like
+      // runningOperation on shared topics); only delete/transfer is gated.
       return ctx.topicModel.updateMetadata(input.id, input.metadata);
     }),
 });

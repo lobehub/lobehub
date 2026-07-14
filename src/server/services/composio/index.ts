@@ -15,6 +15,12 @@ const log = debug('lobe-server:composio-service');
 const VALID_COMPOSIO_IDENTIFIERS = new Set(COMPOSIO_APP_TYPES.map((type) => type.identifier));
 
 export interface ComposioToolExecuteParams {
+  /**
+   * Agent scope: prefer the agent-owned connector row (`agent_id = agentId`)
+   * for this identifier, so a service-account agent runs off its own Composio
+   * account instead of the caller's (Agent > Workspace/Personal).
+   */
+  agentId?: string;
   args: Record<string, any>;
   identifier: string;
   toolSlug: string;
@@ -23,6 +29,12 @@ export interface ComposioToolExecuteParams {
 export interface ComposioServiceOptions {
   db?: LobeChatDatabase;
   userId?: string;
+  /**
+   * Workspace scope. When set, connector/plugin rows resolve within the team
+   * workspace instead of the caller's personal scope (fixes workspace-installed
+   * Composio connectors being invisible at runtime — LOBE-10891).
+   */
+  workspaceId?: string;
 }
 
 /**
@@ -41,26 +53,29 @@ export class ComposioService {
   private userId?: string;
 
   constructor(options: ComposioServiceOptions = {}) {
-    const { db, userId } = options;
+    const { db, userId, workspaceId } = options;
     this.userId = userId;
 
     if (db && userId) {
-      // Personal-scoped, mirroring the write path in the composio lambda router.
-      this.pluginModel = new PluginModel(db, userId);
-      this.connectorModel = new ConnectorModel(db, userId);
-      this.connectorToolModel = new ConnectorToolModel(db, userId);
+      // Scope to the caller's workspace (personal when undefined). Agent-scoped
+      // resolution is a per-call refinement on top of this, applied via the
+      // connector model's resolve* methods.
+      this.pluginModel = new PluginModel(db, userId, workspaceId);
+      this.connectorModel = new ConnectorModel(db, userId, workspaceId);
+      this.connectorToolModel = new ConnectorToolModel(db, userId, workspaceId);
     }
 
     log(
-      'ComposioService initialized: hasDB=%s, hasUserId=%s, isClientAvailable=%s',
+      'ComposioService initialized: hasDB=%s, hasUserId=%s, hasWorkspace=%s, isClientAvailable=%s',
       !!db,
       !!userId,
+      !!workspaceId,
       isComposioClientAvailable(),
     );
   }
 
   async executeComposioTool(params: ComposioToolExecuteParams): Promise<ToolExecutionResult> {
-    const { identifier, toolSlug, args } = params;
+    const { identifier, toolSlug, args, agentId } = params;
 
     log('executeComposioTool: %s/%s with args: %O', identifier, toolSlug, args);
 
@@ -84,7 +99,7 @@ export class ComposioService {
     }
 
     try {
-      const connectedAccountId = await this.resolveConnectedAccountId(identifier);
+      const connectedAccountId = await this.resolveConnectedAccountId(identifier, agentId);
       if (!connectedAccountId) {
         return {
           content: `Composio configuration not found for server "${identifier}"`,
@@ -151,12 +166,16 @@ export class ComposioService {
 
   /**
    * Resolve the Composio `connectedAccountId` for an identifier.
-   * Connector metadata first (new path); plugin customParams as fallback (old
-   * connections without a connector projection).
+   * Connector metadata first (new path), preferring the agent-owned row when an
+   * `agentId` is given (Agent > Workspace/Personal); plugin customParams as
+   * fallback (old connections without a connector projection).
    */
-  private async resolveConnectedAccountId(identifier: string): Promise<string | undefined> {
+  private async resolveConnectedAccountId(
+    identifier: string,
+    agentId?: string,
+  ): Promise<string | undefined> {
     if (this.connectorModel) {
-      const [connector] = await this.connectorModel.queryByIdentifiers([identifier]);
+      const [connector] = await this.connectorModel.resolveByIdentifiers([identifier], agentId);
       const fromConnector = connector?.metadata?.composio?.connectedAccountId;
       if (fromConnector) return fromConnector;
     }
@@ -169,17 +188,18 @@ export class ComposioService {
     return undefined;
   }
 
-  async getComposioManifests(): Promise<LobeToolManifest[]> {
+  async getComposioManifests(agentId?: string): Promise<LobeToolManifest[]> {
     const manifests: LobeToolManifest[] = [];
     const coveredIdentifiers = new Set<string>();
 
     // 1. Connector-based (new path): rows whose metadata.composio marks them as
     //    Composio connectors and are ACTIVE. Tool defs come from
     //    user_connector_tools (all of them, so disabled tools stay visible for
-    //    downstream permission patching).
+    //    downstream permission patching). Resolved agent-aware: an agent-owned
+    //    Composio connector shadows the base one for the same identifier.
     if (this.connectorModel && this.connectorToolModel) {
       try {
-        const connectors = await this.connectorModel.query();
+        const connectors = await this.connectorModel.resolveAll(agentId);
         const composioConnectors = connectors.filter(
           (c) => c.isEnabled && c.metadata?.composio?.status === 'ACTIVE',
         );

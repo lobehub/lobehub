@@ -3,6 +3,8 @@
   "features.agentGraphConfig.title": "Cấu Hình Thời Gian Chạy Đồ Thị Tác Nhân",
   "features.agentSelfIteration.desc": "Cho phép trợ lý tự phản tư, xây dựng khả năng tự nhận thức và liên tục cải thiện thông qua các nỗ lực và tương tác đang diễn ra.",
   "features.agentSelfIteration.title": "Tự lặp của tác nhân",
+  "features.artifactDeployment.desc": "Xuất bản các tệp hiện vật lên một URL được lưu trữ và quản lý các phiên bản từ thanh bên cuộc trò chuyện",
+  "features.artifactDeployment.title": "Triển khai Hiện vật",
   "features.assistantMessageGroup.desc": "Nhóm các tin nhắn của tác nhân và kết quả gọi công cụ lại với nhau để hiển thị",
   "features.assistantMessageGroup.title": "Nhóm Tin Nhắn Tác Nhân",
   "features.claudeCodeSdk.desc": "Chạy các phiên Claude Code thông qua Claude Agent SDK thay vì khởi chạy CLI. Cho phép truyền tải phong phú hơn và kiểm soát phiên làm việc.",

@@ -549,9 +549,13 @@ export class DocumentService {
   /**
    * Delete document (recursively deletes children if it's a folder)
    */
-  async deleteDocument(id: string) {
+  async deleteDocument(id: string, options?: { restrictToCreator?: boolean }) {
     const document = await this.documentModel.findById(id);
     if (!document) return;
+    // Descendants created by other members are skipped, not deleted — their
+    // parentId FK is `set null`, so they get promoted to root instead of being
+    // destroyed by a non-owner's folder delete.
+    if (options?.restrictToCreator && document.userId !== this.userId) return;
 
     // If it's a folder, recursively delete all children first
     if (document.fileType === CUSTOM_FOLDER_FILE_TYPE) {
@@ -564,7 +568,7 @@ export class DocumentService {
 
       // Recursively delete all children
       for (const child of children) {
-        await this.deleteDocument(child.id);
+        await this.deleteDocument(child.id, options);
       }
 
       // Also delete all files in this folder
@@ -576,6 +580,7 @@ export class DocumentService {
       });
 
       for (const file of childFiles) {
+        if (options?.restrictToCreator && file.userId !== this.userId) continue;
         await this.deleteFileRecordAndStorage(file.id);
       }
     }
@@ -592,9 +597,18 @@ export class DocumentService {
   /**
    * Delete multiple documents in batch
    */
-  async deleteDocuments(ids: string[]) {
+  async deleteDocuments(ids: string[], options?: { restrictToCreator?: boolean }) {
+    let targetIds = ids;
+
+    // Workspace bulk deletes from non-owner members only target rows they
+    // created; the restriction also applies to each folder's recursive cascade.
+    if (options?.restrictToCreator) {
+      const rows = await this.documentModel.findByIds(ids);
+      targetIds = rows.filter((row) => row.userId === this.userId).map((row) => row.id);
+    }
+
     // Delete each document (which handles recursive deletion for folders)
-    await Promise.all(ids.map((id) => this.deleteDocument(id)));
+    await Promise.all(targetIds.map((id) => this.deleteDocument(id, options)));
   }
 
   /**

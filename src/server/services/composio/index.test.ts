@@ -14,8 +14,11 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/database/models/connector', () => ({
   ConnectorModel: vi.fn().mockImplementation(() => ({
-    query: mocks.connectorQuery,
-    queryByIdentifiers: mocks.connectorQueryByIdentifiers,
+    // Runtime resolution goes through the agent-aware resolvers; map them to the
+    // same fixtures (the priority/dedup logic itself is covered by the model's
+    // own connectorAgentScope tests).
+    resolveAll: mocks.connectorQuery,
+    resolveByIdentifiers: mocks.connectorQueryByIdentifiers,
   })),
 }));
 

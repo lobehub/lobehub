@@ -395,8 +395,13 @@ export class TaskModel {
     return result.rows.length > 0;
   }
 
-  async deleteAll(): Promise<number> {
-    const result = await this.db.delete(tasks).where(this.ownership()).returning();
+  async deleteAll(options?: { restrictToCreator?: boolean }): Promise<number> {
+    // `restrictToCreator` narrows the workspace-wide sweep to rows the caller
+    // created (non-owner members); owners/personal mode keep the full scope.
+    const where = options?.restrictToCreator
+      ? and(this.ownership(), eq(tasks.createdByUserId, this.userId))
+      : this.ownership();
+    const result = await this.db.delete(tasks).where(where).returning();
 
     return result.length;
   }
@@ -1284,6 +1289,16 @@ export class TaskModel {
    *   - `currentTopicId` (topic ownership is also moving but the link is
    *     reset to avoid surfacing a stale active topic in the new scope)
    */
+  /**
+   * Whether the task subtree contains rows created by someone else. Transfers
+   * rehome every cascaded row, so non-owner members must not move a task tree
+   * that carries teammates' subtasks.
+   */
+  async subtreeHasForeignRows(taskId: string): Promise<boolean> {
+    const subtree = await this.collectTaskSubtree(taskId, this.db);
+    return subtree.some((task) => task.createdByUserId !== this.userId);
+  }
+
   async transferTo(
     taskId: string,
     targetWorkspaceId: string | null,

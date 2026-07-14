@@ -21,7 +21,10 @@ vi.mock('@/business/server/trpc-middlewares/workspaceAuth', async () => {
   const mod = await vi.importActual<{ trpc: any }>('@/libs/trpc/lambda/init');
   // The real `wsCompatProcedure` validates a Better-Auth session; for unit
   // tests we skip auth and rely on the test ctx already carrying `userId`.
-  return { wsCompatProcedure: mod.trpc.procedure };
+  return {
+    requireWorkspaceRoleWhenScoped: () => mod.trpc.middleware(async (opts: any) => opts.next()),
+    wsCompatProcedure: mod.trpc.procedure,
+  };
 });
 vi.mock('@/libs/trpc/lambda/middleware', () => ({
   serverDatabase: async (opts: any) =>
@@ -177,6 +180,7 @@ describe('connectorRouter.create — sourceType handling on existing rows', () =
     vi.clearAllMocks();
     connectorModelMock = {
       create: vi.fn().mockResolvedValue({ id: 'conn-new' }),
+      findScopedByIdentifier: vi.fn().mockResolvedValue(null),
       queryByIdentifiers: vi.fn().mockResolvedValue([]),
       update: vi.fn().mockResolvedValue(undefined),
     };
@@ -205,9 +209,11 @@ describe('connectorRouter.create — sourceType handling on existing rows', () =
 
   it('promotes an existing marketplace row to custom when the input asks for it', async () => {
     // Pre-existing half-baked row from the old syncPluginTools code path.
-    connectorModelMock.queryByIdentifiers.mockResolvedValueOnce([
-      { id: 'conn-existing', identifier: 'legacy-mcp', sourceType: 'marketplace' },
-    ]);
+    connectorModelMock.findScopedByIdentifier.mockResolvedValueOnce({
+      id: 'conn-existing',
+      identifier: 'legacy-mcp',
+      sourceType: 'marketplace',
+    });
 
     const result = await caller().create(baseCustomInput);
 
@@ -224,9 +230,11 @@ describe('connectorRouter.create — sourceType handling on existing rows', () =
     // A normal re-save / re-authorize of an already-custom connector — the
     // update still includes sourceType, but the value stays the same. This
     // documents that the promotion path is safe for the no-op case.
-    connectorModelMock.queryByIdentifiers.mockResolvedValueOnce([
-      { id: 'conn-existing', identifier: 'legacy-mcp', sourceType: 'custom' },
-    ]);
+    connectorModelMock.findScopedByIdentifier.mockResolvedValueOnce({
+      id: 'conn-existing',
+      identifier: 'legacy-mcp',
+      sourceType: 'custom',
+    });
 
     await caller().create(baseCustomInput);
 
@@ -237,7 +245,7 @@ describe('connectorRouter.create — sourceType handling on existing rows', () =
   });
 
   it('still creates a fresh row when no existing identifier matches', async () => {
-    connectorModelMock.queryByIdentifiers.mockResolvedValueOnce([]);
+    connectorModelMock.findScopedByIdentifier.mockResolvedValueOnce(null);
 
     const result = await caller().create(baseCustomInput);
 

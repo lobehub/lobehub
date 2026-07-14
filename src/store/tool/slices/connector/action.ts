@@ -23,6 +23,49 @@ export class ConnectorActionImpl {
   };
 
   /**
+   * Fetch an agent's own tools (agent-owned + mounted) for the "Agent Tools"
+   * tab. Stored keyed by agentId.
+   */
+  fetchAgentConnectors = async (agentId: string): Promise<void> => {
+    const data = await lambdaClient.connector.listByAgent.query({ agentId });
+    this.#set(
+      (s) => ({
+        agentConnectors: { ...s.agentConnectors, [agentId]: data as any },
+        agentConnectorsInit: { ...s.agentConnectorsInit, [agentId]: true },
+      }),
+      false,
+      'fetchAgentConnectors',
+    );
+  };
+
+  /** Copy a user connector into an agent-owned, independently editable row. */
+  copyConnectorToAgent = async (connectorId: string, agentId: string): Promise<string> => {
+    const { id } = await lambdaClient.connector.copyToAgent.mutate({ agentId, connectorId });
+    await this.fetchAgentConnectors(agentId);
+    return id;
+  };
+
+  /** Mount (reference + lock) a user connector onto an agent. */
+  mountConnectorToAgent = async (connectorId: string, agentId: string): Promise<void> => {
+    await lambdaClient.connector.mountToAgent.mutate({ agentId, connectorId });
+    await Promise.all([this.fetchAgentConnectors(agentId), this.fetchConnectors()]);
+  };
+
+  /** Unmount / detach a connector from an agent (unmounts or deletes the agent row). */
+  detachConnectorFromAgent = async (
+    connectorId: string,
+    agentId: string,
+    mode: 'unmount' | 'delete',
+  ): Promise<void> => {
+    if (mode === 'unmount') {
+      await lambdaClient.connector.unmountFromAgent.mutate({ connectorId });
+    } else {
+      await lambdaClient.connector.delete.mutate({ id: connectorId });
+    }
+    await Promise.all([this.fetchAgentConnectors(agentId), this.fetchConnectors()]);
+  };
+
+  /**
    * Fetch the connector with its decrypted user-set credentials for the edit
    * form. Does NOT update the store — caller uses the result directly.
    * Machine-managed OAuth tokens are excluded server-side.

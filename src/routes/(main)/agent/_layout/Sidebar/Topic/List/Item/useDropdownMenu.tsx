@@ -37,6 +37,7 @@ import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
 import { useElectronStore } from '@/store/electron';
 import { useGlobalStore } from '@/store/global';
+import { isForbiddenError } from '@/utils/forbiddenError';
 
 interface TopicItemDropdownMenuProps {
   fav?: boolean;
@@ -139,7 +140,15 @@ export const useTopicItemDropdownMenu = ({
             defaultValue: title,
             description: t('renameModal.description', { ns: 'topic' }),
             onSave: async (newTitle) => {
-              await updateTopicTitle(id, newTitle);
+              try {
+                await updateTopicTitle(id, newTitle);
+              } catch (error) {
+                message.error(
+                  isForbiddenError(error)
+                    ? t('manageOnlyCreator', { ns: 'common' })
+                    : t('operationFailed', { ns: 'common' }),
+                );
+              }
             },
             title: t('renameModal.title', { ns: 'topic' }),
           });
@@ -247,7 +256,15 @@ export const useTopicItemDropdownMenu = ({
         onClick: () => {
           void confirmRemoveTopic({
             onConfirm: async (removeFiles) => {
-              await removeTopic(id, removeFiles);
+              try {
+                await removeTopic(id, removeFiles);
+              } catch (error) {
+                message.error(
+                  isForbiddenError(error)
+                    ? t('manageOnlyCreator', { ns: 'common' })
+                    : t('operationFailed', { ns: 'common' }),
+                );
+              }
             },
             topicIds: [id],
           });

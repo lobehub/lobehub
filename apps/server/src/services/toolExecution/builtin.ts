@@ -45,11 +45,13 @@ const collectRuntimeApiNames = (runtime: Record<string, any>): string[] => {
 
 export class BuiltinToolsExecutor implements IToolExecutor {
   private marketService: MarketService;
-  private composioService: ComposioService;
+  private db: LobeChatDatabase;
+  private userId: string;
 
   constructor(db: LobeChatDatabase, userId: string) {
+    this.db = db;
+    this.userId = userId;
     this.marketService = new MarketService({ userInfo: { userId } });
-    this.composioService = new ComposioService({ db, userId });
   }
 
   async execute(
@@ -110,9 +112,19 @@ export class BuiltinToolsExecutor implements IToolExecutor {
       });
     }
 
-    // Route Composio tools to ComposioService
+    // Route Composio tools to ComposioService. Build it request-scoped: agentId
+    // and workspaceId live on the per-call context (not known at construction),
+    // so a workspace run resolves workspace connectors (LOBE-10891) and a
+    // service-account agent runs off its own Composio account
+    // (Agent > Workspace/Personal).
     if (source === 'composio') {
-      return this.composioService.executeComposioTool({
+      const composioService = new ComposioService({
+        db: this.db,
+        userId: this.userId,
+        workspaceId: context.workspaceId,
+      });
+      return composioService.executeComposioTool({
+        agentId: context.agentId,
         args,
         identifier,
         toolSlug: apiName,

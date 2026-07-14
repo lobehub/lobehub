@@ -9,7 +9,7 @@ import { AiAgentService } from '../index';
 // instead of requiring the model to call `activateSkill`. Non-pinned (auto)
 // skills stay content-less here and remain lazily activatable.
 const {
-  mockConnectorQueryByIdentifiers,
+  mockConnectorResolveByIdentifiers,
   mockConnectorToolQueryAll,
   mockCreateOperation,
   mockCreateServerAgentToolsEngine,
@@ -23,7 +23,7 @@ const {
   mockSkillFindAll,
   mockSkillFindByIds,
 } = vi.hoisted(() => ({
-  mockConnectorQueryByIdentifiers: vi.fn().mockResolvedValue([]),
+  mockConnectorResolveByIdentifiers: vi.fn().mockResolvedValue([]),
   mockConnectorToolQueryAll: vi.fn().mockResolvedValue([]),
   mockCreateOperation: vi.fn(),
   mockCreateServerAgentToolsEngine: vi.fn().mockReturnValue({
@@ -95,7 +95,7 @@ vi.mock('@/database/models/plugin', () => ({
 
 vi.mock('@/database/models/connector', () => ({
   ConnectorModel: vi.fn().mockImplementation(() => ({
-    queryByIdentifiers: mockConnectorQueryByIdentifiers,
+    resolveByIdentifiers: mockConnectorResolveByIdentifiers,
   })),
 }));
 

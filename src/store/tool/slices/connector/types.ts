@@ -12,6 +12,8 @@ export interface ConnectorTool {
 }
 
 export interface ConnectorWithTools {
+  /** Set when this connector is fully owned by an agent (Copy / Connect-new). */
+  agentId?: string | null;
   credentials: unknown;
   id: string;
   identifier: string;
@@ -23,4 +25,6 @@ export interface ConnectorWithTools {
   sourceType: string;
   status: string;
   tools: ConnectorTool[];
+  /** Creator attribution — drives the workspace row-level manage gate. */
+  userId?: string | null;
 }

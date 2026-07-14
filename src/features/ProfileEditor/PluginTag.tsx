@@ -2,11 +2,11 @@
 
 import { type ComposioAppType, type LobehubSkillProviderType } from '@lobechat/const';
 import { COMPOSIO_APP_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
-import { Avatar, Icon, Tag } from '@lobehub/ui';
+import { Avatar, Flexbox, Icon, Tag } from '@lobehub/ui';
 import { McpIcon } from '@lobehub/ui/icons';
 import { createStaticStyles, cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
-import { AlertCircle, Loader2, X } from 'lucide-react';
+import { AlertCircle, Loader2, Square, SquareCheckBig, X } from 'lucide-react';
 import React, { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -79,9 +79,24 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 export interface PluginTagProps {
+  /**
+   * When set, an identifier owned/mounted by this agent resolves as installed
+   * (agent connectors live on the agent's own rows, not the user's stores),
+   * so an agent-exclusive connector doesn't render as "Not Installed".
+   */
+  agentId?: string;
   disabled?: boolean;
-  onRemove: (e: React.MouseEvent) => void;
+  onRemove?: (e: React.MouseEvent) => void;
+  /** Fires when the checkbox/tag is toggled in `selectable` mode. */
+  onSelect?: () => void;
   pluginId: string | { enabled: boolean; identifier: string; settings: Record<string, any> };
+  /**
+   * Render as a selectable chip: a leading checkbox, no remove (×) button, and
+   * the whole tag toggles selection. Used by the multi-select "copy" flow.
+   */
+  selectable?: boolean;
+  /** Selection state in `selectable` mode. */
+  selected?: boolean;
   /**
    * Whether to show "Desktop Only" label for tools not available in web
    * @default false
@@ -95,12 +110,28 @@ export interface PluginTagProps {
 }
 
 const PluginTag = memo<PluginTagProps>(
-  ({ pluginId, onRemove, disabled, showDesktopOnlyLabel = false, useAllMetaList = false }) => {
+  ({
+    agentId,
+    pluginId,
+    onRemove,
+    onSelect,
+    selectable = false,
+    selected = false,
+    disabled,
+    showDesktopOnlyLabel = false,
+    useAllMetaList = false,
+  }) => {
     const isDarkMode = useIsDark();
     const { t } = useTranslation('setting');
 
     // Extract identifier
     const identifier = typeof pluginId === 'string' ? pluginId : pluginId?.identifier;
+
+    // Agent-scoped connectors (empty unless agentId is provided).
+    const agentConnectors = useToolStore(
+      connectorSelectors.agentConnectors(agentId ?? ''),
+      isEqual,
+    );
 
     // Get local plugin lists - use allMetaList or metaList based on prop
     const builtinList = useToolStore(
@@ -125,6 +156,15 @@ const PluginTag = memo<PluginTagProps>(
 
     // Try to find in local lists first (including Composio and LobehubSkill)
     const localMeta = useMemo(() => {
+      // Agent-owned/mounted connector: resolve as installed even though it isn't
+      // in the user-scoped stores. The icon still comes from the normal
+      // resolution below (composio/lobehub/builtin/plugin), with an MCP fallback
+      // at the end for an agent-only connector absent from every user list.
+      const agentConn = agentId
+        ? agentConnectors.find((c) => c.identifier === identifier)
+        : undefined;
+      const agentInstalled = !!agentConn;
+
       // Check if it's a Composio server type
       if (isComposioEnabledInEnv) {
         const composioType = COMPOSIO_APP_TYPES.find((type) => type.identifier === identifier);
@@ -134,7 +174,7 @@ const PluginTag = memo<PluginTagProps>(
           return {
             availableInWeb: true,
             icon: composioType.icon,
-            isInstalled: !!connectedServer,
+            isInstalled: !!connectedServer || agentInstalled,
             label: composioType.label,
             title: composioType.label,
             type: 'composio' as const,
@@ -151,7 +191,7 @@ const PluginTag = memo<PluginTagProps>(
           return {
             availableInWeb: true,
             icon: lobehubSkillProvider.icon,
-            isInstalled: !!connectedServer,
+            isInstalled: !!connectedServer || agentInstalled,
             label: lobehubSkillProvider.label,
             title: lobehubSkillProvider.label,
             type: 'lobehub-skill' as const,
@@ -199,9 +239,24 @@ const PluginTag = memo<PluginTagProps>(
         };
       }
 
+      // Agent-only connector not found in any user store: use its own row + MCP
+      // icon so it renders installed (not a warning "Not Installed" chip).
+      if (agentConn) {
+        return {
+          availableInWeb: true,
+          icon: McpIcon,
+          isInstalled: true,
+          label: agentConn.name || identifier,
+          title: agentConn.name || identifier,
+          type: 'custom-connector' as const,
+        };
+      }
+
       return null;
     }, [
       identifier,
+      agentId,
+      agentConnectors,
       builtinList,
       installedPluginList,
       isComposioEnabledInEnv,
@@ -209,6 +264,7 @@ const PluginTag = memo<PluginTagProps>(
       isLobehubSkillEnabled,
       allLobehubSkillServers,
       customConnectors,
+      useAllMetaList,
     ]);
 
     // Fetch from remote if not found locally
@@ -290,20 +346,35 @@ const PluginTag = memo<PluginTagProps>(
     return (
       <Tag
         className={styles.tag}
-        closable={!disabled}
+        closable={!disabled && !selectable}
         closeIcon={<X size={12} />}
         color={showErrorState ? 'error' : undefined}
-        icon={renderIcon()}
+        style={selectable ? { cursor: 'pointer' } : undefined}
         variant={isDarkMode ? 'filled' : 'outlined'}
+        icon={
+          selectable ? (
+            <Flexbox horizontal align={'center'} gap={6}>
+              <Icon
+                icon={selected ? SquareCheckBig : Square}
+                size={14}
+                style={{ color: selected ? cssVar.colorPrimary : cssVar.colorTextQuaternary }}
+              />
+              {renderIcon()}
+            </Flexbox>
+          ) : (
+            renderIcon()
+          )
+        }
         title={
           showErrorState
             ? t('tools.notInstalledWarning', { defaultValue: 'This tool is not installed' })
             : undefined
         }
+        onClick={selectable ? onSelect : undefined}
         onClose={(e) => {
           if (disabled) return;
 
-          onRemove(e);
+          onRemove?.(e);
         }}
       >
         {getDisplayText()}

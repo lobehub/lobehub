@@ -436,6 +436,8 @@ export default {
   'loading': 'Loading...',
   'mail.business': 'Business Cooperation',
   'mail.support': 'Email Support',
+  'manageOnlyCreator': 'Only the creator or a workspace owner can do this',
+  'operationFailed': 'Operation failed, please try again',
   'addNew': 'Add new',
   'gotIt': 'Got it',
   'more': 'More',

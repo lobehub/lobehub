@@ -130,6 +130,7 @@ const fillScript = (ref: string, text: string) => `((ref, text) => {
 
 const READ_PAGE_SCRIPT = `JSON.stringify({
   content: (document.body ? document.body.innerText : '').replaceAll(/\\n{3,}/g, '\\n\\n').slice(0, ${READ_PAGE_MAX_CHARS}),
+  selectedText: (window.getSelection ? window.getSelection().toString() : '').replaceAll(/\\n{3,}/g, '\\n\\n').trim().slice(0, ${READ_PAGE_MAX_CHARS}),
   title: document.title,
   url: location.href,
 })`;

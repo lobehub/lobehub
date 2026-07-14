@@ -9,6 +9,7 @@ import {
   type RecordOperationStartParams,
 } from '@/database/models/agentOperation';
 import { MessageModel } from '@/database/models/message';
+import { recomputeTopicUsage } from '@/database/models/topicUsage';
 import { VerifyRunModel } from '@/database/models/verifyRun';
 import { type LobeChatDatabase } from '@/database/type';
 import { formatErrorForState } from '@/server/modules/AgentRuntime/formatErrorForState';
@@ -266,6 +267,22 @@ export class CompletionLifecycle {
       });
     } catch (error) {
       log('[%s] Failed to persist operation completion (non-fatal): %O', operationId, error);
+    }
+
+    // The topic rollup's tool / human-interaction stats derive from the
+    // operation rows written above (`recomputeTopicUsage` reads their usage/cost
+    // blobs), but its usual trigger is the assistant message's usage write,
+    // which can land BEFORE this terminal persist. Refresh here so this op's
+    // tool spend shows up without waiting for the next message mutation.
+    // Idempotent (pure derived projection) and non-fatal.
+    if (topicId) {
+      try {
+        await this.serverDB.transaction((trx) =>
+          recomputeTopicUsage(trx, this.userId, topicId, this.workspaceId),
+        );
+      } catch (error) {
+        log('[%s] Failed to recompute topic usage rollup (non-fatal): %O', operationId, error);
+      }
     }
   }
 

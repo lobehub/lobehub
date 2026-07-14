@@ -23,6 +23,8 @@ import { mergeWithDefaults, platformRegistry } from '@/server/services/bot/platf
 import { GatewayService } from '@/server/services/gateway';
 import { getBotRuntimeStatus } from '@/server/services/gateway/runtimeStatus';
 
+import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
+
 const agentBotProviderProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
   const wsId = ctx.workspaceId ?? undefined;
@@ -112,6 +114,7 @@ export const agentBotProviderRouter = router({
     .mutation(async ({ input, ctx }) => {
       // Load record before delete to get platform + applicationId
       const existing = await ctx.agentBotProviderModel.findById(input.id);
+      if (existing) assertWorkspaceRowManageable(ctx, existing.userId, 'bot provider');
 
       const result = await ctx.agentBotProviderModel.delete(input.id);
 
@@ -323,6 +326,7 @@ export const agentBotProviderRouter = router({
 
       // Load existing record to get platform + applicationId for cache invalidation
       const existing = await ctx.agentBotProviderModel.findById(id);
+      if (existing) assertWorkspaceRowManageable(ctx, existing.userId, 'bot provider');
       const targetPlatform = value.platform ?? existing?.platform;
       const targetApplicationId = value.applicationId ?? existing?.applicationId;
       const isDisableOnly =

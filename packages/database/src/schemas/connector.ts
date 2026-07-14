@@ -128,6 +128,15 @@ export interface ConnectorMetadata {
   composio?: ComposioConnectorMetadata;
   customHeaders?: Record<string, string>;
   description?: string;
+  /**
+   * "Mount" reference lock: a base (user-owned) connector referenced by an
+   * agent via the "挂载/Linked" flow. The row stays user-owned (`agent_id`
+   * NULL) and keeps syncing with the user's edits, but resolves for this agent
+   * and is locked so no other agent can mount the same connector. Cleared on
+   * unmount. Distinct from `agent_id` (which is full agent ownership — Copy /
+   * Connect-new).
+   */
+  mountedByAgentId?: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

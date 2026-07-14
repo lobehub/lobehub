@@ -1,15 +1,19 @@
 import { isDesktop } from '@lobechat/const';
+import { nanoid } from '@lobechat/utils';
 import { ActionIcon, Center, Empty, Flexbox, Icon, Input, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Button, DropdownMenu } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import {
   Camera,
   ChevronLeft,
   ChevronRight,
   ExternalLink,
+  FileText,
   Globe,
   Import,
+  MessageCirclePlus,
   RefreshCw,
+  TextSelect,
   XCircle,
 } from 'lucide-react';
 import { memo, useEffect, useRef, useState } from 'react';
@@ -19,7 +23,10 @@ import { message } from '@/components/AntdStaticMethods';
 import { BrowserIcon } from '@/components/BrowserIcon';
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
+import { electronBrowserControlService } from '@/services/electron/browserControl';
 import { electronBrowserSidebarService } from '@/services/electron/browserSidebar';
+import { useChatStore } from '@/store/chat';
+import { useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
 
 import AgentOverlay from './AgentOverlay';
@@ -29,11 +36,54 @@ import {
   BROWSER_WEBVIEW_SESSION_ATTRIBUTE,
 } from './const';
 import { useBrowserSidebarState } from './useBrowserSidebarState';
-import { normalizeBrowserUrl } from './utils';
+import { createBrowserContext, normalizeBrowserUrl } from './utils';
 
 type WebviewElement = HTMLElement & { getWebContentsId: () => number };
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
+  loadingBar: css`
+    pointer-events: none;
+
+    position: absolute;
+    z-index: 3;
+    inset-block-start: 0;
+    inset-inline: 0;
+
+    overflow: hidden;
+
+    height: 2px;
+
+    &::after {
+      content: '';
+
+      position: absolute;
+      inset-block: 0;
+      inset-inline-start: 0;
+
+      width: 36%;
+
+      background: ${cssVar.colorInfo};
+
+      animation: browser-loading-progress 1.15s ease-in-out infinite;
+    }
+
+    @keyframes browser-loading-progress {
+      from {
+        transform: translateX(-110%);
+      }
+
+      to {
+        transform: translateX(310%);
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      &::after {
+        width: 100%;
+        animation: none;
+      }
+    }
+  `,
   container: css`
     position: relative;
 
@@ -46,7 +96,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     background: ${cssVar.colorBgLayout};
   `,
   toolbar: css`
+    position: relative;
+
     flex-shrink: 0;
+
     min-height: 56px;
     padding-inline: 16px;
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
@@ -64,7 +117,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     }
   `,
   importBanner: css`
+    container-type: inline-size;
     flex-shrink: 0;
+    flex-wrap: wrap;
 
     min-height: 72px;
     padding-block: 12px;
@@ -76,6 +131,15 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   importCopy: css`
     flex: 1;
     min-width: 0;
+  `,
+  importActions: css`
+    margin-inline-start: auto;
+
+    @container (max-width: 480px) {
+      flex-basis: 100%;
+      justify-content: flex-end;
+      margin-inline-start: 44px;
+    }
   `,
   toolbarActions: css`
     margin-inline-start: auto;
@@ -180,6 +244,50 @@ const BrowserPane = memo<BrowserPaneProps>(({ sessionId }) => {
     void runAction(() => electronBrowserSidebarService.navigate({ sessionId, url }));
   };
 
+  const addPageContext = async (selected: boolean) => {
+    try {
+      const result = await electronBrowserControlService.readPage({ sessionId });
+      if (!result.success) {
+        message.error(result.error || t('workingPanel.browser.context.failed'));
+        return;
+      }
+
+      const content = selected ? result.selectedText : result.content;
+      if (!content?.trim()) {
+        message.info(
+          t(
+            selected
+              ? 'workingPanel.browser.context.noSelection'
+              : 'workingPanel.browser.context.noContent',
+          ),
+        );
+        return;
+      }
+
+      useFileStore.getState().addChatContextSelection(
+        createBrowserContext({
+          content,
+          id: `browser-context-${nanoid(6)}`,
+          pageTitle: result.title,
+          selected,
+          selectionTitle: t('workingPanel.browser.context.selectionTitle'),
+          url: result.url,
+        }),
+      );
+      message.success(
+        t(
+          selected
+            ? 'workingPanel.browser.context.selectionAdded'
+            : 'workingPanel.browser.context.pageAdded',
+        ),
+      );
+      window.setTimeout(() => useChatStore.getState().mainInputEditor?.focus(), 160);
+    } catch (error) {
+      console.error('[BrowserSidebar] Failed to add browser context:', error);
+      message.error(t('workingPanel.browser.context.failed'));
+    }
+  };
+
   const handleImportChromeLoginData = async () => {
     setIsImporting(true);
     try {
@@ -272,6 +380,31 @@ const BrowserPane = memo<BrowserPaneProps>(({ sessionId }) => {
           }}
         />
         <Flexbox horizontal align={'center'} className={styles.toolbarActions} gap={4}>
+          <DropdownMenu
+            iconSpaceMode={'group'}
+            placement={'bottomRight'}
+            items={[
+              {
+                icon: <TextSelect size={16} />,
+                key: 'selection',
+                label: t('workingPanel.browser.context.addSelection'),
+                onClick: () => void addPageContext(true),
+              },
+              {
+                icon: <FileText size={16} />,
+                key: 'page',
+                label: t('workingPanel.browser.context.addPage'),
+                onClick: () => void addPageContext(false),
+              },
+            ]}
+          >
+            <ActionIcon
+              disabled={!state.attached || state.isLoading}
+              icon={MessageCirclePlus}
+              size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+              title={t('workingPanel.browser.context.add')}
+            />
+          </DropdownMenu>
           <ActionIcon
             disabled={!state.attached}
             icon={ExternalLink}
@@ -307,22 +440,32 @@ const BrowserPane = memo<BrowserPaneProps>(({ sessionId }) => {
               {t('workingPanel.browser.import.desc')}
             </Text>
           </Flexbox>
-          <Button
-            icon={<Icon icon={Import} />}
-            loading={isImporting}
-            onClick={handleImportChromeLoginData}
-          >
-            {t('workingPanel.browser.import.action')}
-          </Button>
-          <ActionIcon
-            icon={XCircle}
-            size={DESKTOP_HEADER_ICON_SMALL_SIZE}
-            title={t('workingPanel.browser.import.dismiss')}
-            onClick={() => setIsImportBannerDismissed(true)}
-          />
+          <Flexbox horizontal align={'center'} className={styles.importActions} gap={4}>
+            <Button
+              icon={<Icon icon={Import} />}
+              loading={isImporting}
+              onClick={handleImportChromeLoginData}
+            >
+              {t('workingPanel.browser.import.action')}
+            </Button>
+            <ActionIcon
+              icon={XCircle}
+              size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+              title={t('workingPanel.browser.import.dismiss')}
+              onClick={() => setIsImportBannerDismissed(true)}
+            />
+          </Flexbox>
         </Flexbox>
       )}
       <Flexbox className={styles.container}>
+        {state.isLoading && (
+          <div
+            aria-label={t('workingPanel.browser.loading')}
+            aria-valuetext={t('workingPanel.browser.loading')}
+            className={styles.loadingBar}
+            role="progressbar"
+          />
+        )}
         <AgentOverlay sessionId={sessionId} />
         {initialUrl ? (
           <webview

@@ -25,6 +25,7 @@ import { useSessionStore } from '@/store/session';
 import { sessionHelpers } from '@/store/session/helpers';
 import { sessionGroupSelectors, sessionSelectors } from '@/store/session/selectors';
 import { SessionDefaultGroup } from '@/types/index';
+import { isForbiddenError } from '@/utils/forbiddenError';
 
 interface ActionProps {
   group: string | undefined;
@@ -174,12 +175,20 @@ const Actions = memo<ActionProps>(({ group, id, openCreateGroupModal, parentType
               confirmModal({
                 okButtonProps: { danger: true },
                 onOk: async () => {
-                  if (parentType === 'group') {
-                    await removeAgentGroup(id);
-                    message.success(t('confirmRemoveGroupSuccess'));
-                  } else {
-                    await removeSession(id);
-                    message.success(t('confirmRemoveSessionSuccess'));
+                  try {
+                    if (parentType === 'group') {
+                      await removeAgentGroup(id);
+                      message.success(t('confirmRemoveGroupSuccess'));
+                    } else {
+                      await removeSession(id);
+                      message.success(t('confirmRemoveSessionSuccess'));
+                    }
+                  } catch (error) {
+                    message.error(
+                      isForbiddenError(error)
+                        ? t('manageOnlyCreator', { ns: 'common' })
+                        : t('operationFailed', { ns: 'common' }),
+                    );
                   }
                 },
                 title:
