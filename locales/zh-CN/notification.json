@@ -21,6 +21,7 @@
   "email.viewDetails": "查看详情",
   "image_generation_completed": "图片「{{prompt}}」已生成。",
   "image_generation_completed_title": "图片生成完成",
+  "inbox.archive": "归档",
   "inbox.archiveAll": "全部归档",
   "inbox.empty": "暂无通知",
   "inbox.emptyUnread": "没有未读通知",

@@ -19,6 +19,7 @@
   "email.viewDetails": "Преглед на подробности",
   "image_generation_completed": "Вашето изображение \"{{prompt}}\" е готово.",
   "image_generation_completed_title": "Генерирането на изображението завърши",
+  "inbox.archive": "Архивиране",
   "inbox.archiveAll": "Архивирай всички",
   "inbox.empty": "Все още няма известия",
   "inbox.emptyUnread": "Няма непрочетени известия",

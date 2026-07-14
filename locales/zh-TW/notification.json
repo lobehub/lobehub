@@ -19,6 +19,7 @@
   "email.viewDetails": "查看詳情",
   "image_generation_completed": "您的圖片「{{prompt}}」已完成。",
   "image_generation_completed_title": "圖片生成完成",
+  "inbox.archive": "封存",
   "inbox.archiveAll": "全部歸檔",
   "inbox.empty": "尚無通知",
   "inbox.emptyUnread": "沒有未讀通知",

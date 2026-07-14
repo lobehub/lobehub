@@ -19,6 +19,7 @@
   "email.viewDetails": "Detayları Görüntüle",
   "image_generation_completed": "\"{{prompt}}\" adlı görseliniz hazır.",
   "image_generation_completed_title": "Görsel oluşturma tamamlandı",
+  "inbox.archive": "Arşivle",
   "inbox.archiveAll": "Tümünü arşivle",
   "inbox.empty": "Henüz bildirim yok",
   "inbox.emptyUnread": "Okunmamış bildirim yok",

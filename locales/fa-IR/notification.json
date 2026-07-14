@@ -19,6 +19,7 @@
   "email.viewDetails": "مشاهده جزئیات",
   "image_generation_completed": "تصویر شما با موضوع «{{prompt}}» آماده است.",
   "image_generation_completed_title": "تولید تصویر تکمیل شد",
+  "inbox.archive": "بایگانی",
   "inbox.archiveAll": "بایگانی همه",
   "inbox.empty": "هنوز هیچ اعلانی وجود ندارد",
   "inbox.emptyUnread": "هیچ اعلان خوانده‌نشده‌ای وجود ندارد",

@@ -19,6 +19,7 @@
   "email.viewDetails": "Просмотреть детали",
   "image_generation_completed": "Ваше изображение «{{prompt}}» готово.",
   "image_generation_completed_title": "Создание изображения завершено",
+  "inbox.archive": "Архивировать",
   "inbox.archiveAll": "Архивировать все",
   "inbox.empty": "Уведомлений пока нет",
   "inbox.emptyUnread": "Нет непрочитанных уведомлений",

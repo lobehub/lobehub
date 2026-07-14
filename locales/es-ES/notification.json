@@ -19,6 +19,7 @@
   "email.viewDetails": "Ver detalles",
   "image_generation_completed": "Tu imagen \"{{prompt}}\" está lista.",
   "image_generation_completed_title": "Generación de imagen completada",
+  "inbox.archive": "Archivar",
   "inbox.archiveAll": "Archivar todo",
   "inbox.empty": "Aún no hay notificaciones",
   "inbox.emptyUnread": "No hay notificaciones sin leer",

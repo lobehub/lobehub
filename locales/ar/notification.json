@@ -19,6 +19,7 @@
   "email.viewDetails": "عرض التفاصيل",
   "image_generation_completed": "الصورة الخاصة بك \"{{prompt}}\" جاهزة.",
   "image_generation_completed_title": "اكتملت عملية إنشاء الصورة",
+  "inbox.archive": "أرشيف",
   "inbox.archiveAll": "أرشفة الكل",
   "inbox.empty": "لا توجد إشعارات بعد",
   "inbox.emptyUnread": "لا توجد إشعارات غير مقروءة",

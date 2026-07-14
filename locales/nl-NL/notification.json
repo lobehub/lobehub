@@ -19,6 +19,7 @@
   "email.viewDetails": "Bekijk details",
   "image_generation_completed": "Uw afbeelding \"{{prompt}}\" is klaar.",
   "image_generation_completed_title": "Afbeeldingsgeneratie voltooid",
+  "inbox.archive": "Archiveren",
   "inbox.archiveAll": "Alles archiveren",
   "inbox.empty": "Nog geen meldingen",
   "inbox.emptyUnread": "Geen ongelezen meldingen",

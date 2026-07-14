@@ -19,6 +19,7 @@
   "email.viewDetails": "자세히 보기",
   "image_generation_completed": "이미지 \"{{prompt}}\"이(가) 준비되었습니다.",
   "image_generation_completed_title": "이미지 생성 완료",
+  "inbox.archive": "보관",
   "inbox.archiveAll": "모두 보관",
   "inbox.empty": "알림이 아직 없습니다",
   "inbox.emptyUnread": "읽지 않은 알림이 없습니다",

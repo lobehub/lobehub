@@ -21,6 +21,7 @@
   "email.viewDetails": "View Details",
   "image_generation_completed": "Your image \"{{prompt}}\" is ready.",
   "image_generation_completed_title": "Image generation completed",
+  "inbox.archive": "Archive",
   "inbox.archiveAll": "Archive all",
   "inbox.empty": "No notifications yet",
   "inbox.emptyUnread": "No unread notifications",

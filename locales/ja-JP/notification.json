@@ -19,6 +19,7 @@
   "email.viewDetails": "詳細を見る",
   "image_generation_completed": "画像「{{prompt}}」の生成が完了しました。",
   "image_generation_completed_title": "画像生成が完了しました",
+  "inbox.archive": "アーカイブ",
   "inbox.archiveAll": "すべてをアーカイブ",
   "inbox.empty": "通知はまだありません",
   "inbox.emptyUnread": "未読の通知はありません",
