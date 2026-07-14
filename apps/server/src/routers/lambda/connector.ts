@@ -173,6 +173,9 @@ export const connectorRouter = router({
     .query(async ({ input, ctx }) => {
       const connector = await ctx.connectorModel.findById(input.id);
       if (!connector) throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
+      // Edit-read returns decrypted credentials — same creator/owner gate as
+      // the mutations that this edit view feeds.
+      assertWorkspaceRowManageable(ctx, connector.userId, 'connector');
 
       const { oidcConfig, credentials, ...rest } = connector;
       const safeOidcConfig = oidcConfig ? { ...oidcConfig, clientSecret: undefined } : oidcConfig;
