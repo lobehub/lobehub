@@ -90,16 +90,32 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
       [message, t],
     );
 
+    // Custom connector sync hits the remote MCP server with stored credentials
+    // and rewrites tool rows — creator/owner only (enforced server-side too).
+    // Builtin/marketplace bootstrap syncs are no-ops for non-managers.
+    const canSync = canManage || connector?.sourceType !== ConnectorSourceType.custom;
+
     const handleSync = useCallback(async () => {
       if (!connector) return;
-      if (connector.sourceType === ConnectorSourceType.builtin) {
-        await syncBuiltinTool(connector.identifier);
-      } else if (connector.sourceType === ConnectorSourceType.marketplace) {
-        await syncPluginTools(connector.identifier);
-      } else {
-        await syncConnectorTools(connectorId);
+      try {
+        if (connector.sourceType === ConnectorSourceType.builtin) {
+          await syncBuiltinTool(connector.identifier);
+        } else if (connector.sourceType === ConnectorSourceType.marketplace) {
+          await syncPluginTools(connector.identifier);
+        } else {
+          await syncConnectorTools(connectorId);
+        }
+      } catch (error) {
+        notifyActionError(error);
       }
-    }, [connector, connectorId, syncBuiltinTool, syncPluginTools, syncConnectorTools]);
+    }, [
+      connector,
+      connectorId,
+      notifyActionError,
+      syncBuiltinTool,
+      syncPluginTools,
+      syncConnectorTools,
+    ]);
 
     const handleUninstall = () => {
       if (!connector) return;
@@ -202,14 +218,17 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
               </Button>
             </ManageTooltip>
             {/* Sync/Refresh: re-sync tool list from manifest */}
-            <Button
-              icon={<RefreshCwIcon size={14} />}
-              loading={syncing}
-              size="small"
-              onClick={handleSync}
-            >
-              {syncLabel}
-            </Button>
+            <ManageTooltip title={canSync ? undefined : manageTooltip}>
+              <Button
+                disabled={!canSync}
+                icon={<RefreshCwIcon size={14} />}
+                loading={syncing}
+                size="small"
+                onClick={handleSync}
+              >
+                {syncLabel}
+              </Button>
+            </ManageTooltip>
             {/* Edit button for custom MCP connectors — only http type has a server URL to edit */}
             {isMcpConnector && connector?.mcpConnectionType === 'http' && (
               <ManageTooltip title={manageTooltip}>

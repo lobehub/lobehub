@@ -209,7 +209,6 @@ export const connectorRouter = router({
       }
     }
 
-
     const fields = {
       // The model expects the decrypted JSON string and encrypts it at rest.
       credentials: input.credentials ? JSON.stringify(input.credentials) : null,
