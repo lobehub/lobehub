@@ -1,122 +1,126 @@
-# Worked Example — the home inbox
+# Worked Example — the agent inbox
 
-One complete trace, end to end. This is the session that seeded the Pattern Base,
-so every mistake in it is real.
+One complete trace. This is the session that seeded the Pattern Base, so every
+mistake in it is real.
 
-**Ask (L0)**: _"Look at our home surface. It hasn't had any design thought put
-into it. What should actually be here?"_
+**The ask (L0)**: _"Look at our home surface. Nobody has put any design thought
+into it. What should actually be there?"_
 
-Note what the ask is **not**: it is not a bug, not a spec, not a list of
-requirements. It is a feeling. Everything below is the work of turning that into
-something buildable.
+Note what the ask is **not**: not a bug, not a spec, not a requirement list. It is
+a feeling. Everything below is the work of turning that into something buildable.
 
 ---
 
 ## Step 1 — Ground
 
-Two read-only subagents, in parallel: _how is this surface assembled?_ and _what
-can the underlying tables actually produce?_
+The surface showed agent **errors**. So the team had been reasoning about it as an
+error log — _"how do we make the error list nicer?"_
 
-The second one is where the redesign was won. The surface rendered a single
-brief type — errors — so it read as an error log. But `briefs` turned out to be
-**a complete agent → human decision inbox** that nobody was using:
+Grounding the domain turned that upside down. The business models **four kinds of
+agent-to-human message**, and produces all four in production every day:
 
-- four `type` values (`decision` / `result` / `insight` / `error`), **all
-  produced in production** — an agent pausing a task for approval writes
-  `decision`; task completion writes `result`; a watchdog writes `error`
-- `priority`, interactive `actions` (Confirm / Request changes / Retry), linked
-  `artifacts`, and a full read → resolve lifecycle
+| Kind         | What it means, in the business                                            |
+| ------------ | ------------------------------------------------------------------------- |
+| **decision** | The agent has paused mid-work and needs a human to rule on something      |
+| **result**   | The agent has produced a deliverable and is waiting for it to be accepted |
+| **insight**  | The agent found something worth knowing. Nothing to decide                |
+| **error**    | The run failed                                                            |
 
-**The most valuable finding of the whole session was that three quarters of an
-existing feature were switched off.** No amount of staring at the screenshot
-would have produced it (`P-04`).
+Each carries a priority, a set of possible responses, and its own linked
+deliverables. Each has a full seen → answered lifecycle.
 
-## Step 2 — Diagnose (structural, not aesthetic)
+**Three of the four were never shown to anyone.**
 
-Three structural errors, each independent of taste:
+The surface was not an error log in need of polish. It was **a decision inbox
+with three of its four channels switched off** (`P-04`). That single finding was
+worth more than everything else in the redesign combined — and no amount of
+staring at the screenshot would ever have produced it.
+
+Two more findings from the same pass, both about **meaning, not mechanism**:
+
+- A task state named `paused` does not mean "the user suspended this". It means
+  **an agent is blocked, waiting for a human** — the most urgent thing on the page
+  (`P-01`).
+- The action labelled "Request changes" does not leave a comment. It **re-tasks
+  the agent**, feeding the comment back in as new input (`P-02`).
+
+## Step 2 — Diagnose
+
+Three structural errors, none of them about taste:
 
 1. **A decision inbox is being used as an error log.** (Above.)
-2. **The surface is trying to be both a triage desk and a reading room.** Each
-   card carried a paragraph-length summary — _too short to replace the document,
-   too long to scan_. Users neither read it nor skipped it cleanly. (`P-09`, `P-10`)
-3. **Signals were grouped by producer, not by required action.** What the user
-   needs is "what is blocked on me", not "what did the agent say". (`P-11`)
+2. **The surface is a triage desk and a reading room at once, and fails at both.**
+   Every card carried a paragraph-length summary — _too short to replace the
+   document, too long to scan_. Users neither read it nor skipped it cleanly
+   (`P-07`, `P-08`).
+3. **Signals were grouped by who produced them, not by what they demand.** What
+   the user needs to know is _"what is blocked on me"_, not _"what did the agent
+   say"_ (`P-09`).
 
 ## Step 3 — Align
 
-Decisions surfaced one at a time, each with a recommendation. The two that
-changed the shape of the answer:
+Decisions surfaced one at a time. The two that changed the shape of the answer:
 
 - _Is the primary axis attention (what needs me) or progress (what's moving)?_
-  → **attention.** Progress is context; attention is the reason to open the page.
-- _Is the attention source agents, humans, or both?_ → **both, one inbox.**
-  An agent saying "I'm stuck" and a colleague saying "@you" are the same signal
-  to the person receiving them (`P-11`).
+  → **attention.** Progress is context; attention is the reason to open the page
+  at all.
+- _Do agent signals and human signals belong in one inbox or two?_ → **one.**
+  An agent saying "I'm stuck" and a colleague saying "@you" are, to the person
+  receiving them, the same signal (`P-09`).
 
-The human overruled the agent's first framing here — it had proposed organizing
-around tasks, and the reply was, roughly: _"it should be organized around the
+The human overruled the first framing here. The agent had proposed organizing
+everything around **tasks**; the reply was, roughly: _"organize it around the
 work, and around attention and goals — not around one entity type."_ That
-correction is `P-11`.
+correction became `P-09`.
 
 ## Step 4 — Prototype
 
-Six iterations in the real design system. Every round, the code overturned
+Six rounds in the real design system. Every round, the business overturned
 something:
 
-| Round | The prototype claimed          | The code said                                                           |
-| ----- | ------------------------------ | ----------------------------------------------------------------------- |
-| v3    | invented status groups & icons | `ExecutionStatus.ts` is canonical; `paused` = _pending review_ (`P-01`) |
-| v4    | tool approval = two buttons    | it is a numbered radio list; digits are the shortcuts (`P-02`)          |
-| v4    | CSS keyframe spinner           | `RingLoading.tsx` — SVG `<animateTransform>` (`P-03`)                   |
-| v5    | "Accept task" button           | assignment already wrote `assigneeUserId`; no such transition (`P-05`)  |
-| v6    | `#seq · 4m 12s` on every run   | no duration column anywhere — computed client-side (`P-13`)             |
+| Round | The prototype claimed             | The business said                                                      |
+| ----- | --------------------------------- | ---------------------------------------------------------------------- |
+| v3    | invented its own state vocabulary | `paused` already means _pending review_ — a human is blocking (`P-01`) |
+| v4    | "Request changes" = a comment box | it re-tasks the agent (`P-02`)                                         |
+| v5    | an "Accept task" button           | assignment is immediate; there is no state to accept from (`P-05`)     |
+| v6    | each run's elapsed time           | the business does not model a run's duration at all (`P-11`)           |
 
-Five of the six Pattern Base Class-A/B entries came from these five rows. **The
-prototype's job is not to be right — it is to be wrong in ways the code can
-correct.**
+**The prototype's job is not to be right. It is to be wrong in ways the business
+can correct.** A round that only moves pixels means the grounding was skipped.
 
-## Step 5 — Scope: three buckets
+## Step 5 — Scope
 
-| Bucket                     | Capability                                                                                                                                                                                                                  |
-| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ✅ **Now**                 | All four brief types (already stored). Running + unread topics — **one existing endpoint**, `queryTopics({ statuses })`. Status icons — import `ExecutionStatus.ts`. Resolve / feedback actions — reuse `BriefCardActions`. |
-| ⚠️ **Blocked by a select** | The task's `T-42` ref and name: `listUnresolvedEnriched` **already joins `tasks`** but selects only `status`. Two more columns.                                                                                             |
-| ❌ **New model**           | Mentions. Annotations. Presence. A `projects` entity. Per-run duration.                                                                                                                                                     |
+| Bucket                                   | Capability                                                                                               |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| ✅ **Modeled and exposed**               | The error channel. The existing response actions.                                                        |
+| ⚠️ **Modeled, never exposed**            | **The other three message kinds.** Running work. Unread finished work. The task each message belongs to. |
+| ❌ **Not a concept in the business yet** | Mentions of a person. Annotations. Presence. A project. A run's duration.                                |
 
-**Shipped: everything in ✅ plus the two-column select.** Zero new tables, zero
-migrations. The ❌ bucket went into the spec by name, with its cost (`P-13`).
+**Shipped: ✅ + ⚠️.** Nothing in the ❌ column. Every item there went into the
+spec by name, with its cost (`P-11`).
 
-The redesign that had started as a sweeping team-collaboration vision shipped as
-a focused personal inbox — **not as a retreat, but because that was the part that
-was real today** (`P-12`).
-
-## The trap that nearly shipped
-
-Deleting the old section shell would have silently removed `Recommendations`,
-`DocumentPreviewModal` and `TopicChatDrawer` — all mounted _inside_ it, across
-three render branches. No type error. No failing test. The artifact-preview and
-"view run" buttons would have rendered and done nothing.
-
-Caught by grepping the render tree before deleting (`P-08`), re-mounted in the
-new composition, and each one given **its own end-to-end verification case** —
-because this class of regression is invisible to the compiler and to unit tests.
+The redesign that began as a sweeping team-collaboration vision shipped as a
+focused personal inbox — **not as a retreat, but because that was the part the
+business already believed in** (`P-10`). The expensive half is still, correctly,
+being argued about.
 
 ## Step 6 — Close the loop
 
-Nine assumptions overturned, nine `NEW` → patterns `P-01` … `P-08`, `P-12`.
-That is the cold-start signature (see
-[trace-schema.md](trace-schema.md#reading-the-log)).
+Nine assumptions overturned, nine `NEW` → the entire Pattern Base. That is the
+cold-start signature (see [trace-schema.md](trace-schema.md#reading-the-log)).
 
-**Saturation, honestly assessed**: L1/L2 for this surface are close to mined out
-— a second grounding pass over `briefs` / `topics` / `tasks` would likely turn up
-little. L0 is wide open: the team-collaboration half of the original ask was
-never answered, only deferred.
+**Saturation, honestly**: L1/L2 for this surface are close to mined out — a second
+pass over the same domain would likely turn up little. **L0 is wide open**: the
+team-collaboration half of the original ask was never answered, only deferred.
+The next round's budget belongs there.
 
 ## What generalizes
 
-1. **The biggest win was a switched-off feature, not a new one.** Look for those
-   first — a table whose enum the UI ignores is free product.
-2. **Every prototype round should be falsified by code.** A round that only
-   moves pixels means grounding was skipped.
-3. **The shippable subset is a discipline, not a compromise.** "What needs zero
-   new tables?" is the question that converts a vision into a merged PR.
+1. **The biggest win was a switched-off capability, not a new one.** Look for
+   those first. A business that models more than it shows is free product, and in
+   a system where agents generate events continuously, this is now the normal
+   case.
+2. **Every prototype round should be falsified by the domain.** If it is not, you
+   are decorating, not designing.
+3. **"What does the business already believe in?" is the question that converts a
+   vision into something that ships.**
