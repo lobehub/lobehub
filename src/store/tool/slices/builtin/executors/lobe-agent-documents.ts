@@ -62,7 +62,7 @@ const stashDocumentRegisterIntent = (input: {
   description?: string | null;
   documentId?: string;
   changeType: 'created' | 'updated';
-  sourceToolName: string;
+  toolName: string;
   toolCallId?: string;
 }) => {
   if (!input.toolCallId || !input.documentId) return;
@@ -75,7 +75,7 @@ const stashDocumentRegisterIntent = (input: {
       description: input.description,
       documentId: input.documentId,
       changeType: input.changeType,
-      sourceToolName: input.sourceToolName,
+      toolName: input.toolName,
     },
     type: 'document',
   });
@@ -97,7 +97,7 @@ const runtime = new AgentDocumentsExecutionRuntime(
         description: doc?.description,
         documentId: doc?.documentId,
         changeType: 'created',
-        sourceToolName: 'copyDocument',
+        toolName: 'copyDocument',
         toolCallId: toolContext?.toolCallId,
       });
       return doc;
@@ -117,7 +117,7 @@ const runtime = new AgentDocumentsExecutionRuntime(
         description: doc?.description,
         documentId: doc?.documentId,
         changeType: 'created',
-        sourceToolName: 'createDocument',
+        toolName: 'createDocument',
         toolCallId: toolContext?.toolCallId,
       });
       return doc;
@@ -146,7 +146,7 @@ const runtime = new AgentDocumentsExecutionRuntime(
         description: doc?.description,
         documentId: doc?.documentId,
         changeType: 'created',
-        sourceToolName: 'createForTopic',
+        toolName: 'createForTopic',
         toolCallId: toolContext?.toolCallId,
       });
       return doc;
@@ -197,7 +197,7 @@ const runtime = new AgentDocumentsExecutionRuntime(
         description: doc?.description,
         documentId: doc?.documentId,
         changeType: 'updated',
-        sourceToolName: 'modifyNodes',
+        toolName: 'modifyNodes',
         toolCallId: toolContext?.toolCallId,
       });
       return doc;
@@ -228,7 +228,7 @@ const runtime = new AgentDocumentsExecutionRuntime(
         description: doc?.description,
         documentId: doc?.documentId,
         changeType: 'updated',
-        sourceToolName: 'renameDocument',
+        toolName: 'renameDocument',
         toolCallId: toolContext?.toolCallId,
       });
       return doc;
@@ -247,7 +247,7 @@ const runtime = new AgentDocumentsExecutionRuntime(
         description: doc?.description,
         documentId: doc?.documentId,
         changeType: 'updated',
-        sourceToolName: 'replaceDocumentContent',
+        toolName: 'replaceDocumentContent',
         toolCallId: toolContext?.toolCallId,
       });
       return doc;

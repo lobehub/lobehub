@@ -1,6 +1,5 @@
 import type {
   RegisterExternalWorkParams,
-  WorkItem,
   WorkListBaseItem,
   WorkListItem,
   WorkSummaryItem,
@@ -9,47 +8,25 @@ import type {
 import { and, desc, eq } from 'drizzle-orm';
 
 import { works, workVersions } from '../../schemas/work';
-import { versionOwnership, type WorkContext, workOwnership } from './context';
+import { type WorkContext, workOwnership } from './context';
 import {
-  currentVersions,
   currentWorkListFields,
-  type DisplayWorkSummaryQueryRow,
   type DisplayWorkType,
   listDisplayVersionEventRows,
-  listDisplayWorkSummaryRows,
   type WorkDisplayColumns,
   type WorkTypeAdapter,
 } from './internal';
-import { createVersion, findById, resolveWorkUpsertConflict } from './writes';
+import { registerWorkVersion } from './writes';
 
 /**
- * External register pipeline: upsert the Work identity row, then under
- * `createVersion`'s Work-row lock merge partial results with the current
- * snapshot and append a complete immutable version. A partial tool result
- * (e.g. Linear `{ id, state }`) names only its fields in `patchFields`.
+ * External register pipeline: atomically find-or-create the Work, merge partial
+ * results with its current snapshot under the Work-row lock, append a complete
+ * immutable version, and update the Work's current projection.
  */
 export const registerExternalWork = async (
   ctx: WorkContext,
   params: RegisterExternalWorkParams,
-): Promise<WorkItem | null> => {
-  const conflict = resolveWorkUpsertConflict(ctx);
-  const [work] = await ctx.db
-    .insert(works)
-    .values({
-      resourceId: params.resourceId,
-      resourceType: params.resourceType,
-      sourceThreadId: params.threadId ?? null,
-      sourceTopicId: params.topicId ?? null,
-      type: 'external',
-      userId: ctx.userId,
-      workspaceId: ctx.workspaceId ?? null,
-    })
-    .onConflictDoUpdate({
-      ...conflict,
-      set: { updatedAt: new Date() },
-    })
-    .returning();
-
+) => {
   const display: WorkDisplayColumns = {
     content: params.content,
     description: params.description,
@@ -59,20 +36,21 @@ export const registerExternalWork = async (
     url: params.url,
   };
 
-  await createVersion(ctx, work, params, () => ({ display, patchFields: params.patchFields }));
-
-  return findById(ctx, work.id);
+  return registerWorkVersion(
+    ctx,
+    { resourceId: params.resourceId, resourceType: params.resourceType, type: 'external' },
+    params,
+    () => ({ display, patchFields: params.patchFields }),
+  );
 };
 
 /**
  * Build the `WorkTypeAdapter` for a display-backed work type (document /
- * external). Current card fields combine the Work's title/description cache
- * with its current immutable version; full `content` stays excluded from
+ * external). Current card fields come from the Work projection; the joined
+ * version contributes event metadata only. Full `content` stays excluded from
  * list/summary payloads.
  */
-export const createDisplayWorkAdapter = (config: {
-  type: DisplayWorkType;
-}): WorkTypeAdapter<DisplayWorkSummaryQueryRow> => {
+export const createDisplayWorkAdapter = (config: { type: DisplayWorkType }): WorkTypeAdapter => {
   const toListItem = (work: WorkListBaseItem): WorkListItem => work as WorkListItem;
 
   return {
@@ -84,10 +62,8 @@ export const createDisplayWorkAdapter = (config: {
         })
         .from(workVersions)
         .innerJoin(works, and(eq(workVersions.workId, works.id), workOwnership(ctx)))
-        .innerJoin(currentVersions, eq(works.currentVersionId, currentVersions.id))
         .where(
           and(
-            versionOwnership(ctx),
             eq(workVersions.topicId, params.topicId),
             params.threadFilter,
             eq(works.type, config.type),
@@ -102,9 +78,6 @@ export const createDisplayWorkAdapter = (config: {
       }));
     },
 
-    listSummaryRows: (ctx, filters, rowLimit) =>
-      listDisplayWorkSummaryRows(ctx, config.type, filters, rowLimit),
-
     listVersionEvents: async (ctx, filters, limit) => {
       const rows = await listDisplayVersionEventRows(ctx, config.type, filters, limit);
 
@@ -117,15 +90,7 @@ export const createDisplayWorkAdapter = (config: {
       );
     },
 
-    mapSummaryRow: (row, totalCost) =>
-      ({
-        ...toListItem(row.work),
-        event: row.event,
-        totalCost,
-        version: row.version,
-      }) as WorkSummaryItem,
-
-    mapWorkspaceRow: (row, totalCost) =>
+    mapCurrentRow: (row, totalCost) =>
       ({
         ...toListItem(row.work),
         event: row.event,

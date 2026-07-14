@@ -50,7 +50,7 @@ describe('workRouter — per-procedure write permission gates', () => {
       createCaller().registerDocument({
         changeType: 'created',
         documentId: 'doc-1',
-        sourceToolName: 'tool',
+        toolName: 'tool',
       }),
     ).rejects.toThrow('GATE:document:update');
     // The gate short-circuits before the model mutation runs.
@@ -59,7 +59,7 @@ describe('workRouter — per-procedure write permission gates', () => {
 
   it('registerTask gates on agent:update (aligned with task mutations)', async () => {
     await expect(
-      createCaller().registerTask({ changeType: 'created', sourceToolName: 'tool' }),
+      createCaller().registerTask({ changeType: 'created', toolName: 'tool' }),
     ).rejects.toThrow('GATE:agent:update');
     expect(mockRegisterTask).not.toHaveBeenCalled();
   });

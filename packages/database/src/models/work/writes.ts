@@ -3,14 +3,15 @@ import type {
   DeleteTaskWorkParams,
   WorkDisplayField,
   WorkItem,
-  WorkVersionItem,
+  WorkResourceType,
+  WorkType,
 } from '@lobechat/types';
-import { and, eq, isNotNull, isNull, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 
 import { documents } from '../../schemas/file';
 import { works, workVersions } from '../../schemas/work';
 import type { LobeChatDatabase } from '../../type';
-import { documentOwnership, versionOwnership, type WorkContext, workOwnership } from './context';
+import { documentOwnership, type WorkContext, workOwnership } from './context';
 import {
   type CreateVersionInput,
   truncateContentText,
@@ -71,52 +72,27 @@ const isUniqueViolation = (error: unknown) => {
   );
 };
 
-export const findById = async (ctx: WorkContext, workId: string): Promise<WorkItem | null> => {
-  const [work] = await ctx.db
-    .select()
-    .from(works)
-    .where(and(eq(works.id, workId), workOwnership(ctx)))
-    .limit(1);
-
-  return work ?? null;
-};
-
-export const findVersionBySourceToolCall = async (
+const findVersionByToolCall = async (
   ctx: WorkContext,
   workId: string,
-  sourceToolCallId?: string | null,
-): Promise<WorkVersionItem | null> => {
-  if (!sourceToolCallId) return null;
+  toolCallId?: string | null,
+) => {
+  if (!toolCallId) return null;
 
   const [version] = await ctx.db
     .select()
     .from(workVersions)
-    .where(
-      and(
-        versionOwnership(ctx),
-        eq(workVersions.workId, workId),
-        eq(workVersions.sourceToolCallId, sourceToolCallId),
-      ),
-    )
+    .where(and(eq(workVersions.workId, workId), eq(workVersions.toolCallId, toolCallId)))
     .limit(1);
 
   return version ?? null;
 };
 
-/**
- * `works` has two partial unique indexes (workspace-scoped vs personal);
- * pick the ON CONFLICT target matching this model's scope.
- */
-export const resolveWorkUpsertConflict = (ctx: WorkContext) =>
-  ctx.workspaceId
-    ? {
-        target: [works.workspaceId, works.resourceType, works.resourceId],
-        targetWhere: isNotNull(works.workspaceId),
-      }
-    : {
-        target: [works.resourceType, works.resourceId, works.userId],
-        targetWhere: isNull(works.workspaceId),
-      };
+interface RegisterWorkIdentity {
+  resourceId: string;
+  resourceType: WorkResourceType;
+  type: WorkType;
+}
 
 /**
  * Build the next complete immutable display snapshot. A partial registration
@@ -143,11 +119,11 @@ const buildVersionSnapshot = (
 };
 
 /**
- * Shared version-create pipeline: dedupe by sourceToolCallId, allocate the
- * next version number in a transaction, insert the complete version snapshot,
- * update the Work's current-version pointer/cache, and retry on
- * unique-violation races (either the `(workId, version)` or the
- * `(workId, sourceToolCallId)` unique index).
+ * Shared registration pipeline: find-or-create the Work identity, dedupe by
+ * toolCallId, allocate the next version number, insert the complete immutable
+ * snapshot, and update the Work's current projection in ONE transaction. Retry
+ * on unique-violation races (either the `(workId, version)` or the
+ * `(workId, toolCallId)` unique index).
  *
  * `buildInput` runs inside the transaction, after a `FOR UPDATE` lock on the
  * works row (same pattern as `TopicModel.updateMetadata`): a concurrent
@@ -157,40 +133,56 @@ const buildVersionSnapshot = (
  * uniqueness retry. Callers must do their reads through the tx-scoped context
  * `buildInput` receives.
  */
-export const createVersion = async (
+export const registerWorkVersion = async (
   ctx: WorkContext,
-  work: WorkItem,
+  identity: RegisterWorkIdentity,
   params: WorkVersionEventParams,
   buildInput: (txCtx: WorkContext) => CreateVersionInput | Promise<CreateVersionInput>,
-): Promise<WorkVersionItem> => {
-  const existing = await findVersionBySourceToolCall(ctx, work.id, params.sourceToolCallId);
-  if (existing) return existing;
-
+): Promise<WorkItem> => {
   for (let attempt = 0; attempt < MAX_VERSION_CREATE_RETRIES; attempt += 1) {
     try {
       return await ctx.db.transaction(async (tx) => {
         const txCtx: WorkContext = { ...ctx, db: tx as LobeChatDatabase };
 
-        const [locked] = await tx
-          .select({ currentVersionId: works.currentVersionId, id: works.id })
-          .from(works)
-          .where(and(eq(works.id, work.id), workOwnership(ctx)))
-          .for('update');
-        // The Work row vanished between upsert and here (e.g. a concurrent
-        // deleteTaskWork); inserting a version would only FK-fail, so bail
-        // with a clearer error.
-        if (!locked) throw new Error(`Work ${work.id} no longer exists`);
+        // Bare ON CONFLICT handles either owner-scope partial unique index. A
+        // conflict performs no UPDATE, so an idempotent replay cannot bump
+        // updatedAt before its toolCallId is checked under the Work row lock.
+        const [inserted] = await tx
+          .insert(works)
+          .values({
+            ...identity,
+            toolIdentifier: params.toolIdentifier ?? null,
+            toolName: params.toolName,
+            userId: ctx.userId,
+            workspaceId: ctx.workspaceId ?? null,
+          })
+          .onConflictDoNothing()
+          .returning();
 
-        // Re-check dedupe under the lock: a concurrent registration with the
-        // same sourceToolCallId that committed before we acquired the lock is
-        // now visible, so return its version instead of tripping the
-        // `(workId, sourceToolCallId)` unique index.
-        const dedupedUnderLock = await findVersionBySourceToolCall(
-          txCtx,
-          work.id,
-          params.sourceToolCallId,
-        );
-        if (dedupedUnderLock) return dedupedUnderLock;
+        const [resolved] = inserted
+          ? [inserted]
+          : await tx
+              .select()
+              .from(works)
+              .where(
+                and(
+                  workOwnership(txCtx),
+                  eq(works.resourceType, identity.resourceType),
+                  eq(works.resourceId, identity.resourceId),
+                ),
+              )
+              .limit(1);
+        if (!resolved) throw new Error(`Failed to resolve ${identity.type} Work identity`);
+
+        const [locked] = await tx
+          .select()
+          .from(works)
+          .where(and(eq(works.id, resolved.id), workOwnership(txCtx)))
+          .for('update');
+        if (!locked) throw new Error(`Work ${resolved.id} no longer exists`);
+
+        const dedupedUnderLock = await findVersionByToolCall(txCtx, locked.id, params.toolCallId);
+        if (dedupedUnderLock) return locked;
 
         const input = await buildInput(txCtx);
         const [currentSnapshot] = locked.currentVersionId
@@ -198,7 +190,10 @@ export const createVersion = async (
               .select(versionSnapshotSelection)
               .from(workVersions)
               .where(
-                and(eq(workVersions.id, locked.currentVersionId), eq(workVersions.workId, work.id)),
+                and(
+                  eq(workVersions.id, locked.currentVersionId),
+                  eq(workVersions.workId, locked.id),
+                ),
               )
               .limit(1)
           : [];
@@ -210,7 +205,7 @@ export const createVersion = async (
             version: sql<number>`COALESCE(MAX(${workVersions.version}), 0) + 1`,
           })
           .from(workVersions)
-          .where(eq(workVersions.workId, work.id));
+          .where(eq(workVersions.workId, locked.id));
 
         const [version] = await tx
           .insert(workVersions)
@@ -226,54 +221,50 @@ export const createVersion = async (
             cumulativeUsage: params.cumulativeUsage ?? null,
             description: snapshot.description,
             identifier: snapshot.identifier,
+            messageId: params.messageId ?? null,
             metadata: input.metadata ?? null,
             changeType: params.changeType,
             rootOperationId: params.rootOperationId ?? null,
-            sourceMessageId: params.sourceMessageId ?? null,
-            sourceToolCallId: params.sourceToolCallId ?? null,
-            // Per-version tool identifier (unlike works', which keeps the creator).
-            sourceToolIdentifier: params.sourceToolIdentifier ?? null,
-            sourceToolName: params.sourceToolName,
             status: snapshot.status,
             threadId: params.threadId ?? null,
             title: snapshot.title,
             topicId: params.topicId ?? null,
-            userId: ctx.userId,
+            toolCallId: params.toolCallId ?? null,
+            toolIdentifier: params.toolIdentifier ?? null,
+            toolName: params.toolName,
             url: snapshot.url,
             version: Number(next.version),
-            workId: work.id,
-            workspaceId: ctx.workspaceId ?? null,
+            workId: locked.id,
+            createdAt: now,
           })
           .returning();
 
-        // Keep only the list-critical title/description denormalized on Work;
-        // every other display field is read from the current version snapshot.
-        await tx
+        const [updatedWork] = await tx
           .update(works)
           .set({
             currentVersionId: version.id,
             description: snapshot.description,
-            sourceToolIdentifier: sql`coalesce(${works.sourceToolIdentifier}, ${params.sourceToolIdentifier ?? null})`,
+            identifier: snapshot.identifier,
+            rootOperationId: params.rootOperationId ?? null,
+            status: snapshot.status,
             title: snapshot.title,
+            toolIdentifier: params.toolIdentifier ?? null,
+            toolName: params.toolName,
             updatedAt: now,
+            url: snapshot.url,
           })
-          .where(and(eq(works.id, work.id), workOwnership(ctx)));
+          .where(and(eq(works.id, locked.id), workOwnership(txCtx)))
+          .returning();
+        if (!updatedWork) throw new Error(`Work ${locked.id} no longer exists`);
 
-        return version;
+        return updatedWork;
       });
     } catch (error) {
       if (!isUniqueViolation(error) || attempt === MAX_VERSION_CREATE_RETRIES - 1) throw error;
-
-      const existingAfterConflict = await findVersionBySourceToolCall(
-        ctx,
-        work.id,
-        params.sourceToolCallId,
-      );
-      if (existingAfterConflict) return existingAfterConflict;
     }
   }
 
-  throw new Error(`Failed to create ${work.type} work version after max retries`);
+  throw new Error(`Failed to register ${identity.type} Work version after max retries`);
 };
 
 export const deleteDocumentWork = async (

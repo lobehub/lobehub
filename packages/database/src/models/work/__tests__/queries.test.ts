@@ -34,16 +34,16 @@ describe('WorkModel · queries', () => {
     await workModel.registerTask({
       changeType: 'created',
       rootOperationId: 'op-first',
-      sourceToolName: 'createTask',
-      sourceToolCallId: 'tool-call-1',
+      toolName: 'createTask',
+      toolCallId: 'tool-call-1',
       taskId: firstTask.id,
       topicId,
     });
     await workModel.registerTask({
       changeType: 'created',
       rootOperationId: 'op-second',
-      sourceToolName: 'createTask',
-      sourceToolCallId: 'tool-call-2',
+      toolName: 'createTask',
+      toolCallId: 'tool-call-2',
       taskId: secondTask.id,
       topicId,
     });
@@ -66,16 +66,16 @@ describe('WorkModel · queries', () => {
     await workModel.registerTask({
       changeType: 'created',
       rootOperationId: 'op-batch-1',
-      sourceToolName: 'createTask',
-      sourceToolCallId: 'tool-call-batch-1',
+      toolName: 'createTask',
+      toolCallId: 'tool-call-batch-1',
       taskId: firstTask.id,
       topicId,
     });
     await workModel.registerTask({
       changeType: 'created',
       rootOperationId: 'op-batch-2',
-      sourceToolName: 'createTask',
-      sourceToolCallId: 'tool-call-batch-2',
+      toolName: 'createTask',
+      toolCallId: 'tool-call-batch-2',
       taskId: secondTask.id,
       topicId,
     });
@@ -108,16 +108,16 @@ describe('WorkModel · queries', () => {
     await workModel.registerTask({
       changeType: 'created',
       rootOperationId: 'op-shared-create',
-      sourceToolName: 'createTask',
-      sourceToolCallId: 'tool-call-shared-1',
+      toolName: 'createTask',
+      toolCallId: 'tool-call-shared-1',
       taskId: task.id,
       topicId,
     });
     await workModel.registerTask({
       changeType: 'updated',
       rootOperationId: 'op-shared-update',
-      sourceToolName: 'updateTask',
-      sourceToolCallId: 'tool-call-shared-2',
+      toolName: 'updateTask',
+      toolCallId: 'tool-call-shared-2',
       taskId: task.id,
       topicId,
     });
@@ -147,12 +147,12 @@ describe('WorkModel · queries', () => {
       documentId: doc.documentId,
       changeType: 'created',
       rootOperationId: 'op-doc-clamp',
-      sourceToolName: 'createDocument',
-      sourceToolCallId: 'tool-call-doc-clamp',
+      toolName: 'createDocument',
+      toolCallId: 'tool-call-doc-clamp',
       topicId,
     });
 
-    // 601 ids * limit 20 * fanout 4 far exceeds MAX_SUMMARY_ROW_LIMIT, so the
+    // 601 ids * limit 20 far exceeds MAX_SUMMARY_ROW_LIMIT, so the
     // query LIMIT is clamped — the real operation's summary must still surface.
     const syntheticIds = Array.from({ length: 600 }, (_, index) => `op-doc-clamp-pad-${index}`);
     const summaries = await workModel.listSummariesByRootOperations({
@@ -177,8 +177,8 @@ describe('WorkModel · queries', () => {
       patchFields: ['identifier', 'title'],
       resourceId: 'linear-issue-1',
       resourceType: 'linear_issue',
-      sourceToolCallId: 'tool-call-linear-issue-1',
-      sourceToolName: 'save_issue',
+      toolCallId: 'tool-call-linear-issue-1',
+      toolName: 'save_issue',
       title: 'Linear issue',
       topicId,
     });
@@ -188,8 +188,8 @@ describe('WorkModel · queries', () => {
       patchFields: ['identifier', 'title'],
       resourceId: 'lobehub/lobehub#1',
       resourceType: 'github_issue',
-      sourceToolCallId: 'tool-call-github-issue-1',
-      sourceToolName: 'create_issue',
+      toolCallId: 'tool-call-github-issue-1',
+      toolName: 'create_issue',
       title: 'GitHub issue',
       topicId,
     });
@@ -225,8 +225,8 @@ describe('WorkModel · queries', () => {
       resourceId: 'lobehub/lobehub#42',
       resourceType: 'github_issue',
       rootOperationId: 'op-card-projection',
-      sourceToolCallId: 'tool-call-card-projection',
-      sourceToolName: 'create_issue',
+      toolCallId: 'tool-call-card-projection',
+      toolName: 'create_issue',
       title: 'Card projection',
       topicId,
     });
@@ -264,6 +264,7 @@ describe('WorkModel · queries', () => {
       .insert(works)
       .values({
         resourceType: 'document',
+        toolName: 'manual-test',
         type: 'document',
         userId,
       })

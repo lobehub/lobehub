@@ -37,14 +37,14 @@ describe('WorkModel · github', () => {
         user: { login: 'yutengjing' },
       },
       rootOperationId: 'op-github-issue-create',
-      sourceToolCallId: 'tool-call-github-issue-create',
+      toolCallId: 'tool-call-github-issue-create',
       toolName: 'create_issue',
       topicId,
     });
-    // Work keeps the current title/description cache and creator identity.
+    // Work keeps the current card projection and latest producer identity.
     expect(first).toMatchObject({
       description: 'Track GitHub issue as Work',
-      sourceToolIdentifier: 'github',
+      toolIdentifier: 'github',
       title: 'GitHub Work issue',
     });
 
@@ -60,7 +60,7 @@ describe('WorkModel · github', () => {
         updated_at: '2026-07-02T09:30:00Z',
       },
       rootOperationId: 'op-github-issue-edit',
-      sourceToolCallId: 'tool-call-github-issue-edit',
+      toolCallId: 'tool-call-github-issue-edit',
       toolName: 'update_issue',
       topicId,
     });
@@ -73,7 +73,7 @@ describe('WorkModel · github', () => {
         state: 'closed',
       },
       rootOperationId: 'op-github-issue-edit',
-      sourceToolCallId: 'tool-call-github-issue-edit',
+      toolCallId: 'tool-call-github-issue-edit',
       toolName: 'update_issue',
       topicId,
     });
@@ -124,14 +124,14 @@ describe('WorkModel · github', () => {
     await workModel.handleSkillToolResult({
       provider: 'github',
       data: { node_id: 'I_kwDOJjRead', number: 200, title: 'Read only' },
-      sourceToolCallId: 'tool-call-github-read',
+      toolCallId: 'tool-call-github-read',
       toolName: 'get_issue',
       topicId,
     });
     await workModel.handleSkillToolResult({
       provider: 'github',
       data: { error: 'Validation failed', isError: true },
-      sourceToolCallId: 'tool-call-github-error',
+      toolCallId: 'tool-call-github-error',
       toolName: 'create_issue',
       topicId,
     });
@@ -164,7 +164,7 @@ describe('WorkModel · github', () => {
         user: { login: 'yutengjing' },
       }),
       rootOperationId: 'op-github-pr-create',
-      sourceToolCallId: 'tool-call-github-pr-create',
+      toolCallId: 'tool-call-github-pr-create',
       toolName: 'create_pull_request',
       topicId,
     });
@@ -186,7 +186,7 @@ describe('WorkModel · github', () => {
         sha: 'abc123def456',
       },
       rootOperationId: 'op-github-pr-merge',
-      sourceToolCallId: 'tool-call-github-pr-merge',
+      toolCallId: 'tool-call-github-pr-merge',
       toolName: 'update_pull_request',
       topicId,
     });
@@ -211,7 +211,7 @@ describe('WorkModel · github', () => {
       provider: 'github',
       args: { owner: 'lobehub', pull_number: 999, repo: 'lobehub' },
       data: { merged: true, sha: 'fff000' },
-      sourceToolCallId: 'tool-call-github-pr-unknown',
+      toolCallId: 'tool-call-github-pr-unknown',
       toolName: 'update_pull_request',
       topicId,
     });
@@ -223,7 +223,7 @@ describe('WorkModel · github', () => {
       provider: 'github',
       args: {},
       data: { merged: true },
-      sourceToolCallId: 'tool-call-github-pr-unresolvable',
+      toolCallId: 'tool-call-github-pr-unresolvable',
       toolName: 'update_pull_request',
       topicId,
     });
@@ -255,7 +255,7 @@ describe('WorkModel · github', () => {
         output: 'https://github.com/lobehub-biz/lobehub-cloud/issues/952\n',
       },
       rootOperationId: 'op-github-cli-create',
-      sourceToolCallId: 'tool-call-github-cli-create',
+      toolCallId: 'tool-call-github-cli-create',
       toolName: 'runCommand',
       topicId,
     });
@@ -278,7 +278,7 @@ describe('WorkModel · github', () => {
         output: 'On branch main\nhttps://github.com/lobehub-biz/lobehub-cloud/issues/952\n',
       },
       rootOperationId: 'op-github-cli-edit',
-      sourceToolCallId: 'tool-call-github-cli-edit',
+      toolCallId: 'tool-call-github-cli-edit',
       toolName: 'runCommand',
       topicId,
     });
@@ -305,7 +305,7 @@ describe('WorkModel · github', () => {
         exitCode: 0,
         output: 'https://github.com/lobehub-biz/lobehub-cloud/pull/953\n',
       },
-      sourceToolCallId: 'tool-call-github-cli-pr',
+      toolCallId: 'tool-call-github-cli-pr',
       toolName: 'runCommand',
       topicId,
     });
@@ -330,7 +330,7 @@ describe('WorkModel · github', () => {
         exitCode: 1,
         output: 'GraphQL: Resource not accessible',
       },
-      sourceToolCallId: 'tool-call-github-cli-failed',
+      toolCallId: 'tool-call-github-cli-failed',
       toolName: 'runCommand',
       topicId,
     });
@@ -341,14 +341,14 @@ describe('WorkModel · github', () => {
         exitCode: 0,
         output: 'CLI Issue #952\nhttps://github.com/lobehub-biz/lobehub-cloud/issues/952',
       },
-      sourceToolCallId: 'tool-call-github-cli-view',
+      toolCallId: 'tool-call-github-cli-view',
       toolName: 'runCommand',
       topicId,
     });
     const nonGh = await workModel.handleSkillToolResult({
       provider: 'github',
       data: { command: 'git push origin main', exitCode: 0, output: 'Everything up-to-date' },
-      sourceToolCallId: 'tool-call-github-cli-git',
+      toolCallId: 'tool-call-github-cli-git',
       toolName: 'runCommand',
       topicId,
     });

@@ -163,21 +163,21 @@ const contextParams = (
   | 'actorAgentId'
   | 'cumulativeCost'
   | 'cumulativeUsage'
+  | 'messageId'
   | 'rootOperationId'
-  | 'sourceMessageId'
-  | 'sourceToolCallId'
-  | 'sourceToolName'
   | 'threadId'
+  | 'toolCallId'
+  | 'toolName'
   | 'topicId'
 > => ({
   actorAgentId: params.actorAgentId ?? null,
   cumulativeCost: params.cumulativeCost ?? null,
   cumulativeUsage: params.cumulativeUsage ?? null,
+  messageId: params.messageId ?? null,
   rootOperationId: params.rootOperationId ?? null,
-  sourceMessageId: params.sourceMessageId ?? null,
-  sourceToolCallId: params.sourceToolCallId ?? null,
-  sourceToolName: params.toolName,
   threadId: params.threadId ?? null,
+  toolCallId: params.toolCallId ?? null,
+  toolName: params.toolName,
   topicId: params.topicId ?? null,
 });
 

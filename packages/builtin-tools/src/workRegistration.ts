@@ -10,6 +10,7 @@ import type {
   RegisterSkillToolResultWorkParams,
   RegisterTaskWorkParams,
   WorkRegistrationIntent,
+  WorkTaskTarget,
   WorkVersionChangeType,
   WorkVersionCumulativeUsage,
 } from '@lobechat/types';
@@ -27,12 +28,6 @@ import type {
  * can be pulled into either bundle cheaply — callers pass their own registry
  * reference into {@link getApiWorkConfig}.
  */
-
-/** A resolved task Work target extracted from a tool result / args. */
-export interface TaskWorkTarget {
-  taskId?: string;
-  taskIdentifier?: string;
-}
 
 /**
  * A resolved document Work target extracted from a tool result's `state`.
@@ -141,7 +136,7 @@ export const extractTaskWorkTargets = ({
 }: {
   args: unknown;
   result: Pick<BuiltinToolResult, 'state' | 'success'>;
-}): TaskWorkTarget[] => {
+}): WorkTaskTarget[] => {
   const stateRecord = isRecord(result.state) ? result.state : undefined;
   const argsRecord = isRecord(args) ? args : undefined;
 
@@ -241,8 +236,8 @@ const resolveDocumentWorkIntent = ({
     document: {
       ...document,
       changeType: workChangeTypeFromAction(config.action),
-      // The concrete API name is the document Work's source tool.
-      sourceToolName: apiName,
+      // The concrete API name is the document Work's producing tool.
+      toolName: apiName,
     },
     type: 'document',
   };
@@ -299,18 +294,18 @@ export interface WorkRegistrationProvenance {
   actorAgentId?: string | null;
   cumulativeCost?: number | null;
   cumulativeUsage?: WorkVersionCumulativeUsage | null;
+  messageId?: string;
   rootOperationId?: string;
-  sourceMessageId?: string;
-  sourceToolCallId?: string;
+  threadId?: string | null;
+  toolCallId?: string;
   /**
    * Tool/plugin identifier that produced this registration (the tool payload's
-   * `identifier`). Stamped onto task/document Works as the creator tool; skills
-   * stamp their own provider DB-side, so this is unused for the skill branch.
+   * `identifier`). Skills stamp their own provider DB-side, so this is unused
+   * for the skill branch.
    */
-  sourceToolIdentifier?: string | null;
-  /** Fallback `sourceToolName` for task Works (the API name); skills/documents carry their own. */
-  sourceToolName: string;
-  threadId?: string | null;
+  toolIdentifier?: string | null;
+  /** Fallback concrete tool name for task Works; skills/documents carry their own. */
+  toolName: string;
   topicId?: string;
 }
 
@@ -323,9 +318,9 @@ export interface WorkRegistrationProvenance {
  */
 const logRejectedTaskWork = (
   action: 'delete' | 'create' | 'update',
-  targets: TaskWorkTarget[],
+  targets: WorkTaskTarget[],
   results: PromiseSettledResult<unknown>[],
-  provenance: Pick<WorkRegistrationProvenance, 'rootOperationId' | 'sourceToolCallId'>,
+  provenance: Pick<WorkRegistrationProvenance, 'rootOperationId' | 'toolCallId'>,
 ): void => {
   results.forEach((result, index) => {
     if (result.status !== 'rejected') return;
@@ -335,7 +330,7 @@ const logRejectedTaskWork = (
       action,
       error: result.reason,
       rootOperationId: provenance.rootOperationId,
-      sourceToolCallId: provenance.sourceToolCallId,
+      toolCallId: provenance.toolCallId,
       taskId: target?.taskId,
       taskIdentifier: target?.taskIdentifier,
     });
@@ -352,11 +347,11 @@ const dispatchTaskWorkIntent = async (
     cumulativeCost,
     cumulativeUsage,
     rootOperationId,
-    sourceMessageId,
-    sourceToolCallId,
-    sourceToolIdentifier,
-    sourceToolName,
+    messageId,
     threadId,
+    toolCallId,
+    toolIdentifier,
+    toolName,
     topicId,
   } = provenance;
   const { action, changeType, targets } = intent;
@@ -366,7 +361,7 @@ const dispatchTaskWorkIntent = async (
     const results = await Promise.allSettled(
       deleteTargets.map((target) => ports.deleteTaskWork({ taskId: target.taskId! })),
     );
-    logRejectedTaskWork('delete', deleteTargets, results, { rootOperationId, sourceToolCallId });
+    logRejectedTaskWork('delete', deleteTargets, results, { rootOperationId, toolCallId });
     return;
   }
 
@@ -380,18 +375,18 @@ const dispatchTaskWorkIntent = async (
         cumulativeCost,
         cumulativeUsage,
         rootOperationId,
-        sourceMessageId,
-        sourceToolCallId,
-        sourceToolIdentifier,
-        sourceToolName,
+        messageId,
         taskId: target.taskId,
         taskIdentifier: target.taskIdentifier,
         threadId,
+        toolCallId,
+        toolIdentifier,
+        toolName,
         topicId,
       }),
     ),
   );
-  logRejectedTaskWork(action, targets, results, { rootOperationId, sourceToolCallId });
+  logRejectedTaskWork(action, targets, results, { rootOperationId, toolCallId });
 };
 
 const dispatchDocumentWorkIntent = async (
@@ -411,10 +406,10 @@ const dispatchDocumentWorkIntent = async (
     cumulativeCost,
     cumulativeUsage,
     rootOperationId,
-    sourceMessageId,
-    sourceToolCallId,
-    sourceToolIdentifier,
+    messageId,
     threadId,
+    toolCallId,
+    toolIdentifier,
     topicId,
   } = provenance;
 
@@ -424,10 +419,10 @@ const dispatchDocumentWorkIntent = async (
     cumulativeCost,
     cumulativeUsage,
     rootOperationId,
-    sourceMessageId,
-    sourceToolCallId,
-    sourceToolIdentifier,
+    messageId,
     threadId,
+    toolCallId,
+    toolIdentifier,
     topicId,
   });
 };
@@ -442,9 +437,9 @@ const dispatchSkillWorkIntent = async (
     cumulativeCost,
     cumulativeUsage,
     rootOperationId,
-    sourceMessageId,
-    sourceToolCallId,
+    messageId,
     threadId,
+    toolCallId,
     topicId,
   } = provenance;
 
@@ -457,9 +452,9 @@ const dispatchSkillWorkIntent = async (
     data: intent.data,
     provider: intent.provider,
     rootOperationId,
-    sourceMessageId,
-    sourceToolCallId,
+    messageId,
     threadId,
+    toolCallId,
     toolName: intent.toolName,
     topicId,
   });

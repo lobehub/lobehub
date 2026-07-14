@@ -38,24 +38,30 @@ export interface WorkItem {
   /** Denormalized current-version preview used by Work list queries. */
   description: string | null;
   id: string;
+  /** Denormalized current-version human reference. */
+  identifier: string | null;
   resourceId: string | null;
   resourceType: WorkResourceType;
-  /** Thread where the Work was first registered (creation provenance; null outside a thread). */
-  sourceThreadId: string | null;
-  /** Tool/plugin identifier that CREATED the Work (written once, never overwritten). */
-  sourceToolIdentifier: string | null;
-  /** Topic where the Work was first registered (creation provenance; null outside a conversation). */
-  sourceTopicId: string | null;
+  /** Latest operation that produced a version and owns the current card. */
+  rootOperationId: string | null;
+  /** Denormalized current-version resource status. */
+  status: string | null;
   /** Denormalized current-version title used by Work list queries. */
   title: string | null;
+  /** Tool/plugin identifier that produced the current version. */
+  toolIdentifier: string | null;
+  /** Concrete tool that produced the current version. */
+  toolName: string;
   type: WorkType;
   updatedAt: Date;
+  /** Denormalized current-version canonical open target. */
+  url: string | null;
   userId: string;
   workspaceId: string | null;
 }
 
 /** Card/list payload shared by conversation history, message chips, and the workspace gallery. */
-export type WorkListBaseItem = WorkItem & Pick<WorkVersionItem, 'identifier' | 'status' | 'url'>;
+export type WorkListBaseItem = WorkItem;
 
 export interface WorkVersionItem {
   actorAgentId: string | null;
@@ -70,26 +76,26 @@ export interface WorkVersionItem {
   id: string;
   /** Short human reference captured by this version. */
   identifier: string | null;
+  /** Persisted tool-result message that triggered this version. */
+  messageId: string | null;
   metadata: WorkVersionMetadata | null;
   rootOperationId: string | null;
-  sourceMessageId: string | null;
-  sourceToolCallId: string | null;
-  /** Tool/plugin identifier that produced THIS version (per-mutation). */
-  sourceToolIdentifier: string | null;
-  /** Concrete tool that produced this version, e.g. 'createTask'. */
-  sourceToolName: string;
   /** Resource status captured by this version. */
   status: string | null;
   threadId: string | null;
   /** Display title captured by this version. */
   title: string | null;
+  /** Runtime tool-call id used to deduplicate repeated registration. */
+  toolCallId: string | null;
+  /** Tool/plugin identifier that produced THIS version (per-mutation). */
+  toolIdentifier: string | null;
+  /** Concrete tool that produced this version, e.g. 'createTask'. */
+  toolName: string;
   topicId: string | null;
   /** Canonical http(s) open target captured by this version. */
   url: string | null;
-  userId: string;
   version: number;
   workId: string;
-  workspaceId: string | null;
 }
 
 /** Version fields embedded in Work list rows (the mutation event that surfaced the Work). */
@@ -101,9 +107,9 @@ export type WorkVersionPreview = Pick<
   | 'metadata'
   | 'changeType'
   | 'rootOperationId'
-  | 'sourceMessageId'
-  | 'sourceToolCallId'
-  | 'sourceToolName'
+  | 'messageId'
+  | 'toolCallId'
+  | 'toolName'
   | 'version'
 >;
 
@@ -191,13 +197,13 @@ export interface RegisterDocumentWorkParams {
   cumulativeUsage?: WorkVersionCumulativeUsage | null;
   description?: string | null;
   documentId: string;
+  messageId?: string | null;
   rootOperationId?: string | null;
-  sourceMessageId?: string | null;
-  sourceToolCallId?: string | null;
-  /** Tool/plugin identifier that created the Work (stamped once on `works`). */
-  sourceToolIdentifier?: string | null;
-  sourceToolName: string;
   threadId?: string | null;
+  toolCallId?: string | null;
+  /** Tool/plugin identifier that produced this version. */
+  toolIdentifier?: string | null;
+  toolName: string;
   topicId?: string | null;
 }
 
@@ -221,6 +227,7 @@ export interface RegisterExternalWorkParams {
   cumulativeUsage?: WorkVersionCumulativeUsage | null;
   description?: string | null;
   identifier?: string | null;
+  messageId?: string | null;
   patchFields?: WorkDisplayField[];
   /**
    * Canonical resource identity (`owner/repo#number`, a linear id, …). Required:
@@ -230,14 +237,13 @@ export interface RegisterExternalWorkParams {
   resourceId: string;
   resourceType: ExternalWorkResourceType;
   rootOperationId?: string | null;
-  sourceMessageId?: string | null;
-  sourceToolCallId?: string | null;
-  /** Tool/plugin identifier that created the Work (stamped once on `works`). */
-  sourceToolIdentifier?: string | null;
-  sourceToolName: string;
   status?: string | null;
   threadId?: string | null;
   title?: string | null;
+  toolCallId?: string | null;
+  /** Tool/plugin identifier that produced this version. */
+  toolIdentifier?: string | null;
+  toolName: string;
   topicId?: string | null;
   url?: string | null;
 }
@@ -291,11 +297,11 @@ export interface RegisterSkillToolResultWorkParams {
   cumulativeCost?: number | null;
   cumulativeUsage?: WorkVersionCumulativeUsage | null;
   data?: unknown;
+  messageId?: string | null;
   provider: string;
   rootOperationId?: string | null;
-  sourceMessageId?: string | null;
-  sourceToolCallId?: string | null;
   threadId?: string | null;
+  toolCallId?: string | null;
   toolName: string;
   topicId?: string | null;
 }
@@ -308,15 +314,15 @@ export interface RegisterTaskWorkParams {
   changeType: WorkVersionChangeType;
   cumulativeCost?: number | null;
   cumulativeUsage?: WorkVersionCumulativeUsage | null;
+  messageId?: string | null;
   rootOperationId?: string | null;
-  sourceMessageId?: string | null;
-  sourceToolCallId?: string | null;
-  /** Tool/plugin identifier that created the Work (stamped once on `works`). */
-  sourceToolIdentifier?: string | null;
-  sourceToolName: string;
   taskId?: string;
   taskIdentifier?: string;
   threadId?: string | null;
+  toolCallId?: string | null;
+  /** Tool/plugin identifier that produced this version. */
+  toolIdentifier?: string | null;
+  toolName: string;
   topicId?: string | null;
 }
 
@@ -362,7 +368,7 @@ export type WorkRegistrationIntent =
         description?: string | null;
         documentId: string;
         changeType: WorkVersionChangeType;
-        sourceToolName: string;
+        toolName: string;
       };
       type: 'document';
     }

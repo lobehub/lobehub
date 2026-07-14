@@ -4,7 +4,7 @@ import { and, eq, ne, or, sql } from 'drizzle-orm';
 import { agentDocuments } from '../../schemas/agentDocuments';
 import { documents } from '../../schemas/file';
 import { tasks } from '../../schemas/task';
-import { works, workVersions } from '../../schemas/work';
+import { works } from '../../schemas/work';
 import type { LobeChatDatabase } from '../../type';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 
@@ -73,9 +73,6 @@ export const workOwnership = (ctx: WorkContext) =>
     taskVisibilityGuard(ctx),
     documentVisibilityGuard(ctx),
   ) as SQL;
-
-export const versionOwnership = (ctx: WorkContext) =>
-  buildWorkspaceWhere({ userId: ctx.userId, workspaceId: ctx.workspaceId }, workVersions);
 
 /**
  * Public-or-owner predicate for the live `tasks` join/lookup — mirrors

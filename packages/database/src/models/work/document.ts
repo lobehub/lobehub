@@ -1,14 +1,13 @@
-import type { RegisterDocumentWorkParams, WorkItem, WorkVersionItem } from '@lobechat/types';
+import type { RegisterDocumentWorkParams } from '@lobechat/types';
 import type { SQL } from 'drizzle-orm';
 import { and, eq, isNull } from 'drizzle-orm';
 
 import { agentDocuments } from '../../schemas/agentDocuments';
 import { type DocumentItem, documents } from '../../schemas/file';
-import { works } from '../../schemas/work';
 import { agentDocumentOwnership, documentOwnership, type WorkContext } from './context';
 import { createDisplayWorkAdapter } from './displayWork';
 import { truncateSummaryText, type WorkDisplayColumns } from './internal';
-import { createVersion, findById, resolveWorkUpsertConflict } from './writes';
+import { registerWorkVersion } from './writes';
 
 export const documentDisplayColumns = (
   doc: DocumentItem,
@@ -67,46 +66,6 @@ const resolveDocument = async (
   return agentDocument ? doc : null;
 };
 
-const upsertDocumentWork = async (
-  ctx: WorkContext,
-  doc: DocumentItem,
-  params: RegisterDocumentWorkParams,
-): Promise<WorkItem> => {
-  const values = {
-    resourceId: doc.id,
-    resourceType: 'document' as const,
-    sourceThreadId: params.threadId ?? null,
-    sourceTopicId: params.topicId ?? null,
-    type: 'document' as const,
-    userId: ctx.userId,
-    workspaceId: ctx.workspaceId ?? null,
-  };
-
-  const conflict = resolveWorkUpsertConflict(ctx);
-
-  const [work] = await ctx.db
-    .insert(works)
-    .values(values)
-    .onConflictDoUpdate({
-      ...conflict,
-      set: { updatedAt: new Date() },
-    })
-    .returning();
-
-  return work;
-};
-
-const createDocumentVersion = async (
-  ctx: WorkContext,
-  work: WorkItem,
-  doc: DocumentItem,
-  params: RegisterDocumentWorkParams,
-): Promise<WorkVersionItem> =>
-  createVersion(ctx, work, params, () => ({
-    display: documentDisplayColumns(doc, params),
-    metadata: params.agentDocumentId ? { agentDocumentId: params.agentDocumentId } : null,
-  }));
-
 /**
  * Document keeps a custom register (unlike the linear/github factory path):
  * it must resolve + ownership-check the backing `documents` row (and the
@@ -116,14 +75,19 @@ const createDocumentVersion = async (
 export const registerDocumentWork = async (
   ctx: WorkContext,
   params: RegisterDocumentWorkParams,
-): Promise<WorkItem | null> => {
+) => {
   const doc = await resolveDocument(ctx, params);
   if (!doc) return null;
 
-  const work = await upsertDocumentWork(ctx, doc, params);
-  await createDocumentVersion(ctx, work, doc, params);
-
-  return findById(ctx, work.id);
+  return registerWorkVersion(
+    ctx,
+    { resourceId: doc.id, resourceType: 'document', type: 'document' },
+    params,
+    () => ({
+      display: documentDisplayColumns(doc, params),
+      metadata: params.agentDocumentId ? { agentDocumentId: params.agentDocumentId } : null,
+    }),
+  );
 };
 
 /** Document display fields are card-sized before the immutable version snapshot is written. */

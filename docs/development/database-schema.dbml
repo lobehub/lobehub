@@ -2714,34 +2714,28 @@ table work_versions {
   status text
   url text
   change_type text [not null]
-  source_tool_name text [not null]
-  source_tool_identifier text
+  tool_name text [not null]
+  tool_identifier text
   topic_id text
   thread_id text
-  source_message_id text
+  message_id text
   root_operation_id text
-  source_tool_call_id text
+  tool_call_id text
   actor_agent_id text
   metadata jsonb
   cumulative_cost "numeric(20, 6)"
   cumulative_usage jsonb
-  user_id text [not null]
-  workspace_id text
   created_at "timestamp with time zone" [not null, default: `now()`]
 
   indexes {
     (work_id, version) [name: 'work_versions_work_id_version_unique', unique]
-    (work_id, source_tool_call_id) [name: 'work_versions_work_id_source_tool_call_id_unique', unique]
-    work_id [name: 'work_versions_work_id_idx']
-    topic_id [name: 'work_versions_topic_id_idx']
+    (work_id, tool_call_id) [name: 'work_versions_work_id_tool_call_id_unique', unique]
     thread_id [name: 'work_versions_thread_id_idx']
-    source_message_id [name: 'work_versions_source_message_id_idx']
-    root_operation_id [name: 'work_versions_root_operation_id_idx']
+    message_id [name: 'work_versions_message_id_idx']
+    actor_agent_id [name: 'work_versions_actor_agent_id_idx']
     (root_operation_id, created_at) [name: 'work_versions_root_operation_created_at_idx']
+    (topic_id, created_at) [name: 'work_versions_topic_created_at_idx']
     (topic_id, thread_id, created_at) [name: 'work_versions_topic_thread_created_at_idx']
-    user_id [name: 'work_versions_user_id_idx']
-    workspace_id [name: 'work_versions_workspace_id_idx']
-    created_at [name: 'work_versions_created_at_idx']
   }
 }
 
@@ -2751,11 +2745,14 @@ table works {
   current_version_id uuid
   resource_type text [not null]
   resource_id text
-  source_topic_id text
-  source_thread_id text
-  source_tool_identifier text
   title text
   description text
+  identifier text
+  status text
+  url text
+  tool_name text [not null]
+  tool_identifier text
+  root_operation_id text
   user_id text [not null]
   workspace_id text
   created_at "timestamp with time zone" [not null, default: `now()`]
@@ -2768,11 +2765,7 @@ table works {
     workspace_id [name: 'works_workspace_id_idx']
     (user_id, updated_at, id) [name: 'works_user_updated_at_id_idx']
     (workspace_id, updated_at, id) [name: 'works_workspace_updated_at_id_idx']
-    (resource_type, resource_id) [name: 'works_resource_idx']
-    current_version_id [name: 'works_current_version_id_idx']
-    updated_at [name: 'works_updated_at_idx']
-    source_topic_id [name: 'works_source_topic_id_idx']
-    source_thread_id [name: 'works_source_thread_id_idx']
+    (root_operation_id, updated_at, id) [name: 'works_root_operation_updated_at_id_idx']
   }
 }
 

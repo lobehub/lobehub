@@ -67,9 +67,9 @@ export class WorkModel {
     const operation = SKILL_TOOL_RESULT_NORMALIZERS[provider](rest);
     if (!operation) return null;
 
-    // The skill provider IS the creator tool identifier (github / linear); the
-    // DB layer stamps it here rather than plumbing it through the transports.
-    return this.registerExternal({ ...operation.params, sourceToolIdentifier: provider });
+    // The skill provider is the producing tool identifier (github / linear);
+    // the DB layer stamps it here rather than plumbing it through transports.
+    return this.registerExternal({ ...operation.params, toolIdentifier: provider });
   };
 
   deleteDocumentWork = (params: DeleteDocumentWorkParams): Promise<void> =>

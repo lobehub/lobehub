@@ -112,9 +112,9 @@ export const registerWorkFromIntent = async ({
   serverDB: LobeChatDatabase;
   sourceMessageId?: string;
   sourceToolCallId?: string;
-  /** Tool/plugin identifier that produced the registration (creator tool for task/document Works). */
+  /** Tool/plugin identifier supplied by the runtime event that produced this version. */
   sourceToolIdentifier?: string | null;
-  /** Fallback `source` for task Works (the API name); skills use their own toolName. */
+  /** Runtime event's concrete tool name; skills may override it with their own toolName. */
   sourceToolName: string;
   state: Pick<AgentState, 'cost' | 'usage'>;
   threadId?: string | null;
@@ -141,12 +141,12 @@ export const registerWorkFromIntent = async ({
       {
         actorAgentId,
         ...cumulative,
+        messageId: sourceMessageId,
         rootOperationId,
-        sourceMessageId,
-        sourceToolCallId,
-        sourceToolIdentifier,
-        sourceToolName,
         threadId,
+        toolCallId: sourceToolCallId,
+        toolIdentifier: sourceToolIdentifier,
+        toolName: sourceToolName,
         topicId,
       },
     );

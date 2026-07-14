@@ -34,19 +34,19 @@ describe('WorkModel · document', () => {
       documentId: doc.documentId,
       changeType: 'created',
       rootOperationId: 'op-doc-create',
-      sourceToolName: 'createDocument',
-      sourceToolCallId: 'tool-call-doc-create',
-      sourceToolIdentifier: 'lobe-agent-documents',
+      toolName: 'createDocument',
+      toolCallId: 'tool-call-doc-create',
+      toolIdentifier: 'lobe-agent-documents',
       topicId,
     });
 
     expect(work).toBeDefined();
-    // Work keeps stable identity plus the current title/description cache.
+    // Work keeps stable resource identity plus the current card projection.
     expect(work).toMatchObject({
       description: 'Research notes',
       resourceId: doc.documentId,
       resourceType: 'document',
-      sourceToolIdentifier: 'lobe-agent-documents',
+      toolIdentifier: 'lobe-agent-documents',
       title: 'Research Notes',
       type: 'document',
     });
@@ -59,7 +59,7 @@ describe('WorkModel · document', () => {
       identifier: 'research.md',
       metadata: { agentDocumentId: doc.id },
       rootOperationId: 'op-doc-create',
-      sourceToolCallId: 'tool-call-doc-create',
+      toolCallId: 'tool-call-doc-create',
       title: 'Research Notes',
     });
 
@@ -106,8 +106,8 @@ describe('WorkModel · document', () => {
       documentId: doc.documentId,
       changeType: 'created',
       rootOperationId: 'op-doc-empty-description',
-      sourceToolName: 'createDocument',
-      sourceToolCallId: 'tool-call-doc-empty-description',
+      toolName: 'createDocument',
+      toolCallId: 'tool-call-doc-empty-description',
       topicId,
     });
 
@@ -147,8 +147,8 @@ describe('WorkModel · document', () => {
       documentId: doc.documentId,
       changeType: 'created',
       rootOperationId: 'op-doc-long-description',
-      sourceToolName: 'createDocument',
-      sourceToolCallId: 'tool-call-doc-long-description',
+      toolName: 'createDocument',
+      toolCallId: 'tool-call-doc-long-description',
       topicId,
     });
 
@@ -170,8 +170,8 @@ describe('WorkModel · document', () => {
       documentId: doc.documentId,
       changeType: 'created',
       rootOperationId: 'op-doc-create',
-      sourceToolName: 'createDocument',
-      sourceToolCallId: 'tool-call-doc-create',
+      toolName: 'createDocument',
+      toolCallId: 'tool-call-doc-create',
       topicId,
     });
 
@@ -183,8 +183,8 @@ describe('WorkModel · document', () => {
       documentId: doc.documentId,
       changeType: 'updated',
       rootOperationId: 'op-doc-rename',
-      sourceToolName: 'renameDocument',
-      sourceToolCallId: 'tool-call-doc-rename',
+      toolName: 'renameDocument',
+      toolCallId: 'tool-call-doc-rename',
       topicId,
     });
 
@@ -194,13 +194,14 @@ describe('WorkModel · document', () => {
       documentId: doc.documentId,
       changeType: 'updated',
       rootOperationId: 'op-doc-rename',
-      sourceToolName: 'renameDocument',
-      sourceToolCallId: 'tool-call-doc-rename',
+      toolName: 'renameDocument',
+      toolCallId: 'tool-call-doc-rename',
       topicId,
     });
 
     expect(second?.id).toBe(first?.id);
     expect(replay?.id).toBe(first?.id);
+    expect(replay?.updatedAt).toEqual(second?.updatedAt);
 
     const workRows = await serverDB
       .select()
@@ -228,8 +229,8 @@ describe('WorkModel · document', () => {
       agentId,
       documentId: doc.documentId,
       changeType: 'created',
-      sourceToolName: 'createDocument',
-      sourceToolCallId: 'tool-call-doc-delete',
+      toolName: 'createDocument',
+      toolCallId: 'tool-call-doc-delete',
     });
 
     await agentDocumentModel.delete(doc.id);
@@ -259,8 +260,8 @@ describe('WorkModel · document', () => {
       agentId,
       documentId: doc.documentId,
       changeType: 'created',
-      sourceToolName: 'createDocument',
-      sourceToolCallId: 'tool-call-other-doc-user',
+      toolName: 'createDocument',
+      toolCallId: 'tool-call-other-doc-user',
       topicId,
     });
 
@@ -305,8 +306,8 @@ describe('WorkModel · workspace document visibility', () => {
       documentId: doc.documentId,
       changeType: 'created',
       rootOperationId: 'op-doc-visibility',
-      sourceToolName: 'createDocument',
-      sourceToolCallId: 'tool-call-doc-visibility',
+      toolName: 'createDocument',
+      toolCallId: 'tool-call-doc-visibility',
       topicId,
     });
 

@@ -3039,11 +3039,11 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
             cost: expect.objectContaining({ total: 0.02 }),
           }),
           changeType: 'created',
-          sourceToolName: 'createTask',
-          sourceMessageId: 'msg-123',
-          sourceToolCallId: 'tool-call-intent',
+          messageId: 'msg-123',
           taskId: 'task_x',
           taskIdentifier: 'T-X',
+          toolCallId: 'tool-call-intent',
+          toolName: 'createTask',
         }),
       );
     });
@@ -3767,17 +3767,17 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
           expect.objectContaining({
             cumulativeUsage: expect.objectContaining({ cost: expect.any(Object) }),
             changeType: 'created',
-            sourceToolName: 'createTask',
-            sourceMessageId: expect.stringMatching(/^tool-msg-/),
-            sourceToolCallId: 'tool-call-1',
+            messageId: expect.stringMatching(/^tool-msg-/),
             taskId: 'task_1',
+            toolCallId: 'tool-call-1',
+            toolName: 'createTask',
           }),
           expect.objectContaining({
             changeType: 'updated',
-            sourceToolName: 'updateTask',
-            sourceMessageId: expect.stringMatching(/^tool-msg-/),
-            sourceToolCallId: 'tool-call-2',
+            messageId: expect.stringMatching(/^tool-msg-/),
             taskId: 'task_2',
+            toolCallId: 'tool-call-2',
+            toolName: 'updateTask',
           }),
         ]),
       );

@@ -3,18 +3,15 @@ import type {
   TaskItem,
   TaskWorkListItem,
   TaskWorkSummaryItem,
-  WorkItem,
-  WorkVersionItem,
 } from '@lobechat/types';
 import type { SQL } from 'drizzle-orm';
 import { and, desc, eq, or } from 'drizzle-orm';
 
 import { tasks } from '../../schemas/task';
 import { works, workVersions } from '../../schemas/work';
-import { taskOwnership, versionOwnership, type WorkContext, workOwnership } from './context';
+import { taskOwnership, type WorkContext, workOwnership } from './context';
 import {
   currentTaskSummaryFields,
-  currentVersions,
   currentWorkListFields,
   eventTaskSummaryFields,
   eventWorkListFields,
@@ -25,7 +22,7 @@ import {
   type WorkDisplayColumns,
   type WorkTypeAdapter,
 } from './internal';
-import { createVersion, findById, resolveWorkUpsertConflict } from './writes';
+import { registerWorkVersion } from './writes';
 
 const normalizeTaskLookup = (value?: string) => {
   const trimmed = value?.trim();
@@ -36,12 +33,13 @@ const normalizeTaskLookup = (value?: string) => {
 /**
  * Task display fields captured by each immutable version. Live data stays on
  * the `tasks` row (joined by every query); snapshots provide the deletion
- * fallback. `status` stays NULL because the live join is authoritative.
+ * fallback when the backing task is later deleted.
  */
 export const taskDisplayColumns = (task: TaskItem): WorkDisplayColumns => ({
   content: task.instruction,
   description: truncateSummaryText(task.instruction),
   identifier: task.identifier,
+  status: task.status,
   title: task.name,
 });
 
@@ -76,59 +74,16 @@ const resolveTask = async (
   return task ?? null;
 };
 
-const upsertTaskWork = async (
-  ctx: WorkContext,
-  task: TaskItem,
-  params: RegisterTaskWorkParams,
-): Promise<WorkItem> => {
-  const values = {
-    resourceId: task.id,
-    resourceType: 'task' as const,
-    // Creation provenance: stamped once at insert, never in the conflict `set`
-    // (see `works.sourceTopicId`/`sourceThreadId` schema JSDoc — write-once,
-    // like the creator `sourceToolIdentifier`).
-    sourceThreadId: params.threadId ?? null,
-    sourceTopicId: params.topicId ?? null,
-    type: 'task' as const,
-    userId: ctx.userId,
-    workspaceId: ctx.workspaceId ?? null,
-  };
-
-  const conflict = resolveWorkUpsertConflict(ctx);
-
-  const [work] = await ctx.db
-    .insert(works)
-    .values(values)
-    .onConflictDoUpdate({
-      ...conflict,
-      set: { updatedAt: new Date() },
-    })
-    .returning();
-
-  return work;
-};
-
-const createTaskVersion = async (
-  ctx: WorkContext,
-  work: WorkItem,
-  task: TaskItem,
-  params: RegisterTaskWorkParams,
-): Promise<WorkVersionItem> =>
-  createVersion(ctx, work, params, () => ({
-    display: taskDisplayColumns(task),
-  }));
-
-export const registerTaskWork = async (
-  ctx: WorkContext,
-  params: RegisterTaskWorkParams,
-): Promise<WorkItem | null> => {
+export const registerTaskWork = async (ctx: WorkContext, params: RegisterTaskWorkParams) => {
   const task = await resolveTask(ctx, params);
   if (!task) return null;
 
-  const work = await upsertTaskWork(ctx, task, params);
-  await createTaskVersion(ctx, work, task, params);
-
-  return findById(ctx, work.id);
+  return registerWorkVersion(
+    ctx,
+    { resourceId: task.id, resourceType: 'task', type: 'task' },
+    params,
+    () => ({ display: taskDisplayColumns(task) }),
+  );
 };
 
 /** Card-facing task fields from a live-coalesced task projection. */
@@ -151,7 +106,7 @@ const toTaskCardFields = (
  * name/status, falling back to the version snapshot only when the task row
  * was deleted outside the tool path.
  */
-export const taskWorkAdapter: WorkTypeAdapter<TaskWorkSummaryQueryRow> = {
+export const taskWorkAdapter: WorkTypeAdapter = {
   listConversationRows: async (ctx, params) => {
     const rows = await ctx.db
       .select({
@@ -161,15 +116,9 @@ export const taskWorkAdapter: WorkTypeAdapter<TaskWorkSummaryQueryRow> = {
       })
       .from(workVersions)
       .innerJoin(works, and(eq(workVersions.workId, works.id), workOwnership(ctx)))
-      .innerJoin(currentVersions, eq(works.currentVersionId, currentVersions.id))
       .leftJoin(tasks, taskSummaryJoin(ctx))
       .where(
-        and(
-          versionOwnership(ctx),
-          eq(workVersions.topicId, params.topicId),
-          params.threadFilter,
-          eq(works.type, 'task'),
-        ),
+        and(eq(workVersions.topicId, params.topicId), params.threadFilter, eq(works.type, 'task')),
       )
       .orderBy(desc(workVersions.createdAt), desc(works.updatedAt))
       .limit(params.rowLimit);
@@ -185,26 +134,6 @@ export const taskWorkAdapter: WorkTypeAdapter<TaskWorkSummaryQueryRow> = {
     }));
   },
 
-  listSummaryRows: (ctx, filters, rowLimit) =>
-    ctx.db
-      .select({
-        event: versionEventSelection,
-        ...currentTaskSummaryFields,
-        version: {
-          createdAt: currentVersions.createdAt,
-          id: currentVersions.id,
-          version: currentVersions.version,
-        },
-        work: currentWorkListFields,
-      })
-      .from(workVersions)
-      .innerJoin(works, and(eq(workVersions.workId, works.id), workOwnership(ctx)))
-      .innerJoin(currentVersions, eq(works.currentVersionId, currentVersions.id))
-      .leftJoin(tasks, taskSummaryJoin(ctx))
-      .where(and(versionOwnership(ctx), ...filters, eq(works.type, 'task')))
-      .orderBy(desc(workVersions.createdAt), desc(works.updatedAt))
-      .limit(rowLimit),
-
   listVersionEvents: async (ctx, filters, limit) => {
     const rows = await ctx.db
       .select({
@@ -215,7 +144,7 @@ export const taskWorkAdapter: WorkTypeAdapter<TaskWorkSummaryQueryRow> = {
       .from(workVersions)
       .innerJoin(works, and(eq(workVersions.workId, works.id), workOwnership(ctx)))
       .leftJoin(tasks, taskSummaryJoin(ctx))
-      .where(and(versionOwnership(ctx), ...filters, eq(works.type, 'task')))
+      .where(and(...filters, eq(works.type, 'task')))
       .orderBy(desc(workVersions.createdAt))
       .limit(limit);
 
@@ -228,17 +157,7 @@ export const taskWorkAdapter: WorkTypeAdapter<TaskWorkSummaryQueryRow> = {
     }));
   },
 
-  mapSummaryRow: (row, totalCost): TaskWorkSummaryItem => ({
-    ...row.work,
-    ...toTaskCardFields(row.task),
-    event: row.event,
-    resourceType: 'task' as const,
-    totalCost,
-    type: 'task' as const,
-    version: row.version,
-  }),
-
-  mapWorkspaceRow: (row, totalCost): TaskWorkSummaryItem => ({
+  mapCurrentRow: (row, totalCost): TaskWorkSummaryItem => ({
     ...row.work,
     ...toTaskCardFields(row.task),
     event: row.event,

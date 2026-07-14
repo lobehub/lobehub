@@ -34,7 +34,7 @@ describe('WorkModel · linear', () => {
     const baseParams = {
       resourceId: 'issue-race',
       resourceType: 'linear_issue' as const,
-      sourceToolName: 'save_issue',
+      toolName: 'save_issue',
       topicId,
     };
 
@@ -44,7 +44,7 @@ describe('WorkModel · linear', () => {
       patchFields: ['title', 'status', 'description'],
       changeType: 'created',
       rootOperationId: 'op-race-create',
-      sourceToolCallId: 'tool-call-race-create',
+      toolCallId: 'tool-call-race-create',
       status: 'Backlog',
       title: 'Original title',
     });
@@ -68,7 +68,7 @@ describe('WorkModel · linear', () => {
         patchFields: ['title'],
         changeType: 'updated',
         rootOperationId: 'op-race-winner',
-        sourceToolCallId: 'tool-call-race-winner',
+        toolCallId: 'tool-call-race-winner',
         title: 'Winner title',
       });
 
@@ -83,7 +83,7 @@ describe('WorkModel · linear', () => {
         patchFields: ['status'],
         changeType: 'updated',
         rootOperationId: 'op-race-loser',
-        sourceToolCallId: 'tool-call-race-loser',
+        toolCallId: 'tool-call-race-loser',
         status: 'In Progress',
       });
     } finally {
@@ -124,7 +124,7 @@ describe('WorkModel · linear', () => {
         url: 'https://linear.app/lobehub/issue/LOBE-10966/linear-work-issue',
       },
       rootOperationId: 'op-linear-issue-create',
-      sourceToolCallId: 'tool-call-linear-issue-create',
+      toolCallId: 'tool-call-linear-issue-create',
       toolName: 'save_issue',
       topicId,
     });
@@ -139,7 +139,7 @@ describe('WorkModel · linear', () => {
         updatedAt: '2026-07-01T13:23:10.614Z',
       },
       rootOperationId: 'op-linear-issue-edit',
-      sourceToolCallId: 'tool-call-linear-issue-edit',
+      toolCallId: 'tool-call-linear-issue-edit',
       toolName: 'save_issue',
       topicId,
     });
@@ -151,19 +151,19 @@ describe('WorkModel · linear', () => {
         state: 'In Progress',
       },
       rootOperationId: 'op-linear-issue-edit',
-      sourceToolCallId: 'tool-call-linear-issue-edit',
+      toolCallId: 'tool-call-linear-issue-edit',
       toolName: 'save_issue',
       topicId,
     });
 
     expect(second?.id).toBe(first?.id);
     expect(replay?.id).toBe(first?.id);
-    // The Work row keeps stable identity plus the current title/description cache.
+    // The Work row keeps stable resource identity plus the current card projection.
     expect(second).toMatchObject({
       description: 'Track Linear issue as Work',
       resourceId: 'issue-uuid-10966',
       resourceType: 'linear_issue',
-      sourceToolIdentifier: 'linear',
+      toolIdentifier: 'linear',
       title: 'Linear Work issue',
       type: 'external',
     });
@@ -206,14 +206,14 @@ describe('WorkModel · linear', () => {
     await workModel.handleSkillToolResult({
       provider: 'linear',
       data: { id: 'issue-uuid-read', title: 'Read only' },
-      sourceToolCallId: 'tool-call-linear-read',
+      toolCallId: 'tool-call-linear-read',
       toolName: 'get_issue',
       topicId,
     });
     await workModel.handleSkillToolResult({
       provider: 'linear',
       data: { error: 'Invalid issue', isError: true },
-      sourceToolCallId: 'tool-call-linear-error',
+      toolCallId: 'tool-call-linear-error',
       toolName: 'save_issue',
       topicId,
     });
@@ -241,7 +241,7 @@ describe('WorkModel · linear', () => {
         },
       }),
       rootOperationId: 'op-linear-document-create',
-      sourceToolCallId: 'tool-call-linear-document-create',
+      toolCallId: 'tool-call-linear-document-create',
       toolName: 'create_document',
       topicId,
     });
@@ -256,7 +256,7 @@ describe('WorkModel · linear', () => {
         url: 'https://linear.app/lobehub/document/linear-document-8298fa69b2e3',
       },
       rootOperationId: 'op-linear-document-edit',
-      sourceToolCallId: 'tool-call-linear-document-edit',
+      toolCallId: 'tool-call-linear-document-edit',
       toolName: 'save_document',
       topicId,
     });
@@ -268,7 +268,7 @@ describe('WorkModel · linear', () => {
         id: 'doc-1',
       },
       rootOperationId: 'op-linear-document-partial-edit',
-      sourceToolCallId: 'tool-call-linear-document-partial-edit',
+      toolCallId: 'tool-call-linear-document-partial-edit',
       toolName: 'save_document',
       topicId,
     });
@@ -284,7 +284,7 @@ describe('WorkModel · linear', () => {
         url: 'https://linear.app/lobehub/issue/LOBE-10966#comment-1',
       },
       rootOperationId: 'op-linear-comment-create',
-      sourceToolCallId: 'tool-call-linear-comment-create',
+      toolCallId: 'tool-call-linear-comment-create',
       toolName: 'save_comment',
       topicId,
     });
@@ -313,7 +313,7 @@ describe('WorkModel · linear', () => {
       provider: 'linear',
       args: { id: 'comment-1' },
       data: { id: 'comment-1' },
-      sourceToolCallId: 'tool-call-linear-comment-delete',
+      toolCallId: 'tool-call-linear-comment-delete',
       toolName: 'delete_comment',
       topicId,
     });
@@ -343,7 +343,7 @@ describe('WorkModel · linear', () => {
         title: 'Owner issue title',
         url: 'https://linear.app/lobehub/issue/LOBE-10966/shared-issue',
       },
-      sourceToolCallId: 'tool-call-linear-owner-issue',
+      toolCallId: 'tool-call-linear-owner-issue',
       toolName: 'save_issue',
       topicId,
     });
@@ -356,7 +356,7 @@ describe('WorkModel · linear', () => {
         title: 'Other user issue title',
         url: 'https://linear.app/lobehub/issue/LOBE-10966/shared-issue',
       },
-      sourceToolCallId: 'tool-call-linear-other-issue',
+      toolCallId: 'tool-call-linear-other-issue',
       toolName: 'save_issue',
       topicId: otherTopicId,
     });

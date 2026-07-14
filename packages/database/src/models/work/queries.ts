@@ -19,6 +19,7 @@ import { type WorkContext, workOwnership } from './context';
 import { getTotalCostByWorkIds } from './cost';
 import {
   currentTaskSummaryFields,
+  currentVersionEventSelection,
   currentVersions,
   currentWorkListFields,
   taskSummaryJoin,
@@ -26,17 +27,15 @@ import {
 import { WORK_TYPE_ADAPTERS, workTypeAdapters } from './registry';
 
 /**
- * Over-fetch multiplier for list/summary queries: one per registered Work
- * type. Rows are fetched per type and deduped to the latest item per work in
- * JS, so each query over-fetches by this factor before results are trimmed
- * back down to `limit`.
+ * Conversation queries still fan out once per registered Work type, then
+ * merge and dedupe the event rows in memory.
  */
-const WORK_TYPE_FANOUT = workTypeAdapters.length;
+const WORK_TYPE_COUNT = workTypeAdapters.length;
 /**
- * Hard ceiling for the summary-row over-fetch LIMIT: `rootOperationIds` length
+ * Hard ceiling for batched root-operation queries. `rootOperationIds` length
  * is caller-controlled (the tRPC schema caps only `limit`), so without a clamp
- * a long conversation's batched ids would inflate the per-type ORDER-BY
- * queries and the matching in-memory sort far beyond the final capped result.
+ * a long conversation could inflate the ORDER-BY query and in-memory
+ * repartitioning far beyond the final capped result.
  */
 const MAX_SUMMARY_ROW_LIMIT = 1000;
 
@@ -113,42 +112,37 @@ export const listSummariesByRootOperations = async (
   if (rootOperationIds.length === 0) return result;
 
   const limit = params.limit ?? 20;
-  const filters = [inArray(workVersions.rootOperationId, rootOperationIds)];
-  const rowLimit = Math.min(
-    rootOperationIds.length * limit * WORK_TYPE_FANOUT,
-    MAX_SUMMARY_ROW_LIMIT,
-  );
-  const rowsByType = await Promise.all(
-    workTypeAdapters.map(async (adapter) => ({
-      adapter,
-      rows: await adapter.listSummaryRows(ctx, filters, rowLimit),
-    })),
-  );
+  const rowLimit = Math.min(rootOperationIds.length * limit, MAX_SUMMARY_ROW_LIMIT);
+  const rows = await ctx.db
+    .select({
+      event: currentVersionEventSelection,
+      ...currentTaskSummaryFields,
+      version: {
+        createdAt: currentVersions.createdAt,
+        id: currentVersions.id,
+        version: currentVersions.version,
+      },
+      work: currentWorkListFields,
+    })
+    .from(works)
+    .innerJoin(currentVersions, eq(works.currentVersionId, currentVersions.id))
+    .leftJoin(tasks, taskSummaryJoin(ctx))
+    .where(and(workOwnership(ctx), inArray(works.rootOperationId, rootOperationIds)))
+    .orderBy(desc(works.updatedAt), desc(works.id))
+    .limit(rowLimit);
 
-  // ONE cost query across every type's rows (cumulative snapshots aggregated
-  // per work in cost.ts), instead of one per type.
   const costByWorkId = await getTotalCostByWorkIds(
     ctx,
-    rowsByType.flatMap(({ rows }) => rows.map((row) => row.work.id)),
+    rows.map((row) => row.work.id),
   );
 
-  const summaries = rowsByType
-    .flatMap(({ adapter, rows }) =>
-      rows.map((row) => adapter.mapSummaryRow(row, costByWorkId.get(row.work.id) ?? null)),
-    )
-    .sort((a, b) => b.event.createdAt.getTime() - a.event.createdAt.getTime());
+  const summaries = rows.map((row) =>
+    WORK_TYPE_ADAPTERS[row.work.type].mapCurrentRow(row, costByWorkId.get(row.work.id) ?? null),
+  );
 
-  // Dedupe to the latest event per Work GLOBALLY across the requested
-  // operations: when several rounds touch the same Work (turn A creates a
-  // task, turn B updates it), only the last touching round's anchor card
-  // should surface it — earlier rounds drop the chip instead of repeating
-  // the same artifact every turn.
-  const seenWorks = new Set<string>();
   for (const summary of summaries) {
-    const rootOperationId = summary.event.rootOperationId;
+    const rootOperationId = summary.rootOperationId;
     if (!rootOperationId || !(rootOperationId in result)) continue;
-    if (seenWorks.has(summary.id)) continue;
-    seenWorks.add(summary.id);
     if (result[rootOperationId].length >= limit) continue;
     result[rootOperationId].push(summary);
   }
@@ -174,7 +168,7 @@ export const listByConversation = async (
   const rowsByType = await Promise.all(
     workTypeAdapters.map((adapter) =>
       adapter.listConversationRows(ctx, {
-        rowLimit: limit * WORK_TYPE_FANOUT,
+        rowLimit: limit * WORK_TYPE_COUNT,
         threadFilter,
         topicId: params.topicId!,
       }),
@@ -258,7 +252,7 @@ const decodeWorkCursor = (cursor: string): { id: string; updatedAt: Date } | nul
  * primary table (not `work_versions` events), so `event`/`version` both reflect
  * the Work's current version. `type` optionally narrows to one registry entry;
  * omitting it powers the combined 全部 view. One query serves every type — the
- * per-type differences live in each adapter's `mapWorkspaceRow`.
+ * per-type differences live in each adapter's `mapCurrentRow`.
  */
 export const listByWorkspace = async (
   ctx: WorkContext,
@@ -293,18 +287,7 @@ export const listByWorkspace = async (
     .select({
       // Global view has no mutation event to anchor on, so the current version
       // doubles as the surfacing event (mirrors the summary row shape).
-      event: {
-        changeType: currentVersions.changeType,
-        createdAt: currentVersions.createdAt,
-        cumulativeCost: currentVersions.cumulativeCost,
-        id: currentVersions.id,
-        metadata: currentVersions.metadata,
-        rootOperationId: currentVersions.rootOperationId,
-        sourceMessageId: currentVersions.sourceMessageId,
-        sourceToolCallId: currentVersions.sourceToolCallId,
-        sourceToolName: currentVersions.sourceToolName,
-        version: currentVersions.version,
-      },
+      event: currentVersionEventSelection,
       ...currentTaskSummaryFields,
       version: {
         createdAt: currentVersions.createdAt,
@@ -329,7 +312,7 @@ export const listByWorkspace = async (
   );
 
   const items = pageRows.map((row) =>
-    WORK_TYPE_ADAPTERS[row.work.type].mapWorkspaceRow(row, costByWorkId.get(row.work.id) ?? null),
+    WORK_TYPE_ADAPTERS[row.work.type].mapCurrentRow(row, costByWorkId.get(row.work.id) ?? null),
   );
 
   return { items, nextCursor: hasMore ? encodeWorkCursor(pageRows.at(-1)!.work) : null };

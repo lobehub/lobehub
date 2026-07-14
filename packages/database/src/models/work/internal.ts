@@ -1,5 +1,4 @@
 import type {
-  DocumentWorkSummaryItem,
   RegisterTaskWorkParams,
   TaskWorkListItem,
   TaskWorkSummaryItem,
@@ -16,12 +15,11 @@ import { alias } from 'drizzle-orm/pg-core';
 
 import { tasks } from '../../schemas/task';
 import { works, workVersions } from '../../schemas/work';
-import { taskOwnership, versionOwnership, type WorkContext, workOwnership } from './context';
+import { taskOwnership, type WorkContext, workOwnership } from './context';
 
 /**
- * Second reference to `work_versions` for summary/list queries that both
- * filter by the mutation event (topicId / rootOperationId on the event row)
- * and render the Work's current content (works.currentVersionId join).
+ * Alias used when a current-Work query joins the immutable Version selected by
+ * `works.currentVersionId` to expose version metadata without another lookup.
  */
 export const currentVersions = alias(workVersions, 'current_work_versions');
 
@@ -69,12 +67,12 @@ export type WorkVersionEventParams = Pick<
   | 'cumulativeCost'
   | 'cumulativeUsage'
   | 'changeType'
+  | 'messageId'
   | 'rootOperationId'
-  | 'sourceMessageId'
-  | 'sourceToolCallId'
-  | 'sourceToolIdentifier'
-  | 'sourceToolName'
   | 'threadId'
+  | 'toolCallId'
+  | 'toolIdentifier'
+  | 'toolName'
   | 'topicId'
 >;
 
@@ -108,11 +106,25 @@ export const versionEventSelection = {
   id: workVersions.id,
   metadata: workVersions.metadata,
   changeType: workVersions.changeType,
+  messageId: workVersions.messageId,
   rootOperationId: workVersions.rootOperationId,
-  sourceMessageId: workVersions.sourceMessageId,
-  sourceToolCallId: workVersions.sourceToolCallId,
-  sourceToolName: workVersions.sourceToolName,
+  toolCallId: workVersions.toolCallId,
+  toolName: workVersions.toolName,
   version: workVersions.version,
+};
+
+/** Current-version event fields selected through the `currentVersions` alias. */
+export const currentVersionEventSelection = {
+  changeType: currentVersions.changeType,
+  createdAt: currentVersions.createdAt,
+  cumulativeCost: currentVersions.cumulativeCost,
+  id: currentVersions.id,
+  messageId: currentVersions.messageId,
+  metadata: currentVersions.metadata,
+  rootOperationId: currentVersions.rootOperationId,
+  toolCallId: currentVersions.toolCallId,
+  toolName: currentVersions.toolName,
+  version: currentVersions.version,
 };
 
 /** Stable Work columns shared by current-card and historical-event projections. */
@@ -122,11 +134,12 @@ const workIdentityFields = {
   id: works.id,
   resourceId: works.resourceId,
   resourceType: works.resourceType,
-  sourceThreadId: works.sourceThreadId,
-  sourceToolIdentifier: works.sourceToolIdentifier,
-  sourceTopicId: works.sourceTopicId,
+  rootOperationId: works.rootOperationId,
+  toolIdentifier: works.toolIdentifier,
+  toolName: works.toolName,
   type: works.type,
   updatedAt: works.updatedAt,
+  url: works.url,
   userId: works.userId,
   workspaceId: works.workspaceId,
 };
@@ -135,10 +148,9 @@ const workIdentityFields = {
 export const currentWorkListFields = {
   ...workIdentityFields,
   description: works.description,
-  identifier: currentVersions.identifier,
-  status: currentVersions.status,
+  identifier: works.identifier,
+  status: works.status,
   title: works.title,
-  url: currentVersions.url,
 };
 
 /** Historical event card fields sourced entirely from that event's version snapshot. */
@@ -146,8 +158,11 @@ export const eventWorkListFields = {
   ...workIdentityFields,
   description: workVersions.description,
   identifier: workVersions.identifier,
+  rootOperationId: workVersions.rootOperationId,
   status: workVersions.status,
   title: workVersions.title,
+  toolIdentifier: workVersions.toolIdentifier,
+  toolName: workVersions.toolName,
   url: workVersions.url,
 };
 
@@ -165,12 +180,6 @@ export interface TaskWorkSummaryQueryRow {
  */
 export type DisplayWorkType = 'document' | 'external';
 
-export interface DisplayWorkSummaryQueryRow {
-  event: WorkVersionPreview;
-  version: DocumentWorkSummaryItem['version'];
-  work: WorkListBaseItem;
-}
-
 /** Version-event row for display-backed types (each mutation event, no live join). */
 export interface DisplayVersionEventRow {
   version: WorkVersionPreview;
@@ -184,11 +193,11 @@ export interface DisplayVersionEventRow {
 export const currentTaskSummaryFields = {
   task: {
     deleted: sql<boolean>`${tasks.id} is null`,
-    identifier: sql<string | null>`coalesce(${tasks.identifier}, ${currentVersions.identifier})`,
+    identifier: sql<string | null>`coalesce(${tasks.identifier}, ${works.identifier})`,
     instruction: sql<string | null>`coalesce(${tasks.instruction}, ${works.description})`,
     name: sql<string | null>`coalesce(${tasks.name}, ${works.title})`,
     priority: sql<number | null>`${tasks.priority}`,
-    status: sql<string | null>`${tasks.status}`,
+    status: sql<string | null>`coalesce(${tasks.status}, ${works.status})`,
   },
 };
 
@@ -200,7 +209,7 @@ export const eventTaskSummaryFields = {
     instruction: sql<string | null>`coalesce(${tasks.instruction}, ${workVersions.description})`,
     name: sql<string | null>`coalesce(${tasks.name}, ${workVersions.title})`,
     priority: sql<number | null>`${tasks.priority}`,
-    status: sql<string | null>`${tasks.status}`,
+    status: sql<string | null>`coalesce(${tasks.status}, ${workVersions.status})`,
   },
 };
 
@@ -230,36 +239,9 @@ export const listDisplayVersionEventRows = (
     })
     .from(workVersions)
     .innerJoin(works, and(eq(workVersions.workId, works.id), workOwnership(ctx)))
-    .where(and(versionOwnership(ctx), ...filters, eq(works.type, type)))
+    .where(and(...filters, eq(works.type, type)))
     .orderBy(desc(workVersions.createdAt))
     .limit(limit);
-
-/**
- * Shared current-version summary query for display-backed work types; `task`
- * keeps its own variant because it additionally joins the tasks table.
- */
-export const listDisplayWorkSummaryRows = (
-  ctx: WorkContext,
-  type: DisplayWorkType,
-  filters: SQL[],
-  rowLimit: number,
-): Promise<DisplayWorkSummaryQueryRow[]> =>
-  ctx.db
-    .select({
-      event: versionEventSelection,
-      version: {
-        createdAt: currentVersions.createdAt,
-        id: currentVersions.id,
-        version: currentVersions.version,
-      },
-      work: currentWorkListFields,
-    })
-    .from(workVersions)
-    .innerJoin(works, and(eq(workVersions.workId, works.id), workOwnership(ctx)))
-    .innerJoin(currentVersions, eq(works.currentVersionId, currentVersions.id))
-    .where(and(versionOwnership(ctx), ...filters, eq(works.type, type)))
-    .orderBy(desc(workVersions.createdAt), desc(works.updatedAt))
-    .limit(rowLimit);
 
 /**
  * One current-version row surfaced by the conversation-scoped list query,
@@ -289,37 +271,22 @@ export interface WorkspaceSummaryQueryRow {
 }
 
 /**
- * Per-type query/mapping strategy consumed by the aggregate queries in
- * `queries.ts`. The aggregates iterate `WORK_TYPE_ADAPTERS` (see registry.ts),
- * so adding a Work type means registering ONE adapter — there is no hand-written
- * per-type fan-out left to forget, which would silently drop that type's rows.
- *
- * `Row` is the type-specific summary row; it round-trips within one adapter
- * (`listSummaryRows` produces it, `mapSummaryRow` consumes it), so the registry
- * can hold adapters as `WorkTypeAdapter<{ work: WorkListBaseItem }>` without losing
- * per-adapter safety. METHOD signatures are required here — methods stay
- * bivariant under strictFunctionTypes, which is what lets an adapter with a
- * narrower `Row` conform to the registry's widened constraint; the
- * property-arrow style the lint rule prefers is contravariant and breaks the
- * `satisfies Record<WorkType, …>` check in registry.ts.
+ * Per-type event-query and display-mapping strategy. Current summaries use one
+ * shared Work-first query; adding a Work type requires only its historical and
+ * conversation projections plus a mapping entry in `WORK_TYPE_ADAPTERS`.
  */
-/* eslint-disable @typescript-eslint/method-signature-style */
-export interface WorkTypeAdapter<Row extends { work: WorkListBaseItem }> {
+export interface WorkTypeAdapter {
   /** Current-version rows for the conversation sidebar list. */
-  listConversationRows(
+  listConversationRows: (
     ctx: WorkContext,
     params: WorkConversationRowParams,
-  ): Promise<WorkConversationRow[]>;
-  /** Current-version summary rows anchored on mutation events (message-list chips). */
-  listSummaryRows(ctx: WorkContext, filters: SQL[], rowLimit: number): Promise<Row[]>;
+  ) => Promise<WorkConversationRow[]>;
   /** Version-event rows carrying each mutation event. */
-  listVersionEvents(
+  listVersionEvents: (
     ctx: WorkContext,
     filters: SQL[],
     limit: number,
-  ): Promise<WorkVersionEventItem[]>;
-  mapSummaryRow(row: Row, totalCost: number | null): WorkSummaryItem;
-  /** Map one shared workspace-list row onto this type's summary item. */
-  mapWorkspaceRow(row: WorkspaceSummaryQueryRow, totalCost: number | null): WorkSummaryItem;
+  ) => Promise<WorkVersionEventItem[]>;
+  /** Map one shared current-Work row onto this type's summary item. */
+  mapCurrentRow: (row: WorkspaceSummaryQueryRow, totalCost: number | null) => WorkSummaryItem;
 }
-/* eslint-enable @typescript-eslint/method-signature-style */

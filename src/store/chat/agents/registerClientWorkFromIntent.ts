@@ -14,9 +14,9 @@ interface RegisterClientWorkFromIntentParams {
   rootOperationId?: string;
   sourceMessageId?: string;
   sourceToolCallId?: string;
-  /** Tool/plugin identifier that produced the registration (creator tool for task/document Works). */
+  /** Tool/plugin identifier supplied by the runtime event that produced this version. */
   sourceToolIdentifier?: string | null;
-  /** Fallback `source` for task Works (the API name); skills/documents carry their own. */
+  /** Runtime event's concrete tool name; skills/documents may carry their own. */
   sourceToolName: string;
   state: Pick<AgentState, 'cost' | 'usage'>;
   threadId?: string | null;
@@ -70,12 +70,12 @@ export const registerClientWorkFromIntent = async ({
       {
         actorAgentId,
         ...cumulative,
+        messageId: sourceMessageId,
         rootOperationId,
-        sourceMessageId,
-        sourceToolCallId,
-        sourceToolIdentifier,
-        sourceToolName,
         threadId,
+        toolCallId: sourceToolCallId,
+        toolIdentifier: sourceToolIdentifier,
+        toolName: sourceToolName,
         topicId,
       },
     );
