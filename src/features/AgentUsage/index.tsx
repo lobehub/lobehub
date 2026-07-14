@@ -44,6 +44,11 @@ const AgentUsage = memo(() => {
   const [range, setRange] = useState<TimeRange>('30d');
   const [granularity, setGranularity] = useState<AgentUsageGranularity>('day');
 
+  const handleGranularityChange = (nextGranularity: AgentUsageGranularity) => {
+    setGranularity(nextGranularity);
+    if (nextGranularity === 'week' && range === '7d') setRange('30d');
+  };
+
   const { data, isLoading, error, mutate } = useAgentUsageStats(
     activeAgentId ?? '',
     range,
@@ -87,7 +92,7 @@ const AgentUsage = memo(() => {
                       { label: t('usageStats.byDay'), value: 'day' },
                       { label: t('usageStats.byWeek'), value: 'week' },
                     ]}
-                    onChange={(v) => setGranularity(v as AgentUsageGranularity)}
+                    onChange={(v) => handleGranularityChange(v as AgentUsageGranularity)}
                   />
                 </Flexbox>
                 <Flexbox horizontal align={'center'} gap={8}>
@@ -97,11 +102,18 @@ const AgentUsage = memo(() => {
                   <Segmented
                     size={'small'}
                     value={range}
-                    options={[
-                      { label: '7d', value: '7d' },
-                      { label: '30d', value: '30d' },
-                      { label: '90d', value: '90d' },
-                    ]}
+                    options={
+                      granularity === 'week'
+                        ? [
+                            { label: '30d', value: '30d' },
+                            { label: '90d', value: '90d' },
+                          ]
+                        : [
+                            { label: '7d', value: '7d' },
+                            { label: '30d', value: '30d' },
+                            { label: '90d', value: '90d' },
+                          ]
+                    }
                     onChange={(v) => setRange(v as TimeRange)}
                   />
                 </Flexbox>
