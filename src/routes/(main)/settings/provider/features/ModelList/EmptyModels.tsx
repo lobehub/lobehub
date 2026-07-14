@@ -69,7 +69,7 @@ const EmptyState = memo<{ provider: string }>(({ provider }) => {
       </Flexbox>
 
       <Flexbox horizontal gap={8}>
-        <Tooltip title={canManageProvider ? '' : reason}>
+        <Tooltip title={canManageProvider ? undefined : reason}>
           <Button
             disabled={!canManageProvider}
             icon={PlusIcon}
@@ -86,7 +86,7 @@ const EmptyState = memo<{ provider: string }>(({ provider }) => {
             {t('providerModels.list.addNew')}
           </Button>
         </Tooltip>
-        <Tooltip title={canManageProvider ? '' : reason}>
+        <Tooltip title={canManageProvider ? undefined : reason}>
           <Button
             disabled={!canManageProvider}
             icon={<Icon icon={LucideRefreshCcwDot} />}

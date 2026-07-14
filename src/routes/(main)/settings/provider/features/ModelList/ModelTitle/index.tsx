@@ -116,7 +116,7 @@ const ModelTitle = memo<ModelFetcherProps>(
               )}
               <Flexbox horizontal gap={4}>
                 {showModelFetcher && (
-                  <Tooltip title={canManageProvider ? '' : reason}>
+                  <Tooltip title={canManageProvider ? undefined : reason}>
                     <Button
                       disabled={!canManageProvider}
                       icon={LucideRefreshCcwDot}
@@ -152,7 +152,7 @@ const ModelTitle = memo<ModelFetcherProps>(
                   </Tooltip>
                 )}
                 {showAddNewModel && (
-                  <Tooltip title={canManageProvider ? '' : reason}>
+                  <Tooltip title={canManageProvider ? undefined : reason}>
                     <Button
                       disabled={!canManageProvider}
                       icon={PlusIcon}
