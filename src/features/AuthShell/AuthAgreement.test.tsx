@@ -1,19 +1,51 @@
 import { act, render, renderHook, screen } from '@testing-library/react';
+import type { ReactElement } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import AuthAgreement, { useAuthAgreement } from './AuthAgreement';
+import AuthFooterLinks from './AuthFooterLinks';
+
+interface TransMockProps {
+  components?: Record<string, ReactElement>;
+  i18nKey: string;
+}
 
 vi.mock('react-i18next', async (importOriginal) => ({
   ...(await importOriginal()),
-  Trans: ({ i18nKey }: { i18nKey: string }) => i18nKey,
+  Trans: ({ components, i18nKey }: TransMockProps) => (
+    <>
+      {i18nKey}
+      {components?.terms}
+      {components?.privacy}
+    </>
+  ),
 }));
 
+const expectLinksToOpenInNewTabs = () => {
+  const links = screen.getAllByRole('link');
+
+  expect(links).toHaveLength(2);
+  for (const link of links) {
+    expect(link.getAttribute('target')).toBe('_blank');
+    expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+  }
+};
+
 describe('AuthAgreement', () => {
-  it('should keep the agreement visible without an email form control', () => {
+  it('should keep the agreement visible and open its links in new tabs', () => {
     render(<AuthAgreement />);
 
     expect(screen.queryByRole('checkbox')).toBeNull();
     expect(screen.getByText('footer.agreement')).toBeTruthy();
+    expectLinksToOpenInNewTabs();
+  });
+});
+
+describe('AuthFooterLinks', () => {
+  it('should open its links in new tabs', () => {
+    render(<AuthFooterLinks />);
+
+    expectLinksToOpenInNewTabs();
   });
 });
 

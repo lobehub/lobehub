@@ -39,12 +39,12 @@ const AgreementText = memo<AgreementTextProps>(({ i18nKey }) => {
       ns={'auth'}
       components={{
         privacy: (
-          <a href={PRIVACY_URL} style={linkStyle}>
+          <a href={PRIVACY_URL} rel="noopener noreferrer" style={linkStyle} target="_blank">
             {translate('footer.privacy')}
           </a>
         ),
         terms: (
-          <a href={TERMS_URL} style={linkStyle}>
+          <a href={TERMS_URL} rel="noopener noreferrer" style={linkStyle} target="_blank">
             {translate('footer.terms')}
           </a>
         ),

@@ -15,11 +15,11 @@ const AuthFooterLinks = memo(() => {
   const { t } = useTranslation('auth');
   return (
     <Text align={'center'} fontSize={13} type={'secondary'}>
-      <a href={TERMS_URL} style={linkStyle}>
+      <a href={TERMS_URL} rel="noopener noreferrer" style={linkStyle} target="_blank">
         {t('footer.terms')}
       </a>
       <span style={{ marginInline: 8 }}>·</span>
-      <a href={PRIVACY_URL} style={linkStyle}>
+      <a href={PRIVACY_URL} rel="noopener noreferrer" style={linkStyle} target="_blank">
         {t('footer.privacy')}
       </a>
     </Text>
