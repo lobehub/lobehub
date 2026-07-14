@@ -471,28 +471,6 @@ it('should use theme', () => {
 });
 ```
 
-### Testing API Calls with MSW
-
-```typescript
-import { rest } from 'msw';
-import { setupServer } from 'msw/node';
-
-const server = setupServer(
-  rest.get('/api/user', (req, res, ctx) => {
-    return res(ctx.json({ id: '1', name: 'Alice' }));
-  }),
-);
-
-beforeAll(() => server.listen());
-afterEach(() => server.resetHandlers());
-afterAll(() => server.close());
-
-it('should fetch user data', async () => {
-  const user = await fetchUser('1');
-  expect(user.name).toBe('Alice');
-});
-```
-
 ## Coverage
 
 ### Generate Coverage Report

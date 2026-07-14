@@ -82,6 +82,8 @@
   "menu.allFiles": "جميع الملفات",
   "menu.allPages": "جميع الصفحات",
   "networkError": "فشل في استرداد المكتبات. يرجى التحقق من اتصال الشبكة والمحاولة مرة أخرى.",
+  "notFound.desc": "هذا الملف غير موجود أو لم يعد متاحًا — قد يكون قد تم حذفه أو تعيينه كخاص من قبل مالكه.",
+  "notFound.title": "الملف غير متاح",
   "notSupportGuide.desc": "وضع النشر الحالي لا يدعم إدارة الملفات. قم بالتبديل إلى <1>وضع قاعدة بيانات الخادم</1>، أو استخدم <3>LobeHub Cloud</3>.",
   "notSupportGuide.features.allKind.desc": "يدعم أنواع الملفات الشائعة، بما في ذلك تنسيقات الصفحات مثل Word وPPT وExcel وPDF وTXT، بالإضافة إلى ملفات البرمجة مثل JS وPython.",
   "notSupportGuide.features.allKind.title": "تحليل أنواع ملفات متعددة",

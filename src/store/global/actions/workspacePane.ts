@@ -152,6 +152,15 @@ export class GlobalWorkspacePaneActionImpl {
     );
   };
 
+  openInBrowserTab = (url: string): void => {
+    this.#get().toggleRightPanel(true);
+    this.#get().setWorkingSidebarTab('browser');
+    this.#get().updateSystemStatus(
+      { workingSidebarBrowserRequest: { nonce: Date.now(), url } },
+      n('openInBrowserTab'),
+    );
+  };
+
   toggleWideScreen = (newValue?: boolean): void => {
     const noWideScreen =
       typeof newValue === 'boolean' ? !newValue : !this.#get().status.noWideScreen;

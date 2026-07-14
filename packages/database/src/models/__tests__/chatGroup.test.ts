@@ -401,6 +401,67 @@ describe('ChatGroupModel', () => {
     });
   });
 
+  describe('publishToWorkspace', () => {
+    it('publishes the private supervisor agent together with the group', async () => {
+      const ownerModel = new ChatGroupModel(serverDB, userId, workspaceId);
+
+      await serverDB.insert(chatGroups).values({
+        id: 'publish-group',
+        title: 'Publish group',
+        userId,
+        visibility: 'private',
+        workspaceId,
+      });
+      await serverDB.insert(agentsTable).values([
+        {
+          id: 'publish-supervisor',
+          title: 'Supervisor',
+          userId,
+          virtual: true,
+          visibility: 'private',
+          workspaceId,
+        },
+        {
+          id: 'publish-private-member',
+          title: 'Private member',
+          userId,
+          visibility: 'private',
+          workspaceId,
+        },
+      ]);
+      await serverDB.insert(chatGroupsAgents).values([
+        {
+          agentId: 'publish-supervisor',
+          chatGroupId: 'publish-group',
+          order: -1,
+          role: 'supervisor',
+          userId,
+          workspaceId,
+        },
+        {
+          agentId: 'publish-private-member',
+          chatGroupId: 'publish-group',
+          order: 0,
+          role: 'participant',
+          userId,
+          workspaceId,
+        },
+      ]);
+
+      const result = await ownerModel.publishToWorkspace('publish-group');
+      expect(result.visibility).toBe('public');
+
+      const rows = await serverDB
+        .select({ id: agentsTable.id, visibility: agentsTable.visibility })
+        .from(agentsTable);
+      const byId = Object.fromEntries(rows.map((r) => [r.id, r.visibility]));
+      // Supervisor visibility follows the group; a private member agent keeps
+      // its own visibility (its owner demoted/kept it private on purpose).
+      expect(byId['publish-supervisor']).toBe('public');
+      expect(byId['publish-private-member']).toBe('private');
+    });
+  });
+
   describe('addAgentToGroup', () => {
     it('should add agent to group', async () => {
       // Create test data
@@ -1178,6 +1239,177 @@ describe('ChatGroupModel', () => {
       const result = await chatGroupModel.getMemberAvatarsByGroupIds([]);
 
       expect(result.size).toBe(0);
+    });
+  });
+
+  describe('member agent demoted to private (LOBE-11772)', () => {
+    // Public workspace group owned by `userId` with two members: a public agent
+    // and an agent `userId` switched back to private after it joined. Viewer is
+    // `otherUserId` (same workspace) — every roster read must drop the private
+    // member for them, while the agent's owner keeps seeing it.
+    const ownerModel = new ChatGroupModel(serverDB, userId, workspaceId);
+
+    beforeEach(async () => {
+      await serverDB.insert(chatGroups).values({
+        id: 'demotion-group',
+        title: 'Demotion group',
+        userId,
+        visibility: 'public',
+        workspaceId,
+      });
+      await serverDB.insert(agentsTable).values([
+        {
+          avatar: '/pub.png',
+          id: 'agt-public-member',
+          title: 'Public member',
+          userId,
+          visibility: 'public',
+          workspaceId,
+        },
+        {
+          avatar: '/priv.png',
+          id: 'agt-demoted-member',
+          title: 'Demoted member',
+          userId,
+          visibility: 'private',
+          workspaceId,
+        },
+      ]);
+      await serverDB.insert(chatGroupsAgents).values([
+        {
+          agentId: 'agt-public-member',
+          chatGroupId: 'demotion-group',
+          enabled: true,
+          order: 0,
+          userId,
+          workspaceId,
+        },
+        {
+          agentId: 'agt-demoted-member',
+          chatGroupId: 'demotion-group',
+          enabled: true,
+          order: 1,
+          userId,
+          workspaceId,
+        },
+      ]);
+    });
+
+    it('drops the private member from every roster read for another member', async () => {
+      const [withDetails] = await workspaceChatGroupModel.queryWithMemberDetails();
+      expect(withDetails.agents.map((a: any) => a.id)).toEqual(['agt-public-member']);
+
+      const found = await workspaceChatGroupModel.findGroupWithAgents('demotion-group');
+      expect(found?.agents.map((a) => a.agentId)).toEqual(['agt-public-member']);
+
+      const groupAgents = await workspaceChatGroupModel.getGroupAgents('demotion-group');
+      expect(groupAgents.map((a) => a.agentId)).toEqual(['agt-public-member']);
+
+      const enabled = await workspaceChatGroupModel.getEnabledGroupAgents('demotion-group');
+      expect(enabled.map((a) => a.agentId)).toEqual(['agt-public-member']);
+
+      const withMeta = await workspaceChatGroupModel.getGroupAgentsWithMeta('demotion-group');
+      expect(withMeta.map((a) => a.agentId)).toEqual(['agt-public-member']);
+
+      const avatars = await workspaceChatGroupModel.getMemberAvatarsByGroupIds(['demotion-group']);
+      expect(avatars.get('demotion-group')).toEqual([
+        { avatar: '/pub.png', backgroundColor: null },
+      ]);
+    });
+
+    it('keeps the private member visible to its own owner', async () => {
+      const found = await ownerModel.findGroupWithAgents('demotion-group');
+      expect(found?.agents.map((a) => a.agentId)).toEqual([
+        'agt-public-member',
+        'agt-demoted-member',
+      ]);
+
+      const avatars = await ownerModel.getMemberAvatarsByGroupIds(['demotion-group']);
+      expect(avatars.get('demotion-group')).toHaveLength(2);
+    });
+
+    it('excludes groups reachable only through a non-visible member in getGroupsWithAgents', async () => {
+      const viaDemoted = await workspaceChatGroupModel.getGroupsWithAgents(['agt-demoted-member']);
+      expect(viaDemoted).toHaveLength(0);
+
+      const viaPublic = await workspaceChatGroupModel.getGroupsWithAgents(['agt-public-member']);
+      expect(viaPublic.map((g) => g.id)).toEqual(['demotion-group']);
+    });
+  });
+
+  describe('countGroupsBlockingAgentDemotion', () => {
+    const ownerModel = new ChatGroupModel(serverDB, userId, workspaceId);
+
+    const seedGroup = async (
+      groupId: string,
+      groupOwner: string,
+      visibility: 'private' | 'public',
+      role: string,
+    ) => {
+      await serverDB.insert(chatGroups).values({
+        id: groupId,
+        title: groupId,
+        userId: groupOwner,
+        visibility,
+        workspaceId,
+      });
+      await serverDB.insert(chatGroupsAgents).values({
+        agentId: 'agt-supervisor',
+        chatGroupId: groupId,
+        role,
+        userId: groupOwner,
+        workspaceId,
+      });
+    };
+
+    beforeEach(async () => {
+      await serverDB.insert(agentsTable).values({
+        id: 'agt-supervisor',
+        title: 'Supervisor agent',
+        userId,
+        visibility: 'public',
+        workspaceId,
+      });
+    });
+
+    it('blocks when the agent supervises a public group', async () => {
+      await seedGroup('public-supervised', userId, 'public', 'supervisor');
+
+      await expect(
+        ownerModel.countGroupsBlockingAgentDemotion('agt-supervisor', userId),
+      ).resolves.toBe(1);
+    });
+
+    it("blocks when the agent supervises another member's group, even a private one", async () => {
+      await seedGroup('others-private-supervised', otherUserId, 'private', 'supervisor');
+
+      await expect(
+        ownerModel.countGroupsBlockingAgentDemotion('agt-supervisor', userId),
+      ).resolves.toBe(1);
+    });
+
+    it('does not block for regular membership in a public group', async () => {
+      await seedGroup('public-participant', userId, 'public', 'participant');
+
+      await expect(
+        ownerModel.countGroupsBlockingAgentDemotion('agt-supervisor', userId),
+      ).resolves.toBe(0);
+    });
+
+    it("does not block for the owner's own private group", async () => {
+      await seedGroup('own-private-supervised', userId, 'private', 'supervisor');
+
+      await expect(
+        ownerModel.countGroupsBlockingAgentDemotion('agt-supervisor', userId),
+      ).resolves.toBe(0);
+    });
+
+    it('returns 0 outside a workspace', async () => {
+      await seedGroup('public-supervised-2', userId, 'public', 'supervisor');
+
+      await expect(
+        chatGroupModel.countGroupsBlockingAgentDemotion('agt-supervisor', userId),
+      ).resolves.toBe(0);
     });
   });
 });

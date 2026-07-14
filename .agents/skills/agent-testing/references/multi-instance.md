@@ -25,7 +25,7 @@ sink an `electron-dev.sh start <id>` on a fresh worktree before it will even mou
 'FloatingPanel'`) and the app hung on the loading screen (`#root` empty,
   `__LOBE_STORES` undefined) **even though raw-CDP screenshots still showed a painted
   frame** from before the crash. Fix: real `pnpm install` in the worktree **root** _and_
-  `apps/desktop` (standalone install, per Step 0.1) before `start`. (`type-check` warns
+  `apps/desktop` (standalone install, per Step 2.1) before `start`. (`type-check` warns
   of the same skew: cross-root `packages/*` dual-identity errors when `node_modules` is
   symlinked across worktree roots.)
 - **First cold Vite load can `ECONNRESET` under resource contention.** Two full

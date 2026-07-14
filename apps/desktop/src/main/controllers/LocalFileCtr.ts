@@ -54,6 +54,7 @@ import {
   moveLocalFiles,
   readLocalFile,
   renameLocalFile,
+  resolveAgainstCwd,
   type SearchOptions,
   writeLocalFile,
 } from '@lobechat/local-file-shell';
@@ -62,6 +63,7 @@ import { execa } from 'execa';
 
 import ContentSearchService from '@/services/contentSearchSrv';
 import FileSearchService from '@/services/fileSearchSrv';
+import RemoteFileUploadService from '@/services/remoteFileUploadSrv';
 import { createLogger } from '@/utils/logger';
 import { netFetch } from '@/utils/net-fetch';
 
@@ -72,6 +74,28 @@ const logger = createLogger('controllers:LocalFileCtr');
 
 const SAFE_PATH_PREFIXES = ['/tmp', '/var/tmp'] as const;
 const PROJECT_FILE_GLOB_LIMIT = 5000;
+
+/**
+ * Image extensions `readFile` uploads to file storage instead of refusing as
+ * binary. The agent then sees the image (vision) via an `image_url` part,
+ * rather than hitting "Unsupported binary file".
+ *
+ * Limited to the formats vision providers accept (Anthropic/OpenAI:
+ * png/jpeg/gif/webp) — anything else would be silently dropped by the
+ * model-runtime builders, which is worse than the binary refusal. SVG is
+ * intentionally absent: it's text, and reading the source is more useful to
+ * the model than a rasterization we can't produce here.
+ */
+const LOCAL_IMAGE_EXT_TO_MIME: Record<string, string> = {
+  gif: 'image/gif',
+  jpeg: 'image/jpeg',
+  jpg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp',
+};
+
+/** Refuse to load image bytes beyond this size — providers reject them anyway. */
+const MAX_IMAGE_READ_BYTES = 10 * 1024 * 1024;
 
 const TEXT_PREVIEW_MIME_TYPES = new Set([
   'application/graphql',
@@ -395,6 +419,79 @@ export default class LocalFileCtr extends ControllerModule {
       fullContent: params.fullContent,
       loc: params.loc,
     });
+
+    // Image files: `local-file-shell` refuses binary, and the agent should be
+    // able to actually *see* the image (vision) rather than hit "Unsupported
+    // binary file type". Delegate the upload to the embedded CLI
+    // (`lh file upload`) and return a durable { fileId, url } — bytes never
+    // cross IPC and never reach the DB; the MessageContent processor turns
+    // the uploaded URL into an `image_url` part for the LLM.
+    const ext = path.extname(params.path).toLowerCase().replace('.', '');
+    const imageMimeType = LOCAL_IMAGE_EXT_TO_MIME[ext];
+    if (imageMimeType) {
+      const filePath = resolveAgainstCwd(params.path, params.cwd) ?? params.path;
+      const filename = path.basename(filePath);
+
+      const buildImageResult = (
+        content: string,
+        extra: Partial<LocalReadFileResult> = {},
+      ): LocalReadFileResult => ({
+        charCount: 0,
+        content,
+        createdTime: new Date(),
+        fileType: imageMimeType,
+        filename,
+        isImage: true,
+        lineCount: 0,
+        loc: [0, 0],
+        modifiedTime: new Date(),
+        totalCharCount: 0,
+        totalLineCount: 0,
+        ...extra,
+      });
+
+      let fileStat;
+      try {
+        fileStat = await stat(filePath);
+      } catch (error) {
+        return buildImageResult(`Error accessing or processing file: ${(error as Error).message}`);
+      }
+
+      if (!fileStat.isFile()) {
+        return buildImageResult(`Error: Not a regular file: ${filePath}`);
+      }
+
+      if (fileStat.size > MAX_IMAGE_READ_BYTES) {
+        return buildImageResult(
+          `Error: Image file is too large to preview (${fileStat.size} bytes, limit ${MAX_IMAGE_READ_BYTES}).`,
+        );
+      }
+
+      try {
+        const record = await this.app.getService(RemoteFileUploadService).uploadLocalFile(filePath);
+
+        if (record?.url) {
+          return buildImageResult(`[Image: ${filename}]`, {
+            createdTime: fileStat.birthtime,
+            imageFileId: record.id,
+            imageUrl: record.url,
+            modifiedTime: fileStat.mtime,
+          });
+        }
+
+        logger.warn('Image upload returned no record:', { filePath });
+      } catch (error) {
+        logger.warn('Image upload failed:', { error, filePath });
+      }
+
+      // Degrade: the placeholder tells the model an image exists that it
+      // cannot inspect, instead of failing the read outright.
+      return buildImageResult(
+        `[Image: ${filename}] (upload unavailable — the model cannot view this image)`,
+        { createdTime: fileStat.birthtime, modifiedTime: fileStat.mtime },
+      );
+    }
+
     return readLocalFile(params);
   }
 

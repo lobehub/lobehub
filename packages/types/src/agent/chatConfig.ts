@@ -4,6 +4,8 @@ import type { SearchMode } from '../search';
 import type { TopicGroupMode } from '../topic';
 import type { UserMemoryEffort } from '../user/settings/memory';
 import type { RuntimeEnvConfig } from './agentConfig';
+import type { ReasoningGraph } from './graph';
+import { ReasoningGraphSchema } from './graph';
 
 export interface WorkingModel {
   model: string;
@@ -70,6 +72,11 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
   enableContextCompression?: boolean;
   enableFollowUpChips?: boolean;
   /**
+   * Whether to route this agent through a graph-style orchestration runtime.
+   * Undefined means the agent uses the default runtime path.
+   */
+  enableGraphMode?: boolean;
+  /**
    * Enable historical message count
    */
   enableHistoryCount?: boolean;
@@ -92,6 +99,11 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
   gpt5_2ReasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
   gpt5_6ReasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
   gpt5ReasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
+  /**
+   * Graph-style orchestration runtime definition. Stored in chat config to avoid
+   * a dedicated agent table column while keeping eval-run snapshots intact.
+   */
+  graph?: null | ReasoningGraph;
   grok4_3ReasoningEffort?: 'none' | 'low' | 'medium' | 'high';
   grok4_5ReasoningEffort?: 'low' | 'medium' | 'high';
   grok4_20ReasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh';
@@ -235,7 +247,9 @@ export const AgentChatConfigSchema = z
     enableAutoScrollOnStreaming: z.boolean().optional(),
     enableCompressHistory: z.boolean().optional(),
     enableContextCompression: z.boolean().optional(),
+    enableGraphMode: z.boolean().optional(),
     enableFollowUpChips: z.boolean().optional(),
+    graph: ReasoningGraphSchema.nullish(),
     enableHistoryCount: z.boolean().optional(),
     enableMaxTokens: z.boolean().optional(),
     enableReasoning: z.boolean().optional(),

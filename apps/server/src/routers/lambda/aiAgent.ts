@@ -1,11 +1,12 @@
 import { type AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import { parse } from '@lobechat/conversation-flow';
-import { type TaskCurrentActivity, type TaskStatusResult } from '@lobechat/types';
+import type { TaskCurrentActivity, TaskStatusResult } from '@lobechat/types';
 import {
   RequestTrigger,
   ThreadStatus,
   ThreadType,
   UserInterventionConfigSchema,
+  workingDirConfigSchema,
 } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
@@ -28,8 +29,6 @@ import { AiAgentService } from '@/server/services/aiAgent';
 import { AiChatService } from '@/server/services/aiChat';
 import { getFileProxyUrl } from '@/server/services/file';
 import { HeterogeneousAgentService } from '@/server/services/heterogeneousAgent';
-
-import { workingDirConfigSchema } from './workingDirSchema';
 
 const log = debug('lobe-server:ai-agent-router');
 
@@ -209,7 +208,7 @@ const ExecAgentSchema = z
         /** ID of the pending `role='tool'` message this result targets. */
         parentMessageId: z.string(),
         /** Optional plugin state to persist on the tool message. */
-        pluginState: z.record(z.unknown()).optional(),
+        pluginState: z.record(z.string(), z.unknown()).optional(),
         /** tool_call_id of the pending tool call being answered. */
         toolCallId: z.string(),
       })
@@ -282,6 +281,35 @@ const ExecAgentsSchema = z.object({
   /** Array of agent tasks to execute */
   tasks: z.array(ExecAgentSchema).min(1),
 });
+
+/**
+ * Schema for scheduleAgentRun - defer an agent run to a future time
+ */
+const ScheduleAgentRunSchema = z
+  .object({
+    /** The agent ID to run (either agentId or slug is required) */
+    agentId: z.string().optional(),
+    /** File IDs of already-uploaded attachments to attach when the run fires */
+    fileIds: z.array(z.string()).optional(),
+    /** Group to file the topic under, when scheduling from a group conversation */
+    groupId: z.string().nullish(),
+    /** Override the agent's default model */
+    model: z.string().optional(),
+    /** The user input/prompt, replayed verbatim when the run comes due */
+    prompt: z.string().min(1),
+    /** Override the agent's default provider */
+    provider: z.string().optional(),
+    /**
+     * When to run. UTC ISO-8601 (`…Z`) — the dispatcher's due query compares it
+     * as text, so a zoned offset would break the ordering.
+     */
+    runAt: z.string().datetime(),
+    /** The agent slug to run (either agentId or slug is required) */
+    slug: z.string().optional(),
+  })
+  .refine((data) => data.agentId || data.slug, {
+    message: 'Either agentId or slug must be provided',
+  });
 
 /**
  * Schema for execSubAgentTask - execute SubAgent task
@@ -763,6 +791,35 @@ export const aiAgentRouter = router({
       });
     }
   }),
+
+  /**
+   * Defer an agent run to a future time ("send this in 3 hours").
+   *
+   * Kept separate from `execAgent` rather than folded in behind a `runAt` flag:
+   * nothing is executed here, so every run-shaped field of `ExecAgentResult`
+   * (operationId, assistantMessageId, autoStarted) would come back empty and
+   * every caller would have to branch on it.
+   *
+   * Cancelling / rescheduling goes through the ordinary topic update mutations —
+   * those are already ownership-scoped, and a schedule is just topic state.
+   */
+  scheduleAgentRun: aiAgentWriteProcedure
+    .input(ScheduleAgentRunSchema)
+    .mutation(async ({ input, ctx }) => {
+      log('scheduleAgentRun: identifier=%s, runAt=%s', input.agentId || input.slug, input.runAt);
+
+      try {
+        return await ctx.aiAgentService.scheduleAgentRun(input);
+      } catch (error: any) {
+        if (error instanceof TRPCError) throw error;
+
+        throw new TRPCError({
+          cause: error,
+          code: 'INTERNAL_SERVER_ERROR',
+          message: `Failed to schedule agent run: ${error.message}`,
+        });
+      }
+    }),
 
   /**
    * Batch execute multiple agents

@@ -13,6 +13,7 @@ import AutoSaveHint from '@/components/Editor/AutoSaveHint';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import { imageUrl } from '@/const/url';
 import { isDesktop } from '@/const/version';
+import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
 import { useSaveState } from '@/hooks/useSaveState';
 import { localeOptions } from '@/locales/resources';
 import { useGlobalStore } from '@/store/global';
@@ -73,7 +74,11 @@ const Common = memo(() => {
             onChange={(value) => setTheme(value === 'auto' ? 'system' : value)}
           />
         ),
-        label: t('settingCommon.themeMode.title'),
+        label: (
+          <SettingsSearchAnchor id={'appearance-theme-mode'}>
+            {t('settingCommon.themeMode.title')}
+          </SettingsSearchAnchor>
+        ),
         minWidth: undefined,
       },
       {
@@ -92,7 +97,11 @@ const Common = memo(() => {
             />
           </Flexbox>
         ),
-        label: t('settingCommon.lang.title'),
+        label: (
+          <SettingsSearchAnchor id={'appearance-language'}>
+            {t('settingCommon.lang.title')}
+          </SettingsSearchAnchor>
+        ),
       },
       {
         children: (
@@ -117,7 +126,11 @@ const Common = memo(() => {
           />
         ),
         desc: t('settingAppearance.animationMode.desc'),
-        label: t('settingAppearance.animationMode.title'),
+        label: (
+          <SettingsSearchAnchor id={'appearance-animation'}>
+            {t('settingAppearance.animationMode.title')}
+          </SettingsSearchAnchor>
+        ),
         minWidth: undefined,
         name: 'animationMode',
         valuePropName: 'activeKey',
@@ -140,7 +153,11 @@ const Common = memo(() => {
           />
         ),
         desc: t('settingAppearance.contextMenuMode.desc'),
-        label: t('settingAppearance.contextMenuMode.title'),
+        label: (
+          <SettingsSearchAnchor id={'appearance-context-menu'}>
+            {t('settingAppearance.contextMenuMode.title')}
+          </SettingsSearchAnchor>
+        ),
         minWidth: undefined,
         name: 'contextMenuMode',
         valuePropName: 'activeKey',
@@ -164,7 +181,11 @@ const Common = memo(() => {
           </Flexbox>
         ),
         desc: t('settingCommon.responseLanguage.desc'),
-        label: t('settingCommon.responseLanguage.title'),
+        label: (
+          <SettingsSearchAnchor id={'appearance-response-language'}>
+            {t('settingCommon.responseLanguage.title')}
+          </SettingsSearchAnchor>
+        ),
       },
     ],
     extra: <AutoSaveHint lastUpdatedTime={lastSavedAt} saveStatus={saveStatus} onRetry={retry} />,

@@ -258,9 +258,7 @@ describe('parseToolCalls', () => {
         {
           code: 'invalid_type',
           expected: 'object',
-          received: 'undefined',
           path: ['function'],
-          message: 'Required',
         },
       ]);
     }

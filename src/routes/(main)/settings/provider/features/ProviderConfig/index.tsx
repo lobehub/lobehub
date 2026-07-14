@@ -14,8 +14,9 @@ import {
   stopPropagation,
   Tooltip,
 } from '@lobehub/ui';
+import { Switch } from '@lobehub/ui/base-ui';
 import { useDebounceFn } from 'ahooks';
-import { Form as AntdForm, Switch } from 'antd';
+import { Form as AntdForm } from 'antd';
 import { createStaticStyles, cssVar, cx, responsive } from 'antd-style';
 import { Loader2Icon, LockIcon } from 'lucide-react';
 import { type ReactNode } from 'react';

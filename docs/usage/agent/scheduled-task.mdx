@@ -18,7 +18,7 @@ Scheduled tasks are jobs that run periodically in the cloud. In short, you can h
 
 ## Creating a Task
 
-Find **Scheduled Tasks** in the left panel of the Agent conversation page, and click `Add Scheduled Task` to start creating a task.
+Scheduling now lives inside the Task system. Open **Tasks** in the left panel of the Agent conversation page, select (or create) a task, and open its **Automation** section in the task detail — that's where you turn on the **Scheduled** tab and configure the recurring schedule.
 
 ![Create Task](/blog/assets3059f679eef80c5e777085db3d2d056e.webp)
 
@@ -44,11 +44,11 @@ Format as a brief executive summary.
 
 - **Daily** — Every day at a specified time
 - **Weekly** — On selected weekdays at a specified time (you can pick multiple days)
-- **Hourly** — Every 1, 2, 6, 12, or 24 hours
+- **Hourly** — Every N hours, where N is any whole number from 1 to 24
 
 **Time and timezone** — Set the exact time and timezone so the task runs at the correct local time. Times use 24-hour format. For distributed teams, getting the timezone right matters.
 
-**Max executions** — Optionally cap how many times the task runs in total. Ongoing tasks often need no limit; for time-boxed campaigns (e.g. 30 days), you might set 30 — the task disables itself after reaching the limit.
+**Max runs** — Optionally cap how many times the task runs in total. Ongoing tasks often need no limit; for time-boxed campaigns (e.g. 30 days), you might set 30 — the task disables itself after reaching the limit.
 
 After you create a task, you can change its configuration at any time.
 
@@ -68,11 +68,6 @@ After you create a task, you can change its configuration at any time.
 
 - Frequency: Every 2 hours
 - Prompt: "Check for any critical alerts or anomalies and summarize findings."
-
-**End-of-month review:**
-
-- Frequency: Monthly — set Max Executions to once per month, or combine with a specific day
-- Prompt: "Analyze this month's performance data and generate an executive report."
 
 ## Managing tasks
 
@@ -105,7 +100,7 @@ If you no longer need a scheduled task, you can delete it. Deletion removes the 
 
 **Use descriptive task names** — Put purpose and timing in the name: "Weekly Competitor Analysis - Monday 9am" beats "Task 2".
 
-**Set max executions while experimenting** — When testing a new scheduled task, use a max execution count of 5–10 so it doesn't run forever if the prompt needs tuning.
+**Set Max runs while experimenting** — When testing a new scheduled task, cap Max runs at 5–10 so it doesn't run forever if the prompt needs tuning.
 
 **Timezone awareness** — Always set the correct timezone. "09:00" is interpreted in the configured timezone, which may differ from your local clock. Wrong timezone is a common cause of unexpected run times.
 
@@ -131,7 +126,7 @@ Set reminders for milestones, recurring checks, or follow-ups. LobeHub can gener
 
 **Poor output quality** — Scheduled prompts run without chat history. Rewrite the prompt so it is fully self-contained, with background, data sources, and format requirements spelled out.
 
-**Too many runs** — While experimenting, set a **Max executions** cap. If a task has already run more than intended, delete it and create a new one with the right limits.
+**Too many runs** — While experimenting, set a **Max runs** cap. If a task has already run more than intended, delete it and create a new one with the right limits.
 
 <Cards>
   <Card href={'/docs/usage/agent/web-search'} title={'Web Search'} />

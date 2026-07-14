@@ -15,9 +15,13 @@ vi.mock('../auth/resolveToken', () => ({
   }),
 }));
 vi.mock('../settings', () => ({
+  addWorkspaceEnrollment: vi.fn(),
   loadOrCreateConnectionId: vi.fn().mockReturnValue('test-connection-id'),
   loadSettings: vi.fn().mockReturnValue(null),
+  // Default: no persisted workspace shares, so runConnect skips the restore path.
+  loadWorkspaceEnrollments: vi.fn().mockReturnValue([]),
   normalizeUrl: vi.fn((url?: string) => (url ? url.replace(/\/$/, '') : undefined)),
+  removeWorkspaceEnrollment: vi.fn(),
   saveSettings: vi.fn(),
 }));
 

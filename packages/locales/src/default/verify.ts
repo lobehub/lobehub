@@ -1,4 +1,7 @@
 export default {
+  'report.actions.copyLink': 'Copy link',
+  'report.actions.copyLinkSuccess': 'Link copied',
+  'report.actions.openInBrowser': 'Open in browser',
   'badge.errored': 'Check could not run',
   'badge.failed': 'Check failed',
   'badge.passed': 'Check passed',
@@ -64,6 +67,8 @@ export default {
   'report.evidence.category.video': 'Video',
   'report.evidence.count': '{{count}} evidence',
   'report.evidence.inlineFallback': 'Inline evidence {{index}}',
+  'report.evidence.comparison.after': 'After',
+  'report.evidence.comparison.before': 'Before',
   'report.evidence.openDetail': 'Open {{name}}',
   'report.evidence.view': 'View evidence ({{count}})',
   'report.filter.all': 'All',
@@ -86,6 +91,17 @@ export default {
   'report.notFound.description':
     'This report may have been deleted, or the link is not available to you.',
   'report.notFound.title': 'Report not found',
+  'report.overview.failed': 'Failed',
+  'report.overview.nextFailed':
+    'Review failed checks first, then add missing evidence or adjust the implementation.',
+  'report.overview.nextPassed': 'All checks passed. Review the evidence if needed, then deliver.',
+  'report.overview.nextTitle': 'Next steps',
+  'report.overview.nextUncertain':
+    'Uncertain checks need clearer evidence before treating this report as complete.',
+  'report.overview.passed': 'Passed',
+  'report.overview.title': 'Check overview',
+  'report.overview.total': 'All',
+  'report.overview.uncertain': 'Uncertain',
   'report.scope.branch': 'Branch',
   'report.scope.commit': 'Commit',
   'report.scope.date': 'Date',

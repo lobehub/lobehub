@@ -29,6 +29,9 @@ import { workspaces } from './workspace';
 // agent is a model that represents the assistant that is created by the user
 // agent can have its own knowledge base and files
 
+/** Agent visibility — shared by column def and insert schema. */
+export const AGENT_VISIBILITY = ['private', 'public'] as const;
+
 export const agents = pgTable(
   'agents',
   {
@@ -80,9 +83,7 @@ export const agents = pgTable(
      * the creator (`user_id`). Ignored in personal mode where the row is
      * implicitly private to its owner.
      */
-    visibility: text('visibility', { enum: ['private', 'public'] })
-      .default('public')
-      .notNull(),
+    visibility: text('visibility', { enum: AGENT_VISIBILITY }).default('public').notNull(),
 
     ...timestamps,
   },
@@ -106,6 +107,10 @@ export const insertAgentSchema = createInsertSchema(agents, {
   agencyConfig: z.custom<LobeAgentAgencyConfig>().nullish(),
   // Override chatConfig type to use the proper schema
   chatConfig: AgentChatConfigSchema.nullish(),
+  // See insertSessionGroupSchema: Zod 4 + drizzle-zod text-enum inference pollution.
+  // `.optional()` preserves defaulted-column omit semantics at runtime.
+  // Enum values from AGENT_VISIBILITY so column def and schema stay in sync.
+  visibility: z.enum(AGENT_VISIBILITY).optional(),
 });
 
 export type NewAgent = typeof agents.$inferInsert;

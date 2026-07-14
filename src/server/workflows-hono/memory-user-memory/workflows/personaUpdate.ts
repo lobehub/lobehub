@@ -8,10 +8,12 @@ import {
 } from '@/server/services/memory/userMemory/persona/service';
 
 import { checkGuard, ensureWorkflowStarted } from './runGuard';
+import { isHourlyMemoryExtractionCancelled } from './utils';
 
 const WORKFLOW_PATH = 'api/workflows/memory-user-memory/pipelines/persona/update-writing';
 
 const workflowPayloadSchema = z.object({
+  hourlyTaskId: z.string().uuid().optional(),
   userIds: z.array(z.string()).optional(),
 });
 
@@ -43,8 +45,21 @@ export const personaUpdateHandler = async (context: WorkflowContext) => {
   }
 
   const service = new UserPersonaService(db);
+  let processedUsers = 0;
 
   for (const userId of userIds) {
+    const hourlyCancellationStepName = `memory:pipelines:persona:update-writing:users:${userId}:cancel-check:hourly`;
+    const hourlyCancellationGuard = await checkGuard(context, WORKFLOW_PATH, {
+      response: { processedUsers: 0 },
+      stepName: hourlyCancellationStepName,
+    });
+    if (!hourlyCancellationGuard.result) return hourlyCancellationGuard.response;
+
+    const hourlyCancelled = await context.run(hourlyCancellationStepName, () =>
+      isHourlyMemoryExtractionCancelled(payload.hourlyTaskId),
+    );
+    if (hourlyCancelled) continue;
+
     const stepName = `memory:pipelines:persona:update-writing:users:${userId}`;
     const guard = await checkGuard(context, WORKFLOW_PATH, {
       response: { processedUsers: 0 },
@@ -62,11 +77,12 @@ export const personaUpdateHandler = async (context: WorkflowContext) => {
         version: result.document.version,
       };
     });
+    processedUsers += 1;
   }
 
   return {
     message: 'User persona processed via workflow.',
-    processedUsers: userIds.length,
+    processedUsers,
   };
 };
 

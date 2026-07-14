@@ -7,24 +7,16 @@ import { type QueueServiceImpl } from './type';
 
 const log = debug('lobe-server:service:queue:qstash');
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
 /**
- * Minimum settling delay (ms) applied before publishing a QStash message.
- *
  * QStash's `delay` option is second-granularity — the `Duration` string form
  * (`10s`, `1m`, `2h`, `1d`) has no millisecond unit, and a bare number is
- * treated as seconds (so `100` would mean 100s, not 100ms). Sub-second settling
- * windows therefore cannot be delegated to QStash and must be honored locally;
- * this floors small or zero delays so a step always gets a brief settle.
+ * treated as seconds (so `100` would mean 100s, not 100ms). Positive
+ * sub-second delays are rounded up to 1s.
  */
-const MIN_SETTLING_DELAY_MS = 300;
-
 const toQStashDelaySeconds = (delayMs: number): number | undefined => {
   if (delayMs <= 0) return undefined;
-  if (delayMs < 1000) return undefined;
 
-  return Math.round(delayMs / 1000);
+  return Math.max(1, Math.round(delayMs / 1000));
 };
 
 /**
@@ -55,15 +47,6 @@ export class QStashQueueServiceImpl implements QueueServiceImpl {
     } = message;
 
     try {
-      // QStash publish delays are second-granularity (`10s`, `1m`, or numeric
-      // seconds) and cannot express sub-second settling, so honor small windows
-      // locally. Floor at MIN_SETTLING_DELAY_MS so even a zero/near-zero delay
-      // still settles before publishing instead of collapsing to immediate
-      // delivery.
-      if (delay < 1000) {
-        await sleep(Math.max(delay, MIN_SETTLING_DELAY_MS));
-      }
-
       log('Initialized QStash queue service');
       const qstashClient = new OtelQstashClient({ token: this.config.qstashToken });
       const qstashDelay = toQStashDelaySeconds(delay);

@@ -10,7 +10,7 @@ import ContentBlock from './ContentBlock';
 
 const continueGenerationMock = vi.fn();
 const deleteDBMessageMock = vi.fn();
-const delAndRegenerateMessageMock = vi.fn();
+const continueHeteroAfterErrorMock = vi.fn();
 const navigateMock = vi.fn();
 
 vi.mock('@lobehub/ui', () => ({
@@ -126,7 +126,7 @@ vi.mock('../../../store', () => ({
   useConversationStore: (selector: (state: unknown) => unknown) =>
     selector({
       continueGeneration: continueGenerationMock,
-      delAndRegenerateMessage: delAndRegenerateMessageMock,
+      continueHeteroAfterError: continueHeteroAfterErrorMock,
       deleteDBMessage: deleteDBMessageMock,
       heteroOverloadRetryAttempts: {},
       internal_beginHeteroOverloadWait: vi.fn(),
@@ -142,11 +142,11 @@ describe('AssistantGroup ContentBlock', () => {
   beforeEach(() => {
     continueGenerationMock.mockClear();
     deleteDBMessageMock.mockClear();
-    delAndRegenerateMessageMock.mockClear();
+    continueHeteroAfterErrorMock.mockClear();
     navigateMock.mockClear();
   });
 
-  it('regenerates the whole turn (not continue) when retrying a heterogeneous error in a group', () => {
+  it('resumes the run (not the no-op continueGeneration) when retrying a heterogeneous error in a group', () => {
     render(
       <ContentBlock
         assistantId="assistant-1"
@@ -169,10 +169,10 @@ describe('AssistantGroup ContentBlock', () => {
 
     screen.getByRole('button', { name: 'guide-retry' }).click();
 
-    // The fix: a grouped hetero turn is replaced in place from the GROUP id via
-    // the delete-first delAndRegenerateMessage (no sibling branch), instead of
-    // the no-op continueGeneration.
-    expect(delAndRegenerateMessageMock).toHaveBeenCalledWith('assistant-1');
+    // Retrying a grouped hetero turn resumes it from the GROUP id — dropping only
+    // the failed step and picking the CLI session back up — instead of calling
+    // continueGeneration, which is a no-op for hetero runtimes.
+    expect(continueHeteroAfterErrorMock).toHaveBeenCalledWith('assistant-1');
     expect(continueGenerationMock).not.toHaveBeenCalled();
   });
 

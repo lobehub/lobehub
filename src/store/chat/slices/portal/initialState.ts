@@ -8,6 +8,7 @@ export enum ArtifactDisplayMode {
 // ============== Portal View Stack Types ==============
 
 export enum PortalViewType {
+  AgentDetail = 'agentDetail',
   Artifact = 'artifact',
   Document = 'document',
   FilePreview = 'filePreview',
@@ -19,6 +20,7 @@ export enum PortalViewType {
   TaskDetail = 'taskDetail',
   Thread = 'thread',
   ToolUI = 'toolUI',
+  VerifyReport = 'verifyReport',
   VerifyResult = 'verifyResult',
 }
 
@@ -41,6 +43,7 @@ export interface OpenLocalFileEntry extends OpenLocalFileParams {
 
 export type PortalViewData =
   | { type: PortalViewType.Home }
+  | { agentId: string; type: PortalViewType.AgentDetail }
   | { artifact: PortalArtifact; type: PortalViewType.Artifact }
   | { agentDocumentId?: string; documentId: string; type: PortalViewType.Document }
   | { type: PortalViewType.Notebook }
@@ -56,6 +59,7 @@ export type PortalViewData =
   | { startMessageId?: string; threadId?: string; type: PortalViewType.Thread }
   | { agentId: string; type: PortalViewType.GroupThread }
   | { taskId: string; type: PortalViewType.TaskDetail }
+  | { runId: string; type: PortalViewType.VerifyReport }
   | { checkItemId: string; operationId: string; type: PortalViewType.VerifyResult };
 
 // ============== Portal State ==============

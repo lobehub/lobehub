@@ -80,7 +80,10 @@ const styles = createStaticStyles(({ css }) => ({
     color: inherit;
     text-decoration: none;
 
+    /* antd's global a:hover outranks the color:inherit above, so without this the
+       row would turn link-blue; hovering should read as emphasis instead. */
     &:hover {
+      color: ${cssVar.colorText};
       background: ${cssVar.colorFillTertiary};
     }
   `,
@@ -183,6 +186,9 @@ const MetaHoverCard = memo<MetaHoverCardProps>(({ metadata, title, time }) => {
         (() => {
           const prState = getPullRequestState(pullRequest);
           const prVisual = PR_STATE_VISUAL[prState];
+          const prTitleAttr = pullRequest.title
+            ? `#${pullRequest.number} ${pullRequest.title}`
+            : `#${pullRequest.number}`;
           const prInner = (
             <>
               <Icon
@@ -191,12 +197,16 @@ const MetaHoverCard = memo<MetaHoverCardProps>(({ metadata, title, time }) => {
                 size={15}
                 style={{ color: prVisual.color }}
               />
-              <span className={styles.rowText} title={pullRequest.title}>
+              <span className={styles.rowText} title={prTitleAttr}>
                 <span style={{ color: prVisual.color, fontWeight: 500 }}>
                   {t(prVisual.labelKey)}
                 </span>
-                {pullRequest.title ? ` · ${pullRequest.title}` : ''}
-                <span style={{ color: cssVar.colorTextTertiary }}>{` #${pullRequest.number}`}</span>
+                {/* The number leads the title: it is the stable identifier, and a
+                    long title would otherwise push it past the ellipsis. */}
+                <span
+                  style={{ color: cssVar.colorTextTertiary }}
+                >{` · #${pullRequest.number}`}</span>
+                {pullRequest.title ? ` ${pullRequest.title}` : ''}
               </span>
             </>
           );

@@ -29,12 +29,6 @@ vi.mock('@/services/chat', () => ({
   },
 }));
 
-vi.mock('@/services/message', () => ({
-  messageService: {
-    updateMessage: vi.fn(),
-  },
-}));
-
 vi.mock('@/store/chat/selectors', () => ({
   topicSelectors: {
     currentActiveTopicSummary: vi.fn().mockReturnValue(undefined),

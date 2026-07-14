@@ -2,6 +2,7 @@
 
 import { Command } from 'commander';
 
+import { registerCtxLintCommand } from './ctx-lint';
 import { registerInspectCommand } from './inspect';
 import { registerListCommand } from './list';
 import { registerPartialCommand } from './partial';
@@ -15,5 +16,6 @@ registerInspectCommand(program);
 registerListCommand(program);
 registerPartialCommand(program);
 registerToolQualityCommand(program);
+registerCtxLintCommand(program);
 
 program.parse();

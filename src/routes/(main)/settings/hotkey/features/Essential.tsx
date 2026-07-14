@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 import AutoSaveHint from '@/components/Editor/AutoSaveHint';
 import { HOTKEYS_REGISTRATION } from '@/const/hotkeys';
 import { FORM_STYLE } from '@/const/layoutTokens';
+import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
 import { useSaveState } from '@/hooks/useSaveState';
 import hotkeyMeta from '@/locales/default/hotkey';
 import { useUserStore } from '@/store/user';
@@ -64,7 +65,11 @@ const HotkeySetting = memo(() => {
       (item) => mapHotkeyItem(item),
     ),
     extra: <AutoSaveHint lastUpdatedTime={lastSavedAt} saveStatus={saveStatus} onRetry={retry} />,
-    title: t('hotkey.group.essential'),
+    title: (
+      <SettingsSearchAnchor id={'hotkey-essential'}>
+        {t('hotkey.group.essential')}
+      </SettingsSearchAnchor>
+    ),
   };
 
   return (

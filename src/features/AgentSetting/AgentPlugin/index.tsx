@@ -2,8 +2,8 @@
 
 import { getActivePluginIds } from '@lobechat/types';
 import { type FormGroupItemType } from '@lobehub/ui';
-import { Avatar, Button, Center, Empty, Flexbox, Form, Tag, Tooltip } from '@lobehub/ui';
-import { Space, Switch } from 'antd';
+import { Avatar, Center, Empty, Flexbox, Form, Tag, Tooltip } from '@lobehub/ui';
+import { Button, Switch } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { BlocksIcon, LucideTrash2, Store } from 'lucide-react';
 import { memo, useCallback } from 'react';
@@ -108,7 +108,7 @@ const AgentPlugin = memo(() => {
   const loadingSkeleton = LoadingList();
 
   const extra = (
-    <Space.Compact style={{ width: 'auto' }}>
+    <Flexbox horizontal gap={4}>
       <AddPluginButton />
       {hasDeprecated ? (
         <Tooltip title={t('plugin.clearDeprecated')}>
@@ -139,7 +139,7 @@ const AgentPlugin = memo(() => {
           />
         </Tooltip>
       ) : null}
-    </Space.Compact>
+    </Flexbox>
   );
 
   const empty = (

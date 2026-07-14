@@ -1,5 +1,6 @@
 import { type MenuProps } from '@lobehub/ui';
-import { Button, Center, DropdownMenu, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { Center, DropdownMenu, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { Check, ChevronDown, Hand, ListChecks, Zap } from 'lucide-react';
 import { type LucideIcon } from 'lucide-react';
@@ -135,12 +136,11 @@ const ModeSelector = memo(() => {
   const button = (
     <Button
       className={styles.modeButton}
-      color={'default'}
       disabled={!canCreateContent}
       icon={ChevronDown}
-      iconPlacement="end"
+      iconPosition="end"
       size="small"
-      variant={'text'}
+      type={'text'}
     >
       {modeLabels[approvalMode]}
     </Button>

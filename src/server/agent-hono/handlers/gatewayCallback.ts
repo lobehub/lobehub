@@ -16,6 +16,7 @@ const StateChangeSchema = z.object({
   connectionId: z.string(),
   platform: z.string(),
   state: z.object({
+    errorCode: z.string().optional(),
     error: z.string().optional(),
     status: z.enum(['connected', 'connecting', 'disconnected', 'dormant', 'error']),
   }),
@@ -80,6 +81,7 @@ export async function gatewayCallback(c: Context): Promise<Response> {
 
   await updateBotRuntimeStatus({
     applicationId,
+    errorCode: state.errorCode,
     errorMessage: state.error,
     platform,
     status: runtimeStatus,

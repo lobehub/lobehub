@@ -82,6 +82,8 @@
   "menu.allFiles": "すべてのファイル",
   "menu.allPages": "すべてのドキュメント",
   "networkError": "ライブラリの取得に失敗しました。ネットワーク接続を確認してから再試行してください。",
+  "notFound.desc": "このファイルは存在しないか、アクセスできなくなっています。所有者によって削除されたか、非公開に設定された可能性があります。",
+  "notFound.title": "ファイルが利用できません",
   "notSupportGuide.desc": "現在のデプロイメントインスタンスはクライアントデータベースモードであり、ファイル管理機能を使用できません。<1>サーバーデータベースデプロイメントモード</1>に切り替えるか、直接 <3>LobeChat Cloud</3> を使用してください。",
   "notSupportGuide.features.allKind.desc": "Word、PPT、Excel、PDF、TXTなどの一般的な文書形式や、JS、Pythonなどの主流のコードファイルを含む、主流のファイルタイプをサポートしています。",
   "notSupportGuide.features.allKind.title": "多様なファイルタイプの解析",

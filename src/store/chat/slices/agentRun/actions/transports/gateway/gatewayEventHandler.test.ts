@@ -40,9 +40,11 @@ const createStore = (dbMessagesMap: Record<string, UIChatMessage[]> = {}) =>
   }) as unknown as ChatStore;
 
 // The handler enqueues work on an internal promise chain; flush the microtask
-// queue so async event handlers settle before assertions.
+// queue so async event handlers settle before assertions. Each `await` inside a
+// queued handler costs a tick, so keep this comfortably above the longest chain
+// rather than tuned to today's exact hop count.
 const flush = async () => {
-  for (let i = 0; i < 5; i += 1) await Promise.resolve();
+  for (let i = 0; i < 50; i += 1) await Promise.resolve();
 };
 
 describe('createGatewayEventHandler', () => {
@@ -165,6 +167,114 @@ describe('createGatewayEventHandler', () => {
     expect(store.replaceMessages).not.toHaveBeenCalled();
   });
 
+  // The placeholder tool row only reaches the store via the `toolMessageIds`
+  // refetch queued by the preceding tools_calling chunk. A fast sub-agent emits
+  // its progress event while that fetch is still in flight — dispatched inline it
+  // would land on a row that doesn't exist yet and no-op away the whole live
+  // readout (a single-step child has no later sample to self-heal with).
+  it('queues sub-agent progress behind the placeholder refetch it depends on', async () => {
+    const order: string[] = [];
+    let resolveFetch: (() => void) | undefined;
+    vi.spyOn(messageService, 'getMessages').mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveFetch = () => {
+            order.push('fetch');
+            resolve([] as unknown as UIChatMessage[]);
+          };
+        }),
+    );
+
+    const store = createStore();
+    (store.internal_dispatchMessage as ReturnType<typeof vi.fn>).mockImplementation(
+      (payload: { type?: string }) => {
+        if (payload?.type === 'updatePluginState') order.push('progress');
+      },
+    );
+
+    const handler = createGatewayEventHandler(() => store, {
+      assistantMessageId: 'seed-msg',
+      context,
+      operationId: 'op-1',
+    });
+
+    handler(
+      makeEvent('stream_chunk', {
+        chunkType: 'tools_calling',
+        toolMessageIds: { 'call-1': 'tool-msg-sub' },
+        toolsCalling: [{ apiName: 'callSubAgent', id: 'call-1' }],
+      }),
+    );
+    handler(
+      makeEvent('step_complete', {
+        phase: 'subagent_progress',
+        toolMessageId: 'tool-msg-sub',
+        totalTokens: 4321,
+        totalToolCalls: 3,
+      }),
+    );
+
+    await flush();
+    // The fetch is still pending, so the progress patch must not have run yet.
+    expect(order).toEqual([]);
+
+    resolveFetch?.();
+    await flush();
+
+    expect(order).toEqual(['fetch', 'progress']);
+  });
+
+  it('patches live sub-agent progress onto the placeholder tool message, in memory only', async () => {
+    const getMessages = vi
+      .spyOn(messageService, 'getMessages')
+      .mockResolvedValue([] as unknown as UIChatMessage[]);
+    const store = createStore();
+    const handler = createGatewayEventHandler(() => store, {
+      assistantMessageId: 'seed-msg',
+      context,
+      operationId: 'op-1',
+    });
+
+    handler(
+      makeEvent('step_complete', {
+        model: 'claude-sonnet-5',
+        phase: 'subagent_progress',
+        toolMessageId: 'tool-msg-sub',
+        totalTokens: 4321,
+        totalToolCalls: 3,
+      }),
+    );
+    await flush();
+
+    expect(store.internal_dispatchMessage).toHaveBeenCalledWith(
+      {
+        id: 'tool-msg-sub',
+        key: 'progress',
+        type: 'updatePluginState',
+        value: { model: 'claude-sonnet-5', totalTokens: 4321, totalToolCalls: 3 },
+      },
+      { operationId: 'op-1' },
+    );
+    // Live progress is advisory — the completion bridge owns the persisted value,
+    // so this must never trigger a DB read or write.
+    expect(getMessages).not.toHaveBeenCalled();
+    expect(store.replaceMessages).not.toHaveBeenCalled();
+  });
+
+  it('ignores a sub-agent progress event with no tool message anchor', async () => {
+    const store = createStore();
+    const handler = createGatewayEventHandler(() => store, {
+      assistantMessageId: 'seed-msg',
+      context,
+      operationId: 'op-1',
+    });
+
+    handler(makeEvent('step_complete', { phase: 'subagent_progress', totalTokens: 10 }));
+    await flush();
+
+    expect(store.internal_dispatchMessage).not.toHaveBeenCalled();
+  });
+
   it('preserves existing result_msg_id when a tools_calling chunk omits result links', async () => {
     const store = createStore({
       key: [
@@ -262,5 +372,141 @@ describe('createGatewayEventHandler', () => {
     expect(store.updateOperationMetadata).toHaveBeenCalledWith('op-1', {
       visibleLoadingDone: true,
     });
+  });
+
+  // ────────────────────────────────────────────────────
+  // Gateway completion notification body
+  // ────────────────────────────────────────────────────
+
+  const createLifecycle = () => ({
+    afterRunComplete: vi.fn().mockResolvedValue(undefined),
+    completeRun: vi.fn().mockResolvedValue({ requeued: false }),
+  });
+
+  it('passes the streamed report text as the gateway completion notification body', async () => {
+    vi.spyOn(messageService, 'getMessages').mockResolvedValue([] as unknown as UIChatMessage[]);
+    const lifecycle = createLifecycle();
+    const store = createStore();
+    const handler = createGatewayEventHandler(() => store, {
+      assistantMessageId: 'answer-msg',
+      context,
+      operationId: 'op-1',
+      runLifecycle: lifecycle as any,
+      runtimeType: 'gateway',
+    });
+
+    // Stream the report text so `accumulatedContent` (the optimistic in-memory
+    // source) holds it, then end the run with no terminal uiMessages snapshot.
+    handler(makeEvent('stream_chunk', { chunkType: 'text', content: 'The final report.' }));
+    handler(makeEvent('agent_runtime_end', { reason: 'completed' }));
+    await flush();
+
+    expect(lifecycle.completeRun).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'completed' }),
+    );
+    expect(lifecycle.afterRunComplete).toHaveBeenCalledWith(
+      expect.objectContaining({
+        notification: { content: 'The final report.' },
+        status: 'completed',
+      }),
+    );
+  });
+
+  it('prefers the terminal snapshot final assistant text over the streamed accumulator', async () => {
+    vi.spyOn(messageService, 'getMessages').mockResolvedValue([] as unknown as UIChatMessage[]);
+    const lifecycle = createLifecycle();
+    const store = createStore();
+    const handler = createGatewayEventHandler(() => store, {
+      assistantMessageId: 'answer-msg',
+      context,
+      operationId: 'op-1',
+      runLifecycle: lifecycle as any,
+      runtimeType: 'gateway',
+    });
+
+    // The stream dropped the tail; the server-finalized snapshot has the whole
+    // report, and the chat is reconciled to it — so must the notification be.
+    handler(makeEvent('stream_chunk', { chunkType: 'text', content: 'The final rep' }));
+    handler(
+      makeEvent('agent_runtime_end', {
+        reason: 'completed',
+        uiMessages: [
+          { content: 'run it', id: 'user-msg', role: 'user' },
+          { content: 'The final report.', id: 'answer-msg', role: 'assistant' },
+        ] as unknown as UIChatMessage[],
+      }),
+    );
+    await flush();
+
+    expect(lifecycle.afterRunComplete).toHaveBeenCalledWith(
+      expect.objectContaining({ notification: { content: 'The final report.' } }),
+    );
+  });
+
+  it('falls back to the streamed accumulator when the terminal snapshot carries no assistant text', async () => {
+    vi.spyOn(messageService, 'getMessages').mockResolvedValue([] as unknown as UIChatMessage[]);
+    const lifecycle = createLifecycle();
+    const store = createStore();
+    const handler = createGatewayEventHandler(() => store, {
+      assistantMessageId: 'answer-msg',
+      context,
+      operationId: 'op-1',
+      runLifecycle: lifecycle as any,
+      runtimeType: 'gateway',
+    });
+
+    handler(makeEvent('stream_chunk', { chunkType: 'text', content: 'The final report.' }));
+    handler(
+      makeEvent('agent_runtime_end', {
+        reason: 'completed',
+        uiMessages: [
+          { content: '', id: 'answer-msg', role: 'assistant' },
+        ] as unknown as UIChatMessage[],
+      }),
+    );
+    await flush();
+
+    expect(lifecycle.afterRunComplete).toHaveBeenCalledWith(
+      expect.objectContaining({ notification: { content: 'The final report.' } }),
+    );
+  });
+
+  it('passes empty notification content when nothing streamed so afterRunComplete can fall back to the store', async () => {
+    vi.spyOn(messageService, 'getMessages').mockResolvedValue([] as unknown as UIChatMessage[]);
+    const lifecycle = createLifecycle();
+    const store = createStore();
+    const handler = createGatewayEventHandler(() => store, {
+      assistantMessageId: 'answer-msg',
+      context,
+      operationId: 'op-1',
+      runLifecycle: lifecycle as any,
+      runtimeType: 'gateway',
+    });
+
+    handler(makeEvent('agent_runtime_end', { reason: 'completed' }));
+    await flush();
+
+    expect(lifecycle.afterRunComplete).toHaveBeenCalledWith(
+      expect.objectContaining({ notification: { content: '' } }),
+    );
+  });
+
+  it('does not fire afterRunComplete on a cancelled (non-completed) gateway run', async () => {
+    vi.spyOn(messageService, 'getMessages').mockResolvedValue([] as unknown as UIChatMessage[]);
+    const lifecycle = createLifecycle();
+    const store = createStore();
+    const handler = createGatewayEventHandler(() => store, {
+      assistantMessageId: 'answer-msg',
+      context,
+      operationId: 'op-1',
+      runLifecycle: lifecycle as any,
+      runtimeType: 'gateway',
+    });
+
+    handler(makeEvent('stream_chunk', { chunkType: 'text', content: 'partial' }));
+    handler(makeEvent('agent_runtime_end', { reason: 'interrupted' }));
+    await flush();
+
+    expect(lifecycle.afterRunComplete).not.toHaveBeenCalled();
   });
 });

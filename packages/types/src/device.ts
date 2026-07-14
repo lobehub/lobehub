@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 export type ProjectSkillScope = 'device' | 'project';
 export type ProjectSkillSource = '.agents/skills' | '.claude/skills';
 
@@ -93,6 +95,23 @@ export interface WorkingDirGithubState {
   pullRequestStatus?: DeviceGitLinkedPullRequestLookupStatus;
 }
 
+/**
+ * The remote ref a local branch publishes to.
+ *
+ * Recorded because the local branch name is a DEVICE-LOCAL label: a worktree
+ * generates its own (`worktree-feat+foo`), and a push with an explicit refspec
+ * (`git push origin local:remote`) renames the branch in flight. Carrying the
+ * local name to another machine — or to `gh pr list --head` — yields nothing.
+ * The remote ref is the only branch identity that survives leaving this machine,
+ * which also makes it the handle for re-fetching the topic's output elsewhere.
+ */
+export interface DeviceGitUpstreamRef {
+  /** Branch name ON the remote (`feat/x`), never the local name. */
+  branch: string;
+  /** Remote name (`origin`). */
+  remote: string;
+}
+
 export interface WorkingDirGitState {
   /**
    * Active checkout selected under this git source. When absent, the source
@@ -113,6 +132,12 @@ export interface WorkingDirGitState {
    * the source path itself.
    */
   isWorktree?: boolean;
+  /**
+   * Remote ref {@link branch} publishes to. Dropped alongside {@link github}
+   * whenever the branch changes — a stale remote ref would bind the topic to
+   * another branch's PR, which is worse than having none.
+   */
+  upstream?: DeviceGitUpstreamRef;
 }
 
 export interface WorkingDirConfig {
@@ -207,6 +232,29 @@ export interface DeviceChannel {
 export type DeviceScope = 'personal' | 'workspace';
 
 /**
+ * Visibility of a WORKSPACE-scoped device (same contract as agents/docs/files):
+ * - `public`  — shared with every workspace member (the default pool).
+ * - `private` — enrolled for the enrolling member only; other members never
+ *   see it in lists, pickers, or agent runs.
+ * Personal-scope devices have no visibility dimension (`null` on the list item).
+ */
+export type DeviceVisibility = 'private' | 'public';
+
+/**
+ * One workspace a PERSONAL device was shared into from the personal device
+ * list. `deviceId` is the workspace-scoped twin (a different hash from the
+ * personal deviceId, linked back via `devices.shared_from_device_id`), which
+ * the revoke path passes to `device.removeWorkspaceDevice` under that
+ * workspace's scope.
+ */
+export interface DeviceWorkspaceShare {
+  deviceId: string;
+  visibility: DeviceVisibility;
+  workspaceId: string;
+  workspaceName: string | null;
+}
+
+/**
  * A device row as returned by the `device.listDevices` query — either a
  * registered device or an online-only "ghost" (connected but not yet persisted).
  * The server query is annotated to return `DeviceListItem[]`, so this type is the
@@ -250,6 +298,24 @@ export interface DeviceListItem {
   registered: boolean;
   /** Personal (own) vs. workspace-enrolled device — drives picker grouping. */
   scope: DeviceScope;
+  /**
+   * Workspace rows only: true when this enrollment was shared from a member's
+   * personal device (`shared_from_device_id` set) rather than enrolled directly
+   * on the machine — drives the "Shared by {name}" tag in the workspace list.
+   */
+  sharedFromPersonal?: boolean;
+  /**
+   * Personal rows only: the workspaces this machine was shared into from the
+   * personal device list. `undefined` for workspace rows, ghosts, and
+   * never-shared machines.
+   */
+  sharedWorkspaces?: DeviceWorkspaceShare[];
+  /**
+   * Workspace-scope rows only: private (enroller-only) vs public (shared pool).
+   * `null` for personal rows and ghost rows. Rows another member enrolled as
+   * private are filtered out server-side and never reach this list.
+   */
+  visibility: DeviceVisibility | null;
   workingDirs: WorkingDirEntry[];
 }
 
@@ -262,6 +328,8 @@ export interface DeviceGitBranchInfo {
   branch?: string;
   /** True when HEAD is detached (no branch ref). */
   detached?: boolean;
+  /** Remote ref the branch publishes to. Absent when unpushed or unresolvable. */
+  upstream?: DeviceGitUpstreamRef;
 }
 
 /**
@@ -275,6 +343,8 @@ export interface DeviceGitLinkedPullRequestResult {
   pullRequest: DeviceGitLinkedPullRequest | null;
   /** 'ok' — lookup succeeded; 'gh-missing' — gh CLI unavailable; 'error' — other failure. */
   status: DeviceGitLinkedPullRequestLookupStatus;
+  /** Remote ref the lookup queried under — the PR's own head ref when one was found. */
+  upstream?: DeviceGitUpstreamRef;
 }
 
 /**
@@ -593,3 +663,44 @@ export interface DeviceListProjectSkillsResult {
   /** Legacy source hint. Per-skill `scope` / `source` fields are authoritative. */
   source: ProjectSkillSource | null;
 }
+
+const gitLinkedPullRequestSchema = z.object({
+  ciStatus: z.enum(['failure', 'pending', 'success', 'unknown']).optional(),
+  isDraft: z.boolean().optional(),
+  mergeable: z.string().optional(),
+  mergeStateStatus: z.string().optional(),
+  mergedAt: z.string().nullable().optional(),
+  number: z.number(),
+  reviewDecision: z.string().optional(),
+  state: z.string(),
+  title: z.string(),
+  url: z.string(),
+});
+
+export const workingDirConfigSchema = z.object({
+  git: z
+    .object({
+      activeWorktree: z.string().optional(),
+      branch: z.string().optional(),
+      detached: z.boolean().optional(),
+      github: z
+        .object({
+          extraPullRequestCount: z.number().optional(),
+          pullRequest: gitLinkedPullRequestSchema.nullable().optional(),
+          pullRequestStatus: z.enum(['error', 'gh-missing', 'ok']).optional(),
+        })
+        .optional(),
+      isWorktree: z.boolean().optional(),
+      // Mirrors `WorkingDirGitState.upstream`. A field missing here is not merely
+      // unvalidated — zod strips it, so it would never survive a write.
+      upstream: z
+        .object({
+          branch: z.string(),
+          remote: z.string(),
+        })
+        .optional(),
+    })
+    .optional(),
+  path: z.string(),
+  repoType: z.enum(['git', 'github']).optional(),
+});

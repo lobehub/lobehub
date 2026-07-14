@@ -1,7 +1,8 @@
 'use client';
 
 import { AGENT_PROFILE_URL } from '@lobechat/const';
-import { Avatar, Button, Flexbox } from '@lobehub/ui';
+import { Avatar, Flexbox } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { Descriptions, Tag, Typography } from 'antd';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -78,7 +79,7 @@ const RunInfo = memo<RunInfoProps>(({ benchmarkId, run }) => {
               <Button
                 size="small"
                 style={{ height: 'auto', padding: 0 }}
-                variant="text"
+                type="text"
                 onClick={handleOpenAgent}
               >
                 {agentTitle}

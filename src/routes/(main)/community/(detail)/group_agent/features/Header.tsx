@@ -1,16 +1,7 @@
 'use client';
 
-import {
-  ActionIcon,
-  Avatar,
-  Button,
-  Flexbox,
-  Icon,
-  Tag,
-  Text,
-  Tooltip,
-  TooltipGroup,
-} from '@lobehub/ui';
+import { ActionIcon, Avatar, Flexbox, Icon, Tag, Text, Tooltip, TooltipGroup } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { createStaticStyles, cssVar, useResponsive } from 'antd-style';
 import { BookmarkCheckIcon, BookmarkIcon, DotIcon, GitBranchIcon, UsersIcon } from 'lucide-react';
@@ -107,9 +98,7 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
         url: '/community/group_agent',
       })}
     >
-      <Button size={'middle'} variant={'outlined'}>
-        {category}
-      </Button>
+      <Button size={'middle'}>{category}</Button>
     </WorkspaceLink>
   ) : null;
 

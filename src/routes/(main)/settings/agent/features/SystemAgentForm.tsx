@@ -1,8 +1,9 @@
 'use client';
 
 import { type FormGroupItemType, type FormItemProps } from '@lobehub/ui';
-import { Button, Flexbox, Form, Icon, Skeleton } from '@lobehub/ui';
-import { Form as AntForm, Switch } from 'antd';
+import { Flexbox, Form, Icon, Skeleton } from '@lobehub/ui';
+import { Button, Switch } from '@lobehub/ui/base-ui';
+import { Form as AntForm } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { Loader2Icon, PencilIcon } from 'lucide-react';
 import { memo, useState } from 'react';

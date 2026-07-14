@@ -1,4 +1,6 @@
 export * from './binary';
+export * from './browserControl';
+export * from './browserSidebar';
 export * from './dataSync';
 export * from './git';
 export * from './heterogeneousAgent';

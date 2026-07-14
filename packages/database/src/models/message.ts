@@ -678,14 +678,21 @@ export class MessageModel {
               fileList: fileList
                 .filter((relation) => relation.messageId === item.id)
 
-                .map<ChatFileItem>(({ id, url, size, fileType, name }) => ({
-                  content: documentsMap[id],
-                  fileType: fileType!,
-                  id,
-                  name: name!,
-                  size: size!,
-                  url,
-                })),
+                .map<ChatFileItem>(({ id, url, size, fileType, name }) =>
+                  // Nulled by the visibility guard: the viewer lost access to
+                  // the referenced file. Emit a tombstone (id only) so the UI
+                  // renders a no-access placeholder.
+                  name === null
+                    ? { fileType: '', id, inaccessible: true, name: '', size: 0, url: '' }
+                    : {
+                        content: documentsMap[id],
+                        fileType: fileType!,
+                        id,
+                        name,
+                        size: size!,
+                        url,
+                      },
+                ),
               imageList: imageList
                 .filter((relation) => relation.messageId === item.id)
 
@@ -818,7 +825,19 @@ export class MessageModel {
             url: files.url,
           })
           .from(messagesFiles)
-          .leftJoin(files, eq(files.id, messagesFiles.fileId))
+          // Guard the referenced file, not just the relation: in a shared
+          // conversation (chat group / workspace task) the message is visible
+          // to every member, but a file its owner switched back to private
+          // must degrade to a tombstone (id only) instead of leaking
+          // name/size/url. Same anti-leak join pattern as the agent knowledge
+          // reads in agent.ts.
+          .leftJoin(
+            files,
+            and(
+              eq(files.id, messagesFiles.fileId),
+              buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, files),
+            ),
+          )
           .where(inArray(messagesFiles.messageId, messageIds)),
       { messageCount: messageIds.length },
     );
@@ -831,20 +850,29 @@ export class MessageModel {
       'db.message.queryWithWhere.relatedFiles.postProcess',
       () =>
         Promise.all(
-          rawRelatedFileList.map(async (file) => ({
-            ...file,
-            url: postProcessUrl
-              ? await postProcessUrl(
-                  file.url,
-                  file as unknown as { fileType: string; id?: string | null },
-                )
-              : (file.url as string),
-          })),
+          rawRelatedFileList.map(async (file) => {
+            // Tombstoned by the visibility guard above — nothing to presign.
+            if (file.name === null) return { ...file, url: '' };
+            return {
+              ...file,
+              url: postProcessUrl
+                ? await postProcessUrl(
+                    file.url,
+                    file as unknown as { fileType: string; id?: string | null },
+                  )
+                : (file.url as string),
+            };
+          }),
         ),
       { fileCount: rawRelatedFileList.length },
     );
 
-    const fileIds = relatedFileList.map((file) => file.id).filter(Boolean);
+    // Exclude tombstoned files — their parsed document content must not leak
+    // through the unguarded documents join below.
+    const fileIds = relatedFileList
+      .filter((file) => file.name !== null)
+      .map((file) => file.id)
+      .filter(Boolean);
 
     if (fileIds.length === 0) return { documentsMap: {}, relatedFileList };
 
@@ -897,7 +925,17 @@ export class MessageModel {
           .from(messageQueryChunks)
           .leftJoin(chunks, eq(chunks.id, messageQueryChunks.chunkId))
           .leftJoin(fileChunks, eq(fileChunks.chunkId, chunks.id))
-          .innerJoin(files, eq(fileChunks.fileId, files.id))
+          // Guard the referenced file like queryMessageFileRelations: in a
+          // shared conversation, RAG reference chunks of a file its owner
+          // switched back to private must not leak filename/url/text to other
+          // members. The inner join drops those chunk rows entirely.
+          .innerJoin(
+            files,
+            and(
+              eq(fileChunks.fileId, files.id),
+              buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, files),
+            ),
+          )
           .where(inArray(messageQueryChunks.messageId, messageIds)),
       { messageCount: messageIds.length },
     );
@@ -1086,26 +1124,19 @@ export class MessageModel {
           url: files.url,
         })
         .from(messagesFiles)
-        .leftJoin(files, eq(files.id, messagesFiles.fileId))
+        // Same anti-leak guard as queryMessageFileRelations: tombstone files
+        // the viewer lost access to instead of leaking name/size/url.
+        .leftJoin(
+          files,
+          and(
+            eq(files.id, messagesFiles.fileId),
+            buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, files),
+          ),
+        )
         .where(inArray(messagesFiles.messageId, messageIds)),
 
-      // 2b. Get related file chunks
-      this.db
-        .select({
-          fileId: files.id,
-          fileType: files.fileType,
-          fileUrl: files.url,
-          filename: files.name,
-          id: chunks.id,
-          messageId: messageQueryChunks.messageId,
-          similarity: messageQueryChunks.similarity,
-          text: chunks.text,
-        })
-        .from(messageQueryChunks)
-        .leftJoin(chunks, eq(chunks.id, messageQueryChunks.chunkId))
-        .leftJoin(fileChunks, eq(fileChunks.chunkId, chunks.id))
-        .innerJoin(files, eq(fileChunks.fileId, files.id))
-        .where(inArray(messageQueryChunks.messageId, messageIds)),
+      // 2b. Get related file chunks (visibility-guarded like queryWithWhere)
+      this.queryMessageChunkRelations(messageIds),
 
       // 2c. Get related message queries (RAG)
       this.db
@@ -1143,19 +1174,27 @@ export class MessageModel {
 
     // 3. Process file results
     const relatedFileList = await Promise.all(
-      rawRelatedFileList.map(async (file) => ({
-        ...file,
-        url: postProcessUrl
-          ? await postProcessUrl(
-              file.url,
-              file as unknown as { fileType: string; id?: string | null },
-            )
-          : (file.url as string),
-      })),
+      rawRelatedFileList.map(async (file) => {
+        // Tombstoned by the visibility guard above — nothing to presign.
+        if (file.name === null) return { ...file, url: '' };
+        return {
+          ...file,
+          url: postProcessUrl
+            ? await postProcessUrl(
+                file.url,
+                file as unknown as { fileType: string; id?: string | null },
+              )
+            : (file.url as string),
+        };
+      }),
     );
 
-    // Get associated document content
-    const fileIds = relatedFileList.map((file) => file.id).filter(Boolean);
+    // Get associated document content. Exclude tombstoned files — their parsed
+    // document content must not leak through the unguarded documents join.
+    const fileIds = relatedFileList
+      .filter((file) => file.name !== null)
+      .map((file) => file.id)
+      .filter(Boolean);
 
     let documentsMap: Record<string, string> = {};
 
@@ -1235,14 +1274,21 @@ export class MessageModel {
           },
           fileList: fileList
             .filter((relation) => relation.messageId === item.id)
-            .map<ChatFileItem>(({ id, url, size, fileType, name }) => ({
-              content: documentsMap[id],
-              fileType: fileType!,
-              id,
-              name: name!,
-              size: size!,
-              url,
-            })),
+            .map<ChatFileItem>(({ id, url, size, fileType, name }) =>
+              // Nulled by the visibility guard: the viewer lost access to the
+              // referenced file. Emit a tombstone (id only) so the UI renders
+              // a no-access placeholder.
+              name === null
+                ? { fileType: '', id, inaccessible: true, name: '', size: 0, url: '' }
+                : {
+                    content: documentsMap[id],
+                    fileType: fileType!,
+                    id,
+                    name,
+                    size: size!,
+                    url,
+                  },
+            ),
           imageList: imageList
             .filter((relation) => relation.messageId === item.id)
             .map<ChatImageItem>(({ id, url, name }) => ({ alt: name!, id, url })),
@@ -1939,6 +1985,8 @@ export class MessageModel {
   ) => {
     // Ensure group message does not populate sessionId
     const normalizedMessage = message.groupId ? { ...message, sessionId: null } : message;
+    const { usage: legacyUsage, ...metadata } =
+      (normalizedMessage.metadata as Record<string, any> | undefined) || {};
 
     return buildWorkspacePayload(
       { userId: this.userId, workspaceId: this.workspaceId },
@@ -1949,14 +1997,13 @@ export class MessageModel {
         // TODO: remove this when the client is updated
         createdAt: createdAt ? new Date(createdAt) : undefined,
         id,
+        metadata: normalizedMessage.metadata ? metadata : undefined,
         model: fromModel,
         provider: fromProvider,
         updatedAt: updatedAt ? new Date(updatedAt) : undefined,
         // Promote token usage into the dedicated `usage` column, preferring a
         // top-level `usage` over the legacy `metadata.usage`.
-        usage:
-          normalizedMessage.usage ??
-          (normalizedMessage.metadata as { usage?: ModelUsage } | undefined)?.usage,
+        usage: normalizedMessage.usage ?? (legacyUsage as ModelUsage | undefined),
       },
     );
   };
@@ -2200,19 +2247,15 @@ export class MessageModel {
     { imageList, metadata, usage, ...message }: Partial<UpdateMessageParams>,
     timing?: ModelTimingContext,
   ): Promise<{ success: boolean }> => {
-    // Promote token usage into the dedicated `usage` column. Prefer a top-level
-    // `usage` payload, falling back to `metadata.usage` so existing writers
-    // (Gateway / hetero-agent executors) keep populating the column without
-    // changes. `metadata.usage` is still written for backward-compatible reads.
-    const usageToWrite = usage ?? (metadata as { usage?: ModelUsage } | undefined)?.usage;
-    // Keep `metadata.usage` dual-written even when usage arrives as a top-level
-    // param (with no metadata payload) — legacy readers / rollback paths still
-    // consume it during the transition. Folding the resolved usage into the
-    // patch also keeps it consistent with the column when both are sent.
-    const metadataPatch =
-      metadata || usageToWrite
-        ? { ...metadata, ...(usageToWrite && { usage: usageToWrite }) }
-        : undefined;
+    // Accept legacy callers that still send `metadata.usage`, but persist usage
+    // exclusively in the dedicated top-level column.
+    const { usage: legacyUsage, ...metadataPatch } = (metadata as Record<string, any>) || {};
+    const usageToWrite = usage ?? (legacyUsage as ModelUsage | undefined);
+    const shouldUpdateMetadata = !!metadata || !!usageToWrite;
+    // A patch that matches no row is a lost write, not a no-op: the caller asked
+    // to persist content onto `id` and it went nowhere. Batched writers key their
+    // retry ledger off this flag, so reporting success here silently drops data.
+    let matchedRow = false;
     try {
       await runTimedStage(
         timing,
@@ -2237,10 +2280,10 @@ export class MessageModel {
               );
             }
 
-            // 2. Handle metadata merge if there's a metadata payload or a
-            // top-level usage to fold back into `metadata.usage`.
+            // 2. Merge non-usage metadata. A usage-bearing update also removes
+            // any legacy `metadata.usage` left on the existing row.
             let mergedMetadata: Record<string, any> | undefined;
-            if (metadataPatch) {
+            if (shouldUpdateMetadata) {
               const [existingMessage] = await runTimedStage(
                 timing,
                 'db.message.update.metadata.select',
@@ -2251,7 +2294,9 @@ export class MessageModel {
                     .where(and(eq(messages.id, id), this.ownership())),
               );
               mergedMetadata = merge(existingMessage?.metadata || {}, metadataPatch);
+              if (usageToWrite && mergedMetadata) delete mergedMetadata.usage;
             }
+            const metadataToWrite = mergedMetadata;
 
             const [updated] = await runTimedStage(
               timing,
@@ -2261,13 +2306,15 @@ export class MessageModel {
                   .update(messages)
                   .set({
                     ...message,
-                    ...(mergedMetadata && { metadata: mergedMetadata }),
+                    ...(metadataToWrite && { metadata: metadataToWrite }),
                     ...(usageToWrite && { usage: usageToWrite }),
                   })
                   .where(and(eq(messages.id, id), this.ownership()))
                   .returning({ topicId: messages.topicId }),
               { hasMetadata: !!metadataPatch, valueKeys: Object.keys(message) },
             );
+
+            matchedRow = !!updated;
 
             if (
               updated?.topicId && // When this write carries token usage (assistant finalize / hetero
@@ -2286,10 +2333,15 @@ export class MessageModel {
           }),
         {
           hasImageList: !!imageList?.length,
-          hasMetadata: !!metadataPatch,
+          hasMetadata: shouldUpdateMetadata,
           valueKeys: Object.keys(message),
         },
       );
+
+      if (!matchedRow) {
+        console.error(`Update message error: no message matched id ${id}`);
+        return { success: false };
+      }
 
       return { success: true };
     } catch (error) {
@@ -2305,10 +2357,9 @@ export class MessageModel {
 
     if (!item) return;
 
-    const mergedMetadata = merge(item.metadata || {}, metadata);
-    // Keep the dedicated `usage` column in sync when the merged metadata carries
-    // token usage, preferring it over the existing column value.
-    const usageToWrite = (metadata as { usage?: ModelUsage } | undefined)?.usage;
+    const { usage: usageToWrite, ...metadataPatch } = metadata as Record<string, any>;
+    const mergedMetadata = merge(item.metadata || {}, metadataPatch);
+    if (usageToWrite) delete mergedMetadata.usage;
 
     return this.db
       .update(messages)
@@ -2427,6 +2478,10 @@ export class MessageModel {
   ): Promise<{ success: boolean }> => {
     const { content, metadata, pluginState, pluginError } = params;
 
+    // `undefined` while no branch has looked for the row yet; see `update` above
+    // for why a write that matches nothing must not report success.
+    let matchedRow: boolean | undefined;
+
     try {
       await this.db.transaction(async (trx) => {
         // Update messages table (content, metadata)
@@ -2446,10 +2501,13 @@ export class MessageModel {
           }
 
           if (Object.keys(messageUpdateData).length > 0) {
-            await trx
+            const [updated] = await trx
               .update(messages)
               .set(messageUpdateData)
-              .where(and(eq(messages.id, id), this.ownership()));
+              .where(and(eq(messages.id, id), this.ownership()))
+              .returning({ id: messages.id });
+
+            matchedRow = !!updated;
           }
         }
 
@@ -2458,6 +2516,10 @@ export class MessageModel {
           const pluginItem = await trx.query.messagePlugins.findFirst({
             where: and(eq(messagePlugins.id, id), this.pluginsOwnership()),
           });
+
+          // A plugin-only patch never touches `messages`, so the plugin row is
+          // the only evidence the tool message exists.
+          if (matchedRow === undefined) matchedRow = !!pluginItem;
 
           if (pluginItem) {
             const pluginUpdateData: Record<string, any> = {};
@@ -2479,6 +2541,11 @@ export class MessageModel {
           }
         }
       });
+
+      if (matchedRow === false) {
+        console.error(`Update tool message error: no tool message matched id ${id}`);
+        return { success: false };
+      }
 
       return { success: true };
     } catch (error) {
@@ -2636,6 +2703,45 @@ export class MessageModel {
             COALESCE(jsonb_exists(${messages.metadata}, 'signal'), false)
             AND (${messages.tools} IS NULL OR ${messages.tools} = '[]'::jsonb)
           )`,
+          this.ownership(),
+        ),
+      )
+      .orderBy(desc(messages.createdAt))
+      .limit(1);
+
+    return row?.id;
+  };
+
+  /**
+   * Fallback anchor for {@link getLatestSpineMessageId}: the latest non-tool
+   * message in a topic/thread, WITHOUT the toolless-signal exclusion.
+   *
+   * A topic whose main thread holds nothing but toolless signal turns has no
+   * spine candidate, so the spine lookup returns undefined and the caller would
+   * persist the new turn with `parentId: undefined` — a second root that forks
+   * the conversation tree. The renderer walks that forest depth-first, so an
+   * earlier root's long-running subtree gets emitted before a later root and the
+   * newest reply surfaces ABOVE older messages (LOBE-11489).
+   *
+   * `role:'tool'` stays excluded: tool results are inline children of their
+   * assistant turn, and anchoring a normal turn onto one orphans it under the
+   * read side's tool-only signal collection.
+   */
+  getLatestNonToolMessageId = async ({
+    topicId,
+    threadId,
+  }: {
+    threadId?: string | null;
+    topicId: string;
+  }): Promise<string | undefined> => {
+    const [row] = await this.db
+      .select({ id: messages.id })
+      .from(messages)
+      .where(
+        and(
+          eq(messages.topicId, topicId),
+          not(eq(messages.role, 'tool')),
+          threadId ? eq(messages.threadId, threadId) : isNull(messages.threadId),
           this.ownership(),
         ),
       )

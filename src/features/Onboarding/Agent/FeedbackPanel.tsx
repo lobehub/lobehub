@@ -1,7 +1,8 @@
 'use client';
 
 import { useAnalytics } from '@lobehub/analytics/react';
-import { Button, Flexbox, Icon, Text, TextArea } from '@lobehub/ui';
+import { Flexbox, Icon, Text, TextArea } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { ThumbsDownIcon, ThumbsUpIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

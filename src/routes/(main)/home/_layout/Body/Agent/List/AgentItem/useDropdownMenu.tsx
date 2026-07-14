@@ -23,7 +23,6 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useAgentTransferMenuItem } from '@/business/client/hooks/useAgentTransferMenuItem';
-import { useIsWorkspaceOwner } from '@/business/client/hooks/useIsWorkspaceOwner';
 import { openEditingPopover } from '@/features/EditingPopover/store';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { usePermission } from '@/hooks/usePermission';
@@ -33,6 +32,8 @@ import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
+
+import { useRevealSidebarSection } from '../../../../hooks';
 
 const BUILTIN_SLUGS = new Set<string>(Object.values(BUILTIN_AGENT_SLUGS));
 
@@ -88,11 +89,11 @@ export const useAgentDropdownMenu = ({
   // Visibility actions are only meaningful inside a workspace: in personal
   // mode every row is implicitly owner-private. "Publish to Workspace"
   // appears on private agents; the inverse "Make private" (LOBE-11551)
-  // appears on published agents, but only for the creator or a workspace
-  // owner, and never on builtin agents (LobeAI etc.). The server enforces
-  // the same rules as a backstop.
+  // appears on published agents, but only for the creator (LOBE-11760 —
+  // owners demoting another member's agent would appropriate it), and never
+  // on builtin agents (LobeAI etc.). The server enforces the same rules as
+  // a backstop.
   const activeWorkspaceId = useActiveWorkspaceId();
-  const isWorkspaceOwner = useIsWorkspaceOwner();
   const currentUserId = useUserStore(userProfileSelectors.userId);
   const isPrivate = visibility === 'private';
   const isBuiltin = !!slug && BUILTIN_SLUGS.has(slug);
@@ -101,7 +102,8 @@ export const useAgentDropdownMenu = ({
     Boolean(activeWorkspaceId) &&
     visibility === 'public' &&
     !isBuiltin &&
-    (isWorkspaceOwner || (!!currentUserId && userId === currentUserId));
+    !!currentUserId &&
+    userId === currentUserId;
 
   // Viewer has no write permissions on agents — disable every mutating menu
   // item (pin/rename/duplicate/move/delete) while keeping the menu visible
@@ -118,6 +120,12 @@ export const useAgentDropdownMenu = ({
   });
 
   const isDefault = group === SessionDefaultGroup.Default;
+
+  // Visibility flips move the item across accordions. Reveal the destination
+  // section afterwards — with a collapsed/hidden target (stale persisted
+  // `sidebarExpandedKeys` predate newer sections) the item would silently
+  // vanish from the sidebar (LOBE-11758).
+  const revealSidebarSection = useRevealSidebarSection();
 
   return useMemo(
     () => () =>
@@ -214,6 +222,7 @@ export const useAgentDropdownMenu = ({
                       try {
                         await agentService.publishAgentToWorkspace(id);
                         await refreshAgentList();
+                        revealSidebarSection('agent');
                         message.success(
                           t('agent.publishToWorkspaceSuccess', {
                             defaultValue: 'Published to workspace',
@@ -254,6 +263,7 @@ export const useAgentDropdownMenu = ({
                       try {
                         await agentService.setAgentVisibility(id, 'private');
                         await refreshAgentList();
+                        revealSidebarSection('private');
                         message.success(t('makePrivate.success', { ns: 'common' }));
                       } catch (error) {
                         console.error('Failed to make agent private:', error);
@@ -307,6 +317,7 @@ export const useAgentDropdownMenu = ({
       showPublishAction,
       showMakePrivateAction,
       refreshAgentList,
+      revealSidebarSection,
       t,
     ],
   );

@@ -1,5 +1,6 @@
 import { ModelIcon } from '@lobehub/icons';
-import { Button, Center, Skeleton, Tag, Tooltip } from '@lobehub/ui';
+import { Center, Skeleton, Tag, Tooltip } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { createStaticStyles, cx } from 'antd-style';
 import { memo, useCallback, useState } from 'react';
@@ -157,7 +158,6 @@ const StarterList = memo(() => {
                 key={key}
                 loading={isSwitching}
                 shape={'round'}
-                variant={'outlined'}
                 onClick={() => handleClick(item)}
               >
                 {item.title}

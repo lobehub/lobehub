@@ -1,8 +1,8 @@
 ---
 title: Legacy Authentication (NextAuth & Clerk)
 description: >-
-  Documentation for legacy authentication methods including NextAuth and Clerk.
-  For new deployments, we recommend using Better Auth.
+  Historical reference for legacy authentication methods NextAuth and Clerk,
+  both of which have been removed from LobeHub. Use Better Auth instead.
 tags:
   - Authentication Service
   - Next Auth
@@ -13,10 +13,10 @@ tags:
 # Legacy Authentication
 
 <Callout type={'warning'}>
-  **Legacy Notice**: NextAuth and Clerk are legacy authentication methods. For new deployments, we strongly recommend using [Better Auth](/docs/self-hosting/auth) for its simplicity and flexibility.
+  **Legacy Notice**: NextAuth and Clerk have been fully removed from LobeHub. Setting removed NextAuth/Clerk variables (`NEXT_AUTH*` / `NEXTAUTH*`, Clerk keys, `AUTH_URL`, `NEXT_PUBLIC_AUTH_URL`, `ACCESS_CODE`, etc.) fails the deployment at build/startup. **`AUTH_SECRET` is not deprecated** — it is still required by [Better Auth](/docs/self-hosting/auth). This page is historical migration reference only.
 </Callout>
 
-This page documents the legacy authentication methods (NextAuth and Clerk) for users who are still using these services.
+This page documents the legacy authentication methods (NextAuth and Clerk), which have been removed from LobeHub, for historical migration reference only.
 
 ## Clerk
 
@@ -42,13 +42,13 @@ By setting the environment variables `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CL
 
 Before using NextAuth, please set the following variables in LobeHub's environment variables:
 
-| Environment Variable             | Type     | Description                                                                                                                                                                                                                     |
-| -------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NEXT_PUBLIC_ENABLE_NEXT_AUTH`   | Required | This is used to enable the NextAuth service. Set it to `1` to enable it; changing this setting requires recompiling the application. Users deploying with the `lobehub/lobehub` image have this configuration added by default. |
-| `AUTH_SECRET`                    | Required | The key used to encrypt Auth.js session tokens. You can use the following command: `openssl rand -base64 32`, or visit `https://generate-secret.vercel.app/32` to generate the key.                                             |
-| `AUTH_URL`                       | Required | This URL specifies the callback address for Auth.js when performing OAuth verification. Set this only if the default generated redirect address is incorrect. `https://example.com/api/auth`                                    |
-| `NEXT_AUTH_SSO_PROVIDERS`        | Optional | This environment variable is used to enable multiple identity verification sources simultaneously, separated by commas, for example, `auth0,microsoft-entra-id,authentik`.                                                      |
-| `NEXT_AUTH_SSO_SESSION_STRATEGY` | Optional | The session strategy for Auth.js. Options are `jwt` or `database`. Default is `jwt`.                                                                                                                                            |
+| Environment Variable             | Type                   | Description                                                                                                                                                                                                                    |
+| -------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `NEXT_PUBLIC_ENABLE_NEXT_AUTH`   | *(Deprecated)*         | Used to enable the NextAuth service. NextAuth has been removed from LobeHub — setting this variable will cause the deployment to fail at build/startup.                                                                        |
+| `AUTH_SECRET`                    | Required (Better Auth) | Still required by Better Auth (not a removed NextAuth-only var). Session encryption secret — generate with `openssl rand -base64 32` or `https://generate-secret.vercel.app/32`. See [Better Auth](/docs/self-hosting/auth).   |
+| `AUTH_URL`                       | *(Deprecated)*         | Previously specified the callback address for Auth.js when performing OAuth verification. Setting this variable will now cause the deployment to fail at build/startup.                                                        |
+| `NEXT_AUTH_SSO_PROVIDERS`        | *(Deprecated)*         | Previously used to enable multiple identity verification sources simultaneously, separated by commas, e.g. `auth0,microsoft-entra-id,authentik`. Setting this variable will now cause the deployment to fail at build/startup. |
+| `NEXT_AUTH_SSO_SESSION_STRATEGY` | *(Deprecated)*         | The session strategy for Auth.js. Setting this variable will now cause the deployment to fail at build/startup.                                                                                                                |
 
 Currently supported identity verification services include:
 

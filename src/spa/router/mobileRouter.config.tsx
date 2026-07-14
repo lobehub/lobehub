@@ -9,6 +9,7 @@ import {
 import { mobileAgentSettingsRouteMeta } from '@/features/RouteMeta/mobileRouteMeta';
 import { verifyReportsRouteMeta, verifyRouteMeta } from '@/features/Verify/routeMeta';
 import { agentRouteMeta } from '@/routes/(main)/agent/features/routeMeta';
+import { sharePageRouteMeta } from '@/routes/share/page/[id]/routeMeta';
 import { shareTopicRouteMeta } from '@/routes/share/t/[id]/routeMeta';
 import { dynamicElement, dynamicLayout, ErrorBoundary, redirectElement } from '@/utils/router';
 
@@ -263,6 +264,13 @@ export const mobileRoutes: RouteObject[] = [
   {
     children: [
       ...sharedMainAreaChildren,
+
+      // Downloads page (personal-only — never mirrored under /:workspaceSlug)
+      {
+        element: dynamicElement(() => import('@/routes/(main)/downloads'), 'Mobile > Downloads'),
+        errorElement: <ErrorBoundary />,
+        path: 'downloads',
+      },
 
       // Settings routes (personal-only — never mirrored under /:workspaceSlug)
       {
@@ -527,6 +535,7 @@ export const mobileRoutes: RouteObject[] = [
     children: [
       {
         element: dynamicElement(() => import('@/routes/share/page/[id]'), 'Mobile > Share > Page'),
+        handle: { meta: sharePageRouteMeta },
         path: ':id',
       },
     ],

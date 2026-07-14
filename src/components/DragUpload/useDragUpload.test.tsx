@@ -9,15 +9,14 @@ import { agentSelectors } from '@/store/agent/selectors';
 
 import { getContainer, useDragUpload } from './useDragUpload';
 
-interface AntdMockModule {
-  App: typeof App;
-}
-
 // Mock the hooks and components
 vi.mock('@/hooks/useVisualMediaUploadAbility');
 vi.mock('@/store/agent');
 vi.mock('antd', async () => {
-  const actual = await vi.importActual<AntdMockModule>('antd');
+  const actual = (await vi.importActual('antd')) as { App: Record<string, unknown> } & Record<
+    string,
+    unknown
+  >;
   const mockWarning = vi.fn();
 
   return {

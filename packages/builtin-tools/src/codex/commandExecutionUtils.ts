@@ -1,3 +1,5 @@
+// The parse-side unwrap in src/store/tool/slices/builtin/executors/worktreeDetection.ts
+// mirrors this wrapper shape — keep the accepted forms in sync.
 const SHELL_WRAPPER_PATTERN =
   /^(?:\/usr\/bin\/env\s+)?(?:\/\S+\/)?(?:bash|sh|zsh)\s+(?:-lc|-c|-l\s+-c)\s+(\S[\s\S]*)$/;
 
@@ -281,13 +283,14 @@ export const getCodexGrepCommandDisplay = (
 };
 
 /** Program families we give a dedicated label + brand icon instead of the generic terminal chip. */
-export type CodexCommandProgram = 'git' | 'node' | 'python';
+export type CodexCommandProgram = 'agent-browser' | 'git' | 'node' | 'python';
 
 const PROGRAM_BY_BASENAME: Record<string, CodexCommandProgram> = {
-  git: 'git',
-  node: 'node',
-  python: 'python',
-  python3: 'python',
+  'agent-browser': 'agent-browser',
+  'git': 'git',
+  'node': 'node',
+  'python': 'python',
+  'python3': 'python',
 };
 
 const ENV_ASSIGNMENT_PATTERN = /^[A-Z_]\w*=/i;

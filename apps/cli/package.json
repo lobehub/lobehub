@@ -1,6 +1,6 @@
 {
   "name": "@lobehub/cli",
-  "version": "0.0.39",
+  "version": "0.0.40",
   "type": "module",
   "bin": {
     "lh": "./dist/index.js",
@@ -35,6 +35,7 @@
     "@lobechat/heterogeneous-agents": "workspace:*",
     "@lobechat/local-file-shell": "workspace:*",
     "@lobechat/tool-runtime": "workspace:*",
+    "@lobechat/types": "workspace:*",
     "@trpc/client": "^11.18.0",
     "@types/node": "^24.13.2",
     "@types/semver": "^7.7.1",

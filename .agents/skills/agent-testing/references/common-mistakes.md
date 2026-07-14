@@ -7,6 +7,24 @@
 
 ---
 
+## Case 18 — Treating a status badge as proof that the error message rendered
+
+**Wrong approach**: marking an error-state UI case as passed because the platform page showed
+the `Failed` badge, while the screenshot only contained an unrelated configuration reminder
+and did not show the error alert or its translated message.
+
+**Why it's wrong**: the badge proves only that a failed runtime state reached the page. It does
+not prove that `errorCode` was translated and presented to the user, which is the core assertion
+of an error-message verification.
+
+**What it breaks**: a report can claim that users receive an actionable explanation while its
+visual evidence shows no explanation at all.
+
+**Correct approach**: for an error-presentation case, visually require all three signals in the
+same screenshot: the target platform, the failed status, and the error alert containing the
+expected user-facing message. Any unrelated warning or setup reminder does not satisfy the
+error-message assertion.
+
 ## Case 1 — Judging `passed` from heuristics instead of looking at the screenshot
 
 **Wrong approach**: after navigating to a surface, deciding "renders fine /
@@ -130,10 +148,32 @@ before from after.
 and it takes another round to re-explain.
 
 **Correct approach**: never ship a raw stale/before screenshot as standalone
-evidence. If a contrast helps, build ONE labeled before→after composite (e.g. sharp:
-crop the region from each, add a "BEFORE …/AFTER …" header bar, place side by side)
-and attach that single image. Evidence for a passed case = the after state (or a
-clearly-labeled comparison), full stop.
+evidence. When a contrast helps, use the report format's **native comparison pairing**
+— attach both raw screenshots and tag them with a shared `comparison` id, and the
+verify page renders them side by side under Before / After headings
+([report.md](./report.md#L64-78)):
+
+```json
+"evidence": [
+  { "path": "assets/before.png", "comparison": { "id": "layout", "role": "before" } },
+  { "path": "assets/after.png", "comparison": { "id": "layout", "role": "after" } }
+]
+```
+
+**Do NOT hand-compose the two shots into one image with sharp** (an earlier version of
+this note told you to, and an agent duly shipped stacked red/green banner images — the
+user asked why the report ignored the spec). The page owns the labeling; a composite
+also bakes in a fixed layout, can't be zoomed per side, and duplicates the heading the
+page already draws. Evidence for a passed case = the after state, or a `comparison`
+pair, full stop.
+
+Two more traps in the same area:
+
+- **One evidence item per case, not the same image reused across cases.** Attaching the
+  same before/after pair to two different cases makes the report look padded and leaves
+  the second case with no evidence of its own claim.
+- A group needs **exactly one `before` and one `after`** — an incomplete group silently
+  degrades to ordinary (unlabeled) evidence, i.e. straight back into this bug.
 
 ## Case 6 — `app://renderer` desktop instance runs the STALE built bundle, not working-tree code
 
@@ -208,6 +248,39 @@ it by opening the PNG, and publish the `/verify` report. Only surface a
 plan-approval question when the _product decision_ is ambiguous (what to test),
 never for _environment mechanics_ (how to render it). Env obstacles are the
 skill's job to solve and then iterate back into these logs.
+
+---
+
+## Case 8b — Handing the user the sign-in click when the app under test is signed out
+
+**Wrong approach**: an isolated Electron instance came up signed out (its userData had been wiped by an
+earlier `electron-dev.sh stop`, and the golden profile's refresh token was rejected → `invalid_grant`), so
+the run stopped and offered the user a choice: "I click Sign in and you authorize in the browser" vs
+"skip the screenshot".
+
+**Why it's wrong**: this is Case 8 wearing a different hat. `auth.md` says "Electron: log in once manually
+in the app" — that line is addressed to the **agent**, not the user. Auth is environment mechanics, and the
+standing rule is that the skill owns those end to end. The user's words: " 你以后都自己点 sign in 授权，不应
+该让我操作 ".
+
+**What it breaks**: burns a round on a question the user doesn't want, and stalls a UI-touching change
+(Case 9 / Case 10) one click short of its screenshot.
+
+**Correct approach**: drive the sign-in yourself — click the app's own "Sign in" entry, follow the OAuth
+flow in the browser it opens, and get back into the app. Only escalate when a step genuinely needs
+something you cannot supply (a 2FA push on their phone), and then name the exact blocking step instead of
+offering to drop the evidence.
+
+**What this run changed**: `electron-dev.sh stop <id>` used to delete the instance's userData and its login
+with it, so every run re-entered the sign-in flow. It now snapshots the login into
+`~/.lobehub/agent-testing/electron-login` first, and `start` seeds new instances from that snapshot
+(`login-status` shows the source + expiry; `save-login <id>` captures a live instance before anything
+risky, since a _killed_ instance loses its rotated refresh token).
+
+**Corollary**: never assume a profile is signed in because it exists — probe for a real signed-in state
+(`user().user?.id`, or a cheap authed mutation) before building a fixture on top of it. A rendered sidebar
+is not proof: the signed-out onboarding screen has text too, so `innerText.length > 50` passes while
+`createAgent` returns `UNAUTHORIZED`.
 
 ---
 
@@ -394,3 +467,47 @@ live branch, measure the target URL/bundle, and use that path if it renders curr
 code. Only keep a harness as supporting evidence; the primary UI evidence must come
 from the product surface, or the report must clearly fail/block after every known
 path is measured.
+
+---
+
+## Case 17 — Using a fixed timeout to arbitrate competing nested popovers
+
+**Wrong approach**: when a row-level hover popover competes with a nested action
+popover, closing the hover surface and suppressing it for an arbitrary number of
+milliseconds.
+
+**Why it's wrong**: pointer travel time varies. After the timeout expires, the hover
+surface can reopen while the action menu is still active and consume the interaction.
+
+**What it breaks**: menu actions become intermittently unclickable; destructive
+actions can disappear before their confirmation surface opens.
+
+**Correct approach**: coordinate both surfaces through explicit shared state. Keep
+the hover surface disabled for the complete lifetime of the nested action popover,
+then restore it only after that popover closes.
+
+---
+
+## Case 19 — Coordinator hand-driving a broken UI flow instead of re-delegating
+
+**Wrong approach**: after a delegated UI-verification subagent is killed mid-case,
+the coordinator takes over and drives the remaining flow inline — dozens of small
+browser commands (probe, reload, sign-in retries, dialog step-through), plus a deep
+root-cause dig into a flapping shared dependency, all in the main loop.
+
+**Why it's wrong**: the coordinator's per-step latency and context cost are far
+higher than a subagent's, and inline grinding turns one recoverable failure into a
+long visible stall. Root-causing an env flake (a shared cache/DB rejecting
+connections) is also not the goal of the test run — a disposable local replacement
+gets the case unblocked in one step.
+
+**What it breaks**: the user watches minutes of micro-steps with no case progress
+and loses confidence; total wall-clock and token spend balloon for zero extra
+evidence value.
+
+**Correct approach**: when a delegated case dies, repackage the _remaining_ steps
+into a fresh, tightly-scoped subagent prompt (include everything already learned:
+working recipes, seeded fixtures, exact remaining assertions). Timebox any
+environment rabbit hole to a couple of probes, then switch to a disposable local
+substitute (e.g. spin up a local instance and override the connection env var for
+the test server) instead of diagnosing shared infrastructure.

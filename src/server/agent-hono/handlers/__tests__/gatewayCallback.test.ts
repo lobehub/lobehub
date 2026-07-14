@@ -142,7 +142,7 @@ describe('gatewayCallback handler', () => {
       authHeader: 'Bearer token-xyz',
       body: {
         ...validBody,
-        state: { error: 'oops', status: incoming },
+        state: { error: 'oops', errorCode: 'invalid_credentials', status: incoming },
       },
     });
 
@@ -152,6 +152,7 @@ describe('gatewayCallback handler', () => {
     expect(mockUpdateBotRuntimeStatus).toHaveBeenCalledTimes(1);
     expect(mockUpdateBotRuntimeStatus).toHaveBeenCalledWith({
       applicationId: 'app-1',
+      errorCode: 'invalid_credentials',
       errorMessage: 'oops',
       platform: 'discord',
       status: expected,

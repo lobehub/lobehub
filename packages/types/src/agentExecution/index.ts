@@ -109,6 +109,18 @@ export interface ExecAgentAppContext {
   /** Optional assistant message id that anchors the run (e.g. parent for an isolated thread). */
   sourceMessageId?: string;
   /**
+   * Live-progress anchor for a `callSubAgent` child, spread onto
+   * `state.metadata.subAgentProgress`.
+   *
+   * The child runs under its own operationId, but the client only ever subscribes
+   * to the PARENT's gateway channel — which stays open across the sub-agent run
+   * because `waiting_for_async_tool` is excluded from `STREAM_END_STATUSES`. So
+   * the child's step loop publishes its running totals onto the parent's channel,
+   * addressed at the placeholder tool message by `toolMessageId`. Without it the
+   * client sees no stats until the completion bridge backfills `pluginState`.
+   */
+  subAgentProgress?: { parentOperationId: string; toolMessageId: string };
+  /**
    * Suppresses AgentSignal `agent.user.message` re-emission when this run is itself driven by a
    * background/builtin agent. Required for self-iteration / memory-writer / skill-manager runs to
    * avoid recursion into the analyzeIntent pipeline.
@@ -161,6 +173,43 @@ export interface ExecAgentParams {
   provider?: string;
   /** The agent slug to run (either agentId or slug is required) */
   slug?: string;
+}
+
+/**
+ * Parameters for scheduleAgentRun — defer an agent run to a future time.
+ *
+ * Deliberately a subset of {@link ExecAgentParams}: a deferred run creates the
+ * topic now and replays the request later through `execAgent`, so anything tied
+ * to a live turn (`existingMessageIds`, `parentOperationId`, `autoStart`) has no
+ * meaning here. One-shot only — recurring execution belongs to
+ * `tasks.automationMode = 'schedule'`.
+ */
+export interface ScheduleAgentRunParams {
+  /** The agent ID to run (either agentId or slug is required) */
+  agentId?: string;
+  /** File IDs of already-uploaded attachments to attach when the run fires */
+  fileIds?: string[];
+  /** Group to file the topic under, when scheduling from a group conversation */
+  groupId?: string | null;
+  /** Override the agent's default model */
+  model?: string;
+  /** The user input/prompt, replayed verbatim when the run comes due */
+  prompt: string;
+  /** Override the agent's default provider */
+  provider?: string;
+  /** When to run. UTC ISO-8601 (`…Z`) — see `TopicScheduledRun.runAt`. */
+  runAt: string;
+  /** The agent slug to run (either agentId or slug is required) */
+  slug?: string;
+}
+
+export interface ScheduleAgentRunResult {
+  /** The resolved agent ID */
+  agentId: string;
+  /** Echoes the scheduled time, so callers don't re-derive it */
+  runAt: string;
+  /** The topic created to hold the deferred run (status `scheduled`) */
+  topicId: string;
 }
 
 /**

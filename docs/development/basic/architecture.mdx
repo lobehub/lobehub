@@ -59,7 +59,7 @@ Frontend code is organized by responsibility under `src/`. See [Directory Struct
 The backend provides two API styles:
 
 - **RESTful WebAPI** (`src/app/(backend)/webapi/`): Handles endpoints requiring special processing such as chat streaming, TTS, and file serving
-- **tRPC Routers** (`src/server/routers/`): Type-safe main business routes, grouped by runtime:
+- **tRPC Routers** (`apps/server/src/routers/`): Type-safe main business routes, grouped by runtime:
   - `lambda/` — Main business (agent, session, message, topic, file, knowledge, settings, etc.)
   - `async/` — Long-running async operations (file processing, image generation, RAG evaluation)
   - `tools/` — Tool invocations (search, MCP, market)

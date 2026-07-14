@@ -5,6 +5,8 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
+import { OFFICIAL_SITE } from '@/const/url';
+
 import ShareButton from '../../../features/ShareButton';
 import { useDetailContext } from '../DetailProvider';
 import { SkillNavKey } from '../types';
@@ -27,7 +29,7 @@ const Sidebar = memo<{ activeTab?: SkillNavKey; mobile?: boolean }>(
           desc: description,
           hashtags: tags,
           title: name,
-          url: urlJoin('https://lobehub.com/skills', identifier || ''),
+          url: urlJoin(OFFICIAL_SITE, 'skills', identifier || ''),
         }}
       >
         {t('share')}

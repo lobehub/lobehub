@@ -305,8 +305,12 @@ export const messageRouter = router({
           ctx.userId ?? undefined,
         );
 
-        const messageModel = new MessageModel(ctx.serverDB, share.ownerId);
-        const fileService = new FileService(ctx.serverDB, share.ownerId);
+        // Workspace shares store their workspaceId on the share record; without
+        // it the ownership filter degrades to `workspace_id IS NULL` and returns
+        // no messages for workspace topics.
+        const shareWorkspaceId = share.workspaceId ?? undefined;
+        const messageModel = new MessageModel(ctx.serverDB, share.ownerId, shareWorkspaceId);
+        const fileService = new FileService(ctx.serverDB, share.ownerId, shareWorkspaceId);
 
         return messageModel.query(
           { ...queryParams, topicId: share.topicId },
@@ -643,7 +647,7 @@ export const messageRouter = router({
       z
         .object({
           toolCallId: z.string(),
-          value: z.union([z.string(), z.record(z.unknown())]),
+          value: z.union([z.string(), z.record(z.string(), z.unknown())]),
         })
         .extend(basicContextSchema.shape),
     )

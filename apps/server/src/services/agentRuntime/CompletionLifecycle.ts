@@ -1,8 +1,11 @@
 import { isParkedStatus } from '@lobechat/agent-runtime';
+import type { MessageContentPart } from '@lobechat/types';
+import { deserializeParts } from '@lobechat/utils';
 import debug from 'debug';
 
 import {
   AgentOperationModel,
+  type ChildUsageRollup,
   type RecordOperationStartParams,
 } from '@/database/models/agentOperation';
 import { MessageModel } from '@/database/models/message';
@@ -209,6 +212,26 @@ export class CompletionLifecycle {
     // dispatchHooks call (when the op resumes and truly ends) overwrites both.
     const completedAt = isParkedStatus(status) ? undefined : new Date();
 
+    // Fold every child operation's spend (callSubAgent children, isolated group
+    // members) into the parent's totals, so an op's row accounts for the whole
+    // tree it forked rather than only the tokens its own turns burned.
+    //
+    // Re-derived from the child rows on every write instead of accumulated onto
+    // this one: `recordCompletion` is a wholesale SET, and this method runs again
+    // each time the op parks and resumes — an additive rollup would multiply. The
+    // SUM is exact however often it re-runs.
+    //
+    // Skipped for sub-agents and group members themselves: nested sub-agents are
+    // rejected up front, so a child never has children of its own and the query
+    // would always return zero.
+    const rollup =
+      metadata?.isSubAgent === true ? undefined : await this.sumChildUsage(operationId);
+
+    const add = (own: number | null | undefined, child: number): number | null => {
+      if (!child) return own ?? null;
+      return (own ?? 0) + child;
+    };
+
     try {
       await this.agentOperationModel.recordCompletion(operationId, {
         completedAt,
@@ -216,7 +239,7 @@ export class CompletionLifecycle {
         cost: state?.cost ?? null,
         error: state?.error ?? null,
         interruption: state?.interruption ?? null,
-        llmCalls: state?.usage?.llm?.apiCalls ?? null,
+        llmCalls: add(state?.usage?.llm?.apiCalls, rollup?.llmCalls ?? 0),
         // Backfill the executed model/provider when the terminal state carries
         // them. The in-process runtime sets neither on `state` (the op already
         // holds them from recordStart) so these stay undefined and recordCompletion
@@ -229,16 +252,30 @@ export class CompletionLifecycle {
         provider: state?.provider,
         status,
         stepCount: state?.stepCount ?? null,
-        toolCalls: state?.usage?.tools?.totalCalls ?? null,
-        totalCost: state?.cost?.total ?? null,
-        totalInputTokens: state?.usage?.llm?.tokens?.input ?? null,
-        totalOutputTokens: state?.usage?.llm?.tokens?.output ?? null,
-        totalTokens: state?.usage?.llm?.tokens?.total ?? null,
+        toolCalls: add(state?.usage?.tools?.totalCalls, rollup?.toolCalls ?? 0),
+        totalCost: add(state?.cost?.total, rollup?.totalCost ?? 0),
+        totalInputTokens: add(state?.usage?.llm?.tokens?.input, rollup?.totalInputTokens ?? 0),
+        totalOutputTokens: add(state?.usage?.llm?.tokens?.output, rollup?.totalOutputTokens ?? 0),
+        totalTokens: add(state?.usage?.llm?.tokens?.total, rollup?.totalTokens ?? 0),
         traceS3Key,
+        // The `usage` / `cost` blobs stay the op's OWN accumulator, un-rolled-up:
+        // they are the runtime's counter, and the executor reads them back as state
+        // (the cost-limit gate compares `state.cost.total` against the budget). Only
+        // the scalar columns — the reporting surface — carry the whole tree.
         usage: state?.usage ?? null,
       });
     } catch (error) {
       log('[%s] Failed to persist operation completion (non-fatal): %O', operationId, error);
+    }
+  }
+
+  /** Best-effort child-usage rollup — a DB hiccup must not fail the completion write. */
+  private async sumChildUsage(operationId: string): Promise<ChildUsageRollup | undefined> {
+    try {
+      return await this.agentOperationModel.sumChildUsage(operationId);
+    } catch (error) {
+      log('[%s] Failed to sum child operation usage (non-fatal): %O', operationId, error);
+      return undefined;
     }
   }
 
@@ -476,13 +513,37 @@ export class CompletionLifecycle {
     const isAsyncToolPark = reason === 'waiting_for_async_tool';
 
     try {
-      const { event, metadata } = this.buildLifecycleEvent(operationId, state, reason);
+      const { assistantMessageId, event, metadata } = this.buildLifecycleEvent(
+        operationId,
+        state,
+        reason,
+      );
 
       // Finalize the agent_operations row before user hooks fire so
       // downstream consumers see the row in its terminal shape.
       await this.persistCompletion(operationId, state, reason);
 
       if (isAsyncToolPark) return;
+
+      // `lastAssistantContent` comes off the Redis-backed `state.messages`,
+      // while the assistant message row is persisted through a separate
+      // `messageModel.update` path. When the two diverge (state entry empty
+      // but the DB row holds the full reply — LOBE-11632: bot completions
+      // arrived with no content while the app showed the reply), consumers
+      // like the IM bot callback silently drop the reply. Recover from the DB
+      // row — the same source of truth the app UI renders — before dispatch.
+      if (
+        (reason === 'done' || reason === 'max_steps' || reason === 'cost_limit') &&
+        !event.lastAssistantContent?.trim() &&
+        !event.attachments?.length
+      ) {
+        const recovered = await this.recoverLastAssistantContent(
+          operationId,
+          assistantMessageId,
+          metadata?.userId || this.userId,
+        );
+        if (recovered) event.lastAssistantContent = recovered;
+      }
 
       await hookDispatcher.dispatch(operationId, 'onComplete', event, metadata._hooks);
 
@@ -565,6 +626,59 @@ export class CompletionLifecycle {
         // Kept across an async-tool park: the op resumes under the same id.
         this.verifyPlanInstantiations.delete(operationId);
       }
+    }
+  }
+
+  /**
+   * Load the final assistant message row from the DB and return its text
+   * content, for completions whose Redis-side state carried no assistant
+   * text (see the LOBE-11632 note in {@link dispatchHooks}). Non-fatal: any
+   * failure just leaves the event as-built.
+   */
+  private async recoverLastAssistantContent(
+    operationId: string,
+    assistantMessageId: string | undefined,
+    userId: string,
+  ): Promise<string | undefined> {
+    if (!assistantMessageId) return undefined;
+
+    try {
+      const messageModel =
+        userId === this.userId
+          ? this.messageModel
+          : new MessageModel(this.serverDB, userId, this.workspaceId);
+      const row = await messageModel.findById(assistantMessageId);
+      const raw = typeof row?.content === 'string' ? row.content : undefined;
+      if (!raw?.trim()) return undefined;
+
+      // Multimodal rows store `content` as serialized MessageContentPart[]
+      // (see callLlmFinalizer / serializePartsForStorage) — sending
+      // that verbatim would deliver raw JSON to the bot channel. Gate on the
+      // row's `metadata.isMultimodal` flag (the same signal the app UI uses
+      // in DisplayContent) rather than sniffing the string, so a legitimate
+      // plain-text reply that happens to be a JSON array is preserved as-is.
+      // Extract only the text parts; an image-only row recovers nothing.
+      const isMultimodal =
+        (row?.metadata as { isMultimodal?: boolean } | null | undefined)?.isMultimodal === true;
+      const parts = isMultimodal ? deserializeParts(raw) : null;
+      const content = parts
+        ? parts
+            .filter((p): p is Extract<MessageContentPart, { type: 'text' }> => p.type === 'text')
+            .map((p) => p.text)
+            .join('')
+        : raw;
+      if (!content.trim()) return undefined;
+
+      // console (not debug) so state/DB divergence stays visible in
+      // production logs — the silent variant of this is what made
+      // LOBE-11632 hard to diagnose.
+      console.warn(
+        `[CompletionLifecycle][${operationId}] completion event had no assistant text; recovered ${content.length} chars from message ${assistantMessageId}`,
+      );
+      return content;
+    } catch (error) {
+      log('[%s] recoverLastAssistantContent failed (non-fatal): %O', operationId, error);
+      return undefined;
     }
   }
 

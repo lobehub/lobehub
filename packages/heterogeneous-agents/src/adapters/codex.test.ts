@@ -1249,6 +1249,7 @@ describe('CodexAdapter', () => {
         cached_input_tokens: 4,
         input_tokens: 10,
         output_tokens: 3,
+        reasoning_output_tokens: 2,
       },
     });
 
@@ -1259,6 +1260,8 @@ describe('CodexAdapter', () => {
         usage: {
           inputCachedTokens: 4,
           inputCacheMissTokens: 6,
+          outputReasoningTokens: 2,
+          outputTextTokens: 1,
           totalInputTokens: 10,
           totalOutputTokens: 3,
           totalTokens: 13,
@@ -1273,6 +1276,8 @@ describe('CodexAdapter', () => {
       initialCumulativeUsage: {
         inputCachedTokens: 4,
         inputCacheMissTokens: 6,
+        outputReasoningTokens: 1,
+        outputTextTokens: 2,
         totalInputTokens: 10,
         totalOutputTokens: 3,
         totalTokens: 13,
@@ -1285,6 +1290,7 @@ describe('CodexAdapter', () => {
         cached_input_tokens: 9,
         input_tokens: 25,
         output_tokens: 11,
+        reasoning_output_tokens: 5,
       },
     });
 
@@ -1295,6 +1301,8 @@ describe('CodexAdapter', () => {
         usage: {
           inputCachedTokens: 5,
           inputCacheMissTokens: 10,
+          outputReasoningTokens: 4,
+          outputTextTokens: 4,
           totalInputTokens: 15,
           totalOutputTokens: 8,
           totalTokens: 23,

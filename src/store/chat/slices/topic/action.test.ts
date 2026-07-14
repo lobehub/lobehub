@@ -523,6 +523,42 @@ describe('topic action', () => {
       expect(updateFavoriteSpy).toHaveBeenCalledWith(topicId, { favorite: favState });
     });
   });
+  describe('updateTopicStatus', () => {
+    // Unique ids: updateTopicStatus registers a TTL-bounded pending status-write
+    // in a private map that beforeEach's state reset can't clear, so a shared id
+    // would bleed status onto other tests' fetched-topic fixtures.
+    it('stamps completedAt when archiving (status: completed)', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const topicId = 'update-status-completed-topic';
+
+      const updateSpy = vi.spyOn(topicService, 'updateTopic').mockResolvedValue(undefined as any);
+
+      await act(async () => {
+        await result.current.updateTopicStatus({ status: 'completed', topicId });
+      });
+
+      // "Archive" persists the completion timestamp alongside the status so the
+      // bulk/stale archive matches the single-item markTopicCompleted.
+      expect(updateSpy).toHaveBeenCalledWith(topicId, {
+        completedAt: expect.any(Date),
+        status: 'completed',
+      });
+    });
+
+    it('does not touch completedAt for non-completed transitions', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const topicId = 'update-status-running-topic';
+
+      const updateSpy = vi.spyOn(topicService, 'updateTopic').mockResolvedValue(undefined as any);
+
+      await act(async () => {
+        await result.current.updateTopicStatus({ status: 'running', topicId });
+      });
+
+      // Agent-run status writes must stay a pure status update — no completedAt.
+      expect(updateSpy).toHaveBeenCalledWith(topicId, { status: 'running' });
+    });
+  });
   describe('useFetchTopics', () => {
     it('should fetch topics for a given session id', async () => {
       const sessionId = 'test-session-id';
@@ -839,11 +875,11 @@ describe('topic action', () => {
     });
   });
   describe('switchTopic', () => {
-    it('should update activeTopicId and call refreshMessages', async () => {
+    it('should update activeTopicId and softly revalidate messages', async () => {
       const topicId = 'topic-id';
       const { result } = renderHook(() => useChatStore());
 
-      const refreshMessagesSpy = vi.spyOn(result.current, 'refreshMessages');
+      const revalidateMessagesSpy = vi.spyOn(result.current, 'revalidateMessages');
       // Call the switchTopic action with the topicId
       await act(async () => {
         await result.current.switchTopic(topicId);
@@ -853,14 +889,14 @@ describe('topic action', () => {
       expect(useChatStore.getState().activeTopicId).toBe(topicId);
 
       // Verify that the refreshMessages was called to update the messages
-      expect(refreshMessagesSpy).toHaveBeenCalled();
+      expect(revalidateMessagesSpy).toHaveBeenCalled();
     });
 
     it('should support options object as second parameter', async () => {
       const topicId = 'topic-id';
       const { result } = renderHook(() => useChatStore());
 
-      const refreshMessagesSpy = vi.spyOn(result.current, 'refreshMessages');
+      const revalidateMessagesSpy = vi.spyOn(result.current, 'revalidateMessages');
 
       // Call with options object (new API)
       await act(async () => {
@@ -868,7 +904,7 @@ describe('topic action', () => {
       });
 
       expect(useChatStore.getState().activeTopicId).toBe(topicId);
-      expect(refreshMessagesSpy).not.toHaveBeenCalled();
+      expect(revalidateMessagesSpy).not.toHaveBeenCalled();
     });
 
     it('should clear new key data when switching to null (main scope)', async () => {
@@ -1070,9 +1106,11 @@ describe('topic action', () => {
       expect(useChatStore.getState().activeTopicId).toBe('new-created-topic-id');
     });
 
-    it('should skip refreshMessages for superseded overlapping switches', async () => {
+    it('should skip revalidateMessages for superseded overlapping switches', async () => {
       const { result } = renderHook(() => useChatStore());
-      const refreshSpy = vi.spyOn(result.current, 'refreshMessages').mockResolvedValue(undefined);
+      const revalidateSpy = vi
+        .spyOn(result.current, 'revalidateMessages')
+        .mockResolvedValue(undefined);
 
       // Fire two overlapping switches: the sync body of both runs before
       // either yields, so by the microtask boundary the second has already
@@ -1083,7 +1121,7 @@ describe('topic action', () => {
         await Promise.all([p1, p2]);
       });
 
-      expect(refreshSpy).toHaveBeenCalledTimes(1);
+      expect(revalidateSpy).toHaveBeenCalledTimes(1);
       expect(useChatStore.getState().activeTopicId).toBe('topic-b');
     });
   });
@@ -1174,10 +1212,28 @@ describe('topic action', () => {
         await result.current.removeTopic(topicId);
       });
 
-      expect(topicService.removeTopic).toHaveBeenCalledWith(topicId);
+      expect(topicService.removeTopic).toHaveBeenCalledWith(topicId, undefined);
       expect(refreshTopicSpy).toHaveBeenCalled();
       expect(switchTopicSpy).toHaveBeenCalled();
     });
+    it('should forward removeFiles so the topic attachments are deleted', async () => {
+      const topicId = 'topic-1';
+      const { result } = renderHook(() => useChatStore());
+      const activeAgentId = 'test-session-id';
+
+      await act(async () => {
+        useChatStore.setState({ activeAgentId, activeTopicId: topicId });
+      });
+
+      vi.spyOn(result.current, 'refreshTopic').mockResolvedValue(undefined);
+
+      await act(async () => {
+        await result.current.removeTopic(topicId, true);
+      });
+
+      expect(topicService.removeTopic).toHaveBeenCalledWith(topicId, true);
+    });
+
     it('should remove a specific topic and its messages, then not switch topic if not active', async () => {
       const topicId = 'topic-1';
       const { result } = renderHook(() => useChatStore());
@@ -1194,7 +1250,7 @@ describe('topic action', () => {
         await result.current.removeTopic(topicId);
       });
 
-      expect(topicService.removeTopic).toHaveBeenCalledWith(topicId);
+      expect(topicService.removeTopic).toHaveBeenCalledWith(topicId, undefined);
       expect(refreshTopicSpy).toHaveBeenCalled();
       expect(switchTopicSpy).not.toHaveBeenCalled();
     });
@@ -1215,7 +1271,7 @@ describe('topic action', () => {
         await result.current.removeTopic(topicId);
       });
 
-      expect(topicService.removeTopic).toHaveBeenCalledWith(topicId);
+      expect(topicService.removeTopic).toHaveBeenCalledWith(topicId, undefined);
       expect(refreshTopicSpy).toHaveBeenCalled();
       expect(switchTopicSpy).toHaveBeenCalled();
     });
@@ -1272,7 +1328,7 @@ describe('topic action', () => {
       const topicData =
         useChatStore.getState().topicDataMap[topicMapKey({ agentId: activeAgentId })];
 
-      expect(topicService.removeTopic).toHaveBeenCalledWith(topicId);
+      expect(topicService.removeTopic).toHaveBeenCalledWith(topicId, undefined);
       expect(topicData).toMatchObject({
         currentPage: 1,
         hasMore: true,

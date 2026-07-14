@@ -1,6 +1,5 @@
 import { DropdownMenu, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
 import { Button, confirmModal } from '@lobehub/ui/base-ui';
-import { Space } from 'antd';
 import { MoreHorizontalIcon, Trash2 } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -74,7 +73,7 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
     <>
       <Flexbox horizontal align={'center'} gap={8} onClick={stopPropagation}>
         {installed ? (
-          <Space.Compact>
+          <Flexbox horizontal gap={4}>
             {showConfigureButton &&
               (isCustomPlugin ? (
                 <EditCustomPlugin identifier={identifier} open={showModal} onOpenChange={setModal}>
@@ -111,7 +110,7 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
             >
               <Button icon={<Icon icon={MoreHorizontalIcon} />} loading={installing} />
             </DropdownMenu>
-          </Space.Compact>
+          </Flexbox>
         ) : (
           <Button
             disabled={!canCreate || !canEdit}

@@ -1,7 +1,8 @@
 'use client';
 
 import { Github } from '@lobehub/icons';
-import { ActionIcon, Avatar, Button, Flexbox, Icon, stopPropagation, Text } from '@lobehub/ui';
+import { ActionIcon, Avatar, Flexbox, Icon, stopPropagation, Text } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
   DotIcon,
@@ -95,7 +96,7 @@ const Header = memo<{ mobile?: boolean }>(({ mobile }) => {
         url: '/community/skill',
       })}
     >
-      <Button icon={<Icon icon={cate.icon} />} size={'middle'} variant={'outlined'}>
+      <Button icon={<Icon icon={cate.icon} />} size={'middle'}>
         {cate.label}
       </Button>
     </WorkspaceLink>

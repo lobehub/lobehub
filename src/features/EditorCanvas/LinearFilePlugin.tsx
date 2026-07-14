@@ -3,7 +3,7 @@
 import { downloadFile } from '@lobechat/utils/client';
 import { FilePlugin, UploadPlugin, useLexicalComposerContext } from '@lobehub/editor';
 import { ActionIcon } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { DownloadIcon } from 'lucide-react';
 import { type FC, memo, useLayoutEffect } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,7 +11,7 @@ import { useTranslation } from 'react-i18next';
 import FileIcon from '@/components/FileIcon';
 import { formatSize } from '@/utils/format';
 
-const useStyles = createStyles(({ css, cssVar, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   card: css`
     cursor: pointer;
 
@@ -23,17 +23,17 @@ const useStyles = createStyles(({ css, cssVar, token }) => ({
     width: 100%;
     padding-block: 10px;
     padding-inline: 12px;
-    border: 1px solid ${token.colorBorderSecondary};
-    border-radius: ${token.borderRadiusLG}px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
 
-    color: ${token.colorText};
+    color: ${cssVar.colorText};
 
-    background: ${token.colorBgContainer};
+    background: ${cssVar.colorBgContainer};
 
     transition: background ${cssVar.motionDurationMid};
 
     &:hover {
-      background: ${token.colorFillTertiary};
+      background: ${cssVar.colorFillTertiary};
     }
 
     &:hover [data-lobehub-file-download] {
@@ -53,18 +53,18 @@ const useStyles = createStyles(({ css, cssVar, token }) => ({
   name: css`
     overflow: hidden;
 
-    font-size: ${token.fontSize}px;
+    font-size: ${cssVar.fontSize};
     font-weight: 500;
     line-height: 1.4;
-    color: ${token.colorText};
+    color: ${cssVar.colorText};
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
   size: css`
     margin-block-start: 2px;
-    font-size: ${token.fontSizeSM}px;
+    font-size: ${cssVar.fontSizeSM};
     line-height: 1.4;
-    color: ${token.colorTextTertiary};
+    color: ${cssVar.colorTextTertiary};
   `,
   state: css`
     display: flex;
@@ -73,12 +73,12 @@ const useStyles = createStyles(({ css, cssVar, token }) => ({
 
     padding-block: 10px;
     padding-inline: 12px;
-    border: 1px solid ${token.colorBorderSecondary};
-    border-radius: ${token.borderRadiusLG}px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
 
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
 
-    background: ${token.colorBgContainer};
+    background: ${cssVar.colorBgContainer};
   `,
 }));
 
@@ -95,7 +95,6 @@ interface LinearFileCardProps {
 }
 
 export const LinearFileCard = memo<LinearFileCardProps>(({ node }) => {
-  const { styles } = useStyles();
   const { t } = useTranslation('editor');
 
   const { fileUrl, message, name, size, status } = node;

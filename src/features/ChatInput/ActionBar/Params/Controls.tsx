@@ -1,6 +1,7 @@
 import { DEFAULT_AGENT_CONFIG } from '@lobechat/const';
-import { Flexbox, Icon, Select, SliderWithInput, TextArea } from '@lobehub/ui';
-import { Form as AntdForm, Switch } from 'antd';
+import { Flexbox, Icon, SliderWithInput, TextArea } from '@lobehub/ui';
+import { Select, Switch } from '@lobehub/ui/base-ui';
+import { Form as AntdForm } from 'antd';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { debounce } from 'es-toolkit/compat';
 import isEqual from 'fast-deep-equal';

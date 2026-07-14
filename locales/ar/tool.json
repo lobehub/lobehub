@@ -17,6 +17,7 @@
   "agentGroupManagement.executeTask.tokens": "استخدام الرموز",
   "agentGroupManagement.executeTasks.intervention.instructionPlaceholder": "تعليمات مفصلة للوكيل لتنفيذ هذه المهمة...",
   "agentGroupManagement.executeTasks.intervention.titlePlaceholder": "عنوان المهمة...",
+  "agentGroupManagement.executeTasks.results": "النتائج",
   "agentMarketplace.category.businessStrategy": "الأعمال والاستراتيجية",
   "agentMarketplace.category.contentCreation": "إنشاء المحتوى",
   "agentMarketplace.category.creatorEconomy": "اقتصاد المبدعين",

@@ -1,3 +1,4 @@
+import { OFFICIAL_URL } from '@lobechat/const';
 import debug from 'debug';
 
 import { appEnv } from '@/envs/app';
@@ -35,7 +36,7 @@ export const preprocessLhCommand = async (
   try {
     const jwt = await signUserJWT(userId);
 
-    const serverUrl = isDev ? 'https://app.lobehub.com' : appEnv.APP_URL;
+    const serverUrl = isDev ? OFFICIAL_URL : appEnv.APP_URL;
 
     const envParts = [`LOBEHUB_JWT=${jwt}`, `LOBEHUB_SERVER=${serverUrl}`];
     if (workspaceId) envParts.push(`LOBEHUB_WORKSPACE_ID=${workspaceId}`);

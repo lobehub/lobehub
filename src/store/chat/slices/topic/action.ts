@@ -473,6 +473,13 @@ export class ChatTopicActionImpl {
     // Already at the target status — both the in-memory and DB writes are no-ops.
     if (topic?.status === status) return;
 
+    // "Archive" in the UI writes status:'completed'. Stamp `completedAt` on that
+    // transition so bulk/stale archive records when the topic was completed,
+    // matching the single-item `markTopicCompleted`. Other status transitions
+    // (agent runs → running/active/unread/…) leave `completedAt` untouched.
+    const patch: Partial<ChatTopic> =
+      status === 'completed' ? { completedAt: new Date(), status } : { status };
+
     this.#pendingTopicStatusWrites.set(topicId, { expiresAt: Date.now() + 15_000, status });
 
     // Scope on the payload routes the write to the owning bucket inside
@@ -481,13 +488,13 @@ export class ChatTopicActionImpl {
     state.internal_dispatchTopic({
       type: 'updateTopic',
       id: topicId,
-      value: { status },
+      value: patch,
       agentId,
       groupId,
       scope,
     });
 
-    await topicService.updateTopic(topicId, { status }).catch((err) => {
+    await topicService.updateTopic(topicId, patch).catch((err) => {
       console.error('[updateTopicStatus] persist failed:', err);
       // The DB never got the write — stop pinning it over fetched rows.
       this.#pendingTopicStatusWrites.delete(topicId);
@@ -1138,12 +1145,15 @@ export class ChatTopicActionImpl {
 
     // Yield a microtask so any switchTopic calls queued behind us can run
     // their sync bodies (and bump #switchTopicEpoch) before we commit to a
-    // refresh. On the other side of the yield, an epoch mismatch means a
-    // newer switch has taken over — skip the redundant SWR mutate.
+    // revalidation. On the other side of the yield, an epoch mismatch means a
+    // newer switch has taken over — skip the redundant SWR mutate. Navigation
+    // uses a soft ensure so a completed or in-flight sidebar prefetch is not
+    // invalidated by the switch itself; explicit refresh signals still go
+    // through refreshMessages and advance the request generation.
     await Promise.resolve();
     if (epoch !== this.#switchTopicEpoch) return;
 
-    await this.#get().refreshMessages();
+    await this.#get().revalidateMessages();
   };
 
   removeSessionTopics = async (): Promise<void> => {
@@ -1189,13 +1199,13 @@ export class ChatTopicActionImpl {
     void evictMessageCache(() => true);
   };
 
-  removeTopic = async (id: string): Promise<void> => {
+  removeTopic = async (id: string, removeFiles?: boolean): Promise<void> => {
     const { activeAgentId, activeGroupId, activeTopicId, switchTopic, refreshTopic } = this.#get();
     // Allow deletion when either agentId or groupId is active
     if (!activeAgentId && !activeGroupId) return;
 
-    // remove topic
-    await topicService.removeTopic(id);
+    // remove topic (and optionally its uploaded attachments)
+    await topicService.removeTopic(id, removeFiles);
     this.#get().internal_dispatchTopic({ type: 'deleteTopic', id }, 'removeTopic');
     await refreshTopic();
     // drop the deleted topic's message cache so it doesn't orphan in IndexedDB
@@ -1400,6 +1410,7 @@ export class ChatTopicActionImpl {
       currentConfig: base.currentConfig,
       github,
       path: base.path,
+      upstream: prData?.upstream,
     });
 
     if (isEqual(base.currentConfig, nextConfig)) return;

@@ -31,7 +31,7 @@ describe('request_human_approve executor', () => {
       const state = createInitialState();
 
       // When
-      const result = await executeWithMockContext({
+      await executeWithMockContext({
         executor: 'request_human_approve',
         instruction,
         state,
@@ -150,12 +150,13 @@ describe('request_human_approve executor', () => {
       });
 
       // Then
-      expect(result.events).toHaveLength(1);
-      expect(result.events[0]).toMatchObject({
-        type: 'human_approve_required',
-        pendingToolsCalling: toolCalls,
-        operationId: 'test-session',
-      });
+      expect(result.events).toContainEqual(
+        expect.objectContaining({
+          type: 'human_approve_required',
+          pendingToolsCalling: toolCalls,
+          operationId: context.operationId,
+        }),
+      );
     });
   });
 
@@ -280,7 +281,9 @@ describe('request_human_approve executor', () => {
       // Then
       expect(mockStore.optimisticCreateMessage).not.toHaveBeenCalled();
       expect(result.newState.status).toBe('waiting_for_human');
-      expect(result.events).toHaveLength(1);
+      expect(result.events).toContainEqual(
+        expect.objectContaining({ type: 'human_approve_required' }),
+      );
     });
   });
 
@@ -443,7 +446,7 @@ describe('request_human_approve executor', () => {
       const context = createTestContext();
       const instruction = createRequestHumanApproveInstruction();
       const state = createInitialState({ status: 'running' });
-      const originalState = JSON.parse(JSON.stringify(state));
+      const originalState = structuredClone(state);
 
       // When
       const result = await executeWithMockContext({

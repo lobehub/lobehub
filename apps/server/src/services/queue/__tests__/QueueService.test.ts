@@ -161,8 +161,7 @@ describe('QueueService', () => {
       delete process.env.QSTASH_TOKEN;
     });
 
-    it('should wait locally for sub-second QStash delays before publishing', async () => {
-      vi.useFakeTimers();
+    it('should round sub-second delays up to 1s for QStash', async () => {
       qstashMocks.publishJSON.mockResolvedValue({ messageId: 'msg-test' });
 
       const { QStashQueueServiceImpl } = await import('../impls/qstash');
@@ -176,19 +175,14 @@ describe('QueueService', () => {
         stepIndex: 0,
       });
 
-      await vi.advanceTimersByTimeAsync(499);
-      expect(qstashMocks.publishJSON).not.toHaveBeenCalled();
-
-      await vi.advanceTimersByTimeAsync(1);
       await expect(result).resolves.toBe('msg-test');
 
       const request = qstashMocks.publishJSON.mock.calls[0][0];
-      expect(request).not.toHaveProperty('delay');
+      expect(request).toMatchObject({ delay: 1 });
       expect(request.body.timestamp).toEqual(expect.any(Number));
     });
 
-    it('should floor zero delay at the 300ms minimum settling window', async () => {
-      vi.useFakeTimers();
+    it('should publish zero delay immediately without a QStash delay', async () => {
       qstashMocks.publishJSON.mockResolvedValue({ messageId: 'msg-test' });
 
       const { QStashQueueServiceImpl } = await import('../impls/qstash');
@@ -202,14 +196,8 @@ describe('QueueService', () => {
         stepIndex: 0,
       });
 
-      // 300ms minimum — not yet published at 299ms
-      await vi.advanceTimersByTimeAsync(299);
-      expect(qstashMocks.publishJSON).not.toHaveBeenCalled();
-
-      await vi.advanceTimersByTimeAsync(1);
       await expect(result).resolves.toBe('msg-test');
 
-      // Zero delay is sub-second, so it is not forwarded to QStash
       const request = qstashMocks.publishJSON.mock.calls[0][0];
       expect(request).not.toHaveProperty('delay');
     });

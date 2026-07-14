@@ -232,15 +232,22 @@ export class GatewayService {
           }
 
           const webhookPath = `/api/agent/webhooks/${platform}/${provider.applicationId}`;
-          const result = await client.connect({
-            applicationId: provider.applicationId,
-            connectionId: provider.id,
-            connectionMode,
-            credentials: provider.credentials,
-            platform,
-            userId: provider.userId,
-            webhookPath,
-          });
+          // `ensure` marks this as a reconcile connect: the gateway preserves
+          // its park/backoff state when the config is unchanged (a parked
+          // connection answers 409 → counted as failed below), instead of
+          // letting every sync round reset stuck connections to fast retry.
+          const result = await client.connect(
+            {
+              applicationId: provider.applicationId,
+              connectionId: provider.id,
+              connectionMode,
+              credentials: provider.credentials,
+              platform,
+              userId: provider.userId,
+              webhookPath,
+            },
+            { ensure: true },
+          );
 
           // Gateway returns "connecting" for async persistent connections
           // (e.g. Discord WebSocket), "connected" for sync webhook-mode.
@@ -642,6 +649,7 @@ export class GatewayService {
           const { state } = await client.getStatus(provider.id);
           await updateBotRuntimeStatus({
             applicationId: provider.applicationId,
+            errorCode: state.errorCode,
             errorMessage: state.error,
             platform: provider.platform,
             status: mapGatewayStatusToRuntimeStatus(state.status),
@@ -695,6 +703,7 @@ export class GatewayService {
       const { state } = await client.getStatus(provider.id);
       return await updateBotRuntimeStatus({
         applicationId,
+        errorCode: state.errorCode,
         errorMessage: state.error,
         platform,
         status: mapGatewayStatusToRuntimeStatus(state.status),

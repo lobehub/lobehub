@@ -1,4 +1,5 @@
-import { Button, Icon, Tag, Typography } from '@lobehub/ui';
+import { Icon, Tag, Typography } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { GithubIcon } from '@lobehub/ui/icons';
 import { Divider } from 'antd';
 import { Settings, Share2 } from 'lucide-react';

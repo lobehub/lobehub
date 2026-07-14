@@ -3,6 +3,7 @@ import type {
   StepCompleteData,
   StreamChunkData,
   StreamStartData,
+  SubAgentProgressData,
   ToolEndData,
   ToolExecuteData,
   ToolStartData,
@@ -571,7 +572,7 @@ export const createGatewayEventHandler = (
       }
 
       case 'stream_chunk': {
-        enqueue(() => {
+        enqueue(async () => {
           const data = event.data as StreamChunkData | undefined;
           if (!data) return;
 
@@ -629,12 +630,17 @@ export const createGatewayEventHandler = (
             );
 
             // If the server attached a `toolMessageIds` map, it has persisted
-            // pending tool messages (human approval path). Fetch the latest
-            // messages so ApprovalActions can read them by id instead of
-            // waiting for `agent_runtime_end` (which won't fire while paused
-            // in `waiting_for_human`).
+            // pending tool messages (human approval, deferred async tools).
+            // Fetch the latest messages so ApprovalActions can read them by id
+            // instead of waiting for `agent_runtime_end` (which won't fire while
+            // paused in `waiting_for_human` / `waiting_for_async_tool`).
+            //
+            // AWAITED so the fetch is actually part of the queued work. Anything
+            // enqueued behind this chunk addresses rows that only exist once it
+            // lands — a fire-and-forget fetch would let the next event overtake
+            // it and dispatch onto a message the store doesn't have yet.
             if ((data as any).toolMessageIds) {
-              fetchAndReplaceMessages(get, context).catch(console.error);
+              await fetchAndReplaceMessages(get, context).catch(console.error);
             }
           }
         });
@@ -783,6 +789,44 @@ export const createGatewayEventHandler = (
       case 'step_complete': {
         const data = event.data as StepCompleteData | undefined;
 
+        // A parked `callSubAgent` child reporting its running totals. Patch them
+        // onto the placeholder tool message in memory only — the persisted values
+        // are written once, by `completeSubAgentBridge`, when the child finishes.
+        // Kept under a `progress` key so a DB refetch can never leave a stale live
+        // number sitting where the authoritative one belongs.
+        //
+        // ENQUEUED, not dispatched inline: the placeholder row only enters the
+        // store via the `toolMessageIds` refetch that the preceding `tools_calling`
+        // chunk queued. A fast child can emit its first progress event while that
+        // fetch is still in flight, and `updatePluginState` against a row the store
+        // doesn't have is a silent no-op — for a single-step sub-agent that lone
+        // sample is the whole live readout, so there is nothing later to self-heal
+        // it. Queueing puts this behind the fetch that creates its target.
+        if (data?.phase === 'subagent_progress') {
+          const progress = event.data as SubAgentProgressData;
+          if (progress.toolMessageId) {
+            enqueue(() => {
+              get().internal_dispatchMessage(
+                {
+                  id: progress.toolMessageId,
+                  key: 'progress',
+                  type: 'updatePluginState',
+                  value: {
+                    model: progress.model,
+                    totalCost: progress.totalCost,
+                    totalInputTokens: progress.totalInputTokens,
+                    totalOutputTokens: progress.totalOutputTokens,
+                    totalTokens: progress.totalTokens,
+                    totalToolCalls: progress.totalToolCalls,
+                  },
+                },
+                dispatchContext,
+              );
+            });
+          }
+          break;
+        }
+
         // Refresh on execution_complete to ensure final step state is consistent
         if (data?.phase === 'execution_complete') {
           enqueue(async () => {
@@ -826,6 +870,10 @@ export const createGatewayEventHandler = (
           get().internal_toggleToolCallingStreaming(currentAssistantMessageId, undefined);
           endReasoningIfNeeded();
 
+          // The terminal snapshot, when the server pushed one — the reconciled
+          // Source of Truth for this run's final assistant text.
+          let terminalMessages: UIChatMessage[] | undefined;
+
           // Reconcile messages FIRST so the terminal run lifecycle's notification
           // (afterRunComplete) can read the final assistant content from the store.
           //
@@ -834,6 +882,7 @@ export const createGatewayEventHandler = (
           // to a DB refetch only if the snapshot is absent (older server
           // builds, or push-event delivery edge cases).
           if (Array.isArray(data?.uiMessages)) {
+            terminalMessages = data.uiMessages;
             get().replaceMessages(data.uiMessages, {
               action: 'gateway/agent_runtime_end',
               context,
@@ -879,7 +928,28 @@ export const createGatewayEventHandler = (
               status,
             });
             if (!requeued && status === 'completed') {
-              await runLifecycle.afterRunComplete({ ...lifecycleEventBase, status });
+              // Notification body, resolved most-authoritative first:
+              //
+              // 1. the terminal snapshot's final assistant text — server-
+              //    finalized, so it wins over the optimistic stream even when
+              //    the two disagree (dropped chunks, server-side rewrites);
+              // 2. `accumulatedContent`, the in-memory stream (a closure
+              //    untouched by `replaceMessages`), for the no-snapshot path
+              //    where `fetchAndReplaceMessages` races the executor's DB
+              //    write and would otherwise leave the body empty. Its stale
+              //    predecessor is NOT read back from that refetch: a not-yet-
+              //    written assistant row would surface the PRIOR turn's reply;
+              // 3. nothing (`''`), letting `afterRunComplete` fall back to its
+              //    store read and then to the generic "generation finished".
+              const finalAssistantContent = terminalMessages?.findLast(
+                (message) => message.role === 'assistant',
+              )?.content;
+
+              await runLifecycle.afterRunComplete({
+                ...lifecycleEventBase,
+                notification: { content: finalAssistantContent || accumulatedContent },
+                status,
+              });
             }
           } else {
             // hetero reuses this handler only for message reconciliation; its

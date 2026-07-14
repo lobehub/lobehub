@@ -1,7 +1,8 @@
 'use client';
 
 import { type FormGroupItemType, type FormItemProps } from '@lobehub/ui';
-import { Button, Form, Tooltip } from '@lobehub/ui';
+import { Form, Icon, Tooltip } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { useUpdateEffect } from 'ahooks';
 import isEqual from 'fast-deep-equal';
 import { Wand2 } from 'lucide-react';
@@ -126,13 +127,10 @@ const AgentMeta = memo(() => {
       >
         <Button
           disabled={disabled || !hasSystemRole}
-          icon={Wand2}
-          iconPlacement={'end'}
+          icon={<Icon icon={Wand2} size={12} />}
+          iconPosition={'end'}
           loading={Object.values(loadingState as any).some((i) => !!i)}
           size={'small'}
-          iconProps={{
-            size: 12,
-          }}
           onClick={(e: any) => {
             e.stopPropagation();
             if (disabled) return;

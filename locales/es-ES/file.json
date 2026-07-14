@@ -82,6 +82,8 @@
   "menu.allFiles": "Todos los archivos",
   "menu.allPages": "Todas las páginas",
   "networkError": "No se pudieron recuperar las bibliotecas. Verifica tu conexión a internet e inténtalo de nuevo.",
+  "notFound.desc": "Este archivo no existe o ya no está accesible; puede que haya sido eliminado o configurado como privado por su propietario.",
+  "notFound.title": "Archivo no disponible",
   "notSupportGuide.desc": "El modo de implementación actual no admite la gestión de archivos. Cambia al <1>modo de base de datos en servidor</1> o utiliza <3>LobeHub Cloud</3>.",
   "notSupportGuide.features.allKind.desc": "Admite los tipos de archivo más comunes, incluidos formatos de página como Word, PPT, Excel, PDF, TXT, así como archivos de código populares como JS y Python.",
   "notSupportGuide.features.allKind.title": "Compatibilidad con múltiples tipos de archivo",

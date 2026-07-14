@@ -18,6 +18,7 @@ import {
 } from '@/server/services/memory/userMemory/extract';
 
 import { checkGuard, ensureWorkflowStarted } from './runGuard';
+import { appendHourlyWorkflowRunId, isHourlyMemoryExtractionCancelled } from './utils';
 
 const { upstashWorkflowExtraHeaders } = parseMemoryExtractionConfig();
 const WORKFLOW_PATH = 'api/workflows/memory-user-memory/pipelines/chat-topic/process-topics';
@@ -120,6 +121,30 @@ export const processTopicsHandler = (context: WorkflowContext<MemoryExtractionPa
             };
           }
         }
+
+        const hourlyCancellationStepName = `memory:user-memory:extract:users:${userId}:topics:cancel-check:hourly`;
+        const hourlyCancellationGuard = await checkGuard(context, WORKFLOW_PATH, {
+          response: { processedTopics: 0, processedUsers: 0 },
+          stepName: hourlyCancellationStepName,
+        });
+        if (!hourlyCancellationGuard.result) {
+          span.setStatus({ code: SpanStatusCode.OK });
+          return hourlyCancellationGuard.response;
+        }
+
+        const hourlyCancelled = await context.run(hourlyCancellationStepName, () =>
+          isHourlyMemoryExtractionCancelled(payload.hourlyTaskId),
+        );
+        if (hourlyCancelled) {
+          span.setStatus({ code: SpanStatusCode.OK });
+          return {
+            message: 'Hourly memory extraction task cancellation requested, skip topic batch.',
+            processedTopics: 0,
+            processedUsers: 0,
+            skipped: true,
+          };
+        }
+
         // Fan out per-topic extraction as independent fire-and-forget workflow runs (replaces the
         // former context.invoke). triggerProcessTopic applies a per-user flowControl key so a single
         // user's concurrent process-topic runs stay bounded; the hard per-user, per-run topic
@@ -135,7 +160,7 @@ export const processTopicsHandler = (context: WorkflowContext<MemoryExtractionPa
             return guard.response;
           }
 
-          await context.run(stepName, () =>
+          const result = await context.run(stepName, () =>
             MemoryExtractionWorkflowService.triggerProcessTopic(
               userId,
               {
@@ -150,9 +175,34 @@ export const processTopicsHandler = (context: WorkflowContext<MemoryExtractionPa
               { extraHeaders: upstashWorkflowExtraHeaders },
             ),
           );
+          await appendHourlyWorkflowRunId(payload.hourlyTaskId, result.workflowRunId);
         }
 
         // Trigger user persona update after topic processing using the workflow client.
+        const hourlyPersonaCancellationStepName = `memory:user-memory:users:${userId}:cancel-check:hourly`;
+        const hourlyPersonaCancellationGuard = await checkGuard(context, WORKFLOW_PATH, {
+          response: { processedTopics: 0, processedUsers: 0 },
+          stepName: hourlyPersonaCancellationStepName,
+        });
+        if (!hourlyPersonaCancellationGuard.result) {
+          span.setStatus({ code: SpanStatusCode.OK });
+          return hourlyPersonaCancellationGuard.response;
+        }
+
+        const hourlyPersonaCancelled = await context.run(hourlyPersonaCancellationStepName, () =>
+          isHourlyMemoryExtractionCancelled(payload.hourlyTaskId),
+        );
+        if (hourlyPersonaCancelled) {
+          span.setStatus({ code: SpanStatusCode.OK });
+          return {
+            message:
+              'Hourly memory extraction task cancellation requested, skip persona update scheduling.',
+            processedTopics: payload.topicIds.length,
+            processedUsers: payload.userIds.length,
+            skipped: true,
+          };
+        }
+
         const personaUpdateStepName = `memory:user-memory:users:${userId}`;
         const personaUpdateGuard = await checkGuard(context, WORKFLOW_PATH, {
           response: { processedTopics: 0, processedUsers: 0 },
@@ -163,11 +213,13 @@ export const processTopicsHandler = (context: WorkflowContext<MemoryExtractionPa
           return personaUpdateGuard.response;
         }
 
-        await context.run(personaUpdateStepName, async () => {
-          await MemoryExtractionWorkflowService.triggerPersonaUpdate(userId, payload.baseUrl, {
+        const personaUpdateResult = await context.run(personaUpdateStepName, async () => {
+          return MemoryExtractionWorkflowService.triggerPersonaUpdate(userId, payload.baseUrl, {
             extraHeaders: upstashWorkflowExtraHeaders,
+            hourlyTaskId: payload.hourlyTaskId,
           });
         });
+        await appendHourlyWorkflowRunId(payload.hourlyTaskId, personaUpdateResult.workflowRunId);
 
         span.setStatus({ code: SpanStatusCode.OK });
 

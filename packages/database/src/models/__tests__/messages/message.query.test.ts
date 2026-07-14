@@ -3135,9 +3135,11 @@ describe('MessageModel Query Tests', () => {
     it('scopes the main thread to threadId IS NULL (ignores thread messages)', async () => {
       await serverDB.insert(sessions).values([{ id: 'session1', userId }]);
       await serverDB.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
-      await serverDB.insert(threads).values([
-        { id: 'thread1', userId, topicId: 'topic1', sourceMessageId: 'm1', type: 'standalone' },
-      ]);
+      await serverDB
+        .insert(threads)
+        .values([
+          { id: 'thread1', userId, topicId: 'topic1', sourceMessageId: 'm1', type: 'standalone' },
+        ]);
       await serverDB.insert(messages).values([
         {
           id: 'm1',
@@ -3187,6 +3189,97 @@ describe('MessageModel Query Tests', () => {
       expect(await otherModel.getLatestSpineMessageId({ topicId: 'topic1' })).toBeUndefined();
       // unknown topic yields undefined
       expect(await messageModel.getLatestSpineMessageId({ topicId: 'nope' })).toBeUndefined();
+    });
+  });
+
+  // Fallback anchor used when `getLatestSpineMessageId` comes back empty. Without
+  // it a new user turn is persisted as a second root and the renderer emits the
+  // newest reply above older messages (LOBE-11489).
+  describe('getLatestNonToolMessageId', () => {
+    it('returns a toolless signal turn that the spine query skips', async () => {
+      await serverDB.insert(sessions).values([{ id: 'session1', userId }]);
+      await serverDB.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
+      await serverDB.insert(messages).values([
+        {
+          id: 'sig-1',
+          userId,
+          topicId: 'topic1',
+          role: 'assistant',
+          content: 'monitor callback',
+          metadata: { signal: { type: 'monitor' } } as any,
+          createdAt: new Date('2023-01-01T00:00:00'),
+        },
+      ]);
+
+      // the spine query finds nothing to anchor on...
+      expect(await messageModel.getLatestSpineMessageId({ topicId: 'topic1' })).toBeUndefined();
+      // ...so the fallback keeps the next turn off a second root
+      expect(await messageModel.getLatestNonToolMessageId({ topicId: 'topic1' })).toBe('sig-1');
+    });
+
+    it('never anchors on a tool result, even when it is the newest row', async () => {
+      await serverDB.insert(sessions).values([{ id: 'session1', userId }]);
+      await serverDB.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
+      await serverDB.insert(messages).values([
+        {
+          id: 'sig-1',
+          userId,
+          topicId: 'topic1',
+          role: 'assistant',
+          content: 'callback',
+          metadata: { signal: { type: 'monitor' } } as any,
+          createdAt: new Date('2023-01-01T00:00:00'),
+        },
+        {
+          id: 'tool-1',
+          userId,
+          topicId: 'topic1',
+          role: 'tool',
+          parentId: 'sig-1',
+          content: 'result',
+          createdAt: new Date('2023-01-01T00:00:01'),
+        },
+      ]);
+
+      expect(await messageModel.getLatestNonToolMessageId({ topicId: 'topic1' })).toBe('sig-1');
+    });
+
+    it('scopes to thread, user, and returns undefined for an empty topic', async () => {
+      const otherModel = new MessageModel(serverDB, otherUserId);
+      await serverDB.insert(sessions).values([{ id: 'session1', userId }]);
+      await serverDB.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
+      await serverDB
+        .insert(threads)
+        .values([
+          { id: 'thread1', userId, topicId: 'topic1', sourceMessageId: 'm1', type: 'standalone' },
+        ]);
+      await serverDB.insert(messages).values([
+        {
+          id: 'm1',
+          userId,
+          topicId: 'topic1',
+          role: 'user',
+          threadId: null,
+          content: 'main tail',
+          createdAt: new Date('2023-01-01T00:00:00'),
+        },
+        {
+          id: 't1',
+          userId,
+          topicId: 'topic1',
+          role: 'assistant',
+          threadId: 'thread1',
+          content: 'thread tail',
+          createdAt: new Date('2023-01-01T00:00:01'),
+        },
+      ]);
+
+      expect(await messageModel.getLatestNonToolMessageId({ topicId: 'topic1' })).toBe('m1');
+      expect(
+        await messageModel.getLatestNonToolMessageId({ topicId: 'topic1', threadId: 'thread1' }),
+      ).toBe('t1');
+      expect(await otherModel.getLatestNonToolMessageId({ topicId: 'topic1' })).toBeUndefined();
+      expect(await messageModel.getLatestNonToolMessageId({ topicId: 'nope' })).toBeUndefined();
     });
   });
 

@@ -82,6 +82,8 @@
   "menu.allFiles": "Tất Cả Tệp",
   "menu.allPages": "Tất Cả Trang",
   "networkError": "Không thể lấy dữ liệu thư viện. Vui lòng kiểm tra kết nối mạng và thử lại.",
+  "notFound.desc": "Tệp này không tồn tại hoặc không còn truy cập được — có thể đã bị xóa hoặc được đặt ở chế độ riêng tư bởi chủ sở hữu.",
+  "notFound.title": "Tệp Không Khả Dụng",
   "notSupportGuide.desc": "Chế độ triển khai hiện tại không hỗ trợ quản lý tệp. Hãy chuyển sang <1>chế độ triển khai cơ sở dữ liệu máy chủ</1>, hoặc sử dụng <3>LobeHub Cloud</3>.",
   "notSupportGuide.features.allKind.desc": "Hỗ trợ các loại tệp phổ biến, bao gồm các định dạng trang như Word, PPT, Excel, PDF, TXT, cũng như các tệp mã như JS và Python.",
   "notSupportGuide.features.allKind.title": "Phân Tích Nhiều Loại Tệp",

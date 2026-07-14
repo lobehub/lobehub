@@ -8,6 +8,10 @@ export default {
   'balance.plansUsageDesc': 'Subscription credits are used first, then top-up credits',
   'balance.title': 'Balance',
   'billing.amount': 'Amount',
+  'billing.cardBindingGift.cta': 'Claim now',
+  'billing.cardBindingGift.description':
+    'Add your first payment method and 1M credits land in your account instantly — no charge, no subscription required.',
+  'billing.cardBindingGift.title': '🎁 Add a payment method, get 1M credits',
   'billing.closed': 'Closed',
   'billing.created': 'Payment Date',
   'billing.draft': 'Draft',
@@ -16,11 +20,14 @@ export default {
   'billing.empty': 'No billing history',
   'billing.endDate': 'End Date',
   'billing.history': 'Billing History',
+  'billing.manage.openFailed': 'Failed to open the payment management page',
+  'billing.manage.title': 'Manage Payments',
   'billing.orderNumber': 'Order Number',
   'billing.paid': 'Paid',
   'billing.pay': 'Pay Now',
   'billing.paymentGateway': 'Payment Gateway',
   'billing.paymentMethod': 'Payment Method',
+  'billing.paymentMethod.openFailed': 'Failed to open payment method setup',
   'billing.price': 'Subscription Price',
   'billing.startDate': 'Start Date',
   'billing.status': 'Transaction Status',
@@ -61,7 +68,7 @@ export default {
   'comparePlans': 'View Plans',
   'createSubscriptionError': 'Failed to create subscription',
   'currentPlan.cancelAlert':
-    'Subscription will be cancelled after {{canceledAt}}. You can still restore it in "Manage Subscription" before then',
+    'Subscription will be cancelled after {{canceledAt}}. You can still restore it before then',
   'currentPlan.downgradeAlert': 'Will be downgraded to {{plan}} after {{downgradedAt}}.',
   'currentPlan.management': 'Manage Subscription',
   'currentPlan.notIncluded': 'Not included in current plan',
@@ -79,6 +86,8 @@ export default {
   'downgradePlans.desc': 'The plan change will take effect after the current plan expires.',
   'downgradePlans.success': 'Subscription cancelled successfully',
   'downgradePlans.title': 'Switch to {{plan}}',
+  'credits.autoTopUp.cardBindingGiftHint':
+    '🎁 Add your first payment method and get 1M credits free',
   'credits.autoTopUp.currentBalance': 'Current Balance',
   'credits.autoTopUp.desc': 'Ensure your credits never run out',
   'credits.autoTopUp.noCustomerHint':
@@ -233,6 +242,25 @@ export default {
   'limitation.insufficientBudget.exactDesc':
     'This request needs more credits. Top up credits or upgrade your plan.',
   'limitation.insufficientBudget.required': 'Required Credits',
+  'limitation.insufficientBudget.rescue.desc':
+    'This request needs {{shortfall}} more credits to continue',
+  'limitation.insufficientBudget.rescue.referral.badge': 'Free',
+  'limitation.insufficientBudget.rescue.referral.benefit':
+    'Invite a friend — you both get {{reward}}M credits',
+  'limitation.insufficientBudget.rescue.referral.cta': 'Invite friends',
+  'limitation.insufficientBudget.rescue.referral.title': 'Invite friends',
+  'limitation.insufficientBudget.rescue.title': 'Out of credits',
+  'limitation.insufficientBudget.rescue.topup.benefit': 'Pay as you go, credited instantly',
+  'limitation.insufficientBudget.rescue.topup.cta': 'Top up & continue',
+  'limitation.insufficientBudget.rescue.topup.title': 'Top up {{quantity}}M credits',
+  'limitation.insufficientBudget.rescue.upgrade.badge': 'Best value',
+  'limitation.insufficientBudget.rescue.upgrade.benefit':
+    '{{credits}} credits per month, cancel anytime',
+  'limitation.insufficientBudget.rescue.upgrade.benefitWithRuns':
+    '{{credits}} credits per month ≈ {{runs}}+ requests like this',
+  'limitation.insufficientBudget.rescue.upgrade.cta': 'Upgrade & continue',
+  'limitation.insufficientBudget.rescue.upgrade.price': 'from ${{price}}/mo',
+  'limitation.insufficientBudget.rescue.upgrade.title': 'Upgrade to {{plan}}',
   'limitation.insufficientBudget.retry': 'Retry',
   'limitation.insufficientBudget.shortfall': 'Credit Shortfall',
   'limitation.insufficientBudget.title': 'Insufficient Credits',
@@ -440,6 +468,7 @@ export default {
   'plans.support.title': 'Support',
   'plans.support.ultimate': 'Priority Chat and Email Support',
   'plans.workspace.features.adminControls': 'Centralized billing and role management',
+  'plans.workspace.features.apiKey': 'Workspace API Keys',
   'plans.workspace.features.auditLog': 'Audit Logs',
   'plans.workspace.features.inviteMembers': 'Invite Members',
   'plans.workspace.features.memberBudget': 'Per-member Budget Control',
@@ -591,7 +620,10 @@ export default {
   'summary.dueBy': 'Due on {{date}}',
   'summary.nextMonthlyPayment': 'Your Next Monthly Payment',
   'summary.nextPayment': 'Your Next Payment',
+  'summary.oneTimePaymentDesc':
+    'This plan was purchased with a one-time payment and will not renew automatically.',
   'summary.paymentInformation': 'Billing Information',
+  'summary.planValidUntil': 'Plan Valid Until',
   'summary.storageSettings': 'Storage pay-as-you-go',
   'summary.storageMonthlyDesc':
     'This amount covers storage overage for the current monthly billing period.',

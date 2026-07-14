@@ -5,7 +5,7 @@ import path from 'node:path';
 import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { registerVerifyCommand } from './verify';
+import { registerVerifyCommand, reportEvidence } from './verify';
 
 const { mockTrpcClient } = vi.hoisted(() => ({
   mockTrpcClient: {
@@ -230,5 +230,68 @@ describe('verify init command', () => {
     expect(out.skill).toBe('verify');
     expect(out.written).toContain('SKILL.md');
     expect(existsSync(path.join(out.dir, 'SKILL.md'))).toBe(true);
+  });
+});
+
+describe('reportEvidence — comparison normalization', () => {
+  it('accepts plain string paths', () => {
+    expect(reportEvidence('assets/a.png')).toEqual([{ path: 'assets/a.png' }]);
+    expect(reportEvidence(['a.png', 'b.png']).map((e) => e.path)).toEqual(['a.png', 'b.png']);
+  });
+
+  it('keeps a comparison that carries both an id and a before/after role', () => {
+    const [before, after] = reportEvidence([
+      { comparison: { id: 'row', role: 'before' }, path: 'before.png' },
+      { comparison: { id: 'row', label: '改后', role: 'after' }, path: 'after.png' },
+    ]);
+
+    expect(before.comparison).toEqual({
+      id: 'row',
+      label: undefined,
+      layout: undefined,
+      role: 'before',
+    });
+    expect(after.comparison).toEqual({
+      id: 'row',
+      label: '改后',
+      layout: undefined,
+      role: 'after',
+    });
+  });
+
+  it('passes a vertical layout through and ignores any other value', () => {
+    const forLayout = (layout: unknown) =>
+      reportEvidence([{ comparison: { id: 'row', layout, role: 'before' }, path: 'a.png' }])[0]
+        .comparison?.layout;
+
+    expect(forLayout('vertical')).toBe('vertical');
+    // Side by side is the default, so anything unrecognized simply falls back to it.
+    expect(forLayout('horizontal')).toBeUndefined();
+    expect(forLayout('diagonal')).toBeUndefined();
+    expect(forLayout(undefined)).toBeUndefined();
+  });
+
+  // The report viewer pairs on `id`, so an id-less comparison could never render
+  // side by side — dropping it here keeps the upload honest instead of shipping
+  // metadata the UI silently ignores.
+  it('drops a comparison missing an id, keeping the image as ordinary evidence', () => {
+    const [item] = reportEvidence([{ comparison: { role: 'before' }, path: 'before.png' }]);
+
+    expect(item).toEqual({ comparison: undefined, description: undefined, path: 'before.png' });
+  });
+
+  it('drops a comparison whose role is absent or unrecognized', () => {
+    expect(
+      reportEvidence([{ comparison: { id: 'x', role: 'middle' }, path: 'a.png' }])[0].comparison,
+    ).toBeUndefined();
+    expect(
+      reportEvidence([{ comparison: { id: 'x' }, path: 'a.png' }])[0].comparison,
+    ).toBeUndefined();
+  });
+
+  it('supports the `file` / `desc` aliases and skips entries with no path', () => {
+    expect(
+      reportEvidence([{ desc: 'a shot', file: 'a.png' }, { comparison: { id: 'x' } }]),
+    ).toEqual([{ comparison: undefined, description: 'a shot', path: 'a.png' }]);
   });
 });

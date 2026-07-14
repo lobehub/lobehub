@@ -18,7 +18,7 @@ The best practice in this area is to use a file storage service (S3) to store im
 <Callout type={'info'}>
   In this documentation, S3 refers to a compatible S3 storage solution, which supports the Amazon S3
   API for object storage systems. Common examples include Cloudflare R2, Alibaba Cloud OSS, and
-  self-deployable Minio, all of which support the S3 compatible API.
+  self-deployable RustFS, all of which support the S3 compatible API.
 </Callout>
 
 ## Core Environment Variables
@@ -48,7 +48,7 @@ The best practice in this area is to use a file storage service (S3) to store im
 
   ### `S3_SET_ACL`
 
-  Whether to set the ACL to `public-read` when uploading files. This option is enabled by default. If the service provider does not support setting individual ACLs for files (i.e., all files inherit the ACL of the storage bucket), enabling this option may cause request errors. Set `S3_SET_ACL` to `0` to disable it.
+  Whether to set the ACL to `public-read` when uploading files. This option is disabled by default; the ACL is only set when `S3_SET_ACL` is explicitly configured to `1`. If the service provider does not support setting individual ACLs for files (i.e., all files inherit the ACL of the storage bucket), enabling this option may cause request errors.
 
   ### `S3_ENABLE_PATH_STYLE`
 
@@ -64,7 +64,7 @@ The best practice in this area is to use a file storage service (S3) to store im
   </Callout>
 
   <Callout type={'tip'}>
-    Common S3 cloud service providers often default to the `virtual-host` mode, while self-deployed services like Minio default to using `path-style`. Therefore, if you use Minio as the S3 service, you need to set `S3_ENABLE_PATH_STYLE=1`.
+    Common S3 cloud service providers often default to the `virtual-host` mode, while self-deployed services like RustFS default to using `path-style`. Therefore, if you use RustFS as the S3 service, you need to set `S3_ENABLE_PATH_STYLE=1`.
   </Callout>
 </Steps>
 
@@ -76,6 +76,8 @@ Currently, the S3 configuration tutorials included in the documentation are:
   <Card href={'/docs/self-hosting/advanced/s3/cloudflare-r2'} title={'Cloudflare R2'} />
 
   <Card href={'/docs/self-hosting/advanced/s3/tencent-cloud'} title={'Tencent Cloud COS'} />
+
+  <Card href={'/docs/self-hosting/advanced/s3/rustfs'} title={'RustFS'} />
 </Cards>
 
 Click to view the tutorial for the corresponding platform. If the above tutorials do not include the S3 service provider you are using, feel free to submit a Pull Request to collectively improve the guide on S3 object storage.

@@ -1,4 +1,5 @@
-import { Button, stopPropagation, Tooltip } from '@lobehub/ui';
+import { stopPropagation, Tooltip } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { isNull } from 'es-toolkit/compat';
 import { FileBoxIcon } from 'lucide-react';

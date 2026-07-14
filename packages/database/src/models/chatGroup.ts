@@ -1,5 +1,5 @@
 import { TRPCError } from '@trpc/server';
-import { and, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, ne, or, sql } from 'drizzle-orm';
 
 import type {
   ChatGroupAgentItem,
@@ -34,6 +34,37 @@ export class ChatGroupModel {
     );
 
   /**
+   * Visibility predicate on the member's `agents` row itself. Group membership
+   * (the junction row) does not grant access to the agent: when a member agent
+   * is switched back to private by its owner, every roster read must drop it
+   * for other members — otherwise the join would keep leaking the agent's
+   * config/meta through group surfaces (LOBE-11772).
+   */
+  private memberAgentVisibility = () =>
+    buildWorkspaceWhere(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      {
+        userId: agents.userId,
+        workspaceId: agents.workspaceId,
+        visibility: agents.visibility,
+      },
+    );
+
+  /**
+   * Same guard as an EXISTS subquery, for junction queries that don't join
+   * `agents`. The subquery is spelled with raw identifiers (not drizzle column
+   * refs) because the relational query builder rebinds every referenced column
+   * in `where` to the primary table's alias, which would corrupt the subquery.
+   * Semantics mirror `buildWorkspaceWhere`.
+   */
+  private memberAgentVisibleExists = () => {
+    if (!this.workspaceId) {
+      return sql`EXISTS (SELECT 1 FROM "agents" "ma" WHERE "ma"."id" = ${chatGroupsAgents.agentId} AND "ma"."user_id" = ${this.userId} AND "ma"."workspace_id" IS NULL)`;
+    }
+    return sql`EXISTS (SELECT 1 FROM "agents" "ma" WHERE "ma"."id" = ${chatGroupsAgents.agentId} AND "ma"."workspace_id" = ${this.workspaceId} AND ("ma"."visibility" IS NULL OR "ma"."visibility" = 'public' OR ("ma"."visibility" = 'private' AND "ma"."user_id" = ${this.userId})))`;
+  };
+
+  /**
    * Get member avatar metas (avatar + backgroundColor) grouped by chatGroupId,
    * ordered by member order. Inbox members fall back to the default avatar.
    */
@@ -52,7 +83,7 @@ export class ChatGroupModel {
       })
       .from(chatGroupsAgents)
       .innerJoin(agents, eq(chatGroupsAgents.agentId, agents.id))
-      .where(inArray(chatGroupsAgents.chatGroupId, groupIds))
+      .where(and(inArray(chatGroupsAgents.chatGroupId, groupIds), this.memberAgentVisibility()))
       .orderBy(chatGroupsAgents.order);
 
     for (const { avatar, backgroundColor, chatGroupId, slug } of rows) {
@@ -105,7 +136,11 @@ export class ChatGroupModel {
     const groupIds = groups.map((g) => g.id);
 
     const groupAgents = await this.db.query.chatGroupsAgents.findMany({
-      where: and(inArray(chatGroupsAgents.chatGroupId, groupIds), this.agentsOwnership()),
+      where: and(
+        inArray(chatGroupsAgents.chatGroupId, groupIds),
+        this.agentsOwnership(),
+        this.memberAgentVisibleExists(),
+      ),
       with: { agent: true },
     });
 
@@ -134,7 +169,11 @@ export class ChatGroupModel {
 
     const agents = await this.db.query.chatGroupsAgents.findMany({
       orderBy: [chatGroupsAgents.order],
-      where: and(eq(chatGroupsAgents.chatGroupId, groupId), this.agentsOwnership()),
+      where: and(
+        eq(chatGroupsAgents.chatGroupId, groupId),
+        this.agentsOwnership(),
+        this.memberAgentVisibleExists(),
+      ),
     });
 
     return { agents, group };
@@ -217,6 +256,28 @@ export class ChatGroupModel {
     if (!result) {
       throw new Error('Chat group not found, already published, or access denied');
     }
+
+    // The synthetic supervisor mirrors the group's visibility at creation
+    // (private group → private supervisor). Publish it together with the
+    // group, otherwise other members would receive a `supervisorAgentId`
+    // whose agent row their roster reads filter out.
+    await this.db
+      .update(agents)
+      .set({ updatedAt: new Date(), visibility: 'public' })
+      .where(
+        and(
+          eq(agents.visibility, 'private'),
+          inArray(
+            agents.id,
+            this.db
+              .select({ id: chatGroupsAgents.agentId })
+              .from(chatGroupsAgents)
+              .where(
+                and(eq(chatGroupsAgents.chatGroupId, id), eq(chatGroupsAgents.role, 'supervisor')),
+              ),
+          ),
+        ),
+      );
 
     return result;
   }
@@ -404,7 +465,11 @@ export class ChatGroupModel {
   async getGroupAgents(groupId: string): Promise<ChatGroupAgentItem[]> {
     return this.db.query.chatGroupsAgents.findMany({
       orderBy: [chatGroupsAgents.order],
-      where: and(eq(chatGroupsAgents.chatGroupId, groupId), this.agentsOwnership()),
+      where: and(
+        eq(chatGroupsAgents.chatGroupId, groupId),
+        this.agentsOwnership(),
+        this.memberAgentVisibleExists(),
+      ),
     });
   }
 
@@ -443,6 +508,7 @@ export class ChatGroupModel {
           eq(chatGroupsAgents.chatGroupId, groupId),
           eq(chatGroupsAgents.enabled, true),
           this.agentsOwnership(),
+          this.memberAgentVisibility(),
         ),
       )
       .orderBy(chatGroupsAgents.order);
@@ -455,8 +521,41 @@ export class ChatGroupModel {
         eq(chatGroupsAgents.chatGroupId, groupId),
         eq(chatGroupsAgents.enabled, true),
         this.agentsOwnership(),
+        this.memberAgentVisibleExists(),
       ),
     });
+  }
+
+  /**
+   * Count workspace groups that would break if the given agent were demoted to
+   * private: groups where it is the **supervisor** and the group is visible to
+   * someone else (public, or owned by another member). A private supervisor is
+   * unresolvable for every other viewer, which makes the whole group unusable —
+   * so demotion is rejected at the source (mirrors
+   * `countTasksBlockingAgentDemotion`). Regular members are deliberately NOT
+   * counted: roster reads drop a non-visible member per viewer instead.
+   * Deliberately workspace-wide and visibility-blind (NOT `ownership()`):
+   * other members' private groups are invisible to the caller but their
+   * supervisor would still break.
+   */
+  async countGroupsBlockingAgentDemotion(
+    agentId: string,
+    agentOwnerUserId: string,
+  ): Promise<number> {
+    if (!this.workspaceId) return 0;
+    const [row] = await this.db
+      .select({ count: sql<number>`count(*)` })
+      .from(chatGroupsAgents)
+      .innerJoin(chatGroups, eq(chatGroupsAgents.chatGroupId, chatGroups.id))
+      .where(
+        and(
+          eq(chatGroups.workspaceId, this.workspaceId),
+          eq(chatGroupsAgents.agentId, agentId),
+          eq(chatGroupsAgents.role, 'supervisor'),
+          or(eq(chatGroups.visibility, 'public'), ne(chatGroups.userId, agentOwnerUserId)),
+        ),
+      );
+    return Number(row?.count ?? 0);
   }
 
   async getGroupsWithAgents(agentIds?: string[]): Promise<ChatGroupItem[]> {
@@ -468,7 +567,13 @@ export class ChatGroupModel {
     const groupIds = await this.db
       .selectDistinct({ chatGroupId: chatGroupsAgents.chatGroupId })
       .from(chatGroupsAgents)
-      .where(and(this.agentsOwnership(), inArray(chatGroupsAgents.agentId, agentIds)));
+      .where(
+        and(
+          this.agentsOwnership(),
+          inArray(chatGroupsAgents.agentId, agentIds),
+          this.memberAgentVisibleExists(),
+        ),
+      );
 
     if (groupIds.length === 0) return [];
 

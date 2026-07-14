@@ -17,6 +17,7 @@
   "agentGroupManagement.executeTask.tokens": "Token Kullanımı",
   "agentGroupManagement.executeTasks.intervention.instructionPlaceholder": "Bu görevi gerçekleştirmesi için ajana verilecek detaylı talimat...",
   "agentGroupManagement.executeTasks.intervention.titlePlaceholder": "Görev başlığı...",
+  "agentGroupManagement.executeTasks.results": "Sonuçlar",
   "agentMarketplace.category.businessStrategy": "İş ve Strateji",
   "agentMarketplace.category.contentCreation": "İçerik Oluşturma",
   "agentMarketplace.category.creatorEconomy": "Yaratıcı Ekonomi",

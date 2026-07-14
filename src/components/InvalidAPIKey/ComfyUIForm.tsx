@@ -1,7 +1,8 @@
 'use client';
 
 import { ComfyUI } from '@lobehub/icons';
-import { Button, Center, Flexbox, Icon, Select } from '@lobehub/ui';
+import { Center, Flexbox, Icon } from '@lobehub/ui';
+import { Button, Select } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Loader2Icon, Network } from 'lucide-react';
 import { memo, use, useEffect, useState } from 'react';

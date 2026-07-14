@@ -4,8 +4,12 @@ import { Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { type ReactNode } from 'react';
 
+import { SETTINGS_ANCHOR_ROW_ATTR, SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
+
 interface ProfileRowProps {
   action?: ReactNode;
+  /** Settings-search anchor id; when set, the row becomes a scroll/highlight target */
+  anchor?: string;
   children?: ReactNode;
   label?: string;
   labelSlot?: ReactNode;
@@ -50,10 +54,14 @@ const styles = createStaticStyles(({ css, responsive }) => ({
   `,
 }));
 
-const ProfileRow = ({ label, labelSlot, children, action }: ProfileRowProps) => {
+const ProfileRow = ({ anchor, label, labelSlot, children, action }: ProfileRowProps) => {
+  const labelNode = labelSlot ?? (label && <Text strong>{label}</Text>);
+
   return (
-    <div className={styles.row}>
-      <div className={styles.label}>{labelSlot ?? (label && <Text strong>{label}</Text>)}</div>
+    <div className={styles.row} {...(anchor ? { [SETTINGS_ANCHOR_ROW_ATTR]: '' } : undefined)}>
+      <div className={styles.label}>
+        {anchor ? <SettingsSearchAnchor id={anchor}>{labelNode}</SettingsSearchAnchor> : labelNode}
+      </div>
       <div className={styles.body}>
         {children}
         {action && <div className={styles.action}>{action}</div>}

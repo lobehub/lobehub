@@ -1,6 +1,6 @@
 import { getActivePluginIds } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
-import { Switch } from 'antd';
+import { Switch } from '@lobehub/ui/base-ui';
 import { memo } from 'react';
 
 import { useStore } from '../store';

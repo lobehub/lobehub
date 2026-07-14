@@ -113,7 +113,7 @@
     "uuid": "^14.0.1",
     "vite": "8.0.14",
     "vitest": "3.2.6",
-    "zod": "^3.25.76"
+    "zod": "^4.4.3"
   },
   "optionalDependencies": {
     "node-mac-permissions": "^2.5.0"

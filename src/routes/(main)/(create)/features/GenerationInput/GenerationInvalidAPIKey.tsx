@@ -1,7 +1,7 @@
 'use client';
 
 import { ProviderIcon } from '@lobehub/icons';
-import { Button } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { ModelProvider } from 'model-bank';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

@@ -228,7 +228,16 @@ const currentKnowledgeIds = (s: AgentStoreState) => {
 };
 
 const isAgentConfigLoading = (s: AgentStoreState) =>
-  !s.activeAgentId || !s.agentMap[s.activeAgentId];
+  // A not-found agent never lands in `agentMap` — treat it as settled so the
+  // UI renders the 404 card instead of an endless skeleton.
+  !s.activeAgentId || (!s.agentMap[s.activeAgentId] && !s.agentNotFoundMap[s.activeAgentId]);
+
+/**
+ * The active agent's config fetch settled on `null` — the agent doesn't exist
+ * or the caller lost access (e.g. a workspace agent switched back to private).
+ */
+const isCurrentAgentNotFound = (s: AgentStoreState): boolean =>
+  !!s.activeAgentId && !!s.agentNotFoundMap[s.activeAgentId];
 
 /**
  * Fetch error for the active agent's config (undefined when none).
@@ -361,6 +370,7 @@ export const agentSelectors = {
   inboxAgentModel,
   isAgentConfigError,
   isAgentConfigLoading,
+  isCurrentAgentNotFound,
   isAgentModeEnabled,
   isCurrentAgentExternal,
   isCurrentAgentHeterogeneous,

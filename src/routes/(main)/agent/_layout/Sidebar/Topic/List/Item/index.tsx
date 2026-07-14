@@ -7,13 +7,15 @@ import {
 } from '@lobechat/utils/client/topic';
 import { Flexbox, Icon, Popover, Skeleton, Tag, Text, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cssVar, keyframes, useTheme } from 'antd-style';
-import { CheckCircle2, Hand, HashIcon, MessageSquareDashed, TriangleAlert } from 'lucide-react';
+import dayjs from 'dayjs';
+import { HashIcon, MessageSquareDashed } from 'lucide-react';
 import type { CSSProperties } from 'react';
 import { memo, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import DotsLoading from '@/components/DotsLoading';
+import { TOPIC_STATUS_VISUALS } from '@/components/ExecutionStatus';
 import RingLoadingIcon from '@/components/RingLoading';
 import { isDesktop } from '@/const/version';
 import DirIcon from '@/features/ChatInput/ControlBar/DirIcon';
@@ -285,9 +287,9 @@ const TopicItem = memo<TopicItemProps>(
       title,
     });
 
-    const isCompleted = status === 'completed';
     const isFailed = status === 'failed';
     const isRunning = status === 'running';
+    const isScheduled = status === 'scheduled';
     const isWaitingForHuman = status === 'waitingForHuman';
     // Post-visible-output tail: the user-visible answer is complete but the run
     // is still doing terminal bookkeeping (unread persist, title summary) —
@@ -303,8 +305,8 @@ const TopicItem = memo<TopicItemProps>(
     const workingDirectoryNode =
       showWorkingDirectory && workingDirectoryDisplay ? (
         <Flexbox horizontal align={'center'} gap={4} style={{ overflow: 'hidden' }}>
-          <DirIcon repoType={workingDirectoryDisplay.repoType} size={12} />
-          <Text ellipsis fontSize={11} style={{ color: cssVar.colorTextDescription }}>
+          <DirIcon repoType={workingDirectoryDisplay.repoType} size={13} />
+          <Text ellipsis fontSize={12} style={{ color: cssVar.colorTextDescription }}>
             {workingDirectoryDisplay.label}
           </Text>
         </Flexbox>
@@ -317,7 +319,7 @@ const TopicItem = memo<TopicItemProps>(
 
     const hasUnread = id && (isUnreadCompleted || isRunningTailUnread);
     const unreadIcon = (
-      <span className={styles.unreadWrapper}>
+      <span className={styles.unreadWrapper} data-testid="topic-unread-dot">
         <span className={styles.unreadRipple} />
         <span className={styles.unreadDot} />
       </span>
@@ -399,8 +401,25 @@ const TopicItem = memo<TopicItemProps>(
         title={title === '...' ? <DotsLoading gap={3} size={4} /> : title}
         titleColor={cssVar.colorText}
         icon={(() => {
+          // A scheduled topic hasn't run yet — nothing else can be true of it,
+          // so its clock outranks the other states.
+          if (isScheduled) {
+            const visual = TOPIC_STATUS_VISUALS.scheduled;
+            const runAt = metadata?.scheduledRun?.runAt;
+            const icon = <Icon icon={visual.icon} size={'small'} style={{ color: visual.color }} />;
+            return runAt ? (
+              <Tooltip
+                title={t('scheduledStatusTip', { time: dayjs(runAt).format('MM-DD HH:mm') })}
+              >
+                {icon}
+              </Tooltip>
+            ) : (
+              icon
+            );
+          }
           if (isWaitingForHuman) {
-            return <Icon icon={Hand} size={'small'} style={{ color: cssVar.colorInfo }} />;
+            const visual = TOPIC_STATUS_VISUALS.waitingForHuman;
+            return <Icon icon={visual.icon} size={'small'} style={{ color: visual.color }} />;
           }
           if (shouldShowRunningIcon) {
             return (
@@ -412,15 +431,29 @@ const TopicItem = memo<TopicItemProps>(
             );
           }
           if (isFailed) {
+            const visual = TOPIC_STATUS_VISUALS.failed;
             return (
               <Tooltip title={t('failedStatusTip')}>
-                <Icon icon={TriangleAlert} size={'small'} style={{ color: cssVar.colorError }} />
+                <Icon icon={visual.icon} size={'small'} style={{ color: visual.color }} />
               </Tooltip>
             );
           }
+          // Unread is the third `pending` attention state (see `resolveStatusBucket`
+          // in `@lobechat/utils/client/topic`), so it ranks with its two siblings
+          // above — and above the PR marker, which shares this single icon slot.
+          if (hasUnread) return unreadIcon;
+          // Persisted execution state is the topic's primary status. Keep every
+          // non-idle state above git metadata so scheduled / paused / completed
+          // topics cannot be mistaken for merely open / merged / closed PRs.
+          // `running` is handled exclusively by shouldShowRunningIcon above so
+          // the masked post-output tail cannot fall back to a static running icon.
+          if (status && status !== 'active' && status !== 'running') {
+            const visual = TOPIC_STATUS_VISUALS[status];
+            return <Icon icon={visual.icon} size={'small'} style={{ color: visual.color }} />;
+          }
           // GitHub PR state marker (open=green, merged=purple, closed=red),
-          // like Codex. Sits below the attention/active states but above the
-          // idle default so an idle topic surfaces its linked PR at a glance.
+          // like Codex. It is secondary metadata, so only an idle topic uses it
+          // as the leading icon.
           if (metaCard?.pullRequest) {
             const prVisual = PR_STATE_VISUAL[getPullRequestState(metaCard.pullRequest)];
             return (
@@ -429,16 +462,6 @@ const TopicItem = memo<TopicItemProps>(
               </Tooltip>
             );
           }
-          if (isCompleted) {
-            return (
-              <Icon
-                icon={CheckCircle2}
-                size={'small'}
-                style={{ color: cssVar.colorTextDescription }}
-              />
-            );
-          }
-          if (hasUnread) return unreadIcon;
           if (metadata?.bot?.platform) {
             const ProviderIcon = getPlatformIcon(metadata.bot!.platform);
             if (ProviderIcon) {

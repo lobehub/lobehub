@@ -16,7 +16,7 @@ export interface ToolResultMetrics {
   chars: number;
   format: 'json' | 'xml' | 'markdown' | 'text';
   identifier: string;
-  /** `isSuccess === false`, or an error/stack signal in the head of the content. */
+  /** Failure per `classifyToolError`: explicit flag > structured containers > short-output regex. */
   isError: boolean;
   /** 0..1 — fraction of fixed-size shingles that are exact repeats (degenerate dumps). */
   selfRedundancy: number;
@@ -36,6 +36,28 @@ export interface ToolResultMetrics {
 const SHINGLE = 80;
 const ERROR_HEAD = 2000;
 const ERROR_RE = /\b(?:error|failed|failure|exception|enoent|econn|traceback|status\s+5\d\d)\b/i;
+// Content that merely *mentions* errors (mixed crawl results, code files, logs quoted in a
+// successful read) must not be classified as a failure — validated 2026-07: a sample of 10
+// "large error" results picked by the old head-regex were ALL isSuccess=true partial
+// successes. The regex is now only a fallback for short outputs with no explicit flag.
+const ERROR_RE_MAX_CHARS = 2000;
+
+/**
+ * Classify a tool result as a failure.
+ * Trust order: explicit `isSuccess` flag > structured error containers > head regex
+ * (short outputs only — long content that mentions "error" is usually mixed content).
+ */
+export function classifyToolError(content: string, isSuccess: boolean | undefined): boolean {
+  if (isSuccess === false) return true;
+  if (isSuccess === true) return false;
+  // structured container: <crawlResults> with only <error> entries and no successful pages
+  if (/^\s*<crawlResults[\s>]/.test(content)) {
+    const errors = (content.match(/<error[\s>]/g) ?? []).length;
+    const pages = (content.match(/<page[\s>]/g) ?? []).length;
+    return errors > 0 && pages === 0;
+  }
+  return content.length <= ERROR_RE_MAX_CHARS && ERROR_RE.test(content.slice(0, ERROR_HEAD));
+}
 
 /** Tool outputs are frequently JSON-wrapped as `{"content":"..."}` — score the payload, not the envelope. */
 function unwrapContent(output: string): string {
@@ -95,7 +117,7 @@ export function analyzeToolResult(
   return {
     chars: content.length,
     format,
-    isError: isSuccess === false || ERROR_RE.test(content.slice(0, ERROR_HEAD)),
+    isError: classifyToolError(content, isSuccess),
     selfRedundancy: selfRedundancy(content),
     structuralNoiseRatio: structuralNoiseRatio(content, format),
     tokens: content ? encode(content).length : 0,

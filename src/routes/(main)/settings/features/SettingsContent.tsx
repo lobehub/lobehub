@@ -4,6 +4,7 @@ import { Fragment, useEffect } from 'react';
 
 import NavHeader from '@/features/NavHeader';
 import SettingContainer from '@/features/Setting/SettingContainer';
+import { useSettingsAnchorScroll } from '@/features/SettingsSearch/anchor';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { SettingsTabs } from '@/store/global/initialState';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
@@ -26,6 +27,8 @@ interface SettingsContentProps {
 const SettingsContent = ({ mobile, activeTab }: SettingsContentProps) => {
   const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
   const navigate = useWorkspaceAwareNavigate();
+
+  useSettingsAnchorScroll();
 
   useEffect(() => {
     if (activeTab && REDIRECT_MAP[activeTab]) {
@@ -70,7 +73,10 @@ const SettingsContent = ({ mobile, activeTab }: SettingsContentProps) => {
   return (
     <>
       {Object.keys(componentMap).map((tabKey) => {
-        const isFullWidth = tabKey === SettingsTabs.Provider || tabKey === SettingsTabs.Skill;
+        const isFullWidth =
+          tabKey === SettingsTabs.Provider ||
+          tabKey === SettingsTabs.Skill ||
+          tabKey === SettingsTabs.Connector;
         if (activeTab !== tabKey) return null;
         const content = renderComponent(tabKey);
         if (isFullWidth) return <Fragment key={tabKey}>{content}</Fragment>;

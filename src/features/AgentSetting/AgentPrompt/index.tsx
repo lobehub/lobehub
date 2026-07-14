@@ -1,6 +1,7 @@
 'use client';
 
-import { Button, Flexbox, Form } from '@lobehub/ui';
+import { Flexbox, Form, Icon } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { EditableMessage } from '@lobehub/ui/chat';
 import { PenLineIcon } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -24,13 +25,10 @@ const AgentPrompt = memo(() => {
 
   const editButton = !editing && !!systemRole && !disabled && (
     <Button
-      icon={PenLineIcon}
-      iconPlacement={'end'}
+      icon={<Icon icon={PenLineIcon} size={12} />}
+      iconPosition={'end'}
       size={'small'}
       type={'primary'}
-      iconProps={{
-        size: 12,
-      }}
       onClick={(e) => {
         e.stopPropagation();
         setEditing(true);

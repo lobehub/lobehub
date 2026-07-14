@@ -78,14 +78,18 @@ export const restoreToInputAction = defineAction({
             ...fromMedia(imageList, 'image'),
             ...fromMedia(videoList, 'video'),
             ...fromMedia(audioList, 'audio'),
-            ...(fileList ?? []).map((f) => ({
-              file: { name: f.name, size: f.size, type: f.fileType } as File,
-              fileUrl: f.url,
-              id: f.id,
-              previewUrl: f.url,
-              skipRemoveFile: true,
-              status: 'success' as const,
-            })),
+            // Tombstoned attachments (viewer lost access to the file) carry no
+            // name/url — nothing usable to reattach, so drop them.
+            ...(fileList ?? [])
+              .filter((f) => !f.inaccessible)
+              .map((f) => ({
+                file: { name: f.name, size: f.size, type: f.fileType } as File,
+                fileUrl: f.url,
+                id: f.id,
+                previewUrl: f.url,
+                skipRemoveFile: true,
+                status: 'success' as const,
+              })),
           ];
 
           const fileStore = useFileStore.getState();

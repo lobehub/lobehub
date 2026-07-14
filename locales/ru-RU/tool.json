@@ -17,6 +17,7 @@
   "agentGroupManagement.executeTask.tokens": "Использование токенов",
   "agentGroupManagement.executeTasks.intervention.instructionPlaceholder": "Подробная инструкция для агента по выполнению этой задачи...",
   "agentGroupManagement.executeTasks.intervention.titlePlaceholder": "Название задачи...",
+  "agentGroupManagement.executeTasks.results": "Результаты",
   "agentMarketplace.category.businessStrategy": "Бизнес и стратегия",
   "agentMarketplace.category.contentCreation": "Создание контента",
   "agentMarketplace.category.creatorEconomy": "Экономика создателей",

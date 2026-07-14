@@ -5,6 +5,7 @@ export default {
   'navigation.discoverMcp': 'Discover MCP',
   'navigation.discoverModels': 'Discover Models',
   'navigation.discoverProviders': 'Discover Providers',
+  'navigation.downloads': 'Downloads',
   'navigation.group': 'Group',
   'navigation.groupChat': 'Group Chat',
   'navigation.home': 'Home',

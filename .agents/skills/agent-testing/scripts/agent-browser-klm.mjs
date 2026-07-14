@@ -3,20 +3,29 @@
  * agent-browser-klm.mjs
  *
  * Thin wrapper around `agent-browser` that records each executed command as an
- * interaction atom for GOMS-KLM analysis. Unknown flags are forwarded. Browser
- * output is intentionally silenced because the agent-browser daemon can keep
- * inherited stdio descriptors open; run probe/read commands directly when their
- * output is needed.
+ * interaction atom for GOMS-KLM analysis. Unknown flags are forwarded.
+ *
+ * Browser output is captured through temp files rather than pipes: the
+ * agent-browser daemon can inherit and hold the child's stdio descriptors, so a
+ * pipe might never reach EOF and `spawnSync` would block on it. A file has no
+ * such dependency. The output is attached to the trace atom, and on failure it
+ * is echoed to stderr — a swallowed error reads exactly like a successful step
+ * (the page simply never navigated), which is far worse than noisy output.
  */
 
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { closeSync, mkdtempSync, openSync, readFileSync, rmSync } from 'node:fs';
 import { appendFile, mkdir } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const SCHEMA = 'lobehub.agentBrowserKlmTrace@1';
 const DEFAULT_TRACE = '.records/interaction-trace.jsonl';
+
+// Enough to carry an agent-browser diagnostic; keeps one JSONL atom on one line.
+const MAX_CAPTURED_CHARS = 4000;
 
 const optionValueFlags = new Set([
   '--browser',
@@ -311,6 +320,47 @@ const buildPhase = (meta) => {
   };
 };
 
+const readCapture = (file) => {
+  try {
+    const text = readFileSync(file, 'utf8').trim();
+    if (!text) return undefined;
+    return text.length > MAX_CAPTURED_CHARS
+      ? `${text.slice(0, MAX_CAPTURED_CHARS)}… [truncated]`
+      : text;
+  } catch {
+    return undefined;
+  }
+};
+
+const spawnCapturing = (binary, args, timeout) => {
+  const captureDir = mkdtempSync(path.join(tmpdir(), 'agent-browser-klm-'));
+  const stdoutPath = path.join(captureDir, 'stdout.log');
+  const stderrPath = path.join(captureDir, 'stderr.log');
+  const stdoutFd = openSync(stdoutPath, 'w');
+  const stderrFd = openSync(stderrPath, 'w');
+  let open = true;
+  const closeBoth = () => {
+    if (!open) return;
+    open = false;
+    closeSync(stdoutFd);
+    closeSync(stderrFd);
+  };
+
+  try {
+    const result = spawnSync(binary, args, {
+      killSignal: 'SIGKILL',
+      stdio: ['ignore', stdoutFd, stderrFd],
+      timeout,
+    });
+    // Close before reading so a SIGKILLed child's last writes are flushed.
+    closeBoth();
+    return { result, stderr: readCapture(stderrPath), stdout: readCapture(stdoutPath) };
+  } finally {
+    closeBoth();
+    rmSync(captureDir, { force: true, recursive: true });
+  }
+};
+
 const runAgentBrowser = async (binary, args, meta) => {
   if (args.length === 0) {
     usage();
@@ -321,12 +371,11 @@ const runAgentBrowser = async (binary, args, meta) => {
   const startedAt = new Date(startedAtMs).toISOString();
   const { argsAfterCommand, command } = normalizeCommand(args);
 
-  const result = spawnSync(binary, args, {
-    encoding: 'utf8',
-    killSignal: 'SIGKILL',
-    stdio: 'ignore',
-    timeout: meta.commandTimeoutMs && meta.commandTimeoutMs > 0 ? meta.commandTimeoutMs : undefined,
-  });
+  const { result, stderr, stdout } = spawnCapturing(
+    binary,
+    args,
+    meta.commandTimeoutMs && meta.commandTimeoutMs > 0 ? meta.commandTimeoutMs : undefined,
+  );
 
   if (result.error && result.error.code !== 'ETIMEDOUT') {
     console.error(`[agent-browser-klm] failed to start ${binary}:`, result.error.message);
@@ -342,7 +391,24 @@ const runAgentBrowser = async (binary, args, meta) => {
     klm.category = 'blocked';
     klm.operators = defaultOperators();
     klm.assumptions.push('agent-browser command timed out; no user-equivalent cost counted.');
+  } else if (exitCode !== 0) {
+    // The action never happened, so charging it as a completed interaction (or
+    // as navigation response time) would inflate the cost model with phantom work.
+    klm.category = 'blocked';
+    klm.operators = defaultOperators();
+    klm.assumptions.push(
+      `agent-browser exited ${exitCode}; the action did not happen, so no user-equivalent cost counted.`,
+    );
   }
+
+  if (exitCode !== 0) {
+    const detail = stderr ?? stdout;
+    console.error(
+      `[agent-browser-klm] ${binary} ${command ?? '<no command>'} exited ${exitCode}` +
+        (detail ? `:\n${detail}` : ' with no output.'),
+    );
+  }
+
   const event = {
     agentBrowser: { args, command },
     completedAt: new Date(completedAtMs).toISOString(),
@@ -354,6 +420,8 @@ const runAgentBrowser = async (binary, args, meta) => {
     schema: SCHEMA,
     source: 'agent-browser',
     startedAt,
+    stderr,
+    stdout,
     surface: meta.surface,
     timedOut,
     type: 'agent_browser_action',

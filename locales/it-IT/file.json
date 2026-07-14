@@ -82,6 +82,8 @@
   "menu.allFiles": "Tutti i file",
   "menu.allPages": "Tutte le pagine",
   "networkError": "Impossibile recuperare le librerie. Controlla la connessione di rete e riprova.",
+  "notFound.desc": "Questo file non esiste o non è più accessibile — potrebbe essere stato eliminato o impostato come privato dal proprietario.",
+  "notFound.title": "File non disponibile",
   "notSupportGuide.desc": "La modalità di distribuzione attuale non supporta la gestione dei file. Passa alla <1>modalità server con database</1> o utilizza <3>LobeHub Cloud</3>.",
   "notSupportGuide.features.allKind.desc": "Supporta i principali tipi di file, inclusi i formati di pagina comuni come Word, PPT, Excel, PDF, TXT, e file di codice popolari come JS e Python.",
   "notSupportGuide.features.allKind.title": "Supporto per più tipi di file",

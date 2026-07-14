@@ -1,7 +1,8 @@
 'use client';
 
 import { type DropdownItem, type DropdownMenuCheckboxItem } from '@lobehub/ui';
-import { Button, DropdownMenu, Icon } from '@lobehub/ui';
+import { DropdownMenu, Icon } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { ChevronDown, Store } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -46,20 +47,18 @@ const MarketSourceSwitch = memo(() => {
 
   const menuItems = useMemo<DropdownMenuCheckboxItem[]>(
     () =>
-      items.map(
-        (item): DropdownMenuCheckboxItem => ({
-          checked: item.key === currentSource,
-          closeOnClick: true,
-          key: item.key,
-          label: item.label,
-          onCheckedChange: (checked: boolean) => {
-            if (checked) {
-              handleChange(item.key);
-            }
-          },
-          type: 'checkbox',
-        }),
-      ),
+      items.map((item): DropdownMenuCheckboxItem => ({
+        checked: item.key === currentSource,
+        closeOnClick: true,
+        key: item.key,
+        label: item.label,
+        onCheckedChange: (checked: boolean) => {
+          if (checked) {
+            handleChange(item.key);
+          }
+        },
+        type: 'checkbox',
+      })),
     [currentSource, handleChange, items],
   );
 

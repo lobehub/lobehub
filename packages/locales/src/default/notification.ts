@@ -30,6 +30,14 @@ export default {
   'inbox.markAllRead': 'Mark all as read',
   'inbox.title': 'Notifications',
   'inbox.viewDetail': 'View details',
+  'promotion_gift_granted': '{{credits}} bonus credits have been added to your account.',
+  'promotion_gift_granted_card_binding':
+    'Thanks for adding a payment method — {{credits}} bonus credits have been added to your account.',
+  'promotion_gift_granted_card_binding_title': 'Bonus credits for adding a payment method',
+  'promotion_gift_granted_first_top_up':
+    'Thanks for your first top-up — {{credits}} bonus credits have been added to your account.',
+  'promotion_gift_granted_first_top_up_title': 'First top-up bonus credits',
+  'promotion_gift_granted_title': 'Bonus credits added',
   'storage_overage_cap_reached':
     'Your storage pay-as-you-go monthly cap of ${{monthlyCap}} has been reached. Estimated charges this cycle are ${{estimatedCycleCharge}}. New uploads beyond your included storage will be blocked until the next billing cycle or until you increase the cap.',
   'storage_overage_cap_reached_title': 'Storage pay-as-you-go cap reached',

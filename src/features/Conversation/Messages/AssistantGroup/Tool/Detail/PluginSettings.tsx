@@ -1,5 +1,6 @@
 import { type ChatPluginPayload } from '@lobechat/types';
-import { Avatar, Button, Center, Flexbox } from '@lobehub/ui';
+import { Avatar, Center, Flexbox } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { Divider } from 'antd';
 import { cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';

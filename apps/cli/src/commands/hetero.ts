@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import type { AskUserBridge } from '@lobechat/heterogeneous-agents/askUser';
-import { AskUserMcpServer } from '@lobechat/heterogeneous-agents/askUser';
+import { LobeBuiltinMcpServer } from '@lobechat/heterogeneous-agents/builtinMcp';
 import { resolveHeteroSpawnCommand } from '@lobechat/heterogeneous-agents/resolveCliCommand';
 import type {
   AgentContentBlock,
@@ -15,25 +15,16 @@ import type {
   AgentStreamEvent,
   UploadHeterogeneousImage,
 } from '@lobechat/heterogeneous-agents/spawn';
-import { spawnAgent } from '@lobechat/heterogeneous-agents/spawn';
+import { createFileStoreImageUploader, spawnAgent } from '@lobechat/heterogeneous-agents/spawn';
 import type { Command } from 'commander';
 
 import { getTrpcClient } from '../api/client';
 import { log } from '../utils/logger';
 import { TrpcIngestSink } from '../utils/TrpcIngestSink';
-import { uploadFileBuffer } from '../utils/uploadLocalFile';
 
 const SUPPORTED_AGENT_TYPES = new Set(['claude-code', 'codex']);
 const CODEX_REASONING_EFFORT_CONFIG_KEY = 'model_reasoning_effort';
 const CODEX_SERVICE_TIER_CONFIG_KEY = 'service_tier';
-
-/** Extension seed for an uploaded tool_result image, by IANA media type. */
-const IMAGE_EXT_BY_MEDIA_TYPE: Record<string, string> = {
-  'image/gif': 'gif',
-  'image/jpeg': 'jpg',
-  'image/png': 'png',
-  'image/webp': 'webp',
-};
 
 /**
  * Patterns that indicate a `--resume <sessionId>` run should be retried
@@ -504,15 +495,14 @@ const exec = async (options: ExecOptions): Promise<void> => {
     );
     serverIngester = new SerialServerIngester(sink);
 
-    uploadImage = async ({ data, mediaType }) => {
-      const ext = IMAGE_EXT_BY_MEDIA_TYPE[mediaType] ?? 'png';
-      const record = await uploadFileBuffer(await getTrpcClient(), {
-        buffer: Buffer.from(data, 'base64'),
-        fileName: `cc-read-image.${ext}`,
-        fileType: mediaType,
-      });
-      return { fileId: record.id, url: record.url };
-    };
+    uploadImage = createFileStoreImageUploader(async () => {
+      const lambda = await getTrpcClient();
+      return {
+        checkFileHash: (input) => lambda.file.checkFileHash.mutate(input),
+        createFile: (input) => lambda.file.createFile.mutate(input),
+        createS3PreSignedUrl: (input) => lambda.upload.createS3PreSignedUrl.mutate(input),
+      };
+    });
   }
 
   // ─── AskUserQuestion MCP — remote Human-in-the-loop (claude-code only) ──────
@@ -527,12 +517,12 @@ const exec = async (options: ExecOptions): Promise<void> => {
   // The bridge's own 5-min timeout is the backstop, so a dropped poll or an
   // absent user never strands CC.
   const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
-  let askServer: AskUserMcpServer | undefined;
+  let askServer: LobeBuiltinMcpServer | undefined;
   let askBridge: AskUserBridge | undefined;
   let askMcpConfigPath: string | undefined;
   const askPollAbort = new AbortController();
   if (serverIngest && agentType === 'claude-code' && serverIngester) {
-    askServer = new AskUserMcpServer();
+    askServer = new LobeBuiltinMcpServer();
     await askServer.start();
     askBridge = askServer.registerOperation(operationId);
     askMcpConfigPath = path.join(os.tmpdir(), `lobe-cc-mcp-${operationId}.json`);

@@ -18,10 +18,22 @@
 # Each pool instance <id> gets, all env-driven so instances never collide:
 #   CDP port   = CDP_BASE + id   (9222 + id)
 #   Vite port  = VITE_BASE + id  (5173 + id)   → needs LOBE_DESKTOP_VITE_PORT support
-#   userData   = $POOL_DIR/ud-<id> (login state copied from the golden profile)
+#   userData   = $POOL_DIR/ud-<id> (login state seeded from the saved snapshot)
 #   IPC id     = lobehub-desktop-dev-<id>       → needs LOBE_IPC_ID support
 # Drive each with a DISTINCT agent-browser session, else the daemon reuses one
 # connection across ports:  agent-browser --session s<port> --cdp <port> ...
+#
+# Login persistence (so you sign in ONCE, not once per run):
+#   `stop` snapshots the instance's login state into $LOGIN_STATE_DIR before it
+#   wipes the userData, and `start` seeds new instances from that snapshot. The
+#   app's OAuth refresh token ROTATES on every boot, so only the instance that
+#   booted last holds a usable one — the snapshot must be re-taken each run, which
+#   is exactly what `stop` does. The golden profile is only a fallback for the very
+#   first run, and is never written to (it belongs to the user's own dev app).
+#     ./electron-dev.sh login-status      # where the login comes from + expiry
+#     ./electron-dev.sh save-login <id>   # snapshot a live instance without stopping
+#   If an instance is killed instead of stopped (crash, command timeout), its
+#   rotated token dies with it — run `save-login` before anything risky.
 #
 # Environment variables:
 #   CDP_PORT          — (legacy only) CDP port (default: 9222)
@@ -29,9 +41,12 @@
 #   CDP_BASE          — pool CDP base (default: 9222 → instance id adds on top)
 #   VITE_BASE         — pool Vite base (default: 5173)
 #   POOL_DIR          — pool state dir (default: /tmp/lobe-electron-pool)
-#   LOBE_GOLDEN_PROFILE — userData to copy login state from
+#   LOBE_LOGIN_STATE_DIR — persistent login snapshot, survives /tmp cleanup
+#                       (default: ~/.lobehub/agent-testing/electron-login)
+#   LOBE_GOLDEN_PROFILE — userData to seed from when no snapshot exists yet
 #                       (default: ~/Library/Application Support/lobehub-desktop-dev)
 #   KEEP_DATA=1       — on `stop <id>`, keep the instance's userData dir
+#   SKIP_LOGIN_SAVE=1 — on `stop <id>`, do not snapshot the login state
 #   ELECTRON_WAIT_S   — max seconds to wait for CDP (default: 90)
 #   RENDERER_WAIT_S   — max seconds to wait for the SPA (default: 60)
 #
@@ -52,6 +67,8 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 POOL_DIR="${POOL_DIR:-/tmp/lobe-electron-pool}"
 GOLDEN_PROFILE="${LOBE_GOLDEN_PROFILE:-$HOME/Library/Application Support/lobehub-desktop-dev}"
+# Persistent across runs AND across /tmp cleanup — the pool dir is not.
+LOGIN_STATE_DIR="${LOBE_LOGIN_STATE_DIR:-$HOME/.lobehub/agent-testing/electron-login}"
 
 # Project-scoped electron path prefix used for pgrep matching in LEGACY mode only
 # (pool mode never uses it — it would cross instances). Any Electron binary from
@@ -188,27 +205,158 @@ wait_for_renderer() {
   return 0
 }
 
-# Copy the login-bearing items from the golden profile into a fresh userData dir
-# (skips the multi-GB caches). No-op if the dir already exists.
+# ── Login state ──────────────────────────────────────────────────────
+#
+# The login-bearing subset of a userData dir (skips the multi-GB caches). The
+# OAuth tokens themselves live in lobehub-settings.json → encryptedTokens.
+LOGIN_ITEMS=(
+  "lobehub-settings.json" "Local State" "Preferences"
+  "Cookies" "Cookies-journal" "Local Storage" "IndexedDB"
+  "Session Storage" "Network Persistent State" "lobehub-storage"
+)
+
+copy_login_items() {
+  local src="$1" dst="$2" f
+  mkdir -p "$dst"
+  for f in "${LOGIN_ITEMS[@]}"; do
+    [ -e "$src/$f" ] && cp -R "$src/$f" "$dst/" 2>/dev/null || true
+  done
+}
+
+# Reads lobehub-settings.json → encryptedTokens and prints
+#   "<hasRefreshToken:0|1> <msUntilAccessTokenExpiry|?>"
+#
+# `expiresAt` is `Date.now() + data.expires_in * 1000` (RemoteServerConfigCtr.saveTokens),
+# i.e. the ACCESS token's lifetime — NOT the refresh token's. It is routinely in the
+# past on a perfectly refreshable login, so it must never gate whether we keep a
+# profile. What does gate it: the app deletes the whole `encryptedTokens` key
+# (clearTokens) the moment a refresh fails non-retryably (`invalid_grant` &co), and
+# keeps it on transient failures. So a present refreshToken means "can still re-auth".
+read_token_state() {
+  python3 - "$1/lobehub-settings.json" 2>/dev/null <<'PY' || echo "0 ?"
+import json, pathlib, sys, time
+
+path = pathlib.Path(sys.argv[1])
+if not path.is_file():
+    print("0 ?")
+    sys.exit(0)
+try:
+    tokens = (json.loads(path.read_text()) or {}).get('encryptedTokens') or {}
+except Exception:
+    print("0 ?")
+    sys.exit(0)
+
+has_refresh = 1 if tokens.get('refreshToken') else 0
+expires_at = tokens.get('expiresAt')
+if not expires_at:
+    print(f"{has_refresh} ?")
+    sys.exit(0)
+# The field has been seen in both seconds and milliseconds.
+if expires_at < 1e11:
+    expires_at *= 1000
+print(f"{has_refresh} {int(expires_at - time.time() * 1000)}")
+PY
+}
+
+# True when the profile still carries a refresh token, i.e. the app can mint a new
+# session from it on the next boot. An expired ACCESS token says nothing here.
+profile_can_reauth() {
+  local state
+  state=$(read_token_state "$1")
+  [ "${state%% *}" = "1" ]
+}
+
+describe_login() {
+  local label="$1" profile="$2" state ms access
+  if [ ! -d "$profile" ]; then
+    echo "  $label: (absent) — $profile"
+    return
+  fi
+  state=$(read_token_state "$profile")
+  ms="${state##* }"
+  if [[ "$ms" =~ ^-?[0-9]+$ ]]; then
+    [ "$ms" -gt 0 ] &&
+      access="access token fresh for $((ms / 3600000))h" ||
+      access="access token stale $(( -ms / 3600000 ))h (harmless — it gets refreshed)"
+  else
+    access="no access-token expiry recorded"
+  fi
+  if [ "${state%% *}" = "1" ]; then
+    echo "  $label: refresh token PRESENT — $access — $profile"
+  else
+    echo "  $label: refresh token GONE (app cleared it after a failed refresh) — $profile"
+  fi
+}
+
+# 1 when the running renderer reports a signed-in user. The OAuth refresh token
+# is not the only way the app holds a session (a better-auth cookie outlives it),
+# so an expired token does NOT mean the instance is signed out — ask the app.
+probe_renderer_authed() {
+  if ! curl -sf --max-time 2 "http://localhost:${CDP_PORT}/json/version" >/dev/null 2>&1; then
+    echo 0
+    return
+  fi
+  local out
+  out=$(agent-browser --session "edev$CDP_PORT" --cdp "$CDP_PORT" eval \
+    '(function(){try{var u=window.__LOBE_STORES.user();return (u.user&&u.user.id)?"AUTHED":"ANON";}catch(e){return "ERR";}})()' \
+    2>/dev/null | tail -1 || true)
+  case "$out" in
+    *AUTHED*) echo 1 ;;
+    *) echo 0 ;;
+  esac
+}
+
+# Persist an instance's login into the snapshot so the NEXT run starts signed in.
+# The refresh token rotates on every boot, so the instance's copy is the only
+# valid one by the time it stops — capture it before the userData is wiped.
+# `authed_hint=1` (from probe_renderer_authed, taken while the app was alive)
+# overrides the token check, which cannot see a cookie-only session.
+save_login_state() {
+  local src="$1" authed_hint="${2:-0}"
+  [ -d "$src" ] || return 0
+  if [ "$authed_hint" != "1" ] && ! profile_can_reauth "$src"; then
+    echo "[electron-dev] Not saving login state: $src is signed out (the app cleared its refresh token) — kept the previous snapshot."
+    return 0
+  fi
+  local staging="${LOGIN_STATE_DIR}.staging.$$"
+  rm -rf "$staging"
+  mkdir -p "$(dirname "$LOGIN_STATE_DIR")"
+  copy_login_items "$src" "$staging"
+  rm -rf "$LOGIN_STATE_DIR"
+  mv "$staging" "$LOGIN_STATE_DIR"
+  if profile_can_reauth "$LOGIN_STATE_DIR"; then
+    echo "[electron-dev] Saved login state → $LOGIN_STATE_DIR (refresh token captured)"
+  else
+    echo "[electron-dev] Saved login state → $LOGIN_STATE_DIR (cookie session only — no refresh token on disk)"
+  fi
+}
+
+# Seed a fresh userData dir: prefer the snapshot we saved on the last stop, and
+# fall back to the user's own dev profile for the very first run. No-op if the
+# dir already exists.
 seed_userdata() {
   local dst="$1"
   [ -d "$dst" ] && return 0
-  if [ ! -d "$GOLDEN_PROFILE" ]; then
-    echo "[electron-dev] WARNING: golden profile not found at $GOLDEN_PROFILE — instance will start signed out."
+
+  # The snapshot only exists because a `stop`/`save-login` found that instance
+  # signed in, so prefer it unconditionally over the golden profile.
+  local src="" label=""
+  if [ -d "$LOGIN_STATE_DIR" ]; then
+    src="$LOGIN_STATE_DIR"
+    label="saved login state"
+  elif [ -d "$GOLDEN_PROFILE" ]; then
+    src="$GOLDEN_PROFILE"
+    label="golden profile (first run)"
+  else
+    echo "[electron-dev] WARNING: no login state at $LOGIN_STATE_DIR or $GOLDEN_PROFILE — instance will start signed out."
     mkdir -p "$dst"
     return 0
   fi
-  echo "[electron-dev] Seeding login state from golden profile → $dst"
-  mkdir -p "$dst"
-  local items=(
-    "lobehub-settings.json" "Local State" "Preferences"
-    "Cookies" "Cookies-journal" "Local Storage" "IndexedDB"
-    "Session Storage" "Network Persistent State" "lobehub-storage"
-  )
-  local f
-  for f in "${items[@]}"; do
-    [ -e "$GOLDEN_PROFILE/$f" ] && cp -R "$GOLDEN_PROFILE/$f" "$dst/" 2>/dev/null || true
-  done
+
+  echo "[electron-dev] Seeding userData from $label → $dst"
+  profile_can_reauth "$src" ||
+    echo "[electron-dev]   note: no refresh token on disk — a cookie session may still carry it; otherwise sign in once and 'stop' will capture it."
+  copy_login_items "$src" "$dst"
 }
 
 # ── Commands ─────────────────────────────────────────────────────────
@@ -217,6 +365,13 @@ do_stop() {
   local label="legacy"
   [ "$POOL_MODE" = "1" ] && label="instance $INSTANCE (cdp $CDP_PORT)"
   echo "[electron-dev] Stopping Electron dev ($label)..."
+
+  # Ask the still-running app whether it is signed in — after the kill there is
+  # nothing left to ask, and the on-disk token alone can't see a cookie session.
+  local authed=0
+  if [ "$POOL_MODE" = "1" ] && [ "${SKIP_LOGIN_SAVE:-0}" != "1" ]; then
+    authed=$(probe_renderer_authed)
+  fi
 
   local seed_pids
   seed_pids=$(find_instance_pids)
@@ -280,8 +435,10 @@ do_stop() {
   agent-browser --session "edev$CDP_PORT" --cdp "$CDP_PORT" close --all 2>/dev/null || true
   rm -f "$PIDFILE"
 
-  # Pool mode: wipe the instance's userData unless asked to keep it.
+  # Pool mode: capture the (freshly rotated) login before touching the userData,
+  # then wipe it unless asked to keep it.
   if [ "$POOL_MODE" = "1" ] && [ -n "$USER_DATA_DIR" ]; then
+    [ "${SKIP_LOGIN_SAVE:-0}" = "1" ] || save_login_state "$USER_DATA_DIR" "$authed"
     if [ "${KEEP_DATA:-0}" = "1" ]; then
       echo "[electron-dev] Keeping userData: $USER_DATA_DIR"
     else
@@ -359,7 +516,9 @@ do_start() {
 
   if ! wait_for_cdp; then
     echo "[electron-dev] Failed to bring up CDP. Cleaning up..."
-    do_stop
+    # The app never came up, so its userData is just the seed copy — snapshotting it
+    # would overwrite a good snapshot with an unverified (possibly rejected) token.
+    SKIP_LOGIN_SAVE=1 do_stop
     return 1
   fi
   wait_for_renderer || true
@@ -371,9 +530,11 @@ do_start() {
   fi
 }
 
-# Quiet stop used at the head of start — never wipes userData.
+# Quiet stop used at the head of start — never wipes userData, and never
+# snapshots: a leftover userData can carry a token that a LATER run has already
+# rotated away, which still looks unexpired but would overwrite a good snapshot.
 do_stop_quiet_for_start() {
-  KEEP_DATA=1 do_stop >/dev/null 2>&1 || true
+  KEEP_DATA=1 SKIP_LOGIN_SAVE=1 do_stop >/dev/null 2>&1 || true
 }
 
 do_restart() {
@@ -401,6 +562,20 @@ do_list() {
     done
   fi
   [ "$found" = "0" ] && echo "  (none)"
+}
+
+do_login_status() {
+  echo "[electron-dev] Login sources (the snapshot wins when present):"
+  describe_login "saved snapshot" "$LOGIN_STATE_DIR"
+  describe_login "golden profile" "$GOLDEN_PROFILE"
+  if [ ! -d "$LOGIN_STATE_DIR" ] && [ ! -d "$GOLDEN_PROFILE" ]; then
+    echo "[electron-dev] Nothing to seed from: sign in once inside the app, then 'save-login <id>' (or just 'stop <id>')."
+    return 2
+  fi
+  echo "[electron-dev] Note: 'expiresAt' in the profile is the ACCESS token's lifetime, not the"
+  echo "[electron-dev] refresh token's — a stale one is normal and gets refreshed on boot. Only a"
+  echo "[electron-dev] missing refresh token means signed out. 'stop'/'save-login' also probe the"
+  echo "[electron-dev] running renderer, so a cookie-only session is captured too."
 }
 
 do_stop_all() {
@@ -445,18 +620,33 @@ case "$CMD" in
   list)
     do_list
     ;;
+  save-login)
+    derive_instance "$INSTANCE"
+    if [ "$POOL_MODE" != "1" ]; then
+      echo "[electron-dev] save-login needs a pool instance id (its userData dir)."
+      exit 1
+    fi
+    save_login_state "$USER_DATA_DIR" "$(probe_renderer_authed)"
+    ;;
+  login-status)
+    do_login_status
+    ;;
   *)
     echo "Usage: $0 {start|stop|status|restart} [<id>]   |   $0 stop --all   |   $0 list"
+    echo "       $0 save-login <id>   |   $0 login-status"
     echo ""
-    echo "  start [<id>]   — Start an instance. No id = legacy single instance (CDP 9222)."
-    echo "                   <id> = pool member: CDP 9222+id, Vite 5173+id, own userData"
-    echo "                   (login copied from the golden profile) + IPC id."
-    echo "  stop [<id>]    — Stop an instance. Pool stop is sibling-safe. KEEP_DATA=1 to"
-    echo "                   preserve the instance's userData."
-    echo "  stop --all     — Stop every pool instance."
-    echo "  status [<id>]  — Check whether the instance's CDP is reachable."
-    echo "  restart [<id>] — Stop then start."
-    echo "  list           — List pool instances and their CDP reachability."
+    echo "  start [<id>]      — Start an instance. No id = legacy single instance (CDP 9222)."
+    echo "                      <id> = pool member: CDP 9222+id, Vite 5173+id, own userData"
+    echo "                      (login seeded from the saved snapshot) + IPC id."
+    echo "  stop [<id>]       — Stop an instance. Pool stop is sibling-safe, and snapshots the"
+    echo "                      instance's login first. KEEP_DATA=1 preserves the userData;"
+    echo "                      SKIP_LOGIN_SAVE=1 skips the snapshot."
+    echo "  stop --all        — Stop every pool instance."
+    echo "  status [<id>]     — Check whether the instance's CDP is reachable."
+    echo "  restart [<id>]    — Stop then start."
+    echo "  list              — List pool instances and their CDP reachability."
+    echo "  save-login <id>   — Snapshot a live instance's login without stopping it."
+    echo "  login-status      — Show which source will seed the next instance, and its expiry."
     exit 1
     ;;
 esac

@@ -1,6 +1,7 @@
 'use client';
 
-import { Button, Empty, Flexbox, Skeleton, Text } from '@lobehub/ui';
+import { Empty, Flexbox, Skeleton, Text } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { FlaskConical, Plus } from 'lucide-react';
 import { memo } from 'react';

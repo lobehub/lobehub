@@ -1,6 +1,7 @@
 'use client';
 
-import { Avatar, Block, Button, Flexbox, Skeleton, Text } from '@lobehub/ui';
+import { Avatar, Block, Flexbox, Skeleton, Text } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
