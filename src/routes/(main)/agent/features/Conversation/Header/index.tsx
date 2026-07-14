@@ -15,6 +15,7 @@ import { useElectronStore } from '@/store/electron';
 import HeaderActions from './HeaderActions';
 import ShareButton from './ShareButton';
 import Tags from './Tags';
+import TerminalToggle from './TerminalToggle';
 import WorkingPanelToggle from './WorkingPanelToggle';
 
 const headerStyles = createStaticStyles(({ css }) => ({
@@ -80,6 +81,7 @@ const Header = memo(() => {
               <OpenInAppButton workingDirectory={effectiveWorkingDirectory} />
             )}
             <ShareButton />
+            <TerminalToggle />
             <WorkingPanelToggle />
           </Flexbox>
         }

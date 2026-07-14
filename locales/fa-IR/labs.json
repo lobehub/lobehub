@@ -7,6 +7,8 @@
   "features.artifactDeployment.title": "انتشار مصنوعات",
   "features.assistantMessageGroup.desc": "نمایش گروهی پیام‌های عامل و نتایج ابزارهای فراخوانی‌شده به‌صورت یکجا",
   "features.assistantMessageGroup.title": "گروه‌بندی پیام‌های عامل",
+  "features.builtinTerminal.desc": "نمایش دکمه ترمینال در صفحه چت که یک پانل ترمینال داخلی را در پایین باز می‌کند، با زبانه‌های مربوط به هر موضوع که در شل محلی شما اجرا می‌شوند.",
+  "features.builtinTerminal.title": "ترمینال داخلی",
   "features.claudeCodeSdk.desc": "اجرای جلسات Claude Code از طریق Claude Agent SDK به جای اجرای CLI. امکان پخش غنی‌تر و کنترل جلسات را فراهم می‌کند.",
   "features.claudeCodeSdk.title": "محیط اجرایی Claude Code SDK",
   "features.fleet.desc": "نمایش گزینه Fleet در نوار عنوان — یک داشبورد کنار هم از تمام وظایف در حال اجرا در میان عوامل شما.",

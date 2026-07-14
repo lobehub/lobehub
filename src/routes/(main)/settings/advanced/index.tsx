@@ -59,6 +59,7 @@ const Page = memo(() => {
     enableMessageTextSelectionActions,
     enableInAppBrowser,
     enableArtifactDeployment,
+    enableBuiltinTerminal,
     updateLab,
   ] = useUserStore((s) => [
     preferenceSelectors.isPreferenceInit(s),
@@ -72,6 +73,7 @@ const Page = memo(() => {
     labPreferSelectors.enableMessageTextSelectionActions(s),
     labPreferSelectors.enableInAppBrowser(s),
     labPreferSelectors.enableArtifactDeployment(s),
+    labPreferSelectors.enableBuiltinTerminal(s),
     s.updateLab,
   ]);
 
@@ -304,6 +306,20 @@ const Page = memo(() => {
             className: styles.labItem,
             desc: tLabs('features.inAppBrowser.desc'),
             label: tLabs('features.inAppBrowser.title'),
+            minWidth: undefined,
+          } satisfies FormItemProps,
+          // The terminal runs PTY sessions in the Electron main process — desktop only.
+          {
+            children: (
+              <Switch
+                checked={enableBuiltinTerminal}
+                loading={!isPreferenceInit}
+                onChange={(checked: boolean) => updateLab({ enableBuiltinTerminal: checked })}
+              />
+            ),
+            className: styles.labItem,
+            desc: tLabs('features.builtinTerminal.desc'),
+            label: tLabs('features.builtinTerminal.title'),
             minWidth: undefined,
           } satisfies FormItemProps,
         ]

@@ -7,6 +7,8 @@
   "features.artifactDeployment.title": "Triển khai Hiện vật",
   "features.assistantMessageGroup.desc": "Nhóm các tin nhắn của tác nhân và kết quả gọi công cụ lại với nhau để hiển thị",
   "features.assistantMessageGroup.title": "Nhóm Tin Nhắn Tác Nhân",
+  "features.builtinTerminal.desc": "Hiển thị nút terminal trên trang trò chuyện, mở bảng điều khiển terminal tích hợp ở phía dưới, với các tab theo từng chủ đề chạy trong shell cục bộ của bạn.",
+  "features.builtinTerminal.title": "Terminal Tích Hợp",
   "features.claudeCodeSdk.desc": "Chạy các phiên Claude Code thông qua Claude Agent SDK thay vì khởi chạy CLI. Cho phép truyền tải phong phú hơn và kiểm soát phiên làm việc.",
   "features.claudeCodeSdk.title": "Thời gian chạy Claude Code SDK",
   "features.fleet.desc": "Hiển thị mục Fleet trong thanh tiêu đề — một bảng điều khiển song song của tất cả các tác vụ đang chạy trên các tác nhân của bạn.",

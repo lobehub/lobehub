@@ -11,6 +11,9 @@ export default {
   'features.assistantMessageGroup.desc':
     'Group agent messages and their tool call results together for display',
   'features.assistantMessageGroup.title': 'Agent Message Grouping',
+  'features.builtinTerminal.desc':
+    'Show a terminal button on the chat page that opens a built-in terminal panel at the bottom, with per-topic tabs running in your local shell.',
+  'features.builtinTerminal.title': 'Built-in Terminal',
   'features.claudeCodeSdk.desc':
     'Run Claude Code sessions through the Claude Agent SDK instead of spawning the CLI. Enables richer streaming and session control.',
   'features.claudeCodeSdk.title': 'Claude Code SDK Runtime',

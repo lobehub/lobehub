@@ -1266,6 +1266,10 @@ export default {
   'thread.subagentMetrics.toolsShort_other': '{{count}} tools',
   'thread.subagentReadOnlyHint':
     'SubAgent conversations are read-only — execution is driven by the parent agent.',
+  'terminalPanel.close': 'Close terminal panel',
+  'terminalPanel.closeTab': 'Close terminal',
+  'terminalPanel.newTab': 'New terminal',
+  'terminalPanel.title': 'Terminal',
   'thread.threadMessageCount': '{{messageCount}} messages',
   'thread.title': 'Subtopic',
   'todoProgress.allCompleted': 'All tasks completed',

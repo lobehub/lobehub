@@ -7,6 +7,8 @@
   "features.artifactDeployment.title": "Implantações de Artefatos",
   "features.assistantMessageGroup.desc": "Agrupe mensagens do agente e os resultados das chamadas de ferramentas para exibição conjunta",
   "features.assistantMessageGroup.title": "Agrupamento de Mensagens do Agente",
+  "features.builtinTerminal.desc": "Exibe um botão de terminal na página de chat que abre um painel de terminal integrado na parte inferior, com abas por tópico executando no seu shell local.",
+  "features.builtinTerminal.title": "Terminal Integrado",
   "features.claudeCodeSdk.desc": "Execute sessões do Claude Code através do Claude Agent SDK em vez de iniciar o CLI. Permite streaming mais rico e controle de sessão.",
   "features.claudeCodeSdk.title": "Runtime do SDK Claude Code",
   "features.fleet.desc": "Exiba a entrada da Frota na barra de título — um painel lado a lado de todas as tarefas em execução entre seus agentes.",

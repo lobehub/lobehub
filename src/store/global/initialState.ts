@@ -267,6 +267,10 @@ export interface SystemStatus {
    */
   showTaskAgentPanel?: boolean;
   /**
+   * Visibility of the chat bottom terminal panel (desktop-only, Labs gated).
+   */
+  showTerminalPanel?: boolean;
+  /**
    * Visibility of the Verify workspace left-side report-list panel.
    * Independent from the nav rail so collapsing the report list does not affect other pages.
    */
@@ -306,6 +310,10 @@ export interface SystemStatus {
     orderDirection: 'asc' | 'desc';
     subGroupBy: 'assignee' | 'none' | 'priority' | 'status';
   };
+  /**
+   * Height of the chat bottom terminal panel. Persisted so resizing survives remounts.
+   */
+  terminalPanelHeight?: number;
   /**
    * Whether to display tokens in short format
    */
@@ -462,11 +470,13 @@ export const INITIAL_STATUS = {
   showRightPanel: false,
   showSystemRole: false,
   showTaskAgentPanel: false,
+  showTerminalPanel: false,
   showVerifyReportPanel: true,
   showVideoPanel: true,
   showVideoTopicPanel: true,
   sidebarExpandedKeys: [...DEFAULT_HOME_SIDEBAR_EXPANDED_KEYS],
   systemRoleExpandedMap: {},
+  terminalPanelHeight: 320,
   tokenDisplayFormatShort: true,
   topicPageSize: 20,
   verifyReportPanelWidth: 300,

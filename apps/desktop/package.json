@@ -43,6 +43,7 @@
   },
   "dependencies": {
     "@lobehub/fluent-emoji": "^4.1.0",
+    "@lydell/node-pty": "1.2.0-beta.12",
     "@napi-rs/canvas": "^0.1.100",
     "electron-log": "^5.4.4",
     "get-windows": "^9.3.0",

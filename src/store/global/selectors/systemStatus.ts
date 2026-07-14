@@ -371,6 +371,8 @@ const showRightPanel = (s: GlobalState) => s.status.showRightPanel;
 const showLeftPanel = (s: GlobalState) => s.status.showLeftPanel;
 const showPageAgentPanel = (s: GlobalState) => s.status.showPageAgentPanel;
 const showTaskAgentPanel = (s: GlobalState) => s.status.showTaskAgentPanel;
+const showTerminalPanel = (s: GlobalState) => s.status.showTerminalPanel;
+const terminalPanelHeight = (s: GlobalState) => s.status.terminalPanelHeight || 320;
 const showFilePanel = (s: GlobalState) => s.status.showFilePanel;
 const showVerifyReportPanel = (s: GlobalState) => s.status.showVerifyReportPanel ?? true;
 const showImagePanel = (s: GlobalState) => s.status.showImagePanel;
@@ -484,10 +486,12 @@ export const systemStatusSelectors = {
   showRightPanel,
   showSystemRole,
   showTaskAgentPanel,
+  showTerminalPanel,
   showVerifyReportPanel,
   showVideoPanel,
   showVideoTopicPanel,
   systemStatus,
+  terminalPanelHeight,
   verifyReportPanelWidth,
   tokenDisplayFormatShort,
   collapsedTopicGroupKeys,

@@ -132,6 +132,13 @@ export class GlobalWorkspacePaneActionImpl {
     this.#get().updateSystemStatus({ showRightPanel }, n('toggleRightPanel', newValue));
   };
 
+  toggleTerminalPanel = (newValue?: boolean): void => {
+    const showTerminalPanel =
+      typeof newValue === 'boolean' ? newValue : !this.#get().status.showTerminalPanel;
+
+    this.#get().updateSystemStatus({ showTerminalPanel }, n('toggleTerminalPanel', newValue));
+  };
+
   toggleSystemRole = (newValue?: boolean): void => {
     const showSystemRole =
       typeof newValue === 'boolean' ? newValue : !this.#get().status.mobileShowTopic;

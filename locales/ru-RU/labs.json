@@ -7,6 +7,8 @@
   "features.artifactDeployment.title": "Развертывание артефактов",
   "features.assistantMessageGroup.desc": "Группируйте сообщения агента и результаты вызова инструментов для совместного отображения",
   "features.assistantMessageGroup.title": "Группировка сообщений агента",
+  "features.builtinTerminal.desc": "Показать кнопку терминала на странице чата, которая открывает встроенную панель терминала внизу с вкладками для каждой темы, работающими в вашем локальном shell.",
+  "features.builtinTerminal.title": "Встроенный терминал",
   "features.claudeCodeSdk.desc": "Запускайте сеансы Claude Code через Claude Agent SDK вместо запуска CLI. Обеспечивает более богатую потоковую передачу и управление сеансами.",
   "features.claudeCodeSdk.title": "Среда выполнения Claude Code SDK",
   "features.fleet.desc": "Показывать запись Fleet в заголовке — панель управления, отображающая все выполняемые задачи на ваших агентах бок о бок.",
