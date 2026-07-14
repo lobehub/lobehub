@@ -14,12 +14,10 @@ export type WorkResourceType = 'document' | ExternalWorkResourceType | 'task';
 export type WorkVersionChangeType = 'created' | 'updated';
 
 /**
- * The patchable Work display columns (now real columns on the `works` row,
- * unified vocabulary). A partial tool result (e.g. Linear `{ id, state }`) names
- * only the fields it carries in `patchFields`, so a concurrent registration's
- * other columns are never overwritten. Free-text fields (`description`) are
- * sliced at WRITE time; full/live data stays on the owning tables (tasks,
- * documents) or in `works.content`.
+ * The display fields captured by every immutable Work version. A partial tool
+ * result (e.g. Linear `{ id, state }`) names only the fields it carries in
+ * `patchFields`; registration merges them with the current version before
+ * inserting the next complete snapshot.
  */
 export type WorkDisplayField =
   'content' | 'description' | 'identifier' | 'status' | 'title' | 'url';
@@ -35,15 +33,11 @@ export interface WorkVersionCumulativeUsage {
 }
 
 export interface WorkItem {
-  /** FULL untruncated text (layer 3). Null for document Works. */
-  content: string | null;
   createdAt: Date;
   currentVersionId: string | null;
-  /** Short preview text, sliced to 120 chars at write time (layer 2). */
+  /** Denormalized current-version preview used by Work list queries. */
   description: string | null;
   id: string;
-  /** Short human reference: `TASK-1`, filename, `ENG-123`, `owner/repo#42`. */
-  identifier: string | null;
   resourceId: string | null;
   resourceType: WorkResourceType;
   /** Thread where the Work was first registered (creation provenance; null outside a thread). */
@@ -52,28 +46,30 @@ export interface WorkItem {
   sourceToolIdentifier: string | null;
   /** Topic where the Work was first registered (creation provenance; null outside a conversation). */
   sourceTopicId: string | null;
-  /** Current resource status (external Works only). */
-  status: string | null;
-  /** Current display title (layer 1). */
+  /** Denormalized current-version title used by Work list queries. */
   title: string | null;
   type: WorkType;
   updatedAt: Date;
-  /** External link (sanitized to http(s) upstream). */
-  url: string | null;
   userId: string;
   workspaceId: string | null;
 }
 
 /** Card/list payload shared by conversation history, message chips, and the workspace gallery. */
-export type WorkListBaseItem = Omit<WorkItem, 'content'>;
+export type WorkListBaseItem = WorkItem & Pick<WorkVersionItem, 'identifier' | 'status' | 'url'>;
 
 export interface WorkVersionItem {
   actorAgentId: string | null;
   changeType: WorkVersionChangeType;
+  /** Full text captured by this version. Null for document Works. */
+  content: string | null;
   createdAt: Date;
   cumulativeCost: number | null;
   cumulativeUsage: WorkVersionCumulativeUsage | null;
+  /** Short preview text captured by this version. */
+  description: string | null;
   id: string;
+  /** Short human reference captured by this version. */
+  identifier: string | null;
   metadata: WorkVersionMetadata | null;
   rootOperationId: string | null;
   sourceMessageId: string | null;
@@ -82,8 +78,14 @@ export interface WorkVersionItem {
   sourceToolIdentifier: string | null;
   /** Concrete tool that produced this version, e.g. 'createTask'. */
   sourceToolName: string;
+  /** Resource status captured by this version. */
+  status: string | null;
   threadId: string | null;
+  /** Display title captured by this version. */
+  title: string | null;
   topicId: string | null;
+  /** Canonical http(s) open target captured by this version. */
+  url: string | null;
   userId: string;
   version: number;
   workId: string;
@@ -213,7 +215,7 @@ export interface DeleteTaskWorkParams {
 export interface RegisterExternalWorkParams {
   actorAgentId?: string | null;
   changeType: WorkVersionChangeType;
-  /** FULL untruncated body (layer 3); patched onto `works.content` when named in `patchFields`. */
+  /** Full body captured in the next version when named in `patchFields`. */
   content?: string | null;
   cumulativeCost?: number | null;
   cumulativeUsage?: WorkVersionCumulativeUsage | null;

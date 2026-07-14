@@ -76,21 +76,6 @@ export const works = pgTable(
     title: text('title'),
     /** Short preview text, sliced to 120 chars at write time (layer 2). */
     description: text('description'),
-    /**
-     * FULL untruncated text (layer 3; e.g. a complete github issue body). Null for
-     * document Works — the full document lives in `documents`, so layer 3 there is
-     * opening the document itself.
-     */
-    content: text('content'),
-    /** Short human reference: `TASK-1`, a filename, `ENG-123`, `owner/repo#42`. */
-    identifier: text('identifier'),
-    /**
-     * Current resource status (external Works only). Task status stays live-join
-     * only (a stale copy would mislead) and documents have no status.
-     */
-    status: text('status'),
-    /** External link (sanitized to http(s) upstream by the normalizers). */
-    url: text('url'),
 
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
@@ -150,6 +135,22 @@ export const workVersions = pgTable(
       .notNull(),
     /** 1-based sequence within a Work, unique per (workId, version). */
     version: integer('version').notNull(),
+
+    /** Display title captured when this immutable version was produced. */
+    title: text('title'),
+    /** Short preview text captured when this immutable version was produced. */
+    description: text('description'),
+    /**
+     * Full text captured by this version, capped at write time. Null for document
+     * Works because their full content remains in the documents table.
+     */
+    content: text('content'),
+    /** Human reference captured by this version, such as `TASK-1` or `ENG-123`. */
+    identifier: text('identifier'),
+    /** Resource status captured by this version when the provider exposes one. */
+    status: text('status'),
+    /** Canonical http(s) open target captured by this version. */
+    url: text('url'),
 
     /**
      * How this version changed the Work: 'created' | 'updated'. Not derivable

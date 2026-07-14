@@ -126,5 +126,5 @@ export const registerDocumentWork = async (
   return findById(ctx, work.id);
 };
 
-/** Document display columns are card-sized at write time; the adapter reads them straight off `works`. */
+/** Document display fields are card-sized before the immutable version snapshot is written. */
 export const documentWorkAdapter = createDisplayWorkAdapter({ type: 'document' });

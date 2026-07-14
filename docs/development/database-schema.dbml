@@ -2707,6 +2707,12 @@ table work_versions {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   work_id text [not null]
   version integer [not null]
+  title text
+  description text
+  content text
+  identifier text
+  status text
+  url text
   change_type text [not null]
   source_tool_name text [not null]
   source_tool_identifier text
@@ -2750,10 +2756,6 @@ table works {
   source_tool_identifier text
   title text
   description text
-  content text
-  identifier text
-  status text
-  url text
   user_id text [not null]
   workspace_id text
   created_at "timestamp with time zone" [not null, default: `now()`]

@@ -13,14 +13,16 @@ import { tasks } from '../../schemas/task';
 import { works, workVersions } from '../../schemas/work';
 import { taskOwnership, versionOwnership, type WorkContext, workOwnership } from './context';
 import {
+  currentTaskSummaryFields,
   currentVersions,
-  taskSummaryFields,
+  currentWorkListFields,
+  eventTaskSummaryFields,
+  eventWorkListFields,
   taskSummaryJoin,
   type TaskWorkSummaryQueryRow,
   truncateSummaryText,
   versionEventSelection,
   type WorkDisplayColumns,
-  workListFields,
   type WorkTypeAdapter,
 } from './internal';
 import { createVersion, findById, resolveWorkUpsertConflict } from './writes';
@@ -32,10 +34,9 @@ const normalizeTaskLookup = (value?: string) => {
 };
 
 /**
- * Task display columns written onto the `works` row. Live data stays on the
- * `tasks` row (joined by every query); these columns are the deletion fallback
- * (title / identifier) plus the instruction preview/full-text. `status` stays
- * NULL: the live join is authoritative, and a stale copy would mislead.
+ * Task display fields captured by each immutable version. Live data stays on
+ * the `tasks` row (joined by every query); snapshots provide the deletion
+ * fallback. `status` stays NULL because the live join is authoritative.
  */
 export const taskDisplayColumns = (task: TaskItem): WorkDisplayColumns => ({
   content: task.instruction,
@@ -130,7 +131,7 @@ export const registerTaskWork = async (
   return findById(ctx, work.id);
 };
 
-/** Card-facing task fields from the live-coalesced `taskSummaryFields` projection. */
+/** Card-facing task fields from a live-coalesced task projection. */
 const toTaskCardFields = (
   task: TaskWorkSummaryQueryRow['task'],
 ): Pick<TaskWorkListItem, 'task' | 'taskDeleted'> => ({
@@ -148,15 +149,15 @@ const toTaskCardFields = (
  * Task keeps bespoke adapter queries (unlike the snapshot factory types):
  * every projection LEFT JOINs the live `tasks` row so cards render live
  * name/status, falling back to the version snapshot only when the task row
- * was deleted outside the tool path (see `taskSummaryFields`).
+ * was deleted outside the tool path.
  */
 export const taskWorkAdapter: WorkTypeAdapter<TaskWorkSummaryQueryRow> = {
   listConversationRows: async (ctx, params) => {
     const rows = await ctx.db
       .select({
         eventCreatedAt: workVersions.createdAt,
-        ...taskSummaryFields,
-        work: workListFields,
+        ...currentTaskSummaryFields,
+        work: currentWorkListFields,
       })
       .from(workVersions)
       .innerJoin(works, and(eq(workVersions.workId, works.id), workOwnership(ctx)))
@@ -188,13 +189,13 @@ export const taskWorkAdapter: WorkTypeAdapter<TaskWorkSummaryQueryRow> = {
     ctx.db
       .select({
         event: versionEventSelection,
-        ...taskSummaryFields,
+        ...currentTaskSummaryFields,
         version: {
           createdAt: currentVersions.createdAt,
           id: currentVersions.id,
           version: currentVersions.version,
         },
-        work: workListFields,
+        work: currentWorkListFields,
       })
       .from(workVersions)
       .innerJoin(works, and(eq(workVersions.workId, works.id), workOwnership(ctx)))
@@ -207,9 +208,9 @@ export const taskWorkAdapter: WorkTypeAdapter<TaskWorkSummaryQueryRow> = {
   listVersionEvents: async (ctx, filters, limit) => {
     const rows = await ctx.db
       .select({
-        ...taskSummaryFields,
+        ...eventTaskSummaryFields,
         version: versionEventSelection,
-        work: workListFields,
+        work: eventWorkListFields,
       })
       .from(workVersions)
       .innerJoin(works, and(eq(workVersions.workId, works.id), workOwnership(ctx)))

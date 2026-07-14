@@ -66,22 +66,22 @@ describe('WorkModel · task', () => {
     expect(versions).toHaveLength(1);
     expect(versions[0]).toMatchObject({
       changeType: 'created',
+      content: 'Write the MVP plan',
+      description: 'Write the MVP plan',
+      identifier: task.identifier,
       rootOperationId: 'op-root',
       sourceToolName: 'createTask',
       sourceMessageId: 'msg-tool',
       sourceToolCallId: 'tool-call-create',
+      status: null,
       threadId,
+      title: 'Work MVP plan',
       topicId,
       version: 1,
     });
-    // Display data lives on the current works row now (no per-version snapshot):
-    // task name → title, task identifier → identifier, instruction → content +
-    // truncated description. `status` stays NULL (the live join is authoritative).
+    // Work keeps only the list-critical current title/description cache.
     expect(work).toMatchObject({
-      content: 'Write the MVP plan',
       description: 'Write the MVP plan',
-      identifier: task.identifier,
-      status: null,
       title: 'Work MVP plan',
     });
 
@@ -172,7 +172,7 @@ describe('WorkModel · task', () => {
     expect(newVersion.topicId).toBe(otherTopicId);
   });
 
-  it('fills the works-row display columns from the task on registration', async () => {
+  it('stores a complete task display snapshot and caches title/description on Work', async () => {
     const taskModel = new TaskModel(serverDB, userId);
     const workModel = new WorkModel(serverDB, userId);
     // A long instruction proves `content` keeps the full text while `description`
@@ -190,22 +190,30 @@ describe('WorkModel · task', () => {
       topicId,
     });
 
-    const [row] = await serverDB.select().from(works).where(eq(works.id, work!.id));
-    expect(row).toMatchObject({
+    const [workRow] = await serverDB.select().from(works).where(eq(works.id, work!.id));
+    expect(workRow).toMatchObject({
+      description: expectedDescription,
+      title: 'Fill display task',
+    });
+
+    const [version] = await serverDB
+      .select()
+      .from(workVersions)
+      .where(eq(workVersions.workId, work!.id));
+    expect(version).toMatchObject({
       content: instruction,
       description: expectedDescription,
       identifier: task.identifier,
-      // `status` stays NULL: the live tasks join is authoritative.
       status: null,
       title: 'Fill display task',
     });
   });
 
-  it('caps works.content at WORK_CONTENT_MAX_LENGTH on write', async () => {
+  it('caps workVersions.content at WORK_CONTENT_MAX_LENGTH on write', async () => {
     const taskModel = new TaskModel(serverDB, userId);
     const workModel = new WorkModel(serverDB, userId);
-    // An instruction past the 65 536-char cap must not land verbatim on the
-    // works row (every list query selects that row).
+    // An instruction past the 65 536-char cap must not land verbatim in the
+    // immutable version snapshot.
     const instruction = 'C'.repeat(70_000);
     const task = await taskModel.create({ instruction, name: 'Capped content task' });
 
@@ -218,8 +226,11 @@ describe('WorkModel · task', () => {
       topicId,
     });
 
-    const [row] = await serverDB.select().from(works).where(eq(works.id, work!.id));
-    expect(row.content).toBe(`${'C'.repeat(65_536)}...`);
+    const [version] = await serverDB
+      .select()
+      .from(workVersions)
+      .where(eq(workVersions.workId, work!.id));
+    expect(version.content).toBe(`${'C'.repeat(65_536)}...`);
   });
 
   it('stamps works.sourceToolIdentifier once with the creator and keeps it per-version', async () => {
@@ -400,13 +411,18 @@ describe('WorkModel · task', () => {
     expect(versions.map((item) => item.version)).toEqual([2, 1]);
     expect(versions[0].changeType).toBe('updated');
     expect(versions[0].id).toBeTruthy();
-    // The current works row reflects the merged current state after the edit:
-    // title/identifier follow the live task, content is the full instruction.
-    expect(second).toMatchObject({
+    // Every version preserves the display state captured at that mutation.
+    expect(versions[0]).toMatchObject({
       content: 'Updated instruction',
       identifier: task.identifier,
       title: 'Updated title',
     });
+    expect(versions[1]).toMatchObject({
+      content: 'Original',
+      identifier: task.identifier,
+      title: 'Original title',
+    });
+    expect(second).toMatchObject({ description: 'Updated instruction', title: 'Updated title' });
 
     const [updatedVersion] = await serverDB
       .select()

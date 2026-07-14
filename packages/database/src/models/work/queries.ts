@@ -17,7 +17,12 @@ import { tasks } from '../../schemas/task';
 import { works, workVersions } from '../../schemas/work';
 import { type WorkContext, workOwnership } from './context';
 import { getTotalCostByWorkIds } from './cost';
-import { currentVersions, taskSummaryFields, taskSummaryJoin, workListFields } from './internal';
+import {
+  currentTaskSummaryFields,
+  currentVersions,
+  currentWorkListFields,
+  taskSummaryJoin,
+} from './internal';
 import { WORK_TYPE_ADAPTERS, workTypeAdapters } from './registry';
 
 /**
@@ -300,13 +305,13 @@ export const listByWorkspace = async (
         sourceToolName: currentVersions.sourceToolName,
         version: currentVersions.version,
       },
-      ...taskSummaryFields,
+      ...currentTaskSummaryFields,
       version: {
         createdAt: currentVersions.createdAt,
         id: currentVersions.id,
         version: currentVersions.version,
       },
-      work: workListFields,
+      work: currentWorkListFields,
     })
     .from(works)
     .innerJoin(currentVersions, eq(works.currentVersionId, currentVersions.id))

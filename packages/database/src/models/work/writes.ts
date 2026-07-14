@@ -14,6 +14,7 @@ import { documentOwnership, versionOwnership, type WorkContext, workOwnership } 
 import {
   type CreateVersionInput,
   truncateContentText,
+  type WorkDisplayColumns,
   type WorkVersionEventParams,
 } from './internal';
 
@@ -28,6 +29,26 @@ const ALL_DISPLAY_FIELDS: WorkDisplayField[] = [
   'title',
   'url',
 ];
+
+type WorkVersionSnapshot = Record<WorkDisplayField, string | null>;
+
+const EMPTY_VERSION_SNAPSHOT: WorkVersionSnapshot = {
+  content: null,
+  description: null,
+  identifier: null,
+  status: null,
+  title: null,
+  url: null,
+};
+
+const versionSnapshotSelection = {
+  content: workVersions.content,
+  description: workVersions.description,
+  identifier: workVersions.identifier,
+  status: workVersions.status,
+  title: workVersions.title,
+  url: workVersions.url,
+};
 
 const isUniqueViolation = (error: unknown) => {
   const message = error instanceof Error ? error.message : String(error);
@@ -98,48 +119,43 @@ export const resolveWorkUpsertConflict = (ctx: WorkContext) =>
       };
 
 /**
- * Compute the `works` display-column UPDATE applied under the version lock.
- * `patchFields` present → set ONLY those columns (partial tool result: never
- * clobber a concurrent registration's other columns); absent → overwrite every
- * display column (task/document carry complete data). `sourceToolIdentifier` is
- * the creator tool: written only when the column is still NULL (coalesce), so a
- * later registration from a different tool never rewrites it.
+ * Build the next complete immutable display snapshot. A partial registration
+ * starts from the locked Work's current version and replaces only named fields;
+ * a complete registration starts empty, so omitted fields become null.
  */
-const buildWorksDisplaySet = (
+const buildVersionSnapshot = (
   input: CreateVersionInput,
-  params: WorkVersionEventParams,
-): Record<string, unknown> => {
-  const set: Record<string, unknown> = {
-    sourceToolIdentifier: sql`coalesce(${works.sourceToolIdentifier}, ${params.sourceToolIdentifier ?? null})`,
-  };
+  currentSnapshot?: WorkDisplayColumns,
+): WorkVersionSnapshot => {
+  const snapshot: WorkVersionSnapshot = input.patchFields
+    ? { ...EMPTY_VERSION_SNAPSHOT, ...currentSnapshot }
+    : { ...EMPTY_VERSION_SNAPSHOT };
 
   const fields = input.patchFields ?? ALL_DISPLAY_FIELDS;
   for (const field of fields) {
     const value = input.display[field] ?? null;
-    // `content` is the only unbounded free-text column; cap it here, the single
-    // choke point every registration path writes the works row through.
-    set[field] = field === 'content' ? truncateContentText(value) : value;
+    // `content` is the only unbounded free-text field; cap it at the single
+    // choke point shared by every version-registration path.
+    snapshot[field] = field === 'content' ? truncateContentText(value) : value;
   }
 
-  return set;
+  return snapshot;
 };
 
 /**
  * Shared version-create pipeline: dedupe by sourceToolCallId, allocate the
- * next version number in a transaction, insert the version row, update the
- * works display columns + bump works.currentVersionId, and retry on
+ * next version number in a transaction, insert the complete version snapshot,
+ * update the Work's current-version pointer/cache, and retry on
  * unique-violation races (either the `(workId, version)` or the
  * `(workId, sourceToolCallId)` unique index).
  *
  * `buildInput` runs inside the transaction, after a `FOR UPDATE` lock on the
  * works row (same pattern as `TopicModel.updateMetadata`): a concurrent
- * registration holds that lock until its commit, so the patch-vs-overwrite
- * display UPDATE here is serialized — a partial (patch) update only touches the
- * columns it names, and unnamed columns keep the concurrent winner's committed
- * value. Without the lock, a stale overwrite could allocate the next version
- * number cleanly — never hitting the unique-violation retry — and silently
- * revert fields the concurrent registration just wrote. Callers must do their
- * reads through the tx-scoped context `buildInput` receives.
+ * registration holds that lock until its commit, so a partial update always
+ * merges against the actual latest snapshot. Without the lock, it could copy a
+ * stale snapshot into a cleanly allocated next version without triggering a
+ * uniqueness retry. Callers must do their reads through the tx-scoped context
+ * `buildInput` receives.
  */
 export const createVersion = async (
   ctx: WorkContext,
@@ -156,7 +172,7 @@ export const createVersion = async (
         const txCtx: WorkContext = { ...ctx, db: tx as LobeChatDatabase };
 
         const [locked] = await tx
-          .select({ id: works.id })
+          .select({ currentVersionId: works.currentVersionId, id: works.id })
           .from(works)
           .where(and(eq(works.id, work.id), workOwnership(ctx)))
           .for('update');
@@ -177,6 +193,16 @@ export const createVersion = async (
         if (dedupedUnderLock) return dedupedUnderLock;
 
         const input = await buildInput(txCtx);
+        const [currentSnapshot] = locked.currentVersionId
+          ? await tx
+              .select(versionSnapshotSelection)
+              .from(workVersions)
+              .where(
+                and(eq(workVersions.id, locked.currentVersionId), eq(workVersions.workId, work.id)),
+              )
+              .limit(1)
+          : [];
+        const snapshot = buildVersionSnapshot(input, currentSnapshot);
 
         const now = new Date();
         const [next] = await tx
@@ -190,6 +216,7 @@ export const createVersion = async (
           .insert(workVersions)
           .values({
             actorAgentId: params.actorAgentId ?? null,
+            content: snapshot.content,
             // Written once at insert time: the agent runtime resolves the tool
             // call's cumulative cost only AFTER execution (in `accumulateTool`),
             // then registers the Work — so cost lands with the row instead of a
@@ -197,6 +224,8 @@ export const createVersion = async (
             // edits) that carry no cost.
             cumulativeCost: params.cumulativeCost ?? null,
             cumulativeUsage: params.cumulativeUsage ?? null,
+            description: snapshot.description,
+            identifier: snapshot.identifier,
             metadata: input.metadata ?? null,
             changeType: params.changeType,
             rootOperationId: params.rootOperationId ?? null,
@@ -205,23 +234,28 @@ export const createVersion = async (
             // Per-version tool identifier (unlike works', which keeps the creator).
             sourceToolIdentifier: params.sourceToolIdentifier ?? null,
             sourceToolName: params.sourceToolName,
+            status: snapshot.status,
             threadId: params.threadId ?? null,
+            title: snapshot.title,
             topicId: params.topicId ?? null,
             userId: ctx.userId,
+            url: snapshot.url,
             version: Number(next.version),
             workId: work.id,
             workspaceId: ctx.workspaceId ?? null,
           })
           .returning();
 
-        // Same lock, same statement class as the old currentVersionId bump:
-        // fold the display-column write (patch or overwrite) into it.
+        // Keep only the list-critical title/description denormalized on Work;
+        // every other display field is read from the current version snapshot.
         await tx
           .update(works)
           .set({
             currentVersionId: version.id,
+            description: snapshot.description,
+            sourceToolIdentifier: sql`coalesce(${works.sourceToolIdentifier}, ${params.sourceToolIdentifier ?? null})`,
+            title: snapshot.title,
             updatedAt: now,
-            ...buildWorksDisplaySet(input, params),
           })
           .where(and(eq(works.id, work.id), workOwnership(ctx)));
 

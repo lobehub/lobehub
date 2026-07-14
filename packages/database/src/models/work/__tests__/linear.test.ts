@@ -2,7 +2,7 @@
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { topics, works } from '../../../schemas';
+import { topics, works, workVersions } from '../../../schemas';
 import { WorkModel } from '..';
 import { normalizeLinearToolResult } from '../linearToolResult';
 import {
@@ -18,10 +18,14 @@ import {
 beforeEach(seedWorkTestData);
 afterEach(cleanupWorkTestData);
 
-/** Re-query the current `works` row (the merged current display state). */
-const currentWorkRow = async (workId: string) => {
-  const [row] = await serverDB.select().from(works).where(eq(works.id, workId));
-  return row;
+/** Re-query the immutable snapshot selected by works.currentVersionId. */
+const currentVersionRow = async (workId: string) => {
+  const [row] = await serverDB
+    .select({ version: workVersions })
+    .from(works)
+    .innerJoin(workVersions, eq(works.currentVersionId, workVersions.id))
+    .where(eq(works.id, workId));
+  return row.version;
 };
 
 describe('WorkModel · linear', () => {
@@ -89,11 +93,10 @@ describe('WorkModel · linear', () => {
     const versions = await workModel.listVersions(first!.id);
     expect(versions.map((item) => item.version)).toEqual([3, 2, 1]);
 
-    // Without re-reading inside the retry, the retried version's status-only patch
-    // would run against the pre-race works row and revert the winner's committed
-    // title. The current row must keep the winner's title, the loser's status, and
-    // the original description untouched by both partial patches.
-    const current = await currentWorkRow(first!.id);
+    // Without re-reading inside the retry, the status-only patch would copy a
+    // stale snapshot and revert the winner's title. The latest immutable version
+    // must combine both concurrent changes with the original description.
+    const current = await currentVersionRow(first!.id);
     expect(current).toMatchObject({
       description: 'Original description',
       status: 'In Progress',
@@ -155,25 +158,31 @@ describe('WorkModel · linear', () => {
 
     expect(second?.id).toBe(first?.id);
     expect(replay?.id).toBe(first?.id);
-    // The partial edit ({ id, state }) patch-updates only `status` on the current
-    // works row; every other display column keeps the create-time value, and the
-    // creator tool identifier is stamped from the provider.
+    // The Work row keeps stable identity plus the current title/description cache.
     expect(second).toMatchObject({
-      content: 'Track Linear issue as Work',
       description: 'Track Linear issue as Work',
-      identifier: 'LOBE-10966',
       resourceId: 'issue-uuid-10966',
       resourceType: 'linear_issue',
       sourceToolIdentifier: 'linear',
-      status: 'In Progress',
       title: 'Linear Work issue',
       type: 'external',
-      url: 'https://linear.app/lobehub/issue/LOBE-10966/linear-work-issue',
     });
 
     const versions = await workModel.listVersions(first!.id);
     expect(versions.map((item) => item.version)).toEqual([2, 1]);
-    expect(versions[0].changeType).toBe('updated');
+    expect(versions[0]).toMatchObject({
+      changeType: 'updated',
+      content: 'Track Linear issue as Work',
+      description: 'Track Linear issue as Work',
+      identifier: 'LOBE-10966',
+      status: 'In Progress',
+      title: 'Linear Work issue',
+      url: 'https://linear.app/lobehub/issue/LOBE-10966/linear-work-issue',
+    });
+    expect(versions[1]).toMatchObject({
+      status: 'Backlog',
+      title: 'Linear Work issue',
+    });
 
     const byOperation = await workModel.listSummariesByRootOperations({
       rootOperationIds: ['op-linear-issue-create', 'op-linear-issue-edit'],
@@ -291,14 +300,13 @@ describe('WorkModel · linear', () => {
 
     const documentVersions = await workModel.listVersions(document!.id);
     expect(documentVersions.map((item) => item.version)).toEqual([3, 2, 1]);
-    // Document previews land in `description` (from `content`); the partial update
-    // (content only) keeps the identifier/title merged from the earlier full edit
-    // on the current works row.
-    expect(partialDocumentUpdate).toMatchObject({
+    // The content-only update inherits every field it did not carry from v2.
+    expect(documentVersions[0]).toMatchObject({
       content: 'Partial body',
       description: 'Partial body',
       identifier: 'linear-document-8298fa69b2e3',
       title: 'Linear document updated',
+      url: 'https://linear.app/lobehub/document/linear-document-8298fa69b2e3',
     });
 
     await workModel.handleSkillToolResult({

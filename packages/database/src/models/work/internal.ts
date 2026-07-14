@@ -27,18 +27,18 @@ export const currentVersions = alias(workVersions, 'current_work_versions');
 
 /**
  * Write-time cap for the card-preview `description` column (message list,
- * sidebar summary, workspace gallery). The full body lives in `works.content`
- * (external Works, capped at {@link WORK_CONTENT_MAX_LENGTH}) or on the owning
- * table (documents); list/summary projections deliberately omit `content` and
- * carry only the `description` preview. Single source of truth, also consumed
- * by the provider normalizers.
+ * sidebar summary, workspace gallery). The full body lives in the immutable
+ * version snapshot (external Works, capped at {@link WORK_CONTENT_MAX_LENGTH})
+ * or on the owning table (documents); list/summary projections deliberately
+ * omit `content` and carry only the `description` preview. Single source of
+ * truth, also consumed by the provider normalizers.
  */
 export const WORK_DESCRIPTION_PREVIEW_LENGTH = 120;
 
 /**
  * Write-time cap for the full-text `content` column (layer 3 of the display
  * trio). Anchored to GitHub's 65 536-char issue-body limit; without a cap an
- * agent-generated multi-MB body would land on the `works` row. Card-facing
+ * agent-generated multi-MB body would land in a version row. Card-facing
  * queries exclude this column and fetch only the bounded preview.
  */
 export const WORK_CONTENT_MAX_LENGTH = 65_536;
@@ -78,7 +78,7 @@ export type WorkVersionEventParams = Pick<
   | 'topicId'
 >;
 
-/** The display columns a registration writes onto the `works` row. */
+/** The display fields captured by an immutable Work version snapshot. */
 export interface WorkDisplayColumns {
   content?: string | null;
   description?: string | null;
@@ -91,10 +91,10 @@ export interface WorkDisplayColumns {
 /** Provider-specific inputs for one work-version insert attempt. */
 export interface CreateVersionInput {
   /**
-   * Display columns to write onto the `works` row under the version lock. When
-   * `patchFields` is set, ONLY those named columns are updated (partial tool
-   * results must not wipe a concurrent registration's other columns); otherwise
-   * every display column is overwritten (task/document carry complete data).
+   * Display fields used to build the next immutable snapshot under the Work row
+   * lock. When `patchFields` is set, unnamed fields inherit from the current
+   * version; otherwise omitted fields become null (task/document carry complete
+   * data).
    */
   display: WorkDisplayColumns;
   metadata?: (typeof workVersions.$inferInsert)['metadata'];
@@ -115,25 +115,40 @@ export const versionEventSelection = {
   version: workVersions.version,
 };
 
-/** Work columns safe for card/list payloads; the full `content` body is intentionally excluded. */
-export const workListFields = {
+/** Stable Work columns shared by current-card and historical-event projections. */
+const workIdentityFields = {
   createdAt: works.createdAt,
   currentVersionId: works.currentVersionId,
-  description: works.description,
   id: works.id,
-  identifier: works.identifier,
   resourceId: works.resourceId,
   resourceType: works.resourceType,
   sourceThreadId: works.sourceThreadId,
   sourceToolIdentifier: works.sourceToolIdentifier,
   sourceTopicId: works.sourceTopicId,
-  status: works.status,
-  title: works.title,
   type: works.type,
   updatedAt: works.updatedAt,
-  url: works.url,
   userId: works.userId,
   workspaceId: works.workspaceId,
+};
+
+/** Current-version card fields; full `content` remains intentionally excluded. */
+export const currentWorkListFields = {
+  ...workIdentityFields,
+  description: works.description,
+  identifier: currentVersions.identifier,
+  status: currentVersions.status,
+  title: works.title,
+  url: currentVersions.url,
+};
+
+/** Historical event card fields sourced entirely from that event's version snapshot. */
+export const eventWorkListFields = {
+  ...workIdentityFields,
+  description: workVersions.description,
+  identifier: workVersions.identifier,
+  status: workVersions.status,
+  title: workVersions.title,
+  url: workVersions.url,
 };
 
 export interface TaskWorkSummaryQueryRow {
@@ -163,20 +178,27 @@ export interface DisplayVersionEventRow {
 }
 
 /**
- * Task live-column projection shared by every task summary/list query. `tasks`
- * columns take priority; a LEFT JOIN miss (task deleted without the tool path)
- * nulls the whole `tasks` row, so title/identifier coalesce onto the persisted
- * `works` display columns and `tasks.id is null` becomes the orphan-deletion
- * signal. `instruction` (NOT NULL on live rows) is the card preview text;
- * instruction/priority/status are live-only — a deleted task's card renders
- * title + identifier + deleted badge from the `works` columns.
+ * Current-card task projection. Live task columns take priority; a LEFT JOIN
+ * miss falls back to the Work's current-version cache/snapshot.
  */
-export const taskSummaryFields = {
+export const currentTaskSummaryFields = {
   task: {
     deleted: sql<boolean>`${tasks.id} is null`,
-    identifier: sql<string | null>`coalesce(${tasks.identifier}, ${works.identifier})`,
-    instruction: sql<string | null>`${tasks.instruction}`,
+    identifier: sql<string | null>`coalesce(${tasks.identifier}, ${currentVersions.identifier})`,
+    instruction: sql<string | null>`coalesce(${tasks.instruction}, ${works.description})`,
     name: sql<string | null>`coalesce(${tasks.name}, ${works.title})`,
+    priority: sql<number | null>`${tasks.priority}`,
+    status: sql<string | null>`${tasks.status}`,
+  },
+};
+
+/** Historical task-event projection with fallback to that event's immutable snapshot. */
+export const eventTaskSummaryFields = {
+  task: {
+    deleted: sql<boolean>`${tasks.id} is null`,
+    identifier: sql<string | null>`coalesce(${tasks.identifier}, ${workVersions.identifier})`,
+    instruction: sql<string | null>`coalesce(${tasks.instruction}, ${workVersions.description})`,
+    name: sql<string | null>`coalesce(${tasks.name}, ${workVersions.title})`,
     priority: sql<number | null>`${tasks.priority}`,
     status: sql<string | null>`${tasks.status}`,
   },
@@ -204,7 +226,7 @@ export const listDisplayVersionEventRows = (
   ctx.db
     .select({
       version: versionEventSelection,
-      work: workListFields,
+      work: eventWorkListFields,
     })
     .from(workVersions)
     .innerJoin(works, and(eq(workVersions.workId, works.id), workOwnership(ctx)))
@@ -230,7 +252,7 @@ export const listDisplayWorkSummaryRows = (
         id: currentVersions.id,
         version: currentVersions.version,
       },
-      work: workListFields,
+      work: currentWorkListFields,
     })
     .from(workVersions)
     .innerJoin(works, and(eq(workVersions.workId, works.id), workOwnership(ctx)))

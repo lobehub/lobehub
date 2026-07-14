@@ -231,8 +231,9 @@ describe('WorkModel · queries', () => {
       topicId,
     });
 
-    // The backing entity still retains layer-3 content for a future detail read.
-    expect(work?.content).toBe(content);
+    // The immutable version retains layer-3 content for a future detail read.
+    const [version] = await workModel.listVersions(work!.id);
+    expect(version.content).toBe(content);
 
     const events = await workModel.listByRootOperation({
       rootOperationId: 'op-card-projection',

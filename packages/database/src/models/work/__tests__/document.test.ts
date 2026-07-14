@@ -41,13 +41,9 @@ describe('WorkModel · document', () => {
     });
 
     expect(work).toBeDefined();
-    // Display columns now live directly on the current `works` row: title from the
-    // document title, identifier from the filename, description from the metadata,
-    // and content stays NULL (the full text lives in `documents`).
+    // Work keeps stable identity plus the current title/description cache.
     expect(work).toMatchObject({
-      content: null,
       description: 'Research notes',
-      identifier: 'research.md',
       resourceId: doc.documentId,
       resourceType: 'document',
       sourceToolIdentifier: 'lobe-agent-documents',
@@ -58,9 +54,13 @@ describe('WorkModel · document', () => {
     const versions = await workModel.listVersions(work!.id);
     expect(versions).toHaveLength(1);
     expect(versions[0]).toMatchObject({
+      content: null,
+      description: 'Research notes',
+      identifier: 'research.md',
       metadata: { agentDocumentId: doc.id },
       rootOperationId: 'op-doc-create',
       sourceToolCallId: 'tool-call-doc-create',
+      title: 'Research Notes',
     });
 
     const byOperation = await workModel.listByRootOperation({ rootOperationId: 'op-doc-create' });
@@ -210,7 +210,9 @@ describe('WorkModel · document', () => {
 
     const versions = await workModel.listVersions(first!.id);
     expect(versions.map((item) => item.version)).toEqual([2, 1]);
-    // The rename is reflected on the current works row (the merged current state).
+    expect(versions[0].title).toBe('Renamed Draft');
+    expect(versions[1].title).toBe('Draft');
+    // The current title cache follows the selected version.
     expect(second?.title).toBe('Renamed Draft');
   });
 

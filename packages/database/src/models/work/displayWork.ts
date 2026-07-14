@@ -12,23 +12,21 @@ import { works, workVersions } from '../../schemas/work';
 import { versionOwnership, type WorkContext, workOwnership } from './context';
 import {
   currentVersions,
+  currentWorkListFields,
   type DisplayWorkSummaryQueryRow,
   type DisplayWorkType,
   listDisplayVersionEventRows,
   listDisplayWorkSummaryRows,
   type WorkDisplayColumns,
-  workListFields,
   type WorkTypeAdapter,
 } from './internal';
 import { createVersion, findById, resolveWorkUpsertConflict } from './writes';
 
 /**
  * External register pipeline: upsert the Work identity row, then under
- * `createVersion`'s works-row lock update the display columns (patch-only for
- * the fields the tool result carried) and append the version. Patch semantics
- * replace the old snapshot merge at column granularity — a partial tool result
- * (e.g. Linear `{ id, state }`) names only its fields in `patchFields`, so the
- * UPDATE never wipes title/url a concurrent registration just wrote.
+ * `createVersion`'s Work-row lock merge partial results with the current
+ * snapshot and append a complete immutable version. A partial tool result
+ * (e.g. Linear `{ id, state }`) names only its fields in `patchFields`.
  */
 export const registerExternalWork = async (
   ctx: WorkContext,
@@ -68,9 +66,9 @@ export const registerExternalWork = async (
 
 /**
  * Build the `WorkTypeAdapter` for a display-backed work type (document /
- * external). The `works` row already carries every display column, so the list
- * item is a card-safe projection of `WorkItem` — the full `content` body stays
- * on the backing row and is excluded from list/summary payloads.
+ * external). Current card fields combine the Work's title/description cache
+ * with its current immutable version; full `content` stays excluded from
+ * list/summary payloads.
  */
 export const createDisplayWorkAdapter = (config: {
   type: DisplayWorkType;
@@ -82,7 +80,7 @@ export const createDisplayWorkAdapter = (config: {
       const rows = await ctx.db
         .select({
           eventCreatedAt: workVersions.createdAt,
-          work: workListFields,
+          work: currentWorkListFields,
         })
         .from(workVersions)
         .innerJoin(works, and(eq(workVersions.workId, works.id), workOwnership(ctx)))
