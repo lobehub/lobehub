@@ -1,6 +1,6 @@
 import {
   WORK_PROVIDER_RESOURCE_TYPES,
-  type WorkItem,
+  type WorkListBaseItem,
   type WorkListItem,
   type WorkSkillProvider,
   type WorkSummaryItem,
@@ -17,7 +17,7 @@ import { tasks } from '../../schemas/task';
 import { works, workVersions } from '../../schemas/work';
 import { type WorkContext, workOwnership } from './context';
 import { getTotalCostByWorkIds } from './cost';
-import { currentVersions, taskSummaryFields, taskSummaryJoin } from './internal';
+import { currentVersions, taskSummaryFields, taskSummaryJoin, workListFields } from './internal';
 import { WORK_TYPE_ADAPTERS, workTypeAdapters } from './registry';
 
 /**
@@ -233,7 +233,7 @@ interface WorkSummaryPage {
  * cursor stays opaque to callers: `<updatedAt ISO>|<work id>` (a work id never
  * contains `|`, and neither does an ISO timestamp).
  */
-const encodeWorkCursor = (work: Pick<WorkItem, 'id' | 'updatedAt'>): string =>
+const encodeWorkCursor = (work: Pick<WorkListBaseItem, 'id' | 'updatedAt'>): string =>
   `${work.updatedAt.toISOString()}|${work.id}`;
 
 const decodeWorkCursor = (cursor: string): { id: string; updatedAt: Date } | null => {
@@ -306,7 +306,7 @@ export const listByWorkspace = async (
         id: currentVersions.id,
         version: currentVersions.version,
       },
-      work: works,
+      work: workListFields,
     })
     .from(works)
     .innerJoin(currentVersions, eq(works.currentVersionId, currentVersions.id))

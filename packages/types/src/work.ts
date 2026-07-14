@@ -64,6 +64,9 @@ export interface WorkItem {
   workspaceId: string | null;
 }
 
+/** Card/list payload shared by conversation history, message chips, and the workspace gallery. */
+export type WorkListBaseItem = Omit<WorkItem, 'content'>;
+
 export interface WorkVersionItem {
   actorAgentId: string | null;
   changeType: WorkVersionChangeType;
@@ -102,7 +105,7 @@ export type WorkVersionPreview = Pick<
   | 'version'
 >;
 
-export interface TaskWorkListItem extends WorkItem {
+export interface TaskWorkListItem extends WorkListBaseItem {
   resourceType: 'task';
   task: {
     /** Short reference (`TASK-1`), live-coalesced like the other fields; card display + open target. */
@@ -127,12 +130,12 @@ export interface TaskWorkListItem extends WorkItem {
   type: 'task';
 }
 
-export interface DocumentWorkListItem extends WorkItem {
+export interface DocumentWorkListItem extends WorkListBaseItem {
   resourceType: 'document';
   type: 'document';
 }
 
-export interface ExternalWorkListItem extends WorkItem {
+export interface ExternalWorkListItem extends WorkListBaseItem {
   resourceType: ExternalWorkResourceType;
   type: 'external';
 }

@@ -1,4 +1,4 @@
-import type { WorkItem, WorkType } from '@lobechat/types';
+import type { WorkListBaseItem, WorkType } from '@lobechat/types';
 
 import { documentWorkAdapter } from './document';
 import { externalWorkAdapter } from './external';
@@ -15,11 +15,11 @@ export const WORK_TYPE_ADAPTERS = {
   document: documentWorkAdapter,
   external: externalWorkAdapter,
   task: taskWorkAdapter,
-} satisfies Record<WorkType, WorkTypeAdapter<{ work: WorkItem }>>;
+} satisfies Record<WorkType, WorkTypeAdapter<{ work: WorkListBaseItem }>>;
 
 export const WORK_TYPES = Object.keys(WORK_TYPE_ADAPTERS) as WorkType[];
 
 /** Type-erased adapter list for uniform iteration in the aggregate queries. */
 export const workTypeAdapters = Object.values(WORK_TYPE_ADAPTERS) as WorkTypeAdapter<{
-  work: WorkItem;
+  work: WorkListBaseItem;
 }>[];

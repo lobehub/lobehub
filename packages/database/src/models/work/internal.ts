@@ -4,7 +4,7 @@ import type {
   TaskWorkListItem,
   TaskWorkSummaryItem,
   WorkDisplayField,
-  WorkItem,
+  WorkListBaseItem,
   WorkListItem,
   WorkSummaryItem,
   WorkVersionEventItem,
@@ -29,16 +29,17 @@ export const currentVersions = alias(workVersions, 'current_work_versions');
  * Write-time cap for the card-preview `description` column (message list,
  * sidebar summary, workspace gallery). The full body lives in `works.content`
  * (external Works, capped at {@link WORK_CONTENT_MAX_LENGTH}) or on the owning
- * table (documents); only the `description` preview is sliced. Single source of
- * truth, also consumed by the provider normalizers.
+ * table (documents); list/summary projections deliberately omit `content` and
+ * carry only the `description` preview. Single source of truth, also consumed
+ * by the provider normalizers.
  */
 export const WORK_DESCRIPTION_PREVIEW_LENGTH = 120;
 
 /**
  * Write-time cap for the full-text `content` column (layer 3 of the display
  * trio). Anchored to GitHub's 65 536-char issue-body limit; without a cap an
- * agent-generated multi-MB body would land on the `works` row that every
- * list/summary query selects.
+ * agent-generated multi-MB body would land on the `works` row. Card-facing
+ * queries exclude this column and fetch only the bounded preview.
  */
 export const WORK_CONTENT_MAX_LENGTH = 65_536;
 
@@ -114,12 +115,33 @@ export const versionEventSelection = {
   version: workVersions.version,
 };
 
+/** Work columns safe for card/list payloads; the full `content` body is intentionally excluded. */
+export const workListFields = {
+  createdAt: works.createdAt,
+  currentVersionId: works.currentVersionId,
+  description: works.description,
+  id: works.id,
+  identifier: works.identifier,
+  resourceId: works.resourceId,
+  resourceType: works.resourceType,
+  sourceThreadId: works.sourceThreadId,
+  sourceToolIdentifier: works.sourceToolIdentifier,
+  sourceTopicId: works.sourceTopicId,
+  status: works.status,
+  title: works.title,
+  type: works.type,
+  updatedAt: works.updatedAt,
+  url: works.url,
+  userId: works.userId,
+  workspaceId: works.workspaceId,
+};
+
 export interface TaskWorkSummaryQueryRow {
   event: WorkVersionPreview;
   /** Live-coalesced task columns; `deleted` flags a missing live row. */
   task: TaskWorkListItem['task'] & { deleted: TaskWorkListItem['taskDeleted'] };
   version: TaskWorkSummaryItem['version'];
-  work: WorkItem;
+  work: WorkListBaseItem;
 }
 
 /**
@@ -131,13 +153,13 @@ export type DisplayWorkType = 'document' | 'external';
 export interface DisplayWorkSummaryQueryRow {
   event: WorkVersionPreview;
   version: DocumentWorkSummaryItem['version'];
-  work: WorkItem;
+  work: WorkListBaseItem;
 }
 
 /** Version-event row for display-backed types (each mutation event, no live join). */
 export interface DisplayVersionEventRow {
   version: WorkVersionPreview;
-  work: WorkItem;
+  work: WorkListBaseItem;
 }
 
 /**
@@ -182,7 +204,7 @@ export const listDisplayVersionEventRows = (
   ctx.db
     .select({
       version: versionEventSelection,
-      work: works,
+      work: workListFields,
     })
     .from(workVersions)
     .innerJoin(works, and(eq(workVersions.workId, works.id), workOwnership(ctx)))
@@ -208,7 +230,7 @@ export const listDisplayWorkSummaryRows = (
         id: currentVersions.id,
         version: currentVersions.version,
       },
-      work: works,
+      work: workListFields,
     })
     .from(workVersions)
     .innerJoin(works, and(eq(workVersions.workId, works.id), workOwnership(ctx)))
@@ -241,7 +263,7 @@ export interface WorkspaceSummaryQueryRow {
   event: WorkVersionPreview;
   task: TaskWorkSummaryQueryRow['task'];
   version: TaskWorkSummaryItem['version'];
-  work: WorkItem;
+  work: WorkListBaseItem;
 }
 
 /**
@@ -252,7 +274,7 @@ export interface WorkspaceSummaryQueryRow {
  *
  * `Row` is the type-specific summary row; it round-trips within one adapter
  * (`listSummaryRows` produces it, `mapSummaryRow` consumes it), so the registry
- * can hold adapters as `WorkTypeAdapter<{ work: WorkItem }>` without losing
+ * can hold adapters as `WorkTypeAdapter<{ work: WorkListBaseItem }>` without losing
  * per-adapter safety. METHOD signatures are required here — methods stay
  * bivariant under strictFunctionTypes, which is what lets an adapter with a
  * narrower `Row` conform to the registry's widened constraint; the
@@ -260,7 +282,7 @@ export interface WorkspaceSummaryQueryRow {
  * `satisfies Record<WorkType, …>` check in registry.ts.
  */
 /* eslint-disable @typescript-eslint/method-signature-style */
-export interface WorkTypeAdapter<Row extends { work: WorkItem }> {
+export interface WorkTypeAdapter<Row extends { work: WorkListBaseItem }> {
   /** Current-version rows for the conversation sidebar list. */
   listConversationRows(
     ctx: WorkContext,

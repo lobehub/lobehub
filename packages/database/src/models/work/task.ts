@@ -20,6 +20,7 @@ import {
   truncateSummaryText,
   versionEventSelection,
   type WorkDisplayColumns,
+  workListFields,
   type WorkTypeAdapter,
 } from './internal';
 import { createVersion, findById, resolveWorkUpsertConflict } from './writes';
@@ -155,7 +156,7 @@ export const taskWorkAdapter: WorkTypeAdapter<TaskWorkSummaryQueryRow> = {
       .select({
         eventCreatedAt: workVersions.createdAt,
         ...taskSummaryFields,
-        work: works,
+        work: workListFields,
       })
       .from(workVersions)
       .innerJoin(works, and(eq(workVersions.workId, works.id), workOwnership(ctx)))
@@ -193,7 +194,7 @@ export const taskWorkAdapter: WorkTypeAdapter<TaskWorkSummaryQueryRow> = {
           id: currentVersions.id,
           version: currentVersions.version,
         },
-        work: works,
+        work: workListFields,
       })
       .from(workVersions)
       .innerJoin(works, and(eq(workVersions.workId, works.id), workOwnership(ctx)))
@@ -208,7 +209,7 @@ export const taskWorkAdapter: WorkTypeAdapter<TaskWorkSummaryQueryRow> = {
       .select({
         ...taskSummaryFields,
         version: versionEventSelection,
-        work: works,
+        work: workListFields,
       })
       .from(workVersions)
       .innerJoin(works, and(eq(workVersions.workId, works.id), workOwnership(ctx)))

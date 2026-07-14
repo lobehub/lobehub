@@ -1,6 +1,7 @@
 import type {
   RegisterExternalWorkParams,
   WorkItem,
+  WorkListBaseItem,
   WorkListItem,
   WorkSummaryItem,
   WorkVersionEventItem,
@@ -16,6 +17,7 @@ import {
   listDisplayVersionEventRows,
   listDisplayWorkSummaryRows,
   type WorkDisplayColumns,
+  workListFields,
   type WorkTypeAdapter,
 } from './internal';
 import { createVersion, findById, resolveWorkUpsertConflict } from './writes';
@@ -67,20 +69,20 @@ export const registerExternalWork = async (
 /**
  * Build the `WorkTypeAdapter` for a display-backed work type (document /
  * external). The `works` row already carries every display column, so the list
- * item IS the `WorkItem` — no snapshot JSON projection anywhere; only the
- * `type` filter differs per adapter.
+ * item is a card-safe projection of `WorkItem` — the full `content` body stays
+ * on the backing row and is excluded from list/summary payloads.
  */
 export const createDisplayWorkAdapter = (config: {
   type: DisplayWorkType;
 }): WorkTypeAdapter<DisplayWorkSummaryQueryRow> => {
-  const toListItem = (work: WorkItem): WorkListItem => work as WorkListItem;
+  const toListItem = (work: WorkListBaseItem): WorkListItem => work as WorkListItem;
 
   return {
     listConversationRows: async (ctx, params) => {
       const rows = await ctx.db
         .select({
           eventCreatedAt: workVersions.createdAt,
-          work: works,
+          work: workListFields,
         })
         .from(workVersions)
         .innerJoin(works, and(eq(workVersions.workId, works.id), workOwnership(ctx)))

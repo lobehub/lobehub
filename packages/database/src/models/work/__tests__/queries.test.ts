@@ -212,6 +212,50 @@ describe('WorkModel · queries', () => {
     ]);
   });
 
+  it('omits full content from every card-facing query payload', async () => {
+    const workModel = new WorkModel(serverDB, userId);
+    const content = 'Full external body that must stay off card payloads';
+
+    const work = await workModel.registerExternal({
+      changeType: 'created',
+      content,
+      description: 'Bounded preview',
+      identifier: 'lobehub/lobehub#42',
+      patchFields: ['content', 'description', 'identifier', 'title'],
+      resourceId: 'lobehub/lobehub#42',
+      resourceType: 'github_issue',
+      rootOperationId: 'op-card-projection',
+      sourceToolCallId: 'tool-call-card-projection',
+      sourceToolName: 'create_issue',
+      title: 'Card projection',
+      topicId,
+    });
+
+    // The backing entity still retains layer-3 content for a future detail read.
+    expect(work?.content).toBe(content);
+
+    const events = await workModel.listByRootOperation({
+      rootOperationId: 'op-card-projection',
+    });
+    const summaries = await workModel.listSummariesByRootOperations({
+      rootOperationIds: ['op-card-projection'],
+    });
+    const conversation = await workModel.listByConversation({ topicId });
+    const workspace = await workModel.listByWorkspace({});
+    const cardItems = [
+      ...events,
+      ...summaries['op-card-projection'],
+      ...conversation,
+      ...workspace.items,
+    ];
+
+    expect(cardItems).toHaveLength(4);
+    for (const item of cardItems) {
+      expect(item).not.toHaveProperty('content');
+      expect(item.description).toBe('Bounded preview');
+    }
+  });
+
   it('accepts a works row with a null resourceId', async () => {
     // `works.resourceId` is nullable now: rows with no stable backing resource
     // bypass the partial unique indexes (Postgres treats NULLs as distinct).
