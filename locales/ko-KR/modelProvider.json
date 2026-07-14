@@ -177,6 +177,7 @@
   "providerModels.config.baseURL.invalid": "유효한 URL을 입력해 주세요",
   "providerModels.config.baseURL.placeholder": "https://your-proxy-url.com/v1",
   "providerModels.config.baseURL.title": "API 프록시 주소",
+  "providerModels.config.builtinNotice": "내장된 제공자는 목록에서 제거할 수 없습니다. 이 제공자를 사용하지 않는 경우 비활성화하십시오.",
   "providerModels.config.checker.button": "확인",
   "providerModels.config.checker.desc": "API Key 및 프록시 주소가 올바르게 입력되었는지 테스트합니다",
   "providerModels.config.checker.pass": "검사 통과",

@@ -13,6 +13,8 @@
   "credit_balance_low": "رصيدك الائتماني منخفض — يتبقى حوالي {{balance}} من الرصيد. قم بتفعيل إعادة التعبئة التلقائية حتى يتم تجديد رصيدك تلقائيًا ولا يتعطل عملك.",
   "credit_balance_low_action": "قم بإعداد إعادة التعبئة التلقائية",
   "credit_balance_low_title": "رصيدك الائتماني منخفض",
+  "email.footer.contactSupport": "اتصل بالدعم",
+  "email.footer.joinDiscord": "انضم إلى Discord",
   "email.footer.manage": "إدارة الإشعارات",
   "email.footer.preference": "لقد تلقيت هذا البريد الإلكتروني بسبب إعدادات الإشعارات الخاصة بك على LobeHub.",
   "email.footer.system": "هذا إشعار مهم للحساب من LobeHub.",

@@ -13,6 +13,8 @@
   "credit_balance_low": "Kredi bakiyeniz azalıyor — yaklaşık {{balance}} kredi kaldı. Otomatik bakiye yüklemeyi açarak bakiyenizin otomatik olarak yenilenmesini sağlayabilir ve çalışmalarınızın kesintiye uğramasını önleyebilirsiniz.",
   "credit_balance_low_action": "Otomatik bakiye yüklemeyi ayarla",
   "credit_balance_low_title": "Kredi bakiyeniz azalıyor",
+  "email.footer.contactSupport": "Destek ile iletişime geçin",
+  "email.footer.joinDiscord": "Discord'a katılın",
   "email.footer.manage": "Bildirimleri yönet",
   "email.footer.preference": "Bu e-postayı LobeHub'daki bildirim ayarlarınız nedeniyle aldınız.",
   "email.footer.system": "Bu, LobeHub'dan önemli bir hesap bildirimidir.",

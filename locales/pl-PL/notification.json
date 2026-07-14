@@ -13,6 +13,8 @@
   "credit_balance_low": "Twój stan kredytowy jest niski — pozostało około {{balance}} kredytów. Włącz automatyczne doładowanie, aby saldo uzupełniało się automatycznie i Twoja praca nie była przerywana.",
   "credit_balance_low_action": "Ustaw automatyczne doładowanie",
   "credit_balance_low_title": "Twój stan kredytowy jest niski",
+  "email.footer.contactSupport": "Skontaktuj się z pomocą techniczną",
+  "email.footer.joinDiscord": "Dołącz do Discorda",
   "email.footer.manage": "Zarządzaj powiadomieniami",
   "email.footer.preference": "Otrzymałeś ten e-mail z powodu ustawień powiadomień na LobeHub.",
   "email.footer.system": "To ważne powiadomienie dotyczące konta od LobeHub.",

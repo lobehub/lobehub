@@ -177,6 +177,7 @@
   "providerModels.config.baseURL.invalid": "Моля, въведете валиден URL адрес",
   "providerModels.config.baseURL.placeholder": "https://your-proxy-url.com/v1",
   "providerModels.config.baseURL.title": "API прокси URL",
+  "providerModels.config.builtinNotice": "Вградените доставчици не могат да бъдат премахнати от списъка. Ако не използвате този доставчик, просто го деактивирайте.",
   "providerModels.config.checker.button": "Провери",
   "providerModels.config.checker.desc": "Провери дали API ключът и прокси URL са попълнени правилно",
   "providerModels.config.checker.pass": "Проверката е успешна",

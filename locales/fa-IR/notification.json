@@ -13,6 +13,8 @@
   "credit_balance_low": "اعتبار شما در حال کاهش است — حدود {{balance}} اعتبار باقی مانده است. شارژ خودکار را فعال کنید تا اعتبار شما به صورت خودکار شارژ شود و کار شما هرگز متوقف نشود.",
   "credit_balance_low_action": "تنظیم شارژ خودکار",
   "credit_balance_low_title": "اعتبار شما در حال کاهش است",
+  "email.footer.contactSupport": "تماس با پشتیبانی",
+  "email.footer.joinDiscord": "به دیسکورد بپیوندید",
   "email.footer.manage": "مدیریت اعلان‌ها",
   "email.footer.preference": "شما این ایمیل را به دلیل تنظیمات اعلان‌های خود در LobeHub دریافت کرده‌اید.",
   "email.footer.system": "این یک اعلان مهم حساب از LobeHub است.",

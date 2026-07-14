@@ -13,6 +13,8 @@
   "credit_balance_low": "Il tuo saldo crediti sta per esaurirsi — circa {{balance}} crediti rimanenti. Attiva il ricaricamento automatico così il tuo saldo si ricarica automaticamente e il tuo lavoro non viene mai interrotto.",
   "credit_balance_low_action": "Configura il ricaricamento automatico",
   "credit_balance_low_title": "Il tuo saldo crediti sta per esaurirsi",
+  "email.footer.contactSupport": "Contatta il supporto",
+  "email.footer.joinDiscord": "Unisciti a Discord",
   "email.footer.manage": "Gestisci notifiche",
   "email.footer.preference": "Hai ricevuto questa email a causa delle impostazioni di notifica su LobeHub.",
   "email.footer.system": "Questa è una notifica importante dell'account da LobeHub.",

@@ -177,6 +177,7 @@
   "providerModels.config.baseURL.invalid": "Vui lòng nhập URL hợp lệ",
   "providerModels.config.baseURL.placeholder": "https://your-proxy-url.com/v1",
   "providerModels.config.baseURL.title": "URL Proxy API",
+  "providerModels.config.builtinNotice": "Các nhà cung cấp tích hợp sẵn không thể bị xóa khỏi danh sách. Nếu bạn không sử dụng nhà cung cấp này, chỉ cần vô hiệu hóa nó.",
   "providerModels.config.checker.button": "Kiểm tra",
   "providerModels.config.checker.desc": "Kiểm tra xem khóa API và URL proxy đã được điền đúng chưa",
   "providerModels.config.checker.pass": "Kiểm tra thành công",

@@ -13,6 +13,8 @@
   "credit_balance_low": "Seu saldo de créditos está baixo — cerca de {{balance}} em créditos restantes. Ative a recarga automática para que seu saldo seja preenchido automaticamente e seu trabalho nunca seja interrompido.",
   "credit_balance_low_action": "Configurar recarga automática",
   "credit_balance_low_title": "Seu saldo de créditos está baixo",
+  "email.footer.contactSupport": "Entrar em contato com o suporte",
+  "email.footer.joinDiscord": "Participar do Discord",
   "email.footer.manage": "Gerenciar notificações",
   "email.footer.preference": "Você recebeu este e-mail devido às suas configurações de notificação no LobeHub.",
   "email.footer.system": "Esta é uma notificação importante de conta do LobeHub.",

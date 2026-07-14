@@ -13,6 +13,8 @@
   "credit_balance_low": "Số dư tín dụng của bạn sắp hết — còn khoảng {{balance}} tín dụng. Bật tự động nạp tiền để số dư của bạn được nạp lại tự động và công việc của bạn không bị gián đoạn.",
   "credit_balance_low_action": "Thiết lập tự động nạp tiền",
   "credit_balance_low_title": "Số dư tín dụng của bạn sắp hết",
+  "email.footer.contactSupport": "Liên hệ hỗ trợ",
+  "email.footer.joinDiscord": "Tham gia Discord",
   "email.footer.manage": "Quản lý thông báo",
   "email.footer.preference": "Bạn nhận được email này vì cài đặt thông báo của bạn trên LobeHub.",
   "email.footer.system": "Đây là thông báo quan trọng về tài khoản từ LobeHub.",

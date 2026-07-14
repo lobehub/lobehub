@@ -177,6 +177,7 @@
   "providerModels.config.baseURL.invalid": "Bitte geben Sie eine gültige URL ein",
   "providerModels.config.baseURL.placeholder": "https://your-proxy-url.com/v1",
   "providerModels.config.baseURL.title": "API-Proxy-URL",
+  "providerModels.config.builtinNotice": "Eingebaute Anbieter können nicht aus der Liste entfernt werden. Wenn Sie diesen Anbieter nicht verwenden, deaktivieren Sie ihn einfach.",
   "providerModels.config.checker.button": "Prüfen",
   "providerModels.config.checker.desc": "Testen Sie, ob API-Schlüssel und Proxy-URL korrekt ausgefüllt sind",
   "providerModels.config.checker.pass": "Prüfung erfolgreich",
