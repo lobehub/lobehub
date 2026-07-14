@@ -16,6 +16,7 @@ import {
   PaletteIcon,
   Sparkles,
   UserCircle,
+  Wrench,
 } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -113,6 +114,7 @@ export const useCategory = (): CategoryGroup[] => {
       makeItem({ icon: SkillsIcon, key: SettingsTabs.Skill, label: t('setting:tab.skill') }),
       makeItem({ icon: Blocks, key: SettingsTabs.Connector, label: t('setting:tab.connector') }),
       makeItem({ icon: BrainCircuit, key: SettingsTabs.Memory, label: t('setting:tab.memory') }),
+      makeItem({ icon: Wrench, key: SettingsTabs.Tools, label: t('setting:tab.tools') }),
       makeItem({ icon: KeyRound, key: SettingsTabs.Creds, label: t('setting:tab.creds') }),
       showApiKeyManage &&
         makeItem({ icon: KeyIcon, key: SettingsTabs.APIKey, label: t('auth:tab.apikey') }),

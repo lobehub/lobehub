@@ -1074,6 +1074,15 @@ export default {
     'Select a voice for the current agent, different TTS services support different voices',
   'settingTTS.voice.preview': 'Voice Preview',
   'settingTTS.voice.title': 'Text-to-Speech Voice',
+  'settingTool.crawler.desc':
+    'Order the services used to read full web pages. Higher items are tried first; disabled ones are skipped.',
+  'settingTool.crawler.title': 'Web Reader',
+  'settingTool.empty': 'No channels available',
+  'settingTool.item.disabled': 'Disabled',
+  'settingTool.item.enabled': 'Enabled',
+  'settingTool.search.desc':
+    'Order the services used to search the web. Higher items are tried first; disabled ones are skipped.',
+  'settingTool.search.title': 'Search Engines',
   'skillGroup.builtinSkills': 'Built-in Skills',
   'skillGroup.builtinTools': 'Built-in Tools',
   'skillGroup.communityConnectors': 'OAuth Connectors',
@@ -1330,6 +1339,7 @@ When I am ___, I need ___
   'tab.storage': 'Storage',
   'tab.sync': 'Cloud Sync',
   'tab.systemTools': 'System Tools',
+  'tab.tools': 'Tools',
   'tab.tts': 'Text-to-Speech',
   'tab.uploadZip': 'Upload Zip',
   'tab.uploadZip.desc': 'Upload a local .zip or .skill file',

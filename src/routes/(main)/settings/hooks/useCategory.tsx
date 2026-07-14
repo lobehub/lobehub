@@ -23,6 +23,7 @@ import {
   PaletteIcon,
   Sparkles,
   TerminalSquare,
+  Wrench,
 } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -171,6 +172,11 @@ export const useCategory = () => {
         icon: BrainCircuit,
         key: SettingsTabs.Memory,
         label: t('tab.memory'),
+      },
+      {
+        icon: Wrench,
+        key: SettingsTabs.Tools,
+        label: t('tab.tools'),
       },
       {
         icon: KeyRound,

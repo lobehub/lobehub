@@ -4,7 +4,18 @@ import type { CrawlUniformResult, CrawlUrlRule } from './type';
 import { crawUrlRules } from './urlRules';
 import { applyUrlRules } from './utils/appUrlRules';
 
-const defaultImpls = ['jina', 'naive', 'search1api', 'browserless'] as CrawlImplType[];
+/**
+ * Built-in crawler impl order used when no impls are provided. Re-exported from
+ * the package entry (`@lobechat/web-crawler`) so callers resolving a
+ * user-preferred order can intersect against the same default set the Crawler
+ * falls back to.
+ */
+export const DEFAULT_CRAWL_IMPLS = [
+  'jina',
+  'naive',
+  'search1api',
+  'browserless',
+] as CrawlImplType[];
 
 interface CrawlOptions {
   impls?: string[];
@@ -16,7 +27,7 @@ export class Crawler {
   constructor(options: CrawlOptions = {}) {
     this.impls = !!options.impls?.length
       ? (options.impls.filter((impl) => Object.keys(crawlImpls).includes(impl)) as CrawlImplType[])
-      : defaultImpls;
+      : DEFAULT_CRAWL_IMPLS;
   }
 
   /**

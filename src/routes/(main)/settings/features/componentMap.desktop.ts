@@ -25,6 +25,7 @@ import Skill from '../skill';
 import Stats from '../stats';
 import Storage from '../storage';
 import SystemTools from '../system-tools';
+import Tools from '../tools';
 
 export const componentMap = {
   [SettingsTabs.Advanced]: Advanced,
@@ -49,6 +50,7 @@ export const componentMap = {
   [SettingsTabs.Security]: Security,
   [SettingsTabs.Skill]: Skill,
   [SettingsTabs.Connector]: Connector,
+  [SettingsTabs.Tools]: Tools,
 
   [SettingsTabs.Plans]: Plans,
   [SettingsTabs.Credits]: Credits,

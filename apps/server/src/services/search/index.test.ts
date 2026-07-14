@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { toolsEnv } from '@/envs/tools';
 
 import { createSearchServiceImpl, SearchImplType } from './impls';
-import { SearchService } from './index';
+import { DEFAULT_CRAWLER_IMPLS, resolveOrderedChannels, SearchService } from './index';
 
 // Mock dependencies
 vi.mock('@lobechat/web-crawler');
@@ -667,6 +667,197 @@ describe('SearchService', () => {
       // Should not retry since result has contentType (successful)
       expect(mockCrawler.crawl).toHaveBeenCalledTimes(1);
       expect(result.results[0]).toBe(successResult);
+    });
+  });
+
+  describe('resolveOrderedChannels', () => {
+    it('should return the enabled order untouched when no user order is given', () => {
+      expect(resolveOrderedChannels(undefined, ['a', 'b', 'c'])).toEqual(['a', 'b', 'c']);
+      expect(resolveOrderedChannels([], ['a', 'b', 'c'])).toEqual(['a', 'b', 'c']);
+    });
+
+    it('should keep only enabled ids in the user order', () => {
+      expect(resolveOrderedChannels(['c', 'a'], ['a', 'b', 'c'])).toEqual(['c', 'a']);
+    });
+
+    it('should drop unknown / disabled ids from the user order', () => {
+      expect(resolveOrderedChannels(['x', 'b', 'y'], ['a', 'b', 'c'])).toEqual(['b']);
+    });
+
+    it('should fall back to the enabled order when intersection is empty', () => {
+      expect(resolveOrderedChannels(['x', 'y'], ['a', 'b', 'c'])).toEqual(['a', 'b', 'c']);
+    });
+  });
+
+  describe('DEFAULT_CRAWLER_IMPLS', () => {
+    it('should stay in sync with DEFAULT_CRAWL_IMPLS from @lobechat/web-crawler', async () => {
+      // The local copy is an intentional duplicate to avoid eagerly importing
+      // the crawler module graph; this guards against the two drifting apart.
+      // `@lobechat/web-crawler` is auto-mocked in this file (which empties its
+      // arrays), so read the real export via importActual.
+      const { DEFAULT_CRAWL_IMPLS } = await vi.importActual<{ DEFAULT_CRAWL_IMPLS: string[] }>(
+        '@lobechat/web-crawler',
+      );
+
+      expect(DEFAULT_CRAWLER_IMPLS).toEqual(DEFAULT_CRAWL_IMPLS);
+    });
+  });
+
+  describe('user channel preferences - search providers', () => {
+    it('should reorder providers by user preference intersected with env', () => {
+      vi.mocked(toolsEnv).SEARCH_PROVIDERS = 'searxng,exa,brave';
+      // Drop the construction the shared beforeEach already recorded.
+      vi.mocked(createSearchServiceImpl).mockClear();
+
+      searchService = new SearchService({ userChannels: { searchProviders: ['exa', 'searxng'] } });
+
+      // Providers are instantiated in the resolved (user) order.
+      expect(createSearchServiceImpl).toHaveBeenNthCalledWith(1, SearchImplType.Exa);
+      expect(createSearchServiceImpl).toHaveBeenNthCalledWith(2, SearchImplType.SearXNG);
+      expect(createSearchServiceImpl).toHaveBeenCalledTimes(2);
+    });
+
+    it('should ignore user providers not enabled in env', () => {
+      vi.mocked(toolsEnv).SEARCH_PROVIDERS = 'searxng,exa';
+      vi.mocked(createSearchServiceImpl).mockClear();
+
+      searchService = new SearchService({
+        userChannels: { searchProviders: ['tavily', 'exa'] },
+      });
+
+      expect(createSearchServiceImpl).toHaveBeenCalledTimes(1);
+      expect(createSearchServiceImpl).toHaveBeenCalledWith(SearchImplType.Exa);
+    });
+
+    it('should fall back to env order when user preference filters to empty', () => {
+      vi.mocked(toolsEnv).SEARCH_PROVIDERS = 'searxng,exa';
+      vi.mocked(createSearchServiceImpl).mockClear();
+
+      searchService = new SearchService({ userChannels: { searchProviders: ['tavily', 'brave'] } });
+
+      expect(createSearchServiceImpl).toHaveBeenNthCalledWith(1, SearchImplType.SearXNG);
+      expect(createSearchServiceImpl).toHaveBeenNthCalledWith(2, SearchImplType.Exa);
+    });
+
+    it('should intersect against the runtime default when SEARCH_PROVIDERS is empty', () => {
+      vi.mocked(toolsEnv).SEARCH_PROVIDERS = '';
+      vi.mocked(createSearchServiceImpl).mockClear();
+
+      // 'exa' is not a default provider, so it is dropped; only SearXNG remains,
+      // matching what `getAvailableChannels` exposes to the settings page.
+      searchService = new SearchService({ userChannels: { searchProviders: ['exa', 'searxng'] } });
+
+      expect(createSearchServiceImpl).toHaveBeenCalledTimes(1);
+      expect(createSearchServiceImpl).toHaveBeenCalledWith(SearchImplType.SearXNG);
+    });
+
+    it('should behave identically to no-config when userChannels is omitted', () => {
+      vi.mocked(toolsEnv).SEARCH_PROVIDERS = 'searxng,exa';
+      vi.mocked(createSearchServiceImpl).mockClear();
+
+      searchService = new SearchService();
+
+      expect(createSearchServiceImpl).toHaveBeenNthCalledWith(1, SearchImplType.SearXNG);
+      expect(createSearchServiceImpl).toHaveBeenNthCalledWith(2, SearchImplType.Exa);
+    });
+  });
+
+  describe('user channel preferences - crawler impls', () => {
+    const mockCrawler = () => {
+      const crawler = {
+        crawl: vi.fn().mockResolvedValue({
+          crawler: 'jina',
+          data: { content: 'ok', contentType: 'text' },
+          originalUrl: 'https://example.com',
+        }),
+      };
+      vi.mocked(Crawler).mockImplementation(() => crawler as any);
+      return crawler;
+    };
+
+    it('should intersect user crawler impls with env in user order', async () => {
+      vi.mocked(toolsEnv).CRAWLER_IMPLS = 'jina,naive,firecrawl';
+      mockCrawler();
+
+      searchService = new SearchService({
+        userChannels: { crawlerImpls: ['firecrawl', 'jina'] },
+      });
+      await searchService.crawlPages({ urls: ['https://example.com'] });
+
+      expect(Crawler).toHaveBeenCalledWith({ impls: ['firecrawl', 'jina'] });
+    });
+
+    it('should intersect against Crawler defaults when env is not configured', async () => {
+      vi.mocked(toolsEnv).CRAWLER_IMPLS = '';
+      mockCrawler();
+
+      searchService = new SearchService({
+        userChannels: { crawlerImpls: ['naive', 'jina', 'firecrawl'] },
+      });
+      await searchService.crawlPages({ urls: ['https://example.com'] });
+
+      // 'firecrawl' is not a default impl, so it is dropped; the rest keep user order.
+      expect(Crawler).toHaveBeenCalledWith({ impls: ['naive', 'jina'] });
+    });
+
+    it('should fall back to env impls when user preference filters to empty', async () => {
+      vi.mocked(toolsEnv).CRAWLER_IMPLS = 'jina,naive';
+      mockCrawler();
+
+      searchService = new SearchService({ userChannels: { crawlerImpls: ['firecrawl'] } });
+      await searchService.crawlPages({ urls: ['https://example.com'] });
+
+      expect(Crawler).toHaveBeenCalledWith({ impls: ['jina', 'naive'] });
+    });
+
+    it('should forward the raw env list unchanged when userChannels is omitted', async () => {
+      vi.mocked(toolsEnv).CRAWLER_IMPLS = '';
+      mockCrawler();
+
+      searchService = new SearchService();
+      await searchService.crawlPages({ urls: ['https://example.com'] });
+
+      // Preserves current behavior: empty list, letting Crawler apply defaults.
+      expect(Crawler).toHaveBeenCalledWith({ impls: [] });
+    });
+  });
+
+  describe('getAvailableChannels', () => {
+    it('should return enabled channels in env default order', () => {
+      vi.mocked(toolsEnv).SEARCH_PROVIDERS = 'searxng,exa,brave';
+      vi.mocked(toolsEnv).CRAWLER_IMPLS = 'jina,naive';
+
+      expect(SearchService.getAvailableChannels()).toEqual({
+        crawlerImpls: [{ id: 'jina' }, { id: 'naive' }],
+        searchProviders: [{ id: 'searxng' }, { id: 'exa' }, { id: 'brave' }],
+      });
+    });
+
+    it('should fall back to Crawler default impls when CRAWLER_IMPLS is empty', () => {
+      vi.mocked(toolsEnv).SEARCH_PROVIDERS = 'searxng';
+      vi.mocked(toolsEnv).CRAWLER_IMPLS = '';
+
+      expect(SearchService.getAvailableChannels()).toEqual({
+        crawlerImpls: [
+          { id: 'jina' },
+          { id: 'naive' },
+          { id: 'search1api' },
+          { id: 'browserless' },
+        ],
+        searchProviders: [{ id: 'searxng' }],
+      });
+    });
+
+    it('should fall back to the runtime default provider when SEARCH_PROVIDERS is empty', () => {
+      vi.mocked(toolsEnv).SEARCH_PROVIDERS = '';
+      vi.mocked(toolsEnv).CRAWLER_IMPLS = 'jina';
+
+      // Matches the runtime default (single SearXNG provider) so the settings
+      // page never reports "no channels available" while search still works.
+      expect(SearchService.getAvailableChannels()).toEqual({
+        crawlerImpls: [{ id: 'jina' }],
+        searchProviders: [{ id: 'searxng' }],
+      });
     });
   });
 });

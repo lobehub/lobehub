@@ -1,3 +1,3 @@
 export type { CrawlImplType } from './crawImpl';
-export { Crawler } from './crawler';
+export { Crawler, DEFAULT_CRAWL_IMPLS } from './crawler';
 export * from './type';
