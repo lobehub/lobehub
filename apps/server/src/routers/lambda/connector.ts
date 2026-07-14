@@ -170,7 +170,9 @@ export const connectorRouter = router({
    * User-set credentials (bearer token, custom headers) are returned as-is so
    * the edit form can display them.
    */
-  getForEdit: connectorProcedure
+  // Member-gated even though it's a query: it returns decrypted credentials
+  // for edit prefill, so a creator later downgraded to viewer must not reach it.
+  getForEdit: connectorWriteProcedure
     .input(z.object({ id: z.string().uuid() }))
     .query(async ({ input, ctx }) => {
       const connector = await ctx.connectorModel.findById(input.id);
