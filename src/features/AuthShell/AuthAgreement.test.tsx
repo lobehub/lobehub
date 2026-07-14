@@ -1,7 +1,21 @@
-import { act, renderHook } from '@testing-library/react';
+import { act, render, renderHook, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { useAuthAgreement } from './AuthAgreement';
+import AuthAgreement, { useAuthAgreement } from './AuthAgreement';
+
+vi.mock('react-i18next', async (importOriginal) => ({
+  ...(await importOriginal()),
+  Trans: ({ i18nKey }: { i18nKey: string }) => i18nKey,
+}));
+
+describe('AuthAgreement', () => {
+  it('should keep the agreement visible without an email form control', () => {
+    render(<AuthAgreement />);
+
+    expect(screen.queryByRole('checkbox')).toBeNull();
+    expect(screen.getByText('footer.agreement')).toBeTruthy();
+  });
+});
 
 describe('useAuthAgreement', () => {
   it('should keep the agreement unchecked when confirmation is cancelled', () => {

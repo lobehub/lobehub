@@ -215,6 +215,7 @@ export const SignInEmailStep = ({
           </a>
         </Text>
       )}
+      {!showEmailForm && <AuthAgreement />}
       {showEmailForm && (
         <Text align={'center'} fontSize={13} style={{ marginTop: 16 }} type={'secondary'}>
           {t('betterAuth.signin.noAccount')}{' '}

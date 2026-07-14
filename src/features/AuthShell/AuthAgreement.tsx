@@ -1,5 +1,6 @@
 'use client';
 
+import { Text } from '@lobehub/ui';
 import { Checkbox, confirmModal } from '@lobehub/ui/base-ui';
 import { type CSSProperties, memo, useCallback, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
@@ -12,10 +13,15 @@ const linkStyle: CSSProperties = {
   textDecoration: 'underline',
 };
 
-interface AuthAgreementProps {
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-}
+type AuthAgreementProps =
+  | {
+      checked: boolean;
+      onChange: (checked: boolean) => void;
+    }
+  | {
+      checked?: undefined;
+      onChange?: undefined;
+    };
 
 interface AgreementTextProps {
   i18nKey: 'agreement.confirm.content' | 'footer.agreement';
@@ -88,6 +94,14 @@ export const useAuthAgreement = (requestConfirmation?: RequestAgreementConfirmat
 };
 
 const AuthAgreement = memo<AuthAgreementProps>(({ checked, onChange }) => {
+  if (checked === undefined || onChange === undefined) {
+    return (
+      <Text fontSize={13} style={{ display: 'block', marginBlockStart: 8 }} type={'secondary'}>
+        <AgreementText i18nKey={'footer.agreement'} />
+      </Text>
+    );
+  }
+
   return (
     <Checkbox
       checked={checked}
