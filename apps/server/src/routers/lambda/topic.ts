@@ -36,10 +36,7 @@ import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { FileService } from '@/server/services/file';
 import { type BatchTaskResult } from '@/types/service';
 
-import {
-  assertWorkspaceRowManageable,
-  isWorkspaceNonOwner,
-} from './_helpers/assertWorkspaceRowManageable';
+import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
 import {
   batchResolveAgentIdFromSessions,
   resolveAgentIdFromSession,
@@ -227,9 +224,9 @@ export const topicRouter = router({
     .use(withScopedPermission('topic:delete'))
     .input(z.object({ agentId: z.string() }))
     .mutation(async ({ input, ctx }) => {
-      // Non-owner members may only sweep their own topics under the agent;
-      // owners keep the full workspace-wide scope.
-      const restrictToCreator = isWorkspaceNonOwner(ctx);
+      // Workspace topic sweeps are caller-scoped for every role — owners
+      // included (bulk actions only affect caller-created content).
+      const restrictToCreator = !!ctx.workspaceId;
 
       return ctx.topicModel.batchDeleteByAgentId(input.agentId, { restrictToCreator });
     }),
@@ -250,9 +247,9 @@ export const topicRouter = router({
         ctx.workspaceId ?? undefined,
       );
 
-      // Non-owner members may only sweep their own topics under the session;
-      // owners keep the full workspace-wide scope.
-      const restrictToCreator = isWorkspaceNonOwner(ctx);
+      // Workspace topic sweeps are caller-scoped for every role — owners
+      // included (bulk actions only affect caller-created content).
+      const restrictToCreator = !!ctx.workspaceId;
 
       return ctx.topicModel.batchDeleteBySessionId(resolved.sessionId, { restrictToCreator });
     }),

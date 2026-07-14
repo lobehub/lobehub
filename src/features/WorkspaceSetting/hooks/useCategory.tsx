@@ -130,6 +130,15 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               key: WorkspaceSettingsTabs.Creds,
               label: t('tab.creds'),
             },
+            // Workspace API keys are member-visible (each member manages their
+            // own keys; secrets stay masked for others), so the tab lives here
+            // rather than in the owner-only Admin group. Viewer access is
+            // rejected server-side via the api_key:read gate.
+            {
+              icon: KeyIcon,
+              key: WorkspaceSettingsTabs.APIKey,
+              label: tAuth('tab.apikey'),
+            },
             // Messenger (chat platform) is intentionally omitted from workspace
             // settings: the System Bot binding is a per-user/personal identity
             // (the link is owned by `userId`, not the workspace), and reaching a
@@ -147,11 +156,6 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               icon: Database,
               key: WorkspaceSettingsTabs.Storage,
               label: t('tab.storage'),
-            },
-            {
-              icon: KeyIcon,
-              key: WorkspaceSettingsTabs.APIKey,
-              label: tAuth('tab.apikey'),
             },
             {
               icon: ScrollText,

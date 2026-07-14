@@ -208,8 +208,10 @@ export const knowledgeBaseRouter = router({
   removeAllKnowledgeBases: knowledgeBaseProcedure
     .use(withScopedPermission('knowledge_base:delete'))
     .mutation(async ({ ctx }) => {
-      // Non-owner members may only clear knowledge bases they created themselves.
-      const restrictToCreator = isWorkspaceNonOwner(ctx);
+      // Workspace clear-all is caller-scoped for every role — owners included
+      // (per docs/usage/workspace-permissions: bulk actions only affect
+      // caller-created content).
+      const restrictToCreator = !!ctx.workspaceId;
 
       const result = await ctx.knowledgeBaseModel.deleteAllWithFiles(
         serverDBEnv.REMOVE_GLOBAL_FILE,

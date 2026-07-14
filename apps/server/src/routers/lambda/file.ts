@@ -29,10 +29,7 @@ import type { FileListItem, KnowledgeItemStatus } from '@/types/files';
 import { QueryFileListSchema, UploadFileSchema } from '@/types/files';
 import { TransferErrorCode } from '@/types/transferError';
 
-import {
-  assertWorkspaceRowManageable,
-  isWorkspaceNonOwner,
-} from './_helpers/assertWorkspaceRowManageable';
+import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
 
 const fileTransferEntityTypeSchema = z.enum(['document', 'file', 'folder']);
 
@@ -466,8 +463,10 @@ export const fileRouter = router({
     .use(withScopedPermission('file:delete'))
     .input(QueryFileListSchema)
     .mutation(async ({ ctx, input }): Promise<{ count: number }> => {
-      // Non-owner members may only bulk-delete rows they created themselves.
-      const restrictToCreator = isWorkspaceNonOwner(ctx);
+      // Workspace clear-all is caller-scoped for every role — owners included
+      // (per docs/usage/workspace-permissions: bulk actions only affect
+      // caller-created content).
+      const restrictToCreator = !!ctx.workspaceId;
 
       const fileIds: string[] = [];
       const documentIds: string[] = [];
