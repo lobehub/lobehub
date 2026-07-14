@@ -219,6 +219,15 @@ export const agentGroupRouter = router({
       const group = await ctx.chatGroupModel.findById(input.id);
       if (!group) throw new TRPCError({ code: 'NOT_FOUND', message: 'Agent group not found' });
       assertWorkspaceRowManageable(ctx, group.userId, 'group');
+      // Same rule as transfer: deleting the group cascades topics/threads/
+      // messages via FK, so a non-owner member must not erase teammates'
+      // conversations along with their own group.
+      if (isWorkspaceNonOwner(ctx) && (await ctx.agentGroupRepo.transferHasForeignRows(input.id))) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: "Only workspace owners can delete a group carrying others' conversations",
+        });
+      }
 
       return ctx.agentGroupService.deleteGroup(input.id);
     }),

@@ -479,6 +479,18 @@ export const agentRouter = router({
       const meta = await ctx.agentModel.getAgentVisibilityMeta(input.agentId);
       if (!meta) throw new TRPCError({ code: 'NOT_FOUND', message: 'Agent not found' });
       assertWorkspaceRowManageable(ctx, meta.userId, 'agent');
+      // Same rule as transfer: the delete cascade erases every linked
+      // session/topic/message, so a non-owner member must not take teammates'
+      // conversations down with their own agent.
+      if (
+        isWorkspaceNonOwner(ctx) &&
+        (await ctx.agentModel.transferHasForeignRows(input.agentId))
+      ) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: "Only workspace owners can delete an agent carrying others' conversations",
+        });
+      }
 
       return ctx.agentModel.delete(input.agentId);
     }),
