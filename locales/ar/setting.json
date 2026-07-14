@@ -2191,7 +2191,7 @@
   "workspace.general.transferAgents.modal.selectPlaceholder": "حدد مساحة العمل أو الحساب الشخصي...",
   "workspace.general.transferAgents.modal.selectTarget": "اختر مساحة عمل أو حساب شخصي لنقل الوكلاء إليه.",
   "workspace.general.transferAgents.modal.selected": "محدد",
-  "workspace.general.transferAgents.modal.selectedAgent": "الوكيل للنقل إلى {{target}}.",
+  "workspace.general.transferAgents.modal.selectedAgent": "سيتم نقل هذا الوكيل إلى {{target}} وسيغادر المساحة الحالية. ستنتقل جميع البيانات المرتبطة به معه: الجلسات، المواضيع والرسائل، الروابط إلى الملفات وقاعدة المعرفة، الوظائف المجدولة، والمهام ذات الصلة — بما في ذلك محادثات كل عضو مع هذا الوكيل.",
   "workspace.general.transferAgents.modal.success": "تم نقل {{count}} وكيل بنجاح",
   "workspace.general.transferAgents.modal.title": "نقل الوكلاء",
   "workspace.general.transferAgents.modal.transfer": "نقل {{count}} وكيل",

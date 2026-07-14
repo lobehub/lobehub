@@ -2191,7 +2191,7 @@
   "workspace.general.transferAgents.modal.selectPlaceholder": "選擇工作區或個人帳戶...",
   "workspace.general.transferAgents.modal.selectTarget": "選擇要轉移代理的工作區或個人帳戶。",
   "workspace.general.transferAgents.modal.selected": "已選擇",
-  "workspace.general.transferAgents.modal.selectedAgent": "要轉移到 {{target}} 的代理。",
+  "workspace.general.transferAgents.modal.selectedAgent": "此代理將移至 {{target}} 並離開當前空間。所有相關數據將隨之移動：會話、主題和消息、文件和知識庫連結、排程的工作以及相關任務——包括每位成員與此代理的對話。",
   "workspace.general.transferAgents.modal.success": "{{count}} 個代理已成功轉移",
   "workspace.general.transferAgents.modal.title": "轉移代理",
   "workspace.general.transferAgents.modal.transfer": "轉移 {{count}} 個代理",

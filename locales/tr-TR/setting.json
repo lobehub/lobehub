@@ -2191,7 +2191,7 @@
   "workspace.general.transferAgents.modal.selectPlaceholder": "Çalışma alanı veya kişisel hesap seçin...",
   "workspace.general.transferAgents.modal.selectTarget": "Ajanları taşımak için bir çalışma alanı veya kişisel hesap seçin.",
   "workspace.general.transferAgents.modal.selected": "seçildi",
-  "workspace.general.transferAgents.modal.selectedAgent": "{{target}}'a taşınacak ajan.",
+  "workspace.general.transferAgents.modal.selectedAgent": "Bu Temsilci {{target}} konumuna taşınacak ve mevcut alandan ayrılacak. Tüm ilişkili veriler onunla birlikte taşınır: oturumlar, konular ve mesajlar, dosya ve bilgi tabanı bağlantıları, planlanmış işler ve ilgili görevler — her üyenin bu Temsilci ile olan konuşmaları dahil.",
   "workspace.general.transferAgents.modal.success": "{{count}} ajan başarıyla taşındı",
   "workspace.general.transferAgents.modal.title": "Ajanları Taşı",
   "workspace.general.transferAgents.modal.transfer": "{{count}} ajan taşı",

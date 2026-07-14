@@ -2191,7 +2191,7 @@
   "workspace.general.transferAgents.modal.selectPlaceholder": "فضای کاری یا حساب شخصی را انتخاب کنید...",
   "workspace.general.transferAgents.modal.selectTarget": "یک فضای کاری یا حساب شخصی برای انتقال نمایندگان انتخاب کنید.",
   "workspace.general.transferAgents.modal.selected": "انتخاب شده",
-  "workspace.general.transferAgents.modal.selectedAgent": "نماینده برای انتقال به {{target}}.",
+  "workspace.general.transferAgents.modal.selectedAgent": "این عامل به {{target}} منتقل خواهد شد و فضای فعلی را ترک خواهد کرد. تمام داده‌های مرتبط با آن منتقل می‌شوند: جلسات، موضوعات و پیام‌ها، لینک‌های فایل و پایگاه دانش، وظایف زمان‌بندی شده و کارهای مرتبط — از جمله مکالمات هر عضو با این عامل.",
   "workspace.general.transferAgents.modal.success": "{{count}} نماینده با موفقیت منتقل شد",
   "workspace.general.transferAgents.modal.title": "انتقال نمایندگان",
   "workspace.general.transferAgents.modal.transfer": "انتقال {{count}} نماینده",

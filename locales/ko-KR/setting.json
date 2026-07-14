@@ -2191,7 +2191,7 @@
   "workspace.general.transferAgents.modal.selectPlaceholder": "워크스페이스 또는 개인 계정을 선택하세요...",
   "workspace.general.transferAgents.modal.selectTarget": "에이전트를 전송할 워크스페이스 또는 개인 계정을 선택하세요.",
   "workspace.general.transferAgents.modal.selected": "선택됨",
-  "workspace.general.transferAgents.modal.selectedAgent": "{{target}}으로 전송할 에이전트.",
+  "workspace.general.transferAgents.modal.selectedAgent": "이 에이전트는 {{target}}으로 이동하며 현재 공간을 떠납니다. 모든 관련 데이터가 함께 이동합니다: 세션, 주제 및 메시지, 파일 및 지식 기반 링크, 예약된 작업, 관련된 작업 — 이 에이전트와의 모든 멤버 대화가 포함됩니다.",
   "workspace.general.transferAgents.modal.success": "{{count}}개의 에이전트가 성공적으로 전송되었습니다",
   "workspace.general.transferAgents.modal.title": "에이전트 전송",
   "workspace.general.transferAgents.modal.transfer": "{{count}}개의 에이전트 전송",

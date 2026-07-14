@@ -2191,7 +2191,7 @@
   "workspace.general.transferAgents.modal.selectPlaceholder": "ワークスペースまたは個人アカウントを選択...",
   "workspace.general.transferAgents.modal.selectTarget": "エージェントを移転するワークスペースまたは個人アカウントを選択してください。",
   "workspace.general.transferAgents.modal.selected": "選択済み",
-  "workspace.general.transferAgents.modal.selectedAgent": "{{target}}に移転するエージェント。",
+  "workspace.general.transferAgents.modal.selectedAgent": "このエージェントは{{target}}に移動し、現在のスペースを離れます。すべての関連データが一緒に移動します: セッション、トピックとメッセージ、ファイルとナレッジベースのリンク、スケジュールされたジョブ、および関連するタスク—このエージェントとのすべてのメンバーの会話を含みます。",
   "workspace.general.transferAgents.modal.success": "{{count}}エージェントが正常に移転されました",
   "workspace.general.transferAgents.modal.title": "エージェントを移転",
   "workspace.general.transferAgents.modal.transfer": "{{count}}エージェントを移転",

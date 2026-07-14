@@ -2191,7 +2191,7 @@
   "workspace.general.transferAgents.modal.selectPlaceholder": "Selecione workspace ou conta pessoal...",
   "workspace.general.transferAgents.modal.selectTarget": "Escolha um workspace ou conta pessoal para transferir os agentes.",
   "workspace.general.transferAgents.modal.selected": "selecionado",
-  "workspace.general.transferAgents.modal.selectedAgent": "Agente para transferir para {{target}}.",
+  "workspace.general.transferAgents.modal.selectedAgent": "Este agente será movido para {{target}} e deixará o espaço atual. Todos os dados associados serão transferidos junto: sessões, tópicos e mensagens, links de arquivos e base de conhecimento, trabalhos agendados e tarefas relacionadas — incluindo todas as conversas dos membros com este agente.",
   "workspace.general.transferAgents.modal.success": "{{count}} agente(s) transferido(s) com sucesso",
   "workspace.general.transferAgents.modal.title": "Transferir Agentes",
   "workspace.general.transferAgents.modal.transfer": "Transferir {{count}} agente(s)",

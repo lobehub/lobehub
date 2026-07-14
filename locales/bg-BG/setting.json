@@ -2191,7 +2191,7 @@
   "workspace.general.transferAgents.modal.selectPlaceholder": "Изберете работно пространство или личен акаунт...",
   "workspace.general.transferAgents.modal.selectTarget": "Изберете работно пространство или личен акаунт, към който да прехвърлите агенти.",
   "workspace.general.transferAgents.modal.selected": "избрано",
-  "workspace.general.transferAgents.modal.selectedAgent": "Агент за прехвърляне към {{target}}.",
+  "workspace.general.transferAgents.modal.selectedAgent": "Този агент ще се премести в {{target}} и ще напусне текущото пространство. Всички свързани данни ще се преместят с него: сесии, теми и съобщения, връзки към файлове и база знания, планирани задачи и свързани дейности — включително разговорите на всеки член с този агент.",
   "workspace.general.transferAgents.modal.success": "{{count}} агент(и) са успешно прехвърлени",
   "workspace.general.transferAgents.modal.title": "Прехвърляне на агенти",
   "workspace.general.transferAgents.modal.transfer": "Прехвърляне на {{count}} агент(и)",
