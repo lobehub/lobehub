@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import { messages, topics, users } from '../../../schemas';
+import { agentOperations, messages, topics, users } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
 import { recomputeTopicUsage } from '../../topicUsage';
 
@@ -60,6 +60,62 @@ const insertAssistantMessage = async (params: {
   return id;
 };
 
+let opSeq = 0;
+
+/**
+ * Insert an `agent_operations` row carrying the runtime's own-accumulator
+ * usage/cost blobs (the shape `CompletionLifecycle.persistCompletion` writes).
+ */
+const insertOperation = async (params: {
+  cost?: Record<string, unknown> | null;
+  id?: string;
+  parentOperationId?: string;
+  topicId?: string | null;
+  usage?: Record<string, unknown> | null;
+  userId?: string;
+}) => {
+  const id = params.id ?? `op-${(opSeq += 1)}`;
+  await serverDB.insert(agentOperations).values({
+    cost: params.cost ?? null,
+    id,
+    parentOperationId: params.parentOperationId ?? null,
+    status: 'done',
+    topicId: params.topicId === undefined ? topicId : params.topicId,
+    usage: params.usage ?? null,
+    userId: params.userId ?? userId,
+  });
+  return id;
+};
+
+const toolsUsage = (
+  byTool: Array<{ calls: number; errors?: number; name: string; totalTimeMs: number }>,
+) => ({
+  humanInteraction: {
+    approvalRequests: 0,
+    promptRequests: 0,
+    selectRequests: 0,
+    totalWaitingTimeMs: 0,
+  },
+  llm: { apiCalls: 0, processingTimeMs: 0, tokens: { input: 0, output: 0, total: 0 } },
+  tools: {
+    byTool: byTool.map((t) => ({ errors: 0, ...t })),
+    totalCalls: byTool.reduce((acc, t) => acc + t.calls, 0),
+    totalTimeMs: byTool.reduce((acc, t) => acc + t.totalTimeMs, 0),
+  },
+});
+
+const toolsCost = (byTool: Array<{ calls: number; name: string; totalCost: number }>) => ({
+  calculatedAt: '2024-01-01T00:00:00.000Z',
+  currency: 'USD',
+  llm: { byModel: [], currency: 'USD', total: 0 },
+  tools: {
+    byTool: byTool.map((t) => ({ currency: 'USD', ...t })),
+    currency: 'USD',
+    total: byTool.reduce((acc, t) => acc + t.totalCost, 0),
+  },
+  total: byTool.reduce((acc, t) => acc + t.totalCost, 0),
+});
+
 const recompute = (uid = userId, tid = topicId) =>
   serverDB.transaction((trx) => recomputeTopicUsage(trx, uid, tid));
 
@@ -70,13 +126,17 @@ const getTopic = async (id = topicId) => {
 
 beforeEach(async () => {
   msgSeq = 0;
+  opSeq = 0;
   await serverDB.delete(users);
+  // agent_operations.user_id is intentionally not a FK — clean up explicitly.
+  await serverDB.delete(agentOperations);
   await serverDB.insert(users).values([{ id: userId }, { id: otherUserId }]);
   await serverDB.insert(topics).values({ id: topicId, userId });
 });
 
 afterEach(async () => {
   await serverDB.delete(users);
+  await serverDB.delete(agentOperations);
 });
 
 describe('recomputeTopicUsage', () => {
@@ -317,5 +377,183 @@ describe('recomputeTopicUsage', () => {
     expect(topic.cost).toBeNull();
     expect(topic.model).toBeNull();
     expect(topic.provider).toBeNull();
+  });
+
+  it('short-circuits when the topic row is missing or owned by another user', async () => {
+    await insertAssistantMessage({
+      cost: 0.01,
+      usage: { totalInputTokens: 10, totalOutputTokens: 5, totalTokens: 15 },
+    });
+    await recompute();
+    expect((await getTopic()).totalTokens).toBe(15);
+
+    // unknown topic id → the lock read matches nothing; no throw, no effect
+    await recompute(userId, 'topic-usage-nonexistent');
+    // another user recomputing this topic → not owned; must not reset/overwrite
+    await recompute(otherUserId, topicId);
+
+    expect((await getTopic()).totalTokens).toBe(15);
+  });
+
+  describe('operation-derived tool usage/cost', () => {
+    it('rolls operation tool usage and cost into the topic; totals include tool cost', async () => {
+      await insertAssistantMessage({
+        cost: 0.002,
+        usage: { totalInputTokens: 100, totalOutputTokens: 50, totalTokens: 150 },
+      });
+      await insertOperation({
+        cost: toolsCost([{ calls: 2, name: 'web-search', totalCost: 0.03 }]),
+        usage: toolsUsage([{ calls: 2, errors: 1, name: 'web-search', totalTimeMs: 800 }]),
+      });
+
+      await recompute();
+      const topic = await getTopic();
+
+      expect((topic.usage as any).tools).toEqual({
+        byTool: [{ calls: 2, errors: 1, name: 'web-search', totalTimeMs: 800 }],
+        totalCalls: 2,
+        totalTimeMs: 800,
+      });
+      expect((topic.cost as any).tools).toEqual({
+        byTool: [{ calls: 2, currency: 'USD', name: 'web-search', totalCost: 0.03 }],
+        currency: 'USD',
+        total: 0.03,
+      });
+      // llm side stays message-derived; grand totals include the tool spend
+      expect((topic.cost as any).llm.total).toBeCloseTo(0.002, 6);
+      expect((topic.cost as any).total).toBeCloseTo(0.032, 6);
+      expect(topic.totalCost).toBeCloseTo(0.032, 6);
+      expect(topic.totalTokens).toBe(150);
+    });
+
+    it('merges byTool across operations (same name summed, output sorted by name)', async () => {
+      await insertAssistantMessage({
+        usage: { totalInputTokens: 10, totalOutputTokens: 5, totalTokens: 15 },
+      });
+      await insertOperation({
+        usage: toolsUsage([
+          { calls: 2, errors: 1, name: 'web-search', totalTimeMs: 500 },
+          { calls: 1, name: 'code-runner', totalTimeMs: 300 },
+        ]),
+      });
+      await insertOperation({
+        usage: toolsUsage([{ calls: 3, errors: 2, name: 'web-search', totalTimeMs: 700 }]),
+      });
+
+      await recompute();
+      const topic = await getTopic();
+
+      expect((topic.usage as any).tools).toEqual({
+        byTool: [
+          { calls: 1, errors: 0, name: 'code-runner', totalTimeMs: 300 },
+          { calls: 5, errors: 3, name: 'web-search', totalTimeMs: 1200 },
+        ],
+        totalCalls: 6,
+        totalTimeMs: 1500,
+      });
+      // no cost anywhere → cost stays NULL even though tools ran
+      expect(topic.cost).toBeNull();
+      expect(topic.totalCost).toBeNull();
+    });
+
+    it('counts a sub-agent child operation once (blobs are per-op own accumulators)', async () => {
+      await insertAssistantMessage({
+        usage: { totalInputTokens: 10, totalOutputTokens: 5, totalTokens: 15 },
+      });
+      const parentId = await insertOperation({
+        usage: toolsUsage([{ calls: 1, name: 'callSubAgent', totalTimeMs: 100 }]),
+      });
+      await insertOperation({
+        parentOperationId: parentId,
+        usage: toolsUsage([{ calls: 4, name: 'web-search', totalTimeMs: 900 }]),
+      });
+
+      await recompute();
+      const topic = await getTopic();
+
+      expect((topic.usage as any).tools.totalCalls).toBe(5);
+      expect((topic.usage as any).tools.totalTimeMs).toBe(1000);
+    });
+
+    it('ignores operations of another user, another topic, or without usage/cost', async () => {
+      await insertAssistantMessage({
+        usage: { totalInputTokens: 10, totalOutputTokens: 5, totalTokens: 15 },
+      });
+      await insertOperation({
+        usage: toolsUsage([{ calls: 1, name: 'web-search', totalTimeMs: 100 }]),
+      });
+      // other user's op under the same topic id
+      await insertOperation({
+        usage: toolsUsage([{ calls: 9, name: 'web-search', totalTimeMs: 999 }]),
+        userId: otherUserId,
+      });
+      // op without a topic linkage
+      await insertOperation({
+        topicId: null,
+        usage: toolsUsage([{ calls: 9, name: 'web-search', totalTimeMs: 999 }]),
+      });
+      // running op that has not persisted any usage/cost yet
+      await insertOperation({});
+
+      await recompute();
+      const topic = await getTopic();
+
+      expect((topic.usage as any).tools).toEqual({
+        byTool: [{ calls: 1, errors: 0, name: 'web-search', totalTimeMs: 100 }],
+        totalCalls: 1,
+        totalTimeMs: 100,
+      });
+    });
+
+    it('writes a tools-only rollup when operations have data but no assistant usage exists', async () => {
+      await insertOperation({
+        cost: toolsCost([{ calls: 1, name: 'web-search', totalCost: 0.05 }]),
+        usage: toolsUsage([{ calls: 1, name: 'web-search', totalTimeMs: 200 }]),
+      });
+
+      await recompute();
+      const topic = await getTopic();
+
+      // token scalars stay "not measured"; tool spend is still accounted
+      expect(topic.totalInputTokens).toBeNull();
+      expect(topic.totalOutputTokens).toBeNull();
+      expect(topic.totalTokens).toBeNull();
+      expect(topic.model).toBeNull();
+      expect(topic.provider).toBeNull();
+      expect(topic.totalCost).toBeCloseTo(0.05, 6);
+
+      expect((topic.usage as any).llm).toEqual({
+        apiCalls: 0,
+        processingTimeMs: 0,
+        tokens: { input: 0, output: 0, total: 0 },
+      });
+      expect((topic.usage as any).tools.totalCalls).toBe(1);
+      expect((topic.cost as any).llm).toEqual({ byModel: [], currency: 'USD', total: 0 });
+      expect((topic.cost as any).total).toBeCloseTo(0.05, 6);
+    });
+
+    it('aggregates humanInteraction stats from operations', async () => {
+      await insertAssistantMessage({
+        usage: { totalInputTokens: 10, totalOutputTokens: 5, totalTokens: 15 },
+      });
+      const usage = toolsUsage([]);
+      usage.humanInteraction = {
+        approvalRequests: 2,
+        promptRequests: 1,
+        selectRequests: 0,
+        totalWaitingTimeMs: 4000,
+      };
+      await insertOperation({ usage });
+
+      await recompute();
+      const topic = await getTopic();
+
+      expect((topic.usage as any).humanInteraction).toEqual({
+        approvalRequests: 2,
+        promptRequests: 1,
+        selectRequests: 0,
+        totalWaitingTimeMs: 4000,
+      });
+    });
   });
 });
