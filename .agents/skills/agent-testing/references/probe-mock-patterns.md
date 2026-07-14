@@ -1267,3 +1267,13 @@ nodeintegration, plugins, disablewebsecurity, allowpopups, preload, …`). The h
   IDENTICALLY whether the gate is broken or the session is missing. Always establish that the
   session is live (a 200 from an authed procedure) BEFORE concluding the gate is wrong —
   otherwise you publish a false bug against your own change.
+
+### E23. In zsh, a loop variable named `path` overwrites the command search path
+
+- **Situation**: parsing a Netscape cookie jar with `while read ... path ...` and then invoking
+  browser commands inside the loop. The first iteration succeeds at assigning the fields, but the
+  next executable fails with `command not found`.
+- **Cause**: zsh exposes `path` as a special array tied to `PATH`; assigning the cookie path field
+  (usually `/`) replaces the process command search path.
+- **Works**: name the field `cookie_path` (and similarly avoid other zsh special parameter names),
+  then pass it to the cookie command. This is a shell failure, not an auth or browser failure.

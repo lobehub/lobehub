@@ -536,3 +536,24 @@ be hidden/disabled for users who will always be rejected).
 as the blocked role and screenshot the rejection state (and the allowed role's
 success state) in addition to API probes. If the rejection renders as a raw or
 missing error message, report that as a finding instead of leaving it undiscovered.
+
+---
+
+## Case 21 — Turning a feature verification into an unbounded dev-environment repair
+
+**Wrong approach**: after the normal product surface fails to boot, repeatedly modify
+shared dev configuration, reinstall the entire workspace, and investigate unrelated
+dependency/context problems before running any assertion for the feature under test.
+
+**Why it's wrong**: environment readiness is a gate, not the test goal. A workaround
+that changes shared configuration can also make the verification less representative,
+while an open-ended repair loop produces no feature evidence.
+
+**What it breaks**: the user waits through a long sequence of setup experiments, the
+working tree gains unrelated edits, and the run still has no reportable test result.
+
+**Correct approach**: follow only recovery paths already documented by this skill. If the
+observed failure mode is not covered, stop the test immediately, revert any experimental
+changes, summarize the exact checks and evidence collected, and ask the user for help before
+continuing. Do not repair the environment, switch surfaces, or invent a fallback without user
+direction.
