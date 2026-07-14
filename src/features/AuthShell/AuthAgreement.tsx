@@ -38,7 +38,7 @@ type AuthAgreementProps =
     };
 
 interface AgreementTextProps {
-  i18nKey: 'agreement.confirm.content' | 'footer.agreement';
+  i18nKey: 'agreement.checkbox' | 'agreement.confirm.content' | 'footer.agreement';
 }
 
 type ContinueWithAgreement = () => void;
@@ -125,7 +125,7 @@ const AuthAgreement = memo<AuthAgreementProps>(({ checked, onChange }) => {
       textProps={{ fontSize: 13, type: 'secondary' }}
       onChange={onChange}
     >
-      <AgreementText i18nKey={'footer.agreement'} />
+      <AgreementText i18nKey={'agreement.checkbox'} />
     </Checkbox>
   );
 });

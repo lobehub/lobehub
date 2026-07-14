@@ -1,4 +1,6 @@
 export default {
+  'agreement.checkbox':
+    'I have read and agree to the <terms>Terms and Conditions</terms> and <privacy>Privacy Policy</privacy>',
   'agreement.confirm.content':
     'By selecting "Agree and continue", you confirm that you have read and agree to the <terms>Terms and Conditions</terms> and <privacy>Privacy Policy</privacy>.',
   'agreement.confirm.ok': 'Agree and continue',
@@ -158,7 +160,7 @@ export default {
   'date.prevMonth': 'Last Month',
   'date.recent30Days': 'Last 30 Days',
   'footer.agreement':
-    'I have read and agree to the <terms>Terms and Conditions</terms> and <privacy>Privacy Policy</privacy>',
+    'By continuing, you confirm that you have read and agree to the <terms>Terms and Conditions</terms> and <privacy>Privacy Policy</privacy>',
   'footer.privacy': 'Privacy Policy',
   'footer.terms': 'Terms of Service',
   'header.desc': 'Manage your account information.',

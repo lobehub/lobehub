@@ -101,7 +101,11 @@ export const SignInEmailStep = ({
                 key={provider}
                 loading={socialLoading === provider}
                 size="large"
-                onClick={() => onSocialSignIn(provider)}
+                onClick={() =>
+                  continueWithAgreement(() => {
+                    onSocialSignIn(provider);
+                  })
+                }
               >
                 {getProviderLabel(provider)}
               </Button>

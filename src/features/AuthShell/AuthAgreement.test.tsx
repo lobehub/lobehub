@@ -1,6 +1,10 @@
-import { act, render, renderHook, screen } from '@testing-library/react';
+import * as BaseUI from '@lobehub/ui/base-ui';
+import { act, fireEvent, render, renderHook, screen } from '@testing-library/react';
+import { Form } from 'antd';
 import type { ReactElement } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { SignInEmailStep } from '@/features/Auth/SignIn/SignInEmailStep';
 
 import AuthAgreement, { useAuthAgreement } from './AuthAgreement';
 import AuthFooterLinks from './AuthFooterLinks';
@@ -21,6 +25,10 @@ vi.mock('react-i18next', async (importOriginal) => ({
   ),
 }));
 
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
 const expectLinksToOpenInNewTabs = () => {
   const links = screen.getAllByRole('link');
 
@@ -32,12 +40,64 @@ const expectLinksToOpenInNewTabs = () => {
 };
 
 describe('AuthAgreement', () => {
-  it('should keep the agreement visible and open its links in new tabs', () => {
+  it('should keep the passive agreement visible and open its links in new tabs', () => {
     render(<AuthAgreement />);
 
     expect(screen.queryByRole('checkbox')).toBeNull();
     expect(screen.getByText('footer.agreement')).toBeTruthy();
     expectLinksToOpenInNewTabs();
+  });
+
+  it('should use the active agreement copy with the checkbox', () => {
+    render(<AuthAgreement checked={false} onChange={vi.fn()} />);
+
+    expect(screen.getByRole('checkbox')).toBeTruthy();
+    expect(screen.getByText('agreement.checkbox')).toBeTruthy();
+    expectLinksToOpenInNewTabs();
+  });
+});
+
+describe('SignInEmailStep', () => {
+  it('should confirm the agreement before social sign-in', async () => {
+    let confirmAgreement: (() => Promise<void>) | (() => void) | undefined;
+    vi.spyOn(BaseUI, 'confirmModal').mockImplementation(({ onOk }) => {
+      confirmAgreement = onOk;
+      return { close: vi.fn(), destroy: vi.fn() };
+    });
+    const onSocialSignIn = vi.fn();
+
+    const TestSignInEmailStep = () => {
+      const [form] = Form.useForm<{ email: string }>();
+
+      return (
+        <SignInEmailStep
+          disableEmailPassword
+          serverConfigInit
+          form={form}
+          isSocialOnly={false}
+          loading={false}
+          oAuthSSOProviders={['google']}
+          socialLoading={null}
+          onCheckUser={vi.fn(async () => {})}
+          onGoToSignup={vi.fn()}
+          onResetEmail={vi.fn()}
+          onSetPassword={vi.fn()}
+          onSocialSignIn={onSocialSignIn}
+        />
+      );
+    };
+
+    render(<TestSignInEmailStep />);
+    fireEvent.click(screen.getByRole('button', { name: /Google/ }));
+
+    expect(BaseUI.confirmModal).toHaveBeenCalledOnce();
+    expect(onSocialSignIn).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await confirmAgreement?.();
+    });
+
+    expect(onSocialSignIn).toHaveBeenCalledWith('google');
   });
 });
 
