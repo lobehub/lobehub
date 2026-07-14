@@ -64,6 +64,8 @@ export default {
     'Does not include monthly credits, you need to configure your own model API',
   'compare.monthlyCredit': 'Monthly Credits',
   'compare.title': 'Plan Comparison',
+  'creditUsageReminder.title':
+    '{{percent}} of the subscription credits included in this billing cycle have been used',
   'compareAllPlans': 'View All Plans',
   'comparePlans': 'View Plans',
   'createSubscriptionError': 'Failed to create subscription',
@@ -81,6 +83,12 @@ export default {
   'discount.maxOff': 'Up to {{percent}}% off',
   'discount.off': '{{percent}}% off',
   'discount.save': 'Save',
+  'modelSelection.confirm.continue': 'Continue using',
+  'modelSelection.confirm.description':
+    '{{model}} can incur higher usage costs. Review its current rates before continuing.',
+  'modelSelection.confirm.inputPrice': 'Input',
+  'modelSelection.confirm.outputPrice': 'Output',
+  'modelSelection.confirm.title': 'Use {{model}}?',
   'downgradePlans.alert':
     'You will still enjoy the benefits until the current plan expires ({{date}}). The new plan will take effect after the current plan expires.',
   'downgradePlans.desc': 'The plan change will take effect after the current plan expires.',

@@ -135,4 +135,33 @@ describe('MultipleProvidersModelItem', () => {
     expect(onModelChange).not.toHaveBeenCalled();
     expect(screen.getByTestId('model-pro-badge')).toHaveTextContent('pro');
   });
+
+  it('should only change the model when the before-select guard approves', async () => {
+    const onModelChange = vi.fn();
+    const onBeforeModelSelect = vi.fn().mockResolvedValue(false);
+
+    render(
+      <MultipleProvidersModelItem
+        activeKey=""
+        newLabel="new"
+        data={{
+          displayName: 'Claude Opus 4.8',
+          model: {
+            abilities: {},
+            displayName: 'Claude Opus 4.8',
+            id: 'claude-opus-4-8',
+          } as any,
+          providers: [{ id: 'lobehub', name: 'LobeHub' }],
+        }}
+        onBeforeModelSelect={onBeforeModelSelect}
+        onClose={vi.fn()}
+        onModelChange={onModelChange}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('Claude Opus 4.8'));
+
+    expect(onBeforeModelSelect).toHaveBeenCalledWith('claude-opus-4-8', 'lobehub');
+    await vi.waitFor(() => expect(onModelChange).not.toHaveBeenCalled());
+  });
 });
