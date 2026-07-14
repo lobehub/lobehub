@@ -2,10 +2,8 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { vanillaExtractPlugin } from '@vanilla-extract/vite-plugin';
-import dotenv from 'dotenv';
-import { defineConfig } from 'electron-vite';
 import type { PluginOption, ViteDevServer } from 'vite';
-import { loadEnv } from 'vite';
+import { defineConfig } from 'vite';
 import tsconfigPaths from 'vite-tsconfig-paths';
 
 import {
@@ -14,35 +12,18 @@ import {
   sharedRendererPlugins,
   sharedRollupOutput,
 } from '../../plugins/vite/sharedRendererConfig';
-import { externalRuntimeModules } from './external-runtime-deps.config.mjs';
-import { getNativeExternalDependencies } from './native-deps.config.mjs';
-
-// Renderer dev-server port. Overridable per instance (e.g. one git worktree per
-// concurrent dev instance) via LOBE_DESKTOP_VITE_PORT; `electron-vite dev` injects
-// the matching ELECTRON_RENDERER_URL into the main process automatically. Kept
-// deterministic (still `strictPort`) so the HMR `clientPort` stays in sync.
-const DEV_VITE_PORT = Number(process.env.LOBE_DESKTOP_VITE_PORT) || 5173;
-
-/**
- * Force `base: '/'` in renderer config. The `electron-vite` preset
- * unconditionally rewrites base to `'./'` in production (with `enforce: 'pre'`),
- * which produces relative asset URLs like `../../assets/...`. Those break in
- * the popup window because its SPA URL (`/popup/agent/:aid/:tid`) is deep
- * enough that relative resolution lands at `/popup/assets/...` instead of the
- * actual `/assets/...`. Our `app://` protocol handler resolves absolute
- * `/assets/...` correctly regardless of URL depth.
- */
-function forceAbsoluteBasePlugin(): PluginOption {
-  return {
-    name: 'electron-desktop-force-base',
-    config(config) {
-      config.base = '/';
-    },
-  };
-}
+import {
+  CLOUD_ROOT_DIR,
+  desktopPackageJson,
+  DEV_VITE_PORT,
+  isCloudDesktopBuild,
+  loadDesktopEnv,
+  RENDERER_CHROME_TARGET,
+  ROOT_DIR,
+} from './vite.shared';
 
 /**
- * Rewrite SPA routes to their corresponding HTML entry so the electron-vite
+ * Rewrite SPA routes to their corresponding HTML entry so the Vite
  * dev server serves the right HTML when root is the monorepo root.
  *
  * - `/popup/*` → `/apps/desktop/popup.html` (topic popup SPA)
@@ -195,129 +176,27 @@ function cloudDesktopBusinessConstPlugin(): PluginOption {
   };
 }
 
-dotenv.config();
-
-const isDev = process.env.NODE_ENV === 'development';
-const ROOT_DIR = path.resolve(__dirname, '../..');
-const CLOUD_ROOT_DIR = path.resolve(__dirname, '../../..');
-const isCloudDesktopBuild = process.env.CLOUD_DESKTOP === '1';
-const mode = process.env.NODE_ENV === 'production' ? 'production' : 'development';
-
-Object.assign(process.env, loadEnv(mode, ROOT_DIR, ''));
-const updateChannel = process.env.UPDATE_CHANNEL;
-const desktopPackageJson = JSON.parse(
-  readFileSync(path.resolve(__dirname, 'package.json'), 'utf8'),
-) as { version: string };
-const electronRuntimeExternals = ['electron'];
-const mainProcessRuntimeExternals = [
-  ...electronRuntimeExternals,
-  ...externalRuntimeModules,
-  'node-mac-permissions',
-];
-const externalNavigationHosts =
-  process.env.DESKTOP_EXTERNAL_NAVIGATION_HOSTS ?? (isCloudDesktopBuild ? 'stripe.com' : '');
-
-console.info(`[electron-vite.config.ts] Detected UPDATE_CHANNEL: ${updateChannel}`);
-console.info(`[electron-vite.config.ts] Cloud desktop build: ${isCloudDesktopBuild}`);
-
 const cloudTsconfigPathsPlugin = () =>
   ({
     ...tsconfigPaths({ projects: [path.resolve(CLOUD_ROOT_DIR, 'tsconfig.json')] }),
     name: 'lobe-cloud-desktop-tsconfig-paths',
   }) satisfies PluginOption;
 
-export default defineConfig({
-  main: {
+export default defineConfig(({ mode }) => {
+  loadDesktopEnv(mode);
+
+  return {
+    // Absolute base: relative asset URLs break in the popup window because its
+    // SPA URL (`/popup/agent/:aid/:tid`) is deep enough that relative resolution
+    // lands at `/popup/assets/...` instead of the actual `/assets/...`. Our
+    // `app://` protocol handler resolves absolute `/assets/...` correctly
+    // regardless of URL depth.
+    base: '/',
     build: {
-      minify: !isDev,
-      outDir: 'dist/main',
-      rolldownOptions: {
-        // Native modules must be externalized to work correctly.
-        // bufferutil and utf-8-validate are optional peer deps of ws that may not be installed.
-        external: [
-          ...mainProcessRuntimeExternals,
-          ...getNativeExternalDependencies(),
-          'bufferutil',
-          'utf-8-validate',
-        ],
-        output: {
-          // Prevent shared deps from being bundled into index.js to avoid side-effect pollution.
-          // Pattern: when a module is imported by both the main bundle (statically) and a
-          // dynamic-import chunk (lazy loader), rolldown places it in main and makes the
-          // chunk back-reference `require("./index.js")`. Electron's main entry isn't in
-          // Node's CJS cache, so that require recompiles `index.js` from scratch — which
-          // re-runs `new App()` at top-level and triggers `protocol.registerSchemesAsPrivileged`
-          // *after* the app is ready → throw.
-          //
-          // Same root cause as the original `debug` regression fixed in #11827. Isolate
-          // each shared module into its own vendor chunk so both ends reference the vendor
-          // chunk instead of back-referencing main.
-          manualChunks(id) {
-            if (id.includes('node_modules/debug')) {
-              return 'vendor-debug';
-            }
-
-            // Small text/binary detection utilities in file-loaders/utils. Imported by
-            // main (via `sniffBinaryFile`) and potentially by lazy loader chunks.
-            // Explicitly enumerated to avoid catching `parser-utils.ts`, which pulls in
-            // xmldom / yauzl / concat-stream — those belong in docx/pptx loader chunks.
-            if (
-              /packages\/file-loaders\/src\/utils\/(?:detectUtf16|isBinaryContent|isTextReadableFile)\.ts$/.test(
-                id,
-              )
-            ) {
-              return 'vendor-file-loaders-utils';
-            }
-
-            // jszip — imported by main (via some static path) AND by the docx loader chunk.
-            // Without this, reading a .docx file throws the protocol re-init error.
-            if (id.includes('node_modules/jszip')) {
-              return 'vendor-jszip';
-            }
-
-            // Split i18n json resources by namespace (ns), not by locale.
-            // Example: ".../resources/locales/zh-CN/common.json?import" -> "locales-common"
-            const normalizedId = id.replaceAll('\\', '/').split('?')[0];
-            const match = normalizedId.match(/\/locales\/[^/]+\/([^/]+)\.json$/);
-
-            if (match?.[1]) return `locales-${match[1]}`;
-          },
-        },
-      },
-      sourcemap: isDev ? 'inline' : false,
-    },
-    define: {
-      'process.env.DESKTOP_EXTERNAL_NAVIGATION_HOSTS': JSON.stringify(externalNavigationHosts),
-      'process.env.UPDATE_CHANNEL': JSON.stringify(process.env.UPDATE_CHANNEL),
-      'process.env.UPDATE_SERVER_URL': JSON.stringify(process.env.UPDATE_SERVER_URL),
-    },
-    resolve: {
-      alias: {
-        '@': path.resolve(__dirname, 'src/main'),
-        '~common': path.resolve(__dirname, 'src/common'),
-      },
-    },
-  },
-  preload: {
-    build: {
-      minify: !isDev,
-      outDir: 'dist/preload',
-      rolldownOptions: {
-        external: electronRuntimeExternals,
-      },
-      sourcemap: isDev ? 'inline' : false,
-    },
-    resolve: {
-      alias: {
-        '@': path.resolve(__dirname, 'src/main'),
-        '~common': path.resolve(__dirname, 'src/common'),
-      },
-    },
-  },
-  renderer: {
-    root: ROOT_DIR,
-    build: {
+      minify: false,
+      modulePreload: { polyfill: false },
       outDir: path.resolve(__dirname, 'dist/renderer'),
+      reportCompressedSize: false,
       rolldownOptions: {
         input: {
           main: path.resolve(__dirname, 'index.html'),
@@ -326,16 +205,18 @@ export default defineConfig({
         },
         output: sharedRollupOutput,
       },
+      target: RENDERER_CHROME_TARGET,
     },
     define: {
-      ...sharedRendererDefine({ isMobile: false, isElectron: true }),
+      ...sharedRendererDefine({ isElectron: true, isMobile: false }),
       __MAIN_VERSION__: JSON.stringify(desktopPackageJson.version),
     },
+    envDir: __dirname,
+    envPrefix: ['RENDERER_VITE_', 'VITE_'],
     optimizeDeps: sharedOptimizeDeps,
     plugins: [
       isCloudDesktopBuild && cloudTsconfigPathsPlugin(),
       isCloudDesktopBuild && cloudDesktopBusinessConstPlugin(),
-      forceAbsoluteBasePlugin(),
       electronDesktopHtmlPlugin(),
       vanillaExtractPlugin(),
       ...(sharedRendererPlugins({ platform: 'desktop' }) as PluginOption[]),
@@ -344,6 +225,7 @@ export default defineConfig({
       dedupe: ['react', 'react-dom'],
       tsconfigPaths: !isCloudDesktopBuild,
     },
+    root: ROOT_DIR,
     // In dev the BrowserWindow loads `app://renderer/` and the Electron main process
     // proxies non-backend requests to this Vite dev server via `net.fetch`. The HMR
     // WebSocket still connects directly (browser → ws://localhost:<port>) — so the
@@ -361,5 +243,5 @@ export default defineConfig({
       port: DEV_VITE_PORT,
       strictPort: true,
     },
-  },
+  };
 });
