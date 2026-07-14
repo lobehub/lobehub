@@ -1114,6 +1114,7 @@
   "taskSchedule.weekdays.wed": "الأربعاء",
   "terminalPanel.close": "إغلاق لوحة الطرفية",
   "terminalPanel.closeTab": "إغلاق الطرفية",
+  "terminalPanel.createFailed": "فشل بدء جلسة الطرفية",
   "terminalPanel.newTab": "طرفية جديدة",
   "terminalPanel.title": "الطرفية",
   "textSelection.addToConversation": "إضافة إلى المحادثة",

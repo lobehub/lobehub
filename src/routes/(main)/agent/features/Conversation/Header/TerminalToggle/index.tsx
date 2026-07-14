@@ -5,6 +5,7 @@ import { ActionIcon } from '@lobehub/ui';
 import { SquareTerminalIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useLocation } from 'react-router';
 
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
@@ -13,11 +14,16 @@ import { labPreferSelectors } from '@/store/user/selectors';
 
 const TerminalToggle = memo(() => {
   const { t } = useTranslation('chat');
+  const { pathname } = useLocation();
   const enableBuiltinTerminal = useUserStore(labPreferSelectors.enableBuiltinTerminal);
   const [toggleTerminalPanel, isStatusInit] = useGlobalStore((s) => [
     s.toggleTerminalPanel,
     systemStatusSelectors.isStatusInit(s),
   ]);
+
+  // The popup window has no ChatTerminalPanel — hide the toggle to avoid a
+  // button that does nothing visible.
+  if (pathname.startsWith('/popup')) return null;
 
   if (!isDesktop || !enableBuiltinTerminal) return null;
 

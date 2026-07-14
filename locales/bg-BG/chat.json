@@ -1114,6 +1114,7 @@
   "taskSchedule.weekdays.wed": "Сря",
   "terminalPanel.close": "Затвори панела на терминала",
   "terminalPanel.closeTab": "Затвори терминала",
+  "terminalPanel.createFailed": "Неуспешно стартиране на терминалната сесия",
   "terminalPanel.newTab": "Нов терминал",
   "terminalPanel.title": "Терминал",
   "textSelection.addToConversation": "Добавяне към разговора",

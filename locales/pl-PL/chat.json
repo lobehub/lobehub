@@ -1114,6 +1114,7 @@
   "taskSchedule.weekdays.wed": "Śr",
   "terminalPanel.close": "Zamknij panel terminala",
   "terminalPanel.closeTab": "Zamknij terminal",
+  "terminalPanel.createFailed": "Nie udało się rozpocząć sesji terminala",
   "terminalPanel.newTab": "Nowy terminal",
   "terminalPanel.title": "Terminal",
   "textSelection.addToConversation": "Dodaj do rozmowy",

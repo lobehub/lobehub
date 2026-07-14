@@ -5,7 +5,7 @@ import type {
   TerminalResizeParams,
   TerminalWriteParams,
 } from '@lobechat/electron-client-ipc';
-import { app as electronApp, BrowserWindow } from 'electron';
+import { app as electronApp } from 'electron';
 
 import { PtySessionManager } from '@/modules/terminal';
 import { createLogger } from '@/utils/logger';
@@ -26,7 +26,10 @@ export default class TerminalCtr extends ControllerModule {
     onExit: (id, exitCode) => {
       this.flush();
       logger.debug(`session ${id} exited with code ${exitCode}`);
-      this.broadcast('terminalExit', { exitCode, id });
+      this.app.browserManager.broadcastToAllWindows('terminalExit', { exitCode, id });
+    },
+    onReap: (id, reason) => {
+      logger.info(`reaping session ${id} (${reason})`);
     },
   });
 
@@ -35,9 +38,14 @@ export default class TerminalCtr extends ControllerModule {
 
   @IpcMethod()
   async createSession(params: TerminalCreateSessionParams): Promise<TerminalCreateSessionResult> {
-    const info = this.manager.create(params);
-    logger.debug(`created session ${info.id} (pid ${info.pid}, shell ${info.shell})`);
-    return info;
+    try {
+      const info = this.manager.create(params);
+      logger.debug(`created session ${info.id} (pid ${info.pid}, shell ${info.shell})`);
+      return info;
+    } catch (error) {
+      logger.error('failed to create terminal session:', error);
+      throw error;
+    }
   }
 
   @IpcMethod()
@@ -53,7 +61,12 @@ export default class TerminalCtr extends ControllerModule {
   @IpcMethod()
   async killSession(params: TerminalKillParams): Promise<void> {
     logger.debug(`killing session ${params.id}`);
-    this.manager.kill(params.id);
+    try {
+      this.manager.kill(params.id);
+    } catch (error) {
+      logger.error(`failed to kill session ${params.id}:`, error);
+      throw error;
+    }
   }
 
   afterAppReady() {
@@ -78,15 +91,7 @@ export default class TerminalCtr extends ControllerModule {
     const batch = this.pendingData;
     this.pendingData = new Map();
     for (const [id, data] of batch) {
-      this.broadcast('terminalData', { data, id });
-    }
-  }
-
-  private broadcast<T>(channel: string, data: T) {
-    for (const win of BrowserWindow.getAllWindows()) {
-      if (!win.isDestroyed()) {
-        win.webContents.send(channel, data);
-      }
+      this.app.browserManager.broadcastToAllWindows('terminalData', { data, id });
     }
   }
 }

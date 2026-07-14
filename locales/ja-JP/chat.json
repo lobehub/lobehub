@@ -1114,6 +1114,7 @@
   "taskSchedule.weekdays.wed": "水",
   "terminalPanel.close": "ターミナルパネルを閉じる",
   "terminalPanel.closeTab": "ターミナルを閉じる",
+  "terminalPanel.createFailed": "ターミナルセッションの開始に失敗しました",
   "terminalPanel.newTab": "新しいターミナル",
   "terminalPanel.title": "ターミナル",
   "textSelection.addToConversation": "会話に追加",

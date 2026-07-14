@@ -1,6 +1,7 @@
 'use client';
 
-import { ActionIcon, Flexbox } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { PlusIcon, SquareTerminalIcon, XIcon } from 'lucide-react';
 import { memo, useEffect, useRef } from 'react';
@@ -87,7 +88,8 @@ const Content = memo(() => {
 
   const tabs = useChatTerminalStore((s) => s.tabsByTopic[topicKey]) ?? EMPTY_TABS;
   const activeTabId = useChatTerminalStore((s) => s.activeTabIds[topicKey]);
-  const creating = useChatTerminalStore((s) => s.creating);
+  const creating = useChatTerminalStore((s) => !!s.creatingByTopic[topicKey]);
+  const createError = useChatTerminalStore((s) => s.createErrors[topicKey]);
   const createTab = useChatTerminalStore((s) => s.createTab);
   const closeTab = useChatTerminalStore((s) => s.closeTab);
   const setActiveTab = useChatTerminalStore((s) => s.setActiveTab);
@@ -149,7 +151,18 @@ const Content = memo(() => {
           onClick={() => toggleTerminalPanel(false)}
         />
       </Flexbox>
-      <div className={styles.view}>{activeTab && <TerminalView sessionId={activeTab.id} />}</div>
+      <div className={styles.view}>
+        {activeTab ? (
+          <TerminalView sessionId={activeTab.id} />
+        ) : createError ? (
+          <Flexbox align={'center'} flex={1} gap={8} height={'100%'} justify={'center'}>
+            <Text type={'secondary'}>{t('terminalPanel.createFailed')}</Text>
+            <Button size={'small'} onClick={() => createTab(topicKey, cwd)}>
+              {t('retry', { ns: 'common' })}
+            </Button>
+          </Flexbox>
+        ) : null}
+      </div>
     </Flexbox>
   );
 });

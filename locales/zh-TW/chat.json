@@ -1114,6 +1114,7 @@
   "taskSchedule.weekdays.wed": "週三",
   "terminalPanel.close": "關閉終端面板",
   "terminalPanel.closeTab": "關閉終端",
+  "terminalPanel.createFailed": "無法啟動終端機會話",
   "terminalPanel.newTab": "新建終端",
   "terminalPanel.title": "終端",
   "textSelection.addToConversation": "添加到對話",

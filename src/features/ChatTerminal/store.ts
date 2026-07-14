@@ -1,8 +1,11 @@
+import debug from 'debug';
 import { create } from 'zustand';
 
 import { electronTerminalService } from '@/services/electron/terminal';
 
 import { xtermManager } from './xtermManager';
+
+const log = debug('lobe-desktop:chat-terminal');
 
 export interface TerminalTab {
   id: string;
@@ -12,7 +15,10 @@ export interface TerminalTab {
 interface ChatTerminalState {
   /** Active tab per topic key */
   activeTabIds: Record<string, string | undefined>;
-  creating: boolean;
+  /** Last session-creation failure per topic key — rendered as the panel's error state */
+  createErrors: Record<string, string | undefined>;
+  /** Per topic key, so a create in-flight for one topic doesn't block another */
+  creatingByTopic: Record<string, boolean>;
   /** Terminal tabs per topic key — sessions created in a topic only show in that topic */
   tabsByTopic: Record<string, TerminalTab[]>;
 }
@@ -47,11 +53,14 @@ export const useChatTerminalStore = create<ChatTerminalActions & ChatTerminalSta
       });
     },
 
-    creating: false,
+    createErrors: {},
 
     createTab: async (topicKey, cwd) => {
-      if (get().creating) return;
-      set({ creating: true });
+      if (get().creatingByTopic[topicKey]) return;
+      set((s) => ({
+        createErrors: { ...s.createErrors, [topicKey]: undefined },
+        creatingByTopic: { ...s.creatingByTopic, [topicKey]: true },
+      }));
       try {
         const info = await electronTerminalService.createSession({ cols: 80, cwd, rows: 24 });
         xtermManager.ensure(info.id);
@@ -66,10 +75,20 @@ export const useChatTerminalStore = create<ChatTerminalActions & ChatTerminalSta
             ],
           },
         });
+      } catch (error) {
+        log('failed to create terminal session for %s: %O', topicKey, error);
+        set((s) => ({
+          createErrors: {
+            ...s.createErrors,
+            [topicKey]: error instanceof Error ? error.message : String(error),
+          },
+        }));
       } finally {
-        set({ creating: false });
+        set((s) => ({ creatingByTopic: { ...s.creatingByTopic, [topicKey]: false } }));
       }
     },
+
+    creatingByTopic: {},
 
     setActiveTab: (topicKey, tabId) => {
       set({ activeTabIds: { ...get().activeTabIds, [topicKey]: tabId } });
@@ -79,8 +98,8 @@ export const useChatTerminalStore = create<ChatTerminalActions & ChatTerminalSta
   }),
 );
 
-// When the shell process exits (e.g. the user types `exit`), close its tab in
-// whichever topic owns it.
+// When the shell process exits (user types `exit`, or the main process reaps an
+// idle/LRU-evicted session), close its tab in whichever topic owns it.
 xtermManager.onSessionExit((sessionId) => {
   const { activeTabIds, tabsByTopic } = useChatTerminalStore.getState();
   const nextTabs: Record<string, TerminalTab[]> = {};

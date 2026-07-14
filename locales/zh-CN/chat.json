@@ -1114,6 +1114,7 @@
   "taskSchedule.weekdays.wed": "三",
   "terminalPanel.close": "关闭终端面板",
   "terminalPanel.closeTab": "关闭终端",
+  "terminalPanel.createFailed": "终端会话启动失败",
   "terminalPanel.newTab": "新建终端",
   "terminalPanel.title": "终端",
   "textSelection.addToConversation": "添加到对话",

@@ -1114,6 +1114,7 @@
   "taskSchedule.weekdays.wed": "Thứ Tư",
   "terminalPanel.close": "Đóng bảng điều khiển terminal",
   "terminalPanel.closeTab": "Đóng terminal",
+  "terminalPanel.createFailed": "Không thể bắt đầu phiên làm việc của terminal",
   "terminalPanel.newTab": "Terminal mới",
   "terminalPanel.title": "Terminal",
   "textSelection.addToConversation": "Thêm vào cuộc trò chuyện",

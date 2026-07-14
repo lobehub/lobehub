@@ -1114,6 +1114,7 @@
   "taskSchedule.weekdays.wed": "Wo",
   "terminalPanel.close": "Sluit terminalpaneel",
   "terminalPanel.closeTab": "Sluit terminal",
+  "terminalPanel.createFailed": "Kan de terminalsessie niet starten",
   "terminalPanel.newTab": "Nieuwe terminal",
   "terminalPanel.title": "Terminal",
   "textSelection.addToConversation": "Toevoegen aan gesprek",

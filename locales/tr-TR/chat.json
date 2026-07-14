@@ -1114,6 +1114,7 @@
   "taskSchedule.weekdays.wed": "Çarşamba",
   "terminalPanel.close": "Terminal panelini kapat",
   "terminalPanel.closeTab": "Terminali kapat",
+  "terminalPanel.createFailed": "Terminal oturumunu başlatma başarısız oldu",
   "terminalPanel.newTab": "Yeni terminal",
   "terminalPanel.title": "Terminal",
   "textSelection.addToConversation": "Sohbete ekle",

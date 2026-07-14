@@ -4,8 +4,11 @@ import type { TerminalDataPayload, TerminalExitPayload } from '@lobechat/electro
 import { FitAddon } from '@xterm/addon-fit';
 import type { ITheme } from '@xterm/xterm';
 import { Terminal } from '@xterm/xterm';
+import debug from 'debug';
 
 import { electronTerminalService } from '@/services/electron/terminal';
+
+const log = debug('lobe-desktop:chat-terminal');
 
 interface TermInstance {
   container: HTMLDivElement;
@@ -118,7 +121,11 @@ class XtermManager {
 
   /** Kill the PTY in the main process and drop the local instance. */
   close(sessionId: string) {
-    void electronTerminalService.killSession({ id: sessionId }).catch(() => {});
+    // Best-effort: the session may already be gone (shell exited / reaped).
+    // The main process logs kill failures on its side too.
+    void electronTerminalService.killSession({ id: sessionId }).catch((error) => {
+      log('killSession %s failed: %O', sessionId, error);
+    });
     this.disposeInstance(sessionId);
   }
 

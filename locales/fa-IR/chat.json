@@ -1114,6 +1114,7 @@
   "taskSchedule.weekdays.wed": "چهارشنبه",
   "terminalPanel.close": "بستن پنل ترمینال",
   "terminalPanel.closeTab": "بستن ترمینال",
+  "terminalPanel.createFailed": "شروع جلسه ترمینال ناموفق بود",
   "terminalPanel.newTab": "ترمینال جدید",
   "terminalPanel.title": "ترمینال",
   "textSelection.addToConversation": "اضافه کردن به مکالمه",
