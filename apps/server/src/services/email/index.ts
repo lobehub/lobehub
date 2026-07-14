@@ -26,10 +26,9 @@ export class EmailService {
    * Send an email
    */
   async sendMail(payload: EmailPayload): Promise<EmailResponse> {
-    return this.emailImpl.sendMail({
-      ...payload,
-      replyTo: payload.replyTo || EMAIL_SUPPORT_REPLY_TO,
-    });
+    const replyTo = payload.replyTo || EMAIL_SUPPORT_REPLY_TO;
+
+    return this.emailImpl.sendMail(replyTo ? { ...payload, replyTo } : payload);
   }
 
   /**

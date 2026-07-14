@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { EMAIL_SUPPORT_REPLY_TO, getEmailSupportHtml, getEmailSupportText } from './support';
+import { EMAIL_SUPPORT_ADDRESS, getEmailSupportHtml, getEmailSupportText } from './support';
 
 describe('email support helpers', () => {
   it('renders actionable support links for HTML and plain-text emails', () => {
     const html = getEmailSupportHtml();
     const text = getEmailSupportText();
 
-    expect(EMAIL_SUPPORT_REPLY_TO).toBe('support@lobehub.com');
+    expect(EMAIL_SUPPORT_ADDRESS).toBe('support@lobehub.com');
     expect(html).toContain('href="mailto:support@lobehub.com"');
     expect(html).toContain('https://discord.gg/');
     expect(text).toContain('support@lobehub.com');

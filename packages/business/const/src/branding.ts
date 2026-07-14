@@ -31,6 +31,7 @@ export const FILE_URL = {
 
 export const BRANDING_EMAIL = {
   business: 'hello@lobehub.com',
+  replyTo: undefined,
   support: 'support@lobehub.com',
 };
 
