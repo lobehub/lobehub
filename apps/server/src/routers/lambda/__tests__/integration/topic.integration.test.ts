@@ -15,7 +15,7 @@ vi.mock('@/database/core/db-adaptor', () => ({
 }));
 
 vi.mock('@/server/utils/scheduleAfterResponse', () => ({
-  scheduleAfterResponse: vi.fn((callback: () => void) => callback()),
+  after: vi.fn((callback: () => void) => callback()),
 }));
 
 /**

@@ -33,7 +33,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { FileService } from '@/server/services/file';
-import { scheduleAfterResponse } from '@/server/utils/scheduleAfterResponse';
+import { after } from '@/server/utils/scheduleAfterResponse';
 import { type BatchTaskResult } from '@/types/service';
 
 import {
@@ -473,7 +473,7 @@ export const topicRouter = router({
         }
       };
 
-      scheduleAfterResponse(runMigration);
+      after(runMigration);
 
       return { items: result.items, total: result.total };
     }),
@@ -645,7 +645,7 @@ export const topicRouter = router({
         }
       };
 
-      scheduleAfterResponse(runMigration);
+      after(runMigration);
 
       // Assemble final result
       return recentTopics.map((topic) => {

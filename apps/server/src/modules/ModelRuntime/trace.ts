@@ -4,7 +4,7 @@ import { type TracePayload } from '@lobechat/types';
 import { TraceTagMap } from '@lobechat/types';
 
 import { TraceClient } from '@/libs/traces';
-import { scheduleAfterResponse } from '@/server/utils/scheduleAfterResponse';
+import { after } from '@/server/utils/scheduleAfterResponse';
 
 export interface AgentChatOptions {
   enableTrace?: boolean;
@@ -86,7 +86,7 @@ export const createTraceOptions = (
       },
 
       onFinal: () => {
-        scheduleAfterResponse(async () => {
+        after(async () => {
           try {
             await traceClient.shutdownAsync();
           } catch (e) {

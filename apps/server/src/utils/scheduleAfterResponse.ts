@@ -12,7 +12,7 @@ const runWork = async (work: ScheduleAfterResponseWork) => {
   }
 };
 
-export const scheduleAfterResponse = (work: ScheduleAfterResponseWork): void => {
+export const after = (work: ScheduleAfterResponseWork): void => {
   try {
     const nextServer = require('next/server') as {
       after?: (work: () => Promise<void>) => void;

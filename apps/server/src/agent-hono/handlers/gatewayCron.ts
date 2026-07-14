@@ -21,7 +21,7 @@ import {
   BOT_RUNTIME_STATUSES,
   updateBotRuntimeStatus,
 } from '@/server/services/gateway/runtimeStatus';
-import { scheduleAfterResponse } from '@/server/utils/scheduleAfterResponse';
+import { after } from '@/server/utils/scheduleAfterResponse';
 
 const log = debug('lobe-server:bot:gateway:cron');
 
@@ -34,7 +34,7 @@ const POLL_INTERVAL_MS = 30_000; // 30 seconds
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const waitUntil = (task: Promise<unknown>) => {
-  scheduleAfterResponse(() => task);
+  after(() => task);
 };
 
 function createRuntimeContext(): BotPlatformRuntimeContext {
@@ -260,7 +260,7 @@ export async function gatewayCron(c: Context): Promise<Response> {
 
   const queued = await processConnectQueue(GATEWAY_DURATION_MS);
 
-  scheduleAfterResponse(async () => {
+  after(async () => {
     const pollEnd = Date.now() + GATEWAY_DURATION_MS;
 
     while (Date.now() < pollEnd) {

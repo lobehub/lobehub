@@ -11,7 +11,7 @@ vi.mock('./index', () => ({
 }));
 
 vi.mock('@/server/utils/scheduleAfterResponse', () => ({
-  scheduleAfterResponse: (callback: () => Promise<void> | void) => {
+  after: (callback: () => Promise<void> | void) => {
     void Promise.resolve().then(callback);
   },
 }));

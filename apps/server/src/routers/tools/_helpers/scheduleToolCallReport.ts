@@ -2,7 +2,7 @@ import { CURRENT_VERSION } from '@lobechat/const';
 import { type CallReportRequest } from '@lobehub/market-types';
 
 import { DiscoverService } from '@/server/services/discover';
-import { scheduleAfterResponse } from '@/server/utils/scheduleAfterResponse';
+import { after } from '@/server/utils/scheduleAfterResponse';
 
 /**
  * Calculate byte size of object
@@ -76,7 +76,7 @@ export function scheduleToolCallReport(params: ScheduleToolCallReportParams): vo
   // Only report when telemetry is enabled and marketAccessToken exists
   if (!telemetryEnabled || !marketAccessToken) return;
 
-  scheduleAfterResponse(async () => {
+  after(async () => {
     try {
       const callDurationMs = Date.now() - startTime;
       const requestSizeBytes = calculateObjectSizeBytes(requestPayload);

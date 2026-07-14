@@ -13,14 +13,14 @@ const {
   mockIsLobeHubModelAvailable,
   mockProcessBackgroundVideoPolling,
   mockResolveBusinessModelMapping,
-  mockScheduleAfterResponse,
+  mockAfter,
   mockServerDB,
   mockTransaction,
 } = vi.hoisted(() => {
   const mockTransaction = vi.fn();
   const mockServerDB = { transaction: mockTransaction };
   const mockCreateVideo = vi.fn();
-  const mockScheduleAfterResponse = vi.fn((cb: () => void) => cb());
+  const mockAfter = vi.fn((cb: () => void) => cb());
   const mockFindUserById = vi.fn();
   const mockGenerationTopicFindById = vi.fn();
   const mockIsLobeHubModelAvailable = vi.fn();
@@ -33,7 +33,7 @@ const {
     mockIsLobeHubModelAvailable,
     mockProcessBackgroundVideoPolling,
     mockResolveBusinessModelMapping,
-    mockScheduleAfterResponse,
+    mockAfter,
     mockServerDB,
     mockTransaction,
   };
@@ -87,7 +87,7 @@ vi.mock('@/business/server/video-generation/getVideoFreeQuota', () => ({
   getVideoFreeQuota: vi.fn().mockResolvedValue({ remaining: 10 }),
 }));
 vi.mock('@/server/utils/scheduleAfterResponse', () => ({
-  scheduleAfterResponse: (cb: () => void) => mockScheduleAfterResponse(cb),
+  after: (cb: () => void) => mockAfter(cb),
 }));
 vi.mock('@/server/services/generation/videoBackgroundPolling', () => ({
   processBackgroundVideoPolling: mockProcessBackgroundVideoPolling,
@@ -189,7 +189,7 @@ describe('videoRouter', () => {
         status: AsyncTaskStatus.Processing,
       });
       // Webhook: should NOT trigger background polling
-      expect(mockScheduleAfterResponse).not.toHaveBeenCalled();
+      expect(mockAfter).not.toHaveBeenCalled();
     });
 
     it('should validate mapped model id before rejecting deprecated lobehub video models', async () => {
@@ -273,7 +273,7 @@ describe('videoRouter', () => {
         status: AsyncTaskStatus.Processing,
       });
       // Polling: should trigger background polling after the response.
-      expect(mockScheduleAfterResponse).toHaveBeenCalled();
+      expect(mockAfter).toHaveBeenCalled();
       expect(mockProcessBackgroundVideoPolling).toHaveBeenCalled();
     });
 
@@ -293,7 +293,7 @@ describe('videoRouter', () => {
         status: AsyncTaskStatus.Processing,
       });
       // No special videoUrl branch — falls through to polling
-      expect(mockScheduleAfterResponse).toHaveBeenCalled();
+      expect(mockAfter).toHaveBeenCalled();
       expect(mockProcessBackgroundVideoPolling).toHaveBeenCalled();
     });
 
@@ -305,7 +305,7 @@ describe('videoRouter', () => {
       await caller.createVideo(defaultInput);
 
       // useWebhook=false means not webhook, should fall to polling
-      expect(mockScheduleAfterResponse).toHaveBeenCalled();
+      expect(mockAfter).toHaveBeenCalled();
       expect(mockProcessBackgroundVideoPolling).toHaveBeenCalled();
     });
   });

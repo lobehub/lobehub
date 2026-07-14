@@ -35,7 +35,7 @@ import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { FileService } from '@/server/services/file';
 import { processBackgroundVideoPolling } from '@/server/services/generation/videoBackgroundPolling';
-import { scheduleAfterResponse } from '@/server/utils/scheduleAfterResponse';
+import { after } from '@/server/utils/scheduleAfterResponse';
 import { AsyncTaskStatus, AsyncTaskType } from '@/types/asyncTask';
 
 import { createVideoTaskSubmitError } from './error';
@@ -289,7 +289,7 @@ export const videoRouter = router({
             status: AsyncTaskStatus.Processing,
           });
 
-          scheduleAfterResponse(async () => {
+          after(async () => {
             log('Background video polling scheduled for task: %s', asyncTaskId);
 
             try {

@@ -6,7 +6,7 @@ import {
 import type { ModelRuntimeHooks } from '@lobechat/model-runtime';
 import debug from 'debug';
 
-import { scheduleAfterResponse } from '@/server/utils/scheduleAfterResponse';
+import { after } from '@/server/utils/scheduleAfterResponse';
 
 import { getLLMGenerationTracingService } from './index';
 
@@ -95,7 +95,7 @@ export const createLLMGenerationTracingHook = (
           ? (rawTracing.onPersisted as (tracingId: string | null) => void | Promise<void>)
           : undefined;
 
-      scheduleAfterResponse(async () => {
+      after(async () => {
         let persistedTracingId: string | null = null;
         try {
           const result = await service.record({

@@ -39,7 +39,7 @@ import { FileS3 } from '@/server/modules/S3';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
 import { FileService } from '@/server/services/file';
 import { OnboardingService } from '@/server/services/onboarding';
-import { scheduleAfterResponse } from '@/server/utils/scheduleAfterResponse';
+import { after } from '@/server/utils/scheduleAfterResponse';
 
 const usernameSchema = z
   .string()
@@ -111,7 +111,7 @@ export const userRouter = router({
 
   getUserState: userProcedure.query(async ({ ctx }): Promise<UserInitializationState> => {
     try {
-      scheduleAfterResponse(async () => {
+      after(async () => {
         try {
           const currentTime = new Date();
           const transition = await ctx.userModel.advanceLastActiveAt(currentTime);

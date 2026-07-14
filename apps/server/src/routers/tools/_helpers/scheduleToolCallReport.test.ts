@@ -10,10 +10,10 @@ import {
   type ScheduleToolCallReportParams,
 } from './scheduleToolCallReport';
 
-const mockScheduleAfterResponse = vi.hoisted(() => vi.fn((callback: () => unknown) => callback()));
+const mockAfter = vi.hoisted(() => vi.fn((callback: () => unknown) => callback()));
 
 vi.mock('@/server/utils/scheduleAfterResponse', () => ({
-  scheduleAfterResponse: mockScheduleAfterResponse,
+  after: mockAfter,
 }));
 
 // Mock DiscoverService
@@ -482,7 +482,7 @@ describe('scheduleToolCallReport', () => {
     it('should schedule reporting after the response', async () => {
       scheduleToolCallReport(baseParams);
 
-      expect(mockScheduleAfterResponse).toHaveBeenCalledWith(expect.any(Function));
+      expect(mockAfter).toHaveBeenCalledWith(expect.any(Function));
     });
 
     it('should create DiscoverService with marketAccessToken', async () => {

@@ -19,7 +19,7 @@ const mockAfterTasks = vi.hoisted((): Promise<void>[] => []);
 
 // Mock modules
 vi.mock('@/server/utils/scheduleAfterResponse', () => ({
-  scheduleAfterResponse: (callback: () => Promise<void> | void) => {
+  after: (callback: () => Promise<void> | void) => {
     mockAfterTasks.push(Promise.resolve(callback()));
   },
 }));

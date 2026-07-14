@@ -8,7 +8,7 @@ import { HomeRepository } from '@/database/repositories/home';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { type HomeBriefData, HomeService } from '@/server/services/home';
-import { scheduleAfterResponse } from '@/server/utils/scheduleAfterResponse';
+import { after } from '@/server/utils/scheduleAfterResponse';
 
 const homeProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -41,7 +41,7 @@ export const homeRouter = router({
       }
     };
 
-    scheduleAfterResponse(runMigration);
+    after(runMigration);
 
     return result;
   }),
