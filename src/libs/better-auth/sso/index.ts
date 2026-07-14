@@ -1,5 +1,5 @@
-import { type GenericOAuthConfig } from 'better-auth/plugins';
-import { type SocialProviders } from 'better-auth/social-providers';
+import type { GenericOAuthConfig } from 'better-auth/plugins';
+import type { SocialProviders } from 'better-auth/social-providers';
 
 import { appEnv } from '@/envs/app';
 import { authEnv } from '@/envs/auth';
@@ -23,6 +23,7 @@ import Microsoft from './providers/microsoft';
 import Okta from './providers/okta';
 import Wechat from './providers/wechat';
 import Zitadel from './providers/zitadel';
+import type { BuiltinProviderDefinition, GenericProviderDefinition } from './types';
 
 const providerDefinitions = [
   Apple,
@@ -43,6 +44,39 @@ const providerDefinitions = [
   Feishu,
   Wechat,
 ] as const;
+
+/**
+ * Binds the env (E) and config (R) type parameters within a single call so that
+ * `build(checkEnvs())` type-checks. The provider registry stores a union of provider
+ * definitions whose `build`/`checkEnvs` are only correlated within a single member, so
+ * resolving them through this helper keeps the call site fully typed without suppressions.
+ */
+const resolveProviderConfig = <E extends Record<string, string | undefined>, R>(
+  definition: { build: (env: E) => R; checkEnvs: () => E | false },
+  rawProvider: string,
+): R => {
+  /**
+   * Providers expose checkEnvs predicates so we can fail fast when credentials are missing instead
+   * of encountering harder-to-trace errors later in the Better-Auth pipeline.
+   */
+  const env = definition.checkEnvs();
+  if (!env) {
+    throw new Error(
+      `[Better-Auth] ${rawProvider} SSO provider environment variables are not set correctly!`,
+    );
+  }
+
+  return definition.build(env);
+};
+
+/** Binds the provider id to its matching config type so the indexed write is type-safe. */
+const assignSocialProvider = <Id extends keyof SocialProviders>(
+  providers: SocialProviders,
+  id: Id,
+  config: SocialProviders[Id],
+): void => {
+  providers[id] = config;
+};
 
 const builtInProviderIds = new Set(BUILTIN_BETTER_AUTH_PROVIDERS);
 
@@ -74,40 +108,34 @@ export const initBetterAuthSSOProviders = () => {
       throw new Error(`[Better-Auth] Unknown SSO provider: ${rawProvider}`);
     }
 
-    /**
-     * Providers expose checkEnvs predicates so we can fail fast when credentials are missing instead
-     * of encountering harder-to-trace errors later in the Better-Auth pipeline.
-     */
-    const env = definition.checkEnvs();
-    if (!env) {
-      throw new Error(
-        `[Better-Auth] ${rawProvider} SSO provider environment variables are not set correctly!`,
-      );
-    }
-
     if (definition.type === 'builtin') {
-      const providerId = definition.id;
+      // The registry stores the union of specific provider definitions; narrow to the base
+      // shape so `build`/`checkEnvs` share a single env type and resolve through the helper.
+      const builtinDefinition = definition as unknown as BuiltinProviderDefinition<
+        Record<string, string | undefined>
+      >;
+      const providerId = builtinDefinition.id;
       if (socialProviders[providerId]) {
         throw new Error(`[Better-Auth] Duplicate SSO provider: ${providerId}`);
       }
 
-      // @ts-expect-error - build expects specific env type, but we use union definition type
-      const config = definition.build(env);
+      const config = resolveProviderConfig(builtinDefinition, rawProvider);
       if (config) {
-        // @ts-expect-error hard to type
-        socialProviders[providerId] = config;
+        assignSocialProvider(socialProviders, providerId, config);
       }
 
       continue;
     }
 
-    // @ts-expect-error - build expects specific env type, but we use union definition type
-    const config = definition.build(env);
+    const genericDefinition = definition as unknown as GenericProviderDefinition<
+      Record<string, string | undefined>
+    >;
+    const config = resolveProviderConfig(genericDefinition, rawProvider);
 
     if (config) {
       // the generic oidc callback url is /api/auth/oauth2/callback/{providerId}
       // different from builtin providers' /api/auth/callback/{providerId}
-      config.redirectURI = `${appEnv.APP_URL}/api/auth/callback/${definition.id}`;
+      config.redirectURI = `${appEnv.APP_URL}/api/auth/callback/${genericDefinition.id}`;
       genericOAuthProviders.push(config);
     }
   }

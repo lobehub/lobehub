@@ -1,6 +1,6 @@
-import { type FC, type PropsWithChildren, type ReactNode } from 'react';
+import type { FC, PropsWithChildren, ReactNode } from 'react';
 
-import { type DynamicLayoutProps } from '@/types/next';
+import type { DynamicLayoutProps } from '@/types/next';
 import { RouteVariants } from '@/utils/server/routeVariants';
 
 interface ServerLayoutProps<T> {
@@ -13,9 +13,8 @@ interface ServerLayoutInnerProps extends DynamicLayoutProps {
 }
 
 const ServerLayout =
-  <T extends PropsWithChildren>({ Desktop, Mobile }: ServerLayoutProps<T>): FC<T> =>
-  // @ts-expect-error
-  async (props: ServerLayoutInnerProps) => {
+  <T extends PropsWithChildren>({ Desktop, Mobile }: ServerLayoutProps<T>) =>
+  async (props: ServerLayoutInnerProps): Promise<ReactNode> => {
     const { params: paramsPromise, ...res } = props;
     if (!paramsPromise) {
       throw new Error(
