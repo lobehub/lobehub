@@ -1,6 +1,6 @@
 'use client';
 
-import { SiGit, SiNodedotjs, SiPython } from '@icons-pack/react-simple-icons';
+import { SiGit, SiGooglechrome, SiNodedotjs, SiPython } from '@icons-pack/react-simple-icons';
 import {
   createGrepContentInspector,
   createReadLocalFileInspector,
@@ -28,9 +28,13 @@ const PROGRAM_DISPLAY: Record<
   CodexCommandProgram,
   { icon: ComponentType<{ className?: string; size?: number }>; translationKey: string }
 > = {
-  git: { icon: SiGit, translationKey: 'builtins.codex.commandExecution.gitOperation' },
-  node: { icon: SiNodedotjs, translationKey: 'builtins.codex.commandExecution.runNode' },
-  python: { icon: SiPython, translationKey: 'builtins.codex.commandExecution.runPython' },
+  'agent-browser': {
+    icon: SiGooglechrome,
+    translationKey: 'builtins.codex.commandExecution.agentBrowser',
+  },
+  'git': { icon: SiGit, translationKey: 'builtins.codex.commandExecution.gitOperation' },
+  'node': { icon: SiNodedotjs, translationKey: 'builtins.codex.commandExecution.runNode' },
+  'python': { icon: SiPython, translationKey: 'builtins.codex.commandExecution.runPython' },
 };
 const SharedGrepInspector = createGrepContentInspector({
   noResultsKey: GREP_NO_RESULTS_KEY,

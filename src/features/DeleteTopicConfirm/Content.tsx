@@ -1,34 +1,38 @@
 'use client';
 
-import { Checkbox, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Checkbox } from '@lobehub/ui/base-ui';
+import type { ReactNode } from 'react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 interface DeleteTopicConfirmContentProps {
   defaultRemoveFiles?: boolean;
+  description?: ReactNode;
   onChange: (removeFiles: boolean) => void;
+  showRemoveFiles: boolean;
 }
 
-const DeleteTopicConfirmContent = memo<DeleteTopicConfirmContentProps>(
-  ({ onChange, defaultRemoveFiles = true }) => {
+export const DeleteTopicConfirmContent = memo<DeleteTopicConfirmContentProps>(
+  ({ description, onChange, showRemoveFiles, defaultRemoveFiles = true }) => {
     const { t } = useTranslation('topic');
     const [checked, setChecked] = useState(defaultRemoveFiles);
 
     return (
       <Flexbox gap={12}>
-        {t('actions.confirmRemoveTopic')}
-        <Checkbox
-          checked={checked}
-          onChange={(value) => {
-            setChecked(value);
-            onChange(value);
-          }}
-        >
-          {t('actions.confirmRemoveTopicFiles')}
-        </Checkbox>
+        {description ?? t('actions.confirmRemoveTopic')}
+        {showRemoveFiles && (
+          <Checkbox
+            checked={checked}
+            onChange={(value) => {
+              setChecked(value);
+              onChange(value);
+            }}
+          >
+            {t('actions.confirmRemoveTopicFiles')}
+          </Checkbox>
+        )}
       </Flexbox>
     );
   },
 );
-
-export default DeleteTopicConfirmContent;

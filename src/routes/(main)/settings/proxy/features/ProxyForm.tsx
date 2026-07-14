@@ -2,9 +2,9 @@
 
 import { type NetworkProxySettings } from '@lobechat/electron-client-ipc';
 import { type FormGroupItemType } from '@lobehub/ui';
-import { Form, Skeleton, toast } from '@lobehub/ui';
+import { Flexbox, Form, Skeleton, toast } from '@lobehub/ui';
 import { Button, Switch } from '@lobehub/ui/base-ui';
-import { Form as AntdForm, Input, Radio, Space } from 'antd';
+import { Form as AntdForm, Input, Radio } from 'antd';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -296,7 +296,7 @@ const ProxyForm = () => {
     children: [
       {
         children: (
-          <Space.Compact style={{ width: '100%' }}>
+          <Flexbox horizontal align={'center'} gap={8} width={'100%'}>
             <Input
               placeholder={t('proxy.testUrlPlaceholder')}
               style={{ flex: 1 }}
@@ -306,7 +306,7 @@ const ProxyForm = () => {
             <Button loading={isTesting} type="default" onClick={handleTest}>
               {t('proxy.testButton')}
             </Button>
-          </Space.Compact>
+          </Flexbox>
         ),
         desc: t('proxy.testDescription'),
         label: <SettingsSearchAnchor id={'proxy-test'}>{t('proxy.testUrl')}</SettingsSearchAnchor>,

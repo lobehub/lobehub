@@ -432,6 +432,33 @@ export class FileModel {
   };
 
   /**
+   * Whether any of the given topics contains a user-owned file attached to a
+   * message. This intentionally checks for attachment presence rather than
+   * deletability: shared files should still be disclosed in the confirmation
+   * UI, while {@link findDeletableFilesByTopicId} remains responsible for
+   * preserving references that survive the topic deletion.
+   */
+  hasFilesByTopicIds = async (topicIds: string[]): Promise<boolean> => {
+    if (topicIds.length === 0) return false;
+
+    const [file] = await this.db
+      .select({ id: messagesFiles.fileId })
+      .from(messagesFiles)
+      .innerJoin(messages, eq(messagesFiles.messageId, messages.id))
+      .innerJoin(files, eq(messagesFiles.fileId, files.id))
+      .where(
+        and(
+          inArray(messages.topicId, topicIds),
+          eq(messagesFiles.userId, this.userId),
+          this.ownership(),
+        ),
+      )
+      .limit(1);
+
+    return Boolean(file);
+  };
+
+  /**
    * Collect the user-uploaded files that should be pre-loaded into a sandbox for
    * the given topic. Combines two associations and de-duplicates by file id:
    * - files attached to messages inside the topic (`messages_files`)

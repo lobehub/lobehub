@@ -245,8 +245,11 @@ export const useTopicItemDropdownMenu = ({
         key: 'delete',
         label: t('delete', { ns: 'common' }),
         onClick: () => {
-          confirmRemoveTopic(async (removeFiles) => {
-            await removeTopic(id, removeFiles);
+          void confirmRemoveTopic({
+            onConfirm: async (removeFiles) => {
+              await removeTopic(id, removeFiles);
+            },
+            topicIds: [id],
           });
         },
       },

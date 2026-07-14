@@ -53,6 +53,7 @@ const topicProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =>
       agentModel: new AgentModel(ctx.serverDB, ctx.userId, wsId),
       agentOperationModel: new AgentOperationModel(ctx.serverDB, ctx.userId, wsId),
       chatGroupModel: new ChatGroupModel(ctx.serverDB, ctx.userId, wsId),
+      fileModel: new FileModel(ctx.serverDB, ctx.userId, wsId),
       heteroSessionImporterRepo: new HeteroSessionImporterRepo(ctx.serverDB, ctx.userId, wsId),
       topicImporterRepo: new TopicImporterRepo(ctx.serverDB, ctx.userId, wsId),
       topicModel: new TopicModel(ctx.serverDB, ctx.userId, wsId),
@@ -478,6 +479,23 @@ export const topicRouter = router({
       return { items: result.items, total: result.total };
     }),
 
+  hasTopicFiles: topicProcedure
+    .use(withScopedPermission('topic:delete'))
+    .input(z.object({ ids: z.array(z.string()).min(1) }))
+    .query(async ({ input, ctx }) => {
+      try {
+        const hasFiles = await ctx.fileModel.hasFilesByTopicIds(input.ids);
+        return { data: { hasFiles }, success: true };
+      } catch (error) {
+        console.error('[topic:hasTopicFiles]', error);
+        throw new TRPCError({
+          cause: error,
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to check topic files',
+        });
+      }
+    }),
+
   hasTopics: topicProcedure.query(async ({ ctx }) => {
     return (await ctx.topicModel.count()) === 0;
   }),
@@ -676,21 +694,22 @@ export const topicRouter = router({
     .mutation(async ({ input, ctx }) => {
       if (!input.removeFiles) return ctx.topicModel.delete(input.id);
 
-      const wsId = ctx.workspaceId ?? undefined;
-      const fileModel = new FileModel(ctx.serverDB, ctx.userId, wsId);
-
       // Collect the topic's deletable attachments BEFORE deleting it — the lookup
       // joins messages, which are cascade-deleted along with the topic. Files
       // still referenced by another topic or the session are intentionally kept.
-      const fileIds = await fileModel.findDeletableFilesByTopicId(input.id);
+      const fileIds = await ctx.fileModel.findDeletableFilesByTopicId(input.id);
 
       const result = await ctx.topicModel.delete(input.id);
 
       if (fileIds.length > 0) {
-        const needToRemove = await fileModel.deleteMany(fileIds, serverDBEnv.REMOVE_GLOBAL_FILE);
+        const needToRemove = await ctx.fileModel.deleteMany(
+          fileIds,
+          serverDBEnv.REMOVE_GLOBAL_FILE,
+        );
         // deleteMany returns only files whose underlying object is no longer
         // referenced by any other file, so the S3 cleanup is reference-safe.
         if (needToRemove && needToRemove.length > 0) {
+          const wsId = ctx.workspaceId ?? undefined;
           const fileService = new FileService(ctx.serverDB, ctx.userId, wsId);
           await fileService.deleteFiles(needToRemove.map((file) => file.url!));
         }

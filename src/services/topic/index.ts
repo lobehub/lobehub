@@ -86,6 +86,11 @@ export class TopicService {
     return lambdaClient.topic.recentTopics.query({ limit });
   };
 
+  hasTopicFiles = async (ids: string[]): Promise<boolean> => {
+    const result = await lambdaClient.topic.hasTopicFiles.query({ ids });
+    return result.data.hasFiles;
+  };
+
   searchTopics = (keywords: string, agentId?: string, groupId?: string): Promise<ChatTopic[]> => {
     return lambdaClient.topic.searchTopics.query({
       agentId,

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { INBOX_SESSION_ID } from '@/const/session';
 import { DEFAULT_AGENT_CONFIG } from '@/const/settings';
 import { AgentModel } from '@/database/models/agent';
+import { ChatGroupModel } from '@/database/models/chatGroup';
 import { FileModel } from '@/database/models/file';
 import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
 import { SessionModel } from '@/database/models/session';
@@ -39,6 +40,10 @@ vi.mock('@/database/models/task', () => ({
   TaskModel: vi.fn(),
 }));
 
+vi.mock('@/database/models/chatGroup', () => ({
+  ChatGroupModel: vi.fn(),
+}));
+
 vi.mock('@/database/models/file', () => ({
   FileModel: vi.fn(),
 }));
@@ -60,6 +65,7 @@ describe('agentRouter', () => {
   let mockCtx: any;
   let agentModelMock: any;
   let taskModelMock: any;
+  let chatGroupModelMock: any;
   let sessionModelMock: any;
   let fileModelMock: any;
   let knowledgeBaseModelMock: any;
@@ -86,6 +92,11 @@ describe('agentRouter', () => {
       countTasksBlockingAgentDemotion: vi.fn().mockResolvedValue(0),
     };
     vi.mocked(TaskModel).mockImplementation(() => taskModelMock);
+
+    chatGroupModelMock = {
+      countGroupsBlockingAgentDemotion: vi.fn().mockResolvedValue(0),
+    };
+    vi.mocked(ChatGroupModel).mockImplementation(() => chatGroupModelMock);
 
     sessionModelMock = {
       findByIdOrSlug: vi.fn(),
@@ -394,6 +405,22 @@ describe('agentRouter', () => {
 
       expect(result).toEqual({ success: true });
       expect(agentModelMock.setVisibility).toHaveBeenCalledWith('agent-1', 'private');
+    });
+
+    it('rejects demotion while the agent supervises group chats visible to others (LOBE-11772)', async () => {
+      chatGroupModelMock.countGroupsBlockingAgentDemotion.mockResolvedValue(1);
+
+      const caller = agentRouter.createCaller(wsCtx());
+
+      await expect(
+        caller.setAgentVisibility({ id: 'agent-1', visibility: 'private' }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+      // Compared against the agent owner (meta.userId), not just the caller.
+      expect(chatGroupModelMock.countGroupsBlockingAgentDemotion).toHaveBeenCalledWith(
+        'agent-1',
+        userId,
+      );
+      expect(agentModelMock.setVisibility).not.toHaveBeenCalled();
     });
 
     it('rejects demotion of another member agent even for a workspace owner (LOBE-11760)', async () => {

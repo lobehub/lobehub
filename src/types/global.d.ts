@@ -4,6 +4,8 @@ import { type IEditor } from '@lobehub/editor';
 import { type LobeCustomStylish, type LobeCustomToken } from '@lobehub/ui';
 import { type AntdToken } from 'antd-style/lib/types/theme';
 
+import { type ChatInputEditor } from '@/features/ChatInput';
+
 import { type SPAServerConfig } from './spaServerConfig';
 
 declare module 'antd-style' {
@@ -23,6 +25,8 @@ declare global {
     __LOBE_BOOT_T_HTML__?: number;
     /** Dev-only: Zustand store snapshots via `getState()` keyed by store name */
     __LOBE_STORES?: Record<string, () => unknown>;
+    /** Chat input editor of the main composer, mounted by MainChatInput while it is on screen */
+    __mainEditor?: ChatInputEditor;
     __SERVER_CONFIG__: SPAServerConfig | undefined;
     lobeEnv?: {
       chromeVersion?: string;

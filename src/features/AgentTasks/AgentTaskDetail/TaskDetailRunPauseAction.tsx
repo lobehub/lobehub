@@ -1,6 +1,5 @@
 import { DropdownMenu, Flexbox, Text } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
-import { Space } from 'antd';
 import { CalendarOffIcon, ChevronDown, PlayIcon, RotateCcwIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -138,7 +137,7 @@ const TaskDetailRunPauseAction = memo(() => {
   if (isScheduled) {
     return (
       <Flexbox horizontal align={'center'} gap={12}>
-        <Space.Compact>
+        <Flexbox horizontal gap={4}>
           <Button
             disabled={!canEditTask || isRunningNow}
             icon={CalendarOffIcon}
@@ -166,7 +165,7 @@ const TaskDetailRunPauseAction = memo(() => {
               title={canEditTask ? undefined : reason}
             />
           </DropdownMenu>
-        </Space.Compact>
+        </Flexbox>
         {countdownText && (
           <Text fontSize={12} type={'secondary'}>
             {t('taskDetail.nextRunCountdown', { countdown: countdownText })}

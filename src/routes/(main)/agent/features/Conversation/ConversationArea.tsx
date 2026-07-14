@@ -24,6 +24,7 @@ import { useChatStore } from '@/store/chat';
 import { threadSelectors, topicSelectors } from '@/store/chat/selectors';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
+import ExposeMainEditor from './ExposeMainEditor';
 import HeterogeneousChatInput from './HeterogeneousChatInput';
 import MainChatInput from './MainChatInput';
 import MessageFromUrl from './MainChatInput/MessageFromUrl';
@@ -145,6 +146,7 @@ const Conversation = memo(() => {
           {isHeterogeneousAgent ? <HeterogeneousChatInput /> : <MainChatInput />}
         </MessageForwardFooter>
       )}
+      <ExposeMainEditor />
       <ThreadHydration />
       <ChatMiniMap />
       <ForwardMessageDispatcher />

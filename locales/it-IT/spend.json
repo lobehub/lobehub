@@ -25,6 +25,7 @@
   "table.columns.trigger.enums.notify": "Notifica",
   "table.columns.trigger.enums.onboarding": "Onboarding",
   "table.columns.trigger.enums.openapi": "OpenAPI",
+  "table.columns.trigger.enums.scheduled": "Esecuzione programmata",
   "table.columns.trigger.enums.semantic_search": "Ricerca Conoscenza",
   "table.columns.trigger.enums.signup_email_llm_review": "Revisione Email di Registrazione",
   "table.columns.trigger.enums.topic": "Riepilogo Argomento",

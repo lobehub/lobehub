@@ -22,7 +22,7 @@
     "@anthropic-ai/claude-agent-sdk": "0.3.204",
     "@anthropic-ai/sdk": "^0.93.0",
     "@lobechat/agent-gateway-client": "workspace:*",
-    "@lobehub/icons": "^5.10.0",
+    "@lobehub/icons": "^5.11.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "diff": "^8.0.4",
     "zod": "^4.4.3"

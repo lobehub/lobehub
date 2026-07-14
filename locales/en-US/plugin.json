@@ -16,6 +16,7 @@
   "builtins.codex.collabTool.sendInput": "Message subagent",
   "builtins.codex.collabTool.spawnAgent": "Spawn subagent",
   "builtins.codex.collabTool.wait": "Wait for subagents",
+  "builtins.codex.commandExecution.agentBrowser": "Operate browser",
   "builtins.codex.commandExecution.gitOperation": "Git operation",
   "builtins.codex.commandExecution.grep": "Search",
   "builtins.codex.commandExecution.noResults": "No results",

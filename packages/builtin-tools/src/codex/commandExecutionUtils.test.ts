@@ -101,6 +101,15 @@ describe('getCodexGrepCommandDisplay', () => {
 });
 
 describe('getCodexCommandProgram', () => {
+  it('classifies agent-browser commands', () => {
+    expect(
+      getCodexCommandProgram('agent-browser --session host9253 --cdp 9253 snapshot -i -C'),
+    ).toBe('agent-browser');
+    expect(getCodexCommandProgram('/usr/local/bin/agent-browser open example.com')).toBe(
+      'agent-browser',
+    );
+  });
+
   it('classifies node commands', () => {
     expect(getCodexCommandProgram('node packages/cli/dist/index.js message-gateway stats')).toBe(
       'node',
@@ -122,6 +131,9 @@ describe('getCodexCommandProgram', () => {
   it('unwraps shell wrappers and skips env assignments', () => {
     expect(getCodexCommandProgram('bash -lc "git log --oneline"')).toBe('git');
     expect(getCodexCommandProgram('NODE_ENV=production node app.js')).toBe('node');
+    expect(
+      getCodexCommandProgram('AB_TARGET="--session host9253 --cdp 9253" agent-browser snapshot -i'),
+    ).toBe('agent-browser');
   });
 
   it('returns undefined for unknown or empty programs', () => {

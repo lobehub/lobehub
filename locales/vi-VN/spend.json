@@ -25,6 +25,7 @@
   "table.columns.trigger.enums.notify": "Thông báo",
   "table.columns.trigger.enums.onboarding": "Hướng dẫn ban đầu",
   "table.columns.trigger.enums.openapi": "OpenAPI",
+  "table.columns.trigger.enums.scheduled": "Chạy theo lịch",
   "table.columns.trigger.enums.semantic_search": "Tìm kiếm Tri thức",
   "table.columns.trigger.enums.signup_email_llm_review": "Đánh giá Email Đăng ký",
   "table.columns.trigger.enums.topic": "Tóm tắt Chủ đề",

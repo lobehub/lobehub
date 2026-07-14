@@ -16,6 +16,7 @@
   "builtins.codex.collabTool.sendInput": "发送消息给子代理",
   "builtins.codex.collabTool.spawnAgent": "启动子代理",
   "builtins.codex.collabTool.wait": "等待子代理",
+  "builtins.codex.commandExecution.agentBrowser": "操作浏览器",
   "builtins.codex.commandExecution.gitOperation": "git 操作",
   "builtins.codex.commandExecution.grep": "搜索",
   "builtins.codex.commandExecution.noResults": "没有结果",

@@ -186,6 +186,23 @@ export const agentRouter = router({
               'Cannot make this agent private while workspace tasks still depend on it. Reassign those tasks or make them private first.',
           });
         }
+
+        // Same source-level guard for group chats, but only for the supervisor
+        // role: a private supervisor is unresolvable for every other viewer and
+        // bricks the whole group. Regular members are not blocked — roster
+        // reads drop a non-visible member per viewer instead (LOBE-11772).
+        const chatGroupModel = new ChatGroupModel(ctx.serverDB, ctx.userId, ctx.workspaceId);
+        const blockingGroups = await chatGroupModel.countGroupsBlockingAgentDemotion(
+          input.id,
+          meta.userId,
+        );
+        if (blockingGroups > 0) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message:
+              'Cannot make this agent private while it supervises workspace group chats. Remove it as supervisor first.',
+          });
+        }
       }
 
       const updated = await ctx.agentModel.setVisibility(input.id, input.visibility);

@@ -1,6 +1,5 @@
 import { Flexbox, Icon, Tooltip, TooltipGroup } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
-import { Space } from 'antd';
 import { ThumbsDownIcon, ThumbsUpIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -25,7 +24,7 @@ const LikeButton = memo<LikeButtonProps>(
     if (showDislike)
       return (
         <TooltipGroup>
-          <Space.Compact style={{ flex: 1.75 }}>
+          <Flexbox horizontal flex={1.75} gap={4}>
             <Tooltip title={t('like')}>
               <Button
                 block
@@ -49,7 +48,7 @@ const LikeButton = memo<LikeButtonProps>(
                 onClick={() => onDislikeClick?.(!isDisliked)}
               />
             </Tooltip>
-          </Space.Compact>
+          </Flexbox>
         </TooltipGroup>
       );
 

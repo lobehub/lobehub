@@ -283,13 +283,14 @@ export const getCodexGrepCommandDisplay = (
 };
 
 /** Program families we give a dedicated label + brand icon instead of the generic terminal chip. */
-export type CodexCommandProgram = 'git' | 'node' | 'python';
+export type CodexCommandProgram = 'agent-browser' | 'git' | 'node' | 'python';
 
 const PROGRAM_BY_BASENAME: Record<string, CodexCommandProgram> = {
-  git: 'git',
-  node: 'node',
-  python: 'python',
-  python3: 'python',
+  'agent-browser': 'agent-browser',
+  'git': 'git',
+  'node': 'node',
+  'python': 'python',
+  'python3': 'python',
 };
 
 const ENV_ASSIGNMENT_PATTERN = /^[A-Z_]\w*=/i;
