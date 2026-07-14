@@ -12,8 +12,8 @@ import {
 } from '@/business/client/hooks/useBusinessAgentMode';
 import type { HomeNewModelItem } from '@/business/client/hooks/useHomeNewModels';
 import { useHomeNewModels } from '@/business/client/hooks/useHomeNewModels';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
-import { useStableNavigate } from '@/hooks/useStableNavigate';
 import { agentService } from '@/services/agent';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
@@ -50,7 +50,7 @@ const skeletonWidths = [112, 150, 126, 138];
 
 const StarterList = memo(() => {
   const { t } = useTranslation('home');
-  const navigate = useStableNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const { message } = App.useApp();
   const { agentId: activeAgentId } = useResolvedHomeAgentId();
   const { allowed: canCreateContent, reason } = usePermission('create_content');
@@ -113,8 +113,12 @@ const StarterList = memo(() => {
             return;
           }
 
-          await updateAgentConfigById(activeAgentId, nextConfig);
-          message.success(t('starter.modelSwitched', { name: item.title }));
+          try {
+            await updateAgentConfigById(activeAgentId, nextConfig, { rethrow: true });
+            message.success(t('starter.modelSwitched', { name: item.title }));
+          } catch {
+            // The agent store already reports persistence failures to the user.
+          }
         } finally {
           setSwitchingKey(null);
         }
