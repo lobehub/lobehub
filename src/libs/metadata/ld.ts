@@ -8,7 +8,7 @@ import { OFFICIAL_SITE, OFFICIAL_URL } from '@/const/url';
 import { type Locales } from '@/locales/resources';
 import { getCanonicalUrl } from '@/server/utils/url';
 
-import pkg from '../../package.json';
+import pkg from '../../../package.json';
 
 const LAST_MODIFIED = new Date().toISOString();
 export const AUTHOR_LIST = {
