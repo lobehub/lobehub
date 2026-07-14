@@ -9,7 +9,10 @@ import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { NotebookRuntimeService } from '@/server/services/notebook';
 
-import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
+import {
+  assertWorkspaceRowManageable,
+  isWorkspaceNonOwner,
+} from './_helpers/assertWorkspaceRowManageable';
 
 const notebookProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -77,7 +80,11 @@ export const notebookRouter = router({
       if (!existing) return { success: true };
       assertWorkspaceRowManageable(ctx, existing.userId, 'document');
 
-      await ctx.notebookService.deleteDocument(input.id);
+      // Same cascade rule as documentRouter.deleteDocument: a non-owner's
+      // folder delete must not take teammates' descendants with it.
+      await ctx.notebookService.deleteDocument(input.id, {
+        restrictToCreator: isWorkspaceNonOwner(ctx),
+      });
 
       return { success: true };
     }),

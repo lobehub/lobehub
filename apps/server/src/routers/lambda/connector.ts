@@ -16,6 +16,7 @@ import {
   ConnectorStatus,
   ConnectorToolPermission,
 } from '@/database/schemas';
+import type { LobeChatDatabase } from '@/database/type';
 import { inferCrudType } from '@/libs/mcp/utils';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
@@ -32,6 +33,7 @@ import {
   saveConnectorOAuthState,
 } from '@/server/services/connector/stateStore';
 import { syncConnectorToolsById } from '@/server/services/connector/sync';
+import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
 
 import {
   assertWorkspaceRowManageable,
@@ -823,6 +825,7 @@ export const connectorRouter = router({
 async function upsertConnectorEntry(
   ctx: {
     connectorModel: ConnectorModel;
+    serverDB: LobeChatDatabase;
     userId: string;
     workspaceId?: string | null;
     workspaceRole?: string;
@@ -840,13 +843,25 @@ async function upsertConnectorEntry(
   if (params.avatar) metadata.avatar = params.avatar;
 
   // Viewers keep browse access: they resolve existing rows read-only below,
-  // but must never create or rewrite connector state.
-  const isViewer = !!ctx.workspaceId && ctx.workspaceRole === 'viewer';
+  // but must never create or rewrite connector state. These bootstrap
+  // endpoints run without the RBAC middleware, so ctx.workspaceRole may be
+  // absent — a missing role must NOT be treated as writable; fall back to an
+  // explicit member-level permission check (viewers lack agent:update).
+  const canWrite = !ctx.workspaceId
+    ? true
+    : ctx.workspaceRole
+      ? ctx.workspaceRole !== 'viewer'
+      : await hasWorkspaceScopedPermission({
+          action: 'AGENT_UPDATE',
+          db: ctx.serverDB,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        });
 
   const existing = await ctx.connectorModel.queryByIdentifiers([params.identifier]);
   if (existing.length > 0) {
     const row = existing[0];
-    const writable = !isViewer && (!isWorkspaceNonOwner(ctx) || row.userId === ctx.userId);
+    const writable = canWrite && (!isWorkspaceNonOwner(ctx) || row.userId === ctx.userId);
     if (writable) {
       // Update metadata with latest description/avatar from manifest
       await ctx.connectorModel.update(row.id, { metadata });
@@ -854,7 +869,7 @@ async function upsertConnectorEntry(
     return { connectorId: row.id, writable };
   }
 
-  if (isViewer) {
+  if (!canWrite) {
     throw new TRPCError({ code: 'FORBIDDEN', message: 'Viewers cannot install connectors' });
   }
 
