@@ -78,13 +78,13 @@ Schema: [trace-schema.md](../references/trace-schema.md).
 **"What is true" must be written in domain language.** If you cannot state the
 fact without naming a table, it is probably not a product finding.
 
-| Assumption | What is true | Layer | Verdict | Pattern |
+| Assumption | What is true | Model | Verdict | Pattern |
 | ---------- | ------------ | ----- | ------- | ------- |
 |            |              |       |         |         |
 
 **Saturation:** did this round's grounding overturn anything? If a full pass
-overturned nothing, say so — L1/L2 are mined out for this surface, and the next
-round's budget belongs to L0.
+overturned nothing, say so — the implementation model is mined out for this
+surface, and the next round's budget belongs to the **mental** model.
 
 **New patterns written back:** `P-nn`, … (or "none — all predicted").
 Check each against [canon.md](../references/canon.md) first: an instance of

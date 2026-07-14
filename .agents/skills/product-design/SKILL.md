@@ -49,13 +49,13 @@ button's padding.
 A self-evolving system, wired per the SCLPT framework (BM-58). Each element maps
 to a file you must actually read and write:
 
-| Element            | Here                                                     | What it does                                                                      |
-| ------------------ | -------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| **P** Pattern Base | [references/pattern-base.md](references/pattern-base.md) | The learned rules. **Read before every run. Append after every run.**             |
-| **L** Layer Model  | [references/layer-model.md](references/layer-model.md)   | L0 scenario / L1 business nouns / L2 business verbs / L3 representation           |
-| **T** Trace Schema | [references/trace-schema.md](references/trace-schema.md) | Every session leaves a **reality-check log**: assumption → what is true → who won |
-| **C** Closed Loop  | Step 6                                                   | Every overturned assumption becomes a new pattern                                 |
-| **S** Saturation   | Step 6                                                   | A grounding round that overturns **nothing** = L1/L2 are mined out                |
+| Element            | Here                                                     | What it does                                                                         |
+| ------------------ | -------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| **P** Pattern Base | [references/pattern-base.md](references/pattern-base.md) | The learned rules. **Read before every run. Append after every run.**                |
+| **L** Layer Model  | [references/layer-model.md](references/layer-model.md)   | Cooper's three models — implementation / represented / mental                        |
+| **T** Trace Schema | [references/trace-schema.md](references/trace-schema.md) | Every session leaves a **reality-check log**: assumption → what is true → who won    |
+| **C** Closed Loop  | Step 6                                                   | Every overturned assumption becomes a new pattern                                    |
+| **S** Saturation   | Step 6                                                   | A grounding round that overturns **nothing** = the implementation model is mined out |
 
 Benchmarked against [references/canon.md](references/canon.md) — the works that
 already named most of this, and the two things they did not.
@@ -175,7 +175,8 @@ The session is done when the **system** got smarter, not when the PR opened:
    named, or genuinely new?_ Most of the time it is the former, and that is a good
    outcome.
 3. **Record the saturation signal.** If a whole round overturned _nothing_, say
-   so: L1/L2 are mined out for that surface, and the next round belongs to L0.
+   so: the implementation model is mined out for that surface, and the next round
+   belongs to the **mental** model — the one grounding cannot reach.
 
 A session that ships a feature but teaches the system nothing has done half the
 job.

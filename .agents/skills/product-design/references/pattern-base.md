@@ -26,26 +26,34 @@ product insight left?_ If no, it is an engineering note in disguise.
 
 ---
 
-## The spine: three models
+## The spine: Cooper's three models
 
-Everything below is one disease with different symptoms. Borrowing Cooper's
-frame (see [canon.md](canon.md)):
+Everything below is one disease with different symptoms. The frame is Cooper's,
+unmodified — see [layer-model.md](layer-model.md):
 
-| Model                 | What it is                                                                    |
-| --------------------- | ----------------------------------------------------------------------------- |
-| **Business model**    | What the product _actually_ models: its concepts, states, events, obligations |
-| **Represented model** | What the surface _claims_ the business is                                     |
-| **Mental model**      | What the user _believes_ it is                                                |
-|                       |                                                                               |
+| Model                    | What it is                                                                  |
+| ------------------------ | --------------------------------------------------------------------------- |
+| **Implementation model** | How the product _actually works_: its concepts, states, events, obligations |
+| **Represented model**    | What the interface _claims_ the product is                                  |
+| **Mental model**         | What the user _believes_ it is                                              |
 
-Design failure is always a gap between two of them. Class A is
-_business ≠ what we thought it was_. Class B is _represented ≠ business_.
-Classes C and D are about what to do once you have the business model right.
+> **The represented model should be as close to the mental model as possible, and
+> as far from the implementation model as necessary.**
 
-**Where the business model is written down**: the schema, the state machines,
-the events. Not because implementation matters — because **that is the most
-honest statement the company has ever made about its own domain.** Read it as a
-domain document, not as code.
+Every pattern here is a failure to hold that line:
+
+- **Class A** — the represented model inherited the implementation model's
+  **vocabulary** instead of its meaning.
+- **Class B** — the represented model and the implementation model simply
+  **disagree** about what exists.
+- **Class C** — the represented model follows the implementation model when it
+  should be following the **mental** model.
+- **Class D** — what to do once the first three are settled.
+
+**Where the implementation model is written down**: the domain model — the
+concepts, the states, the events. Not because implementation matters, but because
+**that is the most honest statement the company has ever made about what it
+believes exists.** Read it as a domain document.
 
 ---
 
@@ -115,40 +123,35 @@ whole team is miscommunicating through it.
 
 ---
 
-## Class B — The surface misrepresents the business
+## Class B — The represented and implementation models disagree
 
-### P-04 — The business models more than the surface exposes
+### P-04 — Do not read the surface as evidence about the product
 
-**The highest-leverage pattern in this file.** Look for this first, every time.
+**Symptom**: the surface shows one kind of thing, so everyone concludes that is
+all the product does.
 
-**Symptom**: the surface shows one kind of thing, so everyone assumes that is
-all the business has.
-
-**The real case**: a home surface showed only agent **errors**, so the whole team
-read it as an error log — and designed around "how do we make the error list
-nicer". The business actually modeled **four** kinds of agent-to-human message:
+**The real case**: a home surface showed only agent **errors**, so the team
+reasoned about it as an error log and asked _"how do we make the error list
+nicer?"_. The product in fact models **four** kinds of agent-to-human message —
 a **decision** (the agent paused and needs a ruling), a **result** (a deliverable
-awaiting acceptance), an **insight** (something worth knowing), and an **error**.
-All four were being produced in production, every day, with priorities and
-interactive actions and linked deliverables — **and three quarters of them were
-never shown to anyone.**
+awaiting acceptance), an **insight** (worth knowing, nothing to decide) and an
+**error** — and produces all four every day. Three had simply never been
+surfaced.
 
-The surface was not an error log that needed polish. It was **a decision inbox
-with three of its four channels switched off.** That single realization was worth
-more than every other finding in the redesign combined.
+The surface was not an error log in need of polish. It was **a decision inbox with
+three of its four channels switched off** — and the entire team's model of the
+product had been formed by looking at the screen.
 
-**Why it happens**: the surface is the only thing anyone can see. A capability
-that is modeled but not rendered is invisible to product, to design, and to the
-user — it exists only in the domain.
+**Why it happens**: nothing mysterious. The scenarios were designed and built
+before the interface caught up, which is ordinary. What is _not_ ordinary is how
+completely a surface can define everyone's understanding of what the product is,
+including the people who built it.
 
 **Detect**: for every concept the surface touches, enumerate **all** of its
-business variants, then ask: _"which of these does the surface ignore, and is
-there a reason?"_ The answer is very often **"no reason — nobody got to it"**.
-That is free product.
-
-**Cooper wrote about the implementation model leaking _into_ the represented
-model. This is the inverse — the represented model failing to expose what the
-business already supports — and it is at least as common and far more valuable.**
+variants in the product, then ask _"which of these does the surface ignore, and is
+there a reason?"_ Often the answer is **"no reason — nobody got to it"**. Check
+this before inventing anything new; it is the cheapest win available and the
+easiest to miss.
 
 ### P-05 — The surface promises a business event that does not exist
 

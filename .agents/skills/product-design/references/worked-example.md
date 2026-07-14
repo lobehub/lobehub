@@ -3,7 +3,7 @@
 One complete trace. This is the session that seeded the Pattern Base, so every
 mistake in it is real.
 
-**The ask (L0)**: _"Look at our home surface. Nobody has put any design thought
+**The ask**: _"Look at our home surface. Nobody has put any design thought
 into it. What should actually be there?"_
 
 Note what the ask is **not**: not a bug, not a spec, not a requirement list. It is
@@ -109,10 +109,13 @@ being argued about.
 Nine assumptions overturned, nine `NEW` → the entire Pattern Base. That is the
 cold-start signature (see [trace-schema.md](trace-schema.md#reading-the-log)).
 
-**Saturation, honestly**: L1/L2 for this surface are close to mined out — a second
-pass over the same domain would likely turn up little. **L0 is wide open**: the
-team-collaboration half of the original ask was never answered, only deferred.
-The next round's budget belongs there.
+**Saturation, honestly**: the implementation model for this surface is close to
+mined out — a second pass over the same domain would turn up little.
+
+**And every one of the nine rows is an implementation-model finding. Not one is
+about the mental model.** That is the real verdict on this session: the half that
+could be done from a desk was done well, and the half that requires a user was not
+done at all. The next round's budget belongs there.
 
 ## What generalizes
 

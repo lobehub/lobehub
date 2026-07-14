@@ -1,127 +1,123 @@
-# Layer Model
+# Layer Model — the three models
 
-The **L** of SCLPT. Four layers, each with its own kind of evidence and its own
-authority. The point is not taxonomy — it is that **a claim from one layer cannot
-settle a question in another**, and mixing them is how a design session produces
-confident nonsense.
+The **L** of SCLPT. We do not invent a layer model; Cooper already wrote the
+right one, and it has held up for twenty-five years.
 
-| Layer                 | Question                                                      | Evidence                                    | Who decides                                         |
-| --------------------- | ------------------------------------------------------------- | ------------------------------------------- | --------------------------------------------------- |
-| **L0 Scenario**       | Who, in what circumstance, is hiring this surface to do what? | The user's words; the job to be done        | **The human.** No amount of grounding answers this. |
-| **L1 Business nouns** | What concepts, states and roles does the business _have_?     | The domain model, read as a domain document | **The business.** Not negotiable.                   |
-| **L2 Business verbs** | What does each action actually _do to the business_?          | The events an action produces               | **The business.** Not negotiable.                   |
-| **L3 Representation** | How is it shown — density, hierarchy, form?                   | The rendered prototype                      | Design judgment, inside L1/L2's limits              |
+| Model                    | What it is                                                                    | The evidence for it                  | Who has authority                                       |
+| ------------------------ | ----------------------------------------------------------------------------- | ------------------------------------ | ------------------------------------------------------- |
+| **Implementation model** | How the product **actually works**: its concepts, states, events, obligations | The domain model, the state machines | **The system.** Not arguable.                           |
+| **Represented model**    | What the interface **claims** the product is                                  | The surface; the prototype           | **Design.** This is the only one we author.             |
+| **Mental model**         | What the user **believes** it is                                              | What users say and do                | **The user.** It cannot be inferred from the other two. |
 
-**L1 is nouns and states. L2 is verbs and consequences.** They are separated
-because they fail differently: L1 failures are _"the concept isn't there"_
-(`P-06`), L2 failures are _"the button doesn't do what it says"_ (`P-02`, `P-05`).
+And Cooper's goal, which is the whole job in one line:
 
-## Where L1 and L2 are written down
+> **The represented model should be as close to the mental model as possible, and
+> as far from the implementation model as necessary.**
 
-In the schema, the state machines, the events.
+Every pattern in the Pattern Base is a failure to hold that line.
 
-**Not because implementation matters** — this skill has nothing to say about
-implementation. Because **that is the most honest statement the company has ever
-made about its own domain.** Marketing copy is aspirational; roadmaps are
-aspirational; the schema is what the business _actually_ believes exists. Read it
-as a domain document.
+## Where the implementation model is written down
 
-The corollary is a filter: if a fact you dug up carries no business meaning —
-which component renders the spinner, how a module is wired — **it is not an L1 or
-L2 finding at all.** It is engineering trivia, and it does not enter this system.
+In the domain model — the concepts, the states, the events.
 
-## The rule
+**Not because implementation matters.** This skill has nothing to say about how
+software is built. Because that is **the most honest statement the company has
+ever made about what it believes exists**. Marketing copy is aspirational;
+roadmaps are aspirational; the domain model is what the product _actually_
+commits to. Read it as a domain document.
 
-> **Never answer an L1 or L2 question with an L3 argument, and never answer an L0
-> question with either.**
+The corollary is a filter: a fact that carries **no business meaning** — which
+component draws the spinner, how a module is wired — **is not a finding about the
+implementation model at all.** It is a fact about the _code_, which is a different
+thing entirely, and it does not enter this system.
 
-Concretely:
+## Cross-model misjudgment — the four that actually happen
 
-- _"This button would feel natural here"_ (L3) does **not** establish that the
-  business event exists (L2). That is exactly how a fake affordance ships
-  (`P-05`).
-- _"The business has no project concept"_ (L1) does **not** settle whether the
-  product _needs_ one (L0). It settles the **cost**, and hands the decision back
-  to the human.
-- _"The state is called `paused`"_ is not an L1 finding at all — it is a word.
-  The L1 finding is **what that state obliges someone to do** (`P-01`).
+This is what the layer model is _for_. Each one is a specific way of using
+evidence from one model to settle a question that belongs to another.
 
-## Cross-layer misjudgment — the four that actually happen
+### 1. Inferring the implementation model from the represented model
 
-### 1. Designing an L3 affordance on top of an L1/L2 that does not exist
+**"The surface doesn't show it, so the product must not do it."**
 
-The most common and most expensive. The mock looks great; the business cannot
-back it. All of **Class B** is this.
+The most costly, and the most invisible — because it feels like observation, not
+inference. A surface showed only agent errors, so the whole team reasoned about
+it as an error log. The product in fact modeled four kinds of agent-to-human
+message and produced all four daily; three had simply never been surfaced.
 
-**Guard**: for every element in the prototype, name the business concept or event
-behind it. If you cannot, mark it `NEW` **on the mock itself** — a visible debt,
-not a silent lie.
+There is nothing profound about _why_ — the scenarios were designed and built
+before the interface caught up, which is ordinary. What is not ordinary is how
+completely the team's model of the product was formed by looking at the screen.
 
-### 2. Reading a state or action by its name instead of its meaning
+**Guard**: never read the surface as evidence about the product. Ground the
+implementation model directly, every time (`P-04`).
 
-`paused` sounds like "suspended" and means "a human is blocking the agent".
-"Request changes" sounds like a comment and means "re-task the agent". Every
-design built on the word instead of the meaning is a design for a different
-product. All of **Class A** is this.
+### 2. Building the represented model out of the implementation model
 
-**Guard**: for every state, _what does it oblige someone to do?_ For every
-action, _after this click, the business is now …?_ If you cannot finish either
-sentence, you have not grounded it.
+Cooper's central disease. The interface mirrors the machine: it inherits the
+machine's vocabulary (`paused`, which actually means _a human is blocking an
+agent_), its groupings (by producing entity, not by required action), and its
+shape.
 
-### 3. Letting L1 quietly veto L0
+**Guard**: the represented model is authored, not derived. For every state, ask
+what it **obliges someone to do**; for every action, what it **produces**. Design
+from that, not from the name (`P-01`, `P-02`, `P-09`).
 
-The business does not model the concept, so the design silently drops the
-requirement. The product has now been decided by the schema — which is exactly
-backwards.
+### 3. Representing something the implementation model does not have
 
-**Guard**: L1 reports **cost**, never verdicts. A missing concept goes into the
-spec as _"the business does not model X; adding it costs Y"_ (`P-11`), and the
-human decides whether Y is worth paying. Dropping it in silence is the design
-equivalent of swallowing an exception.
+The mirror image of #2, and it ships as theatre: an "Accept task" button on work
+that was already, unilaterally, assigned to you. The affordance implies a choice
+the product does not model.
 
-### 4. Answering L0 from the screenshot
+**Guard**: for every element, name the business event behind it. If you cannot,
+mark it `NEW` **on the prototype itself** — a visible debt, not a silent lie
+(`P-05`, `P-06`).
 
-The surface shows what is rendered; it says nothing about who needs what, or
-when. A redesign that starts from _"this looks dated"_ has skipped L0 entirely,
-and will optimize the wrong thing beautifully.
+### 4. Inferring the mental model from either of the other two
 
-**Guard**: the diagnosis must be **structural**. _"It looks dated"_ is not one.
-_"It shows one of four message kinds, so a decision inbox reads as an error log"_
-is.
+**The one nobody notices they are doing.**
 
-## Which layer is a given finding from?
+"The product models four kinds of message, so users think in four kinds." No.
+"The surface has always been an error log, so that is what users expect." No. The
+mental model is the only one that **cannot be grounded** — not in the domain, not
+in the screen. It comes from the user, and from nowhere else.
 
-The tag decides what you may do with it.
+**Guard**: a claim about what users believe or want is a **claim**, and it must
+be argued or observed — never asserted from a schema or a screenshot. When the
+work has produced zero findings about the mental model, **say so**; that is not a
+clean bill of health, it is an unexamined layer.
 
-| Finding                                                                  | Layer | What it licenses                                       |
-| ------------------------------------------------------------------------ | ----- | ------------------------------------------------------ |
-| "The business models four kinds of agent message; the surface shows one" | L1    | A scope opportunity — and probably the whole redesign  |
-| "`paused` obliges a human to review, not to wait"                        | L1    | A queue, not a 'later' bucket                          |
-| "'Request changes' re-tasks the agent; it is not a comment"              | L2    | Design a re-tasking, not a comment box                 |
-| "There is no 'offered, pending acceptance' state for assigned work"      | L2    | Kill the Accept button. It is theatre.                 |
-| "Conversations have no notion of belonging to a member"                  | L1    | A **red line** — this is a domain change, not a layout |
-| "The summary is too long to scan, too short to replace the document"     | L3    | A density decision — inside L1/L2's limits             |
-| "Nobody opens a dashboard twice"                                         | L0    | A product judgment — argue it, don't assert it         |
-| "This spinner is implemented as an SVG animation"                        | —     | **Not a finding.** No business meaning. Discard.       |
+## Tagging a finding
 
-That last row is the filter. Most things you can learn from a codebase are not
-product findings, and letting them in is how a Pattern Base turns into a
-changelog.
+Every row in the [reality-check log](trace-schema.md) is tagged with the model it
+is a fact about. The tag decides what the finding licenses.
 
-## Saturation, per layer
+| Finding                                                                 | Model          | What it licenses                                      |
+| ----------------------------------------------------------------------- | -------------- | ----------------------------------------------------- |
+| "The product models four kinds of agent message; the surface shows one" | implementation | A scope opportunity — possibly the whole redesign     |
+| "`paused` obliges a human to review; it does not mean 'suspended'"      | implementation | A queue, not a 'later' bucket                         |
+| "'Request changes' re-tasks the agent; it is not a comment"             | implementation | Design a re-tasking, not a comment box                |
+| "There is no 'offered, pending acceptance' state"                       | implementation | Kill the Accept button. It is theatre.                |
+| "Conversations have no notion of belonging to a person"                 | implementation | A **red line** — a domain change, not a layout choice |
+| "The summary is too long to scan, too short to replace the document"    | represented    | A density decision                                    |
+| "Nobody opens a dashboard twice"                                        | **mental**     | A claim. Argue it or observe it — never assert it.    |
+| "This spinner is drawn with an SVG animation"                           | —              | **Not a finding.** No business meaning. Discard.      |
 
-Saturation (**S**) is measured **per layer**, and they saturate at different
+The last row is the filter. Most of what you can learn from a codebase is not a
+product finding, and letting it in is how a Pattern Base turns into a changelog.
+
+## Saturation, per model
+
+Saturation (**S**) is measured per model, and they saturate at very different
 speeds:
 
-- **L1 / L2 saturate fast.** One thorough pass over a domain usually surfaces most
-  of what it models. When a second pass overturns nothing, they are mined out —
-  stop spending budget there.
-- **L3 saturates per iteration.** Each prototype round should produce fewer
-  corrections than the last. If round 3 produces as many as round 1, the problem
-  is upstream: L1 or L2 was never actually grounded.
-- **L0 never saturates.** Intent changes when the business changes. A quiet L0 is
-  not a solved L0 — it is an unexamined one.
-
-**The signal to record** (Step 6): _"this round's grounding overturned zero
-assumptions"_ — L1/L2 are done for this surface, and the next round's budget
-belongs to L0.
+- **The implementation model saturates fast.** One thorough grounding pass usually
+  surfaces most of what the product models. When a second pass overturns nothing,
+  it is mined out — stop spending budget there.
+- **The represented model saturates per iteration.** Each prototype round should
+  produce fewer corrections than the last. If round three produces as many as
+  round one, the problem is upstream: the implementation model was never actually
+  grounded.
+- **The mental model never saturates**, and it is the one this skill is weakest at.
+  Grounding cannot touch it. A session with zero mental-model findings has not
+  finished — it has only done the half that could be done from a desk.
