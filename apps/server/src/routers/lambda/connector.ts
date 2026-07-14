@@ -271,7 +271,7 @@ export const connectorRouter = router({
    * Guards: the caller must be able to edit the agent; the agent must not
    * already have a connector for this identifier (one per identifier per agent).
    */
-  bindAgent: connectorProcedure
+  bindAgent: connectorWriteProcedure
     .input(z.object({ agentId: z.string(), connectorId: z.string().uuid() }))
     .mutation(async ({ input, ctx }) => {
       const agentModel = new AgentModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
@@ -281,6 +281,8 @@ export const connectorRouter = router({
 
       const connector = await ctx.connectorModel.findById(input.connectorId);
       if (!connector) throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
+      // Rebinding routes the connector's credentials to the agent — creator/owner only.
+      assertWorkspaceRowManageable(ctx, connector.userId, 'connector');
 
       const existingAgentRow = await ctx.connectorModel.findScopedByIdentifier(
         connector.identifier,
@@ -303,11 +305,12 @@ export const connectorRouter = router({
    * to keep the base scope single-per-identifier — the caller should delete the
    * agent connector instead of demoting it into a collision.
    */
-  unbindAgent: connectorProcedure
+  unbindAgent: connectorWriteProcedure
     .input(z.object({ connectorId: z.string().uuid() }))
     .mutation(async ({ input, ctx }) => {
       const connector = await ctx.connectorModel.findById(input.connectorId);
       if (!connector) throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
+      assertWorkspaceRowManageable(ctx, connector.userId, 'connector');
       if (!connector.agentId) return { id: input.connectorId }; // already base — no-op
 
       const existingBase = await ctx.connectorModel.findScopedByIdentifier(connector.identifier);
@@ -327,7 +330,7 @@ export const connectorRouter = router({
    * row (own credentials, separately editable). Server-side because the
    * credentials ciphertext never reaches the client (see ConnectorModel).
    */
-  copyToAgent: connectorProcedure
+  copyToAgent: connectorWriteProcedure
     .input(z.object({ agentId: z.string(), connectorId: z.string().uuid() }))
     .mutation(async ({ input, ctx }) => {
       const agentModel = new AgentModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
@@ -337,6 +340,9 @@ export const connectorRouter = router({
 
       const source = await ctx.connectorModel.findById(input.connectorId);
       if (!source) throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
+      // Cloning duplicates the source's encrypted credentials into a row the
+      // agent owner controls — creator/owner only.
+      assertWorkspaceRowManageable(ctx, source.userId, 'connector');
 
       const existing = await ctx.connectorModel.findScopedByIdentifier(
         source.identifier,
@@ -359,7 +365,7 @@ export const connectorRouter = router({
    * The row stays user-owned (keeps syncing with the user's edits) but resolves
    * for this agent and is locked so no other agent can mount the same one.
    */
-  mountToAgent: connectorProcedure
+  mountToAgent: connectorWriteProcedure
     .input(z.object({ agentId: z.string(), connectorId: z.string().uuid() }))
     .mutation(async ({ input, ctx }) => {
       const agentModel = new AgentModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
@@ -369,6 +375,9 @@ export const connectorRouter = router({
 
       const connector = await ctx.connectorModel.findById(input.connectorId);
       if (!connector) throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
+      // Mounting routes the source's credentials to the agent and locks the
+      // row (metadata.mountedByAgentId) — creator/owner only.
+      assertWorkspaceRowManageable(ctx, connector.userId, 'connector');
       if (connector.agentId) {
         throw new TRPCError({
           code: 'BAD_REQUEST',
@@ -402,11 +411,13 @@ export const connectorRouter = router({
     }),
 
   /** Unmount a connector from its agent (clears the reference lock). */
-  unmountFromAgent: connectorProcedure
+  unmountFromAgent: connectorWriteProcedure
     .input(z.object({ connectorId: z.string().uuid() }))
     .mutation(async ({ input, ctx }) => {
       const connector = await ctx.connectorModel.findById(input.connectorId);
       if (!connector) throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
+      // Clearing the mount lock mutates the source row — creator/owner only.
+      assertWorkspaceRowManageable(ctx, connector.userId, 'connector');
 
       const { mountedByAgentId: _drop, ...restMeta } = connector.metadata ?? {};
       await ctx.connectorModel.update(input.connectorId, { metadata: restMeta });
