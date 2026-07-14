@@ -62,6 +62,11 @@ export class ResourceManagerStoreActionImpl {
 
           await resourceService.deleteResourcesByQuery(fileStore.queryParams as any);
           fileStore.clearCurrentQueryResources();
+          // Workspace query deletes are creator-scoped on the server — rows
+          // created by teammates survive. Revalidate so they reappear instead
+          // of looking deleted until the next manual refresh.
+          const { revalidateResources } = await import('@/store/file/slices/resource/hooks');
+          await revalidateResources(fileStore.queryParams);
 
           this.#set({ selectAllState: 'none', selectedFileIds: [] });
           return;

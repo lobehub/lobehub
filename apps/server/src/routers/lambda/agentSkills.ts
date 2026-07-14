@@ -73,9 +73,7 @@ const skillProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =>
       fileModel: new FileModel(ctx.serverDB, ctx.userId, workspaceId),
       fileService: new FileService(ctx.serverDB, ctx.userId, workspaceId),
       marketService: new MarketService({ userInfo: { userId: ctx.userId } }),
-      skillImporter: new SkillImporter(ctx.serverDB, ctx.userId, workspaceId, {
-        workspaceRole: (ctx as { workspaceRole?: string }).workspaceRole,
-      }),
+      skillImporter: new SkillImporter(ctx.serverDB, ctx.userId, workspaceId),
       skillModel,
     },
   });
@@ -87,7 +85,21 @@ const skillProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =>
 // workspaceId). Replaces the legacy `requireWorkspaceRoleWhenScoped('owner')`
 // which was overly restrictive (member should be able to manage skills they
 // own, per the role-permission matrix in @lobechat/const/rbac).
-const skillWriteProcedure = skillProcedure.use(withScopedPermission('agent:update'));
+const skillWriteProcedure = skillProcedure
+  .use(withScopedPermission('agent:update'))
+  // Rebuild the importer AFTER the RBAC middleware so it sees the resolved
+  // workspaceRole — the base-procedure instance is constructed before the
+  // role exists on ctx and would wrongly block owners in assertCanOverwrite.
+  .use(async (opts) => {
+    const { ctx } = opts;
+    return opts.next({
+      ctx: {
+        skillImporter: new SkillImporter(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined, {
+          workspaceRole: (ctx as { workspaceRole?: string }).workspaceRole,
+        }),
+      },
+    });
+  });
 
 const skillResourceProcedure = skillProcedure.use(async (opts) => {
   const { ctx } = opts;
