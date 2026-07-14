@@ -29,7 +29,7 @@ const DEFAULT_PAGE_SIZE = { height: 800, width: 1200 };
  * Sessions are keyed per topic (and, later, per tab), so a single agent can hold
  * several pages at once — hence the headroom over the original per-agent cap.
  */
-const MAX_LIVE_PAGES = 10;
+export const MAX_LIVE_PAGES = 10;
 /**
  * A page an agent touched this recently is treated as in use and never discarded
  * mid-run, even over the cap: breaking a running automation is far worse than
