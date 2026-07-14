@@ -25,6 +25,7 @@
   "table.columns.trigger.enums.notify": "Известие",
   "table.columns.trigger.enums.onboarding": "Въвеждане",
   "table.columns.trigger.enums.openapi": "OpenAPI",
+  "table.columns.trigger.enums.scheduled": "Планирано изпълнение",
   "table.columns.trigger.enums.semantic_search": "Търсене на знания",
   "table.columns.trigger.enums.signup_email_llm_review": "Преглед на имейл за регистрация",
   "table.columns.trigger.enums.topic": "Резюме на тема",
