@@ -102,18 +102,35 @@ export const works = pgTable(
     updatedAt: updatedAt(),
   },
   (t) => [
+    /** Deduplicates personal Works and serves the personal resource upsert conflict target. */
     uniqueIndex('works_resource_user_unique')
       .on(t.resourceType, t.resourceId, t.userId)
       .where(isNull(t.workspaceId)),
+    /** Deduplicates workspace Works and serves the workspace resource upsert conflict target. */
     uniqueIndex('works_resource_workspace_unique')
       .on(t.workspaceId, t.resourceType, t.resourceId)
       .where(isNotNull(t.workspaceId)),
+    /** Supports user-scoped ownership filters and cascading cleanup when a user is deleted. */
     index('works_user_id_idx').on(t.userId),
+    /** Supports workspace-scoped ownership filters and cascading cleanup when a workspace is deleted. */
     index('works_workspace_id_idx').on(t.workspaceId),
+    /** Powers keyset pagination of personal Works ordered by latest update and stable id. */
+    index('works_user_updated_at_id_idx')
+      .on(t.userId, t.updatedAt, t.id)
+      .where(isNull(t.workspaceId)),
+    /** Powers keyset pagination of workspace Works ordered by latest update and stable id. */
+    index('works_workspace_updated_at_id_idx')
+      .on(t.workspaceId, t.updatedAt, t.id)
+      .where(isNotNull(t.workspaceId)),
+    /** Locates a Work by its backing resource for resource-driven updates and deletes. */
     index('works_resource_idx').on(t.resourceType, t.resourceId),
+    /** Supports reverse lookup from a materialized current version to its owning Work. */
     index('works_current_version_id_idx').on(t.currentVersionId),
+    /** Supports global maintenance and recency scans ordered or filtered by last update. */
     index('works_updated_at_idx').on(t.updatedAt),
+    /** Supports creation-topic provenance lookup and topic-deletion SET NULL processing. */
     index('works_source_topic_id_idx').on(t.sourceTopicId),
+    /** Supports creation-thread provenance lookup and thread-deletion SET NULL processing. */
     index('works_source_thread_id_idx').on(t.sourceThreadId),
   ],
 );
@@ -185,17 +202,31 @@ export const workVersions = pgTable(
     createdAt: createdAt(),
   },
   (t) => [
+    /** Enforces one immutable row per Work version and supports ordered version-history reads. */
     uniqueIndex('work_versions_work_id_version_unique').on(t.workId, t.version),
+    /** Deduplicates retries of the same tool call while resolving a Work version. */
     uniqueIndex('work_versions_work_id_source_tool_call_id_unique')
       .on(t.workId, t.sourceToolCallId)
       .where(isNotNull(t.sourceToolCallId)),
+    /** Supports Work history and cost scans plus cascading cleanup when a Work is deleted. */
     index('work_versions_work_id_idx').on(t.workId),
+    /** Supports topic-scoped event lookup and topic-deletion SET NULL processing. */
     index('work_versions_topic_id_idx').on(t.topicId),
+    /** Supports thread-scoped event lookup and thread-deletion SET NULL processing. */
     index('work_versions_thread_id_idx').on(t.threadId),
+    /** Supports message provenance lookup and message-deletion SET NULL processing. */
     index('work_versions_source_message_id_idx').on(t.sourceMessageId),
+    /** Supports direct and batched lookup of version events produced by an agent operation. */
     index('work_versions_root_operation_id_idx').on(t.rootOperationId),
+    /** Powers operation-scoped event lists ordered by creation time. */
+    index('work_versions_root_operation_created_at_idx').on(t.rootOperationId, t.createdAt),
+    /** Powers conversation event lists filtered by topic/thread and ordered by creation time. */
+    index('work_versions_topic_thread_created_at_idx').on(t.topicId, t.threadId, t.createdAt),
+    /** Supports user-scoped version ownership filters and cascading user cleanup. */
     index('work_versions_user_id_idx').on(t.userId),
+    /** Supports workspace-scoped version ownership filters and cascading workspace cleanup. */
     index('work_versions_workspace_id_idx').on(t.workspaceId),
+    /** Supports global maintenance and recency scans over Work mutation events. */
     index('work_versions_created_at_idx').on(t.createdAt),
   ],
 );
