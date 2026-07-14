@@ -17,6 +17,8 @@ import { publishResourceEvent } from '@/server/services/resourceEvents';
 import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
 import { TransferErrorCode } from '@/types/transferError';
 
+import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
+
 /**
  * Custom schema for agent member input, replacing drizzle-generated insertAgentSchema
  * to avoid Json type inference issues with jsonb columns.
@@ -211,6 +213,10 @@ export const agentGroupRouter = router({
   deleteGroup: agentGroupProcedureWrite
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
+      const group = await ctx.chatGroupModel.findById(input.id);
+      if (!group) throw new TRPCError({ code: 'NOT_FOUND', message: 'Agent group not found' });
+      assertWorkspaceRowManageable(ctx, group.userId, 'group');
+
       return ctx.agentGroupService.deleteGroup(input.id);
     }),
 
@@ -302,6 +308,11 @@ export const agentGroupRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      // Strips members and hard-deletes virtual agents — creator/owner only.
+      const group = await ctx.chatGroupModel.findById(input.groupId);
+      if (!group) throw new TRPCError({ code: 'NOT_FOUND', message: 'Agent group not found' });
+      assertWorkspaceRowManageable(ctx, group.userId, 'group');
+
       return ctx.agentGroupRepo.removeAgentsFromGroup(
         input.groupId,
         input.agentIds,

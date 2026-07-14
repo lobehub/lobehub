@@ -25,4 +25,6 @@ export interface ConnectorWithTools {
   sourceType: string;
   status: string;
   tools: ConnectorTool[];
+  /** Creator attribution — drives the workspace row-level manage gate. */
+  userId?: string | null;
 }

@@ -14,6 +14,8 @@ import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermiss
 import { type KnowledgeBaseItem } from '@/types/knowledgeBase';
 import { TransferErrorCode } from '@/types/transferError';
 
+import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
+
 const knowledgeBaseProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
   const wsId = ctx.workspaceId ?? undefined;
@@ -203,8 +205,12 @@ export const knowledgeBaseRouter = router({
   removeAllKnowledgeBases: knowledgeBaseProcedure
     .use(withScopedPermission('knowledge_base:delete'))
     .mutation(async ({ ctx }) => {
+      // Non-owner members may only clear knowledge bases they created themselves.
+      const restrictToCreator = !!ctx.workspaceId && ctx.workspaceRole !== 'owner';
+
       const result = await ctx.knowledgeBaseModel.deleteAllWithFiles(
         serverDBEnv.REMOVE_GLOBAL_FILE,
+        { restrictToCreator },
       );
 
       if (result.deletedFiles.length > 0) {
@@ -227,6 +233,10 @@ export const knowledgeBaseRouter = router({
     .use(withScopedPermission('knowledge_base:delete'))
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
+      const existing = await ctx.knowledgeBaseModel.findById(input.id);
+      if (!existing) return;
+      assertWorkspaceRowManageable(ctx, existing.userId, 'knowledge base');
+
       const result = await ctx.knowledgeBaseModel.deleteWithFiles(
         input.id,
         serverDBEnv.REMOVE_GLOBAL_FILE,
@@ -267,6 +277,7 @@ export const knowledgeBaseRouter = router({
           message: 'Knowledge base not found',
         });
       }
+      assertWorkspaceRowManageable(ctx, knowledgeBase.userId, 'knowledge base');
 
       if (input.targetWorkspaceId) {
         const canWriteTarget = await hasWorkspaceScopedPermission({
@@ -308,6 +319,10 @@ export const knowledgeBaseRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      const existing = await ctx.knowledgeBaseModel.findById(input.id);
+      if (!existing) return;
+      assertWorkspaceRowManageable(ctx, existing.userId, 'knowledge base');
+
       return ctx.knowledgeBaseModel.update(input.id, input.value);
     }),
 });

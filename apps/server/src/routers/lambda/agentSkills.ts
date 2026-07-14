@@ -18,6 +18,8 @@ import {
   SkillResourceService,
 } from '@/server/services/skill';
 
+import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
+
 // ===== Error Handling =====
 
 const skillImportErrorToTRPCCode = (
@@ -128,6 +130,10 @@ export const agentSkillsRouter = router({
   delete: skillWriteProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
+      const target = await ctx.skillModel.findById(input.id);
+      // Missing row → keep the delete idempotent, nothing to authorize.
+      if (!target) return;
+      assertWorkspaceRowManageable(ctx, target.userId, 'skill');
       return ctx.skillModel.delete(input.id);
     }),
 
@@ -285,6 +291,10 @@ export const agentSkillsRouter = router({
   // ===== Update =====
 
   update: skillWriteProcedure.input(updateSkillSchema).mutation(async ({ ctx, input }) => {
+    const target = await ctx.skillModel.findById(input.id);
+    if (!target) throw new TRPCError({ code: 'NOT_FOUND', message: 'Skill not found' });
+    assertWorkspaceRowManageable(ctx, target.userId, 'skill');
+
     const { id, content, manifest } = input;
     return ctx.skillModel.update(id, {
       content,

@@ -1,7 +1,10 @@
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
-import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
+import {
+  requireWorkspaceRoleWhenScoped,
+  wsCompatProcedure,
+} from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AgentModel } from '@/database/models/agent';
 import { ConnectorModel } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
@@ -30,6 +33,8 @@ import {
 } from '@/server/services/connector/stateStore';
 import { syncConnectorToolsById } from '@/server/services/connector/sync';
 
+import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
+
 const connectorProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
   // Credentials (OAuth tokens) are encrypted at rest — give the model a gatekeeper.
@@ -43,6 +48,10 @@ const connectorProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts
     },
   });
 });
+
+// Writes: workspace mode requires at least the member role, gating viewers
+// out (read-only role) while personal mode passes through unrestricted.
+const connectorWriteProcedure = connectorProcedure.use(requireWorkspaceRoleWhenScoped('member'));
 
 const oidcConfigSchema = z.object({
   authorizationEndpoint: z.string().optional(),
@@ -180,7 +189,7 @@ export const connectorRouter = router({
 
   // ── Mutations ─────────────────────────────────────────────────────────────
 
-  create: connectorProcedure.input(createConnectorSchema).mutation(async ({ input, ctx }) => {
+  create: connectorWriteProcedure.input(createConnectorSchema).mutation(async ({ input, ctx }) => {
     const { agentId } = input;
 
     // Agent-scoped connector: the caller must be able to edit the target agent
@@ -193,6 +202,7 @@ export const connectorRouter = router({
         throw new TRPCError({ code: 'FORBIDDEN', message: 'Agent not found or not editable' });
       }
     }
+
 
     const fields = {
       // The model expects the decrypted JSON string and encrypts it at rest.
@@ -226,6 +236,9 @@ export const connectorRouter = router({
     // across scopes).
     const existing = await ctx.connectorModel.findScopedByIdentifier(input.identifier, agentId);
     if (existing) {
+      // The upsert path rewrites another creator's config/credentials — only
+      // the creator (or a workspace owner) may re-add over an existing row.
+      assertWorkspaceRowManageable(ctx, existing.userId, 'connector');
       await ctx.connectorModel.update(existing.id, {
         ...fields,
         isEnabled: input.isEnabled ?? true,
@@ -404,11 +417,13 @@ export const connectorRouter = router({
    * authorize URL for the client to open. The PKCE verifier is stashed in Redis
    * keyed by `state`; the callback route completes the exchange.
    */
-  startOAuth: connectorProcedure
+  startOAuth: connectorWriteProcedure
     .input(z.object({ id: z.string().uuid(), returnTo: z.string().optional() }))
     .mutation(async ({ input, ctx }) => {
       const connector = await ctx.connectorModel.findById(input.id);
       if (!connector) throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
+      // Re-authorizing overwrites the stored OAuth credentials.
+      assertWorkspaceRowManageable(ctx, connector.userId, 'connector');
       if (!connector.mcpServerUrl) {
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'Connector has no MCP server URL' });
       }
@@ -488,7 +503,7 @@ export const connectorRouter = router({
       return { authorizationUrl };
     }),
 
-  update: connectorProcedure
+  update: connectorWriteProcedure
     .input(
       z.object({
         id: z.string().uuid(),
@@ -503,6 +518,10 @@ export const connectorRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      const target = await ctx.connectorModel.findById(input.id);
+      if (!target) throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
+      assertWorkspaceRowManageable(ctx, target.userId, 'connector');
+
       const { credentials, ...patch } = input.patch;
       await ctx.connectorModel.update(input.id, {
         ...patch,
@@ -518,9 +537,13 @@ export const connectorRouter = router({
       } as any);
     }),
 
-  delete: connectorProcedure
+  delete: connectorWriteProcedure
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ input, ctx }) => {
+      const target = await ctx.connectorModel.findById(input.id);
+      // Missing row → keep the delete idempotent, nothing to authorize.
+      if (!target) return;
+      assertWorkspaceRowManageable(ctx, target.userId, 'connector');
       await ctx.connectorModel.delete(input.id);
     }),
 
@@ -529,7 +552,7 @@ export const connectorRouter = router({
    * `user_connector_tools`. Manifest-derived fields are overwritten;
    * user permission settings are preserved.
    */
-  syncTools: connectorProcedure
+  syncTools: connectorWriteProcedure
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ input, ctx }) => {
       try {
@@ -548,7 +571,7 @@ export const connectorRouter = router({
    * the connector, hard-blocks disabled tools, refreshes the OAuth token if
    * needed, and calls the remote MCP server with the decrypted credentials.
    */
-  callTool: connectorProcedure
+  callTool: connectorWriteProcedure
     .input(
       z.object({
         args: z.string().optional(),
@@ -574,9 +597,14 @@ export const connectorRouter = router({
   /**
    * Reset all tool permissions for a connector back to 'auto' (fully open).
    */
-  resetPermissions: connectorProcedure
+  resetPermissions: connectorWriteProcedure
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ input, ctx }) => {
+      const target = await ctx.connectorModel.findById(input.id);
+      if (!target) throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
+      // Permission gates decide what auto-runs for the whole workspace.
+      assertWorkspaceRowManageable(ctx, target.userId, 'connector');
+
       const tools = await ctx.connectorToolModel.queryByConnector(input.id);
       await Promise.all(
         tools.map((t) =>
@@ -586,7 +614,7 @@ export const connectorRouter = router({
       return { toolCount: tools.length };
     }),
 
-  updateToolPermission: connectorProcedure
+  updateToolPermission: connectorWriteProcedure
     .input(
       z.object({
         permission: z.enum([
@@ -598,6 +626,11 @@ export const connectorRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      const tool = await ctx.connectorToolModel.findById(input.toolId);
+      if (!tool) throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector tool not found' });
+      const owner = await ctx.connectorModel.findById(tool.userConnectorId);
+      assertWorkspaceRowManageable(ctx, owner?.userId, 'connector');
+
       await ctx.connectorToolModel.updatePermission(input.toolId, input.permission);
     }),
 
@@ -606,7 +639,7 @@ export const connectorRouter = router({
    * that already have their tool list available on the client side).
    * Idempotent — safe to call whenever the detail panel opens.
    */
-  syncToolsFromClient: connectorProcedure
+  syncToolsFromClient: connectorWriteProcedure
     .input(
       z.object({
         identifier: z.string().min(1),
@@ -648,7 +681,7 @@ export const connectorRouter = router({
    * by reading its manifest from @lobechat/builtin-tools.
    * Idempotent — safe to call on every open of the detail panel.
    */
-  syncBuiltinTool: connectorProcedure
+  syncBuiltinTool: connectorWriteProcedure
     .input(z.object({ identifier: z.string().min(1) }))
     .mutation(async ({ input, ctx }) => {
       const { builtinTools } = await import('@lobechat/builtin-tools');
@@ -695,7 +728,7 @@ export const connectorRouter = router({
    * transport endpoint) and would also collide on the unique `(user_id,
    * identifier)` index when the migration later tries to upsert.
    */
-  syncPluginTools: connectorProcedure
+  syncPluginTools: connectorWriteProcedure
     .input(z.object({ identifier: z.string().min(1) }))
     .mutation(async ({ input, ctx }) => {
       const plugin = await ctx.pluginModel.findById(input.identifier);

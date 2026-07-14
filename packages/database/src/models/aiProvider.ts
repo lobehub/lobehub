@@ -140,10 +140,15 @@ export class AiProviderModel {
     const decrypt = decryptor ?? JSON.parse;
 
     // Merge keyVaults with existing values to preserve OAuth tokens
-    // when updating from form values that don't include them
+    // when updating from form values that don't include them.
+    // Only the caller's own row may seed the merge: `scopeWhere()` alone is
+    // workspace-wide, which would decrypt another member's keyVaults and copy
+    // them into the caller's row.
     let mergedKeyVaults = value.keyVaults || {};
 
-    const existing = await this.findById(id);
+    const existing = await this.db.query.aiProviders.findFirst({
+      where: and(eq(aiProviders.id, id), eq(aiProviders.userId, this.userId), this.scopeWhere()),
+    });
     if (existing?.keyVaults) {
       try {
         const existingKeyVaults = await decrypt(existing.keyVaults);

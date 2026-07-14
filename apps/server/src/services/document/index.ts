@@ -592,9 +592,18 @@ export class DocumentService {
   /**
    * Delete multiple documents in batch
    */
-  async deleteDocuments(ids: string[]) {
+  async deleteDocuments(ids: string[], options?: { restrictToCreator?: boolean }) {
+    let targetIds = ids;
+
+    // Workspace bulk deletes from non-owner members only target rows they
+    // created; the recursive cascade below each target stays untouched.
+    if (options?.restrictToCreator) {
+      const rows = await this.documentModel.findByIds(ids);
+      targetIds = rows.filter((row) => row.userId === this.userId).map((row) => row.id);
+    }
+
     // Delete each document (which handles recursive deletion for folders)
-    await Promise.all(ids.map((id) => this.deleteDocument(id)));
+    await Promise.all(targetIds.map((id) => this.deleteDocument(id)));
   }
 
   /**

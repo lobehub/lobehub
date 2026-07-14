@@ -15,6 +15,7 @@ import { DocumentService } from '@/server/services/document';
 import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
 import { TransferErrorCode } from '@/types/transferError';
 
+import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
 import {
   compareDocumentHistoryItemsInputSchema,
   getDocumentHistoryItemInputSchema,
@@ -132,6 +133,10 @@ export const documentRouter = router({
     .use(withScopedPermission('document:delete'))
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
+      const existing = await ctx.documentModel.findById(input.id);
+      if (!existing) return;
+      assertWorkspaceRowManageable(ctx, existing.userId, 'document');
+
       return ctx.documentService.deleteDocument(input.id);
     }),
 
@@ -139,6 +144,11 @@ export const documentRouter = router({
     .use(withScopedPermission('document:delete'))
     .input(z.object({ ids: z.array(z.string()) }))
     .mutation(async ({ ctx, input }) => {
+      const targets = await ctx.documentModel.findByIds(input.ids);
+      for (const target of targets) {
+        assertWorkspaceRowManageable(ctx, target.userId, 'document');
+      }
+
       return ctx.documentService.deleteDocuments(input.ids);
     }),
 

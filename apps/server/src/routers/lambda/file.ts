@@ -29,6 +29,8 @@ import type { FileListItem, KnowledgeItemStatus } from '@/types/files';
 import { QueryFileListSchema, UploadFileSchema } from '@/types/files';
 import { TransferErrorCode } from '@/types/transferError';
 
+import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
+
 const fileTransferEntityTypeSchema = z.enum(['document', 'file', 'folder']);
 
 const filterKnowledgeItems = <
@@ -461,6 +463,9 @@ export const fileRouter = router({
     .use(withScopedPermission('file:delete'))
     .input(QueryFileListSchema)
     .mutation(async ({ ctx, input }): Promise<{ count: number }> => {
+      // Non-owner members may only bulk-delete rows they created themselves.
+      const restrictToCreator = !!ctx.workspaceId && ctx.workspaceRole !== 'owner';
+
       const fileIds: string[] = [];
       const documentIds: string[] = [];
       const batchSize = 500;
@@ -497,13 +502,14 @@ export const fileRouter = router({
       }
 
       if (documentIds.length > 0) {
-        await ctx.documentService.deleteDocuments(documentIds);
+        await ctx.documentService.deleteDocuments(documentIds, { restrictToCreator });
       }
 
       if (fileIds.length > 0) {
         const needToRemoveFileList = await ctx.fileModel.deleteMany(
           fileIds,
           serverDBEnv.REMOVE_GLOBAL_FILE,
+          { restrictToCreator },
         );
 
         if (needToRemoveFileList && needToRemoveFileList.length > 0) {
@@ -593,6 +599,10 @@ export const fileRouter = router({
     .use(withScopedPermission('file:delete'))
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
+      const existing = await ctx.fileModel.findById(input.id);
+      if (!existing) return;
+      assertWorkspaceRowManageable(ctx, existing.userId, 'file');
+
       const file = await ctx.fileModel.delete(input.id, serverDBEnv.REMOVE_GLOBAL_FILE);
 
       if (!file) return;
@@ -613,6 +623,7 @@ export const fileRouter = router({
       const file = await ctx.fileModel.findById(input.id);
 
       if (!file) return;
+      assertWorkspaceRowManageable(ctx, file.userId, 'file');
 
       const taskId = input.type === 'embedding' ? file.embeddingTaskId : file.chunkTaskId;
 
@@ -625,6 +636,11 @@ export const fileRouter = router({
     .use(withScopedPermission('file:delete'))
     .input(z.object({ ids: z.array(z.string()) }))
     .mutation(async ({ input, ctx }) => {
+      const targets = await ctx.fileModel.findByIds(input.ids);
+      for (const target of targets) {
+        assertWorkspaceRowManageable(ctx, target.userId, 'file');
+      }
+
       const needToRemoveFileList = await ctx.fileModel.deleteMany(
         input.ids,
         serverDBEnv.REMOVE_GLOBAL_FILE,
@@ -648,6 +664,10 @@ export const fileRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const { id, metadata, name, parentId } = input;
+
+      const existing = await ctx.fileModel.findById(id);
+      if (!existing) return { success: true };
+      assertWorkspaceRowManageable(ctx, existing.userId, 'file');
 
       // Resolve parentId if it's a slug (otherwise use as-is)
       let resolvedParentId: string | null | undefined = parentId;
@@ -788,6 +808,7 @@ export const fileRouter = router({
             message: input.entityType === 'folder' ? 'Folder not found' : 'Document not found',
           });
         }
+        assertWorkspaceRowManageable(ctx, document.userId, 'document');
         const additionalSize = await ctx.documentModel.countFileUsageInSubtree(input.id);
         await businessFileTransferStorageCheck({
           additionalSize,
@@ -809,6 +830,7 @@ export const fileRouter = router({
           code: 'NOT_FOUND',
           message: 'File not found',
         });
+      assertWorkspaceRowManageable(ctx, file.userId, 'file');
       await businessFileTransferStorageCheck({
         additionalSize: file.size,
         targetUserId: ctx.userId,

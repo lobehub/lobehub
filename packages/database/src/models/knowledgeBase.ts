@@ -574,9 +574,20 @@ export class KnowledgeBaseModel {
     return { deletedFiles };
   };
 
-  deleteAllWithFiles = async (removeGlobalFile: boolean = true) => {
-    const allKbFileIds = await this.db
-      .select({ fileId: knowledgeBaseFiles.fileId })
+  deleteAllWithFiles = async (
+    removeGlobalFile: boolean = true,
+    options?: { restrictToCreator?: boolean },
+  ) => {
+    // Workspace clear-all from non-owner members only removes the caller's own KBs.
+    const kbWhere = options?.restrictToCreator
+      ? and(this.ownership(), eq(knowledgeBases.userId, this.userId))
+      : this.ownership();
+
+    const allKbLinks = await this.db
+      .select({
+        fileId: knowledgeBaseFiles.fileId,
+        knowledgeBaseId: knowledgeBaseFiles.knowledgeBaseId,
+      })
       .from(knowledgeBaseFiles)
       .where(
         buildWorkspaceWhere(
@@ -585,7 +596,32 @@ export class KnowledgeBaseModel {
         ),
       );
 
-    const fileIds = [...new Set(allKbFileIds.map((f) => f.fileId))];
+    let fileIds = [...new Set(allKbLinks.map((f) => f.fileId))];
+
+    if (options?.restrictToCreator) {
+      const targetKbs = await this.db
+        .select({ id: knowledgeBases.id })
+        .from(knowledgeBases)
+        .where(kbWhere);
+      const targetKbIds = new Set(targetKbs.map((kb) => kb.id));
+
+      // Files still linked to a surviving KB must outlive the narrowed clear-all.
+      const survivingFileIds = new Set(
+        allKbLinks
+          .filter((link) => !targetKbIds.has(link.knowledgeBaseId))
+          .map((link) => link.fileId),
+      );
+
+      fileIds = [
+        ...new Set(
+          allKbLinks
+            .filter(
+              (link) => targetKbIds.has(link.knowledgeBaseId) && !survivingFileIds.has(link.fileId),
+            )
+            .map((link) => link.fileId),
+        ),
+      ];
+    }
 
     let deletedFiles: Array<{ id: string; url: string | null }> = [];
     if (fileIds.length > 0) {
@@ -594,7 +630,7 @@ export class KnowledgeBaseModel {
       deletedFiles = (result || []).map((f) => ({ id: f.id, url: f.url }));
     }
 
-    await this.db.delete(knowledgeBases).where(this.ownership());
+    await this.db.delete(knowledgeBases).where(kbWhere);
 
     return { deletedFiles };
   };

@@ -395,8 +395,13 @@ export class TaskModel {
     return result.rows.length > 0;
   }
 
-  async deleteAll(): Promise<number> {
-    const result = await this.db.delete(tasks).where(this.ownership()).returning();
+  async deleteAll(options?: { restrictToCreator?: boolean }): Promise<number> {
+    // `restrictToCreator` narrows the workspace-wide sweep to rows the caller
+    // created (non-owner members); owners/personal mode keep the full scope.
+    const where = options?.restrictToCreator
+      ? and(this.ownership(), eq(tasks.createdByUserId, this.userId))
+      : this.ownership();
+    const result = await this.db.delete(tasks).where(where).returning();
 
     return result.length;
   }

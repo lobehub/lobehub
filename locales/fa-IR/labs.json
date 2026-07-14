@@ -3,6 +3,8 @@
   "features.agentGraphConfig.title": "پیکربندی زمان اجرای نمودار عامل",
   "features.agentSelfIteration.desc": "به دستیار امکان می‌دهد درباره عملکرد خود تأمل کند، خودآگاهی ایجاد کند و از طریق تلاش‌ها و تعاملات مداوم به طور پیوسته بهبود یابد.",
   "features.agentSelfIteration.title": "خود‌تکراری عامل",
+  "features.artifactDeployment.desc": "انتشار مصنوعات به یک URL میزبانی شده و مدیریت نسخه‌ها از نوار کناری مکالمه",
+  "features.artifactDeployment.title": "انتشار مصنوعات",
   "features.assistantMessageGroup.desc": "نمایش گروهی پیام‌های عامل و نتایج ابزارهای فراخوانی‌شده به‌صورت یکجا",
   "features.assistantMessageGroup.title": "گروه‌بندی پیام‌های عامل",
   "features.claudeCodeSdk.desc": "اجرای جلسات Claude Code از طریق Claude Agent SDK به جای اجرای CLI. امکان پخش غنی‌تر و کنترل جلسات را فراهم می‌کند.",

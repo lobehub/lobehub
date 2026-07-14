@@ -3,7 +3,10 @@ import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { z } from 'zod';
 
-import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
+import {
+  requireWorkspaceRoleWhenScoped,
+  wsCompatProcedure,
+} from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AgentSkillModel } from '@/database/models/agentSkill';
 import { FileModel } from '@/database/models/file';
 import { UserModel } from '@/database/models/user';
@@ -81,6 +84,11 @@ const marketToolProcedure = wsCompatProcedure
       },
     });
   });
+
+// Execution mutations (sandbox runs, cloud MCP calls, file exports) have side
+// effects and spend quota — workspace viewers (read-only) are gated out while
+// personal mode passes through unrestricted.
+const marketToolWriteProcedure = marketToolProcedure.use(requireWorkspaceRoleWhenScoped('member'));
 
 // ============================== LobeHub Skill Procedures ==============================
 /**
@@ -301,7 +309,7 @@ const execInSandboxHandler = async ({
 // ============================== Router ==============================
 export const marketRouter = router({
   // ============================== Cloud MCP Gateway ==============================
-  callCloudMcpEndpoint: marketToolProcedure
+  callCloudMcpEndpoint: marketToolWriteProcedure
     .input(callCloudMcpEndpointSchema)
     .mutation(async ({ input, ctx }) => {
       log('callCloudMcpEndpoint input: %O', input);
@@ -392,12 +400,12 @@ export const marketRouter = router({
     }),
 
   /** @deprecated Use execInSandbox instead. Will be removed in a future version. */
-  callCodeInterpreterTool: marketToolProcedure
+  callCodeInterpreterTool: marketToolWriteProcedure
     .input(execInSandboxSchema)
     .mutation(({ input, ctx }) => execInSandboxHandler({ ctx, input })),
 
   // ============================== Sandbox Execution ==============================
-  execInSandbox: marketToolProcedure
+  execInSandbox: marketToolWriteProcedure
     .input(execInSandboxSchema)
     .mutation(({ input, ctx }) => execInSandboxHandler({ ctx, input })),
 
@@ -671,7 +679,7 @@ export const marketRouter = router({
    * This combines the previous getExportFileUploadUrl + execInSandbox + createFileRecord flow
    * Returns a permanent /f/:id URL instead of a temporary pre-signed URL
    */
-  exportAndUploadFile: marketToolProcedure
+  exportAndUploadFile: marketToolWriteProcedure
     .input(exportAndUploadFileSchema)
     .mutation(async ({ input, ctx }) => {
       const { path, filename, topicId } = input;

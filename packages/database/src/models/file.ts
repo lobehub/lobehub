@@ -238,22 +238,33 @@ export class FileModel {
     return parseInt(result[0].totalSize!) || 0;
   };
 
-  deleteMany = async (ids: string[], removeGlobalFile: boolean = true) => {
+  deleteMany = async (
+    ids: string[],
+    removeGlobalFile: boolean = true,
+    options?: { restrictToCreator?: boolean },
+  ) => {
     if (ids.length === 0) return [];
 
     return await this.db.transaction(async (trx) => {
       // 1. First get the file list to return the deleted files
       const fileList = await trx.query.files.findMany({
-        where: and(inArray(files.id, ids), this.ownership()),
+        where: and(
+          inArray(files.id, ids),
+          this.ownership(),
+          // Workspace bulk deletes from non-owner members only touch their own rows.
+          options?.restrictToCreator ? eq(files.userId, this.userId) : undefined,
+        ),
       });
 
       if (fileList.length === 0) return [];
+
+      const targetIds = fileList.map((file) => file.id);
 
       // Extract file hashes that need to be checked
       const hashList = fileList.map((file) => file.fileHash!).filter(Boolean);
 
       // 2. Delete related chunks
-      await this.deleteFileChunks(trx as any, ids);
+      await this.deleteFileChunks(trx as any, targetIds);
 
       // 3. Delete mirror documents (sourceType='file') so they don't linger as
       // orphans with fileId set to null after the file row is removed.
@@ -261,7 +272,7 @@ export class FileModel {
         .delete(documents)
         .where(
           and(
-            inArray(documents.fileId, ids),
+            inArray(documents.fileId, targetIds),
             buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, documents),
             eq(documents.sourceType, 'file'),
           ),
@@ -276,7 +287,7 @@ export class FileModel {
       }
 
       // 5. Delete file records
-      await trx.delete(files).where(and(inArray(files.id, ids), this.ownership()));
+      await trx.delete(files).where(and(inArray(files.id, targetIds), this.ownership()));
 
       // If global files don't need to be deleted, no storage object should be removed.
       if (!removeGlobalFile || hashList.length === 0) return [];

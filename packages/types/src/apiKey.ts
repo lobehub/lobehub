@@ -2,9 +2,14 @@
 export interface ApiKeyItem {
   accessedAt: Date;
   createdAt: Date;
+  // Display name of the key's creator (workspace list view); null when unknown.
+  creator?: string | null;
   enabled?: boolean | null;
   expiresAt?: Date | null;
   id: string;
+  // Whether the current caller created this key. Only own keys carry the
+  // decrypted plaintext `key`; other members' rows come back masked.
+  isMine?: boolean;
   key: string;
   lastUsedAt?: Date | null;
   name: string;

@@ -22,6 +22,8 @@ import { publishResourceEvent } from '@/server/services/resourceEvents';
 import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
 import { TransferErrorCode } from '@/types/transferError';
 
+import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
+
 const agentProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
   const wsId = ctx.workspaceId ?? undefined;
@@ -469,6 +471,12 @@ export const agentRouter = router({
     .use(withScopedPermission('agent:delete'))
     .input(z.object({ agentId: z.string() }))
     .mutation(async ({ input, ctx }) => {
+      // Deleting cascades sessions/topics/messages, so gate to the creator or
+      // a workspace owner before the destructive write.
+      const meta = await ctx.agentModel.getAgentVisibilityMeta(input.agentId);
+      if (!meta) throw new TRPCError({ code: 'NOT_FOUND', message: 'Agent not found' });
+      assertWorkspaceRowManageable(ctx, meta.userId, 'agent');
+
       return ctx.agentModel.delete(input.agentId);
     }),
 

@@ -794,8 +794,12 @@ describe('fileRouter', () => {
 
       const result = await caller.deleteKnowledgeItemsByQuery({});
 
-      expect(mockDocumentServiceDeleteDocuments).toHaveBeenCalledWith(['doc-1']);
-      expect(mockFileModelDeleteMany).toHaveBeenCalledWith(['file-2'], false);
+      expect(mockDocumentServiceDeleteDocuments).toHaveBeenCalledWith(['doc-1'], {
+        restrictToCreator: false,
+      });
+      expect(mockFileModelDeleteMany).toHaveBeenCalledWith(['file-2'], false, {
+        restrictToCreator: false,
+      });
       expect(result).toEqual({ count: 2 });
     });
   });
@@ -803,7 +807,7 @@ describe('fileRouter', () => {
   describe('transferEntity', () => {
     it('should transfer document resources via documentModel', async () => {
       ctx.workspaceId = 'workspace-active';
-      mockDocumentModelFindById.mockResolvedValue({ id: 'doc-1' });
+      mockDocumentModelFindById.mockResolvedValue({ id: 'doc-1', userId: 'test-user' });
       mockDocumentModelCountFileUsageInSubtree.mockResolvedValue(4096);
       mockDocumentModelTransferTo.mockResolvedValue({ id: 'doc-1' });
 
@@ -901,7 +905,7 @@ describe('fileRouter', () => {
 
     it('should copy document resources via documentModel', async () => {
       mockDocumentModelCopyToWorkspace.mockResolvedValue({ id: 'doc-1' });
-      mockDocumentModelFindById.mockResolvedValue({ id: 'doc-1' });
+      mockDocumentModelFindById.mockResolvedValue({ id: 'doc-1', userId: 'test-user' });
       mockDocumentModelCountFileUsageInSubtree.mockResolvedValue(4096);
 
       await caller.copyEntityToWorkspace({

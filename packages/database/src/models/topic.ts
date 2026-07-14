@@ -206,6 +206,15 @@ export class TopicModel {
 
   private ownership = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, topics);
+
+  /**
+   * In workspace mode `ownership()` matches every member's topics, so a bulk
+   * "clear all" would wipe teammates' conversations. Destructive sweeps must
+   * additionally pin `user_id` to the caller (personal mode is unchanged —
+   * ownership already scopes to the user there).
+   */
+  private mine = () => and(this.ownership(), eq(topics.userId, this.userId));
+
   private messageOwnership = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, messages);
   // **************** Query *************** //
@@ -512,6 +521,19 @@ export class TopicModel {
     return this.db.query.topics.findFirst({
       where: and(eq(topics.id, id), this.ownership()),
     });
+  };
+
+  /**
+   * Minimal creator projection for router-level workspace row checks on
+   * batch-by-ids operations (batch delete / move).
+   */
+  findOwnersByIds = async (ids: string[]): Promise<{ id: string; userId: string }[]> => {
+    if (ids.length === 0) return [];
+
+    return this.db
+      .select({ id: topics.id, userId: topics.userId })
+      .from(topics)
+      .where(and(inArray(topics.id, ids), this.ownership()));
   };
 
   /**
@@ -970,9 +992,21 @@ export class TopicModel {
 
   /**
    * Deletes multiple topics based on the sessionId.
+   * `restrictToCreator` limits the sweep to the caller's own rows (workspace
+   * non-owner members must not clear teammates' topics).
    */
-  batchDeleteBySessionId = async (sessionId?: string | null) => {
-    return this.db.delete(topics).where(and(this.matchSession(sessionId), this.ownership()));
+  batchDeleteBySessionId = async (
+    sessionId?: string | null,
+    options?: { restrictToCreator?: boolean },
+  ) => {
+    return this.db
+      .delete(topics)
+      .where(
+        and(
+          this.matchSession(sessionId),
+          options?.restrictToCreator ? this.mine() : this.ownership(),
+        ),
+      );
   };
 
   /**
@@ -984,9 +1018,18 @@ export class TopicModel {
 
   /**
    * Deletes all topics matching the given agentId (`topics.agentId`).
+   * `restrictToCreator` limits the sweep to the caller's own rows (workspace
+   * non-owner members must not clear teammates' topics).
    */
-  batchDeleteByAgentId = async (agentId: string) => {
-    return this.db.delete(topics).where(and(this.ownership(), eq(topics.agentId, agentId)));
+  batchDeleteByAgentId = async (agentId: string, options?: { restrictToCreator?: boolean }) => {
+    return this.db
+      .delete(topics)
+      .where(
+        and(
+          options?.restrictToCreator ? this.mine() : this.ownership(),
+          eq(topics.agentId, agentId),
+        ),
+      );
   };
 
   /**
@@ -997,7 +1040,7 @@ export class TopicModel {
   };
 
   deleteAll = async () => {
-    return this.db.delete(topics).where(and(this.ownership()));
+    return this.db.delete(topics).where(this.mine());
   };
 
   // **************** Update *************** //

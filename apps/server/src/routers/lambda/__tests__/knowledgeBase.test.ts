@@ -45,7 +45,7 @@ describe('knowledgeBaseRouter', () => {
     routerMocks.hasWorkspaceScopedPermission.mockResolvedValue(true);
     mockKnowledgeBaseModelCopyToWorkspace.mockResolvedValue({ id: 'kb-copy' });
     mockKnowledgeBaseModelCountFileUsage.mockResolvedValue(4096);
-    mockKnowledgeBaseModelFindById.mockResolvedValue({ id: 'kb-1' });
+    mockKnowledgeBaseModelFindById.mockResolvedValue({ id: 'kb-1', userId: 'test-user' });
     mockKnowledgeBaseModelTransferTo.mockResolvedValue({ id: 'kb-1' });
   });
 

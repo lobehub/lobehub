@@ -3,6 +3,8 @@
   "features.agentGraphConfig.title": "تكوين وقت تشغيل الرسم البياني للوكيل",
   "features.agentSelfIteration.desc": "السماح للمساعد بالتفكير الذاتي، وبناء الوعي الذاتي، والاستمرار في التطوير عبر المحاولات والتفاعلات المتواصلة.",
   "features.agentSelfIteration.title": "التكرار الذاتي للوكيل",
+  "features.artifactDeployment.desc": "نشر العناصر إلى عنوان URL مستضاف وإدارة الإصدارات من الشريط الجانبي للمحادثة",
+  "features.artifactDeployment.title": "نشر العناصر",
   "features.assistantMessageGroup.desc": "تجميع رسائل الوكيل ونتائج استدعاء الأدوات معًا للعرض",
   "features.assistantMessageGroup.title": "تجميع رسائل الوكيل",
   "features.claudeCodeSdk.desc": "قم بتشغيل جلسات Claude Code من خلال Claude Agent SDK بدلاً من تشغيل واجهة سطر الأوامر (CLI). يتيح ذلك بثًا أكثر ثراءً وتحكمًا أفضل في الجلسات.",

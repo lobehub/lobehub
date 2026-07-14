@@ -204,6 +204,13 @@ export class DocumentModel {
     });
   };
 
+  findByIds = async (ids: string[]): Promise<DocumentItem[]> => {
+    if (ids.length === 0) return [];
+    return this.db.query.documents.findMany({
+      where: and(this.ownership(), inArray(documents.id, ids)),
+    });
+  };
+
   findByFileId = async (fileId: string) => {
     return this.db.query.documents.findFirst({
       where: and(this.ownership(), eq(documents.fileId, fileId)),

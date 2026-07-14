@@ -9,6 +9,8 @@ import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { NotebookRuntimeService } from '@/server/services/notebook';
 
+import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
+
 const notebookProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
   const wsId = ctx.workspaceId ?? undefined;
@@ -71,6 +73,10 @@ export const notebookRouter = router({
     .use(withScopedPermission('document:delete'))
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
+      const existing = await ctx.documentModel.findById(input.id);
+      if (!existing) return { success: true };
+      assertWorkspaceRowManageable(ctx, existing.userId, 'document');
+
       await ctx.notebookService.deleteDocument(input.id);
 
       return { success: true };

@@ -103,7 +103,9 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
         },
         {
           items: [
-            {
+            // AI provider config (keys/endpoints) is shared workspace infra —
+            // owner-only, hidden from members entirely (LOBE-11834).
+            isOwner && {
               icon: Brain,
               key: WorkspaceSettingsTabs.Provider,
               label: t('tab.provider'),
@@ -133,7 +135,7 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
             // (the link is owned by `userId`, not the workspace), and reaching a
             // workspace's agents happens via the scope selector on the *personal*
             // Messenger page. There is nothing workspace-level to configure here.
-          ],
+          ].filter(Boolean) as WorkspaceSettingCategoryItem[],
           key: WorkspaceSettingsGroupKey.Agent,
           title: t('workspaceSetting.group.agent'),
         },

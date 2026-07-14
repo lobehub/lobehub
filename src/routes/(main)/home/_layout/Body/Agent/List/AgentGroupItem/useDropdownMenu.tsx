@@ -11,6 +11,7 @@ import { openEditingPopover } from '@/features/EditingPopover/store';
 import { usePermission } from '@/hooks/usePermission';
 import { useGlobalStore } from '@/store/global';
 import { useHomeStore } from '@/store/home';
+import { isForbiddenError } from '@/utils/forbiddenError';
 
 interface UseGroupDropdownMenuParams {
   anchor: HTMLElement | null;
@@ -127,8 +128,16 @@ export const useGroupDropdownMenu = ({
               okButtonProps: { danger: true },
               okText: t('delete', { ns: 'common' }),
               onOk: async () => {
-                await removeAgentGroup(id);
-                message.success(t('confirmRemoveGroupSuccess'));
+                try {
+                  await removeAgentGroup(id);
+                  message.success(t('confirmRemoveGroupSuccess'));
+                } catch (error) {
+                  message.error(
+                    isForbiddenError(error)
+                      ? t('manageOnlyCreator', { ns: 'common' })
+                      : t('operationFailed', { ns: 'common' }),
+                  );
+                }
               },
               title: t('delete', { ns: 'common' }),
             });

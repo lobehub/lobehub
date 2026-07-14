@@ -3,6 +3,8 @@
   "features.agentGraphConfig.title": "Ajan Grafik Çalışma Zamanı Yapılandırması",
   "features.agentSelfIteration.desc": "Asistanın düşünmesini, öz farkındalık geliştirmesini ve devam eden denemeler ile etkileşimler boyunca sürekli yineleme yapmasını sağlar.",
   "features.agentSelfIteration.title": "Aracının Kendi Kendine Yinelemesi",
+  "features.artifactDeployment.desc": "Artifaktleri barındırılan bir URL'ye yayınlayın ve sürümleri sohbet kenar çubuğundan yönetin",
+  "features.artifactDeployment.title": "Artifakt Dağıtımları",
   "features.assistantMessageGroup.desc": "Temsilci mesajlarını ve bunlara ait araç çağrısı sonuçlarını birlikte gruplayarak görüntüleyin",
   "features.assistantMessageGroup.title": "Temsilci Mesaj Gruplama",
   "features.claudeCodeSdk.desc": "Claude Agent SDK aracılığıyla Claude Code oturumlarını çalıştırın, CLI başlatmak yerine. Daha zengin akış ve oturum kontrolü sağlar.",
