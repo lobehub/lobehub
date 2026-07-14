@@ -13,7 +13,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     color: inherit;
 
     &:visited {
-      color: ${cssVar.colorTextDescription};
+      color: ${cssVar.colorLinkActive};
     }
   `,
 }));

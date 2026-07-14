@@ -22,7 +22,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     }
 
     &:visited {
-      color: ${cssVar.colorTextDescription};
+      color: ${cssVar.colorLinkActive};
     }
   `,
 }));
