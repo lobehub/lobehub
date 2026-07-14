@@ -19,6 +19,7 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useIsWorkspaceOwner } from '@/business/client/hooks/useIsWorkspaceOwner';
+import { useIsWorkspaceViewer } from '@/business/client/hooks/useIsWorkspaceViewer';
 import { WorkspaceSettingsTabs } from '@/types/workspaceSettings';
 
 export enum WorkspaceSettingsGroupKey {
@@ -45,6 +46,7 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
   const { t: tAuth } = useTranslation('auth');
   const { t: tSubscription } = useTranslation('subscription');
   const isOwner = useIsWorkspaceOwner();
+  const isViewer = useIsWorkspaceViewer();
 
   return useMemo(
     () =>
@@ -132,9 +134,9 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
             },
             // Workspace API keys are member-visible (each member manages their
             // own keys; secrets stay masked for others), so the tab lives here
-            // rather than in the owner-only Admin group. Viewer access is
-            // rejected server-side via the api_key:read gate.
-            {
+            // rather than in the owner-only Admin group. Viewers don't get the
+            // tab — the api_key:read gate rejects them server-side anyway.
+            !isViewer && {
               icon: KeyIcon,
               key: WorkspaceSettingsTabs.APIKey,
               label: tAuth('tab.apikey'),
@@ -167,6 +169,6 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
           title: t('workspaceSetting.group.admin'),
         },
       ].filter(Boolean) as WorkspaceSettingCategoryGroup[],
-    [t, tAuth, tSubscription, isOwner],
+    [t, tAuth, tSubscription, isOwner, isViewer],
   );
 };
