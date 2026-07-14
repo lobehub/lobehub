@@ -13,7 +13,6 @@ import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
 import AgentConfigError from './AgentConfigError';
-import { useExposeMainEditor } from './useExposeMainEditor';
 import { useSendMenuItems } from './useSendMenuItems';
 
 const contextWindowRightActions: ActionKeys[] = ['contextWindow'];
@@ -41,8 +40,6 @@ const MainChatInput = memo(() => {
     : contextWindowRightActions;
 
   const leftActions: ActionKeys[] = useMemo(() => ['model', 'plus'], []);
-
-  useExposeMainEditor(useConversationStore((s) => s.editor));
 
   return (
     <>
