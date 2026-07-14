@@ -272,6 +272,13 @@ function assertPlanEnum<T extends string>(
  * `method` / `expected` stay prose: they are the author's intent in words, which
  * no enum can carry. Everything else the frozen {@link VerifyCheckItem} needs is
  * filled in here, so an author writes only `{ id, title }` plus what they mean.
+ *
+ * Returns `undefined` only when the report declares no `plan` field at all —
+ * "leave whatever is stored alone". A `plan` that IS present but empty returns
+ * `[]`, which CLEARS the stored one. The distinction matters on a re-ingest of a
+ * reused report dir: a previous round's plan would otherwise stay attached, and
+ * every one of its items would render as "not run" against a report that never
+ * planned them.
  */
 export function planFromResult(result: Record<string, unknown>) {
   if (!Array.isArray(result.plan)) return undefined;
@@ -325,7 +332,9 @@ export function planFromResult(result: Record<string, unknown>) {
     ];
   });
 
-  return items.length > 0 ? items : undefined;
+  // `[]` is meaningful — it clears a stale plan. Only an absent `plan` field
+  // (handled above) means "don't touch what's stored".
+  return items;
 }
 
 /**
@@ -333,11 +342,17 @@ export function planFromResult(result: Record<string, unknown>) {
  * agent runtime echoes into the child process. Lets a report published from an
  * in-app agent link back to the session that produced it with no flags to
  * remember. Absent (a plain terminal) → no origin, which is not an error.
+ *
+ * Reads the env and ONLY the env. `--operation` is the opposite relation — the
+ * Agent Run this session *verifies* — so letting it fall through to here would
+ * attribute the report to the run under test instead of the run that wrote it,
+ * corrupting the very provenance this records. The two ids are independent and
+ * may legitimately differ in the same publish.
  */
-export function originFromEnv(operationOverride?: string): VerifyRunOrigin | undefined {
+export function originFromEnv(): VerifyRunOrigin | undefined {
   const origin: VerifyRunOrigin = {
     agentId: firstString(process.env.LOBEHUB_AGENT_ID),
-    operationId: firstString(operationOverride, process.env.LOBEHUB_OPERATION_ID),
+    operationId: firstString(process.env.LOBEHUB_OPERATION_ID),
     topicId: firstString(process.env.LOBEHUB_TOPIC_ID),
   };
 
@@ -1331,7 +1346,9 @@ export function registerVerifyCommand(program: Command) {
         const goal = options.goal ?? (typeof result.focus === 'string' ? result.focus : undefined);
         const title = options.title ?? result.title;
         // The in-app conversation that ran this harness, if any (env-supplied).
-        const origin = originFromEnv(options.operation);
+        // Strictly the authoring conversation. `--operation` names the Agent Run
+        // under test and is passed to `createRun` below — a different relation.
+        const origin = originFromEnv();
         const newRunMetadata = metadataForReport(result, undefined, origin);
 
         // Resolve the target session. Reuse the one this report dir already
@@ -1503,8 +1520,10 @@ export function registerVerifyCommand(program: Command) {
         writeSidecarRunId(dir, runId);
 
         // A case with no matching plan item means the run checked something it
-        // never planned — worth saying out loud, but not a failure.
-        const unplanned = plan
+        // never planned — worth saying out loud, but not a failure. Only
+        // meaningful against a plan that actually names something: with no plan
+        // (or a cleared one) every case is trivially "unplanned", which is noise.
+        const unplanned = plan?.length
           ? [...seenCheckItemIds].filter((id) => !plan.some((item) => item.id === id))
           : [];
 
@@ -1533,13 +1552,17 @@ export function registerVerifyCommand(program: Command) {
             `${inlined > 0 ? `, ${pc.bold(String(inlined))} inline` : ''}` +
             `${pruned > 0 ? `, pruned ${pc.bold(String(pruned))} stale case(s)` : ''}`,
         );
-        if (plan) {
+        if (plan?.length) {
           const unexecuted = plan.filter((item) => !seenCheckItemIds.has(item.id));
           console.log(
             `${pc.bold('plan')}: ${plan.length} item(s)` +
               `${unexecuted.length > 0 ? pc.yellow(` — ${unexecuted.length} planned but not executed`) : ''}` +
               `${unplanned.length > 0 ? pc.dim(` — ${unplanned.length} unplanned case(s)`) : ''}`,
           );
+        } else if (plan && reused) {
+          // The report dropped its plan this round; say that the stored one went
+          // with it, rather than leaving the user to wonder where it went.
+          console.log(`${pc.bold('plan')}: ${pc.dim('none — cleared the previously stored plan')}`);
         }
         if (pullRequest?.url) console.log(`${pc.bold('pr')}: ${pullRequest.url}`);
         if (origin?.topicId) console.log(`${pc.bold('origin topic')}: ${origin.topicId}`);

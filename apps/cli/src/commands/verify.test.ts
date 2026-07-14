@@ -417,9 +417,19 @@ describe('planFromResult — plan item normalization', () => {
     expect(items.map((i) => i.id)).toEqual(['case-a', 'case-2']);
   });
 
-  it('drops an item that names no check and returns undefined for no plan', () => {
-    expect(planFromResult({ plan: [{ id: '1' }] })).toBeUndefined();
+  it('drops an item that names no check', () => {
+    expect(planFromResult({ plan: [{ id: '1' }] })).toEqual([]);
+  });
+
+  it('distinguishes "no plan field" from "an empty plan", so a re-ingest can CLEAR a stale one', () => {
+    // Absent → undefined → `updateRun` omits it → whatever is stored stays.
     expect(planFromResult({})).toBeUndefined();
+
+    // Present but empty → `[]` → the stored plan is overwritten with nothing.
+    // Without this, re-ingesting a reused report dir whose plan was emptied
+    // would leave the PREVIOUS round's plan attached, and every one of its items
+    // would render as "not run" against a report that never planned them.
+    expect(planFromResult({ plan: [] })).toEqual([]);
   });
 });
 
@@ -442,10 +452,15 @@ describe('originFromEnv — in-app provenance', () => {
     });
   });
 
-  it('lets an explicit --operation win over the env', () => {
-    process.env.LOBEHUB_OPERATION_ID = 'op_env';
+  it('never takes its operationId from --operation, which names the run under TEST', () => {
+    // `--operation` links the session to the Agent Run being verified; origin is
+    // the run that AUTHORED the report. Conflating them attributes the report to
+    // its own subject — exactly the provenance this is meant to preserve.
+    process.env.LOBEHUB_OPERATION_ID = 'op_authoring_run';
 
-    expect(originFromEnv('op_flag')?.operationId).toBe('op_flag');
+    expect(originFromEnv()?.operationId).toBe('op_authoring_run');
+    // The flag is passed to `createRun` separately; it must not reach here at all.
+    expect(originFromEnv).toHaveLength(0);
   });
 
   it('is undefined outside a LobeHub-spawned agent — a plain terminal is not an error', () => {
