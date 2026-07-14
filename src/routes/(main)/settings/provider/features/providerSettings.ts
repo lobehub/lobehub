@@ -1,3 +1,5 @@
+import { isProviderOAuthDeviceFlow } from 'model-bank/modelProviders';
+
 import { type AiProviderSDKType, type AiProviderSettings } from '@/types/aiProvider';
 
 const RESPONSE_API_SUPPORTED_SDK_TYPES = new Set<AiProviderSDKType>(['openai', 'router']);
@@ -7,6 +9,18 @@ export const isResponsesApiSupportedSdkType = (sdkType?: AiProviderSDKType) => {
 
   return RESPONSE_API_SUPPORTED_SDK_TYPES.has(sdkType);
 };
+
+interface ShouldShowProviderFooterParams {
+  isCustomBranding: boolean;
+  providerId?: string;
+}
+
+// Subscription OAuth providers source models from the user's own account,
+// so the "more providers coming" footer reads as a misleading model roadmap there.
+export const shouldShowProviderFooter = ({
+  isCustomBranding,
+  providerId,
+}: ShouldShowProviderFooterParams) => !isCustomBranding && !isProviderOAuthDeviceFlow(providerId);
 
 interface NormalizeProviderSettingsParams {
   nextSettings?: AiProviderSettings;

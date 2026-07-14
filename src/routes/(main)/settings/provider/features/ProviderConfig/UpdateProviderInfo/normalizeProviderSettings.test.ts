@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { isResponsesApiSupportedSdkType, normalizeProviderSettings } from '../../providerSettings';
+import {
+  isResponsesApiSupportedSdkType,
+  normalizeProviderSettings,
+  shouldShowProviderFooter,
+} from '../../providerSettings';
 
 describe('isResponsesApiSupportedSdkType', () => {
   it('should return true for openai and router sdk types', () => {
@@ -11,6 +15,27 @@ describe('isResponsesApiSupportedSdkType', () => {
   it('should return false for unsupported sdk types', () => {
     expect(isResponsesApiSupportedSdkType('anthropic')).toBe(false);
     expect(isResponsesApiSupportedSdkType(undefined)).toBe(false);
+  });
+});
+
+describe('shouldShowProviderFooter', () => {
+  it('should hide the footer for OAuth device flow providers', () => {
+    expect(shouldShowProviderFooter({ isCustomBranding: false, providerId: 'supergrok' })).toBe(
+      false,
+    );
+  });
+
+  it('should hide the footer for custom branding', () => {
+    expect(shouldShowProviderFooter({ isCustomBranding: true, providerId: 'openai' })).toBe(false);
+  });
+
+  it('should show the footer for regular providers', () => {
+    expect(shouldShowProviderFooter({ isCustomBranding: false, providerId: 'openai' })).toBe(true);
+  });
+
+  it('should show the footer on the provider list where no provider is selected', () => {
+    expect(shouldShowProviderFooter({ isCustomBranding: false, providerId: 'all' })).toBe(true);
+    expect(shouldShowProviderFooter({ isCustomBranding: false })).toBe(true);
   });
 });
 

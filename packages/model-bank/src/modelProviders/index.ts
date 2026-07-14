@@ -239,6 +239,11 @@ export const isProviderDisableBrowserRequest = (id: string) => {
   return !!provider;
 };
 
+export const isProviderOAuthDeviceFlow = (id?: string) =>
+  DEFAULT_MODEL_PROVIDER_LIST.some(
+    (provider) => provider.id === id && provider.settings?.authType === 'oauthDeviceFlow',
+  );
+
 export { default as Ai21ProviderCard } from './ai21';
 export { default as Ai302ProviderCard } from './ai302';
 export { default as Ai360ProviderCard } from './ai360';
