@@ -1,7 +1,7 @@
 # <Surface> — <what this round changes>
 
 **Date:** YYYY-MM-DD
-**Status:** aligning | scoped | shipped
+**Status:** discovery | aligning | scoped | validated
 **Scope:** one sentence. Say what is **out** of scope too.
 **Prototype:** path, if any
 
@@ -22,7 +22,17 @@ surface touches:
 
 ---
 
-## 2. Diagnosis
+## 2. User view model
+
+- Circumstance and job
+- Lookup objects and proof attached to each
+- First-scan questions and secondary dimensions
+- Evidence for each claim: observed | reported | inferred
+- Confidence and validation gaps
+
+---
+
+## 3. Diagnosis
 
 Name the **structural** error(s) — something wrong regardless of taste. Not "it
 looks dated".
@@ -31,14 +41,14 @@ If you cannot name one, you do not have a diagnosis. You have an opinion.
 
 ---
 
-## 3. Principles
+## 4. Principles
 
 Only the principles this diagnosis actually forced. Each with a **rejected
 alternative** attached — a principle with no rejected alternative is decoration.
 
 ---
 
-## 4. Information architecture
+## 5. Information architecture
 
 Block by block. For each:
 
@@ -48,21 +58,20 @@ Block by block. For each:
 
 ---
 
-## 5. Scope — what does the business already support?
+## 6. Scope — what does the business already support?
 
-| Bucket                               | Capability | Meaning                             |
-| ------------------------------------ | ---------- | ----------------------------------- |
-| ✅ Already modeled, already exposed  |            | Rearranging what is there           |
-| ⚠️ Already modeled, never exposed    |            | Nearly free product                 |
-| ❌ Not a concept in the business yet |            | A domain change. Order of magnitude |
+| Bucket                               | Capability | Meaning                                           |
+| ------------------------------------ | ---------- | ------------------------------------------------- |
+| ✅ Already modeled, already exposed  |            | Rearranging what is there                         |
+| ⚠️ Already modeled, never exposed    |            | Lower domain risk; validate implementation cost   |
+| ❌ Not a concept in the business yet |            | Domain expansion; assess cost and risk explicitly |
 
-**Ships this round:** ✅ + ⚠️.
-**Does not, and why:** every ❌ item **by name, with its cost**. Silence reads as
-an oversight (`P-11`).
+**Recommended coherent slice:** explain how it completes the user's job.
+**Does not, and why:** every excluded item by name, with likely cost drivers.
 
 ---
 
-## 6. Red lines
+## 7. Red lines
 
 Concepts the business does not have, which therefore cannot be designed around —
 only proposed as domain changes. **Bold them.** These are not preferences
@@ -70,7 +79,7 @@ only proposed as domain changes. **Bold them.** These are not preferences
 
 ---
 
-## 7. Reality-check log
+## 8. Reality-check log
 
 The `T` of SCLPT. One row per assumption that met the business model.
 Schema: [trace-schema.md](../references/trace-schema.md).
@@ -82,17 +91,16 @@ fact without naming a table, it is probably not a product finding.
 | ---------- | ------------ | ----- | ------- | ------- |
 |            |              |       |         |         |
 
-**Saturation:** did this round's grounding overturn anything? If a full pass
-overturned nothing, say so — the implementation model is mined out for this
-surface, and the next round's budget belongs to the **mental** model.
+**Coverage:** which sources, roles, permissions, states and lifecycle paths were
+checked? What evidence was unavailable? Which claims remain low-confidence? If no
+new gap was found, state only that none was found in this inspected scope.
 
-**New patterns written back:** `P-nn`, … (or "none — all predicted").
-Check each against [canon.md](../references/canon.md) first: an instance of
-something already named, or genuinely new?
+**Pattern candidates:** list candidates or “none”. Check each against
+[canon.md](../references/canon.md); append only after review and authorization.
 
 ---
 
-## 8. Open decisions
+## 9. Open decisions
 
 Only the ones that **change the shape of the answer**. Each with a recommendation
 and its reasoning. Not a list of everything unresolved.

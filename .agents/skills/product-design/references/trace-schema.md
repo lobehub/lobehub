@@ -56,17 +56,23 @@ mature run should be mostly `confirmed`, with one or two `NEW`.
 
 The shape of the log **is** the diagnosis of the session:
 
-| Shape                                | What it means                                                                                           |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------- |
-| Many `overturned`, all `NEW`         | Cold start. The Pattern Base was blind here — harvest it.                                               |
-| Many `overturned`, all citing `P-nn` | **The patterns were not read.** A process failure, not a knowledge failure. Fix Step 0, not the design. |
-| Mostly `confirmed`, one or two `NEW` | Healthy. The system is working.                                                                         |
-| Zero rows                            | Either a trivial surface, or — far more likely — **nobody grounded anything.** Treat with suspicion.    |
-| Zero `NEW` across a whole round      | **Saturation.** The implementation model is mined out for this surface.                                 |
+| Shape                                | What it means                                                                                        |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| Many `overturned`, all `NEW`         | Cold start. The Pattern Base was blind here — harvest it.                                            |
+| Many `overturned`, all citing `P-nn` | Check whether the relevant patterns were read and applied; this may be a process gap.                |
+| Mostly `confirmed`, one or two `NEW` | Healthy. The system is working.                                                                      |
+| Zero rows                            | Either a trivial surface, or — far more likely — **nobody grounded anything.** Treat with suspicion. |
+| Zero `NEW` across a documented round | No new gap was found in the inspected scope; check coverage before shifting effort.                  |
 
-That second row is worth dwelling on. If the business keeps overturning things the
-Pattern Base **already knew**, the skill is fine and the run was sloppy. The fix
-is to read Step 0 — not to add more patterns.
+If evidence keeps overturning things the Pattern Base already covers, inspect the
+run's pattern selection and application before adding more patterns. Do not assume
+the guidance itself is complete or correctly scoped.
+
+## Recording coverage
+
+Name the sources and lifecycle areas checked, unavailable evidence,
+contradictions and low-confidence claims. Without this record, zero new findings
+is inconclusive rather than a saturation signal.
 
 ## Marking debt on the prototype itself
 
@@ -83,7 +89,7 @@ the business event behind an element, you must draw the tag.**
 
 ## Why the log, and not just a good memory
 
-The Pattern Base is the skill's long-term memory; the reality-check log is its
-short-term one. Skipping the log does not merely lose a document — it breaks the
-**C** (Closed Loop) of SCLPT, and the next session re-learns the same nine lessons
-from scratch.
+The Pattern Base is reviewed long-term guidance; the reality-check log is
+task-local evidence. Include the log in a requested spec, or summarize its
+material findings in a read-only response. Do not create an artifact solely to
+satisfy the process.

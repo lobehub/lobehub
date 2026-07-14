@@ -106,18 +106,16 @@ is a fact about. The tag decides what the finding licenses.
 The last row is the filter. Most of what you can learn from a codebase is not a
 product finding, and letting it in is how a Pattern Base turns into a changelog.
 
-## Saturation, per model
+## Coverage, per model
 
-Saturation (**S**) is measured per model, and they saturate at very different
-speeds:
+Coverage is measured per model. A round with no new gaps is useful only when its
+inspected sources and lifecycle areas are recorded:
 
-- **The implementation model saturates fast.** One thorough grounding pass usually
-  surfaces most of what the product models. When a second pass overturns nothing,
-  it is mined out — stop spending budget there.
-- **The represented model saturates per iteration.** Each prototype round should
-  produce fewer corrections than the last. If round three produces as many as
-  round one, the problem is upstream: the implementation model was never actually
-  grounded.
-- **The mental model never saturates**, and it is the one this skill is weakest at.
-  Grounding cannot touch it. A session with zero mental-model findings has not
-  finished — it has only done the half that could be done from a desk.
+- **The implementation model is often bounded.** A thorough pass may find most of
+  the relevant concepts. A second pass with no new gaps can justify shifting effort
+  toward user evidence, but proves only that none was found in the recorded scope.
+- **The represented model stabilizes through validation.** Continued change can
+  reflect learning; record its cause rather than inferring process quality from
+  the number of corrections.
+- **The mental model remains provisional.** Grounding cannot establish it. Label
+  observed, reported and inferred claims separately, and record validation gaps.

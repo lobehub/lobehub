@@ -44,7 +44,16 @@ Two more findings from the same pass, both about **meaning, not mechanism**:
 - The action labelled "Request changes" does not leave a comment. It **re-tasks
   the agent**, feeding the comment back in as new input (`P-02`).
 
-## Step 2 — Diagnose
+## Step 2 — Frame the user's view model
+
+The initial view model was a hypothesis, not a user fact: someone opens the home
+surface to find work blocked on their attention. The repeated lookup object was a
+signal requiring a response, with its source and consequence attached. This was
+supported by domain obligations but still required user validation; the later
+human correction from “tasks” to “work, attention and goals” supplied direct
+reported evidence.
+
+## Step 3 — Diagnose
 
 Three structural errors, none of them about taste:
 
@@ -57,7 +66,7 @@ Three structural errors, none of them about taste:
    the user needs to know is _"what is blocked on me"_, not _"what did the agent
    say"_ (`P-09`).
 
-## Step 3 — Align
+## Step 4 — Align
 
 Decisions surfaced one at a time. The two that changed the shape of the answer:
 
@@ -73,7 +82,7 @@ everything around **tasks**; the reply was, roughly: _"organize it around the
 work, and around attention and goals — not around one entity type."_ That
 correction became `P-09`.
 
-## Step 4 — Prototype
+## Step 5 — Prototype
 
 Six rounds in the real design system. Every round, the business overturned
 something:
@@ -88,7 +97,7 @@ something:
 **The prototype's job is not to be right. It is to be wrong in ways the business
 can correct.** A round that only moves pixels means the grounding was skipped.
 
-## Step 5 — Scope
+## Step 6 — Scope
 
 | Bucket                                   | Capability                                                                                               |
 | ---------------------------------------- | -------------------------------------------------------------------------------------------------------- |
@@ -96,7 +105,9 @@ can correct.** A round that only moves pixels means the grounding was skipped.
 | ⚠️ **Modeled, never exposed**            | **The other three message kinds.** Running work. Unread finished work. The task each message belongs to. |
 | ❌ **Not a concept in the business yet** | Mentions of a person. Annotations. Presence. A project. A run's duration.                                |
 
-**Shipped: ✅ + ⚠️.** Nothing in the ❌ column. Every item there went into the
+**Recommended and shipped in this case: ✅ + ⚠️.** Together they formed a coherent
+personal-inbox job. Nothing in the ❌ column was required for that slice. Every
+excluded item went into the
 spec by name, with its cost (`P-11`).
 
 The redesign that began as a sweeping team-collaboration vision shipped as a
@@ -104,13 +115,14 @@ focused personal inbox — **not as a retreat, but because that was the part the
 business already believed in** (`P-10`). The expensive half is still, correctly,
 being argued about.
 
-## Step 6 — Close the loop
+## Close — record coverage and propose learning
 
 Nine assumptions overturned, nine `NEW` → the entire Pattern Base. That is the
 cold-start signature (see [trace-schema.md](trace-schema.md#reading-the-log)).
 
-**Saturation, honestly**: the implementation model for this surface is close to
-mined out — a second pass over the same domain would turn up little.
+**Coverage signal**: the inspected message variants, task states, response actions
+and ownership concepts produced no further gaps late in the pass. That justified
+shifting the next round toward user evidence; it did not prove the model exhausted.
 
 **And every one of the nine rows is an implementation-model finding. Not one is
 about the mental model.** That is the real verdict on this session: the half that

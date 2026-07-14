@@ -1,14 +1,14 @@
 # Pattern Base
 
-> **Mandatory**: read this file in full before every product-design run, and
-> self-check against each pattern.
+> Read this file in full before a substantial product-design run. For a narrow
+> question, inspect the relevant patterns and state the checked scope.
 >
-> **Append after every run.** When the business model overturns an assumption
-> that no pattern here predicted, that is a new gap — write it down. Each entry:
+> **Propose before appending.** When evidence overturns an assumption that no
+> pattern here predicted, record a candidate. Append only when repository edits
+> are authorized and the lesson is general, deduplicated and reviewable. Each entry:
 > **Symptom / The real case / Why it happens / How to detect it next time.**
 >
-> This is the **P** of SCLPT. Its coverage is the ceiling of what this skill can
-> catch. Saturation = a grounding round that produces **zero** new entries here.
+> This is the **P** of SCLPT. It is a reviewed aid, not an exhaustive truth set.
 
 ## What belongs here, and what does not
 
@@ -48,12 +48,13 @@ Every pattern here is a failure to hold that line:
   **disagree** about what exists.
 - **Class C** — the represented model follows the implementation model when it
   should be following the **mental** model.
-- **Class D** — what to do once the first three are settled.
+- **Class D** — how to scope once the first three are settled.
+- **Class E** — how human judgment relates to machine-produced evidence.
 
-**Where the implementation model is written down**: the domain model — the
-concepts, the states, the events. Not because implementation matters, but because
-**that is the most honest statement the company has ever made about what it
-believes exists.** Read it as a domain document.
+**Where to investigate the implementation model**: domain concepts, states and
+events are strong evidence, but not the only evidence. Reconcile them with actual
+service behavior, permissions, policy and production facts where relevant. Code
+can be stale, accidental or incomplete.
 
 ---
 
@@ -261,20 +262,20 @@ field says urgent** — because "urgent" was written by the producer, and
 
 ## Class D — Scope and honesty
 
-### P-10 — Ship what the business already supports, first
+### P-10 — Prefer coherent value with lower domain risk
 
 **Rule**: before scoping, sort every capability the design needs by **whether the
 business already models it**:
 
-| Bucket                                   | Meaning                                                         |
-| ---------------------------------------- | --------------------------------------------------------------- |
-| ✅ **Already modeled, already exposed**  | Rearranging what is there                                       |
-| ⚠️ **Already modeled, not yet exposed**  | `P-04` territory — nearly free product                          |
-| ❌ **Not a concept in the business yet** | A domain change. Real, but an order of magnitude more expensive |
+| Bucket                                   | Meaning                                                     |
+| ---------------------------------------- | ----------------------------------------------------------- |
+| ✅ **Already modeled, already exposed**  | Rearranging what is there                                   |
+| ⚠️ **Already modeled, not yet exposed**  | Lower domain risk; engineering cost still needs validation  |
+| ❌ **Not a concept in the business yet** | Requires domain expansion and explicit cost/risk assessment |
 
-**Then ship ✅ + ⚠️ first.** Not as a compromise — as a discipline. It forces the
-design to be honest about what the business actually is today, and it puts a real
-surface in front of users while the domain changes are still being argued about.
+**Prefer a coherent ✅ + ⚠️ slice when it completes the user's job.** Do not ship
+an incomplete or misleading slice merely because its concepts exist. A ❌ item can
+be the right first investment when required for value, safety or semantic integrity.
 
 **The real case**: a sweeping team-collaboration vision needed mentions,
 annotations, presence and a project concept — **all ❌**. But the attention inbox
@@ -282,8 +283,9 @@ at its core was entirely ✅ + ⚠️: the four message kinds were already being
 produced, and the running/unread work was already a business concept. That subset
 shipped. The expensive half is still, correctly, being argued about.
 
-**Detect**: if your first milestone requires the business to learn a new concept,
-you have probably not looked hard enough for the ⚠️ bucket.
+**Detect**: if the first milestone requires a new concept, check the ⚠️ bucket
+before committing. Then compare user value, risk, coherence and engineering cost
+instead of treating concept existence as the cost estimate.
 
 ### P-11 — Name what you are _not_ building, and what it would cost
 
@@ -299,3 +301,103 @@ the conversation you want.
 **The real case**: a prototype showed each run's elapsed time. The business has
 no such concept — a run's duration is not modeled, anywhere. Writing that down
 converted _"you forgot the timestamps"_ into _"we know, and here is the price"_.
+
+---
+
+## Class E — Human judgment and machine-produced evidence
+
+### P-12 — The actor who closes the lifecycle defines the surface
+
+**Symptom**: a surface called a report leads with the system's verdict, summary,
+counts and execution history, while the human action that creates the terminal
+business outcome is absent or secondary.
+
+**The real case**: delivery acceptance had rich verification runs and generated
+reports, so the first designs treated the surface as a finished report with
+evidence attached. In the business, however, an acceptance becomes terminal only
+when the user clicks **Accept delivery**. The verifier's `passed` result is advice;
+the user's acceptance is the event. The honest surface is therefore a decision
+workspace: what is safe to accept, what changed, what still deserves review, the
+evidence needed for that judgment, and the final action. The complete report is a
+drill-down, not the page's organizing principle.
+
+**Why it happens**: machine outputs are numerous, named and easy to render; the
+single human decision is often implemented later and looks like "just a button".
+Design inherits the volume of the implementation model and mistakes it for the
+importance of the business model.
+
+**Detect**: for every review, approval or acceptance surface, ask **"who is
+allowed to make this terminal, and what event does that action produce?"** If the
+answer is a human action, organize the surface around the decision it supports.
+Treat system verdicts as recommendations and evidence as decision material —
+never as a substitute for the terminal event.
+
+**Canonical anchor**: Cooper's goal-directed design and JTBD. The user's goal is
+to make a defensible decision in this circumstance, not to inspect everything the
+machine happened to produce.
+
+### P-13 — Execution history is an audit model, not the default review model
+
+**Symptom**: attempts, runs or evidence versions dominate the first screen because
+they are the clearest structure in storage.
+
+**The real case**: a multi-run acceptance was first represented as a Check × Run
+matrix followed by an "evidence evolution" gallery. Both were accurate and useful
+for deep investigation, but they made the user reconstruct the actual decision:
+what was fixed, what remains risky, and whether the delivery is safe to accept.
+The first screen instead needs exceptions and decision-relevant change: failed →
+fixed proof, missing or stale evidence, and anything carried forward without a
+rerun. Stable checks and their full run ledger remain available as audit detail.
+
+**Why it happens**: chronology is objective and readily available, while deciding
+which differences matter requires product judgment. Teams therefore expose the
+event log and call the reconstruction work "transparency".
+
+**Detect**: before putting chronology on the default surface, ask **"does the user
+need to understand every attempt to act, or only the exceptions and changes that
+alter today's decision?"** Default-expand the latter. Collapse unchanged success
+into a count; put the complete ledger behind deliberate exploration.
+
+**Canonical anchor**: Cooper's represented-vs-implementation model, plus JTBD's
+circumstance. Runs are how the system executed; acceptability and exceptions are
+how the user decides.
+
+### P-14 — The domain constrains truth; the user's lookup object organizes the view
+
+**Symptom**: every section is semantically correct, yet the user still cannot find
+the thing they came for without translating domain language, combining several
+modules or expanding hidden detail.
+
+**The real case**: an acceptance design progressed from report summary, to evidence
+gallery, to Check × Run ledger, to exception-first decision cards. Each correction
+made the business semantics more accurate, but the user still wanted something
+simpler: **the complete union of acceptance Check items, grouped by a familiar
+category, with each item's final evidence directly underneath it**. They needed to
+answer "Did Web interaction have a screenshot?" by scanning the Web check — not by
+interpreting a system judgment, an evidence-evolution module or a run matrix. Runs
+were useful only to show when a Check was introduced and where its final evidence
+came from.
+
+**Why it happens**: grounding the domain is hard and rewarding, so once the model
+is understood the designer over-promotes it into the interface. A second failure
+then follows: "user-centered" is interpreted as deciding what the user should care
+about (exceptions, risk, recommendations) rather than exposing the objects the user
+is actually trying to inspect. The result is curated but controlling — the system
+answers a nearby question and hides the requested inventory.
+
+**Detect**: before proposing sections, complete three sentences in the user's
+language:
+
+1. "I came here to find every \_\_\_."
+2. "For each one, I need to see \_\_\_ without another click."
+3. "I use \_\_\_ only to filter, explain provenance or investigate history."
+
+Make the first blank the repeated item contract, attach the second directly to each
+item, and demote the third. If users ask "does item X have proof?" and the proof is
+in another module, the information architecture is wrong even when every business
+fact is correct.
+
+**Canonical anchor**: Cooper's represented-vs-implementation model and JTBD. The
+domain model licenses claims; the circumstance reveals the user's retrieval object.
+Neither authorizes the designer to substitute a curated summary for the inventory
+the user came to inspect.
