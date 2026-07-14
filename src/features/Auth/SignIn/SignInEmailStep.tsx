@@ -25,7 +25,12 @@ export const USERNAME_REGEX = /^\w+$/;
 
 // Pin both the provider logo and the loading spinner to the same spot so the
 // spinner doesn't jump when a social button enters its loading state.
-const PROVIDER_ICON_STYLE: CSSProperties = { left: 12, position: 'absolute', top: 13 };
+const PROVIDER_ICON_STYLE: CSSProperties = {
+  insetInlineStart: 12,
+  position: 'absolute',
+  top: '50%',
+  transform: 'translateY(-50%)',
+};
 
 // Turn a provider id into a display name, e.g. "google" -> "Google".
 const getProviderName = (provider: string) =>
@@ -97,10 +102,12 @@ export const SignInEmailStep = ({
             const button = (
               <Button
                 block
-                icon={<Icon icon={AuthIcons(provider, 18)} style={PROVIDER_ICON_STYLE} />}
+                icon={<Icon icon={AuthIcons(provider, 18)} />}
                 key={provider}
                 loading={socialLoading === provider}
                 size="large"
+                styles={{ icon: PROVIDER_ICON_STYLE }}
+                type="fill"
                 onClick={() =>
                   continueWithAgreement(() => {
                     onSocialSignIn(provider);
