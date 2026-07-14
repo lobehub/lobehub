@@ -324,9 +324,14 @@ export interface SystemStatus {
   /**
    * One-shot navigation request for the WorkingSidebar browser tab, so external
    * triggers (e.g. web-browsing search results) can open a URL in the in-app
-   * browser. Consumed by nonce.
+   * browser. The pane clears it (to `null`) the moment it navigates: this status
+   * is persisted, and the pane remounts whenever the browser session key changes
+   * (i.e. on every topic switch), so a request left lying around would be
+   * re-consumed and would drag that topic's page off whatever the agent had
+   * loaded. `null` rather than `undefined` because `updateSystemStatus` merges
+   * with lodash, which skips undefined.
    */
-  workingSidebarBrowserRequest?: { nonce: number; url: string };
+  workingSidebarBrowserRequest?: { nonce: number; url: string } | null;
   workingSidebarRevealRequest?: { nonce: number; path: string };
   /**
    * Active tab inside the agent chat right-side WorkingSidebar.
