@@ -21,7 +21,10 @@ vi.mock('@/business/server/trpc-middlewares/workspaceAuth', async () => {
   const mod = await vi.importActual<{ trpc: any }>('@/libs/trpc/lambda/init');
   // The real `wsCompatProcedure` validates a Better-Auth session; for unit
   // tests we skip auth and rely on the test ctx already carrying `userId`.
-  return { wsCompatProcedure: mod.trpc.procedure };
+  return {
+    requireWorkspaceRoleWhenScoped: () => mod.trpc.middleware(async (opts: any) => opts.next()),
+    wsCompatProcedure: mod.trpc.procedure,
+  };
 });
 vi.mock('@/libs/trpc/lambda/middleware', () => ({
   serverDatabase: async (opts: any) =>

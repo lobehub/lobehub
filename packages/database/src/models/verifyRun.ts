@@ -85,7 +85,7 @@ export class VerifyRunModel {
    */
   private assertOperationOwned = async (operationId: string): Promise<void> => {
     const [op] = await this.db
-      .select({ id: agentOperations.id })
+      .select({ id: agentOperations.id, userId: agentOperations.userId })
       .from(agentOperations)
       .where(
         and(
@@ -99,6 +99,14 @@ export class VerifyRunModel {
       .limit(1);
     if (!op) {
       throw new Error(`Agent operation "${operationId}" not found in the current workspace`);
+    }
+    // Workspace visibility is not enough: the lazily-created run is stamped
+    // with the caller's userId and reserves the unique operation_id, which
+    // would block the operation's real owner from managing their own run.
+    if (op.userId !== this.userId) {
+      throw new Error(
+        `Agent operation "${operationId}" belongs to another member; only its creator can start a verify run`,
+      );
     }
   };
 
