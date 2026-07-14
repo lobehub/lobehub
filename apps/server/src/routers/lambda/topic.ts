@@ -850,9 +850,9 @@ export const topicRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const topic = await ctx.topicModel.findById(input.id);
-      if (topic) assertWorkspaceRowManageable(ctx, topic.userId, 'topic');
-
+      // Intentionally no creator/owner gate: metadata follows the same
+      // co-editable path as updateTopic (chat/tool flows write fields like
+      // runningOperation on shared topics); only delete/transfer is gated.
       return ctx.topicModel.updateMetadata(input.id, input.metadata);
     }),
 });
