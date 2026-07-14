@@ -46,8 +46,8 @@ button's padding.
 
 ## SCLPT — why this skill gets better over time
 
-A self-evolving system, wired per the SCLPT framework (BM-58). Each element maps
-to a file you must actually read and write:
+A self-evolving system, wired per the SCLPT framework. Each element maps to a file
+you must actually read and write:
 
 | Element            | Here                                                     | What it does                                                                         |
 | ------------------ | -------------------------------------------------------- | ------------------------------------------------------------------------------------ |

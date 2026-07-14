@@ -119,10 +119,10 @@ done at all. The next round's budget belongs there.
 
 ## What generalizes
 
-1. **The biggest win was a switched-off capability, not a new one.** Look for
-   those first. A business that models more than it shows is free product, and in
-   a system where agents generate events continuously, this is now the normal
-   case.
+1. **The biggest win was a switched-off capability, not a new one.** Check for one
+   before inventing anything — it is the cheapest win available, and the easiest
+   to miss, because the surface is what everyone (including the people who built
+   it) mistakes for the product.
 2. **Every prototype round should be falsified by the domain.** If it is not, you
    are decorating, not designing.
 3. **"What does the business already believe in?" is the question that converts a
