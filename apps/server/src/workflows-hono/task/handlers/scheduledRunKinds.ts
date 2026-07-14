@@ -1,4 +1,4 @@
-import { HETERO_CONTINUE_PROMPT } from '@lobechat/const';
+import { HETERO_CONTINUE_PROMPT, LOADING_FLAT } from '@lobechat/const';
 import type { LobeChatDatabase } from '@lobechat/database';
 import type { ExecAgentResult, TopicScheduledRun, TopicScheduledRunKind } from '@lobechat/types';
 import { RequestTrigger } from '@lobechat/types';
@@ -25,8 +25,12 @@ type ScheduledRunHandlers = {
  *
  * Mirrors `continueHeteroAfterError`: resume the surviving CLI session from the
  * assistant-chain tail with the shared continuation instruction. The failed turn
- * is deliberately NOT deleted before dispatch — a dispatch failure must leave the
- * user's error card and retry entry intact.
+ * is deliberately NOT touched before dispatch — a dispatch failure must leave the
+ * user's error card and retry entry intact. Only after execAgent accepts the run
+ * is the stale rate-limit card removed: a step that preserved work (streamed
+ * content / tool calls) keeps its body and just drops the error; an error-only
+ * step would render as an empty block, so it is deleted outright (`deleteMessage`
+ * reparents the already-created continuation placeholder onto its parent).
  */
 const runResumeAfterRateLimit: ScheduledRunHandlers['resume_after_rate_limit'] = async (
   run,
@@ -36,7 +40,7 @@ const runResumeAfterRateLimit: ScheduledRunHandlers['resume_after_rate_limit'] =
   const failedMessage = await messageModel.findById(run.failedAssistantMessageId);
   if (!failedMessage) throw new Error('Scheduled continuation message no longer exists');
 
-  return new AiAgentService(db, topic.userId, { workspaceId }).execAgent({
+  const result = await new AiAgentService(db, topic.userId, { workspaceId }).execAgent({
     agentId: topic.agentId ?? undefined,
     appContext: { topicId: topic.id },
     parentMessageId: failedMessage.id,
@@ -44,6 +48,31 @@ const runResumeAfterRateLimit: ScheduledRunHandlers['resume_after_rate_limit'] =
     resume: true,
     trigger: RequestTrigger.Cron,
   });
+
+  if (result.success) {
+    const hasSalvageableWork =
+      (Array.isArray(failedMessage.tools) && failedMessage.tools.length > 0) ||
+      (!!failedMessage.content && failedMessage.content !== LOADING_FLAT);
+
+    // Cleanup is best-effort: the run is already live, so a failure here must
+    // not fail the dispatch (the dispatcher would leave the topic `scheduled`
+    // and the next tick would fire a duplicate continuation).
+    try {
+      if (hasSalvageableWork) {
+        await messageModel.update(failedMessage.id, { error: null });
+      } else {
+        await messageModel.deleteMessage(failedMessage.id);
+      }
+    } catch (err) {
+      console.error(
+        '[scheduled-topic-dispatch] failed to clear rate-limit error card message=%s: %O',
+        failedMessage.id,
+        err,
+      );
+    }
+  }
+
+  return result;
 };
 
 /**

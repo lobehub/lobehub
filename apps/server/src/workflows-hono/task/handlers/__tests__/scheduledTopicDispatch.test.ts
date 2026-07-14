@@ -6,10 +6,12 @@ import { scheduledTopicDispatch } from '../scheduledTopicDispatch';
 const mocks = vi.hoisted(() => ({
   claimScheduledTopic: vi.fn(),
   clearScheduledRun: vi.fn(),
+  deleteMessage: vi.fn(),
   execAgent: vi.fn(),
   findById: vi.fn(),
   getDueScheduledTopics: vi.fn(),
   getServerDB: vi.fn(),
+  updateMessage: vi.fn(),
 }));
 
 vi.mock('@/database/server', () => ({ getServerDB: mocks.getServerDB }));
@@ -25,6 +27,8 @@ vi.mock('@/database/models/topic', () => ({
 vi.mock('@/database/models/message', () => ({
   MessageModel: class {
     findById = mocks.findById;
+    update = mocks.updateMessage;
+    deleteMessage = mocks.deleteMessage;
   },
 }));
 
@@ -144,6 +148,63 @@ describe('scheduledTopicDispatch', () => {
         parentMessageId: 'assistant-failed',
         resume: true,
       }),
+    );
+  });
+
+  it('clears the rate-limit error card once the continuation is accepted, keeping preserved work', async () => {
+    mocks.getDueScheduledTopics.mockResolvedValue([topic(resumeAfterRateLimit)]);
+    // The failed step streamed content before dying → keep it, only drop the error.
+    mocks.findById.mockResolvedValue({
+      content: 'partial answer',
+      error: { body: { code: 'rate_limit' } },
+      id: 'assistant-failed',
+    });
+
+    await dispatch();
+
+    expect(mocks.updateMessage).toHaveBeenCalledWith('assistant-failed', { error: null });
+    expect(mocks.deleteMessage).not.toHaveBeenCalled();
+  });
+
+  it('deletes an error-only failed step after dispatch, instead of leaving an empty block', async () => {
+    mocks.getDueScheduledTopics.mockResolvedValue([topic(resumeAfterRateLimit)]);
+    // Nothing but the error (content is the loading placeholder, no tools).
+    mocks.findById.mockResolvedValue({
+      content: '...',
+      error: { body: { code: 'rate_limit' } },
+      id: 'assistant-failed',
+    });
+
+    await dispatch();
+
+    expect(mocks.deleteMessage).toHaveBeenCalledWith('assistant-failed');
+    expect(mocks.updateMessage).not.toHaveBeenCalled();
+  });
+
+  it('keeps the error card intact when dispatch fails, so retry entry points survive', async () => {
+    mocks.getDueScheduledTopics.mockResolvedValue([topic(resumeAfterRateLimit)]);
+    mocks.execAgent.mockResolvedValue({ error: 'device offline', success: false });
+
+    await dispatch();
+
+    expect(mocks.updateMessage).not.toHaveBeenCalled();
+    expect(mocks.deleteMessage).not.toHaveBeenCalled();
+  });
+
+  it('still dispatches successfully when the post-dispatch cleanup write fails', async () => {
+    // The run is already live — a cleanup failure must not leave the topic
+    // `scheduled`, or the next tick would fire a duplicate continuation.
+    mocks.getDueScheduledTopics.mockResolvedValue([topic(resumeAfterRateLimit)]);
+    mocks.updateMessage.mockRejectedValue(new Error('db write failed'));
+
+    const response = await dispatch();
+
+    await expect(response.json()).resolves.toMatchObject({ dispatched: 1 });
+    expect(mocks.clearScheduledRun).toHaveBeenCalledWith(
+      {},
+      'topic-1',
+      'running',
+      expect.any(String),
     );
   });
 
