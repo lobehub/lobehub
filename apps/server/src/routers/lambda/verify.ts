@@ -89,6 +89,7 @@ const rubricConfigSchema = z.object({
 });
 
 const checkItemSchema = z.object({
+  category: z.string().optional(),
   description: z.string().optional(),
   id: z.string(),
   index: z.number(),
@@ -96,6 +97,7 @@ const checkItemSchema = z.object({
   required: z.boolean(),
   sourceCriterionId: z.string().nullish(),
   sourceRubricId: z.string().nullish(),
+  supersedes: z.array(z.string()).optional(),
   title: z.string(),
   verifierConfig: z.record(z.string(), z.unknown()),
   verifierType: verifierTypeSchema,

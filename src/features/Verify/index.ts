@@ -1,4 +1,4 @@
-export { default as AcceptanceViewer } from './AcceptanceViewer';
+export { default as AcceptanceViewer } from './Acceptance';
 export { default as CheckerDock } from './CheckerDock';
 export {
   useAcceptanceBundle,

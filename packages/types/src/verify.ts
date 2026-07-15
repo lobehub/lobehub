@@ -315,6 +315,12 @@ export interface VerifyRunMetadata {
  * `sourceRubricId` are provenance pointers only.
  */
 export interface VerifyCheckItem {
+  /**
+   * Grouping key for the acceptance union view (a page section / feature
+   * domain, authored by the harness that writes the plan). Free-form label;
+   * checks without one fall back to surface grouping.
+   */
+  category?: string;
   /** One-sentence summary of what this check verifies. */
   description?: string;
   /** The document holding the detailed judging instruction / rule body, if any. */
@@ -331,6 +337,12 @@ export interface VerifyCheckItem {
   sourceCriterionId?: string | null;
   /** Provenance: the rubric (group) this item came in through, or null. */
   sourceRubricId?: string | null;
+  /**
+   * Generation declaration: the older check-item ids THIS item replaces. The
+   * acceptance union folds the superseded items into this item's iteration
+   * timeline instead of listing semantically-dead checks side by side.
+   */
+  supersedes?: string[];
   title: string;
   verifierConfig: Record<string, unknown>;
   verifierType: VerifierType;

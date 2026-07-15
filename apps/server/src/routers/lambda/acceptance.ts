@@ -147,18 +147,20 @@ export const acceptanceRouter = router({
         runs.map((run) => ({ results: resultsByRun.get(run.id) ?? [], run })),
       );
 
-      // Enrich only the evidence backing each check's FINAL result — that is what
-      // the union view renders inline; earlier rounds' artifacts stay reachable
-      // through the per-round report drill-down.
+      // Enrich the evidence backing every executed timeline step — the final
+      // round's artifacts render inline on the row; earlier steps' artifacts
+      // render inside the check's iteration-history timeline.
       const resolveFileMeta = createEvidenceFileResolver(
         ctx.serverDB,
         acceptance.userId,
         acceptance.workspaceId ?? undefined,
       );
-      const finalResultIds = new Set(checks.map((c) => c.result?.id).filter(Boolean));
+      const timelineResultIds = new Set(
+        checks.flatMap((check) => check.timeline.map((entry) => entry.resultId)),
+      );
       const enriched = await Promise.all(
         evidence
-          .filter((e) => finalResultIds.has(e.checkResultId))
+          .filter((e) => timelineResultIds.has(e.checkResultId))
           .map(async (e) => ({ ...e, ...(await resolveFileMeta(e.fileId ?? null)) })),
       );
       const evidenceByResult = new Map<string, typeof enriched>();
@@ -180,6 +182,10 @@ export const acceptanceRouter = router({
         checks: checks.map((check) => ({
           ...check,
           evidence: check.result ? (evidenceByResult.get(check.result.id) ?? []) : [],
+          timeline: check.timeline.map((entry) => ({
+            ...entry,
+            evidence: evidenceByResult.get(entry.resultId) ?? [],
+          })),
         })),
         latestReport,
         rounds,

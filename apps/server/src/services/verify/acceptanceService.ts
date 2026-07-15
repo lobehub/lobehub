@@ -48,6 +48,20 @@ export interface AcceptanceCheckHistoryEntry {
   verifyRunId: string;
 }
 
+/**
+ * One executed step of a check's iteration timeline. Carries the title THAT
+ * round used (a superseded item keeps its own wording) so the evolution reads
+ * as written, newest rendered first by the viewer.
+ */
+export interface AcceptanceTimelineEntry {
+  /** The result row backing this step — the key its evidence attaches by. */
+  resultId: string;
+  roundIndex: number;
+  state: CheckState;
+  title: string;
+  verifyRunId: string;
+}
+
 /** One row of the acceptance union: a check item merged across every round. */
 export interface AcceptanceCheckRow {
   /**
@@ -56,13 +70,15 @@ export interface AcceptanceCheckRow {
    * evidence actually comes from.
    */
   carriedFromRound?: number;
+  /** Grouping key for the union view (harness-authored page section / domain). */
+  category: string | null;
   /** Passed now, but failed in at least one earlier round — a repaired check. */
   fixed: boolean;
   /** Verdict trail across rounds, oldest first — only rounds that produced a result. */
   history: AcceptanceCheckHistoryEntry[];
-  /** The `checkItemId` every round agrees on. */
+  /** The `checkItemId` every round agrees on (the successor id after folding). */
   id: string;
-  /** First round whose plan (or results) named this check. */
+  /** First round whose plan (or results) named this check (or one it supersedes). */
   introducedAtRound: number;
   /** The latest plan snapshot of this item (carries method/expected/requiredEvidence). */
   planItem?: VerifyCheckItem;
@@ -71,11 +87,19 @@ export interface AcceptanceCheckRow {
   result?: VerifyCheckResultItem;
   /** Round the final result came from. */
   resultRound?: number;
+  /** How many executed steps the timeline holds (re-runs + folded generations). */
+  revisions: number;
   /** Final cross-round state — what the decision is made on. */
   state: CheckState;
+  /** Ids folded into this row via `supersedes` declarations. */
+  supersededIds: string[];
   /** Per-item product surface (from the plan item's `verifierConfig.surface`). */
   surface: VerifySurface | null;
+  /** The executed steps, oldest first — drives the iteration-history timeline. */
+  timeline: AcceptanceTimelineEntry[];
   title: string;
+  /** The wording evolved across the timeline (a real iteration, not a re-run). */
+  titleChanged: boolean;
 }
 
 interface RoundInput {
@@ -89,10 +113,13 @@ const itemSurface = (item: VerifyCheckItem | undefined): VerifySurface | null =>
 };
 
 /**
- * Merge a whole round chain into the union check list. Alignment key is the
- * stable `checkItemId` — exact by design: repair rounds re-snapshot the same
- * plan (same ids), and the ingest CLI reuses case ids across rounds. Two
- * differently-named ids are two checks; no fuzzy matching here.
+ * Merge a whole round chain into the union check list.
+ *
+ * Alignment is two-layered, both harness-authored (no fuzzy matching):
+ * - the stable `checkItemId` aligns re-runs of the same check across rounds;
+ * - a plan item's `supersedes` folds the ids of checks it REPLACES into this
+ *   item's iteration timeline, so a semantically-dead older wording stops
+ *   showing up as its own row.
  */
 export const buildAcceptanceCheckUnion = (rounds: RoundInput[]): AcceptanceCheckRow[] => {
   const ordered = [...rounds].sort((a, b) => (a.run.roundIndex ?? 0) - (b.run.roundIndex ?? 0));
@@ -105,14 +132,19 @@ export const buildAcceptanceCheckUnion = (rounds: RoundInput[]): AcceptanceCheck
     const existing = rows.get(id);
     if (existing) return existing;
     const row: AcceptanceCheckRow = {
+      category: null,
       fixed: false,
       history: [],
       id,
       introducedAtRound: roundIndex,
       required: true,
+      revisions: 0,
       state: 'not_executed',
+      supersededIds: [],
       surface: null,
+      timeline: [],
       title: id,
+      titleChanged: false,
     };
     rows.set(id, row);
     return row;
@@ -121,6 +153,7 @@ export const buildAcceptanceCheckUnion = (rounds: RoundInput[]): AcceptanceCheck
   for (const { results, run } of ordered) {
     const roundIndex = run.roundIndex ?? 0;
     const plan = (run.plan ?? []) as VerifyCheckItem[];
+    const planById = new Map(plan.map((item) => [item.id, item]));
 
     for (const item of plan) {
       const row = ensureRow(item.id, roundIndex);
@@ -128,13 +161,25 @@ export const buildAcceptanceCheckUnion = (rounds: RoundInput[]): AcceptanceCheck
       row.planItem = item;
       row.title = item.title;
       row.required = item.required;
+      row.category = item.category ?? row.category;
       row.surface = itemSurface(item) ?? row.surface;
       lastPlannedRound.set(item.id, roundIndex);
     }
 
     for (const result of results) {
       const row = ensureRow(result.checkItemId, roundIndex);
-      row.history.push({ roundIndex, state: resultState(result), verifyRunId: run.id });
+      const state = resultState(result);
+      // The title THIS round used — the current round's snapshot, not the final one.
+      const roundTitle =
+        planById.get(result.checkItemId)?.title ?? result.checkItemTitle ?? row.title;
+      row.history.push({ roundIndex, state, verifyRunId: run.id });
+      row.timeline.push({
+        resultId: result.id,
+        roundIndex,
+        state,
+        title: roundTitle,
+        verifyRunId: run.id,
+      });
       row.result = result;
       row.resultRound = roundIndex;
       if (!row.planItem && result.checkItemTitle) row.title = result.checkItemTitle;
@@ -142,9 +187,33 @@ export const buildAcceptanceCheckUnion = (rounds: RoundInput[]): AcceptanceCheck
     }
   }
 
+  // Fold superseded generations into their successor's timeline, in round
+  // order so a chain (C replaced by B replaced by A) collapses fully into A.
+  const foldOrder = [...rows.values()].sort((a, b) => a.introducedAtRound - b.introducedAtRound);
+  for (const row of foldOrder) {
+    const supersedes = row.planItem?.supersedes ?? [];
+    for (const oldId of supersedes) {
+      const old = rows.get(oldId);
+      if (!old || old === row) continue;
+      row.timeline = [...old.timeline, ...row.timeline].sort((a, b) => a.roundIndex - b.roundIndex);
+      row.history = [...old.history, ...row.history].sort((a, b) => a.roundIndex - b.roundIndex);
+      row.introducedAtRound = Math.min(row.introducedAtRound, old.introducedAtRound);
+      row.supersededIds = [...row.supersededIds, ...old.supersededIds, old.id];
+      // The successor's own state stands; a never-run successor inherits the
+      // superseded item's final result so the row still shows evidence.
+      if (!row.result && old.result) {
+        row.result = old.result;
+        row.resultRound = old.resultRound;
+      }
+      rows.delete(oldId);
+    }
+  }
+
   for (const row of rows.values()) {
     row.state = row.result ? resultState(row.result) : 'not_executed';
     row.fixed = row.state === 'passed' && row.history.some((entry) => entry.state === 'failed');
+    row.revisions = row.timeline.length;
+    row.titleChanged = row.timeline.some((entry) => entry.title !== row.title);
     // Carried forward: a later round still planned the item but never re-ran it,
     // so the final evidence predates the current round.
     const planned = lastPlannedRound.get(row.id);

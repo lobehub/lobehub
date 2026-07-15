@@ -139,4 +139,92 @@ describe('buildAcceptanceCheckUnion', () => {
     expect(rows[0].title).toBe('new title');
     expect(rows[0].required).toBe(false);
   });
+
+  it('builds the timeline with each round own wording', () => {
+    const rows = buildAcceptanceCheckUnion([
+      {
+        results: [result('x', 'failed')],
+        run: run('r1', 1, [planItem('x', { title: 'first wording' })]),
+      },
+      {
+        results: [result('x', 'passed')],
+        run: run('r2', 2, [planItem('x', { title: 'refined wording' })]),
+      },
+    ]);
+
+    const row = rows[0];
+    expect(row.revisions).toBe(2);
+    expect(row.titleChanged).toBe(true);
+    expect(row.timeline.map((entry) => `${entry.roundIndex}:${entry.title}`)).toEqual([
+      '1:first wording',
+      '2:refined wording',
+    ]);
+    // Re-runs with a stable wording are NOT an iteration.
+    const stable = buildAcceptanceCheckUnion([
+      { results: [result('y', 'passed')], run: run('r1', 1, [planItem('y')]) },
+      { results: [result('y', 'passed')], run: run('r2', 2, [planItem('y')]) },
+    ])[0];
+    expect(stable.revisions).toBe(2);
+    expect(stable.titleChanged).toBe(false);
+  });
+
+  it('folds superseded generations into the successor timeline', () => {
+    const rows = buildAcceptanceCheckUnion([
+      {
+        results: [result('single-section', 'passed')],
+        run: run('r1', 1, [planItem('single-section', { title: '仅未读时无分区标题' })]),
+      },
+      {
+        results: [result('single-section-removed', 'passed')],
+        run: run('r2', 2, [
+          planItem('single-section-removed', {
+            supersedes: ['single-section'],
+            title: '单区标题规则已移除',
+          }),
+        ]),
+      },
+    ]);
+
+    expect(rows).toHaveLength(1);
+    const row = rows[0];
+    expect(row.id).toBe('single-section-removed');
+    expect(row.supersededIds).toEqual(['single-section']);
+    expect(row.introducedAtRound).toBe(1);
+    expect(row.revisions).toBe(2);
+    expect(row.titleChanged).toBe(true);
+    expect(row.timeline.map((entry) => entry.title)).toEqual([
+      '仅未读时无分区标题',
+      '单区标题规则已移除',
+    ]);
+    expect(row.state).toBe('passed');
+  });
+
+  it('collapses a supersedes chain fully into the newest generation', () => {
+    const rows = buildAcceptanceCheckUnion([
+      { results: [result('a', 'failed')], run: run('r1', 1, [planItem('a')]) },
+      {
+        results: [result('b', 'failed')],
+        run: run('r2', 2, [planItem('b', { supersedes: ['a'] })]),
+      },
+      {
+        results: [result('c', 'passed')],
+        run: run('r3', 3, [planItem('c', { supersedes: ['b'] })]),
+      },
+    ]);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].id).toBe('c');
+    expect(rows[0].supersededIds.sort()).toEqual(['a', 'b']);
+    expect(rows[0].revisions).toBe(3);
+    expect(rows[0].fixed).toBe(true);
+  });
+
+  it('reads the grouping category from the latest plan snapshot', () => {
+    const rows = buildAcceptanceCheckUnion([
+      { results: [], run: run('r1', 1, [planItem('x', { category: '未读区' })]) },
+      { results: [], run: run('r2', 2, [planItem('x')]) },
+    ]);
+
+    expect(rows[0].category).toBe('未读区');
+  });
 });

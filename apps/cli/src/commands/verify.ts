@@ -331,13 +331,22 @@ export function planFromResult(result: Record<string, unknown>) {
       );
     }
 
+    // The acceptance union groups by category and folds superseded ids into
+    // the new item's iteration timeline — both authored by the harness.
+    const category = firstString(item.category, item.group);
+    const supersedes = Array.isArray(item.supersedes)
+      ? item.supersedes.filter((value: unknown): value is string => typeof value === 'string')
+      : [];
+
     return [
       {
+        ...(category === undefined ? {} : { category }),
         description: firstString(item.description),
         id,
         index,
         onFail: 'manual' as const,
         required: typeof item.required === 'boolean' ? item.required : true,
+        ...(supersedes.length > 0 ? { supersedes } : {}),
         title,
         verifierConfig: {
           ...(method === undefined ? {} : { method }),
