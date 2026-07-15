@@ -347,3 +347,101 @@ describe('ConnectorModel agent-scoped resolution', () => {
     });
   });
 });
+
+// The agent-binding mutations (bindAgent / copyToAgent / mountToAgent) load the
+// target connector via `findById` before attaching it, and rely on its scoped
+// `ownership()` filter to reject cross-scope rows — that is what enforces
+// "workspace agent ⇒ workspace-only tools, personal agent ⇒ personal-only"
+// (LOBE-11681). These lock that filter so a future refactor can't silently let
+// a personal connector be bound to a workspace agent (or vice versa).
+describe('ConnectorModel scope isolation (workspace vs personal) — LOBE-11681', () => {
+  it('a workspace-scoped model cannot findById a personal connector', async () => {
+    const personal = await insertConnector({
+      identifier: 'gmail',
+      name: 'Personal',
+      workspaceId: null,
+    });
+
+    const wsModel = new ConnectorModel(serverDB, userId, workspaceId);
+    expect(await wsModel.findById(personal.id)).toBeNull();
+  });
+
+  it('a personal-scoped model cannot findById a workspace connector', async () => {
+    const wsConnector = await insertConnector({
+      identifier: 'gmail',
+      name: 'Workspace',
+      workspaceId,
+    });
+
+    const personalModel = new ConnectorModel(serverDB, userId);
+    expect(await personalModel.findById(wsConnector.id)).toBeNull();
+  });
+
+  it('findById resolves a same-scope row (control)', async () => {
+    const personal = await insertConnector({
+      identifier: 'gmail',
+      name: 'Personal',
+      workspaceId: null,
+    });
+    const wsConnector = await insertConnector({ identifier: 'notion', name: 'WS', workspaceId });
+
+    const personalModel = new ConnectorModel(serverDB, userId);
+    const wsModel = new ConnectorModel(serverDB, userId, workspaceId);
+
+    expect((await personalModel.findById(personal.id))?.id).toBe(personal.id);
+    expect((await wsModel.findById(wsConnector.id))?.id).toBe(wsConnector.id);
+  });
+});
+
+// `queryAllAgentScoped` powers the unified connector-settings page (LOBE-11682):
+// it lists every agent-OWNED connector across all agents in one scope, and must
+// stay scope-correct (no personal↔workspace leak — the LOBE-11681 invariant).
+describe('ConnectorModel.queryAllAgentScoped — LOBE-11682', () => {
+  it('returns agent-owned rows across all agents and excludes base rows', async () => {
+    const ownedA = await insertConnector({ agentId: agentA, identifier: 'gmail', name: 'A' });
+    const ownedB = await insertConnector({ agentId: agentB, identifier: 'slack', name: 'B' });
+    // base (agent_id NULL) row must NOT appear
+    await insertConnector({ identifier: 'notion', name: 'Base' });
+
+    const model = new ConnectorModel(serverDB, userId);
+    const rows = await model.queryAllAgentScoped();
+
+    expect(rows.map((r) => r.id).sort()).toEqual([ownedA.id, ownedB.id].sort());
+    expect(rows.every((r) => r.agentId !== null)).toBe(true);
+  });
+
+  it('is scope-isolated: a personal-scoped model excludes workspace agent rows', async () => {
+    await insertConnector({ agentId: agentA, identifier: 'gmail', name: 'WS-owned', workspaceId });
+    const personalOwned = await insertConnector({
+      agentId: agentB,
+      identifier: 'slack',
+      name: 'Personal-owned',
+      workspaceId: null,
+    });
+
+    const personalModel = new ConnectorModel(serverDB, userId);
+    const rows = await personalModel.queryAllAgentScoped();
+
+    expect(rows.map((r) => r.id)).toEqual([personalOwned.id]);
+  });
+
+  it('is scope-isolated: a workspace-scoped model excludes personal agent rows', async () => {
+    const wsOwned = await insertConnector({
+      agentId: agentA,
+      identifier: 'gmail',
+      name: 'WS-owned',
+      workspaceId,
+    });
+    await insertConnector({
+      agentId: agentB,
+      identifier: 'slack',
+      name: 'Personal-owned',
+      workspaceId: null,
+    });
+
+    const wsModel = new ConnectorModel(serverDB, userId, workspaceId);
+    const rows = await wsModel.queryAllAgentScoped();
+
+    expect(rows.map((r) => r.id)).toEqual([wsOwned.id]);
+  });
+});

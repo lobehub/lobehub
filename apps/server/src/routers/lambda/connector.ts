@@ -160,6 +160,45 @@ export const connectorRouter = router({
     }),
 
   /**
+   * List every agent-OWNED connector in the current scope (all agents at once),
+   * so the unified connector-settings page can show "which connector belongs to
+   * which agent" without querying one agent at a time. Each row keeps its
+   * `agentId` and is enriched with the owning agent's `agentTitle`/`agentAvatar`
+   * for attribution badges. Scope-correct via `ConnectorModel.ownership()` (and
+   * `AgentModel.ownership()` for the titles) — a workspace context only returns
+   * that workspace's agent connectors (LOBE-11681 / LOBE-11682).
+   */
+  listAgentBound: connectorProcedure.query(async ({ ctx }) => {
+    const connectors = await ctx.connectorModel.queryAllAgentScoped();
+
+    // Resolve owning-agent display info in one scoped query (workspace-aware),
+    // instead of loading each agent's config client-side from a page that isn't
+    // in any agent's context.
+    const agentIds = [
+      ...new Set(connectors.map((c) => c.agentId).filter((id): id is string => !!id)),
+    ];
+    const agentModel = new AgentModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
+    const agentMetas = agentIds.length > 0 ? await agentModel.getAgentAvatarsByIds(agentIds) : [];
+    const agentMetaById = new Map(agentMetas.map((m) => [m.id, m]));
+
+    return Promise.all(
+      connectors.map(async (c) => {
+        const tools = await ctx.connectorToolModel.queryByConnector(c.id);
+        const { credentials: _credentials, oidcConfig, ...rest } = c;
+        const safeOidcConfig = oidcConfig ? { ...oidcConfig, clientSecret: undefined } : oidcConfig;
+        const meta = c.agentId ? agentMetaById.get(c.agentId) : undefined;
+        return {
+          ...rest,
+          agentAvatar: meta?.avatar ?? null,
+          agentTitle: meta?.title ?? null,
+          oidcConfig: safeOidcConfig,
+          tools,
+        };
+      }),
+    );
+  }),
+
+  /**
    * Return the connector record with decrypted user-set credentials so the
    * edit form can pre-fill accurately. Only the connector owner can call this
    * (enforced by connectorProcedure ownership check).

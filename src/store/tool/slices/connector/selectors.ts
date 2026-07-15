@@ -1,9 +1,12 @@
 import type { ToolStore } from '../../store';
-import type { ConnectorTool, ConnectorWithTools } from './types';
+import type { AgentBoundConnector, ConnectorTool, ConnectorWithTools } from './types';
 
 // `?? []` tolerates a partially-initialized store (e.g. in unit-test mocks);
 // the real store always seeds `connectors: []` via initialState.
 const connectorList = (s: ToolStore): ConnectorWithTools[] => s.connectors ?? [];
+
+/** All agent-owned connectors across agents, for the unified settings page. */
+const agentBoundConnectors = (s: ToolStore): AgentBoundConnector[] => s.agentBoundConnectors ?? [];
 
 const connectorById =
   (id: string) =>
@@ -94,6 +97,7 @@ const agentOverriddenIdentifiers =
   };
 
 export const connectorSelectors = {
+  agentBoundConnectors,
   agentConnectors,
   agentOverriddenIdentifiers,
   agentToolBadge,

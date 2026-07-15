@@ -23,6 +23,34 @@ export class ConnectorActionImpl {
   };
 
   /**
+   * Fetch every agent-owned connector across all agents (the flat aggregate for
+   * the unified connector-settings page, LOBE-11682). Each row is enriched
+   * server-side with the owning agent's title/avatar. Scope-correct: a workspace
+   * context only returns that workspace's agent connectors (LOBE-11681).
+   */
+  fetchAgentBoundConnectors = async (): Promise<void> => {
+    const data = await lambdaClient.connector.listAgentBound.query();
+    this.#set(
+      { agentBoundConnectors: data as any, isAgentBoundInit: true },
+      false,
+      'fetchAgentBoundConnectors',
+    );
+  };
+
+  /**
+   * Delete an agent-owned connector row from the unified settings page. Deletes
+   * only the `user_connectors` row (via `connector.delete`); it deliberately
+   * does NOT touch the owning agent's `agents.plugins` pin, because that config
+   * is not safely loadable/mutable from this page's context (see LOBE-11682 —
+   * pin migration is handled server-side in the separate rebind work). A pin
+   * left without a backing row resolves to nothing at runtime (graceful no-op).
+   */
+  deleteAgentConnector = async (connectorId: string): Promise<void> => {
+    await lambdaClient.connector.delete.mutate({ id: connectorId });
+    await this.fetchAgentBoundConnectors();
+  };
+
+  /**
    * Fetch an agent's own tools (agent-owned + mounted) for the "Agent Tools"
    * tab. Stored keyed by agentId.
    */
