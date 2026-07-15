@@ -376,14 +376,10 @@ export const acceptances = pgTable(
     /** Latest active or most recently settled verify round (denormalized pointer to verify_runs.id). */
     currentVerifyRunId: uuid('current_verify_run_id'),
 
-    /**
-     * Verify round whose user decision CLOSED the lifecycle (accepted, or a
-     * terminal rejected/abandoned) — written once at closure, never overwritten.
-     * Mid-loop rejections are per-round events and live on the judged round
-     * itself (verify_runs metadata), not here: every delivered round may be
-     * rejected again, so a single overwritten pointer would lose that trail.
-     */
-    finalVerifyRunId: uuid('final_verify_run_id'),
+    // No final_verify_run_id on purpose: a terminal status freezes the chain, so
+    // the closing round IS current_verify_run_id. Mid-loop rejections are
+    // per-round events (verify_runs metadata) — an aggregate pointer would either
+    // lose that trail (overwritten) or duplicate current (write-once).
 
     /** Latest verify report for this acceptance (denormalized pointer to verify_reports.id). */
     latestReportId: uuid('latest_report_id'),
@@ -408,7 +404,6 @@ export const acceptances = pgTable(
     index('acceptances_status_idx').on(t.status),
     index('acceptances_root_verify_run_id_idx').on(t.rootVerifyRunId),
     index('acceptances_current_verify_run_id_idx').on(t.currentVerifyRunId),
-    index('acceptances_final_verify_run_id_idx').on(t.finalVerifyRunId),
     index('acceptances_latest_report_id_idx').on(t.latestReportId),
     // One acceptance per subject in personal scope.
     uniqueIndex('acceptances_personal_subject_unique')

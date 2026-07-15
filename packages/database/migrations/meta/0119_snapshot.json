@@ -6,7 +6,7 @@
   },
   "dialect": "postgresql",
   "enums": {},
-  "id": "950105b9-9064-4b6d-b639-298c2b949a35",
+  "id": "8b2ceaa0-01f9-4ad6-9b3e-2755ff8a3548",
   "policies": {},
   "prevId": "8f880aef-6d25-4875-aaa9-d01d12e5d5c2",
   "roles": {},
@@ -20544,12 +20544,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "final_verify_run_id": {
-          "name": "final_verify_run_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
         "latest_report_id": {
           "name": "latest_report_id",
           "type": "uuid",
@@ -20683,21 +20677,6 @@
           "columns": [
             {
               "expression": "current_verify_run_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "acceptances_final_verify_run_id_idx": {
-          "name": "acceptances_final_verify_run_id_idx",
-          "columns": [
-            {
-              "expression": "final_verify_run_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"

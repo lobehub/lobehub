@@ -2493,7 +2493,6 @@ table acceptances {
   config jsonb [default: `{}`]
   root_verify_run_id uuid
   current_verify_run_id uuid
-  final_verify_run_id uuid
   latest_report_id uuid
   visual_render jsonb
   metadata jsonb
@@ -2509,7 +2508,6 @@ table acceptances {
     status [name: 'acceptances_status_idx']
     root_verify_run_id [name: 'acceptances_root_verify_run_id_idx']
     current_verify_run_id [name: 'acceptances_current_verify_run_id_idx']
-    final_verify_run_id [name: 'acceptances_final_verify_run_id_idx']
     latest_report_id [name: 'acceptances_latest_report_id_idx']
     (user_id, subject_type, subject_id) [name: 'acceptances_personal_subject_unique', unique]
     (workspace_id, subject_type, subject_id) [name: 'acceptances_workspace_subject_unique', unique]
