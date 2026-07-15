@@ -5,6 +5,7 @@ import { getErrorCodeSpec } from '@lobechat/model-runtime';
 import type { CreateMessageParams, SendMessageServerResponse } from '@lobechat/types';
 import { AiSendMessageServerSchema, RequestTrigger, StructureOutputSchema } from '@lobechat/types';
 import { createTimingHelpers, createTimingRequestId } from '@lobechat/utils';
+import { pickNonEmptyString, toRecord } from '@lobechat/utils/object';
 import { TRPCError } from '@trpc/server';
 import { getStatusKeyFromCode } from '@trpc/server/unstable-core-do-not-import';
 import debug from 'debug';
@@ -50,6 +51,17 @@ const getTRPCErrorCodeFromStatus = (status: number): TRPCErrorCode => {
   return 'INTERNAL_SERVER_ERROR';
 };
 
+const getRuntimeErrorMessage = (error: unknown): string | undefined => {
+  const errorRecord = toRecord(error);
+  if (!errorRecord) return;
+
+  return (
+    pickNonEmptyString(errorRecord.message) ??
+    pickNonEmptyString(toRecord(errorRecord.error)?.message) ??
+    pickNonEmptyString(errorRecord.errorMessage)
+  );
+};
+
 const createRuntimeTRPCError = (
   error: unknown,
   options?: { silentHandlerLog?: boolean },
@@ -58,12 +70,12 @@ const createRuntimeTRPCError = (
   if (typeof errorType === 'number' && errorType >= 400 && errorType <= 599) {
     if (options?.silentHandlerLog && errorType < 500) markSilentTRPCErrorLog(error);
 
-    const message = (error as { message?: unknown }).message;
+    const message = getRuntimeErrorMessage(error);
 
     return new TRPCError({
       cause: error,
       code: getTRPCErrorCodeFromStatus(errorType),
-      message: typeof message === 'string' ? message : `Request failed (${errorType})`,
+      message: message ?? `Request failed (${errorType})`,
     });
   }
 

@@ -1186,6 +1186,47 @@ describe('aiChatRouter', () => {
       }
     });
 
+    it.each([
+      {
+        accessError: {
+          error: { message: 'Nested forbidden message' },
+          errorType: ChatErrorType.Forbidden,
+        },
+        expectedMessage: 'Nested forbidden message',
+        source: 'nested error.message',
+      },
+      {
+        accessError: {
+          error: {},
+          errorMessage: 'Legacy forbidden message',
+          errorType: ChatErrorType.Forbidden,
+        },
+        expectedMessage: 'Legacy forbidden message',
+        source: 'legacy errorMessage',
+      },
+    ])('preserves $source for numeric chat errors', async ({ accessError, expectedMessage }) => {
+      const { initModelRuntimeFromDB } = await import('@/server/modules/ModelRuntime');
+      const mockGenerateObject = vi.fn().mockRejectedValue(accessError);
+
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValue({
+        generateObject: mockGenerateObject,
+      } as any);
+
+      const caller = aiChatRouter.createCaller({ ...mockCtx, serverDB: {} } as any);
+
+      await expect(
+        caller.outputJSON({
+          messages: [{ content: 'test', role: 'user' }],
+          model: 'claude-fable-5',
+          provider: 'lobehub',
+        }),
+      ).rejects.toMatchObject({
+        cause: accessError,
+        code: 'FORBIDDEN',
+        message: expectedMessage,
+      });
+    });
+
     it('maps raw provider 4xx errors to BAD_REQUEST instead of internal errors', async () => {
       const { initModelRuntimeFromDB } = await import('@/server/modules/ModelRuntime');
 
