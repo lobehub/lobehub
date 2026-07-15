@@ -33,11 +33,11 @@ const { createPrefixedTimingContext, logTiming, runTimedStage } = createTimingHe
 type TRPCErrorCode = ConstructorParameters<typeof TRPCError>[0]['code'];
 type TRPCStatusCode = Parameters<typeof getStatusKeyFromCode>[0];
 
-const getRuntimeErrorType = (error: unknown): string | undefined => {
+const getRuntimeErrorType = (error: unknown): number | string | undefined => {
   if (!error || typeof error !== 'object') return;
 
   const errorType = (error as { errorType?: unknown }).errorType;
-  return typeof errorType === 'string' ? errorType : undefined;
+  return typeof errorType === 'number' || typeof errorType === 'string' ? errorType : undefined;
 };
 
 const getTRPCErrorCodeFromStatus = (status: number): TRPCErrorCode => {
@@ -55,8 +55,20 @@ const createRuntimeTRPCError = (
   options?: { silentHandlerLog?: boolean },
 ): TRPCError | undefined => {
   const errorType = getRuntimeErrorType(error);
-  const spec = getErrorCodeSpec(errorType);
-  if (errorType && spec) {
+  if (typeof errorType === 'number' && errorType >= 400 && errorType <= 599) {
+    if (options?.silentHandlerLog && errorType < 500) markSilentTRPCErrorLog(error);
+
+    const message = (error as { message?: unknown }).message;
+
+    return new TRPCError({
+      cause: error,
+      code: getTRPCErrorCodeFromStatus(errorType),
+      message: typeof message === 'string' ? message : `Request failed (${errorType})`,
+    });
+  }
+
+  const spec = typeof errorType === 'string' ? getErrorCodeSpec(errorType) : undefined;
+  if (typeof errorType === 'string' && spec) {
     if (options?.silentHandlerLog && spec.httpStatus < 500) markSilentTRPCErrorLog(error);
 
     return new TRPCError({

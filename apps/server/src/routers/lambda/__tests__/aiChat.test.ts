@@ -1,6 +1,6 @@
 // @vitest-environment node
 import type { CreateMessageParams } from '@lobechat/types';
-import { AgentRuntimeErrorType, ThreadType } from '@lobechat/types';
+import { AgentRuntimeErrorType, ChatErrorType, ThreadType } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -1151,6 +1151,38 @@ describe('aiChatRouter', () => {
       } catch (error) {
         expect(error).toBeInstanceOf(TRPCError);
         expect((runtimeError as any).__lobeSilentTRPCErrorLog).toBeUndefined();
+      }
+    });
+
+    it('maps numeric chat error types to their tRPC status', async () => {
+      const { initModelRuntimeFromDB } = await import('@/server/modules/ModelRuntime');
+      const accessError = {
+        error: { message: ChatErrorType.Forbidden },
+        errorType: ChatErrorType.Forbidden,
+        message: 'Forbidden',
+      };
+      const mockGenerateObject = vi.fn().mockRejectedValue(accessError);
+
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValue({
+        generateObject: mockGenerateObject,
+      } as any);
+
+      const caller = aiChatRouter.createCaller({ ...mockCtx, serverDB: {} } as any);
+
+      try {
+        await caller.outputJSON({
+          messages: [{ content: 'test', role: 'user' }],
+          model: 'claude-fable-5',
+          provider: 'lobehub',
+        });
+        throw new Error('Expected outputJSON to throw');
+      } catch (error) {
+        expect(error).toBeInstanceOf(TRPCError);
+        expect(error).toMatchObject({
+          cause: accessError,
+          code: 'FORBIDDEN',
+          message: accessError.message,
+        });
       }
     });
 
