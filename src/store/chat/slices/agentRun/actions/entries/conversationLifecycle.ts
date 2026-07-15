@@ -34,6 +34,7 @@ import {
   resolveAgentWorkingDirectory,
   resolveAgentWorkingDirectoryConfig,
 } from '@/helpers/agentWorkingDirectory';
+import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { globalAgentContextManager } from '@/helpers/GlobalAgentContextManager';
 import { agentService } from '@/services/agent';
 import { aiChatService } from '@/services/aiChat';
@@ -587,20 +588,34 @@ export class ConversationLifecycleActionImpl {
       : undefined;
     const currentDeviceId = getElectronStoreState().gatewayDeviceInfo?.deviceId;
     const agentState = getAgentStoreState();
-    // Resolve the cwd for EVERY hetero-provider run, not just the desktop
-    // in-process (`runtimeType === 'hetero'`) path: workspace hetero agents
-    // dispatch via the gateway, and the server can only honour a cwd the
-    // client resolved (per-user legacy slot included) if it rides along as the
-    // new topic's initial metadata.
-    const resolvesHeteroCwd = !!heterogeneousProvider;
     // Merge the caller's per-user device override (LOBE-11689) so the cwd is
     // read for the device THIS member's run targets, not the shared row's.
+    const isWorkspaceAgentForCwd = agentByIdSelectors.isWorkspaceAgentById(agentId)(agentState);
     const agencyConfig = resolveAgencyConfig(
       agentByIdSelectors.getAgencyConfigById(agentId)(agentState),
-      agentByIdSelectors.isWorkspaceAgentById(agentId)(agentState)
+      isWorkspaceAgentForCwd
         ? getUserStoreState().workspaceUserPreference.agentDeviceOverrides?.[agentId]
         : undefined,
     );
+    // Resolve the cwd for every hetero-provider run that lands on a MACHINE
+    // (in-process `hetero` runtime, or a gateway dispatch whose effective
+    // target routes to a device) — the server can only honour a cwd the client
+    // resolved (per-user legacy slot included) if it rides along as the new
+    // topic's initial metadata. Sandbox/none targets must NOT resolve one: the
+    // desktop/home fallback is a local machine path that doesn't exist in an
+    // ephemeral cloud sandbox and would pollute the topic's metadata.
+    const heteroEffectiveTarget = heterogeneousProvider
+      ? resolveExecutionTarget(agencyConfig, {
+          clientExecutionAvailable: isDesktop,
+          isHetero: true,
+          workspaceScoped: isWorkspaceAgentForCwd,
+        })
+      : undefined;
+    const resolvesHeteroCwd =
+      !!heterogeneousProvider &&
+      (heteroEffectiveTarget === 'local' ||
+        heteroEffectiveTarget === 'device' ||
+        heteroEffectiveTarget === 'auto');
     // Same precedence as `getAgentWorkingDirectoryById`, but over the MERGED
     // config — the selector reads the raw shared row internally, which could
     // fall back to a cwd registered for another member's device. Desktop/home
@@ -627,7 +642,7 @@ export class ConversationLifecycleActionImpl {
     // sessionId consistent and never drops the conversation context. The active
     // worktree lives only in `workingDirectoryConfig.git.activeWorktree` as a
     // record. Non-hetero runtimes keep the effective (worktree) path.
-    const resolveWorkingDirPath = resolvesHeteroCwd
+    const resolveWorkingDirPath = heterogeneousProvider
       ? getWorkingDirSourcePath
       : getWorkingDirEffectivePath;
     const workingDirectory =
