@@ -20,12 +20,19 @@ import { builtinToolSelectors, lobehubSkillStoreSelectors } from '@/store/tool/s
 import { connectorSelectors } from '@/store/tool/slices/connector';
 import { pluginSelectors } from '@/store/tool/slices/plugin/selectors';
 
+import AgentConnectorUsage from '../AgentConnectorUsage';
 import { getLocalizedBuiltinSkillDetail, getNoPermissionsTitle } from './localization';
 
 const AgentSkillDetail = lazy(() => import('@/features/AgentSkillDetail'));
 
 export type ToolDetailType =
-  'agent-skill' | 'builtin' | 'builtin-skill' | 'lobehub-connector' | 'mcp-connector' | 'plugin';
+  | 'agent-connector'
+  | 'agent-skill'
+  | 'builtin'
+  | 'builtin-skill'
+  | 'lobehub-connector'
+  | 'mcp-connector'
+  | 'plugin';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   description: css`
@@ -181,6 +188,13 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
   const uninstallBuiltinTool = useToolStore((s) => s.uninstallBuiltinTool);
   const deleteAgentSkill = useToolStore((s) => s.deleteAgentSkill);
   const connector = useToolStore(connectorSelectors.connectorByIdentifier(identifier));
+  // For agent connectors the `identifier` slot carries the connector id; resolve
+  // the row from the agent-bound pool to show its owning-agent usage block.
+  const agentBoundConnector = useToolStore((s) =>
+    type === 'agent-connector'
+      ? (s.agentBoundConnectors ?? []).find((c) => c.id === identifier)
+      : undefined,
+  );
 
   // Creator attribution for the row-level manage gate: agent skills carry it
   // on the skill row; connector-backed types on the connector row.
@@ -378,6 +392,30 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
           </Suspense>
         </div>
       </div>
+    );
+  }
+
+  // Agent-owned connector (unified settings, LOBE-11682): the `identifier` slot
+  // carries the connector id (not the slug — agent connectors can share a slug
+  // with a base connector). Reuse the same ConnectorDetail as base connectors so
+  // tool-permission editing, sync and delete behave identically; it resolves the
+  // row from the agent-bound pool via the id-aware connector selectors.
+  if (type === 'agent-connector') {
+    const usageAgentId = agentBoundConnector?.agentId;
+    return (
+      <ConnectorDetail
+        connectorId={identifier}
+        middleSlot={
+          usageAgentId ? (
+            <AgentConnectorUsage
+              agentAvatar={agentBoundConnector?.agentAvatar}
+              agentId={usageAgentId}
+              agentTitle={agentBoundConnector?.agentTitle}
+            />
+          ) : undefined
+        }
+        onDelete={onDelete}
+      />
     );
   }
 

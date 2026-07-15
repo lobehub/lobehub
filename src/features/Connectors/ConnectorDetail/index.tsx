@@ -20,6 +20,12 @@ import ToolPermissionGroup from './ToolPermissionGroup';
 interface ConnectorDetailProps {
   connectorId: string;
   lifecycleActions?: ReactNode;
+  /**
+   * Extra content rendered between the description and the tool-permission list.
+   * Used by the unified settings' agent connectors to show the owning agent +
+   * a jump-to-use action (LOBE-11682).
+   */
+  middleSlot?: ReactNode;
   onDelete?: () => void;
 }
 
@@ -38,7 +44,7 @@ const ManageTooltip = ({ children, title }: { children: ReactNode; title?: strin
   );
 
 const ConnectorDetail = memo<ConnectorDetailProps>(
-  ({ connectorId, lifecycleActions, onDelete }) => {
+  ({ connectorId, lifecycleActions, middleSlot, onDelete }) => {
     const { t } = useTranslation('tool');
     const { t: ts } = useTranslation('setting');
     const { message } = App.useApp();
@@ -333,6 +339,8 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
               {connectorDescription}
             </div>
           )}
+
+          {middleSlot}
 
           {hasTools ? (
             <div style={{ flex: 1, overflowY: 'auto' }}>

@@ -588,7 +588,14 @@ const SkillList = memo<SkillListProps>(
           renderSection(
             'agentConnectors',
             t('skillGroup.agentConnectors', 'Agent Connectors'),
-            agentBoundConnectors.map((c) => <AgentConnectorItem connector={c} key={c.id} />),
+            agentBoundConnectors.map((c) => (
+              <AgentConnectorItem
+                connector={c}
+                isSelected={selectedIdentifier === c.id}
+                key={c.id}
+                onSelect={onSelect ? () => onSelect(c.id, 'agent-connector') : undefined}
+              />
+            )),
           )}
 
         {hasCustomSkills &&

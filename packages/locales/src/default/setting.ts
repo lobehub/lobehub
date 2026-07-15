@@ -13,11 +13,8 @@ export default {
   'agentImport.modal.knowledgeNotice': 'Knowledge bindings and files are not copied yet.',
   'agentImport.success': 'Agent copied to {{name}}.',
   'agentImport.title': 'Copy to Workspace',
-  'agentConnectorList.deleteConfirm':
-    'Delete this agent connector? The connector and its stored credentials will be removed. This does not affect the user or workspace connectors.',
-  'agentConnectorList.deleteTooltip': 'Delete connector',
-  'agentConnectorList.manageOnlyCreator':
-    'Only the creator or a workspace owner can delete this connector',
+  'agentConnectorUsage.goToAgent': 'Go to agent',
+  'agentConnectorUsage.label': 'Used by agent',
   'accountDeletion.cancelButton': 'Cancel Deletion',
   'accountDeletion.cancelConfirmTitle': 'Cancel account deletion request?',
   'accountDeletion.cancelFailed': 'Failed to cancel deletion request',
@@ -1080,7 +1077,6 @@ export default {
   'settingTTS.voice.preview': 'Voice Preview',
   'settingTTS.voice.title': 'Text-to-Speech Voice',
   'skillGroup.agentConnectors': 'Agent Connectors',
-  'skillGroup.agentConnectorsUnknownAgent': 'Agent',
   'skillGroup.builtinSkills': 'Built-in Skills',
   'skillGroup.builtinTools': 'Built-in Tools',
   'skillGroup.communityConnectors': 'OAuth Connectors',
