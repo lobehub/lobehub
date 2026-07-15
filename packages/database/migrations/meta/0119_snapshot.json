@@ -6,7 +6,7 @@
   },
   "dialect": "postgresql",
   "enums": {},
-  "id": "701e9c36-d72e-4067-8782-91e1736e03cc",
+  "id": "1e177eba-5912-4792-a508-09a598ca6cc1",
   "policies": {},
   "prevId": "8f880aef-6d25-4875-aaa9-d01d12e5d5c2",
   "roles": {},
@@ -22328,7 +22328,12 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "verify_runs_acceptance_requires_round": {
+          "name": "verify_runs_acceptance_requires_round",
+          "value": "\"verify_runs\".\"acceptance_id\" IS NULL OR \"verify_runs\".\"round_index\" IS NOT NULL"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.workspace_audit_logs": {

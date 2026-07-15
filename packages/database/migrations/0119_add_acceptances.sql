@@ -39,4 +39,6 @@ ALTER TABLE "verify_runs" DROP CONSTRAINT IF EXISTS "verify_runs_acceptance_id_a
 ALTER TABLE "verify_runs" ADD CONSTRAINT "verify_runs_acceptance_id_acceptances_id_fk" FOREIGN KEY ("acceptance_id") REFERENCES "public"."acceptances"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "verify_runs_acceptance_id_idx" ON "verify_runs" USING btree ("acceptance_id");--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "verify_runs_acceptance_round_unique" ON "verify_runs" USING btree ("acceptance_id","round_index");--> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "verify_runs_user_decision_idx" ON "verify_runs" USING btree ("user_decision");
+CREATE INDEX IF NOT EXISTS "verify_runs_user_decision_idx" ON "verify_runs" USING btree ("user_decision");--> statement-breakpoint
+ALTER TABLE "verify_runs" DROP CONSTRAINT IF EXISTS "verify_runs_acceptance_requires_round";--> statement-breakpoint
+ALTER TABLE "verify_runs" ADD CONSTRAINT "verify_runs_acceptance_requires_round" CHECK ("verify_runs"."acceptance_id" IS NULL OR "verify_runs"."round_index" IS NOT NULL);

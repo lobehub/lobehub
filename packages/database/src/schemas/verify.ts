@@ -26,6 +26,7 @@ import type {
 import { sql } from 'drizzle-orm';
 import {
   boolean,
+  check,
   index,
   integer,
   jsonb,
@@ -596,6 +597,14 @@ export const verifyRuns = pgTable(
     index('verify_runs_workspace_id_idx').on(t.workspaceId),
     index('verify_runs_acceptance_id_idx').on(t.acceptanceId),
     uniqueIndex('verify_runs_acceptance_round_unique').on(t.acceptanceId, t.roundIndex),
+    // A run linked to an acceptance MUST carry a round index. Without this, the
+    // unique index above cannot order the chain: Postgres treats NULLs as
+    // distinct, so several null-round rows could pile onto one acceptance. Both
+    // columns stay nullable for standalone/legacy runs (neither set).
+    check(
+      'verify_runs_acceptance_requires_round',
+      sql`${t.acceptanceId} IS NULL OR ${t.roundIndex} IS NOT NULL`,
+    ),
     // At most one verification round per Agent Run; NULLs are distinct in a
     // unique index, so standalone (operation-less) rounds stay unconstrained.
     uniqueIndex('verify_runs_operation_id_unique').on(t.operationId),

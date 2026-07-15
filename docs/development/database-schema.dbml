@@ -2689,6 +2689,7 @@ table verify_runs {
     workspace_id [name: 'verify_runs_workspace_id_idx']
     acceptance_id [name: 'verify_runs_acceptance_id_idx']
     (acceptance_id, round_index) [name: 'verify_runs_acceptance_round_unique', unique]
+    
     operation_id [name: 'verify_runs_operation_id_unique', unique]
     source [name: 'verify_runs_source_idx']
     user_decision [name: 'verify_runs_user_decision_idx']
