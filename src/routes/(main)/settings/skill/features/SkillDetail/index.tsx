@@ -404,6 +404,7 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
     const usageAgentId = agentBoundConnector?.agentId;
     return (
       <ConnectorDetail
+        agentTitle={agentBoundConnector?.agentTitle}
         connectorId={identifier}
         middleSlot={
           usageAgentId ? (

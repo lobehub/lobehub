@@ -1,3 +1,4 @@
+import { upsertPluginMode } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -604,6 +605,26 @@ export const connectorRouter = router({
       if (!target) return;
       assertWorkspaceRowManageable(ctx, target.userId, 'connector');
       await ctx.connectorModel.delete(input.id);
+
+      // Agent-owned connector: also unpin its tool from the owning agent's
+      // `plugins`, so deleting it here matches the agent-profile delete (row +
+      // pin) and never leaves a dangling pin. Done server-side because the
+      // unified settings page has no safe access to an arbitrary agent's config
+      // (mirrors the profile page's client-side unpin, `upsertPluginMode(...,
+      // 'auto')`). Idempotent: re-running on an already-unpinned agent is a no-op.
+      if (target.agentId) {
+        const agentModel = new AgentModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
+        const config = await agentModel.getAgentConfigById(target.agentId);
+        if (config) {
+          await agentModel.update(target.agentId, {
+            plugins: upsertPluginMode(
+              config.plugins ?? undefined,
+              target.identifier,
+              'auto',
+            ) as any,
+          });
+        }
+      }
     }),
 
   /**
