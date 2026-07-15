@@ -661,6 +661,10 @@ export default {
     'Scheduled. This run will continue automatically once the limit resets.',
   'cliRateLimitGuide.schedule.scheduledForApprox':
     'Scheduled. This run will continue automatically in about {{duration}}.',
+  'cliRateLimitGuide.schedule.titleAfterReset':
+    'Scheduled {{name}} to continue after the limit resets',
+  'cliRateLimitGuide.schedule.titleForApprox':
+    'Scheduled {{name}} to continue in about {{duration}}',
   'cliRateLimitGuide.resetUnknown': 'the quota resets',
   'cliRateLimitGuide.title': '{{name}} is temporarily unavailable',
   'codexInstallGuide.actions.openDocs': 'Open Install Guide',

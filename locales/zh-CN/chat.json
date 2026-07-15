@@ -137,6 +137,8 @@
   "cliRateLimitGuide.schedule.runNow": "立即运行",
   "cliRateLimitGuide.schedule.scheduledAfterReset": "已安排，限额重置后将自动继续本次运行。",
   "cliRateLimitGuide.schedule.scheduledForApprox": "已安排，约 {{duration}} 后将自动继续本次运行。",
+  "cliRateLimitGuide.schedule.titleAfterReset": "已安排 {{name}} 在限额重置后继续运行",
+  "cliRateLimitGuide.schedule.titleForApprox": "已安排 {{name}} 在约 {{duration}} 后继续运行",
   "cliRateLimitGuide.title": "{{name}} 暂时不可用",
   "codexInstallGuide.actions.openDocs": "打开安装指南",
   "codexInstallGuide.actions.openSystemTools": "打开系统工具",
