@@ -102,6 +102,17 @@ export const useCommitWorkingDirectory = (agentId: string) => {
   const currentDeviceId = useElectronStore((s) => s.gatewayDeviceInfo?.deviceId);
   const targetDeviceId = resolveTargetDeviceId(effectiveAgencyConfig, currentDeviceId);
 
+  // A workspace agent resolving to THIS member's personal machine (a `local`
+  // override, LOBE-11689) must not persist its cwd into the workspace-shared
+  // `agents.agencyConfig.workingDirByDevice` — that would leak the member's
+  // personal device id and an absolute local path to every other member. Route
+  // those writes to the per-user legacy slot instead (a `local` pick only
+  // exists on desktop, where that slot works). Workspace-pool devices keep the
+  // shared per-device map: the path lives on a machine the workspace shares.
+  const isWorkspaceAgent = useAgentStore((s) => Boolean(s.agentMap[agentId]?.workspaceId));
+  const isPersonalDeviceTarget =
+    isWorkspaceAgent && !!targetDeviceId && targetDeviceId === currentDeviceId;
+
   const writeCwd = useCallback(
     async (entry?: WorkingDirEntry) => {
       const effectivePath = getWorkingDirEffectivePath(entry);
@@ -130,7 +141,14 @@ export const useCommitWorkingDirectory = (agentId: string) => {
           workingDirectoryConfig: entry ? toAgentWorkingDirConfig(entry) : undefined,
         });
       } else {
-        if (targetDeviceId) {
+        if (targetDeviceId && isPersonalDeviceTarget) {
+          // Per-user slot (see `isPersonalDeviceTarget`) — never the shared row.
+          // The legacy slot stores a plain path, so the worktree/git metadata is
+          // carried by the topic metadata once a conversation starts.
+          await updateAgentRuntimeEnvConfigById(agentId, {
+            workingDirectory: effectivePath || undefined,
+          });
+        } else if (targetDeviceId) {
           const prev = agencyConfig?.workingDirByDevice ?? {};
           // Clearing sends `undefined` rather than dropping the key: deep-merge
           // (client store + server persist) can't remove a key, so the delete is
@@ -148,7 +166,8 @@ export const useCommitWorkingDirectory = (agentId: string) => {
         // otherwise it keeps re-supplying a stale cwd from a lower precedence
         // level and Clear looks dead. (Only clears the localStorage map; no
         // network round-trip since `workingDirectory` is stripped before send.)
-        if (!effectivePath && legacyAgentWorkingDirectory) {
+        // The personal-device branch above already wrote that same slot.
+        if (!isPersonalDeviceTarget && !effectivePath && legacyAgentWorkingDirectory) {
           await updateAgentRuntimeEnvConfigById(agentId, { workingDirectory: undefined });
         }
       }
@@ -164,6 +183,7 @@ export const useCommitWorkingDirectory = (agentId: string) => {
       activeTopic,
       activeTopicId,
       isHetero,
+      isPersonalDeviceTarget,
       targetDeviceId,
       legacyAgentWorkingDirectory,
       updateAgentConfigById,
@@ -264,7 +284,7 @@ export const useCommitWorkingDirectory = (agentId: string) => {
     async (newPath: string) => {
       const path = newPath.trim();
       if (!path) return;
-      if (targetDeviceId) {
+      if (targetDeviceId && !isPersonalDeviceTarget) {
         const prev = agencyConfig?.workingDirByDevice ?? {};
         await updateAgentConfigById(agentId, {
           agencyConfig: {
@@ -273,12 +293,21 @@ export const useCommitWorkingDirectory = (agentId: string) => {
           },
         });
       } else {
-        // No resolvable device (e.g. gateway id unavailable) — fall back to the
-        // legacy per-agent slot so the action still takes effect.
+        // No resolvable device (e.g. gateway id unavailable), or a workspace
+        // agent targeting this member's own machine (`isPersonalDeviceTarget`,
+        // which must never persist into the shared row) — fall back to the
+        // per-user legacy slot so the action still takes effect.
         await updateAgentRuntimeEnvConfigById(agentId, { workingDirectory: path });
       }
     },
-    [agentId, agencyConfig, targetDeviceId, updateAgentConfigById, updateAgentRuntimeEnvConfigById],
+    [
+      agentId,
+      agencyConfig,
+      isPersonalDeviceTarget,
+      targetDeviceId,
+      updateAgentConfigById,
+      updateAgentRuntimeEnvConfigById,
+    ],
   );
 
   /** Clear the current selection (falls back to the next precedence level). */
