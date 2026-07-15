@@ -15,7 +15,7 @@ export default defineConfig({
   test: {
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'json', 'lcov', 'text-summary'],
+      reporter: ['text', 'json', ['lcov', { projectRoot: repoRoot }], 'text-summary'],
     },
     environment: 'node',
   },
