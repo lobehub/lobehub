@@ -7,6 +7,7 @@ import {
 } from '@lobechat/builtin-tool-agent-management';
 import { isDesktop, LOADING_FLAT } from '@lobechat/const';
 import { formatSelectedSkillsContext, formatSelectedToolsContext } from '@lobechat/context-engine';
+import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import { chainCompressContext } from '@lobechat/prompts';
 import type {
   ChatImageItem,
@@ -641,8 +642,13 @@ export class ConversationLifecycleActionImpl {
     // SOURCE repo, NOT the selected worktree, so switching worktree keeps cwd +
     // sessionId consistent and never drops the conversation context. The active
     // worktree lives only in `workingDirectoryConfig.git.activeWorktree` as a
-    // record. Non-hetero runtimes keep the effective (worktree) path.
-    const resolveWorkingDirPath = heterogeneousProvider
+    // record. The per-cwd session store is a LOCAL CLI trait — remote platform
+    // agents (openclaw / hermes) run through the gateway with no such
+    // constraint, so they (like non-hetero runtimes) keep the effective
+    // (worktree) path.
+    const isLocalCliHetero =
+      !!heterogeneousProvider && !isRemoteHeterogeneousType(heterogeneousProvider.type);
+    const resolveWorkingDirPath = isLocalCliHetero
       ? getWorkingDirSourcePath
       : getWorkingDirEffectivePath;
     const workingDirectory =

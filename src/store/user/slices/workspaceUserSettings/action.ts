@@ -1,4 +1,5 @@
 import type { WorkspaceUserPreference } from '@lobechat/types';
+import { useEffect } from 'react';
 
 import {
   getActiveWorkspaceId,
@@ -44,20 +45,29 @@ export class WorkspaceUserSettingsActionImpl {
 
   useFetchWorkspaceUserPreference = () => {
     const workspaceId = useActiveWorkspaceId();
-    return useClientDataSWR<WorkspaceUserPreference | null>(
+    const swr = useClientDataSWR<WorkspaceUserPreference | null>(
       workspaceId ? [WORKSPACE_USER_SETTINGS_SWR_KEY, workspaceId] : null,
       async () => workspaceUserSettingsService.getPreference(),
-      {
-        onSuccess: (data) => {
-          if (!data) return;
-          this.#set(
-            { workspaceUserPreference: data },
-            false,
-            n('useFetchWorkspaceUserPreference/onSuccess'),
-          );
-        },
-      },
     );
+
+    // Sync EVERY data change into the (un-keyed) store bucket — not just
+    // fetch successes. On a workspace switch-back the SWR cache serves the
+    // new workspace's preference synchronously, and an `onSuccess`-only sync
+    // would leave the bucket holding the previous workspace's data until
+    // revalidation lands; imperative readers (send-time cwd resolution) read
+    // the bucket, so it must be corrected on the first render. A `null`
+    // response (no server row) clears the bucket for the same reason.
+    const data = swr.data;
+    useEffect(() => {
+      if (data === undefined) return;
+      this.#set(
+        { workspaceUserPreference: data ?? {} },
+        false,
+        n('useFetchWorkspaceUserPreference/sync'),
+      );
+    }, [data]);
+
+    return swr;
   };
 
   updateWorkspaceUserPreference = async (
