@@ -840,6 +840,13 @@
       "when": 1784101324965,
       "tag": "0119_add_acceptances",
       "breakpoints": true
+    },
+    {
+      "idx": 120,
+      "version": "7",
+      "when": 1784130423992,
+      "tag": "0120_oidc_clients_governance",
+      "breakpoints": true
     }
   ],
   "version": "6"
