@@ -1462,7 +1462,22 @@ export function registerVerifyCommand(program: Command) {
         let reused = false;
         if (rememberedRunId) {
           const existing = await client.verify.getRun.query({ verifyRunId: rememberedRunId });
-          if (existing) {
+          if (existing && existing.userDecision) {
+            // The remembered round has already been judged (e.g. rejected on the
+            // acceptance page). A decided round is immutable history — updating
+            // it in place would leave the aggregate stuck on the old decision.
+            // Fall through to a fresh session, which chains as the NEXT round
+            // and re-opens the acceptance.
+            if (options.run) {
+              log.error(
+                `Session ${options.run} already carries a user decision (${existing.userDecision}) — drop --run so a new round is created`,
+              );
+              process.exit(1);
+            }
+            log.info(
+              `Recorded session was already decided (${existing.userDecision}) — starting a new round`,
+            );
+          } else if (existing) {
             reused = true;
             runId = existing.id;
             const metadata = metadataForReport(result, existing.metadata, origin);

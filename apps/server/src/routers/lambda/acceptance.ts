@@ -6,6 +6,7 @@ import {
   requireWorkspaceRoleWhenScoped,
   wsCompatProcedure,
 } from '@/business/server/trpc-middlewares/workspaceAuth';
+import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { AcceptanceItem } from '@/database/schemas/verify';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
@@ -76,8 +77,22 @@ export const acceptanceRouter = router({
       const acceptance = await resolveAcceptance(ctx, input.acceptanceId);
       assertWorkspaceRowManageable(ctx, acceptance.userId, 'acceptance');
 
+      // The attach rewrites the RUN's acceptance_id/round_index too — and a
+      // workspace-visible run is not necessarily the caller's. Creator-scope it
+      // like every other verify write, or a member could chain another
+      // member's report onto their aggregate.
+      const run = await new VerifyRunModel(
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      ).findById(input.verifyRunId);
+      if (!run) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Verification run not found' });
+      }
+      assertWorkspaceRowManageable(ctx, run.userId, 'verify run');
+
       try {
-        return await ctx.acceptanceService.attachRun(input.verifyRunId, acceptance.id);
+        return await ctx.acceptanceService.attachRun(run.id, acceptance.id);
       } catch (error) {
         throw new TRPCError({
           code: 'BAD_REQUEST',

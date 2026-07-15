@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -446,6 +446,64 @@ describe('planFromResult — plan item normalization', () => {
     // would leave the PREVIOUS round's plan attached, and every one of its items
     // would render as "not run" against a report that never planned them.
     expect(planFromResult({ plan: [] })).toEqual([]);
+  });
+});
+
+describe('verify ingest-report — decided rounds are immutable', () => {
+  let consoleSpy: ReturnType<typeof vi.spyOn>;
+  let dir: string;
+
+  beforeEach(() => {
+    consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    mockGetTrpcClient.mockResolvedValue(mockTrpcClient);
+    const verify = mockTrpcClient.verify as Record<string, any>;
+    verify.getRun = { query: vi.fn() };
+    verify.createRun = { mutate: vi.fn().mockResolvedValue({ id: 'run-new' }) };
+    verify.updateRun = { mutate: vi.fn() };
+    verify.upsertReport = { mutate: vi.fn().mockResolvedValue({}) };
+
+    dir = mkdtempSync(path.join(tmpdir(), 'lh-ingest-'));
+    writeFileSync(path.join(dir, 'result.json'), JSON.stringify({ cases: [] }));
+    // The sidecar remembers the previous round's session.
+    writeFileSync(path.join(dir, '.verify-run.json'), JSON.stringify({ verifyRunId: 'run-old' }));
+  });
+
+  afterEach(() => {
+    consoleSpy.mockRestore();
+    rmSync(dir, { force: true, recursive: true });
+  });
+
+  const run = async (args: string[]) => {
+    const program = new Command();
+    program.exitOverride();
+    registerVerifyCommand(program);
+    await program.parseAsync(['node', 'lh', 'verify', ...args]);
+  };
+
+  it('starts a fresh round instead of updating a decided session in place', async () => {
+    const verify = mockTrpcClient.verify as Record<string, any>;
+    verify.getRun.query.mockResolvedValue({
+      id: 'run-old',
+      metadata: null,
+      userDecision: 'reject',
+    });
+
+    await run(['ingest-report', dir, '--json']);
+
+    // The rejected round is history: no in-place update, a new session instead.
+    expect(verify.updateRun.mutate).not.toHaveBeenCalled();
+    expect(verify.createRun.mutate).toHaveBeenCalled();
+  });
+
+  it('still updates an undecided remembered session in place', async () => {
+    const verify = mockTrpcClient.verify as Record<string, any>;
+    verify.getRun.query.mockResolvedValue({ id: 'run-old', metadata: null, userDecision: null });
+    verify.listResultsByRun = { query: vi.fn().mockResolvedValue([]) };
+
+    await run(['ingest-report', dir, '--json']);
+
+    expect(verify.updateRun.mutate).toHaveBeenCalled();
+    expect(verify.createRun.mutate).not.toHaveBeenCalled();
   });
 });
 
