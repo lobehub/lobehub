@@ -54,7 +54,7 @@ app sessions are dev-build singletons. Validated verdicts:
 | Electron single-instance lock            | `App.ts:227`                                                     | ✅ **keyed by userData** — distinct userData dirs each get their own lock; all instances run. No code change needed. |
 | Chromium `SingletonLock`                 | per userData dir                                                 | ✅ one per userData dir automatically (observed distinct PIDs per dir).                                              |
 | userData dir `lobehub-desktop-dev`       | `pre-app-init.ts:12`                                             | ✅ fixed — now env-overridable via `LOBE_DESKTOP_USER_DATA_DIR`.                                                     |
-| Vite dev server `strictPort:true` 5173   | `electron.vite.config.ts`                                        | ✅ fixed — now env-overridable via `LOBE_DESKTOP_VITE_PORT` (Model B: one Vite per worktree).                        |
+| Vite dev server `strictPort:true` 5173   | `apps/desktop/vite.shared.ts`                                    | ✅ fixed — now env-overridable via `LOBE_DESKTOP_VITE_PORT` (Model B: one Vite per worktree).                        |
 | `electron-server-ipc` unix socket        | `App.ts` → `packages/electron-server-ipc/src/ipcServer.ts:23-31` | ✅ fixed — id now env-overridable via `LOBE_IPC_ID`; distinct sockets, no more hijack (was last-writer-wins).        |
 | safeStorage / Chromium cookie encryption | OS keychain, keyed by **app name**                               | 🔑 requires **app name constant** to decrypt a copied login state.                                                   |
 | Global shortcuts / `lobehub://` protocol | OS-global                                                        | first/last wins; harmless for headless automation.                                                                   |
@@ -105,7 +105,7 @@ branch ships all three:
    this.ipcServer = new ElectronIPCServer(ipcId, ipcServerEvents);
    ```
 
-3. **`apps/desktop/electron.vite.config.ts`** — per-instance Vite dev port
+3. **`apps/desktop/vite.shared.ts`** — per-instance Vite dev port
    (Model B: one Vite per worktree), kept `strictPort` so HMR clientPort matches:
 
    ```ts
@@ -180,14 +180,15 @@ Raw `curl http://localhost:<port>/json/list` always shows a port's true target
 
 ### Model A — one Vite, many electron processes (what the validation used)
 
-One `electron-vite dev` owns Vite 5173 + the built `dist/main`; extra instances
-are raw electrons sharing the renderer via `ELECTRON_RENDERER_URL`:
+One dev orchestrator (`pnpm dev` in `apps/desktop`) owns Vite 5173 + the built
+`dist/main`; extra instances are raw electrons sharing the renderer via
+`ELECTRON_RENDERER_URL`:
 
 ```bash
 # instance 1: owns Vite 5173 + is itself CDP 9223
 cd apps/desktop
 LOBE_DESKTOP_USER_DATA_DIR=/tmp/lobe-ud-1 \
-  npx electron-vite dev -- --remote-debugging-port=9223
+  pnpm dev -- --remote-debugging-port=9223
 
 # instances 2,3: reuse Vite 5173 + built main, isolate userData + CDP
 LOBE_DESKTOP_USER_DATA_DIR=/tmp/lobe-ud-2 ELECTRON_RENDERER_URL=http://127.0.0.1:5173 \
@@ -200,19 +201,20 @@ Lightest; all share one build/renderer. Extra instances get no HMR re-launch.
 
 ### Model B — one Vite per worktree (the N-worktree use case)
 
-Each worktree runs its own `electron-vite dev` (own code, own build, own HMR).
+Each worktree runs its own dev orchestrator (own code, own build, own HMR).
 The `LOBE_DESKTOP_VITE_PORT` knob makes this work — otherwise the 2nd worktree
 fails on `strictPort` 5173. Just use the pool (below), or by hand per worktree:
 
 ```bash
 LOBE_DESKTOP_VITE_PORT=51xx LOBE_DESKTOP_USER_DATA_DIR=… LOBE_IPC_ID=… \
-  npx electron-vite dev -- --remote-debugging-port=92xx
+  pnpm dev -- --remote-debugging-port=92xx
 ```
 
-`electron-vite dev` injects the matching `ELECTRON_RENDERER_URL` automatically.
+`pnpm dev` injects the matching `ELECTRON_RENDERER_URL` automatically.
 Cost: N Vite servers + N builds (heavy); acceptable since each worktree is a
-distinct dev target. **Validated** — two `electron-vite dev` on 5174 + 5175 ran
-concurrently (transcript below).
+distinct dev target. **Validated** — two dev orchestrators on 5174 + 5175 ran
+concurrently (transcript below, recorded pre-migration with `electron-vite dev`;
+the port/isolation knobs are unchanged).
 
 ## electron-dev.sh instance pool (implemented)
 

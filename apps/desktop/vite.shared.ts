@@ -10,7 +10,9 @@ export const DESKTOP_DIR = __dirname;
 export const ROOT_DIR = path.resolve(__dirname, '../..');
 export const CLOUD_ROOT_DIR = path.resolve(__dirname, '../../..');
 
-export const isCloudDesktopBuild = process.env.CLOUD_DESKTOP === '1';
+// Must stay a function: configs call it after `loadDesktopEnv(mode)`, so a
+// `CLOUD_DESKTOP=1` coming from `apps/desktop/.env` (not just the CLI env) is seen.
+export const isCloudDesktopBuild = () => process.env.CLOUD_DESKTOP === '1';
 
 // Renderer dev-server port. Overridable per instance (e.g. one git worktree per
 // concurrent dev instance) via LOBE_DESKTOP_VITE_PORT; `scripts/dev.mjs` injects
@@ -27,7 +29,7 @@ export const desktopPackageJson = JSON.parse(
 ) as { version: string };
 
 export const loadDesktopEnv = (mode: string) => {
-  dotenv.config();
+  dotenv.config({ path: path.join(DESKTOP_DIR, '.env') });
   Object.assign(process.env, loadEnv(mode, ROOT_DIR, ''));
 };
 

@@ -230,7 +230,7 @@ false fail), on the wrong bundle entirely.
 
 **Correct approach**: to verify working-tree UI in the desktop shape, start an
 isolated dev instance that loads live code — `electron-dev.sh start <id>` runs
-`electron-vite dev` (its own CDP/Vite, copied login), which DOES bundle your src
+the dev orchestrator `scripts/dev.mjs` (its own CDP/Vite, copied login), which DOES bundle your src
 changes. Prove it's live by MEASURING a known-changed value (e.g. computed
 `::before` inset 10px vs old 28px) before trusting any screenshot. Don't kill the
 user's resident 9222 app — use a pool id. Also: `agent-browser open` mangles

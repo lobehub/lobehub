@@ -6,6 +6,7 @@ import { externalRuntimeModules } from './external-runtime-deps.config.mjs';
 import { getNativeExternalDependencies } from './native-deps.config.mjs';
 import {
   applyDesktopViteConfigExtension,
+  isCloudDesktopBuild,
   loadDesktopEnv,
   MAIN_NODE_TARGET,
   mainProcessAlias,
@@ -19,12 +20,12 @@ export default defineConfig(async (env) => {
 
   const isDev = mode === 'development';
   const updateChannel = process.env.UPDATE_CHANNEL;
-  const isCloudDesktopBuild = process.env.CLOUD_DESKTOP === '1';
+  const isCloudDesktop = isCloudDesktopBuild();
   const externalNavigationHosts =
-    process.env.DESKTOP_EXTERNAL_NAVIGATION_HOSTS ?? (isCloudDesktopBuild ? 'stripe.com' : '');
+    process.env.DESKTOP_EXTERNAL_NAVIGATION_HOSTS ?? (isCloudDesktop ? 'stripe.com' : '');
 
   console.info(`[vite.main.config.ts] Detected UPDATE_CHANNEL: ${updateChannel}`);
-  console.info(`[vite.main.config.ts] Cloud desktop build: ${isCloudDesktopBuild}`);
+  console.info(`[vite.main.config.ts] Cloud desktop build: ${isCloudDesktop}`);
 
   const config = {
     build: {

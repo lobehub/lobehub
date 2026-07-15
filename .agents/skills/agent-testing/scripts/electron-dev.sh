@@ -126,8 +126,8 @@ expand_descendants() {
 # Seed PIDs for the CURRENT instance only. Pool mode scopes strictly to this
 # instance (pidfile session leader + whoever holds this instance's CDP/Vite
 # ports) so stopping one instance never kills a sibling. Legacy mode additionally
-# sweeps the project's Electron + electron-vite (to tear down a stray `bun run
-# dev` the user started outside this script).
+# sweeps the project's Electron + dev orchestrator (to tear down a stray `bun
+# run dev` the user started outside this script).
 find_instance_pids() {
   local pids=""
 
@@ -155,7 +155,7 @@ find_instance_pids() {
   # 4. Legacy only: broad project matching (would cross pool instances)
   if [ "$POOL_MODE" = "0" ]; then
     pids="$pids $(pgrep -f "$PROJECT_ELECTRON_PATH" 2>/dev/null || true)"
-    pids="$pids $(pgrep -f "electron-vite[/.].*\\bdev\\b" 2>/dev/null || true)"
+    pids="$pids $(pgrep -f "scripts/dev\\.mjs" 2>/dev/null || true)"
   fi
 
   # `|| true` because `grep -v '^$'` exits 1 on all-empty input, which with

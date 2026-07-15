@@ -171,7 +171,7 @@ agent-browser --cdp 9222 eval "JSON.stringify(window.__CAPTURED_ERRORS)"
 
 - **Always use `electron-dev.sh stop` to clean up** — `pkill -f "Electron"` only kills the main process; helper processes (GPU, renderer, network) survive. The script finds and kills all of them via PID matching against the project's electron binary path.
 
-- **`npx electron-vite dev` must run from `apps/desktop/`** — running from project root fails silently. The `electron-dev.sh` script handles this automatically.
+- **`pnpm dev` must run from `apps/desktop/`** — running from project root starts the web app instead. The `electron-dev.sh` script handles this automatically.
 
 - **Dev build auto-opens DevTools, which hijacks the CDP target** — `agent-browser --cdp 9222` may attach to the DevTools page (`devtools://…`) instead of the app (`app://renderer/`). Symptom: `get url` returns a `devtools://` URL. Fix: close the DevTools target and reconnect:
 

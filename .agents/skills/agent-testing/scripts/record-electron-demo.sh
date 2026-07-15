@@ -36,7 +36,7 @@ RECORD_PID=""
 cleanup() {
   echo "[cleanup] Stopping all processes..."
   [ -n "$RECORD_PID" ] && kill -INT "$RECORD_PID" 2>/dev/null && sleep 2
-  pkill -f "electron-vite" 2>/dev/null || true
+  pkill -f "scripts/dev.mjs" 2>/dev/null || true
   pkill -f "Electron" 2>/dev/null || true
   pkill -f "agent-browser" 2>/dev/null || true
   echo "[cleanup] Done."
@@ -317,14 +317,14 @@ echo "=== Electron Demo Recorder ==="
 # 1. Kill existing instances
 echo "[setup] Cleaning up existing processes..."
 pkill -f "Electron" 2>/dev/null || true
-pkill -f "electron-vite" 2>/dev/null || true
+pkill -f "scripts/dev.mjs" 2>/dev/null || true
 pkill -f "agent-browser" 2>/dev/null || true
 sleep 3
 
 # 2. Start Electron
 echo "[setup] Starting Electron..."
 cd "$PROJECT_ROOT/apps/desktop"
-ELECTRON_ENABLE_LOGGING=1 npx electron-vite dev -- --remote-debugging-port="$CDP_PORT" > "$ELECTRON_LOG" 2>&1 &
+ELECTRON_ENABLE_LOGGING=1 pnpm dev -- --remote-debugging-port="$CDP_PORT" > "$ELECTRON_LOG" 2>&1 &
 
 wait_for_electron
 wait_for_renderer

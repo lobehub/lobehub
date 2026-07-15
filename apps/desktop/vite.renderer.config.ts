@@ -187,6 +187,8 @@ export default defineConfig(async (env) => {
   const { mode } = env;
   loadDesktopEnv(mode);
 
+  const isCloudDesktop = isCloudDesktopBuild();
+
   const config = {
     // Absolute base: relative asset URLs break in the popup window because its
     // SPA URL (`/popup/agent/:aid/:tid`) is deep enough that relative resolution
@@ -217,15 +219,15 @@ export default defineConfig(async (env) => {
     envPrefix: ['RENDERER_VITE_', 'VITE_'],
     optimizeDeps: sharedOptimizeDeps,
     plugins: [
-      isCloudDesktopBuild && cloudTsconfigPathsPlugin(),
-      isCloudDesktopBuild && cloudDesktopBusinessConstPlugin(),
+      isCloudDesktop && cloudTsconfigPathsPlugin(),
+      isCloudDesktop && cloudDesktopBusinessConstPlugin(),
       electronDesktopHtmlPlugin(),
       vanillaExtractPlugin(),
       ...(sharedRendererPlugins({ platform: 'desktop' }) as PluginOption[]),
     ],
     resolve: {
       dedupe: ['react', 'react-dom'],
-      tsconfigPaths: !isCloudDesktopBuild,
+      tsconfigPaths: !isCloudDesktop,
     },
     root: ROOT_DIR,
     // In dev the BrowserWindow loads `app://renderer/` and the Electron main process
