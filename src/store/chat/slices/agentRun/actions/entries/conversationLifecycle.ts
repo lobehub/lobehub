@@ -20,7 +20,11 @@ import type {
   SendMessageServerResponse,
   UIChatMessage,
 } from '@lobechat/types';
-import { getWorkingDirEffectivePath, getWorkingDirSourcePath } from '@lobechat/types';
+import {
+  getWorkingDirEffectivePath,
+  getWorkingDirSourcePath,
+  resolveAgencyConfig,
+} from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
 import { TRPCClientError } from '@trpc/client';
 import { t } from 'i18next';
@@ -72,6 +76,7 @@ import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/lobe-page-agent';
 import { type StoreSetter } from '@/store/types';
+import { getUserStoreState } from '@/store/user';
 import { useUserMemoryStore } from '@/store/userMemory';
 import { markdownToTxt } from '@/utils/markdownToTxt';
 
@@ -578,28 +583,40 @@ export class ConversationLifecycleActionImpl {
       : undefined;
     const currentDeviceId = getElectronStoreState().gatewayDeviceInfo?.deviceId;
     const agentState = getAgentStoreState();
-    const agentWorkingDirectory =
-      runtimeType === 'hetero' && heterogeneousProvider
-        ? agentByIdSelectors.getAgentWorkingDirectoryById(agentId, currentDeviceId)(agentState)
-        : undefined;
-    const agencyConfig = agentByIdSelectors.getAgencyConfigById(agentId)(agentState);
-    const agentWorkingDirectoryConfig =
-      runtimeType === 'hetero' && heterogeneousProvider
-        ? resolveAgentWorkingDirectoryConfig({
-            agencyConfig,
-            currentDeviceId,
-            fallback: agentWorkingDirectory,
-            legacyAgentWorkingDirectory: agentState.localAgentWorkingDirectoryMap[agentId],
-          })
-        : undefined;
+    // Resolve the cwd for EVERY hetero-provider run, not just the desktop
+    // in-process (`runtimeType === 'hetero'`) path: workspace hetero agents
+    // dispatch via the gateway, and the server can only honour a cwd the
+    // client resolved (per-user legacy slot included) if it rides along as the
+    // new topic's initial metadata.
+    const resolvesHeteroCwd = !!heterogeneousProvider;
+    const agentWorkingDirectory = resolvesHeteroCwd
+      ? agentByIdSelectors.getAgentWorkingDirectoryById(agentId, currentDeviceId)(agentState)
+      : undefined;
+    // Merge the caller's per-user device override (LOBE-11689) so the cwd is
+    // read for the device THIS member's run targets, not the shared row's.
+    const agencyConfig = resolveAgencyConfig(
+      agentByIdSelectors.getAgencyConfigById(agentId)(agentState),
+      agentByIdSelectors.isWorkspaceAgentById(agentId)(agentState)
+        ? getUserStoreState().workspaceUserPreference.agentDeviceOverrides?.[agentId]
+        : undefined,
+    );
+    const agentWorkingDirectoryConfig = resolvesHeteroCwd
+      ? resolveAgentWorkingDirectoryConfig({
+          agencyConfig,
+          currentDeviceId,
+          fallback: agentWorkingDirectory,
+          legacyAgentWorkingDirectory: agentState.localAgentWorkingDirectoryMap[agentId],
+        })
+      : undefined;
     // Heterogeneous CLI agents (Claude Code, Codex, …) store sessions per-cwd
     // (`~/.claude/projects/<encoded-cwd>/`). Anchor their session cwd to the
     // SOURCE repo, NOT the selected worktree, so switching worktree keeps cwd +
     // sessionId consistent and never drops the conversation context. The active
     // worktree lives only in `workingDirectoryConfig.git.activeWorktree` as a
     // record. Non-hetero runtimes keep the effective (worktree) path.
-    const resolveWorkingDirPath =
-      runtimeType === 'hetero' ? getWorkingDirSourcePath : getWorkingDirEffectivePath;
+    const resolveWorkingDirPath = resolvesHeteroCwd
+      ? getWorkingDirSourcePath
+      : getWorkingDirEffectivePath;
     const workingDirectory =
       resolveWorkingDirPath(existingTopic?.metadata?.workingDirectoryConfig) ??
       existingTopic?.metadata?.workingDirectory ??
