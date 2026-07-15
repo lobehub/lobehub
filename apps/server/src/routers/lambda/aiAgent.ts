@@ -324,6 +324,8 @@ const ExecSubAgentTaskSchema = z.object({
   instruction: z.string(),
   /** The parent message ID (Supervisor's tool call message or task message) */
   parentMessageId: z.string(),
+  /** Parent operation ID for dispatching callAgent hooks */
+  parentOperationId: z.string().optional(),
   /** Timeout in milliseconds (optional) */
   timeout: z.number().optional(),
   /** Task title (shown in UI, used as thread title) */
@@ -974,7 +976,16 @@ export const aiAgentRouter = router({
   execSubAgentTask: aiAgentWriteProcedure
     .input(ExecSubAgentTaskSchema)
     .mutation(async ({ input, ctx }) => {
-      const { agentId, groupId, instruction, parentMessageId, title, topicId, timeout } = input;
+      const {
+        agentId,
+        groupId,
+        instruction,
+        parentMessageId,
+        parentOperationId,
+        title,
+        topicId,
+        timeout,
+      } = input;
 
       log('execSubAgentTask: agentId=%s, groupId=%s', agentId, groupId);
 
@@ -985,6 +996,7 @@ export const aiAgentRouter = router({
           groupId,
           instruction,
           parentMessageId,
+          ...(parentOperationId && { parentOperationId }),
           timeout,
           title,
           topicId,

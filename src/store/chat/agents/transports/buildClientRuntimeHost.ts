@@ -15,6 +15,7 @@ import { ClientContextBuilder } from './ClientContextBuilder';
 import { ClientLLMTransport } from './ClientLLMTransport';
 import { ClientMessageTransport } from './ClientMessageTransport';
 import { type ClientRuntimeSession, ClientRuntimeStreamSink } from './ClientRuntimeStreamSink';
+import { ClientSubAgentTransport } from './ClientSubAgentTransport';
 import { ClientToolTransport } from './ClientToolTransport';
 
 export const buildClientRuntimeHost = (context: {
@@ -77,6 +78,7 @@ export const buildClientRuntimeHost = (context: {
       messages,
       operationStore,
       stream,
+      subAgent: new ClientSubAgentTransport(context.get, context.operationId),
       tools: new ClientToolTransport(
         context.get,
         context.messageKey,
