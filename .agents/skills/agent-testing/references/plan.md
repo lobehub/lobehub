@@ -68,6 +68,12 @@ Do not include irrelevant environment rows. Add a row when the run has another
 hard prerequisite, such as a native bot app, gateway, fixture repository, or
 specific external account.
 
+When a check refines or replaces a requirement from an earlier Acceptance round, keep the
+old stable id if it is the same assertion. If the semantic assertion needs a new id, declare
+the replacement explicitly with `supersedes: ['old-check-id']`; title similarity is never a
+merge signal. For every user-visible UI case, plan a dedicated screenshot or recording for
+that exact claim—program output may supplement it but cannot replace visual evidence.
+
 ## Confirmation behavior
 
 After the feedback, use the runtime structured question tool

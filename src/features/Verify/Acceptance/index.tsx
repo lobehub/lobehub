@@ -495,7 +495,7 @@ const AcceptancePage = memo(() => {
         expand={ledgerExpand}
         minWidth={300}
         placement={'right'}
-        style={{ bottom: 0, position: 'absolute', right: 0, top: 0, zIndex: 10 }}
+        style={{ flex: 'none', height: '100%' }}
         onExpandChange={setLedgerExpand}
       >
         <Flexbox style={{ height: '100%', overflow: 'auto' }}>
