@@ -30,6 +30,7 @@ import {
   Loader2,
   PanelRightOpen,
   RotateCcw,
+  Target,
 } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -65,6 +66,15 @@ const styles = createStaticStyles(({ css }) => ({
     height: 100%;
     background: ${cssVar.colorBgLayout};
   `,
+  requirement: css`
+    padding-block: 14px;
+    padding-inline: 16px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-inline-start: 3px solid ${cssVar.colorPrimary};
+    border-radius: ${cssVar.borderRadiusLG};
+
+    background: ${cssVar.colorFillQuaternary};
+  `,
   scopeChip: css`
     font-size: 12px;
     color: ${cssVar.colorTextSecondary};
@@ -79,6 +89,12 @@ const styles = createStaticStyles(({ css }) => ({
 
 /** Aggregate states in which the round chain is still executing. */
 const LIVE_STATUSES = new Set(['pending', 'planned', 'verifying', 'repairing']);
+
+/**
+ * The user-closure decision bar (accept / reject) is NOT shipping in this
+ * release — kept behind this switch (with its modals) until the loop launches.
+ */
+const ENABLE_DECISION_BAR = false;
 
 const AcceptancePage = memo(() => {
   const { acceptanceId } = useParams<{ acceptanceId: string }>();
@@ -340,11 +356,6 @@ const AcceptancePage = memo(() => {
                   />
                 )}
               </Flexbox>
-              {acceptance.requirement && (
-                <Text fontSize={13} type={'secondary'}>
-                  {t('acceptance.requirement', { requirement: acceptance.requirement })}
-                </Text>
-              )}
               <Flexbox horizontal align={'center'} gap={16} wrap={'wrap'}>
                 {scope?.branch && (
                   <Flexbox horizontal align={'center'} className={styles.scopeChip} gap={4}>
@@ -368,9 +379,24 @@ const AcceptancePage = memo(() => {
               </Flexbox>
             </Flexbox>
 
-            {/* Decision bar — the user closes the lifecycle (P-12) */}
-            {decisionBanner()}
-            {actionError && <Text type={'danger'}>{actionError}</Text>}
+            {/* The acceptance bar — what this delivery is judged against. A
+                first-class body block, not header fine print. */}
+            {acceptance.requirement && (
+              <Flexbox className={styles.requirement} gap={6}>
+                <Flexbox horizontal align={'center'} gap={8}>
+                  <Icon color={cssVar.colorTextSecondary} icon={Target} size={15} />
+                  <Text strong style={{ fontSize: 13 }}>
+                    {t('acceptance.requirementLabel')}
+                  </Text>
+                </Flexbox>
+                <Text style={{ fontSize: 14, lineHeight: 1.7 }}>{acceptance.requirement}</Text>
+              </Flexbox>
+            )}
+
+            {/* Decision bar — the user closes the lifecycle (P-12). Hidden
+                until the accept/reject loop ships. */}
+            {ENABLE_DECISION_BAR && decisionBanner()}
+            {ENABLE_DECISION_BAR && actionError && <Text type={'danger'}>{actionError}</Text>}
 
             {/* Latest report narrative — an entry point, not the page's spine */}
             {latestReport?.summary && (

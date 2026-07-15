@@ -71,7 +71,7 @@ export default {
   'acceptance.reject.placeholder':
     'Describe what must change before this delivery can be accepted.',
   'acceptance.reportDrawer.title': 'Round {{round}} · verification report',
-  'acceptance.requirement': 'Acceptance bar: {{requirement}}',
+  'acceptance.requirementLabel': 'Acceptance bar',
   'acceptance.round': 'Round {{round}}',
   'acceptance.roundCount': '{{count}} verification round(s)',
   'acceptance.roundStatus.errored': 'Errored',

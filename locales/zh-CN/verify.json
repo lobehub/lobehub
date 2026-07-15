@@ -58,7 +58,7 @@
   "acceptance.reject.description": "打回不是留言：你的意见将作为输入，发起新一轮修复，完成后回到「待验收」。",
   "acceptance.reject.placeholder": "说明打回原因，例如：深色模式需补截图证据……",
   "acceptance.reportDrawer.title": "第 {{round}} 轮 · 交付验证报告",
-  "acceptance.requirement": "验收要求：{{requirement}}",
+  "acceptance.requirementLabel": "验收要求",
   "acceptance.round": "第 {{round}} 轮",
   "acceptance.roundCount": "{{count}} 轮验证",
   "acceptance.roundStatus.errored": "异常",
