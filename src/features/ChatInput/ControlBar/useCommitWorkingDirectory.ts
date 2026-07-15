@@ -12,6 +12,7 @@ import type { PartialDeep } from 'type-fest';
 
 import { resolveTargetDeviceId } from '@/helpers/agentWorkingDirectory';
 import { getHeteroSessionIdForWorkingDirectory } from '@/helpers/heteroSessionByWorkingDirectory';
+import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
@@ -71,7 +72,15 @@ const toAgentWorkingDirConfig = (entry: WorkingDirEntry): WorkingDirConfig => ({
 export const useCommitWorkingDirectory = (agentId: string) => {
   const { t } = useTranslation(['plugin', 'chat']);
 
+  // The RAW shared config — every write below spreads it back into
+  // `agents.agencyConfig`, so it must never contain this member's per-user
+  // device override (spreading the merged config would leak the override's
+  // executionTarget/boundDeviceId into the workspace-shared row).
   const agencyConfig = useAgentStore(agentByIdSelectors.getAgencyConfigById(agentId));
+  // The EFFECTIVE config (override merged, LOBE-11689) — only for resolving
+  // which device the cwd write should target, keeping it on the same machine
+  // the picker/GitStatus/`useEffectiveWorkingDirectory` operate on.
+  const { agencyConfig: effectiveAgencyConfig } = useEffectiveAgencyConfig(agentId);
   // Heterogeneous CLI agents (Claude Code, Codex, …) store sessions per-cwd, so
   // their session cwd anchors to the SOURCE repo — a worktree switch (same repo,
   // different activeWorktree) must NOT change the session cwd or reset the
@@ -91,7 +100,7 @@ export const useCommitWorkingDirectory = (agentId: string) => {
 
   const updateDeviceCwd = useDeviceStore((s) => s.updateDeviceCwd);
   const currentDeviceId = useElectronStore((s) => s.gatewayDeviceInfo?.deviceId);
-  const targetDeviceId = resolveTargetDeviceId(agencyConfig, currentDeviceId);
+  const targetDeviceId = resolveTargetDeviceId(effectiveAgencyConfig, currentDeviceId);
 
   const writeCwd = useCallback(
     async (entry?: WorkingDirEntry) => {
