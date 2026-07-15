@@ -103,11 +103,13 @@ vi.mock('@lobechat/heterogeneous-agents/spawn', async (importOriginal) => {
   };
 });
 
-const { fetchCodexQuotaMock } = vi.hoisted(() => ({
+const { consumeCodexRateLimitResetCreditMock, fetchCodexQuotaMock } = vi.hoisted(() => ({
+  consumeCodexRateLimitResetCreditMock: vi.fn(),
   fetchCodexQuotaMock: vi.fn(),
 }));
 
 vi.mock('@/modules/heterogeneousAgent/codexQuota', () => ({
+  consumeCodexRateLimitResetCredit: consumeCodexRateLimitResetCreditMock,
   fetchCodexQuota: fetchCodexQuotaMock,
 }));
 
@@ -190,6 +192,7 @@ describe('HeterogeneousAgentCtr', () => {
   beforeEach(async () => {
     originalClaudeSdkLabEnv = process.env.LOBE_CLAUDE_CODE_SDK;
     appStoragePath = await mkdtemp(path.join(os.tmpdir(), 'lobehub-hetero-'));
+    consumeCodexRateLimitResetCreditMock.mockReset();
     fetchCodexQuotaMock.mockReset();
     claudeSdkSessionCloseMock.mockReset();
     claudeSdkSessionConstructMock.mockReset();
@@ -374,6 +377,63 @@ describe('HeterogeneousAgentCtr', () => {
 
       await ctr.getCodexQuota({ ...params, force: true });
 
+      expect(fetchCodexQuotaMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('consumes a reset credit and replaces the cached quota with a fresh snapshot', async () => {
+      execFileMock.mockImplementation(
+        (
+          _file: string,
+          _args: string[],
+          optionsOrCallback: unknown,
+          callback?: (error: Error | null, result: { stderr: string; stdout: string }) => void,
+        ) => {
+          const resolvedCallback =
+            typeof optionsOrCallback === 'function' ? optionsOrCallback : callback;
+          resolvedCallback?.(null, { stderr: '', stdout: 'codex-cli 0.99.0' });
+        },
+      );
+      const initialQuota = {
+        error: null,
+        provider: 'codex',
+        rateLimitResetCredits: { availableCount: 2 },
+        session: { resetsAt: null, usedPercent: 96, windowMinutes: 300 },
+        status: 'ok',
+        updatedAt: 1,
+        weekly: null,
+      };
+      const refreshedQuota = {
+        ...initialQuota,
+        rateLimitResetCredits: { availableCount: 1 },
+        session: { resetsAt: null, usedPercent: 0, windowMinutes: 300 },
+        updatedAt: 2,
+      };
+      fetchCodexQuotaMock.mockResolvedValueOnce(initialQuota).mockResolvedValueOnce(refreshedQuota);
+      consumeCodexRateLimitResetCreditMock.mockResolvedValue('reset');
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const source = {
+        command: '/custom/bin/codex',
+        env: { CODEX_HOME: '/tmp/codex-home' },
+      };
+
+      await ctr.getCodexQuota(source);
+      await expect(
+        ctr.consumeCodexRateLimitResetCredit({
+          ...source,
+          creditId: 'credit-first',
+          idempotencyKey: 'redeem-request-1',
+        }),
+      ).resolves.toEqual({ outcome: 'reset', quota: refreshedQuota });
+
+      expect(consumeCodexRateLimitResetCreditMock).toHaveBeenCalledWith({
+        command: '/custom/bin/codex',
+        creditId: 'credit-first',
+        env: { CODEX_HOME: '/tmp/codex-home' },
+        idempotencyKey: 'redeem-request-1',
+      });
       expect(fetchCodexQuotaMock).toHaveBeenCalledTimes(2);
     });
   });

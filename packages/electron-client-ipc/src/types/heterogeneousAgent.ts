@@ -50,13 +50,22 @@ export interface HeteroQuotaWindow {
 
 export type CodexQuotaWindow = HeteroQuotaWindow;
 
+export interface CodexRateLimitResetCredit {
+  expiresAt: number | null;
+  grantedAt: number | null;
+  /** Opaque backend identifier used only when redeeming this specific credit. */
+  id: string | null;
+  redeemedAt?: number | null;
+  redeemStartedAt?: number | null;
+  resetType: string | null;
+  status: string;
+  title: string | null;
+}
+
 export interface CodexRateLimitResetCredits {
   availableCount: number;
-  credits?: {
-    expiresAt: number | null;
-    grantedAt: number | null;
-    status: string;
-  }[];
+  /** Detailed rows when supported by the installed Codex CLI/backend. */
+  credits?: CodexRateLimitResetCredit[];
   nextExpiresAt?: number | null;
   totalEarnedCount?: number;
 }
@@ -69,6 +78,14 @@ export interface CodexQuotaSnapshot {
   status: 'error' | 'ok' | 'unavailable';
   updatedAt: number;
   weekly: CodexQuotaWindow | null;
+}
+
+export type CodexRateLimitResetOutcome =
+  'alreadyRedeemed' | 'noCredit' | 'nothingToReset' | 'reset';
+
+export interface CodexRateLimitResetResult {
+  outcome: CodexRateLimitResetOutcome;
+  quota: CodexQuotaSnapshot;
 }
 
 /**

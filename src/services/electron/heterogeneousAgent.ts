@@ -1,4 +1,8 @@
-import type { ClaudeCodeQuotaSnapshot, CodexQuotaSnapshot } from '@lobechat/electron-client-ipc';
+import type {
+  ClaudeCodeQuotaSnapshot,
+  CodexQuotaSnapshot,
+  CodexRateLimitResetResult,
+} from '@lobechat/electron-client-ipc';
 
 import { ensureElectronIpc } from '@/utils/electron/ipc';
 
@@ -52,6 +56,15 @@ class HeterogeneousAgentService {
     force?: boolean;
   }): Promise<CodexQuotaSnapshot> {
     return this.ipc.heterogeneousAgent.getCodexQuota(params);
+  }
+
+  async consumeCodexRateLimitResetCredit(params: {
+    command?: string;
+    creditId?: string;
+    env?: Record<string, string>;
+    idempotencyKey: string;
+  }): Promise<CodexRateLimitResetResult> {
+    return this.ipc.heterogeneousAgent.consumeCodexRateLimitResetCredit(params);
   }
 
   async getClaudeCodeQuota(params?: {

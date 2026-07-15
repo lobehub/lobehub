@@ -11,6 +11,7 @@ import { finished as streamFinished } from 'node:stream/promises';
 import type {
   ClaudeCodeQuotaSnapshot,
   CodexQuotaSnapshot,
+  CodexRateLimitResetResult,
   HeterogeneousAgentSessionError,
 } from '@lobechat/electron-client-ipc';
 import {
@@ -47,7 +48,10 @@ import { detectHeterogeneousCliCommand } from '@/modules/binaries';
 import { getHeterogeneousAgentDriver } from '@/modules/heterogeneousAgent';
 import { buildBrowserMcpTools } from '@/modules/heterogeneousAgent/browserMcpTools';
 import { fetchClaudeCodeQuota } from '@/modules/heterogeneousAgent/claudeCodeQuota';
-import { fetchCodexQuota } from '@/modules/heterogeneousAgent/codexQuota';
+import {
+  consumeCodexRateLimitResetCredit as consumeCodexRateLimitResetCreditRequest,
+  fetchCodexQuota,
+} from '@/modules/heterogeneousAgent/codexQuota';
 import { createLambdaFileStorePort } from '@/modules/heterogeneousAgent/fileStorePort';
 import {
   createQuotaCacheKey,
@@ -213,6 +217,13 @@ interface GetCodexQuotaParams {
   command?: string;
   env?: Record<string, string>;
   force?: boolean;
+}
+
+interface ConsumeCodexRateLimitResetCreditParams {
+  command?: string;
+  creditId?: string;
+  env?: Record<string, string>;
+  idempotencyKey: string;
 }
 
 interface GetClaudeCodeQuotaParams {
@@ -1596,6 +1607,42 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
       },
       { force: params.force },
     );
+  }
+
+  /**
+   * Redeem one earned Codex rate-limit reset, then bypass the quota cache so
+   * every renderer receives the post-reset windows and remaining inventory.
+   */
+  @IpcMethod()
+  async consumeCodexRateLimitResetCredit(
+    params: ConsumeCodexRateLimitResetCreditParams,
+  ): Promise<CodexRateLimitResetResult> {
+    const command = params.command?.trim() || 'codex';
+    const sourceEnv = {
+      ...buildProxyEnv(this.app.storeManager.get('networkProxy')),
+      ...params.env,
+    };
+    const sourceKey = createQuotaCacheKey('codex', command, sourceEnv);
+    const status = await detectHeterogeneousCliCommand('codex', command);
+    const env = {
+      ...(status.resolvedPathEnv ? { PATH: status.resolvedPathEnv } : {}),
+      ...sourceEnv,
+    };
+    const requestOptions = {
+      command: status.available && status.path ? status.path : command,
+      env: Object.keys(env).length > 0 ? env : undefined,
+    };
+
+    const outcome = await consumeCodexRateLimitResetCreditRequest({
+      ...requestOptions,
+      creditId: params.creditId,
+      idempotencyKey: params.idempotencyKey,
+    });
+    const quota = await this.codexQuotaCache.get(sourceKey, () => fetchCodexQuota(requestOptions), {
+      force: true,
+    });
+
+    return { outcome, quota };
   }
 
   /**

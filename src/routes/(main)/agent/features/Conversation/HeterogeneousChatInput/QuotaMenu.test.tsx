@@ -10,9 +10,21 @@ import ClaudeCodeQuotaMenu from './ClaudeCodeQuotaMenu';
 import CodexQuotaMenu from './CodexQuotaMenu';
 
 const mockService = vi.hoisted(() => ({
+  consumeCodexRateLimitResetCredit: vi.fn(),
   getClaudeCodeQuota: vi.fn(),
   getCodexQuota: vi.fn(),
 }));
+
+const { confirmModalMock, toastErrorMock, toastSuccessMock } = vi.hoisted(() => ({
+  confirmModalMock: vi.fn(),
+  toastErrorMock: vi.fn(),
+  toastSuccessMock: vi.fn(),
+}));
+
+const translate = vi.hoisted(() => (key: string, opts?: Record<string, unknown>) => {
+  const values = opts ? Object.values(opts) : [];
+  return values.length > 0 ? `${key}:${values.join(',')}` : key;
+});
 
 vi.mock('@/services/electron/heterogeneousAgent', () => ({
   heterogeneousAgentService: mockService,
@@ -22,10 +34,7 @@ vi.mock('@/services/electron/heterogeneousAgent', () => ({
 // target the exact i18n key + params a snapshot should produce.
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string, opts?: Record<string, unknown>) => {
-      const values = opts ? Object.values(opts) : [];
-      return values.length > 0 ? `${key}:${values.join(',')}` : key;
-    },
+    t: translate,
   }),
 }));
 
@@ -68,6 +77,29 @@ vi.mock('@lobehub/ui', () => ({
   Tooltip: ({ children }: { children?: ReactNode }) => <>{children}</>,
 }));
 
+vi.mock('@lobehub/ui/base-ui', () => ({
+  Button: ({
+    children,
+    disabled,
+    loading,
+    onClick,
+  }: {
+    children?: ReactNode;
+    disabled?: boolean;
+    loading?: boolean;
+    onClick?: () => void;
+  }) => (
+    <button disabled={disabled || loading} type="button" onClick={onClick}>
+      {children}
+    </button>
+  ),
+  confirmModal: confirmModalMock,
+  toast: {
+    error: toastErrorMock,
+    success: toastSuccessMock,
+  },
+}));
+
 const claudeSnapshot = (
   overrides: Partial<ClaudeCodeQuotaSnapshot> = {},
 ): ClaudeCodeQuotaSnapshot => ({
@@ -93,8 +125,12 @@ const codexSnapshot = (overrides: Partial<CodexQuotaSnapshot> = {}): CodexQuotaS
 });
 
 beforeEach(() => {
+  confirmModalMock.mockReset();
+  mockService.consumeCodexRateLimitResetCredit.mockReset();
   mockService.getClaudeCodeQuota.mockReset();
   mockService.getCodexQuota.mockReset();
+  toastErrorMock.mockReset();
+  toastSuccessMock.mockReset();
 });
 
 describe('ClaudeCodeQuotaMenu', () => {
@@ -115,9 +151,9 @@ describe('ClaudeCodeQuotaMenu', () => {
     expect(await screen.findByText('heteroAgent.quota.session')).toBeTruthy();
     expect(screen.getByText('heteroAgent.quota.weekly')).toBeTruthy();
     expect(screen.getByText('heteroAgent.claudeQuota.scopedWeekly:Fable')).toBeTruthy();
-    // 100 - usedPercent, session drives the compact trigger label
+    // The compact trigger surfaces the most binding window.
     expect(screen.getByText('heteroAgent.quota.left:92')).toBeTruthy();
-    expect(screen.getByText('heteroAgent.quota.compactLeft:92')).toBeTruthy();
+    expect(screen.getByText('heteroAgent.quota.compactLeft:76')).toBeTruthy();
     expect(mockService.getClaudeCodeQuota).toHaveBeenCalledWith({
       env: { CLAUDE_CONFIG_DIR: '/custom' },
     });
@@ -334,17 +370,36 @@ describe('ClaudeCodeQuotaMenu', () => {
 
 describe('CodexQuotaMenu', () => {
   it('renders windows and the reset-credits footer', async () => {
+    const resetsAt = Date.now() + 60 * 60_000;
     mockService.getCodexQuota.mockResolvedValue(
       codexSnapshot({
         rateLimitResetCredits: { availableCount: 4, nextExpiresAt: null },
-        session: { resetsAt: null, usedPercent: 19, windowMinutes: 300 },
+        session: { resetsAt, usedPercent: 19, windowMinutes: 300 },
+        weekly: { resetsAt: resetsAt + 60 * 60_000, usedPercent: 88, windowMinutes: 10_080 },
       }),
     );
 
     render(<CodexQuotaMenu command="codex" />);
 
     expect(await screen.findByText('heteroAgent.quota.left:81')).toBeTruthy();
+    expect(screen.getByText('heteroAgent.quota.left:12')).toBeTruthy();
+    expect(screen.getByText('heteroAgent.quota.compactLeft:12')).toBeTruthy();
+    expect(screen.getByText('heteroAgent.codexQuota.fiveHour')).toBeTruthy();
+    expect(screen.getByText('heteroAgent.quota.weekly')).toBeTruthy();
+    expect(
+      screen.getAllByText((content) => content.startsWith('heteroAgent.quota.resetsIn:')),
+    ).toHaveLength(2);
+    expect(
+      screen.queryAllByText((content) => content.startsWith('heteroAgent.quota.resetAt:')),
+    ).toHaveLength(0);
     expect(screen.getByText('heteroAgent.codexQuota.resetCredits:4')).toBeTruthy();
+    expect(screen.getByText('#1')).toBeTruthy();
+    expect(screen.getByText('#2')).toBeTruthy();
+    expect(screen.getByText('#3')).toBeTruthy();
+    expect(screen.getByText('#4')).toBeTruthy();
+    expect(
+      screen.getAllByText('heteroAgent.codexQuota.resetCreditDetailsUnavailable'),
+    ).toHaveLength(4);
     expect(mockService.getCodexQuota).toHaveBeenCalledWith({ command: 'codex', env: undefined });
 
     fireEvent.click(screen.getByTestId('refresh'));
@@ -364,5 +419,121 @@ describe('CodexQuotaMenu', () => {
     render(<CodexQuotaMenu />);
 
     expect(await screen.findByText('heteroAgent.codexQuota.resetCreditsUnavailable')).toBeTruthy();
+  });
+
+  it('renders every available reset with relative expiry only', async () => {
+    const now = Date.now();
+    mockService.getCodexQuota.mockResolvedValue(
+      codexSnapshot({
+        rateLimitResetCredits: {
+          availableCount: 3,
+          credits: [
+            {
+              expiresAt: now + 3 * 24 * 60 * 60_000,
+              grantedAt: now - 24 * 60 * 60_000,
+              id: 'credit-later',
+              resetType: 'codex_all_limits',
+              status: 'available',
+              title: 'Weekly rescue',
+            },
+            {
+              expiresAt: now + 24 * 60 * 60_000,
+              grantedAt: now - 2 * 24 * 60 * 60_000,
+              id: 'credit-first',
+              resetType: 'codex_all_limits',
+              status: 'available',
+              title: 'Early reset',
+            },
+          ],
+          nextExpiresAt: now + 24 * 60 * 60_000,
+          totalEarnedCount: 5,
+        },
+        session: { resetsAt: null, usedPercent: 95, windowMinutes: 300 },
+      }),
+    );
+
+    render(<CodexQuotaMenu />);
+
+    expect(await screen.findByText('Early reset')).toBeTruthy();
+    expect(screen.getByText('Weekly rescue')).toBeTruthy();
+    expect(screen.getByText('#1')).toBeTruthy();
+    expect(screen.getByText('#2')).toBeTruthy();
+    expect(screen.getByText('#3')).toBeTruthy();
+    expect(
+      screen.getAllByText((text) => text.startsWith('heteroAgent.codexQuota.expiresIn:')),
+    ).toHaveLength(2);
+    expect(
+      screen.queryAllByText((text) => text.startsWith('heteroAgent.codexQuota.expiresAt:')),
+    ).toHaveLength(0);
+    expect(
+      screen.queryAllByText((text) => text.startsWith('heteroAgent.codexQuota.grantedAt:')),
+    ).toHaveLength(0);
+    expect(screen.getByText('heteroAgent.codexQuota.totalEarned:5')).toBeTruthy();
+    expect(screen.getByText('heteroAgent.codexQuota.resetCreditDetailsUnavailable')).toBeTruthy();
+    expect(screen.getByText('heteroAgent.codexQuota.resetCreditTitle')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'heteroAgent.codexQuota.resetNow' })).toBeTruthy();
+  });
+
+  it('confirms and consumes the earliest-expiring credit, then applies refreshed quota', async () => {
+    const now = Date.now();
+    mockService.getCodexQuota.mockResolvedValue(
+      codexSnapshot({
+        rateLimitResetCredits: {
+          availableCount: 2,
+          credits: [
+            {
+              expiresAt: now + 2 * 24 * 60 * 60_000,
+              grantedAt: now,
+              id: 'credit-later',
+              resetType: 'codex_all_limits',
+              status: 'available',
+              title: 'Later reset',
+            },
+            {
+              expiresAt: now + 60 * 60_000,
+              grantedAt: now,
+              id: 'credit-first',
+              resetType: 'codex_all_limits',
+              status: 'available',
+              title: 'First reset',
+            },
+          ],
+        },
+        session: { resetsAt: null, usedPercent: 96, windowMinutes: 300 },
+      }),
+    );
+    mockService.consumeCodexRateLimitResetCredit.mockResolvedValue({
+      outcome: 'reset',
+      quota: codexSnapshot({
+        rateLimitResetCredits: { availableCount: 1 },
+        session: { resetsAt: null, usedPercent: 0, windowMinutes: 300 },
+      }),
+    });
+
+    render(<CodexQuotaMenu command="codex" env={{ CODEX_HOME: '/custom' }} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'heteroAgent.codexQuota.resetNow' }));
+    expect(confirmModalMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: 'heteroAgent.codexQuota.resetConfirmDescription',
+        title: 'heteroAgent.codexQuota.resetConfirmTitle',
+      }),
+    );
+
+    await act(async () => {
+      await confirmModalMock.mock.calls[0][0].onOk();
+    });
+
+    await waitFor(() =>
+      expect(mockService.consumeCodexRateLimitResetCredit).toHaveBeenCalledWith({
+        command: 'codex',
+        creditId: 'credit-first',
+        env: { CODEX_HOME: '/custom' },
+        idempotencyKey: expect.any(String),
+      }),
+    );
+    expect(await screen.findByText('heteroAgent.quota.left:100')).toBeTruthy();
+    expect(screen.getByText('heteroAgent.codexQuota.resetSuccess')).toBeTruthy();
+    expect(toastSuccessMock).toHaveBeenCalledWith('heteroAgent.codexQuota.resetSuccess');
   });
 });
