@@ -94,7 +94,10 @@ const HeterogeneousChatInput = memo(() => {
   // (LOBE-11689) — the raw shared `agencyConfig` may carry another member's
   // device pick, which would drive the guard/model-selector gates off the
   // wrong machine.
-  const { agencyConfig } = useEffectiveAgencyConfig(agentId);
+  // While the preference is loading, the merged config may still reflect only
+  // the shared row — hold the input closed (below) instead of gating device
+  // runs off a value that can flip once the override arrives.
+  const { agencyConfig, isPreferenceLoading } = useEffectiveAgencyConfig(agentId);
   const providerType = agencyConfig?.heterogeneousProvider?.type;
   const isWorkspaceAgent = useAgentStore(agentByIdSelectors.isWorkspaceAgentById(agentId));
   const executionTarget = resolveExecutionTarget(agencyConfig, {
@@ -192,7 +195,9 @@ const HeterogeneousChatInput = memo(() => {
   };
 
   const renderCloudConfigGuard = () => {
-    if (isDeviceExecution || isConfigured) return null;
+    // Until the override loads, `isDeviceExecution` may be a false negative —
+    // don't flash the cloud-config prompt for what turns out to be a device run.
+    if (isPreferenceLoading || isDeviceExecution || isConfigured) return null;
 
     return (
       <GuardBanner
@@ -208,8 +213,11 @@ const HeterogeneousChatInput = memo(() => {
   };
 
   // Device execution doesn't use the cloud sandbox, so it doesn't need cloud
-  // credentials — only the sandbox path gates on `isConfigured`.
-  const inputDisabled = (!isConfigured && !isDeviceExecution) || deviceBlocked;
+  // credentials — only the sandbox path gates on `isConfigured`. While the
+  // workspace preference loads, keep send disabled: the effective target isn't
+  // known yet, so neither guard can vouch for the run.
+  const inputDisabled =
+    isPreferenceLoading || (!isConfigured && !isDeviceExecution) || deviceBlocked;
   const hasGuard = deviceBlocked || (!isConfigured && !isDeviceExecution);
 
   return (
