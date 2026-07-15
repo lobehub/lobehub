@@ -376,7 +376,13 @@ export const acceptances = pgTable(
     /** Latest active or most recently settled verify round (denormalized pointer to verify_runs.id). */
     currentVerifyRunId: uuid('current_verify_run_id'),
 
-    /** Terminal verify round that produced the latest accepted/rejected outcome (verify_runs.id). */
+    /**
+     * Verify round whose user decision CLOSED the lifecycle (accepted, or a
+     * terminal rejected/abandoned) — written once at closure, never overwritten.
+     * Mid-loop rejections are per-round events and live on the judged round
+     * itself (verify_runs metadata), not here: every delivered round may be
+     * rejected again, so a single overwritten pointer would lose that trail.
+     */
     finalVerifyRunId: uuid('final_verify_run_id'),
 
     /** Latest verify report for this acceptance (denormalized pointer to verify_reports.id). */
