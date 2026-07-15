@@ -37,7 +37,7 @@ export class OidcClientModel {
     this.userId = userId;
   }
 
-  private ownership = () => eq(oidcClients.ownerId, this.userId);
+  private ownership = () => eq(oidcClients.userId, this.userId);
 
   create = async (params: CreateOidcClientParams) => {
     const [result] = await this.db
@@ -51,7 +51,7 @@ export class OidcClientModel {
         isFirstParty: false,
         logoUri: params.logoUri,
         name: params.name,
-        ownerId: this.userId,
+        userId: this.userId,
         redirectUris: [],
         responseTypes: [],
         scopes: DEFAULT_SCOPES,
@@ -63,16 +63,21 @@ export class OidcClientModel {
   };
 
   list = async () => {
-    return this.db.query.oidcClients.findMany({
-      orderBy: [desc(oidcClients.createdAt)],
-      where: this.ownership(),
-    });
+    return this.db
+      .select()
+      .from(oidcClients)
+      .where(this.ownership())
+      .orderBy(desc(oidcClients.createdAt));
   };
 
   findById = async (id: string) => {
-    return this.db.query.oidcClients.findFirst({
-      where: and(eq(oidcClients.id, id), this.ownership()),
-    });
+    const [result] = await this.db
+      .select()
+      .from(oidcClients)
+      .where(and(eq(oidcClients.id, id), this.ownership()))
+      .limit(1);
+
+    return result;
   };
 
   update = async (id: string, value: UpdateOidcClientParams) => {
@@ -91,9 +96,11 @@ export class OidcClientModel {
 
   delete = async (id: string) => {
     return this.db.transaction(async (trx) => {
-      const client = await trx.query.oidcClients.findFirst({
-        where: and(eq(oidcClients.id, id), this.ownership()),
-      });
+      const [client] = await trx
+        .select({ id: oidcClients.id })
+        .from(oidcClients)
+        .where(and(eq(oidcClients.id, id), this.ownership()))
+        .limit(1);
 
       if (!client) return;
 

@@ -31,7 +31,7 @@ describe('OidcClientModel', () => {
 
       expect(result.id).toMatch(/^lca_[\dA-Za-z]{24}$/);
       expect(result.name).toBe('My App');
-      expect(result.ownerId).toBe(userId);
+      expect(result.userId).toBe(userId);
       expect(result.enabled).toBe(true);
       expect(result.isFirstParty).toBe(false);
       expect(result.clientSecret).toBeNull();
@@ -66,7 +66,7 @@ describe('OidcClientModel', () => {
         grants: [],
         id: 'lca_older',
         name: 'Older',
-        ownerId: userId,
+        userId,
         redirectUris: [],
         responseTypes: [],
         scopes: [],
@@ -77,7 +77,7 @@ describe('OidcClientModel', () => {
         grants: [],
         id: 'lca_newer',
         name: 'Newer',
-        ownerId: userId,
+        userId,
         redirectUris: [],
         responseTypes: [],
         scopes: [],
@@ -127,9 +127,11 @@ describe('OidcClientModel', () => {
 
       await oidcClientModel.update(id, { description: 'new desc', name: 'New Name' });
 
-      const updated = await serverDB.query.oidcClients.findFirst({
-        where: eq(oidcClients.id, id),
-      });
+      const [updated] = await serverDB
+        .select()
+        .from(oidcClients)
+        .where(eq(oidcClients.id, id))
+        .limit(1);
       expect(updated?.name).toBe('New Name');
       expect(updated?.description).toBe('new desc');
     });
@@ -140,9 +142,11 @@ describe('OidcClientModel', () => {
 
       await oidcClientModel.update(id, { name: 'Hacked' });
 
-      const unchanged = await serverDB.query.oidcClients.findFirst({
-        where: eq(oidcClients.id, id),
-      });
+      const [unchanged] = await serverDB
+        .select()
+        .from(oidcClients)
+        .where(eq(oidcClients.id, id))
+        .limit(1);
       expect(unchanged?.name).toBe('Theirs');
     });
   });
@@ -153,9 +157,11 @@ describe('OidcClientModel', () => {
 
       await oidcClientModel.setEnabled(id, false);
 
-      const updated = await serverDB.query.oidcClients.findFirst({
-        where: eq(oidcClients.id, id),
-      });
+      const [updated] = await serverDB
+        .select()
+        .from(oidcClients)
+        .where(eq(oidcClients.id, id))
+        .limit(1);
       expect(updated?.enabled).toBe(false);
     });
 
@@ -165,9 +171,11 @@ describe('OidcClientModel', () => {
 
       await oidcClientModel.setEnabled(id, false);
 
-      const unchanged = await serverDB.query.oidcClients.findFirst({
-        where: eq(oidcClients.id, id),
-      });
+      const [unchanged] = await serverDB
+        .select()
+        .from(oidcClients)
+        .where(eq(oidcClients.id, id))
+        .limit(1);
       expect(unchanged?.enabled).toBe(true);
     });
   });
@@ -193,15 +201,21 @@ describe('OidcClientModel', () => {
 
       await oidcClientModel.delete(id);
 
-      const client = await serverDB.query.oidcClients.findFirst({
-        where: eq(oidcClients.id, id),
-      });
-      const grant = await serverDB.query.oidcGrants.findFirst({
-        where: eq(oidcGrants.id, 'grant-1'),
-      });
-      const refresh = await serverDB.query.oidcRefreshTokens.findFirst({
-        where: eq(oidcRefreshTokens.id, 'refresh-1'),
-      });
+      const [client] = await serverDB
+        .select()
+        .from(oidcClients)
+        .where(eq(oidcClients.id, id))
+        .limit(1);
+      const [grant] = await serverDB
+        .select()
+        .from(oidcGrants)
+        .where(eq(oidcGrants.id, 'grant-1'))
+        .limit(1);
+      const [refresh] = await serverDB
+        .select()
+        .from(oidcRefreshTokens)
+        .where(eq(oidcRefreshTokens.id, 'refresh-1'))
+        .limit(1);
 
       expect(client).toBeUndefined();
       expect(grant).toBeUndefined();
@@ -214,9 +228,11 @@ describe('OidcClientModel', () => {
 
       await oidcClientModel.delete(id);
 
-      const client = await serverDB.query.oidcClients.findFirst({
-        where: eq(oidcClients.id, id),
-      });
+      const [client] = await serverDB
+        .select()
+        .from(oidcClients)
+        .where(eq(oidcClients.id, id))
+        .limit(1);
       expect(client).toBeDefined();
     });
 
@@ -234,9 +250,11 @@ describe('OidcClientModel', () => {
 
       await oidcClientModel.delete(id);
 
-      const grant = await serverDB.query.oidcGrants.findFirst({
-        where: eq(oidcGrants.id, 'grant-other'),
-      });
+      const [grant] = await serverDB
+        .select()
+        .from(oidcGrants)
+        .where(eq(oidcGrants.id, 'grant-other'))
+        .limit(1);
       expect(grant).toBeDefined();
     });
   });

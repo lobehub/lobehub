@@ -20,16 +20,25 @@ vi.mock('./oidcProvider', () => ({
 
 vi.mock('@lobechat/database', () => ({
   getServerDB: vi.fn(async () => ({
-    query: {
-      oidcClients: { findFirst: dbMocks.findFirstClient },
-      users: { findFirst: dbMocks.findFirstUser },
-    },
+    select: vi.fn((fields: Record<string, unknown>) => ({
+      from: vi.fn(() => ({
+        where: vi.fn(() => ({
+          limit: vi.fn(async () => {
+            const record = await ('userId' in fields
+              ? dbMocks.findFirstClient()
+              : dbMocks.findFirstUser());
+
+            return record ? [record] : [];
+          }),
+        })),
+      })),
+    })),
   })),
 }));
 
 vi.mock('@lobechat/database/schemas', () => ({
-  oidcClients: { id: 'id' },
-  users: { id: 'id' },
+  oidcClients: { id: 'id', name: 'name', policyUri: 'policyUri', userId: 'userId' },
+  users: { fullName: 'fullName', id: 'id', username: 'username' },
 }));
 
 vi.mock('@/libs/oidc-provider/config', () => ({
@@ -281,8 +290,8 @@ describe('OIDCService', () => {
     });
     dbMocks.findFirstClient.mockResolvedValue({
       name: 'Third Party App',
-      ownerId: 'user-1',
       policyUri: null,
+      userId: 'user-1',
     });
     dbMocks.findFirstUser.mockResolvedValue({ fullName: 'Jane Doe', username: 'jane' });
 
@@ -303,8 +312,8 @@ describe('OIDCService', () => {
     provider.Client.find.mockResolvedValue({ metadata: () => ({}) });
     dbMocks.findFirstClient.mockResolvedValue({
       name: 'Nameless App',
-      ownerId: 'user-2',
       policyUri: 'https://nameless.app/privacy',
+      userId: 'user-2',
     });
     dbMocks.findFirstUser.mockResolvedValue({ fullName: null, username: null });
 

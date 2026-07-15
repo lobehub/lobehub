@@ -112,19 +112,25 @@ export class OIDCService {
     if (isFirstParty) return base;
 
     const db = await getServerDB();
-    const record = await db.query.oidcClients.findFirst({
-      columns: { name: true, ownerId: true, policyUri: true },
-      where: eq(oidcClients.id, clientId),
-    });
+    const [record] = await db
+      .select({
+        name: oidcClients.name,
+        policyUri: oidcClients.policyUri,
+        userId: oidcClients.userId,
+      })
+      .from(oidcClients)
+      .where(eq(oidcClients.id, clientId))
+      .limit(1);
 
     if (!record) return base;
 
     let developerName: string | undefined;
-    if (record.ownerId) {
-      const owner = await db.query.users.findFirst({
-        columns: { fullName: true, username: true },
-        where: eq(users.id, record.ownerId),
-      });
+    if (record.userId) {
+      const [owner] = await db
+        .select({ fullName: users.fullName, username: users.username })
+        .from(users)
+        .where(eq(users.id, record.userId))
+        .limit(1);
       developerName = owner?.fullName || owner?.username || undefined;
     }
 
