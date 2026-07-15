@@ -536,4 +536,59 @@ describe('CodexQuotaMenu', () => {
     expect(screen.getByText('heteroAgent.codexQuota.resetSuccess')).toBeTruthy();
     expect(toastSuccessMock).toHaveBeenCalledWith('heteroAgent.codexQuota.resetSuccess');
   });
+
+  it('clears refresh loading when a reset supersedes an in-flight quota request', async () => {
+    const requests: Array<(snapshot: CodexQuotaSnapshot) => void> = [];
+    mockService.getCodexQuota
+      .mockResolvedValueOnce(
+        codexSnapshot({
+          rateLimitResetCredits: { availableCount: 1 },
+          session: { resetsAt: null, usedPercent: 96, windowMinutes: 300 },
+        }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise<CodexQuotaSnapshot>((resolve) => {
+            requests.push(resolve);
+          }),
+      );
+    mockService.consumeCodexRateLimitResetCredit.mockResolvedValue({
+      outcome: 'reset',
+      quota: codexSnapshot({
+        rateLimitResetCredits: { availableCount: 0 },
+        session: { resetsAt: null, usedPercent: 0, windowMinutes: 300 },
+      }),
+    });
+
+    render(<CodexQuotaMenu />);
+
+    expect(await screen.findByText('heteroAgent.quota.left:4')).toBeTruthy();
+
+    fireEvent.click(screen.getByTestId('refresh'));
+
+    await waitFor(() => expect(requests).toHaveLength(1));
+    expect((screen.getByTestId('refresh') as HTMLButtonElement).disabled).toBe(true);
+
+    fireEvent.click(screen.getByRole('button', { name: 'heteroAgent.codexQuota.resetNow' }));
+
+    await act(async () => {
+      await confirmModalMock.mock.calls[0][0].onOk();
+    });
+
+    expect(await screen.findByText('heteroAgent.quota.left:100')).toBeTruthy();
+    expect((screen.getByTestId('refresh') as HTMLButtonElement).disabled).toBe(false);
+
+    await act(async () => {
+      requests[0](
+        codexSnapshot({
+          rateLimitResetCredits: { availableCount: 1 },
+          session: { resetsAt: null, usedPercent: 80, windowMinutes: 300 },
+        }),
+      );
+    });
+
+    expect(screen.getByText('heteroAgent.quota.left:100')).toBeTruthy();
+    expect(screen.queryByText('heteroAgent.quota.left:20')).toBeNull();
+    expect((screen.getByTestId('refresh') as HTMLButtonElement).disabled).toBe(false);
+  });
 });

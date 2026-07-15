@@ -221,6 +221,7 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
       // A completed mutation owns the newest snapshot. Invalidate any older
       // read still in flight so it cannot repaint pre-mutation quota data.
       requestIdRef.current += 1;
+      setLoading(false);
       setRefreshError(null);
       setQuotaSnapshot(nextQuota);
     },
