@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS "acceptances" (
 	"current_verify_run_id" uuid,
 	"final_verify_run_id" uuid,
 	"latest_report_id" uuid,
+	"visual_render" jsonb,
 	"metadata" jsonb,
 	"completed_at" timestamp with time zone,
 	"accessed_at" timestamp with time zone DEFAULT now() NOT NULL,

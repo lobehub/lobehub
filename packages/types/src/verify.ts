@@ -55,9 +55,36 @@ export type AcceptanceSubjectType = 'task' | 'topic' | 'document';
  * Business-level acceptance state. Check-level and run-level verdicts stay in the
  * verify vocabulary (`passed` / `failed`); the aggregate exposes the user's
  * outcome language (`accepted` / `rejected`).
+ *
+ * `delivered`: verification settled positively and the aggregate now waits for
+ * the user's accept/reject — the human decision closes the lifecycle, the
+ * verifier's verdict is only a recommendation.
  */
 export type AcceptanceStatus =
-  'pending' | 'planned' | 'verifying' | 'repairing' | 'accepted' | 'rejected' | 'errored';
+  | 'pending'
+  | 'planned'
+  | 'verifying'
+  | 'repairing'
+  | 'delivered'
+  | 'accepted'
+  | 'rejected'
+  | 'errored';
+
+/**
+ * AI-generated visualization for an acceptance report (`acceptances.visual_render`).
+ * One jsonb bag (not a bare text column) so generation provenance and future
+ * knobs (theme, assets) never need a migration.
+ *
+ * The `html` payload is model-produced — viewers MUST render it inside a
+ * sandboxed iframe, never inject it into the host document.
+ */
+export interface AcceptanceVisualRender {
+  generatedAt?: string;
+  /** Producer of the visualization, e.g. a model id. */
+  generatedBy?: string;
+  /** Self-contained HTML document filled in by the AI. */
+  html: string;
+}
 
 /**
  * Acceptance policy/config snapshot. The source may be a task's `config.verify`,

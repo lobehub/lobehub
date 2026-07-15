@@ -1,13 +1,3 @@
-import type {
-  AcceptanceConfig,
-  AcceptanceMetadata,
-  ToulminVerdict,
-  VerifyCheckItem,
-  VerifyRubricConfig,
-  VerifyRunContext,
-  VerifyRunMetadata,
-  VerifyRunScenario,
-} from '@lobechat/types';
 import {
   acceptanceStatuses,
   acceptanceSubjectTypes,
@@ -21,6 +11,17 @@ import {
   verifyUserDecisions,
   verifyVerdicts,
 } from '@lobechat/const/verify';
+import type {
+  AcceptanceConfig,
+  AcceptanceMetadata,
+  AcceptanceVisualRender,
+  ToulminVerdict,
+  VerifyCheckItem,
+  VerifyRubricConfig,
+  VerifyRunContext,
+  VerifyRunMetadata,
+  VerifyRunScenario,
+} from '@lobechat/types';
 import { sql } from 'drizzle-orm';
 import {
   boolean,
@@ -380,6 +381,13 @@ export const acceptances = pgTable(
 
     /** Latest verify report for this acceptance (denormalized pointer to verify_reports.id). */
     latestReportId: uuid('latest_report_id'),
+
+    /**
+     * AI-filled visualization for the acceptance report. The html payload is
+     * model-produced: viewers MUST render it in a sandboxed iframe, never
+     * inject it into the host document.
+     */
+    visualRender: jsonb('visual_render').$type<AcceptanceVisualRender>(),
 
     /** Generic aggregate extension bag for future subject-specific state. */
     metadata: jsonb('metadata').$type<AcceptanceMetadata>(),

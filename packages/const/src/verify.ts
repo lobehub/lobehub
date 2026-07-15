@@ -139,6 +139,9 @@ export const acceptanceStatuses = [
   'planned',
   'verifying',
   'repairing',
+  // Verification settled positively; waiting for the user's accept/reject —
+  // the human decision closes the lifecycle, the verdict is a recommendation.
+  'delivered',
   'accepted',
   'rejected',
   'errored',
