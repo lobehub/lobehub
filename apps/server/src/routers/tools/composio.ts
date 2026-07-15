@@ -9,10 +9,15 @@ import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { MCPService } from '@/server/services/mcp';
 
 const composioProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
+  const { ctx } = opts;
   const composioClient = getComposioClient();
-  const pluginModel = new PluginModel(opts.ctx.serverDB, opts.ctx.userId);
-  const connectorModel = new ConnectorModel(opts.ctx.serverDB, opts.ctx.userId);
-  return opts.next({ ctx: { ...opts.ctx, composioClient, connectorModel, pluginModel } });
+  // Workspace-scoped so a manual tool execution resolves the workspace-dimension
+  // Composio connection (workspace_id = wsId) rather than only the personal one.
+  // Personal mode (wsId undefined) falls back to `workspace_id IS NULL`.
+  const wsId = ctx.workspaceId ?? undefined;
+  const pluginModel = new PluginModel(ctx.serverDB, ctx.userId, wsId);
+  const connectorModel = new ConnectorModel(ctx.serverDB, ctx.userId, wsId);
+  return opts.next({ ctx: { ...ctx, composioClient, connectorModel, pluginModel } });
 });
 
 export const composioToolsRouter = router({

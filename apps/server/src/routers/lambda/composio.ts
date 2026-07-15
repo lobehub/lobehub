@@ -3,6 +3,7 @@ import { type ToolManifest } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
+import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { getServerComposioAuthConfigId } from '@/config/composio';
 import { AgentModel } from '@/database/models/agent';
 import { ConnectorModel } from '@/database/models/connector';
@@ -16,20 +17,28 @@ import {
 } from '@/database/schemas';
 import { getComposioClient } from '@/libs/composio';
 import { inferCrudType } from '@/libs/mcp/utils';
-import { authedProcedure, router } from '@/libs/trpc/lambda';
+import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 
-const composioProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
+const composioProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
+  const { ctx } = opts;
   const client = getComposioClient();
-  const pluginModel = new PluginModel(opts.ctx.serverDB, opts.ctx.userId);
-  // Personal-scoped (no workspaceId/gateKeeper), matching PluginModel above:
-  // Composio connections are personal today, and the runtime reads them back
-  // with the same scoping (ComposioService is constructed with { db, userId }).
-  const connectorModel = new ConnectorModel(opts.ctx.serverDB, opts.ctx.userId);
-  const connectorToolModel = new ConnectorToolModel(opts.ctx.serverDB, opts.ctx.userId);
+  // Credentials are encrypted at rest — give the connector model a gatekeeper.
+  const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
+  const wsId = ctx.workspaceId ?? undefined;
+  // Workspace-scoped. A Composio connection bound to a workspace agent (or a
+  // workspace's base tools) must land as a workspace-dimension row
+  // (workspace_id = wsId); otherwise the correctly workspace-scoped runtime
+  // (ComposioService/aiAgent build the model WITH wsId) can never resolve it and
+  // the tool shows as "not installed". Personal mode (wsId undefined) is
+  // unchanged — the model falls back to `workspace_id IS NULL`.
+  const pluginModel = new PluginModel(ctx.serverDB, ctx.userId, wsId);
+  const connectorModel = new ConnectorModel(ctx.serverDB, ctx.userId, wsId, gateKeeper);
+  const connectorToolModel = new ConnectorToolModel(ctx.serverDB, ctx.userId, wsId);
 
   return opts.next({
-    ctx: { ...opts.ctx, composioClient: client, connectorModel, connectorToolModel, pluginModel },
+    ctx: { ...ctx, composioClient: client, connectorModel, connectorToolModel, pluginModel },
   });
 });
 
@@ -154,8 +163,9 @@ async function assertCanEditAgent(
   db: LobeChatDatabase,
   userId: string,
   agentId: string,
+  workspaceId?: string,
 ): Promise<void> {
-  const agentModel = new AgentModel(db, userId);
+  const agentModel = new AgentModel(db, userId, workspaceId);
   if (!(await agentModel.existsOwnedById(agentId))) {
     throw new TRPCError({ code: 'FORBIDDEN', message: 'Agent not found or not editable' });
   }
@@ -176,7 +186,8 @@ export const composioRouter = router({
       const { appSlug, identifier, label, agentId } = input;
       const { userId } = ctx;
 
-      if (agentId) await assertCanEditAgent(ctx.serverDB, userId, agentId);
+      if (agentId)
+        await assertCanEditAgent(ctx.serverDB, userId, agentId, ctx.workspaceId ?? undefined);
 
       const callbackUrl = `${process.env.APP_URL || process.env.NEXTAUTH_URL || ''}/api/composio/oauth/callback`;
 
@@ -405,7 +416,8 @@ export const composioRouter = router({
         agentId,
       } = input;
 
-      if (agentId) await assertCanEditAgent(ctx.serverDB, ctx.userId, agentId);
+      if (agentId)
+        await assertCanEditAgent(ctx.serverDB, ctx.userId, agentId, ctx.workspaceId ?? undefined);
 
       const existingPlugin = await ctx.pluginModel.findById(identifier);
 
