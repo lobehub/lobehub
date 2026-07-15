@@ -21,17 +21,14 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
-import { useClientDataSWR } from '@/libs/swr';
 import { lambdaQuery } from '@/libs/trpc/client';
-import { deviceService } from '@/services/device';
 import { useElectronStore } from '@/store/electron';
-import { useUserStore } from '@/store/user';
-import { authSelectors } from '@/store/user/selectors';
 
-import { DEVICE_LIST_SWR_KEY, refreshDeviceList } from './const';
+import { refreshDeviceList } from './const';
 import DeviceDetailPanel from './DeviceDetailPanel';
 import DeviceItem from './DeviceItem';
 import { useCanEditDevice } from './useCanEditDevice';
+import { useDeviceList } from './useDeviceList';
 
 const styles = createStaticStyles(({ css }) => ({
   // ─── Onboarding empty state ───
@@ -297,18 +294,9 @@ const DeviceManager = memo<DeviceManagerProps>(({ onConnect, scope, visibility }
   const { t } = useTranslation('setting');
   const isWorkspace = scope === 'workspace';
 
-  // Fetch via SWR so the cache key carries the active workspace id (see
-  // `DEVICE_LIST_SWR_KEY`). The raw TRPC React Query key had no workspace
-  // dimension, so a fetch primed while the workspace was still resolving (empty
-  // `X-Workspace-Id` header → personal pool) stuck for the whole session and the
-  // workspace list rendered empty until a hard refresh.
-  // Devices come from an authed lambda procedure, so only query once signed in
-  // (desktop always queries — it lists the local device's registered cwd).
-  const isLogin = useUserStore(authSelectors.isLogin);
-  const { data, isLoading, error, mutate, isValidating } = useClientDataSWR(
-    isLogin || isDesktop ? [DEVICE_LIST_SWR_KEY] : null,
-    () => deviceService.listDevices(),
-  );
+  // Workspace-keyed SWR fetch — the shared hook every device-listing surface
+  // uses (see `useDeviceList` for why the raw TRPC React Query path is wrong).
+  const { data, isLoading, error, mutate, isValidating } = useDeviceList();
   // `listDevices` is workspace-aware and returns both pools — keep each surface
   // to its own scope (and visibility tab). Ghost rows (`visibility: null`,
   // online but unregistered) belong to the shared pool: the server already

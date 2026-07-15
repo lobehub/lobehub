@@ -20,7 +20,7 @@ import { BotIcon, CheckCircle2, MonitorSmartphone, RefreshCw, XCircle } from 'lu
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { lambdaQuery } from '@/libs/trpc/client';
+import { useDeviceList } from '@/features/DeviceManager/useDeviceList';
 import { deviceService } from '@/services/device';
 import { useAgentStore } from '@/store/agent';
 
@@ -109,10 +109,10 @@ const ChangeDeviceContent = memo<ChangeDeviceContentProps>(
       setCanDismissByClickOutside(!saving);
     }, [saving, setCanDismissByClickOutside]);
 
-    const { data: devices, isLoading: loadingDevices } = lambdaQuery.device.listDevices.useQuery(
-      undefined,
-      { staleTime: 30_000 },
-    );
+    // Workspace-keyed SWR fetch (see useDeviceList) — the raw lambdaQuery key
+    // has no workspace dimension, so the list went stale across workspace
+    // switches (LOBE-11904).
+    const { data: devices, isLoading: loadingDevices } = useDeviceList();
 
     const onlineDevices = (devices ?? []).filter(
       (d) => d.online && (!isWorkspaceAgent || d.scope === 'workspace'),
@@ -274,9 +274,8 @@ const RemoteAgentConfigCard = memo<RemoteAgentConfigCardProps>(
 
     const platformName = HETEROGENEOUS_TYPE_LABELS[provider.type] ?? provider.type;
 
-    const { data: devices } = lambdaQuery.device.listDevices.useQuery(undefined, {
-      staleTime: 30_000,
-    });
+    // Workspace-keyed SWR fetch — see the comment on the sibling call above.
+    const { data: devices } = useDeviceList();
 
     const boundDevice = devices?.find((d) => d.deviceId === boundDeviceId);
 

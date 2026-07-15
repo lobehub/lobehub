@@ -30,7 +30,7 @@ import { useNavigate } from 'react-router';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { DOWNLOAD_URL } from '@/const/url';
-import { lambdaQuery } from '@/libs/trpc/client';
+import { useDeviceList } from '@/features/DeviceManager/useDeviceList';
 import { deviceService } from '@/services/device';
 import { useAgentStore } from '@/store/agent';
 import { useHomeStore } from '@/store/home';
@@ -152,14 +152,15 @@ const CreatePlatformAgentContent = memo<CreatePlatformAgentContentProps>(
       type: c.type,
     }));
 
+    // Workspace-keyed SWR fetch (see useDeviceList) — the raw lambdaQuery key
+    // has no workspace dimension, so the wizard listed the previous
+    // workspace's pool after a switch (LOBE-11904).
     const {
       data: devices,
       isLoading: loadingDevices,
-      isFetching: fetchingDevices,
-      refetch: refetchDevices,
-    } = lambdaQuery.device.listDevices.useQuery(undefined, {
-      staleTime: 0,
-    });
+      isValidating: fetchingDevices,
+      mutate: refetchDevices,
+    } = useDeviceList();
 
     const selectedPlatformDef = platformDefs.find((p) => p.type === platform)!;
 

@@ -15,6 +15,7 @@ import { useTranslation } from 'react-i18next';
 import WorkspaceControls from '@/features/ChatInput/ControlBar/WorkspaceControls';
 import { useAgentId } from '@/features/ChatInput/hooks/useAgentId';
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
+import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 
@@ -128,7 +129,9 @@ const HeteroControlBar = memo(() => {
 
   // All hooks must be called unconditionally (Rules of Hooks)
   const isLoading = useAgentStore(agentByIdSelectors.isAgentConfigLoadingById(agentId));
-  const agencyConfig = useAgentStore(agentByIdSelectors.getAgencyConfigById(agentId));
+  // Effective config = shared row + this member's device override (LOBE-11689),
+  // so the quota badges gate on where THIS member's run actually executes.
+  const { agencyConfig } = useEffectiveAgencyConfig(agentId);
   const isWorkspaceAgent = useAgentStore(agentByIdSelectors.isWorkspaceAgentById(agentId));
 
   // On web there's no full-access badge / skeleton — just the workspace controls

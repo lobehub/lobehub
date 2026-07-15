@@ -20,9 +20,10 @@ import { ChatInput } from '@/features/Conversation';
 import { contextSelectors, useConversationStore } from '@/features/Conversation/store';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
+import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useRemoteAgentDeviceGuard } from '@/hooks/useRemoteAgentDeviceGuard';
 import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
+import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 
 import HeteroControlBar from './HeteroControlBar';
@@ -89,9 +90,11 @@ const HeterogeneousChatInput = memo(() => {
   const params = useParams<{ aid: string }>();
   const navigate = useNavigate();
 
-  const agencyConfig = useAgentStore(
-    (s) => agentSelectors.getAgentConfigById(agentId)(s)?.agencyConfig,
-  );
+  // Effective config = shared row + this member's per-agent device override
+  // (LOBE-11689) — the raw shared `agencyConfig` may carry another member's
+  // device pick, which would drive the guard/model-selector gates off the
+  // wrong machine.
+  const { agencyConfig } = useEffectiveAgencyConfig(agentId);
   const providerType = agencyConfig?.heterogeneousProvider?.type;
   const isWorkspaceAgent = useAgentStore(agentByIdSelectors.isWorkspaceAgentById(agentId));
   const executionTarget = resolveExecutionTarget(agencyConfig, {

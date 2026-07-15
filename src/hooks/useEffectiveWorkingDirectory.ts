@@ -5,8 +5,8 @@ import {
   resolveTargetDeviceId,
 } from '@/helpers/agentWorkingDirectory';
 import { globalAgentContextManager } from '@/helpers/GlobalAgentContextManager';
+import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 import { deviceSelectors, useDeviceStore } from '@/store/device';
@@ -32,9 +32,10 @@ export const useEffectiveWorkingDirectory = (agentId?: string): string | undefin
   const isLogin = useUserStore(authSelectors.isLogin);
   useDeviceStore((s) => s.useFetchDevices)(isLogin || isDesktop);
 
-  const agencyConfig = useAgentStore((s) =>
-    agentId ? agentByIdSelectors.getAgencyConfigById(agentId)(s) : undefined,
-  );
+  // Effective config = shared row + this member's device override (LOBE-11689),
+  // so `resolveTargetDeviceId` targets the device THIS member's run goes to —
+  // not whichever machine landed on the workspace-shared row.
+  const { agencyConfig } = useEffectiveAgencyConfig(agentId);
   const legacyAgentWorkingDirectory = useAgentStore((s) =>
     agentId ? s.localAgentWorkingDirectoryMap[agentId] : undefined,
   );

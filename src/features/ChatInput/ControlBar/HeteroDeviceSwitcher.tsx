@@ -4,7 +4,6 @@ import { SiApple, SiLinux } from '@icons-pack/react-simple-icons';
 import { isDesktop } from '@lobechat/const';
 import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import type { DeviceExecutionTarget } from '@lobechat/types';
-import { resolveAgencyConfig } from '@lobechat/types';
 import { Microsoft } from '@lobehub/icons';
 import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
@@ -26,15 +25,13 @@ import { useTranslation } from 'react-i18next';
 
 import { DOWNLOAD_URL } from '@/const/url';
 import { useSelectExecutionTarget } from '@/features/ChatInput/hooks/useSelectExecutionTarget';
+import { useDeviceList } from '@/features/DeviceManager/useDeviceList';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { useIsGatewayModeEnabled } from '@/helpers/gatewayMode';
-import { lambdaQuery } from '@/libs/trpc/client';
+import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useElectronStore } from '@/store/electron';
-import { useUserStore } from '@/store/user';
-import { workspaceUserSettingsSelectors } from '@/store/user/selectors';
 
 const styles = createStaticStyles(({ css }) => ({
   button: css`
@@ -346,22 +343,14 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   const [open, setOpen] = useState(false);
   const navigate = useWorkspaceAwareNavigate();
 
-  const sharedAgencyConfig = useAgentStore(agentByIdSelectors.getAgencyConfigById(agentId));
   const agentWorkspaceId = useAgentStore((s) => s.agentMap[agentId]?.workspaceId);
   const isWorkspaceAgent = Boolean(agentWorkspaceId);
 
-  // The current caller's per-agent override (LOBE-11689). Only ever non-empty
-  // for workspace agents in practice — personal agents already have a single
-  // owner whose choice is the shared config. Comes from the
-  // `workspaceUserSettings` slice (backed by `workspace_user_settings.preference`),
-  // which the picker eagerly fetches on mount so what the picker shows and
-  // what dispatch will actually do always agree. Merged over the shared config
-  // via `resolveAgencyConfig`.
-  const { isLoading: isWorkspacePreferenceLoading } = useUserStore(
-    (s) => s.useFetchWorkspaceUserPreference,
-  )();
-  const override = useUserStore(workspaceUserSettingsSelectors.agentDeviceOverrideById(agentId));
-  const agencyConfig = resolveAgencyConfig(sharedAgencyConfig, override);
+  // Shared config merged with the caller's per-agent override (LOBE-11689) —
+  // the hook eagerly fetches the `workspaceUserSettings` bucket on mount so
+  // what the picker shows and what dispatch will actually do always agree.
+  const { agencyConfig, isPreferenceLoading: isWorkspacePreferenceLoading } =
+    useEffectiveAgencyConfig(agentId);
 
   const heteroType = agencyConfig?.heterogeneousProvider?.type;
   const boundDeviceId = agencyConfig?.boundDeviceId;
@@ -372,9 +361,10 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   // the option and never fall back to / honour a stale stored `'none'`.
   const isHetero = !!heteroType;
 
-  const { data: devices, isLoading } = lambdaQuery.device.listDevices.useQuery(undefined, {
-    staleTime: 30_000,
-  });
+  // Workspace-keyed SWR fetch — the raw lambdaQuery key has no workspace
+  // dimension, so the picker kept showing the previous workspace's pool after
+  // a switch (LOBE-11904).
+  const { data: devices, isLoading } = useDeviceList();
 
   // The current machine's own gateway deviceId (desktop only), used to badge the
   // matching device row with a "This device" tag and show the local-process
