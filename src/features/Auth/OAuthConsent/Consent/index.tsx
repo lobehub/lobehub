@@ -2,7 +2,7 @@
 
 import { Block, Flexbox, Text } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
-import React, { memo, useState } from 'react';
+import React, { memo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AuthCard from '@/features/AuthCard';
@@ -32,11 +32,12 @@ const ConsentClient = memo<ClientProps>(({ uid, clientId, scopes, clientMetadata
   const { t } = useTranslation('oauth');
 
   const [isLoading, setIsLoading] = useState(false);
+  const consentInputRef = useRef<HTMLInputElement>(null);
 
   const clientDisplayName = clientMetadata?.clientName || clientId;
 
   if (BUILTIN_CLIENTS.has(clientId)) {
-    return <BuiltinConsent uid={clientId} />;
+    return <BuiltinConsent uid={uid} />;
   }
 
   return (
@@ -52,21 +53,29 @@ const ConsentClient = memo<ClientProps>(({ uid, clientId, scopes, clientMetadata
         footer={
           <form action="/oidc/consent" method="post" style={{ width: '100%' }}>
             <input name="uid" type="hidden" value={uid} />
+            <input defaultValue="accept" name="consent" ref={consentInputRef} type="hidden" />
             <Flexbox gap={12}>
               <Button
+                data-testid="oauth-consent-accept"
                 htmlType="submit"
                 loading={isLoading}
-                name="consent"
                 size={'large'}
                 type="primary"
-                value="accept"
                 onClick={() => {
+                  if (consentInputRef.current) consentInputRef.current.value = 'accept';
                   setIsLoading(true);
                 }}
               >
                 {t('consent.buttons.accept')}
               </Button>
-              <Button htmlType="submit" name="consent" size={'large'} value="deny">
+              <Button
+                data-testid="oauth-consent-deny"
+                htmlType="submit"
+                size={'large'}
+                onClick={() => {
+                  if (consentInputRef.current) consentInputRef.current.value = 'deny';
+                }}
+              >
                 {t('consent.buttons.deny')}
               </Button>
             </Flexbox>
