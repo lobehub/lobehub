@@ -2,7 +2,7 @@
  * @vitest-environment happy-dom
  */
 import { render, screen } from '@testing-library/react';
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import CreateTaskInlineEntry from './CreateTaskInlineEntry';
@@ -43,8 +43,12 @@ vi.mock('@lobehub/ui/base-ui', () => ({
 }));
 
 vi.mock('@/features/EditorCanvas', () => ({
-  EditorCanvas: ({ disabled }: { disabled?: boolean }) => (
-    <div data-disabled={String(!!disabled)} data-testid="task-editor" />
+  EditorCanvas: ({ disabled, style }: { disabled?: boolean; style?: CSSProperties }) => (
+    <div
+      data-disabled={String(!!disabled)}
+      data-padding-bottom={String(style?.paddingBottom)}
+      data-testid="task-editor"
+    />
   ),
 }));
 
@@ -134,5 +138,26 @@ describe('CreateTaskInlineEntry', () => {
     rerender(<CreateTaskInlineEntry variant="hero" />);
 
     expect(screen.getByTestId('visibility-trigger')).toHaveAttribute('data-locked', 'false');
+  });
+
+  it('uses compact editor padding and aligned action controls', () => {
+    const { container } = render(<CreateTaskInlineEntry variant="hero" />);
+
+    const editor = screen.getByTestId('task-editor');
+    expect(editor.parentElement).toHaveStyle({ padding: '12px 16px 0' });
+    expect(editor).toHaveAttribute('data-padding-bottom', '12');
+
+    const assigneeControl = screen.getByText('createTask.assignee').parentElement;
+    expect(assigneeControl?.style.getPropertyValue('--lobe-flex-height')).toBe('24px');
+    expect(assigneeControl?.style.getPropertyValue('--lobe-flex-padding-block')).toBe('3px');
+
+    const attachmentAction = container.querySelector<HTMLElement>('[role="button"]');
+    expect(attachmentAction).toHaveStyle({ height: '24px', width: '24px' });
+    expect(attachmentAction?.parentElement?.style.getPropertyValue('--lobe-flex-align')).toBe(
+      'center',
+    );
+
+    const visibilityTrigger = screen.getByTestId('visibility-trigger');
+    expect(visibilityTrigger.nextElementSibling).toHaveTextContent('createTask.submit');
   });
 });

@@ -215,7 +215,7 @@ export default {
     'You can move to personal or workspaces that have permission to create a page.',
   'pageList.transferFailed': 'Failed to transfer page',
   'pageList.transferSuccess': 'Page transferred',
-  'pageList.transferTitle': 'Transfer page',
+  'pageList.transferTitle': 'Move page',
   'pageList.transferTo': 'Transfer to…',
   'pageList.transferWarning': 'This is a one-way move; reverting requires another transfer.',
   'pageList.untitled': 'Untitled',

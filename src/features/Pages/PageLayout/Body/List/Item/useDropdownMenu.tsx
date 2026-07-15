@@ -43,7 +43,9 @@ export const useDropdownMenu = ({
   const publishPageToWorkspace = usePageStore((s) => s.publishPageToWorkspace);
   const setPageVisibility = usePageStore((s) => s.setPageVisibility);
   const document = usePageStore((s) => pageSelectors.getDocumentById(pageId)(s));
-  const transferMenuItems = useDocumentTransferMenuItem(pageId);
+  const transferMenuItems = useDocumentTransferMenuItem(pageId, {
+    transferLabel: t('pageEditor.menu.move', { ns: 'file' }),
+  });
   const currentUserId = useUserStore(userProfileSelectors.userId);
 
   const isPrivate = document?.visibility === 'private';

@@ -54,6 +54,10 @@ vi.mock('../UserLoginOrSignup', () => ({
   )),
 }));
 
+vi.mock('../UserPanel/LangButton', () => ({
+  default: () => <div>Language chooser</div>,
+}));
+
 vi.mock('../DataStatistics', () => ({
   default: vi.fn(() => <div>Mocked DataStatistics</div>),
 }));
@@ -128,5 +132,6 @@ describe('PanelContent', () => {
     renderWithRouter(<PanelContent closePopover={closePopover} />);
 
     expect(screen.getAllByText('Mocked Menu').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Language chooser')).not.toBeInTheDocument();
   });
 });

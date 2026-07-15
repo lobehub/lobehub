@@ -190,7 +190,7 @@
   "pageList.transferDescription": "您可以移动到有权限创建页面的个人账户或工作区。",
   "pageList.transferFailed": "转移页面失败",
   "pageList.transferSuccess": "页面已转移",
-  "pageList.transferTitle": "转移页面",
+  "pageList.transferTitle": "移动页面",
   "pageList.transferTo": "转移到…",
   "pageList.transferWarning": "这是单向移动；恢复需要另一次转移。",
   "pageList.untitled": "无标题",

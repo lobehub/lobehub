@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from 'vitest';
 import WorkspaceStatsSetting from './index';
 
 const useFetchWorkspaceMembersMock = vi.hoisted(() => vi.fn());
+const statsPagePropsMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/business/client/hooks/useFetchWorkspaceMembers', () => ({
   useFetchWorkspaceMembers: useFetchWorkspaceMembersMock,
@@ -24,11 +25,12 @@ vi.mock('react-i18next', () => ({
 }));
 
 vi.mock('@/routes/(main)/settings/stats', () => ({
-  default: ({
-    resolveUser,
-  }: {
+  default: (props: {
     resolveUser: (userId: string) => { avatar?: string | null; name: string };
+    showSettingHeader?: boolean;
   }) => {
+    statsPagePropsMock(props);
+    const { resolveUser } = props;
     const activeUser = resolveUser('user-1');
     const removedUser = resolveUser('user-2');
     const noAvatarUser = resolveUser('user-3');
@@ -88,5 +90,9 @@ describe('WorkspaceStatsSetting', () => {
     expect(screen.getByText('https://example.com/avatar.png')).toBeInTheDocument();
     expect(screen.getByText('grace (Removed)')).toBeInTheDocument();
     expect(screen.getByText('alan')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'tab.stats' })).toBeInTheDocument();
+    expect(statsPagePropsMock).toHaveBeenCalledWith(
+      expect.objectContaining({ showSettingHeader: false }),
+    );
   });
 });

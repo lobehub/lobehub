@@ -8,7 +8,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { DeviceConnectModal, DeviceManager } from '@/features/DeviceManager';
-import SettingHeader from '@/routes/(main)/settings/features/SettingHeader';
+import WorkspaceSettingsTitle from '@/features/WorkspaceSetting/Title';
 
 /**
  * Workspace device settings: two pools behind tabs (LOBE-11690) —
@@ -24,12 +24,8 @@ const WorkspaceDevicesSetting = memo(() => {
 
   return (
     <>
-      <SettingHeader title={t('tab.devices')} />
-
-      {/* Tabs and the device list form one unit: group them so the settings
-          Container's 36px section gap applies once, instead of stacking
-          between the tabs and the list they control. */}
       <Flexbox gap={16}>
+        <WorkspaceSettingsTitle>{t('tab.devices')}</WorkspaceSettingsTitle>
         <Tabs
           activeKey={visibility}
           items={[
