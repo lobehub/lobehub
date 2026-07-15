@@ -45,6 +45,7 @@
   "acceptance.group.expandAll": "Expand groups",
   "acceptance.group.expandItems": "Expand checks in this group",
   "acceptance.group.passRatio": "{{passed}}/{{total}} passed",
+  "acceptance.group.uncategorized": "Other requirements",
   "acceptance.history.jump": "Round {{round}} — click to locate it in the ledger",
   "acceptance.latestSummary": "Latest report summary",
   "acceptance.ledger.collapse": "Collapse the round ledger",

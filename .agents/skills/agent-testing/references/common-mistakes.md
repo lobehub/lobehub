@@ -7,6 +7,26 @@
 
 ---
 
+## Case 19 — Stopping after a fix without publishing the next Acceptance round
+
+**Wrong approach**: implementing and locally validating a user-requested second iteration, then
+ending the task without committing, pushing, or publishing a fresh immutable verify run to the
+existing Acceptance.
+
+**Why it's wrong**: an Acceptance is the cross-round audit trail. A local-only fix leaves the PR
+stale and makes the Acceptance claim that the previous round is still the latest result. Local
+tests are preparation, not the delivery.
+
+**What it breaks**: reviewers cannot inspect the updated code, the Acceptance timeline misses the
+iteration, and the user has to ask whether anything was actually shipped.
+
+**Correct approach**: after every requested iteration, complete the whole delivery loop unless the
+user explicitly says not to: validate the new state, commit and push the PR branch, create a fresh
+report directory, ingest exactly once as the next immutable run on the same subject Acceptance,
+verify the new round appears, then return both the commit and production links.
+
+---
+
 ## Case 18 — Treating a status badge as proof that the error message rendered
 
 **Wrong approach**: marking an error-state UI case as passed because the platform page showed

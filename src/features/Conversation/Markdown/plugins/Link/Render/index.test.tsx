@@ -169,6 +169,18 @@ describe('Link Render — message link icon toggle', () => {
 });
 
 describe('Link Render — internal entities', () => {
+  it('renders acceptance links as dedicated entities and navigates in-app', () => {
+    const { getByRole } = renderLink({
+      linkHref: '/acceptance/acceptance-1',
+      linkKind: 'generic',
+      linkLabel: 'Acceptance',
+    });
+
+    fireEvent.click(getByRole('link', { name: 'Acceptance' }));
+
+    expect(mockNavigate).toHaveBeenCalledWith('/acceptance/acceptance-1');
+  });
+
   it('opens official document links in the conversation portal', () => {
     const { getByRole } = renderLink({
       linkHref: '/agent/agt_1/docs/doc1',

@@ -144,9 +144,9 @@ table — those double up on the page. It carries only the non-duplicate narrati
      lh verify ingest-report "$DIR" --source agent-testing --open --json
    ```
 
-   This creates a standalone verification session and uploads the cases (as check
-   results), each case's `evidence` files, and `report.md` (as the report body),
-   then prints `/verify/<verifyRunId>` (→ `https://app.lobehub.com/verify/<id>`).
+   This creates a new immutable verification run, attaches it to the required
+   subject acceptance, uploads the cases, evidence, and report body, then prints
+   both `/verify/<verifyRunId>` and `/acceptance/<acceptanceId>`.
    Include that full production link in the final reply alongside the local
    report dir. See SKILL.md → Step 4 for why production (a localhost URL isn't
    shareable and a local stub S3 fails file-evidence uploads), the production
@@ -230,6 +230,7 @@ missing; a blocked case is not a pass).
   "branch": "feat/task-tree",
   "cases": [
     {
+      "category": "Task hierarchy",
       "id": "1",
       "name": "task tree returns nested children",
       "surface": "cli",
@@ -278,9 +279,13 @@ missing; a blocked case is not a pass).
 ```
 
 `plan[]` is the checks you committed to **before running them**, and it shares
-`id`s with `cases[]`. Only `id` and `title` are required. A plan item with no
-matching case renders as **未执行**: cutting coverage is allowed, hiding that you
-cut it is not.
+`id`s with `cases[]`. Every agent-testing plan item must carry a `category` that
+names its user-facing business scenario or requirement area (for example `Task
+hierarchy`, `Rate-limit recovery`, or `Browser actions`). It must not name a
+technical surface such as `Desktop`, `CLI`, or `Backend`: Acceptance groups are
+organized by what the user is accepting, while `surface` separately records
+where the check ran. A plan item with no matching case renders as **未执行**:
+cutting coverage is allowed, hiding that you cut it is not.
 
 Two of its fields are a **closed vocabulary**, because the pipeline acts on them
 — they are not labels:
@@ -299,9 +304,8 @@ check on the page next to the outcome.
 
 A plan item may also carry a per-item `surface` (same closed set as the run-level
 `surfaces` below; `electron` normalizes to `desktop`). It says which product
-surface THIS check ran on — the acceptance union view groups checks by it, so a
-mixed web+cli round stays legible. An unknown value is warned about and dropped,
-never stored.
+surface THIS check ran on. It is metadata, never an Acceptance grouping key. An
+unknown value is warned about and dropped, never stored.
 
 `surfaces` is a **closed set** — `web` | `desktop` | `cli` | `mobile` | `bot` —
 and names the product surface a check ran **on**. `electron` is accepted and
@@ -324,11 +328,15 @@ that isn't the branch's own.
 polish, copy quality); omit it for purely binary runs. `verdict` is the single
 word the user reads first: `pass`, `fail`, or `partial`.
 
-`subject` is optional and chains the session onto a business subject's
-**acceptance aggregate** (one decision page across repair rounds): either
+`subject` identifies the business subject whose **acceptance aggregate** owns
+this immutable run: either
 `"subject": "task:<id>"` (`task` | `topic` | `document`) or
 `{ "type": "task", "id": "task_…", "requirement": "one-sentence acceptance bar" }`.
-The `--subject` flag on `ingest-report` overrides this field.
+The `--subject` flag overrides this field. Inside a LobeHub conversation, both
+may be omitted because `ingest-report` defaults to
+`topic:$LOBEHUB_TOPIC_ID`; outside a topic, an explicit subject is mandatory.
+Every ingest creates a new immutable run. Never update a prior run after a fix;
+publish the re-verification as the next round on the same acceptance.
 
 `interactionCost` is optional and run-level. For UI runs driven through
 `agent-browser`, create `interaction-trace.jsonl` with

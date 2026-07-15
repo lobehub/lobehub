@@ -481,18 +481,16 @@ interface CheckGroup {
 }
 
 /**
- * Group by the harness-authored `category`, falling back to the product
- * surface, then a catch-all — familiar sections over storage taxonomy (P-14).
+ * Group by the harness-authored business `category`. Product surfaces describe
+ * where a check ran, not what user requirement it verifies, so they must never
+ * become acceptance sections.
  */
-export const groupChecks = (
-  checks: AcceptanceCheck[],
-  surfaceLabel: (surface: NonNullable<AcceptanceCheck['surface']>) => string,
-  otherLabel: string,
-): CheckGroup[] => {
+export const groupChecks = (checks: AcceptanceCheck[], otherLabel: string): CheckGroup[] => {
   const groups = new Map<string, CheckGroup>();
   for (const check of checks) {
-    const key = check.category ?? (check.surface ? `surface:${check.surface}` : 'other');
-    const label = check.category ?? (check.surface ? surfaceLabel(check.surface) : otherLabel);
+    const category = check.category?.trim();
+    const key = category ? `category:${category}` : 'uncategorized';
+    const label = category || otherLabel;
     const group = groups.get(key) ?? { checks: [], key, label };
     group.checks.push(check);
     groups.set(key, group);
@@ -531,11 +529,7 @@ const CheckList = memo<CheckListProps>(
       return true;
     };
 
-    const groups = groupChecks(
-      checks,
-      (surface) => t(`report.surface.${surface}`),
-      t('acceptance.surface.other'),
-    )
+    const groups = groupChecks(checks, t('acceptance.group.uncategorized'))
       .map((group) => ({
         ...group,
         rows: group.checks

@@ -160,10 +160,12 @@ const CommandExecutionInspector = memo<
     getAgentBrowserCommandDisplay(partialArgs?.command);
   if (agentBrowserDisplay) {
     const { icon, translationKey } = AGENT_BROWSER_DISPLAY[agentBrowserDisplay.action];
+    const description =
+      agentBrowserDisplay.action === 'eval' ? undefined : agentBrowserDisplay.value;
     return (
       <RunCommandInspector
         {...props}
-        args={{ ...args, command: '', description: agentBrowserDisplay.value }}
+        args={{ ...args, command: '', description }}
         icon={icon}
         partialArgs={undefined}
         translationKey={translationKey}

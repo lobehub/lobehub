@@ -158,14 +158,14 @@ describe('getAgentBrowserCommandDisplay', () => {
     ).toEqual({ action: 'snapshot', value: undefined });
   });
 
-  it('extracts useful values for navigation, eval, and screenshots', () => {
+  it('extracts useful values without exposing evaluated JavaScript', () => {
     expect(getAgentBrowserCommandDisplay('agent-browser open https://example.com/docs')).toEqual({
       action: 'navigate',
       value: 'example.com/docs',
     });
     expect(getAgentBrowserCommandDisplay('agent-browser eval "document.title"')).toEqual({
       action: 'eval',
-      value: 'document.title',
+      value: undefined,
     });
     expect(getAgentBrowserCommandDisplay('agent-browser screenshot ./proof/page.png')).toEqual({
       action: 'screenshot',

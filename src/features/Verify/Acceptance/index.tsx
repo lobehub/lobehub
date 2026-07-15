@@ -9,7 +9,6 @@ import {
   Flexbox,
   Icon,
   Markdown,
-  ScrollShadow,
   Tag,
   Text,
 } from '@lobehub/ui';
@@ -61,6 +60,7 @@ const styles = createStaticStyles(({ css }) => ({
     background: ${cssVar.colorBgContainer};
   `,
   page: css`
+    position: relative;
     overflow: hidden;
     height: 100%;
     background: ${cssVar.colorBgLayout};
@@ -164,11 +164,9 @@ const AcceptancePage = memo(() => {
   // The scope header comes from the latest round that carries a coding context.
   const scope = [...rounds].reverse().find((round) => round.run.context)?.run.context;
 
-  const groupKeys = groupChecks(
-    checks,
-    (surface) => t(`report.surface.${surface}`),
-    t('acceptance.surface.other'),
-  ).map((group) => group.key);
+  const groupKeys = groupChecks(checks, t('acceptance.group.uncategorized')).map(
+    (group) => group.key,
+  );
   const allGroupsCollapsed =
     groupKeys.length > 0 && groupKeys.every((key) => collapsedGroups.has(key));
 
@@ -327,168 +325,166 @@ const AcceptancePage = memo(() => {
 
   return (
     <Flexbox horizontal className={styles.page}>
-      <Flexbox flex={1} style={{ minWidth: 0 }}>
-        <ScrollShadow style={{ height: '100%' }}>
-          <Flexbox
-            gap={16}
-            paddingBlock={20}
-            paddingInline={24}
-            style={{ margin: '0 auto', maxWidth: 920, width: '100%' }}
-          >
-            {/* Header — the accepted object and its scope */}
-            <Flexbox gap={8}>
-              <Flexbox horizontal align={'center'} gap={10}>
-                <Text as={'h1'} style={{ fontSize: 18, margin: 0 }}>
-                  {subject.title ?? subject.id}
-                </Text>
-                <Tag size={'small'}>{t(`acceptance.subject.${subject.type}`)}</Tag>
-                <Flexbox flex={1} />
-                {!ledgerExpand && (
-                  <ActionIcon
-                    icon={PanelRightOpen}
-                    size={'small'}
-                    title={t('acceptance.ledger.expand')}
-                    onClick={() => setLedgerExpand(true)}
-                  />
-                )}
-              </Flexbox>
-              <Flexbox horizontal align={'center'} gap={16} wrap={'wrap'}>
-                {scope?.branch && (
-                  <Flexbox horizontal align={'center'} className={styles.scopeChip} gap={4}>
-                    <Icon icon={GitBranch} size={13} /> {scope.branch}
-                  </Flexbox>
-                )}
-                {scope?.commit && (
-                  <Flexbox horizontal align={'center'} className={styles.scopeChip} gap={4}>
-                    <Icon icon={GitCommitHorizontal} size={13} /> {scope.commit.slice(0, 10)}
-                  </Flexbox>
-                )}
-                {scope?.pullRequest?.number && (
-                  <Flexbox horizontal align={'center'} className={styles.scopeChip} gap={4}>
-                    <Icon icon={GitPullRequest} size={13} /> #{scope.pullRequest.number}
-                  </Flexbox>
-                )}
+      <Flexbox flex={1} style={{ minWidth: 0, overflow: 'auto' }}>
+        <Flexbox
+          gap={16}
+          paddingBlock={20}
+          paddingInline={24}
+          style={{ margin: '0 auto', maxWidth: 920, width: '100%' }}
+        >
+          {/* Header — the accepted object and its scope */}
+          <Flexbox gap={8}>
+            <Flexbox horizontal align={'center'} gap={10}>
+              <Text as={'h1'} style={{ fontSize: 18, margin: 0 }}>
+                {subject.title ?? subject.id}
+              </Text>
+              <Tag size={'small'}>{t(`acceptance.subject.${subject.type}`)}</Tag>
+              <Flexbox flex={1} />
+              {!ledgerExpand && (
+                <ActionIcon
+                  icon={PanelRightOpen}
+                  size={'small'}
+                  title={t('acceptance.ledger.expand')}
+                  onClick={() => setLedgerExpand(true)}
+                />
+              )}
+            </Flexbox>
+            <Flexbox horizontal align={'center'} gap={16} wrap={'wrap'}>
+              {scope?.branch && (
                 <Flexbox horizontal align={'center'} className={styles.scopeChip} gap={4}>
-                  <Icon icon={FileClock} size={13} />{' '}
-                  {t('acceptance.roundCount', { count: rounds.length })}
+                  <Icon icon={GitBranch} size={13} /> {scope.branch}
                 </Flexbox>
+              )}
+              {scope?.commit && (
+                <Flexbox horizontal align={'center'} className={styles.scopeChip} gap={4}>
+                  <Icon icon={GitCommitHorizontal} size={13} /> {scope.commit.slice(0, 10)}
+                </Flexbox>
+              )}
+              {scope?.pullRequest?.number && (
+                <Flexbox horizontal align={'center'} className={styles.scopeChip} gap={4}>
+                  <Icon icon={GitPullRequest} size={13} /> #{scope.pullRequest.number}
+                </Flexbox>
+              )}
+              <Flexbox horizontal align={'center'} className={styles.scopeChip} gap={4}>
+                <Icon icon={FileClock} size={13} />{' '}
+                {t('acceptance.roundCount', { count: rounds.length })}
               </Flexbox>
             </Flexbox>
+          </Flexbox>
 
-            {/* The acceptance bar — what this delivery is judged against.
+          {/* The acceptance bar — what this delivery is judged against.
                 Prominence through typography (a lede under the heading), not
                 chrome: no card, no border. */}
-            {acceptance.requirement && (
-              <Flexbox gap={4} style={{ maxWidth: 760 }}>
-                <Text className={styles.requirementLabel}>{t('acceptance.requirementLabel')}</Text>
-                <Text style={{ fontSize: 15, lineHeight: 1.7 }}>{acceptance.requirement}</Text>
-              </Flexbox>
-            )}
-
-            {/* Decision bar — the user closes the lifecycle (P-12). Hidden
-                until the accept/reject loop ships. */}
-            {ENABLE_DECISION_BAR && decisionBanner()}
-            {ENABLE_DECISION_BAR && actionError && <Text type={'danger'}>{actionError}</Text>}
-
-            {/* Latest report narrative — an entry point, not the page's spine */}
-            {latestReport?.summary && (
-              <Flexbox className={styles.card} gap={8} padding={16}>
-                <Flexbox horizontal align={'center'} gap={8}>
-                  <Icon color={cssVar.colorTextSecondary} icon={FileText} size={15} />
-                  <Text strong style={{ fontSize: 13 }}>
-                    {t('acceptance.latestSummary')}
-                    {currentRound
-                      ? ` · ${t('acceptance.round', { round: currentRound.run.roundIndex })}`
-                      : ''}
-                  </Text>
-                  <Flexbox flex={1} />
-                  <Button
-                    size={'small'}
-                    type={'text'}
-                    onClick={() =>
-                      setReportRound([...rounds].reverse().find((r) => r.report) ?? null)
-                    }
-                  >
-                    {t('acceptance.viewFullReport')}
-                  </Button>
-                </Flexbox>
-                <Text className={styles.summaryClamp} fontSize={13} type={'secondary'}>
-                  {latestReport.summary}
-                </Text>
-              </Flexbox>
-            )}
-
-            {/* Check union — the complete inventory, familiar sections (P-14) */}
-            <Flexbox horizontal align={'center'} gap={12}>
-              <Text strong style={{ fontSize: 14 }}>
-                {t('acceptance.checks.title')}
-              </Text>
-              <Text fontSize={12} type={'secondary'}>
-                {t('acceptance.checks.subtitle', { count: counts.total, rounds: rounds.length })}
-              </Text>
-              <Flexbox flex={1} />
-              <Segmented
-                size={'small'}
-                value={filter}
-                options={[
-                  { label: t('acceptance.filter.all', { count: counts.total }), value: 'all' },
-                  {
-                    label: t('acceptance.filter.exception', { count: counts.exceptions }),
-                    value: 'exception',
-                  },
-                  { label: t('acceptance.filter.fixed', { count: counts.fixed }), value: 'fixed' },
-                ]}
-                onChange={(value) => setFilter(value as CheckFilter)}
-              />
-              <Button
-                icon={<Icon icon={allGroupsCollapsed ? ChevronsUpDown : ChevronsDownUp} />}
-                size={'small'}
-                onClick={() =>
-                  setCollapsedGroups(allGroupsCollapsed ? new Set() : new Set(groupKeys))
-                }
-              >
-                {allGroupsCollapsed
-                  ? t('acceptance.group.expandAll')
-                  : t('acceptance.group.collapseAll')}
-              </Button>
+          {acceptance.requirement && (
+            <Flexbox gap={4} style={{ maxWidth: 760 }}>
+              <Text className={styles.requirementLabel}>{t('acceptance.requirementLabel')}</Text>
+              <Text style={{ fontSize: 15, lineHeight: 1.7 }}>{acceptance.requirement}</Text>
             </Flexbox>
+          )}
 
-            <CheckList
-              checks={checks}
-              collapsedGroups={collapsedGroups}
-              expanded={expanded}
-              filter={filter}
-              onRound={gotoRound}
-              onToggleGroup={(key) =>
-                setCollapsedGroups((previous) => {
-                  const next = new Set(previous);
-                  if (next.has(key)) next.delete(key);
-                  else next.add(key);
-                  return next;
-                })
-              }
-              onToggleGroupItems={(ids, open) =>
-                setExpanded((previous) => {
-                  const next = new Set(previous);
-                  for (const id of ids) {
-                    if (open) next.add(id);
-                    else next.delete(id);
+          {/* Decision bar — the user closes the lifecycle (P-12). Hidden
+                until the accept/reject loop ships. */}
+          {ENABLE_DECISION_BAR && decisionBanner()}
+          {ENABLE_DECISION_BAR && actionError && <Text type={'danger'}>{actionError}</Text>}
+
+          {/* Latest report narrative — an entry point, not the page's spine */}
+          {latestReport?.summary && (
+            <Flexbox className={styles.card} gap={8} padding={16}>
+              <Flexbox horizontal align={'center'} gap={8}>
+                <Icon color={cssVar.colorTextSecondary} icon={FileText} size={15} />
+                <Text strong style={{ fontSize: 13 }}>
+                  {t('acceptance.latestSummary')}
+                  {currentRound
+                    ? ` · ${t('acceptance.round', { round: currentRound.run.roundIndex })}`
+                    : ''}
+                </Text>
+                <Flexbox flex={1} />
+                <Button
+                  size={'small'}
+                  type={'text'}
+                  onClick={() =>
+                    setReportRound([...rounds].reverse().find((r) => r.report) ?? null)
                   }
-                  return next;
-                })
-              }
-              onToggleItem={(id) =>
-                setExpanded((previous) => {
-                  const next = new Set(previous);
-                  if (next.has(id)) next.delete(id);
-                  else next.add(id);
-                  return next;
-                })
-              }
+                >
+                  {t('acceptance.viewFullReport')}
+                </Button>
+              </Flexbox>
+              <Text className={styles.summaryClamp} fontSize={13} type={'secondary'}>
+                {latestReport.summary}
+              </Text>
+            </Flexbox>
+          )}
+
+          {/* Check union — the complete inventory, familiar sections (P-14) */}
+          <Flexbox horizontal align={'center'} gap={12}>
+            <Text strong style={{ fontSize: 14 }}>
+              {t('acceptance.checks.title')}
+            </Text>
+            <Text fontSize={12} type={'secondary'}>
+              {t('acceptance.checks.subtitle', { count: counts.total, rounds: rounds.length })}
+            </Text>
+            <Flexbox flex={1} />
+            <Segmented
+              size={'small'}
+              value={filter}
+              options={[
+                { label: t('acceptance.filter.all', { count: counts.total }), value: 'all' },
+                {
+                  label: t('acceptance.filter.exception', { count: counts.exceptions }),
+                  value: 'exception',
+                },
+                { label: t('acceptance.filter.fixed', { count: counts.fixed }), value: 'fixed' },
+              ]}
+              onChange={(value) => setFilter(value as CheckFilter)}
             />
-            <Flexbox style={{ height: 24 }} />
+            <Button
+              icon={<Icon icon={allGroupsCollapsed ? ChevronsUpDown : ChevronsDownUp} />}
+              size={'small'}
+              onClick={() =>
+                setCollapsedGroups(allGroupsCollapsed ? new Set() : new Set(groupKeys))
+              }
+            >
+              {allGroupsCollapsed
+                ? t('acceptance.group.expandAll')
+                : t('acceptance.group.collapseAll')}
+            </Button>
           </Flexbox>
-        </ScrollShadow>
+
+          <CheckList
+            checks={checks}
+            collapsedGroups={collapsedGroups}
+            expanded={expanded}
+            filter={filter}
+            onRound={gotoRound}
+            onToggleGroup={(key) =>
+              setCollapsedGroups((previous) => {
+                const next = new Set(previous);
+                if (next.has(key)) next.delete(key);
+                else next.add(key);
+                return next;
+              })
+            }
+            onToggleGroupItems={(ids, open) =>
+              setExpanded((previous) => {
+                const next = new Set(previous);
+                for (const id of ids) {
+                  if (open) next.add(id);
+                  else next.delete(id);
+                }
+                return next;
+              })
+            }
+            onToggleItem={(id) =>
+              setExpanded((previous) => {
+                const next = new Set(previous);
+                if (next.has(id)) next.delete(id);
+                else next.add(id);
+                return next;
+              })
+            }
+          />
+          <Flexbox style={{ height: 24 }} />
+        </Flexbox>
       </Flexbox>
 
       {/* Round ledger — audit detail, off the decision path (P-13) */}
@@ -499,16 +495,17 @@ const AcceptancePage = memo(() => {
         expand={ledgerExpand}
         minWidth={300}
         placement={'right'}
+        style={{ bottom: 0, position: 'absolute', right: 0, top: 0, zIndex: 10 }}
         onExpandChange={setLedgerExpand}
       >
-        <ScrollShadow style={{ height: '100%' }}>
+        <Flexbox style={{ height: '100%', overflow: 'auto' }}>
           <LedgerPanel
             highlight={highlightRound}
             rounds={rounds}
             onCollapse={() => setLedgerExpand(false)}
             onOpenReport={setReportRound}
           />
-        </ScrollShadow>
+        </Flexbox>
       </DraggablePanel>
 
       {/* Per-round report drill-down */}

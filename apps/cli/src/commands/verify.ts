@@ -279,12 +279,9 @@ function assertPlanEnum<T extends string>(
  * no enum can carry. Everything else the frozen {@link VerifyCheckItem} needs is
  * filled in here, so an author writes only `{ id, title }` plus what they mean.
  *
- * Returns `undefined` only when the report declares no `plan` field at all —
- * "leave whatever is stored alone". A `plan` that IS present but empty returns
- * `[]`, which CLEARS the stored one. The distinction matters on a re-ingest of a
- * reused report dir: a previous round's plan would otherwise stay attached, and
- * every one of its items would render as "not run" against a report that never
- * planned them.
+ * Returns `undefined` when the report declares no `plan` field. A `plan` that is
+ * present but empty returns `[]`, recording an explicitly empty plan in this
+ * immutable snapshot.
  */
 export function planFromResult(result: Record<string, unknown>) {
   if (!Array.isArray(result.plan)) return undefined;
@@ -392,9 +389,7 @@ function metadataForReport(
   origin?: VerifyRunOrigin,
 ): Record<string, unknown> | undefined {
   const hasInteractionCost = Object.prototype.hasOwnProperty.call(result, 'interactionCost');
-  // Nothing to write is not the same as writing an empty bag — leave the run's
-  // metadata untouched so a re-ingest from a plain terminal can't wipe the
-  // origin a previous in-app round recorded.
+  // Nothing to write is not the same as writing an empty metadata bag.
   if (!hasInteractionCost && !origin) return undefined;
 
   const metadata = { ...objectValue(existingMetadata) };
@@ -455,32 +450,10 @@ export function subjectFromResult(result: Record<string, unknown>): {
   return ref ? { ref, requirement: firstString(value.requirement) } : null;
 }
 
-/**
- * The report dir remembers which verification session it created, so
- * re-verifying the same case updates one evolving `/verify/<id>` in place
- * instead of spawning a fresh list entry every round. Kept in a sidecar (not
- * result.json, which the harness regenerates each round) so it survives a
- * rewrite of the report body.
- */
-const RUN_SIDECAR = '.verify-run.json';
-
-function readSidecarRunId(dir: string): string | undefined {
-  const p = path.join(dir, RUN_SIDECAR);
-  if (!existsSync(p)) return undefined;
-  try {
-    const parsed = JSON.parse(readFileSync(p, 'utf8'));
-    return typeof parsed?.verifyRunId === 'string' ? parsed.verifyRunId : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-function writeSidecarRunId(dir: string, verifyRunId: string): void {
-  try {
-    writeFileSync(path.join(dir, RUN_SIDECAR), `${JSON.stringify({ verifyRunId }, null, 2)}\n`);
-  } catch {
-    // Best-effort: a read-only dir just means the next run creates a new session.
-  }
+/** Default acceptance subject for a report authored inside a LobeHub topic. */
+export function subjectFromEnv(): AcceptanceSubjectRef | null {
+  const topicId = firstString(process.env.LOBEHUB_TOPIC_ID);
+  return topicId ? { subjectId: topicId, subjectType: 'topic' } : null;
 }
 
 // ── Command Registration ───────────────────────────────────
@@ -1350,11 +1323,9 @@ export function registerVerifyCommand(program: Command) {
     .option('--operation <id>', 'Link the session to an existing Agent Run')
     .option('--title <title>', 'Override the session title')
     .option('--goal <goal>', 'The goal/task being verified')
-    .option('--run <verifyRunId>', 'Update an existing session in place instead of creating one')
-    .option('--new', 'Force a fresh session even if this report dir already created one')
     .option(
       '--subject <type:id>',
-      "Chain this session onto the subject's acceptance as its next round (task:<id> | topic:<id> | document:<id>)",
+      'Override the required acceptance subject (defaults to the current LOBEHUB_TOPIC_ID)',
     )
     .option(
       '--requirement <text>',
@@ -1368,11 +1339,9 @@ export function registerVerifyCommand(program: Command) {
         options: {
           goal?: string;
           json?: boolean | string;
-          new?: boolean;
           open?: boolean;
           operation?: string;
           requirement?: string;
-          run?: string;
           source?: string;
           subject?: string;
           title?: string;
@@ -1423,9 +1392,8 @@ export function registerVerifyCommand(program: Command) {
         // the coding scope header. Overridable via result.json `scenario`.
         const scenario = result.scenario === 'coding' ? 'coding' : ('coding' as const);
 
-        // The acceptance subject this report belongs to: an explicit --subject
-        // wins; otherwise result.json's `subject` field. Malformed explicit input
-        // is a user error; a malformed result field is reported and skipped.
+        // Every agent-testing report belongs to an acceptance. Explicit CLI input
+        // wins, then result.json, then the authoring topic echoed by the runtime.
         let subject = subjectFromResult(result);
         if (options.subject) {
           const ref = parseSubjectRef(options.subject);
@@ -1437,9 +1405,17 @@ export function registerVerifyCommand(program: Command) {
           }
           subject = { ref, requirement: subject?.requirement };
         } else if (result.subject && !subject) {
-          log.warn(
-            'result.json `subject` is malformed — ignoring it (expected "type:id" or {type,id})',
+          log.error('result.json `subject` is malformed (expected "type:id" or {type,id})');
+          process.exit(1);
+        } else if (!subject) {
+          const ref = subjectFromEnv();
+          if (ref) subject = { ref };
+        }
+        if (!subject) {
+          log.error(
+            'Acceptance subject is required: run inside a LobeHub topic or pass --subject task:<id> | topic:<id> | document:<id>',
           );
+          process.exit(1);
         }
         const requirement = options.requirement ?? subject?.requirement;
 
@@ -1452,88 +1428,33 @@ export function registerVerifyCommand(program: Command) {
         const origin = originFromEnv();
         const newRunMetadata = metadataForReport(result, undefined, origin);
 
-        // Resolve the target session. Reuse the one this report dir already
-        // created (recorded in the sidecar) so re-verifying the same case
-        // updates one evolving report in place rather than adding a list entry
-        // per round. `--run` targets a session explicitly; `--new` forces a
-        // fresh one; `--operation` links a fresh session to an Agent Run.
-        const rememberedRunId = options.new ? undefined : (options.run ?? readSidecarRunId(dir));
-        let runId!: string;
-        let reused = false;
-        if (rememberedRunId) {
-          const existing = await client.verify.getRun.query({ verifyRunId: rememberedRunId });
-          if (existing && existing.userDecision) {
-            // The remembered round has already been judged (e.g. rejected on the
-            // acceptance page). A decided round is immutable history — updating
-            // it in place would leave the aggregate stuck on the old decision.
-            // Fall through to a fresh session, which chains as the NEXT round
-            // and re-opens the acceptance.
-            if (options.run) {
-              log.error(
-                `Session ${options.run} already carries a user decision (${existing.userDecision}) — drop --run so a new round is created`,
-              );
-              process.exit(1);
-            }
-            log.info(
-              `Recorded session was already decided (${existing.userDecision}) — starting a new round`,
-            );
-          } else if (existing) {
-            reused = true;
-            runId = existing.id;
-            const metadata = metadataForReport(result, existing.metadata, origin);
-            // 1a. Refresh the scope header / plan / title / goal in place.
-            await client.verify.updateRun.mutate({
-              value: { context, goal, metadata, plan, scenario, title },
-              verifyRunId: runId,
-            });
-          } else if (options.run) {
-            // An explicit --run that doesn't resolve is a user error, not a
-            // silent fall-through to a stray new session.
-            log.error(`Verification session not found: ${options.run}`);
-            process.exit(1);
-          } else {
-            // The remembered session was deleted — drop the stale pointer and
-            // create a fresh one below.
-            log.warn(`Recorded session ${rememberedRunId} no longer exists — creating a new one`);
-          }
-        }
-
-        // 1b. Create the verification session when not updating one in place.
-        if (!reused) {
-          const run = await client.verify.createRun.mutate({
-            context,
-            goal,
-            metadata: newRunMetadata,
-            operationId: options.operation,
-            plan,
-            scenario,
-            source: options.source as any,
-            title,
-          });
-          runId = run.id;
-        }
+        // Every ingest is a new immutable verification snapshot. A repair or
+        // re-verification is represented by another run on the same acceptance.
+        const run = await client.verify.createRun.mutate({
+          context,
+          goal,
+          metadata: newRunMetadata,
+          operationId: options.operation,
+          plan,
+          scenario,
+          source: options.source as any,
+          title,
+        });
+        const runId = run.id;
 
         // 1c. Chain the session onto its subject's acceptance as the next round
         //     BEFORE the report lands, so the report-time status rollup already
-        //     sees the aggregate. Idempotent: a reused session keeps its round.
-        let acceptanceId: string | undefined;
-        if (subject) {
-          const acceptance = await client.acceptance.ensure.mutate({
-            requirement,
-            subjectId: subject.ref.subjectId,
-            subjectType: subject.ref.subjectType,
-          });
-          acceptanceId = acceptance.id;
-          await client.acceptance.attachRun.mutate({
-            acceptanceId: acceptance.id,
-            verifyRunId: runId,
-          });
-        }
+        //     sees the aggregate.
+        const acceptance = await client.acceptance.ensure.mutate({
+          requirement,
+          subjectId: subject.ref.subjectId,
+          subjectType: subject.ref.subjectType,
+        });
+        const acceptanceId = acceptance.id;
+        await client.acceptance.attachRun.mutate({ acceptanceId, verifyRunId: runId });
 
         // 2. Ingest each case as a check result + its evidence. `checkItemId` is
-        //    the stable upsert key, so a re-ingest overwrites the matching case
-        //    rather than duplicating it. Track the ids we touch to prune dropped
-        //    cases afterwards, keeping a re-run a full replace.
+        //    the stable key within this immutable run.
         const seenCheckItemIds = new Set<string>();
         let evidenceCount = 0;
         let inlined = 0;
@@ -1549,27 +1470,14 @@ export function registerVerifyCommand(program: Command) {
             required: c.required ?? true,
             // The case's key observation is recorded as Toulmin evidence; a real
             // remediation hint (if the report provides one) goes to `suggestion`.
-            // Absent → explicit `null`, not `undefined`: ingest-report is a full
-            // replace, so a case that dropped its observation/suggestion this
-            // round must CLEAR the prior value on a reused run (undefined would be
-            // skipped by the conflict UPDATE and leave stale text on the row).
+            // Absent → explicit `null`, so this immutable snapshot records the
+            // absence instead of relying on upsert defaults.
             suggestion: typeof c.suggestion === 'string' ? c.suggestion : null,
             toulmin: typeof observation === 'string' ? { evidence: observation } : null,
             verdict,
             verifierType: 'agent',
             verifyRunId: runId,
           });
-
-          // On an in-place update, clear the case's prior evidence before
-          // re-attaching so screenshots are replaced, not stacked round on round.
-          if (reused) {
-            const prior = await client.verify.listEvidence.query({
-              checkResultId: checkResult.id,
-            });
-            for (const ev of prior) {
-              await client.verify.deleteEvidence.mutate({ id: ev.id });
-            }
-          }
 
           for (const evidenceInput of reportEvidence(c.evidence)) {
             const rel = evidenceInput.path;
@@ -1632,26 +1540,6 @@ export function registerVerifyCommand(program: Command) {
           verifyRunId: runId,
         });
 
-        // 4. Prune cases the report no longer has (only when updating in place —
-        //    a fresh session has nothing to prune). Keeps a re-run a full
-        //    replace: dropped checks and their evidence disappear.
-        let pruned = 0;
-        if (reused) {
-          const existingResults = await client.verify.listResultsByRun.query({
-            verifyRunId: runId,
-          });
-          for (const r of existingResults) {
-            if (!seenCheckItemIds.has(r.checkItemId)) {
-              await client.verify.deleteResult.mutate({ id: r.id });
-              pruned += 1;
-            }
-          }
-        }
-
-        // 5. Remember this session on the report dir so the next ingest of the
-        //    same dir updates it in place instead of creating a new one.
-        writeSidecarRunId(dir, runId);
-
         // A case with no matching plan item means the run checked something it
         // never planned — worth saying out loud, but not a failure. Only
         // meaningful against a plan that actually names something: with no plan
@@ -1669,10 +1557,8 @@ export function registerVerifyCommand(program: Command) {
               inlined,
               origin,
               planItems: plan?.length ?? 0,
-              pruned,
               pullRequest,
-              reused,
-              subject: subject?.ref,
+              subject: subject.ref,
               unplanned,
               verifyRunId: runId,
             },
@@ -1681,11 +1567,9 @@ export function registerVerifyCommand(program: Command) {
           return;
         }
 
-        const verb = reused ? 'Updated' : 'Ingested';
         console.log(
-          `${pc.green('✓')} ${verb} ${pc.bold(String(cases.length))} case(s), ${pc.bold(String(evidenceCount))} evidence artifact(s)` +
-            `${inlined > 0 ? `, ${pc.bold(String(inlined))} inline` : ''}` +
-            `${pruned > 0 ? `, pruned ${pc.bold(String(pruned))} stale case(s)` : ''}`,
+          `${pc.green('✓')} Ingested ${pc.bold(String(cases.length))} case(s), ${pc.bold(String(evidenceCount))} evidence artifact(s)` +
+            `${inlined > 0 ? `, ${pc.bold(String(inlined))} inline` : ''}`,
         );
         if (plan?.length) {
           const unexecuted = plan.filter((item) => !seenCheckItemIds.has(item.id));
@@ -1694,25 +1578,16 @@ export function registerVerifyCommand(program: Command) {
               `${unexecuted.length > 0 ? pc.yellow(` — ${unexecuted.length} planned but not executed`) : ''}` +
               `${unplanned.length > 0 ? pc.dim(` — ${unplanned.length} unplanned case(s)`) : ''}`,
           );
-        } else if (plan && reused) {
-          // The report dropped its plan this round; say that the stored one went
-          // with it, rather than leaving the user to wonder where it went.
-          console.log(`${pc.bold('plan')}: ${pc.dim('none — cleared the previously stored plan')}`);
         }
         if (pullRequest?.url) console.log(`${pc.bold('pr')}: ${pullRequest.url}`);
         if (origin?.topicId) console.log(`${pc.bold('origin topic')}: ${origin.topicId}`);
+        console.log(`${pc.bold('verifyRunId')}: ${runId} ${pc.dim('(immutable snapshot)')}`);
         console.log(
-          `${pc.bold('verifyRunId')}: ${runId}${reused ? pc.dim(' (updated in place)') : ''}`,
+          `${pc.bold('acceptance')}: ${acceptanceId} ${pc.dim(`(${subject.ref.subjectType}:${subject.ref.subjectId})`)}`,
         );
-        if (acceptanceId) {
-          console.log(
-            `${pc.bold('acceptance')}: ${acceptanceId} ${pc.dim(`(${subject!.ref.subjectType}:${subject!.ref.subjectId})`)}`,
-          );
-        }
         if (options.open) {
           console.log(`${pc.bold('open')}: /verify/${runId}`);
-          if (acceptanceId)
-            console.log(`${pc.bold('open acceptance')}: /acceptance/${acceptanceId}`);
+          console.log(`${pc.bold('open acceptance')}: /acceptance/${acceptanceId}`);
         }
       },
     );

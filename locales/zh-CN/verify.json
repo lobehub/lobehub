@@ -45,6 +45,7 @@
   "acceptance.group.expandAll": "展开分组",
   "acceptance.group.expandItems": "展开本组检查项",
   "acceptance.group.passRatio": "{{passed}}/{{total}} 通过",
+  "acceptance.group.uncategorized": "其他需求",
   "acceptance.history.jump": "第 {{round}} 轮——点击在轮次审计中定位",
   "acceptance.latestSummary": "最新报告摘要",
   "acceptance.ledger.collapse": "收起轮次审计",

@@ -10,6 +10,7 @@ const require = createRequire(path.join(desktopRoot, 'package.json'));
 const electronBin = require('electron');
 
 const VITE_PORT = Number(process.env.LOBE_DESKTOP_VITE_PORT) || 5173;
+const CDP_PORT = Number(process.env.LOBE_DESKTOP_CDP_PORT);
 const MAIN_BUNDLE = path.join(desktopRoot, 'dist/main/index.js');
 const PRELOAD_BUNDLE = path.join(desktopRoot, 'dist/preload/index.js');
 
@@ -44,7 +45,12 @@ process.on('SIGINT', () => shutdown(0));
 process.on('SIGTERM', () => shutdown(0));
 
 function startElectron() {
-  electron = spawn(electronBin, ['.'], {
+  const args = ['.'];
+  if (Number.isInteger(CDP_PORT) && CDP_PORT > 0) {
+    args.push(`--remote-debugging-port=${CDP_PORT}`);
+  }
+
+  electron = spawn(electronBin, args, {
     cwd: desktopRoot,
     env: {
       ...process.env,

@@ -4,7 +4,13 @@ import { isDesktop } from '@lobechat/const';
 import { RENDERER_HANDLED_LINK_ATTR } from '@lobechat/desktop-bridge';
 import { Icon } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { BotIcon, CheckCircleIcon, CheckSquareIcon, FileTextIcon } from 'lucide-react';
+import {
+  BadgeCheckIcon,
+  BotIcon,
+  CheckCircleIcon,
+  CheckSquareIcon,
+  FileTextIcon,
+} from 'lucide-react';
 import type { MouseEvent } from 'react';
 import { memo, useCallback } from 'react';
 
@@ -52,6 +58,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 const ENTITY_ICONS = {
+  acceptance: BadgeCheckIcon,
   agent: BotIcon,
   document: FileTextIcon,
   task: CheckSquareIcon,
@@ -107,6 +114,10 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, 
       }
 
       switch (reference.type) {
+        case 'acceptance': {
+          navigate(reference.pathname);
+          break;
+        }
         case 'agent': {
           openAgentDetail(reference.agentId);
           break;

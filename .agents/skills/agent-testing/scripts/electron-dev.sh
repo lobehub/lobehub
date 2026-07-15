@@ -503,7 +503,7 @@ do_start() {
 
   local launch_cmd="
     cd '$PROJECT_ROOT/apps/desktop'
-    exec env $env_assignments npx electron-vite dev -- --remote-debugging-port=$CDP_PORT
+    exec env $env_assignments LOBE_DESKTOP_CDP_PORT=$CDP_PORT pnpm dev
   "
   if command -v setsid >/dev/null 2>&1; then
     setsid bash -c "$launch_cmd" >>"$ELECTRON_LOG" 2>&1 </dev/null &

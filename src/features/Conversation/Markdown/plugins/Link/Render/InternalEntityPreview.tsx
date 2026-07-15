@@ -3,7 +3,13 @@
 import { Avatar, Flexbox, Icon, Popover, Skeleton, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import type { TFunction } from 'i18next';
-import { BotIcon, CheckCircleIcon, CheckSquareIcon, FileTextIcon } from 'lucide-react';
+import {
+  BadgeCheckIcon,
+  BotIcon,
+  CheckCircleIcon,
+  CheckSquareIcon,
+  FileTextIcon,
+} from 'lucide-react';
 import { memo, type PropsWithChildren, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -105,6 +111,28 @@ const getPreviewData = async (
   t: TFunction<'chat'>,
 ): Promise<PreviewData | null> => {
   switch (reference.type) {
+    case 'acceptance': {
+      const bundle = await verifyService.getAcceptanceBundle(reference.acceptanceId);
+      if (!bundle) return null;
+
+      const passed = bundle.checks.filter((check) => check.state === 'passed').length;
+      const exceptions = bundle.checks.filter(
+        (check) => check.state === 'failed' || check.state === 'uncertain',
+      ).length;
+
+      return {
+        description: bundle.acceptance.requirement || bundle.latestReport?.summary,
+        meta: t('internalLink.preview.acceptanceCounts', {
+          exceptions,
+          passed,
+          total: bundle.checks.length,
+        }),
+        secondaryMeta: t('internalLink.preview.acceptanceRounds', {
+          count: bundle.rounds.length,
+        }),
+        title: bundle.subject.title || bundle.subject.id,
+      };
+    }
     case 'agent': {
       return agentService.getAgentConfigById(reference.agentId);
     }
@@ -176,13 +204,15 @@ export const InternalEntityPreview = memo<InternalEntityPreviewProps>(
     );
 
     const icon =
-      reference.type === 'agent'
-        ? BotIcon
-        : reference.type === 'task'
-          ? CheckSquareIcon
-          : reference.type === 'verify'
-            ? CheckCircleIcon
-            : FileTextIcon;
+      reference.type === 'acceptance'
+        ? BadgeCheckIcon
+        : reference.type === 'agent'
+          ? BotIcon
+          : reference.type === 'task'
+            ? CheckSquareIcon
+            : reference.type === 'verify'
+              ? CheckCircleIcon
+              : FileTextIcon;
     const typeLabel = t(`internalLink.preview.${reference.type}`);
 
     const content = isLoading ? (

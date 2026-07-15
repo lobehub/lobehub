@@ -366,6 +366,11 @@ export const getAgentBrowserCommandDisplay = (
       case 'snapshot': {
         return;
       }
+      case 'eval': {
+        // JavaScript is an implementation detail, not a useful user-facing
+        // summary. Keep the semantic action while hiding the executed source.
+        return;
+      }
       case 'navigate': {
         return firstArgument?.replace(/^https?:\/\//i, '');
       }

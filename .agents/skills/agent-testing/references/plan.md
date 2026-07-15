@@ -5,10 +5,17 @@ Keep it concrete and compact: report observed state, not generic readiness claim
 
 ## Readiness verdicts
 
-- **Ready**: every prerequisite for the proposed run is verified.
-- **Ready with warnings**: execution can proceed; list non-blocking limitations and
+- **✅ Ready**: every prerequisite for the proposed run is verified.
+- **⚠️ Ready with warnings**: execution can proceed; list non-blocking limitations and
   their effect on evidence or scope.
-- **Blocked**: execution cannot start until one or more prerequisites are resolved.
+- **❌ Blocked**: execution cannot start until one or more prerequisites are resolved.
+- **⏳ Pending**: an agent-owned check is actively being resolved and has not reached a
+  final readiness verdict yet.
+
+Always prefix the overall verdict and every Status cell with its emoji marker:
+`✅ Ready`, `⚠️ Warning`, `❌ Blocked`, or `⏳ Pending`. Do not use color words or
+bare status text without the marker; the table must remain scannable in clients
+that do not render semantic colors.
 
 Fix safe environment mechanics yourself before reporting. Separate remaining
 items by owner:
@@ -25,18 +32,18 @@ Never put a Codex-owned item under “Needed from you.” If none remain, write
 ## Template
 
 ```markdown
-Verification plan — Environment: <Ready | Ready with warnings | Blocked>
+Verification plan — Environment: <✅ Ready | ⚠️ Ready with warnings | ❌ Blocked>
 
 Environment
 
-| Check              | Status                  | Observed state                                      |
-| ------------------ | ----------------------- | --------------------------------------------------- |
-| Workspace / branch | <Ready/Warning/Blocked> | <path, branch/worktree, relevant dirty-state note>  |
-| Dependencies       | <Ready/Warning/Blocked> | <root and selected standalone app status>           |
-| Runtime / ports    | <Ready/Warning/Blocked> | <resolved URLs/ports and ownership or availability> |
-| Required services  | <Ready/Warning/Blocked> | <DB, Redis, QStash, dev server—only those in scope> |
-| Auth               | <Ready/Warning/Blocked> | <selected surface and verified signed-in state>     |
-| Evidence capture   | <Ready/Warning/Blocked> | <CDP or OS capture readiness>                       |
+| Check              | Status                                      | Observed state                                      |
+| ------------------ | ------------------------------------------- | --------------------------------------------------- |
+| Workspace / branch | <✅ Ready/⚠️ Warning/❌ Blocked/⏳ Pending> | <path, branch/worktree, relevant dirty-state note>  |
+| Dependencies       | <✅ Ready/⚠️ Warning/❌ Blocked/⏳ Pending> | <root and selected standalone app status>           |
+| Runtime / ports    | <✅ Ready/⚠️ Warning/❌ Blocked/⏳ Pending> | <resolved URLs/ports and ownership or availability> |
+| Required services  | <✅ Ready/⚠️ Warning/❌ Blocked/⏳ Pending> | <DB, Redis, QStash, dev server—only those in scope> |
+| Auth               | <✅ Ready/⚠️ Warning/❌ Blocked/⏳ Pending> | <selected surface and verified signed-in state>     |
+| Evidence capture   | <✅ Ready/⚠️ Warning/❌ Blocked/⏳ Pending> | <CDP or OS capture readiness>                       |
 
 Execution plan
 

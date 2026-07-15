@@ -50,6 +50,22 @@ describe('parseInternalLink', () => {
     });
   });
 
+  it('parses acceptance links as dedicated entities', () => {
+    expect(parseInternalLink('https://app.lobehub.com/acceptance/acceptance-1')).toEqual({
+      acceptanceId: 'acceptance-1',
+      pathname: '/acceptance/acceptance-1',
+      type: 'acceptance',
+    });
+    expect(
+      parseInternalLink('/lobe-team/acceptance/acceptance-2', undefined, ['lobe-team']),
+    ).toEqual({
+      acceptanceId: 'acceptance-2',
+      pathname: '/lobe-team/acceptance/acceptance-2',
+      type: 'acceptance',
+      workspaceSlug: 'lobe-team',
+    });
+  });
+
   it('parses workspace-prefixed entity paths', () => {
     expect(
       parseInternalLink('/lobe-team/agent/agt_agent/docs/docs_document', undefined, ['lobe-team']),

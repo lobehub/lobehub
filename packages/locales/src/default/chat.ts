@@ -1717,6 +1717,11 @@ export default {
   'verifyConfig.verifierTypeDesc.agent': 'Spawn a sub-agent to investigate and judge',
   'verifyConfig.verifierTypeDesc.llm': 'Let an LLM judge the result',
   'verifyConfig.verifierTypeDesc.program': 'Run a deterministic script to check',
+  'internalLink.preview.acceptance': 'Acceptance',
+  'internalLink.preview.acceptanceCounts':
+    '{{passed}}/{{total}} passed · {{exceptions}} exceptions',
+  'internalLink.preview.acceptanceRounds_one': '{{count}} verification round',
+  'internalLink.preview.acceptanceRounds_other': '{{count}} verification rounds',
   'internalLink.preview.agent': 'Agent',
   'internalLink.preview.document': 'Page',
   'internalLink.preview.task': 'Task',

@@ -369,6 +369,8 @@ At the end of Step 2, always send one user-facing Plan feedback before entering
 Execute. Read and follow [references/plan.md](./references/plan.md). It requires:
 
 - an overall environment verdict with concrete checks and evidence;
+- emoji-prefixed status markers in the verdict and every table row
+  (`✅ Ready`, `⚠️ Warning`, `❌ Blocked`, `⏳ Pending`);
 - the proposed execution plan, cases, and expected evidence;
 - every unresolved prerequisite, clearly assigned to Codex or the user;
 - an explicit statement that nothing is needed from the user when that is true;
@@ -612,10 +614,12 @@ env -u LOBEHUB_SERVER -u LOBE_API_KEY -u LOBEHUB_CLI_API_KEY -u LOBEHUB_CLI_HOME
 env -u LOBEHUB_SERVER -u LOBE_API_KEY -u LOBEHUB_CLI_API_KEY -u LOBEHUB_CLI_HOME lh login                  # only if not authed
 ```
 
-`verify ingest-report` reads `$DIR` and, in one call, creates a standalone
-verification session and uploads everything:
+`verify ingest-report` reads `$DIR` and, in one call, creates a new immutable
+verification run, attaches it to the subject acceptance, and uploads everything:
 
-- `result.json.plan[]` → the frozen check plan (what this round set out to verify)
+- `result.json.plan[]` → the frozen check plan (what this round set out to verify),
+  with a business-scenario `category` on every item; categories name requirements
+  or features, never execution surfaces such as Desktop / CLI / Backend
 - `result.json.cases[]` → one check result each (verdict + key observation),
   paired back to its plan item by `id`; a planned item with no case renders as
   **未执行** instead of silently disappearing
@@ -635,11 +639,14 @@ inline screenshot/text evidence). On production that resolves to
 `https://app.lobehub.com/verify/<verifyRunId>`. **Include that full production
 link in the final chat reply** alongside the local report dir.
 
-#### Chaining rounds onto a subject's acceptance (optional)
+#### Every run belongs to a subject acceptance (mandatory)
 
-When the verification belongs to a business subject — a task, a topic, or a
-document — chain the session onto that subject's **acceptance aggregate** so
-every round lands on ONE decision page instead of scattered report entries:
+Every agent-testing run MUST be chained onto a task, topic, or document
+**acceptance aggregate**, so every round lands on one auditable decision page.
+When the harness runs inside a LobeHub topic, `ingest-report` automatically uses
+`LOBEHUB_TOPIC_ID` as `topic:<id>`; do not ask the user to supply it and do not
+omit the acceptance. An explicit `--subject` or `result.json.subject` overrides
+that default for task/document verification:
 
 ```bash
 # SUBJECT is task:$TASK_ID, topic:$TOPIC_ID, or document:$DOC_ID
@@ -649,30 +656,24 @@ env -u LOBEHUB_SERVER -u LOBE_API_KEY -u LOBEHUB_CLI_API_KEY -u LOBEHUB_CLI_HOME
 
 `--subject` accepts `task:<id> | topic:<id> | document:<id>` (or put
 `"subject": "task:<id>"` / `{ "type", "id", "requirement" }` in `result.json`).
-The first ingest creates the acceptance; each **new session** (`--new` or a fresh
-`$DIR`) becomes the next round; re-ingesting a remembered dir updates its round
-in place. The user closes the loop on `/acceptance/<acceptanceId>` (also
+Outside a LobeHub topic, one of those explicit forms is required; publishing
+without a resolvable subject fails instead of creating an orphan verify report.
+The first ingest creates the acceptance and every ingest creates its next
+immutable round. The user closes the loop on `/acceptance/<acceptanceId>` (also
 printed by `--open`) — accept / reject with a comment; inspect or decide from the
 terminal via `lh verify acceptance view|accept|reject <id | type:id>`.
 
-#### Re-verifying the same case updates the report in place (don't spawn a new one)
+#### Every verification run is an immutable snapshot
 
-When you iterate on one change — fix → re-verify → fix again — **keep reusing the
-same report dir (`$DIR`)**. `ingest-report` records the session it created in a
-`.verify-run.json` sidecar inside `$DIR`, so re-ingesting the **same dir**
-**updates that session in place** (same `/verify/<id>` URL) instead of creating a
-new list entry every round. The update is a full replace: cases are overwritten
-by their stable `id`, each case's evidence is re-attached (old screenshots
-cleared, not stacked), and cases the new report dropped are pruned.
+One call to `ingest-report` creates one immutable `/verify/<id>` snapshot. Never
+overwrite, replace, prune, or re-ingest into an earlier run. A fix followed by
+re-verification MUST create another run on the same acceptance, preserving the
+earlier plan, results, evidence, and verdict exactly as observed at that time.
 
-So the rule for an iterative case: `report-init.sh` **once**, then re-run
-`ingest-report "$DIR"` after each fix — the report accretes value at one stable
-URL rather than flooding the list with near-duplicate runs. Only scaffold a fresh
-`$DIR` when you start verifying a genuinely different case.
-
-Escape hatches: `--new` forces a fresh session even if the dir already made one;
-`--run <verifyRunId>` targets an existing session explicitly (e.g. to update from
-a different machine/checkout where the sidecar is absent).
+Use a fresh report directory for every execution round. The acceptance page is
+the stable cross-round URL; individual `/verify/<id>` URLs are permanent
+historical records. There is no `--run` update path and no same-directory
+sidecar reuse in the agent-testing workflow.
 
 Notes:
 
