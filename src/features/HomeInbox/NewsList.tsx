@@ -47,9 +47,9 @@ interface NewsItemProps {
 }
 
 /**
- * One `insight` brief, collapsed to a single line. The agent that surfaced it
- * leads the row; opening it reads it (there is nothing to decide, so a glance
- * *is* the resolution) and drops the finding's detail inline.
+ * One non-actionable brief, collapsed to a single line. The agent that surfaced
+ * it leads the row; opening it reads it (there is nothing to decide) and drops
+ * the finding's detail inline.
  */
 const NewsItem = memo<NewsItemProps>(({ brief }) => {
   const markBriefRead = useBriefStore((s) => s.markBriefRead);
@@ -122,9 +122,9 @@ interface NewsListProps {
 }
 
 /**
- * `insight` briefs: the agent found something worth knowing, but there is
- * nothing to decide. One line each — the detail lives behind the click, so a
- * week of findings still fits on screen.
+ * Non-actionable briefs: the agent found something worth knowing or completed a
+ * recurring run, but there is nothing to decide. One line each — the detail
+ * lives behind the click, so a week of findings still fits on screen.
  */
 const NewsList = memo<NewsListProps>(({ news }) => {
   if (news.length === 0) return null;

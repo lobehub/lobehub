@@ -100,8 +100,15 @@ describe('isTrivialAssistantContent', () => {
 });
 
 describe('selectBriefType / selectBriefPriority', () => {
-  it('first cut emits result/normal for every non-skipped topic', () => {
+  it('emits result/normal for a one-off task topic', () => {
     expect(selectBriefType(baseInput())).toBe('result');
     expect(selectBriefPriority(baseInput())).toBe('normal');
+  });
+
+  it('emits scheduled run updates as insights', () => {
+    const input = baseInput({ task: { automationMode: 'schedule' } });
+
+    expect(selectBriefType(input)).toBe('insight');
+    expect(selectBriefPriority(input)).toBe('normal');
   });
 });

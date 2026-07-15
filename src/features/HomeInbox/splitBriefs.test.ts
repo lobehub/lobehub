@@ -7,6 +7,9 @@ import { splitBriefs } from './splitBriefs';
 const brief = (id: string, type: BriefItem['type']): BriefItem =>
   ({ id, summary: '', title: id, type }) as BriefItem;
 
+const scheduledResult = (id: string): BriefItem =>
+  ({ ...brief(id, 'result'), taskStatus: 'scheduled' }) as BriefItem;
+
 describe('splitBriefs', () => {
   it('routes insight briefs to news and everything else to needsYou', () => {
     const { needsYou, news } = splitBriefs([
@@ -18,6 +21,16 @@ describe('splitBriefs', () => {
 
     expect(needsYou.map((b) => b.id)).toEqual(['a', 'c', 'd']);
     expect(news.map((b) => b.id)).toEqual(['b']);
+  });
+
+  it('routes legacy scheduled result briefs to news instead of needsYou', () => {
+    const recurringReport = scheduledResult('weekly-repository-health-report');
+    const oneOffDelivery = brief('one-off-delivery', 'result');
+
+    const { needsYou, news } = splitBriefs([recurringReport, oneOffDelivery]);
+
+    expect(needsYou.map((item) => item.id)).toEqual(['one-off-delivery']);
+    expect(news.map((item) => item.id)).toEqual(['weekly-repository-health-report']);
   });
 
   it('sinks errors to the bottom of needsYou', () => {

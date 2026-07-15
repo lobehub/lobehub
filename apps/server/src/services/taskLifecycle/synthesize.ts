@@ -78,11 +78,12 @@ export const isTrivialAssistantContent = (content?: string): boolean => {
 /**
  * Pick the brief type for the auto-synthesis path.
  *
- * For now we only emit `result` briefs — we treat every non-skipped topic
- * completion as a delivery moment. Adding `insight` (mid-process observation)
- * is a future product call.
+ * Scheduled runs are recurring status updates, not terminal deliveries awaiting
+ * acceptance. Route them to the Daily Brief as `insight`; one-off task results
+ * remain `result` briefs that require explicit user acceptance.
  */
-export const selectBriefType = (_input: ShouldEmitTopicBriefInput): BriefType => 'result';
+export const selectBriefType = (input: ShouldEmitTopicBriefInput): BriefType =>
+  input.task?.automationMode === 'schedule' ? 'insight' : 'result';
 
 /**
  * Pick the brief priority. `result` briefs default to `normal` so they show up
