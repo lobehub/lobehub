@@ -30,6 +30,7 @@
   "billing.status": "Status da Transação",
   "billing.subscriptionId": "ID da Assinatura",
   "billing.unpaid": "Não Pago",
+  "billing.validUntil": "Válido até",
   "billing.view": "Visualizar",
   "cancelPlan.alert": "Você ainda terá acesso aos benefícios até o vencimento do plano atual ({{date}}). Você pode reativar a assinatura a qualquer momento antes do vencimento.",
   "cancelPlan.confirmCountdown": "Cancelar Assinatura ({{seconds}})",

@@ -30,6 +30,7 @@
   "billing.status": "거래 상태",
   "billing.subscriptionId": "구독 ID",
   "billing.unpaid": "미결제",
+  "billing.validUntil": "유효 기간",
   "billing.view": "보기",
   "cancelPlan.alert": "현재 플랜이 만료되는 {{date}}까지 혜택을 계속 누릴 수 있습니다. 만료 전 언제든지 다시 구독할 수 있습니다.",
   "cancelPlan.confirmCountdown": "구독 취소 ({{seconds}})",

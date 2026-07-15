@@ -30,6 +30,7 @@
   "billing.status": "وضعیت تراکنش",
   "billing.subscriptionId": "شناسه اشتراک",
   "billing.unpaid": "پرداخت نشده",
+  "billing.validUntil": "معتبر تا",
   "billing.view": "مشاهده",
   "cancelPlan.alert": "تا پایان دوره فعلی ({{date}}) همچنان از مزایای اشتراک بهره‌مند خواهید بود. می‌توانید قبل از انقضا دوباره اشتراک تهیه کنید.",
   "cancelPlan.confirmCountdown": "لغو اشتراک ({{seconds}})",

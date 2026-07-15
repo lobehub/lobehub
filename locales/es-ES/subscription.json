@@ -30,6 +30,7 @@
   "billing.status": "Estado de la Transacción",
   "billing.subscriptionId": "ID de Suscripción",
   "billing.unpaid": "No Pagado",
+  "billing.validUntil": "Válido hasta",
   "billing.view": "Ver",
   "cancelPlan.alert": "Seguirás disfrutando de los beneficios hasta que el plan actual expire ({{date}}). Puedes volver a suscribirte en cualquier momento antes de la expiración.",
   "cancelPlan.confirmCountdown": "Cancelar suscripción ({{seconds}})",

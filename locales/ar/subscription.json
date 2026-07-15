@@ -30,6 +30,7 @@
   "billing.status": "حالة المعاملة",
   "billing.subscriptionId": "معرّف الاشتراك",
   "billing.unpaid": "غير مدفوع",
+  "billing.validUntil": "صالح حتى",
   "billing.view": "عرض",
   "cancelPlan.alert": "ستستمر في الاستفادة من المزايا حتى انتهاء الخطة الحالية ({{date}}). يمكنك إعادة الاشتراك في أي وقت قبل انتهاء الصلاحية.",
   "cancelPlan.confirmCountdown": "إلغاء الاشتراك ({{seconds}})",

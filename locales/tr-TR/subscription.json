@@ -30,6 +30,7 @@
   "billing.status": "İşlem Durumu",
   "billing.subscriptionId": "Abonelik Kimliği",
   "billing.unpaid": "Ödenmedi",
+  "billing.validUntil": "Geçerlilik Tarihi",
   "billing.view": "Görüntüle",
   "cancelPlan.alert": "Mevcut planın süresi dolana kadar avantajlardan yararlanmaya devam edeceksiniz ({{date}}). Süresi dolmadan yeniden abone olabilirsiniz.",
   "cancelPlan.confirmCountdown": "Aboneliği İptal Et ({{seconds}})",

@@ -30,6 +30,7 @@
   "billing.status": "Transactiestatus",
   "billing.subscriptionId": "Abonnements-ID",
   "billing.unpaid": "Onbetaald",
+  "billing.validUntil": "Geldig tot",
   "billing.view": "Bekijk",
   "cancelPlan.alert": "Je blijft profiteren van de voordelen tot het huidige abonnement afloopt ({{date}}). Je kunt op elk moment opnieuw abonneren vóór de vervaldatum.",
   "cancelPlan.confirmCountdown": "Abonnement annuleren ({{seconds}})",

@@ -30,6 +30,7 @@
   "billing.status": "Trạng thái giao dịch",
   "billing.subscriptionId": "ID đăng ký",
   "billing.unpaid": "Chưa thanh toán",
+  "billing.validUntil": "Có hiệu lực đến",
   "billing.view": "Xem",
   "cancelPlan.alert": "Bạn vẫn sẽ được hưởng quyền lợi cho đến khi gói hiện tại hết hạn ({{date}}). Bạn có thể đăng ký lại bất kỳ lúc nào trước khi hết hạn.",
   "cancelPlan.confirmCountdown": "Hủy đăng ký ({{seconds}})",

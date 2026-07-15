@@ -30,6 +30,7 @@
   "billing.status": "Статус транзакции",
   "billing.subscriptionId": "ID подписки",
   "billing.unpaid": "Не оплачено",
+  "billing.validUntil": "Действительно до",
   "billing.view": "Просмотр",
   "cancelPlan.alert": "Вы продолжите пользоваться преимуществами до окончания текущего плана ({{date}}). Вы можете повторно подписаться в любое время до окончания срока.",
   "cancelPlan.confirmCountdown": "Отменить подписку ({{seconds}})",

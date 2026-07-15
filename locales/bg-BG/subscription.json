@@ -30,6 +30,7 @@
   "billing.status": "Статус на транзакцията",
   "billing.subscriptionId": "ID на абонамента",
   "billing.unpaid": "Неплатено",
+  "billing.validUntil": "Валиден до",
   "billing.view": "Преглед",
   "cancelPlan.alert": "Ще продължите да се възползвате от предимствата до изтичането на текущия план ({{date}}). Можете да се абонирате отново по всяко време преди изтичането.",
   "cancelPlan.confirmCountdown": "Отказ от абонамент ({{seconds}})",

@@ -30,6 +30,7 @@
   "billing.status": "交易狀態",
   "billing.subscriptionId": "訂閱 ID",
   "billing.unpaid": "未付款",
+  "billing.validUntil": "有效期限",
   "billing.view": "查看",
   "cancelPlan.alert": "您仍可享有目前方案的權益至到期日（{{date}}），可於到期前隨時重新訂閱。",
   "cancelPlan.confirmCountdown": "取消訂閱（{{seconds}}）",

@@ -30,6 +30,7 @@
   "billing.status": "取引状況",
   "billing.subscriptionId": "サブスクリプションID",
   "billing.unpaid": "未払い",
+  "billing.validUntil": "有効期限",
   "billing.view": "表示",
   "cancelPlan.alert": "現在のプランの有効期限（{{date}}）までは引き続き特典をご利用いただけます。有効期限前であればいつでも再加入可能です。",
   "cancelPlan.confirmCountdown": "サブスクリプションをキャンセルする（{{seconds}}）",
