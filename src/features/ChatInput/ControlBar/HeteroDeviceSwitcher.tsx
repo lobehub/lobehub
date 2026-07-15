@@ -389,6 +389,16 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     isHetero,
   });
 
+  // Amp cannot fall back to the cloud sandbox. When a web/legacy config has no
+  // usable device target, open the picker once so `none` is an explicit setup
+  // prompt rather than a disabled-but-active sandbox row.
+  useEffect(() => {
+    if (heteroType !== 'amp') return;
+    if (isWorkspacePreferenceLoading) return;
+    if (executionTarget !== 'none') return;
+    setOpen(true);
+  }, [executionTarget, heteroType, isWorkspacePreferenceLoading]);
+
   const selectExecutionTarget = useSelectExecutionTarget(agentId);
   const handleSelect = useCallback(
     async (target: DeviceExecutionTarget, deviceId?: string) => {

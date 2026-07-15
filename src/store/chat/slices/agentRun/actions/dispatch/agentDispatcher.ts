@@ -110,14 +110,19 @@ export const selectRuntimeType = (
   if (ctx.heterogeneousProvider && isRemoteHeterogeneousType(ctx.heterogeneousProvider.type)) {
     return 'gateway';
   }
-  // Local CLI hetero (claude-code / codex) — route by the resolved execution
+  // Local CLI hetero (Amp / Claude Code / Codex) — route by the resolved execution
   // target (shared resolution with the server / the device switcher UI):
   // `device` / `sandbox` need server-side dispatch; `local` runs in-process on
-  // the desktop. On web, unbound `local` resolves to sandbox, while a desktop
-  // `local` selection synced with boundDeviceId resolves to device dispatch.
+  // the desktop. On web, unbound `local` resolves to sandbox when supported
+  // (otherwise the pending `none` state), while a desktop `local` selection
+  // synced with boundDeviceId resolves to device dispatch.
   if (ctx.heterogeneousProvider) {
     const target = resolveExecutionTarget(
-      { boundDeviceId: ctx.boundDeviceId, executionTarget: ctx.executionTarget },
+      {
+        boundDeviceId: ctx.boundDeviceId,
+        executionTarget: ctx.executionTarget,
+        heterogeneousProvider: ctx.heterogeneousProvider,
+      },
       // on the client the desktop build IS where local execution is available
       {
         isHetero: true,

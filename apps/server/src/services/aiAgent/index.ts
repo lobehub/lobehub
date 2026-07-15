@@ -2118,6 +2118,7 @@ export class AiAgentService {
           isHetero: true,
           clientExecutionAvailable: false,
           requestedDeviceId,
+          sandboxExecutionAvailable: heteroType !== 'amp',
           trigger: requestTriggerMetadata?.trigger,
         });
 

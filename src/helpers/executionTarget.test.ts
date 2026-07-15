@@ -12,6 +12,10 @@ import {
 } from './executionTarget';
 
 const cfg = (over: Partial<LobeAgentAgencyConfig> = {}): LobeAgentAgencyConfig => ({ ...over });
+const ampCfg = (over: Partial<LobeAgentAgencyConfig> = {}): LobeAgentAgencyConfig => ({
+  heterogeneousProvider: { command: 'amp', type: 'amp' },
+  ...over,
+});
 
 describe('resolveExecutionTarget', () => {
   it('returns the stored target verbatim when set', () => {
@@ -118,6 +122,55 @@ describe('resolveExecutionTarget', () => {
     expect(
       resolveExecutionTarget(undefined, { clientExecutionAvailable: false, isHetero: true }),
     ).toBe('sandbox');
+  });
+
+  describe('hetero providers without sandbox execution', () => {
+    it('keeps an unconfigured Amp agent pending on web instead of defaulting to sandbox', () => {
+      expect(
+        resolveExecutionTarget(ampCfg(), {
+          clientExecutionAvailable: false,
+          isHetero: true,
+        }),
+      ).toBe('none');
+
+      // Desktop can still run the CLI in-process, so its default remains local.
+      expect(
+        resolveExecutionTarget(ampCfg(), {
+          clientExecutionAvailable: true,
+          isHetero: true,
+        }),
+      ).toBe('local');
+    });
+
+    it('normalizes unsupported Amp sandbox and unbound web-local targets to pending', () => {
+      for (const executionTarget of ['sandbox', 'local'] as const) {
+        expect(
+          resolveExecutionTarget(ampCfg({ executionTarget }), {
+            clientExecutionAvailable: false,
+            isHetero: true,
+          }),
+        ).toBe('none');
+      }
+    });
+
+    it('still routes a bound Amp desktop-local selection to its device on web', () => {
+      expect(
+        resolveExecutionTarget(ampCfg({ boundDeviceId: 'device-a', executionTarget: 'local' }), {
+          clientExecutionAvailable: false,
+          isHetero: true,
+        }),
+      ).toBe('device');
+    });
+
+    it('accepts an explicit capability override for legacy model-only configs', () => {
+      expect(
+        resolveExecutionTarget(undefined, {
+          clientExecutionAvailable: false,
+          isHetero: true,
+          sandboxExecutionAvailable: false,
+        }),
+      ).toBe('none');
+    });
   });
 
   describe('workspaceScoped — a workspace agent never executes on the member client', () => {
@@ -781,6 +834,28 @@ describe('resolveExecutionPlan', () => {
         });
         expect(plan).toEqual({ kind: 'sandbox', target: 'sandbox' });
       }
+    });
+
+    it('keeps Amp non-device targets pending instead of constructing a sandbox plan', () => {
+      for (const executionTarget of ['local', 'none', 'sandbox', undefined] as const) {
+        const plan: ExecutionPlan = resolveExecutionPlan({
+          agencyConfig: executionTarget ? ampCfg({ executionTarget }) : ampCfg(),
+          clientExecutionAvailable: false,
+          isHetero: true,
+        });
+        expect(plan).toEqual({ kind: 'none', target: 'none' });
+      }
+    });
+
+    it('uses an explicit sandbox capability override for legacy model-only Amp agents', () => {
+      expect(
+        resolveExecutionPlan({
+          agencyConfig: undefined,
+          clientExecutionAvailable: false,
+          isHetero: true,
+          sandboxExecutionAvailable: false,
+        }),
+      ).toEqual({ kind: 'none', target: 'none' });
     });
   });
 });

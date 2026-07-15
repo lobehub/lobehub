@@ -47,7 +47,7 @@ const leftActions: ActionKeys[] = [];
  * block, no oversized 24px icon) so the guard stays a compact strip instead of
  * eating a chunk of the conversation area.
  */
-const GuardBanner = memo<{ action: ReactNode; hint?: string; title: string }>(
+const GuardBanner = memo<{ action?: ReactNode; hint?: string; title: string }>(
   ({ title, hint, action }) => (
     <WideScreenContainer>
       <Flexbox align={'center'} paddingBlock={'0 8px'} paddingInline={12}>
@@ -106,6 +106,7 @@ const HeterogeneousChatInput = memo(() => {
     workspaceScoped: isWorkspaceAgent,
   });
   const isRemoteAgent = !!providerType && isRemoteHeterogeneousType(providerType);
+  const ampDeviceSelectionRequired = providerType === 'amp' && executionTarget === 'none';
 
   // The model + thinking-effort selector only applies to local-CLI providers
   // (claude-code / codex) and only when this surface actually dispatches the run.
@@ -197,7 +198,9 @@ const HeterogeneousChatInput = memo(() => {
   const renderCloudConfigGuard = () => {
     // Until the override loads, `isDeviceExecution` may be a false negative —
     // don't flash the cloud-config prompt for what turns out to be a device run.
-    if (isPreferenceLoading || isDeviceExecution || isConfigured) return null;
+    if (isPreferenceLoading || ampDeviceSelectionRequired || isDeviceExecution || isConfigured) {
+      return null;
+    }
 
     return (
       <GuardBanner
@@ -212,16 +215,32 @@ const HeterogeneousChatInput = memo(() => {
     );
   };
 
+  const renderAmpDeviceGuard = () => {
+    if (!ampDeviceSelectionRequired) return null;
+
+    return (
+      <GuardBanner
+        hint={t('heteroAgent.executionTarget.ampSandboxUnsupported')}
+        title={t('platformAgent.deviceGuard.noDevice.title')}
+      />
+    );
+  };
+
   // Device execution doesn't use the cloud sandbox, so it doesn't need cloud
   // credentials — only the sandbox path gates on `isConfigured`. While the
   // workspace preference loads, keep send disabled: the effective target isn't
   // known yet, so neither guard can vouch for the run.
   const inputDisabled =
-    isPreferenceLoading || (!isConfigured && !isDeviceExecution) || deviceBlocked;
-  const hasGuard = deviceBlocked || (!isConfigured && !isDeviceExecution);
+    isPreferenceLoading ||
+    ampDeviceSelectionRequired ||
+    (!isConfigured && !isDeviceExecution) ||
+    deviceBlocked;
+  const hasGuard =
+    ampDeviceSelectionRequired || deviceBlocked || (!isConfigured && !isDeviceExecution);
 
   return (
     <Flexbox>
+      {renderAmpDeviceGuard()}
       {renderCloudConfigGuard()}
       {renderDeviceGuard()}
       <ChatInput
