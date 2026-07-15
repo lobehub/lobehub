@@ -20,6 +20,8 @@ CREATE TABLE IF NOT EXISTS "acceptances" (
 --> statement-breakpoint
 ALTER TABLE "verify_runs" ADD COLUMN IF NOT EXISTS "acceptance_id" uuid;--> statement-breakpoint
 ALTER TABLE "verify_runs" ADD COLUMN IF NOT EXISTS "round_index" integer;--> statement-breakpoint
+ALTER TABLE "verify_runs" ADD COLUMN IF NOT EXISTS "user_decision" text;--> statement-breakpoint
+ALTER TABLE "verify_runs" ADD COLUMN IF NOT EXISTS "decision_detail" jsonb;--> statement-breakpoint
 ALTER TABLE "acceptances" DROP CONSTRAINT IF EXISTS "acceptances_user_id_users_id_fk";--> statement-breakpoint
 ALTER TABLE "acceptances" ADD CONSTRAINT "acceptances_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "acceptances" DROP CONSTRAINT IF EXISTS "acceptances_workspace_id_workspaces_id_fk";--> statement-breakpoint
@@ -36,4 +38,5 @@ CREATE UNIQUE INDEX IF NOT EXISTS "acceptances_workspace_subject_unique" ON "acc
 ALTER TABLE "verify_runs" DROP CONSTRAINT IF EXISTS "verify_runs_acceptance_id_acceptances_id_fk";--> statement-breakpoint
 ALTER TABLE "verify_runs" ADD CONSTRAINT "verify_runs_acceptance_id_acceptances_id_fk" FOREIGN KEY ("acceptance_id") REFERENCES "public"."acceptances"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "verify_runs_acceptance_id_idx" ON "verify_runs" USING btree ("acceptance_id");--> statement-breakpoint
-CREATE UNIQUE INDEX IF NOT EXISTS "verify_runs_acceptance_round_unique" ON "verify_runs" USING btree ("acceptance_id","round_index");
+CREATE UNIQUE INDEX IF NOT EXISTS "verify_runs_acceptance_round_unique" ON "verify_runs" USING btree ("acceptance_id","round_index");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "verify_runs_user_decision_idx" ON "verify_runs" USING btree ("user_decision");

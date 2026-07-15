@@ -6,7 +6,7 @@
   },
   "dialect": "postgresql",
   "enums": {},
-  "id": "8b2ceaa0-01f9-4ad6-9b3e-2755ff8a3548",
+  "id": "701e9c36-d72e-4067-8782-91e1736e03cc",
   "policies": {},
   "prevId": "8f880aef-6d25-4875-aaa9-d01d12e5d5c2",
   "roles": {},
@@ -22140,6 +22140,18 @@
           "primaryKey": false,
           "notNull": false
         },
+        "user_decision": {
+          "name": "user_decision",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "decision_detail": {
+          "name": "decision_detail",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
         "accessed_at": {
           "name": "accessed_at",
           "type": "timestamp with time zone",
@@ -22249,6 +22261,21 @@
           "columns": [
             {
               "expression": "source",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "verify_runs_user_decision_idx": {
+          "name": "verify_runs_user_decision_idx",
+          "columns": [
+            {
+              "expression": "user_decision",
               "isExpression": false,
               "asc": true,
               "nulls": "last"

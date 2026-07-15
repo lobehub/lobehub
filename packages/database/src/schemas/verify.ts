@@ -19,6 +19,7 @@ import type {
   VerifyCheckItem,
   VerifyRubricConfig,
   VerifyRunContext,
+  VerifyRunDecisionDetail,
   VerifyRunMetadata,
   VerifyRunScenario,
 } from '@lobechat/types';
@@ -376,11 +377,6 @@ export const acceptances = pgTable(
     /** Latest active or most recently settled verify round (denormalized pointer to verify_runs.id). */
     currentVerifyRunId: uuid('current_verify_run_id'),
 
-    // No final_verify_run_id on purpose: a terminal status freezes the chain, so
-    // the closing round IS current_verify_run_id. Mid-loop rejections are
-    // per-round events (verify_runs metadata) — an aggregate pointer would either
-    // lose that trail (overwritten) or duplicate current (write-once).
-
     /** Latest verify report for this acceptance (denormalized pointer to verify_reports.id). */
     latestReportId: uuid('latest_report_id'),
 
@@ -574,6 +570,25 @@ export const verifyRuns = pgTable(
     /** Denormalized rollup of the round's verify pipeline state. */
     status: text('status', { enum: verifyRunStatuses }),
 
+    /**
+     * The user's acceptance decision on THIS round — the human verdict that
+     * drives the acceptance loop (`accept` closes it, `reject` seeds the next
+     * repair round). Per-round because every delivered round can be judged
+     * again, so the trail lives here, not on a single aggregate pointer.
+     *
+     * Free-form text, not an enum column: the decision vocabulary is expected to
+     * grow (e.g. `accept-with-reservation`) and we don't want a migration for a
+     * new verb. Null until the user decides.
+     */
+    userDecision: text('user_decision'),
+
+    /**
+     * Provenance of that decision — comment, attachments, who and when. One bag
+     * so the decision can carry richer evidence without new columns; the
+     * `userDecision` verb stays the queryable field.
+     */
+    decisionDetail: jsonb('decision_detail').$type<VerifyRunDecisionDetail>(),
+
     ...timestamps,
   },
   (t) => [
@@ -585,6 +600,7 @@ export const verifyRuns = pgTable(
     // unique index, so standalone (operation-less) rounds stay unconstrained.
     uniqueIndex('verify_runs_operation_id_unique').on(t.operationId),
     index('verify_runs_source_idx').on(t.source),
+    index('verify_runs_user_decision_idx').on(t.userDecision),
   ],
 );
 

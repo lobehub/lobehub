@@ -2678,6 +2678,8 @@ table verify_runs {
   plan jsonb
   plan_confirmed_at "timestamp with time zone"
   status text
+  user_decision text
+  decision_detail jsonb
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
@@ -2689,6 +2691,7 @@ table verify_runs {
     (acceptance_id, round_index) [name: 'verify_runs_acceptance_round_unique', unique]
     operation_id [name: 'verify_runs_operation_id_unique', unique]
     source [name: 'verify_runs_source_idx']
+    user_decision [name: 'verify_runs_user_decision_idx']
   }
 }
 
