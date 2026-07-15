@@ -2,19 +2,15 @@ import { useMemo } from 'react';
 
 import { useClientDataSWR } from '@/libs/swr';
 import { fleetKeys } from '@/libs/swr/keys';
-import { topicService } from '@/services/topic';
-import { type ChatTopic, type ChatTopicStatus } from '@/types/topic';
+import { type TopicListItem, topicService } from '@/services/topic';
+import { type ChatTopicStatus } from '@/types/topic';
 
 import { type FleetColumn, fleetColumnKey } from './types';
 
 // Topic statuses considered "actively running" for the Fleet board.
 const RUNNING_STATUSES: ChatTopicStatus[] = ['running'];
 
-// queryTopics returns raw topic rows, which carry agentId even though the
-// shared ChatTopic type does not declare it.
-type RunningTopic = ChatTopic & { agentId?: string | null };
-
-const toColumn = (topic: RunningTopic): FleetColumn | null => {
+const toColumn = (topic: TopicListItem): FleetColumn | null => {
   if (!topic.agentId) return null;
   return {
     agentId: topic.agentId,
@@ -47,7 +43,7 @@ export const useRunningTopics = () => {
   // list instead of flapping to "no running tasks".
   const hasHardError = Boolean(error) && data === undefined;
 
-  const running = useMemo(() => (data ?? []) as RunningTopic[], [data]);
+  const running = useMemo(() => data ?? [], [data]);
 
   const columns = useMemo(
     () => running.map(toColumn).filter((c): c is FleetColumn => Boolean(c)),

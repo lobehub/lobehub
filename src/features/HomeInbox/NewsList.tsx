@@ -1,16 +1,24 @@
-import { Avatar, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Avatar, Flexbox, Icon, Markdown, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { ChevronRightIcon } from 'lucide-react';
-import { memo } from 'react';
+import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
+import { memo, useCallback, useState } from 'react';
 
-import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
+import BriefCardArtifacts from '@/features/DailyBrief/BriefCardArtifacts';
 import BriefIcon from '@/features/DailyBrief/BriefIcon';
 import { type BriefItem } from '@/features/DailyBrief/types';
-import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import Time from '@/routes/(main)/home/features/components/Time';
 import { useBriefStore } from '@/store/brief';
 
+const AVATAR_SIZE = 20;
+const ROW_GAP = 10;
+const ROW_PADDING_INLINE = 14;
+
 const styles = createStaticStyles(({ css, cssVar }) => ({
+  // Line the content up under the headline, past the leading avatar.
+  body: css`
+    padding-block-end: 12px;
+    padding-inline: ${ROW_PADDING_INLINE + AVATAR_SIZE + ROW_GAP}px ${ROW_PADDING_INLINE}px;
+  `,
   list: css`
     overflow: hidden;
     border: 1px solid ${cssVar.colorBorderSecondary};
@@ -20,18 +28,94 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   row: css`
     cursor: pointer;
     padding-block: 11px;
-    padding-inline: 14px;
+    padding-inline: ${ROW_PADDING_INLINE}px;
     transition: background ${cssVar.motionDurationFast};
-
-    &:not(:last-child) {
-      border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-    }
 
     &:hover {
       background: ${cssVar.colorFillQuaternary};
     }
   `,
+  section: css`
+    &:not(:last-child) {
+      border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+    }
+  `,
 }));
+
+interface NewsItemProps {
+  brief: BriefItem;
+}
+
+/**
+ * One `insight` brief, collapsed to a single line. The agent that surfaced it
+ * leads the row; opening it reads it (there is nothing to decide, so a glance
+ * *is* the resolution) and drops the finding's detail inline.
+ */
+const NewsItem = memo<NewsItemProps>(({ brief }) => {
+  const markBriefRead = useBriefStore((s) => s.markBriefRead);
+
+  const [expanded, setExpanded] = useState(false);
+  const [read, setRead] = useState(Boolean(brief.readAt));
+
+  const toggle = useCallback(() => {
+    setExpanded((prev) => {
+      if (!prev && !read) {
+        setRead(true);
+        void markBriefRead(brief.id);
+      }
+      return !prev;
+    });
+  }, [brief.id, markBriefRead, read]);
+
+  return (
+    <Flexbox className={styles.section}>
+      <Flexbox horizontal align={'center'} className={styles.row} gap={ROW_GAP} onClick={toggle}>
+        {brief.agent?.avatar ? (
+          <Avatar
+            avatar={brief.agent.avatar}
+            background={brief.agent.backgroundColor || cssVar.colorBgContainer}
+            shape={'circle'}
+            size={AVATAR_SIZE}
+            // Fade the whole row once read: the leading glyph dims with the title
+            // so a scanned item recedes as one, not just a lighter headline.
+            style={{ flex: 'none', opacity: read ? 0.5 : 1 }}
+            title={brief.agent.title ?? undefined}
+          />
+        ) : (
+          <BriefIcon muted={read} type={brief.type} />
+        )}
+        <Text
+          ellipsis
+          weight={read ? 400 : 500}
+          style={{
+            color: read ? cssVar.colorTextTertiary : undefined,
+            flex: 1,
+            minWidth: 0,
+          }}
+        >
+          {brief.title}
+        </Text>
+        <Time date={brief.createdAt} />
+        <Icon
+          color={cssVar.colorTextQuaternary}
+          icon={expanded ? ChevronDownIcon : ChevronRightIcon}
+          size={14}
+        />
+      </Flexbox>
+
+      {expanded && (brief.summary || brief.artifacts) && (
+        <Flexbox className={styles.body} gap={8}>
+          {brief.summary && (
+            <Markdown style={{ overflow: 'unset' }} variant={'chat'}>
+              {brief.summary}
+            </Markdown>
+          )}
+          <BriefCardArtifacts artifacts={brief.artifacts} />
+        </Flexbox>
+      )}
+    </Flexbox>
+  );
+});
 
 interface NewsListProps {
   news: BriefItem[];
@@ -39,46 +123,16 @@ interface NewsListProps {
 
 /**
  * `insight` briefs: the agent found something worth knowing, but there is
- * nothing to decide. One line each — the summary lives behind the click, so a
+ * nothing to decide. One line each — the detail lives behind the click, so a
  * week of findings still fits on screen.
  */
 const NewsList = memo<NewsListProps>(({ news }) => {
-  const navigate = useWorkspaceAwareNavigate();
-  const markBriefRead = useBriefStore((s) => s.markBriefRead);
-
   if (news.length === 0) return null;
 
   return (
     <Flexbox className={styles.list}>
       {news.map((brief) => (
-        <Flexbox
-          horizontal
-          align={'center'}
-          className={styles.row}
-          gap={10}
-          key={brief.id}
-          onClick={() => {
-            void markBriefRead(brief.id);
-            if (brief.taskId) navigate(taskDetailPath(brief.taskId, brief.agentId ?? undefined));
-          }}
-        >
-          <BriefIcon muted={Boolean(brief.readAt)} type={brief.type} />
-          <Text ellipsis style={{ flex: 1, minWidth: 0 }} weight={brief.readAt ? 400 : 500}>
-            {brief.title}
-          </Text>
-          {brief.agent?.avatar && (
-            <Avatar
-              avatar={brief.agent.avatar}
-              background={brief.agent.backgroundColor || cssVar.colorBgContainer}
-              shape={'circle'}
-              size={20}
-              style={{ flex: 'none' }}
-              title={brief.agent.title ?? undefined}
-            />
-          )}
-          <Time date={brief.createdAt} />
-          <Icon color={cssVar.colorTextQuaternary} icon={ChevronRightIcon} size={14} />
-        </Flexbox>
+        <NewsItem brief={brief} key={brief.id} />
       ))}
     </Flexbox>
   );

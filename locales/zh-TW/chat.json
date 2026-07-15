@@ -457,6 +457,7 @@
   "knowledgeBase.library.action.detail": "詳情",
   "knowledgeBase.library.action.remove": "移除",
   "knowledgeBase.library.title": "檔案／資源庫",
+  "knowledgeBase.related.empty": "沒有相關的檔案或資料庫",
   "knowledgeBase.relativeFilesOrLibraries": "關聯檔案／資源庫",
   "knowledgeBase.title": "資源庫",
   "knowledgeBase.uploadGuide": "上傳的檔案可在「資源」中查看喔",

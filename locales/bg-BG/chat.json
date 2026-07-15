@@ -457,6 +457,7 @@
   "knowledgeBase.library.action.detail": "Детайли",
   "knowledgeBase.library.action.remove": "Премахни",
   "knowledgeBase.library.title": "Файлове / Библиотеки",
+  "knowledgeBase.related.empty": "Няма свързани файлове или библиотеки",
   "knowledgeBase.relativeFilesOrLibraries": "Свързани файлове/библиотеки",
   "knowledgeBase.title": "Библиотека",
   "knowledgeBase.uploadGuide": "Качените файлове могат да се видят в секцията 'Ресурси'.",

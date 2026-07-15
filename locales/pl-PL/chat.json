@@ -457,6 +457,7 @@
   "knowledgeBase.library.action.detail": "Szczegóły",
   "knowledgeBase.library.action.remove": "Usuń",
   "knowledgeBase.library.title": "Pliki / Biblioteki",
+  "knowledgeBase.related.empty": "Brak powiązanych plików lub bibliotek",
   "knowledgeBase.relativeFilesOrLibraries": "Powiązane pliki/biblioteki",
   "knowledgeBase.title": "Biblioteka",
   "knowledgeBase.uploadGuide": "Przesłane pliki można przeglądać w sekcji „Zasoby”.",

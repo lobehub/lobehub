@@ -513,6 +513,27 @@ export class StreamingExecutorActionImpl {
       sourceType: 'client.runtime.start',
     });
 
+    // Persist `running` on the topic so surfaces that read the stored status
+    // rather than this tab's live operations — the home inbox and the Fleet
+    // board — see the run in flight. The gateway/hetero transports already do
+    // this; the client one didn't, so a client-driven run was invisible off the
+    // active conversation. Top-level runs only (a sub-agent shares the topic and
+    // would just rewrite the same status). The terminal lifecycle flips it back
+    // (markTopicUnread / writeTopicStatus 'active'), with `cleanupStaleRunningTopics`
+    // as the backstop if this tab dies mid-run.
+    if (topicId && !isSubAgent) {
+      const runningWrite = this.#get().updateTopicStatus?.({
+        agentId,
+        groupId,
+        ...(scope === 'group' || scope === 'group_agent' ? { scope } : {}),
+        status: 'running',
+        topicId,
+      });
+      void runningWrite?.catch((error) => {
+        console.error('[streamingExecutor] running status write failed:', error);
+      });
+    }
+
     // Create a new array to avoid modifying the original messages
     const messages = [...originalMessages];
 

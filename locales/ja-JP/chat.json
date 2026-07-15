@@ -457,6 +457,7 @@
   "knowledgeBase.library.action.detail": "詳細",
   "knowledgeBase.library.action.remove": "削除",
   "knowledgeBase.library.title": "ファイル / ライブラリ",
+  "knowledgeBase.related.empty": "関連するファイルやライブラリはありません",
   "knowledgeBase.relativeFilesOrLibraries": "関連ファイル / ライブラリ",
   "knowledgeBase.title": "ライブラリ",
   "knowledgeBase.uploadGuide": "アップロードしたファイルは「リソース」で確認できます",

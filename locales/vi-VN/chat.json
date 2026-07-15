@@ -457,6 +457,7 @@
   "knowledgeBase.library.action.detail": "Chi tiết",
   "knowledgeBase.library.action.remove": "Xóa",
   "knowledgeBase.library.title": "Tệp / Thư viện",
+  "knowledgeBase.related.empty": "Không có tệp hoặc thư viện liên quan",
   "knowledgeBase.relativeFilesOrLibraries": "Tệp/Thư viện liên quan",
   "knowledgeBase.title": "Thư viện",
   "knowledgeBase.uploadGuide": "Các tệp đã tải lên có thể xem trong phần 'Tài nguyên'.",

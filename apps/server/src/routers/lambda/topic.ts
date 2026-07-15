@@ -380,11 +380,16 @@ export const topicRouter = router({
         .object({
           pageSize: z.number().max(500).optional(),
           statuses: z.array(z.string()).optional(),
+          withLastMessage: z.boolean().optional(),
         })
         .optional(),
     )
     .query(async ({ input, ctx }) => {
-      return ctx.topicModel.queryTopics({ pageSize: input?.pageSize, statuses: input?.statuses });
+      return ctx.topicModel.queryTopics({
+        pageSize: input?.pageSize,
+        statuses: input?.statuses,
+        withLastMessage: input?.withLastMessage,
+      });
     }),
 
   getShareInfo: topicProcedure

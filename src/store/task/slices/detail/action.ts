@@ -231,6 +231,8 @@ export class TaskDetailSliceActionImpl {
     this.#set(
       {
         activeTaskId: taskId,
+        activeTopicDrawerAgentId: undefined,
+        activeTopicDrawerTitle: undefined,
         activeTopicDrawerTopicId: undefined,
       },
       false,
@@ -238,14 +240,35 @@ export class TaskDetailSliceActionImpl {
     );
   };
 
-  openTopicDrawer = (topicId: string): void => {
+  /**
+   * `topic` carries the agent and title for a run opened outside a task detail
+   * (the home inbox lists plain topics too) — the drawer falls back to it when
+   * no task detail is loaded to read them from.
+   */
+  openTopicDrawer = (topicId: string, topic?: { agentId?: string; title?: string }): void => {
     if (this.#get().activeTopicDrawerTopicId === topicId) return;
-    this.#set({ activeTopicDrawerTopicId: topicId }, false, 'openTopicDrawer');
+    this.#set(
+      {
+        activeTopicDrawerAgentId: topic?.agentId,
+        activeTopicDrawerTitle: topic?.title,
+        activeTopicDrawerTopicId: topicId,
+      },
+      false,
+      'openTopicDrawer',
+    );
   };
 
   closeTopicDrawer = (): void => {
     if (!this.#get().activeTopicDrawerTopicId) return;
-    this.#set({ activeTopicDrawerTopicId: undefined }, false, 'closeTopicDrawer');
+    this.#set(
+      {
+        activeTopicDrawerAgentId: undefined,
+        activeTopicDrawerTitle: undefined,
+        activeTopicDrawerTopicId: undefined,
+      },
+      false,
+      'closeTopicDrawer',
+    );
   };
 
   unpinDocument = async (taskId: string, documentId: string): Promise<void> => {

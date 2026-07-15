@@ -6,7 +6,7 @@ import {
   getTopicMetadataWorkingDirectorySourcePath,
 } from '@lobechat/utils/client/topic';
 import { Flexbox, Icon, Popover, Skeleton, Tag, Text, Tooltip } from '@lobehub/ui';
-import { createStaticStyles, cssVar, keyframes, useTheme } from 'antd-style';
+import { createStaticStyles, cssVar, useTheme } from 'antd-style';
 import dayjs from 'dayjs';
 import { HashIcon, MessageSquareDashed } from 'lucide-react';
 import type { CSSProperties, DragEvent } from 'react';
@@ -17,6 +17,7 @@ import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspa
 import DotsLoading from '@/components/DotsLoading';
 import { TOPIC_STATUS_VISUALS } from '@/components/ExecutionStatus';
 import RingLoadingIcon from '@/components/RingLoading';
+import UnreadDot from '@/components/UnreadDot';
 import { isDesktop } from '@/const/version';
 import DirIcon from '@/features/ChatInput/ControlBar/DirIcon';
 import { useHasDraft } from '@/features/ChatInput/draftStorage';
@@ -40,17 +41,6 @@ import { getPullRequestState, getTopicMetaCard, PR_STATE_VISUAL } from './metaCa
 import MetaHoverCard from './MetaHoverCard';
 import { useTopicItemDropdownMenu } from './useDropdownMenu';
 
-const rippleAnim = keyframes`
-  0% {
-    transform: scale(1);
-    opacity: 0.7;
-  }
-  100% {
-    transform: scale(3);
-    opacity: 0;
-  }
-`;
-
 // Base UI Popover plays an opacity/scale enter+exit transition driven by these
 // CSS vars on the positioner. Zero them so the meta hover card appears instantly
 // instead of easing in — the hover-intent delay (`mouseEnterDelay`) still gates
@@ -65,40 +55,6 @@ const META_HOVER_CARD_STYLES = {
 };
 
 const styles = createStaticStyles(({ css }) => ({
-  unreadWrapper: css`
-    position: relative;
-
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 14px;
-    height: 14px;
-  `,
-  unreadDot: css`
-    position: relative;
-    z-index: 1;
-
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-
-    background: ${cssVar.colorInfo};
-  `,
-  unreadRipple: css`
-    position: absolute;
-    inset: 0;
-
-    width: 6px;
-    height: 6px;
-    margin: auto;
-    border: 1px solid ${cssVar.colorInfo};
-    border-radius: 50%;
-
-    background: transparent;
-
-    animation: ${rippleAnim} 1.8s ease-out infinite;
-  `,
   runningElapsedTime: css`
     flex: none;
 
@@ -328,12 +284,7 @@ const TopicItem = memo<TopicItemProps>(
     const isRunningTailUnread = isMaskedRunningTail && !isTopicActive;
 
     const hasUnread = id && (isUnreadCompleted || isRunningTailUnread);
-    const unreadIcon = (
-      <span className={styles.unreadWrapper} data-testid="topic-unread-dot">
-        <span className={styles.unreadRipple} />
-        <span className={styles.unreadDot} />
-      </span>
-    );
+    const unreadIcon = <UnreadDot />;
 
     useEffect(() => {
       if (!activeAgentId || !id || !isUnreadCompleted || hasLocalRunningRuntime) return;

@@ -1,13 +1,13 @@
 import { Flexbox } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
 
+import CollapsibleContent from '@/components/CollapsibleContent';
 import MarkdownMessage from '@/features/Conversation/Markdown';
 import { cleanSpeakerTag } from '@/store/chat/utils/cleanSpeakerTag';
 import { type UIChatMessage } from '@/types/index';
 
 import { useMarkdown } from '../useMarkdown';
 import AudioFileListViewer from './AudioFileListViewer';
-import CollapsibleContent from './CollapsibleContent';
 import FileListViewer from './FileListViewer';
 import ImageFileListViewer from './ImageFileListViewer';
 import PageSelections from './PageSelections';

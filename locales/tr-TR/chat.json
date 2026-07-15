@@ -457,6 +457,7 @@
   "knowledgeBase.library.action.detail": "Ayrıntılar",
   "knowledgeBase.library.action.remove": "Kaldır",
   "knowledgeBase.library.title": "Dosyalar / Kütüphaneler",
+  "knowledgeBase.related.empty": "İlgili dosya veya kütüphane bulunamadı",
   "knowledgeBase.relativeFilesOrLibraries": "İlgili Dosyalar/Kütüphaneler",
   "knowledgeBase.title": "Kütüphane",
   "knowledgeBase.uploadGuide": "Yüklenen dosyalar 'Kaynaklar' bölümünde görüntülenebilir.",

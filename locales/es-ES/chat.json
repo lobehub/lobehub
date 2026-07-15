@@ -457,6 +457,7 @@
   "knowledgeBase.library.action.detail": "Detalles",
   "knowledgeBase.library.action.remove": "Eliminar",
   "knowledgeBase.library.title": "Archivos / Bibliotecas",
+  "knowledgeBase.related.empty": "No hay archivos o bibliotecas relacionadas",
   "knowledgeBase.relativeFilesOrLibraries": "Archivos/Bibliotecas relacionadas",
   "knowledgeBase.title": "Biblioteca",
   "knowledgeBase.uploadGuide": "Los archivos subidos se pueden ver en la sección 'Recursos'.",

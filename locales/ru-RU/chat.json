@@ -457,6 +457,7 @@
   "knowledgeBase.library.action.detail": "Подробнее",
   "knowledgeBase.library.action.remove": "Удалить",
   "knowledgeBase.library.title": "Файлы / Библиотеки",
+  "knowledgeBase.related.empty": "Нет связанных файлов или библиотек",
   "knowledgeBase.relativeFilesOrLibraries": "Связанные файлы/библиотеки",
   "knowledgeBase.title": "Библиотека",
   "knowledgeBase.uploadGuide": "Загруженные файлы можно просмотреть в разделе «Ресурсы».",

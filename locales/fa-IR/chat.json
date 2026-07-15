@@ -457,6 +457,7 @@
   "knowledgeBase.library.action.detail": "جزئیات",
   "knowledgeBase.library.action.remove": "حذف",
   "knowledgeBase.library.title": "فایل‌ها / کتابخانه‌ها",
+  "knowledgeBase.related.empty": "هیچ فایل یا کتابخانه مرتبطی وجود ندارد",
   "knowledgeBase.relativeFilesOrLibraries": "فایل‌ها/کتابخانه‌های مرتبط",
   "knowledgeBase.title": "کتابخانه",
   "knowledgeBase.uploadGuide": "فایل‌های بارگذاری‌شده در بخش «منابع» قابل مشاهده هستند.",

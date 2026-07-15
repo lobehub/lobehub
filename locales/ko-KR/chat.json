@@ -457,6 +457,7 @@
   "knowledgeBase.library.action.detail": "상세",
   "knowledgeBase.library.action.remove": "제거",
   "knowledgeBase.library.title": "파일/자료실",
+  "knowledgeBase.related.empty": "관련된 파일이나 라이브러리가 없습니다",
   "knowledgeBase.relativeFilesOrLibraries": "관련 파일/자료실",
   "knowledgeBase.title": "자료실",
   "knowledgeBase.uploadGuide": "업로드한 파일은 '자료'에서 확인할 수 있습니다",

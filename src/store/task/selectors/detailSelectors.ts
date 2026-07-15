@@ -107,6 +107,16 @@ const taskSaveStatus = (s: TaskStoreState): SaveStatus =>
 
 const activeTopicDrawerTopicId = (s: TaskStoreState) => s.activeTopicDrawerTopicId;
 
+/**
+ * Which agent the open run drawer talks to. A run opened from a task detail
+ * inherits the task's agent; one opened from the home inbox carries its own,
+ * since the topic may have no parent task.
+ */
+const topicDrawerAgentId = (s: TaskStoreState) =>
+  s.activeTopicDrawerAgentId ?? activeTaskAgentId(s);
+
+const topicDrawerTitle = (s: TaskStoreState) => s.activeTopicDrawerTitle;
+
 export const taskDetailSelectors = {
   activeTaskAgentId,
   activeTaskAutomationMode,
@@ -143,4 +153,6 @@ export const taskDetailSelectors = {
   isTaskDetailLoading,
   taskDetailById,
   taskSaveStatus,
+  topicDrawerAgentId,
+  topicDrawerTitle,
 };

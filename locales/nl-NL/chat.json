@@ -457,6 +457,7 @@
   "knowledgeBase.library.action.detail": "Details",
   "knowledgeBase.library.action.remove": "Verwijderen",
   "knowledgeBase.library.title": "Bestanden / Bibliotheken",
+  "knowledgeBase.related.empty": "Geen gerelateerde bestanden of bibliotheken",
   "knowledgeBase.relativeFilesOrLibraries": "Gerelateerde bestanden/bibliotheken",
   "knowledgeBase.title": "Bibliotheek",
   "knowledgeBase.uploadGuide": "Geüploade bestanden zijn te bekijken in het gedeelte 'Bronnen'.",

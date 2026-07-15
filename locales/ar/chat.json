@@ -457,6 +457,7 @@
   "knowledgeBase.library.action.detail": "تفاصيل",
   "knowledgeBase.library.action.remove": "إزالة",
   "knowledgeBase.library.title": "الملفات / المكتبات",
+  "knowledgeBase.related.empty": "لا توجد ملفات أو مكتبات ذات صلة",
   "knowledgeBase.relativeFilesOrLibraries": "الملفات/المكتبات ذات الصلة",
   "knowledgeBase.title": "المكتبة",
   "knowledgeBase.uploadGuide": "يمكن عرض الملفات المرفوعة في قسم 'الموارد'.",

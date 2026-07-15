@@ -53,6 +53,8 @@ const InboxBriefCard = memo<InboxBriefCardProps>(({ brief }) => {
   const isInbox = agent?.id === INBOX_SESSION_ID;
   const canNavigate = Boolean(brief.taskId);
 
+  const hasTaskMeta = Boolean(brief.taskStatus || brief.taskIdentifier || brief.taskName);
+
   const openTask = () => {
     if (!brief.taskId) return;
     navigate(taskDetailPath(brief.taskId, brief.agentId ?? undefined));
@@ -66,19 +68,24 @@ const InboxBriefCard = memo<InboxBriefCardProps>(({ brief }) => {
       style={{ borderRadius: cssVar.borderRadiusLG }}
       variant={'outlined'}
     >
-      <Flexbox
-        horizontal
-        align={'center'}
-        className={canNavigate ? styles.meta : undefined}
-        gap={7}
-        onClick={canNavigate ? openTask : undefined}
-      >
-        {brief.taskStatus && <StatusGlyph status={brief.taskStatus} variant={'task'} />}
-        {brief.taskIdentifier && <span className={styles.taskRef}>{brief.taskIdentifier}</span>}
-        {brief.taskName && <span className={styles.taskName}>{brief.taskName}</span>}
-        <Flexbox flex={1} />
-        <Time date={brief.createdAt} />
-      </Flexbox>
+      {/* A brief raised outside a task has no status / ref / name to show, which
+          left the meta row as an empty band with a lone timestamp. Drop the row
+          entirely in that case and let the title line carry the time. */}
+      {hasTaskMeta && (
+        <Flexbox
+          horizontal
+          align={'center'}
+          className={canNavigate ? styles.meta : undefined}
+          gap={7}
+          onClick={canNavigate ? openTask : undefined}
+        >
+          {brief.taskStatus && <StatusGlyph status={brief.taskStatus} variant={'task'} />}
+          {brief.taskIdentifier && <span className={styles.taskRef}>{brief.taskIdentifier}</span>}
+          {brief.taskName && <span className={styles.taskName}>{brief.taskName}</span>}
+          <Flexbox flex={1} />
+          <Time date={brief.createdAt} />
+        </Flexbox>
+      )}
 
       <Flexbox horizontal align={'flex-start'} gap={10}>
         {agent && (
@@ -94,7 +101,12 @@ const InboxBriefCard = memo<InboxBriefCardProps>(({ brief }) => {
           />
         )}
         <Flexbox flex={1} gap={6} style={{ minWidth: 0 }}>
-          <Text weight={500}>{brief.title}</Text>
+          <Flexbox horizontal align={'center'} gap={8}>
+            <Text ellipsis style={{ flex: 1, minWidth: 0 }} weight={500}>
+              {brief.title}
+            </Text>
+            {!hasTaskMeta && <Time date={brief.createdAt} />}
+          </Flexbox>
           <BriefCardSummary summary={brief.summary} />
           <BriefCardArtifacts artifacts={brief.artifacts} />
         </Flexbox>
