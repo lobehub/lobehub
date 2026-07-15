@@ -716,7 +716,9 @@ export default {
   'settingAgent.agentTools.pickerEmpty': 'No user connectors available to add',
   'settingAgent.agentTools.priorityHint': 'Run priority',
   'settingAgent.agentTools.priorityTooltip':
-    'When identifiers collide, the Agent tool overrides the User tool at runtime (Agent > Workspace > Personal).',
+    'When tools share a name, the agent-exclusive tool runs first at runtime; your user tools come next.',
+  'settingAgent.agentTools.priorityTooltipWorkspace':
+    'When tools share a name, this agent-scoped tool runs first at runtime; the workspace user tools are the fallback.',
   'settingAgent.agentTools.removeOwnedConfirm':
     'Delete this agent-exclusive connector? Its credentials will be removed.',
   'settingAgent.agentTools.tabAgent': 'Agent Tools',

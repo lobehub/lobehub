@@ -10,6 +10,7 @@ import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import ModelSelect from '@/features/ModelSelect';
+import RunPriorityHint from '@/features/ProfileEditor/AgentUserTools/RunPriorityHint';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
@@ -139,7 +140,10 @@ const ProfileEditor = memo(() => {
         ) : (
           <>
             <Flexbox className={styles.configPanel} gap={10}>
-              <div className={styles.configLabel}>{t('settingAgent.runtimeConfig.title')}</div>
+              <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
+                <div className={styles.configLabel}>{t('settingAgent.runtimeConfig.title')}</div>
+                <RunPriorityHint agentId={agentId} />
+              </Flexbox>
               <Flexbox horizontal align={'center'} gap={12} justify={'flex-start'} wrap={'wrap'}>
                 <ModelSelect
                   initialWidth
