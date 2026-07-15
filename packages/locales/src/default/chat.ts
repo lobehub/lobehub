@@ -307,6 +307,7 @@ export default {
   'heteroAgent.codexQuota.title': 'Codex quota',
   'heteroAgent.codexQuota.tooltip': 'View Codex quota',
   'heteroAgent.quota.compactLeft': '{{percent}}%',
+  'heteroAgent.quota.exhausted': 'Exhausted',
   'heteroAgent.quota.duration.day_one': '{{count}}d',
   'heteroAgent.quota.duration.day_other': '{{count}}d',
   'heteroAgent.quota.duration.hour_one': '{{count}}h',

@@ -18,6 +18,7 @@ const extractTimezoneLabel = (value?: string) => {
 const RateLimitState = ({
   config,
   error,
+  onDismiss,
   onOpenSystemTools,
   onRetry,
   schedule,
@@ -171,6 +172,7 @@ const RateLimitState = ({
               )}
         </Text>
       }
+      onDismiss={onDismiss}
     >
       <Flexbox gap={8}>
         {formattedResetAt && (

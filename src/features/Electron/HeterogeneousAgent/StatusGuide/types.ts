@@ -34,6 +34,7 @@ export interface HeterogeneousAgentStatusGuideProps {
   agentType?: string;
   autoRetry?: HeterogeneousAgentAutoRetryState;
   error?: HeterogeneousAgentSessionError | null;
+  onDismiss?: () => void;
   onOpenSystemTools?: () => void;
   onRetry?: () => void;
   schedule?: HeterogeneousAgentScheduleState;
@@ -57,6 +58,7 @@ export interface HeterogeneousAgentGuideStateProps {
   autoRetry?: HeterogeneousAgentAutoRetryState;
   config: HeterogeneousAgentGuideConfig;
   error?: HeterogeneousAgentSessionError | null;
+  onDismiss?: () => void;
   onOpenSystemTools?: () => void;
   onRetry?: () => void;
   schedule?: HeterogeneousAgentScheduleState;

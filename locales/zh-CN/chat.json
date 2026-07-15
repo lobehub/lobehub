@@ -368,6 +368,7 @@
   "heteroAgent.quota.duration.hour_other": "{{count}}小时",
   "heteroAgent.quota.duration.minute_one": "{{count}}分钟",
   "heteroAgent.quota.duration.minute_other": "{{count}}分钟",
+  "heteroAgent.quota.exhausted": "已耗尽",
   "heteroAgent.quota.left": "剩余 {{percent}}%",
   "heteroAgent.quota.noData": "暂未获取到额度。",
   "heteroAgent.quota.refresh": "刷新额度",

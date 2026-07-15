@@ -49,6 +49,9 @@ const styles = createStaticStyles(({ css }) => ({
     border-radius: inherit;
     background: ${cssVar.colorSuccess};
   `,
+  progressFillWarning: css`
+    background: ${cssVar.colorWarning};
+  `,
   progressTrack: css`
     overflow: hidden;
 
@@ -85,6 +88,14 @@ const styles = createStaticStyles(({ css }) => ({
       color: ${cssVar.colorTextSecondary};
       background: ${cssVar.colorFillSecondary};
     }
+
+    &[data-quota-level='low'] {
+      color: ${cssVar.colorWarningText};
+
+      &:hover {
+        color: ${cssVar.colorWarningText};
+      }
+    }
   `,
   triggerOpen: css`
     color: ${cssVar.colorTextSecondary};
@@ -99,6 +110,9 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 const clampPercent = (value: number) => Math.min(100, Math.max(0, Math.round(value)));
+const LOW_QUOTA_THRESHOLD = 15;
+
+const isLowQuota = (leftPercent: number) => leftPercent < LOW_QUOTA_THRESHOLD;
 
 type QuotaSourcePart = Record<string, string | undefined> | string | null | undefined;
 
@@ -351,6 +365,7 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
 
     const leftPercent = clampPercent(100 - window.usedPercent);
     const resetLabel = formatResetCountdown(window.resetsAt);
+    const lowQuota = isLowQuota(leftPercent);
 
     return (
       <Flexbox className={styles.window} gap={4} key={key}>
@@ -358,11 +373,17 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
           {label}
         </Text>
         <div className={styles.progressTrack}>
-          <div className={styles.progressFill} style={{ width: `${leftPercent}%` }} />
+          <div
+            className={cx(styles.progressFill, lowQuota && styles.progressFillWarning)}
+            data-quota-level={lowQuota ? 'low' : 'normal'}
+            style={{ width: `${leftPercent}%` }}
+          />
         </div>
         <Flexbox horizontal style={{ justifyContent: 'space-between' }}>
           <Text className={styles.value} style={{ fontSize: 12 }}>
-            {t('heteroAgent.quota.left', { percent: leftPercent })}
+            {leftPercent === 0
+              ? t('heteroAgent.quota.exhausted')
+              : t('heteroAgent.quota.left', { percent: leftPercent })}
           </Text>
           {resetLabel && (
             <Text style={{ fontSize: 12 }} type="secondary">
@@ -428,10 +449,21 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
       aria-label={tooltip}
       className={cx(styles.trigger, open && styles.triggerOpen)}
       type="button"
+      data-quota-level={
+        compactLeftPercent === undefined
+          ? undefined
+          : isLowQuota(compactLeftPercent)
+            ? 'low'
+            : 'normal'
+      }
     >
       <Icon icon={GaugeIcon} size={14} />
       {compactLeftPercent !== undefined && (
-        <span>{t('heteroAgent.quota.compactLeft', { percent: compactLeftPercent })}</span>
+        <span>
+          {compactLeftPercent === 0
+            ? t('heteroAgent.quota.exhausted')
+            : t('heteroAgent.quota.compactLeft', { percent: compactLeftPercent })}
+        </span>
       )}
       <Icon icon={ChevronDownIcon} size={12} />
     </button>

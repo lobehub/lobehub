@@ -123,6 +123,21 @@ describe('ClaudeCodeQuotaMenu', () => {
     });
   });
 
+  it('warns below 15 percent and labels zero quota as exhausted', async () => {
+    mockService.getClaudeCodeQuota.mockResolvedValue(
+      claudeSnapshot({
+        session: { resetsAt: null, usedPercent: 100, windowMinutes: 300 },
+        weekly: { resetsAt: null, usedPercent: 86, windowMinutes: 10_080 },
+      }),
+    );
+
+    render(<ClaudeCodeQuotaMenu />);
+
+    expect(await screen.findAllByText('heteroAgent.quota.exhausted')).toHaveLength(2);
+    expect(screen.getByText('heteroAgent.quota.left:14')).toBeTruthy();
+    expect(document.querySelectorAll('[data-quota-level="low"]')).toHaveLength(3);
+  });
+
   it('maps unavailable reasons to their localized explanations', async () => {
     mockService.getClaudeCodeQuota.mockResolvedValue(
       claudeSnapshot({
