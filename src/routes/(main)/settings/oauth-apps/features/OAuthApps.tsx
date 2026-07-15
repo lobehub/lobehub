@@ -7,7 +7,6 @@ import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { usePermission } from '@/hooks/usePermission';
 import { useClientDataSWR } from '@/libs/swr';
 import { authKeys } from '@/libs/swr/keys';
 import { lambdaClient } from '@/libs/trpc/client';
@@ -25,9 +24,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-const OAuthApps: FC = () => {
+interface OAuthAppsProps {
+  canEdit: boolean;
+}
+
+const OAuthApps: FC<OAuthAppsProps> = ({ canEdit }) => {
   const { t } = useTranslation('auth');
-  const { allowed: canEdit } = usePermission('create_content');
   const navigate = useWorkspaceAwareNavigate();
   const params = useParams<{ sub?: string }>();
 

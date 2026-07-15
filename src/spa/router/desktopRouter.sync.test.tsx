@@ -140,6 +140,7 @@ describe('desktopRouter config sync', () => {
       '@/routes/(main)/[workspaceSlug]/settings/usage',
       '@/routes/(main)/[workspaceSlug]/settings/skill',
       '@/routes/(main)/[workspaceSlug]/settings/connector',
+      '@/routes/(main)/[workspaceSlug]/settings/oauth-apps',
       '@/routes/(main)/[workspaceSlug]/settings/audit-log',
     ];
 
@@ -173,13 +174,24 @@ describe('desktopRouter config sync', () => {
           ? [route.path, ...collectPaths(route.children ?? [])]
           : collectPaths(route.children ?? []),
       );
-    const registeredTabs = collectPaths(settingsRoute?.children ?? []);
+    const registeredTabs = collectPaths(settingsRoute?.children ?? []).map(
+      (registeredPath) => registeredPath.split('/')[0],
+    );
     const missingTabs = registeredTabs.filter((tab) => !WORKSPACE_SETTINGS_TABS.has(tab));
 
     expect(
       missingTabs,
       `Add workspace settings tabs to WORKSPACE_SETTINGS_TABS: ${missingTabs.join(', ')}`,
     ).toEqual([]);
+  });
+
+  it('workspace OAuth apps list and detail routes are registered', () => {
+    const listMatches = matchRoutes(desktopRoutes, '/acme/settings/oauth-apps');
+    const detailMatches = matchRoutes(desktopRoutes, '/acme/settings/oauth-apps/client-1');
+
+    expect(listMatches?.at(-1)?.route.path).toBe('oauth-apps');
+    expect(detailMatches?.at(-1)?.route.path).toBe('oauth-apps/:sub');
+    expect(detailMatches?.at(-1)?.params).toMatchObject({ sub: 'client-1', workspaceSlug: 'acme' });
   });
 
   it('both configs import and spread BusinessResourceRoutes into /resource children', async () => {

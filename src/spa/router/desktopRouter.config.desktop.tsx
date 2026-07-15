@@ -48,6 +48,7 @@ import WorkspaceSlugSettingsCredsPage from '@/routes/(main)/[workspaceSlug]/sett
 import WorkspaceSlugSettingsDevicesPage from '@/routes/(main)/[workspaceSlug]/settings/devices';
 import WorkspaceSlugSettingsGeneralPage from '@/routes/(main)/[workspaceSlug]/settings/general';
 import WorkspaceSlugSettingsMembersPage from '@/routes/(main)/[workspaceSlug]/settings/members';
+import WorkspaceSlugSettingsOAuthAppsPage from '@/routes/(main)/[workspaceSlug]/settings/oauth-apps';
 import WorkspaceSlugSettingsPlansPage from '@/routes/(main)/[workspaceSlug]/settings/plans';
 import WorkspaceSlugSettingsProviderPage from '@/routes/(main)/[workspaceSlug]/settings/provider';
 import WorkspaceSlugSettingsServiceModelPage from '@/routes/(main)/[workspaceSlug]/settings/service-model';
@@ -722,6 +723,8 @@ export const desktopRoutes: RouteObject[] = [
                   { element: <WorkspaceSlugSettingsServiceModelPage />, path: 'service-model' },
                   { element: <WorkspaceSlugSettingsCredsPage />, path: 'creds' },
                   { element: <WorkspaceSlugSettingsApiKeyPage />, path: 'apikey' },
+                  { element: <WorkspaceSlugSettingsOAuthAppsPage />, path: 'oauth-apps' },
+                  { element: <WorkspaceSlugSettingsOAuthAppsPage />, path: 'oauth-apps/:sub' },
                   { element: <WorkspaceSlugSettingsAuditLogPage />, path: 'audit-log' },
                   { element: <WorkspaceSlugSettingsStoragePage />, path: 'storage' },
                   { element: <WorkspaceSlugSettingsDevicesPage />, path: 'devices' },

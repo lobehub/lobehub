@@ -1,5 +1,6 @@
 import { SkillsIcon } from '@lobehub/ui/icons';
 import {
+  AppWindowIcon,
   Blocks,
   Brain,
   Building2,
@@ -20,6 +21,8 @@ import { useTranslation } from 'react-i18next';
 
 import { useIsWorkspaceOwner } from '@/business/client/hooks/useIsWorkspaceOwner';
 import { useIsWorkspaceViewer } from '@/business/client/hooks/useIsWorkspaceViewer';
+import { useUserStore } from '@/store/user';
+import { userGeneralSettingsSelectors } from '@/store/user/slices/settings/selectors';
 import { WorkspaceSettingsTabs } from '@/types/workspaceSettings';
 
 export enum WorkspaceSettingsGroupKey {
@@ -47,6 +50,7 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
   const { t: tSubscription } = useTranslation('subscription');
   const isOwner = useIsWorkspaceOwner();
   const isViewer = useIsWorkspaceViewer();
+  const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
 
   return useMemo(
     () =>
@@ -141,6 +145,11 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               key: WorkspaceSettingsTabs.APIKey,
               label: tAuth('tab.apikey'),
             },
+            isDevMode && {
+              icon: AppWindowIcon,
+              key: WorkspaceSettingsTabs.OAuthApps,
+              label: tAuth('tab.oauthApps'),
+            },
             // Messenger (chat platform) is intentionally omitted from workspace
             // settings: the System Bot binding is a per-user/personal identity
             // (the link is owned by `userId`, not the workspace), and reaching a
@@ -169,6 +178,6 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
           title: t('workspaceSetting.group.admin'),
         },
       ].filter(Boolean) as WorkspaceSettingCategoryGroup[],
-    [t, tAuth, tSubscription, isOwner, isViewer],
+    [t, tAuth, tSubscription, isDevMode, isOwner, isViewer],
   );
 };

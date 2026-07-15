@@ -919,6 +919,20 @@ export const desktopRoutes: RouteObject[] = [
                   },
                   {
                     element: dynamicElement(
+                      () => import('@/routes/(main)/[workspaceSlug]/settings/oauth-apps'),
+                      'Desktop > Workspace > Settings > OAuth Apps',
+                    ),
+                    path: 'oauth-apps',
+                  },
+                  {
+                    element: dynamicElement(
+                      () => import('@/routes/(main)/[workspaceSlug]/settings/oauth-apps'),
+                      'Desktop > Workspace > Settings > OAuth App Detail',
+                    ),
+                    path: 'oauth-apps/:sub',
+                  },
+                  {
+                    element: dynamicElement(
                       () => import('@/routes/(main)/[workspaceSlug]/settings/audit-log'),
                       'Desktop > Workspace > Settings > Audit Log',
                     ),

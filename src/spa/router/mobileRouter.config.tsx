@@ -464,6 +464,20 @@ export const mobileRoutes: RouteObject[] = [
                 ),
                 path: 'audit-log',
               },
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/oauth-apps'),
+                  'Mobile > Workspace > Settings > OAuth Apps',
+                ),
+                path: 'oauth-apps',
+              },
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/oauth-apps'),
+                  'Mobile > Workspace > Settings > OAuth App Detail',
+                ),
+                path: 'oauth-apps/:sub',
+              },
             ],
             element: dynamicLayout(
               () => import('@/routes/(mobile)/settings/_layout'),

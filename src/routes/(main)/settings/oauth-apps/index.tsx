@@ -2,6 +2,8 @@ import { Button } from '@lobehub/ui/base-ui';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import { useIsWorkspaceOwner } from '@/business/client/hooks/useIsWorkspaceOwner';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
 import { lambdaClient } from '@/libs/trpc/client';
@@ -12,7 +14,10 @@ import OAuthApps from './features/OAuthApps';
 
 const CreateAppButton = () => {
   const { t } = useTranslation('auth');
-  const { allowed: canEdit, reason } = usePermission('create_content');
+  const { allowed: hasEditPermission, reason } = usePermission('create_content');
+  const activeWorkspaceId = useActiveWorkspaceId();
+  const isWorkspaceOwner = useIsWorkspaceOwner();
+  const canEdit = hasEditPermission && (!activeWorkspaceId || isWorkspaceOwner);
   const navigate = useWorkspaceAwareNavigate();
 
   const handleCreate = () => {
@@ -34,12 +39,19 @@ const CreateAppButton = () => {
 
 const Page = () => {
   const { t } = useTranslation('auth');
+  const { allowed: hasEditPermission } = usePermission('create_content');
+  const activeWorkspaceId = useActiveWorkspaceId();
+  const isWorkspaceOwner = useIsWorkspaceOwner();
   const params = useParams<{ sub?: string }>();
+  const canEdit = hasEditPermission && (!activeWorkspaceId || isWorkspaceOwner);
 
   return (
     <>
-      <SettingHeader extra={!params.sub && <CreateAppButton />} title={t('tab.oauthApps')} />
-      <OAuthApps />
+      <SettingHeader
+        extra={!params.sub && canEdit && <CreateAppButton />}
+        title={t('tab.oauthApps')}
+      />
+      <OAuthApps canEdit={canEdit} />
     </>
   );
 };
