@@ -21,7 +21,11 @@ import { agentDocumentRouteMeta } from '@/features/AgentDocumentPage/routeMeta';
 import { taskRouteMeta, tasksRouteMeta } from '@/features/AgentTasks/routeMeta';
 import { fleetRouteMeta } from '@/features/Fleet/routeMeta';
 import { pageRouteMeta } from '@/features/Pages/routeMeta';
-import { verifyReportsRouteMeta, verifyRouteMeta } from '@/features/Verify/routeMeta';
+import {
+  acceptanceRouteMeta,
+  verifyReportsRouteMeta,
+  verifyRouteMeta,
+} from '@/features/Verify/routeMeta';
 import { workspaceHomeRouteMeta } from '@/features/Workspace/routeMeta';
 import { agentRouteMeta, topicsRouteMeta } from '@/routes/(main)/agent/features/routeMeta';
 import { groupRouteMeta } from '@/routes/(main)/group/features/routeMeta';
@@ -1044,6 +1048,17 @@ export const desktopRoutes: RouteObject[] = [
     errorElement: <ErrorBoundary />,
     handle: { meta: verifyReportsRouteMeta },
     path: '/verify',
+  },
+
+  // Subject-level delivery acceptance — separate from single-run verify reports.
+  {
+    element: dynamicElement(
+      () => import('@/routes/acceptance/[acceptanceId]'),
+      'Desktop > AcceptanceReport',
+    ),
+    errorElement: <ErrorBoundary />,
+    handle: { meta: acceptanceRouteMeta },
+    path: '/acceptance/:acceptanceId',
   },
 
   // Devtools route (outside main layout, dev-only)

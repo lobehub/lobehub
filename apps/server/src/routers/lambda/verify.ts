@@ -10,7 +10,6 @@ import {
   wsCompatProcedure,
 } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AgentOperationModel } from '@/database/models/agentOperation';
-import { FileModel } from '@/database/models/file';
 import { LlmGenerationTracingModel } from '@/database/models/llmGenerationTracing';
 import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
 import { VerifyCriterionModel } from '@/database/models/verifyCriterion';
@@ -26,8 +25,9 @@ import {
 } from '@/database/schemas/verify';
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
-import { FileService } from '@/server/services/file';
 import {
+  AcceptanceService,
+  createEvidenceFileResolver,
   finalizeVerifyRun,
   VerifyExecutorService,
   VerifyFeedbackService,
@@ -904,7 +904,7 @@ export const verifyRouter = router({
       // The upsert overwrites the run's existing report row.
       assertWorkspaceRowManageable(ctx, run.userId, 'verify run');
 
-      return ctx.reportModel.upsertByRun({
+      const report = await ctx.reportModel.upsertByRun({
         content: input.content ?? null,
         failedChecks: input.failedChecks ?? null,
         generatedBy: input.generatedBy ?? 'agent-testing',
@@ -916,6 +916,23 @@ export const verifyRouter = router({
         verdict: input.verdict ?? null,
         verifyRunId: run.id,
       });
+
+      // A published report settles an ingested round — re-derive the aggregate
+      // it chains onto (→ `delivered`, awaiting the user's decision). Best-effort:
+      // the report write must not fail on a rollup hiccup.
+      if (run.acceptanceId) {
+        try {
+          await new AcceptanceService(
+            ctx.serverDB,
+            ctx.userId,
+            ctx.workspaceId ?? undefined,
+          ).recomputeStatus(run.acceptanceId);
+        } catch (error) {
+          console.error('[verify:upsertReport:recomputeAcceptance]', error);
+        }
+      }
+
+      return report;
     }),
 
   getReport: verifyProcedure.input(verifyRunIdInputSchema).query(async ({ ctx, input }) => {
@@ -983,47 +1000,11 @@ export const verifyRouter = router({
       ]);
 
       // Resolve display metadata for each file-backed evidence artifact.
-      let fileService: FileService | null | undefined;
-      const getFileService = () => {
-        if (fileService !== undefined) return fileService;
-
-        try {
-          fileService = new FileService(ctx.serverDB, run.userId, run.workspaceId ?? undefined);
-        } catch (error) {
-          console.error('[verify:getReportBundle:resolveFileMeta]', error);
-          fileService = null;
-        }
-
-        return fileService;
-      };
-      const resolveFileMeta = async (fileId: string | null) => {
-        if (!fileId) return { fileName: null, fileUrl: null };
-
-        try {
-          const file = await FileModel.getFileById(ctx.serverDB, fileId);
-          if (!file) return { fileName: null, fileUrl: null };
-          if (!file.url) return { fileName: file.name ?? null, fileUrl: null };
-
-          const service = getFileService();
-          if (!service) return { fileName: file.name ?? null, fileUrl: null };
-
-          try {
-            return {
-              fileName: file.name ?? null,
-              fileUrl: await service.getFullFileUrl(file.url),
-            };
-          } catch (error) {
-            console.error('[verify:getReportBundle:resolveFileMeta]', error);
-            return { fileName: file.name ?? null, fileUrl: null };
-          }
-        } catch (error) {
-          console.error('[verify:getReportBundle:resolveFileMeta]', error);
-          return {
-            fileName: null,
-            fileUrl: null,
-          };
-        }
-      };
+      const resolveFileMeta = createEvidenceFileResolver(
+        ctx.serverDB,
+        run.userId,
+        run.workspaceId ?? undefined,
+      );
 
       const resultsWithEvidence = await Promise.all(
         results.map(async (r) => {

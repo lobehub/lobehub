@@ -35,6 +35,14 @@ export const useVerifyReportBundle = (verifyRunId: string | null) =>
     VERIFY_REPORT_SWR_CONFIG,
   );
 
+/** Cross-round acceptance decision bundle by acceptance id. */
+export const useAcceptanceBundle = (acceptanceId: string | null) =>
+  useClientDataSWR(
+    acceptanceId ? verifyKeys.acceptanceBundle(acceptanceId) : null,
+    () => verifyService.getAcceptanceBundle(acceptanceId!),
+    VERIFY_REPORT_SWR_CONFIG,
+  );
+
 /**
  * Cursor-paginated, infinite-scrolling report summaries. `q` drives a
  * server-side title search (spanning the whole history, not just loaded pages);

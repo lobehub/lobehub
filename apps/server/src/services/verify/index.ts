@@ -1,5 +1,13 @@
+export {
+  type AcceptanceCheckHistoryEntry,
+  type AcceptanceCheckRow,
+  AcceptanceService,
+  type AcceptanceSubjectSummary,
+  buildAcceptanceCheckUnion,
+} from './acceptanceService';
 export { createVerifierAgentRunner } from './agentVerifier';
 export { coverageGaps, readRequiredEvidence } from './evidenceCoverage';
+export { createEvidenceFileResolver, type EvidenceFileMeta } from './evidenceFiles';
 export {
   type ExecuteVerifyParams,
   type VerifierAgentRunner,

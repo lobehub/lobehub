@@ -7,9 +7,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   originFromEnv,
+  parseSubjectRef,
   planFromResult,
   registerVerifyCommand,
   reportEvidence,
+  subjectFromResult,
   surfacesFromResult,
 } from './verify';
 
@@ -411,6 +413,20 @@ describe('planFromResult — plan item normalization', () => {
     expect(item.verifierConfig).toEqual({ expected: 'the file exists', method: 'tail the log' });
   });
 
+  it('normalizes a per-item surface and drops one that names no surface', () => {
+    const items = planFromResult({
+      plan: [
+        { id: '1', surface: 'electron', title: 'tray dedupe' },
+        { id: '2', surface: 'unit', title: 'model test' },
+        { id: '3', title: 'no surface' },
+      ],
+    })!;
+
+    expect(items[0].verifierConfig).toEqual({ surface: 'desktop' });
+    expect(items[1].verifierConfig).toEqual({});
+    expect(items[2].verifierConfig).toEqual({});
+  });
+
   it('keys items by the same id the cases use, so results pair back to them', () => {
     const items = planFromResult({ plan: [{ id: 'case-a', title: 'a' }, { title: 'b' }] })!;
 
@@ -430,6 +446,57 @@ describe('planFromResult — plan item normalization', () => {
     // would leave the PREVIOUS round's plan attached, and every one of its items
     // would render as "not run" against a report that never planned them.
     expect(planFromResult({ plan: [] })).toEqual([]);
+  });
+});
+
+describe('parseSubjectRef / subjectFromResult — acceptance subject', () => {
+  it('parses the closed set of type:id references', () => {
+    expect(parseSubjectRef('task:task_123')).toEqual({
+      subjectId: 'task_123',
+      subjectType: 'task',
+    });
+    expect(parseSubjectRef('topic:tpc_abc')).toEqual({
+      subjectId: 'tpc_abc',
+      subjectType: 'topic',
+    });
+    expect(parseSubjectRef('document:doc_1')).toEqual({
+      subjectId: 'doc_1',
+      subjectType: 'document',
+    });
+  });
+
+  it('rejects unknown types and malformed references', () => {
+    expect(parseSubjectRef('release:rel_1')).toBeNull();
+    expect(parseSubjectRef('task:')).toBeNull();
+    expect(parseSubjectRef('task_123')).toBeNull();
+    expect(parseSubjectRef(undefined)).toBeNull();
+  });
+
+  it('keeps an id containing colons intact (splits on the FIRST colon only)', () => {
+    expect(parseSubjectRef('topic:tpc:odd:id')).toEqual({
+      subjectId: 'tpc:odd:id',
+      subjectType: 'topic',
+    });
+  });
+
+  it('reads result.json subject in both string and object shapes', () => {
+    expect(subjectFromResult({ subject: 'task:task_9' })).toEqual({
+      ref: { subjectId: 'task_9', subjectType: 'task' },
+    });
+    expect(
+      subjectFromResult({
+        subject: { id: 'tpc_1', requirement: 'no regressions', type: 'topic' },
+      }),
+    ).toEqual({
+      ref: { subjectId: 'tpc_1', subjectType: 'topic' },
+      requirement: 'no regressions',
+    });
+  });
+
+  it('returns null on a malformed subject field instead of guessing', () => {
+    expect(subjectFromResult({})).toBeNull();
+    expect(subjectFromResult({ subject: 'nonsense' })).toBeNull();
+    expect(subjectFromResult({ subject: { id: 'x' } })).toBeNull();
   });
 });
 

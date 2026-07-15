@@ -705,6 +705,10 @@ export const messengerKeys = {
 
 // ---- verify (deliverable judging) ---------------------------------------
 export const verifyKeys = {
+  acceptanceBundle: def('verify:acceptanceBundle', (acceptanceId: string) => [
+    'verify:acceptanceBundle',
+    acceptanceId,
+  ]),
   criteria: def('verify:criteria', () => ['verify:criteria']),
   instruction: def('verify:instruction', (documentId: string) => [
     'verify:instruction',

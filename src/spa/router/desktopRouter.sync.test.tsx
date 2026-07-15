@@ -25,20 +25,16 @@ const WEB_ONLY_PATHS = new Set([
   '/onboarding',
   '/onboarding/agent',
   '/onboarding/classic',
-  // Verify report workspace + messenger link flow — web/CLI only
-  '/verify',
+  // Messenger link flow — web/CLI only (the verify workspace + acceptance
+  // pages ship on Electron too, so they are synced, not listed here)
   '/verify-im',
-  ':runId',
 ]);
 
-/** Extra `index: true` routes present only on web (verify empty detail). */
-const WEB_ONLY_INDEX_DELTA = 1;
+/** Extra `index: true` routes present only on web. */
+const WEB_ONLY_INDEX_DELTA = 0;
 
 /** handle.meta blobs present only on web. */
-const WEB_ONLY_HANDLE_METAS = new Set([
-  '{ meta: verifyRouteMeta }',
-  '{ meta: verifyReportsRouteMeta }',
-]);
+const WEB_ONLY_HANDLE_METAS = new Set<string>([]);
 
 function extractIndexCount(source: string) {
   return [...source.matchAll(/index:\s*true/g)].length;

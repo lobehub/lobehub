@@ -56,9 +56,9 @@ export type AcceptanceSubjectType = 'task' | 'topic' | 'document';
  * verify vocabulary (`passed` / `failed`); the aggregate exposes the user's
  * outcome language (`accepted` / `rejected`).
  *
- * `delivered`: verification settled positively and the aggregate now waits for
- * the user's accept/reject — the human decision closes the lifecycle, the
- * verifier's verdict is only a recommendation.
+ * `delivered`: verification settled (passed OR failed) and the aggregate now
+ * waits for the user's accept/reject — the human decision closes the lifecycle,
+ * the verifier's verdict is only a recommendation either way.
  */
 export type AcceptanceStatus =
   | 'pending'
@@ -355,6 +355,14 @@ export interface VerifyAgentPlanConfig {
   method?: string;
   /** Evidence media this item must produce — gated, not decorative. */
   requiredEvidence?: RequiredEvidenceSpec[];
+  /**
+   * The product surface THIS item was exercised on — the acceptance union view
+   * groups checks by it. Optional and per-item on purpose: the run-level
+   * `context.surfaces` records where the round ran as a whole, while one round
+   * routinely mixes web + cli + desktop checks. Same closed set as
+   * {@link VerifySurface}; a missing value renders ungrouped.
+   */
+  surface?: VerifySurface;
 }
 
 /**

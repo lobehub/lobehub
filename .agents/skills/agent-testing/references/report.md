@@ -297,6 +297,12 @@ would silently gate on nothing, which is worse than no gate at all.
 stay **free prose** — they carry intent no enum can, and both render under the
 check on the page next to the outcome.
 
+A plan item may also carry a per-item `surface` (same closed set as the run-level
+`surfaces` below; `electron` normalizes to `desktop`). It says which product
+surface THIS check ran on — the acceptance union view groups checks by it, so a
+mixed web+cli round stays legible. An unknown value is warned about and dropped,
+never stored.
+
 `surfaces` is a **closed set** — `web` | `desktop` | `cli` | `mobile` | `bot` —
 and names the product surface a check ran **on**. `electron` is accepted and
 normalized to `desktop`. Anything else fails the ingest, so don't reach for it:
@@ -317,6 +323,12 @@ that isn't the branch's own.
 `score` is optional — use it when the verdict has a subjective component (UI
 polish, copy quality); omit it for purely binary runs. `verdict` is the single
 word the user reads first: `pass`, `fail`, or `partial`.
+
+`subject` is optional and chains the session onto a business subject's
+**acceptance aggregate** (one decision page across repair rounds): either
+`"subject": "task:<id>"` (`task` | `topic` | `document`) or
+`{ "type": "task", "id": "task_…", "requirement": "one-sentence acceptance bar" }`.
+The `--subject` flag on `ingest-report` overrides this field.
 
 `interactionCost` is optional and run-level. For UI runs driven through
 `agent-browser`, create `interaction-trace.jsonl` with

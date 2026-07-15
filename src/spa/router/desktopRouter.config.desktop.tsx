@@ -21,6 +21,11 @@ import { agentDocumentRouteMeta } from '@/features/AgentDocumentPage/routeMeta';
 import { taskRouteMeta, tasksRouteMeta } from '@/features/AgentTasks/routeMeta';
 import { fleetRouteMeta } from '@/features/Fleet/routeMeta';
 import { pageRouteMeta } from '@/features/Pages/routeMeta';
+import {
+  acceptanceRouteMeta,
+  verifyReportsRouteMeta,
+  verifyRouteMeta,
+} from '@/features/Verify/routeMeta';
 import { workspaceHomeRouteMeta } from '@/features/Workspace/routeMeta';
 import DesktopOnboarding from '@/routes/(desktop)/desktop-onboarding';
 // Layouts — sync import (Electron local, no network overhead)
@@ -127,11 +132,15 @@ import { settingsRouteMeta } from '@/routes/(main)/settings/features/routeMeta';
 import { ProviderDetailPage, ProviderLayout } from '@/routes/(main)/settings/provider';
 import TaskDetailRoute from '@/routes/(main)/task/[taskId]';
 import AllTasksPage from '@/routes/(main)/tasks';
+import VerifyWorkspace from '@/routes/(main)/verify';
+import VerifyEmptyPage from '@/routes/(main)/verify/empty';
+import AcceptanceReportPage from '@/routes/acceptance/[acceptanceId]';
 import SharePagePage from '@/routes/share/page/[id]';
 import { sharePageRouteMeta } from '@/routes/share/page/[id]/routeMeta';
 import ShareTopicPage from '@/routes/share/t/[id]';
 import ShareTopicLayout from '@/routes/share/t/[id]/_layout';
 import { shareTopicRouteMeta } from '@/routes/share/t/[id]/routeMeta';
+import VerifyReportPage from '@/routes/verify/[runId]';
 import { routeMeta } from '@/spa/router/routeMeta';
 import { SettingsTabs } from '@/store/global/initialState';
 import { ErrorBoundary, redirectElement } from '@/utils/router';
@@ -783,6 +792,30 @@ export const desktopRoutes: RouteObject[] = [
       },
     ],
     path: '/share/page',
+  },
+
+  // Verify report workspace — standalone master-detail (outside main layout)
+  {
+    children: [
+      { element: <VerifyEmptyPage />, index: true },
+      {
+        element: <VerifyReportPage />,
+        handle: { meta: verifyRouteMeta },
+        path: ':runId',
+      },
+    ],
+    element: <VerifyWorkspace />,
+    errorElement: <ErrorBoundary />,
+    handle: { meta: verifyReportsRouteMeta },
+    path: '/verify',
+  },
+
+  // Subject-level delivery acceptance — separate from single-run verify reports.
+  {
+    element: <AcceptanceReportPage />,
+    errorElement: <ErrorBoundary />,
+    handle: { meta: acceptanceRouteMeta },
+    path: '/acceptance/:acceptanceId',
   },
 
   // Devtools route (outside main layout, dev-only)

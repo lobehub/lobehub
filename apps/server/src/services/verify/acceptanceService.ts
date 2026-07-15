@@ -1,0 +1,434 @@
+import { normalizeVerifySurface } from '@lobechat/const/verify';
+import type {
+  AcceptanceStatus,
+  AcceptanceSubjectType,
+  VerifyAgentPlanConfig,
+  VerifyCheckItem,
+  VerifyRunDecisionDetail,
+  VerifySurface,
+} from '@lobechat/types';
+import debug from 'debug';
+
+import { AcceptanceModel } from '@/database/models/acceptance';
+import { DocumentModel } from '@/database/models/document';
+import { TaskModel } from '@/database/models/task';
+import { TopicModel } from '@/database/models/topic';
+import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
+import { VerifyEvidenceModel } from '@/database/models/verifyEvidence';
+import { VerifyReportModel } from '@/database/models/verifyReport';
+import { VerifyRunModel } from '@/database/models/verifyRun';
+import type {
+  AcceptanceItem,
+  VerifyCheckResultItem,
+  VerifyRunItem,
+} from '@/database/schemas/verify';
+import type { LobeChatDatabase } from '@/database/type';
+import { TaskService } from '@/server/services/task';
+
+const log = debug('lobe-server:verify-acceptance');
+
+// ============================================
+// Union view — the cross-round check merge (P-14: the complete inventory of
+// acceptance checks, each with its final verdict + evidence; rounds demoted to
+// provenance). Deterministically computed at read time — never stored, so it
+// can't go stale.
+// ============================================
+
+type CheckState = 'passed' | 'failed' | 'uncertain' | 'not_executed';
+
+const resultState = (result: VerifyCheckResultItem): CheckState => {
+  const v = result.verdict ?? result.status;
+  if (v === 'passed' || v === 'failed' || v === 'uncertain') return v;
+  return 'uncertain';
+};
+
+export interface AcceptanceCheckHistoryEntry {
+  roundIndex: number;
+  state: CheckState;
+  verifyRunId: string;
+}
+
+/** One row of the acceptance union: a check item merged across every round. */
+export interface AcceptanceCheckRow {
+  /**
+   * Set when the item was planned in rounds AFTER the one that produced its
+   * final result (it was carried forward without a re-run): the round the
+   * evidence actually comes from.
+   */
+  carriedFromRound?: number;
+  /** Passed now, but failed in at least one earlier round — a repaired check. */
+  fixed: boolean;
+  /** Verdict trail across rounds, oldest first — only rounds that produced a result. */
+  history: AcceptanceCheckHistoryEntry[];
+  /** The `checkItemId` every round agrees on. */
+  id: string;
+  /** First round whose plan (or results) named this check. */
+  introducedAtRound: number;
+  /** The latest plan snapshot of this item (carries method/expected/requiredEvidence). */
+  planItem?: VerifyCheckItem;
+  required: boolean;
+  /** The final (latest-round) result row, or undefined when the item never ran. */
+  result?: VerifyCheckResultItem;
+  /** Round the final result came from. */
+  resultRound?: number;
+  /** Final cross-round state — what the decision is made on. */
+  state: CheckState;
+  /** Per-item product surface (from the plan item's `verifierConfig.surface`). */
+  surface: VerifySurface | null;
+  title: string;
+}
+
+interface RoundInput {
+  results: VerifyCheckResultItem[];
+  run: VerifyRunItem;
+}
+
+const itemSurface = (item: VerifyCheckItem | undefined): VerifySurface | null => {
+  const raw = (item?.verifierConfig as VerifyAgentPlanConfig | undefined)?.surface;
+  return typeof raw === 'string' ? normalizeVerifySurface(raw) : null;
+};
+
+/**
+ * Merge a whole round chain into the union check list. Alignment key is the
+ * stable `checkItemId` — exact by design: repair rounds re-snapshot the same
+ * plan (same ids), and the ingest CLI reuses case ids across rounds. Two
+ * differently-named ids are two checks; no fuzzy matching here.
+ */
+export const buildAcceptanceCheckUnion = (rounds: RoundInput[]): AcceptanceCheckRow[] => {
+  const ordered = [...rounds].sort((a, b) => (a.run.roundIndex ?? 0) - (b.run.roundIndex ?? 0));
+
+  const rows = new Map<string, AcceptanceCheckRow>();
+  // Last round whose PLAN named each item — drives the carried-forward flag.
+  const lastPlannedRound = new Map<string, number>();
+
+  const ensureRow = (id: string, roundIndex: number): AcceptanceCheckRow => {
+    const existing = rows.get(id);
+    if (existing) return existing;
+    const row: AcceptanceCheckRow = {
+      fixed: false,
+      history: [],
+      id,
+      introducedAtRound: roundIndex,
+      required: true,
+      state: 'not_executed',
+      surface: null,
+      title: id,
+    };
+    rows.set(id, row);
+    return row;
+  };
+
+  for (const { results, run } of ordered) {
+    const roundIndex = run.roundIndex ?? 0;
+    const plan = (run.plan ?? []) as VerifyCheckItem[];
+
+    for (const item of plan) {
+      const row = ensureRow(item.id, roundIndex);
+      // The latest snapshot wins: repair rounds may refine method/expected.
+      row.planItem = item;
+      row.title = item.title;
+      row.required = item.required;
+      row.surface = itemSurface(item) ?? row.surface;
+      lastPlannedRound.set(item.id, roundIndex);
+    }
+
+    for (const result of results) {
+      const row = ensureRow(result.checkItemId, roundIndex);
+      row.history.push({ roundIndex, state: resultState(result), verifyRunId: run.id });
+      row.result = result;
+      row.resultRound = roundIndex;
+      if (!row.planItem && result.checkItemTitle) row.title = result.checkItemTitle;
+      if (!row.planItem) row.required = result.required;
+    }
+  }
+
+  for (const row of rows.values()) {
+    row.state = row.result ? resultState(row.result) : 'not_executed';
+    row.fixed = row.state === 'passed' && row.history.some((entry) => entry.state === 'failed');
+    // Carried forward: a later round still planned the item but never re-ran it,
+    // so the final evidence predates the current round.
+    const planned = lastPlannedRound.get(row.id);
+    if (row.resultRound !== undefined && planned !== undefined && planned > row.resultRound) {
+      row.carriedFromRound = row.resultRound;
+    }
+  }
+
+  return [...rows.values()];
+};
+
+// ============================================
+// Status rollup — the aggregate's user-facing lifecycle state, derived from the
+// current (highest) round. `accepted` is terminal and user-owned: recompute
+// never overwrites it. `rejected` holds until a newer round re-opens the loop.
+// ============================================
+
+/** Derive the aggregate status from the current round's pipeline state. */
+const statusFromRound = (run: VerifyRunItem, hasReport: boolean): AcceptanceStatus => {
+  switch (run.status) {
+    case 'planned': {
+      return 'planned';
+    }
+    case 'verifying': {
+      return 'verifying';
+    }
+    case 'repairing': {
+      return 'repairing';
+    }
+    case 'errored': {
+      return 'errored';
+    }
+    // Both settled outcomes await the same human decision — the verdict is
+    // advice, acceptance is the user's event (P-12).
+    case 'passed':
+    case 'failed':
+    case 'delivered': {
+      return 'delivered';
+    }
+    default: {
+      // Ingested rounds carry no rollup status: a published report means the
+      // round has settled and awaits the decision; otherwise it is still open.
+      return hasReport ? 'delivered' : 'verifying';
+    }
+  }
+};
+
+export interface AcceptanceSubjectSummary {
+  id: string;
+  title: string | null;
+  type: AcceptanceSubjectType;
+}
+
+export class AcceptanceService {
+  private readonly db: LobeChatDatabase;
+  private readonly userId: string;
+  private readonly workspaceId?: string;
+
+  readonly acceptanceModel: AcceptanceModel;
+  private readonly runModel: VerifyRunModel;
+  private readonly resultModel: VerifyCheckResultModel;
+  private readonly evidenceModel: VerifyEvidenceModel;
+  private readonly reportModel: VerifyReportModel;
+
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+    this.db = db;
+    this.userId = userId;
+    this.workspaceId = workspaceId;
+    this.acceptanceModel = new AcceptanceModel(db, userId, workspaceId);
+    this.runModel = new VerifyRunModel(db, userId, workspaceId);
+    this.resultModel = new VerifyCheckResultModel(db, userId, workspaceId);
+    this.evidenceModel = new VerifyEvidenceModel(db, userId, workspaceId);
+    this.reportModel = new VerifyReportModel(db, userId, workspaceId);
+  }
+
+  /**
+   * Validate the subject exists in the caller's scope before creating an
+   * aggregate for it — the table deliberately has no FK (polymorphic subject),
+   * so this is where dangling aggregates are prevented.
+   */
+  private assertSubjectExists = async (
+    subjectType: AcceptanceSubjectType,
+    subjectId: string,
+  ): Promise<void> => {
+    const found = await this.findSubject(subjectType, subjectId);
+    if (!found) {
+      throw new Error(`${subjectType} "${subjectId}" not found in the current workspace`);
+    }
+  };
+
+  private findSubject = async (
+    subjectType: AcceptanceSubjectType,
+    subjectId: string,
+  ): Promise<{ title: string | null } | null> => {
+    switch (subjectType) {
+      case 'task': {
+        const task = await new TaskModel(this.db, this.userId, this.workspaceId).resolve(subjectId);
+        return task ? { title: task.name ?? task.identifier } : null;
+      }
+      case 'topic': {
+        const topic = await new TopicModel(this.db, this.userId, this.workspaceId).findById(
+          subjectId,
+        );
+        return topic ? { title: topic.title ?? null } : null;
+      }
+      case 'document': {
+        const doc = await new DocumentModel(this.db, this.userId, this.workspaceId).findById(
+          subjectId,
+        );
+        return doc ? { title: doc.title ?? null } : null;
+      }
+    }
+  };
+
+  /** Get (or create) the aggregate for a subject, validating the subject first. */
+  ensureForSubject = async (
+    subjectType: AcceptanceSubjectType,
+    subjectId: string,
+    defaults?: { requirement?: string },
+  ): Promise<AcceptanceItem> => {
+    await this.assertSubjectExists(subjectType, subjectId);
+    return this.acceptanceModel.ensureForSubject(subjectType, subjectId, defaults);
+  };
+
+  /**
+   * Chain a run onto an acceptance as its next round, then re-derive the
+   * aggregate status (a new round re-opens a rejected loop).
+   */
+  attachRun = async (runId: string, acceptanceId: string): Promise<VerifyRunItem> => {
+    const acceptance = await this.acceptanceModel.findById(acceptanceId);
+    if (!acceptance) throw new Error(`Acceptance "${acceptanceId}" not found`);
+
+    // Idempotent for the re-ingest path (the CLI sidecar remembers the run):
+    // an already-chained round keeps its index instead of being re-appended.
+    const existing = await this.runModel.findById(runId);
+    if (!existing) throw new Error(`Verify run "${runId}" not found in the current workspace`);
+    if (existing.acceptanceId === acceptanceId) return existing;
+    if (existing.acceptanceId) {
+      throw new Error('This verify run already belongs to another acceptance');
+    }
+
+    const run = await this.runModel.attachToAcceptance(runId, acceptanceId);
+    await this.recomputeStatus(acceptanceId);
+    log('run %s attached to acceptance %s as round %d', runId, acceptanceId, run.roundIndex);
+    return run;
+  };
+
+  /**
+   * Re-derive the aggregate's lifecycle state from its current round. The
+   * user's `accepted` is terminal; `rejected` is sticky until a round newer
+   * than the decision arrives.
+   */
+  recomputeStatus = async (acceptanceId: string): Promise<AcceptanceStatus | null> => {
+    const acceptance = await this.acceptanceModel.findById(acceptanceId);
+    if (!acceptance) return null;
+    if (acceptance.status === 'accepted') return 'accepted';
+
+    const runs = await this.runModel.listByAcceptance(acceptanceId);
+    const current = runs.at(-1);
+    if (!current) return acceptance.status as AcceptanceStatus;
+
+    // The rejected round stays rejected; only a NEWER round re-opens the loop.
+    if (acceptance.status === 'rejected' && current.userDecision === 'reject') return 'rejected';
+
+    const report = await this.reportModel.findByRun(current.id);
+    const status = statusFromRound(current, Boolean(report));
+    if (status !== acceptance.status) {
+      await this.acceptanceModel.updateStatus(acceptanceId, status);
+      log('acceptance %s → %s (from round %d)', acceptanceId, status, current.roundIndex);
+    }
+    return status;
+  };
+
+  /**
+   * The user accepts the delivery — the terminal business event (P-12). Stamps
+   * the decision on the current round, closes the aggregate, and best-effort
+   * completes a task subject that verification alone didn't settle.
+   */
+  accept = async (acceptanceId: string, comment?: string): Promise<AcceptanceItem> => {
+    const acceptance = await this.requireOpenAcceptance(acceptanceId);
+
+    await this.stampDecision(acceptanceId, 'accept', comment);
+    await this.acceptanceModel.updateStatus(acceptanceId, 'accepted');
+
+    if (acceptance.subjectType === 'task') await this.completeTaskSubject(acceptance.subjectId);
+
+    return (await this.acceptanceModel.findById(acceptanceId))!;
+  };
+
+  /**
+   * The user rejects the delivery. The comment is the re-tasking input: it is
+   * recorded on the round's decision detail, where the next repair/verify round
+   * picks it up. (Spawning the repair run itself is the runtime's job — for
+   * agent-bound rounds via the repair pipeline, for ingested rounds via the
+   * next `lh verify ingest-report`.)
+   */
+  reject = async (acceptanceId: string, comment: string): Promise<AcceptanceItem> => {
+    await this.requireOpenAcceptance(acceptanceId);
+
+    await this.stampDecision(acceptanceId, 'reject', comment);
+    await this.acceptanceModel.updateStatus(acceptanceId, 'rejected');
+
+    return (await this.acceptanceModel.findById(acceptanceId))!;
+  };
+
+  private requireOpenAcceptance = async (acceptanceId: string): Promise<AcceptanceItem> => {
+    const acceptance = await this.acceptanceModel.findById(acceptanceId);
+    if (!acceptance) throw new Error(`Acceptance "${acceptanceId}" not found`);
+    if (acceptance.status === 'accepted') {
+      throw new Error('This delivery has already been accepted');
+    }
+    return acceptance;
+  };
+
+  private stampDecision = async (
+    acceptanceId: string,
+    decision: 'accept' | 'reject',
+    comment?: string,
+  ): Promise<void> => {
+    const runs = await this.runModel.listByAcceptance(acceptanceId);
+    const current = runs.at(-1);
+    if (!current) throw new Error('This acceptance has no verification round to decide on');
+
+    const detail: VerifyRunDecisionDetail = {
+      decidedAt: new Date().toISOString(),
+      decidedBy: this.userId,
+      ...(comment ? { comment } : {}),
+    };
+    await this.runModel.setDecision(current.id, decision, detail);
+  };
+
+  /**
+   * Accepting a task subject completes the task when verification didn't
+   * already (e.g. the round failed but the user accepted anyway). Best-effort:
+   * a task error must not undo the recorded acceptance.
+   */
+  private completeTaskSubject = async (subjectId: string): Promise<void> => {
+    try {
+      const taskModel = new TaskModel(this.db, this.userId, this.workspaceId);
+      const task = await taskModel.resolve(subjectId);
+      if (!task || ['canceled', 'completed', 'failed'].includes(task.status)) return;
+
+      // TaskService cascades checkpoint / sibling rollup / downstream unlock —
+      // the same completion path settle.ts drives on a passed verify.
+      await new TaskService(this.db, this.userId, this.workspaceId).updateStatus({
+        id: task.id,
+        status: 'completed',
+      });
+      log('acceptance accepted → task %s completed', task.id);
+    } catch (error) {
+      log('completeTaskSubject failed (non-fatal): %O', error);
+    }
+  };
+
+  /** Best-effort subject header info for the bundle (title may be gone). */
+  resolveSubject = async (acceptance: AcceptanceItem): Promise<AcceptanceSubjectSummary> => {
+    let title: string | null = null;
+    try {
+      title =
+        (
+          await this.findSubject(
+            acceptance.subjectType as AcceptanceSubjectType,
+            acceptance.subjectId,
+          )
+        )?.title ?? null;
+    } catch (error) {
+      log('resolveSubject failed (non-fatal): %O', error);
+    }
+    return {
+      id: acceptance.subjectId,
+      title,
+      type: acceptance.subjectType as AcceptanceSubjectType,
+    };
+  };
+
+  /** The rounds + their per-round data the bundle and the union both read. */
+  loadRounds = async (acceptanceId: string) => {
+    const runs = await this.runModel.listByAcceptance(acceptanceId);
+    const runIds = runs.map((r) => r.id);
+    const [results, evidence, reports] = await Promise.all([
+      this.resultModel.listByRuns(runIds),
+      this.evidenceModel.listByRuns(runIds),
+      this.reportModel.findByRuns(runIds),
+    ]);
+    return { evidence, reports, results, runs };
+  };
+}

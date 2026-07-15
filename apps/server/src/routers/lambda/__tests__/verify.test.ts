@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { verifyRouter } from '@/server/routers/lambda/verify';
 import { FileService } from '@/server/services/file';
+import type * as VerifyServiceModule from '@/server/services/verify';
 
 const modelMocks = vi.hoisted(() => ({
   createEvidence: vi.fn(),
@@ -43,7 +44,8 @@ vi.mock('@/database/models/verifyEvidence', () => ({
   })),
 }));
 
-vi.mock('@/server/services/verify', () => ({
+vi.mock('@/server/services/verify', async (importOriginal) => ({
+  ...(await importOriginal<typeof VerifyServiceModule>()),
   VerifyExecutorService: class VerifyExecutorService {},
   VerifyFeedbackService: class VerifyFeedbackService {},
   VerifyPlanGeneratorService: class VerifyPlanGeneratorService {},

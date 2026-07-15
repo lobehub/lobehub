@@ -612,6 +612,26 @@ inline screenshot/text evidence). On production that resolves to
 `https://app.lobehub.com/verify/<verifyRunId>`. **Include that full production
 link in the final chat reply** alongside the local report dir.
 
+#### Chaining rounds onto a subject's acceptance (optional)
+
+When the verification belongs to a business subject — a task, a topic, or a
+document — chain the session onto that subject's **acceptance aggregate** so
+every round lands on ONE decision page instead of scattered report entries:
+
+```bash
+# SUBJECT is task:$TASK_ID, topic:$TOPIC_ID, or document:$DOC_ID
+env -u LOBEHUB_SERVER -u LOBE_API_KEY -u LOBEHUB_CLI_API_KEY -u LOBEHUB_CLI_HOME \
+  lh verify ingest-report "$DIR" --source agent-testing --subject "$SUBJECT" --open --json
+```
+
+`--subject` accepts `task:<id> | topic:<id> | document:<id>` (or put
+`"subject": "task:<id>"` / `{ "type", "id", "requirement" }` in `result.json`).
+The first ingest creates the acceptance; each **new session** (`--new` or a fresh
+`$DIR`) becomes the next round; re-ingesting a remembered dir updates its round
+in place. The user closes the loop on `/acceptance/<acceptanceId>` (also
+printed by `--open`) — accept / reject with a comment; inspect or decide from the
+terminal via `lh verify acceptance view|accept|reject <id | type:id>`.
+
 #### Re-verifying the same case updates the report in place (don't spawn a new one)
 
 When you iterate on one change — fix → re-verify → fix again — **keep reusing the

@@ -2,8 +2,9 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
-import type { VerifyRunOrigin, VerifySurface } from '@lobechat/const/verify';
+import type { AcceptanceSubjectType, VerifyRunOrigin, VerifySurface } from '@lobechat/const/verify';
 import {
+  acceptanceSubjectTypes,
   normalizeVerifySurface,
   verifyEvidenceTypes,
   verifySurfaces,
@@ -15,6 +16,7 @@ import { getTrpcClient } from '../api/client';
 import { confirm, outputJson, printTable, timeAgo, truncate } from '../utils/format';
 import { log } from '../utils/logger';
 import { uploadLocalFile } from '../utils/uploadLocalFile';
+import { registerAcceptanceCommands } from './verifyAcceptance';
 
 // ── Helpers ────────────────────────────────────────────────
 
@@ -318,6 +320,17 @@ export function planFromResult(result: Record<string, unknown>) {
         })
       : [];
 
+    // Per-item surface: the acceptance union groups checks by it. Normalized to
+    // the closed set (electron → desktop); an unknown value is dropped loudly
+    // rather than stored as a mystery chip.
+    const surfaceRaw = firstString(item.surface);
+    const surface = surfaceRaw ? normalizeVerifySurface(surfaceRaw) : null;
+    if (surfaceRaw && !surface) {
+      log.warn(
+        `plan item "${id}": surface "${surfaceRaw}" names no product surface (expected ${verifySurfaces.join('/')}) — dropping it`,
+      );
+    }
+
     return [
       {
         description: firstString(item.description),
@@ -330,6 +343,7 @@ export function planFromResult(result: Record<string, unknown>) {
           ...(method === undefined ? {} : { method }),
           ...(expected === undefined ? {} : { expected }),
           ...(requiredEvidence.length > 0 ? { requiredEvidence } : {}),
+          ...(surface ? { surface } : {}),
         },
         verifierType,
       },
@@ -391,6 +405,47 @@ function metadataForReport(
   return metadata;
 }
 
+/** A parsed acceptance subject reference (`task:<id>` / `topic:<id>` / `document:<id>`). */
+export interface AcceptanceSubjectRef {
+  subjectId: string;
+  subjectType: AcceptanceSubjectType;
+}
+
+/**
+ * Parse a `type:id` subject reference. Returns null on anything malformed —
+ * callers decide whether that is an error (an explicit `--subject`) or a
+ * silently absent field (result.json).
+ */
+export function parseSubjectRef(raw: unknown): AcceptanceSubjectRef | null {
+  if (typeof raw !== 'string') return null;
+  const idx = raw.indexOf(':');
+  if (idx <= 0) return null;
+  const type = raw.slice(0, idx).trim().toLowerCase();
+  const id = raw.slice(idx + 1).trim();
+  if (!id || !(acceptanceSubjectTypes as readonly string[]).includes(type)) return null;
+  return { subjectId: id, subjectType: type as AcceptanceSubjectType };
+}
+
+/**
+ * The acceptance subject a report attributes itself to, from result.json's
+ * `subject` field — either `"task:<id>"` or `{ type, id, requirement? }`. An
+ * explicit `--subject` flag wins over this.
+ */
+export function subjectFromResult(result: Record<string, unknown>): {
+  ref: AcceptanceSubjectRef;
+  requirement?: string;
+} | null {
+  const raw = result.subject;
+  if (typeof raw === 'string') {
+    const ref = parseSubjectRef(raw);
+    return ref ? { ref } : null;
+  }
+  const value = objectValue(raw);
+  if (!value) return null;
+  const ref = parseSubjectRef(`${firstString(value.type) ?? ''}:${firstString(value.id) ?? ''}`);
+  return ref ? { ref, requirement: firstString(value.requirement) } : null;
+}
+
 /**
  * The report dir remembers which verification session it created, so
  * re-verifying the same case updates one evolving `/verify/<id>` in place
@@ -425,6 +480,9 @@ export function registerVerifyCommand(program: Command) {
   const verify = program
     .command('verify')
     .description('Manage the Agent Run delivery checker (criteria, rubrics, plans, results)');
+
+  // `verify acceptance …` — subject-level acceptance aggregates.
+  registerAcceptanceCommands(verify);
 
   // ════════════ init (materialize the portable verify skill) ════════════
   verify
@@ -1285,6 +1343,14 @@ export function registerVerifyCommand(program: Command) {
     .option('--goal <goal>', 'The goal/task being verified')
     .option('--run <verifyRunId>', 'Update an existing session in place instead of creating one')
     .option('--new', 'Force a fresh session even if this report dir already created one')
+    .option(
+      '--subject <type:id>',
+      "Chain this session onto the subject's acceptance as its next round (task:<id> | topic:<id> | document:<id>)",
+    )
+    .option(
+      '--requirement <text>',
+      'Acceptance requirement recorded when the aggregate is first created',
+    )
     .option('--open', 'Print the in-app URL to open the report')
     .option('--json [fields]', 'Output JSON')
     .action(
@@ -1296,8 +1362,10 @@ export function registerVerifyCommand(program: Command) {
           new?: boolean;
           open?: boolean;
           operation?: string;
+          requirement?: string;
           run?: string;
           source?: string;
+          subject?: string;
           title?: string;
         },
       ) => {
@@ -1345,6 +1413,26 @@ export function registerVerifyCommand(program: Command) {
         // The harness verifies software changes; tag the run so the viewer renders
         // the coding scope header. Overridable via result.json `scenario`.
         const scenario = result.scenario === 'coding' ? 'coding' : ('coding' as const);
+
+        // The acceptance subject this report belongs to: an explicit --subject
+        // wins; otherwise result.json's `subject` field. Malformed explicit input
+        // is a user error; a malformed result field is reported and skipped.
+        let subject = subjectFromResult(result);
+        if (options.subject) {
+          const ref = parseSubjectRef(options.subject);
+          if (!ref) {
+            log.error(
+              `--subject must be one of ${acceptanceSubjectTypes.map((t) => `${t}:<id>`).join(' | ')}`,
+            );
+            process.exit(1);
+          }
+          subject = { ref, requirement: subject?.requirement };
+        } else if (result.subject && !subject) {
+          log.warn(
+            'result.json `subject` is malformed — ignoring it (expected "type:id" or {type,id})',
+          );
+        }
+        const requirement = options.requirement ?? subject?.requirement;
 
         const client = await getTrpcClient();
         const goal = options.goal ?? (typeof result.focus === 'string' ? result.focus : undefined);
@@ -1399,6 +1487,23 @@ export function registerVerifyCommand(program: Command) {
             title,
           });
           runId = run.id;
+        }
+
+        // 1c. Chain the session onto its subject's acceptance as the next round
+        //     BEFORE the report lands, so the report-time status rollup already
+        //     sees the aggregate. Idempotent: a reused session keeps its round.
+        let acceptanceId: string | undefined;
+        if (subject) {
+          const acceptance = await client.acceptance.ensure.mutate({
+            requirement,
+            subjectId: subject.ref.subjectId,
+            subjectType: subject.ref.subjectType,
+          });
+          acceptanceId = acceptance.id;
+          await client.acceptance.attachRun.mutate({
+            acceptanceId: acceptance.id,
+            verifyRunId: runId,
+          });
         }
 
         // 2. Ingest each case as a check result + its evidence. `checkItemId` is
@@ -1534,6 +1639,7 @@ export function registerVerifyCommand(program: Command) {
         if (options.json !== undefined) {
           outputJson(
             {
+              acceptanceId,
               cases: cases.length,
               evidence: evidenceCount,
               inlined,
@@ -1542,6 +1648,7 @@ export function registerVerifyCommand(program: Command) {
               pruned,
               pullRequest,
               reused,
+              subject: subject?.ref,
               unplanned,
               verifyRunId: runId,
             },
@@ -1573,8 +1680,15 @@ export function registerVerifyCommand(program: Command) {
         console.log(
           `${pc.bold('verifyRunId')}: ${runId}${reused ? pc.dim(' (updated in place)') : ''}`,
         );
+        if (acceptanceId) {
+          console.log(
+            `${pc.bold('acceptance')}: ${acceptanceId} ${pc.dim(`(${subject!.ref.subjectType}:${subject!.ref.subjectId})`)}`,
+          );
+        }
         if (options.open) {
           console.log(`${pc.bold('open')}: /verify/${runId}`);
+          if (acceptanceId)
+            console.log(`${pc.bold('open acceptance')}: /acceptance/${acceptanceId}`);
         }
       },
     );

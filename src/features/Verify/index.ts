@@ -1,5 +1,11 @@
+export { default as AcceptanceViewer } from './AcceptanceViewer';
 export { default as CheckerDock } from './CheckerDock';
-export { useVerifyReportSummariesInfinite, useVerifyResults, useVerifyState } from './hooks';
+export {
+  useAcceptanceBundle,
+  useVerifyReportSummariesInfinite,
+  useVerifyResults,
+  useVerifyState,
+} from './hooks';
 export { default as ReportViewer } from './ReportViewer';
 export { default as RunResult } from './RunResult';
 export { countResults, isDraftUnconfirmed, phaseFromStatus } from './utils';

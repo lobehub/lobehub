@@ -18,6 +18,7 @@ import { workspaceMemberRouter } from '@/business/server/lambda-routers/workspac
 import { workspaceUsageRouter } from '@/business/server/lambda-routers/workspaceUsage';
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 
+import { acceptanceRouter } from './acceptance';
 import { agentRouter } from './agent';
 import { agentBotProviderRouter } from './agentBotProvider';
 import { agentDocumentRouter } from './agentDocument';
@@ -84,6 +85,7 @@ import { webBrowsingRouter } from './webBrowsing';
 import { workspaceUserSettingsRouter } from './workspaceUserSettings';
 
 export const lambdaRouter = router({
+  acceptance: acceptanceRouter,
   agent: agentRouter,
   agentBotProvider: agentBotProviderRouter,
   agentNotify: agentNotifyRouter,
