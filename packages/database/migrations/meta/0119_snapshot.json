@@ -6,7 +6,7 @@
   },
   "dialect": "postgresql",
   "enums": {},
-  "id": "1e177eba-5912-4792-a508-09a598ca6cc1",
+  "id": "5e04cc6b-8b87-4398-abf1-ab841112fddc",
   "policies": {},
   "prevId": "8f880aef-6d25-4875-aaa9-d01d12e5d5c2",
   "roles": {},
@@ -20532,24 +20532,6 @@
           "notNull": false,
           "default": "'{}'::jsonb"
         },
-        "root_verify_run_id": {
-          "name": "root_verify_run_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "current_verify_run_id": {
-          "name": "current_verify_run_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "latest_report_id": {
-          "name": "latest_report_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
         "visual_render": {
           "name": "visual_render",
           "type": "jsonb",
@@ -20647,51 +20629,6 @@
           "columns": [
             {
               "expression": "status",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "acceptances_root_verify_run_id_idx": {
-          "name": "acceptances_root_verify_run_id_idx",
-          "columns": [
-            {
-              "expression": "root_verify_run_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "acceptances_current_verify_run_id_idx": {
-          "name": "acceptances_current_verify_run_id_idx",
-          "columns": [
-            {
-              "expression": "current_verify_run_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "acceptances_latest_report_id_idx": {
-          "name": "acceptances_latest_report_id_idx",
-          "columns": [
-            {
-              "expression": "latest_report_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"

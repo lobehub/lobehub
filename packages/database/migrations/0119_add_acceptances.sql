@@ -7,9 +7,6 @@ CREATE TABLE IF NOT EXISTS "acceptances" (
 	"status" text DEFAULT 'pending' NOT NULL,
 	"requirement" text,
 	"config" jsonb DEFAULT '{}'::jsonb,
-	"root_verify_run_id" uuid,
-	"current_verify_run_id" uuid,
-	"latest_report_id" uuid,
 	"visual_render" jsonb,
 	"metadata" jsonb,
 	"completed_at" timestamp with time zone,
@@ -30,9 +27,6 @@ CREATE INDEX IF NOT EXISTS "acceptances_user_id_idx" ON "acceptances" USING btre
 CREATE INDEX IF NOT EXISTS "acceptances_workspace_id_idx" ON "acceptances" USING btree ("workspace_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "acceptances_subject_idx" ON "acceptances" USING btree ("subject_type","subject_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "acceptances_status_idx" ON "acceptances" USING btree ("status");--> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "acceptances_root_verify_run_id_idx" ON "acceptances" USING btree ("root_verify_run_id");--> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "acceptances_current_verify_run_id_idx" ON "acceptances" USING btree ("current_verify_run_id");--> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "acceptances_latest_report_id_idx" ON "acceptances" USING btree ("latest_report_id");--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "acceptances_personal_subject_unique" ON "acceptances" USING btree ("user_id","subject_type","subject_id") WHERE "acceptances"."workspace_id" IS NULL;--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "acceptances_workspace_subject_unique" ON "acceptances" USING btree ("workspace_id","subject_type","subject_id") WHERE "acceptances"."workspace_id" IS NOT NULL;--> statement-breakpoint
 ALTER TABLE "verify_runs" DROP CONSTRAINT IF EXISTS "verify_runs_acceptance_id_acceptances_id_fk";--> statement-breakpoint

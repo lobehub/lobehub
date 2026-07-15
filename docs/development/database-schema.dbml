@@ -2491,9 +2491,6 @@ table acceptances {
   status text [not null, default: 'pending']
   requirement text
   config jsonb [default: `{}`]
-  root_verify_run_id uuid
-  current_verify_run_id uuid
-  latest_report_id uuid
   visual_render jsonb
   metadata jsonb
   completed_at "timestamp with time zone"
@@ -2506,9 +2503,6 @@ table acceptances {
     workspace_id [name: 'acceptances_workspace_id_idx']
     (subject_type, subject_id) [name: 'acceptances_subject_idx']
     status [name: 'acceptances_status_idx']
-    root_verify_run_id [name: 'acceptances_root_verify_run_id_idx']
-    current_verify_run_id [name: 'acceptances_current_verify_run_id_idx']
-    latest_report_id [name: 'acceptances_latest_report_id_idx']
     (user_id, subject_type, subject_id) [name: 'acceptances_personal_subject_unique', unique]
     (workspace_id, subject_type, subject_id) [name: 'acceptances_workspace_subject_unique', unique]
   }

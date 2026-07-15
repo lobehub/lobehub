@@ -372,14 +372,12 @@ export const acceptances = pgTable(
     /** Policy/config snapshot used when instantiating verify rounds for this acceptance. */
     config: jsonb('config').$type<AcceptanceConfig>().default({}),
 
-    /** First verify round in this acceptance chain (denormalized pointer to verify_runs.id). */
-    rootVerifyRunId: uuid('root_verify_run_id'),
-
-    /** Latest active or most recently settled verify round (denormalized pointer to verify_runs.id). */
-    currentVerifyRunId: uuid('current_verify_run_id'),
-
-    /** Latest verify report for this acceptance (denormalized pointer to verify_reports.id). */
-    latestReportId: uuid('latest_report_id'),
+    // No root/current/latest-report pointers: all three are derivable from the
+    // round chain via the verify_runs (acceptance_id, round_index) unique index —
+    // root = min round, current = max round, latest report = report of the
+    // highest round that has one. A denormalized pointer would only add a
+    // write-time sync burden and a staleness bug surface for no read win at this
+    // (per-user, bounded) list scale.
 
     /**
      * AI-filled visualization for the acceptance report. The html payload is
@@ -399,9 +397,6 @@ export const acceptances = pgTable(
     index('acceptances_workspace_id_idx').on(t.workspaceId),
     index('acceptances_subject_idx').on(t.subjectType, t.subjectId),
     index('acceptances_status_idx').on(t.status),
-    index('acceptances_root_verify_run_id_idx').on(t.rootVerifyRunId),
-    index('acceptances_current_verify_run_id_idx').on(t.currentVerifyRunId),
-    index('acceptances_latest_report_id_idx').on(t.latestReportId),
     // One acceptance per subject in personal scope.
     uniqueIndex('acceptances_personal_subject_unique')
       .on(t.userId, t.subjectType, t.subjectId)
