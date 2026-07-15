@@ -23,14 +23,17 @@ type ScheduledRunHandlers = {
 /**
  * Resume a heterogeneous turn that was parked when the provider rate-limited it.
  *
- * Mirrors `continueHeteroAfterError`: resume the surviving CLI session from the
- * assistant-chain tail with the shared continuation instruction. The failed turn
- * is deliberately NOT touched before dispatch — a dispatch failure must leave the
- * user's error card and retry entry intact. Only after execAgent accepts the run
- * is the stale rate-limit card removed: a step that preserved work (streamed
- * content / tool calls) keeps its body and just drops the error; an error-only
- * step would render as an empty block, so it is deleted outright (`deleteMessage`
- * reparents the already-created continuation placeholder onto its parent).
+ * Mirrors `continueHeteroAfterError` — including its ordering: the stale
+ * rate-limit card is cleared BEFORE dispatch. A step that preserved work
+ * (streamed content / tool calls) keeps its body and only drops the error; an
+ * error-only step would render as an empty block, so it is deleted and the
+ * continuation anchors on its parent instead. Then the surviving CLI session is
+ * resumed from that anchor with the shared continuation instruction.
+ *
+ * If dispatch fails (e.g. device offline) the topic stays `scheduled` and the
+ * next tick retries; by then the failed message may already be cleaned or gone,
+ * so a missing message is not an error — the retry falls back to anchoring on
+ * the user turn recorded in the payload.
  */
 const runResumeAfterRateLimit: ScheduledRunHandlers['resume_after_rate_limit'] = async (
   run,
@@ -38,41 +41,30 @@ const runResumeAfterRateLimit: ScheduledRunHandlers['resume_after_rate_limit'] =
 ) => {
   const messageModel = new MessageModel(db, topic.userId, workspaceId);
   const failedMessage = await messageModel.findById(run.failedAssistantMessageId);
-  if (!failedMessage) throw new Error('Scheduled continuation message no longer exists');
 
-  const result = await new AiAgentService(db, topic.userId, { workspaceId }).execAgent({
-    agentId: topic.agentId ?? undefined,
-    appContext: { topicId: topic.id },
-    parentMessageId: failedMessage.id,
-    prompt: HETERO_CONTINUE_PROMPT,
-    resume: true,
-    trigger: RequestTrigger.Cron,
-  });
-
-  if (result.success) {
+  let parentMessageId = run.userMessageId;
+  if (failedMessage) {
     const hasSalvageableWork =
       (Array.isArray(failedMessage.tools) && failedMessage.tools.length > 0) ||
       (!!failedMessage.content && failedMessage.content !== LOADING_FLAT);
 
-    // Cleanup is best-effort: the run is already live, so a failure here must
-    // not fail the dispatch (the dispatcher would leave the topic `scheduled`
-    // and the next tick would fire a duplicate continuation).
-    try {
-      if (hasSalvageableWork) {
-        await messageModel.update(failedMessage.id, { error: null });
-      } else {
-        await messageModel.deleteMessage(failedMessage.id);
-      }
-    } catch (err) {
-      console.error(
-        '[scheduled-topic-dispatch] failed to clear rate-limit error card message=%s: %O',
-        failedMessage.id,
-        err,
-      );
+    if (hasSalvageableWork) {
+      await messageModel.update(failedMessage.id, { error: null });
+      parentMessageId = failedMessage.id;
+    } else {
+      await messageModel.deleteMessage(failedMessage.id);
+      parentMessageId = failedMessage.parentId ?? run.userMessageId;
     }
   }
 
-  return result;
+  return new AiAgentService(db, topic.userId, { workspaceId }).execAgent({
+    agentId: topic.agentId ?? undefined,
+    appContext: { topicId: topic.id },
+    parentMessageId,
+    prompt: HETERO_CONTINUE_PROMPT,
+    resume: true,
+    trigger: RequestTrigger.Cron,
+  });
 };
 
 /**

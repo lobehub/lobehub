@@ -151,7 +151,7 @@ describe('scheduledTopicDispatch', () => {
     );
   });
 
-  it('clears the rate-limit error card once the continuation is accepted, keeping preserved work', async () => {
+  it('clears the rate-limit error card before dispatch, keeping preserved work', async () => {
     mocks.getDueScheduledTopics.mockResolvedValue([topic(resumeAfterRateLimit)]);
     // The failed step streamed content before dying → keep it, only drop the error.
     mocks.findById.mockResolvedValue({
@@ -164,47 +164,52 @@ describe('scheduledTopicDispatch', () => {
 
     expect(mocks.updateMessage).toHaveBeenCalledWith('assistant-failed', { error: null });
     expect(mocks.deleteMessage).not.toHaveBeenCalled();
+    // Cleanup runs first — the continuation must never stream in above a stale card.
+    expect(mocks.updateMessage.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.execAgent.mock.invocationCallOrder[0],
+    );
+    expect(mocks.execAgent).toHaveBeenCalledWith(
+      expect.objectContaining({ parentMessageId: 'assistant-failed' }),
+    );
   });
 
-  it('deletes an error-only failed step after dispatch, instead of leaving an empty block', async () => {
+  it('deletes an error-only failed step and anchors the continuation on its parent', async () => {
     mocks.getDueScheduledTopics.mockResolvedValue([topic(resumeAfterRateLimit)]);
     // Nothing but the error (content is the loading placeholder, no tools).
     mocks.findById.mockResolvedValue({
       content: '...',
       error: { body: { code: 'rate_limit' } },
       id: 'assistant-failed',
+      parentId: 'user-message',
     });
 
     await dispatch();
 
     expect(mocks.deleteMessage).toHaveBeenCalledWith('assistant-failed');
     expect(mocks.updateMessage).not.toHaveBeenCalled();
+    expect(mocks.deleteMessage.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.execAgent.mock.invocationCallOrder[0],
+    );
+    // The deleted step can't anchor anything — chain onto its parent.
+    expect(mocks.execAgent).toHaveBeenCalledWith(
+      expect.objectContaining({ parentMessageId: 'user-message', resume: true }),
+    );
   });
 
-  it('keeps the error card intact when dispatch fails, so retry entry points survive', async () => {
+  it('retries from the user turn when the failed message is already gone', async () => {
+    // A prior tick cleaned the error-only step but its dispatch failed (device
+    // offline). The retry must not error out — it falls back to the user turn
+    // recorded in the payload.
     mocks.getDueScheduledTopics.mockResolvedValue([topic(resumeAfterRateLimit)]);
-    mocks.execAgent.mockResolvedValue({ error: 'device offline', success: false });
-
-    await dispatch();
-
-    expect(mocks.updateMessage).not.toHaveBeenCalled();
-    expect(mocks.deleteMessage).not.toHaveBeenCalled();
-  });
-
-  it('still dispatches successfully when the post-dispatch cleanup write fails', async () => {
-    // The run is already live — a cleanup failure must not leave the topic
-    // `scheduled`, or the next tick would fire a duplicate continuation.
-    mocks.getDueScheduledTopics.mockResolvedValue([topic(resumeAfterRateLimit)]);
-    mocks.updateMessage.mockRejectedValue(new Error('db write failed'));
+    mocks.findById.mockResolvedValue(undefined);
 
     const response = await dispatch();
 
     await expect(response.json()).resolves.toMatchObject({ dispatched: 1 });
-    expect(mocks.clearScheduledRun).toHaveBeenCalledWith(
-      {},
-      'topic-1',
-      'running',
-      expect.any(String),
+    expect(mocks.updateMessage).not.toHaveBeenCalled();
+    expect(mocks.deleteMessage).not.toHaveBeenCalled();
+    expect(mocks.execAgent).toHaveBeenCalledWith(
+      expect.objectContaining({ parentMessageId: 'user-message', resume: true }),
     );
   });
 
