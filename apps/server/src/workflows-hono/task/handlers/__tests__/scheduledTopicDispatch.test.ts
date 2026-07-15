@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   findById: vi.fn(),
   getDueScheduledTopics: vi.fn(),
   getServerDB: vi.fn(),
+  repointScheduledRunFailedMessage: vi.fn(),
   updateMessage: vi.fn(),
 }));
 
@@ -21,6 +22,7 @@ vi.mock('@/database/models/topic', () => ({
     claimScheduledTopic: mocks.claimScheduledTopic,
     clearScheduledRun: mocks.clearScheduledRun,
     getDueScheduledTopics: mocks.getDueScheduledTopics,
+    repointScheduledRunFailedMessage: mocks.repointScheduledRunFailedMessage,
   },
 }));
 
@@ -196,6 +198,30 @@ describe('scheduledTopicDispatch', () => {
     );
   });
 
+  it('re-points the schedule at the dispatch-failure bubble so the retry cleans it too', async () => {
+    // A failed dispatch leaves a `ServerAgentRuntimeError` bubble on the
+    // placeholder execAgent created (finalizeHeteroDispatchError). Without
+    // re-pointing, the next successful retry would strand that bubble forever —
+    // the same stale-card bug this handler's cleanup exists to prevent.
+    mocks.getDueScheduledTopics.mockResolvedValue([topic(resumeAfterRateLimit)]);
+    mocks.execAgent.mockResolvedValue({
+      assistantMessageId: 'assistant-dispatch-failed',
+      error: 'device offline',
+      success: false,
+    });
+
+    const response = await dispatch();
+
+    await expect(response.json()).resolves.toMatchObject({ dispatched: 0 });
+    expect(mocks.repointScheduledRunFailedMessage).toHaveBeenCalledWith(
+      {},
+      'topic-1',
+      'assistant-dispatch-failed',
+    );
+    // The topic itself stays scheduled — the next tick retries.
+    expect(mocks.clearScheduledRun).not.toHaveBeenCalled();
+  });
+
   it('retries from the user turn when the failed message is already gone', async () => {
     // A prior tick cleaned the error-only step but its dispatch failed (device
     // offline). The retry must not error out — it falls back to the user turn
@@ -221,6 +247,8 @@ describe('scheduledTopicDispatch', () => {
 
     await expect(response.json()).resolves.toMatchObject({ claimed: 1, dispatched: 0 });
     expect(mocks.clearScheduledRun).not.toHaveBeenCalled();
+    // Only the resume kind has a cleanup phase to hand the bubble to.
+    expect(mocks.repointScheduledRunFailedMessage).not.toHaveBeenCalled();
   });
 
   it('dispatches a continuation parked by the pre-`kind` version, rather than discarding it', async () => {

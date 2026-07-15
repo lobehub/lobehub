@@ -4,6 +4,7 @@ import type { ExecAgentResult, TopicScheduledRun, TopicScheduledRunKind } from '
 import { RequestTrigger } from '@lobechat/types';
 
 import { MessageModel } from '@/database/models/message';
+import { TopicModel } from '@/database/models/topic';
 import type { TopicItem } from '@/database/schemas/topic';
 import { AiAgentService } from '@/server/services/aiAgent';
 
@@ -57,7 +58,7 @@ const runResumeAfterRateLimit: ScheduledRunHandlers['resume_after_rate_limit'] =
     }
   }
 
-  return new AiAgentService(db, topic.userId, { workspaceId }).execAgent({
+  const result = await new AiAgentService(db, topic.userId, { workspaceId }).execAgent({
     agentId: topic.agentId ?? undefined,
     appContext: { topicId: topic.id },
     parentMessageId,
@@ -65,6 +66,18 @@ const runResumeAfterRateLimit: ScheduledRunHandlers['resume_after_rate_limit'] =
     resume: true,
     trigger: RequestTrigger.Cron,
   });
+
+  // A dispatch that fails inside execAgent (device offline, access denied, …)
+  // leaves its own error bubble on the placeholder it created
+  // (`finalizeHeteroDispatchError`) — the user still sees why the continuation
+  // didn't fire. Track that bubble as the run's failed message so the next
+  // tick's pre-dispatch cleanup clears it exactly like the original card;
+  // otherwise every failed attempt would strand one more stale error card.
+  if (!result.success && result.assistantMessageId) {
+    await TopicModel.repointScheduledRunFailedMessage(db, topic.id, result.assistantMessageId);
+  }
+
+  return result;
 };
 
 /**

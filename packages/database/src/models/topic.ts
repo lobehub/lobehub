@@ -1468,4 +1468,45 @@ export class TopicModel {
         .where(eq(topics.id, id));
     });
   }
+
+  /**
+   * Re-point a still-pending scheduled run at a new failed-attempt message. A
+   * dispatch that fails inside execAgent leaves its own error bubble on the
+   * placeholder it created; tracking that bubble as the run's
+   * `failedAssistantMessageId` lets the next tick's pre-dispatch cleanup clear
+   * it the same way it clears the original card, so retries don't strand one
+   * stale error bubble per failed attempt. No-ops when the schedule was
+   * cancelled or already cleared in the meantime.
+   */
+  static async repointScheduledRunFailedMessage(
+    db: LobeChatDatabase,
+    id: string,
+    failedAssistantMessageId: string,
+  ): Promise<void> {
+    await db.transaction(async (tx) => {
+      const [row] = await tx
+        .select({ metadata: topics.metadata, status: topics.status })
+        .from(topics)
+        .where(eq(topics.id, id))
+        .for('update');
+      if (!row || row.status !== 'scheduled') return;
+
+      const scheduledRun = row.metadata?.scheduledRun;
+      if (!scheduledRun) return;
+
+      await tx
+        .update(topics)
+        .set({
+          metadata: {
+            ...row.metadata,
+            scheduledRun: {
+              ...scheduledRun,
+              failedAssistantMessageId,
+              updatedAt: new Date().toISOString(),
+            },
+          } as ChatTopicMetadata,
+        })
+        .where(eq(topics.id, id));
+    });
+  }
 }
