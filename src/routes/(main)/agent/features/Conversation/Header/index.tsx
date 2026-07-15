@@ -18,25 +18,75 @@ import Tags from './Tags';
 import TerminalToggle from './TerminalToggle';
 import WorkingPanelToggle from './WorkingPanelToggle';
 
+// Below this column width the header is a solid in-flow bar with a bottom
+// border; at or above it, the header floats above the full-bleed message
+// stream (Codex-style): the 960px reading column stays clear of the floating
+// slots, which keep their own opaque backing for when content scrolls under.
+const FLOATING_HEADER_QUERY = '@container agent-chat-layout (min-width: 1200px)';
+
 const headerStyles = createStaticStyles(({ css }) => ({
   container: css`
     position: relative;
+
     container-name: agent-conv-header;
     container-type: inline-size;
+
+    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+
+    background: ${cssVar.colorBgContainer};
+
+    ${FLOATING_HEADER_QUERY} {
+      pointer-events: none;
+
+      position: absolute;
+      z-index: 10;
+      inset-block-start: 0;
+      inset-inline: 0;
+
+      border-block-end: none;
+
+      background: transparent;
+    }
   `,
   leftContent: css`
     overflow: hidden;
     flex: 1 1 auto;
     min-width: 0;
+    background: ${cssVar.colorBgContainer};
+
+    ${FLOATING_HEADER_QUERY} {
+      flex-grow: 0;
+      border-radius: ${cssVar.borderRadius};
+      box-shadow: ${cssVar.boxShadowTertiary};
+    }
+  `,
+  rightContent: css`
+    background: ${cssVar.colorBgContainer};
+
+    ${FLOATING_HEADER_QUERY} {
+      border-radius: ${cssVar.borderRadius};
+      box-shadow: ${cssVar.boxShadowTertiary};
+    }
   `,
   slotLeft: css`
     overflow: hidden;
     flex: 1 1 auto;
     min-width: 0;
+
+    ${FLOATING_HEADER_QUERY} {
+      pointer-events: auto;
+
+      /* Hug the title pill so the transparent middle stays click-through */
+      flex-grow: 0;
+    }
   `,
   slotRight: css`
     flex: 0 0 auto;
     min-width: 0;
+
+    ${FLOATING_HEADER_QUERY} {
+      pointer-events: auto;
+    }
   `,
 }));
 
@@ -64,19 +114,13 @@ const Header = memo(() => {
             align={'center'}
             className={headerStyles.leftContent}
             gap={4}
-            style={{ backgroundColor: cssVar.colorBgContainer }}
           >
             <Tags />
             <HeaderActions />
           </Flexbox>
         }
         right={
-          <Flexbox
-            horizontal
-            align={'center'}
-            gap={4}
-            style={{ backgroundColor: cssVar.colorBgContainer }}
-          >
+          <Flexbox horizontal align={'center'} className={headerStyles.rightContent} gap={4}>
             {isLocalSystemEnabled && (
               <OpenInAppButton workingDirectory={effectiveWorkingDirectory} />
             )}
