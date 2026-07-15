@@ -148,6 +148,7 @@ export const messageRouter = router({
         agentId: z.string(),
         groupId: z.string().nullish(),
         messageGroupId: z.string(),
+        sourceGroupIds: z.array(z.string()).optional(),
         threadId: z.string().nullish(),
         topicId: z.string(),
       }),

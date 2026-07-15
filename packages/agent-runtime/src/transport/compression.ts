@@ -30,6 +30,7 @@ export interface CompressionGroupFinalizeInput {
   content: string;
   groupId?: string;
   messageGroupId: string;
+  sourceGroupIds?: string[];
   threadId?: string;
   topicId: string;
   workspaceId?: string;

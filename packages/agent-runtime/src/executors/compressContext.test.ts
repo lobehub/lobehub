@@ -278,6 +278,95 @@ describe('compressContext executor', () => {
     expect((result.nextContext?.payload as any).skipped).not.toBe(true);
   });
 
+  it('supersedes prior compressed groups without duplicating their summaries', async () => {
+    const sourceGroup1 = {
+      content: 'First prior summary',
+      id: 'source-group-1',
+      lastMessageId: 'assistant-in-source-1',
+      role: 'compressedGroup',
+    };
+    const sourceGroup2 = {
+      content: 'Second prior summary',
+      id: 'source-group-2',
+      lastMessageId: 'assistant-in-source-2',
+      role: 'compressedGroup',
+    };
+    messagesQuery.mockResolvedValue([
+      sourceGroup1,
+      sourceGroup2,
+      { content: 'recent question', id: 'msg-recent', role: 'user' },
+      { content: 'recent answer', id: 'assistant-recent', role: 'assistant' },
+    ]);
+    compressionCreateGroup.mockResolvedValue({
+      messageGroupId: 'group-123',
+      messages: [
+        sourceGroup1,
+        sourceGroup2,
+        { content: '...', id: 'group-123', role: 'compressedGroup' },
+      ],
+      messagesToSummarize: [{ content: 'recent question', id: 'msg-recent', role: 'user' }],
+    });
+    compressionFinalizeGroup.mockResolvedValue({
+      messages: [{ content: 'combined summary', id: 'group-123', role: 'compressedGroup' }],
+    });
+    llmStream.mockResolvedValue({ content: 'combined summary' });
+    const state = createState({
+      messages: [
+        sourceGroup1,
+        sourceGroup2,
+        { content: 'recent question', id: 'msg-recent', role: 'user' },
+        { content: 'recent answer', id: 'assistant-recent', role: 'assistant' },
+      ],
+    });
+
+    const result = await compressContext(host)(createInstruction(state.messages), state);
+
+    expect(compressionBuildPrompt).toHaveBeenCalledWith({
+      existingSummary: 'First prior summary\n\nSecond prior summary',
+      messages: [{ content: 'recent question', id: 'msg-recent', role: 'user' }],
+    });
+    expect(compressionFinalizeGroup).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messageGroupId: 'group-123',
+        sourceGroupIds: ['source-group-1', 'source-group-2'],
+      }),
+    );
+    expect((result.nextContext?.payload as any).compressedMessages).toEqual([
+      { content: 'combined summary', id: 'group-123', role: 'compressedGroup' },
+    ]);
+    expect((result.nextContext?.payload as any).parentMessageId).toBe('assistant-recent');
+  });
+
+  it('can recompress summaries when there are no new persisted messages', async () => {
+    const sourceGroup = {
+      content: 'Prior summary',
+      id: 'source-group',
+      lastMessageId: 'assistant-in-source',
+      role: 'compressedGroup',
+    };
+    messagesQuery.mockResolvedValue([sourceGroup]);
+    compressionCreateGroup.mockResolvedValue({
+      messageGroupId: 'group-123',
+      messages: [sourceGroup, { content: '...', id: 'group-123', role: 'compressedGroup' }],
+      messagesToSummarize: [],
+    });
+    compressionFinalizeGroup.mockResolvedValue({
+      messages: [{ content: 'shorter summary', id: 'group-123', role: 'compressedGroup' }],
+    });
+    llmStream.mockResolvedValue({ content: 'shorter summary' });
+    const state = createState({ messages: [sourceGroup] });
+
+    const result = await compressContext(host)(createInstruction(state.messages), state);
+
+    expect(compressionCreateGroup).toHaveBeenCalledWith(
+      expect.objectContaining({ messageIds: [] }),
+    );
+    expect(compressionFinalizeGroup).toHaveBeenCalledWith(
+      expect.objectContaining({ sourceGroupIds: ['source-group'] }),
+    );
+    expect((result.nextContext?.payload as any).parentMessageId).toBe('assistant-in-source');
+  });
+
   it('skips before creating a group when model config is unavailable', async () => {
     messagesQuery.mockResolvedValue([
       { content: 'history', id: 'msg-history', role: 'user' },
@@ -318,7 +407,15 @@ describe('compressContext executor', () => {
   });
 
   it('rolls back a created group when summary generation fails', async () => {
-    messagesQuery.mockResolvedValue([{ content: 'history', id: 'msg-history', role: 'user' }]);
+    const sourceGroup = {
+      content: 'Existing summary',
+      id: 'source-group',
+      role: 'compressedGroup',
+    };
+    messagesQuery.mockResolvedValue([
+      sourceGroup,
+      { content: 'history', id: 'msg-history', role: 'user' },
+    ]);
     compressionCreateGroup.mockResolvedValue({
       messageGroupId: 'group-123',
       messagesToSummarize: [{ content: 'history', id: 'msg-history', role: 'user' }],
@@ -326,7 +423,7 @@ describe('compressContext executor', () => {
     llmStream.mockRejectedValue(new Error('summary failed'));
 
     const state = createState({
-      messages: [{ content: 'history', id: 'msg-history', role: 'user' }],
+      messages: [sourceGroup, { content: 'history', id: 'msg-history', role: 'user' }],
     });
     const result = await compressContext(host)(createInstruction(state.messages), state);
 
@@ -337,7 +434,10 @@ describe('compressContext executor', () => {
       }),
     );
     expect(compressionFinalizeGroup).not.toHaveBeenCalled();
-    expect((result.nextContext?.payload as any).skipped).toBe(true);
+    expect(result.nextContext?.payload as any).toMatchObject({
+      compressedMessages: expect.arrayContaining([sourceGroup]),
+      skipped: true,
+    });
   });
 
   it('rolls back instead of finalizing when the compression signal is aborted', async () => {

@@ -98,6 +98,7 @@ describe('ClientCompressionTransport', () => {
       ...createGroupInput,
       content: 'Summary',
       messageGroupId: created.messageGroupId,
+      sourceGroupIds: ['previous-compressed-group'],
     });
 
     expect(messageService.createCompressionGroup).toHaveBeenCalledWith(createGroupInput);
@@ -130,6 +131,15 @@ describe('ClientCompressionTransport', () => {
     );
     expect(store.replaceMessages).toHaveBeenNthCalledWith(2, finalMessages, {
       context: expect.objectContaining(operationContext),
+    });
+    expect(messageService.finalizeCompression).toHaveBeenCalledWith({
+      agentId: 'agent-1',
+      content: 'Summary',
+      groupId: 'group-1',
+      messageGroupId: 'compressed-group',
+      sourceGroupIds: ['previous-compressed-group'],
+      threadId: 'thread-1',
+      topicId: 'topic-1',
     });
     expect(store.completeOperation).toHaveBeenNthCalledWith(1, 'child-operation-2');
     expect(store.completeOperation).toHaveBeenNthCalledWith(2, 'child-operation-1', {

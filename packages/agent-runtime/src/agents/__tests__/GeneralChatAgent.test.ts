@@ -213,7 +213,7 @@ describe('GeneralChatAgent', () => {
       expect(result).toEqual({
         payload: {
           currentTokenCount: expect.any(Number),
-          existingSummary: 'Earlier decisions and constraints',
+          existingSummary: 'Outdated decisions\n\nEarlier decisions and constraints',
           messages: state.messages,
         },
         type: 'compress_context',

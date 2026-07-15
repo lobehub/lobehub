@@ -350,6 +350,7 @@ export class MessageService {
     content: string;
     groupId?: string | null;
     messageGroupId: string;
+    sourceGroupIds?: string[];
     threadId?: string | null;
     topicId: string;
   }): Promise<{ messages?: UIChatMessage[] }> => {

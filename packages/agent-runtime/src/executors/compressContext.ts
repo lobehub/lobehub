@@ -125,6 +125,17 @@ export const compressContext =
         { resolveAssetUrls: true },
       );
 
+      const sourceCompressionGroups = dbMessages.filter(
+        (message) => message.role === 'compressedGroup' && Boolean(message.id),
+      );
+      const sourceGroupIds = sourceCompressionGroups
+        .map((message) => message.id)
+        .filter((id): id is string => Boolean(id));
+      const persistedExistingSummary = sourceCompressionGroups
+        .map((message) => (typeof message.content === 'string' ? message.content.trim() : ''))
+        .filter(Boolean)
+        .join('\n\n');
+
       const messageIds = dbMessages
         .filter(
           (message) =>
@@ -134,16 +145,22 @@ export const compressContext =
         )
         .map((message) => message.id);
 
-      if (messageIds.length === 0 || messagesToCompress.length === 0) {
+      if (
+        (messageIds.length === 0 && sourceGroupIds.length === 0) ||
+        messagesToCompress.length === 0
+      ) {
         return skippedResult();
       }
 
       const latestAssistantMessage = dbMessages.findLast((message) => message.role === 'assistant');
+      const parentMessageId =
+        latestAssistantMessage?.id ??
+        (sourceCompressionGroups.at(-1) as { lastMessageId?: string } | undefined)?.lastMessageId;
       const compressionModel =
         newState.modelRuntimeConfig?.compressionModel || newState.modelRuntimeConfig;
 
       if (!compressionModel?.model || !compressionModel?.provider) {
-        return skippedResult(latestAssistantMessage?.id);
+        return skippedResult(parentMessageId);
       }
 
       const compressionResult = await compression.createGroup({
@@ -157,7 +174,7 @@ export const compressContext =
       createdGroupId = compressionResult.messageGroupId;
 
       const compressionPayload = await compression.buildPrompt({
-        existingSummary,
+        existingSummary: persistedExistingSummary || existingSummary,
         messages: compressionResult.messagesToSummarize,
       });
 
@@ -192,13 +209,24 @@ export const compressContext =
         content: summaryResult.content,
         groupId,
         messageGroupId: compressionResult.messageGroupId,
+        sourceGroupIds,
         threadId,
         topicId,
         workspaceId,
       });
 
+      const sourceGroupIdSet = new Set(sourceGroupIds);
+      const finalizedMessagesFallback = compressionResult.messages
+        ?.filter((message) => !sourceGroupIdSet.has(message.id))
+        .map((message) =>
+          message.id === compressionResult.messageGroupId
+            ? { ...message, content: summaryResult.content }
+            : message,
+        );
       const compressedMessagesBase =
-        finalCompression.messages || compressionResult.messagesToSummarize;
+        finalCompression.messages ??
+        finalizedMessagesFallback ??
+        compressionResult.messagesToSummarize;
       const compressedMessages = [...compressedMessagesBase];
 
       for (const preservedMessage of preservedMessages) {
@@ -232,7 +260,7 @@ export const compressContext =
 
       events.push({
         groupId: compressionResult.messageGroupId,
-        parentMessageId: latestAssistantMessage?.id,
+        parentMessageId,
         type: 'compression_complete',
       });
 
@@ -258,7 +286,7 @@ export const compressContext =
           ...createNextContext({
             compressedMessages,
             groupId: compressionResult.messageGroupId,
-            parentMessageId: latestAssistantMessage?.id,
+            parentMessageId,
           }),
           session: {
             messageCount: compressedMessages.length,

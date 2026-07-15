@@ -53,6 +53,7 @@ export class ServerCompressionTransport implements CompressionTransport {
     const result = await service.finalizeCompression(input.messageGroupId, input.content, {
       agentId: input.agentId,
       groupId: input.groupId,
+      sourceGroupIds: input.sourceGroupIds,
       threadId: input.threadId,
       topicId: input.topicId,
     } as any);

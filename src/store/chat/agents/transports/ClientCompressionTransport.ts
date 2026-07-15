@@ -136,6 +136,7 @@ export class ClientCompressionTransport implements CompressionTransport {
       content: input.content,
       groupId: operationContext.groupId,
       messageGroupId: input.messageGroupId,
+      sourceGroupIds: input.sourceGroupIds,
       threadId: operationContext.threadId,
       topicId: input.topicId,
     });
