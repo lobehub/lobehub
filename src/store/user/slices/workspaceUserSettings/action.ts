@@ -1,7 +1,10 @@
 import type { WorkspaceUserPreference } from '@lobechat/types';
 
-import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
-import { useClientDataSWR } from '@/libs/swr';
+import {
+  getActiveWorkspaceId,
+  useActiveWorkspaceId,
+} from '@/business/client/hooks/useActiveWorkspaceId';
+import { mutate, useClientDataSWR } from '@/libs/swr';
 import { workspaceUserSettingsService } from '@/services/workspaceUserSettings';
 import { type StoreSetter } from '@/store/types';
 import { type UserStore } from '@/store/user';
@@ -62,13 +65,19 @@ export class WorkspaceUserSettingsActionImpl {
   ): Promise<void> => {
     // Optimistic merge — the picker's own re-render should see the new
     // choice on the very next frame, not wait for the mutation round-trip.
+    // Mirror the write into the SWR cache too: readers that prefer the
+    // workspace-keyed SWR data over this un-keyed bucket (see
+    // `useEffectiveAgencyConfig`) must observe the optimistic value as well.
     const previous = this.#get().workspaceUserPreference;
     const optimistic: WorkspaceUserPreference = { ...previous, ...patch };
+    const workspaceId = getActiveWorkspaceId();
+    const swrKey = workspaceId ? [WORKSPACE_USER_SETTINGS_SWR_KEY, workspaceId] : null;
     this.#set(
       { workspaceUserPreference: optimistic },
       false,
       n('updateWorkspaceUserPreference/optimistic'),
     );
+    if (swrKey) void mutate(swrKey, optimistic, { revalidate: false });
 
     try {
       await workspaceUserSettingsService.updatePreference(patch);
@@ -80,6 +89,7 @@ export class WorkspaceUserSettingsActionImpl {
         false,
         n('updateWorkspaceUserPreference/rollback'),
       );
+      if (swrKey) void mutate(swrKey, previous, { revalidate: false });
       throw error;
     }
   };

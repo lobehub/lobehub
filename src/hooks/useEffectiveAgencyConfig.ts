@@ -4,7 +4,6 @@ import { resolveAgencyConfig } from '@lobechat/types';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useUserStore } from '@/store/user';
-import { workspaceUserSettingsSelectors } from '@/store/user/selectors';
 
 export interface UseEffectiveAgencyConfigResult {
   /** Shared `agents.agencyConfig` merged with the caller's per-agent override. */
@@ -43,10 +42,20 @@ export const useEffectiveAgencyConfig = (agentId?: string): UseEffectiveAgencyCo
     agentId ? agentByIdSelectors.isWorkspaceAgentById(agentId)(s) : false,
   );
 
-  const { isLoading } = useUserStore((s) => s.useFetchWorkspaceUserPreference)();
-  const override = useUserStore((s) =>
-    agentId ? workspaceUserSettingsSelectors.agentDeviceOverrideById(agentId)(s) : undefined,
-  );
+  // Prefer the SWR response over the store bucket: the SWR cache is keyed by
+  // the ACTIVE workspace, while the zustand bucket is a single un-keyed slot —
+  // when switching back to a workspace whose preference is already cached,
+  // `isLoading` is false immediately but the bucket still holds the previous
+  // workspace's data until revalidation lands. Optimistic writes stay visible
+  // because `updateWorkspaceUserPreference` mutates the SWR cache too. The
+  // bucket remains the fallback for the pre-first-response window; a `null`
+  // response (no server row yet) means "no override", not "use the bucket".
+  const { data: fetchedPreference, isLoading } = useUserStore(
+    (s) => s.useFetchWorkspaceUserPreference,
+  )();
+  const storePreference = useUserStore((s) => s.workspaceUserPreference);
+  const preference = fetchedPreference === undefined ? storePreference : (fetchedPreference ?? {});
+  const override = agentId ? preference.agentDeviceOverrides?.[agentId] : undefined;
 
   return {
     agencyConfig: resolveAgencyConfig(sharedAgencyConfig, isWorkspaceAgent ? override : undefined),

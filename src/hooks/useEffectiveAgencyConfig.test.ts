@@ -34,18 +34,21 @@ const sharedConfig = { boundDeviceId: 'creator-device', executionTarget: 'device
 
 const setupStores = ({
   agencyConfig = sharedConfig as unknown,
+  fetchedPreference,
   isLoading = false,
   override,
   workspaceId,
 }: {
   agencyConfig?: unknown;
+  /** SWR response data — `undefined` = not yet resolved, `null` = no server row. */
+  fetchedPreference?: unknown;
   isLoading?: boolean;
   override?: unknown;
   workspaceId?: string;
 } = {}) => {
   const agentState = { agentMap: { 'agent-1': { agencyConfig, workspaceId } } };
   const userState = {
-    useFetchWorkspaceUserPreference: () => ({ isLoading }),
+    useFetchWorkspaceUserPreference: () => ({ data: fetchedPreference, isLoading }),
     workspaceUserPreference: { agentDeviceOverrides: override ? { 'agent-1': override } : {} },
   };
   mockedUseAgentStore.mockImplementation((selector: any) => selector(agentState));
@@ -95,6 +98,36 @@ describe('useEffectiveAgencyConfig', () => {
     setupStores({ isLoading: true });
     const personalResult = renderHook(() => useEffectiveAgencyConfig('agent-1'));
     expect(personalResult.result.current.isPreferenceLoading).toBe(false);
+  });
+
+  it('prefers the SWR preference over the (possibly stale) store bucket', () => {
+    // Switch-back window: SWR serves the cached CURRENT workspace preference
+    // while the un-keyed store bucket still holds the previous workspace's.
+    setupStores({
+      fetchedPreference: {
+        agentDeviceOverrides: {
+          'agent-1': { boundDeviceId: 'my-device', executionTarget: 'device' },
+        },
+      },
+      override: { boundDeviceId: 'stale-other-ws-device', executionTarget: 'device' },
+      workspaceId: 'ws-1',
+    });
+
+    const { result } = renderHook(() => useEffectiveAgencyConfig('agent-1'));
+
+    expect(result.current.agencyConfig?.boundDeviceId).toBe('my-device');
+  });
+
+  it('treats a null SWR response (no server row) as no override', () => {
+    setupStores({
+      fetchedPreference: null,
+      override: { boundDeviceId: 'stale-other-ws-device', executionTarget: 'device' },
+      workspaceId: 'ws-1',
+    });
+
+    const { result } = renderHook(() => useEffectiveAgencyConfig('agent-1'));
+
+    expect(result.current.agencyConfig).toEqual(sharedConfig);
   });
 
   it('returns undefined config when agentId is missing', () => {
