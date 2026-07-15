@@ -1,4 +1,4 @@
-export { ClaudeCodeAdapter } from './adapters';
+export { AmpAdapter, ClaudeCodeAdapter } from './adapters';
 export type {
   HeterogeneousAgentType,
   LocalHeterogeneousAgentType,

@@ -14,6 +14,8 @@ import type {
   HeterogeneousAgentSessionError,
 } from '@lobechat/electron-client-ipc';
 import {
+  AMP_CLI_INSTALL_COMMANDS,
+  AMP_CLI_INSTALL_DOCS_URL,
   CLAUDE_CODE_CLI_INSTALL_COMMANDS,
   CLAUDE_CODE_CLI_INSTALL_DOCS_URL,
   CODEX_CLI_INSTALL_COMMANDS,
@@ -104,6 +106,7 @@ const CLI_AUTH_REQUIRED_PATTERNS = [
   /\bunauthorized\b/i,
   /\b401\b/,
 ] as const;
+const AMP_AUTH_REQUIRED_PATTERNS = [/please (?:log|sign) in/i, /amp_api_key/i] as const;
 const CODEX_RESUME_CWD_MISMATCH_PATTERNS = [
   /working directory/i,
   /\bcwd\b/i,
@@ -337,7 +340,30 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     const resolvedCommand = session.command.trim();
     if (resolvedCommand) return resolvedCommand;
 
-    return session.agentType === 'codex' ? 'codex' : 'claude';
+    switch (session.agentType) {
+      case 'amp': {
+        return 'amp';
+      }
+      case 'codex': {
+        return 'codex';
+      }
+      default: {
+        return 'claude';
+      }
+    }
+  }
+
+  private buildAmpCliMissingError(session: AgentSession): HeterogeneousAgentSessionError {
+    const command = this.resolveSessionCommand(session);
+
+    return {
+      agentType: 'amp',
+      code: HeterogeneousAgentSessionErrorCode.CliNotFound,
+      command,
+      docsUrl: AMP_CLI_INSTALL_DOCS_URL,
+      installCommands: AMP_CLI_INSTALL_COMMANDS,
+      message: `Amp CLI was not found. Install it and make sure \`${command}\` can be executed.`,
+    };
   }
 
   private buildCodexCliMissingError(session: AgentSession): HeterogeneousAgentSessionError {
@@ -368,6 +394,9 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
 
   private buildCliMissingError(session: AgentSession): HeterogeneousAgentSessionError | undefined {
     switch (session.agentType) {
+      case 'amp': {
+        return this.buildAmpCliMissingError(session);
+      }
       case 'claude-code': {
         return this.buildClaudeCodeCliMissingError(session);
       }
@@ -387,6 +416,17 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     const command = this.resolveSessionCommand(session);
 
     switch (session.agentType) {
+      case 'amp': {
+        return {
+          agentType: 'amp',
+          code: HeterogeneousAgentSessionErrorCode.AuthRequired,
+          command,
+          docsUrl: AMP_CLI_INSTALL_DOCS_URL,
+          message:
+            'Amp could not authenticate. Run `amp login` or configure AMP_API_KEY, then retry.',
+          stderr,
+        };
+      }
       case 'claude-code': {
         return {
           agentType: 'claude-code',
@@ -484,7 +524,12 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   ): HeterogeneousAgentSessionError | undefined {
     const message = this.getErrorMessage(error);
 
-    if (!message || !CLI_AUTH_REQUIRED_PATTERNS.some((pattern) => pattern.test(message))) return;
+    if (!message) return;
+    const patterns =
+      session.agentType === 'amp'
+        ? [...CLI_AUTH_REQUIRED_PATTERNS, ...AMP_AUTH_REQUIRED_PATTERNS]
+        : CLI_AUTH_REQUIRED_PATTERNS;
+    if (!patterns.some((pattern) => pattern.test(message))) return;
 
     return this.buildCliAuthRequiredError(session, message);
   }
@@ -551,11 +596,13 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     session: AgentSession,
   ): Promise<HeterogeneousAgentSessionError | undefined> {
     const defaultCommand =
-      session.agentType === 'claude-code'
-        ? 'claude'
-        : session.agentType === 'codex'
-          ? 'codex'
-          : undefined;
+      session.agentType === 'amp'
+        ? 'amp'
+        : session.agentType === 'claude-code'
+          ? 'claude'
+          : session.agentType === 'codex'
+            ? 'codex'
+            : undefined;
     if (!defaultCommand) return;
 
     const command = this.resolveSessionCommand(session);
@@ -563,7 +610,7 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
       command === defaultCommand
         ? await this.app.binaryManager?.detect?.(defaultCommand, true)
         : await detectHeterogeneousCliCommand(
-            session.agentType === 'claude-code' ? 'claude-code' : 'codex',
+            session.agentType as 'amp' | 'claude-code' | 'codex',
             command,
           );
 

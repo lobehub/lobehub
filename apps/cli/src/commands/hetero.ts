@@ -22,7 +22,7 @@ import { getTrpcClient } from '../api/client';
 import { log } from '../utils/logger';
 import { TrpcIngestSink } from '../utils/TrpcIngestSink';
 
-const SUPPORTED_AGENT_TYPES = new Set(['claude-code', 'codex']);
+const SUPPORTED_AGENT_TYPES = new Set(['amp', 'claude-code', 'codex']);
 const CODEX_REASONING_EFFORT_CONFIG_KEY = 'model_reasoning_effort';
 const CODEX_SERVICE_TIER_CONFIG_KEY = 'service_tier';
 
@@ -107,18 +107,20 @@ const buildExtraArgs = (
   options: Pick<ExecOptions, 'agentArg' | 'effort' | 'model' | 'speed' | 'type'>,
 ): string[] | undefined => {
   const selectorArgs =
-    options.type === 'codex'
-      ? [
-          ...(options.model ? ['--model', options.model] : []),
-          ...(options.effort
-            ? ['-c', `${CODEX_REASONING_EFFORT_CONFIG_KEY}="${options.effort}"`]
-            : []),
-          ...(options.speed ? ['-c', `${CODEX_SERVICE_TIER_CONFIG_KEY}="${options.speed}"`] : []),
-        ]
-      : [
-          ...(options.model ? ['--model', options.model] : []),
-          ...(options.effort ? ['--effort', options.effort] : []),
-        ];
+    options.type === 'amp'
+      ? []
+      : options.type === 'codex'
+        ? [
+            ...(options.model ? ['--model', options.model] : []),
+            ...(options.effort
+              ? ['-c', `${CODEX_REASONING_EFFORT_CONFIG_KEY}="${options.effort}"`]
+              : []),
+            ...(options.speed ? ['-c', `${CODEX_SERVICE_TIER_CONFIG_KEY}="${options.speed}"`] : []),
+          ]
+        : [
+            ...(options.model ? ['--model', options.model] : []),
+            ...(options.effort ? ['--effort', options.effort] : []),
+          ];
   const extraArgs = [...(options.agentArg ?? []), ...selectorArgs];
 
   return extraArgs.length > 0 ? extraArgs : undefined;
@@ -474,7 +476,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
   // Build the ingest sink — no-op for standalone mode, real tRPC sink for
   // server-ingest mode.  The tRPC client reads LOBEHUB_JWT (operation-scoped
   // JWT injected by the server) for authentication.
-  const agentType = options.type as 'claude-code' | 'codex';
+  const agentType = options.type as 'amp' | 'claude-code' | 'codex';
   let sink: TrpcIngestSink | undefined;
   let serverIngester: SerialServerIngester | undefined;
   // Uploader for tool_result images (CC `Read` on an image file). Reuses the
@@ -805,7 +807,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
     ...(askMcpConfigPath ? ['--mcp-config', askMcpConfigPath] : []),
   ];
   // Resolve the CLI binary once, up front, and reuse it for both the initial
-  // run and the resume-retry. For the default bare command (`codex`/`claude`)
+  // run and the resume-retry. For the default bare command (`amp`/`codex`/`claude`)
   // this finds the validated binary — including an app-bundled Codex CLI when
   // a broken `codex` shim shadows PATH — so sandbox/terminal runs no longer
   // ENOENT on a stale global install. Custom commands are used verbatim.
@@ -926,7 +928,9 @@ const exec = async (options: ExecOptions): Promise<void> => {
 export function registerHeteroCommand(program: Command) {
   const hetero = program
     .command('hetero')
-    .description('Run heterogeneous agent CLIs (Claude Code / Codex) and stream their output');
+    .description(
+      'Run heterogeneous agent CLIs (Amp / Claude Code / Codex) and stream their output',
+    );
 
   hetero
     .command('exec')
@@ -959,7 +963,7 @@ export function registerHeteroCommand(program: Command) {
     )
     .option(
       '-c, --command <bin>',
-      'Override the agent CLI binary name (default: `claude` or `codex`)',
+      'Override the agent CLI binary name (default: `amp`, `claude`, or `codex`)',
     )
     .option(
       '--operation-id <id>',

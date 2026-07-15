@@ -61,6 +61,21 @@ describe('resolveCliCommand', () => {
       platformMock.mockReturnValue('darwin');
     });
 
+    it('resolves AMP on PATH and validates its help banner', async () => {
+      callExecFile('/Users/x/.local/bin/amp\n');
+      callExecFile('Amp CLI\n\nUsage: amp [options] [command]');
+
+      const { detectHeterogeneousCliCommand } = await importModule();
+      const status = await detectHeterogeneousCliCommand('amp', 'amp');
+
+      expect(status).toMatchObject({
+        available: true,
+        path: '/Users/x/.local/bin/amp',
+        version: 'Amp CLI',
+      });
+      expect(execFileMock.mock.calls[1]![1]).toEqual(['--help']);
+    });
+
     it('resolves `codex` on PATH and validates it via execFile (no shell)', async () => {
       callExecFile('/usr/local/bin/codex\n');
       callExecFile('codex-cli 0.142.5');
@@ -233,6 +248,16 @@ describe('resolveCliCommand', () => {
   describe('resolveHeteroSpawnCommand', () => {
     beforeEach(() => {
       platformMock.mockReturnValue('darwin');
+    });
+
+    it('uses amp as the default command for the AMP adapter', async () => {
+      callExecFile('/Users/x/.local/bin/amp\n');
+      callExecFile('Amp CLI');
+
+      const { resolveHeteroSpawnCommand } = await importModule();
+      const resolved = await resolveHeteroSpawnCommand('amp', undefined);
+
+      expect(resolved.command).toBe('/Users/x/.local/bin/amp');
     });
 
     it('resolves the default bare command to the validated absolute path', async () => {

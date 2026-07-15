@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import type { HeterogeneousProviderConfig } from './agencyConfig';
 import {
   buildHeteroExecArgs,
   buildHeteroSpawnArgs,
@@ -68,6 +69,13 @@ describe('buildHeteroSpawnArgs', () => {
       '--agent',
       'main',
     ]);
+  });
+
+  it('passes AMP native args through direct spawns and encodes them for lh hetero exec', () => {
+    const provider: HeterogeneousProviderConfig = { args: ['--mode', 'high'], type: 'amp' };
+
+    expect(buildHeteroSpawnArgs(provider)).toEqual(['--mode', 'high']);
+    expect(buildHeteroExecArgs(provider)).toEqual(['--agent-arg=--mode', '--agent-arg=high']);
   });
 
   it('preserves Claude Code defaults when model/effort have not been selected', () => {

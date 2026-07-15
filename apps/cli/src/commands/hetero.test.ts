@@ -102,8 +102,9 @@ describe('hetero exec command', () => {
     stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     mockResolveHeteroSpawnCommand.mockReset();
     mockResolveHeteroSpawnCommand.mockImplementation(
-      async (agentType: 'claude-code' | 'codex', command?: string) => ({
-        command: command ?? (agentType === 'codex' ? 'codex' : 'claude'),
+      async (agentType: 'amp' | 'claude-code' | 'codex', command?: string) => ({
+        command:
+          command ?? (agentType === 'amp' ? 'amp' : agentType === 'codex' ? 'codex' : 'claude'),
       }),
     );
     mockSpawnAgent.mockReset();
@@ -319,6 +320,34 @@ describe('hetero exec command', () => {
       command: 'codex',
       extraArgs: ['-c', 'model = "gpt-5.4"', '-c', 'model_reasoning_effort="xhigh"'],
     });
+  });
+
+  it('runs AMP and forwards only native agent args', async () => {
+    mockSpawnAgent.mockReturnValue(createFakeHandle());
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'amp',
+      '--prompt',
+      'do thing',
+      '--model',
+      'ignored-by-wrapper',
+      '--effort',
+      'high',
+      '--agent-arg=--mode',
+      '--agent-arg=high',
+    ]);
+
+    expect(mockResolveHeteroSpawnCommand).toHaveBeenCalledWith('amp', undefined);
+    expect(mockSpawnAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentType: 'amp',
+        command: 'amp',
+        extraArgs: ['--mode', 'high'],
+      }),
+    );
   });
 
   it('streams events to stdout as JSONL, one line per event', async () => {

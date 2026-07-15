@@ -4,6 +4,7 @@ import type {
   AgentStreamEvent,
 } from '@lobechat/agent-gateway-client';
 import {
+  AMP_CLI_INSTALL_DOCS_URL,
   CLAUDE_CODE_CLI_INSTALL_DOCS_URL,
   CODEX_CLI_INSTALL_DOCS_URL,
   type HeterogeneousAgentSessionError,
@@ -89,21 +90,45 @@ const CLI_AUTH_REQUIRED_PATTERNS = [
   /\bunauthorized\b/i,
   /\b401\b/,
 ] as const;
+const AMP_AUTH_REQUIRED_PATTERNS = [/please (?:log|sign) in/i, /amp_api_key/i] as const;
 
 const buildCliAuthRequiredSessionError = (
-  agentType: 'claude-code' | 'codex',
+  agentType: 'amp' | 'claude-code' | 'codex',
   rawMessage: string,
-): HeterogeneousAgentSessionError => ({
-  agentType,
-  code: HeterogeneousAgentSessionErrorCode.AuthRequired,
-  docsUrl:
-    agentType === 'claude-code' ? CLAUDE_CODE_CLI_INSTALL_DOCS_URL : CODEX_CLI_INSTALL_DOCS_URL,
-  message:
-    agentType === 'claude-code'
-      ? 'Claude Code could not authenticate. Sign in again or refresh its credentials, then retry.'
-      : 'Codex could not authenticate. Sign in again or refresh its credentials, then retry.',
-  stderr: rawMessage,
-});
+): HeterogeneousAgentSessionError => {
+  switch (agentType) {
+    case 'amp': {
+      return {
+        agentType,
+        code: HeterogeneousAgentSessionErrorCode.AuthRequired,
+        docsUrl: AMP_CLI_INSTALL_DOCS_URL,
+        message:
+          'Amp could not authenticate. Run `amp login` or configure AMP_API_KEY, then retry.',
+        stderr: rawMessage,
+      };
+    }
+    case 'claude-code': {
+      return {
+        agentType,
+        code: HeterogeneousAgentSessionErrorCode.AuthRequired,
+        docsUrl: CLAUDE_CODE_CLI_INSTALL_DOCS_URL,
+        message:
+          'Claude Code could not authenticate. Sign in again or refresh its credentials, then retry.',
+        stderr: rawMessage,
+      };
+    }
+    case 'codex': {
+      return {
+        agentType,
+        code: HeterogeneousAgentSessionErrorCode.AuthRequired,
+        docsUrl: CODEX_CLI_INSTALL_DOCS_URL,
+        message:
+          'Codex could not authenticate. Sign in again or refresh its credentials, then retry.',
+        stderr: rawMessage,
+      };
+    }
+  }
+};
 
 const normalizeErrorText = (value?: string) => value?.replaceAll(/\s+/g, ' ').trim();
 
@@ -111,7 +136,7 @@ const maybeClassifyCliAuthRequiredError = (
   error: unknown,
   agentType?: string,
 ): HeterogeneousAgentSessionError | undefined => {
-  if (agentType !== 'claude-code' && agentType !== 'codex') return;
+  if (agentType !== 'amp' && agentType !== 'claude-code' && agentType !== 'codex') return;
 
   const message =
     error instanceof Error
@@ -125,7 +150,12 @@ const maybeClassifyCliAuthRequiredError = (
           ? error.message
           : undefined;
 
-  if (!message || !CLI_AUTH_REQUIRED_PATTERNS.some((pattern) => pattern.test(message))) return;
+  if (!message) return;
+  const patterns =
+    agentType === 'amp'
+      ? [...CLI_AUTH_REQUIRED_PATTERNS, ...AMP_AUTH_REQUIRED_PATTERNS]
+      : CLI_AUTH_REQUIRED_PATTERNS;
+  if (!patterns.some((pattern) => pattern.test(message))) return;
 
   return buildCliAuthRequiredSessionError(agentType, message);
 };
@@ -146,6 +176,20 @@ const shouldSuppressTerminalErrorEcho = (content: string, error: ChatMessageErro
   );
 
   return !!normalizedContent && !!normalizedRawError && normalizedContent === normalizedRawError;
+};
+
+const getDefaultHeterogeneousCommand = (agentType: string): string => {
+  switch (agentType) {
+    case 'amp': {
+      return 'amp';
+    }
+    case 'codex': {
+      return 'codex';
+    }
+    default: {
+      return 'claude';
+    }
+  }
 };
 
 const toHeterogeneousAgentMessageError = (error: unknown, agentType?: string): ChatMessageError => {
@@ -1675,7 +1719,7 @@ export const executeHeterogeneousAgent = async (
     const result = await heterogeneousAgentService.startSession({
       agentType: adapterType,
       args: buildHeteroSpawnArgs(heterogeneousProvider),
-      command: heterogeneousProvider.command || (adapterType === 'codex' ? 'codex' : 'claude'),
+      command: heterogeneousProvider.command || getDefaultHeterogeneousCommand(adapterType),
       cwd: workingDirectory,
       env: {
         // Tell the CLI which LobeHub conversation it is running inside. The child

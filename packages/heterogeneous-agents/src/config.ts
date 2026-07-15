@@ -1,7 +1,7 @@
-export type HeterogeneousAgentMenuLabelKey = 'newClaudeCodeAgent' | 'newCodexAgent';
+export type HeterogeneousAgentMenuLabelKey = 'newAmpAgent' | 'newClaudeCodeAgent' | 'newCodexAgent';
 
 /**
- * Config for local CLI hetero agents (Claude Code, Codex) that run as
+ * Config for local CLI hetero agents (Amp, Claude Code, Codex) that run as
  * desktop subprocesses via Electron IPC. Remote device agents (openclaw,
  * hermes) have their own setup flow and are not listed here.
  */
@@ -11,7 +11,7 @@ export interface HeterogeneousAgentConfig {
   menuKey: string;
   menuLabelKey: HeterogeneousAgentMenuLabelKey;
   title: string;
-  type: 'claude-code' | 'codex';
+  type: 'amp' | 'claude-code' | 'codex';
 }
 
 export const HETEROGENEOUS_AGENT_CONFIGS = [
@@ -31,6 +31,14 @@ export const HETEROGENEOUS_AGENT_CONFIGS = [
     title: 'Codex',
     type: 'codex',
   },
+  {
+    command: 'amp',
+    iconId: 'Amp',
+    menuKey: 'newAmpAgent',
+    menuLabelKey: 'newAmpAgent',
+    title: 'Amp',
+    type: 'amp',
+  },
 ] as const satisfies readonly HeterogeneousAgentConfig[];
 
 export const getHeterogeneousAgentConfig = (type: string) =>
@@ -45,13 +53,12 @@ export const getHeterogeneousAgentConfig = (type: string) =>
  */
 export interface RemoteHeterogeneousAgentConfig {
   title: string;
-  type: 'amp' | 'hermes' | 'opencode' | 'openclaw';
+  type: 'hermes' | 'opencode' | 'openclaw';
 }
 
 export const REMOTE_HETEROGENEOUS_AGENT_CONFIGS = [
   { title: 'OpenClaw', type: 'openclaw' },
   { title: 'Hermes', type: 'hermes' },
-  { title: 'Amp', type: 'amp' },
   { title: 'OpenCode', type: 'opencode' },
 ] as const satisfies readonly RemoteHeterogeneousAgentConfig[];
 

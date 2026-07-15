@@ -42,6 +42,16 @@ vi.mock('@lobechat/heterogeneous-agents/client', () => ({
       title: 'Codex',
       type: 'codex',
     },
+    {
+      avatar: 'amp-avatar',
+      command: 'amp',
+      icon: () => null,
+      iconId: 'Amp',
+      menuKey: 'newAmpAgent',
+      menuLabelKey: 'newAmpAgent',
+      title: 'Amp',
+      type: 'amp',
+    },
   ],
 }));
 
@@ -167,6 +177,7 @@ describe('useCreateMenuItems', () => {
       'divider',
       'newClaudeCodeAgent',
       'newCodexAgent',
+      'newAmpAgent',
       'divider',
       'addAgentFromMarket',
     ]);
@@ -256,5 +267,30 @@ describe('useCreateMenuItems', () => {
     });
     expect(refreshAgentListMock).toHaveBeenCalled();
     expect(navigateMock).toHaveBeenCalledWith('/agent/agent-codex');
+  });
+
+  it('creates AMP as an independent local CLI agent', async () => {
+    const { result } = renderHook(() => useCreateMenuItems());
+
+    const ampItem = result.current
+      .createHeterogeneousAgentMenuItems()
+      .find((item) => isActionItem(item) && item.key === 'newAmpAgent');
+
+    if (!isActionItem(ampItem)) throw new Error('Expected AMP menu item');
+
+    await act(async () => {
+      await ampItem.onClick?.({ domEvent: { stopPropagation: vi.fn() } });
+    });
+
+    expect(createAgentMock).toHaveBeenCalledWith({
+      config: {
+        agencyConfig: { heterogeneousProvider: { command: 'amp', type: 'amp' } },
+        avatar: 'amp-avatar',
+        provider: 'amp',
+        systemRole: '',
+        title: 'Amp',
+      },
+      groupId: undefined,
+    });
   });
 });

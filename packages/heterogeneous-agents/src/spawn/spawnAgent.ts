@@ -10,11 +10,11 @@ import type { AgentPromptInput, BuildAgentInputOptions } from './input';
 import { buildAgentInput } from './input';
 
 export interface SpawnAgentOptions {
-  /** Agent type key (`'claude-code'` | `'codex'`). */
+  /** Agent type key (`'amp'` | `'claude-code'` | `'codex'`). */
   agentType: string;
   /**
-   * Override the CLI binary name. Defaults to `'claude'` for `claude-code`,
-   * `'codex'` for `codex`. Use this when the binary lives at a non-default
+   * Override the CLI binary name. Defaults to the agent's standard executable.
+   * Use this when the binary lives at a non-default
    * path or is wrapped by a launcher.
    */
   command?: string;
@@ -160,6 +160,22 @@ export const CODEX_EXECUTION_MODE_FLAGS = [
   '-s',
 ] as const;
 
+/**
+ * Headless, private AMP execution flags shared by desktop and `lh hetero exec`.
+ * AMP's stream-json protocol reports terminal failures as JSON even when the
+ * process exits with code 0, so the dedicated adapter owns result validation.
+ */
+export const AMP_BASE_ARGS = [
+  '--execute',
+  '--stream-json-thinking',
+  '--stream-json-input',
+  '--visibility',
+  'private',
+  '--no-ide',
+  '--no-notifications',
+  '--no-archive-after-execute',
+] as const;
+
 const hasAnyFlag = (args: string[], flags: readonly string[]) =>
   args.some((arg) => flags.includes(arg as (typeof flags)[number]));
 
@@ -200,8 +216,19 @@ const buildCodexArgs = ({ extraArgs, inputArgs, resumeSessionId }: BuildSpawnArg
     : ['exec', ...optionArgs];
 };
 
+const buildAmpArgs = ({ extraArgs, inputArgs, resumeSessionId }: BuildSpawnArgsParams) => {
+  const executionArgs = [...AMP_BASE_ARGS, ...inputArgs, ...extraArgs];
+
+  return resumeSessionId
+    ? ['threads', 'continue', resumeSessionId, ...executionArgs]
+    : executionArgs;
+};
+
 const buildSpawnArgs = (params: BuildSpawnArgsParams): string[] => {
   switch (params.agentType) {
+    case 'amp': {
+      return buildAmpArgs(params);
+    }
     case 'claude-code': {
       return buildClaudeCodeArgs(params);
     }
@@ -214,7 +241,19 @@ const buildSpawnArgs = (params: BuildSpawnArgsParams): string[] => {
   }
 };
 
-const defaultCommand = (agentType: string): string => (agentType === 'codex' ? 'codex' : 'claude');
+const defaultCommand = (agentType: string): string => {
+  switch (agentType) {
+    case 'amp': {
+      return 'amp';
+    }
+    case 'codex': {
+      return 'codex';
+    }
+    default: {
+      return 'claude';
+    }
+  }
+};
 
 const killProcessTree = (proc: ChildProcess, signal: NodeJS.Signals): void => {
   if (!proc.pid || proc.killed) return;
@@ -244,7 +283,7 @@ const killProcessTree = (proc: ChildProcess, signal: NodeJS.Signals): void => {
 };
 
 /**
- * Spawn an external agent CLI (Claude Code or Codex) and yield its stream as
+ * Spawn an external agent CLI (Amp, Claude Code, or Codex) and yield its stream as
  * unified `AgentStreamEvent`s. Used by `lh hetero exec` for both standalone
  * terminal runs and (later) sandbox-driven runs that ingest into the server.
  *

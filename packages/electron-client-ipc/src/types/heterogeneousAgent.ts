@@ -1,3 +1,10 @@
+export const AMP_CLI_INSTALL_DOCS_URL = 'https://ampcode.com/manual';
+
+export const AMP_CLI_INSTALL_COMMANDS = [
+  'curl -fsSL https://ampcode.com/install.sh | bash',
+  'brew install ampcode/tap/ampcode',
+] as const;
+
 export const CLAUDE_CODE_CLI_INSTALL_DOCS_URL =
   'https://docs.anthropic.com/en/docs/claude-code/setup';
 

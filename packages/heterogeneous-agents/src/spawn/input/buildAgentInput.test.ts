@@ -161,6 +161,37 @@ describe('buildAgentInput', () => {
     });
   });
 
+  describe('amp', () => {
+    it('uses AMP stream-json input with text and inline images', async () => {
+      const plan = await buildAgentInput('amp', [
+        { text: 'inspect', type: 'text' },
+        {
+          source: { data: PNG_BYTES.toString('base64'), mediaType: 'image/png', type: 'base64' },
+          type: 'image',
+        },
+      ]);
+
+      expect(plan.args).toEqual([]);
+      expect(JSON.parse(plan.stdin.trim())).toEqual({
+        message: {
+          content: [
+            { text: 'inspect', type: 'text' },
+            {
+              source: {
+                data: PNG_BYTES.toString('base64'),
+                media_type: 'image/png',
+                type: 'base64',
+              },
+              type: 'image',
+            },
+          ],
+          role: 'user',
+        },
+        type: 'user',
+      });
+    });
+  });
+
   describe('codex', () => {
     it('puts text on stdin and emits no --image flags when there are no images', async () => {
       const plan = await buildAgentInput('codex', 'just text');

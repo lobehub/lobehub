@@ -360,6 +360,8 @@ export default {
   'heteroAgent.cloudRepo.notSet': 'No repo selected',
   'heteroAgent.cloudRepo.noRepos': 'No repositories configured. Add them in agent settings.',
   'heteroAgent.cloudRepo.multiSelected': '{{count}} repos selected',
+  'heteroAgent.executionTarget.ampSandboxUnsupported':
+    'Amp currently runs only on a local or connected device',
   'heteroAgent.executionTarget.auto': 'Auto',
   'heteroAgent.executionTarget.autoDesc':
     'Use an online device automatically, picking one when several are available',
@@ -584,6 +586,17 @@ export default {
     "Skill wasn't added. Retry, or create an Agent anyway.",
   'createModal.skillSuggestion.title': 'A Skill may fit better',
   'createModal.title': 'What should this Agent do?',
+  'ampInstallGuide.actions.openDocs': 'Open Install Guide',
+  'ampInstallGuide.actions.openSystemTools': 'Open System Tools',
+  'ampInstallGuide.afterInstall':
+    'After installing, run `amp login`, then retry your message or click Re-detect in System Tools.',
+  'ampInstallGuide.desc':
+    'Amp needs the Amp CLI to run locally. Install it and make sure the `amp` command is available in your PATH.',
+  'ampInstallGuide.installWithBrew': 'Homebrew (macOS)',
+  'ampInstallGuide.installWithNpm': 'Recommended install',
+  'ampInstallGuide.menuNotification.title': 'Amp CLI not found',
+  'ampInstallGuide.reason': 'LobeHub could not start Amp: {{message}}',
+  'ampInstallGuide.title': 'Install Amp CLI',
   'claudeCodeInstallGuide.actions.openDocs': 'Open Install Guide',
   'claudeCodeInstallGuide.actions.openSystemTools': 'Open System Tools',
   'claudeCodeInstallGuide.afterInstall':
@@ -662,6 +675,7 @@ export default {
   'codexInstallGuide.title': 'Install Codex CLI',
   'addAgentFromMarket': 'Add from Market',
   'newAgent': 'Create Agent',
+  'newAmpAgent': 'Add Amp',
   'newClaudeCodeAgent': 'Add Claude Code',
   'newCodexAgent': 'Add Codex',
   'newPlatformAgent': 'Connect Agent',

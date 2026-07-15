@@ -112,7 +112,7 @@ interface CreatePlatformAgentContentProps {
   visibility?: 'private' | 'public';
 }
 
-const COMING_SOON_PLATFORMS = new Set<RemoteHeterogeneousAgentType>(['amp', 'opencode']);
+const COMING_SOON_PLATFORMS = new Set<RemoteHeterogeneousAgentType>(['opencode']);
 
 const CreatePlatformAgentContent = memo<CreatePlatformAgentContentProps>(
   ({ groupId, visibility }) => {

@@ -4,7 +4,7 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 
 /**
- * Shared resolver for the external CLI-agent binaries (Claude Code / Codex).
+ * Shared resolver for the external CLI-agent binaries (Amp / Claude Code / Codex).
  *
  * This is the single source of truth for "given a command name, where is the
  * runnable binary?". It's consumed by BOTH spawn sites:
@@ -20,7 +20,7 @@ import { promisify } from 'node:util';
 const execFilePromise = promisify(execFile);
 const execPromise = promisify(exec);
 
-export type HeterogeneousCliAgentType = 'claude-code' | 'codex';
+export type HeterogeneousCliAgentType = 'amp' | 'claude-code' | 'codex';
 
 /**
  * Resolution result. A structural subset of the desktop `BinaryManager`'s
@@ -235,6 +235,10 @@ export const detectValidatedCommand = async (
 };
 
 const HETEROGENEOUS_CLI_AGENT_OPTIONS = {
+  'amp': {
+    validateFlag: '--help',
+    validateKeywords: ['Amp CLI'],
+  },
   'claude-code': {
     validateKeywords: ['claude code'],
   },
@@ -247,6 +251,7 @@ const HETEROGENEOUS_CLI_AGENT_OPTIONS = {
 // fallback locations below hold *this* binary, so they may only be probed when
 // the requested command is the default — never for a custom command.
 export const DEFAULT_HETERO_COMMAND: Record<HeterogeneousCliAgentType, string> = {
+  'amp': 'amp',
   'claude-code': 'claude',
   'codex': 'codex',
 };
@@ -257,6 +262,17 @@ export const DEFAULT_HETERO_COMMAND: Record<HeterogeneousCliAgentType, string> =
 // desktop app bundles a functional CLI inside its app bundle without symlinking it.
 const getWellKnownCommandPaths = (agentType: HeterogeneousCliAgentType): string[] => {
   switch (agentType) {
+    case 'amp': {
+      if (platform() !== 'darwin' && platform() !== 'linux') return [];
+
+      return [
+        path.join(homedir(), '.local', 'bin', 'amp'),
+        path.join(homedir(), '.amp', 'bin', 'amp'),
+        path.join(homedir(), '.bun', 'bin', 'amp'),
+        path.join(homedir(), '.npm-global', 'bin', 'amp'),
+        path.join(homedir(), 'Library', 'pnpm', 'amp'),
+      ];
+    }
     case 'claude-code': {
       if (platform() !== 'darwin' && platform() !== 'linux') return [];
 

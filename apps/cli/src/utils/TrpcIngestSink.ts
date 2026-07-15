@@ -13,7 +13,7 @@ import type { IngestSink } from './BatchIngester';
 export class TrpcIngestSink implements IngestSink {
   constructor(
     private readonly client: TrpcClient,
-    private readonly agentType: 'claude-code' | 'codex',
+    private readonly agentType: 'amp' | 'claude-code' | 'codex',
     private readonly operationId: string,
     private readonly topicId: string,
     private readonly assistantMessageId?: string,

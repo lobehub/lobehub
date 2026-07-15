@@ -355,11 +355,12 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   const heteroType = agencyConfig?.heterogeneousProvider?.type;
   const boundDeviceId = agencyConfig?.boundDeviceId;
 
-  // Heterogeneous agents (Claude Code / Codex — remote types already early-return
+  // Local heterogeneous agents (remote types already early-return
   // below) bring their own toolchain and must execute somewhere, so `'none'`
   // (plain chat, no execution environment) isn't a valid target for them: hide
   // the option and never fall back to / honour a stale stored `'none'`.
   const isHetero = !!heteroType;
+  const supportsSandbox = heteroType !== 'amp';
 
   // Workspace-keyed SWR fetch — the raw lambdaQuery key has no workspace
   // dimension, so the picker kept showing the previous workspace's pool after
@@ -603,9 +604,14 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
       ) : null}
       <OptionRow
         active={isActive('sandbox')}
-        desc={t('heteroAgent.executionTarget.sandboxDesc')}
+        disabled={!supportsSandbox}
         icon={<Icon icon={BoxIcon} size={14} />}
         label={t('heteroAgent.executionTarget.sandbox')}
+        desc={t(
+          supportsSandbox
+            ? 'heteroAgent.executionTarget.sandboxDesc'
+            : 'heteroAgent.executionTarget.ampSandboxUnsupported',
+        )}
         onClick={() => void handleSelect('sandbox')}
       />
       {deviceRows.length > 0 ? (

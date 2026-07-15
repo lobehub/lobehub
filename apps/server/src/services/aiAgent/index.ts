@@ -1597,7 +1597,7 @@ export class AiAgentService {
       !!botContext,
     );
 
-    // 3.5. Hetero-agent early exit — Claude Code / Codex / OpenClaw / Hermes agents bypass the
+    // 3.5. Hetero-agent early exit — local CLI and remote platform agents bypass the
     // server-side LLM pipeline.  After topic + message creation we hand off to
     // the device gateway (desktop) or cloud sandbox, which will push events
     // back via `heteroIngest` / `heteroFinish` (claude-code / codex) or
@@ -1605,11 +1605,11 @@ export class AiAgentService {
     //
     // Detection: prefer agencyConfig.heterogeneousProvider.type (set by the UI),
     // fall back to model field for backwards compatibility.
-    const HETERO_AGENT_MODELS = new Set<string>(['claude-code', 'codex']);
+    const HETERO_AGENT_MODELS = new Set<string>(['amp', 'claude-code', 'codex']);
     const heteroProviderType = agentConfig.agencyConfig?.heterogeneousProvider?.type;
     const isHeteroAgent = !!heteroProviderType || HETERO_AGENT_MODELS.has(model);
     const heteroType = (heteroProviderType ?? model) as
-      'claude-code' | 'codex' | 'hermes' | 'openclaw';
+      'amp' | 'claude-code' | 'codex' | 'hermes' | 'openclaw';
 
     // ── Shared turn setup (runs for BOTH hetero and normal agents) ──────────
     // Everything up to and including persisting the turn is identical for both
@@ -1889,7 +1889,7 @@ export class AiAgentService {
           ? runAttachments.imageList.map((image) => ({ id: image.id, url: image.url }))
           : undefined;
       const heteroExecArgs =
-        heteroType === 'claude-code' || heteroType === 'codex'
+        heteroType === 'amp' || heteroType === 'claude-code' || heteroType === 'codex'
           ? buildHeteroExecArgs(
               agentConfig.agencyConfig?.heterogeneousProvider?.type === heteroType
                 ? agentConfig.agencyConfig.heterogeneousProvider
@@ -2070,7 +2070,7 @@ export class AiAgentService {
           };
         }
       } else {
-        // Local CLI hetero (claude-code / codex) — fork between device dispatch
+        // Local CLI hetero (Amp / Claude Code / Codex) — fork between device dispatch
         // and cloud sandbox via the shared execution plan:
         //   - requestedDeviceId (topic-level override) always wins
         //   - executionTarget 'device' → dispatch to boundDeviceId (errors if unset)
@@ -2129,7 +2129,9 @@ export class AiAgentService {
               agentId: resolvedAgentId,
               assistantMessageId: assistantMessageRecord.id,
               detail:
-                'No device bound. Pick a device in the Execution Device switcher, or switch to Cloud sandbox.',
+                heteroType === 'amp'
+                  ? 'No device bound. Pick a local or connected device in the Execution Device switcher.'
+                  : 'No device bound. Pick a device in the Execution Device switcher, or switch to Cloud sandbox.',
               message: 'No bound device for hetero agent',
               operationId,
               topicId,
@@ -2230,7 +2232,34 @@ export class AiAgentService {
             };
           }
         } else {
-          // Cloud sandbox path — only for local CLI agents (claude-code / codex).
+          if (heteroType === 'amp') {
+            const message =
+              'Amp requires a local or connected device; cloud sandbox execution is not supported.';
+            await this.finalizeHeteroDispatchError({
+              agentId: resolvedAgentId,
+              assistantMessageId: assistantMessageRecord.id,
+              detail: message,
+              message,
+              operationId,
+              topicId,
+            });
+            return {
+              agentId: resolvedAgentId,
+              assistantMessageId: assistantMessageRecord.id,
+              autoStarted: false,
+              createdAt: new Date().toISOString(),
+              error: message,
+              message,
+              operationId,
+              status: 'error',
+              success: false,
+              timestamp: new Date().toISOString(),
+              topicId,
+              userMessageId: userMessageRecord?.id ?? parentMessageId ?? '',
+            };
+          }
+
+          // Cloud sandbox path — only for sandbox-provisioned local CLI agents.
           // Remote agents (openclaw / hermes) always require a bound device.
           // Lazy-loaded on purpose: `sandboxRunner` pulls the sandbox-service graph
           // (which eagerly touches server-only ModelRuntime env at module init), so

@@ -24,7 +24,7 @@ export interface BuildAgentInputOptions extends NormalizeImageOptions {
  *
  * `args` is appended to the agent's CLI argv (e.g. Codex `--image <path>`
  * pairs); `stdin` is the payload written to the child's stdin (stream-json
- * for Claude Code, raw text for Codex).
+ * for Amp / Claude Code, raw text for Codex).
  */
 export interface AgentInputPlan {
   args: string[];
@@ -126,7 +126,7 @@ const buildCodexInput = async (
  * extra CLI args required to attach images. The single source of truth for
  * how each external agent CLI receives multimodal input.
  *
- * - `claude-code`: stream-json on stdin with text + base64 image content blocks
+ * - `amp` / `claude-code`: stream-json on stdin with text + base64 image content blocks
  * - `codex`: raw text on stdin + repeatable `--image <path>` flags
  *
  * Path-mode agents materialize URL / base64 images via `materializeImageToPath`
@@ -140,6 +140,7 @@ export const buildAgentInput = async (
   const blocks = toBlocks(prompt);
 
   switch (agentType) {
+    case 'amp':
     case 'claude-code': {
       return buildClaudeCodeStdin(blocks, options);
     }
