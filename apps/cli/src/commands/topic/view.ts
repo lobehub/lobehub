@@ -1,4 +1,3 @@
-import { sanitizeUTF8 } from '@lobechat/utils/sanitizeUTF8';
 import type { Command } from 'commander';
 import pc from 'picocolors';
 
@@ -144,9 +143,18 @@ const redactBase64DataUrls = (value: string): string => {
   return output;
 };
 
+const sanitizeTerminalControls = (value: string): string =>
+  value
+    .replaceAll('�', '')
+    // Keep newlines and tabs for formatting while dropping terminal control sequences.
+    // eslint-disable-next-line no-control-regex
+    .replaceAll(/[\u0000-\u0008\v\f\u000E-\u001F\u007F-\u009F]/g, '')
+    // Preserve valid surrogate pairs (emoji) and remove only lone surrogates.
+    .replaceAll(/[\uD800-\uDFFF]/gu, '');
+
 const normalizeTerminalText = (value: string): string =>
   redactBase64DataUrls(
-    sanitizeUTF8(value)
+    sanitizeTerminalControls(value)
       .replaceAll('\r\n', '\n')
       .replaceAll('\r', '\n')
       .replaceAll('\t', '    ')
