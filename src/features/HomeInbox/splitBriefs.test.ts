@@ -23,14 +23,14 @@ describe('splitBriefs', () => {
     expect(news.map((b) => b.id)).toEqual(['b']);
   });
 
-  it('routes legacy scheduled result briefs to news instead of needsYou', () => {
-    const recurringReport = scheduledResult('weekly-repository-health-report');
+  it('routes scheduled task results to news instead of needsYou', () => {
+    const recurringReport = scheduledResult('run-now-scheduled-task-report');
     const oneOffDelivery = brief('one-off-delivery', 'result');
 
     const { needsYou, news } = splitBriefs([recurringReport, oneOffDelivery]);
 
     expect(needsYou.map((item) => item.id)).toEqual(['one-off-delivery']);
-    expect(news.map((item) => item.id)).toEqual(['weekly-repository-health-report']);
+    expect(news.map((item) => item.id)).toEqual(['run-now-scheduled-task-report']);
   });
 
   it('sinks errors to the bottom of needsYou', () => {

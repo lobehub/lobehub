@@ -18,9 +18,9 @@ export interface SplitBriefs {
 }
 
 /**
- * Scheduled task results created before recurring runs were emitted as
- * `insight` are status updates too. Keep this compatibility rule so existing
- * unresolved rows leave the user's action queue immediately after upgrading.
+ * Results belonging to scheduled tasks are recurring reports, including an
+ * ad-hoc "Run now" invocation. They remain `result` briefs, but reading the
+ * report is enough — they do not require explicit acceptance.
  */
 const isNewsBrief = (brief: BriefItem): boolean =>
   brief.type === 'insight' || (brief.type === 'result' && brief.taskStatus === 'scheduled');
