@@ -30,7 +30,6 @@ import {
   Loader2,
   PanelRightOpen,
   RotateCcw,
-  Target,
 } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -66,14 +65,11 @@ const styles = createStaticStyles(({ css }) => ({
     height: 100%;
     background: ${cssVar.colorBgLayout};
   `,
-  requirement: css`
-    padding-block: 14px;
-    padding-inline: 16px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-inline-start: 3px solid ${cssVar.colorPrimary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorFillQuaternary};
+  requirementLabel: css`
+    font-size: 12px;
+    font-weight: 500;
+    color: ${cssVar.colorTextTertiary};
+    letter-spacing: 0.04em;
   `,
   scopeChip: css`
     font-size: 12px;
@@ -379,17 +375,13 @@ const AcceptancePage = memo(() => {
               </Flexbox>
             </Flexbox>
 
-            {/* The acceptance bar — what this delivery is judged against. A
-                first-class body block, not header fine print. */}
+            {/* The acceptance bar — what this delivery is judged against.
+                Prominence through typography (a lede under the heading), not
+                chrome: no card, no border. */}
             {acceptance.requirement && (
-              <Flexbox className={styles.requirement} gap={6}>
-                <Flexbox horizontal align={'center'} gap={8}>
-                  <Icon color={cssVar.colorTextSecondary} icon={Target} size={15} />
-                  <Text strong style={{ fontSize: 13 }}>
-                    {t('acceptance.requirementLabel')}
-                  </Text>
-                </Flexbox>
-                <Text style={{ fontSize: 14, lineHeight: 1.7 }}>{acceptance.requirement}</Text>
+              <Flexbox gap={4} style={{ maxWidth: 760 }}>
+                <Text className={styles.requirementLabel}>{t('acceptance.requirementLabel')}</Text>
+                <Text style={{ fontSize: 15, lineHeight: 1.7 }}>{acceptance.requirement}</Text>
               </Flexbox>
             )}
 
