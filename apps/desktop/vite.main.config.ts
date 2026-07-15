@@ -1,10 +1,11 @@
 import path from 'node:path';
 
-import { defineConfig } from 'vite';
+import { defineConfig, type UserConfig } from 'vite';
 
 import { externalRuntimeModules } from './external-runtime-deps.config.mjs';
 import { getNativeExternalDependencies } from './native-deps.config.mjs';
 import {
+  applyDesktopViteConfigExtension,
   loadDesktopEnv,
   MAIN_NODE_TARGET,
   mainProcessAlias,
@@ -12,7 +13,8 @@ import {
   processEnvDefine,
 } from './vite.shared';
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(async (env) => {
+  const { mode } = env;
   loadDesktopEnv(mode);
 
   const isDev = mode === 'development';
@@ -24,7 +26,7 @@ export default defineConfig(({ mode }) => {
   console.info(`[vite.main.config.ts] Detected UPDATE_CHANNEL: ${updateChannel}`);
   console.info(`[vite.main.config.ts] Cloud desktop build: ${isCloudDesktopBuild}`);
 
-  return {
+  const config = {
     build: {
       assetsDir: 'chunks',
       copyPublicDir: false,
@@ -112,5 +114,7 @@ export default defineConfig(({ mode }) => {
     },
     root: __dirname,
     ssr: { noExternal: true },
-  };
+  } satisfies UserConfig;
+
+  return applyDesktopViteConfigExtension('main', config, env);
 });

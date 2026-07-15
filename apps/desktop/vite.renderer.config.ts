@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { vanillaExtractPlugin } from '@vanilla-extract/vite-plugin';
-import type { PluginOption, ViteDevServer } from 'vite';
+import type { PluginOption, UserConfig, ViteDevServer } from 'vite';
 import { defineConfig } from 'vite';
 import tsconfigPaths from 'vite-tsconfig-paths';
 
@@ -13,6 +13,7 @@ import {
   sharedRollupOutput,
 } from '../../plugins/vite/sharedRendererConfig';
 import {
+  applyDesktopViteConfigExtension,
   CLOUD_ROOT_DIR,
   desktopPackageJson,
   DEV_VITE_PORT,
@@ -182,10 +183,11 @@ const cloudTsconfigPathsPlugin = () =>
     name: 'lobe-cloud-desktop-tsconfig-paths',
   }) satisfies PluginOption;
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(async (env) => {
+  const { mode } = env;
   loadDesktopEnv(mode);
 
-  return {
+  const config = {
     // Absolute base: relative asset URLs break in the popup window because its
     // SPA URL (`/popup/agent/:aid/:tid`) is deep enough that relative resolution
     // lands at `/popup/assets/...` instead of the actual `/assets/...`. Our
@@ -243,5 +245,7 @@ export default defineConfig(({ mode }) => {
       port: DEV_VITE_PORT,
       strictPort: true,
     },
-  };
+  } satisfies UserConfig;
+
+  return applyDesktopViteConfigExtension('renderer', config, env);
 });

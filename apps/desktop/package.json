@@ -51,6 +51,7 @@
     "node-screenshots": "^0.2.8"
   },
   "devDependencies": {
+    "@base-ui/react": "^1.6.0",
     "@electron-toolkit/eslint-config-prettier": "^3.0.0",
     "@electron-toolkit/eslint-config-ts": "^3.1.0",
     "@electron-toolkit/preload": "^3.0.2",
