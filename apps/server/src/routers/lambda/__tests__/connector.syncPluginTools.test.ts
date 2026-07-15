@@ -333,3 +333,59 @@ describe('connectorRouter.delete — agent connector unpins from the owning agen
     expect(agentModelMock.update).not.toHaveBeenCalled();
   });
 });
+
+describe('connectorRouter.listAgentBound — hides connectors of unseen agents (LOBE-11681)', () => {
+  // `queryAllAgentScoped` filters only by `workspace_id`, so a member could
+  // otherwise see connectors owned by another member's PRIVATE agent. Gate the
+  // result on the visibility-aware agent set (`getAgentAvatarsByIds`).
+  let connectorModelMock: any;
+  let connectorToolModelMock: any;
+  let agentModelMock: any;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    connectorModelMock = { queryAllAgentScoped: vi.fn() };
+    connectorToolModelMock = { queryByConnector: vi.fn().mockResolvedValue([]) };
+    agentModelMock = { getAgentAvatarsByIds: vi.fn() };
+    vi.mocked(ConnectorModel).mockImplementation(() => connectorModelMock);
+    vi.mocked(ConnectorToolModel).mockImplementation(() => connectorToolModelMock);
+    vi.mocked(PluginModel).mockImplementation(() => ({}) as any);
+    vi.mocked(AgentModel).mockImplementation(() => agentModelMock);
+  });
+
+  const caller = () =>
+    connectorRouter.createCaller({
+      serverDB: {},
+      userId: 'user_test',
+      workspaceId: 'ws-1',
+    } as any);
+
+  it('drops rows whose owning agent is not in the visible set', async () => {
+    connectorModelMock.queryAllAgentScoped.mockResolvedValueOnce([
+      {
+        agentId: 'agent-visible',
+        credentials: null,
+        id: 'c-visible',
+        identifier: 'gmail',
+        oidcConfig: null,
+      },
+      {
+        agentId: 'agent-private',
+        credentials: null,
+        id: 'c-private',
+        identifier: 'notion',
+        oidcConfig: null,
+      },
+    ]);
+    // AgentModel.ownership() (visibility-aware) only returns the visible agent —
+    // the other member's private agent is absent.
+    agentModelMock.getAgentAvatarsByIds.mockResolvedValueOnce([
+      { avatar: null, id: 'agent-visible', title: 'Visible Agent' },
+    ]);
+
+    const result = await caller().listAgentBound();
+
+    expect(result.map((r: any) => r.id)).toEqual(['c-visible']);
+    expect(result[0].agentTitle).toBe('Visible Agent');
+  });
+});

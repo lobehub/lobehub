@@ -179,23 +179,33 @@ export const connectorRouter = router({
       ...new Set(connectors.map((c) => c.agentId).filter((id): id is string => !!id)),
     ];
     const agentModel = new AgentModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
+    // `getAgentAvatarsByIds` applies `AgentModel.ownership()` (visibility-aware):
+    // in a workspace it returns only agents visible to the caller — public ones
+    // plus their own private agents. A `user_connectors` row is scoped only by
+    // `workspace_id`, so on its own it would surface connectors owned by another
+    // member's PRIVATE agent. Gate on the visible-agent set so private-agent
+    // connector inventory never leaks across members (LOBE-11681).
     const agentMetas = agentIds.length > 0 ? await agentModel.getAgentAvatarsByIds(agentIds) : [];
     const agentMetaById = new Map(agentMetas.map((m) => [m.id, m]));
 
     return Promise.all(
-      connectors.map(async (c) => {
-        const tools = await ctx.connectorToolModel.queryByConnector(c.id);
-        const { credentials: _credentials, oidcConfig, ...rest } = c;
-        const safeOidcConfig = oidcConfig ? { ...oidcConfig, clientSecret: undefined } : oidcConfig;
-        const meta = c.agentId ? agentMetaById.get(c.agentId) : undefined;
-        return {
-          ...rest,
-          agentAvatar: meta?.avatar ?? null,
-          agentTitle: meta?.title ?? null,
-          oidcConfig: safeOidcConfig,
-          tools,
-        };
-      }),
+      connectors
+        .filter((c) => !!c.agentId && agentMetaById.has(c.agentId))
+        .map(async (c) => {
+          const tools = await ctx.connectorToolModel.queryByConnector(c.id);
+          const { credentials: _credentials, oidcConfig, ...rest } = c;
+          const safeOidcConfig = oidcConfig
+            ? { ...oidcConfig, clientSecret: undefined }
+            : oidcConfig;
+          const meta = agentMetaById.get(c.agentId!);
+          return {
+            ...rest,
+            agentAvatar: meta?.avatar ?? null,
+            agentTitle: meta?.title ?? null,
+            oidcConfig: safeOidcConfig,
+            tools,
+          };
+        }),
     );
   }),
 

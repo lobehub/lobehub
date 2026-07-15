@@ -20,10 +20,12 @@ import { builtinToolSelectors, lobehubSkillStoreSelectors } from '@/store/tool/s
 import { connectorSelectors } from '@/store/tool/slices/connector';
 import { pluginSelectors } from '@/store/tool/slices/plugin/selectors';
 
-import AgentConnectorUsage from '../AgentConnectorUsage';
 import { getLocalizedBuiltinSkillDetail, getNoPermissionsTitle } from './localization';
 
 const AgentSkillDetail = lazy(() => import('@/features/AgentSkillDetail'));
+// Lazy so `SkillDetail`'s static import graph stays free of the agent-navigation
+// chain (`useNavigateToAgent` → chat store); only agent connectors need it.
+const AgentConnectorUsage = lazy(() => import('../AgentConnectorUsage'));
 
 export type ToolDetailType =
   | 'agent-connector'
@@ -408,11 +410,13 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
         connectorId={identifier}
         middleSlot={
           usageAgentId ? (
-            <AgentConnectorUsage
-              agentAvatar={agentBoundConnector?.agentAvatar}
-              agentId={usageAgentId}
-              agentTitle={agentBoundConnector?.agentTitle}
-            />
+            <Suspense fallback={null}>
+              <AgentConnectorUsage
+                agentAvatar={agentBoundConnector?.agentAvatar}
+                agentId={usageAgentId}
+                agentTitle={agentBoundConnector?.agentTitle}
+              />
+            </Suspense>
           ) : undefined
         }
         onDelete={onDelete}
