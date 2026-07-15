@@ -45,6 +45,9 @@ const FEATURE_FLAG_OVERRIDE_DOMAIN: RuntimeConfigDomain<Record<string, boolean>>
 let featureFlagsProvider: RuntimeConfigProvider<IFeatureFlags> | null = null;
 let featureFlagsOverrideProvider: RuntimeConfigProvider<Record<string, boolean>> | null = null;
 
+export const applyDevelopmentFeatureFlagDefaults = (flags: IFeatureFlags) =>
+  process.env.NODE_ENV === 'development' ? { ...flags, workspace: true } : flags;
+
 const getFeatureFlagsProvider = () => {
   featureFlagsProvider ??= new CompositeRuntimeConfigProvider(
     new RedisRuntimeConfigProvider(FEATURE_FLAGS_DOMAIN),
@@ -65,7 +68,11 @@ const getFeatureFlagOverrideProvider = () => {
 const getMergedFeatureFlags = async (userId?: string) => {
   const globalSnapshot = await getFeatureFlagsProvider().getSnapshot({ scope: 'global' });
 
-  const globalFlags = merge(DEFAULT_FEATURE_FLAGS, globalSnapshot?.data || {});
+  // Shared runtime config can contain production allowlists even in local development.
+  // Apply development defaults after the global snapshot; user-specific overrides below still win.
+  const globalFlags = applyDevelopmentFeatureFlagDefaults(
+    merge(DEFAULT_FEATURE_FLAGS, globalSnapshot?.data || {}),
+  );
 
   if (!userId) {
     return globalFlags;
