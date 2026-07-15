@@ -15,9 +15,6 @@ vi.mock('@/database/models/agent', () => ({ AgentModel: vi.fn() }));
 vi.mock('@/database/models/connector', () => ({ ConnectorModel: vi.fn() }));
 vi.mock('@/database/models/connectorTool', () => ({ ConnectorToolModel: vi.fn() }));
 vi.mock('@/database/models/plugin', () => ({ PluginModel: vi.fn() }));
-vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
-  KeyVaultsGateKeeper: { initWithEnvKey: async () => ({}) },
-}));
 // A pre-configured auth config short-circuits the discovery branch.
 vi.mock('@/config/composio', () => ({ getServerComposioAuthConfigId: () => 'auth-cfg-1' }));
 vi.mock('@/libs/composio', () => ({
@@ -30,7 +27,10 @@ vi.mock('@/business/server/trpc-middlewares/workspaceAuth', async () => {
   const mod = await vi.importActual<{ trpc: any }>('@/libs/trpc/lambda/init');
   // The real `wsCompatProcedure` validates a Better-Auth session; for unit tests
   // we skip auth and rely on the test ctx already carrying userId/workspaceId.
-  return { wsCompatProcedure: mod.trpc.procedure };
+  return {
+    requireWorkspaceRoleWhenScoped: () => mod.trpc.middleware(async (opts: any) => opts.next()),
+    wsCompatProcedure: mod.trpc.procedure,
+  };
 });
 vi.mock('@/libs/trpc/lambda/middleware', () => ({
   serverDatabase: async (opts: any) =>
@@ -83,12 +83,7 @@ describe('composioRouter — workspace scoping (workspace-agent connector bug)',
 
     // The crux: before the fix the model was `new ConnectorModel(db, userId)`
     // (no wsId) → row (workspace_id=NULL, agent_id=agent-1). Now it carries wsId.
-    expect(ConnectorModel).toHaveBeenCalledWith(
-      expect.anything(),
-      'user_test',
-      'ws-1',
-      expect.anything(),
-    );
+    expect(ConnectorModel).toHaveBeenCalledWith(expect.anything(), 'user_test', 'ws-1');
     expect(connectorToolModelMock).toBeDefined();
     expect(ConnectorToolModel).toHaveBeenCalledWith(expect.anything(), 'user_test', 'ws-1');
     // The row is agent-scoped (agent_id set), and together with wsId that makes it
@@ -114,12 +109,7 @@ describe('composioRouter — workspace scoping (workspace-agent connector bug)',
   it('personal connection (no workspace) still builds a personal-scoped model — unchanged', async () => {
     await callerFor().createConnection({ appSlug: 'gmail', identifier: 'gmail', label: 'Gmail' });
 
-    expect(ConnectorModel).toHaveBeenCalledWith(
-      expect.anything(),
-      'user_test',
-      undefined,
-      expect.anything(),
-    );
+    expect(ConnectorModel).toHaveBeenCalledWith(expect.anything(), 'user_test', undefined);
     // Personal (non-agent) connections DO keep writing the legacy plugin row.
     expect(pluginModelMock.create).toHaveBeenCalled();
   });
@@ -136,13 +126,32 @@ describe('composioRouter — workspace scoping (workspace-agent connector bug)',
       tools: [],
     });
 
-    expect(ConnectorModel).toHaveBeenCalledWith(
-      expect.anything(),
-      'user_test',
-      'ws-1',
-      expect.anything(),
-    );
+    expect(ConnectorModel).toHaveBeenCalledWith(expect.anything(), 'user_test', 'ws-1');
     expect(AgentModel).toHaveBeenCalledWith(expect.anything(), 'user_test', 'ws-1');
     expect(agentModelMock.existsOwnedById).toHaveBeenCalledWith('agent-1');
+  });
+
+  it('blocks a non-owner member from overwriting another member’s workspace connection', async () => {
+    // buildWorkspaceWhere makes workspace rows writable workspace-wide; the
+    // row-level gate must stop a plain member from clobbering another member's
+    // Composio connection — before any remote account is created.
+    connectorModelMock.findScopedByIdentifier.mockResolvedValueOnce({
+      id: 'conn-other',
+      identifier: 'gmail',
+      userId: 'another-user',
+    });
+
+    await expect(
+      composioRouter
+        .createCaller({
+          serverDB: {},
+          userId: 'user_test',
+          workspaceId: 'ws-1',
+          workspaceRole: 'member',
+        } as any)
+        .createConnection({ appSlug: 'gmail', identifier: 'gmail', label: 'Gmail' }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+    expect(connectorModelMock.create).not.toHaveBeenCalled();
   });
 });

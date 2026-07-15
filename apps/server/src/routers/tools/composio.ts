@@ -1,14 +1,20 @@
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
+import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { ConnectorModel } from '@/database/models/connector';
 import { PluginModel } from '@/database/models/plugin';
 import { getComposioClient } from '@/libs/composio';
-import { authedProcedure, publicProcedure, router } from '@/libs/trpc/lambda';
+import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { MCPService } from '@/server/services/mcp';
 
-const composioProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
+// wsCompatProcedure (not authedProcedure): when a request carries X-Workspace-Id
+// the models below resolve in that workspace and buildWorkspaceWhere drops the
+// userId filter, so honoring the header without verifying workspace membership
+// would let any signed-in user execute another workspace's connected account.
+// The cloud override validates membership; the OSS stub is a passthrough.
+const composioProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
   const composioClient = getComposioClient();
   // Workspace-scoped so a manual tool execution resolves the workspace-dimension
