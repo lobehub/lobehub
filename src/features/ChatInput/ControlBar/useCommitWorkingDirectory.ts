@@ -150,10 +150,14 @@ export const useCommitWorkingDirectory = (agentId: string) => {
       } else {
         if (targetDeviceId && isPersonalDeviceTarget) {
           // Per-user slot (see `isPersonalDeviceTarget`) — never the shared row.
-          // The legacy slot stores a plain path, so the worktree/git metadata is
-          // carried by the topic metadata once a conversation starts.
+          // The legacy slot stores a plain path, so persist the SESSION cwd
+          // (source repo for hetero — anchoring a CLI session to a worktree
+          // path would break resume; effective path otherwise). The worktree
+          // pick itself is carried by topic metadata once a conversation
+          // starts; full-fidelity pre-topic persistence needs a per-user
+          // server-side slot (deferred).
           await updateAgentRuntimeEnvConfigById(agentId, {
-            workingDirectory: effectivePath || undefined,
+            workingDirectory: sessionCwd || undefined,
           });
         } else if (targetDeviceId) {
           const prev = agencyConfig?.workingDirByDevice ?? {};

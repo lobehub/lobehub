@@ -30,7 +30,11 @@ import { TRPCClientError } from '@trpc/client';
 import { t } from 'i18next';
 
 import { message as antdMessage } from '@/components/AntdStaticMethods';
-import { resolveAgentWorkingDirectoryConfig } from '@/helpers/agentWorkingDirectory';
+import {
+  resolveAgentWorkingDirectory,
+  resolveAgentWorkingDirectoryConfig,
+} from '@/helpers/agentWorkingDirectory';
+import { globalAgentContextManager } from '@/helpers/GlobalAgentContextManager';
 import { agentService } from '@/services/agent';
 import { aiChatService } from '@/services/aiChat';
 import { chatService } from '@/services/chat';
@@ -589,9 +593,6 @@ export class ConversationLifecycleActionImpl {
     // client resolved (per-user legacy slot included) if it rides along as the
     // new topic's initial metadata.
     const resolvesHeteroCwd = !!heterogeneousProvider;
-    const agentWorkingDirectory = resolvesHeteroCwd
-      ? agentByIdSelectors.getAgentWorkingDirectoryById(agentId, currentDeviceId)(agentState)
-      : undefined;
     // Merge the caller's per-user device override (LOBE-11689) so the cwd is
     // read for the device THIS member's run targets, not the shared row's.
     const agencyConfig = resolveAgencyConfig(
@@ -600,13 +601,25 @@ export class ConversationLifecycleActionImpl {
         ? getUserStoreState().workspaceUserPreference.agentDeviceOverrides?.[agentId]
         : undefined,
     );
-    const agentWorkingDirectoryConfig = resolvesHeteroCwd
-      ? resolveAgentWorkingDirectoryConfig({
+    // Same precedence as `getAgentWorkingDirectoryById`, but over the MERGED
+    // config — the selector reads the raw shared row internally, which could
+    // fall back to a cwd registered for another member's device. Desktop/home
+    // is the only neutral last resort.
+    const heteroCwdContext =
+      resolvesHeteroCwd && isDesktop ? globalAgentContextManager.getContext() : undefined;
+    const heteroCwdParams = resolvesHeteroCwd
+      ? {
           agencyConfig,
           currentDeviceId,
-          fallback: agentWorkingDirectory,
+          fallback: heteroCwdContext?.desktopPath ?? heteroCwdContext?.homePath,
           legacyAgentWorkingDirectory: agentState.localAgentWorkingDirectoryMap[agentId],
-        })
+        }
+      : undefined;
+    const agentWorkingDirectory = heteroCwdParams
+      ? resolveAgentWorkingDirectory(heteroCwdParams)
+      : undefined;
+    const agentWorkingDirectoryConfig = heteroCwdParams
+      ? resolveAgentWorkingDirectoryConfig(heteroCwdParams)
       : undefined;
     // Heterogeneous CLI agents (Claude Code, Codex, …) store sessions per-cwd
     // (`~/.claude/projects/<encoded-cwd>/`). Anchor their session cwd to the
