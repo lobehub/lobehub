@@ -50,6 +50,14 @@ export interface HeteroQuotaWindow {
 
 export type CodexQuotaWindow = HeteroQuotaWindow;
 
+export interface CodexRateLimitSnapshot {
+  /** Canonical metered limit identifier, for example `codex` or `codex_other`. */
+  limitId: string;
+  limitName: string | null;
+  primary: CodexQuotaWindow | null;
+  secondary: CodexQuotaWindow | null;
+}
+
 export interface CodexRateLimitResetCredit {
   expiresAt: number | null;
   grantedAt: number | null;
@@ -74,6 +82,8 @@ export interface CodexQuotaSnapshot {
   error: string | null;
   provider: 'codex';
   rateLimitResetCredits?: CodexRateLimitResetCredits | null;
+  /** Complete multi-bucket view when supported by the installed Codex app-server. */
+  rateLimits?: CodexRateLimitSnapshot[];
   session: CodexQuotaWindow | null;
   status: 'error' | 'ok' | 'unavailable';
   updatedAt: number;

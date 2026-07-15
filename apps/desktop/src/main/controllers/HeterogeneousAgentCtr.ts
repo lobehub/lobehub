@@ -1638,6 +1638,7 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
       creditId: params.creditId,
       idempotencyKey: params.idempotencyKey,
     });
+    this.codexQuotaCache.invalidate(sourceKey);
     const quota = await this.codexQuotaCache.get(sourceKey, () => fetchCodexQuota(requestOptions), {
       force: true,
     });

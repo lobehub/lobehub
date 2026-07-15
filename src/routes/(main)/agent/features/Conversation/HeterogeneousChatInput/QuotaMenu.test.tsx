@@ -411,6 +411,41 @@ describe('CodexQuotaMenu', () => {
     });
   });
 
+  it('renders every Codex rate-limit bucket and uses the tightest window in the trigger', async () => {
+    mockService.getCodexQuota.mockResolvedValue(
+      codexSnapshot({
+        rateLimits: [
+          {
+            limitId: 'codex',
+            limitName: 'Codex',
+            primary: { resetsAt: null, usedPercent: 10, windowMinutes: 300 },
+            secondary: { resetsAt: null, usedPercent: 20, windowMinutes: 10_080 },
+          },
+          {
+            limitId: 'codex_other',
+            limitName: 'Codex Other',
+            primary: { resetsAt: null, usedPercent: 98, windowMinutes: 60 },
+            secondary: { resetsAt: null, usedPercent: 40, windowMinutes: 43_200 },
+          },
+        ],
+        session: { resetsAt: null, usedPercent: 10, windowMinutes: 300 },
+        weekly: { resetsAt: null, usedPercent: 20, windowMinutes: 10_080 },
+      }),
+    );
+
+    render(<CodexQuotaMenu />);
+
+    expect(await screen.findByText('heteroAgent.quota.compactLeft:2')).toBeTruthy();
+    expect(screen.getByText('heteroAgent.codexQuota.fiveHour')).toBeTruthy();
+    expect(screen.getByText('heteroAgent.quota.weekly')).toBeTruthy();
+    expect(screen.getByText('Codex Other · heteroAgent.quota.session')).toBeTruthy();
+    expect(screen.getByText('Codex Other · heteroAgent.codexQuota.monthly')).toBeTruthy();
+    expect(screen.getByText('heteroAgent.quota.left:90')).toBeTruthy();
+    expect(screen.getByText('heteroAgent.quota.left:80')).toBeTruthy();
+    expect(screen.getByText('heteroAgent.quota.left:2')).toBeTruthy();
+    expect(screen.getByText('heteroAgent.quota.left:60')).toBeTruthy();
+  });
+
   it('renders the credits-unavailable footer when the RPC omits credits', async () => {
     mockService.getCodexQuota.mockResolvedValue(
       codexSnapshot({ session: { resetsAt: null, usedPercent: 5, windowMinutes: 300 } }),

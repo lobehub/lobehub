@@ -10,10 +10,13 @@ import type {
   CodexRateLimitResetCredit,
   CodexRateLimitResetCredits,
   CodexRateLimitResetOutcome,
+  CodexRateLimitSnapshot,
 } from '@lobechat/electron-client-ipc';
 import { resolveCliSpawnPlan } from '@lobechat/heterogeneous-agents/spawn';
 
 const RPC_TIMEOUT_MS = 10_000;
+const CODEX_PRIMARY_WINDOW_MINUTES = 5 * 60;
+const CODEX_SECONDARY_WINDOW_MINUTES = 7 * 24 * 60;
 const RESET_CONSUME_TIMEOUT_MS = 30_000;
 const RESET_CREDITS_TIMEOUT_MS = 5_000;
 const CODEX_RATE_LIMIT_RESET_CREDITS_URL =
@@ -43,6 +46,13 @@ interface RpcRateWindow {
   windowDurationMins?: number;
 }
 
+interface RpcRateLimitSnapshot {
+  limitId?: string | null;
+  limitName?: string | null;
+  primary?: RpcRateWindow;
+  secondary?: RpcRateWindow;
+}
+
 interface RpcRateLimitResetCredit {
   expiresAt?: number | string | null;
   grantedAt?: number | string | null;
@@ -61,10 +71,8 @@ interface RpcRateLimitsResponse {
     nextExpiresAt?: number | string | null;
     totalEarnedCount?: number;
   } | null;
-  rateLimits?: {
-    primary?: RpcRateWindow;
-    secondary?: RpcRateWindow;
-  };
+  rateLimits?: RpcRateLimitSnapshot;
+  rateLimitsByLimitId?: Record<string, RpcRateLimitSnapshot> | null;
 }
 
 interface CodexAuthFile {
@@ -355,6 +363,45 @@ const mapRpcWindow = (
   };
 };
 
+const mapRpcRateLimitSnapshot = (
+  raw: RpcRateLimitSnapshot | undefined,
+  fallbackLimitId: string,
+): CodexRateLimitSnapshot | null => {
+  if (!raw) return null;
+
+  const primary = mapRpcWindow(raw.primary, CODEX_PRIMARY_WINDOW_MINUTES);
+  const secondary = mapRpcWindow(raw.secondary, CODEX_SECONDARY_WINDOW_MINUTES);
+  if (!primary && !secondary) return null;
+
+  return {
+    limitId: normalizeCreditText(raw.limitId) ?? fallbackLimitId,
+    limitName: normalizeCreditText(raw.limitName),
+    primary,
+    secondary,
+  };
+};
+
+const mapRpcRateLimits = (wrapper: RpcRateLimitsResponse): CodexRateLimitSnapshot[] => {
+  const snapshots = new Map<string, CodexRateLimitSnapshot>();
+
+  const addSnapshot = (raw: RpcRateLimitSnapshot | undefined, fallbackLimitId: string) => {
+    const snapshot = mapRpcRateLimitSnapshot(raw, fallbackLimitId);
+    if (!snapshot) return;
+
+    const normalizedId = snapshot.limitId.toLowerCase();
+    if (!snapshots.has(normalizedId)) snapshots.set(normalizedId, snapshot);
+  };
+
+  addSnapshot(wrapper.rateLimits, 'codex');
+
+  const additionalLimits = Object.entries(wrapper.rateLimitsByLimitId ?? {}).sort(
+    ([left], [right]) => left.localeCompare(right),
+  );
+  for (const [limitId, snapshot] of additionalLimits) addSnapshot(snapshot, limitId);
+
+  return [...snapshots.values()];
+};
+
 const cleanupRpcListeners = (
   child: ChildProcess,
   listeners: {
@@ -516,6 +563,9 @@ const fetchViaRpc = async (
       failureMessage: 'Codex rate-limit request failed',
       method: 'account/rateLimits/read',
     });
+    const rateLimits = mapRpcRateLimits(wrapper);
+    const defaultRateLimit =
+      rateLimits.find(({ limitId }) => limitId.toLowerCase() === 'codex') ?? rateLimits[0];
     const rateLimitResetCredits = mapRpcResetCredits(wrapper?.rateLimitResetCredits);
     let backendCredits: CodexRateLimitResetCredits | null = null;
 
@@ -534,10 +584,11 @@ const fetchViaRpc = async (
       provider: 'codex',
       rateLimitResetCredits:
         backendCredits ?? (rateLimitResetCredits === undefined ? undefined : rateLimitResetCredits),
-      session: mapRpcWindow(wrapper?.rateLimits?.primary, 300),
+      rateLimits,
+      session: defaultRateLimit?.primary ?? null,
       status: 'ok',
       updatedAt: Date.now(),
-      weekly: mapRpcWindow(wrapper?.rateLimits?.secondary, 10_080),
+      weekly: defaultRateLimit?.secondary ?? null,
     };
   } catch (error) {
     return errorSnapshot(

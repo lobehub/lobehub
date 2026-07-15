@@ -4,6 +4,7 @@ import type {
   CodexQuotaSnapshot,
   CodexQuotaWindow,
   CodexRateLimitResetCredit,
+  CodexRateLimitSnapshot,
 } from '@lobechat/electron-client-ipc';
 import { uuid } from '@lobechat/utils';
 import { Flexbox, Icon, Text } from '@lobehub/ui';
@@ -170,20 +171,64 @@ const CodexQuotaMenu = memo<CodexQuotaMenuProps>(({ command, env }) => {
     [t],
   );
 
+  const getRateLimitWindowLabel = useCallback(
+    (rateLimit: CodexRateLimitSnapshot, window: CodexQuotaWindow, fallback: string) => {
+      const windowLabel = getWindowLabel(window, fallback);
+      if (rateLimit.limitId.toLowerCase() === 'codex') return windowLabel;
+
+      return `${rateLimit.limitName || rateLimit.limitId} · ${windowLabel}`;
+    },
+    [getWindowLabel],
+  );
+
   const getWindows = useCallback(
-    (quota: CodexQuotaSnapshot): QuotaWindowItem[] => [
-      {
-        key: 'primary',
-        label: getWindowLabel(quota.session, t('heteroAgent.quota.session')),
-        window: quota.session,
-      },
-      {
-        key: 'secondary',
-        label: getWindowLabel(quota.weekly, t('heteroAgent.quota.weekly')),
-        window: quota.weekly,
-      },
-    ],
-    [getWindowLabel, t],
+    (quota: CodexQuotaSnapshot): QuotaWindowItem[] => {
+      if (!quota.rateLimits?.length) {
+        return [
+          {
+            key: 'primary',
+            label: getWindowLabel(quota.session, t('heteroAgent.quota.session')),
+            window: quota.session,
+          },
+          {
+            key: 'secondary',
+            label: getWindowLabel(quota.weekly, t('heteroAgent.quota.weekly')),
+            window: quota.weekly,
+          },
+        ];
+      }
+
+      return quota.rateLimits.flatMap((rateLimit) => {
+        const windows: QuotaWindowItem[] = [];
+
+        if (rateLimit.primary) {
+          windows.push({
+            key: `${rateLimit.limitId}:primary`,
+            label: getRateLimitWindowLabel(
+              rateLimit,
+              rateLimit.primary,
+              t('heteroAgent.quota.session'),
+            ),
+            window: rateLimit.primary,
+          });
+        }
+
+        if (rateLimit.secondary) {
+          windows.push({
+            key: `${rateLimit.limitId}:secondary`,
+            label: getRateLimitWindowLabel(
+              rateLimit,
+              rateLimit.secondary,
+              t('heteroAgent.quota.weekly'),
+            ),
+            window: rateLimit.secondary,
+          });
+        }
+
+        return windows;
+      });
+    },
+    [getRateLimitWindowLabel, getWindowLabel, t],
   );
 
   const hasExtraData = useCallback(

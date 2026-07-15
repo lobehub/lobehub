@@ -265,6 +265,70 @@ describe('fetchCodexQuota', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it('maps and deduplicates every app-server rate-limit bucket', async () => {
+    const child = new RpcChild();
+    spawnMock.mockReturnValue(child);
+    vi.mocked(readFile).mockRejectedValue(new Error('ENOENT'));
+    mockRpcRateLimits(child, {
+      rateLimits: {
+        limitId: 'codex',
+        limitName: 'Codex',
+        primary: { resetsAt: 1_718_800_000, usedPercent: 12, windowDurationMins: 300 },
+        secondary: { resetsAt: 1_719_300_000, usedPercent: 24, windowDurationMins: 10_080 },
+      },
+      rateLimitsByLimitId: {
+        codex: {
+          limitId: 'codex',
+          primary: { resetsAt: 1_718_800_100, usedPercent: 99, windowDurationMins: 300 },
+        },
+        codex_other: {
+          limitName: 'Codex Other',
+          primary: { resetsAt: 1_718_900_000, usedPercent: 98, windowDurationMins: 60 },
+          secondary: { resetsAt: 1_721_400_000, usedPercent: 40, windowDurationMins: 43_200 },
+        },
+      },
+    });
+
+    const resultPromise = fetchCodexQuota({ command: '/custom/bin/codex' });
+    await vi.advanceTimersByTimeAsync(1);
+    await vi.advanceTimersByTimeAsync(1);
+    const result = await resultPromise;
+
+    expect(result.rateLimits).toEqual([
+      {
+        limitId: 'codex',
+        limitName: 'Codex',
+        primary: {
+          resetsAt: 1_718_800_000 * 1000,
+          usedPercent: 12,
+          windowMinutes: 300,
+        },
+        secondary: {
+          resetsAt: 1_719_300_000 * 1000,
+          usedPercent: 24,
+          windowMinutes: 10_080,
+        },
+      },
+      {
+        limitId: 'codex_other',
+        limitName: 'Codex Other',
+        primary: {
+          resetsAt: 1_718_900_000 * 1000,
+          usedPercent: 98,
+          windowMinutes: 60,
+        },
+        secondary: {
+          resetsAt: 1_721_400_000 * 1000,
+          usedPercent: 40,
+          windowMinutes: 43_200,
+        },
+      },
+    ]);
+    expect(result.session).toEqual(result.rateLimits?.[0].primary);
+    expect(result.weekly).toEqual(result.rateLimits?.[0].secondary);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it('returns RPC quota when reset-credit enrichment times out', async () => {
     const child = new RpcChild();
     spawnMock.mockReturnValue(child);
