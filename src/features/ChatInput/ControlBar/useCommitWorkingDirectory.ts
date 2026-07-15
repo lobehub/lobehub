@@ -110,8 +110,15 @@ export const useCommitWorkingDirectory = (agentId: string) => {
   // exists on desktop, where that slot works). Workspace-pool devices keep the
   // shared per-device map: the path lives on a machine the workspace shares.
   const isWorkspaceAgent = useAgentStore((s) => Boolean(s.agentMap[agentId]?.workspaceId));
+  // A `local` target always denotes the member's own machine — its
+  // `boundDeviceId` is that machine's personal gateway id even when viewed
+  // from web (`currentDeviceId` undefined there, so an id-equality check alone
+  // would miss it). The equality arm still covers a desktop default target
+  // (no stored target → `resolveTargetDeviceId` falls back to this machine).
   const isPersonalDeviceTarget =
-    isWorkspaceAgent && !!targetDeviceId && targetDeviceId === currentDeviceId;
+    isWorkspaceAgent &&
+    !!targetDeviceId &&
+    (effectiveAgencyConfig?.executionTarget === 'local' || targetDeviceId === currentDeviceId);
 
   const writeCwd = useCallback(
     async (entry?: WorkingDirEntry) => {
