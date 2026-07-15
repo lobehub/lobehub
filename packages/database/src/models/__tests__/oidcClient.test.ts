@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { oidcClients, oidcGrants, oidcRefreshTokens, users } from '../../schemas';
+import { oidcClients, oidcGrants, oidcRefreshTokens, users, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { OidcClientModel } from '../oidcClient';
 
@@ -11,6 +11,8 @@ const serverDB: LobeChatDatabase = await getTestDB();
 
 const userId = 'oidc-client-model-test-user';
 const otherUserId = 'oidc-client-model-other-user';
+const workspaceId = 'oidc-client-model-test-workspace';
+const otherWorkspaceId = 'oidc-client-model-other-workspace';
 
 let oidcClientModel: OidcClientModel;
 
@@ -18,6 +20,20 @@ beforeEach(async () => {
   oidcClientModel = new OidcClientModel(serverDB, userId);
   await serverDB.delete(users);
   await serverDB.insert(users).values([{ id: userId }, { id: otherUserId }]);
+  await serverDB.insert(workspaces).values([
+    {
+      id: workspaceId,
+      name: 'OIDC Client Test Workspace',
+      primaryOwnerId: userId,
+      slug: workspaceId,
+    },
+    {
+      id: otherWorkspaceId,
+      name: 'OIDC Client Other Workspace',
+      primaryOwnerId: otherUserId,
+      slug: otherWorkspaceId,
+    },
+  ]);
 });
 
 afterEach(async () => {
@@ -32,6 +48,7 @@ describe('OidcClientModel', () => {
       expect(result.id).toMatch(/^lca_[\dA-Za-z]{24}$/);
       expect(result.name).toBe('My App');
       expect(result.userId).toBe(userId);
+      expect(result.workspaceId).toBeNull();
       expect(result.enabled).toBe(true);
       expect(result.isFirstParty).toBe(false);
       expect(result.clientSecret).toBeNull();
@@ -55,6 +72,18 @@ describe('OidcClientModel', () => {
 
       expect(result.description).toBe('a demo');
       expect(result.logoUri).toBe('https://example.com/logo.png');
+    });
+
+    it('should create a workspace client with its creator and workspace scope', async () => {
+      const workspaceModel = new OidcClientModel(serverDB, userId, workspaceId);
+
+      const result = await workspaceModel.create({ name: 'Workspace App' });
+
+      expect(result).toMatchObject({
+        name: 'Workspace App',
+        userId,
+        workspaceId,
+      });
     });
   });
 
@@ -100,6 +129,29 @@ describe('OidcClientModel', () => {
       expect(clients).toHaveLength(1);
       expect(clients[0].name).toBe('Mine');
     });
+
+    it('should exclude workspace clients from personal mode', async () => {
+      const workspaceModel = new OidcClientModel(serverDB, userId, workspaceId);
+      await oidcClientModel.create({ name: 'Personal App' });
+      await workspaceModel.create({ name: 'Workspace App' });
+
+      const clients = await oidcClientModel.list();
+
+      expect(clients.map(({ name }) => name)).toEqual(['Personal App']);
+    });
+
+    it('should share clients within a workspace and isolate other workspaces', async () => {
+      const creatorModel = new OidcClientModel(serverDB, userId, workspaceId);
+      const memberModel = new OidcClientModel(serverDB, otherUserId, workspaceId);
+      const otherWorkspaceModel = new OidcClientModel(serverDB, otherUserId, otherWorkspaceId);
+      await creatorModel.create({ name: 'Shared App' });
+
+      const memberClients = await memberModel.list();
+      const otherWorkspaceClients = await otherWorkspaceModel.list();
+
+      expect(memberClients.map(({ name }) => name)).toEqual(['Shared App']);
+      expect(otherWorkspaceClients).toEqual([]);
+    });
   });
 
   describe('findById', () => {
@@ -118,6 +170,17 @@ describe('OidcClientModel', () => {
       const found = await oidcClientModel.findById(id);
 
       expect(found).toBeUndefined();
+    });
+
+    it('should find a client from the same workspace but not another workspace', async () => {
+      const creatorModel = new OidcClientModel(serverDB, userId, workspaceId);
+      const memberModel = new OidcClientModel(serverDB, otherUserId, workspaceId);
+      const otherWorkspaceModel = new OidcClientModel(serverDB, otherUserId, otherWorkspaceId);
+      const { id } = await creatorModel.create({ name: 'Shared App' });
+
+      await expect(memberModel.findById(id)).resolves.toMatchObject({ id });
+      await expect(otherWorkspaceModel.findById(id)).resolves.toBeUndefined();
+      await expect(oidcClientModel.findById(id)).resolves.toBeUndefined();
     });
   });
 
@@ -148,6 +211,16 @@ describe('OidcClientModel', () => {
         .where(eq(oidcClients.id, id))
         .limit(1);
       expect(unchanged?.name).toBe('Theirs');
+    });
+
+    it('should not update a client from another workspace', async () => {
+      const workspaceModel = new OidcClientModel(serverDB, userId, workspaceId);
+      const otherWorkspaceModel = new OidcClientModel(serverDB, otherUserId, otherWorkspaceId);
+      const { id } = await workspaceModel.create({ name: 'Workspace App' });
+
+      await otherWorkspaceModel.update(id, { name: 'Hacked' });
+
+      await expect(workspaceModel.findById(id)).resolves.toMatchObject({ name: 'Workspace App' });
     });
   });
 
@@ -234,6 +307,16 @@ describe('OidcClientModel', () => {
         .where(eq(oidcClients.id, id))
         .limit(1);
       expect(client).toBeDefined();
+    });
+
+    it('should not delete a client from another workspace', async () => {
+      const workspaceModel = new OidcClientModel(serverDB, userId, workspaceId);
+      const otherWorkspaceModel = new OidcClientModel(serverDB, otherUserId, otherWorkspaceId);
+      const { id } = await workspaceModel.create({ name: 'Workspace App' });
+
+      await otherWorkspaceModel.delete(id);
+
+      await expect(workspaceModel.findById(id)).resolves.toMatchObject({ id });
     });
 
     it('should not touch another user token rows when deleting fails ownership', async () => {

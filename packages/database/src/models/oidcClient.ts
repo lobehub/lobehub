@@ -10,6 +10,7 @@ import {
 } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { createNanoId } from '../utils/idGenerator';
+import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 interface CreateOidcClientParams {
   description?: string | null;
@@ -29,34 +30,41 @@ const DEFAULT_SCOPES = ['openid', 'profile', 'email', 'offline_access'];
 const generateClientId = () => `lca_${createNanoId(24)()}`;
 
 export class OidcClientModel {
-  private userId: string;
   private db: LobeChatDatabase;
+  private userId: string;
+  private workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.db = db;
     this.userId = userId;
+    this.workspaceId = workspaceId;
   }
 
-  private ownership = () => eq(oidcClients.userId, this.userId);
+  private ownership = () =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, oidcClients);
 
   create = async (params: CreateOidcClientParams) => {
     const [result] = await this.db
       .insert(oidcClients)
-      .values({
-        applicationType: 'native',
-        clientSecret: null,
-        description: params.description,
-        grants: DEVICE_FLOW_GRANTS,
-        id: generateClientId(),
-        isFirstParty: false,
-        logoUri: params.logoUri,
-        name: params.name,
-        userId: this.userId,
-        redirectUris: [],
-        responseTypes: [],
-        scopes: DEFAULT_SCOPES,
-        tokenEndpointAuthMethod: 'none',
-      })
+      .values(
+        buildWorkspacePayload(
+          { userId: this.userId, workspaceId: this.workspaceId },
+          {
+            applicationType: 'native',
+            clientSecret: null,
+            description: params.description,
+            grants: DEVICE_FLOW_GRANTS,
+            id: generateClientId(),
+            isFirstParty: false,
+            logoUri: params.logoUri,
+            name: params.name,
+            redirectUris: [],
+            responseTypes: [],
+            scopes: DEFAULT_SCOPES,
+            tokenEndpointAuthMethod: 'none',
+          },
+        ),
+      )
       .returning();
 
     return result;

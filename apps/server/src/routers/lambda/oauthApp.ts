@@ -1,18 +1,24 @@
 import { z } from 'zod';
 
+import {
+  requireWorkspaceRoleWhenScoped,
+  wsCompatProcedure,
+} from '@/business/server/trpc-middlewares/workspaceAuth';
 import { OidcClientModel } from '@/database/models/oidcClient';
-import { authedProcedure, router } from '@/libs/trpc/lambda';
+import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 
-const oauthAppProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
+const oauthAppProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
 
   return opts.next({
     ctx: {
-      oidcClientModel: new OidcClientModel(ctx.serverDB, ctx.userId),
+      oidcClientModel: new OidcClientModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined),
     },
   });
 });
+
+const oauthAppWriteProcedure = oauthAppProcedure.use(requireWorkspaceRoleWhenScoped('owner'));
 
 const stripSecret = <T extends { clientSecret?: string | null }>(client: T) => {
   const { clientSecret: _clientSecret, ...rest } = client;
@@ -20,7 +26,7 @@ const stripSecret = <T extends { clientSecret?: string | null }>(client: T) => {
 };
 
 export const oauthAppRouter = router({
-  create: oauthAppProcedure
+  create: oauthAppWriteProcedure
     .input(
       z.object({
         description: z.string().max(500).optional(),
@@ -33,9 +39,11 @@ export const oauthAppRouter = router({
       return stripSecret(client);
     }),
 
-  delete: oauthAppProcedure.input(z.object({ id: z.string() })).mutation(async ({ input, ctx }) => {
-    return ctx.oidcClientModel.delete(input.id);
-  }),
+  delete: oauthAppWriteProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      return ctx.oidcClientModel.delete(input.id);
+    }),
 
   getById: oauthAppProcedure.input(z.object({ id: z.string() })).query(async ({ input, ctx }) => {
     const client = await ctx.oidcClientModel.findById(input.id);
@@ -47,13 +55,13 @@ export const oauthAppRouter = router({
     return clients.map(stripSecret);
   }),
 
-  setEnabled: oauthAppProcedure
+  setEnabled: oauthAppWriteProcedure
     .input(z.object({ enabled: z.boolean(), id: z.string() }))
     .mutation(async ({ input, ctx }) => {
       return ctx.oidcClientModel.setEnabled(input.id, input.enabled);
     }),
 
-  update: oauthAppProcedure
+  update: oauthAppWriteProcedure
     .input(
       z.object({
         id: z.string(),
