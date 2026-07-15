@@ -293,6 +293,31 @@ Re-tested end-to-end against the running dev server. The previous claim ("blocks
   ```
   (zsh does not word-split unquoted vars — inline the `--cdp` flags, don't stash them in `$AB`.)
 
+### A10. ⚠️ `git checkout -- <file>` to revert an injection DESTROYS the branch's uncommitted changes in that file
+
+- **Situation**: A4/A6/A8/E10 all end with "revert with `git checkout -- <file>`". That is only safe
+  when the file was **clean** before the injection. When you are verifying a branch that has
+  **uncommitted working-tree changes** (the common case for a pre-PR review), and your probe lands in
+  one of those same modified files, `git checkout --` resets it to **HEAD** — silently wiping the very
+  feature edits you were sent to verify, not just your probe.
+- **Measured**: injecting a one-line probe into a component that the branch had already modified
+  (uncommitted), then `git checkout -- <file>`, reverted the file to its committed version. The
+  branch's uncommitted edits (a changed selector + a title fallback) were gone, and the file no longer
+  matched what the user asked to test. Nothing warns you — the probe residue check
+  (`grep -rn AGENT-TEST`) comes back clean either way, because your marker is gone too.
+- **Works — snapshot the file yourself before injecting, restore from the snapshot:**
+  ```bash
+  cp <file> /tmp/probe-backup-$(basename <file>)     # BEFORE the edit
+  # ... inject, HMR, capture ...
+  cp /tmp/probe-backup-$(basename <file>) <file>     # restore — preserves uncommitted work
+  ```
+  Then prove the restore is exact: `git diff -- <file>` must show the SAME blob hash as before the
+  probe (`index <old>..<new>` — the right-hand hash is the working-tree blob), and
+  `grep -rn AGENT-TEST` must be empty. Check `git status --short` before you start so you know which
+  files are dirty; for a dirty file, `git checkout --` is never the revert.
+- **Corollary**: `git stash` has the same failure shape (it takes the branch's edits with it). If you
+  must use git to revert, scope it to a file you have confirmed is clean.
+
 ---
 
 ## B. Cache / stale state that MASKS the failure
@@ -368,6 +393,23 @@ Re-tested end-to-end against the running dev server. The previous claim ("blocks
 - The cache persists to **two durable tiers** (`src/libs/swr/localStorageProvider.ts`):
   IndexedDB for the big collections and localStorage for small shells. That is why B1's
   cold-load recipe clears localStorage, sessionStorage, IndexedDB **and** the Cache API.
+
+### B4. Component-local `useState` seeded from a cached list item does NOT reset when fresh data arrives — re-seeded fixtures render stale flags
+
+- **Situation**: verifying an "unread → click → read" flag on a list row whose component
+  initializes local state from the item (`useState(Boolean(item.readAt))`). The fixture was
+  re-seeded in the DB with the flag cleared (`read_at` NULL, confirmed by SQL), yet on reload
+  one row rendered as already-read.
+- **Cause (measured)**: the SWR persisted cache (B3's IndexedDB tier) hydrates the list first
+  with the PREVIOUS round's item (flag set, because an earlier run had clicked it). `useState`
+  captures that initial value; when the fresh server response (flag clear) replaces the SWR
+  data, the row does not remount (same React key = same item id), so the stale local state
+  sticks. No amount of waiting fixes it.
+- **Works**: for any assertion on an initial-render flag that flows through `useState(init)`,
+  force a clean first frame by deleting only the SWR IndexedDB database (`lobehub-local-data`)
+  and reloading — login survives (the session cookie is not touched), unlike B1's full clear.
+  Verify the DB value separately with SQL so a stale render is attributed to cache, not to the
+  change under test.
 
 ---
 
