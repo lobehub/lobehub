@@ -56,6 +56,7 @@ const topicProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =>
       chatGroupModel: new ChatGroupModel(ctx.serverDB, ctx.userId, wsId),
       fileModel: new FileModel(ctx.serverDB, ctx.userId, wsId),
       heteroSessionImporterRepo: new HeteroSessionImporterRepo(ctx.serverDB, ctx.userId, wsId),
+      messageModel: new MessageModel(ctx.serverDB, ctx.userId, wsId),
       topicImporterRepo: new TopicImporterRepo(ctx.serverDB, ctx.userId, wsId),
       topicModel: new TopicModel(ctx.serverDB, ctx.userId, wsId),
       topicShareModel: new TopicShareModel(ctx.serverDB, ctx.userId, wsId),
@@ -131,6 +132,38 @@ export const topicRouter = router({
       return topic;
     }),
 
+  getTopicTranscript: topicProcedure
+    .input(
+      z.object({
+        includeMessages: z.boolean().default(true),
+        limit: z.number().int().min(1).max(500).default(50),
+        offset: z.number().int().min(0).default(0),
+        topicId: z.string(),
+      }),
+    )
+    .query(async ({ input, ctx }) => {
+      const topic = await ctx.topicModel.findById(input.topicId);
+
+      if (!topic) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: `Topic not found: ${input.topicId}`,
+        });
+      }
+
+      if (!input.includeMessages) {
+        return { items: [], topic, total: null };
+      }
+
+      const transcript = await ctx.messageModel.queryTopicTranscript({
+        limit: input.limit,
+        offset: input.offset,
+        topicId: input.topicId,
+      });
+
+      return { ...transcript, topic };
+    }),
+
   getTopicContext: topicProcedure
     .input(z.object({ topicId: z.string() }))
     .query(async ({ input, ctx }) => {
@@ -151,9 +184,7 @@ export const topicRouter = router({
       }
 
       // Fallback: fetch recent messages with correct agentId/groupId
-      const wsId = ctx.workspaceId ?? undefined;
-      const messageModel = new MessageModel(ctx.serverDB, ctx.userId, wsId);
-      const messages = await messageModel.query({
+      const messages = await ctx.messageModel.query({
         agentId: topic.agentId ?? undefined,
         groupId: topic.groupId ?? undefined,
         topicId: input.topicId,
