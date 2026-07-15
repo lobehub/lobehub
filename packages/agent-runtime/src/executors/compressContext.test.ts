@@ -76,6 +76,8 @@ describe('compressContext executor', () => {
   let compressionCreateGroup: ReturnType<typeof vi.fn>;
   let compressionBuildPrompt: ReturnType<typeof vi.fn>;
   let compressionFinalizeGroup: ReturnType<typeof vi.fn>;
+  let compressionRollbackGroup: ReturnType<typeof vi.fn>;
+  let compressionUpdateGroup: ReturnType<typeof vi.fn>;
   let llmStream: ReturnType<typeof vi.fn>;
   let lifecycleDispatch: ReturnType<typeof vi.fn>;
 
@@ -89,6 +91,8 @@ describe('compressContext executor', () => {
       messages: [{ content: 'summarize', role: 'user' }],
     });
     compressionFinalizeGroup = vi.fn().mockResolvedValue({});
+    compressionRollbackGroup = vi.fn().mockResolvedValue({});
+    compressionUpdateGroup = vi.fn();
     llmStream = vi.fn().mockResolvedValue({ content: 'summary' });
     lifecycleDispatch = vi.fn().mockResolvedValue(undefined);
 
@@ -109,6 +113,8 @@ describe('compressContext executor', () => {
           buildPrompt: compressionBuildPrompt,
           createGroup: compressionCreateGroup,
           finalizeGroup: compressionFinalizeGroup,
+          rollbackGroup: compressionRollbackGroup,
+          updateGroup: compressionUpdateGroup,
         },
         llm: {
           stream: llmStream,
@@ -140,13 +146,17 @@ describe('compressContext executor', () => {
       messageGroupId: 'group-123',
       messagesToSummarize: [{ content: 'history', id: 'msg-history', role: 'user' }],
     });
-    llmStream.mockResolvedValue({
-      content: 'summary',
-      usage: {
-        totalInputTokens: 10,
-        totalOutputTokens: 5,
-        totalTokens: 15,
-      },
+    llmStream.mockImplementation(async (_payload, handlers) => {
+      handlers?.onText?.('sum');
+      handlers?.onText?.('mary');
+      return {
+        content: 'summary',
+        usage: {
+          totalInputTokens: 10,
+          totalOutputTokens: 5,
+          totalTokens: 15,
+        },
+      };
     });
     compressionFinalizeGroup.mockResolvedValue({
       messages: [{ content: 'summary', id: 'group-123', role: 'compressedGroup' }],
@@ -177,11 +187,23 @@ describe('compressContext executor', () => {
       existingSummary: undefined,
       messages: [{ content: 'history', id: 'msg-history', role: 'user' }],
     });
-    expect(llmStream).toHaveBeenCalledWith({
-      messages: [{ content: 'summarize', role: 'user' }],
-      model: 'gpt-4',
-      provider: 'openai',
-      stream: true,
+    expect(llmStream).toHaveBeenCalledWith(
+      {
+        messages: [{ content: 'summarize', role: 'user' }],
+        model: 'gpt-4',
+        provider: 'openai',
+        stream: true,
+      },
+      expect.objectContaining({ onText: expect.any(Function) }),
+      undefined,
+    );
+    expect(compressionUpdateGroup).toHaveBeenNthCalledWith(1, {
+      content: 'sum',
+      messageGroupId: 'group-123',
+    });
+    expect(compressionUpdateGroup).toHaveBeenNthCalledWith(2, {
+      content: 'summary',
+      messageGroupId: 'group-123',
     });
     expect(compressionFinalizeGroup).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -215,7 +237,7 @@ describe('compressContext executor', () => {
     );
   });
 
-  it('skips without compression side effects when topic or user context is missing', async () => {
+  it('skips without compression side effects when topic context is missing', async () => {
     const state = createState({
       metadata: { agentId: 'agent-123' },
       messages: [{ content: 'history', role: 'user' }],
@@ -233,6 +255,46 @@ describe('compressContext executor', () => {
     expect(compressionCreateGroup).not.toHaveBeenCalled();
     expect(llmStream).not.toHaveBeenCalled();
     expect((result.nextContext?.payload as any).skipped).toBe(true);
+  });
+
+  it('runs with client transports when userId is absent', async () => {
+    messagesQuery.mockResolvedValue([{ content: 'history', id: 'msg-history', role: 'user' }]);
+    compressionCreateGroup.mockResolvedValue({
+      messageGroupId: 'group-123',
+      messagesToSummarize: [{ content: 'history', id: 'msg-history', role: 'user' }],
+    });
+    compressionFinalizeGroup.mockResolvedValue({
+      messages: [{ content: 'summary', id: 'group-123', role: 'compressedGroup' }],
+    });
+    host.operation.userId = undefined;
+    host.lifecycle = undefined;
+
+    const state = createState({
+      messages: [{ content: 'history', id: 'msg-history', role: 'user' }],
+    });
+    const result = await compressContext(host)(createInstruction(state.messages), state);
+
+    expect(compressionCreateGroup).toHaveBeenCalledTimes(1);
+    expect((result.nextContext?.payload as any).skipped).not.toBe(true);
+  });
+
+  it('skips before creating a group when model config is unavailable', async () => {
+    messagesQuery.mockResolvedValue([
+      { content: 'history', id: 'msg-history', role: 'user' },
+      { content: 'loading', id: 'assistant-existing', role: 'assistant' },
+    ]);
+    const state = createState({
+      messages: [{ content: 'history', id: 'msg-history', role: 'user' }],
+      modelRuntimeConfig: undefined,
+    });
+
+    const result = await compressContext(host)(createInstruction(state.messages), state);
+
+    expect(compressionCreateGroup).not.toHaveBeenCalled();
+    expect(result.nextContext?.payload as any).toMatchObject({
+      parentMessageId: 'assistant-existing',
+      skipped: true,
+    });
   });
 
   it('continues with skipped compression and dispatches onCompactError when compression fails', async () => {
@@ -253,5 +315,53 @@ describe('compressContext executor', () => {
         type: 'onCompactError',
       }),
     );
+  });
+
+  it('rolls back a created group when summary generation fails', async () => {
+    messagesQuery.mockResolvedValue([{ content: 'history', id: 'msg-history', role: 'user' }]);
+    compressionCreateGroup.mockResolvedValue({
+      messageGroupId: 'group-123',
+      messagesToSummarize: [{ content: 'history', id: 'msg-history', role: 'user' }],
+    });
+    llmStream.mockRejectedValue(new Error('summary failed'));
+
+    const state = createState({
+      messages: [{ content: 'history', id: 'msg-history', role: 'user' }],
+    });
+    const result = await compressContext(host)(createInstruction(state.messages), state);
+
+    expect(compressionRollbackGroup).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: expect.objectContaining({ message: 'summary failed' }),
+        messageGroupId: 'group-123',
+      }),
+    );
+    expect(compressionFinalizeGroup).not.toHaveBeenCalled();
+    expect((result.nextContext?.payload as any).skipped).toBe(true);
+  });
+
+  it('rolls back instead of finalizing when the compression signal is aborted', async () => {
+    const controller = new AbortController();
+    messagesQuery.mockResolvedValue([{ content: 'history', id: 'msg-history', role: 'user' }]);
+    compressionCreateGroup.mockResolvedValue({
+      messageGroupId: 'group-123',
+      messagesToSummarize: [{ content: 'history', id: 'msg-history', role: 'user' }],
+      signal: controller.signal,
+    });
+    llmStream.mockImplementation(async () => {
+      controller.abort();
+      return { content: 'partial summary' };
+    });
+
+    const state = createState({
+      messages: [{ content: 'history', id: 'msg-history', role: 'user' }],
+    });
+    const result = await compressContext(host)(createInstruction(state.messages), state);
+
+    expect(compressionRollbackGroup).toHaveBeenCalledWith(
+      expect.objectContaining({ messageGroupId: 'group-123' }),
+    );
+    expect(compressionFinalizeGroup).not.toHaveBeenCalled();
+    expect((result.nextContext?.payload as any).skipped).toBe(true);
   });
 });

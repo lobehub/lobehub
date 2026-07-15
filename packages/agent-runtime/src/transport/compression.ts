@@ -13,6 +13,7 @@ export interface CompressionGroupCreateResult {
   messageGroupId: string;
   messages?: UIChatMessage[];
   messagesToSummarize: UIChatMessage[];
+  signal?: AbortSignal;
 }
 
 export interface CompressionPromptInput {
@@ -38,6 +39,25 @@ export interface CompressionGroupFinalizeResult {
   messages?: UIChatMessage[];
 }
 
+export interface CompressionGroupUpdateInput {
+  content: string;
+  messageGroupId: string;
+}
+
+export interface CompressionGroupRollbackInput {
+  agentId?: string;
+  error: unknown;
+  groupId?: string;
+  messageGroupId: string;
+  threadId?: string;
+  topicId: string;
+  workspaceId?: string;
+}
+
+export interface CompressionGroupRollbackResult {
+  messages?: UIChatMessage[];
+}
+
 /**
  * Persistence + prompt-preparation port for context compression.
  *
@@ -50,4 +70,6 @@ export interface CompressionTransport {
   buildPrompt: (input: CompressionPromptInput) => Promise<CompressionPromptResult>;
   createGroup: (input: CompressionGroupCreateInput) => Promise<CompressionGroupCreateResult>;
   finalizeGroup: (input: CompressionGroupFinalizeInput) => Promise<CompressionGroupFinalizeResult>;
+  rollbackGroup?: (input: CompressionGroupRollbackInput) => Promise<CompressionGroupRollbackResult>;
+  updateGroup?: (input: CompressionGroupUpdateInput) => void;
 }

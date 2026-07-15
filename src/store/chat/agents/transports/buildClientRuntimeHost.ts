@@ -10,6 +10,7 @@ import type { MessageMetadata } from '@lobechat/types';
 import type { ResolvedAgentConfig } from '@/services/chat/mecha';
 import type { ChatStore } from '@/store/chat/store';
 
+import { ClientCompressionTransport } from './ClientCompressionTransport';
 import { ClientContextBuilder } from './ClientContextBuilder';
 import { ClientLLMTransport } from './ClientLLMTransport';
 import { ClientMessageTransport } from './ClientMessageTransport';
@@ -54,6 +55,11 @@ export const buildClientRuntimeHost = (context: {
       topicId: topicId ?? undefined,
     },
     transports: {
+      compression: new ClientCompressionTransport(
+        context.get,
+        context.messageKey,
+        context.operationId,
+      ),
       context: new ClientContextBuilder({
         agentConfig: context.agentConfig,
         get: context.get,

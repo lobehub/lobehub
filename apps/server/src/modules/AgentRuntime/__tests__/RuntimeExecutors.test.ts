@@ -15,6 +15,7 @@ type PublishedStreamEvent = Omit<StreamEvent, 'operationId' | 'timestamp'>;
 type PublishStreamEventCall = [string, PublishedStreamEvent];
 
 const mockCreateCompressionGroup = vi.fn();
+const mockCancelCompression = vi.fn();
 const mockFinalizeCompression = vi.fn();
 const mockBuiltinModels = vi.hoisted(() => [
   {
@@ -62,6 +63,7 @@ vi.mock('@/server/modules/ModelRuntime', () => ({
 
 vi.mock('@/server/services/message', () => ({
   MessageService: vi.fn().mockImplementation(() => ({
+    cancelCompression: mockCancelCompression,
     createCompressionGroup: mockCreateCompressionGroup,
     finalizeCompression: mockFinalizeCompression,
   })),
@@ -145,7 +147,9 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
     vi.clearAllMocks();
     vi.mocked(initModelRuntimeFromDB).mockReset();
     mockCreateCompressionGroup.mockReset();
+    mockCancelCompression.mockReset();
     mockFinalizeCompression.mockReset();
+    mockCancelCompression.mockResolvedValue({ messages: [], success: true });
     mockCreateCompressionGroup.mockResolvedValue({
       messageGroupId: 'group-123',
       messagesToSummarize: [],
@@ -1466,7 +1470,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
 
       const result = await executors.compress_context!(instruction, state);
 
-      expect(mockCreateCompressionGroup).toHaveBeenCalledTimes(1);
+      expect(mockCreateCompressionGroup).not.toHaveBeenCalled();
       expect(mockFinalizeCompression).not.toHaveBeenCalled();
       expect(result.nextContext?.payload as any).toMatchObject({
         compressedMessages: [{ content: 'history', role: 'user' }],
@@ -1649,6 +1653,10 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       const result = await executors.compress_context!(instruction, state);
 
       expect(mockFinalizeCompression).not.toHaveBeenCalled();
+      expect(mockCancelCompression).toHaveBeenCalledWith(
+        'group-123',
+        expect.objectContaining({ topicId: 'topic-123' }),
+      );
       expect((result.nextContext?.payload as any).skipped).toBe(true);
       expect(result.events).toContainEqual(
         expect.objectContaining({

@@ -366,12 +366,16 @@ export class GeneralChatAgent implements Agent {
     // Look for compression group summary in messages
     // The summary is typically stored as a system message with compression metadata
     // or as a MessageGroup content field
-    for (const msg of messages) {
+    for (let index = messages.length - 1; index >= 0; index--) {
+      const msg = messages[index];
       if (msg.role === 'system' && msg.metadata?.compressionSummary) {
         return msg.content;
       }
-      // Check for MessageGroup type compression
-      if (msg.messageGroupType === 'compression' && msg.content) {
+      // Check both persisted compressedGroup rows and legacy compression metadata.
+      if (
+        (msg.role === 'compressedGroup' || msg.messageGroupType === 'compression') &&
+        msg.content
+      ) {
         return msg.content;
       }
     }

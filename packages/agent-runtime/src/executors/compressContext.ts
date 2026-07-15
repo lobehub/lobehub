@@ -8,22 +8,6 @@ import type {
   InstructionExecutor,
 } from '../types';
 
-const requireCompressionTransport = (host: AgentRuntimeHost) => {
-  const compression = host.transports.compression;
-  if (!compression) {
-    throw new Error('CompressionTransport is required for compress_context executor');
-  }
-  return compression;
-};
-
-const requireLLMTransport = (host: AgentRuntimeHost) => {
-  const llm = host.transports.llm;
-  if (!llm) {
-    throw new Error('LLMTransport is required for compress_context executor');
-  }
-  return llm;
-};
-
 const getErrorMessage = (error: unknown): string => {
   if (error instanceof Error && error.message) return error.message;
   if (typeof error === 'string' && error) return error;
@@ -65,6 +49,11 @@ export const compressContext =
     const newState = structuredClone(state);
     const topicId = state.metadata?.topicId ?? operation.topicId;
     const workspaceId = state.metadata?.workspaceId ?? operation.workspaceId;
+    const agentId = operation.agentId ?? state.metadata?.agentId;
+    const groupId = operation.groupId ?? state.metadata?.groupId;
+    const threadId = operation.threadId ?? state.metadata?.threadId;
+    const compression = transports.compression;
+    const llm = transports.llm;
     const lastMessage = messages.at(-1);
     const preservedMessages =
       messages.length > 1 && lastMessage?.role === 'user' ? [lastMessage] : [];
@@ -106,7 +95,7 @@ export const compressContext =
       }),
     });
 
-    if (!topicId || !userId) {
+    if (!topicId || !agentId || !compression || !llm) {
       return skippedResult();
     }
 
@@ -123,15 +112,14 @@ export const compressContext =
       state.metadata?._hooks,
     );
 
-    try {
-      const compression = requireCompressionTransport(host);
-      const llm = requireLLMTransport(host);
+    let createdGroupId: string | undefined;
 
+    try {
       const dbMessages = await transports.messages.query(
         {
-          agentId: state.metadata?.agentId,
-          groupId: state.metadata?.groupId,
-          threadId: state.metadata?.threadId,
+          agentId,
+          groupId,
+          threadId,
           topicId,
         },
         { resolveAssetUrls: true },
@@ -151,15 +139,6 @@ export const compressContext =
       }
 
       const latestAssistantMessage = dbMessages.findLast((message) => message.role === 'assistant');
-      const compressionResult = await compression.createGroup({
-        agentId: state.metadata?.agentId,
-        groupId: state.metadata?.groupId,
-        messageIds,
-        threadId: state.metadata?.threadId,
-        topicId,
-        workspaceId,
-      });
-
       const compressionModel =
         newState.modelRuntimeConfig?.compressionModel || newState.modelRuntimeConfig;
 
@@ -167,24 +146,53 @@ export const compressContext =
         return skippedResult(latestAssistantMessage?.id);
       }
 
+      const compressionResult = await compression.createGroup({
+        agentId,
+        groupId,
+        messageIds,
+        threadId,
+        topicId,
+        workspaceId,
+      });
+      createdGroupId = compressionResult.messageGroupId;
+
       const compressionPayload = await compression.buildPrompt({
         existingSummary,
         messages: compressionResult.messagesToSummarize,
       });
 
-      const summaryResult = await llm.stream({
-        messages: compressionPayload.messages,
-        model: compressionModel.model,
-        provider: compressionModel.provider,
-        stream: true,
-      });
+      let streamedSummary = '';
+      const summaryResult = await llm.stream(
+        {
+          messages: compressionPayload.messages,
+          model: compressionModel.model,
+          provider: compressionModel.provider,
+          stream: true,
+        },
+        {
+          onText: (text) => {
+            streamedSummary += text;
+            compression.updateGroup?.({
+              content: streamedSummary,
+              messageGroupId: compressionResult.messageGroupId,
+            });
+          },
+        },
+        compressionResult.signal,
+      );
+
+      if (compressionResult.signal?.aborted) {
+        const abortError = new Error('Context compression cancelled');
+        abortError.name = 'AbortError';
+        throw abortError;
+      }
 
       const finalCompression = await compression.finalizeGroup({
-        agentId: state.metadata?.agentId,
+        agentId,
         content: summaryResult.content,
-        groupId: state.metadata?.groupId,
+        groupId,
         messageGroupId: compressionResult.messageGroupId,
-        threadId: state.metadata?.threadId,
+        threadId,
         topicId,
         workspaceId,
       });
@@ -261,6 +269,22 @@ export const compressContext =
         },
       };
     } catch (error) {
+      if (createdGroupId && compression.rollbackGroup) {
+        try {
+          await compression.rollbackGroup({
+            agentId,
+            error,
+            groupId,
+            messageGroupId: createdGroupId,
+            threadId,
+            topicId,
+            workspaceId,
+          });
+        } catch (rollbackError) {
+          console.error('Failed to rollback context compression', rollbackError);
+        }
+      }
+
       dispatchLifecycle(
         host,
         'onCompactError',
