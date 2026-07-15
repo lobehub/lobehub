@@ -4059,7 +4059,7 @@ export class AiAgentService {
           parentMessageId: params.anchorMessageId,
           parentOperationId: params.parentOperationId,
           timeout: params.timeout,
-          title: params.instruction?.slice(0, 50),
+          title: params.title ?? params.instruction?.slice(0, 50),
           topicId: params.topicId,
         },
         {

@@ -183,6 +183,7 @@ export class GroupOrchestrationActionImpl {
       agentId,
       instruction,
       timeout,
+      title,
       toolMessageId,
       skipCallSupervisor,
       runInClient,
@@ -212,7 +213,7 @@ export class GroupOrchestrationActionImpl {
         type: 'supervisor_decided',
         payload: {
           decision: 'execute_task',
-          params: { agentId, instruction, runInClient, timeout, toolMessageId },
+          params: { agentId, instruction, runInClient, timeout, title, toolMessageId },
           skipCallSupervisor: skipCallSupervisor ?? false,
         },
       },

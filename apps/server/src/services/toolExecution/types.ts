@@ -74,6 +74,8 @@ export interface ServerAgentMemberRunItem {
   agentId: string;
   /** Optional supervisor instruction to guide the member's response. */
   instruction?: string;
+  /** Optional title for an isolated member task. */
+  title?: string;
 }
 
 export interface ServerAgentMemberRunParams {

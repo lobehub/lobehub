@@ -291,6 +291,7 @@ export const buildServerAgentMemberRunner = (
               // members parent their response here (siblings of the council tool).
               supervisorMessageId: parentMessageId,
               timeout,
+              title: member.title,
               topicId,
             });
             if (result?.started) {

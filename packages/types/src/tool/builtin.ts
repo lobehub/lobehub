@@ -731,6 +731,10 @@ export interface TriggerExecuteTaskParams extends GroupOrchestrationBaseParams {
    */
   timeout?: number;
   /**
+   * Brief title describing what this task does (shown in UI)
+   */
+  title: string;
+  /**
    * The tool message ID that triggered the task
    */
   toolMessageId: string;
