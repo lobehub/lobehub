@@ -622,6 +622,7 @@
   "settingAgent.agentTools.removeOwnedConfirm": "删除这个 Agent 专属连接器？其凭据将被移除。",
   "settingAgent.agentTools.tabAgent": "Agent 工具",
   "settingAgent.agentTools.tabUser": "用户工具",
+  "settingAgent.agentTools.tabWorkspace": "Workspace 工具",
   "settingAgent.avatar.sizeExceeded": "图片大小超过 1MB 限制，请选择更小的图片",
   "settingAgent.avatar.title": "助理头像",
   "settingAgent.backgroundColor.title": "头像背景色",

@@ -91,6 +91,13 @@ export interface PluginTagProps {
   onSelect?: () => void;
   pluginId: string | { enabled: boolean; identifier: string; settings: Record<string, any> };
   /**
+   * Whether the remove (×) button is shown. Default true. Set false to keep the
+   * tag interactive (clickable to open detail) while hiding removal — e.g. a
+   * shared workspace connector the current member isn't allowed to delete
+   * (only its creator or a workspace owner can).
+   */
+  removable?: boolean;
+  /**
    * Render as a selectable chip: a leading checkbox, no remove (×) button, and
    * the whole tag toggles selection. Used by the multi-select "copy" flow.
    */
@@ -115,6 +122,7 @@ const PluginTag = memo<PluginTagProps>(
     pluginId,
     onRemove,
     onSelect,
+    removable = true,
     selectable = false,
     selected = false,
     disabled,
@@ -346,7 +354,7 @@ const PluginTag = memo<PluginTagProps>(
     return (
       <Tag
         className={styles.tag}
-        closable={!disabled && !selectable}
+        closable={removable && !disabled && !selectable}
         closeIcon={<X size={12} />}
         color={showErrorState ? 'error' : undefined}
         style={selectable ? { cursor: 'pointer' } : undefined}

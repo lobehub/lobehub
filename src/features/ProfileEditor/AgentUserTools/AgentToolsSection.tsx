@@ -8,6 +8,8 @@ import { CopyIcon, PlugZapIcon, PlusIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import { useIsWorkspaceOwner } from '@/business/client/hooks/useIsWorkspaceOwner';
 import { createAgentSkillStoreModal } from '@/features/AgentSkillStore';
 import PluginTag from '@/features/ProfileEditor/PluginTag';
 import { usePermission } from '@/hooks/usePermission';
@@ -16,6 +18,7 @@ import { agentSelectors } from '@/store/agent/selectors';
 import { useToolStore } from '@/store/tool';
 import { connectorSelectors } from '@/store/tool/slices/connector';
 import type { ConnectorWithTools } from '@/store/tool/slices/connector/types';
+import { useUserStore } from '@/store/user';
 
 /**
  * The "Agent Tools" section (top of the tools area): the connectors owned by
@@ -27,6 +30,14 @@ const AgentToolsSection = memo<{ agentId: string; onStartCopy: () => void }>(
   ({ agentId, onStartCopy }) => {
     const { t } = useTranslation('setting');
     const { allowed: canEdit } = usePermission('edit_own_content');
+
+    // Deleting an agent connector row is creator-or-owner only in a workspace
+    // (mirrors the server `assertWorkspaceRowManageable` gate). Used to hide the
+    // remove (×) on shared connectors the current member can't delete, so B
+    // never clicks into a FORBIDDEN error on A's connector.
+    const activeWorkspaceId = useActiveWorkspaceId();
+    const isWorkspaceOwner = useIsWorkspaceOwner();
+    const currentUserId = useUserStore((s) => s.user?.id);
 
     const agentConnectors = useToolStore(connectorSelectors.agentConnectors(agentId), isEqual);
     const detachConnectorFromAgent = useToolStore((s) => s.detachConnectorFromAgent);
@@ -95,17 +106,28 @@ const AgentToolsSection = memo<{ agentId: string; onStartCopy: () => void }>(
             </Text>
           )}
 
-          {agentConnectors.map((connector) => (
-            <PluginTag
-              agentId={agentId}
-              disabled={!canEdit}
-              key={connector.id}
-              pluginId={connector.identifier}
-              onRemove={() => {
-                handleRemove(connector);
-              }}
-            />
-          ))}
+          {agentConnectors.map((connector) => {
+            // Outside a workspace (personal), or when the row has no known
+            // creator, fall back to the existing edit-permission gate. In a
+            // workspace, only the creator or a workspace owner may delete.
+            const canManageRow =
+              !activeWorkspaceId ||
+              !connector.userId ||
+              connector.userId === currentUserId ||
+              isWorkspaceOwner;
+            return (
+              <PluginTag
+                agentId={agentId}
+                disabled={!canEdit}
+                key={connector.id}
+                pluginId={connector.identifier}
+                removable={canManageRow}
+                onRemove={() => {
+                  handleRemove(connector);
+                }}
+              />
+            );
+          })}
         </Flexbox>
       </Flexbox>
     );

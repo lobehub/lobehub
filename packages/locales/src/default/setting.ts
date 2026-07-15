@@ -721,6 +721,7 @@ export default {
     'Delete this agent-exclusive connector? Its credentials will be removed.',
   'settingAgent.agentTools.tabAgent': 'Agent Tools',
   'settingAgent.agentTools.tabUser': 'User Tools',
+  'settingAgent.agentTools.tabWorkspace': 'Workspace Tools',
   'settingAgent.runtimeConfig.title': 'Model & Tools',
   'settingAgent.submit': 'Update Agent',
   'settingAgent.tag.desc': 'Agent tags will be displayed in the Agent Community',
