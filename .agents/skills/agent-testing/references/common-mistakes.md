@@ -557,3 +557,30 @@ observed failure mode is not covered, stop the test immediately, revert any expe
 changes, summarize the exact checks and evidence collected, and ask the user for help before
 continuing. Do not repair the environment, switch surfaces, or invent a fallback without user
 direction.
+
+---
+
+## Case 22 — Bare invocation: narrating skill setup, then asking an open "what should I test?"
+
+**Wrong approach**: invoked with no test target, the agent sent "I'm using the
+agent-testing skill; I'll load its mandatory living logs first", read both
+living logs in full (\~1.9k lines), then sent a second message — "Agent-testing
+is loaded, including both mandatory living logs. What feature, change, PR, or
+user flow should I verify?" — an open question that ignored the visible
+candidate (the current feature branch and its recent commits).
+
+**Why it's wrong**: the living logs inform execution, not target selection —
+reading them before a target exists burns context that may be compacted away
+before the run starts. Narrating internal setup ("mandatory living logs") is
+compliance-reporting the user never asked for. And an open question pushes work
+onto the user that observable context could have pre-filled as a candidate.
+
+**What it breaks**: two user-visible turns whose combined value is one
+clarifying question, asked twice; the user must type the target from scratch.
+
+**Correct approach**: ground the target first (SKILL.md Step 0): the user's
+words in the conversation > an inferred candidate from branch/commits/working
+tree, confirmed via one structured question and labeled as a guess (never
+executed on unconfirmed — Case 3) > an open question only as last resort. Read
+the living logs once the target is known, and never narrate skill-internal
+setup — the first visible message is about the user's test.

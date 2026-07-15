@@ -994,7 +994,7 @@ agents. Set` `agentRules: false` `in next.config to disable.` and leaves the wor
   overrides the ignore, or call `/usr/bin/grep` directly. Before asserting "X exists nowhere",
   re-run the search with an explicit path into the dependency tree.
 
-### E14. Electron `will-attach-webview` params carry NO custom attributes — identity via data-\* never arrives
+### E25. Electron `will-attach-webview` params carry NO custom attributes — identity via data-\* never arrives
 
 - **Situation**: a main-process controller needs to know WHICH renderer feature a mounting
   `<webview>` belongs to (e.g. a per-conversation session id), and the renderer put it in a
@@ -1097,7 +1097,7 @@ nodeintegration, plugins, disablewebsecurity, allowpopups, preload, …`). The h
   before opening the share page. Verify the fetch actually fired via
   `agent-browser network requests | grep getMessages`, not by waiting on the UI.
 
-### E15. ✅ Next dev does NOT hot-reload `apps/server/**` — you are testing STALE compiled server code
+### E26. ✅ Next dev does NOT hot-reload `apps/server/**` — you are testing STALE compiled server code
 
 - **Situation**: verifying a working-tree change inside `apps/server/src/**` (an agent-runtime
   service, a tool executor, a router) against a `bun run dev` server that was started before the
@@ -1114,7 +1114,7 @@ nodeintegration, plugins, disablewebsecurity, allowpopups, preload, …`). The h
   conclusion. If a run "should" have hit your code and didn't, prove the server is running your
   code FIRST — drop a `console.error` on the path and restart — before debugging the code itself.
 
-### E16. ✅ `source`-ing an unquoted JSON env var silently corrupts it (JWKS\_KEY → gateway auth\_failed)
+### E27. ✅ `source`-ing an unquoted JSON env var silently corrupts it (JWKS\_KEY → gateway auth\_failed)
 
 - **Situation**: writing an env file for the local gateway loop with
   `JWKS_KEY={"keys":[{"kty":"RSA",...}]}` on one line, then `set -a; source that-file`.
@@ -1134,7 +1134,7 @@ nodeintegration, plugins, disablewebsecurity, allowpopups, preload, …`). The h
   To diagnose an `auth_failed`, hook `ws.send` in the page and read the token the client actually
   sends — an empty string means the SERVER failed to sign, not that the gateway rejected a signature.
 
-### E17. The chat input silently refuses to send when the agent's model is retired
+### E28. The chat input silently refuses to send when the agent's model is retired
 
 - **Situation**: driving a real turn (store `sendMessage` or type+Enter). The call resolves, no error
   is thrown, `activeTopicId` stays `null`, and no `agent_operations` row appears. Nothing in the dev
@@ -1147,7 +1147,7 @@ nodeintegration, plugins, disablewebsecurity, allowpopups, preload, …`). The h
   and pick one from there. Also: a send that "resolves fine but creates no operation" is a UI-gate
   symptom; **screenshot the composer** instead of re-reading your store call.
 
-### E18. Fresh-worktree `seed-user` dies on `Cannot find module 'bcryptjs'` — NODE\_PATH into .pnpm fixes it
+### E29. Fresh-worktree `seed-user` dies on `Cannot find module 'bcryptjs'` — NODE\_PATH into .pnpm fixes it
 
 - **Situation**: in a fresh git-worktree install, `init-dev-env.sh seed-user`
   (which runs `node <<'NODE'` from the repo root) throws MODULE\_NOT\_FOUND for
@@ -1166,7 +1166,7 @@ nodeintegration, plugins, disablewebsecurity, allowpopups, preload, …`). The h
   the `os error 35` agent-browser daemon wedge (D8) recovers with
   `agent-browser close --all` + re-running `setup-auth.sh web-seed`.
 
-### C7. `document.body.innerText` is ALWAYS 0 in this app — probe `#root`, and use textContent to tell a wedge from a blank
+### C10. `document.body.innerText` is ALWAYS 0 in this app — probe `#root`, and use textContent to tell a wedge from a blank
 
 - **Situation**: asserting rendered text with `document.body.innerText.includes(...)`. It returns `""` / length 0 even on a fully rendered page, so every text assertion silently fails and reads as "the page is blank".
 - **Works**: probe `document.getElementById('root').innerText`. (Cause not established — some ancestor of `#root` makes body's inner-text computation collapse; `#root` itself is fine.)
