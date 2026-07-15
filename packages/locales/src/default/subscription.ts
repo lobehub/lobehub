@@ -461,7 +461,7 @@ export default {
   'plans.plan.free.title': 'Free',
   'plans.plan.hobby.desc': 'For users with their own API who pay as they go',
   'plans.plan.hobby.title': 'Hobby',
-  'plans.plan.premium.desc': 'Designed for professional users who frequently use AI',
+  'plans.plan.premium.desc': 'For professional users who frequently use AI',
   'plans.plan.premium.title': 'Premium',
   'plans.plan.starter.desc': 'For occasional AI users',
   'plans.plan.starter.title': 'Starter',

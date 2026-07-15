@@ -395,7 +395,7 @@
   "plans.plan.free.title": "免费版",
   "plans.plan.hobby.desc": "适合拥有自定义 API、按量付费的用户",
   "plans.plan.hobby.title": "自助版",
-  "plans.plan.premium.desc": "为频繁使用 AI 的专业用户设计",
+  "plans.plan.premium.desc": "适合频繁使用 AI 的专业用户",
   "plans.plan.premium.title": "进阶版",
   "plans.plan.starter.desc": "适合偶尔使用 AI 的用户",
   "plans.plan.starter.title": "基础版",
