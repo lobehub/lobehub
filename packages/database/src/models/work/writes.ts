@@ -154,6 +154,12 @@ export const registerWorkVersion = async (
           .insert(works)
           .values({
             ...identity,
+            // Origin provenance is stamped ONLY here: it records where the Work
+            // identity was first registered and stays immutable through every
+            // later version (the current-projection UPDATE below never touches it).
+            originAgentId: params.agentId ?? null,
+            originThreadId: params.threadId ?? null,
+            originTopicId: params.topicId ?? null,
             toolIdentifier: params.toolIdentifier,
             toolName: params.toolName,
             workspaceId: ctx.workspaceId ?? null,
@@ -247,7 +253,6 @@ export const registerWorkVersion = async (
             currentVersionId: version.id,
             description: snapshot.description,
             identifier: snapshot.identifier,
-            rootOperationId: params.rootOperationId ?? null,
             status: snapshot.status,
             title: snapshot.title,
             toolIdentifier: params.toolIdentifier,

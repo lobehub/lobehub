@@ -6,6 +6,7 @@ import { messages, topics, works, workspaces, workVersions } from '../../../sche
 import { TaskModel } from '../../task';
 import { WorkModel } from '..';
 import {
+  agentId,
   cleanupWorkTestData,
   expectTaskListItem,
   expectTaskSummaryItem,
@@ -85,7 +86,8 @@ describe('WorkModel · task', () => {
     expect(work).toMatchObject({
       description: 'Write the MVP plan',
       identifier: task.identifier,
-      rootOperationId: 'op-root',
+      originThreadId: threadId,
+      originTopicId: topicId,
       status: 'backlog',
       title: 'Work MVP plan',
       toolName: 'createTask',
@@ -117,6 +119,52 @@ describe('WorkModel · task', () => {
       }),
     });
     expect(byOperations['op-missing']).toEqual([]);
+  });
+
+  it('stamps origin provenance once at identity creation and never updates it', async () => {
+    const taskModel = new TaskModel(serverDB, userId);
+    const workModel = new WorkModel(serverDB, userId);
+    const task = await taskModel.create({ instruction: 'Origin task', name: 'Origin task' });
+
+    const otherTopicId = 'work-test-topic-id-origin';
+    await serverDB.insert(topics).values({ id: otherTopicId, userId });
+
+    const created = await workModel.registerTask({
+      agentId,
+      changeType: 'created',
+      rootOperationId: 'op-origin-create',
+      taskId: task.id,
+      threadId,
+      toolCallId: 'tool-call-origin-1',
+      toolIdentifier: 'lobe-task',
+      toolName: 'createTask',
+      topicId,
+    });
+    expect(created).toMatchObject({
+      originAgentId: agentId,
+      originThreadId: threadId,
+      originTopicId: topicId,
+    });
+
+    // A later registration from another conversation (and no agent) appends a
+    // version but must NOT touch the immutable origin columns.
+    const updated = await workModel.registerTask({
+      changeType: 'updated',
+      rootOperationId: 'op-origin-update',
+      taskId: task.id,
+      toolCallId: 'tool-call-origin-2',
+      toolIdentifier: 'lobe-task',
+      toolName: 'editTask',
+      topicId: otherTopicId,
+    });
+    expect(updated).toMatchObject({
+      originAgentId: agentId,
+      originThreadId: threadId,
+      originTopicId: topicId,
+    });
+    // The version itself carries the new conversation's provenance.
+    const versions = await workModel.listVersions(created!.id);
+    expect(versions[0]).toMatchObject({ topicId: otherTopicId, version: 2 });
   });
 
   it('keeps conversation provenance on versions and latest card state on Work', async () => {
@@ -151,7 +199,10 @@ describe('WorkModel · task', () => {
 
     const [row] = await serverDB.select().from(works).where(eq(works.id, edited!.id));
     expect(row).toMatchObject({
-      rootOperationId: 'op-provenance-second',
+      // Origin stays pinned to the first registration's conversation even
+      // though the current card state comes from the second one.
+      originThreadId: threadId,
+      originTopicId: topicId,
       title: 'Latest title',
       toolName: 'editTask',
       toolIdentifier: 'lobe-task',

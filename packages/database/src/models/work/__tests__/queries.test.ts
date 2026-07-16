@@ -140,6 +140,46 @@ describe('WorkModel · queries', () => {
     });
   });
 
+  it('keeps the summary card in this conversation when a later edit happens in a foreign operation', async () => {
+    const taskModel = new TaskModel(serverDB, userId);
+    const workModel = new WorkModel(serverDB, userId);
+    const task = await taskModel.create({ instruction: 'Cross-topic work', name: 'Cross-topic' });
+
+    await workModel.registerTask({
+      changeType: 'created',
+      rootOperationId: 'op-home-round',
+      taskId: task.id,
+      toolCallId: 'tool-call-home-1',
+      toolIdentifier: 'lobe-task',
+      toolName: 'createTask',
+      topicId,
+    });
+    // Same task edited later by an operation from ANOTHER conversation. That
+    // operation is not in this conversation's anchor set, so it must not steal
+    // the card: anchoring is latest-wins WITHIN the requested ids only.
+    await workModel.registerTask({
+      changeType: 'updated',
+      rootOperationId: 'op-foreign-round',
+      taskId: task.id,
+      toolCallId: 'tool-call-foreign-1',
+      toolIdentifier: 'lobe-task',
+      toolName: 'editTask',
+      topicId,
+    });
+
+    const summaries = await workModel.listSummariesByRootOperations({
+      rootOperationIds: ['op-home-round'],
+    });
+
+    expect(summaries['op-home-round']).toHaveLength(1);
+    // The card still shows the Work's CURRENT snapshot (the foreign edit).
+    expect(summaries['op-home-round'][0].event).toMatchObject({
+      changeType: 'updated',
+      rootOperationId: 'op-foreign-round',
+      version: 2,
+    });
+  });
+
   it('clamps the summary over-fetch limit while still returning results for large id batches', async () => {
     const agentDocumentModel = new AgentDocumentModel(serverDB, userId);
     const workModel = new WorkModel(serverDB, userId);

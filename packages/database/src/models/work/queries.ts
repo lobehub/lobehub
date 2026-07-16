@@ -113,6 +113,30 @@ export const listSummariesByRootOperations = async (
 
   const limit = params.limit ?? 20;
   const rowLimit = Math.min(rootOperationIds.length * limit, MAX_SUMMARY_ROW_LIMIT);
+
+  // Anchor each Work to the LATEST version event among the requested operations
+  // (latest-wins within the caller's anchor set — typically one conversation's
+  // operations). An edit made in another conversation's operation is outside
+  // this set, so it never steals the card from this conversation's summaries.
+  const eventRows = await ctx.db
+    .select({
+      createdAt: workVersions.createdAt,
+      rootOperationId: workVersions.rootOperationId,
+      workId: workVersions.workId,
+    })
+    .from(workVersions)
+    .innerJoin(works, and(eq(workVersions.workId, works.id), workOwnership(ctx)))
+    .where(inArray(workVersions.rootOperationId, rootOperationIds))
+    .orderBy(desc(workVersions.createdAt))
+    .limit(rowLimit);
+
+  const anchorByWorkId = new Map<string, string>();
+  for (const row of eventRows) {
+    if (!row.rootOperationId) continue;
+    if (!anchorByWorkId.has(row.workId)) anchorByWorkId.set(row.workId, row.rootOperationId);
+  }
+  if (anchorByWorkId.size === 0) return result;
+
   const rows = await ctx.db
     .select({
       event: currentVersionEventSelection,
@@ -127,9 +151,8 @@ export const listSummariesByRootOperations = async (
     .from(works)
     .innerJoin(currentVersions, eq(works.currentVersionId, currentVersions.id))
     .leftJoin(tasks, taskSummaryJoin(ctx))
-    .where(and(workOwnership(ctx), inArray(works.rootOperationId, rootOperationIds)))
-    .orderBy(desc(works.updatedAt), desc(works.id))
-    .limit(rowLimit);
+    .where(and(workOwnership(ctx), inArray(works.id, Array.from(anchorByWorkId.keys()))))
+    .orderBy(desc(works.updatedAt), desc(works.id));
 
   const costByWorkId = await getTotalCostByWorkIds(
     ctx,
@@ -141,7 +164,7 @@ export const listSummariesByRootOperations = async (
   );
 
   for (const summary of summaries) {
-    const rootOperationId = summary.rootOperationId;
+    const rootOperationId = anchorByWorkId.get(summary.id);
     if (!rootOperationId || !(rootOperationId in result)) continue;
     if (result[rootOperationId].length >= limit) continue;
     result[rootOperationId].push(summary);

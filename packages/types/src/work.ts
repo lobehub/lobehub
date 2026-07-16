@@ -41,10 +41,14 @@ export interface WorkItem {
   id: string;
   /** Denormalized current-version human reference. */
   identifier: string | null;
+  /** Agent that first registered this Work; stamped once at creation, immutable. */
+  originAgentId: string | null;
+  /** Thread where this Work was first registered; stamped once at creation, immutable. */
+  originThreadId: string | null;
+  /** Topic where this Work was first registered; stamped once at creation, immutable. */
+  originTopicId: string | null;
   resourceId: string | null;
   resourceType: WorkResourceType;
-  /** Latest operation that produced a version and owns the current card. */
-  rootOperationId: string | null;
   /** Denormalized current-version resource status. */
   status: string | null;
   /** Denormalized current-version title used by Work list queries. */
