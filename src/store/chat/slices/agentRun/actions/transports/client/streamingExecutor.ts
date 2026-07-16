@@ -660,7 +660,6 @@ export class StreamingExecutorActionImpl {
         operationId,
         parentId: params.parentMessageId,
         toolsEngine, // Pass toolsEngine for dynamic tool injection via activateTools
-        userMessageId: params.userMessageId,
       }),
       getOperation: (opId: string) => {
         const op = this.#get().operations[opId];
