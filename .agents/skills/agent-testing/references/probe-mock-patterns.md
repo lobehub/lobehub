@@ -1396,3 +1396,39 @@ nodeintegration, plugins, disablewebsecurity, allowpopups, preload, …`). The h
 - **Works**: use client observables (`messages.model`, thread ids, and chat-store operations) for web;
   use CLI/server execution and `agent_operations` for the server runtime. A change affecting both paths
   needs evidence from both paths.
+
+### E32. ✅ WORKS — driving `heteroIngest`/`heteroFinish` directly needs an OIDC token, and bun's spawn-ENOENT message differs from node's
+
+- **Situation**: E2E-testing the hetero server-ingest chain by running `lh hetero exec --topic <t> --operation-id <op>` manually (the exact command a device daemon spawns), against a local dev
+  server, with the seeded CLI API key.
+- **Doesn't work**: the seeded `LOBE_API_KEY`. `heteroAuthedProcedure` requires `ctx.oidcAuth`
+  (`packages/trpc/src/lambda/middleware/heteroOperationAuth.ts`) — an API key never populates it, so
+  `heteroFinish` 401s. Also note the local no-`.env` env has no `JWKS_KEY` (E22), so the server
+  cannot even validate a JWT until restarted with one.
+- **Works** — production-shape auth in three steps:
+  1. `node scripts/generate-oidc-jwk.mjs > /tmp/jwks.json`
+  2. restart the dev server with `JWKS_KEY="$(cat /tmp/jwks.json)"` (must be present at start)
+  3. sign a 4h `hetero-operation` JWT with the SAME key via `signOperationJwt(<userId>)`
+     (`packages/trpc/src/utils/internalJwt.ts`; run a small `.mts` inside the repo with `bunx tsx`),
+     then run the CLI with `LOBEHUB_JWT=<token> LOBEHUB_SERVER=<app-url>` — the CLI forwards it as
+     the `Oidc-Auth` header.
+     The fixture side needs `topics.metadata.runningOperation = { operationId, assistantMessageId }`
+     seeded, and the operationId must embed real ids (`op_<ts>_agt_<id>_tpc_<id>_<suffix>`).
+- **Bonus trap**: under bun, a spawn failure reads `ENOENT: no such file or directory,
+posix_spawn '<cmd>'` — NOT node's `spawn <cmd> ENOENT`. Any stderr-text pattern keyed to the node
+  format silently misses on bun; classification/assertions should key on the raw error's
+  `err.code === 'ENOENT'` (runtime-agnostic) and treat text matching as fallback only.
+- **Persistence shape worth knowing**: a process-level failure that produced ZERO stream events
+  never creates op state, so `HeterogeneousPersistenceHandler.finish` early-returns — the message
+  error is written by `CompletionLifecycle.completeOperation`'s onError branch instead
+  (`body: messageError.body ?? { message }`). Assert on `messages.error`, not on which writer ran.
+
+### E33. ✅ WORKS — keep the Electron supervisor session alive in process-reaping runners
+
+- **Situation**: `electron-dev.sh start <id>` reports `Ready`, but CDP and the Vite port disappear
+  immediately after the shell command returns. The Electron log contains no crash or product error.
+- **Doesn't work**: repeatedly restarting and treating the vanished CDP endpoint as an app crash.
+- **Works**: keep the launcher shell alive for the test session (for example, run `start` followed by
+  a short periodic wait loop in the same PTY), drive CDP from a second shell, then stop with
+  `electron-dev.sh stop <id>` and terminate the holder. Some execution harnesses reap descendants when
+  the command cell closes even though the launcher normally survives an interactive terminal.
