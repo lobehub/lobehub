@@ -418,6 +418,35 @@ describe('LobeMinimaxAI - handlePayload', () => {
     expect(result.messages[0].content).toBe(content);
   });
 
+  it('normalizes rejected image detail "auto" to "high" for MiniMax vision requests', () => {
+    const content = [
+      { text: 'describe this image', type: 'text' },
+      { image_url: { detail: 'auto', url: 'https://example.com/image.png' }, type: 'image_url' },
+    ];
+
+    const result = handlePayload({
+      messages: [{ content, role: 'user' }],
+      model: 'MiniMax-M3',
+    } as any);
+
+    expect((result.messages[0].content as any)[1].image_url.detail).toBe('high');
+    // Original payload must not be mutated in place.
+    expect((content[1] as any).image_url.detail).toBe('auto');
+  });
+
+  it('leaves supported image detail values untouched', () => {
+    const content = [
+      { image_url: { detail: 'low', url: 'https://example.com/image.png' }, type: 'image_url' },
+    ];
+
+    const result = handlePayload({
+      messages: [{ content, role: 'user' }],
+      model: 'MiniMax-M3',
+    } as any);
+
+    expect(result.messages[0].content).toBe(content);
+  });
+
   it('keeps reasoning_split enabled for non-M3 MiniMax models', () => {
     const result = handlePayload({
       messages: [{ content: 'hi', role: 'user' }],

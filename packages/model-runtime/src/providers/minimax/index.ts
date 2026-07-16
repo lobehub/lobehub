@@ -31,6 +31,27 @@ const isEmptyContent = (content: unknown) =>
 
 const hasReasoningContent = (reasoning: any) => typeof reasoning?.content === 'string';
 
+// MiniMax's vision API only accepts `detail: 'low' | 'high'` and rejects the
+// OpenAI-spec `'auto'` value with a 400, so remap it to a supported value.
+const MINIMAX_UNSUPPORTED_IMAGE_DETAIL = 'auto';
+const MINIMAX_FALLBACK_IMAGE_DETAIL = 'high';
+
+const normalizeMiniMaxImageDetail = (content: unknown) => {
+  if (!Array.isArray(content)) return content;
+
+  let changed = false;
+
+  const next = content.map((part: any) => {
+    if (part?.type === 'image_url' && part.image_url?.detail === MINIMAX_UNSUPPORTED_IMAGE_DETAIL) {
+      changed = true;
+      return { ...part, image_url: { ...part.image_url, detail: MINIMAX_FALLBACK_IMAGE_DETAIL } };
+    }
+    return part;
+  });
+
+  return changed ? next : content;
+};
+
 const normalizeMiniMaxAnthropicBaseURL = (baseURL?: string | null) =>
   baseURL?.replace(MINIMAX_ANTHROPIC_MESSAGES_PATH_PATTERN, '');
 
@@ -122,11 +143,13 @@ export const buildMiniMaxOpenAIPayload = (payload: ChatStreamPayload) => {
 
   // Interleaved thinking
   const processedMessages = messages.map((message: any) => {
+    let processed = message;
+
     if (message.role === 'assistant' && message.reasoning) {
       // Only process historical reasoning content without a signature
       if (!message.reasoning.signature && message.reasoning.content) {
         const { reasoning, ...messageWithoutReasoning } = message;
-        return {
+        processed = {
           ...messageWithoutReasoning,
           reasoning_details: [
             {
@@ -138,13 +161,18 @@ export const buildMiniMaxOpenAIPayload = (payload: ChatStreamPayload) => {
             },
           ],
         };
+      } else {
+        // If there is a signature or no content, remove the reasoning field
+        const { reasoning: _reasoning, ...messageWithoutReasoning } = message;
+        processed = messageWithoutReasoning;
       }
-
-      // If there is a signature or no content, remove the reasoning field
-      const { reasoning: _reasoning, ...messageWithoutReasoning } = message;
-      return messageWithoutReasoning;
     }
-    return message;
+
+    const normalizedContent = normalizeMiniMaxImageDetail(processed.content);
+
+    return normalizedContent === processed.content
+      ? processed
+      : { ...processed, content: normalizedContent };
   });
 
   // MiniMax API enforces `input_tokens + max_tokens <= context_window`,
