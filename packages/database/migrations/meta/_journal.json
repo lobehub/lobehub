@@ -847,6 +847,13 @@
       "when": 1784130423992,
       "tag": "0120_oidc_clients_governance",
       "breakpoints": true
+    },
+    {
+      "idx": 121,
+      "version": "7",
+      "when": 1784169439447,
+      "tag": "0121_add_work_registry_tables",
+      "breakpoints": true
     }
   ],
   "version": "6"

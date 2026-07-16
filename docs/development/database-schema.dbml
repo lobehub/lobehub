@@ -2699,6 +2699,74 @@ table verify_runs {
   }
 }
 
+table work_versions {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  work_id text [not null]
+  version integer [not null]
+  title text
+  description text
+  content text
+  identifier text
+  status text
+  url text
+  change_type text [not null]
+  tool_name text [not null]
+  tool_identifier text [not null]
+  topic_id text
+  thread_id text
+  message_id text
+  root_operation_id text
+  tool_call_id text
+  agent_id text
+  metadata jsonb
+  cumulative_cost "numeric(20, 6)"
+  cumulative_usage jsonb
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (work_id, version) [name: 'work_versions_work_id_version_unique', unique]
+    (work_id, tool_call_id) [name: 'work_versions_work_id_tool_call_id_unique', unique]
+    thread_id [name: 'work_versions_thread_id_idx']
+    message_id [name: 'work_versions_message_id_idx']
+    agent_id [name: 'work_versions_agent_id_idx']
+    (root_operation_id, created_at) [name: 'work_versions_root_operation_created_at_idx']
+    (topic_id, created_at) [name: 'work_versions_topic_created_at_idx']
+    (topic_id, thread_id, created_at) [name: 'work_versions_topic_thread_created_at_idx']
+  }
+}
+
+table works {
+  id text [pk, not null]
+  type text [not null]
+  current_version_id uuid
+  resource_type text [not null]
+  resource_id text
+  title text
+  description text
+  identifier text
+  status text
+  url text
+  tool_name text [not null]
+  tool_identifier text [not null]
+  root_operation_id text
+  user_id text [not null]
+  workspace_id text
+  visibility text [not null]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (resource_type, resource_id, user_id) [name: 'works_resource_user_unique', unique]
+    (workspace_id, resource_type, resource_id) [name: 'works_resource_workspace_unique', unique]
+    user_id [name: 'works_user_id_idx']
+    workspace_id [name: 'works_workspace_id_idx']
+    (workspace_id, visibility, user_id) [name: 'works_workspace_visibility_idx']
+    (user_id, updated_at, id) [name: 'works_user_updated_at_id_idx']
+    (workspace_id, updated_at, id) [name: 'works_workspace_updated_at_id_idx']
+    (root_operation_id, updated_at, id) [name: 'works_root_operation_updated_at_id_idx']
+  }
+}
+
 table workspace_audit_logs {
   id text [pk, not null]
   workspace_id text [not null]
