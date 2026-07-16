@@ -22,9 +22,10 @@ import {
   LoaderCircle,
   PanelLeftClose,
   ScrollText,
+  Search,
   TriangleAlert,
 } from 'lucide-react';
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router';
 
@@ -75,6 +76,61 @@ const styles = createStaticStyles(({ css }) => ({
       color: ${cssVar.colorText};
       background: ${cssVar.colorFillTertiary};
     }
+  `,
+  search: css`
+    display: flex;
+    gap: 7px;
+    align-items: center;
+
+    height: 32px;
+    margin-block: 8px 4px;
+    margin-inline: 4px;
+    padding-inline: 10px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadius};
+
+    background: ${cssVar.colorBgContainer};
+
+    svg {
+      flex: none;
+      color: ${cssVar.colorTextQuaternary};
+    }
+
+    input {
+      width: 100%;
+      min-width: 0;
+      border: none;
+
+      font-size: 13px;
+      color: ${cssVar.colorText};
+
+      background: none;
+      outline: none;
+
+      &::placeholder {
+        color: ${cssVar.colorTextQuaternary};
+      }
+    }
+  `,
+  searchEmpty: css`
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: flex-start;
+
+    padding-block: 24px;
+    padding-inline: 12px;
+  `,
+  searchEmptyMsg: css`
+    font-size: 12px;
+    line-height: 1.6;
+    color: ${cssVar.colorTextTertiary};
+    word-break: break-word;
+  `,
+  queryHl: css`
+    font-weight: 600;
+    color: ${cssVar.colorTextSecondary};
+    word-break: break-all;
   `,
   list: css`
     display: flex;
@@ -171,6 +227,16 @@ const AcceptanceListPanel = memo<ReportPanelExpand>(({ expand, isNarrow, setExpa
 
   const { data, error, isLoading, mutate } = useAcceptanceList(true);
 
+  // Client-side filter: the list endpoint returns the caller's full recent set
+  // (bounded, no pagination), so filtering the loaded rows IS filtering the set.
+  const [query, setQuery] = useState('');
+  const trimmedQuery = query.trim().toLowerCase();
+  const filtered = trimmedQuery
+    ? (data ?? []).filter((item) =>
+        (item.subject.title || item.subjectId).toLowerCase().includes(trimmedQuery),
+      )
+    : (data ?? []);
+
   const [panelWidth, updateSystemStatus] = useGlobalStore((s) => [
     systemStatusSelectors.verifyReportPanelWidth(s),
     s.updateSystemStatus,
@@ -212,6 +278,15 @@ const AcceptanceListPanel = memo<ReportPanelExpand>(({ expand, isNarrow, setExpa
               <Icon icon={PanelLeftClose} size={16} />
             </button>
           </div>
+          <label className={styles.search}>
+            <Icon icon={Search} size={13} />
+            <input
+              placeholder={t('workspace.search')}
+              type={'search'}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </label>
         </div>
 
         <Flexbox flex={1} style={{ minHeight: 0, overflowX: 'hidden', overflowY: 'auto' }}>
@@ -230,17 +305,32 @@ const AcceptanceListPanel = memo<ReportPanelExpand>(({ expand, isNarrow, setExpa
             </Center>
           ) : isLoading ? (
             <SkeletonList rows={6} style={{ paddingBlock: 6, paddingInline: 8 }} />
-          ) : !data || data.length === 0 ? (
-            <Center className={styles.emptyState}>
-              <Empty
-                description={t('acceptance.workspace.listEmpty')}
-                icon={ScrollText}
-                title={t('acceptance.workspace.listEmptyTitle')}
-              />
-            </Center>
+          ) : filtered.length === 0 ? (
+            trimmedQuery ? (
+              // A zero-result FILTER must read as "no match for this query",
+              // never as the first-run empty state.
+              <div className={styles.searchEmpty}>
+                <span className={styles.searchEmptyMsg}>
+                  {t('workspace.searchEmptyPrefix')}
+                  <b className={styles.queryHl}>{query.trim()}</b>
+                  {t('workspace.searchEmptySuffix')}
+                </span>
+                <button className={styles.retryBtn} type={'button'} onClick={() => setQuery('')}>
+                  {t('workspace.clearSearch')}
+                </button>
+              </div>
+            ) : (
+              <Center className={styles.emptyState}>
+                <Empty
+                  description={t('acceptance.workspace.listEmpty')}
+                  icon={ScrollText}
+                  title={t('acceptance.workspace.listEmptyTitle')}
+                />
+              </Center>
+            )
           ) : (
             <div className={styles.list}>
-              {data.map((item) => {
+              {filtered.map((item) => {
                 const glyph = glyphOf(item.status as AcceptanceStatus);
                 const meta = glyphMeta[glyph];
                 const title = item.subject.title || item.subjectId;

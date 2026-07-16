@@ -61,6 +61,19 @@ function toVerdict(raw: unknown): Verdict {
   return 'uncertain'; // partial / blocked / skipped / pending / unknown
 }
 
+/**
+ * The report's headline verdict when the author didn't set `summary.verdict`:
+ * derived from the ingested cases, so a report can never ship verdict-less and
+ * render as a permanent "?" in every list surface.
+ */
+export function deriveReportVerdict(cases: unknown[]): Verdict | undefined {
+  const verdicts = cases.map((c) => toVerdict((c as any)?.result ?? (c as any)?.verdict));
+  if (verdicts.length === 0) return undefined;
+  if (verdicts.includes('failed')) return 'failed';
+  if (verdicts.includes('uncertain')) return 'uncertain';
+  return 'passed';
+}
+
 /** Pick an evidence medium from a file extension. */
 function evidenceTypeForFile(file: string): EvidenceType {
   const ext = path.extname(file).toLowerCase().slice(1);
@@ -1422,6 +1435,13 @@ export function registerVerifyCommand(program: Command) {
         const client = await getTrpcClient();
         const goal = options.goal ?? (typeof result.focus === 'string' ? result.focus : undefined);
         const title = options.title ?? result.title;
+        // The title is the run's identity in every list surface — an untitled
+        // run renders as a placeholder forever, so say so before it ships.
+        if (!title) {
+          log.warn(
+            'result.json has no "title" — the run will list as untitled; set result.title (or pass --title)',
+          );
+        }
         // The in-app conversation that ran this harness, if any (env-supplied).
         // Strictly the authoring conversation. `--operation` names the Agent Run
         // under test and is passed to `createRun` below — a different relation.
@@ -1536,7 +1556,10 @@ export function registerVerifyCommand(program: Command) {
           summary: conclusion,
           totalChecks: summary.total ?? cases.length,
           uncertainChecks: (summary.blocked ?? 0) + (summary.uncertain ?? 0) || undefined,
-          verdict: summary.verdict ? toVerdict(summary.verdict) : undefined,
+          // An explicit summary.verdict wins; otherwise the headline is derived
+          // from the ingested cases (deriveReportVerdict) so no report ships
+          // verdict-less and lists as a permanent "?".
+          verdict: summary.verdict ? toVerdict(summary.verdict) : deriveReportVerdict(cases),
           verifyRunId: runId,
         });
 

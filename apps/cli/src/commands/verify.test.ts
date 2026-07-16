@@ -6,6 +6,7 @@ import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  deriveReportVerdict,
   originFromEnv,
   parseSubjectRef,
   planFromResult,
@@ -607,6 +608,24 @@ describe('originFromEnv — in-app provenance', () => {
     delete process.env.LOBEHUB_OPERATION_ID;
 
     expect(originFromEnv()).toBeUndefined();
+  });
+});
+
+describe('deriveReportVerdict — headline fallback when summary.verdict is absent', () => {
+  it('derives passed when every case passed', () => {
+    expect(deriveReportVerdict([{ result: 'passed' }, { result: 'ok' }])).toBe('passed');
+  });
+
+  it('any failed case fails the report', () => {
+    expect(deriveReportVerdict([{ result: 'passed' }, { result: 'failed' }])).toBe('failed');
+  });
+
+  it('a non-passed, non-failed case makes the report uncertain', () => {
+    expect(deriveReportVerdict([{ result: 'passed' }, { result: 'blocked' }])).toBe('uncertain');
+  });
+
+  it('no cases → no derived verdict', () => {
+    expect(deriveReportVerdict([])).toBeUndefined();
   });
 });
 

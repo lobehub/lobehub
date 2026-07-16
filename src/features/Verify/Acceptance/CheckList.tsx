@@ -21,6 +21,11 @@ import { useTranslation } from 'react-i18next';
 
 import type { AcceptanceBundle } from '@/services/verify';
 
+import {
+  EvidenceComparisonCard,
+  readEvidenceComparison,
+} from '../components/EvidenceComparisonCard';
+
 export type AcceptanceCheck = AcceptanceBundle['checks'][number];
 export type AcceptanceCheckState = AcceptanceCheck['state'];
 type AcceptanceEvidence = AcceptanceCheck['evidence'][number];
@@ -207,13 +212,68 @@ const EVIDENCE_BADGES = [
 const isFilename = (value: string | null | undefined) =>
   !value || /^[\w.-]+\.(?:gif|jpe?g|mp4|png|webm|webp)$/i.test(value);
 
+/** Flat media for a comparison side — the card frames it, so no own border/radius. */
+const comparisonContent = (item: AcceptanceEvidence) =>
+  item.type === 'video' ? (
+    <video controls src={item.fileUrl!} style={{ display: 'block', width: '100%' }} />
+  ) : (
+    <Image
+      preview
+      alt={item.description ?? item.fileName ?? item.type}
+      loading={'lazy'}
+      src={item.fileUrl!}
+      style={{ borderRadius: 0, width: '100%' }}
+      variant={'borderless'}
+    />
+  );
+
 const EvidenceList = memo<{ evidence: AcceptanceEvidence[] }>(({ evidence }) => {
   const sorted = [...evidence].sort((a, b) => (isVisual(b) ? 1 : 0) - (isVisual(a) ? 1 : 0));
   if (sorted.length === 0) return null;
 
+  // Before/after pairs render as one fused comparison card (same component as
+  // the verify report). Only complete pairs fuse; a lone half stays a plain
+  // artifact, matching the ingest CLI's warning semantics.
+  const groups = new Map<string, Partial<Record<'after' | 'before', AcceptanceEvidence>>>();
+  for (const item of sorted) {
+    if (!isVisual(item)) continue;
+    const comparison = readEvidenceComparison(item.metadata);
+    if (!comparison) continue;
+    const group = groups.get(comparison.id) ?? {};
+    group[comparison.role] = item;
+    groups.set(comparison.id, group);
+  }
+  const pairedIds = new Set(
+    [...groups.values()]
+      .filter((group) => group.before && group.after)
+      .flatMap((group) => [group.before!.id, group.after!.id]),
+  );
+
+  const comparisonSide = (item: AcceptanceEvidence) => ({
+    caption:
+      readEvidenceComparison(item.metadata)?.label ??
+      (isFilename(item.description) ? undefined : (item.description ?? undefined)),
+    content: comparisonContent(item),
+  });
+
   return (
     <Flexbox gap={12}>
       {sorted.map((item) => {
+        if (pairedIds.has(item.id)) {
+          const comparison = readEvidenceComparison(item.metadata)!;
+          // The pair renders once, anchored at its `before` half.
+          if (comparison.role !== 'before') return null;
+          const group = groups.get(comparison.id)!;
+          return (
+            <EvidenceComparisonCard
+              after={comparisonSide(group.after!)}
+              before={comparisonSide(group.before!)}
+              key={comparison.id}
+              layout={comparison.layout}
+            />
+          );
+        }
+
         const caption = !isFilename(item.description) && (
           <span className={styles.caption}>{item.description}</span>
         );

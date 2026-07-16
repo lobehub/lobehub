@@ -7,6 +7,32 @@
 
 ---
 
+## Case 25 — Building a surface's "twin" without walking the sibling implementation feature-by-feature
+
+**Wrong approach**: when asked to make surface B "consistent with" an existing surface A (a list
+panel, an evidence renderer, a link chip), skimming A for its visual language (colors, spacing,
+component choices) and rebuilding B from that impression — instead of walking A's implementation
+feature-by-feature and porting each one deliberately. In one round this dropped: A's search box,
+A's before/after comparison rendering, and A's authored-report field conventions (title / verdict /
+comparison labels), while a hover state contradicted the intended text-emphasis semantics.
+
+**Why it's wrong**: "consistency" is a checklist over the sibling's FEATURES, not a style match.
+Every capability the sibling has that the twin lacks is a bug the user will find one screenshot
+later. The ux skill's own line — "compose the canonical surface component, don't re-derive it" —
+covers exactly this, but it only bites if the sibling is actually enumerated before building.
+
+**What it breaks**: the user gets a surface that looks 90% right and is missing load-bearing
+features; a round of "为什么这里缺 X / 丢了 Y" feedback that a 10-minute sibling walk would have
+prevented; trust that "对齐" means aligned.
+
+**Correct approach**: before building a twin surface, enumerate the sibling's implementation —
+grep its component for every rendered affordance (search, empty states, comparison views, hover
+behaviors, drawer wiring) and its data conventions (which fields the author must supply) — and
+turn that list into the build checklist. After building, diff the two surfaces side by side in
+screenshots before publishing. For authored artifacts (result.json), re-read the field spec in
+references/report.md instead of writing from memory: `title` and `summary.verdict` are identity
+fields, and comparison pairs need per-side `label`s.
+
 ## Case 20 — Publishing a replacement as a second Acceptance row and passing UI from text-only evidence
 
 **Wrong approach**: giving a refined check a new id without declaring `supersedes`, then marking

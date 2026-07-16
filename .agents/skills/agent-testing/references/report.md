@@ -225,6 +225,17 @@ missing; a blocked case is not a pass).
 
 ## result.json schema
 
+**Two fields are the report's identity in every list surface — treat them as
+REQUIRED on every ingest:**
+
+- `title` (top level) — without it the run lists as "未命名验证" forever.
+- `summary.verdict` (`pass` / `fail` / `partial`) — without it the list glyph is
+  a permanent amber "?" instead of the green pass. The CLI now derives a
+  fallback from the cases, but an explicit verdict is still the author's job.
+- Every `comparison` pair side should carry a `label` — the role band renders
+  it as the explanation ("优化前：清单头部被挤压…"); a pair without labels shows
+  two bare role words and reads as unexplained.
+
 ```json
 {
   "branch": "feat/task-tree",
