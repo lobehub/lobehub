@@ -1248,6 +1248,47 @@ describe('HeterogeneousPersistenceHandler', () => {
       expect(asst.content).toBe('partial');
     });
 
+    it('finish() preserves a structured status-guide error body on the assistant', async () => {
+      const h = createHarness({
+        assistantMessageId: 'asst-1',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      // Register op state without any in-stream error — the process-level
+      // failure (spawn ENOENT) only arrives via the finish payload.
+      await h.handler.ingest({
+        events: [buildEvent('stream_chunk', 0, { chunkType: 'text', content: '' })],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      await h.handler.finish({
+        error: {
+          body: {
+            agentType: 'claude-code',
+            code: 'cli_not_found',
+            stderr: 'Error: spawn claude ENOENT',
+          },
+          message: 'Claude Code CLI was not found on the machine running this agent.',
+          type: 'stream_error',
+        },
+        operationId: 'op-1',
+        result: 'error',
+      });
+
+      const asst = h.messages.get('asst-1')!;
+      expect(asst.error).toBeDefined();
+      // `body` must survive formatErrorForState untouched — the client's
+      // status-guide UI gates on `body.agentType` + `body.code`.
+      expect(asst.error.body).toMatchObject({
+        agentType: 'claude-code',
+        code: 'cli_not_found',
+        stderr: 'Error: spawn claude ENOENT',
+      });
+      expect(asst.error.message).toContain('was not found');
+    });
+
     it('finish() drops the per-operation state so a retry starts fresh', async () => {
       const h = createHarness({
         assistantMessageId: 'asst-1',
@@ -1612,7 +1653,13 @@ describe('HeterogeneousPersistenceHandler', () => {
             chunkType: 'tools_calling',
             subagent: subagentCtx,
             toolsCalling: [
-              { apiName: 'Read', arguments: '{}', id: 'inner-tc', identifier: 'read', type: 'default' },
+              {
+                apiName: 'Read',
+                arguments: '{}',
+                id: 'inner-tc',
+                identifier: 'read',
+                type: 'default',
+              },
             ],
           }),
           buildEvent('step_complete', 2, {

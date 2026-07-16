@@ -2,7 +2,17 @@ import type { AgentStreamEvent } from '@lobechat/heterogeneous-agents/spawn';
 
 export interface IngestSink {
   finish: (params: {
-    error?: { message: string; type: string };
+    error?: {
+      /**
+       * Structured status-guide error (`classifyHeteroProcessFailure` output:
+       * `agentType` + `code` + details). Persisted verbatim as the
+       * `ChatMessageError.body` so the client renders the dedicated
+       * install/sign-in guide instead of the generic error card.
+       */
+      body?: Record<string, unknown>;
+      message: string;
+      type: string;
+    };
     result: 'cancelled' | 'error' | 'success';
     sessionId?: string;
   }) => Promise<void>;

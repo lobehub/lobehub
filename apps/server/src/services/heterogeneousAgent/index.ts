@@ -39,7 +39,12 @@ export interface HeterogeneousIngestParams {
 
 export interface HeterogeneousFinishParams {
   agentType: HeterogeneousAgentType;
-  error?: { message: string; type: string };
+  /**
+   * CLI-reported failure. `body`, when present, is the structured status-guide
+   * error (`agentType` + `code` + details) persisted verbatim as the
+   * `ChatMessageError.body`.
+   */
+  error?: { body?: Record<string, unknown>; message: string; type: string };
   operationId: string;
   result: HeterogeneousFinishResult;
   /**

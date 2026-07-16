@@ -263,7 +263,7 @@ export class HeterogeneousPersistenceHandler {
    * this topic can include `--resume <id>`.
    */
   async finish(params: {
-    error?: { message: string; type: string };
+    error?: { body?: Record<string, unknown>; message: string; type: string };
     operationId: string;
     result: 'success' | 'error' | 'cancelled';
     sessionId?: string;
@@ -974,7 +974,7 @@ export class HeterogeneousPersistenceHandler {
   /** Final safety flush triggered by `heteroFinish`. */
   private async flushFinalState(
     state: OperationState,
-    error: { message: string; type: string } | undefined,
+    error: { body?: Record<string, unknown>; message: string; type: string } | undefined,
     result: 'success' | 'error' | 'cancelled',
   ) {
     if (!state.main.accContent && !state.main.accReasoning && !error && result !== 'error') {
@@ -989,6 +989,8 @@ export class HeterogeneousPersistenceHandler {
       // Same canonical normalization as the in-stream `setError` path — the CLI's
       // free-form `{ message, type }` runs through formatErrorForState so the
       // terminal flush and the in-stream write produce one classified error shape.
+      // A structured `body` (status-guide error: agentType + code) passes
+      // through untouched — the client's guide UI gates on it.
       updateValue.error = formatErrorForState(error);
     }
 

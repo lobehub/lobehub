@@ -537,7 +537,7 @@ describe('hetero exec command', () => {
   });
 
   it('finishes server-ingest runs with error when spawnAgent rejects before streaming', async () => {
-    mockSpawnAgent.mockRejectedValue(new Error('spawn claude ENOENT'));
+    mockSpawnAgent.mockRejectedValue(new Error('image fetch failed: 404'));
 
     await runCmd([
       'hetero',
@@ -557,17 +557,18 @@ describe('hetero exec command', () => {
     expect(mockHeteroFinishMutate).toHaveBeenCalledTimes(1);
     expect(mockHeteroFinishMutate.mock.calls[0][0]).toMatchObject({
       agentType: 'claude-code',
-      error: { message: 'spawn claude ENOENT', type: 'AgentRuntimeError' },
+      error: { message: 'image fetch failed: 404', type: 'AgentRuntimeError' },
       operationId: 'op-server',
       result: 'error',
       topicId: 'topic-1',
     });
+    expect(mockHeteroFinishMutate.mock.calls[0][0].error.body).toBeUndefined();
     expect(exitSpy).toHaveBeenCalledWith(1);
   });
 
   it('finishes server-ingest runs with error when the agent event stream fails', async () => {
     mockSpawnAgent.mockReturnValue(
-      createFakeHandle({ eventsError: new Error('spawn claude ENOENT') }),
+      createFakeHandle({ eventsError: new Error('adapter choked on malformed JSONL') }),
     );
 
     await runCmd([
@@ -587,7 +588,86 @@ describe('hetero exec command', () => {
 
     expect(mockHeteroFinishMutate).toHaveBeenCalledTimes(1);
     expect(mockHeteroFinishMutate.mock.calls[0][0]).toMatchObject({
-      error: { message: 'Error: spawn claude ENOENT', type: 'stream_error' },
+      error: { message: 'Error: adapter choked on malformed JSONL', type: 'stream_error' },
+      operationId: 'op-server',
+      result: 'error',
+      topicId: 'topic-1',
+    });
+    expect(mockHeteroFinishMutate.mock.calls[0][0].error.body).toBeUndefined();
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it('classifies a spawn ENOENT stream failure as a structured cli_not_found error', async () => {
+    // `spawnAgent` surfaces a missing CLI binary by failing the event stream
+    // with the child's ErrnoException (see `failStream` in spawnAgent.ts).
+    const enoent = new Error('spawn claude ENOENT') as NodeJS.ErrnoException;
+    enoent.code = 'ENOENT';
+    mockSpawnAgent.mockReturnValue(createFakeHandle({ eventsError: enoent }));
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'claude-code',
+      '--prompt',
+      'hi',
+      '--topic',
+      'topic-1',
+      '--operation-id',
+      'op-server',
+      '--render',
+      'none',
+    ]);
+
+    expect(mockHeteroFinishMutate).toHaveBeenCalledTimes(1);
+    expect(mockHeteroFinishMutate.mock.calls[0][0]).toMatchObject({
+      error: {
+        body: {
+          agentType: 'claude-code',
+          code: 'cli_not_found',
+          stderr: 'Error: spawn claude ENOENT',
+        },
+        type: 'stream_error',
+      },
+      operationId: 'op-server',
+      result: 'error',
+      topicId: 'topic-1',
+    });
+    expect(mockHeteroFinishMutate.mock.calls[0][0].error.message).toContain('was not found');
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it('classifies an auth failure on stderr as a structured auth_required error', async () => {
+    // CLI exits non-zero after printing an auth error to stderr, without ever
+    // emitting a structured error event.
+    mockSpawnAgent.mockReturnValue(
+      createFakeHandle({
+        exitCode: 1,
+        stderrChunks: ['Error: not authenticated. Run `claude login` first.\n'],
+      }),
+    );
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'claude-code',
+      '--prompt',
+      'hi',
+      '--topic',
+      'topic-1',
+      '--operation-id',
+      'op-server',
+      '--render',
+      'none',
+    ]);
+
+    expect(mockHeteroFinishMutate).toHaveBeenCalledTimes(1);
+    expect(mockHeteroFinishMutate.mock.calls[0][0]).toMatchObject({
+      error: {
+        body: { agentType: 'claude-code', code: 'auth_required' },
+        type: 'AgentRuntimeError',
+      },
       operationId: 'op-server',
       result: 'error',
       topicId: 'topic-1',
