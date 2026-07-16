@@ -2,8 +2,10 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { type ModelProviderCard } from '@/types/llm';
 
+import AiOnlyProviderCard from './aionly';
 import {
   DEFAULT_MODEL_PROVIDER_LIST,
+  filterEnabledModels,
   isProviderDisableBrowserRequest,
   isProviderOAuthDeviceFlow,
 } from './index';
@@ -56,5 +58,19 @@ describe('model provider predicates', () => {
     expect(isProviderOAuthDeviceFlow('enabled-provider')).toBe(false);
     expect(isProviderOAuthDeviceFlow('not-exists')).toBe(false);
     expect(isProviderOAuthDeviceFlow()).toBe(false);
+  });
+
+  it('exposes AiOnly curated models on the provider card', () => {
+    expect(filterEnabledModels(AiOnlyProviderCard)).toEqual([
+      'claude-opus-4-8',
+      'claude-sonnet-5',
+      'gpt-5.5',
+      'gpt-5.4',
+      'gemini-3.1-pro-preview',
+      'gemini-2.5-pro',
+      'deepseek-v4-pro',
+      'glm-5.2',
+      'qwen3.7-plus',
+    ]);
   });
 });
