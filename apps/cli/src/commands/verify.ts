@@ -1431,13 +1431,16 @@ export function registerVerifyCommand(program: Command) {
         // The scenario's context for the report's scope header. Coding lifts the
         // well-known top-level fields (branch / commit / surfaces / PR); every
         // other scenario passes result.json `context` through as its own bag.
+        // `pullRequest` is hoisted: the success output (text and --json) prints
+        // the PR link after the ingest, whatever the scenario resolved to.
         let context: Record<string, unknown> | undefined;
+        let pullRequest: ReturnType<typeof pullRequestFromResult>;
         if (scenario === 'coding') {
           const branch = typeof result.branch === 'string' ? result.branch : undefined;
           const surfaces = surfacesFromResult(result);
           // An authored PR wins; otherwise ask `gh` what the branch's PR is, so the
           // report links to it without the author having to remember the field.
-          const pullRequest = pullRequestFromResult(result) ?? pullRequestFromBranch(branch);
+          pullRequest = pullRequestFromResult(result) ?? pullRequestFromBranch(branch);
           const contextEntries = Object.entries({
             branch,
             commit: typeof result.commit === 'string' ? result.commit : undefined,
@@ -1630,7 +1633,7 @@ export function registerVerifyCommand(program: Command) {
               inlined,
               origin,
               planItems: plan?.length ?? 0,
-              pullRequest: context?.pullRequest,
+              pullRequest,
               scenario,
               subject: subject.ref,
               unplanned,

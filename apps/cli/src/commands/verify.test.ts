@@ -523,6 +523,29 @@ describe('verify ingest-report — every run is an immutable acceptance round', 
     );
   });
 
+  it('finishes the human (non-json) output path for a non-coding report', async () => {
+    // Regression: `pullRequest` was block-scoped inside the coding branch while
+    // the text success output still read it, so every non-json ingest crashed
+    // with a ReferenceError AFTER creating the run.
+    const verify = mockTrpcClient.verify as Record<string, any>;
+    writeFileSync(
+      path.join(dir, 'result.json'),
+      JSON.stringify({
+        cases: [],
+        context: { question: 'How mature is X?' },
+        scenario: 'research',
+      }),
+    );
+
+    await run(['ingest-report', dir]);
+
+    expect(verify.createRun.mutate).toHaveBeenCalledWith(
+      expect.objectContaining({ scenario: 'research' }),
+    );
+    // The success tail printed — the command reached past the run creation.
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('verifyRunId'));
+  });
+
   it('rejects an unknown scenario instead of silently tagging the run coding', async () => {
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
       throw new Error(`process.exit ${code}`);
