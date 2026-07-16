@@ -6,6 +6,7 @@ import type * as VerifyServiceModule from '@/server/services/verify';
 
 const modelMocks = vi.hoisted(() => ({
   createEvidence: vi.fn(),
+  createRun: vi.fn(),
   deleteResult: vi.fn(),
   deleteRun: vi.fn(),
   findRunByOperation: vi.fn(),
@@ -31,6 +32,7 @@ vi.mock('@/database/models/verifyCheckResult', () => ({
 
 vi.mock('@/database/models/verifyRun', () => ({
   VerifyRunModel: vi.fn(() => ({
+    create: modelMocks.createRun,
     delete: modelMocks.deleteRun,
     findByOperation: modelMocks.findRunByOperation,
     findById: modelMocks.findRunById,
@@ -227,6 +229,55 @@ describe('verifyRouter', () => {
 
       expect(modelMocks.findRunById).not.toHaveBeenCalled();
       expect(modelMocks.updateRun).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('createRun — scenario-aware context contract', () => {
+    it('preserves a non-coding scenario context as its own bag', async () => {
+      modelMocks.createRun.mockResolvedValueOnce({ id: 'run-research' });
+
+      await createCaller().createRun({
+        context: {
+          question: 'What changed in the EU AI Act enforcement in 2026?',
+          sourceCount: 12,
+          sources: [{ title: 'EUR-Lex', url: 'https://eur-lex.europa.eu' }],
+        },
+        scenario: 'research',
+        title: 'research acceptance round',
+      });
+
+      // The bag must land as-is: an ordered union with the (all-optional,
+      // stripping) coding schema would silently swallow these fields.
+      expect(modelMocks.createRun).toHaveBeenCalledWith(
+        expect.objectContaining({
+          context: {
+            question: 'What changed in the EU AI Act enforcement in 2026?',
+            sourceCount: 12,
+            sources: [{ title: 'EUR-Lex', url: 'https://eur-lex.europa.eu' }],
+          },
+          scenario: 'research',
+        }),
+      );
+    });
+
+    it('still canonicalizes coding surfaces when scenario is absent (legacy contract)', async () => {
+      modelMocks.createRun.mockResolvedValueOnce({ id: 'run-coding' });
+
+      await createCaller().createRun({
+        context: { branch: 'feat/x', surfaces: ['electron'] },
+      });
+
+      expect(modelMocks.createRun).toHaveBeenCalledWith(
+        expect.objectContaining({ context: { branch: 'feat/x', surfaces: ['desktop'] } }),
+      );
+    });
+
+    it('rejects an unknown scenario before touching the database', async () => {
+      await expect(
+        createCaller().createRun({ scenario: 'poetry' as any, title: 'nope' }),
+      ).rejects.toThrow();
+
+      expect(modelMocks.createRun).not.toHaveBeenCalled();
     });
   });
 

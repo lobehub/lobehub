@@ -1,5 +1,6 @@
 'use client';
 
+import type { VerifyCodingScope } from '@lobechat/types';
 import {
   ActionIcon,
   Center,
@@ -214,7 +215,12 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
   const { acceptance, checks, latestReport, rounds, subject } = data;
   const currentRound = rounds.at(-1);
   // The scope header comes from the latest round that carries a coding context.
-  const scope = [...rounds].reverse().find((round) => round.run.context)?.run.context;
+  // A round with no scenario predates the column and is a coding round; a
+  // non-coding round's context carries none of the chips this header renders.
+  const scope = [...rounds]
+    .reverse()
+    .find((round) => (round.run.scenario ?? 'coding') === 'coding' && round.run.context)?.run
+    .context as VerifyCodingScope | null | undefined;
 
   const groupKeys = groupChecks(checks, t('acceptance.group.uncategorized')).map(
     (group) => group.key,

@@ -1877,7 +1877,12 @@ const ReportViewer = memo<ReportViewerProps>(({ runId: explicitRunId }) => {
             {!isCodingReport && run.goal && <Text className={styles.summary}>{run.goal}</Text>}
             {report?.summary && <Text className={styles.summary}>{report.summary}</Text>}
 
-            {isCodingReport && <CodingScopeCard context={run.context} origin={origin} />}
+            {isCodingReport && (
+              <CodingScopeCard
+                context={run.context as VerifyCodingScope | null | undefined}
+                origin={origin}
+              />
+            )}
 
             {liveStatus && (
               <div className={styles.liveBanner}>

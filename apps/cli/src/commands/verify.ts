@@ -2,11 +2,17 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
-import type { AcceptanceSubjectType, VerifyRunOrigin, VerifySurface } from '@lobechat/const/verify';
+import type {
+  AcceptanceSubjectType,
+  VerifyRunOrigin,
+  VerifyRunScenario,
+  VerifySurface,
+} from '@lobechat/const/verify';
 import {
   acceptanceSubjectTypes,
   normalizeVerifySurface,
   verifyEvidenceTypes,
+  verifyRunScenarios,
   verifySurfaces,
 } from '@lobechat/const/verify';
 import type { Command } from 'commander';
@@ -257,6 +263,45 @@ export function surfacesFromResult(result: Record<string, unknown>): VerifySurfa
   }
 
   return canonical.length > 0 ? canonical : undefined;
+}
+
+/**
+ * What kind of delivery the report verified. Defaults to `coding` — the
+ * agent-testing harness's home turf — and rejects an unknown value rather than
+ * storing a scenario nothing renders (mirrors the strict surface policy: the
+ * author still has the context to fix it).
+ */
+export function scenarioFromResult(result: Record<string, unknown>): VerifyRunScenario {
+  const raw = result.scenario;
+  if (raw === undefined) return 'coding';
+  if (typeof raw === 'string' && (verifyRunScenarios as readonly string[]).includes(raw)) {
+    return raw as VerifyRunScenario;
+  }
+
+  log.error(
+    `result.json "scenario" must be one of: ${verifyRunScenarios.join(', ')} — rejected: ${JSON.stringify(raw)}`,
+  );
+  process.exit(1);
+}
+
+/**
+ * A non-coding scenario's scope, passed through from result.json `context` as
+ * the scenario's own bag (the server stores it as-is; known shapes live in
+ * `@lobechat/types`). Top-level `entry` / `createdAt` are lifted as defaults so
+ * every scenario gets the shared provenance fields for free; explicit `context`
+ * keys win.
+ */
+export function genericContextFromResult(
+  result: Record<string, unknown>,
+): Record<string, unknown> | undefined {
+  const bag = objectValue(result.context) ?? {};
+  const entries = Object.entries({
+    entry: firstString(result.entry),
+    testedAt: firstString(result.createdAt),
+    ...bag,
+  }).filter(([, v]) => v !== undefined);
+
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
 }
 
 /** Reject an out-of-vocabulary plan value rather than storing a word nothing reads. */
@@ -1380,30 +1425,35 @@ export function registerVerifyCommand(program: Command) {
         const reportMdPath = path.join(dir, 'report.md');
         const content = existsSync(reportMdPath) ? readFileSync(reportMdPath, 'utf8') : undefined;
 
-        // The scenario's context for the report's scope header, lifted from
-        // result.json's top-level fields. Drop empty keys so the bag stays clean.
-        const branch = typeof result.branch === 'string' ? result.branch : undefined;
-        const surfaces = surfacesFromResult(result);
-        // An authored PR wins; otherwise ask `gh` what the branch's PR is, so the
-        // report links to it without the author having to remember the field.
-        const pullRequest = pullRequestFromResult(result) ?? pullRequestFromBranch(branch);
-        const contextEntries = Object.entries({
-          branch,
-          commit: typeof result.commit === 'string' ? result.commit : undefined,
-          entry: typeof result.entry === 'string' ? result.entry : undefined,
-          pullRequest,
-          surfaces,
-          testedAt: typeof result.createdAt === 'string' ? result.createdAt : undefined,
-        }).filter(([, v]) => v !== undefined);
-        const context = contextEntries.length > 0 ? Object.fromEntries(contextEntries) : undefined;
+        // What kind of delivery this report verified (default: coding).
+        const scenario = scenarioFromResult(result);
+
+        // The scenario's context for the report's scope header. Coding lifts the
+        // well-known top-level fields (branch / commit / surfaces / PR); every
+        // other scenario passes result.json `context` through as its own bag.
+        let context: Record<string, unknown> | undefined;
+        if (scenario === 'coding') {
+          const branch = typeof result.branch === 'string' ? result.branch : undefined;
+          const surfaces = surfacesFromResult(result);
+          // An authored PR wins; otherwise ask `gh` what the branch's PR is, so the
+          // report links to it without the author having to remember the field.
+          const pullRequest = pullRequestFromResult(result) ?? pullRequestFromBranch(branch);
+          const contextEntries = Object.entries({
+            branch,
+            commit: typeof result.commit === 'string' ? result.commit : undefined,
+            entry: typeof result.entry === 'string' ? result.entry : undefined,
+            pullRequest,
+            surfaces,
+            testedAt: typeof result.createdAt === 'string' ? result.createdAt : undefined,
+          }).filter(([, v]) => v !== undefined);
+          context = contextEntries.length > 0 ? Object.fromEntries(contextEntries) : undefined;
+        } else {
+          context = genericContextFromResult(result);
+        }
 
         // What the run set out to check, written before it ran. Paired with the
         // results by `id`, so the report can show a planned item that never ran.
         const plan = planFromResult(result);
-
-        // The harness verifies software changes; tag the run so the viewer renders
-        // the coding scope header. Overridable via result.json `scenario`.
-        const scenario = result.scenario === 'coding' ? 'coding' : ('coding' as const);
 
         // Every agent-testing report belongs to an acceptance. Explicit CLI input
         // wins, then result.json, then the authoring topic echoed by the runtime.
@@ -1580,7 +1630,8 @@ export function registerVerifyCommand(program: Command) {
               inlined,
               origin,
               planItems: plan?.length ?? 0,
-              pullRequest,
+              pullRequest: context?.pullRequest,
+              scenario,
               subject: subject.ref,
               unplanned,
               verifyRunId: runId,

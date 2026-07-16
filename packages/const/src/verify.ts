@@ -84,9 +84,12 @@ export type VerifyRunSource = (typeof verifyRunSources)[number];
  * records what *produced* the run): `scenario` drives how the report renders its
  * scope header and scenario-specific detail. Open-ended — new scenarios add a
  * value here plus their own `VerifyRunContext` shape.
- * - coding: verifying a software change (branch / commit / surfaces under test).
+ * - coding:   verifying a software change (branch / commit / surfaces under test).
+ * - writing:  verifying a written deliverable (manuscript / chapters / documents).
+ * - research: verifying a research deliverable (question / sources / claims).
+ * - generic:  any other delivery — no modeled scope; context is an open bag.
  */
-export const verifyRunScenarios = ['coding'] as const;
+export const verifyRunScenarios = ['coding', 'writing', 'research', 'generic'] as const;
 export type VerifyRunScenario = (typeof verifyRunScenarios)[number];
 
 /**

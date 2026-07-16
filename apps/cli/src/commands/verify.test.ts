@@ -7,11 +7,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   deriveReportVerdict,
+  genericContextFromResult,
   originFromEnv,
   parseSubjectRef,
   planFromResult,
   registerVerifyCommand,
   reportEvidence,
+  scenarioFromResult,
   subjectFromEnv,
   subjectFromResult,
   surfacesFromResult,
@@ -500,6 +502,43 @@ describe('verify ingest-report — every run is an immutable acceptance round', 
     });
   });
 
+  it('passes a non-coding scenario and its context bag through to the run', async () => {
+    const verify = mockTrpcClient.verify as Record<string, any>;
+    writeFileSync(
+      path.join(dir, 'result.json'),
+      JSON.stringify({
+        cases: [],
+        context: { question: 'How mature is X?', sourceCount: 8 },
+        scenario: 'research',
+      }),
+    );
+
+    await run(['ingest-report', dir, '--json']);
+
+    expect(verify.createRun.mutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: expect.objectContaining({ question: 'How mature is X?', sourceCount: 8 }),
+        scenario: 'research',
+      }),
+    );
+  });
+
+  it('rejects an unknown scenario instead of silently tagging the run coding', async () => {
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+      throw new Error(`process.exit ${code}`);
+    }) as never);
+    writeFileSync(path.join(dir, 'result.json'), JSON.stringify({ cases: [], scenario: 'poetry' }));
+
+    try {
+      await expect(run(['ingest-report', dir, '--json'])).rejects.toThrow('process.exit 1');
+      expect(
+        (mockTrpcClient.verify as Record<string, any>).createRun.mutate,
+      ).not.toHaveBeenCalled();
+    } finally {
+      exitSpy.mockRestore();
+    }
+  });
+
   it('creates another run when the same report directory is ingested again', async () => {
     const verify = mockTrpcClient.verify as Record<string, any>;
     verify.createRun.mutate
@@ -518,6 +557,44 @@ describe('verify ingest-report — every run is an immutable acceptance round', 
       acceptanceId: 'acceptance-1',
       verifyRunId: 'run-second',
     });
+  });
+});
+
+describe('scenarioFromResult / genericContextFromResult — non-coding scenarios', () => {
+  it('defaults to coding and passes any known scenario through', () => {
+    expect(scenarioFromResult({})).toBe('coding');
+    expect(scenarioFromResult({ scenario: 'research' })).toBe('research');
+    expect(scenarioFromResult({ scenario: 'writing' })).toBe('writing');
+    expect(scenarioFromResult({ scenario: 'generic' })).toBe('generic');
+  });
+
+  it('hard-errors on a scenario nothing renders', () => {
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+      throw new Error(`process.exit ${code}`);
+    }) as never);
+
+    try {
+      expect(() => scenarioFromResult({ scenario: 'poetry' })).toThrow('process.exit 1');
+    } finally {
+      exitSpy.mockRestore();
+    }
+  });
+
+  it('lifts shared provenance defaults but lets explicit context keys win', () => {
+    expect(
+      genericContextFromResult({
+        context: { testedAt: '2026-07-16T10:00:00Z', wordCount: 82_000, work: '长夜' },
+        createdAt: '2026-07-15T00:00:00Z',
+        entry: 'lh doc export',
+      }),
+    ).toEqual({
+      entry: 'lh doc export',
+      testedAt: '2026-07-16T10:00:00Z',
+      wordCount: 82_000,
+      work: '长夜',
+    });
+
+    expect(genericContextFromResult({})).toBeUndefined();
   });
 });
 

@@ -1,5 +1,6 @@
 'use client';
 
+import type { VerifyCodingScope } from '@lobechat/types';
 import { Avatar, Flexbox, Icon, Popover, Skeleton, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import type { TFunction } from 'i18next';
@@ -168,11 +169,15 @@ const getPreviewData = async (
             uncertain: report.uncertainChecks ?? 0,
           })
         : null;
-      const context = run.context;
+      // Branch/commit chips only exist on a coding scope (a run with no
+      // scenario predates the column and is coding); testedAt is shared.
+      const codingScope =
+        (run.scenario ?? 'coding') === 'coding' ? (run.context as VerifyCodingScope | null) : null;
+      const testedAt = (run.context as { testedAt?: string } | null)?.testedAt;
       const scope = [
-        context?.branch,
-        context?.commit?.slice(0, 10),
-        context?.testedAt ? new Date(context.testedAt).toLocaleString() : null,
+        codingScope?.branch,
+        codingScope?.commit?.slice(0, 10),
+        testedAt ? new Date(testedAt).toLocaleString() : null,
       ].filter(Boolean);
 
       return {
