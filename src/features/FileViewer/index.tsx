@@ -205,6 +205,13 @@ const ARCHIVE_MIME_TYPES = new Set([
   'application/x-xz',
 ]);
 
+// Generic placeholder types carry no real extension/MIME signal, so any
+// extension substring inside them (e.g. the `c` in `custom/document`) must
+// not be trusted — fall back to the filename/URL instead.
+const GENERIC_FILE_TYPES = new Set(['application/octet-stream', 'custom/document']);
+
+const normalizeFileType = (fileType?: string) => fileType?.split(';')[0].trim().toLowerCase();
+
 // Helper function to check file type
 const matchesFileType = (
   fileType: string | undefined,
@@ -212,16 +219,22 @@ const matchesFileType = (
   extensions: string[],
   mimeTypes: Set<string>,
 ): boolean => {
-  const lowerFileType = fileType?.toLowerCase();
+  const normalizedFileType = normalizeFileType(fileType);
   const lowerFileName = fileName?.toLowerCase();
 
   // Check MIME type
-  if (lowerFileType && mimeTypes.has(lowerFileType)) {
+  if (normalizedFileType && mimeTypes.has(normalizedFileType)) {
     return true;
   }
 
-  // Check file extension in fileType
-  if (lowerFileType && extensions.some((ext) => lowerFileType.includes(ext.slice(1)))) {
+  // Check file extension in fileType. Generic placeholder types are inferred
+  // from the filename/URL instead, so a substring like `c` in `custom/document`
+  // can't masquerade as a `.c` code file.
+  if (
+    normalizedFileType &&
+    !GENERIC_FILE_TYPES.has(normalizedFileType) &&
+    extensions.some((ext) => normalizedFileType.includes(ext.slice(1)))
+  ) {
     return true;
   }
 
@@ -242,8 +255,19 @@ interface FileViewerProps extends FileListItem {
  * Preview any file type.
  */
 const FileViewer = memo<FileViewerProps>(({ id, style, fileType, url, name }) => {
+  const normalizedFileType = normalizeFileType(fileType);
+  // Parsed documents often arrive with a generic placeholder type while the
+  // real format lives in the URL path, so infer from the path only when the
+  // declared type carries no real signal.
+  const canInferFileTypeFromUrl = !normalizedFileType || GENERIC_FILE_TYPES.has(normalizedFileType);
+
   // PDF files
-  if (fileType?.toLowerCase() === 'pdf' || name?.toLowerCase().endsWith('.pdf')) {
+  if (
+    normalizedFileType === 'pdf' ||
+    normalizedFileType === 'application/pdf' ||
+    name?.toLowerCase().endsWith('.pdf') ||
+    (canInferFileTypeFromUrl && url.split(/[?#]/)[0].toLowerCase().endsWith('.pdf'))
+  ) {
     return <PDFViewer fileId={id} url={url} />;
   }
 
