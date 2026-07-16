@@ -69,6 +69,17 @@ export class ToolNameResolver {
       if (toolName.length >= 64) {
         identifierName = this.hashComponent(identifier);
         toolName = identifierName + PLUGIN_SCHEMA_SEPARATOR + apiName + pluginType;
+
+        // Step 4: Both components are now hashed (20 chars each), so the only
+        // remaining unbounded part is the `type` suffix. If the name still
+        // exceeds 64, drop the suffix — otherwise `generate()` would return a
+        // name longer than the provider's limit and the whole tool-calling
+        // request is rejected ("can't call the tool"). `resolve()` recovers the
+        // type from the manifest when the suffix is absent (same path used when
+        // a model strips the suffix), so dropping it is lossless.
+        if (toolName.length >= 64) {
+          toolName = identifierName + PLUGIN_SCHEMA_SEPARATOR + apiName;
+        }
       }
     }
 

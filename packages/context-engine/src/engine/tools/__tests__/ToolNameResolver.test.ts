@@ -72,6 +72,48 @@ describe('ToolNameResolver', () => {
       expect(result.length).toBeLessThan(64);
     });
 
+    // Regression: the `type` suffix is not shortened by the length reduction, so
+    // when both identifier and apiName are hashed (20 chars each) a long type
+    // used to push the result past 64 — a name the provider rejects, so the tool
+    // could not be called. generate() must always honor its <= 64 contract.
+    it('should stay within 64 chars even when the type suffix is long', () => {
+      const identifier = 'a-fairly-long-connector-identifier-value';
+      const apiName = 'someActionNameThatIsAlsoQuiteLongForGoodMeasure';
+      const longType = 'a-very-long-plugin-type-string-that-overflows';
+
+      const result = resolver.generate(identifier, apiName, longType);
+
+      expect(result.length).toBeLessThanOrEqual(64);
+      expect(result).toContain('MD5HASH_');
+      // The unbounded type suffix is dropped to fit; resolve() recovers it.
+      expect(result).not.toContain(longType);
+    });
+
+    it('should recover the dropped type suffix from the manifest on resolve', () => {
+      const identifier = 'a-fairly-long-connector-identifier-value';
+      const apiName = 'someActionNameThatIsAlsoQuiteLongForGoodMeasure';
+      const longType = 'a-very-long-plugin-type-string-that-overflows';
+
+      const toolName = resolver.generate(identifier, apiName, longType);
+      expect(toolName.length).toBeLessThanOrEqual(64);
+
+      const [resolved] = resolver.resolve(
+        [{ function: { arguments: '{}', name: toolName }, id: 'call_1', type: 'function' }],
+        {
+          [identifier]: {
+            api: [{ description: '', name: apiName, parameters: {} }],
+            identifier,
+            meta: {},
+            type: longType as any,
+          },
+        },
+      );
+
+      expect(resolved.identifier).toBe(identifier);
+      expect(resolved.apiName).toBe(apiName);
+      expect(resolved.type).toBe(longType);
+    });
+
     it('should handle edge case at exactly 64 characters', () => {
       // Create a name that's exactly 64 characters
       const identifier = 'short-id';
