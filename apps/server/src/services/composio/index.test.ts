@@ -181,10 +181,31 @@ describe('ComposioService.executeComposioTool', () => {
     expect(mocks.pluginFindById).not.toHaveBeenCalled();
   });
 
+  it('executes under the account OWNER entity, not the caller (workspace-shared connector)', async () => {
+    // Regression: a workspace member runs a shared agent whose Composio connector
+    // was linked by another user (openomy). buildWorkspaceWhere resolves that
+    // owner's row; the connected account is bound to the owner's Composio entity,
+    // so execute MUST pass the owner's userId — passing the caller's ('user-1')
+    // failed Composio's account/entity validation ("Error executing the tool").
+    mocks.connectorQueryByIdentifiers.mockResolvedValue([
+      activeConnectorRow({ userId: 'owner-openomy' }),
+    ]);
+    mocks.toolsExecute.mockResolvedValue({ data: 'sent' });
+
+    const result = await service().executeComposioTool(params);
+
+    expect(result.success).toBe(true);
+    expect(mocks.toolsExecute).toHaveBeenCalledWith(
+      'GMAIL_SEND_EMAIL',
+      expect.objectContaining({ connectedAccountId: 'ca-connector', userId: 'owner-openomy' }),
+    );
+  });
+
   it('falls back to plugin customParams when the connector has no account', async () => {
     mocks.connectorQueryByIdentifiers.mockResolvedValue([]);
     mocks.pluginFindById.mockResolvedValue({
       customParams: { composio: { connectedAccountId: 'ca-plugin' } },
+      userId: 'owner-plugin',
     });
     mocks.toolsExecute.mockResolvedValue({ data: 'sent' });
 
@@ -193,7 +214,7 @@ describe('ComposioService.executeComposioTool', () => {
     expect(result.success).toBe(true);
     expect(mocks.toolsExecute).toHaveBeenCalledWith(
       'GMAIL_SEND_EMAIL',
-      expect.objectContaining({ connectedAccountId: 'ca-plugin' }),
+      expect.objectContaining({ connectedAccountId: 'ca-plugin', userId: 'owner-plugin' }),
     );
   });
 
