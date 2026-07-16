@@ -43,12 +43,9 @@ const getRuntimeErrorType = (error: unknown): number | string | undefined => {
 
 const getTRPCErrorCodeFromStatus = (status: number): TRPCErrorCode => {
   const code = getStatusKeyFromCode(status as TRPCStatusCode) as TRPCErrorCode;
-  if (code !== 'INTERNAL_SERVER_ERROR' || status === 500) return code;
+  if (code !== 'INTERNAL_SERVER_ERROR') return code;
 
-  if (status >= 500) return 'INTERNAL_SERVER_ERROR';
-  if (status >= 400) return 'BAD_REQUEST';
-
-  return 'INTERNAL_SERVER_ERROR';
+  return status >= 400 && status < 500 ? 'BAD_REQUEST' : 'INTERNAL_SERVER_ERROR';
 };
 
 const getRuntimeErrorMessage = (error: unknown): string | undefined => {
@@ -67,26 +64,22 @@ const createRuntimeTRPCError = (
   options?: { silentHandlerLog?: boolean },
 ): TRPCError | undefined => {
   const errorType = getRuntimeErrorType(error);
-  if (typeof errorType === 'number' && errorType >= 400 && errorType <= 599) {
-    if (options?.silentHandlerLog && errorType < 500) markSilentTRPCErrorLog(error);
-
-    const message = getRuntimeErrorMessage(error);
-
-    return new TRPCError({
-      cause: error,
-      code: getTRPCErrorCodeFromStatus(errorType),
-      message: message ?? `Request failed (${errorType})`,
-    });
-  }
-
-  const spec = typeof errorType === 'string' ? getErrorCodeSpec(errorType) : undefined;
-  if (typeof errorType === 'string' && spec) {
-    if (options?.silentHandlerLog && spec.httpStatus < 500) markSilentTRPCErrorLog(error);
+  const runtimeStatus =
+    typeof errorType === 'number'
+      ? errorType >= 400 && errorType <= 599
+        ? errorType
+        : undefined
+      : getErrorCodeSpec(errorType)?.httpStatus;
+  if (runtimeStatus) {
+    if (options?.silentHandlerLog && runtimeStatus < 500) markSilentTRPCErrorLog(error);
 
     return new TRPCError({
       cause: error,
-      code: getTRPCErrorCodeFromStatus(spec.httpStatus),
-      message: errorType,
+      code: getTRPCErrorCodeFromStatus(runtimeStatus),
+      message:
+        typeof errorType === 'string'
+          ? errorType
+          : (getRuntimeErrorMessage(error) ?? `Request failed (${runtimeStatus})`),
     });
   }
 

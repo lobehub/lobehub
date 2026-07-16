@@ -1227,6 +1227,96 @@ describe('aiChatRouter', () => {
       });
     });
 
+    it.each([
+      { errorType: 400, expectedCode: 'BAD_REQUEST' },
+      { errorType: 418, expectedCode: 'BAD_REQUEST' },
+      { errorType: 599, expectedCode: 'INTERNAL_SERVER_ERROR' },
+    ])(
+      'maps numeric status $errorType to $expectedCode with a generic message',
+      async ({ errorType, expectedCode }) => {
+        const { initModelRuntimeFromDB } = await import('@/server/modules/ModelRuntime');
+        const accessError = { error: {}, errorType };
+        const mockGenerateObject = vi.fn().mockRejectedValue(accessError);
+
+        vi.mocked(initModelRuntimeFromDB).mockResolvedValue({
+          generateObject: mockGenerateObject,
+        } as any);
+
+        const caller = aiChatRouter.createCaller({ ...mockCtx, serverDB: {} } as any);
+
+        await expect(
+          caller.outputJSON({
+            messages: [{ content: 'test', role: 'user' }],
+            model: 'claude-fable-5',
+            provider: 'lobehub',
+          }),
+        ).rejects.toMatchObject({
+          cause: accessError,
+          code: expectedCode,
+          message: `Request failed (${errorType})`,
+        });
+      },
+    );
+
+    it('does not silence numeric runtime 5xx errors', async () => {
+      const { initModelRuntimeFromDB } = await import('@/server/modules/ModelRuntime');
+      const runtimeError = {
+        error: { message: 'Provider unavailable' },
+        errorType: 503,
+      };
+      const mockGenerateObject = vi.fn().mockRejectedValue(runtimeError);
+
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValue({
+        generateObject: mockGenerateObject,
+      } as any);
+
+      const caller = aiChatRouter.createCaller({ ...mockCtx, serverDB: {} } as any);
+
+      try {
+        await caller.outputJSON({
+          messages: [{ content: 'test', role: 'user' }],
+          model: 'claude-fable-5',
+          provider: 'lobehub',
+          tracing: { scenario: 'input_completion' },
+        });
+        throw new Error('Expected outputJSON to throw');
+      } catch (error) {
+        expect(error).toMatchObject({
+          cause: runtimeError,
+          code: 'SERVICE_UNAVAILABLE',
+          message: runtimeError.error.message,
+        });
+        expect((runtimeError as any).__lobeSilentTRPCErrorLog).toBeUndefined();
+      }
+    });
+
+    it.each([399, 600])('does not map out-of-range numeric error type %i', async (errorType) => {
+      const { initModelRuntimeFromDB } = await import('@/server/modules/ModelRuntime');
+      const runtimeError = { errorType };
+      const mockGenerateObject = vi.fn().mockRejectedValue(runtimeError);
+
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValue({
+        generateObject: mockGenerateObject,
+      } as any);
+
+      const caller = aiChatRouter.createCaller({ ...mockCtx, serverDB: {} } as any);
+
+      try {
+        await caller.outputJSON({
+          messages: [{ content: 'test', role: 'user' }],
+          model: 'claude-fable-5',
+          provider: 'lobehub',
+          tracing: { scenario: 'input_completion' },
+        });
+        throw new Error('Expected outputJSON to throw');
+      } catch (error) {
+        expect(error).toBeInstanceOf(TRPCError);
+        expect(error).toMatchObject({ code: 'INTERNAL_SERVER_ERROR' });
+        expect((error as Error).message).not.toBe(`Request failed (${errorType})`);
+        expect((runtimeError as any).__lobeSilentTRPCErrorLog).toBeUndefined();
+      }
+    });
+
     it('maps raw provider 4xx errors to BAD_REQUEST instead of internal errors', async () => {
       const { initModelRuntimeFromDB } = await import('@/server/modules/ModelRuntime');
 
