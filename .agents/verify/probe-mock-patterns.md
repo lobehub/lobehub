@@ -1,22 +1,7 @@
 # Probe / Mock Pattern Library — PROJECT layer (LobeHub)
 
-> **PROJECT layer — writable, LobeHub-specific.** Append project learnings here
-> during runs. Each item: Situation / Doesn't work / Works, with a `file:line`
-> citation for any mechanism claim (if you only saw a symptom, write "cause not
-> established" instead of guessing).
->
-> The generic, product-independent recipes (framework/tool-level: agent-browser
-> and raw-CDP mechanics, SWR cache-masking method, fetch-outcome interception, the
-> `git checkout` snapshot rule) live in the installed skill's
-> `references/probe-mock-patterns.md` — read-only in this repo, updated by PR to
-> `@lobehub/cli`. Read BOTH layers before a run. When an entry here turns out to
-> be product-independent, genericize it (drop `__LOBE_STORES`, file paths, route
-> names) and PR it upstream.
->
-> Entries keep their ORIGINAL ids (A7, C8, D20, E22, …) so the many internal
-> cross-references still resolve. A cross-reference to an id NOT in this file
-> (`A4`, `B1`, `C2`, `D9`, `D18`, `E13`, "Case 1 rule", …) points at the generic
-> layer, where that recipe was promoted — possibly under a renumbered id.
+> **PROJECT layer — writable, LobeHub-specific.** Append project learnings here during runs (each: Situation / Doesn't work / Works). The generic, product-independent recipes live in the installed skill's `references/probe-mock-patterns.md` (read-only in this repo, updated by PR to `@lobehub/cli`) — read BOTH layers before any run that forces an error state or inspects runtime state. When an entry here turns out to be product-independent, genericize it (drop the LobeHub nouns) and PR it upstream.
+> Keep the original discipline: cite `file:line` for any mechanism claim; if you only saw a symptom, write "cause not established" rather than guess.
 
 ---
 
@@ -302,20 +287,15 @@ executionTarget: 'local'` in `agencyConfig`) + one message per case asking CC to
 
 ---
 
-## D. agent-browser / CDP mechanics (LobeHub-specific surfaces)
+## D. agent-browser / CDP mechanics
 
-### D3. offline is `agent-browser set offline on|off`
-
-- `agent-browser set offline on|off` (under `set`, with `viewport`/`geo`/`headers`), not a
-  top-level `offline` command. (LobeHub note: offline trips Chrome's document-level interstitial,
-  not the app's `AsyncError` — see the generic layer's fetch-fault recipes for forcing a real
-  component error.)
-
-### D6. The singleton hover action bar is hard to drive; its icons are `div[role=button]`, NOT `<button>`
-
-- The per-message action bar (`SingletonMessageActionsBar`) is one portal that moves via DOM + a
-  freeze/commit `MutationObserver`, so it appears only while hovering and re-hides on the next
-  commit tick. Gotchas that wasted a run:
+- **D3. offline is `agent-browser set offline on|off`** (under `set`, with
+  `viewport`/`geo`/`headers`), not a top-level `offline` command.
+- **D6. The singleton hover action bar is hard to drive; its icons are
+  `div[role=button]`, NOT `<button>`.** The per-message action bar
+  (`SingletonMessageActionsBar`) is one portal that moves via DOM + a
+  freeze/commit `MutationObserver`, so it appears only while hovering and
+  re-hides on the next commit tick. Gotchas that wasted a run:
   - `host.querySelectorAll('button')` returns 0 — the ActionIcon items render as
     `<div role="button">`. Query `[role="button"]` (or the broad
     `button,[role=button],[class*=ActionIcon]`).
@@ -335,21 +315,18 @@ executionTarget: 'local'` in `agencyConfig`) + one message per case asking CC to
     A programmatic `.click()` on the ellipsis DOES open the antd dropdown (it sets
     `data-popup-open`, which also freezes the bar so it won't vanish). The action
     labels are localized (`分享`/`多选`/`删除` = share/select/del).
-
-### D7. To get a _finished_ hetero (CC/Codex) turn that ENDS on a tool block
-
-- (last child has tools → `getGroupLatestMessageWithoutTools` returns undefined, the
-  `!contentId` action-bar path): send a single long tool call (e.g. `用 Bash 工具运行 sleep 20`)
-  and, the moment the group's last child is a running tool, call `stopGenerateMessage()` in the
-  SAME eval to avoid the race where CC appends a trailing text summary (which would give it a text
-  last-block and a defined contentId). Poll-then-stop-atomically:
+- **D7. To get a _finished_ hetero (CC/Codex) turn that ENDS on a tool block**
+  (last child has tools → `getGroupLatestMessageWithoutTools` returns undefined,
+  the `!contentId` action-bar path): send a single long tool call (e.g.
+  `用 Bash 工具运行 sleep 20`) and, the moment the group's last child is a running
+  tool, call `stopGenerateMessage()` in the SAME eval to avoid the race where CC
+  appends a trailing text summary (which would give it a text last-block and a
+  defined contentId). Poll-then-stop-atomically:
   ```bash
   agent-browser $S eval '(function(){var c=window.__LOBE_STORES.chat();var t=c.activeTopicId;var a=c.messagesMap["main_"+c.activeAgentId+"_"+t]||[];var g=a.filter(m=>m.role==="assistantGroup").pop();var lc=g&&g.children&&g.children.at(-1);var running=Object.values(c.operations||{}).some(o=>o.status==="running");if(lc&&(lc.tools||[]).length&&running){c.stopGenerateMessage();return "STOPPED";}return "wait";})()'
   ```
-
-### D11. ✅ WORKS — catch a BRIEF blank/transient frame (sub-second) that screencast misses
-
-- Verifying a momentary full-screen blank (e.g. a React subtree unmounting to `null` for
+- **D11. ✅ WORKS — catch a BRIEF blank/transient frame (sub-second) that screencast misses.**
+  Verifying a momentary full-screen blank (e.g. a React subtree unmounting to `null` for
   \~150–350ms during a scope change): `Page.startScreencast` emits one frame when it starts and
   then only on a VISUAL CHANGE, so a _static_ blank produces no further frames — you see a time
   GAP in the manifest, not a blank image. (Measured: 3s of a static page → **1** frame, the
@@ -391,7 +368,7 @@ executionTarget: 'local'` in `agencyConfig`) + one message per case asking CC to
 - **`ffprobe` may be absent even when `ffmpeg` is installed.** Validate with
   `ffmpeg -v error -i out.mp4 -f null -` (silence = decodes fine) and read `Duration` from
   `ffmpeg -i out.mp4 2>&1 | grep Duration`.
-- Being an OS capture it is subject to the display-sleep black-frame problem: gate with
+- Being an OS capture it is subject to D10 (black frames when the display sleeps): gate with
   `check-screen-recording.sh` and hold `caffeinate -dimsu` for the WHOLE run — re-check right
   before recording if the run has been long, since the display can sleep mid-session.
 - **Pick evidence by what you're asserting, not by a rule.** A state transition lasting seconds
@@ -440,7 +417,7 @@ executionTarget: 'local'` in `agencyConfig`) + one message per case asking CC to
   Use it to assert per-session isolation (N sessions → N coexisting pages, and a page that
   should have survived an action is still listed) without adding any IPC or store probe:
   ```bash
-  curl -s --noproxy '*' http://127.0.0.1:$CDP/json/list \
+  curl -s --noproxy '*' http://127.0.0.1: < cdp > /json/list \
     | python3 -c "import json,sys; print([t['url'] for t in json.load(sys.stdin) if t['type']=='page'])"
   ```
 - **Pixels still need an OS capture.** A `WebContentsView` does not composite into the host
@@ -450,11 +427,10 @@ executionTarget: 'local'` in `agencyConfig`) + one message per case asking CC to
 
 ---
 
-## E. Env / ports / dev-server (LobeHub-specific)
+## E. Env / ports
 
-### E1. ⚠️ The old `init-dev-env.sh env` clobber note was wrong — do not trust its reasoning
-
-- It claimed `eval "$(init-dev-env.sh env)"` "can clobber `PATH`". It cannot: the `env`
+- **E1. ⚠️ This item was wrong on both counts — do not trust its reasoning.**
+  It claimed `eval "$(init-dev-env.sh env)"` "can clobber `PATH`". It cannot: the `env`
   subcommand prints only the keys in `env_keys()` (`init-dev-env.sh:178-204`), and the string
   `PATH` does not appear anywhere in the script. It also told you to hardcode
   `http://localhost:20874`; `SERVER_PORT` is **randomly allocated per workspace** in
@@ -463,36 +439,51 @@ executionTarget: 'local'` in `agencyConfig`) + one message per case asking CC to
   else in the repo. **Works**: read the port from that file, or export just the one var —
   `export APP_URL="$(init-dev-env.sh env | sed -n 's/^APP_URL=//p')"`. Whatever broke
   `awk`/`head` in the original run was never diagnosed.
-
-### E2. SPA port is configurable to coexist with another worktree
-
-- Vite binds `SPA_PORT||9876`; Next proxies `VITE_DEV_PORT||9876`. Pass `SPA_PORT=9877` to
-  `init-dev-env.sh dev` (it exports `VITE_DEV_PORT=$SPA_PORT`) so both agree and you don't fight
-  a worktree already on 9876.
+- **E2. SPA port is configurable to coexist with another worktree.** Vite binds
+  `SPA_PORT||9876`; Next proxies `VITE_DEV_PORT||9876`. Pass `SPA_PORT=9877` to
+  `init-dev-env.sh dev` (it exports `VITE_DEV_PORT=$SPA_PORT`) so both agree and
+  you don't fight a worktree already on 9876.
 
 ### E3. Deep-linking to an authed SPA route — NOT reproduced; soft-nav is still the safer path
 
 - **Original claim**: after `setup-auth.sh web-seed`, a hard `open <app>/agent/<id>/docs`
   redirects to `/signin?callbackUrl=...` while `/` stays authed.
+
 - **Did not reproduce** against the current dev server with a seeded web session
   (`isSignedIn: true`, `userId: user_agent_testing_001`). Hard-loading `/settings/common` and
   the note's exact shape `/agent/<real-id>/docs` both landed on the route itself, with no
   `/signin` and no `callbackUrl`. Either it was fixed, or the original run's cookie state
   differed. Don't budget for the bounce; check for it.
+
 - **Still true and still useful**: `app-probe.sh auth` "false-negatives" here because it talks
   to the **Electron CDP endpoint on 9222**, not to your web browser session — it fails with
   `All CDP discovery methods failed for 127.0.0.1:9222`. Read the auth state out of the page
   instead: `window.__LOBE_STORES.user()` → `{ isSignedIn, user.id }`.
+
 - **Works**: hard-load `/` (authed), confirm by screenshot (not the app-probe auth
   JSON — it false-negatives here, returns `isSignedIn:false` on an authed page),
   then **client-side soft-nav** with no server round-trip:
+
   ```bash
   agent-browser eval "history.pushState({},'','/agent/<id>/docs'); window.dispatchEvent(new PopStateEvent('popstate')); 'nav'" --session lobehub-dev
   ```
+
   react-router picks up the popstate and renders the route in-context with the
   already-hydrated auth. Right-panels that render at a _layout_ level do NOT see a
   child route's `:param` via `useParams()` — read it from `location.pathname` if
   you need it.
+
+### E4. ✅ WORKS — keep Electron pool `LOBE_IPC_ID` short
+
+- **Situation**: manually starting an isolated Electron dev instance with a
+  descriptive `LOBE_IPC_ID` such as `lobehub-desktop-dev-manual-selection-2`.
+  The main process builds a Unix socket path under `$TMPDIR`, and macOS rejects
+  overlong socket paths.
+- **Doesn't work**: long IPC ids can crash Electron at bootstrap with
+  `listen EINVAL ... <id>-electron-ipc.sock`, before any renderer/CDP evidence is
+  available.
+- **Works**: use the numeric `electron-dev.sh start <id>` pool path, or keep
+  manual IPC ids very short, e.g. `LOBE_IPC_ID=lhmsel2`.
 
 ### E5. ✅ WORKS — no-Docker fallback stack for the isolated no-.env env
 
@@ -510,6 +501,19 @@ executionTarget: 'local'` in `agencyConfig`) + one message per case asking CC to
     does NOT rescue an unknown access key id (403 on the browser preflight). Set the dev
     server's `S3_ACCESS_KEY_ID/S3_SECRET_ACCESS_KEY=S3RVER`, `S3_ENABLE_PATH_STYLE=1`,
     `S3_PUBLIC_DOMAIN=http://127.0.0.1:29000/<bucket>`.
+
+### E6. code-inspector-plugin breaks Turbopack compile of Next-served authed pages
+
+- **Situation**: the first AUTHENTICATED render of a Next-served (non-SPA) page whose client
+  graph pulls the chat store dies in `next dev` (Turbopack) with Build Error `Resource path
+"worker/browser/createWorker.ts" needs to be on project filesystem` (chain: layout →
+  GlobalProvider/Query → trpc client → image/chat store → python-interpreter worker).
+  Unauthenticated curl 302s BEFORE the client graph compiles, so it false-passes; a fresh
+  no-lockfile `pnpm install` can resolve a broken plugin version.
+- **Works**: `E2E=1` (or `TEST=1`) — `defineConfig`'s `isTest` skips `codeInspectorPlugin`,
+  the only thing it gates. Webpack mode (`next dev --webpack`) is NOT a viable fallback
+  (react version mismatch when two next versions are hoisted; `zlib-sync` unresolved for
+  discord.js).
 
 ### E8. ✅ WORKS — a git-worktree checkout needs its OWN `pnpm install`, not a symlinked `node_modules`
 
@@ -559,13 +563,12 @@ executionTarget: 'local'` in `agencyConfig`) + one message per case asking CC to
   `[optimizer] bundling dependencies`, which ends in `optimized dependencies changed. reloading`.
 - **Works**: poll until the DOM actually has content instead of sleeping a fixed amount:
   ```bash
-  until [ "$(agent-browser --session s --cdp $PORT eval \
-    '(function(){return String(document.getElementById("root").innerText.trim().length>50)})()' \
+  until [ "$(agent-browser --session s \
+    '(function(){return String(document.getElementById("root").innerText.trim().length>50)})()' < port > --cdp < port > eval \
     | tr -d '"')" = "true" ]; do sleep 5; done
   ```
   Also note `zsh does NOT word-split unquoted vars` — `S="--session x --cdp 9226"; agent-browser $S eval`
-  fails with `Unknown command` (the zsh word-split rule itself was promoted to the generic layer). Inline
-  the flags or use an array.
+  fails with `Unknown command`. Inline the flags or use an array.
 
 ### E10. ✅ WORKS — stop the main process from yanking the renderer back to its last tab
 
@@ -654,6 +657,19 @@ executionTarget: 'local'` in `agencyConfig`) + one message per case asking CC to
   did NOT survive it — budget for one more login after any restart (e.g. when a main-process
   change forces one, see E9).
 
+### E15. Main-process code changes need a restart; Vite HMR only covers the renderer
+
+- Adapters under `packages/heterogeneous-agents` run in the **main** process
+  (JSONL framing + adapter + `toStreamEvent`). Editing one and reloading the
+  renderer verifies nothing — the old adapter is still running.
+- Prove which code each process has before trusting a run:
+  ```bash
+  # renderer: vite serves working-tree src (VITE_BASE + id)
+  curl -s --noproxy '*' "http://127.0.0.1:<vitePort>/src/<path>.ts" | grep -c '<marker>'
+  # main: rebuilt on start into the desktop dist bundle
+  grep -c '<marker>' apps/desktop/dist/main/index.js
+  ```
+
 ### E16. agent-browser session silently re-targets to a newly created `<webview>` guest
 
 - **Situation**: driving an Electron app over CDP while the app itself spawns a `<webview>`
@@ -716,7 +732,7 @@ executionTarget: 'local'` in `agencyConfig`) + one message per case asking CC to
 
 - **Situation**: a real Claude Code / Codex run in the local no-`.env` env fails immediately with `Failed to sign operation JWT for hetero agent` (`apps/server/src/services/aiAgent/index.ts`). Nothing in the UI explains it; the topic just fails.
 - **Cause**: `signOperationJwt` → `getSigningKey()` → `getJwksKey()` needs the `JWKS_KEY` RSA JWK, and `init-dev-env.sh` does not export one.
-- **Works**: the repo ships a generator — `JWKS_KEY="$(node scripts/generate-oidc-jwk.mjs)" ./.agents/verify/scripts/init-dev-env.sh dev`. Must be present at dev-server **start** (it is read from `process.env`), so a running server has to be restarted.
+- **Works**: the repo ships a generator — `JWKS_KEY="$(node scripts/generate-oidc-jwk.mjs)" ./.agents/skills/agent-testing/scripts/init-dev-env.sh dev`. Must be present at dev-server **start** (it is read from `process.env`), so a running server has to be restarted.
 - **Note the failure is downstream-honest**: with `JWKS_KEY` set, the run proceeds and then fails at the hetero _sandbox_ (`Hetero sandbox spawn failed / unauthorized`) unless the agent has a real Claude Code token. Those are two different walls — don't read the second as the first.
 
 ### E25. Electron `will-attach-webview` params carry NO custom attributes — identity via data-\* never arrives
@@ -733,6 +749,23 @@ nodeintegration, plugins, disablewebsecurity, allowpopups, preload, …`). The h
   explicit IPC — renderer listens for the webview's `dom-ready`, calls
   `attach({ sessionId, webContentsId: el.getWebContentsId() })`, main process
   `webContents.fromId()` + validates the guest's session belongs to the expected partition.
+
+### E26. ✅ Next dev does NOT hot-reload `apps/server/**` — you are testing STALE compiled server code
+
+- **Situation**: verifying a working-tree change inside `apps/server/src/**` (an agent-runtime
+  service, a tool executor, a router) against a `bun run dev` server that was started before the
+  edit. The app behaves normally, the feature simply does nothing.
+- **Doesn't work**: assuming HMR covers it because `@/server/*` maps to `apps/server/src/*` in
+  `tsconfig.json` (source, no `dist`), so it "should" recompile. It does not, at least for large
+  service files. Measured: a `console.error` added at the top of a code path that demonstrably ran
+  (child ops were created, the DB rows appeared) printed **zero** lines across four separate runs;
+  after a dev-server restart, the same line printed on the first run. The whole feature under test
+  had never executed once.
+- **Why this is a trap and not a nuisance**: the failure mode is silent and looks exactly like a
+  logic bug. You will go hunting in your own diff for a fault that is not there.
+- **Works**: after ANY edit under `apps/server/**`, restart the dev server before drawing a
+  conclusion. If a run "should" have hit your code and didn't, prove the server is running your
+  code FIRST — drop a `console.error` on the path and restart — before debugging the code itself.
 
 ### E27. ✅ `source`-ing an unquoted JSON env var silently corrupts it (JWKS\_KEY → gateway auth\_failed)
 
@@ -783,7 +816,7 @@ nodeintegration, plugins, disablewebsecurity, allowpopups, preload, …`). The h
 - Same run also (re)confirmed: `init-dev-env.sh dev` ports are DYNAMIC (e.g.
   next on 33803, vite on 32459) — never hardcode 3010; re-run
   `scripts/test-env.sh` after the server is up, it reads the ports-file. And
-  the `os error 35` agent-browser daemon wedge recovers with
+  the `os error 35` agent-browser daemon wedge (D8) recovers with
   `agent-browser close --all` + re-running `setup-auth.sh web-seed`.
 
 ### E30. ✅ "Failed to fetch dynamically imported module" points at the WRONG file — the failure is downstream
@@ -802,52 +835,9 @@ nodeintegration, plugins, disablewebsecurity, allowpopups, preload, …`). The h
   use CLI/server execution and `agent_operations` for the server runtime. A change affecting both paths
   needs evidence from both paths.
 
-### E6. code-inspector-plugin breaks Turbopack compile of Next-served authed pages
-
-- **Situation**: the first AUTHENTICATED render of a Next-served (non-SPA) page whose client
-  graph pulls the chat store dies in `next dev` (Turbopack) with Build Error `Resource path
-"worker/browser/createWorker.ts" needs to be on project filesystem` (chain: layout →
-  GlobalProvider/Query → trpc client → image/chat store → python-interpreter worker).
-  Unauthenticated curl 302s BEFORE the client graph compiles, so it false-passes; a fresh
-  no-lockfile `pnpm install` can resolve a broken plugin version.
-- **Works**: `E2E=1` (or `TEST=1`) — `defineConfig`'s `isTest` skips `codeInspectorPlugin`,
-  the only thing it gates. Webpack mode (`next dev --webpack`) is NOT a viable fallback
-  (react version mismatch when two next versions are hoisted; `zlib-sync` unresolved for
-  discord.js).
-
-### E7. curl "502" on localhost with nothing listening = shell proxy env — **only if `NO_PROXY` omits localhost**
-
-> (LobeHub-env note; the general proxy-mirage rule was promoted to the generic layer.)
-
-- The causal mechanism is real: force a dead host through a proxy
-  (`curl --proxy http://127.0.0.1:7890 …`) and you get the proxy's `502`, not
-  connection-refused — a "server up but broken" mirage.
-- **But it does not reproduce in this environment**, and the note used to state it
-  unconditionally. `HTTP_PROXY`/`HTTPS_PROXY` are set here, yet
-  `NO_PROXY="localhost, 127.0.0.1, ::1"` exempts exactly the hosts you probe locally.
-  Measured against a dead port: with and without `--noproxy '*'`, both give curl exit 7 /
-  `code=000` (connection refused). No 502 either way.
-- **Works**: `curl --noproxy '*'` is a harmless belt-and-braces habit, but if you actually see
-  a 502 from a local port, check `NO_PROXY` before believing this note — the proxy is only in
-  the path when localhost is missing from it.
-
-### E12. agent-browser daemon serializes commands — `open` queues behind a record-gif loop
-
-> (was tagged D12 in an interleaved section of the old file; LobeHub loading-state recipe.)
-
-- **Situation**: `record-gif.sh` (a screenshot loop) running while you issue
-  `agent-browser open <url>` — the daemon socket serializes, the open lands late/out of
-  order, and your "during navigation" screenshot actually shows the PREVIOUS page (which can
-  look identical to the expected end state — false read).
-- **Works**: during any recording loop, navigate with
-  `agent-browser eval 'location.href="<url>"'` (fire-and-forget) instead of `open`. To hold
-  a streaming loading state on screen, inject a server-side `await sleep(8000)` before the
-  slow lookup in the page (\[AGENT-TEST], revert) — TTFB stays \~0.3s so loading.tsx renders
-  while the route hangs, giving a wide static-capture window.
-
 ---
 
-## F. Direct-SQL fixture seeding (LobeHub schema)
+## F. Fixture-seeding by raw SQL
 
 ### F1. Seeding a shared topic by raw SQL: messages MUST carry `agent_id`, or the share page renders skeletons forever
 
