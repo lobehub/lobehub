@@ -197,6 +197,7 @@ async function webSearch(
   if (res.errorDetail) {
     log.error(String(res.errorDetail));
     process.exit(1);
+    return;
   }
 
   console.log(

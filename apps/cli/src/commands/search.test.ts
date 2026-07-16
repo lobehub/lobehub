@@ -160,7 +160,7 @@ describe('search command', () => {
 
     expect(log.error).toHaveBeenCalledWith('All search providers failed');
     expect(exitSpy).toHaveBeenCalledWith(1);
-    expect(consoleSpy).not.toHaveBeenCalledWith('No results found.');
+    expect(consoleSpy).not.toHaveBeenCalled();
   });
 
   it('should keep JSON web search failure output and exit nonzero', async () => {
