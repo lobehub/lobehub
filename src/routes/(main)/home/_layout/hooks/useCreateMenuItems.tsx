@@ -384,7 +384,7 @@ export const useCreateMenuItems = () => {
     (onOpenConfig: () => void): ItemType => ({
       icon: <Icon icon={FolderCogIcon} />,
       key: 'config',
-      label: t('sessionGroup.config'),
+      label: t('sessionGroup.manageCategory'),
       onClick: (info) => {
         info.domEvent?.stopPropagation();
         onOpenConfig();

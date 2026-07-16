@@ -793,6 +793,7 @@
   "sessionGroup.creatingAgent": "正在创建助理…",
   "sessionGroup.groupName": "分类名称",
   "sessionGroup.inputPlaceholder": "请输入分类名称…",
+  "sessionGroup.manageCategory": "管理分类",
   "sessionGroup.moveGroup": "移动到分类",
   "sessionGroup.newGroup": "新分类",
   "sessionGroup.noAvailableAgents": "暂无可用助理",

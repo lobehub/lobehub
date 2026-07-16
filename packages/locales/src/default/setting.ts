@@ -2507,8 +2507,6 @@ When I am ___, I need ___
   'workspace.members.invite.upgradePlanCta': 'Upgrade plan',
   'workspace.members.invite.roleLabel': 'Role',
   'workspace.members.invite.submit': 'Invite',
-  'workspace.members.invite.subtitle':
-    'Add new members by entering their email address and assigning a role',
   'workspace.members.invite.addAnother': 'Add another',
   'workspace.members.invite.button': 'Invite',
   'workspace.members.invite.modal.cancel': 'Cancel',

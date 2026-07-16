@@ -897,6 +897,7 @@ export default {
   'sendPlaceholderWithAgentAssignment':
     'Ask, create, or start a task. @ to assign tasks to other agents.',
   'sessionGroup.config': 'Category Management',
+  'sessionGroup.manageCategory': 'Manage Category',
   'sessionGroup.confirmRemoveGroupAlert':
     'This category is about to be deleted. After deletion, the agents in this category will be moved to the default list. Please confirm your operation.',
   'sessionGroup.createAgentSuccess': 'Agent created successfully',

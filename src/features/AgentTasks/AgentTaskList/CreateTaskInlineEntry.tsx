@@ -288,7 +288,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     <Block
       style={{ overflow: 'hidden', position: 'relative' }}
       variant={'outlined'}
-      onKeyDown={handleKeyDown}
+      onKeyDownCapture={handleKeyDown}
     >
       {!isHero && (
         <ActionIcon

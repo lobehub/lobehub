@@ -201,6 +201,14 @@ describe('useCreateMenuItems', () => {
     expect(navigateMock).toHaveBeenCalledWith('/community/agent');
   });
 
+  it('uses an action-oriented label for category management', () => {
+    const { result } = renderHook(() => useCreateMenuItems());
+
+    const configItem = result.current.configMenuItem(vi.fn());
+
+    expect(configItem.label).toBe('sessionGroup.manageCategory');
+  });
+
   it('creates the Claude Code agent normally when the CLI is available', async () => {
     const { result } = renderHook(() => useCreateMenuItems());
 

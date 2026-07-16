@@ -793,6 +793,7 @@
   "sessionGroup.creatingAgent": "Creating agent...",
   "sessionGroup.groupName": "Category Name",
   "sessionGroup.inputPlaceholder": "Please enter category name...",
+  "sessionGroup.manageCategory": "Manage Category",
   "sessionGroup.moveGroup": "Move to Category",
   "sessionGroup.newGroup": "New Category",
   "sessionGroup.noAvailableAgents": "No available agents",

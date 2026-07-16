@@ -2341,7 +2341,6 @@
   "workspace.members.invite.seatInsufficient": "Only {{remaining}} seat(s) remaining. Buy more seats to invite {{required}} new member(s), or invite viewers instead (they don’t take a seat).",
   "workspace.members.invite.seatInsufficientNoBuy": "Only {{remaining}} seat(s) remaining. Ask the workspace owner to purchase more seats, or invite viewers instead (they don’t take a seat).",
   "workspace.members.invite.submit": "Invite",
-  "workspace.members.invite.subtitle": "Add new members by entering their email address and assigning a role",
   "workspace.members.invite.success": "Team members invited successfully.",
   "workspace.members.invite.title": "Invite Members",
   "workspace.members.invite.upgradePlanCta": "Upgrade plan",
