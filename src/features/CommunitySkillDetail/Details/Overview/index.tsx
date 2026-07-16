@@ -75,6 +75,7 @@ const Overview = memo(() => {
     overview,
     category,
     identifier,
+    version,
     versions = [],
     content,
   } = useDetailContext();
@@ -84,7 +85,10 @@ const Overview = memo(() => {
   const useFetchRelatedSkills = useDiscoverStore((s) => s.useFetchRelatedSkills);
   const { data: related } = useFetchRelatedSkills({ category, identifier });
 
-  const latestVersion = versions.find((v) => v.isLatest) || versions[0];
+  // Honor the fetched (possibly deep-linked ?version=) version before falling
+  // back to the latest entry
+  const selectedVersion =
+    versions.find((v) => v.version === version) || versions.find((v) => v.isLatest) || versions[0];
 
   const handleMoreRelated = useCallback(() => {
     navigate(qs.stringifyUrl({ query: { category }, url: '/community/skill' }));
@@ -138,7 +142,7 @@ const Overview = memo(() => {
       )}
 
       {/* WHAT'S NEW */}
-      {latestVersion?.changelog && (
+      {selectedVersion?.changelog && (
         <Flexbox gap={12}>
           <SectionLabel>{t('skills.details.overview.whatsNew')}</SectionLabel>
           <Block
@@ -150,15 +154,15 @@ const Overview = memo(() => {
           >
             <Flexbox horizontal align={'center'} gap={8}>
               <Text style={{ fontFamily: cssVar.fontFamilyCode, fontSize: 14 }} weight={600}>
-                {t('skills.details.overview.version', { version: latestVersion.version })}
+                {t('skills.details.overview.version', { version: selectedVersion.version })}
               </Text>
               <PublishedTime
-                date={latestVersion.createdAt}
+                date={selectedVersion.createdAt}
                 style={{ color: cssVar.colorTextDescription, fontSize: 12 }}
                 template={'MMM DD, YYYY'}
               />
             </Flexbox>
-            <Markdown variant={'chat'}>{latestVersion.changelog}</Markdown>
+            <Markdown variant={'chat'}>{selectedVersion.changelog}</Markdown>
           </Block>
         </Flexbox>
       )}

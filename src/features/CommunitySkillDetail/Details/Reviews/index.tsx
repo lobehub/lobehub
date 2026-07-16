@@ -3,6 +3,7 @@
 import { Flexbox, Skeleton } from '@lobehub/ui';
 import { memo, useCallback } from 'react';
 
+import AsyncError from '@/components/AsyncError';
 import CommentList, { type CommentListProps } from '@/components/CommentList';
 import RatingOverview from '@/components/RatingOverview';
 import { discoverService } from '@/services/discover';
@@ -20,7 +21,13 @@ const Reviews = memo(() => {
   const useFetchSkillComments = useDiscoverStore((s) => s.useFetchSkillComments);
 
   const { data: distribution } = useFetchSkillRatingDistribution(identifier);
-  const { data: firstPage, isLoading } = useFetchSkillComments({
+  const {
+    data: firstPage,
+    error,
+    isLoading,
+    isValidating,
+    mutate,
+  } = useFetchSkillComments({
     identifier,
     ...FIRST_COMMENTS_PAGE_QUERY,
   });
@@ -43,9 +50,17 @@ const Reviews = memo(() => {
             <Skeleton active key={i} paragraph={{ rows: 2 }} title={{ width: 120 }} />
           ))}
         </Flexbox>
+      ) : error ? (
+        // A failed fetch is not "no reviews yet" — offer a retry. CommentList
+        // only mounts on success, so retried data seeds it fresh (it snapshots
+        // initialData at mount time).
+        <AsyncError
+          error={error}
+          retrying={isValidating}
+          variant={'block'}
+          onRetry={() => mutate()}
+        />
       ) : (
-        // A failed fetch leaves firstPage undefined — CommentList then renders
-        // its empty state instead of an endless skeleton
         <CommentList fetchMore={fetchMore} initialData={firstPage} key={identifier} />
       )}
     </Flexbox>

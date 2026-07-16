@@ -15,6 +15,15 @@ interface SkillDetailPageProps {
   mobile?: boolean;
 }
 
+/** Tab keys this route emitted before the redesign — keep old shared links working */
+const LEGACY_TAB_ALIASES: Record<string, SkillNavKey> = {
+  installation: SkillNavKey.Install,
+  related: SkillNavKey.Overview,
+  resources: SkillNavKey.Install,
+  skill: SkillNavKey.Overview,
+  version: SkillNavKey.Overview,
+};
+
 const SkillDetailPage = memo<SkillDetailPageProps>(({ mobile }) => {
   const params = useParams<{ slug: string }>();
   const identifier = params.slug ?? '';
@@ -24,7 +33,7 @@ const SkillDetailPage = memo<SkillDetailPageProps>(({ mobile }) => {
   const activeTabParam = searchParams.get('activeTab');
   const activeTab = Object.values(SkillNavKey).includes(activeTabParam as SkillNavKey)
     ? (activeTabParam as SkillNavKey)
-    : SkillNavKey.Overview;
+    : (LEGACY_TAB_ALIASES[activeTabParam ?? ''] ?? SkillNavKey.Overview);
 
   const handleTabChange = useCallback(
     (tab: SkillNavKey) => {

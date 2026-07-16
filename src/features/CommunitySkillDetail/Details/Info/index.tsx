@@ -114,14 +114,20 @@ const Info = memo(() => {
     license,
     repository,
     updatedAt,
+    version,
     versions = [],
   } = useDetailContext();
 
   const categoryItem = useSkillCategoryItem(category);
-  const latestVersion = versions.find((item) => item.isLatest) || versions[0];
+  // Honor the fetched (possibly deep-linked ?version=) version before falling
+  // back to the latest entry
+  const selectedVersion =
+    versions.find((item) => item.version === version) ||
+    versions.find((item) => item.isLatest) ||
+    versions[0];
   const sourceUrl = github?.url || repository || homepage;
   const isGitHubSource = isGitHubUrl(sourceUrl);
-  const updatedDate = updatedAt || latestVersion?.createdAt || createdAt;
+  const updatedDate = selectedVersion?.createdAt || updatedAt || createdAt;
 
   const sourceValue = sourceUrl ? (
     <a className={styles.sourceLink} href={sourceUrl} rel={'noopener noreferrer'} target={'_blank'}>
@@ -144,7 +150,7 @@ const Info = memo(() => {
     {
       key: 'version',
       label: t('skills.details.info.version'),
-      value: latestVersion?.version,
+      value: version || selectedVersion?.version,
     },
     {
       key: 'updated',

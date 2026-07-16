@@ -137,6 +137,11 @@ const InstallButton = memo<{ identifier?: string; name?: string }>(({ identifier
   const { allowed: canCreate } = usePermission('create_content');
   const { allowed: canEdit } = usePermission('edit_own_content');
 
+  // Ensure agent skills are fetched so the install state is real on a direct
+  // visit — otherwise installed skills render as installable
+  const useFetchAgentSkills = useToolStore((s) => s.useFetchAgentSkills);
+  useFetchAgentSkills(true);
+
   const installed = useToolStore(agentSkillsSelectors.isAgentSkill(identifier || ''));
   const installedSkill = useToolStore(
     agentSkillsSelectors.getAgentSkillByIdentifier(identifier || ''),
