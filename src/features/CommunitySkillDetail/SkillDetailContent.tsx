@@ -6,6 +6,7 @@ import { SearchX } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncError from '@/components/AsyncError';
 import { useDiscoverStore } from '@/store/discover';
 import { type DiscoverSkillDetail } from '@/types/discover';
 
@@ -52,11 +53,21 @@ export const SkillDetailContent = memo<SkillDetailContentProps>(
     const { close } = useModalContext();
 
     const useSkillDetail = useDiscoverStore((s) => s.useFetchSkillDetail);
-    const { data, isLoading } = useSkillDetail({ identifier });
+    const { data, error, isLoading, isValidating, mutate } = useSkillDetail({ identifier });
 
     const actions = useMemo(() => ({ close, selectSkill: setIdentifier }), [close]);
 
     if (isLoading) return <Loading />;
+    // A failed fetch is not "skill doesn't exist" — offer a retry instead
+    if (error)
+      return (
+        <AsyncError
+          error={error}
+          retrying={isValidating}
+          variant={'page'}
+          onRetry={() => mutate()}
+        />
+      );
     if (!data)
       return (
         <Flexbox align={'center'} justify={'center'} paddingBlock={80}>

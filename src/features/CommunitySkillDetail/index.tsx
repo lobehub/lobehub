@@ -1,6 +1,7 @@
 'use client';
 
 import { createModal } from '@lobehub/ui/base-ui';
+import { t } from 'i18next';
 
 import { SkillDetailContent } from './SkillDetailContent';
 
@@ -23,6 +24,8 @@ export const createSkillDetailModal = ({ identifier }: CreateSkillDetailModalOpt
         paddingInline: 'clamp(16px, 4vw, 40px)',
       },
     },
-    title: null,
+    // The imperative modal renders its header (and the close button) only when
+    // a title is present — `null` would leave backdrop/Escape as the only way out
+    title: t('dev.title.skillDetails', { ns: 'plugin' }),
     width: 'min(92vw, 960px)',
   });

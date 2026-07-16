@@ -22,20 +22,29 @@ export interface CommentListProps {
 
 const CommentList = memo<CommentListProps>(({ initialData, fetchMore }) => {
   const { t } = useTranslation('discover');
+  const { t: tc } = useTranslation('common');
   const [items, setItems] = useState<SkillCommentItem[]>(initialData?.items ?? []);
   const [currentPage, setCurrentPage] = useState(initialData?.currentPage ?? 1);
   const [totalPages, setTotalPages] = useState(initialData?.totalPages ?? 1);
   const [totalCount, setTotalCount] = useState(initialData?.totalCount ?? 0);
+  const [loadMoreFailed, setLoadMoreFailed] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   const handleLoadMore = useCallback(() => {
     const nextPage = currentPage + 1;
     startTransition(async () => {
-      const res = await fetchMore({ order: 'desc', page: nextPage, sort: 'createdAt' });
-      setItems((prev) => [...prev, ...res.items]);
-      setCurrentPage(res.currentPage);
-      setTotalPages(res.totalPages);
-      setTotalCount(res.totalCount);
+      // Keep failures inside the transition: preserve loaded comments and
+      // turn the button into a retry instead of surfacing to an error boundary
+      try {
+        const res = await fetchMore({ order: 'desc', page: nextPage, sort: 'createdAt' });
+        setItems((prev) => [...prev, ...res.items]);
+        setCurrentPage(res.currentPage);
+        setTotalPages(res.totalPages);
+        setTotalCount(res.totalCount);
+        setLoadMoreFailed(false);
+      } catch {
+        setLoadMoreFailed(true);
+      }
     });
   }, [currentPage, fetchMore]);
 
@@ -58,7 +67,7 @@ const CommentList = memo<CommentListProps>(({ initialData, fetchMore }) => {
         </Flexbox>
         {currentPage < totalPages && (
           <Button block loading={isPending} onClick={handleLoadMore}>
-            {t('skills.details.comments.loadMore')}
+            {loadMoreFailed ? tc('retry') : t('skills.details.comments.loadMore')}
           </Button>
         )}
       </>

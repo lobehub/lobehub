@@ -131,9 +131,11 @@ const SkillItem = memo<DiscoverSkillItem>(
                   style={{ color: 'inherit', overflow: 'hidden' }}
                   to={link}
                   onClick={(e) => {
+                    // Never let the click bubble to the card (it would open the
+                    // modal on top of the browser's new-tab navigation)
+                    e.stopPropagation();
                     if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
                     e.preventDefault();
-                    e.stopPropagation();
                     handleClick();
                   }}
                 >

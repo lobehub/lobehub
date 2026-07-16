@@ -15,6 +15,7 @@ import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 
+import { useDetailActionContext } from '../../DetailProvider';
 import VsCodeIcon from './VsCodeIcon';
 
 const Title = ({ children }: { children?: React.ReactNode }) => (
@@ -112,6 +113,7 @@ const Platform = memo<PlatformProps>(
   ({ lite, identifier, mobile, expandCodeByDefault, downloadUrl }) => {
     const { t } = useTranslation('discover');
     const navigate = useWorkspaceAwareNavigate();
+    const { close } = useDetailActionContext();
     const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
     const sendMessage = useChatStore((s) => s.sendMessage);
     const [active, setActive] = useState<PlatformType>(PlatformType.Claude);
@@ -199,9 +201,11 @@ const Platform = memo<PlatformProps>(
         message: agentPrompt,
       });
 
-      // Navigate to LobeAI chat session
+      // Navigate to LobeAI chat session; in the modal the host outlives the
+      // router, so dismiss the detail alongside the navigation
       navigate(AGENT_CHAT_URL(inboxAgentId, mobile));
-    }, [agentPrompt, inboxAgentId, mobile, navigate, sendMessage]);
+      close?.();
+    }, [agentPrompt, close, inboxAgentId, mobile, navigate, sendMessage]);
 
     return (
       <Block gap={lite ? 0 : 16} padding={4} variant={lite ? 'outlined' : 'borderless'}>
