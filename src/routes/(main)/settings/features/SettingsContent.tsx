@@ -28,6 +28,7 @@ const COMPACT_HEADER_TABS = [
   SettingsTabs.Appearance,
   SettingsTabs.Billing,
   SettingsTabs.Credits,
+  SettingsTabs.Devices,
   SettingsTabs.Hotkey,
   SettingsTabs.Memory,
   SettingsTabs.Notification,
@@ -55,6 +56,7 @@ const SettingsContent = ({ mobile, activeTab }: SettingsContentProps) => {
     [SettingsTabs.Appearance]: t('setting:tab.appearance'),
     [SettingsTabs.Billing]: t('subscription:tab.billing'),
     [SettingsTabs.Credits]: t('subscription:tab.credits'),
+    [SettingsTabs.Devices]: t('setting:devices.title'),
     [SettingsTabs.Hotkey]: t('setting:tab.hotkey'),
     [SettingsTabs.Memory]: t('setting:tab.memory'),
     [SettingsTabs.Notification]: t('setting:tab.notification'),
@@ -93,6 +95,7 @@ const SettingsContent = ({ mobile, activeTab }: SettingsContentProps) => {
         SettingsTabs.Profile,
         SettingsTabs.Stats,
         SettingsTabs.Usage,
+        SettingsTabs.Creds,
         SettingsTabs.Security,
         ...(enableBusinessFeatures
           ? [SettingsTabs.Plans, SettingsTabs.Credits, SettingsTabs.Billing, SettingsTabs.Referral]
@@ -118,6 +121,7 @@ const SettingsContent = ({ mobile, activeTab }: SettingsContentProps) => {
           tabKey === SettingsTabs.Provider ||
           tabKey === SettingsTabs.Skill ||
           tabKey === SettingsTabs.Connector ||
+          tabKey === SettingsTabs.Creds ||
           tabKey === SettingsTabs.Usage;
         if (activeTab !== tabKey) return null;
         const content = renderComponent(tabKey);

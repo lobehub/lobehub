@@ -772,6 +772,10 @@ export const desktopRoutes: RouteObject[] = [
             handle: { settingsTab: SettingsTabs.Memory },
             path: 'memory',
           },
+          {
+            element: redirectElement('/settings/credential'),
+            path: 'creds',
+          },
           // Other settings tabs
           {
             element: dynamicElement(

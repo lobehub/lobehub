@@ -308,6 +308,10 @@ export const mobileRoutes: RouteObject[] = [
             ),
             path: 'provider',
           },
+          {
+            element: redirectElement('/settings/credential'),
+            path: 'creds',
+          },
           // Other settings tabs (common, agent, memory, tts, about, etc.)
           {
             element: dynamicElement(

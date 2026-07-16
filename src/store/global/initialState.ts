@@ -62,7 +62,7 @@ export enum SettingsTabs {
   Common = 'common',
   Connector = 'connector',
   Credits = 'credits',
-  Creds = 'creds',
+  Creds = 'credential',
   Devices = 'devices',
   Hotkey = 'hotkey',
   /** @deprecated Use ServiceModel instead */
