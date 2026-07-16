@@ -213,10 +213,13 @@ describe('scheduledTopicDispatch', () => {
     const response = await dispatch();
 
     await expect(response.json()).resolves.toMatchObject({ dispatched: 0 });
+    // Fenced on the dispatcher's claim lease — a stale attempt must not
+    // re-point a newer scheduled run.
     expect(mocks.repointScheduledRunFailedMessage).toHaveBeenCalledWith(
       {},
       'topic-1',
       'assistant-dispatch-failed',
+      mocks.claimScheduledTopic.mock.calls[0][2].id,
     );
     // The topic itself stays scheduled — the next tick retries.
     expect(mocks.clearScheduledRun).not.toHaveBeenCalled();

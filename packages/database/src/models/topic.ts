@@ -1475,13 +1475,20 @@ export class TopicModel {
    * placeholder it created; tracking that bubble as the run's
    * `failedAssistantMessageId` lets the next tick's pre-dispatch cleanup clear
    * it the same way it clears the original card, so retries don't strand one
-   * stale error bubble per failed attempt. No-ops when the schedule was
-   * cancelled or already cleared in the meantime.
+   * stale error bubble per failed attempt.
+   *
+   * `expectedClaimId` fences stale writers the same way it does in
+   * {@link TopicModel.clearScheduledRun}: a dispatch attempt that outlived its
+   * claim lease — or one whose schedule the user cancelled and re-armed — must
+   * not overwrite the pointer of a NEWER scheduled run, or the next cleanup
+   * would delete / anchor against an unrelated message. No-ops when the
+   * schedule was cleared or the claim no longer matches.
    */
   static async repointScheduledRunFailedMessage(
     db: LobeChatDatabase,
     id: string,
     failedAssistantMessageId: string,
+    expectedClaimId: string,
   ): Promise<void> {
     await db.transaction(async (tx) => {
       const [row] = await tx
@@ -1493,6 +1500,7 @@ export class TopicModel {
 
       const scheduledRun = row.metadata?.scheduledRun;
       if (!scheduledRun) return;
+      if (scheduledRun.claim?.id !== expectedClaimId) return;
 
       await tx
         .update(topics)

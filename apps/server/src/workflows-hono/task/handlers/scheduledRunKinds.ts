@@ -9,6 +9,8 @@ import type { TopicItem } from '@/database/schemas/topic';
 import { AiAgentService } from '@/server/services/aiAgent';
 
 export interface ScheduledRunContext {
+  /** The dispatcher's claim lease id — fences post-dispatch writes against stale attempts. */
+  claimId: string;
   db: LobeChatDatabase;
   topic: TopicItem;
   workspaceId?: string;
@@ -38,7 +40,7 @@ type ScheduledRunHandlers = {
  */
 const runResumeAfterRateLimit: ScheduledRunHandlers['resume_after_rate_limit'] = async (
   run,
-  { db, topic, workspaceId },
+  { claimId, db, topic, workspaceId },
 ) => {
   const messageModel = new MessageModel(db, topic.userId, workspaceId);
   const failedMessage = await messageModel.findById(run.failedAssistantMessageId);
@@ -73,8 +75,15 @@ const runResumeAfterRateLimit: ScheduledRunHandlers['resume_after_rate_limit'] =
   // didn't fire. Track that bubble as the run's failed message so the next
   // tick's pre-dispatch cleanup clears it exactly like the original card;
   // otherwise every failed attempt would strand one more stale error card.
+  // Fenced on our claim lease: an attempt that outlived it (or whose schedule
+  // was cancelled and re-armed) must not re-point a newer run.
   if (!result.success && result.assistantMessageId) {
-    await TopicModel.repointScheduledRunFailedMessage(db, topic.id, result.assistantMessageId);
+    await TopicModel.repointScheduledRunFailedMessage(
+      db,
+      topic.id,
+      result.assistantMessageId,
+      claimId,
+    );
   }
 
   return result;

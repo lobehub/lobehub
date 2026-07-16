@@ -838,6 +838,7 @@ describe('TopicModel', () => {
         serverDB,
         'scheduled-repoint',
         'assistant-retry-1',
+        'claim-1',
       );
 
       const [row] = await serverDB.select().from(topics).where(eq(topics.id, 'scheduled-repoint'));
@@ -850,6 +851,33 @@ describe('TopicModel', () => {
         runAt: scheduledRun.runAt,
         userMessageId: 'user-message',
       });
+    });
+
+    it('does not let a stale dispatch attempt re-point a re-armed schedule', async () => {
+      // The failed attempt's claim lease expired and the user (or a newer tick)
+      // re-armed / re-claimed the schedule — the old writer must lose.
+      await serverDB.insert(topics).values({
+        id: 'scheduled-reclaimed',
+        metadata: {
+          scheduledRun: { ...scheduledRun, claim: { claimedAt: '', expiresAt: '', id: 'new' } },
+        },
+        status: 'scheduled',
+        title: 'reclaimed',
+        userId,
+      });
+
+      await TopicModel.repointScheduledRunFailedMessage(
+        serverDB,
+        'scheduled-reclaimed',
+        'assistant-stale-attempt',
+        'old',
+      );
+
+      const [row] = await serverDB
+        .select()
+        .from(topics)
+        .where(eq(topics.id, 'scheduled-reclaimed'));
+      expect(row.metadata?.scheduledRun?.failedAssistantMessageId).toBe('assistant-failed');
     });
 
     it('does not resurrect a cancelled schedule when re-pointing', async () => {
@@ -865,6 +893,7 @@ describe('TopicModel', () => {
         serverDB,
         'scheduled-cancelled',
         'assistant-retry-2',
+        'claim-1',
       );
 
       const [row] = await serverDB
