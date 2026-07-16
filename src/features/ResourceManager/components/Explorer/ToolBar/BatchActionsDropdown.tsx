@@ -13,8 +13,10 @@ import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import { useIsWorkspaceOwner } from '@/business/client/hooks/useIsWorkspaceOwner';
 import RepoIcon from '@/components/LibIcon';
 import { useKnowledgeBaseListContext } from '@/features/ResourceManager/components/KnowledgeBaseListProvider';
+import { openWorkspaceDeleteAllModal } from '@/features/WorkspaceDeleteAllModal';
 import { usePermission } from '@/hooks/usePermission';
 import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
 import { useKnowledgeBaseStore } from '@/store/library';
@@ -46,7 +48,12 @@ const BatchActionsDropdown = memo<BatchActionsDropdownProps>(({ selectCount, onA
   const knowledgeBases = useKnowledgeBaseListContext();
   const activeWorkspaceId = useActiveWorkspaceId();
   const { allowed: canEditResources, reason } = usePermission('edit_own_content');
+  const isWorkspaceOwner = useIsWorkspaceOwner();
   const isWorkspaceDeleteAll = !!activeWorkspaceId && selectAllState === 'all';
+  // Owners deleting a select-all query hit the server's workspace-wide path
+  // (restrictToCreator = false), so they must see the workspace-wide label and
+  // the elevated acknowledge modal — same contract as the header trash button.
+  const isWorkspaceOwnerDeleteAll = isWorkspaceDeleteAll && isWorkspaceOwner;
 
   const menuItems = useMemo<DropdownItem[]>(() => {
     const items: DropdownItem[] = [];
@@ -177,10 +184,34 @@ const BatchActionsDropdown = memo<BatchActionsDropdownProps>(({ selectCount, onA
         disabled: selectCount === 0,
         icon: <Icon icon={Trash2Icon} />,
         key: 'delete',
-        label: t(isWorkspaceDeleteAll ? 'FileManager.actions.deleteAllOwn' : 'delete', {
-          ns: isWorkspaceDeleteAll ? 'components' : 'common',
-        }),
+        label: t(
+          isWorkspaceOwnerDeleteAll
+            ? 'FileManager.actions.deleteAll'
+            : isWorkspaceDeleteAll
+              ? 'FileManager.actions.deleteAllOwn'
+              : 'delete',
+          {
+            ns: isWorkspaceDeleteAll ? 'components' : 'common',
+          },
+        ),
         onClick: async () => {
+          const handleDelete = async () => {
+            await onActionClick('delete');
+            message.success(t('FileManager.actions.deleteSuccess'));
+          };
+
+          if (isWorkspaceOwnerDeleteAll) {
+            openWorkspaceDeleteAllModal({
+              acknowledgeText: t('FileManager.actions.confirmDeleteAllWorkspaceAcknowledge'),
+              cancelText: t('cancel', { ns: 'common' }),
+              confirmText: t('FileManager.actions.deleteAll'),
+              description: t('FileManager.actions.confirmDeleteAllWorkspaceFiles'),
+              onConfirm: handleDelete,
+              title: t('FileManager.actions.deleteAll'),
+            });
+            return;
+          }
+
           confirmModal({
             cancelText: t('cancel', { ns: 'common' }),
             content: t(
@@ -195,10 +226,7 @@ const BatchActionsDropdown = memo<BatchActionsDropdownProps>(({ selectCount, onA
               danger: true,
             },
             okText: t('delete', { ns: 'common' }),
-            onOk: async () => {
-              await onActionClick('delete');
-              message.success(t('FileManager.actions.deleteSuccess'));
-            },
+            onOk: handleDelete,
             title: t('delete', { ns: 'common' }),
           });
         },
@@ -220,6 +248,7 @@ const BatchActionsDropdown = memo<BatchActionsDropdownProps>(({ selectCount, onA
     listVisibility,
     activeWorkspaceId,
     isWorkspaceDeleteAll,
+    isWorkspaceOwnerDeleteAll,
   ]);
 
   return (

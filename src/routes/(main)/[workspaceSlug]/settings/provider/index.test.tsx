@@ -52,6 +52,15 @@ describe('WorkspaceProviderSetting', () => {
     expect(screen.getByTestId('provider-context')).toHaveTextContent('true:true');
   });
 
+  // The provider roadmap footer was removed from the provider list page in
+  // #17217, so the page renders no footer for any provider anymore.
+  it('renders no provider footer', () => {
+    isOwner.value = true;
+    renderPage('openai');
+
+    expect(screen.queryByTestId('provider-footer')).not.toBeInTheDocument();
+  });
+
   it('renders forbidden screen for non-owners', () => {
     isOwner.value = false;
     renderPage('openai');
