@@ -49,23 +49,15 @@ const rawDetail = {
   name: 'Skill A',
 };
 
-const listItem = (identifier: string) => ({ identifier, name: identifier });
-
 describe('skillRouter.getSkillDetail', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
     mockGetSkillDetail.mockResolvedValue(rawDetail);
     mockGetSkillDownloadUrl.mockReturnValue('https://market.example/skills/skill-a/download');
-    mockSearchSkill.mockResolvedValue({
-      items: [
-        listItem('github.acme.skill-a'),
-        ...Array.from({ length: 7 }, (_, i) => listItem(`github.acme.other-${i}`)),
-      ],
-    });
   });
 
-  it('enriches the raw detail with downloadUrl and related skills', async () => {
+  it('enriches the raw detail with downloadUrl', async () => {
     const caller = await createCaller();
 
     const result = await caller.getSkillDetail({
@@ -77,18 +69,20 @@ describe('skillRouter.getSkillDetail', () => {
       locale: 'en-US',
       version: undefined,
     });
-    expect(mockSearchSkill).toHaveBeenCalledWith({
-      category: 'productivity-tasks',
-      locale: 'en-US',
-      page: 1,
-      pageSize: 7,
-      sort: 'recommended',
-    });
     expect(result.downloadUrl).toBe('https://market.example/skills/skill-a/download');
-    // Capped at 6 and never includes the skill itself
-    expect(result.related).toHaveLength(6);
-    expect(result.related?.map((i) => i.identifier)).not.toContain('github.acme.skill-a');
     expect(result.name).toBe('Skill A');
+  });
+
+  it('stays a single upstream request — never fans out to the skill list', async () => {
+    // The detail query also backs per-skill icon/metadata lookups (one per
+    // installed skill in the chat tools panel). Related skills must be
+    // composed client-side from getSkillList, not aggregated here.
+    const caller = await createCaller();
+
+    await caller.getSkillDetail({ identifier: 'github.acme.skill-a' });
+
+    expect(mockGetSkillDetail).toHaveBeenCalledTimes(1);
+    expect(mockSearchSkill).not.toHaveBeenCalled();
   });
 
   it('passes the requested version through to detail and download URL', async () => {
@@ -101,27 +95,6 @@ describe('skillRouter.getSkillDetail', () => {
       version: '1.2.0',
     });
     expect(mockGetSkillDownloadUrl).toHaveBeenCalledWith('github.acme.skill-a', '1.2.0');
-  });
-
-  it('returns the detail without related when the related lookup fails', async () => {
-    mockSearchSkill.mockRejectedValue(new Error('market unavailable'));
-    const caller = await createCaller();
-
-    const result = await caller.getSkillDetail({ identifier: 'github.acme.skill-a' });
-
-    expect(result.name).toBe('Skill A');
-    expect(result.related).toBeUndefined();
-    expect(result.downloadUrl).toBe('https://market.example/skills/skill-a/download');
-  });
-
-  it('skips the related lookup when the skill has no category', async () => {
-    mockGetSkillDetail.mockResolvedValue({ ...rawDetail, category: undefined });
-    const caller = await createCaller();
-
-    const result = await caller.getSkillDetail({ identifier: 'github.acme.skill-a' });
-
-    expect(mockSearchSkill).not.toHaveBeenCalled();
-    expect(result.related).toBeUndefined();
   });
 
   it('wraps detail failures into an internal server error', async () => {

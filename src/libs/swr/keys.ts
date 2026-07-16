@@ -429,6 +429,15 @@ export const discoverKeys = {
     'discover:skillRatingDistribution',
     identifier,
   ]),
+  skillRelated: def(
+    'discover:skillRelated',
+    (locale: string, category: string, identifier: string) => [
+      'discover:skillRelated',
+      locale,
+      category,
+      identifier,
+    ],
+  ),
   userProfile: def('discover:userProfile', (locale: string, username: string) => [
     'discover:userProfile',
     locale,

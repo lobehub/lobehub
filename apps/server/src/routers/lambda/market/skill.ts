@@ -9,9 +9,6 @@ import { SkillSorts } from '@/types/discover';
 
 const log = debug('lambda-router:market:skill');
 
-/** How many related skills the detail endpoint returns alongside the skill itself */
-const RELATED_SKILLS_COUNT = 6;
-
 // Public procedure with optional user info for trusted client token
 const marketProcedure = publicProcedure
   .use(serverDatabase)
@@ -88,33 +85,18 @@ export const skillRouter = router({
       log('getSkillDetail input: %O', input);
 
       try {
+        // Keep this path lean: it also backs per-skill icon/metadata lookups
+        // (e.g. the chat tools panel renders one detail query per installed
+        // skill), so it must stay a single upstream request. Related skills
+        // are composed client-side from getSkillList (useFetchRelatedSkills).
         const detail = await ctx.marketService.getSkillDetail(input.identifier, {
           locale: input.locale,
           version: input.version,
         });
 
-        // Related skills are decoration — never fail the detail because of them
-        const related = detail.category
-          ? await ctx.marketService
-              .searchSkill({
-                category: detail.category,
-                locale: input.locale,
-                page: 1,
-                pageSize: 7,
-                sort: 'recommended',
-              })
-              .then((list) =>
-                list.items
-                  .filter((item) => item.identifier !== detail.identifier)
-                  .slice(0, RELATED_SKILLS_COUNT),
-              )
-              .catch(() => undefined)
-          : undefined;
-
         return {
           ...detail,
           downloadUrl: ctx.marketService.getSkillDownloadUrl(input.identifier, input.version),
-          related,
         };
       } catch (error) {
         log('Error fetching skill detail: %O', error);
