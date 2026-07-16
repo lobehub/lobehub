@@ -62,7 +62,14 @@ table — those double up on the page. It carries only the non-duplicate narrati
 
    - UI (before/after comparison): capture and visually verify both original
      screenshots. Do not ask the agent to compose them into a new image. In the
-     case's `evidence` array, pair them with a shared comparison id:
+     case's `evidence` array, pair them with a shared comparison id.
+
+     **A `comparison` pair means ONE view in two states** — the same surface
+     before and after a change (the red/green role bands say "was / is now").
+     Two sequential steps of a FLOW (a dialog, then the state after submitting
+     it) are NOT a before/after: labeling them so misstates the semantics and
+     reads as if the first shot were a defect. For flow steps, attach plain
+     ordered evidence items and let each caption name its step:
 
      ```json
      "evidence": [

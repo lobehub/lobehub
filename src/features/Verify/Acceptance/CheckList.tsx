@@ -1,9 +1,14 @@
 'use client';
 
-import { ActionIcon, Flexbox, Icon, Image, Tag, Text, Tooltip } from '@lobehub/ui';
+import type { AcceptanceReviewAnnotation } from '@lobechat/types';
+import { ActionIcon, copyToClipboard, Flexbox, Icon, Image, Tag, Text, Tooltip } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
+import dayjs from 'dayjs';
 import {
-  CheckCircle2,
+  BadgeCheck,
+  Check,
+  CheckCheck,
   ChevronRight,
   ChevronsDownUp,
   ChevronsUpDown,
@@ -12,8 +17,8 @@ import {
   Film,
   HelpCircle,
   Images,
+  MessageSquareX,
   Repeat,
-  Wrench,
   XCircle,
 } from 'lucide-react';
 import { Fragment, memo, useState } from 'react';
@@ -25,10 +30,39 @@ import {
   EvidenceComparisonCard,
   readEvidenceComparison,
 } from '../components/EvidenceComparisonCard';
+import { AnnotatedImage } from './Annotation';
+import { openCheckRejectModal } from './CheckRejectModal';
 
 export type AcceptanceCheck = AcceptanceBundle['checks'][number];
 export type AcceptanceCheckState = AcceptanceCheck['state'];
 type AcceptanceEvidence = AcceptanceCheck['evidence'][number];
+type AcceptanceCheckReviewEntry = AcceptanceCheck['reviews'][number];
+
+/** What the user asked the page to record — the page owns the service call. */
+export interface CheckReviewInput {
+  action: 'accept' | 'reject';
+  annotations?: AcceptanceReviewAnnotation[];
+  checkItemIds: string[];
+  comment?: string;
+}
+
+/** The user's standing verdict on a check — `pending` means "awaiting your confirmation". */
+export type UserReviewState = 'accepted' | 'pending' | 'rejected';
+
+export const userReviewState = (check: AcceptanceCheck): UserReviewState => {
+  const review = check.userReview;
+  if (!review) return 'pending';
+  if (review.action === 'accept') return 'accepted';
+  return review.stale ? 'pending' : 'rejected';
+};
+
+/** Every reviewable check in the group is user-accepted — settled business. */
+export const isGroupFullyAccepted = (checks: AcceptanceCheck[]): boolean => {
+  const reviewable = checks.filter((check) => check.result);
+  return (
+    reviewable.length > 0 && reviewable.every((check) => userReviewState(check) === 'accepted')
+  );
+};
 
 /** Unresolved-first ordering — exceptions are what the decision hinges on. */
 const SEVERITY: Record<AcceptanceCheckState, number> = {
@@ -38,10 +72,15 @@ const SEVERITY: Record<AcceptanceCheckState, number> = {
   uncertain: 1,
 };
 
-const STATE_META: Record<AcceptanceCheckState, { color: string; icon: typeof CheckCircle2 }> = {
+/**
+ * Verdict iconography: a bare check for passed (no ring), doubling into a
+ * bare double-check once the human signs it off — one icon slot, read like a
+ * delivery receipt. Non-passed states keep their ringed marks.
+ */
+const STATE_META: Record<AcceptanceCheckState, { color: string; icon: typeof Check }> = {
   failed: { color: cssVar.colorError, icon: XCircle },
   not_executed: { color: cssVar.colorTextQuaternary, icon: CircleDashed },
-  passed: { color: cssVar.colorSuccess, icon: CheckCircle2 },
+  passed: { color: cssVar.colorSuccess, icon: Check },
   uncertain: { color: cssVar.colorWarning, icon: HelpCircle },
 };
 
@@ -114,25 +153,6 @@ const styles = createStaticStyles(({ css }) => ({
     border-radius: ${cssVar.borderRadiusLG};
     background: ${cssVar.colorBgContainer};
   `,
-  groupFooter: css`
-    cursor: pointer;
-
-    display: flex;
-    gap: 4px;
-    align-items: center;
-    justify-content: center;
-
-    padding-block: 6px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-
-    font-size: 12px;
-    color: ${cssVar.colorTextQuaternary};
-
-    &:hover {
-      color: ${cssVar.colorTextSecondary};
-      background: ${cssVar.colorFillQuaternary};
-    }
-  `,
   groupHeader: css`
     cursor: pointer;
     padding-block: 10px;
@@ -158,6 +178,26 @@ const styles = createStaticStyles(({ css }) => ({
   row: css`
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
+  /** Stable check label ("C3") — referenced by feedback and annotations. */
+  seqChip: css`
+    flex: none;
+
+    font-family: ${cssVar.fontFamilyCode};
+    font-size: 11px;
+    color: ${cssVar.colorTextQuaternary};
+    letter-spacing: 0.02em;
+  `,
+  seqChipClickable: css`
+    cursor: copy;
+
+    &:hover {
+      color: ${cssVar.colorText};
+    }
+  `,
+  rowActions: css`
+    opacity: 0;
+    transition: opacity 0.2s;
+  `,
   rowHeader: css`
     cursor: pointer;
     padding-block: 12px;
@@ -165,6 +205,10 @@ const styles = createStaticStyles(({ css }) => ({
 
     &:hover {
       background: ${cssVar.colorFillQuaternary};
+
+      .acceptance-row-actions {
+        opacity: 1;
+      }
     }
   `,
   stepDot: css`
@@ -291,12 +335,15 @@ const EvidenceList = memo<{ evidence: AcceptanceEvidence[] }>(({ evidence }) => 
         if (item.fileUrl && VISUAL_EVIDENCE.has(item.type))
           return (
             <Flexbox gap={4} key={item.id} style={{ maxWidth: '100%', width: 'fit-content' }}>
+              {/* The frame owns the border — the inner Image must not draw its
+                  own, or the two 1px borders stack visibly. */}
               <Flexbox className={styles.evidenceImage}>
                 <Image
                   alt={item.description ?? item.fileName ?? item.type}
                   loading={'lazy'}
                   src={item.fileUrl}
-                  style={{ maxWidth: '100%' }}
+                  style={{ borderRadius: 0, maxWidth: '100%' }}
+                  variant={'borderless'}
                 />
               </Flexbox>
               {caption}
@@ -316,21 +363,158 @@ const EvidenceList = memo<{ evidence: AcceptanceEvidence[] }>(({ evidence }) => 
 });
 
 /**
+ * The user's acceptance, rendered as one quiet gray line — a signature, not an
+ * event card: the verdict icon stays the row's headline, this is metadata.
+ */
+const AcceptedNote = memo<{ review: AcceptanceCheckReviewEntry }>(({ review }) => {
+  const { t } = useTranslation('verify');
+  return (
+    <Flexbox horizontal align={'center'} gap={6}>
+      <Icon color={cssVar.colorTextQuaternary} icon={BadgeCheck} size={13} />
+      <Text fontSize={12} type={'secondary'}>
+        {t('acceptance.review.acceptedNote', {
+          time: dayjs(review.createdAt).format('MM-DD HH:mm'),
+        })}
+      </Text>
+    </Flexbox>
+  );
+});
+
+/**
+ * One reject-feedback event: a small red marker line, then the note and the
+ * circled regions as plain content — no background wash. Used both as the
+ * standing feedback under the row's evidence and inside the iteration history.
+ */
+const FeedbackCard = memo<{
+  evidenceById: Map<string, AcceptanceEvidence>;
+  review: AcceptanceCheckReviewEntry;
+}>(({ evidenceById, review }) => {
+  const { t } = useTranslation('verify');
+  if (review.action === 'accept') return <AcceptedNote review={review} />;
+
+  const groups = new Map<
+    string,
+    { comment?: string; rect: AcceptanceReviewAnnotation['rect'] }[]
+  >();
+  for (const annotation of review.annotations ?? []) {
+    const bucket = groups.get(annotation.evidenceId) ?? [];
+    bucket.push({ comment: annotation.comment, rect: annotation.rect });
+    groups.set(annotation.evidenceId, bucket);
+  }
+
+  return (
+    <Flexbox gap={8}>
+      <Flexbox horizontal align={'center'} gap={6}>
+        <Icon color={cssVar.colorError} icon={MessageSquareX} size={13} />
+        <Text style={{ color: cssVar.colorError, fontSize: 12 }}>
+          {t('acceptance.review.feedbackLabel', { round: review.roundIndex })}
+        </Text>
+        <Text fontSize={12} type={'secondary'}>
+          {dayjs(review.createdAt).format('MM-DD HH:mm')}
+        </Text>
+      </Flexbox>
+      {review.comment && <Text style={{ fontSize: 12 }}>{review.comment}</Text>}
+      {[...groups.entries()].map(([evidenceId, annotations]) => {
+        const evidence = evidenceById.get(evidenceId);
+        // The evidence may be gone (deleted round) — the notes stay readable.
+        if (!evidence?.fileUrl)
+          return annotations
+            .filter((annotation) => annotation.comment)
+            .map((annotation, index) => (
+              <Text fontSize={12} key={`${evidenceId}-${index}`} type={'secondary'}>
+                {annotation.comment}
+              </Text>
+            ));
+        return (
+          <AnnotatedImage
+            annotations={annotations}
+            imageStyle={{ maxHeight: 240 }}
+            key={evidenceId}
+            src={evidence.fileUrl}
+          />
+        );
+      })}
+    </Flexbox>
+  );
+});
+
+/** Everything a check knows about its evidence, keyed by id — annotation lookups. */
+const collectEvidenceById = (check: AcceptanceCheck): Map<string, AcceptanceEvidence> => {
+  const map = new Map<string, AcceptanceEvidence>();
+  for (const entry of check.timeline) for (const item of entry.evidence) map.set(item.id, item);
+  for (const item of check.evidence) map.set(item.id, item);
+  return map;
+};
+
+/** A step of the merged history: an executed round, or a user feedback event. */
+type HistoryStep =
+  | { key: string; kind: 'review'; review: AcceptanceCheckReviewEntry; roundIndex: number }
+  | { key: string; kind: 'run'; roundIndex: number; step: AcceptanceCheck['timeline'][number] };
+
+/**
  * The iteration-history timeline (newest first): each executed step's round,
- * the wording THAT round used, and its evidence — how the check evolved.
+ * the wording THAT round used, and its evidence — plus the user's feedback
+ * events, slotted after the round they judged — how the check evolved.
  */
 const IterationTimeline = memo<{
   check: AcceptanceCheck;
+  evidenceById: Map<string, AcceptanceEvidence>;
+  historyReviews: AcceptanceCheckReviewEntry[];
   onRound: (round: number) => void;
-}>(({ check, onRound }) => {
+}>(({ check, evidenceById, historyReviews, onRound }) => {
   const { t } = useTranslation('verify');
-  const steps = [...check.timeline].reverse();
+
+  const merged: HistoryStep[] = [
+    ...check.timeline.map<HistoryStep>((step) => ({
+      key: `run-${step.roundIndex}-${step.resultId}`,
+      kind: 'run',
+      roundIndex: step.roundIndex,
+      step,
+    })),
+    ...historyReviews.map<HistoryStep>((review) => ({
+      key: `review-${review.id}`,
+      kind: 'review',
+      review,
+      roundIndex: review.roundIndex,
+    })),
+  ]
+    .sort(
+      (a, b) =>
+        a.roundIndex - b.roundIndex ||
+        // Within a round the run comes first — feedback judges its result.
+        (a.kind === 'review' ? 1 : 0) - (b.kind === 'review' ? 1 : 0) ||
+        (a.kind === 'review' && b.kind === 'review'
+          ? new Date(a.review.createdAt).getTime() - new Date(b.review.createdAt).getTime()
+          : 0),
+    )
+    .reverse();
 
   return (
     <Flexbox>
-      {steps.map((step, index) => {
+      {merged.map((entry, index) => {
         const isCurrent = index === 0;
-        const isLast = index === steps.length - 1;
+        const isLast = index === merged.length - 1;
+
+        if (entry.kind === 'review')
+          return (
+            <Flexbox horizontal gap={12} key={entry.key}>
+              <Flexbox align={'center'} style={{ flex: 'none', width: 9 }}>
+                <span
+                  className={styles.stepDot}
+                  style={{
+                    borderColor:
+                      entry.review.action === 'accept' ? cssVar.colorSuccess : cssVar.colorError,
+                  }}
+                />
+                {!isLast && <div className={styles.stepRail} />}
+              </Flexbox>
+              <Flexbox flex={1} gap={6} style={{ minWidth: 0, paddingBlockEnd: isLast ? 0 : 20 }}>
+                <FeedbackCard evidenceById={evidenceById} review={entry.review} />
+              </Flexbox>
+            </Flexbox>
+          );
+
+        const { step } = entry;
         const stateColor =
           {
             failed: cssVar.colorError,
@@ -339,7 +523,7 @@ const IterationTimeline = memo<{
           }[step.state as string] ?? cssVar.colorTextQuaternary;
 
         return (
-          <Flexbox horizontal gap={12} key={`${step.roundIndex}-${step.resultId}`}>
+          <Flexbox horizontal gap={12} key={entry.key}>
             <Flexbox align={'center'} style={{ flex: 'none', width: 9 }}>
               <span
                 className={styles.stepDot}
@@ -370,7 +554,8 @@ const IterationTimeline = memo<{
                           alt={item.description ?? item.type}
                           loading={'lazy'}
                           src={item.fileUrl}
-                          style={{ maxHeight: 160, maxWidth: 280, width: 'auto' }}
+                          style={{ borderRadius: 0, maxHeight: 160, maxWidth: 280, width: 'auto' }}
+                          variant={'borderless'}
                         />
                       </Flexbox>
                     ) : item.content ? (
@@ -404,21 +589,68 @@ const IterationTimeline = memo<{
 });
 
 const CheckRow = memo<{
+  canReview: boolean;
   check: AcceptanceCheck;
   expanded: boolean;
+  onReview: (input: CheckReviewInput) => Promise<boolean>;
   onRound: (round: number) => void;
   onToggle: () => void;
-}>(({ check, expanded, onRound, onToggle }) => {
+  reviewPending: boolean;
+}>(({ canReview, check, expanded, onReview, onRound, onToggle, reviewPending }) => {
   const { t } = useTranslation('verify');
   // The judging narrative stays collapsed: level one is title + evidence.
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [seqCopied, setSeqCopied] = useState(false);
   const meta = STATE_META[check.state];
   const counts = evidenceCounts(check.evidence);
+
+  const reviewState = userReviewState(check);
+  // The decision is stamped on the check's result row — a never-executed
+  // check has no evidence to judge, so it exposes no review actions.
+  const reviewable = canReview && Boolean(check.result);
+  const activeReview =
+    check.userReview && !check.userReview.stale
+      ? check.reviews.at(-1) // the standing verdict is always the newest entry
+      : undefined;
+  const historyReviews = check.reviews.filter((entry) => entry !== activeReview);
+  const evidenceById = collectEvidenceById(check);
+  const hasHistory = check.revisions > 1 || historyReviews.length > 0;
+
+  const openReject = () =>
+    openCheckRejectModal({
+      checkTitle: `C${check.seq} · ${check.title}`,
+      evidence: check.evidence
+        .filter((item) => isVisual(item))
+        .map((item) => ({ fileUrl: item.fileUrl!, id: item.id })),
+      onConfirm: ({ annotations, comment }) =>
+        onReview({
+          action: 'reject',
+          annotations: annotations.length > 0 ? annotations : undefined,
+          checkItemIds: [check.id],
+          comment: comment || undefined,
+        }),
+    });
+
+  // Passed + user-accepted merges into the double-check receipt.
+  const headIcon = check.state === 'passed' && reviewState === 'accepted' ? CheckCheck : meta.icon;
 
   return (
     <Flexbox className={styles.row}>
       <Flexbox horizontal align={'center'} className={styles.rowHeader} gap={10} onClick={onToggle}>
-        <Icon color={meta.color} icon={meta.icon} size={16} />
+        <Icon color={meta.color} icon={headIcon} size={16} style={{ flex: 'none' }} />
+        <Tooltip title={seqCopied ? t('acceptance.checks.copied') : t('acceptance.checks.copySeq')}>
+          <span
+            className={cx(styles.seqChip, styles.seqChipClickable)}
+            onClick={(event) => {
+              event.stopPropagation();
+              void copyToClipboard(`C${check.seq}`);
+              setSeqCopied(true);
+              setTimeout(() => setSeqCopied(false), 1500);
+            }}
+          >
+            C{check.seq}
+          </span>
+        </Tooltip>
         <Flexbox
           horizontal
           align={'center'}
@@ -440,6 +672,51 @@ const CheckRow = memo<{
           )}
         </Flexbox>
         <Flexbox horizontal align={'center'} gap={6}>
+          {/* An accept on a NON-passed verdict can't merge into the head icon
+              (the failed/uncertain mark must stay visible) — mark it here. */}
+          {reviewState === 'accepted' && check.state !== 'passed' && (
+            <Tooltip
+              title={t('acceptance.review.acceptedNote', {
+                time: dayjs(check.userReview!.createdAt).format('MM-DD HH:mm'),
+              })}
+            >
+              <Icon color={cssVar.colorTextQuaternary} icon={BadgeCheck} size={14} />
+            </Tooltip>
+          )}
+          {reviewState === 'rejected' && (
+            <Tooltip title={t('acceptance.review.rejectedHint')}>
+              <Icon color={cssVar.colorError} icon={MessageSquareX} size={14} />
+            </Tooltip>
+          )}
+          {reviewable && reviewState === 'pending' && (
+            <Flexbox
+              horizontal
+              align={'center'}
+              className={cx(styles.rowActions, 'acceptance-row-actions')}
+              gap={2}
+            >
+              <ActionIcon
+                disabled={reviewPending}
+                icon={Check}
+                size={'small'}
+                title={t('acceptance.review.accept')}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  void onReview({ action: 'accept', checkItemIds: [check.id] });
+                }}
+              />
+              <ActionIcon
+                disabled={reviewPending}
+                icon={MessageSquareX}
+                size={'small'}
+                title={t('acceptance.review.reject')}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  openReject();
+                }}
+              />
+            </Flexbox>
+          )}
           {EVIDENCE_BADGES.map(({ icon, key, labelKey }) =>
             counts[key] ? (
               <Tooltip key={key} title={t(labelKey, { count: counts[key] })}>
@@ -468,18 +745,6 @@ const CheckRow = memo<{
                 {check.titleChanged
                   ? t('acceptance.checks.iterated', { count: check.revisions })
                   : t('acceptance.checks.rerun', { count: check.revisions })}
-              </span>
-            </Tooltip>
-          )}
-          {check.fixed && (
-            <Tooltip
-              title={t('acceptance.checks.fixedHint', {
-                fixedRound: check.resultRound,
-                round: check.introducedAtRound,
-              })}
-            >
-              <span className={styles.chip}>
-                <Icon icon={Wrench} size={10} /> {t('acceptance.checks.fixed')}
               </span>
             </Tooltip>
           )}
@@ -529,7 +794,40 @@ const CheckRow = memo<{
           )}
           <EvidenceList evidence={check.evidence} />
 
-          {check.revisions > 1 && (
+          {/* The user's standing feedback hangs right under the evidence it judges. */}
+          {activeReview && <FeedbackCard evidenceById={evidenceById} review={activeReview} />}
+
+          {/* Confirm (primary, filled) anchors the right edge; reject is the
+              quiet text escape next to it. */}
+          {reviewable && !activeReview && (
+            <Flexbox horizontal gap={4} justify={'flex-end'}>
+              <Button
+                disabled={reviewPending}
+                size={'small'}
+                type={'text'}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  openReject();
+                }}
+              >
+                {t('acceptance.review.reject')}
+              </Button>
+              <Button
+                disabled={reviewPending}
+                icon={<Icon icon={Check} />}
+                size={'small'}
+                type={'primary'}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  void onReview({ action: 'accept', checkItemIds: [check.id] });
+                }}
+              >
+                {t('acceptance.review.accept')}
+              </Button>
+            </Flexbox>
+          )}
+
+          {hasHistory && (
             <span className={styles.historyToggle} onClick={() => setHistoryOpen((open) => !open)}>
               <Icon
                 icon={ChevronRight}
@@ -542,8 +840,13 @@ const CheckRow = memo<{
               {t('acceptance.checks.iterationHistory', { count: check.revisions })}
             </span>
           )}
-          {historyOpen && check.revisions > 1 && (
-            <IterationTimeline check={check} onRound={onRound} />
+          {historyOpen && hasHistory && (
+            <IterationTimeline
+              check={check}
+              evidenceById={evidenceById}
+              historyReviews={historyReviews}
+              onRound={onRound}
+            />
           )}
         </Flexbox>
       )}
@@ -551,7 +854,21 @@ const CheckRow = memo<{
   );
 });
 
-export type CheckFilter = 'all' | 'exception' | 'fixed';
+/**
+ * The filter maps the reviewer's workflow, not verifier taxonomy:
+ * - pending:  the verifier passed it, your confirmation is what's missing;
+ * - needsFix: broken, uncertain, never executed, or rejected by you — the
+ *   next round's work items;
+ * - accepted: signed off, out of the way.
+ */
+export type CheckFilter = 'all' | 'pending' | 'needsFix' | 'accepted';
+
+export const checkFilterState = (check: AcceptanceCheck): Exclude<CheckFilter, 'all'> => {
+  const review = userReviewState(check);
+  if (review === 'accepted') return 'accepted';
+  if (review === 'rejected' || check.state !== 'passed') return 'needsFix';
+  return 'pending';
+};
 
 interface CheckGroup {
   checks: AcceptanceCheck[];
@@ -578,35 +895,40 @@ export const groupChecks = (checks: AcceptanceCheck[], otherLabel: string): Chec
 };
 
 interface CheckListProps {
+  /** Whether the viewer may review checks (the aggregate's owner). */
+  canReview: boolean;
   checks: AcceptanceCheck[];
   collapsedGroups: Set<string>;
   expanded: Set<string>;
   filter: CheckFilter;
+  /** Record the user's verdict; resolves true when the write landed. */
+  onReview: (input: CheckReviewInput) => Promise<boolean>;
   onRound: (round: number) => void;
   onToggleGroup: (key: string) => void;
   onToggleGroupItems: (ids: string[], open: boolean) => void;
   onToggleItem: (id: string) => void;
+  reviewPending: boolean;
 }
 
 /** The union check list: one joined card, collapsible business groups. */
 const CheckList = memo<CheckListProps>(
   ({
+    canReview,
     checks,
     collapsedGroups,
     expanded,
     filter,
+    onReview,
     onRound,
     onToggleGroup,
     onToggleGroupItems,
     onToggleItem,
+    reviewPending,
   }) => {
     const { t } = useTranslation('verify');
 
-    const visible = (check: AcceptanceCheck) => {
-      if (filter === 'exception') return isException(check);
-      if (filter === 'fixed') return check.fixed;
-      return true;
-    };
+    const visible = (check: AcceptanceCheck) =>
+      filter === 'all' || checkFilterState(check) === filter;
 
     const groups = groupChecks(checks, t('acceptance.group.uncategorized'))
       .map((group) => ({
@@ -628,6 +950,11 @@ const CheckList = memo<CheckListProps>(
           const passed = groupChecks_.filter((check) => check.state === 'passed').length;
           const collapsed = collapsedGroups.has(key);
           const anyItemOpen = rows.some((check) => expanded.has(check.id));
+          // Only executed checks can be stamped — see the row-level gating.
+          const reviewableChecks = groupChecks_.filter((check) => check.result);
+          const unaccepted = reviewableChecks.filter(
+            (check) => userReviewState(check) !== 'accepted',
+          );
 
           return (
             <Fragment key={key}>
@@ -649,6 +976,35 @@ const CheckList = memo<CheckListProps>(
                   {t('acceptance.group.passRatio', { passed, total: groupChecks_.length })}
                 </Text>
                 <Flexbox flex={1} />
+                {canReview &&
+                  reviewableChecks.length > 0 &&
+                  (unaccepted.length > 0 ? (
+                    <Button
+                      disabled={reviewPending}
+                      icon={<Icon icon={BadgeCheck} />}
+                      size={'small'}
+                      type={'text'}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void onReview({
+                          action: 'accept',
+                          checkItemIds: unaccepted.map((check) => check.id),
+                        });
+                      }}
+                    >
+                      {t('acceptance.review.acceptAll')}
+                    </Button>
+                  ) : (
+                    <Flexbox
+                      horizontal
+                      align={'center'}
+                      gap={4}
+                      style={{ color: cssVar.colorSuccess, fontSize: 12 }}
+                    >
+                      <Icon icon={BadgeCheck} size={13} />
+                      {t('acceptance.review.acceptAllDone')}
+                    </Flexbox>
+                  ))}
                 {collapsed ? (
                   // Fixed-size placeholder keeps the header height stable across toggles.
                   <div style={{ height: 24, width: 24 }} />
@@ -683,9 +1039,12 @@ const CheckList = memo<CheckListProps>(
               {!collapsed &&
                 rows.map((check) => (
                   <CheckRow
+                    canReview={canReview}
                     check={check}
                     expanded={expanded.has(check.id)}
                     key={check.id}
+                    reviewPending={reviewPending}
+                    onReview={onReview}
                     onRound={onRound}
                     onToggle={() => onToggleItem(check.id)}
                   />
@@ -693,10 +1052,18 @@ const CheckList = memo<CheckListProps>(
               {/* Bottom escape hatch — after scrolling through the group's rows,
                   collapse it without travelling back to the header. */}
               {!collapsed && (
-                <div className={styles.groupFooter} onClick={() => onToggleGroup(key)}>
-                  <Icon icon={ChevronsDownUp} size={12} />
-                  {t('acceptance.group.collapse', { label })}
-                </div>
+                <Flexbox
+                  align={'center'}
+                  paddingBlock={4}
+                  style={{ borderBlockStart: `1px solid ${cssVar.colorBorderSecondary}` }}
+                >
+                  <ActionIcon
+                    icon={ChevronsDownUp}
+                    size={'small'}
+                    title={t('acceptance.group.collapse', { label })}
+                    onClick={() => onToggleGroup(key)}
+                  />
+                </Flexbox>
               )}
             </Fragment>
           );

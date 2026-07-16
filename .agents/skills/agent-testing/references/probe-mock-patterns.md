@@ -1451,3 +1451,48 @@ posix_spawn '<cmd>'` — NOT node's `spawn <cmd> ENOENT`. Any stderr-text patter
   in-process for 30s (`packages/app-config/src/messenger.ts` CACHE\_TTL\_MS) — wait out the TTL
   after editing the row before reloading.
 - Locale for evidence shots: `window.__LOBE_STORES.global().switchLocale('zh-CN')` then reload.
+### D21. ✅ WORKS — when `click @ref` reports Done but the React onClick never fires, click via `eval` `element.click()`
+
+**Situation**: on a dense list row (acceptance check rows with hover-revealed ActionIcons and
+expanded-area buttons), `agent-browser click @ref` returned `✓ Done` but no TRPC mutation fired and
+no state changed — the pointer click seemingly landed on an overlaying/other element. Repeated for
+both hover icons and regular buttons inside the row.
+
+**Doesn't work**: re-snapshotting and clicking the fresh `@ref`; the command still reports success
+with no effect (so the failure is silent — always verify the click by its observable side effect,
+e.g. the network request or a DB row, never by the driver's `Done`).
+
+**Works**: locate the element in-page and call the DOM `element.click()` via `eval` — React's
+synthetic onClick fires reliably:
+
+```bash
+agent-browser --session "(()=>{const b=[...document.querySelectorAll('button')]
+  .find(x=>x.textContent.trim()==='<label>'); b.click(); return 'clicked'})()" < s > eval
+```
+
+Scope the query to the intended row/container first (climb from a unique text node, stop before the
+ancestor contains other rows' text) — a page-wide `find(...)` picks the FIRST match and can submit
+an action against the wrong row. For drag interactions (annotation canvases), dispatch synthetic
+`MouseEvent`s (`mousedown/mousemove/mouseup` with `bubbles:true` and computed `clientX/Y`) on the
+target element.
+
+### E34. Shell proxy env (HTTP\_PROXY=127.0.0.1:7890) inherited by the dev server breaks auth with silent 307 loops
+
+**Situation**: `init-dev-env.sh dev` launched from a shell where a system proxy (Clash etc.) exported
+`HTTP_PROXY`/`HTTPS_PROXY`. The server booted fine, pages served, but `POST /api/auth/sign-in/email`
+returned a bare `307 → /` with NO `set-cookie` (body = Next `__next_error__` page), the boot prewarm
+logged `redirect count exceeded`, and `setup-auth.sh web-seed` failed with "sign-in succeeded but no
+cookies were written" (307 matches its `^[23]` success check).
+
+**Doesn't work**: retrying the seed, restarting the agent-browser daemon — the failure is in the
+server process env, not the client.
+
+**Works**: strip proxy vars when starting the dev server:
+
+```bash
+env -u HTTP_PROXY -u HTTPS_PROXY -u http_proxy -u https_proxy -u ALL_PROXY -u all_proxy \
+  -u NO_PROXY -u no_proxy ./.agents/skills/agent-testing/scripts/init-dev-env.sh dev
+```
+
+Symptom fingerprint: every auth POST answers 307 in \~25ms with `application-code` time present, and
+the prewarm warning mentions `redirect count exceeded`.

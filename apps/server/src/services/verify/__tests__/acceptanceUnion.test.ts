@@ -78,6 +78,20 @@ describe('buildAcceptanceCheckUnion', () => {
     expect(rows[0].carriedFromRound).toBeUndefined();
   });
 
+  it('numbers rows by first appearance, stable as rounds accrue', () => {
+    const rows1 = buildAcceptanceCheckUnion([
+      { results: [], run: run('r1', 1, [planItem('a'), planItem('b')]) },
+    ]);
+    expect(rows1.map((r) => `${r.id}:C${r.seq}`)).toEqual(['a:C1', 'b:C2']);
+
+    // A later round appends a new check — earlier numbering never shifts.
+    const rows2 = buildAcceptanceCheckUnion([
+      { results: [], run: run('r1', 1, [planItem('a'), planItem('b')]) },
+      { results: [], run: run('r2', 2, [planItem('a'), planItem('b'), planItem('c')]) },
+    ]);
+    expect(rows2.map((r) => `${r.id}:C${r.seq}`)).toEqual(['a:C1', 'b:C2', 'c:C3']);
+  });
+
   it('records an item introduced by a later round', () => {
     const first = [planItem('a')];
     const second = [planItem('a'), planItem('empty-state')];

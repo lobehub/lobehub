@@ -636,8 +636,14 @@ someone holding the shared link.
 It prints the `verifyRunId` and, with `--open`, the in-app path
 `/verify/<verifyRunId>` — the report viewer (verdict, stats, every check, and the
 inline screenshot/text evidence). On production that resolves to
-`https://app.lobehub.com/verify/<verifyRunId>`. **Include that full production
-link in the final chat reply** alongside the local report dir.
+`https://app.lobehub.com/verify/<verifyRunId>`.
+
+**The final chat reply leads with the ACCEPTANCE link, not the verify link.**
+`https://app.lobehub.com/acceptance/<acceptanceId>` is the stable cross-round
+page where the user reviews the LATEST merged state and closes the loop; a
+`/verify/<id>` report is one round's immutable snapshot — supporting detail.
+Phrase the deliverable as "在 acceptance 页查看最新验收状态" with the acceptance
+URL first; the round's verify link may follow as the per-round record.
 
 #### Every run belongs to a subject acceptance (mandatory)
 
@@ -662,6 +668,51 @@ The first ingest creates the acceptance and every ingest creates its next
 immutable round. The user closes the loop on `/acceptance/<acceptanceId>` (also
 printed by `--open`) — accept / reject with a comment; inspect or decide from the
 terminal via `lh verify acceptance view|accept|reject <id | type:id>`.
+
+#### Before the next round: read the acceptance state and the user's feedback (mandatory)
+
+When a follow-up round starts on a subject that already has an acceptance
+(repair after a reject, another iteration on the same PR/topic), the FIRST step
+of planning is reading the prior state — never re-derive it from memory:
+
+```bash
+env -u LOBEHUB_SERVER -u LOBE_API_KEY -u LOBEHUB_CLI_API_KEY -u LOBEHUB_CLI_HOME \
+  lh verify acceptance view "$SUBJECT" --json # or the acceptance uuid
+```
+
+Read three things from the bundle:
+
+- `checks[].state` + `checks[].id` — which checks passed / failed / never ran,
+  and the stable ids the next plan MUST reuse (or `supersedes`).
+- `checks[].userReview` — the user's own verdict on each check:
+  - `action: "accept"` — the user has signed this check off. It stays settled
+    across rounds; keep its stable id in the plan (carry it forward or re-run
+    it cheaply), but it needs no repair work.
+  - `action: "reject", stale: false` — **actionable feedback**: this check is
+    what the next round exists to fix. Read `comment` and every
+    `annotations[].comment` (region notes circled on the evidence screenshots)
+    and address them explicitly; the round's fix summary should reference them.
+  - `stale: true` — feedback already consumed by a newer round; it is history.
+- `checks[].reviews` — the full feedback trail (for context on how a check
+  evolved).
+
+The human-readable `view` (without `--json`) prints the same signal: a `C#`
+label and a USER column per check, plus a `user feedback` section with
+`▶ actionable` / `· addressed` markers. After the new round is ingested, the
+addressed feedback automatically moves into the check's iteration history on
+the acceptance page — do not delete or restate it anywhere.
+
+**The next round touches ONLY what is not user-settled.** Rounds are immutable
+snapshots, but the union view is where "overwriting" happens — through ids:
+
+- `userReview.action == "accept"` → user-settled. Do NOT re-run it, do NOT
+  restate it in the new plan; the union carries it forward untouched.
+- a check being fixed or re-verified → reuse its EXACT stable id, so the new
+  result lands on the same union row (same `C#`) as a new timeline step.
+- a check whose semantics changed → new id with `supersedes: ['old-id']`.
+- NEVER give the same semantic assertion a fresh id without `supersedes`: the
+  union has no fuzzy matching, so it renders as a pile of new parallel rows
+  next to the old ones instead of an iteration.
 
 #### Every verification run is an immutable snapshot
 

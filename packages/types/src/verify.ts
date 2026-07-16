@@ -105,6 +105,51 @@ export interface AcceptanceMetadata {
 }
 
 /**
+ * The user's per-check verdict on the acceptance union. `accept` is sticky —
+ * an accepted check stays settled across later rounds; `reject` binds to the
+ * round it was made on and becomes iteration history once a newer round lands.
+ */
+export type AcceptanceCheckReviewAction = 'accept' | 'reject';
+
+/**
+ * A user-drawn region on one evidence image, in coordinates normalized to the
+ * image box (0–1) so the overlay renders at any display size.
+ */
+export interface AcceptanceReviewAnnotation {
+  /** The note attached to this region. */
+  comment?: string;
+  /** The evidence row (`verify_evidence.id`) the region was drawn on. */
+  evidenceId: string;
+  rect: { height: number; width: number; x: number; y: number };
+}
+
+/**
+ * Provenance + feedback behind a user's decision on one check result
+ * (`verify_check_results.user_decision_detail`) — the check-level mirror of
+ * {@link VerifyRunDecisionDetail}. The `user_decision` verb stays the queryable
+ * field; this bag carries the note, the circled evidence regions, and who/when,
+ * so richer feedback never needs new columns.
+ */
+export interface VerifyCheckDecisionDetail {
+  /** Regions circled on the check's evidence images, each with its own note. */
+  annotations?: AcceptanceReviewAnnotation[];
+  /** Free-form feedback — for a reject, the re-tasking input of the next round. */
+  comment?: string;
+  /** When the decision was made (ISO 8601). */
+  decidedAt?: string;
+  /** Who made the decision (user id) — set when it may differ from the row owner. */
+  decidedBy?: string;
+  /**
+   * The acceptance round that was CURRENT when the decision was made. A
+   * carried-forward check's result row belongs to an older round, so the
+   * result's own round cannot arbitrate staleness — a reject stands until a
+   * round NEWER than this lands, regardless of which round produced the
+   * judged evidence.
+   */
+  roundIndex?: number;
+}
+
+/**
  * Denormalized rollup of a verification round's pipeline state — mirrors the
  * legacy `agent_operations.verify_status` set so the two stay interchangeable
  * while results/reports migrate from being operation-anchored to run-anchored.

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { type AcceptanceCheck, groupChecks } from './CheckList';
+import { type AcceptanceCheck, groupChecks, userReviewState } from './CheckList';
 
 const check = (id: string, category: string | null, surface: AcceptanceCheck['surface']) =>
   ({ category, id, surface }) as AcceptanceCheck;
@@ -38,5 +38,38 @@ describe('groupChecks', () => {
     expect(groups[0]?.key).toBe('uncategorized');
     expect(groups[0]?.label).toBe('Other requirements');
     expect(groups[0]?.checks.map((item) => item.id)).toEqual(['desktop', 'cli']);
+  });
+});
+
+describe('userReviewState', () => {
+  const withReview = (userReview: AcceptanceCheck['userReview']) =>
+    ({ userReview }) as AcceptanceCheck;
+
+  it('is pending when the user never reviewed the check', () => {
+    expect(userReviewState(withReview(undefined))).toBe('pending');
+  });
+
+  it('an accept stays settled across rounds', () => {
+    expect(
+      userReviewState(
+        withReview({
+          action: 'accept',
+          createdAt: '2026-07-16T00:00:00.000Z',
+          roundIndex: 1,
+          stale: false,
+        }),
+      ),
+    ).toBe('accepted');
+  });
+
+  it('a reject stands until a newer round consumes it, then reverts to pending', () => {
+    const reject = {
+      action: 'reject' as const,
+      comment: 'misaligned',
+      createdAt: '2026-07-16T00:00:00.000Z',
+      roundIndex: 2,
+    };
+    expect(userReviewState(withReview({ ...reject, stale: false }))).toBe('rejected');
+    expect(userReviewState(withReview({ ...reject, stale: true }))).toBe('pending');
   });
 });

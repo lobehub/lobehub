@@ -16,6 +16,7 @@ import type {
   AcceptanceMetadata,
   AcceptanceVisualRender,
   ToulminVerdict,
+  VerifyCheckDecisionDetail,
   VerifyCheckItem,
   VerifyRubricConfig,
   VerifyRunContext,
@@ -246,6 +247,13 @@ export const verifyCheckResults = pgTable(
 
     // ---- Data flywheel ----
     userDecision: text('user_decision', { enum: verifyUserDecisions }),
+    /**
+     * Provenance + feedback behind the decision (note, circled evidence
+     * regions, who/when) — the check-level mirror of
+     * `verify_runs.decision_detail`. The `user_decision` verb stays the
+     * queryable field; this bag is what the next verify round reads.
+     */
+    userDecisionDetail: jsonb('user_decision_detail').$type<VerifyCheckDecisionDetail>(),
     isFalsePositive: boolean('is_false_positive'),
     isFalseNegative: boolean('is_false_negative'),
 

@@ -854,6 +854,13 @@
       "when": 1784209244697,
       "tag": "0121_add_work_registry_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 122,
+      "version": "7",
+      "when": 1784218412070,
+      "tag": "0122_check_results_add_user_decision_detail",
+      "breakpoints": true
     }
   ],
   "version": "6"

@@ -41,6 +41,13 @@ const statusColor = (status: string): string => {
   return pc.dim(status);
 };
 
+/** The user's standing verdict on one union check, for the USER column. */
+const userGlyph = (userReview?: { action: string; stale: boolean } | null): string => {
+  if (!userReview) return pc.dim('· pending');
+  if (userReview.action === 'accept') return pc.green('✓ accepted');
+  return userReview.stale ? pc.dim('· pending') : pc.red('✗ rejected');
+};
+
 export function registerAcceptanceCommands(verify: Command) {
   const acceptance = verify
     .command('acceptance')
@@ -103,8 +110,10 @@ export function registerAcceptanceCommands(verify: Command) {
       console.log();
       printTable(
         checks.map((c) => [
+          `C${c.seq}`,
           truncate(c.title, 46),
           stateGlyph(c.state),
+          userGlyph(c.userReview),
           c.required ? 'gate' : 'soft',
           c.surface ?? '',
           c.fixed
@@ -114,8 +123,32 @@ export function registerAcceptanceCommands(verify: Command) {
               : '',
           c.history.map((h) => `r${h.roundIndex}:${h.state}`).join(' → '),
         ]),
-        ['CHECK', 'FINAL', 'BLOCK', 'SURFACE', 'NOTE', 'HISTORY'],
+        ['C#', 'CHECK', 'FINAL', 'USER', 'BLOCK', 'SURFACE', 'NOTE', 'HISTORY'],
       );
+
+      // The user's feedback trail — what the next verification round must act
+      // on. Standing rejects first (actionable now), then consumed history.
+      const withFeedback = checks.filter((c) => c.reviews.some((r) => r.action === 'reject'));
+      if (withFeedback.length > 0) {
+        console.log();
+        console.log(pc.bold('user feedback'));
+        for (const c of withFeedback) {
+          for (const review of c.reviews) {
+            if (review.action !== 'reject') continue;
+            const standing =
+              c.userReview && !c.userReview.stale ? c.reviews.at(-1) === review : false;
+            const marker = standing ? pc.red('▶ actionable') : pc.dim('· addressed');
+            console.log(
+              `  ${marker} C${c.seq} ${truncate(c.title, 60)} ${pc.dim(`[${c.id}] (r${review.roundIndex})`)}`,
+            );
+            if (review.comment) console.log(`      ${review.comment}`);
+            for (const annotation of review.annotations ?? []) {
+              if (annotation.comment)
+                console.log(`      ${pc.dim('region:')} ${annotation.comment}`);
+            }
+          }
+        }
+      }
 
       console.log();
       printTable(

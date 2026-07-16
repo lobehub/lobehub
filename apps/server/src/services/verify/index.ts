@@ -1,9 +1,13 @@
 export {
   type AcceptanceCheckHistoryEntry,
+  type AcceptanceCheckReviewEvent,
+  type AcceptanceCheckReviewOverlay,
   type AcceptanceCheckRow,
+  type AcceptanceCheckUserReview,
   AcceptanceService,
   type AcceptanceSubjectSummary,
   buildAcceptanceCheckUnion,
+  buildCheckReviewOverlay,
 } from './acceptanceService';
 export { createVerifierAgentRunner } from './agentVerifier';
 export { coverageGaps, readRequiredEvidence } from './evidenceCoverage';

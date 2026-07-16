@@ -1,8 +1,11 @@
 import { normalizeVerifySurface } from '@lobechat/const/verify';
 import type {
+  AcceptanceCheckReviewAction,
+  AcceptanceReviewAnnotation,
   AcceptanceStatus,
   AcceptanceSubjectType,
   VerifyAgentPlanConfig,
+  VerifyCheckDecisionDetail,
   VerifyCheckItem,
   VerifyRunDecisionDetail,
   VerifySurface,
@@ -10,6 +13,7 @@ import type {
 import debug from 'debug';
 
 import { AcceptanceModel } from '@/database/models/acceptance';
+import { AgentModel } from '@/database/models/agent';
 import { DocumentModel } from '@/database/models/document';
 import { TaskModel } from '@/database/models/task';
 import { TopicModel } from '@/database/models/topic';
@@ -24,6 +28,8 @@ import type {
 } from '@/database/schemas/verify';
 import type { LobeChatDatabase } from '@/database/type';
 import { TaskService } from '@/server/services/task';
+
+import { computeFalseFlags } from './feedbackService';
 
 const log = debug('lobe-server:verify-acceptance');
 
@@ -89,6 +95,14 @@ export interface AcceptanceCheckRow {
   resultRound?: number;
   /** How many executed steps the timeline holds (re-runs + folded generations). */
   revisions: number;
+  /**
+   * Stable 1-based label across the whole union ("C3") — first-appearance
+   * order over the round chain, so earlier rounds' numbering never shifts when
+   * a new round lands. Feedback and annotations reference checks by it.
+   * (Folding a superseded generation removes its row, so numbering after the
+   * folded id shifts by one — the successor keeps its own slot.)
+   */
+  seq: number;
   /** Final cross-round state — what the decision is made on. */
   state: CheckState;
   /** Ids folded into this row via `supersedes` declarations. */
@@ -139,6 +153,7 @@ export const buildAcceptanceCheckUnion = (rounds: RoundInput[]): AcceptanceCheck
       introducedAtRound: roundIndex,
       required: true,
       revisions: 0,
+      seq: 0,
       state: 'not_executed',
       supersededIds: [],
       surface: null,
@@ -209,6 +224,11 @@ export const buildAcceptanceCheckUnion = (rounds: RoundInput[]): AcceptanceCheck
     }
   }
 
+  // Number the surviving rows by first appearance (Map insertion order) —
+  // stable as rounds accrue, because a new round only appends new ids.
+  let seq = 0;
+  for (const row of rows.values()) row.seq = ++seq;
+
   for (const row of rows.values()) {
     row.state = row.result ? resultState(row.result) : 'not_executed';
     row.fixed = row.state === 'passed' && row.history.some((entry) => entry.state === 'failed');
@@ -223,6 +243,95 @@ export const buildAcceptanceCheckUnion = (rounds: RoundInput[]): AcceptanceCheck
   }
 
   return [...rows.values()];
+};
+
+// ============================================
+// User review overlay — the per-check human verdict layered onto the union.
+// An accept is sticky across rounds; a reject binds to the round it judged and
+// demotes to iteration history once a newer round lands.
+// ============================================
+
+/** The standing user verdict on one union row, derived from its result rows. */
+export interface AcceptanceCheckUserReview {
+  action: AcceptanceCheckReviewAction;
+  annotations?: AcceptanceReviewAnnotation[];
+  comment?: string;
+  createdAt: string;
+  roundIndex: number;
+  /**
+   * A reject made against a round older than the current one — the feedback
+   * was (or is being) consumed by a newer round, so the check is back to
+   * awaiting the user's confirmation instead of standing rejected.
+   */
+  stale: boolean;
+}
+
+/**
+ * One user decision on one executed step of a check, projected out of the
+ * result rows (`user_decision` + `user_decision_detail`) — no dedicated store:
+ * each round's row keeps the decision the user made on THAT round's evidence.
+ */
+export interface AcceptanceCheckReviewEvent {
+  action: AcceptanceCheckReviewAction;
+  annotations?: AcceptanceReviewAnnotation[];
+  comment?: string;
+  /** When the decision was made (ISO 8601; falls back to the row's timestamps). */
+  createdAt: string;
+  /** The result row the decision is stamped on. */
+  id: string;
+  roundIndex: number;
+}
+
+export interface AcceptanceCheckReviewOverlay {
+  /** The full review trail for this check, oldest first — the iteration history input. */
+  reviews: AcceptanceCheckReviewEvent[];
+  /** The newest review, with its staleness resolved against the current round. */
+  userReview?: AcceptanceCheckUserReview;
+}
+
+/**
+ * Project a union row's review trail + standing user verdict from its result
+ * rows. Superseded generations' decisions ride along automatically — the union
+ * already folded their results into this row's timeline.
+ */
+export const buildCheckReviewOverlay = (
+  check: Pick<AcceptanceCheckRow, 'timeline'>,
+  resultsById: Map<string, VerifyCheckResultItem>,
+  currentRoundIndex: number,
+): AcceptanceCheckReviewOverlay => {
+  const reviews: AcceptanceCheckReviewEvent[] = [];
+  for (const entry of check.timeline) {
+    const result = resultsById.get(entry.resultId);
+    const decision = result?.userDecision;
+    if (!result || (decision !== 'accepted' && decision !== 'rejected')) continue;
+    const detail = result.userDecisionDetail ?? undefined;
+    reviews.push({
+      action: decision === 'accepted' ? 'accept' : 'reject',
+      annotations: detail?.annotations,
+      comment: detail?.comment,
+      createdAt: detail?.decidedAt ?? (result.completedAt ?? result.createdAt)?.toISOString() ?? '',
+      id: result.id,
+      // A carried-forward check is judged at the CURRENT round even though its
+      // evidence row belongs to an older one — the detail records that round.
+      roundIndex: detail?.roundIndex ?? entry.roundIndex,
+    });
+  }
+  // ISO strings order lexically; ties (legacy rows without decidedAt) keep round order.
+  reviews.sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.roundIndex - b.roundIndex);
+
+  const latest = reviews.at(-1);
+  if (!latest) return { reviews };
+  return {
+    reviews,
+    userReview: {
+      action: latest.action,
+      annotations: latest.annotations,
+      comment: latest.comment,
+      createdAt: latest.createdAt,
+      roundIndex: latest.roundIndex,
+      stale: latest.action === 'reject' && latest.roundIndex < currentRoundIndex,
+    },
+  };
 };
 
 // ============================================
@@ -420,6 +529,88 @@ export class AcceptanceService {
   };
 
   /**
+   * Record the user's verdict on one or more union checks (a group-level
+   * "accept all" is just many ids). Stamps `user_decision` +
+   * `user_decision_detail` on each check's FINAL result row — the same data
+   * flywheel every other decision path writes (FP/FN flags included). Unlike
+   * the aggregate-level accept/reject, a per-check review is allowed at any
+   * lifecycle state — confirming a check mid-chain is exactly the point.
+   */
+  reviewChecks = async (
+    acceptanceId: string,
+    input: {
+      action: AcceptanceCheckReviewAction;
+      annotations?: AcceptanceReviewAnnotation[];
+      checkItemIds: string[];
+      comment?: string;
+    },
+  ): Promise<{ resultIds: string[] }> => {
+    const acceptance = await this.acceptanceModel.findById(acceptanceId);
+    if (!acceptance) throw new Error(`Acceptance "${acceptanceId}" not found`);
+
+    const { results, runs } = await this.loadRounds(acceptanceId);
+
+    // Reviews address union rows — resolve each id (or a superseded alias) to
+    // its row, so a stale client can't stamp junk ids.
+    const resultsByRun = new Map<string, VerifyCheckResultItem[]>();
+    for (const result of results) {
+      const bucket = resultsByRun.get(result.verifyRunId!) ?? [];
+      bucket.push(result);
+      resultsByRun.set(result.verifyRunId!, bucket);
+    }
+    const checks = buildAcceptanceCheckUnion(
+      runs.map((run) => ({ results: resultsByRun.get(run.id) ?? [], run })),
+    );
+    const rowById = new Map<string, AcceptanceCheckRow>();
+    for (const check of checks) {
+      rowById.set(check.id, check);
+      for (const oldId of check.supersededIds) rowById.set(oldId, check);
+    }
+
+    const unknown = input.checkItemIds.filter((id) => !rowById.has(id));
+    if (unknown.length > 0) {
+      throw new Error(`Unknown check item(s): ${unknown.join(', ')}`);
+    }
+
+    // The decision is stamped on evidence — a never-executed check has no
+    // result row to judge, so it cannot be reviewed yet.
+    const targets = new Map<string, VerifyCheckResultItem>();
+    const notExecuted: string[] = [];
+    for (const id of input.checkItemIds) {
+      const row = rowById.get(id)!;
+      if (row.result) targets.set(row.result.id, row.result);
+      else notExecuted.push(id);
+    }
+    if (notExecuted.length > 0) {
+      throw new Error(`Check(s) never executed — nothing to review: ${notExecuted.join(', ')}`);
+    }
+
+    const decision = input.action === 'accept' ? 'accepted' : 'rejected';
+    const currentRoundIndex = runs.at(-1)?.roundIndex ?? 0;
+    const detail: VerifyCheckDecisionDetail = {
+      decidedAt: new Date().toISOString(),
+      decidedBy: this.userId,
+      roundIndex: currentRoundIndex,
+      ...(input.comment ? { comment: input.comment } : {}),
+      ...(input.annotations?.length ? { annotations: input.annotations } : {}),
+    };
+
+    await Promise.all(
+      [...targets.values()].map((result) => {
+        const { isFalsePositive, isFalseNegative } = computeFalseFlags(result.verdict, decision);
+        return this.resultModel.update(result.id, {
+          isFalseNegative,
+          isFalsePositive,
+          userDecision: decision,
+          userDecisionDetail: detail,
+        });
+      }),
+    );
+    log('acceptance %s: %d check result(s) marked %s', acceptanceId, targets.size, decision);
+    return { resultIds: [...targets.keys()] };
+  };
+
+  /**
    * A user decision needs a SETTLED round to judge (`delivered`, or `errored`
    * — the verifier could not run, the user may still take or refuse the
    * delivery). Deciding mid-flight would stamp a terminal state (and possibly
@@ -515,6 +706,43 @@ export class AcceptanceService {
     return Promise.all(
       rows.map(async (row) => ({ ...row, subject: await this.resolveSubject(row) })),
     );
+  };
+
+  /**
+   * The authoring conversation behind the round chain, resolved to displayable
+   * entities (agent avatar/title, topic title). Owner-only header data — the
+   * bundle must not include it for anonymous link holders.
+   */
+  resolveOrigin = async (
+    runs: VerifyRunItem[],
+  ): Promise<{
+    agent: {
+      avatar: string | null;
+      backgroundColor: string | null;
+      id: string;
+      title: string | null;
+    } | null;
+    topic: { id: string; title: string | null } | null;
+  } | null> => {
+    const origin = [...runs].reverse().find((run) => run.metadata?.origin)?.metadata?.origin;
+    if (!origin?.agentId && !origin?.topicId) return null;
+
+    const [agent, topic] = await Promise.all([
+      origin.agentId
+        ? new AgentModel(this.db, this.userId, this.workspaceId)
+            .getAgentAvatarsByIds([origin.agentId])
+            .then((rows) => rows[0] ?? null)
+            .catch(() => null)
+        : null,
+      origin.topicId
+        ? new TopicModel(this.db, this.userId, this.workspaceId)
+            .findById(origin.topicId)
+            .then((row) => (row ? { id: row.id, title: row.title ?? null } : null))
+            .catch(() => null)
+        : null,
+    ]);
+    if (!agent && !topic) return null;
+    return { agent, topic };
   };
 
   /** The rounds + their per-round data the bundle and the union both read. */

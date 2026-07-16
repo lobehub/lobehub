@@ -152,6 +152,14 @@ export const acceptanceStatuses = [
 ] as const;
 export type AcceptanceStatus = (typeof acceptanceStatuses)[number];
 
+/**
+ * The user's per-check verdict on the acceptance union. `accept` is sticky —
+ * an accepted check stays settled across later rounds; `reject` binds to the
+ * round it was made on and becomes iteration history once a newer round lands.
+ */
+export const acceptanceCheckReviewActions = ['accept', 'reject'] as const;
+export type AcceptanceCheckReviewAction = (typeof acceptanceCheckReviewActions)[number];
+
 /** The medium of a captured evidence artifact. */
 export const verifyEvidenceTypes = [
   'screenshot',

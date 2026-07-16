@@ -2538,6 +2538,7 @@ table verify_check_results {
   metadata jsonb
   suggestion text
   user_decision text
+  user_decision_detail jsonb
   is_false_positive boolean
   is_false_negative boolean
   repair_operation_id text

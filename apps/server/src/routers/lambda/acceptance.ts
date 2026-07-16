@@ -1,4 +1,4 @@
-import { acceptanceSubjectTypes } from '@lobechat/const/verify';
+import { acceptanceCheckReviewActions, acceptanceSubjectTypes } from '@lobechat/const/verify';
 import { TRPCError } from '@trpc/server';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
@@ -15,6 +15,7 @@ import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import {
   AcceptanceService,
   buildAcceptanceCheckUnion,
+  buildCheckReviewOverlay,
   createEvidenceFileResolver,
 } from '@/server/services/verify';
 
@@ -225,18 +226,37 @@ export const acceptanceRouter = router({
       });
       const latestReport = [...rounds].reverse().find((r) => r.report)?.report ?? null;
 
+      // The authoring conversation (agent + topic), resolved for the header —
+      // owner-only, same redaction rule as `run.metadata.origin`.
+      const origin = isOwner ? await ownerService.resolveOrigin(runs) : null;
+
+      const currentRoundIndex = runs.at(-1)?.roundIndex ?? 0;
+      const resultsById = new Map(results.map((result) => [result.id, result]));
+
       return {
         acceptance,
         isOwner,
-        checks: checks.map((check) => ({
-          ...check,
-          evidence: check.result ? (evidenceByResult.get(check.result.id) ?? []) : [],
-          timeline: check.timeline.map((entry) => ({
-            ...entry,
-            evidence: evidenceByResult.get(entry.resultId) ?? [],
-          })),
-        })),
+        checks: checks.map((check) => {
+          // Projected from the result rows' user_decision(+detail) — the
+          // events carry no user ids, so nothing needs redacting here.
+          const { reviews, userReview } = buildCheckReviewOverlay(
+            check,
+            resultsById,
+            currentRoundIndex,
+          );
+          return {
+            ...check,
+            evidence: check.result ? (evidenceByResult.get(check.result.id) ?? []) : [],
+            reviews,
+            timeline: check.timeline.map((entry) => ({
+              ...entry,
+              evidence: evidenceByResult.get(entry.resultId) ?? [],
+            })),
+            userReview,
+          };
+        }),
         latestReport,
+        origin,
         rounds,
         subject,
       };
@@ -244,6 +264,66 @@ export const acceptanceRouter = router({
 
   /** Recent acceptances (with subject headers), newest first — list panel + CLI. */
   list: acceptanceProcedure.query(async ({ ctx }) => ctx.acceptanceService.listWithSubjects()),
+
+  /**
+   * The user's verdict on individual union checks — `accept` settles a check
+   * for good ("已验收,不用再管"); `reject` records feedback the next verify
+   * round reads as its re-tasking input. A group-level "accept all" is the
+   * same call with many ids. Independent of the aggregate-level accept/reject:
+   * reviewing checks never moves the acceptance lifecycle.
+   */
+  reviewChecks: acceptanceWriteProcedure
+    .input(
+      z
+        .object({
+          action: z.enum(acceptanceCheckReviewActions),
+          annotations: z
+            .array(
+              z.object({
+                comment: z.string().max(2000).optional(),
+                evidenceId: z.string(),
+                rect: z.object({
+                  height: z.number().min(0).max(1),
+                  width: z.number().min(0).max(1),
+                  x: z.number().min(0).max(1),
+                  y: z.number().min(0).max(1),
+                }),
+              }),
+            )
+            .max(20)
+            .optional(),
+          checkItemIds: z.array(z.string()).min(1).max(200),
+          comment: z.string().max(2000).optional(),
+          id: z.string(),
+        })
+        // A reject IS its feedback — without a note (either global or on an
+        // annotated region) the next round has nothing to act on.
+        .refine(
+          (value) =>
+            value.action !== 'reject' ||
+            Boolean(value.comment?.trim()) ||
+            Boolean(value.annotations?.some((annotation) => annotation.comment?.trim())),
+          { message: 'Rejecting a check requires a comment' },
+        ),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const acceptance = await resolveAcceptance(ctx, input.id);
+      assertWorkspaceRowManageable(ctx, acceptance.userId, 'acceptance');
+
+      try {
+        return await ctx.acceptanceService.reviewChecks(acceptance.id, {
+          action: input.action,
+          annotations: input.annotations,
+          checkItemIds: input.checkItemIds,
+          comment: input.comment?.trim() || undefined,
+        });
+      } catch (error) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: error instanceof Error ? error.message : 'Failed to review checks',
+        });
+      }
+    }),
 
   /**
    * The user rejects the delivery. The comment is a re-tasking input: it is
