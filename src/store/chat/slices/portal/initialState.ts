@@ -8,6 +8,7 @@ export enum ArtifactDisplayMode {
 // ============== Portal View Stack Types ==============
 
 export enum PortalViewType {
+  Acceptance = 'acceptance',
   AgentDetail = 'agentDetail',
   Artifact = 'artifact',
   Document = 'document',
@@ -43,6 +44,7 @@ export interface OpenLocalFileEntry extends OpenLocalFileParams {
 
 export type PortalViewData =
   | { type: PortalViewType.Home }
+  | { acceptanceId: string; type: PortalViewType.Acceptance }
   | { agentId: string; type: PortalViewType.AgentDetail }
   | { artifact: PortalArtifact; type: PortalViewType.Artifact }
   | { agentDocumentId?: string; documentId: string; type: PortalViewType.Document }

@@ -133,8 +133,19 @@ const LIVE_STATUSES = new Set(['pending', 'planned', 'verifying', 'repairing']);
  */
 const ENABLE_DECISION_BAR = false;
 
-const AcceptancePage = memo(() => {
-  const { acceptanceId } = useParams<{ acceptanceId: string }>();
+interface AcceptancePageProps {
+  /**
+   * Render for a specific aggregate instead of the route param — the portal
+   * embed path. Embedded surfaces are narrow, so the round ledger starts
+   * collapsed there.
+   */
+  acceptanceId?: string;
+}
+
+const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAcceptanceId }) => {
+  const params = useParams<{ acceptanceId: string }>();
+  const acceptanceId = explicitAcceptanceId ?? params.acceptanceId;
+  const isEmbedded = Boolean(explicitAcceptanceId);
   const { t } = useTranslation('verify');
   const { data, error, isLoading, mutate } = useAcceptanceBundle(acceptanceId ?? null);
 
@@ -143,7 +154,7 @@ const AcceptancePage = memo(() => {
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set());
   const [seeded, setSeeded] = useState(false);
   const [highlightRound, setHighlightRound] = useState<number | null>(null);
-  const [ledgerExpand, setLedgerExpand] = useState(true);
+  const [ledgerExpand, setLedgerExpand] = useState(!isEmbedded);
   const [reportRound, setReportRound] = useState<AcceptanceRound | null>(null);
   const [pending, setPending] = useState(false);
   const [actionError, setActionError] = useState<string>();
@@ -543,12 +554,14 @@ const AcceptancePage = memo(() => {
             </Flexbox>
           )}
 
-          {/* Check union — the complete inventory, familiar sections (P-14) */}
-          <Flexbox horizontal align={'center'} gap={12}>
-            <Text strong style={{ fontSize: 14 }}>
+          {/* Check union — the complete inventory, familiar sections (P-14).
+              The row wraps so narrow embeds (the chat portal) drop the filter
+              controls to a second line instead of crushing the text vertical. */}
+          <Flexbox horizontal align={'center'} gap={12} wrap={'wrap'}>
+            <Text strong style={{ fontSize: 14, whiteSpace: 'nowrap' }}>
               {t('acceptance.checks.title')}
             </Text>
-            <Text fontSize={12} type={'secondary'}>
+            <Text fontSize={12} style={{ whiteSpace: 'nowrap' }} type={'secondary'}>
               {t('acceptance.checks.subtitle', { count: counts.total, rounds: rounds.length })}
             </Text>
             <Flexbox flex={1} />

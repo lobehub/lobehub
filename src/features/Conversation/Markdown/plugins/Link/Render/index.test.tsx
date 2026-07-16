@@ -23,6 +23,7 @@ let mockShowIcon = true;
 let mockEnableInAppBrowser = false;
 const mockOpenInBrowserTab = vi.fn();
 const mockNavigate = vi.fn();
+const mockOpenAcceptance = vi.fn();
 const mockOpenAgentDetail = vi.fn();
 const mockOpenDocument = vi.fn();
 const mockOpenTaskDetail = vi.fn();
@@ -55,6 +56,7 @@ vi.mock('@/store/agent', () => ({
 vi.mock('@/store/chat', () => ({
   useChatStore: (selector: (state: unknown) => unknown) =>
     selector({
+      openAcceptance: mockOpenAcceptance,
       openAgentDetail: mockOpenAgentDetail,
       openDocument: mockOpenDocument,
       openTaskDetail: mockOpenTaskDetail,
@@ -169,7 +171,7 @@ describe('Link Render — message link icon toggle', () => {
 });
 
 describe('Link Render — internal entities', () => {
-  it('renders acceptance links as dedicated entities and navigates in-app', () => {
+  it('opens acceptance links in the conversation portal, never a full-page navigation', () => {
     const { getByRole } = renderLink({
       linkHref: '/acceptance/acceptance-1',
       linkKind: 'generic',
@@ -178,7 +180,8 @@ describe('Link Render — internal entities', () => {
 
     fireEvent.click(getByRole('link', { name: 'Acceptance' }));
 
-    expect(mockNavigate).toHaveBeenCalledWith('/acceptance/acceptance-1');
+    expect(mockOpenAcceptance).toHaveBeenCalledWith('acceptance-1');
+    expect(mockNavigate).not.toHaveBeenCalled();
   });
 
   it('opens official document links in the conversation portal', () => {
