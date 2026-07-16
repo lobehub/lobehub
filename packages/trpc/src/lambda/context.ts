@@ -30,7 +30,12 @@ const extractClientIp = (request: NextRequest): string | undefined => {
   return undefined;
 };
 
-const validateApiKeyUserId = async (apiKey: string): Promise<string | null> => {
+interface ValidatedApiKey {
+  userId: string;
+  workspaceId: string | null;
+}
+
+const validateApiKey = async (apiKey: string): Promise<ValidatedApiKey | null> => {
   if (!validateApiKeyFormat(apiKey)) return null;
 
   try {
@@ -51,7 +56,7 @@ const validateApiKeyUserId = async (apiKey: string): Promise<string | null> => {
       console.error('Failed to update API key last used timestamp:', error);
     });
 
-    return apiKeyRecord.userId;
+    return { userId: apiKeyRecord.userId, workspaceId: apiKeyRecord.workspaceId ?? null };
   } catch (error) {
     log('API key authentication failed: %O', error);
     console.error('API key authentication failed, trying other methods:', error);
@@ -157,9 +162,9 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
   log('X-API-Key header: %s', apiKeyToken ? 'exists' : 'not found');
 
   if (apiKeyToken) {
-    const apiKeyUserId = await validateApiKeyUserId(apiKeyToken);
+    const apiKeyAuth = await validateApiKey(apiKeyToken);
 
-    if (!apiKeyUserId) {
+    if (!apiKeyAuth) {
       log('API key authentication failed; rejecting request without fallback auth');
 
       return createContextInner({
@@ -169,12 +174,39 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
       });
     }
 
-    log('API key authentication successful, userId: %s', apiKeyUserId);
+    // Bind the key to its workspace, mirroring the OpenAPI surface
+    // (`resolveWorkspaceId` in packages/openapi): a personal key must not reach
+    // workspace data, and a workspace key must not be replayed against another
+    // workspace via the caller-supplied X-Workspace-Id header.
+    if (!apiKeyAuth.workspaceId && workspaceId) {
+      log('Personal API key cannot access workspace data; rejecting request');
+
+      return createContextInner({
+        ...commonContext,
+        traceContext,
+        userId: null,
+        workspaceId: undefined,
+      });
+    }
+
+    if (apiKeyAuth.workspaceId && workspaceId && workspaceId !== apiKeyAuth.workspaceId) {
+      log('Workspace API key cannot access a different workspace; rejecting request');
+
+      return createContextInner({
+        ...commonContext,
+        traceContext,
+        userId: null,
+        workspaceId: undefined,
+      });
+    }
+
+    log('API key authentication successful, userId: %s', apiKeyAuth.userId);
 
     return createContextInner({
       ...commonContext,
       traceContext,
-      userId: apiKeyUserId,
+      userId: apiKeyAuth.userId,
+      workspaceId: apiKeyAuth.workspaceId ?? undefined,
     });
   }
 
