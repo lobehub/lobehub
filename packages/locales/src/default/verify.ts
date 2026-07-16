@@ -72,7 +72,7 @@ export default {
     'Your reason becomes input for the next repair round; this is not a passive comment.',
   'acceptance.reject.placeholder':
     'Describe what must change before this delivery can be accepted.',
-  'acceptance.reportDrawer.title': 'Round {{round}} · verification report',
+  'acceptance.reportDrawer.close': 'Close the round report',
   'acceptance.requirementLabel': 'Acceptance bar',
   'acceptance.round': 'Round {{round}}',
   'acceptance.roundCount': '{{count}} verification round(s)',

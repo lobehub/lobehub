@@ -27,6 +27,7 @@ import {
   Loader2,
   PanelRightOpen,
   RotateCcw,
+  X,
 } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -57,6 +58,21 @@ const styles = createStaticStyles(({ css }) => ({
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
     background: ${cssVar.colorBgContainer};
+  `,
+  /* Floats over the headerless report drawer — the report hero is the header. */
+  drawerClose: css`
+    position: absolute;
+    z-index: 10;
+    inset-block-start: 16px;
+    inset-inline-end: 20px;
+
+    border: 1px solid ${cssVar.colorBorderSecondary};
+
+    background: ${cssVar.colorBgContainer};
+
+    &:hover {
+      border-color: ${cssVar.colorBorder};
+    }
   `,
   page: css`
     position: relative;
@@ -621,21 +637,34 @@ const AcceptancePage = memo(() => {
       </DraggablePanel>
 
       {/* Per-round report drill-down — the full verify run view, not a
-          markdown excerpt: same content as /verify/:runId, opened in place. */}
+          markdown excerpt: same content as /verify/:runId, opened in place.
+          No drawer header: the report's own hero (title + verdict pill) is the
+          header; a floating close sits over it. */}
       <Drawer
         destroyOnHidden
+        noHeader
+        containerMaxWidth={'100%'}
         open={reportRound !== null}
         placement={'right'}
-        styles={{ body: { overflow: 'hidden', padding: 0 } }}
         width={'min(960px, 92vw)'}
-        title={
-          reportRound
-            ? t('acceptance.reportDrawer.title', { round: reportRound.run.roundIndex })
-            : ''
-        }
+        styles={{
+          body: { height: '100%', padding: 0 },
+          bodyContent: { height: '100%', minHeight: 0, overflow: 'hidden' },
+        }}
         onClose={() => setReportRound(null)}
       >
-        {reportRound && <ReportViewer runId={reportRound.run.id} />}
+        {reportRound && (
+          <Flexbox style={{ height: '100%', position: 'relative' }}>
+            <ActionIcon
+              className={styles.drawerClose}
+              icon={X}
+              size={'small'}
+              title={t('acceptance.reportDrawer.close')}
+              onClick={() => setReportRound(null)}
+            />
+            <ReportViewer runId={reportRound.run.id} />
+          </Flexbox>
+        )}
       </Drawer>
     </Flexbox>
   );
