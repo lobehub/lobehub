@@ -38,13 +38,15 @@ const Reviews = memo(() => {
         distribution={distribution}
         totalCount={distribution?.totalCount ?? ratingCount}
       />
-      {isLoading || !firstPage ? (
+      {isLoading ? (
         <Flexbox gap={24}>
           {Array.from({ length: 3 }).map((_, i) => (
             <Skeleton active key={i} paragraph={{ rows: 2 }} title={{ width: 120 }} />
           ))}
         </Flexbox>
       ) : (
+        // A failed fetch leaves firstPage undefined — CommentList then renders
+        // its empty state instead of an endless skeleton
         <CommentList fetchMore={fetchMore} initialData={firstPage} key={identifier} />
       )}
     </Flexbox>
