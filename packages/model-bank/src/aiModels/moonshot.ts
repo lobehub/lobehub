@@ -28,6 +28,11 @@ const moonshotChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2026-07-16',
+    settings: {
+      // K3 fixes sampling params server-side (temperature=1, top_p=0.95, penalties=0)
+      // and the API docs advise against sending them
+      disabledParams: ['frequency_penalty', 'presence_penalty', 'temperature', 'top_p'],
+    },
     type: 'chat',
   },
   {
