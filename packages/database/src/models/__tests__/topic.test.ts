@@ -877,7 +877,10 @@ describe('TopicModel', () => {
         .select()
         .from(topics)
         .where(eq(topics.id, 'scheduled-reclaimed'));
-      expect(row.metadata?.scheduledRun?.failedAssistantMessageId).toBe('assistant-failed');
+      expect(row.metadata?.scheduledRun).toMatchObject({
+        claim: { id: 'new' },
+        failedAssistantMessageId: 'assistant-failed',
+      });
     });
 
     it('does not resurrect a cancelled schedule when re-pointing', async () => {
