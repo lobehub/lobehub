@@ -23,6 +23,7 @@ import { confirm, outputJson, printTable, timeAgo, truncate } from '../utils/for
 import { log } from '../utils/logger';
 import { uploadLocalFile } from '../utils/uploadLocalFile';
 import { registerAcceptanceCommands } from './verifyAcceptance';
+import { registerVerifyInstallCommand } from './verifyInstall';
 
 // ── Helpers ────────────────────────────────────────────────
 
@@ -523,6 +524,11 @@ export function registerVerifyCommand(program: Command) {
 
   // `verify acceptance …` — subject-level acceptance aggregates.
   registerAcceptanceCommands(verify);
+
+  // `verify install` — install the bundled agent-testing skill from this CLI
+  // package into the consumer repo. Distinct from `verify init` below, which
+  // pulls a named skill bundle live from the server.
+  registerVerifyInstallCommand(verify);
 
   // ════════════ init (materialize the portable verify skill) ════════════
   verify

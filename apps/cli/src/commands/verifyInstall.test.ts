@@ -10,19 +10,25 @@ import {
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
+import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   HARNESS_SKILL_DIRS,
-  isVerifyInitSuccess,
+  isVerifyInstallSuccess,
   NoHarnessDirError,
-  runVerifyInit,
-} from './verifyInit';
+  registerVerifyInstallCommand,
+  runVerifyInstall,
+} from './verifyInstall';
 
 const { mockLocateBundledSkill } = vi.hoisted(() => ({
   mockLocateBundledSkill: vi.fn(),
 }));
 vi.mock('../utils/skillLocator', () => ({ locateBundledSkill: mockLocateBundledSkill }));
+vi.mock('../utils/logger', () => ({
+  log: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
+  setVerbose: vi.fn(),
+}));
 
 let root: string;
 let bundleDir: string;
@@ -36,7 +42,7 @@ function writeBundledSkill(dir: string) {
 }
 
 beforeEach(() => {
-  root = mkdtempSync(path.join(tmpdir(), 'verify-init-'));
+  root = mkdtempSync(path.join(tmpdir(), 'verify-install-'));
   bundleDir = path.join(root, '__bundle__', 'agent-testing');
   writeBundledSkill(bundleDir);
   mockLocateBundledSkill.mockReset().mockReturnValue({
@@ -51,16 +57,15 @@ afterEach(() => {
 });
 
 function makeCwd(): string {
-  const cwd = mkdtempSync(path.join(root, 'consumer-'));
-  return cwd;
+  return mkdtempSync(path.join(root, 'consumer-'));
 }
 
-describe('runVerifyInit — no harness dir found', () => {
+describe('runVerifyInstall — no harness dir found', () => {
   it('throws NoHarnessDirError listing recognized dirs, without --target', () => {
     const cwd = makeCwd();
-    expect(() => runVerifyInit({ cwd })).toThrow(NoHarnessDirError);
+    expect(() => runVerifyInstall({ cwd })).toThrow(NoHarnessDirError);
     try {
-      runVerifyInit({ cwd });
+      runVerifyInstall({ cwd });
     } catch (e) {
       expect((e as Error).message).toContain('.claude/skills');
       expect((e as Error).message).toContain('.codex/skills');
@@ -70,12 +75,12 @@ describe('runVerifyInit — no harness dir found', () => {
   });
 });
 
-describe('runVerifyInit — fresh install', () => {
+describe('runVerifyInstall — fresh install', () => {
   it('installs into a single existing harness dir', () => {
     const cwd = makeCwd();
     mkdirSync(path.join(cwd, '.claude', 'skills'), { recursive: true });
 
-    const result = runVerifyInit({ cwd });
+    const result = runVerifyInstall({ cwd });
 
     expect(result.results).toHaveLength(1);
     expect(result.results[0].status).toBe('installed');
@@ -97,7 +102,7 @@ describe('runVerifyInit — fresh install', () => {
     mkdirSync(path.join(cwd, '.codex', 'skills'), { recursive: true });
     // .agents/skills intentionally absent
 
-    const result = runVerifyInit({ cwd });
+    const result = runVerifyInstall({ cwd });
 
     expect(result.results.map((r) => r.status)).toEqual(['installed', 'installed']);
     expect(result.results.map((r) => r.target).sort()).toEqual(
@@ -111,7 +116,7 @@ describe('runVerifyInit — fresh install', () => {
   it('re-applies chmod +x to .sh/.mjs/.cjs after copying, leaves other files untouched', () => {
     const cwd = makeCwd();
     mkdirSync(path.join(cwd, '.claude', 'skills'), { recursive: true });
-    const result = runVerifyInit({ cwd });
+    const result = runVerifyInstall({ cwd });
     const target = result.results[0].target;
 
     const shMode = statSync(path.join(target, 'scripts', 'run.sh')).mode & 0o777;
@@ -124,7 +129,7 @@ describe('runVerifyInit — fresh install', () => {
     const cwd = makeCwd();
     mkdirSync(path.join(cwd, '.claude', 'skills'), { recursive: true }); // present but must be ignored
 
-    const result = runVerifyInit({ cwd, target: 'custom/skills-dir' });
+    const result = runVerifyInstall({ cwd, target: 'custom/skills-dir' });
 
     expect(result.results).toHaveLength(1);
     const target = path.join(cwd, 'custom', 'skills-dir', 'agent-testing');
@@ -134,12 +139,12 @@ describe('runVerifyInit — fresh install', () => {
   });
 });
 
-describe('runVerifyInit — edge cases', () => {
+describe('runVerifyInstall — edge cases', () => {
   it('version marker present, bundled version newer → overwrites skill body', () => {
     const cwd = makeCwd();
     const skillsDir = path.join(cwd, '.claude', 'skills');
     mkdirSync(skillsDir, { recursive: true });
-    runVerifyInit({ cwd }); // installs 1.0.0
+    runVerifyInstall({ cwd }); // installs 1.0.0
 
     mockLocateBundledSkill.mockReturnValue({
       cliRoot: path.join(root, '__bundle__'),
@@ -148,7 +153,7 @@ describe('runVerifyInit — edge cases', () => {
     });
     writeFileSync(path.join(bundleDir, 'SKILL.md'), '# agent-testing v2');
 
-    const result = runVerifyInit({ cwd });
+    const result = runVerifyInstall({ cwd });
     expect(result.results[0].status).toBe('updated');
     const target = path.join(skillsDir, 'agent-testing');
     expect(readFileSync(path.join(target, 'SKILL.md'), 'utf8')).toBe('# agent-testing v2');
@@ -159,9 +164,9 @@ describe('runVerifyInit — edge cases', () => {
   it('marker present, same version → no-op with message', () => {
     const cwd = makeCwd();
     mkdirSync(path.join(cwd, '.claude', 'skills'), { recursive: true });
-    runVerifyInit({ cwd });
+    runVerifyInstall({ cwd });
 
-    const result = runVerifyInit({ cwd });
+    const result = runVerifyInstall({ cwd });
     expect(result.results[0].status).toBe('no-op');
   });
 
@@ -173,14 +178,14 @@ describe('runVerifyInit — edge cases', () => {
       skillDir: bundleDir,
       version: '5.0.0',
     });
-    runVerifyInit({ cwd }); // installs 5.0.0
+    runVerifyInstall({ cwd }); // installs 5.0.0
 
     mockLocateBundledSkill.mockReturnValue({
       cliRoot: path.join(root, '__bundle__'),
       skillDir: bundleDir,
       version: '1.0.0',
     });
-    const result = runVerifyInit({ cwd });
+    const result = runVerifyInstall({ cwd });
     expect(result.results[0].status).toBe('no-op');
   });
 
@@ -191,11 +196,11 @@ describe('runVerifyInit — edge cases', () => {
     mkdirSync(target, { recursive: true });
     writeFileSync(path.join(target, 'SKILL.md'), '# hand-written predecessor');
 
-    const refused = runVerifyInit({ cwd });
+    const refused = runVerifyInstall({ cwd });
     expect(refused.results[0].status).toBe('refused');
     expect(readFileSync(path.join(target, 'SKILL.md'), 'utf8')).toBe('# hand-written predecessor');
 
-    const forced = runVerifyInit({ cwd, force: true });
+    const forced = runVerifyInstall({ cwd, force: true });
     expect(forced.results[0].status).toBe('updated');
     expect(readFileSync(path.join(target, 'SKILL.md'), 'utf8')).toBe('# agent-testing');
   });
@@ -203,7 +208,7 @@ describe('runVerifyInit — edge cases', () => {
   it('consumer cwd not a git repo → installs anyway, reports isGitRepo: false', () => {
     const cwd = makeCwd();
     mkdirSync(path.join(cwd, '.claude', 'skills'), { recursive: true });
-    const result = runVerifyInit({ cwd });
+    const result = runVerifyInstall({ cwd });
     expect(result.isGitRepo).toBe(false);
     expect(result.results[0].status).toBe('installed');
   });
@@ -212,14 +217,14 @@ describe('runVerifyInit — edge cases', () => {
     const cwd = makeCwd();
     mkdirSync(path.join(cwd, '.claude', 'skills'), { recursive: true });
     mkdirSync(path.join(cwd, '.git'), { recursive: true });
-    const result = runVerifyInit({ cwd });
+    const result = runVerifyInstall({ cwd });
     expect(result.isGitRepo).toBe(true);
   });
 
   it('no .gitignore at cwd → creates one containing .records/', () => {
     const cwd = makeCwd();
     mkdirSync(path.join(cwd, '.claude', 'skills'), { recursive: true });
-    const result = runVerifyInit({ cwd });
+    const result = runVerifyInstall({ cwd });
     expect(result.gitignore.action).toBe('created');
     expect(readFileSync(path.join(cwd, '.gitignore'), 'utf8')).toBe('.records/\n');
   });
@@ -229,12 +234,12 @@ describe('runVerifyInit — edge cases', () => {
     mkdirSync(path.join(cwd, '.claude', 'skills'), { recursive: true });
     writeFileSync(path.join(cwd, '.gitignore'), 'node_modules/\n');
 
-    const result = runVerifyInit({ cwd });
+    const result = runVerifyInstall({ cwd });
     expect(result.gitignore.action).toBe('appended');
     const content = readFileSync(path.join(cwd, '.gitignore'), 'utf8');
     expect(content).toBe('node_modules/\n.records/\n');
 
-    const again = runVerifyInit({ cwd });
+    const again = runVerifyInstall({ cwd });
     expect(again.gitignore.action).toBe('no-op');
     expect(readFileSync(path.join(cwd, '.gitignore'), 'utf8')).toBe(content);
   });
@@ -244,7 +249,7 @@ describe('runVerifyInit — edge cases', () => {
     mkdirSync(path.join(cwd, '.claude', 'skills'), { recursive: true });
     writeFileSync(path.join(cwd, '.gitignore'), 'dist/\n.records/\n');
 
-    const result = runVerifyInit({ cwd });
+    const result = runVerifyInstall({ cwd });
     expect(result.gitignore.action).toBe('no-op');
     expect(readFileSync(path.join(cwd, '.gitignore'), 'utf8')).toBe('dist/\n.records/\n');
   });
@@ -256,7 +261,7 @@ describe('runVerifyInit — edge cases', () => {
     mkdirSync(verifyAdapterDir, { recursive: true });
     writeFileSync(path.join(verifyAdapterDir, 'PROJECT.md'), 'existing adapter content');
 
-    runVerifyInit({ cwd });
+    runVerifyInstall({ cwd });
 
     expect(readFileSync(path.join(verifyAdapterDir, 'PROJECT.md'), 'utf8')).toBe(
       'existing adapter content',
@@ -265,12 +270,12 @@ describe('runVerifyInit — edge cases', () => {
   });
 });
 
-describe('isVerifyInitSuccess', () => {
+describe('isVerifyInstallSuccess', () => {
   it('is true when at least one target installed/updated/no-op', () => {
-    expect(isVerifyInitSuccess([{ message: '', status: 'installed', target: 'a' }])).toBe(true);
-    expect(isVerifyInitSuccess([{ message: '', status: 'no-op', target: 'a' }])).toBe(true);
+    expect(isVerifyInstallSuccess([{ message: '', status: 'installed', target: 'a' }])).toBe(true);
+    expect(isVerifyInstallSuccess([{ message: '', status: 'no-op', target: 'a' }])).toBe(true);
     expect(
-      isVerifyInitSuccess([
+      isVerifyInstallSuccess([
         { message: '', status: 'refused', target: 'a' },
         { message: '', status: 'installed', target: 'b' },
       ]),
@@ -278,13 +283,78 @@ describe('isVerifyInitSuccess', () => {
   });
 
   it('is false when every target refused, or there are no targets', () => {
-    expect(isVerifyInitSuccess([{ message: '', status: 'refused', target: 'a' }])).toBe(false);
-    expect(isVerifyInitSuccess([])).toBe(false);
+    expect(isVerifyInstallSuccess([{ message: '', status: 'refused', target: 'a' }])).toBe(false);
+    expect(isVerifyInstallSuccess([])).toBe(false);
   });
 });
 
 describe('HARNESS_SKILL_DIRS', () => {
   it('lists the three recognized harness dirs', () => {
     expect(HARNESS_SKILL_DIRS).toEqual(['.claude/skills', '.codex/skills', '.agents/skills']);
+  });
+});
+
+describe('lh verify install — command registration', () => {
+  let consoleSpy: ReturnType<typeof vi.spyOn>;
+  let exitSpy: ReturnType<typeof vi.spyOn>;
+  let cwd: string;
+  let cwdSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+    cwd = makeCwd();
+    cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue(cwd);
+  });
+
+  afterEach(() => {
+    consoleSpy.mockRestore();
+    exitSpy.mockRestore();
+    cwdSpy.mockRestore();
+  });
+
+  const run = async (args: string[]) => {
+    const program = new Command();
+    program.exitOverride();
+    const verify = program.command('verify');
+    registerVerifyInstallCommand(verify);
+    await program.parseAsync(['node', 'lh', 'verify', ...args]);
+  };
+
+  it('is registered as `verify install`, distinct from `verify init`', async () => {
+    mkdirSync(path.join(cwd, '.claude', 'skills'), { recursive: true });
+    await run(['install']);
+
+    expect(existsSync(path.join(cwd, '.claude', 'skills', 'agent-testing', 'SKILL.md'))).toBe(true);
+    expect(exitSpy).not.toHaveBeenCalledWith(1);
+  });
+
+  it('happy path installs and prints a per-target result line', async () => {
+    mkdirSync(path.join(cwd, '.claude', 'skills'), { recursive: true });
+    await run(['install']);
+
+    const printed = consoleSpy.mock.calls.map((c) => String(c[0])).join('\n');
+    expect(printed).toContain('installed');
+    expect(printed).toContain('agent-testing');
+    expect(printed).toContain('PROJECT.md');
+  });
+
+  it('--json outputs the structured result and exits 0 on success', async () => {
+    mkdirSync(path.join(cwd, '.claude', 'skills'), { recursive: true });
+    await run(['install', '--json']);
+
+    const out = JSON.parse(consoleSpy.mock.calls.map((c) => String(c[0])).join(''));
+    expect(out.results[0].status).toBe('installed');
+    expect(exitSpy).toHaveBeenCalledWith(0);
+  });
+
+  it('--target installs into the given dir even without a recognized harness dir', async () => {
+    await run(['install', '--target', 'custom-dir']);
+    expect(existsSync(path.join(cwd, 'custom-dir', 'agent-testing', 'SKILL.md'))).toBe(true);
+  });
+
+  it('exits non-zero and logs an error when no harness dir and no --target', async () => {
+    await run(['install']);
+    expect(exitSpy).toHaveBeenCalledWith(1);
   });
 });

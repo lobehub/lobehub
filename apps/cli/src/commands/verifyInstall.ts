@@ -10,8 +10,12 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 
+import type { Command } from 'commander';
+import pc from 'picocolors';
 import semver from 'semver';
 
+import { outputJson } from '../utils/format';
+import { log } from '../utils/logger';
 import { type BundledSkill, locateBundledSkill } from '../utils/skillLocator';
 
 export const SKILL_NAME = 'agent-testing';
@@ -33,13 +37,13 @@ export interface InstallResult {
   target: string;
 }
 
-export interface VerifyInitOptions {
+export interface VerifyInstallOptions {
   cwd: string;
   force?: boolean;
   target?: string;
 }
 
-export interface VerifyInitResult {
+export interface VerifyInstallResult {
   bundled: BundledSkill;
   gitignore: { action: 'appended' | 'created' | 'no-op'; path: string };
   isGitRepo: boolean;
@@ -147,7 +151,7 @@ function ensureGitignore(cwd: string): { action: 'appended' | 'created' | 'no-op
   return { action: 'appended', path: gitignorePath };
 }
 
-export function runVerifyInit(options: VerifyInitOptions): VerifyInitResult {
+export function runVerifyInstall(options: VerifyInstallOptions): VerifyInstallResult {
   const bundled = locateBundledSkill(SKILL_NAME);
   const cwd = options.cwd;
 
@@ -168,6 +172,78 @@ export function runVerifyInit(options: VerifyInitOptions): VerifyInitResult {
   return { bundled, gitignore, isGitRepo, results };
 }
 
-export function isVerifyInitSuccess(results: InstallResult[]): boolean {
+export function isVerifyInstallSuccess(results: InstallResult[]): boolean {
   return results.some((r) => r.status !== 'refused');
+}
+
+// ── Command Registration ───────────────────────────────────
+
+const STATUS_GLYPH: Record<InstallStatus, string> = {
+  'installed': pc.green('✓ installed'),
+  'no-op': pc.dim('· no-op'),
+  'refused': pc.red('✗ refused'),
+  'updated': pc.yellow('↑ updated'),
+};
+
+export function registerVerifyInstallCommand(verify: Command) {
+  verify
+    .command('install')
+    .description(
+      "Install the bundled agent-testing skill into this repo's agent skill dirs (.claude/.codex/.agents)",
+    )
+    .option('--target <dir>', 'Install into a specific directory instead of auto-detecting')
+    .option('--force', 'Replace an existing install even without a recognized version marker')
+    .option('--json [fields]', 'Output JSON')
+    .action(async (options: { force?: boolean; json?: boolean | string; target?: string }) => {
+      let result: VerifyInstallResult;
+      try {
+        result = runVerifyInstall({
+          cwd: process.cwd(),
+          force: options.force,
+          target: options.target,
+        });
+      } catch (e) {
+        if (e instanceof NoHarnessDirError) {
+          log.error(e.message);
+          process.exit(1);
+          return;
+        }
+        throw e;
+      }
+
+      const success = isVerifyInstallSuccess(result.results);
+
+      if (options.json !== undefined) {
+        outputJson(result, typeof options.json === 'string' ? options.json : undefined);
+        process.exit(success ? 0 : 1);
+        return;
+      }
+
+      for (const r of result.results) {
+        console.log(
+          `${STATUS_GLYPH[r.status]} ${pc.dim(path.relative(process.cwd(), r.target) || r.target)} ${pc.dim(`— ${r.message}`)}`,
+        );
+      }
+
+      if (!result.isGitRepo) {
+        console.log(
+          pc.yellow('  (not a git repository — .records/ hygiene must be handled manually)'),
+        );
+      }
+      if (result.gitignore.action !== 'no-op') {
+        console.log(
+          pc.dim(
+            `  .gitignore ${result.gitignore.action === 'created' ? 'created with' : 'updated with'} ${GITIGNORE_ENTRY}`,
+          ),
+        );
+      }
+
+      console.log(
+        pc.dim(
+          '  First verification run bootstraps .agents/verify/PROJECT.md — see the skill docs.',
+        ),
+      );
+
+      if (!success) process.exit(1);
+    });
 }

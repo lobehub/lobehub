@@ -139,7 +139,7 @@ When `.agents/verify/PROJECT.md` is absent, build it before doing anything else:
 4. **Write it only after approval**, to `.agents/verify/PROJECT.md`. Create
    `.agents/verify/` if it does not exist.
 
-`init` (the CLI's `lh verify init`) only places the skill files; it does no repo
+`install` (the CLI's `lh verify install`) only places the skill files; it does no repo
 exploration. The adapter draft needs a model, so the first verification run is what
 bootstraps `PROJECT.md`.
 
