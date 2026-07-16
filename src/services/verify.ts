@@ -18,6 +18,9 @@ import type {
 import { lambdaClient } from '@/libs/trpc/client';
 
 export type AcceptanceBundle = Awaited<ReturnType<typeof lambdaClient.acceptance.getBundle.query>>;
+export type AcceptanceListItem = Awaited<
+  ReturnType<typeof lambdaClient.acceptance.list.query>
+>[number];
 
 /** Editable fields of a single delivery-check criterion. */
 export interface UpdateCriterionValue {
@@ -135,6 +138,8 @@ export class VerifyService {
   // ---- subject-level acceptance ----
   getAcceptanceBundle = (id: string): Promise<AcceptanceBundle> =>
     lambdaClient.acceptance.getBundle.query({ id });
+
+  listAcceptances = (): Promise<AcceptanceListItem[]> => lambdaClient.acceptance.list.query();
 
   acceptDelivery = (id: string, comment?: string) =>
     lambdaClient.acceptance.accept.mutate({ comment, id });

@@ -505,6 +505,18 @@ export class AcceptanceService {
     };
   };
 
+  /**
+   * Recent aggregates with their subject headers — the list-panel payload.
+   * Titles resolve in parallel per row (bounded by the list limit); a deleted
+   * subject degrades to a null title instead of dropping the row.
+   */
+  listWithSubjects = async (limit = 50) => {
+    const rows = await this.acceptanceModel.query(limit);
+    return Promise.all(
+      rows.map(async (row) => ({ ...row, subject: await this.resolveSubject(row) })),
+    );
+  };
+
   /** The rounds + their per-round data the bundle and the union both read. */
   loadRounds = async (acceptanceId: string) => {
     const runs = await this.runModel.listByAcceptance(acceptanceId);

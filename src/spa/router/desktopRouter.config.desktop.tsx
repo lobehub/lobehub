@@ -55,6 +55,8 @@ import WorkspaceSlugSettingsSkillPage from '@/routes/(main)/[workspaceSlug]/sett
 import WorkspaceSlugSettingsStatsPage from '@/routes/(main)/[workspaceSlug]/settings/stats';
 import WorkspaceSlugSettingsStoragePage from '@/routes/(main)/[workspaceSlug]/settings/storage';
 import WorkspaceSlugSettingsUsagePage from '@/routes/(main)/[workspaceSlug]/settings/usage';
+import AcceptanceWorkspace from '@/routes/(main)/acceptance';
+import AcceptanceEmptyPage from '@/routes/(main)/acceptance/empty';
 // Pages — sync import
 import AgentPage from '@/routes/(main)/agent';
 import DesktopChatLayout from '@/routes/(main)/agent/_layout';
@@ -810,12 +812,21 @@ export const desktopRoutes: RouteObject[] = [
     path: '/verify',
   },
 
-  // Subject-level delivery acceptance — separate from single-run verify reports.
+  // Subject-level delivery acceptance — the verify workspace's twin: a
+  // master-detail with the acceptance list on the left.
   {
-    element: <AcceptanceReportPage />,
+    children: [
+      { element: <AcceptanceEmptyPage />, index: true },
+      {
+        element: <AcceptanceReportPage />,
+        handle: { meta: acceptanceRouteMeta },
+        path: ':acceptanceId',
+      },
+    ],
+    element: <AcceptanceWorkspace />,
     errorElement: <ErrorBoundary />,
     handle: { meta: acceptanceRouteMeta },
-    path: '/acceptance/:acceptanceId',
+    path: '/acceptance',
   },
 
   // Devtools route (outside main layout, dev-only)

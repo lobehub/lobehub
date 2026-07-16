@@ -43,6 +43,14 @@ export const useAcceptanceBundle = (acceptanceId: string | null) =>
     VERIFY_REPORT_SWR_CONFIG,
   );
 
+/** The caller's recent acceptance aggregates (with subject headers) — the list panel. */
+export const useAcceptanceList = (enabled: boolean) =>
+  useClientDataSWR(
+    enabled ? verifyKeys.acceptances() : null,
+    () => verifyService.listAcceptances(),
+    VERIFY_REPORT_SWR_CONFIG,
+  );
+
 /**
  * Cursor-paginated, infinite-scrolling report summaries. `q` drives a
  * server-side title search (spanning the whole history, not just loaded pages);

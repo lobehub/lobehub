@@ -1,5 +1,6 @@
 import { acceptanceSubjectTypes, acceptanceVisibilities } from '@lobechat/const/verify';
 import { TRPCError } from '@trpc/server';
+import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 import {
@@ -7,8 +8,10 @@ import {
   wsCompatProcedure,
 } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { VerifyRunModel } from '@/database/models/verifyRun';
+import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
 import type { AcceptanceItem } from '@/database/schemas/verify';
-import { router } from '@/libs/trpc/lambda';
+import { acceptances } from '@/database/schemas/verify';
+import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import {
   AcceptanceService,
@@ -19,6 +22,9 @@ import {
 import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
 
 const subjectTypeSchema = z.enum(acceptanceSubjectTypes);
+
+/** Reads addressed purely by acceptance id — visibility is checked in the handler. */
+const publicAcceptanceProcedure = publicProcedure.use(serverDatabase);
 
 const acceptanceProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -139,15 +145,48 @@ export const acceptanceRouter = router({
    * subject header, the round ledger (each round's run + report), and the
    * cross-round check union — every check ever planned, with its final verdict,
    * final evidence (file-URL enriched) and round provenance.
+   *
+   * Public like the verify report viewer: the acceptance URL is meant to be
+   * linked from PRs/reports, so a `public` aggregate is readable by anyone
+   * holding the id. `private` stays gated to the owner and (for workspace
+   * scope) workspace members. A denied read is a NOT_FOUND, never a
+   * FORBIDDEN — existence must not leak through the error code.
    */
-  getBundle: acceptanceProcedure
+  getBundle: publicAcceptanceProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
-      const acceptance = await resolveAcceptance(ctx, input.id);
+      const acceptance = await ctx.serverDB.query.acceptances.findFirst({
+        where: eq(acceptances.id, input.id),
+      });
+      if (!acceptance) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Acceptance not found' });
+      }
+
+      const isOwner = Boolean(ctx.userId) && ctx.userId === acceptance.userId;
+      let canRead = isOwner || acceptance.visibility === 'public';
+      if (!canRead && ctx.userId && acceptance.workspaceId) {
+        const member = await new WorkspaceMemberModel(ctx.serverDB, ctx.userId).getMember(
+          acceptance.workspaceId,
+          ctx.userId,
+        );
+        canRead = Boolean(member);
+      }
+      if (!canRead) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Acceptance not found' });
+      }
+
+      // Sub-reads (rounds / results / evidence) are ownership-scoped models, so
+      // read them AS the aggregate's owner — same pattern as the evidence file
+      // resolver. The visibility gate above is the actual access decision.
+      const ownerService = new AcceptanceService(
+        ctx.serverDB,
+        acceptance.userId,
+        acceptance.workspaceId ?? undefined,
+      );
 
       const [subject, { evidence, reports, results, runs }] = await Promise.all([
-        ctx.acceptanceService.resolveSubject(acceptance),
-        ctx.acceptanceService.loadRounds(acceptance.id),
+        ownerService.resolveSubject(acceptance),
+        ownerService.loadRounds(acceptance.id),
       ]);
 
       const resultsByRun = new Map<string, typeof results>();
@@ -186,14 +225,21 @@ export const acceptanceRouter = router({
       }
 
       const reportsByRun = new Map(reports.map((r) => [r.verifyRunId!, r]));
-      const rounds = runs.map((run) => ({
-        report: reportsByRun.get(run.id) ?? null,
-        run,
-      }));
+      const rounds = runs.map((run) => {
+        // `origin` points at the author's private topic/agent — never hand it
+        // to a visitor holding nothing but the shared link.
+        let publicRun = run;
+        if (!isOwner && run.metadata?.origin) {
+          const { origin: _origin, ...publicMetadata } = run.metadata;
+          publicRun = { ...run, metadata: publicMetadata };
+        }
+        return { report: reportsByRun.get(run.id) ?? null, run: publicRun };
+      });
       const latestReport = [...rounds].reverse().find((r) => r.report)?.report ?? null;
 
       return {
         acceptance,
+        isOwner,
         checks: checks.map((check) => ({
           ...check,
           evidence: check.result ? (evidenceByResult.get(check.result.id) ?? []) : [],
@@ -208,8 +254,8 @@ export const acceptanceRouter = router({
       };
     }),
 
-  /** Recent acceptances, newest first — the CLI list surface. */
-  list: acceptanceProcedure.query(async ({ ctx }) => ctx.acceptanceService.acceptanceModel.query()),
+  /** Recent acceptances (with subject headers), newest first — list panel + CLI. */
+  list: acceptanceProcedure.query(async ({ ctx }) => ctx.acceptanceService.listWithSubjects()),
 
   /**
    * Flip who can read the acceptance beyond its creator. Creation defaults are

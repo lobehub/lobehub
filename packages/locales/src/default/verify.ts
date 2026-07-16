@@ -104,6 +104,13 @@ export default {
   'acceptance.verdict.latestAt': 'last verified {{time}}',
   'acceptance.verdict.passed': 'All checks passed',
   'acceptance.viewFullReport': 'View full report',
+  'acceptance.workspace.emptyDetail.description':
+    'Pick an acceptance on the left to review its checks, rounds and evidence.',
+  'acceptance.workspace.emptyDetail.title': 'Select an acceptance',
+  'acceptance.workspace.listEmpty':
+    'Ingest a verification report with the CLI and its acceptance will show up here.',
+  'acceptance.workspace.listEmptyTitle': 'No acceptances yet',
+  'acceptance.workspace.title': 'Acceptances',
   'report.actions.copyLink': 'Copy link',
   'report.actions.copyLinkSuccess': 'Link copied',
   'report.actions.openInBrowser': 'Open in browser',

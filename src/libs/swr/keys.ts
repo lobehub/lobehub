@@ -715,6 +715,7 @@ export const verifyKeys = {
     'verify:acceptanceBundle',
     acceptanceId,
   ]),
+  acceptances: def('verify:acceptances', () => ['verify:acceptances']),
   criteria: def('verify:criteria', () => ['verify:criteria']),
   instruction: def('verify:instruction', (documentId: string) => [
     'verify:instruction',

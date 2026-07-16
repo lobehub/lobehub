@@ -1050,15 +1050,30 @@ export const desktopRoutes: RouteObject[] = [
     path: '/verify',
   },
 
-  // Subject-level delivery acceptance — separate from single-run verify reports.
+  // Subject-level delivery acceptance — the verify workspace's twin: a
+  // master-detail with the acceptance list on the left.
   {
-    element: dynamicElement(
-      () => import('@/routes/acceptance/[acceptanceId]'),
-      'Desktop > AcceptanceReport',
-    ),
+    children: [
+      {
+        element: dynamicElement(
+          () => import('@/routes/(main)/acceptance/empty'),
+          'Desktop > Acceptance Empty',
+        ),
+        index: true,
+      },
+      {
+        element: dynamicElement(
+          () => import('@/routes/acceptance/[acceptanceId]'),
+          'Desktop > AcceptanceReport',
+        ),
+        handle: { meta: acceptanceRouteMeta },
+        path: ':acceptanceId',
+      },
+    ],
+    element: dynamicElement(() => import('@/routes/(main)/acceptance'), 'Desktop > Acceptance'),
     errorElement: <ErrorBoundary />,
     handle: { meta: acceptanceRouteMeta },
-    path: '/acceptance/:acceptanceId',
+    path: '/acceptance',
   },
 
   // Devtools route (outside main layout, dev-only)
