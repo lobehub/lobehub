@@ -12,6 +12,7 @@ import type { LobeChatDatabase } from '../type';
 import {
   assignWorkspaceRoleToUser,
   revokeWorkspaceRolesForUser,
+  seedWorkspaceRoles,
 } from '../utils/seedWorkspaceRoles';
 
 const hasWorkspaceOwnerRole = async (
@@ -67,6 +68,16 @@ export class WorkspaceModel {
 
       await tx.insert(workspaceMembers).values({
         role: 'owner',
+        userId: this.userId,
+        workspaceId: workspace.id,
+      });
+
+      // Seed the built-in RBAC roles and grant the creator `workspace_owner`
+      // so role-based checks (e.g. the workspace API key owner gate) see the
+      // owner from day one — `workspace_members.role` alone is not enough.
+      await seedWorkspaceRoles(tx, workspace.id);
+      await assignWorkspaceRoleToUser(tx, {
+        roleName: WORKSPACE_SYSTEM_ROLES.OWNER,
         userId: this.userId,
         workspaceId: workspace.id,
       });

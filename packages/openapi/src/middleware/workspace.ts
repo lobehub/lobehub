@@ -86,9 +86,13 @@ export const workspaceAuthMiddleware = async (c: Context, next: Next) => {
   if (c.get('authType') === 'apikey') {
     const rbacModel = new RbacModel(serverDB, userId);
     const userRoles = await rbacModel.getUserRoles({ workspaceId });
-    const isWorkspaceOwner = userRoles.some(
-      (role) => role.name === WORKSPACE_SYSTEM_ROLES.OWNER && role.workspaceId === workspaceId,
-    );
+    // Workspaces created before RBAC seeding landed have no `rbac_user_roles`
+    // rows, so fall back to the membership role — role transitions keep both
+    // tables in sync, and the membership row was already loaded above.
+    const isWorkspaceOwner =
+      userRoles.some(
+        (role) => role.name === WORKSPACE_SYSTEM_ROLES.OWNER && role.workspaceId === workspaceId,
+      ) || membership.role === 'owner';
 
     if (!isWorkspaceOwner) {
       throw new HTTPException(403, {

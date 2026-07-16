@@ -5,6 +5,7 @@ import debug from 'debug';
 import { type NextRequest } from 'next/server';
 
 import { auth } from '@/auth';
+import { canUseWorkspaceApiKeys } from '@/business/server/workspaceApiKey';
 import { getServerDB } from '@/database/core/db-adaptor';
 import { ApiKeyModel } from '@/database/models/apiKey';
 import { authEnv, LOBE_CHAT_OIDC_AUTH_HEADER } from '@/envs/auth';
@@ -191,6 +192,20 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
 
     if (apiKeyAuth.workspaceId && workspaceId && workspaceId !== apiKeyAuth.workspaceId) {
       log('Workspace API key cannot access a different workspace; rejecting request');
+
+      return createContextInner({
+        ...commonContext,
+        traceContext,
+        userId: null,
+        workspaceId: undefined,
+      });
+    }
+
+    // Same availability gate as the OpenAPI workspace middleware: a workspace
+    // that loses the workspace-API-key entitlement must not keep serving
+    // already-issued keys.
+    if (apiKeyAuth.workspaceId && !(await canUseWorkspaceApiKeys(apiKeyAuth.workspaceId))) {
+      log('Workspace API key access is not available for this workspace; rejecting request');
 
       return createContextInner({
         ...commonContext,

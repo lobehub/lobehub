@@ -47,7 +47,9 @@ const codeToName = (code: string): string => {
  * linkage step. Permissions live in the global table (no workspaceId) — only
  * the *roles* are workspace-scoped.
  */
-const ensurePermissionsExist = async (db: LobeChatDatabase): Promise<Map<string, string>> => {
+const ensurePermissionsExist = async (
+  db: WorkspaceRoleMutationDb,
+): Promise<Map<string, string>> => {
   const requiredCodes = new Set<string>();
   for (const codes of Object.values(WORKSPACE_ROLE_PERMISSIONS)) {
     for (const code of codes) requiredCodes.add(code);
@@ -94,7 +96,7 @@ const ensurePermissionsExist = async (db: LobeChatDatabase): Promise<Map<string,
  * insert idempotent.
  */
 const upsertWorkspaceRole = async (
-  db: LobeChatDatabase,
+  db: WorkspaceRoleMutationDb,
   workspaceId: string,
   roleName: WorkspaceSystemRoleName,
   permissionIdByCode: Map<string, string>,
@@ -163,7 +165,7 @@ export interface SeededWorkspaceRoles {
  * - Re-run on the same workspace (no-op after the first run)
  */
 export const seedWorkspaceRoles = async (
-  db: LobeChatDatabase,
+  db: WorkspaceRoleMutationDb,
   workspaceId: string,
 ): Promise<SeededWorkspaceRoles> => {
   const permissionIdByCode = await ensurePermissionsExist(db);
