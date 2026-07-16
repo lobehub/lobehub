@@ -16,7 +16,6 @@ export const getToolsConfig = () => {
       JINA_USE_CN_DOMAINS: process.env.JINA_USE_CN_DOMAINS,
       SEARCH_PROVIDERS: process.env.SEARCH_PROVIDERS,
       SEARXNG_URL: process.env.SEARXNG_URL,
-      TOOL_NAME_MAX_LENGTH: process.env.TOOL_NAME_MAX_LENGTH,
       VISUAL_UNDERSTANDING_MODEL: process.env.VISUAL_UNDERSTANDING_MODEL,
       VISUAL_UNDERSTANDING_PROVIDER: process.env.VISUAL_UNDERSTANDING_PROVIDER,
     },
@@ -28,13 +27,6 @@ export const getToolsConfig = () => {
       JINA_USE_CN_DOMAINS: z.enum(['true', 'false']).optional(),
       SEARCH_PROVIDERS: z.string().optional(),
       SEARXNG_URL: z.string().url().optional(),
-      /**
-       * Max length for generated function-call tool names before they are
-       * compressed to an MD5 hash. Providers like OpenAI cap function names at
-       * 64 chars; other models don't, and compression hurts readability, so this
-       * is configurable. `0` disables length-based compression entirely.
-       */
-      TOOL_NAME_MAX_LENGTH: optionalNumberEnv(0, 512),
       VISUAL_UNDERSTANDING_MODEL: z.string().optional(),
       VISUAL_UNDERSTANDING_PROVIDER: z.string().optional(),
     },

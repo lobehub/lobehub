@@ -11,24 +11,41 @@ const TOOL_NAME_COMPONENT_PATTERN = /^[\w-]+$/;
 
 // OpenAI GPT function_call names can't be longer than 64 characters, so long
 // names are compressed to an MD5 hash. Other providers don't have this limit,
-// and the opaque hash hurts readability, so the threshold is configurable.
+// and the opaque hash hurts readability, so the threshold is configurable via
+// the `TOOL_NAME_MAX_LENGTH` env var (`0` disables length-based compression).
 const DEFAULT_TOOL_NAME_MAX_LENGTH = 64;
-let toolNameMaxLength = DEFAULT_TOOL_NAME_MAX_LENGTH;
 
 /**
- * Configure the max tool-name length before MD5 compression kicks in.
- *
- * The app pushes this in from env (`TOOL_NAME_MAX_LENGTH`) since context-engine
- * can't read env itself. Pass `0` (or a negative value) to disable length-based
- * compression entirely — names are then emitted at full length. `undefined` or
- * a non-finite value resets to the default (64). Invalid-character normalization
- * is unaffected; only the length-driven hashing is gated by this.
+ * Read the threshold from env, defaulting to 64. Read directly (not through the
+ * app env layer) and at module load so it is correct on every serverless worker
+ * / cold start — the same name must compress identically wherever `generate()`
+ * and `resolve()` run for an operation, including resume paths that never touch
+ * the tool-engine setup. Guarded for non-Node runtimes (browser SPA) where
+ * `process` may be undefined; there it falls back to the default.
+ */
+const readEnvMaxLength = (): number => {
+  try {
+    const raw = typeof process === 'undefined' ? undefined : process.env?.TOOL_NAME_MAX_LENGTH;
+    if (raw === undefined || raw === '') return DEFAULT_TOOL_NAME_MAX_LENGTH;
+    const parsed = Number.parseInt(raw, 10);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : DEFAULT_TOOL_NAME_MAX_LENGTH;
+  } catch {
+    return DEFAULT_TOOL_NAME_MAX_LENGTH;
+  }
+};
+
+let toolNameMaxLength = readEnvMaxLength();
+
+/**
+ * Override the max tool-name length before MD5 compression kicks in. Mainly for
+ * tests and hosts that source the value differently; normal runtime picks it up
+ * from env at module load. Pass `0` (or negative) to disable length-based
+ * compression entirely; `undefined`/non-finite re-reads the env default.
+ * Invalid-character normalization is independent and always applies.
  */
 export const setToolNameMaxLength = (value: number | undefined): void => {
   toolNameMaxLength =
-    typeof value === 'number' && Number.isFinite(value) && value >= 0
-      ? value
-      : DEFAULT_TOOL_NAME_MAX_LENGTH;
+    typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : readEnvMaxLength();
 };
 
 /** Current max tool-name length; `0` means length-based compression is off. */
