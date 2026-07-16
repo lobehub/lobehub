@@ -14,7 +14,8 @@
   ],
   "files": [
     "dist",
-    "man"
+    "man",
+    "skills"
   ],
   "scripts": {
     "build": "tsdown",

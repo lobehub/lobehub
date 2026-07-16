@@ -12,20 +12,48 @@
 // Requires the `ws` package to be resolvable from this file's own location —
 // Node's require() walks up ancestor node_modules automatically, so this works
 // whether the skill ships inside @lobehub/cli's own node_modules or a hoisted
-// monorepo root; no manual NODE_PATH wiring needed.
+// monorepo root; no manual NODE_PATH wiring needed. A `lh verify init`-copied
+// skill dir lives inside a consumer repo's harness skills dir, though, so the
+// ancestor walk from there never reaches @lobehub/cli's node_modules — fall
+// back to the `cliRoot` recorded in the sibling `.skill-meta.json`.
 
 const http = require('node:http');
 const fs = require('node:fs');
+const path = require('node:path');
 
-let WebSocket;
-try {
-  WebSocket = require('ws');
-} catch {
+function resolveWs() {
+  const attempted = [];
+  try {
+    return require('ws');
+  } catch {
+    attempted.push('ancestor node_modules walk from ' + __filename);
+  }
+
+  const metaPath = path.join(__dirname, '..', '.skill-meta.json');
+  let cliRoot;
+  try {
+    const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+    cliRoot = meta && meta.cliRoot;
+  } catch {
+    attempted.push(metaPath + ' (missing or unreadable)');
+  }
+
+  if (cliRoot) {
+    const cliRootWsPath = path.join(cliRoot, 'node_modules', 'ws');
+    try {
+      return require(cliRootWsPath);
+    } catch {
+      attempted.push(cliRootWsPath + ' (via .skill-meta.json cliRoot)');
+    }
+  }
+
   console.log(
     JSON.stringify({
       ok: false,
       error:
-        "Cannot find module 'ws'. This script requires the 'ws' package to be resolvable " +
+        "Cannot find module 'ws'. Tried: " +
+        attempted.join('; ') +
+        ". This script requires the 'ws' package to be resolvable " +
         'from its own install location (a dependency of @lobehub/cli, or installed ' +
         "alongside it). Run 'npm install ws' in the consuming project if using this " +
         'script standalone.',
@@ -33,6 +61,8 @@ try {
   );
   process.exit(7);
 }
+
+const WebSocket = resolveWs();
 
 const arg = (k, d) => {
   const i = process.argv.indexOf(k);
