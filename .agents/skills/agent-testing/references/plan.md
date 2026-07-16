@@ -6,28 +6,29 @@ Keep it concrete and compact: report observed state, not generic readiness claim
 ## Readiness verdicts
 
 - **✅ Ready**: every prerequisite for the proposed run is verified.
-- **⚠️ Ready with warnings**: execution can proceed; list non-blocking limitations and
-  their effect on evidence or scope.
-- **❌ Blocked**: execution cannot start until one or more prerequisites are resolved.
-- **⏳ Pending**: an agent-owned check is actively being resolved and has not reached a
-  final readiness verdict yet.
+- **⚠️ Ready with warnings**: execution can proceed; list non-blocking limitations
+  and their effect on evidence or scope.
+- **❌ Blocked**: execution cannot start until one or more prerequisites are
+  resolved.
+- **⏳ Pending**: an agent-owned check is actively being resolved and has not
+  reached a final readiness verdict yet.
 
 Always prefix the overall verdict and every Status cell with its emoji marker:
 `✅ Ready`, `⚠️ Warning`, `❌ Blocked`, or `⏳ Pending`. Do not use color words or
 bare status text without the marker; the table must remain scannable in clients
 that do not render semantic colors.
 
-Fix safe environment mechanics yourself before reporting. Separate remaining
-items by owner:
+Fix safe environment mechanics yourself before reporting. Separate remaining items
+by owner:
 
-- **Codex-owned**: dependencies, processes, ports, generated local env, seeded
+- **Agent-owned**: dependencies, processes, ports, generated local env, seeded
   fixtures, navigation, retries, and other work possible within the task's scope.
 - **User-owned**: secrets the user must supply, device/2FA approval, permissions
   only the user can grant, destructive authorization, or an unresolved product
   choice that materially changes the plan.
 
-Never put a Codex-owned item under “Needed from you.” If none remain, write
-`None` explicitly.
+Never put an agent-owned item under "Needed from you." If none remain, write `None`
+explicitly.
 
 ## Template
 
@@ -41,7 +42,7 @@ Environment
 | Workspace / branch | <✅ Ready/⚠️ Warning/❌ Blocked/⏳ Pending> | <path, branch/worktree, relevant dirty-state note>  |
 | Dependencies       | <✅ Ready/⚠️ Warning/❌ Blocked/⏳ Pending> | <root and selected standalone app status>           |
 | Runtime / ports    | <✅ Ready/⚠️ Warning/❌ Blocked/⏳ Pending> | <resolved URLs/ports and ownership or availability> |
-| Required services  | <✅ Ready/⚠️ Warning/❌ Blocked/⏳ Pending> | <DB, Redis, QStash, dev server—only those in scope> |
+| Required services  | <✅ Ready/⚠️ Warning/❌ Blocked/⏳ Pending> | <DB, cache, queue, dev server—only those in scope>  |
 | Auth               | <✅ Ready/⚠️ Warning/❌ Blocked/⏳ Pending> | <selected surface and verified signed-in state>     |
 | Evidence capture   | <✅ Ready/⚠️ Warning/❌ Blocked/⏳ Pending> | <CDP or OS capture readiness>                       |
 
@@ -60,19 +61,20 @@ Scope and assumptions
 
 Needed before execution
 
-- Codex will resolve: <remaining non-blocking or in-progress agent-owned work, or None>
+- Agent will resolve: <remaining non-blocking or in-progress agent-owned work, or None>
 - Needed from you: <exact user-owned prerequisite and why it is required, or None>
 ```
 
-Do not include irrelevant environment rows. Add a row when the run has another
-hard prerequisite, such as a native bot app, gateway, fixture repository, or
-specific external account.
+Do not include irrelevant environment rows. Add a row when the run has another hard
+prerequisite, such as a native app, gateway, fixture repository, or specific
+external account.
 
-When a check refines or replaces a requirement from an earlier Acceptance round, keep the
-old stable id if it is the same assertion. If the semantic assertion needs a new id, declare
-the replacement explicitly with `supersedes: ['old-check-id']`; title similarity is never a
-merge signal. For every user-visible UI case, plan a dedicated screenshot or recording for
-that exact claim—program output may supplement it but cannot replace visual evidence.
+When a check refines or replaces a requirement from an earlier Acceptance round,
+keep the old stable id if it is the same assertion. If the semantic assertion needs
+a new id, declare the replacement explicitly with `supersedes: ['old-check-id']`;
+title similarity is never a merge signal. For every user-visible UI case, plan a
+dedicated screenshot or recording for that exact claim — program output may
+supplement it but cannot replace visual evidence.
 
 On a follow-up round, seed the plan from `lh verify acceptance view <subject> --json`
 before writing any case (see SKILL.md "Before the next round"). Per-check policy:
