@@ -33,6 +33,9 @@ class BootErrorBoundary extends Component<BootErrorBoundaryProps, BootErrorBound
   private hasBooted = false;
 
   public componentDidMount() {
+    // A fallback mount is not a successful boot; preserve the reload budget across reporting.
+    if (this.state.hasError) return;
+
     this.hasBooted = true;
     this.resetReloadAttempts();
     this.cleanForceReloadMarker();
