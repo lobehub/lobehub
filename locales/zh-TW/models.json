@@ -768,6 +768,7 @@
   "kimi-k2.6.description": "Kimi-K2.6 是 Moonshot AI 推出的大型語言模型，具有卓越的編程和工具調用能力。僅支持在中國大陸部署服務。",
   "kimi-k2.7-code-highspeed.description": "Kimi K2.7 Code HighSpeed 是 Kimi K2.7 Code 的高速版本。該模型與 Kimi K2.7 Code 相同，但輸出速度約為 180 Tokens/s，短上下文場景下可達 260 Tokens/s，帶來更極致的編程體驗。",
   "kimi-k2.7-code.description": "Kimi K2.7 Code 是 Moonshot AI 基於 Kimi K2.6 開發的專注於編程的代理模型，在真實世界的長期編程任務中有顯著改進，並將思考 token 的使用量降低了約 30%。",
+  "kimi-k3.description": "Kimi K3 是 Kimi 至今最強大的模型，擁有 2.8 兆參數。基於 Kimi Delta Attention 和 Attention Residuals 架構，提供原生視覺理解能力以及 1M-token 的上下文窗口，適用於前沿智能場景，例如軟體工程、知識工作和深度推理。推理功能始終啟用，可透過頂層的 reasoning_effort 欄位進行配置。",
   "kling/kling-v3-image-generation.description": "支持最多10張參考影像，允許鎖定主題、元素及色調以確保風格一致性。結合風格轉換、肖像/角色參考、多影像融合及局部修補，提供靈活控制。呈現逼真的肖像細節，整體視覺精緻且層次豐富，具有電影級色彩及氛圍。",
   "kling/kling-v3-omni-image-generation.description": "解鎖電影敘事視覺效果，支持新系列影像生成及直接2K/4K輸出。深度分析提示中的視聽元素，精確執行創意指令。支持靈活的多參考輸入及全面的質量升級，非常適合故事板、敘事概念藝術及場景設計。",
   "kling/kling-v3-omni-video-generation.description": "全新“全參考”功能支持3至8秒影像或多張影像錨定角色元素。可匹配原始音頻及唇部動作，實現真實角色表現。增強影像一致性及動態表現。支持視聽同步及智能故事板設計。",

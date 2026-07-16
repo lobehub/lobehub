@@ -25,6 +25,8 @@
   "features.inputMarkdown.title": "Отображение Markdown при вводе",
   "features.messageTextSelectionActions.desc": "Показать быстрое действие при выделении текста в сообщениях чата, чтобы выделенный текст можно было добавить в контекст следующего разговора.",
   "features.messageTextSelectionActions.title": "Действия при выделении текста сообщения",
+  "features.oauthApps.desc": "Показать управление OAuth-приложениями в личных и рабочих настройках. Эта функция скрыта по умолчанию.",
+  "features.oauthApps.title": "OAuth-приложения",
   "features.platformAgent.desc": "Показать пункт \"Подключить агент\" в меню создания. Подключенные агенты (например, OpenClaw, Hermes) работают на ваших устройствах и связываются обратно через lh connect.",
   "features.platformAgent.title": "Подключить агент",
   "features.taskVerify.desc": "Добавьте раздел приемки доставки в детали задачи: опишите приемку в одном предложении, и ИИ создаст редактируемые критерии проверки.",

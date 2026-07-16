@@ -25,6 +25,8 @@
   "features.inputMarkdown.title": "Rendu Markdown dans la saisie",
   "features.messageTextSelectionActions.desc": "Afficher une action rapide lors de la sélection de texte dans les messages de chat afin que le texte sélectionné puisse être ajouté au contexte de la prochaine conversation.",
   "features.messageTextSelectionActions.title": "Actions de sélection de texte dans les messages",
+  "features.oauthApps.desc": "Afficher la gestion des applications OAuth dans les paramètres personnels et de l'espace de travail. Cette fonctionnalité est masquée par défaut.",
+  "features.oauthApps.title": "Applications OAuth",
   "features.platformAgent.desc": "Afficher l'entrée \"Connecter un agent\" dans le menu de création. Les agents connectés (par exemple, OpenClaw, Hermes) fonctionnent sur vos propres appareils et communiquent via lh connect.",
   "features.platformAgent.title": "Connecter un agent",
   "features.taskVerify.desc": "Ajoutez une section d'acceptation de livraison dans les détails de la tâche : décrivez l'acceptation en une phrase et laissez l'IA générer des critères de vérification modifiables.",

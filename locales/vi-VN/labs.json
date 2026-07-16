@@ -25,6 +25,8 @@
   "features.inputMarkdown.title": "Hiển Thị Markdown Trong Ô Nhập",
   "features.messageTextSelectionActions.desc": "Hiển thị hành động nhanh khi chọn văn bản trong tin nhắn trò chuyện để văn bản được chọn có thể được thêm vào ngữ cảnh cuộc trò chuyện tiếp theo.",
   "features.messageTextSelectionActions.title": "Hành Động Chọn Văn Bản Tin Nhắn",
+  "features.oauthApps.desc": "Hiển thị quản lý ứng dụng OAuth trong cài đặt cá nhân và không gian làm việc. Tính năng này bị ẩn theo mặc định.",
+  "features.oauthApps.title": "Ứng dụng OAuth",
   "features.platformAgent.desc": "Hiển thị mục \"Kết nối Agent\" trong menu tạo. Các agent được kết nối (ví dụ: OpenClaw, Hermes) chạy trên thiết bị của bạn và giao tiếp lại thông qua lh connect.",
   "features.platformAgent.title": "Kết nối Agent",
   "features.taskVerify.desc": "Thêm phần chấp nhận giao hàng vào chi tiết nhiệm vụ: mô tả chấp nhận trong một câu và để AI tạo tiêu chí xác minh có thể chỉnh sửa.",

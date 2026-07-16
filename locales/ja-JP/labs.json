@@ -25,6 +25,8 @@
   "features.inputMarkdown.title": "入力欄のMarkdownレンダリング",
   "features.messageTextSelectionActions.desc": "チャットメッセージ内のテキストを選択すると、次の会話コンテキストに選択したテキストを追加できるクイックアクションを表示します。",
   "features.messageTextSelectionActions.title": "メッセージテキスト選択アクション",
+  "features.oauthApps.desc": "個人およびワークスペース設定でOAuthアプリ管理を表示します。この機能はデフォルトでは非表示です。",
+  "features.oauthApps.title": "OAuthアプリ",
   "features.platformAgent.desc": "作成メニューに「エージェントを接続」エントリを表示します。接続されたエージェント（例: OpenClaw、Hermes）は、ユーザー自身のデバイス上で動作し、lh connectを介して通信します。",
   "features.platformAgent.title": "エージェントを接続",
   "features.taskVerify.desc": "タスク詳細に納品受け入れセクションを追加: 受け入れ内容を1文で記述し、AIが編集可能な検証基準を生成します。",

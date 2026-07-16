@@ -25,6 +25,8 @@
   "features.inputMarkdown.title": "Markdown-Darstellung im Eingabefeld",
   "features.messageTextSelectionActions.desc": "Zeigt eine Schnellaktion beim Auswählen von Text in Chatnachrichten an, damit der ausgewählte Text dem Kontext des nächsten Gesprächs hinzugefügt werden kann.",
   "features.messageTextSelectionActions.title": "Aktionen zur Textauswahl in Nachrichten",
+  "features.oauthApps.desc": "Zeige die Verwaltung von OAuth-Apps in den persönlichen und Arbeitsbereichseinstellungen. Diese Funktion ist standardmäßig ausgeblendet.",
+  "features.oauthApps.title": "OAuth-Apps",
   "features.platformAgent.desc": "Zeigt den Eintrag \"Agent verbinden\" im Erstellungsmenü an. Verbundene Agenten (z. B. OpenClaw, Hermes) laufen auf Ihren eigenen Geräten und kommunizieren über LH Connect zurück.",
   "features.platformAgent.title": "Agent verbinden",
   "features.taskVerify.desc": "Fügen Sie einen Abschnitt zur Lieferannahme in die Aufgabenbeschreibung hinzu: Beschreiben Sie die Annahme in einem Satz und lassen Sie die KI bearbeitbare Überprüfungskriterien erstellen.",

@@ -25,6 +25,8 @@
   "features.inputMarkdown.title": "輸入框 Markdown 渲染",
   "features.messageTextSelectionActions.desc": "在聊天訊息中選取文字時顯示快速操作，讓選取的文字可以添加到下一次對話的上下文中。",
   "features.messageTextSelectionActions.title": "訊息文字選取操作",
+  "features.oauthApps.desc": "在個人和工作區設定中顯示 OAuth 應用程式管理。此功能預設為隱藏。",
+  "features.oauthApps.title": "OAuth 應用程式",
   "features.platformAgent.desc": "在建立選單中顯示「連接代理」項目。已連接的代理（例如 OpenClaw、Hermes）運行於您的設備上，並通過 lh connect 進行通信。",
   "features.platformAgent.title": "連接代理",
   "features.taskVerify.desc": "在任務詳情中新增交付驗收部分：用一句話描述驗收內容，並讓 AI 生成可編輯的驗收標準。",

@@ -25,6 +25,8 @@
   "features.inputMarkdown.title": "Renderowanie Markdown w Polu Wprowadzania",
   "features.messageTextSelectionActions.desc": "Pokaż szybkie działanie podczas zaznaczania tekstu w wiadomościach czatu, aby wybrany tekst można było dodać do kontekstu następnej rozmowy.",
   "features.messageTextSelectionActions.title": "Akcje zaznaczania tekstu wiadomości",
+  "features.oauthApps.desc": "Pokaż zarządzanie aplikacjami OAuth w ustawieniach osobistych i przestrzeni roboczej. Ta funkcja jest domyślnie ukryta.",
+  "features.oauthApps.title": "Aplikacje OAuth",
   "features.platformAgent.desc": "Pokaż opcję „Połącz agenta” w menu tworzenia. Połączone agenty (np. OpenClaw, Hermes) działają na Twoich urządzeniach i komunikują się za pomocą lh connect.",
   "features.platformAgent.title": "Połącz agenta",
   "features.taskVerify.desc": "Dodaj sekcję akceptacji dostawy do szczegółów zadania: opisz akceptację w jednym zdaniu i pozwól AI wygenerować edytowalne kryteria weryfikacji.",
