@@ -201,6 +201,34 @@ describe('ComposioService.executeComposioTool', () => {
     );
   });
 
+  it('prefers metadata.composio.linkedByUserId over the row creator (owner reconnected a member row)', async () => {
+    // A workspace owner reconnected Gmail on a member-created connector row:
+    // upsertComposioConnector refreshes metadata (incl. linkedByUserId=owner) but
+    // keeps userId=member (the row creator, for manage-rights). The account is now
+    // linked under the owner, so execute must run under linkedByUserId, NOT userId.
+    mocks.connectorQueryByIdentifiers.mockResolvedValue([
+      activeConnectorRow({
+        metadata: {
+          composio: {
+            connectedAccountId: 'ca-connector',
+            linkedByUserId: 'owner-reconnector',
+            status: 'ACTIVE',
+          },
+        },
+        userId: 'member-creator',
+      }),
+    ]);
+    mocks.toolsExecute.mockResolvedValue({ data: 'sent' });
+
+    const result = await service().executeComposioTool(params);
+
+    expect(result.success).toBe(true);
+    expect(mocks.toolsExecute).toHaveBeenCalledWith(
+      'GMAIL_SEND_EMAIL',
+      expect.objectContaining({ connectedAccountId: 'ca-connector', userId: 'owner-reconnector' }),
+    );
+  });
+
   it('falls back to plugin customParams when the connector has no account', async () => {
     mocks.connectorQueryByIdentifiers.mockResolvedValue([]);
     mocks.pluginFindById.mockResolvedValue({

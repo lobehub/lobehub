@@ -180,12 +180,13 @@ export class ComposioService {
    * plugin customParams as fallback (old connections without a connector
    * projection).
    *
-   * `ownerUserId` is the row's `userId` — the user who linked the account
-   * (`connectedAccounts.link(ownerUserId, …)`). It is the Composio entity the
-   * account is bound to and MUST be the `userId` passed to `tools.execute`. In a
-   * workspace a member runs a shared agent whose connector belongs to another
-   * user; resolving off `buildWorkspaceWhere` returns that owner's row, and its
-   * `userId` is the correct entity — the caller's would not match.
+   * `ownerUserId` is the Composio entity the account is bound to and MUST be the
+   * `userId` passed to `tools.execute`. In a workspace a member runs a shared
+   * agent whose connector belongs to another user; the caller's id would not
+   * match. It is read from `metadata.composio.linkedByUserId` (the user who
+   * actually linked the current account) and falls back to the row creator
+   * (`userId`) for rows written before that field existed — the two diverge when
+   * a workspace owner reconnects a member-created connector.
    */
   private async resolveComposioAccount(
     identifier: string,
@@ -193,17 +194,23 @@ export class ComposioService {
   ): Promise<{ connectedAccountId: string; ownerUserId: string } | undefined> {
     if (this.connectorModel) {
       const [connector] = await this.connectorModel.resolveByIdentifiers([identifier], agentId);
-      const fromConnector = connector?.metadata?.composio?.connectedAccountId;
-      if (fromConnector) {
-        return { connectedAccountId: fromConnector, ownerUserId: connector.userId ?? this.userId! };
+      const composio = connector?.metadata?.composio;
+      if (composio?.connectedAccountId) {
+        return {
+          connectedAccountId: composio.connectedAccountId,
+          ownerUserId: composio.linkedByUserId ?? connector.userId ?? this.userId!,
+        };
       }
     }
 
     if (this.pluginModel) {
       const plugin = await this.pluginModel.findById(identifier);
-      const fromPlugin = plugin?.customParams?.composio?.connectedAccountId;
-      if (fromPlugin) {
-        return { connectedAccountId: fromPlugin, ownerUserId: plugin.userId ?? this.userId! };
+      const composio = plugin?.customParams?.composio;
+      if (composio?.connectedAccountId) {
+        return {
+          connectedAccountId: composio.connectedAccountId,
+          ownerUserId: composio.linkedByUserId ?? plugin?.userId ?? this.userId!,
+        };
       }
     }
 

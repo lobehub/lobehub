@@ -309,6 +309,9 @@ export const composioRouter = router({
               appSlug,
               authConfigId,
               connectedAccountId: connReq.id,
+              // The user entity the account was linked under — used at runtime as
+              // the Composio `userId` (see ComposioConnectorMetadata.linkedByUserId).
+              linkedByUserId: userId,
               redirectUrl: connReq.redirectUrl,
               status: 'PENDING',
             },
@@ -329,6 +332,7 @@ export const composioRouter = router({
           appSlug,
           authConfigId,
           connectedAccountId: connReq.id,
+          linkedByUserId: userId,
           redirectUrl: connReq.redirectUrl,
           status: 'PENDING',
         },
@@ -478,7 +482,17 @@ export const composioRouter = router({
       };
 
       const customParams = {
-        composio: { appSlug, authConfigId, connectedAccountId, redirectUrl, status },
+        composio: {
+          appSlug,
+          authConfigId,
+          connectedAccountId,
+          // Refresh the link owner on every (re)connect: a workspace owner may
+          // reconnect a member-created row, moving the Composio entity to the
+          // owner even though the row's userId (creator) stays put.
+          linkedByUserId: ctx.userId,
+          redirectUrl,
+          status,
+        },
       };
 
       // Personal-only plugin projection: skip for agent connections (see
@@ -502,7 +516,14 @@ export const composioRouter = router({
       // table. `tools` already carries the full manifest from the client.
       await upsertComposioConnector(ctx.connectorModel, ctx.connectorToolModel, {
         agentId,
-        composio: { appSlug, authConfigId, connectedAccountId, redirectUrl, status },
+        composio: {
+          appSlug,
+          authConfigId,
+          connectedAccountId,
+          linkedByUserId: ctx.userId,
+          redirectUrl,
+          status,
+        },
         identifier,
         label,
         replaceTools: true,

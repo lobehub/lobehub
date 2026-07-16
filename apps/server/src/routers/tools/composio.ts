@@ -42,16 +42,20 @@ export const composioToolsRouter = router({
       // Connector metadata first (new path); plugin customParams as fallback for
       // connections created before the connector projection existed.
       const [connector] = await ctx.connectorModel.queryByIdentifiers([input.identifier]);
-      let connectedAccountId = connector?.metadata?.composio?.connectedAccountId;
-      // The Composio user entity that OWNS the account (linked it via
-      // `connectedAccounts.link(ownerUserId, …)`), NOT the caller. In a workspace
-      // the resolved row may belong to another member; passing the caller's id
-      // fails Composio's account/entity validation.
-      let ownerUserId: string | undefined = connector?.userId;
+      const connectorComposio = connector?.metadata?.composio;
+      let connectedAccountId = connectorComposio?.connectedAccountId;
+      // The Composio user entity that OWNS the account (linked it), NOT the
+      // caller. In a workspace the resolved row may belong to another member;
+      // passing the caller's id fails Composio's account/entity validation.
+      // `linkedByUserId` tracks the true linker (diverges from the row creator
+      // when a workspace owner reconnects a member's row); fall back to the row
+      // creator for legacy rows without it.
+      let ownerUserId: string | undefined = connectorComposio?.linkedByUserId ?? connector?.userId;
       if (!connectedAccountId) {
         const plugin = await ctx.pluginModel.findById(input.identifier);
-        connectedAccountId = plugin?.customParams?.composio?.connectedAccountId;
-        ownerUserId = plugin?.userId;
+        const pluginComposio = plugin?.customParams?.composio;
+        connectedAccountId = pluginComposio?.connectedAccountId;
+        ownerUserId = pluginComposio?.linkedByUserId ?? plugin?.userId;
       }
 
       if (!connectedAccountId) {
