@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { topics } from '../../../schemas';
+import { topics, workspaces } from '../../../schemas';
 import { AgentDocumentModel } from '../../agentDocuments';
 import { TaskModel } from '../../task';
 import { WorkModel } from '..';
@@ -168,6 +168,32 @@ describe('WorkModel · listByWorkspace', () => {
 
     const { items } = await workModel.listByWorkspace({});
     expect(items).toEqual([]);
+  });
+
+  it('keeps workspace external Works private to their registrant', async () => {
+    const workspaceId = 'work-test-external-workspace';
+    await serverDB.insert(workspaces).values({
+      id: workspaceId,
+      name: 'External Work Test Workspace',
+      primaryOwnerId: userId,
+      slug: workspaceId,
+    });
+
+    const ownerWorks = new WorkModel(serverDB, userId, workspaceId);
+    const memberWorks = new WorkModel(serverDB, userId2, workspaceId);
+    const work = await ownerWorks.registerExternal({
+      changeType: 'created',
+      identifier: 'lobehub/lobehub#42',
+      resourceId: 'lobehub/lobehub#42',
+      resourceType: 'github_issue',
+      toolCallId: 'tool-call-private-external',
+      toolIdentifier: 'github',
+      toolName: 'create_issue',
+    });
+
+    expect(work).toMatchObject({ userId, visibility: 'private' });
+    expect((await ownerWorks.listByWorkspace({})).items).toHaveLength(1);
+    expect((await memberWorks.listByWorkspace({})).items).toHaveLength(0);
   });
 
   it('flags an orphaned task work whose task was deleted without the tool', async () => {

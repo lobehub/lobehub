@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { documents, works, workspaces, workVersions } from '../../../schemas';
 import { AgentDocumentModel } from '../../agentDocuments';
+import { DocumentModel } from '../../document';
 import { WorkModel } from '..';
 import {
   agentId,
@@ -49,6 +50,7 @@ describe('WorkModel · document', () => {
       toolIdentifier: 'lobe-agent-documents',
       title: 'Research Notes',
       type: 'document',
+      visibility: 'public',
     });
 
     const versions = await workModel.listVersions(work!.id);
@@ -340,13 +342,23 @@ describe('WorkModel · workspace document visibility', () => {
 
   it('keeps a public-document Work visible to other members', async () => {
     await seedWorkspace();
+    const ownerDocuments = new DocumentModel(serverDB, userId, workspaceId);
     const memberWorks = new WorkModel(serverDB, userId2, workspaceId);
 
-    await registerWorkspaceDocument('public');
+    const { doc } = await registerWorkspaceDocument('public');
 
     const memberView = await memberWorks.listByConversation({ topicId });
     expect(memberView).toHaveLength(1);
     expect(memberView[0]).toMatchObject({ title: 'Shared doc', type: 'document' });
+
+    await ownerDocuments.setVisibility(doc.documentId, 'private');
+
+    const [mirrored] = await serverDB
+      .select({ visibility: works.visibility })
+      .from(works)
+      .where(eq(works.resourceId, doc.documentId));
+    expect(mirrored.visibility).toBe('private');
+    expect(await memberWorks.listByConversation({ topicId })).toHaveLength(0);
   });
 
   it('keeps an orphaned document Work (backing row deleted) visible to the registrant only', async () => {

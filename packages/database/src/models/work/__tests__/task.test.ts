@@ -2,7 +2,7 @@
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { messages, tasks, topics, works, workspaces, workVersions } from '../../../schemas';
+import { messages, topics, works, workspaces, workVersions } from '../../../schemas';
 import { TaskModel } from '../../task';
 import { WorkModel } from '..';
 import {
@@ -90,6 +90,7 @@ describe('WorkModel · task', () => {
       title: 'Work MVP plan',
       toolName: 'createTask',
       toolIdentifier: 'lobe-task',
+      visibility: 'public',
     });
 
     const worksInConversation = await workModel.listByConversation({ threadId, topicId });
@@ -852,9 +853,14 @@ describe('WorkModel · workspace task visibility', () => {
     expect(memberView).toHaveLength(1);
     expect(expectTaskListItem(memberView[0]).task.name).toBe('Shared task');
 
-    // The guard reads live visibility, so flipping the task private hides the
-    // existing Work (and its versions) from other members immediately.
-    await serverDB.update(tasks).set({ visibility: 'private' }).where(eq(tasks.id, task.id));
+    // The task transition mirrors visibility onto Work in the same transaction.
+    await ownerTasks.updateVisibility(task.id, 'private');
+
+    const [mirrored] = await serverDB
+      .select({ visibility: works.visibility })
+      .from(works)
+      .where(eq(works.resourceId, task.id));
+    expect(mirrored.visibility).toBe('private');
 
     expect(await memberWorks.listByConversation({ topicId })).toHaveLength(0);
     expect(await ownerWorks.listByConversation({ topicId })).toHaveLength(1);
@@ -885,16 +891,18 @@ describe('WorkModel · workspace task visibility', () => {
       }),
     ).toBeNull();
 
-    expect(
-      await memberWorks.registerTask({
-        changeType: 'updated',
-        toolCallId: 'tool-call-member-public',
-        toolName: 'updateTask',
-        toolIdentifier: 'lobe-task',
-        taskId: publicTask.id,
-        topicId,
-      }),
-    ).not.toBeNull();
+    const memberRegisteredPublicWork = await memberWorks.registerTask({
+      changeType: 'updated',
+      toolCallId: 'tool-call-member-public',
+      toolName: 'updateTask',
+      toolIdentifier: 'lobe-task',
+      taskId: publicTask.id,
+      topicId,
+    });
+    expect(memberRegisteredPublicWork).toMatchObject({
+      userId,
+      visibility: 'public',
+    });
   });
 
   it('hides an orphaned private-task Work from other members but keeps it for the registrant', async () => {

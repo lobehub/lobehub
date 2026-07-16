@@ -38,7 +38,13 @@ export const registerExternalWork = async (
 
   return registerWorkVersion(
     ctx,
-    { resourceId: params.resourceId, resourceType: params.resourceType, type: 'external' },
+    {
+      resourceId: params.resourceId,
+      resourceType: params.resourceType,
+      type: 'external',
+      userId: ctx.userId,
+      visibility: 'private',
+    },
     params,
     () => ({ display, patchFields: params.patchFields }),
   );

@@ -28,6 +28,7 @@ import { merge } from '@/utils/merge';
 import { documents } from '../schemas/file';
 import type { NewTaskComment, TaskCommentItem } from '../schemas/task';
 import { taskComments, taskDependencies, taskDocuments, tasks, taskTopics } from '../schemas/task';
+import { works } from '../schemas/work';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspaceWhere } from '../utils/workspace';
 
@@ -326,6 +327,23 @@ export class TaskModel {
         .update(taskDocuments)
         .set({ visibility })
         .where(and(inArray(taskDocuments.taskId, taskIds), this.docsOwnership()));
+
+      // Work is a denormalized resource projection. Keep its indexed visibility
+      // mirror in the same transaction as the task subtree so gallery/list
+      // queries cannot observe a stale public row after demotion.
+      await tx
+        .update(works)
+        .set({ visibility })
+        .where(
+          and(
+            eq(works.resourceType, 'task'),
+            inArray(works.resourceId, taskIds),
+            buildWorkspaceWhere(
+              { userId: this.userId, workspaceId: this.workspaceId },
+              { userId: works.userId, workspaceId: works.workspaceId },
+            ),
+          ),
+        );
 
       // Demotion-only cascade for the event-shaped child rows (see docstring):
       // their visibility mirrors the task, so pulling the task back to private

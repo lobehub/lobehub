@@ -141,6 +141,7 @@ const workIdentityFields = {
   updatedAt: works.updatedAt,
   url: works.url,
   userId: works.userId,
+  visibility: works.visibility,
   workspaceId: works.workspaceId,
 };
 

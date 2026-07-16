@@ -81,7 +81,13 @@ export const registerDocumentWork = async (
 
   return registerWorkVersion(
     ctx,
-    { resourceId: doc.id, resourceType: 'document', type: 'document' },
+    {
+      resourceId: doc.id,
+      resourceType: 'document',
+      type: 'document',
+      userId: doc.userId,
+      visibility: doc.visibility,
+    },
     params,
     () => ({
       display: documentDisplayColumns(doc, params),

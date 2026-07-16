@@ -23,10 +23,9 @@ export interface WorkContext {
 /**
  * Row-level guard for task Works: visible iff the viewer registered the Work
  * themselves OR can see the live task under the public-or-owner rule.
- * `buildWorkspaceWhere` only scopes Works to the workspace; task rows
- * additionally carry their own `visibility`, so without this any member could
- * read another member's private-task Work (snapshot title and identifier, plus
- * live name/instruction/status via the task join). The registrant branch keeps
+ * `buildWorkspaceWhere` filters the mirrored `works.visibility`; this live
+ * resource check is defense in depth for stale/moved resources and direct DB
+ * mutations that bypass the visibility cascade. The registrant branch keeps
  * orphaned Works (task row hard-deleted outside the tool path) rendering from
  * their snapshot for their creator, while an orphan of a formerly-private task
  * never leaks its snapshot to other members — the trade-off is that other
@@ -48,10 +47,10 @@ const taskVisibilityGuard = (ctx: WorkContext): SQL =>
 
 /**
  * Row-level guard for document Works, mirroring {@link taskVisibilityGuard}:
- * `works` carries no visibility column, so without this any workspace member
- * could read another member's private document's Work title/description. Visible
- * iff the viewer registered the Work themselves OR can see the backing document
- * under the public-or-owner rule.
+ * `works.visibility` is the indexed primary filter; this live resource check
+ * additionally prevents a stale or moved backing document from exposing its
+ * Work snapshot. Visible iff the viewer registered the Work themselves OR can
+ * see the backing document under the public-or-owner rule.
  *
  * Unlike tasks, `documents.visibility` is NOT NULL default 'public', so there is
  * no null branch to treat as public. Orphaned document Works (backing row

@@ -80,7 +80,13 @@ export const registerTaskWork = async (ctx: WorkContext, params: RegisterTaskWor
 
   return registerWorkVersion(
     ctx,
-    { resourceId: task.id, resourceType: 'task', type: 'task' },
+    {
+      resourceId: task.id,
+      resourceType: 'task',
+      type: 'task',
+      userId: task.createdByUserId,
+      visibility: task.visibility,
+    },
     params,
     () => ({ display: taskDisplayColumns(task) }),
   );

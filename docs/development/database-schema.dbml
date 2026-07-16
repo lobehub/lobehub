@@ -2755,6 +2755,7 @@ table works {
   root_operation_id text
   user_id text [not null]
   workspace_id text
+  visibility text [not null]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
 
@@ -2763,6 +2764,7 @@ table works {
     (workspace_id, resource_type, resource_id) [name: 'works_resource_workspace_unique', unique]
     user_id [name: 'works_user_id_idx']
     workspace_id [name: 'works_workspace_id_idx']
+    (workspace_id, visibility, user_id) [name: 'works_workspace_visibility_idx']
     (user_id, updated_at, id) [name: 'works_user_updated_at_id_idx']
     (workspace_id, updated_at, id) [name: 'works_workspace_updated_at_id_idx']
     (root_operation_id, updated_at, id) [name: 'works_root_operation_updated_at_id_idx']

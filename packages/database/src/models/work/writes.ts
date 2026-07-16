@@ -5,6 +5,7 @@ import type {
   WorkItem,
   WorkResourceType,
   WorkType,
+  WorkVisibility,
 } from '@lobechat/types';
 import { and, eq, sql } from 'drizzle-orm';
 
@@ -92,6 +93,8 @@ interface RegisterWorkIdentity {
   resourceId: string;
   resourceType: WorkResourceType;
   type: WorkType;
+  userId: string;
+  visibility: WorkVisibility;
 }
 
 /**
@@ -153,7 +156,6 @@ export const registerWorkVersion = async (
             ...identity,
             toolIdentifier: params.toolIdentifier,
             toolName: params.toolName,
-            userId: ctx.userId,
             workspaceId: ctx.workspaceId ?? null,
           })
           .onConflictDoNothing()
@@ -252,6 +254,8 @@ export const registerWorkVersion = async (
             toolName: params.toolName,
             updatedAt: now,
             url: snapshot.url,
+            userId: identity.userId,
+            visibility: identity.visibility,
           })
           .where(and(eq(works.id, locked.id), workOwnership(txCtx)))
           .returning();

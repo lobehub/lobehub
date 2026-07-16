@@ -4,6 +4,7 @@ import type {
   WorkVersionChangeType,
   WorkVersionCumulativeUsage,
   WorkVersionMetadata,
+  WorkVisibility,
 } from '@lobechat/types';
 import { isNotNull, isNull } from 'drizzle-orm';
 import { index, integer, jsonb, pgTable, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
@@ -73,11 +74,18 @@ export const works = pgTable(
     /** Latest runtime operation that produced a version and therefore owns the current card. */
     rootOperationId: text('root_operation_id'),
 
+    /** Backing-resource owner for task/document Works; registrant for external Works. */
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
     /** Null for personal Works; determines which resource unique index applies below. */
     workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
+    /**
+     * Visibility within the owning workspace. Registration mirrors task/document
+     * visibility; external Works stay private until a shared authorization source exists.
+     * Ignored in personal mode where the row is implicitly private to its owner.
+     */
+    visibility: text('visibility').$type<WorkVisibility>().notNull(),
 
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -95,6 +103,8 @@ export const works = pgTable(
     index('works_user_id_idx').on(t.userId),
     /** Supports workspace-scoped ownership filters and cascading cleanup when a workspace is deleted. */
     index('works_workspace_id_idx').on(t.workspaceId),
+    /** Supports workspace public-or-owner visibility filtering. */
+    index('works_workspace_visibility_idx').on(t.workspaceId, t.visibility, t.userId),
     /** Powers keyset pagination of personal Works ordered by latest update and stable id. */
     index('works_user_updated_at_id_idx')
       .on(t.userId, t.updatedAt, t.id)

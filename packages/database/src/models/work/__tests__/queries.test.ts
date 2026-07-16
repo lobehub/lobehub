@@ -278,6 +278,7 @@ describe('WorkModel · queries', () => {
         toolName: 'manual-test',
         type: 'document',
         userId,
+        visibility: 'private',
       })
       .returning();
 

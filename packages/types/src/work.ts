@@ -6,6 +6,7 @@ export type GithubWorkResourceType = 'github_issue' | 'github_pull_request';
 /** Every resource type backed by the unified `external` Work type. */
 export type ExternalWorkResourceType = GithubWorkResourceType | LinearWorkResourceType;
 export type WorkResourceType = 'document' | ExternalWorkResourceType | 'task';
+export type WorkVisibility = 'private' | 'public';
 /**
  * How a version changed the Work. Not derivable from `version === 1`: updating
  * an external resource that was never registered before yields a v1 row with
@@ -57,6 +58,8 @@ export interface WorkItem {
   /** Denormalized current-version canonical open target. */
   url: string | null;
   userId: string;
+  /** Workspace visibility mirrored from the backing resource; external Works are private. */
+  visibility: WorkVisibility;
   workspaceId: string | null;
 }
 
