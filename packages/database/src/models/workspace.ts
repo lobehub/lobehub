@@ -39,6 +39,30 @@ const hasWorkspaceOwnerRole = async (
   return rows.length > 0;
 };
 
+/**
+ * Whether `userId` currently holds owner status in `workspaceId` — the RBAC
+ * owner role, with a fallback to the membership role for workspaces created
+ * before RBAC seeding landed. Used by the workspace-API-key owner gates on
+ * both the OpenAPI and lambda TRPC surfaces.
+ */
+export const hasWorkspaceOwnerAccess = async (
+  db: LobeChatDatabase,
+  params: { userId: string; workspaceId: string },
+): Promise<boolean> => {
+  if (await hasWorkspaceOwnerRole(db, params.workspaceId, params.userId)) return true;
+
+  const membership = await db.query.workspaceMembers.findFirst({
+    columns: { role: true },
+    where: and(
+      eq(workspaceMembers.workspaceId, params.workspaceId),
+      eq(workspaceMembers.userId, params.userId),
+      isNull(workspaceMembers.deletedAt),
+    ),
+  });
+
+  return membership?.role === 'owner';
+};
+
 export class WorkspaceModel {
   protected readonly db: LobeChatDatabase;
   protected readonly userId: string;
