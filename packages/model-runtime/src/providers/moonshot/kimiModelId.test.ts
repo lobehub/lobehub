@@ -4,6 +4,7 @@ import {
   isKimiAlwaysPreserveThinkingModel,
   isKimiNativeThinkingModel,
   isKimiPreserveThinkingModel,
+  isKimiReasoningModel,
   isKimiThinkingToggleModel,
   parseKimiModelId,
 } from './kimiModelId';
@@ -49,6 +50,38 @@ describe('parseKimiModelId', () => {
     });
   });
 
+  it('should parse Kimi K3 generation ids', () => {
+    expect(parseKimiModelId('kimi-k3')).toEqual({
+      family: 'k',
+      majorVersion: 3,
+      normalizedModelId: 'kimi-k3',
+      source: 'moonshot',
+    });
+
+    expect(parseKimiModelId('kimi-k3.1')).toEqual({
+      family: 'k',
+      majorVersion: 3,
+      minorVersion: 1,
+      normalizedModelId: 'kimi-k3.1',
+      source: 'moonshot',
+    });
+
+    expect(parseKimiModelId('kimi-k3-code')).toEqual({
+      family: 'k',
+      majorVersion: 3,
+      normalizedModelId: 'kimi-k3-code',
+      source: 'moonshot',
+      variant: 'code',
+    });
+
+    expect(parseKimiModelId('moonshotai/kimi-k3')).toEqual({
+      family: 'k',
+      majorVersion: 3,
+      normalizedModelId: 'kimi-k3',
+      source: 'openRouter',
+    });
+  });
+
   it('should return undefined for non-Kimi ids', () => {
     expect(parseKimiModelId('claude-sonnet-4-5')).toBeUndefined();
   });
@@ -65,6 +98,17 @@ describe('isKimiThinkingToggleModel', () => {
     expect(isKimiThinkingToggleModel('kimi-k2-thinking')).toBe(false);
     expect(isKimiThinkingToggleModel('kimi-k2-turbo-preview')).toBe(false);
   });
+
+  it('should return true for the whole Kimi K3 generation, minor optional', () => {
+    expect(isKimiThinkingToggleModel('kimi-k3')).toBe(true);
+    expect(isKimiThinkingToggleModel('kimi-k3.1')).toBe(true);
+    expect(isKimiThinkingToggleModel('moonshotai/kimi-k3')).toBe(true);
+  });
+
+  it('should return false for Kimi K3 native thinking variants', () => {
+    expect(isKimiThinkingToggleModel('kimi-k3-code')).toBe(false);
+    expect(isKimiThinkingToggleModel('kimi-k3-thinking')).toBe(false);
+  });
 });
 
 describe('isKimiNativeThinkingModel', () => {
@@ -80,6 +124,17 @@ describe('isKimiNativeThinkingModel', () => {
     expect(isKimiNativeThinkingModel('kimi-k2.5')).toBe(false);
     expect(isKimiNativeThinkingModel('kimi-k2.6')).toBe(false);
   });
+
+  it('should treat Kimi K3 -code and -thinking variants as native thinking', () => {
+    expect(isKimiNativeThinkingModel('kimi-k3-code')).toBe(true);
+    expect(isKimiNativeThinkingModel('kimi-k3-thinking')).toBe(true);
+  });
+
+  it('should return false for bare Kimi K3 generation ids', () => {
+    expect(isKimiNativeThinkingModel('kimi-k3')).toBe(false);
+    expect(isKimiNativeThinkingModel('kimi-k3.1')).toBe(false);
+    expect(isKimiNativeThinkingModel('moonshotai/kimi-k3')).toBe(false);
+  });
 });
 
 describe('isKimiAlwaysPreserveThinkingModel', () => {
@@ -89,9 +144,15 @@ describe('isKimiAlwaysPreserveThinkingModel', () => {
     expect(isKimiAlwaysPreserveThinkingModel('kimi-k2.8-code-preview')).toBe(true);
   });
 
+  it('should return true for Kimi K3 code models', () => {
+    expect(isKimiAlwaysPreserveThinkingModel('kimi-k3-code')).toBe(true);
+  });
+
   it('should return false for switchable and non-code Kimi models', () => {
     expect(isKimiAlwaysPreserveThinkingModel('kimi-k2.6')).toBe(false);
     expect(isKimiAlwaysPreserveThinkingModel('kimi-k2-thinking')).toBe(false);
+    expect(isKimiAlwaysPreserveThinkingModel('kimi-k3')).toBe(false);
+    expect(isKimiAlwaysPreserveThinkingModel('kimi-k3-thinking')).toBe(false);
   });
 });
 
@@ -100,9 +161,34 @@ describe('isKimiPreserveThinkingModel', () => {
     expect(isKimiPreserveThinkingModel('kimi-k2.6')).toBe(true);
   });
 
+  it('should return true for bare Kimi K3 generation ids', () => {
+    expect(isKimiPreserveThinkingModel('kimi-k3')).toBe(true);
+    expect(isKimiPreserveThinkingModel('kimi-k3.1')).toBe(true);
+  });
+
   it('should return false for other Kimi models', () => {
     expect(isKimiPreserveThinkingModel('kimi-k2.5')).toBe(false);
     expect(isKimiPreserveThinkingModel('kimi-k2.7-code')).toBe(false);
     expect(isKimiPreserveThinkingModel('kimi-k2-thinking')).toBe(false);
+    // K3 code always has Preserved Thinking active, so the param is redundant
+    expect(isKimiPreserveThinkingModel('kimi-k3-code')).toBe(false);
+  });
+});
+
+describe('isKimiReasoningModel', () => {
+  it('should return true for dot-versioned Kimi K2 models and later generations', () => {
+    expect(isKimiReasoningModel('kimi-k2.5')).toBe(true);
+    expect(isKimiReasoningModel('kimi-k2.6')).toBe(true);
+    expect(isKimiReasoningModel('kimi-k2.7-code')).toBe(true);
+    expect(isKimiReasoningModel('kimi-k3')).toBe(true);
+    expect(isKimiReasoningModel('kimi-k3.1')).toBe(true);
+    expect(isKimiReasoningModel('kimi-k3-code')).toBe(true);
+    expect(isKimiReasoningModel('moonshotai/kimi-k3')).toBe(true);
+  });
+
+  it('should return false for legacy K2 ids without a minor version and non-Kimi models', () => {
+    expect(isKimiReasoningModel('kimi-k2-0711-preview')).toBe(false);
+    expect(isKimiReasoningModel('kimi-k2-thinking')).toBe(false);
+    expect(isKimiReasoningModel('moonshot-v1-8k')).toBe(false);
   });
 });

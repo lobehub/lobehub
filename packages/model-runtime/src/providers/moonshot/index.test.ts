@@ -23,8 +23,8 @@ const defaultOpenAIBaseURL = 'https://api.moonshot.cn/v1';
 const anthropicBaseURL = 'https://api.moonshot.cn/anthropic';
 
 // Mock the console.error and console.warn to avoid polluting test output
-vi.spyOn(console, 'error').mockImplementation(() => { });
-vi.spyOn(console, 'warn').mockImplementation(() => { });
+vi.spyOn(console, 'error').mockImplementation(() => {});
+vi.spyOn(console, 'warn').mockImplementation(() => {});
 
 beforeEach(() => {
   loadModelsMock.mockResolvedValue([]);
@@ -370,6 +370,52 @@ describe('LobeMoonshotOpenAI', () => {
 
         const payload = getLastRequestPayload();
         expect(payload.thinking).toEqual({ keep: 'all', type: 'enabled' });
+      });
+
+      it('should handle kimi-k3 model with thinking enabled by default', async () => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'kimi-k3',
+          temperature: 0.5,
+          top_p: 0.8,
+        });
+
+        const payload = getLastRequestPayload();
+        expect(payload.temperature).toBe(1);
+        expect(payload.top_p).toBe(0.95);
+        expect(payload.frequency_penalty).toBe(0);
+        expect(payload.presence_penalty).toBe(0);
+        expect(payload.thinking).toEqual({ type: 'enabled' });
+      });
+
+      it('should handle kimi-k3 model with thinking disabled', async () => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'kimi-k3',
+          thinking: { budget_tokens: 0, type: 'disabled' },
+        });
+
+        const payload = getLastRequestPayload();
+        expect(payload.temperature).toBe(0.6);
+        expect(payload.thinking).toEqual({ type: 'disabled' });
+      });
+
+      it('should force reasoning_content on assistant messages for kimi-k3', async () => {
+        await instance.chat({
+          messages: [
+            { content: 'Hello', role: 'user' },
+            { content: 'Response', role: 'assistant' },
+            { content: 'Follow-up', role: 'user' },
+          ],
+          model: 'kimi-k3',
+        });
+
+        const payload = getLastRequestPayload();
+        const assistantMessage = payload.messages.find(
+          (message: any) => message.role === 'assistant',
+        );
+
+        expect(assistantMessage?.reasoning_content).toBe('');
       });
     });
 

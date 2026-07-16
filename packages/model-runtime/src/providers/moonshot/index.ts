@@ -73,7 +73,7 @@ const toContentArray = (content: any) =>
 
 /**
  * Normalize assistant messages for Anthropic format.
- * When forceThinking is true (kimi-k2.x family with thinking enabled), every assistant
+ * When forceThinking is true (kimi thinking family with thinking enabled), every assistant
  * message must carry a thinking block, otherwise Moonshot rejects with:
  * "thinking is enabled but reasoning_content is missing in assistant tool call message"
  */
@@ -100,7 +100,7 @@ const normalizeMessagesForAnthropic = (
 
 /**
  * Normalize assistant messages for OpenAI format.
- * When forceReasoning is true (kimi-k2.x family with thinking enabled), every assistant
+ * When forceReasoning is true (kimi thinking family with thinking enabled), every assistant
  * message must carry reasoning_content (even as empty string), similar to DeepSeek.
  */
 const normalizeMessagesForOpenAI = (
@@ -124,7 +124,7 @@ const normalizeMessagesForOpenAI = (
   });
 
 /**
- * Build Moonshot Anthropic format payload with special handling for kimi-k2.x thinking toggle
+ * Build Moonshot Anthropic format payload with special handling for the kimi thinking toggle
  */
 const buildMoonshotAnthropicPayload = async (
   payload: ChatStreamPayload,
@@ -138,10 +138,10 @@ const buildMoonshotAnthropicPayload = async (
     )) ??
     8192;
 
-  const isK2Family = isKimiThinkingToggleModel(payload.model);
+  const isThinkingToggle = isKimiThinkingToggleModel(payload.model);
   const isNativeThinking = isKimiNativeThinkingModel(payload.model);
   const isThinkingEnabled =
-    isNativeThinking || (isK2Family && payload.thinking?.type !== 'disabled');
+    isNativeThinking || (isThinkingToggle && payload.thinking?.type !== 'disabled');
 
   const basePayload = await buildDefaultAnthropicPayload({
     ...payload,
@@ -153,7 +153,7 @@ const buildMoonshotAnthropicPayload = async (
   const tools = appendSearchTool(basePayload.tools, payload.enabledSearch);
   const basePayloadWithSearch = { ...basePayload, tools };
 
-  if (!isK2Family && !isNativeThinking) return basePayloadWithSearch;
+  if (!isThinkingToggle && !isNativeThinking) return basePayloadWithSearch;
 
   const resolvedThinkingBudget = payload.thinking?.budget_tokens
     ? Math.min(payload.thinking.budget_tokens, resolvedMaxTokens - 1)
@@ -163,8 +163,8 @@ const buildMoonshotAnthropicPayload = async (
       ? {
           budget_tokens: resolvedThinkingBudget,
           type: 'enabled' as const,
-          // Only inject keep:'all' for kimi-k2.6; kimi-k2.5 does not support it and
-          // kimi-k2.7-code always has Preserved Thinking active (no need to pass the param)
+          // Inject keep:'all' only for models that accept the param (kimi-k2.6 and assumed
+          // k3+); kimi-k2.5 rejects it and kimi-k2.7-code always has Preserved Thinking active
           ...(payload.preserveThinking && isKimiPreserveThinkingModel(payload.model)
             ? { keep: 'all' as const }
             : {}),
@@ -186,19 +186,19 @@ const buildMoonshotOpenAIPayload = (
 ): OpenAI.ChatCompletionCreateParamsStreaming => {
   const { enabledSearch, messages, model, temperature, thinking, tools, ...rest } = payload;
 
-  const isK2Family = isKimiThinkingToggleModel(model);
+  const isThinkingToggle = isKimiThinkingToggleModel(model);
   const isNativeThinking = isKimiNativeThinkingModel(model);
-  const isThinkingEnabled = isNativeThinking || (isK2Family && thinking?.type !== 'disabled');
+  const isThinkingEnabled = isNativeThinking || (isThinkingToggle && thinking?.type !== 'disabled');
   const normalizedMessages = normalizeMessagesForOpenAI(messages, isThinkingEnabled);
   const moonshotTools = appendSearchTool(tools, enabledSearch);
 
-  if (isK2Family || isNativeThinking) {
+  if (isThinkingToggle || isNativeThinking) {
     const thinkingParam =
       isNativeThinking || thinking?.type !== 'disabled'
         ? {
             type: 'enabled',
-            // Only inject keep:'all' for kimi-k2.6; kimi-k2.5 does not support it and
-            // kimi-k2.7-code always has Preserved Thinking active (no need to pass the param)
+            // Inject keep:'all' only for models that accept the param (kimi-k2.6 and assumed
+            // k3+); kimi-k2.5 rejects it and kimi-k2.7-code always has Preserved Thinking active
             ...(payload.preserveThinking && isKimiPreserveThinkingModel(model)
               ? { keep: 'all' }
               : {}),

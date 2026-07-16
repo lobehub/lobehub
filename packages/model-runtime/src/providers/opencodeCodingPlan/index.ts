@@ -6,6 +6,7 @@ import { createRouterRuntime } from '../../core/RouterRuntime';
 import type { CreateRouterRuntimeOptions } from '../../core/RouterRuntime/createRuntime';
 import type { ChatStreamPayload } from '../../types';
 import { processMultiProviderModelList } from '../../utils/modelParse';
+import { isKimiReasoningModel } from '../moonshot/kimiModelId';
 import { resolveProviderRouteModels } from '../utils/resolveProviderRouteModels';
 
 // ============================================================================
@@ -216,8 +217,9 @@ const enrichWithModelsDev = (
 // Reasoning Content Helpers
 // ============================================================================
 
-// Kimi K2.x models expose reasoning on the OpenAI-compatible route
-const isKimiThinkingToggleModel = (model: string) => model.startsWith('kimi-k2.');
+// Kimi dot-versioned k2 models (k2.5+) and later generations (k3+) expose
+// reasoning on the OpenAI-compatible route
+const isKimiThinkingToggleModel = isKimiReasoningModel;
 
 // Models in `interleavedIds` need:
 //   1. reason → reasoning_content conversion
