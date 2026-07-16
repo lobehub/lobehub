@@ -69,7 +69,9 @@ function readSkillMeta(skillDir: string): SkillMeta | undefined {
   const metaPath = path.join(skillDir, '.skill-meta.json');
   if (!existsSync(metaPath)) return undefined;
   try {
-    return JSON.parse(readFileSync(metaPath, 'utf8'));
+    const parsed = JSON.parse(readFileSync(metaPath, 'utf8'));
+    if (!semver.valid(parsed?.version)) return undefined;
+    return parsed;
   } catch {
     return undefined;
   }
@@ -144,7 +146,9 @@ function installOne(
 
   return {
     message: exists
-      ? `updated ${meta?.version} → ${bundled.version}`
+      ? meta
+        ? `updated ${meta.version} → ${bundled.version}`
+        : `replaced unversioned install with ${bundled.version}`
       : `installed ${bundled.version}`,
     status: exists ? 'updated' : 'installed',
     target,

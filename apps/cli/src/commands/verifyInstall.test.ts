@@ -241,6 +241,23 @@ describe('runVerifyInstall — edge cases', () => {
     const forced = runVerifyInstall({ cwd, force: true });
     expect(forced.results[0].status).toBe('updated');
     expect(readFileSync(path.join(target, 'SKILL.md'), 'utf8')).toBe('# agent-testing');
+    expect(forced.results[0].message).toBe('replaced unversioned install with 1.0.0');
+  });
+
+  it('marker present but with invalid/missing version → refuses; --force replaces', () => {
+    const cwd = makeCwd();
+    const skillsDir = path.join(cwd, '.claude', 'skills');
+    const target = path.join(skillsDir, 'agent-testing');
+    mkdirSync(target, { recursive: true });
+    writeFileSync(path.join(target, 'SKILL.md'), '# hand-written predecessor');
+    writeFileSync(path.join(target, '.skill-meta.json'), '{}');
+
+    const refused = runVerifyInstall({ cwd });
+    expect(refused.results[0].status).toBe('refused');
+
+    const forced = runVerifyInstall({ cwd, force: true });
+    expect(forced.results[0].status).toBe('updated');
+    expect(readFileSync(path.join(target, 'SKILL.md'), 'utf8')).toBe('# agent-testing');
   });
 
   it('consumer cwd not a git repo → installs anyway, reports isGitRepo: false', () => {

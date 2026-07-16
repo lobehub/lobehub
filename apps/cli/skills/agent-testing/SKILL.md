@@ -490,7 +490,7 @@ agent-testing/
 │   ├── project-adapter.md      # PROJECT.md template + first-run bootstrap
 │   ├── common-mistakes.md      # GENERIC living log — read-only, PR upstream
 │   └── probe-mock-patterns.md  # GENERIC living log — read-only, PR upstream
-└── scripts/                    # generic scripts (ported by a later task)
+└── scripts/                    # generic scripts
 ```
 
 ## Gotchas
