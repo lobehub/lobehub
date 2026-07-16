@@ -608,6 +608,12 @@ const exec = async (options: ExecOptions): Promise<void> => {
    * renders the dedicated install/sign-in guide instead of the generic error
    * card. Unclassifiable failures keep the flat `{ message, type }` everything
    * downstream already handles.
+   *
+   * A classified error is always typed `AgentRuntimeError` — matching how the
+   * adapters' in-stream classified errors (overloaded / rate_limit) persist —
+   * instead of leaking the transport-internal `type` the failure happened to
+   * surface through (`stream_error` for a spawn ENOENT reads wrong on a
+   * "CLI not installed" error).
    */
   const buildFinishError = (
     message: string,
@@ -616,7 +622,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
   ): { body?: Record<string, unknown>; message: string; type: string } => {
     const classified = classifyHeteroProcessFailure({ agentType, detail: message, errnoCode });
     if (!classified) return { message, type };
-    return { body: { ...classified }, message: classified.message, type };
+    return { body: { ...classified }, message: classified.message, type: 'AgentRuntimeError' };
   };
 
   /**

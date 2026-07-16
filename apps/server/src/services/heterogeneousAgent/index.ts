@@ -189,7 +189,11 @@ export class HeterogeneousAgentService {
     // accumulated content / reasoning that the in-stream `agent_runtime_end`
     // already wrote (no-op when state is clean), persists the CLI's native
     // session id for next-turn resume, and frees the per-operation memory.
-    await this.persistenceHandler.finish({ error, operationId, result, sessionId });
+    // `topicId` lets finish() bootstrap state for a run that failed before
+    // producing any stream event (spawn ENOENT / auth-on-stderr): the terminal
+    // error must be written HERE, before the `agent_runtime_end` publish below
+    // triggers the client's message refetch.
+    await this.persistenceHandler.finish({ error, operationId, result, sessionId, topicId });
 
     // Always emit a terminal `agent_runtime_end` so renderer subscribers shut
     // down even if the CLI stream missed it (process killed mid-flight,

@@ -1289,6 +1289,74 @@ describe('HeterogeneousPersistenceHandler', () => {
       expect(asst.error.message).toContain('was not found');
     });
 
+    it('finish() with NO prior ingest bootstraps state and writes the error (spawn-fail path)', async () => {
+      // The real process-level failure shape: spawn ENOENT produces ZERO
+      // stream events, so no ingest ever created an OperationState. finish()
+      // must bootstrap from topic.metadata.runningOperation and write the
+      // error itself — deferring it to CompletionLifecycle (which runs AFTER
+      // the agent_runtime_end publish) races the client's message refetch.
+      const h = createHarness({
+        assistantMessageId: 'asst-1',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      await h.handler.finish({
+        error: {
+          body: {
+            agentType: 'claude-code',
+            code: 'cli_not_found',
+            stderr: 'Error: spawn claude ENOENT',
+          },
+          message: 'Claude Code CLI was not found on the machine running this agent.',
+          type: 'AgentRuntimeError',
+        },
+        operationId: 'op-1',
+        result: 'error',
+        topicId: 'topic-1',
+      });
+
+      const asst = h.messages.get('asst-1')!;
+      expect(asst.error).toBeDefined();
+      expect(asst.error.body).toMatchObject({
+        agentType: 'claude-code',
+        code: 'cli_not_found',
+      });
+      expect(asst.error.message).toContain('was not found');
+    });
+
+    it('finish() with no state stays a no-op for a stale operation (mismatched runningOperation)', async () => {
+      const h = createHarness({
+        assistantMessageId: 'asst-1',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+      // The topic's runningOperation belongs to a DIFFERENT operation — a late
+      // finish from a superseded run must not touch the current turn.
+      h.topicModel.findById.mockResolvedValueOnce({
+        agentId: null,
+        id: 'topic-1',
+        metadata: {
+          runningOperation: {
+            assistantMessageId: 'asst-other',
+            operationId: 'op-OTHER',
+          },
+        },
+      });
+
+      await expect(
+        h.handler.finish({
+          error: { message: 'boom', type: 'AgentRuntimeError' },
+          operationId: 'op-1',
+          result: 'error',
+          topicId: 'topic-1',
+        }),
+      ).resolves.toBeUndefined();
+
+      expect(h.messages.get('asst-1')!.error).toBeUndefined();
+      expect(h.messageModel.update).not.toHaveBeenCalled();
+    });
+
     it('finish() drops the per-operation state so a retry starts fresh', async () => {
       const h = createHarness({
         assistantMessageId: 'asst-1',

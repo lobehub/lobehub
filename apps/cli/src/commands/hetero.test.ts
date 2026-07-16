@@ -627,7 +627,10 @@ describe('hetero exec command', () => {
           code: 'cli_not_found',
           stderr: 'Error: spawn claude ENOENT',
         },
-        type: 'stream_error',
+        // Classified errors are normalized to AgentRuntimeError — the
+        // transport-internal `stream_error` label must not leak into the
+        // persisted error type.
+        type: 'AgentRuntimeError',
       },
       operationId: 'op-server',
       result: 'error',
