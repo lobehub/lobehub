@@ -163,6 +163,34 @@ describe('AiAgentService.execAgent - headless approval default', () => {
     expect(callArgs.userInterventionConfig).toEqual({ approvalMode: 'manual' });
   });
 
+  it('forwards clientIp / userAgent into the createOperation appContext when provided', async () => {
+    await service.execAgent({
+      agentId: 'agent-1',
+      clientIp: '203.0.113.7',
+      prompt: 'Hello',
+      userAgent: 'Mozilla/5.0 (Test)',
+    });
+
+    expect(mockCreateOperation).toHaveBeenCalledTimes(1);
+    const callArgs = mockCreateOperation.mock.calls[0][0];
+    expect(callArgs.appContext).toMatchObject({
+      clientIp: '203.0.113.7',
+      userAgent: 'Mozilla/5.0 (Test)',
+    });
+  });
+
+  it('leaves clientIp / userAgent undefined in the createOperation appContext when not provided', async () => {
+    await service.execAgent({
+      agentId: 'agent-1',
+      prompt: 'Hello',
+    });
+
+    expect(mockCreateOperation).toHaveBeenCalledTimes(1);
+    const { appContext } = mockCreateOperation.mock.calls[0][0];
+    expect(appContext.clientIp).toBeUndefined();
+    expect(appContext.userAgent).toBeUndefined();
+  });
+
   it('should respect explicit allow-list approval mode with allowList', async () => {
     const config = { allowList: ['tool-a', 'tool-b'], approvalMode: 'allow-list' as const };
 

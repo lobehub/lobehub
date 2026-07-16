@@ -770,6 +770,11 @@ export const aiAgentRouter = router({
         agentId,
         appContext,
         autoStart,
+        // Propagate the originating request's client IP / user agent into the run
+        // so downstream LLM-call metadata can carry them for auditing and spend
+        // attribution. These are server-derived from the tRPC context and are
+        // intentionally not part of the client-passable input schema.
+        clientIp: ctx.clientIp ?? undefined,
         deviceId,
         existingMessageIds,
         fileIds,
@@ -784,6 +789,7 @@ export const aiAgentRouter = router({
         selectedToolIds,
         slug,
         trigger: trigger ?? RequestTrigger.Chat,
+        userAgent: ctx.userAgent ?? undefined,
         userInterventionConfig,
       });
     } catch (error: any) {

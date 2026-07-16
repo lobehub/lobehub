@@ -28,6 +28,8 @@ interface CreateServerCallLlmAttemptInput {
   attempt: number;
   blobStore?: BlobStore;
   chatPayload: ChatStreamPayload;
+  /** Client IP of the originating request, forwarded into the LLM-call metadata for auditing and spend attribution. */
+  clientIp?: string;
   ctx: RuntimeExecutorContext;
   events: AgentEvent[];
   maxAttempts: number;
@@ -40,6 +42,8 @@ interface CreateServerCallLlmAttemptInput {
   resolved: ServerCallLlmTooling['resolved'];
   topicId?: string;
   trigger?: unknown;
+  /** User agent of the originating request, forwarded into the LLM-call metadata for auditing and spend attribution. */
+  userAgent?: string;
 }
 
 const createStreamExecutionError = (errorData: unknown) => {
@@ -61,6 +65,7 @@ export class ServerCallLlmAttempt {
   private answerSalvagedFromReasoning = false;
   private readonly attempt: number;
   private readonly chatPayload: ChatStreamPayload;
+  private readonly clientIp?: string;
   private readonly ctx: RuntimeExecutorContext;
   private finishReason?: string;
   private grounding: GroundingSearch | null = null;
@@ -80,12 +85,14 @@ export class ServerCallLlmAttempt {
   private toolsCalling: ChatToolPayload[] = [];
   private readonly topicId?: string;
   private readonly trigger?: unknown;
+  private readonly userAgent?: string;
   private usage?: ModelUsage;
 
   constructor({
     attempt,
     blobStore,
     chatPayload,
+    clientIp,
     ctx,
     events,
     maxAttempts,
@@ -98,9 +105,11 @@ export class ServerCallLlmAttempt {
     resolved,
     topicId,
     trigger,
+    userAgent,
   }: CreateServerCallLlmAttemptInput) {
     this.attempt = attempt;
     this.chatPayload = chatPayload;
+    this.clientIp = clientIp;
     this.ctx = ctx;
     this.maxAttempts = maxAttempts;
     this.messageCount = messageCount;
@@ -118,6 +127,7 @@ export class ServerCallLlmAttempt {
     });
     this.topicId = topicId;
     this.trigger = trigger;
+    this.userAgent = userAgent;
   }
 
   async execute(): Promise<void> {
@@ -217,9 +227,11 @@ export class ServerCallLlmAttempt {
         },
       },
       metadata: {
+        clientIp: this.clientIp,
         operationId: this.ctx.operationId,
         topicId: this.topicId,
         trigger: this.trigger,
+        userAgent: this.userAgent,
       },
       user: this.ctx.userId,
     });

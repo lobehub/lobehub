@@ -145,6 +145,13 @@ export interface ExecAgentParams {
   appContext?: ExecAgentAppContext;
   /** Whether to auto-start execution after creating operation (default: true) */
   autoStart?: boolean;
+  /**
+   * Client IP of the originating request, captured server-side for run
+   * attribution. Propagated into the run's `state.metadata` and downstream
+   * LLM-call metadata for auditing and spend attribution. Never client-passable
+   * input — derived from the request context.
+   */
+  clientIp?: string;
   /** Explicit device ID to bind to the topic and activate for this run */
   deviceId?: string;
   /** Optional existing message IDs to include in context */
@@ -173,6 +180,13 @@ export interface ExecAgentParams {
   provider?: string;
   /** The agent slug to run (either agentId or slug is required) */
   slug?: string;
+  /**
+   * User agent of the originating request, captured server-side for run
+   * attribution. Propagated into the run's `state.metadata` and downstream
+   * LLM-call metadata for auditing and spend attribution. Never client-passable
+   * input — derived from the request context.
+   */
+  userAgent?: string;
 }
 
 /**

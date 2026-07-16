@@ -1100,6 +1100,8 @@ export class AiAgentService {
       appContext,
       autoStart = true,
       botContext,
+      clientIp,
+      userAgent,
       deviceId: requestedDeviceId,
       botPlatformContext,
       discordContext,
@@ -3888,6 +3890,12 @@ export class AiAgentService {
           // context (state.metadata.agentId) targets the reviewed agent; ordinary
           // runs (no marker) fall back to the resolved executing agent.
           agentId: appContext?.agentSignal?.agentId ?? resolvedAgentId,
+          // Propagate the originating request's client IP / user agent into
+          // state.metadata (via the `...appContext` spread in createOperation) so
+          // downstream LLM-call metadata can carry them for auditing and spend
+          // attribution.
+          clientIp,
+          userAgent,
           // When scope === 'agent_builder', agentId stays as the builder builtin so
           // message ownership and queryUiMessages remain correct. editingAgentId
           // carries the actual editing target separately; only the AgentBuilder server
