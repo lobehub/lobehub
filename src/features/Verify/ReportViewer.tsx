@@ -420,11 +420,13 @@ const styles = createStaticStyles(({ css }) => ({
     }
   `,
   prChip: css`
-    /* Hover steps the WHOLE chip's text up one level (secondary→primary,
-       tertiary→secondary) — not a link-blue recolor that leaves the child
-       spans' own grays behind. Vars so every child steps together. */
+    /* Resting: number secondary, title tertiary, icon quaternary — a quiet chip.
+       Hover lifts the WHOLE thing to the primary text color at once (a clearly
+       perceptible emphasis, not a one-gray-step nudge), and never the global
+       link-blue. Vars so number/title/icon rise together. */
     --pr-number-color: ${cssVar.colorTextSecondary};
     --pr-title-color: ${cssVar.colorTextTertiary};
+    --pr-icon-color: ${cssVar.colorTextQuaternary};
 
     cursor: default;
 
@@ -449,7 +451,8 @@ const styles = createStaticStyles(({ css }) => ({
 
     &[data-link='true']:hover {
       --pr-number-color: ${cssVar.colorText};
-      --pr-title-color: ${cssVar.colorTextSecondary};
+      --pr-title-color: ${cssVar.colorText};
+      --pr-icon-color: ${cssVar.colorTextSecondary};
 
       /* Re-assert over the global \`a:hover\` link-blue — the chip's hover is a
          text-emphasis step, never a recolor. */
@@ -458,7 +461,8 @@ const styles = createStaticStyles(({ css }) => ({
 
     > svg:first-child {
       flex: 0 0 auto;
-      color: ${cssVar.colorTextQuaternary};
+      color: var(--pr-icon-color);
+      transition: color 0.15s;
     }
   `,
   prNumber: css`
