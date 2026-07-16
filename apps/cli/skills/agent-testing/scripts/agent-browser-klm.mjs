@@ -82,7 +82,7 @@ const usage = () => {
 
 Examples:
   AGENT_BROWSER_KLM_TRACE="$DIR/interaction-trace.jsonl" \\
-    agent-browser-klm.mjs --klm-phase login --klm-check case-1 --session lobehub-dev click @e3
+    agent-browser-klm.mjs --klm-phase login --klm-check case-1 --session app-dev click @e3
 
   agent-browser-klm.mjs mental --m 2 --score 3 --confidence 0.75 \\
     --reason "First view requires understanding status and next action"`);

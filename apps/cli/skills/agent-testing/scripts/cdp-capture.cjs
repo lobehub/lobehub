@@ -29,11 +29,15 @@ function resolveWs() {
     attempted.push('ancestor node_modules walk from ' + __filename);
   }
 
-  const metaPath = path.join(__dirname, '..', '.skill-meta.json');
+  const markerDir = path.join(__dirname, '..');
+  const metaPath = path.join(markerDir, '.skill-meta.json');
   let cliRoot;
   try {
     const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
     cliRoot = meta && meta.cliRoot;
+    if (cliRoot && !path.isAbsolute(cliRoot)) {
+      cliRoot = path.resolve(markerDir, cliRoot);
+    }
   } catch {
     attempted.push(metaPath + ' (missing or unreadable)');
   }

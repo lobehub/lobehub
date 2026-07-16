@@ -96,6 +96,44 @@ describe('runVerifyInstall — fresh install', () => {
     });
   });
 
+  it('cliRoot outside the consumer repo → marker keeps the absolute path', () => {
+    // bundleDir/cliRoot live under `root`, sibling to (not inside) `cwd` —
+    // simulates a global install / npx where @lobehub/cli sits outside the
+    // consumer repo entirely.
+    const cwd = makeCwd();
+    mkdirSync(path.join(cwd, '.claude', 'skills'), { recursive: true });
+
+    const result = runVerifyInstall({ cwd });
+
+    const target = result.results[0].target;
+    const meta = JSON.parse(readFileSync(path.join(target, '.skill-meta.json'), 'utf8'));
+    expect(meta.cliRoot).toBe(path.join(root, '__bundle__'));
+    expect(path.isAbsolute(meta.cliRoot)).toBe(true);
+  });
+
+  it('cliRoot inside the consumer repo → marker stores a POSIX-relative path from the marker dir', () => {
+    // Simulates @lobehub/cli vendored inside the consumer repo itself (e.g.
+    // this monorepo): cliRoot sits under cwd, so baking in an absolute path
+    // would commit a machine-specific filesystem layout.
+    const cwd = makeCwd();
+    mkdirSync(path.join(cwd, '.claude', 'skills'), { recursive: true });
+    const inRepoCliRoot = path.join(cwd, 'apps', 'cli');
+    mkdirSync(inRepoCliRoot, { recursive: true });
+    mockLocateBundledSkill.mockReturnValue({
+      cliRoot: inRepoCliRoot,
+      skillDir: bundleDir,
+      version: '1.0.0',
+    });
+
+    const result = runVerifyInstall({ cwd });
+
+    const target = result.results[0].target;
+    const meta = JSON.parse(readFileSync(path.join(target, '.skill-meta.json'), 'utf8'));
+    expect(meta.cliRoot).toBe('../../../apps/cli');
+    expect(path.isAbsolute(meta.cliRoot)).toBe(false);
+    expect(path.resolve(target, meta.cliRoot)).toBe(inRepoCliRoot);
+  });
+
   it('installs into every existing harness dir (multi-harness)', () => {
     const cwd = makeCwd();
     mkdirSync(path.join(cwd, '.claude', 'skills'), { recursive: true });

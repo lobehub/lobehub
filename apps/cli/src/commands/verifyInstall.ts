@@ -90,10 +90,28 @@ function writeSkillMeta(skillDir: string, meta: SkillMeta): void {
   writeFileSync(path.join(skillDir, '.skill-meta.json'), JSON.stringify(meta, null, 2) + '\n');
 }
 
+// The consumer repo may vendor @lobehub/cli inside itself (e.g. this very
+// monorepo), in which case cliRoot sits under cwd and an absolute path would
+// bake this machine's filesystem layout into a committed marker file. Resolve
+// relative to the marker's own directory instead, so the marker stays
+// portable across machines and CI. Global installs / npx still resolve
+// cliRoot outside the consumer repo, so those keep the absolute path — there
+// is no repo-relative path to express.
+function resolveCliRootForMeta(cliRoot: string, cwd: string, targetDir: string): string {
+  const relFromCwd = path.relative(cwd, cliRoot);
+  const isInsideRepo =
+    relFromCwd !== '' && !relFromCwd.startsWith('..') && !path.isAbsolute(relFromCwd);
+  if (!isInsideRepo) return cliRoot;
+
+  const relFromTarget = path.relative(targetDir, cliRoot);
+  return relFromTarget.split(path.sep).join('/');
+}
+
 function installOne(
   harnessDir: string,
   bundled: BundledSkill,
   force: boolean | undefined,
+  cwd: string,
 ): InstallResult {
   const target = path.join(harnessDir, SKILL_NAME);
   const exists = existsSync(target);
@@ -118,7 +136,11 @@ function installOne(
   if (exists) rmSync(target, { recursive: true, force: true });
   cpSync(bundled.skillDir, target, { recursive: true });
   chmodExecutablesRecursive(target);
-  writeSkillMeta(target, { cliRoot: bundled.cliRoot, name: SKILL_NAME, version: bundled.version });
+  writeSkillMeta(target, {
+    cliRoot: resolveCliRootForMeta(bundled.cliRoot, cwd, target),
+    name: SKILL_NAME,
+    version: bundled.version,
+  });
 
   return {
     message: exists
@@ -165,7 +187,7 @@ export function runVerifyInstall(options: VerifyInstallOptions): VerifyInstallRe
     if (targets.length === 0) throw new NoHarnessDirError(cwd);
   }
 
-  const results = targets.map((dir) => installOne(dir, bundled, options.force));
+  const results = targets.map((dir) => installOne(dir, bundled, options.force, cwd));
   const isGitRepo = existsSync(path.join(cwd, '.git'));
   const gitignore = ensureGitignore(cwd);
 
