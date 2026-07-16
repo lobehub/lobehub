@@ -7,29 +7,29 @@ import { type BriefItem } from '@/features/DailyBrief/types';
 const NEEDS_YOU_ORDER: Record<string, number> = {
   decision: 0,
   error: 9,
-  result: 1,
 };
 
 export interface SplitBriefs {
   /** Briefs the user must act on — grouped as "Needs you", errors last. */
   needsYou: BriefItem[];
-  /** `insight` briefs: nothing to decide, just worth a glance. */
+  /** `insight` + `result` briefs: nothing to decide, just worth a glance. */
   news: BriefItem[];
 }
 
 /**
- * Results belonging to scheduled tasks are recurring reports, including an
- * ad-hoc "Run now" invocation. They remain `result` briefs, but reading the
- * report is enough — they do not require explicit acceptance.
+ * A `result` brief is a completion report: the work already happened, reading
+ * it is enough. Splitting on the parent task's *runtime* status proved fragile
+ * (a paused/completed recurring task flipped its whole report history back
+ * into the to-do pile), so results are news unconditionally — accepting a
+ * one-off delivery stays available from the task page.
  */
 const isNewsBrief = (brief: BriefItem): boolean =>
-  brief.type === 'insight' || (brief.type === 'result' && brief.taskStatus === 'scheduled');
+  brief.type === 'insight' || brief.type === 'result';
 
 /**
  * Splits the unresolved brief feed by whether the user has to *do* something.
- * `decision` / one-off `result` / `error` block an agent until answered;
- * `insight` and recurring-run results are pure knowledge and belong in a
- * scannable list, not in a to-do pile.
+ * `decision` / `error` block an agent until answered; `insight` and `result`
+ * are pure knowledge and belong in a scannable list, not in a to-do pile.
  *
  * The server already sorts by priority then recency, so we only re-order within
  * "Needs you" — a stable sort keeps that ordering inside each rank.

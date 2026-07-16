@@ -7,11 +7,8 @@ import { splitBriefs } from './splitBriefs';
 const brief = (id: string, type: BriefItem['type']): BriefItem =>
   ({ id, summary: '', title: id, type }) as BriefItem;
 
-const scheduledResult = (id: string): BriefItem =>
-  ({ ...brief(id, 'result'), taskStatus: 'scheduled' }) as BriefItem;
-
 describe('splitBriefs', () => {
-  it('routes insight briefs to news and everything else to needsYou', () => {
+  it('routes insight and result briefs to news, decision and error to needsYou', () => {
     const { needsYou, news } = splitBriefs([
       brief('a', 'decision'),
       brief('b', 'insight'),
@@ -19,28 +16,33 @@ describe('splitBriefs', () => {
       brief('d', 'error'),
     ]);
 
-    expect(needsYou.map((b) => b.id)).toEqual(['a', 'c', 'd']);
-    expect(news.map((b) => b.id)).toEqual(['b']);
+    expect(needsYou.map((b) => b.id)).toEqual(['a', 'd']);
+    expect(news.map((b) => b.id)).toEqual(['b', 'c']);
   });
 
-  it('routes scheduled task results to news instead of needsYou', () => {
-    const recurringReport = scheduledResult('run-now-scheduled-task-report');
-    const oneOffDelivery = brief('one-off-delivery', 'result');
+  it('routes results to news regardless of the parent task runtime status', () => {
+    const scheduledReport = { ...brief('scheduled-report', 'result'), taskStatus: 'scheduled' };
+    const pausedTaskReport = { ...brief('paused-task-report', 'result'), taskStatus: 'paused' };
+    const detachedResult = brief('detached-result', 'result');
 
-    const { needsYou, news } = splitBriefs([recurringReport, oneOffDelivery]);
+    const { needsYou, news } = splitBriefs([
+      scheduledReport,
+      pausedTaskReport,
+      detachedResult,
+    ] as BriefItem[]);
 
-    expect(needsYou.map((item) => item.id)).toEqual(['one-off-delivery']);
-    expect(news.map((item) => item.id)).toEqual(['run-now-scheduled-task-report']);
+    expect(needsYou).toEqual([]);
+    expect(news.map((item) => item.id)).toEqual([
+      'scheduled-report',
+      'paused-task-report',
+      'detached-result',
+    ]);
   });
 
   it('sinks errors to the bottom of needsYou', () => {
-    const { needsYou } = splitBriefs([
-      brief('err', 'error'),
-      brief('res', 'result'),
-      brief('dec', 'decision'),
-    ]);
+    const { needsYou } = splitBriefs([brief('err', 'error'), brief('dec', 'decision')]);
 
-    expect(needsYou.map((b) => b.id)).toEqual(['dec', 'res', 'err']);
+    expect(needsYou.map((b) => b.id)).toEqual(['dec', 'err']);
   });
 
   it('preserves server order within the same rank', () => {
