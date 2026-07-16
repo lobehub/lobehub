@@ -15,6 +15,7 @@ import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
 
 import InboxBriefCard from './InboxBriefCard';
+import MarkAllReadButton from './MarkAllReadButton';
 import NewsList from './NewsList';
 import RunningTasksCard from './RunningTasksCard';
 import { splitBriefs } from './splitBriefs';
@@ -36,6 +37,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 interface InboxSection {
+  /** Header action revealed on hover (GroupBlock's action slot). */
+  action?: ReactNode;
   key: string;
   node: ReactNode;
   /** Omitted when the section labels itself (the running card names its own count). */
@@ -55,14 +58,15 @@ const titleWithCount = (label: string, count: number, subtitle?: string): ReactN
  * The home inbox: everything the agents did while you were away, sorted by
  * whether it needs you.
  *
- * - **Needs you** — briefs blocking an agent (decide / review / fix). Errors sink
- *   to the bottom: a stuck decision blocks work right now, a failed run has
- *   already stopped.
+ * - **Needs you** — briefs blocking an agent (decide / fix). Errors sink to the
+ *   bottom: a stuck decision blocks work right now, a failed run has already
+ *   stopped.
  * - **Unread** — runs that finished while you were away, each showing the agent's
  *   last reply so the answer is right there.
  * - **Running** — collapsed to one line, showing who is working; a healthy run
  *   needs nothing from you.
- * - **News** — `insight` briefs; read them or don't.
+ * - **News** — `insight` + `result` briefs (reports of finished work); read them
+ *   or don't.
  *
  * Sections are siblings, never nested: each names itself and carries its own
  * count, and one absent section never hides another's heading.
@@ -159,6 +163,7 @@ const HomeInbox = memo(() => {
 
   if (news.length > 0)
     sections.push({
+      action: <MarkAllReadButton news={news} />,
       key: 'news',
       node: <NewsList news={news} />,
       title: titleWithCount(t('inbox.news.title'), news.length, t('inbox.news.subtitle')),
@@ -182,9 +187,9 @@ const HomeInbox = memo(() => {
 
   return (
     <Flexbox gap={32}>
-      {sections.map(({ key, node, title }) =>
+      {sections.map(({ action, key, node, title }) =>
         title ? (
-          <GroupBlock key={key} title={title}>
+          <GroupBlock action={action} key={key} title={title}>
             {node}
           </GroupBlock>
         ) : (

@@ -47,6 +47,7 @@ export default {
   'homePromoBanner.dismiss': 'Dismiss',
   'homePromoBanner.label': '{{model}} is now available',
   'inbox.needsYou.title': 'Needs you',
+  'inbox.news.markAllRead': 'Mark all read',
   'inbox.news.subtitle': 'Nothing to decide — just a glance',
   'inbox.news.title': 'Daily brief',
   'inbox.running.title': '{{count}} task running',

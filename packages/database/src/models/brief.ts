@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, notInArray, type SQL, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, notInArray, type SQL, sql } from 'drizzle-orm';
 
 import { agents } from '../schemas/agent';
 import type { BriefItem, NewBrief } from '../schemas/task';
@@ -243,6 +243,34 @@ export class BriefModel {
       .returning();
 
     return result[0] || null;
+  }
+
+  /**
+   * Bulk "mark all read": resolves the given briefs with a neutral `read`
+   * action so they leave the unresolved feed. Deliberately bypasses
+   * `BriefService.resolve()` — a bulk dismissal must never trigger the
+   * approve-completes-task lifecycle; only a single explicit `approve` may.
+   * Already-resolved briefs are skipped so a stale client list cannot
+   * overwrite an earlier, more meaningful resolution.
+   *
+   * Returns the ids that were actually resolved.
+   */
+  async resolveManyAsRead(ids: string[]): Promise<string[]> {
+    if (ids.length === 0) return [];
+
+    const now = new Date();
+    const rows = await this.db
+      .update(briefs)
+      .set({
+        // Keep the first-read timestamp when the brief was already opened.
+        readAt: sql`COALESCE(${briefs.readAt}, ${now})`,
+        resolvedAction: 'read',
+        resolvedAt: now,
+      })
+      .where(and(inArray(briefs.id, ids), this.ownership(), isNull(briefs.resolvedAt)))
+      .returning({ id: briefs.id });
+
+    return rows.map((row) => row.id);
   }
 
   /**
