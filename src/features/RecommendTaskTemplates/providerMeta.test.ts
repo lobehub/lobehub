@@ -34,8 +34,8 @@ describe('getProviderMeta', () => {
   });
 
   it('does not cross namespaces (lobehub id under composio source returns undefined)', () => {
-    // 'github' is a lobehub provider id, not a composio identifier.
-    expect(getProviderMeta({ identifier: 'github', source: 'composio' })).toBeUndefined();
+    // 'posthog' is a lobehub provider id, not a composio identifier.
+    expect(getProviderMeta({ identifier: 'posthog', source: 'composio' })).toBeUndefined();
   });
 });
 
