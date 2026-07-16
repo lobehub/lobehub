@@ -45,6 +45,7 @@
   "homePromoBanner.dismiss": "Sluiten",
   "homePromoBanner.label": "{{model}} is nu beschikbaar",
   "inbox.needsYou.title": "Heeft je nodig",
+  "inbox.news.markAllRead": "Alles als gelezen markeren",
   "inbox.news.subtitle": "Niets te beslissen — gewoon een blik",
   "inbox.news.title": "Dagelijks overzicht",
   "inbox.running.title": "{{count}} taak actief",

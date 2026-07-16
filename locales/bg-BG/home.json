@@ -45,6 +45,7 @@
   "homePromoBanner.dismiss": "Затвори",
   "homePromoBanner.label": "{{model}} вече е наличен",
   "inbox.needsYou.title": "Има нужда от вас",
+  "inbox.news.markAllRead": "Отбележи всички като прочетени",
   "inbox.news.subtitle": "Няма какво да решавате — просто погледнете",
   "inbox.news.title": "Ежедневен бюлетин",
   "inbox.running.title": "{{count}} задача в процес",

@@ -45,6 +45,7 @@
   "homePromoBanner.dismiss": "閉じる",
   "homePromoBanner.label": "{{model}}が利用可能になりました",
   "inbox.needsYou.title": "あなたが必要です",
+  "inbox.news.markAllRead": "すべて既読にする",
   "inbox.news.subtitle": "決めることはありません — ただ一目見るだけ",
   "inbox.news.title": "デイリーブリーフ",
   "inbox.running.title": "{{count}} 件のタスクが実行中",

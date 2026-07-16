@@ -45,6 +45,7 @@
   "homePromoBanner.dismiss": "بستن",
   "homePromoBanner.label": "{{model}} اکنون در دسترس است",
   "inbox.needsYou.title": "به شما نیاز دارد",
+  "inbox.news.markAllRead": "علامت‌گذاری همه به‌عنوان خوانده‌شده",
   "inbox.news.subtitle": "چیزی برای تصمیم‌گیری نیست — فقط یک نگاه",
   "inbox.news.title": "خلاصه روزانه",
   "inbox.running.title": "{{count}} وظیفه در حال اجرا",

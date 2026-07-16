@@ -45,6 +45,7 @@
   "homePromoBanner.dismiss": "Bỏ qua",
   "homePromoBanner.label": "{{model}} hiện đã có sẵn",
   "inbox.needsYou.title": "Cần bạn",
+  "inbox.news.markAllRead": "Đánh dấu tất cả là đã đọc",
   "inbox.news.subtitle": "Không có gì cần quyết định — chỉ cần nhìn qua",
   "inbox.news.title": "Tóm tắt hàng ngày",
   "inbox.running.title": "{{count}} nhiệm vụ đang chạy",

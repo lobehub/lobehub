@@ -45,6 +45,7 @@
   "homePromoBanner.dismiss": "닫기",
   "homePromoBanner.label": "{{model}}이(가) 이제 사용 가능합니다",
   "inbox.needsYou.title": "당신이 필요합니다",
+  "inbox.news.markAllRead": "모두 읽음으로 표시",
   "inbox.news.subtitle": "결정할 필요 없음 — 한눈에 보기",
   "inbox.news.title": "일일 요약",
   "inbox.running.title": "{{count}}개의 작업 실행 중",

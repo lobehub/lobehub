@@ -45,6 +45,7 @@
   "homePromoBanner.dismiss": "تجاهل",
   "homePromoBanner.label": "{{model}} متاح الآن",
   "inbox.needsYou.title": "يحتاج إليك",
+  "inbox.news.markAllRead": "تحديد الكل كمقروء",
   "inbox.news.subtitle": "لا شيء لتقرره - مجرد نظرة",
   "inbox.news.title": "الملخص اليومي",
   "inbox.running.title": "{{count}} مهمة قيد التشغيل",

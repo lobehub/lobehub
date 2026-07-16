@@ -45,6 +45,7 @@
   "homePromoBanner.dismiss": "Kapat",
   "homePromoBanner.label": "{{model}} artık mevcut",
   "inbox.needsYou.title": "Sana ihtiyaç var",
+  "inbox.news.markAllRead": "Tümünü okundu olarak işaretle",
   "inbox.news.subtitle": "Karar vermeye gerek yok — sadece bir bakış",
   "inbox.news.title": "Günlük özet",
   "inbox.running.title": "{{count}} görev çalışıyor",

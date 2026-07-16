@@ -45,6 +45,7 @@
   "homePromoBanner.dismiss": "Zamknij",
   "homePromoBanner.label": "{{model}} jest już dostępny",
   "inbox.needsYou.title": "Potrzebuje Cię",
+  "inbox.news.markAllRead": "Oznacz wszystkie jako przeczytane",
   "inbox.news.subtitle": "Nic do zdecydowania — tylko rzut oka",
   "inbox.news.title": "Codzienny przegląd",
   "inbox.running.title": "{{count}} zadanie w toku",
