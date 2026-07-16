@@ -115,7 +115,7 @@ const UserToolsSection = memo<Props>(
         <Text style={{ fontSize: 12, fontWeight: 500 }} type={'secondary'}>
           {baseToolsLabel} · {userToolCount}
         </Text>
-        <SharedAgentTool {...toolProps} agentId={agentId} />
+        <SharedAgentTool {...toolProps} excludeAgentConnectors agentId={agentId} />
       </Flexbox>
     );
   },

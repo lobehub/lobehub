@@ -54,6 +54,17 @@ export interface AgentToolProps {
    */
   agentId?: string;
   /**
+   * Hide identifiers that are agent-owned/linked connectors from the rendered
+   * chips. ONLY the two-section agent profile sets this (it renders those
+   * connectors in a separate "Agent Tools" section above, so showing them here
+   * too would duplicate them — as an "uninstalled" chip lacking a base manifest).
+   * Consumers that render `AgentTool` as the SOLE tool list (e.g. the group
+   * member profile) MUST leave this off, otherwise the enabled agent tool would
+   * disappear entirely with no way to see or remove it.
+   * @default false
+   */
+  excludeAgentConnectors?: boolean;
+  /**
    * Whether to filter tools by availableInWeb property
    * @default false
    */
@@ -71,7 +82,13 @@ export interface AgentToolProps {
 }
 
 const AgentTool = memo<AgentToolProps>(
-  ({ agentId, showWebBrowsing = false, filterAvailableInWeb = false, useAllMetaList = false }) => {
+  ({
+    agentId,
+    showWebBrowsing = false,
+    filterAvailableInWeb = false,
+    useAllMetaList = false,
+    excludeAgentConnectors = false,
+  }) => {
     const { t } = useTranslation('setting');
     const { allowed: canEdit } = usePermission('edit_own_content');
     const activeAgentId = useAgentStore((s) => s.activeAgentId);
@@ -144,20 +161,21 @@ const AgentTool = memo<AgentToolProps>(
 
     // Custom connectors (user-added OAuth MCP servers) from the connector store
     const customConnectors = useToolStore(connectorSelectors.customConnectors, isEqual);
-    // Agent-owned / linked connectors are rendered in the dedicated "Agent Tools"
-    // section above this one. An agent-scoped connector (e.g. a Composio account
-    // bound to this agent) is also pinned into `config.plugins` for runtime
-    // gating, so without this exclusion it would ALSO surface here as a chip —
-    // and, having no base-dimension manifest, render as "uninstalled". Exclude
-    // those identifiers from this base/user tools list (display-only; the pin
-    // stays in config.plugins).
+    // Agent-owned / linked connectors: when `excludeAgentConnectors` is set (the
+    // two-section agent profile), these are rendered in the dedicated "Agent
+    // Tools" section above, so they must be dropped from THIS base/user list —
+    // otherwise the identifier, pinned into `config.plugins` for runtime gating,
+    // would surface here too and, lacking a base-dimension manifest, render as an
+    // "uninstalled" chip. When the prop is off (e.g. the group member profile,
+    // where AgentTool is the only tool list) they are kept, so the enabled tool
+    // stays visible and removable. Display-only either way; the pin is untouched.
     const agentConnectors = useToolStore(
       connectorSelectors.agentConnectors(effectiveAgentId),
       isEqual,
     );
     const agentConnectorIdentifiers = useMemo(
-      () => new Set(agentConnectors.map((c) => c.identifier)),
-      [agentConnectors],
+      () => (excludeAgentConnectors ? new Set(agentConnectors.map((c) => c.identifier)) : null),
+      [agentConnectors, excludeAgentConnectors],
     );
     const isConnectorsInit = useToolStore((s) => s.isConnectorsInit);
     const fetchConnectors = useToolStore((s) => s.fetchConnectors);
@@ -793,7 +811,7 @@ const AgentTool = memo<AgentToolProps>(
       }
       return tools.filter(
         (toolId) =>
-          !USER_HIDDEN_BUILTIN_SKILLS.has(toolId) && !agentConnectorIdentifiers.has(toolId),
+          !USER_HIDDEN_BUILTIN_SKILLS.has(toolId) && !agentConnectorIdentifiers?.has(toolId),
       );
     }, [plugins, isSearchEnabled, showWebBrowsing, agentConnectorIdentifiers]);
 
