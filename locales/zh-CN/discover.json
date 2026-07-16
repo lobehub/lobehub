@@ -561,6 +561,7 @@
   "skills.details.header.stats.installs": "安装量",
   "skills.details.header.stats.rating": "评分",
   "skills.details.header.stats.ratingCount": "{{count}} 个评分",
+  "skills.details.header.stats.reviews": "评价",
   "skills.details.header.stats.starsCaption": "Stars",
   "skills.details.info.category": "分类",
   "skills.details.info.installs": "安装量",

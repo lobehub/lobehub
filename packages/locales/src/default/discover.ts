@@ -1023,6 +1023,8 @@ export default {
 
   'skills.details.header.stats.ratingCount': '{{count}} Ratings',
 
+  'skills.details.header.stats.reviews': 'Reviews',
+
   'skills.details.header.stats.starsCaption': 'Stars',
 
   'skills.details.info.category': 'Category',

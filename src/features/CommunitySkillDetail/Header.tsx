@@ -12,10 +12,12 @@ import Rate from '@/components/RatingOverview/Rate';
 import { usePermission } from '@/hooks/usePermission';
 import { useSkillCategoryItem } from '@/hooks/useSkillCategory';
 import { agentSkillService } from '@/services/skill';
+import { useDiscoverStore } from '@/store/discover';
 import { useToolStore } from '@/store/tool';
 import { agentSkillsSelectors } from '@/store/tool/selectors';
 import { formatShortenNumber } from '@/utils/format';
 
+import { FIRST_COMMENTS_PAGE_QUERY } from './const';
 import { useDetailContext } from './DetailProvider';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -227,6 +229,11 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
   const { mobile = isMobile } = useResponsive();
   const categoryItem = useSkillCategoryItem(category);
 
+  // Same query as the Reviews tab — SWR dedupes them into one request, so the
+  // stat costs nothing extra and warms the tab
+  const useFetchSkillComments = useDiscoverStore((s) => s.useFetchSkillComments);
+  const { data: comments } = useFetchSkillComments({ identifier, ...FIRST_COMMENTS_PAGE_QUERY });
+
   const displayRatingAverage =
     typeof ratingAverage === 'number' ? Number(ratingAverage.toFixed(1)) : undefined;
 
@@ -257,6 +264,14 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
           label: t('skills.details.header.stats.installs'),
           statKey: 'installs',
           value: formatShortenNumber(installCount),
+        }
+      : undefined,
+    comments?.totalCount
+      ? {
+          caption: '',
+          label: t('skills.details.header.stats.reviews'),
+          statKey: 'reviews',
+          value: formatShortenNumber(comments.totalCount),
         }
       : undefined,
   ].filter(Boolean) as {

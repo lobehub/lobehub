@@ -8,6 +8,7 @@ import RatingOverview from '@/components/RatingOverview';
 import { discoverService } from '@/services/discover';
 import { useDiscoverStore } from '@/store/discover';
 
+import { FIRST_COMMENTS_PAGE_QUERY } from '../../const';
 import { useDetailContext } from '../../DetailProvider';
 
 const Reviews = memo(() => {
@@ -21,9 +22,7 @@ const Reviews = memo(() => {
   const { data: distribution } = useFetchSkillRatingDistribution(identifier);
   const { data: firstPage, isLoading } = useFetchSkillComments({
     identifier,
-    order: 'desc',
-    page: 1,
-    sort: 'createdAt',
+    ...FIRST_COMMENTS_PAGE_QUERY,
   });
 
   const fetchMore: CommentListProps['fetchMore'] = useCallback(
