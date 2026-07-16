@@ -144,6 +144,21 @@ const AgentTool = memo<AgentToolProps>(
 
     // Custom connectors (user-added OAuth MCP servers) from the connector store
     const customConnectors = useToolStore(connectorSelectors.customConnectors, isEqual);
+    // Agent-owned / linked connectors are rendered in the dedicated "Agent Tools"
+    // section above this one. An agent-scoped connector (e.g. a Composio account
+    // bound to this agent) is also pinned into `config.plugins` for runtime
+    // gating, so without this exclusion it would ALSO surface here as a chip —
+    // and, having no base-dimension manifest, render as "uninstalled". Exclude
+    // those identifiers from this base/user tools list (display-only; the pin
+    // stays in config.plugins).
+    const agentConnectors = useToolStore(
+      connectorSelectors.agentConnectors(effectiveAgentId),
+      isEqual,
+    );
+    const agentConnectorIdentifiers = useMemo(
+      () => new Set(agentConnectors.map((c) => c.identifier)),
+      [agentConnectors],
+    );
     const isConnectorsInit = useToolStore((s) => s.isConnectorsInit);
     const fetchConnectors = useToolStore((s) => s.fetchConnectors);
     useEffect(() => {
@@ -776,8 +791,11 @@ const AgentTool = memo<AgentToolProps>(
       if (showWebBrowsing && isSearchEnabled && !tools.includes(WEB_BROWSING_IDENTIFIER)) {
         tools.unshift(WEB_BROWSING_IDENTIFIER);
       }
-      return tools.filter((toolId) => !USER_HIDDEN_BUILTIN_SKILLS.has(toolId));
-    }, [plugins, isSearchEnabled, showWebBrowsing]);
+      return tools.filter(
+        (toolId) =>
+          !USER_HIDDEN_BUILTIN_SKILLS.has(toolId) && !agentConnectorIdentifiers.has(toolId),
+      );
+    }, [plugins, isSearchEnabled, showWebBrowsing, agentConnectorIdentifiers]);
 
     return (
       <>
