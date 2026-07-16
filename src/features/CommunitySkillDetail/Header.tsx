@@ -1,7 +1,7 @@
 'use client';
 
 import { Avatar, DropdownMenu, Flexbox, Icon, Text } from '@lobehub/ui';
-import { Button, confirmModal } from '@lobehub/ui/base-ui';
+import { Button, confirmModal, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, responsive, useResponsive } from 'antd-style';
 import { CheckCircle2, CheckIcon, ChevronDown, Trash2 } from 'lucide-react';
 import { memo, type ReactNode, useCallback, useState } from 'react';
@@ -129,7 +129,7 @@ const StatBlock = memo<{
   );
 });
 
-const InstallButton = memo<{ identifier?: string }>(({ identifier }) => {
+const InstallButton = memo<{ identifier?: string; name?: string }>(({ identifier, name }) => {
   const { t } = useTranslation('plugin');
   const { t: tc } = useTranslation('common');
   const { t: td } = useTranslation('discover');
@@ -153,11 +153,12 @@ const InstallButton = memo<{ identifier?: string }>(({ identifier }) => {
       await agentSkillService.importFromMarket(identifier);
       await refreshAgentSkills();
     } catch {
-      // surfaced via the unchanged install state
+      // The button falls back to Install (clicking again retries) — say why
+      toast.error(t('error.installError', { name: name || identifier }));
     } finally {
       setInstalling(false);
     }
-  }, [canCreate, identifier, installing, installed, refreshAgentSkills]);
+  }, [canCreate, identifier, installing, installed, name, refreshAgentSkills, t]);
 
   const handleUninstall = useCallback(() => {
     if (!canEdit || !installedSkill) return;
@@ -360,7 +361,7 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
             )}
           </Flexbox>
         </Flexbox>
-        <InstallButton identifier={identifier} />
+        <InstallButton identifier={identifier} name={name} />
       </Flexbox>
       {stats.length > 0 && (
         <div className={styles.statsBar} style={{ width: '100%' }}>
