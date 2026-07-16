@@ -43,7 +43,7 @@ export default {
   'table.filters.reset': 'Reset',
   'table.filters.searchModel': 'Search model',
   'table.filters.startDate': 'Start date',
-  'table.title': 'Credit Usage Details',
+  'table.title': 'Breakdown',
   'table.totalToken.input': 'Input',
   'table.totalToken.output': 'Output',
   'usageStats.breakdown.cost': 'Cost',

@@ -7,11 +7,15 @@ import Appearance from '../common/features/Appearance';
 import Common from '../common/features/Common/Common';
 import Desktop from './features/Desktop';
 
-const Page = () => {
+interface PageProps {
+  showSettingHeader?: boolean;
+}
+
+const Page = ({ showSettingHeader = true }: PageProps) => {
   const { t } = useTranslation('setting');
   return (
     <>
-      <SettingHeader title={t('tab.appearance')} />
+      {showSettingHeader && <SettingHeader title={t('tab.appearance')} />}
       <Common />
       <Appearance />
       <Desktop />
