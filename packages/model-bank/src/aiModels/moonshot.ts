@@ -1,7 +1,35 @@
 import type { AIChatModelCard } from '../types/aiModel';
 
-// https://platform.kimi.com/docs/pricing/chat
+// https://platform.kimi.ai/docs/pricing/chat
 const moonshotChatModels: AIChatModelCard[] = [
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      structuredOutput: true,
+      video: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_048_576,
+    description:
+      "Kimi K3 is Kimi's most capable model to date, with 2.8 trillion parameters. Built on Kimi Delta Attention and Attention Residuals, it offers native visual understanding and a 1M-token context window for frontier intelligence scenarios such as software engineering, knowledge work, and deep reasoning. Reasoning is always on, configured via the top-level reasoning_effort field.",
+    displayName: 'Kimi K3',
+    enabled: true,
+    family: 'kimi',
+    generation: 'kimi-k3',
+    id: 'kimi-k3',
+    maxOutput: 131_072,
+    pricing: {
+      currency: 'USD',
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 15, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-07-16',
+    type: 'chat',
+  },
   {
     abilities: {
       functionCall: true,

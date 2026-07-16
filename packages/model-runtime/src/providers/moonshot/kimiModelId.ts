@@ -71,14 +71,16 @@ const isAtLeastGeneration = (parsed: ParsedKimiModelId, major: number, minor = 0
 
 /**
  * Models whose thinking is always on and cannot be disabled: the legacy
- * `-thinking` variants (kimi-k2-thinking) and `-code` variants since k2.7
- * (kimi-k2.7-code always errors on `thinking: {type: 'disabled'}`).
- * Future `-code` / `-thinking` variants (k3+) are assumed to keep this behavior.
+ * `-thinking` variants (kimi-k2-thinking), `-code` variants since k2.7
+ * (kimi-k2.7-code errors on `thinking: {type: 'disabled'}`), and the entire
+ * k3+ generation ("K3 always runs with thinking enabled").
+ * Docs: https://platform.kimi.com/docs/guide/kimi-k3-quickstart
  */
 export const isKimiNativeThinkingModel = (model: string): boolean => {
   const parsed = parseKimiModelId(model);
   if (!parsed) return false;
 
+  if (parsed.majorVersion >= 3) return true;
   if (parsed.majorVersion < 2) return false;
   if (hasVariant(parsed, 'thinking')) return true;
 
@@ -86,42 +88,58 @@ export const isKimiNativeThinkingModel = (model: string): boolean => {
 };
 
 /**
- * Models with Preserved Thinking always active (`thinking.keep` is treated as
- * 'all' whether passed or not): `-code` variants since kimi-k2.7-code.
+ * Models (k3+) that configure reasoning strength via the top-level
+ * OpenAI-style `reasoning_effort` field. The K2.x `thinking` param does not
+ * apply to them and must not be sent.
+ * Docs: https://platform.kimi.com/docs/api/models-overview
+ */
+export const isKimiReasoningEffortModel = (model: string): boolean => {
+  const parsed = parseKimiModelId(model);
+  if (!parsed) return false;
+
+  return parsed.majorVersion >= 3;
+};
+
+/**
+ * Models that must round-trip the complete assistant message (including
+ * `reasoning_content`) across turns with no opt-out: `-code` variants since
+ * kimi-k2.7-code (Preserved Thinking always active) and the whole k3+
+ * generation.
  */
 export const isKimiAlwaysPreserveThinkingModel = (model: string): boolean => {
   const parsed = parseKimiModelId(model);
   if (!parsed) return false;
 
+  if (parsed.majorVersion >= 3) return true;
+
   return hasVariant(parsed, 'code') && isAtLeastGeneration(parsed, 2, 7);
 };
 
 /**
- * Models that accept `thinking: {type: 'enabled' | 'disabled'}` with fixed
- * sampling params (temperature 1/0.6, top_p 0.95, penalties 0).
- * For k2 an explicit minor version is required (k2.5/k2.6) — bare legacy
- * kimi-k2-* ids (e.g. kimi-k2-0711-preview) predate the toggle. From k3 on the
- * whole generation is assumed to follow k2.6 semantics until official docs land.
+ * K2.x models that accept `thinking: {type: 'enabled' | 'disabled'}` with
+ * fixed sampling params (temperature 1/0.6, top_p 0.95, penalties 0):
+ * kimi-k2.5 and kimi-k2.6. Bare legacy kimi-k2-* ids (e.g.
+ * kimi-k2-0711-preview) predate the toggle, and k3+ replaced the `thinking`
+ * param with top-level `reasoning_effort`.
  */
 export const isKimiThinkingToggleModel = (model: string): boolean => {
   const parsed = parseKimiModelId(model);
   if (!parsed) return false;
   if (isKimiNativeThinkingModel(model)) return false;
 
-  if (parsed.majorVersion === 2) return parsed.minorVersion !== undefined;
-  return parsed.majorVersion > 2;
+  return parsed.majorVersion === 2 && parsed.minorVersion !== undefined;
 };
 
 /**
- * Models that accept the optional `thinking.keep: 'all'` param, introduced in
- * kimi-k2.6 (kimi-k2.5 rejects it) and assumed inherited by k3+. Excludes
- * always-preserve models (kimi-k2.7-code) where passing the param is redundant.
+ * Models that accept the optional `thinking.keep: 'all'` param — kimi-k2.6
+ * only: kimi-k2.5 rejects it, kimi-k2.7-code always preserves (param
+ * redundant), and k3+ has no `thinking` param at all.
  */
 export const isKimiPreserveThinkingModel = (model: string): boolean => {
   const parsed = parseKimiModelId(model);
   if (!parsed) return false;
 
-  return isAtLeastGeneration(parsed, 2, 6) && !isKimiAlwaysPreserveThinkingModel(model);
+  return parsed.majorVersion === 2 && parsed.minorVersion === 6;
 };
 
 /**

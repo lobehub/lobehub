@@ -17,6 +17,7 @@ import { MODEL_LIST_CONFIGS, processModelList } from '../../utils/modelParse';
 import {
   isKimiNativeThinkingModel,
   isKimiPreserveThinkingModel,
+  isKimiReasoningEffortModel,
   isKimiThinkingToggleModel,
 } from './kimiModelId';
 
@@ -153,6 +154,16 @@ const buildMoonshotAnthropicPayload = async (
   const tools = appendSearchTool(basePayload.tools, payload.enabledSearch);
   const basePayloadWithSearch = { ...basePayload, tools };
 
+  // K3+ has no `thinking` param (reasoning is always on, strength is the top-level
+  // OpenAI-style `reasoning_effort`) and temperature/top_p are server-fixed — the docs
+  // advise not to send them. Reasoning replay is already enforced via
+  // normalizeMessagesForAnthropic above (isNativeThinking covers k3+).
+  // https://platform.kimi.ai/docs/guide/kimi-k3-quickstart
+  if (isKimiReasoningEffortModel(payload.model)) {
+    const { temperature: _temperature, top_p: _topP, ...effortBase } = basePayloadWithSearch;
+    return effortBase;
+  }
+
   if (!isThinkingToggle && !isNativeThinking) return basePayloadWithSearch;
 
   const resolvedThinkingBudget = payload.thinking?.budget_tokens
@@ -191,6 +202,30 @@ const buildMoonshotOpenAIPayload = (
   const isThinkingEnabled = isNativeThinking || (isThinkingToggle && thinking?.type !== 'disabled');
   const normalizedMessages = normalizeMessagesForOpenAI(messages, isThinkingEnabled);
   const moonshotTools = appendSearchTool(tools, enabledSearch);
+
+  // K3+ replaced the `thinking` param with the top-level OpenAI-style `reasoning_effort`
+  // (currently only 'max', which is also the server default — passed through from the
+  // payload as-is) and fixes temperature/top_p/n/penalties server-side; the docs advise
+  // not to send them. `max_tokens` is documented as `max_completion_tokens` (default
+  // 131072, up to 1048576). https://platform.kimi.ai/docs/guide/kimi-k3-quickstart
+  if (isKimiReasoningEffortModel(model)) {
+    const {
+      frequency_penalty: _frequencyPenalty,
+      max_tokens,
+      presence_penalty: _presencePenalty,
+      top_p: _topP,
+      ...effortRest
+    } = rest;
+
+    return {
+      ...effortRest,
+      ...(max_tokens === undefined ? {} : { max_completion_tokens: max_tokens }),
+      messages: normalizedMessages,
+      model,
+      stream: payload.stream ?? true,
+      tools: moonshotTools?.length ? moonshotTools : undefined,
+    } as any;
+  }
 
   if (isThinkingToggle || isNativeThinking) {
     const thinkingParam =
