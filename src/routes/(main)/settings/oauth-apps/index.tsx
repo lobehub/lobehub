@@ -1,13 +1,17 @@
+import { Skeleton } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useIsWorkspaceOwner } from '@/business/client/hooks/useIsWorkspaceOwner';
+import NotFound from '@/components/404';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
 import { lambdaClient } from '@/libs/trpc/client';
 import SettingHeader from '@/routes/(main)/settings/features/SettingHeader';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors, preferenceSelectors } from '@/store/user/selectors';
 
 import { createOAuthAppModal } from './features/CreateAppModal';
 import OAuthApps from './features/OAuthApps';
@@ -44,6 +48,13 @@ const Page = () => {
   const isWorkspaceOwner = useIsWorkspaceOwner();
   const params = useParams<{ sub?: string }>();
   const canEdit = hasEditPermission && (!activeWorkspaceId || isWorkspaceOwner);
+  const [isPreferenceInit, enableOAuthApps] = useUserStore((s) => [
+    preferenceSelectors.isPreferenceInit(s),
+    labPreferSelectors.enableOAuthApps(s),
+  ]);
+
+  if (!isPreferenceInit) return <Skeleton active paragraph={{ rows: 5 }} title={false} />;
+  if (!enableOAuthApps) return <NotFound />;
 
   return (
     <>

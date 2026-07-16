@@ -79,5 +79,17 @@ describe('preferenceSelectors', () => {
 
       expect(labPreferSelectors.enableMessageTextSelectionActions(store)).toBe(true);
     });
+
+    it('keeps OAuth app management hidden by default', () => {
+      store.preference.lab = undefined;
+
+      expect(labPreferSelectors.enableOAuthApps(store)).toBe(false);
+    });
+
+    it('returns the configured OAuth app management preference', () => {
+      store.preference.lab = { enableOAuthApps: true };
+
+      expect(labPreferSelectors.enableOAuthApps(store)).toBe(true);
+    });
   });
 });

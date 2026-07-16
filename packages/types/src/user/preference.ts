@@ -128,6 +128,10 @@ export const UserLabSchema = z.object({
    */
   enableMessageTextSelectionActions: z.boolean().optional(),
   /**
+   * show OAuth app management in personal and workspace settings
+   */
+  enableOAuthApps: z.boolean().optional(),
+  /**
    * show the "Add Platform Agent" entry in the create menu
    */
   enablePlatformAgent: z.boolean().optional(),

@@ -25,6 +25,7 @@ export const labPreferSelectors = {
     s.preference.lab?.enableMessageTextSelectionActions ??
     DEFAULT_PREFERENCE.lab?.enableMessageTextSelectionActions ??
     false,
+  enableOAuthApps: (s: UserState): boolean => s.preference.lab?.enableOAuthApps ?? false,
   enablePlatformAgent: (s: UserState): boolean => s.preference.lab?.enablePlatformAgent ?? false,
   enableTaskVerify: (s: UserState): boolean => s.preference.lab?.enableTaskVerify ?? false,
 };

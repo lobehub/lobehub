@@ -22,7 +22,7 @@ import { useTranslation } from 'react-i18next';
 import { useIsWorkspaceOwner } from '@/business/client/hooks/useIsWorkspaceOwner';
 import { useIsWorkspaceViewer } from '@/business/client/hooks/useIsWorkspaceViewer';
 import { useUserStore } from '@/store/user';
-import { userGeneralSettingsSelectors } from '@/store/user/slices/settings/selectors';
+import { labPreferSelectors } from '@/store/user/selectors';
 import { WorkspaceSettingsTabs } from '@/types/workspaceSettings';
 
 export enum WorkspaceSettingsGroupKey {
@@ -50,7 +50,7 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
   const { t: tSubscription } = useTranslation('subscription');
   const isOwner = useIsWorkspaceOwner();
   const isViewer = useIsWorkspaceViewer();
-  const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
+  const enableOAuthApps = useUserStore(labPreferSelectors.enableOAuthApps);
 
   return useMemo(
     () =>
@@ -145,7 +145,7 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               key: WorkspaceSettingsTabs.APIKey,
               label: tAuth('tab.apikey'),
             },
-            isDevMode && {
+            enableOAuthApps && {
               icon: AppWindowIcon,
               key: WorkspaceSettingsTabs.OAuthApps,
               label: tAuth('tab.oauthApps'),
@@ -178,6 +178,6 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
           title: t('workspaceSetting.group.admin'),
         },
       ].filter(Boolean) as WorkspaceSettingCategoryGroup[],
-    [t, tAuth, tSubscription, isDevMode, isOwner, isViewer],
+    [t, tAuth, tSubscription, enableOAuthApps, isOwner, isViewer],
   );
 };

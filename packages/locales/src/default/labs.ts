@@ -37,6 +37,9 @@ export default {
   'features.messageTextSelectionActions.desc':
     'Show a quick action when selecting text in chat messages so the selected text can be added to the next conversation context.',
   'features.messageTextSelectionActions.title': 'Message Text Selection Actions',
+  'features.oauthApps.desc':
+    'Show OAuth app management in personal and workspace settings. This feature is hidden by default.',
+  'features.oauthApps.title': 'OAuth Apps',
   'features.platformAgent.desc':
     'Show the "Connect Agent" entry in the create menu. Connected agents (e.g. OpenClaw, Hermes) run on your own devices and communicate back via lh connect.',
   'features.platformAgent.title': 'Connect Agent',
