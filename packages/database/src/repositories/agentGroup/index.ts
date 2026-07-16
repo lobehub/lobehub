@@ -338,7 +338,10 @@ export class AgentGroupRepository {
       .from(chatGroupsAgents)
       .innerJoin(agents, eq(chatGroupsAgents.agentId, agents.id))
       .where(eq(chatGroupsAgents.chatGroupId, groupId))
-      .orderBy(chatGroupsAgents.order);
+      // `createdAt` is a deterministic tiebreak so rows sharing an `order`
+      // (e.g. legacy members left at the default 0) keep a stable, insertion-
+      // based order instead of shuffling on every refetch.
+      .orderBy(chatGroupsAgents.order, chatGroupsAgents.createdAt);
 
     // 3. Extract agent items with isSupervisor flag and find supervisor
     const agentItems: AgentGroupMember[] = [];
@@ -630,7 +633,7 @@ export class AgentGroupRepository {
       .from(chatGroupsAgents)
       .innerJoin(agents, eq(chatGroupsAgents.agentId, agents.id))
       .where(eq(chatGroupsAgents.chatGroupId, groupId))
-      .orderBy(chatGroupsAgents.order);
+      .orderBy(chatGroupsAgents.order, chatGroupsAgents.createdAt);
 
     // 3. Separate supervisor, virtual members, and non-virtual members
     let sourceSupervisor: (typeof groupAgentsWithDetails)[number] | undefined;
@@ -914,7 +917,7 @@ export class AgentGroupRepository {
       .from(chatGroupsAgents)
       .innerJoin(agents, eq(chatGroupsAgents.agentId, agents.id))
       .where(eq(chatGroupsAgents.chatGroupId, groupId))
-      .orderBy(chatGroupsAgents.order);
+      .orderBy(chatGroupsAgents.order, chatGroupsAgents.createdAt);
 
     const sourceSupervisor = groupAgentsWithDetails.find((row) => row.role === 'supervisor');
     const sourceMembers = groupAgentsWithDetails.filter((row) => row.role !== 'supervisor');

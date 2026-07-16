@@ -264,6 +264,8 @@
   "groupSidebar.members.orchestrator": "主持人",
   "groupSidebar.members.orchestratorThinking": "主持人思考中…",
   "groupSidebar.members.removeMember": "移除成员",
+  "groupSidebar.members.sortMember": "成员排序",
+  "groupSidebar.members.sortModalTitle": "成员排序",
   "groupSidebar.members.stopOrchestrator": "停止思考",
   "groupSidebar.members.triggerOrchestrator": "开始群聊",
   "groupSidebar.tabs.host": "主持人",

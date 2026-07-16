@@ -252,6 +252,8 @@ export default {
   'groupSidebar.members.orchestrator': 'Orchestrator',
   'groupSidebar.members.orchestratorThinking': 'Orchestrator is thinking...',
   'groupSidebar.members.removeMember': 'Remove Member',
+  'groupSidebar.members.sortMember': 'Sort Members',
+  'groupSidebar.members.sortModalTitle': 'Sort Members',
   'groupSidebar.members.stopOrchestrator': 'Stop',
   'groupSidebar.members.triggerOrchestrator': 'Start',
   'groupSidebar.tabs.host': 'Orchestrator',
