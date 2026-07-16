@@ -1,6 +1,7 @@
 import { ConnectorToolPermission } from '@/database/schemas';
 import { mcpService } from '@/server/services/mcp';
 
+import { buildLastSyncedAtMap, scheduleStaleConnectorToolsRefresh } from './refresh';
 import { buildConnectorMcpParams, type ConnectorToolSyncContext } from './sync';
 import { ensureFreshConnectorToken } from './tokens';
 
@@ -55,6 +56,28 @@ export const callConnectorToolById = async (
       'FORBIDDEN',
       `Tool '${params.toolName}' is disabled for this connector`,
     );
+  }
+
+  // Keep the tool list fresh through normal use: if it hasn't been synced in a
+  // while, refresh it from the upstream MCP server in the background so the user
+  // never has to open the connector page and click Refresh by hand. HTTP-only,
+  // throttled, and deferred — reuses the `tools` rows already loaded above.
+  // Wrapped defensively: this is a pure optimization and must never break the
+  // tool call, even if the scheduler itself throws.
+  try {
+    scheduleStaleConnectorToolsRefresh(
+      [
+        {
+          id: connector.id,
+          mcpConnectionType: connector.mcpConnectionType,
+          mcpServerUrl: connector.mcpServerUrl,
+        },
+      ],
+      buildLastSyncedAtMap(tools),
+      ctx,
+    );
+  } catch {
+    // Background tool-list refresh is best-effort — never fail the tool call.
   }
 
   const fresh = await ensureFreshConnectorToken(connector, ctx.connectorModel);

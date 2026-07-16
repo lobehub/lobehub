@@ -137,6 +137,10 @@ import {
 } from '@/server/services/agentSignal/featureGate';
 import { shouldSuppressSignal } from '@/server/services/agentSignal/suppressSignal';
 import { ComposioService } from '@/server/services/composio';
+import {
+  buildLastSyncedAtMap,
+  scheduleStaleConnectorToolsRefresh,
+} from '@/server/services/connector/refresh';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
 import { DocumentService } from '@/server/services/document';
@@ -2530,6 +2534,21 @@ export class AiAgentService {
           : [];
 
       connectorManifests = buildConnectorManifests(connectorsMcp, connectorTools);
+
+      // Auto-refresh stale connector tool lists in the background so upstream MCP
+      // tool changes propagate without the user manually re-syncing — the freshness
+      // the connectors migration lost from the old plugin system. Reuses the tools
+      // just fetched as the last-sync marker (no extra query), HTTP-only, throttled,
+      // and deferred via after() so it adds no latency to this run. Wrapped
+      // defensively: it is a pure optimization and must never break the agent run.
+      try {
+        scheduleStaleConnectorToolsRefresh(connectorsMcp, buildLastSyncedAtMap(connectorTools), {
+          connectorModel: this.connectorModel,
+          connectorToolModel: this.connectorToolModel,
+        });
+      } catch (err) {
+        log('execAgent: failed to schedule connector tool refresh (ignored): %O', err);
+      }
 
       // Only connectors that ACTUALLY produced a manifest (enabled + with synced
       // tools) replace a same-named plugin. Deriving the set from connectorsMcp
