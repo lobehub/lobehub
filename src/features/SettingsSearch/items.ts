@@ -568,8 +568,9 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
   },
   {
     anchor: 'usage-overview',
-    keywords: ['usage', 'quota'],
-    labelKey: 'usage.title',
+    descKey: 'usage.credit.desc',
+    keywords: ['usage', 'quota', 'credit'],
+    labelKey: 'usage.credit.title',
     ns: 'subscription',
     tab: SettingsTabs.Usage,
   },

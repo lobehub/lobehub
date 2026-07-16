@@ -76,7 +76,8 @@ const SettingsContent = ({ mobile, activeTab }: SettingsContentProps) => {
         const isFullWidth =
           tabKey === SettingsTabs.Provider ||
           tabKey === SettingsTabs.Skill ||
-          tabKey === SettingsTabs.Connector;
+          tabKey === SettingsTabs.Connector ||
+          tabKey === SettingsTabs.Usage;
         if (activeTab !== tabKey) return null;
         const content = renderComponent(tabKey);
         if (isFullWidth) return <Fragment key={tabKey}>{content}</Fragment>;

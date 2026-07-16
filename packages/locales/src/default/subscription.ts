@@ -662,7 +662,6 @@ export default {
   'usage.credit.addon.desc': 'Quota resets in {{time}}',
   'usage.credit.addon.used': 'Top-up Credits',
   'usage.credit.desc': 'Credits usage for AI chat, image generation, speech synthesis',
-  'usage.credit.detail': 'Usage statistics for the past {{day}} days',
   'usage.credit.free.desc': 'Quota resets in {{time}}',
   'usage.credit.free.expired': 'Expired on {{date}}',
   'usage.credit.free.used': 'Free Credits',
@@ -683,7 +682,6 @@ export default {
   'usage.storage.embeddings.used': 'Vector Storage',
   'usage.storage.file.used': 'File Usage',
   'usage.storage.title': 'Data Storage',
-  'usage.title': 'This Month Usage',
   'usage.used': 'Used',
   'zarinpal.infoModal.desc':
     'Due to policy requirements, please complete the following personal information before placing an order:',
