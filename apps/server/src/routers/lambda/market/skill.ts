@@ -9,6 +9,9 @@ import { SkillSorts } from '@/types/discover';
 
 const log = debug('lambda-router:market:skill');
 
+/** How many related skills the detail endpoint returns alongside the skill itself */
+const RELATED_SKILLS_COUNT = 6;
+
 // Public procedure with optional user info for trusted client token
 const marketProcedure = publicProcedure
   .use(serverDatabase)
@@ -48,6 +51,31 @@ export const skillRouter = router({
       }
     }),
 
+  getSkillComments: marketProcedure
+    .input(
+      z.object({
+        identifier: z.string(),
+        order: z.enum(['asc', 'desc']).optional(),
+        page: z.number().optional(),
+        pageSize: z.number().optional(),
+        sort: z.enum(['createdAt', 'upvotes']).optional(),
+      }),
+    )
+    .query(async ({ input, ctx }) => {
+      log('getSkillComments input: %O', input);
+
+      try {
+        const { identifier, ...params } = input;
+        return await ctx.marketService.getSkillComments(identifier, params);
+      } catch (error) {
+        log('Error fetching skill comments: %O', error);
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to fetch skill comments',
+        });
+      }
+    }),
+
   getSkillDetail: marketProcedure
     .input(
       z.object({
@@ -60,10 +88,34 @@ export const skillRouter = router({
       log('getSkillDetail input: %O', input);
 
       try {
-        return await ctx.marketService.getSkillDetail(input.identifier, {
+        const detail = await ctx.marketService.getSkillDetail(input.identifier, {
           locale: input.locale,
           version: input.version,
         });
+
+        // Related skills are decoration — never fail the detail because of them
+        const related = detail.category
+          ? await ctx.marketService
+              .searchSkill({
+                category: detail.category,
+                locale: input.locale,
+                page: 1,
+                pageSize: 7,
+                sort: 'recommended',
+              })
+              .then((list) =>
+                list.items
+                  .filter((item) => item.identifier !== detail.identifier)
+                  .slice(0, RELATED_SKILLS_COUNT),
+              )
+              .catch(() => undefined)
+          : undefined;
+
+        return {
+          ...detail,
+          downloadUrl: ctx.marketService.getSkillDownloadUrl(input.identifier, input.version),
+          related,
+        };
       } catch (error) {
         log('Error fetching skill detail: %O', error);
         throw new TRPCError({
@@ -97,6 +149,22 @@ export const skillRouter = router({
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to fetch skill list',
+        });
+      }
+    }),
+
+  getSkillRatingDistribution: marketProcedure
+    .input(z.object({ identifier: z.string() }))
+    .query(async ({ input, ctx }) => {
+      log('getSkillRatingDistribution input: %O', input);
+
+      try {
+        return await ctx.marketService.getSkillRatingDistribution(input.identifier);
+      } catch (error) {
+        log('Error fetching skill rating distribution: %O', error);
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to fetch skill rating distribution',
         });
       }
     }),

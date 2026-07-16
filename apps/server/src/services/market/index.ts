@@ -433,6 +433,7 @@ export class MarketService {
       | 'forks'
       | 'installCount'
       | 'name'
+      | 'recommended'
       | 'relevance'
       | 'stars'
       | 'updatedAt'
@@ -458,6 +459,32 @@ export class MarketService {
     log('getSkillDetail response: %O', result);
 
     return result;
+  }
+
+  /**
+   * Get skill comments from market
+   */
+  async getSkillComments(
+    identifier: string,
+    params?: {
+      order?: 'asc' | 'desc';
+      page?: number;
+      pageSize?: number;
+      sort?: 'createdAt' | 'upvotes';
+    },
+  ) {
+    log('getSkillComments: %s, params: %O', identifier, params);
+
+    return this.market.marketSkills.getComments(identifier, params);
+  }
+
+  /**
+   * Get skill rating distribution from market
+   */
+  async getSkillRatingDistribution(identifier: string) {
+    log('getSkillRatingDistribution: %s', identifier);
+
+    return this.market.marketSkills.getRatingDistribution(identifier);
   }
 
   /**

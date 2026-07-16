@@ -10,8 +10,11 @@ import { type StoreSetter } from '@/store/types';
 import {
   type DiscoverSkillDetail,
   type SkillCategoryItem,
+  type SkillCommentListResponse,
+  type SkillCommentsQueryParams,
   type SkillListResponse,
   type SkillQueryParams,
+  type SkillRatingDistribution,
 } from '@/types/discover';
 
 type Setter = StoreSetter<DiscoverStore>;
@@ -48,6 +51,16 @@ export class SkillActionImpl {
     );
   };
 
+  useFetchSkillComments = ({
+    identifier,
+    ...params
+  }: Partial<SkillCommentsQueryParams>): SWRResponse<SkillCommentListResponse> => {
+    return useClientDataSWR(
+      identifier ? discoverKeys.skillComments(identifier, params) : null,
+      async () => discoverService.getSkillComments({ identifier: identifier!, ...params }),
+    );
+  };
+
   useFetchSkillList = (params: SkillQueryParams): SWRResponse<SkillListResponse> => {
     const locale = globalHelpers.getCurrentLanguage();
     return useClientDataSWR(discoverKeys.skillList(locale, params), async () =>
@@ -56,6 +69,13 @@ export class SkillActionImpl {
         page: params.page ? Number(params.page) : 1,
         pageSize: params.pageSize ? Number(params.pageSize) : 21,
       }),
+    );
+  };
+
+  useFetchSkillRatingDistribution = (identifier?: string): SWRResponse<SkillRatingDistribution> => {
+    return useClientDataSWR(
+      identifier ? discoverKeys.skillRatingDistribution(identifier) : null,
+      async () => discoverService.getSkillRatingDistribution(identifier!),
     );
   };
 

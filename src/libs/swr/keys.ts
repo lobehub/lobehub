@@ -406,6 +406,11 @@ export const discoverKeys = {
     locale,
     params,
   ]),
+  skillComments: def('discover:skillComments', (identifier: string, params: unknown) => [
+    'discover:skillComments',
+    identifier,
+    params,
+  ]),
   skillDetail: def(
     'discover:skillDetail',
     (locale: string, identifier: string, version?: string) => [
@@ -419,6 +424,10 @@ export const discoverKeys = {
     'discover:skillList',
     locale,
     params,
+  ]),
+  skillRatingDistribution: def('discover:skillRatingDistribution', (identifier: string) => [
+    'discover:skillRatingDistribution',
+    identifier,
   ]),
   userProfile: def('discover:userProfile', (locale: string, username: string) => [
     'discover:userProfile',
