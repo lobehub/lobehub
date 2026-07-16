@@ -15,8 +15,13 @@ import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 
-import Title from '../../../../components/Title';
 import VsCodeIcon from './VsCodeIcon';
+
+const Title = ({ children }: { children?: React.ReactNode }) => (
+  <Text as={'h3'} fontSize={16} style={{ margin: 0, paddingInline: 8 }} weight={600}>
+    {children}
+  </Text>
+);
 
 type GuideMode = 'agent' | 'human';
 
