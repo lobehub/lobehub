@@ -1071,6 +1071,8 @@ export default {
 
   'skills.details.related.listTitle': 'Related Skills',
 
+  'skills.details.related.more': 'View More',
+
   'skills.details.sidebar.agent.title': 'Send this prompt to your Agent to install this Skill',
 
   'skills.details.sidebar.agent.useOnLobeAI': 'Use on LobeAI',

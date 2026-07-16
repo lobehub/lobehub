@@ -585,6 +585,7 @@
   "skills.details.rating.noRatings": "No ratings yet",
   "skills.details.rating.totalRatings": "{{count}} ratings",
   "skills.details.related.listTitle": "Related Skills",
+  "skills.details.related.more": "View More",
   "skills.details.sidebar.agent.title": "Send this prompt to your Agent to install this Skill",
   "skills.details.sidebar.agent.useOnLobeAI": "Use on LobeAI",
   "skills.details.sidebar.directoryLayout": "Directory Layout",

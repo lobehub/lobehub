@@ -19,10 +19,13 @@ export const useDetailContext = () => {
 };
 
 /**
- * How "open another skill" behaves where the detail is rendered: the modal
- * swaps its own content in place, the standalone page navigates.
+ * How navigation behaves where the detail is rendered: the modal swaps its own
+ * content in place (and closes itself before leaving for another route), the
+ * standalone page just navigates.
  */
 export interface DetailActionContextValue {
+  /** Present only in the modal — call before navigating away from the detail */
+  close?: () => void;
   selectSkill?: (identifier: string) => void;
 }
 

@@ -1,6 +1,7 @@
 'use client';
 
 import { Empty, Flexbox } from '@lobehub/ui';
+import { useModalContext } from '@lobehub/ui/base-ui';
 import { SearchX } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -48,11 +49,12 @@ export const SkillDetailContent = memo<SkillDetailContentProps>(
   ({ identifier: initialIdentifier, mobile }) => {
     const { t } = useTranslation('error');
     const [identifier, setIdentifier] = useState(initialIdentifier);
+    const { close } = useModalContext();
 
     const useSkillDetail = useDiscoverStore((s) => s.useFetchSkillDetail);
     const { data, isLoading } = useSkillDetail({ identifier });
 
-    const actions = useMemo(() => ({ selectSkill: setIdentifier }), []);
+    const actions = useMemo(() => ({ close, selectSkill: setIdentifier }), [close]);
 
     if (isLoading) return <Loading />;
     if (!data)

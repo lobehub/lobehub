@@ -1,14 +1,18 @@
 'use client';
 
-import { Block, Collapse, Flexbox, Markdown, ScrollShadow, Tag, Text } from '@lobehub/ui';
+import { Block, Collapse, Flexbox, Icon, Markdown, ScrollShadow, Tag, Text } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, responsive } from 'antd-style';
-import { memo } from 'react';
+import { ChevronRight } from 'lucide-react';
+import qs from 'query-string';
+import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import PublishedTime from '@/components/PublishedTime';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useDiscoverStore } from '@/store/discover';
 
-import { useDetailContext } from '../../DetailProvider';
+import { useDetailActionContext, useDetailContext } from '../../DetailProvider';
 import RelatedSkillCard from './RelatedSkillCard';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -32,6 +36,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     ${responsive.sm} {
       font-size: 18px;
     }
+  `,
+  more: css`
+    display: flex;
+    align-items: center;
+    color: ${cssVar.colorTextSecondary};
   `,
   summary: css`
     font-size: 15px;
@@ -69,11 +78,19 @@ const Overview = memo(() => {
     versions = [],
     content,
   } = useDetailContext();
+  const { close } = useDetailActionContext();
+  const navigate = useWorkspaceAwareNavigate();
 
   const useFetchRelatedSkills = useDiscoverStore((s) => s.useFetchRelatedSkills);
   const { data: related } = useFetchRelatedSkills({ category, identifier });
 
   const latestVersion = versions.find((v) => v.isLatest) || versions[0];
+
+  const handleMoreRelated = useCallback(() => {
+    navigate(qs.stringifyUrl({ query: { category }, url: '/community/skill' }));
+    // In the modal, leave the detail open no longer than the navigation
+    close?.();
+  }, [category, close, navigate]);
 
   return (
     <Flexbox gap={32}>
@@ -149,7 +166,18 @@ const Overview = memo(() => {
       {/* RELATED SKILLS */}
       {related && related.length > 0 && (
         <Flexbox gap={12}>
-          <SectionLabel>{t('skills.details.related.listTitle')}</SectionLabel>
+          <Flexbox horizontal align={'center'} justify={'space-between'}>
+            <SectionLabel>{t('skills.details.related.listTitle')}</SectionLabel>
+            <Button
+              className={styles.more}
+              style={{ paddingInline: 6 }}
+              type={'text'}
+              onClick={handleMoreRelated}
+            >
+              <span>{t('skills.details.related.more')}</span>
+              <Icon icon={ChevronRight} />
+            </Button>
+          </Flexbox>
           <div className={styles.relatedGrid}>
             {related.map((item) => (
               <RelatedSkillCard key={item.identifier} {...item} />

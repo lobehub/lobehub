@@ -585,6 +585,7 @@
   "skills.details.rating.noRatings": "暂无评分",
   "skills.details.rating.totalRatings": "{{count}} 个评分",
   "skills.details.related.listTitle": "相关技能",
+  "skills.details.related.more": "查看更多",
   "skills.details.sidebar.agent.title": "发送此提示词给你的 Agent 以安装此技能",
   "skills.details.sidebar.agent.useOnLobeAI": "在 LobeAI 上使用",
   "skills.details.sidebar.directoryLayout": "目录布局",
