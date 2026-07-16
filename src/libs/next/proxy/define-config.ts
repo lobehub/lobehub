@@ -129,7 +129,9 @@ export function defineConfig() {
       return NextResponse.next();
     }
 
-    const isAuthSpaRoute = authSpaRoutes.some((r) => url.pathname.startsWith(r));
+    const isAuthSpaRoute = authSpaRoutes.some(
+      (route) => url.pathname === route || url.pathname.startsWith(`${route}/`),
+    );
 
     // Auth SPA routes: rewrite to /spa-auth/[locale]/[[...path]] catch-all
     if (isAuthSpaRoute) {
