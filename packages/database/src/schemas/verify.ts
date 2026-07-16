@@ -1,7 +1,6 @@
 import {
   acceptanceStatuses,
   acceptanceSubjectTypes,
-  acceptanceVisibilities,
   verifierTypes,
   verifyCheckResultStatuses,
   verifyEvidenceCapturedBy,
@@ -367,14 +366,6 @@ export const acceptances = pgTable(
     /** User-facing acceptance lifecycle state. */
     status: text('status', { enum: acceptanceStatuses }).default('pending').notNull(),
 
-    /**
-     * Read visibility beyond the creator. The DB default matches the personal
-     * scope (`public` — the page is meant to be linked from PRs/reports);
-     * workspace-scoped creation overrides to `private` in the model, so org
-     * data stays member-gated unless deliberately opened up.
-     */
-    visibility: text('visibility', { enum: acceptanceVisibilities }).default('public').notNull(),
-
     /** One-sentence acceptance requirement the user configured for this subject. */
     requirement: text('requirement'),
 
@@ -406,7 +397,6 @@ export const acceptances = pgTable(
     index('acceptances_workspace_id_idx').on(t.workspaceId),
     index('acceptances_subject_idx').on(t.subjectType, t.subjectId),
     index('acceptances_status_idx').on(t.status),
-    index('acceptances_workspace_visibility_idx').on(t.workspaceId, t.visibility, t.userId),
     // One acceptance per subject in personal scope.
     uniqueIndex('acceptances_personal_subject_unique')
       .on(t.userId, t.subjectType, t.subjectId)
