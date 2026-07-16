@@ -206,6 +206,10 @@ describe('useCreateMenuItems', () => {
 
     const configItem = result.current.configMenuItem(vi.fn());
 
+    if (!isActionItem(configItem)) {
+      throw new Error('Expected category management menu item');
+    }
+
     expect(configItem.label).toBe('sessionGroup.manageCategory');
   });
 
