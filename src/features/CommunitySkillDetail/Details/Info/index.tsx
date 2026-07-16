@@ -10,6 +10,7 @@ import { useSkillCategoryItem } from '@/hooks/useSkillCategory';
 import { formatNumber } from '@/utils/format';
 
 import { useDetailContext } from '../../DetailProvider';
+import { isGitHubUrl } from './isGitHubUrl';
 
 const EMPTY_VALUE = '--';
 
@@ -119,12 +120,12 @@ const Info = memo(() => {
   const categoryItem = useSkillCategoryItem(category);
   const latestVersion = versions.find((item) => item.isLatest) || versions[0];
   const sourceUrl = github?.url || repository || homepage;
-  const isGithubSource = sourceUrl?.includes('github.com');
+  const isGitHubSource = isGitHubUrl(sourceUrl);
   const updatedDate = updatedAt || latestVersion?.createdAt || createdAt;
 
   const sourceValue = sourceUrl ? (
     <a className={styles.sourceLink} href={sourceUrl} rel={'noopener noreferrer'} target={'_blank'}>
-      {isGithubSource ? t('skills.details.info.viewOnGithub') : t('skills.details.info.viewSource')}{' '}
+      {isGitHubSource ? t('skills.details.info.viewOnGithub') : t('skills.details.info.viewSource')}{' '}
       ↗
     </a>
   ) : undefined;
