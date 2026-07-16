@@ -15,12 +15,30 @@ const log = debug('lobe-server:connector-refresh');
 export const CONNECTOR_TOOLS_REFRESH_TTL_MS = 10 * 60 * 1000;
 
 /**
- * Per-instance guard so concurrent requests (many tool calls in one turn, or
- * parallel chats) don't fan out multiple upstream syncs for the same connector.
- * Best-effort only — a fresh serverless instance starts empty, which the TTL
- * check still bounds.
+ * `connectorId → epoch ms of the last refresh we scheduled`, per instance.
+ *
+ * Combined with the DB tool timestamps as the throttle. It does three jobs the
+ * DB marker alone can't:
+ * - **Empty tool lists**: a connector whose upstream returns no tools writes no
+ *   tool row, so the DB marker never advances; without this it would re-fire on
+ *   every run. Recording the attempt here honors the TTL regardless.
+ * - **Concurrency**: many tool calls in one turn resolve to the same `now`, so
+ *   the second sees a fresh attempt and is skipped — no fan-out.
+ * - **Failure backoff**: a failed sync leaves the attempt recorded, so a down
+ *   connector is retried at most once per TTL instead of every message.
+ *
+ * Best-effort only — a fresh serverless instance starts empty and falls back to
+ * the DB marker. Pruned opportunistically to stay bounded.
  */
-const inFlight = new Set<string>();
+const lastAttemptAt = new Map<string, number>();
+
+/** Cap the attempt map by dropping entries older than the TTL (no longer throttling). */
+const pruneAttempts = (now: number): void => {
+  if (lastAttemptAt.size < 1000) return;
+  for (const [id, ts] of lastAttemptAt) {
+    if (now - ts > CONNECTOR_TOOLS_REFRESH_TTL_MS) lastAttemptAt.delete(id);
+  }
+};
 
 export interface StaleRefreshConnector {
   id: string;
@@ -76,6 +94,8 @@ export const scheduleStaleConnectorToolsRefresh = (
   // optimization only: under NO circumstances may it throw into the caller and
   // break the tool call or chat flow. Every step is guarded so a bad input, a
   // logging failure, or an `after()` scheduling failure is swallowed here.
+  pruneAttempts(now);
+
   for (const connector of connectors) {
     try {
       // stdio can't be refreshed server-side (the binary lives on the user's
@@ -83,12 +103,14 @@ export const scheduleStaleConnectorToolsRefresh = (
       if (connector.mcpConnectionType === ConnectorMcpConnectionType.stdio) continue;
       if (!connector.mcpServerUrl) continue;
 
-      const lastSyncedAt = lastSyncedAtById.get(connector.id) ?? 0;
+      const { id } = connector;
+      // Throttle on whichever is more recent: the DB tool marker or the last
+      // attempt we scheduled on this instance (covers empty tool lists and
+      // concurrent calls, and backs off failed syncs to once per TTL).
+      const lastSyncedAt = Math.max(lastSyncedAtById.get(id) ?? 0, lastAttemptAt.get(id) ?? 0);
       if (now - lastSyncedAt < CONNECTOR_TOOLS_REFRESH_TTL_MS) continue;
 
-      if (inFlight.has(connector.id)) continue;
-      const { id } = connector;
-      inFlight.add(id);
+      lastAttemptAt.set(id, now);
 
       try {
         after(async () => {
@@ -97,18 +119,15 @@ export const scheduleStaleConnectorToolsRefresh = (
             log('auto-refreshed connector %s: %d tools', id, toolCount);
           } catch (err) {
             // Remote unreachable / auth failure / etc. — best-effort background
-            // sweep, never surfaced to the user.
+            // sweep, never surfaced to the user. The attempt stays recorded so
+            // the connector backs off for a TTL instead of retrying every call.
             log('auto-refresh failed for connector %s: %O', id, err);
-          } finally {
-            // Always release the guard, even after a failed sync, so a later
-            // request can retry instead of the connector being stuck.
-            inFlight.delete(id);
           }
         });
       } catch (err) {
-        // `after()` failed to even schedule the work — release the guard so we
-        // don't permanently block this connector, and swallow.
-        inFlight.delete(id);
+        // `after()` failed to even schedule the work — clear the attempt so a
+        // later call can retry, and swallow.
+        lastAttemptAt.delete(id);
         log('failed to schedule refresh for connector %s: %O', id, err);
       }
     } catch (err) {

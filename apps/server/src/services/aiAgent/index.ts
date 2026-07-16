@@ -2542,8 +2542,15 @@ export class AiAgentService {
       // and deferred via after() so it adds no latency to this run. Wrapped
       // defensively: it is a pure optimization and must never break the agent run.
       try {
+        // The background sync decrypts stored OAuth/bearer credentials to auth
+        // against the MCP server, so it needs a gatekeeper-backed model — the
+        // same `connectorGateKeeper` used above. `this.connectorModel` has none,
+        // which would decrypt to null and make an authed connector 401 → error.
+        const refreshConnectorModel = connectorGateKeeper
+          ? new ConnectorModel(this.db, this.userId, this.workspaceId, connectorGateKeeper)
+          : this.connectorModel;
         scheduleStaleConnectorToolsRefresh(connectorsMcp, buildLastSyncedAtMap(connectorTools), {
-          connectorModel: this.connectorModel,
+          connectorModel: refreshConnectorModel,
           connectorToolModel: this.connectorToolModel,
         });
       } catch (err) {

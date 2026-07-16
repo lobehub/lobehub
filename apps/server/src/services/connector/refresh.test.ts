@@ -118,13 +118,26 @@ describe('scheduleStaleConnectorToolsRefresh — eligibility', () => {
     expect(syncConnectorToolsById).not.toHaveBeenCalled();
   });
 
-  it('does not fan out a second refresh while one is already in flight', async () => {
+  it('throttles a second call for the same connector at the same instant', async () => {
     const id = nextId();
     scheduleStaleConnectorToolsRefresh([httpConnector(id)], new Map(), ctx, NOW);
-    // Second call before the first deferred work runs → still in flight → skipped.
+    // Second call at the same `now` → within TTL of the recorded attempt → skipped.
     scheduleStaleConnectorToolsRefresh([httpConnector(id)], new Map(), ctx, NOW);
 
     expect(after).toHaveBeenCalledTimes(1);
+    await flushDeferred();
+    expect(syncConnectorToolsById).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps throttling a connector whose upstream tool list is empty', async () => {
+    // Empty upstream list → no tool row records the sync → DB marker stays 0.
+    // The in-memory attempt marker must still honor the TTL so it does not
+    // re-fire on every run.
+    const id = nextId();
+    scheduleStaleConnectorToolsRefresh([httpConnector(id)], new Map(), ctx, NOW);
+    await flushDeferred();
+    // Later, but still within the TTL, with an empty DB marker again → skipped.
+    scheduleStaleConnectorToolsRefresh([httpConnector(id)], new Map(), ctx, NOW + 1000);
     await flushDeferred();
     expect(syncConnectorToolsById).toHaveBeenCalledTimes(1);
   });
@@ -146,24 +159,40 @@ describe('scheduleStaleConnectorToolsRefresh — remote result handling', () => 
     await expect(flushDeferred()).resolves.toBeUndefined();
   });
 
-  it('releases the in-flight guard after success so a later stale call re-syncs', async () => {
+  it('re-syncs once the TTL has elapsed since the last attempt', async () => {
     const id = nextId();
     scheduleStaleConnectorToolsRefresh([httpConnector(id)], new Map(), ctx, NOW);
     await flushDeferred();
-    // Same connector, still stale → should schedule again now the guard is freed.
-    scheduleStaleConnectorToolsRefresh([httpConnector(id)], new Map(), ctx, NOW);
+    // Past the TTL → eligible again even though the DB marker never advanced.
+    scheduleStaleConnectorToolsRefresh(
+      [httpConnector(id)],
+      new Map(),
+      ctx,
+      NOW + CONNECTOR_TOOLS_REFRESH_TTL_MS + 1,
+    );
     await flushDeferred();
     expect(syncConnectorToolsById).toHaveBeenCalledTimes(2);
   });
 
-  it('releases the in-flight guard after failure so a later call can retry', async () => {
+  it('backs off a failed connector for a TTL, then retries', async () => {
     const id = nextId();
     vi.mocked(syncConnectorToolsById).mockRejectedValueOnce(new Error('remote MCP down'));
     scheduleStaleConnectorToolsRefresh([httpConnector(id)], new Map(), ctx, NOW);
     await flushDeferred();
-    // A down connector must not be permanently stuck — the next call retries.
+
+    // Within the TTL after a failure → still backed off, not retried.
+    scheduleStaleConnectorToolsRefresh([httpConnector(id)], new Map(), ctx, NOW + 1000);
+    await flushDeferred();
+    expect(syncConnectorToolsById).toHaveBeenCalledTimes(1);
+
+    // After the TTL → retried, and this time it succeeds.
     vi.mocked(syncConnectorToolsById).mockResolvedValueOnce({ toolCount: 5 });
-    scheduleStaleConnectorToolsRefresh([httpConnector(id)], new Map(), ctx, NOW);
+    scheduleStaleConnectorToolsRefresh(
+      [httpConnector(id)],
+      new Map(),
+      ctx,
+      NOW + CONNECTOR_TOOLS_REFRESH_TTL_MS + 1,
+    );
     await flushDeferred();
     expect(syncConnectorToolsById).toHaveBeenCalledTimes(2);
   });
