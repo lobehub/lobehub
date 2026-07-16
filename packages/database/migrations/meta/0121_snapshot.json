@@ -6,7 +6,7 @@
   },
   "dialect": "postgresql",
   "enums": {},
-  "id": "30acf92a-14da-438c-be7e-d8be0e061f22",
+  "id": "e8808417-c854-41cf-81c3-f21af96ae6b8",
   "policies": {},
   "prevId": "a5cdc8c1-9de5-4b7f-9e92-17a2123fc860",
   "roles": {},
@@ -22774,8 +22774,20 @@
           "primaryKey": false,
           "notNull": true
         },
-        "root_operation_id": {
-          "name": "root_operation_id",
+        "origin_topic_id": {
+          "name": "origin_topic_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "origin_thread_id": {
+          "name": "origin_thread_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "origin_agent_id": {
+          "name": "origin_agent_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -22983,36 +22995,80 @@
           "method": "btree",
           "with": {}
         },
-        "works_root_operation_updated_at_id_idx": {
-          "name": "works_root_operation_updated_at_id_idx",
+        "works_origin_topic_id_idx": {
+          "name": "works_origin_topic_id_idx",
           "columns": [
             {
-              "expression": "root_operation_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "updated_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "id",
+              "expression": "origin_topic_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
             }
           ],
           "isUnique": false,
-          "where": "\"works\".\"root_operation_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "works_origin_thread_id_idx": {
+          "name": "works_origin_thread_id_idx",
+          "columns": [
+            {
+              "expression": "origin_thread_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "works_origin_agent_id_idx": {
+          "name": "works_origin_agent_id_idx",
+          "columns": [
+            {
+              "expression": "origin_agent_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
           "concurrently": false,
           "method": "btree",
           "with": {}
         }
       },
       "foreignKeys": {
+        "works_origin_topic_id_topics_id_fk": {
+          "name": "works_origin_topic_id_topics_id_fk",
+          "tableFrom": "works",
+          "tableTo": "topics",
+          "columnsFrom": ["origin_topic_id"],
+          "columnsTo": ["id"],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "works_origin_thread_id_threads_id_fk": {
+          "name": "works_origin_thread_id_threads_id_fk",
+          "tableFrom": "works",
+          "tableTo": "threads",
+          "columnsFrom": ["origin_thread_id"],
+          "columnsTo": ["id"],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "works_origin_agent_id_agents_id_fk": {
+          "name": "works_origin_agent_id_agents_id_fk",
+          "tableFrom": "works",
+          "tableTo": "agents",
+          "columnsFrom": ["origin_agent_id"],
+          "columnsTo": ["id"],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
         "works_user_id_users_id_fk": {
           "name": "works_user_id_users_id_fk",
           "tableFrom": "works",

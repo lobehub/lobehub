@@ -2748,7 +2748,9 @@ table works {
   url text
   tool_name text [not null]
   tool_identifier text [not null]
-  root_operation_id text
+  origin_topic_id text
+  origin_thread_id text
+  origin_agent_id text
   user_id text [not null]
   workspace_id text
   visibility text [not null]
@@ -2763,7 +2765,9 @@ table works {
     (workspace_id, visibility, user_id) [name: 'works_workspace_visibility_idx']
     (user_id, updated_at, id) [name: 'works_user_updated_at_id_idx']
     (workspace_id, updated_at, id) [name: 'works_workspace_updated_at_id_idx']
-    (root_operation_id, updated_at, id) [name: 'works_root_operation_updated_at_id_idx']
+    origin_topic_id [name: 'works_origin_topic_id_idx']
+    origin_thread_id [name: 'works_origin_thread_id_idx']
+    origin_agent_id [name: 'works_origin_agent_id_idx']
   }
 }
 

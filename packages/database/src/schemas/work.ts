@@ -70,8 +70,20 @@ export const works = pgTable(
     toolName: text('tool_name').notNull(),
     /** Tool/plugin identifier that produced the current version, e.g. `lobe-task`. */
     toolIdentifier: text('tool_identifier').notNull(),
-    /** Latest runtime operation that produced a version and therefore owns the current card. */
-    rootOperationId: text('root_operation_id'),
+
+    /**
+     * Origin provenance: where this Work was FIRST registered. Stamped once when
+     * the identity row is created and never updated — even when that first
+     * registration is an update to a pre-existing external resource
+     * (changeType='updated'). Powers "works created in this topic / by this
+     * agent" filters; per-mutation provenance lives on `work_versions`.
+     * Set-null so deleting the origin conversation/agent keeps the Work.
+     */
+    originTopicId: text('origin_topic_id').references(() => topics.id, { onDelete: 'set null' }),
+    originThreadId: text('origin_thread_id').references(() => threads.id, {
+      onDelete: 'set null',
+    }),
+    originAgentId: text('origin_agent_id').references(() => agents.id, { onDelete: 'set null' }),
 
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
@@ -112,10 +124,12 @@ export const works = pgTable(
     index('works_workspace_updated_at_id_idx')
       .on(t.workspaceId, t.updatedAt, t.id)
       .where(isNotNull(t.workspaceId)),
-    /** Powers current-card lookup by latest operation, ordered by current recency and stable id. */
-    index('works_root_operation_updated_at_id_idx')
-      .on(t.rootOperationId, t.updatedAt, t.id)
-      .where(isNotNull(t.rootOperationId)),
+    /** Supports origin-topic filters (e.g. per-topic created-works lists) and topic-deletion SET NULL processing. */
+    index('works_origin_topic_id_idx').on(t.originTopicId),
+    /** Supports origin-thread filters and thread-deletion SET NULL processing. */
+    index('works_origin_thread_id_idx').on(t.originThreadId),
+    /** Supports origin-agent filters and agent-deletion SET NULL processing. */
+    index('works_origin_agent_id_idx').on(t.originAgentId),
   ],
 );
 
