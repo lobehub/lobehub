@@ -46,6 +46,7 @@ const BatchActionsDropdown = memo<BatchActionsDropdownProps>(({ selectCount, onA
   const knowledgeBases = useKnowledgeBaseListContext();
   const activeWorkspaceId = useActiveWorkspaceId();
   const { allowed: canEditResources, reason } = usePermission('edit_own_content');
+  const isWorkspaceDeleteAll = !!activeWorkspaceId && selectAllState === 'all';
 
   const menuItems = useMemo<DropdownItem[]>(() => {
     const items: DropdownItem[] = [];
@@ -176,11 +177,20 @@ const BatchActionsDropdown = memo<BatchActionsDropdownProps>(({ selectCount, onA
         disabled: selectCount === 0,
         icon: <Icon icon={Trash2Icon} />,
         key: 'delete',
-        label: t('delete', { ns: 'common' }),
+        label: t(isWorkspaceDeleteAll ? 'FileManager.actions.deleteAllOwn' : 'delete', {
+          ns: isWorkspaceDeleteAll ? 'components' : 'common',
+        }),
         onClick: async () => {
           confirmModal({
             cancelText: t('cancel', { ns: 'common' }),
-            content: t('FileManager.actions.confirmDeleteMultiFiles', { count: selectCount }),
+            content: t(
+              selectAllState === 'all'
+                ? isWorkspaceDeleteAll
+                  ? 'FileManager.actions.confirmDeleteAllOwnFiles'
+                  : 'FileManager.actions.confirmDeleteAllFiles'
+                : 'FileManager.actions.confirmDeleteMultiFiles',
+              { count: selectCount },
+            ),
             okButtonProps: {
               danger: true,
             },
@@ -209,6 +219,7 @@ const BatchActionsDropdown = memo<BatchActionsDropdownProps>(({ selectCount, onA
     canEditResources,
     listVisibility,
     activeWorkspaceId,
+    isWorkspaceDeleteAll,
   ]);
 
   return (

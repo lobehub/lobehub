@@ -117,6 +117,7 @@
   "verify.error.unlinkBeforeRelink": "این حساب LobeHub قبلاً به یک حساب تلگرام دیگر متصل شده است. ابتدا آن را در تنظیمات → پیام‌رسان قطع کنید تا بتوانید حساب جدیدی را متصل کنید.",
   "verify.signInCta": "برای ادامه وارد شوید",
   "verify.signInRequired": "لطفاً وارد LobeHub شوید تا لینک را تأیید کنید.",
+  "verify.success.backToLobeHub": "بازگشت به LobeHub",
   "verify.success.description": "حساب شما اکنون به {{platform}} متصل شده است. {{platform}} را باز کنید و اولین پیام خود را ارسال کنید.",
   "verify.success.openBot": "باز کردن در {{platform}}",
   "verify.success.title": "با موفقیت لینک شد!"

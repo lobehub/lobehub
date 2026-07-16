@@ -117,6 +117,7 @@
   "verify.error.unlinkBeforeRelink": "Questo account LobeHub è già collegato a un altro account Telegram. Scollegalo in Impostazioni → Messenger prima di collegarne uno nuovo.",
   "verify.signInCta": "Accedi per continuare",
   "verify.signInRequired": "Accedi a LobeHub per confermare il collegamento.",
+  "verify.success.backToLobeHub": "Torna a LobeHub",
   "verify.success.description": "Il tuo account è ora connesso a {{platform}}. Apri {{platform}} e invia il tuo primo messaggio.",
   "verify.success.openBot": "Apri in {{platform}}",
   "verify.success.title": "Collegamento riuscito!"

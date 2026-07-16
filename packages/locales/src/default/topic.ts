@@ -3,15 +3,31 @@ export default {
   'actions.addNewTopicInProject': 'Start new topic in {{directory}}',
   'actions.autoRename': 'Smart Rename',
   'actions.archiveMergedPullRequests': 'Archive Topics with Merged PRs',
+  'actions.archiveMergedPullRequestsOwn': 'Archive My Topics with Merged PRs',
+  'actions.archiveMergedPullRequestsWorkspace': 'Archive All Topics with Merged PRs',
   'actions.archiveMergedPullRequestsNone': 'No topics with merged PRs found.',
   'actions.archiveMergedPullRequestsSuccess_one': 'Archived {{count}} topic with a merged PR.',
   'actions.archiveMergedPullRequestsSuccess_other': 'Archived {{count}} topics with merged PRs.',
+  'actions.confirmArchiveMergedPullRequestsWorkspace':
+    'Archive all Workspace topics with merged PRs, including topics created by other members?',
   'actions.confirmRemoveAll': 'You are about to delete all topics. This action cannot be undone.',
+  'actions.confirmRemoveAllOwn':
+    'You are about to delete all topics you created in the current list. Topics created by other Workspace members will remain. This action cannot be undone.',
+  'actions.confirmRemoveAllWorkspace':
+    'You are about to delete all topics in the current Workspace list, including topics created by other members. This action cannot be undone.',
+  'actions.confirmRemoveAllWorkspaceAcknowledge':
+    "I understand that this permanently deletes other members' topics.",
   'actions.confirmRemoveTopic': 'You are about to delete this topic. This action cannot be undone.',
   'actions.confirmRemoveTopicFiles': 'Also delete images and files uploaded in this topic',
   'actions.confirmRemoveTopicTitle': 'Delete this topic?',
   'actions.confirmRemoveUnstarred':
     'You are about to delete unstarred topics. This action cannot be undone.',
+  'actions.confirmRemoveUnstarredOwn':
+    'You are about to delete unstarred topics you created. Topics created by other Workspace members will remain. This action cannot be undone.',
+  'actions.confirmRemoveUnstarredWorkspace':
+    'You are about to delete all unstarred topics in the current Workspace list, including topics created by other members. Starred topics will remain. This action cannot be undone.',
+  'actions.confirmRemoveUnstarredWorkspaceAcknowledge':
+    "I understand that this permanently deletes other members' unstarred topics.",
   'actions.copyLink': 'Copy Link',
   'actions.copyLinkSuccess': 'Link copied',
   'actions.copySessionId': 'Copy Topic ID',
@@ -30,8 +46,12 @@ export default {
   'actions.openInNewTab': 'Open in New Tab',
   'actions.openInNewWindow': 'Open in a new window',
   'actions.removeAll': 'Delete All Topics',
+  'actions.removeAllOwn': 'Delete My Topics',
+  'actions.removeAllWorkspace': 'Delete All Topics',
   'actions.removeTopic': 'Delete Topic',
   'actions.removeUnstarred': 'Delete Unstarred Topics',
+  'actions.removeUnstarredOwn': 'Delete My Unstarred Topics',
+  'actions.removeUnstarredWorkspace': 'Delete All Unstarred Topics',
   'defaultTitle': 'Default Topic',
   'displayItems': 'Display Items',
   'draft': '[Draft]',

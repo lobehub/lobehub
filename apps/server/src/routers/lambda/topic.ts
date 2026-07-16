@@ -36,7 +36,10 @@ import { FileService } from '@/server/services/file';
 import { after } from '@/server/utils/scheduleAfterResponse';
 import { type BatchTaskResult } from '@/types/service';
 
-import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
+import {
+  assertWorkspaceRowManageable,
+  shouldRestrictBulkDeleteToCreator,
+} from './_helpers/assertWorkspaceRowManageable';
 import {
   batchResolveAgentIdFromSessions,
   resolveAgentIdFromSession,
@@ -63,6 +66,8 @@ const topicProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =>
     },
   });
 });
+
+const topicBulkDeleteScopeSchema = z.enum(['own', 'workspace']).default('own');
 
 interface TopicShareCtx {
   serverDB: LobeChatDatabase;
@@ -253,13 +258,20 @@ export const topicRouter = router({
 
   batchDeleteByAgentId: topicProcedure
     .use(withScopedPermission('topic:delete'))
-    .input(z.object({ agentId: z.string() }))
+    .input(z.object({ agentId: z.string(), scope: topicBulkDeleteScopeSchema }))
     .mutation(async ({ input, ctx }) => {
-      // Workspace topic sweeps are caller-scoped for every role — owners
-      // included (bulk actions only affect caller-created content).
-      const restrictToCreator = !!ctx.workspaceId;
+      const restrictToCreator = shouldRestrictBulkDeleteToCreator(ctx, input.scope);
 
       return ctx.topicModel.batchDeleteByAgentId(input.agentId, { restrictToCreator });
+    }),
+
+  batchDeleteByGroupId: topicProcedure
+    .use(withScopedPermission('topic:delete'))
+    .input(z.object({ groupId: z.string(), scope: topicBulkDeleteScopeSchema }))
+    .mutation(async ({ input, ctx }) => {
+      const restrictToCreator = shouldRestrictBulkDeleteToCreator(ctx, input.scope);
+
+      return ctx.topicModel.batchDeleteByGroupId(input.groupId, { restrictToCreator });
     }),
 
   batchDeleteBySessionId: topicProcedure
@@ -268,6 +280,7 @@ export const topicRouter = router({
       z.object({
         agentId: z.string().optional(),
         id: z.string().nullish(),
+        scope: topicBulkDeleteScopeSchema,
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -278,9 +291,7 @@ export const topicRouter = router({
         ctx.workspaceId ?? undefined,
       );
 
-      // Workspace topic sweeps are caller-scoped for every role — owners
-      // included (bulk actions only affect caller-created content).
-      const restrictToCreator = !!ctx.workspaceId;
+      const restrictToCreator = shouldRestrictBulkDeleteToCreator(ctx, input.scope);
 
       return ctx.topicModel.batchDeleteBySessionId(resolved.sessionId, { restrictToCreator });
     }),

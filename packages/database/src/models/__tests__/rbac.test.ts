@@ -50,6 +50,42 @@ describe('RbacModel — workspace scope', () => {
   const ownerCode = `${PERMISSION_ACTIONS.WORKSPACE_UPDATE}:all`;
   const memberCode = `${PERMISSION_ACTIONS.WORKSPACE_READ}:all`;
 
+  describe('seedWorkspaceRoles', () => {
+    it('removes stale permissions from a built-in role when re-seeded', async () => {
+      const [memberRole] = await serverDB
+        .select({ id: roles.id })
+        .from(roles)
+        .where(
+          and(eq(roles.name, WORKSPACE_SYSTEM_ROLES.MEMBER), eq(roles.workspaceId, workspaceAId)),
+        )
+        .limit(1);
+      const apiKeyReadCode = `${PERMISSION_ACTIONS.API_KEY_READ}:all`;
+      const [apiKeyReadPermission] = await serverDB
+        .select({ id: permissions.id })
+        .from(permissions)
+        .where(eq(permissions.code, apiKeyReadCode))
+        .limit(1);
+
+      await serverDB.insert(rolePermissions).values({
+        permissionId: apiKeyReadPermission.id,
+        roleId: memberRole.id,
+      });
+
+      await seedWorkspaceRoles(serverDB, workspaceAId);
+
+      const staleLinks = await serverDB
+        .select()
+        .from(rolePermissions)
+        .where(
+          and(
+            eq(rolePermissions.roleId, memberRole.id),
+            eq(rolePermissions.permissionId, apiKeyReadPermission.id),
+          ),
+        );
+      expect(staleLinks).toEqual([]);
+    });
+  });
+
   describe('assignWorkspaceRole / hasPermission with workspaceId', () => {
     it('returns true for a permission granted via the assigned role in that workspace', async () => {
       const rbac = new RbacModel(serverDB, userId);

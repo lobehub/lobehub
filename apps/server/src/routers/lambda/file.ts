@@ -35,6 +35,9 @@ import {
 } from './_helpers/assertWorkspaceRowManageable';
 
 const fileTransferEntityTypeSchema = z.enum(['document', 'file', 'folder']);
+const deleteKnowledgeItemsByQuerySchema = QueryFileListSchema.extend({
+  excludedIds: z.array(z.string()).optional(),
+});
 
 const filterKnowledgeItems = <
   T extends {
@@ -445,6 +448,7 @@ export const fileRouter = router({
       while (hasMore) {
         const knowledgeItems = await ctx.knowledgeRepo.query({
           ...input,
+          creatorUserId: isWorkspaceNonOwner(ctx) ? ctx.userId : undefined,
           limit: batchSize + 1,
           offset,
         });
@@ -464,12 +468,13 @@ export const fileRouter = router({
 
   deleteKnowledgeItemsByQuery: fileProcedure
     .use(withScopedPermission('file:delete'))
-    .input(QueryFileListSchema)
+    .input(deleteKnowledgeItemsByQuerySchema)
     .mutation(async ({ ctx, input }): Promise<{ count: number }> => {
-      // Workspace clear-all is caller-scoped for every role — owners included
-      // (per docs/usage/workspace-permissions: bulk actions only affect
-      // caller-created content).
-      const restrictToCreator = !!ctx.workspaceId;
+      // Members can sweep only rows they created. Workspace owners may clear
+      // the entire query scope, including rows uploaded by other members.
+      const restrictToCreator = isWorkspaceNonOwner(ctx);
+      const { excludedIds = [], ...query } = input;
+      const excludedIdSet = new Set(excludedIds);
 
       const fileIds: string[] = [];
       const documentIds: string[] = [];
@@ -479,14 +484,17 @@ export const fileRouter = router({
 
       while (hasMore) {
         const knowledgeItems = await ctx.knowledgeRepo.query({
-          ...input,
+          ...query,
+          creatorUserId: restrictToCreator ? ctx.userId : undefined,
           limit: batchSize + 1,
           offset,
         });
 
         const currentHasMore = knowledgeItems.length > batchSize;
         const itemsToProcess = currentHasMore ? knowledgeItems.slice(0, batchSize) : knowledgeItems;
-        const filteredItems = filterKnowledgeItems(itemsToProcess, input.knowledgeBaseId);
+        const filteredItems = filterKnowledgeItems(itemsToProcess, query.knowledgeBaseId).filter(
+          (item) => !excludedIdSet.has(item.id),
+        );
 
         for (const item of filteredItems) {
           if (item.sourceType === DERIVED_DOCUMENT_SOURCE_TYPE) {

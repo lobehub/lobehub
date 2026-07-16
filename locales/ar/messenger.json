@@ -117,6 +117,7 @@
   "verify.error.unlinkBeforeRelink": "تم ربط حساب LobeHub هذا بالفعل بحساب Telegram آخر. قم بفصله في الإعدادات → المراسلة قبل ربط حساب جديد.",
   "verify.signInCta": "تسجيل الدخول للمتابعة",
   "verify.signInRequired": "يرجى تسجيل الدخول إلى LobeHub لتأكيد الرابط.",
+  "verify.success.backToLobeHub": "العودة إلى LobeHub",
   "verify.success.description": "تم الآن ربط حسابك بـ {{platform}}. افتح {{platform}} وأرسل رسالتك الأولى.",
   "verify.success.openBot": "افتح في {{platform}}",
   "verify.success.title": "تم الربط بنجاح!"

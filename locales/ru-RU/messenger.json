@@ -117,6 +117,7 @@
   "verify.error.unlinkBeforeRelink": "Этот аккаунт LobeHub уже связан с другим аккаунтом Telegram. Отключите его в Настройки → Мессенджер перед привязкой нового.",
   "verify.signInCta": "Войдите, чтобы продолжить",
   "verify.signInRequired": "Пожалуйста, войдите в LobeHub, чтобы подтвердить привязку.",
+  "verify.success.backToLobeHub": "Вернуться в LobeHub",
   "verify.success.description": "Ваш аккаунт теперь подключен к {{platform}}. Откройте {{platform}} и отправьте ваше первое сообщение.",
   "verify.success.openBot": "Открыть в {{platform}}",
   "verify.success.title": "Успешно привязано!"

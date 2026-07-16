@@ -117,6 +117,7 @@
   "verify.error.unlinkBeforeRelink": "Bu LobeHub hesabı zaten başka bir Telegram hesabıyla bağlantılı. Yeni bir hesap bağlamadan önce Ayarlar → Messenger bölümünden bağlantıyı kesin.",
   "verify.signInCta": "Devam etmek için giriş yapın",
   "verify.signInRequired": "Bağlantıyı onaylamak için LobeHub'a giriş yapın.",
+  "verify.success.backToLobeHub": "LobeHub'a Dön",
   "verify.success.description": "Hesabınız artık {{platform}} ile bağlı. {{platform}}'u açın ve ilk mesajınızı gönderin.",
   "verify.success.openBot": "{{platform}}'da aç",
   "verify.success.title": "Başarıyla bağlandı!"

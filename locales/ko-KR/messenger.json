@@ -117,6 +117,7 @@
   "verify.error.unlinkBeforeRelink": "이 LobeHub 계정은 이미 다른 Telegram 계정에 연결되어 있습니다. 새 계정을 연결하기 전에 설정 → 메신저에서 연결을 해제하세요.",
   "verify.signInCta": "계속하려면 로그인",
   "verify.signInRequired": "LobeHub에 로그인하여 링크를 확인하세요.",
+  "verify.success.backToLobeHub": "LobeHub으로 돌아가기",
   "verify.success.description": "이제 {{platform}}에 계정이 연결되었습니다. {{platform}}을 열고 첫 메시지를 보내세요.",
   "verify.success.openBot": "{{platform}}에서 열기",
   "verify.success.title": "성공적으로 연결됨!"

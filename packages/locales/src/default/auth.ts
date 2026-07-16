@@ -14,6 +14,9 @@ export default {
   'apikey.display.neverExpires': 'Never expires',
   'apikey.display.neverUsed': 'Never used',
   'apikey.display.show': 'Show',
+  'apikey.display.unavailable': 'Secret unavailable',
+  'apikey.display.unavailableDescription':
+    'This secret cannot be displayed. Recreate the API Key if you no longer have it.',
   'apikey.form.fields.expiresAt.label': 'Expiration Date',
   'apikey.form.fields.expiresAt.placeholder': 'Never expires',
   'apikey.form.fields.name.label': 'Name',
@@ -33,6 +36,7 @@ export default {
   'apikey.list.columns.lastUsedAt': 'Last Used',
   'apikey.list.columns.name': 'Name',
   'apikey.list.columns.status': 'Enabled Status',
+  'apikey.list.empty': 'No API Keys yet',
   'apikey.list.title': 'API Key List',
   'apikey.validation.required': 'This field cannot be empty',
   'authModal.description':

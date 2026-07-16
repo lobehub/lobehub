@@ -117,6 +117,7 @@
   "verify.error.unlinkBeforeRelink": "此 LobeHub 帳戶已連結至其他 Telegram 帳戶。請在 設定 → Messenger 中解除連結後再連結新的帳戶。",
   "verify.signInCta": "登入以繼續",
   "verify.signInRequired": "請登入 LobeHub 以確認連結。",
+  "verify.success.backToLobeHub": "返回 LobeHub",
   "verify.success.description": "您的帳戶現在已連接到 {{platform}}。打開 {{platform}} 並發送您的第一條訊息。",
   "verify.success.openBot": "在 {{platform}} 中打開",
   "verify.success.title": "連結成功！"

@@ -117,6 +117,7 @@
   "verify.error.unlinkBeforeRelink": "此 LobeHub 账户已链接到当前平台上的另一个账户。请先在 设置 → Messenger 中断开后再链接新账户。",
   "verify.signInCta": "登录以继续",
   "verify.signInRequired": "请登录 LobeHub 以确认绑定。",
+  "verify.success.backToLobeHub": "回到 LobeHub",
   "verify.success.description": "你的账号已连接到 {{platform}}。打开 {{platform}} 并发送你的第一条消息。",
   "verify.success.openBot": "在 {{platform}} 中打开",
   "verify.success.title": "绑定成功！"

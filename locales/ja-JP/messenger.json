@@ -117,6 +117,7 @@
   "verify.error.unlinkBeforeRelink": "このLobeHubアカウントはすでに別のTelegramアカウントにリンクされています。新しいアカウントをリンクする前に、設定 → メッセンジャーでリンクを解除してください。",
   "verify.signInCta": "サインインして続行",
   "verify.signInRequired": "リンクを確認するには LobeHub にサインインしてください。",
+  "verify.success.backToLobeHub": "LobeHubに戻る",
   "verify.success.description": "アカウントが {{platform}} に接続されました。{{platform}} を開き、最初のメッセージを送信してください。",
   "verify.success.openBot": "{{platform}} で開く",
   "verify.success.title": "リンクが成功しました！"

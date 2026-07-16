@@ -274,7 +274,6 @@
   "channel.wechatBotIdHint": "Bot identifier assigned after QR code authorization.",
   "channel.wechatConnectedInfo": "Connected WeChat Account",
   "channel.wechatGenerateQrCode": "Generate QR Code",
-  "channel.wechatIdleNotice": "If no users send messages for over 7 days, this connection will be automatically paused. To resume, click \"Rebind via QR Code\".",
   "channel.wechatManagedCredentials": "This channel is already connected through QR code authorization. Credentials are managed automatically.",
   "channel.wechatQrExpired": "QR code expired. Please refresh to get a new one.",
   "channel.wechatQrLoadFailed": "Failed to load the QR code. Please try again.",

@@ -693,3 +693,24 @@ sessionStorage / IndexedDB / caches, re-seed auth, reopen) and then **assert the
 before asserting anything downstream of it** (`__LOBE_STORES.agent().agentMap[id]`). See
 probe-mock-patterns C11. Rule of thumb: the DB is where you _wrote_ it; the store is where the
 behavior _reads_ it — verify at the layer the behavior reads.
+
+---
+
+## Case 26 — Applying dual scope to only one action in a bulk-maintenance menu
+
+**Wrong approach**: after introducing own-scope and workspace-scope variants for one
+bulk action, leave sibling maintenance actions owner-own-only because the review focused
+on restricting what regular members can do.
+
+**Why it's wrong**: the capability matrix was evaluated per menu entry instead of across
+role × action × scope. An owner can retain safe personal actions while also receiving
+explicit workspace-wide variants for every applicable maintenance action.
+
+**What it breaks**: owners must manually process other members' records for the omitted
+actions, and the menu presents an inconsistent authority model where only one bulk action
+can operate at workspace scope.
+
+**Correct approach**: enumerate the full role × bulk-action matrix before implementation
+and verification. Give members own-only actions; give owners both own and workspace
+variants for every applicable action; use elevated confirmation for destructive
+workspace-wide variants; and assert every matrix cell in UI tests and screenshots.

@@ -520,7 +520,7 @@ export class TopicModel {
 
     // Remove internal fields before returning
 
-    const cleanItems = items.map(({ agentId, sessionId, ...rest }) => rest);
+    const cleanItems = items.map(({ agentId: _agentId, sessionId: _sessionId, ...rest }) => rest);
 
     logTiming(timing, 'db.topic.query:done', {
       itemCount: cleanItems.length,
@@ -1081,9 +1081,17 @@ export class TopicModel {
 
   /**
    * Deletes multiple topics based on the groupId.
+   * `restrictToCreator` limits the sweep to the caller's own rows in workspace mode.
    */
-  batchDeleteByGroupId = async (groupId?: string | null) => {
-    return this.db.delete(topics).where(and(this.matchGroup(groupId), this.ownership()));
+  batchDeleteByGroupId = async (
+    groupId?: string | null,
+    options?: { restrictToCreator?: boolean },
+  ) => {
+    return this.db
+      .delete(topics)
+      .where(
+        and(this.matchGroup(groupId), options?.restrictToCreator ? this.mine() : this.ownership()),
+      );
   };
 
   /**

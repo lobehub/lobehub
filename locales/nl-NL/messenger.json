@@ -117,6 +117,7 @@
   "verify.error.unlinkBeforeRelink": "Dit LobeHub-account is al gekoppeld aan een ander Telegram-account. Ontkoppel het in Instellingen → Messenger voordat je een nieuw account koppelt.",
   "verify.signInCta": "Log in om door te gaan",
   "verify.signInRequired": "Log in bij LobeHub om de koppeling te bevestigen.",
+  "verify.success.backToLobeHub": "Terug naar LobeHub",
   "verify.success.description": "Je account is nu verbonden met {{platform}}. Open {{platform}} en stuur je eerste bericht.",
   "verify.success.openBot": "Open in {{platform}}",
   "verify.success.title": "Succesvol gekoppeld!"

@@ -117,6 +117,7 @@
   "verify.error.unlinkBeforeRelink": "Ce compte LobeHub est déjà lié à un autre compte Telegram. Déconnectez-le dans Paramètres → Messagerie avant d'en lier un nouveau.",
   "verify.signInCta": "Connectez-vous pour continuer",
   "verify.signInRequired": "Veuillez vous connecter à LobeHub pour confirmer la liaison.",
+  "verify.success.backToLobeHub": "Retour à LobeHub",
   "verify.success.description": "Votre compte est maintenant connecté à {{platform}}. Ouvrez {{platform}} et envoyez votre premier message.",
   "verify.success.openBot": "Ouvrir dans {{platform}}",
   "verify.success.title": "Liaison réussie !"

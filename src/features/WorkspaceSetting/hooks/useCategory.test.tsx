@@ -1,10 +1,10 @@
 import { cleanup, renderHook } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useUserStore } from '@/store/user';
 import { WorkspaceSettingsTabs } from '@/types/workspaceSettings';
 
-import { useWorkspaceSettingCategory } from './useCategory';
+import { useWorkspaceSettingCategory, WorkspaceSettingsGroupKey } from './useCategory';
 
 vi.hoisted(() => {
   Object.defineProperty(globalThis, 'localStorage', {
@@ -17,6 +17,10 @@ vi.hoisted(() => {
   });
 });
 
+const mocks = vi.hoisted(() => ({
+  isOwner: true,
+}));
+
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string) => key,
@@ -24,11 +28,7 @@ vi.mock('react-i18next', () => ({
 }));
 
 vi.mock('@/business/client/hooks/useIsWorkspaceOwner', () => ({
-  useIsWorkspaceOwner: () => true,
-}));
-
-vi.mock('@/business/client/hooks/useIsWorkspaceViewer', () => ({
-  useIsWorkspaceViewer: () => false,
+  useIsWorkspaceOwner: () => mocks.isOwner,
 }));
 
 const initialUserStoreState = useUserStore.getState();
@@ -38,6 +38,10 @@ const getItemKeys = () => {
 
   return result.current.flatMap((group) => group.items.map((item) => item.key));
 };
+
+beforeEach(() => {
+  mocks.isOwner = true;
+});
 
 afterEach(() => {
   cleanup();
@@ -58,5 +62,30 @@ describe('workspace settings useCategory', () => {
     });
 
     expect(getItemKeys()).toContain(WorkspaceSettingsTabs.OAuthApps);
+  });
+
+  it('places API Key in the owner-only Admin group', () => {
+    const { result } = renderHook(() => useWorkspaceSettingCategory());
+    const adminGroup = result.current.find(
+      (group) => group.key === WorkspaceSettingsGroupKey.Admin,
+    );
+    const agentGroup = result.current.find(
+      (group) => group.key === WorkspaceSettingsGroupKey.Agent,
+    );
+
+    expect(adminGroup?.items.map((item) => item.key)).toContain(WorkspaceSettingsTabs.APIKey);
+    expect(agentGroup?.items.map((item) => item.key)).not.toContain(WorkspaceSettingsTabs.APIKey);
+  });
+
+  it('does not expose API Key settings to non-owners', () => {
+    mocks.isOwner = false;
+
+    const itemKeys = getItemKeys();
+    const { result } = renderHook(() => useWorkspaceSettingCategory());
+
+    expect(result.current.some((group) => group.key === WorkspaceSettingsGroupKey.Admin)).toBe(
+      false,
+    );
+    expect(itemKeys).not.toContain(WorkspaceSettingsTabs.APIKey);
   });
 });

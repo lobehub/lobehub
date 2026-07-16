@@ -1432,3 +1432,22 @@ posix_spawn '<cmd>'` — NOT node's `spawn <cmd> ENOENT`. Any stderr-text patter
   a short periodic wait loop in the same PTY), drive CDP from a second shell, then stop with
   `electron-dev.sh stop <id>` and terminate the holder. Some execution harnesses reap descendants when
   the command cell closes even though the launcher normally survives an interactive terminal.
+
+### F3. ✅ WORKS — render the `/verify-im` messenger bind SUCCESS state without a real platform token
+
+- **Situation**: verifying the messenger verify page's success card (`SuccessCard`) for
+  Telegram/Slack/Discord. A real bind needs a live bot issuing a `random_id` link token —
+  unavailable in an isolated env.
+- **Works**: take the page's own refresh-after-link path instead. With a signed-in user, seed
+  (1) a `messenger_account_links` row for (user, platform, tenant\_id='') and (2) an enabled
+  `system_bot_providers` row for the platform — `credentials` must be encrypted with
+  `KeyVaultsGateKeeper.initWithEnvKey()` (same `KEY_VAULTS_SECRET` as the dev server), e.g.
+  telegram `{ botToken, botUsername }`. Then open
+  `/verify-im?random_id=<anything>&im_type=<platform>`: the peek-token query fails, but the
+  existing-link lookup succeeds and the page falls through to the real success card
+  (`shouldShowSingleAccountSuccess` — existing link + no active token → success).
+- `botUsername` drives the "Open in <platform>" deep-link CTA; re-encrypt the credentials
+  WITHOUT it to exercise the no-deep-link fallback. Note the platform config is cached
+  in-process for 30s (`packages/app-config/src/messenger.ts` CACHE\_TTL\_MS) — wait out the TTL
+  after editing the row before reloading.
+- Locale for evidence shots: `window.__LOBE_STORES.global().switchLocale('zh-CN')` then reload.

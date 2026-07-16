@@ -1922,11 +1922,11 @@ When I am ___, I need ___
     'Call workspace agents and resources from your own systems via the LobeHub API.',
   'workspace.apiKey.upgrade.benefits.integration.title': 'Programmatic access',
   'workspace.apiKey.upgrade.benefits.security.desc':
-    'Requests run under workspace roles and permissions, and keys can be revoked centrally.',
+    'Requests stay bound to this workspace and require an active owner account.',
   'workspace.apiKey.upgrade.benefits.security.title': 'Workspace-scoped security',
   'workspace.apiKey.upgrade.benefits.shared.desc':
-    'Keys belong to the workspace instead of one person, so automation survives member changes.',
-  'workspace.apiKey.upgrade.benefits.shared.title': 'Team-shared keys',
+    'Only workspace owners can create, view, manage, and revoke workspace API keys.',
+  'workspace.apiKey.upgrade.benefits.shared.title': 'Owner-managed keys',
   'workspace.apiKey.upgrade.cta': 'Upgrade to Pro',
   'workspace.apiKey.upgrade.desc':
     'Create workspace-scoped API keys to integrate workspace agents and data into your own workflows and services.',

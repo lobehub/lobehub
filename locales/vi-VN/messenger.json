@@ -117,6 +117,7 @@
   "verify.error.unlinkBeforeRelink": "Tài khoản LobeHub này đã được liên kết với một tài khoản Telegram khác. Ngắt kết nối trong Cài đặt → Messenger trước khi liên kết tài khoản mới.",
   "verify.signInCta": "Đăng nhập để tiếp tục",
   "verify.signInRequired": "Vui lòng đăng nhập vào LobeHub để xác nhận liên kết.",
+  "verify.success.backToLobeHub": "Quay lại LobeHub",
   "verify.success.description": "Tài khoản của bạn hiện đã được kết nối với {{platform}}. Mở {{platform}} và gửi tin nhắn đầu tiên của bạn.",
   "verify.success.openBot": "Mở trong {{platform}}",
   "verify.success.title": "Liên kết thành công!"
