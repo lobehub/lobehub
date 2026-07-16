@@ -3,7 +3,7 @@ import type { MessageMapScope, MessageMetadata } from '@lobechat/types';
 
 import { DEFAULT_AGENT_CHAT_CONFIG, DEFAULT_AGENT_CONFIG } from '@/const/settings';
 import { type ResolvedAgentConfig } from '@/services/chat/mecha';
-import { createAgentExecutors } from '@/store/chat/agents/createAgentExecutors';
+import { createClientRuntimeExecutors } from '@/store/chat/agents/transports/createClientRuntimeExecutors';
 import { type OperationType } from '@/store/chat/slices/operation/types';
 import { type ChatStore } from '@/store/chat/store';
 
@@ -74,13 +74,12 @@ export const executeWithMockContext = async ({
   }
 
   // Create executors with mock context
-  const executors = createAgentExecutors({
+  const executors = createClientRuntimeExecutors({
     agentConfig: createMockResolvedAgentConfig(),
     get: () => mockStore,
     metadata,
     messageKey: context.messageKey,
     operationId: context.operationId,
-    parentId: context.parentId,
   });
 
   const executorFn = executors[executor];

@@ -268,7 +268,7 @@ describe('finish executor', () => {
       const context = createTestContext();
       const instruction = createFinishInstruction('completed');
       const state = createInitialState({ operationId: 'test', stepCount: 5 });
-      const originalState = JSON.parse(JSON.stringify(state));
+      const originalState = structuredClone(state);
 
       // When
       const result = await executeWithMockContext({

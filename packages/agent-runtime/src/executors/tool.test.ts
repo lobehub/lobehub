@@ -238,7 +238,7 @@ describe('tool executors', () => {
     expect(createToolMessage).not.toHaveBeenCalled();
   });
 
-  it('returns client sub-agent stop states to the agent but terminates other stop results', async () => {
+  it('terminates removed client sub-agent stop states like other stop results', async () => {
     const instruction: Extract<AgentInstruction, { type: 'call_tool' }> = {
       payload: { parentMessageId: 'assistant-msg-1', toolCalling: createToolCall() },
       type: 'call_tool',
@@ -252,15 +252,6 @@ describe('tool executors', () => {
         stop: true,
         success: true,
       },
-    });
-    const delegated = await callTool(host)(instruction, createState());
-
-    expect(delegated.newState.status).toBe('running');
-    expect(delegated.nextContext?.payload).toMatchObject({ stop: true });
-
-    runTool.mockResolvedValueOnce({
-      attempts: 1,
-      result: { content: 'Spoken', state: { type: 'speak' }, stop: true, success: true },
     });
     const stopped = await callTool(host)(instruction, createState());
 

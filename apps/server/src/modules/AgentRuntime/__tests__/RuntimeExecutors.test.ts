@@ -234,6 +234,21 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
     };
   });
 
+  it('registers the same complete package executor matrix as the client', () => {
+    expect(Object.keys(createRuntimeExecutors(ctx))).toEqual([
+      'call_llm',
+      'call_tool',
+      'call_tools_batch',
+      'compress_context',
+      'exec_sub_agent',
+      'exec_sub_agents',
+      'finish',
+      'request_human_approve',
+      'resolve_aborted_tools',
+      'resolve_blocked_tools',
+    ]);
+  });
+
   // Helper to create a valid mock usage object
   const createMockUsage = () => ({
     humanInteraction: {

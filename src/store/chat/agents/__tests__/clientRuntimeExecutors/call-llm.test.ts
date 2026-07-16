@@ -6,7 +6,7 @@ import { DEFAULT_AGENT_CHAT_CONFIG, DEFAULT_AGENT_CONFIG } from '@/const/setting
 import { chatService } from '@/services/chat';
 import type { ResolvedAgentConfig } from '@/services/chat/mecha';
 import { messageService } from '@/services/message';
-import { createAgentExecutors } from '@/store/chat/agents/createAgentExecutors';
+import { createClientRuntimeExecutors } from '@/store/chat/agents/transports/createClientRuntimeExecutors';
 import type { ChatStore } from '@/store/chat/store';
 
 const messageKey = 'agent-1_topic-1';
@@ -95,7 +95,7 @@ const createInstruction = (overrides: Record<string, unknown> = {}) => ({
   type: 'call_llm' as const,
 });
 
-describe('createAgentExecutors call_llm', () => {
+describe('createClientRuntimeExecutors call_llm', () => {
   beforeEach(() => {
     vi.spyOn(chatService, 'buildAssistantMessageContext').mockImplementation(
       async ({ messages, model, provider }) => ({
@@ -131,12 +131,11 @@ describe('createAgentExecutors call_llm', () => {
       });
       return new Response();
     });
-    const executor = createAgentExecutors({
+    const executor = createClientRuntimeExecutors({
       agentConfig: createResolvedAgentConfig(),
       get: () => store,
       messageKey,
       operationId,
-      parentId: userMessage.id,
     }).call_llm!;
 
     const result = await executor(
@@ -184,12 +183,11 @@ describe('createAgentExecutors call_llm', () => {
       await options?.onFinish?.('Answer after compression', { type: 'stop' });
       return new Response();
     });
-    const executor = createAgentExecutors({
+    const executor = createClientRuntimeExecutors({
       agentConfig: createResolvedAgentConfig(),
       get: () => store,
       messageKey,
       operationId,
-      parentId: compressedAssistant.id,
     }).call_llm!;
 
     const result = await executor(
@@ -224,12 +222,11 @@ describe('createAgentExecutors call_llm', () => {
         await options?.onFinish?.('', { type: 'stop' });
         return new Response();
       });
-    const executor = createAgentExecutors({
+    const executor = createClientRuntimeExecutors({
       agentConfig: createResolvedAgentConfig(),
       get: () => store,
       messageKey,
       operationId,
-      parentId: userMessage.id,
     }).call_llm!;
 
     const result = await executor(
@@ -263,12 +260,11 @@ describe('createAgentExecutors call_llm', () => {
       await options?.onFinish?.('Regenerated', { type: 'stop' });
       return new Response();
     });
-    const executor = createAgentExecutors({
+    const executor = createClientRuntimeExecutors({
       agentConfig: createResolvedAgentConfig(),
       get: () => store,
       messageKey,
       operationId,
-      parentId: assistantMessage.id,
     }).call_llm!;
 
     await executor(
@@ -294,12 +290,11 @@ describe('createAgentExecutors call_llm', () => {
       await options?.onFinish?.('Partial', { type: 'abort' });
       return new Response();
     });
-    const executor = createAgentExecutors({
+    const executor = createClientRuntimeExecutors({
       agentConfig: createResolvedAgentConfig(),
       get: () => store,
       messageKey,
       operationId,
-      parentId: userMessage.id,
     }).call_llm!;
 
     const result = await executor(
@@ -323,12 +318,11 @@ describe('createAgentExecutors call_llm', () => {
       operation.abortController.abort();
       throw new DOMException('The operation was aborted', 'AbortError');
     });
-    const executor = createAgentExecutors({
+    const executor = createClientRuntimeExecutors({
       agentConfig: createResolvedAgentConfig(),
       get: () => store,
       messageKey,
       operationId,
-      parentId: userMessage.id,
     }).call_llm!;
 
     const result = await executor(
