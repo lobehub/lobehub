@@ -25,7 +25,7 @@ import {
   groupSupervisorToolIds,
 } from '@lobechat/builtin-tools';
 import { createEnableChecker, type LobeToolManifest } from '@lobechat/context-engine';
-import { ToolsEngine } from '@lobechat/context-engine';
+import { setToolNameMaxLength, ToolsEngine } from '@lobechat/context-engine';
 import {
   type BuiltinToolManifest,
   type RuntimeEnvMode,
@@ -33,6 +33,7 @@ import {
 } from '@lobechat/types';
 import debug from 'debug';
 
+import { toolsEnv } from '@/envs/tools';
 import {
   executionTargetToRuntimeMode,
   isDeviceLockedPlan,
@@ -73,6 +74,12 @@ export const createServerToolsEngine = (
   context: ServerAgentToolsContext,
   config: ServerAgentToolsEngineConfig = {},
 ): ToolsEngine => {
+  // Push the env-configured tool-name compression threshold into context-engine
+  // (which can't read env itself). Runs before any tool name is generated for
+  // this turn; idempotent, so calling it per-engine is fine. `0` disables the
+  // MD5 compression for deployments whose models don't cap function-name length.
+  setToolNameMaxLength(toolsEnv.TOOL_NAME_MAX_LENGTH);
+
   const {
     enableChecker,
     additionalManifests = [],
