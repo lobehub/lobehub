@@ -177,7 +177,7 @@ describe('buildOpenAIPayload Kimi thinking semantics', () => {
   });
 
   describe('native-thinking K3 models (kimi-k3)', () => {
-    it('should drop a saved thinking:disabled and keep reasoning_effort + forced reasoning_content', async () => {
+    it("should drop a saved thinking:disabled and keep reasoning_effort 'max' + forced reasoning_content", async () => {
       await instance.chat({
         messages: [
           { content: 'Hello', role: 'user' },
@@ -185,7 +185,7 @@ describe('buildOpenAIPayload Kimi thinking semantics', () => {
           { content: 'Follow-up', role: 'user' },
         ],
         model: 'kimi-k3',
-        reasoning_effort: 'high',
+        reasoning_effort: 'max',
         thinking: { type: 'disabled' },
       } as any);
 
@@ -193,10 +193,24 @@ describe('buildOpenAIPayload Kimi thinking semantics', () => {
 
       // K3 rejects the `thinking` param entirely: no key must be emitted.
       expect('thinking' in payload).toBe(false);
-      // disabled is ignored for native-thinking models, so reasoning_effort passes through.
-      expect(payload.reasoning_effort).toBe('high');
+      // disabled is ignored for native-thinking models; K3 accepts reasoning_effort 'max'.
+      expect(payload.reasoning_effort).toBe('max');
       // assistant messages still get reasoning_content forced (fallback ' ').
       expect(findAssistantMessage(payload)?.reasoning_content).toBe(' ');
+    });
+
+    it("should drop a non-'max' reasoning_effort for kimi-k3", async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'kimi-k3',
+        reasoning_effort: 'high',
+      } as any);
+
+      const payload = getLastRequestPayload();
+
+      // K3 only accepts reasoning_effort 'max' (server default); other values are dropped
+      // rather than sent and rejected.
+      expect('reasoning_effort' in payload).toBe(false);
     });
 
     it('should not emit thinking even when thinking:enabled is provided', async () => {
@@ -231,6 +245,19 @@ describe('buildOpenAIPayload Kimi thinking semantics', () => {
       // Native-thinking models cannot turn reasoning off; disabled must not be re-emitted.
       expect('thinking' in payload).toBe(false);
       expect(findAssistantMessage(payload)?.reasoning_content).toBe(' ');
+    });
+
+    it("should pass through a non-'max' reasoning_effort unchanged (non-K3 model)", async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'kimi-k2.7-code',
+        reasoning_effort: 'high',
+      } as any);
+
+      const payload = getLastRequestPayload();
+
+      // Only K3+ (isKimiReasoningEffortModel) drops non-'max' efforts; k2.7-code keeps full passthrough.
+      expect(payload.reasoning_effort).toBe('high');
     });
   });
 

@@ -204,21 +204,25 @@ const buildMoonshotOpenAIPayload = (
   const moonshotTools = appendSearchTool(tools, enabledSearch);
 
   // K3+ replaced the `thinking` param with the top-level OpenAI-style `reasoning_effort`
-  // (currently only 'max', which is also the server default — passed through from the
-  // payload as-is) and fixes temperature/top_p/n/penalties server-side; the docs advise
-  // not to send them. `max_tokens` is documented as `max_completion_tokens` (default
-  // 131072, up to 1048576). https://platform.kimi.ai/docs/guide/kimi-k3-quickstart
+  // and fixes temperature/top_p/n/penalties server-side; the docs advise not to send
+  // them. `max_tokens` is documented as `max_completion_tokens` (default 131072, up to
+  // 1048576). https://platform.kimi.ai/docs/guide/kimi-k3-quickstart
   if (isKimiReasoningEffortModel(model)) {
     const {
       frequency_penalty: _frequencyPenalty,
       max_tokens,
       presence_penalty: _presencePenalty,
+      reasoning_effort,
       top_p: _topP,
       ...effortRest
     } = rest;
 
     return {
       ...effortRest,
+      // K3 currently only accepts reasoning_effort 'max' (also the server default);
+      // a saved generic effort (the UI offers low/medium/high) would be rejected, so
+      // drop anything else instead of failing the whole request
+      ...(reasoning_effort === 'max' ? { reasoning_effort } : {}),
       ...(max_tokens === undefined ? {} : { max_completion_tokens: max_tokens }),
       messages: normalizedMessages,
       model,

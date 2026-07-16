@@ -385,7 +385,13 @@ const buildOpenAIPayload = (
     messages,
     response_format,
     tools,
-    ...(!thinkingExplicitlyDisabled && reasoning_effort ? { reasoning_effort } : {}),
+    // Kimi K3+ only accepts reasoning_effort 'max' (also the server default) — drop
+    // any other saved effort instead of sending a value the API rejects
+    ...(!thinkingExplicitlyDisabled &&
+    reasoning_effort &&
+    (!isKimiReasoningEffortModel(model) || reasoning_effort === 'max')
+      ? { reasoning_effort }
+      : {}),
     // K3+ models configure reasoning via top-level reasoning_effort only and
     // reject the K2.x-only `thinking` param; native-thinking models never get
     // `disabled` re-emitted (the toggle does not exist for them).
