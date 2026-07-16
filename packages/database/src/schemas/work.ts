@@ -78,6 +78,13 @@ export const works = pgTable(
       .notNull(),
     /** Null for personal Works; determines which resource unique index applies below. */
     workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
+    /**
+     * Visibility within the owning workspace. Registration must explicitly
+     * inherit this from the backing resource; external Works default to private
+     * at the write boundary until a workspace-shared authorization is known.
+     * Ignored in personal mode where the row is implicitly private to its owner.
+     */
+    visibility: text('visibility', { enum: ['private', 'public'] }).notNull(),
 
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -95,6 +102,8 @@ export const works = pgTable(
     index('works_user_id_idx').on(t.userId),
     /** Supports workspace-scoped ownership filters and cascading cleanup when a workspace is deleted. */
     index('works_workspace_id_idx').on(t.workspaceId),
+    /** Supports workspace public-or-owner visibility filtering. */
+    index('works_workspace_visibility_idx').on(t.workspaceId, t.visibility, t.userId),
     /** Powers keyset pagination of personal Works ordered by latest update and stable id. */
     index('works_user_updated_at_id_idx')
       .on(t.userId, t.updatedAt, t.id)
