@@ -109,6 +109,25 @@ const styles = createStaticStyles(({ css }) => ({
     border-radius: ${cssVar.borderRadiusLG};
     background: ${cssVar.colorBgContainer};
   `,
+  groupFooter: css`
+    cursor: pointer;
+
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    justify-content: center;
+
+    padding-block: 6px;
+    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
+
+    font-size: 12px;
+    color: ${cssVar.colorTextQuaternary};
+
+    &:hover {
+      color: ${cssVar.colorTextSecondary};
+      background: ${cssVar.colorFillQuaternary};
+    }
+  `,
   groupHeader: css`
     cursor: pointer;
     padding-block: 10px;
@@ -611,6 +630,14 @@ const CheckList = memo<CheckListProps>(
                     onToggle={() => onToggleItem(check.id)}
                   />
                 ))}
+              {/* Bottom escape hatch — after scrolling through the group's rows,
+                  collapse it without travelling back to the header. */}
+              {!collapsed && (
+                <div className={styles.groupFooter} onClick={() => onToggleGroup(key)}>
+                  <Icon icon={ChevronsDownUp} size={12} />
+                  {t('acceptance.group.collapse', { label })}
+                </div>
+              )}
             </Fragment>
           );
         })}

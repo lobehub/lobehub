@@ -134,6 +134,15 @@ export type AcceptanceSubjectType = (typeof acceptanceSubjectTypes)[number];
  * verify vocabulary (`passed` / `failed`); the aggregate exposes the user's
  * outcome language (`accepted` / `rejected`).
  */
+/**
+ * Who can see an acceptance beyond its creator. Personal-scope aggregates
+ * default to `public` (the page is meant to be linked from PRs / reports);
+ * workspace-scope aggregates default to `private` (org data stays member-gated
+ * until deliberately opened up).
+ */
+export const acceptanceVisibilities = ['private', 'public'] as const;
+export type AcceptanceVisibility = (typeof acceptanceVisibilities)[number];
+
 export const acceptanceStatuses = [
   'pending',
   'planned',

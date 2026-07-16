@@ -1,14 +1,13 @@
 'use client';
 
 import { ActionIcon, Flexbox, Icon, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import dayjs from 'dayjs';
 import {
   CheckCircle2,
+  ChevronRight,
   CircleAlert,
   FileClock,
-  FileText,
   HelpCircle,
   Loader2,
   PanelRightClose,
@@ -29,11 +28,31 @@ const styles = createStaticStyles(({ css }) => ({
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadius};
 
-    transition: box-shadow 0.2s ease;
+    transition:
+      box-shadow 0.2s ease,
+      border-color 0.2s ease;
   `,
   roundActive: css`
     border-color: ${cssVar.colorPrimary};
     box-shadow: 0 0 0 2px ${cssVar.colorPrimaryBg};
+  `,
+  /* The whole card is the report affordance — no inner button. */
+  roundClickable: css`
+    cursor: pointer;
+
+    .acceptance-round-open-hint {
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+
+    &:hover {
+      border-color: ${cssVar.colorBorder};
+      background: ${cssVar.colorFillQuaternary};
+
+      .acceptance-round-open-hint {
+        opacity: 1;
+      }
+    }
   `,
 }));
 
@@ -103,11 +122,20 @@ const LedgerPanel = memo<LedgerPanelProps>(({ highlight, onCollapse, onOpenRepor
             : null;
         const commit = (round.run.context as { commit?: string } | null)?.commit;
 
+        const openable = Boolean(round.report);
+
         return (
           <Flexbox
-            className={cx(styles.round, highlight === round.run.roundIndex && styles.roundActive)}
+            aria-label={openable ? t('acceptance.ledger.viewReport') : undefined}
             gap={6}
             key={round.run.id}
+            role={openable ? 'button' : undefined}
+            className={cx(
+              styles.round,
+              openable && styles.roundClickable,
+              highlight === round.run.roundIndex && styles.roundActive,
+            )}
+            onClick={openable ? () => onOpenReport(round) : undefined}
           >
             <Flexbox horizontal align={'center'} gap={8}>
               <Text strong style={{ fontSize: 13 }}>
@@ -131,6 +159,14 @@ const LedgerPanel = memo<LedgerPanelProps>(({ highlight, onCollapse, onOpenRepor
               <Text fontSize={12} type={'secondary'}>
                 {dayjs(round.run.createdAt).format('MM-DD HH:mm')}
               </Text>
+              {openable && (
+                <Icon
+                  className={'acceptance-round-open-hint'}
+                  color={cssVar.colorTextTertiary}
+                  icon={ChevronRight}
+                  size={14}
+                />
+              )}
             </Flexbox>
             {round.run.title && (
               <Text fontSize={12} style={{ lineHeight: 1.5 }} type={'secondary'}>
@@ -141,13 +177,6 @@ const LedgerPanel = memo<LedgerPanelProps>(({ highlight, onCollapse, onOpenRepor
               <Text fontSize={12} type={'secondary'}>
                 {[stats, commit?.slice(0, 10)].filter(Boolean).join(' · ')}
               </Text>
-            )}
-            {round.report && (
-              <Flexbox horizontal>
-                <Button size={'small'} type={'text'} onClick={() => onOpenReport(round)}>
-                  <Icon icon={FileText} size={13} /> {t('acceptance.ledger.viewReport')}
-                </Button>
-              </Flexbox>
             )}
           </Flexbox>
         );

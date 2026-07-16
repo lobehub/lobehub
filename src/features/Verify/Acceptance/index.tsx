@@ -8,19 +8,17 @@ import {
   Empty,
   Flexbox,
   Icon,
-  Markdown,
   Tag,
   Text,
 } from '@lobehub/ui';
 import { Button, Segmented } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import dayjs from 'dayjs';
 import {
   BadgeCheck,
   CheckCircle2,
   ChevronsDownUp,
   ChevronsUpDown,
-  FileClock,
   FileText,
   GitBranch,
   GitCommitHorizontal,
@@ -38,6 +36,7 @@ import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { verifyService } from '@/services/verify';
 
 import { useAcceptanceBundle } from '../hooks';
+import ReportViewer from '../ReportViewer';
 import CheckList, {
   type CheckFilter,
   groupChecks,
@@ -61,8 +60,14 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   page: css`
     position: relative;
+
     overflow: hidden;
+
+    /* AppTheme's root is a centered flex column — without an explicit width the page
+       shrinks to content width and the ledger hugs the shrunken edge, not the viewport */
+    width: 100%;
     height: 100%;
+
     background: ${cssVar.colorBgLayout};
   `,
   requirementLabel: css`
@@ -73,13 +78,33 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   scopeChip: css`
     font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
+    color: ${cssVar.colorTextTertiary};
+  `,
+  scopeLink: css`
+    cursor: pointer;
+    color: ${cssVar.colorTextTertiary};
+
+    &:hover {
+      color: ${cssVar.colorText};
+    }
   `,
   summaryClamp: css`
     overflow: hidden;
     display: -webkit-box;
     -webkit-box-orient: vertical;
-    -webkit-line-clamp: 5;
+    -webkit-line-clamp: 3;
+  `,
+  verdictPill: css`
+    display: inline-flex;
+    gap: 5px;
+    align-items: center;
+
+    padding-block: 2px;
+    padding-inline: 10px;
+    border-radius: 99px;
+
+    font-size: 12px;
+    font-weight: 500;
   `,
 }));
 
@@ -180,6 +205,57 @@ const AcceptancePage = memo(() => {
   ]
     .filter(Boolean)
     .join(' · ');
+
+  // The header's one-glance verdict: lifecycle state wins; a settled chain
+  // falls back to whether any exception is left for the user to judge.
+  const verdictMeta: {
+    bg: string;
+    color: string;
+    icon: typeof CheckCircle2;
+    label: string;
+    spin?: boolean;
+  } = LIVE_STATUSES.has(acceptance.status)
+    ? {
+        bg: cssVar.colorInfoBg,
+        color: cssVar.colorInfo,
+        icon: Loader2,
+        label: t(`acceptance.status.${acceptance.status}`),
+        spin: true,
+      }
+    : acceptance.status === 'accepted'
+      ? {
+          bg: cssVar.colorSuccessBg,
+          color: cssVar.colorSuccess,
+          icon: BadgeCheck,
+          label: t('acceptance.status.accepted'),
+        }
+      : acceptance.status === 'rejected'
+        ? {
+            bg: cssVar.colorErrorBg,
+            color: cssVar.colorError,
+            icon: RotateCcw,
+            label: t('acceptance.status.rejected'),
+          }
+        : acceptance.status === 'errored'
+          ? {
+              bg: cssVar.colorWarningBg,
+              color: cssVar.colorWarning,
+              icon: HelpCircle,
+              label: t('acceptance.status.errored'),
+            }
+          : counts.exceptions > 0
+            ? {
+                bg: cssVar.colorWarningBg,
+                color: cssVar.colorWarning,
+                icon: HelpCircle,
+                label: t('acceptance.verdict.exceptions', { count: counts.exceptions }),
+              }
+            : {
+                bg: cssVar.colorSuccessBg,
+                color: cssVar.colorSuccess,
+                icon: CheckCircle2,
+                label: t('acceptance.verdict.passed'),
+              };
 
   const runAction = async (action: () => Promise<unknown>) => {
     try {
@@ -332,8 +408,10 @@ const AcceptancePage = memo(() => {
           paddingInline={24}
           style={{ margin: '0 auto', maxWidth: 920, width: '100%' }}
         >
-          {/* Header — the accepted object and its scope */}
-          <Flexbox gap={8}>
+          {/* Header — identity, then the at-a-glance verdict, then provenance.
+                Three separate lines because they answer three different
+                questions: what is this / how did it end / where did it run. */}
+          <Flexbox gap={10}>
             <Flexbox horizontal align={'center'} gap={10}>
               <Text as={'h1'} style={{ fontSize: 18, margin: 0 }}>
                 {subject.title ?? subject.id}
@@ -349,6 +427,32 @@ const AcceptancePage = memo(() => {
                 />
               )}
             </Flexbox>
+
+            {/* Verdict line — the page's answer, readable without scrolling */}
+            <Flexbox horizontal align={'center'} gap={10} wrap={'wrap'}>
+              <span
+                className={styles.verdictPill}
+                style={{ background: verdictMeta.bg, color: verdictMeta.color }}
+              >
+                <Icon icon={verdictMeta.icon} size={13} spin={verdictMeta.spin} />
+                {verdictMeta.label}
+              </span>
+              <Text fontSize={12} type={'secondary'}>
+                {[
+                  countsText,
+                  t('acceptance.roundCount', { count: rounds.length }),
+                  currentRound
+                    ? t('acceptance.verdict.latestAt', {
+                        time: dayjs(currentRound.run.createdAt).format('MM-DD HH:mm'),
+                      })
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </Text>
+            </Flexbox>
+
+            {/* Provenance — where the verified code came from */}
             <Flexbox horizontal align={'center'} gap={16} wrap={'wrap'}>
               {scope?.branch && (
                 <Flexbox horizontal align={'center'} className={styles.scopeChip} gap={4}>
@@ -360,15 +464,23 @@ const AcceptancePage = memo(() => {
                   <Icon icon={GitCommitHorizontal} size={13} /> {scope.commit.slice(0, 10)}
                 </Flexbox>
               )}
-              {scope?.pullRequest?.number && (
-                <Flexbox horizontal align={'center'} className={styles.scopeChip} gap={4}>
-                  <Icon icon={GitPullRequest} size={13} /> #{scope.pullRequest.number}
-                </Flexbox>
-              )}
-              <Flexbox horizontal align={'center'} className={styles.scopeChip} gap={4}>
-                <Icon icon={FileClock} size={13} />{' '}
-                {t('acceptance.roundCount', { count: rounds.length })}
-              </Flexbox>
+              {scope?.pullRequest?.number &&
+                (scope.pullRequest.url ? (
+                  <a
+                    className={cx(styles.scopeChip, styles.scopeLink)}
+                    href={scope.pullRequest.url}
+                    rel={'noreferrer'}
+                    target={'_blank'}
+                  >
+                    <Flexbox horizontal align={'center'} gap={4}>
+                      <Icon icon={GitPullRequest} size={13} /> #{scope.pullRequest.number}
+                    </Flexbox>
+                  </a>
+                ) : (
+                  <Flexbox horizontal align={'center'} className={styles.scopeChip} gap={4}>
+                    <Icon icon={GitPullRequest} size={13} /> #{scope.pullRequest.number}
+                  </Flexbox>
+                ))}
             </Flexbox>
           </Flexbox>
 
@@ -508,11 +620,14 @@ const AcceptancePage = memo(() => {
         </Flexbox>
       </DraggablePanel>
 
-      {/* Per-round report drill-down */}
+      {/* Per-round report drill-down — the full verify run view, not a
+          markdown excerpt: same content as /verify/:runId, opened in place. */}
       <Drawer
+        destroyOnHidden
         open={reportRound !== null}
         placement={'right'}
-        width={640}
+        styles={{ body: { overflow: 'hidden', padding: 0 } }}
+        width={'min(960px, 92vw)'}
         title={
           reportRound
             ? t('acceptance.reportDrawer.title', { round: reportRound.run.roundIndex })
@@ -520,11 +635,7 @@ const AcceptancePage = memo(() => {
         }
         onClose={() => setReportRound(null)}
       >
-        {reportRound?.report?.content ? (
-          <Markdown>{reportRound.report.content}</Markdown>
-        ) : (
-          <Text type={'secondary'}>{reportRound?.report?.summary}</Text>
-        )}
+        {reportRound && <ReportViewer runId={reportRound.run.id} />}
       </Drawer>
     </Flexbox>
   );

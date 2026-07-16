@@ -847,6 +847,13 @@
       "when": 1784130423992,
       "tag": "0120_oidc_clients_governance",
       "breakpoints": true
+    },
+    {
+      "idx": 121,
+      "version": "7",
+      "when": 1784179201459,
+      "tag": "0121_acceptances_add_visibility",
+      "breakpoints": true
     }
   ],
   "version": "6"

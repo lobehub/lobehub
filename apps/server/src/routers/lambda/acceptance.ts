@@ -1,4 +1,4 @@
-import { acceptanceSubjectTypes } from '@lobechat/const/verify';
+import { acceptanceSubjectTypes, acceptanceVisibilities } from '@lobechat/const/verify';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -210,6 +210,22 @@ export const acceptanceRouter = router({
 
   /** Recent acceptances, newest first — the CLI list surface. */
   list: acceptanceProcedure.query(async ({ ctx }) => ctx.acceptanceService.acceptanceModel.query()),
+
+  /**
+   * Flip who can read the acceptance beyond its creator. Creation defaults are
+   * scope-dependent (personal → public, workspace → private); this is the
+   * deliberate override.
+   */
+  setVisibility: acceptanceWriteProcedure
+    .input(z.object({ id: z.string(), visibility: z.enum(acceptanceVisibilities) }))
+    .mutation(async ({ ctx, input }) => {
+      const acceptance = await resolveAcceptance(ctx, input.id);
+      assertWorkspaceRowManageable(ctx, acceptance.userId, 'acceptance');
+
+      return ctx.acceptanceService.acceptanceModel.update(acceptance.id, {
+        visibility: input.visibility,
+      });
+    }),
 
   /**
    * The user rejects the delivery. The comment is a re-tasking input: it is
