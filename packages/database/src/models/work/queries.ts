@@ -14,6 +14,7 @@ import type { SQL } from 'drizzle-orm';
 import { and, desc, eq, inArray, isNull, lt, or } from 'drizzle-orm';
 
 import { tasks } from '../../schemas/task';
+import { topics } from '../../schemas/topic';
 import { works, workVersions } from '../../schemas/work';
 import { type WorkContext, workOwnership } from './context';
 import { getTotalCostByWorkIds } from './cost';
@@ -312,6 +313,9 @@ export const listByWorkspace = async (
       // doubles as the surfacing event (mirrors the summary row shape).
       event: currentVersionEventSelection,
       ...currentTaskSummaryFields,
+      // Joined for the gallery's group-by-conversation headers; null once the
+      // origin topic is deleted (originTopicId is set-null on topic deletion).
+      originTopicTitle: topics.title,
       version: {
         createdAt: currentVersions.createdAt,
         id: currentVersions.id,
@@ -322,6 +326,7 @@ export const listByWorkspace = async (
     .from(works)
     .innerJoin(currentVersions, eq(works.currentVersionId, currentVersions.id))
     .leftJoin(tasks, taskSummaryJoin(ctx))
+    .leftJoin(topics, eq(works.originTopicId, topics.id))
     .where(and(...filters))
     .orderBy(desc(works.updatedAt), desc(works.id))
     .limit(limit + 1);
@@ -334,9 +339,12 @@ export const listByWorkspace = async (
     pageRows.map((row) => row.work.id),
   );
 
-  const items = pageRows.map((row) =>
-    WORK_TYPE_ADAPTERS[row.work.type].mapCurrentRow(row, costByWorkId.get(row.work.id) ?? null),
-  );
+  // Attached after the per-type mapping so adapters stay unaware of the
+  // gallery-only topic join.
+  const items = pageRows.map((row) => ({
+    ...WORK_TYPE_ADAPTERS[row.work.type].mapCurrentRow(row, costByWorkId.get(row.work.id) ?? null),
+    originTopicTitle: row.originTopicTitle,
+  }));
 
   return { items, nextCursor: hasMore ? encodeWorkCursor(pageRows.at(-1)!.work) : null };
 };

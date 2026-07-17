@@ -68,7 +68,14 @@ export interface WorkItem {
 }
 
 /** Card/list payload shared by conversation history, message chips, and the workspace gallery. */
-export type WorkListBaseItem = WorkItem;
+export type WorkListBaseItem = WorkItem & {
+  /**
+   * Title of the origin topic, joined for grouping the workspace gallery by
+   * conversation. Populated only by the workspace list query; `null` when the
+   * origin topic was deleted (originTopicId is set-null) or never stamped.
+   */
+  originTopicTitle?: string | null;
+};
 
 export interface WorkVersionItem {
   /** Agent that produced this version. */

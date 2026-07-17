@@ -4,18 +4,19 @@ import type { WorkSummaryItem } from '@lobechat/types';
 import { Center, Empty, Flexbox, Skeleton, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { PackageOpenIcon, TriangleAlertIcon } from 'lucide-react';
-import { memo, useCallback, useEffect, useRef } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { formatTaskItemDate } from '@/features/AgentTasks/features/formatTaskItemDate';
 import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
 import DocumentPreviewModal from '@/features/DocumentModal/Preview';
 import { getWorkTypeDescriptor, isSafeExternalUrl } from '@/features/Work/descriptors';
-import WorkSummaryCard from '@/features/Work/WorkSummaryCard';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useDocumentStore } from '@/store/document';
 
 import type { WorkGalleryKey } from './const';
 import { useWorkspaceWorksInfinite } from './hooks';
+import WorkPreviewCard from './WorkPreviewCard';
 
 const styles = createStaticStyles(({ css }) => ({
   container: css`
@@ -34,22 +35,48 @@ const styles = createStaticStyles(({ css }) => ({
     padding-block: 8px 24px;
     padding-inline: 24px;
   `,
-  grid: css`
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  // Single-column stack (not a grid): cards keep the library page's fixed
+  // proportions and read top-to-bottom within each topic group.
+  cardList: css`
+    display: flex;
+    flex-direction: column;
     gap: 12px;
-    align-content: start;
+
+    width: 100%;
+    max-width: 420px;
   `,
-  // Loading placeholder shell that mirrors `WorkSummaryCard` so the skeleton
-  // lays out as cards in the same grid, not as full-width list rows.
+  groupDate: css`
+    flex: none;
+    font-size: 12px;
+    color: ${cssVar.colorTextTertiary};
+  `,
+  groupHeader: css`
+    display: flex;
+    gap: 16px;
+    align-items: baseline;
+    justify-content: space-between;
+
+    margin-block-end: 12px;
+  `,
+  groupTitle: css`
+    overflow: hidden;
+
+    font-size: 16px;
+    font-weight: 600;
+    color: ${cssVar.colorText};
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  `,
+  // Loading placeholder shell that mirrors `WorkPreviewCard` so the skeleton
+  // lays out as vertical preview cards in the same grid.
   skeletonCard: css`
     display: flex;
+    flex-direction: column;
     gap: 12px;
-    align-items: center;
 
     padding: 12px;
     border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 8px;
+    border-radius: 12px;
 
     background: ${cssVar.colorBgElevated};
   `,
@@ -91,26 +118,35 @@ const styles = createStaticStyles(({ css }) => ({
 
 /** Card-shaped loading placeholders laid out in the same grid as real cards. */
 const SkeletonCards = memo<{ count: number }>(({ count }) => (
-  <div className={styles.grid}>
+  <div className={styles.cardList}>
     {Array.from({ length: count }).map((_, index) => (
       <div className={styles.skeletonCard} key={index}>
-        <Skeleton.Button
-          active
-          size={'small'}
-          style={{ borderRadius: 8, height: 36, maxWidth: 36, minWidth: 36 }}
-        />
-        <Flexbox flex={1} gap={8} style={{ minWidth: 0 }}>
+        <Flexbox horizontal align={'center'} gap={8}>
           <Skeleton.Button
             active
-            block
             size={'small'}
-            style={{ borderRadius: 4, height: 14, maxWidth: '70%' }}
+            style={{ borderRadius: 6, height: 26, maxWidth: 26, minWidth: 26 }}
           />
           <Skeleton.Button
             active
             block
             size={'small'}
-            style={{ borderRadius: 4, height: 12, maxWidth: '45%', opacity: 0.5 }}
+            style={{ borderRadius: 4, height: 14, maxWidth: '60%' }}
+          />
+        </Flexbox>
+        <Flexbox gap={8}>
+          <Skeleton.Button active block size={'small'} style={{ borderRadius: 4, height: 12 }} />
+          <Skeleton.Button
+            active
+            block
+            size={'small'}
+            style={{ borderRadius: 4, height: 12, maxWidth: '80%', opacity: 0.7 }}
+          />
+          <Skeleton.Button
+            active
+            block
+            size={'small'}
+            style={{ borderRadius: 4, height: 12, maxWidth: '55%', opacity: 0.4 }}
           />
         </Flexbox>
       </div>
@@ -120,24 +156,77 @@ const SkeletonCards = memo<{ count: number }>(({ count }) => (
 
 SkeletonCards.displayName = 'SkeletonCards';
 
+/**
+ * Initial-load placeholder mirroring the final layout: topic-group sections,
+ * each with a title/date header row above its card grid — not a bare card pile.
+ */
+const SkeletonGroups = memo(() => (
+  <Flexbox gap={32}>
+    {[3, 2].map((count, index) => (
+      <div key={index}>
+        <div className={styles.groupHeader}>
+          <Skeleton.Button
+            active
+            size={'small'}
+            style={{ borderRadius: 4, height: 16, minWidth: 160, width: 160 }}
+          />
+          <Skeleton.Button
+            active
+            size={'small'}
+            style={{ borderRadius: 4, height: 12, minWidth: 48, opacity: 0.5, width: 48 }}
+          />
+        </div>
+        <SkeletonCards count={count} />
+      </div>
+    ))}
+  </Flexbox>
+));
+
+SkeletonGroups.displayName = 'SkeletonGroups';
+
 interface WorkGalleryProps {
   galleryKey: WorkGalleryKey;
 }
 
 /**
- * The resource page's 产物 content area: a cross-topic, cursor-paginated card
- * flow of Work summaries for the active workspace / personal scope. Reuses
- * `WorkSummaryCard`, feeding it an `onOpen` that navigates without the chat
- * portal (task → standalone detail route, document → global preview modal,
- * external skill works (linear / github) → external link).
+ * The resource page's 产物 content area: a cross-topic, cursor-paginated flow
+ * of Work previews grouped by origin topic. Renders `WorkPreviewCard` with an
+ * `onOpen` that navigates without the chat portal (task → standalone detail
+ * route, document → global preview modal, external skill works (linear /
+ * github) → external link).
  */
 const WorkGallery = memo<WorkGalleryProps>(({ galleryKey }) => {
-  const { t } = useTranslation('file');
+  const { t, i18n } = useTranslation('file');
   const navigate = useWorkspaceAwareNavigate();
   const openDocumentPreview = useDocumentStore((s) => s.openDocumentPreview);
 
   const { items, error, hasMore, isLoadingInitial, isLoadingMore, loadMore, reload } =
     useWorkspaceWorksInfinite(galleryKey);
+
+  // Group the flat (updatedAt desc) page stream by origin topic. First
+  // appearance decides group order, so groups sort by their newest work; later
+  // pages can still append older works into an already-rendered group.
+  const groups = useMemo(() => {
+    const byKey = new Map<
+      string,
+      { items: WorkSummaryItem[]; newestAt: Date; title: string | null }
+    >();
+    for (const item of items) {
+      // Deleted-topic and non-conversation works share one trailing bucket per
+      // render order; their titles are gone, so finer keys would only produce
+      // several identical "other" sections.
+      const key = item.originTopicId ?? '__no_topic__';
+      const group = byKey.get(key);
+      if (group) group.items.push(item);
+      else
+        byKey.set(key, {
+          items: [item],
+          newestAt: item.updatedAt,
+          title: item.originTopicTitle ?? null,
+        });
+    }
+    return [...byKey.entries()].map(([key, group]) => ({ key, ...group }));
+  }, [items]);
 
   const handleOpen = useCallback(
     (item: WorkSummaryItem) => {
@@ -200,7 +289,7 @@ const WorkGallery = memo<WorkGalleryProps>(({ galleryKey }) => {
         </Center>
       );
 
-    if (isLoadingInitial && items.length === 0) return <SkeletonCards count={6} />;
+    if (isLoadingInitial && items.length === 0) return <SkeletonGroups />;
 
     if (items.length === 0)
       return (
@@ -215,11 +304,29 @@ const WorkGallery = memo<WorkGalleryProps>(({ galleryKey }) => {
 
     return (
       <>
-        <div className={styles.grid}>
-          {items.map((item) => (
-            <WorkSummaryCard item={item} key={item.id} onOpen={handleOpen} />
+        <Flexbox gap={32}>
+          {groups.map((group) => (
+            <div key={group.key}>
+              <div className={styles.groupHeader}>
+                <span className={styles.groupTitle}>
+                  {group.title ?? t('work.topicGroup.other')}
+                </span>
+                <span className={styles.groupDate}>
+                  {formatTaskItemDate(group.newestAt, {
+                    formatOtherYear: t('time.formatOtherYear', { ns: 'common' }),
+                    formatThisYear: t('time.formatThisYear', { ns: 'common' }),
+                    locale: i18n.language,
+                  })}
+                </span>
+              </div>
+              <div className={styles.cardList}>
+                {group.items.map((item) => (
+                  <WorkPreviewCard item={item} key={item.id} onOpen={handleOpen} />
+                ))}
+              </div>
+            </div>
           ))}
-        </div>
+        </Flexbox>
         {/* Sentinel drives infinite scroll; keep it mounted so the observer can
             re-fire after each page appends. */}
         <div aria-hidden ref={sentinelRef} style={{ height: 1 }} />
@@ -243,7 +350,7 @@ const WorkGallery = memo<WorkGalleryProps>(({ galleryKey }) => {
     <Flexbox className={styles.container}>
       <div className={styles.header}>
         <Text strong style={{ fontSize: 16 }}>
-          {t(`work.tab.${galleryKey}`)}
+          {t('work.group')}
         </Text>
       </div>
       <Flexbox className={styles.scroll}>{renderBody()}</Flexbox>

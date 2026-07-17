@@ -2,7 +2,7 @@
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { works } from '../../../schemas';
+import { topics, works } from '../../../schemas';
 import { AgentDocumentModel } from '../../agentDocuments';
 import { TaskModel } from '../../task';
 import { WorkModel } from '..';
@@ -259,6 +259,49 @@ describe('WorkModel · queries', () => {
       'github_issue',
       'linear_issue',
     ]);
+  });
+
+  it('joins the origin topic title onto workspace list rows for grouping', async () => {
+    const titledTopicId = 'work-origin-titled-topic';
+    await serverDB.insert(topics).values({ id: titledTopicId, title: 'Origin topic', userId });
+    const workModel = new WorkModel(serverDB, userId);
+
+    await workModel.registerExternal({
+      changeType: 'created',
+      identifier: 'lobehub/lobehub#7',
+      patchFields: ['identifier', 'title'],
+      resourceId: 'lobehub/lobehub#7',
+      resourceType: 'github_issue',
+      toolCallId: 'tool-call-origin-titled',
+      toolIdentifier: 'github',
+      toolName: 'create_issue',
+      title: 'Titled origin',
+      topicId: titledTopicId,
+    });
+    // No topicId: origin is never stamped, so the gallery's "other" bucket case.
+    await workModel.registerExternal({
+      changeType: 'created',
+      identifier: 'lobehub/lobehub#8',
+      patchFields: ['identifier', 'title'],
+      resourceId: 'lobehub/lobehub#8',
+      resourceType: 'github_issue',
+      toolCallId: 'tool-call-origin-none',
+      toolIdentifier: 'github',
+      toolName: 'create_issue',
+      title: 'No origin',
+    });
+
+    const workspace = await workModel.listByWorkspace({});
+    const byResource = new Map(workspace.items.map((item) => [item.resourceId, item]));
+
+    expect(byResource.get('lobehub/lobehub#7')).toMatchObject({
+      originTopicId: titledTopicId,
+      originTopicTitle: 'Origin topic',
+    });
+    expect(byResource.get('lobehub/lobehub#8')).toMatchObject({
+      originTopicId: null,
+      originTopicTitle: null,
+    });
   });
 
   it('omits full content from every card-facing query payload', async () => {

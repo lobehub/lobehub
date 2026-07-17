@@ -262,9 +262,5 @@
   "work.loadErrorTitle": "无法加载产物",
   "work.loadMoreError": "加载更多产物失败。",
   "work.retry": "重试",
-  "work.tab.all": "全部",
-  "work.tab.document": "文档",
-  "work.tab.github": "GitHub",
-  "work.tab.linear": "Linear",
-  "work.tab.task": "任务"
+  "work.topicGroup.other": "其他"
 }

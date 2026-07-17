@@ -1,31 +1,11 @@
 import type { WorkSkillProvider, WorkType } from '@lobechat/types';
-import { Github, type IconType } from '@lobehub/icons';
-import type { IconProps } from '@lobehub/ui';
-import { ClipboardListIcon, FileTextIcon, LayoutPanelTopIcon } from 'lucide-react';
-import type { ComponentProps, FC } from 'react';
-
-import RawLinearIcon from '@/features/Work/icons/LinearIcon';
 
 /**
- * `@lobehub/ui`'s `<Icon>` (used by NavItem) injects `fill="transparent"` — the
- * right default for lucide's stroke-based glyphs, but it erases the fill of the
- * Linear / GitHub brand logomarks, rendering them invisible. Re-assert
- * `fill="currentColor"` after the injected props so each mark fills with the
- * row's (active/inactive-tinted) text color, matching how tool-call rows render
- * the same marks.
- */
-const LinearIcon: FC<ComponentProps<IconType>> = (props) => (
-  <RawLinearIcon {...props} fill={'currentColor'} />
-);
-const GithubIcon: FC<ComponentProps<IconType>> = (props) => (
-  <Github {...props} fill={'currentColor'} />
-);
-
-/**
- * `?works=` values: the per-type tabs (task / document) plus the per-PROVIDER
- * tabs (linear / github) and a combined `all` view. Tabs stay user-facing
- * per-provider even though linear/github share the unified `external` Work type
- * — so the key set can no longer be `'all' | WorkType`.
+ * `?works=` values: the per-type keys (task / document) plus the per-PROVIDER
+ * keys (linear / github) and a combined `all` view. The sidebar currently
+ * exposes only the single `all` entry — the narrower keys stay parseable so
+ * deep links keep working and per-category tabs can return without a URL
+ * migration.
  */
 export type WorkGalleryKey = 'all' | 'document' | 'github' | 'linear' | 'task';
 
@@ -39,30 +19,13 @@ export interface WorkGalleryFilter {
   type?: WorkType;
 }
 
-export interface WorkGalleryEntry {
-  /** Empty for the combined `all` view. */
-  filter: WorkGalleryFilter;
-  icon: IconProps['icon'];
-  key: WorkGalleryKey;
-}
-
-/**
- * The five entries of the resource page's 产物 group, in display order. Icons
- * mirror `WorkSummaryCard` so a card and its sidebar entry read as the same
- * thing; `all` reuses the file "All" glyph for visual parity with the sibling
- * category menu.
- */
-export const WORK_GALLERY_ENTRIES: WorkGalleryEntry[] = [
-  { filter: {}, icon: LayoutPanelTopIcon, key: 'all' },
-  { filter: { type: 'task' }, icon: ClipboardListIcon, key: 'task' },
-  { filter: { type: 'document' }, icon: FileTextIcon, key: 'document' },
-  { filter: { provider: 'linear' }, icon: LinearIcon, key: 'linear' },
-  { filter: { provider: 'github' }, icon: GithubIcon, key: 'github' },
-];
-
-const FILTER_BY_KEY = new Map<WorkGalleryKey, WorkGalleryFilter>(
-  WORK_GALLERY_ENTRIES.map((entry) => [entry.key, entry.filter]),
-);
+const FILTER_BY_KEY = new Map<WorkGalleryKey, WorkGalleryFilter>([
+  ['all', {}],
+  ['task', { type: 'task' }],
+  ['document', { type: 'document' }],
+  ['linear', { provider: 'linear' }],
+  ['github', { provider: 'github' }],
+]);
 
 /** Parse the raw `?works=` param into a valid key, or null when absent/invalid. */
 export const parseWorkGalleryKey = (value: string | null): WorkGalleryKey | null =>
