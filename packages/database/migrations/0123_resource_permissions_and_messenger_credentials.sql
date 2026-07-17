@@ -10,6 +10,8 @@ CREATE TABLE IF NOT EXISTS "resource_permissions" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+ALTER TABLE "messenger_account_links" ADD COLUMN IF NOT EXISTS "application_id" varchar(255);--> statement-breakpoint
+ALTER TABLE "messenger_account_links" ADD COLUMN IF NOT EXISTS "credentials" text;--> statement-breakpoint
 ALTER TABLE "resource_permissions" DROP CONSTRAINT IF EXISTS "resource_permissions_workspace_id_workspaces_id_fk";--> statement-breakpoint
 ALTER TABLE "resource_permissions" ADD CONSTRAINT "resource_permissions_workspace_id_workspaces_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "public"."workspaces"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "resource_permissions" DROP CONSTRAINT IF EXISTS "resource_permissions_created_by_users_id_fk";--> statement-breakpoint

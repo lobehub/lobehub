@@ -13,9 +13,11 @@ import { workspaces } from './workspace';
  * client (`/agents` + `/switch <n>`) or the web UI without re-running the
  * verify-im flow per agent.
  *
- * Distinct from `agent_bot_providers` (per-user-deployed bots): the bot
- * itself is shared (credentials in env), and the routing key is the IM
- * account, not the agent.
+ * Most platforms use a shared bot whose credentials live in env or
+ * `messenger_installations`. User-scoped credential platforms such as WeChat
+ * keep their encrypted connection credentials on this same account aggregate
+ * instead: the credential cannot outlive or be shared independently from the
+ * bound IM identity.
  */
 export const messengerAccountLinks = pgTable(
   'messenger_account_links',
@@ -48,6 +50,21 @@ export const messengerAccountLinks = pgTable(
 
     /** Optional platform-side display name (Telegram @username, Slack real_name, etc.) */
     platformUsername: text('platform_username'),
+
+    /**
+     * Platform-side application/bot id for user-scoped credential platforms.
+     * WeChat stores the scanned iLink bot id here so inbound payloads can fail
+     * closed before decrypting credentials. Null for shared-bot platforms.
+     */
+    applicationId: varchar('application_id', { length: 255 }),
+
+    /**
+     * AES-GCM encrypted platform credential JSON. WeChat stores
+     * `{ baseUrl, botId, botToken }`; shared-bot platforms leave this null.
+     * Server-side model methods must use an explicit credential projection so
+     * ordinary account-link API responses never expose this ciphertext.
+     */
+    credentials: text('credentials'),
 
     /**
      * Currently selected agent for this IM session. Nullable so a fresh link

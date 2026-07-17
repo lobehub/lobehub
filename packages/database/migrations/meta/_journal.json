@@ -865,8 +865,8 @@
     {
       "idx": 123,
       "version": "7",
-      "when": 1784289934074,
-      "tag": "0123_add_resource_permissions",
+      "when": 1784293980561,
+      "tag": "0123_resource_permissions_and_messenger_credentials",
       "breakpoints": true
     }
   ],
