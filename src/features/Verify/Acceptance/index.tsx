@@ -110,11 +110,11 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   scopeChip: css`
     font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
+    color: ${cssVar.colorTextSecondary};
   `,
   scopeLink: css`
     cursor: pointer;
-    color: ${cssVar.colorTextTertiary};
+    color: ${cssVar.colorTextSecondary};
 
     &:hover {
       color: ${cssVar.colorText};
@@ -594,7 +594,7 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
                   )}
                 </Flexbox>
                 {latestReport?.summary && (
-                  <Text className={styles.summaryClamp} fontSize={13}>
+                  <Text className={styles.summaryClamp} fontSize={13} type={'secondary'}>
                     {latestReport.summary}
                   </Text>
                 )}

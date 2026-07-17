@@ -797,7 +797,7 @@ const CheckRow = memo<{
           {/* The user's standing feedback hangs right under the evidence it judges. */}
           {activeReview && <FeedbackCard evidenceById={evidenceById} review={activeReview} />}
 
-          {/* Confirm (primary, filled) anchors the right edge; reject is the
+          {/* Confirm (plain filled) anchors the right edge; reject is the
               quiet text escape next to it. */}
           {reviewable && !activeReview && (
             <Flexbox horizontal gap={4} justify={'flex-end'}>
@@ -816,7 +816,7 @@ const CheckRow = memo<{
                 disabled={reviewPending}
                 icon={<Icon icon={Check} />}
                 size={'small'}
-                type={'primary'}
+                type={'fill'}
                 onClick={(event) => {
                   event.stopPropagation();
                   void onReview({ action: 'accept', checkItemIds: [check.id] });
@@ -955,6 +955,9 @@ const CheckList = memo<CheckListProps>(
           const unaccepted = reviewableChecks.filter(
             (check) => userReviewState(check) !== 'accepted',
           );
+          // Everything passed AND the user signed all of it off — the ratio
+          // itself turns into the green receipt, no separate right-side note.
+          const allVerified = passed === groupChecks_.length && isGroupFullyAccepted(groupChecks_);
 
           return (
             <Fragment key={key}>
@@ -972,9 +975,21 @@ const CheckList = memo<CheckListProps>(
                 <Text strong style={{ fontSize: 13 }}>
                   {label}
                 </Text>
-                <Text fontSize={12} type={'secondary'}>
-                  {t('acceptance.group.passRatio', { passed, total: groupChecks_.length })}
-                </Text>
+                {allVerified ? (
+                  <Flexbox
+                    horizontal
+                    align={'center'}
+                    gap={4}
+                    style={{ color: cssVar.colorSuccess, fontSize: 12 }}
+                  >
+                    <Icon icon={BadgeCheck} size={13} />
+                    {t('acceptance.group.allVerified', { passed, total: groupChecks_.length })}
+                  </Flexbox>
+                ) : (
+                  <Text fontSize={12} type={'secondary'}>
+                    {t('acceptance.group.passRatio', { passed, total: groupChecks_.length })}
+                  </Text>
+                )}
                 <Flexbox flex={1} />
                 {canReview &&
                   reviewableChecks.length > 0 &&
@@ -994,7 +1009,9 @@ const CheckList = memo<CheckListProps>(
                     >
                       {t('acceptance.review.acceptAll')}
                     </Button>
-                  ) : (
+                  ) : allVerified ? null : (
+                    // Fully signed off but not all green — the mixed-verdict
+                    // receipt that can't fold into the ratio text.
                     <Flexbox
                       horizontal
                       align={'center'}

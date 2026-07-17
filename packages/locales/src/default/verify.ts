@@ -50,6 +50,7 @@ export default {
   'acceptance.filter.all': 'All {{count}}',
   'acceptance.filter.needsFix': 'Needs fix {{count}}',
   'acceptance.filter.pending': 'To review {{count}}',
+  'acceptance.group.allVerified': '{{passed}}/{{total}} all verified & accepted',
   'acceptance.group.collapse': 'Collapse {{label}}',
   'acceptance.group.collapseAll': 'Collapse groups',
   'acceptance.group.collapseItems': 'Collapse checks in this group',

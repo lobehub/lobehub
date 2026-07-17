@@ -40,6 +40,7 @@
   "acceptance.filter.all": "全部 {{count}}",
   "acceptance.filter.needsFix": "待修复 {{count}}",
   "acceptance.filter.pending": "未验收 {{count}}",
+  "acceptance.group.allVerified": "{{passed}}/{{total}} 已全部验证通过",
   "acceptance.group.collapse": "收起{{label}}",
   "acceptance.group.collapseAll": "收起分组",
   "acceptance.group.collapseItems": "收起本组检查项",
