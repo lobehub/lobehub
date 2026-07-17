@@ -268,7 +268,11 @@ export class HeterogeneousPersistenceHandler {
    * See `OperationState.publishedKeys` for why this gate is separate from
    * the persistence dedupe. Without state (already finished, or a retry on
    * a cold replica) every event is treated as unpublished — degrading to
-   * republish-all, which text consumers de-dup via `snapshotSeq`.
+   * republish-all. Main-agent text/reasoning survive that via their
+   * `replace`-snapshot seq guards; the accepted cross-replica residuals are
+   * subagent text (append semantics), tool lifecycle replays (benign client
+   * upserts), and a duplicate trace fold — closing those needs a durable
+   * publish identity (tracked follow-up), not a bigger in-memory map.
    */
   filterUnpublishedEvents(operationId: string, events: AgentStreamEvent[]): AgentStreamEvent[] {
     const state = operationStates.get(operationId);
