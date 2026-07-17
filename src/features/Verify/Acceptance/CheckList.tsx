@@ -123,34 +123,6 @@ const styles = createStaticStyles(({ css }) => ({
       background: ${cssVar.colorFillSecondary};
     }
   `,
-  /* The iteration chip pair: "introduced in round N" is detail behind the
-     "iterated N×" headline — collapsed to zero width until the pair is
-     hovered, so the chip row stays quiet on scan. */
-  iterationChips: css`
-    display: inline-flex;
-    gap: 6px;
-    align-items: center;
-
-    .acceptance-chip-introduced {
-      overflow: hidden;
-
-      max-width: 0;
-      padding-inline: 0;
-
-      opacity: 0;
-
-      transition:
-        max-width 0.2s,
-        opacity 0.2s,
-        padding 0.2s;
-    }
-
-    &:hover .acceptance-chip-introduced {
-      max-width: 160px;
-      padding-inline: 6px;
-      opacity: 1;
-    }
-  `,
   descClamp: css`
     overflow: hidden;
     display: -webkit-box;
@@ -227,7 +199,7 @@ const styles = createStaticStyles(({ css }) => ({
 
     font-family: ${cssVar.fontFamilyCode};
     font-size: 11px;
-    color: ${cssVar.colorTextQuaternary};
+    color: ${cssVar.colorTextSecondary};
     letter-spacing: 0.02em;
   `,
   seqChipClickable: css`
@@ -812,44 +784,34 @@ const CheckRow = memo<{
               </Tooltip>
             ) : null,
           )}
+          {/* The iteration mark stays compact — [↻ N]; the words (verified N
+              rounds · introduced in round X) live in its tooltip. Clicking
+              jumps to the round the concern first appeared in. */}
           {check.revisions > 1 && (
-            <span className={styles.iterationChips}>
-              <Tooltip
-                title={
-                  check.titleChanged
-                    ? t('acceptance.checks.iteratedHint', { count: check.revisions })
-                    : t('acceptance.checks.rerunHint', { count: check.revisions })
-                }
-              >
-                <span className={styles.chip}>
-                  <Icon icon={Repeat} size={10} />{' '}
-                  {check.titleChanged
-                    ? t('acceptance.checks.iterated', { count: check.revisions })
-                    : t('acceptance.checks.rerun', { count: check.revisions })}
-                </span>
-              </Tooltip>
-              {/* Where the concern first appeared — detail behind the
-                  iteration count, revealed by hovering it. */}
-              {check.resultRound !== undefined &&
+            <Tooltip
+              title={[
+                check.titleChanged
+                  ? t('acceptance.checks.iterated', { count: check.revisions })
+                  : t('acceptance.checks.rerun', { count: check.revisions }),
+                check.resultRound !== undefined &&
                 check.resultRound !== null &&
-                check.introducedAtRound !== check.resultRound && (
-                  <Tooltip title={t('acceptance.checks.introducedHint')}>
-                    <span
-                      className={cx(
-                        styles.chip,
-                        styles.chipClickable,
-                        'acceptance-chip-introduced',
-                      )}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        onRound(check.introducedAtRound);
-                      }}
-                    >
-                      {t('acceptance.checks.introduced', { round: check.introducedAtRound })}
-                    </span>
-                  </Tooltip>
-                )}
-            </span>
+                check.introducedAtRound !== check.resultRound
+                  ? t('acceptance.checks.introduced', { round: check.introducedAtRound })
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+            >
+              <span
+                className={cx(styles.chip, styles.chipClickable)}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onRound(check.introducedAtRound);
+                }}
+              >
+                <Icon icon={Repeat} size={10} /> {check.revisions}
+              </span>
+            </Tooltip>
           )}
           {check.resultRound !== undefined && check.resultRound !== null && (
             <Tooltip title={t('acceptance.checks.finalRoundHint')}>

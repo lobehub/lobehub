@@ -5,6 +5,7 @@ import {
   ActionIcon,
   Avatar,
   Center,
+  copyToClipboard,
   DraggablePanel,
   Drawer,
   Empty,
@@ -13,7 +14,7 @@ import {
   Tag,
   Text,
 } from '@lobehub/ui';
-import { Button, Segmented, Select } from '@lobehub/ui/base-ui';
+import { Button, Segmented, Select, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx, useResponsive } from 'antd-style';
 import dayjs from 'dayjs';
 import {
@@ -58,7 +59,19 @@ import CheckList, {
 import DecisionBar from './DecisionBar';
 import FeedbackDrawer, { type FeedbackListEntry } from './FeedbackDrawer';
 import LedgerPanel, { type AcceptanceRound } from './LedgerPanel';
-import { openAcceptModal } from './modals';
+import { openAcceptModal, openRejectModal } from './modals';
+
+/**
+ * The hardcoded repair prompt (复制 review 建议 / 打回重跑 share it): points the
+ * agent at the CLI as the source of truth for this acceptance's feedback, so
+ * nobody has to hand-summarize review notes into an instruction.
+ */
+const buildRepairPrompt = (acceptanceId: string) =>
+  `请用 LobeHub CLI 读取验收 ${acceptanceId} 的最新 review 反馈：
+
+lh verify acceptance view ${acceptanceId}
+
+输出里标记为「▶ actionable」的条目（含各检查项的评论与截图圈选标注）就是本轮要处理的全部反馈。请逐条修改代码；完成后重新执行验证，并把新一轮验证结果 ingest 回同一个 acceptance（复用既有检查项 id，语义有变化的用 supersedes 迭代）。`;
 
 const styles = createStaticStyles(({ css }) => ({
   banner: css`
@@ -81,24 +94,6 @@ const styles = createStaticStyles(({ css }) => ({
     color: ${cssVar.colorTextSecondary};
 
     background: ${cssVar.colorFillTertiary};
-  `,
-  /* Narrow viewports: the ledger floats over the report instead of shrinking
-     it — same regime as the list panel (useReportPanelExpand). An in-flow
-     300px+ column on a ~500px viewport would crush the report into an
-     unreadable sliver. */
-  ledgerOverlay: css`
-    position: absolute;
-    z-index: 30;
-    inset-block: 0;
-    inset-inline-end: 0;
-
-    overflow: auto;
-
-    width: min(340px, 88%);
-    border-inline-start: 1px solid ${cssVar.colorBorderSecondary};
-
-    background: ${cssVar.colorBgElevated};
-    box-shadow: ${cssVar.boxShadowSecondary};
   `,
   /* Pinned to the page's top-right corner — the way back to the collapsed
      ledger, without a permanent handle tab on the edge. */
@@ -215,6 +210,7 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
   }, [isNarrowViewport]);
   const [reportRound, setReportRound] = useState<AcceptanceRound | null>(null);
   const [pending, setPending] = useState(false);
+  const [rerunPending, setRerunPending] = useState(false);
   const [actionError, setActionError] = useState<string>();
   const [feedbackOpen, setFeedbackOpen] = useState(false);
 
@@ -416,7 +412,14 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
       : acceptance.status === 'rejected'
         ? ('rejected' as const)
         : ('settled' as const);
-  const hasException = counts.exceptions > 0;
+  // Review progress — the bar's dial and wording follow how much of the union
+  // the user has personally signed off, not the verifier's pass tally.
+  const reviewableChecks = checks.filter((check) => check.result);
+  const reviewTotal = reviewableChecks.length;
+  const reviewDone = reviewableChecks.filter(
+    (check) => userReviewState(check) === 'accepted',
+  ).length;
+  const allConfirmed = reviewTotal > 0 && reviewDone >= reviewTotal;
   const barTexts = {
     accepted: {
       statusText: t('acceptance.banner.accepted', {
@@ -434,12 +437,19 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
       statusText: t('acceptance.banner.rejected'),
       subText: currentRound?.run.decisionDetail?.comment ?? t('acceptance.banner.rejectedHint'),
     },
-    settled: {
-      statusText: hasException
-        ? t('acceptance.banner.exceptions', { count: counts.exceptions })
-        : t('acceptance.banner.clean', { count: rounds.length }),
-      subText: `${countsText} · ${t('acceptance.banner.decisionHint')}`,
-    },
+    settled: allConfirmed
+      ? {
+          statusText: t('acceptance.bar.progressDone', { total: reviewTotal }),
+          subText: countsText,
+        }
+      : {
+          statusText: t('acceptance.bar.progress', {
+            done: reviewDone,
+            rest: reviewTotal - reviewDone,
+            total: reviewTotal,
+          }),
+          subText: `${countsText} · ${t('acceptance.banner.decisionHint')}`,
+        },
   }[barState];
 
   // Every feedback event, flattened for the clearing list: per-check rejects
@@ -491,6 +501,40 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
       onConfirm: () => runAction(() => verifyService.acceptDelivery(acceptance.id)),
       subjectTitle: subject.title ?? subject.id,
     });
+
+  // The aggregate-level reject — the whole delivery goes back with a comment.
+  const handleRejectComment = () =>
+    openRejectModal({
+      onConfirm: (comment) => runAction(() => verifyService.rejectDelivery(acceptance.id, comment)),
+    });
+
+  const repairPrompt = buildRepairPrompt(acceptance.id);
+
+  // Hand the repair prompt to the reviewer's clipboard — for pasting to any
+  // agent, not just the origin conversation.
+  const handleCopyReview = async () => {
+    await copyToClipboard(repairPrompt);
+    toast.success(t('acceptance.bar.copied'));
+  };
+
+  // Dispatch the repair prompt straight into the origin conversation — the
+  // agent reads the feedback itself via the CLI, no hand-summarizing.
+  const handleRerun = async () => {
+    if (!origin?.topic) return;
+    setRerunPending(true);
+    try {
+      await verifyService.dispatchAcceptanceRepair({
+        agentId: origin.agent?.id,
+        content: repairPrompt,
+        topicId: origin.topic.id,
+      });
+      toast.success(t('acceptance.bar.rerunSent'));
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : t('acceptance.actionError'));
+    } finally {
+      setRerunPending(false);
+    }
+  };
 
   return (
     <Flexbox horizontal className={styles.page}>
@@ -790,14 +834,20 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
               queueing feedback are the author's calls, never a visitor's. */}
           {isOwner && (
             <DecisionBar
+              acceptedCount={reviewDone}
               feedbackCount={activeFeedbackCount}
-              hasException={hasException}
               pending={pending}
+              rerunAvailable={Boolean(origin?.topic)}
+              rerunPending={rerunPending}
               state={barState}
               statusText={barTexts.statusText}
               subText={barTexts.subText}
+              totalCount={reviewTotal}
               onAccept={handleAccept}
+              onCopyReview={handleCopyReview}
               onOpenFeedback={() => setFeedbackOpen(true)}
+              onRejectComment={handleRejectComment}
+              onRerun={handleRerun}
             />
           )}
           <Flexbox style={{ height: 8 }} />
@@ -813,19 +863,26 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
 
       {/* Round ledger — audit detail, off the decision path (P-13). No edge
           handle: opening happens from the page-corner toggle, closing from the
-          ledger's own header action. On narrow viewports it floats over the
-          report instead of shrinking it into an unreadable column. */}
+          ledger's own header action. On narrow viewports it opens as a masked
+          drawer over the report — dismissable by tapping outside — instead of
+          shrinking the report into an unreadable column. */}
       {isNarrowViewport ? (
-        ledgerExpand && (
-          <div className={styles.ledgerOverlay}>
-            <LedgerPanel
-              highlight={highlightRound}
-              rounds={rounds}
-              onCollapse={() => setLedgerExpand(false)}
-              onOpenReport={setReportRound}
-            />
-          </div>
-        )
+        <Drawer
+          noHeader
+          containerMaxWidth={'100%'}
+          open={ledgerExpand}
+          placement={'right'}
+          styles={{ body: { padding: 0 } }}
+          width={'min(340px, 88vw)'}
+          onClose={() => setLedgerExpand(false)}
+        >
+          <LedgerPanel
+            highlight={highlightRound}
+            rounds={rounds}
+            onCollapse={() => setLedgerExpand(false)}
+            onOpenReport={setReportRound}
+          />
+        </Drawer>
       ) : (
         <DraggablePanel
           defaultSize={{ width: 340 }}

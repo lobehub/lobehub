@@ -185,22 +185,26 @@ const GroupFeedbackContent = memo<GroupFeedbackContentProps>(({ groupLabel, onCo
       <Text fontSize={13} type={'secondary'}>
         {translate('acceptance.group.feedbackDescription', { label: groupLabel })}
       </Text>
-      <TextArea
-        autoSize={{ maxRows: 8, minRows: 3 }}
-        placeholder={translate('acceptance.group.feedbackPlaceholder')}
-        value={comment}
-        onChange={(event) => setComment(event.target.value)}
-        onPaste={handlePaste}
-      />
-      <AttachmentStrip
-        attachments={attachments}
-        disabled={loading}
-        uploading={uploading}
-        onRemove={remove}
-      />
+      <Flexbox gap={8}>
+        <TextArea
+          autoSize={{ maxRows: 8, minRows: 3 }}
+          placeholder={translate('acceptance.group.feedbackPlaceholder')}
+          value={comment}
+          onChange={(event) => setComment(event.target.value)}
+          onPaste={handlePaste}
+        />
+        {/* One row hugging the input — attachments belong to the note. */}
+        <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
+          <AttachmentStrip
+            attachments={attachments}
+            disabled={loading}
+            uploading={uploading}
+            onRemove={remove}
+          />
+          <AttachmentUploadButton disabled={loading} onFiles={uploadFiles} />
+        </Flexbox>
+      </Flexbox>
       <Flexbox horizontal align={'center'} gap={8} justify={'flex-end'}>
-        <AttachmentUploadButton disabled={loading} onFiles={uploadFiles} />
-        <Flexbox flex={1} />
         <Button disabled={loading} onClick={close}>
           {translate('acceptance.actions.cancel')}
         </Button>

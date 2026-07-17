@@ -1,10 +1,9 @@
 'use client';
 
 import type { AcceptanceAttachment } from '@lobechat/types';
-import { Drawer, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Drawer, Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import dayjs from 'dayjs';
-import { MessageSquareText, MessageSquareX } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -46,7 +45,7 @@ const styles = createStaticStyles(({ css }) => ({
     flex: none;
     font-family: ${cssVar.fontFamilyCode};
     font-size: 11px;
-    color: ${cssVar.colorTextQuaternary};
+    color: ${cssVar.colorTextSecondary};
   `,
 }));
 
@@ -101,12 +100,6 @@ const EntryRow = memo<{
       onClick={entry.checkId ? () => onJumpToCheck(entry.checkId!) : undefined}
     >
       <Flexbox horizontal align={'center'} gap={6}>
-        <Icon
-          color={entry.stale ? cssVar.colorTextQuaternary : cssVar.colorError}
-          icon={isCheck ? MessageSquareX : MessageSquareText}
-          size={13}
-          style={{ flex: 'none' }}
-        />
         {isCheck ? (
           <>
             <span className={styles.seq}>C{entry.checkSeq}</span>
@@ -125,15 +118,11 @@ const EntryRow = memo<{
         <span className={styles.meta}>{metaBits.join(' · ')}</span>
       </Flexbox>
       {entry.comment && (
-        <Text style={{ fontSize: 12, paddingInlineStart: 19 }} type={'secondary'}>
+        <Text style={{ fontSize: 12 }} type={'secondary'}>
           {entry.comment}
         </Text>
       )}
-      {entry.attachments?.length ? (
-        <div style={{ paddingInlineStart: 19 }}>
-          <AttachmentThumbs attachments={entry.attachments} />
-        </div>
-      ) : null}
+      <AttachmentThumbs attachments={entry.attachments} />
     </Flexbox>
   );
 });

@@ -400,13 +400,15 @@ const CheckRejectContent = memo<CheckRejectModalProps>(
               onChange={(event) => setComment(event.target.value)}
               onPaste={handlePaste}
             />
-            <AttachmentStrip
-              attachments={attachments}
-              disabled={loading}
-              uploading={uploading}
-              onRemove={remove}
-            />
-            <Flexbox horizontal>
+            {/* One row hugging the input — the thumbnails and the picker
+                belong to the note they back, not to the modal footer. */}
+            <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
+              <AttachmentStrip
+                attachments={attachments}
+                disabled={loading}
+                uploading={uploading}
+                onRemove={remove}
+              />
               <AttachmentUploadButton disabled={loading} onFiles={uploadFiles} />
             </Flexbox>
           </Flexbox>

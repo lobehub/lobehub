@@ -24,7 +24,15 @@ export default {
   'acceptance.banner.rejectedHint':
     'The next verification round re-opens this acceptance when it lands.',
   'acceptance.banner.rejectedReason': 'Reason: {{reason}}',
+  'acceptance.bar.copied': 'Copied — paste it to any agent to start the repair.',
+  'acceptance.bar.copyReview': 'Copy review prompt',
   'acceptance.bar.feedback': 'Feedback {{count}}',
+  'acceptance.bar.progress':
+    'Confirmed {{done}} / {{total}} checks — {{rest}} awaiting your review',
+  'acceptance.bar.progressDone': 'All {{total}} checks confirmed — ready to accept',
+  'acceptance.bar.rejectComment': 'Reject with comment',
+  'acceptance.bar.rerun': 'Send back & rerun',
+  'acceptance.bar.rerunSent': 'Sent to the origin conversation — the repair round is starting.',
   'acceptance.checks.copied': 'Copied',
   'acceptance.checks.copySeq': 'Copy the check label',
   'acceptance.checks.finalRoundHint':

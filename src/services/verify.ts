@@ -174,6 +174,19 @@ export class VerifyService {
     id: string;
   }) => lambdaClient.acceptance.addGroupFeedback.mutate(input);
 
+  /**
+   * Dispatch the repair prompt straight into the acceptance's origin
+   * conversation — a user message that triggers the agent, the same callback
+   * channel remote hetero runs (`lh notify`) use.
+   */
+  dispatchAcceptanceRepair = (input: { agentId?: string; content: string; topicId: string }) =>
+    lambdaClient.agentNotify.notify.mutate({
+      agentId: input.agentId,
+      content: input.content,
+      role: 'user',
+      topicId: input.topicId,
+    });
+
   // ---- per-run plan ----
   getVerifyState = (operationId: string): Promise<VerifyStateResponse | null> =>
     lambdaClient.verify.getVerifyState.query({
