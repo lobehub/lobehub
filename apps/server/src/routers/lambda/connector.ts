@@ -35,6 +35,10 @@ import {
 } from '@/server/services/connector/stateStore';
 import { syncConnectorToolsById } from '@/server/services/connector/sync';
 import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
+import {
+  resolveConnectorAuthorizerId,
+  resolveUserDisplayMap,
+} from '@/server/utils/connectorAttribution';
 
 import {
   assertWorkspaceRowManageable,
@@ -125,13 +129,28 @@ export const connectorRouter = router({
   list: connectorProcedure.query(async ({ ctx }) => {
     const connectors = await ctx.connectorModel.query();
 
+    // Attribution — resolve the member who authorized each connector (workspace
+    // dimension), so the profile can tag "authorized by X". The ids come from
+    // scope-checked rows the caller already sees.
+    const authorMap = await resolveUserDisplayMap(
+      ctx.serverDB,
+      connectors.map((c) => resolveConnectorAuthorizerId(c)),
+    );
+
     const toolsByConnector = await Promise.all(
       connectors.map(async (c) => {
         const tools = await ctx.connectorToolModel.queryByConnector(c.id);
         // Never ship decrypted OAuth tokens or the client secret to the browser.
         const { credentials: _credentials, oidcConfig, ...rest } = c;
         const safeOidcConfig = oidcConfig ? { ...oidcConfig, clientSecret: undefined } : oidcConfig;
-        return { ...rest, oidcConfig: safeOidcConfig, tools };
+        const author = authorMap.get(resolveConnectorAuthorizerId(c) ?? '');
+        return {
+          ...rest,
+          authorizedByAvatar: author?.avatar ?? null,
+          authorizedByName: author?.name ?? null,
+          oidcConfig: safeOidcConfig,
+          tools,
+        };
       }),
     );
 
@@ -148,6 +167,13 @@ export const connectorRouter = router({
     .query(async ({ input, ctx }) => {
       const connectors = await ctx.connectorModel.queryByAgent(input.agentId);
 
+      // Attribution — the member who authorized each agent-scoped connector, so
+      // a teammate viewing the agent sees "authorized by X" on each chip.
+      const authorMap = await resolveUserDisplayMap(
+        ctx.serverDB,
+        connectors.map((c) => resolveConnectorAuthorizerId(c)),
+      );
+
       return Promise.all(
         connectors.map(async (c) => {
           const tools = await ctx.connectorToolModel.queryByConnector(c.id);
@@ -155,7 +181,14 @@ export const connectorRouter = router({
           const safeOidcConfig = oidcConfig
             ? { ...oidcConfig, clientSecret: undefined }
             : oidcConfig;
-          return { ...rest, oidcConfig: safeOidcConfig, tools };
+          const author = authorMap.get(resolveConnectorAuthorizerId(c) ?? '');
+          return {
+            ...rest,
+            authorizedByAvatar: author?.avatar ?? null,
+            authorizedByName: author?.name ?? null,
+            oidcConfig: safeOidcConfig,
+            tools,
+          };
         }),
       );
     }),

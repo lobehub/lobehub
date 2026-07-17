@@ -601,6 +601,7 @@
   "serviceModel.optionalFeatures.title": "可选功能",
   "settingAgent.agentTools.add": "添加工具",
   "settingAgent.agentTools.agentEmpty": "还没有 Agent 专属工具",
+  "settingAgent.agentTools.authorizedBy": "由 {{name}} 授权",
   "settingAgent.agentTools.badge.agentOnly": "Agent 专属",
   "settingAgent.agentTools.badge.copy": "副本",
   "settingAgent.agentTools.badge.linked": "引用",

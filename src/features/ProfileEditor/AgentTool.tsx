@@ -70,6 +70,14 @@ export interface AgentToolProps {
    */
   filterAvailableInWeb?: boolean;
   /**
+   * Show an "authorized by X" avatar on each connector chip. Set by the
+   * two-section agent profile in a workspace so a teammate can see whose
+   * credentials each shared tool runs under. Off elsewhere (personal mode has a
+   * single authorizer — always the caller — so the tag would be noise).
+   * @default false
+   */
+  showAuthor?: boolean;
+  /**
    * Whether to show web browsing toggle functionality
    * @default false
    */
@@ -88,6 +96,7 @@ const AgentTool = memo<AgentToolProps>(
     filterAvailableInWeb = false,
     useAllMetaList = false,
     excludeAgentConnectors = false,
+    showAuthor = false,
   }) => {
     const { t } = useTranslation('setting');
     const { allowed: canEdit } = usePermission('edit_own_content');
@@ -872,6 +881,7 @@ const AgentTool = memo<AgentToolProps>(
                 disabled={!canEdit}
                 key={pluginId}
                 pluginId={pluginId}
+                showAuthor={showAuthor}
                 showDesktopOnlyLabel={filterAvailableInWeb}
                 useAllMetaList={useAllMetaList}
                 onRemove={handleRemovePlugin(pluginId)}

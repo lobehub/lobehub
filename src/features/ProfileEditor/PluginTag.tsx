@@ -2,7 +2,7 @@
 
 import { type ComposioAppType, type LobehubSkillProviderType } from '@lobechat/const';
 import { COMPOSIO_APP_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
-import { Avatar, Flexbox, Icon, Tag } from '@lobehub/ui';
+import { Avatar, Flexbox, Icon, Tag, Tooltip } from '@lobehub/ui';
 import { McpIcon } from '@lobehub/ui/icons';
 import { createStaticStyles, cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
@@ -47,6 +47,11 @@ const LobehubSkillIcon = memo<Pick<LobehubSkillProviderType, 'icon' | 'label'>>(
     return <Icon fill={cssVar.colorText} icon={icon} size={16} />;
   },
 );
+
+// Stable empty reference for the connector-list read when attribution is off,
+// so `showAuthor={false}` tags never subscribe to connector list changes.
+const EMPTY_CONNECTORS: ReturnType<typeof connectorSelectors.connectorList> = [];
+const emptyConnectorList = () => EMPTY_CONNECTORS;
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   loadingIcon: css`
@@ -105,6 +110,15 @@ export interface PluginTagProps {
   /** Selection state in `selectable` mode. */
   selected?: boolean;
   /**
+   * Show a trailing avatar attributing the connector to the member who
+   * authorized it ("authorized by X"). Resolved from the connector rows in the
+   * store (agent-scoped row when `agentId` is set, else the base/workspace row).
+   * Only meaningful in a workspace — callers pass it when several members may
+   * share the agent, so a teammate can see WHOSE credentials a tool runs under.
+   * @default false
+   */
+  showAuthor?: boolean;
+  /**
    * Whether to show "Desktop Only" label for tools not available in web
    * @default false
    */
@@ -126,6 +140,7 @@ const PluginTag = memo<PluginTagProps>(
     selectable = false,
     selected = false,
     disabled,
+    showAuthor = false,
     showDesktopOnlyLabel = false,
     useAllMetaList = false,
   }) => {
@@ -140,6 +155,26 @@ const PluginTag = memo<PluginTagProps>(
       connectorSelectors.agentConnectors(agentId ?? ''),
       isEqual,
     );
+
+    // Base/workspace connector rows — used to attribute a tool to its authorizing
+    // member. Only read when `showAuthor` so non-attributing call sites don't
+    // re-render on connector list changes.
+    const connectorList = useToolStore(
+      showAuthor ? connectorSelectors.connectorList : emptyConnectorList,
+      isEqual,
+    );
+
+    // The member who authorized this connector: prefer the agent-scoped row
+    // (agent dimension) over the base/workspace row. `null` when not attributable
+    // (builtin tool, remote plugin, or attribution disabled).
+    const author = useMemo(() => {
+      if (!showAuthor) return null;
+      const row =
+        (agentId ? agentConnectors.find((c) => c.identifier === identifier) : undefined) ??
+        connectorList.find((c) => c.identifier === identifier);
+      if (!row?.authorizedByName) return null;
+      return { avatar: row.authorizedByAvatar ?? undefined, name: row.authorizedByName };
+    }, [showAuthor, agentId, agentConnectors, connectorList, identifier]);
 
     // Get local plugin lists - use allMetaList or metaList based on prop
     const builtinList = useToolStore(
@@ -385,7 +420,21 @@ const PluginTag = memo<PluginTagProps>(
           onRemove?.(e);
         }}
       >
-        {getDisplayText()}
+        {author ? (
+          <Flexbox horizontal align={'center'} gap={4}>
+            {getDisplayText()}
+            <Tooltip title={t('settingAgent.agentTools.authorizedBy', { name: author.name })}>
+              <Avatar
+                avatar={author.avatar}
+                size={16}
+                style={{ flexShrink: 0 }}
+                title={author.name}
+              />
+            </Tooltip>
+          </Flexbox>
+        ) : (
+          getDisplayText()
+        )}
       </Tag>
     );
   },

@@ -697,6 +697,7 @@ export default {
   'settingAgent.prompt.title': 'Core Instructions',
   'settingAgent.agentTools.add': 'Add Tool',
   'settingAgent.agentTools.agentEmpty': 'No agent-exclusive tools yet',
+  'settingAgent.agentTools.authorizedBy': 'Authorized by {{name}}',
   'settingAgent.agentTools.badge.agentOnly': 'Agent-only',
   'settingAgent.agentTools.badge.copy': 'Copy',
   'settingAgent.agentTools.badge.linked': 'Linked',

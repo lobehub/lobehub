@@ -122,6 +122,7 @@ const AgentToolsSection = memo<{ agentId: string; onStartCopy: () => void }>(
                 key={connector.id}
                 pluginId={connector.identifier}
                 removable={canManageRow}
+                showAuthor={!!activeWorkspaceId}
                 onRemove={() => {
                   handleRemove(connector);
                 }}
