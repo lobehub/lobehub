@@ -104,3 +104,10 @@ export const insertMessengerAccountLinkSchema = createInsertSchema(messengerAcco
 
 export type NewMessengerAccountLink = typeof messengerAccountLinks.$inferInsert;
 export type MessengerAccountLinkItem = typeof messengerAccountLinks.$inferSelect;
+
+/**
+ * Row shape safe to return from account-link APIs — excludes the encrypted
+ * `credentials` ciphertext, which only explicit credential-scoped reads may
+ * project.
+ */
+export type MessengerAccountLinkPublicItem = Omit<MessengerAccountLinkItem, 'credentials'>;

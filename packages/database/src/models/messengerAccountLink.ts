@@ -1,8 +1,14 @@
-import { and, eq, type SQL } from 'drizzle-orm';
+import { and, eq, getTableColumns, type SQL } from 'drizzle-orm';
 
-import type { MessengerAccountLinkItem, NewMessengerAccountLink } from '../schemas';
+import type { MessengerAccountLinkPublicItem, NewMessengerAccountLink } from '../schemas';
 import { messengerAccountLinks } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+
+// Default projection for every row-returning query in this model: the AES-GCM
+// `credentials` ciphertext must never ride along on ordinary account-link
+// reads/writes — credential access requires an explicit credential-scoped
+// method.
+const { credentials: _credentials, ...publicColumns } = getTableColumns(messengerAccountLinks);
 
 /**
  * Tenant id for global-token platforms (Telegram today, Discord later) —
@@ -79,7 +85,7 @@ export class MessengerAccountLinkModel {
    */
   upsertForPlatform = async (
     params: Omit<NewMessengerAccountLink, 'userId' | 'id'>,
-  ): Promise<MessengerAccountLinkItem> => {
+  ): Promise<MessengerAccountLinkPublicItem> => {
     const tenantId = params.tenantId ?? GLOBAL_TENANT_ID;
     const now = new Date();
 
@@ -103,7 +109,7 @@ export class MessengerAccountLinkModel {
             messengerAccountLinks.tenantId,
           ],
         })
-        .returning();
+        .returning(publicColumns);
 
       if (created) return created;
     } catch (error) {
@@ -142,7 +148,7 @@ export class MessengerAccountLinkModel {
           workspaceId: params.workspaceId ?? null,
         })
         .where(eq(messengerAccountLinks.id, byIdentity.id))
-        .returning();
+        .returning(publicColumns);
       return updated;
     }
 
@@ -161,7 +167,7 @@ export class MessengerAccountLinkModel {
           workspaceId: params.workspaceId ?? null,
         })
         .where(eq(messengerAccountLinks.id, existingForUser.id))
-        .returning();
+        .returning(publicColumns);
       return updated;
     }
 
@@ -182,8 +188,8 @@ export class MessengerAccountLinkModel {
     return this.db.delete(messengerAccountLinks).where(and(...conditions));
   };
 
-  list = async (): Promise<MessengerAccountLinkItem[]> => {
-    return this.db.select().from(messengerAccountLinks).where(this.ownership());
+  list = async (): Promise<MessengerAccountLinkPublicItem[]> => {
+    return this.db.select(publicColumns).from(messengerAccountLinks).where(this.ownership());
   };
 
   /**
@@ -195,14 +201,14 @@ export class MessengerAccountLinkModel {
   findByPlatform = async (
     platform: string,
     tenantId?: string,
-  ): Promise<MessengerAccountLinkItem | undefined> => {
+  ): Promise<MessengerAccountLinkPublicItem | undefined> => {
     const conditions: SQL[] = [this.ownership(), eq(messengerAccountLinks.platform, platform)];
     if (tenantId !== undefined) {
       conditions.push(eq(messengerAccountLinks.tenantId, tenantId));
     }
 
     const [result] = await this.db
-      .select()
+      .select(publicColumns)
       .from(messengerAccountLinks)
       .where(and(...conditions))
       .limit(1);
@@ -219,7 +225,7 @@ export class MessengerAccountLinkModel {
     agentId: string | null,
     workspaceId: string | null,
     tenantId?: string,
-  ): Promise<MessengerAccountLinkItem | undefined> => {
+  ): Promise<MessengerAccountLinkPublicItem | undefined> => {
     const conditions: SQL[] = [this.ownership(), eq(messengerAccountLinks.platform, platform)];
     if (tenantId !== undefined) {
       conditions.push(eq(messengerAccountLinks.tenantId, tenantId));
@@ -229,7 +235,7 @@ export class MessengerAccountLinkModel {
       .update(messengerAccountLinks)
       .set({ activeAgentId: agentId, updatedAt: new Date(), workspaceId })
       .where(and(...conditions))
-      .returning();
+      .returning(publicColumns);
 
     return updated;
   };
@@ -250,9 +256,9 @@ export class MessengerAccountLinkModel {
     platform: string,
     platformUserId: string,
     tenantId: string = GLOBAL_TENANT_ID,
-  ): Promise<MessengerAccountLinkItem | undefined> => {
+  ): Promise<MessengerAccountLinkPublicItem | undefined> => {
     const [result] = await db
-      .select()
+      .select(publicColumns)
       .from(messengerAccountLinks)
       .where(
         and(
@@ -271,12 +277,12 @@ export class MessengerAccountLinkModel {
     db: LobeChatDatabase,
     linkId: string,
     agentId: string | null,
-  ): Promise<MessengerAccountLinkItem | undefined> => {
+  ): Promise<MessengerAccountLinkPublicItem | undefined> => {
     const [updated] = await db
       .update(messengerAccountLinks)
       .set({ activeAgentId: agentId, updatedAt: new Date() })
       .where(eq(messengerAccountLinks.id, linkId))
-      .returning();
+      .returning(publicColumns);
     return updated;
   };
 
@@ -293,12 +299,12 @@ export class MessengerAccountLinkModel {
     linkId: string,
     workspaceId: string | null,
     agentId: string | null = null,
-  ): Promise<MessengerAccountLinkItem | undefined> => {
+  ): Promise<MessengerAccountLinkPublicItem | undefined> => {
     const [updated] = await db
       .update(messengerAccountLinks)
       .set({ activeAgentId: agentId, updatedAt: new Date(), workspaceId })
       .where(eq(messengerAccountLinks.id, linkId))
-      .returning();
+      .returning(publicColumns);
     return updated;
   };
 }

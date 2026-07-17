@@ -13,7 +13,7 @@ import { getServerDB } from '@/database/core/db-adaptor';
 import { AgentModel } from '@/database/models/agent';
 import { MessengerAccountLinkModel } from '@/database/models/messengerAccountLink';
 import { WorkspaceModel } from '@/database/models/workspace';
-import type { MessengerAccountLinkItem } from '@/database/schemas';
+import type { MessengerAccountLinkPublicItem } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { getServerFeatureFlagsStateFromRuntimeConfig } from '@/server/featureFlags';
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
@@ -95,7 +95,7 @@ interface MessengerCommandContext {
    *  user-private UI (e.g. `/agents` picker) widen private replies into
    *  ephemerals when this is false so the channel doesn't see them. */
   isDM: boolean;
-  link: MessengerAccountLinkItem | undefined;
+  link: MessengerAccountLinkPublicItem | undefined;
   message?: Message;
   platform: MessengerPlatform;
   /** Platform-aware reply: ephemeral on Slack slash, DM on Discord slash,
@@ -1525,7 +1525,7 @@ export class MessengerRouter {
     thread: any,
     message: Message,
     client: PlatformClient,
-    link: MessengerAccountLinkItem,
+    link: MessengerAccountLinkPublicItem,
     agentId: string,
     platform: MessengerPlatform,
     bridgeMethod: 'handleMention' | 'handleSubscribedMessage',
