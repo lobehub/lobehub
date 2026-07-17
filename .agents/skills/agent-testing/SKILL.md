@@ -476,7 +476,8 @@ All under `.agents/skills/agent-testing/scripts/`:
 | `agent-browser-klm.mjs`         | Wrap `agent-browser`, run the real action, and append a GOMS-KLM interaction atom JSONL     |
 | `agent-browser-klm-analyze.mjs` | Summarize interaction JSONL into `result.json.interactionCost` / markdown cost output       |
 | `record-gif.sh`                 | Frame-sequence → GIF for time-based behavior (streaming, timers, animations)                |
-| `report-init.sh`                | Scaffold a structured test report (Step 5)                                                  |
+| `report-init.sh`                | Scaffold a structured test report, grouped by acceptance subject (Step 5)                   |
+| `fixture.mjs`                   | Per-check fixture assets: `init-check` / `list` / `compose` an ingest-ready round (Step 5)  |
 | `check-screen-recording.sh`     | Preflight: OS screen-capture works (macOS Screen Recording + display awake)                 |
 | `electron-dev.sh`               | Manage Electron dev env (start/stop/status/restart, CDP 9222)                               |
 | `cdp-screenshot.sh`             | Electron/Chrome screenshot via RAW CDP (bypasses agent-browser daemon); `--check` preflight |
@@ -531,16 +532,42 @@ Every automated test session ends with a structured, evidence-backed report —
 not a chat-only summary. Scaffold it up front and fill it as you test:
 
 ```bash
-DIR=$(./.agents/skills/agent-testing/scripts/report-init.sh my-feature "Verify my feature")
+# --subject = the acceptance this run belongs to (Step 6) — pass it up front
+DIR=$(./.agents/skills/agent-testing/scripts/report-init.sh --subject topic:tpc_xxx my-feature "Verify my feature")
 # ... test, saving screenshots / CLI transcripts into $DIR/assets/ ...
 # fill $DIR/result.json (scenario, context, cases[], summary.conclusion) — the report;
 # $DIR/report.md holds only the narrative tail (follow-ups / notes / score)
 ```
 
-Reports live in `.records/reports/<timestamp>-<slug>/` (gitignored): `result.json`
-(the structured report — scenario/context/cases/summary), `report.md` (narrative
-tail), `assets/` (evidence). Format spec and evidence rules:
-[references/report.md](./references/report.md).
+Reports live in `.records/reports/<subject-key>/<timestamp>-<slug>/` (gitignored),
+**grouped by acceptance**: one dir per subject (`topic-tpc_xxx`, with an
+`acceptance.json` marker), one subdir per verification run. Each run dir holds
+`result.json` (the structured report — scenario/context/cases/summary),
+`report.md` (narrative tail), `assets/` (evidence). `--subject` also pre-fills
+`result.json.subject` so ingest attaches the run automatically. Format spec and
+evidence rules: [references/report.md](./references/report.md).
+
+#### Fixtures: reusable per-check assets
+
+When a run needs seeded/constructed data (fixture rounds, seed files, probe
+steps), keep those assets per CHECK ITEM — the business check that recurs
+across rounds — under `.records/fixtures/<subject-key>/<check-id>/`
+(`check.json` = plan fragment + case template + future replay `steps`;
+`seed/` = reusable INPUT assets only). The reusability line is inputs vs
+outputs: what a run consumes (files to upload, DB seed fragments, stand-in
+evidence for synthetic ingest rounds) belongs in `seed/`; what a run produces
+(screenshots, transcripts) is tied to that one execution and stays in the round
+dir's `assets/` — never copy it back into the fixture. Compose an ingest-ready
+round from checks instead of hand-writing result.json each time:
+
+```bash
+F=./.agents/skills/agent-testing/scripts/fixture.mjs
+$F init-check --subject topic:tpc_xxx palette-long-list # scaffold, then fill check.json
+$F list --subject topic:tpc_xxx
+DIR=$($F compose --subject topic:tpc_xxx --slug round4 --title "第四轮全量回归" \
+  palette-open palette-long-list)  # → report group round dir
+lh verify ingest-report "$DIR" ... # fixture rounds are normal reports
+```
 
 Two hard rules worth front-loading:
 

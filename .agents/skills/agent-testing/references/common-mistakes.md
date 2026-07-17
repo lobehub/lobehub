@@ -714,6 +714,7 @@ can operate at workspace scope.
 and verification. Give members own-only actions; give owners both own and workspace
 variants for every applicable action; use elevated confirmation for destructive
 workspace-wide variants; and assert every matrix cell in UI tests and screenshots.
+
 ## Case 27 — Labeling two steps of a flow as a before/after `comparison` pair
 
 **Wrong approach**: for a case whose evidence is two SEQUENTIAL steps of one flow (the reject
@@ -731,3 +732,24 @@ misleads reviewers about what they are looking at.
 **Correct approach**: `comparison` is ONLY for the same surface before vs after a change. For flow
 steps, attach plain ordered evidence items (the array preserves order) and give each a caption
 naming its step ("step 1 — dialog with region circled", "step 2 — feedback card after submit").
+
+## Case 28 — Publishing the report to the LOCAL instance because the subject "only exists locally"
+
+**Wrong approach**: the run's subject (the task under test) lived only in the local dev DB, so I
+ingested the report into the local instance (`--subject task:<local id>` against `localhost`) and
+delivered `localhost` URLs as the final links — reasoning that a production subject didn't exist and
+that attaching to the actual local task was "semantically perfect".
+
+**Why it's wrong**: the user immediately asked why the report wasn't on production. The publish
+target rule (SKILL Step 6) is not conditional on subject convenience: the deliverable must live on
+`app.lobehub.com`, where links survive teardown and are shareable. A missing production subject is a
+solvable prerequisite, not a reason to downgrade the publish target — the CLI can create one in
+seconds (`lh task create -n "<verification anchor>" -i "..."` → `--subject task:T-<seq>`). A local
+ingest is fine as an _additional_ demo of the acceptance chaining, but never as the primary
+deliverable.
+
+**Correct approach**: when no production subject exists, create a production anchor entity first
+(task via `lh task create`, or a topic), then run the clean-env production publish
+(`env -u LOBEHUB_SERVER -u LOBE_API_KEY -u LOBEHUB_CLI_API_KEY -u LOBEHUB_CLI_HOME` + the branch's
+own CLI for the canary `--subject` contract). Gotcha hit on the way: bare `--json` on `task create`
+crashes (`fields.split is not a function`) — omit it or pass explicit fields.

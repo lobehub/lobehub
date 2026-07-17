@@ -7,14 +7,34 @@ user (or a reviewer, or a later agent) audits without replaying the session.
 ## Location & layout
 
 Reports live under `.records/reports/` (gitignored, like all `.records/`
-output):
+output), **grouped by the acceptance they belong to**: one directory per
+subject, one subdirectory per verification run (round). The subject key is the
+ingest subject with `:` → `-`.
 
 ```
-.records/reports/<YYYYMMDD-HHMMSS>-<slug>/
-├── report.md      # narrative TAIL only (跟进 / 本轮验证 / 评分) — rendered as the page's "Details"
-├── result.json    # the structured source: scenario + context + cases + summary.conclusion
-└── assets/        # evidence: screenshots, HAR files, CLI transcripts
+.records/reports/<subject-key>/                  # e.g. topic-tpc_acceptreview001
+├── acceptance.json                              # group marker: subject, title, lastRun
+├── <YYYYMMDD-HHMMSS>-<slug>/                    # one run = one round on the acceptance
+│   ├── report.md      # narrative TAIL only (跟进 / 本轮验证 / 评分) — the page's "Details"
+│   ├── result.json    # the structured source: scenario + context + cases + summary.conclusion
+│   └── assets/        # evidence: screenshots, HAR files, CLI transcripts
+└── <YYYYMMDD-HHMMSS>-<slug>/                    # the next round, and so on
 ```
+
+Every run belongs to a subject acceptance (SKILL.md Step 6), so the group is
+known before the round starts — pass it to the scaffold:
+`report-init.sh --subject topic:tpc_xxx <slug> "<title>"`. The scaffold also
+pre-fills `result.json.subject`, so `lh verify ingest-report` attaches the run
+without an explicit `--subject`. Runs scaffolded without `--subject` fall back
+to a flat `.records/reports/<ts>-<slug>/` (legacy layout, still readable by
+`ingest-report` — but new runs should always carry their subject).
+
+Reusable per-check fixture assets live NEXT to the report groups under
+`.records/fixtures/<subject-key>/<check-id>/` — `check.json` plus `seed/`
+(INPUTS a run consumes: files to upload, DB seed fragments, replay steps'
+material). Execution OUTPUTS (screenshots, transcripts) are per-run evidence
+and belong only in the round dir's `assets/`. See `scripts/fixture.mjs` and
+SKILL.md "Fixtures: reusable per-check assets".
 
 **`result.json` is the report — `report.md` is just its tail.** The published
 verify page (`/verify/<id>`) renders itself from `result.json`: one line of
@@ -29,7 +49,7 @@ table — those double up on the page. It carries only the non-duplicate narrati
 1. **Scaffold up front** — before running the first test step:
 
    ```bash
-   DIR=$(./.agents/skills/agent-testing/scripts/report-init.sh < slug > "<title>")
+   DIR=$(./.agents/skills/agent-testing/scripts/report-init.sh --subject topic:tpc_xxx < slug > "<title>")
    ```
 
    The script creates the directory, pre-fills branch / commit / date in both

@@ -1451,6 +1451,7 @@ posix_spawn '<cmd>'` — NOT node's `spawn <cmd> ENOENT`. Any stderr-text patter
   in-process for 30s (`packages/app-config/src/messenger.ts` CACHE\_TTL\_MS) — wait out the TTL
   after editing the row before reloading.
 - Locale for evidence shots: `window.__LOBE_STORES.global().switchLocale('zh-CN')` then reload.
+
 ### D21. ✅ WORKS — when `click @ref` reports Done but the React onClick never fires, click via `eval` `element.click()`
 
 **Situation**: on a dense list row (acceptance check rows with hover-revealed ActionIcons and
@@ -1496,3 +1497,37 @@ env -u HTTP_PROXY -u HTTPS_PROXY -u http_proxy -u https_proxy -u ALL_PROXY -u al
 
 Symptom fingerprint: every auth POST answers 307 in \~25ms with `application-code` time present, and
 the prewarm warning mentions `redirect count exceeded`.
+
+### C12. A globally installed `lh` ingest-report can silently create an ORPHAN verify run (no acceptance attach) when the branch's CLI contract is newer
+
+- **Situation**: publishing/ingesting a report while verifying a branch that extends the verify CLI
+  (e.g. adds `--subject` / acceptance attach). The global `lh` accepted the report, returned a
+  `verifyRunId`, and printed no error — but the run's `acceptance_id` was NULL, so it never appeared
+  on the acceptance page, which reads as "my ingest didn't show up / the page is stale".
+- **Doesn't work**: trusting a green `verifyRunId` from the global CLI as proof of attachment, or
+  passing `--subject` to it (`error: unknown option '--subject'` is the tell that it predates the
+  branch contract).
+- **Works**: run the branch's own CLI from the worktree — `cd apps/cli && bun src/index.ts verify
+ingest-report <dir> --subject topic:<id> …` — and verify attachment in the DB
+  (`select acceptance_id from verify_runs where id='<runId>'`) before driving the UI against it.
+
+### D22. ✅ WORKS — driving the manual-approval intervention chain (批准 / 提交 cards) in web chat
+
+- **Situation**: a real agent turn under the default manual-approval mode stops at an
+  intervention card (`lobe-activator → 激活工具`, `Task Tools → createTask`, …) after EVERY tool
+  call. `snapshot -i` does not reliably expose the card's option rows / submit button as refs,
+  and one turn can chain 4–5 sequential interventions — a fixed approve-once script stalls.
+- **Doesn't work**: matching the option row by exact text `批准` (the row nests the label; the
+  filtered element list often misses it), or assuming one approval finishes the turn.
+- **Works**: the "approve" option is pre-selected by default, so clicking the card's **提交**
+  button alone approves. Loop until quiescent: each round, find the LAST visible element whose
+  text includes `提交` via `eval`, tag it `data-probe`, click through agent-browser (trusted
+  input), then poll `chat().operations` for zero `running` AND no remaining 提交 button before
+  declaring the turn done. Log which tool each round approved by grabbing the last visible
+  `… → …` header text. One creation turn (activate + createTask + setTaskVerify + runTask)
+  took 5 approvals.
+- **Also measured (fixture note)**: a task's verify requirement is visible to the RUNNER agent,
+  which will optimize toward the acceptance criteria (a "200 字，no code" instruction with a
+  "≥1500 字 + Python code" requirement produced a 3.5k-char deliverable) — a contradictory-criteria
+  fixture still fails verification, but not for the reason you scripted; assert on the verifier's
+  recorded rationale, not on your intended contradiction.
