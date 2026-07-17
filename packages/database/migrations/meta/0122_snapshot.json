@@ -6,7 +6,7 @@
   },
   "dialect": "postgresql",
   "enums": {},
-  "id": "dd3b65b0-0a47-4ecd-9b41-d02275ab5eee",
+  "id": "2cd76389-3e3a-48a8-81b9-ed81ff418b77",
   "policies": {},
   "prevId": "e8808417-c854-41cf-81c3-f21af96ae6b8",
   "roles": {},
@@ -20593,6 +20593,13 @@
           "notNull": true,
           "default": "'pending'"
         },
+        "visibility": {
+          "name": "visibility",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'public'"
+        },
         "requirement": {
           "name": "requirement",
           "type": "text",
@@ -20703,6 +20710,33 @@
           "columns": [
             {
               "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "acceptances_workspace_visibility_idx": {
+          "name": "acceptances_workspace_visibility_idx",
+          "columns": [
+            {
+              "expression": "workspace_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "visibility",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "user_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"

@@ -1,1 +1,0 @@
-ALTER TABLE "verify_check_results" ADD COLUMN IF NOT EXISTS "user_decision_detail" jsonb;

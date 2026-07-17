@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { acceptances, topics, users, verifyRuns } from '../../schemas';
+import { acceptances, topics, users, verifyRuns, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { AcceptanceModel } from '../acceptance';
 import { VerifyRunModel } from '../verifyRun';
@@ -42,6 +42,24 @@ describe('AcceptanceModel', () => {
     });
     expect(second.id).toBe(first.id);
     expect(second.requirement).toBe('All checks green');
+  });
+
+  it('defaults visibility by scope: personal public, workspace private', async () => {
+    const personal = new AcceptanceModel(serverDB, userId);
+    const personalRow = await personal.ensureForSubject('topic', topicId);
+    expect(personalRow.visibility).toBe('public');
+
+    const [ws] = await serverDB
+      .insert(workspaces)
+      .values({ name: 'acceptance-vis-ws', primaryOwnerId: userId, slug: 'acceptance-vis-ws' })
+      .returning();
+    const scoped = new AcceptanceModel(serverDB, userId, ws.id);
+    const scopedRow = await scoped.ensureForSubject('topic', topicId);
+    expect(scopedRow.visibility).toBe('private');
+
+    // The deliberate override survives the scope default.
+    await scoped.update(scopedRow.id, { visibility: 'public' });
+    expect((await scoped.findById(scopedRow.id))?.visibility).toBe('public');
   });
 
   it('scopes subject lookup per owner', async () => {

@@ -225,8 +225,9 @@ export function defineConfig() {
     // standalone verification report viewer — the run id in the URL is the
     // read-only capability for viewing the report without a signed-in session.
     '/verify/(.*)',
-    // acceptance decision page — same shape as /verify/:id: the id in the URL
-    // is the read-only capability, no signed-in session required.
+    // acceptance decision page — same shape as /verify/:id: the id is the
+    // capability; the tRPC layer enforces the aggregate's `visibility` (a
+    // private aggregate 404s for anyone but the owner / workspace members).
     '/acceptance/(.*)',
     // messenger verify-im — page itself handles unauth (in-page sign-in CTA)
     // and the random_id token is the actual capability check; no need for
