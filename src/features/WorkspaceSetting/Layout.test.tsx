@@ -35,6 +35,7 @@ vi.mock('./hooks/useCategory', () => ({
         { key: 'apikey', label: 'API Keys' },
         { key: 'service-model', label: 'Default Models' },
         { key: 'credential', label: 'Credentials' },
+        { key: 'stats', label: 'Stats' },
         { key: 'usage', label: 'Usage' },
       ],
     },
@@ -63,6 +64,7 @@ describe('WorkspaceSettingsContentLayout', () => {
     ['apikey', 'API Keys'],
     ['service-model', 'Default Models'],
     ['credential', 'Credentials'],
+    ['stats', 'Stats'],
   ])('renders the compact header for the %s tab', (tab, title) => {
     const html = renderLayout(tab);
 

@@ -90,7 +90,7 @@ describe('WorkspaceStatsSetting', () => {
     expect(screen.getByText('https://example.com/avatar.png')).toBeInTheDocument();
     expect(screen.getByText('grace (Removed)')).toBeInTheDocument();
     expect(screen.getByText('alan')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'tab.stats' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading')).not.toBeInTheDocument();
     expect(statsPagePropsMock).toHaveBeenCalledWith(
       expect.objectContaining({ showSettingHeader: false }),
     );

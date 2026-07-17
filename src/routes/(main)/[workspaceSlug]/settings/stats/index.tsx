@@ -5,7 +5,6 @@ import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useFetchWorkspaceMembers } from '@/business/client/hooks/useFetchWorkspaceMembers';
-import WorkspaceSettingsTitle from '@/features/WorkspaceSetting/Title';
 import Page from '@/routes/(main)/settings/stats';
 import WorkspaceWelcome from '@/routes/(main)/settings/stats/features/overview/WorkspaceWelcome';
 import { type UserDisplay } from '@/routes/(main)/settings/stats/types';
@@ -25,7 +24,6 @@ interface WorkspaceStatsMember {
 
 const WorkspaceStatsSetting = () => {
   const { t } = useTranslation('auth');
-  const { t: tSetting } = useTranslation('setting');
 
   const { data: members = [] } = useFetchWorkspaceMembers({ includeDeleted: true });
 
@@ -50,7 +48,6 @@ const WorkspaceStatsSetting = () => {
 
   return (
     <Flexbox gap={16}>
-      <WorkspaceSettingsTitle>{tSetting('tab.stats')}</WorkspaceSettingsTitle>
       <Page
         enableUserDimension
         headerNode={<WorkspaceWelcome />}
