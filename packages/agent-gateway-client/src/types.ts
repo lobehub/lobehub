@@ -78,6 +78,18 @@ export interface StreamChunkData {
   images?: any[];
   reasoning?: string;
   reasoningParts?: Array<{ text: string; type: 'text' } | { image: string; type: 'image' }>;
+  /**
+   * `lh hetero exec` coalesces main-agent text deltas into full-text
+   * snapshots: `content` carries the WHOLE message so far and must replace
+   * the accumulated text, not append to it. Absent on plain deltas.
+   */
+  snapshotMode?: 'replace';
+  /**
+   * Operation-monotonic sequence for `replace` snapshots. Consumers drop a
+   * snapshot whose seq is ≤ the last applied one — that is a redelivery
+   * (producer batch retry) or an out-of-order duplicate.
+   */
+  snapshotSeq?: number;
   toolsCalling?: any[];
 }
 

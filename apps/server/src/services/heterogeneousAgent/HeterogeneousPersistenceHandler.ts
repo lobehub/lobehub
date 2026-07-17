@@ -121,6 +121,15 @@ interface OperationState {
   operationId: string;
   processedKeys: Set<string>;
   /**
+   * Publish gate, peer of `processedKeys` but for the live-stream sink.
+   * Persistence and publish fail independently: a batch can persist fully
+   * yet die inside the publish loop — its retry must republish ONLY the
+   * unpublished tail — while a batch whose tRPC response was lost after
+   * full success must republish nothing. Keyed by `eventKey`, latched only
+   * after the event's XADD succeeds.
+   */
+  publishedKeys: Set<string>;
+  /**
    * Run-global DB index for every tool message in the topic, keyed by
    * `tool_call_id`. Main and subagent reducers keep only their per-turn maps;
    * this map lets a `tool_result` land even when its `tools_calling` was
@@ -251,6 +260,25 @@ export class HeterogeneousPersistenceHandler {
     // picking up this operation always sees the latest content in the DB,
     // even if it never processes a step boundary or terminal event.
     await this.flushBatchContent(state);
+  }
+
+  /**
+   * Events of the batch not yet successfully published to the live stream.
+   * See `OperationState.publishedKeys` for why this gate is separate from
+   * the persistence dedupe. Without state (already finished, or a retry on
+   * a cold replica) every event is treated as unpublished — degrading to
+   * republish-all, which text consumers de-dup via `snapshotSeq`.
+   */
+  filterUnpublishedEvents(operationId: string, events: AgentStreamEvent[]): AgentStreamEvent[] {
+    const state = operationStates.get(operationId);
+    if (!state) return events;
+
+    return events.filter((event) => !state.publishedKeys.has(eventKey(event)));
+  }
+
+  /** Latch an event as published so a batch retry skips its XADD. */
+  markEventPublished(operationId: string, event: AgentStreamEvent): void {
+    operationStates.get(operationId)?.publishedKeys.add(eventKey(event));
   }
 
   /**
@@ -428,6 +456,7 @@ export class HeterogeneousPersistenceHandler {
       main: createMainAgentRunState(currentAssistantMessageId),
       operationId,
       processedKeys: new Set(),
+      publishedKeys: new Set(),
       toolMsgIdByCallId: new Map(),
       topicId,
     };

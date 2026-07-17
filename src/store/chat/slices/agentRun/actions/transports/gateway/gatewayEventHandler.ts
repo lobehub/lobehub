@@ -416,6 +416,10 @@ export const createGatewayEventHandler = (
   // Accumulated content from stream chunks (reset on each stream_start)
   let accumulatedContent = '';
   let accumulatedReasoning = '';
+  // Last applied `replace`-snapshot seq. Operation-monotonic (the producer
+  // never resets it across messages), so unlike the accumulators it is NOT
+  // reset on stream boundaries — a seq ≤ this is a redelivered duplicate.
+  let lastTextSnapshotSeq = 0;
 
   // Tracks whether any server-confirmed state has actually arrived
   // (server-assigned assistant id, streamed text/reasoning/tools, or a SoT
@@ -599,19 +603,36 @@ export const createGatewayEventHandler = (
           if (!data) return;
 
           if (data.chunkType === 'text' && data.content) {
-            // Text after reasoning marks the end of the thinking pass — see
-            // `StreamingHandler.handleText` for the same transition.
-            endReasoningIfNeeded();
-            accumulatedContent += data.content;
-            hasStreamedContent = true;
-            get().internal_dispatchMessage(
-              {
-                id: currentAssistantMessageId,
-                type: 'updateMessage',
-                value: { content: accumulatedContent },
-              },
-              dispatchContext,
-            );
+            // `lh hetero exec` coalesces main-agent text into full-text
+            // `replace` snapshots; native gateway runs stream plain deltas.
+            const snapshotSeq =
+              data.snapshotMode === 'replace' && typeof data.snapshotSeq === 'number'
+                ? data.snapshotSeq
+                : undefined;
+
+            if (snapshotSeq !== undefined && snapshotSeq <= lastTextSnapshotSeq) {
+              // Redelivered snapshot (producer batch retry / duplicate on the
+              // stream) — already applied, appending it would duplicate text.
+            } else {
+              // Text after reasoning marks the end of the thinking pass — see
+              // `StreamingHandler.handleText` for the same transition.
+              endReasoningIfNeeded();
+              if (snapshotSeq === undefined) {
+                accumulatedContent += data.content;
+              } else {
+                lastTextSnapshotSeq = snapshotSeq;
+                accumulatedContent = data.content;
+              }
+              hasStreamedContent = true;
+              get().internal_dispatchMessage(
+                {
+                  id: currentAssistantMessageId,
+                  type: 'updateMessage',
+                  value: { content: accumulatedContent },
+                },
+                dispatchContext,
+              );
+            }
           }
 
           if (data.chunkType === 'reasoning' && data.reasoning) {
