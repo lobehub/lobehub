@@ -162,6 +162,13 @@ export class VerifyService {
     id: string;
   }) => lambdaClient.acceptance.reviewChecks.mutate(input);
 
+  /**
+   * Feedback addressed to a check group (business category) — for concerns
+   * that belong to no single check yet must reach the next round.
+   */
+  addGroupFeedback = (input: { category: string; comment: string; id: string }) =>
+    lambdaClient.acceptance.addGroupFeedback.mutate(input);
+
   // ---- per-run plan ----
   getVerifyState = (operationId: string): Promise<VerifyStateResponse | null> =>
     lambdaClient.verify.getVerifyState.query({

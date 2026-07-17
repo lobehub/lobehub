@@ -37,6 +37,10 @@ import { useParams } from 'react-router';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import AgentProfilePopup from '@/features/AgentProfileCard/AgentProfilePopup';
+// The workspace-scoped mutate — a bare `import { mutate } from 'swr'` misses
+// every `useClientDataSWR` subscriber (augmented keys + custom cache provider).
+import { mutate as globalMutate } from '@/libs/swr';
+import { verifyKeys } from '@/libs/swr/keys';
 import { verifyService } from '@/services/verify';
 
 import { useAcceptanceBundle } from '../hooks';
@@ -323,6 +327,9 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
       setActionError(undefined);
       await action();
       await mutate();
+      // The list panel derives its glyph from the same status — a decision
+      // here must not leave a stale icon there until a hard refresh.
+      void globalMutate(verifyKeys.acceptances());
       return true;
     } catch (cause) {
       setActionError(cause instanceof Error ? cause.message : t('acceptance.actionError'));
@@ -341,6 +348,11 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
   // the feedback the next verify round reads.
   const handleReview = (input: CheckReviewInput) =>
     runAction(() => verifyService.reviewChecks({ id: acceptance.id, ...input }));
+
+  // Group-scoped feedback — for concerns that belong to no single check (the
+  // checks themselves may be accepted) yet must reach the next round.
+  const handleGroupFeedback = (category: string, comment: string) =>
+    runAction(() => verifyService.addGroupFeedback({ category, comment, id: acceptance.id }));
 
   const decisionBanner = () => {
     if (LIVE_STATUSES.has(acceptance.status))
@@ -371,7 +383,8 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
           align={'center'}
           className={styles.banner}
           gap={10}
-          style={{ background: cssVar.colorSuccessBg }}
+          // Neutral fill — the receipt is a quiet archive line, not a callout.
+          style={{ background: cssVar.colorFillQuaternary }}
         >
           <Icon color={cssVar.colorSuccess} icon={BadgeCheck} size={18} />
           <Flexbox flex={1} gap={2}>
@@ -419,7 +432,10 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
         align={'center'}
         className={styles.banner}
         gap={12}
-        style={{ background: hasException ? cssVar.colorWarningBg : cssVar.colorSuccessBg }}
+        // Neutral fill for the clean case — the green verdict belongs to the
+        // user's accept, not to a banner asking for it. Exceptions keep the
+        // warning wash: they change what the user is signing.
+        style={{ background: hasException ? cssVar.colorWarningBg : cssVar.colorFillQuaternary }}
       >
         <Icon
           color={hasException ? cssVar.colorWarning : cssVar.colorSuccess}
@@ -545,7 +561,16 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
                     className={cx(styles.scopeChip, styles.scopeLink)}
                     gap={4}
                     title={t('acceptance.origin.openTopic')}
-                    onClick={() => window.open(`/chat?topic=${origin.topic!.id}`, '_blank')}
+                    onClick={() =>
+                      window.open(
+                        // The canonical conversation route needs the agent;
+                        // without one, the legacy topic deep-link is the way in.
+                        origin.agent
+                          ? `/agent/${origin.agent.id}/${origin.topic!.id}`
+                          : `/chat?topic=${origin.topic!.id}`,
+                        '_blank',
+                      )
+                    }
                   >
                     <Icon icon={MessagesSquare} size={13} />
                     {origin.topic.title ?? subject.title ?? origin.topic.id}
@@ -674,8 +699,11 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
             {rounds.length > 1 && (
               <Select
                 size={'small'}
-                style={{ width: 110 }}
+                // Filled + the Segmented's exact height so the two read as
+                // one control family, not a stray bordered input.
+                style={{ height: 34, width: 110 }}
                 value={roundFilter === null ? 'all' : String(roundFilter)}
+                variant={'filled'}
                 options={[
                   { label: t('acceptance.filter.roundAll'), value: 'all' },
                   ...[...rounds].reverse().map((round) => ({
@@ -704,10 +732,13 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
             canReview={isOwner}
             checks={checks}
             collapsedGroups={collapsedGroups}
+            currentRound={currentRound?.run.roundIndex ?? 0}
             expanded={expanded}
             filter={filter}
+            groupFeedback={acceptance.metadata?.groupFeedback ?? []}
             reviewPending={pending}
             round={roundFilter}
+            onGroupFeedback={handleGroupFeedback}
             onReview={handleReview}
             onRound={gotoRound}
             onToggleGroup={(key) =>

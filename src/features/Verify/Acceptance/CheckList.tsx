@@ -1,6 +1,6 @@
 'use client';
 
-import type { AcceptanceReviewAnnotation } from '@lobechat/types';
+import type { AcceptanceGroupFeedback, AcceptanceReviewAnnotation } from '@lobechat/types';
 import { ActionIcon, copyToClipboard, Flexbox, Icon, Image, Tag, Text, Tooltip } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
@@ -17,6 +17,7 @@ import {
   Film,
   HelpCircle,
   Images,
+  MessageSquarePlus,
   MessageSquareX,
   Repeat,
   XCircle,
@@ -32,6 +33,7 @@ import {
 } from '../components/EvidenceComparisonCard';
 import { AnnotatedImage } from './Annotation';
 import { openCheckRejectModal } from './CheckRejectModal';
+import { openGroupFeedbackModal } from './modals';
 
 export type AcceptanceCheck = AcceptanceBundle['checks'][number];
 export type AcceptanceCheckState = AcceptanceCheck['state'];
@@ -850,7 +852,7 @@ const CheckRow = memo<{
               style={{
                 background: cssVar.colorFillQuaternary,
                 borderRadius: cssVar.borderRadius,
-                width: 'fit-content',
+                width: '100%',
               }}
             >
               <Text fontSize={12} type={'secondary'}>
@@ -984,8 +986,14 @@ interface CheckListProps {
   canReview: boolean;
   checks: AcceptanceCheck[];
   collapsedGroups: Set<string>;
+  /** The latest round index — arbitrates group-feedback staleness. */
+  currentRound: number;
   expanded: Set<string>;
   filter: CheckFilter;
+  /** Group-scoped feedback entries recorded on the aggregate. */
+  groupFeedback: AcceptanceGroupFeedback[];
+  /** Record group-scoped feedback; resolves true when the write landed. */
+  onGroupFeedback: (category: string, comment: string) => Promise<boolean>;
   /** Record the user's verdict; resolves true when the write landed. */
   onReview: (input: CheckReviewInput) => Promise<boolean>;
   onRound: (round: number) => void;
@@ -1003,8 +1011,11 @@ const CheckList = memo<CheckListProps>(
     canReview,
     checks,
     collapsedGroups,
+    currentRound,
     expanded,
     filter,
+    groupFeedback,
+    onGroupFeedback,
     onReview,
     onRound,
     onToggleGroup,
@@ -1047,9 +1058,22 @@ const CheckList = memo<CheckListProps>(
           const unaccepted = reviewableChecks.filter(
             (check) => userReviewState(check) !== 'accepted',
           );
+          // The header counts what the REVIEWER cares about: how many they
+          // signed off, how many the verifier flagged, how many they sent
+          // back — not the verifier's pass tally alone.
+          const acceptedCount = reviewableChecks.filter(
+            (check) => userReviewState(check) === 'accepted',
+          ).length;
+          const rejectedCount = reviewableChecks.filter(
+            (check) => userReviewState(check) === 'rejected',
+          ).length;
+          const exceptionCount = groupChecks_.filter((check) => isException(check)).length;
           // Everything passed AND the user signed all of it off — the ratio
           // itself turns into the green receipt, no separate right-side note.
           const allVerified = passed === groupChecks_.length && isGroupFullyAccepted(groupChecks_);
+          // Group-scoped feedback targets the raw category ('' = uncategorized).
+          const rawCategory = key === 'uncategorized' ? '' : label;
+          const feedbackEntries = groupFeedback.filter((entry) => entry.category === rawCategory);
 
           return (
             <Fragment key={key}>
@@ -1078,9 +1102,24 @@ const CheckList = memo<CheckListProps>(
                     {t('acceptance.group.allVerified', { passed, total: groupChecks_.length })}
                   </Flexbox>
                 ) : (
-                  <Text fontSize={12} type={'secondary'}>
-                    {t('acceptance.group.passRatio', { passed, total: groupChecks_.length })}
-                  </Text>
+                  <Flexbox horizontal align={'center'} gap={8}>
+                    <Text fontSize={12} type={'secondary'}>
+                      {t('acceptance.group.acceptedRatio', {
+                        accepted: acceptedCount,
+                        total: groupChecks_.length,
+                      })}
+                    </Text>
+                    {exceptionCount > 0 && (
+                      <Text style={{ color: cssVar.colorError, fontSize: 12 }}>
+                        {t('acceptance.group.failedCount', { count: exceptionCount })}
+                      </Text>
+                    )}
+                    {rejectedCount > 0 && (
+                      <Text style={{ color: cssVar.colorError, fontSize: 12 }}>
+                        {t('acceptance.group.rejectedCount', { count: rejectedCount })}
+                      </Text>
+                    )}
+                  </Flexbox>
                 )}
                 {/* Bulk accept sits by the ratio it settles, hover-revealed —
                     a full-width column of always-on buttons begs misclicks. */}
@@ -1123,6 +1162,24 @@ const CheckList = memo<CheckListProps>(
                       {t('acceptance.review.acceptAllDone')}
                     </Flexbox>
                   ))}
+                {/* Group-scoped feedback — the channel for concerns that
+                    belong to no single check yet must reach the next round. */}
+                {canReview && (
+                  <span className={'acceptance-group-actions'}>
+                    <ActionIcon
+                      icon={MessageSquarePlus}
+                      size={'small'}
+                      title={t('acceptance.group.feedbackAction')}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        openGroupFeedbackModal({
+                          groupLabel: label,
+                          onConfirm: (comment) => onGroupFeedback(rawCategory, comment),
+                        });
+                      }}
+                    />
+                  </span>
+                )}
                 <Flexbox flex={1} />
                 {collapsed ? (
                   // Fixed-size placeholder keeps the header height stable across toggles.
@@ -1155,6 +1212,42 @@ const CheckList = memo<CheckListProps>(
                   }}
                 />
               </Flexbox>
+              {/* Group feedback trail — newest first; entries consumed by a
+                  later round stay readable but visually recede. */}
+              {!collapsed && feedbackEntries.length > 0 && (
+                <Flexbox gap={10} paddingBlock={10} paddingInline={16}>
+                  {[...feedbackEntries].reverse().map((entry) => {
+                    const stale = entry.roundIndex < currentRound;
+                    return (
+                      <Flexbox
+                        gap={4}
+                        key={`${entry.createdAt}-${entry.roundIndex}`}
+                        style={stale ? { opacity: 0.55 } : undefined}
+                      >
+                        <Flexbox horizontal align={'center'} gap={6}>
+                          <Icon
+                            color={stale ? cssVar.colorTextQuaternary : cssVar.colorError}
+                            icon={MessageSquarePlus}
+                            size={13}
+                          />
+                          <Text
+                            style={{
+                              color: stale ? cssVar.colorTextTertiary : cssVar.colorError,
+                              fontSize: 12,
+                            }}
+                          >
+                            {t('acceptance.group.feedbackLabel', { round: entry.roundIndex })}
+                          </Text>
+                          <Text fontSize={12} type={'secondary'}>
+                            {dayjs(entry.createdAt).format('MM-DD HH:mm')}
+                          </Text>
+                        </Flexbox>
+                        <Text style={{ fontSize: 12 }}>{entry.comment}</Text>
+                      </Flexbox>
+                    );
+                  })}
+                </Flexbox>
+              )}
               {!collapsed &&
                 rows.map((check) => (
                   <CheckRow
@@ -1180,6 +1273,8 @@ const CheckList = memo<CheckListProps>(
                   <Button
                     icon={<Icon icon={ChevronsDownUp} />}
                     size={'small'}
+                    // Quiet escape hatch — tertiary text, not a competing action.
+                    style={{ color: cssVar.colorTextTertiary }}
                     type={'text'}
                     onClick={() => onToggleGroup(key)}
                   >

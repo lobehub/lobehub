@@ -1,16 +1,41 @@
 'use client';
 
 import type { AcceptanceReviewAnnotation } from '@lobechat/types';
-import { Flexbox, Text, TextArea } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Text, TextArea } from '@lobehub/ui';
 import { Button, createModal, type ModalInstance, useModalContext } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { t } from 'i18next';
-import { memo, useEffect, useState } from 'react';
+import { Trash2, ZoomIn, ZoomOut } from 'lucide-react';
+import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { AnnotationCanvas } from './Annotation';
 
 const styles = createStaticStyles(({ css }) => ({
+  regionIndex: css`
+    flex: none;
+
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 18px;
+    color: #fff;
+    text-align: center;
+
+    background: ${cssVar.colorError};
+  `,
+  sidePanel: css`
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    gap: 12px;
+
+    width: 300px;
+    min-width: 0;
+  `,
   thumb: css`
     cursor: pointer;
 
@@ -30,6 +55,24 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   thumbActive: css`
     border-color: ${cssVar.colorPrimary};
+  `,
+  /** The zoomable stage — its native scrolling doubles as panning. */
+  viewport: css`
+    overflow: auto;
+
+    max-height: 58vh;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
+
+    background: ${cssVar.colorFillQuaternary};
+  `,
+  zoomLabel: css`
+    min-width: 44px;
+
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    color: ${cssVar.colorTextSecondary};
+    text-align: center;
   `,
 }));
 
@@ -69,6 +112,8 @@ const readDraft = (key: string | undefined): RejectDraft | null => {
   }
 };
 
+const ZOOM_STEPS = [0.5, 0.75, 1, 1.5, 2, 3, 4];
+
 interface CheckRejectModalProps {
   checkTitle: string;
   /** Stable key (the check id) for the refresh-surviving draft cache. */
@@ -98,6 +143,22 @@ const CheckRejectContent = memo<CheckRejectModalProps>(
           .map((entry) => ({ ...entry, key: nextAnnotationKey() })),
     );
 
+    // Zoom-to-inspect: the stage scrolls natively (trackpad = pan), the
+    // image width is viewport × zoom, and rects stay put because they are
+    // normalized to the image box.
+    const [zoom, setZoom] = useState(1);
+    const viewportRef = useRef<HTMLDivElement>(null);
+    const [viewportWidth, setViewportWidth] = useState<number>();
+    useLayoutEffect(() => {
+      const node = viewportRef.current;
+      if (!node) return;
+      const measure = () => setViewportWidth(node.clientWidth);
+      measure();
+      const observer = new ResizeObserver(measure);
+      observer.observe(node);
+      return () => observer.disconnect();
+    }, [activeEvidenceId]);
+
     // Persist the draft as it is typed; an empty draft cleans the slot up.
     useEffect(() => {
       if (!draftKey) return;
@@ -117,6 +178,13 @@ const CheckRejectContent = memo<CheckRejectModalProps>(
 
     const activeEvidence = evidence.find((item) => item.id === activeEvidenceId);
     const activeAnnotations = annotations.filter((item) => item.evidenceId === activeEvidenceId);
+
+    const stepZoom = (direction: 1 | -1) =>
+      setZoom((current) => {
+        const index = ZOOM_STEPS.findIndex((step) => Math.abs(step - current) < 0.001);
+        const at = index === -1 ? 2 : index;
+        return ZOOM_STEPS[Math.min(Math.max(at + direction, 0), ZOOM_STEPS.length - 1)];
+      });
 
     // The reject IS its feedback — at least one note (global or per-region).
     const canSubmit =
@@ -146,6 +214,22 @@ const CheckRejectContent = memo<CheckRejectModalProps>(
 
     const hasEvidence = evidence.length > 0;
 
+    const commentField = (
+      <Flexbox gap={6}>
+        {hasEvidence && (
+          <Text fontSize={12} type={'secondary'}>
+            {translate('acceptance.review.supplement')}
+          </Text>
+        )}
+        <TextArea
+          autoSize={{ maxRows: 6, minRows: hasEvidence ? 2 : 3 }}
+          placeholder={translate('acceptance.review.rejectPlaceholder')}
+          value={comment}
+          onChange={(event) => setComment(event.target.value)}
+        />
+      </Flexbox>
+    );
+
     return (
       <>
         {/* Only the body scrolls — the action bar below stays pinned to the
@@ -161,80 +245,107 @@ const CheckRejectContent = memo<CheckRejectModalProps>(
             {translate('acceptance.review.rejectDescription', { title: checkTitle })}
           </Text>
 
-          {/* Circling the evidence is the primary feedback act; the free-form note
-          below is supplementary context. Without evidence, the note IS the
-          feedback and stands alone. */}
-          {hasEvidence && (
-            <Flexbox gap={8}>
-              <Flexbox gap={2}>
-                <Text strong fontSize={13}>
-                  {translate('acceptance.review.annotate')}
-                </Text>
-                <Text fontSize={12} type={'secondary'}>
-                  {translate('acceptance.review.annotateHint')}
-                </Text>
-              </Flexbox>
-              {evidence.length > 1 && (
-                <Flexbox horizontal gap={8} wrap={'wrap'}>
-                  {evidence.map((item) => (
-                    <div
-                      key={item.id}
-                      className={cx(
-                        styles.thumb,
-                        item.id === activeEvidenceId && styles.thumbActive,
-                      )}
-                      onClick={() => setActiveEvidenceId(item.id)}
-                    >
-                      <img alt={''} src={item.fileUrl} />
-                    </div>
-                  ))}
+          {/* Composer-style review: the zoomable evidence stage on the left,
+              region comments alongside on the right — circle a spot, write
+              next to it, never below the fold. */}
+          {hasEvidence ? (
+            <Flexbox horizontal align={'stretch'} gap={16} wrap={'wrap'}>
+              <Flexbox flex={1} gap={8} style={{ minWidth: 320 }}>
+                <Flexbox horizontal align={'center'} gap={8}>
+                  <Text fontSize={12} type={'secondary'}>
+                    {translate('acceptance.review.annotateHint')}
+                  </Text>
+                  <Flexbox flex={1} />
+                  <ActionIcon
+                    disabled={zoom <= ZOOM_STEPS[0]}
+                    icon={ZoomOut}
+                    size={'small'}
+                    title={translate('acceptance.review.zoomOut')}
+                    onClick={() => stepZoom(-1)}
+                  />
+                  <span className={styles.zoomLabel}>{Math.round(zoom * 100)}%</span>
+                  <ActionIcon
+                    disabled={zoom >= ZOOM_STEPS.at(-1)!}
+                    icon={ZoomIn}
+                    size={'small'}
+                    title={translate('acceptance.review.zoomIn')}
+                    onClick={() => stepZoom(1)}
+                  />
                 </Flexbox>
-              )}
-              {activeEvidence && (
-                <AnnotationCanvas
-                  annotations={activeAnnotations}
-                  src={activeEvidence.fileUrl}
-                  onDraw={(rect) =>
-                    setAnnotations((previous) => [
-                      ...previous,
-                      {
-                        comment: '',
-                        evidenceId: activeEvidence.id,
-                        key: nextAnnotationKey(),
-                        rect,
-                      },
-                    ])
-                  }
-                  onRemove={(index) => {
-                    const target = activeAnnotations[index];
-                    if (target)
-                      setAnnotations((previous) =>
-                        previous.filter((item) => item.key !== target.key),
-                      );
-                  }}
-                  onUpdate={(index, rect) => {
-                    const target = activeAnnotations[index];
-                    if (target)
-                      setAnnotations((previous) =>
-                        previous.map((item) =>
-                          item.key === target.key ? { ...item, rect } : item,
-                        ),
-                      );
-                  }}
-                />
-              )}
-              {activeAnnotations.map((annotation, index) => {
-                return (
+                {evidence.length > 1 && (
+                  <Flexbox horizontal gap={8} wrap={'wrap'}>
+                    {evidence.map((item) => (
+                      <div
+                        key={item.id}
+                        className={cx(
+                          styles.thumb,
+                          item.id === activeEvidenceId && styles.thumbActive,
+                        )}
+                        onClick={() => setActiveEvidenceId(item.id)}
+                      >
+                        <img alt={''} src={item.fileUrl} />
+                      </div>
+                    ))}
+                  </Flexbox>
+                )}
+                {activeEvidence && (
+                  <div className={styles.viewport} ref={viewportRef}>
+                    <AnnotationCanvas
+                      annotations={activeAnnotations}
+                      src={activeEvidence.fileUrl}
+                      imageWidth={
+                        // -2 keeps the frame's own border inside the viewport
+                        // at fit zoom, so no phantom horizontal scrollbar.
+                        viewportWidth ? Math.max(viewportWidth * zoom - 2, 0) : undefined
+                      }
+                      onDraw={(rect) =>
+                        setAnnotations((previous) => [
+                          ...previous,
+                          {
+                            comment: '',
+                            evidenceId: activeEvidence.id,
+                            key: nextAnnotationKey(),
+                            rect,
+                          },
+                        ])
+                      }
+                      onRemove={(index) => {
+                        const target = activeAnnotations[index];
+                        if (target)
+                          setAnnotations((previous) =>
+                            previous.filter((item) => item.key !== target.key),
+                          );
+                      }}
+                      onUpdate={(index, rect) => {
+                        const target = activeAnnotations[index];
+                        if (target)
+                          setAnnotations((previous) =>
+                            previous.map((item) =>
+                              item.key === target.key ? { ...item, rect } : item,
+                            ),
+                          );
+                      }}
+                    />
+                  </div>
+                )}
+              </Flexbox>
+
+              <div className={styles.sidePanel}>
+                <Text strong fontSize={13}>
+                  {translate('acceptance.review.regionComments')}
+                </Text>
+                {activeAnnotations.length === 0 && (
+                  <Text fontSize={12} type={'secondary'}>
+                    {translate('acceptance.review.regionCommentsEmpty')}
+                  </Text>
+                )}
+                {activeAnnotations.map((annotation, index) => (
                   <Flexbox horizontal align={'flex-start'} gap={8} key={annotation.key}>
-                    <Text
-                      fontSize={12}
-                      style={{ flex: 'none', lineHeight: '30px' }}
-                      type={'secondary'}
-                    >
-                      {index + 1}.
-                    </Text>
+                    <span className={styles.regionIndex} style={{ marginBlockStart: 6 }}>
+                      {index + 1}
+                    </span>
                     <TextArea
-                      autoSize={{ maxRows: 4, minRows: 1 }}
+                      autoSize={{ maxRows: 5, minRows: 1 }}
                       style={{ flex: 1 }}
                       value={annotation.comment}
                       placeholder={translate('acceptance.review.annotationPlaceholder', {
@@ -250,25 +361,25 @@ const CheckRejectContent = memo<CheckRejectModalProps>(
                         )
                       }
                     />
+                    <ActionIcon
+                      icon={Trash2}
+                      size={'small'}
+                      style={{ marginBlockStart: 2 }}
+                      title={translate('acceptance.review.removeRegion')}
+                      onClick={() =>
+                        setAnnotations((previous) =>
+                          previous.filter((item) => item.key !== annotation.key),
+                        )
+                      }
+                    />
                   </Flexbox>
-                );
-              })}
+                ))}
+                {commentField}
+              </div>
             </Flexbox>
+          ) : (
+            commentField
           )}
-
-          <Flexbox gap={6}>
-            {hasEvidence && (
-              <Text fontSize={12} type={'secondary'}>
-                {translate('acceptance.review.supplement')}
-              </Text>
-            )}
-            <TextArea
-              autoSize={{ maxRows: 6, minRows: hasEvidence ? 2 : 3 }}
-              placeholder={translate('acceptance.review.rejectPlaceholder')}
-              value={comment}
-              onChange={(event) => setComment(event.target.value)}
-            />
-          </Flexbox>
         </Flexbox>
 
         <Flexbox
@@ -293,7 +404,7 @@ const CheckRejectContent = memo<CheckRejectModalProps>(
 
 CheckRejectContent.displayName = 'AcceptanceCheckRejectContent';
 
-/** Per-check reject dialog — a note plus optional circled regions on evidence. */
+/** Per-check reject dialog — a zoomable annotation stage plus side comments. */
 export const openCheckRejectModal = (options: CheckRejectModalProps): ModalInstance =>
   createModal({
     content: <CheckRejectContent {...options} />,
@@ -311,5 +422,5 @@ export const openCheckRejectModal = (options: CheckRejectModalProps): ModalInsta
       },
     },
     title: t('acceptance.review.reject', { ns: 'verify' }),
-    width: 'min(92vw, 640px)',
+    width: 'min(96vw, 1080px)',
   });

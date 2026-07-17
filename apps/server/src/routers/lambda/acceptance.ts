@@ -282,6 +282,40 @@ export const acceptanceRouter = router({
   list: acceptanceProcedure.query(async ({ ctx }) => ctx.acceptanceService.listWithSubjects()),
 
   /**
+   * Feedback addressed to a check GROUP (business category) rather than any
+   * single check — for concerns that don't invalidate an individual check
+   * (which may well be accepted) but still need to reach the next round.
+   * Append-only, stamped with the current round for the same staleness rule
+   * as check-level rejects.
+   */
+  addGroupFeedback: acceptanceWriteProcedure
+    .input(
+      z.object({
+        category: z.string().max(200),
+        comment: z.string().trim().min(1).max(2000),
+        id: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const acceptance = await resolveAcceptance(ctx, input.id);
+      assertWorkspaceRowManageable(ctx, acceptance.userId, 'acceptance');
+
+      const { runs } = await ctx.acceptanceService.loadRounds(acceptance.id);
+      const entry = {
+        category: input.category,
+        comment: input.comment,
+        createdAt: new Date().toISOString(),
+        roundIndex: runs.at(-1)?.roundIndex ?? 0,
+      };
+      const metadata = {
+        ...acceptance.metadata,
+        groupFeedback: [...(acceptance.metadata?.groupFeedback ?? []), entry],
+      };
+      await ctx.acceptanceService.acceptanceModel.update(acceptance.id, { metadata });
+      return { entry, success: true };
+    }),
+
+  /**
    * The user's verdict on individual union checks — `accept` settles a check
    * for good ("已验收,不用再管"); `reject` records feedback the next verify
    * round reads as its re-tasking input. A group-level "accept all" is the

@@ -100,8 +100,25 @@ export interface AcceptanceConfig {
 }
 
 /** Generic acceptance extension bag for cross-subject state we have not modeled yet. */
+/**
+ * User feedback addressed to a check GROUP (business category) rather than any
+ * single check — the "this concern doesn't belong to a check I could reject"
+ * channel. Same staleness rule as check rejects: an entry is consumed once a
+ * round newer than `roundIndex` lands.
+ */
+export interface AcceptanceGroupFeedback {
+  /** The group's category label ('' targets the uncategorized bucket). */
+  category: string;
+  comment: string;
+  /** When the feedback was written (ISO 8601). */
+  createdAt: string;
+  /** The acceptance round that was current when the feedback was written. */
+  roundIndex: number;
+}
+
 export interface AcceptanceMetadata {
   [key: string]: unknown;
+  groupFeedback?: AcceptanceGroupFeedback[];
 }
 
 /**

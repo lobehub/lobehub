@@ -141,3 +141,69 @@ export const openRejectModal = (options: RejectContentProps): ModalInstance =>
     title: t('acceptance.actions.reject', { ns: 'verify' }),
     width: 'min(90vw, 480px)',
   });
+
+interface GroupFeedbackContentProps {
+  groupLabel: string;
+  /** Record the feedback; resolve true to close. */
+  onConfirm: (comment: string) => Promise<boolean>;
+}
+
+const GroupFeedbackContent = memo<GroupFeedbackContentProps>(({ groupLabel, onConfirm }) => {
+  const { t: translate } = useTranslation('verify');
+  const { close } = useModalContext();
+  const [comment, setComment] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleConfirm = async () => {
+    const trimmed = comment.trim();
+    if (!trimmed) return;
+    setLoading(true);
+    try {
+      if (await onConfirm(trimmed)) close();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Flexbox gap={16}>
+      <Text fontSize={13} type={'secondary'}>
+        {translate('acceptance.group.feedbackDescription', { label: groupLabel })}
+      </Text>
+      <TextArea
+        autoSize={{ maxRows: 8, minRows: 3 }}
+        placeholder={translate('acceptance.group.feedbackPlaceholder')}
+        value={comment}
+        onChange={(event) => setComment(event.target.value)}
+      />
+      <Flexbox horizontal gap={8} justify={'flex-end'}>
+        <Button disabled={loading} onClick={close}>
+          {translate('acceptance.actions.cancel')}
+        </Button>
+        <Button
+          disabled={!comment.trim()}
+          loading={loading}
+          type={'primary'}
+          onClick={handleConfirm}
+        >
+          {translate('acceptance.group.feedbackSubmit')}
+        </Button>
+      </Flexbox>
+    </Flexbox>
+  );
+});
+
+GroupFeedbackContent.displayName = 'AcceptanceGroupFeedbackContent';
+
+/**
+ * Group-scoped feedback dialog — the channel for concerns that belong to no
+ * single check (which may well be accepted) yet must reach the next round.
+ */
+export const openGroupFeedbackModal = (options: GroupFeedbackContentProps): ModalInstance =>
+  createModal({
+    content: <GroupFeedbackContent {...options} />,
+    footer: null,
+    maskClosable: true,
+    title: t('acceptance.group.feedbackTitle', { ns: 'verify' }),
+    width: 'min(90vw, 520px)',
+  });

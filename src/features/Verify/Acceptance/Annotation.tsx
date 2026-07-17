@@ -159,6 +159,12 @@ export interface DraftAnnotation {
 
 interface AnnotationCanvasProps {
   annotations: DraftAnnotation[];
+  /**
+   * Explicit display width (CSS px) — the host computes viewport × zoom.
+   * Rects are normalized to the image box, so zooming never remaps them; the
+   * host's scroll container doubles as panning when zoomed in.
+   */
+  imageWidth?: number;
   onDraw: (rect: Rect) => void;
   onRemove: (index: number) => void;
   /** Reposition / resize an existing region. */
@@ -179,7 +185,7 @@ const clamp01 = (value: number) => Math.min(Math.max(value, 0), 1);
  * corner handle to resize; each region carries its own note.
  */
 export const AnnotationCanvas = memo<AnnotationCanvasProps>(
-  ({ annotations, onDraw, onRemove, onUpdate, src }) => {
+  ({ annotations, imageWidth, onDraw, onRemove, onUpdate, src }) => {
     const imageRef = useRef<HTMLImageElement>(null);
     const [draft, setDraft] = useState<Rect | null>(null);
     const gestureRef = useRef<Gesture | null>(null);
@@ -217,6 +223,10 @@ export const AnnotationCanvas = memo<AnnotationCanvasProps>(
     return (
       <div
         className={`${styles.frame} ${styles.canvas}`}
+        // With an explicit zoomed width the frame must OUTGROW its host —
+        // capping at 100% would clip the image instead of letting the host
+        // viewport scroll/pan over it.
+        style={imageWidth ? { maxWidth: 'none' } : undefined}
         onMouseUp={endGesture}
         onMouseDown={(event) => {
           event.preventDefault();
@@ -254,7 +264,16 @@ export const AnnotationCanvas = memo<AnnotationCanvasProps>(
           });
         }}
       >
-        <img alt={''} className={styles.image} draggable={false} ref={imageRef} src={src} />
+        <img
+          alt={''}
+          className={styles.image}
+          draggable={false}
+          ref={imageRef}
+          src={src}
+          // Zoomed width comes from the host (viewport × zoom); the frame
+          // shrink-wraps the image, so overlays track exactly.
+          style={imageWidth ? { maxWidth: 'none', width: imageWidth } : undefined}
+        />
         {annotations.map((annotation, index) => (
           <div
             className={`${styles.rect} ${styles.editableRect}`}
