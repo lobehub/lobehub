@@ -44,6 +44,29 @@ describe('AcceptanceModel', () => {
     expect(second.requirement).toBe('All checks green');
   });
 
+  it('ensureForSubject backfills an EMPTY requirement from a later round', async () => {
+    const model = new AcceptanceModel(serverDB, userId);
+
+    // First ingest omitted the requirement — the aggregate starts blank.
+    const first = await model.ensureForSubject('topic', topicId);
+    expect(first.requirement).toBeNull();
+
+    // The first later round that supplies one fills the blank…
+    const second = await model.ensureForSubject('topic', topicId, {
+      requirement: 'Review UX polish ships end to end',
+    });
+    expect(second.id).toBe(first.id);
+    expect(second.requirement).toBe('Review UX polish ships end to end');
+    const persisted = await model.findBySubject('topic', topicId);
+    expect(persisted?.requirement).toBe('Review UX polish ships end to end');
+
+    // …and from then on the recorded statement is immutable again.
+    const third = await model.ensureForSubject('topic', topicId, {
+      requirement: 'Different text',
+    });
+    expect(third.requirement).toBe('Review UX polish ships end to end');
+  });
+
   it('defaults visibility by scope: personal public, workspace private', async () => {
     const personal = new AcceptanceModel(serverDB, userId);
     const personalRow = await personal.ensureForSubject('topic', topicId);

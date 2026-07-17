@@ -753,3 +753,24 @@ deliverable.
 (`env -u LOBEHUB_SERVER -u LOBE_API_KEY -u LOBEHUB_CLI_API_KEY -u LOBEHUB_CLI_HOME` + the branch's
 own CLI for the canary `--subject` contract). Gotcha hit on the way: bare `--json` on `task create`
 crashes (`fields.split is not a function`) — omit it or pass explicit fields.
+
+---
+
+## Case 29 — Publishing an acceptance without its `requirement` (验收目标), assuming it is auto-generated
+
+**Wrong approach**: authoring `result.json` with the bare-string subject form
+(`"subject": "topic:<id>"`) and no `--requirement`, assuming the system derives the acceptance
+goal on its own.
+
+**Why it's wrong**: `acceptances.requirement` is author-supplied only — the CLI passes it to
+`acceptance.ensure` solely from the subject OBJECT form (`{ type, id, requirement }`) or the
+`--requirement` flag. Nothing generates it. Worse, it is set at aggregate creation: a first
+ingest that omits it leaves the decision page reading "尚未记录该对象的验收目标" (a model-side
+backfill for the empty case ships later; a recorded value stays immutable either way).
+
+**What it breaks**: the decision page's headline card — the one thing the whole acceptance is
+judged against — renders a placeholder, and the user has to ask why.
+
+**Correct approach**: every FIRST ingest for a subject uses the object subject form with a
+one-sentence business goal: `"subject": { "type": "topic", "id": "<id>", "requirement": "<该主体
+整体要达成什么>" }`. Phrase it as the cross-round goal, not the current round's scope.

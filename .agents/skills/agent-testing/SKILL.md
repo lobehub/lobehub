@@ -691,6 +691,14 @@ env -u LOBEHUB_SERVER -u LOBE_API_KEY -u LOBEHUB_CLI_API_KEY -u LOBEHUB_CLI_HOME
 `"subject": "task:<id>"` / `{ "type", "id", "requirement" }` in `result.json`).
 Outside a LobeHub topic, one of those explicit forms is required; publishing
 without a resolvable subject fails instead of creating an orphan verify report.
+
+**Always supply the acceptance `requirement` (验收目标) with the subject** —
+the object form `{ "type", "id", "requirement": "<one-sentence goal>" }` or
+`--requirement`. It is NOT auto-generated: an aggregate created without one
+renders "尚未记录该对象的验收目标" at the top of the decision page. Write it as
+the one-sentence business goal the whole acceptance is judged against (not this
+round's scope). A recorded requirement is immutable; an empty one is backfilled
+by the first later round that supplies it.
 The first ingest creates the acceptance and every ingest creates its next
 immutable round. The user closes the loop on `/acceptance/<acceptanceId>` (also
 printed by `--open`) — accept / reject with a comment; inspect or decide from the

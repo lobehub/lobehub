@@ -81,7 +81,20 @@ export class AcceptanceModel {
     defaults?: Partial<Pick<NewAcceptance, 'config' | 'requirement'>>,
   ): Promise<AcceptanceItem> => {
     const existing = await this.findBySubject(subjectType, subjectId);
-    if (existing) return existing;
+    if (existing) {
+      // A recorded requirement is never overwritten — but an aggregate created
+      // WITHOUT one (a first ingest that omitted it) accepts the first
+      // non-empty statement a later round supplies, instead of staying blank
+      // forever ("尚未记录该对象的验收目标").
+      if (!existing.requirement && defaults?.requirement) {
+        await this.db
+          .update(acceptances)
+          .set({ requirement: defaults.requirement })
+          .where(eq(acceptances.id, existing.id));
+        return { ...existing, requirement: defaults.requirement };
+      }
+      return existing;
+    }
 
     await this.db
       .insert(acceptances)
