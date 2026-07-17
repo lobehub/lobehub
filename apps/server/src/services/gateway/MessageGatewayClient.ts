@@ -6,9 +6,28 @@ const log = debug('lobe-server:message-gateway-client');
 
 // ─── Types ───
 
+/**
+ * Feature capabilities the gateway may use to filter inbound traffic at the
+ * edge before forwarding to LobeHub. Advisory: the server-side routers stay
+ * authoritative, and gateways that don't understand a capability simply
+ * forward everything (current behavior).
+ */
+export interface MessageGatewayCapabilities {
+  /**
+   * Passive channel monitoring. When disabled, the gateway is free to drop
+   * ordinary channel messages (not DMs, not mentions/replies to the bot,
+   * not commands/interactions) instead of forwarding them.
+   */
+  messageMonitoring?: {
+    enabled: boolean;
+  };
+}
+
 export interface MessageGatewayConnectionConfig {
   /** Platform application ID (e.g., Feishu appId, QQ appId) */
   applicationId?: string;
+  /** Edge-filtering capabilities for this connection. Omitted = forward everything. */
+  capabilities?: MessageGatewayCapabilities;
   connectionId: string;
   /** Preferred connection mode (e.g., "webhook", "websocket"). Falls back to platform default if omitted. */
   connectionMode?: string;

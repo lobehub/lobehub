@@ -1,7 +1,13 @@
+import { assertBotFeatureAccess } from '@/business/server/bot/featureAccess';
 import { GatewayService } from '@/server/services/gateway';
 
 import { getBotMessageRouter } from './BotMessageRouter';
-import { mergeWithDefaults, platformRegistry, validateAccessSettings } from './platforms';
+import {
+  extractWatchKeywordEntries,
+  mergeWithDefaults,
+  platformRegistry,
+  validateAccessSettings,
+} from './platforms';
 
 /**
  * Merge schema defaults into incoming settings before persisting, so the DB
@@ -37,9 +43,44 @@ export function assertBotAccessSettings(settings: Record<string, unknown> | unde
   throw new Error(message);
 }
 
+/**
+ * Adding or changing watch keywords turns on passive channel monitoring — a
+ * gated feature (`messageMonitoring`). Enforced only when the incoming
+ * settings actually change the keyword set: unrelated settings saves and
+ * keyword removals always pass, so existing configurations are never locked
+ * out of their own record (they simply stop matching at runtime while the
+ * feature isn't allowed).
+ */
+export async function assertWatchKeywordsWritable(params: {
+  applicationId?: string;
+  existingSettings?: Record<string, unknown> | null;
+  platform: string;
+  settings?: Record<string, unknown>;
+  userId: string;
+  workspaceId?: string;
+}): Promise<void> {
+  if (params.settings === undefined) return;
+  const next = extractWatchKeywordEntries(params.settings);
+  // Clearing (or never having) keywords is always allowed.
+  if (next.length === 0) return;
+  const prev = extractWatchKeywordEntries(params.existingSettings ?? undefined);
+  if (JSON.stringify(prev) === JSON.stringify(next)) return;
+
+  await assertBotFeatureAccess({
+    action: 'manage',
+    applicationId: params.applicationId,
+    feature: 'messageMonitoring',
+    platform: params.platform,
+    userId: params.userId,
+    workspaceId: params.workspaceId,
+  });
+}
+
 interface BotInvalidationTarget {
   applicationId: string;
   platform: string;
+  /** Previous settings — enables capability-delta detection (e.g. watch keywords). */
+  settings?: Record<string, unknown> | null;
   /** Owner of the bot — passed to `GatewayService.stopClient` for runtime teardown. */
   userId: string;
 }
@@ -48,6 +89,7 @@ interface BotInvalidationDelta {
   applicationId?: string;
   enabled?: boolean;
   platform?: string;
+  settings?: Record<string, unknown>;
 }
 
 /**
@@ -61,10 +103,21 @@ export async function invalidateBotAfterUpdate(
   existing: BotInvalidationTarget,
   value: BotInvalidationDelta,
 ): Promise<void> {
+  // Watch-keyword presence feeds the gateway's edge-filtering capability
+  // (`messageMonitoring.enabled`), which is only sent at connect time — a
+  // flip needs a runtime restart so the reconcile pass reconnects with the
+  // fresh capability. Same-presence keyword edits don't need it.
+  const monitoringFlipped =
+    value.settings !== undefined &&
+    existing.settings !== undefined &&
+    extractWatchKeywordEntries(value.settings).length > 0 !==
+      extractWatchKeywordEntries(existing.settings ?? undefined).length > 0;
+
   const shouldStopRuntime =
     value.enabled === false ||
     (value.applicationId !== undefined && value.applicationId !== existing.applicationId) ||
-    (value.platform !== undefined && value.platform !== existing.platform);
+    (value.platform !== undefined && value.platform !== existing.platform) ||
+    monitoringFlipped;
 
   if (shouldStopRuntime) {
     const service = new GatewayService();

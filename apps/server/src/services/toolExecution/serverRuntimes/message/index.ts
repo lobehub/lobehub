@@ -21,6 +21,7 @@ import { agents } from '@/database/schemas';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import {
   assertBotAccessSettings,
+  assertWatchKeywordsWritable,
   invalidateBotAfterUpdate,
   mergeBotSettingsForPersist,
 } from '@/server/services/bot/agentBotProviderSettings';
@@ -265,6 +266,13 @@ export const messageRuntime: ServerRuntimeRegistration = {
         });
         const settings = mergeBotSettingsForPersist(params.platform, params.settings);
         assertBotAccessSettings(settings);
+        await assertWatchKeywordsWritable({
+          applicationId: params.applicationId,
+          platform: params.platform,
+          settings,
+          userId: context.userId!,
+          workspaceId: context.workspaceId ?? undefined,
+        });
         const result = await providerModel.create({ ...params, settings });
         return { id: result.id, platform: params.platform };
       },
@@ -371,6 +379,14 @@ export const messageRuntime: ServerRuntimeRegistration = {
         if (params.settings !== undefined) {
           const merged = mergeBotSettingsForPersist(existing.platform, params.settings);
           assertBotAccessSettings(merged);
+          await assertWatchKeywordsWritable({
+            applicationId: existing.applicationId,
+            existingSettings: existing.settings,
+            platform: existing.platform,
+            settings: merged,
+            userId: context.userId!,
+            workspaceId: existing.workspaceId ?? undefined,
+          });
           value.settings = merged;
         }
 
@@ -379,9 +395,10 @@ export const messageRuntime: ServerRuntimeRegistration = {
           {
             applicationId: existing.applicationId,
             platform: existing.platform,
+            settings: existing.settings,
             userId: context.userId!,
           },
-          {},
+          value,
         );
       },
 

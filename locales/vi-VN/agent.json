@@ -180,6 +180,7 @@
   "channel.paidFeature.enforce.desc.personal": "{{name}} có sẵn trên các gói cá nhân trả phí. Nâng cấp để cấu hình và giữ kênh này được kết nối.",
   "channel.paidFeature.enforce.desc.workspace": "{{name}} có sẵn trên các workspace Pro / Doanh nghiệp. Nâng cấp workspace này để cấu hình và giữ kênh này được kết nối.",
   "channel.paidFeature.enforce.title": "Yêu cầu gói trả phí",
+  "channel.paidFeature.fieldLocked": "Có sẵn trên các gói trả phí. Nâng cấp để cấu hình tính năng này.",
   "channel.paidFeature.notice.desc": "Do chi phí liên lạc cao cho kênh {{name}}, chúng tôi dự định biến kênh này thành một tính năng trả phí sớm. Các kết nối hiện có vẫn khả dụng trong thời gian thông báo, nhưng việc tạo hoặc kết nối lại kênh này bây giờ yêu cầu gói cá nhân trả phí hoặc workspace Pro / Doanh nghiệp.",
   "channel.paidFeature.notice.desc.personal": "Do chi phí liên lạc cao cho kênh {{name}}, chúng tôi dự định biến kênh này thành một tính năng trả phí sớm. Các kết nối hiện có vẫn khả dụng trong thời gian thông báo, nhưng việc tạo hoặc kết nối lại kênh này yêu cầu gói cá nhân trả phí.",
   "channel.paidFeature.notice.desc.workspace": "Do chi phí liên lạc cao cho kênh {{name}}, chúng tôi dự định biến kênh này thành một tính năng trả phí sớm. Các kết nối hiện có vẫn khả dụng trong thời gian thông báo, nhưng việc tạo hoặc kết nối lại kênh này yêu cầu nâng cấp workspace này lên Pro hoặc Doanh nghiệp.",
