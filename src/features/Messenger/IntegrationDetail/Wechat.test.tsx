@@ -27,8 +27,24 @@ vi.mock('@lobehub/ui/base-ui', () => ({
 
 vi.mock('antd', () => ({
   App: { useApp: () => ({ message: { success: vi.fn() } }) },
-  QRCode: ({ 'aria-label': ariaLabel, value }: { 'aria-label'?: string; 'value': string }) => (
-    <span aria-label={ariaLabel} data-value={value} role="img" />
+  QRCode: ({
+    'aria-label': ariaLabel,
+    bgColor,
+    color,
+    value,
+  }: {
+    'aria-label'?: string;
+    'bgColor'?: string;
+    'color'?: string;
+    'value': string;
+  }) => (
+    <span
+      aria-label={ariaLabel}
+      data-bg-color={bgColor}
+      data-color={color}
+      data-value={value}
+      role="img"
+    />
   ),
 }));
 
@@ -77,10 +93,10 @@ describe('WechatQrSetup', () => {
   it('encodes the WeChat URL as the QR payload during rescan', async () => {
     render(<WechatQrSetup autoStart onConfirmed={vi.fn()} />);
 
-    expect(await screen.findByRole('img', { name: 'Set up WeChat' })).toHaveAttribute(
-      'data-value',
-      'https://liteapp.weixin.qq.com/q/qr-payload',
-    );
+    const qrCode = await screen.findByRole('img', { name: 'Set up WeChat' });
+    expect(qrCode).toHaveAttribute('data-bg-color', '#fff');
+    expect(qrCode).toHaveAttribute('data-color', '#000');
+    expect(qrCode).toHaveAttribute('data-value', 'https://liteapp.weixin.qq.com/q/qr-payload');
   });
 
   it('encodes the WeChat URL as the QR payload after the initial connect action', async () => {

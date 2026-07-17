@@ -182,7 +182,9 @@ const WechatQrSetup = memo<WechatQrSetupProps>(({ autoStart, disabled, onCancel,
           {state.stage === 'ready' && (
             <QRCode
               aria-label={t('messenger.wechat.setupTitle')}
+              bgColor="#fff"
               bordered={false}
+              color="#000"
               size={QR_SIZE}
               value={state.qrCodePayload}
             />
