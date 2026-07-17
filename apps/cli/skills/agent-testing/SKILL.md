@@ -386,6 +386,13 @@ Production auth is the user's own device-code login. Verify it first in the same
 clean env; if it returns "No authentication found", have the user log in
 (`lh login` prints a URL + code), then re-run the publish.
 
+**Check the CLI version before publishing.** The publish flags this step relies on
+(`--subject`, `--source agent-testing`) require `lh` >= the version recorded in
+this skill's `.skill-meta.json`. The `lh` on PATH in a consumer repo is often
+older and fails only at this final step (`unknown option '--subject'`). Run
+`lh --version` first; when it is older than the marker version, publish through
+`npx @lobehub/cli@latest` instead of the PATH binary.
+
 `verify ingest-report` reads `$DIR` and, in one call, creates a new immutable
 verification run, attaches it to the subject acceptance, and uploads everything:
 
@@ -418,6 +425,20 @@ env -u LOBEHUB_SERVER -u LOBE_API_KEY -u LOBEHUB_CLI_API_KEY -u LOBEHUB_CLI_HOME
 `--subject` accepts `task:<id> | topic:<id> | document:<id>` (or put
 `"subject": "task:<id>"` in `result.json`). The first ingest creates the
 acceptance; every ingest creates its next immutable round.
+
+When no subject exists yet (first verification in a repo, no tracked task),
+create one with the CLI instead of asking the user for an id — a dedicated task
+is the natural acceptance subject for the run:
+
+```bash
+env -u LOBEHUB_SERVER -u LOBE_API_KEY -u LOBEHUB_CLI_API_KEY -u LOBEHUB_CLI_HOME \
+  lh task create -n "<project>: <what this run verifies>" -i "<one-line goal>"
+# prints: Task created: T-<n> <name> — the T-<n> identifier works directly:
+SUBJECT="task:T-<n>"
+```
+
+Tell the user which task was created. Reuse the same subject for every follow-up
+round in that repo so all rounds land on one acceptance page.
 
 #### Every verification run is an immutable snapshot
 
