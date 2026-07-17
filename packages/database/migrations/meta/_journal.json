@@ -858,8 +858,8 @@
     {
       "idx": 122,
       "version": "7",
-      "when": 1784257988874,
-      "tag": "0122_acceptance_visibility_and_check_user_decision",
+      "when": 1784258432422,
+      "tag": "0122_verify_visibility_and_check_user_decision",
       "breakpoints": true
     }
   ],

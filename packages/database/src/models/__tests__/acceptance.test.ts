@@ -104,6 +104,34 @@ describe('VerifyRunModel acceptance chain', () => {
     expect(rounds.map((r) => r.title)).toEqual(['round 1', 'round 2']);
   });
 
+  it('run visibility: scope default, umbrella inheritance on attach, and cascade', async () => {
+    // Scope defaults mirror acceptances: personal → public, workspace → private.
+    const personal = new VerifyRunModel(serverDB, userId);
+    const personalRun = await personal.create({ source: 'agent-testing' });
+    expect(personalRun.visibility).toBe('public');
+
+    const [ws] = await serverDB
+      .insert(workspaces)
+      .values({ name: 'verify-vis-ws', primaryOwnerId: userId, slug: 'verify-vis-ws' })
+      .returning();
+    const scoped = new VerifyRunModel(serverDB, userId, ws.id);
+    const scopedRun = await scoped.create({ source: 'agent-testing' });
+    expect(scopedRun.visibility).toBe('private');
+
+    // Attaching inherits the aggregate's visibility (a private umbrella hides
+    // the new round's own report URL too).
+    const acceptanceModel = new AcceptanceModel(serverDB, userId);
+    const acceptance = await acceptanceModel.ensureForSubject('topic', topicId);
+    await acceptanceModel.update(acceptance.id, { visibility: 'private' });
+    const attached = await personal.attachToAcceptance(personalRun.id, acceptance.id, 'private');
+    expect(attached.visibility).toBe('private');
+
+    // The aggregate-level flip re-stamps every chained round.
+    await acceptanceModel.update(acceptance.id, { visibility: 'public' });
+    await personal.setVisibilityByAcceptance(acceptance.id, 'public');
+    expect((await personal.findById(personalRun.id))?.visibility).toBe('public');
+  });
+
   it('setDecision records the user verdict with its detail', async () => {
     const acceptanceModel = new AcceptanceModel(serverDB, userId);
     const acceptance = await acceptanceModel.ensureForSubject('topic', topicId);

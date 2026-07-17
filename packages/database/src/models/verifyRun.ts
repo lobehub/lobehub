@@ -1,3 +1,4 @@
+import type { VerifyVisibility } from '@lobechat/const/verify';
 import type {
   VerifyCheckItem,
   VerifyRunDecisionDetail,
@@ -115,6 +116,13 @@ export class VerifyRunModel {
     }
   };
 
+  /**
+   * Scope-dependent visibility default: personal rounds are link-shareable
+   * (`public`), workspace rounds stay member-gated (`private`). An explicit
+   * caller value always wins.
+   */
+  private defaultVisibility = () => (this.workspaceId ? ('private' as const) : ('public' as const));
+
   create = async (
     params: Omit<NewVerifyRun, 'userId' | 'workspaceId'> & { source?: VerifyRunSource },
   ): Promise<VerifyRunItem> => {
@@ -124,7 +132,12 @@ export class VerifyRunModel {
 
     const [run] = await this.db
       .insert(verifyRuns)
-      .values(buildWorkspacePayload({ userId: this.userId, workspaceId: this.workspaceId }, params))
+      .values(
+        buildWorkspacePayload(
+          { userId: this.userId, workspaceId: this.workspaceId },
+          { visibility: this.defaultVisibility(), ...params },
+        ),
+      )
       .returning();
     return run;
   };
@@ -219,7 +232,12 @@ export class VerifyRunModel {
    * attaches cannot read the same max; if they still collide, the
    * `(acceptance_id, round_index)` unique index rejects the loser.
    */
-  attachToAcceptance = async (runId: string, acceptanceId: string): Promise<VerifyRunItem> => {
+  attachToAcceptance = async (
+    runId: string,
+    acceptanceId: string,
+    /** The aggregate's visibility — attached rounds inherit their umbrella. */
+    visibility?: VerifyVisibility,
+  ): Promise<VerifyRunItem> => {
     const [run] = await this.db
       .update(verifyRuns)
       .set({
@@ -229,12 +247,36 @@ export class VerifyRunModel {
           FROM ${verifyRuns}
           WHERE ${verifyRuns.acceptanceId} = ${acceptanceId}
         )`,
+        ...(visibility ? { visibility } : {}),
       })
       .where(and(eq(verifyRuns.id, runId), this.ownership()))
       .returning();
 
     if (!run) throw new Error(`Verify run "${runId}" not found in the current workspace`);
     return run;
+  };
+
+  /** Flip who can read this round's report page beyond its creator. */
+  setVisibility = async (runId: string, visibility: VerifyVisibility): Promise<void> => {
+    await this.db
+      .update(verifyRuns)
+      .set({ visibility })
+      .where(and(eq(verifyRuns.id, runId), this.ownership()));
+  };
+
+  /**
+   * Re-stamp every round chained to an acceptance — the aggregate-level
+   * `setVisibility` cascades so rounds never stay more open than (or hidden
+   * inside) their umbrella. Deliberately clobbers per-round overrides.
+   */
+  setVisibilityByAcceptance = async (
+    acceptanceId: string,
+    visibility: VerifyVisibility,
+  ): Promise<void> => {
+    await this.db
+      .update(verifyRuns)
+      .set({ visibility })
+      .where(and(eq(verifyRuns.acceptanceId, acceptanceId), this.ownership()));
   };
 
   /**

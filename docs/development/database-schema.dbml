@@ -2676,6 +2676,7 @@ table verify_runs {
   round_index integer
   operation_id text
   source text [not null, default: 'agent']
+  visibility text [not null, default: 'public']
   scenario text
   title text
   goal text

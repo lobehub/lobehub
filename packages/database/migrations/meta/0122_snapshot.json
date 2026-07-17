@@ -6,7 +6,7 @@
   },
   "dialect": "postgresql",
   "enums": {},
-  "id": "2cd76389-3e3a-48a8-81b9-ed81ff418b77",
+  "id": "a849abea-fb2d-4ed0-854b-130cfe463dc8",
   "policies": {},
   "prevId": "e8808417-c854-41cf-81c3-f21af96ae6b8",
   "roles": {},
@@ -22142,6 +22142,13 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'agent'"
+        },
+        "visibility": {
+          "name": "visibility",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'public'"
         },
         "scenario": {
           "name": "scenario",

@@ -138,13 +138,16 @@ export type AcceptanceSubjectType = (typeof acceptanceSubjectTypes)[number];
  * outcome language (`accepted` / `rejected`).
  */
 /**
- * Who can see an acceptance beyond its creator. Personal-scope aggregates
- * default to `public` (the page is meant to be linked from PRs / reports);
- * workspace-scope aggregates default to `private` (org data stays member-gated
- * until deliberately opened up).
+ * Who can see a verify artifact (a run's report page, an acceptance page)
+ * beyond its creator. Personal-scope rows default to `public` (the page is
+ * meant to be linked from PRs / reports); workspace-scope rows default to
+ * `private` (org data stays member-gated until deliberately opened up).
  */
-export const acceptanceVisibilities = ['private', 'public'] as const;
-export type AcceptanceVisibility = (typeof acceptanceVisibilities)[number];
+export const verifyVisibilities = ['private', 'public'] as const;
+export type VerifyVisibility = (typeof verifyVisibilities)[number];
+
+export const acceptanceVisibilities = verifyVisibilities;
+export type AcceptanceVisibility = VerifyVisibility;
 
 export const acceptanceStatuses = [
   'pending',

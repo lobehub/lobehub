@@ -464,7 +464,9 @@ export class AcceptanceService {
       throw new Error('This verify run already belongs to another acceptance');
     }
 
-    const run = await this.runModel.attachToAcceptance(runId, acceptanceId);
+    // Rounds inherit the aggregate's visibility so a private acceptance's new
+    // round never leaks through its own report URL.
+    const run = await this.runModel.attachToAcceptance(runId, acceptanceId, acceptance.visibility);
     await this.recomputeStatus(acceptanceId);
     log('run %s attached to acceptance %s as round %d', runId, acceptanceId, run.roundIndex);
     return run;

@@ -1,5 +1,10 @@
 import { VerifySkill } from '@lobechat/builtin-skills';
-import { normalizeVerifySurface, verifyRunScenarios, verifySurfaces } from '@lobechat/const/verify';
+import {
+  normalizeVerifySurface,
+  verifyRunScenarios,
+  verifySurfaces,
+  verifyVisibilities,
+} from '@lobechat/const/verify';
 import type { VerifyCheckItem, VerifyRunContext, VerifyRunScenario } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { asc, eq } from 'drizzle-orm';
@@ -17,6 +22,7 @@ import { VerifyEvidenceModel } from '@/database/models/verifyEvidence';
 import { VerifyReportModel } from '@/database/models/verifyReport';
 import { VerifyRubricModel } from '@/database/models/verifyRubric';
 import { VerifyRunModel } from '@/database/models/verifyRun';
+import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
 import {
   verifyCheckResults,
   verifyEvidence,
@@ -1016,13 +1022,31 @@ export const verifyRouter = router({
     }),
 
   /**
+   * Flip who can read this round's report page beyond its creator. Creation
+   * defaults are scope-dependent (personal → public, workspace → private) and
+   * acceptance-attached rounds inherit their aggregate; this is the deliberate
+   * per-round override. Note `acceptance.setVisibility` cascades over rounds,
+   * so the aggregate flip wins over earlier per-round choices.
+   */
+  setRunVisibility: verifyWriteProcedure
+    .input(z.object({ verifyRunId: z.string(), visibility: z.enum(verifyVisibilities) }))
+    .mutation(async ({ ctx, input }) => {
+      const run = await resolveVerifyRun(ctx, input.verifyRunId);
+      assertWorkspaceRowManageable(ctx, run.userId, 'verify run');
+      await ctx.runModel.setVisibility(run.id, input.visibility);
+    }),
+
+  /**
    * One-shot payload for the standalone report viewer: the session, its report,
    * and every check result with its evidence — addressed purely by verifyRunId
    * (no operation / chat context required).
    *
-   * Public: a report URL is shareable, so anyone with the id gets the checks and
-   * evidence. `isOwner` gates what only the author may see — today the origin
-   * conversation, which is redacted for everyone else.
+   * Public like the acceptance page: a `public` run's report URL is readable by
+   * anyone holding the id; `private` stays gated to the owner and (for
+   * workspace scope) workspace members. A denied read looks exactly like a
+   * missing run (`null`) — existence must not leak. `isOwner` additionally
+   * gates what only the author may see — today the origin conversation,
+   * which is redacted for everyone else.
    */
   getReportBundle: publicVerifyReportProcedure
     .input(verifyRunIdInputSchema)
@@ -1033,6 +1057,15 @@ export const verifyRouter = router({
       if (!found) return null;
 
       const isOwner = Boolean(ctx.userId) && ctx.userId === found.userId;
+      let canRead = isOwner || found.visibility === 'public';
+      if (!canRead && ctx.userId && found.workspaceId) {
+        const member = await new WorkspaceMemberModel(ctx.serverDB, ctx.userId).getMember(
+          found.workspaceId,
+          ctx.userId,
+        );
+        canRead = Boolean(member);
+      }
+      if (!canRead) return null;
       // `origin` points at the author's private topic/agent — never hand it to a
       // visitor holding nothing but the shared link.
       const { origin: _origin, ...publicMetadata } = found.metadata ?? {};

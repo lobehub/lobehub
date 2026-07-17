@@ -352,9 +352,18 @@ export const acceptanceRouter = router({
       const acceptance = await resolveAcceptance(ctx, input.id);
       assertWorkspaceRowManageable(ctx, acceptance.userId, 'acceptance');
 
-      return ctx.acceptanceService.acceptanceModel.update(acceptance.id, {
+      const updated = await ctx.acceptanceService.acceptanceModel.update(acceptance.id, {
         visibility: input.visibility,
       });
+      // Cascade to every chained round: each round's report page is its own
+      // shareable URL, so it must follow the umbrella (clobbering per-round
+      // overrides on purpose — the aggregate flip is the deliberate act).
+      await new VerifyRunModel(
+        ctx.serverDB,
+        acceptance.userId,
+        acceptance.workspaceId ?? undefined,
+      ).setVisibilityByAcceptance(acceptance.id, input.visibility);
+      return updated;
     }),
 
   /**

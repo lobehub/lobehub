@@ -11,6 +11,7 @@ import {
   verifyRunStatuses,
   verifyUserDecisions,
   verifyVerdicts,
+  verifyVisibilities,
 } from '@lobechat/const/verify';
 import type {
   AcceptanceConfig,
@@ -545,6 +546,15 @@ export const verifyRuns = pgTable(
 
     /** What produced this round — drives provenance + analytics filtering. */
     source: text('source', { enum: verifyRunSources }).default('agent').notNull(),
+
+    /**
+     * Read visibility of this round's report page beyond its creator. The DB
+     * default matches the personal scope (`public` — report URLs are meant to
+     * be linked from PRs); workspace-scoped creation overrides to `private` in
+     * the model, and attaching to an acceptance inherits the aggregate's
+     * setting so rounds never leak past their umbrella.
+     */
+    visibility: text('visibility', { enum: verifyVisibilities }).default('public').notNull(),
 
     /**
      * What kind of thing this round verifies (e.g. `coding`). Drives how the
