@@ -36,6 +36,7 @@ vi.mock('./hooks/useCategory', () => ({
         { key: 'service-model', label: 'Default Models' },
         { key: 'credential', label: 'Credentials' },
         { key: 'stats', label: 'Stats' },
+        { key: 'storage', label: 'Storage' },
         { key: 'usage', label: 'Usage' },
       ],
     },
@@ -65,6 +66,7 @@ describe('WorkspaceSettingsContentLayout', () => {
     ['service-model', 'Default Models'],
     ['credential', 'Credentials'],
     ['stats', 'Stats'],
+    ['usage', 'Usage'],
   ])('renders the compact header for the %s tab', (tab, title) => {
     const html = renderLayout(tab);
 
@@ -73,7 +75,7 @@ describe('WorkspaceSettingsContentLayout', () => {
   });
 
   it('keeps non-compact tabs on the existing content-only layout', () => {
-    const html = renderLayout('usage');
+    const html = renderLayout('storage');
 
     expect(html).not.toContain('<header>');
     expect(html).toContain('<main><div>Page content</div></main>');
