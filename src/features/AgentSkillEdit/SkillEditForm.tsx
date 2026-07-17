@@ -71,17 +71,24 @@ const SkillEditForm = memo<SkillEditFormProps>(
 
     useEffect(() => {
       if (!editor) return;
-      try {
-        setTimeout(() => {
+
+      let timer: ReturnType<typeof setTimeout>;
+
+      const setDoc = () => {
+        timer = setTimeout(() => {
           if (initialValues.content) {
             editor.setDocument('markdown', initialValues.content);
           }
         }, 100);
+      };
+
+      try {
+        setDoc();
       } catch {
-        setTimeout(() => {
-          editor.setDocument('markdown', initialValues.content);
-        }, 100);
+        setDoc();
       }
+
+      return () => clearTimeout(timer);
     }, [editor, initialValues.content]);
 
     const handleContentChange = useCallback(
