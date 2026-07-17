@@ -36,6 +36,7 @@ import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
+import AgentProfilePopup from '@/features/AgentProfileCard/AgentProfilePopup';
 import { verifyService } from '@/services/verify';
 
 import { useAcceptanceBundle } from '../hooks';
@@ -100,7 +101,7 @@ const styles = createStaticStyles(({ css }) => ({
     width: 100%;
     height: 100%;
 
-    background: ${cssVar.colorBgLayout};
+    background: ${cssVar.colorBgContainer};
   `,
   requirementLabel: css`
     font-size: 12px;
@@ -525,25 +526,43 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
             {(origin?.agent || origin?.topic) && (
               <Flexbox horizontal align={'center'} gap={16} wrap={'wrap'}>
                 {origin.agent && (
-                  <Flexbox horizontal align={'center'} className={styles.scopeChip} gap={6}>
-                    <Avatar
-                      avatar={origin.agent.avatar ?? undefined}
-                      background={origin.agent.backgroundColor ?? undefined}
-                      size={18}
-                    />
-                    {origin.agent.title ?? t('acceptance.origin.agentFallback')}
-                  </Flexbox>
+                  <AgentProfilePopup
+                    agentId={origin.agent.id}
+                    trigger={'hover'}
+                    agent={{
+                      avatar: origin.agent.avatar ?? undefined,
+                      backgroundColor: origin.agent.backgroundColor ?? undefined,
+                      title: origin.agent.title ?? undefined,
+                    }}
+                  >
+                    <Flexbox
+                      horizontal
+                      align={'center'}
+                      className={styles.scopeChip}
+                      gap={6}
+                      style={{ cursor: 'default' }}
+                    >
+                      <Avatar
+                        avatar={origin.agent.avatar ?? undefined}
+                        background={origin.agent.backgroundColor ?? undefined}
+                        size={18}
+                      />
+                      {origin.agent.title ?? t('acceptance.origin.agentFallback')}
+                    </Flexbox>
+                  </AgentProfilePopup>
                 )}
                 {origin.topic && (
-                  <Flexbox horizontal align={'center'} className={styles.scopeChip} gap={4}>
+                  <Flexbox
+                    horizontal
+                    align={'center'}
+                    className={cx(styles.scopeChip, styles.scopeLink)}
+                    gap={4}
+                    title={t('acceptance.origin.openTopic')}
+                    onClick={() => window.open(`/chat?topic=${origin.topic!.id}`, '_blank')}
+                  >
                     <Icon icon={MessagesSquare} size={13} />
                     {origin.topic.title ?? subject.title ?? origin.topic.id}
-                    <ActionIcon
-                      icon={SquareArrowOutUpRight}
-                      size={'small'}
-                      title={t('acceptance.origin.openTopic')}
-                      onClick={() => window.open(`/chat?topic=${origin.topic!.id}`, '_blank')}
-                    />
+                    <Icon icon={SquareArrowOutUpRight} size={12} />
                   </Flexbox>
                 )}
               </Flexbox>
@@ -663,17 +682,18 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
               ]}
               onChange={(value) => setFilter(value as CheckFilter)}
             />
-            <Button
-              icon={<Icon icon={allGroupsCollapsed ? ChevronsUpDown : ChevronsDownUp} />}
+            <ActionIcon
+              icon={allGroupsCollapsed ? ChevronsUpDown : ChevronsDownUp}
               size={'small'}
+              title={
+                allGroupsCollapsed
+                  ? t('acceptance.group.expandAll')
+                  : t('acceptance.group.collapseAll')
+              }
               onClick={() =>
                 setCollapsedGroups(allGroupsCollapsed ? new Set() : new Set(groupKeys))
               }
-            >
-              {allGroupsCollapsed
-                ? t('acceptance.group.expandAll')
-                : t('acceptance.group.collapseAll')}
-            </Button>
+            />
           </Flexbox>
 
           <CheckList

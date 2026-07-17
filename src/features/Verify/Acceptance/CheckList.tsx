@@ -158,6 +158,17 @@ const styles = createStaticStyles(({ css }) => ({
     padding-block: 10px;
     padding-inline: 16px;
     background: ${cssVar.colorFillQuaternary};
+
+    .acceptance-group-actions {
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+
+    &:hover {
+      .acceptance-group-actions {
+        opacity: 1;
+      }
+    }
   `,
   historyToggle: css`
     cursor: pointer;
@@ -204,11 +215,16 @@ const styles = createStaticStyles(({ css }) => ({
     padding-inline: 16px;
 
     &:hover {
-      background: ${cssVar.colorFillQuaternary};
-
       .acceptance-row-actions {
         opacity: 1;
       }
+    }
+
+    /* The hover wash marks the collapsed row as a click target. An OPEN row is
+       in reading mode — a gray band flashing between the white body and the
+       white page just severs the title from its content, so no wash there. */
+    &:not([data-expanded]):hover {
+      background: ${cssVar.colorFillQuaternary};
     }
   `,
   stepDot: css`
@@ -601,6 +617,7 @@ const CheckRow = memo<{
   // The judging narrative stays collapsed: level one is title + evidence.
   const [historyOpen, setHistoryOpen] = useState(false);
   const [seqCopied, setSeqCopied] = useState(false);
+  const [accepting, setAccepting] = useState(false);
   const meta = STATE_META[check.state];
   const counts = evidenceCounts(check.evidence);
 
@@ -631,12 +648,29 @@ const CheckRow = memo<{
         }),
     });
 
+  // Accepting settles the check — the row folds itself away once the write
+  // lands, so the reviewer's eye moves on to what still needs judgment.
+  const handleAccept = async (event: { stopPropagation: () => void }) => {
+    event.stopPropagation();
+    setAccepting(true);
+    const ok = await onReview({ action: 'accept', checkItemIds: [check.id] });
+    setAccepting(false);
+    if (ok && expanded) onToggle();
+  };
+
   // Passed + user-accepted merges into the double-check receipt.
   const headIcon = check.state === 'passed' && reviewState === 'accepted' ? CheckCheck : meta.icon;
 
   return (
     <Flexbox className={styles.row}>
-      <Flexbox horizontal align={'center'} className={styles.rowHeader} gap={10} onClick={onToggle}>
+      <Flexbox
+        horizontal
+        align={'center'}
+        className={styles.rowHeader}
+        data-expanded={expanded ? '' : undefined}
+        gap={10}
+        onClick={onToggle}
+      >
         <Icon color={meta.color} icon={headIcon} size={16} style={{ flex: 'none' }} />
         <Tooltip title={seqCopied ? t('acceptance.checks.copied') : t('acceptance.checks.copySeq')}>
           <span
@@ -694,16 +728,16 @@ const CheckRow = memo<{
               align={'center'}
               className={cx(styles.rowActions, 'acceptance-row-actions')}
               gap={2}
+              // The accept spinner must stay visible after the pointer leaves.
+              style={accepting ? { opacity: 1 } : undefined}
             >
               <ActionIcon
-                disabled={reviewPending}
+                disabled={reviewPending && !accepting}
                 icon={Check}
+                loading={accepting}
                 size={'small'}
                 title={t('acceptance.review.accept')}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  void onReview({ action: 'accept', checkItemIds: [check.id] });
-                }}
+                onClick={handleAccept}
               />
               <ActionIcon
                 disabled={reviewPending}
@@ -794,8 +828,38 @@ const CheckRow = memo<{
           )}
           <EvidenceList evidence={check.evidence} />
 
-          {/* The user's standing feedback hangs right under the evidence it judges. */}
-          {activeReview && <FeedbackCard evidenceById={evidenceById} review={activeReview} />}
+          {/* An executed check with zero artifacts must SAY so — a silent blank
+              under the verdict reads as a rendering bug, not as a fact. */}
+          {check.result && check.evidence.length === 0 && (
+            <Text fontSize={12} type={'secondary'}>
+              {t('acceptance.evidence.empty')}
+            </Text>
+          )}
+
+          {/* The user's standing feedback hangs right under the evidence it
+              judges. An accept keeps an undo path — the signature line gains a
+              quiet "change to reject" escape, feedback then flows as usual. */}
+          {activeReview &&
+            (activeReview.action === 'accept' ? (
+              <Flexbox horizontal align={'center'} gap={8}>
+                <AcceptedNote review={activeReview} />
+                {reviewable && (
+                  <Button
+                    disabled={reviewPending}
+                    size={'small'}
+                    type={'text'}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      openReject();
+                    }}
+                  >
+                    {t('acceptance.review.revertToReject')}
+                  </Button>
+                )}
+              </Flexbox>
+            ) : (
+              <FeedbackCard evidenceById={evidenceById} review={activeReview} />
+            ))}
 
           {/* Confirm (plain filled) anchors the right edge; reject is the
               quiet text escape next to it. */}
@@ -813,14 +877,12 @@ const CheckRow = memo<{
                 {t('acceptance.review.reject')}
               </Button>
               <Button
-                disabled={reviewPending}
+                disabled={reviewPending && !accepting}
                 icon={<Icon icon={Check} />}
+                loading={accepting}
                 size={'small'}
                 type={'fill'}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  void onReview({ action: 'accept', checkItemIds: [check.id] });
-                }}
+                onClick={handleAccept}
               >
                 {t('acceptance.review.accept')}
               </Button>
@@ -926,6 +988,7 @@ const CheckList = memo<CheckListProps>(
     reviewPending,
   }) => {
     const { t } = useTranslation('verify');
+    const [acceptingGroup, setAcceptingGroup] = useState<string | null>(null);
 
     const visible = (check: AcceptanceCheck) =>
       filter === 'all' || checkFilterState(check) === filter;
@@ -990,21 +1053,30 @@ const CheckList = memo<CheckListProps>(
                     {t('acceptance.group.passRatio', { passed, total: groupChecks_.length })}
                   </Text>
                 )}
-                <Flexbox flex={1} />
+                {/* Bulk accept sits by the ratio it settles, hover-revealed —
+                    a full-width column of always-on buttons begs misclicks. */}
                 {canReview &&
                   reviewableChecks.length > 0 &&
                   (unaccepted.length > 0 ? (
                     <Button
-                      disabled={reviewPending}
+                      className={'acceptance-group-actions'}
+                      disabled={reviewPending && acceptingGroup !== key}
                       icon={<Icon icon={BadgeCheck} />}
+                      loading={acceptingGroup === key}
                       size={'small'}
+                      // The spinner must stay visible after the pointer leaves.
+                      style={acceptingGroup === key ? { opacity: 1 } : undefined}
                       type={'text'}
-                      onClick={(event) => {
+                      onClick={async (event) => {
                         event.stopPropagation();
-                        void onReview({
+                        setAcceptingGroup(key);
+                        const ok = await onReview({
                           action: 'accept',
                           checkItemIds: unaccepted.map((check) => check.id),
                         });
+                        setAcceptingGroup(null);
+                        // A fully signed-off group is settled business — fold it.
+                        if (ok && !collapsed) onToggleGroup(key);
                       }}
                     >
                       {t('acceptance.review.acceptAll')}
@@ -1022,6 +1094,7 @@ const CheckList = memo<CheckListProps>(
                       {t('acceptance.review.acceptAllDone')}
                     </Flexbox>
                   ))}
+                <Flexbox flex={1} />
                 {collapsed ? (
                   // Fixed-size placeholder keeps the header height stable across toggles.
                   <div style={{ height: 24, width: 24 }} />

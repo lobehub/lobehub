@@ -43,6 +43,8 @@ export default {
   'acceptance.detail.suggestion': 'Suggestion',
   'acceptance.error.description': 'Check your connection and try loading this acceptance again.',
   'acceptance.error.title': 'Unable to load acceptance',
+  'acceptance.evidence.empty':
+    'No evidence artifacts were submitted for this check in this round — only the verifier’s recorded observation.',
   'acceptance.evidence.file': '{{count}} text evidence item(s)',
   'acceptance.evidence.image': '{{count}} image evidence item(s)',
   'acceptance.evidence.video': '{{count}} video evidence item(s)',
@@ -91,6 +93,7 @@ export default {
     'Reject "{{title}}" — your feedback is what the next verification round acts on.',
   'acceptance.review.rejectPlaceholder': 'What is wrong, and what do you expect instead…',
   'acceptance.review.rejectedHint': 'You rejected this check — the next round reads your feedback.',
+  'acceptance.review.revertToReject': 'Change to reject with comment',
   'acceptance.review.supplement': 'Additional notes (optional)',
   'acceptance.requirementEmpty': 'No acceptance goal recorded for this subject yet.',
   'acceptance.requirementLabel': 'Acceptance goal',

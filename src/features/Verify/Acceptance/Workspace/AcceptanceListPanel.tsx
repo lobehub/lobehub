@@ -16,7 +16,7 @@ import dayjs from 'dayjs';
 import isEqual from 'fast-deep-equal';
 import {
   BadgeCheck,
-  CircleCheck,
+  CircleDashed,
   CircleHelp,
   CircleX,
   LoaderCircle,
@@ -184,7 +184,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-type Glyph = 'ok' | 'bad' | 'unsure' | 'running' | 'accepted';
+type Glyph = 'awaiting' | 'bad' | 'unsure' | 'running' | 'accepted';
 
 const RUNNING_STATUSES = new Set<AcceptanceStatus>([
   'pending',
@@ -198,13 +198,16 @@ const glyphOf = (status: AcceptanceStatus): Glyph => {
   if (status === 'accepted') return 'accepted';
   if (status === 'rejected') return 'bad';
   if (status === 'errored') return 'unsure';
-  return 'ok';
+  return 'awaiting';
 };
 
-const glyphMeta: Record<Glyph, { color: string; icon: typeof CircleCheck }> = {
+// Mirrors the detail header's verdict pill: a delivered-but-undecided
+// aggregate reads as "acceptance in progress", never as a green all-clear
+// the user hasn't given.
+const glyphMeta: Record<Glyph, { color: string; icon: typeof BadgeCheck }> = {
   accepted: { color: cssVar.colorSuccess, icon: BadgeCheck },
+  awaiting: { color: cssVar.colorInfo, icon: CircleDashed },
   bad: { color: cssVar.colorError, icon: CircleX },
-  ok: { color: cssVar.colorSuccess, icon: CircleCheck },
   running: { color: cssVar.colorInfo, icon: LoaderCircle },
   unsure: { color: cssVar.colorWarning, icon: CircleHelp },
 };
