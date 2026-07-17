@@ -18,6 +18,7 @@ import {
   HelpCircle,
   Images,
   MessageSquarePlus,
+  MessageSquareText,
   MessageSquareX,
   Repeat,
   XCircle,
@@ -1227,7 +1228,7 @@ const CheckList = memo<CheckListProps>(
                         <Flexbox horizontal align={'center'} gap={6}>
                           <Icon
                             color={stale ? cssVar.colorTextQuaternary : cssVar.colorError}
-                            icon={MessageSquarePlus}
+                            icon={MessageSquareText}
                             size={13}
                           />
                           <Text

@@ -25,9 +25,6 @@ export default {
     'The next verification round re-opens this acceptance when it lands.',
   'acceptance.banner.rejectedReason': 'Reason: {{reason}}',
   'acceptance.bar.feedback': 'Feedback {{count}}',
-  'acceptance.bar.globalPlaceholder':
-    'Overall feedback for the next round — anything no single check covers…',
-  'acceptance.bar.send': 'Record feedback',
   'acceptance.checks.copied': 'Copied',
   'acceptance.checks.copySeq': 'Copy the check label',
   'acceptance.checks.finalRoundHint':
@@ -110,7 +107,6 @@ export default {
     'Drag on the image to circle a region, then leave a note for it.',
   'acceptance.review.annotationPlaceholder': 'What is wrong in region {{index}}…',
   'acceptance.review.confirmReject': 'Submit feedback',
-  'acceptance.review.exitFullscreen': 'Exit fullscreen',
   'acceptance.review.feedbackLabel': 'Your feedback · round {{round}}',
   'acceptance.review.fullscreen': 'Annotate fullscreen',
   'acceptance.review.regionComments': 'Region comments',

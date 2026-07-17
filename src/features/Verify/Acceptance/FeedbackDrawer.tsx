@@ -3,7 +3,7 @@
 import { Drawer, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import dayjs from 'dayjs';
-import { MessageSquarePlus, MessageSquareX } from 'lucide-react';
+import { MessageSquareText, MessageSquareX } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -80,7 +80,7 @@ const EntryCard = memo<{
       <Flexbox horizontal align={'center'} gap={6}>
         <Icon
           color={entry.stale ? cssVar.colorTextQuaternary : cssVar.colorError}
-          icon={isCheck ? MessageSquareX : MessageSquarePlus}
+          icon={isCheck ? MessageSquareX : MessageSquareText}
           size={13}
         />
         {isCheck ? (

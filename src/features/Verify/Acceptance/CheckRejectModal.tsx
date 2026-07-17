@@ -2,12 +2,17 @@
 
 import type { AcceptanceReviewAnnotation } from '@lobechat/types';
 import { ActionIcon, Flexbox, Text, TextArea } from '@lobehub/ui';
-import { Button, createModal, type ModalInstance, useModalContext } from '@lobehub/ui/base-ui';
+import {
+  Button,
+  createModal,
+  Modal,
+  type ModalInstance,
+  useModalContext,
+} from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { t } from 'i18next';
-import { Maximize2, X, ZoomIn, ZoomOut } from 'lucide-react';
+import { Maximize2, ZoomIn, ZoomOut } from 'lucide-react';
 import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
 import { AnnotationCanvas } from './Annotation';
@@ -41,35 +46,6 @@ const styles = createStaticStyles(({ css }) => ({
     flex: 1;
     gap: 16px;
     min-height: 0;
-  `,
-  fullscreenMask: css`
-    position: fixed;
-    z-index: 2000;
-    inset: 0;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    padding: 24px;
-
-    /* antd exposes no mask token to cssVar — the modal's own scrim is a
-       literal; match it so the underlying reject dialog is dimmed, not bleeding
-       through. */
-    background: rgb(0 0 0 / 45%);
-  `,
-  fullscreenPanel: css`
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-
-    width: 100%;
-    max-width: 1680px;
-    height: 100%;
-    padding: 16px;
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorBgContainer};
   `,
   regionIndex: css`
     flex: none;
@@ -209,29 +185,32 @@ const CheckRejectContent = memo<CheckRejectModalProps>(
     const [zoom, setZoom] = useState(1);
     const viewportRef = useRef<HTMLDivElement>(null);
     const [viewportWidth, setViewportWidth] = useState<number>();
+
     useLayoutEffect(() => {
       if (!fullscreen) return;
-      const node = viewportRef.current;
-      if (!node) return;
-      const measure = () => setViewportWidth(node.clientWidth);
-      measure();
-      const observer = new ResizeObserver(measure);
-      observer.observe(node);
-      return () => observer.disconnect();
-    }, [fullscreen, activeEvidenceId]);
-
-    // Fullscreen is an inspection layer — Esc leaves it, never the modal.
-    useEffect(() => {
-      if (!fullscreen) return;
-      const onKey = (event: KeyboardEvent) => {
-        if (event.key === 'Escape') {
-          event.stopPropagation();
-          setFullscreen(false);
+      let observer: ResizeObserver | undefined;
+      let raf = 0;
+      // The Modal body mounts async (portal + open animation), so the ref may
+      // be null on the first pass — retry on the next frame until it attaches,
+      // then track its width. Without this the image stays fit-width and zoom
+      // does nothing (viewportWidth never resolves).
+      const attach = () => {
+        const node = viewportRef.current;
+        if (!node) {
+          raf = requestAnimationFrame(attach);
+          return;
         }
+        const measure = () => setViewportWidth(node.clientWidth);
+        measure();
+        observer = new ResizeObserver(measure);
+        observer.observe(node);
       };
-      window.addEventListener('keydown', onKey, true);
-      return () => window.removeEventListener('keydown', onKey, true);
-    }, [fullscreen]);
+      attach();
+      return () => {
+        cancelAnimationFrame(raf);
+        observer?.disconnect();
+      };
+    }, [fullscreen, activeEvidenceId]);
 
     // Persist the draft as it is typed; an empty draft cleans the slot up.
     useEffect(() => {
@@ -428,70 +407,83 @@ const CheckRejectContent = memo<CheckRejectModalProps>(
           </Button>
         </Flexbox>
 
-        {/* Fullscreen inspect-and-annotate stage — same draft state as the
-            modal; zoom via toolbar, pan via the viewport's native scroll. */}
-        {fullscreen &&
-          activeEvidence &&
-          createPortal(
-            <div className={styles.fullscreenMask} onClick={() => setFullscreen(false)}>
-              <div className={styles.fullscreenPanel} onClick={(event) => event.stopPropagation()}>
-                <Flexbox horizontal align={'center'} gap={8}>
-                  <Text strong fontSize={14}>
-                    {translate('acceptance.review.annotate')}
+        {/* Fullscreen inspect-and-annotate stage — a base-ui Modal so the mask,
+            theme scope and stacking are handled by the same layer system as
+            the reject dialog it opens over (nested modals stack correctly).
+            Same draft state: zoom via the toolbar, pan via the viewport's
+            native scroll. */}
+        <Modal
+          centered
+          destroyOnHidden
+          footer={null}
+          height={'88vh'}
+          open={fullscreen}
+          title={translate('acceptance.review.annotate')}
+          width={'min(96vw, 1440px)'}
+          styles={{
+            body: {
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 12,
+              height: '100%',
+              minHeight: 0,
+              paddingBlock: 12,
+            },
+          }}
+          onCancel={() => setFullscreen(false)}
+        >
+          {activeEvidence && (
+            <>
+              <Flexbox horizontal align={'center'} gap={8}>
+                <Text fontSize={12} type={'secondary'}>
+                  {translate('acceptance.review.annotateHint')}
+                </Text>
+                <Flexbox flex={1} />
+                <ActionIcon
+                  disabled={zoom <= ZOOM_STEPS[0]}
+                  icon={ZoomOut}
+                  size={'small'}
+                  title={translate('acceptance.review.zoomOut')}
+                  onClick={() => stepZoom(-1)}
+                />
+                <span className={styles.zoomLabel}>{Math.round(zoom * 100)}%</span>
+                <ActionIcon
+                  disabled={zoom >= ZOOM_STEPS.at(-1)!}
+                  icon={ZoomIn}
+                  size={'small'}
+                  title={translate('acceptance.review.zoomIn')}
+                  onClick={() => stepZoom(1)}
+                />
+              </Flexbox>
+              {thumbnails}
+              <div className={styles.fullscreenBody}>
+                <div className={styles.viewport} ref={viewportRef}>
+                  <AnnotationCanvas
+                    annotations={activeAnnotations}
+                    src={activeEvidence.fileUrl}
+                    imageWidth={
+                      // -2 keeps the frame's own border inside the viewport at
+                      // fit zoom, so no phantom horizontal scrollbar.
+                      viewportWidth ? Math.max(viewportWidth * zoom - 2, 0) : undefined
+                    }
+                    {...canvasHandlers}
+                  />
+                </div>
+                <div className={styles.sidePanel}>
+                  <Text strong fontSize={13}>
+                    {translate('acceptance.review.regionComments')}
                   </Text>
-                  <Flexbox flex={1} />
-                  <ActionIcon
-                    disabled={zoom <= ZOOM_STEPS[0]}
-                    icon={ZoomOut}
-                    size={'small'}
-                    title={translate('acceptance.review.zoomOut')}
-                    onClick={() => stepZoom(-1)}
-                  />
-                  <span className={styles.zoomLabel}>{Math.round(zoom * 100)}%</span>
-                  <ActionIcon
-                    disabled={zoom >= ZOOM_STEPS.at(-1)!}
-                    icon={ZoomIn}
-                    size={'small'}
-                    title={translate('acceptance.review.zoomIn')}
-                    onClick={() => stepZoom(1)}
-                  />
-                  <ActionIcon
-                    icon={X}
-                    size={'small'}
-                    title={translate('acceptance.review.exitFullscreen')}
-                    onClick={() => setFullscreen(false)}
-                  />
-                </Flexbox>
-                {thumbnails}
-                <div className={styles.fullscreenBody}>
-                  <div className={styles.viewport} ref={viewportRef}>
-                    <AnnotationCanvas
-                      annotations={activeAnnotations}
-                      src={activeEvidence.fileUrl}
-                      imageWidth={
-                        // -2 keeps the frame's own border inside the viewport
-                        // at fit zoom, so no phantom horizontal scrollbar.
-                        viewportWidth ? Math.max(viewportWidth * zoom - 2, 0) : undefined
-                      }
-                      {...canvasHandlers}
-                    />
-                  </div>
-                  <div className={styles.sidePanel}>
-                    <Text strong fontSize={13}>
-                      {translate('acceptance.review.regionComments')}
+                  {activeAnnotations.length === 0 && (
+                    <Text fontSize={12} type={'secondary'}>
+                      {translate('acceptance.review.regionCommentsEmpty')}
                     </Text>
-                    {activeAnnotations.length === 0 && (
-                      <Text fontSize={12} type={'secondary'}>
-                        {translate('acceptance.review.regionCommentsEmpty')}
-                      </Text>
-                    )}
-                    {annotationInputs}
-                  </div>
+                  )}
+                  {annotationInputs}
                 </div>
               </div>
-            </div>,
-            document.body,
+            </>
           )}
+        </Modal>
       </>
     );
   },

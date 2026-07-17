@@ -754,7 +754,6 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
               subText={barTexts.subText}
               onAccept={handleAccept}
               onOpenFeedback={() => setFeedbackOpen(true)}
-              onSendGlobalFeedback={(comment) => handleGroupFeedback('', comment)}
             />
           )}
           <Flexbox style={{ height: 8 }} />
