@@ -601,6 +601,7 @@
   "serviceModel.optionalFeatures.title": "İsteğe Bağlı Özellikler",
   "settingAgent.agentTools.add": "Araç Ekle",
   "settingAgent.agentTools.agentEmpty": "Henüz ajanlara özel araç yok",
+  "settingAgent.agentTools.authorizedBy": "{{name}} tarafından yetkilendirildi",
   "settingAgent.agentTools.badge.agentOnly": "Sadece ajanlara özel",
   "settingAgent.agentTools.badge.copy": "Kopyala",
   "settingAgent.agentTools.badge.linked": "Bağlı",

@@ -601,6 +601,7 @@
   "serviceModel.optionalFeatures.title": "Optionele functies",
   "settingAgent.agentTools.add": "Tool toevoegen",
   "settingAgent.agentTools.agentEmpty": "Nog geen agent-exclusieve tools",
+  "settingAgent.agentTools.authorizedBy": "Geautoriseerd door {{name}}",
   "settingAgent.agentTools.badge.agentOnly": "Alleen voor agent",
   "settingAgent.agentTools.badge.copy": "Kopiëren",
   "settingAgent.agentTools.badge.linked": "Gekoppeld",

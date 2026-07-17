@@ -601,6 +601,7 @@
   "serviceModel.optionalFeatures.title": "선택적 기능",
   "settingAgent.agentTools.add": "도구 추가",
   "settingAgent.agentTools.agentEmpty": "아직 에이전트 전용 도구가 없습니다",
+  "settingAgent.agentTools.authorizedBy": "{{name}}에 의해 승인됨",
   "settingAgent.agentTools.badge.agentOnly": "에이전트 전용",
   "settingAgent.agentTools.badge.copy": "복사",
   "settingAgent.agentTools.badge.linked": "연결됨",

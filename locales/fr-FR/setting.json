@@ -601,6 +601,7 @@
   "serviceModel.optionalFeatures.title": "Fonctionnalités optionnelles",
   "settingAgent.agentTools.add": "Ajouter un outil",
   "settingAgent.agentTools.agentEmpty": "Aucun outil exclusif à l'agent pour le moment",
+  "settingAgent.agentTools.authorizedBy": "Autorisé par {{name}}",
   "settingAgent.agentTools.badge.agentOnly": "Exclusif à l'agent",
   "settingAgent.agentTools.badge.copy": "Copier",
   "settingAgent.agentTools.badge.linked": "Lié",

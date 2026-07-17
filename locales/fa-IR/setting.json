@@ -601,6 +601,7 @@
   "serviceModel.optionalFeatures.title": "ویژگی‌های اختیاری",
   "settingAgent.agentTools.add": "افزودن ابزار",
   "settingAgent.agentTools.agentEmpty": "هنوز هیچ ابزار اختصاصی برای عامل وجود ندارد",
+  "settingAgent.agentTools.authorizedBy": "مجاز شده توسط {{name}}",
   "settingAgent.agentTools.badge.agentOnly": "فقط برای عامل",
   "settingAgent.agentTools.badge.copy": "کپی",
   "settingAgent.agentTools.badge.linked": "مرتبط",

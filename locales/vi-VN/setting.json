@@ -601,6 +601,7 @@
   "serviceModel.optionalFeatures.title": "Tính năng tùy chọn",
   "settingAgent.agentTools.add": "Thêm Công cụ",
   "settingAgent.agentTools.agentEmpty": "Chưa có công cụ dành riêng cho agent",
+  "settingAgent.agentTools.authorizedBy": "Được cấp phép bởi {{name}}",
   "settingAgent.agentTools.badge.agentOnly": "Chỉ dành cho agent",
   "settingAgent.agentTools.badge.copy": "Sao chép",
   "settingAgent.agentTools.badge.linked": "Đã liên kết",

@@ -601,6 +601,7 @@
   "serviceModel.optionalFeatures.title": "Опционални функции",
   "settingAgent.agentTools.add": "Добавяне на инструмент",
   "settingAgent.agentTools.agentEmpty": "Все още няма инструменти, ексклузивни за агента",
+  "settingAgent.agentTools.authorizedBy": "Оторизирано от {{name}}",
   "settingAgent.agentTools.badge.agentOnly": "Само за агенти",
   "settingAgent.agentTools.badge.copy": "Копиране",
   "settingAgent.agentTools.badge.linked": "Свързано",

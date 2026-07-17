@@ -601,6 +601,7 @@
   "serviceModel.optionalFeatures.title": "オプション機能",
   "settingAgent.agentTools.add": "ツールを追加",
   "settingAgent.agentTools.agentEmpty": "エージェント専用のツールはまだありません",
+  "settingAgent.agentTools.authorizedBy": "{{name}} により承認",
   "settingAgent.agentTools.badge.agentOnly": "エージェント専用",
   "settingAgent.agentTools.badge.copy": "コピー",
   "settingAgent.agentTools.badge.linked": "リンク済み",

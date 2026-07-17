@@ -601,6 +601,7 @@
   "serviceModel.optionalFeatures.title": "Дополнительные функции",
   "settingAgent.agentTools.add": "Добавить инструмент",
   "settingAgent.agentTools.agentEmpty": "Пока нет инструментов, доступных только агенту",
+  "settingAgent.agentTools.authorizedBy": "Авторизовано {{name}}",
   "settingAgent.agentTools.badge.agentOnly": "Только для агента",
   "settingAgent.agentTools.badge.copy": "Копия",
   "settingAgent.agentTools.badge.linked": "Связано",

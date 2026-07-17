@@ -601,6 +601,7 @@
   "serviceModel.optionalFeatures.title": "الميزات الاختيارية",
   "settingAgent.agentTools.add": "إضافة أداة",
   "settingAgent.agentTools.agentEmpty": "لا توجد أدوات حصرية للوكيل حتى الآن",
+  "settingAgent.agentTools.authorizedBy": "مصرح به من قبل {{name}}",
   "settingAgent.agentTools.badge.agentOnly": "حصري للوكيل",
   "settingAgent.agentTools.badge.copy": "نسخ",
   "settingAgent.agentTools.badge.linked": "مرتبط",

@@ -601,6 +601,7 @@
   "serviceModel.optionalFeatures.title": "Funkcje opcjonalne",
   "settingAgent.agentTools.add": "Dodaj narzędzie",
   "settingAgent.agentTools.agentEmpty": "Brak narzędzi wyłącznie dla agenta",
+  "settingAgent.agentTools.authorizedBy": "Autoryzowane przez {{name}}",
   "settingAgent.agentTools.badge.agentOnly": "Tylko dla agenta",
   "settingAgent.agentTools.badge.copy": "Kopia",
   "settingAgent.agentTools.badge.linked": "Połączone",
