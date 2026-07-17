@@ -76,20 +76,14 @@ title similarity is never a merge signal. For every user-visible UI case, plan a
 dedicated screenshot or recording for that exact claim — program output may
 supplement it but cannot replace visual evidence.
 
-On a follow-up round, seed the plan from `lh verify acceptance view <subject> --json`
-before writing any case (see SKILL.md "Before the next round"). Per-check policy:
+On a follow-up round, seed the plan from
+`lh verify acceptance view <subject> --json` before writing any case:
 
-- `userReview.action == "accept"` — user-settled. OMIT it from the new plan
-  entirely: no re-run, no restating. The union carries it forward untouched;
-  a settled check is not yours to touch again.
-- `userReview.action == "reject"` with `stale: false` — the round's primary work
-  items. Quote the user's `comment` / `annotations[].comment` in the plan case's
-  expected outcome so the fix is verified against the actual feedback, and reuse
-  the EXACT stable id so the re-run lands on the same union row (same `C#`).
-- everything else — plan by the check's own `state` (failed / uncertain first),
-  again reusing stable ids; only a semantic change warrants a new id, and then
-  ONLY with `supersedes: ['old-id']` — a fresh id without it renders as a new
-  parallel row, not an iteration.
+- Accepted checks are user-settled; omit them from the new plan.
+- Rejected, non-stale checks are the primary repair items. Carry their comments
+  and annotations into the expected outcome, and reuse their exact stable ids.
+- Plan all remaining checks from their current state, again reusing stable ids.
+  A semantic replacement requires a new id plus `supersedes: ['old-id']`.
 
 ## Confirmation behavior
 

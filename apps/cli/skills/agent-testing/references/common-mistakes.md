@@ -497,3 +497,44 @@ unless told not to: validate the new state, commit and push the branch, create a
 report directory, ingest exactly once as the next immutable run on the same subject
 acceptance, verify the new round appears, then return both the commit and the
 production link.
+
+---
+
+## M24 — Labeling sequential flow steps as a before/after comparison
+
+**Wrong approach**: attaching two sequential steps of one flow as a `comparison`
+pair with `before` and `after` roles.
+
+**Why it is wrong**: comparison rendering means the same surface before and after
+a change. Sequential steps are neither a defect nor its remediation.
+
+**Correct approach**: reserve `comparison` for one view in two states. Attach
+flow steps as ordinary ordered evidence with a caption naming each step.
+
+---
+
+## M25 — Publishing locally because the acceptance subject exists only locally
+
+**Wrong approach**: ingesting the primary report into a local instance because
+its task or topic is absent from production.
+
+**Why it is wrong**: localhost links disappear with the environment and cannot
+serve as shared deliverables. Subject convenience does not change the production
+publication requirement.
+
+**Correct approach**: create a production task or topic as the acceptance anchor,
+then publish in a clean environment against `app.lobehub.com`. A local ingest may
+supplement the run, but never replace the production deliverable.
+
+---
+
+## M26 — Creating an acceptance without its requirement
+
+**Wrong approach**: using a bare subject string on the first ingest and assuming
+the acceptance goal is inferred automatically.
+
+**Why it is wrong**: the requirement is author-supplied. Omitting it leaves the
+decision page without the business goal against which all rounds are judged.
+
+**Correct approach**: supply `--requirement` or the object subject form on the
+first ingest. State the cross-round business goal, not the current round's scope.

@@ -277,7 +277,8 @@ installed; `chmod +x` is applied on install):
 
 | Script                          | Usage                                                                                           |
 | ------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `report-init.sh`                | Scaffold a structured test report (Step 5)                                                      |
+| `report-init.sh`                | Scaffold a structured report grouped by acceptance subject (Step 5)                             |
+| `fixture.mjs`                   | Per-check fixtures: `init-check`, `list`, and `compose` an ingest-ready round (Step 5)          |
 | `record-gif.sh`                 | Frame-sequence → GIF for time-based behavior (streaming, timers, animations)                    |
 | `check-screen-recording.sh`     | Preflight: OS screen-capture works (macOS Screen Recording + display awake)                     |
 | `cdp-screenshot.sh`             | Electron/Chrome screenshot via RAW CDP (bypasses the agent-browser daemon); `--check` preflight |
@@ -327,16 +328,36 @@ Every automated test session ends with a structured, evidence-backed report — 
 a chat-only summary. Scaffold it up front and fill it as you test:
 
 ```bash
-DIR=$("$SKILL_DIR/scripts/report-init.sh" my-feature "Verify my feature")
+# Pass the acceptance subject up front so every round is grouped correctly.
+DIR=$("$SKILL_DIR/scripts/report-init.sh" --subject topic:tpc_xxx my-feature "Verify my feature")
 # ... test, saving screenshots / CLI transcripts into $DIR/assets/ ...
 # fill $DIR/result.json (scenario, context, plan[], cases[], summary.conclusion) — the report;
 # $DIR/report.md holds only the narrative tail (follow-ups / notes / score)
 ```
 
-Reports live in `.records/reports/<timestamp>-<slug>/` (instruct the project to
-gitignore `.records/`): `result.json` (the structured report), `report.md`
-(narrative tail), `assets/` (evidence). Format spec and evidence rules:
-[references/report.md](./references/report.md). Hard rules worth front-loading:
+Reports live in `.records/reports/<subject-key>/<timestamp>-<slug>/` (instruct
+the project to gitignore `.records/`), grouped by acceptance. The subject
+directory contains an `acceptance.json` marker and one subdirectory per
+immutable round. Passing `--subject` also pre-fills `result.json.subject`.
+Format and evidence rules: [references/report.md](./references/report.md).
+
+#### Fixtures: reusable per-check inputs
+
+When a check needs reusable seed data or replay steps, keep it under
+`.records/fixtures/<subject-key>/<check-id>/`: `check.json` stores the plan and
+case template; `seed/` stores reusable inputs. Execution outputs such as
+screenshots and transcripts remain in the round's `assets/` and must never be
+copied back into a fixture.
+
+```bash
+F="$SKILL_DIR/scripts/fixture.mjs"
+$F init-check --subject topic:tpc_xxx palette-long-list
+$F list --subject topic:tpc_xxx
+DIR=$($F compose --subject topic:tpc_xxx --slug round4 --title "Full regression" \
+  palette-open palette-long-list)
+```
+
+Hard rules worth front-loading:
 
 - **Report language = the user's conversation language.** Write `report.md` and
   every human-facing string in `result.json` (case `name`/`observation`,
@@ -350,11 +371,11 @@ gitignore `.records/`): `result.json` (the structured report), `report.md`
 - **Visual evidence lives in `result.json`, NOT in `report.md`.** Attach each
   screenshot/GIF to its case via `cases[].evidence`; the page renders it next to
   the check. Do NOT embed images/GIFs in `report.md`.
-- **Final replies: the ONLY visual deliverable is the published `/verify/<id>`
-  link — put NO images and NO local-file links in the chat reply.** The chat UI
-  cannot load a local-path image (it renders as a broken box) or open a local-path
-  link. The published page renders every screenshot inline; that URL is the
-  evidence pointer. You may mention the local report dir as a plain string.
+- **Final replies lead with the published `/acceptance/<id>` link; the round's
+  `/verify/<id>` link may follow as the immutable record. Put no images or local
+  file links in the chat reply.** The acceptance page is the stable cross-round
+  decision surface; the verify page renders that round's evidence inline. You
+  may mention the local report directory as plain text.
 - **Time-based behavior needs a GIF, not a screenshot.** Streaming output, a
   ticking timer, loading states, animations — record with `scripts/record-gif.sh`
   and attach the GIF as that case's evidence; a static screenshot cannot prove it.
@@ -404,9 +425,10 @@ verification run, attaches it to the subject acceptance, and uploads everything:
 - each case's `evidence` file(s) → uploaded and attached to that result;
 - `report.md` → the report body, plus the `summary` stats.
 
-It prints the `verifyRunId` and, with `--open`, the path `/verify/<verifyRunId>` —
-on production `https://app.lobehub.com/verify/<verifyRunId>`. **Include that full
-production link in the final chat reply** alongside the local report dir.
+It prints the `verifyRunId`, `acceptanceId`, and their in-app paths. The final
+reply leads with `https://app.lobehub.com/acceptance/<acceptanceId>` as the
+latest cross-round state; the round-specific
+`https://app.lobehub.com/verify/<verifyRunId>` may follow as supporting detail.
 
 #### Every run belongs to a subject acceptance (mandatory)
 
@@ -419,12 +441,24 @@ LobeHub topic, an explicit subject is required and publishing without one fails:
 ```bash
 # SUBJECT is task:$TASK_ID, topic:$TOPIC_ID, or document:$DOC_ID
 env -u LOBEHUB_SERVER -u LOBE_API_KEY -u LOBEHUB_CLI_API_KEY -u LOBEHUB_CLI_HOME \
-  lh verify ingest-report "$DIR" --source agent-testing --subject "$SUBJECT" --open --json
+  lh verify ingest-report "$DIR" --source agent-testing --subject "$SUBJECT" \
+  --requirement "$REQUIREMENT" --open --json
 ```
 
-`--subject` accepts `task:<id> | topic:<id> | document:<id>` (or put
-`"subject": "task:<id>"` in `result.json`). The first ingest creates the
-acceptance; every ingest creates its next immutable round.
+`--subject` accepts `task:<id> | topic:<id> | document:<id>`; `result.json` may
+instead use the string form or
+`{ "type": "task", "id": "<id>", "requirement": "<goal>" }`.
+
+**Always supply the acceptance requirement on the first ingest.** It is not
+generated automatically. Write the one-sentence business goal against which the
+whole acceptance is judged, not the current round's narrower scope. A recorded
+requirement is immutable; an initially empty value may be backfilled by the first
+later round that supplies one.
+
+The first ingest creates the acceptance and every ingest creates its next
+immutable round. The user closes the loop on `/acceptance/<acceptanceId>`; the
+same state is available through
+`lh verify acceptance view|accept|reject <id | type:id>`.
 
 When no subject exists yet (first verification in a repo, no tracked task),
 create one with the CLI instead of asking the user for an id — a dedicated task
@@ -439,6 +473,24 @@ SUBJECT="task:T-<n>"
 
 Tell the user which task was created. Reuse the same subject for every follow-up
 round in that repo so all rounds land on one acceptance page.
+
+#### Before a follow-up round: read user feedback
+
+When the subject already has an acceptance, planning starts from its current
+state rather than memory:
+
+```bash
+env -u LOBEHUB_SERVER -u LOBE_API_KEY -u LOBEHUB_CLI_API_KEY -u LOBEHUB_CLI_HOME \
+  lh verify acceptance view "$SUBJECT" --json
+```
+
+- `checks[].userReview.action === "accept"`: user-settled; omit it from the new
+  plan and do not re-run it.
+- `action === "reject"` with `stale: false`: address its comment and annotations,
+  and reuse the exact stable check id so the next result lands on the same row.
+- For a semantic replacement, create a new id with `supersedes: ['old-id']`.
+  A fresh id without `supersedes` creates an unrelated parallel check.
+- Treat `stale: true` feedback as history already consumed by a newer round.
 
 #### Every verification run is an immutable snapshot
 

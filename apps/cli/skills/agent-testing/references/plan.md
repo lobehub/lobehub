@@ -76,6 +76,15 @@ title similarity is never a merge signal. For every user-visible UI case, plan a
 dedicated screenshot or recording for that exact claim — program output may
 supplement it but cannot replace visual evidence.
 
+On a follow-up round, seed the plan from
+`lh verify acceptance view <subject> --json` before writing any case:
+
+- Accepted checks are user-settled; omit them from the new plan.
+- Rejected, non-stale checks are the primary repair items. Carry their comments
+  and annotations into the expected outcome, and reuse their exact stable ids.
+- Plan all remaining checks from their current state, again reusing stable ids.
+  A semantic replacement requires a new id plus `supersedes: ['old-id']`.
+
 ## Confirmation behavior
 
 After the feedback, use the runtime structured question tool

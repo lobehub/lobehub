@@ -6,14 +6,29 @@ a reviewer, or a later agent) audits without replaying the session.
 
 ## Location & layout
 
-Reports live under `.records/reports/` (gitignored, like all `.records/` output):
+Reports live under `.records/reports/` (gitignored, like all `.records/`
+output), grouped by acceptance subject. One subject directory contains one
+subdirectory per immutable verification round:
 
 ```
-.records/reports/<YYYYMMDD-HHMMSS>-<slug>/
-├── report.md      # narrative TAIL only (follow-ups / this-round notes / score) — the page's "Details"
-├── result.json    # the structured source: scenario + context + plan + cases + summary.conclusion
-└── assets/        # evidence: screenshots, HAR files, CLI transcripts
+.records/reports/<subject-key>/
+├── acceptance.json
+├── <YYYYMMDD-HHMMSS>-<slug>/
+│   ├── report.md
+│   ├── result.json
+│   └── assets/
+└── <YYYYMMDD-HHMMSS>-<slug>/
 ```
+
+`<subject-key>` is the ingest subject with `:` replaced by `-`. Scaffold with
+`report-init.sh --subject topic:tpc_xxx <slug> "<title>"`; this also pre-fills
+`result.json.subject`. The legacy flat layout remains readable, but new runs
+should always carry their subject.
+
+Reusable per-check inputs live separately under
+`.records/fixtures/<subject-key>/<check-id>/` as `check.json` plus `seed/`.
+Execution outputs remain in the round directory's `assets/`. See
+`scripts/fixture.mjs` and the skill's fixture workflow.
 
 **`result.json` is the report — `report.md` is just its tail.** The published
 verify page (`/verify/<id>`) renders itself from `result.json`: one line of
@@ -30,7 +45,7 @@ table — those double up on the page. It carries only the non-duplicate narrati
 
    ```bash
    # $SKILL_DIR = the skill's install dir
-   DIR=$("$SKILL_DIR/scripts/report-init.sh" my-slug "My title")
+   DIR=$("$SKILL_DIR/scripts/report-init.sh" --subject topic:tpc_xxx my-slug "My title")
    ```
 
    The script creates the directory, pre-fills branch / commit / date in both
@@ -61,7 +76,11 @@ table — those double up on the page. It carries only the non-duplicate narrati
 
    - UI (before/after comparison): capture and visually verify both original
      screenshots. Do not compose them into a new image. In the case's `evidence`
-     array, pair them with a shared comparison id:
+     array, pair them with a shared comparison id.
+
+     A comparison pair means the same view in two states. Sequential steps of a
+     flow are not before/after states; attach those as ordinary ordered evidence
+     items with captions naming each step.
 
      ```json
      "evidence": [

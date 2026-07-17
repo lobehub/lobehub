@@ -92,3 +92,17 @@ be hidden/disabled for users who will always be rejected).
 as the blocked role and screenshot the rejection state (and the allowed role's
 success state) in addition to API probes. If the rejection renders as a raw or
 missing error message, report that as a finding instead of leaving it undiscovered.
+
+---
+
+## Case 26 — Applying dual scope to only one bulk-maintenance action
+
+**Wrong approach**: introduce own-scope and workspace-scope variants for one
+bulk action while leaving sibling maintenance actions owner-own-only.
+
+**Why it is wrong**: authority was evaluated per menu entry rather than across
+the complete role × action × scope matrix.
+
+**Correct approach**: enumerate every matrix cell. Members receive own-only
+actions; owners receive both own and workspace variants for each applicable
+action, with elevated confirmation for destructive workspace-wide operations.

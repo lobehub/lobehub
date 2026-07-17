@@ -862,3 +862,202 @@ nodeintegration, plugins, disablewebsecurity, allowpopups, preload, …`). The h
 - **Works**: seed an `agents` row and set `topics.agent_id` (and `messages.agent_id`)
   before opening the share page. Verify the fetch actually fired via
   `agent-browser network requests | grep getMessages`, not by waiting on the UI.
+
+---
+
+## Post-migration findings preserved from canary
+
+### E32. ✅ WORKS — driving `heteroIngest`/`heteroFinish` directly needs an OIDC token, and bun's spawn-ENOENT message differs from node's
+
+- **Situation**: E2E-testing the hetero server-ingest chain by running `lh hetero exec --topic <t> --operation-id <op>` manually (the exact command a device daemon spawns), against a local dev
+  server, with the seeded CLI API key.
+- **Doesn't work**: the seeded `LOBE_API_KEY`. `heteroAuthedProcedure` requires `ctx.oidcAuth`
+  (`packages/trpc/src/lambda/middleware/heteroOperationAuth.ts`) — an API key never populates it, so
+  `heteroFinish` 401s. Also note the local no-`.env` env has no `JWKS_KEY` (E22), so the server
+  cannot even validate a JWT until restarted with one.
+- **Works** — production-shape auth in three steps:
+  1. `node scripts/generate-oidc-jwk.mjs > /tmp/jwks.json`
+  2. restart the dev server with `JWKS_KEY="$(cat /tmp/jwks.json)"` (must be present at start)
+  3. sign a 4h `hetero-operation` JWT with the SAME key via `signOperationJwt(<userId>)`
+     (`packages/trpc/src/utils/internalJwt.ts`; run a small `.mts` inside the repo with `bunx tsx`),
+     then run the CLI with `LOBEHUB_JWT=<token> LOBEHUB_SERVER=<app-url>` — the CLI forwards it as
+     the `Oidc-Auth` header.
+     The fixture side needs `topics.metadata.runningOperation = { operationId, assistantMessageId }`
+     seeded, and the operationId must embed real ids (`op_<ts>_agt_<id>_tpc_<id>_<suffix>`).
+- **Bonus trap**: under bun, a spawn failure reads `ENOENT: no such file or directory,
+posix_spawn '<cmd>'` — NOT node's `spawn <cmd> ENOENT`. Any stderr-text pattern keyed to the node
+  format silently misses on bun; classification/assertions should key on the raw error's
+  `err.code === 'ENOENT'` (runtime-agnostic) and treat text matching as fallback only.
+- **Persistence shape worth knowing**: a process-level failure that produced ZERO stream events
+  never creates op state, so `HeterogeneousPersistenceHandler.finish` early-returns — the message
+  error is written by `CompletionLifecycle.completeOperation`'s onError branch instead
+  (`body: messageError.body ?? { message }`). Assert on `messages.error`, not on which writer ran.
+
+### E33. ✅ WORKS — keep the Electron supervisor session alive in process-reaping runners
+
+- **Situation**: `electron-dev.sh start <id>` reports `Ready`, but CDP and the Vite port disappear
+  immediately after the shell command returns. The Electron log contains no crash or product error.
+- **Doesn't work**: repeatedly restarting and treating the vanished CDP endpoint as an app crash.
+- **Works**: keep the launcher shell alive for the test session (for example, run `start` followed by
+  a short periodic wait loop in the same PTY), drive CDP from a second shell, then stop with
+  `electron-dev.sh stop <id>` and terminate the holder. Some execution harnesses reap descendants when
+  the command cell closes even though the launcher normally survives an interactive terminal.
+
+### F3. ✅ WORKS — render the `/verify-im` messenger bind SUCCESS state without a real platform token
+
+- **Situation**: verifying the messenger verify page's success card (`SuccessCard`) for
+  Telegram/Slack/Discord. A real bind needs a live bot issuing a `random_id` link token —
+  unavailable in an isolated env.
+- **Works**: take the page's own refresh-after-link path instead. With a signed-in user, seed
+  (1) a `messenger_account_links` row for (user, platform, tenant\_id='') and (2) an enabled
+  `system_bot_providers` row for the platform — `credentials` must be encrypted with
+  `KeyVaultsGateKeeper.initWithEnvKey()` (same `KEY_VAULTS_SECRET` as the dev server), e.g.
+  telegram `{ botToken, botUsername }`. Then open
+  `/verify-im?random_id=<anything>&im_type=<platform>`: the peek-token query fails, but the
+  existing-link lookup succeeds and the page falls through to the real success card
+  (`shouldShowSingleAccountSuccess` — existing link + no active token → success).
+- `botUsername` drives the "Open in <platform>" deep-link CTA; re-encrypt the credentials
+  WITHOUT it to exercise the no-deep-link fallback. Note the platform config is cached
+  in-process for 30s (`packages/app-config/src/messenger.ts` CACHE\_TTL\_MS) — wait out the TTL
+  after editing the row before reloading.
+- Locale for evidence shots: `window.__LOBE_STORES.global().switchLocale('zh-CN')` then reload.
+
+### D21. ✅ WORKS — when `click @ref` reports Done but the React onClick never fires, click via `eval` `element.click()`
+
+**Situation**: on a dense list row (acceptance check rows with hover-revealed ActionIcons and
+expanded-area buttons), `agent-browser click @ref` returned `✓ Done` but no TRPC mutation fired and
+no state changed — the pointer click seemingly landed on an overlaying/other element. Repeated for
+both hover icons and regular buttons inside the row.
+
+**Doesn't work**: re-snapshotting and clicking the fresh `@ref`; the command still reports success
+with no effect (so the failure is silent — always verify the click by its observable side effect,
+e.g. the network request or a DB row, never by the driver's `Done`).
+
+**Works**: locate the element in-page and call the DOM `element.click()` via `eval` — React's
+synthetic onClick fires reliably:
+
+```bash
+agent-browser --session "(()=>{const b=[...document.querySelectorAll('button')]
+  .find(x=>x.textContent.trim()==='<label>'); b.click(); return 'clicked'})()" < s > eval
+```
+
+Scope the query to the intended row/container first (climb from a unique text node, stop before the
+ancestor contains other rows' text) — a page-wide `find(...)` picks the FIRST match and can submit
+an action against the wrong row. For drag interactions (annotation canvases), dispatch synthetic
+`MouseEvent`s (`mousedown/mousemove/mouseup` with `bubbles:true` and computed `clientX/Y`) on the
+target element.
+
+### E34. Shell proxy env (HTTP\_PROXY=127.0.0.1:7890) inherited by the dev server breaks auth with silent 307 loops
+
+**Situation**: `init-dev-env.sh dev` launched from a shell where a system proxy (Clash etc.) exported
+`HTTP_PROXY`/`HTTPS_PROXY`. The server booted fine, pages served, but `POST /api/auth/sign-in/email`
+returned a bare `307 → /` with NO `set-cookie` (body = Next `__next_error__` page), the boot prewarm
+logged `redirect count exceeded`, and `setup-auth.sh web-seed` failed with "sign-in succeeded but no
+cookies were written" (307 matches its `^[23]` success check).
+
+**Doesn't work**: retrying the seed, restarting the agent-browser daemon — the failure is in the
+server process env, not the client.
+
+**Works**: strip proxy vars when starting the dev server:
+
+```bash
+env -u HTTP_PROXY -u HTTPS_PROXY -u http_proxy -u https_proxy -u ALL_PROXY -u all_proxy \
+  -u NO_PROXY -u no_proxy ./.agents/verify/scripts/init-dev-env.sh dev
+```
+
+Symptom fingerprint: every auth POST answers 307 in \~25ms with `application-code` time present, and
+the prewarm warning mentions `redirect count exceeded`.
+
+### C12. A globally installed `lh` ingest-report can silently create an ORPHAN verify run (no acceptance attach) when the branch's CLI contract is newer
+
+- **Situation**: publishing/ingesting a report while verifying a branch that extends the verify CLI
+  (e.g. adds `--subject` / acceptance attach). The global `lh` accepted the report, returned a
+  `verifyRunId`, and printed no error — but the run's `acceptance_id` was NULL, so it never appeared
+  on the acceptance page, which reads as "my ingest didn't show up / the page is stale".
+- **Doesn't work**: trusting a green `verifyRunId` from the global CLI as proof of attachment, or
+  passing `--subject` to it (`error: unknown option '--subject'` is the tell that it predates the
+  branch contract).
+- **Works**: run the branch's own CLI from the worktree — `cd apps/cli && bun src/index.ts verify
+ingest-report <dir> --subject topic:<id> …` — and verify attachment in the DB
+  (`select acceptance_id from verify_runs where id='<runId>'`) before driving the UI against it.
+
+### D22. ✅ WORKS — driving the manual-approval intervention chain (批准 / 提交 cards) in web chat
+
+- **Situation**: a real agent turn under the default manual-approval mode stops at an
+  intervention card (`lobe-activator → 激活工具`, `Task Tools → createTask`, …) after EVERY tool
+  call. `snapshot -i` does not reliably expose the card's option rows / submit button as refs,
+  and one turn can chain 4–5 sequential interventions — a fixed approve-once script stalls.
+- **Doesn't work**: matching the option row by exact text `批准` (the row nests the label; the
+  filtered element list often misses it), or assuming one approval finishes the turn.
+- **Works**: the "approve" option is pre-selected by default, so clicking the card's **提交**
+  button alone approves. Loop until quiescent: each round, find the LAST visible element whose
+  text includes `提交` via `eval`, tag it `data-probe`, click through agent-browser (trusted
+  input), then poll `chat().operations` for zero `running` AND no remaining 提交 button before
+  declaring the turn done. Log which tool each round approved by grabbing the last visible
+  `… → …` header text. One creation turn (activate + createTask + setTaskVerify + runTask)
+  took 5 approvals.
+- **Also measured (fixture note)**: a task's verify requirement is visible to the RUNNER agent,
+  which will optimize toward the acceptance criteria (a "200 字，no code" instruction with a
+  "≥1500 字 + Python code" requirement produced a 3.5k-char deliverable) — a contradictory-criteria
+  fixture still fails verification, but not for the reason you scripted; assert on the verifier's
+  recorded rationale, not on your intended contradiction.
+
+### E35. A listening port is NOT the product under test — another project's dev server can own it
+
+- **Situation**: `.env` says `PORT=<n>`, something answers on `<n>`, and a prior session recorded
+  "dev server running on `<n>`" — so the run plans a mere restart.
+- **Doesn't work**: trusting liveness (an HTTP response, an open socket) as identity. A sibling
+  project's dev server started on the same port responds happily; every request then exercises the
+  wrong codebase, and hook/DB assertions fail in ways that read as product bugs.
+- **Works**: fingerprint the app before using it: `ps -o command= -p <pid>` of the listener shows the
+  repo path in the `next dev`/`node` command line, and an unauthenticated `GET /` redirect is a
+  cheap signature (this repo's better-auth redirects to `/signin`; a Clerk app redirects to
+  `/login` with `x-clerk-*` headers). If it is the wrong app, free the port and start the right
+  server — and re-verify with the same fingerprint after boot.
+
+### C13. better-auth email-verification cannot be completed from the outside — treat real-mail paths as blocked
+
+- **Situation**: an assertion requires a REAL email-verification event (e.g. a hook that only fires
+  on better-auth verification routes), and the test inbox does not exist.
+- **Doesn't work**: recovering the token from the database. The `/verify-email` link token is a
+  signed JWT that is never stored; the email-otp OTP did not appear in the `verifications` table
+  either (only unrelated OIDC rows), and the send endpoint returns `{"success":true}` regardless.
+  Flipping `email_verified` in the DB is a fixture, not a verification — route-gated hooks
+  correctly ignore it (which is itself a useful negative check).
+- **Works**: mark the case `blocked` and cover the path with unit tests, or run the flow with a
+  real receivable mailbox (staging/prod smoke). Use the DB flip only to unblock downstream
+  fixtures, and assert it does NOT produce the event as a bonus authenticity check.
+
+### E36. Desktop main-process `logger.info` is invisible in dev without `DEBUG`
+
+- **Situation**: verifying desktop main-process behavior (e.g. perf probes in a manager/module) by
+  reading the dev log.
+- **Doesn't work**: expecting `createLogger(ns).info(...)` lines in `/tmp/electron-dev.log` from a
+  plain dev start — in dev (`app.isPackaged` false) `info` only goes through the `debug` package,
+  which is silent unless its namespace is enabled.
+- **Works**: start the instance with the namespace enabled, e.g.
+  `DEBUG="screenCapture:*" electron-dev.sh restart`, then grep the log. In packaged builds the same
+  lines land in electron-log's file instead.
+
+### E37. osascript keystrokes go to the frontmost app — never send Escape
+
+- **Situation**: driving a desktop flow with synthetic keys (global shortcut trigger is fine — it's
+  registered globally), then trying to dismiss a window with `key code 53` (Escape).
+- **Doesn't work**: the Escape lands on whatever app is frontmost — typically the terminal running
+  the agent session, which interprets it as an interrupt and kills the agent's own turn.
+- **Works**: close app surfaces in-band instead: eval the app's own close IPC via CDP on that
+  window's target (`window.electronAPI.invoke('...close')`), or click its close affordance. Reserve
+  synthetic keys for globally-registered shortcuts that don't depend on focus.
+
+### E38. Bimodal timings from a globalShortcut handler = idle-event-loop stall (and `setTimeout` probes mask it)
+
+- **Situation**: timing a flow triggered from an Electron `globalShortcut` callback; measurements
+  are wildly bimodal (sub-ms vs multi-second) and "fix" themselves when extra probes are added.
+- **Doesn't work**: attributing the multi-second gap to whatever awaited call sits at that milestone
+  (it may be a cached no-op), or keeping a `setTimeout(0)` diagnostic probe while re-measuring — a
+  pending timer wakes the loop and hides the stall entirely.
+- **Works**: bracket the suspect `await` with markers plus one `queueMicrotask` and one
+  `setTimeout(0)` marker ONCE to classify the stall, then remove them and re-measure. If the
+  continuation only runs when an external event arrives (a CDP poll, mouse move), the cause is the
+  native-callback context not draining microtasks on an idle loop — fix by deferring the handler
+  body via `setImmediate` at the registration site, then verify variance collapses.

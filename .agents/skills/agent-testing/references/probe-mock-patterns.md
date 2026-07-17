@@ -234,6 +234,16 @@ derive(item))`) captures the value at first render. When a persisted cache hydra
   not painting (a compositor wedge — see D9). When both are 0, the DOM is genuinely
   empty. This distinction tells a non-painting renderer from a blank page.
 
+### C5. A successful ingest does not prove acceptance attachment when the CLI is stale
+
+- A globally installed CLI may accept `ingest-report` and return a run id while
+  lacking newer subject/acceptance behavior. The result is an orphan round even
+  though the command appears successful.
+- Compare `lh --version` with the skill marker before publishing. If the branch
+  under test changes the CLI contract, run that branch's CLI; otherwise use
+  `npx @lobehub/cli@latest`. Confirm the returned acceptance id or inspect the
+  acceptance page rather than treating a run id alone as proof.
+
 ---
 
 ## D. agent-browser / CDP mechanics
