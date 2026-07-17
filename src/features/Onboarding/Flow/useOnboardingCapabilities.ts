@@ -61,7 +61,7 @@ export const useOnboardingCapabilities = (): OnboardingCapabilitiesResult => {
   const hasResolvedCapabilities = useResolvedOnce(isLoading);
 
   const capabilities = useMemo(
-    () => ({ analysis: false, composio, messenger, starterTasks: false }),
+    () => ({ analysis: true, composio, messenger, starterTasks: true }),
     [composio, messenger],
   );
 

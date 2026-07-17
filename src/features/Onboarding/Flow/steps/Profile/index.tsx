@@ -2,6 +2,7 @@
 
 import { Flexbox, Skeleton, Text } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
+import { SquarePenIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -22,6 +23,7 @@ const Profile = memo<OnboardingFlowController>(({ back, hasPrevious, next }) => 
       titleExtra={
         <Button
           className={styles.tellUsMore}
+          icon={SquarePenIcon}
           shape={'round'}
           size={'small'}
           onClick={() => createSupplementModal()}

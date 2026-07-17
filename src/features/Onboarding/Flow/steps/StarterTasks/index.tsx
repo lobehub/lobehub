@@ -1,6 +1,8 @@
 'use client';
 
 import { Flexbox, Text } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
+import { PlayIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -32,6 +34,11 @@ const StarterTasks = memo<OnboardingFlowController>(({ back, hasPrevious, next }
         selectedCount > 0
           ? t('flow.steps.starterTasks.addTasks', { count: selectedCount })
           : t('flow.footer.continue')
+      }
+      titleExtra={
+        <Button icon={PlayIcon} shape={'round'} size={'small'} style={{ flex: 'none' }}>
+          {t('flow.steps.starterTasks.play')}
+        </Button>
       }
       onBack={hasPrevious ? back : undefined}
       onContinue={submit}
