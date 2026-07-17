@@ -33,6 +33,20 @@ export class CoalescingBatchIngester {
   }
 
   push(event: AgentStreamEvent): void {
+    // Mirror the previous serial ingester's fatal short-circuit: once the
+    // batcher has exhausted its retries nothing can ever be delivered, so
+    // drop later events — including text deltas — instead of retaining an
+    // undeliverable response in `accumulatedText` until the process exits.
+    if (this.batcher.failed) {
+      this.accumulatedText = '';
+      this.pendingTextEvent = undefined;
+      if (this.timer) {
+        clearTimeout(this.timer);
+        this.timer = null;
+      }
+      return;
+    }
+
     // Text-snapshot coalescing is a MAIN-AGENT-ONLY transport optimization:
     // it debounces the main agent's token-level text *deltas* into one
     // `replace` snapshot to cut ingest volume. Subagent text is explicitly

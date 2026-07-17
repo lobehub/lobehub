@@ -177,4 +177,36 @@ describe('CoalescingBatchIngester', () => {
 
     expect(ingest).toHaveBeenCalledTimes(6); // initial + 5 retries
   });
+
+  it('stops accumulating text once the batcher has failed (no undeliverable retention)', async () => {
+    // Mirrors the serial ingester's fatal short-circuit: after retries are
+    // exhausted nothing can be delivered, so later text deltas must be
+    // dropped instead of retained in `accumulatedText` until process exit.
+    const ingest = vi.fn(async () => {
+      throw new Error('server down');
+    });
+    const ingester = new CoalescingBatchIngester({ finish: vi.fn(), ingest });
+
+    ingester.push(toolEvent(1));
+    const drained = ingester.drain();
+    const assertion = expect(drained).rejects.toThrow('server down');
+    await vi.advanceTimersByTimeAsync(20_000);
+    await assertion;
+
+    ingester.push(textEvent('undeliverable '));
+    ingester.push(textEvent('response'));
+    await vi.advanceTimersByTimeAsync(1000);
+
+    // White-box on purpose — the regression IS the internal retention: the
+    // accumulator stays empty, no snapshot is pending, no debounce armed.
+    expect((ingester as any).accumulatedText).toBe('');
+    expect((ingester as any).pendingTextEvent).toBeUndefined();
+    expect((ingester as any).timer).toBeNull();
+
+    // And nothing new ever reaches the sink; drain keeps rethrowing.
+    const redrained = expect(ingester.drain()).rejects.toThrow('server down');
+    await vi.advanceTimersByTimeAsync(20_000);
+    await redrained;
+    expect(ingest).toHaveBeenCalledTimes(6); // unchanged after the failure
+  });
 });

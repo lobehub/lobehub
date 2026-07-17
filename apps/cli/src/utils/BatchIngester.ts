@@ -52,6 +52,13 @@ export class BatchIngester {
 
   constructor(private readonly sink: IngestSink) {}
 
+  /** True once a batch has exhausted its retries — every later push is a no-op
+   *  and `drain()` rethrows the stored error. Lets wrappers stop buffering
+   *  work (e.g. text coalescing) that can never be delivered. */
+  get failed(): boolean {
+    return this.fatalError !== null;
+  }
+
   push(event: AgentStreamEvent): void {
     if (this.fatalError) return;
     this.buffer.push(event);
