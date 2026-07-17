@@ -92,6 +92,10 @@ vi.mock('@/business/server/bot/featureAccess', () => ({
 }));
 
 vi.mock('../../bot/platforms', () => ({
+  extractWatchKeywordEntries: (settings?: Record<string, unknown>) =>
+    Array.isArray(settings?.watchKeywords)
+      ? settings.watchKeywords.filter((e: any) => typeof e?.keyword === 'string' && e.keyword)
+      : [],
   platformRegistry: {
     getPlatform: (platform: string) => ({ id: platform }),
     listPlatforms: () => [{ id: 'discord' }, { id: 'telegram' }, { id: 'wechat' }],

@@ -120,6 +120,27 @@ describe('invalidateBotAfterUpdate — monitoring capability flips', () => {
     expect(mockStopClient).toHaveBeenCalledTimes(1);
   });
 
+  it('does not stop webhook-mode runtimes on keyword flips (no auto-reconnect exists)', async () => {
+    // Gateway reconciliation skips webhook-mode providers, so a stop here
+    // would take the bot offline until the next manual config save.
+    await invalidateBotAfterUpdate(
+      { ...target, platform: 'telegram', settings: {} },
+      { settings: { watchKeywords: [{ keyword: 'bug' }] } },
+    );
+
+    expect(mockStopClient).not.toHaveBeenCalled();
+    expect(mockInvalidateBot).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not stop the runtime when settings switch the bot into webhook mode', async () => {
+    await invalidateBotAfterUpdate(
+      { ...target, settings: {} },
+      { settings: { connectionMode: 'webhook', watchKeywords: [{ keyword: 'bug' }] } },
+    );
+
+    expect(mockStopClient).not.toHaveBeenCalled();
+  });
+
   it('does not stop the runtime when keyword presence is unchanged', async () => {
     await invalidateBotAfterUpdate(
       { ...target, settings: { watchKeywords: [{ keyword: 'bug' }] } },

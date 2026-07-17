@@ -193,9 +193,13 @@ const renderFieldIcon = (field: FieldSchema) => (
 );
 
 const SchemaField = memo<SchemaFieldProps>(
-  ({ field, parentKey, divider, disabled, featureLocked }) => {
+  ({ field, parentKey, divider, disabled: formDisabled, featureLocked }) => {
     const { t: _t } = useTranslation('agent');
     const t = _t as (key: string) => string;
+
+    // Scalar controls fully lock with the feature; list fields handle the
+    // locked state themselves so operators can still remove stale rows.
+    const disabled = formDisabled || featureLocked;
 
     // Conditional visibility: watch the sibling field specified by visibleWhen
     const watchedValue = AntdForm.useWatch(
@@ -212,7 +216,7 @@ const SchemaField = memo<SchemaFieldProps>(
     if (field.type === 'array' && field.items?.type === 'object') {
       return (
         <ObjectListField
-          disabled={disabled}
+          disabled={formDisabled}
           divider={divider}
           featureLocked={featureLocked}
           field={field}
@@ -342,6 +346,12 @@ const ObjectListField = memo<ObjectListFieldProps>(
     const { t: _t } = useTranslation('agent');
     const t = _t as (key: string) => string;
 
+    // A locked feature blocks new rows and edits, but existing rows must stay
+    // removable — the server-side write gate always allows clearing keywords,
+    // and stale rows would otherwise keep the feature semi-active with no way
+    // out short of resetting all advanced settings.
+    const editDisabled = disabled || featureLocked;
+
     // The runtime ignores anything beyond `id`, but the editor renders every
     // declared property so future additions (e.g. a per-row note tag) flow
     // through without code changes here.
@@ -390,7 +400,7 @@ const ObjectListField = memo<ObjectListFieldProps>(
                         }
                       >
                         <FormInput
-                          disabled={disabled}
+                          disabled={editDisabled}
                           placeholder={
                             sub.placeholder
                               ? t(sub.placeholder as 'channel.allowFromIdPlaceholder')
@@ -416,7 +426,7 @@ const ObjectListField = memo<ObjectListFieldProps>(
               )}
               <Button
                 block
-                disabled={disabled}
+                disabled={editDisabled}
                 icon={<Plus size={14} />}
                 type="dashed"
                 onClick={() => add({ id: '', name: '' })}
@@ -658,7 +668,7 @@ const Body = memo<BodyProps>(
                   return (
                     <SchemaField
                       divider
-                      disabled={disabled || featureLocked}
+                      disabled={disabled}
                       featureLocked={featureLocked}
                       field={field}
                       key={field.key}

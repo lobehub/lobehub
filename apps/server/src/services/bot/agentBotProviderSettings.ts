@@ -6,6 +6,7 @@ import {
   extractWatchKeywordEntries,
   mergeWithDefaults,
   platformRegistry,
+  resolveConnectionMode,
   validateAccessSettings,
 } from './platforms';
 
@@ -106,12 +107,18 @@ export async function invalidateBotAfterUpdate(
   // Watch-keyword presence feeds the gateway's edge-filtering capability
   // (`messageMonitoring.enabled`), which is only sent at connect time — a
   // flip needs a runtime restart so the reconcile pass reconnects with the
-  // fresh capability. Same-presence keyword edits don't need it.
+  // fresh capability. Same-presence keyword edits don't need it. Webhook-mode
+  // providers are excluded: gateway reconciliation intentionally skips them,
+  // so a stop here would take the bot offline with no automatic reconnect —
+  // and their registration (capabilities included) is refreshed on config
+  // save anyway.
   const monitoringFlipped =
     value.settings !== undefined &&
     existing.settings !== undefined &&
     extractWatchKeywordEntries(value.settings).length > 0 !==
-      extractWatchKeywordEntries(existing.settings ?? undefined).length > 0;
+      extractWatchKeywordEntries(existing.settings ?? undefined).length > 0 &&
+    resolveConnectionMode(platformRegistry.getPlatform(existing.platform), value.settings) !==
+      'webhook';
 
   const shouldStopRuntime =
     value.enabled === false ||
