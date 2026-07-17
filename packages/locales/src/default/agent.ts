@@ -215,7 +215,7 @@ export default {
   'channel.wechatRebind': 'Rebind via QR Code',
   'channel.wechatScanTitle': 'Connect WeChat Bot',
   'channel.wechatTips':
-    'Please update WeChat to the latest version and restart it. The ClawBot plugin is in gradual rollout, so check Settings > Plugins to confirm access.',
+    'Open WeChat on your phone, scan this code, and confirm. This code is single-use and expires in 5 minutes.',
   'channel.wechatUserId': 'WeChat User ID',
   'channel.wechatBotIdHint': 'Bot identifier assigned after QR code authorization.',
   'channel.wechatUserIdHint': 'WeChat account identifier returned by the authorization flow.',

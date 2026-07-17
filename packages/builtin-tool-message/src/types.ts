@@ -67,7 +67,7 @@ export const MessageApiName = {
   // be created via tool calls (OAuth requires browser flow).
   /** List the current user's System Bot installations across workspaces. */
   listMessengers: 'listMessengers',
-  /** Get one install's detail by installationId. */
+  /** Get one System Bot connection's detail by installationId. */
   getMessengerDetail: 'getMessengerDetail',
   /** Revoke a workspace install (cascades to all users in that workspace). */
   uninstallMessenger: 'uninstallMessenger',
@@ -567,7 +567,7 @@ export interface MessengerInfo {
   platform: string;
   /** OAuth scope string granted at install time (Slack-only typically). */
   scope?: string;
-  /** Tenant identifier — Slack workspace, Discord guild, … (empty for Telegram). */
+  /** Tenant identifier — Slack workspace, Discord guild, WeChat user, … (empty for Telegram). */
   tenantId: string;
   /** Optional human-friendly tenant label (workspace / guild name). */
   tenantName?: string;
@@ -583,11 +583,11 @@ export interface MessengerLinkInfo {
   /** When the link was created. */
   createdAt?: string | Date;
   platform: string;
-  /** Platform-side user id (Slack user id, Discord user id, Telegram chat id). */
+  /** Platform-side user id (Slack/Discord user id, Telegram chat id, WeChat user id). */
   platformUserId?: string;
   /** Display name surfaced when verify-im completed. */
   platformUsername?: string;
-  /** Tenant scope for the link — empty for global-bot platforms (Telegram). */
+  /** Tenant scope for the link — empty for single-link platforms (Telegram / WeChat). */
   tenantId?: string;
 }
 

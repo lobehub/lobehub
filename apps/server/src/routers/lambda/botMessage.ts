@@ -158,12 +158,7 @@ const resolveBot = async (
   };
 };
 
-/**
- * Resolve a system-bot messenger installation row into a runnable
- * `MessageRuntimeService`. Authorization: only the user who installed the
- * row can target it — workspace admins who installed under a different
- * LobeHub account need their own session.
- */
+/** Resolve a user-owned System Bot connection into a runnable service. */
 const resolveMessengerInstall = async (
   ctx: { serverDB: any; userId: string },
   installationId: string,
@@ -205,6 +200,28 @@ const resolveMessengerInstall = async (
   }
 
   const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey().catch(() => undefined);
+  const wechatLink = await new MessengerAccountLinkModel(
+    ctx.serverDB,
+    ctx.userId,
+  ).findByIdWithCredentials(installationId, 'wechat', gateKeeper);
+  if (wechatLink) {
+    if (!wechatLink.applicationId || typeof wechatLink.credentials.botToken !== 'string') {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: `WeChat connection credentials are unavailable: ${installationId}`,
+      });
+    }
+    return {
+      platform: 'wechat',
+      service: createServiceForCredentials(
+        'wechat',
+        wechatLink.applicationId,
+        wechatLink.credentials,
+      ),
+      settings: {},
+    };
+  }
+
   const row = await MessengerInstallationModel.findById(ctx.serverDB, installationId, gateKeeper);
   if (!row) {
     throw new TRPCError({

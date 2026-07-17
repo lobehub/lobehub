@@ -19,6 +19,7 @@ const mockGatewayClient = vi.hoisted(() => ({
 
 const mockGatewayEnv = vi.hoisted(() => ({
   MESSAGE_GATEWAY_ENABLED: undefined as string | undefined,
+  MESSAGE_GATEWAY_SERVICE_TOKEN: 'gateway-service-token' as string | undefined,
 }));
 
 const mockGatewayManager = vi.hoisted(() => ({
@@ -40,6 +41,7 @@ const mockResolveConnectionMode = vi.hoisted(() => vi.fn());
 const mockIsBotFeatureAccessAllowed = vi.hoisted(() => vi.fn());
 const mockGetBotFeatureBlockedMessage = vi.hoisted(() => vi.fn());
 const mockGetBotRuntimeStatus = vi.hoisted(() => vi.fn());
+const mockResolveMessengerInstallation = vi.hoisted(() => vi.fn());
 
 // ─── Module mocks ───
 
@@ -87,8 +89,37 @@ vi.mock('../runtimeStatus', () => ({
 }));
 
 vi.mock('@/business/server/bot/featureAccess', () => ({
+  assertBotFeatureAccess: vi.fn(),
   getBotFeatureBlockedMessage: mockGetBotFeatureBlockedMessage,
   isBotFeatureAccessAllowed: mockIsBotFeatureAccessAllowed,
+}));
+
+vi.mock('@/server/services/messenger/installations', () => ({
+  getInstallationStore: vi.fn(() => ({ resolveByKey: mockResolveMessengerInstallation })),
+  isMessengerConnectionId: (connectionId: string) => connectionId.startsWith('messenger:'),
+  messengerConnectionIdForUser: ({
+    connectionMode,
+    installationKey,
+    userId,
+  }: {
+    connectionMode?: string;
+    installationKey: string;
+    userId: string;
+  }) => {
+    if (connectionMode === 'websocket' && installationKey.endsWith(':singleton')) {
+      return `messenger:${installationKey.slice(0, -':singleton'.length)}:singleton`;
+    }
+    return `messenger:${installationKey}:user-${userId}`;
+  },
+}));
+
+vi.mock('@/server/services/messenger/platforms', () => ({
+  messengerPlatformRegistry: {
+    getPlatform: (platform: string) => ({
+      connectionMode:
+        platform === 'wechat' ? 'polling' : platform === 'discord' ? 'websocket' : 'webhook',
+    }),
+  },
 }));
 
 vi.mock('../../bot/platforms', () => ({
@@ -126,6 +157,7 @@ describe('GatewayService', () => {
     mockIsBotFeatureAccessAllowed.mockResolvedValue(true);
     mockGetBotFeatureBlockedMessage.mockReturnValue('This bot channel requires a paid plan.');
     mockGetBotRuntimeStatus.mockResolvedValue({});
+    mockResolveMessengerInstallation.mockResolvedValue(null);
     service = new GatewayService();
   });
 
@@ -223,6 +255,55 @@ describe('GatewayService', () => {
 
         expect(mockGatewayManager.start).not.toHaveBeenCalled();
       });
+    });
+  });
+
+  describe('per-user messenger lifecycle', () => {
+    it('registers WeChat as a real polling connection with the complete QR credential bundle', async () => {
+      mockGatewayClient.isEnabled = true;
+      mockResolveMessengerInstallation.mockResolvedValue({
+        applicationId: 'bot@im.wechat',
+        baseUrl: 'https://ilink.example.com',
+        botId: 'bot@im.wechat',
+        botToken: 'secret-token',
+      });
+
+      const connectionId = await service.ensureUserMessengerConnected({
+        installationKey: 'wechat:alice@im.wechat',
+        platform: 'wechat',
+        userId: 'user-1',
+      });
+
+      expect(connectionId).toBe('messenger:wechat:alice@im.wechat:user-user-1');
+      expect(mockGatewayClient.connect).toHaveBeenCalledWith({
+        applicationId: 'bot@im.wechat',
+        connectionId,
+        connectionMode: 'polling',
+        credentials: {
+          baseUrl: 'https://ilink.example.com',
+          botId: 'bot@im.wechat',
+          botToken: 'secret-token',
+          webhookToken: 'gateway-service-token',
+        },
+        platform: 'wechat',
+        userId: 'user-1',
+        webhookPath: '/api/agent/messenger/webhooks/wechat',
+      });
+    });
+
+    it('disconnects a user WeChat poller even when active gateway flows are disabled', async () => {
+      mockGatewayClient.isConfigured = true;
+      mockGatewayClient.isEnabled = false;
+
+      await service.disconnectUserMessenger({
+        installationKey: 'wechat:alice@im.wechat',
+        platform: 'wechat',
+        userId: 'user-1',
+      });
+
+      expect(mockGatewayClient.disconnect).toHaveBeenCalledWith(
+        'messenger:wechat:alice@im.wechat:user-user-1',
+      );
     });
   });
 

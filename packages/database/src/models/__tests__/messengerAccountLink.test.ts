@@ -132,7 +132,7 @@ describe('MessengerAccountLinkModel', () => {
       const model = new MessengerAccountLinkModel(serverDB, userA);
       const first = await model.upsertForPlatform({
         applicationId: 'wxbot-1',
-        credentials: 'cipher-v1',
+        credentials: { token: 'v1' },
         platform: 'wechat',
         platformUserId: 'wx-1',
       });
@@ -147,12 +147,12 @@ describe('MessengerAccountLinkModel', () => {
         .from(messengerAccountLinks)
         .where(eq(messengerAccountLinks.id, first.id));
       expect(raw.applicationId).toBe('wxbot-1');
-      expect(raw.credentials).toBe('cipher-v1');
+      expect(raw.credentials).toBe(JSON.stringify({ token: 'v1' }));
 
       // Re-verify with rotated credentials → stored values refresh.
       await model.upsertForPlatform({
         applicationId: 'wxbot-2',
-        credentials: 'cipher-v2',
+        credentials: { token: 'v2' },
         platform: 'wechat',
         platformUserId: 'wx-1',
       });
@@ -161,20 +161,20 @@ describe('MessengerAccountLinkModel', () => {
         .from(messengerAccountLinks)
         .where(eq(messengerAccountLinks.id, first.id));
       expect(raw.applicationId).toBe('wxbot-2');
-      expect(raw.credentials).toBe('cipher-v2');
+      expect(raw.credentials).toBe(JSON.stringify({ token: 'v2' }));
     });
 
     it('surfaces a conflict when another user claims the same credential application id', async () => {
       await new MessengerAccountLinkModel(serverDB, userA).upsertForPlatform({
         applicationId: 'wxbot-claimed',
-        credentials: 'cipher-a',
+        credentials: { token: 'a' },
         platform: 'wechat',
         platformUserId: 'wx-owner',
       });
 
       const promise = new MessengerAccountLinkModel(serverDB, userB).upsertForPlatform({
         applicationId: 'wxbot-claimed',
-        credentials: 'cipher-b',
+        credentials: { token: 'b' },
         platform: 'wechat',
         platformUserId: 'wx-intruder',
       });
@@ -186,14 +186,14 @@ describe('MessengerAccountLinkModel', () => {
     it('surfaces a conflict when a credential refresh rotates to an application id claimed by another user', async () => {
       await new MessengerAccountLinkModel(serverDB, userA).upsertForPlatform({
         applicationId: 'wxbot-owned-by-a',
-        credentials: 'cipher-a',
+        credentials: { token: 'a' },
         platform: 'wechat',
         platformUserId: 'wx-user-a2',
       });
       const modelB = new MessengerAccountLinkModel(serverDB, userB);
       await modelB.upsertForPlatform({
         applicationId: 'wxbot-owned-by-b',
-        credentials: 'cipher-b',
+        credentials: { token: 'b' },
         platform: 'wechat',
         platformUserId: 'wx-user-b2',
       });
@@ -201,13 +201,93 @@ describe('MessengerAccountLinkModel', () => {
       // Re-verify (update path) rotating to a bot id already claimed by userA.
       const promise = modelB.upsertForPlatform({
         applicationId: 'wxbot-owned-by-a',
-        credentials: 'cipher-b2',
+        credentials: { token: 'b2' },
         platform: 'wechat',
         platformUserId: 'wx-user-b2',
       });
 
       await expect(promise).rejects.toBeInstanceOf(MessengerAccountLinkConflictError);
       await expect(promise).rejects.toMatchObject({ existingUserId: userA });
+    });
+
+    it('stores WeChat credentials encrypted while keeping ordinary reads secret-free', async () => {
+      const ciphertext = new Map<string, string>();
+      let sequence = 0;
+      const gateKeeper = {
+        decrypt: async (value: string) => ({ plaintext: ciphertext.get(value) ?? '' }),
+        encrypt: async (plaintext: string) => {
+          const value = `encrypted-${++sequence}`;
+          ciphertext.set(value, plaintext);
+          return value;
+        },
+      };
+      const model = new MessengerAccountLinkModel(serverDB, userA);
+      const first = await model.upsertForPlatform(
+        {
+          activeAgentId: agentA,
+          applicationId: 'wechat-bot',
+          credentials: {
+            baseUrl: 'https://ilink.example.com',
+            botId: 'wechat-bot',
+            botToken: 'token-v1',
+          },
+          platform: 'wechat',
+          platformUserId: 'wechat-user',
+          tenantId: 'wechat-user',
+        },
+        gateKeeper,
+      );
+
+      expect(first).not.toHaveProperty('credentials');
+      expect(await model.list()).toEqual([
+        expect.not.objectContaining({ credentials: expect.anything() }),
+      ]);
+
+      const [stored] = await serverDB
+        .select({ credentials: messengerAccountLinks.credentials })
+        .from(messengerAccountLinks)
+        .where(eq(messengerAccountLinks.id, first.id));
+      expect(stored.credentials).toBe('encrypted-1');
+
+      const resolved = await MessengerAccountLinkModel.findByPlatformUserWithCredentials(
+        serverDB,
+        {
+          applicationId: 'wechat-bot',
+          platform: 'wechat',
+          platformUserId: 'wechat-user',
+          tenantId: 'wechat-user',
+        },
+        gateKeeper,
+      );
+      expect(resolved?.credentials).toEqual({
+        baseUrl: 'https://ilink.example.com',
+        botId: 'wechat-bot',
+        botToken: 'token-v1',
+      });
+
+      const refreshed = await model.upsertForPlatform(
+        {
+          applicationId: 'wechat-bot',
+          credentials: {
+            baseUrl: 'https://ilink.example.com/v2',
+            botId: 'wechat-bot',
+            botToken: 'token-v2',
+          },
+          platform: 'wechat',
+          platformUserId: 'wechat-user',
+          tenantId: 'wechat-user',
+        },
+        gateKeeper,
+      );
+      expect(refreshed.id).toBe(first.id);
+      expect(refreshed.activeAgentId).toBe(agentA);
+
+      const updated = await model.findByIdWithCredentials(first.id, 'wechat', gateKeeper);
+      expect(updated?.credentials).toEqual({
+        baseUrl: 'https://ilink.example.com/v2',
+        botId: 'wechat-bot',
+        botToken: 'token-v2',
+      });
     });
 
     it('throws MessengerAccountLinkRelinkRequiredError when re-linking a different account in the same scope', async () => {

@@ -26,7 +26,12 @@ interface BlockedInstall {
   platform: 'slack' | 'discord';
 }
 
-const VALID_PLATFORMS: ReadonlySet<MessengerPlatform> = new Set(['slack', 'telegram', 'discord']);
+const VALID_PLATFORMS: ReadonlySet<MessengerPlatform> = new Set([
+  'slack',
+  'telegram',
+  'discord',
+  'wechat',
+]);
 
 const isMessengerPlatform = (value: string | undefined): value is MessengerPlatform =>
   !!value && VALID_PLATFORMS.has(value as MessengerPlatform);
@@ -126,6 +131,7 @@ const MessengerSettings = memo(() => {
       <Flexbox gap={20}>
         {selected && selectedMeta ? (
           <IntegrationDetail
+            access={selectedMeta.access}
             appId={selectedMeta.appId}
             botUsername={selectedMeta.botUsername}
             name={selectedMeta.name}

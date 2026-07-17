@@ -1,6 +1,6 @@
 'use client';
 
-import { Block, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Block, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { ChevronRightIcon } from 'lucide-react';
 import { memo } from 'react';
@@ -57,6 +57,11 @@ const IntegrationList = memo<IntegrationListProps>(({ onSelect, platforms }) => 
                 {t(`messenger.list.${platform.id}.description` as any)}
               </Text>
             </Flexbox>
+            {platform.access?.requiredPlan === 'paid' && (
+              <Tag color="gold" size="small">
+                {t('messenger.paidBadge')}
+              </Tag>
+            )}
             <Icon icon={ChevronRightIcon} />
           </Flexbox>
         </Block>

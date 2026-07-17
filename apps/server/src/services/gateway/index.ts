@@ -12,6 +12,7 @@ import {
   AgentBotProviderModel,
   type DecryptedBotProvider,
 } from '@/database/models/agentBotProvider';
+import { gatewayEnv } from '@/envs/gateway';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import {
   getInstallationStore,
@@ -857,6 +858,7 @@ export class GatewayService {
 
     try {
       const client = getMessageGatewayClient();
+      const isPolling = connectionMode === 'polling';
       await client.connect({
         applicationId: creds.applicationId,
         // Messenger-owned connections never consume passive channel
@@ -864,16 +866,21 @@ export class GatewayService {
         // mentions, so the gateway may drop ordinary channel messages.
         capabilities: { messageMonitoring: { enabled: false } },
         connectionId,
-        // The user DO is purely an outbound surface for typing; no inbound
-        // events come back through this connection. Webhook mode prevents the
-        // gateway from opening per-user persistent connections (Telegram /
-        // Slack inbound already arrives at lobehub directly via webhooks;
-        // Discord inbound stays on the singleton WS).
-        connectionMode: 'webhook',
-        credentials: { botToken: creds.botToken },
+        // Webhook platforms only need an outbound typing surface. Polling
+        // platforms (WeChat) own a real per-user inbound lifecycle and must
+        // receive the complete QR-issued credential bundle.
+        connectionMode: isPolling ? 'polling' : 'webhook',
+        credentials: isPolling
+          ? {
+              baseUrl: creds.baseUrl,
+              botId: creds.botId,
+              botToken: creds.botToken,
+              webhookToken: gatewayEnv.MESSAGE_GATEWAY_SERVICE_TOKEN,
+            }
+          : { botToken: creds.botToken },
         platform,
         userId,
-        webhookPath: '',
+        webhookPath: isPolling ? `/api/agent/messenger/webhooks/${platform}` : '',
       });
 
       // Evict-on-add: the iterator yields keys in insertion order, so the
@@ -889,6 +896,34 @@ export class GatewayService {
     } catch (err) {
       log('ensureUserMessengerConnected: connect failed for %s: %O', connectionId, err);
       return null;
+    }
+  }
+
+  /**
+   * Stop a user-owned messenger connection during unlink or credential
+   * replacement. Cleanup is allowed while the gateway feature flag is off so
+   * a rollout rollback cannot strand a long-polling WeChat connection.
+   */
+  async disconnectUserMessenger(params: {
+    installationKey: string;
+    platform: MessengerPlatform;
+    userId: string;
+  }): Promise<void> {
+    const { installationKey, platform, userId } = params;
+    const connectionMode = messengerPlatformRegistry.getPlatform(platform)?.connectionMode;
+    if (connectionMode === 'websocket') return;
+
+    const connectionId = messengerConnectionIdForUser({ connectionMode, installationKey, userId });
+    userMessengerConnections.delete(connectionId);
+
+    const client = getMessageGatewayClient();
+    if (!client.isConfigured) return;
+
+    try {
+      await client.disconnect(connectionId);
+      log('disconnectUserMessenger: disconnected %s', connectionId);
+    } catch (error) {
+      log('disconnectUserMessenger: failed for %s: %O', connectionId, error);
     }
   }
 

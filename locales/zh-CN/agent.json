@@ -283,7 +283,7 @@
   "channel.wechatQrWait": "打开微信扫描二维码以连接。",
   "channel.wechatRebind": "通过二维码重新绑定",
   "channel.wechatScanTitle": "连接微信机器人",
-  "channel.wechatTips": "请将微信更新至最新版本并重新启动。ClawBot 插件正在逐步推广，请前往设置 > 插件确认是否已获得访问权限。",
+  "channel.wechatTips": "请在手机上打开微信，扫描此二维码并确认。此二维码仅可使用一次，有效期为 5 分钟。",
   "channel.wechatUserId": "微信用户 ID",
   "channel.wechatUserIdHint": "通过授权流程返回的微信账号标识符。",
   "transfer.button": "移动",
