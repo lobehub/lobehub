@@ -349,7 +349,7 @@
   "devices.empty.title": "Verbinden Sie Ihr erstes Gerät",
   "devices.fallbackBadge": "Instabile Identität",
   "devices.fallbackTooltip": "Dieses Gerät konnte nicht anhand seiner Maschinen-ID identifiziert werden, daher kann eine Neuinstallation der App einen doppelten Eintrag erstellen.",
-  "devices.lastSeen": "Zuletzt aktiv {{time}}",
+  "devices.lastSeen": "Zuletzt verbunden {{time}}",
   "devices.remove.confirm": "Dieses Gerät entfernen?",
   "devices.remove.confirmDesc": "Dies trennt das Gerät von Ihrem Konto. Es wird nicht abgemeldet und kann sich beim nächsten Verbinden erneut registrieren.",
   "devices.remove.currentSessionWarning": "Dies schließt das Gerät ein, das Sie gerade verwenden – wenn Sie es entfernen, wird Ihre aktuelle Sitzung getrennt.",

@@ -349,7 +349,7 @@
   "devices.empty.title": "قم بتوصيل جهازك الأول",
   "devices.fallbackBadge": "هوية غير مستقرة",
   "devices.fallbackTooltip": "لم يتمكن هذا الجهاز من التعرف عليه بواسطة معرف الجهاز، لذا قد يؤدي إعادة تثبيت التطبيق إلى إنشاء إدخال مكرر.",
-  "devices.lastSeen": "آخر نشاط {{time}}",
+  "devices.lastSeen": "آخر اتصال {{time}}",
   "devices.remove.confirm": "إزالة هذا الجهاز؟",
   "devices.remove.confirmDesc": "سيتم فصل الجهاز عن حسابك. لن يتم تسجيل خروج الجهاز، ويمكنه إعادة التسجيل عند الاتصال التالي.",
   "devices.remove.currentSessionWarning": "يتضمن ذلك الجهاز الذي تستخدمه الآن — إزالته ستؤدي إلى قطع الاتصال بجلسة العمل الحالية.",

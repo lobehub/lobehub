@@ -349,7 +349,7 @@
   "devices.empty.title": "連接您的第一個設備",
   "devices.fallbackBadge": "不穩定的身份",
   "devices.fallbackTooltip": "此裝置無法通過其機器 ID 識別，因此重新安裝應用程式可能會創建重複的條目。",
-  "devices.lastSeen": "最後活躍 {{time}}",
+  "devices.lastSeen": "最後連接於 {{time}}",
   "devices.remove.confirm": "移除此裝置？",
   "devices.remove.confirmDesc": "這將使裝置與您的帳戶斷開連接。它不會登出該裝置，並且可以在下次連接時重新註冊。",
   "devices.remove.currentSessionWarning": "這包括您現在正在使用的裝置——移除它將使您的當前會話斷開連接。",

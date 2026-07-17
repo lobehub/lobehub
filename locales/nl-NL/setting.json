@@ -349,7 +349,7 @@
   "devices.empty.title": "Verbind uw eerste apparaat",
   "devices.fallbackBadge": "Onstabiele identiteit",
   "devices.fallbackTooltip": "Dit apparaat kon niet worden geïdentificeerd via zijn machine-ID, dus het opnieuw installeren van de app kan een dubbele vermelding creëren.",
-  "devices.lastSeen": "Laatst actief {{time}}",
+  "devices.lastSeen": "Laatst verbonden {{time}}",
   "devices.remove.confirm": "Dit apparaat verwijderen?",
   "devices.remove.confirmDesc": "Hiermee wordt het apparaat losgekoppeld van je account. Het logt het apparaat niet uit, en het kan zich opnieuw registreren bij de volgende verbinding.",
   "devices.remove.currentSessionWarning": "Dit omvat het apparaat dat je momenteel gebruikt — het verwijderen verbreekt je huidige sessie.",

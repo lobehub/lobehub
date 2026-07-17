@@ -349,7 +349,7 @@
   "devices.empty.title": "最初のデバイスを接続",
   "devices.fallbackBadge": "不安定なアイデンティティ",
   "devices.fallbackTooltip": "このデバイスはマシンIDで識別できなかったため、アプリを再インストールすると重複エントリが作成される可能性があります。",
-  "devices.lastSeen": "最終アクティブ {{time}}",
+  "devices.lastSeen": "最終接続 {{time}}",
   "devices.remove.confirm": "このデバイスを削除しますか？",
   "devices.remove.confirmDesc": "このデバイスをアカウントから切断します。デバイスのサインアウトは行われず、次回接続時に再登録できます。",
   "devices.remove.currentSessionWarning": "これには現在使用しているデバイスも含まれます。削除すると現在のセッションが切断されます。",

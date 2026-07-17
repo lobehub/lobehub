@@ -349,7 +349,7 @@
   "devices.empty.title": "Conecta tu primer dispositivo",
   "devices.fallbackBadge": "Identidad inestable",
   "devices.fallbackTooltip": "Este dispositivo no pudo ser identificado por su ID de máquina, por lo que reinstalar la aplicación puede crear una entrada duplicada.",
-  "devices.lastSeen": "Última actividad {{time}}",
+  "devices.lastSeen": "Última conexión {{time}}",
   "devices.remove.confirm": "¿Eliminar este dispositivo?",
   "devices.remove.confirmDesc": "Esto desconecta el dispositivo de tu cuenta. No cierra la sesión del dispositivo, y puede registrarse nuevamente en la próxima conexión.",
   "devices.remove.currentSessionWarning": "Esto incluye el dispositivo que estás utilizando ahora mismo; eliminarlo desconectará tu sesión actual.",

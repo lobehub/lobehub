@@ -349,7 +349,7 @@
   "devices.empty.title": "Connectez votre premier appareil",
   "devices.fallbackBadge": "Identité instable",
   "devices.fallbackTooltip": "Cet appareil n'a pas pu être identifié par son ID machine, donc la réinstallation de l'application peut créer une entrée en double.",
-  "devices.lastSeen": "Dernière activité {{time}}",
+  "devices.lastSeen": "Dernière connexion {{time}}",
   "devices.remove.confirm": "Supprimer cet appareil ?",
   "devices.remove.confirmDesc": "Cela déconnecte l'appareil de votre compte. Cela ne déconnecte pas l'appareil, et il peut se réenregistrer lors de la prochaine connexion.",
   "devices.remove.currentSessionWarning": "Cela inclut l'appareil que vous utilisez actuellement — le supprimer déconnectera votre session en cours.",

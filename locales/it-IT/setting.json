@@ -349,7 +349,7 @@
   "devices.empty.title": "Connetti il tuo primo dispositivo",
   "devices.fallbackBadge": "Identità instabile",
   "devices.fallbackTooltip": "Questo dispositivo non è stato identificato tramite il suo ID macchina, quindi reinstallare l'app potrebbe creare una voce duplicata.",
-  "devices.lastSeen": "Ultima attività {{time}}",
+  "devices.lastSeen": "Ultima connessione {{time}}",
   "devices.remove.confirm": "Rimuovere questo dispositivo?",
   "devices.remove.confirmDesc": "Questo disconnette il dispositivo dal tuo account. Non effettua il logout del dispositivo, che può registrarsi nuovamente alla prossima connessione.",
   "devices.remove.currentSessionWarning": "Questo include il dispositivo che stai utilizzando in questo momento — rimuoverlo disconnetterà la tua sessione corrente.",

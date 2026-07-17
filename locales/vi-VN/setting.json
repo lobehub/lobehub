@@ -349,7 +349,7 @@
   "devices.empty.title": "Kết nối thiết bị đầu tiên của bạn",
   "devices.fallbackBadge": "Danh tính không ổn định",
   "devices.fallbackTooltip": "Thiết bị này không thể được nhận diện bằng ID máy, vì vậy việc cài đặt lại ứng dụng có thể tạo ra một mục trùng lặp.",
-  "devices.lastSeen": "Hoạt động lần cuối {{time}}",
+  "devices.lastSeen": "Kết nối lần cuối {{time}}",
   "devices.remove.confirm": "Xóa thiết bị này?",
   "devices.remove.confirmDesc": "Điều này sẽ ngắt kết nối thiết bị khỏi tài khoản của bạn. Nó không đăng xuất thiết bị và có thể đăng ký lại khi kết nối lần sau.",
   "devices.remove.currentSessionWarning": "Điều này bao gồm thiết bị bạn đang sử dụng ngay bây giờ — việc loại bỏ nó sẽ ngắt kết nối phiên hiện tại của bạn.",

@@ -349,7 +349,7 @@
   "devices.empty.title": "Połącz swoje pierwsze urządzenie",
   "devices.fallbackBadge": "Niestabilna tożsamość",
   "devices.fallbackTooltip": "To urządzenie nie mogło zostać zidentyfikowane przez jego identyfikator maszyny, więc ponowna instalacja aplikacji może utworzyć duplikat wpisu.",
-  "devices.lastSeen": "Ostatnia aktywność {{time}}",
+  "devices.lastSeen": "Ostatnie połączenie {{time}}",
   "devices.remove.confirm": "Usunąć to urządzenie?",
   "devices.remove.confirmDesc": "To rozłącza urządzenie z Twojego konta. Nie wylogowuje urządzenia, które może się ponownie zarejestrować przy następnym połączeniu.",
   "devices.remove.currentSessionWarning": "Dotyczy to urządzenia, którego używasz w tej chwili — usunięcie go spowoduje rozłączenie bieżącej sesji.",

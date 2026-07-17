@@ -349,7 +349,7 @@
   "devices.empty.title": "İlk cihazınızı bağlayın",
   "devices.fallbackBadge": "Kararsız kimlik",
   "devices.fallbackTooltip": "Bu cihaz makine kimliğiyle tanımlanamadı, bu nedenle uygulamayı yeniden yüklemek bir kopya giriş oluşturabilir.",
-  "devices.lastSeen": "Son aktif {{time}}",
+  "devices.lastSeen": "Son bağlantı {{time}}",
   "devices.remove.confirm": "Bu cihazı kaldır?",
   "devices.remove.confirmDesc": "Bu, cihazı hesabınızdan ayırır. Cihaz oturumu kapatmaz ve bir sonraki bağlantıda yeniden kaydolabilir.",
   "devices.remove.currentSessionWarning": "Bu, şu anda kullandığınız cihazı da içeriyor — kaldırmak mevcut oturumunuzu sonlandırır.",

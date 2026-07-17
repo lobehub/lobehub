@@ -349,7 +349,7 @@
   "devices.empty.title": "첫 번째 장치를 연결하세요",
   "devices.fallbackBadge": "불안정한 ID",
   "devices.fallbackTooltip": "이 장치는 머신 ID로 식별할 수 없으므로 앱을 재설치하면 중복 항목이 생성될 수 있습니다.",
-  "devices.lastSeen": "마지막 활동 {{time}}",
+  "devices.lastSeen": "마지막 연결 {{time}}",
   "devices.remove.confirm": "이 장치를 제거하시겠습니까?",
   "devices.remove.confirmDesc": "이 장치를 계정에서 연결 해제합니다. 장치에서 로그아웃하지 않으며 다음 연결 시 다시 등록할 수 있습니다.",
   "devices.remove.currentSessionWarning": "현재 사용 중인 장치도 포함됩니다. 이를 제거하면 현재 세션이 연결 해제됩니다.",
