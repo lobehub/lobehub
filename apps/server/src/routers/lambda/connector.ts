@@ -38,6 +38,7 @@ import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermiss
 import {
   resolveConnectorAuthorizerId,
   resolveUserDisplayMap,
+  withTrustedLinkedByUserId,
 } from '@/server/utils/connectorAttribution';
 
 import {
@@ -302,7 +303,11 @@ export const connectorRouter = router({
       mcpConnectionType: input.mcpConnectionType ?? null,
       mcpServerUrl: input.mcpServerUrl ?? null,
       mcpStdioConfig: input.mcpStdioConfig ?? null,
-      metadata: input.metadata ?? null,
+      // Drop any client-supplied `composio.linkedByUserId` — it is server-owned
+      // (written by the OAuth connect path), and trusting it here would let a
+      // member spoof connector attribution. No existing row on create → the
+      // field is simply removed.
+      metadata: withTrustedLinkedByUserId(input.metadata, undefined) ?? null,
       name: input.name,
       oidcConfig: input.oidcConfig ?? null,
     };
@@ -626,8 +631,14 @@ export const connectorRouter = router({
       assertWorkspaceRowManageable(ctx, target.userId, 'connector');
 
       const { credentials, ...patch } = input.patch;
+      // Preserve the server-owned `composio.linkedByUserId` from the stored row
+      // and ignore whatever the client sent, so an edit can never spoof (or
+      // silently clear) the connector's authorizer. Untouched when the patch
+      // omits metadata.
+      const metadata = withTrustedLinkedByUserId(patch.metadata, target.metadata);
       await ctx.connectorModel.update(input.id, {
         ...patch,
+        ...(patch.metadata === undefined ? {} : { metadata }),
         // undefined → leave untouched; null → clear; object → encrypt the JSON string.
         // When credentials are cleared, also drop the cached expiry timestamp so
         // token-refresh logic doesn't act on a stale value for the new server.

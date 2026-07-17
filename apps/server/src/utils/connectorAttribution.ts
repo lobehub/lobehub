@@ -26,6 +26,41 @@ export const resolveConnectorAuthorizerId = (connector: ConnectorAttributionRow)
   return composio?.linkedByUserId ?? connector.userId ?? null;
 };
 
+/**
+ * `linkedByUserId` marks the member whose credentials a Composio tool runs under
+ * — it is server-owned, written only by the OAuth connect path
+ * (`upsertComposioConnector`). The generic connector create/update accepts
+ * free-form `metadata`, so without a guard a member could set
+ * `metadata.composio.linkedByUserId` to another user's id and spoof both the
+ * attribution tag and the runtime ownership note (and shift the Composio
+ * execution entity). This forces the field to the TRUSTED value — the existing
+ * DB row's `linkedByUserId` on update, or dropped on create (no server value
+ * yet) — ignoring whatever the client supplied. All other metadata is preserved.
+ *
+ * `serverMetadata` is the persisted row's metadata (pass `undefined` on create).
+ * Returns the client metadata untouched when neither side has anything Composio.
+ */
+export const withTrustedLinkedByUserId = (
+  clientMetadata: Record<string, unknown> | null | undefined,
+  serverMetadata: Record<string, unknown> | null | undefined,
+): Record<string, unknown> | null | undefined => {
+  // undefined → "leave metadata untouched"; null → "clear it". Nothing to guard.
+  if (!clientMetadata) return clientMetadata;
+
+  const serverLinked = (serverMetadata as { composio?: { linkedByUserId?: string } } | null)
+    ?.composio?.linkedByUserId;
+  const clientComposio = (clientMetadata as { composio?: Record<string, unknown> }).composio;
+
+  // No composio block from the client and no trusted server value → nothing to do.
+  if (!clientComposio && serverLinked === undefined) return clientMetadata;
+
+  const composio: Record<string, unknown> = { ...clientComposio };
+  if (serverLinked === undefined) delete composio.linkedByUserId;
+  else composio.linkedByUserId = serverLinked;
+
+  return { ...clientMetadata, composio };
+};
+
 export interface UserDisplayInfo {
   avatar: string | null;
   name: string | null;
@@ -83,6 +118,15 @@ export const collectBorrowedConnectors = (
 };
 
 /**
+ * Neutralize user-editable text (connector name, member display name) before it
+ * is concatenated into the system prompt: collapse newlines and drop angle
+ * brackets so a crafted name can't forge a closing `</tool_credential_ownership>`
+ * tag or inject its own system-level instructions, then cap the length.
+ */
+const sanitizeForPrompt = (value: string): string =>
+  value.replaceAll(/\s+/g, ' ').replaceAll(/[<>]/g, '').trim().slice(0, 120);
+
+/**
  * Build the system-prompt block that tells the model which of its tools run
  * under another member's credentials, so a non-owner running a shared agent
  * knows the results belong to that member (not the current user). Returns
@@ -96,7 +140,7 @@ export const buildConnectorOwnershipPrompt = (
   if (borrowed.length === 0) return undefined;
   const lines = borrowed.map((b) => {
     const name = displayMap.get(b.authorizerId)?.name ?? fallbackName;
-    return `- ${b.name}: authorized by ${name}`;
+    return `- ${sanitizeForPrompt(b.name)}: authorized by ${sanitizeForPrompt(name)}`;
   });
   return [
     '<tool_credential_ownership>',
