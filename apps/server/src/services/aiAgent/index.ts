@@ -151,6 +151,11 @@ import type { ConversationHistoryEntry } from '@/server/services/heterogeneousAg
 import { buildCloudHeteroContext } from '@/server/services/heterogeneousAgent/cloudHeteroContext';
 import { buildRemoteDeviceHeteroContext } from '@/server/services/heterogeneousAgent/remoteDeviceHeteroContext';
 import { MarketService } from '@/server/services/market';
+import {
+  buildConnectorOwnershipPrompt,
+  collectBorrowedConnectors,
+  resolveUserDisplayMap,
+} from '@/server/utils/connectorAttribution';
 import { markdownToTxt } from '@/utils/markdownToTxt';
 
 import { resolveDeviceAccessPolicy } from './deviceAccessPolicy';
@@ -2519,6 +2524,34 @@ export class AiAgentService {
               connectorGateKeeper,
             )
           : [];
+
+      // 5a-1b. Model awareness: when the caller runs a shared agent whose tools
+      // were authorized by OTHER members (workspace dimension), tell the model
+      // whose connected account each such tool runs on. Skipped entirely when
+      // the caller authorized everything (owner runs own agent → empty set), so
+      // it costs nothing in the common case. Appended to `systemRole`, which is
+      // consumed by `createOperation` further below.
+      try {
+        const borrowed = collectBorrowedConnectors(connectors, this.userId!);
+        if (borrowed.length > 0) {
+          const displayMap = await resolveUserDisplayMap(
+            this.db,
+            borrowed.map((b) => b.authorizerId),
+          );
+          const note = buildConnectorOwnershipPrompt(borrowed, displayMap);
+          if (note) {
+            agentConfig.systemRole = agentConfig.systemRole
+              ? `${agentConfig.systemRole}\n\n${note}`
+              : note;
+            log(
+              'execAgent: injected tool credential ownership note for %d connector(s)',
+              borrowed.length,
+            );
+          }
+        }
+      } catch (err) {
+        log('execAgent: failed to build tool credential ownership note: %O', err);
+      }
 
       // Only connectors WITH a real MCP endpoint (mcpServerUrl or stdio) can replace plugins in the
       // manifest. Connectors WITHOUT an endpoint (e.g. Lobehub/Composio OAuth skills synced via
