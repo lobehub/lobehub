@@ -667,12 +667,37 @@ export class MessageModel {
           .leftJoin(messageTranslates, eq(messageTranslates.id, messages.id))
           .leftJoin(messageTTS, eq(messageTTS.id, messages.id))
           .leftJoin(users, eq(users.id, messages.userId))
-          .orderBy(asc(messages.createdAt))
+          // Page from the NEWEST messages, not the oldest. `desc` + limit/offset
+          // fetches the most recent `pageSize` rows, so a topic with more than
+          // `pageSize` mainline messages keeps its latest turns (including the
+          // final answer) instead of silently dropping them — the previous
+          // `asc + limit` truncated exactly the newest batch, which is the worst
+          // possible slice for a chat transcript. The page is reversed back to
+          // ascending immediately below, so every downstream consumer is
+          // unaffected; only *which* rows are fetched changed. See LOBE-12011.
+          .orderBy(desc(messages.createdAt), desc(messages.id))
           .limit(pageSize)
           .offset(offset),
       { current, pageSize },
     );
     logTiming(timing, 'db.message.queryWithWhere.baseSelect:rows', { rowCount: result.length });
+
+    // Restore ascending (createdAt, id) order so downstream assembly — the
+    // MessageGroup time window, work-summary anchoring, and the final merge sort —
+    // behaves exactly as before the newest-first fetch above.
+    result.reverse();
+
+    // When the newest page is truncated (it filled `pageSize`), its oldest rows
+    // may sit mid-round. The renderer roots a slice at a single parent, so a slice
+    // cut inside a round can strand sibling chains and drop them from the screen.
+    // Align the lower boundary to a round start — a mainline `user` message — so
+    // the slice is one contiguous chain. Never trim to empty: an oversized single
+    // round with no user message in view is kept whole (the proper fix for those
+    // is lazy step loading). Thread queries pass no `topicId` and are untouched.
+    if (topicId && current === 0 && result.length >= pageSize) {
+      const firstRoundStart = result.findIndex((message) => message.role === 'user');
+      if (firstRoundStart > 0) result.splice(0, firstRoundStart);
+    }
 
     const messageIds = result.map((message) => message.id as string);
 
