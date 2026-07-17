@@ -888,11 +888,12 @@ describe('hetero exec command', () => {
     });
   });
 
-  it('sends full text snapshots before tools and waits for finish until all server ingests ack', async () => {
+  it('batches snapshot + tool + terminal events into ordered ingest calls and finishes after the ack', async () => {
     const callOrder: string[] = [];
     mockHeteroIngestMutate.mockImplementation(async ({ events }: any) => {
-      const first = events[0];
-      callOrder.push(`ingest:${first.type}:${first.data?.chunkType ?? 'terminal'}`);
+      for (const event of events) {
+        callOrder.push(`ingest:${event.type}:${event.data?.chunkType ?? 'terminal'}`);
+      }
       return { ack: true };
     });
     mockHeteroFinishMutate.mockImplementation(async () => {
@@ -962,13 +963,17 @@ describe('hetero exec command', () => {
       'none',
     ]);
 
-    expect(mockHeteroIngestMutate).toHaveBeenCalledTimes(3);
+    // The whole run fits one batched ingest call (3 events ≪ MAX_BATCH) —
+    // NOT one serial round-trip per event as before.
+    expect(mockHeteroIngestMutate).toHaveBeenCalledTimes(1);
     expect(mockHeteroIngestMutate.mock.calls[0][0].events[0].data).toMatchObject({
       chunkType: 'text',
       content: 'hello world',
       snapshotMode: 'replace',
       snapshotSeq: 1,
     });
+    // Within-batch order preserved (server processes a batch sequentially),
+    // and finish is only sent after every ingest acked.
     expect(callOrder).toEqual([
       'ingest:stream_chunk:text',
       'ingest:stream_chunk:tools_calling',

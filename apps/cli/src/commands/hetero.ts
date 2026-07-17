@@ -24,6 +24,7 @@ import {
 import type { Command } from 'commander';
 
 import { getTrpcClient } from '../api/client';
+import { CoalescingBatchIngester } from '../utils/CoalescingBatchIngester';
 import { log } from '../utils/logger';
 import { TrpcIngestSink } from '../utils/TrpcIngestSink';
 
@@ -252,111 +253,6 @@ const resolvePrompt = async (options: ExecOptions): Promise<ResolvedPrompt> => {
   return buildPromptFromText(raw, images);
 };
 
-class SerialServerIngester {
-  private accumulatedText = '';
-  private fatalError: Error | null = null;
-  private inflight: Promise<void> = Promise.resolve();
-  private nextSnapshotSeq = 0;
-  private pendingTextEvent: AgentStreamEvent | undefined;
-  private timer: ReturnType<typeof setTimeout> | null = null;
-
-  constructor(
-    private readonly sink: TrpcIngestSink,
-    private readonly snapshotFlushMs = 200,
-  ) {}
-
-  push(event: AgentStreamEvent): void {
-    if (this.fatalError) return;
-
-    // Text-snapshot coalescing is a MAIN-AGENT-ONLY transport optimization:
-    // it debounces the main agent's token-level text *deltas* into one
-    // `replace` snapshot to cut ingest calls. Subagent text is explicitly
-    // excluded (`!event.data?.subagent`) for two reasons:
-    //   1. Subagent text is emitted as ONE full block per turn (see
-    //      claudeCode adapter `handleSubagentAssistant` — "the full block IS
-    //      the only emission"), so there is nothing to coalesce.
-    //   2. `accumulatedText` is a single shared accumulator with no subagent
-    //      scope. Folding subagent blocks in would (a) splice main-agent text
-    //      into the subagent message via the shared buffer, and (b) emit a
-    //      `replace` snapshot that the server's subagent path *appends*
-    //      (`persistSubagentText` has no snapshot semantics) → duplicated /
-    //      cross-scope content. Forwarding the raw block straight through lets
-    //      the server append it exactly once, correctly.
-    if (
-      event.type === 'stream_chunk' &&
-      event.data?.chunkType === 'text' &&
-      typeof event.data?.content === 'string' &&
-      !event.data?.subagent
-    ) {
-      this.accumulatedText += event.data.content;
-      this.pendingTextEvent = event;
-      if (this.timer) clearTimeout(this.timer);
-      this.timer = setTimeout(() => {
-        this.timer = null;
-        this.queuePendingTextSnapshot();
-      }, this.snapshotFlushMs);
-      return;
-    }
-
-    this.queuePendingTextSnapshot();
-    // `accumulatedText` is a PER-MESSAGE accumulator: it coalesces the text
-    // deltas of the current assistant message into one `replace` snapshot.
-    // A new message boundary (`stream_start` / `stream_end`, emitted by the
-    // adapter's `openMainMessage`) must reset it — otherwise it spans the
-    // whole run and every later message's snapshot re-emits all prior
-    // messages' text verbatim, which the server then persists into the new
-    // DB message: cross-message text duplication. Reset
-    // AFTER flushing the just-ended message's pending snapshot above.
-    if (event.type === 'stream_start' || event.type === 'stream_end') {
-      this.accumulatedText = '';
-    }
-    this.enqueue(async () => {
-      await this.sink.ingest([event]);
-    });
-  }
-
-  async drain(): Promise<void> {
-    this.queuePendingTextSnapshot();
-    try {
-      await this.inflight;
-    } catch {
-      // `fatalError` is re-thrown below.
-    }
-    if (this.fatalError) throw this.fatalError;
-  }
-
-  private enqueue(task: () => Promise<void>) {
-    this.inflight = this.inflight.then(task).catch((err) => {
-      this.fatalError = err instanceof Error ? err : new Error(String(err));
-      throw this.fatalError;
-    });
-  }
-
-  private queuePendingTextSnapshot() {
-    if (!this.pendingTextEvent || this.fatalError) return;
-    if (this.timer) {
-      clearTimeout(this.timer);
-      this.timer = null;
-    }
-
-    const baseEvent = this.pendingTextEvent;
-    this.pendingTextEvent = undefined;
-    const snapshotEvent: AgentStreamEvent = {
-      ...baseEvent,
-      data: {
-        ...baseEvent.data,
-        content: this.accumulatedText,
-        snapshotMode: 'replace',
-        snapshotSeq: ++this.nextSnapshotSeq,
-      },
-    };
-
-    this.enqueue(async () => {
-      await this.sink.ingest([snapshotEvent]);
-    });
-  }
-}
-
 interface RawStreamDumpAttempt {
   /** Flush + close both file streams. Resolves once the bytes are on disk. */
   close: () => Promise<void>;
@@ -483,7 +379,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
   // JWT injected by the server) for authentication.
   const agentType = options.type as 'amp' | 'claude-code' | 'codex';
   let sink: TrpcIngestSink | undefined;
-  let serverIngester: SerialServerIngester | undefined;
+  let serverIngester: CoalescingBatchIngester | undefined;
   // Uploader for tool_result images (CC `Read` on an image file). Reuses the
   // CLI's authenticated lambda client so the persisted event carries a
   // `{ fileId, url }` reference instead of heavy base64. Only wired in
@@ -500,7 +396,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
       options.topic!,
       process.env.LOBEHUB_ASSISTANT_MESSAGE_ID,
     );
-    serverIngester = new SerialServerIngester(sink);
+    serverIngester = new CoalescingBatchIngester(sink);
 
     uploadImage = createFileStoreImageUploader(async () => {
       const lambda = await getTrpcClient();
