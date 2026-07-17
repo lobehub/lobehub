@@ -1,9 +1,12 @@
+import debug from 'debug';
 import { and, eq, inArray } from 'drizzle-orm';
 import pMap from 'p-map';
 
 import * as EXPORT_TABLES from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { buildWorkspaceWhere } from '../../utils/workspace';
+
+const log = debug('lobe-database:data-exporter');
 
 interface BaseTableConfig {
   table: keyof typeof EXPORT_TABLES;
@@ -113,9 +116,7 @@ export class DataExporterRepos {
 
         // If source data is empty, this table may not be able to query any data
         if (sourceData.length === 0) {
-          console.info(
-            `Source table ${relation.sourceTable} has no data, skipping query for ${table}`,
-          );
+          log('Source table %s has no data, skipping query for %s', relation.sourceTable, table);
           return [];
         }
 
@@ -140,7 +141,7 @@ export class DataExporterRepos {
       const result = await this.db.query[table].findMany({ where });
 
       // Only remove userId field for tables queried with userId
-      console.info(`Successfully exported table: ${table}, count: ${result.length}`);
+      log('Successfully exported table: %s, count: %d', table, result.length);
       return config.relations ? result : this.removeUserId(result);
     } catch (error) {
       console.error(`Error querying table ${table}:`, error);
@@ -171,7 +172,7 @@ export class DataExporterRepos {
       const result = await this.db.query[table].findMany({ where });
 
       // Only remove userId field for tables queried with userId
-      console.info(`Successfully exported table: ${table}, count: ${result.length}`);
+      log('Successfully exported table: %s, count: %d', table, result.length);
       return this.removeUserId(result);
     } catch (error) {
       console.error(`Error querying table ${table}:`, error);
@@ -183,7 +184,7 @@ export class DataExporterRepos {
     const result: Record<string, any[]> = {};
 
     // 1. First query all base tables concurrently
-    console.info('Querying base tables...');
+    log('Querying base tables...');
     const baseResults = await pMap(
       DATA_EXPORT_CONFIG.baseTables,
       async (config) => ({ data: await this.queryBaseTables(config), table: config.table }),
@@ -206,7 +207,7 @@ export class DataExporterRepos {
         );
 
         if (!allSourcesHaveData) {
-          console.info(`Skipping table ${config.table} as some source tables have no data`);
+          log('Skipping table %s as some source tables have no data', config.table);
           return { data: [], table: config.table };
         }
 
