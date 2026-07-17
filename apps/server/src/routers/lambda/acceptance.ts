@@ -3,6 +3,7 @@ import {
   acceptanceSubjectTypes,
   acceptanceVisibilities,
 } from '@lobechat/const/verify';
+import type { AcceptanceAttachment } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
@@ -229,6 +230,30 @@ export const acceptanceRouter = router({
         evidenceByResult.set(e.checkResultId, bucket);
       }
 
+      // Resolve the files backing user feedback (uploaded/pasted screenshots)
+      // to URLs with the same owner-scoped resolver the evidence uses — one
+      // batch for every attachment id across check rejects and group feedback.
+      const attachmentIds = new Set<string>();
+      for (const result of results)
+        for (const id of result.userDecisionDetail?.fileIds ?? []) attachmentIds.add(id);
+      for (const run of runs)
+        for (const entry of run.decisionDetail?.groupFeedback ?? [])
+          for (const id of entry.fileIds ?? []) attachmentIds.add(id);
+      const attachmentById = new Map<string, AcceptanceAttachment>();
+      await Promise.all(
+        [...attachmentIds].map(async (id) => {
+          const meta = await resolveFileMeta(id);
+          attachmentById.set(id, { id, name: meta.fileName ?? undefined, url: meta.fileUrl });
+        }),
+      );
+      const toAttachments = (fileIds?: string[]): AcceptanceAttachment[] | undefined => {
+        if (!fileIds?.length) return undefined;
+        const resolved = fileIds
+          .map((id) => attachmentById.get(id))
+          .filter((a): a is AcceptanceAttachment => Boolean(a));
+        return resolved.length > 0 ? resolved : undefined;
+      };
+
       const reportsByRun = new Map(reports.map((r) => [r.verifyRunId!, r]));
       const rounds = runs.map((run) => {
         // `origin` points at the author's private topic/agent — never hand it
@@ -237,6 +262,20 @@ export const acceptanceRouter = router({
         if (!isOwner && run.metadata?.origin) {
           const { origin: _origin, ...publicMetadata } = run.metadata;
           publicRun = { ...run, metadata: publicMetadata };
+        }
+        // Enrich group feedback with resolved attachment URLs for the client.
+        const groupFeedback = publicRun.decisionDetail?.groupFeedback;
+        if (groupFeedback?.some((entry) => entry.fileIds?.length)) {
+          publicRun = {
+            ...publicRun,
+            decisionDetail: {
+              ...publicRun.decisionDetail,
+              groupFeedback: groupFeedback.map((entry) => {
+                const attachments = toAttachments(entry.fileIds);
+                return attachments ? { ...entry, attachments } : entry;
+              }),
+            },
+          };
         }
         return { report: reportsByRun.get(run.id) ?? null, run: publicRun };
       });
@@ -260,15 +299,25 @@ export const acceptanceRouter = router({
             resultsById,
             currentRoundIndex,
           );
+          // The standing verdict mirrors the latest review — resolve its
+          // attachments too so the row's feedback card can render them.
+          const resolvedReviews = reviews.map((review) => {
+            const attachments = toAttachments(review.fileIds);
+            return attachments ? { ...review, attachments } : review;
+          });
+          const latestAttachments = toAttachments(reviews.at(-1)?.fileIds);
           return {
             ...check,
             evidence: check.result ? (evidenceByResult.get(check.result.id) ?? []) : [],
-            reviews,
+            reviews: resolvedReviews,
             timeline: check.timeline.map((entry) => ({
               ...entry,
               evidence: evidenceByResult.get(entry.resultId) ?? [],
             })),
-            userReview,
+            userReview:
+              userReview && latestAttachments
+                ? { ...userReview, attachments: latestAttachments }
+                : userReview,
           };
         }),
         latestReport,
@@ -293,6 +342,7 @@ export const acceptanceRouter = router({
       z.object({
         category: z.string().max(200),
         comment: z.string().trim().min(1).max(2000),
+        fileIds: z.array(z.string()).max(10).optional(),
         id: z.string(),
       }),
     )
@@ -317,6 +367,7 @@ export const acceptanceRouter = router({
         category: input.category,
         comment: input.comment,
         createdAt: new Date().toISOString(),
+        ...(input.fileIds?.length ? { fileIds: input.fileIds } : {}),
       };
       await new VerifyRunModel(
         ctx.serverDB,
@@ -355,15 +406,17 @@ export const acceptanceRouter = router({
             .optional(),
           checkItemIds: z.array(z.string()).min(1).max(200),
           comment: z.string().max(2000).optional(),
+          fileIds: z.array(z.string()).max(10).optional(),
           id: z.string(),
         })
-        // A reject IS its feedback — without a note (either global or on an
-        // annotated region) the next round has nothing to act on.
+        // A reject IS its feedback — without a note (global, on an annotated
+        // region, or a screenshot attachment) the next round has nothing to act on.
         .refine(
           (value) =>
             value.action !== 'reject' ||
             Boolean(value.comment?.trim()) ||
-            Boolean(value.annotations?.some((annotation) => annotation.comment?.trim())),
+            Boolean(value.annotations?.some((annotation) => annotation.comment?.trim())) ||
+            Boolean(value.fileIds?.length),
           { message: 'Rejecting a check requires a comment' },
         ),
     )
@@ -377,6 +430,7 @@ export const acceptanceRouter = router({
           annotations: input.annotations,
           checkItemIds: input.checkItemIds,
           comment: input.comment?.trim() || undefined,
+          fileIds: input.fileIds,
         });
       } catch (error) {
         throw new TRPCError({

@@ -159,6 +159,7 @@ export class VerifyService {
     annotations?: AcceptanceReviewAnnotation[];
     checkItemIds: string[];
     comment?: string;
+    fileIds?: string[];
     id: string;
   }) => lambdaClient.acceptance.reviewChecks.mutate(input);
 
@@ -166,8 +167,12 @@ export class VerifyService {
    * Feedback addressed to a check group (business category) — for concerns
    * that belong to no single check yet must reach the next round.
    */
-  addGroupFeedback = (input: { category: string; comment: string; id: string }) =>
-    lambdaClient.acceptance.addGroupFeedback.mutate(input);
+  addGroupFeedback = (input: {
+    category: string;
+    comment: string;
+    fileIds?: string[];
+    id: string;
+  }) => lambdaClient.acceptance.addGroupFeedback.mutate(input);
 
   // ---- per-run plan ----
   getVerifyState = (operationId: string): Promise<VerifyStateResponse | null> =>

@@ -7,6 +7,8 @@ import { t } from 'i18next';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { AttachmentStrip, AttachmentUploadButton, useFeedbackAttachments } from './attachments';
+
 const styles = createStaticStyles(({ css }) => ({
   warning: css`
     padding-block: 10px;
@@ -15,6 +17,15 @@ const styles = createStaticStyles(({ css }) => ({
     background: ${cssVar.colorWarningBg};
   `,
 }));
+
+/**
+ * A frosted scrim for the acceptance decision dialogs — the page behind reads
+ * as a soft blur so the dialog owns focus (matches the antd modal mask, which
+ * already blurs). Applied per-modal via `styles.backdrop`; a global backdrop
+ * rule can't be used because base-ui popups (Select/Menu lists) share the same
+ * `role=presentation` element and would frost their own content.
+ */
+export const frostedModalStyles = { backdrop: { backdropFilter: 'blur(4px)' } };
 
 interface AcceptContentProps {
   /** Titles of the exceptions the user is knowingly accepting with. */
@@ -76,6 +87,7 @@ export const openAcceptModal = (options: AcceptContentProps): ModalInstance =>
     content: <AcceptContent {...options} />,
     footer: null,
     maskClosable: true,
+    styles: frostedModalStyles,
     title: t('acceptance.actions.accept', { ns: 'verify' }),
     width: 'min(90vw, 480px)',
   });
@@ -138,14 +150,15 @@ export const openRejectModal = (options: RejectContentProps): ModalInstance =>
     content: <RejectContent {...options} />,
     footer: null,
     maskClosable: true,
+    styles: frostedModalStyles,
     title: t('acceptance.actions.reject', { ns: 'verify' }),
     width: 'min(90vw, 480px)',
   });
 
 interface GroupFeedbackContentProps {
   groupLabel: string;
-  /** Record the feedback; resolve true to close. */
-  onConfirm: (comment: string) => Promise<boolean>;
+  /** Record the feedback (note + any screenshots); resolve true to close. */
+  onConfirm: (comment: string, fileIds: string[]) => Promise<boolean>;
 }
 
 const GroupFeedbackContent = memo<GroupFeedbackContentProps>(({ groupLabel, onConfirm }) => {
@@ -153,13 +166,15 @@ const GroupFeedbackContent = memo<GroupFeedbackContentProps>(({ groupLabel, onCo
   const { close } = useModalContext();
   const [comment, setComment] = useState('');
   const [loading, setLoading] = useState(false);
+  const { attachments, fileIds, handlePaste, remove, uploadFiles, uploading } =
+    useFeedbackAttachments();
 
   const handleConfirm = async () => {
     const trimmed = comment.trim();
     if (!trimmed) return;
     setLoading(true);
     try {
-      if (await onConfirm(trimmed)) close();
+      if (await onConfirm(trimmed, fileIds)) close();
     } finally {
       setLoading(false);
     }
@@ -175,13 +190,22 @@ const GroupFeedbackContent = memo<GroupFeedbackContentProps>(({ groupLabel, onCo
         placeholder={translate('acceptance.group.feedbackPlaceholder')}
         value={comment}
         onChange={(event) => setComment(event.target.value)}
+        onPaste={handlePaste}
       />
-      <Flexbox horizontal gap={8} justify={'flex-end'}>
+      <AttachmentStrip
+        attachments={attachments}
+        disabled={loading}
+        uploading={uploading}
+        onRemove={remove}
+      />
+      <Flexbox horizontal align={'center'} gap={8} justify={'flex-end'}>
+        <AttachmentUploadButton disabled={loading} onFiles={uploadFiles} />
+        <Flexbox flex={1} />
         <Button disabled={loading} onClick={close}>
           {translate('acceptance.actions.cancel')}
         </Button>
         <Button
-          disabled={!comment.trim()}
+          disabled={!comment.trim() || uploading}
           loading={loading}
           type={'primary'}
           onClick={handleConfirm}
@@ -204,6 +228,7 @@ export const openGroupFeedbackModal = (options: GroupFeedbackContentProps): Moda
     content: <GroupFeedbackContent {...options} />,
     footer: null,
     maskClosable: true,
+    styles: frostedModalStyles,
     title: t('acceptance.group.feedbackTitle', { ns: 'verify' }),
     width: 'min(90vw, 520px)',
   });

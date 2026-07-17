@@ -9,26 +9,42 @@ import { useTranslation } from 'react-i18next';
 
 const styles = createStaticStyles(({ css }) => ({
   /* Floats over the scrolling checklist — the decision stays reachable
-     however deep the review goes. */
+     however deep the review goes. A tinted left rail carries the state colour
+     so the strip reads at a glance without shouting a full coloured fill. */
   bar: css`
     position: sticky;
     z-index: 20;
     inset-block-end: 16px;
 
+    overflow: hidden;
     display: flex;
-    gap: 12px;
+    gap: 14px;
     align-items: center;
 
-    padding-block: 10px;
-    padding-inline: 14px;
+    padding-block: 12px;
+    padding-inline: 18px;
     border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
+    border-radius: 14px;
 
     background: ${cssVar.colorBgElevated};
-    box-shadow: ${cssVar.boxShadowTertiary};
+    box-shadow: ${cssVar.boxShadowSecondary};
   `,
-  feedbackChip: css`
-    white-space: nowrap;
+  /* The status glyph in a soft tinted disc — quieter than a bare coloured icon. */
+  glyph: css`
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+  `,
+  rail: css`
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 0;
+    width: 4px;
   `,
 }));
 
@@ -68,21 +84,22 @@ const DecisionBar = memo<DecisionBarProps>(
     const { t } = useTranslation('verify');
 
     const stateMeta = {
-      accepted: { color: cssVar.colorSuccess, icon: BadgeCheck, spin: false },
-      live: { color: cssVar.colorInfo, icon: Loader2, spin: true },
-      rejected: { color: cssVar.colorError, icon: RotateCcw, spin: false },
-      settled: {
-        color: hasException ? cssVar.colorWarning : cssVar.colorSuccess,
-        icon: hasException ? HelpCircle : BadgeCheck,
-        spin: false,
-      },
+      accepted: { bg: cssVar.colorSuccessBg, color: cssVar.colorSuccess, icon: BadgeCheck },
+      live: { bg: cssVar.colorInfoBg, color: cssVar.colorInfo, icon: Loader2 },
+      rejected: { bg: cssVar.colorErrorBg, color: cssVar.colorError, icon: RotateCcw },
+      settled: hasException
+        ? { bg: cssVar.colorWarningBg, color: cssVar.colorWarning, icon: HelpCircle }
+        : { bg: cssVar.colorSuccessBg, color: cssVar.colorSuccess, icon: BadgeCheck },
     }[state];
 
     return (
       <div className={styles.bar}>
-        <Icon color={stateMeta.color} icon={stateMeta.icon} size={18} spin={stateMeta.spin} />
-        <Flexbox gap={1} style={{ flex: 1, minWidth: 0 }}>
-          <Text strong style={{ fontSize: 14, whiteSpace: 'nowrap' }}>
+        <span className={styles.rail} style={{ background: stateMeta.color }} />
+        <div className={styles.glyph} style={{ background: stateMeta.bg }}>
+          <Icon color={stateMeta.color} icon={stateMeta.icon} size={18} spin={state === 'live'} />
+        </div>
+        <Flexbox gap={2} style={{ flex: 1, minWidth: 0 }}>
+          <Text ellipsis strong style={{ fontSize: 14 }}>
             {statusText}
           </Text>
           {subText && (
@@ -95,10 +112,10 @@ const DecisionBar = memo<DecisionBarProps>(
         {/* The clearing list — every note this round queues for the next one. */}
         {feedbackCount > 0 && (
           <Button
-            className={styles.feedbackChip}
             icon={<Icon icon={ListTodo} />}
             size={'small'}
-            type={'text'}
+            style={{ flex: 'none' }}
+            type={'fill'}
             onClick={onOpenFeedback}
           >
             {t('acceptance.bar.feedback', { count: feedbackCount })}
@@ -106,7 +123,7 @@ const DecisionBar = memo<DecisionBarProps>(
         )}
 
         {state === 'settled' && (
-          <Button disabled={pending} type={'primary'} onClick={onAccept}>
+          <Button disabled={pending} style={{ flex: 'none' }} type={'primary'} onClick={onAccept}>
             {t('acceptance.actions.accept')}
           </Button>
         )}

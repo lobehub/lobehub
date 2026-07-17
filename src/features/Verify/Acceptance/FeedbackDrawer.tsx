@@ -1,11 +1,14 @@
 'use client';
 
+import type { AcceptanceAttachment } from '@lobechat/types';
 import { Drawer, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import dayjs from 'dayjs';
 import { MessageSquareText, MessageSquareX } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { AttachmentThumbs } from './attachments';
 
 const styles = createStaticStyles(({ css }) => ({
   card: css`
@@ -40,6 +43,8 @@ const styles = createStaticStyles(({ css }) => ({
 export interface FeedbackListEntry {
   /** Number of circled regions carried by the feedback (check rejects). */
   annotationCount?: number;
+  /** Resolved screenshots the reviewer attached to the feedback. */
+  attachments?: AcceptanceAttachment[];
   /** Jump target — set for check-scoped entries. */
   checkId?: string;
   /** Check label ("C3") for check-scoped entries. */
@@ -109,6 +114,7 @@ const EntryCard = memo<{
         </Text>
       </Flexbox>
       {entry.comment && <Text style={{ fontSize: 13 }}>{entry.comment}</Text>}
+      <AttachmentThumbs attachments={entry.attachments} />
     </Flexbox>
   );
 });

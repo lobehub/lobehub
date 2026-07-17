@@ -33,6 +33,7 @@ import {
   readEvidenceComparison,
 } from '../components/EvidenceComparisonCard';
 import { AnnotatedImage } from './Annotation';
+import { AttachmentThumbs } from './attachments';
 import { openCheckRejectModal } from './CheckRejectModal';
 import { openGroupFeedbackModal } from './modals';
 
@@ -47,6 +48,7 @@ export interface CheckReviewInput {
   annotations?: AcceptanceReviewAnnotation[];
   checkItemIds: string[];
   comment?: string;
+  fileIds?: string[];
 }
 
 /** The user's standing verdict on a check — `pending` means "awaiting your confirmation". */
@@ -433,6 +435,7 @@ const FeedbackCard = memo<{
         </Text>
       </Flexbox>
       {review.comment && <Text style={{ fontSize: 12 }}>{review.comment}</Text>}
+      <AttachmentThumbs attachments={review.attachments} />
       {[...groups.entries()].map(([evidenceId, annotations]) => {
         const evidence = evidenceById.get(evidenceId);
         // The evidence may be gone (deleted round) — the notes stay readable.
@@ -643,12 +646,13 @@ const CheckRow = memo<{
       evidence: check.evidence
         .filter((item) => isVisual(item))
         .map((item) => ({ fileUrl: item.fileUrl!, id: item.id })),
-      onConfirm: ({ annotations, comment }) =>
+      onConfirm: ({ annotations, comment, fileIds }) =>
         onReview({
           action: 'reject',
           annotations: annotations.length > 0 ? annotations : undefined,
           checkItemIds: [check.id],
           comment: comment || undefined,
+          fileIds: fileIds.length > 0 ? fileIds : undefined,
         }),
     });
 
@@ -994,7 +998,7 @@ interface CheckListProps {
   /** Group-scoped feedback entries recorded on the aggregate. */
   groupFeedback: AcceptanceGroupFeedback[];
   /** Record group-scoped feedback; resolves true when the write landed. */
-  onGroupFeedback: (category: string, comment: string) => Promise<boolean>;
+  onGroupFeedback: (category: string, comment: string, fileIds: string[]) => Promise<boolean>;
   /** Record the user's verdict; resolves true when the write landed. */
   onReview: (input: CheckReviewInput) => Promise<boolean>;
   onRound: (round: number) => void;
@@ -1175,7 +1179,8 @@ const CheckList = memo<CheckListProps>(
                         event.stopPropagation();
                         openGroupFeedbackModal({
                           groupLabel: label,
-                          onConfirm: (comment) => onGroupFeedback(rawCategory, comment),
+                          onConfirm: (comment, fileIds) =>
+                            onGroupFeedback(rawCategory, comment, fileIds),
                         });
                       }}
                     />
@@ -1244,6 +1249,7 @@ const CheckList = memo<CheckListProps>(
                           </Text>
                         </Flexbox>
                         <Text style={{ fontSize: 12 }}>{entry.comment}</Text>
+                        <AttachmentThumbs attachments={entry.attachments} />
                       </Flexbox>
                     );
                   })}

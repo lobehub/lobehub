@@ -1,5 +1,6 @@
 import { normalizeVerifySurface } from '@lobechat/const/verify';
 import type {
+  AcceptanceAttachment,
   AcceptanceCheckReviewAction,
   AcceptanceReviewAnnotation,
   AcceptanceStatus,
@@ -255,6 +256,8 @@ export const buildAcceptanceCheckUnion = (rounds: RoundInput[]): AcceptanceCheck
 export interface AcceptanceCheckUserReview {
   action: AcceptanceCheckReviewAction;
   annotations?: AcceptanceReviewAnnotation[];
+  /** Attachments backing a reject, resolved to URLs by the bundle read. */
+  attachments?: AcceptanceAttachment[];
   comment?: string;
   createdAt: string;
   roundIndex: number;
@@ -274,9 +277,13 @@ export interface AcceptanceCheckUserReview {
 export interface AcceptanceCheckReviewEvent {
   action: AcceptanceCheckReviewAction;
   annotations?: AcceptanceReviewAnnotation[];
+  /** Attachments backing the reject, resolved to URLs by the bundle read. */
+  attachments?: AcceptanceAttachment[];
   comment?: string;
   /** When the decision was made (ISO 8601; falls back to the row's timestamps). */
   createdAt: string;
+  /** Uploaded/pasted screenshots backing the reject (FKs to files). */
+  fileIds?: string[];
   /** The result row the decision is stamped on. */
   id: string;
   roundIndex: number;
@@ -310,6 +317,7 @@ export const buildCheckReviewOverlay = (
       annotations: detail?.annotations,
       comment: detail?.comment,
       createdAt: detail?.decidedAt ?? (result.completedAt ?? result.createdAt)?.toISOString() ?? '',
+      fileIds: detail?.fileIds,
       id: result.id,
       // A carried-forward check is judged at the CURRENT round even though its
       // evidence row belongs to an older one — the detail records that round.
@@ -545,6 +553,7 @@ export class AcceptanceService {
       annotations?: AcceptanceReviewAnnotation[];
       checkItemIds: string[];
       comment?: string;
+      fileIds?: string[];
     },
   ): Promise<{ resultIds: string[] }> => {
     const acceptance = await this.acceptanceModel.findById(acceptanceId);
@@ -595,6 +604,7 @@ export class AcceptanceService {
       roundIndex: currentRoundIndex,
       ...(input.comment ? { comment: input.comment } : {}),
       ...(input.annotations?.length ? { annotations: input.annotations } : {}),
+      ...(input.fileIds?.length ? { fileIds: input.fileIds } : {}),
     };
 
     await Promise.all(

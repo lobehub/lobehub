@@ -362,8 +362,15 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
 
   // Group-scoped feedback — for concerns that belong to no single check (the
   // checks themselves may be accepted) yet must reach the next round.
-  const handleGroupFeedback = (category: string, comment: string) =>
-    runAction(() => verifyService.addGroupFeedback({ category, comment, id: acceptance.id }));
+  const handleGroupFeedback = (category: string, comment: string, fileIds: string[]) =>
+    runAction(() =>
+      verifyService.addGroupFeedback({
+        category,
+        comment,
+        fileIds: fileIds.length > 0 ? fileIds : undefined,
+        id: acceptance.id,
+      }),
+    );
 
   // The floating bar's one-line state + supporting line — the old banner's
   // content, relocated to where the decision actually happens.
@@ -409,6 +416,7 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
         .filter((review) => review.action === 'reject')
         .map((review) => ({
           annotationCount: review.annotations?.length || undefined,
+          attachments: review.attachments,
           checkId: check.id,
           checkSeq: check.seq,
           comment: review.comment ?? '',
@@ -420,6 +428,7 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
         })),
     ),
     ...groupFeedbackEntries.map((entry) => ({
+      attachments: entry.attachments,
       comment: entry.comment,
       createdAt: entry.createdAt,
       groupLabel: entry.category,

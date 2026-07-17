@@ -118,6 +118,26 @@ describe('buildCheckReviewOverlay', () => {
     expect(overlay.userReview).toMatchObject({ action: 'reject', roundIndex: 2, stale: false });
   });
 
+  it('surfaces the reject attachment fileIds so the bundle can resolve them to URLs', () => {
+    const withShots = result('r1', {
+      userDecision: 'rejected',
+      userDecisionDetail: {
+        comment: 'see the screenshots',
+        decidedAt: '2026-07-16T01:00:00.000Z',
+        fileIds: ['file-a', 'file-b'],
+      },
+    });
+    const overlay = buildCheckReviewOverlay(
+      { timeline: [timelineEntry('r1', 1)] },
+      byId(withShots),
+      1,
+    );
+    // The overlay carries the raw ids on the trail; the bundle read resolves
+    // them to URLs (userReview.attachments) off this latest review.
+    expect(overlay.reviews[0].fileIds).toEqual(['file-a', 'file-b']);
+    expect(overlay.userReview).toMatchObject({ action: 'reject', roundIndex: 1 });
+  });
+
   it('carries annotations and falls back to row timestamps for legacy decisions', () => {
     const annotated = result('r1', {
       userDecision: 'rejected',

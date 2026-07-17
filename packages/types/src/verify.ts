@@ -100,6 +100,20 @@ export interface AcceptanceConfig {
 }
 
 /**
+ * A file the user attached to their feedback (an uploaded/pasted screenshot),
+ * resolved to a display URL. The stored form is a bare `fileId` on the decision
+ * detail; this is the enriched view the acceptance page renders, produced by the
+ * bundle read (which resolves the id to a signed URL as the aggregate's owner).
+ */
+export interface AcceptanceAttachment {
+  id: string;
+  /** Original file name, when known. */
+  name?: string;
+  /** Resolved (possibly signed) URL — null when the file no longer resolves. */
+  url: string | null;
+}
+
+/**
  * User feedback addressed to a check GROUP (business category) rather than any
  * single check — the "this concern doesn't belong to a check I could reject"
  * channel. Stored on the round it judges ({@link VerifyRunDecisionDetail});
@@ -108,11 +122,15 @@ export interface AcceptanceConfig {
  * newer round lands) applies structurally.
  */
 export interface AcceptanceGroupFeedback {
+  /** Attachments backing the feedback, resolved to URLs by the bundle read. */
+  attachments?: AcceptanceAttachment[];
   /** The group's category label ('' targets the uncategorized bucket). */
   category: string;
   comment: string;
   /** When the feedback was written (ISO 8601). */
   createdAt: string;
+  /** Uploaded/pasted screenshots backing the feedback (FKs to files). */
+  fileIds?: string[];
   /** The round the feedback was addressed to — its run's own round index. */
   roundIndex: number;
 }
@@ -160,6 +178,8 @@ export interface VerifyCheckDecisionDetail {
   decidedAt?: string;
   /** Who made the decision (user id) — set when it may differ from the row owner. */
   decidedBy?: string;
+  /** Uploaded/pasted screenshots backing the reject (FKs to files). */
+  fileIds?: string[];
   /**
    * The acceptance round that was CURRENT when the decision was made. A
    * carried-forward check's result row belongs to an older round, so the

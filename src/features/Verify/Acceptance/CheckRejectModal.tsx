@@ -16,6 +16,7 @@ import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { AnnotationCanvas } from './Annotation';
+import { AttachmentStrip, AttachmentUploadButton, useFeedbackAttachments } from './attachments';
 
 const styles = createStaticStyles(({ css }) => ({
   canvasWrap: css`
@@ -160,6 +161,7 @@ interface CheckRejectModalProps {
   onConfirm: (value: {
     annotations: AcceptanceReviewAnnotation[];
     comment: string;
+    fileIds: string[];
   }) => Promise<boolean>;
 }
 
@@ -179,6 +181,11 @@ const CheckRejectContent = memo<CheckRejectModalProps>(
           .filter((entry) => evidence.some((item) => item.id === entry.evidenceId))
           .map((entry) => ({ ...entry, key: nextAnnotationKey() })),
     );
+
+    // Your own screenshots (paste or upload) — attached to the reject alongside
+    // the note and any circled regions.
+    const { attachments, fileIds, handlePaste, remove, uploadFiles, uploading } =
+      useFeedbackAttachments();
 
     // Fullscreen inspect-and-annotate: same draft state, a zoomable stage.
     const [fullscreen, setFullscreen] = useState(false);
@@ -239,9 +246,12 @@ const CheckRejectContent = memo<CheckRejectModalProps>(
         return ZOOM_STEPS[Math.min(Math.max(at + direction, 0), ZOOM_STEPS.length - 1)];
       });
 
-    // The reject IS its feedback — at least one note (global or per-region).
+    // The reject IS its feedback — at least one note (global or per-region) or
+    // an attached screenshot the next round can act on.
     const canSubmit =
-      Boolean(comment.trim()) || annotations.some((annotation) => annotation.comment.trim());
+      Boolean(comment.trim()) ||
+      annotations.some((annotation) => annotation.comment.trim()) ||
+      fileIds.length > 0;
 
     const handleConfirm = async () => {
       setLoading(true);
@@ -255,6 +265,7 @@ const CheckRejectContent = memo<CheckRejectModalProps>(
               rect: annotation.rect,
             })),
           comment: comment.trim(),
+          fileIds,
         });
         if (confirmed) {
           if (draftKey) localStorage.removeItem(draftStorageKey(draftKey));
@@ -387,7 +398,17 @@ const CheckRejectContent = memo<CheckRejectModalProps>(
               placeholder={translate('acceptance.review.rejectPlaceholder')}
               value={comment}
               onChange={(event) => setComment(event.target.value)}
+              onPaste={handlePaste}
             />
+            <AttachmentStrip
+              attachments={attachments}
+              disabled={loading}
+              uploading={uploading}
+              onRemove={remove}
+            />
+            <Flexbox horizontal>
+              <AttachmentUploadButton disabled={loading} onFiles={uploadFiles} />
+            </Flexbox>
           </Flexbox>
         </Flexbox>
 
@@ -402,7 +423,12 @@ const CheckRejectContent = memo<CheckRejectModalProps>(
           <Button disabled={loading} onClick={close}>
             {translate('acceptance.actions.cancel')}
           </Button>
-          <Button disabled={!canSubmit} loading={loading} type={'primary'} onClick={handleConfirm}>
+          <Button
+            disabled={!canSubmit || uploading}
+            loading={loading}
+            type={'primary'}
+            onClick={handleConfirm}
+          >
             {translate('acceptance.review.confirmReject')}
           </Button>
         </Flexbox>
@@ -500,6 +526,7 @@ export const openCheckRejectModal = (options: CheckRejectModalProps): ModalInsta
     // The content region hosts its own scroll body + pinned action bar — it
     // must not scroll (or pad) as a whole, or the bar scrolls away with it.
     styles: {
+      backdrop: { backdropFilter: 'blur(4px)' },
       content: {
         display: 'flex',
         flexDirection: 'column',

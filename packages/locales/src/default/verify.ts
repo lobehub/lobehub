@@ -106,6 +106,10 @@ export default {
   'acceptance.review.annotateHint':
     'Drag on the image to circle a region, then leave a note for it.',
   'acceptance.review.annotationPlaceholder': 'What is wrong in region {{index}}…',
+  'acceptance.review.attach': 'Attach screenshot',
+  'acceptance.review.attachFailed': 'Screenshot upload failed — please try again.',
+  'acceptance.review.attachLimit': 'Up to {{count}} screenshots.',
+  'acceptance.review.attachTooLarge': 'The image is too large (10MB max).',
   'acceptance.review.confirmReject': 'Submit feedback',
   'acceptance.review.feedbackLabel': 'Your feedback · round {{round}}',
   'acceptance.review.fullscreen': 'Annotate fullscreen',
