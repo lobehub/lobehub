@@ -29,6 +29,7 @@ export * from './rag';
 export * from './ragEvals';
 export * from './rbac';
 export * from './relations';
+export * from './resourcePermission';
 export * from './session';
 export * from './systemBotProvider';
 export * from './task';

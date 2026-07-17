@@ -861,6 +861,13 @@
       "when": 1784258432422,
       "tag": "0122_verify_visibility_and_check_user_decision",
       "breakpoints": true
+    },
+    {
+      "idx": 123,
+      "version": "7",
+      "when": 1784289934074,
+      "tag": "0123_add_resource_permissions",
+      "breakpoints": true
     }
   ],
   "version": "6"
