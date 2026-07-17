@@ -187,6 +187,9 @@ export class VerifyService {
       topicId: input.topicId,
     });
 
+  /** Stamp the aggregate `repairing` after the send-back dispatch. */
+  markAcceptanceRepairing = (id: string) => lambdaClient.acceptance.markRepairing.mutate({ id });
+
   // ---- per-run plan ----
   getVerifyState = (operationId: string): Promise<VerifyStateResponse | null> =>
     lambdaClient.verify.getVerifyState.query({

@@ -276,6 +276,13 @@ const EVIDENCE_BADGES = [
 const isFilename = (value: string | null | undefined) =>
   !value || /^[\w.-]+\.(?:gif|jpe?g|mp4|png|webm|webp)$/i.test(value);
 
+/**
+ * Reserve the image's box before it loads — with the stored intrinsic size the
+ * layout never jumps when a row expands and its screenshots stream in.
+ */
+const imageRatio = (item: AcceptanceEvidence): string | undefined =>
+  item.fileWidth && item.fileHeight ? `${item.fileWidth} / ${item.fileHeight}` : undefined;
+
 /** Flat media for a comparison side — the card frames it, so no own border/radius. */
 const comparisonContent = (item: AcceptanceEvidence) =>
   item.type === 'video' ? (
@@ -286,7 +293,7 @@ const comparisonContent = (item: AcceptanceEvidence) =>
       alt={item.description ?? item.fileName ?? item.type}
       loading={'lazy'}
       src={item.fileUrl!}
-      style={{ borderRadius: 0, width: '100%' }}
+      style={{ aspectRatio: imageRatio(item), borderRadius: 0, width: '100%' }}
       variant={'borderless'}
     />
   );
@@ -356,14 +363,29 @@ const EvidenceList = memo<{ evidence: AcceptanceEvidence[] }>(({ evidence }) => 
           return (
             <Flexbox gap={4} key={item.id} style={{ maxWidth: '100%', width: 'fit-content' }}>
               {/* The frame owns the border — the inner Image must not draw its
-                  own, or the two 1px borders stack visibly. */}
-              <Flexbox className={styles.evidenceImage}>
+                  own, or the two 1px borders stack visibly. The frame also
+                  reserves the aspect ratio so the row's height is settled
+                  before the image loads (no expand jump). */}
+              <Flexbox
+                className={styles.evidenceImage}
+                style={
+                  item.fileWidth && item.fileHeight
+                    ? { aspectRatio: imageRatio(item), maxWidth: '100%', width: item.fileWidth }
+                    : undefined
+                }
+              >
                 <Image
                   alt={item.description ?? item.fileName ?? item.type}
                   loading={'lazy'}
                   src={item.fileUrl}
-                  style={{ borderRadius: 0, maxWidth: '100%' }}
                   variant={'borderless'}
+                  style={{
+                    borderRadius: 0,
+                    maxWidth: '100%',
+                    // Fill the ratio-reserving frame; without known dimensions
+                    // the image keeps its intrinsic size (legacy evidence).
+                    width: item.fileWidth && item.fileHeight ? '100%' : undefined,
+                  }}
                 />
               </Flexbox>
               {caption}
@@ -427,7 +449,7 @@ const FeedbackCard = memo<{
       <Flexbox horizontal align={'center'} gap={6}>
         <Icon color={cssVar.colorError} icon={MessageSquareX} size={13} />
         <Text style={{ color: cssVar.colorError, fontSize: 12 }}>
-          {t('acceptance.review.feedbackLabel', { round: review.roundIndex })}
+          {t('acceptance.review.feedbackLabel')}
         </Text>
         <Text fontSize={12} type={'secondary'}>
           {dayjs(review.createdAt).format('MM-DD HH:mm')}
@@ -449,9 +471,16 @@ const FeedbackCard = memo<{
         return (
           <AnnotatedImage
             annotations={annotations}
-            imageStyle={{ maxHeight: 240 }}
             key={evidenceId}
             src={evidence.fileUrl}
+            imageStyle={{
+              // Known dimensions reserve the box up front (explicit height +
+              // ratio-derived width) — no height jump when the row expands
+              // and the screenshot streams in.
+              aspectRatio: imageRatio(evidence),
+              height: evidence.fileHeight ? Math.min(evidence.fileHeight, 240) : undefined,
+              maxHeight: 240,
+            }}
           />
         );
       })}
@@ -1248,7 +1277,7 @@ const CheckList = memo<CheckListProps>(
                               fontSize: 12,
                             }}
                           >
-                            {t('acceptance.group.feedbackLabel', { round: entry.roundIndex })}
+                            {t('acceptance.group.feedbackLabel')}
                           </Text>
                           <Text fontSize={12} type={'secondary'}>
                             {dayjs(entry.createdAt).format('MM-DD HH:mm')}

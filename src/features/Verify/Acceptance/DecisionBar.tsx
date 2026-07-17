@@ -3,7 +3,7 @@
 import { Flexbox, Icon, Text } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { BadgeCheck, Check, ListTodo, Loader2, RotateCcw } from 'lucide-react';
+import { BadgeCheck, ListTodo, Loader2, RotateCcw } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -41,15 +41,33 @@ const styles = createStaticStyles(({ css }) => ({
 
 type BarState = 'accepted' | 'live' | 'rejected' | 'settled';
 
-/** The review-progress dial: how many checks the user has signed off, of all. */
+/**
+ * The review-progress dial: how many checks the user has signed off, of all.
+ * At zero it reads as a dashed "not started" circle; the completed state is
+ * rendered by the bar as the BadgeCheck disc, not here.
+ */
 const ProgressRing = memo<{ done: number; total: number }>(({ done, total }) => {
   const size = 36;
   const stroke = 3.5;
   const radius = (size - stroke) / 2;
   const circumference = 2 * Math.PI * radius;
   const ratio = total > 0 ? Math.min(done / total, 1) : 0;
-  const complete = total > 0 && done >= total;
-  const arcColor = complete ? cssVar.colorSuccess : cssVar.colorPrimary;
+
+  if (done <= 0)
+    return (
+      <svg height={size} style={{ flex: 'none' }} width={size}>
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          fill={'none'}
+          r={radius}
+          stroke={cssVar.colorTextQuaternary}
+          strokeDasharray={'3 5'}
+          strokeLinecap={'round'}
+          strokeWidth={stroke}
+        />
+      </svg>
+    );
 
   return (
     <div style={{ flex: 'none', height: size, position: 'relative', width: size }}>
@@ -67,7 +85,7 @@ const ProgressRing = memo<{ done: number; total: number }>(({ done, total }) => 
           cy={size / 2}
           fill={'none'}
           r={radius}
-          stroke={arcColor}
+          stroke={cssVar.colorPrimary}
           strokeDasharray={`${circumference * ratio} ${circumference}`}
           strokeLinecap={'round'}
           strokeWidth={stroke}
@@ -80,11 +98,7 @@ const ProgressRing = memo<{ done: number; total: number }>(({ done, total }) => 
         justify={'center'}
         style={{ fontSize: 10, fontVariantNumeric: 'tabular-nums', inset: 0, position: 'absolute' }}
       >
-        {complete ? (
-          <Icon color={cssVar.colorSuccess} icon={Check} size={14} />
-        ) : (
-          <span style={{ color: cssVar.colorTextSecondary, fontWeight: 600 }}>{done}</span>
-        )}
+        <span style={{ color: cssVar.colorTextSecondary, fontWeight: 600 }}>{done}</span>
       </Flexbox>
     </div>
   );
@@ -155,9 +169,19 @@ const DecisionBar = memo<DecisionBarProps>(
 
     return (
       <div className={styles.bar}>
-        {stateMeta ? (
-          <div className={styles.glyph} style={{ background: stateMeta.bg }}>
-            <Icon color={stateMeta.color} icon={stateMeta.icon} size={18} spin={state === 'live'} />
+        {stateMeta || allConfirmed ? (
+          // A fully signed-off review earns the badge, not a maxed-out dial —
+          // the same mark the accepted state carries.
+          <div
+            className={styles.glyph}
+            style={{ background: stateMeta?.bg ?? cssVar.colorSuccessBg }}
+          >
+            <Icon
+              color={stateMeta?.color ?? cssVar.colorSuccess}
+              icon={stateMeta?.icon ?? BadgeCheck}
+              size={18}
+              spin={state === 'live'}
+            />
           </div>
         ) : (
           <ProgressRing done={acceptedCount} total={totalCount} />
@@ -183,6 +207,14 @@ const DecisionBar = memo<DecisionBarProps>(
             onClick={onOpenFeedback}
           >
             {t('acceptance.bar.feedback', { count: feedbackCount })}
+          </Button>
+        )}
+
+        {/* A dispatched send-back (repairing) keeps the copy entry alive —
+            the reviewer may still hand the prompt to another agent. */}
+        {state === 'live' && hasFeedback && (
+          <Button disabled={pending} style={{ flex: 'none' }} type={'fill'} onClick={onCopyReview}>
+            {t('acceptance.bar.copyReview')}
           </Button>
         )}
 

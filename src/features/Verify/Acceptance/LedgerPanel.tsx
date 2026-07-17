@@ -74,6 +74,9 @@ const roundStatus = (round: AcceptanceRound): string => {
 };
 
 interface LedgerPanelProps {
+  /** The hosting surface already provides a close affordance (narrow-mode
+      Drawer) — a second collapse icon here would read as two closes. */
+  hideCollapse?: boolean;
   highlight: number | null;
   onCollapse: () => void;
   onOpenReport: (round: AcceptanceRound) => void;
@@ -85,105 +88,109 @@ interface LedgerPanelProps {
  * full verify run; the main list is the cross-round merge. Newest round first —
  * the latest attempt is the one under judgment.
  */
-const LedgerPanel = memo<LedgerPanelProps>(({ highlight, onCollapse, onOpenReport, rounds }) => {
-  const { t } = useTranslation('verify');
-  const latestIndex = rounds.at(-1)?.run.roundIndex;
+const LedgerPanel = memo<LedgerPanelProps>(
+  ({ hideCollapse, highlight, onCollapse, onOpenReport, rounds }) => {
+    const { t } = useTranslation('verify');
+    const latestIndex = rounds.at(-1)?.run.roundIndex;
 
-  return (
-    <Flexbox gap={12} padding={16}>
-      <Flexbox horizontal align={'center'} gap={8}>
-        <Icon color={cssVar.colorTextSecondary} icon={FileClock} size={16} />
-        <Text strong style={{ fontSize: 13 }}>
-          {t('acceptance.ledger.title')}
-        </Text>
+    return (
+      <Flexbox gap={12} padding={16}>
+        <Flexbox horizontal align={'center'} gap={8}>
+          <Icon color={cssVar.colorTextSecondary} icon={FileClock} size={16} />
+          <Text strong style={{ fontSize: 13 }}>
+            {t('acceptance.ledger.title')}
+          </Text>
+          <Text fontSize={12} type={'secondary'}>
+            {t('acceptance.ledger.count', { count: rounds.length })}
+          </Text>
+          <Flexbox flex={1} />
+          {!hideCollapse && (
+            <ActionIcon
+              icon={PanelRightClose}
+              size={'small'}
+              title={t('acceptance.ledger.collapse')}
+              onClick={onCollapse}
+            />
+          )}
+        </Flexbox>
         <Text fontSize={12} type={'secondary'}>
-          {t('acceptance.ledger.count', { count: rounds.length })}
+          {t('acceptance.ledger.description')}
         </Text>
-        <Flexbox flex={1} />
-        <ActionIcon
-          icon={PanelRightClose}
-          size={'small'}
-          title={t('acceptance.ledger.collapse')}
-          onClick={onCollapse}
-        />
-      </Flexbox>
-      <Text fontSize={12} type={'secondary'}>
-        {t('acceptance.ledger.description')}
-      </Text>
-      {[...rounds].reverse().map((round) => {
-        const status = roundStatus(round);
-        const meta = STATUS_META[status] ?? STATUS_META.verifying;
-        const stats =
-          round.report?.totalChecks != null
-            ? t('acceptance.ledger.stats', {
-                passed: round.report.passedChecks ?? 0,
-                total: round.report.totalChecks,
-              })
-            : null;
-        const commit = (round.run.context as { commit?: string } | null)?.commit;
+        {[...rounds].reverse().map((round) => {
+          const status = roundStatus(round);
+          const meta = STATUS_META[status] ?? STATUS_META.verifying;
+          const stats =
+            round.report?.totalChecks != null
+              ? t('acceptance.ledger.stats', {
+                  passed: round.report.passedChecks ?? 0,
+                  total: round.report.totalChecks,
+                })
+              : null;
+          const commit = (round.run.context as { commit?: string } | null)?.commit;
 
-        const openable = Boolean(round.report);
+          const openable = Boolean(round.report);
 
-        return (
-          <Flexbox
-            aria-label={openable ? t('acceptance.ledger.viewReport') : undefined}
-            gap={6}
-            key={round.run.id}
-            role={openable ? 'button' : undefined}
-            className={cx(
-              styles.round,
-              openable && styles.roundClickable,
-              highlight === round.run.roundIndex && styles.roundActive,
-            )}
-            onClick={openable ? () => onOpenReport(round) : undefined}
-          >
-            <Flexbox horizontal align={'center'} gap={8}>
-              <Text strong style={{ fontSize: 13 }}>
-                {t('acceptance.round', { round: round.run.roundIndex })}
-              </Text>
-              {round.run.roundIndex === latestIndex && (
+          return (
+            <Flexbox
+              aria-label={openable ? t('acceptance.ledger.viewReport') : undefined}
+              gap={6}
+              key={round.run.id}
+              role={openable ? 'button' : undefined}
+              className={cx(
+                styles.round,
+                openable && styles.roundClickable,
+                highlight === round.run.roundIndex && styles.roundActive,
+              )}
+              onClick={openable ? () => onOpenReport(round) : undefined}
+            >
+              <Flexbox horizontal align={'center'} gap={8}>
+                <Text strong style={{ fontSize: 13 }}>
+                  {t('acceptance.round', { round: round.run.roundIndex })}
+                </Text>
+                {round.run.roundIndex === latestIndex && (
+                  <Text fontSize={12} type={'secondary'}>
+                    {t('acceptance.ledger.latest')}
+                  </Text>
+                )}
+                <Flexbox
+                  horizontal
+                  align={'center'}
+                  gap={4}
+                  style={{ color: meta.color, fontSize: 12 }}
+                >
+                  <Icon icon={meta.icon} size={13} />
+                  {t(`acceptance.roundStatus.${status}`, { defaultValue: status })}
+                </Flexbox>
+                <Flexbox flex={1} />
                 <Text fontSize={12} type={'secondary'}>
-                  {t('acceptance.ledger.latest')}
+                  {dayjs(round.run.createdAt).format('MM-DD HH:mm')}
+                </Text>
+                {openable && (
+                  <Icon
+                    className={'acceptance-round-open-hint'}
+                    color={cssVar.colorTextTertiary}
+                    icon={ChevronRight}
+                    size={14}
+                  />
+                )}
+              </Flexbox>
+              {round.run.title && (
+                <Text fontSize={12} style={{ lineHeight: 1.5 }} type={'secondary'}>
+                  {round.run.title}
                 </Text>
               )}
-              <Flexbox
-                horizontal
-                align={'center'}
-                gap={4}
-                style={{ color: meta.color, fontSize: 12 }}
-              >
-                <Icon icon={meta.icon} size={13} />
-                {t(`acceptance.roundStatus.${status}`, { defaultValue: status })}
-              </Flexbox>
-              <Flexbox flex={1} />
-              <Text fontSize={12} type={'secondary'}>
-                {dayjs(round.run.createdAt).format('MM-DD HH:mm')}
-              </Text>
-              {openable && (
-                <Icon
-                  className={'acceptance-round-open-hint'}
-                  color={cssVar.colorTextTertiary}
-                  icon={ChevronRight}
-                  size={14}
-                />
+              {(stats || commit) && (
+                <Text fontSize={12} type={'secondary'}>
+                  {[stats, commit?.slice(0, 10)].filter(Boolean).join(' · ')}
+                </Text>
               )}
             </Flexbox>
-            {round.run.title && (
-              <Text fontSize={12} style={{ lineHeight: 1.5 }} type={'secondary'}>
-                {round.run.title}
-              </Text>
-            )}
-            {(stats || commit) && (
-              <Text fontSize={12} type={'secondary'}>
-                {[stats, commit?.slice(0, 10)].filter(Boolean).join(' · ')}
-              </Text>
-            )}
-          </Flexbox>
-        );
-      })}
-    </Flexbox>
-  );
-});
+          );
+        })}
+      </Flexbox>
+    );
+  },
+);
 
 LedgerPanel.displayName = 'AcceptanceLedgerPanel';
 

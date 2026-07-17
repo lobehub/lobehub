@@ -466,6 +466,27 @@ export const acceptanceRouter = router({
     }),
 
   /**
+   * The user sent the delivery back for a repair round (the in-app 打回重跑
+   * dispatch). Stamps the aggregate `repairing` so every surface reflects the
+   * send-back immediately; the next round's ingest recomputes the status from
+   * real run state, so a stale stamp cannot stick.
+   */
+  markRepairing: acceptanceWriteProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const acceptance = await resolveAcceptance(ctx, input.id);
+      assertWorkspaceRowManageable(ctx, acceptance.userId, 'acceptance');
+
+      if (acceptance.status !== 'delivered' && acceptance.status !== 'errored') {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: `Only a settled acceptance can be sent back (status: ${acceptance.status})`,
+        });
+      }
+      return ctx.acceptanceService.acceptanceModel.updateStatus(acceptance.id, 'repairing');
+    }),
+
+  /**
    * The user rejects the delivery. The comment is a re-tasking input: it is
    * recorded on the current round's decision and seeds the next repair/verify
    * round (spawned by the runtime for agent rounds, or by the next

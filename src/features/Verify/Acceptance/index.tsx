@@ -442,17 +442,24 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
     },
     settled: allConfirmed
       ? {
+          // The done line stands alone — a grey stats echo under it reads as
+          // an unresolved caveat (review feedback).
           statusText: t('acceptance.bar.progressDone', { total: reviewTotal }),
-          subText: countsText,
+          subText: undefined,
         }
-      : {
-          statusText: t('acceptance.bar.progress', {
-            done: reviewDone,
-            rest: reviewTotal - reviewDone,
-            total: reviewTotal,
-          }),
-          subText: `${countsText} · ${t('acceptance.banner.decisionHint')}`,
-        },
+      : reviewDone === 0
+        ? {
+            statusText: t('acceptance.bar.progressZero', { total: reviewTotal }),
+            subText: `${countsText} · ${t('acceptance.banner.decisionHint')}`,
+          }
+        : {
+            statusText: t('acceptance.bar.progress', {
+              done: reviewDone,
+              rest: reviewTotal - reviewDone,
+              total: reviewTotal,
+            }),
+            subText: `${countsText} · ${t('acceptance.banner.decisionHint')}`,
+          },
   }[barState];
 
   // Every feedback event, flattened for the clearing list: per-check rejects
@@ -517,11 +524,14 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
   // agent, not just the origin conversation.
   const handleCopyReview = async () => {
     await copyToClipboard(repairPrompt);
-    toast.success(t('acceptance.bar.copied'));
+    // Bottom-center — right above the action bar the click came from.
+    toast.success({ placement: 'bottom', title: t('acceptance.bar.copied') });
   };
 
   // Dispatch the repair prompt straight into the origin conversation — the
-  // agent reads the feedback itself via the CLI, no hand-summarizing.
+  // agent reads the feedback itself via the CLI, no hand-summarizing. The
+  // aggregate is stamped `repairing` so the page (and the list) show the
+  // send-back took effect instead of sitting unchanged.
   const handleRerun = async () => {
     if (!origin?.topic) return;
     setRerunPending(true);
@@ -531,7 +541,10 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
         content: repairPrompt,
         topicId: origin.topic.id,
       });
-      toast.success(t('acceptance.bar.rerunSent'));
+      await verifyService.markAcceptanceRepairing(acceptance.id);
+      await mutate();
+      void globalMutate(verifyKeys.acceptances());
+      toast.success({ placement: 'bottom', title: t('acceptance.bar.rerunSent') });
     } catch (cause) {
       toast.error(cause instanceof Error ? cause.message : t('acceptance.actionError'));
     } finally {
@@ -908,6 +921,7 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
           onClose={() => setLedgerExpand(false)}
         >
           <LedgerPanel
+            hideCollapse
             highlight={highlightRound}
             rounds={rounds}
             onCollapse={() => setLedgerExpand(false)}

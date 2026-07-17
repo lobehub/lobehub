@@ -3,9 +3,17 @@ import type { LobeChatDatabase } from '@/database/type';
 import { FileService } from '@/server/services/file';
 
 export interface EvidenceFileMeta {
+  /** Intrinsic image height (px) from the upload's stored metadata, when known. */
+  fileHeight: number | null;
   fileName: string | null;
   fileUrl: string | null;
+  /** Intrinsic image width (px) — lets the client reserve the aspect ratio
+      before the image loads, so expanding a row never jumps in height. */
+  fileWidth: number | null;
 }
+
+const dimension = (value: unknown): number | null =>
+  typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null;
 
 /**
  * Display metadata for file-backed evidence artifacts (name + full/signed URL).
@@ -35,25 +43,39 @@ export const createEvidenceFileResolver = (
   };
 
   return async (fileId: string | null): Promise<EvidenceFileMeta> => {
-    if (!fileId) return { fileName: null, fileUrl: null };
+    const empty: EvidenceFileMeta = {
+      fileHeight: null,
+      fileName: null,
+      fileUrl: null,
+      fileWidth: null,
+    };
+    if (!fileId) return empty;
 
     try {
       const file = await FileModel.getFileById(db, fileId);
-      if (!file) return { fileName: null, fileUrl: null };
-      if (!file.url) return { fileName: file.name ?? null, fileUrl: null };
+      if (!file) return empty;
+
+      const metadata = file.metadata as { height?: unknown; width?: unknown } | null;
+      const base: EvidenceFileMeta = {
+        fileHeight: dimension(metadata?.height),
+        fileName: file.name ?? null,
+        fileUrl: null,
+        fileWidth: dimension(metadata?.width),
+      };
+      if (!file.url) return base;
 
       const service = getFileService();
-      if (!service) return { fileName: file.name ?? null, fileUrl: null };
+      if (!service) return base;
 
       try {
-        return { fileName: file.name ?? null, fileUrl: await service.getFullFileUrl(file.url) };
+        return { ...base, fileUrl: await service.getFullFileUrl(file.url) };
       } catch (error) {
         console.error('[verify:getReportBundle:resolveFileMeta]', error);
-        return { fileName: file.name ?? null, fileUrl: null };
+        return base;
       }
     } catch (error) {
       console.error('[verify:getReportBundle:resolveFileMeta]', error);
-      return { fileName: null, fileUrl: null };
+      return empty;
     }
   };
 };
