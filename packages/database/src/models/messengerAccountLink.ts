@@ -123,6 +123,34 @@ export class MessengerAccountLinkModel {
       ) {
         throw error;
       }
+
+      // A credential bot (`applicationId`) may only be claimed by one link.
+      // The identity-based resolution below can't see this conflict (the
+      // claiming row has a different `platformUserId`), so surface it here
+      // instead of falling through to the generic final error.
+      if (constraint === 'messenger_account_links_platform_tenant_application_unique') {
+        const [claimed] = await this.db
+          .select(publicColumns)
+          .from(messengerAccountLinks)
+          .where(
+            and(
+              eq(messengerAccountLinks.platform, params.platform),
+              eq(messengerAccountLinks.tenantId, tenantId),
+              eq(messengerAccountLinks.applicationId, params.applicationId!),
+            ),
+          )
+          .limit(1);
+
+        if (claimed && claimed.userId !== this.userId) {
+          throw new MessengerAccountLinkConflictError(
+            claimed.userId,
+            'Credential application is already linked to another LobeHub user',
+          );
+        }
+        // Same user re-claiming their bot from a different IM identity —
+        // requires an explicit unlink of the old link first.
+        throw new MessengerAccountLinkRelinkRequiredError();
+      }
     }
 
     // Resolve by IM identity after the insert attempt. This catches both the

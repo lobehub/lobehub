@@ -164,6 +164,25 @@ describe('MessengerAccountLinkModel', () => {
       expect(raw.credentials).toBe('cipher-v2');
     });
 
+    it('surfaces a conflict when another user claims the same credential application id', async () => {
+      await new MessengerAccountLinkModel(serverDB, userA).upsertForPlatform({
+        applicationId: 'wxbot-claimed',
+        credentials: 'cipher-a',
+        platform: 'wechat',
+        platformUserId: 'wx-owner',
+      });
+
+      const promise = new MessengerAccountLinkModel(serverDB, userB).upsertForPlatform({
+        applicationId: 'wxbot-claimed',
+        credentials: 'cipher-b',
+        platform: 'wechat',
+        platformUserId: 'wx-intruder',
+      });
+
+      await expect(promise).rejects.toBeInstanceOf(MessengerAccountLinkConflictError);
+      await expect(promise).rejects.toMatchObject({ existingUserId: userA });
+    });
+
     it('throws MessengerAccountLinkRelinkRequiredError when re-linking a different account in the same scope', async () => {
       const model = new MessengerAccountLinkModel(serverDB, userA);
       const first = await model.upsertForPlatform({
