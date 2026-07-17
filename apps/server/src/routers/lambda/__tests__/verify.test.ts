@@ -458,12 +458,41 @@ describe('verifyRouter', () => {
   });
 
   describe('getReportBundle', () => {
+    it('hides a private run from visitors but not its owner', async () => {
+      const run = {
+        goal: 'Ship a working page',
+        id: 'run-1',
+        title: 'Run report',
+        userId: 'owner-user',
+        visibility: 'private',
+        workspaceId: null,
+      };
+      const makeServerDB = () => ({
+        query: {
+          verifyReports: { findFirst: vi.fn(async () => null) },
+          verifyRuns: { findFirst: vi.fn(async () => run) },
+        },
+        select: vi.fn().mockReturnValueOnce(selectRows([])),
+      });
+
+      // A visitor's denied read is indistinguishable from a missing run.
+      modelMocks.getServerDB.mockResolvedValue(makeServerDB());
+      expect(await createPublicCaller().getReportBundle({ verifyRunId: 'run-1' })).toBeNull();
+
+      // The owner still reads their own private report.
+      modelMocks.getServerDB.mockResolvedValue(makeServerDB());
+      const ownerCaller = verifyRouter.createCaller({ userId: 'owner-user' } as any);
+      const bundle = await ownerCaller.getReportBundle({ verifyRunId: 'run-1' });
+      expect(bundle).toMatchObject({ isOwner: true, run: { id: 'run-1' } });
+    });
+
     it('reads a standalone report without a logged-in user', async () => {
       const run = {
         goal: 'Ship a working page',
         id: 'run-1',
         title: 'Run report',
         userId: 'owner-user',
+        visibility: 'public',
         workspaceId: null,
       };
       const report = {
@@ -546,6 +575,7 @@ describe('verifyRouter', () => {
         id: 'run-1',
         title: 'Run report',
         userId: 'owner-user',
+        visibility: 'public',
         workspaceId: null,
       };
       const result = {
