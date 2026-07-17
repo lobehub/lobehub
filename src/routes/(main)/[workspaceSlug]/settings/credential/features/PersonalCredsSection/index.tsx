@@ -1,7 +1,7 @@
 'use client';
 
 import { type UserCredSummary } from '@lobechat/types';
-import { Flexbox, Text } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import { useMutation } from '@tanstack/react-query';
 import { Empty, Spin } from 'antd';
 import { createStaticStyles } from 'antd-style';
@@ -14,6 +14,7 @@ import CredItem from '@/routes/(main)/settings/creds/features/CredItem';
 import { createEditCredModal } from '@/routes/(main)/settings/creds/features/EditCredModal';
 import { createViewCredModal } from '@/routes/(main)/settings/creds/features/ViewCredModal';
 
+import CredsSection from '../CredsSection';
 import ShareToggle from './ShareToggle';
 
 // Always the personal namespace — this section is deliberately personal-scoped
@@ -21,19 +22,9 @@ import ShareToggle from './ShareToggle';
 const personalCredsApi = { client: lambdaClient.market.creds, query: lambdaQuery.market.creds };
 
 const styles = createStaticStyles(({ css }) => ({
-  desc: css`
-    margin-block-end: 12px;
-    font-size: 13px;
-    color: var(--lobe-color-text-secondary);
-  `,
   empty: css`
     padding-block: 32px;
     padding-inline: 0;
-  `,
-  title: css`
-    margin-block-end: 4px;
-    font-size: 16px;
-    font-weight: 600;
   `,
 }));
 
@@ -96,9 +87,7 @@ const PersonalCredsSection: FC<PersonalCredsSectionProps> = ({ onWorkspaceCredsC
   };
 
   return (
-    <Flexbox gap={0} style={{ marginBlockStart: 32 }}>
-      <Text className={styles.title}>{t('creds.personalSection.title')}</Text>
-      <Text className={styles.desc}>{t('creds.personalSection.desc')}</Text>
+    <CredsSection desc={t('creds.personalSection.desc')} title={t('creds.personalSection.title')}>
       <AsyncBoundary
         data={data}
         empty={<Empty className={styles.empty} description={t('creds.empty')} />}
@@ -126,7 +115,7 @@ const PersonalCredsSection: FC<PersonalCredsSectionProps> = ({ onWorkspaceCredsC
           ))}
         </Flexbox>
       </AsyncBoundary>
-    </Flexbox>
+    </CredsSection>
   );
 };
 

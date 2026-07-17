@@ -288,6 +288,8 @@
   "creds.view.title": "查看凭证：{{name}}",
   "creds.view.values": "凭证值",
   "creds.view.warning": "这些值是敏感信息，请勿与他人分享。",
+  "creds.workspaceSection.desc": "此工作区所有成员可用的凭证，包含成员共享的凭证。",
+  "creds.workspaceSection.title": "工作区凭证",
   "danger.reset.action": "立即重置",
   "danger.reset.confirm": "确认重置所有设置吗？",
   "danger.reset.currentVersion": "当前版本",

@@ -322,6 +322,9 @@ export default {
   'creds.share.visibility.public': 'Public',
   'creds.signIn': 'Sign In to Market',
   'creds.signInRequired': 'Please sign in to the Market to manage your credentials',
+  'creds.workspaceSection.desc':
+    'Credentials available to everyone in this workspace, including credentials shared by members.',
+  'creds.workspaceSection.title': 'Workspace Credentials',
   'creds.form.addPair': 'Add Key-Value Pair',
   'creds.form.back': 'Back',
   'creds.form.cancel': 'Cancel',
