@@ -209,12 +209,16 @@ export const buildRunLifecycle = (
         console.info('[dev] sliced topic title (NEXT_PUBLIC_DEV_DISABLE_AUTO_TOPIC=1):', title);
       };
 
-      // Use the full conversation context (incl. groupId/threadId) so group
-      // topics read their real messages instead of an empty main-scope bucket —
-      // an empty read makes topic-title generation summarize nothing and emit a
-      // degenerate "空对话标题" title.
+      // Key off the EVENT's context, not the adapter's send-time `context`.
+      // `context` (= operationContext captured at dispatch) still carries a null
+      // topicId for a just-created topic, so its key points at the empty
+      // main-scope bucket; gateway/hetero persist the conversation under the real
+      // topicId (`event.context` — `{ ...operationContext, topicId }`). Reading
+      // the stale key summarizes nothing and emits a degenerate "空对话标题"
+      // title. `event.context` also carries groupId/threadId, so group topics
+      // keep reading their real messages (the #16289 fix).
       const readStoreChats = () =>
-        displayMessageSelectors.getDisplayMessagesByKey(messageMapKey(context))(get());
+        displayMessageSelectors.getDisplayMessagesByKey(messageMapKey(event.context))(get());
 
       // New topic → always title. Use caller-provided messages when present
       // (client's freshly-created rows aren't in the store under topicId yet);
