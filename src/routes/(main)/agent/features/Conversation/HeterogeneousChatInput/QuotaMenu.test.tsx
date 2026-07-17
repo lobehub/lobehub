@@ -151,15 +151,46 @@ describe('ClaudeCodeQuotaMenu', () => {
     expect(await screen.findByText('heteroAgent.quota.session')).toBeTruthy();
     expect(screen.getByText('heteroAgent.quota.weekly')).toBeTruthy();
     expect(screen.getByText('heteroAgent.claudeQuota.scopedWeekly:Fable')).toBeTruthy();
-    // The compact trigger surfaces the most binding window.
     expect(screen.getByText('heteroAgent.quota.left:92')).toBeTruthy();
-    expect(screen.getByText('heteroAgent.quota.compactLeft:76')).toBeTruthy();
+    const trigger = screen.getByRole('button', { name: 'heteroAgent.claudeQuota.tooltip' });
+    expect(trigger.textContent).toContain(
+      'heteroAgent.quota.weekly heteroAgent.quota.compactLeft:87',
+    );
+    expect(trigger.textContent).toContain('Fable heteroAgent.quota.compactLeft:76');
     expect(mockService.getClaudeCodeQuota).toHaveBeenCalledWith({
       env: { CLAUDE_CONFIG_DIR: '/custom' },
     });
   });
 
-  it('warns below 15 percent and labels zero quota as exhausted', async () => {
+  it('shows the tightest global window and Fable as separate compact values', async () => {
+    mockService.getClaudeCodeQuota.mockResolvedValue(
+      claudeSnapshot({
+        scopedWeekly: {
+          modelName: 'Fable',
+          window: { resetsAt: null, usedPercent: 100, windowMinutes: 10_080 },
+        },
+        session: { resetsAt: null, usedPercent: 49, windowMinutes: 300 },
+        weekly: { resetsAt: null, usedPercent: 53, windowMinutes: 10_080 },
+      }),
+    );
+
+    render(<ClaudeCodeQuotaMenu />);
+
+    expect(await screen.findByText('heteroAgent.quota.exhausted')).toBeTruthy();
+    const trigger = screen.getByRole('button', { name: 'heteroAgent.claudeQuota.tooltip' });
+    expect(trigger.textContent).toContain(
+      'heteroAgent.quota.weekly heteroAgent.quota.compactLeft:47',
+    );
+    expect(trigger.textContent).toContain('Fable heteroAgent.quota.compactLeft:0');
+    expect(trigger.textContent).not.toContain('heteroAgent.quota.exhausted');
+    expect(
+      [...trigger.querySelectorAll('[data-quota-level]')].map((item) =>
+        item.getAttribute('data-quota-level'),
+      ),
+    ).toEqual(['normal', 'low']);
+  });
+
+  it('warns below 15 percent and keeps compact zero quota numeric', async () => {
     mockService.getClaudeCodeQuota.mockResolvedValue(
       claudeSnapshot({
         session: { resetsAt: null, usedPercent: 100, windowMinutes: 300 },
@@ -169,8 +200,11 @@ describe('ClaudeCodeQuotaMenu', () => {
 
     render(<ClaudeCodeQuotaMenu />);
 
-    expect(await screen.findAllByText('heteroAgent.quota.exhausted')).toHaveLength(2);
+    expect(await screen.findAllByText('heteroAgent.quota.exhausted')).toHaveLength(1);
     expect(screen.getByText('heteroAgent.quota.left:14')).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: 'heteroAgent.claudeQuota.tooltip' }).textContent,
+    ).toContain('heteroAgent.quota.session heteroAgent.quota.compactLeft:0');
     expect(document.querySelectorAll('[data-quota-level="low"]')).toHaveLength(3);
   });
 
@@ -384,6 +418,11 @@ describe('CodexQuotaMenu', () => {
     expect(await screen.findByText('heteroAgent.quota.left:81')).toBeTruthy();
     expect(screen.getByText('heteroAgent.quota.left:12')).toBeTruthy();
     expect(screen.getByText('heteroAgent.quota.compactLeft:12')).toBeTruthy();
+    expect(
+      screen
+        .getByRole('button', { name: 'heteroAgent.codexQuota.tooltip' })
+        .getAttribute('data-quota-level'),
+    ).toBe('low');
     expect(screen.getByText('heteroAgent.codexQuota.fiveHour')).toBeTruthy();
     expect(screen.getByText('heteroAgent.quota.weekly')).toBeTruthy();
     expect(
