@@ -122,8 +122,15 @@ const WorkspaceCredsSetting = () => {
 
   const orgMissing = isAuthenticated && !isLoading && error?.data?.code === 'NOT_FOUND';
 
+  // The owner-only `manage_provider_key` gate mirrors the server's
+  // `requireWorkspaceRole('owner')` on workspaceCreds writes — but it only
+  // applies to the workspace scope. Personal credentials are the caller's own
+  // (`market.creds`), so workspace RBAC never disables creation there.
+  const canCreate = scope === 'workspace' ? canManageCredentials : true;
+  const createBlockedReason = scope === 'workspace' && !canManageCredentials ? reason : '';
+
   const handleCreate = () => {
-    if (!canManageCredentials) return;
+    if (!canCreate) return;
     if (scope === 'workspace') {
       createCreateCredModal({
         credsApi: workspaceCredsApi,
@@ -140,6 +147,17 @@ const WorkspaceCredsSetting = () => {
   // Hidden while signed out (the list shows the sign-in prompt instead) and
   // while the workspace org is missing (creation would fail server-side).
   const showCreateButton = isAuthenticated && !(scope === 'workspace' && orgMissing);
+
+  const createButton = (
+    <Button
+      disabled={!canCreate}
+      icon={<Icon icon={Plus} />}
+      type={'primary'}
+      onClick={handleCreate}
+    >
+      {t('creds.create')}
+    </Button>
+  );
 
   return (
     <Flexbox gap={16}>
@@ -160,19 +178,16 @@ const WorkspaceCredsSetting = () => {
           ]}
           onChange={(key) => setScope(key as CredsScope)}
         />
-        {showCreateButton && (
-          <Tooltip title={reason}>
-            <Button
-              disabled={!canManageCredentials}
-              icon={<Icon icon={Plus} />}
-              size={'small'}
-              type={'primary'}
-              onClick={handleCreate}
-            >
-              {t('creds.create')}
-            </Button>
-          </Tooltip>
-        )}
+        {showCreateButton &&
+          // Disabled buttons swallow hover events, so the tooltip needs the
+          // span wrapper to fire (see the usePermission docstring pattern).
+          (createBlockedReason ? (
+            <Tooltip title={createBlockedReason}>
+              <span>{createButton}</span>
+            </Tooltip>
+          ) : (
+            createButton
+          ))}
       </Flexbox>
       <Flexbox gap={12}>
         <Text className={styles.desc}>

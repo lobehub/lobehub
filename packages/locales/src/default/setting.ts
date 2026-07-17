@@ -373,7 +373,6 @@ export default {
   'devices.actions.edit': 'Edit',
   'devices.actions.refresh': 'Refresh',
   'devices.actions.remove': 'Remove',
-  'devices.actions.removeSelected': 'Remove ({{count}})',
   'devices.channel.connected': 'Connected {{time}}',
   'devices.currentBadge': 'This device',
   'devices.detail.addDir': 'Add directory',
@@ -400,11 +399,7 @@ export default {
   'devices.connectWizard.cli.connectDesc':
     'Start the background daemon to keep the device online and listening for remote operations.',
   'devices.connectWizard.cli.connectTitle': 'Start the daemon',
-  'devices.connectWizard.cli.installDesc':
-    'Install the LobeHub CLI globally with your preferred package manager to enable device connectivity and management.',
   'devices.connectWizard.cli.installTitle': 'Install the CLI',
-  'devices.connectWizard.cli.loginDesc':
-    'Complete OAuth authorization in your browser to link the CLI with your account.',
   'devices.connectWizard.cli.loginTitle': 'Sign in',
   'devices.connectWizard.desktop.downloadLink': 'Download LobeHub Desktop',
   'devices.connectWizard.desktop.step1': 'Download the desktop app',
@@ -439,12 +434,8 @@ export default {
   'devices.remove.confirm': 'Remove this device?',
   'devices.remove.confirmDesc':
     'This disconnects the device from your account. It does not sign the device out, and it can re-register on next connect.',
-  'devices.remove.confirmMany': 'Remove {{count}} devices?',
-  'devices.remove.confirmManyDesc':
-    'This disconnects the selected devices from your account. They are not signed out, and each can re-register on next connect.',
   'devices.remove.currentSessionWarning':
     "This includes the device you're using right now — removing it disconnects your current session.",
-  'devices.selection.selected': '{{count}} selected',
   'devices.selection.total': '{{count}} devices',
   'devices.share.alreadyShared': 'Shared',
   'devices.share.badge': 'Shared to {{count}} workspaces',
@@ -1596,14 +1587,12 @@ When I am ___, I need ___
   'workspace.billingPage.billing.free.upgradeCta': 'Upgrade to Pro',
   'workspace.billingPage.billing.invoice.empty':
     'No invoices yet. Your first invoice will appear after the next renewal.',
-  'workspace.billingPage.billing.invoice.emptyHint': 'Workspace created on {{date}}.',
   'workspace.billingPage.billing.invoice.nonOwner':
     'Only workspace owners can view billing history.',
   'workspace.billingPage.billing.invoice.tab.all': 'All',
   'workspace.billingPage.billing.invoice.tab.failed': 'Closed',
   'workspace.billingPage.billing.invoice.tab.open': 'Unpaid',
   'workspace.billingPage.billing.invoice.tab.paid': 'Paid',
-  'workspace.billingPage.billing.invoice.subtitle': 'View and download invoices for this workspace',
   'workspace.billingPage.billing.invoice.title': 'Billing history',
   'workspace.billingPage.billing.manage.cancelItem': 'Cancel Subscription',
   'workspace.billingPage.billing.manage.cta': 'Manage',
@@ -1765,6 +1754,7 @@ When I am ___, I need ___
   'workspace.billingPage.credits.autoTopUp.validation.targetMustExceedThreshold':
     'Target balance must be greater than the trigger threshold.',
   'workspace.billingPage.plans.cancelled': 'Pending cancellation',
+  'workspace.billingPage.plans.billedYearly': '${{price}} billed yearly',
   'workspace.billingPage.plans.currentTag': 'Current plan',
   'workspace.billingPage.plans.currentTitle': 'Current plan',
   'workspace.billingPage.plans.businessTag': 'Higher limits',
@@ -1815,12 +1805,6 @@ When I am ___, I need ___
     'Free workspaces do not include monthly credits. Configure your own model API or top up credits as needed.',
   'workspace.billingPage.plans.freeDesc':
     'For small teams getting started with workspace collaboration',
-  'workspace.billingPage.plans.headerNote.active':
-    'You are on the {{plan}} plan. If you have any questions or would like further support with your plan, <contact>contact us</contact>',
-  'workspace.billingPage.plans.headerNote.payOnce':
-    'You are on the {{plan}} plan ({{duration}}), valid until {{date}}. If you have any questions or would like further support with your plan, <contact>contact us</contact>',
-  'workspace.billingPage.plans.headerNote.renewing':
-    'You are on the {{plan}} plan, renewing {{date}}. If you have any questions or would like further support with your plan, <contact>contact us</contact>',
   'workspace.billingPage.plans.manageSeatsLink': 'Manage seats',
   'workspace.billingPage.plans.modelsHint': 'Estimated messages from the shared pool',
   'workspace.billingPage.plans.modelsTitle': 'Featured models',
@@ -2397,17 +2381,12 @@ When I am ___, I need ___
   'workspace.member.demoteConfirm.content': 'This member will lose owner privileges.',
   'workspace.member.demoteConfirm.title': 'Demote owner?',
   'workspace.member.invite': 'Invite members',
-  'workspace.member.manageAccess': 'Manage access',
+  'workspace.member.manageAccess': 'Change role...',
   'workspace.member.manageAccessModal.current': 'Current',
   'workspace.member.manageAccessModal.failed': 'Failed to update access',
   'workspace.member.manageAccessModal.save': 'Save Changes',
-  'workspace.member.manageAccessModal.sectionLabel': 'Select a role',
-  'workspace.member.manageAccessModal.subtitleMiddle': 'has for',
-  'workspace.member.manageAccessModal.subtitlePrefix': 'Manage the roles',
-  'workspace.member.manageAccessModal.subtitleSuffix': '',
   'workspace.member.manageAccessModal.success': 'Access updated',
-  'workspace.member.manageAccessModal.title': 'Manage Team Access',
-  'workspace.member.primaryOwner': 'Primary',
+  'workspace.member.manageAccessModal.title': 'Change role for {{username}}',
   'workspace.member.promote': 'Promote to owner',
   'workspace.member.transferPrimaryConfirm.billingNotice.acknowledge':
     'I understand the saved payment method will keep being charged until the new primary owner replaces it.',
@@ -2433,6 +2412,7 @@ When I am ___, I need ___
   'workspace.member.removeConfirm.title': 'Remove Workspace Member',
   'workspace.member.removeSuccess': 'Member removed from workspace successfully.',
   'workspace.member.roles.basicBadge': 'Basic',
+  'workspace.member.roles.admin': 'Admin',
   'workspace.member.roles.freeBadge': 'Free',
   'workspace.member.roles.member': 'Member',
   'workspace.member.roles.memberDescription':
@@ -2483,6 +2463,9 @@ When I am ___, I need ___
   'workspace.invitePage.workspaceLimitSubtitle':
     "You've reached the maximum of {{limit}} workspaces. Leave one before joining another.",
   'workspace.invitePage.workspaceLimitTitle': 'Workspace Limit Reached',
+  'workspace.members.columns.joinedAt': 'Joined',
+  'workspace.members.columns.name': 'Name',
+  'workspace.members.columns.role': 'Role',
   'workspace.members.empty': 'No members yet',
   'workspace.members.invite.emailLabel': 'Email Address',
   'workspace.members.invite.emailPlaceholder': 'jane@example.com',
@@ -2519,22 +2502,24 @@ When I am ___, I need ___
     'Your team is expanding! By confirming, you will invite 1 new team member to this workspace.',
   'workspace.members.invite.modal.description_other':
     'Your team is expanding! By confirming, you will invite {{count}} new team members to this workspace.',
-  'workspace.members.invite.modal.expiryWarning': 'Team invites expire after 1 week.',
   'workspace.members.invite.modal.title': 'Invite Team Members',
   'workspace.members.invite.noPermissionHint':
     'Additional permissions are required to manage Team Members',
   'workspace.members.invite.partialSuccess':
     '{{success}} invited, {{failed}} failed. Check the addresses and try again.',
-  'workspace.members.invite.success': 'Team members invited successfully.',
+  'workspace.members.invite.success': 'Invitations sent. Invitation links expire after 1 week.',
   'workspace.members.invite.title': 'Invite Members',
+  'workspace.members.pending.columns.email': 'Email',
+  'workspace.members.pending.columns.expiresAt': 'Expires',
   'workspace.members.pending.empty': 'No pending invitations',
-  'workspace.members.pending.expiresAt': 'Expires {{date}}',
+  'workspace.members.pending.loadFailed': "Couldn't load pending invitations.",
   'workspace.members.pending.resend': 'Resend',
   'workspace.members.pending.resendFailed': 'Failed to resend invitation',
   'workspace.members.pending.resendSuccess': 'Invitation email resent',
   'workspace.members.pending.revoke': 'Revoke',
   'workspace.members.pending.revokeConfirm.content': 'The invitation link will no longer be valid.',
   'workspace.members.pending.revokeConfirm.title': 'Revoke this invitation?',
+  'workspace.members.pending.revokeFailed': 'Failed to revoke invitation',
   'workspace.members.seatChange.memberJoinBlocked':
     'Current members have reached the scheduled seat limit, so new paid members may not be able to join this workspace',
   'workspace.members.subtitle': 'Manage workspace members and invitations',
@@ -2845,20 +2830,16 @@ When I am ___, I need ___
     "We couldn't set up your Community profile automatically. <cta>Create one in Community</cta> so workspace agents can be shared.",
   'workspace.onboarding.step4.cta': 'Enter workspace',
   'workspaceSetting.breadcrumb.settings': 'Settings',
-  'workspaceSetting.devices.desc':
-    'Shared machines enrolled into this workspace. Members can run agents on them.',
+  'workspaceSetting.devices.connectTitlePrivate': 'Add private device',
+  'workspaceSetting.devices.connectTitlePublic': 'Add public device',
   'workspaceSetting.devices.empty': 'No workspace devices yet.',
   'workspaceSetting.devices.enrollDesc':
     'Run this on the machine you want to share with the workspace:',
   'workspaceSetting.devices.enrolledBy': 'Enrolled by {{name}}',
   'workspaceSetting.devices.enrolledByLabel': 'Enrolled by',
   'workspaceSetting.devices.enrollTitle': 'Add a device',
-  'workspaceSetting.devices.heroDesc':
-    'Enroll a shared machine — a build server or a team Mac — and every member can run agents on it: read/write files, run commands, and call system tools.',
-  'workspaceSetting.devices.heroDescPrivate':
-    "Enroll a machine for your own use in this workspace — other members can't see or use it. Run agents on it: read/write files, run commands, and call system tools.",
-  'workspaceSetting.devices.heroTitle': 'Connect your first workspace device',
-  'workspaceSetting.devices.heroTitlePrivate': 'Connect your first private device',
+  'workspaceSetting.devices.heroDesc': 'Connect to a device which you can dispatch from anywhere.',
+  'workspaceSetting.devices.heroTitle': 'No device connected',
   'workspaceSetting.devices.offline': 'Offline',
   'workspaceSetting.devices.online': 'Online',
   'workspaceSetting.devices.readonlyHint':
