@@ -62,6 +62,8 @@ export default {
     '{{count}} messages were saved empty: their text never reached the database.',
   'doctor.issue.orphan-signal-turn':
     'A tool callback was attached to the wrong message, so it never shows up — {{count}} messages.',
+  'doctor.issue.segment-split':
+    'A new message was sent before this topic finished loading, so a section of {{count}} messages broke off on its own — showing out of order and cut off from the assistant’s memory of the rest.',
   'doctor.issue.stale-branch-index':
     'An interrupted regenerate left this message pointing at a branch that does not exist, hiding every answer under it — {{count}} messages.',
   'doctor.notRepairable': 'This cannot be undone — the content was never saved.',

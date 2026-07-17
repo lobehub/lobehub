@@ -73,6 +73,13 @@ const TopicDoctorContent = memo<TopicDoctorContentProps>(({ agentId, topicId }) 
       case 'orphan-signal-turn': {
         return t('doctor.issue.orphan-signal-turn', { count });
       }
+      // Nothing is hidden here — the section renders, but on its own root: out of order and
+      // cut off from the model's context. The count is the section being reconnected.
+      case 'segment-split': {
+        return t('doctor.issue.segment-split', {
+          count: issue.reattachedMessageIds?.length ?? 0,
+        });
+      }
       // The one shape that cannot be undone: these rows reached the database with nothing in
       // them, so the text is simply gone.
       case 'lost-content': {
@@ -97,10 +104,12 @@ const TopicDoctorContent = memo<TopicDoctorContentProps>(({ agentId, topicId }) 
 
   return (
     <Flexbox gap={16}>
-      <Flexbox horizontal align={'center'} gap={8}>
-        <Icon color={cssVar.colorWarning} icon={EyeOff} />
-        <Text>{t('doctor.summary', { count: hiddenCount })}</Text>
-      </Flexbox>
+      {hiddenCount > 0 && (
+        <Flexbox horizontal align={'center'} gap={8}>
+          <Icon color={cssVar.colorWarning} icon={EyeOff} />
+          <Text>{t('doctor.summary', { count: hiddenCount })}</Text>
+        </Flexbox>
+      )}
 
       <Flexbox gap={8}>
         {issues.map((issue) => (

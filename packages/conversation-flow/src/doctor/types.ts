@@ -14,6 +14,8 @@ export type TopicIssueKind =
   | 'orphan-signal-turn'
   /** `metadata.activeBranchIndex` is out of bounds, so the branch resolver skips the whole subtree */
   | 'stale-branch-index'
+  /** A new turn was sent with no parent mid-conversation, so a whole section detached into its own root */
+  | 'segment-split'
   /** A run of assistant rows whose content and tool calls never landed — unrecoverable */
   | 'lost-content';
 
@@ -25,6 +27,11 @@ export interface TopicIssue {
   lostMessageIds?: string[];
   /** The message the issue is anchored on */
   messageId: string;
+  /**
+   * The detached section reconnected by this repair (`segment-split` only). These render
+   * today, but on their own root — out of order and severed from the model's context chain.
+   */
+  reattachedMessageIds?: string[];
   /**
    * False when the shape is understood but nothing can be safely rewritten — the issue is
    * still reported so the user knows why the conversation looks the way it does.

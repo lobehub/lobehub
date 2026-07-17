@@ -372,4 +372,110 @@ describe('diagnoseTopic', () => {
       expect(diagnoseTopic(messages).issues).toHaveLength(0);
     });
   });
+
+  describe('segment split', () => {
+    // A new turn was sent while the local list was still empty, so it landed with no parent
+    // and a whole section broke off onto its own root — rendered, but out of order and cut
+    // off from the model's context.
+    const messages = build([
+      { content: 'first question', id: 'u1', role: 'user', t: 0 },
+      { content: 'first answer', id: 'a1', parent: 'u1', role: 'assistant', t: 10 },
+      // sent the next session with an empty list → no parent
+      { content: 'second question', id: 'u2', role: 'user', t: 100 },
+      { content: 'second answer', id: 'a2', parent: 'u2', role: 'assistant', t: 110 },
+    ]);
+
+    it('reattaches the stranded section onto the tail of what came before', () => {
+      const { hiddenCount, issues, patch } = diagnoseTopic(messages);
+
+      expect(issues).toHaveLength(1);
+      expect(issues[0]).toMatchObject({
+        kind: 'segment-split',
+        messageId: 'u2',
+        repairable: true,
+      });
+      // Nothing is hidden — the section renders, just on its own root.
+      expect(hiddenCount).toBe(0);
+      expect(issues[0].hiddenMessageIds).toEqual([]);
+      expect(issues[0].reattachedMessageIds).toEqual(expect.arrayContaining(['u2', 'a2']));
+
+      expect(patch).toEqual([{ messageId: 'u2', parentId: 'a1', type: 'reparent' }]);
+    });
+
+    it('collapses the tree to a single root once repaired', () => {
+      const { patch } = diagnoseTopic(messages);
+      const repaired = applyPatch(messages, patch);
+
+      const roots = repaired.filter(
+        (m) => !m.parentId || !repaired.some((o) => o.id === m.parentId),
+      );
+      expect(roots).toHaveLength(1);
+
+      const rendered = renderedIds(repaired);
+      for (const message of repaired) expect(rendered.has(message.id)).toBe(true);
+      expect(diagnoseTopic(repaired).issues).toHaveLength(0);
+    });
+
+    it('treats a dangling parent the same as a missing one', () => {
+      // The parent id was never synced, so the reader turns it into a second root just as it
+      // does for a null parent.
+      const dangling = build([
+        { content: 'q', id: 'u1', role: 'user', t: 0 },
+        { content: 'a', id: 'a1', parent: 'u1', role: 'assistant', t: 10 },
+        { content: 'later q', id: 'u2', parent: 'ghost', role: 'user', t: 100 },
+        { content: 'later a', id: 'a2', parent: 'u2', role: 'assistant', t: 110 },
+      ]);
+
+      expect(diagnoseTopic(dangling).patch).toEqual([
+        { messageId: 'u2', parentId: 'a1', type: 'reparent' },
+      ]);
+    });
+
+    it('chains several stranded sections back in time order', () => {
+      const three = build([
+        { content: 'q1', id: 'u1', role: 'user', t: 0 },
+        { content: 'a1', id: 'a1', parent: 'u1', role: 'assistant', t: 10 },
+        { content: 'q2', id: 'u2', role: 'user', t: 100 },
+        { content: 'a2', id: 'a2', parent: 'u2', role: 'assistant', t: 110 },
+        { content: 'q3', id: 'u3', role: 'user', t: 200 },
+        { content: 'a3', id: 'a3', parent: 'u3', role: 'assistant', t: 210 },
+      ]);
+
+      const { patch } = diagnoseTopic(three);
+      expect(patch).toEqual([
+        { messageId: 'u2', parentId: 'a1', type: 'reparent' },
+        { messageId: 'u3', parentId: 'a2', type: 'reparent' },
+      ]);
+
+      const repaired = applyPatch(three, patch);
+      const roots = repaired.filter(
+        (m) => !m.parentId || !repaired.some((o) => o.id === m.parentId),
+      );
+      expect(roots).toHaveLength(1);
+      expect(diagnoseTopic(repaired).issues).toHaveLength(0);
+    });
+
+    it('leaves a parentless assistant seed for a human to look at', () => {
+      // A re-entry always starts with a user turn; a rootless assistant is a murkier shape
+      // (a lost seed, not someone typing again) and must not be auto-rewired.
+      const strayAssistant = build([
+        { content: 'q', id: 'u1', role: 'user', t: 0 },
+        { content: 'a', id: 'a1', parent: 'u1', role: 'assistant', t: 10 },
+        { content: 'orphan seed', id: 'a2', role: 'assistant', t: 100 },
+      ]);
+
+      expect(diagnoseTopic(strayAssistant).issues).toHaveLength(0);
+    });
+
+    it('does not touch a healthy single-root topic', () => {
+      const healthy = build([
+        { content: 'q', id: 'u1', role: 'user', t: 0 },
+        { content: 'a', id: 'a1', parent: 'u1', role: 'assistant', t: 10 },
+        { content: 'q2', id: 'u2', parent: 'a1', role: 'user', t: 20 },
+        { content: 'a2', id: 'a2', parent: 'u2', role: 'assistant', t: 30 },
+      ]);
+
+      expect(diagnoseTopic(healthy).issues).toHaveLength(0);
+    });
+  });
 });

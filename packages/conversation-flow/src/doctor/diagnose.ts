@@ -146,6 +146,51 @@ export const diagnoseTopic = (
     if (op) patch.push(op);
   };
 
+  // 0. Segment split: the client sent a turn while its local message list was still empty, so
+  //    the new turn landed with no parent (or a parent that never synced) and became a second
+  //    root. Every root but the earliest is a section that broke off mid-conversation: the
+  //    reader still shows it, but on its own root it sorts by tree order rather than time —
+  //    scrambling the transcript — and, worse, it starts a fresh parent chain, so the model
+  //    loses all the history before it.
+  //
+  //    Unlike the reachability rules this one is not "the message is hidden" — it is "the
+  //    message is stranded". It is disjoint from the fork/branch rules by construction: those
+  //    walk `childrenOf`, which only links messages to a parent that exists, so a root is
+  //    never one of their branches.
+  const roots = sorted.filter((m) => !m.parentId || !byId.has(m.parentId));
+  if (roots.length > 1) {
+    // The earliest root is the conversation's real start and stays put; the rest are splits.
+    const [, ...strandedRoots] = roots;
+    for (const root of strandedRoots) {
+      // A stranded section always begins with a user turn — an assistant with no parent is a
+      // murkier shape (a lost seed, not a re-entry), so leave it for a human to look at.
+      if (root.role !== 'user') continue;
+
+      const section = subtreeOf(root.id);
+      if (!section.some((m) => hasSubstance(m))) continue;
+
+      // Reattach to the tail of what came before: the most recent real spine message written
+      // before this section began. Tool results and signal turns are never a spine tail, and
+      // a message inside this very section can't anchor it.
+      const sectionIds = new Set(section.map((m) => m.id));
+      const anchor = sorted
+        .filter((m) => canAnchor(m) && m.createdAt < root.createdAt && !sectionIds.has(m.id))
+        .sort((a, b) => b.createdAt - a.createdAt)[0];
+      if (!anchor) continue;
+
+      report(
+        {
+          hiddenMessageIds: [],
+          kind: 'segment-split',
+          messageId: root.id,
+          reattachedMessageIds: section.map((m) => m.id),
+          repairable: true,
+        },
+        { messageId: root.id, parentId: anchor.id, type: 'reparent' },
+      );
+    }
+  }
+
   // 1. Concurrent fork: a user turn started while the previous run was still writing, so the
   //    run's remaining steps and the new turn both hang off the same pre-fork anchor. The
   //    reader can only follow one of them. Distinguishing this from a regenerate branch is

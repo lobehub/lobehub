@@ -102,7 +102,14 @@ export class TopicDoctorRepo {
       }
     });
 
-    const restoredMessageIds = [...new Set(diagnosis.issues.flatMap((i) => i.hiddenMessageIds))];
+    // Both the messages a repair un-hides and the detached sections it reconnects count as
+    // "brought back": the latter rendered before, but stranded on their own root and severed
+    // from the model's context — putting them back in the chain is the point of the fix.
+    const restoredMessageIds = [
+      ...new Set(
+        diagnosis.issues.flatMap((i) => [...i.hiddenMessageIds, ...(i.reattachedMessageIds ?? [])]),
+      ),
+    ];
 
     return { applied: writable.length, restoredMessageIds };
   };

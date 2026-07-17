@@ -52,6 +52,7 @@
   "doctor.issue.concurrent-fork": "上一轮还在输出时你发了新问题，对话分成了两支，其中一支被隐藏了 —— 共 {{count}} 条消息。",
   "doctor.issue.lostContent": "有 {{count}} 条消息存进来时是空的：正文没能写入数据库。",
   "doctor.issue.orphan-signal-turn": "工具回调挂到了错误的消息上，导致它始终不显示 —— 共 {{count}} 条消息。",
+  "doctor.issue.segment-split": "在话题还没加载完时就发出了新消息，导致一段 {{count}} 条消息脱离主链、自成一支 —— 显示顺序错乱，且与助手对其余对话的记忆断开。",
   "doctor.issue.stale-branch-index": "一次中断的重新生成，让这条消息指向了不存在的分支，它下面的回答全部被隐藏 —— 共 {{count}} 条消息。",
   "doctor.notRepairable": "无法恢复 —— 这部分内容从未被保存。",
   "doctor.repair": "修复",
