@@ -636,6 +636,7 @@ const CheckRow = memo<{
   const openReject = () =>
     openCheckRejectModal({
       checkTitle: `C${check.seq} · ${check.title}`,
+      draftKey: check.id,
       evidence: check.evidence
         .filter((item) => isVisual(item))
         .map((item) => ({ fileUrl: item.fileUrl!, id: item.id })),
@@ -658,8 +659,20 @@ const CheckRow = memo<{
     if (ok && expanded) onToggle();
   };
 
-  // Passed + user-accepted merges into the double-check receipt.
-  const headIcon = check.state === 'passed' && reviewState === 'accepted' ? CheckCheck : meta.icon;
+  // The user's standing verdict owns the head slot: a reject replaces the
+  // verifier's mark outright (that check IS sent back, whatever the verifier
+  // said); passed + user-accepted merges into the double-check receipt.
+  const headIcon =
+    reviewState === 'rejected'
+      ? MessageSquareX
+      : check.state === 'passed' && reviewState === 'accepted'
+        ? CheckCheck
+        : meta.icon;
+  const headColor = reviewState === 'rejected' ? cssVar.colorError : meta.color;
+
+  const headIconNode = (
+    <Icon color={headColor} icon={headIcon} size={16} style={{ flex: 'none' }} />
+  );
 
   return (
     <Flexbox className={styles.row}>
@@ -671,7 +684,11 @@ const CheckRow = memo<{
         gap={10}
         onClick={onToggle}
       >
-        <Icon color={meta.color} icon={headIcon} size={16} style={{ flex: 'none' }} />
+        {reviewState === 'rejected' ? (
+          <Tooltip title={t('acceptance.review.rejectedHint')}>{headIconNode}</Tooltip>
+        ) : (
+          headIconNode
+        )}
         <Tooltip title={seqCopied ? t('acceptance.checks.copied') : t('acceptance.checks.copySeq')}>
           <span
             className={cx(styles.seqChip, styles.seqChipClickable)}
@@ -715,11 +732,6 @@ const CheckRow = memo<{
               })}
             >
               <Icon color={cssVar.colorTextQuaternary} icon={BadgeCheck} size={14} />
-            </Tooltip>
-          )}
-          {reviewState === 'rejected' && (
-            <Tooltip title={t('acceptance.review.rejectedHint')}>
-              <Icon color={cssVar.colorError} icon={MessageSquareX} size={14} />
             </Tooltip>
           )}
           {reviewable && reviewState === 'pending' && (
@@ -829,11 +841,22 @@ const CheckRow = memo<{
           <EvidenceList evidence={check.evidence} />
 
           {/* An executed check with zero artifacts must SAY so — a silent blank
-              under the verdict reads as a rendering bug, not as a fact. */}
+              under the verdict reads as a rendering bug, not as a fact. Filled
+              so it reads as a status, never as more description text. */}
           {check.result && check.evidence.length === 0 && (
-            <Text fontSize={12} type={'secondary'}>
-              {t('acceptance.evidence.empty')}
-            </Text>
+            <Flexbox
+              paddingBlock={6}
+              paddingInline={10}
+              style={{
+                background: cssVar.colorFillQuaternary,
+                borderRadius: cssVar.borderRadius,
+                width: 'fit-content',
+              }}
+            >
+              <Text fontSize={12} type={'secondary'}>
+                {t('acceptance.evidence.empty')}
+              </Text>
+            </Flexbox>
           )}
 
           {/* The user's standing feedback hangs right under the evidence it
@@ -970,6 +993,8 @@ interface CheckListProps {
   onToggleGroupItems: (ids: string[], open: boolean) => void;
   onToggleItem: (id: string) => void;
   reviewPending: boolean;
+  /** Show only checks that round executed (any step of their timeline). */
+  round?: number | null;
 }
 
 /** The union check list: one joined card, collapsible business groups. */
@@ -986,12 +1011,16 @@ const CheckList = memo<CheckListProps>(
     onToggleGroupItems,
     onToggleItem,
     reviewPending,
+    round,
   }) => {
     const { t } = useTranslation('verify');
     const [acceptingGroup, setAcceptingGroup] = useState<string | null>(null);
 
     const visible = (check: AcceptanceCheck) =>
-      filter === 'all' || checkFilterState(check) === filter;
+      (filter === 'all' || checkFilterState(check) === filter) &&
+      (round === null ||
+        round === undefined ||
+        check.timeline.some((step) => step.roundIndex === round));
 
     const groups = groupChecks(checks, t('acceptance.group.uncategorized'))
       .map((group) => ({
@@ -1140,19 +1169,22 @@ const CheckList = memo<CheckListProps>(
                   />
                 ))}
               {/* Bottom escape hatch — after scrolling through the group's rows,
-                  collapse it without travelling back to the header. */}
+                  collapse it without travelling back to the header. Labeled:
+                  a bare icon at this distance from the header reads as noise. */}
               {!collapsed && (
                 <Flexbox
                   align={'center'}
                   paddingBlock={4}
                   style={{ borderBlockStart: `1px solid ${cssVar.colorBorderSecondary}` }}
                 >
-                  <ActionIcon
-                    icon={ChevronsDownUp}
+                  <Button
+                    icon={<Icon icon={ChevronsDownUp} />}
                     size={'small'}
-                    title={t('acceptance.group.collapse', { label })}
+                    type={'text'}
                     onClick={() => onToggleGroup(key)}
-                  />
+                  >
+                    {t('acceptance.group.collapse', { label })}
+                  </Button>
                 </Flexbox>
               )}
             </Fragment>

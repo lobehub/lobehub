@@ -1,11 +1,11 @@
 'use client';
 
 import type { AcceptanceReviewAnnotation } from '@lobechat/types';
-import { Flexbox, Input, Text, TextArea } from '@lobehub/ui';
+import { Flexbox, Text, TextArea } from '@lobehub/ui';
 import { Button, createModal, type ModalInstance, useModalContext } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { t } from 'i18next';
-import { memo, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { AnnotationCanvas } from './Annotation';
@@ -39,8 +39,34 @@ export interface RejectableEvidence {
   id: string;
 }
 
+interface DraftAnnotationEntry {
+  comment: string;
+  evidenceId: string;
+  rect: AcceptanceReviewAnnotation['rect'];
+}
+
+/** What survives a refresh — typed feedback is too costly to lose to one F5. */
+interface RejectDraft {
+  annotations: DraftAnnotationEntry[];
+  comment: string;
+}
+
+const draftStorageKey = (key: string) => `acceptance-reject-draft:${key}`;
+
+const readDraft = (key: string | undefined): RejectDraft | null => {
+  if (!key) return null;
+  try {
+    const raw = localStorage.getItem(draftStorageKey(key));
+    return raw ? (JSON.parse(raw) as RejectDraft) : null;
+  } catch {
+    return null;
+  }
+};
+
 interface CheckRejectModalProps {
   checkTitle: string;
+  /** Stable key (the check id) for the refresh-surviving draft cache. */
+  draftKey?: string;
   evidence: RejectableEvidence[];
   /** Perform the reject; resolve true to close, false to stay open. */
   onConfirm: (value: {
@@ -49,162 +75,205 @@ interface CheckRejectModalProps {
   }) => Promise<boolean>;
 }
 
-const CheckRejectContent = memo<CheckRejectModalProps>(({ checkTitle, evidence, onConfirm }) => {
-  const { t: translate } = useTranslation('verify');
-  const { close } = useModalContext();
-  const [comment, setComment] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [activeEvidenceId, setActiveEvidenceId] = useState(evidence[0]?.id);
-  const [annotations, setAnnotations] = useState<
-    { comment: string; evidenceId: string; rect: AcceptanceReviewAnnotation['rect'] }[]
-  >([]);
+const CheckRejectContent = memo<CheckRejectModalProps>(
+  ({ checkTitle, draftKey, evidence, onConfirm }) => {
+    const { t: translate } = useTranslation('verify');
+    const { close } = useModalContext();
+    const [draft] = useState(() => readDraft(draftKey));
+    const [comment, setComment] = useState(draft?.comment ?? '');
+    const [loading, setLoading] = useState(false);
+    const [activeEvidenceId, setActiveEvidenceId] = useState(evidence[0]?.id);
+    const [annotations, setAnnotations] = useState<DraftAnnotationEntry[]>(
+      // Only restore regions whose evidence still exists — a new round may
+      // have replaced the artifacts since the draft was written.
+      () =>
+        (draft?.annotations ?? []).filter((entry) =>
+          evidence.some((item) => item.id === entry.evidenceId),
+        ),
+    );
 
-  const activeEvidence = evidence.find((item) => item.id === activeEvidenceId);
-  const activeAnnotations = annotations.filter((item) => item.evidenceId === activeEvidenceId);
+    // Persist the draft as it is typed; an empty draft cleans the slot up.
+    useEffect(() => {
+      if (!draftKey) return;
+      try {
+        if (!comment && annotations.length === 0) {
+          localStorage.removeItem(draftStorageKey(draftKey));
+        } else {
+          localStorage.setItem(
+            draftStorageKey(draftKey),
+            JSON.stringify({ annotations, comment } satisfies RejectDraft),
+          );
+        }
+      } catch {
+        /* quota/private mode — the draft is a convenience, never a blocker */
+      }
+    }, [annotations, comment, draftKey]);
 
-  // The reject IS its feedback — at least one note (global or per-region).
-  const canSubmit =
-    Boolean(comment.trim()) || annotations.some((annotation) => annotation.comment.trim());
+    const activeEvidence = evidence.find((item) => item.id === activeEvidenceId);
+    const activeAnnotations = annotations.filter((item) => item.evidenceId === activeEvidenceId);
 
-  const handleConfirm = async () => {
-    setLoading(true);
-    try {
-      const confirmed = await onConfirm({
-        annotations: annotations
-          .filter((annotation) => annotation.comment.trim())
-          .map((annotation) => ({
-            comment: annotation.comment.trim(),
-            evidenceId: annotation.evidenceId,
-            rect: annotation.rect,
-          })),
-        comment: comment.trim(),
-      });
-      if (confirmed) close();
-    } finally {
-      setLoading(false);
-    }
-  };
+    // The reject IS its feedback — at least one note (global or per-region).
+    const canSubmit =
+      Boolean(comment.trim()) || annotations.some((annotation) => annotation.comment.trim());
 
-  const hasEvidence = evidence.length > 0;
+    const handleConfirm = async () => {
+      setLoading(true);
+      try {
+        const confirmed = await onConfirm({
+          annotations: annotations
+            .filter((annotation) => annotation.comment.trim())
+            .map((annotation) => ({
+              comment: annotation.comment.trim(),
+              evidenceId: annotation.evidenceId,
+              rect: annotation.rect,
+            })),
+          comment: comment.trim(),
+        });
+        if (confirmed) {
+          if (draftKey) localStorage.removeItem(draftStorageKey(draftKey));
+          close();
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  return (
-    <>
-      {/* Only the body scrolls — the action bar below stays pinned to the
+    const hasEvidence = evidence.length > 0;
+
+    return (
+      <>
+        {/* Only the body scrolls — the action bar below stays pinned to the
           modal's bottom edge however tall the evidence grows. */}
-      <Flexbox
-        flex={1}
-        gap={16}
-        paddingBlock={12}
-        paddingInline={16}
-        style={{ minHeight: 0, overflowY: 'auto' }}
-      >
-        <Text fontSize={13} type={'secondary'}>
-          {translate('acceptance.review.rejectDescription', { title: checkTitle })}
-        </Text>
+        <Flexbox
+          flex={1}
+          gap={16}
+          paddingBlock={12}
+          paddingInline={16}
+          style={{ minHeight: 0, overflowY: 'auto' }}
+        >
+          <Text fontSize={13} type={'secondary'}>
+            {translate('acceptance.review.rejectDescription', { title: checkTitle })}
+          </Text>
 
-        {/* Circling the evidence is the primary feedback act; the free-form note
+          {/* Circling the evidence is the primary feedback act; the free-form note
           below is supplementary context. Without evidence, the note IS the
           feedback and stands alone. */}
-        {hasEvidence && (
-          <Flexbox gap={8}>
-            <Flexbox gap={2}>
-              <Text strong fontSize={13}>
-                {translate('acceptance.review.annotate')}
-              </Text>
-              <Text fontSize={12} type={'secondary'}>
-                {translate('acceptance.review.annotateHint')}
-              </Text>
-            </Flexbox>
-            {evidence.length > 1 && (
-              <Flexbox horizontal gap={8} wrap={'wrap'}>
-                {evidence.map((item) => (
-                  <div
-                    className={cx(styles.thumb, item.id === activeEvidenceId && styles.thumbActive)}
-                    key={item.id}
-                    onClick={() => setActiveEvidenceId(item.id)}
-                  >
-                    <img alt={''} src={item.fileUrl} />
-                  </div>
-                ))}
+          {hasEvidence && (
+            <Flexbox gap={8}>
+              <Flexbox gap={2}>
+                <Text strong fontSize={13}>
+                  {translate('acceptance.review.annotate')}
+                </Text>
+                <Text fontSize={12} type={'secondary'}>
+                  {translate('acceptance.review.annotateHint')}
+                </Text>
               </Flexbox>
-            )}
-            {activeEvidence && (
-              <AnnotationCanvas
-                annotations={activeAnnotations}
-                src={activeEvidence.fileUrl}
-                onDraw={(rect) =>
-                  setAnnotations((previous) => [
-                    ...previous,
-                    { comment: '', evidenceId: activeEvidence.id, rect },
-                  ])
-                }
-                onRemove={(index) =>
-                  setAnnotations((previous) =>
-                    previous.filter((item) => item !== activeAnnotations[index]),
-                  )
-                }
-              />
-            )}
-            {activeAnnotations.map((annotation, index) => {
-              const globalIndex = annotations.indexOf(annotation);
-              return (
-                <Input
-                  key={globalIndex}
-                  value={annotation.comment}
-                  placeholder={translate('acceptance.review.annotationPlaceholder', {
-                    index: index + 1,
-                  })}
-                  prefix={
-                    <Text fontSize={12} type={'secondary'}>
-                      {index + 1}.
-                    </Text>
+              {evidence.length > 1 && (
+                <Flexbox horizontal gap={8} wrap={'wrap'}>
+                  {evidence.map((item) => (
+                    <div
+                      key={item.id}
+                      className={cx(
+                        styles.thumb,
+                        item.id === activeEvidenceId && styles.thumbActive,
+                      )}
+                      onClick={() => setActiveEvidenceId(item.id)}
+                    >
+                      <img alt={''} src={item.fileUrl} />
+                    </div>
+                  ))}
+                </Flexbox>
+              )}
+              {activeEvidence && (
+                <AnnotationCanvas
+                  annotations={activeAnnotations}
+                  src={activeEvidence.fileUrl}
+                  onDraw={(rect) =>
+                    setAnnotations((previous) => [
+                      ...previous,
+                      { comment: '', evidenceId: activeEvidence.id, rect },
+                    ])
                   }
-                  onChange={(event) =>
+                  onRemove={(index) =>
+                    setAnnotations((previous) =>
+                      previous.filter((item) => item !== activeAnnotations[index]),
+                    )
+                  }
+                  onUpdate={(index, rect) =>
                     setAnnotations((previous) =>
                       previous.map((item) =>
-                        item === annotation ? { ...item, comment: event.target.value } : item,
+                        item === activeAnnotations[index] ? { ...item, rect } : item,
                       ),
                     )
                   }
                 />
-              );
-            })}
-          </Flexbox>
-        )}
-
-        <Flexbox gap={6}>
-          {hasEvidence && (
-            <Text fontSize={12} type={'secondary'}>
-              {translate('acceptance.review.supplement')}
-            </Text>
+              )}
+              {activeAnnotations.map((annotation, index) => {
+                const globalIndex = annotations.indexOf(annotation);
+                return (
+                  <Flexbox horizontal align={'flex-start'} gap={8} key={globalIndex}>
+                    <Text
+                      fontSize={12}
+                      style={{ flex: 'none', lineHeight: '30px' }}
+                      type={'secondary'}
+                    >
+                      {index + 1}.
+                    </Text>
+                    <TextArea
+                      autoSize={{ maxRows: 4, minRows: 1 }}
+                      style={{ flex: 1 }}
+                      value={annotation.comment}
+                      placeholder={translate('acceptance.review.annotationPlaceholder', {
+                        index: index + 1,
+                      })}
+                      onChange={(event) =>
+                        setAnnotations((previous) =>
+                          previous.map((item) =>
+                            item === annotation ? { ...item, comment: event.target.value } : item,
+                          ),
+                        )
+                      }
+                    />
+                  </Flexbox>
+                );
+              })}
+            </Flexbox>
           )}
-          <TextArea
-            autoSize={{ maxRows: 6, minRows: hasEvidence ? 2 : 3 }}
-            placeholder={translate('acceptance.review.rejectPlaceholder')}
-            value={comment}
-            onChange={(event) => setComment(event.target.value)}
-          />
-        </Flexbox>
-      </Flexbox>
 
-      <Flexbox
-        horizontal
-        gap={8}
-        justify={'flex-end'}
-        paddingBlock={12}
-        paddingInline={16}
-        style={{ borderBlockStart: `1px solid ${cssVar.colorBorderSecondary}`, flex: 'none' }}
-      >
-        <Button disabled={loading} onClick={close}>
-          {translate('acceptance.actions.cancel')}
-        </Button>
-        <Button disabled={!canSubmit} loading={loading} type={'primary'} onClick={handleConfirm}>
-          {translate('acceptance.review.confirmReject')}
-        </Button>
-      </Flexbox>
-    </>
-  );
-});
+          <Flexbox gap={6}>
+            {hasEvidence && (
+              <Text fontSize={12} type={'secondary'}>
+                {translate('acceptance.review.supplement')}
+              </Text>
+            )}
+            <TextArea
+              autoSize={{ maxRows: 6, minRows: hasEvidence ? 2 : 3 }}
+              placeholder={translate('acceptance.review.rejectPlaceholder')}
+              value={comment}
+              onChange={(event) => setComment(event.target.value)}
+            />
+          </Flexbox>
+        </Flexbox>
+
+        <Flexbox
+          horizontal
+          gap={8}
+          justify={'flex-end'}
+          paddingBlock={12}
+          paddingInline={16}
+          style={{ borderBlockStart: `1px solid ${cssVar.colorBorderSecondary}`, flex: 'none' }}
+        >
+          <Button disabled={loading} onClick={close}>
+            {translate('acceptance.actions.cancel')}
+          </Button>
+          <Button disabled={!canSubmit} loading={loading} type={'primary'} onClick={handleConfirm}>
+            {translate('acceptance.review.confirmReject')}
+          </Button>
+        </Flexbox>
+      </>
+    );
+  },
+);
 
 CheckRejectContent.displayName = 'AcceptanceCheckRejectContent';
 

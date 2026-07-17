@@ -13,7 +13,7 @@ import {
   Tag,
   Text,
 } from '@lobehub/ui';
-import { Button, Segmented } from '@lobehub/ui/base-ui';
+import { Button, Segmented, Select } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import dayjs from 'dayjs';
 import {
@@ -51,7 +51,7 @@ import CheckList, {
   isGroupFullyAccepted,
 } from './CheckList';
 import LedgerPanel, { type AcceptanceRound } from './LedgerPanel';
-import { openAcceptModal, openRejectModal } from './modals';
+import { openAcceptModal } from './modals';
 
 const styles = createStaticStyles(({ css }) => ({
   banner: css`
@@ -155,12 +155,6 @@ const styles = createStaticStyles(({ css }) => ({
 /** Aggregate states in which the round chain is still executing. */
 const LIVE_STATUSES = new Set(['pending', 'planned', 'verifying', 'repairing']);
 
-/**
- * The user-closure decision bar (accept / reject) is NOT shipping in this
- * release — kept behind this switch (with its modals) until the loop launches.
- */
-const ENABLE_DECISION_BAR = false;
-
 interface AcceptancePageProps {
   /**
    * Render for a specific aggregate instead of the route param — the portal
@@ -178,6 +172,7 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
   const { data, error, isLoading, mutate } = useAcceptanceBundle(acceptanceId ?? null);
 
   const [filter, setFilter] = useState<CheckFilter>('all');
+  const [roundFilter, setRoundFilter] = useState<number | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set());
   const [seeded, setSeeded] = useState(false);
@@ -441,17 +436,9 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
             {countsText} · {t('acceptance.banner.decisionHint')}
           </Text>
         </Flexbox>
-        <Button
-          disabled={pending}
-          onClick={() =>
-            openRejectModal({
-              onConfirm: (comment) =>
-                runAction(() => verifyService.rejectDelivery(acceptance.id, comment)),
-            })
-          }
-        >
-          {t('acceptance.actions.reject')}
-        </Button>
+        {/* Whole-delivery reject is deliberately NOT exposed yet — per-check
+            reject-with-feedback is the send-back path; only the closing
+            accept ships for now. */}
         <Button
           disabled={pending}
           type={'primary'}
@@ -569,9 +556,9 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
             )}
           </Flexbox>
 
-          {/* Decision bar — the user closes the lifecycle (P-12). Hidden
-                until the accept/reject loop ships. */}
-          {ENABLE_DECISION_BAR && decisionBanner()}
+          {/* Decision bar — the user closes the lifecycle (P-12). Owner-only:
+              the closing accept is the author's call, never a visitor's. */}
+          {isOwner && decisionBanner()}
           {actionError && <Text type={'danger'}>{actionError}</Text>}
 
           {/* The acceptance goal — THE thing this delivery is judged against,
@@ -682,6 +669,23 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
               ]}
               onChange={(value) => setFilter(value as CheckFilter)}
             />
+            {/* Which round touched a check — audit slicing, orthogonal to the
+                review-state segments. */}
+            {rounds.length > 1 && (
+              <Select
+                size={'small'}
+                style={{ width: 110 }}
+                value={roundFilter === null ? 'all' : String(roundFilter)}
+                options={[
+                  { label: t('acceptance.filter.roundAll'), value: 'all' },
+                  ...[...rounds].reverse().map((round) => ({
+                    label: t('acceptance.round', { round: round.run.roundIndex }),
+                    value: String(round.run.roundIndex),
+                  })),
+                ]}
+                onChange={(value) => setRoundFilter(value === 'all' ? null : Number(value))}
+              />
+            )}
             <ActionIcon
               icon={allGroupsCollapsed ? ChevronsUpDown : ChevronsDownUp}
               size={'small'}
@@ -703,6 +707,7 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
             expanded={expanded}
             filter={filter}
             reviewPending={pending}
+            round={roundFilter}
             onReview={handleReview}
             onRound={gotoRound}
             onToggleGroup={(key) =>
