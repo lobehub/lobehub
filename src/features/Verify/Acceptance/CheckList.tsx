@@ -677,7 +677,7 @@ const CheckRow = memo<{
   );
 
   return (
-    <Flexbox className={styles.row}>
+    <Flexbox className={styles.row} data-check-row={check.id}>
       <Flexbox
         horizontal
         align={'center'}

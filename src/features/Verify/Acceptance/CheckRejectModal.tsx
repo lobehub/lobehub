@@ -5,13 +5,72 @@ import { ActionIcon, Flexbox, Text, TextArea } from '@lobehub/ui';
 import { Button, createModal, type ModalInstance, useModalContext } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { t } from 'i18next';
-import { Trash2, ZoomIn, ZoomOut } from 'lucide-react';
+import { Maximize2, X, ZoomIn, ZoomOut } from 'lucide-react';
 import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
 import { AnnotationCanvas } from './Annotation';
 
 const styles = createStaticStyles(({ css }) => ({
+  canvasWrap: css`
+    position: relative;
+
+    .acceptance-annotate-fullscreen {
+      position: absolute;
+      z-index: 5;
+      inset-block-start: 8px;
+      inset-inline-end: 8px;
+
+      border: 1px solid ${cssVar.colorBorderSecondary};
+
+      opacity: 0;
+      background: ${cssVar.colorBgContainer};
+
+      transition: opacity 0.2s;
+    }
+
+    &:hover {
+      .acceptance-annotate-fullscreen {
+        opacity: 1;
+      }
+    }
+  `,
+  fullscreenBody: css`
+    display: flex;
+    flex: 1;
+    gap: 16px;
+    min-height: 0;
+  `,
+  fullscreenMask: css`
+    position: fixed;
+    z-index: 2000;
+    inset: 0;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    padding: 24px;
+
+    /* antd exposes no mask token to cssVar — the modal's own scrim is a
+       literal; match it so the underlying reject dialog is dimmed, not bleeding
+       through. */
+    background: rgb(0 0 0 / 45%);
+  `,
+  fullscreenPanel: css`
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+
+    width: 100%;
+    max-width: 1680px;
+    height: 100%;
+    padding: 16px;
+    border-radius: ${cssVar.borderRadiusLG};
+
+    background: ${cssVar.colorBgContainer};
+  `,
   regionIndex: css`
     flex: none;
 
@@ -28,12 +87,13 @@ const styles = createStaticStyles(({ css }) => ({
     background: ${cssVar.colorError};
   `,
   sidePanel: css`
+    overflow-y: auto;
     display: flex;
     flex: none;
     flex-direction: column;
     gap: 12px;
 
-    width: 300px;
+    width: 320px;
     min-width: 0;
   `,
   thumb: css`
@@ -56,11 +116,12 @@ const styles = createStaticStyles(({ css }) => ({
   thumbActive: css`
     border-color: ${cssVar.colorPrimary};
   `,
-  /** The zoomable stage — its native scrolling doubles as panning. */
+  /** The fullscreen zoom stage — its native scrolling doubles as panning. */
   viewport: css`
     overflow: auto;
+    flex: 1;
 
-    max-height: 58vh;
+    min-width: 0;
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
 
@@ -143,13 +204,13 @@ const CheckRejectContent = memo<CheckRejectModalProps>(
           .map((entry) => ({ ...entry, key: nextAnnotationKey() })),
     );
 
-    // Zoom-to-inspect: the stage scrolls natively (trackpad = pan), the
-    // image width is viewport × zoom, and rects stay put because they are
-    // normalized to the image box.
+    // Fullscreen inspect-and-annotate: same draft state, a zoomable stage.
+    const [fullscreen, setFullscreen] = useState(false);
     const [zoom, setZoom] = useState(1);
     const viewportRef = useRef<HTMLDivElement>(null);
     const [viewportWidth, setViewportWidth] = useState<number>();
     useLayoutEffect(() => {
+      if (!fullscreen) return;
       const node = viewportRef.current;
       if (!node) return;
       const measure = () => setViewportWidth(node.clientWidth);
@@ -157,7 +218,20 @@ const CheckRejectContent = memo<CheckRejectModalProps>(
       const observer = new ResizeObserver(measure);
       observer.observe(node);
       return () => observer.disconnect();
-    }, [activeEvidenceId]);
+    }, [fullscreen, activeEvidenceId]);
+
+    // Fullscreen is an inspection layer — Esc leaves it, never the modal.
+    useEffect(() => {
+      if (!fullscreen) return;
+      const onKey = (event: KeyboardEvent) => {
+        if (event.key === 'Escape') {
+          event.stopPropagation();
+          setFullscreen(false);
+        }
+      };
+      window.addEventListener('keydown', onKey, true);
+      return () => window.removeEventListener('keydown', onKey, true);
+    }, [fullscreen]);
 
     // Persist the draft as it is typed; an empty draft cleans the slot up.
     useEffect(() => {
@@ -214,19 +288,60 @@ const CheckRejectContent = memo<CheckRejectModalProps>(
 
     const hasEvidence = evidence.length > 0;
 
-    const commentField = (
-      <Flexbox gap={6}>
-        {hasEvidence && (
-          <Text fontSize={12} type={'secondary'}>
-            {translate('acceptance.review.supplement')}
-          </Text>
-        )}
+    const canvasHandlers = {
+      onDraw: (rect: AcceptanceReviewAnnotation['rect']) =>
+        setAnnotations((previous) => [
+          ...previous,
+          { comment: '', evidenceId: activeEvidence!.id, key: nextAnnotationKey(), rect },
+        ]),
+      onRemove: (index: number) => {
+        const target = activeAnnotations[index];
+        if (target)
+          setAnnotations((previous) => previous.filter((item) => item.key !== target.key));
+      },
+      onUpdate: (index: number, rect: AcceptanceReviewAnnotation['rect']) => {
+        const target = activeAnnotations[index];
+        if (target)
+          setAnnotations((previous) =>
+            previous.map((item) => (item.key === target.key ? { ...item, rect } : item)),
+          );
+      },
+    };
+
+    const annotationInputs = activeAnnotations.map((annotation, index) => (
+      <Flexbox horizontal align={'flex-start'} gap={8} key={annotation.key}>
+        <span className={styles.regionIndex} style={{ marginBlockStart: 6 }}>
+          {index + 1}
+        </span>
         <TextArea
-          autoSize={{ maxRows: 6, minRows: hasEvidence ? 2 : 3 }}
-          placeholder={translate('acceptance.review.rejectPlaceholder')}
-          value={comment}
-          onChange={(event) => setComment(event.target.value)}
+          autoSize={{ maxRows: 5, minRows: 1 }}
+          style={{ flex: 1 }}
+          value={annotation.comment}
+          placeholder={translate('acceptance.review.annotationPlaceholder', {
+            index: index + 1,
+          })}
+          onChange={(event) =>
+            setAnnotations((previous) =>
+              previous.map((item) =>
+                item.key === annotation.key ? { ...item, comment: event.target.value } : item,
+              ),
+            )
+          }
         />
+      </Flexbox>
+    ));
+
+    const thumbnails = evidence.length > 1 && (
+      <Flexbox horizontal gap={8} wrap={'wrap'}>
+        {evidence.map((item) => (
+          <div
+            className={cx(styles.thumb, item.id === activeEvidenceId && styles.thumbActive)}
+            key={item.id}
+            onClick={() => setActiveEvidenceId(item.id)}
+          >
+            <img alt={''} src={item.fileUrl} />
+          </div>
+        ))}
       </Flexbox>
     );
 
@@ -245,141 +360,56 @@ const CheckRejectContent = memo<CheckRejectModalProps>(
             {translate('acceptance.review.rejectDescription', { title: checkTitle })}
           </Text>
 
-          {/* Composer-style review: the zoomable evidence stage on the left,
-              region comments alongside on the right — circle a spot, write
-              next to it, never below the fold. */}
-          {hasEvidence ? (
-            <Flexbox horizontal align={'stretch'} gap={16} wrap={'wrap'}>
-              <Flexbox flex={1} gap={8} style={{ minWidth: 320 }}>
-                <Flexbox horizontal align={'center'} gap={8}>
-                  <Text fontSize={12} type={'secondary'}>
-                    {translate('acceptance.review.annotateHint')}
-                  </Text>
-                  <Flexbox flex={1} />
-                  <ActionIcon
-                    disabled={zoom <= ZOOM_STEPS[0]}
-                    icon={ZoomOut}
-                    size={'small'}
-                    title={translate('acceptance.review.zoomOut')}
-                    onClick={() => stepZoom(-1)}
-                  />
-                  <span className={styles.zoomLabel}>{Math.round(zoom * 100)}%</span>
-                  <ActionIcon
-                    disabled={zoom >= ZOOM_STEPS.at(-1)!}
-                    icon={ZoomIn}
-                    size={'small'}
-                    title={translate('acceptance.review.zoomIn')}
-                    onClick={() => stepZoom(1)}
-                  />
-                </Flexbox>
-                {evidence.length > 1 && (
-                  <Flexbox horizontal gap={8} wrap={'wrap'}>
-                    {evidence.map((item) => (
-                      <div
-                        key={item.id}
-                        className={cx(
-                          styles.thumb,
-                          item.id === activeEvidenceId && styles.thumbActive,
-                        )}
-                        onClick={() => setActiveEvidenceId(item.id)}
-                      >
-                        <img alt={''} src={item.fileUrl} />
-                      </div>
-                    ))}
-                  </Flexbox>
-                )}
-                {activeEvidence && (
-                  <div className={styles.viewport} ref={viewportRef}>
-                    <AnnotationCanvas
-                      annotations={activeAnnotations}
-                      src={activeEvidence.fileUrl}
-                      imageWidth={
-                        // -2 keeps the frame's own border inside the viewport
-                        // at fit zoom, so no phantom horizontal scrollbar.
-                        viewportWidth ? Math.max(viewportWidth * zoom - 2, 0) : undefined
-                      }
-                      onDraw={(rect) =>
-                        setAnnotations((previous) => [
-                          ...previous,
-                          {
-                            comment: '',
-                            evidenceId: activeEvidence.id,
-                            key: nextAnnotationKey(),
-                            rect,
-                          },
-                        ])
-                      }
-                      onRemove={(index) => {
-                        const target = activeAnnotations[index];
-                        if (target)
-                          setAnnotations((previous) =>
-                            previous.filter((item) => item.key !== target.key),
-                          );
-                      }}
-                      onUpdate={(index, rect) => {
-                        const target = activeAnnotations[index];
-                        if (target)
-                          setAnnotations((previous) =>
-                            previous.map((item) =>
-                              item.key === target.key ? { ...item, rect } : item,
-                            ),
-                          );
-                      }}
-                    />
-                  </div>
-                )}
-              </Flexbox>
-
-              <div className={styles.sidePanel}>
+          {/* Circling the evidence is the primary feedback act; region notes
+              sit right under the canvas. Fullscreen opens the zoomable stage
+              for pixel-level inspection on large screenshots. */}
+          {hasEvidence && (
+            <Flexbox gap={8}>
+              <Flexbox gap={2}>
                 <Text strong fontSize={13}>
-                  {translate('acceptance.review.regionComments')}
+                  {translate('acceptance.review.annotate')}
                 </Text>
-                {activeAnnotations.length === 0 && (
-                  <Text fontSize={12} type={'secondary'}>
-                    {translate('acceptance.review.regionCommentsEmpty')}
-                  </Text>
-                )}
-                {activeAnnotations.map((annotation, index) => (
-                  <Flexbox horizontal align={'flex-start'} gap={8} key={annotation.key}>
-                    <span className={styles.regionIndex} style={{ marginBlockStart: 6 }}>
-                      {index + 1}
-                    </span>
-                    <TextArea
-                      autoSize={{ maxRows: 5, minRows: 1 }}
-                      style={{ flex: 1 }}
-                      value={annotation.comment}
-                      placeholder={translate('acceptance.review.annotationPlaceholder', {
-                        index: index + 1,
-                      })}
-                      onChange={(event) =>
-                        setAnnotations((previous) =>
-                          previous.map((item) =>
-                            item.key === annotation.key
-                              ? { ...item, comment: event.target.value }
-                              : item,
-                          ),
-                        )
-                      }
-                    />
-                    <ActionIcon
-                      icon={Trash2}
-                      size={'small'}
-                      style={{ marginBlockStart: 2 }}
-                      title={translate('acceptance.review.removeRegion')}
-                      onClick={() =>
-                        setAnnotations((previous) =>
-                          previous.filter((item) => item.key !== annotation.key),
-                        )
-                      }
-                    />
-                  </Flexbox>
-                ))}
-                {commentField}
-              </div>
+                <Text fontSize={12} type={'secondary'}>
+                  {translate('acceptance.review.annotateHint')}
+                </Text>
+              </Flexbox>
+              {thumbnails}
+              {activeEvidence && (
+                <div className={styles.canvasWrap}>
+                  <AnnotationCanvas
+                    annotations={activeAnnotations}
+                    src={activeEvidence.fileUrl}
+                    {...canvasHandlers}
+                  />
+                  <ActionIcon
+                    className={'acceptance-annotate-fullscreen'}
+                    icon={Maximize2}
+                    size={'small'}
+                    title={translate('acceptance.review.fullscreen')}
+                    onClick={() => {
+                      setZoom(1);
+                      setFullscreen(true);
+                    }}
+                  />
+                </div>
+              )}
+              {annotationInputs}
             </Flexbox>
-          ) : (
-            commentField
           )}
+
+          <Flexbox gap={6}>
+            {hasEvidence && (
+              <Text fontSize={12} type={'secondary'}>
+                {translate('acceptance.review.supplement')}
+              </Text>
+            )}
+            <TextArea
+              autoSize={{ maxRows: 6, minRows: hasEvidence ? 2 : 3 }}
+              placeholder={translate('acceptance.review.rejectPlaceholder')}
+              value={comment}
+              onChange={(event) => setComment(event.target.value)}
+            />
+          </Flexbox>
         </Flexbox>
 
         <Flexbox
@@ -397,6 +427,71 @@ const CheckRejectContent = memo<CheckRejectModalProps>(
             {translate('acceptance.review.confirmReject')}
           </Button>
         </Flexbox>
+
+        {/* Fullscreen inspect-and-annotate stage — same draft state as the
+            modal; zoom via toolbar, pan via the viewport's native scroll. */}
+        {fullscreen &&
+          activeEvidence &&
+          createPortal(
+            <div className={styles.fullscreenMask} onClick={() => setFullscreen(false)}>
+              <div className={styles.fullscreenPanel} onClick={(event) => event.stopPropagation()}>
+                <Flexbox horizontal align={'center'} gap={8}>
+                  <Text strong fontSize={14}>
+                    {translate('acceptance.review.annotate')}
+                  </Text>
+                  <Flexbox flex={1} />
+                  <ActionIcon
+                    disabled={zoom <= ZOOM_STEPS[0]}
+                    icon={ZoomOut}
+                    size={'small'}
+                    title={translate('acceptance.review.zoomOut')}
+                    onClick={() => stepZoom(-1)}
+                  />
+                  <span className={styles.zoomLabel}>{Math.round(zoom * 100)}%</span>
+                  <ActionIcon
+                    disabled={zoom >= ZOOM_STEPS.at(-1)!}
+                    icon={ZoomIn}
+                    size={'small'}
+                    title={translate('acceptance.review.zoomIn')}
+                    onClick={() => stepZoom(1)}
+                  />
+                  <ActionIcon
+                    icon={X}
+                    size={'small'}
+                    title={translate('acceptance.review.exitFullscreen')}
+                    onClick={() => setFullscreen(false)}
+                  />
+                </Flexbox>
+                {thumbnails}
+                <div className={styles.fullscreenBody}>
+                  <div className={styles.viewport} ref={viewportRef}>
+                    <AnnotationCanvas
+                      annotations={activeAnnotations}
+                      src={activeEvidence.fileUrl}
+                      imageWidth={
+                        // -2 keeps the frame's own border inside the viewport
+                        // at fit zoom, so no phantom horizontal scrollbar.
+                        viewportWidth ? Math.max(viewportWidth * zoom - 2, 0) : undefined
+                      }
+                      {...canvasHandlers}
+                    />
+                  </div>
+                  <div className={styles.sidePanel}>
+                    <Text strong fontSize={13}>
+                      {translate('acceptance.review.regionComments')}
+                    </Text>
+                    {activeAnnotations.length === 0 && (
+                      <Text fontSize={12} type={'secondary'}>
+                        {translate('acceptance.review.regionCommentsEmpty')}
+                      </Text>
+                    )}
+                    {annotationInputs}
+                  </div>
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )}
       </>
     );
   },
@@ -404,7 +499,7 @@ const CheckRejectContent = memo<CheckRejectModalProps>(
 
 CheckRejectContent.displayName = 'AcceptanceCheckRejectContent';
 
-/** Per-check reject dialog — a zoomable annotation stage plus side comments. */
+/** Per-check reject dialog — a note plus circled regions; fullscreen zoom to inspect. */
 export const openCheckRejectModal = (options: CheckRejectModalProps): ModalInstance =>
   createModal({
     content: <CheckRejectContent {...options} />,
@@ -422,5 +517,5 @@ export const openCheckRejectModal = (options: CheckRejectModalProps): ModalInsta
       },
     },
     title: t('acceptance.review.reject', { ns: 'verify' }),
-    width: 'min(96vw, 1080px)',
+    width: 'min(92vw, 640px)',
   });
