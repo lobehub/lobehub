@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
@@ -125,6 +126,42 @@ describe('MessengerAccountLinkModel', () => {
       expect(second.platformUsername).toBe('@new');
       // activeAgentId stays since the second call didn't override it.
       expect(second.activeAgentId).toBe(agentA);
+    });
+
+    it('refreshes credentials and applicationId on re-verify, preserves them when omitted', async () => {
+      const model = new MessengerAccountLinkModel(serverDB, userA);
+      const first = await model.upsertForPlatform({
+        applicationId: 'wxbot-1',
+        credentials: 'cipher-v1',
+        platform: 'wechat',
+        platformUserId: 'wx-1',
+      });
+
+      // Row-returning methods never expose the ciphertext.
+      expect(first).not.toHaveProperty('credentials');
+
+      // Re-verify without credential fields → stored values stay intact.
+      await model.upsertForPlatform({ platform: 'wechat', platformUserId: 'wx-1' });
+      let [raw] = await serverDB
+        .select()
+        .from(messengerAccountLinks)
+        .where(eq(messengerAccountLinks.id, first.id));
+      expect(raw.applicationId).toBe('wxbot-1');
+      expect(raw.credentials).toBe('cipher-v1');
+
+      // Re-verify with rotated credentials → stored values refresh.
+      await model.upsertForPlatform({
+        applicationId: 'wxbot-2',
+        credentials: 'cipher-v2',
+        platform: 'wechat',
+        platformUserId: 'wx-1',
+      });
+      [raw] = await serverDB
+        .select()
+        .from(messengerAccountLinks)
+        .where(eq(messengerAccountLinks.id, first.id));
+      expect(raw.applicationId).toBe('wxbot-2');
+      expect(raw.credentials).toBe('cipher-v2');
     });
 
     it('throws MessengerAccountLinkRelinkRequiredError when re-linking a different account in the same scope', async () => {

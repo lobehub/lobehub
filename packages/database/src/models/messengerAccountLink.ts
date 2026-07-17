@@ -146,6 +146,11 @@ export class MessengerAccountLinkModel {
           platformUsername: params.platformUsername ?? null,
           updatedAt: now,
           workspaceId: params.workspaceId ?? null,
+          // Refresh rotated user-scoped credentials on re-verify; omitting the
+          // fields preserves the stored values (the row shapes we read back
+          // are credential-free public projections, so we can't backfill).
+          ...(params.applicationId === undefined ? {} : { applicationId: params.applicationId }),
+          ...(params.credentials === undefined ? {} : { credentials: params.credentials }),
         })
         .where(eq(messengerAccountLinks.id, byIdentity.id))
         .returning(publicColumns);
@@ -165,6 +170,9 @@ export class MessengerAccountLinkModel {
           platformUsername: params.platformUsername ?? null,
           updatedAt: now,
           workspaceId: params.workspaceId ?? null,
+          // Same credential-refresh semantics as the identity-resolved branch.
+          ...(params.applicationId === undefined ? {} : { applicationId: params.applicationId }),
+          ...(params.credentials === undefined ? {} : { credentials: params.credentials }),
         })
         .where(eq(messengerAccountLinks.id, existingForUser.id))
         .returning(publicColumns);
