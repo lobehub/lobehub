@@ -17,6 +17,15 @@ const { credentials: _credentials, ...publicColumns } = getTableColumns(messenge
  */
 const GLOBAL_TENANT_ID = '';
 
+const APPLICATION_UNIQUE_CONSTRAINT = 'messenger_account_links_platform_tenant_application_unique';
+
+/** Returns the violated constraint name when `error` is a Postgres unique violation. */
+const uniqueViolationConstraint = (error: unknown): string | undefined => {
+  const pgError = error as { cause?: { code?: string; constraint?: string }; code?: string };
+  const code = pgError.cause?.code ?? pgError.code;
+  return code === '23505' ? pgError.cause?.constraint : undefined;
+};
+
 /**
  * Thrown by `upsertForPlatform` when the IM identity is already bound to a
  * different LobeHub user. Callers (e.g. the messenger router) should surface
@@ -62,6 +71,39 @@ export class MessengerAccountLinkModel {
   // from the active agent), NOT part of the link's identity, so it must not
   // scope lookups; otherwise switching scope would orphan the existing link.
   private ownership = (): SQL => eq(messengerAccountLinks.userId, this.userId);
+
+  /**
+   * Map a unique violation on the application-id index to a typed conflict the
+   * verify flow can turn into a friendly 409. Always throws: the claiming link
+   * belongs to another user → `MessengerAccountLinkConflictError`; otherwise
+   * (own bot from another IM identity, or the row vanished in a race) →
+   * `MessengerAccountLinkRelinkRequiredError`.
+   */
+  private throwApplicationClaimConflict = async (
+    platform: string,
+    tenantId: string,
+    applicationId: string,
+  ): Promise<never> => {
+    const [claimed] = await this.db
+      .select(publicColumns)
+      .from(messengerAccountLinks)
+      .where(
+        and(
+          eq(messengerAccountLinks.platform, platform),
+          eq(messengerAccountLinks.tenantId, tenantId),
+          eq(messengerAccountLinks.applicationId, applicationId),
+        ),
+      )
+      .limit(1);
+
+    if (claimed && claimed.userId !== this.userId) {
+      throw new MessengerAccountLinkConflictError(
+        claimed.userId,
+        'Credential application is already linked to another LobeHub user',
+      );
+    }
+    throw new MessengerAccountLinkRelinkRequiredError();
+  };
 
   // --------------- User-scoped CRUD ---------------
 
@@ -113,43 +155,15 @@ export class MessengerAccountLinkModel {
 
       if (created) return created;
     } catch (error) {
-      const pgError = error as { cause?: { code?: string; constraint?: string }; code?: string };
-      const code = pgError.cause?.code ?? pgError.code;
-      const constraint = pgError.cause?.constraint;
-
-      if (
-        code !== '23505' &&
-        constraint !== 'messenger_account_links_platform_tenant_user_unique'
-      ) {
-        throw error;
-      }
+      const constraint = uniqueViolationConstraint(error);
+      if (!constraint) throw error;
 
       // A credential bot (`applicationId`) may only be claimed by one link.
       // The identity-based resolution below can't see this conflict (the
       // claiming row has a different `platformUserId`), so surface it here
       // instead of falling through to the generic final error.
-      if (constraint === 'messenger_account_links_platform_tenant_application_unique') {
-        const [claimed] = await this.db
-          .select(publicColumns)
-          .from(messengerAccountLinks)
-          .where(
-            and(
-              eq(messengerAccountLinks.platform, params.platform),
-              eq(messengerAccountLinks.tenantId, tenantId),
-              eq(messengerAccountLinks.applicationId, params.applicationId!),
-            ),
-          )
-          .limit(1);
-
-        if (claimed && claimed.userId !== this.userId) {
-          throw new MessengerAccountLinkConflictError(
-            claimed.userId,
-            'Credential application is already linked to another LobeHub user',
-          );
-        }
-        // Same user re-claiming their bot from a different IM identity —
-        // requires an explicit unlink of the old link first.
-        throw new MessengerAccountLinkRelinkRequiredError();
+      if (constraint === APPLICATION_UNIQUE_CONSTRAINT) {
+        await this.throwApplicationClaimConflict(params.platform, tenantId, params.applicationId!);
       }
     }
 
@@ -167,22 +181,34 @@ export class MessengerAccountLinkModel {
       if (byIdentity.userId !== this.userId) {
         throw new MessengerAccountLinkConflictError(byIdentity.userId);
       }
-      const [updated] = await this.db
-        .update(messengerAccountLinks)
-        .set({
-          activeAgentId: params.activeAgentId ?? byIdentity.activeAgentId,
-          platformUsername: params.platformUsername ?? null,
-          updatedAt: now,
-          workspaceId: params.workspaceId ?? null,
-          // Refresh rotated user-scoped credentials on re-verify; omitting the
-          // fields preserves the stored values (the row shapes we read back
-          // are credential-free public projections, so we can't backfill).
-          ...(params.applicationId === undefined ? {} : { applicationId: params.applicationId }),
-          ...(params.credentials === undefined ? {} : { credentials: params.credentials }),
-        })
-        .where(eq(messengerAccountLinks.id, byIdentity.id))
-        .returning(publicColumns);
-      return updated;
+      try {
+        const [updated] = await this.db
+          .update(messengerAccountLinks)
+          .set({
+            activeAgentId: params.activeAgentId ?? byIdentity.activeAgentId,
+            platformUsername: params.platformUsername ?? null,
+            updatedAt: now,
+            workspaceId: params.workspaceId ?? null,
+            // Refresh rotated user-scoped credentials on re-verify; omitting the
+            // fields preserves the stored values (the row shapes we read back
+            // are credential-free public projections, so we can't backfill).
+            ...(params.applicationId === undefined ? {} : { applicationId: params.applicationId }),
+            ...(params.credentials === undefined ? {} : { credentials: params.credentials }),
+          })
+          .where(eq(messengerAccountLinks.id, byIdentity.id))
+          .returning(publicColumns);
+        return updated;
+      } catch (error) {
+        // A rotated `applicationId` can collide with a bot already claimed by
+        // another link — same typed conflict as the insert path.
+        if (
+          uniqueViolationConstraint(error) === APPLICATION_UNIQUE_CONSTRAINT &&
+          params.applicationId != null
+        ) {
+          await this.throwApplicationClaimConflict(params.platform, tenantId, params.applicationId);
+        }
+        throw error;
+      }
     }
 
     const existingForUser = await this.findByPlatform(params.platform, tenantId);
@@ -191,20 +217,30 @@ export class MessengerAccountLinkModel {
         throw new MessengerAccountLinkRelinkRequiredError();
       }
 
-      const [updated] = await this.db
-        .update(messengerAccountLinks)
-        .set({
-          activeAgentId: params.activeAgentId ?? existingForUser.activeAgentId,
-          platformUsername: params.platformUsername ?? null,
-          updatedAt: now,
-          workspaceId: params.workspaceId ?? null,
-          // Same credential-refresh semantics as the identity-resolved branch.
-          ...(params.applicationId === undefined ? {} : { applicationId: params.applicationId }),
-          ...(params.credentials === undefined ? {} : { credentials: params.credentials }),
-        })
-        .where(eq(messengerAccountLinks.id, existingForUser.id))
-        .returning(publicColumns);
-      return updated;
+      try {
+        const [updated] = await this.db
+          .update(messengerAccountLinks)
+          .set({
+            activeAgentId: params.activeAgentId ?? existingForUser.activeAgentId,
+            platformUsername: params.platformUsername ?? null,
+            updatedAt: now,
+            workspaceId: params.workspaceId ?? null,
+            // Same credential-refresh semantics as the identity-resolved branch.
+            ...(params.applicationId === undefined ? {} : { applicationId: params.applicationId }),
+            ...(params.credentials === undefined ? {} : { credentials: params.credentials }),
+          })
+          .where(eq(messengerAccountLinks.id, existingForUser.id))
+          .returning(publicColumns);
+        return updated;
+      } catch (error) {
+        if (
+          uniqueViolationConstraint(error) === APPLICATION_UNIQUE_CONSTRAINT &&
+          params.applicationId != null
+        ) {
+          await this.throwApplicationClaimConflict(params.platform, tenantId, params.applicationId);
+        }
+        throw error;
+      }
     }
 
     throw new Error('MessengerAccountLink upsert could not resolve the final row state');

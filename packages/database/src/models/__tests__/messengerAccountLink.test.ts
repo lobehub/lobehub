@@ -183,6 +183,33 @@ describe('MessengerAccountLinkModel', () => {
       await expect(promise).rejects.toMatchObject({ existingUserId: userA });
     });
 
+    it('surfaces a conflict when a credential refresh rotates to an application id claimed by another user', async () => {
+      await new MessengerAccountLinkModel(serverDB, userA).upsertForPlatform({
+        applicationId: 'wxbot-owned-by-a',
+        credentials: 'cipher-a',
+        platform: 'wechat',
+        platformUserId: 'wx-user-a2',
+      });
+      const modelB = new MessengerAccountLinkModel(serverDB, userB);
+      await modelB.upsertForPlatform({
+        applicationId: 'wxbot-owned-by-b',
+        credentials: 'cipher-b',
+        platform: 'wechat',
+        platformUserId: 'wx-user-b2',
+      });
+
+      // Re-verify (update path) rotating to a bot id already claimed by userA.
+      const promise = modelB.upsertForPlatform({
+        applicationId: 'wxbot-owned-by-a',
+        credentials: 'cipher-b2',
+        platform: 'wechat',
+        platformUserId: 'wx-user-b2',
+      });
+
+      await expect(promise).rejects.toBeInstanceOf(MessengerAccountLinkConflictError);
+      await expect(promise).rejects.toMatchObject({ existingUserId: userA });
+    });
+
     it('throws MessengerAccountLinkRelinkRequiredError when re-linking a different account in the same scope', async () => {
       const model = new MessengerAccountLinkModel(serverDB, userA);
       const first = await model.upsertForPlatform({
