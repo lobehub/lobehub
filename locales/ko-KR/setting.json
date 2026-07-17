@@ -288,6 +288,8 @@
   "creds.view.title": "자격 증명 보기: {{name}}",
   "creds.view.values": "자격 증명 값",
   "creds.view.warning": "이 값은 민감합니다. 다른 사람과 공유하지 마세요.",
+  "creds.workspaceSection.desc": "이 워크스페이스의 모든 사용자에게 제공되는 자격 증명으로, 멤버들이 공유한 자격 증명도 포함됩니다.",
+  "creds.workspaceSection.title": "워크스페이스 자격 증명",
   "danger.reset.action": "즉시 초기화",
   "danger.reset.confirm": "모든 설정을 초기화하시겠습니까?",
   "danger.reset.currentVersion": "현재 버전",

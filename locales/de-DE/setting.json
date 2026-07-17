@@ -288,6 +288,8 @@
   "creds.view.title": "Berechtigung ansehen: {{name}}",
   "creds.view.values": "Berechtigungswerte",
   "creds.view.warning": "Diese Werte sind sensibel. Teilen Sie sie nicht mit anderen.",
+  "creds.workspaceSection.desc": "Anmeldedaten, die allen in diesem Arbeitsbereich zur Verfügung stehen, einschließlich der von Mitgliedern geteilten Anmeldedaten.",
+  "creds.workspaceSection.title": "Arbeitsbereich-Anmeldedaten",
   "danger.reset.action": "Jetzt zurücksetzen",
   "danger.reset.confirm": "Alle Einstellungen zurücksetzen?",
   "danger.reset.currentVersion": "Aktuelle Version",

@@ -288,6 +288,8 @@
   "creds.view.title": "Visualizza Credenziale: {{name}}",
   "creds.view.values": "Valori della Credenziale",
   "creds.view.warning": "Questi valori sono sensibili. Non condividerli con altri.",
+  "creds.workspaceSection.desc": "Credenziali disponibili per tutti in questo spazio di lavoro, incluse quelle condivise dai membri.",
+  "creds.workspaceSection.title": "Credenziali dello Spazio di Lavoro",
   "danger.reset.action": "Ripristina Ora",
   "danger.reset.confirm": "Ripristinare tutte le impostazioni?",
   "danger.reset.currentVersion": "Versione Attuale",

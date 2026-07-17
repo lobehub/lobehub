@@ -288,6 +288,8 @@
   "creds.view.title": "Kimlik Bilgisini Görüntüle: {{name}}",
   "creds.view.values": "Kimlik Bilgisi Değerleri",
   "creds.view.warning": "Bu değerler hassastır. Başkalarıyla paylaşmayın.",
+  "creds.workspaceSection.desc": "Bu çalışma alanındaki herkese açık kimlik bilgileri, üyeler tarafından paylaşılan kimlik bilgileri dahil.",
+  "creds.workspaceSection.title": "Çalışma Alanı Kimlik Bilgileri",
   "danger.reset.action": "Şimdi Sıfırla",
   "danger.reset.confirm": "Tüm ayarlar sıfırlansın mı?",
   "danger.reset.currentVersion": "Mevcut Sürüm",

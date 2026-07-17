@@ -288,6 +288,8 @@
   "creds.view.title": "Xem Thông Tin Xác Thực: {{name}}",
   "creds.view.values": "Giá Trị Thông Tin Xác Thực",
   "creds.view.warning": "Những giá trị này rất nhạy cảm. Không chia sẻ chúng với người khác.",
+  "creds.workspaceSection.desc": "Thông tin xác thực có sẵn cho tất cả mọi người trong không gian làm việc này, bao gồm cả thông tin xác thực được chia sẻ bởi các thành viên.",
+  "creds.workspaceSection.title": "Thông Tin Xác Thực Không Gian Làm Việc",
   "danger.reset.action": "Đặt lại ngay",
   "danger.reset.confirm": "Đặt lại tất cả cài đặt?",
   "danger.reset.currentVersion": "Phiên bản hiện tại",

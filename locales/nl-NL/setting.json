@@ -288,6 +288,8 @@
   "creds.view.title": "Referentie Bekijken: {{name}}",
   "creds.view.values": "Referentiewaarden",
   "creds.view.warning": "Deze waarden zijn gevoelig. Deel ze niet met anderen.",
+  "creds.workspaceSection.desc": "Referenties beschikbaar voor iedereen in deze werkruimte, inclusief referenties die door leden worden gedeeld.",
+  "creds.workspaceSection.title": "Werkruimte Referenties",
   "danger.reset.action": "Nu resetten",
   "danger.reset.confirm": "Alle instellingen resetten?",
   "danger.reset.currentVersion": "Huidige versie",

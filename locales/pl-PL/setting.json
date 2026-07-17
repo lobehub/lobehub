@@ -288,6 +288,8 @@
   "creds.view.title": "Wyświetl poświadczenie: {{name}}",
   "creds.view.values": "Wartości poświadczenia",
   "creds.view.warning": "Te wartości są poufne. Nie udostępniaj ich innym.",
+  "creds.workspaceSection.desc": "Poświadczenia dostępne dla wszystkich w tym obszarze roboczym, w tym poświadczenia udostępnione przez członków.",
+  "creds.workspaceSection.title": "Poświadczenia Obszaru Roboczego",
   "danger.reset.action": "Zresetuj teraz",
   "danger.reset.confirm": "Zresetować wszystkie ustawienia?",
   "danger.reset.currentVersion": "Aktualna wersja",

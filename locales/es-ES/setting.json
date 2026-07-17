@@ -288,6 +288,8 @@
   "creds.view.title": "Ver Credencial: {{name}}",
   "creds.view.values": "Valores de la Credencial",
   "creds.view.warning": "Estos valores son sensibles. No los comparta con otros.",
+  "creds.workspaceSection.desc": "Credenciales disponibles para todos en este espacio de trabajo, incluidas las credenciales compartidas por los miembros.",
+  "creds.workspaceSection.title": "Credenciales del Espacio de Trabajo",
   "danger.reset.action": "Restablecer Ahora",
   "danger.reset.confirm": "¿Restablecer todas las configuraciones?",
   "danger.reset.currentVersion": "Versión Actual",

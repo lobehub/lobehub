@@ -288,6 +288,8 @@
   "creds.view.title": "Преглед на идентификатор: {{name}}",
   "creds.view.values": "Стойности на идентификатора",
   "creds.view.warning": "Тези стойности са чувствителни. Не ги споделяйте с други.",
+  "creds.workspaceSection.desc": "Удостоверения, достъпни за всички в това работно пространство, включително удостоверения, споделени от членовете.",
+  "creds.workspaceSection.title": "Удостоверения на работното пространство",
   "danger.reset.action": "Нулирай сега",
   "danger.reset.confirm": "Да се нулират ли всички настройки?",
   "danger.reset.currentVersion": "Текуща версия",

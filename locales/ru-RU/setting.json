@@ -288,6 +288,8 @@
   "creds.view.title": "Просмотр учетных данных: {{name}}",
   "creds.view.values": "Значения учетных данных",
   "creds.view.warning": "Эти значения являются конфиденциальными. Не делитесь ими с другими.",
+  "creds.workspaceSection.desc": "Учетные данные, доступные всем в этом рабочем пространстве, включая учетные данные, которыми поделились участники.",
+  "creds.workspaceSection.title": "Учетные данные рабочего пространства",
   "danger.reset.action": "Сбросить сейчас",
   "danger.reset.confirm": "Сбросить все настройки?",
   "danger.reset.currentVersion": "Текущая версия",

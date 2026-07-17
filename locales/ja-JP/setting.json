@@ -288,6 +288,8 @@
   "creds.view.title": "資格情報を表示: {{name}}",
   "creds.view.values": "資格情報の値",
   "creds.view.warning": "これらの値は機密情報です。他人と共有しないでください。",
+  "creds.workspaceSection.desc": "このワークスペース内の全員が利用可能な資格情報、メンバーによって共有された資格情報を含みます。",
+  "creds.workspaceSection.title": "ワークスペース資格情報",
   "danger.reset.action": "すぐにリセット",
   "danger.reset.confirm": "すべての設定をリセットしますか？",
   "danger.reset.currentVersion": "現在のバージョン",

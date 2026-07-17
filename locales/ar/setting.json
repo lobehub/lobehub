@@ -288,6 +288,8 @@
   "creds.view.title": "عرض بيانات الاعتماد: {{name}}",
   "creds.view.values": "قيم بيانات الاعتماد",
   "creds.view.warning": "هذه القيم حساسة. لا تشاركها مع الآخرين.",
+  "creds.workspaceSection.desc": "بيانات الاعتماد المتاحة للجميع في مساحة العمل هذه، بما في ذلك بيانات الاعتماد التي يشاركها الأعضاء.",
+  "creds.workspaceSection.title": "بيانات اعتماد مساحة العمل",
   "danger.reset.action": "إعادة التعيين الآن",
   "danger.reset.confirm": "هل تريد إعادة تعيين جميع الإعدادات؟",
   "danger.reset.currentVersion": "الإصدار الحالي",

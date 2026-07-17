@@ -288,6 +288,8 @@
   "creds.view.title": "Voir l'information d'identification : {{name}}",
   "creds.view.values": "Valeurs d'identification",
   "creds.view.warning": "Ces valeurs sont sensibles. Ne les partagez pas avec d'autres.",
+  "creds.workspaceSection.desc": "Identifiants disponibles pour tous dans cet espace de travail, y compris les identifiants partagés par les membres.",
+  "creds.workspaceSection.title": "Identifiants de l'Espace de Travail",
   "danger.reset.action": "Réinitialiser maintenant",
   "danger.reset.confirm": "Réinitialiser tous les paramètres ?",
   "danger.reset.currentVersion": "Version actuelle",
