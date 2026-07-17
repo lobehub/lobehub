@@ -14,7 +14,7 @@ import {
   Text,
 } from '@lobehub/ui';
 import { Button, Segmented, Select } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { createStaticStyles, cssVar, cx, useResponsive } from 'antd-style';
 import dayjs from 'dayjs';
 import {
   BadgeCheck,
@@ -81,6 +81,24 @@ const styles = createStaticStyles(({ css }) => ({
     color: ${cssVar.colorTextSecondary};
 
     background: ${cssVar.colorFillTertiary};
+  `,
+  /* Narrow viewports: the ledger floats over the report instead of shrinking
+     it — same regime as the list panel (useReportPanelExpand). An in-flow
+     300px+ column on a ~500px viewport would crush the report into an
+     unreadable sliver. */
+  ledgerOverlay: css`
+    position: absolute;
+    z-index: 30;
+    inset-block: 0;
+    inset-inline-end: 0;
+
+    overflow: auto;
+
+    width: min(340px, 88%);
+    border-inline-start: 1px solid ${cssVar.colorBorderSecondary};
+
+    background: ${cssVar.colorBgElevated};
+    box-shadow: ${cssVar.boxShadowSecondary};
   `,
   /* Pinned to the page's top-right corner — the way back to the collapsed
      ledger, without a permanent handle tab on the edge. */
@@ -177,6 +195,11 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
   const isEmbedded = Boolean(explicitAcceptanceId);
   const { t } = useTranslation('verify');
   const { data, error, isLoading, mutate } = useAcceptanceBundle(acceptanceId ?? null);
+  // Below `lg` the report body and a 300px+ in-flow ledger cannot share the
+  // viewport — the ledger switches to a float overlay, closed by default (the
+  // same narrow regime the list panel uses).
+  const { lg = true } = useResponsive();
+  const isNarrowViewport = !lg;
 
   const [filter, setFilter] = useState<CheckFilter>('all');
   const [roundFilter, setRoundFilter] = useState<number | null>(null);
@@ -185,6 +208,11 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
   const [seeded, setSeeded] = useState(false);
   const [highlightRound, setHighlightRound] = useState<number | null>(null);
   const [ledgerExpand, setLedgerExpand] = useState(!isEmbedded);
+  // Entering the narrow regime closes the ledger (it would cover the report);
+  // reopening is an explicit act via the corner toggle, as a float overlay.
+  useEffect(() => {
+    if (isNarrowViewport) setLedgerExpand(false);
+  }, [isNarrowViewport]);
   const [reportRound, setReportRound] = useState<AcceptanceRound | null>(null);
   const [pending, setPending] = useState(false);
   const [actionError, setActionError] = useState<string>();
@@ -785,24 +813,38 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
 
       {/* Round ledger — audit detail, off the decision path (P-13). No edge
           handle: opening happens from the page-corner toggle, closing from the
-          ledger's own header action. */}
-      <DraggablePanel
-        defaultSize={{ width: 340 }}
-        expand={ledgerExpand}
-        minWidth={300}
-        placement={'right'}
-        style={{ flex: 'none', height: '100%' }}
-        onExpandChange={setLedgerExpand}
-      >
-        <Flexbox style={{ height: '100%', overflow: 'auto' }}>
-          <LedgerPanel
-            highlight={highlightRound}
-            rounds={rounds}
-            onCollapse={() => setLedgerExpand(false)}
-            onOpenReport={setReportRound}
-          />
-        </Flexbox>
-      </DraggablePanel>
+          ledger's own header action. On narrow viewports it floats over the
+          report instead of shrinking it into an unreadable column. */}
+      {isNarrowViewport ? (
+        ledgerExpand && (
+          <div className={styles.ledgerOverlay}>
+            <LedgerPanel
+              highlight={highlightRound}
+              rounds={rounds}
+              onCollapse={() => setLedgerExpand(false)}
+              onOpenReport={setReportRound}
+            />
+          </div>
+        )
+      ) : (
+        <DraggablePanel
+          defaultSize={{ width: 340 }}
+          expand={ledgerExpand}
+          minWidth={300}
+          placement={'right'}
+          style={{ flex: 'none', height: '100%' }}
+          onExpandChange={setLedgerExpand}
+        >
+          <Flexbox style={{ height: '100%', overflow: 'auto' }}>
+            <LedgerPanel
+              highlight={highlightRound}
+              rounds={rounds}
+              onCollapse={() => setLedgerExpand(false)}
+              onOpenReport={setReportRound}
+            />
+          </Flexbox>
+        </DraggablePanel>
+      )}
 
       {/* Per-round report drill-down — the full verify run view, not a
           markdown excerpt: same content as /verify/:runId, opened in place.
