@@ -171,7 +171,7 @@ describe('DeviceGateway', () => {
       const proxy = new DeviceGateway();
       const result = await proxy.queryDeviceList('user-1');
 
-      expect(result[0].channels.map((c) => c.connectionId)).toEqual([
+      expect(result[0]?.channels?.map((c) => c.connectionId)).toEqual([
         'conn-new',
         'conn-mid',
         'conn-old',
