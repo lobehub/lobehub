@@ -10,6 +10,9 @@ const makeEvent = (type: string, data: Record<string, unknown> = {}): AgentStrea
 const textEvent = (content: string, extra: Record<string, unknown> = {}) =>
   makeEvent('stream_chunk', { chunkType: 'text', content, ...extra });
 
+const reasoningEvent = (reasoning: string, extra: Record<string, unknown> = {}) =>
+  makeEvent('stream_chunk', { chunkType: 'reasoning', reasoning, ...extra });
+
 const toolEvent = (i: number) => makeEvent('tool_start', { toolCallId: `tc-${i}` });
 
 const createSink = () => {
@@ -108,6 +111,69 @@ describe('CoalescingBatchIngester', () => {
     // Second snapshot carries ONLY its own message, with a fresh seq.
     expect(batch[0].data).toMatchObject({ content: 'first message', snapshotSeq: 1 });
     expect(batch[3].data).toMatchObject({ content: 'second message', snapshotSeq: 2 });
+  });
+
+  it('coalesces reasoning deltas into a replace snapshot ordered before the text snapshot', async () => {
+    // Reasoning gets the same snapshot treatment as text: `replace` is
+    // idempotent under batch redelivery, whereas raw deltas re-append and
+    // durably duplicate the thinking content on a cold-replica retry.
+    const { batches, ingest, sink } = createSink();
+    const ingester = new CoalescingBatchIngester(sink);
+
+    ingester.push(reasoningEvent('thinking '));
+    ingester.push(reasoningEvent('hard'));
+    ingester.push(textEvent('the answer'));
+    ingester.push(makeEvent('stream_chunk', { chunkType: 'tools_calling', toolsCalling: [] }));
+    await ingester.drain();
+
+    expect(ingest).toHaveBeenCalledTimes(1);
+    const [batch] = batches;
+    // Emission order preserved: reasoning → text → tools.
+    expect(batch.map((event) => (event.data as any).chunkType)).toEqual([
+      'reasoning',
+      'text',
+      'tools_calling',
+    ]);
+    expect(batch[0].data).toMatchObject({
+      reasoning: 'thinking hard',
+      snapshotMode: 'replace',
+      snapshotSeq: 1,
+    });
+    expect(batch[1].data).toMatchObject({
+      content: 'the answer',
+      snapshotMode: 'replace',
+      snapshotSeq: 1, // per-kind counters are independent
+    });
+  });
+
+  it('resets the reasoning accumulator at stream boundaries', async () => {
+    const { batches, sink } = createSink();
+    const ingester = new CoalescingBatchIngester(sink);
+
+    ingester.push(reasoningEvent('first thought'));
+    ingester.push(makeEvent('stream_end'));
+    ingester.push(makeEvent('stream_start', { newStep: true }));
+    ingester.push(reasoningEvent('second thought'));
+    await ingester.drain();
+
+    const batch = batches.flat();
+    expect(batch[0].data).toMatchObject({ reasoning: 'first thought', snapshotSeq: 1 });
+    expect(batch[3].data).toMatchObject({ reasoning: 'second thought', snapshotSeq: 2 });
+  });
+
+  it('forwards subagent reasoning verbatim without snapshot conversion', async () => {
+    const { batches, sink } = createSink();
+    const ingester = new CoalescingBatchIngester(sink);
+
+    const subagent = { parentToolCallId: 'task-1', subagentMessageId: 'msg-sub-1' };
+    ingester.push(reasoningEvent('main think '));
+    ingester.push(reasoningEvent('sub think', { subagent }));
+    await ingester.drain();
+
+    const batch = batches.flat();
+    expect(batch[0].data).toMatchObject({ reasoning: 'main think ', snapshotMode: 'replace' });
+    expect(batch[1].data).toMatchObject({ reasoning: 'sub think', subagent });
+    expect((batch[1].data as any).snapshotMode).toBeUndefined();
   });
 
   it('forwards subagent text verbatim — no snapshot conversion, no accumulator pollution', async () => {

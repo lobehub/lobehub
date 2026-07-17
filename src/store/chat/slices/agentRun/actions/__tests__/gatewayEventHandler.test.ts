@@ -285,6 +285,46 @@ describe('createGatewayEventHandler', () => {
       expect(textDispatches).toHaveLength(2); // the redelivered snapshot dispatched nothing
     });
 
+    it('applies reasoning replace snapshots and drops redelivered seqs', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      handler(
+        makeEvent('stream_chunk', {
+          chunkType: 'reasoning',
+          reasoning: 'thinking',
+          snapshotMode: 'replace',
+          snapshotSeq: 1,
+        }),
+      );
+      handler(
+        makeEvent('stream_chunk', {
+          chunkType: 'reasoning',
+          reasoning: 'thinking done',
+          snapshotMode: 'replace',
+          snapshotSeq: 2,
+        }),
+      );
+      // Redelivered seq 2 — appending it would render "thinking donethinking done".
+      handler(
+        makeEvent('stream_chunk', {
+          chunkType: 'reasoning',
+          reasoning: 'thinking done',
+          snapshotMode: 'replace',
+          snapshotSeq: 2,
+        }),
+      );
+      await flush();
+
+      const reasoningDispatches = store.internal_dispatchMessage.mock.calls.filter(
+        ([action]: any[]) => action.type === 'updateMessage' && 'reasoning' in action.value,
+      );
+      expect(reasoningDispatches).toHaveLength(2); // duplicate dropped
+      expect(reasoningDispatches.at(-1)?.[0].value).toEqual({
+        reasoning: { content: 'thinking done' },
+      });
+    });
+
     it('a snapshot replaces text accumulated from plain deltas', async () => {
       const store = createMockStore();
       const handler = createHandler(store);

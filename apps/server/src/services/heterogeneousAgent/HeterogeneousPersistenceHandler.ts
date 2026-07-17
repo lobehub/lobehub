@@ -85,6 +85,7 @@ interface AssistantDbSnapshot {
   parentId: string | null | undefined;
   provider: string | undefined;
   reasoning: string;
+  reasoningSnapshotSeq: number;
   textSnapshotSeq: number;
   tools: ChatToolPayload[];
 }
@@ -488,6 +489,7 @@ export class HeterogeneousPersistenceHandler {
       any
     >;
     const textSnapshotSeq = Number(metadata.heteroTextSnapshotSeq ?? 0);
+    const reasoningSnapshotSeq = Number(metadata.heteroReasoningSnapshotSeq ?? 0);
     return {
       content: rawContent === LOADING_FLAT ? '' : rawContent,
       metadata,
@@ -495,6 +497,7 @@ export class HeterogeneousPersistenceHandler {
       parentId: message?.parentId,
       provider: message?.provider,
       reasoning: (message?.reasoning as { content?: string } | null)?.content ?? '',
+      reasoningSnapshotSeq: Number.isFinite(reasoningSnapshotSeq) ? reasoningSnapshotSeq : 0,
       textSnapshotSeq: Number.isFinite(textSnapshotSeq) ? textSnapshotSeq : 0,
       tools: (message?.tools ?? []) as ChatToolPayload[],
     };
@@ -579,7 +582,12 @@ export class HeterogeneousPersistenceHandler {
       }
     }
 
-    if (snapshot.reasoning.length > state.main.accReasoning.length) {
+    // Seq-guarded reasoning restore mirrors the text path above; the length
+    // heuristic stays as the fallback for legacy rows without a stamped seq.
+    if (snapshot.reasoningSnapshotSeq > state.main.lastReasoningSnapshotSeq) {
+      state.main.accReasoning = snapshot.reasoning;
+      state.main.lastReasoningSnapshotSeq = snapshot.reasoningSnapshotSeq;
+    } else if (snapshot.reasoning.length > state.main.accReasoning.length) {
       state.main.accReasoning = snapshot.reasoning;
     }
 
@@ -769,6 +777,7 @@ export class HeterogeneousPersistenceHandler {
       accContent: '',
       accReasoning: '',
       currentAssistantId: authoritativeAssistantMessageId,
+      lastReasoningSnapshotSeq: 0,
       lastTextSnapshotSeq: 0,
       toolState: this.createEmptyMainToolState(),
       turnMetadata: {},

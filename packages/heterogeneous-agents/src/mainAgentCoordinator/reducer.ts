@@ -163,6 +163,7 @@ const openTurn = (state: MainAgentRunState, data: any, ctx: MainAgentReduceCtx):
   next.currentMainMessageId = mainMessageId;
   next.accContent = '';
   next.accReasoning = '';
+  next.lastReasoningSnapshotSeq = 0;
   next.lastTextSnapshotSeq = 0;
   next.turnMetadata = {};
   next.toolState = emptyToolState();
@@ -222,9 +223,23 @@ const reduceTextChunk = (state: MainAgentRunState, data: any): ReduceResult => {
 };
 
 const reduceReasoningChunk = (state: MainAgentRunState, data: any): ReduceResult => {
-  if (!data?.reasoning) return { intents: [], state };
   const next = copyState(state);
-  next.accReasoning = state.accReasoning + data.reasoning;
+  const snapshotMode = data?.snapshotMode;
+  const snapshotSeq = typeof data?.snapshotSeq === 'number' ? data.snapshotSeq : undefined;
+
+  // Mirrors `reduceTextChunk`: `replace` snapshots are idempotent under batch
+  // redelivery (a raw delta re-append would durably duplicate reasoning on a
+  // cold-replica retry), and the seq guard drops stale/out-of-order ones.
+  if (snapshotMode === 'replace' && snapshotSeq !== undefined) {
+    if (snapshotSeq <= state.lastReasoningSnapshotSeq) return { intents: [], state }; // stale snapshot
+    next.lastReasoningSnapshotSeq = snapshotSeq;
+    next.turnMetadata = { ...next.turnMetadata, heteroReasoningSnapshotSeq: snapshotSeq };
+    next.accReasoning = data.reasoning;
+  } else {
+    if (!data?.reasoning) return { intents: [], state };
+    next.accReasoning = state.accReasoning + data.reasoning;
+  }
+
   return {
     intents: [
       { kind: 'streamContent', messageId: next.currentAssistantId, reasoning: next.accReasoning },

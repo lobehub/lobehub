@@ -416,10 +416,11 @@ export const createGatewayEventHandler = (
   // Accumulated content from stream chunks (reset on each stream_start)
   let accumulatedContent = '';
   let accumulatedReasoning = '';
-  // Last applied `replace`-snapshot seq. Operation-monotonic (the producer
-  // never resets it across messages), so unlike the accumulators it is NOT
-  // reset on stream boundaries — a seq ≤ this is a redelivered duplicate.
+  // Last applied `replace`-snapshot seqs. Operation-monotonic (the producer
+  // never resets them across messages), so unlike the accumulators they are
+  // NOT reset on stream boundaries — a seq ≤ these is a redelivered duplicate.
   let lastTextSnapshotSeq = 0;
+  let lastReasoningSnapshotSeq = 0;
 
   // Tracks whether any server-confirmed state has actually arrived
   // (server-assigned assistant id, streamed text/reasoning/tools, or a SoT
@@ -636,17 +637,35 @@ export const createGatewayEventHandler = (
           }
 
           if (data.chunkType === 'reasoning' && data.reasoning) {
-            startReasoningIfNeeded();
-            accumulatedReasoning += data.reasoning;
-            hasStreamedContent = true;
-            get().internal_dispatchMessage(
-              {
-                id: currentAssistantMessageId,
-                type: 'updateMessage',
-                value: { reasoning: { content: accumulatedReasoning } },
-              },
-              dispatchContext,
-            );
+            // Same snapshot semantics as text above: `lh hetero exec`
+            // coalesces reasoning into `replace` snapshots; redelivered seqs
+            // are dropped instead of appended (which would duplicate the
+            // thinking text on a server-side batch retry).
+            const snapshotSeq =
+              data.snapshotMode === 'replace' && typeof data.snapshotSeq === 'number'
+                ? data.snapshotSeq
+                : undefined;
+
+            if (snapshotSeq !== undefined && snapshotSeq <= lastReasoningSnapshotSeq) {
+              // Redelivered snapshot — already applied.
+            } else {
+              startReasoningIfNeeded();
+              if (snapshotSeq === undefined) {
+                accumulatedReasoning += data.reasoning;
+              } else {
+                lastReasoningSnapshotSeq = snapshotSeq;
+                accumulatedReasoning = data.reasoning;
+              }
+              hasStreamedContent = true;
+              get().internal_dispatchMessage(
+                {
+                  id: currentAssistantMessageId,
+                  type: 'updateMessage',
+                  value: { reasoning: { content: accumulatedReasoning } },
+                },
+                dispatchContext,
+              );
+            }
           }
 
           if (data.chunkType === 'tools_calling' && data.toolsCalling) {

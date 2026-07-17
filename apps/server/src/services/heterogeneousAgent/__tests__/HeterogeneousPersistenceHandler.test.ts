@@ -361,6 +361,53 @@ describe('HeterogeneousPersistenceHandler', () => {
       expect(asst.metadata?.heteroTextSnapshotSeq).toBe(2);
     });
 
+    it('replaces reasoning snapshots idempotently instead of re-appending on redelivery', async () => {
+      const h = createHarness({
+        assistantMessageId: 'asst-1',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      await h.handler.ingest({
+        events: [
+          buildEvent('stream_chunk', 0, {
+            chunkType: 'reasoning',
+            reasoning: 'thinking hard',
+            snapshotMode: 'replace',
+            snapshotSeq: 1,
+          }),
+        ],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      // Redelivery reaching the reducer (a cold replica has an empty
+      // processedKeys map — simulated here with a different timestamp so the
+      // in-memory dedupe does not swallow the event first). A raw delta would
+      // re-append and durably double the reasoning; the snapshot must not.
+      await h.handler.ingest({
+        events: [
+          buildEvent(
+            'stream_chunk',
+            0,
+            {
+              chunkType: 'reasoning',
+              reasoning: 'thinking hard',
+              snapshotMode: 'replace',
+              snapshotSeq: 1,
+            },
+            1_700_000_000_999,
+          ),
+        ],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      const asst = h.messages.get('asst-1')!;
+      expect(asst.reasoning?.content).toBe('thinking hard'); // NOT doubled
+      expect(asst.metadata?.heteroReasoningSnapshotSeq).toBe(1);
+    });
+
     it('drops events with the same (stepIndex, type, timestamp, dataFingerprint) key', async () => {
       const h = createHarness({
         assistantMessageId: 'asst-1',
