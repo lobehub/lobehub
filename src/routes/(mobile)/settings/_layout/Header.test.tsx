@@ -47,6 +47,7 @@ describe('mobile settings Header', () => {
     ['members', 'setting:workspaceSetting.tab.members'],
     ['plans', 'subscription:tab.plans'],
     ['billing', 'subscription:tab.billing'],
+    ['credits', 'subscription:tab.credits'],
     ['devices', 'setting:tab.devices'],
     ['service-model', 'setting:tab.serviceModel'],
   ])('resolves the workspace %s title', (tab, title) => {

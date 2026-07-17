@@ -12,8 +12,10 @@ import { useWorkspaceSettingCategory } from './hooks/useCategory';
 import SideBar from './SideBar';
 
 const COMPACT_HEADER_TABS = new Set<string>([
+  WorkspaceSettingsTabs.APIKey,
   WorkspaceSettingsTabs.Billing,
   WorkspaceSettingsTabs.Creds,
+  WorkspaceSettingsTabs.Credits,
   WorkspaceSettingsTabs.Devices,
   WorkspaceSettingsTabs.General,
   WorkspaceSettingsTabs.Members,
