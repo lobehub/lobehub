@@ -75,8 +75,9 @@ interface DesiredGatewayConnection {
 
 interface ActualConnectionsSnapshot {
   /**
-   * False when the registered-ids call failed and the snapshot only covers
-   * live stats — dormant/hibernated connections may be missing from the map.
+   * True when registered ids were loaded successfully, making absence from
+   * `connections` authoritative. False means the snapshot only covers live
+   * stats, so dormant/hibernated connections may be missing from the map.
    */
   complete: boolean;
   /** connectionId → gateway status, or null for registered-only (pruned) ids. */
@@ -189,19 +190,25 @@ export class GatewayService {
     const { desired, desiredComplete, gated } = await this.buildDesiredConnections(
       serverDB,
       gateKeeper,
-      client,
     );
 
-    // Fetch actual AFTER the gated disconnects above so those ids have already
-    // dropped out of the gateway's view and don't get double-counted as stale.
     const actual = await this.fetchActualConnections(client);
+    const gatedDisconnected = actual
+      ? await this.disconnectGatedConnections(client, actual.connections, gated)
+      : 0;
 
     // A partial desired set would make healthy connections look stale, so only
     // run the disconnect pass when every platform loaded successfully. A
     // partial ACTUAL set is fine — the pass only disconnects ids it can see.
     let stale = 0;
     if (actual && desiredComplete) {
-      stale = await this.disconnectStaleConnections(client, serverDB, actual.connections, desired);
+      stale = await this.disconnectStaleConnections(
+        client,
+        serverDB,
+        actual.connections,
+        desired,
+        gated,
+      );
     } else if (actual) {
       log('Gateway sync: desired set incomplete, skipping stale-connection cleanup this round');
     }
@@ -209,6 +216,7 @@ export class GatewayService {
     // ── desired − actual → connect ──
 
     let connected = 0;
+    let deferred = 0;
     let skipped = 0;
     let failed = 0;
 
@@ -225,27 +233,22 @@ export class GatewayService {
             return;
           }
 
-          const status = await this.resolveGatewayStatus(client, provider.id, actual);
+          // Registered ids are the gateway's authoritative existence set. The
+          // connection DO owns health checks, reconnect/backoff and parked
+          // states, so a periodic reconcile must not wake every registered DO
+          // merely to inspect its runtime status.
+          if (actual?.connections.has(provider.id)) {
+            skipped++;
+            log('Gateway sync: %s already registered, skipping', provider.id);
+            return;
+          }
 
-          if (status === 'connected' || status === 'connecting') {
-            skipped++;
-            log('Gateway sync: %s already %s, skipping', provider.id, status);
-            return;
-          }
-          // Dormant: gateway is running sparse alarm-driven polling and will
-          // self-wake when a message arrives. Reconnecting here would defeat
-          // the purpose — only manual reconnect (startClient) should override.
-          if (status === 'dormant') {
-            skipped++;
-            log('Gateway sync: %s dormant, skipping (DO is sparse-polling)', provider.id);
-            return;
-          }
-          // "error" means credential/config issue (e.g. WeChat session expired
-          // because the account connected elsewhere). Auto-retry is pointless —
-          // only user action (saving new credentials) can fix it.
-          if (status === 'error') {
-            skipped++;
-            log('Gateway sync: %s in error state, skipping', provider.id);
+          // Without a complete registry snapshot, absence from live stats does
+          // not prove the connection is missing. Fail safe and retry next round
+          // instead of degrading to an unbounded per-DO status probe fan-out.
+          if (!actual?.complete) {
+            deferred++;
+            log('Gateway sync: %s absent from incomplete snapshot, deferring', provider.id);
             return;
           }
 
@@ -292,13 +295,16 @@ export class GatewayService {
     );
 
     log(
-      'Gateway sync complete in %dms: desired=%d actual=%s connected=%d skipped=%d gated=%d stale=%d failed=%d',
+      'Gateway sync complete in %dms: desired=%d actual=%s snapshotComplete=%s connected=%d skipped=%d deferred=%d gated=%d gatedDisconnected=%d stale=%d failed=%d',
       Date.now() - startedAt,
       desired.size,
       actual ? actual.connections.size : 'unavailable',
+      actual?.complete ?? false,
       connected,
       skipped,
-      gated,
+      deferred,
+      gated.size,
+      gatedDisconnected,
       stale,
       failed,
     );
@@ -308,24 +314,22 @@ export class GatewayService {
    * Build the set of connections that SHOULD exist on the gateway: enabled
    * persistent-mode providers whose owner passes the bot feature gate.
    *
-   * Paid-gated providers are disconnected inline (the generic stale pass
-   * can't produce their user-facing blocked message) and excluded from the
-   * desired set. If the gate check itself errors, the provider is kept in
-   * desired — a flaky subscription lookup must not tear down a healthy
-   * connection.
+   * Paid-gated providers are tracked separately and excluded from the desired
+   * set so the caller can disconnect only ids the gateway still holds. If the
+   * gate check itself errors, the provider is kept in desired — a flaky
+   * subscription lookup must not tear down a healthy connection.
    */
   private async buildDesiredConnections(
     serverDB: Awaited<ReturnType<typeof getServerDB>>,
     gateKeeper: KeyVaultsGateKeeper,
-    client: ReturnType<typeof getMessageGatewayClient>,
   ): Promise<{
     desired: Map<string, DesiredGatewayConnection>;
     desiredComplete: boolean;
-    gated: number;
+    gated: Set<string>;
   }> {
     const desired = new Map<string, DesiredGatewayConnection>();
     let desiredComplete = true;
-    let gated = 0;
+    const gated = new Set<string>();
 
     for (const definition of platformRegistry.listPlatforms()) {
       const platform = definition.id;
@@ -366,12 +370,7 @@ export class GatewayService {
           }
 
           if (!allowed) {
-            gated++;
-            try {
-              await client.disconnect(provider.id);
-            } catch (err) {
-              log('Gateway sync: paid-gated disconnect failed %s: %O', provider.id, err);
-            }
+            gated.add(provider.id);
             await updateBotRuntimeStatus({
               applicationId: provider.applicationId,
               errorMessage: getBotFeatureBlockedMessage(
@@ -381,7 +380,11 @@ export class GatewayService {
               platform,
               status: BOT_RUNTIME_STATUSES.failed,
             });
-            log('Gateway sync: paid-gated %s:%s, disconnected', platform, provider.applicationId);
+            log(
+              'Gateway sync: paid-gated %s:%s, excluded from desired set',
+              platform,
+              provider.applicationId,
+            );
             continue;
           }
 
@@ -397,46 +400,73 @@ export class GatewayService {
   }
 
   /**
+   * Disconnect paid-gated providers only when the gateway snapshot says the
+   * connection still exists. Providers stay enabled in the database, so an
+   * unconditional DELETE here would repeat forever after the first cleanup.
+   */
+  private async disconnectGatedConnections(
+    client: ReturnType<typeof getMessageGatewayClient>,
+    actual: Map<string, string | null>,
+    gated: Set<string>,
+  ): Promise<number> {
+    const connectionIds = [...gated].filter((id) => actual.has(id));
+    let disconnected = 0;
+
+    await pMap(
+      connectionIds,
+      async (id) => {
+        try {
+          await client.disconnect(id);
+          disconnected++;
+          log('Gateway sync: paid-gated connection %s disconnected', id);
+        } catch (err) {
+          log('Gateway sync: paid-gated disconnect failed %s: %O', id, err);
+        }
+      },
+      { concurrency: GATEWAY_SYNC_CONCURRENCY },
+    );
+
+    return disconnected;
+  }
+
+  /**
    * Snapshot the gateway's view of existing connections: live stats (with
    * status) unioned with registered ids (dormant/hibernated connections the
    * AdminDO stats already pruned — status unknown, hence `null`).
    *
-   * Returns null when stats are unavailable; callers then fall back to
-   * per-connection status checks and skip stale-connection cleanup. The
-   * registered-ids call is best-effort: an older gateway without the admin
-   * endpoint (mid-rollout) or a transient failure must not disable
-   * reconciliation for the live connections stats already covers — the stale
-   * pass only ever disconnects ids present in the snapshot, so a partial
-   * snapshot just cleans up less. `complete: false` marks the partial case so
-   * status resolution won't treat "missing from snapshot" as disconnected.
+   * Registered ids are the authoritative existence set, so a successful call
+   * produces a complete snapshot even when stats are unavailable. When only
+   * stats succeed, the partial snapshot can still drive safe stale cleanup,
+   * but desired ids missing from it are deferred rather than probed one by one.
+   * Returns null only when neither endpoint is available.
    */
   private async fetchActualConnections(
     client: ReturnType<typeof getMessageGatewayClient>,
   ): Promise<ActualConnectionsSnapshot | null> {
     const connections = new Map<string, string | null>();
+    let statsAvailable = false;
 
     try {
       const stats = await client.getStats();
+      statsAvailable = true;
       for (const conn of stats.connections) {
         connections.set(conn.connectionId, conn.state.status);
       }
     } catch (err) {
       log('Gateway sync: failed to fetch gateway stats snapshot: %O', err);
-      return null;
     }
 
-    let complete = true;
     try {
       const { ids } = await client.getRegisteredIds();
       for (const id of ids) {
         if (!connections.has(id)) connections.set(id, null);
       }
+      return { complete: true, connections };
     } catch (err) {
-      complete = false;
       log('Gateway sync: registered-ids unavailable, using stats-only snapshot: %O', err);
     }
 
-    return { complete, connections };
+    return statsAvailable ? { complete: false, connections } : null;
   }
 
   /**
@@ -451,9 +481,10 @@ export class GatewayService {
     serverDB: Awaited<ReturnType<typeof getServerDB>>,
     actual: Map<string, string | null>,
     desired: Map<string, DesiredGatewayConnection>,
+    gated: Set<string>,
   ): Promise<number> {
     const allStaleIds = [...actual.keys()].filter(
-      (id) => !desired.has(id) && !isMessengerConnectionId(id),
+      (id) => !desired.has(id) && !gated.has(id) && !isMessengerConnectionId(id),
     );
     if (allStaleIds.length === 0) return 0;
 
@@ -528,39 +559,6 @@ export class GatewayService {
     );
 
     return disconnected;
-  }
-
-  /**
-   * Resolve a connection's gateway status from the reconciliation snapshot,
-   * falling back to a per-connection status call when the snapshot is missing
-   * (admin endpoints down) or only knows the id from the registered set.
-   * Returns undefined when the status can't be determined — callers treat
-   * that as "attempt connect" (the gateway upserts on connectionId, so a
-   * redundant connect is safe).
-   */
-  private async resolveGatewayStatus(
-    client: ReturnType<typeof getMessageGatewayClient>,
-    connectionId: string,
-    actual: ActualConnectionsSnapshot | null,
-  ): Promise<string | undefined> {
-    if (actual) {
-      const snapshot = actual.connections.get(connectionId);
-      // Unknown to the gateway entirely → connect. Only trustworthy when the
-      // snapshot is complete — a stats-only snapshot misses dormant ids, and
-      // treating those as disconnected would reconnect sparse-polling DOs.
-      if (snapshot === undefined && actual.complete) return 'disconnected';
-      // Known status from stats.
-      if (snapshot !== undefined && snapshot !== null) return snapshot;
-      // Registered but pruned from stats (likely dormant), or missing from an
-      // incomplete snapshot — ask the DO itself.
-    }
-
-    try {
-      const status = await client.getStatus(connectionId);
-      return status.state.status;
-    } catch {
-      return undefined;
-    }
   }
 
   async stop(): Promise<void> {
