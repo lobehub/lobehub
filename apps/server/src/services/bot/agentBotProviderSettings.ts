@@ -64,8 +64,13 @@ export async function assertWatchKeywordsWritable(params: {
   const next = extractWatchKeywordEntries(params.settings);
   // Clearing (or never having) keywords is always allowed.
   if (next.length === 0) return;
-  const prev = extractWatchKeywordEntries(params.existingSettings ?? undefined);
-  if (JSON.stringify(prev) === JSON.stringify(next)) return;
+  // Only additions/edits turn on new monitoring capability. Removals and
+  // reorders of already-saved entries pass, so a downgraded plan can still
+  // prune stale keywords one row at a time.
+  const prev = new Set(
+    extractWatchKeywordEntries(params.existingSettings ?? undefined).map((e) => JSON.stringify(e)),
+  );
+  if (next.every((e) => prev.has(JSON.stringify(e)))) return;
 
   await assertBotFeatureAccess({
     action: 'manage',
@@ -104,15 +109,20 @@ export async function invalidateBotAfterUpdate(
   existing: BotInvalidationTarget,
   value: BotInvalidationDelta,
 ): Promise<void> {
-  // Watch-keyword presence feeds the gateway's edge-filtering capability
-  // (`messageMonitoring.enabled`), which is only sent at connect time — a
-  // flip needs a runtime restart so the reconcile pass reconnects with the
-  // fresh capability. Same-presence keyword edits don't need it. Webhook-mode
-  // providers are excluded: gateway reconciliation intentionally skips them,
-  // so a stop here would take the bot offline with no automatic reconnect —
-  // and their registration (capabilities included) is refreshed on config
-  // save anyway.
+  const service = new GatewayService();
+
+  // Watch-keyword presence feeds the external gateway's edge-filtering
+  // capability (`messageMonitoring.enabled`), which is only sent at connect
+  // time — a flip needs a runtime stop so the reconcile pass reconnects with
+  // the fresh capability. Same-presence keyword edits don't need it. Scoped
+  // tightly to where that reconnect actually exists:
+  //  - only when the external message gateway is in use (local/Vercel
+  //    runtimes have no reconcile loop, a stop there is plain downtime — and
+  //    they don't consume the capability anyway);
+  //  - only for non-webhook modes (reconciliation skips webhook providers;
+  //    their registration refreshes capabilities on config save).
   const monitoringFlipped =
+    service.useMessageGateway &&
     value.settings !== undefined &&
     existing.settings !== undefined &&
     extractWatchKeywordEntries(value.settings).length > 0 !==
@@ -127,7 +137,6 @@ export async function invalidateBotAfterUpdate(
     monitoringFlipped;
 
   if (shouldStopRuntime) {
-    const service = new GatewayService();
     await service.stopClient(existing.platform, existing.applicationId, existing.userId);
   }
 

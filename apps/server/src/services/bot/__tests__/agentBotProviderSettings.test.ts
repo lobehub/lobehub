@@ -5,13 +5,19 @@ import { assertWatchKeywordsWritable, invalidateBotAfterUpdate } from '../agentB
 const mockAssertBotFeatureAccess = vi.hoisted(() => vi.fn());
 const mockStopClient = vi.hoisted(() => vi.fn());
 const mockInvalidateBot = vi.hoisted(() => vi.fn());
+const gatewayState = vi.hoisted(() => ({ useMessageGateway: true }));
 
 vi.mock('@/business/server/bot/featureAccess', () => ({
   assertBotFeatureAccess: mockAssertBotFeatureAccess,
 }));
 
 vi.mock('@/server/services/gateway', () => ({
-  GatewayService: vi.fn(() => ({ stopClient: mockStopClient })),
+  GatewayService: vi.fn(() => ({
+    stopClient: mockStopClient,
+    get useMessageGateway() {
+      return gatewayState.useMessageGateway;
+    },
+  })),
 }));
 
 vi.mock('../BotMessageRouter', () => ({
@@ -76,6 +82,35 @@ describe('assertWatchKeywordsWritable', () => {
     expect(mockAssertBotFeatureAccess).toHaveBeenCalledTimes(1);
   });
 
+  it('skips pure removals that leave other keywords in place', async () => {
+    // Downgrade path: a locked plan must be able to prune stale rows one at
+    // a time, not only via a single clear-everything edit.
+    await assertWatchKeywordsWritable({
+      ...base,
+      existingSettings: { watchKeywords: [{ keyword: 'bug' }, { keyword: 'outage' }] },
+      settings: { watchKeywords: [{ keyword: 'bug' }] },
+    });
+    expect(mockAssertBotFeatureAccess).not.toHaveBeenCalled();
+  });
+
+  it('skips reorders of already-saved keywords', async () => {
+    await assertWatchKeywordsWritable({
+      ...base,
+      existingSettings: { watchKeywords: [{ keyword: 'bug' }, { keyword: 'outage' }] },
+      settings: { watchKeywords: [{ keyword: 'outage' }, { keyword: 'bug' }] },
+    });
+    expect(mockAssertBotFeatureAccess).not.toHaveBeenCalled();
+  });
+
+  it('asserts feature access when a keyword is edited in place', async () => {
+    await assertWatchKeywordsWritable({
+      ...base,
+      existingSettings: { watchKeywords: [{ keyword: 'bug' }] },
+      settings: { watchKeywords: [{ keyword: 'incident' }] },
+    });
+    expect(mockAssertBotFeatureAccess).toHaveBeenCalledTimes(1);
+  });
+
   it('propagates the denial from assertBotFeatureAccess', async () => {
     mockAssertBotFeatureAccess.mockRejectedValueOnce(new Error('paid plan required'));
 
@@ -91,6 +126,7 @@ describe('assertWatchKeywordsWritable', () => {
 describe('invalidateBotAfterUpdate — monitoring capability flips', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    gatewayState.useMessageGateway = true;
     mockStopClient.mockResolvedValue(undefined);
     mockInvalidateBot.mockResolvedValue(undefined);
   });
@@ -116,6 +152,28 @@ describe('invalidateBotAfterUpdate — monitoring capability flips', () => {
       { ...target, settings: { watchKeywords: [{ keyword: 'bug' }] } },
       { settings: { watchKeywords: [] } },
     );
+
+    expect(mockStopClient).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not stop the runtime on keyword flips without the external gateway', async () => {
+    // Local/Vercel runtimes have no reconcile loop to restart a stopped
+    // client — and they never consume the edge capability the flip feeds.
+    gatewayState.useMessageGateway = false;
+
+    await invalidateBotAfterUpdate(
+      { ...target, settings: {} },
+      { settings: { watchKeywords: [{ keyword: 'bug' }] } },
+    );
+
+    expect(mockStopClient).not.toHaveBeenCalled();
+    expect(mockInvalidateBot).toHaveBeenCalledTimes(1);
+  });
+
+  it('still stops the runtime for disable/rebind even without the external gateway', async () => {
+    gatewayState.useMessageGateway = false;
+
+    await invalidateBotAfterUpdate({ ...target, settings: {} }, { enabled: false });
 
     expect(mockStopClient).toHaveBeenCalledTimes(1);
   });
