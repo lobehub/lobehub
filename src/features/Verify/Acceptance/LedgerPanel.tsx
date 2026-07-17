@@ -11,7 +11,7 @@ import {
   HelpCircle,
   Loader2,
   PanelRightClose,
-  Wrench,
+  RefreshCw,
   XCircle,
 } from 'lucide-react';
 import { memo } from 'react';
@@ -60,7 +60,7 @@ const STATUS_META: Record<string, { color: string; icon: typeof CheckCircle2 }> 
   errored: { color: cssVar.colorWarning, icon: CircleAlert },
   failed: { color: cssVar.colorError, icon: XCircle },
   passed: { color: cssVar.colorSuccess, icon: CheckCircle2 },
-  repairing: { color: cssVar.colorInfo, icon: Wrench },
+  repairing: { color: cssVar.colorWarning, icon: RefreshCw },
   uncertain: { color: cssVar.colorWarning, icon: HelpCircle },
   verifying: { color: cssVar.colorInfo, icon: Loader2 },
 };

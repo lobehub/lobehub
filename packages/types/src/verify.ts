@@ -141,6 +141,8 @@ export type VerifyRunGroupFeedbackEntry = Omit<AcceptanceGroupFeedback, 'roundIn
 /** Generic acceptance extension bag for cross-subject state we have not modeled yet. */
 export interface AcceptanceMetadata {
   [key: string]: unknown;
+  /** User-set display-title override for the acceptance (sidebar rename). */
+  title?: string;
 }
 
 /**

@@ -689,17 +689,23 @@ export class AcceptanceService {
 
   /** Best-effort subject header info for the bundle (title may be gone). */
   resolveSubject = async (acceptance: AcceptanceItem): Promise<AcceptanceSubjectSummary> => {
-    let title: string | null = null;
-    try {
-      title =
-        (
-          await this.findSubject(
-            acceptance.subjectType as AcceptanceSubjectType,
-            acceptance.subjectId,
-          )
-        )?.title ?? null;
-    } catch (error) {
-      log('resolveSubject failed (non-fatal): %O', error);
+    // A user rename wins over the subject's own title — the sidebar entry is
+    // renamed without touching the source topic/task/document.
+    const override = acceptance.metadata?.title;
+    let title: string | null =
+      typeof override === 'string' && override.trim() ? override.trim() : null;
+    if (!title) {
+      try {
+        title =
+          (
+            await this.findSubject(
+              acceptance.subjectType as AcceptanceSubjectType,
+              acceptance.subjectId,
+            )
+          )?.title ?? null;
+      } catch (error) {
+        log('resolveSubject failed (non-fatal): %O', error);
+      }
     }
     return {
       id: acceptance.subjectId,

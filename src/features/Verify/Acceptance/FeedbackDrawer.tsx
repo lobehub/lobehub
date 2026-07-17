@@ -27,7 +27,7 @@ const styles = createStaticStyles(({ css }) => ({
      The drawer is an audit trail; rows read as entries in a ledger. Roomy
      vertical rhythm: cramped rows made the trail read as one dense block. */
   row: css`
-    padding-block: 14px;
+    padding-block: 20px;
     padding-inline: 8px;
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadius};
@@ -96,7 +96,7 @@ const EntryRow = memo<{
   return (
     <Flexbox
       className={cx(styles.row, entry.checkId && styles.clickable)}
-      gap={6}
+      gap={8}
       style={entry.stale ? { opacity: 0.55 } : undefined}
       onClick={entry.checkId ? () => onJumpToCheck(entry.checkId!) : undefined}
     >

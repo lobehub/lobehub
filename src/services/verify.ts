@@ -190,6 +190,17 @@ export class VerifyService {
   /** Stamp the aggregate `repairing` after the send-back dispatch. */
   markAcceptanceRepairing = (id: string) => lambdaClient.acceptance.markRepairing.mutate({ id });
 
+  /** Rename the acceptance's sidebar entry (a metadata title override). */
+  renameAcceptance = (id: string, title: string) =>
+    lambdaClient.acceptance.rename.mutate({ id, title });
+
+  /** Owner override of the acceptance's decision state from the list. */
+  updateAcceptanceStatus = (id: string, status: 'accepted' | 'delivered' | 'rejected') =>
+    lambdaClient.acceptance.updateStatus.mutate({ id, status });
+
+  /** Delete the acceptance aggregate (its round reports detach, not delete). */
+  deleteAcceptance = (id: string) => lambdaClient.acceptance.remove.mutate({ id });
+
   // ---- per-run plan ----
   getVerifyState = (operationId: string): Promise<VerifyStateResponse | null> =>
     lambdaClient.verify.getVerifyState.query({

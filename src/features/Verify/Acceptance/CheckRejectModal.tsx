@@ -93,9 +93,12 @@ const styles = createStaticStyles(({ css }) => ({
   thumbActive: css`
     border-color: ${cssVar.colorPrimary};
   `,
-  /** The fullscreen zoom stage — its native scrolling doubles as panning. */
+  /** The fullscreen zoom stage — its native scrolling doubles as panning.
+      Flex + the inner frame's `margin: auto` keeps the image centered when it
+      fits the stage, and scrolls from the edges once it grows past it. */
   viewport: css`
     overflow: auto;
+    display: flex;
     flex: 1;
 
     min-width: 0;
@@ -103,6 +106,11 @@ const styles = createStaticStyles(({ css }) => ({
     border-radius: ${cssVar.borderRadiusLG};
 
     background: ${cssVar.colorFillQuaternary};
+  `,
+  /** The centered image frame inside the stage — `margin: auto` absorbs the
+      free space on both axes (centering) and collapses to 0 on overflow. */
+  viewportInner: css`
+    margin: auto;
   `,
   /** The zoom pill floats bottom-center over the stage — controls live with
       the thing they control, not in a detached toolbar row. */
@@ -425,16 +433,18 @@ const CheckRejectContent = memo<CheckRejectModalProps>(
               onChange={(event) => setComment(event.target.value)}
               onPaste={handlePaste}
             />
-            {/* One row hugging the input — the thumbnails and the picker
-                belong to the note they back, not to the modal footer. */}
-            <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
+            {/* The picker sits on its own row right under the input; the
+                thumbnails stack BELOW it. Keeping them on separate rows means
+                the button never shifts as screenshots pile up — its position
+                is fixed, independent of the attachment count. */}
+            <Flexbox align={'flex-start'} gap={8}>
+              <AttachmentUploadButton disabled={loading} onFiles={uploadFiles} />
               <AttachmentStrip
                 attachments={attachments}
                 disabled={loading}
                 uploading={uploading}
                 onRemove={remove}
               />
-              <AttachmentUploadButton disabled={loading} onFiles={uploadFiles} />
             </Flexbox>
           </Flexbox>
         </Flexbox>
@@ -492,16 +502,18 @@ const CheckRejectContent = memo<CheckRejectModalProps>(
               {thumbnails}
               <div className={styles.fullscreenBody} style={{ position: 'relative' }}>
                 <div className={styles.viewport} ref={viewportRef}>
-                  <AnnotationCanvas
-                    annotations={activeAnnotations}
-                    src={activeEvidence.fileUrl}
-                    imageWidth={
-                      // -2 keeps the frame's own border inside the viewport at
-                      // fit zoom, so no phantom horizontal scrollbar.
-                      viewportWidth ? Math.max(viewportWidth * zoom - 2, 0) : undefined
-                    }
-                    {...canvasHandlers}
-                  />
+                  <div className={styles.viewportInner}>
+                    <AnnotationCanvas
+                      annotations={activeAnnotations}
+                      src={activeEvidence.fileUrl}
+                      imageWidth={
+                        // -2 keeps the frame's own border inside the viewport at
+                        // fit zoom, so no phantom horizontal scrollbar.
+                        viewportWidth ? Math.max(viewportWidth * zoom - 2, 0) : undefined
+                      }
+                      {...canvasHandlers}
+                    />
+                  </div>
                 </div>
                 <div className={styles.zoomBar}>
                   <ActionIcon

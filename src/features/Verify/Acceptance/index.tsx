@@ -29,6 +29,7 @@ import {
   Loader2,
   MessagesSquare,
   PanelRightOpen,
+  RefreshCw,
   RotateCcw,
   SquareArrowOutUpRight,
 } from 'lucide-react';
@@ -330,41 +331,52 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
     icon: typeof BadgeCheck;
     label: string;
     spin?: boolean;
-  } = LIVE_STATUSES.has(acceptance.status)
-    ? {
-        bg: cssVar.colorInfoBg,
-        color: cssVar.colorInfo,
-        icon: Loader2,
-        label: t(`acceptance.status.${acceptance.status}`),
-        spin: true,
-      }
-    : acceptance.status === 'accepted'
+  } =
+    acceptance.status === 'repairing'
       ? {
-          bg: cssVar.colorSuccessBg,
-          color: cssVar.colorSuccess,
-          icon: BadgeCheck,
-          label: t('acceptance.status.accepted'),
+          // A repair round is an in-progress TASK — warn-coloured spinning
+          // refresh, matching the system's task-process cue, not a neutral verify.
+          bg: cssVar.colorWarningBg,
+          color: cssVar.colorWarning,
+          icon: RefreshCw,
+          label: t('acceptance.status.repairing'),
+          spin: true,
         }
-      : acceptance.status === 'rejected'
+      : LIVE_STATUSES.has(acceptance.status)
         ? {
-            bg: cssVar.colorErrorBg,
-            color: cssVar.colorError,
-            icon: RotateCcw,
-            label: t('acceptance.status.rejected'),
+            bg: cssVar.colorInfoBg,
+            color: cssVar.colorInfo,
+            icon: Loader2,
+            label: t(`acceptance.status.${acceptance.status}`),
+            spin: true,
           }
-        : acceptance.status === 'errored'
+        : acceptance.status === 'accepted'
           ? {
-              bg: cssVar.colorWarningBg,
-              color: cssVar.colorWarning,
-              icon: HelpCircle,
-              label: t('acceptance.status.errored'),
+              bg: cssVar.colorSuccessBg,
+              color: cssVar.colorSuccess,
+              icon: BadgeCheck,
+              label: t('acceptance.status.accepted'),
             }
-          : {
-              bg: cssVar.colorInfoBg,
-              color: cssVar.colorInfo,
-              icon: CircleDashed,
-              label: t('acceptance.verdict.inProgress'),
-            };
+          : acceptance.status === 'rejected'
+            ? {
+                bg: cssVar.colorErrorBg,
+                color: cssVar.colorError,
+                icon: RotateCcw,
+                label: t('acceptance.status.rejected'),
+              }
+            : acceptance.status === 'errored'
+              ? {
+                  bg: cssVar.colorWarningBg,
+                  color: cssVar.colorWarning,
+                  icon: HelpCircle,
+                  label: t('acceptance.status.errored'),
+                }
+              : {
+                  bg: cssVar.colorInfoBg,
+                  color: cssVar.colorInfo,
+                  icon: CircleDashed,
+                  label: t('acceptance.verdict.inProgress'),
+                };
 
   const runAction = async (action: () => Promise<unknown>) => {
     try {
@@ -440,17 +452,17 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
       statusText: t('acceptance.banner.rejected'),
       subText: currentRound?.run.decisionDetail?.comment ?? t('acceptance.banner.rejectedHint'),
     },
+    // The status line stands alone in every settled state — a grey stats echo
+    // (`N 通过 · …`) under it read as an unresolved caveat and just added noise.
     settled: allConfirmed
       ? {
-          // The done line stands alone — a grey stats echo under it reads as
-          // an unresolved caveat (review feedback).
           statusText: t('acceptance.bar.progressDone', { total: reviewTotal }),
           subText: undefined,
         }
       : reviewDone === 0
         ? {
             statusText: t('acceptance.bar.progressZero', { total: reviewTotal }),
-            subText: `${countsText} · ${t('acceptance.banner.decisionHint')}`,
+            subText: undefined,
           }
         : {
             statusText: t('acceptance.bar.progress', {
@@ -458,7 +470,7 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
               rest: reviewTotal - reviewDone,
               total: reviewTotal,
             }),
-            subText: `${countsText} · ${t('acceptance.banner.decisionHint')}`,
+            subText: undefined,
           },
   }[barState];
 
@@ -881,6 +893,7 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
               acceptedCount={reviewDone}
               feedbackCount={activeFeedbackCount}
               pending={pending}
+              repairing={acceptance.status === 'repairing'}
               rerunAvailable={Boolean(origin?.topic)}
               rerunPending={rerunPending}
               state={barState}
@@ -909,10 +922,13 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
           handle: opening happens from the page-corner toggle, closing from the
           ledger's own header action. On narrow viewports it opens as a masked
           drawer over the report — dismissable by tapping outside — instead of
-          shrinking the report into an unreadable column. */}
+          shrinking the report into an unreadable column. The panel's own
+          fold icon is the close affordance (same as wide mode), so the Drawer's
+          built-in close button is suppressed — one collapse handle, not two. */}
       {isNarrowViewport ? (
         <Drawer
           noHeader
+          closable={false}
           containerMaxWidth={'100%'}
           open={ledgerExpand}
           placement={'right'}
@@ -921,7 +937,6 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
           onClose={() => setLedgerExpand(false)}
         >
           <LedgerPanel
-            hideCollapse
             highlight={highlightRound}
             rounds={rounds}
             onCollapse={() => setLedgerExpand(false)}
