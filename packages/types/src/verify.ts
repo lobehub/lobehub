@@ -99,12 +99,13 @@ export interface AcceptanceConfig {
   verifyRubricId?: string;
 }
 
-/** Generic acceptance extension bag for cross-subject state we have not modeled yet. */
 /**
  * User feedback addressed to a check GROUP (business category) rather than any
  * single check — the "this concern doesn't belong to a check I could reject"
- * channel. Same staleness rule as check rejects: an entry is consumed once a
- * round newer than `roundIndex` lands.
+ * channel. Stored on the round it judges ({@link VerifyRunDecisionDetail});
+ * this is the derived view the acceptance page consumes, with `roundIndex`
+ * read off that run, so the check-reject staleness rule (consumed once a
+ * newer round lands) applies structurally.
  */
 export interface AcceptanceGroupFeedback {
   /** The group's category label ('' targets the uncategorized bucket). */
@@ -112,13 +113,16 @@ export interface AcceptanceGroupFeedback {
   comment: string;
   /** When the feedback was written (ISO 8601). */
   createdAt: string;
-  /** The acceptance round that was current when the feedback was written. */
+  /** The round the feedback was addressed to — its run's own round index. */
   roundIndex: number;
 }
 
+/** One group-scoped feedback entry as stored on a round's decision detail. */
+export type VerifyRunGroupFeedbackEntry = Omit<AcceptanceGroupFeedback, 'roundIndex'>;
+
+/** Generic acceptance extension bag for cross-subject state we have not modeled yet. */
 export interface AcceptanceMetadata {
   [key: string]: unknown;
-  groupFeedback?: AcceptanceGroupFeedback[];
 }
 
 /**
@@ -238,6 +242,14 @@ export interface VerifyRunDecisionDetail {
   decidedBy?: string;
   /** Attachments backing the decision (annotated screenshots, etc.) — FKs to files. */
   fileIds?: string[];
+  /**
+   * Group-scoped review feedback addressed to THIS round — concerns that
+   * belong to no single check (whose checks may well be accepted) yet must
+   * reach the next round. Lives here, not on the acceptance aggregate, so a
+   * round carries its own feedback (and takes it along when deleted) and
+   * staleness falls out of the round chain.
+   */
+  groupFeedback?: VerifyRunGroupFeedbackEntry[];
 }
 
 /**

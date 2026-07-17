@@ -250,6 +250,14 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
 
   const { acceptance, checks, isOwner, latestReport, origin, rounds, subject } = data;
   const currentRound = rounds.at(-1);
+  // Group-scoped feedback lives on each round's decision detail — flatten the
+  // chain into the derived per-entry view (roundIndex from the carrying run).
+  const groupFeedbackEntries = rounds.flatMap((round) =>
+    (round.run.decisionDetail?.groupFeedback ?? []).map((entry) => ({
+      ...entry,
+      roundIndex: round.run.roundIndex ?? 0,
+    })),
+  );
   // The latest coding round's context — rendered with the latest report card
   // (it describes what THAT round verified), not as aggregate-level identity.
   // A round with no scenario predates the column and is a coding round; a
@@ -735,7 +743,7 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
             currentRound={currentRound?.run.roundIndex ?? 0}
             expanded={expanded}
             filter={filter}
-            groupFeedback={acceptance.metadata?.groupFeedback ?? []}
+            groupFeedback={groupFeedbackEntries}
             reviewPending={pending}
             round={roundFilter}
             onGroupFeedback={handleGroupFeedback}

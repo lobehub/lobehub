@@ -300,19 +300,30 @@ export const acceptanceRouter = router({
       const acceptance = await resolveAcceptance(ctx, input.id);
       assertWorkspaceRowManageable(ctx, acceptance.userId, 'acceptance');
 
+      // The feedback is addressed to the CURRENT round and lives on its run's
+      // decision detail — the same home as the round's terminal accept/reject
+      // note, so staleness falls out of the round chain and a deleted round
+      // takes its feedback along.
       const { runs } = await ctx.acceptanceService.loadRounds(acceptance.id);
+      const currentRun = runs.at(-1);
+      if (!currentRun) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'No verification round to address feedback to',
+        });
+      }
+
       const entry = {
         category: input.category,
         comment: input.comment,
         createdAt: new Date().toISOString(),
-        roundIndex: runs.at(-1)?.roundIndex ?? 0,
       };
-      const metadata = {
-        ...acceptance.metadata,
-        groupFeedback: [...(acceptance.metadata?.groupFeedback ?? []), entry],
-      };
-      await ctx.acceptanceService.acceptanceModel.update(acceptance.id, { metadata });
-      return { entry, success: true };
+      await new VerifyRunModel(
+        ctx.serverDB,
+        acceptance.userId,
+        acceptance.workspaceId ?? undefined,
+      ).appendGroupFeedback(currentRun.id, entry);
+      return { entry: { ...entry, roundIndex: currentRun.roundIndex }, success: true };
     }),
 
   /**

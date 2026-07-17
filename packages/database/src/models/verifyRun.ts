@@ -2,6 +2,7 @@ import type { VerifyVisibility } from '@lobechat/const/verify';
 import type {
   VerifyCheckItem,
   VerifyRunDecisionDetail,
+  VerifyRunGroupFeedbackEntry,
   VerifyRunSource,
   VerifyRunStatus,
 } from '@lobechat/types';
@@ -284,6 +285,31 @@ export class VerifyRunModel {
    * closes or re-opens the acceptance loop). Free-form verb by design — see the
    * `user_decision` column comment.
    */
+  /**
+   * Append one group-scoped feedback entry to this round's decision detail.
+   * Read-merge-write on the jsonb bag; the round carries its feedback (and
+   * takes it along when the round is deleted).
+   */
+  appendGroupFeedback = async (
+    runId: string,
+    entry: VerifyRunGroupFeedbackEntry,
+  ): Promise<VerifyRunDecisionDetail> => {
+    const run = await this.db.query.verifyRuns.findFirst({
+      where: and(eq(verifyRuns.id, runId), this.ownership()),
+    });
+    if (!run) throw new Error(`Verify run "${runId}" not found in the current workspace`);
+
+    const decisionDetail: VerifyRunDecisionDetail = {
+      ...run.decisionDetail,
+      groupFeedback: [...(run.decisionDetail?.groupFeedback ?? []), entry],
+    };
+    await this.db
+      .update(verifyRuns)
+      .set({ decisionDetail })
+      .where(and(eq(verifyRuns.id, runId), this.ownership()));
+    return decisionDetail;
+  };
+
   setDecision = async (
     runId: string,
     userDecision: string,
