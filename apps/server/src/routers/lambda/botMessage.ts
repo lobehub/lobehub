@@ -112,7 +112,9 @@ const createServiceForCredentials = (
     }
     case 'wechat': {
       return new WechatMessageService(
-        new WechatApiClient(credentials.botToken, credentials.botId),
+        // `baseUrl` is issued during QR confirmation and must be honored when
+        // it differs from the default endpoint (see wechat/protocol-spec.md).
+        new WechatApiClient(credentials.botToken, credentials.botId, credentials.baseUrl),
         applicationId,
       );
     }

@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { resolveWechatQrContent, WechatQrSetup } from './Wechat';
+import { resolveWechatQrImageSrc, WechatQrSetup } from './Wechat';
 
 const messengerServiceMocks = vi.hoisted(() => ({
   createWechatQrSession: vi.fn(),
@@ -30,9 +30,6 @@ vi.mock('@lobehub/ui/base-ui', () => ({
 
 vi.mock('antd', () => ({
   App: { useApp: () => ({ message: { success: vi.fn() } }) },
-  QRCode: ({ value }: { value: string }) => (
-    <span aria-label="Generated QR code" data-value={value} role="img" />
-  ),
 }));
 
 vi.mock('antd-style', () => ({
@@ -85,32 +82,29 @@ describe('WechatQrSetup', () => {
     );
   });
 
-  it('generates a QR code when WeChat returns a landing-page URL', async () => {
-    const qrUrl = 'https://liteapp.weixin.qq.com/q/example?qrcode=token&bot_type=3';
+  it('renders a QR image URL directly instead of re-encoding it as a QR payload', async () => {
+    const qrImageUrl = 'https://weixin.qq.com/x/cAbCdEfGhIj';
     messengerServiceMocks.createWechatQrSession.mockResolvedValueOnce({
-      imageContent: qrUrl,
+      imageContent: qrImageUrl,
       sessionId: 'session-1',
       status: 'wait',
     });
 
     render(<WechatQrSetup autoStart onConfirmed={vi.fn()} />);
 
-    expect(await screen.findByRole('img', { name: 'Generated QR code' })).toHaveAttribute(
-      'data-value',
-      qrUrl,
+    expect(await screen.findByRole('img', { name: 'Set up WeChat' })).toHaveAttribute(
+      'data-src',
+      qrImageUrl,
     );
   });
 });
 
-describe('resolveWechatQrContent', () => {
+describe('resolveWechatQrImageSrc', () => {
   it.each([
-    ['data:image/png;base64,abc', { type: 'image', value: 'data:image/png;base64,abc' }],
-    [
-      'https://liteapp.weixin.qq.com/q/qr-code',
-      { type: 'value', value: 'https://liteapp.weixin.qq.com/q/qr-code' },
-    ],
-    ['  raw-base64  ', { type: 'image', value: 'data:image/png;base64,raw-base64' }],
+    ['data:image/png;base64,abc', 'data:image/png;base64,abc'],
+    ['https://weixin.qq.com/x/cAbCdEfGhIj', 'https://weixin.qq.com/x/cAbCdEfGhIj'],
+    ['  raw-base64  ', 'data:image/png;base64,raw-base64'],
   ])('normalizes %s', (input, expected) => {
-    expect(resolveWechatQrContent(input)).toEqual(expected);
+    expect(resolveWechatQrImageSrc(input)).toBe(expected);
   });
 });

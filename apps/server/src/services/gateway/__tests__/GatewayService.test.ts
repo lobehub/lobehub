@@ -277,6 +277,9 @@ describe('GatewayService', () => {
       expect(connectionId).toBe('messenger:wechat:alice@im.wechat:user-user-1');
       expect(mockGatewayClient.connect).toHaveBeenCalledWith({
         applicationId: 'bot@im.wechat',
+        // Per-user messenger connections have no bot-provider settings row, so
+        // gated capabilities always resolve to disabled.
+        capabilities: { messageMonitoring: { enabled: false } },
         connectionId,
         connectionMode: 'polling',
         credentials: {
