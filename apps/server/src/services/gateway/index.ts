@@ -193,9 +193,7 @@ export class GatewayService {
     );
 
     const actual = await this.fetchActualConnections(client);
-    const gatedDisconnected = actual
-      ? await this.disconnectGatedConnections(client, actual.connections, gated)
-      : 0;
+    const gatedDisconnected = await this.disconnectGatedConnections(client, actual, gated);
 
     // A partial desired set would make healthy connections look stale, so only
     // run the disconnect pass when every platform loaded successfully. A
@@ -233,11 +231,13 @@ export class GatewayService {
             return;
           }
 
-          // Registered ids are the gateway's authoritative existence set. The
-          // connection DO owns health checks, reconnect/backoff and parked
-          // states, so a periodic reconcile must not wake every registered DO
-          // merely to inspect its runtime status.
-          if (actual?.connections.has(provider.id)) {
+          // Registered ids are the gateway's authoritative existence set. Use
+          // the status already present in live stats to recover an explicitly
+          // disconnected connection, but never wake registered-only DOs merely
+          // to inspect their runtime status.
+          const exists = actual?.connections.has(provider.id) ?? false;
+          const snapshotStatus = actual?.connections.get(provider.id);
+          if (exists && snapshotStatus !== 'disconnected') {
             skipped++;
             log('Gateway sync: %s already registered, skipping', provider.id);
             return;
@@ -246,10 +246,14 @@ export class GatewayService {
           // Without a complete registry snapshot, absence from live stats does
           // not prove the connection is missing. Fail safe and retry next round
           // instead of degrading to an unbounded per-DO status probe fan-out.
-          if (!actual?.complete) {
+          if (!exists && !actual?.complete) {
             deferred++;
             log('Gateway sync: %s absent from incomplete snapshot, deferring', provider.id);
             return;
+          }
+
+          if (snapshotStatus === 'disconnected') {
+            log('Gateway sync: %s reported disconnected in stats, reconnecting', provider.id);
           }
 
           const webhookPath = `/api/agent/webhooks/${platform}/${provider.applicationId}`;
@@ -400,16 +404,20 @@ export class GatewayService {
   }
 
   /**
-   * Disconnect paid-gated providers only when the gateway snapshot says the
-   * connection still exists. Providers stay enabled in the database, so an
-   * unconditional DELETE here would repeat forever after the first cleanup.
+   * With a complete registry snapshot, disconnect paid-gated providers only
+   * when the connection still exists. When the snapshot is partial or
+   * unavailable, preserve access enforcement by falling back to disconnecting
+   * every gated id; that bounded set is independent of the desired-connection
+   * status fan-out this reconciliation avoids.
    */
   private async disconnectGatedConnections(
     client: ReturnType<typeof getMessageGatewayClient>,
-    actual: Map<string, string | null>,
+    actual: ActualConnectionsSnapshot | null,
     gated: Set<string>,
   ): Promise<number> {
-    const connectionIds = [...gated].filter((id) => actual.has(id));
+    const connectionIds = actual?.complete
+      ? [...gated].filter((id) => actual.connections.has(id))
+      : [...gated];
     let disconnected = 0;
 
     await pMap(

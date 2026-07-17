@@ -373,6 +373,42 @@ describe('GatewayService', () => {
       );
     });
 
+    it.each([
+      { snapshot: 'stats-only', statsUnavailable: false },
+      { snapshot: 'unavailable', statsUnavailable: true },
+    ])(
+      'disconnects a paid-gated provider when the registry snapshot is $snapshot',
+      async ({ statsUnavailable }) => {
+        mockFindEnabledByPlatform.mockImplementation(async (_db, platform) =>
+          platform === 'wechat'
+            ? [
+                {
+                  applicationId: 'wechat-app',
+                  credentials: { botToken: 'token' },
+                  id: 'wechat-provider',
+                  settings: {},
+                  userId: 'free-user',
+                },
+              ]
+            : [],
+        );
+        mockResolveConnectionMode.mockReturnValue('polling');
+        mockIsBotFeatureAccessAllowed.mockResolvedValue(false);
+        mockGatewayClient.getRegisteredIds.mockRejectedValue(
+          new Error('registered-ids unavailable'),
+        );
+        if (statsUnavailable) {
+          mockGatewayClient.getStats.mockRejectedValue(new Error('stats unavailable'));
+        }
+
+        await service.ensureRunning();
+
+        expect(mockGatewayClient.disconnect).toHaveBeenCalledWith('wechat-provider');
+        expect(mockGatewayClient.getStatus).not.toHaveBeenCalled();
+        expect(mockGatewayClient.connect).not.toHaveBeenCalled();
+      },
+    );
+
     it('sets connected status for sync connect result', async () => {
       mockFindEnabledByPlatform.mockResolvedValue([
         {
@@ -838,6 +874,35 @@ describe('GatewayService', () => {
 
       expect(mockGatewayClient.getStatus).not.toHaveBeenCalled();
       expect(mockGatewayClient.connect).not.toHaveBeenCalled();
+      expect(mockGatewayClient.disconnect).not.toHaveBeenCalled();
+    });
+
+    it('reconnects a desired connection reported disconnected by stats without probing its DO', async () => {
+      mockFindEnabledByPlatform.mockImplementation(async (_db: unknown, platform: string) =>
+        platform === 'discord' ? [provider] : [],
+      );
+      mockGatewayClient.getStats.mockResolvedValue({
+        byPlatform: {},
+        connections: [
+          {
+            connectionId: 'prov-1',
+            platform: 'discord',
+            state: { status: 'disconnected' },
+            userId: 'u1',
+          },
+        ],
+        total: 1,
+      });
+      mockGatewayClient.getRegisteredIds.mockResolvedValue({ ids: ['prov-1'] });
+      mockGatewayClient.connect.mockResolvedValue({ status: 'connecting' });
+
+      await service.ensureRunning();
+
+      expect(mockGatewayClient.getStatus).not.toHaveBeenCalled();
+      expect(mockGatewayClient.connect).toHaveBeenCalledWith(
+        expect.objectContaining({ connectionId: 'prov-1' }),
+        { ensure: true },
+      );
       expect(mockGatewayClient.disconnect).not.toHaveBeenCalled();
     });
 
