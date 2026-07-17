@@ -42,8 +42,14 @@ export interface RejectableEvidence {
 interface DraftAnnotationEntry {
   comment: string;
   evidenceId: string;
+  /** Stable identity — rapid move/resize updates must never key off object
+      identity, which a stale render closure invalidates mid-gesture. */
+  key: number;
   rect: AcceptanceReviewAnnotation['rect'];
 }
+
+let draftAnnotationSeq = 0;
+const nextAnnotationKey = () => ++draftAnnotationSeq;
 
 /** What survives a refresh — typed feedback is too costly to lose to one F5. */
 interface RejectDraft {
@@ -87,9 +93,9 @@ const CheckRejectContent = memo<CheckRejectModalProps>(
       // Only restore regions whose evidence still exists — a new round may
       // have replaced the artifacts since the draft was written.
       () =>
-        (draft?.annotations ?? []).filter((entry) =>
-          evidence.some((item) => item.id === entry.evidenceId),
-        ),
+        (draft?.annotations ?? [])
+          .filter((entry) => evidence.some((item) => item.id === entry.evidenceId))
+          .map((entry) => ({ ...entry, key: nextAnnotationKey() })),
     );
 
     // Persist the draft as it is typed; an empty draft cleans the slot up.
@@ -191,27 +197,35 @@ const CheckRejectContent = memo<CheckRejectModalProps>(
                   onDraw={(rect) =>
                     setAnnotations((previous) => [
                       ...previous,
-                      { comment: '', evidenceId: activeEvidence.id, rect },
+                      {
+                        comment: '',
+                        evidenceId: activeEvidence.id,
+                        key: nextAnnotationKey(),
+                        rect,
+                      },
                     ])
                   }
-                  onRemove={(index) =>
-                    setAnnotations((previous) =>
-                      previous.filter((item) => item !== activeAnnotations[index]),
-                    )
-                  }
-                  onUpdate={(index, rect) =>
-                    setAnnotations((previous) =>
-                      previous.map((item) =>
-                        item === activeAnnotations[index] ? { ...item, rect } : item,
-                      ),
-                    )
-                  }
+                  onRemove={(index) => {
+                    const target = activeAnnotations[index];
+                    if (target)
+                      setAnnotations((previous) =>
+                        previous.filter((item) => item.key !== target.key),
+                      );
+                  }}
+                  onUpdate={(index, rect) => {
+                    const target = activeAnnotations[index];
+                    if (target)
+                      setAnnotations((previous) =>
+                        previous.map((item) =>
+                          item.key === target.key ? { ...item, rect } : item,
+                        ),
+                      );
+                  }}
                 />
               )}
               {activeAnnotations.map((annotation, index) => {
-                const globalIndex = annotations.indexOf(annotation);
                 return (
-                  <Flexbox horizontal align={'flex-start'} gap={8} key={globalIndex}>
+                  <Flexbox horizontal align={'flex-start'} gap={8} key={annotation.key}>
                     <Text
                       fontSize={12}
                       style={{ flex: 'none', lineHeight: '30px' }}
@@ -229,7 +243,9 @@ const CheckRejectContent = memo<CheckRejectModalProps>(
                       onChange={(event) =>
                         setAnnotations((previous) =>
                           previous.map((item) =>
-                            item === annotation ? { ...item, comment: event.target.value } : item,
+                            item.key === annotation.key
+                              ? { ...item, comment: event.target.value }
+                              : item,
                           ),
                         )
                       }
