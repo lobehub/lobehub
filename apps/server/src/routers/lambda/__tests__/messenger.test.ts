@@ -27,6 +27,7 @@ const {
   mockGetServerFeatureFlagsStateFromRuntimeConfig,
   mockHasAnyPermission,
   mockInitWithEnvKey,
+  mockInvalidateMessengerBot,
   mockIsMessengerPlatformEnabled,
   mockListAccountLinks,
   mockListUserWorkspaces,
@@ -61,6 +62,7 @@ const {
   mockGetServerFeatureFlagsStateFromRuntimeConfig: vi.fn(),
   mockHasAnyPermission: vi.fn(),
   mockInitWithEnvKey: vi.fn(),
+  mockInvalidateMessengerBot: vi.fn(),
   mockIsMessengerPlatformEnabled: vi.fn(),
   mockListAccountLinks: vi.fn(),
   mockListUserWorkspaces: vi.fn(),
@@ -159,6 +161,7 @@ vi.mock('@/server/services/messenger', () => ({
   acquireWechatQrFinalizeLock: mockAcquireWechatQrFinalizeLock,
   consumeLinkToken: mockConsumeLinkToken,
   consumeWechatQrSession: mockConsumeWechatQrSession,
+  getMessengerRouter: () => ({ invalidateBot: mockInvalidateMessengerBot }),
   MessengerDiscordBinder: vi.fn(),
   messengerPlatformRegistry: {
     listSerializedPlatforms: vi.fn().mockReturnValue([]),
@@ -428,6 +431,9 @@ describe('messengerRouter.pollWechatQrSession', () => {
       expect.objectContaining({ activeAgentId: 'agent-inbox', workspaceId: null }),
       { kind: 'gatekeeper' },
     );
+    // The rescan replaced the QR-issued credentials — the cached Chat SDK bot
+    // must be evicted so webhooks stop replying through the old token/baseUrl.
+    expect(mockInvalidateMessengerBot).toHaveBeenCalledWith('wechat:wechat-user');
   });
 
   it('rolls back the persisted connection when the Message Gateway poller cannot start', async () => {

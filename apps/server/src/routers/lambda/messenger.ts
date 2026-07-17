@@ -42,6 +42,7 @@ import {
   acquireWechatQrFinalizeLock,
   consumeLinkToken,
   consumeWechatQrSession,
+  getMessengerRouter,
   issueWechatQrSession,
   MessengerDiscordBinder,
   messengerPlatformRegistry,
@@ -120,11 +121,16 @@ const disconnectWechatAccountLink = async (
   link: SafeMessengerAccountLink,
   userId: string,
 ): Promise<void> => {
+  const installationKey = wechatInstallationKey(link.tenantId);
   await new GatewayService().disconnectUserMessenger({
-    installationKey: wechatInstallationKey(link.tenantId),
+    installationKey,
     platform: 'wechat',
     userId,
   });
+  // A rescan replaces the QR-issued token/baseUrl under the same installation
+  // key — drop the cached Chat SDK bot so webhooks rebuild it from the new
+  // credentials instead of replying through the stale client.
+  getMessengerRouter().invalidateBot(installationKey);
 
   if (!link.applicationId) return;
   const redis = getAgentRuntimeRedisClient();

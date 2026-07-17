@@ -41,7 +41,7 @@ import { TelegramMessageService } from '@/server/services/bot/platforms/telegram
 import { WechatMessageService } from '@/server/services/bot/platforms/wechat/service';
 import { GatewayService } from '@/server/services/gateway';
 import { getBotRuntimeStatus } from '@/server/services/gateway/runtimeStatus';
-import { messengerPlatformRegistry } from '@/server/services/messenger';
+import { getMessengerRouter, messengerPlatformRegistry } from '@/server/services/messenger';
 import { TELEGRAM_INSTALLATION_KEY } from '@/server/services/messenger/installations/telegram';
 import { wechatInstallationKey } from '@/server/services/messenger/installations/wechat';
 
@@ -131,11 +131,15 @@ const disconnectWechatAccountLink = async (
   link: SafeMessengerAccountLink,
   userId: string,
 ): Promise<void> => {
+  const installationKey = wechatInstallationKey(link.tenantId);
   await new GatewayService().disconnectUserMessenger({
-    installationKey: wechatInstallationKey(link.tenantId),
+    installationKey,
     platform: 'wechat',
     userId,
   });
+  // Credential bundles rotate under the same installation key on rescan —
+  // evict the cached Chat SDK bot so webhooks rebuild it with fresh creds.
+  getMessengerRouter().invalidateBot(installationKey);
   if (!link.applicationId) return;
 
   const redis = getAgentRuntimeRedisClient();

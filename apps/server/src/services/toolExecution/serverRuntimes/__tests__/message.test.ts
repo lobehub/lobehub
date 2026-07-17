@@ -84,8 +84,10 @@ vi.mock('@/config/messenger', () => ({
 }));
 
 const mockListSerializedPlatforms = vi.fn();
+const mockInvalidateMessengerBot = vi.fn();
 
 vi.mock('@/server/services/messenger', () => ({
+  getMessengerRouter: () => ({ invalidateBot: mockInvalidateMessengerBot }),
   messengerPlatformRegistry: {
     listSerializedPlatforms: mockListSerializedPlatforms,
   },
@@ -509,6 +511,7 @@ describe('messageRuntime', () => {
       mockLinkFindById,
       mockLinkFindByPlatform,
       mockDisconnectUserMessenger,
+      mockInvalidateMessengerBot,
       mockGetEnabledMessengerPlatforms,
       mockGetMessengerSlackConfig,
       mockGetMessengerDiscordConfig,
@@ -872,6 +875,8 @@ describe('messageRuntime', () => {
       expect(mockDisconnectUserMessenger).toHaveBeenCalledWith(
         expect.objectContaining({ platform: 'wechat' }),
       );
+      // Rotated credentials must not keep serving through the cached bot.
+      expect(mockInvalidateMessengerBot).toHaveBeenCalledWith('wechat:alice@im.wechat');
       // WeChat lives in `messenger_account_links`, never the installs table.
       expect(mockFindInstallationById).not.toHaveBeenCalled();
       expect(mockMarkRevoked).not.toHaveBeenCalled();

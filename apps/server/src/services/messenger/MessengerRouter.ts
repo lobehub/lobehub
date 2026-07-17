@@ -233,6 +233,17 @@ export class MessengerRouter {
    *  web QR and therefore does not expose `/start`). */
   private readonly commands: MessengerCommand[] = this.buildCommands();
 
+  /**
+   * Drop the cached Chat SDK bot for an install so the next webhook rebuilds
+   * it from freshly resolved credentials. Must be called whenever an install's
+   * credential bundle is replaced or removed (e.g. a WeChat rescan rotates the
+   * QR-issued bot token / baseUrl) — otherwise this process keeps replying
+   * through the stale client until restart.
+   */
+  invalidateBot(installationKey: string): void {
+    this.bots.delete(installationKey);
+  }
+
   private getCommandsForPlatform(platform: MessengerPlatform): MessengerCommand[] {
     if (platform !== 'wechat') return this.commands;
     return this.commands.filter((command) => !WECHAT_UNSUPPORTED_COMMANDS.has(command.name));
