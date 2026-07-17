@@ -43,11 +43,14 @@ function resolveWs() {
   }
 
   if (cliRoot) {
-    const cliRootWsPath = path.join(cliRoot, 'node_modules', 'ws');
+    // createRequire, not a hand-built <cliRoot>/node_modules/ws path: pnpm
+    // links a package's deps NEXT TO it (.pnpm/<pkg>@<v>/node_modules/ws),
+    // so only Node's real resolution walk anchored inside cliRoot finds ws
+    // across both npm and pnpm layouts.
     try {
-      return require(cliRootWsPath);
+      return require('node:module').createRequire(path.join(cliRoot, 'package.json'))('ws');
     } catch {
-      attempted.push(cliRootWsPath + ' (via .skill-meta.json cliRoot)');
+      attempted.push("createRequire('ws') from " + cliRoot + ' (via .skill-meta.json cliRoot)');
     }
   }
 
