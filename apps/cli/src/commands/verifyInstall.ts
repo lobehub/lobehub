@@ -70,7 +70,8 @@ function readSkillMeta(skillDir: string): SkillMeta | undefined {
   if (!existsSync(metaPath)) return undefined;
   try {
     const parsed = JSON.parse(readFileSync(metaPath, 'utf8'));
-    if (!semver.valid(parsed?.version)) return undefined;
+    if (parsed?.name !== SKILL_NAME) return undefined;
+    if (!semver.valid(parsed.version)) return undefined;
     return parsed;
   } catch {
     return undefined;
@@ -121,7 +122,7 @@ function installOne(
 
   if (exists && !meta && !force) {
     return {
-      message: `${path.join(target, '.skill-meta.json')} not found — this looks like a hand-written or pre-existing skill dir, refusing to overwrite. Pass --force to replace it.`,
+      message: `${path.join(target, '.skill-meta.json')} is missing or is not a ${SKILL_NAME} marker — this looks like a hand-written or pre-existing skill dir, refusing to overwrite. Pass --force to replace it.`,
       status: 'refused',
       target,
     };

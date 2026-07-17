@@ -16,6 +16,16 @@ set -euo pipefail
 SLUG="${1:?Usage: report-init.sh <slug> [title]}"
 TITLE="${2:-$SLUG}"
 
+json_escape() {
+  local s=$1
+  s=${s//\\/\\\\}
+  s=${s//\"/\\\"}
+  s=${s//$'\n'/\\n}
+  s=${s//$'\r'/\\r}
+  s=${s//$'\t'/\\t}
+  printf '%s' "$s"
+}
+
 REPO_ROOT="$(pwd)"
 TS="$(date +%Y%m%d-%H%M%S)"
 DIR="$REPO_ROOT/.records/reports/$TS-$SLUG"
@@ -55,11 +65,11 @@ EOF
 # build / CDP dev instance; that goes on the plan item's \`method\`).
 cat > "$DIR/result.json" << EOF
 {
-  "title": "$TITLE",
+  "title": "$(json_escape "$TITLE")",
   "scenario": "coding",
-  "createdAt": "$DATE_ISO",
-  "branch": "$BRANCH",
-  "commit": "$COMMIT",
+  "createdAt": "$(json_escape "$DATE_ISO")",
+  "branch": "$(json_escape "$BRANCH")",
+  "commit": "$(json_escape "$COMMIT")",
   "surfaces": [],
   "entry": "",
   "plan": [],

@@ -260,6 +260,25 @@ describe('runVerifyInstall — edge cases', () => {
     expect(readFileSync(path.join(target, 'SKILL.md'), 'utf8')).toBe('# agent-testing');
   });
 
+  it('marker from another tool → refuses instead of trusting its version; --force replaces', () => {
+    const cwd = makeCwd();
+    const target = path.join(cwd, '.claude', 'skills', 'agent-testing');
+    mkdirSync(target, { recursive: true });
+    writeFileSync(path.join(target, 'SKILL.md'), '# someone else’s skill');
+    writeFileSync(
+      path.join(target, '.skill-meta.json'),
+      JSON.stringify({ name: 'other', version: '999.0.0' }),
+    );
+
+    const refused = runVerifyInstall({ cwd });
+    expect(refused.results[0].status).toBe('refused');
+    expect(readFileSync(path.join(target, 'SKILL.md'), 'utf8')).toBe('# someone else’s skill');
+
+    const forced = runVerifyInstall({ cwd, force: true });
+    expect(forced.results[0].status).toBe('updated');
+    expect(readFileSync(path.join(target, 'SKILL.md'), 'utf8')).toBe('# agent-testing');
+  });
+
   it('consumer cwd not a git repo → installs anyway, reports isGitRepo: false', () => {
     const cwd = makeCwd();
     mkdirSync(path.join(cwd, '.claude', 'skills'), { recursive: true });
