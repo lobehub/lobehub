@@ -1289,6 +1289,47 @@ describe('HeterogeneousPersistenceHandler', () => {
       expect(asst.error.message).toContain('was not found');
     });
 
+    it('finish() must not downgrade an in-stream status-guide error with a flat message', async () => {
+      // Remote CC relays an API failure (529 overloaded / rate limit) as an
+      // in-stream `error` event whose data the adapter already classified into
+      // the structured status-guide shape (`agentType` + `code`). Older CLIs
+      // then send a finish error flattened to a bare `{ message }` — writing
+      // that over the persisted structured error would demote the client from
+      // the dedicated guide card to the generic error alert.
+      const h = createHarness({
+        assistantMessageId: 'asst-1',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      const overloadedMessage = 'API Error: 529 Overloaded. This is a server-side issue.';
+      await h.handler.ingest({
+        events: [
+          buildEvent('error', 0, {
+            agentType: 'claude-code',
+            code: 'overloaded',
+            error: overloadedMessage,
+            message: overloadedMessage,
+            stderr: overloadedMessage,
+          }),
+        ],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      await h.handler.finish({
+        error: { message: overloadedMessage, type: 'AgentRuntimeError' },
+        operationId: 'op-1',
+        result: 'error',
+      });
+
+      const asst = h.messages.get('asst-1')!;
+      expect(asst.error.body).toMatchObject({
+        agentType: 'claude-code',
+        code: 'overloaded',
+      });
+    });
+
     it('finish() with NO prior ingest bootstraps state and writes the error (spawn-fail path)', async () => {
       // The real process-level failure shape: spawn ENOENT produces ZERO
       // stream events, so no ingest ever created an OperationState. finish()

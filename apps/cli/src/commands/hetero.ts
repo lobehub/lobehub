@@ -18,6 +18,7 @@ import type {
 import {
   classifyHeteroProcessFailure,
   createFileStoreImageUploader,
+  isHeteroStatusGuideErrorData,
   spawnAgent,
 } from '@lobechat/heterogeneous-agents/spawn';
 import type { Command } from 'commander';
@@ -645,6 +646,12 @@ const exec = async (options: ExecOptions): Promise<void> => {
    *                      and still exit 0, so the exit code alone is not enough)
    *   terminalErrorMessage — the message from that terminal `error` event, used
    *                      as the task-level error detail in the finish payload
+   *   terminalErrorData — the full structured payload of that terminal `error`
+   *                      event when the adapter already classified it into a
+   *                      status-guide error (overloaded / rate_limit / …); the
+   *                      finish leg forwards it verbatim as the error `body` so
+   *                      the client renders the dedicated guide instead of the
+   *                      generic error card
    *   stderrContent  — accumulated stderr (only when interceptResumeErrors=true)
    */
   const runOneAgent = async (
@@ -659,6 +666,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
     sessionId: string | undefined;
     signal: NodeJS.Signals | null;
     stderrContent: string;
+    terminalErrorData: Record<string, unknown> | undefined;
     terminalErrorMessage: string | undefined;
   }> => {
     // One raw-dump file pair per spawn attempt (the resume retry is a second
@@ -750,6 +758,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
     let resumeNotFound = false;
     let sawTerminalError = false;
     let terminalErrorMessage: string | undefined;
+    let terminalErrorData: Record<string, unknown> | undefined;
     const ingestError = false;
     try {
       for await (const event of handle.events) {
@@ -773,6 +782,11 @@ const exec = async (options: ExecOptions): Promise<void> => {
           sawTerminalError = true;
           const data = event.data as Record<string, unknown> | undefined;
           terminalErrorMessage = String(data?.message ?? data?.error ?? '') || undefined;
+          // Keep the adapter's already-classified status-guide payload
+          // (overloaded / rate_limit carry `agentType` + `code`) so the finish
+          // leg doesn't flatten it back to a bare string — the process-failure
+          // classifier there only knows cli_not_found / auth_required.
+          terminalErrorData = isHeteroStatusGuideErrorData(data) ? data : undefined;
         }
         if (emitJsonl) process.stdout.write(`${JSON.stringify(event)}\n`);
         serverIngester?.push(event);
@@ -831,6 +845,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
       sessionId: handle.sessionId,
       signal,
       stderrContent,
+      terminalErrorData,
       terminalErrorMessage,
     };
   };
@@ -929,10 +944,22 @@ const exec = async (options: ExecOptions): Promise<void> => {
     // payload small.
     const stderrTail = result.stderrContent.trim();
     const errorDetail = result.terminalErrorMessage || stderrTail;
-    const finishError =
-      !exitedClean && errorDetail
-        ? buildFinishError(errorDetail.slice(-1024), 'AgentRuntimeError')
-        : undefined;
+    // The adapter's in-stream classification (overloaded / rate_limit) already
+    // carries the structured status-guide body — forward it verbatim instead of
+    // re-deriving from the flattened message via the process-only classifier,
+    // which would drop `agentType`/`code` and demote the client UI to the
+    // generic error card.
+    const finishError = exitedClean
+      ? undefined
+      : result.terminalErrorData
+        ? {
+            body: { ...result.terminalErrorData },
+            message: String(result.terminalErrorData.message ?? errorDetail ?? ''),
+            type: 'AgentRuntimeError',
+          }
+        : errorDetail
+          ? buildFinishError(errorDetail.slice(-1024), 'AgentRuntimeError')
+          : undefined;
 
     try {
       await sink.finish({

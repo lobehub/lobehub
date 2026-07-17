@@ -11,6 +11,7 @@ import type {
 } from '@lobechat/heterogeneous-agents';
 import {
   createMainAgentRunState,
+  isHeteroStatusGuideErrorData,
   reduceMainAgent,
   rehydrateSubagentRunsState,
 } from '@lobechat/heterogeneous-agents';
@@ -1013,7 +1014,18 @@ export class HeterogeneousPersistenceHandler {
       // terminal flush and the in-stream write produce one classified error shape.
       // A structured `body` (status-guide error: agentType + code) passes
       // through untouched — the client's guide UI gates on it.
-      updateValue.error = formatErrorForState(error);
+      //
+      // Never DOWNGRADE, though: the in-stream `setError` path may already have
+      // persisted the adapter's classified status-guide error on this assistant,
+      // while older CLIs flatten the finish error to a bare `{ message }`.
+      // Overwriting would demote the client from the dedicated guide card to
+      // the generic error alert — keep the richer persisted error instead.
+      const overwritesGuideError =
+        !isHeteroStatusGuideErrorData(error.body) &&
+        isHeteroStatusGuideErrorData(
+          (await this.deps.messageModel.findById(state.main.currentAssistantId))?.error?.body,
+        );
+      if (!overwritesGuideError) updateValue.error = formatErrorForState(error);
     }
 
     if (Object.keys(updateValue).length > 0) {

@@ -1024,6 +1024,66 @@ describe('hetero exec command', () => {
     });
   });
 
+  it('forwards the adapter-classified status-guide error as the finish error body', async () => {
+    // The adapter classifies overloaded / rate-limit terminal errors into a
+    // structured payload carrying `agentType` + `code` — the pair the client's
+    // status-guide UI gates on. The finish leg must forward it verbatim instead
+    // of flattening to `{ message }`, otherwise flushFinalState overwrites the
+    // in-stream persisted error and the client falls back to the generic alert.
+    const overloadedMessage =
+      'API Error: 529 Overloaded. This is a server-side issue, usually temporary.';
+    mockSpawnAgent.mockReturnValue(
+      createFakeHandle({
+        events: [
+          {
+            data: {
+              agentType: 'claude-code',
+              clearEchoedContent: true,
+              code: 'overloaded',
+              error: overloadedMessage,
+              message: overloadedMessage,
+              stderr: overloadedMessage,
+            },
+            operationId: 'op-err-guide',
+            stepIndex: 0,
+            timestamp: 1,
+            type: 'error',
+          },
+        ],
+        exitCode: 0,
+      }),
+    );
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'claude-code',
+      '--prompt',
+      'hi',
+      '--topic',
+      'topic-1',
+      '--operation-id',
+      'op-err-guide',
+      '--render',
+      'none',
+    ]);
+
+    expect(mockHeteroFinishMutate).toHaveBeenCalledTimes(1);
+    expect(mockHeteroFinishMutate.mock.calls[0][0]).toMatchObject({
+      error: {
+        body: {
+          agentType: 'claude-code',
+          code: 'overloaded',
+          message: overloadedMessage,
+        },
+        message: overloadedMessage,
+        type: 'AgentRuntimeError',
+      },
+      result: 'error',
+    });
+  });
+
   it('resets the per-message text accumulator at message boundaries (no cross-message duplication)', async () => {
     // The `replace` snapshot accumulator must not span
     // message boundaries. Two assistant messages separated by a
