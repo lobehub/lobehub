@@ -19,11 +19,19 @@ const GLOBAL_TENANT_ID = '';
 
 const APPLICATION_UNIQUE_CONSTRAINT = 'messenger_account_links_platform_tenant_application_unique';
 
-/** Returns the violated constraint name when `error` is a Postgres unique violation. */
+/**
+ * Returns the violated constraint name when `error` is a Postgres unique
+ * violation. Diagnostics land on `cause` (drizzle/pg wrappers) or on the error
+ * itself (node-postgres driver), so read both levels.
+ */
 const uniqueViolationConstraint = (error: unknown): string | undefined => {
-  const pgError = error as { cause?: { code?: string; constraint?: string }; code?: string };
+  const pgError = error as {
+    cause?: { code?: string; constraint?: string };
+    code?: string;
+    constraint?: string;
+  };
   const code = pgError.cause?.code ?? pgError.code;
-  return code === '23505' ? pgError.cause?.constraint : undefined;
+  return code === '23505' ? (pgError.cause?.constraint ?? pgError.constraint) : undefined;
 };
 
 /**
