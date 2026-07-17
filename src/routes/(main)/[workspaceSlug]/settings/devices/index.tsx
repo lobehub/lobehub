@@ -8,7 +8,6 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { DeviceConnectModal, DeviceManager } from '@/features/DeviceManager';
-import WorkspaceSettingsTitle from '@/features/WorkspaceSetting/Title';
 
 /**
  * Workspace device settings: two pools behind tabs (LOBE-11690) —
@@ -25,7 +24,6 @@ const WorkspaceDevicesSetting = memo(() => {
   return (
     <>
       <Flexbox gap={16}>
-        <WorkspaceSettingsTitle>{t('tab.devices')}</WorkspaceSettingsTitle>
         <Tabs
           activeKey={visibility}
           items={[
