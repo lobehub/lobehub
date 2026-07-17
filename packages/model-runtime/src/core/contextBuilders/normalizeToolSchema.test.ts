@@ -125,6 +125,48 @@ describe('normalizeToolJsonSchema', () => {
     expect('enum' in result.items).toBe(false);
   });
 
+  it('strips a null member from a nullable enum but keeps the string values and type', () => {
+    const result = normalizeToolJsonSchema({
+      enum: ['heartbeat', 'schedule', null],
+      type: ['string', 'null'],
+    });
+
+    expect(result.enum).toEqual(['heartbeat', 'schedule']);
+    expect(result.type).toEqual(['string', 'null']);
+  });
+
+  it('drops an enum that held only null', () => {
+    const result = normalizeToolJsonSchema({
+      enum: [null],
+      type: ['string', 'null'],
+    });
+
+    expect('enum' in result).toBe(false);
+  });
+
+  it('keeps a numeric enum with no null members untouched', () => {
+    const result = normalizeToolJsonSchema({
+      enum: [0, 1, 2, 3, 4],
+      type: 'number',
+    });
+
+    expect(result.enum).toEqual([0, 1, 2, 3, 4]);
+  });
+
+  it('strips a null enum member on a nested property (Gemini `enum[i]: cannot be empty`)', () => {
+    const result = normalizeToolJsonSchema({
+      properties: {
+        automationMode: {
+          enum: ['heartbeat', 'schedule', null],
+          type: ['string', 'null'],
+        },
+      },
+      type: 'object',
+    });
+
+    expect(result.properties.automationMode.enum).toEqual(['heartbeat', 'schedule']);
+  });
+
   it('keeps boolean additionalProperties untouched (a valid, accepted form)', () => {
     expect(normalizeToolJsonSchema({ additionalProperties: false, type: 'object' })).toEqual({
       additionalProperties: false,
