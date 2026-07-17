@@ -1267,6 +1267,8 @@ table messenger_account_links {
   tenant_id varchar(255) [not null, default: '']
   platform_user_id varchar(255) [not null]
   platform_username text
+  application_id varchar(255)
+  credentials text
   active_agent_id text
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
