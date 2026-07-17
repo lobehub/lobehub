@@ -146,11 +146,17 @@ const DeviceItem = memo<DeviceItemProps>(({ device, isCurrent, onSelect, selecte
   // reachable" is the answer needed to pick between rows, and hover can't
   // answer it for a whole list at once — nor at all on touch.
   //
-  // Online reads the gateway's live `connectedAt`. Offline can only report
-  // `lastSeen`, which is stamped on register — and every client registers
-  // right before opening its WS (`gatewayConnectionSrv`, CLI `registerDevice`)
-  // — so it means "last CONNECTED", not "last active". The copy says exactly
-  // that; it becomes a true last-active once a writer stamps liveness.
+  // Online reads the gateway's live `connectedAt` from `channels[0]` — the
+  // newest connection, since the pool is sorted newest-first in
+  // `deviceGateway.queryDeviceList`. That is the same channel
+  // `sortDevicesByActivity` ranks this row by, so the label always explains
+  // the row's position.
+  //
+  // Offline can only report `lastSeen`, which is stamped on register — and
+  // every client registers right before opening its WS
+  // (`gatewayConnectionSrv`, CLI `registerDevice`) — so it means "last
+  // CONNECTED", not "last active". The copy says exactly that; it becomes a
+  // true last-active once a writer stamps liveness.
   const activityText = online
     ? t('devices.channel.connected', {
         time: dayjs(channels[0]?.connectedAt ?? device.lastSeen).fromNow(),

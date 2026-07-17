@@ -115,11 +115,23 @@ export class DeviceGateway {
       return devices.map((d) => ({
         // `channels` may be absent if the gateway worker deploy lags behind the
         // server (separate Cloudflare deploy); tolerate the legacy flat shape.
-        channels: (d.channels ?? []).map((c) => ({
-          channel: c.channel,
-          connectedAt: new Date(c.connectedAt).toISOString(),
-          connectionId: c.connectionId,
-        })),
+        //
+        // Sorted newest-first because every consumer reads `channels[0]` as
+        // "this device's current connection" — the settings row's
+        // "Connected {time}", a ghost row's `lastSeen`, its hostname/platform
+        // fallback — while `sortDevicesByActivity` ranks by the FRESHEST
+        // channel. The gateway promises no order, so leaving it raw lets a
+        // multi-channel device rank by one connection and get labelled with
+        // another. Normalising here (the single entry point both `listDevices`
+        // and `getScopedOnlineDevices` pull channels through) makes
+        // `channels[0]` mean the same thing everywhere.
+        channels: (d.channels ?? [])
+          .map((c) => ({
+            channel: c.channel,
+            connectedAt: new Date(c.connectedAt).toISOString(),
+            connectionId: c.connectionId,
+          }))
+          .sort((a, b) => Date.parse(b.connectedAt) - Date.parse(a.connectedAt)),
         deviceId: d.deviceId,
         hostname: d.hostname,
         lastSeen: new Date(d.connectedAt).toISOString(),
