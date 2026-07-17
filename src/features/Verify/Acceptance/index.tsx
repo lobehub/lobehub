@@ -69,9 +69,9 @@ import { openAcceptModal, openRejectModal } from './modals';
 const buildRepairPrompt = (acceptanceId: string) =>
   `请用 LobeHub CLI 读取验收 ${acceptanceId} 的最新 review 反馈：
 
-lh verify acceptance view ${acceptanceId}
+lh acceptance feedback ${acceptanceId} --actionable
 
-输出里标记为「▶ actionable」的条目（含各检查项的评论与截图圈选标注）就是本轮要处理的全部反馈。请逐条修改代码；完成后重新执行验证，并把新一轮验证结果 ingest 回同一个 acceptance（复用既有检查项 id，语义有变化的用 supersedes 迭代）。`;
+输出的条目（含各检查项的评论、截图圈选标注与附件）就是本轮要处理的全部反馈。请逐条修改代码；完成后重新执行验证，并把新一轮验证结果 ingest 回同一个 acceptance（复用既有检查项 id，语义有变化的用 supersedes 迭代）。`;
 
 const styles = createStaticStyles(({ css }) => ({
   banner: css`
@@ -195,6 +195,9 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
   // same narrow regime the list panel uses).
   const { lg = true } = useResponsive();
   const isNarrowViewport = !lg;
+  // The portal embed is container-narrow even in a wide window — both regimes
+  // get the one-line compact toolbar.
+  const compactToolbar = isEmbedded || isNarrowViewport;
 
   const [filter, setFilter] = useState<CheckFilter>('all');
   const [roundFilter, setRoundFilter] = useState<number | null>(null);
@@ -589,8 +592,10 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
             </Flexbox>
 
             {/* Origin — the conversation this acceptance belongs to (agent +
-                topic). Owner-only: the server redacts it for shared links. */}
-            {(origin?.agent || origin?.topic) && (
+                topic). Owner-only: the server redacts it for shared links.
+                Hidden in the portal embed: that surface already lives inside
+                the origin conversation. */}
+            {!isEmbedded && (origin?.agent || origin?.topic) && (
               <Flexbox horizontal align={'center'} gap={16} wrap={'wrap'}>
                 {origin.agent && (
                   <AgentProfilePopup
@@ -728,34 +733,60 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
           </Flexbox>
 
           {/* Check union — the complete inventory, familiar sections (P-14).
-              The row wraps so narrow embeds (the chat portal) drop the filter
-              controls to a second line instead of crushing the text vertical. */}
-          <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
+              Narrow surfaces (the chat portal embed, sub-lg viewports) trade
+              the Segmented for a compact Select so the toolbar stays one
+              line; wide viewports keep the glanceable Segmented. */}
+          <Flexbox horizontal align={'center'} gap={8} wrap={compactToolbar ? 'nowrap' : 'wrap'}>
             <Text strong style={{ fontSize: 14, whiteSpace: 'nowrap' }}>
               {t('acceptance.checks.title')}
             </Text>
             <span className={styles.countBadge}>{counts.total}</span>
             <Flexbox flex={1} />
-            <Segmented
-              size={'small'}
-              value={filter}
-              options={[
-                { label: t('acceptance.filter.all', { count: counts.total }), value: 'all' },
-                {
-                  label: t('acceptance.filter.pending', { count: counts.pending }),
-                  value: 'pending',
-                },
-                {
-                  label: t('acceptance.filter.needsFix', { count: counts.needsFix }),
-                  value: 'needsFix',
-                },
-                {
-                  label: t('acceptance.filter.accepted', { count: counts.accepted }),
-                  value: 'accepted',
-                },
-              ]}
-              onChange={(value) => setFilter(value as CheckFilter)}
-            />
+            {compactToolbar ? (
+              <Select
+                size={'small'}
+                style={{ height: 34, width: 118 }}
+                value={filter}
+                variant={'filled'}
+                options={[
+                  { label: t('acceptance.filter.all', { count: counts.total }), value: 'all' },
+                  {
+                    label: t('acceptance.filter.pending', { count: counts.pending }),
+                    value: 'pending',
+                  },
+                  {
+                    label: t('acceptance.filter.needsFix', { count: counts.needsFix }),
+                    value: 'needsFix',
+                  },
+                  {
+                    label: t('acceptance.filter.accepted', { count: counts.accepted }),
+                    value: 'accepted',
+                  },
+                ]}
+                onChange={(value) => setFilter(value as CheckFilter)}
+              />
+            ) : (
+              <Segmented
+                size={'small'}
+                value={filter}
+                options={[
+                  { label: t('acceptance.filter.all', { count: counts.total }), value: 'all' },
+                  {
+                    label: t('acceptance.filter.pending', { count: counts.pending }),
+                    value: 'pending',
+                  },
+                  {
+                    label: t('acceptance.filter.needsFix', { count: counts.needsFix }),
+                    value: 'needsFix',
+                  },
+                  {
+                    label: t('acceptance.filter.accepted', { count: counts.accepted }),
+                    value: 'accepted',
+                  },
+                ]}
+                onChange={(value) => setFilter(value as CheckFilter)}
+              />
+            )}
             {/* Which round touched a check — audit slicing, orthogonal to the
                 review-state segments. */}
             {rounds.length > 1 && (

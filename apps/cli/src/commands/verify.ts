@@ -522,7 +522,8 @@ export function registerVerifyCommand(program: Command) {
     .description('Manage the Agent Run delivery checker (criteria, rubrics, plans, results)');
 
   // `verify acceptance …` — subject-level acceptance aggregates.
-  registerAcceptanceCommands(verify);
+  // Legacy spelling — the canonical group is the first-class `lh acceptance`.
+  registerAcceptanceCommands(verify, { deprecated: true });
 
   // ════════════ init (materialize the portable verify skill) ════════════
   verify

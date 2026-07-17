@@ -7,6 +7,8 @@
   "acceptance.actions.cancel": "Cancel",
   "acceptance.actions.confirmAccept": "Confirm acceptance",
   "acceptance.actions.confirmReject": "Reject and start the next round",
+  "acceptance.actions.more": "More actions",
+  "acceptance.actions.refresh": "Refresh",
   "acceptance.actions.reject": "Reject delivery",
   "acceptance.banner.accepted": "Accepted · confirmed by you at {{time}}",
   "acceptance.banner.acceptedHint": "{{count}} verification round(s) archived as the acceptance record",

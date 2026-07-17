@@ -7,6 +7,8 @@
   "acceptance.actions.cancel": "取消",
   "acceptance.actions.confirmAccept": "确认接受交付",
   "acceptance.actions.confirmReject": "打回并发起下一轮",
+  "acceptance.actions.more": "更多操作",
+  "acceptance.actions.refresh": "刷新",
   "acceptance.actions.reject": "打回交付",
   "acceptance.banner.accepted": "已验收 · {{time}} 由你确认接受交付",
   "acceptance.banner.acceptedHint": "{{count}} 轮验证记录已归档为验收依据",
