@@ -53,6 +53,7 @@ import CheckList, {
   hasVisualEvidence,
   isException,
   isGroupFullyAccepted,
+  userReviewState,
 } from './CheckList';
 import DecisionBar from './DecisionBar';
 import FeedbackDrawer, { type FeedbackListEntry } from './FeedbackDrawer';
@@ -199,14 +200,20 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
   }, [status, mutate]);
 
   // Exceptions and visually-evidenced checks start expanded (P-08) — once,
-  // on first load, so the user's own toggling is never overwritten. Groups the
-  // user already accepted in full are settled business: they start collapsed.
+  // on first load, so the user's own toggling is never overwritten. A check
+  // the user already accepted is settled business and stays folded regardless
+  // of its evidence; groups accepted in full start collapsed for the same
+  // reason.
   useEffect(() => {
     if (seeded || !data) return;
     setExpanded(
       new Set(
         data.checks
-          .filter((check) => isException(check) || hasVisualEvidence(check))
+          .filter(
+            (check) =>
+              userReviewState(check) !== 'accepted' &&
+              (isException(check) || hasVisualEvidence(check)),
+          )
           .map((check) => check.id),
       ),
     );

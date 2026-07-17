@@ -17,7 +17,6 @@ import {
   Film,
   HelpCircle,
   Images,
-  MessageSquarePlus,
   MessageSquareText,
   MessageSquareX,
   Repeat,
@@ -122,6 +121,34 @@ const styles = createStaticStyles(({ css }) => ({
     &:hover {
       color: ${cssVar.colorText};
       background: ${cssVar.colorFillSecondary};
+    }
+  `,
+  /* The iteration chip pair: "introduced in round N" is detail behind the
+     "iterated N×" headline — collapsed to zero width until the pair is
+     hovered, so the chip row stays quiet on scan. */
+  iterationChips: css`
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+
+    .acceptance-chip-introduced {
+      overflow: hidden;
+
+      max-width: 0;
+      padding-inline: 0;
+
+      opacity: 0;
+
+      transition:
+        max-width 0.2s,
+        opacity 0.2s,
+        padding 0.2s;
+    }
+
+    &:hover .acceptance-chip-introduced {
+      max-width: 160px;
+      padding-inline: 6px;
+      opacity: 1;
     }
   `,
   descClamp: css`
@@ -786,36 +813,44 @@ const CheckRow = memo<{
             ) : null,
           )}
           {check.revisions > 1 && (
-            <Tooltip
-              title={
-                check.titleChanged
-                  ? t('acceptance.checks.iteratedHint', { count: check.revisions })
-                  : t('acceptance.checks.rerunHint', { count: check.revisions })
-              }
-            >
-              <span className={styles.chip}>
-                <Icon icon={Repeat} size={10} />{' '}
-                {check.titleChanged
-                  ? t('acceptance.checks.iterated', { count: check.revisions })
-                  : t('acceptance.checks.rerun', { count: check.revisions })}
-              </span>
-            </Tooltip>
-          )}
-          {check.resultRound !== undefined &&
-            check.resultRound !== null &&
-            check.introducedAtRound !== check.resultRound && (
-              <Tooltip title={t('acceptance.checks.introducedHint')}>
-                <span
-                  className={cx(styles.chip, styles.chipClickable)}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onRound(check.introducedAtRound);
-                  }}
-                >
-                  {t('acceptance.checks.introduced', { round: check.introducedAtRound })}
+            <span className={styles.iterationChips}>
+              <Tooltip
+                title={
+                  check.titleChanged
+                    ? t('acceptance.checks.iteratedHint', { count: check.revisions })
+                    : t('acceptance.checks.rerunHint', { count: check.revisions })
+                }
+              >
+                <span className={styles.chip}>
+                  <Icon icon={Repeat} size={10} />{' '}
+                  {check.titleChanged
+                    ? t('acceptance.checks.iterated', { count: check.revisions })
+                    : t('acceptance.checks.rerun', { count: check.revisions })}
                 </span>
               </Tooltip>
-            )}
+              {/* Where the concern first appeared — detail behind the
+                  iteration count, revealed by hovering it. */}
+              {check.resultRound !== undefined &&
+                check.resultRound !== null &&
+                check.introducedAtRound !== check.resultRound && (
+                  <Tooltip title={t('acceptance.checks.introducedHint')}>
+                    <span
+                      className={cx(
+                        styles.chip,
+                        styles.chipClickable,
+                        'acceptance-chip-introduced',
+                      )}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onRound(check.introducedAtRound);
+                      }}
+                    >
+                      {t('acceptance.checks.introduced', { round: check.introducedAtRound })}
+                    </span>
+                  </Tooltip>
+                )}
+            </span>
+          )}
           {check.resultRound !== undefined && check.resultRound !== null && (
             <Tooltip title={t('acceptance.checks.finalRoundHint')}>
               <span
@@ -1167,12 +1202,14 @@ const CheckList = memo<CheckListProps>(
                       {t('acceptance.review.acceptAllDone')}
                     </Flexbox>
                   ))}
+                <Flexbox flex={1} />
                 {/* Group-scoped feedback — the channel for concerns that
-                    belong to no single check yet must reach the next round. */}
+                    belong to no single check yet must reach the next round.
+                    Lives with the other group-level controls by the chevron. */}
                 {canReview && (
                   <span className={'acceptance-group-actions'}>
                     <ActionIcon
-                      icon={MessageSquarePlus}
+                      icon={MessageSquareText}
                       size={'small'}
                       title={t('acceptance.group.feedbackAction')}
                       onClick={(event) => {
@@ -1186,7 +1223,6 @@ const CheckList = memo<CheckListProps>(
                     />
                   </span>
                 )}
-                <Flexbox flex={1} />
                 {collapsed ? (
                   // Fixed-size placeholder keeps the header height stable across toggles.
                   <div style={{ height: 24, width: 24 }} />
@@ -1201,8 +1237,16 @@ const CheckList = memo<CheckListProps>(
                     }
                     onClick={(event) => {
                       event.stopPropagation();
+                      // Expanding a group is "show me what still needs judgment"
+                      // — rows the user already accepted are settled business
+                      // and stay folded (they open individually on demand).
+                      // Collapsing folds everything, accepted or not.
                       onToggleGroupItems(
-                        rows.map((check) => check.id),
+                        anyItemOpen
+                          ? rows.map((check) => check.id)
+                          : rows
+                              .filter((check) => userReviewState(check) !== 'accepted')
+                              .map((check) => check.id),
                         !anyItemOpen,
                       );
                     }}
