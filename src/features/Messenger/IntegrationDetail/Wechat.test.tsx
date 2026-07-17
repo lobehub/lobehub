@@ -1,8 +1,8 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { resolveWechatQrImageSrc, WechatQrSetup } from './Wechat';
+import { WechatQrSetup } from './Wechat';
 
 const messengerServiceMocks = vi.hoisted(() => ({
   createWechatQrSession: vi.fn(),
@@ -14,9 +14,6 @@ vi.mock('@lobehub/ui', () => ({
   Block: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   Icon: () => <span />,
-  Image: ({ alt, src }: { alt?: string; src?: string }) => (
-    <span aria-label={alt} data-src={src} role="img" />
-  ),
   Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
 }));
 
@@ -30,6 +27,9 @@ vi.mock('@lobehub/ui/base-ui', () => ({
 
 vi.mock('antd', () => ({
   App: { useApp: () => ({ message: { success: vi.fn() } }) },
+  QRCode: ({ 'aria-label': ariaLabel, value }: { 'aria-label'?: string; 'value': string }) => (
+    <span aria-label={ariaLabel} data-value={value} role="img" />
+  ),
 }));
 
 vi.mock('antd-style', () => ({
@@ -40,6 +40,7 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string) =>
       ({
+        'messenger.wechat.connectCta': 'Connect WeChat',
         'messenger.wechat.qr.tip': 'Scan with WeChat',
         'messenger.wechat.qr.waiting': 'Waiting',
         'messenger.wechat.setupTitle': 'Set up WeChat',
@@ -67,44 +68,28 @@ describe('WechatQrSetup', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     messengerServiceMocks.createWechatQrSession.mockResolvedValue({
-      imageContent: 'iVBORw0KGgoAAAANSUhEUg',
+      qrCodePayload: 'https://liteapp.weixin.qq.com/q/qr-payload',
       sessionId: 'session-1',
       status: 'wait',
     });
   });
 
-  it('renders raw QR image content as a PNG data URL instead of encoding it again', async () => {
+  it('encodes the WeChat URL as the QR payload during rescan', async () => {
     render(<WechatQrSetup autoStart onConfirmed={vi.fn()} />);
 
     expect(await screen.findByRole('img', { name: 'Set up WeChat' })).toHaveAttribute(
-      'data-src',
-      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUg',
+      'data-value',
+      'https://liteapp.weixin.qq.com/q/qr-payload',
     );
   });
 
-  it('renders a QR image URL directly instead of re-encoding it as a QR payload', async () => {
-    const qrImageUrl = 'https://weixin.qq.com/x/cAbCdEfGhIj';
-    messengerServiceMocks.createWechatQrSession.mockResolvedValueOnce({
-      imageContent: qrImageUrl,
-      sessionId: 'session-1',
-      status: 'wait',
-    });
-
-    render(<WechatQrSetup autoStart onConfirmed={vi.fn()} />);
+  it('encodes the WeChat URL as the QR payload after the initial connect action', async () => {
+    render(<WechatQrSetup onConfirmed={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Connect WeChat' }));
 
     expect(await screen.findByRole('img', { name: 'Set up WeChat' })).toHaveAttribute(
-      'data-src',
-      qrImageUrl,
+      'data-value',
+      'https://liteapp.weixin.qq.com/q/qr-payload',
     );
-  });
-});
-
-describe('resolveWechatQrImageSrc', () => {
-  it.each([
-    ['data:image/png;base64,abc', 'data:image/png;base64,abc'],
-    ['https://weixin.qq.com/x/cAbCdEfGhIj', 'https://weixin.qq.com/x/cAbCdEfGhIj'],
-    ['  raw-base64  ', 'data:image/png;base64,raw-base64'],
-  ])('normalizes %s', (input, expected) => {
-    expect(resolveWechatQrImageSrc(input)).toBe(expected);
   });
 });

@@ -304,7 +304,7 @@ export const messengerRouter = router({
       });
       return {
         ...session,
-        imageContent: qr.qrcode_img_content,
+        qrCodePayload: qr.qrcode_img_content,
         status: 'wait' as const,
       };
     } catch (error) {

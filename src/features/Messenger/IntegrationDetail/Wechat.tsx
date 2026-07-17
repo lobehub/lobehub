@@ -1,9 +1,9 @@
 'use client';
 
 import { InfoCircleOutlined } from '@ant-design/icons';
-import { Alert, Block, Flexbox, Icon, Image, Text } from '@lobehub/ui';
+import { Alert, Block, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
+import { App, QRCode } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { ExternalLinkIcon, QrCodeIcon, RefreshCwIcon, XIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
@@ -27,20 +27,6 @@ import {
 const QR_POLL_INTERVAL_MS = 2000;
 const QR_SIZE = 220;
 const QR_SLOT_SIZE = 240;
-
-/**
- * `qrcode_img_content` is always a renderable image source — an HTTP(S) URL,
- * a data URL, or raw base64 content (see wechat/protocol-spec.md). Re-encoding
- * any of these through a QR component would produce a code that opens the
- * image URL instead of the iLink login flow.
- */
-export const resolveWechatQrImageSrc = (imageContent: string) => {
-  const source = imageContent.trim();
-
-  if (/^https?:\/\//i.test(source) || /^data:image\//i.test(source)) return source;
-
-  return `data:image/png;base64,${source}`;
-};
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   error: css`
@@ -85,7 +71,7 @@ type QrState =
   | { stage: 'idle' }
   | { stage: 'loading' }
   | { message: string; stage: 'error' }
-  | { imageContent: string; stage: 'ready'; status: 'scaned' | 'wait' };
+  | { qrCodePayload: string; stage: 'ready'; status: 'scaned' | 'wait' };
 
 interface WechatQrSetupProps {
   autoStart?: boolean;
@@ -114,7 +100,7 @@ const WechatQrSetup = memo<WechatQrSetupProps>(({ autoStart, disabled, onCancel,
     try {
       const session = await messengerService.createWechatQrSession();
       if (!aliveRef.current) return;
-      setState({ imageContent: session.imageContent, stage: 'ready', status: 'wait' });
+      setState({ qrCodePayload: session.qrCodePayload, stage: 'ready', status: 'wait' });
 
       const poll = async (): Promise<void> => {
         if (!aliveRef.current) return;
@@ -134,7 +120,7 @@ const WechatQrSetup = memo<WechatQrSetupProps>(({ autoStart, disabled, onCancel,
           }
 
           setState({
-            imageContent: session.imageContent,
+            qrCodePayload: session.qrCodePayload,
             stage: 'ready',
             status: result.status,
           });
@@ -177,8 +163,6 @@ const WechatQrSetup = memo<WechatQrSetupProps>(({ autoStart, disabled, onCancel,
         ? t('messenger.wechat.qr.scanned')
         : t('messenger.wechat.qr.waiting')
       : undefined;
-  const qrImageSrc =
-    state.stage === 'ready' ? resolveWechatQrImageSrc(state.imageContent) : undefined;
 
   return (
     <Block className={styles.setup}>
@@ -195,13 +179,12 @@ const WechatQrSetup = memo<WechatQrSetupProps>(({ autoStart, disabled, onCancel,
             </Button>
           )}
           {state.stage === 'loading' && <NeuralNetworkLoading size={48} />}
-          {state.stage === 'ready' && qrImageSrc && (
-            <Image
-              alt={t('messenger.wechat.setupTitle')}
-              height={QR_SIZE}
-              preview={false}
-              src={qrImageSrc}
-              width={QR_SIZE}
+          {state.stage === 'ready' && (
+            <QRCode
+              aria-label={t('messenger.wechat.setupTitle')}
+              bordered={false}
+              size={QR_SIZE}
+              value={state.qrCodePayload}
             />
           )}
           {state.stage === 'error' && (
