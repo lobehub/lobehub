@@ -1,7 +1,7 @@
 'use client';
 
 import { type UserCredSummary } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
+import { Flexbox, Text } from '@lobehub/ui';
 import { Segmented, Switch } from '@lobehub/ui/base-ui';
 import { useMutation } from '@tanstack/react-query';
 import { App } from 'antd';
@@ -109,6 +109,9 @@ const ShareToggle: FC<ShareToggleProps> = ({ cred, onChange }) => {
 
   return (
     <Flexbox horizontal align={'center'} gap={8}>
+      <Text fontSize={12} type={'secondary'}>
+        {t('creds.share.toggle')}
+      </Text>
       {shared && (
         <Segmented
           disabled={isPending}
@@ -121,12 +124,7 @@ const ShareToggle: FC<ShareToggleProps> = ({ cred, onChange }) => {
           onChange={handleVisibilityChange}
         />
       )}
-      <Switch
-        checked={shared}
-        loading={isPending}
-        title={t('creds.share.toggle')}
-        onChange={handleSwitchChange}
-      />
+      <Switch checked={shared} loading={isPending} onChange={handleSwitchChange} />
     </Flexbox>
   );
 };

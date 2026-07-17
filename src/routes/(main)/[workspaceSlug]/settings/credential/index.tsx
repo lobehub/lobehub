@@ -1,10 +1,11 @@
 'use client';
 
-import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Block, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
+import { Button, Tabs } from '@lobehub/ui/base-ui';
 import { Empty } from 'antd';
-import { Plus } from 'lucide-react';
-import { useMemo } from 'react';
+import { createStaticStyles } from 'antd-style';
+import { Plus, UserRoundIcon, UsersIcon } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { usePermission } from '@/hooks/usePermission';
@@ -17,38 +18,61 @@ import {
   CredsApiProvider,
 } from '@/routes/(main)/settings/creds/features/useCredsApi';
 
-import CredsSection from './features/CredsSection';
 import PersonalCredsSection from './features/PersonalCredsSection';
+
+// Always the personal namespace — the personal scope is deliberately
+// personal-scoped regardless of page context (see PersonalCredsSection).
+const personalCredsApi: CredsApi = {
+  client: lambdaClient.market.creds,
+  query: lambdaQuery.market.creds,
+};
+
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  container: css`
+    overflow: hidden;
+    width: 100%;
+    padding-block: 4px;
+    padding-inline: 16px;
+  `,
+  desc: css`
+    font-size: 13px;
+    color: ${cssVar.colorTextSecondary};
+  `,
+}));
+
+type CredsScope = 'personal' | 'workspace';
 
 /**
  * Workspace credential management.
  *
- * Two sections, each grouped in an outlined container ({@link CredsSection}):
- * - Top ("workspace"): the shared {@link CredsList} rebound to the cloud
+ * One unified header row — scope tabs on the left, the create action on the
+ * right — above an outlined list container (same container treatment as the
+ * agent channel detail page). The create button follows the active scope.
+ *
+ * - "Workspace" tab: the shared {@link CredsList} rebound to the cloud
  *   `workspaceCreds.*` tRPC namespace via {@link CredsApiProvider}.
  *   `workspaceCreds` resolves the active workspace to its Market organization
  *   mirror; Market's `list` there already merges the org's own credentials
  *   with every member's *published* (public-visibility) personal credentials,
  *   so a shared credential surfaces here automatically once its owner turns
- *   on {@link PersonalCredsSection}'s share toggle. The section header carries
- *   the create action — the page header stays a plain title.
- * - Bottom ("your personal credentials"): {@link PersonalCredsSection} — the
- *   caller's own personal credentials, each with a switch to share/unshare it
- *   into this workspace's organization (and a private/public visibility
- *   choice once shared). Always personal-scoped, independent of the workspace
- *   org's setup state.
+ *   on the share toggle in the personal tab.
+ * - "Personal" tab: {@link PersonalCredsSection} — the caller's own personal
+ *   credentials, each with a switch to share/unshare it into this workspace's
+ *   organization (and a private/public visibility choice once shared). Always
+ *   personal-scoped, independent of the workspace org's setup state.
  *
  * When the workspace has no Market organization yet (Community Profile not
- * completed), the backend returns NOT_FOUND for the *workspace* section. This
+ * completed), the backend returns NOT_FOUND for the *workspace* scope. This
  * component intercepts that error and renders a setup prompt in its place —
- * the personal section still renders below it, since sharing your own
- * credential doesn't require the org to exist yet (it will simply fail with
- * a normal error until Community Profile setup completes).
+ * the personal tab still works, since sharing your own credential doesn't
+ * require the org to exist yet (it will simply fail with a normal error until
+ * Community Profile setup completes).
  */
 const WorkspaceCredsSetting = () => {
   const { t } = useTranslation('setting');
   const { isAuthenticated } = useMarketAuth();
   const { allowed: canManageCredentials, reason } = usePermission('manage_provider_key');
+  const [scope, setScope] = useState<CredsScope>('workspace');
 
   const workspaceCredsApi = useMemo<CredsApi>(
     () => ({
@@ -63,16 +87,16 @@ const WorkspaceCredsSetting = () => {
     [],
   );
 
-  // Pre-flight check: detect "org not set up" before rendering the full list.
+  // Pre-flight check: detect "org not set up" before rendering the list.
   // React Query deduplicates this against the identical call inside CredsList,
   // so only one network request is made — which is also why `refetch` here
-  // refreshes the workspace section's list too: creating a credential from the
-  // section header, or sharing/unsharing/re-visibility-ing a credential from
-  // `PersonalCredsSection` below, changes what this org-scoped list should
-  // return, but those mutations live in other components with no direct handle
-  // on CredsList's own query. Since both hooks share the same query key
-  // (workspaceCreds.list, input undefined), refetching this one pushes the
-  // fresh result to every subscriber, including CredsList's.
+  // refreshes the workspace list too: creating a credential from the header,
+  // or sharing/unsharing/re-visibility-ing a credential from the personal tab,
+  // changes what this org-scoped list should return, but those mutations live
+  // in other components with no direct handle on CredsList's own query. Since
+  // both hooks share the same query key (workspaceCreds.list, input
+  // undefined), refetching this one pushes the fresh result to every
+  // subscriber, including CredsList's.
   const {
     error,
     isLoading,
@@ -88,53 +112,91 @@ const WorkspaceCredsSetting = () => {
     },
   });
 
+  // Same dedup trick for the personal scope: shares its query key with the
+  // list inside PersonalCredsSection, so a create from the unified header
+  // refreshes that tab's list (and pre-warms it while the workspace tab is
+  // active, since the tabs render only the active scope).
+  const { refetch: refetchPersonalCreds } = personalCredsApi.query.list.useQuery(undefined, {
+    enabled: isAuthenticated,
+  });
+
   const orgMissing = isAuthenticated && !isLoading && error?.data?.code === 'NOT_FOUND';
 
   const handleCreate = () => {
     if (!canManageCredentials) return;
-    createCreateCredModal({
-      credsApi: workspaceCredsApi,
-      onSuccess: () => refetchWorkspaceCreds(),
-    });
+    if (scope === 'workspace') {
+      createCreateCredModal({
+        credsApi: workspaceCredsApi,
+        onSuccess: () => refetchWorkspaceCreds(),
+      });
+    } else {
+      createCreateCredModal({
+        credsApi: personalCredsApi,
+        onSuccess: () => refetchPersonalCreds(),
+      });
+    }
   };
 
-  // Hidden while the org is missing (creation would fail server-side) and
-  // while signed out (CredsList shows the sign-in prompt instead).
-  const showCreateButton = isAuthenticated && !orgMissing;
+  // Hidden while signed out (the list shows the sign-in prompt instead) and
+  // while the workspace org is missing (creation would fail server-side).
+  const showCreateButton = isAuthenticated && !(scope === 'workspace' && orgMissing);
 
   return (
-    <>
-      <CredsSection
-        desc={t('creds.workspaceSection.desc')}
-        title={t('creds.workspaceSection.title')}
-        extra={
-          showCreateButton && (
-            <Tooltip title={reason}>
-              <Button
-                disabled={!canManageCredentials}
-                icon={<Icon icon={Plus} />}
-                size={'small'}
-                type={'primary'}
-                onClick={handleCreate}
-              >
-                {t('creds.create')}
-              </Button>
-            </Tooltip>
-          )
-        }
-      >
-        {orgMissing ? (
-          <Flexbox align={'center'} justify={'center'} style={{ padding: 48 }}>
-            <Empty description={t('creds.orgSetupRequired')} />
-          </Flexbox>
-        ) : (
-          <CredsApiProvider value={workspaceCredsApi}>
-            <CredsList />
-          </CredsApiProvider>
+    <Flexbox gap={16}>
+      <Flexbox horizontal align={'center'} gap={16} justify={'space-between'}>
+        <Tabs
+          activeKey={scope}
+          items={[
+            {
+              icon: <Icon icon={UsersIcon} />,
+              key: 'workspace',
+              label: t('creds.tabs.workspace'),
+            },
+            {
+              icon: <Icon icon={UserRoundIcon} />,
+              key: 'personal',
+              label: t('creds.tabs.personal'),
+            },
+          ]}
+          onChange={(key) => setScope(key as CredsScope)}
+        />
+        {showCreateButton && (
+          <Tooltip title={reason}>
+            <Button
+              disabled={!canManageCredentials}
+              icon={<Icon icon={Plus} />}
+              size={'small'}
+              type={'primary'}
+              onClick={handleCreate}
+            >
+              {t('creds.create')}
+            </Button>
+          </Tooltip>
         )}
-      </CredsSection>
-      <PersonalCredsSection onWorkspaceCredsChange={refetchWorkspaceCreds} />
-    </>
+      </Flexbox>
+      <Flexbox gap={12}>
+        <Text className={styles.desc}>
+          {scope === 'workspace'
+            ? t('creds.workspaceSection.desc')
+            : t('creds.personalSection.desc')}
+        </Text>
+        <Block className={styles.container} variant={'outlined'}>
+          {scope === 'workspace' ? (
+            orgMissing ? (
+              <Flexbox align={'center'} justify={'center'} style={{ padding: 48 }}>
+                <Empty description={t('creds.orgSetupRequired')} />
+              </Flexbox>
+            ) : (
+              <CredsApiProvider value={workspaceCredsApi}>
+                <CredsList />
+              </CredsApiProvider>
+            )
+          ) : (
+            <PersonalCredsSection onWorkspaceCredsChange={refetchWorkspaceCreds} />
+          )}
+        </Block>
+      </Flexbox>
+    </Flexbox>
   );
 };
 
