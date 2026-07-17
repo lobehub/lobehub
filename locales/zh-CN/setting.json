@@ -349,7 +349,7 @@
   "devices.empty.title": "连接你的第一台设备",
   "devices.fallbackBadge": "身份不稳定",
   "devices.fallbackTooltip": "未能通过机器 ID 识别此设备，重装应用可能会产生重复条目。",
-  "devices.lastSeen": "最近活跃 {{time}}",
+  "devices.lastSeen": "最后连接于 {{time}}",
   "devices.remove.confirm": "移除此设备？",
   "devices.remove.confirmDesc": "这会断开设备与你账户的关联，但不会让设备登出，下次连接时它可重新注册。",
   "devices.remove.currentSessionWarning": "其中包含你当前正在使用的设备，移除后会断开当前会话。",

@@ -6,7 +6,7 @@ import type {
   DeviceWorkspaceShare,
   WorkingDirEntry,
 } from '@lobechat/types';
-import { deriveWorktreePath, workingDirConfigSchema } from '@lobechat/types';
+import { deriveWorktreePath, sortDevicesByActivity, workingDirConfigSchema } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -869,10 +869,15 @@ export const deviceRouter = router({
       return [...fromDb, ...ghosts];
     };
 
-    return [
+    // Ordered here rather than in SQL: `online` is the primary key and only the
+    // gateway knows it, so no per-pool `ORDER BY` can produce it — the two pools
+    // and their ghosts have to be merged first, then ordered as one list.
+    // Consumers (settings list, picker) filter this down to a single scope, and
+    // filtering preserves order, so one pass serves every surface.
+    return sortDevicesByActivity([
       ...buildItems(personalRows, personalOnline, 'personal'),
       ...buildItems(workspaceRows, workspaceOnline, 'workspace', hiddenWorkspaceIds),
-    ];
+    ]);
   }),
 
   /**

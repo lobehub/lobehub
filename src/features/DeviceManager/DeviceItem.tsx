@@ -28,6 +28,14 @@ import { openShareDeviceModal } from './ShareDeviceModal';
 import { useCanEditDevice } from './useCanEditDevice';
 
 const styles = createStaticStyles(({ css }) => ({
+  // Liveness line. `flex: none` + no ellipsis: it is the shortest thing on the
+  // row and the reason the row is readable at a glance — a long cwd next to it
+  // must truncate itself rather than squeeze this out.
+  activity: css`
+    flex: none;
+    font-size: ${cssVar.fontSizeSM};
+    white-space: nowrap;
+  `,
   // Code-font cwd line; truncates rather than wrapping so a deep path keeps the
   // row at one line.
   cwd: css`
@@ -52,6 +60,12 @@ const styles = createStaticStyles(({ css }) => ({
     color: ${cssVar.colorTextSecondary};
 
     background: ${cssVar.colorFillTertiary};
+  `,
+  metaDivider: css`
+    flex: none;
+    width: 1px;
+    height: 10px;
+    background: ${cssVar.colorBorderSecondary};
   `,
   row: css`
     cursor: pointer;
@@ -128,7 +142,16 @@ const DeviceItem = memo<DeviceItemProps>(({ device, isCurrent, onSelect, selecte
   // Online when the device has at least one live connection in `device.channels`.
   const channels = device.channels ?? [];
   const online = channels.length > 0;
-  const statusTooltip = online
+  // Rendered inline (not as a dot tooltip): "when was this machine last
+  // reachable" is the answer needed to pick between rows, and hover can't
+  // answer it for a whole list at once — nor at all on touch.
+  //
+  // Online reads the gateway's live `connectedAt`. Offline can only report
+  // `lastSeen`, which is stamped on register — and every client registers
+  // right before opening its WS (`gatewayConnectionSrv`, CLI `registerDevice`)
+  // — so it means "last CONNECTED", not "last active". The copy says exactly
+  // that; it becomes a true last-active once a writer stamps liveness.
+  const activityText = online
     ? t('devices.channel.connected', {
         time: dayjs(channels[0]?.connectedAt ?? device.lastSeen).fromNow(),
       })
@@ -245,9 +268,7 @@ const DeviceItem = memo<DeviceItemProps>(({ device, isCurrent, onSelect, selecte
           <Text ellipsis fontSize={15} weight={500}>
             {displayName}
           </Text>
-          <Tooltip title={statusTooltip}>
-            <span className={online ? styles.statusOnline : styles.statusOffline} />
-          </Tooltip>
+          <span className={online ? styles.statusOnline : styles.statusOffline} />
           {isCurrent && <Tag>{t('devices.currentBadge')}</Tag>}
           {device.scope === 'workspace' && device.sharedFromPersonal && (
             // Member-shared machine (vs directly enrolled infra) — mirrors the
@@ -272,14 +293,20 @@ const DeviceItem = memo<DeviceItemProps>(({ device, isCurrent, onSelect, selecte
             </Tooltip>
           )}
         </Flexbox>
-        {device.defaultCwd && (
-          <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
-            <Icon icon={FolderIcon} size={12} style={{ color: cssVar.colorTextQuaternary }} />
-            <Text className={styles.cwd} type={'secondary'}>
-              {device.defaultCwd}
-            </Text>
-          </Flexbox>
-        )}
+        <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
+          <Text className={styles.activity} type={'secondary'}>
+            {activityText}
+          </Text>
+          {device.defaultCwd && (
+            <>
+              <span className={styles.metaDivider} />
+              <Icon icon={FolderIcon} size={12} style={{ color: cssVar.colorTextQuaternary }} />
+              <Text className={styles.cwd} type={'secondary'}>
+                {device.defaultCwd}
+              </Text>
+            </>
+          )}
+        </Flexbox>
       </Flexbox>
 
       <Flexbox horizontal align={'center'} gap={8} style={{ flex: 'none' }}>
