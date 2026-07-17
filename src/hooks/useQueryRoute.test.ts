@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useQueryRoute } from './useQueryRoute';
 
 const navigateMock = vi.hoisted(() => vi.fn((href: string) => href));
-const activeWorkspaceSlugMock = vi.hoisted(() => vi.fn(() => null));
+const activeWorkspaceSlugMock = vi.hoisted(() => vi.fn<() => string | null>(() => null));
 
 // Mocks
 vi.mock('react-router', () => ({
