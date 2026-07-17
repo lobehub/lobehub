@@ -1557,3 +1557,37 @@ ingest-report <dir> --subject topic:<id> …` — and verify attachment in the D
 - **Works**: mark the case `blocked` and cover the path with unit tests, or run the flow with a
   real receivable mailbox (staging/prod smoke). Use the DB flip only to unblock downstream
   fixtures, and assert it does NOT produce the event as a bonus authenticity check.
+
+### E36. Desktop main-process `logger.info` is invisible in dev without `DEBUG`
+
+- **Situation**: verifying desktop main-process behavior (e.g. perf probes in a manager/module) by
+  reading the dev log.
+- **Doesn't work**: expecting `createLogger(ns).info(...)` lines in `/tmp/electron-dev.log` from a
+  plain dev start — in dev (`app.isPackaged` false) `info` only goes through the `debug` package,
+  which is silent unless its namespace is enabled.
+- **Works**: start the instance with the namespace enabled, e.g.
+  `DEBUG="screenCapture:*" electron-dev.sh restart`, then grep the log. In packaged builds the same
+  lines land in electron-log's file instead.
+
+### E37. osascript keystrokes go to the frontmost app — never send Escape
+
+- **Situation**: driving a desktop flow with synthetic keys (global shortcut trigger is fine — it's
+  registered globally), then trying to dismiss a window with `key code 53` (Escape).
+- **Doesn't work**: the Escape lands on whatever app is frontmost — typically the terminal running
+  the agent session, which interprets it as an interrupt and kills the agent's own turn.
+- **Works**: close app surfaces in-band instead: eval the app's own close IPC via CDP on that
+  window's target (`window.electronAPI.invoke('...close')`), or click its close affordance. Reserve
+  synthetic keys for globally-registered shortcuts that don't depend on focus.
+
+### E38. Bimodal timings from a globalShortcut handler = idle-event-loop stall (and `setTimeout` probes mask it)
+
+- **Situation**: timing a flow triggered from an Electron `globalShortcut` callback; measurements
+  are wildly bimodal (sub-ms vs multi-second) and "fix" themselves when extra probes are added.
+- **Doesn't work**: attributing the multi-second gap to whatever awaited call sits at that milestone
+  (it may be a cached no-op), or keeping a `setTimeout(0)` diagnostic probe while re-measuring — a
+  pending timer wakes the loop and hides the stall entirely.
+- **Works**: bracket the suspect `await` with markers plus one `queueMicrotask` and one
+  `setTimeout(0)` marker ONCE to classify the stall, then remove them and re-measure. If the
+  continuation only runs when an external event arrives (a CDP poll, mouse move), the cause is the
+  native-callback context not draining microtasks on an idle loop — fix by deferring the handler
+  body via `setImmediate` at the registration site, then verify variance collapses.

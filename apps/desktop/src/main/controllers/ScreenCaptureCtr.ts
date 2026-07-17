@@ -17,6 +17,11 @@ export default class ScreenCaptureCtr extends ControllerModule {
 
   @IpcMethod()
   async traceOverlayEvent(payload: { data?: unknown; event: string }): Promise<void> {
+    if (payload.event.startsWith('perf.')) {
+      const at = (payload.data as { at?: number } | undefined)?.at;
+      this.app.screenCaptureManager.markPerf(payload.event, at);
+      return;
+    }
     console.info('[screenCapture:overlay]', payload.event, payload.data ?? '');
   }
 

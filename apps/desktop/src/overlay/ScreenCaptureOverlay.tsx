@@ -28,9 +28,17 @@ const ScreenCaptureOverlay = memo(() => {
   const capturingRef = useRef(false);
   const pendingWindowRef = useRef<ScreenCaptureSession['windows'][number] | null>(null);
   const pointerStartRef = useRef<{ x: number; y: number } | null>(null);
+  const sessionPerfReportedRef = useRef(false);
 
   useEffect(() => {
     const unsubscribe = window.electronAPI?.onScreenCaptureSession?.((data) => {
+      if (!sessionPerfReportedRef.current) {
+        sessionPerfReportedRef.current = true;
+        void window.electronAPI?.invoke?.('screenCapture.traceOverlayEvent', {
+          data: { at: Date.now() },
+          event: 'perf.sessionReceived',
+        });
+      }
       setSession(data);
     });
 
@@ -71,6 +79,15 @@ const ScreenCaptureOverlay = memo(() => {
       event,
     });
   }, []);
+
+  useEffect(() => {
+    traceOverlayEvent('perf.reactMounted', { at: Date.now() });
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        traceOverlayEvent('perf.firstPaint', { at: Date.now() });
+      });
+    });
+  }, [traceOverlayEvent]);
 
   const handleClose = useCallback(() => {
     traceOverlayEvent('overlay.close');

@@ -58,8 +58,31 @@ export class ScreenCaptureManager {
    * session closes.
    */
   private captureUploads = new Map<string, CaptureUploadEntry>();
+  private perfStart: number | null = null;
+  /**
+   * macOS Screen Recording (TCC) status queries go through a native XPC call
+   * that can take seconds. A grant only takes effect after app relaunch, so a
+   * positive result is stable for the process lifetime and safe to cache.
+   */
+  private screenCaptureGranted = false;
 
   constructor(private readonly app: App) {}
+
+  prewarmPermissionCheck(): void {
+    if (!isMac || this.screenCaptureGranted) return;
+    setTimeout(() => {
+      const start = Date.now();
+      this.screenCaptureGranted = getScreenCaptureStatus() === 'granted';
+      logger.info(
+        `Prewarmed screen capture permission: granted=${this.screenCaptureGranted} (${Date.now() - start}ms)`,
+      );
+    }, 0);
+  }
+
+  markPerf(event: string, at: number = Date.now()): void {
+    if (this.perfStart === null) return;
+    logger.info(`[perf] ${event} +${at - this.perfStart}ms`);
+  }
 
   publishOverlaySnapshot(payload: OverlaySnapshotPayload): void {
     this.snapshot = payload;
@@ -78,9 +101,13 @@ export class ScreenCaptureManager {
   }
 
   async startSession(): Promise<void> {
+    this.perfStart = Date.now();
+    this.markPerf('main.trigger');
+
     if (!(await this.ensureScreenCaptureAccess())) {
       return;
     }
+    this.markPerf('main.permissionChecked');
 
     if (this.isActive) {
       logger.warn('Capture session already active');
@@ -96,6 +123,7 @@ export class ScreenCaptureManager {
     );
 
     const windows = await enumerateWindows(bounds, scaleFactor);
+    this.markPerf('main.windowsEnumerated');
 
     this.session = {
       displayBounds: bounds,
@@ -273,12 +301,13 @@ export class ScreenCaptureManager {
   }
 
   private async ensureScreenCaptureAccess(): Promise<boolean> {
-    if (!isMac) {
+    if (!isMac || this.screenCaptureGranted) {
       return true;
     }
 
     const status = getScreenCaptureStatus();
     if (status === 'granted') {
+      this.screenCaptureGranted = true;
       return true;
     }
 
@@ -333,6 +362,7 @@ export class ScreenCaptureManager {
       x: bounds.x,
       y: bounds.y,
     });
+    this.markPerf('main.windowConstructed');
 
     win.setAlwaysOnTop(true, 'screen-saver');
     win.setVisibleOnAllWorkspaces(true, {
@@ -351,10 +381,12 @@ export class ScreenCaptureManager {
     });
 
     const url = await this.app.buildRendererUrl('/overlay');
+    this.markPerf('main.urlBuilt');
     logger.info(`Loading overlay URL: ${url}`);
 
     win.webContents.once('did-finish-load', () => {
       logger.info('Overlay did-finish-load');
+      this.markPerf('main.didFinishLoad');
       if (this.session && !win.isDestroyed()) {
         logger.info(`Sending overlay session with ${this.session.windows.length} windows`);
         win.webContents.send('screenCaptureSession', this.session);
@@ -362,10 +394,12 @@ export class ScreenCaptureManager {
     });
 
     await win.loadURL(url);
+    this.markPerf('main.loadUrlResolved');
 
     win.show();
     win.focus();
     win.moveTop();
+    this.markPerf('main.windowShown');
 
     logger.info('Overlay window created and shown');
   }
