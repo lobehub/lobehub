@@ -270,6 +270,38 @@ describe('MessengerAccountLinkModel', () => {
       const links = await model.list();
       expect(links.filter((l) => l.platform === 'slack')).toHaveLength(2);
     });
+
+    it('rejects a second link claiming the same credential application id', async () => {
+      await serverDB.insert(messengerAccountLinks).values({
+        applicationId: 'wxbot-shared',
+        credentials: 'cipher-a',
+        platform: 'wechat',
+        platformUserId: 'wx-user-a',
+        userId: userA,
+      });
+
+      await expect(
+        serverDB.insert(messengerAccountLinks).values({
+          applicationId: 'wxbot-shared',
+          credentials: 'cipher-b',
+          platform: 'wechat',
+          platformUserId: 'wx-user-b',
+          userId: userB,
+        }),
+      ).rejects.toThrow();
+
+      // Shared-bot rows (NULL application_id) stay unconstrained.
+      await serverDB.insert(messengerAccountLinks).values({
+        platform: 'telegram',
+        platformUserId: 'tg-a',
+        userId: userA,
+      });
+      await serverDB.insert(messengerAccountLinks).values({
+        platform: 'telegram',
+        platformUserId: 'tg-b',
+        userId: userB,
+      });
+    });
   });
 
   describe('active scope (workspaceId)', () => {

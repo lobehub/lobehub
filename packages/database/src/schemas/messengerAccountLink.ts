@@ -1,3 +1,4 @@
+import { isNotNull } from 'drizzle-orm';
 import { index, pgTable, text, uniqueIndex, uuid, varchar } from 'drizzle-orm/pg-core';
 import { createInsertSchema } from 'drizzle-zod';
 
@@ -95,6 +96,15 @@ export const messengerAccountLinks = pgTable(
       t.platform,
       t.tenantId,
     ),
+    // A user-scoped credential bot (WeChat iLink bot id) belongs to exactly
+    // one account link — a second link claiming the same bot id must fail
+    // closed instead of creating an ambiguous inbound route with the wrong
+    // ciphertext. Partial: shared-bot rows keep `application_id` NULL and are
+    // unaffected. Mirrors the unique routing keys on `messenger_installations`
+    // and `agent_bot_providers`.
+    uniqueIndex('messenger_account_links_platform_tenant_application_unique')
+      .on(t.platform, t.tenantId, t.applicationId)
+      .where(isNotNull(t.applicationId)),
     index('messenger_account_links_active_agent_idx').on(t.activeAgentId),
     index('messenger_account_links_workspace_id_idx').on(t.workspaceId),
   ],

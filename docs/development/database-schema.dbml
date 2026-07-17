@@ -1277,6 +1277,7 @@ table messenger_account_links {
   indexes {
     (platform, tenant_id, platform_user_id) [name: 'messenger_account_links_platform_tenant_user_unique', unique]
     (user_id, platform, tenant_id) [name: 'messenger_account_links_user_platform_tenant_unique', unique]
+    (platform, tenant_id, application_id) [name: 'messenger_account_links_platform_tenant_application_unique', unique]
     active_agent_id [name: 'messenger_account_links_active_agent_idx']
     workspace_id [name: 'messenger_account_links_workspace_id_idx']
   }

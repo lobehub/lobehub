@@ -18,4 +18,5 @@ ALTER TABLE "resource_permissions" DROP CONSTRAINT IF EXISTS "resource_permissio
 ALTER TABLE "resource_permissions" ADD CONSTRAINT "resource_permissions_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "resource_permissions_workspace_resource_unique" ON "resource_permissions" USING btree ("workspace_id","resource_type","resource_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "resource_permissions_resource_idx" ON "resource_permissions" USING btree ("resource_type","resource_id");--> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "resource_permissions_workspace_idx" ON "resource_permissions" USING btree ("workspace_id");
+CREATE INDEX IF NOT EXISTS "resource_permissions_workspace_idx" ON "resource_permissions" USING btree ("workspace_id");--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "messenger_account_links_platform_tenant_application_unique" ON "messenger_account_links" USING btree ("platform","tenant_id","application_id") WHERE "messenger_account_links"."application_id" is not null;
