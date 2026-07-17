@@ -68,11 +68,11 @@ import { openAcceptModal, openRejectModal } from './modals';
  * nobody has to hand-summarize review notes into an instruction.
  */
 const buildRepairPrompt = (acceptanceId: string) =>
-  `请用 LobeHub CLI 读取验收 ${acceptanceId} 的最新 review 反馈：
+  `Use the LobeHub CLI to read the latest review feedback for acceptance ${acceptanceId}:
 
 lh acceptance feedback ${acceptanceId} --actionable
 
-输出的条目（含各检查项的评论、截图圈选标注与附件）就是本轮要处理的全部反馈。请逐条修改代码；完成后重新执行验证，并把新一轮验证结果 ingest 回同一个 acceptance（复用既有检查项 id，语义有变化的用 supersedes 迭代）。`;
+Every entry it prints (per-check comments, circled-region annotations on the evidence screenshots, and attachments) is the full set of feedback to handle this round. Fix the code item by item; then re-run verification and ingest the new result back into the SAME acceptance (reuse the existing check ids, and use supersedes for any check whose meaning changed). Keep the final report in the same language the previous rounds used.`;
 
 const styles = createStaticStyles(({ css }) => ({
   banner: css`
@@ -427,14 +427,20 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
       : acceptance.status === 'rejected'
         ? ('rejected' as const)
         : ('settled' as const);
-  // Review progress — the bar's dial and wording follow how much of the union
-  // the user has personally signed off, not the verifier's pass tally.
+  // Review progress — the bar's dial and wording track the user's own decisions,
+  // split the SAME way as the checklist chips (已验收 / 待修复 / 未验收) so the two
+  // never disagree. A rejected check is DECIDED (it belongs to 待修复), not
+  // "awaiting your acceptance" — only the untouched 未验收 checks are pending.
   const reviewableChecks = checks.filter((check) => check.result);
   const reviewTotal = reviewableChecks.length;
-  const reviewDone = reviewableChecks.filter(
-    (check) => userReviewState(check) === 'accepted',
+  const acceptedCount = reviewableChecks.filter(
+    (check) => checkFilterState(check) === 'accepted',
   ).length;
-  const allConfirmed = reviewTotal > 0 && reviewDone >= reviewTotal;
+  const needsFixCount = reviewableChecks.filter(
+    (check) => checkFilterState(check) === 'needsFix',
+  ).length;
+  const pendingCount = reviewTotal - acceptedCount - needsFixCount; // 未验收 (undecided)
+  const decidedCount = acceptedCount + needsFixCount;
   const barTexts = {
     accepted: {
       statusText: t('acceptance.banner.accepted', {
@@ -454,24 +460,34 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
     },
     // The status line stands alone in every settled state — a grey stats echo
     // (`N 通过 · …`) under it read as an unresolved caveat and just added noise.
-    settled: allConfirmed
-      ? {
-          statusText: t('acceptance.bar.progressDone', { total: reviewTotal }),
-          subText: undefined,
-        }
-      : reviewDone === 0
-        ? {
+    settled:
+      decidedCount === 0
+        ? // Nothing reviewed yet — a clean "not started" prompt (no "已完成 0/…").
+          {
             statusText: t('acceptance.bar.progressZero', { total: reviewTotal }),
             subText: undefined,
           }
-        : {
-            statusText: t('acceptance.bar.progress', {
-              done: reviewDone,
-              rest: reviewTotal - reviewDone,
-              total: reviewTotal,
-            }),
-            subText: undefined,
-          },
+        : pendingCount === 0
+          ? needsFixCount === 0
+            ? // Every check accepted — ready to accept the delivery.
+              {
+                statusText: t('acceptance.bar.progressDone', { total: reviewTotal }),
+                subText: undefined,
+              }
+            : // Fully reviewed, but some checks need a fix — NOT "awaiting acceptance".
+              {
+                statusText: t('acceptance.bar.needsFix', { count: needsFixCount }),
+                subText: undefined,
+              }
+          : // Mid-review — the remainder is the UNDECIDED (未验收) count, not total-accepted.
+            {
+              statusText: t('acceptance.bar.progress', {
+                done: decidedCount,
+                rest: pendingCount,
+                total: reviewTotal,
+              }),
+              subText: undefined,
+            },
   }[barState];
 
   // Every feedback event, flattened for the clearing list: per-check rejects
@@ -536,8 +552,13 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
   // agent, not just the origin conversation.
   const handleCopyReview = async () => {
     await copyToClipboard(repairPrompt);
-    // Bottom-center — right above the action bar the click came from.
-    toast.success({ placement: 'bottom', title: t('acceptance.bar.copied') });
+    // Bottom-center, lifted clear of the sticky decision bar so it floats ABOVE
+    // the action row the click came from (not overlapping it).
+    toast.success({
+      placement: 'bottom',
+      style: { marginBlockEnd: 88 },
+      title: t('acceptance.bar.copied'),
+    });
   };
 
   // Dispatch the repair prompt straight into the origin conversation — the
@@ -556,7 +577,11 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
       await verifyService.markAcceptanceRepairing(acceptance.id);
       await mutate();
       void globalMutate(verifyKeys.acceptances());
-      toast.success({ placement: 'bottom', title: t('acceptance.bar.rerunSent') });
+      toast.success({
+        placement: 'bottom',
+        style: { marginBlockEnd: 88 },
+        title: t('acceptance.bar.rerunSent'),
+      });
     } catch (cause) {
       toast.error(cause instanceof Error ? cause.message : t('acceptance.actionError'));
     } finally {
@@ -890,8 +915,9 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
               queueing feedback are the author's calls, never a visitor's. */}
           {isOwner && (
             <DecisionBar
-              acceptedCount={reviewDone}
+              acceptedCount={acceptedCount}
               feedbackCount={activeFeedbackCount}
+              needsFixCount={needsFixCount}
               pending={pending}
               repairing={acceptance.status === 'repairing'}
               rerunAvailable={Boolean(origin?.topic)}

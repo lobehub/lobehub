@@ -3,7 +3,7 @@
 import { Flexbox, Icon, Text } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { BadgeCheck, ListTodo, Loader2, RefreshCw, RotateCcw } from 'lucide-react';
+import { BadgeCheck, CircleAlert, ListTodo, Loader2, RefreshCw, RotateCcw } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -37,8 +37,8 @@ type BarState = 'accepted' | 'live' | 'rejected' | 'settled';
  * rendered by the bar as the BadgeCheck disc, not here.
  */
 const ProgressRing = memo<{ done: number; total: number }>(({ done, total }) => {
-  const size = 28;
-  const stroke = 3;
+  const size = 24;
+  const stroke = 2.5;
   const radius = (size - stroke) / 2;
   const circumference = 2 * Math.PI * radius;
   const ratio = total > 0 ? Math.min(done / total, 1) : 0;
@@ -101,6 +101,8 @@ interface DecisionBarProps {
   acceptedCount: number;
   /** Active (not-yet-consumed) feedback recorded this round. */
   feedbackCount: number;
+  /** Checks the user reviewed as needing a fix (待修复) — decided, not pending. */
+  needsFixCount: number;
   onAccept: () => void;
   /** Copy the hardcoded repair prompt for pasting to any agent. */
   onCopyReview: () => void;
@@ -135,6 +137,7 @@ const DecisionBar = memo<DecisionBarProps>(
   ({
     acceptedCount,
     feedbackCount,
+    needsFixCount,
     onAccept,
     onCopyReview,
     onOpenFeedback,
@@ -164,22 +167,33 @@ const DecisionBar = memo<DecisionBarProps>(
 
     const allConfirmed = totalCount > 0 && acceptedCount >= totalCount;
     const hasFeedback = feedbackCount > 0;
+    // The dial tracks DECIDED checks (accepted + 待修复), so a fully-reviewed
+    // union reads as done even when some checks still need a fix.
+    const decidedCount = acceptedCount + needsFixCount;
+    // Every check reviewed, but some need a fix — a review outcome, not a
+    // success and not "still awaiting". Reads as an attention mark, never the
+    // near-complete progress dial that made the state look like an all-clear.
+    const settledNeedsFix =
+      state === 'settled' && !allConfirmed && decidedCount >= totalCount && needsFixCount > 0;
 
     return (
       <div className={styles.bar}>
-        {stateMeta || allConfirmed ? (
-          // A fully signed-off / settled review reads as a clean status badge —
-          // a plain coloured mark, not a filled disc (the disc read heavy and
-          // unrefined). The same badge the accepted state carries.
+        {stateMeta ? (
+          // accepted / live / rejected — a plain coloured status mark.
           <Icon
-            color={stateMeta?.color ?? cssVar.colorSuccess}
-            icon={stateMeta?.icon ?? BadgeCheck}
+            color={stateMeta.color}
+            icon={stateMeta.icon}
             size={22}
             spin={state === 'live'}
             style={{ flex: 'none' }}
           />
+        ) : allConfirmed ? (
+          // Every check signed off — the same clean badge the accepted state carries.
+          <Icon color={cssVar.colorSuccess} icon={BadgeCheck} size={22} style={{ flex: 'none' }} />
+        ) : settledNeedsFix ? (
+          <Icon color={cssVar.colorWarning} icon={CircleAlert} size={22} style={{ flex: 'none' }} />
         ) : (
-          <ProgressRing done={acceptedCount} total={totalCount} />
+          <ProgressRing done={decidedCount} total={totalCount} />
         )}
         <Flexbox gap={2} style={{ flex: 1, minWidth: 0 }}>
           <Text ellipsis strong style={{ fontSize: 14 }}>
