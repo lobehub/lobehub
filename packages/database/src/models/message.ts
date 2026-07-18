@@ -694,6 +694,15 @@ export class MessageModel {
     // the slice is one contiguous chain. Never trim to empty: an oversized single
     // round with no user message in view is kept whole (the proper fix for those
     // is lazy step loading). Thread queries pass no `topicId` and are untouched.
+    //
+    // Scope: this only serves the single "most recent page" load (`current === 0`),
+    // which is the only page the chat read path ever requests — `current`/`pageSize`
+    // offset paging is dead code here (the very premise of LOBE-12011). The trim is
+    // deliberately NOT offset-exact: the rows it drops from page 0 also fall outside
+    // page 1's `offset = pageSize` window, so a hypothetical offset walk would skip
+    // them. That is acceptable because nothing offset-walks this path; loading older
+    // history is round-cursor based (see the follow-up), which supersedes offset
+    // paging entirely and closes that gap by construction.
     if (topicId && current === 0 && result.length >= pageSize) {
       const firstRoundStart = result.findIndex((message) => message.role === 'user');
       if (firstRoundStart > 0) result.splice(0, firstRoundStart);
