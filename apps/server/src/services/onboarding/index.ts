@@ -2,6 +2,7 @@ import { getDocumentTemplate } from '@lobechat/agent-templates';
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { CURRENT_ONBOARDING_VERSION } from '@lobechat/const';
 import type { OnboardingUserInfo } from '@lobechat/context-engine';
+import { UnderstandingSessionRepository } from '@lobechat/database';
 import type {
   AgentOnboardingStructuredField,
   ChatTopicMetadata,
@@ -34,9 +35,11 @@ import {
   userPersonaDocuments,
 } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
+import { AgentRuntimeCoordinator } from '@/server/modules/AgentRuntime';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { AgentService } from '@/server/services/agent';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
+import { UnderstandingSourceStore } from '@/server/services/understanding/sourceStore';
 
 const STRUCTURED_FIELD_LABELS: Record<SaveUserQuestionField, string> = {
   agentEmoji: 'agent emoji',
@@ -48,6 +51,10 @@ const STRUCTURED_FIELD_LABELS: Record<SaveUserQuestionField, string> = {
 
 const AGENT_MANAGEMENT_IDENTIFIER = 'lobe-agent-management';
 const GROUP_AGENT_BUILDER_IDENTIFIER = 'lobe-group-agent-builder';
+
+type UnderstandingResetCleanup = NonNullable<
+  Awaited<ReturnType<UnderstandingSessionRepository['removeForReset']>>
+>;
 
 const defaultAgentOnboardingState = (): UserAgentOnboarding => ({
   version: CURRENT_ONBOARDING_VERSION,
@@ -123,6 +130,7 @@ export class OnboardingService {
   private inboxDocumentsInitialized = false;
   private readonly messageModel: MessageModel;
   private readonly topicModel: TopicModel;
+  private readonly understandingSessionRepository: UnderstandingSessionRepository;
   private readonly userId: string;
   private readonly userModel: UserModel;
 
@@ -136,6 +144,7 @@ export class OnboardingService {
     this.agentService = new AgentService(db, userId);
     this.messageModel = new MessageModel(db, userId);
     this.topicModel = new TopicModel(db, userId);
+    this.understandingSessionRepository = new UnderstandingSessionRepository(db, userId);
     this.userModel = new UserModel(db, userId);
   }
 
@@ -519,8 +528,7 @@ export class OnboardingService {
       };
     } else {
       let discoveryContext:
-        | { currentUserMessageCount: number; startUserMessageCount: number }
-        | undefined;
+        { currentUserMessageCount: number; startUserMessageCount: number } | undefined;
 
       if (topicId) {
         const pastPreDiscovery =
@@ -653,8 +661,7 @@ export class OnboardingService {
 
     let currentUserMessageCount: number | undefined;
     let discoveryContext:
-      | { currentUserMessageCount: number; startUserMessageCount: number }
-      | undefined;
+      { currentUserMessageCount: number; startUserMessageCount: number } | undefined;
 
     // Build discovery context if we have a topic and are past agent_identity + user_identity
     if (topicId) {
@@ -914,7 +921,53 @@ export class OnboardingService {
     };
   };
 
+  private cleanupUnderstandingReset = async (cleanup: UnderstandingResetCleanup): Promise<void> => {
+    const cleanupTasks: Promise<void>[] = [];
+    try {
+      cleanupTasks.push(
+        new UnderstandingSourceStore()
+          .deleteSession({ sessionId: cleanup.session.id, userId: this.userId })
+          .catch((error) => {
+            console.error(
+              '[OnboardingService] Failed to delete Understanding session data:',
+              error,
+            );
+          }),
+      );
+    } catch (error) {
+      console.error(
+        '[OnboardingService] Failed to initialize Understanding session cleanup:',
+        error,
+      );
+    }
+
+    try {
+      const runtimeCoordinator = new AgentRuntimeCoordinator();
+      cleanupTasks.push(
+        ...cleanup.operationIds.map((operationId) =>
+          runtimeCoordinator.deleteAgentOperation(operationId).catch((error) => {
+            console.error(
+              `[OnboardingService] Failed to delete Understanding operation ${operationId}:`,
+              error,
+            );
+          }),
+        ),
+      );
+    } catch (error) {
+      console.error(
+        '[OnboardingService] Failed to initialize Understanding runtime cleanup:',
+        error,
+      );
+    }
+    await Promise.all(cleanupTasks);
+  };
+
   reset = async () => {
+    const previousState = this.ensureState((await this.getUserState()).agentOnboarding);
+    const understandingCleanup = previousState.activeTopicId
+      ? await this.understandingSessionRepository.removeForReset(previousState.activeTopicId)
+      : undefined;
+    if (understandingCleanup) await this.cleanupUnderstandingReset(understandingCleanup);
     const state = defaultAgentOnboardingState();
 
     // Preserve users.full_name and users.username on reset.

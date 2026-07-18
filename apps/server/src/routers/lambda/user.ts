@@ -3,11 +3,24 @@ import {
   formatWebOnboardingStateMessage,
 } from '@lobechat/builtin-tool-web-onboarding/utils';
 import { isDesktop } from '@lobechat/const';
-import { applyMarkdownPatch, formatMarkdownPatchError } from '@lobechat/markdown-patch';
 import {
-  type UserInitializationState,
-  type UserPreference,
-  type UserSettings,
+  StaleUnderstandingSessionError,
+  UnderstandingConfirmationRepository,
+  UnderstandingMergeSourcesChangedError,
+  UnderstandingPreconditionError,
+  UnderstandingResourceNotFoundError,
+  UnderstandingSessionNotFoundError,
+} from '@lobechat/database';
+import { applyMarkdownPatch, formatMarkdownPatchError } from '@lobechat/markdown-patch';
+import type {
+  ConfirmOnboardingUnderstandingInput,
+  ConfirmOnboardingUnderstandingResult,
+  OnboardingUnderstandingPollingResult,
+  OnboardingUnderstandingTopicInput,
+  RetryOnboardingUnderstandingSourceInput,
+  UserInitializationState,
+  UserPreference,
+  UserSettings,
 } from '@lobechat/types';
 import {
   Plans,
@@ -39,7 +52,62 @@ import { FileS3 } from '@/server/modules/S3';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
 import { FileService } from '@/server/services/file';
 import { OnboardingService } from '@/server/services/onboarding';
+import { createUnderstandingOrchestrator } from '@/server/services/understanding/createOrchestrator';
+import type { UnderstandingBackgroundScheduler } from '@/server/services/understanding/orchestrator';
 import { after } from '@/server/utils/scheduleAfterResponse';
+
+interface OnboardingUnderstandingService {
+  getSession: (
+    input: OnboardingUnderstandingTopicInput,
+  ) => Promise<OnboardingUnderstandingPollingResult>;
+  resumePendingSources: (input: OnboardingUnderstandingTopicInput) => Promise<void>;
+  retrySource: (
+    input: RetryOnboardingUnderstandingSourceInput,
+  ) => Promise<OnboardingUnderstandingPollingResult>;
+  start: (
+    input: OnboardingUnderstandingTopicInput,
+    schedule: UnderstandingBackgroundScheduler,
+  ) => Promise<OnboardingUnderstandingPollingResult>;
+}
+
+const throwUnderstandingApiError = (error: unknown): never => {
+  if (error instanceof TRPCError) throw error;
+
+  if (
+    error instanceof UnderstandingResourceNotFoundError ||
+    error instanceof UnderstandingSessionNotFoundError
+  ) {
+    throw new TRPCError({
+      code: 'NOT_FOUND',
+      message: 'Onboarding understanding was not found',
+    });
+  }
+
+  if (
+    error instanceof StaleUnderstandingSessionError ||
+    error instanceof UnderstandingMergeSourcesChangedError
+  ) {
+    throw new TRPCError({
+      code: 'CONFLICT',
+      message: 'Onboarding understanding is no longer current',
+    });
+  }
+
+  if (error instanceof UnderstandingPreconditionError) {
+    throw new TRPCError({
+      code: 'PRECONDITION_FAILED',
+      message: 'Onboarding understanding action is not currently available',
+    });
+  }
+
+  console.error('[user:onboardingUnderstanding]', {
+    errorName: error instanceof Error ? error.name : 'UnknownError',
+  });
+  throw new TRPCError({
+    code: 'INTERNAL_SERVER_ERROR',
+    message: 'Unable to process onboarding understanding request',
+  });
+};
 
 const usernameSchema = z
   .string()
@@ -47,6 +115,25 @@ const usernameSchema = z
   .min(1, { message: 'USERNAME_REQUIRED' })
   .max(64, { message: 'USERNAME_TOO_LONG' })
   .regex(/^\w+$/, { message: 'USERNAME_INVALID' });
+
+const understandingIdSchema = z.string().trim().min(1).max(512);
+const onboardingUnderstandingTopicInputSchema = z
+  .object({ topicId: understandingIdSchema })
+  .strict() satisfies z.ZodType<OnboardingUnderstandingTopicInput>;
+const retryOnboardingUnderstandingSourceInputSchema = z
+  .object({
+    sessionId: understandingIdSchema,
+    sourceId: understandingIdSchema,
+    topicId: understandingIdSchema,
+  })
+  .strict() satisfies z.ZodType<RetryOnboardingUnderstandingSourceInput>;
+const confirmOnboardingUnderstandingInputSchema = z
+  .object({
+    resultId: understandingIdSchema,
+    sessionId: understandingIdSchema,
+    topicId: understandingIdSchema,
+  })
+  .strict() satisfies z.ZodType<ConfirmOnboardingUnderstandingInput>;
 
 const AVATAR_WEBAPI_PREFIX = '/webapi/';
 const OWNER_SETTING_KEYS = ['defaultAgent', 'image', 'memory', 'systemAgent', 'tts'] as const;
@@ -96,10 +183,59 @@ const userProcedure = authedProcedure.use(serverDatabase).use(async ({ ctx, next
   });
 });
 
+const personalUnderstandingProcedure = authedProcedure
+  .use(serverDatabase)
+  .use(async ({ ctx, next }) => {
+    if (ctx.workspaceId) {
+      throw new TRPCError({
+        code: 'FORBIDDEN',
+        message: 'Onboarding understanding is available only in personal scope',
+      });
+    }
+    return next();
+  })
+  .use(async ({ next }) => {
+    const result = await next();
+    if (!result.ok) throwUnderstandingApiError(result.error.cause ?? result.error);
+    return result;
+  });
+const understandingOrchestratorProcedure = personalUnderstandingProcedure.use(
+  async ({ ctx, next }) => {
+    const understandingService: OnboardingUnderstandingService =
+      await createUnderstandingOrchestrator({
+        db: ctx.serverDB,
+        userId: ctx.userId,
+      });
+
+    return next({ ctx: { understandingService } });
+  },
+);
+
 export const userRouter = router({
   getUserActivitySummary: userProcedure.query(async ({ ctx }) => {
     return ctx.userModel.getUserActivitySummary();
   }),
+
+  confirmOnboardingUnderstanding: personalUnderstandingProcedure
+    .input(confirmOnboardingUnderstandingInputSchema)
+    .mutation(async ({ ctx, input }) => {
+      await new UnderstandingConfirmationRepository(ctx.serverDB, ctx.userId).confirm(input);
+
+      return {
+        confirmed: true,
+        resultId: input.resultId,
+        sessionId: input.sessionId,
+      } satisfies ConfirmOnboardingUnderstandingResult;
+    }),
+
+  // Polling reconciles operation state and may launch merge work.
+  getOnboardingUnderstanding: understandingOrchestratorProcedure
+    .input(onboardingUnderstandingTopicInputSchema)
+    .query(async ({ ctx, input }): Promise<OnboardingUnderstandingPollingResult> => {
+      const result = await ctx.understandingService.getSession(input);
+      after(() => ctx.understandingService.resumePendingSources(input));
+      return result;
+    }),
 
   getUserRegistrationDuration: userProcedure.query(async ({ ctx }) => {
     return ctx.userModel.getUserRegistrationDuration();
@@ -190,6 +326,18 @@ export const userRouter = router({
   resetSettings: userProcedure.mutation(async ({ ctx }) => {
     return ctx.userModel.deleteSetting();
   }),
+
+  retryOnboardingUnderstandingSource: understandingOrchestratorProcedure
+    .input(retryOnboardingUnderstandingSourceInputSchema)
+    .mutation(async ({ ctx, input }): Promise<OnboardingUnderstandingPollingResult> => {
+      return ctx.understandingService.retrySource(input);
+    }),
+
+  startOnboardingUnderstanding: understandingOrchestratorProcedure
+    .input(onboardingUnderstandingTopicInputSchema)
+    .mutation(async ({ ctx, input }): Promise<OnboardingUnderstandingPollingResult> => {
+      return ctx.understandingService.start(input, (task) => after(task));
+    }),
 
   updateAvatar: userProcedure.input(z.string()).mutation(async ({ ctx, input }) => {
     assertSafeAvatarInput(input, ctx.userId);

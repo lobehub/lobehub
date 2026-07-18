@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import type { OnboardingUnderstandingThreadMarker } from '../understanding';
+
 export const ThreadType = {
   Continuation: 'continuation',
   Eval: 'eval',
@@ -45,6 +47,8 @@ export interface ThreadMetadata {
    * the child messages being loaded.
    */
   model?: string;
+  /** Marks hidden onboarding Understanding source and merge isolation threads. */
+  onboardingUnderstanding?: OnboardingUnderstandingThreadMarker;
   /** Operation ID for tracking */
   operationId?: string;
   /**

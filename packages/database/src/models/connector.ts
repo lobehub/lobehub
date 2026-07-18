@@ -19,6 +19,20 @@ export interface DecryptedConnector extends Omit<UserConnectorItem, 'credentials
   credentials: ConnectorCredentials | null;
 }
 
+export interface ConnectorReference {
+  id: string;
+  isEnabled: boolean;
+  status: string;
+}
+
+export interface ComposioConnectorReference extends ConnectorReference {
+  composio?: {
+    appSlug: string;
+    connectedAccountId: string;
+    status: string;
+  };
+}
+
 type CreateConnectorParams = Omit<NewUserConnector, 'userId' | 'id' | 'createdAt' | 'updatedAt'>;
 
 type UpdateConnectorParams = Partial<
@@ -320,6 +334,52 @@ export class ConnectorModel {
     return decryptRow(row, gateKeeper);
   };
 
+  queryReferencesByIdentifiers = async (identifiers: string[]): Promise<ConnectorReference[]> => {
+    if (identifiers.length === 0) return [];
+
+    return this.db
+      .select({
+        id: userConnectors.id,
+        isEnabled: userConnectors.isEnabled,
+        status: userConnectors.status,
+      })
+      .from(userConnectors)
+      .where(and(this.ownership(), inArray(userConnectors.identifier, identifiers)));
+  };
+
+  queryComposioReferencesByIdentifiers = async (
+    identifiers: string[],
+  ): Promise<ComposioConnectorReference[]> => {
+    if (identifiers.length === 0) return [];
+
+    const rows = await this.db
+      .select({
+        id: userConnectors.id,
+        isEnabled: userConnectors.isEnabled,
+        metadata: userConnectors.metadata,
+        status: userConnectors.status,
+      })
+      .from(userConnectors)
+      .where(and(this.ownership(), inArray(userConnectors.identifier, identifiers)));
+
+    return rows.map(toComposioConnectorReference);
+  };
+
+  findComposioReferenceById = async (id: string): Promise<ComposioConnectorReference | null> => {
+    const [row] = await this.db
+      .select({
+        id: userConnectors.id,
+        isEnabled: userConnectors.isEnabled,
+        metadata: userConnectors.metadata,
+        status: userConnectors.status,
+      })
+      .from(userConnectors)
+      .where(and(eq(userConnectors.id, id), this.ownership()))
+      .limit(1);
+
+    return row ? toComposioConnectorReference(row) : null;
+  };
+
   findById = async (
     id: string,
     gateKeeper: GateKeeper | undefined = this.gateKeeper,
@@ -365,6 +425,29 @@ export class ConnectorModel {
 }
 
 // ── Private helpers ───────────────────────────────────────────────────────────
+
+const toComposioConnectorReference = ({
+  id,
+  isEnabled,
+  metadata,
+  status,
+}: Pick<UserConnectorItem, 'id' | 'isEnabled' | 'metadata' | 'status'>) => {
+  const composio = metadata?.composio;
+  return {
+    ...(composio
+      ? {
+          composio: {
+            appSlug: composio.appSlug,
+            connectedAccountId: composio.connectedAccountId,
+            status: composio.status,
+          },
+        }
+      : {}),
+    id,
+    isEnabled,
+    status,
+  } satisfies ComposioConnectorReference;
+};
 
 async function encryptCredentials(credentials: string, gateKeeper?: GateKeeper): Promise<string> {
   if (!gateKeeper) return credentials;

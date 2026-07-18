@@ -229,6 +229,98 @@ describe('ConnectorModel', () => {
     });
   });
 
+  describe('queryReferencesByIdentifiers', () => {
+    it('returns scoped safe references without decrypting credentials', async () => {
+      const model = new ConnectorModel(serverDB, userId, undefined, gateKeeper);
+      await model.create({
+        credentials: JSON.stringify(apikeyCredentials),
+        identifier: 'github',
+        isEnabled: true,
+        name: 'GitHub',
+        sourceType: 'builtin',
+        status: 'connected',
+      });
+      await new ConnectorModel(serverDB, otherUserId).create({
+        identifier: 'github',
+        name: 'Other GitHub',
+        sourceType: 'builtin',
+        status: 'connected',
+      });
+      gateKeeper.decrypt.mockClear();
+
+      const rows = await model.queryReferencesByIdentifiers(['github']);
+
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toEqual({
+        id: expect.any(String),
+        isEnabled: true,
+        status: 'connected',
+      });
+      expect(rows[0]).not.toHaveProperty('credentials');
+      expect(gateKeeper.decrypt).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Composio references', () => {
+    it('returns only scoped non-credential Composio fields without decrypting', async () => {
+      const model = new ConnectorModel(serverDB, userId, undefined, gateKeeper);
+      const created = await model.create({
+        credentials: JSON.stringify(apikeyCredentials),
+        identifier: 'gmail',
+        isEnabled: true,
+        metadata: {
+          composio: {
+            appSlug: 'gmail',
+            authConfigId: 'secret-auth-config',
+            connectedAccountId: 'ca-current',
+            redirectUrl: 'https://secret.example/callback',
+            status: 'ACTIVE',
+          },
+        },
+        name: 'Gmail',
+        sourceType: 'builtin',
+        status: 'connected',
+      });
+      await new ConnectorModel(serverDB, otherUserId).create({
+        identifier: 'gmail',
+        isEnabled: true,
+        metadata: {
+          composio: {
+            appSlug: 'gmail',
+            authConfigId: 'other-auth-config',
+            connectedAccountId: 'ca-other',
+            status: 'ACTIVE',
+          },
+        },
+        name: 'Other Gmail',
+        sourceType: 'builtin',
+        status: 'connected',
+      });
+      gateKeeper.decrypt.mockClear();
+
+      const rows = await model.queryComposioReferencesByIdentifiers(['gmail']);
+      const found = await model.findComposioReferenceById(created.id);
+
+      expect(rows).toEqual([
+        {
+          composio: {
+            appSlug: 'gmail',
+            connectedAccountId: 'ca-current',
+            status: 'ACTIVE',
+          },
+          id: created.id,
+          isEnabled: true,
+          status: 'connected',
+        },
+      ]);
+      expect(found).toEqual(rows[0]);
+      expect(JSON.stringify(rows)).not.toMatch(
+        /credentials|secret-auth-config|redirectUrl|ca-other/,
+      );
+      expect(gateKeeper.decrypt).not.toHaveBeenCalled();
+    });
+  });
+
   describe('findById', () => {
     it('returns the decrypted connector by id', async () => {
       const model = new ConnectorModel(serverDB, userId, undefined, gateKeeper);
