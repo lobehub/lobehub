@@ -90,6 +90,54 @@ describe('MCPClient', () => {
     );
   });
 
+  // Regression for https://github.com/lobehub/lobehub/issues/17307:
+  // the stdio pre-check must NOT spread the full server process.env into the
+  // spawned subprocess, otherwise server-side secrets leak to the MCP process.
+  describe('Stdio pre-check env isolation (#17307)', () => {
+    const TIMEOUT = 120_000;
+
+    it(
+      'does not leak server process.env secrets to the pre-check subprocess',
+      async () => {
+        const SECRET_KEY = 'LOBE_TEST_SECRET_LEAK';
+        const SECRET_VALUE = 'super-secret-should-not-leak-1234';
+        const ALLOWED_KEY = 'LOBE_TEST_USER_ENV';
+        const ALLOWED_VALUE = 'user-configured-value';
+
+        process.env[SECRET_KEY] = SECRET_VALUE;
+        try {
+          const mcpClient = new MCPClient({
+            id: 'env-leak-test',
+            name: 'Env Leak Test',
+            type: 'stdio',
+            command: process.execPath,
+            // Dump the child env to stderr then exit non-zero: the main transport
+            // connect fails, which triggers the pre-check path we are guarding.
+            args: ['-e', 'console.error(JSON.stringify(process.env)); process.exit(1);'],
+            env: { [ALLOWED_KEY]: ALLOWED_VALUE },
+          } as any);
+
+          let thrown: any;
+          try {
+            await mcpClient.initialize();
+          } catch (error) {
+            thrown = error;
+          }
+
+          expect(thrown).toBeDefined();
+          const errorLog: string = thrown?.data?.metadata?.errorLog ?? '';
+          // the child env dumped to stderr must not contain the server secret
+          expect(errorLog).not.toContain(SECRET_VALUE);
+          // sanity: user-configured env vars are still forwarded to the subprocess
+          expect(errorLog).toContain(ALLOWED_VALUE);
+        } finally {
+          delete process.env[SECRET_KEY];
+        }
+      },
+      TIMEOUT,
+    );
+  });
+
   // Error Handling tests remain the same...
   describe('Error Handling', () => {
     it('should throw error for unsupported connection type', () => {

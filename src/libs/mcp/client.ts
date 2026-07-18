@@ -43,8 +43,11 @@ async function preCheckStdioCommand(params: {
     log('Pre-checking stdio command: %s with args: %O', params.command, params.args);
 
     const child = spawn(params.command, params.args, {
+      // Do NOT spread the full process.env here: it would leak server-side secrets
+      // (DATABASE_URL, KEY_VAULTS_SECRET, provider API keys, OAuth/JWT secrets, ...)
+      // into the spawned MCP subprocess. Match the main StdioClientTransport below,
+      // which only exposes the safe default environment plus user-configured vars.
       env: {
-        ...process.env,
         ...getDefaultEnvironment(),
         ...params.env,
       },
