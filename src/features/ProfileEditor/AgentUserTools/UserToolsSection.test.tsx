@@ -21,9 +21,18 @@ const mocks = vi.hoisted(() => ({
       string,
       Array<{ agentId: string; id: string; identifier: string }>
     >,
+    builtinTools: [] as Array<{
+      hidden?: boolean;
+      identifier: string;
+      manifest: { api: never[]; identifier: string; meta: { title: string }; systemRole: string };
+      type: 'builtin';
+    }>,
     connectors: [] as unknown[],
   },
-  agentConfig: { plugins: [] as unknown[] },
+  agentConfig: { plugins: [] } as {
+    chatConfig?: { skillActivateMode?: 'auto' | 'manual' };
+    plugins: unknown[];
+  },
 }));
 
 vi.mock('react-i18next', () => ({
@@ -35,8 +44,8 @@ vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
   useActiveWorkspaceId: () => 'ws-1',
 }));
 
-// The chips themselves are rendered by AgentTool (covered separately); stub it
-// so this test isolates the header count wiring.
+// The chips themselves are rendered by AgentTool; stub it so this test isolates
+// the header count wiring. The shared visibility predicate has focused coverage.
 vi.mock('@/features/ProfileEditor/AgentTool', () => ({ default: () => null }));
 vi.mock('@/features/ProfileEditor/PluginTag', () => ({ default: () => null }));
 
@@ -74,9 +83,10 @@ const renderSection = () =>
 
 const labelText = () => screen.getByTestId('label').textContent;
 
-describe('UserToolsSection — base tool count excludes agent-owned connectors', () => {
+describe('UserToolsSection — Workspace/User tool count', () => {
   beforeEach(() => {
     mocks.toolState.agentConnectors = {};
+    mocks.toolState.builtinTools = [];
     mocks.toolState.connectors = [];
     mocks.agentConfig = { plugins: [] };
   });
@@ -104,6 +114,80 @@ describe('UserToolsSection — base tool count excludes agent-owned connectors',
     mocks.toolState.agentConnectors = {
       'agent-1': [{ agentId: 'agent-1', id: 'c1', identifier: 'google-drive' }],
     };
+
+    renderSection();
+
+    expect(labelText()).toContain('· 1');
+  });
+
+  it('does not count Web Browsing even when a legacy plugin entry is pinned', () => {
+    mocks.agentConfig = {
+      plugins: [
+        { identifier: 'lobe-web-browsing', mode: 'pinned' },
+        { identifier: 'some-user-plugin', mode: 'pinned' },
+      ],
+    };
+    mocks.toolState.builtinTools = [
+      {
+        hidden: true,
+        identifier: 'lobe-web-browsing',
+        manifest: {
+          api: [],
+          identifier: 'lobe-web-browsing',
+          meta: { title: 'Web Browsing' },
+          systemRole: '',
+        },
+        type: 'builtin',
+      },
+    ];
+
+    renderSection();
+
+    expect(labelText()).toContain('· 1');
+  });
+
+  it('does not count pinned Skill Store in auto activation mode', () => {
+    mocks.agentConfig = {
+      chatConfig: { skillActivateMode: 'auto' },
+      plugins: [{ identifier: 'lobe-skill-store', mode: 'pinned' }],
+    };
+    mocks.toolState.builtinTools = [
+      {
+        hidden: true,
+        identifier: 'lobe-skill-store',
+        manifest: {
+          api: [],
+          identifier: 'lobe-skill-store',
+          meta: { title: 'Skill Store' },
+          systemRole: '',
+        },
+        type: 'builtin',
+      },
+    ];
+
+    renderSection();
+
+    expect(labelText()).toContain('· 0');
+  });
+
+  it('counts pinned Skill Store in manual activation mode', () => {
+    mocks.agentConfig = {
+      chatConfig: { skillActivateMode: 'manual' },
+      plugins: [{ identifier: 'lobe-skill-store', mode: 'pinned' }],
+    };
+    mocks.toolState.builtinTools = [
+      {
+        hidden: true,
+        identifier: 'lobe-skill-store',
+        manifest: {
+          api: [],
+          identifier: 'lobe-skill-store',
+          meta: { title: 'Skill Store' },
+          systemRole: '',
+        },
+        type: 'builtin',
+      },
+    ];
 
     renderSection();
 
