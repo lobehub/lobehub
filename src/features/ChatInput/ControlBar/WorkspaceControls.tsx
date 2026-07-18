@@ -42,12 +42,10 @@ const WorkspaceControls = memo<WorkspaceControlsProps>(
     // member's run actually targets.
     const { agencyConfig } = useEffectiveAgencyConfig(agentId);
     const deviceRoutingAvailable = useIsGatewayModeEnabled(agentId);
-    const isWorkspaceAgent = useAgentStore(agentByIdSelectors.isWorkspaceAgentById(agentId));
     const effectiveTarget = resolveExecutionTarget(agencyConfig, {
       clientExecutionAvailable: isDesktop,
       deviceRoutingAvailable,
       isHetero: isHeterogeneous,
-      workspaceScoped: isWorkspaceAgent,
     });
     const isDeviceMode = effectiveTarget === 'device' && !!agencyConfig?.boundDeviceId;
 

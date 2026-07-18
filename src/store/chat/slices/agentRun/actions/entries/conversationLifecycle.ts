@@ -277,14 +277,24 @@ export class ConversationLifecycleActionImpl {
 
     if (!agentId) return;
 
-    const agentConfig = agentSelectors.getAgentConfigById(agentId)(getAgentStoreState());
-    const heterogeneousProvider = agentConfig?.agencyConfig?.heterogeneousProvider;
+    const agentState = getAgentStoreState();
+    const agentConfig = agentSelectors.getAgentConfigById(agentId)(agentState);
+    const isWorkspaceAgent = agentByIdSelectors.isWorkspaceAgentById(agentId)(agentState);
+    // Runtime selection must use the same per-user device override as the
+    // switcher. A workspace-local pick is intentionally private to this member
+    // and is therefore safe to execute in-process on their desktop.
+    const agencyConfig = resolveAgencyConfig(
+      agentConfig?.agencyConfig,
+      isWorkspaceAgent
+        ? getUserStoreState().workspaceUserPreference.agentDeviceOverrides?.[agentId]
+        : undefined,
+    );
+    const heterogeneousProvider = agencyConfig?.heterogeneousProvider;
     const runtimeType = selectRuntimeType({
-      boundDeviceId: agentConfig?.agencyConfig?.boundDeviceId,
-      executionTarget: agentConfig?.agencyConfig?.executionTarget,
+      boundDeviceId: agencyConfig?.boundDeviceId,
+      executionTarget: agencyConfig?.executionTarget,
       heterogeneousProvider,
       isGatewayMode: this.#get().isGatewayModeEnabled(agentId),
-      isWorkspaceAgent: agentByIdSelectors.isWorkspaceAgentById(agentId)(getAgentStoreState()),
       // Callers that need to pin the runtime (e.g. task topics that were
       // started server-side via runTask) pass `forceRuntime` to override
       // the agent's local/cloud preference.
@@ -588,16 +598,6 @@ export class ConversationLifecycleActionImpl {
       ? topicSelectors.getTopicById(operationContext.topicId)(this.#get())
       : undefined;
     const currentDeviceId = getElectronStoreState().gatewayDeviceInfo?.deviceId;
-    const agentState = getAgentStoreState();
-    // Merge the caller's per-user device override (LOBE-11689) so the cwd is
-    // read for the device THIS member's run targets, not the shared row's.
-    const isWorkspaceAgentForCwd = agentByIdSelectors.isWorkspaceAgentById(agentId)(agentState);
-    const agencyConfig = resolveAgencyConfig(
-      agentByIdSelectors.getAgencyConfigById(agentId)(agentState),
-      isWorkspaceAgentForCwd
-        ? getUserStoreState().workspaceUserPreference.agentDeviceOverrides?.[agentId]
-        : undefined,
-    );
     // Resolve the cwd for every hetero-provider run that lands on a MACHINE
     // (in-process `hetero` runtime, or a gateway dispatch whose effective
     // target routes to a device) — the server can only honour a cwd the client
@@ -609,7 +609,6 @@ export class ConversationLifecycleActionImpl {
       ? resolveExecutionTarget(agencyConfig, {
           clientExecutionAvailable: isDesktop,
           isHetero: true,
-          workspaceScoped: isWorkspaceAgentForCwd,
         })
       : undefined;
     const resolvesHeteroCwd =

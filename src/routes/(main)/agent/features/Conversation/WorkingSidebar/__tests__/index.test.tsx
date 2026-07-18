@@ -22,7 +22,18 @@ const rightPanel = vi.hoisted(() => ({
 
 const agentStore = vi.hoisted(() => ({
   activeAgentId: undefined as string | undefined,
-  isLocalSystemEnabled: false,
+  isHeterogeneous: false,
+  rawAgencyConfig: undefined as
+    { boundDeviceId?: string; executionTarget?: 'device' | 'local' } | undefined,
+}));
+
+const effectiveConfig = vi.hoisted(() => ({
+  agencyConfig: undefined as
+    { boundDeviceId?: string; executionTarget?: 'device' | 'local' } | undefined,
+}));
+
+const filesProps = vi.hoisted(() => ({
+  current: undefined as { deviceId?: string; workingDirectory: string } | undefined,
 }));
 
 const reviewState = vi.hoisted(() => ({
@@ -51,7 +62,12 @@ vi.mock('@/features/RightPanel', () => ({
 
 // ─── stub every downstream dependency so the sidebar renders deterministically ──
 
-vi.mock('../Files', () => ({ default: () => <div /> }));
+vi.mock('../Files', () => ({
+  default: (props: { deviceId?: string; workingDirectory: string }) => {
+    filesProps.current = props;
+    return <div data-testid="files" />;
+  },
+}));
 vi.mock('../Review', () => ({ default: () => <div /> }));
 vi.mock('../ProgressSection', () => ({ default: () => <div /> }));
 vi.mock('../ResourcesSection', () => ({ default: () => <div /> }));
@@ -64,15 +80,14 @@ vi.mock('@/store/agent', () => ({
 }));
 vi.mock('@/store/agent/selectors', () => ({
   agentByIdSelectors: {
-    getAgencyConfigById: () => () => undefined,
+    getAgencyConfigById: () => () => agentStore.rawAgencyConfig,
     isWorkspaceAgentById: () => () => false,
   },
   agentSelectors: {
-    isCurrentAgentHeterogeneous: () => false,
+    isCurrentAgentHeterogeneous: () => agentStore.isHeterogeneous,
   },
   chatConfigByIdSelectors: {
     isChatModeById: () => () => false,
-    isLocalSystemEnabledById: () => () => agentStore.isLocalSystemEnabled,
   },
 }));
 vi.mock('@/store/global', () => ({
@@ -96,11 +111,19 @@ vi.mock('@/features/ChatInput/ControlBar/useRepoType', () => ({
 vi.mock('@/hooks/useEffectiveWorkingDirectory', () => ({
   useEffectiveWorkingDirectory: () => reviewState.workingDirectory,
 }));
+vi.mock('@/hooks/useEffectiveAgencyConfig', () => ({
+  useEffectiveAgencyConfig: () => ({ agencyConfig: effectiveConfig.agencyConfig }),
+}));
 vi.mock('@/hooks/useLocalStorageState', () => ({
   useLocalStorageState: () => [reviewState.showTree, vi.fn()],
 }));
 vi.mock('@/helpers/agentWorkingDirectory', () => ({ resolveTargetDeviceId: () => undefined }));
-vi.mock('@/helpers/executionTarget', () => ({ resolveExecutionTarget: () => 'local' }));
+vi.mock('@/helpers/executionTarget', () => ({
+  resolveExecutionTarget: (
+    agencyConfig: { executionTarget?: 'device' | 'local' } | undefined,
+    options: { workspaceScoped?: boolean },
+  ) => (options.workspaceScoped ? 'device' : (agencyConfig?.executionTarget ?? 'local')),
+}));
 vi.mock('@/helpers/gatewayMode', () => ({ useIsGatewayModeEnabled: () => false }));
 
 vi.mock('react-i18next', () => ({
@@ -118,7 +141,10 @@ vi.mock('antd-style', () => ({
 
 beforeEach(() => {
   agentStore.activeAgentId = undefined;
-  agentStore.isLocalSystemEnabled = false;
+  agentStore.isHeterogeneous = false;
+  agentStore.rawAgencyConfig = undefined;
+  effectiveConfig.agencyConfig = undefined;
+  filesProps.current = undefined;
   reviewState.repoType = undefined;
   reviewState.showTree = false;
   reviewState.workingDirectory = undefined;
@@ -158,7 +184,6 @@ describe('AgentWorkingSidebar — controlled panel width', () => {
 
   it('clamps two-pane Review width without overwriting the persisted preference', () => {
     agentStore.activeAgentId = 'agent';
-    agentStore.isLocalSystemEnabled = true;
     reviewState.repoType = 'git';
     reviewState.showTree = true;
     reviewState.workingDirectory = 'C:\\repo';
@@ -219,5 +244,30 @@ describe('AgentWorkingSidebar — controlled panel width', () => {
 
     expect(rightPanel.current?.width).toBe(360);
     expect(globalStore.updateSystemStatus).not.toHaveBeenCalled();
+  });
+
+  it('indexes a workspace-local project on this desktop instead of the shared bound device', () => {
+    agentStore.activeAgentId = 'agent';
+    agentStore.isHeterogeneous = true;
+    // The shared row can still point at a workspace device. This member's
+    // private override selects their own desktop and must win for both the cwd
+    // and the file transport.
+    agentStore.rawAgencyConfig = {
+      boundDeviceId: 'workspace-device',
+      executionTarget: 'device',
+    };
+    effectiveConfig.agencyConfig = {
+      boundDeviceId: 'personal-device',
+      executionTarget: 'local',
+    };
+    reviewState.workingDirectory = '/Users/me/project';
+    globalStore.status.workingSidebarTab = 'files';
+
+    render(<AgentWorkingSidebar />);
+
+    expect(filesProps.current).toEqual({
+      deviceId: undefined,
+      workingDirectory: '/Users/me/project',
+    });
   });
 });

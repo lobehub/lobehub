@@ -132,7 +132,6 @@ const HeteroControlBar = memo(() => {
   // Effective config = shared row + this member's device override (LOBE-11689),
   // so the quota badges gate on where THIS member's run actually executes.
   const { agencyConfig } = useEffectiveAgencyConfig(agentId);
-  const isWorkspaceAgent = useAgentStore(agentByIdSelectors.isWorkspaceAgentById(agentId));
 
   // On web there's no full-access badge / skeleton — just the workspace controls
   // (the cloud repo switcher is rendered inside WorkspaceControls). The CLI
@@ -169,7 +168,6 @@ const HeteroControlBar = memo(() => {
     resolveExecutionTarget(agencyConfig, {
       clientExecutionAvailable: isDesktop,
       isHetero: true,
-      workspaceScoped: isWorkspaceAgent,
     }) === 'local';
   const shouldShowCodexQuota = heteroProvider?.type === 'codex' && isLocalHeteroExecution;
   const shouldShowClaudeQuota = heteroProvider?.type === 'claude-code' && isLocalHeteroExecution;

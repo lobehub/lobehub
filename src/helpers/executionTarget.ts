@@ -84,16 +84,15 @@ export interface ResolveExecutionTargetOptions {
    */
   trigger?: RequestTrigger;
   /**
-   * The agent belongs to a workspace (`agent.workspaceId` is set). Every
-   * member runs a workspace agent through the shared device pool, so the
-   * CURRENT member's own client is never a valid execution host — `local`
-   * would silently run the shared agent on whichever personal machine opened
-   * it. Treats client execution as unavailable: an unset target no longer
-   * defaults to `local`, and a stored `local` (synced from before the agent
-   * joined the workspace) coerces to `sandbox` when supported (otherwise
-   * `none`) — or, for hetero agents, to `device` when a (grandfathered)
-   * `boundDeviceId` pins a machine, matching the write-time guard in
-   * `AgentModel.assertWorkspaceDeviceBinding`.
+   * The supplied config is the raw workspace-shared fallback and has NOT been
+   * merged with the current member's `agentDeviceOverrides`. Such a config
+   * must not run `local` on whichever member happened to open it, so this
+   * treats client execution as unavailable and coerces legacy local values to
+   * sandbox/device as appropriate.
+   *
+   * Never set this for an effective config returned by `resolveAgencyConfig`
+   * or `useEffectiveAgencyConfig`: a member's private `local` override is an
+   * explicit choice to execute on their own desktop.
    */
   workspaceScoped?: boolean;
 }
@@ -153,8 +152,9 @@ export const resolveExecutionTarget = (
     workspaceScoped,
   }: ResolveExecutionTargetOptions,
 ): DeviceExecutionTarget => {
-  // A workspace agent never executes on the current member's own client — see
-  // `workspaceScoped` above. Same coercions as a client-less environment.
+  // An unmerged workspace-shared config never executes on the current member's
+  // own client — see `workspaceScoped` above. Same coercions as a client-less
+  // environment.
   const clientAvailable = clientExecutionAvailable && !workspaceScoped;
   const sandboxAvailable =
     sandboxExecutionAvailable ?? agencyConfig?.heterogeneousProvider?.type !== 'amp';

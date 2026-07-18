@@ -12,14 +12,11 @@ import RightPanel from '@/features/RightPanel';
 import { resolveTargetDeviceId } from '@/helpers/agentWorkingDirectory';
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { useIsGatewayModeEnabled } from '@/helpers/gatewayMode';
+import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import { useAgentStore } from '@/store/agent';
-import {
-  agentByIdSelectors,
-  agentSelectors,
-  chatConfigByIdSelectors,
-} from '@/store/agent/selectors';
+import { agentSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { useElectronStore } from '@/store/electron';
 import { useGlobalStore } from '@/store/global';
@@ -112,9 +109,6 @@ const AgentWorkingSidebar = memo(() => {
   ]);
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   const topicId = useChatStore((s) => s.activeTopicId);
-  const isLocalSystemEnabled = useAgentStore((s) =>
-    activeAgentId ? chatConfigByIdSelectors.isLocalSystemEnabledById(activeAgentId)(s) : false,
-  );
   const isChatMode = useAgentStore((s) =>
     activeAgentId ? chatConfigByIdSelectors.isChatModeById(activeAgentId)(s) : false,
   );
@@ -126,21 +120,15 @@ const AgentWorkingSidebar = memo(() => {
   const workingDirectory = useEffectiveWorkingDirectory(activeAgentId);
   // Effective target device for git ops — bound device for remote agents, this
   // machine otherwise. Resolved the same way WorkingDirectoryPicker / GitStatus do.
-  const agencyConfig = useAgentStore((s) =>
-    activeAgentId ? agentByIdSelectors.getAgencyConfigById(activeAgentId)(s) : undefined,
-  );
+  const { agencyConfig } = useEffectiveAgencyConfig(activeAgentId);
   const currentDeviceId = useElectronStore((s) => s.gatewayDeviceInfo?.deviceId);
   const targetDeviceId = resolveTargetDeviceId(agencyConfig, currentDeviceId);
   const repoType = useRepoType(workingDirectory, targetDeviceId);
   const deviceRoutingAvailable = useIsGatewayModeEnabled(activeAgentId);
-  const isWorkspaceAgent = useAgentStore((s) =>
-    activeAgentId ? agentByIdSelectors.isWorkspaceAgentById(activeAgentId)(s) : false,
-  );
   const effectiveTarget = resolveExecutionTarget(agencyConfig, {
     clientExecutionAvailable: isDesktop,
     deviceRoutingAvailable,
     isHetero,
-    workspaceScoped: isWorkspaceAgent,
   });
 
   // Running against a bound device (remote, or this machine as a device): file
@@ -152,12 +140,11 @@ const AgentWorkingSidebar = memo(() => {
   // remote device RPC; local "This device" must keep Electron IPC + file-open
   // actions enabled.
   const remoteDeviceId = isDeviceMode ? agencyConfig.boundDeviceId : undefined;
+  const isLocalExecution = effectiveTarget === 'local';
   // Files tab is an agent-mode affordance — in plain chat mode the working
   // directory is irrelevant to the user, so hide the tab even when one resolves.
-  const filesAvailable =
-    !isChatMode && (isLocalSystemEnabled || isDeviceMode) && !!workingDirectory;
-  const reviewAvailable =
-    (isLocalSystemEnabled || isDeviceMode) && !!workingDirectory && !!repoType;
+  const filesAvailable = !isChatMode && (isLocalExecution || isDeviceMode) && !!workingDirectory;
+  const reviewAvailable = (isLocalExecution || isDeviceMode) && !!workingDirectory && !!repoType;
   const paramsAvailable = !isHetero;
   // The in-app browser pages are main-process WebContentsViews — desktop only,
   // and gated behind the Labs toggle while the feature matures.
