@@ -75,6 +75,7 @@ const headerStyles = createStaticStyles(({ css }) => ({
 
     ${FLOATING_HEADER_QUERY} {
       pointer-events: auto;
+      overflow: visible;
 
       /* Hug the title pill so the transparent middle stays click-through */
       flex-grow: 0;
