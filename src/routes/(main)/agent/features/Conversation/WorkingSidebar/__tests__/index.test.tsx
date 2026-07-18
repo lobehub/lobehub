@@ -1,4 +1,4 @@
-import { act, render } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -39,6 +39,7 @@ const filesProps = vi.hoisted(() => ({
 
 const reviewState = vi.hoisted(() => ({
   repoType: undefined as string | undefined,
+  setRepoType: undefined as ((repoType?: string) => void) | undefined,
   showTree: false,
   workingDirectory: undefined as string | undefined,
 }));
@@ -106,9 +107,17 @@ vi.mock('@/business/client/features/WorkingSidebarTabs', () => ({
   useBusinessWorkingSidebarTabs: () => [],
 }));
 
-vi.mock('@/features/ChatInput/ControlBar/useRepoType', () => ({
-  useRepoType: () => reviewState.repoType,
-}));
+vi.mock('@/features/ChatInput/ControlBar/useRepoType', async () => {
+  const { useState } = await import('react');
+
+  return {
+    useRepoType: () => {
+      const [repoType, setRepoType] = useState(reviewState.repoType);
+      reviewState.setRepoType = setRepoType;
+      return repoType;
+    },
+  };
+});
 vi.mock('@/hooks/useEffectiveWorkingDirectory', () => ({
   useEffectiveWorkingDirectory: () => reviewState.workingDirectory,
 }));
@@ -151,6 +160,7 @@ beforeEach(() => {
   effectiveConfig.workspaceScoped = false;
   filesProps.current = undefined;
   reviewState.repoType = undefined;
+  reviewState.setRepoType = undefined;
   reviewState.showTree = false;
   reviewState.workingDirectory = undefined;
   globalStore.status.workingSidebarWidth = 360;
@@ -163,6 +173,7 @@ beforeEach(() => {
 
 afterEach(() => {
   rightPanel.current = undefined;
+  vi.restoreAllMocks();
   vi.clearAllMocks();
 });
 
@@ -293,5 +304,74 @@ describe('AgentWorkingSidebar — controlled panel width', () => {
       deviceId: 'workspace-device',
       workingDirectory: '/workspace/project',
     });
+  });
+});
+
+describe('AgentWorkingSidebar — tab strip', () => {
+  // Regression: at the 300px minimum panel width, labels such as “Deployments”
+  // were allowed to shrink and wrap inside words. Tabs now stay on one line in a
+  // horizontal strip, so a persisted tab near the end must be brought into view.
+  it('scrolls an overflowed active tab into view', () => {
+    globalStore.status.workingSidebarTab = 'params';
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: Element,
+    ) {
+      return this instanceof HTMLButtonElement && this.getAttribute('aria-pressed') === 'true'
+        ? ({ left: 220, right: 280 } as DOMRect)
+        : ({ left: 0, right: 200 } as DOMRect);
+    });
+    const scrollIntoView = vi
+      .spyOn(Element.prototype, 'scrollIntoView')
+      .mockImplementation(() => undefined);
+
+    render(<AgentWorkingSidebar />);
+    const paramsTab = screen.getByRole('button', { name: 'settingModel.params.panel.tab' });
+
+    expect(paramsTab).toHaveAttribute('aria-pressed', 'true');
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest', inline: 'nearest' });
+  });
+
+  it('exposes and reveals a persisted active Works tab', () => {
+    globalStore.status.workingSidebarTab = 'works';
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: Element,
+    ) {
+      return this instanceof HTMLButtonElement && this.getAttribute('aria-pressed') === 'true'
+        ? ({ left: 220, right: 280 } as DOMRect)
+        : ({ left: 0, right: 200 } as DOMRect);
+    });
+    const scrollIntoView = vi
+      .spyOn(Element.prototype, 'scrollIntoView')
+      .mockImplementation(() => undefined);
+
+    render(<AgentWorkingSidebar />);
+    const worksTab = screen.getByRole('button', { name: 'workingPanel.works.title' });
+
+    expect(worksTab).toHaveAttribute('aria-pressed', 'true');
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest', inline: 'nearest' });
+  });
+
+  it('reveals the active tab again when an async tab becomes available', () => {
+    agentStore.activeAgentId = 'agent';
+    reviewState.workingDirectory = '/repo';
+    globalStore.status.workingSidebarTab = 'params';
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: Element,
+    ) {
+      return this instanceof HTMLButtonElement && this.getAttribute('aria-pressed') === 'true'
+        ? ({ left: 220, right: 280 } as DOMRect)
+        : ({ left: 0, right: 200 } as DOMRect);
+    });
+    const scrollIntoView = vi
+      .spyOn(Element.prototype, 'scrollIntoView')
+      .mockImplementation(() => undefined);
+
+    render(<AgentWorkingSidebar />);
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+
+    act(() => reviewState.setRepoType?.('git'));
+
+    expect(screen.getByRole('button', { name: 'workingPanel.review.title' })).toBeInTheDocument();
+    expect(scrollIntoView).toHaveBeenCalledTimes(2);
   });
 });
