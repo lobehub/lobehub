@@ -9,12 +9,23 @@ import {
   resolveExecutionPlan,
   resolveExecutionTarget,
   resolveRuntimeMode,
+  resolveWorkspaceScoped,
 } from './executionTarget';
 
 const cfg = (over: Partial<LobeAgentAgencyConfig> = {}): LobeAgentAgencyConfig => ({ ...over });
 const ampCfg = (over: Partial<LobeAgentAgencyConfig> = {}): LobeAgentAgencyConfig => ({
   heterogeneousProvider: { command: 'amp', type: 'amp' },
   ...over,
+});
+
+describe('resolveWorkspaceScoped', () => {
+  it('preserves shared-row coercion until a workspace member explicitly selects a target', () => {
+    expect(resolveWorkspaceScoped(false, undefined)).toBe(false);
+    expect(resolveWorkspaceScoped(true, undefined)).toBe(true);
+    expect(resolveWorkspaceScoped(true, { boundDeviceId: 'member-device' })).toBe(true);
+    expect(resolveWorkspaceScoped(true, { executionTarget: 'local' })).toBe(false);
+    expect(resolveWorkspaceScoped(true, { executionTarget: 'device' })).toBe(false);
+  });
 });
 
 describe('resolveExecutionTarget', () => {

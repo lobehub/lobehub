@@ -30,6 +30,7 @@ describe('useRemoteAgentDeviceGuard', () => {
         heterogeneousProvider: { type: 'codex' },
       },
       isPreferenceLoading: false,
+      workspaceScoped: false,
     });
     mockedListDevices.mockResolvedValue([
       { deviceId: 'creator-device', online: false },
@@ -49,6 +50,7 @@ describe('useRemoteAgentDeviceGuard', () => {
         heterogeneousProvider: { type: 'claude-code' },
       },
       isPreferenceLoading: false,
+      workspaceScoped: false,
     });
     mockedListDevices.mockResolvedValue([{ deviceId: 'my-device', online: false }] as never);
 
@@ -65,6 +67,7 @@ describe('useRemoteAgentDeviceGuard', () => {
         heterogeneousProvider: { type: 'codex' },
       },
       isPreferenceLoading: true,
+      workspaceScoped: true,
     });
 
     const { result } = renderHook(() => useRemoteAgentDeviceGuard({ agentId: 'agent-1' }));
@@ -77,6 +80,7 @@ describe('useRemoteAgentDeviceGuard', () => {
     mockedUseEffectiveAgencyConfig.mockReturnValue({
       agencyConfig: { heterogeneousProvider: { type: 'codex' } },
       isPreferenceLoading: false,
+      workspaceScoped: false,
     });
 
     const { result } = renderHook(() => useRemoteAgentDeviceGuard({ agentId: 'agent-1' }));

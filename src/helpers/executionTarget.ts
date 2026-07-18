@@ -1,10 +1,21 @@
 import type {
+  AgentDeviceOverride,
   DeviceExecutionTarget,
   LobeAgentAgencyConfig,
   LobeAgentChatConfig,
   RuntimeEnvMode,
 } from '@lobechat/types';
 import { RequestTrigger } from '@lobechat/types';
+
+/**
+ * Whether a workspace config still needs the shared-row safety coercion.
+ * A member opts out only by explicitly choosing an execution target; a missing
+ * or bound-device-only override still inherits the raw shared target.
+ */
+export const resolveWorkspaceScoped = (
+  isWorkspaceAgent: boolean,
+  deviceOverride: AgentDeviceOverride | null | undefined,
+): boolean => isWorkspaceAgent && deviceOverride?.executionTarget === undefined;
 
 /**
  * The agent's tool mode — explicit `chatConfig.toolMode` wins; otherwise derive
@@ -90,9 +101,10 @@ export interface ResolveExecutionTargetOptions {
    * treats client execution as unavailable and coerces legacy local values to
    * sandbox/device as appropriate.
    *
-   * Never set this for an effective config returned by `resolveAgencyConfig`
-   * or `useEffectiveAgencyConfig`: a member's private `local` override is an
-   * explicit choice to execute on their own desktop.
+   * Set this to `false` only when the current member has an explicit
+   * `executionTarget` override. Calling `resolveAgencyConfig` alone is not
+   * sufficient: without an override it returns the raw shared config unchanged.
+   * `useEffectiveAgencyConfig` exposes this distinction as `workspaceScoped`.
    */
   workspaceScoped?: boolean;
 }

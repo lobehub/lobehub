@@ -120,15 +120,18 @@ const AgentWorkingSidebar = memo(() => {
   const workingDirectory = useEffectiveWorkingDirectory(activeAgentId);
   // Effective target device for git ops — bound device for remote agents, this
   // machine otherwise. Resolved the same way WorkingDirectoryPicker / GitStatus do.
-  const { agencyConfig } = useEffectiveAgencyConfig(activeAgentId);
+  const { agencyConfig, workspaceScoped } = useEffectiveAgencyConfig(activeAgentId);
   const currentDeviceId = useElectronStore((s) => s.gatewayDeviceInfo?.deviceId);
-  const targetDeviceId = resolveTargetDeviceId(agencyConfig, currentDeviceId);
+  const targetDeviceId = resolveTargetDeviceId(agencyConfig, currentDeviceId, {
+    workspaceScoped,
+  });
   const repoType = useRepoType(workingDirectory, targetDeviceId);
   const deviceRoutingAvailable = useIsGatewayModeEnabled(activeAgentId);
   const effectiveTarget = resolveExecutionTarget(agencyConfig, {
     clientExecutionAvailable: isDesktop,
     deviceRoutingAvailable,
     isHetero,
+    workspaceScoped,
   });
 
   // Running against a bound device (remote, or this machine as a device): file

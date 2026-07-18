@@ -23,6 +23,7 @@ const effectiveAgencyConfig = vi.hoisted(() => ({
     executionTarget: 'local' as const,
     heterogeneousProvider: { command: 'codex', type: 'codex' as const },
   },
+  workspaceScoped: false,
 }));
 
 vi.mock('@lobechat/const', async (importOriginal) => ({
@@ -42,7 +43,10 @@ vi.mock('@/features/ChatInput/ControlBar/WorkspaceControls', () => ({
 vi.mock('@/features/ChatInput/hooks/useAgentId', () => ({ useAgentId: () => 'agent-1' }));
 
 vi.mock('@/hooks/useEffectiveAgencyConfig', () => ({
-  useEffectiveAgencyConfig: () => ({ agencyConfig: effectiveAgencyConfig.current }),
+  useEffectiveAgencyConfig: () => ({
+    agencyConfig: effectiveAgencyConfig.current,
+    workspaceScoped: effectiveAgencyConfig.workspaceScoped,
+  }),
 }));
 
 vi.mock('@/store/agent', () => ({
@@ -168,6 +172,12 @@ const codexSnapshot = (
 });
 
 beforeEach(() => {
+  effectiveAgencyConfig.current = {
+    boundDeviceId: 'personal-device',
+    executionTarget: 'local',
+    heterogeneousProvider: { command: 'codex', type: 'codex' },
+  };
+  effectiveAgencyConfig.workspaceScoped = false;
   confirmModalMock.mockReset();
   mockService.consumeCodexRateLimitResetCredit.mockReset();
   mockService.getClaudeCodeQuota.mockReset();
@@ -188,6 +198,20 @@ describe('HeteroControlBar', () => {
       await screen.findByRole('button', { name: 'heteroAgent.codexQuota.tooltip' }),
     ).toBeTruthy();
     expect(mockService.getCodexQuota).toHaveBeenCalledWith({ command: 'codex', env: undefined });
+  });
+
+  it('does not show local quota for a workspace shared-local fallback without an override', () => {
+    effectiveAgencyConfig.current = {
+      boundDeviceId: 'workspace-device',
+      executionTarget: 'local',
+      heterogeneousProvider: { command: 'codex', type: 'codex' },
+    };
+    effectiveAgencyConfig.workspaceScoped = true;
+
+    render(<HeteroControlBar />);
+
+    expect(screen.queryByRole('button', { name: 'heteroAgent.codexQuota.tooltip' })).toBeNull();
+    expect(mockService.getCodexQuota).not.toHaveBeenCalled();
   });
 });
 

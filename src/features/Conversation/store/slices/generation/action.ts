@@ -14,6 +14,7 @@ import { MESSAGE_CANCEL_FLAT } from '@/const/index';
 import { saveDraft } from '@/features/ChatInput/draftStorage';
 import { isHeterogeneousAgentStatusGuideError } from '@/features/Conversation/Error/heterogeneous';
 import { resolveAgentWorkingDirectory } from '@/helpers/agentWorkingDirectory';
+import { resolveWorkspaceScoped } from '@/helpers/executionTarget';
 import { globalAgentContextManager } from '@/helpers/GlobalAgentContextManager';
 import { messageService } from '@/services/message';
 import { getAgentStoreState } from '@/store/agent';
@@ -95,13 +96,14 @@ const getEffectiveAgencyConfig = (agentId: string) => {
   const agentState = getAgentStoreState();
   const sharedAgencyConfig = agentSelectors.getAgentConfigById(agentId)(agentState)?.agencyConfig;
   const isWorkspaceAgent = agentByIdSelectors.isWorkspaceAgentById(agentId)(agentState);
+  const deviceOverride = isWorkspaceAgent
+    ? getUserStoreState().workspaceUserPreference.agentDeviceOverrides?.[agentId]
+    : undefined;
 
-  return resolveAgencyConfig(
-    sharedAgencyConfig,
-    isWorkspaceAgent
-      ? getUserStoreState().workspaceUserPreference.agentDeviceOverrides?.[agentId]
-      : undefined,
-  );
+  return {
+    agencyConfig: resolveAgencyConfig(sharedAgencyConfig, deviceOverride),
+    workspaceScoped: resolveWorkspaceScoped(isWorkspaceAgent, deviceOverride),
+  };
 };
 
 /**
@@ -132,11 +134,13 @@ const resolveHeteroRunContext = (
   const currentDeviceId = getElectronStoreState().gatewayDeviceInfo?.deviceId;
   const agentState = getAgentStoreState();
   const desktopContext = globalAgentContextManager.getContext();
+  const { agencyConfig, workspaceScoped } = getEffectiveAgencyConfig(agentId);
   const agentWorkingDirectory = resolveAgentWorkingDirectory({
-    agencyConfig: getEffectiveAgencyConfig(agentId),
+    agencyConfig,
     currentDeviceId,
     fallback: desktopContext?.desktopPath ?? desktopContext?.homePath,
     legacyAgentWorkingDirectory: agentState.localAgentWorkingDirectoryMap[agentId],
+    workspaceScoped,
   });
   const workingDirectory = topic?.metadata?.workingDirectory || agentWorkingDirectory;
 
@@ -519,12 +523,13 @@ export const generationSlice: StateCreator<
       if (shouldProceed === false) return;
     }
 
-    const agencyConfig = getEffectiveAgencyConfig(context.agentId);
+    const { agencyConfig, workspaceScoped } = getEffectiveAgencyConfig(context.agentId);
     const runtimeType = selectRuntimeType({
       boundDeviceId: agencyConfig?.boundDeviceId,
       executionTarget: agencyConfig?.executionTarget,
       heterogeneousProvider: agencyConfig?.heterogeneousProvider,
       isGatewayMode: chatStore.isGatewayModeEnabled(context.agentId),
+      isWorkspaceAgent: workspaceScoped,
     });
 
     // Hetero CLIs (CC / Codex) have no "continue a cut-off response" primitive
@@ -591,13 +596,14 @@ export const generationSlice: StateCreator<
     // tool/provider error on a grouped reply is not resumable this way.
     if (!isHeterogeneousAgentStatusGuideError(erroredStep.error?.body)) return;
 
-    const agencyConfig = getEffectiveAgencyConfig(context.agentId);
+    const { agencyConfig, workspaceScoped } = getEffectiveAgencyConfig(context.agentId);
     const heterogeneousProvider = agencyConfig?.heterogeneousProvider;
     const runtimeType = selectRuntimeType({
       boundDeviceId: agencyConfig?.boundDeviceId,
       executionTarget: agencyConfig?.executionTarget,
       heterogeneousProvider,
       isGatewayMode: chatStore.isGatewayModeEnabled(context.agentId),
+      isWorkspaceAgent: workspaceScoped,
     });
     const agentId = context.agentId;
 
@@ -970,13 +976,14 @@ export const generationSlice: StateCreator<
       );
       if (postSwitchOp && postSwitchOp.status !== 'running') return;
 
-      const agencyConfig = getEffectiveAgencyConfig(context.agentId);
+      const { agencyConfig, workspaceScoped } = getEffectiveAgencyConfig(context.agentId);
       const heterogeneousProvider = agencyConfig?.heterogeneousProvider;
       const runtimeType = selectRuntimeType({
         boundDeviceId: agencyConfig?.boundDeviceId,
         executionTarget: agencyConfig?.executionTarget,
         heterogeneousProvider,
         isGatewayMode: chatStore.isGatewayModeEnabled(context.agentId),
+        isWorkspaceAgent: workspaceScoped,
       });
 
       // ── Gateway mode: trigger server-side regeneration ──

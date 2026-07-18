@@ -35,7 +35,7 @@ import {
   resolveAgentWorkingDirectory,
   resolveAgentWorkingDirectoryConfig,
 } from '@/helpers/agentWorkingDirectory';
-import { resolveExecutionTarget } from '@/helpers/executionTarget';
+import { resolveExecutionTarget, resolveWorkspaceScoped } from '@/helpers/executionTarget';
 import { globalAgentContextManager } from '@/helpers/GlobalAgentContextManager';
 import { agentService } from '@/services/agent';
 import { aiChatService } from '@/services/aiChat';
@@ -280,21 +280,21 @@ export class ConversationLifecycleActionImpl {
     const agentState = getAgentStoreState();
     const agentConfig = agentSelectors.getAgentConfigById(agentId)(agentState);
     const isWorkspaceAgent = agentByIdSelectors.isWorkspaceAgentById(agentId)(agentState);
+    const deviceOverride = isWorkspaceAgent
+      ? getUserStoreState().workspaceUserPreference.agentDeviceOverrides?.[agentId]
+      : undefined;
+    const workspaceScoped = resolveWorkspaceScoped(isWorkspaceAgent, deviceOverride);
     // Runtime selection must use the same per-user device override as the
     // switcher. A workspace-local pick is intentionally private to this member
     // and is therefore safe to execute in-process on their desktop.
-    const agencyConfig = resolveAgencyConfig(
-      agentConfig?.agencyConfig,
-      isWorkspaceAgent
-        ? getUserStoreState().workspaceUserPreference.agentDeviceOverrides?.[agentId]
-        : undefined,
-    );
+    const agencyConfig = resolveAgencyConfig(agentConfig?.agencyConfig, deviceOverride);
     const heterogeneousProvider = agencyConfig?.heterogeneousProvider;
     const runtimeType = selectRuntimeType({
       boundDeviceId: agencyConfig?.boundDeviceId,
       executionTarget: agencyConfig?.executionTarget,
       heterogeneousProvider,
       isGatewayMode: this.#get().isGatewayModeEnabled(agentId),
+      isWorkspaceAgent: workspaceScoped,
       // Callers that need to pin the runtime (e.g. task topics that were
       // started server-side via runTask) pass `forceRuntime` to override
       // the agent's local/cloud preference.
@@ -609,6 +609,7 @@ export class ConversationLifecycleActionImpl {
       ? resolveExecutionTarget(agencyConfig, {
           clientExecutionAvailable: isDesktop,
           isHetero: true,
+          workspaceScoped,
         })
       : undefined;
     const resolvesHeteroCwd =
@@ -628,6 +629,7 @@ export class ConversationLifecycleActionImpl {
           currentDeviceId,
           fallback: heteroCwdContext?.desktopPath ?? heteroCwdContext?.homePath,
           legacyAgentWorkingDirectory: agentState.localAgentWorkingDirectoryMap[agentId],
+          workspaceScoped,
         }
       : undefined;
     const agentWorkingDirectory = heteroCwdParams

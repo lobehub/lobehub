@@ -30,6 +30,7 @@ const agentStore = vi.hoisted(() => ({
 const effectiveConfig = vi.hoisted(() => ({
   agencyConfig: undefined as
     { boundDeviceId?: string; executionTarget?: 'device' | 'local' } | undefined,
+  workspaceScoped: false,
 }));
 
 const filesProps = vi.hoisted(() => ({
@@ -112,7 +113,10 @@ vi.mock('@/hooks/useEffectiveWorkingDirectory', () => ({
   useEffectiveWorkingDirectory: () => reviewState.workingDirectory,
 }));
 vi.mock('@/hooks/useEffectiveAgencyConfig', () => ({
-  useEffectiveAgencyConfig: () => ({ agencyConfig: effectiveConfig.agencyConfig }),
+  useEffectiveAgencyConfig: () => ({
+    agencyConfig: effectiveConfig.agencyConfig,
+    workspaceScoped: effectiveConfig.workspaceScoped,
+  }),
 }));
 vi.mock('@/hooks/useLocalStorageState', () => ({
   useLocalStorageState: () => [reviewState.showTree, vi.fn()],
@@ -144,6 +148,7 @@ beforeEach(() => {
   agentStore.isHeterogeneous = false;
   agentStore.rawAgencyConfig = undefined;
   effectiveConfig.agencyConfig = undefined;
+  effectiveConfig.workspaceScoped = false;
   filesProps.current = undefined;
   reviewState.repoType = undefined;
   reviewState.showTree = false;
@@ -268,6 +273,25 @@ describe('AgentWorkingSidebar — controlled panel width', () => {
     expect(filesProps.current).toEqual({
       deviceId: undefined,
       workingDirectory: '/Users/me/project',
+    });
+  });
+
+  it('keeps a shared local fallback on its bound workspace device without a member override', () => {
+    agentStore.activeAgentId = 'agent';
+    agentStore.isHeterogeneous = true;
+    effectiveConfig.agencyConfig = {
+      boundDeviceId: 'workspace-device',
+      executionTarget: 'local',
+    };
+    effectiveConfig.workspaceScoped = true;
+    reviewState.workingDirectory = '/workspace/project';
+    globalStore.status.workingSidebarTab = 'files';
+
+    render(<AgentWorkingSidebar />);
+
+    expect(filesProps.current).toEqual({
+      deviceId: 'workspace-device',
+      workingDirectory: '/workspace/project',
     });
   });
 });

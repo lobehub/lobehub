@@ -96,11 +96,12 @@ const HeterogeneousChatInput = memo(() => {
   // While the preference is loading, the merged config may still reflect only
   // the shared row — hold the input closed (below) instead of gating device
   // runs off a value that can flip once the override arrives.
-  const { agencyConfig, isPreferenceLoading } = useEffectiveAgencyConfig(agentId);
+  const { agencyConfig, isPreferenceLoading, workspaceScoped } = useEffectiveAgencyConfig(agentId);
   const providerType = agencyConfig?.heterogeneousProvider?.type;
   const executionTarget = resolveExecutionTarget(agencyConfig, {
     isHetero: !!providerType,
     clientExecutionAvailable: isDesktop,
+    workspaceScoped,
   });
   const isRemoteAgent = !!providerType && isRemoteHeterogeneousType(providerType);
   const ampDeviceSelectionRequired = providerType === 'amp' && executionTarget === 'none';

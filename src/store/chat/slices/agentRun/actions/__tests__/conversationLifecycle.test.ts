@@ -1756,6 +1756,49 @@ describe('ConversationLifecycle actions', () => {
         expect(executeGatewayAgent).not.toHaveBeenCalled();
       });
 
+      it('keeps a workspace shared-local fallback on the gateway without a member override', async () => {
+        mockConstEnv.isDesktop = true;
+        setupMockSelectors({
+          agentConfig: {
+            agencyConfig: {
+              boundDeviceId: 'workspace-device',
+              executionTarget: 'local',
+              heterogeneousProvider: { command: 'codex', type: 'codex' },
+            },
+          },
+        });
+
+        const { agentByIdSelectors } = await import('@/store/agent/selectors');
+        vi.spyOn(agentByIdSelectors, 'isWorkspaceAgentById').mockReturnValue(() => true);
+
+        const executeGatewayAgent = vi.fn().mockResolvedValue(undefined);
+        act(() => {
+          useChatStore.setState({ executeGatewayAgent });
+        });
+
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
+          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          messages: [
+            createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
+            createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
+          ],
+          topicId: TEST_IDS.TOPIC_ID,
+          topics: [],
+          userMessageId: TEST_IDS.USER_MESSAGE_ID,
+        } as any);
+
+        const { result } = renderHook(() => useChatStore());
+        await act(async () => {
+          await result.current.sendMessage({
+            message: TEST_CONTENT.USER_MESSAGE,
+            context: createTestContext(),
+          });
+        });
+
+        expect(executeGatewayAgent).toHaveBeenCalledTimes(1);
+        expect(executeHeterogeneousAgentMock).not.toHaveBeenCalled();
+      });
+
       it('should route new-topic heterogeneous streaming updates to the persisted topic key', async () => {
         mockConstEnv.isDesktop = true;
         setupMockSelectors({

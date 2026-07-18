@@ -66,6 +66,7 @@ describe('useEffectiveAgencyConfig', () => {
     const { result } = renderHook(() => useEffectiveAgencyConfig('agent-1'));
 
     expect(result.current.agencyConfig).toEqual(sharedConfig);
+    expect(result.current.workspaceScoped).toBe(false);
   });
 
   it('merges the caller override over the shared config for workspace agents', () => {
@@ -80,6 +81,7 @@ describe('useEffectiveAgencyConfig', () => {
       boundDeviceId: 'my-device',
       executionTarget: 'local',
     });
+    expect(result.current.workspaceScoped).toBe(false);
   });
 
   it('falls back to the shared config when a workspace agent has no override', () => {
@@ -88,6 +90,16 @@ describe('useEffectiveAgencyConfig', () => {
     const { result } = renderHook(() => useEffectiveAgencyConfig('agent-1'));
 
     expect(result.current.agencyConfig).toEqual(sharedConfig);
+    expect(result.current.workspaceScoped).toBe(true);
+  });
+
+  it('preserves workspace scope when an override has no explicit execution target', () => {
+    setupStores({ override: { boundDeviceId: 'my-device' }, workspaceId: 'ws-1' });
+
+    const { result } = renderHook(() => useEffectiveAgencyConfig('agent-1'));
+
+    expect(result.current.agencyConfig?.boundDeviceId).toBe('my-device');
+    expect(result.current.workspaceScoped).toBe(true);
   });
 
   it('reports preference loading only for workspace agents', () => {
@@ -137,5 +149,6 @@ describe('useEffectiveAgencyConfig', () => {
 
     expect(result.current.agencyConfig).toBeUndefined();
     expect(result.current.isPreferenceLoading).toBe(false);
+    expect(result.current.workspaceScoped).toBe(false);
   });
 });

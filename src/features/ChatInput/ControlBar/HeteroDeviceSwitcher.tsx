@@ -349,8 +349,11 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   // Shared config merged with the caller's per-agent override (LOBE-11689) —
   // the hook eagerly fetches the `workspaceUserSettings` bucket on mount so
   // what the picker shows and what dispatch will actually do always agree.
-  const { agencyConfig, isPreferenceLoading: isWorkspacePreferenceLoading } =
-    useEffectiveAgencyConfig(agentId);
+  const {
+    agencyConfig,
+    isPreferenceLoading: isWorkspacePreferenceLoading,
+    workspaceScoped,
+  } = useEffectiveAgencyConfig(agentId);
 
   const heteroType = agencyConfig?.heterogeneousProvider?.type;
   const boundDeviceId = agencyConfig?.boundDeviceId;
@@ -374,19 +377,15 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   const gatewayDeviceInfo = useElectronStore((s) => s.gatewayDeviceInfo);
   const currentDeviceId = isDesktop ? gatewayDeviceInfo?.deviceId : undefined;
 
-  // Effective target: `resolveExecutionTarget` runs over the *merged*
-  // `agencyConfig` (shared + this user's LOBE-11689 override), so what the
-  // chip shows and what the server dispatches always agree.
-  //
-  // `workspaceScoped: false`: with per-user overrides, workspace agents can
-  // resolve `local` again — the pre-11689 coercion was only there because
-  // sharing the choice across members made a personal-scope `local` pick
-  // dangerous.
+  // A member's explicit target override may resolve `local`; without one the
+  // raw shared fallback stays workspace-scoped so a legacy `local` value keeps
+  // routing to its bound workspace device rather than this member's desktop.
   const deviceRoutingAvailable = useIsGatewayModeEnabled(agentId);
   const executionTarget = resolveExecutionTarget(agencyConfig, {
     clientExecutionAvailable: isDesktop,
     deviceRoutingAvailable,
     isHetero,
+    workspaceScoped,
   });
 
   // Amp cannot fall back to the cloud sandbox. When a web/legacy config has no
