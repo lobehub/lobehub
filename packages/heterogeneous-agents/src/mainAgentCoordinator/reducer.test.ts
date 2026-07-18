@@ -55,6 +55,21 @@ const toolsEvent = (tools: any[]) => ({
   type: 'stream_chunk',
 });
 
+const toolStateEvent = (
+  toolCallId: string,
+  snapshotSeq: number,
+  pluginState: Record<string, unknown>,
+) => ({
+  data: {
+    chunkType: 'tool_state',
+    pluginState,
+    snapshotMode: 'replace',
+    snapshotSeq,
+    toolCallId,
+  },
+  type: 'stream_chunk',
+});
+
 const toolResultEvent = (toolCallId: string, content: string, extra: Record<string, any> = {}) => ({
   data: { content, toolCallId, ...extra },
   type: 'tool_result',
@@ -106,6 +121,40 @@ describe('main agent reducer', () => {
     expect(steps[0]).toEqual([{ content: 'Hello ', kind: 'streamContent', messageId: 'A0' }]);
     expect(steps[1]).toEqual([{ content: 'Hello world', kind: 'streamContent', messageId: 'A0' }]);
     expect(state.accContent).toBe('Hello world');
+  });
+
+  it('emits a replace-only tool-state intent without mutating reducer state', () => {
+    const pluginState = { todos: { items: [{ status: 'processing', text: 'Implement' }] } };
+    const initial = createMainAgentRunState('A0');
+    const result = reduceMainAgent(initial, toolStateEvent('todo-1', 2, pluginState), makeCtx());
+
+    expect(result.intents).toEqual([
+      {
+        kind: 'updateToolState',
+        pluginState,
+        snapshotSeq: 2,
+        toolCallId: 'todo-1',
+      },
+    ]);
+    expect(result.state).toBe(initial);
+  });
+
+  it('ignores malformed tool-state chunks', () => {
+    const { steps } = run([
+      toolStateEvent('todo-1', 0, { todos: {} }),
+      {
+        data: {
+          chunkType: 'tool_state',
+          pluginState: [],
+          snapshotMode: 'replace',
+          snapshotSeq: 1,
+          toolCallId: 'todo-1',
+        },
+        type: 'stream_chunk',
+      },
+    ]);
+
+    expect(steps).toEqual([[], []]);
   });
 
   it('replace-mode text snapshots replace, and stale sequences are dropped', () => {

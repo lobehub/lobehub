@@ -171,6 +171,7 @@ export type MainAgentIntent =
   | PersistAssistantIntent
   | MainStreamContentIntent
   | MainPersistToolBatchIntent
+  | MainUpdateToolStateIntent
   | MainResolveToolResultIntent
   | MainRecordUsageIntent
   | SetErrorIntent;
@@ -232,6 +233,14 @@ export interface MainPersistToolBatchIntent {
   kind: 'persistToolBatch';
   reasoning?: string;
   tools: PersistToolBatchEntry[];
+}
+
+/** Replace the live/durable plugin state for a still-running main-agent tool. */
+export interface MainUpdateToolStateIntent {
+  kind: 'updateToolState';
+  pluginState: Record<string, unknown>;
+  snapshotSeq: number;
+  toolCallId: string;
 }
 
 /**

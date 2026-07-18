@@ -219,6 +219,7 @@ function createMockStore(overrides: Record<string, any> = {}) {
   const store = {
     associateMessageWithOperation: vi.fn(),
     completeOperation: vi.fn(),
+    dbMessagesMap: {},
     drainQueuedMessages: vi.fn(() => []),
     internal_dispatchMessage: vi.fn(),
     internal_toggleToolCallingStreaming: vi.fn(),
@@ -460,6 +461,23 @@ const codexCommandCompleted = (id: string, command: string, aggregatedOutput: st
     type: 'command_execution',
   },
   type: 'item.completed',
+});
+
+const codexTodo = (
+  lifecycle: 'item.completed' | 'item.started' | 'item.updated',
+  completed: number,
+) => ({
+  item: {
+    id: 'todo-1',
+    items: [
+      { completed: completed >= 1, text: 'Inspect' },
+      { completed: completed >= 2, text: 'Implement' },
+      { completed: completed >= 3, text: 'Verify' },
+    ],
+    status: lifecycle === 'item.completed' ? 'completed' : 'in_progress',
+    type: 'todo_list',
+  },
+  type: lifecycle,
 });
 
 const codexTurnCompleted = (usage?: {
@@ -2083,6 +2101,99 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
   });
 
   describe('Codex multi-turn persistence', () => {
+    it('optimistically replaces TodoProgress state while Codex is still running', async () => {
+      const { store } = await runWithEvents(
+        [
+          codexTurnStarted(),
+          codexTodo('item.started', 0),
+          codexTodo('item.updated', 1),
+          codexTodo('item.completed', 3),
+          codexTurnCompleted(),
+        ],
+        {
+          params: {
+            heterogeneousProvider: { command: 'codex', type: 'codex' as const },
+          },
+        },
+      );
+
+      const stateWrites = mockUpdateToolMessage.mock.calls
+        .map(([, value]) => value)
+        .filter((value) => value.heterogeneousToolState);
+      expect(stateWrites).toEqual([
+        expect.objectContaining({
+          heterogeneousToolState: { operationId: 'op-1', snapshotSeq: 1 },
+        }),
+        expect.objectContaining({
+          heterogeneousToolState: { operationId: 'op-1', snapshotSeq: 2 },
+        }),
+      ]);
+
+      const optimisticStates = store.internal_dispatchMessage.mock.calls
+        .map(([payload]: any[]) => payload)
+        .filter((payload: any) => payload.type === 'replaceMessagePluginState');
+      expect(optimisticStates).toHaveLength(2);
+      expect(optimisticStates.at(-1)).toMatchObject({
+        metadata: {
+          heterogeneousToolStateOperationId: 'op-1',
+          heterogeneousToolStateSeq: 2,
+        },
+        value: {
+          todos: {
+            items: [
+              { status: 'completed', text: 'Inspect' },
+              { status: 'processing', text: 'Implement' },
+              { status: 'todo', text: 'Verify' },
+            ],
+          },
+        },
+      });
+
+      const finalWrite = mockUpdateToolMessage.mock.calls
+        .map(([, value]) => value)
+        .find((value) => value.content === 'Todo list updated (3/3 completed).');
+      expect(finalWrite).toMatchObject({
+        pluginState: {
+          todos: {
+            items: [
+              { status: 'completed', text: 'Inspect' },
+              { status: 'completed', text: 'Implement' },
+              { status: 'completed', text: 'Verify' },
+            ],
+          },
+        },
+      });
+      expect(finalWrite).not.toHaveProperty('heterogeneousToolState');
+    });
+
+    it('does not replay failed intermediate tool state after the final result succeeds', async () => {
+      mockUpdateToolMessage.mockImplementation(async (_id, value) => ({
+        success: !value.heterogeneousToolState,
+      }));
+
+      await runWithEvents(
+        [
+          codexTurnStarted(),
+          codexTodo('item.started', 0),
+          codexTodo('item.updated', 1),
+          codexTodo('item.completed', 3),
+          codexTurnCompleted(),
+        ],
+        {
+          params: {
+            heterogeneousProvider: { command: 'codex', type: 'codex' as const },
+          },
+        },
+      );
+
+      const writes = mockUpdateToolMessage.mock.calls.map(([, value]) => value);
+      expect(writes.filter((value) => value.heterogeneousToolState)).toHaveLength(2);
+      expect(
+        writes.filter((value) => value.content === 'Todo list updated (3/3 completed).'),
+      ).toHaveLength(1);
+      expect(writes).toHaveLength(3);
+    });
+
     it('should persist Codex host model metadata onto the current assistant message', async () => {
       await runWithEvents(
         [

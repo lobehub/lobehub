@@ -319,6 +319,29 @@ const reduceStreamChunk = (
   if (data?.chunkType === 'reasoning' && typeof data.reasoning === 'string') {
     return reduceReasoningChunk(state, data);
   }
+  if (
+    data?.chunkType === 'tool_state' &&
+    data.snapshotMode === 'replace' &&
+    typeof data.toolCallId === 'string' &&
+    data.toolCallId.length > 0 &&
+    Number.isInteger(data.snapshotSeq) &&
+    data.snapshotSeq > 0 &&
+    typeof data.pluginState === 'object' &&
+    data.pluginState !== null &&
+    !Array.isArray(data.pluginState)
+  ) {
+    return {
+      intents: [
+        {
+          kind: 'updateToolState',
+          pluginState: data.pluginState,
+          snapshotSeq: data.snapshotSeq,
+          toolCallId: data.toolCallId,
+        },
+      ],
+      state,
+    };
+  }
   if (data?.chunkType === 'tools_calling') {
     const tools = (data.toolsCalling as ToolCallPayload[] | undefined) ?? [];
     if (tools.length === 0) return { intents: [], state };

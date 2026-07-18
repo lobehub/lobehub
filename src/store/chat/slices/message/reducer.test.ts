@@ -246,6 +246,39 @@ describe('messagesReducer', () => {
     });
   });
 
+  describe('replaceMessagePluginState', () => {
+    it('replaces plugin state and advances its metadata watermark atomically', () => {
+      const state: UIChatMessage[] = [
+        {
+          content: '',
+          id: 'tool-1',
+          metadata: { heteroMessageId: 'native-tool-1' },
+          pluginState: { obsolete: true, todos: { items: [{ text: 'old' }] } },
+          role: 'tool',
+        } as UIChatMessage,
+      ];
+
+      const newState = messagesReducer(state, {
+        id: 'tool-1',
+        metadata: {
+          heterogeneousToolStateOperationId: 'op-1',
+          heterogeneousToolStateSeq: 2,
+        },
+        type: 'replaceMessagePluginState',
+        value: { todos: { items: [{ status: 'processing', text: 'new' }] } },
+      });
+
+      expect(newState[0].pluginState).toEqual({
+        todos: { items: [{ status: 'processing', text: 'new' }] },
+      });
+      expect(newState[0].metadata).toEqual({
+        heteroMessageId: 'native-tool-1',
+        heterogeneousToolStateOperationId: 'op-1',
+        heterogeneousToolStateSeq: 2,
+      });
+    });
+  });
+
   describe('updateMessagePlugin', () => {
     it('should update the plugin of a tool message', () => {
       const toolMessage: UIChatMessage = {

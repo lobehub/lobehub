@@ -63,6 +63,15 @@ export interface ChatToolResult {
 }
 
 /**
+ * Internal conditional-write descriptor for a heterogeneous tool-state
+ * snapshot. It is not part of the renderer-facing pluginState payload.
+ */
+export interface HeterogeneousToolStateSnapshot {
+  operationId: string;
+  snapshotSeq: number;
+}
+
+/**
  * Chat tool payload with merged execution result
  */
 export interface ChatToolPayloadWithResult extends ChatToolPayload {

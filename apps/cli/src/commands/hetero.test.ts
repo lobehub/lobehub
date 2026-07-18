@@ -398,6 +398,107 @@ describe('hetero exec command', () => {
     expect(exitSpy).toHaveBeenCalledWith(130);
   });
 
+  it('flushes terminal tool events before finishing a server-ingest run as cancelled', async () => {
+    let sigintHandler: (() => void) | undefined;
+    vi.spyOn(process, 'on').mockImplementation(((event: string, listener: () => void) => {
+      if (event === 'SIGINT') sigintHandler = listener;
+      return process;
+    }) as typeof process.on);
+
+    let resolveFirstEvent: ((result: IteratorResult<Record<string, unknown>>) => void) | undefined;
+    let eventIndex = 0;
+    const events: AsyncIterable<Record<string, unknown>> = {
+      [Symbol.asyncIterator]() {
+        return {
+          next: async () => {
+            if (eventIndex === 0) {
+              eventIndex += 1;
+              return new Promise<IteratorResult<Record<string, unknown>>>((resolve) => {
+                resolveFirstEvent = resolve;
+              });
+            }
+            if (eventIndex === 1) {
+              eventIndex += 1;
+              return {
+                done: false,
+                value: {
+                  data: { isSuccess: false, toolCallId: 'todo-1' },
+                  operationId: 'op-cancel',
+                  stepIndex: 0,
+                  timestamp: 2,
+                  type: 'tool_end',
+                },
+              };
+            }
+            return { done: true, value: undefined };
+          },
+        };
+      },
+    };
+    const stderr = new PassThrough();
+    stderr.end();
+    const kill = vi.fn();
+    mockSpawnAgent.mockResolvedValue({
+      events,
+      exit: Promise.resolve({ code: null, signal: 'SIGINT' }),
+      kill,
+      pid: 12_345,
+      stderr,
+    });
+
+    const callOrder: string[] = [];
+    mockHeteroIngestMutate.mockImplementation(async ({ events: batch }) => {
+      callOrder.push(...batch.map((event: { type: string }) => event.type));
+      return { ack: true };
+    });
+    mockHeteroFinishMutate.mockImplementation(async ({ result }) => {
+      callOrder.push(`finish:${result}`);
+      return { ack: true };
+    });
+
+    const command = runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'codex',
+      '--prompt',
+      'hi',
+      '--topic',
+      'topic-1',
+      '--operation-id',
+      'op-cancel',
+      '--render',
+      'none',
+    ]);
+    for (let i = 0; i < 20 && !sigintHandler; i += 1) await Promise.resolve();
+
+    sigintHandler?.();
+    expect(kill).toHaveBeenCalledWith('SIGINT');
+    expect(mockHeteroFinishMutate).not.toHaveBeenCalled();
+
+    resolveFirstEvent?.({
+      done: false,
+      value: {
+        data: {
+          content: 'Todo list update interrupted.',
+          isError: true,
+          pluginState: { todos: { items: [] } },
+          toolCallId: 'todo-1',
+        },
+        operationId: 'op-cancel',
+        stepIndex: 0,
+        timestamp: 1,
+        type: 'tool_result',
+      },
+    });
+    await command;
+
+    expect(callOrder).toEqual(['tool_result', 'tool_end', 'finish:cancelled']);
+    expect(mockHeteroFinishMutate).toHaveBeenCalledWith(
+      expect.objectContaining({ error: undefined, result: 'cancelled' }),
+    );
+  });
+
   it('combines --prompt + --image into mixed content blocks', async () => {
     mockSpawnAgent.mockReturnValue(createFakeHandle());
 

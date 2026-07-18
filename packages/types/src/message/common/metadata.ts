@@ -193,6 +193,10 @@ export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSche
   // CreateMessageParamsSchema (the renderer executor's `messageService` path).
   heteroMessageId: z.string().optional(),
   heteroSessionId: z.string().optional(),
+  // Durable watermark for replace-only heterogeneous tool-state snapshots.
+  // The pair is scoped by operation so a later run may restart seq at 1.
+  heterogeneousToolStateOperationId: z.string().optional(),
+  heterogeneousToolStateSeq: z.number().int().positive().optional(),
   inspectExpanded: z.boolean().optional(),
   isMultimodal: z.boolean().optional(),
   isSupervisor: z.boolean().optional(),
@@ -281,6 +285,10 @@ export interface MessageMetadata {
   /** @deprecated use `metadata.performance` instead */
   duration?: number;
   finishType?: string;
+  /** Operation owning the durable heterogeneous tool-state watermark. */
+  heterogeneousToolStateOperationId?: string;
+  /** Last persisted replace-snapshot sequence for this tool message. */
+  heterogeneousToolStateSeq?: number;
   /**
    * The native id of this message inside the hetero agent (Claude Code /
    * Codex) that produced it — forensic provenance tying a row back to its

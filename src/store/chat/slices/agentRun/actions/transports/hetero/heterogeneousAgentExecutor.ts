@@ -57,6 +57,7 @@ import {
 } from '@/services/message';
 import { threadService } from '@/services/thread';
 import { topicSelectors } from '@/store/chat/selectors';
+import { dbMessageSelectors } from '@/store/chat/slices/message/selectors';
 import {
   mergeQueuedMessages,
   reconstructUploadFilesFromQueue,
@@ -437,6 +438,12 @@ const subscribeBroadcasts = (
 interface SubagentStoreDispatcher {
   /** Push a new message into the thread bucket (user / assistant / tool). */
   create: (msg: UIChatMessage) => void;
+  /** Atomically replace pluginState and advance its optimistic watermark. */
+  replacePluginState: (
+    id: string,
+    pluginState: Record<string, unknown>,
+    metadata: NonNullable<UIChatMessage['metadata']>,
+  ) => void;
   /** Update a message already in the thread bucket by id. */
   update: (id: string, value: Partial<UIChatMessage>) => void;
 }
@@ -663,7 +670,10 @@ export const executeHeterogeneousAgent = async (
    * `persistToolResult` and the intervention handlers.
    */
   const toolMsgIdByCallId: Map<string, string> = new Map();
+  const lastAppliedToolStateSeqByCallId = new Map<string, number>();
   const mainToolCallIds = new Set<string>();
+  /** Final tool_result supersedes every pending non-terminal state retry. */
+  const terminalToolMessageIds = new Set<string>();
   const pendingInterventionRequests = new Map<string, AgentInterventionRequestData>();
   const pendingInterventionResponses = new Map<string, AgentInterventionResponseData>();
   /**
@@ -703,7 +713,7 @@ export const executeHeterogeneousAgent = async (
    * be lost once the reducer clears `accContent` on terminal.
    */
   const pendingMainFlush = new Map<string, Record<string, any>>();
-  /** Retry ledger for tool result content / plugin state. */
+  /** Retry ledger for the latest non-superseded tool write. */
   const pendingToolFlush = new Map<string, ToolMessageUpdateOperation['value']>();
 
   /** Later intents carry a superset of the payload, so a shallow merge wins. */
@@ -930,6 +940,9 @@ export const executeHeterogeneousAgent = async (
       return;
     }
 
+    terminalToolMessageIds.add(toolMsgId);
+    pendingToolFlush.delete(toolMsgId);
+
     const toolUpdate = {
       content,
       pluginError: isError ? { message: content } : undefined,
@@ -937,8 +950,28 @@ export const executeHeterogeneousAgent = async (
     };
     messageWriteBatcher.enqueueToolMessageUpdate(toolMsgId, toolUpdate, messageWriteCtx, (err) => {
       console.error('[HeterogeneousAgent] Failed to update tool message content:', err);
-      pendingToolFlush.set(toolMsgId, { ...pendingToolFlush.get(toolMsgId), ...toolUpdate });
+      pendingToolFlush.set(toolMsgId, toolUpdate);
     });
+  };
+  const claimToolStateSnapshot = (
+    toolCallId: string,
+    toolMsgId: string,
+    snapshotSeq: number,
+  ): NonNullable<UIChatMessage['metadata']> | undefined => {
+    const stored = dbMessageSelectors.getDbMessageById(toolMsgId)(get());
+    const durableSeq =
+      stored?.metadata?.heterogeneousToolStateOperationId === operationId &&
+      typeof stored.metadata.heterogeneousToolStateSeq === 'number'
+        ? stored.metadata.heterogeneousToolStateSeq
+        : 0;
+    const lastApplied = Math.max(durableSeq, lastAppliedToolStateSeqByCallId.get(toolCallId) ?? 0);
+    if (snapshotSeq <= lastApplied) return;
+
+    lastAppliedToolStateSeqByCallId.set(toolCallId, snapshotSeq);
+    return {
+      heterogeneousToolStateOperationId: operationId,
+      heterogeneousToolStateSeq: snapshotSeq,
+    };
   };
   const applyInterventionRequest = async (data: AgentInterventionRequestData): Promise<boolean> => {
     const toolMsgId = toolMsgIdByCallId.get(data.toolCallId);
@@ -1080,6 +1113,12 @@ export const executeHeterogeneousAgent = async (
         create(msg) {
           get().internal_dispatchMessage(
             { id: msg.id, type: 'createMessage', value: msg as any },
+            dispatchCtx,
+          );
+        },
+        replacePluginState(id, pluginState, metadata) {
+          get().internal_dispatchMessage(
+            { id, metadata, type: 'replaceMessagePluginState', value: pluginState },
             dispatchCtx,
           );
         },
@@ -1376,6 +1415,8 @@ export const executeHeterogeneousAgent = async (
         const t = getSubagentThread(intent.threadId);
         const toolMsgId = toolMsgIdByCallId.get(intent.toolCallId);
         if (toolMsgId) {
+          terminalToolMessageIds.add(toolMsgId);
+          pendingToolFlush.delete(toolMsgId);
           const update: ToolMessageUpdateOperation['value'] = {
             content: intent.content,
             pluginError: intent.isError ? { message: intent.content } : undefined,
@@ -1385,9 +1426,43 @@ export const executeHeterogeneousAgent = async (
             await mutateMessageBatch([{ id: toolMsgId, type: 'updateToolMessage', value: update }]);
           } catch (err) {
             console.error('[HeterogeneousAgent] Failed to persist subagent tool result:', err);
+            pendingToolFlush.set(toolMsgId, update);
           }
           t?.stream.update(toolMsgId, update as Partial<UIChatMessage>);
         }
+        return;
+      }
+
+      case 'updateToolState': {
+        const t = getSubagentThread(intent.threadId);
+        const toolMsgId = toolMsgIdByCallId.get(intent.toolCallId);
+        if (!toolMsgId) {
+          console.warn(
+            '[HeterogeneousAgent] tool_state for unknown subagent toolCallId:',
+            intent.toolCallId,
+          );
+          return;
+        }
+
+        const metadata = claimToolStateSnapshot(intent.toolCallId, toolMsgId, intent.snapshotSeq);
+        if (!metadata) return;
+
+        const update: ToolMessageUpdateOperation['value'] = {
+          heterogeneousToolState: {
+            operationId,
+            snapshotSeq: intent.snapshotSeq,
+          },
+          pluginState: intent.pluginState,
+        };
+        try {
+          await mutateMessageBatch([{ id: toolMsgId, type: 'updateToolMessage', value: update }]);
+        } catch (err) {
+          console.error('[HeterogeneousAgent] Failed to persist subagent tool state:', err);
+          if (!terminalToolMessageIds.has(toolMsgId)) {
+            pendingToolFlush.set(toolMsgId, { ...pendingToolFlush.get(toolMsgId), ...update });
+          }
+        }
+        t.stream.replacePluginState(toolMsgId, intent.pluginState, metadata);
         return;
       }
 
@@ -1625,6 +1700,41 @@ export const executeHeterogeneousAgent = async (
             { operationId },
           );
         }
+        return;
+      }
+
+      case 'updateToolState': {
+        if (!mainToolCallIds.has(intent.toolCallId)) return;
+
+        const toolMsgId = toolMsgIdByCallId.get(intent.toolCallId);
+        if (!toolMsgId) {
+          console.warn(
+            '[HeterogeneousAgent] tool_state for unknown main toolCallId:',
+            intent.toolCallId,
+          );
+          return;
+        }
+
+        const metadata = claimToolStateSnapshot(intent.toolCallId, toolMsgId, intent.snapshotSeq);
+        if (!metadata) return;
+
+        const update: ToolMessageUpdateOperation['value'] = {
+          heterogeneousToolState: {
+            operationId,
+            snapshotSeq: intent.snapshotSeq,
+          },
+          pluginState: intent.pluginState,
+        };
+        messageWriteBatcher.enqueueToolMessageUpdate(toolMsgId, update, messageWriteCtx, (err) => {
+          console.error('[HeterogeneousAgent] Failed to persist main tool state:', err);
+          if (!terminalToolMessageIds.has(toolMsgId)) {
+            pendingToolFlush.set(toolMsgId, { ...pendingToolFlush.get(toolMsgId), ...update });
+          }
+        });
+        get().internal_dispatchMessage(
+          { id: toolMsgId, metadata, type: 'replaceMessagePluginState', value: intent.pluginState },
+          { operationId },
+        );
         return;
       }
 
@@ -1879,6 +1989,16 @@ export const executeHeterogeneousAgent = async (
       if (event.type === 'agent_runtime_end' || event.type === 'error') {
         deferredTerminalEvent = event;
         notifyTerminalEvent();
+        return;
+      }
+
+      // tool_state is interpreted locally after the preceding tools_calling
+      // intent has registered its tool row. Do not also forward it to the
+      // gateway handler: that path would bootstrap-refetch while the local
+      // write-behind create may still be queued.
+      if (event.type === 'stream_chunk' && event.data?.chunkType === 'tool_state') {
+        sawStreamedEvent = true;
+        persistQueue = persistQueue.then(() => reduceAndApplyMain(event));
         return;
       }
 

@@ -62,6 +62,7 @@ export interface AgentStreamEvent {
 export type StreamChunkType =
   | 'text'
   | 'reasoning'
+  | 'tool_state'
   | 'tools_calling'
   | 'image'
   | 'grounding'
@@ -76,6 +77,7 @@ export interface StreamChunkData {
   grounding?: any;
   imageList?: any[];
   images?: any[];
+  pluginState?: Record<string, unknown>;
   reasoning?: string;
   reasoningParts?: Array<{ text: string; type: 'text' } | { image: string; type: 'image' }>;
   /**
@@ -85,12 +87,24 @@ export interface StreamChunkData {
    */
   snapshotMode?: 'replace';
   /**
-   * Operation-monotonic sequence for `replace` snapshots. Consumers drop a
-   * snapshot whose seq is ≤ the last applied one — that is a redelivery
-   * (producer batch retry) or an out-of-order duplicate.
+   * Sequence for `replace` snapshots. Text/reasoning producers keep it
+   * operation-monotonic; `tool_state` keeps it monotonic per toolCallId.
+   * Consumers drop a snapshot whose seq is ≤ the matching last-applied one.
    */
   snapshotSeq?: number;
+  toolCallId?: string;
   toolsCalling?: any[];
+}
+
+/** Replace-only, non-terminal state snapshot for a running tool message. */
+export interface ToolStateChunkData {
+  chunkType: 'tool_state';
+  pluginState: Record<string, unknown>;
+  snapshotMode: 'replace';
+  snapshotSeq: number;
+  /** Subagent context is intentionally structural to avoid a package cycle. */
+  subagent?: { parentToolCallId: string; [key: string]: unknown };
+  toolCallId: string;
 }
 
 // ─── Typed Event Data ───
