@@ -1,4 +1,4 @@
-export type ConnectorDataProvider = 'github';
+export type ConnectorDataProvider = 'github' | 'gmail';
 
 export interface ConnectorDataErrorOptions {
   code: string;
