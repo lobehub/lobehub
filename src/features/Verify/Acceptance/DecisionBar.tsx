@@ -37,8 +37,8 @@ type BarState = 'accepted' | 'live' | 'rejected' | 'settled';
  * rendered by the bar as the BadgeCheck disc, not here.
  */
 const ProgressRing = memo<{ done: number; total: number }>(({ done, total }) => {
-  const size = 24;
-  const stroke = 2.5;
+  const size = 20;
+  const stroke = 2;
   const radius = (size - stroke) / 2;
   const circumference = 2 * Math.PI * radius;
   const ratio = total > 0 ? Math.min(done / total, 1) : 0;
