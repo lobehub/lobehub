@@ -21,6 +21,7 @@ export {
 export {
   classifyHeteroProcessFailure,
   type ClassifyHeteroProcessFailureParams,
+  isHeteroStatusGuideErrorData,
 } from './classifyProcessFailure';
 export {
   buildClaudeSdkUserMessageFromStreamJson,

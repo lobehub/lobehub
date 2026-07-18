@@ -1,4 +1,4 @@
-import { type UIChatMessage } from '@lobechat/types';
+import type { LobeUser, UIChatMessage } from '@lobechat/types';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { type Mock } from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -13,6 +13,7 @@ import { PortalViewType } from '@/store/chat/slices/portal/initialState';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 import { useSessionStore } from '@/store/session';
+import { useUserStore } from '@/store/user';
 import { type ChatTopic } from '@/types/topic';
 
 import { useChatStore } from '../../store';
@@ -32,6 +33,7 @@ vi.mock('@/services/topic', () => ({
   topicService: {
     removeTopics: vi.fn(),
     removeTopicsByAgentId: vi.fn(),
+    removeTopicsByGroupId: vi.fn(),
     removeAllTopic: vi.fn(),
     removeTopic: vi.fn(),
     cloneTopic: vi.fn(),
@@ -86,6 +88,7 @@ beforeEach(() => {
     false,
   );
   useAgentStore.setState({ agentDocumentsMap: {} });
+  useUserStore.setState({ user: { id: 'user-1' } as LobeUser });
   useSessionStore.setState(
     {
       activeId: 'inbox',
@@ -1139,36 +1142,25 @@ describe('topic action', () => {
         await result.current.removeSessionTopics();
       });
 
-      expect(topicService.removeTopicsByAgentId).toHaveBeenCalledWith(activeAgentId);
+      expect(topicService.removeTopicsByAgentId).toHaveBeenCalledWith(activeAgentId, 'own');
       expect(refreshTopicSpy).toHaveBeenCalled();
       expect(switchTopicSpy).toHaveBeenCalled();
     });
-  });
-  describe('removeGroupTopics', () => {
-    it('should remove all topics for the specified group and refresh state', async () => {
-      const { result } = renderHook(() => useChatStore());
-      const groupId = 'group-delete';
-      const topics = [
-        { id: 'topic-1', title: 'Topic 1' } as ChatTopic,
-        { id: 'topic-2', title: 'Topic 2' } as ChatTopic,
-      ];
 
+    it('forwards explicit workspace scope for an owner full delete', async () => {
+      const { result } = renderHook(() => useChatStore());
       await act(async () => {
-        useChatStore.setState({
-          topicDataMap: {
-            [topicMapKey({ groupId })]: {
-              items: topics,
-              total: topics.length,
-              currentPage: 0,
-              hasMore: false,
-              pageSize: 20,
-            },
-          },
-        });
+        useChatStore.setState({ activeAgentId: 'agent-owner' });
+        await result.current.removeSessionTopics('workspace');
       });
 
-      const batchRemoveSpy = topicService.batchRemoveTopics as Mock;
-      batchRemoveSpy.mockClear();
+      expect(topicService.removeTopicsByAgentId).toHaveBeenCalledWith('agent-owner', 'workspace');
+    });
+  });
+  describe('removeGroupTopics', () => {
+    it('should remove all topics through the group-scoped endpoint and refresh state', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const groupId = 'group-delete';
       const refreshTopicSpy = vi.spyOn(result.current, 'refreshTopic').mockResolvedValue(undefined);
       const switchTopicSpy = vi.spyOn(result.current, 'switchTopic').mockResolvedValue(undefined);
 
@@ -1176,9 +1168,19 @@ describe('topic action', () => {
         await result.current.removeGroupTopics(groupId);
       });
 
-      expect(batchRemoveSpy).toHaveBeenCalledWith(['topic-1', 'topic-2']);
+      expect(topicService.removeTopicsByGroupId).toHaveBeenCalledWith(groupId, 'own');
       expect(refreshTopicSpy).toHaveBeenCalled();
       expect(switchTopicSpy).toHaveBeenCalled();
+    });
+
+    it('forwards explicit workspace scope through the group endpoint', async () => {
+      const { result } = renderHook(() => useChatStore());
+
+      await act(async () => {
+        await result.current.removeGroupTopics('group-owner', 'workspace');
+      });
+
+      expect(topicService.removeTopicsByGroupId).toHaveBeenCalledWith('group-owner', 'workspace');
     });
   });
   describe('removeAllTopics', () => {
@@ -1484,6 +1486,35 @@ describe('topic action', () => {
       expect(topicService.batchRemoveTopics).toHaveBeenCalledWith(['topic-1', 'topic-3']);
       expect(refreshTopicSpy).toHaveBeenCalled();
       expect(switchTopicSpy).toHaveBeenCalled();
+    });
+
+    it('removes only the signed-in user’s unstarred topics when onlyOwn is enabled', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const topics = [
+        { id: 'own-unstarred', favorite: false, userId: 'user-1' },
+        { id: 'other-unstarred', favorite: false, userId: 'user-2' },
+        { id: 'own-starred', favorite: true, userId: 'user-1' },
+      ] as ChatTopic[];
+      await act(async () => {
+        useChatStore.setState({
+          activeAgentId: 'abc',
+          topicDataMap: {
+            [topicMapKey({ agentId: 'abc' })]: {
+              currentPage: 0,
+              hasMore: false,
+              items: topics,
+              pageSize: 20,
+              total: topics.length,
+            },
+          },
+        });
+      });
+
+      await act(async () => {
+        await result.current.removeUnstarredTopic({ onlyOwn: true });
+      });
+
+      expect(topicService.batchRemoveTopics).toHaveBeenCalledWith(['own-unstarred']);
     });
   });
   describe('internal_updateTopic', () => {

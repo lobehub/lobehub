@@ -43,8 +43,8 @@ import WorkspaceSlugSettingsApiKeyPage from '@/routes/(main)/[workspaceSlug]/set
 import WorkspaceSlugSettingsAuditLogPage from '@/routes/(main)/[workspaceSlug]/settings/audit-log';
 import WorkspaceSlugSettingsBillingPage from '@/routes/(main)/[workspaceSlug]/settings/billing';
 import WorkspaceSlugSettingsConnectorPage from '@/routes/(main)/[workspaceSlug]/settings/connector';
+import WorkspaceSlugSettingsCredentialPage from '@/routes/(main)/[workspaceSlug]/settings/credential';
 import WorkspaceSlugSettingsCreditsPage from '@/routes/(main)/[workspaceSlug]/settings/credits';
-import WorkspaceSlugSettingsCredsPage from '@/routes/(main)/[workspaceSlug]/settings/creds';
 import WorkspaceSlugSettingsDevicesPage from '@/routes/(main)/[workspaceSlug]/settings/devices';
 import WorkspaceSlugSettingsGeneralPage from '@/routes/(main)/[workspaceSlug]/settings/general';
 import WorkspaceSlugSettingsMembersPage from '@/routes/(main)/[workspaceSlug]/settings/members';
@@ -727,7 +727,9 @@ export const desktopRoutes: RouteObject[] = [
                   { element: <WorkspaceSlugSettingsCreditsPage />, path: 'credits' },
                   { element: <WorkspaceSlugSettingsUsagePage />, path: 'usage' },
                   { element: <WorkspaceSlugSettingsServiceModelPage />, path: 'service-model' },
-                  { element: <WorkspaceSlugSettingsCredsPage />, path: 'creds' },
+                  { element: <WorkspaceSlugSettingsCredentialPage />, path: 'credential' },
+                  // Legacy `/:slug/settings/creds` URLs — kept for deep-links.
+                  { element: redirectElement('../credential'), path: 'creds' },
                   { element: <WorkspaceSlugSettingsApiKeyPage />, path: 'apikey' },
                   { element: <WorkspaceSlugSettingsOAuthAppsPage />, path: 'oauth-apps' },
                   { element: <WorkspaceSlugSettingsOAuthAppsPage />, path: 'oauth-apps/:sub' },

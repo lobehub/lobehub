@@ -1601,5 +1601,17 @@
   "workingPanel.skills.title": "Skills",
   "workingPanel.space": "Space",
   "workingPanel.title": "Working Panel",
+  "workingPanel.works.changeType.created": "Created",
+  "workingPanel.works.changeType.updated": "Updated",
+  "workingPanel.works.empty": "No works in this conversation yet",
+  "workingPanel.works.emptyVersions": "No versions yet",
+  "workingPanel.works.error": "Failed to load works",
+  "workingPanel.works.taskDeleted": "Task deleted",
+  "workingPanel.works.title": "Works",
+  "workingPanel.works.totalCost": "Total cost: {{cost}}",
+  "workingPanel.works.versionCost": "Version cost: {{cost}}",
+  "workingPanel.works.versionError": "Failed to load versions",
+  "workingPanel.works.viewMode.history": "Version history",
+  "workingPanel.works.viewMode.summary": "Summary cards",
   "you": "You"
 }

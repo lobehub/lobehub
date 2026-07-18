@@ -35,6 +35,11 @@ import {
 } from '@/server/services/connector/stateStore';
 import { syncConnectorToolsById } from '@/server/services/connector/sync';
 import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
+import {
+  resolveConnectorAuthorizerId,
+  resolveUserDisplayMap,
+  withTrustedLinkedByUserId,
+} from '@/server/utils/connectorAttribution';
 
 import {
   assertWorkspaceRowManageable,
@@ -125,13 +130,28 @@ export const connectorRouter = router({
   list: connectorProcedure.query(async ({ ctx }) => {
     const connectors = await ctx.connectorModel.query();
 
+    // Attribution — resolve the member who authorized each connector (workspace
+    // dimension), so the profile can tag "authorized by X". The ids come from
+    // scope-checked rows the caller already sees.
+    const authorMap = await resolveUserDisplayMap(
+      ctx.serverDB,
+      connectors.map((c) => resolveConnectorAuthorizerId(c)),
+    );
+
     const toolsByConnector = await Promise.all(
       connectors.map(async (c) => {
         const tools = await ctx.connectorToolModel.queryByConnector(c.id);
         // Never ship decrypted OAuth tokens or the client secret to the browser.
         const { credentials: _credentials, oidcConfig, ...rest } = c;
         const safeOidcConfig = oidcConfig ? { ...oidcConfig, clientSecret: undefined } : oidcConfig;
-        return { ...rest, oidcConfig: safeOidcConfig, tools };
+        const author = authorMap.get(resolveConnectorAuthorizerId(c) ?? '');
+        return {
+          ...rest,
+          authorizedByAvatar: author?.avatar ?? null,
+          authorizedByName: author?.name ?? null,
+          oidcConfig: safeOidcConfig,
+          tools,
+        };
       }),
     );
 
@@ -148,6 +168,13 @@ export const connectorRouter = router({
     .query(async ({ input, ctx }) => {
       const connectors = await ctx.connectorModel.queryByAgent(input.agentId);
 
+      // Attribution — the member who authorized each agent-scoped connector, so
+      // a teammate viewing the agent sees "authorized by X" on each chip.
+      const authorMap = await resolveUserDisplayMap(
+        ctx.serverDB,
+        connectors.map((c) => resolveConnectorAuthorizerId(c)),
+      );
+
       return Promise.all(
         connectors.map(async (c) => {
           const tools = await ctx.connectorToolModel.queryByConnector(c.id);
@@ -155,7 +182,14 @@ export const connectorRouter = router({
           const safeOidcConfig = oidcConfig
             ? { ...oidcConfig, clientSecret: undefined }
             : oidcConfig;
-          return { ...rest, oidcConfig: safeOidcConfig, tools };
+          const author = authorMap.get(resolveConnectorAuthorizerId(c) ?? '');
+          return {
+            ...rest,
+            authorizedByAvatar: author?.avatar ?? null,
+            authorizedByName: author?.name ?? null,
+            oidcConfig: safeOidcConfig,
+            tools,
+          };
         }),
       );
     }),
@@ -269,7 +303,11 @@ export const connectorRouter = router({
       mcpConnectionType: input.mcpConnectionType ?? null,
       mcpServerUrl: input.mcpServerUrl ?? null,
       mcpStdioConfig: input.mcpStdioConfig ?? null,
-      metadata: input.metadata ?? null,
+      // Drop any client-supplied `composio.linkedByUserId` — it is server-owned
+      // (written by the OAuth connect path), and trusting it here would let a
+      // member spoof connector attribution. No existing row on create → the
+      // field is simply removed.
+      metadata: withTrustedLinkedByUserId(input.metadata, undefined) ?? null,
       name: input.name,
       oidcConfig: input.oidcConfig ?? null,
     };
@@ -593,8 +631,14 @@ export const connectorRouter = router({
       assertWorkspaceRowManageable(ctx, target.userId, 'connector');
 
       const { credentials, ...patch } = input.patch;
+      // Preserve the server-owned `composio.linkedByUserId` from the stored row
+      // and ignore whatever the client sent, so an edit can never spoof (or
+      // silently clear) the connector's authorizer. Untouched when the patch
+      // omits metadata.
+      const metadata = withTrustedLinkedByUserId(patch.metadata, target.metadata);
       await ctx.connectorModel.update(input.id, {
         ...patch,
+        ...(patch.metadata === undefined ? {} : { metadata }),
         // undefined → leave untouched; null → clear; object → encrypt the JSON string.
         // When credentials are cleared, also drop the cached expiry timestamp so
         // token-refresh logic doesn't act on a stale value for the new server.

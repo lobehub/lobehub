@@ -199,6 +199,65 @@ describe('callLlmFinalizer', () => {
     });
   });
 
+  it('stamps the work display anchor only on the turn-final message after tool interaction', async () => {
+    const messages = createMessageTransport();
+    const state = AgentRuntime.createInitialState({
+      messages: [
+        { content: 'Create a task', id: 'user-1', role: 'user' },
+        {
+          content: '',
+          id: 'assistant-0',
+          role: 'assistant',
+          tool_calls: [
+            { function: { arguments: '{}', name: 'createTask' }, id: 'call-1', type: 'function' },
+          ],
+        },
+        { content: 'created', id: 'tool-1', role: 'tool' },
+      ],
+      metadata: { sourceMessageId: 'user-1' },
+      operationId: 'operation-1',
+    });
+
+    await finalizeCallLlmTurn({
+      assistantMessageId: 'assistant-1',
+      events: [],
+      host: createHost(messages),
+      model: 'gpt-4',
+      output: createOutput(),
+      provider: 'openai',
+      shouldReplayAssistantReasoning: false,
+      state,
+    });
+
+    expect(messages.update).toHaveBeenCalledWith(
+      'assistant-1',
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          work: { rootOperationId: 'operation-1', userMessageId: 'user-1' },
+        }),
+      }),
+    );
+
+    // A plain answer with no prior tool interaction must NOT get an anchor.
+    const plainMessages = createMessageTransport();
+    await finalizeCallLlmTurn({
+      assistantMessageId: 'assistant-2',
+      events: [],
+      host: createHost(plainMessages),
+      model: 'gpt-4',
+      output: createOutput(),
+      provider: 'openai',
+      shouldReplayAssistantReasoning: false,
+      state: AgentRuntime.createInitialState({
+        messages: [{ content: 'Hi', id: 'user-2', role: 'user' }],
+        metadata: { sourceMessageId: 'user-2' },
+        operationId: 'operation-1',
+      }),
+    });
+    const [, plainUpdate] = vi.mocked(plainMessages.update).mock.calls[0];
+    expect(plainUpdate.metadata ?? {}).not.toHaveProperty('work');
+  });
+
   it('serializes multimodal parts and keeps the null grounding sentinel', async () => {
     const messages = createMessageTransport();
     const state = AgentRuntime.createInitialState({ operationId: 'operation-1' });

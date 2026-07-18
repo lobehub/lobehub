@@ -20,6 +20,8 @@ export interface TopicListItem extends ChatTopic {
   lastAssistantMessage?: string | null;
 }
 
+export type TopicBatchDeleteScope = 'own' | 'workspace';
+
 type OnboardingSessionMetadataPatch = Partial<NonNullable<ChatTopicMetadata['onboardingSession']>>;
 
 type UpdateTopicMetadataInput = Omit<Partial<ChatTopicMetadata>, 'onboardingSession'> & {
@@ -142,12 +144,19 @@ export class TopicService {
     return lambdaClient.topic.removeTopic.mutate({ id, removeFiles });
   };
 
-  removeTopics = (sessionId: string) => {
-    return lambdaClient.topic.batchDeleteBySessionId.mutate({ id: this.toDbSessionId(sessionId) });
+  removeTopics = (sessionId: string, scope: TopicBatchDeleteScope = 'own') => {
+    return lambdaClient.topic.batchDeleteBySessionId.mutate({
+      id: this.toDbSessionId(sessionId),
+      scope,
+    });
   };
 
-  removeTopicsByAgentId = (agentId: string) => {
-    return lambdaClient.topic.batchDeleteByAgentId.mutate({ agentId });
+  removeTopicsByAgentId = (agentId: string, scope: TopicBatchDeleteScope = 'own') => {
+    return lambdaClient.topic.batchDeleteByAgentId.mutate({ agentId, scope });
+  };
+
+  removeTopicsByGroupId = (groupId: string, scope: TopicBatchDeleteScope = 'own') => {
+    return lambdaClient.topic.batchDeleteByGroupId.mutate({ groupId, scope });
   };
 
   batchRemoveTopics = (topics: string[]) => {

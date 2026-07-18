@@ -909,9 +909,14 @@ export const desktopRoutes: RouteObject[] = [
                   },
                   {
                     element: dynamicElement(
-                      () => import('@/routes/(main)/[workspaceSlug]/settings/creds'),
-                      'Desktop > Workspace > Settings > Creds',
+                      () => import('@/routes/(main)/[workspaceSlug]/settings/credential'),
+                      'Desktop > Workspace > Settings > Credential',
                     ),
+                    path: 'credential',
+                  },
+                  // Legacy `/:slug/settings/creds` URLs — kept for deep-links.
+                  {
+                    element: redirectElement('../credential'),
                     path: 'creds',
                   },
                   {

@@ -149,6 +149,8 @@ function buildRules(field: FieldSchema, t: (key: string) => string) {
 interface SchemaFieldProps {
   disabled?: boolean;
   divider?: boolean;
+  /** The field belongs to a gated feature the current plan doesn't include. */
+  featureLocked?: boolean;
   field: FieldSchema;
   parentKey: string;
 }
@@ -156,12 +158,17 @@ interface SchemaFieldProps {
 const renderFieldLabel = (field: FieldSchema, t: (key: string) => string) => {
   const hint = field.tooltip;
 
-  if (!hint && !field.devOnly) return t(field.label);
+  if (!hint && !field.devOnly && !field.paidFeature) return t(field.label);
 
   return (
     <Flexbox horizontal align="center" gap={8}>
       {t(field.label)}
       {hint && <InfoTooltip size={'small'} title={t(hint)} />}
+      {field.paidFeature && (
+        <Tag color="gold" size={'small'}>
+          {t('channel.paidFeature.badge')}
+        </Tag>
+      )}
       {field.devOnly && <Tag color="gold">Dev Only</Tag>}
     </Flexbox>
   );
@@ -185,99 +192,115 @@ const renderFieldIcon = (field: FieldSchema) => (
   <Icon className={styles.fieldIcon} icon={getFieldIcon(field)} size={20} />
 );
 
-const SchemaField = memo<SchemaFieldProps>(({ field, parentKey, divider, disabled }) => {
-  const { t: _t } = useTranslation('agent');
-  const t = _t as (key: string) => string;
+const SchemaField = memo<SchemaFieldProps>(
+  ({ field, parentKey, divider, disabled: formDisabled, featureLocked }) => {
+    const { t: _t } = useTranslation('agent');
+    const t = _t as (key: string) => string;
 
-  // Conditional visibility: watch the sibling field specified by visibleWhen
-  const watchedValue = AntdForm.useWatch(
-    field.visibleWhen ? [parentKey, field.visibleWhen.field] : [],
-  );
-  if (field.visibleWhen && watchedValue !== field.visibleWhen.value) return null;
+    // Scalar controls fully lock with the feature; list fields handle the
+    // locked state themselves so operators can still remove stale rows.
+    const disabled = formDisabled || featureLocked;
 
-  // Only explicitly authored, actionable guidance earns a help affordance.
-  // Generic schema descriptions stay out of the compact row layout.
-  const label = renderFieldLabel(field, t);
-
-  // Array of objects (e.g. user / channel allowlist) — needs Form.List, can't
-  // be expressed as a single control inside a name-bound FormItem.
-  if (field.type === 'array' && field.items?.type === 'object') {
-    return (
-      <ObjectListField
-        disabled={disabled}
-        divider={divider}
-        field={field}
-        icon={renderFieldIcon(field)}
-        label={label}
-        parentKey={parentKey}
-      />
+    // Conditional visibility: watch the sibling field specified by visibleWhen
+    const watchedValue = AntdForm.useWatch(
+      field.visibleWhen ? [parentKey, field.visibleWhen.field] : [],
     );
-  }
+    if (field.visibleWhen && watchedValue !== field.visibleWhen.value) return null;
 
-  let children: React.ReactNode;
-  switch (field.type) {
-    case 'password': {
-      children = (
-        <FormPassword
-          autoComplete="new-password"
-          disabled={disabled}
-          placeholder={field.placeholder ? t(field.placeholder) : undefined}
+    // Only explicitly authored, actionable guidance earns a help affordance.
+    // Generic schema descriptions stay out of the compact row layout.
+    const label = renderFieldLabel(field, t);
+
+    // Array of objects (e.g. user / channel allowlist) — needs Form.List, can't
+    // be expressed as a single control inside a name-bound FormItem.
+    if (field.type === 'array' && field.items?.type === 'object') {
+      return (
+        <ObjectListField
+          disabled={formDisabled}
+          divider={divider}
+          featureLocked={featureLocked}
+          field={field}
+          icon={renderFieldIcon(field)}
+          label={label}
+          parentKey={parentKey}
         />
       );
-      break;
     }
-    case 'boolean': {
-      children = <Switch disabled={disabled} />;
-      break;
-    }
-    case 'number':
-    case 'integer': {
-      children = (
-        <InputNumber
-          disabled={disabled}
-          max={field.maximum}
-          min={field.minimum}
-          placeholder={field.placeholder ? t(field.placeholder) : undefined}
-          style={{ width: '100%' }}
-        />
-      );
-      break;
-    }
-    case 'string': {
-      if (field.enum) {
-        const hasDescriptions = field.enumDescriptions?.some(Boolean);
-        const options = field.enum.map((value, i) => ({
-          description: field.enumDescriptions?.[i] ? t(field.enumDescriptions[i]) : undefined,
-          label: field.enumLabels?.[i] ? t(field.enumLabels[i]) : value,
-          value,
-        })) satisfies Array<SelectOption<string> & { description?: string }>;
 
+    let children: React.ReactNode;
+    switch (field.type) {
+      case 'password': {
         children = (
-          <Select
+          <FormPassword
+            autoComplete="new-password"
             disabled={disabled}
-            options={options}
             placeholder={field.placeholder ? t(field.placeholder) : undefined}
-            optionRender={
-              hasDescriptions
-                ? (item) => {
-                    const option = item as SelectOption<string> & { description?: string };
-
-                    return (
-                      <Flexbox horizontal align="center" gap={12} justify="space-between">
-                        <span>{option.label}</span>
-                        {option.description && (
-                          <Text fontSize={12} type="secondary">
-                            {option.description}
-                          </Text>
-                        )}
-                      </Flexbox>
-                    );
-                  }
-                : undefined
-            }
           />
         );
-      } else {
+        break;
+      }
+      case 'boolean': {
+        children = <Switch disabled={disabled} />;
+        break;
+      }
+      case 'number':
+      case 'integer': {
+        children = (
+          <InputNumber
+            disabled={disabled}
+            max={field.maximum}
+            min={field.minimum}
+            placeholder={field.placeholder ? t(field.placeholder) : undefined}
+            style={{ width: '100%' }}
+          />
+        );
+        break;
+      }
+      case 'string': {
+        if (field.enum) {
+          const hasDescriptions = field.enumDescriptions?.some(Boolean);
+          const options = field.enum.map((value, i) => ({
+            description: field.enumDescriptions?.[i] ? t(field.enumDescriptions[i]) : undefined,
+            label: field.enumLabels?.[i] ? t(field.enumLabels[i]) : value,
+            value,
+          })) satisfies Array<SelectOption<string> & { description?: string }>;
+
+          children = (
+            <Select
+              disabled={disabled}
+              options={options}
+              placeholder={field.placeholder ? t(field.placeholder) : undefined}
+              optionRender={
+                hasDescriptions
+                  ? (item) => {
+                      const option = item as SelectOption<string> & { description?: string };
+
+                      return (
+                        <Flexbox horizontal align="center" gap={12} justify="space-between">
+                          <span>{option.label}</span>
+                          {option.description && (
+                            <Text fontSize={12} type="secondary">
+                              {option.description}
+                            </Text>
+                          )}
+                        </Flexbox>
+                      );
+                    }
+                  : undefined
+              }
+            />
+          );
+        } else {
+          children = (
+            <FormInput
+              disabled={disabled}
+              placeholder={field.placeholder ? t(field.placeholder) : t(field.label)}
+            />
+          );
+        }
+        break;
+      }
+      default: {
         children = (
           <FormInput
             disabled={disabled}
@@ -285,40 +308,33 @@ const SchemaField = memo<SchemaFieldProps>(({ field, parentKey, divider, disable
           />
         );
       }
-      break;
     }
-    default: {
-      children = (
-        <FormInput
-          disabled={disabled}
-          placeholder={field.placeholder ? t(field.placeholder) : t(field.label)}
-        />
-      );
-    }
-  }
 
-  return (
-    <FormItem
-      avatar={renderFieldIcon(field)}
-      divider={divider}
-      initialValue={field.default}
-      label={label}
-      minWidth={'max(50%, 400px)'}
-      name={[parentKey, field.key]}
-      rules={buildRules(field, t)}
-      valuePropName={field.type === 'boolean' ? 'checked' : undefined}
-      variant="outlined"
-    >
-      {children}
-    </FormItem>
-  );
-});
+    return (
+      <FormItem
+        avatar={renderFieldIcon(field)}
+        divider={divider}
+        initialValue={field.default}
+        label={label}
+        minWidth={'max(50%, 400px)'}
+        name={[parentKey, field.key]}
+        rules={buildRules(field, t)}
+        valuePropName={field.type === 'boolean' ? 'checked' : undefined}
+        variant="outlined"
+      >
+        {children}
+      </FormItem>
+    );
+  },
+);
 
 // --------------- Object-list field (e.g. allowFrom: [{id, name?}]) ---------------
 
 interface ObjectListFieldProps {
   disabled?: boolean;
   divider?: boolean;
+  /** The field belongs to a gated feature the current plan doesn't include. */
+  featureLocked?: boolean;
   field: FieldSchema;
   icon: React.ReactNode;
   label: React.ReactNode;
@@ -326,9 +342,15 @@ interface ObjectListFieldProps {
 }
 
 const ObjectListField = memo<ObjectListFieldProps>(
-  ({ field, parentKey, divider, icon, label, disabled }) => {
+  ({ field, parentKey, divider, icon, label, disabled, featureLocked }) => {
     const { t: _t } = useTranslation('agent');
     const t = _t as (key: string) => string;
+
+    // A locked feature blocks new rows and edits, but existing rows must stay
+    // removable — the server-side write gate always allows clearing keywords,
+    // and stale rows would otherwise keep the feature semi-active with no way
+    // out short of resetting all advanced settings.
+    const editDisabled = disabled || featureLocked;
 
     // The runtime ignores anything beyond `id`, but the editor renders every
     // declared property so future additions (e.g. a per-row note tag) flow
@@ -378,7 +400,7 @@ const ObjectListField = memo<ObjectListFieldProps>(
                         }
                       >
                         <FormInput
-                          disabled={disabled}
+                          disabled={editDisabled}
                           placeholder={
                             sub.placeholder
                               ? t(sub.placeholder as 'channel.allowFromIdPlaceholder')
@@ -397,9 +419,14 @@ const ObjectListField = memo<ObjectListFieldProps>(
                   />
                 </Flexbox>
               ))}
+              {featureLocked && (
+                <Flexbox style={{ fontSize: 12, opacity: 0.6, paddingBlock: 4 }}>
+                  {t('channel.paidFeature.fieldLocked')}
+                </Flexbox>
+              )}
               <Button
                 block
-                disabled={disabled}
+                disabled={editDisabled}
                 icon={<Plus size={14} />}
                 type="dashed"
                 onClick={() => add({ id: '', name: '' })}
@@ -632,15 +659,23 @@ const Body = memo<BodyProps>(
                 }
                 onCollapse={setSettingsActive}
               >
-                {settingsFields.map((field) => (
-                  <SchemaField
-                    divider
-                    disabled={disabled}
-                    field={field}
-                    key={field.key}
-                    parentKey="settings"
-                  />
-                ))}
+                {settingsFields.map((field) => {
+                  // Feature-gated fields (e.g. watch keywords) lock when the
+                  // resolved access meta reports the feature as not allowed.
+                  const featureLocked =
+                    !!field.paidFeature &&
+                    platformDef.access?.features?.[field.paidFeature]?.allowed === false;
+                  return (
+                    <SchemaField
+                      divider
+                      disabled={disabled}
+                      featureLocked={featureLocked}
+                      field={field}
+                      key={field.key}
+                      parentKey="settings"
+                    />
+                  );
+                })}
               </FormGroup>
             </div>
           )}

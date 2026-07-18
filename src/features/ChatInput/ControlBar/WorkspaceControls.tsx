@@ -40,14 +40,13 @@ const WorkspaceControls = memo<WorkspaceControlsProps>(
     // Effective config = shared row + this member's device override (LOBE-11689),
     // so `isDeviceMode` routes the working-directory section by the device THIS
     // member's run actually targets.
-    const { agencyConfig } = useEffectiveAgencyConfig(agentId);
+    const { agencyConfig, workspaceScoped } = useEffectiveAgencyConfig(agentId);
     const deviceRoutingAvailable = useIsGatewayModeEnabled(agentId);
-    const isWorkspaceAgent = useAgentStore(agentByIdSelectors.isWorkspaceAgentById(agentId));
     const effectiveTarget = resolveExecutionTarget(agencyConfig, {
       clientExecutionAvailable: isDesktop,
       deviceRoutingAvailable,
       isHetero: isHeterogeneous,
-      workspaceScoped: isWorkspaceAgent,
+      workspaceScoped,
     });
     const isDeviceMode = effectiveTarget === 'device' && !!agencyConfig?.boundDeviceId;
 

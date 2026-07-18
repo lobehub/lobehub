@@ -254,5 +254,13 @@
   "uploadDock.uploadStatus.pending": "等待上传",
   "uploadDock.uploadStatus.processing": "正在上传",
   "uploadDock.uploadStatus.success": "上传完成",
-  "uploadDock.uploadStatus.uploading": "正在上传"
+  "uploadDock.uploadStatus.uploading": "正在上传",
+  "work.empty.desc": "Agent 产出的交付物（任务、文档、Linear 与 GitHub 条目）都会汇聚在这里。",
+  "work.empty.title": "还没有产物",
+  "work.group": "产物",
+  "work.loadError": "加载产物时出错了。",
+  "work.loadErrorTitle": "无法加载产物",
+  "work.loadMoreError": "加载更多产物失败。",
+  "work.retry": "重试",
+  "work.topicGroup.other": "其他"
 }

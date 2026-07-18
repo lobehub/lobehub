@@ -66,7 +66,7 @@ const styles = createStaticStyles(({ css }) => ({
 
 interface StepProps {
   children?: React.ReactNode;
-  desc: string;
+  desc?: string;
   index: number;
   last?: boolean;
   title: string;
@@ -80,9 +80,11 @@ const Step = memo<StepProps>(({ index, title, desc, children, last }) => (
     </Flexbox>
     <Flexbox flex={1} gap={4} style={{ paddingBlockEnd: last ? 0 : 24 }}>
       <Text weight={500}>{title}</Text>
-      <Text color={cssVar.colorTextTertiary} lineHeight={1.6}>
-        {desc}
-      </Text>
+      {desc && (
+        <Text color={cssVar.colorTextTertiary} lineHeight={1.6}>
+          {desc}
+        </Text>
+      )}
       {children && <div style={{ marginBlockStart: 12 }}>{children}</div>}
     </Flexbox>
   </Flexbox>
@@ -136,18 +138,10 @@ const DeviceConnectModal = memo<DeviceConnectModalProps>(
 
     const cliSteps = (
       <Flexbox>
-        <Step
-          desc={t('devices.connectWizard.cli.installDesc')}
-          index={1}
-          title={t('devices.connectWizard.cli.installTitle')}
-        >
+        <Step index={1} title={t('devices.connectWizard.cli.installTitle')}>
           <CommandLine command={'npm install -g @lobehub/cli'} />
         </Step>
-        <Step
-          desc={t('devices.connectWizard.cli.loginDesc')}
-          index={2}
-          title={t('devices.connectWizard.cli.loginTitle')}
-        >
+        <Step index={2} title={t('devices.connectWizard.cli.loginTitle')}>
           <CommandLine command={'lh login'} />
         </Step>
         <Step
@@ -169,14 +163,22 @@ const DeviceConnectModal = memo<DeviceConnectModalProps>(
       <ImperativeModal
         footer={null}
         open={open}
-        title={t('devices.connectWizard.title')}
         width={560}
+        title={
+          isWorkspace
+            ? t(
+                visibility === 'private'
+                  ? 'workspaceSetting.devices.connectTitlePrivate'
+                  : 'workspaceSetting.devices.connectTitlePublic',
+              )
+            : t('devices.connectWizard.title')
+        }
         onCancel={onClose}
       >
         <Flexbox gap={20}>
-          <Text color={cssVar.colorTextTertiary}>
-            {isWorkspace ? t('workspaceSetting.devices.desc') : t('devices.connectWizard.subtitle')}
-          </Text>
+          {!isWorkspace && (
+            <Text color={cssVar.colorTextTertiary}>{t('devices.connectWizard.subtitle')}</Text>
+          )}
 
           {isWorkspace ? null : (
             <Tabs

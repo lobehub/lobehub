@@ -1,6 +1,6 @@
 {
   "name": "@lobehub/cli",
-  "version": "0.0.43",
+  "version": "0.0.44",
   "type": "module",
   "bin": {
     "lh": "./dist/index.js",
@@ -14,7 +14,8 @@
   ],
   "files": [
     "dist",
-    "man"
+    "man",
+    "skills"
   ],
   "scripts": {
     "build": "tsdown",
@@ -26,6 +27,9 @@
     "test": "bunx vitest run --config vitest.config.mts --silent='passed-only'",
     "test:coverage": "bunx vitest run --config vitest.config.mts --coverage",
     "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "ws": "^8.21.0"
   },
   "devDependencies": {
     "@lobechat/agent-gateway-client": "workspace:*",
@@ -52,8 +56,7 @@
     "superjson": "^2.2.6",
     "tree-kill": "^1.2.2",
     "tsdown": "^0.21.10",
-    "typescript": "^6.0.3",
-    "ws": "^8.21.0"
+    "typescript": "^6.0.3"
   },
   "publishConfig": {
     "access": "public",

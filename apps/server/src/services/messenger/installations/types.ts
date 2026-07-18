@@ -16,6 +16,10 @@ export interface InstallationCredentials {
   accountId?: string;
   /** Platform-side application/bot id (Slack `app_id`, …). */
   applicationId: string;
+  /** WeChat iLink API base URL returned by QR confirmation. */
+  baseUrl?: string;
+  /** WeChat iLink bot id acquired together with the per-user token. */
+  botId?: string;
   /** The actual bot token used for outbound API calls. */
   botToken: string;
   /** Stable cache key, e.g. `'slack:T0123ABC'` or `'telegram:singleton'`. */

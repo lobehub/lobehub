@@ -24,6 +24,18 @@ describe('buildWorkspaceAwarePath', () => {
     expect(buildWorkspaceAwarePath('/fleet', 'acme')).toBe('/acme/fleet');
   });
 
+  it('prefixes deep agent and evaluation paths used by cross-page navigation', () => {
+    expect(buildWorkspaceAwarePath('/agent/agent-1/profile', 'acme')).toBe(
+      '/acme/agent/agent-1/profile',
+    );
+    expect(buildWorkspaceAwarePath('/agent/agent-1/topic-1', 'acme')).toBe(
+      '/acme/agent/agent-1/topic-1',
+    );
+    expect(buildWorkspaceAwarePath('/eval/bench/bench-1/runs/run-1/cases/case-1', 'acme')).toBe(
+      '/acme/eval/bench/bench-1/runs/run-1/cases/case-1',
+    );
+  });
+
   it('bypasses the prefix when `escape` is true', () => {
     expect(buildWorkspaceAwarePath('/settings/profile', 'acme', { escape: true })).toBe(
       '/settings/profile',
@@ -76,6 +88,10 @@ describe('buildWorkspaceAwarePath', () => {
     expect(buildWorkspaceAwarePath('/settings/audit-log', 'acme')).toBe('/acme/settings/audit-log');
     expect(buildWorkspaceAwarePath('/settings/storage', 'acme')).toBe('/acme/settings/storage');
     expect(buildWorkspaceAwarePath('/settings/messenger', 'acme')).toBe('/acme/settings/messenger');
+    expect(buildWorkspaceAwarePath('/settings/credential', 'acme')).toBe(
+      '/acme/settings/credential',
+    );
+    // Legacy alias — prefixed, then the router redirects to `credential`.
     expect(buildWorkspaceAwarePath('/settings/creds', 'acme')).toBe('/acme/settings/creds');
     expect(buildWorkspaceAwarePath('/settings/oauth-apps', 'acme')).toBe(
       '/acme/settings/oauth-apps',

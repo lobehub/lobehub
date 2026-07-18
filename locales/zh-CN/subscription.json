@@ -376,6 +376,7 @@
   "plans.message.more": "更多模型请查看计划对比",
   "plans.message.normalLLM": "标准模型",
   "plans.message.tooltip": "按每条消息平均 {{number}} tokens 估算",
+  "plans.messageChannels.monitoring": "消息监控",
   "plans.messageChannels.title": "消息频道",
   "plans.messageChannels.wechat": "微信渠道",
   "plans.mostPicked": "最受欢迎",

@@ -298,9 +298,11 @@ const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) =
   // Effective config (shared row + this member's device override, LOBE-11689)
   // so recents / default cwd / the selected-repo label all resolve against the
   // device THIS member's run actually targets.
-  const { agencyConfig } = useEffectiveAgencyConfig(agentId);
+  const { agencyConfig, workspaceScoped } = useEffectiveAgencyConfig(agentId);
   const currentDeviceId = useElectronStore((s) => s.gatewayDeviceInfo?.deviceId);
-  const targetDeviceId = resolveTargetDeviceId(agencyConfig, currentDeviceId);
+  const targetDeviceId = resolveTargetDeviceId(agencyConfig, currentDeviceId, {
+    workspaceScoped,
+  });
   // The local machine's filesystem is browsable; a remote device's is not.
   const isLocalDevice = isDesktop && !!targetDeviceId && targetDeviceId === currentDeviceId;
 
@@ -330,6 +332,7 @@ const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) =
     legacyAgentWorkingDirectory,
     topicWorkingDirectory,
     topicWorkingDirectoryConfig,
+    workspaceScoped,
   });
   const selectedDir = getWorkingDirectoryPathString(resolvedSelectedDir);
 

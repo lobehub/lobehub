@@ -21,6 +21,7 @@ import type {
   UIChatMessage,
   UpdateMessageParams,
   UpdateMessageRAGParams,
+  WorkSummaryItem,
 } from '@lobechat/types';
 import { MessageGroupType, ThreadType } from '@lobechat/types';
 import type { TimingSink } from '@lobechat/utils';
@@ -77,6 +78,18 @@ import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../
 import { idGenerator } from '../utils/idGenerator';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 import { recomputeTopicUsage } from './topicUsage';
+import { WorkModel } from './work';
+
+/**
+ * Read the operation-final Work root id stamped on a message's metadata by the
+ * Work registry (`metadata.work.rootOperationId`). Mirrors the client-side
+ * `getOperationFinalRootId` without importing from the app layer.
+ */
+const getMessageWorkRootId = (metadata: unknown): string | undefined => {
+  const rootOperationId = (metadata as { work?: { rootOperationId?: unknown } } | null)?.work
+    ?.rootOperationId;
+  return typeof rootOperationId === 'string' && rootOperationId ? rootOperationId : undefined;
+};
 
 /**
  * Options for querying messages with relations
@@ -97,6 +110,10 @@ export interface QueryMessagesOptions {
     path: string | null,
     file: { fileType: string; id?: string | null },
   ) => Promise<string>;
+  /**
+   * Skip the Work-summary assembly (see `QueryMessageParams.skipWorks`).
+   */
+  skipWorks?: boolean;
   timing?: ModelTimingContext;
   /**
    * Topic ID for MessageGroup aggregation queries
@@ -354,6 +371,7 @@ export class MessageModel {
       current = 0,
       pageSize = 1000,
       sessionId,
+      skipWorks,
       topicId,
       groupId,
       threadId,
@@ -403,6 +421,7 @@ export class MessageModel {
         current,
         pageSize,
         postProcessUrl: options.postProcessUrl,
+        skipWorks,
         timing,
         // Thread queries optionally add agent/session scope if provided
         where: agentCondition ? and(agentCondition, threadCondition) : threadCondition,
@@ -428,6 +447,7 @@ export class MessageModel {
         current,
         pageSize,
         postProcessUrl: options.postProcessUrl,
+        skipWorks,
         timing,
         topicId: topicId ?? undefined,
         where: whereCondition,
@@ -451,6 +471,7 @@ export class MessageModel {
       current,
       pageSize,
       postProcessUrl: options.postProcessUrl,
+      skipWorks,
       timing,
       topicId: topicId ?? undefined,
       where: whereCondition,
@@ -557,7 +578,15 @@ export class MessageModel {
    * @returns Messages with all related data, including MessageGroup nodes
    */
   queryWithWhere = async (options: QueryMessagesOptions = {}): Promise<UIChatMessage[]> => {
-    const { where, current = 0, pageSize = 1000, postProcessUrl, topicId, timing } = options;
+    const {
+      where,
+      current = 0,
+      pageSize = 1000,
+      postProcessUrl,
+      skipWorks,
+      topicId,
+      timing,
+    } = options;
     const totalStartedAt = Date.now();
     const offset = current * pageSize;
 
@@ -667,12 +696,16 @@ export class MessageModel {
       chunksList,
       messageQueriesList,
       threadData,
+      worksByMessageId,
     ] = await Promise.all([
       messageGroupNodesPromise,
       this.queryMessageFileRelations(messageIds, postProcessUrl, timing),
       this.queryMessageChunkRelations(messageIds, timing),
       this.queryMessageQueryRelations(messageIds, timing),
       this.queryMessageThreadRelations(taskMessageIds, timing),
+      skipWorks
+        ? ({} as Record<string, WorkSummaryItem[]>)
+        : this.queryMessageWorkSummaries(result, timing),
     ]);
 
     if (messageIds.length === 0 && messageGroupNodes.length === 0) {
@@ -780,6 +813,9 @@ export class MessageModel {
                 .filter((relation) => relation.messageId === item.id)
 
                 .map<ChatVideoItem>(({ id, url, name }) => ({ alt: name!, id, url })),
+              // Work summaries for this message's root operation, resolved
+              // server-side (attached only to the round's anchor message).
+              works: worksByMessageId[item.id as string],
               audioList: audioList
                 .filter((relation) => relation.messageId === item.id)
 
@@ -1011,6 +1047,48 @@ export class MessageModel {
     });
 
     return chunksList;
+  };
+
+  /**
+   * Resolve Work summaries for a page of messages and key them by anchor
+   * message id — the LAST message (rows are createdAt-asc, so last occurrence)
+   * carrying each `metadata.work.rootOperationId`. Works ride the message-list
+   * payload so the in-message Works chips and the sidebar summary read from one
+   * source instead of a dedicated work-summary fetch. Attaching only to the
+   * round's last message (not every row sharing the operation) keeps the
+   * payload flat — the client re-keys by `rootOperationId`, so which row
+   * physically carries it doesn't matter.
+   */
+  private queryMessageWorkSummaries = async (
+    rows: { id: unknown; metadata: unknown }[],
+    timing?: ModelTimingContext,
+  ): Promise<Record<string, WorkSummaryItem[]>> => {
+    const anchorByRootId = new Map<string, string>();
+    for (const row of rows) {
+      const rootOperationId = getMessageWorkRootId(row.metadata);
+      if (rootOperationId) anchorByRootId.set(rootOperationId, row.id as string);
+    }
+    if (anchorByRootId.size === 0) return {};
+
+    const summaryMap = await runTimedStage(
+      timing,
+      'db.message.queryWithWhere.workSummaries',
+      () =>
+        new WorkModel(this.db, this.userId, this.workspaceId).listSummariesByRootOperations({
+          rootOperationIds: Array.from(anchorByRootId.keys()),
+        }),
+      { rootOperationCount: anchorByRootId.size },
+    );
+
+    const worksByMessageId: Record<string, WorkSummaryItem[]> = {};
+    for (const [rootOperationId, messageId] of anchorByRootId) {
+      const works = summaryMap[rootOperationId];
+      if (works && works.length > 0) worksByMessageId[messageId] = works;
+    }
+    logTiming(timing, 'db.message.queryWithWhere.workSummaries:rows', {
+      messageCount: Object.keys(worksByMessageId).length,
+    });
+    return worksByMessageId;
   };
 
   private queryMessageQueryRelations = async (

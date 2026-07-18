@@ -1,11 +1,17 @@
 import { type AgentState } from '@lobechat/agent-runtime';
 import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
+import { dispatchWorkRegistrationIntent } from '@lobechat/builtin-tools/workRegistration';
 import { resolveSubAgentModel } from '@lobechat/const';
 import { type OperationToolSet } from '@lobechat/context-engine';
 import { type ToolType } from '@lobechat/observability-otel/modules/agent-runtime';
-import { type ChatToolPayload, type LobeAgentConfig } from '@lobechat/types';
+import {
+  type ChatToolPayload,
+  type LobeAgentConfig,
+  type WorkRegistrationIntent,
+} from '@lobechat/types';
 import debug from 'debug';
 
+import { WorkModel } from '@/database/models/work';
 import { type LobeChatDatabase } from '@/database/type';
 import { FileService } from '@/server/services/file';
 import {
@@ -14,6 +20,7 @@ import {
   type ToolExecutionResultResponse,
 } from '@/server/services/toolExecution';
 import { archiveToolResultIfNeeded } from '@/server/services/toolExecution/archiveToolResult';
+import { buildWorkVersionCumulativeUsage } from '@/utils/workCumulativeUsage';
 
 import { type RuntimeExecutorContext } from './context';
 
@@ -65,6 +72,87 @@ export const archiveRuntimeToolResult = async (
   });
 
   return archive.content === result.content ? result : { ...result, content: archive.content };
+};
+
+/**
+ * Persist a Work version from the executor's registration intent, stamping the
+ * tool call's cumulative cost/usage onto the row at insert time. Replaces the
+ * old "register cost-less in the executor, back-fill cost later" two-step: the
+ * executor now only resolves the intent, and the runtime writes it once here,
+ * after `accumulateTool` has computed the cumulative cost.
+ *
+ * Thin server wrapper around the shared {@link dispatchWorkRegistrationIntent}:
+ * builds `WorkModel`-backed ports (all five, incl. `deleteDocumentWork`) and
+ * per-call provenance, then delegates all branch logic.
+ *
+ * Best-effort: any failure is swallowed so Work bookkeeping never breaks the
+ * tool result. Runs AFTER `tool_end` publishes (cost is known only then), so
+ * the Work row becomes durable slightly later than the tool_end event — the
+ * conversation view self-heals from the tool message metadata; the works
+ * sidebar refresh gap is tracked as a follow-up.
+ */
+export const registerWorkFromIntent = async ({
+  agentId,
+  intent,
+  rootOperationId,
+  serverDB,
+  sourceMessageId,
+  sourceToolCallId,
+  sourceToolIdentifier,
+  sourceToolName,
+  state,
+  threadId,
+  topicId,
+  userId,
+  workspaceId,
+}: {
+  agentId?: string | null;
+  intent: WorkRegistrationIntent;
+  rootOperationId?: string;
+  serverDB: LobeChatDatabase;
+  sourceMessageId?: string;
+  sourceToolCallId?: string;
+  /** Tool/plugin identifier supplied by the runtime event that produced this version. */
+  sourceToolIdentifier: string;
+  /** Runtime event's concrete tool name; skills may override it with their own toolName. */
+  sourceToolName: string;
+  state: Pick<AgentState, 'cost' | 'usage'>;
+  threadId?: string | null;
+  topicId?: string;
+  userId?: string;
+  workspaceId?: string;
+}) => {
+  if (!userId) return;
+
+  const cumulative = buildWorkVersionCumulativeUsage({ cost: state.cost, usage: state.usage });
+
+  try {
+    const workModel = new WorkModel(serverDB, userId, workspaceId);
+
+    await dispatchWorkRegistrationIntent(
+      intent,
+      {
+        deleteDocumentWork: (params) => workModel.deleteDocumentWork(params),
+        deleteTaskWork: (params) => workModel.deleteTaskWork(params),
+        handleSkillToolResult: (params) => workModel.handleSkillToolResult(params),
+        registerDocument: (params) => workModel.registerDocument(params),
+        registerTask: (params) => workModel.registerTask(params),
+      },
+      {
+        agentId,
+        ...cumulative,
+        messageId: sourceMessageId,
+        rootOperationId,
+        threadId,
+        toolCallId: sourceToolCallId,
+        toolIdentifier: sourceToolIdentifier,
+        toolName: sourceToolName,
+        topicId,
+      },
+    );
+  } catch (error) {
+    log('registerWorkFromIntent failed for toolCallId=%s: %O', sourceToolCallId, error);
+  }
 };
 
 // Builds a postProcessUrl callback that resolves keys in file-backed fields

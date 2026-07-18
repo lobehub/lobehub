@@ -81,6 +81,8 @@ export interface MainAgentRunState {
   currentMainMessageId: string | undefined;
   /** Set once a terminal event has been reduced (idempotent finalize). */
   ended: boolean;
+  /** Highest seen reasoning snapshot sequence (replace-mode de-dup). */
+  lastReasoningSnapshotSeq: number;
   /**
    * Chain rule: the most recent NON-tool, NON-signal
    * main-thread message — the run's spine. The next NORMAL turn's assistant
@@ -126,6 +128,7 @@ export const createMainAgentRunState = (seedAssistantId: string): MainAgentRunSt
   currentMainMessageId: undefined,
   ended: false,
   lastSpineMessageId: seedAssistantId,
+  lastReasoningSnapshotSeq: 0,
   lastTextSnapshotSeq: 0,
   lastToolMsgIdEver: undefined,
   subagents: createSubagentRunsState(),

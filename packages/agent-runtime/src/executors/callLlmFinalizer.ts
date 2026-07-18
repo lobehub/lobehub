@@ -123,11 +123,52 @@ const sanitizeStateToolCalls = (toolCalls: MessageToolCall[]) => {
   return sanitizedToolCalls.length > 0 ? sanitizedToolCalls : undefined;
 };
 
+/**
+ * Work display anchor: Work cards render on the FINAL assistant message of a
+ * turn (stable across the two-round tool flow), so stamp `metadata.work` only
+ * when this LLM step ends the turn — i.e. it emits no new tool calls AND at
+ * least one tool ran earlier in this operation (messages after
+ * sourceMessageId, the triggering user message). Without the prior-tool check
+ * every plain answer would get a work anchor; without the slice the scan
+ * would see other turns' tool messages.
+ */
+const buildWorkAnchor = ({
+  operationId,
+  output,
+  state,
+}: {
+  operationId: string;
+  output: LLMAttemptOutput;
+  state: AgentState;
+}): MessageMetadata['work'] => {
+  if (output.toolsCalling.length > 0 || output.toolCalls.length > 0) return undefined;
+
+  const sourceMessageId = state.metadata?.sourceMessageId;
+  const sourceMessageIndex =
+    typeof sourceMessageId === 'string'
+      ? state.messages.findIndex((message) => message.id === sourceMessageId)
+      : -1;
+  const currentOperationMessages =
+    sourceMessageIndex >= 0 ? state.messages.slice(sourceMessageIndex + 1) : [];
+  const hasPriorToolInteraction = currentOperationMessages.some(
+    (message) =>
+      message.role === 'tool' ||
+      (Array.isArray(message.tool_calls) && message.tool_calls.length > 0),
+  );
+  if (!hasPriorToolInteraction) return undefined;
+
+  return {
+    rootOperationId: operationId,
+    ...(typeof sourceMessageId === 'string' && { userMessageId: sourceMessageId }),
+  };
+};
+
 const persistFinalMessage = async ({
   assistantMessageId,
   host,
   output,
-}: Pick<FinalizeCallLlmTurnInput, 'assistantMessageId' | 'host' | 'output'>) => {
+  state,
+}: Pick<FinalizeCallLlmTurnInput, 'assistantMessageId' | 'host' | 'output' | 'state'>) => {
   const finalContent = output.hasContentImages
     ? serializePartsForStorage(output.contentParts)
     : output.content;
@@ -139,12 +180,17 @@ const persistFinalMessage = async ({
     finishType: output.finishReason,
     hasContentImages: output.hasContentImages,
   });
+  const workAnchor = buildWorkAnchor({
+    operationId: host.operation.operationId,
+    output,
+    state,
+  });
 
   try {
     await host.transports.messages.update(assistantMessageId, {
       content: finalContent,
       imageList: output.imageList.length > 0 ? output.imageList : undefined,
-      metadata,
+      metadata: workAnchor ? { ...metadata, work: workAnchor } : metadata,
       observationId: output.observationId,
       reasoning: finalReasoning,
       search: output.grounding,
@@ -267,7 +313,7 @@ export const finalizeCallLlmTurn = async ({
     }
   }
 
-  const finalReasoning = await persistFinalMessage({ assistantMessageId, host, output });
+  const finalReasoning = await persistFinalMessage({ assistantMessageId, host, output, state });
   const newState = buildFinalState({
     assistantMessageId,
     finalReasoning,

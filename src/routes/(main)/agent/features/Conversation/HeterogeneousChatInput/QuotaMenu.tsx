@@ -12,6 +12,21 @@ const QUOTA_STALE_MS = 60_000;
 const QUOTA_RETRY_COOLDOWN_MS = 60_000;
 
 const styles = createStaticStyles(({ css }) => ({
+  compactItem: css`
+    color: inherit;
+
+    &[data-quota-level='low'] {
+      color: ${cssVar.colorWarningText};
+    }
+  `,
+  compactItems: css`
+    display: inline-flex;
+    gap: 4px;
+    align-items: center;
+  `,
+  compactSeparator: css`
+    color: ${cssVar.colorTextQuaternary};
+  `,
   emptyState: css`
     padding-block: 10px;
     font-size: 12px;
@@ -132,9 +147,19 @@ export interface QuotaSnapshotBase {
 }
 
 export interface QuotaWindowItem {
+  /** Windows in the same compact group collapse to their tightest remaining value. */
+  compactGroup?: string;
+  /** Optional scope label shown before this window's compact percentage. */
+  compactLabel?: string;
   key: string;
   label: string;
   window: HeteroQuotaWindow | null;
+}
+
+interface CompactQuotaItem {
+  key: string;
+  label?: string;
+  leftPercent: number;
 }
 
 export interface QuotaMenuHelpers<S> {
@@ -171,8 +196,8 @@ interface LoadQuotaOptions {
 }
 
 /**
- * Shared quota popover for local CLI agents: gauge trigger with the most
- * binding window's remaining percent, plus per-window progress bars and
+ * Shared quota popover for local CLI agents: gauge trigger with the tightest
+ * remaining percent in each compact group, plus per-window progress bars and
  * reset countdowns. Agent specifics come in through the props.
  */
 const QuotaMenu = <S extends QuotaSnapshotBase>({
@@ -349,11 +374,23 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
   );
 
   const windows = quota ? getWindows(quota) : [];
-  const compactLeftPercent = windows.reduce<number | undefined>((mostBinding, item) => {
-    if (!item.window) return mostBinding;
+  const compactItemsByGroup = new Map<string, CompactQuotaItem>();
+  for (const item of windows) {
+    if (!item.window) continue;
+
     const leftPercent = clampPercent(100 - item.window.usedPercent);
-    return mostBinding === undefined ? leftPercent : Math.min(mostBinding, leftPercent);
-  }, undefined);
+    const compactGroup = item.compactGroup ?? 'default';
+    const existing = compactItemsByGroup.get(compactGroup);
+
+    if (!existing || leftPercent < existing.leftPercent) {
+      compactItemsByGroup.set(compactGroup, {
+        key: compactGroup,
+        label: item.compactLabel,
+        leftPercent,
+      });
+    }
+  }
+  const compactItems = [...compactItemsByGroup.values()];
   const hasQuotaData = hasQuotaDataForSnapshot(quota);
   const manualRefreshErrorText =
     refreshError && (getRefreshErrorText?.(refreshError) || t('heteroAgent.quota.refreshFailed'));
@@ -470,19 +507,40 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
       className={cx(styles.trigger, open && styles.triggerOpen)}
       type="button"
       data-quota-level={
-        compactLeftPercent === undefined
-          ? undefined
-          : isLowQuota(compactLeftPercent)
+        compactItems.length === 1
+          ? isLowQuota(compactItems[0].leftPercent)
             ? 'low'
             : 'normal'
+          : undefined
       }
     >
       <Icon icon={GaugeIcon} size={14} />
-      {compactLeftPercent !== undefined && (
-        <span>
-          {compactLeftPercent === 0
-            ? t('heteroAgent.quota.exhausted')
-            : t('heteroAgent.quota.compactLeft', { percent: compactLeftPercent })}
+      {compactItems.length > 0 && (
+        <span className={styles.compactItems}>
+          {compactItems.map((item, index) => (
+            <span key={item.key}>
+              {index > 0 && (
+                <span aria-hidden className={styles.compactSeparator}>
+                  {' · '}
+                </span>
+              )}
+              <span
+                className={styles.compactItem}
+                data-quota-level={
+                  compactItems.length > 1
+                    ? isLowQuota(item.leftPercent)
+                      ? 'low'
+                      : 'normal'
+                    : undefined
+                }
+              >
+                {item.label && `${item.label} `}
+                {item.leftPercent === 0 && !item.label
+                  ? t('heteroAgent.quota.exhausted')
+                  : t('heteroAgent.quota.compactLeft', { percent: item.leftPercent })}
+              </span>
+            </span>
+          ))}
         </span>
       )}
       <Icon icon={ChevronDownIcon} size={12} />

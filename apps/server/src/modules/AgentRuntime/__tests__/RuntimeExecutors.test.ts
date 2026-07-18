@@ -137,6 +137,29 @@ vi.mock('@/server/services/file', () => ({
   })),
 }));
 
+const {
+  mockDeleteDocumentWork,
+  mockDeleteTaskWork,
+  mockHandleSkillToolResult,
+  mockRegisterDocument,
+  mockRegisterTask,
+} = vi.hoisted(() => ({
+  mockDeleteDocumentWork: vi.fn(),
+  mockDeleteTaskWork: vi.fn(),
+  mockHandleSkillToolResult: vi.fn(),
+  mockRegisterDocument: vi.fn(),
+  mockRegisterTask: vi.fn(),
+}));
+vi.mock('@/database/models/work', () => ({
+  WorkModel: vi.fn().mockImplementation(() => ({
+    deleteDocumentWork: mockDeleteDocumentWork,
+    deleteTaskWork: mockDeleteTaskWork,
+    handleSkillToolResult: mockHandleSkillToolResult,
+    registerDocument: mockRegisterDocument,
+    registerTask: mockRegisterTask,
+  })),
+}));
+
 describe('RuntimeExecutors', { timeout: 60_000 }, () => {
   let mockMessageModel: any;
   let mockStreamManager: any;
@@ -145,6 +168,16 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockDeleteTaskWork.mockReset();
+    mockDeleteTaskWork.mockResolvedValue(undefined);
+    mockHandleSkillToolResult.mockReset();
+    mockHandleSkillToolResult.mockResolvedValue(undefined);
+    mockDeleteDocumentWork.mockReset();
+    mockDeleteDocumentWork.mockResolvedValue(undefined);
+    mockRegisterDocument.mockReset();
+    mockRegisterDocument.mockResolvedValue({ id: 'doc-work-1' });
+    mockRegisterTask.mockReset();
+    mockRegisterTask.mockResolvedValue({ id: 'work-1' });
     vi.mocked(initModelRuntimeFromDB).mockReset();
     mockCreateCompressionGroup.mockReset();
     mockCancelCompression.mockReset();
@@ -1147,6 +1180,91 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       expect(result.newState.messages.at(-1)).toEqual(
         expect.objectContaining({ content: 'Here is your answer.', role: 'assistant' }),
       );
+    });
+
+    it('marks the final assistant message as the work display anchor after current tool interaction', async () => {
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState({
+        messages: [
+          { content: 'Create a task', id: 'user-msg-1', role: 'user' },
+          {
+            content: '',
+            id: 'assistant-tool-msg-1',
+            role: 'assistant',
+            tool_calls: [{ function: { arguments: '{}', name: 'createTask' }, id: 'call_1' }],
+          },
+          { content: 'created', id: 'tool-msg-1', role: 'tool', tool_call_id: 'call_1' },
+        ] as any,
+        metadata: {
+          agentId: 'agent-123',
+          sourceMessageId: 'user-msg-1',
+          threadId: 'thread-123',
+          topicId: 'topic-123',
+        },
+      });
+
+      await executors.call_llm!(
+        {
+          payload: {
+            messages: [{ content: 'Create a task', role: 'user' }],
+            model: 'gpt-4',
+            provider: 'openai',
+            tools: [],
+          },
+          type: 'call_llm' as const,
+        },
+        state,
+      );
+
+      expect(mockMessageModel.update).toHaveBeenCalledWith(
+        'msg-123',
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            work: { rootOperationId: 'op-123', userMessageId: 'user-msg-1' },
+          }),
+        }),
+      );
+    });
+
+    it('does not mark ordinary replies because of older tool calls from another turn', async () => {
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState({
+        messages: [
+          { content: 'Old request', id: 'old-user-msg', role: 'user' },
+          {
+            content: '',
+            id: 'old-assistant-tool-msg',
+            role: 'assistant',
+            tool_calls: [{ function: { arguments: '{}', name: 'createTask' }, id: 'old_call' }],
+          },
+          { content: 'old result', id: 'old-tool-msg', role: 'tool', tool_call_id: 'old_call' },
+          { content: 'What model are you?', id: 'user-msg-2', role: 'user' },
+        ] as any,
+        metadata: {
+          agentId: 'agent-123',
+          sourceMessageId: 'user-msg-2',
+          threadId: 'thread-123',
+          topicId: 'topic-123',
+        },
+      });
+
+      await executors.call_llm!(
+        {
+          payload: {
+            messages: [{ content: 'What model are you?', role: 'user' }],
+            model: 'gpt-4',
+            provider: 'openai',
+            tools: [],
+          },
+          type: 'call_llm' as const,
+        },
+        state,
+      );
+
+      const updatePayload = mockMessageModel.update.mock.calls.at(-1)?.[1];
+      // Before the current-turn slice, any historical tool call could make this
+      // unrelated assistant reply render work cards after refresh.
+      expect(updatePayload?.metadata?.work).toBeUndefined();
     });
 
     // Gemini 2.5+/3 thinking streams deliver assistant text/reasoning as
@@ -2878,6 +2996,58 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       );
     });
 
+    it('registers a Work version once with its cumulative cost from the executor intent', async () => {
+      const executors = createRuntimeExecutors(ctx);
+      // The executor now hands back a registration intent instead of writing the
+      // Work itself; the runtime persists it after cost is accumulated, stamping
+      // cumulativeCost + provenance (source message = the just-created tool msg).
+      mockToolExecutionService.executeTool.mockResolvedValueOnce({
+        content: 'ok',
+        error: null,
+        executionTime: 100,
+        state: {},
+        success: true,
+        workRegistration: {
+          action: 'create',
+          changeType: 'created',
+          targets: [{ taskId: 'task_x', taskIdentifier: 'T-X' }],
+          type: 'task',
+        },
+      });
+      const state = createMockState({ cost: { ...createMockCost(), total: 0.02 } });
+
+      const instruction = {
+        payload: {
+          parentMessageId: 'assistant-msg-intent',
+          toolCalling: {
+            apiName: 'createTask',
+            arguments: '{"name":"A"}',
+            id: 'tool-call-intent',
+            identifier: 'lobe-task',
+            type: 'builtin' as const,
+          },
+        },
+        type: 'call_tool' as const,
+      };
+
+      await executors.call_tool!(instruction, state);
+
+      expect(mockRegisterTask).toHaveBeenCalledWith(
+        expect.objectContaining({
+          cumulativeCost: 0.02,
+          cumulativeUsage: expect.objectContaining({
+            cost: expect.objectContaining({ total: 0.02 }),
+          }),
+          changeType: 'created',
+          messageId: 'msg-123',
+          taskId: 'task_x',
+          taskIdentifier: 'T-X',
+          toolCallId: 'tool-call-intent',
+          toolName: 'createTask',
+        }),
+      );
+    });
+
     it('should return tool message ID as parentMessageId in nextContext for parentId chain', async () => {
       // Setup: mock messageModel.create to return a specific tool message ID
       const toolMessageId = 'tool-msg-789';
@@ -3531,6 +3701,85 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
           role: 'tool',
           tool_call_id: 'tool-call-2',
         }),
+      );
+    });
+
+    it('registers each batch tool Work version once with its own cumulative cost + provenance', async () => {
+      // Each executor result carries a task registration intent; the batch
+      // persists it ONCE per tool, stamping that call's cumulative cost and the
+      // just-created tool message as the source — no cost-less insert + backfill.
+      mockToolExecutionService.executeTool.mockImplementation((payload: any) =>
+        Promise.resolve({
+          content: 'ok',
+          error: null,
+          executionTime: 100,
+          state: {},
+          success: true,
+          workRegistration:
+            payload.id === 'tool-call-1'
+              ? {
+                  action: 'create',
+                  changeType: 'created',
+                  targets: [{ taskId: 'task_1', taskIdentifier: 'T-1' }],
+                  type: 'task',
+                }
+              : {
+                  action: 'update',
+                  changeType: 'updated',
+                  targets: [{ taskId: 'task_2', taskIdentifier: 'T-2' }],
+                  type: 'task',
+                },
+        }),
+      );
+
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+
+      const instruction = {
+        payload: {
+          parentMessageId: 'assistant-msg-123',
+          toolsCalling: [
+            {
+              apiName: 'createTask',
+              arguments: '{"name":"A"}',
+              id: 'tool-call-1',
+              identifier: 'lobe-task',
+              type: 'default' as const,
+            },
+            {
+              apiName: 'updateTask',
+              arguments: '{"name":"B"}',
+              id: 'tool-call-2',
+              identifier: 'lobe-task',
+              type: 'default' as const,
+            },
+          ],
+        },
+        type: 'call_tools_batch' as const,
+      };
+
+      await executors.call_tools_batch!(instruction, state);
+
+      expect(mockRegisterTask).toHaveBeenCalledTimes(2);
+      const registerCalls = mockRegisterTask.mock.calls.map(([params]) => params);
+      expect(registerCalls).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            cumulativeUsage: expect.objectContaining({ cost: expect.any(Object) }),
+            changeType: 'created',
+            messageId: expect.stringMatching(/^tool-msg-/),
+            taskId: 'task_1',
+            toolCallId: 'tool-call-1',
+            toolName: 'createTask',
+          }),
+          expect.objectContaining({
+            changeType: 'updated',
+            messageId: expect.stringMatching(/^tool-msg-/),
+            taskId: 'task_2',
+            toolCallId: 'tool-call-2',
+            toolName: 'updateTask',
+          }),
+        ]),
       );
     });
 

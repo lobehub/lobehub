@@ -1,4 +1,5 @@
 import type {
+  AcceptanceCheckReviewAction,
   AcceptanceStatus,
   AcceptanceSubjectType,
   VerifierType,
@@ -17,6 +18,7 @@ import type {
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
 import type {
+  acceptanceCheckReviewActions,
   acceptanceStatuses,
   acceptanceSubjectTypes,
   verifierTypes,
@@ -61,6 +63,9 @@ describe('verify vocabulary', () => {
     expectTypeOf<VerifyRunOrigin>().toEqualTypeOf<VerifyRunOriginType>();
     expectTypeOf<(typeof acceptanceSubjectTypes)[number]>().toEqualTypeOf<AcceptanceSubjectType>();
     expectTypeOf<(typeof acceptanceStatuses)[number]>().toEqualTypeOf<AcceptanceStatus>();
+    expectTypeOf<
+      (typeof acceptanceCheckReviewActions)[number]
+    >().toEqualTypeOf<AcceptanceCheckReviewAction>();
   });
 });
 

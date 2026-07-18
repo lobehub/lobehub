@@ -29,6 +29,11 @@ export type ConnectionMode = 'polling' | 'webhook' | 'websocket';
 export interface PlatformAccessMeta {
   allowed?: boolean;
   blockedMessage?: string;
+  /**
+   * Per-feature access flags keyed by feature id (see `FieldSchema.paidFeature`).
+   * Platform-level `allowed` stays authoritative for the channel itself.
+   */
+  features?: Record<string, { allowed: boolean }>;
   requiredPlan?: 'paid';
   rolloutMode?: 'enforce' | 'notice';
 }
@@ -62,6 +67,12 @@ export interface FieldSchema {
   label: string;
   maximum?: number;
   minimum?: number;
+  /**
+   * Marks the field as belonging to a gated feature (by feature id). The
+   * frontend renders a paid badge next to the label and disables editing
+   * when the platform access meta reports the feature as not allowed.
+   */
+  paidFeature?: string;
   placeholder?: string;
   /** Nested fields (for type: 'object') */
   properties?: FieldSchema[];

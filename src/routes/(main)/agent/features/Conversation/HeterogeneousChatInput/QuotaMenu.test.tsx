@@ -1,18 +1,63 @@
 /**
  * @vitest-environment happy-dom
  */
-import type { ClaudeCodeQuotaSnapshot, CodexQuotaSnapshot } from '@lobechat/electron-client-ipc';
+import type * as LobechatConstModule from '@lobechat/const';
+import type * as ElectronClientIpcModule from '@lobechat/electron-client-ipc';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import ClaudeCodeQuotaMenu from './ClaudeCodeQuotaMenu';
 import CodexQuotaMenu from './CodexQuotaMenu';
+import HeteroControlBar from './HeteroControlBar';
 
 const mockService = vi.hoisted(() => ({
   consumeCodexRateLimitResetCredit: vi.fn(),
   getClaudeCodeQuota: vi.fn(),
   getCodexQuota: vi.fn(),
+}));
+
+const effectiveAgencyConfig = vi.hoisted(() => ({
+  current: {
+    boundDeviceId: 'personal-device',
+    executionTarget: 'local' as const,
+    heterogeneousProvider: { command: 'codex', type: 'codex' as const },
+  },
+  workspaceScoped: false,
+}));
+
+vi.mock('@lobechat/const', async (importOriginal) => ({
+  ...(await importOriginal<typeof LobechatConstModule>()),
+  isDesktop: true,
+}));
+
+vi.mock('@lobechat/electron-client-ipc', async (importOriginal) => ({
+  ...(await importOriginal<typeof ElectronClientIpcModule>()),
+  useWatchBroadcast: vi.fn(),
+}));
+
+vi.mock('@/features/ChatInput/ControlBar/WorkspaceControls', () => ({
+  default: () => <div data-testid="workspace-controls" />,
+}));
+
+vi.mock('@/features/ChatInput/hooks/useAgentId', () => ({ useAgentId: () => 'agent-1' }));
+
+vi.mock('@/hooks/useEffectiveAgencyConfig', () => ({
+  useEffectiveAgencyConfig: () => ({
+    agencyConfig: effectiveAgencyConfig.current,
+    workspaceScoped: effectiveAgencyConfig.workspaceScoped,
+  }),
+}));
+
+vi.mock('@/store/agent', () => ({
+  useAgentStore: (selector: (state: Record<string, unknown>) => unknown) => selector({}),
+}));
+
+vi.mock('@/store/agent/selectors', () => ({
+  agentByIdSelectors: {
+    isAgentConfigLoadingById: () => () => false,
+    isWorkspaceAgentById: () => () => true,
+  },
 }));
 
 const { confirmModalMock, toastErrorMock, toastSuccessMock } = vi.hoisted(() => ({
@@ -101,8 +146,8 @@ vi.mock('@lobehub/ui/base-ui', () => ({
 }));
 
 const claudeSnapshot = (
-  overrides: Partial<ClaudeCodeQuotaSnapshot> = {},
-): ClaudeCodeQuotaSnapshot => ({
+  overrides: Partial<ElectronClientIpcModule.ClaudeCodeQuotaSnapshot> = {},
+): ElectronClientIpcModule.ClaudeCodeQuotaSnapshot => ({
   error: null,
   provider: 'claude-code',
   scopedWeekly: null,
@@ -113,7 +158,9 @@ const claudeSnapshot = (
   ...overrides,
 });
 
-const codexSnapshot = (overrides: Partial<CodexQuotaSnapshot> = {}): CodexQuotaSnapshot => ({
+const codexSnapshot = (
+  overrides: Partial<ElectronClientIpcModule.CodexQuotaSnapshot> = {},
+): ElectronClientIpcModule.CodexQuotaSnapshot => ({
   error: null,
   provider: 'codex',
   rateLimitResetCredits: null,
@@ -125,12 +172,47 @@ const codexSnapshot = (overrides: Partial<CodexQuotaSnapshot> = {}): CodexQuotaS
 });
 
 beforeEach(() => {
+  effectiveAgencyConfig.current = {
+    boundDeviceId: 'personal-device',
+    executionTarget: 'local',
+    heterogeneousProvider: { command: 'codex', type: 'codex' },
+  };
+  effectiveAgencyConfig.workspaceScoped = false;
   confirmModalMock.mockReset();
   mockService.consumeCodexRateLimitResetCredit.mockReset();
   mockService.getClaudeCodeQuota.mockReset();
   mockService.getCodexQuota.mockReset();
   toastErrorMock.mockReset();
   toastSuccessMock.mockReset();
+});
+
+describe('HeteroControlBar', () => {
+  it('shows local Codex quota for a workspace member local-device override', async () => {
+    mockService.getCodexQuota.mockResolvedValue(
+      codexSnapshot({ session: { resetsAt: null, usedPercent: 20, windowMinutes: 300 } }),
+    );
+
+    render(<HeteroControlBar />);
+
+    expect(
+      await screen.findByRole('button', { name: 'heteroAgent.codexQuota.tooltip' }),
+    ).toBeTruthy();
+    expect(mockService.getCodexQuota).toHaveBeenCalledWith({ command: 'codex', env: undefined });
+  });
+
+  it('does not show local quota for a workspace shared-local fallback without an override', () => {
+    effectiveAgencyConfig.current = {
+      boundDeviceId: 'workspace-device',
+      executionTarget: 'local',
+      heterogeneousProvider: { command: 'codex', type: 'codex' },
+    };
+    effectiveAgencyConfig.workspaceScoped = true;
+
+    render(<HeteroControlBar />);
+
+    expect(screen.queryByRole('button', { name: 'heteroAgent.codexQuota.tooltip' })).toBeNull();
+    expect(mockService.getCodexQuota).not.toHaveBeenCalled();
+  });
 });
 
 describe('ClaudeCodeQuotaMenu', () => {
@@ -151,15 +233,46 @@ describe('ClaudeCodeQuotaMenu', () => {
     expect(await screen.findByText('heteroAgent.quota.session')).toBeTruthy();
     expect(screen.getByText('heteroAgent.quota.weekly')).toBeTruthy();
     expect(screen.getByText('heteroAgent.claudeQuota.scopedWeekly:Fable')).toBeTruthy();
-    // The compact trigger surfaces the most binding window.
     expect(screen.getByText('heteroAgent.quota.left:92')).toBeTruthy();
-    expect(screen.getByText('heteroAgent.quota.compactLeft:76')).toBeTruthy();
+    const trigger = screen.getByRole('button', { name: 'heteroAgent.claudeQuota.tooltip' });
+    expect(trigger.textContent).toContain(
+      'heteroAgent.quota.weekly heteroAgent.quota.compactLeft:87',
+    );
+    expect(trigger.textContent).toContain('Fable heteroAgent.quota.compactLeft:76');
     expect(mockService.getClaudeCodeQuota).toHaveBeenCalledWith({
       env: { CLAUDE_CONFIG_DIR: '/custom' },
     });
   });
 
-  it('warns below 15 percent and labels zero quota as exhausted', async () => {
+  it('shows the tightest global window and Fable as separate compact values', async () => {
+    mockService.getClaudeCodeQuota.mockResolvedValue(
+      claudeSnapshot({
+        scopedWeekly: {
+          modelName: 'Fable',
+          window: { resetsAt: null, usedPercent: 100, windowMinutes: 10_080 },
+        },
+        session: { resetsAt: null, usedPercent: 49, windowMinutes: 300 },
+        weekly: { resetsAt: null, usedPercent: 53, windowMinutes: 10_080 },
+      }),
+    );
+
+    render(<ClaudeCodeQuotaMenu />);
+
+    expect(await screen.findByText('heteroAgent.quota.exhausted')).toBeTruthy();
+    const trigger = screen.getByRole('button', { name: 'heteroAgent.claudeQuota.tooltip' });
+    expect(trigger.textContent).toContain(
+      'heteroAgent.quota.weekly heteroAgent.quota.compactLeft:47',
+    );
+    expect(trigger.textContent).toContain('Fable heteroAgent.quota.compactLeft:0');
+    expect(trigger.textContent).not.toContain('heteroAgent.quota.exhausted');
+    expect(
+      [...trigger.querySelectorAll('[data-quota-level]')].map((item) =>
+        item.getAttribute('data-quota-level'),
+      ),
+    ).toEqual(['normal', 'low']);
+  });
+
+  it('warns below 15 percent and keeps compact zero quota numeric', async () => {
     mockService.getClaudeCodeQuota.mockResolvedValue(
       claudeSnapshot({
         session: { resetsAt: null, usedPercent: 100, windowMinutes: 300 },
@@ -169,8 +282,11 @@ describe('ClaudeCodeQuotaMenu', () => {
 
     render(<ClaudeCodeQuotaMenu />);
 
-    expect(await screen.findAllByText('heteroAgent.quota.exhausted')).toHaveLength(2);
+    expect(await screen.findAllByText('heteroAgent.quota.exhausted')).toHaveLength(1);
     expect(screen.getByText('heteroAgent.quota.left:14')).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: 'heteroAgent.claudeQuota.tooltip' }).textContent,
+    ).toContain('heteroAgent.quota.session heteroAgent.quota.compactLeft:0');
     expect(document.querySelectorAll('[data-quota-level="low"]')).toHaveLength(3);
   });
 
@@ -319,10 +435,10 @@ describe('ClaudeCodeQuotaMenu', () => {
   });
 
   it('ignores stale request loading updates after switching Claude Code credential source', async () => {
-    const requests: Array<(snapshot: ClaudeCodeQuotaSnapshot) => void> = [];
+    const requests: Array<(snapshot: ElectronClientIpcModule.ClaudeCodeQuotaSnapshot) => void> = [];
     mockService.getClaudeCodeQuota.mockImplementation(
       () =>
-        new Promise<ClaudeCodeQuotaSnapshot>((resolve) => {
+        new Promise<ElectronClientIpcModule.ClaudeCodeQuotaSnapshot>((resolve) => {
           requests.push(resolve);
         }),
     );
@@ -384,6 +500,11 @@ describe('CodexQuotaMenu', () => {
     expect(await screen.findByText('heteroAgent.quota.left:81')).toBeTruthy();
     expect(screen.getByText('heteroAgent.quota.left:12')).toBeTruthy();
     expect(screen.getByText('heteroAgent.quota.compactLeft:12')).toBeTruthy();
+    expect(
+      screen
+        .getByRole('button', { name: 'heteroAgent.codexQuota.tooltip' })
+        .getAttribute('data-quota-level'),
+    ).toBe('low');
     expect(screen.getByText('heteroAgent.codexQuota.fiveHour')).toBeTruthy();
     expect(screen.getByText('heteroAgent.quota.weekly')).toBeTruthy();
     expect(
@@ -573,7 +694,7 @@ describe('CodexQuotaMenu', () => {
   });
 
   it('clears refresh loading when a reset supersedes an in-flight quota request', async () => {
-    const requests: Array<(snapshot: CodexQuotaSnapshot) => void> = [];
+    const requests: Array<(snapshot: ElectronClientIpcModule.CodexQuotaSnapshot) => void> = [];
     mockService.getCodexQuota
       .mockResolvedValueOnce(
         codexSnapshot({
@@ -583,7 +704,7 @@ describe('CodexQuotaMenu', () => {
       )
       .mockImplementationOnce(
         () =>
-          new Promise<CodexQuotaSnapshot>((resolve) => {
+          new Promise<ElectronClientIpcModule.CodexQuotaSnapshot>((resolve) => {
             requests.push(resolve);
           }),
       );

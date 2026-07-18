@@ -1,6 +1,7 @@
 import type { LobeAgentAgencyConfig } from '@lobechat/types';
 import { resolveAgencyConfig } from '@lobechat/types';
 
+import { resolveWorkspaceScoped } from '@/helpers/executionTarget';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useUserStore } from '@/store/user';
@@ -15,6 +16,13 @@ export interface UseEffectiveAgencyConfigResult {
    * should wait instead of acting on a value that may flip.
    */
   isPreferenceLoading: boolean;
+  /**
+   * The effective config still comes from the workspace-shared fallback because
+   * this member has not explicitly selected an execution target. Callers must
+   * preserve workspace coercion so a legacy shared `local` value cannot execute
+   * on whichever member happens to open the agent.
+   */
+  workspaceScoped: boolean;
 }
 
 /**
@@ -60,5 +68,6 @@ export const useEffectiveAgencyConfig = (agentId?: string): UseEffectiveAgencyCo
   return {
     agencyConfig: resolveAgencyConfig(sharedAgencyConfig, isWorkspaceAgent ? override : undefined),
     isPreferenceLoading: isWorkspaceAgent && isLoading,
+    workspaceScoped: resolveWorkspaceScoped(isWorkspaceAgent, override),
   };
 };

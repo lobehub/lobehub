@@ -1,6 +1,7 @@
 import {
   acceptanceStatuses,
   acceptanceSubjectTypes,
+  acceptanceVisibilities,
   verifierTypes,
   verifyCheckResultStatuses,
   verifyEvidenceCapturedBy,
@@ -10,12 +11,14 @@ import {
   verifyRunStatuses,
   verifyUserDecisions,
   verifyVerdicts,
+  verifyVisibilities,
 } from '@lobechat/const/verify';
 import type {
   AcceptanceConfig,
   AcceptanceMetadata,
   AcceptanceVisualRender,
   ToulminVerdict,
+  VerifyCheckDecisionDetail,
   VerifyCheckItem,
   VerifyRubricConfig,
   VerifyRunContext,
@@ -246,6 +249,13 @@ export const verifyCheckResults = pgTable(
 
     // ---- Data flywheel ----
     userDecision: text('user_decision', { enum: verifyUserDecisions }),
+    /**
+     * Provenance + feedback behind the decision (note, circled evidence
+     * regions, who/when) — the check-level mirror of
+     * `verify_runs.decision_detail`. The `user_decision` verb stays the
+     * queryable field; this bag is what the next verify round reads.
+     */
+    userDecisionDetail: jsonb('user_decision_detail').$type<VerifyCheckDecisionDetail>(),
     isFalsePositive: boolean('is_false_positive'),
     isFalseNegative: boolean('is_false_negative'),
 
@@ -366,6 +376,14 @@ export const acceptances = pgTable(
     /** User-facing acceptance lifecycle state. */
     status: text('status', { enum: acceptanceStatuses }).default('pending').notNull(),
 
+    /**
+     * Read visibility beyond the creator. The DB default matches the personal
+     * scope (`public` — the page is meant to be linked from PRs/reports);
+     * workspace-scoped creation overrides to `private` in the model, so org
+     * data stays member-gated unless deliberately opened up.
+     */
+    visibility: text('visibility', { enum: acceptanceVisibilities }).default('public').notNull(),
+
     /** One-sentence acceptance requirement the user configured for this subject. */
     requirement: text('requirement'),
 
@@ -397,6 +415,7 @@ export const acceptances = pgTable(
     index('acceptances_workspace_id_idx').on(t.workspaceId),
     index('acceptances_subject_idx').on(t.subjectType, t.subjectId),
     index('acceptances_status_idx').on(t.status),
+    index('acceptances_workspace_visibility_idx').on(t.workspaceId, t.visibility, t.userId),
     // One acceptance per subject in personal scope.
     uniqueIndex('acceptances_personal_subject_unique')
       .on(t.userId, t.subjectType, t.subjectId)
@@ -527,6 +546,15 @@ export const verifyRuns = pgTable(
 
     /** What produced this round — drives provenance + analytics filtering. */
     source: text('source', { enum: verifyRunSources }).default('agent').notNull(),
+
+    /**
+     * Read visibility of this round's report page beyond its creator. The DB
+     * default matches the personal scope (`public` — report URLs are meant to
+     * be linked from PRs); workspace-scoped creation overrides to `private` in
+     * the model, and attaching to an acceptance inherits the aggregate's
+     * setting so rounds never leak past their umbrella.
+     */
+    visibility: text('visibility', { enum: verifyVisibilities }).default('public').notNull(),
 
     /**
      * What kind of thing this round verifies (e.g. `coding`). Drives how the

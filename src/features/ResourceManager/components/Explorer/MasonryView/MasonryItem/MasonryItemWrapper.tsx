@@ -8,6 +8,7 @@ import MasonryFileItem from '.';
 interface MasonryItemWrapperProps {
   context: {
     knowledgeBaseId?: string;
+    isItemSelectable: (item: FileListItem) => boolean;
     onSelectedChange: (id: string, checked: boolean) => void;
     selectAllState: 'all' | 'loaded' | 'none';
     selectFileIds: string[];
@@ -22,15 +23,21 @@ const MasonryItemWrapper = memo<MasonryItemWrapperProps>(({ data: item, context 
     return null;
   }
 
+  const selectable = context.isItemSelectable(item);
+
   return (
     <div style={{ padding: '8px 4px' }}>
       <MasonryFileItem
         knowledgeBaseId={context.knowledgeBaseId}
-        selected={isExplorerItemSelected({
-          id: item.id,
-          selectAllState: context.selectAllState,
-          selectedIds: context.selectFileIds,
-        })}
+        selectable={selectable}
+        selected={
+          selectable &&
+          isExplorerItemSelected({
+            id: item.id,
+            selectAllState: context.selectAllState,
+            selectedIds: context.selectFileIds,
+          })
+        }
         onSelectedChange={context.onSelectedChange}
         {...item}
       />

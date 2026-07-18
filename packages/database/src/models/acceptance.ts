@@ -30,12 +30,24 @@ export class AcceptanceModel {
   private ownership = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, acceptances);
 
+  /**
+   * Scope-dependent visibility default: personal aggregates are link-shareable
+   * (`public`), workspace aggregates stay member-gated (`private`). An explicit
+   * caller value always wins.
+   */
+  private defaultVisibility = () => (this.workspaceId ? ('private' as const) : ('public' as const));
+
   create = async (
     params: Omit<NewAcceptance, 'userId' | 'workspaceId'>,
   ): Promise<AcceptanceItem> => {
     const [row] = await this.db
       .insert(acceptances)
-      .values(buildWorkspacePayload({ userId: this.userId, workspaceId: this.workspaceId }, params))
+      .values(
+        buildWorkspacePayload(
+          { userId: this.userId, workspaceId: this.workspaceId },
+          { visibility: this.defaultVisibility(), ...params },
+        ),
+      )
       .returning();
     return row;
   };
@@ -69,14 +81,27 @@ export class AcceptanceModel {
     defaults?: Partial<Pick<NewAcceptance, 'config' | 'requirement'>>,
   ): Promise<AcceptanceItem> => {
     const existing = await this.findBySubject(subjectType, subjectId);
-    if (existing) return existing;
+    if (existing) {
+      // A recorded requirement is never overwritten — but an aggregate created
+      // WITHOUT one (a first ingest that omitted it) accepts the first
+      // non-empty statement a later round supplies, instead of staying blank
+      // forever ("尚未记录该对象的验收目标").
+      if (!existing.requirement && defaults?.requirement) {
+        await this.db
+          .update(acceptances)
+          .set({ requirement: defaults.requirement })
+          .where(eq(acceptances.id, existing.id));
+        return { ...existing, requirement: defaults.requirement };
+      }
+      return existing;
+    }
 
     await this.db
       .insert(acceptances)
       .values(
         buildWorkspacePayload(
           { userId: this.userId, workspaceId: this.workspaceId },
-          { subjectId, subjectType, ...defaults },
+          { subjectId, subjectType, visibility: this.defaultVisibility(), ...defaults },
         ),
       )
       // Conflict = another caller won the per-scope subject unique index race.
@@ -97,7 +122,9 @@ export class AcceptanceModel {
 
   update = async (
     id: string,
-    value: Partial<Pick<NewAcceptance, 'config' | 'metadata' | 'requirement' | 'visualRender'>>,
+    value: Partial<
+      Pick<NewAcceptance, 'config' | 'metadata' | 'requirement' | 'visibility' | 'visualRender'>
+    >,
   ): Promise<AcceptanceItem | undefined> => {
     const [row] = await this.db
       .update(acceptances)

@@ -18,6 +18,8 @@
  * `@/services/document/swrKeys` (already a factory, widely imported) and
  * re-exported here so the whole set is reachable from one place.
  */
+import { type ConversationContext } from '@lobechat/types';
+
 import {
   agentDocumentSWRKeys,
   documentSWRKeys,
@@ -94,6 +96,22 @@ export const messageKeys = {
     normalizeMessageListQueryContext(context),
     MESSAGE_CACHE_VERSION,
   ]),
+};
+
+/**
+ * SWR `mutate` matcher for `message:list` keys. The key shape is
+ * `[message:list, ConversationContext, version]`, so this guards `key[0]` and
+ * hands the resolved context to an optional predicate (omit it to match every
+ * message list, any scope / thread / page-size / version variant). Shared by
+ * every message-list invalidation site so the key-shape knowledge lives once.
+ */
+export const isMessageListKey = (
+  key: unknown,
+  predicate?: (context: ConversationContext) => boolean,
+): boolean => {
+  if (!Array.isArray(key) || key[0] !== messageKeys.list.root) return false;
+  const context = key[1] as ConversationContext | undefined;
+  return !!context && (predicate ? predicate(context) : true);
 };
 
 // ---- topic --------------------------------------------------------------
@@ -204,6 +222,30 @@ export const taskKeys = {
       'task:list',
       agentKey,
       visibility,
+    ],
+  ),
+};
+
+// ---- work ---------------------------------------------------------------
+export const workKeys = {
+  conversation: def('work:conversation', (topicId: string, threadId?: string | null) => [
+    'work:conversation',
+    topicId,
+    threadId ?? null,
+  ]),
+  versions: def('work:versions', (workId: string) => ['work:versions', workId]),
+  // Cross-topic Work gallery on the resource page: keyed by owner scope + the
+  // gallery filter key (type OR provider tab, e.g. `all` / `task` / `linear`) +
+  // keyset cursor (one entry per infinite-scroll page). The filter key (not the
+  // Work type) is the discriminator so the per-provider linear/github tabs,
+  // which share the `external` Work type, get distinct cache entries.
+  workspace: def(
+    'work:workspace',
+    (workspaceId: string | null | undefined, filterKey: string, cursor?: string | null) => [
+      'work:workspace',
+      workspaceId ?? null,
+      filterKey,
+      cursor ?? null,
     ],
   ),
 };

@@ -346,6 +346,47 @@ describe('buildRunLifecycle.afterUserMessagePersisted — topic title (all runti
     expect(store.summaryTopicTitle).toHaveBeenCalledWith('t1', messages);
   });
 
+  it('new topic (gateway, no caller messages) reads the store under the EVENT topicId, not the stale send-time context', async () => {
+    // Regression (#16289 follow-up): the adapter is built with the send-time
+    // `operationContext`, whose topicId is still null for a brand-new topic.
+    // Gateway/hetero omit `event.messages` and persist the conversation under
+    // the REAL topicId (carried on `event.context`). Reading the store with the
+    // stale adapter context lands on an empty bucket, so the model summarizes
+    // nothing and emits a degenerate "空对话标题" title.
+    const { get, store } = makeStore();
+    const storedMessages = [{ content: 'hello there', id: 'm1', role: 'user' } as any];
+    // Send-time context: new topic not created yet, so no topicId.
+    const sendContext = { agentId: 'a1', workspaceSlug: 'team' } as ConversationContext;
+    // Event context: the freshly-created topic id the messages were persisted under.
+    const eventContext = {
+      agentId: 'a1',
+      topicId: 't1',
+      workspaceSlug: 'team',
+    } as ConversationContext;
+    store.messagesMap = { [messageMapKey(eventContext)]: storedMessages };
+
+    const runLifecycle = buildRunLifecycle(get, {
+      context: sendContext,
+      parentMessageId: 'u1',
+      parentMessageType: 'user',
+      runId: OP,
+      runScope: 'top_level',
+      runtimeType: 'gateway',
+    });
+
+    await runLifecycle.afterUserMessagePersisted({
+      context: eventContext,
+      isCreateNewTopic: true,
+      operationId: OP,
+      runId: OP,
+      runScope: 'top_level',
+      runtimeType: 'gateway',
+      topicId: 't1',
+    });
+
+    expect(store.summaryTopicTitle).toHaveBeenCalledWith('t1', storedMessages);
+  });
+
   it('does NOT title for a sub_agent run', async () => {
     const { get, store } = makeStore();
 

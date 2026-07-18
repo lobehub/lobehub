@@ -480,6 +480,7 @@ export class StreamingExecutorActionImpl {
      * keep their own model.
      */
     modelOverride?: { model: string; provider: string };
+    userMessageId?: string;
   }): Promise<{ cost?: Cost; model?: string; provider?: string; usage?: Usage } | void> => {
     const {
       disableTools,
@@ -1010,6 +1011,7 @@ export class StreamingExecutorActionImpl {
         parentMessageId: userMessageId,
         parentMessageType: 'user',
         parentOperationId,
+        userMessageId,
       });
 
       // 7. Extract the sub-agent's final assistant output as the tool result

@@ -777,6 +777,50 @@ describe('BotMessageRouter', () => {
       expect(mockHandleSubscribedMessage).toHaveBeenCalledTimes(1);
     });
 
+    it('should drop a keyword wake when messageMonitoring access is not allowed', async () => {
+      mockGetBotFeatureAccessState.mockImplementation(async (params: any) =>
+        params?.feature === 'messageMonitoring'
+          ? { allowed: false, requiredPlan: 'paid' }
+          : { allowed: true },
+      );
+      const handler = await loadSubscribedHandler({
+        dmPolicy: 'open',
+        watchKeywords: [{ keyword: 'bug' }],
+      });
+      const thread = makeThread({ isDM: false });
+      const message = makeMessage({
+        isMention: false,
+        text: 'hey team, I think we have a bug in checkout',
+      });
+
+      await handler(thread, message);
+
+      expect(mockHandleSubscribedMessage).not.toHaveBeenCalled();
+      expect(mockGetBotFeatureAccessState).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'runtime', feature: 'messageMonitoring' }),
+      );
+    });
+
+    it('should keep handling mentions when messageMonitoring access is not allowed', async () => {
+      // The gate only covers passive keyword wakes — explicit @mentions in
+      // the same thread must keep flowing for every plan.
+      mockGetBotFeatureAccessState.mockImplementation(async (params: any) =>
+        params?.feature === 'messageMonitoring'
+          ? { allowed: false, requiredPlan: 'paid' }
+          : { allowed: true },
+      );
+      const handler = await loadSubscribedHandler({
+        dmPolicy: 'open',
+        watchKeywords: [{ keyword: 'bug' }],
+      });
+      const thread = makeThread({ isDM: false });
+      const message = makeMessage({ isMention: true, text: 'there is a bug, please look' });
+
+      await handler(thread, message);
+
+      expect(mockHandleSubscribedMessage).toHaveBeenCalledTimes(1);
+    });
+
     it('should still skip when text contains a keyword as substring only (word boundary)', async () => {
       const handler = await loadSubscribedHandler({
         dmPolicy: 'open',
@@ -1488,6 +1532,58 @@ describe('BotMessageRouter', () => {
       expect(merged.text).toBe(
         'Scan the recent thread for a bug report.\n\nlooks like a bug in checkout',
       );
+    });
+
+    it('drops a channel keyword wake via catch-all when messageMonitoring is not allowed', async () => {
+      mockGetBotFeatureAccessState.mockImplementation(async (params: any) =>
+        params?.feature === 'messageMonitoring'
+          ? { allowed: false, requiredPlan: 'paid' }
+          : { allowed: true },
+      );
+      const handler = await loadDmCatchAllHandler({
+        dmPolicy: 'open',
+        watchKeywords: [{ keyword: 'bug' }],
+      });
+      if (!handler) throw new Error('expected catch-all to be registered');
+      const thread = {
+        id: 'discord:guild-1:channel-1',
+        isDM: false,
+        post: vi.fn().mockResolvedValue(undefined),
+      };
+      const message = {
+        author: { isBot: false, userId: 'alice-id', userName: 'alice' },
+        text: 'looks like a bug in checkout',
+      };
+
+      await handler(thread, message);
+
+      expect(mockHandleMention).not.toHaveBeenCalled();
+    });
+
+    it('keeps DM catch-all handling when messageMonitoring is not allowed', async () => {
+      mockGetBotFeatureAccessState.mockImplementation(async (params: any) =>
+        params?.feature === 'messageMonitoring'
+          ? { allowed: false, requiredPlan: 'paid' }
+          : { allowed: true },
+      );
+      const handler = await loadDmCatchAllHandler({
+        dmPolicy: 'open',
+        watchKeywords: [{ keyword: 'bug' }],
+      });
+      if (!handler) throw new Error('expected catch-all to be registered');
+      const thread = {
+        id: 'discord:dm-1',
+        isDM: true,
+        post: vi.fn().mockResolvedValue(undefined),
+      };
+      const message = {
+        author: { isBot: false, userId: 'alice-id', userName: 'alice' },
+        text: 'hi bot, found a bug',
+      };
+
+      await handler(thread, message);
+
+      expect(mockHandleMention).toHaveBeenCalledTimes(1);
     });
 
     it('still ignores non-DM channel traffic that does NOT match any watch keyword', async () => {

@@ -4,6 +4,7 @@ import type {
   WorkVersionChangeType,
   WorkVersionCumulativeUsage,
   WorkVersionMetadata,
+  WorkVisibility,
 } from '@lobechat/types';
 import { isNotNull, isNull } from 'drizzle-orm';
 import { index, integer, jsonb, pgTable, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
@@ -85,18 +86,18 @@ export const works = pgTable(
     }),
     originAgentId: text('origin_agent_id').references(() => agents.id, { onDelete: 'set null' }),
 
+    /** Backing-resource owner for task/document Works; registrant for external Works. */
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
     /** Null for personal Works; determines which resource unique index applies below. */
     workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
     /**
-     * Visibility within the owning workspace. Registration must explicitly
-     * inherit this from the backing resource; external Works default to private
-     * at the write boundary until a workspace-shared authorization is known.
+     * Visibility within the owning workspace. Registration mirrors task/document
+     * visibility; external Works stay private until a shared authorization source exists.
      * Ignored in personal mode where the row is implicitly private to its owner.
      */
-    visibility: text('visibility', { enum: ['private', 'public'] }).notNull(),
+    visibility: text('visibility').$type<WorkVisibility>().notNull(),
 
     createdAt: createdAt(),
     updatedAt: updatedAt(),

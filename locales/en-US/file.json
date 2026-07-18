@@ -254,5 +254,13 @@
   "uploadDock.uploadStatus.pending": "Waiting to upload",
   "uploadDock.uploadStatus.processing": "Uploading",
   "uploadDock.uploadStatus.success": "Upload completed",
-  "uploadDock.uploadStatus.uploading": "Uploading"
+  "uploadDock.uploadStatus.uploading": "Uploading",
+  "work.empty.desc": "Works your agents produce — tasks, documents, Linear and GitHub items — will collect here.",
+  "work.empty.title": "No works yet",
+  "work.group": "Works",
+  "work.loadError": "Something went wrong while loading works.",
+  "work.loadErrorTitle": "Couldn’t load works",
+  "work.loadMoreError": "Failed to load more works.",
+  "work.retry": "Retry",
+  "work.topicGroup.other": "Other"
 }

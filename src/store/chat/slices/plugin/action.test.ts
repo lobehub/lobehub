@@ -356,9 +356,11 @@ describe('ChatPluginAction', () => {
         await result.current.invokeBuiltinTool(messageId, payload);
       });
 
+      expect(capturedContext?.anchorMessageId).toBe('assistant-msg-1');
       expect(capturedContext?.messageId).toBe(messageId);
       expect(capturedContext?.sourceMessageId).toBe('user-msg-1');
       expect(capturedContext?.toolCallId).toBe('tool-call-1');
+      expect(capturedContext?.toolMessageId).toBe(messageId);
     });
 
     it('should pass sub-agent context to Tool Store executor', async () => {

@@ -73,6 +73,7 @@ describe('dispatchClientTool', () => {
     const streamManager = makeStreamManager(undefined);
 
     const result = await dispatchClientTool(makePayload(), {
+      assistantMessageId: 'msg-assistant',
       operationId: 'op-1',
       streamManager,
     });
@@ -87,8 +88,18 @@ describe('dispatchClientTool', () => {
     const streamManager = makeStreamManager(vi.fn());
 
     const result = await dispatchClientTool(makePayload(), {
+      agentId: 'agent-1',
+      assistantMessageId: 'msg-assistant',
+      documentId: 'doc-1',
+      groupId: 'group-1',
       operationId: 'op-1',
+      rootOperationId: 'op-root',
+      scope: 'thread',
+      sourceMessageId: 'msg-user',
       streamManager,
+      taskId: 'task-1',
+      threadId: 'thread-1',
+      topicId: 'topic-1',
     });
 
     expect(result.success).toBe(false);
@@ -109,8 +120,18 @@ describe('dispatchClientTool', () => {
     ]);
 
     const result = await dispatchClientTool(makePayload(), {
+      agentId: 'agent-1',
+      assistantMessageId: 'msg-assistant',
+      documentId: 'doc-1',
+      groupId: 'group-1',
       operationId: 'op-1',
+      rootOperationId: 'op-root',
+      scope: 'thread',
+      sourceMessageId: 'msg-user',
       streamManager,
+      taskId: 'task-1',
+      threadId: 'thread-1',
+      topicId: 'topic-1',
     });
 
     expect(sendToolExecute).toHaveBeenCalledTimes(1);
@@ -118,8 +139,18 @@ describe('dispatchClientTool', () => {
     expect(sendCall[0]).toBe('op-1');
     expect(sendCall[1]).toMatchObject({
       apiName: 'readFile',
+      agentId: 'agent-1',
+      assistantMessageId: 'msg-assistant',
+      documentId: 'doc-1',
+      groupId: 'group-1',
       identifier: 'local-system',
+      rootOperationId: 'op-root',
+      scope: 'thread',
+      sourceMessageId: 'msg-user',
+      taskId: 'task-1',
+      threadId: 'thread-1',
       toolCallId: 'call-1',
+      topicId: 'topic-1',
     });
 
     expect(result.success).toBe(true);
@@ -149,6 +180,50 @@ describe('dispatchClientTool', () => {
     });
 
     expect(result.state).toEqual(state);
+  });
+
+  it('forwards workRegistration from the BLPOP payload onto the execution result', async () => {
+    const sendToolExecute = vi.fn().mockResolvedValue(undefined);
+    const streamManager = makeStreamManager(sendToolExecute);
+
+    const workRegistration = {
+      action: 'create',
+      targets: [{ taskId: 'task-9' }],
+      type: 'task',
+    };
+    mockBlpop.mockResolvedValue([
+      'tool_result:call-1',
+      JSON.stringify({
+        content: 'created',
+        success: true,
+        toolCallId: 'call-1',
+        workRegistration,
+      }),
+    ]);
+
+    const result = await dispatchClientTool(makePayload(), {
+      operationId: 'op-1',
+      streamManager,
+    });
+
+    expect(result.workRegistration).toEqual(workRegistration);
+  });
+
+  it('leaves workRegistration undefined when the BLPOP payload omits it', async () => {
+    const sendToolExecute = vi.fn().mockResolvedValue(undefined);
+    const streamManager = makeStreamManager(sendToolExecute);
+
+    mockBlpop.mockResolvedValue([
+      'tool_result:call-1',
+      JSON.stringify({ content: 'ok', success: true, toolCallId: 'call-1' }),
+    ]);
+
+    const result = await dispatchClientTool(makePayload(), {
+      operationId: 'op-1',
+      streamManager,
+    });
+
+    expect(result.workRegistration).toBeUndefined();
   });
 
   it('returns a timeout result and still disconnects when BLPOP times out', async () => {

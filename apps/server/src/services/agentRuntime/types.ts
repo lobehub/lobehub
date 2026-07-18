@@ -342,6 +342,12 @@ export interface OperationCreationParams {
      * read on the completion path to project receipts.
      */
     agentSignal?: AgentSignalOperationMarker;
+    /**
+     * Client IP of the originating request. Spread onto `state.metadata.clientIp`
+     * so downstream LLM-call metadata can carry it for auditing and spend
+     * attribution.
+     */
+    clientIp?: string;
     defaultTaskAssigneeAgentId?: string;
     documentId?: string | null;
     groupId?: string | null;
@@ -373,6 +379,12 @@ export interface OperationCreationParams {
     threadId?: string | null;
     topicId?: string | null;
     trigger?: string;
+    /**
+     * User agent of the originating request. Spread onto
+     * `state.metadata.userAgent` so downstream LLM-call metadata can carry it for
+     * auditing and spend attribution.
+     */
+    userAgent?: string;
   };
   autoStart?: boolean;
   /**

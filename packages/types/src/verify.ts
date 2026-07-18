@@ -99,9 +99,97 @@ export interface AcceptanceConfig {
   verifyRubricId?: string;
 }
 
+/**
+ * A file the user attached to their feedback (an uploaded/pasted screenshot),
+ * resolved to a display URL. The stored form is a bare `fileId` on the decision
+ * detail; this is the enriched view the acceptance page renders, produced by the
+ * bundle read (which resolves the id to a signed URL as the aggregate's owner).
+ */
+export interface AcceptanceAttachment {
+  id: string;
+  /** Original file name, when known. */
+  name?: string;
+  /** Resolved (possibly signed) URL — null when the file no longer resolves. */
+  url: string | null;
+}
+
+/**
+ * User feedback addressed to a check GROUP (business category) rather than any
+ * single check — the "this concern doesn't belong to a check I could reject"
+ * channel. Stored on the round it judges ({@link VerifyRunDecisionDetail});
+ * this is the derived view the acceptance page consumes, with `roundIndex`
+ * read off that run, so the check-reject staleness rule (consumed once a
+ * newer round lands) applies structurally.
+ */
+export interface AcceptanceGroupFeedback {
+  /** Attachments backing the feedback, resolved to URLs by the bundle read. */
+  attachments?: AcceptanceAttachment[];
+  /** The group's category label ('' targets the uncategorized bucket). */
+  category: string;
+  comment: string;
+  /** When the feedback was written (ISO 8601). */
+  createdAt: string;
+  /** Uploaded/pasted screenshots backing the feedback (FKs to files). */
+  fileIds?: string[];
+  /** The round the feedback was addressed to — its run's own round index. */
+  roundIndex: number;
+}
+
+/** One group-scoped feedback entry as stored on a round's decision detail. */
+export type VerifyRunGroupFeedbackEntry = Omit<AcceptanceGroupFeedback, 'roundIndex'>;
+
 /** Generic acceptance extension bag for cross-subject state we have not modeled yet. */
 export interface AcceptanceMetadata {
   [key: string]: unknown;
+  /** User-set display-title override for the acceptance (sidebar rename). */
+  title?: string;
+}
+
+/**
+ * The user's per-check verdict on the acceptance union. `accept` is sticky —
+ * an accepted check stays settled across later rounds; `reject` binds to the
+ * round it was made on and becomes iteration history once a newer round lands.
+ */
+export type AcceptanceCheckReviewAction = 'accept' | 'reject';
+
+/**
+ * A user-drawn region on one evidence image, in coordinates normalized to the
+ * image box (0–1) so the overlay renders at any display size.
+ */
+export interface AcceptanceReviewAnnotation {
+  /** The note attached to this region. */
+  comment?: string;
+  /** The evidence row (`verify_evidence.id`) the region was drawn on. */
+  evidenceId: string;
+  rect: { height: number; width: number; x: number; y: number };
+}
+
+/**
+ * Provenance + feedback behind a user's decision on one check result
+ * (`verify_check_results.user_decision_detail`) — the check-level mirror of
+ * {@link VerifyRunDecisionDetail}. The `user_decision` verb stays the queryable
+ * field; this bag carries the note, the circled evidence regions, and who/when,
+ * so richer feedback never needs new columns.
+ */
+export interface VerifyCheckDecisionDetail {
+  /** Regions circled on the check's evidence images, each with its own note. */
+  annotations?: AcceptanceReviewAnnotation[];
+  /** Free-form feedback — for a reject, the re-tasking input of the next round. */
+  comment?: string;
+  /** When the decision was made (ISO 8601). */
+  decidedAt?: string;
+  /** Who made the decision (user id) — set when it may differ from the row owner. */
+  decidedBy?: string;
+  /** Uploaded/pasted screenshots backing the reject (FKs to files). */
+  fileIds?: string[];
+  /**
+   * The acceptance round that was CURRENT when the decision was made. A
+   * carried-forward check's result row belongs to an older round, so the
+   * result's own round cannot arbitrate staleness — a reject stands until a
+   * round NEWER than this lands, regardless of which round produced the
+   * judged evidence.
+   */
+  roundIndex?: number;
 }
 
 /**
@@ -176,6 +264,14 @@ export interface VerifyRunDecisionDetail {
   decidedBy?: string;
   /** Attachments backing the decision (annotated screenshots, etc.) — FKs to files. */
   fileIds?: string[];
+  /**
+   * Group-scoped review feedback addressed to THIS round — concerns that
+   * belong to no single check (whose checks may well be accepted) yet must
+   * reach the next round. Lives here, not on the acceptance aggregate, so a
+   * round carries its own feedback (and takes it along when deleted) and
+   * staleness falls out of the round chain.
+   */
+  groupFeedback?: VerifyRunGroupFeedbackEntry[];
 }
 
 /**

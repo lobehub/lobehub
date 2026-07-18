@@ -1601,5 +1601,18 @@
   "workingPanel.skills.title": "技能",
   "workingPanel.space": "空间",
   "workingPanel.title": "工作面板",
-  "you": "你"
+  "workingPanel.works.changeType.created": "已创建",
+  "workingPanel.works.changeType.updated": "已编辑",
+  "workingPanel.works.empty": "当前会话暂无产物",
+  "workingPanel.works.emptyVersions": "暂无版本",
+  "workingPanel.works.error": "产物加载失败",
+  "workingPanel.works.taskDeleted": "任务已删除",
+  "workingPanel.works.title": "产物",
+  "workingPanel.works.totalCost": "总成本：{{cost}}",
+  "workingPanel.works.versionCost": "本版本成本：{{cost}}",
+  "workingPanel.works.versionError": "版本加载失败",
+  "workingPanel.works.viewMode.history": "版本历史",
+  "workingPanel.works.viewMode.summary": "摘要卡片",
+  "you": "你",
+  "zenMode": "专注模式"
 }

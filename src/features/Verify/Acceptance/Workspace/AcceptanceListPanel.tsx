@@ -2,6 +2,7 @@
 
 import type { AcceptanceStatus } from '@lobechat/types';
 import {
+  ActionIcon,
   Center,
   DraggablePanel,
   DraggablePanelContainer,
@@ -11,26 +12,39 @@ import {
   Icon,
   Text,
 } from '@lobehub/ui';
+import type { DropdownItem } from '@lobehub/ui/base-ui';
+import { confirmModal, DropdownMenu } from '@lobehub/ui/base-ui';
+import { App } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import dayjs from 'dayjs';
 import isEqual from 'fast-deep-equal';
 import {
   BadgeCheck,
   CircleCheck,
+  CircleDashed,
   CircleHelp,
   CircleX,
   LoaderCircle,
+  MoreHorizontal,
   PanelLeftClose,
+  Pencil,
+  RefreshCw,
+  RotateCcw,
   ScrollText,
   Search,
+  Trash2,
   TriangleAlert,
 } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { SkeletonList } from '@/features/NavPanel/components/SkeletonList';
+import { mutate as globalMutate } from '@/libs/swr';
+import { verifyKeys } from '@/libs/swr/keys';
+import type { AcceptanceListItem } from '@/services/verify';
+import { verifyService } from '@/services/verify';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
@@ -158,6 +172,29 @@ const styles = createStaticStyles(({ css }) => ({
     font-size: 12px;
     color: ${cssVar.colorTextTertiary};
   `,
+  editRow: css`
+    padding-block: 4px;
+    padding-inline: 4px;
+  `,
+  itemTitleInput: css`
+    width: 100%;
+    min-width: 0;
+    height: 24px;
+    padding-inline: 6px;
+    border: 1px solid ${cssVar.colorBorder};
+    border-radius: 4px;
+
+    font-size: 13px;
+    color: ${cssVar.colorText};
+
+    background: ${cssVar.colorBgContainer};
+    outline: none;
+
+    &:focus {
+      border-color: ${cssVar.colorPrimary};
+      box-shadow: 0 0 0 2px ${cssVar.colorPrimaryBg};
+    }
+  `,
   emptyState: css`
     height: 100%;
     min-height: 240px;
@@ -184,7 +221,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-type Glyph = 'ok' | 'bad' | 'unsure' | 'running' | 'accepted';
+type Glyph = 'awaiting' | 'bad' | 'unsure' | 'running' | 'repairing' | 'accepted';
 
 const RUNNING_STATUSES = new Set<AcceptanceStatus>([
   'pending',
@@ -194,17 +231,26 @@ const RUNNING_STATUSES = new Set<AcceptanceStatus>([
 ]);
 
 const glyphOf = (status: AcceptanceStatus): Glyph => {
+  // A repair round is an in-progress TASK, distinct from a neutral verify —
+  // warn-coloured, matching the system's task-process cue.
+  if (status === 'repairing') return 'repairing';
   if (RUNNING_STATUSES.has(status)) return 'running';
   if (status === 'accepted') return 'accepted';
   if (status === 'rejected') return 'bad';
   if (status === 'errored') return 'unsure';
-  return 'ok';
+  return 'awaiting';
 };
 
-const glyphMeta: Record<Glyph, { color: string; icon: typeof CircleCheck }> = {
+const SPINNING_GLYPHS = new Set<Glyph>(['running', 'repairing']);
+
+// Mirrors the detail header's verdict pill: a delivered-but-undecided
+// aggregate reads as "acceptance in progress", never as a green all-clear
+// the user hasn't given.
+const glyphMeta: Record<Glyph, { color: string; icon: typeof BadgeCheck }> = {
   accepted: { color: cssVar.colorSuccess, icon: BadgeCheck },
+  awaiting: { color: cssVar.colorInfo, icon: CircleDashed },
   bad: { color: cssVar.colorError, icon: CircleX },
-  ok: { color: cssVar.colorSuccess, icon: CircleCheck },
+  repairing: { color: cssVar.colorWarning, icon: RefreshCw },
   running: { color: cssVar.colorInfo, icon: LoaderCircle },
   unsure: { color: cssVar.colorWarning, icon: CircleHelp },
 };
@@ -216,13 +262,235 @@ const relativeTime = (value?: Date | string | null) => {
 };
 
 /**
+ * One acceptance row: the status glyph + title + a hover `…` menu (rename in
+ * place, override the decision status, delete). Mirrors the verify workspace's
+ * ReportListItem so the two lists manage their entries the same way.
+ */
+const AcceptanceRow = memo<{
+  active: boolean;
+  item: AcceptanceListItem;
+  onChanged: () => Promise<unknown> | unknown;
+}>(({ active, item, onChanged }) => {
+  const { t } = useTranslation(['verify', 'common']);
+  const { message } = App.useApp();
+  const navigate = useNavigate();
+  const [editing, setEditing] = useState(false);
+  const [mutating, setMutating] = useState(false);
+  const isSavingRef = useRef(false);
+
+  const glyph = glyphOf(item.status as AcceptanceStatus);
+  const meta = glyphMeta[glyph];
+  const title = item.subject.title || item.subjectId;
+  const [draftTitle, setDraftTitle] = useState(title);
+
+  // A rename/status/delete must not leave a stale glyph or header behind — the
+  // list and the open detail both read the same aggregate.
+  const refresh = () =>
+    Promise.all([onChanged(), globalMutate(verifyKeys.acceptanceBundle(item.id))]);
+
+  const startRename = () => {
+    setDraftTitle(title);
+    setEditing(true);
+  };
+
+  const cancelRename = () => {
+    if (isSavingRef.current) return;
+    setDraftTitle(title);
+    setEditing(false);
+  };
+
+  const commitRename = async () => {
+    if (isSavingRef.current) return;
+    const next = draftTitle.trim();
+    if (!next) {
+      message.error(t('verify:acceptance.workspace.renameEmpty'));
+      setDraftTitle(title);
+      setEditing(false);
+      return;
+    }
+    if (next === title) {
+      setEditing(false);
+      return;
+    }
+    isSavingRef.current = true;
+    setMutating(true);
+    try {
+      await verifyService.renameAcceptance(item.id, next);
+      await refresh();
+      message.success(t('verify:acceptance.workspace.renameSuccess'));
+      setEditing(false);
+    } catch (error) {
+      console.error('[acceptance:rename]', error);
+      message.error(t('verify:acceptance.workspace.renameError'));
+    } finally {
+      isSavingRef.current = false;
+      setMutating(false);
+    }
+  };
+
+  const changeStatus = async (status: 'accepted' | 'delivered' | 'rejected') => {
+    setMutating(true);
+    try {
+      await verifyService.updateAcceptanceStatus(item.id, status);
+      await refresh();
+      message.success(t('verify:acceptance.workspace.statusSuccess'));
+    } catch (error) {
+      console.error('[acceptance:status]', error);
+      message.error(t('verify:acceptance.workspace.statusError'));
+    } finally {
+      setMutating(false);
+    }
+  };
+
+  const removeAcceptance = () => {
+    confirmModal({
+      cancelText: t('common:cancel'),
+      content: t('verify:acceptance.workspace.deleteConfirmDescription', { title }),
+      okButtonProps: { danger: true },
+      okText: t('common:delete'),
+      onOk: async () => {
+        setMutating(true);
+        try {
+          await verifyService.deleteAcceptance(item.id);
+          if (active) navigate('/acceptance', { replace: true });
+          await onChanged();
+          message.success(t('verify:acceptance.workspace.deleteSuccess'));
+        } catch (error) {
+          console.error('[acceptance:delete]', error);
+          message.error(t('verify:acceptance.workspace.deleteError'));
+        } finally {
+          setMutating(false);
+        }
+      },
+      title: t('verify:acceptance.workspace.deleteConfirmTitle'),
+    });
+  };
+
+  // The status action follows the CURRENT state — an awaiting delivery can be
+  // accepted; an already-decided one can be reopened; a still-running round
+  // offers nothing (accept/reject need a settled round, matching the server
+  // guard). Never "reopen" an acceptance that was never decided.
+  const statusItems: DropdownItem[] =
+    item.status === 'delivered' || item.status === 'errored'
+      ? [
+          {
+            icon: <Icon icon={CircleCheck} />,
+            key: 'accept',
+            label: t('verify:acceptance.workspace.actions.markAccepted'),
+            onClick: () => void changeStatus('accepted'),
+          },
+        ]
+      : item.status === 'accepted' || item.status === 'rejected'
+        ? [
+            {
+              icon: <Icon icon={RotateCcw} />,
+              key: 'reopen',
+              label: t('verify:acceptance.workspace.actions.reopen'),
+              onClick: () => void changeStatus('delivered'),
+            },
+          ]
+        : [];
+
+  const menuItems: DropdownItem[] = [
+    {
+      icon: <Icon icon={Pencil} />,
+      key: 'rename',
+      label: t('verify:acceptance.workspace.actions.rename'),
+      onClick: startRename,
+    },
+    ...statusItems,
+    ...(statusItems.length > 0 ? [{ type: 'divider' as const }] : []),
+    {
+      danger: true,
+      icon: <Icon icon={Trash2} />,
+      key: 'delete',
+      label: t('verify:acceptance.workspace.actions.delete'),
+      onClick: removeAcceptance,
+    },
+  ];
+
+  // Rename swaps the whole row for an inline input.
+  if (editing) {
+    return (
+      <div className={styles.editRow}>
+        <input
+          autoFocus
+          className={styles.itemTitleInput}
+          value={draftTitle}
+          onBlur={() => void commitRename()}
+          onChange={(e) => setDraftTitle(e.target.value)}
+          onFocus={(e) => e.currentTarget.select()}
+          onKeyDown={(e) => {
+            e.stopPropagation();
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              void commitRename();
+            }
+            if (e.key === 'Escape') {
+              e.preventDefault();
+              cancelRename();
+            }
+          }}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <NavItem
+      active={active}
+      key={item.id}
+      style={mutating ? { opacity: 0.62, pointerEvents: 'none' } : undefined}
+      title={title}
+      titleColor={cssVar.colorText}
+      actions={
+        <DropdownMenu
+          iconSpaceMode={'group'}
+          items={menuItems}
+          placement={'bottomRight'}
+          popupProps={{ style: { minWidth: 160 } }}
+        >
+          <ActionIcon
+            icon={MoreHorizontal}
+            size={'small'}
+            title={t('verify:acceptance.workspace.actions.more')}
+          />
+        </DropdownMenu>
+      }
+      description={
+        <Flexbox horizontal className={styles.itemSub} gap={8}>
+          {/* The status glyph already carries the lifecycle state, so the
+              second line shows the check count instead of a redundant label. */}
+          <span>
+            {item.checkCount != null
+              ? t('acceptance.workspace.checkCount', { count: item.checkCount })
+              : t(`acceptance.status.${item.status}` as any)}
+          </span>
+          <span>{relativeTime(item.updatedAt ?? item.createdAt)}</span>
+        </Flexbox>
+      }
+      icon={
+        <Icon
+          className={SPINNING_GLYPHS.has(glyph) ? styles.spin : undefined}
+          icon={meta.icon}
+          size={16}
+          style={{ color: meta.color }}
+        />
+      }
+      onClick={() => navigate(`/acceptance/${item.id}`)}
+    />
+  );
+});
+
+AcceptanceRow.displayName = 'AcceptanceRow';
+
+/**
  * Master list of the caller's acceptance aggregates — the acceptance twin of
  * the verify workspace's ReportListPanel, sharing its visual language and the
  * same persisted panel-width preference so the two surfaces read as one family.
  */
 const AcceptanceListPanel = memo<ReportPanelExpand>(({ expand, isNarrow, setExpand }) => {
   const { t } = useTranslation('verify');
-  const navigate = useNavigate();
   const { acceptanceId } = useParams<{ acceptanceId: string }>();
 
   const { data, error, isLoading, mutate } = useAcceptanceList(true);
@@ -330,35 +598,14 @@ const AcceptanceListPanel = memo<ReportPanelExpand>(({ expand, isNarrow, setExpa
             )
           ) : (
             <div className={styles.list}>
-              {filtered.map((item) => {
-                const glyph = glyphOf(item.status as AcceptanceStatus);
-                const meta = glyphMeta[glyph];
-                const title = item.subject.title || item.subjectId;
-
-                return (
-                  <NavItem
-                    active={item.id === acceptanceId}
-                    key={item.id}
-                    title={title}
-                    titleColor={cssVar.colorText}
-                    description={
-                      <Flexbox horizontal className={styles.itemSub} gap={8}>
-                        <span>{t(`acceptance.status.${item.status}` as any)}</span>
-                        <span>{relativeTime(item.updatedAt ?? item.createdAt)}</span>
-                      </Flexbox>
-                    }
-                    icon={
-                      <Icon
-                        className={glyph === 'running' ? styles.spin : undefined}
-                        icon={meta.icon}
-                        size={16}
-                        style={{ color: meta.color }}
-                      />
-                    }
-                    onClick={() => navigate(`/acceptance/${item.id}`)}
-                  />
-                );
-              })}
+              {filtered.map((item) => (
+                <AcceptanceRow
+                  active={item.id === acceptanceId}
+                  item={item}
+                  key={item.id}
+                  onChanged={mutate}
+                />
+              ))}
             </div>
           )}
         </Flexbox>

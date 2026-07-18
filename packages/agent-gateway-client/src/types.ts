@@ -78,6 +78,18 @@ export interface StreamChunkData {
   images?: any[];
   reasoning?: string;
   reasoningParts?: Array<{ text: string; type: 'text' } | { image: string; type: 'image' }>;
+  /**
+   * `lh hetero exec` coalesces main-agent text deltas into full-text
+   * snapshots: `content` carries the WHOLE message so far and must replace
+   * the accumulated text, not append to it. Absent on plain deltas.
+   */
+  snapshotMode?: 'replace';
+  /**
+   * Operation-monotonic sequence for `replace` snapshots. Consumers drop a
+   * snapshot whose seq is ≤ the last applied one — that is a redelivery
+   * (producer batch retry) or an out-of-order duplicate.
+   */
+  snapshotSeq?: number;
   toolsCalling?: any[];
 }
 
@@ -193,16 +205,38 @@ export interface AgentInterventionResponseData {
  * Server → Client: request the client to execute a tool locally and return the result.
  */
 export interface ToolExecuteData {
+  /** Agent currently running the tool. */
+  agentId?: string | null;
   /** Tool function name (e.g. "readFile"). */
   apiName: string;
   /** JSON-encoded argument string as returned by the LLM. */
   arguments: string;
+  /** Assistant message that carries this tool call. */
+  assistantMessageId?: string;
+  /** Current page document ID for page-scoped conversations. */
+  documentId?: string | null;
   /** Per-invocation deadline. Server caps against its own function budget. */
   executionTimeoutMs: number;
+  /** Group chat ID, when the run belongs to a group conversation. */
+  groupId?: string | null;
   /** Tool plugin identifier (e.g. "local-system"). */
   identifier: string;
+  /** Root server-side runtime operation ID for this assistant run. */
+  rootOperationId?: string;
+  /** Conversation scope captured by the server runtime. */
+  scope?: string | null;
+  /** Source user message ID for tools that need the current turn. */
+  sourceMessageId?: string | null;
+  /** Current task identifier or database id when task-scoped. */
+  taskId?: string | null;
+  /** Current thread ID when thread-scoped. */
+  threadId?: string | null;
   /** Unique tool call id; used as the correlation key for the returned result. */
   toolCallId: string;
+  /** Tool result message id, when the server created it before dispatch. */
+  toolMessageId?: string;
+  /** Current topic ID. */
+  topicId?: string | null;
 }
 
 // ─── WebSocket Protocol Messages ───
@@ -245,6 +279,14 @@ export interface ToolResultMessage {
   success: boolean;
   toolCallId: string;
   type: 'tool_result';
+  /**
+   * In-memory relay of the client-side Work registration intent (a
+   * `WorkRegistrationIntent`, kept opaque here to preserve this package's
+   * zero-`@lobechat` dependency surface — mirrors how `state` is typed). The
+   * server registers the Work version from it and NEVER persists it with the
+   * tool message.
+   */
+  workRegistration?: any;
 }
 
 export type ClientMessage =

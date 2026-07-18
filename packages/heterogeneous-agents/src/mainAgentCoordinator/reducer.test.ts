@@ -121,6 +121,31 @@ describe('main agent reducer', () => {
     expect(state.lastTextSnapshotSeq).toBe(3);
   });
 
+  it('replaces reasoning snapshots and drops stale or redelivered seqs', () => {
+    const snapshot = (reasoning: string, snapshotSeq: number) => ({
+      data: { chunkType: 'reasoning', reasoning, snapshotMode: 'replace', snapshotSeq },
+      type: 'stream_chunk',
+    });
+    const { state, steps } = run([
+      snapshot('thinking', 1),
+      snapshot('thinking done', 2),
+      // Redelivered seq 2 (batch retry on a cold replica) — must be a no-op,
+      // not an append: appending would duplicate the reasoning durably.
+      snapshot('thinking done', 2),
+      // Stale out-of-order snapshot — dropped.
+      snapshot('thinking', 1),
+    ]);
+
+    expect(steps[1]).toEqual([
+      { kind: 'streamContent', messageId: 'A0', reasoning: 'thinking done' },
+    ]);
+    expect(steps[2]).toEqual([]);
+    expect(steps[3]).toEqual([]);
+    expect(state.accReasoning).toBe('thinking done');
+    expect(state.lastReasoningSnapshotSeq).toBe(2);
+    expect(state.turnMetadata.heteroReasoningSnapshotSeq).toBe(2);
+  });
+
   it('accumulates reasoning separately', () => {
     const { steps, state } = run([reasoningEvent('think '), reasoningEvent('more')]);
     expect(steps[1]).toEqual([{ kind: 'streamContent', messageId: 'A0', reasoning: 'think more' }]);

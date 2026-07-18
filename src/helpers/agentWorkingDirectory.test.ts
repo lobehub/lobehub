@@ -38,6 +38,28 @@ describe('resolveTargetDeviceId', () => {
   it('returns undefined when device target has no boundDeviceId', () => {
     expect(resolveTargetDeviceId(cfg({ executionTarget: 'device' }), 'cur')).toBeUndefined();
   });
+
+  it('uses only the shared binding when workspace coercion is preserved', () => {
+    expect(
+      resolveTargetDeviceId(
+        cfg({ boundDeviceId: 'workspace-device', executionTarget: 'local' }),
+        'member-device',
+        { workspaceScoped: true },
+      ),
+    ).toBe('workspace-device');
+    expect(
+      resolveTargetDeviceId(cfg({ executionTarget: 'local' }), 'member-device', {
+        workspaceScoped: true,
+      }),
+    ).toBe(undefined);
+    expect(
+      resolveTargetDeviceId(
+        cfg({ boundDeviceId: 'stale-device', executionTarget: 'sandbox' }),
+        'member-device',
+        { workspaceScoped: true },
+      ),
+    ).toBeUndefined();
+  });
 });
 
 describe('resolveAgentWorkingDirectory', () => {
@@ -87,6 +109,52 @@ describe('resolveAgentWorkingDirectory', () => {
     expect(resolveAgentWorkingDirectory({ agencyConfig, currentDeviceId: 'cur' })).toBe(
       '/remote-choice',
     );
+  });
+
+  it('keys a shared local fallback by its bound workspace device', () => {
+    const agencyConfig = cfg({
+      boundDeviceId: 'workspace-device',
+      executionTarget: 'local',
+      workingDirByDevice: {
+        'member-device': '/member-project',
+        'workspace-device': '/workspace-project',
+      },
+    });
+
+    expect(
+      resolveAgentWorkingDirectory({
+        agencyConfig,
+        currentDeviceId: 'member-device',
+        workspaceScoped: true,
+      }),
+    ).toBe('/workspace-project');
+  });
+
+  it('does not leak member-local fallback paths into a workspace-scoped run', () => {
+    const agencyConfig = cfg({
+      boundDeviceId: 'workspace-device',
+      executionTarget: 'local',
+    });
+
+    expect(
+      resolveAgentWorkingDirectory({
+        agencyConfig,
+        currentDeviceId: 'member-device',
+        deviceDefaultCwd: '/workspace-default',
+        fallback: '/Users/member',
+        legacyAgentWorkingDirectory: '/Users/member/project',
+        workspaceScoped: true,
+      }),
+    ).toBe('/workspace-default');
+    expect(
+      resolveAgentWorkingDirectory({
+        agencyConfig,
+        currentDeviceId: 'member-device',
+        fallback: '/Users/member',
+        legacyAgentWorkingDirectory: '/Users/member/project',
+        workspaceScoped: true,
+      }),
+    ).toBeUndefined();
   });
 
   it('uses the active worktree from the per-device source entry as the effective cwd', () => {

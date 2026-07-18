@@ -3,7 +3,9 @@ import { type ChatToolPayload } from '@lobechat/types';
 import { type Mock } from 'vitest';
 import { describe, expect, it, vi } from 'vitest';
 
+import { registerClientWorkFromIntent } from '@/store/chat/agents/registerClientWorkFromIntent';
 import { type OperationCancelContext } from '@/store/chat/slices/operation/types';
+import { stashWorkIntent } from '@/utils/clientWorkIntentStash';
 
 import { createAssistantMessage, createCallToolInstruction, createMockStore } from './fixtures';
 import {
@@ -26,6 +28,10 @@ vi.mock('@/utils/localStorage', () => {
 
   return { AsyncLocalStorage };
 });
+
+vi.mock('@/store/chat/agents/registerClientWorkFromIntent', () => ({
+  registerClientWorkFromIntent: vi.fn().mockResolvedValue(undefined),
+}));
 
 describe('call_tool executor', () => {
   describe('Basic Behavior', () => {
@@ -66,6 +72,204 @@ describe('call_tool executor', () => {
       });
       expect(mockStore.optimisticCreateMessage).toHaveBeenCalledTimes(1);
       expect(mockStore.internal_invokeDifferentTypePlugin).toHaveBeenCalledTimes(1);
+    });
+
+    it('should register the stashed work intent with the accumulated cost after execution', async () => {
+      vi.mocked(registerClientWorkFromIntent).mockClear();
+
+      const mockStore = createMockStore({ registerAfterCompletionCallback: vi.fn() });
+      const context = createTestContext({ operationId: 'root-op-1' });
+
+      const assistantMessage = createAssistantMessage({ groupId: 'group_123' });
+      mockStore.dbMessagesMap[context.messageKey] = [assistantMessage];
+
+      const toolCall: ChatToolPayload = {
+        apiName: 'search',
+        arguments: JSON.stringify({ query: 'test query' }),
+        id: 'tool_call_usage',
+        identifier: 'lobe-web-browsing',
+        type: 'default',
+      };
+
+      // A registration site (builtin/skill/document dispatch) stashes the intent
+      // while the tool runs; `call_tool` drains it AFTER cost is accumulated.
+      stashWorkIntent('tool_call_usage', {
+        action: 'create',
+        changeType: 'created',
+        targets: [{ taskId: 'task_1', taskIdentifier: 'task-one' }],
+        type: 'task',
+      });
+
+      const instruction = createCallToolInstruction(toolCall, { parentMessageId: 'msg_parent' });
+      const state = createInitialState({
+        cost: {
+          calculatedAt: '2026-06-30T08:00:00.000Z',
+          currency: 'USD',
+          llm: { byModel: [], currency: 'USD', total: 0.01 },
+          tools: { byTool: [], currency: 'USD', total: 0 },
+          total: 0.01,
+        },
+        operationId: 'root-op-1',
+      });
+
+      await executeWithMockContext({
+        executor: 'call_tool',
+        instruction,
+        state,
+        mockStore,
+        context,
+      });
+
+      expect(registerClientWorkFromIntent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          intent: expect.objectContaining({ type: 'task' }),
+          rootOperationId: 'root-op-1',
+          sourceToolCallId: 'tool_call_usage',
+          sourceToolName: 'search',
+          // `newState.cost` carries the tool cost (0.01 base + 0.001 search) so
+          // the version row is written once with its cumulative cost.
+          state: expect.objectContaining({
+            cost: expect.objectContaining({ total: 0.011 }),
+            usage: expect.objectContaining({
+              tools: expect.objectContaining({ totalCalls: 1 }),
+            }),
+          }),
+        }),
+      );
+      expect(mockStore.registerAfterCompletionCallback).toHaveBeenCalledWith(
+        'root-op-1',
+        expect.any(Function),
+      );
+    });
+
+    it('should not register work when no intent was stashed for the tool call', async () => {
+      vi.mocked(registerClientWorkFromIntent).mockClear();
+
+      const mockStore = createMockStore({ registerAfterCompletionCallback: vi.fn() });
+      const context = createTestContext({ operationId: 'root-op-1' });
+
+      const assistantMessage = createAssistantMessage({ groupId: 'group_123' });
+      mockStore.dbMessagesMap[context.messageKey] = [assistantMessage];
+
+      const toolCall: ChatToolPayload = {
+        apiName: 'search',
+        arguments: JSON.stringify({ query: 'test query' }),
+        id: 'tool_call_no_intent',
+        identifier: 'lobe-web-browsing',
+        type: 'default',
+      };
+
+      const instruction = createCallToolInstruction(toolCall, { parentMessageId: 'msg_parent' });
+      const state = createInitialState({ operationId: 'root-op-1' });
+
+      await executeWithMockContext({
+        executor: 'call_tool',
+        instruction,
+        state,
+        mockStore,
+        context,
+      });
+
+      expect(registerClientWorkFromIntent).not.toHaveBeenCalled();
+      expect(mockStore.registerAfterCompletionCallback).not.toHaveBeenCalled();
+    });
+
+    it('should await work registration before completing the tool step', async () => {
+      vi.mocked(registerClientWorkFromIntent).mockClear();
+      let resolveRegistration!: () => void;
+      vi.mocked(registerClientWorkFromIntent).mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveRegistration = resolve;
+          }),
+      );
+
+      const mockStore = createMockStore({ registerAfterCompletionCallback: vi.fn() });
+      const context = createTestContext({ operationId: 'root-op-1' });
+
+      const assistantMessage = createAssistantMessage({ groupId: 'group_123' });
+      mockStore.dbMessagesMap[context.messageKey] = [assistantMessage];
+
+      const toolCall: ChatToolPayload = {
+        apiName: 'search',
+        arguments: JSON.stringify({ query: 'test query' }),
+        id: 'tool_call_blocking',
+        identifier: 'lobe-web-browsing',
+        type: 'default',
+      };
+
+      stashWorkIntent('tool_call_blocking', {
+        action: 'create',
+        changeType: 'created',
+        targets: [{ taskId: 'task_blocking' }],
+        type: 'task',
+      });
+
+      const instruction = createCallToolInstruction(toolCall, { parentMessageId: 'msg_parent' });
+      const state = createInitialState({ operationId: 'root-op-1' });
+
+      let settled = false;
+      const execution = executeWithMockContext({
+        executor: 'call_tool',
+        instruction,
+        state,
+        mockStore,
+        context,
+      }).finally(() => {
+        settled = true;
+      });
+
+      await vi.waitFor(() => {
+        expect(registerClientWorkFromIntent).toHaveBeenCalledWith(
+          expect.objectContaining({ sourceToolCallId: 'tool_call_blocking' }),
+        );
+      });
+      expect(settled).toBe(false);
+
+      resolveRegistration();
+      const result = await execution;
+      expect(result.events).toHaveLength(1);
+      expect(settled).toBe(true);
+    });
+
+    it('should schedule one operation-end refresh for a task status mutation', async () => {
+      vi.mocked(registerClientWorkFromIntent).mockClear();
+
+      const mockStore = createMockStore({ registerAfterCompletionCallback: vi.fn() });
+      const context = createTestContext({ operationId: 'root-op-1' });
+      mockStore.dbMessagesMap[context.messageKey] = [
+        createAssistantMessage({ groupId: 'group_123' }),
+      ];
+      mockStore.internal_invokeDifferentTypePlugin = vi.fn().mockResolvedValue({
+        content: 'Task T-1 status updated to completed.',
+        state: { status: 'completed', success: true },
+        success: true,
+      });
+
+      const instruction = createCallToolInstruction(
+        {
+          apiName: 'updateTaskStatus',
+          arguments: JSON.stringify({ identifier: 'T-1', status: 'completed' }),
+          id: 'tool_call_status',
+          identifier: 'lobe-task',
+          type: 'default',
+        },
+        { parentMessageId: 'msg_parent' },
+      );
+
+      await executeWithMockContext({
+        executor: 'call_tool',
+        instruction,
+        state: createInitialState({ operationId: 'root-op-1' }),
+        mockStore,
+        context,
+      });
+
+      expect(registerClientWorkFromIntent).not.toHaveBeenCalled();
+      expect(mockStore.registerAfterCompletionCallback).toHaveBeenCalledWith(
+        'root-op-1',
+        expect.any(Function),
+      );
     });
 
     it('should call internal_invokeDifferentTypePlugin with correct parameters', async () => {

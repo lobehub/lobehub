@@ -888,11 +888,12 @@ describe('hetero exec command', () => {
     });
   });
 
-  it('sends full text snapshots before tools and waits for finish until all server ingests ack', async () => {
+  it('batches snapshot + tool + terminal events into ordered ingest calls and finishes after the ack', async () => {
     const callOrder: string[] = [];
     mockHeteroIngestMutate.mockImplementation(async ({ events }: any) => {
-      const first = events[0];
-      callOrder.push(`ingest:${first.type}:${first.data?.chunkType ?? 'terminal'}`);
+      for (const event of events) {
+        callOrder.push(`ingest:${event.type}:${event.data?.chunkType ?? 'terminal'}`);
+      }
       return { ack: true };
     });
     mockHeteroFinishMutate.mockImplementation(async () => {
@@ -962,13 +963,17 @@ describe('hetero exec command', () => {
       'none',
     ]);
 
-    expect(mockHeteroIngestMutate).toHaveBeenCalledTimes(3);
+    // The whole run fits one batched ingest call (3 events ≪ MAX_BATCH) —
+    // NOT one serial round-trip per event as before.
+    expect(mockHeteroIngestMutate).toHaveBeenCalledTimes(1);
     expect(mockHeteroIngestMutate.mock.calls[0][0].events[0].data).toMatchObject({
       chunkType: 'text',
       content: 'hello world',
       snapshotMode: 'replace',
       snapshotSeq: 1,
     });
+    // Within-batch order preserved (server processes a batch sequentially),
+    // and finish is only sent after every ingest acked.
     expect(callOrder).toEqual([
       'ingest:stream_chunk:text',
       'ingest:stream_chunk:tools_calling',
@@ -1018,6 +1023,66 @@ describe('hetero exec command', () => {
     expect(mockHeteroFinishMutate.mock.calls[0][0]).toMatchObject({
       error: {
         message: 'API Error: Server is temporarily limiting requests · Rate limited',
+        type: 'AgentRuntimeError',
+      },
+      result: 'error',
+    });
+  });
+
+  it('forwards the adapter-classified status-guide error as the finish error body', async () => {
+    // The adapter classifies overloaded / rate-limit terminal errors into a
+    // structured payload carrying `agentType` + `code` — the pair the client's
+    // status-guide UI gates on. The finish leg must forward it verbatim instead
+    // of flattening to `{ message }`, otherwise flushFinalState overwrites the
+    // in-stream persisted error and the client falls back to the generic alert.
+    const overloadedMessage =
+      'API Error: 529 Overloaded. This is a server-side issue, usually temporary.';
+    mockSpawnAgent.mockReturnValue(
+      createFakeHandle({
+        events: [
+          {
+            data: {
+              agentType: 'claude-code',
+              clearEchoedContent: true,
+              code: 'overloaded',
+              error: overloadedMessage,
+              message: overloadedMessage,
+              stderr: overloadedMessage,
+            },
+            operationId: 'op-err-guide',
+            stepIndex: 0,
+            timestamp: 1,
+            type: 'error',
+          },
+        ],
+        exitCode: 0,
+      }),
+    );
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'claude-code',
+      '--prompt',
+      'hi',
+      '--topic',
+      'topic-1',
+      '--operation-id',
+      'op-err-guide',
+      '--render',
+      'none',
+    ]);
+
+    expect(mockHeteroFinishMutate).toHaveBeenCalledTimes(1);
+    expect(mockHeteroFinishMutate.mock.calls[0][0]).toMatchObject({
+      error: {
+        body: {
+          agentType: 'claude-code',
+          code: 'overloaded',
+          message: overloadedMessage,
+        },
+        message: overloadedMessage,
         type: 'AgentRuntimeError',
       },
       result: 'error',

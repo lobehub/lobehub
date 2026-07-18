@@ -1,7 +1,7 @@
 import { type ConversationContext } from '@lobechat/types';
 
 import { mutate } from '@/libs/swr';
-import { messageKeys } from '@/libs/swr/keys';
+import { isMessageListKey } from '@/libs/swr/keys';
 
 /**
  * Evict persisted `message:list` cache entries whose conversation context
@@ -27,12 +27,4 @@ import { messageKeys } from '@/libs/swr/keys';
 export const evictMessageCache = (
   predicate: (ctx: ConversationContext) => boolean,
 ): Promise<unknown> =>
-  mutate(
-    (key) => {
-      if (!Array.isArray(key) || key[0] !== messageKeys.list.root) return false;
-      const ctx = key[1] as ConversationContext | undefined;
-      return !!ctx && predicate(ctx);
-    },
-    undefined,
-    { revalidate: false },
-  );
+  mutate((key) => isMessageListKey(key, predicate), undefined, { revalidate: false });
