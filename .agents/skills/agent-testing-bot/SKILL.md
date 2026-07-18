@@ -20,7 +20,7 @@ PLAN (Steps 0–2) → EXECUTE (Steps 3–6) → FINISH (Step 7)
 ```
 
 — and the same report + publish pipeline (`result.json` → `report-init.sh` →
-`lh verify ingest-report … --source agent-testing`). Read the generic skill's
+`lh acceptance run ingest … --source agent-testing`). Read the generic skill's
 `SKILL.md` for target grounding, the living logs, the Phase-1 approval gate, the
 report format, and teardown. This file only adds the bot-channel surface.
 

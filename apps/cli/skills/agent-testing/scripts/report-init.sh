@@ -10,7 +10,7 @@
 # under its acceptance:
 #   .records/reports/<type>-<id>/<YYYYMMDD-HHMMSS>-<slug>/
 # and the group directory gets an acceptance.json marker. The subject is also
-# pre-filled into result.json so ingest-report attaches the run automatically.
+# pre-filled into result.json so acceptance run ingest attaches the run automatically.
 #
 # Run this from the CONSUMER repo root — the report is created relative to the
 # current working directory, not relative to this script's own location.

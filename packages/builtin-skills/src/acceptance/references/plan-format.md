@@ -52,11 +52,11 @@ The plan (a) is all you need. For each `verifyPlan[]` item with non-empty
 
 ```bash
 OP="$LOBE_OPERATION_ID"
-lh verify submit --operation "$OP" --item vci_a1b2c3 --type screenshot \
+lh acceptance run result submit --operation "$OP" --item vci_a1b2c3 --type screenshot \
   --file ./proof/home.png --by agent-browser --desc "…"
 ```
 
-`lh verify submit` resolves the session from the operation id and **creates the
+`lh acceptance run result submit` resolves the session from the operation id and **creates the
 check-result row for you** (idempotent on `checkItemId`), then attaches the
 evidence — there is no `checkResultId` to look up first.
 
@@ -66,7 +66,7 @@ Once you've submitted, the result rows exist. To confirm coverage, read them bac
 and list each row's evidence:
 
 ```jsonc
-// lh verify result list --operation "$OP" --json
+// lh acceptance run result list --operation "$OP" --json
 [
   {
     "id": "vcr_x9y8z7", // checkResultId (created by submit)
@@ -77,5 +77,5 @@ and list each row's evidence:
 ```
 
 ```bash
-lh verify evidence list "$CHECK_RESULT_ID" --json # confirm each required type is present
+lh acceptance run evidence list "$CHECK_RESULT_ID" --json # confirm each required type is present
 ```

@@ -236,7 +236,7 @@ derive(item))`) captures the value at first render. When a persisted cache hydra
 
 ### C5. A successful ingest does not prove acceptance attachment when the CLI is stale
 
-- A globally installed CLI may accept `ingest-report` and return a run id while
+- A globally installed CLI may accept `acceptance run ingest` and return a run id while
   lacking newer subject/acceptance behavior. The result is an orphan round even
   though the command appears successful.
 - Compare `lh --version` with the skill marker before publishing. If the branch
@@ -378,6 +378,6 @@ unquoted vars` — stashing `S="--session x --cdp 9226"` then `agent-browser $S`
   moment containing none of its strings, every assertion `false`. It reads like a product bug;
   it is two runs sharing one browser. **Works**: give every run its own session name, seed auth
   into it, and confirm the tab is yours before asserting — `agent-browser --session <name> tab
-  list` must print YOUR port and path. Same applies to ports: a worktree allocates its own
+list` must print YOUR port and path. Same applies to ports: a worktree allocates its own
   `SERVER_PORT`/`SPA_PORT`, so re-run `test-env.sh` inside the worktree you are testing rather
   than assuming another checkout's ports.

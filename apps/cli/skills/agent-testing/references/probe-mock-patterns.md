@@ -236,7 +236,7 @@ derive(item))`) captures the value at first render. When a persisted cache hydra
 
 ### C5. A successful ingest does not prove acceptance attachment when the CLI is stale
 
-- A globally installed CLI may accept `ingest-report` and return a run id while
+- A globally installed CLI may accept `acceptance run ingest` and return a run id while
   lacking newer subject/acceptance behavior. The result is an orphan round even
   though the command appears successful.
 - Compare `lh --version` with the skill marker before publishing. If the branch

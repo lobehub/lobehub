@@ -145,7 +145,7 @@ table — those double up on the page. It carries only the non-duplicate narrati
 
    ```bash
    env -u LOBEHUB_SERVER -u LOBE_API_KEY -u LOBEHUB_CLI_API_KEY -u LOBEHUB_CLI_HOME \
-     lh verify ingest-report "$DIR" --source agent-testing --open --json
+     lh acceptance run ingest "$DIR" --source agent-testing --open --json
    ```
 
    This creates a new immutable verification run, attaches it to the required
@@ -154,7 +154,7 @@ table — those double up on the page. It carries only the non-duplicate narrati
    production link in the final reply alongside the local report dir. See SKILL.md →
    Step 6 for why production defaults (a localhost URL isn't shareable and a local
    stub storage fails file-evidence uploads), the production login check, and the
-   atomic commands (`verify run|result|evidence|report …`).
+   atomic commands (`acceptance run …` (plus `… result`, `… evidence`, `… report`)).
 
 ## Report language (hard rule)
 
@@ -299,7 +299,7 @@ reads first: `pass`, `fail`, or `partial`.
 immutable run: either `"subject": "task:<id>"` (`task` | `topic` | `document`) or
 `{ "type": "task", "id": "task_…", "requirement": "one-sentence acceptance bar" }`.
 The `--subject` flag overrides this field. Inside a LobeHub conversation, both may
-be omitted because `ingest-report` defaults to `topic:$LOBEHUB_TOPIC_ID`; outside a
+be omitted because `acceptance run ingest` defaults to `topic:$LOBEHUB_TOPIC_ID`; outside a
 topic, an explicit subject is mandatory. Every ingest creates a new immutable run;
 never update a prior run after a fix, publish the re-verification as the next round.
 
@@ -307,7 +307,7 @@ never update a prior run after a fix, publish the re-verification as the next ro
 `agent-browser`, create `interaction-trace.jsonl` with `scripts/agent-browser-klm.mjs`,
 then run `scripts/agent-browser-klm-analyze.mjs --trace "$DIR/interaction-trace.jsonl" --result "$DIR/result.json" --write`.
 
-When published, `verify ingest-report` maps each case onto a check result:
+When published, `acceptance run ingest` maps each case onto a check result:
 `name`→title, `status`/`result`→verdict, `observation`→the result's key
 observation, and `evidence` paths→uploaded artifacts. `summary.{total,passed,failed,blocked}`
 and `verdict` become the report's stats + overall verdict; `report.md` becomes the

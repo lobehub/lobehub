@@ -77,7 +77,7 @@ dedicated screenshot or recording for that exact claim — program output may
 supplement it but cannot replace visual evidence.
 
 On a follow-up round, seed the plan from
-`lh verify acceptance view <subject> --json` before writing any case:
+`lh acceptance view <subject> --json` before writing any case:
 
 - Accepted checks are user-settled; omit them from the new plan.
 - Rejected, non-stale checks are the primary repair items. Carry their comments

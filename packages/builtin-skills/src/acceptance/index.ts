@@ -13,31 +13,31 @@ import electron from './surfaces/electron.md';
 import native from './surfaces/native.md';
 import web from './surfaces/web.md';
 
-export const VerifyIdentifier = 'verify';
+export const AcceptanceIdentifier = 'acceptance';
 
 /**
- * Portable builder-side verify skill. Unlike the repo-local `agent-testing`
+ * Portable builder-side acceptance skill. Unlike the repo-local `agent-testing`
  * skill (macOS scripts + local report dirs + LobeHub-specific probes), this one
  * depends only on the `lh` CLI and `agent-browser`, so any external builder
  * (Claude Code / Codex) can run it from a task's working directory: discover the
- * plan → pick a surface → capture evidence per criterion → `lh verify
- * submit` → self-check coverage.
+ * plan → pick a surface → capture evidence per criterion → `lh acceptance run
+ * result submit` → self-check coverage.
  *
  * The references carry the full operating manual (agent-browser CLI, web vs
  * Electron decision + setup, auth recipes, capture recipes), with all
  * LobeHub-only coupling generalized away.
  *
- * Resource keys keep the `.md` extension so a disk pull (`.claude/skills/verify/
- * references/*.md`) maps 1:1 to real files and the in-SKILL relative links
- * resolve.
+ * Resource keys keep the `.md` extension so a disk pull
+ * (`.claude/skills/acceptance/references/*.md`) maps 1:1 to real files and the
+ * in-SKILL relative links resolve.
  */
-export const VerifySkill: BuiltinSkill = {
+export const AcceptanceSkill: BuiltinSkill = {
   avatar: '✅',
   content,
   description:
-    'Self-evidence for task delivery verification — discover the verify plan, pick the right surface (CLI / web / desktop), drive it with agent-browser, get past auth, capture portable evidence per criterion, and submit each with `lh verify submit` so the delivery is judged on real proof.',
-  identifier: VerifyIdentifier,
-  name: 'verify',
+    'Self-evidence for task delivery acceptance — discover the verify plan, pick the right surface (CLI / web / desktop), drive it with agent-browser, get past auth, capture portable evidence per criterion, and submit each with `lh acceptance run result submit` so the delivery is judged on real proof.',
+  identifier: AcceptanceIdentifier,
+  name: 'acceptance',
   resources: toResourceMeta({
     'references/agent-browser.md': agentBrowser,
     'references/auth.md': auth,
