@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { type AcceptanceCheck, groupChecks, userReviewState } from './CheckList';
+import { type AcceptanceCheck, checkFilterState, groupChecks, userReviewState } from './CheckList';
 
 const check = (id: string, category: string | null, surface: AcceptanceCheck['surface']) =>
   ({ category, id, surface }) as AcceptanceCheck;
@@ -71,5 +71,56 @@ describe('userReviewState', () => {
     };
     expect(userReviewState(withReview({ ...reject, stale: false }))).toBe('rejected');
     expect(userReviewState(withReview({ ...reject, stale: true }))).toBe('pending');
+  });
+});
+
+describe('checkFilterState', () => {
+  const reject = (stale: boolean): AcceptanceCheck['userReview'] => ({
+    action: 'reject',
+    comment: 'x',
+    createdAt: '2026-07-16T00:00:00.000Z',
+    roundIndex: 2,
+    stale,
+  });
+  const make = (state: AcceptanceCheck['state'], userReview?: AcceptanceCheck['userReview']) =>
+    ({ state, userReview }) as AcceptanceCheck;
+
+  // The bucket tracks the USER's decision, never the verifier's verdict alone.
+  it('a verifier-uncertain check you have not reviewed is pending, not needsFix', () => {
+    expect(checkFilterState(make('uncertain'))).toBe('pending');
+  });
+
+  it('a verifier-failed check you have not reviewed is pending (awaiting your review)', () => {
+    expect(checkFilterState(make('failed'))).toBe('pending');
+  });
+
+  it('a never-executed check you have not reviewed is pending', () => {
+    expect(checkFilterState(make('not_executed'))).toBe('pending');
+  });
+
+  it('a passed-but-unconfirmed check is pending', () => {
+    expect(checkFilterState(make('passed'))).toBe('pending');
+  });
+
+  it('needsFix only when you rejected it — even if the verifier passed it', () => {
+    expect(checkFilterState(make('passed', reject(false)))).toBe('needsFix');
+    expect(checkFilterState(make('uncertain', reject(false)))).toBe('needsFix');
+  });
+
+  it('a stale reject reverts to pending, not needsFix (its feedback was consumed)', () => {
+    expect(checkFilterState(make('uncertain', reject(true)))).toBe('pending');
+  });
+
+  it('accepted when you signed it off', () => {
+    expect(
+      checkFilterState(
+        make('passed', {
+          action: 'accept',
+          createdAt: '2026-07-16T00:00:00.000Z',
+          roundIndex: 1,
+          stale: false,
+        }),
+      ),
+    ).toBe('accepted');
   });
 });

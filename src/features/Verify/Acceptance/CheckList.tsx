@@ -991,18 +991,27 @@ const CheckRow = memo<{
 });
 
 /**
- * The filter maps the reviewer's workflow, not verifier taxonomy:
- * - pending:  the verifier passed it, your confirmation is what's missing;
- * - needsFix: broken, uncertain, never executed, or rejected by you — the
- *   next round's work items;
- * - accepted: signed off, out of the way.
+ * The filter maps the reviewer's WORKFLOW, not the verifier's taxonomy — each
+ * tab is the user's own disposition on a check, so the verifier's verdict alone
+ * never moves a check between tabs:
+ * - pending (未验收):  awaiting your review — whatever the verifier returned
+ *   (passed-but-unconfirmed, uncertain ❓, failed, or never executed). The row
+ *   icon still carries the verifier verdict; the tab is about YOUR call.
+ * - needsFix (待修复): you rejected it. The only bucket that is a decision you
+ *   made — so every 待修复 item carries your feedback (待修复 stays in step with
+ *   反馈, instead of inflating with checks you never sent back).
+ * - accepted (已验收): you signed it off.
+ *
+ * An uncertain/failed check the verifier flagged but you have NOT rejected is
+ * still 未验收: the verifier is unsure or the run is red, so it needs your eyes
+ * — not an automatic "needs fix" label you never asked for.
  */
 export type CheckFilter = 'all' | 'pending' | 'needsFix' | 'accepted';
 
 export const checkFilterState = (check: AcceptanceCheck): Exclude<CheckFilter, 'all'> => {
   const review = userReviewState(check);
   if (review === 'accepted') return 'accepted';
-  if (review === 'rejected' || check.state !== 'passed') return 'needsFix';
+  if (review === 'rejected') return 'needsFix';
   return 'pending';
 };
 
