@@ -39,6 +39,10 @@ export default {
   'acceptance.bar.rerunSent': 'Sent to the origin conversation — the repair round is starting.',
   'acceptance.checks.copied': 'Copied',
   'acceptance.checks.copySeq': 'Copy the check label',
+  'acceptance.checks.empty': 'No acceptance checks recorded yet',
+  'acceptance.checks.emptyFilter.accepted': 'No checks accepted yet',
+  'acceptance.checks.emptyFilter.needsFix': 'No checks marked for fixing',
+  'acceptance.checks.emptyFilter.pending': 'No checks left to review',
   'acceptance.checks.finalRoundHint':
     'The final result and evidence come from this round — click to locate it.',
   'acceptance.checks.introduced': 'Added in round {{round}}',

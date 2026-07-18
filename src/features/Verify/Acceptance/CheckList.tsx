@@ -1,7 +1,17 @@
 'use client';
 
 import type { AcceptanceGroupFeedback, AcceptanceReviewAnnotation } from '@lobechat/types';
-import { ActionIcon, copyToClipboard, Flexbox, Icon, Image, Tag, Text, Tooltip } from '@lobehub/ui';
+import {
+  ActionIcon,
+  copyToClipboard,
+  Empty,
+  Flexbox,
+  Icon,
+  Image,
+  Tag,
+  Text,
+  Tooltip,
+} from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import dayjs from 'dayjs';
@@ -150,6 +160,14 @@ const styles = createStaticStyles(({ css }) => ({
     white-space: pre-wrap;
 
     background: ${cssVar.colorFillQuaternary};
+  `,
+  emptyCard: css`
+    padding-block: 48px;
+    padding-inline: 16px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
+
+    background: ${cssVar.colorBgContainer};
   `,
   groupCard: css`
     overflow: hidden;
@@ -1077,6 +1095,22 @@ const CheckList = memo<CheckListProps>(
           ),
       }))
       .filter((group) => group.rows.length > 0);
+
+    // A filter that matches nothing must read as "this bucket is empty", not as
+    // a blank bordered card — each filter gets its own reassuring line.
+    if (groups.length === 0)
+      return (
+        <Flexbox align={'center'} className={styles.emptyCard} justify={'center'}>
+          <Empty
+            icon={CircleDashed}
+            description={t(
+              filter === 'all'
+                ? 'acceptance.checks.empty'
+                : `acceptance.checks.emptyFilter.${filter}`,
+            )}
+          />
+        </Flexbox>
+      );
 
     return (
       <Flexbox className={styles.groupCard}>
