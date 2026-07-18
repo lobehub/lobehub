@@ -27,6 +27,7 @@ import { consumePendingTopicRepos, getPendingTopicRepos } from '@/store/chat/pen
 import { topicSelectors } from '@/store/chat/selectors';
 import type { ChatStore } from '@/store/chat/store';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 import type { StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors, toolInterventionSelectors } from '@/store/user/selectors';
@@ -727,7 +728,12 @@ export class GatewayActionImpl {
             .catch(() => {});
           // Also clear the local store copy — the server clear above does NOT touch
           // the Zustand topic map that useGatewayReconnect reads (LOBE-12055).
-          this.clearLocalRunningOperation(result.topicId, result.operationId);
+          this.clearLocalRunningOperation({
+            agentId: execContext.agentId,
+            groupId: execContext.groupId,
+            operationId: result.operationId,
+            topicId: result.topicId,
+          });
         }
         onComplete?.();
       },
@@ -786,7 +792,7 @@ export class GatewayActionImpl {
       ({ token } = await aiAgentService.refreshGatewayToken(topicId));
     } catch (error) {
       if ((error as { data?: { code?: string } })?.data?.code === 'NOT_FOUND') {
-        this.clearLocalRunningOperation(topicId, operationId);
+        this.clearLocalRunningOperation({ operationId, topicId });
         return;
       }
       throw error;
@@ -910,7 +916,7 @@ export class GatewayActionImpl {
         topicService.updateTopicMetadata(topicId, { runningOperation: null }).catch(() => {});
         // Mirror the clear into the local store — the server clear above leaves the
         // Zustand topic map stale, which useGatewayReconnect keys off (LOBE-12055).
-        this.clearLocalRunningOperation(topicId, operationId);
+        this.clearLocalRunningOperation({ agentId: context.agentId, operationId, topicId });
       },
       operationId,
       resumeOnConnect: true,
@@ -969,12 +975,30 @@ export class GatewayActionImpl {
    * the topic still carries the marker for `operationId` — a late close of a finished op
    * can race with a retry/send that already wrote a NEWER operation's marker, and clearing
    * unconditionally would break reconnect-after-reload for that live run.
+   *
+   * `agentId`/`groupId` route the lookup + dispatch to the run's OWNING topic bucket
+   * (same convention as `updateTopicStatus`): a background completion can land after the
+   * user switched agent/group, when the active-bucket `getTopicById` would miss the topic
+   * and leave its marker stale.
    */
-  private clearLocalRunningOperation = (topicId: string, operationId: string): void => {
-    const existingTopic = topicSelectors.getTopicById(topicId)(this.#get());
+  private clearLocalRunningOperation = (params: {
+    agentId?: string;
+    groupId?: string;
+    operationId: string;
+    topicId: string;
+  }): void => {
+    const { topicId, operationId, agentId, groupId } = params;
+    const state = this.#get();
+    const key = topicMapKey({
+      agentId: agentId ?? state.activeAgentId,
+      groupId: groupId ?? state.activeGroupId,
+    });
+    const existingTopic = state.topicDataMap[key]?.items?.find((t) => t.id === topicId);
     if (existingTopic?.metadata?.runningOperation?.operationId !== operationId) return;
 
-    this.#get().internal_dispatchTopic({
+    state.internal_dispatchTopic({
+      agentId,
+      groupId,
       id: topicId,
       type: 'updateTopic',
       value: { metadata: { ...existingTopic.metadata, runningOperation: null } },
