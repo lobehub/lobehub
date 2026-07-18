@@ -521,8 +521,13 @@ export const acceptanceRouter = router({
   /**
    * Manually move the acceptance's user-facing lifecycle state from the list —
    * an owner override (mark accepted / rejected, or reopen for another look).
-   * Restricted to the decision states; the machine states (verifying / … ) are
-   * driven by the verify pipeline, never set by hand here.
+   *
+   * accept / reject go through the SERVICE, never a bare status write: the
+   * service applies `requireDecidableAcceptance` (a premature `accepted` is
+   * sticky in recomputeStatus and could never be corrected by a later verifier
+   * result) and stamps the decision on the current round. Reopen is only
+   * meaningful for an already-decided aggregate — a still-running round must
+   * not be forced back to a decision-pending state by hand.
    */
   updateStatus: acceptanceWriteProcedure
     .input(z.object({ id: z.string(), status: z.enum(['delivered', 'accepted', 'rejected']) }))
@@ -530,7 +535,32 @@ export const acceptanceRouter = router({
       const acceptance = await resolveAcceptance(ctx, input.id);
       assertWorkspaceRowManageable(ctx, acceptance.userId, 'acceptance');
 
-      await ctx.acceptanceService.acceptanceModel.updateStatus(acceptance.id, input.status);
+      try {
+        if (input.status === 'accepted') {
+          await ctx.acceptanceService.accept(acceptance.id);
+        } else if (input.status === 'rejected') {
+          await ctx.acceptanceService.reject(
+            acceptance.id,
+            'Rejected from the acceptance list — needs another round.',
+          );
+        } else {
+          // Reopen (→ delivered): only a decided aggregate can be re-opened; a
+          // live round recomputes its own status and must not be clobbered.
+          if (acceptance.status !== 'accepted' && acceptance.status !== 'rejected') {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: `Only a decided acceptance can be reopened (status: ${acceptance.status})`,
+            });
+          }
+          await ctx.acceptanceService.acceptanceModel.updateStatus(acceptance.id, 'delivered');
+        }
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: error instanceof Error ? error.message : 'Failed to update status',
+        });
+      }
       return { success: true };
     }),
 

@@ -6,13 +6,12 @@ import dayjs from 'dayjs';
 import {
   CheckCircle2,
   ChevronRight,
+  Circle,
   CircleAlert,
   FileClock,
-  HelpCircle,
   Loader2,
   PanelRightClose,
   RefreshCw,
-  XCircle,
 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -21,7 +20,24 @@ import type { AcceptanceBundle } from '@/services/verify';
 
 export type AcceptanceRound = AcceptanceBundle['rounds'][number];
 
+/** Per-round acceptance tally (how many of the round's own checks the user signed off). */
+export interface RoundReview {
+  accepted: number;
+  total: number;
+}
+
 const styles = createStaticStyles(({ css }) => ({
+  countBadge: css`
+    padding-block: 1px;
+    padding-inline: 7px;
+    border-radius: 99px;
+
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    color: ${cssVar.colorTextSecondary};
+
+    background: ${cssVar.colorFillTertiary};
+  `,
   round: css`
     padding-block: 10px;
     padding-inline: 12px;
@@ -56,21 +72,20 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-const STATUS_META: Record<string, { color: string; icon: typeof CheckCircle2 }> = {
+/** Only the still-running states keep a machine indicator; a settled round is
+    reframed as an ACCEPTANCE state (已验收 / 待验收), not a verification verdict. */
+const RUNNING_META: Record<string, { color: string; icon: typeof CheckCircle2 }> = {
   errored: { color: cssVar.colorWarning, icon: CircleAlert },
-  failed: { color: cssVar.colorError, icon: XCircle },
-  passed: { color: cssVar.colorSuccess, icon: CheckCircle2 },
   repairing: { color: cssVar.colorWarning, icon: RefreshCw },
-  uncertain: { color: cssVar.colorWarning, icon: HelpCircle },
   verifying: { color: cssVar.colorInfo, icon: Loader2 },
 };
 
-/** The round's settled state for the ledger — report verdict beats a null rollup. */
-const roundStatus = (round: AcceptanceRound): string => {
+/** Is the round still executing (so it has no settled result to accept yet)? */
+const isRunningRound = (round: AcceptanceRound): boolean => {
   const status = round.run.status;
-  if (status === 'passed' || status === 'failed' || status === 'errored') return status;
-  if (status === 'repairing' || status === 'verifying') return status;
-  return round.report?.verdict ?? (round.report ? 'passed' : 'verifying');
+  if (status === 'verifying' || status === 'repairing' || status === 'errored') return true;
+  // No report yet and no terminal status → still spinning up.
+  return !round.report && status !== 'passed' && status !== 'failed';
 };
 
 interface LedgerPanelProps {
@@ -80,16 +95,19 @@ interface LedgerPanelProps {
   highlight: number | null;
   onCollapse: () => void;
   onOpenReport: (round: AcceptanceRound) => void;
+  /** Per-round acceptance tally, keyed by round index (the round's own checks). */
+  reviewByRound: Map<number, RoundReview>;
   rounds: AcceptanceRound[];
 }
 
 /**
- * The execution history, demoted to an audit side panel (P-13): each round is a
- * full verify run; the main list is the cross-round merge. Newest round first —
- * the latest attempt is the one under judgment.
+ * The execution history, demoted to an audit side panel (P-13). Each row is a
+ * round; the state it reports is the user's ACCEPTANCE progress on that round's
+ * checks (已验收 / 待验收), not the raw verification verdict — the panel speaks
+ * the same acceptance language as the checklist.
  */
 const LedgerPanel = memo<LedgerPanelProps>(
-  ({ hideCollapse, highlight, onCollapse, onOpenReport, rounds }) => {
+  ({ hideCollapse, highlight, onCollapse, onOpenReport, reviewByRound, rounds }) => {
     const { t } = useTranslation('verify');
     const latestIndex = rounds.at(-1)?.run.roundIndex;
 
@@ -100,9 +118,7 @@ const LedgerPanel = memo<LedgerPanelProps>(
           <Text strong style={{ fontSize: 13 }}>
             {t('acceptance.ledger.title')}
           </Text>
-          <Text fontSize={12} type={'secondary'}>
-            {t('acceptance.ledger.count', { count: rounds.length })}
-          </Text>
+          <span className={styles.countBadge}>{rounds.length}</span>
           <Flexbox flex={1} />
           {!hideCollapse && (
             <ActionIcon
@@ -113,20 +129,38 @@ const LedgerPanel = memo<LedgerPanelProps>(
             />
           )}
         </Flexbox>
-        <Text fontSize={12} type={'secondary'}>
-          {t('acceptance.ledger.description')}
-        </Text>
         {[...rounds].reverse().map((round) => {
-          const status = roundStatus(round);
-          const meta = STATUS_META[status] ?? STATUS_META.verifying;
+          const running = isRunningRound(round);
+          const runStatus = round.run.status ?? 'verifying';
+          const runningMeta = running ? (RUNNING_META[runStatus] ?? RUNNING_META.verifying) : null;
+          const rv =
+            round.run.roundIndex != null ? reviewByRound.get(round.run.roundIndex) : undefined;
+          const total = rv?.total ?? 0;
+          const accepted = rv?.accepted ?? 0;
+          const allAccepted = total > 0 && accepted >= total;
+
+          const stateColor = runningMeta
+            ? runningMeta.color
+            : allAccepted
+              ? cssVar.colorSuccess
+              : cssVar.colorTextTertiary;
+          const stateIcon = runningMeta ? runningMeta.icon : allAccepted ? CheckCircle2 : Circle;
+          const stateLabel = runningMeta
+            ? t(`acceptance.roundStatus.${runStatus}` as 'acceptance.roundStatus.verifying', {
+                defaultValue: runStatus,
+              })
+            : allAccepted
+              ? t('acceptance.ledger.accepted')
+              : t('acceptance.ledger.pending');
+
+          // Acceptance-framed stats: how many of THIS round's checks are signed
+          // off (accepted/total), or all still awaiting.
           const stats =
-            round.report?.totalChecks != null
-              ? t('acceptance.ledger.stats', {
-                  passed: round.report.passedChecks ?? 0,
-                  total: round.report.totalChecks,
-                })
-              : null;
-          const commit = (round.run.context as { commit?: string } | null)?.commit;
+            running || total === 0
+              ? null
+              : accepted > 0
+                ? t('acceptance.ledger.acceptedStats', { accepted, total })
+                : t('acceptance.ledger.awaitingStats', { total });
 
           const openable = Boolean(round.report);
 
@@ -156,10 +190,10 @@ const LedgerPanel = memo<LedgerPanelProps>(
                   horizontal
                   align={'center'}
                   gap={4}
-                  style={{ color: meta.color, fontSize: 12 }}
+                  style={{ color: stateColor, fontSize: 12 }}
                 >
-                  <Icon icon={meta.icon} size={13} />
-                  {t(`acceptance.roundStatus.${status}`, { defaultValue: status })}
+                  <Icon icon={stateIcon} size={13} spin={running} />
+                  {stateLabel}
                 </Flexbox>
                 <Flexbox flex={1} />
                 <Text fontSize={12} type={'secondary'}>
@@ -179,9 +213,9 @@ const LedgerPanel = memo<LedgerPanelProps>(
                   {round.run.title}
                 </Text>
               )}
-              {(stats || commit) && (
+              {stats && (
                 <Text fontSize={12} type={'secondary'}>
-                  {[stats, commit?.slice(0, 10)].filter(Boolean).join(' · ')}
+                  {stats}
                 </Text>
               )}
             </Flexbox>

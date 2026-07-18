@@ -460,7 +460,13 @@ const AcceptanceRow = memo<{
       }
       description={
         <Flexbox horizontal className={styles.itemSub} gap={8}>
-          <span>{t(`acceptance.status.${item.status}` as any)}</span>
+          {/* The status glyph already carries the lifecycle state, so the
+              second line shows the check count instead of a redundant label. */}
+          <span>
+            {item.checkCount != null
+              ? t('acceptance.workspace.checkCount', { count: item.checkCount })
+              : t(`acceptance.status.${item.status}` as any)}
+          </span>
           <span>{relativeTime(item.updatedAt ?? item.createdAt)}</span>
         </Flexbox>
       }

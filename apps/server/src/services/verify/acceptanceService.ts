@@ -715,14 +715,52 @@ export class AcceptanceService {
   };
 
   /**
+   * The latest round's total-check count per acceptance — a cheap glance for the
+   * list panel (two batched reads, never a per-row union recompute). The signed-
+   * off/accepted count would need the cross-round union per row, which is far too
+   * heavy for a list, so the panel shows the total and leans on the row's status
+   * glyph for the decision state.
+   */
+  private latestCheckCounts = async (acceptanceIds: string[]): Promise<Map<string, number>> => {
+    const out = new Map<string, number>();
+    if (acceptanceIds.length === 0) return out;
+
+    const runs = await this.db.query.verifyRuns.findMany({
+      columns: { acceptanceId: true, id: true, roundIndex: true },
+      where: (run, { inArray }) => inArray(run.acceptanceId, acceptanceIds),
+    });
+    const latest = new Map<string, { id: string; round: number }>();
+    for (const run of runs) {
+      if (!run.acceptanceId) continue;
+      const round = run.roundIndex ?? 0;
+      const cur = latest.get(run.acceptanceId);
+      if (!cur || round > cur.round) latest.set(run.acceptanceId, { id: run.id, round });
+    }
+
+    const reports = await this.reportModel.findByRuns([...latest.values()].map((v) => v.id));
+    const totalByRun = new Map(reports.map((report) => [report.verifyRunId, report.totalChecks]));
+    for (const [acceptanceId, { id: runId }] of latest) {
+      const total = totalByRun.get(runId);
+      if (total != null) out.set(acceptanceId, total);
+    }
+    return out;
+  };
+
+  /**
    * Recent aggregates with their subject headers — the list-panel payload.
    * Titles resolve in parallel per row (bounded by the list limit); a deleted
-   * subject degrades to a null title instead of dropping the row.
+   * subject degrades to a null title instead of dropping the row. Each row also
+   * carries the latest round's check count for the panel's at-a-glance line.
    */
   listWithSubjects = async (limit = 50) => {
     const rows = await this.acceptanceModel.query(limit);
+    const checkCounts = await this.latestCheckCounts(rows.map((row) => row.id));
     return Promise.all(
-      rows.map(async (row) => ({ ...row, subject: await this.resolveSubject(row) })),
+      rows.map(async (row) => ({
+        ...row,
+        checkCount: checkCounts.get(row.id) ?? null,
+        subject: await this.resolveSubject(row),
+      })),
     );
   };
 

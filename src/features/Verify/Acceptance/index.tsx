@@ -441,6 +441,21 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
   ).length;
   const pendingCount = reviewTotal - acceptedCount - needsFixCount; // 未验收 (undecided)
   const decidedCount = acceptedCount + needsFixCount;
+  // Per-round acceptance tally for the ledger: each reviewable check belongs to
+  // the round its current result came from, so the ledger can show that round's
+  // own 已验收 / 待验收 progress instead of a raw verification verdict.
+  const reviewByRound = (() => {
+    const map = new Map<number, { accepted: number; total: number }>();
+    for (const check of reviewableChecks) {
+      const round = check.resultRound;
+      if (round === undefined || round === null) continue;
+      const cur = map.get(round) ?? { accepted: 0, total: 0 };
+      cur.total += 1;
+      if (checkFilterState(check) === 'accepted') cur.accepted += 1;
+      map.set(round, cur);
+    }
+    return map;
+  })();
   const barTexts = {
     accepted: {
       statusText: t('acceptance.banner.accepted', {
@@ -964,6 +979,7 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
         >
           <LedgerPanel
             highlight={highlightRound}
+            reviewByRound={reviewByRound}
             rounds={rounds}
             onCollapse={() => setLedgerExpand(false)}
             onOpenReport={setReportRound}
@@ -981,6 +997,7 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
           <Flexbox style={{ height: '100%', overflow: 'auto' }}>
             <LedgerPanel
               highlight={highlightRound}
+              reviewByRound={reviewByRound}
               rounds={rounds}
               onCollapse={() => setLedgerExpand(false)}
               onOpenReport={setReportRound}
