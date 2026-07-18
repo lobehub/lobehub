@@ -1148,6 +1148,87 @@ describe('GatewayActionImpl', () => {
       });
     });
 
+    // A late close of a finished op must NOT wipe the marker of a NEWER operation
+    // that a racing retry/send already wrote — that would break reconnect-after-reload
+    // for the live run. Only a marker matching the completed op's id gets cleared.
+    it('does not clear the local marker when it already belongs to a newer operation', async () => {
+      const connectToGateway = vi.fn();
+      const internalDispatchTopic = vi.fn();
+      const startOperation = vi.fn(() => ({ operationId: 'gw-op-1' }));
+      const state: Record<string, any> = {
+        activeAgentId: 'agent-1',
+        activeTopicId: 'topic-1',
+        gatewayConnections: {},
+        topicDataMap: {
+          'agent_agent-1': {
+            items: [
+              {
+                id: 'topic-1',
+                metadata: {
+                  model: 'gpt-4',
+                  // Marker already points at a newer op than the one completing below.
+                  runningOperation: { assistantMessageId: 'ast-2', operationId: 'server-op-NEWER' },
+                },
+              },
+            ],
+          },
+        },
+      };
+      const set = vi.fn((updater: any) => {
+        if (typeof updater === 'function') Object.assign(state, updater(state));
+        else Object.assign(state, updater);
+      });
+      const get = vi.fn(() => ({
+        ...state,
+        associateMessageWithOperation: vi.fn(),
+        completeOperation: vi.fn(),
+        connectToGateway,
+        internal_dispatchTopic: internalDispatchTopic,
+        moveQueuedMessages: vi.fn(),
+        onOperationCancel: vi.fn(),
+        startOperation,
+        updateTopicStatus: vi.fn(),
+      })) as any;
+
+      (globalThis as any).window = {
+        global_serverConfigStore: {
+          getState: () => ({ serverConfig: { agentGatewayUrl: 'https://gateway.test.com' } }),
+        },
+      };
+
+      const action = new GatewayActionImpl(set as any, get, undefined);
+      action.createClient = vi.fn(() => createMockClient());
+
+      vi.mocked(aiAgentService.execAgentTask).mockResolvedValue({
+        agentId: 'agent-1',
+        assistantMessageId: 'ast-1',
+        autoStarted: true,
+        createdAt: new Date().toISOString(),
+        message: 'ok',
+        operationId: 'server-op-1',
+        status: 'created',
+        success: true,
+        timestamp: new Date().toISOString(),
+        token: 'test-token',
+        topicId: 'topic-1',
+        userMessageId: 'usr-1',
+      });
+
+      await action.executeGatewayAgent({
+        context: { agentId: 'agent-1', scope: 'main', threadId: null, topicId: 'topic-1' },
+        message: 'Hello',
+      });
+
+      const { onSessionComplete } = connectToGateway.mock.calls[0][0];
+      // Ignore any dispatches from the optimistic-update path during setup.
+      internalDispatchTopic.mockClear();
+      vi.mocked(topicService.updateTopicMetadata).mockResolvedValue(undefined as never);
+
+      onSessionComplete({ succeeded: false, terminalReceived: true });
+
+      expect(internalDispatchTopic).not.toHaveBeenCalled();
+    });
+
     // When the desktop runs against 本机 (effective runtime mode 'local'), the
     // client must forward this machine's own gateway deviceId so the server can
     // preset activeDeviceId and inject lobe-local-system into the first LLM

@@ -727,7 +727,7 @@ export class GatewayActionImpl {
             .catch(() => {});
           // Also clear the local store copy — the server clear above does NOT touch
           // the Zustand topic map that useGatewayReconnect reads (LOBE-12055).
-          this.clearLocalRunningOperation(result.topicId);
+          this.clearLocalRunningOperation(result.topicId, result.operationId);
         }
         onComplete?.();
       },
@@ -786,7 +786,7 @@ export class GatewayActionImpl {
       ({ token } = await aiAgentService.refreshGatewayToken(topicId));
     } catch (error) {
       if ((error as { data?: { code?: string } })?.data?.code === 'NOT_FOUND') {
-        this.clearLocalRunningOperation(topicId);
+        this.clearLocalRunningOperation(topicId, operationId);
         return;
       }
       throw error;
@@ -910,7 +910,7 @@ export class GatewayActionImpl {
         topicService.updateTopicMetadata(topicId, { runningOperation: null }).catch(() => {});
         // Mirror the clear into the local store — the server clear above leaves the
         // Zustand topic map stale, which useGatewayReconnect keys off (LOBE-12055).
-        this.clearLocalRunningOperation(topicId);
+        this.clearLocalRunningOperation(topicId, operationId);
       },
       operationId,
       resumeOnConnect: true,
@@ -966,11 +966,13 @@ export class GatewayActionImpl {
    *
    * The `updateTopic` reducer shallow-merges `value.metadata` (`{...currentTopic, ...value}`),
    * so we spread the existing metadata to avoid dropping its other keys. Only dispatch when
-   * the topic exists in the store and still carries a non-null `runningOperation`.
+   * the topic still carries the marker for `operationId` — a late close of a finished op
+   * can race with a retry/send that already wrote a NEWER operation's marker, and clearing
+   * unconditionally would break reconnect-after-reload for that live run.
    */
-  private clearLocalRunningOperation = (topicId: string): void => {
+  private clearLocalRunningOperation = (topicId: string, operationId: string): void => {
     const existingTopic = topicSelectors.getTopicById(topicId)(this.#get());
-    if (!existingTopic?.metadata?.runningOperation) return;
+    if (existingTopic?.metadata?.runningOperation?.operationId !== operationId) return;
 
     this.#get().internal_dispatchTopic({
       id: topicId,
