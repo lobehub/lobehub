@@ -32,7 +32,6 @@ import {
   RotateCcw,
   ScrollText,
   Search,
-  SlidersHorizontal,
   Trash2,
   TriangleAlert,
 } from 'lucide-react';
@@ -367,6 +366,31 @@ const AcceptanceRow = memo<{
     });
   };
 
+  // The status action follows the CURRENT state — an awaiting delivery can be
+  // accepted; an already-decided one can be reopened; a still-running round
+  // offers nothing (accept/reject need a settled round, matching the server
+  // guard). Never "reopen" an acceptance that was never decided.
+  const statusItems: DropdownItem[] =
+    item.status === 'delivered' || item.status === 'errored'
+      ? [
+          {
+            icon: <Icon icon={CircleCheck} />,
+            key: 'accept',
+            label: t('verify:acceptance.workspace.actions.markAccepted'),
+            onClick: () => void changeStatus('accepted'),
+          },
+        ]
+      : item.status === 'accepted' || item.status === 'rejected'
+        ? [
+            {
+              icon: <Icon icon={RotateCcw} />,
+              key: 'reopen',
+              label: t('verify:acceptance.workspace.actions.reopen'),
+              onClick: () => void changeStatus('delivered'),
+            },
+          ]
+        : [];
+
   const menuItems: DropdownItem[] = [
     {
       icon: <Icon icon={Pencil} />,
@@ -374,33 +398,8 @@ const AcceptanceRow = memo<{
       label: t('verify:acceptance.workspace.actions.rename'),
       onClick: startRename,
     },
-    {
-      children: [
-        {
-          icon: <Icon icon={CircleCheck} />,
-          key: 'accepted',
-          label: t('verify:acceptance.workspace.actions.markAccepted'),
-          onClick: () => void changeStatus('accepted'),
-        },
-        {
-          icon: <Icon icon={CircleX} />,
-          key: 'rejected',
-          label: t('verify:acceptance.workspace.actions.markRejected'),
-          onClick: () => void changeStatus('rejected'),
-        },
-        {
-          icon: <Icon icon={RotateCcw} />,
-          key: 'delivered',
-          label: t('verify:acceptance.workspace.actions.reopen'),
-          onClick: () => void changeStatus('delivered'),
-        },
-      ],
-      icon: <Icon icon={SlidersHorizontal} />,
-      key: 'status',
-      label: t('verify:acceptance.workspace.actions.status'),
-      type: 'submenu',
-    },
-    { type: 'divider' },
+    ...statusItems,
+    ...(statusItems.length > 0 ? [{ type: 'divider' as const }] : []),
     {
       danger: true,
       icon: <Icon icon={Trash2} />,

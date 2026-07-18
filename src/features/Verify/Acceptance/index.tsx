@@ -35,7 +35,7 @@ import {
 } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router';
+import { useParams, useSearchParams } from 'react-router';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import AgentProfilePopup from '@/features/AgentProfileCard/AgentProfilePopup';
@@ -200,7 +200,33 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
   // get the one-line compact toolbar.
   const compactToolbar = isEmbedded || isNarrowViewport;
 
-  const [filter, setFilter] = useState<CheckFilter>('all');
+  // The checklist filter survives a refresh via a `?filter=` query param — but
+  // only on the standalone acceptance page. The portal embed rides the chat
+  // URL, so it keeps the filter in local state instead of hijacking that query.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [localFilter, setLocalFilter] = useState<CheckFilter>('all');
+  const urlFilterRaw = searchParams.get('filter');
+  const urlFilter: CheckFilter = (['all', 'pending', 'needsFix', 'accepted'] as const).includes(
+    urlFilterRaw as CheckFilter,
+  )
+    ? (urlFilterRaw as CheckFilter)
+    : 'all';
+  const filter = isEmbedded ? localFilter : urlFilter;
+  const setFilter = (next: CheckFilter) => {
+    if (isEmbedded) {
+      setLocalFilter(next);
+      return;
+    }
+    setSearchParams(
+      (prev) => {
+        const params = new URLSearchParams(prev);
+        if (next === 'all') params.delete('filter');
+        else params.set('filter', next);
+        return params;
+      },
+      { replace: true },
+    );
+  };
   const [roundFilter, setRoundFilter] = useState<number | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set());
