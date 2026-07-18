@@ -185,9 +185,15 @@ export const imageRouter = router({
         userId,
         workspaceId: wsId,
       });
-      if (chargeResult) {
+      // An error batch (insufficient budget / cooldown / frozen workspace) is
+      // returned to the client as-is.
+      if (chargeResult && 'data' in chargeResult) {
         return chargeResult;
       }
+      // Otherwise, opaque per-generation billing handles to thread through each
+      // asyncTask so the completion charge can reconcile against them.
+      const prechargeItems =
+        chargeResult && 'prechargeItems' in chargeResult ? chargeResult.prechargeItems : undefined;
 
       // Step 1: Atomically create all database records in a transaction
       const { batch: createdBatch, generationsWithTasks } = await serverDB.transaction(
@@ -237,11 +243,14 @@ export const imageRouter = router({
           // 3. Concurrently create asyncTask for each generation (within transaction)
           log('Creating async tasks for generations');
           const generationsWithTasks = await Promise.all(
-            createdGenerations.map(async (generation) => {
-              // Create asyncTask directly in transaction
+            createdGenerations.map(async (generation, index) => {
+              // Create asyncTask directly in transaction, carrying this
+              // generation's billing handle (if any) for the completion charge.
+              const prechargeItem = prechargeItems?.[index];
               const [createdAsyncTask] = await tx
                 .insert(asyncTasks)
                 .values({
+                  metadata: prechargeItem ? { precharge: prechargeItem } : undefined,
                   status: AsyncTaskStatus.Pending,
                   type: AsyncTaskType.ImageGeneration,
                   userId,

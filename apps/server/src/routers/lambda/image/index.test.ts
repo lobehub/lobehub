@@ -430,6 +430,38 @@ describe('imageRouter', () => {
       );
     });
 
+    it('threads per-generation prechargeItems into each asyncTask metadata', async () => {
+      mockChargeBeforeGenerate.mockResolvedValue({
+        prechargeItems: [{ reservationKey: 'k-1' }, { reservationKey: 'k-2' }],
+      });
+
+      const ctx = createMockCtx();
+      const input = createDefaultInput();
+
+      const caller = imageRouter.createCaller(ctx);
+      await caller.createImage(input);
+
+      // insertValues: [0] batch, [1] generations[], [2] task#1, [3] task#2
+      expect(mockInsertValues[2]).toEqual(
+        expect.objectContaining({ metadata: { precharge: { reservationKey: 'k-1' } } }),
+      );
+      expect(mockInsertValues[3]).toEqual(
+        expect.objectContaining({ metadata: { precharge: { reservationKey: 'k-2' } } }),
+      );
+    });
+
+    it('leaves asyncTask metadata unset when there are no prechargeItems', async () => {
+      mockChargeBeforeGenerate.mockResolvedValue({ prechargeItems: undefined });
+
+      const ctx = createMockCtx();
+      const input = createDefaultInput();
+
+      const caller = imageRouter.createCaller(ctx);
+      await caller.createImage(input);
+
+      expect(mockInsertValues[2]).toEqual(expect.objectContaining({ metadata: undefined }));
+    });
+
     it('should trigger async image generation tasks', async () => {
       const ctx = createMockCtx();
       const input = createDefaultInput();
