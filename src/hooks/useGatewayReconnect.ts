@@ -50,6 +50,9 @@ export const useGatewayReconnect = (
       revalidateIfStale: false,
       revalidateOnFocus: false,
       revalidateOnReconnect: false,
+      // Reconnect is a one-shot action; a failed attempt (e.g. operation already
+      // gone → 404) must not loop retries.
+      shouldRetryOnError: false,
     },
   );
 };
