@@ -275,25 +275,32 @@ export const imageRouter = router({
           }
 
           if (ENABLE_BUSINESS_FEATURES) {
-            await chargeAfterGenerate({
-              metrics: { latency: duration },
-              metadata: {
-                asyncTaskId: taskId,
-                generationBatchId,
-                topicId: generationTopicId,
-                ...buildMappedBusinessModelFields({
-                  provider,
-                  requestedModelId,
-                  resolvedModelId,
-                }),
-              },
-              modelUsage,
-              prechargeResult,
-              pricingContext: runtimeOptions.pricingContext,
-              provider,
-              userId: ctx.userId,
-              workspaceId,
-            });
+            // Contain success-billing errors: the image is already delivered and
+            // the task marked Success, so a billing failure here must not fall
+            // into the outer catch and be reconciled as a generation failure.
+            try {
+              await chargeAfterGenerate({
+                metrics: { latency: duration },
+                metadata: {
+                  asyncTaskId: taskId,
+                  generationBatchId,
+                  topicId: generationTopicId,
+                  ...buildMappedBusinessModelFields({
+                    provider,
+                    requestedModelId,
+                    resolvedModelId,
+                  }),
+                },
+                modelUsage,
+                prechargeResult,
+                pricingContext: runtimeOptions.pricingContext,
+                provider,
+                userId: ctx.userId,
+                workspaceId,
+              });
+            } catch (chargeError) {
+              console.error('[image-async] success billing failed:', chargeError);
+            }
           }
 
           log('Async image generation completed successfully: %s', taskId);
