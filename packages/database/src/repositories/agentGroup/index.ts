@@ -3,6 +3,10 @@ import type { AgentGroupDetail, AgentGroupMember, AgentPluginEntry } from '@lobe
 import { cleanObject } from '@lobechat/utils';
 import { and, eq, inArray, ne, not, sql } from 'drizzle-orm';
 
+import {
+  hasForeignTopicComments,
+  syncTopicCommentsOnTopicTransfer,
+} from '../../models/topicComment';
 import type {
   AgentItem,
   ChatGroupItem,
@@ -798,6 +802,12 @@ export class AgentGroupRepository {
       .limit(1);
     if (foreignTopic) return true;
 
+    // Comments move (or die, when the target is personal scope) with their
+    // topics — a teammate's comment on the caller's own topic is still their
+    // work. NULL authors (deleted accounts) count as foreign too.
+    if (await hasForeignTopicComments(this.db, this.userId, eq(topics.groupId, groupId)))
+      return true;
+
     const [foreignThread] = await this.db
       .select({ id: threads.id })
       .from(threads)
@@ -877,6 +887,11 @@ export class AgentGroupRepository {
       await trx.update(topics).set(ownershipUpdate).where(eq(topics.groupId, groupId));
       await trx.update(threads).set(ownershipUpdate).where(eq(threads.groupId, groupId));
       await trx.update(messages).set(ownershipUpdate).where(eq(messages.groupId, groupId));
+
+      // Topic comments denormalize the topic's workspaceId — move them with
+      // the topic (or drop them when leaving workspace scope entirely),
+      // otherwise workspace-filtered comment reads go stale. See the helper doc.
+      await syncTopicCommentsOnTopicTransfer(trx, groupTopicIds, targetWorkspaceId);
 
       if (groupTopicIds.length > 0) {
         await trx

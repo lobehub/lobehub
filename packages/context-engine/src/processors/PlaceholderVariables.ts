@@ -11,6 +11,17 @@ declare module '../types' {
 
 const log = debug('context-engine:processor:PlaceholderVariablesProcessor');
 
+const CONTENT_PREVIEW_LENGTH = 200;
+
+const truncateContentPreview = (content: string): string => {
+  let cutoff = CONTENT_PREVIEW_LENGTH;
+  const lastCharCode = content.charCodeAt(cutoff - 1);
+
+  if (lastCharCode >= 0xd8_00 && lastCharCode <= 0xdb_ff) cutoff -= 1;
+
+  return content.slice(0, cutoff);
+};
+
 /**
  * Build a short, log-safe preview of a message's content.
  *
@@ -20,14 +31,14 @@ const log = debug('context-engine:processor:PlaceholderVariablesProcessor');
  * (e.g. budget-exceeded errors) used to take down the whole processor.
  * Always coerce to a string before slicing.
  */
-const buildContentPreview = (content: unknown): string => {
-  if (typeof content === 'string') return content.slice(0, 200);
+export const buildContentPreview = (content: unknown): string => {
+  if (typeof content === 'string') return truncateContentPreview(content);
 
   try {
     const serialized = JSON.stringify(content);
-    return (serialized ?? String(content)).slice(0, 200);
+    return truncateContentPreview(serialized ?? String(content));
   } catch {
-    return String(content).slice(0, 200);
+    return truncateContentPreview(String(content));
   }
 };
 
