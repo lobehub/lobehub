@@ -119,7 +119,7 @@ const createHarness = () => {
     confirmation: { confirm: confirmation },
     context: { userId: 'user' },
     ids: () => `id-${++sequence}`,
-    launches: { findByThread: vi.fn(async () => undefined) },
+    launches: { find: vi.fn(async () => undefined), save: vi.fn() },
     messages: { readContent: vi.fn(async (id: string) => contents.get(id)) },
     operations: { findById: vi.fn(async () => ({ status: 'running' })) },
     registry: createUnderstandingProviderRegistry([github, gmail]),
@@ -443,6 +443,21 @@ describe('UnderstandingService', () => {
     expect(launch).toMatchObject({ operationId: expect.any(String), success: true });
     expect(JSON.stringify(launch)).not.toContain('PRIVATE_SOURCE_DOCUMENT');
     expect(harness.session().runs[0]).not.toHaveProperty('operationId');
+    expect(harness.dependencies.launches.save).toHaveBeenCalledWith(
+      {
+        agentId: 'understanding-agent',
+        kind: 'source',
+        threadId: input.threadId,
+        topicId: 'topic',
+      },
+      {
+        assistantMessageId: launch.assistantMessageId,
+        operationId: launch.operationId,
+      },
+    );
+    expect(harness.dependencies.launches.save.mock.invocationCallOrder[0]).toBeLessThan(
+      harness.dependencies.sessions.updateSourceRun.mock.invocationCallOrder.at(-1)!,
+    );
   });
 
   it('retries an incomplete source launch and skips after its assistant pointer is stored', async () => {
@@ -471,10 +486,9 @@ describe('UnderstandingService', () => {
     const { branches, session } = await initializeAndDiscover(harness);
     const input = { ...branches[0], sessionId: session.id, topicId: 'topic' };
     await harness.service.collectSource(input);
-    harness.dependencies.launches.findByThread.mockResolvedValue({
+    harness.dependencies.launches.find.mockResolvedValue({
       assistantMessageId: 'durable-source-message',
       operationId: 'durable-source-operation',
-      status: 'running',
     });
 
     const recovered = await harness.service.launchSourceAnalysis(input);
@@ -666,10 +680,9 @@ describe('UnderstandingService', () => {
         assistantMessageId: launch.assistantMessageId,
       });
     }
-    harness.dependencies.launches.findByThread.mockResolvedValue({
+    harness.dependencies.launches.find.mockResolvedValue({
       assistantMessageId: 'durable-merge-message',
       operationId: 'durable-merge-operation',
-      status: 'done',
     });
 
     const recovered = await harness.service.launchMerge(

@@ -1,6 +1,9 @@
 import { z } from 'zod';
 
-import type { OnboardingUnderstandingThreadMarker } from '../understanding';
+import {
+  type OnboardingUnderstandingThreadMarker,
+  OnboardingUnderstandingThreadMarkerSchema,
+} from '../understanding';
 
 export const ThreadType = {
   Continuation: 'continuation',
@@ -123,6 +126,7 @@ export const threadMetadataSchema = z.object({
   duration: z.number().optional(),
   error: z.any().optional(),
   model: z.string().optional(),
+  onboardingUnderstanding: OnboardingUnderstandingThreadMarkerSchema.optional(),
   operationId: z.string().optional(),
   sourceToolCallId: z.string().optional(),
   startedAt: z.string().optional(),

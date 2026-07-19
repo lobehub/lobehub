@@ -1,5 +1,6 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
+import { threadMetadataSchema } from './topic/thread';
 import type {
   CollectionDiagnostics,
   OnboardingUnderstandingMessageMetadata,
@@ -11,6 +12,7 @@ import type {
 import {
   MAX_COLLECTION_ERRORS,
   OnboardingUnderstandingSessionSchema,
+  OnboardingUnderstandingThreadMarkerSchema,
   projectOnboardingUnderstandingSessionStatus,
   UnderstandingSourceRefSchema,
 } from './understanding';
@@ -51,6 +53,23 @@ const source = {
 };
 
 describe('Understanding durable contracts', () => {
+  it('accepts only bounded paired launch references on Understanding thread markers', () => {
+    const marker = {
+      kind: 'source' as const,
+      launch: { assistantMessageId: 'message', operationId: 'operation' },
+    };
+    expect(OnboardingUnderstandingThreadMarkerSchema.safeParse(marker).success).toBe(true);
+    expect(
+      threadMetadataSchema.parse({ onboardingUnderstanding: marker }).onboardingUnderstanding,
+    ).toEqual(marker);
+    expect(
+      OnboardingUnderstandingThreadMarkerSchema.safeParse({
+        kind: 'source',
+        launch: { assistantMessageId: 'message', operationId: 'x'.repeat(513) },
+      }).success,
+    ).toBe(false);
+  });
+
   it('excludes credentials, raw source data, runtime operation IDs, and schema versions', () => {
     const contractAssertions: [
       HasNoForbiddenKeys<UnderstandingSourceRef>,

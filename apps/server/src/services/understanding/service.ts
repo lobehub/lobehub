@@ -31,16 +31,16 @@ import {
   RequestTrigger,
   UnderstandingAnalysisSchema,
 } from '@lobechat/types';
-import { and, desc, eq, isNull } from 'drizzle-orm';
 
 import { AgentModel } from '@/database/models/agent';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { MessageModel } from '@/database/models/message';
+import { ThreadModel } from '@/database/models/thread';
 import { TopicModel } from '@/database/models/topic';
-import { agentOperations, messages } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { AiAgentService } from '@/server/services/aiAgent';
 
+import { UnderstandingLaunchStore } from './launchStore';
 import { discoverUnderstandingSources } from './pipeline';
 import type { UnderstandingProviderRegistry } from './providers';
 import {
@@ -135,11 +135,21 @@ interface UnderstandingServiceDependencies {
   context: UnderstandingProviderContext;
   ids: () => string;
   launches: {
-    findByThread: (input: {
+    find: (input: {
       agentId: string;
+      kind: 'merged' | 'source';
       threadId: string;
       topicId: string;
-    }) => Promise<{ assistantMessageId: string; operationId: string; status: string } | undefined>;
+    }) => Promise<{ assistantMessageId: string; operationId: string } | undefined>;
+    save: (
+      input: {
+        agentId: string;
+        kind: 'merged' | 'source';
+        threadId: string;
+        topicId: string;
+      },
+      launch: { assistantMessageId: string; operationId: string },
+    ) => Promise<void>;
   };
   messages: { readContent: (assistantMessageId: string) => Promise<unknown> };
   operations: { findById: (operationId: string) => Promise<{ status: string } | null> };
@@ -351,11 +361,13 @@ export class UnderstandingService {
     input: SourceIdentity,
   ): Promise<UnderstandingSourceLaunchReference | UnderstandingSourceLaunchSkipped> => {
     const run = await this.sourceRun(input);
-    const recovered = await this.dependencies.launches.findByThread({
+    const launchIdentity = {
       agentId: this.dependencies.agentId,
+      kind: 'source' as const,
       threadId: input.threadId,
       topicId: input.topicId,
-    });
+    };
+    const recovered = await this.dependencies.launches.find(launchIdentity);
     if (recovered) {
       if (run.assistantMessageId && run.assistantMessageId !== recovered.assistantMessageId) {
         throw new Error('Understanding source launch does not match its active run');
@@ -408,6 +420,10 @@ export class UnderstandingService {
       trigger: RequestTrigger.Onboarding,
     });
     const success = launched.autoStarted;
+    await this.dependencies.launches.save(launchIdentity, {
+      assistantMessageId: launched.assistantMessageId,
+      operationId: launched.operationId,
+    });
     await this.dependencies.sessions.updateSourceRun(
       input.topicId,
       input.sessionId,
@@ -551,11 +567,13 @@ export class UnderstandingService {
     if (!claimed && merge.threadId !== requestedThreadId) {
       return { skipped: true, threadId: merge.threadId };
     }
-    const recovered = await this.dependencies.launches.findByThread({
+    const launchIdentity = {
       agentId: this.dependencies.agentId,
+      kind: 'merged' as const,
       threadId: merge.threadId,
       topicId,
-    });
+    };
+    const recovered = await this.dependencies.launches.find(launchIdentity);
     if (recovered) {
       if (merge.assistantMessageId && merge.assistantMessageId !== recovered.assistantMessageId) {
         throw new Error('Understanding merge launch does not match its active run');
@@ -608,6 +626,10 @@ export class UnderstandingService {
       trigger: RequestTrigger.Onboarding,
     });
     const success = launched.autoStarted;
+    await this.dependencies.launches.save(launchIdentity, {
+      assistantMessageId: launched.assistantMessageId,
+      operationId: launched.operationId,
+    });
     await this.dependencies.sessions.update(topicId, sessionId, (current) => {
       const currentMerge = current.mergeRun;
       if (currentMerge?.threadId !== merge.threadId) {
@@ -942,6 +964,7 @@ export const createUnderstandingService = async ({
   if (!agent) throw new Error('Onboarding Understanding agent is unavailable');
   const { context, registry } = materializeUnderstandingProviders(registrations, { db, userId });
   const messageModel = new MessageModel(db, userId);
+  const threadModel = new ThreadModel(db, userId);
   const topicModel = new TopicModel(db, userId);
   return new UnderstandingService({
     agent: new AiAgentService(db, userId),
@@ -949,43 +972,7 @@ export const createUnderstandingService = async ({
     confirmation: new UnderstandingConfirmationRepository(db, userId),
     context,
     ids: randomUUID,
-    launches: {
-      findByThread: async ({ agentId, threadId, topicId }) => {
-        const [operation] = await db
-          .select({ operationId: agentOperations.id, status: agentOperations.status })
-          .from(agentOperations)
-          .where(
-            and(
-              eq(agentOperations.userId, userId),
-              isNull(agentOperations.workspaceId),
-              eq(agentOperations.agentId, agentId),
-              eq(agentOperations.topicId, topicId),
-              eq(agentOperations.threadId, threadId),
-              eq(agentOperations.trigger, RequestTrigger.Onboarding),
-            ),
-          )
-          .orderBy(desc(agentOperations.createdAt))
-          .limit(1);
-        if (!operation) return;
-        const [message] = await db
-          .select({ assistantMessageId: messages.id })
-          .from(messages)
-          .where(
-            and(
-              eq(messages.userId, userId),
-              isNull(messages.workspaceId),
-              eq(messages.agentId, agentId),
-              eq(messages.topicId, topicId),
-              eq(messages.threadId, threadId),
-              eq(messages.role, 'assistant'),
-            ),
-          )
-          .orderBy(desc(messages.createdAt))
-          .limit(1);
-        if (!message) return;
-        return { ...message, ...operation };
-      },
-    },
+    launches: new UnderstandingLaunchStore({ threads: threadModel, topics: topicModel }),
     messages: {
       readContent: async (assistantMessageId) =>
         (await messageModel.findById(assistantMessageId))?.content,
