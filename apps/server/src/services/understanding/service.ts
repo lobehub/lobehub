@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
+import type { ISnapshotStore } from '@lobechat/agent-tracing';
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import {
   StaleUnderstandingRunError,
@@ -64,6 +65,19 @@ import type {
 
 const UNDERSTANDING_AGENT_SLUG = 'onboarding-understanding';
 const terminalStatuses = new Set(['completed', 'failed']);
+
+// Privacy boundary: source briefs can contain raw connector data and must never reach file/S3
+// Agent Runtime snapshots. The operation state remains durable in the runtime coordinator.
+const discardUnderstandingSnapshotStore: ISnapshotStore = {
+  get: () => Promise.resolve(null),
+  getLatest: () => Promise.resolve(null),
+  list: () => Promise.resolve([]),
+  listPartials: () => Promise.resolve([]),
+  loadPartial: () => Promise.resolve(null),
+  removePartial: () => Promise.resolve(),
+  save: () => Promise.resolve(),
+  savePartial: () => Promise.resolve(),
+};
 
 const emptyDiagnostics = (error?: CollectionError): CollectionDiagnostics => ({
   errors: error ? [error] : [],
@@ -971,7 +985,10 @@ export const createUnderstandingService = async ({
   const { context, registry } = materializeUnderstandingProviders(registrations, { db, userId });
   const messageModel = new MessageModel(db, userId);
   const topicModel = new TopicModel(db, userId);
-  const agentRuntime = new AgentRuntimeService(db, userId, { queueService: null });
+  const agentRuntime = new AgentRuntimeService(db, userId, {
+    queueService: null,
+    snapshotStore: discardUnderstandingSnapshotStore,
+  });
   return new UnderstandingService({
     agent: new AiAgentService(db, userId),
     agentId: agent.id,

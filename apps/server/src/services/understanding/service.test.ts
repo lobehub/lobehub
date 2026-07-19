@@ -1,3 +1,5 @@
+import type { ExecutionSnapshot, ISnapshotStore } from '@lobechat/agent-tracing';
+import type { LobeChatDatabase } from '@lobechat/database';
 import type {
   CollectionDiagnostics,
   OnboardingUnderstandingMessageMetadata,
@@ -8,8 +10,10 @@ import { projectOnboardingUnderstandingSessionStatus } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createUnderstandingProviderRegistry } from './providers';
-import { UnderstandingService } from './service';
+import { createUnderstandingService, UnderstandingService } from './service';
 import type { UnderstandingProvider } from './types';
+
+const { agentRuntimeConstructor } = vi.hoisted(() => ({ agentRuntimeConstructor: vi.fn() }));
 
 vi.mock('@lobechat/database', () => {
   class DomainError extends Error {}
@@ -24,13 +28,22 @@ vi.mock('@lobechat/database', () => {
     UnderstandingSessionRepository: class {},
   };
 });
-vi.mock('@/database/models/agent', () => ({ AgentModel: class {} }));
+vi.mock('@/database/models/agent', () => ({
+  AgentModel: class {
+    getBuiltinAgent = vi.fn(async () => ({ id: 'understanding-agent' }));
+  },
+}));
 vi.mock('@/database/models/message', () => ({ MessageModel: class {} }));
 vi.mock('@/database/models/topic', () => ({ TopicModel: class {} }));
 vi.mock('@/server/services/agentRuntime/AgentRuntimeService', () => ({
-  AgentRuntimeService: class {},
+  AgentRuntimeService: class {
+    constructor(...args: unknown[]) {
+      agentRuntimeConstructor(...args);
+    }
+  },
 }));
 vi.mock('@/server/services/aiAgent', () => ({ AiAgentService: class {} }));
+vi.mock('./sourceStore', () => ({ UnderstandingSourceStore: class {} }));
 
 const analysis: UnderstandingAnalysis = {
   composition: {
@@ -265,6 +278,29 @@ describe('UnderstandingService', () => {
 
   beforeEach(() => {
     harness = createHarness();
+  });
+
+  it('injects a discard snapshot store into the private understanding runtime', async () => {
+    await createUnderstandingService({
+      db: {} as LobeChatDatabase,
+      registrations: [],
+      userId: 'user',
+    });
+
+    const options = agentRuntimeConstructor.mock.calls.at(-1)?.[2] as {
+      queueService: null;
+      snapshotStore: ISnapshotStore;
+    };
+    expect(options).toMatchObject({ queueService: null, snapshotStore: expect.any(Object) });
+    const { snapshotStore } = options;
+    await expect(snapshotStore.get('trace')).resolves.toBeNull();
+    await expect(snapshotStore.getLatest()).resolves.toBeNull();
+    await expect(snapshotStore.list()).resolves.toEqual([]);
+    await expect(snapshotStore.listPartials()).resolves.toEqual([]);
+    await expect(snapshotStore.loadPartial('operation')).resolves.toBeNull();
+    await expect(snapshotStore.save({} as ExecutionSnapshot)).resolves.toBeUndefined();
+    await expect(snapshotStore.savePartial('operation', {})).resolves.toBeUndefined();
+    await expect(snapshotStore.removePartial('operation')).resolves.toBeUndefined();
   });
 
   it('initializes an empty pending session idempotently', async () => {
