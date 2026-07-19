@@ -23,10 +23,7 @@ interface SourceBranch {
   threadId: string;
 }
 
-interface SourceOutcome {
-  sourceId: string;
-  status: 'completed' | 'failed';
-}
+type SourceStatus = 'completed' | 'failed';
 
 export interface OnboardingUnderstandingWorkflowContext {
   requestPayload?: unknown;
@@ -55,9 +52,9 @@ const persistSourceFailure = async (
   service: UnderstandingService,
   payload: OnboardingUnderstandingWorkflowPayload,
   branch: SourceBranch,
-): Promise<SourceOutcome> => {
+): Promise<SourceStatus> => {
   const result = toSafeStepResult(await service.failSource(sourceIdentity(payload, branch)));
-  return { sourceId: branch.sourceId, status: result.kind === 'source' ? 'completed' : 'failed' };
+  return result.kind === 'source' ? 'completed' : 'failed';
 };
 
 const executeSource = async (
@@ -65,7 +62,7 @@ const executeSource = async (
   payload: OnboardingUnderstandingWorkflowPayload,
   branch: SourceBranch,
   launch: UnderstandingSourceLaunchReference,
-): Promise<SourceOutcome> => {
+): Promise<SourceStatus> => {
   const execution = await service.executeAgentOperation(launch.operationId);
   if (execution.status === 'error') return persistSourceFailure(service, payload, branch);
   if (execution.status !== 'done') {
@@ -78,10 +75,7 @@ const executeSource = async (
       assistantMessageId: launch.assistantMessageId,
     }),
   );
-  return {
-    sourceId: branch.sourceId,
-    status: result.kind === 'source' ? 'completed' : 'failed',
-  };
+  return result.kind === 'source' ? 'completed' : 'failed';
 };
 
 const runMerge = async (
@@ -158,48 +152,61 @@ export const runOnboardingUnderstandingWorkflow = async (
     return { attached: true };
   });
 
-  const branches = (
-    payload.mode === 'initial'
-      ? await context.run('discover', () => service.discover(payload.topicId, payload.sessionId))
-      : [
-          await context.run('retry:prepare', () =>
-            service.prepareRetry({
-              sessionId: payload.sessionId,
-              sourceId: payload.sourceId!,
-              topicId: payload.topicId,
-            }),
-          ),
-        ]
-  ).sort((left, right) => left.sourceId.localeCompare(right.sourceId));
+  let branches: SourceBranch[];
+  if (payload.mode === 'initial') {
+    await context.run('discover', async () => ({
+      sourceCount: (await service.discover(payload.topicId, payload.sessionId)).length,
+    }));
+    branches = await service.getSourceBranches(payload.topicId, payload.sessionId);
+  } else {
+    const prepared = await context.run('retry:prepare', async () => {
+      const branch = await service.prepareRetry({
+        sessionId: payload.sessionId,
+        sourceId: payload.sourceId!,
+        topicId: payload.topicId,
+      });
+      return { threadId: branch.threadId };
+    });
+    branches = [{ sourceId: payload.sourceId!, threadId: prepared.threadId }];
+  }
+  branches.sort((left, right) => left.sourceId.localeCompare(right.sourceId));
 
   const collected = await context.run('sources:collect', () =>
     Promise.all(
       branches.map(async (branch) => {
         try {
           await service.collectSource(sourceIdentity(payload, branch));
-          return { branch, collected: true as const };
+          return true;
         } catch (error) {
           if (!(error instanceof UnderstandingBranchFailureError)) throw error;
-          return { branch, collected: false as const };
+          return false;
         }
       }),
     ),
   );
 
   const launches: Array<{
-    branch: SourceBranch;
-    launch?: UnderstandingSourceLaunchReference;
+    launch?: Omit<UnderstandingSourceLaunchReference, 'sourceId'>;
   }> = [];
-  for (const [index, item] of collected.entries()) {
+  for (const [index, wasCollected] of collected.entries()) {
+    const branch = branches[index];
     launches.push(
       await context.run(`sources:launch:${index}`, async () => {
-        if (!item.collected) return { branch: item.branch };
+        if (!wasCollected) return {};
         try {
-          const launch = await service.launchSourceAnalysis(sourceIdentity(payload, item.branch));
-          return 'skipped' in launch ? { branch: item.branch } : { branch: item.branch, launch };
+          const launch = await service.launchSourceAnalysis(sourceIdentity(payload, branch));
+          if ('skipped' in launch) return {};
+          return {
+            launch: {
+              assistantMessageId: launch.assistantMessageId,
+              operationId: launch.operationId,
+              success: launch.success,
+              threadId: launch.threadId,
+            },
+          };
         } catch (error) {
           if (!(error instanceof UnderstandingBranchFailureError)) throw error;
-          return { branch: item.branch };
+          return {};
         }
       }),
     );
@@ -207,14 +214,14 @@ export const runOnboardingUnderstandingWorkflow = async (
 
   const outcomes = await context.run('sources:execute-finalize', () =>
     Promise.all(
-      launches.map(({ branch, launch }) =>
-        launch
-          ? executeSource(service, payload, branch, launch)
-          : persistSourceFailure(service, payload, branch),
-      ),
+      launches.map(async ({ launch }, index) => ({
+        index,
+        status: launch
+          ? await executeSource(service, payload, branches[index], launch)
+          : await persistSourceFailure(service, payload, branches[index]),
+      })),
     ),
   );
-  outcomes.sort((left, right) => left.sourceId.localeCompare(right.sourceId));
 
   const merge = outcomes.some(({ status }) => status === 'completed')
     ? await runMerge(context, service, payload)

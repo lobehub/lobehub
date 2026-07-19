@@ -69,6 +69,10 @@ const createService = () => {
       .mockImplementation(({ sourceId }) =>
         Promise.resolve({ kind: 'source', resultId: `${sourceId}-result` }),
       ),
+    getSourceBranches: vi.fn().mockResolvedValue([
+      { sourceId: 'github:account-1', threadId: 'thread-github' },
+      { sourceId: 'gmail:account-1', threadId: 'thread-gmail' },
+    ]),
     launchMerge: vi.fn().mockResolvedValue({
       assistantMessageId: 'message-merge',
       operationId: 'operation-merge',
@@ -170,8 +174,8 @@ describe('runOnboardingUnderstandingWorkflow', () => {
     await expect(running).resolves.toEqual({
       merge: 'completed',
       sources: [
-        { sourceId: 'github:account-1', status: 'completed' },
-        { sourceId: 'gmail:account-1', status: 'completed' },
+        { index: 0, status: 'completed' },
+        { index: 1, status: 'completed' },
       ],
     });
     expect(service.launchMerge).toHaveBeenCalledWith(
@@ -209,8 +213,8 @@ describe('runOnboardingUnderstandingWorkflow', () => {
     ).resolves.toEqual({
       merge: 'completed',
       sources: [
-        { sourceId: 'github:account-1', status: 'completed' },
-        { sourceId: 'gmail:account-1', status: 'failed' },
+        { index: 0, status: 'completed' },
+        { index: 1, status: 'failed' },
       ],
     });
     expect(service.failSource).toHaveBeenCalledWith({
@@ -246,6 +250,10 @@ describe('runOnboardingUnderstandingWorkflow', () => {
       { sourceId: 'github:account-2', threadId: 'thread-2' },
       { sourceId: 'github:account-1', threadId: 'thread-1' },
     ]);
+    service.getSourceBranches.mockResolvedValue([
+      { sourceId: 'github:account-2', threadId: 'thread-2' },
+      { sourceId: 'github:account-1', threadId: 'thread-1' },
+    ]);
     const steps: string[] = [];
 
     await runOnboardingUnderstandingWorkflow(createContext(initialPayload, steps), {
@@ -271,11 +279,9 @@ describe('runOnboardingUnderstandingWorkflow', () => {
       if (step === 'sources:launch:0') {
         steps.push(step);
         return {
-          branch: { sourceId: 'github:account-1', threadId: 'thread-github' },
           launch: {
             assistantMessageId: 'cached-message',
             operationId: 'cached-operation',
-            sourceId: 'github:account-1',
             success: true,
             threadId: 'thread-github',
           },
@@ -296,12 +302,25 @@ describe('runOnboardingUnderstandingWorkflow', () => {
     expect(service.executeAgentOperation).toHaveBeenCalledWith('cached-operation');
   });
 
-  it('keeps connector documents out of durable step outputs', async () => {
+  it('keeps source identities and connector data out of every durable and final output', async () => {
     const service = createService();
     service.collectSource.mockResolvedValue({
       sourceBrief: 'PRIVATE_CONNECTOR_DOCUMENT',
       sourceCount: 1,
     });
+    service.getSourceBranches.mockResolvedValue([
+      { sourceId: 'github:account-1', threadId: 'opaque-thread-0' },
+      { sourceId: 'gmail:account-1', threadId: 'opaque-thread-1' },
+    ]);
+    service.launchSourceAnalysis.mockImplementation(({ sourceId, threadId }) =>
+      Promise.resolve({
+        assistantMessageId: `opaque-message-${threadId.at(-1)}`,
+        operationId: `opaque-operation-${threadId.at(-1)}`,
+        sourceId,
+        success: true,
+        threadId,
+      }),
+    );
     const durableOutputs: unknown[] = [];
     const context = createContext(initialPayload);
     context.run = async <T>(_step: string, handler: () => Promise<T>) => {
@@ -310,9 +329,20 @@ describe('runOnboardingUnderstandingWorkflow', () => {
       return output;
     };
 
-    await runOnboardingUnderstandingWorkflow(context, { createService: async () => service });
+    const result = await runOnboardingUnderstandingWorkflow(context, {
+      createService: async () => service,
+    });
 
-    expect(JSON.stringify(durableOutputs)).not.toContain('PRIVATE_CONNECTOR_DOCUMENT');
+    const serialized = JSON.stringify({ durableOutputs, result });
+    for (const forbidden of [
+      'github',
+      'gmail',
+      'account-1',
+      'PRIVATE_CONNECTOR_DOCUMENT',
+      'analysis',
+    ]) {
+      expect(serialized).not.toContain(forbidden);
+    }
   });
 
   it('fails a merge with the thread returned by its launch', async () => {

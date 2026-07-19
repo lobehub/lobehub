@@ -340,6 +340,9 @@ export class UnderstandingService {
     return this.branches(installed);
   };
 
+  getSourceBranches = async (topicId: string, sessionId: string) =>
+    this.branches(await this.activeSession(topicId, sessionId));
+
   collectSource = async (input: SourceIdentity) => {
     const run = await this.sourceRun(input);
     const runtime = await this.dependencies.workflowRuntime();

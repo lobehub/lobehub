@@ -436,6 +436,14 @@ describe('UnderstandingService', () => {
     expect(JSON.stringify(harness.session())).not.toContain('private oauth error');
   });
 
+  it('reads source branches from the DB core without loading workflow dependencies', async () => {
+    const { branches, session } = await initializeAndDiscover(harness);
+    vi.clearAllMocks();
+
+    await expect(harness.service.getSourceBranches('topic', session.id)).resolves.toEqual(branches);
+    expect(harness.dependencies.workflowRuntime).not.toHaveBeenCalled();
+  });
+
   it('makes empty discovery terminal and replayable without querying providers again', async () => {
     vi.mocked(harness.github.discoverSources).mockResolvedValueOnce([]);
     vi.mocked(harness.gmail.discoverSources).mockResolvedValueOnce([]);
