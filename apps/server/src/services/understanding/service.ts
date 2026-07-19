@@ -342,27 +342,15 @@ export class UnderstandingService {
     input: SourceIdentity,
   ): Promise<UnderstandingSourceLaunchReference | UnderstandingSourceLaunchSkipped> => {
     const run = await this.sourceRun(input);
+    if (run.assistantMessageId) {
+      return { skipped: true, sourceId: input.sourceId, threadId: input.threadId };
+    }
     const payload = await this.dependencies.sourceStore.get({
       ...input,
       userId: this.dependencies.context.userId,
     });
     if (!payload) throw new Error('Understanding source payload is unavailable');
-    let claimed = false;
-    await this.dependencies.sessions.update(input.topicId, input.sessionId, (session) => ({
-      ...session,
-      runs: session.runs.map((current) => {
-        if (current.source.id !== input.sourceId) return current;
-        if (current.threadId !== input.threadId) {
-          throw new StaleUnderstandingRunError('source', input.threadId);
-        }
-        if (current.status !== 'pending') return current;
-        claimed = true;
-        return { ...current, status: 'running' as const };
-      }),
-    }));
-    if (!claimed) {
-      return { skipped: true, sourceId: input.sourceId, threadId: input.threadId };
-    }
+    // Upstash serializes and replays this named launch step; the persisted pointer marks completion.
     await this.dependencies.results.ensureThread({
       agentId: this.dependencies.agentId,
       kind: 'source',
@@ -416,10 +404,9 @@ export class UnderstandingService {
     });
     const diagnostics = payload?.diagnostics ?? emptyDiagnostics();
     let metadata: UnderstandingSourceResult;
+    const content = await this.dependencies.messages.readContent(input.assistantMessageId);
     try {
-      const analysis = parseAnalysis(
-        await this.dependencies.messages.readContent(input.assistantMessageId),
-      );
+      const analysis = parseAnalysis(content);
       metadata = {
         analysis,
         diagnostics,
@@ -526,7 +513,10 @@ export class UnderstandingService {
       };
     });
     const merge = session.mergeRun!;
-    if (!claimed) return { skipped: true, threadId: merge.threadId };
+    if (!claimed && merge.threadId !== requestedThreadId) {
+      return { skipped: true, threadId: merge.threadId };
+    }
+    if (merge.assistantMessageId) return { skipped: true, threadId: merge.threadId };
 
     const materials = await this.completedMaterials(topicId, sessionId, session);
     const diagnostics = combineDiagnostics(materials.map(({ result }) => result.diagnostics));
@@ -587,11 +577,9 @@ export class UnderstandingService {
       result.kind === 'source' ? [result.analysis] : [],
     );
     let metadata: UnderstandingMergedResult;
+    const content = await this.dependencies.messages.readContent(input.assistantMessageId);
     try {
-      const analysis = reconcileMergedPronoun(
-        parseAnalysis(await this.dependencies.messages.readContent(input.assistantMessageId)),
-        sources,
-      );
+      const analysis = reconcileMergedPronoun(parseAnalysis(content), sources);
       metadata = {
         analysis,
         diagnostics,
@@ -770,6 +758,10 @@ export class UnderstandingService {
     if (!result || result.resultId !== run.resultId) {
       throw new Error('Understanding source result is unavailable');
     }
+    await this.dependencies.sourceStore.deleteSourcePayload({
+      ...input,
+      userId: this.dependencies.context.userId,
+    });
     return result;
   };
 
@@ -805,15 +797,16 @@ export class UnderstandingService {
   private recoverSource = async (reference: UnderstandingSourceRef) => {
     const provider = this.dependencies.registry.get(reference.provider);
     if (!provider) throw new Error('Understanding source provider is unavailable');
-    const candidates = await provider.discoverSources(this.dependencies.context);
-    for (const candidate of candidates) {
-      const resolved = await provider.resolveSource(
-        reference,
-        candidate,
-        this.dependencies.context,
-      );
-      if (resolved) return resolved;
-    }
+    const discovery = await discoverUnderstandingSources(
+      { get: (id) => (id === provider.id ? provider : undefined), list: () => [provider] },
+      this.dependencies.context,
+    );
+    const resolved = discovery.sources.find(
+      (source) =>
+        source.provider === reference.provider &&
+        source.externalAccountId === reference.externalAccountId,
+    );
+    if (resolved) return resolved;
     throw new Error('Understanding source credential is unavailable');
   };
 

@@ -365,6 +365,46 @@ describe('UnderstandingService', () => {
     expect(harness.gmail.discoverSources).not.toHaveBeenCalled();
   });
 
+  it('uses ranked discovery fallback when the first recovery candidate cannot be identified', async () => {
+    const { branches, session } = await initializeAndDiscover(harness);
+    const branch = branches.find(({ sourceId }) => sourceId.startsWith('github'))!;
+    harness.locators.delete(branch.sourceId);
+    vi.mocked(harness.github.discoverSources).mockResolvedValueOnce([
+      {
+        candidateId: 'candidate-broken',
+        credentialOrigin: 'auth_account',
+        credentialReference: 'broken-reference',
+        provider: 'github',
+      },
+      {
+        candidateId: 'candidate-valid',
+        credentialOrigin: 'connector',
+        credentialReference: 'valid-reference',
+        provider: 'github',
+      },
+    ]);
+    vi.mocked(harness.github.identifySource).mockImplementation(async (candidate) => {
+      if (candidate.candidateId === 'candidate-broken') throw new Error('expired credential');
+      return {
+        credential: { token: 'current-secret' },
+        displayName: 'github account',
+        externalAccountId: 'github-user',
+        grantedScopes: [],
+      };
+    });
+
+    await harness.service.collectSource({
+      ...branch,
+      sessionId: session.id,
+      topicId: 'topic',
+    });
+
+    expect(harness.github.collect).toHaveBeenCalledWith(
+      expect.objectContaining({ candidateId: 'candidate-valid' }),
+      { userId: 'user' },
+    );
+  });
+
   it('fences an old retry thread from collection', async () => {
     const { branches, session } = await initializeAndDiscover(harness);
     const branch = branches[0];
@@ -404,20 +444,42 @@ describe('UnderstandingService', () => {
     expect(harness.session().runs[0]).not.toHaveProperty('operationId');
   });
 
-  it('allows only one concurrent source launch for the exact pending thread', async () => {
+  it('retries an incomplete source launch and skips after its assistant pointer is stored', async () => {
     const { branches, session } = await initializeAndDiscover(harness);
     const input = { ...branches[0], sessionId: session.id, topicId: 'topic' };
     await harness.service.collectSource(input);
+    harness.execAgent.mockRejectedValueOnce(new Error('launch transport failed'));
 
-    const launches = await Promise.all([
-      harness.service.launchSourceAnalysis(input),
-      harness.service.launchSourceAnalysis(input),
-    ]);
+    await expect(harness.service.launchSourceAnalysis(input)).rejects.toThrow(
+      'launch transport failed',
+    );
+    expect(harness.session().runs[0]).not.toHaveProperty('assistantMessageId');
+    const launch = requireLaunch(await harness.service.launchSourceAnalysis(input));
+    const replay = await harness.service.launchSourceAnalysis(input);
 
-    expect(launches.filter((launch) => 'skipped' in launch)).toEqual([
-      { skipped: true, sourceId: input.sourceId, threadId: input.threadId },
-    ]);
-    expect(harness.execAgent).toHaveBeenCalledOnce();
+    expect(launch).toMatchObject({ success: true });
+    expect(replay).toEqual({
+      skipped: true,
+      sourceId: input.sourceId,
+      threadId: input.threadId,
+    });
+    expect(harness.execAgent).toHaveBeenCalledTimes(2);
+  });
+
+  it('propagates source message transport failures instead of persisting invalid output', async () => {
+    const { branches, session } = await initializeAndDiscover(harness);
+    const input = { ...branches[0], sessionId: session.id, topicId: 'topic' };
+    await harness.service.collectSource(input);
+    const launch = requireLaunch(await harness.service.launchSourceAnalysis(input));
+    harness.dependencies.messages.readContent.mockRejectedValueOnce(new Error('database offline'));
+
+    await expect(
+      harness.service.finalizeSource({
+        ...input,
+        assistantMessageId: launch.assistantMessageId,
+      }),
+    ).rejects.toThrow('database offline');
+    expect(harness.dependencies.results.finalizeSource).not.toHaveBeenCalled();
   });
 
   it('finalizes valid and invalid source output and deletes terminal payloads', async () => {
@@ -431,10 +493,16 @@ describe('UnderstandingService', () => {
     harness.contents.set(firstLaunch.assistantMessageId, JSON.stringify(analysis));
     harness.contents.set(secondLaunch.assistantMessageId, 'not json');
 
-    const sourceResult = await harness.service.finalizeSource({
-      ...first,
-      assistantMessageId: firstLaunch.assistantMessageId,
-    });
+    harness.dependencies.sourceStore.deleteSourcePayload.mockRejectedValueOnce(
+      new Error('redis offline'),
+    );
+    await expect(
+      harness.service.finalizeSource({
+        ...first,
+        assistantMessageId: firstLaunch.assistantMessageId,
+      }),
+    ).rejects.toThrow('redis offline');
+    const sourceResult = harness.storedResults.get(firstLaunch.assistantMessageId)!;
     const sourceError = await harness.service.finalizeSource({
       ...second,
       assistantMessageId: secondLaunch.assistantMessageId,
@@ -458,11 +526,17 @@ describe('UnderstandingService', () => {
   it('persists a stable source failure even before an agent launch', async () => {
     const { branches, session } = await initializeAndDiscover(harness);
     const input = { ...branches[0], sessionId: session.id, topicId: 'topic' };
+    harness.dependencies.sourceStore.deleteSourcePayload.mockRejectedValueOnce(
+      new Error('redis offline'),
+    );
 
-    const result = await harness.service.failSource(input);
+    await expect(harness.service.failSource(input)).rejects.toThrow('redis offline');
+    const result = harness.storedResults.get('id-4');
+    await expect(harness.service.failSource(input)).resolves.toBe(result);
 
     expect(result).toMatchObject({ kind: 'source_error', resultId: 'id-4' });
     expect(harness.dependencies.results.ensureThread).toHaveBeenCalled();
+    expect(harness.dependencies.results.finalizeSource).toHaveBeenCalledOnce();
   });
 
   it('allows one merge launcher, finalizes it, and preserves an explicit source pronoun', async () => {
@@ -477,18 +551,32 @@ describe('UnderstandingService', () => {
         assistantMessageId: launch.assistantMessageId,
       });
     }
-    const [launch, loser] = await Promise.all([
-      harness.service.launchMerge('topic', session.id, 'merge-thread'),
-      harness.service.launchMerge('topic', session.id, 'merge-thread'),
-    ]);
+    harness.execAgent.mockRejectedValueOnce(new Error('merge launch transport failed'));
+    await expect(harness.service.launchMerge('topic', session.id, 'merge-thread')).rejects.toThrow(
+      'merge launch transport failed',
+    );
+    const differentThread = await harness.service.launchMerge('topic', session.id, 'other-thread');
+    const launch = await harness.service.launchMerge('topic', session.id, 'merge-thread');
+    const loser = await harness.service.launchMerge('topic', session.id, 'merge-thread');
+    expect(differentThread).toEqual({ skipped: true, threadId: 'merge-thread' });
     expect(loser).toEqual({ skipped: true, threadId: 'merge-thread' });
-    expect(harness.execAgent).toHaveBeenCalledTimes(3);
+    expect(harness.execAgent).toHaveBeenCalledTimes(4);
     if ('skipped' in launch) throw new Error('expected merge launch');
     harness.contents.set(
       launch.assistantMessageId,
       JSON.stringify({ ...analysis, profile: { ...analysis.profile, pronoun: 'non-specific' } }),
     );
 
+    harness.dependencies.messages.readContent.mockRejectedValueOnce(new Error('database offline'));
+    await expect(
+      harness.service.finalizeMerge({
+        assistantMessageId: launch.assistantMessageId,
+        sessionId: session.id,
+        threadId: launch.threadId,
+        topicId: 'topic',
+      }),
+    ).rejects.toThrow('database offline');
+    expect(harness.dependencies.results.finalizeMerge).not.toHaveBeenCalled();
     const result = await harness.service.finalizeMerge({
       assistantMessageId: launch.assistantMessageId,
       sessionId: session.id,
