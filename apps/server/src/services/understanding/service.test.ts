@@ -119,6 +119,7 @@ const createHarness = () => {
     confirmation: { confirm: confirmation },
     context: { userId: 'user' },
     ids: () => `id-${++sequence}`,
+    launches: { findByThread: vi.fn(async () => undefined) },
     messages: { readContent: vi.fn(async (id: string) => contents.get(id)) },
     operations: { findById: vi.fn(async () => ({ status: 'running' })) },
     registry: createUnderstandingProviderRegistry([github, gmail]),
@@ -466,6 +467,31 @@ describe('UnderstandingService', () => {
     expect(harness.execAgent).toHaveBeenCalledTimes(2);
   });
 
+  it('recovers a durable source launch before and after its session pointer is attached', async () => {
+    const { branches, session } = await initializeAndDiscover(harness);
+    const input = { ...branches[0], sessionId: session.id, topicId: 'topic' };
+    await harness.service.collectSource(input);
+    harness.dependencies.launches.findByThread.mockResolvedValue({
+      assistantMessageId: 'durable-source-message',
+      operationId: 'durable-source-operation',
+      status: 'running',
+    });
+
+    const recovered = await harness.service.launchSourceAnalysis(input);
+    const acknowledged = await harness.service.launchSourceAnalysis(input);
+
+    expect(recovered).toEqual({
+      assistantMessageId: 'durable-source-message',
+      operationId: 'durable-source-operation',
+      sourceId: input.sourceId,
+      success: true,
+      threadId: input.threadId,
+    });
+    expect(acknowledged).toEqual(recovered);
+    expect(harness.session().runs[0].assistantMessageId).toBe('durable-source-message');
+    expect(harness.execAgent).not.toHaveBeenCalled();
+  });
+
   it('propagates source message transport failures instead of persisting invalid output', async () => {
     const { branches, session } = await initializeAndDiscover(harness);
     const input = { ...branches[0], sessionId: session.id, topicId: 'topic' };
@@ -626,6 +652,46 @@ describe('UnderstandingService', () => {
       }),
     ).resolves.toBe(failed);
     expect(harness.dependencies.results.finalizeMerge).toHaveBeenCalledOnce();
+  });
+
+  it('recovers a durable merge launch before and after its session pointer is attached', async () => {
+    const { branches, session } = await initializeAndDiscover(harness);
+    for (const branch of branches) {
+      const input = { ...branch, sessionId: session.id, topicId: 'topic' };
+      await harness.service.collectSource(input);
+      const launch = requireLaunch(await harness.service.launchSourceAnalysis(input));
+      harness.contents.set(launch.assistantMessageId, JSON.stringify(analysis));
+      await harness.service.finalizeSource({
+        ...input,
+        assistantMessageId: launch.assistantMessageId,
+      });
+    }
+    harness.dependencies.launches.findByThread.mockResolvedValue({
+      assistantMessageId: 'durable-merge-message',
+      operationId: 'durable-merge-operation',
+      status: 'done',
+    });
+
+    const recovered = await harness.service.launchMerge(
+      'topic',
+      session.id,
+      'durable-merge-thread',
+    );
+    const acknowledged = await harness.service.launchMerge(
+      'topic',
+      session.id,
+      'durable-merge-thread',
+    );
+
+    expect(recovered).toEqual({
+      assistantMessageId: 'durable-merge-message',
+      operationId: 'durable-merge-operation',
+      success: true,
+      threadId: 'durable-merge-thread',
+    });
+    expect(acknowledged).toEqual(recovered);
+    expect(harness.session().mergeRun?.assistantMessageId).toBe('durable-merge-message');
+    expect(harness.execAgent).toHaveBeenCalledTimes(2);
   });
 
   it('polls progressively without writes and delegates confirmation directly', async () => {

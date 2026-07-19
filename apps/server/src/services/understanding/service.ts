@@ -31,11 +31,13 @@ import {
   RequestTrigger,
   UnderstandingAnalysisSchema,
 } from '@lobechat/types';
+import { and, desc, eq, isNull } from 'drizzle-orm';
 
 import { AgentModel } from '@/database/models/agent';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { MessageModel } from '@/database/models/message';
 import { TopicModel } from '@/database/models/topic';
+import { agentOperations, messages } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { AiAgentService } from '@/server/services/aiAgent';
 
@@ -132,6 +134,13 @@ interface UnderstandingServiceDependencies {
   confirmation: { confirm: (input: ConfirmOnboardingUnderstandingInput) => Promise<unknown> };
   context: UnderstandingProviderContext;
   ids: () => string;
+  launches: {
+    findByThread: (input: {
+      agentId: string;
+      threadId: string;
+      topicId: string;
+    }) => Promise<{ assistantMessageId: string; operationId: string; status: string } | undefined>;
+  };
   messages: { readContent: (assistantMessageId: string) => Promise<unknown> };
   operations: { findById: (operationId: string) => Promise<{ status: string } | null> };
   registry: UnderstandingProviderRegistry;
@@ -342,6 +351,32 @@ export class UnderstandingService {
     input: SourceIdentity,
   ): Promise<UnderstandingSourceLaunchReference | UnderstandingSourceLaunchSkipped> => {
     const run = await this.sourceRun(input);
+    const recovered = await this.dependencies.launches.findByThread({
+      agentId: this.dependencies.agentId,
+      threadId: input.threadId,
+      topicId: input.topicId,
+    });
+    if (recovered) {
+      if (run.assistantMessageId && run.assistantMessageId !== recovered.assistantMessageId) {
+        throw new Error('Understanding source launch does not match its active run');
+      }
+      if (!run.assistantMessageId) {
+        await this.dependencies.sessions.updateSourceRun(
+          input.topicId,
+          input.sessionId,
+          input.sourceId,
+          input.threadId,
+          { assistantMessageId: recovered.assistantMessageId, status: 'running' },
+        );
+      }
+      return {
+        assistantMessageId: recovered.assistantMessageId,
+        operationId: recovered.operationId,
+        sourceId: input.sourceId,
+        success: true,
+        threadId: input.threadId,
+      };
+    }
     if (run.assistantMessageId) {
       return { skipped: true, sourceId: input.sourceId, threadId: input.threadId };
     }
@@ -515,6 +550,38 @@ export class UnderstandingService {
     const merge = session.mergeRun!;
     if (!claimed && merge.threadId !== requestedThreadId) {
       return { skipped: true, threadId: merge.threadId };
+    }
+    const recovered = await this.dependencies.launches.findByThread({
+      agentId: this.dependencies.agentId,
+      threadId: merge.threadId,
+      topicId,
+    });
+    if (recovered) {
+      if (merge.assistantMessageId && merge.assistantMessageId !== recovered.assistantMessageId) {
+        throw new Error('Understanding merge launch does not match its active run');
+      }
+      if (!merge.assistantMessageId) {
+        await this.dependencies.sessions.update(topicId, sessionId, (current) => {
+          const currentMerge = current.mergeRun;
+          if (currentMerge?.threadId !== merge.threadId) {
+            throw new StaleUnderstandingRunError('merge', merge.threadId);
+          }
+          return {
+            ...current,
+            mergeRun: {
+              ...currentMerge,
+              assistantMessageId: recovered.assistantMessageId,
+              status: 'running' as const,
+            },
+          };
+        });
+      }
+      return {
+        assistantMessageId: recovered.assistantMessageId,
+        operationId: recovered.operationId,
+        success: true,
+        threadId: merge.threadId,
+      };
     }
     if (merge.assistantMessageId) return { skipped: true, threadId: merge.threadId };
 
@@ -882,6 +949,43 @@ export const createUnderstandingService = async ({
     confirmation: new UnderstandingConfirmationRepository(db, userId),
     context,
     ids: randomUUID,
+    launches: {
+      findByThread: async ({ agentId, threadId, topicId }) => {
+        const [operation] = await db
+          .select({ operationId: agentOperations.id, status: agentOperations.status })
+          .from(agentOperations)
+          .where(
+            and(
+              eq(agentOperations.userId, userId),
+              isNull(agentOperations.workspaceId),
+              eq(agentOperations.agentId, agentId),
+              eq(agentOperations.topicId, topicId),
+              eq(agentOperations.threadId, threadId),
+              eq(agentOperations.trigger, RequestTrigger.Onboarding),
+            ),
+          )
+          .orderBy(desc(agentOperations.createdAt))
+          .limit(1);
+        if (!operation) return;
+        const [message] = await db
+          .select({ assistantMessageId: messages.id })
+          .from(messages)
+          .where(
+            and(
+              eq(messages.userId, userId),
+              isNull(messages.workspaceId),
+              eq(messages.agentId, agentId),
+              eq(messages.topicId, topicId),
+              eq(messages.threadId, threadId),
+              eq(messages.role, 'assistant'),
+            ),
+          )
+          .orderBy(desc(messages.createdAt))
+          .limit(1);
+        if (!message) return;
+        return { ...message, ...operation };
+      },
+    },
     messages: {
       readContent: async (assistantMessageId) =>
         (await messageModel.findById(assistantMessageId))?.content,
