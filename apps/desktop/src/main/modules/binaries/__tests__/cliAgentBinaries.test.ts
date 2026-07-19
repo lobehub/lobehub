@@ -170,6 +170,20 @@ describe('cliAgentBinaries', () => {
       platformMock.mockReturnValue('darwin');
     });
 
+    it('detects OpenCode through the shared command/version probe', async () => {
+      callExecFile('/Users/test/.opencode/bin/opencode\n');
+      callExecFile('1.18.3');
+
+      const { opencodeBinary } = await import('../cliAgentBinaries');
+      const status = await opencodeBinary.detect();
+
+      expect(status).toMatchObject({
+        available: true,
+        path: '/Users/test/.opencode/bin/opencode',
+        version: '1.18.3',
+      });
+    });
+
     it('runs the binary directly via execFile (no shell)', async () => {
       callExecFile('/usr/local/bin/claude\n');
       callExecFile('1.2.3 (Claude Code)');

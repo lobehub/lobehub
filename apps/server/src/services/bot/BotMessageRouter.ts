@@ -567,6 +567,37 @@ export class BotMessageRouter {
      */
     const watchKeywordEntries = extractWatchKeywordEntries(info.settings);
     const watchKeywords: ReadonlyArray<string> = watchKeywordEntries.map((e) => e.keyword);
+
+    /**
+     * Watch-keyword wakes ride on passive channel monitoring, which is a
+     * gated feature (`messageMonitoring` — see the business featureAccess
+     * slot). Checked lazily, only when a keyword (not a mention / DM /
+     * command) is the sole wake reason, so access changes take effect on
+     * the next message without any cache invalidation. Mentions, DMs,
+     * replies, and commands never hit this gate.
+     */
+    const isMessageMonitoringAllowed = async (
+      caller: string,
+      threadId: string,
+    ): Promise<boolean> => {
+      const access = await getBotFeatureAccessState({
+        action: 'runtime',
+        applicationId,
+        feature: 'messageMonitoring',
+        platform,
+        userId,
+        workspaceId: workspaceId ?? undefined,
+      });
+      if (access.allowed) return true;
+      log(
+        '%s: watch-keyword wake dropped (messageMonitoring not allowed), agent=%s, platform=%s, thread=%s',
+        caller,
+        agentId,
+        platform,
+        threadId,
+      );
+      return false;
+    };
     /**
      * The provider's owner platform user ID. Only consulted under the
      * `pairing` policy, where the gate gives the owner a free pass so they
@@ -1166,6 +1197,7 @@ export class BotMessageRouter {
       }
 
       if (matchesWatchKeyword && !isAddressedToBot && !isCommand) {
+        if (!(await isMessageMonitoringAllowed('onSubscribedMessage', thread.id))) return;
         log(
           'onSubscribedMessage: keyword match wakes bot, agent=%s, platform=%s, author=%s, thread=%s, keywords=%o',
           agentId,
@@ -1347,6 +1379,11 @@ export class BotMessageRouter {
         if (!(isDM && dmCatchAllEnabled) && !matchesWatchKeyword) return;
 
         if (matchesWatchKeyword) {
+          if (
+            !(await isMessageMonitoringAllowed(`onNewMessage (${platform} catch-all)`, thread.id))
+          ) {
+            return;
+          }
           log(
             'onNewMessage (%s catch-all): keyword match wakes bot in channel, agent=%s, author=%s, thread=%s, keywords=%o',
             platform,

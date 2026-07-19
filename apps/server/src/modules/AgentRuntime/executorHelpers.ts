@@ -1,10 +1,17 @@
 import { type AgentState } from '@lobechat/agent-runtime';
 import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
+import { dispatchWorkRegistrationIntent } from '@lobechat/builtin-tools/workRegistration';
+import { resolveSubAgentModel } from '@lobechat/const';
 import { type OperationToolSet } from '@lobechat/context-engine';
 import { type ToolType } from '@lobechat/observability-otel/modules/agent-runtime';
-import { type ChatToolPayload } from '@lobechat/types';
+import {
+  type ChatToolPayload,
+  type LobeAgentConfig,
+  type WorkRegistrationIntent,
+} from '@lobechat/types';
 import debug from 'debug';
 
+import { WorkModel } from '@/database/models/work';
 import { type LobeChatDatabase } from '@/database/type';
 import { FileService } from '@/server/services/file';
 import {
@@ -13,6 +20,7 @@ import {
   type ToolExecutionResultResponse,
 } from '@/server/services/toolExecution';
 import { archiveToolResultIfNeeded } from '@/server/services/toolExecution/archiveToolResult';
+import { buildWorkVersionCumulativeUsage } from '@/utils/workCumulativeUsage';
 
 import { type RuntimeExecutorContext } from './context';
 
@@ -66,6 +74,87 @@ export const archiveRuntimeToolResult = async (
   return archive.content === result.content ? result : { ...result, content: archive.content };
 };
 
+/**
+ * Persist a Work version from the executor's registration intent, stamping the
+ * tool call's cumulative cost/usage onto the row at insert time. Replaces the
+ * old "register cost-less in the executor, back-fill cost later" two-step: the
+ * executor now only resolves the intent, and the runtime writes it once here,
+ * after `accumulateTool` has computed the cumulative cost.
+ *
+ * Thin server wrapper around the shared {@link dispatchWorkRegistrationIntent}:
+ * builds `WorkModel`-backed ports (all five, incl. `deleteDocumentWork`) and
+ * per-call provenance, then delegates all branch logic.
+ *
+ * Best-effort: any failure is swallowed so Work bookkeeping never breaks the
+ * tool result. Runs AFTER `tool_end` publishes (cost is known only then), so
+ * the Work row becomes durable slightly later than the tool_end event — the
+ * conversation view self-heals from the tool message metadata; the works
+ * sidebar refresh gap is tracked as a follow-up.
+ */
+export const registerWorkFromIntent = async ({
+  agentId,
+  intent,
+  rootOperationId,
+  serverDB,
+  sourceMessageId,
+  sourceToolCallId,
+  sourceToolIdentifier,
+  sourceToolName,
+  state,
+  threadId,
+  topicId,
+  userId,
+  workspaceId,
+}: {
+  agentId?: string | null;
+  intent: WorkRegistrationIntent;
+  rootOperationId?: string;
+  serverDB: LobeChatDatabase;
+  sourceMessageId?: string;
+  sourceToolCallId?: string;
+  /** Tool/plugin identifier supplied by the runtime event that produced this version. */
+  sourceToolIdentifier: string;
+  /** Runtime event's concrete tool name; skills may override it with their own toolName. */
+  sourceToolName: string;
+  state: Pick<AgentState, 'cost' | 'usage'>;
+  threadId?: string | null;
+  topicId?: string;
+  userId?: string;
+  workspaceId?: string;
+}) => {
+  if (!userId) return;
+
+  const cumulative = buildWorkVersionCumulativeUsage({ cost: state.cost, usage: state.usage });
+
+  try {
+    const workModel = new WorkModel(serverDB, userId, workspaceId);
+
+    await dispatchWorkRegistrationIntent(
+      intent,
+      {
+        deleteDocumentWork: (params) => workModel.deleteDocumentWork(params),
+        deleteTaskWork: (params) => workModel.deleteTaskWork(params),
+        handleSkillToolResult: (params) => workModel.handleSkillToolResult(params),
+        registerDocument: (params) => workModel.registerDocument(params),
+        registerTask: (params) => workModel.registerTask(params),
+      },
+      {
+        agentId,
+        ...cumulative,
+        messageId: sourceMessageId,
+        rootOperationId,
+        threadId,
+        toolCallId: sourceToolCallId,
+        toolIdentifier: sourceToolIdentifier,
+        toolName: sourceToolName,
+        topicId,
+      },
+    );
+  } catch (error) {
+    log('registerWorkFromIntent failed for toolCallId=%s: %O', sourceToolCallId, error);
+  }
+};
+
 // Builds a postProcessUrl callback that resolves keys in file-backed fields
 // (imageList, videoList, fileList) to externally accessible URLs. Must be
 // passed to every messageModel.query() call whose output is later fed to the
@@ -115,8 +204,22 @@ export const buildServerVirtualSubAgentRunner = (
   const topicId = ctx.topicId ?? state.metadata?.topicId;
   if (!agentId || !topicId) return undefined;
 
+  const parentAgentConfig = state.metadata?.agentConfig as LobeAgentConfig | undefined;
+
   return {
     run: async ({ agentId: targetAgentId, description, instruction, timeout }) => {
+      // This runner serves two tools, and only one of them may swap the model:
+      //   - `callSubAgent` names no agent, so the child is an anonymous clone of
+      //     the parent — it takes the parent's `agencyConfig.subagent` model.
+      //   - `callAgent` names an existing agent, which carries a model the user
+      //     configured on it. Overriding that would discard a deliberate choice,
+      //     the same way forcing a group member onto the sub-agent default would.
+      // Resolved here at the spawn site so the execution side never has to
+      // re-derive it from the parent config.
+      const subAgentModel = targetAgentId
+        ? undefined
+        : resolveSubAgentModel(parentAgentConfig?.agencyConfig?.subagent);
+
       // 1. Create the pending placeholder tool message (mirrors the normal
       //    tool-message shape in call_tool) that anchors the isolation thread
       //    and renders a loading state until the bridge backfills it.
@@ -140,8 +243,10 @@ export const buildServerVirtualSubAgentRunner = (
         agentId: targetAgentId ?? agentId,
         groupId: state.metadata?.groupId ?? undefined,
         instruction,
+        model: subAgentModel?.model,
         parentMessageId: placeholder.id,
         parentOperationId: ctx.operationId,
+        provider: subAgentModel?.provider,
         timeout,
         title: description,
         topicId,
@@ -174,6 +279,7 @@ export const buildServerVirtualSubAgentRunner = (
         started: true,
         subOperationId: result?.operationId,
         threadId: result?.threadId ?? '',
+        toolMessageId: placeholder.id,
       };
     },
   };

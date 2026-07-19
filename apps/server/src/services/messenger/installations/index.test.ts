@@ -17,6 +17,11 @@ vi.mock('./discord', () => ({
   DiscordInstallationStore: vi.fn().mockImplementation(() => ({ kind: 'discord' })),
 }));
 
+vi.mock('./wechat', () => ({
+  WechatInstallationStore: vi.fn().mockImplementation(() => ({ kind: 'wechat' })),
+  wechatInstallationKey: (tenantId: string) => `wechat:${tenantId}`,
+}));
+
 describe('getInstallationStore', () => {
   it('returns the slack store for platform=slack', () => {
     const store = getInstallationStore('slack');
@@ -31,6 +36,11 @@ describe('getInstallationStore', () => {
   it('returns the discord store for platform=discord', () => {
     const store = getInstallationStore('discord');
     expect(store).toEqual({ kind: 'discord' });
+  });
+
+  it('returns the wechat store for platform=wechat', () => {
+    const store = getInstallationStore('wechat');
+    expect(store).toEqual({ kind: 'wechat' });
   });
 
   it('memoizes the store across calls (one instance per process)', async () => {
@@ -68,6 +78,16 @@ describe('messengerConnectionIdForUser', () => {
     expect(messengerConnectionIdForUser({ installationKey: 'slack:T0123', userId: 'u_abc' })).toBe(
       'messenger:slack:T0123:user-u_abc',
     );
+  });
+
+  it('preserves the WeChat user tenant for per-user polling installs', () => {
+    expect(
+      messengerConnectionIdForUser({
+        connectionMode: 'polling',
+        installationKey: 'wechat:alice@im.wechat',
+        userId: 'u_abc',
+      }),
+    ).toBe('messenger:wechat:alice@im.wechat:user-u_abc');
   });
 
   it('routes to the singleton connectionId when websocket mode + singleton install (discord)', () => {

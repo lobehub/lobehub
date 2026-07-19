@@ -415,10 +415,6 @@ export const WORKSPACE_ROLE_PERMISSIONS: Record<WorkspaceSystemRoleName, readonl
     `${action('AI_MODEL_READ')}:all`,
     `${action('AI_MODEL_INVOKE')}:all`,
     `${action('AI_PROVIDER_READ')}:all`,
-    `${action('API_KEY_READ')}:owner`,
-    `${action('API_KEY_CREATE')}:owner`,
-    `${action('API_KEY_UPDATE')}:owner`,
-    `${action('API_KEY_DELETE')}:owner`,
   ],
   [WORKSPACE_SYSTEM_ROLES.VIEWER]: [
     // Read-only across the board

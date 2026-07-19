@@ -12,6 +12,8 @@ import { type AsyncTaskError } from '@/types/asyncTask';
 import { AsyncTaskStatus } from '@/types/asyncTask';
 import { type Generation } from '@/types/generation';
 
+import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
+
 const generationProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
   const wsId = ctx.workspaceId ?? undefined;
@@ -36,6 +38,11 @@ export const generationRouter = router({
     .use(withScopedPermission('file:delete'))
     .input(z.object({ generationId: z.string() }))
     .mutation(async ({ ctx, input }) => {
+      const generation = await ctx.generationModel.findById(input.generationId);
+      // Missing row → keep the delete idempotent, nothing to authorize.
+      if (!generation) return;
+      assertWorkspaceRowManageable(ctx, generation.userId, 'generation');
+
       // Delete the generation record from database and get the deleted data
       const deletedGeneration = await ctx.generationModel.delete(input.generationId);
 

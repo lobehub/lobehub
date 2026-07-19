@@ -4,7 +4,6 @@ import { OFFICIAL_URL } from '@lobechat/const';
 import {
   Avatar,
   Block,
-  Button,
   Center,
   Flexbox,
   Icon,
@@ -14,7 +13,7 @@ import {
   TextArea,
   Tooltip,
 } from '@lobehub/ui';
-import { Tabs } from '@lobehub/ui/base-ui';
+import { Button, Tabs } from '@lobehub/ui/base-ui';
 import type { TableColumnsType, UploadProps } from 'antd';
 import { App, Input as AntInput, Table, Upload } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';

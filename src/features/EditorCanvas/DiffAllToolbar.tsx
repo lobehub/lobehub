@@ -148,7 +148,6 @@ const DiffAllToolbar = memo<DiffAllToolbarProps>(({ documentId, editor }) => {
             {t('modifier.rejectAll')}
           </Button>
           <Button
-            color={'default'}
             size={'small'}
             type="fill"
             onClick={async () => {

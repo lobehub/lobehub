@@ -8,6 +8,8 @@ import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { FileService } from '@/server/services/file';
 import { getVideoAvgLatency } from '@/server/services/generation/latency';
 
+import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
+
 const generationBatchProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
   const wsId = ctx.workspaceId ?? undefined;
@@ -25,6 +27,11 @@ export const generationBatchRouter = router({
     .use(withScopedPermission('file:delete'))
     .input(z.object({ batchId: z.string() }))
     .mutation(async ({ ctx, input }) => {
+      const batch = await ctx.generationBatchModel.findById(input.batchId);
+      // Missing row → keep the delete idempotent, nothing to authorize.
+      if (!batch) return;
+      assertWorkspaceRowManageable(ctx, batch.userId, 'generation batch');
+
       // 1. Delete database records and get thumbnail URLs to clean
       const result = await ctx.generationBatchModel.delete(input.batchId);
 

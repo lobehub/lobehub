@@ -13,6 +13,7 @@ import {
   varchar,
 } from 'drizzle-orm/pg-core';
 import { createInsertSchema } from 'drizzle-zod';
+import { z } from 'zod';
 
 import type { LobeDocumentPage } from '@/types/document';
 import type { FileSource } from '@/types/files';
@@ -243,6 +244,9 @@ export const files = pgTable(
 export type NewFile = typeof files.$inferInsert;
 export type FileItem = typeof files.$inferSelect;
 
+/** Knowledge-base visibility — shared by column def and insert schema. */
+export const KNOWLEDGE_BASE_VISIBILITY = ['private', 'public'] as const;
+
 export const knowledgeBases = pgTable(
   'knowledge_bases',
   {
@@ -278,9 +282,7 @@ export const knowledgeBases = pgTable(
      * (file-level workspace visibility). This column only gates *KB list*
      * enumeration; retrieval via a known KB id still goes through `ownership()`.
      */
-    visibility: text('visibility', { enum: ['private', 'public'] })
-      .default('public')
-      .notNull(),
+    visibility: text('visibility', { enum: KNOWLEDGE_BASE_VISIBILITY }).default('public').notNull(),
 
     ...timestamps,
   },
@@ -292,7 +294,12 @@ export const knowledgeBases = pgTable(
   ],
 );
 
-export const insertKnowledgeBasesSchema = createInsertSchema(knowledgeBases);
+// See insertSessionGroupSchema: Zod 4 + drizzle-zod text-enum inference pollution.
+// `.optional()` preserves defaulted-column omit semantics at runtime.
+// Enum values from KNOWLEDGE_BASE_VISIBILITY so column def and schema stay in sync.
+export const insertKnowledgeBasesSchema = createInsertSchema(knowledgeBases, {
+  visibility: z.enum(KNOWLEDGE_BASE_VISIBILITY).optional(),
+});
 
 export type NewKnowledgeBase = typeof knowledgeBases.$inferInsert;
 export type KnowledgeBaseItem = typeof knowledgeBases.$inferSelect;

@@ -4,44 +4,34 @@ import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
 
+import type {
+  CodexQuotaSnapshot,
+  CodexQuotaWindow,
+  CodexRateLimitResetCredit,
+  CodexRateLimitResetCredits,
+  CodexRateLimitResetOutcome,
+  CodexRateLimitSnapshot,
+} from '@lobechat/electron-client-ipc';
 import { resolveCliSpawnPlan } from '@lobechat/heterogeneous-agents/spawn';
 
 const RPC_TIMEOUT_MS = 10_000;
-const RESET_CREDITS_TIMEOUT_MS = 1_500;
+const CODEX_PRIMARY_WINDOW_MINUTES = 5 * 60;
+const CODEX_SECONDARY_WINDOW_MINUTES = 7 * 24 * 60;
+const RESET_CONSUME_TIMEOUT_MS = 30_000;
+const RESET_CREDITS_TIMEOUT_MS = 5_000;
 const CODEX_RATE_LIMIT_RESET_CREDITS_URL =
   'https://chatgpt.com/backend-api/wham/rate-limit-reset-credits';
-
-export interface CodexQuotaWindow {
-  resetsAt: number | null;
-  usedPercent: number;
-  windowMinutes: number;
-}
-
-export interface CodexRateLimitResetCredits {
-  availableCount: number;
-  credits?: {
-    expiresAt: number | null;
-    grantedAt: number | null;
-    status: string;
-  }[];
-  nextExpiresAt?: number | null;
-  totalEarnedCount?: number;
-}
-
-export interface CodexQuotaSnapshot {
-  error: string | null;
-  provider: 'codex';
-  rateLimitResetCredits?: CodexRateLimitResetCredits | null;
-  session: CodexQuotaWindow | null;
-  status: 'error' | 'ok' | 'unavailable';
-  updatedAt: number;
-  weekly: CodexQuotaWindow | null;
-}
+const CODEX_RATE_LIMIT_RESET_CONSUME_URL = `${CODEX_RATE_LIMIT_RESET_CREDITS_URL}/consume`;
 
 export interface FetchCodexQuotaOptions {
   codexHomePath?: string | null;
   command?: string;
   env?: NodeJS.ProcessEnv;
+}
+
+export interface ConsumeCodexRateLimitResetCreditOptions extends FetchCodexQuotaOptions {
+  creditId?: string;
+  idempotencyKey: string;
 }
 
 interface RpcResponse {
@@ -56,21 +46,33 @@ interface RpcRateWindow {
   windowDurationMins?: number;
 }
 
+interface RpcRateLimitSnapshot {
+  limitId?: string | null;
+  limitName?: string | null;
+  primary?: RpcRateWindow;
+  secondary?: RpcRateWindow;
+}
+
+interface RpcRateLimitResetCredit {
+  expiresAt?: number | string | null;
+  grantedAt?: number | string | null;
+  id?: string;
+  redeemedAt?: number | string | null;
+  redeemStartedAt?: number | string | null;
+  resetType?: string;
+  status?: string;
+  title?: string | null;
+}
+
 interface RpcRateLimitsResponse {
   rateLimitResetCredits?: {
     availableCount?: number;
-    credits?: {
-      expiresAt?: number | string | null;
-      grantedAt?: number | string | null;
-      status?: string;
-    }[];
+    credits?: RpcRateLimitResetCredit[] | null;
     nextExpiresAt?: number | string | null;
     totalEarnedCount?: number;
   } | null;
-  rateLimits?: {
-    primary?: RpcRateWindow;
-    secondary?: RpcRateWindow;
-  };
+  rateLimits?: RpcRateLimitSnapshot;
+  rateLimitsByLimitId?: Record<string, RpcRateLimitSnapshot> | null;
 }
 
 interface CodexAuthFile {
@@ -85,9 +87,22 @@ interface BackendRateLimitResetCreditsResponse {
   credits?: {
     expires_at?: number | string | null;
     granted_at?: number | string | null;
+    id?: string;
+    redeem_started_at?: number | string | null;
+    redeemed_at?: number | string | null;
+    reset_type?: string;
     status?: string;
+    title?: string | null;
   }[];
   total_earned_count?: number;
+}
+
+interface BackendConsumeRateLimitResetCreditResponse {
+  code?: string;
+}
+
+interface RpcConsumeRateLimitResetCreditResponse {
+  outcome?: string;
 }
 
 interface CodexBackendAuth {
@@ -127,11 +142,47 @@ const parseCreditTimestamp = (value: number | string | null | undefined): number
 
 const normalizeCreditStatus = (status?: string) => status?.toLowerCase() ?? 'unknown';
 
+const normalizeCreditText = (value: string | null | undefined) => {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed || null;
+};
+
+const mapRpcResetCredit = (credit: RpcRateLimitResetCredit): CodexRateLimitResetCredit => ({
+  expiresAt: parseCreditTimestamp(credit.expiresAt),
+  grantedAt: parseCreditTimestamp(credit.grantedAt),
+  id: normalizeCreditText(credit.id),
+  redeemStartedAt: parseCreditTimestamp(credit.redeemStartedAt),
+  redeemedAt: parseCreditTimestamp(credit.redeemedAt),
+  resetType: normalizeCreditText(credit.resetType),
+  status: normalizeCreditStatus(credit.status),
+  title: normalizeCreditText(credit.title),
+});
+
+const mapBackendResetCredit = (
+  credit: NonNullable<BackendRateLimitResetCreditsResponse['credits']>[number],
+): CodexRateLimitResetCredit => ({
+  expiresAt: parseCreditTimestamp(credit.expires_at),
+  grantedAt: parseCreditTimestamp(credit.granted_at),
+  id: normalizeCreditText(credit.id),
+  redeemStartedAt: parseCreditTimestamp(credit.redeem_started_at),
+  redeemedAt: parseCreditTimestamp(credit.redeemed_at),
+  resetType: normalizeCreditText(credit.reset_type),
+  status: normalizeCreditStatus(credit.status),
+  title: normalizeCreditText(credit.title),
+});
+
 const getNextAvailableCreditExpiry = (
   credits: CodexRateLimitResetCredits['credits'] | undefined,
+  now = Date.now(),
 ) =>
   credits
-    ?.filter((credit) => credit.status === 'available' && typeof credit.expiresAt === 'number')
+    ?.filter(
+      (credit) =>
+        credit.status === 'available' &&
+        typeof credit.expiresAt === 'number' &&
+        credit.expiresAt > now,
+    )
     .map((credit) => credit.expiresAt as number)
     .sort((a, b) => a - b)[0] ?? null;
 
@@ -142,11 +193,7 @@ const mapRpcResetCredits = (
   if (raw === undefined) return undefined;
   if (typeof raw.availableCount !== 'number' || !Number.isFinite(raw.availableCount)) return null;
 
-  const credits = raw.credits?.map((credit) => ({
-    expiresAt: parseCreditTimestamp(credit.expiresAt),
-    grantedAt: parseCreditTimestamp(credit.grantedAt),
-    status: normalizeCreditStatus(credit.status),
-  }));
+  const credits = Array.isArray(raw.credits) ? raw.credits.map(mapRpcResetCredit) : undefined;
 
   return {
     availableCount: Math.max(0, Math.floor(raw.availableCount)),
@@ -163,11 +210,7 @@ const mapBackendResetCredits = (
 ): CodexRateLimitResetCredits | null => {
   if (!raw) return null;
 
-  const credits = raw.credits?.map((credit) => ({
-    expiresAt: parseCreditTimestamp(credit.expires_at),
-    grantedAt: parseCreditTimestamp(credit.granted_at),
-    status: normalizeCreditStatus(credit.status),
-  }));
+  const credits = raw.credits?.map(mapBackendResetCredit);
   const availableCount =
     typeof raw.available_count === 'number' && Number.isFinite(raw.available_count)
       ? raw.available_count
@@ -201,10 +244,10 @@ const readCodexBackendAuth = async (
   if (!accessToken) return null;
 
   const headers: Record<string, string> = {
-    Authorization: `Bearer ${accessToken}`,
+    'Authorization': `Bearer ${accessToken}`,
     'OpenAI-Beta': 'codex-1',
     'User-Agent': 'codex-cli',
-    originator: 'LobeHub Desktop',
+    'originator': 'LobeHub Desktop',
   };
 
   if (auth.tokens?.account_id) {
@@ -244,6 +287,60 @@ const fetchBackendResetCredits = async (
   }
 };
 
+const mapConsumeOutcome = (outcome: string | undefined): CodexRateLimitResetOutcome => {
+  switch (outcome) {
+    case 'already_redeemed':
+    case 'alreadyRedeemed': {
+      return 'alreadyRedeemed';
+    }
+    case 'no_credit':
+    case 'noCredit': {
+      return 'noCredit';
+    }
+    case 'nothing_to_reset':
+    case 'nothingToReset': {
+      return 'nothingToReset';
+    }
+    case 'reset': {
+      return 'reset';
+    }
+    default: {
+      throw new Error(`Unknown Codex rate-limit reset outcome: ${outcome ?? 'missing'}`);
+    }
+  }
+};
+
+const consumeBackendResetCredit = async (
+  auth: CodexBackendAuth,
+  options: ConsumeCodexRateLimitResetCreditOptions,
+): Promise<CodexRateLimitResetOutcome> => {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), RESET_CONSUME_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(CODEX_RATE_LIMIT_RESET_CONSUME_URL, {
+      body: JSON.stringify({
+        ...(options.creditId ? { credit_id: options.creditId } : {}),
+        redeem_request_id: options.idempotencyKey,
+      }),
+      headers: {
+        ...auth.headers,
+        'Content-Type': 'application/json',
+      },
+      method: 'POST',
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      throw new Error(`Codex rate-limit reset failed: HTTP ${response.status}`);
+    }
+
+    const payload = (await response.json()) as BackendConsumeRateLimitResetCreditResponse;
+    return mapConsumeOutcome(payload.code);
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
 const mapRpcWindow = (
   raw: RpcRateWindow | undefined,
   fallbackWindowMinutes: number,
@@ -260,13 +357,49 @@ const mapRpcWindow = (
       : fallbackWindowMinutes;
 
   return {
-    resetsAt:
-      typeof raw.resetsAt === 'number' && Number.isFinite(raw.resetsAt)
-        ? raw.resetsAt * 1000
-        : null,
+    resetsAt: parseCreditTimestamp(raw.resetsAt),
     usedPercent: Math.min(100, Math.max(0, raw.usedPercent)),
     windowMinutes,
   };
+};
+
+const mapRpcRateLimitSnapshot = (
+  raw: RpcRateLimitSnapshot | undefined,
+  fallbackLimitId: string,
+): CodexRateLimitSnapshot | null => {
+  if (!raw) return null;
+
+  const primary = mapRpcWindow(raw.primary, CODEX_PRIMARY_WINDOW_MINUTES);
+  const secondary = mapRpcWindow(raw.secondary, CODEX_SECONDARY_WINDOW_MINUTES);
+  if (!primary && !secondary) return null;
+
+  return {
+    limitId: normalizeCreditText(raw.limitId) ?? fallbackLimitId,
+    limitName: normalizeCreditText(raw.limitName),
+    primary,
+    secondary,
+  };
+};
+
+const mapRpcRateLimits = (wrapper: RpcRateLimitsResponse): CodexRateLimitSnapshot[] => {
+  const snapshots = new Map<string, CodexRateLimitSnapshot>();
+
+  const addSnapshot = (raw: RpcRateLimitSnapshot | undefined, fallbackLimitId: string) => {
+    const snapshot = mapRpcRateLimitSnapshot(raw, fallbackLimitId);
+    if (!snapshot) return;
+
+    const normalizedId = snapshot.limitId.toLowerCase();
+    if (!snapshots.has(normalizedId)) snapshots.set(normalizedId, snapshot);
+  };
+
+  addSnapshot(wrapper.rateLimits, 'codex');
+
+  const additionalLimits = Object.entries(wrapper.rateLimitsByLimitId ?? {}).sort(
+    ([left], [right]) => left.localeCompare(right),
+  );
+  for (const [limitId, snapshot] of additionalLimits) addSnapshot(snapshot, limitId);
+
+  return [...snapshots.values()];
 };
 
 const cleanupRpcListeners = (
@@ -284,25 +417,32 @@ const cleanupRpcListeners = (
   child.off('close', listeners.close);
 };
 
-const fetchViaRpc = async (
+interface RpcRequestConfig {
+  failureMessage: string;
+  method: string;
+  params?: unknown;
+  timeoutMs?: number;
+}
+
+const requestViaRpc = async <T>(
   options: FetchCodexQuotaOptions,
-  auth: CodexBackendAuth | null,
-): Promise<CodexQuotaSnapshot> =>
-  new Promise<CodexQuotaSnapshot>((resolve) => {
+  { failureMessage, method, params, timeoutMs = RPC_TIMEOUT_MS }: RpcRequestConfig,
+): Promise<T> =>
+  new Promise<T>((resolve, reject) => {
     let buffer = '';
     let child: ChildProcess | null = null;
-    let initId = 0;
+    let initId: number | null = null;
     let stderr = '';
-    let resolved = false;
+    let finished = false;
+    let requestId: number | null = null;
     let rpcId = 0;
-    let rateLimitsId: number | null = null;
     let timeout: ReturnType<typeof setTimeout> | undefined;
 
     const rpcArgs = ['-s', 'read-only', '-a', 'untrusted', 'app-server'];
 
-    const settle = (result: CodexQuotaSnapshot, kill = false) => {
-      if (resolved) return;
-      resolved = true;
+    const cleanup = (kill: boolean) => {
+      if (finished) return false;
+      finished = true;
       if (timeout) {
         clearTimeout(timeout);
         timeout = undefined;
@@ -311,6 +451,16 @@ const fetchViaRpc = async (
         cleanupRpcListeners(child, listeners);
         if (kill) child.kill();
       }
+      return true;
+    };
+
+    const settleError = (error: Error, kill = false) => {
+      if (!cleanup(kill)) return;
+      reject(error);
+    };
+
+    const settleResult = (result: T) => {
+      if (!cleanup(true)) return;
       resolve(result);
     };
 
@@ -324,41 +474,7 @@ const fetchViaRpc = async (
       child.stdin?.write(`${JSON.stringify({ jsonrpc: '2.0', method, params: {} })}\n`);
     };
 
-    const handleRateLimitsResponse = async (message: RpcResponse) => {
-      if (message.error) {
-        settle(errorSnapshot(message.error.message ?? 'Codex rate-limit RPC failed'), true);
-        return;
-      }
-
-      const wrapper = message.result as RpcRateLimitsResponse | undefined;
-      const rateLimitResetCredits = mapRpcResetCredits(wrapper?.rateLimitResetCredits);
-      let backendCredits: CodexRateLimitResetCredits | null = null;
-
-      if (auth && rateLimitResetCredits?.nextExpiresAt == null) {
-        try {
-          backendCredits = await fetchBackendResetCredits(auth);
-        } catch {
-          backendCredits = null;
-        }
-      }
-
-      settle(
-        {
-          error: null,
-          provider: 'codex',
-          rateLimitResetCredits:
-            backendCredits ??
-            (rateLimitResetCredits === undefined ? undefined : rateLimitResetCredits),
-          session: mapRpcWindow(wrapper?.rateLimits?.primary, 300),
-          status: 'ok',
-          updatedAt: Date.now(),
-          weekly: mapRpcWindow(wrapper?.rateLimits?.secondary, 10_080),
-        },
-        true,
-      );
-    };
-
-    const onStdoutData = (child: ChildProcess) => (chunk: Buffer) => {
+    const onStdoutData = (chunk: Buffer) => {
       buffer += chunk.toString();
 
       let newlineIndex: number;
@@ -370,14 +486,25 @@ const fetchViaRpc = async (
         try {
           const message = JSON.parse(line) as RpcResponse;
           if (message.id === initId) {
+            if (message.error) {
+              settleError(
+                new Error(message.error.message ?? `${failureMessage}: initialize`),
+                true,
+              );
+              return;
+            }
             if (!child) return;
             sendNotification(child, 'initialized');
-            rateLimitsId = sendRpc(child, 'account/rateLimits/read');
+            requestId = sendRpc(child, method, params);
             continue;
           }
 
-          if (rateLimitsId !== null && message.id === rateLimitsId) {
-            void handleRateLimitsResponse(message);
+          if (requestId !== null && message.id === requestId) {
+            if (message.error) {
+              settleError(new Error(message.error.message ?? failureMessage), true);
+              return;
+            }
+            settleResult(message.result as T);
           }
         } catch {
           // Ignore non-JSON output from the RPC process.
@@ -390,21 +517,19 @@ const fetchViaRpc = async (
     };
 
     const listeners = {
-      close: () => settle(errorSnapshot(stderr || 'Codex rate-limit RPC exited'), false),
-      error: (error: Error) => settle(errorSnapshot(error.message), false),
+      close: () => settleError(new Error(stderr.trim() || `${failureMessage}: RPC exited`), false),
+      error: (error: Error) => settleError(error, false),
       stderrData: onStderrData,
-      stdoutData: (chunk: Buffer) => {
-        if (child) onStdoutData(child)(chunk);
-      },
+      stdoutData: onStdoutData,
     };
 
     timeout = setTimeout(() => {
-      settle(errorSnapshot('Codex rate-limit RPC timed out'), true);
-    }, RPC_TIMEOUT_MS);
+      settleError(new Error(`${failureMessage}: RPC timed out`), true);
+    }, timeoutMs);
 
     void resolveCliSpawnPlan(options.command ?? 'codex', rpcArgs)
       .then((spawnPlan) => {
-        if (resolved) return;
+        if (finished) return;
 
         child = spawn(spawnPlan.command, spawnPlan.args, {
           env: {
@@ -425,13 +550,91 @@ const fetchViaRpc = async (
       })
       .catch((error: unknown) => {
         const message = error instanceof Error ? error.message : 'Failed to resolve Codex command';
-        settle(errorSnapshot(message), true);
+        settleError(new Error(message), true);
       });
   });
+
+const fetchViaRpc = async (
+  options: FetchCodexQuotaOptions,
+  auth: CodexBackendAuth | null,
+): Promise<CodexQuotaSnapshot> => {
+  try {
+    const wrapper = await requestViaRpc<RpcRateLimitsResponse>(options, {
+      failureMessage: 'Codex rate-limit request failed',
+      method: 'account/rateLimits/read',
+    });
+    const rateLimits = mapRpcRateLimits(wrapper);
+    const defaultRateLimit =
+      rateLimits.find(({ limitId }) => limitId.toLowerCase() === 'codex') ?? rateLimits[0];
+    const rateLimitResetCredits = mapRpcResetCredits(wrapper?.rateLimitResetCredits);
+    let backendCredits: CodexRateLimitResetCredits | null = null;
+
+    // Older Codex app-server versions expose only availableCount. Use the same
+    // backend contract as Codex/CodexBar to fill the detail rows when needed.
+    if (auth && rateLimitResetCredits?.credits === undefined) {
+      try {
+        backendCredits = await fetchBackendResetCredits(auth);
+      } catch {
+        backendCredits = null;
+      }
+    }
+
+    return {
+      error: null,
+      provider: 'codex',
+      rateLimitResetCredits:
+        backendCredits ?? (rateLimitResetCredits === undefined ? undefined : rateLimitResetCredits),
+      rateLimits,
+      session: defaultRateLimit?.primary ?? null,
+      status: 'ok',
+      updatedAt: Date.now(),
+      weekly: defaultRateLimit?.secondary ?? null,
+    };
+  } catch (error) {
+    return errorSnapshot(
+      error instanceof Error ? error.message : 'Codex rate-limit request failed',
+    );
+  }
+};
 
 export const fetchCodexQuota = async (
   options: FetchCodexQuotaOptions = {},
 ): Promise<CodexQuotaSnapshot> => {
   const auth = await readCodexBackendAuth(options);
   return fetchViaRpc(options, auth);
+};
+
+export const consumeCodexRateLimitResetCredit = async (
+  options: ConsumeCodexRateLimitResetCreditOptions,
+): Promise<CodexRateLimitResetOutcome> => {
+  const idempotencyKey = options.idempotencyKey.trim();
+  const creditId = options.creditId?.trim();
+  if (!idempotencyKey) throw new Error('Codex reset idempotency key is required');
+  if (options.creditId !== undefined && !creditId) {
+    throw new Error('Codex reset credit ID must not be empty');
+  }
+
+  const normalizedOptions = { ...options, creditId, idempotencyKey };
+  const auth = await readCodexBackendAuth(normalizedOptions);
+
+  try {
+    const response = await requestViaRpc<RpcConsumeRateLimitResetCreditResponse>(
+      normalizedOptions,
+      {
+        failureMessage: 'Codex rate-limit reset failed',
+        method: 'account/rateLimitResetCredit/consume',
+        params: {
+          ...(creditId ? { creditId } : {}),
+          idempotencyKey,
+        },
+        timeoutMs: RESET_CONSUME_TIMEOUT_MS,
+      },
+    );
+    return mapConsumeOutcome(response?.outcome);
+  } catch (rpcError) {
+    // The reset endpoint predates the app-server consume method. Reuse the same
+    // idempotency key so falling back is safe even if the RPC response was lost.
+    if (!auth) throw rpcError;
+    return consumeBackendResetCredit(auth, normalizedOptions);
+  }
 };

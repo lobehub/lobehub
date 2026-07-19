@@ -363,6 +363,7 @@ export class WechatApiClient {
 
 export interface QrCodeResponse {
   qrcode: string;
+  /** URL payload that clients must encode into a QR code for scanning. */
   qrcode_img_content: string;
 }
 

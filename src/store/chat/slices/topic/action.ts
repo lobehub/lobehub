@@ -15,6 +15,7 @@ import { cronKeys, deviceKeys, topicKeys } from '@/libs/swr/keys';
 import { chatService } from '@/services/chat';
 import { type GitLinkedPRSummary, gitService } from '@/services/git';
 import { messageService } from '@/services/message';
+import type { TopicBatchDeleteScope } from '@/services/topic';
 import { topicService } from '@/services/topic';
 import { type ChatStore } from '@/store/chat';
 import { evictMessageCache } from '@/store/chat/utils/evictMessageCache';
@@ -31,7 +32,11 @@ import { useGlobalStore } from '@/store/global';
 import { getHomeStoreState } from '@/store/home';
 import { type StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
-import { systemAgentSelectors, userGeneralSettingsSelectors } from '@/store/user/selectors';
+import {
+  systemAgentSelectors,
+  userGeneralSettingsSelectors,
+  userProfileSelectors,
+} from '@/store/user/selectors';
 import {
   type ChatTopic,
   type ChatTopicStatus,
@@ -90,6 +95,11 @@ export interface SwitchTopicOptions {
    * @default false
    */
   skipRefreshMessage?: boolean;
+}
+
+export interface RemoveUnstarredTopicOptions {
+  /** Restrict the bulk delete to topics created by the signed-in user. */
+  onlyOwn?: boolean;
 }
 
 type Setter = StoreSetter<ChatStore>;
@@ -473,6 +483,13 @@ export class ChatTopicActionImpl {
     // Already at the target status — both the in-memory and DB writes are no-ops.
     if (topic?.status === status) return;
 
+    // "Archive" in the UI writes status:'completed'. Stamp `completedAt` on that
+    // transition so bulk/stale archive records when the topic was completed,
+    // matching the single-item `markTopicCompleted`. Other status transitions
+    // (agent runs → running/active/unread/…) leave `completedAt` untouched.
+    const patch: Partial<ChatTopic> =
+      status === 'completed' ? { completedAt: new Date(), status } : { status };
+
     this.#pendingTopicStatusWrites.set(topicId, { expiresAt: Date.now() + 15_000, status });
 
     // Scope on the payload routes the write to the owning bucket inside
@@ -481,13 +498,13 @@ export class ChatTopicActionImpl {
     state.internal_dispatchTopic({
       type: 'updateTopic',
       id: topicId,
-      value: { status },
+      value: patch,
       agentId,
       groupId,
       scope,
     });
 
-    await topicService.updateTopic(topicId, { status }).catch((err) => {
+    await topicService.updateTopic(topicId, patch).catch((err) => {
       console.error('[updateTopicStatus] persist failed:', err);
       // The DB never got the write — stop pinning it over fetched rows.
       this.#pendingTopicStatusWrites.delete(topicId);
@@ -1138,19 +1155,22 @@ export class ChatTopicActionImpl {
 
     // Yield a microtask so any switchTopic calls queued behind us can run
     // their sync bodies (and bump #switchTopicEpoch) before we commit to a
-    // refresh. On the other side of the yield, an epoch mismatch means a
-    // newer switch has taken over — skip the redundant SWR mutate.
+    // revalidation. On the other side of the yield, an epoch mismatch means a
+    // newer switch has taken over — skip the redundant SWR mutate. Navigation
+    // uses a soft ensure so a completed or in-flight sidebar prefetch is not
+    // invalidated by the switch itself; explicit refresh signals still go
+    // through refreshMessages and advance the request generation.
     await Promise.resolve();
     if (epoch !== this.#switchTopicEpoch) return;
 
-    await this.#get().refreshMessages();
+    await this.#get().revalidateMessages();
   };
 
-  removeSessionTopics = async (): Promise<void> => {
+  removeSessionTopics = async (scope: TopicBatchDeleteScope = 'own'): Promise<void> => {
     const { switchTopic, activeAgentId, refreshTopic } = this.#get();
     if (!activeAgentId) return;
 
-    await topicService.removeTopicsByAgentId(activeAgentId);
+    await topicService.removeTopicsByAgentId(activeAgentId, scope);
     await refreshTopic();
     // drop every deleted topic's message cache (all belong to this agent)
     void evictMessageCache((ctx) => ctx.agentId === activeAgentId);
@@ -1159,22 +1179,16 @@ export class ChatTopicActionImpl {
     switchTopic(null);
   };
 
-  removeGroupTopics = async (groupId: string): Promise<void> => {
+  removeGroupTopics = async (
+    groupId: string,
+    scope: TopicBatchDeleteScope = 'own',
+  ): Promise<void> => {
     const { switchTopic, refreshTopic } = this.#get();
 
-    // Get topics for this specific group from the topic map using topicMapKey
-    const key = topicMapKey({ groupId });
-    const groupTopics = this.#get().topicDataMap[key]?.items || [];
-    const topicIds = groupTopics.map((t) => t.id);
-
-    if (topicIds.length > 0) {
-      await topicService.batchRemoveTopics(topicIds);
-    }
-
+    await topicService.removeTopicsByGroupId(groupId, scope);
     await refreshTopic();
-    // drop the deleted topics' message caches
-    const removed = new Set(topicIds);
-    void evictMessageCache((ctx) => !!ctx.topicId && removed.has(ctx.topicId));
+    // drop every deleted topic's message cache (all belong to this group)
+    void evictMessageCache((ctx) => ctx.groupId === groupId);
 
     // switch to default topic
     switchTopic(null);
@@ -1189,13 +1203,13 @@ export class ChatTopicActionImpl {
     void evictMessageCache(() => true);
   };
 
-  removeTopic = async (id: string): Promise<void> => {
+  removeTopic = async (id: string, removeFiles?: boolean): Promise<void> => {
     const { activeAgentId, activeGroupId, activeTopicId, switchTopic, refreshTopic } = this.#get();
     // Allow deletion when either agentId or groupId is active
     if (!activeAgentId && !activeGroupId) return;
 
-    // remove topic
-    await topicService.removeTopic(id);
+    // remove topic (and optionally its uploaded attachments)
+    await topicService.removeTopic(id, removeFiles);
     this.#get().internal_dispatchTopic({ type: 'deleteTopic', id }, 'removeTopic');
     await refreshTopic();
     // drop the deleted topic's message cache so it doesn't orphan in IndexedDB
@@ -1205,10 +1219,13 @@ export class ChatTopicActionImpl {
     if (activeTopicId === id) switchTopic(null);
   };
 
-  removeUnstarredTopic = async (): Promise<void> => {
+  removeUnstarredTopic = async (options?: RemoveUnstarredTopicOptions): Promise<void> => {
     const { refreshTopic, switchTopic } = this.#get();
     const topics = topicSelectors.currentUnFavTopics(this.#get());
-    const topicIds = topics.map((t) => t.id);
+    const currentUserId = userProfileSelectors.userId(useUserStore.getState());
+    const topicIds = topics
+      .filter((topic) => !options?.onlyOwn || (!!currentUserId && topic.userId === currentUserId))
+      .map((topic) => topic.id);
 
     await topicService.batchRemoveTopics(topicIds);
     await refreshTopic();
@@ -1400,6 +1417,7 @@ export class ChatTopicActionImpl {
       currentConfig: base.currentConfig,
       github,
       path: base.path,
+      upstream: prData?.upstream,
     });
 
     if (isEqual(base.currentConfig, nextConfig)) return;

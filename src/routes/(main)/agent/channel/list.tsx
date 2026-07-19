@@ -1,71 +1,75 @@
 'use client';
 
-import { exportJSONFile } from '@lobechat/utils/client';
-import { ActionIcon, type DropdownItem, DropdownMenu, Icon, Tag } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
-import { createStaticStyles, cx, useTheme } from 'antd-style';
-import { Book, Download, MoreHorizontal, Trash2, Upload } from 'lucide-react';
-import { memo, useCallback, useRef } from 'react';
-import { useTranslation } from 'react-i18next';
+import { Avatar, Block, Flexbox, Tag, Text } from '@lobehub/ui';
+import { createStaticStyles, responsive, useTheme } from 'antd-style';
+import isEqual from 'fast-deep-equal';
+import { memo } from 'react';
+import { Trans, useTranslation } from 'react-i18next';
 
+import { DEFAULT_AVATAR } from '@/const/meta';
 import { useAgentStore } from '@/store/agent';
-import type { BotProviderItem } from '@/store/agent/slices/bot/action';
+import { agentSelectors } from '@/store/agent/selectors';
 
 import { BOT_RUNTIME_STATUSES, type BotRuntimeStatus } from '../../../../types/botRuntimeStatus';
 import { type ChannelPlatformDefinition, getPlatformIcon } from './const';
-import MessengerPromo from './MessengerPromo';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
-  item: css`
-    cursor: pointer;
-
+  card: css`
     display: flex;
-    gap: 12px;
-    align-items: center;
+    flex-direction: column;
+    gap: 8px;
+    align-items: stretch;
 
-    width: 100%;
-    padding-block: 10px;
+    min-height: 104px;
+    padding-block: 12px;
     padding-inline: 12px;
-    border: none;
-    border-radius: ${cssVar.borderRadius};
 
-    color: ${cssVar.colorTextSecondary};
-    text-align: start;
-
-    background: transparent;
-
-    transition: all 0.2s;
+    transition:
+      transform 0.18s,
+      box-shadow 0.18s,
+      border-color 0.18s;
 
     &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillTertiary};
-    }
-
-    &.active {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillSecondary};
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgb(0 0 0 / 6%);
     }
   `,
-  list: css`
-    overflow-y: auto;
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    gap: 4px;
+  description: css`
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
 
-    padding: 12px;
-    padding-block-start: 16px;
+    line-height: 1.5;
+  `,
+  grid: css`
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+
+    width: 100%;
+    min-width: 0;
+
+    ${responsive.md} {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    ${responsive.sm} {
+      grid-template-columns: minmax(0, 1fr);
+    }
   `,
   root: css`
     display: flex;
     flex-direction: column;
-    flex-shrink: 0;
+    align-items: center;
 
-    width: 260px;
-    border-inline-end: 1px solid ${cssVar.colorBorder};
+    width: 100%;
+    padding-block: 24px;
+    padding-inline: 24px;
   `,
   statusDot: css`
+    flex-shrink: 0;
+
     width: 8px;
     height: 8px;
     border-radius: 50%;
@@ -73,136 +77,88 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     background: ${cssVar.colorSuccess};
     box-shadow: 0 0 0 1px ${cssVar.colorBgContainer};
   `,
+  title: css`
+    width: 100%;
+    margin-block: 0 20px;
+
+    font-size: 24px;
+    font-weight: 600;
+    line-height: 1.4;
+    color: ${cssVar.colorText};
+
+    ${responsive.sm} {
+      font-size: 20px;
+    }
+  `,
+  titleAvatar: css`
+    display: inline-flex;
+    margin-inline: 6px;
+    vertical-align: -6px;
+  `,
+  widthLimiter: css`
+    width: 100%;
+    max-width: 1024px;
+  `,
+  titleRow: css`
+    width: 100%;
+    min-width: 0;
+  `,
+  trailing: css`
+    flex-shrink: 0;
+  `,
 }));
 
-interface PlatformListProps {
-  activeId: string;
+interface PlatformGridProps {
   agentId: string;
-  disabled?: boolean;
   onSelect: (id: string) => void;
   platforms: ChannelPlatformDefinition[];
-  providers?: BotProviderItem[];
   runtimeStatuses: Map<string, BotRuntimeStatus>;
 }
 
-const PlatformList = memo<PlatformListProps>(
-  ({ platforms, activeId, agentId, disabled, onSelect, providers, runtimeStatuses }) => {
-    const { t } = useTranslation('agent');
+const PlatformGrid = memo<PlatformGridProps>(
+  ({ agentId, platforms, onSelect, runtimeStatuses }) => {
+    const { t } = useTranslation(['agent', 'common']);
     const theme = useTheme();
-    const { message } = App.useApp();
-    const fileInputRef = useRef<HTMLInputElement>(null);
-    const deleteAllBotProviders = useAgentStore((s) => s.deleteAllBotProviders);
-    const createBotProvider = useAgentStore((s) => s.createBotProvider);
-    const connectBot = useAgentStore((s) => s.connectBot);
+    const meta = useAgentStore(agentSelectors.getAgentMetaById(agentId), isEqual);
+    const agentName = meta.title || t('defaultSession', { ns: 'common' });
 
-    const handleExport = useCallback(() => {
-      if (!providers?.length) return;
-      const exportData = providers.map(({ id: _, ...rest }) => rest);
-      exportJSONFile(exportData, `lobehub-channels-${agentId}.json`);
-    }, [providers, agentId]);
-
-    const handleImport = useCallback(() => {
-      if (disabled) return;
-      fileInputRef.current?.click();
-    }, [disabled]);
-
-    const handleFileChange = useCallback(
-      async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (disabled) {
-          e.target.value = '';
-          return;
+    const getPlatformDescription = (id: string, name: string) => {
+      switch (id) {
+        case 'discord': {
+          return t('channel.platform.discord.description');
         }
-        if (!file) return;
-
-        try {
-          const text = await file.text();
-          const data = JSON.parse(text);
-
-          if (!Array.isArray(data)) {
-            message.error(t('channel.importInvalidFormat'));
-            return;
-          }
-
-          for (const item of data) {
-            if (!item.platform || !item.applicationId || !item.credentials) {
-              message.error(t('channel.importInvalidFormat'));
-              return;
-            }
-          }
-
-          for (const item of data) {
-            await createBotProvider({
-              agentId,
-              applicationId: item.applicationId,
-              credentials: item.credentials,
-              platform: item.platform,
-              settings: item.settings ?? undefined,
-            });
-            if (item.enabled) {
-              await connectBot({
-                agentId,
-                applicationId: item.applicationId,
-                platform: item.platform,
-              });
-            }
-          }
-
-          message.success(t('channel.importSuccess'));
-        } catch {
-          message.error(t('channel.importFailed'));
-        } finally {
-          e.target.value = '';
+        case 'feishu': {
+          return t('channel.platform.feishu.description');
         }
-      },
-      [agentId, connectBot, createBotProvider, disabled, message, t],
-    );
-
-    const handleDeleteAll = useCallback(() => {
-      if (disabled) return;
-      if (!providers?.length) return;
-      confirmModal({
-        content: t('channel.deleteAllConfirmDesc'),
-        okButtonProps: { danger: true },
-        okText: t('channel.deleteAllChannels'),
-        onOk: async () => {
-          try {
-            await deleteAllBotProviders(agentId);
-            message.success(t('channel.deleteAllSuccess'));
-          } catch {
-            message.error(t('channel.deleteAllFailed'));
-          }
-        },
-        title: t('channel.deleteAllConfirm'),
-      });
-    }, [agentId, deleteAllBotProviders, disabled, message, providers, t]);
-
-    const hasProviders = !!providers?.length;
-    const menuItems: DropdownItem[] = [
-      {
-        icon: <Icon icon={Download} size={'small'} />,
-        key: 'export',
-        disabled: !hasProviders,
-        label: t('channel.exportConfig'),
-        onClick: handleExport,
-      },
-      {
-        icon: <Icon icon={Upload} size={'small'} />,
-        key: 'import',
-        disabled,
-        label: t('channel.importConfig'),
-        onClick: handleImport,
-      },
-      { type: 'divider' as const },
-      {
-        danger: true,
-        disabled: disabled || !hasProviders,
-        icon: <Icon icon={Trash2} size={'small'} />,
-        key: 'deleteAll',
-        label: t('channel.deleteAllChannels'),
-        onClick: handleDeleteAll,
-      },
-    ];
+        case 'imessage': {
+          return t('channel.platform.imessage.description');
+        }
+        case 'lark': {
+          return t('channel.platform.lark.description');
+        }
+        case 'line': {
+          return t('channel.platform.line.description');
+        }
+        case 'qq': {
+          return t('channel.platform.qq.description');
+        }
+        case 'slack': {
+          return t('channel.platform.slack.description');
+        }
+        case 'telegram': {
+          return t('channel.platform.telegram.description');
+        }
+        case 'wechat': {
+          return t('channel.platform.wechat.description');
+        }
+        case 'whatsapp': {
+          return t('channel.platform.whatsapp.description');
+        }
+        default: {
+          return t('channel.platform.default.description', { name });
+        }
+      }
+    };
 
     const getStatusColor = (status?: BotRuntimeStatus) => {
       switch (status) {
@@ -255,86 +211,88 @@ const PlatformList = memo<PlatformListProps>(
     };
 
     return (
-      <aside className={styles.root}>
-        <div className={styles.list}>
-          <input
-            accept=".json"
-            ref={fileInputRef}
-            style={{ display: 'none' }}
-            type="file"
-            onChange={handleFileChange}
-          />
-          {platforms.map((platform) => {
-            const PlatformIcon = getPlatformIcon(platform.name);
-            const ColorIcon =
-              PlatformIcon && 'Color' in PlatformIcon ? (PlatformIcon as any).Color : PlatformIcon;
-            const runtimeStatus = platform.comingSoon
-              ? undefined
-              : runtimeStatuses.get(platform.id);
-            const statusColor = getStatusColor(runtimeStatus);
-            const statusTitle = getStatusTitle(runtimeStatus);
-            return (
-              <button
-                className={cx(styles.item, activeId === platform.id && 'active')}
-                key={platform.id}
-                onClick={() => onSelect(platform.id)}
-              >
-                {ColorIcon && <ColorIcon size={20} />}
-                <span style={{ flex: 1 }}>{platform.name}</span>
-                {platform.comingSoon && (
-                  <Tag size={'small'} style={{ marginInlineEnd: 0 }}>
-                    {t('channel.comingSoon')}
-                  </Tag>
-                )}
-                {platform.access?.requiredPlan === 'paid' && (
-                  <Tag color="gold" size={'small'} style={{ marginInlineEnd: 0 }}>
-                    {platform.access.rolloutMode === 'notice'
-                      ? t('channel.paidFeature.noticeBadge')
-                      : t('channel.paidFeature.badge')}
-                  </Tag>
-                )}
-                {runtimeStatus && (
-                  <div
-                    className={styles.statusDot}
-                    style={{ background: statusColor }}
-                    title={statusTitle}
-                  />
-                )}
-              </button>
-            );
-          })}
+      <section className={styles.root}>
+        <div className={styles.widthLimiter}>
+          <h1 className={styles.title}>
+            <Trans<'channel.home.title', 'agent'>
+              i18nKey={'channel.home.title'}
+              ns={'agent'}
+              values={{ name: agentName }}
+              components={{
+                avatar: (
+                  <span className={styles.titleAvatar}>
+                    <Avatar
+                      avatar={meta.avatar || DEFAULT_AVATAR}
+                      background={meta.backgroundColor}
+                      shape={'square'}
+                      size={28}
+                    />
+                  </span>
+                ),
+              }}
+            />
+          </h1>
+          <div className={styles.grid}>
+            {platforms.map((platform) => {
+              const PlatformIcon = getPlatformIcon(platform.name);
+              const ColorIcon =
+                PlatformIcon && 'Color' in PlatformIcon
+                  ? (PlatformIcon as any).Color
+                  : PlatformIcon;
+              const runtimeStatus = platform.comingSoon
+                ? undefined
+                : runtimeStatuses.get(platform.id);
+              const statusColor = getStatusColor(runtimeStatus);
+              const statusTitle = getStatusTitle(runtimeStatus);
+              const description = getPlatformDescription(platform.id, platform.name);
+              return (
+                <Block
+                  clickable
+                  className={styles.card}
+                  key={platform.id}
+                  variant={'outlined'}
+                  onClick={() => onSelect(platform.id)}
+                >
+                  <Flexbox horizontal align={'center'} className={styles.titleRow} gap={8}>
+                    {ColorIcon && <ColorIcon size={24} />}
+                    <Text ellipsis style={{ flex: 1, minWidth: 0 }} weight={600}>
+                      {platform.name}
+                    </Text>
+                    <Flexbox horizontal align={'center'} className={styles.trailing} gap={4}>
+                      {platform.comingSoon && (
+                        <Tag size={'small'} style={{ marginInlineEnd: 0 }}>
+                          {t('channel.comingSoon')}
+                        </Tag>
+                      )}
+                      {platform.access?.requiredPlan === 'paid' && (
+                        <Tag color="gold" size={'small'} style={{ marginInlineEnd: 0 }}>
+                          {platform.access.rolloutMode === 'notice'
+                            ? t('channel.paidFeature.noticeBadge')
+                            : t('channel.paidFeature.badge')}
+                        </Tag>
+                      )}
+                      {runtimeStatus && (
+                        <div
+                          className={styles.statusDot}
+                          style={{ background: statusColor }}
+                          title={statusTitle}
+                        />
+                      )}
+                    </Flexbox>
+                  </Flexbox>
+                  <Text className={styles.description} fontSize={12} type={'secondary'}>
+                    {description}
+                  </Text>
+                </Block>
+              );
+            })}
+          </div>
         </div>
-        <MessengerPromo />
-        <div
-          style={{
-            alignItems: 'center',
-            borderTop: `1px solid ${theme.colorBorder}`,
-            display: 'flex',
-            justifyContent: 'space-between',
-            padding: 12,
-          }}
-        >
-          <a
-            href="https://lobehub.com/docs/usage/channels/overview"
-            rel="noopener noreferrer"
-            target="_blank"
-            style={{
-              alignItems: 'center',
-              color: theme.colorTextSecondary,
-              display: 'flex',
-              fontSize: 12,
-              gap: 4,
-            }}
-          >
-            <Icon icon={Book} size={'small'} /> {t('channel.documentation')}
-          </a>
-          <DropdownMenu items={menuItems}>
-            <ActionIcon icon={MoreHorizontal} />
-          </DropdownMenu>
-        </div>
-      </aside>
+      </section>
     );
   },
 );
 
-export default PlatformList;
+PlatformGrid.displayName = 'PlatformGrid';
+
+export default PlatformGrid;

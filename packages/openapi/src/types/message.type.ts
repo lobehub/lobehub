@@ -123,7 +123,7 @@ export interface MessagesCreateRequest {
 
 export const MessagesCreateRequestSchema = z.object({
   content: z.string().min(1, 'Message content cannot be empty'),
-  role: z.enum(['user', 'system', 'assistant', 'tool'], { required_error: 'Invalid role type' }),
+  role: z.enum(['user', 'system', 'assistant', 'tool'], { error: 'Invalid role type' }),
 
   // AI-related fields
   model: z.string().nullish(), // Model used
@@ -158,7 +158,7 @@ export const MessagesCreateRequestSchema = z.object({
 });
 
 export const MessagesCreateWithReplyRequestSchema = MessagesCreateRequestSchema.extend({
-  role: z.literal('user', { errorMap: () => ({ message: 'Role must be user when creating an AI reply' }) }),
+  role: z.literal('user', { error: 'Role must be user when creating an AI reply' }),
 });
 
 export type MessagesCreateWithReplyRequest = z.infer<typeof MessagesCreateWithReplyRequestSchema>;

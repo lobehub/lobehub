@@ -7,11 +7,15 @@ import Conversation from './features/Conversation';
 import Desktop from './features/Desktop';
 import Essential from './features/Essential';
 
-const Page = () => {
+interface PageProps {
+  showSettingHeader?: boolean;
+}
+
+const Page = ({ showSettingHeader = true }: PageProps) => {
   const { t } = useTranslation('setting');
   return (
     <>
-      <SettingHeader title={t('tab.hotkey')} />
+      {showSettingHeader && <SettingHeader title={t('tab.hotkey')} />}
       {isDesktop && <Desktop />}
       <Essential />
       <Conversation />

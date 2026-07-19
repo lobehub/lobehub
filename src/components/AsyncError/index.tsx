@@ -31,6 +31,8 @@ export interface AsyncErrorProps {
   error?: unknown;
   /** Retry the same request (SWR `mutate` / query refetch). Hidden if absent. */
   onRetry?: () => void;
+  /** Whether an explicit Retry action is currently in flight. */
+  retrying?: boolean;
   /** Override the default title copy. */
   title?: ReactNode;
   variant?: AsyncErrorVariant;
@@ -64,7 +66,7 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 const AsyncError = memo<AsyncErrorProps>(
-  ({ variant = 'block', error, onRetry, title, description }) => {
+  ({ variant = 'block', error, onRetry, retrying = false, title, description }) => {
     const { t } = useTranslation('error');
     const { status, retryable } = normalizeAsyncError(error);
 
@@ -84,15 +86,15 @@ const AsyncError = memo<AsyncErrorProps>(
             {t('asyncState.metricLabel')}
           </Text>
           {showRetry && (
-            <Text
-              aria-label={t('error.retry')}
-              role={'button'}
-              style={{ color: cssVar.colorPrimary, cursor: 'pointer' }}
-              tabIndex={0}
+            <Button
+              disabled={retrying}
+              loading={retrying}
+              size={'small'}
+              type={'text'}
               onClick={onRetry}
             >
               {t('error.retry')}
-            </Text>
+            </Button>
           )}
         </Flexbox>
       );
@@ -107,14 +109,15 @@ const AsyncError = memo<AsyncErrorProps>(
             {heading}
           </Text>
           {showRetry && (
-            <Text
-              role={'button'}
-              style={{ color: cssVar.colorPrimary, cursor: 'pointer' }}
-              tabIndex={0}
+            <Button
+              disabled={retrying}
+              loading={retrying}
+              size={'small'}
+              type={'text'}
               onClick={onRetry}
             >
               {t('error.retry')}
-            </Text>
+            </Button>
           )}
         </Flexbox>
       );
@@ -142,7 +145,13 @@ const AsyncError = memo<AsyncErrorProps>(
           </Text>
         </Flexbox>
         {showRetry && (
-          <Button icon={<Icon icon={RotateCwIcon} />} size={'small'} onClick={onRetry}>
+          <Button
+            disabled={retrying}
+            icon={<Icon icon={RotateCwIcon} />}
+            loading={retrying}
+            size={'small'}
+            onClick={onRetry}
+          >
             {t('error.retry')}
           </Button>
         )}

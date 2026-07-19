@@ -2,8 +2,8 @@
 
 import type { AgentEvalRunListItem } from '@lobechat/types';
 import { formatCost } from '@lobechat/utils';
-import { Button, type DropdownItem, DropdownMenu, Flexbox, Icon, Text } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
+import { type DropdownItem, DropdownMenu, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Button, confirmModal } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
   CircleDollarSign,
@@ -33,7 +33,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   heroBand: css`
     padding: 20px;
     border-radius: ${cssVar.borderRadiusLG};
-
     background: ${cssVar.colorFillQuaternary};
   `,
   heroValue: css`
@@ -245,11 +244,11 @@ const BenchmarkHeader = memo<BenchmarkHeaderProps>(
             </Flexbox>
 
             <Flexbox horizontal gap={8}>
-              <Button icon={Edit} size="small" variant="outlined" onClick={handleEdit}>
+              <Button icon={Edit} size="small" onClick={handleEdit}>
                 {t('common.edit')}
               </Button>
               <DropdownMenu items={menuItems} placement="bottomRight">
-                <Button icon={EllipsisVertical} size="small" variant="outlined" />
+                <Button icon={EllipsisVertical} size="small" />
               </DropdownMenu>
             </Flexbox>
           </Flexbox>
@@ -374,9 +373,7 @@ const BenchmarkHeader = memo<BenchmarkHeaderProps>(
                 <div className={styles.statIcon} style={{ background: cssVar.colorPrimaryBg }}>
                   <Layers size={16} style={{ color: cssVar.colorPrimary }} />
                 </div>
-                <span className={styles.statLabel}>
-                  {t('benchmark.detail.stats.dataScale')}
-                </span>
+                <span className={styles.statLabel}>{t('benchmark.detail.stats.dataScale')}</span>
                 {totalCases === 0 && (
                   <span
                     style={{
@@ -431,9 +428,7 @@ const BenchmarkHeader = memo<BenchmarkHeaderProps>(
                 <div className={styles.statIcon} style={{ background: cssVar.colorInfoBg }}>
                   <Clock size={16} style={{ color: cssVar.colorInfo }} />
                 </div>
-                <span className={styles.statLabel}>
-                  {t('benchmark.detail.stats.avgDuration')}
-                </span>
+                <span className={styles.statLabel}>{t('benchmark.detail.stats.avgDuration')}</span>
               </Flexbox>
 
               {avgDuration == null ? (
@@ -464,7 +459,9 @@ const BenchmarkHeader = memo<BenchmarkHeaderProps>(
                     </span>
                   </Flexbox>
                   {p99Duration != null && (
-                    <span style={{ color: cssVar.colorTextQuaternary, fontSize: cssVar.fontSizeSM }}>
+                    <span
+                      style={{ color: cssVar.colorTextQuaternary, fontSize: cssVar.fontSizeSM }}
+                    >
                       P99: {formatDuration(p99Duration)}
                     </span>
                   )}

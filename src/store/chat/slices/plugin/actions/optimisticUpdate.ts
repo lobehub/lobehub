@@ -226,8 +226,7 @@ export class PluginOptimisticUpdateActionImpl {
     params: UpdateToolMessageParams,
     context?: OptimisticUpdateContext,
   ): Promise<void> => {
-    const { replaceMessages, internal_getConversationContext, internal_dispatchMessage } =
-      this.#get();
+    const { internal_dispatchMessage } = this.#get();
 
     const { content, metadata, pluginState, pluginError } = params;
 
@@ -244,19 +243,13 @@ export class PluginOptimisticUpdateActionImpl {
       );
     }
 
-    const ctx = internal_getConversationContext(context);
-
-    // Use single API call to update all fields in one transaction
-    // This prevents race conditions that occurred with multiple parallel requests
-    const result = await messageService.updateToolMessage(
-      id,
-      { content, metadata, pluginError, pluginState },
-      ctx,
-    );
-
-    if (result?.success && result.messages) {
-      replaceMessages(result.messages, { context: ctx });
-    }
+    await messageService.batchMutateOrThrow([
+      {
+        id,
+        type: 'updateToolMessage',
+        value: { content, metadata, pluginError, pluginState },
+      },
+    ]);
   };
 }
 

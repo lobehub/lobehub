@@ -1,6 +1,7 @@
 'use client';
 
-import { Alert, Button, Flexbox, Icon } from '@lobehub/ui';
+import { Alert, Flexbox, Icon } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { Divider } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { InfoIcon, PlayIcon } from 'lucide-react';

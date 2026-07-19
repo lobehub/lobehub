@@ -8,6 +8,7 @@
 
 import { agentBuilderExecutor } from '@lobechat/builtin-tool-agent-builder/executor';
 import { agentManagementExecutor } from '@lobechat/builtin-tool-agent-management/executor';
+import { browserExecutor } from '@lobechat/builtin-tool-browser/client/executor';
 import { calculatorExecutor } from '@lobechat/builtin-tool-calculator/executor';
 import { cloudSandboxExecutor } from '@lobechat/builtin-tool-cloud-sandbox/executor';
 import { credsExecutor } from '@lobechat/builtin-tool-creds/executor';
@@ -20,7 +21,7 @@ import { memoryExecutor } from '@lobechat/builtin-tool-memory/executor';
 import { taskExecutor } from '@lobechat/builtin-tool-task/client/executor';
 
 import type { BuiltinToolContext, BuiltinToolResult, IBuiltinToolExecutor } from '../types';
-import { claudeCodeExecutor, codexExecutor } from './heteroCli';
+import { ampExecutor, claudeCodeExecutor, codexExecutor, openCodeExecutor } from './heteroCli';
 import { activatorExecutor } from './lobe-activator';
 import { agentDocumentsExecutor } from './lobe-agent-documents';
 import { messageExecutor } from './lobe-message';
@@ -32,6 +33,7 @@ import { topicReferenceExecutor } from './lobe-topic-reference';
 import { userInteractionExecutor } from './lobe-user-interaction';
 import { webBrowsing } from './lobe-web-browsing';
 import { webOnboardingExecutor } from './lobe-web-onboarding';
+import { stashBuiltinToolWorkIntent } from './workRegistration';
 
 /**
  * Registry structure: Map<identifier, executor instance>
@@ -120,7 +122,15 @@ export const invokeExecutor = async (
     };
   }
 
-  return executor.invoke(apiName, params, ctx);
+  const result = await executor.invoke(apiName, params, ctx);
+
+  // Manifest-driven Work registration (best-effort; a no-op unless the API
+  // declares a `work` config). Only STASH the intent here — `call_tool` drains
+  // it and writes the Work version once the tool call's cumulative cost is known
+  // (write-once instead of register-then-backfill).
+  stashBuiltinToolWorkIntent(identifier, apiName, params, ctx, result);
+
+  return result;
 };
 
 /**
@@ -138,10 +148,12 @@ export const registerBuiltinToolExecutors = (): void => {
   if (executorsRegistered) return;
 
   registerExecutors([
-    // Hook-only executors for heterogeneous CLI agents (Claude Code / Codex) —
+    // Hook-only executors for heterogeneous CLI agents —
     // observe their shell tool results via `onAfterCall` (never invoked).
+    ampExecutor,
     claudeCodeExecutor,
     codexExecutor,
+    openCodeExecutor,
     agentBuilderExecutor,
     agentDocumentsExecutor,
     agentManagementExecutor,
@@ -151,6 +163,7 @@ export const registerBuiltinToolExecutors = (): void => {
     groupAgentBuilderExecutor,
     groupManagementExecutor,
     knowledgeBaseExecutor,
+    browserExecutor,
     localSystemExecutor,
     memoryExecutor,
     messageExecutor,

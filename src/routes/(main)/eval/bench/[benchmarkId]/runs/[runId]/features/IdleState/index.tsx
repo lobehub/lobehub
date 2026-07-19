@@ -1,7 +1,7 @@
 'use client';
 
-import { Button, Icon } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
+import { Icon } from '@lobehub/ui';
+import { Button, confirmModal } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { Brain, ChartBar, MessageSquare, Play } from 'lucide-react';

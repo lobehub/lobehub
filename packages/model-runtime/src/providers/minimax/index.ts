@@ -84,7 +84,7 @@ export const buildMiniMaxAnthropicPayload = async (
     max_tokens: resolvedMaxTokens,
     messages: normalizeMessagesForAnthropic(payload.messages),
   });
-  const { temperature, top_p, ...restPayload } = basePayload;
+  const { temperature: _temperature, top_p: _topP, ...restPayload } = basePayload;
   const resolvedParams = resolveParameters(
     {
       temperature: payload.temperature,
@@ -108,7 +108,15 @@ export const buildMiniMaxAnthropicPayload = async (
 };
 
 export const buildMiniMaxOpenAIPayload = (payload: ChatStreamPayload) => {
-  const { enabledSearch, max_tokens, messages, temperature, thinking, top_p, ...params } = payload;
+  const {
+    enabledSearch: _enabledSearch,
+    max_tokens: _maxTokens,
+    messages,
+    temperature,
+    thinking,
+    top_p,
+    ...params
+  } = payload;
 
   const isM3 = isMiniMaxM3Model(payload.model);
 
@@ -133,8 +141,7 @@ export const buildMiniMaxOpenAIPayload = (payload: ChatStreamPayload) => {
       }
 
       // If there is a signature or no content, remove the reasoning field
-      // eslint-disable-next-line unused-imports/no-unused-vars
-      const { reasoning, ...messageWithoutReasoning } = message;
+      const { reasoning: _reasoning, ...messageWithoutReasoning } = message;
       return messageWithoutReasoning;
     }
     return message;

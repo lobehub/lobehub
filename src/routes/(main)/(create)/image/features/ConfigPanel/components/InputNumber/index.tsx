@@ -1,6 +1,7 @@
 'use client';
 
-import { Button, Flexbox, InputNumber, Tooltip } from '@lobehub/ui';
+import { Flexbox, InputNumber, Tooltip } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { Dices } from 'lucide-react';
 import { MAX_SEED } from 'model-bank';
 import { type CSSProperties } from 'react';
@@ -39,12 +40,7 @@ const SeedNumberInput = memo<SeedNumberInputProps>(
           {...rest}
         />
         <Tooltip title={t('config.seed.random')}>
-          <Button
-            icon={Dices}
-            style={{ flex: 'none', width: 48 }}
-            variant={'outlined'}
-            onClick={handleClick}
-          />
+          <Button icon={Dices} style={{ flex: 'none', width: 48 }} onClick={handleClick} />
         </Tooltip>
       </Flexbox>
     );

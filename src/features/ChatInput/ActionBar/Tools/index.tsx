@@ -14,7 +14,7 @@ import { useControls } from './useControls';
 
 const Tools = memo(() => {
   const { t } = useTranslation('setting');
-  const { marketItems, editPluginDrawer, pinnedCount, autoCount } = useControls();
+  const { marketItems, editPluginDrawer, pinnedCount, autoCount, isPolicyMenuOpen } = useControls();
 
   const agentId = useAgentId();
   const model = useAgentStore((s) => agentByIdSelectors.getAgentModelById(agentId)(s));
@@ -39,6 +39,7 @@ const Tools = memo(() => {
           content: (
             <PopoverContent
               autoCount={autoCount}
+              detailPopoverDisabled={isPolicyMenuOpen}
               items={marketItems}
               pinnedCount={pinnedCount}
               onOpenStore={handleOpenStore}

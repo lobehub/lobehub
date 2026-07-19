@@ -1,3 +1,12 @@
-import { type ItemType } from 'antd/es/menu/interface';
+import type { ItemType } from 'antd/es/menu/interface';
 
-export const useDocumentTransferMenuItem = (_documentId?: string): ItemType[] | null => null;
+export interface DocumentTransferMenuItemOptions {
+  defaultTargetVisibility?: 'private' | 'public';
+  preferCurrentWorkspace?: boolean;
+  transferLabel?: string;
+}
+
+export const useDocumentTransferMenuItem = (
+  _documentId?: string,
+  _options?: DocumentTransferMenuItemOptions,
+): ItemType[] | null => null;

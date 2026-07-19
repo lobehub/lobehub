@@ -12,28 +12,31 @@ const hasAnyFlag = (args: string[], flags: readonly string[]) =>
 const buildCodexOptionArgs = async ({
   args,
   helpers,
-  imageList,
-}: Pick<HeterogeneousAgentBuildPlanParams, 'args' | 'helpers' | 'imageList'>) => {
-  const imagePaths = await helpers.resolveCliImagePaths(imageList);
-  const imageArgs = imagePaths.flatMap((filePath) => ['--image', filePath]);
+  promptInput,
+}: Pick<HeterogeneousAgentBuildPlanParams, 'args' | 'helpers' | 'promptInput'>) => {
+  const inputPlan = await helpers.buildAgentInput('codex', promptInput);
   const executionModeArgs = hasAnyFlag(args, CODEX_EXECUTION_MODE_FLAGS)
     ? []
     : [...CODEX_DEFAULT_EXECUTION_ARGS];
 
-  return [...CODEX_REQUIRED_ARGS, ...executionModeArgs, ...args, ...imageArgs];
+  return {
+    args: [...CODEX_REQUIRED_ARGS, ...executionModeArgs, ...args, ...inputPlan.args],
+    stdinPayload: inputPlan.stdin,
+  };
 };
 
 export const codexDriver: HeterogeneousAgentDriver = {
   async buildSpawnPlan({
     args,
     helpers,
-    imageList,
-    prompt,
+    promptInput,
     resumeSessionId,
-    systemContext,
   }: HeterogeneousAgentBuildPlanParams) {
-    const optionArgs = await buildCodexOptionArgs({ args, helpers, imageList });
-    const stdinPayload = [systemContext, prompt].filter(Boolean).join('\n\n');
+    const { args: optionArgs, stdinPayload } = await buildCodexOptionArgs({
+      args,
+      helpers,
+      promptInput,
+    });
 
     return {
       args: resumeSessionId

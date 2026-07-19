@@ -399,6 +399,7 @@ export const watchKeywordsField: FieldSchema = {
   default: [],
   description: 'channel.watchKeywordsHint',
   label: 'channel.watchKeywords',
+  paidFeature: 'messageMonitoring',
   type: 'array',
   items: {
     key: 'item',

@@ -95,7 +95,7 @@ export const credsRouter = router({
         key: z.string().min(1).max(100),
         name: z.string().min(1).max(255),
         type: z.enum(['kv-env', 'kv-header']),
-        values: z.record(z.string()),
+        values: z.record(z.string(), z.string()),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -510,7 +510,7 @@ export const credsRouter = router({
         description: z.string().optional(),
         id: z.number(),
         name: z.string().optional(),
-        values: z.record(z.string()).optional(),
+        values: z.record(z.string(), z.string()).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {

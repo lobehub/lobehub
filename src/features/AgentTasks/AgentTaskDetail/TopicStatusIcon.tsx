@@ -1,25 +1,18 @@
 import { Icon } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import {
-  CircleAlert,
-  CircleCheck,
-  CircleDashed,
-  CircleSlash,
-  CircleX,
-  type LucideIcon,
-} from 'lucide-react';
+import { CircleAlert } from 'lucide-react';
 import { memo } from 'react';
+
+import { EXECUTION_STATUS_VISUALS, type ExecutionStatusVisual } from '@/components/ExecutionStatus';
 
 type TopicRunStatus = 'canceled' | 'completed' | 'failed' | 'pending' | 'running' | 'timeout';
 
-const STATIC_META: Record<
-  Exclude<TopicRunStatus, 'running'>,
-  { color: string; icon: LucideIcon }
-> = {
-  canceled: { color: cssVar.colorTextSecondary, icon: CircleSlash },
-  completed: { color: cssVar.colorSuccess, icon: CircleCheck },
-  failed: { color: cssVar.colorError, icon: CircleX },
-  pending: { color: cssVar.colorTextQuaternary, icon: CircleDashed },
+const STATIC_META: Record<Exclude<TopicRunStatus, 'running'>, ExecutionStatusVisual> = {
+  canceled: EXECUTION_STATUS_VISUALS.canceled,
+  completed: EXECUTION_STATUS_VISUALS.completed,
+  failed: EXECUTION_STATUS_VISUALS.failed,
+  // Not-yet-started run: same glyph as a backlog task.
+  pending: EXECUTION_STATUS_VISUALS.backlog,
   timeout: { color: cssVar.colorWarning, icon: CircleAlert },
 };
 

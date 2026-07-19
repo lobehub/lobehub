@@ -36,7 +36,6 @@ import { selectors as profileSelectors, useProfileStore } from '../store';
 import AgentForkTag from './AgentForkTag';
 import AgentStatusTag from './AgentStatusTag';
 import AgentVersionReviewTag from './AgentVersionReviewTag';
-import AutoSaveHint from './AutoSaveHint';
 
 type HeaderTranslation = TFunction<
   readonly ['setting', 'chat', 'file', 'common', 'spend'],
@@ -247,13 +246,11 @@ const Header = memo(() => {
 
   return (
     <NavHeader
-      styles={{ left: { paddingInlineStart: 24 } }}
       left={
         <Flexbox horizontal align={'center'} gap={8}>
           {activeAgentId && (
             <AgentBreadcrumb agentId={activeAgentId} title={t('tab.profile', { ns: 'chat' })} />
           )}
-          <AutoSaveHint />
           <AgentStatusTag />
           <AgentVersionReviewTag />
           <AgentForkTag />
@@ -274,6 +271,11 @@ const Header = memo(() => {
           )}
         </Flexbox>
       }
+      styles={{
+        left: {
+          paddingInlineStart: 8,
+        },
+      }}
     />
   );
 });

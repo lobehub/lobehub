@@ -1,5 +1,6 @@
 import type {
   ShowTrayNotificationParams,
+  TrayNavigationSnapshot,
   UpdateTrayIconParams,
   UpdateTrayTooltipParams,
 } from '@lobechat/electron-client-ipc';
@@ -41,6 +42,7 @@ const mockUpdateIcon = vi.fn();
 const mockUpdateTooltip = vi.fn();
 const mockGetMainTray = vi.fn();
 const mockSetAppTrayVisible = vi.fn();
+const mockUpdateNavigationSnapshot = vi.fn();
 const mockStoreGet = vi.fn(() => true);
 const mockStoreSet = vi.fn();
 
@@ -55,6 +57,7 @@ const mockApp = {
   trayManager: {
     getMainTray: mockGetMainTray,
     setAppTrayVisible: mockSetAppTrayVisible,
+    updateNavigationSnapshot: mockUpdateNavigationSnapshot,
   },
 } as unknown as App;
 
@@ -87,6 +90,21 @@ describe('TrayMenuCtr', () => {
 
       expect(mockStoreSet).toHaveBeenCalledWith('appTrayVisible', false);
       expect(mockSetAppTrayVisible).toHaveBeenCalledWith(false);
+      expect(result).toEqual({ success: true });
+    });
+  });
+
+  describe('updateNavigationSnapshot', () => {
+    it('should pass the latest navigation snapshot to the tray manager', () => {
+      const snapshot: TrayNavigationSnapshot = {
+        agents: [{ id: 'agent-1', title: 'Researcher', url: '/agent/agent-1' }],
+        pinned: [{ title: 'Pinned task', url: '/tasks/pinned' }],
+        recent: [{ title: 'Recent page', url: '/page/recent' }],
+      };
+
+      const result = trayMenuCtr.updateNavigationSnapshot(snapshot);
+
+      expect(mockUpdateNavigationSnapshot).toHaveBeenCalledWith(snapshot);
       expect(result).toEqual({ success: true });
     });
   });

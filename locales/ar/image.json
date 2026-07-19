@@ -53,6 +53,8 @@
   "generation.metadata.createdAt": "تم الإنشاء في {{time}}",
   "generation.status.failed": "فشل في الإنشاء",
   "generation.status.generating": "جارٍ الإنشاء...",
+  "generationTopic.notFound.desc": "هذا الجيل غير موجود أو لم يعد متاحًا — قد يكون قد تم حذفه أو تعيينه كخاص من قبل مالكه.",
+  "generationTopic.notFound.title": "الجيل غير متاح",
   "notSupportGuide.desc": "وضع النشر الحالي لا يدعم إنشاء الصور بالذكاء الاصطناعي. قم بالتبديل إلى <1>وضع نشر قاعدة بيانات الخادم</1>، أو استخدم <3>LobeHub Cloud</3>.",
   "notSupportGuide.features.fileIntegration.desc": "تكامل عميق مع نظام إدارة الملفات؛ يتم حفظ الصور المُنشأة تلقائيًا في نظام الملفات لإدارة وتنظيم موحد.",
   "notSupportGuide.features.fileIntegration.title": "تكامل مع نظام الملفات",

@@ -19,6 +19,8 @@ import { type AgentHook } from './hooks/types';
 // ==================== Operation Tool Set ====================
 
 export interface OperationToolSet {
+  /** Tool IDs that may be restored from historical explicit activations for this run. */
+  activatableToolIds?: string[];
   enabledToolIds?: string[];
   executorMap?: Record<string, ToolExecutor>;
   manifestMap: Record<string, LobeToolManifest>;
@@ -317,6 +319,13 @@ export interface ExecGroupMemberResult {
 
 export interface OperationCreationParams {
   activeDeviceId?: string;
+  /**
+   * Principal pool the routed `activeDeviceId` lives in. `personal` when a
+   * workspace run was routed to the caller's own device via a per-user
+   * `local` override — device runtimes must then address it through the
+   * personal `(userId, deviceId)` pool instead of the `workspace:<id>` pool.
+   */
+  activeDeviceScope?: 'personal' | 'workspace';
   agentConfig?: any;
   /**
    * Multi-agent group (or bot-conversation fallback) context, resolved once at
@@ -333,6 +342,12 @@ export interface OperationCreationParams {
      * read on the completion path to project receipts.
      */
     agentSignal?: AgentSignalOperationMarker;
+    /**
+     * Client IP of the originating request. Spread onto `state.metadata.clientIp`
+     * so downstream LLM-call metadata can carry it for auditing and spend
+     * attribution.
+     */
+    clientIp?: string;
     defaultTaskAssigneeAgentId?: string;
     documentId?: string | null;
     groupId?: string | null;
@@ -347,10 +362,29 @@ export interface OperationCreationParams {
     scope?: string | null;
     /** Source user message ID used for same-turn Agent Signal procedure suppression. */
     sourceMessageId?: string;
+    /**
+     * Live-progress anchor for a `callSubAgent` child, spread onto
+     * `state.metadata.subAgentProgress`.
+     *
+     * The child runs on its own operationId, but the client only ever subscribes
+     * to the PARENT's gateway channel — which stays open across the sub-agent run
+     * because `waiting_for_async_tool` is excluded from `STREAM_END_STATUSES`.
+     * So the child's step loop publishes its running totals onto the parent's
+     * channel, addressed at the placeholder tool message by `toolMessageId`.
+     * Without this the client sees nothing until `completeSubAgentBridge`
+     * backfills `pluginState` at the very end.
+     */
+    subAgentProgress?: { parentOperationId: string; toolMessageId: string };
     taskId?: string;
     threadId?: string | null;
     topicId?: string | null;
     trigger?: string;
+    /**
+     * User agent of the originating request. Spread onto
+     * `state.metadata.userAgent` so downstream LLM-call metadata can carry it for
+     * auditing and spend attribution.
+     */
+    userAgent?: string;
   };
   autoStart?: boolean;
   /**

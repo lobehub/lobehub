@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { WORKSPACE_SYSTEM_ROLES } from '@lobechat/const/rbac';
 import { TRPCError } from '@trpc/server';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -11,8 +12,11 @@ import {
   topics,
   topicShares,
   users,
+  workspaces,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { seedWorkspaceRoles } from '../../utils/seedWorkspaceRoles';
+import { RbacModel } from '../rbac';
 import { TopicShareModel } from '../topicShare';
 
 const serverDB: LobeChatDatabase = await getTestDB();
@@ -202,6 +206,166 @@ describe('TopicShareModel', () => {
 
       expect(result).toBeDefined();
       expect(result!.agentId).toBeNull();
+    });
+
+    it('should return workspaceId for a workspace topic share', async () => {
+      const workspaceId = 'topic-share-test-workspace';
+      const wsTopicId = 'topic-share-test-ws-topic';
+
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Test Workspace',
+        primaryOwnerId: userId,
+        slug: 'topic-share-test-ws',
+      });
+      await serverDB
+        .insert(topics)
+        .values({ id: wsTopicId, title: 'Workspace Topic', userId, workspaceId });
+
+      const wsShareModel = new TopicShareModel(serverDB, userId, workspaceId);
+      const created = await wsShareModel.create(wsTopicId, 'link');
+
+      const result = await TopicShareModel.findByShareId(serverDB, created.id);
+
+      expect(result).toBeDefined();
+      expect(result!.workspaceId).toBe(workspaceId);
+    });
+
+    it('should return null workspaceId for a personal topic share', async () => {
+      const created = await topicShareModel.create(topicId, 'link');
+
+      const result = await TopicShareModel.findByShareId(serverDB, created.id);
+
+      expect(result!.workspaceId).toBeNull();
+    });
+  });
+
+  describe('workspace mode ownership', () => {
+    const workspaceId = 'topic-share-ws-ownership';
+    const wsTopicId = 'topic-share-ws-ownership-topic';
+    let wsShareModel: TopicShareModel;
+
+    beforeEach(async () => {
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Ownership WS',
+        primaryOwnerId: userId,
+        slug: 'topic-share-ws-ownership',
+      });
+      await serverDB
+        .insert(topics)
+        .values({ id: wsTopicId, title: 'WS Ownership Topic', userId, workspaceId });
+      wsShareModel = new TopicShareModel(serverDB, userId, workspaceId);
+    });
+
+    it('getByTopicId should still find the share after switching visibility to link', async () => {
+      await wsShareModel.create(wsTopicId, 'private');
+
+      const updated = await wsShareModel.updateVisibility(wsTopicId, 'link');
+      expect(updated).not.toBeNull();
+
+      // Regression: topic_shares.visibility is 'private' | 'link' (share semantics),
+      // it must NOT be treated as the workspace 'public' | 'private' row-visibility —
+      // a 'link' share used to be filtered out by its own ownership clause.
+      const info = await wsShareModel.getByTopicId(wsTopicId);
+      expect(info).not.toBeNull();
+      expect(info!.visibility).toBe('link');
+    });
+
+    it('create keeps the topic creator as share owner when another member creates the share', async () => {
+      // Regression: a workspace admin creating a share for a member's topic used
+      // to insert their own id as topic_shares.user_id, which downstream access
+      // checks treat as ownerId — locking the actual creator out of a private share.
+      const adminShareModel = new TopicShareModel(serverDB, userId2, workspaceId);
+
+      const created = await adminShareModel.create(wsTopicId, 'private');
+
+      expect(created!.userId).toBe(userId);
+    });
+
+    it('updateVisibility can switch a link share back to private', async () => {
+      await wsShareModel.create(wsTopicId, 'link');
+
+      const updated = await wsShareModel.updateVisibility(wsTopicId, 'private');
+      expect(updated).not.toBeNull();
+      expect(updated!.visibility).toBe('private');
+    });
+
+    it('deleteByTopicId removes a link share in workspace mode', async () => {
+      const created = await wsShareModel.create(wsTopicId, 'link');
+
+      await wsShareModel.deleteByTopicId(wsTopicId);
+
+      const result = await TopicShareModel.findByShareId(serverDB, created.id);
+      expect(result).toBeNull();
+    });
+
+    describe('findByShareIdWithAccessCheck — private is creator-only, even in a workspace', () => {
+      beforeEach(async () => {
+        await seedWorkspaceRoles(serverDB, workspaceId);
+      });
+
+      it('rejects a workspace member (viewer role) for a private share', async () => {
+        await new RbacModel(serverDB, userId2).assignWorkspaceRole({
+          roleName: WORKSPACE_SYSTEM_ROLES.VIEWER,
+          userId: userId2,
+          workspaceId,
+        });
+        const created = await wsShareModel.create(wsTopicId, 'private');
+
+        try {
+          await TopicShareModel.findByShareIdWithAccessCheck(serverDB, created.id, userId2);
+          throw new Error('should not reach');
+        } catch (error) {
+          expect((error as TRPCError).code).toBe('FORBIDDEN');
+        }
+      });
+
+      it('allows the creator to view their own private share', async () => {
+        const created = await wsShareModel.create(wsTopicId, 'private');
+
+        const result = await TopicShareModel.findByShareIdWithAccessCheck(
+          serverDB,
+          created.id,
+          userId,
+        );
+
+        expect(result.topicId).toBe(wsTopicId);
+      });
+
+      it('rejects a non-member user for a private workspace share', async () => {
+        const created = await wsShareModel.create(wsTopicId, 'private');
+
+        try {
+          await TopicShareModel.findByShareIdWithAccessCheck(serverDB, created.id, userId2);
+          throw new Error('should not reach');
+        } catch (error) {
+          expect((error as TRPCError).code).toBe('FORBIDDEN');
+        }
+      });
+
+      it('rejects anonymous access for a private workspace share', async () => {
+        const created = await wsShareModel.create(wsTopicId, 'private');
+
+        try {
+          await TopicShareModel.findByShareIdWithAccessCheck(serverDB, created.id, undefined);
+          throw new Error('should not reach');
+        } catch (error) {
+          expect((error as TRPCError).code).toBe('FORBIDDEN');
+        }
+      });
+
+      it('still allows anonymous access for a link workspace share', async () => {
+        const created = await wsShareModel.create(wsTopicId, 'link');
+
+        const result = await TopicShareModel.findByShareIdWithAccessCheck(
+          serverDB,
+          created.id,
+          undefined,
+        );
+
+        expect(result.topicId).toBe(wsTopicId);
+      });
     });
   });
 

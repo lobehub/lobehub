@@ -1,7 +1,7 @@
 import { LOADING_FLAT } from '@lobechat/const';
 import { type UIChatMessage } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
-import { memo, useCallback } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
@@ -18,7 +18,7 @@ import { useMarkdown } from '../useMarkdown';
 
 const MessageContent = memo<UIChatMessage>(
   ({ id, tools, content, chunksList, search, imageList, metadata, ...props }) => {
-    const { drawer, markdownProps } = useMarkdown(id);
+    const { drawer, markdownProps } = useMarkdown(id, !!tools?.length);
     // Use ConversationStore instead of ChatStore
     const generating = useConversationStore(messageStateSelectors.isMessageGenerating(id));
     const isCreating = useConversationStore(messageStateSelectors.isMessageCreating(id));
@@ -42,7 +42,7 @@ const MessageContent = memo<UIChatMessage>(
 
     const showFileChunks = !!chunksList && chunksList.length > 0;
 
-    const reactions = metadata?.reactions || [];
+    const reactions = useMemo(() => metadata?.reactions || [], [metadata?.reactions]);
 
     const handleReactionClick = useCallback(
       (emoji: string) => {
@@ -53,7 +53,7 @@ const MessageContent = memo<UIChatMessage>(
           addReaction(id, emoji);
         }
       },
-      [id, reactions, addReaction, removeReaction],
+      [id, reactions, userId, addReaction, removeReaction],
     );
 
     const isActive = useCallback(
@@ -61,7 +61,7 @@ const MessageContent = memo<UIChatMessage>(
         const reaction = reactions.find((r) => r.emoji === emoji);
         return !!reaction && reaction.users.includes(userId);
       },
-      [reactions],
+      [reactions, userId],
     );
 
     if (isCollapsed) return <CollapsedMessage content={content} id={id} />;

@@ -1,4 +1,5 @@
-import { Button, Flexbox, Markdown, MaskShadow } from '@lobehub/ui';
+import { Flexbox, Markdown, MaskShadow } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { useSize } from 'ahooks';
 import { ChevronsDownUpIcon, ChevronsUpDownIcon } from 'lucide-react';
 import { memo, useEffect, useRef, useState } from 'react';
@@ -50,7 +51,7 @@ const BriefCardSummary = memo<BriefCardSummaryProps>(({ summary }) => {
           block
           className={styles.expandLink}
           icon={expanded ? ChevronsDownUpIcon : ChevronsUpDownIcon}
-          iconPlacement={'end'}
+          iconPosition={'end'}
           size={'small'}
           type={'text'}
           onClick={() => setExpanded(!expanded)}

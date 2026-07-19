@@ -83,8 +83,16 @@ export const MODEL_LIST_CONFIGS = {
   },
   moonshot: {
     functionCallKeywords: ['moonshot', 'kimi'],
-    reasoningKeywords: ['thinking', 'k2.5'],
-    visionKeywords: ['vision', 'kimi-latest', 'kimi-thinking-preview', 'k2.5'],
+    reasoningKeywords: ['thinking', 'k2.5', 'k2.6', 'k2.7', 'kimi-k3'],
+    visionKeywords: [
+      'vision',
+      'kimi-latest',
+      'kimi-thinking-preview',
+      'k2.5',
+      'k2.6',
+      'k2.7',
+      'kimi-k3',
+    ],
   },
   openai: {
     excludeKeywords: ['audio'],
@@ -280,9 +288,11 @@ const isKeywordListMatch = (modelId: string, keywords: readonly string[]): boole
  * @param provider Provider type
  * @returns Matching local model configuration
  */
+// Accepts either a provider id or a model-family key — at runtime it simply
+// looks up a same-named export in model-bank and skips when absent.
 const findKnownModelByProvider = async (
   modelId: string,
-  provider: keyof typeof MODEL_LIST_CONFIGS,
+  provider: ModelProviderKey | keyof typeof MODEL_LIST_CONFIGS,
 ): Promise<any> => {
   const lowerModelId = modelId.toLowerCase();
 
@@ -667,13 +677,13 @@ const processModelCard = (
 export const processModelList = async (
   modelList: Array<{ id: string }>,
   config: ModelProcessorConfig,
-  provider?: keyof typeof MODEL_LIST_CONFIGS,
+  provider?: ModelProviderKey,
 ): Promise<ChatModelCard[]> => {
   const { loadModels } = await import('model-bank');
   const builtinModels = await loadModels();
 
   // If provider is provided, try to get the local configuration for that provider
-  const providerLocalConfig = await getProviderLocalConfig(provider as ModelProviderKey);
+  const providerLocalConfig = await getProviderLocalConfig(provider);
 
   return Promise.all(
     modelList.map(async (model) => {

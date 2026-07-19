@@ -16,6 +16,7 @@ import type {
   DeviceGitRemoveWorktreeResult,
   DeviceGitRenameBranchResult,
   DeviceGitSyncResult,
+  DeviceGitUpstreamRef,
   DeviceGitWorkingTreeStatus,
   DeviceGitWorktreeListItem,
 } from '@lobechat/types';
@@ -27,6 +28,7 @@ import { electronGitService } from '@/services/electron/git';
 export interface GitBranchSummary {
   branch?: string;
   detached?: boolean;
+  upstream?: DeviceGitUpstreamRef;
 }
 
 /** Linked-PR summary for a branch — the result of the expensive `gh` leg. */
@@ -35,6 +37,7 @@ export interface GitLinkedPRSummary {
   ghMissing?: boolean;
   pullRequest?: DeviceGitLinkedPullRequest | null;
   pullRequestStatus?: DeviceGitLinkedPullRequestLookupStatus;
+  upstream?: DeviceGitUpstreamRef;
 }
 
 /**
@@ -186,14 +189,18 @@ class GitService {
     const info = deviceId
       ? await lambdaClient.device.gitBranch.query({ deviceId, path })
       : await electronGitService.getGitBranch(path);
-    return { branch: info?.branch, detached: info?.detached };
+    return { branch: info?.branch, detached: info?.detached, upstream: info?.upstream };
   }
 
   /**
-   * PR linked to `branch` on a GitHub repo. Shells out to `gh pr list` (8s
-   * timeout), so callers throttle this far more aggressively than the branch
-   * read. Includes merged/closed PRs so persisted snapshots can refresh after
-   * GitHub changes outside the app.
+   * PR linked to `branch` on a GitHub repo. Shells out to `gh` (8s timeout), so
+   * callers throttle this far more aggressively than the branch read. Includes
+   * merged/closed PRs so persisted snapshots can refresh after GitHub changes
+   * outside the app.
+   *
+   * `branch` is the LOCAL branch; the device resolves the remote ref it publishes
+   * to and queries GitHub under that, falling back to a commit→PR lookup. It
+   * reports the ref it landed on as `upstream` — persist that, not the local name.
    */
   async getLinkedPullRequest({
     branch,
@@ -220,6 +227,7 @@ class GitService {
       ghMissing: pr.status === 'gh-missing',
       pullRequest: pr.pullRequest,
       pullRequestStatus: pr.status,
+      upstream: pr.upstream,
     };
   }
 

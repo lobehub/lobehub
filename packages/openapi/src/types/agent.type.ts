@@ -47,7 +47,7 @@ export const CreateAgentRequestSchema = z.object({
     .nullish(),
   description: z.string().nullish(),
   model: z.string().nullish(),
-  params: z.record(z.unknown()).nullish(),
+  params: z.record(z.string(), z.unknown()).nullish(),
   provider: z.string().nullish(),
   systemRole: z.string().nullish(),
   title: z.string().min(1, 'Title cannot be empty'),

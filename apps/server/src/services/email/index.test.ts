@@ -1,7 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { EMAIL_SUPPORT_REPLY_TO } from '@/libs/email/support';
+
 import { createEmailServiceImpl, EmailImplType } from './impls';
 import { EmailService } from './index';
+
+vi.mock('@/envs/email', () => ({
+  emailEnv: { EMAIL_SERVICE_PROVIDER: undefined },
+}));
 
 // Mock dependencies
 vi.mock('./impls');
@@ -53,7 +59,9 @@ describe('EmailService', () => {
 
       const result = await emailService.sendMail(payload);
 
-      expect(mockEmailImpl.sendMail).toHaveBeenCalledWith(payload);
+      expect(mockEmailImpl.sendMail).toHaveBeenCalledWith(
+        EMAIL_SUPPORT_REPLY_TO ? { ...payload, replyTo: EMAIL_SUPPORT_REPLY_TO } : payload,
+      );
       expect(result).toBe(mockResponse);
     });
 
@@ -72,7 +80,9 @@ describe('EmailService', () => {
 
       await emailService.sendMail(payload);
 
-      expect(mockEmailImpl.sendMail).toHaveBeenCalledWith(payload);
+      expect(mockEmailImpl.sendMail).toHaveBeenCalledWith(
+        EMAIL_SUPPORT_REPLY_TO ? { ...payload, replyTo: EMAIL_SUPPORT_REPLY_TO } : payload,
+      );
     });
 
     it('should support attachments', async () => {
@@ -96,7 +106,9 @@ describe('EmailService', () => {
 
       await emailService.sendMail(payload);
 
-      expect(mockEmailImpl.sendMail).toHaveBeenCalledWith(payload);
+      expect(mockEmailImpl.sendMail).toHaveBeenCalledWith(
+        EMAIL_SUPPORT_REPLY_TO ? { ...payload, replyTo: EMAIL_SUPPORT_REPLY_TO } : payload,
+      );
     });
 
     it('should support reply-to address', async () => {

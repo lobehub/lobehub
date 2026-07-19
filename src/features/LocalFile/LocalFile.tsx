@@ -1,5 +1,5 @@
-import { Button, Flexbox, Popover } from '@lobehub/ui';
-import { Space } from 'antd';
+import { Flexbox, Popover } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ExternalLink, FolderOpen } from 'lucide-react';
 import React from 'react';
@@ -45,7 +45,12 @@ interface LocalFileProps {
   readonly?: boolean;
 }
 
-export const LocalFile = ({ name, path, isDirectory = false, readonly = false }: LocalFileProps) => {
+export const LocalFile = ({
+  name,
+  path,
+  isDirectory = false,
+  readonly = false,
+}: LocalFileProps) => {
   const { t } = useTranslation('components');
 
   const handleOpenFile = () => {
@@ -81,7 +86,7 @@ export const LocalFile = ({ name, path, isDirectory = false, readonly = false }:
 
   // File: show popover with two actions
   const popoverContent = (
-    <Space.Compact>
+    <Flexbox horizontal gap={4} padding={4}>
       <Button
         icon={ExternalLink}
         size="small"
@@ -98,7 +103,7 @@ export const LocalFile = ({ name, path, isDirectory = false, readonly = false }:
       >
         {t('LocalFile.action.showInFolder')}
       </Button>
-    </Space.Compact>
+    </Flexbox>
   );
 
   return (

@@ -1,0 +1,108 @@
+---
+title: Workspace Roles & Permissions
+description: >-
+  A complete reference of what each workspace role — Owner, Member, and Viewer
+  — can see and do in LobeHub, covering workspace management, billing, AI
+  providers, skills, connectors, and content collaboration.
+tags:
+  - LobeHub
+  - Workspace
+  - Permissions
+  - Roles
+  - RBAC
+  - Team Collaboration
+---
+
+# Workspace Roles & Permissions
+
+Every member of a LobeHub workspace has one of three roles. This page is the complete reference of what each role can see and do.
+
+## Roles at a Glance
+
+| Role       | Summary                                                                                                                                                       |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Owner**  | Full control: workspace settings, members, billing, AI providers, and every member's content. A workspace can have multiple owners.                           |
+| **Member** | Everyday collaborator: chats with agents, creates content, and manages skills and connectors. Can co-edit shared content, but deletes only what they created. |
+| **Viewer** | Read-only: browses agents, conversations, pages, and files, but cannot chat, create, or change anything.                                                      |
+
+<Callout type={'info'}>
+  The workspace's **primary owner** is the owner who holds the billing relationship. Only the
+  primary owner can change the subscription plan, cancel or resume the subscription, and transfer
+  primary ownership to another owner.
+</Callout>
+
+## Workspace Management
+
+| Capability                                     | Owner | Member | Viewer |
+| ---------------------------------------------- | :---: | :----: | :----: |
+| View workspace info and member list            |   ✅   |    ✅   |    ✅   |
+| Edit workspace name, avatar, URL, and settings |   ✅   |    ❌   |    ❌   |
+| Invite / remove members, change roles          |   ✅   |    ❌   |    ❌   |
+| Set member budgets and spending limits         |   ✅   |    ❌   |    ❌   |
+| View audit log                                 |   ✅   |    ❌   |    ❌   |
+| Export / import / reset workspace data         |   ✅   |    ❌   |    ❌   |
+| Delete workspace                               |   ✅   |    ❌   |    ❌   |
+
+## Billing & Usage
+
+| Capability                                         |        Owner       | Member | Viewer |
+| -------------------------------------------------- | :----------------: | :----: | :----: |
+| View plans, billing, invoices, and payment methods |          ✅         |    ❌   |    ❌   |
+| Top up credits and configure auto top-up           |          ✅         |    ❌   |    ❌   |
+| View usage across all members                      |          ✅         |    ❌   |    ❌   |
+| View their own usage                               |          ✅         |    ✅   |    ❌   |
+| Change plan / cancel / resume subscription         | Primary owner only |    ❌   |    ❌   |
+
+Billing pages are hidden from members and viewers entirely.
+
+## AI Configuration
+
+| Capability                                           | Owner | Member | Viewer |
+| ---------------------------------------------------- | :---: | :----: | :----: |
+| Configure AI providers (API keys, endpoints, models) |   ✅   |    ❌   |    ❌   |
+| Use workspace models in chat                         |   ✅   |    ✅   |    ❌   |
+| Manage shared credentials                            |   ✅   |    ❌   |    ❌   |
+| Manage storage                                       |   ✅   |    ❌   |    ❌   |
+| View the workspace API key list                      |   ✅   |    ✅   |    ❌   |
+| Create / manage own API keys                         |   ✅   |    ✅   |    ❌   |
+| Manage other members' API keys                       |   ✅   |    ❌   |    ❌   |
+
+The **AI Provider** settings page is visible to owners only — members and viewers do not see it in workspace settings.
+
+The **workspace API key** list is visible to every member: each member sees all keys in the workspace with their creator, but the plaintext secret is shown only for keys they created themselves. Members can create and manage their own keys; owners can manage everyone's.
+
+## Skills & Connectors
+
+| Capability                                   | Owner |  Member  |    Viewer   |
+| -------------------------------------------- | :---: | :------: | :---------: |
+| Browse and use installed skills / connectors |   ✅   |     ✅    | Browse only |
+| Install skills / add connectors              |   ✅   |     ✅    |      ❌      |
+| Edit / remove skills and connectors          |  All  | Own only |      ❌      |
+| Run tools (MCP, sandbox execution)           |   ✅   |     ✅    |      ❌      |
+
+Skills and connectors are shared across the workspace — everyone can browse and use them. Editing or removing an entry (including re-authorizing a connector's credentials or changing its tool permissions) is limited to the member who created it; owners can manage every entry.
+
+## Content Collaboration
+
+Content covers agents, conversations (topics and messages), pages, files, documents, and knowledge bases.
+
+| Capability                                                                                              | Owner | Member | Viewer |
+| ------------------------------------------------------------------------------------------------------- | :---: | :----: | :----: |
+| Browse all workspace content                                                                            |   ✅   |    ✅   |    ✅   |
+| Chat with agents                                                                                        |   ✅   |    ✅   |    ❌   |
+| Create new content                                                                                      |   ✅   |    ✅   |    ❌   |
+| Edit / delete their own content                                                                         |   ✅   |    ✅   |    ❌   |
+| Collaboratively edit shared content (public pages, public agent / group settings, tasks, shared topics) |   ✅   |    ✅   |    ❌   |
+| Delete / transfer other members' content                                                                |   ✅   |    ❌   |    ❌   |
+
+Row-level ownership rules that apply on top of the table:
+
+- **Deleting or transferring** a conversation, topic, page, file, document, knowledge base, agent, group, image-generation topic, verify session, or task created by someone else is limited to that creator and workspace owners.
+- **Credential-backed entries** (workspace API keys, bot integrations) can be modified or removed only by their creator or an owner, and each member sees only their own API key values.
+- **"Clear all" bulk actions** (clear topics, threads, tasks, knowledge bases, API keys) only affect content the caller created.
+- **Collaborative editing** of shared content is intentional: members can co-edit public pages and documents, public agent and group configurations, tasks, and messages in shared topics — but they still cannot delete those resources.
+
+<Callout type={'tip'}>
+  Viewers cannot chat because a conversation both writes message history and spends the workspace
+  budget. If someone needs to chat, give them the **Member** role instead.
+</Callout>

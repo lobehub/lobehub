@@ -53,6 +53,8 @@
   "generation.metadata.createdAt": "Создано в {{time}}",
   "generation.status.failed": "Ошибка генерации",
   "generation.status.generating": "Генерация...",
+  "generationTopic.notFound.desc": "Это поколение не существует или больше недоступно — возможно, оно было удалено или сделано приватным его владельцем.",
+  "generationTopic.notFound.title": "Поколение недоступно",
   "notSupportGuide.desc": "Текущий режим развертывания не поддерживает генерацию AI-изображений. Переключитесь на <1>режим развертывания с серверной базой данных</1> или используйте <3>LobeHub Cloud</3>.",
   "notSupportGuide.features.fileIntegration.desc": "Глубокая интеграция с системой управления файлами; сгенерированные изображения автоматически сохраняются в файловую систему для централизованного управления и организации.",
   "notSupportGuide.features.fileIntegration.title": "Интеграция с файловой системой",

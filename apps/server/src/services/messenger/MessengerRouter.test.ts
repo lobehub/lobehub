@@ -3,12 +3,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MessengerRouter } from './MessengerRouter';
 
+const mockGetBotFeatureAccessState = vi.hoisted(() => vi.fn());
+
 vi.mock('@/database/core/db-adaptor', () => ({
   getServerDB: vi.fn().mockResolvedValue({}),
 }));
 
 vi.mock('@/server/modules/AgentRuntime/redis', () => ({
   getAgentRuntimeRedisClient: vi.fn().mockReturnValue(null),
+}));
+
+vi.mock('@/business/server/bot/featureAccess', () => ({
+  getBotFeatureAccessState: mockGetBotFeatureAccessState,
+}));
+
+vi.mock('@/envs/gateway', () => ({
+  gatewayEnv: { MESSAGE_GATEWAY_SERVICE_TOKEN: 'gateway-service-token' },
 }));
 
 const mockResolveByPayload = vi.fn();
@@ -75,6 +85,7 @@ const mockChatBot = {
   webhooks: {
     slack: mockWebhookHandler,
     telegram: mockWebhookHandler,
+    wechat: mockWebhookHandler,
   },
 };
 vi.mock('chat', () => ({
@@ -107,6 +118,16 @@ vi.mock('@/server/services/bot/AgentBridgeService', () => ({
     }
     handleMention = mockHandleMention;
     handleSubscribedMessage = mockHandleSubscribed;
+  },
+}));
+
+// `fetchUserAgents` constructs an AgentModel directly; stub the class so the
+// partition test can feed it rows without standing up drizzle. AgentModel's
+// methods are instance arrow-function fields, so prototype spies don't work.
+const mockListMessengerBindableAgents = vi.fn();
+vi.mock('@/database/models/agent', () => ({
+  AgentModel: class {
+    listMessengerBindableAgents = (...args: any[]) => mockListMessengerBindableAgents(...args);
   },
 }));
 
@@ -177,6 +198,19 @@ vi.mock('./platforms/telegram/binder', () => ({
   })),
 }));
 
+const mockWechatBinder = {
+  createClient: () => ({
+    createAdapter: () => ({}),
+    extractChatId: (id: string) => id.split(':').at(-1) ?? id,
+  }),
+  handleUnlinkedMessage: vi.fn(),
+  notifyLinkSuccess: vi.fn(),
+  sendDmText: vi.fn(),
+};
+vi.mock('./platforms/wechat/binder', () => ({
+  MessengerWechatBinder: vi.fn().mockImplementation(() => mockWechatBinder),
+}));
+
 const buildSlackRequest = (body: string, headers: Record<string, string> = {}): Request =>
   new Request('https://app.example.com/api/agent/messenger/webhooks/slack', {
     body,
@@ -199,11 +233,23 @@ const slackCreds = (tenantId: string) => ({
   tenantId,
 });
 
+const wechatCreds = {
+  applicationId: 'wechat-bot',
+  baseUrl: 'https://ilink.example.com',
+  botId: 'wechat-bot',
+  botToken: 'wechat-token',
+  installationKey: 'wechat:wechat-user',
+  metadata: {},
+  platform: 'wechat' as const,
+  tenantId: 'wechat-user',
+};
+
 beforeEach(() => {
   mockVerifySignature.mockReturnValue(true);
   mockChatBot.webhooks = {
     slack: mockWebhookHandler,
     telegram: mockWebhookHandler,
+    wechat: mockWebhookHandler,
   };
   mockFindLink.mockReset();
   mockSetActiveScope.mockReset();
@@ -213,6 +259,8 @@ beforeEach(() => {
   ]);
   mockGetServerFeatureFlagsStateFromRuntimeConfig.mockReset();
   mockGetServerFeatureFlagsStateFromRuntimeConfig.mockResolvedValue({ enableWorkspace: true });
+  mockGetBotFeatureAccessState.mockReset();
+  mockGetBotFeatureAccessState.mockResolvedValue({ allowed: true });
   mockAgentBridgeConstructor.mockReset();
   mockHandleMention.mockReset();
   mockHandleSubscribed.mockReset();
@@ -228,6 +276,8 @@ beforeEach(() => {
   mockSlackBinder.replyPrivately.mockReset();
   mockSlackBinder.sendAgentPicker.mockReset();
   mockSlackBinder.sendDmText.mockReset();
+  mockWechatBinder.handleUnlinkedMessage.mockReset();
+  mockWechatBinder.sendDmText.mockReset();
 });
 
 afterEach(() => {
@@ -411,6 +461,18 @@ const loadSlackBot = async (): Promise<void> => {
   );
 };
 
+const loadWechatBot = async (): Promise<void> => {
+  mockResolveByPayload.mockResolvedValue(wechatCreds);
+  const router = new MessengerRouter();
+  await router.getWebhookHandler('wechat')(
+    new Request('https://app.example.com/api/agent/messenger/webhooks/wechat', {
+      body: '{}',
+      headers: { authorization: 'Bearer gateway-service-token' },
+      method: 'POST',
+    }),
+  );
+};
+
 const fakeMessage = (overrides: Partial<any> = {}): any => ({
   author: { isBot: false, userId: 'U_ALICE', userName: 'alice' },
   id: 'm1',
@@ -428,6 +490,13 @@ const fakeChannelThread = (): any => ({
 
 const fakeDmThread = (): any => ({
   id: 'slack:D_DM',
+  isDM: true,
+  post: vi.fn(),
+  subscribe: vi.fn(),
+});
+
+const fakeWechatDmThread = (): any => ({
+  id: 'wechat:dm:wechat-user',
   isDM: true,
   post: vi.fn(),
   subscribe: vi.fn(),
@@ -463,12 +532,80 @@ describe('MessengerRouter channel @mention', () => {
       'user_alice',
       'workspace-1',
     );
+    expect(mockGetBotFeatureAccessState).toHaveBeenCalledWith({
+      action: 'runtime',
+      platform: 'slack',
+      userId: 'user_alice',
+      workspaceId: 'workspace-1',
+    });
     expect(mockHandleMention.mock.calls[0][2]).toMatchObject({ agentId: 'agt_main' });
     expect(mockHandleSubscribed).not.toHaveBeenCalled();
     // We deliberately do NOT subscribe channel threads — see comment in
     // `onNewMention`.
     expect(thread.subscribe).not.toHaveBeenCalled();
     expect(mockSlackBinder.handleUnlinkedMessage).not.toHaveBeenCalled();
+    expect(mockSlackBinder.replyEphemeral).not.toHaveBeenCalled();
+  });
+
+  it('sends the feature-gate denial ephemerally for a public channel mention', async () => {
+    await loadSlackBot();
+    mockFindLink.mockResolvedValue({
+      activeAgentId: 'agt_main',
+      id: 'link_1',
+      platformUserId: 'U_ALICE',
+      tenantId: 'T_ACME',
+      userId: 'user_alice',
+      workspaceId: null,
+    });
+    mockGetBotFeatureAccessState.mockResolvedValueOnce({
+      allowed: false,
+      blockedMessage: 'Upgrade to continue.',
+    });
+
+    const handler = mockChatBot.onNewMention.mock.calls[0][0] as (
+      thread: any,
+      msg: any,
+    ) => Promise<void>;
+    await handler(fakeChannelThread(), fakeMessage({ isMention: true }));
+
+    expect(mockGetBotFeatureAccessState).toHaveBeenCalledWith({
+      action: 'runtime',
+      platform: 'slack',
+      userId: 'user_alice',
+    });
+    expect(mockHandleMention).not.toHaveBeenCalled();
+    expect(mockSlackBinder.replyEphemeral).toHaveBeenCalledWith({
+      channelId: 'C_GENERAL',
+      text: 'Upgrade to continue.',
+      threadTs: '1715000000.000100',
+      userId: 'U_ALICE',
+    });
+    expect(mockSlackBinder.sendDmText).not.toHaveBeenCalled();
+  });
+
+  it('sends the feature-gate denial normally in a private conversation', async () => {
+    await loadSlackBot();
+    mockFindLink.mockResolvedValue({
+      activeAgentId: 'agt_main',
+      id: 'link_1',
+      platformUserId: 'U_ALICE',
+      tenantId: 'T_ACME',
+      userId: 'user_alice',
+      workspaceId: null,
+    });
+    mockGetBotFeatureAccessState.mockResolvedValueOnce({
+      allowed: false,
+      blockedMessage: 'Upgrade to continue.',
+    });
+
+    const handler = mockChatBot.onNewMention.mock.calls[0][0] as (
+      thread: any,
+      msg: any,
+    ) => Promise<void>;
+    await handler(fakeDmThread(), fakeMessage({ isMention: true }));
+
+    expect(mockHandleMention).not.toHaveBeenCalled();
+    expect(mockSlackBinder.sendDmText).toHaveBeenCalledWith('D_DM', 'Upgrade to continue.');
     expect(mockSlackBinder.replyEphemeral).not.toHaveBeenCalled();
   });
 
@@ -702,8 +839,8 @@ describe('MessengerRouter slash command dispatch', () => {
   // simply ignore the spy.
   beforeEach(() => {
     vi.spyOn(MessengerRouter.prototype as any, 'fetchUserAgents').mockResolvedValue([
-      { id: 'agt_a', title: 'A' },
-      { id: 'agt_b', title: 'B' },
+      { id: 'agt_a', isPrivate: false, title: 'A' },
+      { id: 'agt_b', isPrivate: false, title: 'B' },
     ]);
   });
 
@@ -1026,6 +1163,190 @@ describe('MessengerRouter onSubscribedMessage gating', () => {
   });
 });
 
+describe('MessengerRouter WeChat system commands', () => {
+  const personalLink = {
+    activeAgentId: 'agt_main',
+    id: 'link_wechat',
+    platformUserId: 'wechat-user',
+    tenantId: 'wechat-user',
+    userId: 'user_alice',
+    workspaceId: null,
+  };
+
+  it('always renders /switch instructions in Chinese', async () => {
+    await loadWechatBot();
+    mockFindLink.mockResolvedValue(personalLink);
+
+    const handler = mockChatBot.onNewMention.mock.calls[0][0] as (
+      thread: any,
+      msg: any,
+    ) => Promise<void>;
+    await handler(fakeWechatDmThread(), fakeMessage({ isMention: true, text: '/switch' }));
+
+    expect(mockWechatBinder.sendDmText).toHaveBeenCalledWith(
+      'wechat-user',
+      expect.stringMatching(/可切换空间：[\s\S]*个人账号 \(当前\)[\s\S]*\/switch <序号>/),
+    );
+  });
+
+  it('omits /start from WeChat help', async () => {
+    await loadWechatBot();
+    mockFindLink.mockResolvedValue(personalLink);
+
+    const handler = mockChatBot.onNewMention.mock.calls[0][0] as (
+      thread: any,
+      msg: any,
+    ) => Promise<void>;
+    await handler(fakeWechatDmThread(), fakeMessage({ isMention: true, text: '/help' }));
+
+    const helpText = mockWechatBinder.sendDmText.mock.calls[0][1];
+    expect(helpText).toContain('可用命令：');
+    expect(helpText).not.toContain('/start');
+  });
+
+  it('does not intercept /start as a WeChat system command', async () => {
+    await loadWechatBot();
+    mockFindLink.mockResolvedValue(personalLink);
+
+    const handler = mockChatBot.onNewMention.mock.calls[0][0] as (
+      thread: any,
+      msg: any,
+    ) => Promise<void>;
+    await handler(fakeWechatDmThread(), fakeMessage({ isMention: true, text: '/start' }));
+
+    expect(mockWechatBinder.sendDmText).not.toHaveBeenCalled();
+    expect(mockHandleMention).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('MessengerRouter /agents private vs workspace grouping', () => {
+  const workspaceLink = {
+    activeAgentId: 'agt_shared',
+    id: 'link_wechat',
+    platformUserId: 'wechat-user',
+    tenantId: 'wechat-user',
+    userId: 'user_alice',
+    workspaceId: 'workspace-1',
+  };
+
+  it('splits the text list into workspace/private sections with continuous numbering', async () => {
+    vi.spyOn(MessengerRouter.prototype as any, 'fetchUserAgents').mockResolvedValue([
+      { id: 'agt_shared', isPrivate: false, title: 'Lobo' },
+      { id: 'agt_shared2', isPrivate: false, title: 'LobeBuilder' },
+      { id: 'agt_private', isPrivate: true, title: '私人助理' },
+    ]);
+    await loadWechatBot();
+    mockFindLink.mockResolvedValue(workspaceLink);
+
+    const handler = mockChatBot.onNewMention.mock.calls[0][0] as (
+      thread: any,
+      msg: any,
+    ) => Promise<void>;
+    await handler(fakeWechatDmThread(), fakeMessage({ isMention: true, text: '/agents' }));
+
+    const text = mockWechatBinder.sendDmText.mock.calls[0][1];
+    expect(text).toMatch(
+      /工作区 Agent：\n1\. Lobo \(当前\)\n2\. LobeBuilder\n\n私人 Agent：\n3\. 私人助理/,
+    );
+    expect(text).not.toContain('你的 Agent：');
+  });
+
+  it('keeps the flat heading when the list has no private agents', async () => {
+    vi.spyOn(MessengerRouter.prototype as any, 'fetchUserAgents').mockResolvedValue([
+      { id: 'agt_shared', isPrivate: false, title: 'Lobo' },
+    ]);
+    await loadWechatBot();
+    mockFindLink.mockResolvedValue(workspaceLink);
+
+    const handler = mockChatBot.onNewMention.mock.calls[0][0] as (
+      thread: any,
+      msg: any,
+    ) => Promise<void>;
+    await handler(fakeWechatDmThread(), fakeMessage({ isMention: true, text: '/agents' }));
+
+    const text = mockWechatBinder.sendDmText.mock.calls[0][1];
+    expect(text).toContain('你的 Agent：');
+    expect(text).not.toContain('工作区 Agent：');
+    expect(text).not.toContain('私人 Agent：');
+  });
+
+  it('suffixes private agents on picker entries when the list mixes both groups', async () => {
+    vi.spyOn(MessengerRouter.prototype as any, 'fetchUserAgents').mockResolvedValue([
+      { id: 'agt_shared', isPrivate: false, title: 'Shared' },
+      { id: 'agt_private', isPrivate: true, title: 'Mine' },
+    ]);
+    await loadSlackBot();
+    mockFindLink.mockResolvedValue({
+      activeAgentId: 'agt_shared',
+      id: 'link_1',
+      platformUserId: 'U_ALICE',
+      tenantId: 'T_ACME',
+      userId: 'user_alice',
+      workspaceId: 'workspace-1',
+    });
+
+    const handler = mockChatBot.onNewMention.mock.calls[0][0] as (
+      thread: any,
+      msg: any,
+    ) => Promise<void>;
+    await handler(fakeDmThread(), fakeMessage({ isMention: true, text: '/agents' }));
+
+    const params = mockSlackBinder.sendAgentPicker.mock.calls[0][1];
+    expect(params.entries).toEqual([
+      { id: 'agt_shared', isActive: true, title: 'Shared' },
+      { id: 'agt_private', isActive: false, title: 'Mine (private)' },
+    ]);
+  });
+
+  it('partitions workspace agents ahead of private ones in fetchUserAgents', async () => {
+    // Earlier tests spy fetchUserAgents on the prototype; undo that so this
+    // test exercises the real implementation.
+    const maybeSpy = (MessengerRouter.prototype as any).fetchUserAgents;
+    if (vi.isMockFunction(maybeSpy)) maybeSpy.mockRestore();
+
+    mockListMessengerBindableAgents.mockResolvedValue([
+      {
+        avatar: null,
+        backgroundColor: null,
+        id: 'p1',
+        isInbox: false,
+        isPrivate: true,
+        title: 'P1',
+      },
+      {
+        avatar: null,
+        backgroundColor: null,
+        id: 'w1',
+        isInbox: false,
+        isPrivate: false,
+        title: 'W1',
+      },
+      {
+        avatar: null,
+        backgroundColor: null,
+        id: 'p2',
+        isInbox: false,
+        isPrivate: true,
+        title: 'P2',
+      },
+      {
+        avatar: null,
+        backgroundColor: null,
+        id: 'w2',
+        isInbox: false,
+        isPrivate: false,
+        title: 'W2',
+      },
+    ]);
+
+    const router = new MessengerRouter();
+    const result = await (router as any).fetchUserAgents({} as any, 'user_alice', 'workspace-1');
+
+    // Stable partition: relative order inside each group is preserved.
+    expect(result.map((r: any) => r.id)).toEqual(['w1', 'w2', 'p1', 'p2']);
+  });
+});
+
 describe('MessengerRouter /switch', () => {
   const personalLink = {
     activeAgentId: 'agt_main',
@@ -1117,7 +1438,7 @@ describe('MessengerRouter /switch', () => {
     ]);
     // `fetchUserAgents` pins the inbox/LobeAI first; the switch lands on it.
     vi.spyOn(MessengerRouter.prototype as any, 'fetchUserAgents').mockResolvedValue([
-      { id: 'agt_inbox', title: 'LobeAI' },
+      { id: 'agt_inbox', isPrivate: false, title: 'LobeAI' },
     ]);
 
     const router = new MessengerRouter();

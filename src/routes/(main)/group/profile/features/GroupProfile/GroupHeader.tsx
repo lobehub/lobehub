@@ -2,11 +2,11 @@
 
 import { EDITOR_DEBOUNCE_TIME } from '@lobechat/const';
 import { Block, Flexbox, Icon, Input, Skeleton, Tooltip } from '@lobehub/ui';
-import { useDebounceFn } from 'ahooks';
 import { message } from 'antd';
+import { debounce } from 'es-toolkit/compat';
 import isEqual from 'fast-deep-equal';
 import { PaletteIcon } from 'lucide-react';
-import { memo, Suspense, useCallback, useEffect, useState } from 'react';
+import { memo, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
@@ -33,7 +33,7 @@ const GroupHeader = memo(() => {
     (s) => agentGroupSelectors.getGroupMeta(gid ?? '')(s),
     isEqual,
   );
-  const updateGroupMeta = useAgentGroupStore((s) => s.updateGroupMeta);
+  const updateGroupMetaById = useAgentGroupStore((s) => s.updateGroupMetaById);
 
   // File upload
   const uploadWithProgress = useFileStore((s) => s.uploadWithProgress);
@@ -45,29 +45,38 @@ const GroupHeader = memo(() => {
   // Sync local state when meta changes from external source
   useEffect(() => {
     setLocalTitle(groupMeta.title || '');
-  }, [groupMeta.title]);
+  }, [gid, groupMeta.title]);
 
   // Debounced save for title
-  const { run: debouncedSaveTitle } = useDebounceFn(
-    (value: string) => {
-      if (!canEdit) return;
+  const debouncedSaveTitle = useMemo(
+    () =>
+      debounce((targetGroupId: string, value: string) => {
+        updateGroupMetaById(targetGroupId, { title: value });
+      }, EDITOR_DEBOUNCE_TIME),
+    [updateGroupMetaById],
+  );
 
-      updateGroupMeta({ title: value });
+  // Persist the departing group's pending title before this route unmounts or
+  // adopts the next gid. The queued invocation carries its original group ID.
+  useEffect(
+    () => () => {
+      debouncedSaveTitle.flush();
+      debouncedSaveTitle.cancel();
     },
-    { wait: EDITOR_DEBOUNCE_TIME },
+    [debouncedSaveTitle, gid],
   );
 
   // Handle avatar change (immediate save)
   const handleAvatarChange = (emoji: string) => {
-    if (!canEdit) return;
+    if (!canEdit || !gid) return;
 
-    updateGroupMeta({ avatar: emoji });
+    updateGroupMetaById(gid, { avatar: emoji });
   };
 
   // Handle avatar upload
   const handleAvatarUpload = useCallback(
     async (file: File) => {
-      if (!canEdit) return;
+      if (!canEdit || !gid) return;
 
       if (file.size > MAX_AVATAR_SIZE) {
         message.error(t('avatar.sizeExceeded'));
@@ -78,28 +87,28 @@ const GroupHeader = memo(() => {
       try {
         const result = await uploadWithProgress({ file });
         if (result?.url) {
-          updateGroupMeta({ avatar: result.url });
+          updateGroupMetaById(gid, { avatar: result.url });
         }
       } finally {
         setUploading(false);
       }
     },
-    [canEdit, uploadWithProgress, updateGroupMeta, t],
+    [canEdit, gid, t, updateGroupMetaById, uploadWithProgress],
   );
 
   // Handle avatar delete
   const handleAvatarDelete = useCallback(() => {
-    if (!canEdit) return;
+    if (!canEdit || !gid) return;
 
-    updateGroupMeta({ avatar: undefined });
-  }, [canEdit, updateGroupMeta]);
+    updateGroupMetaById(gid, { avatar: undefined });
+  }, [canEdit, gid, updateGroupMetaById]);
 
   // Handle background color change
   const handleBackgroundColorChange = (color?: string) => {
-    if (!canEdit) return;
+    if (!canEdit || !gid) return;
 
     if (color !== undefined) {
-      updateGroupMeta({ backgroundColor: color });
+      updateGroupMetaById(gid, { backgroundColor: color });
     }
   };
 
@@ -194,9 +203,9 @@ const GroupHeader = memo(() => {
           }}
           onChange={(e) => {
             setLocalTitle(e.target.value);
-            if (!canEdit) return;
+            if (!canEdit || !gid) return;
 
-            debouncedSaveTitle(e.target.value);
+            debouncedSaveTitle(gid, e.target.value);
           }}
         />
       </Flexbox>

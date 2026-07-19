@@ -1,5 +1,4 @@
 import type { ModelTokensUsage, ModelUsage } from '@lobechat/types';
-import { isRecord } from '@lobechat/utils/object';
 import debug from 'debug';
 import type { Pricing } from 'model-bank';
 import type OpenAI from 'openai';
@@ -23,17 +22,25 @@ const shouldKeepUsageValue = (key: string, value: unknown) => {
 };
 
 /**
- * OpenAI GPT-5.6+ reports cache writes as `cache_write_tokens` under usage details.
- * The field is not yet in all openai SDK type snapshots, so read it defensively.
- *
+ * OpenAI GPT-5.6+ reports cache writes as `cache_write_tokens` under usage details,
+ * a field not yet present in the openai SDK type snapshots — extend the SDK detail
+ * shapes locally until the SDK catches up.
+ */
+type CacheWriteUsageDetails =
+  | (NonNullable<OpenAI.Completions.CompletionUsage['prompt_tokens_details']> & {
+      cache_write_tokens?: number;
+    })
+  | (NonNullable<OpenAI.Responses.ResponseUsage['input_tokens_details']> & {
+      cache_write_tokens?: number;
+    });
+
+/**
  * Billing note: write tokens are a subset of total input tokens and are charged at
  * 1.25× uncached input. They must be excluded from the uncached (1×) miss bucket so
  * computeChatCost does not double-charge textInput + textInput_cacheWrite.
  */
-const readCacheWriteTokens = (details: unknown): number | undefined => {
-  if (!isRecord(details)) return undefined;
-
-  const value = details.cache_write_tokens;
+const readCacheWriteTokens = (details: CacheWriteUsageDetails | undefined): number | undefined => {
+  const value = details?.cache_write_tokens;
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 };
 

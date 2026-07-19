@@ -22,6 +22,8 @@ import { TaskRunnerService } from '@/server/services/taskRunner';
 import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
 import { TransferErrorCode } from '@/types/transferError';
 
+import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
+
 const taskProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
   const wsId = ctx.workspaceId ?? undefined;
@@ -76,8 +78,8 @@ const updateSchema = z.object({
   assigneeAgentId: z.string().nullish(),
   assigneeUserId: z.string().nullish(),
   automationMode: z.enum(['heartbeat', 'schedule']).nullish(),
-  config: z.record(z.unknown()).optional(),
-  context: z.record(z.unknown()).optional(),
+  config: z.record(z.string(), z.unknown()).optional(),
+  context: z.record(z.string(), z.unknown()).optional(),
   description: z.string().optional(),
   editorData: z.unknown().optional(),
   // 0 clears the interval (disables heartbeat); any positive value must be
@@ -407,7 +409,11 @@ export const taskRouter = router({
   clearAll: taskProcedureWrite.mutation(async ({ ctx }) => {
     try {
       const model = ctx.taskModel;
-      const count = await model.deleteAll();
+      // Workspace clear-all is caller-scoped for every role — owners included
+      // (per docs/usage/workspace-permissions: bulk actions only affect
+      // caller-created content).
+      const restrictToCreator = !!ctx.workspaceId;
+      const count = await model.deleteAll({ restrictToCreator });
       return { count, message: `${count} tasks deleted`, success: true };
     } catch (error) {
       console.error('[task:clearAll]', error);
@@ -423,6 +429,7 @@ export const taskRouter = router({
     try {
       const model = ctx.taskModel;
       const task = await resolveOrThrow(model, input.id);
+      assertWorkspaceRowManageable(ctx, task.createdByUserId, 'task');
       await model.delete(task.id);
       return { data: task, message: 'Task deleted', success: true };
     } catch (error) {
@@ -884,8 +891,8 @@ export const taskRouter = router({
             maxIterations: z.number().min(1).max(10).default(3),
             rubrics: z.array(
               z.object({
-                config: z.record(z.unknown()),
-                extractor: z.record(z.unknown()).optional(),
+                config: z.record(z.string(), z.unknown()),
+                extractor: z.record(z.string(), z.unknown()).optional(),
                 id: z.string(),
                 name: z.string(),
                 threshold: z.number().min(0).max(1).optional(),
@@ -1086,11 +1093,19 @@ export const taskRouter = router({
           }
         }
 
-        // Owner can always change visibility on their own tasks. In workspace
-        // mode, allow workspace owners to override (mirrors the transferTask
-        // policy at line ~1166): only they can change visibility on tasks
-        // created by other members.
+        // The creator can always change visibility on their own tasks. In
+        // workspace mode, workspace owners may still promote other members'
+        // tasks (mirrors the transferTask policy at line ~1166), but demoting
+        // to private stays creator-only (LOBE-11760): the task would land in
+        // the creator's private list, so an owner-initiated demotion just
+        // appropriates another member's data.
         if (ctx.workspaceId && resolved.createdByUserId !== ctx.userId) {
+          if (input.visibility === 'private') {
+            throw new TRPCError({
+              code: 'FORBIDDEN',
+              message: 'Only the task creator can make this task private',
+            });
+          }
           const canOverride = await hasWorkspaceScopedPermission({
             action: 'AGENT_UPDATE',
             db: ctx.serverDB,
@@ -1195,7 +1210,7 @@ export const taskRouter = router({
   }),
 
   updateConfig: taskProcedureWrite
-    .input(idInput.merge(z.object({ config: z.record(z.unknown()) })))
+    .input(idInput.merge(z.object({ config: z.record(z.string(), z.unknown()) })))
     .mutation(async ({ input, ctx }) => {
       const { id, config } = input;
       try {
@@ -1278,6 +1293,12 @@ export const taskRouter = router({
       }
     }),
 
+  // Cross-workspace task *transfer* is intentionally not supported anymore:
+  // moving a task drags its whole subtree plus history (dependencies,
+  // documents, comments) out of the workspace. Use `copyTaskToWorkspace`,
+  // which clones the task definition only. The procedure is kept as a
+  // compatibility stub so already-released clients get a stable business
+  // error instead of a procedure-not-found failure.
   transferTask: taskProcedureWrite
     .input(
       z.object({
@@ -1286,62 +1307,12 @@ export const taskRouter = router({
         taskId: z.string(),
       }),
     )
-    .mutation(async ({ ctx, input }) => {
-      const task = await ctx.taskModel.resolve(input.taskId);
-      if (!task)
-        throw new TRPCError({
-          cause: { data: { code: TransferErrorCode.ResourceNotFound } },
-          code: 'NOT_FOUND',
-          message: 'Task not found',
-        });
-
-      if (ctx.workspaceId && task.createdByUserId !== ctx.userId) {
-        const canOverride = await hasWorkspaceScopedPermission({
-          action: 'AGENT_UPDATE',
-          db: ctx.serverDB,
-          scopes: ['ALL'],
-          userId: ctx.userId,
-          workspaceId: ctx.workspaceId,
-        });
-        if (!canOverride) {
-          throw new TRPCError({
-            cause: { data: { code: TransferErrorCode.OwnerOnly } },
-            code: 'FORBIDDEN',
-            message: 'Only workspace owners can transfer tasks created by others',
-          });
-        }
-      }
-
-      if (input.targetWorkspaceId === (ctx.workspaceId ?? null)) {
-        throw new TRPCError({
-          cause: { data: { code: TransferErrorCode.SameWorkspace } },
-          code: 'BAD_REQUEST',
-          message: 'Cannot transfer task to the same workspace',
-        });
-      }
-
-      if (input.targetWorkspaceId) {
-        const canWriteTarget = await hasWorkspaceScopedPermission({
-          action: 'AGENT_UPDATE',
-          db: ctx.serverDB,
-          userId: ctx.userId,
-          workspaceId: input.targetWorkspaceId,
-        });
-        if (!canWriteTarget) {
-          throw new TRPCError({
-            cause: { data: { code: TransferErrorCode.TargetNoWriteAccess } },
-            code: 'FORBIDDEN',
-            message: 'No write access to target workspace',
-          });
-        }
-      }
-
-      return ctx.taskModel.transferTo(
-        task.id,
-        input.targetWorkspaceId,
-        ctx.userId,
-        input.targetVisibility,
-      );
+    .mutation(async () => {
+      throw new TRPCError({
+        cause: { data: { code: TransferErrorCode.TransferNotSupported } },
+        code: 'PRECONDITION_FAILED',
+        message: 'Task transfer is no longer supported; use copyTaskToWorkspace instead',
+      });
     }),
 
   copyTaskToWorkspace: taskProcedureWrite
@@ -1361,6 +1332,10 @@ export const taskRouter = router({
           message: 'Task not found',
         });
 
+      // No source-side creator gate: copy is non-destructive and clones the
+      // task definition only, so any member who can resolve the task (the
+      // visibility-aware `resolve` above already hides others' private tasks)
+      // may copy it.
       if (input.targetWorkspaceId) {
         const canWriteTarget = await hasWorkspaceScopedPermission({
           action: 'AGENT_UPDATE',

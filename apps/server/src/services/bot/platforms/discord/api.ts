@@ -224,6 +224,16 @@ export class DiscordApi {
     });
   }
 
+  /**
+   * Add a user to a thread. Members receive a notification and see the
+   * thread in their client regardless of whether the origin message's
+   * thread pill rendered (see LOBE-11632).
+   */
+  async addThreadMember(threadId: string, userId: string): Promise<void> {
+    log('addThreadMember: thread=%s, user=%s', threadId, userId);
+    await this.rest.put(Routes.threadMembers(threadId, userId));
+  }
+
   // ==================== Message Operations ====================
 
   async getMessages(

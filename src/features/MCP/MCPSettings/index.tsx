@@ -1,5 +1,6 @@
-import { Button, Flexbox, Icon, Input, Text } from '@lobehub/ui';
-import { App,Form as AForm } from 'antd';
+import { Flexbox, Icon, Input, Text } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
+import { App, Form as AForm } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { EditIcon, LinkIcon, Settings2Icon, TerminalIcon } from 'lucide-react';
 import { useImperativeHandle, useState } from 'react';
@@ -158,7 +159,11 @@ interface SettingsProps {
   identifier: string;
 }
 
-const Settings = ({ ref, identifier, hideFooter }: SettingsProps & { ref?: React.RefObject<SettingsRef | null> }) => {
+const Settings = ({
+  ref,
+  identifier,
+  hideFooter,
+}: SettingsProps & { ref?: React.RefObject<SettingsRef | null> }) => {
   const { t } = useTranslation(['plugin', 'common']);
   const [connectionForm] = AForm.useForm();
   const [envForm] = AForm.useForm();

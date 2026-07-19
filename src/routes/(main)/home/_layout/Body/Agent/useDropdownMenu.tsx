@@ -1,14 +1,12 @@
 import { type MenuProps } from '@lobehub/ui';
 import { Icon } from '@lobehub/ui';
-import { ArrowDownIcon, ArrowUpIcon, Hash, LucideCheck, SlidersHorizontalIcon } from 'lucide-react';
-import { useCallback, useMemo } from 'react';
+import { Hash, LucideCheck, SlidersHorizontalIcon } from 'lucide-react';
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { openCustomizeSidebarModal } from '@/routes/(main)/home/_layout/Body/CustomizeSidebarModal';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
-import { reorderSidebarItems } from '@/store/global/selectors/systemStatus';
 
 import { useCreateMenuItems } from '../../hooks';
 
@@ -21,29 +19,8 @@ export const useAgentActionsDropdownMenu = ({
 }: AgentActionsDropdownMenuProps): MenuProps['items'] => {
   const { t } = useTranslation('common');
 
-  const activeWorkspaceId = useActiveWorkspaceId();
   const agentPageSize = useGlobalStore(systemStatusSelectors.agentPageSize);
-  const sidebarItems = useGlobalStore(systemStatusSelectors.sidebarItems(activeWorkspaceId));
-  const hiddenSections = useGlobalStore(
-    systemStatusSelectors.hiddenSidebarSections(activeWorkspaceId),
-  );
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
-
-  const visibleItems = sidebarItems.filter((k) => !hiddenSections.includes(k));
-  const visibleIndex = visibleItems.indexOf('agent');
-  const isFirst = visibleIndex === 0;
-  const isLast = visibleIndex === visibleItems.length - 1;
-
-  const moveSection = useCallback(
-    (direction: 'up' | 'down') => {
-      const idx = sidebarItems.indexOf('agent');
-      if (idx === -1) return;
-      const next = reorderSidebarItems(sidebarItems, idx, direction === 'up' ? idx - 1 : idx + 1);
-      if (next === sidebarItems) return;
-      updateSystemStatus({ sidebarItems: next });
-    },
-    [sidebarItems, updateSystemStatus],
-  );
 
   // Create menu items
   const { createSessionGroupMenuItem, configMenuItem } = useCreateMenuItems();
@@ -73,20 +50,6 @@ export const useAgentActionsDropdownMenu = ({
         key: 'show',
         label: t('navPanel.show'),
       },
-      {
-        disabled: isFirst,
-        icon: <Icon icon={ArrowUpIcon} />,
-        key: 'moveUp',
-        label: t('navPanel.moveUp'),
-        onClick: () => moveSection('up'),
-      },
-      {
-        disabled: isLast,
-        icon: <Icon icon={ArrowDownIcon} />,
-        key: 'moveDown',
-        label: t('navPanel.moveDown'),
-        onClick: () => moveSection('down'),
-      },
       { type: 'divider' as const },
       {
         icon: <Icon icon={SlidersHorizontalIcon} />,
@@ -101,10 +64,6 @@ export const useAgentActionsDropdownMenu = ({
     createSessionGroupMenuItem,
     configMenuItem,
     openConfigGroupModal,
-    isFirst,
-    isLast,
-    moveSection,
-    visibleItems.length,
     t,
   ]);
 };

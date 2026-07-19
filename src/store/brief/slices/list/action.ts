@@ -48,6 +48,23 @@ export class BriefListActionImpl {
     this.internal_updateBrief(id, { readAt: new Date().toISOString() });
   };
 
+  // "Mark all read" over the news section: resolves the briefs with the
+  // neutral `read` action (server-side, never `approve` — bulk dismissal must
+  // not complete tasks) and drops them from the feed, mirroring what the next
+  // unresolved-only fetch would return. Only the ids the server actually
+  // resolved are removed, so a brief resolved elsewhere in the meantime keeps
+  // its own resolution.
+  resolveBriefsAsRead = async (ids: string[]) => {
+    if (ids.length === 0) return;
+
+    const result = await briefService.resolveManyAsRead(ids);
+    const resolvedIds = new Set(result.data);
+    if (resolvedIds.size === 0) return;
+
+    const briefs = this.#get().briefs.filter((b) => !resolvedIds.has(b.id));
+    this.#set({ briefs }, false, n('resolveBriefsAsRead'));
+  };
+
   resolveBrief = async (id: string, action?: string, comment?: string) => {
     await briefService.resolve(id, { action, comment });
     this.internal_updateBrief(id, {

@@ -1,7 +1,7 @@
-import { and, count, desc, eq, inArray, isNull, notInArray, sum } from 'drizzle-orm';
+import { and, count, desc, eq, inArray, isNull, ne, notInArray, sum } from 'drizzle-orm';
 
 import type { DocumentItem, NewDocument } from '../schemas';
-import { DOCUMENT_FOLDER_TYPE, documents, files } from '../schemas';
+import { DOCUMENT_FOLDER_TYPE, documents, files, works } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
@@ -204,6 +204,13 @@ export class DocumentModel {
     });
   };
 
+  findByIds = async (ids: string[]): Promise<DocumentItem[]> => {
+    if (ids.length === 0) return [];
+    return this.db.query.documents.findMany({
+      where: and(this.ownership(), inArray(documents.id, ids)),
+    });
+  };
+
   findByFileId = async (fileId: string) => {
     return this.db.query.documents.findFirst({
       where: and(this.ownership(), eq(documents.fileId, fileId)),
@@ -311,7 +318,7 @@ export class DocumentModel {
 
       const ids = subtree.map((d) => d.id);
 
-      await (trx as LobeChatDatabase)
+      const updatedDocuments = await (trx as LobeChatDatabase)
         .update(documents)
         .set({ updatedAt: new Date(), visibility })
         .where(
@@ -320,7 +327,28 @@ export class DocumentModel {
             eq(documents.userId, this.userId),
             eq(documents.visibility, fromVisibility),
           ),
-        );
+        )
+        .returning({ id: documents.id });
+
+      const updatedDocumentIds = updatedDocuments.map(({ id }) => id);
+      if (updatedDocumentIds.length > 0) {
+        // Mirror visibility onto existing Work projections in the same
+        // transaction. Scope without works.visibility so a promotion can
+        // update rows that are currently private.
+        await (trx as LobeChatDatabase)
+          .update(works)
+          .set({ visibility })
+          .where(
+            and(
+              eq(works.resourceType, 'document'),
+              inArray(works.resourceId, updatedDocumentIds),
+              buildWorkspaceWhere(
+                { userId: this.userId, workspaceId: this.workspaceId },
+                { userId: works.userId, workspaceId: works.workspaceId },
+              ),
+            ),
+          );
+      }
 
       // No child-table cascade needed here — Pages (`sourceType: 'api'`) hold
       // content inline in `documents.content` / `documents.pages`, and the
@@ -387,6 +415,26 @@ export class DocumentModel {
    * Files anchored to documents in the subtree are also re-homed so the
    * resource manager view stays consistent.
    */
+  /**
+   * Whether the subtree (documents + anchored files) contains rows created by
+   * someone else. Transfers rehome every cascaded row, so non-owner members
+   * must not move a folder that carries teammates' content.
+   */
+  subtreeHasForeignRows = async (documentId: string): Promise<boolean> => {
+    const subtree = await this.collectSubtree(documentId, this.db);
+    if (subtree.some((doc) => doc.userId !== this.userId)) return true;
+
+    const ids = subtree.map((doc) => doc.id);
+    if (ids.length === 0) return false;
+
+    const [foreignFile] = await this.db
+      .select({ id: files.id })
+      .from(files)
+      .where(and(inArray(files.parentId, ids), ne(files.userId, this.userId)))
+      .limit(1);
+    return !!foreignFile;
+  };
+
   transferTo = async (
     documentId: string,
     targetWorkspaceId: string | null,

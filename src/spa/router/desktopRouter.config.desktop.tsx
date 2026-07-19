@@ -2,6 +2,7 @@
 
 import {
   BrainCircuit,
+  Download,
   FilePenIcon,
   Home,
   Image,
@@ -14,12 +15,17 @@ import type { RouteObject } from 'react-router';
 import {
   BusinessDesktopRoutesWithMainLayout,
   BusinessDesktopRoutesWithoutMainLayout,
+  BusinessResourceRoutes,
 } from '@/business/client/BusinessDesktopRoutes';
 import { agentDocumentRouteMeta } from '@/features/AgentDocumentPage/routeMeta';
 import { taskRouteMeta, tasksRouteMeta } from '@/features/AgentTasks/routeMeta';
 import { fleetRouteMeta } from '@/features/Fleet/routeMeta';
 import { pageRouteMeta } from '@/features/Pages/routeMeta';
-import { verifyReportsRouteMeta, verifyRouteMeta } from '@/features/Verify/routeMeta';
+import {
+  acceptanceRouteMeta,
+  verifyReportsRouteMeta,
+  verifyRouteMeta,
+} from '@/features/Verify/routeMeta';
 import { workspaceHomeRouteMeta } from '@/features/Workspace/routeMeta';
 import DesktopOnboarding from '@/routes/(desktop)/desktop-onboarding';
 // Layouts — sync import (Electron local, no network overhead)
@@ -37,11 +43,12 @@ import WorkspaceSlugSettingsApiKeyPage from '@/routes/(main)/[workspaceSlug]/set
 import WorkspaceSlugSettingsAuditLogPage from '@/routes/(main)/[workspaceSlug]/settings/audit-log';
 import WorkspaceSlugSettingsBillingPage from '@/routes/(main)/[workspaceSlug]/settings/billing';
 import WorkspaceSlugSettingsConnectorPage from '@/routes/(main)/[workspaceSlug]/settings/connector';
+import WorkspaceSlugSettingsCredentialPage from '@/routes/(main)/[workspaceSlug]/settings/credential';
 import WorkspaceSlugSettingsCreditsPage from '@/routes/(main)/[workspaceSlug]/settings/credits';
-import WorkspaceSlugSettingsCredsPage from '@/routes/(main)/[workspaceSlug]/settings/creds';
 import WorkspaceSlugSettingsDevicesPage from '@/routes/(main)/[workspaceSlug]/settings/devices';
 import WorkspaceSlugSettingsGeneralPage from '@/routes/(main)/[workspaceSlug]/settings/general';
 import WorkspaceSlugSettingsMembersPage from '@/routes/(main)/[workspaceSlug]/settings/members';
+import WorkspaceSlugSettingsOAuthAppsPage from '@/routes/(main)/[workspaceSlug]/settings/oauth-apps';
 import WorkspaceSlugSettingsPlansPage from '@/routes/(main)/[workspaceSlug]/settings/plans';
 import WorkspaceSlugSettingsProviderPage from '@/routes/(main)/[workspaceSlug]/settings/provider';
 import WorkspaceSlugSettingsServiceModelPage from '@/routes/(main)/[workspaceSlug]/settings/service-model';
@@ -49,11 +56,14 @@ import WorkspaceSlugSettingsSkillPage from '@/routes/(main)/[workspaceSlug]/sett
 import WorkspaceSlugSettingsStatsPage from '@/routes/(main)/[workspaceSlug]/settings/stats';
 import WorkspaceSlugSettingsStoragePage from '@/routes/(main)/[workspaceSlug]/settings/storage';
 import WorkspaceSlugSettingsUsagePage from '@/routes/(main)/[workspaceSlug]/settings/usage';
+import AcceptanceWorkspace from '@/routes/(main)/acceptance';
+import AcceptanceEmptyPage from '@/routes/(main)/acceptance/empty';
 // Pages — sync import
 import AgentPage from '@/routes/(main)/agent';
 import DesktopChatLayout from '@/routes/(main)/agent/_layout';
 import DesktopAgentChatLayout from '@/routes/(main)/agent/(chat)/_layout';
 import AgentChannelPage from '@/routes/(main)/agent/channel';
+import AgentChannelPlatformPage from '@/routes/(main)/agent/channel/[platform]';
 import AgentDocumentsIndexRoute from '@/routes/(main)/agent/docs';
 import AgentDocumentLayout from '@/routes/(main)/agent/docs/_layout';
 import AgentDocumentRoute from '@/routes/(main)/agent/docs/[docId]';
@@ -89,6 +99,7 @@ import CommunityListSkillLayout from '@/routes/(main)/community/(list)/skill/_la
 import DevtoolsIndexPage from '@/routes/(main)/devtools';
 import DevtoolsLayout from '@/routes/(main)/devtools/_layout';
 import DevtoolsToolPage from '@/routes/(main)/devtools/[identifier]';
+import DownloadsPage from '@/routes/(main)/downloads';
 import EvalOverviewPage from '@/routes/(main)/eval';
 import EvalLayout from '@/routes/(main)/eval/_layout';
 import EvalHomeLayout from '@/routes/(main)/eval/(home)/_layout';
@@ -125,13 +136,14 @@ import { ProviderDetailPage, ProviderLayout } from '@/routes/(main)/settings/pro
 import TaskDetailRoute from '@/routes/(main)/task/[taskId]';
 import AllTasksPage from '@/routes/(main)/tasks';
 import VerifyWorkspace from '@/routes/(main)/verify';
-import VerifyEmptyDetail from '@/routes/(main)/verify/empty';
+import VerifyEmptyPage from '@/routes/(main)/verify/empty';
+import AcceptanceReportPage from '@/routes/acceptance/[acceptanceId]';
 import SharePagePage from '@/routes/share/page/[id]';
+import { sharePageRouteMeta } from '@/routes/share/page/[id]/routeMeta';
 import ShareTopicPage from '@/routes/share/t/[id]';
 import ShareTopicLayout from '@/routes/share/t/[id]/_layout';
 import { shareTopicRouteMeta } from '@/routes/share/t/[id]/routeMeta';
 import VerifyReportPage from '@/routes/verify/[runId]';
-import VerifyImPage from '@/routes/verify-im';
 import { routeMeta } from '@/spa/router/routeMeta';
 import { SettingsTabs } from '@/store/global/initialState';
 import { ErrorBoundary, redirectElement } from '@/utils/router';
@@ -188,6 +200,10 @@ export const sharedMainAreaChildren: RouteObject[] = [
           {
             element: <AgentChannelPage />,
             path: 'channel',
+          },
+          {
+            element: <AgentChannelPlatformPage />,
+            path: 'channel/:platform',
           },
           {
             element: <AgentTopicsPage />,
@@ -400,6 +416,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
             },
             index: true,
           },
+          ...BusinessResourceRoutes,
         ],
         element: <ResourceHomeLayout />,
       },
@@ -616,6 +633,14 @@ export const desktopRoutes: RouteObject[] = [
     children: [
       ...sharedMainAreaChildren,
 
+      // Downloads page (personal-only — never mirrored under /:workspaceSlug)
+      {
+        element: <DownloadsPage />,
+        errorElement: <ErrorBoundary />,
+        handle: { meta: routeMeta({ icon: Download, titleKey: 'navigation.downloads' }) },
+        path: 'downloads',
+      },
+
       // Settings routes (personal-only — never mirrored under /:workspaceSlug)
       {
         children: [
@@ -648,6 +673,10 @@ export const desktopRoutes: RouteObject[] = [
             element: <SettingsTabPage />,
             handle: { settingsTab: SettingsTabs.Memory },
             path: 'memory',
+          },
+          {
+            element: redirectElement('/settings/credential'),
+            path: 'creds',
           },
           // Other settings tabs
           {
@@ -698,8 +727,12 @@ export const desktopRoutes: RouteObject[] = [
                   { element: <WorkspaceSlugSettingsCreditsPage />, path: 'credits' },
                   { element: <WorkspaceSlugSettingsUsagePage />, path: 'usage' },
                   { element: <WorkspaceSlugSettingsServiceModelPage />, path: 'service-model' },
-                  { element: <WorkspaceSlugSettingsCredsPage />, path: 'creds' },
+                  { element: <WorkspaceSlugSettingsCredentialPage />, path: 'credential' },
+                  // Legacy `/:slug/settings/creds` URLs — kept for deep-links.
+                  { element: redirectElement('../credential'), path: 'creds' },
                   { element: <WorkspaceSlugSettingsApiKeyPage />, path: 'apikey' },
+                  { element: <WorkspaceSlugSettingsOAuthAppsPage />, path: 'oauth-apps' },
+                  { element: <WorkspaceSlugSettingsOAuthAppsPage />, path: 'oauth-apps/:sub' },
                   { element: <WorkspaceSlugSettingsAuditLogPage />, path: 'audit-log' },
                   { element: <WorkspaceSlugSettingsStoragePage />, path: 'storage' },
                   { element: <WorkspaceSlugSettingsDevicesPage />, path: 'devices' },
@@ -765,26 +798,17 @@ export const desktopRoutes: RouteObject[] = [
     children: [
       {
         element: <SharePagePage />,
+        handle: { meta: sharePageRouteMeta },
         path: ':id',
       },
     ],
     path: '/share/page',
   },
 
-  // Messenger verify route (outside main layout)
-  {
-    element: <VerifyImPage />,
-    errorElement: <ErrorBoundary />,
-    path: '/verify-im',
-  },
-
   // Verify report workspace — standalone master-detail (outside main layout)
   {
     children: [
-      {
-        element: <VerifyEmptyDetail />,
-        index: true,
-      },
+      { element: <VerifyEmptyPage />, index: true },
       {
         element: <VerifyReportPage />,
         handle: { meta: verifyRouteMeta },
@@ -795,6 +819,23 @@ export const desktopRoutes: RouteObject[] = [
     errorElement: <ErrorBoundary />,
     handle: { meta: verifyReportsRouteMeta },
     path: '/verify',
+  },
+
+  // Subject-level delivery acceptance — the verify workspace's twin: a
+  // master-detail with the acceptance list on the left.
+  {
+    children: [
+      { element: <AcceptanceEmptyPage />, index: true },
+      {
+        element: <AcceptanceReportPage />,
+        handle: { meta: acceptanceRouteMeta },
+        path: ':acceptanceId',
+      },
+    ],
+    element: <AcceptanceWorkspace />,
+    errorElement: <ErrorBoundary />,
+    handle: { meta: acceptanceRouteMeta },
+    path: '/acceptance',
   },
 
   // Devtools route (outside main layout, dev-only)

@@ -8,8 +8,12 @@ export const params = {
   baseURL: 'https://api.cerebras.ai/v1',
   chatCompletion: {
     handlePayload: (payload) => {
-      // eslint-disable-next-line unused-imports/no-unused-vars
-      const { frequency_penalty, presence_penalty, model, ...rest } = payload;
+      const {
+        frequency_penalty: _frequencyPenalty,
+        presence_penalty: _presencePenalty,
+        model,
+        ...rest
+      } = payload;
 
       return {
         ...rest,

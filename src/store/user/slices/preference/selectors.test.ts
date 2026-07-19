@@ -68,18 +68,6 @@ describe('preferenceSelectors', () => {
   });
 
   describe('labPreferSelectors', () => {
-    it('returns false for agent document floating chat panel by default', () => {
-      store.preference.lab = undefined;
-
-      expect(labPreferSelectors.enableAgentDocumentFloatingChatPanel(store)).toBe(false);
-    });
-
-    it('returns the configured agent document floating chat panel preference', () => {
-      store.preference.lab = { enableAgentDocumentFloatingChatPanel: true };
-
-      expect(labPreferSelectors.enableAgentDocumentFloatingChatPanel(store)).toBe(true);
-    });
-
     it('returns false for message text selection actions by default', () => {
       store.preference.lab = undefined;
 
@@ -90,6 +78,18 @@ describe('preferenceSelectors', () => {
       store.preference.lab = { enableMessageTextSelectionActions: true };
 
       expect(labPreferSelectors.enableMessageTextSelectionActions(store)).toBe(true);
+    });
+
+    it('keeps OAuth app management hidden by default', () => {
+      store.preference.lab = undefined;
+
+      expect(labPreferSelectors.enableOAuthApps(store)).toBe(false);
+    });
+
+    it('returns the configured OAuth app management preference', () => {
+      store.preference.lab = { enableOAuthApps: true };
+
+      expect(labPreferSelectors.enableOAuthApps(store)).toBe(true);
     });
   });
 });

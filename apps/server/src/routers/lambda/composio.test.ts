@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
   connectedAccountsLink: vi.fn(),
   connectorCreate: vi.fn(),
   connectorDelete: vi.fn(),
-  connectorQueryByIdentifiers: vi.fn(),
+  connectorFindScopedByIdentifier: vi.fn(),
   connectorToolDeleteToolsNotIn: vi.fn(),
   connectorToolUpsertMany: vi.fn(),
   connectorUpdate: vi.fn(),
@@ -44,7 +44,7 @@ vi.mock('@/database/models/connector', () => ({
   ConnectorModel: vi.fn().mockImplementation(() => ({
     create: mocks.connectorCreate,
     delete: mocks.connectorDelete,
-    queryByIdentifiers: mocks.connectorQueryByIdentifiers,
+    findScopedByIdentifier: mocks.connectorFindScopedByIdentifier,
     update: mocks.connectorUpdate,
   })),
 }));
@@ -68,7 +68,7 @@ const caller = () => composioRouter.createCaller({ userId: 'user-1' } as any);
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.connectorQueryByIdentifiers.mockResolvedValue([]);
+  mocks.connectorFindScopedByIdentifier.mockResolvedValue(null);
   mocks.connectorCreate.mockResolvedValue({ id: 'conn-new' });
   mocks.pluginFindById.mockResolvedValue(undefined);
 });
@@ -113,7 +113,7 @@ describe('composioRouter.updateComposioPlugin dual-write', () => {
   };
 
   it('creates the connector projection (ACTIVE) + tools when none exists', async () => {
-    mocks.connectorQueryByIdentifiers.mockResolvedValue([]);
+    mocks.connectorFindScopedByIdentifier.mockResolvedValue(null);
 
     const res = await caller().updateComposioPlugin(input);
 
@@ -131,7 +131,7 @@ describe('composioRouter.updateComposioPlugin dual-write', () => {
   });
 
   it('updates an existing connector projection instead of duplicating it', async () => {
-    mocks.connectorQueryByIdentifiers.mockResolvedValue([{ id: 'conn-existing' }]);
+    mocks.connectorFindScopedByIdentifier.mockResolvedValue({ id: 'conn-existing' });
 
     await caller().updateComposioPlugin(input);
 
@@ -152,7 +152,7 @@ describe('composioRouter.updateComposioPlugin dual-write', () => {
   });
 
   it('prunes all connector tools when the refreshed list is empty', async () => {
-    mocks.connectorQueryByIdentifiers.mockResolvedValue([{ id: 'conn-existing' }]);
+    mocks.connectorFindScopedByIdentifier.mockResolvedValue({ id: 'conn-existing' });
 
     await caller().updateComposioPlugin({ ...input, tools: [] });
 
@@ -164,7 +164,7 @@ describe('composioRouter.updateComposioPlugin dual-write', () => {
 
 describe('composioRouter delete paths clean up the connector projection', () => {
   it('removeComposioPlugin deletes the connector row when present', async () => {
-    mocks.connectorQueryByIdentifiers.mockResolvedValue([{ id: 'conn-existing' }]);
+    mocks.connectorFindScopedByIdentifier.mockResolvedValue({ id: 'conn-existing' });
 
     await caller().removeComposioPlugin({ identifier: 'gmail' });
 
@@ -174,7 +174,7 @@ describe('composioRouter delete paths clean up the connector projection', () => 
 
   it('deleteConnection deletes both plugin and connector', async () => {
     mocks.connectedAccountsDelete.mockResolvedValue(undefined);
-    mocks.connectorQueryByIdentifiers.mockResolvedValue([{ id: 'conn-existing' }]);
+    mocks.connectorFindScopedByIdentifier.mockResolvedValue({ id: 'conn-existing' });
 
     await caller().deleteConnection({ connectedAccountId: 'ca-1', identifier: 'gmail' });
 
@@ -183,7 +183,7 @@ describe('composioRouter delete paths clean up the connector projection', () => 
   });
 
   it('does not call connector delete when no projection exists', async () => {
-    mocks.connectorQueryByIdentifiers.mockResolvedValue([]);
+    mocks.connectorFindScopedByIdentifier.mockResolvedValue(null);
 
     await caller().removeComposioPlugin({ identifier: 'gmail' });
 

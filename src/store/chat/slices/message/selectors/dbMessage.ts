@@ -28,7 +28,12 @@ import { messageMapKey } from '../../../utils/messageMapKey';
  * Get the current chat key for accessing dbMessagesMap
  */
 export const currentDbChatKey = (s: ChatStoreState) =>
-  messageMapKey({ agentId: s.activeAgentId, topicId: s.activeTopicId });
+  messageMapKey({
+    agentId: s.activeAgentId,
+    groupId: s.activeGroupId,
+    threadId: s.activeThreadId,
+    topicId: s.activeTopicId,
+  });
 
 /**
  * Get raw messages from database by key
@@ -116,14 +121,18 @@ const dbUserMessages = (s: ChatStoreState) => {
 };
 
 /**
- * Get all file attachments from user messages
+ * Get all file attachments from user messages.
+ *
+ * Tombstoned entries (the viewer lost access to the file — empty
+ * name/type/url) are excluded: list/preview consumers have nothing to render
+ * or open for them; only the message bubble shows a no-access placeholder.
  */
 const dbUserFiles = (s: ChatStoreState) => {
   const userMessages = dbUserMessages(s);
   return userMessages
     .filter((m) => m.fileList && m.fileList.length > 0)
     .flatMap((m) => m.fileList)
-    .filter(Boolean);
+    .filter((f) => !!f && !f.inaccessible);
 };
 
 // ============= DB Message Counting ========== //

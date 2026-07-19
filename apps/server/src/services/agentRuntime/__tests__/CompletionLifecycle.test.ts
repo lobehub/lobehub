@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { type Message, parse } from '@lobechat/conversation-flow';
 import { ChatErrorType } from '@lobechat/types';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -119,6 +120,180 @@ describe('CompletionLifecycle.buildLifecycleEvent', () => {
 
     expect(event.lastAssistantContent).toBe('final answer');
     expect(event.attachments).toBeUndefined();
+  });
+
+  it('preserves the final answer after DB messages are parsed into an assistantGroup', () => {
+    const dbMessages: Message[] = [
+      {
+        content: 'user prompt',
+        createdAt: 0,
+        id: 'msg-user',
+        role: 'user',
+        updatedAt: 0,
+      },
+      {
+        content: '',
+        createdAt: 1,
+        id: 'msg-tool-call',
+        parentId: 'msg-user',
+        role: 'assistant',
+        tools: [
+          {
+            apiName: 'search',
+            arguments: '{}',
+            id: 'tool-call-1',
+            identifier: 'builtin',
+            result_msg_id: 'msg-tool-result',
+            type: 'default',
+          },
+        ],
+        updatedAt: 1,
+      },
+      {
+        content: 'tool result',
+        createdAt: 2,
+        id: 'msg-tool-result',
+        parentId: 'msg-tool-call',
+        role: 'tool',
+        tool_call_id: 'tool-call-1',
+        updatedAt: 2,
+      },
+      {
+        content: 'final answer after tool use',
+        createdAt: 3,
+        id: 'msg-final',
+        parentId: 'msg-tool-result',
+        role: 'assistant',
+        updatedAt: 3,
+      },
+    ];
+    const { flatList } = parse(dbMessages);
+
+    expect(flatList.at(-1)?.role).toBe('assistantGroup');
+
+    const { assistantMessageId, event } = callBuild({ messages: flatList, metadata: {} });
+
+    expect(assistantMessageId).toBe('msg-final');
+    expect(event.lastAssistantContent).toBe('final answer after tool use');
+  });
+
+  it('extracts the final assistant leaf from an assistantGroup', () => {
+    const state = {
+      messages: [
+        { content: 'user prompt', id: 'msg-user', role: 'user' },
+        {
+          children: [
+            {
+              content: '',
+              id: 'msg-tool-call',
+              tools: [
+                {
+                  id: 'tool-call-1',
+                  result: { content: 'tool result', id: 'msg-tool-result' },
+                },
+              ],
+            },
+            { content: 'grouped final answer', id: 'msg-final' },
+          ],
+          content: '',
+          id: 'msg-group',
+          role: 'assistantGroup',
+        },
+      ],
+      metadata: { agentId: 'agent-1', userId: 'user-1' },
+    };
+
+    const { assistantMessageId, event } = callBuild(state);
+
+    expect(assistantMessageId).toBe('msg-final');
+    expect(event.lastAssistantContent).toBe('grouped final answer');
+  });
+
+  it('keeps the final empty assistantGroup leaf instead of falling back to stale text', () => {
+    const state = {
+      messages: [
+        { content: 'stale prior answer', id: 'msg-stale', role: 'assistant' },
+        { content: 'follow-up prompt', id: 'msg-user', role: 'user' },
+        {
+          children: [{ content: '', id: 'msg-final' }],
+          content: '',
+          id: 'msg-group',
+          role: 'assistantGroup',
+        },
+      ],
+      metadata: {},
+    };
+
+    const { assistantMessageId, event } = callBuild(state);
+
+    expect(assistantMessageId).toBe('msg-final');
+    expect(event.lastAssistantContent).toBeUndefined();
+  });
+
+  it('treats an empty assistantGroup as the final assistant boundary', () => {
+    const state = {
+      messages: [
+        { content: 'stale prior answer', id: 'msg-stale', role: 'assistant' },
+        { children: [], content: '', id: 'msg-empty-group', role: 'assistantGroup' },
+      ],
+      metadata: {},
+    };
+
+    const { assistantMessageId, event } = callBuild(state);
+
+    expect(assistantMessageId).toBe('msg-empty-group');
+    expect(event.lastAssistantContent).toBeUndefined();
+  });
+
+  it('extracts attachments from grouped assistant and tool-result leaves', () => {
+    const state = {
+      messages: [
+        {
+          children: [
+            {
+              content: '',
+              id: 'msg-tool-call',
+              tools: [
+                {
+                  id: 'tool-call-1',
+                  result: {
+                    content: [
+                      {
+                        image_url: { url: 'https://cdn.example.com/tool.png' },
+                        type: 'image_url',
+                      },
+                    ],
+                    id: 'msg-tool-result',
+                  },
+                },
+              ],
+            },
+            {
+              content: [
+                { text: 'done', type: 'text' },
+                {
+                  image_url: { url: 'https://cdn.example.com/final.png' },
+                  type: 'image_url',
+                },
+              ],
+              id: 'msg-final',
+            },
+          ],
+          content: '',
+          id: 'msg-group',
+          role: 'assistantGroup',
+        },
+      ],
+      metadata: {},
+    };
+
+    const { event } = callBuild(state);
+
+    expect(event.lastAssistantContent).toBe('done');
+    expect(event.attachments).toEqual([
+      expect.objectContaining({ fetchUrl: 'https://cdn.example.com/tool.png', type: 'image' }),
+      expect.objectContaining({ fetchUrl: 'https://cdn.example.com/final.png', type: 'image' }),
+    ]);
   });
 
   it('concatenates text parts from a multimodal final assistant turn', () => {
@@ -409,6 +584,214 @@ describe('CompletionLifecycle.dispatchHooks — async-tool park', () => {
 
     expect(dispatchSpy).toHaveBeenCalledWith('op-1', 'onComplete', expect.anything(), []);
     expect(unregisterSpy).toHaveBeenCalledWith('op-1');
+  });
+});
+
+describe('CompletionLifecycle.dispatchHooks — lastAssistantContent DB recovery (LOBE-11632)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const buildDoneState = (assistantContent: string | undefined) => ({
+    messages: [
+      { content: 'user prompt', id: 'msg-user', role: 'user' },
+      { content: assistantContent, id: 'msg-assistant', role: 'assistant' },
+    ],
+    metadata: { _hooks: [], agentId: 'agent-1', topicId: 'tpc-1', userId: 'user-1' },
+    status: 'done',
+  });
+
+  const setupSpies = (lifecycle: CompletionLifecycle) => {
+    vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
+    vi.spyOn(lifecycle as any, 'createVerifyMessage').mockResolvedValue(undefined);
+    vi.spyOn(verifyServices, 'runVerifyOnCompletion').mockResolvedValue(undefined);
+    vi.spyOn(hookDispatcher, 'unregister').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    return vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
+  };
+
+  it('recovers the reply text from the DB row when the state carries no assistant text', async () => {
+    const lifecycle = buildLifecycle();
+    const dispatchSpy = setupSpies(lifecycle);
+    const findById = vi.fn().mockResolvedValue({ content: 'the real reply', id: 'msg-assistant' });
+    (lifecycle as any).messageModel = { findById };
+
+    await lifecycle.dispatchHooks('op-1', buildDoneState(''), 'done');
+
+    expect(findById).toHaveBeenCalledWith('msg-assistant');
+    expect(dispatchSpy).toHaveBeenCalledWith(
+      'op-1',
+      'onComplete',
+      expect.objectContaining({ lastAssistantContent: 'the real reply' }),
+      [],
+    );
+  });
+
+  it('recovers by the final assistantGroup child id when grouped state carries no text', async () => {
+    const lifecycle = buildLifecycle();
+    const dispatchSpy = setupSpies(lifecycle);
+    const findById = vi.fn().mockResolvedValue({
+      content: 'the grouped reply from DB',
+      id: 'msg-group-final',
+    });
+    (lifecycle as any).messageModel = { findById };
+
+    await lifecycle.dispatchHooks(
+      'op-1',
+      {
+        messages: [
+          { content: 'user prompt', id: 'msg-user', role: 'user' },
+          {
+            children: [
+              { content: '', id: 'msg-tool-call', tools: [{ id: 'tool-call-1' }] },
+              { content: '', id: 'msg-group-final' },
+            ],
+            content: '',
+            id: 'msg-group',
+            role: 'assistantGroup',
+          },
+        ],
+        metadata: { _hooks: [], agentId: 'agent-1', topicId: 'tpc-1', userId: 'user-1' },
+        status: 'done',
+      },
+      'done',
+    );
+
+    expect(findById).toHaveBeenCalledWith('msg-group-final');
+    expect(dispatchSpy).toHaveBeenCalledWith(
+      'op-1',
+      'onComplete',
+      expect.objectContaining({ lastAssistantContent: 'the grouped reply from DB' }),
+      [],
+    );
+  });
+
+  it('does not hit the DB when the state already carries assistant text', async () => {
+    const lifecycle = buildLifecycle();
+    const dispatchSpy = setupSpies(lifecycle);
+    const findById = vi.fn();
+    (lifecycle as any).messageModel = { findById };
+
+    await lifecycle.dispatchHooks('op-1', buildDoneState('state reply'), 'done');
+
+    expect(findById).not.toHaveBeenCalled();
+    expect(dispatchSpy).toHaveBeenCalledWith(
+      'op-1',
+      'onComplete',
+      expect.objectContaining({ lastAssistantContent: 'state reply' }),
+      [],
+    );
+  });
+
+  it('extracts only text parts when the DB row stores serialized multimodal content', async () => {
+    const lifecycle = buildLifecycle();
+    const dispatchSpy = setupSpies(lifecycle);
+    const serialized = JSON.stringify([
+      { text: '图里是一只猫', type: 'text' },
+      { image: 'data:image/png;base64,xxx', type: 'image' },
+    ]);
+    const findById = vi.fn().mockResolvedValue({
+      content: serialized,
+      id: 'msg-assistant',
+      metadata: { isMultimodal: true },
+    });
+    (lifecycle as any).messageModel = { findById };
+
+    await lifecycle.dispatchHooks('op-1', buildDoneState(''), 'done');
+
+    expect(dispatchSpy).toHaveBeenCalledWith(
+      'op-1',
+      'onComplete',
+      expect.objectContaining({ lastAssistantContent: '图里是一只猫' }),
+      [],
+    );
+  });
+
+  it('returns a plain-text reply verbatim even when it looks like a parts array', async () => {
+    const lifecycle = buildLifecycle();
+    const dispatchSpy = setupSpies(lifecycle);
+    // A legitimate text answer that happens to be a JSON array with `type`
+    // fields — without metadata.isMultimodal it must NOT be parsed as parts.
+    const jsonLookalike = '[{"type":"custom","value":1}]';
+    const findById = vi.fn().mockResolvedValue({ content: jsonLookalike, id: 'msg-assistant' });
+    (lifecycle as any).messageModel = { findById };
+
+    await lifecycle.dispatchHooks('op-1', buildDoneState(''), 'done');
+
+    expect(dispatchSpy).toHaveBeenCalledWith(
+      'op-1',
+      'onComplete',
+      expect.objectContaining({ lastAssistantContent: jsonLookalike }),
+      [],
+    );
+  });
+
+  it('does not recover raw JSON from an image-only multimodal DB row', async () => {
+    const lifecycle = buildLifecycle();
+    const dispatchSpy = setupSpies(lifecycle);
+    const serialized = JSON.stringify([{ image: 'data:image/png;base64,xxx', type: 'image' }]);
+    const findById = vi.fn().mockResolvedValue({
+      content: serialized,
+      id: 'msg-assistant',
+      metadata: { isMultimodal: true },
+    });
+    (lifecycle as any).messageModel = { findById };
+
+    await lifecycle.dispatchHooks('op-1', buildDoneState(''), 'done');
+
+    expect(dispatchSpy).toHaveBeenCalledWith(
+      'op-1',
+      'onComplete',
+      expect.objectContaining({ lastAssistantContent: undefined }),
+      [],
+    );
+  });
+
+  it('leaves the event untouched when the DB row is empty too', async () => {
+    const lifecycle = buildLifecycle();
+    const dispatchSpy = setupSpies(lifecycle);
+    const findById = vi.fn().mockResolvedValue({ content: '', id: 'msg-assistant' });
+    (lifecycle as any).messageModel = { findById };
+
+    await lifecycle.dispatchHooks('op-1', buildDoneState(''), 'done');
+
+    expect(dispatchSpy).toHaveBeenCalledWith(
+      'op-1',
+      'onComplete',
+      expect.objectContaining({ lastAssistantContent: undefined }),
+      [],
+    );
+  });
+
+  it('still dispatches the original event when the DB lookup throws', async () => {
+    const lifecycle = buildLifecycle();
+    const dispatchSpy = setupSpies(lifecycle);
+    const findById = vi.fn().mockRejectedValue(new Error('db down'));
+    (lifecycle as any).messageModel = { findById };
+
+    await lifecycle.dispatchHooks('op-1', buildDoneState(''), 'done');
+
+    expect(dispatchSpy).toHaveBeenCalledWith(
+      'op-1',
+      'onComplete',
+      expect.objectContaining({ lastAssistantContent: undefined }),
+      [],
+    );
+  });
+
+  it('skips recovery on the error path', async () => {
+    const lifecycle = buildLifecycle();
+    setupSpies(lifecycle);
+    const findById = vi.fn();
+    (lifecycle as any).messageModel = { findById, update: vi.fn().mockResolvedValue(undefined) };
+
+    await lifecycle.dispatchHooks(
+      'op-1',
+      { ...buildDoneState(''), error: { message: 'boom' }, status: 'error' },
+      'error',
+    );
+
+    expect(findById).not.toHaveBeenCalled();
   });
 });
 

@@ -342,8 +342,7 @@ export class SessionModel {
 
     if (!result) return;
 
-    // eslint-disable-next-line unused-imports/no-unused-vars
-    const { agent, clientId, ...session } = result;
+    const { agent, clientId: _clientId, ...session } = result;
     const sessionId = this.genId();
 
     const { id: _, slug: __, ...config } = agent;

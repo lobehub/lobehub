@@ -17,6 +17,11 @@ import { publishResourceEvent } from '@/server/services/resourceEvents';
 import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
 import { TransferErrorCode } from '@/types/transferError';
 
+import {
+  assertWorkspaceRowManageable,
+  isWorkspaceNonOwner,
+} from './_helpers/assertWorkspaceRowManageable';
+
 /**
  * Custom schema for agent member input, replacing drizzle-generated insertAgentSchema
  * to avoid Json type inference issues with jsonb columns.
@@ -211,6 +216,19 @@ export const agentGroupRouter = router({
   deleteGroup: agentGroupProcedureWrite
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
+      const group = await ctx.chatGroupModel.findById(input.id);
+      if (!group) throw new TRPCError({ code: 'NOT_FOUND', message: 'Agent group not found' });
+      assertWorkspaceRowManageable(ctx, group.userId, 'group');
+      // Same rule as transfer: deleting the group cascades topics/threads/
+      // messages via FK, so a non-owner member must not erase teammates'
+      // conversations along with their own group.
+      if (isWorkspaceNonOwner(ctx) && (await ctx.agentGroupRepo.transferHasForeignRows(input.id))) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: "Only workspace owners can delete a group carrying others' conversations",
+        });
+      }
+
       return ctx.agentGroupService.deleteGroup(input.id);
     }),
 
@@ -302,6 +320,11 @@ export const agentGroupRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      // Strips members and hard-deletes virtual agents — creator/owner only.
+      const group = await ctx.chatGroupModel.findById(input.groupId);
+      if (!group) throw new TRPCError({ code: 'NOT_FOUND', message: 'Agent group not found' });
+      assertWorkspaceRowManageable(ctx, group.userId, 'group');
+
       return ctx.agentGroupRepo.removeAgentsFromGroup(
         input.groupId,
         input.agentIds,
@@ -367,6 +390,19 @@ export const agentGroupRouter = router({
           cause: { data: { code: TransferErrorCode.SameWorkspace } },
           code: 'BAD_REQUEST',
           message: 'Cannot transfer agent group to the same workspace',
+        });
+      }
+
+      // The transfer rehomes member agents and every group conversation — a
+      // non-owner member must not move teammates' rows along with their group.
+      if (
+        isWorkspaceNonOwner(ctx) &&
+        (await ctx.agentGroupRepo.transferHasForeignRows(input.groupId))
+      ) {
+        throw new TRPCError({
+          cause: { data: { code: TransferErrorCode.OwnerOnly } },
+          code: 'FORBIDDEN',
+          message: "Only workspace owners can transfer a group carrying others' content",
         });
       }
 

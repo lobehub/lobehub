@@ -1,37 +1,51 @@
+import { PERMISSION_ACTIONS } from '@lobechat/const/rbac';
 import {
+  chatTopicMetadataUpdateSchema,
   chatTopicStatusSchema,
+  type HeteroSessionImportPayload,
+  heteroSessionImportPayloadSchema,
   type RecentTopic,
   type RecentTopicGroup,
   type RecentTopicGroupMember,
-  serializedAgentHookSchema,
 } from '@lobechat/types';
 import { cleanObject } from '@lobechat/utils';
+import { TRPCError } from '@trpc/server';
 import { inArray } from 'drizzle-orm';
-import { after } from 'next/server';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
+import { serverDBEnv } from '@/config/db';
 import { AgentModel } from '@/database/models/agent';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { ChatGroupModel } from '@/database/models/chatGroup';
+import { FileModel } from '@/database/models/file';
 import { MessageModel } from '@/database/models/message';
+import { RbacModel } from '@/database/models/rbac';
 import { TopicModel } from '@/database/models/topic';
 import { TopicShareModel } from '@/database/models/topicShare';
+import { WorkspaceAuditLogModel } from '@/database/models/workspaceAuditLog';
 import { AgentMigrationRepo } from '@/database/repositories/agentMigration';
+import { HeteroSessionImporterRepo } from '@/database/repositories/heteroSessionImporter';
 import { TopicImporterRepo } from '@/database/repositories/topicImporter';
 import { chatGroups } from '@/database/schemas';
+import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { FileService } from '@/server/services/file';
+import { after } from '@/server/utils/scheduleAfterResponse';
 import { type BatchTaskResult } from '@/types/service';
 
+import {
+  assertWorkspaceRowManageable,
+  shouldRestrictBulkDeleteToCreator,
+} from './_helpers/assertWorkspaceRowManageable';
 import {
   batchResolveAgentIdFromSessions,
   resolveAgentIdFromSession,
   resolveContext,
 } from './_helpers/resolveContext';
 import { basicContextSchema } from './_schema/context';
-import { workingDirConfigSchema } from './workingDirSchema';
 
 const topicProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -43,12 +57,76 @@ const topicProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =>
       agentModel: new AgentModel(ctx.serverDB, ctx.userId, wsId),
       agentOperationModel: new AgentOperationModel(ctx.serverDB, ctx.userId, wsId),
       chatGroupModel: new ChatGroupModel(ctx.serverDB, ctx.userId, wsId),
+      fileModel: new FileModel(ctx.serverDB, ctx.userId, wsId),
+      heteroSessionImporterRepo: new HeteroSessionImporterRepo(ctx.serverDB, ctx.userId, wsId),
+      messageModel: new MessageModel(ctx.serverDB, ctx.userId, wsId),
       topicImporterRepo: new TopicImporterRepo(ctx.serverDB, ctx.userId, wsId),
       topicModel: new TopicModel(ctx.serverDB, ctx.userId, wsId),
       topicShareModel: new TopicShareModel(ctx.serverDB, ctx.userId, wsId),
     },
   });
 });
+
+const topicBulkDeleteScopeSchema = z.enum(['own', 'workspace']).default('own');
+
+interface TopicShareCtx {
+  serverDB: LobeChatDatabase;
+  topicModel: TopicModel;
+  userId: string;
+  workspaceId?: string | null;
+}
+
+/**
+ * Workspace share management is creator + workspace-owner only: a member may
+ * manage shares of their own topics; managing someone else's requires the
+ * `:all` scope (workspace owner). Personal mode needs no extra check — the
+ * model's ownership filter already scopes mutations to the caller.
+ */
+const assertCanManageTopicShare = async (ctx: TopicShareCtx, topicId: string) => {
+  if (!ctx.workspaceId) return;
+
+  const topic = await ctx.topicModel.findById(topicId);
+  if (!topic) {
+    throw new TRPCError({ code: 'NOT_FOUND', message: 'Topic not found' });
+  }
+  if (topic.userId === ctx.userId) return;
+
+  const isWorkspaceAdmin = await new RbacModel(ctx.serverDB, ctx.userId).hasPermission(
+    `${PERMISSION_ACTIONS.TOPIC_UPDATE}:all`,
+    { workspaceId: ctx.workspaceId },
+  );
+  if (!isWorkspaceAdmin) {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: 'Only the topic creator or a workspace owner can manage this share',
+    });
+  }
+};
+
+/**
+ * Audit trail for workspace share state changes, mirroring the page-share
+ * `resource.shared` / `resource.unshared` events. Personal mode is not
+ * audited. A share record with 'private' visibility is an unshared
+ * placeholder, so only transitions in/out of 'link' are recorded.
+ */
+const recordTopicShareAudit = async (
+  ctx: TopicShareCtx,
+  params: { currentVisibility: string; previousVisibility: string; topicId: string },
+) => {
+  if (!ctx.workspaceId) return;
+  const { currentVisibility, previousVisibility, topicId } = params;
+  if (currentVisibility === previousVisibility) return;
+  if (currentVisibility !== 'link' && previousVisibility !== 'link') return;
+
+  await new WorkspaceAuditLogModel(ctx.serverDB).create({
+    action: currentVisibility === 'link' ? 'resource.shared' : 'resource.unshared',
+    metadata: { currentVisibility, previousVisibility },
+    resourceId: topicId,
+    resourceType: 'topic',
+    userId: ctx.userId,
+    workspaceId: ctx.workspaceId,
+  });
+};
 
 export const topicRouter = router({
   getTopicDetail: topicProcedure
@@ -57,6 +135,38 @@ export const topicRouter = router({
       const topic = await ctx.topicModel.findById(input.id);
       if (!topic) return null;
       return topic;
+    }),
+
+  getTopicTranscript: topicProcedure
+    .input(
+      z.object({
+        includeMessages: z.boolean().default(true),
+        limit: z.number().int().min(1).max(500).default(50),
+        offset: z.number().int().min(0).default(0),
+        topicId: z.string(),
+      }),
+    )
+    .query(async ({ input, ctx }) => {
+      const topic = await ctx.topicModel.findById(input.topicId);
+
+      if (!topic) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: `Topic not found: ${input.topicId}`,
+        });
+      }
+
+      if (!input.includeMessages) {
+        return { items: [], topic, total: null };
+      }
+
+      const transcript = await ctx.messageModel.queryTopicTranscript({
+        limit: input.limit,
+        offset: input.offset,
+        topicId: input.topicId,
+      });
+
+      return { ...transcript, topic };
     }),
 
   getTopicContext: topicProcedure
@@ -79,9 +189,7 @@ export const topicRouter = router({
       }
 
       // Fallback: fetch recent messages with correct agentId/groupId
-      const wsId = ctx.workspaceId ?? undefined;
-      const messageModel = new MessageModel(ctx.serverDB, ctx.userId, wsId);
-      const messages = await messageModel.query({
+      const messages = await ctx.messageModel.query({
         agentId: topic.agentId ?? undefined,
         groupId: topic.groupId ?? undefined,
         topicId: input.topicId,
@@ -140,14 +248,30 @@ export const topicRouter = router({
     .use(withScopedPermission('topic:delete'))
     .input(z.object({ ids: z.array(z.string()) }))
     .mutation(async ({ input, ctx }) => {
+      const rows = await ctx.topicModel.findOwnersByIds(input.ids);
+      for (const userId of new Set(rows.map((row) => row.userId))) {
+        assertWorkspaceRowManageable(ctx, userId, 'topic');
+      }
+
       return ctx.topicModel.batchDelete(input.ids);
     }),
 
   batchDeleteByAgentId: topicProcedure
     .use(withScopedPermission('topic:delete'))
-    .input(z.object({ agentId: z.string() }))
+    .input(z.object({ agentId: z.string(), scope: topicBulkDeleteScopeSchema }))
     .mutation(async ({ input, ctx }) => {
-      return ctx.topicModel.batchDeleteByAgentId(input.agentId);
+      const restrictToCreator = shouldRestrictBulkDeleteToCreator(ctx, input.scope);
+
+      return ctx.topicModel.batchDeleteByAgentId(input.agentId, { restrictToCreator });
+    }),
+
+  batchDeleteByGroupId: topicProcedure
+    .use(withScopedPermission('topic:delete'))
+    .input(z.object({ groupId: z.string(), scope: topicBulkDeleteScopeSchema }))
+    .mutation(async ({ input, ctx }) => {
+      const restrictToCreator = shouldRestrictBulkDeleteToCreator(ctx, input.scope);
+
+      return ctx.topicModel.batchDeleteByGroupId(input.groupId, { restrictToCreator });
     }),
 
   batchDeleteBySessionId: topicProcedure
@@ -156,6 +280,7 @@ export const topicRouter = router({
       z.object({
         agentId: z.string().optional(),
         id: z.string().nullish(),
+        scope: topicBulkDeleteScopeSchema,
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -166,7 +291,9 @@ export const topicRouter = router({
         ctx.workspaceId ?? undefined,
       );
 
-      return ctx.topicModel.batchDeleteBySessionId(resolved.sessionId);
+      const restrictToCreator = shouldRestrictBulkDeleteToCreator(ctx, input.scope);
+
+      return ctx.topicModel.batchDeleteBySessionId(resolved.sessionId, { restrictToCreator });
     }),
 
   batchMoveTopics: topicProcedure
@@ -178,6 +305,11 @@ export const topicRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      const rows = await ctx.topicModel.findOwnersByIds(input.topicIds);
+      for (const userId of new Set(rows.map((row) => row.userId))) {
+        assertWorkspaceRowManageable(ctx, userId, 'topic');
+      }
+
       return ctx.topicModel.batchMoveToAgent(input.topicIds, input.targetAgentId);
     }),
 
@@ -240,7 +372,20 @@ export const topicRouter = router({
     .use(withScopedPermission('topic:update'))
     .input(z.object({ topicId: z.string() }))
     .mutation(async ({ input, ctx }) => {
-      return ctx.topicShareModel.deleteByTopicId(input.topicId);
+      await assertCanManageTopicShare(ctx, input.topicId);
+
+      const previous = await ctx.topicShareModel.getByTopicId(input.topicId);
+      const result = await ctx.topicShareModel.deleteByTopicId(input.topicId);
+
+      if (previous) {
+        await recordTopicShareAudit(ctx, {
+          currentVisibility: 'private',
+          previousVisibility: previous.visibility,
+          topicId: input.topicId,
+        });
+      }
+
+      return result;
     }),
 
   /**
@@ -255,7 +400,20 @@ export const topicRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      return ctx.topicShareModel.create(input.topicId, input.visibility);
+      await assertCanManageTopicShare(ctx, input.topicId);
+
+      const previous = await ctx.topicShareModel.getByTopicId(input.topicId);
+      const result = await ctx.topicShareModel.create(input.topicId, input.visibility);
+
+      if (result) {
+        await recordTopicShareAudit(ctx, {
+          currentVisibility: result.visibility,
+          previousVisibility: previous?.visibility ?? 'private',
+          topicId: input.topicId,
+        });
+      }
+
+      return result;
     }),
 
   queryTopics: topicProcedure
@@ -264,11 +422,16 @@ export const topicRouter = router({
         .object({
           pageSize: z.number().max(500).optional(),
           statuses: z.array(z.string()).optional(),
+          withLastMessage: z.boolean().optional(),
         })
         .optional(),
     )
     .query(async ({ input, ctx }) => {
-      return ctx.topicModel.queryTopics({ pageSize: input?.pageSize, statuses: input?.statuses });
+      return ctx.topicModel.queryTopics({
+        pageSize: input?.pageSize,
+        statuses: input?.statuses,
+        withLastMessage: input?.withLastMessage,
+      });
     }),
 
   getShareInfo: topicProcedure
@@ -376,15 +539,58 @@ export const topicRouter = router({
         }
       };
 
-      // Use Next.js after() for non-blocking execution
       after(runMigration);
 
       return { items: result.items, total: result.total };
     }),
 
+  hasTopicFiles: topicProcedure
+    .use(withScopedPermission('topic:delete'))
+    .input(z.object({ ids: z.array(z.string()).min(1) }))
+    .query(async ({ input, ctx }) => {
+      try {
+        const hasFiles = await ctx.fileModel.hasFilesByTopicIds(input.ids);
+        return { data: { hasFiles }, success: true };
+      } catch (error) {
+        console.error('[topic:hasTopicFiles]', error);
+        throw new TRPCError({
+          cause: error,
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to check topic files',
+        });
+      }
+    }),
+
   hasTopics: topicProcedure.query(async ({ ctx }) => {
     return (await ctx.topicModel.count()) === 0;
   }),
+
+  getHeteroSessionImportStatus: topicProcedure
+    .input(
+      z.object({
+        sessions: z.array(z.object({ sessionId: z.string(), topicClientId: z.string() })),
+      }),
+    )
+    .query(async ({ input, ctx }) => {
+      return ctx.heteroSessionImporterRepo.getImportStatus(input.sessions);
+    }),
+
+  importHeteroSessions: topicProcedure
+    .use(withScopedPermission('topic:create'))
+    .input(
+      z.object({
+        agentId: z.string(),
+        groupId: z.string().nullish(),
+        sessions: z.array(heteroSessionImportPayloadSchema),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      return ctx.heteroSessionImporterRepo.importSessions({
+        agentId: input.agentId,
+        groupId: input.groupId,
+        sessions: input.sessions as HeteroSessionImportPayload[],
+      });
+    }),
 
   importTopic: topicProcedure
     .use(withScopedPermission('topic:create'))
@@ -505,7 +711,6 @@ export const topicRouter = router({
         }
       };
 
-      // Use Next.js after() for non-blocking execution
       after(runMigration);
 
       // Assemble final result
@@ -549,9 +754,35 @@ export const topicRouter = router({
 
   removeTopic: topicProcedure
     .use(withScopedPermission('topic:delete'))
-    .input(z.object({ id: z.string() }))
+    .input(z.object({ id: z.string(), removeFiles: z.boolean().optional() }))
     .mutation(async ({ input, ctx }) => {
-      return ctx.topicModel.delete(input.id);
+      const topic = await ctx.topicModel.findById(input.id);
+      if (topic) assertWorkspaceRowManageable(ctx, topic.userId, 'topic');
+
+      if (!input.removeFiles) return ctx.topicModel.delete(input.id);
+
+      // Collect the topic's deletable attachments BEFORE deleting it — the lookup
+      // joins messages, which are cascade-deleted along with the topic. Files
+      // still referenced by another topic or the session are intentionally kept.
+      const fileIds = await ctx.fileModel.findDeletableFilesByTopicId(input.id);
+
+      const result = await ctx.topicModel.delete(input.id);
+
+      if (fileIds.length > 0) {
+        const needToRemove = await ctx.fileModel.deleteMany(
+          fileIds,
+          serverDBEnv.REMOVE_GLOBAL_FILE,
+        );
+        // deleteMany returns only files whose underlying object is no longer
+        // referenced by any other file, so the S3 cleanup is reference-safe.
+        if (needToRemove && needToRemove.length > 0) {
+          const wsId = ctx.workspaceId ?? undefined;
+          const fileService = new FileService(ctx.serverDB, ctx.userId, wsId);
+          await fileService.deleteFiles(needToRemove.map((file) => file.url!));
+        }
+      }
+
+      return result;
     }),
 
   searchTopics: topicProcedure
@@ -596,7 +827,20 @@ export const topicRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      return ctx.topicShareModel.updateVisibility(input.topicId, input.visibility);
+      await assertCanManageTopicShare(ctx, input.topicId);
+
+      const previous = await ctx.topicShareModel.getByTopicId(input.topicId);
+      const result = await ctx.topicShareModel.updateVisibility(input.topicId, input.visibility);
+
+      if (result && previous) {
+        await recordTopicShareAudit(ctx, {
+          currentVisibility: result.visibility,
+          previousVisibility: previous.visibility,
+          topicId: input.topicId,
+        });
+      }
+
+      return result;
     }),
 
   updateTopic: topicProcedure
@@ -623,6 +867,8 @@ export const topicRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      // Intentionally no creator/owner gate: shared topics are co-editable by
+      // members (title/status/metadata); only delete/transfer is creator-scoped.
       const { agentId, ...restValue } = input.value;
 
       // If agentId is provided, resolve to sessionId
@@ -645,61 +891,13 @@ export const topicRouter = router({
     .input(
       z.object({
         id: z.string(),
-        metadata: z.object({
-          boundDeviceId: z.string().optional(),
-          heteroSessionId: z.string().optional(),
-          heteroSessionIdByWorkingDirectory: z.record(z.string()).optional(),
-          model: z.string().optional(),
-          onboardingFeedback: z
-            .object({
-              comment: z.string().max(500).optional(),
-              rating: z.enum(['good', 'bad']),
-              submittedAt: z.string(),
-            })
-            .optional(),
-          onboardingSession: z
-            .object({
-              agentIdentityCompletedAt: z.string().optional(),
-              agentMarketplacePick: z
-                .object({
-                  categoryHints: z.array(z.string()),
-                  installedAgentIds: z.array(z.string()).optional(),
-                  requestId: z.string(),
-                  resolvedAt: z.string(),
-                  selectedTemplateIds: z.array(z.string()).optional(),
-                  skipReason: z.string().optional(),
-                  skippedAgentIds: z.array(z.string()).optional(),
-                  status: z.enum(['cancelled', 'skipped', 'submitted']),
-                })
-                .optional(),
-              discoveryCompletedAt: z.string().optional(),
-              finalAgentNames: z.array(z.string()).optional(),
-              finishedAt: z.string().optional(),
-              lastActiveAt: z.string().optional(),
-              phase: z.enum(['agent_identity', 'user_identity', 'discovery', 'summary']).optional(),
-              startedAt: z.string().optional(),
-              userIdentityCompletedAt: z.string().optional(),
-              version: z.number().optional(),
-            })
-            .optional(),
-          provider: z.string().optional(),
-          runningOperation: z
-            .object({
-              assistantMessageId: z.string(),
-              hooks: z.array(serializedAgentHookSchema).optional(),
-              operationId: z.string(),
-              scope: z.string().optional(),
-              threadId: z.string().nullish(),
-            })
-            .nullable()
-            .optional(),
-          repos: z.array(z.string()).optional(),
-          workingDirectory: z.string().optional(),
-          workingDirectoryConfig: workingDirConfigSchema.optional(),
-        }),
+        metadata: chatTopicMetadataUpdateSchema,
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      // Intentionally no creator/owner gate: metadata follows the same
+      // co-editable path as updateTopic (chat/tool flows write fields like
+      // runningOperation on shared topics); only delete/transfer is gated.
       return ctx.topicModel.updateMetadata(input.id, input.metadata);
     }),
 });

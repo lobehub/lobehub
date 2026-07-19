@@ -4,6 +4,7 @@ import { type MigrationSQL, type MigrationTableItem } from '@/types/clientDB';
 import { DatabaseLoadingState } from '@/types/clientDB';
 import { type LocaleMode } from '@/types/locale';
 import { SessionDefaultGroup } from '@/types/session';
+import { type TopicGroupMode } from '@/types/topic';
 import { AsyncLocalStorage } from '@/utils/localStorage';
 
 export enum SidebarTabKey {
@@ -36,7 +37,9 @@ export enum GroupSettingsTabs {
   Settings = 'settings',
 }
 
-export type WorkingSidebarTab = 'files' | 'params' | 'resources' | 'review';
+// business builds may register extra sidebar tabs, so any string key is accepted
+export type WorkingSidebarTab =
+  'browser' | 'files' | 'params' | 'resources' | 'review' | (string & {});
 
 export const DEFAULT_RESOURCE_MANAGER_COLUMN_WIDTHS = {
   date: 160,
@@ -59,7 +62,7 @@ export enum SettingsTabs {
   Common = 'common',
   Connector = 'connector',
   Credits = 'credits',
-  Creds = 'creds',
+  Creds = 'credential',
   Devices = 'devices',
   Hotkey = 'hotkey',
   /** @deprecated Use ServiceModel instead */
@@ -68,6 +71,7 @@ export enum SettingsTabs {
   Memory = 'memory',
   Messenger = 'messenger',
   Notification = 'notification',
+  OAuthApps = 'oauth-apps',
   // business
   Plans = 'plans',
   Profile = 'profile',
@@ -99,6 +103,7 @@ export enum ProfileTabs {
 }
 
 export const MODEL_DETAIL_PANEL_EXPANDED_KEYS = [
+  'rating',
   'context',
   'abilities',
   'pricing',
@@ -108,6 +113,8 @@ export const MODEL_DETAIL_PANEL_EXPANDED_KEYS = [
 export type ModelDetailPanelExpandedKey = (typeof MODEL_DETAIL_PANEL_EXPANDED_KEYS)[number];
 
 export const DEFAULT_MODEL_DETAIL_PANEL_EXPANDED_KEYS = [
+  'rating',
+  'abilities',
   'pricing',
   'config',
 ] as const satisfies readonly ModelDetailPanelExpandedKey[];
@@ -124,6 +131,14 @@ export interface SystemStatus {
    */
   agentPageSize?: number;
   chatInputHeight?: number;
+  /**
+   * Which topicGroups are collapsed, bucketed by group mode. We persist the
+   * collapsed keys rather than the expanded ones so a group that shows up later
+   * (a new project directory, a new month bucket) starts expanded; and bucketing
+   * per mode keeps `project:*` keys from leaking into byTime, where nothing would
+   * match and every group would render collapsed.
+   */
+  collapsedTopicGroupKeysByMode?: Partial<Record<TopicGroupMode, string[]>>;
   disabledModelProvidersSortType?: string;
   disabledModelsSortType?: string;
   /**
@@ -142,8 +157,6 @@ export interface SystemStatus {
   expandInputActionbar?: boolean;
   // which sessionGroup should expand
   expandSessionGroupKeys: string[];
-  // which topicGroup should expand
-  expandTopicGroupKeys?: string[];
   fileManagerViewMode?: 'list' | 'masonry';
   filePanelWidth: number;
   /**
@@ -255,6 +268,10 @@ export interface SystemStatus {
    */
   showTaskAgentPanel?: boolean;
   /**
+   * Visibility of the chat bottom terminal panel (desktop-only, Labs gated).
+   */
+  showTerminalPanel?: boolean;
+  /**
    * Visibility of the Verify workspace left-side report-list panel.
    * Independent from the nav rail so collapsing the report list does not affect other pages.
    */
@@ -295,6 +312,10 @@ export interface SystemStatus {
     subGroupBy: 'assignee' | 'none' | 'priority' | 'status';
   };
   /**
+   * Height of the chat bottom terminal panel. Persisted so resizing survives remounts.
+   */
+  terminalPanelHeight?: number;
+  /**
    * Whether to display tokens in short format
    */
   tokenDisplayFormatShort?: boolean;
@@ -309,6 +330,17 @@ export interface SystemStatus {
   videoPanelWidth: number;
   videoTopicPanelWidth?: number;
   videoTopicViewMode?: 'grid' | 'list';
+  /**
+   * One-shot navigation request for the WorkingSidebar browser tab, so external
+   * triggers (e.g. web-browsing search results) can open a URL in the in-app
+   * browser. The pane clears it (to `null`) the moment it navigates: this status
+   * is persisted, and the pane remounts whenever the browser session key changes
+   * (i.e. on every topic switch), so a request left lying around would be
+   * re-consumed and would drag that topic's page off whatever the agent had
+   * loaded. `null` rather than `undefined` because `updateSystemStatus` merges
+   * with lodash, which skips undefined.
+   */
+  workingSidebarBrowserRequest?: { nonce: number; url: string } | null;
   workingSidebarRevealRequest?: { nonce: number; path: string };
   /**
    * Active tab inside the agent chat right-side WorkingSidebar.
@@ -316,6 +348,11 @@ export interface SystemStatus {
    * can switch the panel to "review" when revealing the right panel.
    */
   workingSidebarTab?: WorkingSidebarTab;
+  /**
+   * Width of the agent chat right-side WorkingSidebar (space / params / files / …).
+   * Persisted so resizing survives remounts when navigating away and back.
+   */
+  workingSidebarWidth?: number;
   /**
    * Workspace-mode overlay for sidebar layout/visibility preferences.
    * When the user is inside a workspace (see `useActiveWorkspaceId`), reads
@@ -439,17 +476,20 @@ export const INITIAL_STATUS = {
   showRightPanel: false,
   showSystemRole: false,
   showTaskAgentPanel: false,
+  showTerminalPanel: false,
   showVerifyReportPanel: true,
   showVideoPanel: true,
   showVideoTopicPanel: true,
   sidebarExpandedKeys: [...DEFAULT_HOME_SIDEBAR_EXPANDED_KEYS],
   systemRoleExpandedMap: {},
+  terminalPanelHeight: 320,
   tokenDisplayFormatShort: true,
   topicPageSize: 20,
   verifyReportPanelWidth: 300,
   videoPanelWidth: 320,
   videoTopicViewMode: 'grid' as const,
   videoTopicPanelWidth: 80,
+  workingSidebarWidth: 360,
 } satisfies SystemStatus;
 
 export const initialState: GlobalState = {

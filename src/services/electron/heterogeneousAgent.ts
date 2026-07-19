@@ -1,4 +1,12 @@
-import type { ClaudeCodeQuotaSnapshot, CodexQuotaSnapshot } from '@lobechat/electron-client-ipc';
+import type {
+  ClaudeCodeQuotaSnapshot,
+  CodexQuotaSnapshot,
+  CodexRateLimitResetResult,
+} from '@lobechat/electron-client-ipc';
+import type {
+  HeterogeneousAgentModelCatalog,
+  ListHeterogeneousAgentModelsParams,
+} from '@lobechat/types';
 
 import { ensureElectronIpc } from '@/utils/electron/ipc';
 
@@ -17,24 +25,21 @@ class HeterogeneousAgentService {
     cwd?: string;
     env?: Record<string, string>;
     resumeSessionId?: string;
+    useClaudeCodeSdk?: boolean;
   }) {
     return this.ipc.heterogeneousAgent.startSession(params);
   }
 
-  async sendPrompt(
-    sessionId: string,
-    prompt: string,
-    operationId: string,
-    imageList?: Array<{ id: string; url: string }>,
-    systemContext?: string,
-  ) {
-    return this.ipc.heterogeneousAgent.sendPrompt({
-      imageList,
-      operationId,
-      prompt,
-      sessionId,
-      systemContext,
-    });
+  async sendPrompt(params: {
+    agentId?: string;
+    imageList?: Array<{ id: string; url: string }>;
+    operationId: string;
+    prompt: string;
+    sessionId: string;
+    systemContext?: string;
+    topicId?: string;
+  }) {
+    return this.ipc.heterogeneousAgent.sendPrompt(params);
   }
 
   async cancelSession(sessionId: string) {
@@ -49,15 +54,32 @@ class HeterogeneousAgentService {
     return this.ipc.heterogeneousAgent.getSessionInfo({ sessionId });
   }
 
+  async listModels(
+    params: ListHeterogeneousAgentModelsParams,
+  ): Promise<HeterogeneousAgentModelCatalog> {
+    return this.ipc.heterogeneousAgent.listModels(params);
+  }
+
   async getCodexQuota(params?: {
     command?: string;
     env?: Record<string, string>;
+    force?: boolean;
   }): Promise<CodexQuotaSnapshot> {
     return this.ipc.heterogeneousAgent.getCodexQuota(params);
   }
 
+  async consumeCodexRateLimitResetCredit(params: {
+    command?: string;
+    creditId?: string;
+    env?: Record<string, string>;
+    idempotencyKey: string;
+  }): Promise<CodexRateLimitResetResult> {
+    return this.ipc.heterogeneousAgent.consumeCodexRateLimitResetCredit(params);
+  }
+
   async getClaudeCodeQuota(params?: {
     env?: Record<string, string>;
+    force?: boolean;
   }): Promise<ClaudeCodeQuotaSnapshot> {
     return this.ipc.heterogeneousAgent.getClaudeCodeQuota(params);
   }

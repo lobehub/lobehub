@@ -1,17 +1,16 @@
-import type { AgentEvent } from '@lobechat/agent-runtime';
+import type { AgentEvent, BlobStore, LLMAttemptContentPart } from '@lobechat/agent-runtime';
 import type { Base64ImageData, ContentPartData } from '@lobechat/model-runtime';
 
 import { fileEnv } from '@/envs/file';
-import { FileService } from '@/server/services/file';
 import { nanoid } from '@/utils/uuid';
 
 import type { RuntimeExecutorContext } from '../context';
 import { log, timing } from '../executorHelpers';
 
-export type ServerCallLlmContentPart =
-  { image: string; type: 'image' } | { text: string; type: 'text' };
+export type ServerCallLlmContentPart = LLMAttemptContentPart;
 
 interface CreateServerCallLlmStreamSinkInput {
+  blobStore?: BlobStore;
   ctx: RuntimeExecutorContext;
   events: AgentEvent[];
   operationLogId: string;
@@ -38,9 +37,9 @@ export class ServerCallLlmStreamSink {
   readonly reasoningParts: ServerCallLlmContentPart[] = [];
   thinkingContent = '';
 
+  private readonly blobStore?: BlobStore;
   private readonly events: AgentEvent[];
   private readonly imageUploadDate = new Date().toISOString().split('T')[0];
-  private readonly imageUploadService?: FileService;
   private readonly operationId: string;
   private readonly operationLogId: string;
   private reasoningBuffer = '';
@@ -49,18 +48,12 @@ export class ServerCallLlmStreamSink {
   private textBuffer = '';
   private textBufferTimer: NodeJS.Timeout | null = null;
 
-  constructor({ ctx, events, operationLogId }: CreateServerCallLlmStreamSinkInput) {
+  constructor({ blobStore, ctx, events, operationLogId }: CreateServerCallLlmStreamSinkInput) {
+    this.blobStore = blobStore;
     this.events = events;
     this.operationId = ctx.operationId;
     this.operationLogId = operationLogId;
     this.stepIndex = ctx.stepIndex;
-    // File service + date shard used to persist model-generated images
-    // (Gemini multimodal `content_part`/`reasoning_part` images) to object
-    // storage, built once and reused across parts. The `userId` check only
-    // satisfies its optional type — it is always present in this executor.
-    // A missing-S3-config failure surfaces later at uploadBase64 (caught per
-    // image in uploadPartImage), never at construction.
-    this.imageUploadService = ctx.userId ? new FileService(ctx.serverDB, ctx.userId) : undefined;
     this.streamManager = ctx.streamManager;
   }
 
@@ -230,11 +223,11 @@ export class ServerCallLlmStreamSink {
     base64: string,
     mimeType: string | undefined,
   ): Promise<void> {
-    if (!this.imageUploadService) return Promise.resolve();
+    if (!this.blobStore) return Promise.resolve();
     const ext = mimeType?.split('/')[1] || 'png';
     const pathname = `${fileEnv.NEXT_PUBLIC_S3_FILE_PATH}/generations/${this.imageUploadDate}/${nanoid()}.${ext}`;
-    return this.imageUploadService
-      .uploadBase64(base64, pathname)
+    return this.blobStore
+      .persistBase64(base64, pathname)
       .then(({ url }) => {
         parts[partIndex] = { image: url, type: 'image' };
       })

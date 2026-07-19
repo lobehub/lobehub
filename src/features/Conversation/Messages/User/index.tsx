@@ -21,6 +21,7 @@ import {
 import Actions from './Actions';
 import UserMessageContent from './components/MessageContent';
 import { UserMessageExtra } from './Extra';
+import ScheduledRunFooter from './ScheduledRunFooter';
 
 interface UserMessageProps {
   disableEditing?: boolean;
@@ -88,6 +89,7 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
     <ChatItem
       actions={<Actions data={item} disableEditing={disableEditing} id={id} />}
       avatar={{ avatar, title }}
+      belowMessage={<ScheduledRunFooter id={id} />}
       editing={editing}
       id={id}
       message={content}

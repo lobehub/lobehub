@@ -9,7 +9,10 @@ import {
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
-import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
+import {
+  requireWorkspaceRoleWhenScoped,
+  wsCompatProcedure,
+} from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AiModelModel } from '@/database/models/aiModel';
 import { UserModel } from '@/database/models/user';
 import { AiInfraRepos } from '@/database/repositories/aiInfra';
@@ -91,14 +94,19 @@ export const aiModelRouter = router({
       return ctx.aiModelModel.batchUpdateAiModels(input.id, input.models);
     }),
 
+  // Model deletes are workspace-wide at the model layer (no per-user narrowing),
+  // so they are owner-only in workspace mode, matching the admin-only provider
+  // settings UI. Per-caller upserts (toggle/update/order) stay member-accessible.
   clearModelsByProvider: aiModelProcedure
     .use(withScopedPermission('ai_model:delete'))
+    .use(requireWorkspaceRoleWhenScoped('owner'))
     .input(z.object({ providerId: z.string() }))
     .mutation(async ({ input, ctx }) => {
       return ctx.aiModelModel.clearModelsByProvider(input.providerId);
     }),
   clearRemoteModels: aiModelProcedure
     .use(withScopedPermission('ai_model:delete'))
+    .use(requireWorkspaceRoleWhenScoped('owner'))
     .input(z.object({ providerId: z.string() }))
     .mutation(async ({ input, ctx }) => {
       return ctx.aiModelModel.clearRemoteModels(input.providerId);
@@ -150,6 +158,7 @@ export const aiModelRouter = router({
 
   removeAiModel: aiModelProcedure
     .use(withScopedPermission('ai_model:delete'))
+    .use(requireWorkspaceRoleWhenScoped('owner'))
     .input(z.object({ id: z.string(), providerId: z.string() }))
     .mutation(async ({ input, ctx }) => {
       return ctx.aiModelModel.delete(input.id, input.providerId);

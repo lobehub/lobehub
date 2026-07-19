@@ -2,7 +2,8 @@
 
 import { type BinaryStatus } from '@lobechat/electron-client-ipc';
 import { type FormGroupItemType } from '@lobehub/ui';
-import { Button, CopyButton, Flexbox, Form, Icon, Tag, Text, Tooltip } from '@lobehub/ui';
+import { CopyButton, Flexbox, Form, Icon, Tag, Text, Tooltip } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { CheckCircle2, Loader2Icon, RefreshCw, XCircle } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';

@@ -6,9 +6,28 @@ const log = debug('lobe-server:message-gateway-client');
 
 // ─── Types ───
 
+/**
+ * Feature capabilities the gateway may use to filter inbound traffic at the
+ * edge before forwarding to LobeHub. Advisory: the server-side routers stay
+ * authoritative, and gateways that don't understand a capability simply
+ * forward everything (current behavior).
+ */
+export interface MessageGatewayCapabilities {
+  /**
+   * Passive channel monitoring. When disabled, the gateway is free to drop
+   * ordinary channel messages (not DMs, not mentions/replies to the bot,
+   * not commands/interactions) instead of forwarding them.
+   */
+  messageMonitoring?: {
+    enabled: boolean;
+  };
+}
+
 export interface MessageGatewayConnectionConfig {
   /** Platform application ID (e.g., Feishu appId, QQ appId) */
   applicationId?: string;
+  /** Edge-filtering capabilities for this connection. Omitted = forward everything. */
+  capabilities?: MessageGatewayCapabilities;
   connectionId: string;
   /** Preferred connection mode (e.g., "webhook", "websocket"). Falls back to platform default if omitted. */
   connectionMode?: string;
@@ -22,6 +41,7 @@ export interface MessageGatewayConnectionStatus {
   config: { connectionId: string; platform: string } | null;
   state: {
     connectedAt?: number;
+    errorCode?: string;
     error?: string;
     platform: string;
     status: 'connected' | 'connecting' | 'disconnected' | 'dormant' | 'error';
@@ -79,10 +99,20 @@ export class MessageGatewayClient {
 
   // ─── Connection Management ───
 
-  async connect(config: MessageGatewayConnectionConfig): Promise<{ status: string }> {
+  /**
+   * `ensure: true` marks a reconcile-driven connect (periodic sync): when the
+   * gateway DO already holds an identical config it preserves its park/backoff
+   * state instead of resetting it — a parked connection answers 409. Omit for
+   * user-driven connects (credential saves, manual reconnect), which must
+   * always get a full fresh lifecycle.
+   */
+  async connect(
+    config: MessageGatewayConnectionConfig,
+    options?: { ensure?: boolean },
+  ): Promise<{ status: MessageGatewayConnectionStatus['state']['status'] }> {
     log('Connecting %s:%s (platform=%s)', config.connectionId, config.userId, config.platform);
 
-    const res = await this.post('/api/connections', { config });
+    const res = await this.post('/api/connections', { config, ensure: options?.ensure });
 
     if (!res.ok) {
       const error = await res.text();

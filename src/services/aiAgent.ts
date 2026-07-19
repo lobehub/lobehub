@@ -2,12 +2,14 @@ import type {
   ExecAgentAppContext,
   ExecAgentResult,
   RuntimeMentionedAgent,
+  ScheduleAgentRunParams,
+  ScheduleAgentRunResult,
   UserInterventionConfig,
 } from '@lobechat/types';
 
 import { lambdaClient } from '@/libs/trpc/client';
 
-export type { ExecAgentResult };
+export type { ExecAgentResult, ScheduleAgentRunParams, ScheduleAgentRunResult };
 
 /**
  * Resume instruction for an operation that hit `human_approve_required`. When
@@ -170,6 +172,14 @@ class AiAgentService {
     options?: { signal?: AbortSignal },
   ): Promise<ExecAgentResult> {
     return await lambdaClient.aiAgent.execAgent.mutate(params, options);
+  }
+
+  /**
+   * Defer an agent run to a future time. Creates an empty `scheduled` topic that
+   * the backend cron fires once `runAt` passes; nothing runs now.
+   */
+  async scheduleAgentRun(params: ScheduleAgentRunParams): Promise<ScheduleAgentRunResult> {
+    return await lambdaClient.aiAgent.scheduleAgentRun.mutate(params);
   }
 
   /**

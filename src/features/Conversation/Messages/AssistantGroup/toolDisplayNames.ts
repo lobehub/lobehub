@@ -1,4 +1,7 @@
-import { formatLinearMcpShortLabel } from '@lobechat/builtin-tool-claude-code/client/labels';
+import {
+  formatBrowserMcpShortLabel,
+  formatLinearMcpShortLabel,
+} from '@lobechat/builtin-tool-claude-code/client/labels';
 import { type ChatToolPayloadWithResult } from '@lobechat/types';
 import { t } from 'i18next';
 
@@ -88,6 +91,13 @@ const toTitleCase = (apiName: string): string => {
 export const getToolDisplayName = (apiName: string): string => {
   const linearLabel = formatLinearMcpShortLabel(apiName);
   if (linearLabel) return linearLabel;
+
+  // MCP wire names title-case into gibberish ("Mcp  lobe cc  browser navigate"),
+  // so the browser tools resolve to their own labels before the fallback.
+  const browserLabel = formatBrowserMcpShortLabel(apiName, (key, defaultValue) =>
+    t(key, { defaultValue, ns: 'chat' }),
+  );
+  if (browserLabel) return browserLabel;
 
   const defaultValue = toTitleCase(apiName);
   const key = TOOL_API_DISPLAY_NAMES[apiName];

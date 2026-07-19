@@ -326,6 +326,73 @@ describe('AgentRuntimeService', () => {
       );
     });
 
+    it('should restore tools activated in a previous operation into initial state', async () => {
+      const taskManifest = { identifier: 'lobe-task' } as any;
+      const initialMessages = [
+        {
+          content: 'Successfully activated tools: lobe-task',
+          id: 'tool-message-1',
+          plugin: { apiName: 'activateTools', identifier: 'lobe-activator' },
+          pluginState: { activatedTools: [{ identifier: 'lobe-task' }] },
+          role: 'tool',
+        },
+      ] as any;
+
+      await service.createOperation({
+        ...mockParams,
+        autoStart: false,
+        initialMessages,
+        initialStepCount: 3,
+        toolSet: {
+          ...mockParams.toolSet,
+          activatableToolIds: ['lobe-task'],
+          manifestMap: { 'lobe-task': taskManifest },
+        },
+      });
+
+      expect(mockCoordinator.saveAgentState).toHaveBeenCalledWith(
+        'test-operation-1',
+        expect.objectContaining({
+          activatedStepTools: [
+            {
+              activatedAtStep: 3,
+              id: 'lobe-task',
+              manifest: taskManifest,
+              source: 'discovery',
+            },
+          ],
+        }),
+      );
+    });
+
+    it('should not restore historical tools that current run gates reject', async () => {
+      await service.createOperation({
+        ...mockParams,
+        autoStart: false,
+        initialMessages: [
+          {
+            content: 'Successfully activated tools: lobe-task',
+            id: 'tool-message-1',
+            plugin: { apiName: 'activateTools', identifier: 'lobe-activator' },
+            pluginState: { activatedTools: [{ identifier: 'lobe-task' }] },
+            role: 'tool',
+          },
+        ] as any,
+        toolSet: {
+          ...mockParams.toolSet,
+          // The broad discovery map may still contain the manifest in chat/custom
+          // mode or for a model without function calling support.
+          activatableToolIds: [],
+          manifestMap: { 'lobe-task': { identifier: 'lobe-task' } as any },
+        },
+      });
+
+      expect(mockCoordinator.saveAgentState).toHaveBeenCalledWith(
+        'test-operation-1',
+        expect.objectContaining({ activatedStepTools: undefined }),
+      );
+    });
+
     it('should abort before creating operation when signal is already aborted', async () => {
       const controller = new AbortController();
       controller.abort(new Error('startup aborted'));

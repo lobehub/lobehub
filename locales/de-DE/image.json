@@ -53,6 +53,8 @@
   "generation.metadata.createdAt": "Erstellt am {{time}}",
   "generation.status.failed": "Generierung fehlgeschlagen",
   "generation.status.generating": "Generiere...",
+  "generationTopic.notFound.desc": "Diese Generation existiert nicht oder ist nicht mehr zugänglich – sie wurde möglicherweise vom Besitzer gelöscht oder auf privat gesetzt.",
+  "generationTopic.notFound.title": "Generation nicht verfügbar",
   "notSupportGuide.desc": "Der aktuelle Bereitstellungsmodus unterstützt keine KI-Bilderzeugung. Wechseln Sie in den <1>Server-Datenbank-Bereitstellungsmodus</1> oder nutzen Sie <3>LobeHub Cloud</3>.",
   "notSupportGuide.features.fileIntegration.desc": "Tiefgreifende Integration mit dem Dateiverwaltungssystem; generierte Bilder werden automatisch im Dateisystem gespeichert und zentral verwaltet.",
   "notSupportGuide.features.fileIntegration.title": "Dateisystem-Integration",

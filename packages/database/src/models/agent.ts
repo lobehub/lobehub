@@ -240,6 +240,24 @@ export class AgentModel {
   };
 
   /**
+   * Stricter than {@link existsById}: the agent must be owned (created) by this
+   * user, regardless of workspace visibility. `existsById` uses the visibility
+   * -aware ownership predicate, so a *public* workspace agent created by another
+   * member also returns true — which is only "can see", not "can edit". Callers
+   * that bind credentials/config to an agent (e.g. agent-scoped connectors) must
+   * use this so a member can't attach an account to someone else's shared agent.
+   */
+  existsOwnedById = async (id: string): Promise<boolean> => {
+    const rows = await this.db
+      .select({ id: agents.id })
+      .from(agents)
+      .where(and(eq(agents.id, id), eq(agents.userId, this.userId)))
+      .limit(1);
+
+    return rows.length > 0;
+  };
+
+  /**
    * Lightweight lookup of an agent's currently-configured model + provider,
    * used to snapshot the model into a task config so later changes to the
    * agent's default model don't silently affect already-created tasks.
@@ -422,6 +440,7 @@ export class AgentModel {
       backgroundColor: string | null;
       id: string;
       isInbox: boolean;
+      isPrivate: boolean;
       title: string | null;
     }>
   > => {
@@ -434,6 +453,7 @@ export class AgentModel {
         id: agents.id,
         slug: agents.slug,
         title: agents.title,
+        visibility: agents.visibility,
       })
       .from(agents)
       .where(and(this.ownership(), or(ne(agents.virtual, true), eq(agents.slug, INBOX_SESSION_ID))))
@@ -441,13 +461,19 @@ export class AgentModel {
 
     const normalized = rows
       .filter((row) => row.id)
-      .map(({ slug, ...row }) => {
+      .map(({ slug, visibility, ...row }) => {
         const meta = normalizeInboxAgentMeta(row, { slug });
         return {
           avatar: meta.avatar,
           backgroundColor: meta.backgroundColor,
           id: meta.id,
           isInbox: slug === INBOX_SESSION_ID,
+          // Only meaningful in workspace mode: the ownership predicate already
+          // scopes visible private rows to the caller, so `isPrivate` means
+          // "the caller's own private agent in this workspace". Personal-mode
+          // rows are all implicitly private, so the flag stays false there to
+          // signal "no grouping needed".
+          isPrivate: Boolean(this.workspaceId) && visibility === 'private',
           // The inbox title is already resolved by normalizeInboxAgentMeta; any
           // other blank title falls back to the caller-provided default.
           title: meta.title?.trim() || fallbackTitle,
@@ -1160,6 +1186,73 @@ export class AgentModel {
    * within that workspace (`private` = only the target user sees it,
    * `public` = every member does). Ignored when moving to a personal account.
    */
+  /**
+   * Whether the agent's transfer cascade (topics / messages / threads / tasks
+   * linked to it) contains rows created by someone else. Transfers rehome every
+   * cascaded row, so non-owner members must not move an agent that carries
+   * teammates' conversations.
+   */
+  transferHasForeignRows = async (agentId: string): Promise<boolean> => {
+    const links = await this.db
+      .select({ sessionId: agentsToSessions.sessionId })
+      .from(agentsToSessions)
+      .where(eq(agentsToSessions.agentId, agentId));
+    const sessionIds = links.map((link) => link.sessionId);
+
+    // A member who merely opened the shared agent already owns a linked
+    // session, even with no topics/messages yet — the transfer would rewrite
+    // that session row too.
+    if (sessionIds.length > 0) {
+      const [foreignSession] = await this.db
+        .select({ id: sessions.id })
+        .from(sessions)
+        .where(and(inArray(sessions.id, sessionIds), ne(sessions.userId, this.userId)))
+        .limit(1);
+      if (foreignSession) return true;
+    }
+
+    const topicWhere =
+      sessionIds.length > 0
+        ? or(inArray(topics.sessionId, sessionIds), eq(topics.agentId, agentId))
+        : eq(topics.agentId, agentId);
+    const [foreignTopic] = await this.db
+      .select({ id: topics.id })
+      .from(topics)
+      .where(and(topicWhere, ne(topics.userId, this.userId)))
+      .limit(1);
+    if (foreignTopic) return true;
+
+    const messageWhere =
+      sessionIds.length > 0
+        ? or(inArray(messages.sessionId, sessionIds), eq(messages.agentId, agentId))
+        : eq(messages.agentId, agentId);
+    const [foreignMessage] = await this.db
+      .select({ id: messages.id })
+      .from(messages)
+      .where(and(messageWhere, ne(messages.userId, this.userId)))
+      .limit(1);
+    if (foreignMessage) return true;
+
+    const [foreignThread] = await this.db
+      .select({ id: threads.id })
+      .from(threads)
+      .where(and(eq(threads.agentId, agentId), ne(threads.userId, this.userId)))
+      .limit(1);
+    if (foreignThread) return true;
+
+    const [foreignTask] = await this.db
+      .select({ id: tasks.id })
+      .from(tasks)
+      .where(
+        and(
+          or(eq(tasks.assigneeAgentId, agentId), eq(tasks.createdByAgentId, agentId)),
+          ne(tasks.createdByUserId, this.userId),
+        ),
+      )
+      .limit(1);
+    return !!foreignTask;
+  };
+
   transferAgent = async (
     agentId: string,
     targetWorkspaceId: string | null,

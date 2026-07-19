@@ -369,7 +369,7 @@ const CloudHeterogeneousConfig = memo<CloudHeterogeneousConfigProps>(
                   {t('heterogeneousStatus.cloud.githubLabel')}
                 </span>
               </Flexbox>
-              <span className={styles.manageLink} onClick={() => navigate('/settings/creds')}>
+              <span className={styles.manageLink} onClick={() => navigate('/settings/credential')}>
                 {t('heterogeneousStatus.cloud.manageCredentials')}
               </span>
             </Flexbox>

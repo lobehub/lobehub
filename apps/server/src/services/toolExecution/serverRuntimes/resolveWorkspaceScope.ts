@@ -7,7 +7,10 @@ import { type ToolExecutionContext } from '../types';
 
 const log = debug('lobe-server:device-scope');
 
-type DeviceScopeContext = Pick<ToolExecutionContext, 'agentId' | 'serverDB' | 'workspaceId'>;
+type DeviceScopeContext = Pick<
+  ToolExecutionContext,
+  'activeDeviceScope' | 'agentId' | 'serverDB' | 'workspaceId'
+>;
 
 /**
  * The workspace scope a device tool call should run under: the run-scoped
@@ -21,10 +24,17 @@ type DeviceScopeContext = Pick<ToolExecutionContext, 'agentId' | 'serverDB' | 'w
  * `workspace:<id>` gateway pool instead of silently falling back to the personal
  * pool. Unscoped lookup by id on purpose: the run already authorized this agent,
  * we only read which workspace it belongs to.
+ *
+ * EXCEPTION: a run whose active device is PERSONAL-scope (a workspace agent
+ * routed to the caller's own machine via the per-user `local` override,
+ * LOBE-11689) must be addressed through the personal `(userId, deviceId)`
+ * pool — that device has no connection under the `workspace:<id>` principal,
+ * so a workspace-addressed call would simply miss it.
  */
 export const resolveRunWorkspaceId = async (
   context: DeviceScopeContext,
 ): Promise<string | undefined> => {
+  if (context.activeDeviceScope === 'personal') return undefined;
   if (context.workspaceId) return context.workspaceId;
 
   const { agentId, serverDB } = context;

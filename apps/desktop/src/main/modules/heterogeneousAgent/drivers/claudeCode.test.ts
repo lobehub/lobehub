@@ -7,8 +7,7 @@ import type {
 import { claudeCodeDriver } from './claudeCode';
 
 const stubHelpers: HeterogeneousAgentBuildPlanHelpers = {
-  buildClaudeStreamJsonInput: async () => '{"type":"user","message":{}}\n',
-  resolveCliImagePaths: async () => [],
+  buildAgentInput: async () => ({ args: [], stdin: '{"type":"user","message":{}}\n' }),
 };
 
 const buildParams = (
@@ -16,8 +15,7 @@ const buildParams = (
 ): HeterogeneousAgentBuildPlanParams => ({
   args: [],
   helpers: stubHelpers,
-  imageList: [],
-  prompt: 'hi',
+  promptInput: 'hi',
   ...overrides,
 });
 

@@ -63,6 +63,24 @@ const Locale = memo<LocaleLayoutProps>(({ children, defaultLang, antdLocale }) =
     if (defaultLang) updateDayjs(defaultLang);
   }, [defaultLang]);
 
+  // Load the antd locale for the initial language too — `languageChanged` can fire
+  // before the listener below is registered, leaving ConfigProvider without a locale
+  // (antd then falls back to en_US, and pro-components intl to zh-CN)
+  useEffect(() => {
+    if (locale || !defaultLang) return;
+    let canceled = false;
+    getAntdLocale(defaultLang)
+      .then((initialLocale) => {
+        if (!canceled) setLocale((prev: any) => prev ?? initialLocale);
+      })
+      .catch((error) => {
+        console.error(`antd locale for ${defaultLang} not found`, error);
+      });
+    return () => {
+      canceled = true;
+    };
+  }, [defaultLang, locale]);
+
   if (!i18n.instance.isInitialized)
     i18n.init().then(async () => {
       const resolvedLang = i18n.instance.language || defaultLang;

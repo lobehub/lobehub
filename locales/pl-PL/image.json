@@ -53,6 +53,8 @@
   "generation.metadata.createdAt": "Utworzono o {{time}}",
   "generation.status.failed": "Generowanie nie powiodło się",
   "generation.status.generating": "Generowanie...",
+  "generationTopic.notFound.desc": "Ta generacja nie istnieje lub nie jest już dostępna — mogła zostać usunięta lub ustawiona jako prywatna przez jej właściciela.",
+  "generationTopic.notFound.title": "Generacja niedostępna",
   "notSupportGuide.desc": "Obecny tryb wdrożenia nie obsługuje generowania obrazów AI. Przełącz się na <1>tryb wdrożenia z bazą danych serwera</1> lub skorzystaj z <3>LobeHub Cloud</3>.",
   "notSupportGuide.features.fileIntegration.desc": "Głęboka integracja z systemem zarządzania plikami; wygenerowane obrazy są automatycznie zapisywane w systemie plików w celu jednolitego zarządzania i organizacji.",
   "notSupportGuide.features.fileIntegration.title": "Integracja z systemem plików",

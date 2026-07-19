@@ -2,6 +2,7 @@ import { isDesktop } from '@lobechat/const';
 import { Avatar } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import {
+  AppWindowIcon,
   BellIcon,
   Blocks,
   Brain,
@@ -36,6 +37,7 @@ import {
   useServerConfigStore,
 } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
 import { userProfileSelectors } from '@/store/user/slices/auth/selectors';
 import { userGeneralSettingsSelectors } from '@/store/user/slices/settings/selectors';
 
@@ -72,6 +74,7 @@ export const useCategory = () => {
   ]);
   const remoteServerUrl = useElectronStore(electronSyncSelectors.remoteServerUrl);
   const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
+  const enableOAuthApps = useUserStore(labPreferSelectors.enableOAuthApps);
 
   const avatarUrl = useMemo(() => {
     if (!avatar) return undefined;
@@ -217,6 +220,11 @@ export const useCategory = () => {
         key: SettingsTabs.APIKey,
         label: tAuth('tab.apikey'),
       },
+      enableOAuthApps && {
+        icon: AppWindowIcon,
+        key: SettingsTabs.OAuthApps,
+        label: tAuth('tab.oauthApps'),
+      },
       {
         icon: EllipsisIcon,
         key: SettingsTabs.Advanced,
@@ -246,6 +254,7 @@ export const useCategory = () => {
     showApiKeyManage,
     showProvider,
     isDevMode,
+    enableOAuthApps,
     avatarUrl,
     username,
   ]);

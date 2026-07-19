@@ -4,7 +4,6 @@ import { type BuiltinSkill, type SkillListItem } from '@lobechat/types';
 import { Avatar, DropdownMenu, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
 import { Button, confirmModal, createModal } from '@lobehub/ui/base-ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
-import { Space } from 'antd';
 import { cssVar } from 'antd-style';
 import { DownloadIcon, MoreHorizontalIcon, Plus, Trash2 } from 'lucide-react';
 import { lazy, memo, Suspense, useState } from 'react';
@@ -137,7 +136,7 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill, isSelected, onSelect 
     }
 
     return (
-      <Space.Compact>
+      <Flexbox horizontal gap={4}>
         <Button disabled={!canEdit} onClick={() => setEditOpen(true)}>
           {tp('store.actions.configure')}
         </Button>
@@ -167,7 +166,7 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill, isSelected, onSelect 
         >
           <Button disabled={!canEdit} icon={<Icon icon={MoreHorizontalIcon} />} loading={loading} />
         </DropdownMenu>
-      </Space.Compact>
+      </Flexbox>
     );
   };
 

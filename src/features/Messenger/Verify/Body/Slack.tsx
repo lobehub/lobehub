@@ -40,6 +40,7 @@ const SlackBody = memo<SlackBodyProps>(
       return (
         <SuccessCard
           openBotUrl={tenantId ? buildSlackOpenBotUrl(tenantId, platformMeta?.appId) : null}
+          platform="slack"
           platformLabel={platformLabel}
         />
       );
