@@ -61,7 +61,7 @@ const executeSource = async (
   service: UnderstandingService,
   payload: OnboardingUnderstandingWorkflowPayload,
   branch: SourceBranch,
-  launch: UnderstandingSourceLaunchReference,
+  launch: Pick<UnderstandingSourceLaunchReference, 'assistantMessageId' | 'operationId'>,
 ): Promise<SourceStatus> => {
   const execution = await service.executeAgentOperation(launch.operationId);
   if (execution.status === 'error') return persistSourceFailure(service, payload, branch);
