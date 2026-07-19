@@ -50,6 +50,7 @@ describe('OpenCode model discovery', () => {
           'openai/gpt-5.6',
           '',
           'openrouter/google/gemini-2.5-pro',
+          'cloudflare/@cf/meta/llama-3.1-8b-instruct',
           'openai/gpt-5.6',
           'PATH=/usr/local/bin:/usr/bin',
           'diagnostic-without-model-id',
@@ -62,10 +63,15 @@ describe('OpenCode model discovery', () => {
         modelId: 'google/gemini-2.5-pro',
         providerId: 'openrouter',
       },
+      {
+        id: 'cloudflare/@cf/meta/llama-3.1-8b-instruct',
+        modelId: '@cf/meta/llama-3.1-8b-instruct',
+        providerId: 'cloudflare',
+      },
     ]);
   });
 
-  it('runs the configured binary with models --pure and forwards cwd/env', async () => {
+  it('runs the configured binary with plugins enabled and forwards cwd/env', async () => {
     resolveExecFile('openai/gpt-5.6\nopenrouter/google/gemini-2.5-pro\n');
     const { listHeterogeneousAgentModels } = await importModule();
 
@@ -89,7 +95,7 @@ describe('OpenCode model discovery', () => {
     });
     expect(execFileMock).toHaveBeenCalledWith(
       '/custom/opencode',
-      ['models', '--pure'],
+      ['models'],
       expect.objectContaining({
         cwd: '/repo',
         env: { OPENCODE_CONFIG_DIR: '/config', PATH: '/custom/bin' },
@@ -123,7 +129,7 @@ describe('OpenCode model discovery', () => {
         { env: NodeJS.ProcessEnv },
       ];
       expect(command).toBe('/login/bin/opencode');
-      expect(args).toEqual(['models', '--pure']);
+      expect(args).toEqual(['models']);
       expect(options.env.PATH?.split(path.delimiter)).toEqual(
         expect.arrayContaining(['/inherited/bin', '/login/bin', '/usr/bin']),
       );

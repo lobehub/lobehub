@@ -15,7 +15,7 @@ import { resolveHeteroSpawnCommand } from '../spawn/resolveCliCommand';
 const execFilePromise = promisify(execFile);
 const MODEL_CATALOG_MAX_BUFFER = 256 * 1024;
 const MODEL_CATALOG_TIMEOUT_MS = 15_000;
-const OPENCODE_MODEL_ID_PATTERN = /^[A-Z0-9][\w.-]*\/[A-Z0-9][\w./:@+-]*$/i;
+const OPENCODE_MODEL_ID_PATTERN = /^[A-Z0-9][\w.-]*\/[A-Z0-9@][\w./:@+-]*$/i;
 
 export const parseOpenCodeModelCatalog = (stdout: string): HeterogeneousAgentModel[] => {
   const seen = new Set<string>();
@@ -73,7 +73,7 @@ export const listHeterogeneousAgentModels = async (
 ): Promise<HeterogeneousAgentModelCatalog> => {
   const updatedAt = Date.now();
   const resolved = await resolveHeteroSpawnCommand('opencode', params.command);
-  const args = ['models', '--pure'];
+  const args = ['models'];
   const spawnPlan = await resolveCliSpawnPlan(resolved.command, args);
   const callerEnv = params.env ?? process.env;
   const mergedPath = [
