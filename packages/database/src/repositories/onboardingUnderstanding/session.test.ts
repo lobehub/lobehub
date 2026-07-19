@@ -70,24 +70,6 @@ describe('UnderstandingSessionRepository', () => {
     });
   });
 
-  it('stores bounded discovery errors on the durable session', async () => {
-    const session = await repository.install(topicId, createSession());
-    const errors = [
-      {
-        code: 'SOURCE_DISCOVERY_FAILED',
-        message: 'GitHub was unavailable',
-        operation: 'discovery',
-        provider: 'github',
-        retryable: true,
-      },
-    ];
-
-    await expect(repository.updateErrors(topicId, session.id, errors)).resolves.toMatchObject({
-      errors,
-    });
-    await expect(repository.get(topicId)).resolves.toMatchObject({ errors });
-  });
-
   it('converges repeated and concurrent install attempts', async () => {
     const concurrentTopicId = 'understanding-concurrent-topic';
     await db.insert(topics).values({
@@ -205,7 +187,7 @@ describe('UnderstandingSessionRepository', () => {
     expect(unchanged.errors).toBeUndefined();
   });
 
-  it('updates source and merge state through focused methods', async () => {
+  it('updates source state through its focused method', async () => {
     await repository.install(topicId, createSession());
     await repository.attachWorkflowRun(topicId, 'session-current', 'workflow-run');
 
@@ -226,32 +208,9 @@ describe('UnderstandingSessionRepository', () => {
       resultId: 'source-result',
       status: 'completed',
     });
-
-    await repository.setMergeRun(topicId, 'session-current', 'workflow-run', {
-      status: 'pending',
-      threadId: 'merge-thread',
-    });
-    const mergeUpdated = await repository.updateMergeRun(
-      topicId,
-      'session-current',
-      'merge-thread',
-      {
-        assistantMessageId: 'merge-message',
-        resultId: 'merge-result',
-        status: 'completed',
-      },
-    );
-    expect(mergeUpdated).toMatchObject({
-      mergeRun: {
-        assistantMessageId: 'merge-message',
-        resultId: 'merge-result',
-        status: 'completed',
-      },
-      status: 'completed',
-    });
   });
 
-  it('rejects updates for an unknown source or missing merge run', async () => {
+  it('rejects updates for an unknown source', async () => {
     await repository.install(topicId, createSession());
     await repository.attachWorkflowRun(topicId, 'session-current', 'workflow-run');
 
@@ -260,9 +219,6 @@ describe('UnderstandingSessionRepository', () => {
         status: 'failed',
       }),
     ).rejects.toThrow('source was not found');
-    await expect(
-      repository.updateMergeRun(topicId, 'session-current', 'merge-thread', { status: 'failed' }),
-    ).rejects.toThrow('merge run was not found');
   });
 
   it('allows an older workflow to finish unchanged runs but rejects a replaced source run', async () => {
@@ -296,25 +252,6 @@ describe('UnderstandingSessionRepository', () => {
 
     await expect(
       repository.updateSourceRun(topicId, 'session-current', 'github', 'github-thread', {
-        status: 'completed',
-      }),
-    ).rejects.toBeInstanceOf(StaleUnderstandingRunError);
-  });
-
-  it('rejects an update for a replaced merge thread', async () => {
-    await repository.install(topicId, createSession());
-    await repository.attachWorkflowRun(topicId, 'session-current', 'workflow-run');
-    await repository.setMergeRun(topicId, 'session-current', 'workflow-run', {
-      status: 'pending',
-      threadId: 'merge-thread',
-    });
-    await repository.update(topicId, 'session-current', (session) => ({
-      ...session,
-      mergeRun: { ...session.mergeRun!, threadId: 'merge-retry-thread' },
-    }));
-
-    await expect(
-      repository.updateMergeRun(topicId, 'session-current', 'merge-thread', {
         status: 'completed',
       }),
     ).rejects.toBeInstanceOf(StaleUnderstandingRunError);

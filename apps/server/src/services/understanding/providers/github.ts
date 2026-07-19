@@ -411,8 +411,6 @@ export const createGitHubUnderstandingProvider = ({
   usefulOptionalScopes: ['read:user', 'user:email', 'read:org', 'repo'],
 });
 
-export const githubUnderstandingProvider = createGitHubUnderstandingProvider();
-
 export const githubUnderstandingRegistration = {
   id: 'github',
   materialize: (scope) => ({

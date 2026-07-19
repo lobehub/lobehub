@@ -28,21 +28,15 @@ interface ConfirmUnderstandingInput {
   topicId: string;
 }
 
-interface UnderstandingConfirmationRepositoryHooks {
-  afterOwnerLock?: () => Promise<void> | void;
-}
-
 export class UnderstandingConfirmationRepository {
   constructor(
     private readonly db: LobeChatDatabase,
     private readonly userId: string,
-    private readonly hooks: UnderstandingConfirmationRepositoryHooks = {},
   ) {}
 
   confirm = async ({ resultId, sessionId, topicId }: ConfirmUnderstandingInput) =>
     this.db.transaction(async (tx) => {
       await lockUserPersonaOwner(tx, this.userId);
-      await this.hooks.afterOwnerLock?.();
 
       const [topic] = await tx
         .select({ metadata: topics.metadata })

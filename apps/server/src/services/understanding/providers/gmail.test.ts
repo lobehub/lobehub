@@ -6,7 +6,6 @@ import { UnderstandingSourceIdentificationError } from '../types';
 import {
   createGmailUnderstandingProvider,
   GMAIL_PROFILE_QUERIES,
-  gmailUnderstandingProvider,
   gmailUnderstandingRegistration,
 } from './gmail';
 
@@ -81,7 +80,7 @@ describe('createGmailUnderstandingProvider', () => {
   });
 
   it('exposes provider metadata and the eight provider-owned search queries', () => {
-    expect(gmailUnderstandingProvider).toMatchObject({
+    expect(createGmailUnderstandingProvider()).toMatchObject({
       id: 'gmail',
       originPriority: ['connector', 'integration', 'auth_account'],
       requiredScopes: [],

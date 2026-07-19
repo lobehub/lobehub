@@ -10,16 +10,8 @@ import type {
   UnderstandingProviderContext,
   UnderstandingProviderRegistration,
 } from '../types';
-import {
-  createGitHubUnderstandingProvider,
-  githubUnderstandingProvider,
-  githubUnderstandingRegistration,
-} from './github';
-import {
-  createGmailUnderstandingProvider,
-  gmailUnderstandingProvider,
-  gmailUnderstandingRegistration,
-} from './gmail';
+import { createGitHubUnderstandingProvider, githubUnderstandingRegistration } from './github';
+import { createGmailUnderstandingProvider, gmailUnderstandingRegistration } from './gmail';
 
 export interface RegisteredUnderstandingProvider {
   collect: (
@@ -148,8 +140,6 @@ export const materializeUnderstandingProviders = (
 export {
   createGitHubUnderstandingProvider,
   createGmailUnderstandingProvider,
-  githubUnderstandingProvider,
   githubUnderstandingRegistration,
-  gmailUnderstandingProvider,
   gmailUnderstandingRegistration,
 };

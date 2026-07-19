@@ -3,8 +3,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { discoverUnderstandingSources } from './pipeline';
 import {
   createUnderstandingProviderRegistry,
-  githubUnderstandingProvider,
-  gmailUnderstandingProvider,
   materializeUnderstandingProviders,
   toPublicUnderstandingSourceRef,
 } from './providers';
@@ -76,7 +74,7 @@ const fakeProvider = <Provider extends string>(
 };
 
 describe('discoverUnderstandingSources', () => {
-  it('materializes a third provider generically and rejects duplicate registrations', () => {
+  it('materializes a third provider generically', () => {
     const notion = fakeProvider('notion', []);
     const registration = {
       id: 'notion',
@@ -89,12 +87,6 @@ describe('discoverUnderstandingSources', () => {
 
     expect(materialized.registry.get('notion')?.id).toBe('notion');
     expect(materialized.context).toEqual({ userId: 'user-1', workspaceId: undefined });
-    expect(() =>
-      materializeUnderstandingProviders([registration, registration], {
-        db: {} as any,
-        userId: 'user-1',
-      }),
-    ).toThrow('already registered');
   });
 
   it('discovers every registered provider and deduplicates accounts without collecting', async () => {
@@ -545,14 +537,6 @@ describe('createUnderstandingProviderRegistry', () => {
       externalAccountId: provider.account,
       grantedScopes: [],
     });
-  });
-
-  it('registers complete built-ins without advertising collector-only providers', () => {
-    const registry = createUnderstandingProviderRegistry([
-      githubUnderstandingProvider,
-      gmailUnderstandingProvider,
-    ]);
-    expect(registry.list().map(({ id }) => id)).toEqual(['github', 'gmail']);
   });
 
   it('rejects duplicate providers', () => {

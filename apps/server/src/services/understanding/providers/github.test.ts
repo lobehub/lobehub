@@ -7,7 +7,6 @@ import type { LobeChatDatabase } from '@/database/type';
 import { sanitizeProviderDiagnostics } from '../sanitizer';
 import { UnderstandingSourceIdentificationError } from '../types';
 import { createGitHubUnderstandingProvider, githubUnderstandingRegistration } from './github';
-import { githubUnderstandingProvider as exportedGitHubProvider } from './index';
 
 const mocks = vi.hoisted(() => {
   const log = vi.fn();
@@ -102,7 +101,7 @@ describe('createGitHubUnderstandingProvider', () => {
   });
 
   it('exposes metadata and materializes the production registration', () => {
-    expect(exportedGitHubProvider).toMatchObject({
+    expect(createGitHubUnderstandingProvider()).toMatchObject({
       id: 'github',
       originPriority: ['connector', 'auth_account', 'integration'],
       requiredScopes: [],

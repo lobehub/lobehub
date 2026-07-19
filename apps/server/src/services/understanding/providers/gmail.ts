@@ -245,8 +245,6 @@ export const createGmailUnderstandingProvider = ({
   usefulOptionalScopes: ['gmail.readonly'],
 });
 
-export const gmailUnderstandingProvider = createGmailUnderstandingProvider();
-
 export const gmailUnderstandingRegistration = {
   id: 'gmail',
   materialize: ({ db, userId, workspaceId }) => {

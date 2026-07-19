@@ -197,31 +197,9 @@ describe('UnderstandingConfirmationRepository', () => {
 
   it('serializes concurrent confirmation into exactly one persona update and history row', async () => {
     await installResult();
-    const firstLocked = deferred();
-    const releaseFirst = deferred();
-    const lockOrder: string[] = [];
-    const firstRepository = new UnderstandingConfirmationRepository(db, userId, {
-      afterOwnerLock: async () => {
-        lockOrder.push('first');
-        firstLocked.resolve();
-        await releaseFirst.promise;
-      },
-    });
-    const secondRepository = new UnderstandingConfirmationRepository(db, userId, {
-      afterOwnerLock: () => {
-        lockOrder.push('second');
-      },
-    });
+    const repository = new UnderstandingConfirmationRepository(db, userId);
+    const [left, right] = await Promise.all([repository.confirm(input), repository.confirm(input)]);
 
-    const leftPromise = firstRepository.confirm(input);
-    await firstLocked.promise;
-    const rightPromise = secondRepository.confirm(input);
-    await new Promise<void>((resolve) => setTimeout(resolve, 0));
-    expect(lockOrder).toEqual(['first']);
-    releaseFirst.resolve();
-    const [left, right] = await Promise.all([leftPromise, rightPromise]);
-
-    expect(lockOrder).toEqual(['first', 'second']);
     expect(left.document.id).toBe(right.document.id);
     const [documents, histories] = await Promise.all([
       db.select().from(userPersonaDocuments).where(eq(userPersonaDocuments.userId, userId)),

@@ -84,15 +84,6 @@ describe('UnderstandingSourceStore', () => {
     expect(transaction.hset.mock.calls[0][1]).not.toBe(transaction.hset.mock.calls[1][1]);
   });
 
-  it('deletes an individual locator when explicitly requested', async () => {
-    await store.deleteSourceLocator(reference);
-
-    expect(redis.hdel).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.stringMatching(/^source:[a-f\d]{64}:locator$/),
-    );
-  });
-
   it('deletes the whole hashed session key without a reset tombstone', async () => {
     await store.deleteSession({ sessionId: reference.sessionId, userId: reference.userId });
 

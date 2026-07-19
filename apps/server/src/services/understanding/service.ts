@@ -21,7 +21,6 @@ import type {
   OnboardingUnderstandingSession,
   UnderstandingAnalysis,
   UnderstandingMergedResult,
-  UnderstandingMergeRun,
   UnderstandingMergeRunResult,
   UnderstandingSourceRef,
   UnderstandingSourceResult,
@@ -148,6 +147,20 @@ interface MergeIdentity {
   topicId: string;
 }
 
+type UnderstandingConfirmationStore = Pick<UnderstandingConfirmationRepository, 'confirm'>;
+type UnderstandingResults = Pick<
+  UnderstandingResultRepository,
+  'ensureThread' | 'finalizeMerge' | 'finalizeSource' | 'readMerge' | 'readSource'
+>;
+type UnderstandingSessions = Pick<
+  UnderstandingSessionRepository,
+  'attachWorkflowRun' | 'get' | 'install' | 'setMergeRun' | 'update' | 'updateSourceRun'
+>;
+type UnderstandingSources = Pick<
+  UnderstandingSourceStore,
+  'deleteSourcePayload' | 'get' | 'getSourceLocator' | 'put' | 'putSourceLocator'
+>;
+
 interface UnderstandingWorkflowRuntime {
   agent: Pick<AiAgentService, 'execAgent'>;
   agentId: string;
@@ -156,92 +169,15 @@ interface UnderstandingWorkflowRuntime {
   };
   context: UnderstandingProviderContext;
   registry: UnderstandingProviderRegistry;
-  sourceStore: {
-    deleteSourcePayload: (input: SourceIdentity & { userId: string }) => Promise<void>;
-    get: (
-      input: SourceIdentity & { userId: string },
-    ) => Promise<{ brief: string; diagnostics: CollectionDiagnostics } | null>;
-    getSourceLocator: (
-      input: Omit<SourceIdentity, 'threadId' | 'topicId'> & { userId: string },
-    ) => Promise<SourceCandidate | null>;
-    put: (
-      input: SourceIdentity & {
-        brief: string;
-        diagnostics: CollectionDiagnostics;
-        userId: string;
-      },
-    ) => Promise<void>;
-    putSourceLocator: (
-      input: Omit<SourceIdentity, 'threadId' | 'topicId'> & {
-        locator: SourceCandidate;
-        userId: string;
-      },
-    ) => Promise<void>;
-  };
+  sourceStore: UnderstandingSources;
 }
 
 interface UnderstandingServiceDependencies {
-  confirmation: { confirm: (input: ConfirmOnboardingUnderstandingInput) => Promise<unknown> };
+  confirmation: UnderstandingConfirmationStore;
   ids: () => string;
   messages: { readContent: (assistantMessageId: string) => Promise<unknown> };
-  results: {
-    ensureThread: (input: {
-      agentId: string;
-      kind: 'merged' | 'source';
-      threadId: string;
-      topicId: string;
-    }) => Promise<unknown>;
-    finalizeMerge: (
-      input: MergeIdentity & {
-        agentId: string;
-        assistantMessageId: string;
-        metadata: UnderstandingMergedResult;
-      },
-    ) => Promise<UnderstandingMergedResult>;
-    finalizeSource: (
-      input: SourceIdentity & {
-        agentId: string;
-        assistantMessageId: string;
-        metadata: UnderstandingSourceResult;
-      },
-    ) => Promise<UnderstandingSourceResult>;
-    readMerge: (
-      input: MergeIdentity & { assistantMessageId: string },
-    ) => Promise<UnderstandingMergedResult | undefined>;
-    readSource: (
-      input: SourceIdentity & { assistantMessageId: string },
-    ) => Promise<UnderstandingSourceResult | undefined>;
-  };
-  sessions: {
-    attachWorkflowRun: (
-      topicId: string,
-      sessionId: string,
-      workflowRunId: string,
-    ) => Promise<OnboardingUnderstandingSession>;
-    get: (topicId: string) => Promise<OnboardingUnderstandingSession | undefined>;
-    install: (
-      topicId: string,
-      session: OnboardingUnderstandingSession,
-    ) => Promise<OnboardingUnderstandingSession>;
-    update: (
-      topicId: string,
-      sessionId: string,
-      mutate: (session: OnboardingUnderstandingSession) => OnboardingUnderstandingSession,
-    ) => Promise<OnboardingUnderstandingSession>;
-    setMergeRun: (
-      topicId: string,
-      sessionId: string,
-      workflowRunId: string,
-      mergeRun: UnderstandingMergeRun,
-    ) => Promise<OnboardingUnderstandingSession>;
-    updateSourceRun: (
-      topicId: string,
-      sessionId: string,
-      sourceId: string,
-      threadId: string,
-      patch: Record<string, unknown>,
-    ) => Promise<OnboardingUnderstandingSession>;
-  };
+  results: UnderstandingResults;
+  sessions: UnderstandingSessions;
   topic: {
     assertActiveOnboardingTopic: (topicId: string) => Promise<void>;
     findById: (topicId: string) => Promise<

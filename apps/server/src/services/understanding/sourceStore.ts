@@ -71,10 +71,6 @@ export class UnderstandingSourceStore {
     await this.deleteField(reference, payloadField(reference.sourceId, reference.threadId));
   }
 
-  async deleteSourceLocator(reference: SourceReference): Promise<void> {
-    await this.deleteField(reference, locatorField(reference.sourceId));
-  }
-
   async deleteSession(reference: Omit<SourceReference, 'sourceId'>): Promise<void> {
     try {
       await this.redis.del(sessionKey(reference));

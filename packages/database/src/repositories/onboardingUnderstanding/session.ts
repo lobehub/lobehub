@@ -70,10 +70,6 @@ type SourceRunUpdate = Partial<
   Pick<UnderstandingSourceRun, 'assistantMessageId' | 'diagnostics' | 'resultId' | 'status'>
 >;
 
-type MergeRunUpdate = Partial<
-  Pick<UnderstandingMergeRun, 'assistantMessageId' | 'diagnostics' | 'resultId' | 'status'>
->;
-
 export class UnderstandingSessionRepository {
   constructor(
     private readonly db: LobeChatDatabase,
@@ -171,13 +167,6 @@ export class UnderstandingSessionRepository {
       };
     });
 
-  updateErrors = (
-    topicId: string,
-    sessionId: string,
-    errors: CollectionError[],
-  ): Promise<OnboardingUnderstandingSession> =>
-    this.update(topicId, sessionId, (session) => ({ ...session, errors }));
-
   updateSourceRun = (
     topicId: string,
     sessionId: string,
@@ -210,20 +199,6 @@ export class UnderstandingSessionRepository {
       }
       if (!session.mergeRun) return { ...session, mergeRun };
       return session;
-    });
-
-  updateMergeRun = (
-    topicId: string,
-    sessionId: string,
-    threadId: string,
-    patch: MergeRunUpdate,
-  ): Promise<OnboardingUnderstandingSession> =>
-    this.update(topicId, sessionId, (session) => {
-      if (!session.mergeRun) throw new Error('Understanding merge run was not found');
-      if (session.mergeRun.threadId !== threadId) {
-        throw new StaleUnderstandingRunError('merge', threadId);
-      }
-      return { ...session, mergeRun: { ...session.mergeRun, ...patch } };
     });
 
   removeForReset = async (topicId: string): Promise<OnboardingUnderstandingSession | undefined> =>

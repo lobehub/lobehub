@@ -25,14 +25,6 @@ const {
   sourceStoreConstructor: vi.fn(),
 }));
 
-const deferred = <T>() => {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((done) => {
-    resolve = done;
-  });
-  return { promise, resolve };
-};
-
 vi.mock('@lobechat/database', () => {
   class DomainError extends Error {}
   return {
@@ -903,41 +895,6 @@ describe('UnderstandingService', () => {
     await expect(
       harness.service.launchMerge('topic', session.id, 'workflow-b', 'merge-b'),
     ).resolves.toEqual({ failed: true, threadId: 'merge-a' });
-  });
-
-  it('fences merge creation from a workflow replaced by a newer retry', async () => {
-    const { branches, session } = await initializeAndDiscover(harness);
-    for (const branch of branches) {
-      const input = { ...branch, sessionId: session.id, topicId: 'topic' };
-      await harness.service.collectSource(input);
-      const launch = requireLaunch(await harness.service.launchSourceAnalysis(input));
-      harness.contents.set(launch.assistantMessageId, JSON.stringify(analysis));
-      await harness.service.finalizeSource({
-        ...input,
-        assistantMessageId: launch.assistantMessageId,
-      });
-    }
-    await harness.service.attachWorkflowRun('topic', session.id, 'workflow-a');
-    const oldClaimReached = deferred<void>();
-    const releaseOldClaim = deferred<void>();
-    const setMergeRun = harness.dependencies.sessions.setMergeRun.getMockImplementation()!;
-    harness.dependencies.sessions.setMergeRun.mockImplementation(async (...args) => {
-      if (args[2] === 'workflow-a') {
-        oldClaimReached.resolve();
-        await releaseOldClaim.promise;
-      }
-      return setMergeRun(...args);
-    });
-
-    const oldLaunch = harness.service.launchMerge('topic', session.id, 'workflow-a', 'merge-a');
-    await oldClaimReached.promise;
-    await harness.service.attachWorkflowRun('topic', session.id, 'workflow-b');
-    releaseOldClaim.resolve();
-
-    await expect(oldLaunch).rejects.toThrow('stale workflow');
-    await expect(
-      harness.service.launchMerge('topic', session.id, 'workflow-b', 'merge-b'),
-    ).resolves.toMatchObject({ threadId: 'merge-b' });
   });
 
   it('replays a persisted merge failure without generating a new result identity', async () => {
