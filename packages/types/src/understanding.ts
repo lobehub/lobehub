@@ -395,7 +395,7 @@ export const projectOnboardingUnderstandingSessionStatus = (
   }
   if (session.mergeRun?.status === 'failed') return 'failed';
   if (session.mergeRun) return 'merging';
-  if (session.runs.length === 0) return 'failed';
+  if (session.runs.length === 0) return session.errors?.length ? 'failed' : 'pending';
   if (session.runs.every((run) => TERMINAL_SOURCE_STATUSES.has(run.status))) {
     return session.runs.some((run) => run.status === 'completed') ? 'processing' : 'failed';
   }

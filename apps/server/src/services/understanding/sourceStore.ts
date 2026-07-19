@@ -22,6 +22,10 @@ interface SourceReference {
   userId: string;
 }
 
+interface SourceRunReference extends SourceReference {
+  threadId: string;
+}
+
 const SourcePayloadSchema = z
   .object({
     brief: z.string().max(MAX_SOURCE_BRIEF_LENGTH),
@@ -51,7 +55,8 @@ const digestIdentifier = (value: string): string => {
 const sessionKey = ({ sessionId, userId }: Omit<SourceReference, 'sourceId'>): string =>
   `${SOURCE_STORE_PREFIX}:{${digestIdentifier(userId)}}:session:${digestIdentifier(sessionId)}`;
 
-const payloadField = (sourceId: string): string => `source:${digestIdentifier(sourceId)}:payload`;
+const payloadField = (sourceId: string, threadId: string): string =>
+  `source:${digestIdentifier(sourceId)}:run:${digestIdentifier(threadId)}:payload`;
 const locatorField = (sourceId: string): string => `source:${digestIdentifier(sourceId)}:locator`;
 
 export class UnderstandingSourceStore {
@@ -62,8 +67,8 @@ export class UnderstandingSourceStore {
     this.redis = redis;
   }
 
-  async deleteSourcePayload(reference: SourceReference): Promise<void> {
-    await this.deleteField(reference, payloadField(reference.sourceId));
+  async deleteSourcePayload(reference: SourceRunReference): Promise<void> {
+    await this.deleteField(reference, payloadField(reference.sourceId, reference.threadId));
   }
 
   async deleteSourceLocator(reference: SourceReference): Promise<void> {
@@ -78,18 +83,22 @@ export class UnderstandingSourceStore {
     }
   }
 
-  async get(reference: SourceReference): Promise<SourcePayload | null> {
-    return this.readField(reference, payloadField(reference.sourceId), SourcePayloadSchema);
+  async get(reference: SourceRunReference): Promise<SourcePayload | null> {
+    return this.readField(
+      reference,
+      payloadField(reference.sourceId, reference.threadId),
+      SourcePayloadSchema,
+    );
   }
 
   async getSourceLocator(reference: SourceReference): Promise<SourceCandidate | null> {
     return this.readField(reference, locatorField(reference.sourceId), SourceLocatorSchema);
   }
 
-  async put(input: SourceReference & SourcePayload): Promise<void> {
+  async put(input: SourceRunReference & SourcePayload): Promise<void> {
     await this.putField(
       input,
-      payloadField(input.sourceId),
+      payloadField(input.sourceId, input.threadId),
       SourcePayloadSchema.parse({ brief: input.brief, diagnostics: input.diagnostics }),
     );
   }

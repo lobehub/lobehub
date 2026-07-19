@@ -11,6 +11,7 @@ const transaction = {
 const redis = { del: vi.fn(), hdel: vi.fn(), hget: vi.fn(), multi: vi.fn() };
 const store = new UnderstandingSourceStore(redis as unknown as Redis);
 const reference = { sessionId: 'session-1', sourceId: 'github:account-1', userId: 'user-1' };
+const runReference = { ...reference, threadId: 'thread-1' };
 
 describe('UnderstandingSourceStore', () => {
   beforeEach(() => {
@@ -26,7 +27,7 @@ describe('UnderstandingSourceStore', () => {
 
   it('stores payloads and locators with hashed identifiers and a 24 hour TTL', async () => {
     await store.put({
-      ...reference,
+      ...runReference,
       brief: 'collected markdown',
       diagnostics: { errors: [], evidenceCount: 1, failedCount: 0, succeededCount: 1 },
     });
@@ -45,7 +46,7 @@ describe('UnderstandingSourceStore', () => {
       expect.stringMatching(
         /^onboarding_understanding:source:\{[a-f\d]{64}\}:session:[a-f\d]{64}$/,
       ),
-      expect.stringMatching(/^source:[a-f\d]{64}:payload$/),
+      expect.stringMatching(/^source:[a-f\d]{64}:run:[a-f\d]{64}:payload$/),
       expect.any(String),
     );
     expect(transaction.hset).toHaveBeenNthCalledWith(
@@ -59,12 +60,28 @@ describe('UnderstandingSourceStore', () => {
   });
 
   it('deletes only the payload so the retry locator survives', async () => {
-    await store.deleteSourcePayload(reference);
+    await store.deleteSourcePayload(runReference);
 
     expect(redis.hdel).toHaveBeenCalledWith(
       expect.any(String),
-      expect.stringMatching(/^source:[a-f\d]{64}:payload$/),
+      expect.stringMatching(/^source:[a-f\d]{64}:run:[a-f\d]{64}:payload$/),
     );
+  });
+
+  it('scopes raw payloads by thread while keeping locators stable by source', async () => {
+    await store.put({
+      ...runReference,
+      brief: 'first run',
+      diagnostics: { errors: [], evidenceCount: 1, failedCount: 0, succeededCount: 1 },
+    });
+    await store.put({
+      ...runReference,
+      brief: 'retry run',
+      threadId: 'thread-2',
+      diagnostics: { errors: [], evidenceCount: 1, failedCount: 0, succeededCount: 1 },
+    });
+
+    expect(transaction.hset.mock.calls[0][1]).not.toBe(transaction.hset.mock.calls[1][1]);
   });
 
   it('deletes an individual locator when explicitly requested', async () => {
@@ -94,10 +111,10 @@ describe('UnderstandingSourceStore', () => {
         diagnostics: { errors: [], evidenceCount: 1, failedCount: 0, succeededCount: 1 },
       }),
     );
-    await expect(store.get(reference)).resolves.toMatchObject({ brief: 'collected markdown' });
+    await expect(store.get(runReference)).resolves.toMatchObject({ brief: 'collected markdown' });
 
     redis.hget.mockResolvedValueOnce('{"brief":"RAW_PRIVATE_DATA"}');
-    const error = await store.get(reference).catch((caught) => caught);
+    const error = await store.get(runReference).catch((caught) => caught);
     expect(error).toEqual(new Error('Failed to read onboarding Understanding source data'));
     expect(String(error)).not.toContain('RAW_PRIVATE_DATA');
   });
@@ -110,7 +127,7 @@ describe('UnderstandingSourceStore', () => {
 
     const error = await store
       .put({
-        ...reference,
+        ...runReference,
         brief: 'collected markdown',
         diagnostics: { errors: [], evidenceCount: 1, failedCount: 0, succeededCount: 1 },
       })
