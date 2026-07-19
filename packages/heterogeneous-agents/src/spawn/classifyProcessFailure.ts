@@ -44,6 +44,8 @@ const CLI_NOT_FOUND_MESSAGES: Record<string, string> = {
     'Claude Code CLI was not found on the machine running this agent. Install it and make sure `claude` can be executed.',
   'codex':
     'Codex CLI was not found on the machine running this agent. Install it and make sure `codex` can be executed.',
+  'opencode':
+    'OpenCode CLI was not found on the machine running this agent. Install it and make sure `opencode` can be executed.',
 };
 
 const AUTH_REQUIRED_MESSAGES: Record<string, string> = {
@@ -51,6 +53,8 @@ const AUTH_REQUIRED_MESSAGES: Record<string, string> = {
     'Claude Code could not authenticate on the machine running this agent. Sign in again or refresh its credentials, then retry.',
   'codex':
     'Codex could not authenticate on the machine running this agent. Sign in again or refresh its credentials, then retry.',
+  'opencode':
+    'OpenCode could not authenticate on the machine running this agent. Sign in again or refresh its credentials, then retry.',
 };
 
 /**
@@ -65,7 +69,7 @@ const STATUS_GUIDE_ERROR_CODES = new Set([
   'overloaded',
   'rate_limit',
 ]);
-const STATUS_GUIDE_AGENT_TYPES = new Set(['amp', 'claude-code', 'codex']);
+const STATUS_GUIDE_AGENT_TYPES = new Set(['amp', 'claude-code', 'codex', 'opencode']);
 
 /**
  * Whether a terminal error payload (an adapter's in-stream `error` event data,
@@ -88,7 +92,7 @@ export const isHeteroStatusGuideErrorData = (
 };
 
 export interface ClassifyHeteroProcessFailureParams {
-  /** Adapter type key — only `claude-code` / `codex` have a status guide. */
+  /** Adapter type key for a local CLI with a status guide. */
   agentType: string;
   /** Stderr tail / flattened error message to pattern-match. */
   detail?: string;

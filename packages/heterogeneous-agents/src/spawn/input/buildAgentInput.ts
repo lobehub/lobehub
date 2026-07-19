@@ -12,7 +12,7 @@ import { materializeImageToPath, normalizeImage } from './normalizeImage';
 
 export interface BuildAgentInputOptions extends NormalizeImageOptions {
   /**
-   * Directory used to materialize images for path-based agents (Codex). When
+   * Directory used to materialize images for path-based agents (Codex/OpenCode). When
    * unset, falls back to `cacheDir`, then to a per-agent subdirectory under
    * the OS tmpdir. Path-input images skip materialization entirely.
    */
@@ -82,7 +82,7 @@ const buildClaudeCodeStdin = async (
   };
 };
 
-const resolveCodexImagePaths = async (
+const resolvePathInputImagePaths = async (
   blocks: AgentContentBlock[],
   options: BuildAgentInputOptions,
 ): Promise<string[]> => {
@@ -113,11 +113,22 @@ const buildCodexInput = async (
   options: BuildAgentInputOptions,
 ): Promise<AgentInputPlan> => {
   const text = collectText(blocks);
-  const imagePaths = await resolveCodexImagePaths(blocks, options);
+  const imagePaths = await resolvePathInputImagePaths(blocks, options);
 
   return {
     args: imagePaths.flatMap((p) => ['--image', p]),
     stdin: text,
+  };
+};
+
+const buildOpenCodeInput = async (
+  blocks: AgentContentBlock[],
+  options: BuildAgentInputOptions,
+): Promise<AgentInputPlan> => {
+  const imagePaths = await resolvePathInputImagePaths(blocks, options);
+  return {
+    args: imagePaths.flatMap((imagePath) => ['--file', imagePath]),
+    stdin: collectText(blocks),
   };
 };
 
@@ -128,6 +139,7 @@ const buildCodexInput = async (
  *
  * - `amp` / `claude-code`: stream-json on stdin with text + base64 image content blocks
  * - `codex`: raw text on stdin + repeatable `--image <path>` flags
+ * - `opencode`: raw text on stdin + repeatable `--file <path>` flags
  *
  * Path-mode agents materialize URL / base64 images via `materializeImageToPath`
  * into `imageMaterializeDir` (defaults to `cacheDir` then `os.tmpdir()`).
@@ -146,6 +158,9 @@ export const buildAgentInput = async (
     }
     case 'codex': {
       return buildCodexInput(blocks, options);
+    }
+    case 'opencode': {
+      return buildOpenCodeInput(blocks, options);
     }
     default: {
       throw new Error(`buildAgentInput: unsupported agent type "${agentType}"`);

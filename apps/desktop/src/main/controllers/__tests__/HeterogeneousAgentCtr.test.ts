@@ -824,6 +824,26 @@ describe('HeterogeneousAgentCtr', () => {
       expect(spawnCalls).toHaveLength(0);
     });
 
+    it('fails fast with OpenCode install guidance when OpenCode is unavailable', async () => {
+      const detect = vi.fn().mockResolvedValue({ available: false });
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+        binaryManager: { detect },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'opencode',
+        command: 'opencode',
+      });
+
+      await expect(
+        ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId }),
+      ).rejects.toThrow('OpenCode CLI was not found');
+
+      expect(detect).toHaveBeenCalledWith('opencode', true);
+      expect(spawnCalls).toHaveLength(0);
+    });
+
     it('fails fast when a customized Claude command is unavailable instead of checking the default detector', async () => {
       execFileMock.mockImplementation(
         (

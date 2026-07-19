@@ -102,9 +102,16 @@ describe('hetero exec command', () => {
     stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     mockResolveHeteroSpawnCommand.mockReset();
     mockResolveHeteroSpawnCommand.mockImplementation(
-      async (agentType: 'amp' | 'claude-code' | 'codex', command?: string) => ({
+      async (agentType: 'amp' | 'claude-code' | 'codex' | 'opencode', command?: string) => ({
         command:
-          command ?? (agentType === 'amp' ? 'amp' : agentType === 'codex' ? 'codex' : 'claude'),
+          command ??
+          (agentType === 'amp'
+            ? 'amp'
+            : agentType === 'codex'
+              ? 'codex'
+              : agentType === 'opencode'
+                ? 'opencode'
+                : 'claude'),
       }),
     );
     mockSpawnAgent.mockReset();
@@ -346,6 +353,39 @@ describe('hetero exec command', () => {
         agentType: 'amp',
         command: 'amp',
         extraArgs: ['--mode', 'high'],
+      }),
+    );
+  });
+
+  it('runs OpenCode with model, resume, and native args while ignoring effort and speed', async () => {
+    mockSpawnAgent.mockReturnValue(createFakeHandle());
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'opencode',
+      '--prompt',
+      'do thing',
+      '--resume',
+      'session-open-1',
+      '--model',
+      'anthropic/claude-sonnet-4',
+      '--effort',
+      'high',
+      '--speed',
+      'fast',
+      '--agent-arg=--variant',
+      '--agent-arg=max',
+    ]);
+
+    expect(mockResolveHeteroSpawnCommand).toHaveBeenCalledWith('opencode', undefined);
+    expect(mockSpawnAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentType: 'opencode',
+        command: 'opencode',
+        extraArgs: ['--variant', 'max', '--model', 'anthropic/claude-sonnet-4'],
+        resumeSessionId: 'session-open-1',
       }),
     );
   });

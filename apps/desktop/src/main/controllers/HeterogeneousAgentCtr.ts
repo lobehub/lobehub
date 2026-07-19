@@ -13,6 +13,7 @@ import type {
   CodexQuotaSnapshot,
   CodexRateLimitResetResult,
   HeterogeneousAgentSessionError,
+  HeterogeneousCliAgentType,
 } from '@lobechat/electron-client-ipc';
 import {
   AMP_CLI_INSTALL_COMMANDS,
@@ -22,10 +23,13 @@ import {
   CODEX_CLI_INSTALL_COMMANDS,
   CODEX_CLI_INSTALL_DOCS_URL,
   HeterogeneousAgentSessionErrorCode,
+  OPENCODE_CLI_INSTALL_COMMANDS,
+  OPENCODE_CLI_INSTALL_DOCS_URL,
 } from '@lobechat/electron-client-ipc';
 import type { AskUserBridge } from '@lobechat/heterogeneous-agents/askUser';
 import type { McpToolResult } from '@lobechat/heterogeneous-agents/builtinMcp';
 import { LobeBuiltinMcpServer } from '@lobechat/heterogeneous-agents/builtinMcp';
+import { listHeterogeneousAgentModels } from '@lobechat/heterogeneous-agents/models';
 import type { HeteroExecImageRef } from '@lobechat/heterogeneous-agents/protocol';
 import {
   buildHeteroExecStdinPayload,
@@ -41,6 +45,10 @@ import {
   resolveCliSpawnPlan,
   resolveCodexInitialModel,
 } from '@lobechat/heterogeneous-agents/spawn';
+import type {
+  HeterogeneousAgentModelCatalog,
+  ListHeterogeneousAgentModelsParams,
+} from '@lobechat/types';
 import { app as electronApp, BrowserWindow } from 'electron';
 
 import { HETERO_AGENT_FILES_DIR, HETERO_AGENT_TRACING_DIR } from '@/const/heteroAgent';
@@ -135,7 +143,7 @@ const waitForHeteroSessionCompleteGrace = () =>
 
 interface StartSessionParams {
   /** Agent type key (e.g., 'claude-code'). Defaults to 'claude-code'. */
-  agentType?: string;
+  agentType?: HeterogeneousCliAgentType;
   /** Additional CLI arguments */
   args?: string[];
   /** Command to execute */
@@ -239,7 +247,7 @@ interface SessionInfo {
 
 interface AgentSession {
   agentSessionId?: string;
-  agentType: string;
+  agentType: HeterogeneousCliAgentType;
   args: string[];
   /**
    * True when *we* initiated the kill (cancelSession / stopSession / before-quit).
@@ -358,6 +366,9 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
       case 'codex': {
         return 'codex';
       }
+      case 'opencode': {
+        return 'opencode';
+      }
       default: {
         return 'claude';
       }
@@ -403,6 +414,19 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     };
   }
 
+  private buildOpenCodeCliMissingError(session: AgentSession): HeterogeneousAgentSessionError {
+    const command = this.resolveSessionCommand(session);
+
+    return {
+      agentType: 'opencode',
+      code: HeterogeneousAgentSessionErrorCode.CliNotFound,
+      command,
+      docsUrl: OPENCODE_CLI_INSTALL_DOCS_URL,
+      installCommands: OPENCODE_CLI_INSTALL_COMMANDS,
+      message: `OpenCode CLI was not found. Install it and make sure \`${command}\` can be executed.`,
+    };
+  }
+
   private buildCliMissingError(session: AgentSession): HeterogeneousAgentSessionError | undefined {
     switch (session.agentType) {
       case 'amp': {
@@ -413,6 +437,9 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
       }
       case 'codex': {
         return this.buildCodexCliMissingError(session);
+      }
+      case 'opencode': {
+        return this.buildOpenCodeCliMissingError(session);
       }
       default: {
         return;
@@ -457,6 +484,17 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
           docsUrl: CODEX_CLI_INSTALL_DOCS_URL,
           message:
             'Codex could not authenticate. Sign in again or refresh its credentials, then retry.',
+          stderr,
+        };
+      }
+      case 'opencode': {
+        return {
+          agentType: 'opencode',
+          code: HeterogeneousAgentSessionErrorCode.AuthRequired,
+          command,
+          docsUrl: OPENCODE_CLI_INSTALL_DOCS_URL,
+          message:
+            'OpenCode could not authenticate. Sign in again or refresh its credentials, then retry.',
           stderr,
         };
       }
@@ -613,17 +651,16 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
           ? 'claude'
           : session.agentType === 'codex'
             ? 'codex'
-            : undefined;
+            : session.agentType === 'opencode'
+              ? 'opencode'
+              : undefined;
     if (!defaultCommand) return;
 
     const command = this.resolveSessionCommand(session);
     const status =
       command === defaultCommand
         ? await this.app.binaryManager?.detect?.(defaultCommand, true)
-        : await detectHeterogeneousCliCommand(
-            session.agentType as 'amp' | 'claude-code' | 'codex',
-            command,
-          );
+        : await detectHeterogeneousCliCommand(session.agentType, command);
 
     if (!status || status.available) {
       // Spawn through the detector-resolved absolute path when the configured
@@ -1580,6 +1617,24 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   async getSessionInfo(params: GetSessionInfoParams): Promise<SessionInfo> {
     const session = this.sessions.get(params.sessionId);
     return { agentSessionId: session?.agentSessionId };
+  }
+
+  /** Query OpenCode's model catalog using the same cwd/env rules as a real local session. */
+  @IpcMethod()
+  async listModels(
+    params: ListHeterogeneousAgentModelsParams,
+  ): Promise<HeterogeneousAgentModelCatalog> {
+    const env = {
+      ...buildInheritedSpawnEnv(),
+      ...buildProxyEnv(this.app.storeManager.get('networkProxy')),
+      ...params.env,
+    };
+
+    return listHeterogeneousAgentModels({
+      ...params,
+      cwd: params.cwd || electronApp.getPath('desktop'),
+      env,
+    });
   }
 
   @IpcMethod()

@@ -90,6 +90,45 @@ describe('resolveCliCommand', () => {
       expect(execMock).not.toHaveBeenCalled();
     });
 
+    it('resolves and validates OpenCode using its bare semver output', async () => {
+      callExecFile('/Users/x/.opencode/bin/opencode\n');
+      callExecFile('1.18.3');
+
+      const { detectHeterogeneousCliCommand } = await importModule();
+      const status = await detectHeterogeneousCliCommand('opencode', 'opencode');
+
+      expect(status).toMatchObject({
+        available: true,
+        path: '/Users/x/.opencode/bin/opencode',
+        version: '1.18.3',
+      });
+    });
+
+    it('finds OpenCode in its well-known user-local install path', async () => {
+      const originalPath = process.env.PATH;
+      const originalShell = process.env.SHELL;
+      process.env.PATH = '/usr/bin:/bin';
+      delete process.env.SHELL;
+
+      try {
+        callExecFileError(new Error('not found')); // which opencode
+        callExecFile('1.18.3'); // ~/.opencode/bin/opencode --version
+
+        const { detectHeterogeneousCliCommand } = await importModule();
+        const status = await detectHeterogeneousCliCommand('opencode', 'opencode');
+
+        expect(status).toMatchObject({
+          available: true,
+          path: path.join(os.homedir(), '.opencode', 'bin', 'opencode'),
+          version: '1.18.3',
+        });
+      } finally {
+        process.env.PATH = originalPath;
+        if (originalShell === undefined) delete process.env.SHELL;
+        else process.env.SHELL = originalShell;
+      }
+    });
+
     it('falls through a PATH `codex` that fails validation to the ChatGPT.app bundled CLI', async () => {
       const originalPath = process.env.PATH;
       const originalShell = process.env.SHELL;
@@ -258,6 +297,11 @@ describe('resolveCliCommand', () => {
       const resolved = await resolveHeteroSpawnCommand('amp', undefined);
 
       expect(resolved.command).toBe('/Users/x/.local/bin/amp');
+    });
+
+    it('defines opencode as the default OpenCode command', async () => {
+      const { DEFAULT_HETERO_COMMAND } = await importModule();
+      expect(DEFAULT_HETERO_COMMAND.opencode).toBe('opencode');
     });
 
     it('resolves the default bare command to the validated absolute path', async () => {

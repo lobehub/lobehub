@@ -284,6 +284,58 @@ describe('spawnAgent', () => {
     expect(args.at(-1)).toBe('-');
   });
 
+  it('spawns OpenCode fresh with JSON thinking/auto flags and raw stdin', async () => {
+    nextFakeProc = createFakeProc().proc;
+    const { OPENCODE_BASE_ARGS, spawnAgent } = await import('./spawnAgent');
+    await spawnAgent({
+      agentType: 'opencode',
+      extraArgs: ['--model', 'anthropic/claude-sonnet-4'],
+      operationId: 'op-open',
+      prompt: 'hello opencode',
+    });
+
+    expect(spawnCalls[0]).toMatchObject({ command: 'opencode' });
+    expect(spawnCalls[0].args).toEqual([
+      ...OPENCODE_BASE_ARGS,
+      '--model',
+      'anthropic/claude-sonnet-4',
+    ]);
+    expect((nextFakeProc as any).stdin.write.mock.calls[0][0]).toBe('hello opencode');
+  });
+
+  it('spawns OpenCode resume with --session and --file before extra args', async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), 'lobe-opencode-spawn-'));
+    tempDirs.push(dir);
+    const imagePath = path.join(dir, 'input.png');
+    await writeFile(imagePath, 'image');
+    nextFakeProc = createFakeProc().proc;
+    const { spawnAgent } = await import('./spawnAgent');
+    await spawnAgent({
+      agentType: 'opencode',
+      extraArgs: ['--model', 'openai/gpt-5'],
+      operationId: 'op-open',
+      prompt: [
+        { text: 'continue', type: 'text' },
+        { source: { path: imagePath, type: 'path' }, type: 'image' },
+      ],
+      resumeSessionId: 'ses_previous',
+    });
+
+    expect(spawnCalls[0].args).toEqual([
+      'run',
+      '--format',
+      'json',
+      '--thinking',
+      '--auto',
+      '--session',
+      'ses_previous',
+      '--file',
+      imagePath,
+      '--model',
+      'openai/gpt-5',
+    ]);
+  });
+
   it('seeds a real Codex resumed stream with the previous cumulative usage from the session file', async () => {
     const threadId = '019dba1e-eec2-7a22-bdfb-ac6175e03081';
     const realCodexFixture = await readFile(

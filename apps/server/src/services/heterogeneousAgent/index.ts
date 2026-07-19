@@ -22,7 +22,7 @@ import { HeteroTraceRecorder } from './HeteroTraceRecorder';
 
 const log = debug('lobe-server:hetero-agent-service');
 
-export type HeterogeneousAgentType = 'amp' | 'claude-code' | 'codex';
+export type HeterogeneousAgentType = 'amp' | 'claude-code' | 'codex' | 'opencode';
 
 export type HeterogeneousFinishResult = 'success' | 'error' | 'cancelled';
 
@@ -74,7 +74,7 @@ export interface HeterogeneousAgentServiceOptions {
 
 /**
  * Server-side ingest handler for heterogeneous agent CLIs (`lh hetero exec`
- * for Amp / Claude Code / Codex). Receives `AgentStreamEvent` batches from the
+ * for Amp / Claude Code / Codex / OpenCode). Receives `AgentStreamEvent` batches from the
  * producer and republishes them through the existing `StreamEventManager`
  * fanout, so renderer-side gateway WS subscribers see the same wire shape
  * regardless of whether the run came from the agent gateway or a CLI process.

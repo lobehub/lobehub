@@ -20,7 +20,10 @@ import { ChatInput } from '@/features/Conversation';
 import { contextSelectors, useConversationStore } from '@/features/Conversation/store';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { resolveExecutionTarget } from '@/helpers/executionTarget';
+import {
+  isHeterogeneousSandboxExecutionAvailable,
+  resolveExecutionTarget,
+} from '@/helpers/executionTarget';
 import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useRemoteAgentDeviceGuard } from '@/hooks/useRemoteAgentDeviceGuard';
 import { useChatStore } from '@/store/chat';
@@ -104,20 +107,22 @@ const HeterogeneousChatInput = memo(() => {
     workspaceScoped,
   });
   const isRemoteAgent = !!providerType && isRemoteHeterogeneousType(providerType);
-  const ampDeviceSelectionRequired = providerType === 'amp' && executionTarget === 'none';
+  const deviceSelectionRequired =
+    !!providerType &&
+    !isHeterogeneousSandboxExecutionAvailable(providerType) &&
+    executionTarget === 'none';
 
-  // The model + thinking-effort selector only applies to local-CLI providers
-  // (claude-code / codex) and only when this surface actually dispatches the run.
-  // Gating here (rather than letting HeteroModel self-hide) keeps the action bar
-  // from rendering an empty slot. Uses the raw `executionTarget` to mirror the
-  // gate the control bar applied before the selector moved into the input.
-  const isSelectableHeteroProvider = providerType === 'claude-code' || providerType === 'codex';
+  // OpenCode can discover models on an explicit bound device; Claude Code and
+  // Codex retain their existing local/sandbox-only selector behavior.
+  const isSelectableHeteroProvider =
+    providerType === 'claude-code' || providerType === 'codex' || providerType === 'opencode';
   const showHeteroModel =
     isSelectableHeteroProvider &&
     shouldShowHeteroModelSelector({
       boundDeviceId: agencyConfig?.boundDeviceId,
-      executionTarget: agencyConfig?.executionTarget,
+      executionTarget,
       isDesktopClient: isDesktop,
+      providerType,
     });
   // The armed-schedule chip sits immediately after the `+` that armed it, so the
   // state and the control that produced it read as one unit.
@@ -196,7 +201,7 @@ const HeterogeneousChatInput = memo(() => {
   const renderCloudConfigGuard = () => {
     // Until the override loads, `isDeviceExecution` may be a false negative —
     // don't flash the cloud-config prompt for what turns out to be a device run.
-    if (isPreferenceLoading || ampDeviceSelectionRequired || isDeviceExecution || isConfigured) {
+    if (isPreferenceLoading || deviceSelectionRequired || isDeviceExecution || isConfigured) {
       return null;
     }
 
@@ -213,13 +218,15 @@ const HeterogeneousChatInput = memo(() => {
     );
   };
 
-  const renderAmpDeviceGuard = () => {
-    if (!ampDeviceSelectionRequired) return null;
+  const renderDeviceSelectionGuard = () => {
+    if (!deviceSelectionRequired) return null;
 
     return (
       <GuardBanner
-        hint={t('heteroAgent.executionTarget.ampSandboxUnsupported')}
         title={t('platformAgent.deviceGuard.noDevice.title')}
+        hint={t('heteroAgent.executionTarget.sandboxUnsupported', {
+          name: providerType ? HETEROGENEOUS_TYPE_LABELS[providerType] : undefined,
+        })}
       />
     );
   };
@@ -230,15 +237,15 @@ const HeterogeneousChatInput = memo(() => {
   // known yet, so neither guard can vouch for the run.
   const inputDisabled =
     isPreferenceLoading ||
-    ampDeviceSelectionRequired ||
+    deviceSelectionRequired ||
     (!isConfigured && !isDeviceExecution) ||
     deviceBlocked;
   const hasGuard =
-    ampDeviceSelectionRequired || deviceBlocked || (!isConfigured && !isDeviceExecution);
+    deviceSelectionRequired || deviceBlocked || (!isConfigured && !isDeviceExecution);
 
   return (
     <Flexbox>
-      {renderAmpDeviceGuard()}
+      {renderDeviceSelectionGuard()}
       {renderCloudConfigGuard()}
       {renderDeviceGuard()}
       <ChatInput

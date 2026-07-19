@@ -7,7 +7,8 @@
  *
  * Architecture:
  *   Claude Code stream-json ──→ ClaudeCodeAdapter ──→ HeterogeneousAgentEvent[]
- *   Codex CLI output         ──→ CodexAdapter      ──→ HeterogeneousAgentEvent[]  (future)
+ *   Codex CLI output         ──→ CodexAdapter      ──→ HeterogeneousAgentEvent[]
+ *   OpenCode JSONL           ──→ OpenCodeAdapter   ──→ HeterogeneousAgentEvent[]
  *   ACP JSON-RPC             ──→ ACPAdapter        ──→ HeterogeneousAgentEvent[]  (future)
  */
 

@@ -209,6 +209,29 @@ export const deviceRouter = router({
       return result ?? null;
     }),
 
+  /** Query OpenCode's model catalog on the device that will execute the agent. */
+  listHeterogeneousAgentModels: deviceProcedure
+    .input(
+      z.object({
+        command: z.string().optional(),
+        cwd: z.string().optional(),
+        deviceId: z.string(),
+        env: z.record(z.string(), z.string()).optional(),
+        type: z.literal('opencode'),
+      }),
+    )
+    .query(async ({ ctx, input }) =>
+      deviceGateway.listHeterogeneousAgentModels({
+        command: input.command,
+        cwd: input.cwd,
+        deviceId: input.deviceId,
+        env: input.env,
+        type: input.type,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      }),
+    ),
+
   /**
    * List the git worktrees attached to the same repository as a directory on a
    * remote device, via the device's `listGitWorktrees` RPC. Lets the web/remote

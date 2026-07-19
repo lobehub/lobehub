@@ -1,5 +1,5 @@
 import type { IconType } from '@lobehub/icons';
-import { Amp, ClaudeCode, Codex, getLobeIconCDN } from '@lobehub/icons';
+import { Amp, ClaudeCode, Codex, getLobeIconCDN, OpenCode } from '@lobehub/icons';
 
 import {
   getHeterogeneousAgentConfig,
@@ -19,6 +19,7 @@ const heterogeneousAgentIcons = {
   'amp': Amp,
   'claude-code': ClaudeCode,
   'codex': Codex,
+  'opencode': OpenCode,
 } as const satisfies Record<HeterogeneousAgentConfig['type'], IconType>;
 
 const createAgentAvatar = (iconId: string) =>

@@ -36,6 +36,7 @@ import type {
   DeviceProjectFileSearchResult,
   DeviceRenameProjectFileResult,
   DeviceWriteProjectFileResult,
+  HeterogeneousAgentModelCatalog,
   ProjectSkillMeta,
   WorkspaceInitResult,
 } from '@lobechat/types';
@@ -432,6 +433,55 @@ export class DeviceGateway {
     return this.invokeGitRead<DeviceGitWorktreeListItem[]>('listGitWorktrees', params, {
       path: params.path,
     });
+  }
+
+  /** Query a heterogeneous CLI's model catalog on the device that will execute it. */
+  async listHeterogeneousAgentModels(params: {
+    command?: string;
+    cwd?: string;
+    deviceId: string;
+    env?: Record<string, string>;
+    timeout?: number;
+    type: 'opencode';
+    userId: string;
+    workspaceId?: string;
+  }): Promise<HeterogeneousAgentModelCatalog> {
+    const { command, cwd, deviceId, env, timeout = 20_000, type, userId, workspaceId } = params;
+    const client = this.getClient();
+    const unavailable = (message: string): HeterogeneousAgentModelCatalog => ({
+      error: { code: 'device_unavailable', message },
+      status: 'error',
+      updatedAt: Date.now(),
+    });
+    if (!client) return unavailable('Device gateway is not configured');
+
+    try {
+      const result = await client.invokeRpc<HeterogeneousAgentModelCatalog>(
+        { deviceId, timeout, userId, workspaceId },
+        {
+          method: 'listHeterogeneousAgentModels',
+          params: { command, cwd, env, type },
+        },
+      );
+
+      if (!result.success || !result.data) {
+        const message = result.error || 'The device did not return a model catalog';
+        const unsupported =
+          message.includes('does not support heterogeneous agent model discovery') ||
+          message.includes('Unknown device RPC method');
+        log('listHeterogeneousAgentModels: failed for deviceId=%s — %s', deviceId, message);
+        return {
+          error: { code: unsupported ? 'unsupported_client' : 'device_unavailable', message },
+          status: 'error',
+          updatedAt: Date.now(),
+        };
+      }
+
+      return result.data;
+    } catch (error) {
+      log('listHeterogeneousAgentModels: error for deviceId=%s — %O', deviceId, error);
+      return unavailable(error instanceof Error ? error.message : 'Device model discovery failed');
+    }
   }
 
   /**

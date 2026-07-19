@@ -23,7 +23,7 @@ export interface BinaryInfo {
   priority?: number;
 }
 
-export type HeterogeneousCliAgentType = 'amp' | 'claude-code' | 'codex';
+export type HeterogeneousCliAgentType = 'amp' | 'claude-code' | 'codex' | 'opencode';
 
 export interface DetectHeterogeneousAgentCommandParams {
   agentType: HeterogeneousCliAgentType;

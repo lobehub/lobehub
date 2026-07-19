@@ -10,6 +10,44 @@ export const HETEROGENEOUS_AGENT_DEFAULT_SELECTION = 'default' as const;
 
 export type HeterogeneousAgentDefaultSelection = typeof HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
 
+export type HeterogeneousAgentModelCatalogErrorCode =
+  'cli_not_found' | 'command_failed' | 'device_unavailable' | 'timeout' | 'unsupported_client';
+
+/** One model reported by a heterogeneous CLI's device-local model catalog. */
+export interface HeterogeneousAgentModel {
+  /** Complete provider/model identifier. Treat as opaque when persisting or spawning. */
+  id: string;
+  /** Everything after the first slash. May itself contain slashes. */
+  modelId: string;
+  /** Everything before the first slash, used only for display grouping. */
+  providerId: string;
+}
+
+export interface ListHeterogeneousAgentModelsParams {
+  command?: string;
+  cwd?: string;
+  env?: Record<string, string>;
+  type: 'opencode';
+}
+
+export interface HeterogeneousAgentModelCatalogSuccess {
+  models: HeterogeneousAgentModel[];
+  status: 'success';
+  updatedAt: number;
+}
+
+export interface HeterogeneousAgentModelCatalogFailure {
+  error: {
+    code: HeterogeneousAgentModelCatalogErrorCode;
+    message: string;
+  };
+  status: 'error';
+  updatedAt: number;
+}
+
+export type HeterogeneousAgentModelCatalog =
+  HeterogeneousAgentModelCatalogFailure | HeterogeneousAgentModelCatalogSuccess;
+
 /**
  * Claude Code reasoning-effort levels, mirrored 1:1 with the CLI's
  * `--effort <level>` flag.
@@ -98,10 +136,11 @@ const CODEX_FAST_SERVICE_TIER_VALUES = ['fast', 'priority'] as const;
  *
  * Two families of hetero agents are supported:
  *
- * - **Local CLI** (`amp` | `claude-code` | `codex`): spawned as a child process on the
- *   desktop; uses `command`, `args`, `env`, `systemContext`.
+ * - **Local CLI** (`amp` | `claude-code` | `codex` | `opencode`): spawned as a child
+ *   process on the desktop or a connected device; uses `command`, `args`, `env`,
+ *   `systemContext`.
  *
- * - **Remote platform** (`openclaw` | `hermes` | `opencode`): dispatched to a machine
+ * - **Remote platform** (`openclaw` | `hermes`): dispatched to a machine
  *   connected via `lh connect`; device is identified by `LobeAgentAgencyConfig.boundDeviceId`.
  *   `platformAgentId` selects the named agent on the remote platform (defaults to `'main'`).
  */
@@ -168,6 +207,7 @@ interface CodexSelectionSource {
 const CODEX_CONFIG_FLAGS = ['-c', '--config'] as const;
 const CODEX_MODEL_FLAGS = ['-m', '--model'] as const;
 const HETERO_EXEC_AGENT_ARG_FLAG = '--agent-arg';
+const OPENCODE_MODEL_FLAGS = ['-m', '--model'] as const;
 
 const hasCliFlag = (args: string[], flag: string): boolean =>
   args.some((arg) => arg === flag || arg.startsWith(`${flag}=`));
@@ -386,7 +426,8 @@ export const codexModelSupportsFastSpeed = (model: string): boolean =>
  * For `claude-code` and `codex`, the chat-input selector persists explicit
  * `model` + `effort` selections on the provider config; this is the single
  * place that maps those stored settings onto provider-specific argv for direct
- * local desktop spawns.
+ * local desktop spawns. OpenCode currently has no dedicated selector, but a
+ * programmatically stored `model` is forwarded using its native `--model` flag.
  * Missing/default settings are resolved by the UI helpers for display only.
  * They are not appended here because CLI overrides must not mask each CLI's
  * own settings/env/account defaults. User-authored `args` win, so there is
@@ -400,7 +441,13 @@ export const buildHeteroSpawnArgs = (
   provider: HeterogeneousProviderConfig | undefined | null,
 ): string[] | undefined => {
   if (!provider) return undefined;
-  if (provider.type !== 'claude-code' && provider.type !== 'codex') return provider.args;
+  if (
+    provider.type !== 'claude-code' &&
+    provider.type !== 'codex' &&
+    provider.type !== 'opencode'
+  ) {
+    return provider.args;
+  }
 
   const baseArgs = provider.args ?? [];
   const extraArgs: string[] = [];
@@ -433,6 +480,17 @@ export const buildHeteroSpawnArgs = (
     }
   }
 
+  if (provider.type === 'opencode') {
+    const model = provider.model?.trim();
+    if (
+      model &&
+      model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
+      !hasAnyCliFlag(baseArgs, OPENCODE_MODEL_FLAGS)
+    ) {
+      extraArgs.push('--model', model);
+    }
+  }
+
   if (extraArgs.length === 0) return provider.args;
   return [...baseArgs, ...extraArgs];
 };
@@ -445,13 +503,18 @@ export const buildHeteroSpawnArgs = (
  * encoded with `--agent-arg=<arg>` so wrapper flags such as `-c, --command`
  * never collide with Codex/Claude flags. Keep selector overrides in the
  * wrapper's `--model` / `--effort` form; `lh hetero exec` translates them into
- * native Codex config immediately before `spawnAgent`.
+ * native provider arguments immediately before `spawnAgent`.
  */
 export const buildHeteroExecArgs = (
   provider: HeterogeneousProviderConfig | undefined | null,
 ): string[] | undefined => {
   if (!provider) return undefined;
-  if (provider.type !== 'amp' && provider.type !== 'claude-code' && provider.type !== 'codex') {
+  if (
+    provider.type !== 'amp' &&
+    provider.type !== 'claude-code' &&
+    provider.type !== 'codex' &&
+    provider.type !== 'opencode'
+  ) {
     return provider.args;
   }
 
@@ -492,6 +555,17 @@ export const buildHeteroExecArgs = (
       !hasCliConfigKey(baseArgs, CODEX_SERVICE_TIER_CONFIG_KEY)
     ) {
       selectorArgs.push('--speed', speed);
+    }
+  }
+
+  if (provider.type === 'opencode') {
+    const model = provider.model?.trim();
+    if (
+      model &&
+      model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
+      !hasAnyCliFlag(baseArgs, OPENCODE_MODEL_FLAGS)
+    ) {
+      selectorArgs.push('--model', model);
     }
   }
 

@@ -4,7 +4,7 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 
 /**
- * Shared resolver for the external CLI-agent binaries (Amp / Claude Code / Codex).
+ * Shared resolver for external CLI-agent binaries (Amp / Claude Code / Codex / OpenCode).
  *
  * This is the single source of truth for "given a command name, where is the
  * runnable binary?". It's consumed by BOTH spawn sites:
@@ -20,7 +20,7 @@ import { promisify } from 'node:util';
 const execFilePromise = promisify(execFile);
 const execPromise = promisify(exec);
 
-export type HeterogeneousCliAgentType = 'amp' | 'claude-code' | 'codex';
+export type HeterogeneousCliAgentType = 'amp' | 'claude-code' | 'codex' | 'opencode';
 
 /**
  * Resolution result. A structural subset of the desktop `BinaryManager`'s
@@ -43,7 +43,8 @@ export interface CliCommandStatus {
 
 interface ValidateOptions {
   validateFlag?: string;
-  validateKeywords: string[];
+  validateKeywords?: string[];
+  validatePattern?: RegExp;
 }
 
 interface ResolvedCommand {
@@ -178,8 +179,8 @@ const resolveCommandPath = async (command: string): Promise<ResolvedCommand | un
 
 /**
  * Resolve a command via which/where, then confirm it's the binary we expect by
- * matching `--version` output against a keyword (avoids collisions with an
- * unrelated executable of the same name).
+ * matching `--version` output against a keyword or output pattern (avoids
+ * collisions with an unrelated executable of the same name).
  */
 export const detectValidatedCommand = async (
   command: string,
@@ -189,7 +190,7 @@ export const detectValidatedCommand = async (
   if (!trimmedCommand) return { available: false };
   if (isWindows() && WINDOWS_SHELL_METAS.test(trimmedCommand)) return { available: false };
 
-  const { validateFlag = '--version', validateKeywords } = options;
+  const { validateFlag = '--version', validateKeywords, validatePattern } = options;
 
   // Resolve via where/which BEFORE invoking. On Windows this is what discovers
   // npm-installed shims like `claude.cmd` under %APPDATA%\npm — `execFile`
@@ -214,8 +215,12 @@ export const detectValidatedCommand = async (
         });
     const output = `${stdout}\n${stderr}`.trim();
     const loweredOutput = output.toLowerCase();
+    const matchesKeyword = validateKeywords?.some((keyword) =>
+      loweredOutput.includes(keyword.toLowerCase()),
+    );
+    const matchesPattern = validatePattern?.test(output);
 
-    if (!validateKeywords.some((keyword) => loweredOutput.includes(keyword.toLowerCase()))) {
+    if (!matchesKeyword && !matchesPattern) {
       return { available: false };
     }
 
@@ -245,6 +250,11 @@ const HETEROGENEOUS_CLI_AGENT_OPTIONS = {
   'codex': {
     validateKeywords: ['codex'],
   },
+  'opencode': {
+    // OpenCode prints only a bare version (for example `1.18.3`) for
+    // `--version`, without a product-name prefix.
+    validatePattern: /^v?\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?$/,
+  },
 } as const satisfies Record<HeterogeneousCliAgentType, ValidateOptions>;
 
 // The default (bare) command each agent type is shipped to run. The well-known
@@ -254,6 +264,7 @@ export const DEFAULT_HETERO_COMMAND: Record<HeterogeneousCliAgentType, string> =
   'amp': 'amp',
   'claude-code': 'claude',
   'codex': 'codex',
+  'opencode': 'opencode',
 };
 
 // Well-known absolute install locations probed when a bare command isn't on
@@ -296,6 +307,17 @@ const getWellKnownCommandPaths = (agentType: HeterogeneousCliAgentType): string[
           path.join(homedir(), 'Applications', bundledCli),
         ];
       });
+    }
+    case 'opencode': {
+      if (platform() !== 'darwin' && platform() !== 'linux') return [];
+
+      return [
+        path.join(homedir(), '.opencode', 'bin', 'opencode'),
+        path.join(homedir(), '.local', 'bin', 'opencode'),
+        path.join(homedir(), '.bun', 'bin', 'opencode'),
+        path.join(homedir(), '.npm-global', 'bin', 'opencode'),
+        path.join(homedir(), 'Library', 'pnpm', 'opencode'),
+      ];
     }
     default: {
       return [];
