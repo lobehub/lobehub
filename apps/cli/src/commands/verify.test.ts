@@ -206,20 +206,20 @@ describe('verify init command', () => {
     await program.parseAsync(['node', 'lh', 'verify', ...args]);
   };
 
-  it('defaults to the acceptance skill and writes it into .claude/skills/acceptance', async () => {
+  it('defaults to the acceptance skill and writes it into .agents/skills/acceptance', async () => {
     await run(['init', '--dir', dir]);
 
     expect(mockTrpcClient.verify.getSkillBundle.query).toHaveBeenCalledWith({
       identifier: 'acceptance',
     });
-    const skillDir = path.join(dir, '.claude', 'skills', 'acceptance');
+    const skillDir = path.join(dir, '.agents', 'skills', 'acceptance');
     expect(readFileSync(path.join(skillDir, 'SKILL.md'), 'utf8')).toBe('# Acceptance SKILL');
     expect(readFileSync(path.join(skillDir, 'references/plan-format.md'), 'utf8')).toBe('plan');
     expect(readFileSync(path.join(skillDir, 'surfaces/cli.md'), 'utf8')).toBe('cli');
   });
 
   it('skips existing files without --force and overwrites with it', async () => {
-    const skillFile = path.join(dir, '.claude', 'skills', 'acceptance', 'SKILL.md');
+    const skillFile = path.join(dir, '.agents', 'skills', 'acceptance', 'SKILL.md');
     await run(['init', '--dir', dir]);
 
     // server now serves updated content
@@ -774,19 +774,19 @@ describe('lh acceptance — canonical run tree', () => {
     expect(mockTrpcClient.verify.deleteRun.mutate).toHaveBeenCalledWith({ verifyRunId: 'run_1' });
   });
 
-  it('exposes `acceptance init` defaulting to the acceptance skill', async () => {
-    const dir = mkdtempSync(path.join(tmpdir(), 'acceptance-init-'));
+  it('exposes `acceptance install` defaulting to the acceptance skill', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'acceptance-install-'));
     mockTrpcClient.verify.getSkillBundle.query.mockReset().mockResolvedValue({
       content: '# Acceptance SKILL',
       files: {},
       identifier: 'acceptance',
       name: 'acceptance',
     });
-    await run(['init', '--dir', dir]);
+    await run(['install', '--dir', dir]);
     expect(mockTrpcClient.verify.getSkillBundle.query).toHaveBeenCalledWith({
       identifier: 'acceptance',
     });
-    expect(existsSync(path.join(dir, '.claude', 'skills', 'acceptance', 'SKILL.md'))).toBe(true);
+    expect(existsSync(path.join(dir, '.agents', 'skills', 'acceptance', 'SKILL.md'))).toBe(true);
     rmSync(dir, { force: true, recursive: true });
   });
 

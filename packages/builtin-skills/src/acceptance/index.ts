@@ -28,7 +28,7 @@ export const AcceptanceIdentifier = 'acceptance';
  * LobeHub-only coupling generalized away.
  *
  * Resource keys keep the `.md` extension so a disk pull
- * (`.claude/skills/acceptance/references/*.md`) maps 1:1 to real files and the
+ * (`.agents/skills/acceptance/references/*.md`) maps 1:1 to real files and the
  * in-SKILL relative links resolve.
  */
 export const AcceptanceSkill: BuiltinSkill = {

@@ -15,7 +15,6 @@ import {
   VERIFIER_TYPES,
   type VerifierType,
 } from './verifyHelpers';
-import { registerVerifyInstallCommand } from './verifyInstall';
 
 // Re-export the report/ingest helpers so existing importers keep resolving them
 // from './verify' (tests, and callers predating the verifyHelpers split).
@@ -32,11 +31,7 @@ export function registerVerifyCommand(program: Command) {
   // `lh acceptance`.
   registerAcceptanceCommands(verify, { deprecated: true });
 
-  // `verify install` — install the bundled agent-testing skill from this CLI
-  // package into the consumer repo.
-  registerVerifyInstallCommand(verify);
-
-  // Deprecated `lh verify …` spellings for the run/result/evidence/report/init
+  // Deprecated `lh verify …` spellings for the run/result/evidence/report/install
   // commands now living under `lh acceptance`. Kept for a few releases.
   attachDeprecatedVerifyRunAliases(verify);
   // ════════════ criteria ════════════

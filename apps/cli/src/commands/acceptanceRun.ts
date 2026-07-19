@@ -37,22 +37,25 @@ import {
 // tree and the deprecated `lh verify …` aliases. Both wire the same function, so
 // the two spellings never drift while the aliases live out their deprecation.
 
-// ── init ──
+// ── install ──
 
-interface InitOptions {
+interface InstallOptions {
   dir?: string;
   force?: boolean;
   json?: boolean | string;
   skill: string;
 }
 
-async function initAction(options: InitOptions): Promise<void> {
+async function installAction(options: InstallOptions): Promise<void> {
   const client = await getTrpcClient();
   // Pulled live from the server's deployed builtin-skills — always the latest.
   const bundle = await client.verify.getSkillBundle.query({ identifier: options.skill });
 
+  // The acceptance skeleton lands under `.agents/skills/<id>` — the harness dir
+  // the project's own `.agents/acceptance/` adapter sits beside. Invariant: this
+  // is a materialized artifact, re-installed to update, never hand-edited.
   const baseDir = options.dir ? path.resolve(options.dir) : process.cwd();
-  const skillDir = path.join(baseDir, '.claude', 'skills', bundle.identifier);
+  const skillDir = path.join(baseDir, '.agents', 'skills', bundle.identifier);
 
   // path → content for SKILL.md plus every resource file.
   const entries: [string, string][] = [
@@ -702,7 +705,7 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
 // Each `withXxxOptions` applies the flag set to a freshly-created command, so
 // the canonical and deprecated spellings always accept exactly the same flags.
 
-function withInitOptions(cmd: Command): Command {
+function withInstallOptions(cmd: Command): Command {
   return cmd
     .option('--dir <path>', 'Target working directory (default: current dir)')
     .option('--skill <id>', 'Skill identifier to pull', 'acceptance')
@@ -804,7 +807,7 @@ function withIngestReportOptions(cmd: Command): Command {
     .option('--json [fields]', 'Output JSON');
 }
 
-// ── Canonical tree: `lh acceptance init` + `lh acceptance run …` ──
+// ── Canonical tree: `lh acceptance install` + `lh acceptance run …` ──
 
 /**
  * The run-scoped acceptance commands. A run is one immutable round of a
@@ -812,13 +815,13 @@ function withIngestReportOptions(cmd: Command): Command {
  * Attached to the first-class `lh acceptance` command.
  */
 export function attachAcceptanceRunCommands(acceptance: Command): void {
-  withInitOptions(
+  withInstallOptions(
     acceptance
-      .command('init')
+      .command('install')
       .description(
-        'Write the portable acceptance skill into a working dir (.claude/skills/acceptance)',
+        'Install the acceptance skill skeleton into .agents/skills/acceptance (pulled from the server)',
       ),
-  ).action(initAction);
+  ).action(installAction);
 
   const run = acceptance
     .command('run')
@@ -921,10 +924,21 @@ function deprecate(cmd: Command, replacement: string): Command {
  * tests keep working.
  */
 export function attachDeprecatedVerifyRunAliases(verify: Command): void {
+  // Both legacy spellings — `verify init` (server pull) and `verify install`
+  // (the old bundled-skill installer) — converge on `acceptance install`.
   deprecate(
-    withInitOptions(verify.command('init').description('Deprecated — use `lh acceptance init`')),
-    'lh acceptance init',
-  ).action(initAction);
+    withInstallOptions(
+      verify.command('init').description('Deprecated — use `lh acceptance install`'),
+    ),
+    'lh acceptance install',
+  ).action(installAction);
+
+  deprecate(
+    withInstallOptions(
+      verify.command('install').description('Deprecated — use `lh acceptance install`'),
+    ),
+    'lh acceptance install',
+  ).action(installAction);
 
   deprecate(
     withIngestReportOptions(
