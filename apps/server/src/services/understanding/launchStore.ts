@@ -61,7 +61,7 @@ export class UnderstandingLaunchStore {
   find = async (
     identity: UnderstandingLaunchIdentity,
   ): Promise<UnderstandingLaunchReference | undefined> => {
-    const { marker } = await this.readThread(identity);
+    const marker = await this.readMarker(identity);
     if (marker.launch) return marker.launch;
 
     const topic = await this.dependencies.topics.findById(identity.topicId);
@@ -81,7 +81,7 @@ export class UnderstandingLaunchStore {
   ): Promise<UnderstandingLaunchReference> =>
     this.dependencies.threads.claim(identity, OnboardingUnderstandingLaunchSchema.parse(launch));
 
-  private readThread = async (identity: UnderstandingLaunchIdentity) => {
+  private readMarker = async (identity: UnderstandingLaunchIdentity) => {
     const thread = await this.dependencies.threads.findById(identity.threadId);
     const marker = OnboardingUnderstandingThreadMarkerSchema.safeParse(
       thread?.metadata?.onboardingUnderstanding,
@@ -96,7 +96,7 @@ export class UnderstandingLaunchStore {
     ) {
       throw new Error('Understanding launch thread is unavailable');
     }
-    return { marker: marker.data, metadata: thread.metadata ?? {} };
+    return marker.data;
   };
 }
 
