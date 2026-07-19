@@ -1,3 +1,8 @@
+import {
+  StaleUnderstandingSessionError,
+  UnderstandingSessionNotFoundError,
+} from '@lobechat/database';
+
 import { getServerDB } from '@/database/server';
 import {
   createUnderstandingService,
@@ -181,28 +186,24 @@ export const runOnboardingUnderstandingWorkflow = async (
     ),
   );
 
-  const launches = await context.run('sources:launch', async () => {
-    const launched: Array<{
-      branch: SourceBranch;
-      launch?: UnderstandingSourceLaunchReference;
-    }> = [];
-    for (const item of collected) {
-      if (!item.collected) {
-        launched.push({ branch: item.branch });
-        continue;
-      }
-      try {
-        const launch = await service.launchSourceAnalysis(sourceIdentity(payload, item.branch));
-        launched.push(
-          'skipped' in launch ? { branch: item.branch } : { branch: item.branch, launch },
-        );
-      } catch (error) {
-        if (!(error instanceof UnderstandingBranchFailureError)) throw error;
-        launched.push({ branch: item.branch });
-      }
-    }
-    return launched;
-  });
+  const launches: Array<{
+    branch: SourceBranch;
+    launch?: UnderstandingSourceLaunchReference;
+  }> = [];
+  for (const [index, item] of collected.entries()) {
+    launches.push(
+      await context.run(`sources:launch:${index}`, async () => {
+        if (!item.collected) return { branch: item.branch };
+        try {
+          const launch = await service.launchSourceAnalysis(sourceIdentity(payload, item.branch));
+          return 'skipped' in launch ? { branch: item.branch } : { branch: item.branch, launch };
+        } catch (error) {
+          if (!(error instanceof UnderstandingBranchFailureError)) throw error;
+          return { branch: item.branch };
+        }
+      }),
+    );
+  }
 
   const outcomes = await context.run('sources:execute-finalize', () =>
     Promise.all(
@@ -231,13 +232,23 @@ export const createOnboardingUnderstandingWorkflowOptions = (sessionId: string) 
     const parsed = OnboardingUnderstandingWorkflowPayloadSchema.safeParse(context.requestPayload);
     if (!parsed.success || parsed.data.sessionId !== sessionId) return 'invalid-payload';
 
-    await terminalizeUnderstandingWorkflow({
-      db: await getServerDB(),
-      sessionId: parsed.data.sessionId,
-      topicId: parsed.data.topicId,
-      userId: parsed.data.userId,
-      workflowRunId: context.workflowRunId,
-    });
+    try {
+      await terminalizeUnderstandingWorkflow({
+        db: await getServerDB(),
+        sessionId: parsed.data.sessionId,
+        topicId: parsed.data.topicId,
+        userId: parsed.data.userId,
+        workflowRunId: context.workflowRunId,
+      });
+    } catch (error) {
+      if (
+        error instanceof UnderstandingSessionNotFoundError ||
+        error instanceof StaleUnderstandingSessionError
+      ) {
+        return 'session-not-current';
+      }
+      throw error;
+    }
     return 'session-terminalized';
   },
   flowControl: {

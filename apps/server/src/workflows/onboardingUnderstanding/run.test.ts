@@ -1,4 +1,8 @@
 // @vitest-environment node
+import {
+  StaleUnderstandingSessionError,
+  UnderstandingSessionNotFoundError,
+} from '@lobechat/database';
 import { WorkflowAbort } from '@upstash/workflow';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -16,6 +20,10 @@ const { terminalizeUnderstandingWorkflowMock } = vi.hoisted(() => ({
   terminalizeUnderstandingWorkflowMock: vi.fn(),
 }));
 
+vi.mock('@lobechat/database', () => ({
+  StaleUnderstandingSessionError: class StaleUnderstandingSessionError extends Error {},
+  UnderstandingSessionNotFoundError: class UnderstandingSessionNotFoundError extends Error {},
+}));
 vi.mock('@/database/server', () => ({ getServerDB: vi.fn() }));
 vi.mock('@/server/services/understanding/service', () => ({
   createUnderstandingService: vi.fn(),
@@ -176,7 +184,8 @@ describe('runOnboardingUnderstandingWorkflow', () => {
       'attach-workflow-run',
       'discover',
       'sources:collect',
-      'sources:launch',
+      'sources:launch:0',
+      'sources:launch:1',
       'sources:execute-finalize',
       'merge:launch',
       'merge:execute',
@@ -231,7 +240,7 @@ describe('runOnboardingUnderstandingWorkflow', () => {
     expect(service.collectSource).toHaveBeenCalledTimes(1);
   });
 
-  it('uses one phase step for multiple accounts from one provider', async () => {
+  it('uses stable index-named durable launch steps without provider identifiers', async () => {
     const service = createService();
     service.discover.mockResolvedValue([
       { sourceId: 'github:account-2', threadId: 'thread-2' },
@@ -244,9 +253,66 @@ describe('runOnboardingUnderstandingWorkflow', () => {
     });
 
     expect(steps.filter((step) => step === 'sources:collect')).toHaveLength(1);
-    expect(steps.filter((step) => step === 'sources:launch')).toHaveLength(1);
+    expect(steps.filter((step) => step.startsWith('sources:launch:'))).toEqual([
+      'sources:launch:0',
+      'sources:launch:1',
+    ]);
+    expect(steps.join('\n')).not.toMatch(/github|account/);
     expect(steps.filter((step) => step === 'sources:execute-finalize')).toHaveLength(1);
     expect(new Set(steps).size).toBe(steps.length);
+  });
+
+  it('replays an acknowledged source launch without launching that source again', async () => {
+    const service = createService();
+    const steps: string[] = [];
+    const context = createContext(initialPayload, steps);
+    const run = context.run;
+    context.run = async <T>(step: string, handler: () => Promise<T>) => {
+      if (step === 'sources:launch:0') {
+        steps.push(step);
+        return {
+          branch: { sourceId: 'github:account-1', threadId: 'thread-github' },
+          launch: {
+            assistantMessageId: 'cached-message',
+            operationId: 'cached-operation',
+            sourceId: 'github:account-1',
+            success: true,
+            threadId: 'thread-github',
+          },
+        } as T;
+      }
+      return run(step, handler);
+    };
+
+    await runOnboardingUnderstandingWorkflow(context, { createService: async () => service });
+
+    expect(service.launchSourceAnalysis).toHaveBeenCalledOnce();
+    expect(service.launchSourceAnalysis).toHaveBeenCalledWith({
+      sessionId: 'session-1',
+      sourceId: 'gmail:account-1',
+      threadId: 'thread-gmail',
+      topicId: 'topic-1',
+    });
+    expect(service.executeAgentOperation).toHaveBeenCalledWith('cached-operation');
+  });
+
+  it('keeps connector documents out of durable step outputs', async () => {
+    const service = createService();
+    service.collectSource.mockResolvedValue({
+      sourceBrief: 'PRIVATE_CONNECTOR_DOCUMENT',
+      sourceCount: 1,
+    });
+    const durableOutputs: unknown[] = [];
+    const context = createContext(initialPayload);
+    context.run = async <T>(_step: string, handler: () => Promise<T>) => {
+      const output = await handler();
+      durableOutputs.push(output);
+      return output;
+    };
+
+    await runOnboardingUnderstandingWorkflow(context, { createService: async () => service });
+
+    expect(JSON.stringify(durableOutputs)).not.toContain('PRIVATE_CONNECTOR_DOCUMENT');
   });
 
   it('fails a merge with the thread returned by its launch', async () => {
@@ -377,5 +443,18 @@ describe('createOnboardingUnderstandingWorkflowOptions', () => {
         context: { requestPayload: initialPayload, workflowRunId: 'workflow-1' },
       } as never),
     ).rejects.toThrow('database unavailable');
+  });
+
+  it.each([
+    new UnderstandingSessionNotFoundError('topic-1'),
+    new StaleUnderstandingSessionError('session-1'),
+  ])('treats a removed or replaced reset session as a benign terminal no-op', async (error) => {
+    terminalizeUnderstandingWorkflowMock.mockRejectedValueOnce(error);
+
+    await expect(
+      createOnboardingUnderstandingWorkflowOptions('session-1').failureFunction({
+        context: { requestPayload: initialPayload, workflowRunId: 'workflow-1' },
+      } as never),
+    ).resolves.toBe('session-not-current');
   });
 });

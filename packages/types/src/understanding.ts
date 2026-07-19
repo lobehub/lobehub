@@ -27,23 +27,11 @@ export interface UnderstandingSourceRef {
 
 export interface OnboardingUnderstandingThreadMarker {
   kind: 'merged' | 'source';
-  launch?: {
-    assistantMessageId: string;
-    operationId: string;
-  };
 }
-
-export const OnboardingUnderstandingLaunchSchema = z
-  .object({
-    assistantMessageId: z.string().min(1).max(512),
-    operationId: z.string().min(1).max(512),
-  })
-  .strict();
 
 export const OnboardingUnderstandingThreadMarkerSchema = z
   .object({
     kind: z.enum(['merged', 'source']),
-    launch: OnboardingUnderstandingLaunchSchema.optional(),
   })
   .strict() satisfies z.ZodType<OnboardingUnderstandingThreadMarker>;
 

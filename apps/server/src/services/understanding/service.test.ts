@@ -13,7 +13,17 @@ import { createUnderstandingProviderRegistry } from './providers';
 import { createUnderstandingService, UnderstandingService } from './service';
 import type { UnderstandingProvider } from './types';
 
-const { agentRuntimeConstructor } = vi.hoisted(() => ({ agentRuntimeConstructor: vi.fn() }));
+const {
+  agentRuntimeConstructor,
+  confirmationRepositoryConfirm,
+  sessionRepositoryGet,
+  sourceStoreConstructor,
+} = vi.hoisted(() => ({
+  agentRuntimeConstructor: vi.fn(),
+  confirmationRepositoryConfirm: vi.fn(),
+  sessionRepositoryGet: vi.fn(),
+  sourceStoreConstructor: vi.fn(),
+}));
 
 const deferred = <T>() => {
   let resolve!: (value: T) => void;
@@ -28,12 +38,19 @@ vi.mock('@lobechat/database', () => {
   return {
     StaleUnderstandingRunError: DomainError,
     StaleUnderstandingSessionError: DomainError,
-    UnderstandingConfirmationRepository: class {},
+    UnderstandingConfirmationRepository: class {
+      confirm = confirmationRepositoryConfirm;
+    },
     UnderstandingPreconditionError: DomainError,
     UnderstandingResourceNotFoundError: DomainError,
-    UnderstandingResultRepository: class {},
+    UnderstandingResultRepository: class {
+      readMerge = vi.fn();
+      readSource = vi.fn();
+    },
     UnderstandingSessionNotFoundError: DomainError,
-    UnderstandingSessionRepository: class {},
+    UnderstandingSessionRepository: class {
+      get = sessionRepositoryGet;
+    },
   };
 });
 vi.mock('@/database/models/agent', () => ({
@@ -42,16 +59,28 @@ vi.mock('@/database/models/agent', () => ({
   },
 }));
 vi.mock('@/database/models/message', () => ({ MessageModel: class {} }));
-vi.mock('@/database/models/topic', () => ({ TopicModel: class {} }));
+vi.mock('@/database/models/topic', () => ({
+  TopicModel: class {
+    findById = vi.fn(async () => ({ metadata: { onboardingSession: {} } }));
+  },
+}));
 vi.mock('@/server/services/agentRuntime/AgentRuntimeService', () => ({
   AgentRuntimeService: class {
+    executeSync = vi.fn(async () => ({ status: 'done' }));
+
     constructor(...args: unknown[]) {
       agentRuntimeConstructor(...args);
     }
   },
 }));
 vi.mock('@/server/services/aiAgent', () => ({ AiAgentService: class {} }));
-vi.mock('./sourceStore', () => ({ UnderstandingSourceStore: class {} }));
+vi.mock('./sourceStore', () => ({
+  UnderstandingSourceStore: class {
+    constructor() {
+      sourceStoreConstructor();
+    }
+  },
+}));
 
 const analysis: UnderstandingAnalysis = {
   composition: {
@@ -119,13 +148,15 @@ const provider = (id: string): UnderstandingProvider => ({
 const createHarness = () => {
   let sequence = 0;
   let session: OnboardingUnderstandingSession | undefined;
+  let runningOperation:
+    { assistantMessageId: string; operationId: string; threadId: string } | undefined;
   const payloads = new Map<string, { brief: string; diagnostics: CollectionDiagnostics }>();
   const locators = new Map<string, any>();
   const contents = new Map<string, unknown>();
   const storedResults = new Map<string, OnboardingUnderstandingMessageMetadata>();
   const github = provider('github');
   const gmail = provider('gmail');
-  const execAgent = vi.fn(async ({ appContext }: any) => ({
+  const execAgent = vi.fn(async ({ appContext }: any): Promise<any> => ({
     assistantMessageId: `message-${appContext.threadId}`,
     autoStarted: false,
     operationId: `operation-${appContext.threadId}`,
@@ -138,19 +169,32 @@ const createHarness = () => {
     ...next,
     status: projectOnboardingUnderstandingSessionStatus(next),
   });
-  const dependencies = {
+  const runtime = {
     agent: { execAgent },
     agentRuntime: { executeOperation },
     agentId: 'understanding-agent',
-    confirmation: { confirm: confirmation },
     context: { userId: 'user' },
-    ids: () => `id-${++sequence}`,
-    launches: {
-      find: vi.fn(async () => undefined),
-      save: vi.fn(async (_identity: unknown, launch: any) => launch),
-    },
-    messages: { readContent: vi.fn(async (id: string) => contents.get(id)) },
     registry: createUnderstandingProviderRegistry([github, gmail]),
+    sourceStore: {
+      deleteSourcePayload: vi.fn(async (input: any) => void payloads.delete(sourceKey(input))),
+      get: vi.fn(async (input: any) => payloads.get(sourceKey(input)) ?? null),
+      getSourceLocator: vi.fn(async ({ sourceId }: any) => locators.get(sourceId) ?? null),
+      put: vi.fn(
+        async (input: any) =>
+          void payloads.set(sourceKey(input), {
+            brief: input.brief,
+            diagnostics: input.diagnostics,
+          }),
+      ),
+      putSourceLocator: vi.fn(
+        async ({ locator, sourceId }: any) => void locators.set(sourceId, locator),
+      ),
+    },
+  };
+  const dependencies = {
+    confirmation: { confirm: confirmation },
+    ids: () => `id-${++sequence}`,
+    messages: { readContent: vi.fn(async (id: string) => contents.get(id)) },
     results: {
       ensureThread: vi.fn(),
       finalizeMerge: vi.fn(async ({ assistantMessageId, metadata, threadId }: any) => {
@@ -251,22 +295,11 @@ const createHarness = () => {
         },
       ),
     },
-    sourceStore: {
-      deleteSourcePayload: vi.fn(async (input: any) => void payloads.delete(sourceKey(input))),
-      get: vi.fn(async (input: any) => payloads.get(sourceKey(input)) ?? null),
-      getSourceLocator: vi.fn(async ({ sourceId }: any) => locators.get(sourceId) ?? null),
-      put: vi.fn(
-        async (input: any) =>
-          void payloads.set(sourceKey(input), {
-            brief: input.brief,
-            diagnostics: input.diagnostics,
-          }),
-      ),
-      putSourceLocator: vi.fn(
-        async ({ locator, sourceId }: any) => void locators.set(sourceId, locator),
-      ),
+    topic: {
+      assertActiveOnboardingTopic: vi.fn(),
+      findById: vi.fn(async () => ({ metadata: { runningOperation } })),
     },
-    topic: { assertActiveOnboardingTopic: vi.fn() },
+    workflowRuntime: vi.fn(async () => runtime),
   };
   const service = new UnderstandingService(dependencies as any);
   return {
@@ -279,7 +312,11 @@ const createHarness = () => {
     gmail,
     locators,
     payloads,
+    runtime,
     service,
+    setRunningOperation: (operation: typeof runningOperation) => {
+      runningOperation = operation;
+    },
     session: () => session!,
     storedResults,
   };
@@ -291,26 +328,31 @@ const initializeAndDiscover = async (harness: ReturnType<typeof createHarness>) 
   return { branches, session };
 };
 
-const requireLaunch = <T extends { skipped?: boolean }>(
+const requireLaunch = <T extends { threadId: string }>(
   launch: T,
-): Exclude<T, { skipped: true }> => {
-  if (launch.skipped) throw new Error('expected agent launch');
-  return launch as Exclude<T, { skipped: true }>;
+): Exclude<T, { failed: true } | { skipped: true }> => {
+  if ('skipped' in launch && launch.skipped) throw new Error('expected agent launch');
+  if ('failed' in launch && launch.failed) throw new Error('expected successful agent launch');
+  return launch as Exclude<T, { failed: true } | { skipped: true }>;
 };
 
 describe('UnderstandingService', () => {
   let harness: ReturnType<typeof createHarness>;
 
   beforeEach(() => {
+    confirmationRepositoryConfirm.mockReset();
+    sessionRepositoryGet.mockReset();
+    sourceStoreConstructor.mockReset();
     harness = createHarness();
   });
 
   it('injects a discard snapshot store into the private understanding runtime', async () => {
-    await createUnderstandingService({
+    const service = await createUnderstandingService({
       db: {} as LobeChatDatabase,
       registrations: [],
       userId: 'user',
     });
+    await service.executeAgentOperation('operation');
 
     const options = agentRuntimeConstructor.mock.calls.at(-1)?.[2] as {
       queueService: null;
@@ -326,6 +368,36 @@ describe('UnderstandingService', () => {
     await expect(snapshotStore.save({} as ExecutionSnapshot)).resolves.toBeUndefined();
     await expect(snapshotStore.savePartial('operation', {})).resolves.toBeUndefined();
     await expect(snapshotStore.removePartial('operation')).resolves.toBeUndefined();
+  });
+
+  it('keeps reads and confirmation available when the lazy workflow runtime is unavailable', async () => {
+    const session: OnboardingUnderstandingSession = {
+      id: 'session',
+      runs: [],
+      status: 'pending',
+    };
+    sessionRepositoryGet.mockResolvedValue(session);
+    confirmationRepositoryConfirm.mockResolvedValue({ confirmed: true });
+    sourceStoreConstructor.mockImplementationOnce(() => {
+      throw new Error('redis unavailable');
+    });
+    const service = await createUnderstandingService({
+      db: {} as LobeChatDatabase,
+      registrations: [],
+      userId: 'user',
+    });
+
+    await expect(service.get('topic')).resolves.toMatchObject({ id: 'session', runs: [] });
+    await expect(
+      service.confirm({ resultId: 'result', sessionId: 'session', topicId: 'topic' }),
+    ).resolves.toEqual({ confirmed: true });
+    expect(sourceStoreConstructor).not.toHaveBeenCalled();
+
+    await expect(service.discover('topic', 'session')).rejects.toThrow('redis unavailable');
+    expect(sourceStoreConstructor).toHaveBeenCalledOnce();
+
+    await expect(service.executeAgentOperation('operation')).resolves.toEqual({ status: 'done' });
+    expect(sourceStoreConstructor).toHaveBeenCalledTimes(2);
   });
 
   it('initializes an empty pending session idempotently', async () => {
@@ -346,9 +418,9 @@ describe('UnderstandingService', () => {
     expect(harness.github.discoverSources).toHaveBeenCalledTimes(1);
     expect(JSON.stringify(branches)).not.toContain('secret');
     expect(JSON.stringify(harness.session())).not.toContain('credentialReference');
-    expect(
-      harness.dependencies.sourceStore.putSourceLocator.mock.invocationCallOrder[1],
-    ).toBeLessThan(harness.dependencies.sessions.update.mock.invocationCallOrder[0]);
+    expect(harness.runtime.sourceStore.putSourceLocator.mock.invocationCallOrder[1]).toBeLessThan(
+      harness.dependencies.sessions.update.mock.invocationCallOrder[0],
+    );
   });
 
   it('keeps partial discovery results and bounded provider errors', async () => {
@@ -489,7 +561,7 @@ describe('UnderstandingService', () => {
         sourceId: branch.sourceId,
         topicId: 'topic',
       }),
-    ).resolves.toBeUndefined();
+    ).resolves.toBe(branch.threadId);
     expect(harness.dependencies.sessions.update).not.toHaveBeenCalled();
     const retry = await harness.service.prepareRetry({
       sessionId: session.id,
@@ -519,21 +591,7 @@ describe('UnderstandingService', () => {
     expect(launch).toMatchObject({ operationId: expect.any(String), success: true });
     expect(JSON.stringify(launch)).not.toContain('PRIVATE_SOURCE_DOCUMENT');
     expect(harness.session().runs[0]).not.toHaveProperty('operationId');
-    expect(harness.dependencies.launches.save).toHaveBeenCalledWith(
-      {
-        agentId: 'understanding-agent',
-        kind: 'source',
-        threadId: input.threadId,
-        topicId: 'topic',
-      },
-      {
-        assistantMessageId: launch.assistantMessageId,
-        operationId: launch.operationId,
-      },
-    );
-    expect(harness.dependencies.launches.save.mock.invocationCallOrder[0]).toBeLessThan(
-      harness.dependencies.sessions.updateSourceRun.mock.invocationCallOrder.at(-1)!,
-    );
+    expect(harness.session().runs[0].assistantMessageId).toBe(launch.assistantMessageId);
   });
 
   it.each([
@@ -581,51 +639,17 @@ describe('UnderstandingService', () => {
     expect(harness.execAgent).toHaveBeenCalledTimes(2);
   });
 
-  it('returns one claimed source operation from concurrent launchers', async () => {
+  it('recovers an exact topic source operation before its session pointer is attached', async () => {
     const { branches, session } = await initializeAndDiscover(harness);
     const input = { ...branches[0], sessionId: session.id, topicId: 'topic' };
     await harness.service.collectSource(input);
-    const gate = deferred<void>();
-    let launchSequence = 0;
-    harness.execAgent.mockImplementation(async () => {
-      const sequence = ++launchSequence;
-      await gate.promise;
-      return {
-        assistantMessageId: `message-${sequence}`,
-        autoStarted: false,
-        operationId: `operation-${sequence}`,
-        success: true,
-      };
-    });
-    let winner: { assistantMessageId: string; operationId: string } | undefined;
-    harness.dependencies.launches.save.mockImplementation(async (_identity, launch) => {
-      winner ??= launch;
-      return winner;
-    });
-
-    const launches = [
-      harness.service.launchSourceAnalysis(input),
-      harness.service.launchSourceAnalysis(input),
-    ];
-    await vi.waitFor(() => expect(harness.execAgent).toHaveBeenCalledTimes(2));
-    gate.resolve();
-
-    const [first, second] = await Promise.all(launches);
-    expect(first).toMatchObject(second);
-    expect(first).toMatchObject(winner!);
-  });
-
-  it('recovers a durable source launch before and after its session pointer is attached', async () => {
-    const { branches, session } = await initializeAndDiscover(harness);
-    const input = { ...branches[0], sessionId: session.id, topicId: 'topic' };
-    await harness.service.collectSource(input);
-    harness.dependencies.launches.find.mockResolvedValue({
+    harness.setRunningOperation({
       assistantMessageId: 'durable-source-message',
       operationId: 'durable-source-operation',
+      threadId: input.threadId,
     });
 
     const recovered = await harness.service.launchSourceAnalysis(input);
-    const acknowledged = await harness.service.launchSourceAnalysis(input);
 
     expect(recovered).toEqual({
       assistantMessageId: 'durable-source-message',
@@ -634,9 +658,25 @@ describe('UnderstandingService', () => {
       success: true,
       threadId: input.threadId,
     });
-    expect(acknowledged).toEqual(recovered);
     expect(harness.session().runs[0].assistantMessageId).toBe('durable-source-message');
     expect(harness.execAgent).not.toHaveBeenCalled();
+  });
+
+  it('does not recover a topic source operation for a different thread', async () => {
+    const { branches, session } = await initializeAndDiscover(harness);
+    const input = { ...branches[0], sessionId: session.id, topicId: 'topic' };
+    await harness.service.collectSource(input);
+    harness.setRunningOperation({
+      assistantMessageId: 'other-message',
+      operationId: 'other-operation',
+      threadId: 'other-thread',
+    });
+
+    const launched = requireLaunch(await harness.service.launchSourceAnalysis(input));
+
+    expect(launched.threadId).toBe(input.threadId);
+    expect(launched.operationId).not.toBe('other-operation');
+    expect(harness.execAgent).toHaveBeenCalledOnce();
   });
 
   it('propagates source message transport failures instead of persisting invalid output', async () => {
@@ -666,7 +706,7 @@ describe('UnderstandingService', () => {
     harness.contents.set(firstLaunch.assistantMessageId, JSON.stringify(analysis));
     harness.contents.set(secondLaunch.assistantMessageId, 'not json');
 
-    harness.dependencies.sourceStore.deleteSourcePayload.mockRejectedValueOnce(
+    harness.runtime.sourceStore.deleteSourcePayload.mockRejectedValueOnce(
       new Error('redis offline'),
     );
     await expect(
@@ -699,7 +739,7 @@ describe('UnderstandingService', () => {
   it('persists a stable source failure even before an agent launch', async () => {
     const { branches, session } = await initializeAndDiscover(harness);
     const input = { ...branches[0], sessionId: session.id, topicId: 'topic' };
-    harness.dependencies.sourceStore.deleteSourcePayload.mockRejectedValueOnce(
+    harness.runtime.sourceStore.deleteSourcePayload.mockRejectedValueOnce(
       new Error('redis offline'),
     );
 
@@ -790,50 +830,6 @@ describe('UnderstandingService', () => {
       }),
     ).resolves.toBe(result);
     expect(harness.dependencies.results.finalizeMerge).toHaveBeenCalledOnce();
-  });
-
-  it('returns one claimed merge operation from concurrent launchers', async () => {
-    const { branches, session } = await initializeAndDiscover(harness);
-    for (const branch of branches) {
-      const input = { ...branch, sessionId: session.id, topicId: 'topic' };
-      await harness.service.collectSource(input);
-      const launch = requireLaunch(await harness.service.launchSourceAnalysis(input));
-      harness.contents.set(launch.assistantMessageId, JSON.stringify(analysis));
-      await harness.service.finalizeSource({
-        ...input,
-        assistantMessageId: launch.assistantMessageId,
-      });
-    }
-    harness.dependencies.launches.find.mockResolvedValue(undefined);
-    const gate = deferred<void>();
-    let launchSequence = 0;
-    harness.execAgent.mockImplementation(async () => {
-      const sequence = ++launchSequence;
-      await gate.promise;
-      return {
-        assistantMessageId: `merge-message-${sequence}`,
-        autoStarted: false,
-        operationId: `merge-operation-${sequence}`,
-        success: true,
-      };
-    });
-    let winner: { assistantMessageId: string; operationId: string } | undefined;
-    harness.dependencies.launches.save.mockImplementation(async (_identity, launch) => {
-      winner ??= launch;
-      return winner;
-    });
-
-    await harness.service.attachWorkflowRun('topic', session.id, 'workflow-run');
-    const launches = [
-      harness.service.launchMerge('topic', session.id, 'workflow-run', 'merge-thread'),
-      harness.service.launchMerge('topic', session.id, 'workflow-run', 'merge-thread'),
-    ];
-    await vi.waitFor(() => expect(harness.execAgent).toHaveBeenCalledTimes(2));
-    gate.resolve();
-
-    const [first, second] = await Promise.all(launches);
-    expect(first).toMatchObject(second);
-    expect(first).toMatchObject(winner!);
   });
 
   it('lets a newer workflow adopt and complete an older pending merge', async () => {
@@ -969,7 +965,7 @@ describe('UnderstandingService', () => {
     expect(harness.dependencies.results.finalizeMerge).toHaveBeenCalledOnce();
   });
 
-  it('recovers a durable merge launch before and after its session pointer is attached', async () => {
+  it('recovers an exact topic merge operation before its session pointer is attached', async () => {
     const { branches, session } = await initializeAndDiscover(harness);
     for (const branch of branches) {
       const input = { ...branch, sessionId: session.id, topicId: 'topic' };
@@ -981,34 +977,59 @@ describe('UnderstandingService', () => {
         assistantMessageId: launch.assistantMessageId,
       });
     }
-    harness.dependencies.launches.find.mockResolvedValue({
+    await harness.service.attachWorkflowRun('topic', session.id, 'workflow-run');
+    harness.setRunningOperation({
       assistantMessageId: 'durable-merge-message',
       operationId: 'durable-merge-operation',
+      threadId: 'durable-merge-thread',
     });
-
-    await harness.service.attachWorkflowRun('topic', session.id, 'workflow-run');
     const recovered = await harness.service.launchMerge(
       'topic',
       session.id,
       'workflow-run',
       'durable-merge-thread',
     );
-    const acknowledged = await harness.service.launchMerge(
-      'topic',
-      session.id,
-      'workflow-run',
-      'durable-merge-thread',
-    );
-
     expect(recovered).toEqual({
       assistantMessageId: 'durable-merge-message',
       operationId: 'durable-merge-operation',
       success: true,
       threadId: 'durable-merge-thread',
     });
-    expect(acknowledged).toEqual(recovered);
     expect(harness.session().mergeRun?.assistantMessageId).toBe('durable-merge-message');
     expect(harness.execAgent).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not recover a topic merge operation for a different thread', async () => {
+    const { branches, session } = await initializeAndDiscover(harness);
+    for (const branch of branches) {
+      const input = { ...branch, sessionId: session.id, topicId: 'topic' };
+      await harness.service.collectSource(input);
+      const launch = requireLaunch(await harness.service.launchSourceAnalysis(input));
+      harness.contents.set(launch.assistantMessageId, JSON.stringify(analysis));
+      await harness.service.finalizeSource({
+        ...input,
+        assistantMessageId: launch.assistantMessageId,
+      });
+    }
+    await harness.service.attachWorkflowRun('topic', session.id, 'workflow-run');
+    harness.setRunningOperation({
+      assistantMessageId: 'other-merge-message',
+      operationId: 'other-merge-operation',
+      threadId: 'other-merge-thread',
+    });
+
+    const launched = requireLaunch(
+      await harness.service.launchMerge(
+        'topic',
+        session.id,
+        'workflow-run',
+        'durable-merge-thread',
+      ),
+    );
+
+    expect(launched.threadId).toBe('durable-merge-thread');
+    expect(launched.operationId).not.toBe('other-merge-operation');
+    expect(harness.execAgent).toHaveBeenCalledTimes(3);
   });
 
   it('polls progressively without writes and delegates confirmation directly', async () => {
@@ -1027,7 +1048,7 @@ describe('UnderstandingService', () => {
     expect(polled.runs[0].result).toMatchObject({ kind: 'source_error' });
     expect(harness.dependencies.sessions.update).not.toHaveBeenCalled();
     expect(harness.execAgent).not.toHaveBeenCalled();
-    expect(harness.dependencies.sourceStore.deleteSourcePayload).not.toHaveBeenCalled();
+    expect(harness.runtime.sourceStore.deleteSourcePayload).not.toHaveBeenCalled();
     expect(confirmed).toEqual({ confirmed: true });
     expect(harness.confirmation).toHaveBeenCalledOnce();
   });

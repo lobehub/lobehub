@@ -53,11 +53,8 @@ const source = {
 };
 
 describe('Understanding durable contracts', () => {
-  it('accepts only bounded paired launch references on Understanding thread markers', () => {
-    const marker = {
-      kind: 'source' as const,
-      launch: { assistantMessageId: 'message', operationId: 'operation' },
-    };
+  it('stores only the Understanding result kind on thread markers', () => {
+    const marker = { kind: 'source' as const };
     expect(OnboardingUnderstandingThreadMarkerSchema.safeParse(marker).success).toBe(true);
     expect(
       threadMetadataSchema.parse({ onboardingUnderstanding: marker }).onboardingUnderstanding,
@@ -65,7 +62,7 @@ describe('Understanding durable contracts', () => {
     expect(
       OnboardingUnderstandingThreadMarkerSchema.safeParse({
         kind: 'source',
-        launch: { assistantMessageId: 'message', operationId: 'x'.repeat(513) },
+        launch: { assistantMessageId: 'message', operationId: 'operation' },
       }).success,
     ).toBe(false);
   });

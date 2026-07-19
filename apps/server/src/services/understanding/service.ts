@@ -41,7 +41,6 @@ import type { LobeChatDatabase } from '@/database/type';
 import { AgentRuntimeService } from '@/server/services/agentRuntime/AgentRuntimeService';
 import { AiAgentService } from '@/server/services/aiAgent';
 
-import { createUnderstandingLaunchStore } from './launchStore';
 import { discoverUnderstandingSources } from './pipeline';
 import type { UnderstandingProviderRegistry } from './providers';
 import {
@@ -149,34 +148,42 @@ interface MergeIdentity {
   topicId: string;
 }
 
-interface UnderstandingServiceDependencies {
+interface UnderstandingWorkflowRuntime {
   agent: Pick<AiAgentService, 'execAgent'>;
   agentId: string;
   agentRuntime: {
     executeOperation: (operationId: string) => Promise<{ status: string }>;
   };
-  confirmation: { confirm: (input: ConfirmOnboardingUnderstandingInput) => Promise<unknown> };
   context: UnderstandingProviderContext;
-  ids: () => string;
-  launches: {
-    find: (input: {
-      agentId: string;
-      kind: 'merged' | 'source';
-      threadId: string;
-      topicId: string;
-    }) => Promise<{ assistantMessageId: string; operationId: string } | undefined>;
-    save: (
-      input: {
-        agentId: string;
-        kind: 'merged' | 'source';
-        threadId: string;
-        topicId: string;
-      },
-      launch: { assistantMessageId: string; operationId: string },
-    ) => Promise<{ assistantMessageId: string; operationId: string }>;
-  };
-  messages: { readContent: (assistantMessageId: string) => Promise<unknown> };
   registry: UnderstandingProviderRegistry;
+  sourceStore: {
+    deleteSourcePayload: (input: SourceIdentity & { userId: string }) => Promise<void>;
+    get: (
+      input: SourceIdentity & { userId: string },
+    ) => Promise<{ brief: string; diagnostics: CollectionDiagnostics } | null>;
+    getSourceLocator: (
+      input: Omit<SourceIdentity, 'threadId' | 'topicId'> & { userId: string },
+    ) => Promise<SourceCandidate | null>;
+    put: (
+      input: SourceIdentity & {
+        brief: string;
+        diagnostics: CollectionDiagnostics;
+        userId: string;
+      },
+    ) => Promise<void>;
+    putSourceLocator: (
+      input: Omit<SourceIdentity, 'threadId' | 'topicId'> & {
+        locator: SourceCandidate;
+        userId: string;
+      },
+    ) => Promise<void>;
+  };
+}
+
+interface UnderstandingServiceDependencies {
+  confirmation: { confirm: (input: ConfirmOnboardingUnderstandingInput) => Promise<unknown> };
+  ids: () => string;
+  messages: { readContent: (assistantMessageId: string) => Promise<unknown> };
   results: {
     ensureThread: (input: {
       agentId: string;
@@ -235,29 +242,22 @@ interface UnderstandingServiceDependencies {
       patch: Record<string, unknown>,
     ) => Promise<OnboardingUnderstandingSession>;
   };
-  sourceStore: {
-    deleteSourcePayload: (input: SourceIdentity & { userId: string }) => Promise<void>;
-    get: (
-      input: SourceIdentity & { userId: string },
-    ) => Promise<{ brief: string; diagnostics: CollectionDiagnostics } | null>;
-    getSourceLocator: (
-      input: Omit<SourceIdentity, 'threadId' | 'topicId'> & { userId: string },
-    ) => Promise<SourceCandidate | null>;
-    put: (
-      input: SourceIdentity & {
-        brief: string;
-        diagnostics: CollectionDiagnostics;
-        userId: string;
-      },
-    ) => Promise<void>;
-    putSourceLocator: (
-      input: Omit<SourceIdentity, 'threadId' | 'topicId'> & {
-        locator: SourceCandidate;
-        userId: string;
-      },
-    ) => Promise<void>;
+  topic: {
+    assertActiveOnboardingTopic: (topicId: string) => Promise<void>;
+    findById: (topicId: string) => Promise<
+      | {
+          metadata?: {
+            runningOperation?: {
+              assistantMessageId: string;
+              operationId: string;
+              threadId?: string | null;
+            } | null;
+          } | null;
+        }
+      | undefined
+    >;
   };
-  topic: { assertActiveOnboardingTopic: (topicId: string) => Promise<void> };
+  workflowRuntime: () => Promise<UnderstandingWorkflowRuntime>;
 }
 
 export interface UnderstandingLaunchReference {
@@ -302,17 +302,15 @@ export class UnderstandingService {
   discover = async (topicId: string, sessionId: string) => {
     const current = await this.activeSession(topicId, sessionId);
     if (current.runs.length > 0 || current.errors) return this.branches(current);
+    const runtime = await this.dependencies.workflowRuntime();
 
-    const discovery = await discoverUnderstandingSources(
-      this.dependencies.registry,
-      this.dependencies.context,
-    );
+    const discovery = await discoverUnderstandingSources(runtime.registry, runtime.context);
     for (const source of discovery.sources) {
-      await this.dependencies.sourceStore.putSourceLocator({
+      await runtime.sourceStore.putSourceLocator({
         locator: this.locator(source),
         sessionId,
         sourceId: source.id,
-        userId: this.dependencies.context.userId,
+        userId: runtime.context.userId,
       });
     }
     const noSourceError =
@@ -344,30 +342,31 @@ export class UnderstandingService {
 
   collectSource = async (input: SourceIdentity) => {
     const run = await this.sourceRun(input);
-    const provider = this.dependencies.registry.get(run.source.provider);
+    const runtime = await this.dependencies.workflowRuntime();
+    const provider = runtime.registry.get(run.source.provider);
     if (!provider) throw new Error('Understanding source provider is unavailable');
-    let locator = await this.dependencies.sourceStore.getSourceLocator({
+    let locator = await runtime.sourceStore.getSourceLocator({
       sessionId: input.sessionId,
       sourceId: input.sourceId,
-      userId: this.dependencies.context.userId,
+      userId: runtime.context.userId,
     });
     let source = locator
-      ? await provider.resolveSource(run.source, locator, this.dependencies.context)
+      ? await provider.resolveSource(run.source, locator, runtime.context)
       : null;
     if (!source) {
-      const recovered = await this.recoverSource(run.source);
+      const recovered = await this.recoverSource(run.source, runtime);
       locator = this.locator(recovered);
       source = recovered;
-      await this.dependencies.sourceStore.putSourceLocator({
+      await runtime.sourceStore.putSourceLocator({
         locator,
         sessionId: input.sessionId,
         sourceId: input.sourceId,
-        userId: this.dependencies.context.userId,
+        userId: runtime.context.userId,
       });
     }
     let collected;
     try {
-      collected = await provider.collect(source, this.dependencies.context);
+      collected = await provider.collect(source, runtime.context);
     } catch (cause) {
       throw new UnderstandingBranchFailureError('Understanding source collection failed', {
         cause,
@@ -385,11 +384,11 @@ export class UnderstandingService {
         'Understanding source collection produced no successful evidence',
       );
     }
-    await this.dependencies.sourceStore.put({
+    await runtime.sourceStore.put({
       ...input,
       brief,
       diagnostics,
-      userId: this.dependencies.context.userId,
+      userId: runtime.context.userId,
     });
     await this.dependencies.sessions.updateSourceRun(
       input.topicId,
@@ -408,13 +407,7 @@ export class UnderstandingService {
     input: SourceIdentity,
   ): Promise<UnderstandingSourceLaunchReference | UnderstandingSourceLaunchSkipped> => {
     const run = await this.sourceRun(input);
-    const launchIdentity = {
-      agentId: this.dependencies.agentId,
-      kind: 'source' as const,
-      threadId: input.threadId,
-      topicId: input.topicId,
-    };
-    const recovered = await this.dependencies.launches.find(launchIdentity);
+    const recovered = await this.recoverRunningOperation(input.topicId, input.threadId);
     if (recovered) {
       if (run.assistantMessageId && run.assistantMessageId !== recovered.assistantMessageId) {
         throw new Error('Understanding source launch does not match its active run');
@@ -439,21 +432,21 @@ export class UnderstandingService {
     if (run.assistantMessageId) {
       return { skipped: true, sourceId: input.sourceId, threadId: input.threadId };
     }
-    const payload = await this.dependencies.sourceStore.get({
+    const runtime = await this.dependencies.workflowRuntime();
+    const payload = await runtime.sourceStore.get({
       ...input,
-      userId: this.dependencies.context.userId,
+      userId: runtime.context.userId,
     });
     if (!payload) {
       throw new UnderstandingBranchFailureError('Understanding source payload is unavailable');
     }
-    // The workflow executes this operation only after the launch pair is durably persisted.
     await this.dependencies.results.ensureThread({
-      agentId: this.dependencies.agentId,
+      agentId: runtime.agentId,
       kind: 'source',
       threadId: input.threadId,
       topicId: input.topicId,
     });
-    const launched = await this.dependencies.agent.execAgent({
+    const launched = await runtime.agent.execAgent({
       appContext: { threadId: input.threadId, topicId: input.topicId },
       autoStart: false,
       ephemeralUserMessage: payload.brief.slice(0, MAX_AGENT_INPUT_LENGTH),
@@ -473,20 +466,16 @@ export class UnderstandingService {
         launched.error ?? 'Understanding agent launch failed',
       );
     }
-    const claimedLaunch = await this.dependencies.launches.save(launchIdentity, {
-      assistantMessageId: launched.assistantMessageId,
-      operationId: launched.operationId,
-    });
     await this.dependencies.sessions.updateSourceRun(
       input.topicId,
       input.sessionId,
       input.sourceId,
       input.threadId,
-      { assistantMessageId: claimedLaunch.assistantMessageId, status: 'running' },
+      { assistantMessageId: launched.assistantMessageId, status: 'running' },
     );
     return {
-      assistantMessageId: claimedLaunch.assistantMessageId,
-      operationId: claimedLaunch.operationId,
+      assistantMessageId: launched.assistantMessageId,
+      operationId: launched.operationId,
       sourceId: input.sourceId,
       success: true,
       threadId: input.threadId,
@@ -494,7 +483,8 @@ export class UnderstandingService {
   };
 
   executeAgentOperation = async (operationId: string) => {
-    const { status } = await this.dependencies.agentRuntime.executeOperation(operationId);
+    const runtime = await this.dependencies.workflowRuntime();
+    const { status } = await runtime.agentRuntime.executeOperation(operationId);
     if (status === 'done') return { status: 'done' as const };
     if (status === 'error' || status === 'interrupted') return { status: 'error' as const };
     if (status === 'waiting_for_human' || status === 'waiting_for_async_tool') {
@@ -505,11 +495,12 @@ export class UnderstandingService {
 
   finalizeSource = async (input: SourceIdentity & { assistantMessageId: string }) => {
     const run = await this.sourceRun(input);
-    const persisted = await this.readTerminalSource(input, run);
+    const runtime = await this.dependencies.workflowRuntime();
+    const persisted = await this.readTerminalSource(input, run, runtime);
     if (persisted) return persisted;
-    const payload = await this.dependencies.sourceStore.get({
+    const payload = await runtime.sourceStore.get({
       ...input,
-      userId: this.dependencies.context.userId,
+      userId: runtime.context.userId,
     });
     const diagnostics = payload?.diagnostics ?? emptyDiagnostics();
     let metadata: UnderstandingSourceResult;
@@ -543,12 +534,12 @@ export class UnderstandingService {
     }
     const result = await this.dependencies.results.finalizeSource({
       ...input,
-      agentId: this.dependencies.agentId,
+      agentId: runtime.agentId,
       metadata,
     });
-    await this.dependencies.sourceStore.deleteSourcePayload({
+    await runtime.sourceStore.deleteSourcePayload({
       ...input,
-      userId: this.dependencies.context.userId,
+      userId: runtime.context.userId,
     });
     return result;
   };
@@ -557,12 +548,13 @@ export class UnderstandingService {
     input: SourceIdentity & { assistantMessageId?: string; retryable?: boolean },
   ) => {
     const run = await this.sourceRun(input);
-    const persisted = await this.readTerminalSource(input, run);
+    const runtime = await this.dependencies.workflowRuntime();
+    const persisted = await this.readTerminalSource(input, run, runtime);
     if (persisted) return persisted;
     const assistantMessageId = input.assistantMessageId ?? this.dependencies.ids();
-    const payload = await this.dependencies.sourceStore.get({
+    const payload = await runtime.sourceStore.get({
       ...input,
-      userId: this.dependencies.context.userId,
+      userId: runtime.context.userId,
     });
     const diagnostics = combineDiagnostics([
       payload?.diagnostics ?? emptyDiagnostics(),
@@ -576,14 +568,14 @@ export class UnderstandingService {
       ),
     ]);
     await this.dependencies.results.ensureThread({
-      agentId: this.dependencies.agentId,
+      agentId: runtime.agentId,
       kind: 'source',
       threadId: input.threadId,
       topicId: input.topicId,
     });
     const result = await this.dependencies.results.finalizeSource({
       ...input,
-      agentId: this.dependencies.agentId,
+      agentId: runtime.agentId,
       assistantMessageId,
       metadata: {
         diagnostics,
@@ -592,9 +584,9 @@ export class UnderstandingService {
         source: run.source,
       },
     });
-    await this.dependencies.sourceStore.deleteSourcePayload({
+    await runtime.sourceStore.deleteSourcePayload({
       ...input,
-      userId: this.dependencies.context.userId,
+      userId: runtime.context.userId,
     });
     return result;
   };
@@ -626,13 +618,7 @@ export class UnderstandingService {
     if (terminalStatuses.has(merge.status)) {
       return { skipped: true, threadId: merge.threadId };
     }
-    const launchIdentity = {
-      agentId: this.dependencies.agentId,
-      kind: 'merged' as const,
-      threadId: merge.threadId,
-      topicId,
-    };
-    const recovered = await this.dependencies.launches.find(launchIdentity);
+    const recovered = await this.recoverRunningOperation(topicId, merge.threadId);
     if (recovered) {
       if (merge.assistantMessageId && merge.assistantMessageId !== recovered.assistantMessageId) {
         throw new Error('Understanding merge launch does not match its active run');
@@ -661,6 +647,7 @@ export class UnderstandingService {
       };
     }
     if (merge.assistantMessageId) return { skipped: true, threadId: merge.threadId };
+    const runtime = await this.dependencies.workflowRuntime();
 
     const materials = await this.completedMaterials(topicId, sessionId, session);
     const diagnostics = combineDiagnostics(materials.map(({ result }) => result.diagnostics));
@@ -668,12 +655,12 @@ export class UnderstandingService {
       result.kind === 'source' ? [result.analysis] : [],
     );
     await this.dependencies.results.ensureThread({
-      agentId: this.dependencies.agentId,
+      agentId: runtime.agentId,
       kind: 'merged',
       threadId: merge.threadId,
       topicId,
     });
-    const launched = await this.dependencies.agent.execAgent({
+    const launched = await runtime.agent.execAgent({
       appContext: { threadId: merge.threadId, topicId },
       autoStart: false,
       ephemeralUserMessage: JSON.stringify(analyses).slice(0, MAX_AGENT_INPUT_LENGTH),
@@ -687,10 +674,6 @@ export class UnderstandingService {
     if (!launched.success) {
       return { failed: true, threadId: merge.threadId };
     }
-    const claimedLaunch = await this.dependencies.launches.save(launchIdentity, {
-      assistantMessageId: launched.assistantMessageId,
-      operationId: launched.operationId,
-    });
     await this.dependencies.sessions.update(topicId, sessionId, (current) => {
       const currentMerge = current.mergeRun;
       if (currentMerge?.threadId !== merge.threadId) {
@@ -700,15 +683,15 @@ export class UnderstandingService {
         ...current,
         mergeRun: {
           ...currentMerge,
-          assistantMessageId: claimedLaunch.assistantMessageId,
+          assistantMessageId: launched.assistantMessageId,
           diagnostics: CollectionDiagnosticsSummarySchema.parse(diagnostics),
           status: 'running' as const,
         },
       };
     });
     return {
-      assistantMessageId: claimedLaunch.assistantMessageId,
-      operationId: claimedLaunch.operationId,
+      assistantMessageId: launched.assistantMessageId,
+      operationId: launched.operationId,
       success: true,
       threadId: merge.threadId,
     };
@@ -721,6 +704,7 @@ export class UnderstandingService {
     }
     const persisted = await this.readTerminalMerge(input, session);
     if (persisted) return persisted;
+    const runtime = await this.dependencies.workflowRuntime();
     const materials = await this.completedMaterials(input.topicId, input.sessionId, session);
     const diagnostics = combineDiagnostics(materials.map(({ result }) => result.diagnostics));
     const sources = materials.flatMap(({ result }) =>
@@ -742,7 +726,7 @@ export class UnderstandingService {
     }
     return this.dependencies.results.finalizeMerge({
       ...input,
-      agentId: this.dependencies.agentId,
+      agentId: runtime.agentId,
       metadata,
     });
   };
@@ -754,18 +738,19 @@ export class UnderstandingService {
     }
     const persisted = await this.readTerminalMerge(input, session);
     if (persisted) return persisted;
+    const runtime = await this.dependencies.workflowRuntime();
     const assistantMessageId = input.assistantMessageId ?? this.dependencies.ids();
     const materials = await this.completedMaterials(input.topicId, input.sessionId, session);
     const diagnostics = combineDiagnostics(materials.map(({ result }) => result.diagnostics));
     await this.dependencies.results.ensureThread({
-      agentId: this.dependencies.agentId,
+      agentId: runtime.agentId,
       kind: 'merged',
       threadId: input.threadId,
       topicId: input.topicId,
     });
     return this.dependencies.results.finalizeMerge({
       ...input,
-      agentId: this.dependencies.agentId,
+      agentId: runtime.agentId,
       assistantMessageId,
       metadata: this.mergeFailureMetadata(assistantMessageId, diagnostics, materials),
     });
@@ -854,13 +839,14 @@ export class UnderstandingService {
     };
   };
 
-  assertRetryable = async (input: Omit<SourceIdentity, 'threadId'>): Promise<void> => {
+  assertRetryable = async (input: Omit<SourceIdentity, 'threadId'>): Promise<string> => {
     const session = await this.activeSession(input.topicId, input.sessionId);
     const target = session.runs.find(({ source }) => source.id === input.sourceId);
     if (!target) throw new UnderstandingResourceNotFoundError('session');
     if (target.status !== 'failed') {
       throw new UnderstandingPreconditionError('source_not_retryable');
     }
+    return target.threadId;
   };
 
   prepareRetry = async (input: Omit<SourceIdentity, 'threadId'>) => {
@@ -885,6 +871,17 @@ export class UnderstandingService {
   confirm = (input: ConfirmOnboardingUnderstandingInput) =>
     this.dependencies.confirmation.confirm(input);
 
+  private recoverRunningOperation = async (topicId: string, threadId: string) => {
+    const topic = await this.dependencies.topic.findById(topicId);
+    if (!topic) throw new UnderstandingResourceNotFoundError('topic');
+    const operation = topic.metadata?.runningOperation;
+    if (!operation || operation.threadId !== threadId) return;
+    return {
+      assistantMessageId: operation.assistantMessageId,
+      operationId: operation.operationId,
+    };
+  };
+
   private activeSession = async (topicId: string, sessionId: string) => {
     await this.dependencies.topic.assertActiveOnboardingTopic(topicId);
     const session = await this.dependencies.sessions.get(topicId);
@@ -905,6 +902,7 @@ export class UnderstandingService {
   private readTerminalSource = async (
     input: SourceIdentity,
     run: OnboardingUnderstandingSession['runs'][number],
+    runtime: UnderstandingWorkflowRuntime,
   ) => {
     if (!terminalStatuses.has(run.status) || !run.assistantMessageId || !run.resultId) return;
     const result = await this.dependencies.results.readSource({
@@ -917,9 +915,9 @@ export class UnderstandingService {
     if (!result || result.resultId !== run.resultId) {
       throw new Error('Understanding source result is unavailable');
     }
-    await this.dependencies.sourceStore.deleteSourcePayload({
+    await runtime.sourceStore.deleteSourcePayload({
       ...input,
-      userId: this.dependencies.context.userId,
+      userId: runtime.context.userId,
     });
     return result;
   };
@@ -953,12 +951,15 @@ export class UnderstandingService {
     provider: source.provider,
   });
 
-  private recoverSource = async (reference: UnderstandingSourceRef) => {
-    const provider = this.dependencies.registry.get(reference.provider);
+  private recoverSource = async (
+    reference: UnderstandingSourceRef,
+    runtime: UnderstandingWorkflowRuntime,
+  ) => {
+    const provider = runtime.registry.get(reference.provider);
     if (!provider) throw new Error('Understanding source provider is unavailable');
     const discovery = await discoverUnderstandingSources(
       { get: (id) => (id === provider.id ? provider : undefined), list: () => [provider] },
-      this.dependencies.context,
+      runtime.context,
     );
     const resolved = discovery.sources.find(
       (source) =>
@@ -1021,6 +1022,17 @@ interface CreateUnderstandingServiceOptions {
   workspaceId?: string;
 }
 
+const createRecoverableLazy = <T>(load: () => Promise<T>) => {
+  let pending: Promise<T> | undefined;
+  return () => {
+    pending ??= load().catch((error) => {
+      pending = undefined;
+      throw error;
+    });
+    return pending;
+  };
+};
+
 export const createUnderstandingService = async ({
   db,
   userId,
@@ -1028,38 +1040,41 @@ export const createUnderstandingService = async ({
   registrations = builtinUnderstandingProviderRegistrations,
 }: CreateUnderstandingServiceOptions): Promise<UnderstandingService> => {
   if (workspaceId) throw new Error('Onboarding Understanding is available only in personal scope');
-  const agent = await new AgentModel(db, userId).getBuiltinAgent(
-    BUILTIN_AGENT_SLUGS.onboardingUnderstanding,
-  );
-  if (!agent) throw new Error('Onboarding Understanding agent is unavailable');
-  const { context, registry } = materializeUnderstandingProviders(registrations, { db, userId });
   const messageModel = new MessageModel(db, userId);
   const topicModel = new TopicModel(db, userId);
-  const agentRuntime = new AgentRuntimeService(db, userId, {
-    queueService: null,
-    snapshotStore: discardUnderstandingSnapshotStore,
+  const workflowRuntime = createRecoverableLazy(async (): Promise<UnderstandingWorkflowRuntime> => {
+    const agent = await new AgentModel(db, userId).getBuiltinAgent(
+      BUILTIN_AGENT_SLUGS.onboardingUnderstanding,
+    );
+    if (!agent) throw new Error('Onboarding Understanding agent is unavailable');
+    const { context, registry } = materializeUnderstandingProviders(registrations, { db, userId });
+    const agentRuntime = new AgentRuntimeService(db, userId, {
+      queueService: null,
+      snapshotStore: discardUnderstandingSnapshotStore,
+    });
+    return {
+      agent: new AiAgentService(db, userId),
+      agentId: agent.id,
+      agentRuntime: {
+        executeOperation: async (operationId) => {
+          const state = await agentRuntime.executeSync(operationId, { maxSteps: 1 });
+          return { status: state.status };
+        },
+      },
+      context,
+      registry,
+      sourceStore: new UnderstandingSourceStore(),
+    };
   });
   return new UnderstandingService({
-    agent: new AiAgentService(db, userId),
-    agentId: agent.id,
-    agentRuntime: {
-      executeOperation: async (operationId) => {
-        const state = await agentRuntime.executeSync(operationId, { maxSteps: 1 });
-        return { status: state.status };
-      },
-    },
     confirmation: new UnderstandingConfirmationRepository(db, userId),
-    context,
     ids: randomUUID,
-    launches: createUnderstandingLaunchStore(db, userId),
     messages: {
       readContent: async (assistantMessageId) =>
         (await messageModel.findById(assistantMessageId))?.content,
     },
-    registry,
     results: new UnderstandingResultRepository(db, userId),
     sessions: new UnderstandingSessionRepository(db, userId),
-    sourceStore: new UnderstandingSourceStore(),
     topic: {
       assertActiveOnboardingTopic: async (topicId) => {
         const topic = await topicModel.findById(topicId);
@@ -1068,7 +1083,9 @@ export const createUnderstandingService = async ({
           throw new UnderstandingResourceNotFoundError('topic');
         }
       },
+      findById: (topicId) => topicModel.findById(topicId),
     },
+    workflowRuntime,
   });
 };
 
