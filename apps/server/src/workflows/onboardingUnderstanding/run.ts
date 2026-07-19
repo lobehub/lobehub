@@ -124,7 +124,12 @@ const runMerge = async (
   let launch: Awaited<ReturnType<UnderstandingService['launchMerge']>>;
   try {
     launch = await context.run('merge:launch', () =>
-      service.launchMerge(payload.topicId, payload.sessionId, requestedThreadId),
+      service.launchMerge(
+        payload.topicId,
+        payload.sessionId,
+        context.workflowRunId,
+        requestedThreadId,
+      ),
     );
   } catch (error) {
     if (error instanceof WorkflowAbort) throw error;

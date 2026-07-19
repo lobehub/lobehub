@@ -21,6 +21,7 @@ import type {
   OnboardingUnderstandingSession,
   UnderstandingAnalysis,
   UnderstandingMergedResult,
+  UnderstandingMergeRun,
   UnderstandingMergeRunResult,
   UnderstandingSourceRef,
   UnderstandingSourceResult,
@@ -219,6 +220,12 @@ interface UnderstandingServiceDependencies {
       topicId: string,
       sessionId: string,
       mutate: (session: OnboardingUnderstandingSession) => OnboardingUnderstandingSession,
+    ) => Promise<OnboardingUnderstandingSession>;
+    setMergeRun: (
+      topicId: string,
+      sessionId: string,
+      workflowRunId: string,
+      mergeRun: UnderstandingMergeRun,
     ) => Promise<OnboardingUnderstandingSession>;
     updateSourceRun: (
       topicId: string,
@@ -590,27 +597,26 @@ export class UnderstandingService {
   launchMerge = async (
     topicId: string,
     sessionId: string,
+    workflowRunId: string,
     requestedThreadId = this.dependencies.ids(),
   ): Promise<
     (UnderstandingLaunchReference & { skipped?: false }) | { skipped: true; threadId: string }
   > => {
-    let claimed = false;
-    const session = await this.dependencies.sessions.update(topicId, sessionId, (current) => {
-      if (current.runs.some((run) => !terminalStatuses.has(run.status))) {
-        throw new UnderstandingPreconditionError('result_not_confirmable');
-      }
-      if (!current.runs.some((run) => run.status === 'completed')) {
-        throw new UnderstandingPreconditionError('result_not_confirmable');
-      }
-      if (current.mergeRun) return current;
-      claimed = true;
-      return {
-        ...current,
-        mergeRun: { status: 'pending' as const, threadId: requestedThreadId },
-      };
-    });
+    const current = await this.activeSession(topicId, sessionId);
+    if (current.runs.some((run) => !terminalStatuses.has(run.status))) {
+      throw new UnderstandingPreconditionError('result_not_confirmable');
+    }
+    if (!current.runs.some((run) => run.status === 'completed')) {
+      throw new UnderstandingPreconditionError('result_not_confirmable');
+    }
+    const session = await this.dependencies.sessions.setMergeRun(
+      topicId,
+      sessionId,
+      workflowRunId,
+      { status: 'pending', threadId: requestedThreadId },
+    );
     const merge = session.mergeRun!;
-    if (!claimed && merge.threadId !== requestedThreadId) {
+    if (terminalStatuses.has(merge.status)) {
       return { skipped: true, threadId: merge.threadId };
     }
     const launchIdentity = {

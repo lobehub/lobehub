@@ -98,6 +98,7 @@ describe('UnderstandingResultRepository', () => {
     });
     sessionRepository = new UnderstandingSessionRepository(db, userId);
     await sessionRepository.install(topicId, session);
+    await sessionRepository.attachWorkflowRun(topicId, session.id, 'workflow-run');
     repository = new UnderstandingResultRepository(db, userId);
   });
 
@@ -243,7 +244,7 @@ describe('UnderstandingResultRepository', () => {
       status: 'running' as const,
       threadId: 'merge-thread',
     };
-    await sessionRepository.setMergeRun(topicId, session.id, mergeRun);
+    await sessionRepository.setMergeRun(topicId, session.id, 'workflow-run', mergeRun);
     const identity = {
       assistantMessageId: mergeRun.assistantMessageId,
       sessionId: session.id,
@@ -289,7 +290,7 @@ describe('UnderstandingResultRepository', () => {
       status: 'running' as const,
       threadId: 'merge-thread',
     };
-    await sessionRepository.setMergeRun(topicId, session.id, mergeRun);
+    await sessionRepository.setMergeRun(topicId, session.id, 'workflow-run', mergeRun);
 
     await expect(
       repository.finalizeMerge({
@@ -379,7 +380,7 @@ describe('UnderstandingResultRepository', () => {
       { status: 'completed' },
     );
     const mergeRun = { status: 'running' as const, threadId: 'merge-error-thread' };
-    await sessionRepository.setMergeRun(topicId, session.id, mergeRun);
+    await sessionRepository.setMergeRun(topicId, session.id, 'workflow-run', mergeRun);
     await repository.ensureThread({
       agentId,
       kind: 'merged',

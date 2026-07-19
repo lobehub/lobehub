@@ -201,13 +201,15 @@ export class UnderstandingSessionRepository {
   setMergeRun = (
     topicId: string,
     sessionId: string,
+    workflowRunId: string,
     mergeRun: UnderstandingMergeRun,
   ): Promise<OnboardingUnderstandingSession> =>
     this.update(topicId, sessionId, (session) => {
+      if (session.workflowRunId !== workflowRunId) {
+        throw new StaleUnderstandingSessionError(sessionId);
+      }
       if (!session.mergeRun) return { ...session, mergeRun };
-      if (session.mergeRun.threadId === mergeRun.threadId) return session;
-
-      throw new Error('Understanding session already has a different merge run');
+      return session;
     });
 
   updateMergeRun = (

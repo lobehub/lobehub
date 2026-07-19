@@ -23,9 +23,6 @@ const createHarness = () => {
     topicId: identity.topicId,
     type: ThreadType.Isolation,
   };
-  const durable = {
-    find: vi.fn(async (): Promise<UnderstandingLaunchReference | undefined> => undefined),
-  };
   const topic: {
     metadata: {
       runningOperation?: {
@@ -62,8 +59,7 @@ const createHarness = () => {
   };
   const topics = { findById: vi.fn(async () => topic) };
   return {
-    durable,
-    store: new UnderstandingLaunchStore({ durable, threads, topics }),
+    store: new UnderstandingLaunchStore({ threads, topics }),
     thread,
     threads,
     topic,
@@ -99,25 +95,6 @@ describe('UnderstandingLaunchStore', () => {
       operationId: 'operation-1',
     });
     expect(harness.topics.findById).not.toHaveBeenCalled();
-    expect(harness.durable.find).not.toHaveBeenCalled();
-  });
-
-  it('promotes a durable launch pair before consulting topic metadata', async () => {
-    const harness = createHarness();
-    harness.durable.find.mockResolvedValue({
-      assistantMessageId: 'durable-message',
-      operationId: 'durable-operation',
-    });
-
-    await expect(harness.store.find(identity)).resolves.toEqual({
-      assistantMessageId: 'durable-message',
-      operationId: 'durable-operation',
-    });
-    expect(harness.topics.findById).not.toHaveBeenCalled();
-    expect(harness.threads.claim).toHaveBeenCalledWith(identity, {
-      assistantMessageId: 'durable-message',
-      operationId: 'durable-operation',
-    });
   });
 
   it('promotes an exact topic runningOperation fallback into the thread marker', async () => {

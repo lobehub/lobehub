@@ -227,7 +227,7 @@ describe('UnderstandingSessionRepository', () => {
       status: 'completed',
     });
 
-    await repository.setMergeRun(topicId, 'session-current', {
+    await repository.setMergeRun(topicId, 'session-current', 'workflow-run', {
       status: 'pending',
       threadId: 'merge-thread',
     });
@@ -303,7 +303,8 @@ describe('UnderstandingSessionRepository', () => {
 
   it('rejects an update for a replaced merge thread', async () => {
     await repository.install(topicId, createSession());
-    await repository.setMergeRun(topicId, 'session-current', {
+    await repository.attachWorkflowRun(topicId, 'session-current', 'workflow-run');
+    await repository.setMergeRun(topicId, 'session-current', 'workflow-run', {
       status: 'pending',
       threadId: 'merge-thread',
     });
@@ -324,19 +325,43 @@ describe('UnderstandingSessionRepository', () => {
     await repository.attachWorkflowRun(topicId, 'session-current', 'workflow-run');
     const mergeRun = { status: 'pending' as const, threadId: 'merge-thread' };
 
-    const created = await repository.setMergeRun(topicId, 'session-current', mergeRun);
+    const created = await repository.setMergeRun(
+      topicId,
+      'session-current',
+      'workflow-run',
+      mergeRun,
+    );
     await expect(
-      repository.setMergeRun(topicId, 'session-current', {
+      repository.setMergeRun(topicId, 'session-current', 'workflow-run', {
         status: 'running',
         threadId: mergeRun.threadId,
       }),
     ).resolves.toEqual(created);
     await expect(
-      repository.setMergeRun(topicId, 'session-current', {
+      repository.setMergeRun(topicId, 'session-current', 'workflow-run', {
         status: 'pending',
         threadId: 'different-merge-thread',
       }),
-    ).rejects.toThrow('different merge run');
+    ).resolves.toEqual(created);
+  });
+
+  it('rejects merge creation from a workflow replaced by a newer retry', async () => {
+    await repository.install(topicId, createSession());
+    await repository.attachWorkflowRun(topicId, 'session-current', 'workflow-a');
+    await repository.attachWorkflowRun(topicId, 'session-current', 'workflow-b');
+
+    await expect(
+      repository.setMergeRun(topicId, 'session-current', 'workflow-a', {
+        status: 'pending',
+        threadId: 'merge-a',
+      }),
+    ).rejects.toBeInstanceOf(StaleUnderstandingSessionError);
+    await expect(
+      repository.setMergeRun(topicId, 'session-current', 'workflow-b', {
+        status: 'pending',
+        threadId: 'merge-b',
+      }),
+    ).resolves.toMatchObject({ mergeRun: { threadId: 'merge-b' } });
   });
 
   it('removes the session and its referenced hidden threads for onboarding reset', async () => {

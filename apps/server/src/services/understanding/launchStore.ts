@@ -1,13 +1,12 @@
 import type { LobeChatDatabase } from '@lobechat/database';
-import { agentOperations, messages, threads as threadTable } from '@lobechat/database/schemas';
+import { threads as threadTable } from '@lobechat/database/schemas';
 import type { ThreadMetadata } from '@lobechat/types';
 import {
   OnboardingUnderstandingLaunchSchema,
   OnboardingUnderstandingThreadMarkerSchema,
-  RequestTrigger,
   ThreadType,
 } from '@lobechat/types';
-import { and, desc, eq, isNull, lte } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 
 import { ThreadModel } from '@/database/models/thread';
 import { TopicModel } from '@/database/models/topic';
@@ -25,11 +24,6 @@ interface UnderstandingLaunchIdentity {
 }
 
 interface UnderstandingLaunchStoreDependencies {
-  durable: {
-    find: (
-      identity: UnderstandingLaunchIdentity,
-    ) => Promise<UnderstandingLaunchReference | undefined>;
-  };
   threads: {
     claim: (
       identity: UnderstandingLaunchIdentity,
@@ -70,12 +64,6 @@ export class UnderstandingLaunchStore {
     const { marker } = await this.readThread(identity);
     if (marker.launch) return marker.launch;
 
-    const durable = await this.dependencies.durable.find(identity);
-    if (durable) {
-      const launch = OnboardingUnderstandingLaunchSchema.parse(durable);
-      return this.save(identity, launch);
-    }
-
     const topic = await this.dependencies.topics.findById(identity.topicId);
     if (!topic) throw new Error('Understanding launch topic is unavailable');
     const running = topic.metadata?.runningOperation;
@@ -111,54 +99,6 @@ export class UnderstandingLaunchStore {
     return { marker: marker.data, metadata: thread.metadata ?? {} };
   };
 }
-
-const findDurableLaunch = async (
-  db: LobeChatDatabase,
-  userId: string,
-  identity: UnderstandingLaunchIdentity,
-): Promise<UnderstandingLaunchReference | undefined> => {
-  const [operation] = await db
-    .select({
-      createdAt: agentOperations.createdAt,
-      operationId: agentOperations.id,
-    })
-    .from(agentOperations)
-    .where(
-      and(
-        eq(agentOperations.userId, userId),
-        isNull(agentOperations.workspaceId),
-        eq(agentOperations.agentId, identity.agentId),
-        eq(agentOperations.topicId, identity.topicId),
-        eq(agentOperations.threadId, identity.threadId),
-        eq(agentOperations.trigger, RequestTrigger.Onboarding),
-      ),
-    )
-    .orderBy(desc(agentOperations.createdAt))
-    .limit(1);
-  if (!operation) return;
-
-  // Both timestamps use the database clock, and execAgent inserts the assistant placeholder before
-  // AgentRuntime records the operation. This avoids app/database clock skew from startedAt.
-  const [assistant] = await db
-    .select({ assistantMessageId: messages.id })
-    .from(messages)
-    .where(
-      and(
-        eq(messages.userId, userId),
-        isNull(messages.workspaceId),
-        eq(messages.agentId, identity.agentId),
-        eq(messages.topicId, identity.topicId),
-        eq(messages.threadId, identity.threadId),
-        eq(messages.role, 'assistant'),
-        lte(messages.createdAt, operation.createdAt),
-      ),
-    )
-    .orderBy(desc(messages.createdAt))
-    .limit(1);
-  if (!assistant) return;
-
-  return { assistantMessageId: assistant.assistantMessageId, operationId: operation.operationId };
-};
 
 const claimThreadLaunch = async (
   db: LobeChatDatabase,
@@ -220,7 +160,6 @@ const claimThreadLaunch = async (
 export const createUnderstandingLaunchStore = (db: LobeChatDatabase, userId: string) => {
   const threads = new ThreadModel(db, userId);
   return new UnderstandingLaunchStore({
-    durable: { find: (identity) => findDurableLaunch(db, userId, identity) },
     threads: {
       claim: (identity, launch) => claimThreadLaunch(db, userId, identity, launch),
       findById: async (threadId) => {

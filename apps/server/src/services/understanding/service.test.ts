@@ -236,6 +236,20 @@ const createHarness = () => {
           return session;
         },
       ),
+      setMergeRun: vi.fn(
+        async (
+          _topicId: string,
+          sessionId: string,
+          workflowRunId: string,
+          mergeRun: OnboardingUnderstandingSession['mergeRun'],
+        ) => {
+          if (session?.id !== sessionId || session.workflowRunId !== workflowRunId) {
+            throw new Error('stale workflow');
+          }
+          session = applyStatus(session.mergeRun ? session : { ...session, mergeRun });
+          return session;
+        },
+      ),
     },
     sourceStore: {
       deleteSourcePayload: vi.fn(async (input: any) => void payloads.delete(sourceKey(input))),
@@ -702,47 +716,67 @@ describe('UnderstandingService', () => {
       });
     }
     harness.execAgent.mockRejectedValueOnce(new Error('merge launch transport failed'));
-    await expect(harness.service.launchMerge('topic', session.id, 'merge-thread')).rejects.toThrow(
-      'merge launch transport failed',
+    await harness.service.attachWorkflowRun('topic', session.id, 'workflow-run');
+    await expect(
+      harness.service.launchMerge('topic', session.id, 'workflow-run', 'merge-thread'),
+    ).rejects.toThrow('merge launch transport failed');
+    const differentThread = await harness.service.launchMerge(
+      'topic',
+      session.id,
+      'workflow-run',
+      'other-thread',
     );
-    const differentThread = await harness.service.launchMerge('topic', session.id, 'other-thread');
-    const launch = await harness.service.launchMerge('topic', session.id, 'merge-thread');
-    const loser = await harness.service.launchMerge('topic', session.id, 'merge-thread');
-    expect(differentThread).toEqual({ skipped: true, threadId: 'merge-thread' });
+    const launch = await harness.service.launchMerge(
+      'topic',
+      session.id,
+      'workflow-run',
+      'merge-thread',
+    );
+    const loser = await harness.service.launchMerge(
+      'topic',
+      session.id,
+      'workflow-run',
+      'merge-thread',
+    );
+    expect(differentThread).toMatchObject({ success: true, threadId: 'merge-thread' });
+    expect(launch).toEqual({ skipped: true, threadId: 'merge-thread' });
     expect(loser).toEqual({ skipped: true, threadId: 'merge-thread' });
     expect(harness.execAgent).toHaveBeenCalledTimes(4);
-    if ('skipped' in launch) throw new Error('expected merge launch');
+    if ('skipped' in differentThread) throw new Error('expected merge launch');
     expect(harness.execAgent).toHaveBeenLastCalledWith(
       expect.objectContaining({ autoStart: false, maxSteps: 1 }),
     );
     harness.contents.set(
-      launch.assistantMessageId,
+      differentThread.assistantMessageId,
       JSON.stringify({ ...analysis, profile: { ...analysis.profile, pronoun: 'non-specific' } }),
     );
 
     harness.dependencies.messages.readContent.mockRejectedValueOnce(new Error('database offline'));
     await expect(
       harness.service.finalizeMerge({
-        assistantMessageId: launch.assistantMessageId,
+        assistantMessageId: differentThread.assistantMessageId,
         sessionId: session.id,
-        threadId: launch.threadId,
+        threadId: differentThread.threadId,
         topicId: 'topic',
       }),
     ).rejects.toThrow('database offline');
     expect(harness.dependencies.results.finalizeMerge).not.toHaveBeenCalled();
     const result = await harness.service.finalizeMerge({
-      assistantMessageId: launch.assistantMessageId,
+      assistantMessageId: differentThread.assistantMessageId,
       sessionId: session.id,
-      threadId: launch.threadId,
+      threadId: differentThread.threadId,
       topicId: 'topic',
     });
     expect(result).toMatchObject({ analysis: { profile: { pronoun: 'she/her' } }, kind: 'merged' });
-    harness.contents.delete(launch.assistantMessageId);
+    await expect(
+      harness.service.launchMerge('topic', session.id, 'workflow-run', 'other-terminal-thread'),
+    ).resolves.toEqual({ skipped: true, threadId: 'merge-thread' });
+    harness.contents.delete(differentThread.assistantMessageId);
     await expect(
       harness.service.finalizeMerge({
-        assistantMessageId: launch.assistantMessageId,
+        assistantMessageId: differentThread.assistantMessageId,
         sessionId: session.id,
-        threadId: launch.threadId,
+        threadId: differentThread.threadId,
         topicId: 'topic',
       }),
     ).resolves.toBe(result);
@@ -780,9 +814,10 @@ describe('UnderstandingService', () => {
       return winner;
     });
 
+    await harness.service.attachWorkflowRun('topic', session.id, 'workflow-run');
     const launches = [
-      harness.service.launchMerge('topic', session.id, 'merge-thread'),
-      harness.service.launchMerge('topic', session.id, 'merge-thread'),
+      harness.service.launchMerge('topic', session.id, 'workflow-run', 'merge-thread'),
+      harness.service.launchMerge('topic', session.id, 'workflow-run', 'merge-thread'),
     ];
     await vi.waitFor(() => expect(harness.execAgent).toHaveBeenCalledTimes(2));
     gate.resolve();
@@ -790,6 +825,81 @@ describe('UnderstandingService', () => {
     const [first, second] = await Promise.all(launches);
     expect(first).toMatchObject(second);
     expect(first).toMatchObject(winner!);
+  });
+
+  it('lets a newer workflow adopt and complete an older pending merge', async () => {
+    const { branches, session } = await initializeAndDiscover(harness);
+    for (const branch of branches) {
+      const input = { ...branch, sessionId: session.id, topicId: 'topic' };
+      await harness.service.collectSource(input);
+      const launch = requireLaunch(await harness.service.launchSourceAnalysis(input));
+      harness.contents.set(launch.assistantMessageId, JSON.stringify(analysis));
+      await harness.service.finalizeSource({
+        ...input,
+        assistantMessageId: launch.assistantMessageId,
+      });
+    }
+    await harness.service.attachWorkflowRun('topic', session.id, 'workflow-a');
+    await harness.dependencies.sessions.setMergeRun('topic', session.id, 'workflow-a', {
+      status: 'pending',
+      threadId: 'merge-a',
+    });
+    await harness.service.attachWorkflowRun('topic', session.id, 'workflow-b');
+
+    const adopted = requireLaunch(
+      await harness.service.launchMerge('topic', session.id, 'workflow-b', 'merge-b'),
+    );
+    expect(adopted.threadId).toBe('merge-a');
+    await expect(harness.service.executeAgentOperation(adopted.operationId)).resolves.toEqual({
+      status: 'done',
+    });
+    harness.contents.set(adopted.assistantMessageId, JSON.stringify(analysis));
+    await expect(
+      harness.service.finalizeMerge({
+        assistantMessageId: adopted.assistantMessageId,
+        sessionId: session.id,
+        threadId: adopted.threadId,
+        topicId: 'topic',
+      }),
+    ).resolves.toMatchObject({ kind: 'merged' });
+    expect(harness.session()).toMatchObject({
+      mergeRun: { status: 'completed', threadId: 'merge-a' },
+    });
+  });
+
+  it('fences merge creation from a workflow replaced by a newer retry', async () => {
+    const { branches, session } = await initializeAndDiscover(harness);
+    for (const branch of branches) {
+      const input = { ...branch, sessionId: session.id, topicId: 'topic' };
+      await harness.service.collectSource(input);
+      const launch = requireLaunch(await harness.service.launchSourceAnalysis(input));
+      harness.contents.set(launch.assistantMessageId, JSON.stringify(analysis));
+      await harness.service.finalizeSource({
+        ...input,
+        assistantMessageId: launch.assistantMessageId,
+      });
+    }
+    await harness.service.attachWorkflowRun('topic', session.id, 'workflow-a');
+    const oldClaimReached = deferred<void>();
+    const releaseOldClaim = deferred<void>();
+    const setMergeRun = harness.dependencies.sessions.setMergeRun.getMockImplementation()!;
+    harness.dependencies.sessions.setMergeRun.mockImplementation(async (...args) => {
+      if (args[2] === 'workflow-a') {
+        oldClaimReached.resolve();
+        await releaseOldClaim.promise;
+      }
+      return setMergeRun(...args);
+    });
+
+    const oldLaunch = harness.service.launchMerge('topic', session.id, 'workflow-a', 'merge-a');
+    await oldClaimReached.promise;
+    await harness.service.attachWorkflowRun('topic', session.id, 'workflow-b');
+    releaseOldClaim.resolve();
+
+    await expect(oldLaunch).rejects.toThrow('stale workflow');
+    await expect(
+      harness.service.launchMerge('topic', session.id, 'workflow-b', 'merge-b'),
+    ).resolves.toMatchObject({ threadId: 'merge-b' });
   });
 
   it('replays a persisted merge failure without generating a new result identity', async () => {
@@ -804,8 +914,9 @@ describe('UnderstandingService', () => {
         assistantMessageId: launch.assistantMessageId,
       });
     }
+    await harness.service.attachWorkflowRun('topic', session.id, 'workflow-run');
     const launch = requireLaunch(
-      await harness.service.launchMerge('topic', session.id, 'failed-merge-thread'),
+      await harness.service.launchMerge('topic', session.id, 'workflow-run', 'failed-merge-thread'),
     );
     const failed = await harness.service.failMerge({
       assistantMessageId: launch.assistantMessageId,
@@ -841,14 +952,17 @@ describe('UnderstandingService', () => {
       operationId: 'durable-merge-operation',
     });
 
+    await harness.service.attachWorkflowRun('topic', session.id, 'workflow-run');
     const recovered = await harness.service.launchMerge(
       'topic',
       session.id,
+      'workflow-run',
       'durable-merge-thread',
     );
     const acknowledged = await harness.service.launchMerge(
       'topic',
       session.id,
+      'workflow-run',
       'durable-merge-thread',
     );
 

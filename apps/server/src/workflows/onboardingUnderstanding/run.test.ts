@@ -163,7 +163,12 @@ describe('runOnboardingUnderstandingWorkflow', () => {
         { sourceId: 'gmail:account-1', status: 'completed' },
       ],
     });
-    expect(service.launchMerge).toHaveBeenCalledWith('topic-1', 'session-1', 'merge-workflow-1');
+    expect(service.launchMerge).toHaveBeenCalledWith(
+      'topic-1',
+      'session-1',
+      'workflow-1',
+      'merge-workflow-1',
+    );
     expect(steps).toEqual([
       'attach-workflow-run',
       'discover',
