@@ -5,7 +5,7 @@ import type { MenuProps } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { FileTextIcon, Maximize2Icon, PenLineIcon, Trash2Icon } from 'lucide-react';
 import type { CSSProperties } from 'react';
-import { memo, useCallback, useMemo, useRef } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { KeyedMutator } from 'swr';
 
@@ -81,6 +81,14 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
   const navigate = useWorkspaceAwareNavigate();
   const treeRef = useRef<ExplorerTreeHandle | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const renameTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(
+    () => () => {
+      if (renameTimerRef.current) clearTimeout(renameTimerRef.current);
+    },
+    [],
+  );
 
   const startInlineRename = useCallback((id: string) => {
     treeRef.current?.startRenaming(id);
@@ -159,7 +167,9 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
   const focusNewRowForRename = useCallback((pendingId: string) => {
     // Defer past the current task so React commits the inserted row and the
     // tree adapter rebuilds its id→path map before we trigger rename.
-    setTimeout(() => {
+    if (renameTimerRef.current) clearTimeout(renameTimerRef.current);
+    renameTimerRef.current = setTimeout(() => {
+      renameTimerRef.current = null;
       treeRef.current?.startRenaming(pendingId);
       // After pierre's input.select() runs in its own layout effect, narrow
       // selection to the stem so the `.md` extension stays intact.
