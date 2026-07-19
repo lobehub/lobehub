@@ -480,28 +480,31 @@ describe('TopicCommentModel', () => {
       });
 
       // Explicit timestamps — never rely on insert order. b and c share createdAt
-      // so cursor pagination exercises the id tie-breaker.
+      // so cursor pagination exercises the id tie-breaker. Keep the IDs fixed and
+      // lowercase so JavaScript and PostgreSQL collations agree on their order.
       const base = new Date('2026-01-01T10:00:00Z');
       const later = new Date('2026-01-02T10:00:00Z');
+      const aId = 'tcm_list_root_a';
+      const bId = 'tcm_list_root_b';
+      const cId = 'tcm_list_root_c';
       await serverDB
         .update(topicComments)
-        .set({ createdAt: base })
+        .set({ createdAt: base, id: aId })
         .where(eq(topicComments.id, a.comment.id));
       await serverDB
         .update(topicComments)
-        .set({ createdAt: later })
+        .set({ createdAt: later, id: bId })
         .where(eq(topicComments.id, b.comment.id));
       await serverDB
         .update(topicComments)
-        .set({ createdAt: later })
+        .set({ createdAt: later, id: cId })
         .where(eq(topicComments.id, c.comment.id));
 
-      const [first, second] = [b.comment.id, c.comment.id].sort();
       return {
-        a: a.comment,
-        b: b.comment,
-        c: c.comment,
-        expectedOrder: [a.comment.id, first, second],
+        a: { ...a.comment, id: aId },
+        b: { ...b.comment, id: bId },
+        c: { ...c.comment, id: cId },
+        expectedOrder: [aId, bId, cId],
       };
     };
 
