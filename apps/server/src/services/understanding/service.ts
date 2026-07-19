@@ -223,6 +223,12 @@ export interface UnderstandingSourceLaunchReference extends UnderstandingLaunchR
   sourceId: string;
 }
 
+export interface UnderstandingSourceLaunchSkipped {
+  skipped: true;
+  sourceId: string;
+  threadId: string;
+}
+
 export class UnderstandingService {
   constructor(private readonly dependencies: UnderstandingServiceDependencies) {}
 
@@ -256,10 +262,19 @@ export class UnderstandingService {
         userId: this.dependencies.context.userId,
       });
     }
+    const noSourceError =
+      discovery.sources.length === 0
+        ? canonicalCollectionError(
+            'understanding',
+            'source discovery',
+            'UNDERSTANDING_NO_SOURCE_AVAILABLE',
+            false,
+          )
+        : undefined;
     const errors = boundCanonicalDiagnostics({
       ...emptyDiagnostics(),
-      errors: discovery.errors,
-      failedCount: discovery.errors.length,
+      errors: [...discovery.errors, ...(noSourceError ? [noSourceError] : [])],
+      failedCount: discovery.errors.length + Number(Boolean(noSourceError)),
     }).errors;
     const candidateRuns = discovery.sources.map((source) => ({
       source: toPublicUnderstandingSourceRef(source),
@@ -301,6 +316,9 @@ export class UnderstandingService {
     const diagnostics = sanitizeProviderDiagnostics(run.source.provider, collected.diagnostics);
     const brief = collected.sourceBrief.trim().slice(0, MAX_SOURCE_BRIEF_LENGTH);
     if (!brief) throw new Error('Understanding source collection returned no content');
+    if (diagnostics.succeededCount === 0) {
+      throw new Error('Understanding source collection produced no successful evidence');
+    }
     await this.dependencies.sourceStore.put({
       ...input,
       brief,
@@ -312,7 +330,7 @@ export class UnderstandingService {
       input.sessionId,
       input.sourceId,
       input.threadId,
-      { diagnostics: CollectionDiagnosticsSummarySchema.parse(diagnostics), status: 'running' },
+      { diagnostics: CollectionDiagnosticsSummarySchema.parse(diagnostics) },
     );
     return {
       diagnostics: CollectionDiagnosticsSummarySchema.parse(diagnostics),
@@ -322,13 +340,29 @@ export class UnderstandingService {
 
   launchSourceAnalysis = async (
     input: SourceIdentity,
-  ): Promise<UnderstandingSourceLaunchReference> => {
+  ): Promise<UnderstandingSourceLaunchReference | UnderstandingSourceLaunchSkipped> => {
     const run = await this.sourceRun(input);
     const payload = await this.dependencies.sourceStore.get({
       ...input,
       userId: this.dependencies.context.userId,
     });
     if (!payload) throw new Error('Understanding source payload is unavailable');
+    let claimed = false;
+    await this.dependencies.sessions.update(input.topicId, input.sessionId, (session) => ({
+      ...session,
+      runs: session.runs.map((current) => {
+        if (current.source.id !== input.sourceId) return current;
+        if (current.threadId !== input.threadId) {
+          throw new StaleUnderstandingRunError('source', input.threadId);
+        }
+        if (current.status !== 'pending') return current;
+        claimed = true;
+        return { ...current, status: 'running' as const };
+      }),
+    }));
+    if (!claimed) {
+      return { skipped: true, sourceId: input.sourceId, threadId: input.threadId };
+    }
     await this.dependencies.results.ensureThread({
       agentId: this.dependencies.agentId,
       kind: 'source',
@@ -374,6 +408,8 @@ export class UnderstandingService {
 
   finalizeSource = async (input: SourceIdentity & { assistantMessageId: string }) => {
     const run = await this.sourceRun(input);
+    const persisted = await this.readTerminalSource(input, run);
+    if (persisted) return persisted;
     const payload = await this.dependencies.sourceStore.get({
       ...input,
       userId: this.dependencies.context.userId,
@@ -425,6 +461,8 @@ export class UnderstandingService {
     input: SourceIdentity & { assistantMessageId?: string; retryable?: boolean },
   ) => {
     const run = await this.sourceRun(input);
+    const persisted = await this.readTerminalSource(input, run);
+    if (persisted) return persisted;
     const assistantMessageId = input.assistantMessageId ?? this.dependencies.ids();
     const payload = await this.dependencies.sourceStore.get({
       ...input,
@@ -488,10 +526,7 @@ export class UnderstandingService {
       };
     });
     const merge = session.mergeRun!;
-    if (!claimed && merge.threadId !== requestedThreadId) {
-      return { skipped: true, threadId: merge.threadId };
-    }
-    if (merge.assistantMessageId) return { skipped: true, threadId: merge.threadId };
+    if (!claimed) return { skipped: true, threadId: merge.threadId };
 
     const materials = await this.completedMaterials(topicId, sessionId, session);
     const diagnostics = combineDiagnostics(materials.map(({ result }) => result.diagnostics));
@@ -544,6 +579,8 @@ export class UnderstandingService {
     if (session.mergeRun?.threadId !== input.threadId) {
       throw new StaleUnderstandingRunError('merge', input.threadId);
     }
+    const persisted = await this.readTerminalMerge(input, session);
+    if (persisted) return persisted;
     const materials = await this.completedMaterials(input.topicId, input.sessionId, session);
     const diagnostics = combineDiagnostics(materials.map(({ result }) => result.diagnostics));
     const sources = materials.flatMap(({ result }) =>
@@ -577,6 +614,8 @@ export class UnderstandingService {
     if (session.mergeRun?.threadId !== input.threadId) {
       throw new StaleUnderstandingRunError('merge', input.threadId);
     }
+    const persisted = await this.readTerminalMerge(input, session);
+    if (persisted) return persisted;
     const assistantMessageId = input.assistantMessageId ?? this.dependencies.ids();
     const materials = await this.completedMaterials(input.topicId, input.sessionId, session);
     const diagnostics = combineDiagnostics(materials.map(({ result }) => result.diagnostics));
@@ -714,6 +753,43 @@ export class UnderstandingService {
       throw new StaleUnderstandingRunError('source', input.threadId);
     }
     return run;
+  };
+
+  private readTerminalSource = async (
+    input: SourceIdentity,
+    run: OnboardingUnderstandingSession['runs'][number],
+  ) => {
+    if (!terminalStatuses.has(run.status) || !run.assistantMessageId || !run.resultId) return;
+    const result = await this.dependencies.results.readSource({
+      assistantMessageId: run.assistantMessageId,
+      sessionId: input.sessionId,
+      sourceId: input.sourceId,
+      threadId: input.threadId,
+      topicId: input.topicId,
+    });
+    if (!result || result.resultId !== run.resultId) {
+      throw new Error('Understanding source result is unavailable');
+    }
+    return result;
+  };
+
+  private readTerminalMerge = async (
+    input: MergeIdentity,
+    session: OnboardingUnderstandingSession,
+  ) => {
+    const run = session.mergeRun;
+    if (!run || !terminalStatuses.has(run.status) || !run.assistantMessageId || !run.resultId)
+      return;
+    const result = await this.dependencies.results.readMerge({
+      assistantMessageId: run.assistantMessageId,
+      sessionId: input.sessionId,
+      threadId: input.threadId,
+      topicId: input.topicId,
+    });
+    if (!result || result.resultId !== run.resultId) {
+      throw new Error('Understanding merge result is unavailable');
+    }
+    return result;
   };
 
   private branches = (session: OnboardingUnderstandingSession) =>

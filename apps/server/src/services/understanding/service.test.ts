@@ -247,6 +247,13 @@ const initializeAndDiscover = async (harness: ReturnType<typeof createHarness>) 
   return { branches, session };
 };
 
+const requireLaunch = <T extends { skipped?: boolean }>(
+  launch: T,
+): Exclude<T, { skipped: true }> => {
+  if (launch.skipped) throw new Error('expected agent launch');
+  return launch as Exclude<T, { skipped: true }>;
+};
+
 describe('UnderstandingService', () => {
   let harness: ReturnType<typeof createHarness>;
 
@@ -290,6 +297,23 @@ describe('UnderstandingService', () => {
     expect(JSON.stringify(harness.session())).not.toContain('private oauth error');
   });
 
+  it('makes empty discovery terminal and replayable without querying providers again', async () => {
+    vi.mocked(harness.github.discoverSources).mockResolvedValueOnce([]);
+    vi.mocked(harness.gmail.discoverSources).mockResolvedValueOnce([]);
+
+    const { branches, session } = await initializeAndDiscover(harness);
+    const replay = await harness.service.discover('topic', session.id);
+
+    expect(branches).toEqual([]);
+    expect(replay).toEqual([]);
+    expect(harness.session()).toMatchObject({
+      errors: [{ code: 'UNDERSTANDING_NO_SOURCE_AVAILABLE' }],
+      status: 'failed',
+    });
+    expect(harness.github.discoverSources).toHaveBeenCalledOnce();
+    expect(harness.gmail.discoverSources).toHaveBeenCalledOnce();
+  });
+
   it('re-resolves current credentials and keeps raw collected documents out of step output', async () => {
     const { branches, session } = await initializeAndDiscover(harness);
     const branch = branches.find(({ sourceId }) => sourceId.startsWith('github'))!;
@@ -309,6 +333,24 @@ describe('UnderstandingService', () => {
       sourceCount: 3,
     });
     expect(JSON.stringify(output)).not.toContain('PRIVATE_SOURCE_DOCUMENT');
+    expect(harness.session().runs.find(({ source }) => source.id === branch.sourceId)?.status).toBe(
+      'pending',
+    );
+  });
+
+  it('rejects non-empty collections with no successful evidence', async () => {
+    vi.mocked(harness.github.collect).mockResolvedValueOnce({
+      diagnostics: { errors: [], evidenceCount: 1, failedCount: 1, succeededCount: 0 },
+      sourceBrief: '# Unusable evidence',
+      sourceCount: 1,
+    });
+    const { branches, session } = await initializeAndDiscover(harness);
+    const branch = branches.find(({ sourceId }) => sourceId.startsWith('github'))!;
+
+    await expect(
+      harness.service.collectSource({ ...branch, sessionId: session.id, topicId: 'topic' }),
+    ).rejects.toThrow('no successful evidence');
+    expect(harness.payloads).toHaveLength(0);
   });
 
   it('rediscovers only the affected provider when its locator expires', async () => {
@@ -349,7 +391,7 @@ describe('UnderstandingService', () => {
     const { branches, session } = await initializeAndDiscover(harness);
     const input = { ...branches[0], sessionId: session.id, topicId: 'topic' };
     await harness.service.collectSource(input);
-    const launch = await harness.service.launchSourceAnalysis(input);
+    const launch = requireLaunch(await harness.service.launchSourceAnalysis(input));
 
     expect(harness.execAgent).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -362,30 +404,55 @@ describe('UnderstandingService', () => {
     expect(harness.session().runs[0]).not.toHaveProperty('operationId');
   });
 
+  it('allows only one concurrent source launch for the exact pending thread', async () => {
+    const { branches, session } = await initializeAndDiscover(harness);
+    const input = { ...branches[0], sessionId: session.id, topicId: 'topic' };
+    await harness.service.collectSource(input);
+
+    const launches = await Promise.all([
+      harness.service.launchSourceAnalysis(input),
+      harness.service.launchSourceAnalysis(input),
+    ]);
+
+    expect(launches.filter((launch) => 'skipped' in launch)).toEqual([
+      { skipped: true, sourceId: input.sourceId, threadId: input.threadId },
+    ]);
+    expect(harness.execAgent).toHaveBeenCalledOnce();
+  });
+
   it('finalizes valid and invalid source output and deletes terminal payloads', async () => {
     const { branches, session } = await initializeAndDiscover(harness);
     const first = { ...branches[0], sessionId: session.id, topicId: 'topic' };
     const second = { ...branches[1], sessionId: session.id, topicId: 'topic' };
     await harness.service.collectSource(first);
     await harness.service.collectSource(second);
-    const firstLaunch = await harness.service.launchSourceAnalysis(first);
-    const secondLaunch = await harness.service.launchSourceAnalysis(second);
+    const firstLaunch = requireLaunch(await harness.service.launchSourceAnalysis(first));
+    const secondLaunch = requireLaunch(await harness.service.launchSourceAnalysis(second));
     harness.contents.set(firstLaunch.assistantMessageId, JSON.stringify(analysis));
     harness.contents.set(secondLaunch.assistantMessageId, 'not json');
+
+    const sourceResult = await harness.service.finalizeSource({
+      ...first,
+      assistantMessageId: firstLaunch.assistantMessageId,
+    });
+    const sourceError = await harness.service.finalizeSource({
+      ...second,
+      assistantMessageId: secondLaunch.assistantMessageId,
+    });
+    expect(sourceResult).toMatchObject({ kind: 'source' });
+    expect(sourceError).toMatchObject({ kind: 'source_error' });
+    harness.contents.delete(firstLaunch.assistantMessageId);
+    harness.contents.delete(secondLaunch.assistantMessageId);
 
     await expect(
       harness.service.finalizeSource({
         ...first,
         assistantMessageId: firstLaunch.assistantMessageId,
       }),
-    ).resolves.toMatchObject({ kind: 'source' });
-    await expect(
-      harness.service.finalizeSource({
-        ...second,
-        assistantMessageId: secondLaunch.assistantMessageId,
-      }),
-    ).resolves.toMatchObject({ kind: 'source_error' });
+    ).resolves.toBe(sourceResult);
+    await expect(harness.service.failSource(second)).resolves.toBe(sourceError);
     expect(harness.payloads).toHaveLength(0);
+    expect(harness.dependencies.results.finalizeSource).toHaveBeenCalledTimes(2);
   });
 
   it('persists a stable source failure even before an agent launch', async () => {
@@ -403,15 +470,17 @@ describe('UnderstandingService', () => {
     for (const branch of branches) {
       const input = { ...branch, sessionId: session.id, topicId: 'topic' };
       await harness.service.collectSource(input);
-      const launch = await harness.service.launchSourceAnalysis(input);
+      const launch = requireLaunch(await harness.service.launchSourceAnalysis(input));
       harness.contents.set(launch.assistantMessageId, JSON.stringify(analysis));
       await harness.service.finalizeSource({
         ...input,
         assistantMessageId: launch.assistantMessageId,
       });
     }
-    const launch = await harness.service.launchMerge('topic', session.id, 'merge-thread');
-    const loser = await harness.service.launchMerge('topic', session.id, 'other-thread');
+    const [launch, loser] = await Promise.all([
+      harness.service.launchMerge('topic', session.id, 'merge-thread'),
+      harness.service.launchMerge('topic', session.id, 'merge-thread'),
+    ]);
     expect(loser).toEqual({ skipped: true, threadId: 'merge-thread' });
     expect(harness.execAgent).toHaveBeenCalledTimes(3);
     if ('skipped' in launch) throw new Error('expected merge launch');
@@ -427,6 +496,48 @@ describe('UnderstandingService', () => {
       topicId: 'topic',
     });
     expect(result).toMatchObject({ analysis: { profile: { pronoun: 'she/her' } }, kind: 'merged' });
+    harness.contents.delete(launch.assistantMessageId);
+    await expect(
+      harness.service.finalizeMerge({
+        assistantMessageId: launch.assistantMessageId,
+        sessionId: session.id,
+        threadId: launch.threadId,
+        topicId: 'topic',
+      }),
+    ).resolves.toBe(result);
+    expect(harness.dependencies.results.finalizeMerge).toHaveBeenCalledOnce();
+  });
+
+  it('replays a persisted merge failure without generating a new result identity', async () => {
+    const { branches, session } = await initializeAndDiscover(harness);
+    for (const branch of branches) {
+      const input = { ...branch, sessionId: session.id, topicId: 'topic' };
+      await harness.service.collectSource(input);
+      const launch = requireLaunch(await harness.service.launchSourceAnalysis(input));
+      harness.contents.set(launch.assistantMessageId, JSON.stringify(analysis));
+      await harness.service.finalizeSource({
+        ...input,
+        assistantMessageId: launch.assistantMessageId,
+      });
+    }
+    const launch = requireLaunch(
+      await harness.service.launchMerge('topic', session.id, 'failed-merge-thread'),
+    );
+    const failed = await harness.service.failMerge({
+      assistantMessageId: launch.assistantMessageId,
+      sessionId: session.id,
+      threadId: launch.threadId,
+      topicId: 'topic',
+    });
+
+    await expect(
+      harness.service.failMerge({
+        sessionId: session.id,
+        threadId: launch.threadId,
+        topicId: 'topic',
+      }),
+    ).resolves.toBe(failed);
+    expect(harness.dependencies.results.finalizeMerge).toHaveBeenCalledOnce();
   });
 
   it('polls progressively without writes and delegates confirmation directly', async () => {
