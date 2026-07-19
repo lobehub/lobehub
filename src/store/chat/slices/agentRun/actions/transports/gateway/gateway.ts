@@ -31,6 +31,7 @@ import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 import type { StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors, toolInterventionSelectors } from '@/store/user/selectors';
+import { isTrpcErrorCode } from '@/utils/trpcError';
 
 import { buildRunLifecycle } from '../../lifecycle/buildRunLifecycle';
 import type { RunScope } from '../../lifecycle/types';
@@ -791,7 +792,7 @@ export class GatewayActionImpl {
     try {
       ({ token } = await aiAgentService.refreshGatewayToken(topicId));
     } catch (error) {
-      if ((error as { data?: { code?: string } })?.data?.code === 'NOT_FOUND') {
+      if (isTrpcErrorCode(error, 'NOT_FOUND')) {
         this.clearLocalRunningOperation({ operationId, topicId });
         return;
       }
