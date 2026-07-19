@@ -1,4 +1,5 @@
 import type {
+  CollectionError,
   OnboardingUnderstandingSession,
   UnderstandingMergeRun,
   UnderstandingSourceRun,
@@ -128,6 +129,13 @@ export class UnderstandingSessionRepository {
     workflowRunId: string,
   ): Promise<OnboardingUnderstandingSession> =>
     this.update(topicId, sessionId, (session) => ({ ...session, workflowRunId }));
+
+  updateErrors = (
+    topicId: string,
+    sessionId: string,
+    errors: CollectionError[],
+  ): Promise<OnboardingUnderstandingSession> =>
+    this.update(topicId, sessionId, (session) => ({ ...session, errors }));
 
   updateSourceRun = (
     topicId: string,

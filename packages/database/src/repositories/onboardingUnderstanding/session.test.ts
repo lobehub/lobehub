@@ -70,6 +70,24 @@ describe('UnderstandingSessionRepository', () => {
     });
   });
 
+  it('stores bounded discovery errors on the durable session', async () => {
+    const session = await repository.install(topicId, createSession());
+    const errors = [
+      {
+        code: 'SOURCE_DISCOVERY_FAILED',
+        message: 'GitHub was unavailable',
+        operation: 'discovery',
+        provider: 'github',
+        retryable: true,
+      },
+    ];
+
+    await expect(repository.updateErrors(topicId, session.id, errors)).resolves.toMatchObject({
+      errors,
+    });
+    await expect(repository.get(topicId)).resolves.toMatchObject({ errors });
+  });
+
   it('converges repeated and concurrent install attempts', async () => {
     const concurrentTopicId = 'understanding-concurrent-topic';
     await db.insert(topics).values({

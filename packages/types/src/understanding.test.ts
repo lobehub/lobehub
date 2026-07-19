@@ -9,6 +9,7 @@ import type {
   UnderstandingSourceRef,
 } from './understanding';
 import {
+  MAX_COLLECTION_ERRORS,
   OnboardingUnderstandingSessionSchema,
   projectOnboardingUnderstandingSessionStatus,
   UnderstandingSourceRefSchema,
@@ -104,6 +105,27 @@ describe('Understanding durable contracts', () => {
         workflowRunId: 'workflow-run',
       }).success,
     ).toBe(true);
+  });
+
+  it('accepts bounded discovery errors and rejects an unbounded session error list', () => {
+    const error = {
+      code: 'SOURCE_DISCOVERY_FAILED',
+      message: 'GitHub was unavailable',
+      operation: 'discovery',
+      provider: 'github',
+      retryable: true,
+    };
+    const session = { id: 'session', runs: [], status: 'failed' };
+
+    expect(
+      OnboardingUnderstandingSessionSchema.safeParse({ ...session, errors: [error] }).success,
+    ).toBe(true);
+    expect(
+      OnboardingUnderstandingSessionSchema.safeParse({
+        ...session,
+        errors: Array.from({ length: MAX_COLLECTION_ERRORS + 1 }, () => error),
+      }).success,
+    ).toBe(false);
   });
 
   it.each([

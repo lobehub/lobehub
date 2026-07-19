@@ -3,25 +3,25 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { UnderstandingSourceStore } from './sourceStore';
 
-const pipeline = {
+const transaction = {
   exec: vi.fn(),
   expire: vi.fn(),
   hset: vi.fn(),
 };
-const redis = { del: vi.fn(), hdel: vi.fn(), hget: vi.fn(), pipeline: vi.fn() };
+const redis = { del: vi.fn(), hdel: vi.fn(), hget: vi.fn(), multi: vi.fn() };
 const store = new UnderstandingSourceStore(redis as unknown as Redis);
 const reference = { sessionId: 'session-1', sourceId: 'github:account-1', userId: 'user-1' };
 
 describe('UnderstandingSourceStore', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    pipeline.exec.mockResolvedValue([
+    transaction.exec.mockResolvedValue([
       [null, 1],
       [null, 1],
     ]);
-    pipeline.expire.mockReturnValue(pipeline);
-    pipeline.hset.mockReturnValue(pipeline);
-    redis.pipeline.mockReturnValue(pipeline);
+    transaction.expire.mockReturnValue(transaction);
+    transaction.hset.mockReturnValue(transaction);
+    redis.multi.mockReturnValue(transaction);
   });
 
   it('stores payloads and locators with hashed identifiers and a 24 hour TTL', async () => {
@@ -40,7 +40,7 @@ describe('UnderstandingSourceStore', () => {
       },
     });
 
-    expect(pipeline.hset).toHaveBeenNthCalledWith(
+    expect(transaction.hset).toHaveBeenNthCalledWith(
       1,
       expect.stringMatching(
         /^onboarding_understanding:source:\{[a-f\d]{64}\}:session:[a-f\d]{64}$/,
@@ -48,24 +48,14 @@ describe('UnderstandingSourceStore', () => {
       expect.stringMatching(/^source:[a-f\d]{64}:payload$/),
       expect.any(String),
     );
-    expect(pipeline.hset).toHaveBeenNthCalledWith(
+    expect(transaction.hset).toHaveBeenNthCalledWith(
       2,
       expect.any(String),
       expect.stringMatching(/^source:[a-f\d]{64}:locator$/),
       expect.not.stringContaining('secret'),
     );
-    expect(pipeline.expire).toHaveBeenCalledTimes(2);
-    expect(pipeline.expire).toHaveBeenCalledWith(expect.any(String), 86_400);
-  });
-
-  it('stores discovery errors in an explicit session field', async () => {
-    await store.putSessionErrors({ errors: [], sessionId: 'session-1', userId: 'user-1' });
-
-    expect(pipeline.hset).toHaveBeenCalledWith(
-      expect.any(String),
-      'errors',
-      JSON.stringify({ errors: [] }),
-    );
+    expect(transaction.expire).toHaveBeenCalledTimes(2);
+    expect(transaction.expire).toHaveBeenCalledWith(expect.any(String), 86_400);
   });
 
   it('deletes only the payload so the retry locator survives', async () => {
@@ -112,11 +102,37 @@ describe('UnderstandingSourceStore', () => {
     expect(String(error)).not.toContain('RAW_PRIVATE_DATA');
   });
 
-  it('sanitizes Redis write failures', async () => {
-    pipeline.exec.mockRejectedValueOnce(new Error('RAW_REDIS_SECRET'));
+  it('rejects a transaction whose expiry command fails', async () => {
+    transaction.exec.mockResolvedValueOnce([
+      [null, 1],
+      [new Error('RAW_REDIS_SECRET'), 0],
+    ]);
 
     const error = await store
-      .putSessionErrors({ errors: [], sessionId: 'session-1', userId: 'user-1' })
+      .put({
+        ...reference,
+        brief: 'collected markdown',
+        diagnostics: { errors: [], evidenceCount: 1, failedCount: 0, succeededCount: 1 },
+      })
+      .catch((caught) => caught);
+
+    expect(error).toEqual(new Error('Failed to persist onboarding Understanding source data'));
+    expect(String(error)).not.toContain('RAW_REDIS_SECRET');
+  });
+
+  it('sanitizes rejected Redis transactions', async () => {
+    transaction.exec.mockRejectedValueOnce(new Error('RAW_REDIS_SECRET'));
+
+    const error = await store
+      .putSourceLocator({
+        ...reference,
+        locator: {
+          candidateId: 'candidate-1',
+          credentialOrigin: 'connector',
+          credentialReference: 'connector-1',
+          provider: 'github',
+        },
+      })
       .catch((caught) => caught);
 
     expect(error).toEqual(new Error('Failed to persist onboarding Understanding source data'));

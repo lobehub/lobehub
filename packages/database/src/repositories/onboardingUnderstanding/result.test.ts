@@ -6,7 +6,7 @@ import type {
   UnderstandingSourceResult,
 } from '@lobechat/types';
 import { ThreadStatus } from '@lobechat/types';
-import { inArray } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
@@ -142,7 +142,7 @@ describe('UnderstandingResultRepository', () => {
     });
 
     await expect(
-      repository.finalizeSource({ metadata: sourceResult, ...sourceIdentity }),
+      repository.finalizeSource({ agentId, metadata: sourceResult, ...sourceIdentity }),
     ).resolves.toEqual(sourceResult);
     await expect(repository.readSource(sourceIdentity)).resolves.toEqual(sourceResult);
 
@@ -185,13 +185,14 @@ describe('UnderstandingResultRepository', () => {
       topicId,
       userId,
     });
-    await repository.finalizeSource({ metadata: sourceResult, ...sourceIdentity });
+    await repository.finalizeSource({ agentId, metadata: sourceResult, ...sourceIdentity });
 
     await expect(
-      repository.finalizeSource({ metadata: sourceResult, ...sourceIdentity }),
+      repository.finalizeSource({ agentId, metadata: sourceResult, ...sourceIdentity }),
     ).resolves.toEqual(sourceResult);
     await expect(
       repository.finalizeSource({
+        agentId,
         metadata: { ...sourceResult, resultId: 'different-result' },
         ...sourceIdentity,
       }),
@@ -208,7 +209,7 @@ describe('UnderstandingResultRepository', () => {
     );
 
     await expect(
-      repository.finalizeSource({ metadata: sourceResult, ...sourceIdentity }),
+      repository.finalizeSource({ agentId, metadata: sourceResult, ...sourceIdentity }),
     ).rejects.toThrow('no longer active');
     await expect(repository.readSource(sourceIdentity)).rejects.toThrow('no longer active');
   });
@@ -225,7 +226,7 @@ describe('UnderstandingResultRepository', () => {
     });
 
     await expect(
-      repository.finalizeSource({ metadata: sourceResult, ...sourceIdentity }),
+      repository.finalizeSource({ agentId, metadata: sourceResult, ...sourceIdentity }),
     ).rejects.toThrow('Invalid Understanding result thread');
   });
 
@@ -273,7 +274,7 @@ describe('UnderstandingResultRepository', () => {
       userId,
     });
     await expect(
-      repository.finalizeMerge({ metadata: mergedResult, ...identity }),
+      repository.finalizeMerge({ agentId, metadata: mergedResult, ...identity }),
     ).resolves.toEqual(mergedResult);
     await expect(repository.readMerge(identity)).resolves.toEqual(mergedResult);
     await expect(sessionRepository.get(topicId)).resolves.toMatchObject({
@@ -292,6 +293,7 @@ describe('UnderstandingResultRepository', () => {
 
     await expect(
       repository.finalizeMerge({
+        agentId,
         assistantMessageId: mergeRun.assistantMessageId,
         metadata: {
           analysis,
@@ -310,6 +312,164 @@ describe('UnderstandingResultRepository', () => {
   it('rejects access from another user', async () => {
     const otherRepository = new UnderstandingResultRepository(db, otherUserId);
     await expect(otherRepository.readSource(sourceIdentity)).rejects.toThrow();
+  });
+
+  it('claims a stable message identity for a source failure before an agent message exists', async () => {
+    await sessionRepository.updateSourceRun(
+      topicId,
+      session.id,
+      sourceRun.source.id,
+      sourceRun.threadId,
+      { assistantMessageId: undefined },
+    );
+    await repository.ensureThread({
+      agentId,
+      kind: 'source',
+      threadId: sourceRun.threadId,
+      topicId,
+    });
+    const metadata: UnderstandingSourceResult = {
+      diagnostics,
+      kind: 'source_error',
+      resultId: 'source-error-result',
+      source: sourceRun.source,
+    };
+    const input = {
+      agentId,
+      assistantMessageId: 'source-error-message',
+      metadata,
+      sessionId: session.id,
+      sourceId: sourceRun.source.id,
+      threadId: sourceRun.threadId,
+      topicId,
+    };
+
+    await expect(repository.finalizeSource(input)).resolves.toEqual(metadata);
+    await expect(repository.finalizeSource(input)).resolves.toEqual(metadata);
+    await expect(
+      repository.finalizeSource({ ...input, assistantMessageId: 'conflicting-message' }),
+    ).rejects.toThrow('no longer active');
+
+    const [message] = await db
+      .select()
+      .from(messages)
+      .where(eq(messages.id, input.assistantMessageId));
+    expect(message).toMatchObject({
+      content: 'Understanding source analysis failed.',
+      role: 'assistant',
+      threadId: sourceRun.threadId,
+    });
+    await expect(sessionRepository.get(topicId)).resolves.toMatchObject({
+      runs: [
+        {
+          assistantMessageId: input.assistantMessageId,
+          resultId: metadata.resultId,
+          status: 'failed',
+        },
+      ],
+    });
+  });
+
+  it('claims a stable message identity for a merge failure before an agent message exists', async () => {
+    await sessionRepository.updateSourceRun(
+      topicId,
+      session.id,
+      sourceRun.source.id,
+      sourceRun.threadId,
+      { status: 'completed' },
+    );
+    const mergeRun = { status: 'running' as const, threadId: 'merge-error-thread' };
+    await sessionRepository.setMergeRun(topicId, session.id, mergeRun);
+    await repository.ensureThread({
+      agentId,
+      kind: 'merged',
+      threadId: mergeRun.threadId,
+      topicId,
+    });
+    const metadata: UnderstandingMergedResult = {
+      diagnostics,
+      inputThreadIds: [sourceRun.threadId],
+      kind: 'merge_error',
+      resultId: 'merge-error-result',
+    };
+
+    await expect(
+      repository.finalizeMerge({
+        agentId,
+        assistantMessageId: 'merge-error-message',
+        metadata,
+        sessionId: session.id,
+        threadId: mergeRun.threadId,
+        topicId,
+      }),
+    ).resolves.toEqual(metadata);
+
+    const [message] = await db
+      .select()
+      .from(messages)
+      .where(eq(messages.id, 'merge-error-message'));
+    expect(message).toMatchObject({
+      content: 'Understanding profile synthesis failed.',
+      role: 'assistant',
+      threadId: mergeRun.threadId,
+    });
+    await expect(sessionRepository.get(topicId)).resolves.toMatchObject({
+      mergeRun: {
+        assistantMessageId: 'merge-error-message',
+        resultId: metadata.resultId,
+        status: 'failed',
+      },
+    });
+  });
+
+  it('rejects an unowned message identity when claiming a terminal failure', async () => {
+    await sessionRepository.updateSourceRun(
+      topicId,
+      session.id,
+      sourceRun.source.id,
+      sourceRun.threadId,
+      { assistantMessageId: undefined },
+    );
+    await repository.ensureThread({
+      agentId,
+      kind: 'source',
+      threadId: sourceRun.threadId,
+      topicId,
+    });
+    await db.insert(threads).values({
+      agentId,
+      id: 'other-message-thread',
+      status: ThreadStatus.Pending,
+      topicId,
+      type: 'isolation',
+      userId: otherUserId,
+    });
+    await db.insert(messages).values({
+      agentId,
+      content: '',
+      id: 'occupied-message',
+      role: 'assistant',
+      threadId: 'other-message-thread',
+      topicId,
+      userId: otherUserId,
+    });
+
+    await expect(
+      repository.finalizeSource({
+        agentId,
+        assistantMessageId: 'occupied-message',
+        metadata: {
+          diagnostics,
+          kind: 'source_error',
+          resultId: 'source-error-result',
+          source: sourceRun.source,
+        },
+        sessionId: session.id,
+        sourceId: sourceRun.source.id,
+        threadId: sourceRun.threadId,
+        topicId,
+      }),
+    ).rejects.toThrow('identity is already occupied');
   });
 
   it('rejects corrupt metadata on an existing active message', async () => {

@@ -3,7 +3,6 @@ import { createHash } from 'node:crypto';
 import {
   type CollectionDiagnostics,
   CollectionDiagnosticsSchema,
-  type CollectionError,
   MAX_PROVIDER_ID_LENGTH,
 } from '@lobechat/types';
 import type Redis from 'ioredis';
@@ -16,7 +15,6 @@ import type { SourceCandidate } from './types';
 
 const SOURCE_STORE_PREFIX = 'onboarding_understanding:source';
 const SOURCE_STORE_TTL_SECONDS = 86_400;
-const SESSION_ERRORS_FIELD = 'errors';
 
 interface SourceReference {
   sessionId: string;
@@ -30,8 +28,6 @@ const SourcePayloadSchema = z
     diagnostics: CollectionDiagnosticsSchema,
   })
   .strict();
-
-const SessionErrorsSchema = z.object({ errors: CollectionDiagnosticsSchema.shape.errors }).strict();
 
 const SourceLocatorSchema = z
   .object({
@@ -86,11 +82,6 @@ export class UnderstandingSourceStore {
     return this.readField(reference, payloadField(reference.sourceId), SourcePayloadSchema);
   }
 
-  async getSessionErrors(reference: Omit<SourceReference, 'sourceId'>): Promise<CollectionError[]> {
-    const stored = await this.readField(reference, SESSION_ERRORS_FIELD, SessionErrorsSchema);
-    return stored?.errors ?? [];
-  }
-
   async getSourceLocator(reference: SourceReference): Promise<SourceCandidate | null> {
     return this.readField(reference, locatorField(reference.sourceId), SourceLocatorSchema);
   }
@@ -100,16 +91,6 @@ export class UnderstandingSourceStore {
       input,
       payloadField(input.sourceId),
       SourcePayloadSchema.parse({ brief: input.brief, diagnostics: input.diagnostics }),
-    );
-  }
-
-  async putSessionErrors(
-    input: Omit<SourceReference, 'sourceId'> & { errors: CollectionError[] },
-  ): Promise<void> {
-    await this.putField(
-      input,
-      SESSION_ERRORS_FIELD,
-      SessionErrorsSchema.parse({ errors: input.errors }),
     );
   }
 
@@ -139,12 +120,12 @@ export class UnderstandingSourceStore {
   ): Promise<void> {
     try {
       const results = await this.redis
-        .pipeline()
+        .multi()
         .hset(sessionKey(reference), field, JSON.stringify(value))
         .expire(sessionKey(reference), SOURCE_STORE_TTL_SECONDS)
         .exec();
       if (!results || results.some(([error]) => error)) {
-        throw new Error('Redis pipeline failed');
+        throw new Error('Redis transaction failed');
       }
     } catch {
       throw new Error('Failed to persist onboarding Understanding source data');

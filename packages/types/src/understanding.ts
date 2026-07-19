@@ -110,6 +110,7 @@ export interface UnderstandingMergeRun {
 }
 
 export interface OnboardingUnderstandingSession {
+  errors?: CollectionError[];
   id: string;
   mergeRun?: UnderstandingMergeRun;
   runs: UnderstandingSourceRun[];
@@ -350,6 +351,7 @@ export const UnderstandingMergeRunSchema = z
 
 export const OnboardingUnderstandingSessionSchema = z
   .object({
+    errors: CollectionDiagnosticsSchema.shape.errors.optional(),
     id: z.string(),
     mergeRun: UnderstandingMergeRunSchema.optional(),
     runs: z.array(UnderstandingSourceRunSchema),

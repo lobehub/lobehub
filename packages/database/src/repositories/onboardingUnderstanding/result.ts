@@ -21,7 +21,7 @@ import { MessageModel } from '../../models/message';
 import { ThreadModel } from '../../models/thread';
 import { messages, threads, topics } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
-import { buildWorkspaceWhere } from '../../utils/workspace';
+import { buildWorkspacePayload, buildWorkspaceWhere } from '../../utils/workspace';
 import {
   InvalidUnderstandingSessionError,
   StaleUnderstandingRunError,
@@ -122,7 +122,7 @@ export class UnderstandingResultRepository {
   };
 
   finalizeSource = async (
-    input: SourceResultIdentity & { metadata: UnderstandingSourceResult },
+    input: SourceResultIdentity & { agentId: string; metadata: UnderstandingSourceResult },
   ): Promise<UnderstandingSourceResult> => {
     const parsed = OnboardingUnderstandingMessageMetadataSchema.parse(input.metadata);
     if (parsed.kind !== 'source' && parsed.kind !== 'source_error') {
@@ -133,7 +133,7 @@ export class UnderstandingResultRepository {
   };
 
   finalizeMerge = async (
-    input: ResultIdentity & { metadata: UnderstandingMergedResult },
+    input: ResultIdentity & { agentId: string; metadata: UnderstandingMergedResult },
   ): Promise<UnderstandingMergedResult> => {
     const parsed = OnboardingUnderstandingMessageMetadataSchema.parse(input.metadata);
     if (parsed.kind !== 'merged' && parsed.kind !== 'merge_error') {
@@ -198,7 +198,7 @@ export class UnderstandingResultRepository {
   };
 
   private async finalize(
-    input: ResultIdentity | SourceResultIdentity,
+    input: (ResultIdentity | SourceResultIdentity) & { agentId: string },
     result: OnboardingUnderstandingMessageMetadata,
   ): Promise<void> {
     await this.db.transaction(async (tx) => {
@@ -215,7 +215,8 @@ export class UnderstandingResultRepository {
 
       const session = parseSession(topic.metadata?.onboardingSession?.understanding);
       if (session.id !== input.sessionId) throw new StaleUnderstandingSessionError(input.sessionId);
-      const reference = this.resolveReference(session, input);
+      const terminalFailure = ['source_error', 'merge_error'].includes(result.kind);
+      const reference = this.resolveReference(session, input, terminalFailure);
       this.assertResult(result, reference);
 
       const threadOwnership = buildWorkspaceWhere(
@@ -246,20 +247,15 @@ export class UnderstandingResultRepository {
         .from(messages)
         .where(and(eq(messages.id, reference.assistantMessageId), messageOwnership))
         .for('update');
-      if (!message)
-        throw new Error(`Understanding result message not found: ${reference.assistantMessageId}`);
-      this.assertMessage(message, input.topicId, reference);
-
-      const terminalStatus = ['source_error', 'merge_error'].includes(result.kind)
-        ? ThreadStatus.Failed
-        : ThreadStatus.Completed;
-      const existing = storedResult(message.metadata);
+      if (message) this.assertMessage(message, input.topicId, reference);
+      const existing = storedResult(message?.metadata);
+      const terminalStatus = terminalFailure ? ThreadStatus.Failed : ThreadStatus.Completed;
       if (existing !== undefined) {
         const parsed = OnboardingUnderstandingMessageMetadataSchema.parse(existing);
         this.assertResult(parsed, reference);
         if (
           isEqual(parsed, result) &&
-          message.content === genericContent[result.kind] &&
+          message?.content === genericContent[result.kind] &&
           thread.status === terminalStatus &&
           this.hasResult(session, reference, result)
         ) {
@@ -271,17 +267,46 @@ export class UnderstandingResultRepository {
         throw new Error(`Understanding result thread is already terminal: ${reference.threadId}`);
       }
 
-      const serialized = JSON.stringify(result);
-      const [updatedMessage] = await tx
-        .update(messages)
-        .set({
-          content: genericContent[result.kind],
-          metadata: sql`jsonb_set(coalesce(${messages.metadata}, '{}'::jsonb), '{onboardingUnderstanding}', ${serialized}::jsonb, true)`,
-          updatedAt: new Date(),
-        })
-        .where(and(eq(messages.id, reference.assistantMessageId), messageOwnership))
-        .returning({ id: messages.id });
-      if (!updatedMessage) throw new Error('Failed to finalize Understanding result message');
+      if (message) {
+        const serialized = JSON.stringify(result);
+        const [updatedMessage] = await tx
+          .update(messages)
+          .set({
+            content: genericContent[result.kind],
+            metadata: sql`jsonb_set(coalesce(${messages.metadata}, '{}'::jsonb), '{onboardingUnderstanding}', ${serialized}::jsonb, true)`,
+            updatedAt: new Date(),
+          })
+          .where(and(eq(messages.id, reference.assistantMessageId), messageOwnership))
+          .returning({ id: messages.id });
+        if (!updatedMessage) throw new Error('Failed to finalize Understanding result message');
+      } else {
+        const [occupied] = await tx
+          .select({ id: messages.id })
+          .from(messages)
+          .where(eq(messages.id, reference.assistantMessageId));
+        if (occupied) {
+          throw new Error('Understanding result message identity is already occupied');
+        }
+        if (!terminalFailure) {
+          throw new Error(
+            `Understanding result message not found: ${reference.assistantMessageId}`,
+          );
+        }
+        await tx.insert(messages).values(
+          buildWorkspacePayload(
+            { userId: this.userId, workspaceId: this.workspaceId },
+            {
+              agentId: input.agentId,
+              content: genericContent[result.kind],
+              id: reference.assistantMessageId,
+              metadata: { onboardingUnderstanding: result },
+              role: 'assistant',
+              threadId: reference.threadId,
+              topicId: input.topicId,
+            },
+          ),
+        );
+      }
 
       const [updatedThread] = await tx
         .update(threads)
@@ -361,32 +386,48 @@ export class UnderstandingResultRepository {
   private resolveReference(
     session: OnboardingUnderstandingSession,
     input: ResultIdentity | SourceResultIdentity,
+    allowMessageClaim = false,
   ): ResultReference {
     if ('sourceId' in input) {
       const run = session.runs.find(({ source }) => source.id === input.sourceId);
       if (
         !run ||
         run.threadId !== input.threadId ||
-        run.assistantMessageId !== input.assistantMessageId
+        (run.assistantMessageId
+          ? run.assistantMessageId !== input.assistantMessageId
+          : !allowMessageClaim)
       ) {
         throw new StaleUnderstandingRunError('source', input.threadId);
       }
-      return { ...input, kind: 'source', source: run.source };
+      return {
+        assistantMessageId: input.assistantMessageId,
+        kind: 'source',
+        sessionId: input.sessionId,
+        source: run.source,
+        sourceId: input.sourceId,
+        threadId: input.threadId,
+        topicId: input.topicId,
+      };
     }
     const run = session.mergeRun;
     if (
       !run ||
       run.threadId !== input.threadId ||
-      run.assistantMessageId !== input.assistantMessageId
+      (run.assistantMessageId
+        ? run.assistantMessageId !== input.assistantMessageId
+        : !allowMessageClaim)
     ) {
       throw new StaleUnderstandingRunError('merge', input.threadId);
     }
     return {
-      ...input,
+      assistantMessageId: input.assistantMessageId,
       inputThreadIds: session.runs
         .filter(({ status }) => status === 'completed')
         .map(({ threadId }) => threadId),
       kind: 'merge',
+      sessionId: input.sessionId,
+      threadId: input.threadId,
+      topicId: input.topicId,
     };
   }
 
@@ -408,6 +449,7 @@ export class UnderstandingResultRepository {
     result: OnboardingUnderstandingMessageMetadata,
   ): OnboardingUnderstandingSession {
     const patch = {
+      assistantMessageId: reference.assistantMessageId,
       diagnostics: CollectionDiagnosticsSummarySchema.parse(result.diagnostics),
       resultId: result.resultId,
       status: ['source_error', 'merge_error'].includes(result.kind)
