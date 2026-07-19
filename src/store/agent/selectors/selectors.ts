@@ -54,6 +54,12 @@ const currentAgentBackgroundColor = (s: AgentStoreState) =>
 
 const currentAgentTags = (s: AgentStoreState) => currentAgentData(s)?.tags || [];
 
+const currentAgentAuthorId = (s: AgentStoreState) => currentAgentData(s)?.userId;
+
+const currentAgentCreatedAt = (s: AgentStoreState) => currentAgentData(s)?.createdAt;
+
+const currentAgentVisibility = (s: AgentStoreState) => currentAgentData(s)?.visibility;
+
 /**
  * Get complete meta data for the current agent
  * Used to replace sessionMetaSelectors.currentAgentMeta
@@ -335,8 +341,10 @@ const getAgentDocumentsById = (agentId: string) => (s: AgentStoreState) =>
 export const agentSelectors = {
   currentAgentExecutionTarget,
   currentAgentHeterogeneousProviderType,
+  currentAgentAuthorId,
   currentAgentAvatar,
   currentAgentBackgroundColor,
+  currentAgentCreatedAt,
   currentAgentConfig,
   currentAgentConfigError,
   currentAgentDescription,
@@ -354,6 +362,7 @@ export const agentSelectors = {
   currentAgentTTSVoice,
   currentAgentTags,
   currentAgentTitle,
+  currentAgentVisibility,
   currentAgentWorkingDirectory,
   currentEnabledKnowledge,
   currentKnowledgeIds,

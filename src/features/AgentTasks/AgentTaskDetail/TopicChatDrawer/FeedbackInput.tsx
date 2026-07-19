@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { AttachmentUploadButton } from '@/features/AttachmentInput';
 import { useConversationStore } from '@/features/Conversation';
 import OpStatusTray from '@/features/Conversation/ChatInput/OpStatusTray';
+import { useConversationResourceAccess } from '@/features/Conversation/hooks/useConversationResourceAccess';
 import { EditorCanvas } from '@/features/EditorCanvas';
 import {
   getAttachmentFileIdsFromEditor,
@@ -25,6 +26,9 @@ const FeedbackInput = memo(() => {
   const [hasAttachments, setHasAttachments] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const shouldSendOnEnter = useEnterToSend();
+  // Task follow-ups send into the shared agent's topic — view-only members
+  // can watch the run but get no reply composer.
+  const { canUseResource } = useConversationResourceAccess();
 
   const canSubmit = hasContent || hasAttachments;
 
@@ -79,6 +83,8 @@ const FeedbackInput = memo(() => {
       setSubmitting(false);
     }
   }, [editor, sendMessage, submitting]);
+
+  if (!canUseResource) return <OpStatusTray seamless />;
 
   // Mirror Fleet's ReplyArea: surface the live running-op status flush above the
   // reply affordance (seamless inline row that renders nothing when idle), so the

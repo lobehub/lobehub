@@ -12,8 +12,10 @@ import { ActivityIcon, CircleAlertIcon, RadioTowerIcon, TimerResetIcon } from 'l
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import HeteroDeviceSwitcher from '@/features/ChatInput/ControlBar/HeteroDeviceSwitcher';
 import WorkspaceControls from '@/features/ChatInput/ControlBar/WorkspaceControls';
 import { useAgentId } from '@/features/ChatInput/hooks/useAgentId';
+import { useChatInputResourceAccess } from '@/features/ChatInput/hooks/useChatInputResourceAccess';
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useAgentStore } from '@/store/agent';
@@ -120,6 +122,7 @@ const visibleSdkRuntimeStates = new Set<HeterogeneousAgentRuntimeState>([
 const HeteroControlBar = memo(() => {
   const { t: tChat } = useTranslation('chat');
   const agentId = useAgentId();
+  const { canConfigureResource, isAccessLoading } = useChatInputResourceAccess();
   const [runtimeStatus, setRuntimeStatus] = useState<HeterogeneousAgentRuntimeStatus>();
 
   useWatchBroadcast('heteroAgentRuntimeStatus', (status) => {
@@ -132,6 +135,19 @@ const HeteroControlBar = memo(() => {
   // Effective config = shared row + this member's device override (LOBE-11689),
   // so the quota badges gate on where THIS member's run actually executes.
   const { agencyConfig, workspaceScoped } = useEffectiveAgencyConfig(agentId);
+
+  if (isAccessLoading) return null;
+
+  // A can-use collaborator may choose only their execution device; working
+  // directory, git, quota and runtime details remain author/editor config.
+  if (!canConfigureResource) {
+    if (!agentId || isLoading) return null;
+    return (
+      <Flexbox horizontal align={'center'} className={styles.bar}>
+        <HeteroDeviceSwitcher agentId={agentId} />
+      </Flexbox>
+    );
+  }
 
   // On web there's no full-access badge / skeleton — just the workspace controls
   // (the cloud repo switcher is rendered inside WorkspaceControls). The CLI

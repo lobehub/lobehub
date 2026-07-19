@@ -9,10 +9,26 @@ import * as AgentGroupRepoModule from '@/database/repositories/agentGroup';
 import * as ChatGroupServiceModule from '@/server/services/agentGroup';
 import { EditLockService } from '@/server/services/editLock';
 import { publishResourceEvent } from '@/server/services/resourceEvents';
+import { canPerformResourceAction } from '@/server/services/resourcePermission';
 
+import { getWorkspaceAgentParentGroupIds } from '../_helpers/workspaceAgentGuard';
 import { agentGroupRouter } from '../agentGroup';
 
 vi.mock('@/server/services/resourceEvents', () => ({ publishResourceEvent: vi.fn() }));
+vi.mock('../_helpers/workspaceAgentGuard', () => ({
+  getWorkspaceAgentParentGroupIds: vi.fn().mockResolvedValue([]),
+}));
+
+vi.mock('@/server/services/resourcePermission', () => ({
+  assertCanEditResource: vi.fn(),
+  assertCanPerformResourceAction: vi.fn(),
+  buildResourcePermissionState: vi.fn((params: any) => ({
+    ...params,
+    generalAccess: params.accessLevel === 'edit' ? 'editor' : 'viewer',
+  })),
+  canPerformResourceAction: vi.fn(),
+  getResourceMeta: vi.fn(),
+}));
 
 const publishResourceEventMock = vi.mocked(publishResourceEvent);
 
@@ -27,6 +43,7 @@ describe('agentGroupRouter', () => {
 
   beforeEach(() => {
     vi.restoreAllMocks();
+    vi.mocked(getWorkspaceAgentParentGroupIds).mockResolvedValue([]);
 
     agentModelMock = {
       batchCreate: vi.fn(),
@@ -258,6 +275,91 @@ describe('agentGroupRouter', () => {
 
       expect(result).toBeNull();
     });
+
+    it('redacts group and member configuration for a member without edit access', async () => {
+      const fullGroupDetail = {
+        agents: [
+          {
+            id: 'agent-1',
+            isSupervisor: true,
+            model: 'private-model',
+            plugins: ['private-tool'],
+            systemRole: 'private member prompt',
+            title: 'Agent 1',
+          },
+        ],
+        config: { openingMessage: 'Welcome', systemPrompt: 'private group prompt' },
+        content: 'private editor content',
+        id: 'group-1',
+        supervisorAgentId: 'agent-1',
+        title: 'Test Group',
+        userId: 'creator-1',
+        visibility: 'public',
+        workspaceId: 'ws-1',
+      };
+      chatGroupServiceMock.getGroupDetail.mockResolvedValue(fullGroupDetail);
+      vi.mocked(canPerformResourceAction).mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+
+      const caller = agentGroupRouter.createCaller({ ...mockCtx, workspaceId: 'ws-1' });
+      const result = await caller.getGroupDetail({ id: 'group-1' });
+
+      expect(result).toEqual({
+        agents: [{ id: 'agent-1', isSupervisor: true, title: 'Agent 1' }],
+        config: { openingMessage: 'Welcome' },
+        id: 'group-1',
+        supervisorAgentId: 'agent-1',
+        title: 'Test Group',
+        userId: 'creator-1',
+        visibility: 'public',
+        workspaceId: 'ws-1',
+      });
+      expect(userModelMock.getUserSettingsDefaultAgentConfig).not.toHaveBeenCalled();
+    });
+
+    it('keeps editable group config but redacts separately restricted member agents', async () => {
+      const fullGroupDetail = {
+        agents: [
+          {
+            id: 'agent-1',
+            model: 'private-model',
+            systemRole: 'private member prompt',
+            title: 'Agent 1',
+            userId: 'creator-1',
+            visibility: 'public',
+            workspaceId: 'ws-1',
+          },
+        ],
+        config: { systemPrompt: 'editable group prompt' },
+        id: 'group-1',
+        title: 'Test Group',
+        userId: 'creator-1',
+        visibility: 'public',
+        workspaceId: 'ws-1',
+      };
+      chatGroupServiceMock.getGroupDetail.mockResolvedValue(fullGroupDetail);
+      vi.mocked(canPerformResourceAction)
+        .mockResolvedValueOnce(true)
+        .mockResolvedValueOnce(false)
+        .mockResolvedValueOnce(true);
+
+      const caller = agentGroupRouter.createCaller({ ...mockCtx, workspaceId: 'ws-1' });
+      const result = await caller.getGroupDetail({ id: 'group-1' });
+
+      expect(result).toEqual({
+        ...fullGroupDetail,
+        agents: [
+          {
+            id: 'agent-1',
+            title: 'Agent 1',
+            userId: 'creator-1',
+            visibility: 'public',
+            workspaceId: 'ws-1',
+          },
+        ],
+      });
+      expect(result?.config).toEqual({ systemPrompt: 'editable group prompt' });
+      expect(result?.agents[0]).not.toHaveProperty('systemRole');
+    });
   });
 
   describe('getGroupAgents', () => {
@@ -291,6 +393,38 @@ describe('agentGroupRouter', () => {
 
       expect(chatGroupServiceMock.getGroups).toHaveBeenCalled();
       expect(result).toEqual(mockGroups);
+    });
+
+    it('redacts config-bearing list results for use/view-only members', async () => {
+      const groups = [
+        {
+          agents: [{ id: 'agent-1', systemRole: 'private prompt', title: 'Agent 1' }],
+          config: { systemPrompt: 'private group prompt' },
+          id: 'group-1',
+          title: 'Group 1',
+          userId: 'creator-1',
+          visibility: 'public',
+          workspaceId: 'ws-1',
+        },
+      ];
+      chatGroupServiceMock.getGroups.mockResolvedValue(groups);
+      vi.mocked(canPerformResourceAction).mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+
+      const caller = agentGroupRouter.createCaller({ ...mockCtx, workspaceId: 'ws-1' });
+      const result = await caller.getGroups();
+
+      expect(result).toEqual([
+        {
+          agents: [{ id: 'agent-1', title: 'Agent 1' }],
+          config: {},
+          id: 'group-1',
+          title: 'Group 1',
+          userId: 'creator-1',
+          visibility: 'public',
+          workspaceId: 'ws-1',
+        },
+      ]);
+      expect(userModelMock.getUserSettingsDefaultAgentConfig).not.toHaveBeenCalled();
     });
   });
 

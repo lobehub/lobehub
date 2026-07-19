@@ -3,8 +3,10 @@
 import { Flexbox } from '@lobehub/ui';
 import { type FC } from 'react';
 import { memo, Suspense } from 'react';
+import { useParams } from 'react-router';
 
 import Loading from '@/components/Loading/BrandTextLoading';
+import ResourceConfigAccessGate from '@/features/ResourcePermission/ResourceConfigAccessGate';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
@@ -50,13 +52,21 @@ const ProfileArea = memo(() => {
 });
 
 const GroupProfile: FC = () => {
+  const { gid } = useParams<{ gid: string }>();
+
   return (
     <Suspense fallback={<Loading debugId="GroupProfile" />}>
-      <StoreSync />
-      <Flexbox horizontal height={'100%'} width={'100%'}>
-        <ProfileArea />
-        <AgentBuilder />
-      </Flexbox>
+      <ResourceConfigAccessGate
+        redirectPath={`/group/${gid ?? ''}`}
+        resourceId={gid}
+        resourceType="agentGroup"
+      >
+        <StoreSync />
+        <Flexbox horizontal height={'100%'} width={'100%'}>
+          <ProfileArea />
+          <AgentBuilder />
+        </Flexbox>
+      </ResourceConfigAccessGate>
     </Suspense>
   );
 };

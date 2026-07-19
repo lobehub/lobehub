@@ -14,12 +14,12 @@ export type PermissionResourceType = (typeof PERMISSION_RESOURCE_TYPES)[number];
 
 /**
  * Workspace-wide access levels for a public resource:
- * - Agent / Agent Group: `use` or `edit`
+ * - Agent / Agent Group: `view`, `use`, or `edit`
  * - Document: `view` or `edit`
  *
  * `use` grants chat execution without configuration access. `view` is the
- * document-only read state. `edit` grants collaborative content/configuration
- * editing but never resource ownership or permission management.
+ * read-only state. `edit` grants collaborative content/configuration editing
+ * but never resource ownership or permission management.
  * Permission management is deliberately not an access level: it is derived
  * from creator ownership or a workspace-scoped `:all` RBAC capability.
  */
@@ -27,8 +27,8 @@ export const RESOURCE_ACCESS_LEVELS = ['view', 'use', 'edit'] as const;
 export type ResourceAccessLevel = (typeof RESOURCE_ACCESS_LEVELS)[number];
 
 export const RESOURCE_ACCESS_LEVELS_BY_TYPE = {
-  agent: ['use', 'edit'],
-  agentGroup: ['use', 'edit'],
+  agent: ['view', 'use', 'edit'],
+  agentGroup: ['view', 'use', 'edit'],
   document: ['view', 'edit'],
 } as const satisfies Record<PermissionResourceType, readonly ResourceAccessLevel[]>;
 

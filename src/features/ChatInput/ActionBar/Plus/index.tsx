@@ -48,6 +48,7 @@ import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
 
 import { useAgentId } from '../../hooks/useAgentId';
+import { useChatInputResourceAccess } from '../../hooks/useChatInputResourceAccess';
 import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
 import { useChatInputStore } from '../../store';
 import Action from '../components/Action';
@@ -289,6 +290,7 @@ const PlusAction = memo(() => {
   const { t: tSetting } = useTranslation('setting');
   const isDark = useIsDark();
   const agentId = useAgentId();
+  const { canConfigureResource } = useChatInputResourceAccess();
   const { updateAgentChatConfig } = useUpdateAgentConfig();
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
@@ -531,119 +533,131 @@ const PlusAction = memo(() => {
           ]
         : [];
 
-    const capabilityItems: ActionDropdownMenuItems = [
-      // Memory toggle — trailing switch; toggle by clicking the switch or the whole row
-      {
-        checked: Boolean(isMemoryEnabled),
-        icon: Brain,
-        key: 'memory',
-        label: t('memory.title'),
-        onCheckedChange: handleToggleMemory,
-        type: 'switch',
-      },
-      // Web search: simple toggle when 2 options, submenu when 3
-      ...(showProviderSearch
-        ? [
-            {
-              children: [
+    const capabilityItems: ActionDropdownMenuItems = canConfigureResource
+      ? [
+          // Memory toggle — trailing switch; toggle by clicking the switch or the whole row
+          {
+            checked: Boolean(isMemoryEnabled),
+            icon: Brain,
+            key: 'memory',
+            label: t('memory.title'),
+            onCheckedChange: handleToggleMemory,
+            type: 'switch',
+          },
+          // Web search: simple toggle when 2 options, submenu when 3
+          ...(showProviderSearch
+            ? [
                 {
-                  key: 'search-off',
-                  label: renderSearchOption(
-                    <Icon icon={GlobeOffIcon} size={18} />,
-                    t('plus.search.off'),
-                    t('plus.search.offDesc'),
-                    activeSearchOption === 'off',
+                  children: [
+                    {
+                      key: 'search-off',
+                      label: renderSearchOption(
+                        <Icon icon={GlobeOffIcon} size={18} />,
+                        t('plus.search.off'),
+                        t('plus.search.offDesc'),
+                        activeSearchOption === 'off',
+                      ),
+                      onClick: () => handleSelectSearch('off'),
+                    },
+                    {
+                      key: 'search-app',
+                      label: renderSearchOption(
+                        <Icon
+                          color={activeSearchOption === 'app' ? cssVar.colorInfo : undefined}
+                          icon={SearchCheck}
+                          size={18}
+                        />,
+                        t('plus.search.appSearch'),
+                        t('plus.search.appSearchDesc'),
+                        activeSearchOption === 'app',
+                      ),
+                      onClick: () => handleSelectSearch('app'),
+                    },
+                    {
+                      key: 'search-provider',
+                      label: renderSearchOption(
+                        <Icon
+                          color={activeSearchOption === 'provider' ? cssVar.colorInfo : undefined}
+                          icon={CloudCog}
+                          size={18}
+                        />,
+                        t('plus.search.modelSearch'),
+                        t('plus.search.modelSearchDesc'),
+                        activeSearchOption === 'provider',
+                      ),
+                      onClick: () => handleSelectSearch('provider'),
+                    },
+                  ],
+                  extra: <Icon className="lobe-submenu-chevron" icon={ChevronRight} size={16} />,
+                  icon: activeIcon(
+                    activeSearchOption === 'off' ? GlobeOffIcon : Globe,
+                    activeSearchOption !== 'off',
                   ),
-                  onClick: () => handleSelectSearch('off'),
-                },
+                  key: 'search-group',
+                  label: t('search.title'),
+                } as ActionDropdownMenuItems[number],
+              ]
+            : [
+                // Web search toggle — trailing switch; toggle by clicking the switch or the whole row
                 {
-                  key: 'search-app',
-                  label: renderSearchOption(
-                    <Icon
-                      color={activeSearchOption === 'app' ? cssVar.colorInfo : undefined}
-                      icon={SearchCheck}
-                      size={18}
-                    />,
-                    t('plus.search.appSearch'),
-                    t('plus.search.appSearchDesc'),
-                    activeSearchOption === 'app',
-                  ),
-                  onClick: () => handleSelectSearch('app'),
-                },
+                  checked: activeSearchOption !== 'off',
+                  icon: Globe,
+                  key: 'search-toggle',
+                  label: t('search.title'),
+                  onCheckedChange: (checked: boolean) =>
+                    handleSelectSearch(checked ? 'app' : 'off'),
+                  type: 'switch',
+                } as ActionDropdownMenuItems[number],
+              ]),
+          ...(enableGatewayMode
+            ? [
                 {
-                  key: 'search-provider',
-                  label: renderSearchOption(
-                    <Icon
-                      color={activeSearchOption === 'provider' ? cssVar.colorInfo : undefined}
-                      icon={CloudCog}
-                      size={18}
-                    />,
-                    t('plus.search.modelSearch'),
-                    t('plus.search.modelSearchDesc'),
-                    activeSearchOption === 'provider',
+                  checked: isGatewayModeEnabled,
+                  icon: Cloud,
+                  key: 'gateway-mode',
+                  label: (
+                    <PopoverLabel
+                      label={renderGatewayModeLabel()}
+                      popoverContent={gatewayModeInfo}
+                      // Clear the trailing toggle so the card sits to the right of the whole menu.
+                      sideOffset={64}
+                    />
                   ),
-                  onClick: () => handleSelectSearch('provider'),
-                },
-              ],
-              extra: <Icon className="lobe-submenu-chevron" icon={ChevronRight} size={16} />,
-              icon: activeIcon(
-                activeSearchOption === 'off' ? GlobeOffIcon : Globe,
-                activeSearchOption !== 'off',
-              ),
-              key: 'search-group',
-              label: t('search.title'),
-            } as ActionDropdownMenuItems[number],
-          ]
-        : [
-            // Web search toggle — trailing switch; toggle by clicking the switch or the whole row
-            {
-              checked: activeSearchOption !== 'off',
-              icon: Globe,
-              key: 'search-toggle',
-              label: t('search.title'),
-              onCheckedChange: (checked: boolean) => handleSelectSearch(checked ? 'app' : 'off'),
-              type: 'switch',
-            } as ActionDropdownMenuItems[number],
-          ]),
-      ...(enableGatewayMode
-        ? [
-            {
-              checked: isGatewayModeEnabled,
-              icon: Cloud,
-              key: 'gateway-mode',
-              label: (
-                <PopoverLabel
-                  label={renderGatewayModeLabel()}
-                  popoverContent={gatewayModeInfo}
-                  // Clear the trailing toggle so the card sits to the right of the whole menu.
-                  sideOffset={64}
-                />
-              ),
-              onCheckedChange: handleToggleGatewayMode,
-              type: 'switch',
-            } as ActionDropdownMenuItems[number],
-          ]
-        : []),
-      { type: 'divider' },
-      // Skills (with "Add Skills..." merged in) sits directly under the Web Search divider.
-      ...toolsItems,
-      // Formatting toolbar toggle — trailing switch; toggle by clicking the switch or the whole row
-      {
-        checked: Boolean(showTypoBar),
-        icon: TypeIcon,
-        key: 'typo',
-        label: tEditor('actions.typobar.title'),
-        onCheckedChange: (checked: boolean) => setShowTypoBar(checked),
-        type: 'switch',
-      },
-      // Advanced parameter settings — mirrors ParamsPanelToggle in the agent header.
-      {
-        icon: Settings2Icon,
-        key: 'params',
-        label: renderActive(tSetting('settingModel.params.title'), isParamsPanelActive),
-        onClick: handleToggleParams,
-      },
-    ];
+                  onCheckedChange: handleToggleGatewayMode,
+                  type: 'switch',
+                } as ActionDropdownMenuItems[number],
+              ]
+            : []),
+          { type: 'divider' },
+          // Skills (with "Add Skills..." merged in) sits directly under the Web Search divider.
+          ...toolsItems,
+          // Formatting toolbar toggle — trailing switch; toggle by clicking the switch or the whole row
+          {
+            checked: Boolean(showTypoBar),
+            icon: TypeIcon,
+            key: 'typo',
+            label: tEditor('actions.typobar.title'),
+            onCheckedChange: (checked: boolean) => setShowTypoBar(checked),
+            type: 'switch',
+          },
+          // Advanced parameter settings — mirrors ParamsPanelToggle in the agent header.
+          {
+            icon: Settings2Icon,
+            key: 'params',
+            label: renderActive(tSetting('settingModel.params.title'), isParamsPanelActive),
+            onClick: handleToggleParams,
+          },
+        ]
+      : [
+          {
+            checked: Boolean(showTypoBar),
+            icon: TypeIcon,
+            key: 'typo',
+            label: tEditor('actions.typobar.title'),
+            onCheckedChange: (checked: boolean) => setShowTypoBar(checked),
+            type: 'switch',
+          },
+        ];
 
     // "Add Attachments..." merges file upload with the knowledge base (libraries / files).
     // When the knowledge base is disabled there is no submenu, so Upload stays a top-level entry.
@@ -652,23 +666,28 @@ const PlusAction = memo(() => {
           {
             children: [
               ...uploadItems,
-              ...(knowledgeItems.length > 0
+              ...(canConfigureResource && knowledgeItems.length > 0
                 ? [{ type: 'divider' as const }, ...knowledgeItems]
-                : [
-                    {
-                      disabled: true,
-                      key: 'knowledge-empty',
-                      label: t('knowledgeBase.related.empty'),
-                    },
-                  ]),
+                : canConfigureResource
+                  ? [
+                      {
+                        disabled: true,
+                        key: 'knowledge-empty',
+                        label: t('knowledgeBase.related.empty'),
+                      },
+                    ]
+                  : []),
             ],
             // Trailing chevron (replaces base-ui's default triangle submenu arrow,
             // which is hidden via the .lobe-submenu-chevron rule in ActionDropdown).
             extra: <Icon className="lobe-submenu-chevron" icon={ChevronRight} size={16} />,
-            footer: knowledgeFooter,
+            footer: canConfigureResource ? knowledgeFooter : undefined,
             icon: LibraryBig,
             key: 'attachments',
-            label: renderLabelWithCount(t('plus.addAttachments'), knowledgeEnabledCount),
+            label: renderLabelWithCount(
+              t('plus.addAttachments'),
+              canConfigureResource ? knowledgeEnabledCount : 0,
+            ),
           } as ActionDropdownMenuItems[number],
         ]
       : uploadItems;
@@ -676,6 +695,8 @@ const PlusAction = memo(() => {
     return [...attachmentsItems, ...capabilityItems];
   }, [
     activeSearchOption,
+    agentId,
+    canConfigureResource,
     canUploadImage,
     canUploadVideo,
     canUploadAudio,

@@ -221,6 +221,12 @@ vi.mock('@/server/services/document', () => ({
   })),
 }));
 
+const mockAssertCanPerformResourceAction = vi.hoisted(() => vi.fn());
+
+vi.mock('@/server/services/resourcePermission', () => ({
+  assertCanPerformResourceAction: mockAssertCanPerformResourceAction,
+}));
+
 describe('fileRouter', () => {
   let ctx: any;
   let caller: any;
@@ -920,6 +926,15 @@ describe('fileRouter', () => {
       });
 
       expect(mockDocumentModelFindById).toHaveBeenCalledWith('doc-1');
+      expect(mockAssertCanPerformResourceAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'transfer',
+          resourceId: 'doc-1',
+          resourceType: 'document',
+          userId: 'test-user',
+          workspaceId: 'workspace-active',
+        }),
+      );
       expect(mockDocumentModelCountFileUsageInSubtree).toHaveBeenCalledWith('doc-1');
       expect(routerMocks.businessFileTransferStorageCheck).toHaveBeenCalledWith({
         additionalSize: 4096,

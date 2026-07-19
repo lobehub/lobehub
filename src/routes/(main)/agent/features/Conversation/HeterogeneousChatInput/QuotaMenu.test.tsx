@@ -42,6 +42,17 @@ vi.mock('@/features/ChatInput/ControlBar/WorkspaceControls', () => ({
 
 vi.mock('@/features/ChatInput/hooks/useAgentId', () => ({ useAgentId: () => 'agent-1' }));
 
+// Resource-access gating is out of scope for quota tests — keep it permissive
+// so HeteroControlBar renders its full quota UI without the ChatInput store.
+vi.mock('@/features/ChatInput/hooks/useChatInputResourceAccess', () => ({
+  useChatInputResourceAccess: () => ({
+    canConfigureResource: true,
+    canSendMessage: true,
+    canUseResource: true,
+    isAccessLoading: false,
+  }),
+}));
+
 vi.mock('@/hooks/useEffectiveAgencyConfig', () => ({
   useEffectiveAgencyConfig: () => ({
     agencyConfig: effectiveAgencyConfig.current,
@@ -83,13 +94,21 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('antd-style', () => ({
-  createStaticStyles: (
-    create: (utils: { css: (...args: unknown[]) => string }) => Record<string, string>,
-  ) => create({ css: () => 'cls' }),
-  cssVar: new Proxy({}, { get: (_target, prop) => `var(--${String(prop)})` }),
-  cx: (...args: unknown[]) => args.filter(Boolean).join(' '),
-}));
+vi.mock('antd-style', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>;
+  const mockCssVar = new Proxy({}, { get: (_target, prop) => `var(--${String(prop)})` });
+  return {
+    ...actual,
+    createStaticStyles: (
+      create: (utils: {
+        css: (...args: unknown[]) => string;
+        cssVar: Record<string, string>;
+      }) => Record<string, string>,
+    ) => create({ css: () => 'cls', cssVar: mockCssVar }),
+    cssVar: mockCssVar,
+    cx: (...args: unknown[]) => args.filter(Boolean).join(' '),
+  };
+});
 
 vi.mock('@lobehub/ui', () => ({
   ActionIcon: ({ disabled, onClick }: { disabled?: boolean; onClick?: () => void }) => (

@@ -8,6 +8,7 @@ const testState = vi.hoisted(() => ({
     agencyConfig: undefined as
       | {
           boundDeviceId?: string;
+          executionTargetSelectionPolicy?: 'fixed' | 'member';
           executionTarget?: string;
           heterogeneousProvider?: { type: string };
         }
@@ -162,6 +163,20 @@ describe('useSelectExecutionTarget', () => {
           'agent-id': { boundDeviceId: 'ws-device-1', executionTarget: 'device' },
         },
       });
+      expect(testState.agent.updateAgentConfigById).not.toHaveBeenCalled();
+    });
+
+    it('does not write a member override while the shared execution target is fixed', async () => {
+      testState.agent.agencyConfig = {
+        boundDeviceId: 'fixed-device',
+        executionTargetSelectionPolicy: 'fixed',
+        executionTarget: 'device',
+      };
+      const { result } = renderHook(() => useSelectExecutionTarget('agent-id'));
+
+      await result.current('device', 'another-device');
+
+      expect(testState.user.updateWorkspaceUserPreference).not.toHaveBeenCalled();
       expect(testState.agent.updateAgentConfigById).not.toHaveBeenCalled();
     });
 

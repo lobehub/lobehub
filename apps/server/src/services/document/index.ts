@@ -145,19 +145,13 @@ export class DocumentService {
     const totalCharCount = content?.length || 0;
     const totalLineCount = content?.split('\n').length || 0;
 
-    // Resolve visibility upfront so the KB mirror file inherits the same
-    // visibility as the document. Mirrors DocumentModel.create semantics:
-    // explicit → parent inheritance → top-level sourceType:'api' default
-    // ('private'). Personal mode (no workspaceId) leaves it undefined —
+    // Resolve visibility upfront so the KB mirror file uses the same policy
+    // as the document. Parent documents are navigation only and do not pass
+    // visibility or ACL to children. Personal mode leaves it undefined —
     // the ownership filter ignores the column there.
     let resolvedVisibility: 'private' | 'public' | undefined = visibility;
     if (!resolvedVisibility && this.workspaceId) {
-      if (parentId) {
-        const parent = await this.documentModel.findById(parentId);
-        resolvedVisibility = parent?.visibility ?? 'private';
-      } else {
-        resolvedVisibility = 'private';
-      }
+      resolvedVisibility = 'private';
     }
 
     let fileId: string | null = null;
@@ -210,7 +204,7 @@ export class DocumentService {
   }
 
   /**
-   * Publish a private document subtree to the workspace. Thin wrapper around
+   * Publish one private document to the workspace. Thin wrapper around
    * `DocumentModel.publishToWorkspace`, with a side-effect notification so any
    * other workspace member with the page open (referencing chip, etc.) sees
    * the new visibility on the next refresh.
@@ -220,7 +214,7 @@ export class DocumentService {
   }
 
   /**
-   * Flip a document subtree's `visibility`. Thin wrapper around
+   * Flip one document's `visibility`. Thin wrapper around
    * `DocumentModel.setVisibility`, plus a side-effect notification so any
    * other workspace member with the page open (referencing chip, editor
    * placeholder, etc.) sees the new visibility on the next refresh — same
