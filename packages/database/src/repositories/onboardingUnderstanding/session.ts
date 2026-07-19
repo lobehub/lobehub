@@ -1,4 +1,8 @@
-import type { OnboardingUnderstandingSession } from '@lobechat/types';
+import type {
+  OnboardingUnderstandingSession,
+  UnderstandingMergeRun,
+  UnderstandingSourceRun,
+} from '@lobechat/types';
 import {
   OnboardingUnderstandingSessionSchema,
   projectOnboardingUnderstandingSessionStatus,
@@ -6,12 +10,9 @@ import {
 } from '@lobechat/types';
 import { and, eq, inArray } from 'drizzle-orm';
 
-import { ThreadModel } from '../../models/thread';
-import { agentOperations, threads, topics } from '../../schemas';
+import { threads, topics } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { buildWorkspaceWhere } from '../../utils/workspace';
-
-const TERMINAL_SOURCE_STATUSES = new Set(['completed', 'failed', 'stale']);
 
 export class UnderstandingSessionNotFoundError extends Error {
   constructor(topicId: string) {
@@ -34,6 +35,7 @@ export class InvalidUnderstandingSessionError extends Error {
   }
 }
 
+// Transitional export for callers removed with the legacy orchestrator.
 export class UnderstandingMergeSourcesChangedError extends Error {
   constructor() {
     super('Understanding completed sources changed during merge claim; retry validation');
@@ -55,17 +57,6 @@ export class UnderstandingPreconditionError extends Error {
   }
 }
 
-const completedSourceTuples = (session: OnboardingUnderstandingSession) =>
-  session.runs
-    .filter((run) => run.status === 'completed')
-    .map((run) => ({
-      assistantMessageId: run.assistantMessageId,
-      operationId: run.operationId,
-      sourceId: run.source.id,
-      status: run.status,
-      threadId: run.threadId,
-    }));
-
 const parseSession = (value: unknown): OnboardingUnderstandingSession => {
   try {
     return OnboardingUnderstandingSessionSchema.parse(value);
@@ -74,21 +65,20 @@ const parseSession = (value: unknown): OnboardingUnderstandingSession => {
   }
 };
 
-export interface UnderstandingResetCleanup {
-  operationIds: string[];
-  session: OnboardingUnderstandingSession;
-}
+type SourceRunUpdate = Partial<
+  Pick<UnderstandingSourceRun, 'assistantMessageId' | 'diagnostics' | 'resultId' | 'status'>
+>;
+
+type MergeRunUpdate = Partial<
+  Pick<UnderstandingMergeRun, 'assistantMessageId' | 'diagnostics' | 'resultId' | 'status'>
+>;
 
 export class UnderstandingSessionRepository {
-  private readonly threadModel: ThreadModel;
-
   constructor(
     private readonly db: LobeChatDatabase,
     private readonly userId: string,
     private readonly workspaceId?: string,
-  ) {
-    this.threadModel = new ThreadModel(db, userId, workspaceId);
-  }
+  ) {}
 
   get = async (topicId: string): Promise<OnboardingUnderstandingSession | undefined> => {
     const [topic] = await this.db
@@ -107,23 +97,10 @@ export class UnderstandingSessionRepository {
   install = async (
     topicId: string,
     session: OnboardingUnderstandingSession,
-    expectedPriorSessionId?: string,
   ): Promise<OnboardingUnderstandingSession> => {
     const parsed = parseSession(session);
     const next = await this.mutateSession(topicId, (current) => {
-      if (expectedPriorSessionId === undefined) {
-        if (current) return current;
-      } else {
-        if (!current) throw new StaleUnderstandingSessionError(expectedPriorSessionId);
-        if (
-          current.id !== expectedPriorSessionId ||
-          current.runs.length !== 0 ||
-          current.status !== 'failed' ||
-          current.mergeRun
-        ) {
-          return current;
-        }
-      }
+      if (current) return current;
       return { ...parsed, status: projectOnboardingUnderstandingSessionStatus(parsed) };
     });
 
@@ -146,62 +123,47 @@ export class UnderstandingSessionRepository {
     return next as OnboardingUnderstandingSession;
   };
 
-  claimMerge = async (topicId: string, sessionId: string, threadId: string): Promise<boolean> => {
-    const session = await this.get(topicId);
-    if (!session) throw new UnderstandingSessionNotFoundError(topicId);
-    if (session.id !== sessionId) throw new StaleUnderstandingSessionError(sessionId);
-    if (session.mergeRun) return false;
+  attachWorkflowRun = (
+    topicId: string,
+    sessionId: string,
+    workflowRunId: string,
+  ): Promise<OnboardingUnderstandingSession> =>
+    this.update(topicId, sessionId, (session) => ({ ...session, workflowRunId }));
 
-    const allTerminal = session.runs.every((run) => TERMINAL_SOURCE_STATUSES.has(run.status));
-    const completedRuns = session.runs.filter((run) => run.status === 'completed');
-    if (!allTerminal || completedRuns.length === 0) return false;
+  updateSourceRun = (
+    topicId: string,
+    sessionId: string,
+    sourceId: string,
+    patch: SourceRunUpdate,
+  ): Promise<OnboardingUnderstandingSession> =>
+    this.update(topicId, sessionId, (session) => {
+      const runIndex = session.runs.findIndex((run) => run.source.id === sourceId);
+      if (runIndex < 0) throw new Error(`Understanding source was not found: ${sourceId}`);
 
-    for (const run of completedRuns) {
-      const thread = await this.threadModel.findById(run.threadId);
-      if (
-        !thread ||
-        thread.topicId !== topicId ||
-        thread.type !== ThreadType.Isolation ||
-        thread.metadata?.onboardingUnderstanding?.kind !== 'source'
-      ) {
-        throw new Error(`Invalid or unowned Understanding source thread: ${run.threadId}`);
-      }
-    }
-    const validatedCompletedSources = completedSourceTuples(session);
-    let claimed = false;
-    await this.update(topicId, sessionId, (current) => {
-      if (current.mergeRun) return current;
-
-      if (
-        JSON.stringify(completedSourceTuples(current)) !== JSON.stringify(validatedCompletedSources)
-      ) {
-        throw new UnderstandingMergeSourcesChangedError();
-      }
-
-      const allTerminal = current.runs.every((run) => TERMINAL_SOURCE_STATUSES.has(run.status));
-      const hasCompletedSource = current.runs.some((run) => run.status === 'completed');
-      if (!allTerminal || !hasCompletedSource) return current;
-
-      const collides = current.runs.some((run) => run.threadId === threadId);
-      if (collides) throw new Error('Understanding merge identifiers collide with a source run');
-
-      claimed = true;
       return {
-        ...current,
-        mergeRun: {
-          inputThreadIds: current.runs
-            .filter((run) => run.status === 'completed')
-            .map((run) => run.threadId),
-          status: 'pending',
-          threadId,
-        },
+        ...session,
+        runs: session.runs.map((run, index) => (index === runIndex ? { ...run, ...patch } : run)),
       };
     });
 
-    return claimed;
-  };
+  setMergeRun = (
+    topicId: string,
+    sessionId: string,
+    mergeRun: UnderstandingMergeRun,
+  ): Promise<OnboardingUnderstandingSession> =>
+    this.update(topicId, sessionId, (session) => ({ ...session, mergeRun }));
 
-  removeForReset = async (topicId: string): Promise<UnderstandingResetCleanup | undefined> =>
+  updateMergeRun = (
+    topicId: string,
+    sessionId: string,
+    patch: MergeRunUpdate,
+  ): Promise<OnboardingUnderstandingSession> =>
+    this.update(topicId, sessionId, (session) => {
+      if (!session.mergeRun) throw new Error('Understanding merge run was not found');
+      return { ...session, mergeRun: { ...session.mergeRun, ...patch } };
+    });
+
+  removeForReset = async (topicId: string): Promise<OnboardingUnderstandingSession | undefined> =>
     this.db.transaction(async (tx) => {
       const topicOwnership = buildWorkspaceWhere(
         { userId: this.userId, workspaceId: this.workspaceId },
@@ -217,65 +179,11 @@ export class UnderstandingSessionRepository {
       if (!topic || !onboardingSession || !persisted) return;
 
       const session = parseSession(persisted);
-      const allRuns = [...(session.retiredRuns ?? []), ...session.runs];
-      const allMergeRuns = [
-        ...(session.retiredMergeRuns ?? []),
-        ...(session.mergeRun ? [session.mergeRun] : []),
-      ];
       const references = new Map([
-        ...allRuns.map((run) => [run.threadId, 'source'] as const),
-        ...allMergeRuns.map((run) => [run.threadId, 'merged'] as const),
+        ...session.runs.map((run) => [run.threadId, 'source'] as const),
+        ...(session.mergeRun ? [[session.mergeRun.threadId, 'merged'] as const] : []),
       ]);
       const threadIds = [...references.keys()];
-      const operationReferences = [
-        ...allRuns.flatMap(({ operationId, threadId }) =>
-          operationId ? [{ operationId, threadId }] : [],
-        ),
-        ...allMergeRuns.flatMap(({ operationId, threadId }) =>
-          operationId ? [{ operationId, threadId }] : [],
-        ),
-      ];
-      const expectedOperationThreads = new Map(
-        operationReferences.map(({ operationId, threadId }) => [operationId, threadId]),
-      );
-      if (expectedOperationThreads.size !== operationReferences.length) {
-        throw new Error('Understanding reset contains colliding operation references');
-      }
-      const operationIds = [...expectedOperationThreads.keys()];
-      let validatedOperationIds: string[] = [];
-
-      if (operationIds.length > 0) {
-        const operationOwnership = buildWorkspaceWhere(
-          { userId: this.userId, workspaceId: this.workspaceId },
-          agentOperations,
-        );
-        const existingOperations = await tx
-          .select({ id: agentOperations.id })
-          .from(agentOperations)
-          .where(inArray(agentOperations.id, operationIds));
-        const ownedOperations = await tx
-          .select({
-            id: agentOperations.id,
-            threadId: agentOperations.threadId,
-            topicId: agentOperations.topicId,
-          })
-          .from(agentOperations)
-          .where(and(inArray(agentOperations.id, operationIds), operationOwnership))
-          .for('update');
-        if (existingOperations.length !== ownedOperations.length) {
-          throw new Error('Understanding reset references an unowned operation');
-        }
-        for (const operation of ownedOperations) {
-          if (
-            operation.topicId !== topicId ||
-            operation.threadId !== expectedOperationThreads.get(operation.id)
-          ) {
-            throw new Error(`Invalid Understanding reset operation: ${operation.id}`);
-          }
-        }
-        const validated = new Set(ownedOperations.map(({ id }) => id));
-        validatedOperationIds = operationIds.filter((operationId) => validated.has(operationId));
-      }
 
       if (threadIds.length > 0) {
         const threadOwnership = buildWorkspaceWhere(
@@ -312,16 +220,13 @@ export class UnderstandingSessionRepository {
         .set({
           metadata: {
             ...topic.metadata,
-            onboardingSession: {
-              ...onboardingSession,
-              understanding: undefined,
-            },
+            onboardingSession: { ...onboardingSession, understanding: undefined },
           },
           updatedAt: new Date(),
         })
         .where(and(eq(topics.id, topicId), topicOwnership));
 
-      return { operationIds: validatedOperationIds, session };
+      return session;
     });
 
   private mutateSession = async (

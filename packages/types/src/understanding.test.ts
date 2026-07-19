@@ -24,13 +24,14 @@ type KnownForbiddenDurableKey =
   | 'credentialReference'
   | 'credentials'
   | 'oauthToken'
+  | 'operationId'
   | 'rawContent'
   | 'refreshToken'
   | 'resolutionKey'
-  | 'sourceLocator'
   | 'schemaVersion'
   | 'secret'
   | 'sourceBrief'
+  | 'sourceLocator'
   | 'token';
 
 type DurableKeys<Value> = Value extends readonly (infer Item)[]
@@ -42,8 +43,14 @@ type DurableKeys<Value> = Value extends readonly (infer Item)[]
 type HasNoForbiddenKeys<Value> =
   Extract<DurableKeys<Value>, KnownForbiddenDurableKey> extends never ? true : false;
 
+const source = {
+  externalAccountId: 'account',
+  id: 'github:account',
+  provider: 'github',
+};
+
 describe('Understanding durable contracts', () => {
-  it('excludes known credential, raw source, and schema version keys', () => {
+  it('excludes credentials, raw source data, runtime operation IDs, and schema versions', () => {
     const contractAssertions: [
       HasNoForbiddenKeys<UnderstandingSourceRef>,
       HasNoForbiddenKeys<CollectionDiagnostics>,
@@ -70,249 +77,98 @@ describe('Understanding durable contracts', () => {
       resultId: string;
       source: UnderstandingSourceRef;
     }>().not.toMatchTypeOf<OnboardingUnderstandingMessageMetadata>();
-    expectTypeOf<{
-      analysis: UnderstandingAnalysis;
-      diagnostics: CollectionDiagnostics;
-      kind: 'source';
-      resultId: string;
-      source: UnderstandingSourceRef;
-    }>().toMatchTypeOf<OnboardingUnderstandingMessageMetadata>();
   });
 
-  it('accepts optional internal cleanup completion markers', () => {
+  it('accepts lean source and merge business state', () => {
     expect(
       OnboardingUnderstandingSessionSchema.safeParse({
         id: 'session',
         mergeRun: {
           assistantMessageId: 'merge-message',
-          cleanupStatus: 'completed',
+          diagnostics: { evidenceCount: 2, failedCount: 0, succeededCount: 2 },
           inputThreadIds: ['thread'],
-          operationId: 'merge-operation',
+          resultId: 'merge-result',
           status: 'completed',
           threadId: 'merge-thread',
         },
         runs: [
           {
             assistantMessageId: 'message',
-            cleanupStatus: 'completed',
-            operationId: 'operation',
-            source: {
-              externalAccountId: 'account',
-              id: 'github:account',
-              provider: 'github',
-            },
+            diagnostics: { evidenceCount: 2, failedCount: 0, succeededCount: 2 },
+            resultId: 'result',
+            source,
             status: 'completed',
             threadId: 'thread',
           },
         ],
         status: 'completed',
+        workflowRunId: 'workflow-run',
       }).success,
     ).toBe(true);
   });
 
-  it('accepts an optional ISO completion timestamp only on source runs', () => {
-    const session = {
-      id: 'session',
-      runs: [
-        {
-          completedAt: '2026-07-17T08:30:00.000Z',
-          source: {
-            externalAccountId: 'account',
-            id: 'github:account',
-            provider: 'github',
-          },
-          status: 'completed',
-          threadId: 'thread',
-        },
-      ],
-      status: 'processing',
-    };
-
-    expect(OnboardingUnderstandingSessionSchema.safeParse(session).success).toBe(true);
+  it.each([
+    ['operationId', 'operation'],
+    ['collectionAttemptId', 'attempt'],
+    ['collectionStartedAt', '2026-07-17T08:30:00.000Z'],
+    ['cleanupStatus', 'completed'],
+    ['completedAt', '2026-07-17T08:30:00.000Z'],
+  ])('rejects runtime-only source field %s', (field, value) => {
     expect(
       OnboardingUnderstandingSessionSchema.safeParse({
-        ...session,
-        runs: [{ ...session.runs[0], completedAt: 'not-a-timestamp' }],
+        id: 'session',
+        runs: [{ [field]: value, source, status: 'running', threadId: 'thread' }],
+        status: 'processing',
       }).success,
     ).toBe(false);
   });
 
-  it('accepts optional collection attempt and ISO lease fields on source runs', () => {
-    const session = {
-      id: 'session',
-      runs: [
-        {
-          collectionAttemptId: 'attempt-1',
-          collectionStartedAt: '2026-07-17T08:30:00.000Z',
-          source: {
-            externalAccountId: 'account',
-            id: 'github:account',
-            provider: 'github',
-          },
-          status: 'collecting',
-          threadId: 'thread',
-        },
-      ],
-      status: 'processing',
-    };
-
-    expect(OnboardingUnderstandingSessionSchema.safeParse(session).success).toBe(true);
-    expect(
-      OnboardingUnderstandingSessionSchema.safeParse({
-        ...session,
-        runs: [{ ...session.runs[0], collectionStartedAt: 'not-a-timestamp' }],
-      }).success,
-    ).toBe(false);
-    expect(
-      OnboardingUnderstandingSessionSchema.safeParse({
-        ...session,
-        runs: [{ ...session.runs[0], collectionAttemptId: '' }],
-      }).success,
-    ).toBe(false);
-  });
-
-  it('accepts compact ISO session initialization lease markers', () => {
-    const session = {
-      id: 'session',
-      initializationStartedAt: '2026-07-17T08:30:00.000Z',
-      initializedAt: '2026-07-17T08:30:01.000Z',
-      runs: [],
-      status: 'failed',
-    };
-
-    expect(OnboardingUnderstandingSessionSchema.safeParse(session).success).toBe(true);
-    expect(
-      OnboardingUnderstandingSessionSchema.safeParse({
-        ...session,
-        initializationStartedAt: 'not-a-timestamp',
-      }).success,
-    ).toBe(false);
-    expect(
-      OnboardingUnderstandingSessionSchema.safeParse({
-        ...session,
-        initializedAt: 'not-a-timestamp',
-      }).success,
-    ).toBe(false);
-  });
-
-  it('allows retired runs to repeat source IDs while requiring unique runtime IDs', () => {
-    const activeRun = {
-      assistantMessageId: 'active-message',
-      operationId: 'active-operation',
-      source: {
-        externalAccountId: 'account',
-        id: 'github:account',
-        provider: 'github',
-      },
-      status: 'failed',
-      threadId: 'active-thread',
-    };
-    const retiredRun = {
-      ...activeRun,
-      assistantMessageId: 'retired-message',
-      operationId: 'retired-operation',
-      threadId: 'retired-thread',
-    };
-    const session = {
-      id: 'session',
-      retiredRuns: [retiredRun],
-      runs: [activeRun],
-      status: 'failed',
-    };
-
-    expect(OnboardingUnderstandingSessionSchema.safeParse(session).success).toBe(true);
-    expect(
-      OnboardingUnderstandingSessionSchema.safeParse({
-        ...session,
-        retiredRuns: [{ ...retiredRun, threadId: activeRun.threadId }],
-      }).success,
-    ).toBe(false);
-    expect(
-      OnboardingUnderstandingSessionSchema.safeParse({
-        ...session,
-        retiredRuns: [{ ...retiredRun, operationId: activeRun.operationId }],
-      }).success,
-    ).toBe(false);
-  });
-
-  it('accepts retired merge history without projecting it as the active merge', () => {
-    const session = {
-      id: 'session',
-      retiredMergeRuns: [
-        {
-          assistantMessageId: 'retired-merge-message',
-          inputThreadIds: ['historical-source-thread'],
-          operationId: 'retired-merge-operation',
-          status: 'completed',
-          threadId: 'retired-merge-thread',
-        },
-      ],
-      runs: [
-        {
-          assistantMessageId: 'active-message',
-          operationId: 'active-operation',
-          source: {
-            externalAccountId: 'account',
-            id: 'github:account',
-            provider: 'github',
-          },
+  it.each(['retiredRuns', 'retiredMergeRuns', 'initializationStartedAt', 'initializedAt'])(
+    'rejects runtime-only session field %s',
+    (field) => {
+      expect(
+        OnboardingUnderstandingSessionSchema.safeParse({
+          [field]: field.startsWith('retired') ? [] : '2026-07-17T08:30:00.000Z',
+          id: 'session',
+          runs: [],
           status: 'failed',
-          threadId: 'active-thread',
-        },
-      ],
-      status: 'failed',
+        }).success,
+      ).toBe(false);
+    },
+  );
+
+  it('projects polling status from source and merge business state', () => {
+    const session = {
+      id: 'session',
+      runs: [{ source, status: 'running' as const, threadId: 'thread' }],
+      status: 'pending' as const,
     };
 
-    const parsed = OnboardingUnderstandingSessionSchema.safeParse(session);
-    expect(parsed.success).toBe(true);
-    if (!parsed.success) return;
-    expect(projectOnboardingUnderstandingSessionStatus(parsed.data)).toBe('failed');
+    expect(projectOnboardingUnderstandingSessionStatus(session)).toBe('processing');
     expect(
-      OnboardingUnderstandingSessionSchema.safeParse({
+      projectOnboardingUnderstandingSessionStatus({
         ...session,
-        retiredMergeRuns: [{ ...session.retiredMergeRuns[0], threadId: 'active-thread' }],
-      }).success,
-    ).toBe(false);
+        mergeRun: { inputThreadIds: ['thread'], status: 'processing', threadId: 'merge-thread' },
+        runs: [{ ...session.runs[0], status: 'completed' }],
+      }),
+    ).toBe('merging');
     expect(
-      OnboardingUnderstandingSessionSchema.safeParse({
+      projectOnboardingUnderstandingSessionStatus({
         ...session,
-        retiredMergeRuns: [{ ...session.retiredMergeRuns[0], operationId: 'active-operation' }],
-      }).success,
-    ).toBe(false);
-    expect(
-      OnboardingUnderstandingSessionSchema.safeParse({
-        ...session,
-        retiredMergeRuns: [
-          { ...session.retiredMergeRuns[0], assistantMessageId: 'active-message' },
-        ],
-      }).success,
-    ).toBe(false);
+        mergeRun: { inputThreadIds: ['thread'], status: 'completed', threadId: 'merge-thread' },
+        runs: [{ ...session.runs[0], status: 'completed' }],
+      }),
+    ).toBe('completed');
   });
 
   it.each(['displayName', 'externalAccountId', 'id', 'provider'] as const)(
-    'rejects an oversized source reference %s in both source and manifest schemas',
+    'rejects an oversized source reference %s',
     (field) => {
-      const source = {
-        displayName: 'Account',
-        externalAccountId: 'account',
-        id: 'github:account',
-        provider: 'github',
-        [field]: 'x'.repeat(10_000),
-      };
-      const run = {
-        assistantMessageId: 'message',
-        operationId: 'operation',
-        source,
-        status: 'resolving',
-        threadId: 'thread',
-      };
-
-      expect(UnderstandingSourceRefSchema.safeParse(source).success).toBe(false);
       expect(
-        OnboardingUnderstandingSessionSchema.safeParse({
-          id: 'session',
-          runs: [run],
-          status: 'processing',
+        UnderstandingSourceRefSchema.safeParse({
+          ...source,
+          displayName: 'Account',
+          [field]: 'x'.repeat(10_000),
         }).success,
       ).toBe(false);
     },

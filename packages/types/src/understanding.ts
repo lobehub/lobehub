@@ -13,8 +13,7 @@ export const MAX_ANALYSIS_DESCRIPTION_LENGTH = 2000;
 export const MAX_ANALYSIS_SHORT_TEXT_LENGTH = 256;
 export const MAX_PERSONA_CONTENT_LENGTH = 4000;
 
-export type UnderstandingRunStatus =
-  'pending' | 'resolving' | 'collecting' | 'analyzing' | 'completed' | 'failed' | 'stale';
+export type UnderstandingRunStatus = 'pending' | 'running' | 'completed' | 'failed';
 
 export type OnboardingUnderstandingSessionStatus =
   'pending' | 'processing' | 'merging' | 'completed' | 'partial' | 'failed';
@@ -95,12 +94,8 @@ export interface UnderstandingAnalysis {
 
 export interface UnderstandingSourceRun {
   assistantMessageId?: string;
-  cleanupStatus?: 'completed';
-  collectionAttemptId?: string;
-  collectionStartedAt?: string;
-  completedAt?: string;
   diagnostics?: CollectionDiagnosticsSummary;
-  operationId?: string;
+  resultId?: string;
   source: UnderstandingSourceRef;
   status: UnderstandingRunStatus;
   threadId: string;
@@ -108,10 +103,8 @@ export interface UnderstandingSourceRun {
 
 export interface UnderstandingMergeRun {
   assistantMessageId?: string;
-  cleanupStatus?: 'completed';
   diagnostics?: CollectionDiagnosticsSummary;
   inputThreadIds: string[];
-  operationId?: string;
   resultId?: string;
   status: 'pending' | 'processing' | 'completed' | 'failed';
   threadId: string;
@@ -119,13 +112,10 @@ export interface UnderstandingMergeRun {
 
 export interface OnboardingUnderstandingSession {
   id: string;
-  initializationStartedAt?: string;
-  initializedAt?: string;
   mergeRun?: UnderstandingMergeRun;
-  retiredMergeRuns?: UnderstandingMergeRun[];
-  retiredRuns?: UnderstandingSourceRun[];
   runs: UnderstandingSourceRun[];
   status: OnboardingUnderstandingSessionStatus;
+  workflowRunId?: string;
 }
 
 interface OnboardingUnderstandingMessageMetadataBase {
@@ -341,22 +331,10 @@ export const OnboardingUnderstandingMessageMetadataSchema = z.discriminatedUnion
 export const UnderstandingSourceRunSchema = z
   .object({
     assistantMessageId: z.string().optional(),
-    cleanupStatus: z.literal('completed').optional(),
-    collectionAttemptId: z.string().min(1).max(128).optional(),
-    collectionStartedAt: z.string().datetime({ offset: true }).optional(),
-    completedAt: z.string().datetime({ offset: true }).optional(),
     diagnostics: CollectionDiagnosticsSummarySchema.optional(),
-    operationId: z.string().optional(),
+    resultId: z.string().optional(),
     source: UnderstandingSourceRefSchema,
-    status: z.enum([
-      'pending',
-      'resolving',
-      'collecting',
-      'analyzing',
-      'completed',
-      'failed',
-      'stale',
-    ]),
+    status: z.enum(['pending', 'running', 'completed', 'failed']),
     threadId: z.string(),
   })
   .strict() satisfies z.ZodType<UnderstandingSourceRun>;
@@ -364,10 +342,8 @@ export const UnderstandingSourceRunSchema = z
 export const UnderstandingMergeRunSchema = z
   .object({
     assistantMessageId: z.string().optional(),
-    cleanupStatus: z.literal('completed').optional(),
     diagnostics: CollectionDiagnosticsSummarySchema.optional(),
     inputThreadIds: z.array(z.string()),
-    operationId: z.string().optional(),
     resultId: z.string().optional(),
     status: z.enum(['pending', 'processing', 'completed', 'failed']),
     threadId: z.string(),
@@ -377,61 +353,16 @@ export const UnderstandingMergeRunSchema = z
 export const OnboardingUnderstandingSessionSchema = z
   .object({
     id: z.string(),
-    initializationStartedAt: z.string().datetime({ offset: true }).optional(),
-    initializedAt: z.string().datetime({ offset: true }).optional(),
     mergeRun: UnderstandingMergeRunSchema.optional(),
-    retiredMergeRuns: z.array(UnderstandingMergeRunSchema).optional(),
-    retiredRuns: z.array(UnderstandingSourceRunSchema).optional(),
     runs: z.array(UnderstandingSourceRunSchema),
     status: z.enum(['pending', 'processing', 'merging', 'completed', 'partial', 'failed']),
+    workflowRunId: z.string().optional(),
   })
-  .strict()
-  .superRefine((session, context) => {
-    const allSourceRuns = [...(session.retiredRuns ?? []), ...session.runs];
-    const allMergeRuns = [
-      ...(session.retiredMergeRuns ?? []),
-      ...(session.mergeRun ? [session.mergeRun] : []),
-    ];
-    const allRuntimeRuns = [...allSourceRuns, ...allMergeRuns];
-    const uniqueFields = [
-      ['operationId', allRuntimeRuns.flatMap((run) => (run.operationId ? [run.operationId] : []))],
-      ['threadId', allRuntimeRuns.map((run) => run.threadId)],
-      [
-        'assistantMessageId',
-        allRuntimeRuns.flatMap((run) => (run.assistantMessageId ? [run.assistantMessageId] : [])),
-      ],
-      ['source.id', session.runs.map((run) => run.source.id)],
-    ] as const;
-
-    for (const [field, values] of uniqueFields) {
-      if (new Set(values).size !== values.length) {
-        context.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: `Duplicate Understanding runtime ${field}`,
-          path: ['runs'],
-        });
-      }
-    }
-
-    if (!session.mergeRun) return;
-    const expectedInputThreadIds = session.runs
-      .filter((run) => run.status === 'completed')
-      .map((run) => run.threadId);
-    if (
-      JSON.stringify(session.mergeRun.inputThreadIds) !== JSON.stringify(expectedInputThreadIds)
-    ) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Understanding merge inputs must match completed source runs in manifest order',
-        path: ['mergeRun', 'inputThreadIds'],
-      });
-    }
-  }) satisfies z.ZodType<OnboardingUnderstandingSession>;
+  .strict() satisfies z.ZodType<OnboardingUnderstandingSession>;
 
 const TERMINAL_SOURCE_STATUSES: ReadonlySet<UnderstandingRunStatus> = new Set([
   'completed',
   'failed',
-  'stale',
 ]);
 
 export const projectOnboardingUnderstandingSessionStatus = (
