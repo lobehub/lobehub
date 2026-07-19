@@ -854,6 +854,15 @@ export class UnderstandingService {
     };
   };
 
+  assertRetryable = async (input: Omit<SourceIdentity, 'threadId'>): Promise<void> => {
+    const session = await this.activeSession(input.topicId, input.sessionId);
+    const target = session.runs.find(({ source }) => source.id === input.sourceId);
+    if (!target) throw new UnderstandingResourceNotFoundError('session');
+    if (target.status !== 'failed') {
+      throw new UnderstandingPreconditionError('source_not_retryable');
+    }
+  };
+
   prepareRetry = async (input: Omit<SourceIdentity, 'threadId'>) => {
     const threadId = this.dependencies.ids();
     await this.dependencies.sessions.update(input.topicId, input.sessionId, (session) => {

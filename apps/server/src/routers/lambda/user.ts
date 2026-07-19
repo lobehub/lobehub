@@ -5,7 +5,6 @@ import {
 import { isDesktop } from '@lobechat/const';
 import {
   StaleUnderstandingSessionError,
-  UnderstandingConfirmationRepository,
   UnderstandingMergeSourcesChangedError,
   UnderstandingPreconditionError,
   UnderstandingResourceNotFoundError,
@@ -52,23 +51,15 @@ import { FileS3 } from '@/server/modules/S3';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
 import { FileService } from '@/server/services/file';
 import { OnboardingService } from '@/server/services/onboarding';
-import { createUnderstandingOrchestrator } from '@/server/services/understanding/createOrchestrator';
-import type { UnderstandingBackgroundScheduler } from '@/server/services/understanding/orchestrator';
+import {
+  createUnderstandingService,
+  type UnderstandingService,
+} from '@/server/services/understanding/service';
 import { after } from '@/server/utils/scheduleAfterResponse';
-
-interface OnboardingUnderstandingService {
-  getSession: (
-    input: OnboardingUnderstandingTopicInput,
-  ) => Promise<OnboardingUnderstandingPollingResult>;
-  resumePendingSources: (input: OnboardingUnderstandingTopicInput) => Promise<void>;
-  retrySource: (
-    input: RetryOnboardingUnderstandingSourceInput,
-  ) => Promise<OnboardingUnderstandingPollingResult>;
-  start: (
-    input: OnboardingUnderstandingTopicInput,
-    schedule: UnderstandingBackgroundScheduler,
-  ) => Promise<OnboardingUnderstandingPollingResult>;
-}
+import {
+  OnboardingUnderstandingWorkflow,
+  UnderstandingWorkflowUnavailableError,
+} from '@/server/workflows/onboardingUnderstanding';
 
 const throwUnderstandingApiError = (error: unknown): never => {
   if (error instanceof TRPCError) throw error;
@@ -97,6 +88,13 @@ const throwUnderstandingApiError = (error: unknown): never => {
     throw new TRPCError({
       code: 'PRECONDITION_FAILED',
       message: 'Onboarding understanding action is not currently available',
+    });
+  }
+
+  if (error instanceof UnderstandingWorkflowUnavailableError) {
+    throw new TRPCError({
+      code: 'PRECONDITION_FAILED',
+      message: 'Onboarding understanding workflow is unavailable',
     });
   }
 
@@ -199,27 +197,24 @@ const personalUnderstandingProcedure = authedProcedure
     if (!result.ok) throwUnderstandingApiError(result.error.cause ?? result.error);
     return result;
   });
-const understandingOrchestratorProcedure = personalUnderstandingProcedure.use(
-  async ({ ctx, next }) => {
-    const understandingService: OnboardingUnderstandingService =
-      await createUnderstandingOrchestrator({
-        db: ctx.serverDB,
-        userId: ctx.userId,
-      });
+const understandingServiceProcedure = personalUnderstandingProcedure.use(async ({ ctx, next }) => {
+  const understandingService: UnderstandingService = await createUnderstandingService({
+    db: ctx.serverDB,
+    userId: ctx.userId,
+  });
 
-    return next({ ctx: { understandingService } });
-  },
-);
+  return next({ ctx: { understandingService } });
+});
 
 export const userRouter = router({
   getUserActivitySummary: userProcedure.query(async ({ ctx }) => {
     return ctx.userModel.getUserActivitySummary();
   }),
 
-  confirmOnboardingUnderstanding: personalUnderstandingProcedure
+  confirmOnboardingUnderstanding: understandingServiceProcedure
     .input(confirmOnboardingUnderstandingInputSchema)
     .mutation(async ({ ctx, input }) => {
-      await new UnderstandingConfirmationRepository(ctx.serverDB, ctx.userId).confirm(input);
+      await ctx.understandingService.confirm(input);
 
       return {
         confirmed: true,
@@ -228,13 +223,10 @@ export const userRouter = router({
       } satisfies ConfirmOnboardingUnderstandingResult;
     }),
 
-  // Polling reconciles operation state and may launch merge work.
-  getOnboardingUnderstanding: understandingOrchestratorProcedure
+  getOnboardingUnderstanding: understandingServiceProcedure
     .input(onboardingUnderstandingTopicInputSchema)
     .query(async ({ ctx, input }): Promise<OnboardingUnderstandingPollingResult> => {
-      const result = await ctx.understandingService.getSession(input);
-      after(() => ctx.understandingService.resumePendingSources(input));
-      return result;
+      return ctx.understandingService.get(input.topicId);
     }),
 
   getUserRegistrationDuration: userProcedure.query(async ({ ctx }) => {
@@ -327,16 +319,31 @@ export const userRouter = router({
     return ctx.userModel.deleteSetting();
   }),
 
-  retryOnboardingUnderstandingSource: understandingOrchestratorProcedure
+  retryOnboardingUnderstandingSource: understandingServiceProcedure
     .input(retryOnboardingUnderstandingSourceInputSchema)
     .mutation(async ({ ctx, input }): Promise<OnboardingUnderstandingPollingResult> => {
-      return ctx.understandingService.retrySource(input);
+      OnboardingUnderstandingWorkflow.assertAvailable();
+      await ctx.understandingService.assertRetryable(input);
+      await OnboardingUnderstandingWorkflow.trigger({
+        ...input,
+        mode: 'retry',
+        userId: ctx.userId,
+      });
+      return ctx.understandingService.get(input.topicId);
     }),
 
-  startOnboardingUnderstanding: understandingOrchestratorProcedure
+  startOnboardingUnderstanding: understandingServiceProcedure
     .input(onboardingUnderstandingTopicInputSchema)
     .mutation(async ({ ctx, input }): Promise<OnboardingUnderstandingPollingResult> => {
-      return ctx.understandingService.start(input, (task) => after(task));
+      OnboardingUnderstandingWorkflow.assertAvailable();
+      const session = await ctx.understandingService.initialize(input.topicId);
+      await OnboardingUnderstandingWorkflow.trigger({
+        mode: 'initial',
+        sessionId: session.id,
+        topicId: input.topicId,
+        userId: ctx.userId,
+      });
+      return ctx.understandingService.get(input.topicId);
     }),
 
   updateAvatar: userProcedure.input(z.string()).mutation(async ({ ctx, input }) => {

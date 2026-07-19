@@ -10,7 +10,6 @@ import { AgentModel } from '@/database/models/agent';
 import { MessageModel } from '@/database/models/message';
 import { TopicModel } from '@/database/models/topic';
 import { UserModel } from '@/database/models/user';
-import { AgentRuntimeCoordinator } from '@/server/modules/AgentRuntime';
 import { AgentService } from '@/server/services/agent';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
 import { UnderstandingSourceStore } from '@/server/services/understanding/sourceStore';
@@ -43,10 +42,6 @@ vi.mock('@/server/services/agentDocuments', () => ({
 
 vi.mock('@lobechat/database', () => ({
   UnderstandingSessionRepository: vi.fn(),
-}));
-
-vi.mock('@/server/modules/AgentRuntime', () => ({
-  AgentRuntimeCoordinator: vi.fn(),
 }));
 
 vi.mock('@/server/services/understanding/sourceStore', () => ({
@@ -83,9 +78,6 @@ describe('OnboardingService', () => {
   };
   let persistedUserState: any;
   let persistedTopics: Record<string, any>;
-  let mockRuntimeCoordinator: {
-    deleteAgentOperation: ReturnType<typeof vi.fn>;
-  };
   let mockSourceStore: {
     deleteSession: ReturnType<typeof vi.fn>;
   };
@@ -207,9 +199,6 @@ describe('OnboardingService', () => {
       getAgentDocuments: vi.fn(async () => []),
       upsertDocument: vi.fn(async () => undefined),
     };
-    mockRuntimeCoordinator = {
-      deleteAgentOperation: vi.fn(async () => undefined),
-    };
     mockSourceStore = {
       deleteSession: vi.fn(async () => undefined),
     };
@@ -223,7 +212,6 @@ describe('OnboardingService', () => {
     vi.mocked(UserModel).mockImplementation(() => mockUserModel as any);
     vi.mocked(TopicModel).mockImplementation(() => mockTopicModel as any);
     vi.mocked(AgentService).mockImplementation(() => mockAgentService as any);
-    vi.mocked(AgentRuntimeCoordinator).mockImplementation(() => mockRuntimeCoordinator as any);
     vi.mocked(UnderstandingSourceStore).mockImplementation(() => mockSourceStore as any);
     vi.mocked(UnderstandingSessionRepository).mockImplementation(
       () => mockUnderstandingSessionRepository as any,
@@ -341,7 +329,7 @@ describe('OnboardingService', () => {
     expect(context.finished).toBe(false);
   });
 
-  it('resets the active Understanding session and its external runtime state', async () => {
+  it('resets the active Understanding session and its temporary source data', async () => {
     persistedUserState.agentOnboarding = {
       activeTopicId: 'topic-1',
       version: CURRENT_ONBOARDING_VERSION,
@@ -366,10 +354,7 @@ describe('OnboardingService', () => {
       ],
       status: 'processing',
     };
-    mockUnderstandingSessionRepository.removeForReset.mockResolvedValue({
-      operationIds: ['source-operation'],
-      session: understandingSession,
-    });
+    mockUnderstandingSessionRepository.removeForReset.mockResolvedValue(understandingSession);
 
     const service = new OnboardingService(mockDb, userId);
     const result = await service.reset();
@@ -382,8 +367,6 @@ describe('OnboardingService', () => {
       sessionId: understandingSession.id,
       userId,
     });
-    expect(mockRuntimeCoordinator.deleteAgentOperation).toHaveBeenCalledWith('source-operation');
-    expect(mockRuntimeCoordinator.deleteAgentOperation).not.toHaveBeenCalledWith('merge-operation');
     expect(result).toEqual({ version: CURRENT_ONBOARDING_VERSION });
     expect(persistedUserState.agentOnboarding.activeTopicId).toBeUndefined();
   });
@@ -394,23 +377,11 @@ describe('OnboardingService', () => {
       version: CURRENT_ONBOARDING_VERSION,
     };
     mockUnderstandingSessionRepository.removeForReset.mockResolvedValue({
-      operationIds: ['source-operation'],
-      session: {
-        id: 'understanding-session',
-        runs: [
-          {
-            assistantMessageId: 'source-message',
-            operationId: 'source-operation',
-            source: { externalAccountId: 'neko', id: 'github:neko', provider: 'github' },
-            status: 'analyzing',
-            threadId: 'source-thread',
-          },
-        ],
-        status: 'processing',
-      },
+      id: 'understanding-session',
+      runs: [],
+      status: 'processing',
     });
     mockSourceStore.deleteSession.mockRejectedValue(new Error('redis unavailable'));
-    mockRuntimeCoordinator.deleteAgentOperation.mockRejectedValue(new Error('runtime unavailable'));
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     const service = new OnboardingService(mockDb, userId);

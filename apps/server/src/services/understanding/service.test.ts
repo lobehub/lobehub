@@ -482,6 +482,15 @@ describe('UnderstandingService', () => {
       branch.threadId,
       { status: 'failed' },
     );
+    vi.clearAllMocks();
+    await expect(
+      harness.service.assertRetryable({
+        sessionId: session.id,
+        sourceId: branch.sourceId,
+        topicId: 'topic',
+      }),
+    ).resolves.toBeUndefined();
+    expect(harness.dependencies.sessions.update).not.toHaveBeenCalled();
     const retry = await harness.service.prepareRetry({
       sessionId: session.id,
       sourceId: branch.sourceId,

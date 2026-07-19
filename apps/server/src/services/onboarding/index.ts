@@ -35,7 +35,6 @@ import {
   userPersonaDocuments,
 } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
-import { AgentRuntimeCoordinator } from '@/server/modules/AgentRuntime';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { AgentService } from '@/server/services/agent';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
@@ -51,10 +50,6 @@ const STRUCTURED_FIELD_LABELS: Record<SaveUserQuestionField, string> = {
 
 const AGENT_MANAGEMENT_IDENTIFIER = 'lobe-agent-management';
 const GROUP_AGENT_BUILDER_IDENTIFIER = 'lobe-group-agent-builder';
-
-type UnderstandingResetCleanup = NonNullable<
-  Awaited<ReturnType<UnderstandingSessionRepository['removeForReset']>>
->;
 
 const defaultAgentOnboardingState = (): UserAgentOnboarding => ({
   version: CURRENT_ONBOARDING_VERSION,
@@ -921,45 +916,12 @@ export class OnboardingService {
     };
   };
 
-  private cleanupUnderstandingReset = async (cleanup: UnderstandingResetCleanup): Promise<void> => {
-    const cleanupTasks: Promise<void>[] = [];
+  private cleanupUnderstandingReset = async (sessionId: string): Promise<void> => {
     try {
-      cleanupTasks.push(
-        new UnderstandingSourceStore()
-          .deleteSession({ sessionId: cleanup.session.id, userId: this.userId })
-          .catch((error) => {
-            console.error(
-              '[OnboardingService] Failed to delete Understanding session data:',
-              error,
-            );
-          }),
-      );
+      await new UnderstandingSourceStore().deleteSession({ sessionId, userId: this.userId });
     } catch (error) {
-      console.error(
-        '[OnboardingService] Failed to initialize Understanding session cleanup:',
-        error,
-      );
+      console.error('[OnboardingService] Failed to delete Understanding session data:', error);
     }
-
-    try {
-      const runtimeCoordinator = new AgentRuntimeCoordinator();
-      cleanupTasks.push(
-        ...cleanup.operationIds.map((operationId) =>
-          runtimeCoordinator.deleteAgentOperation(operationId).catch((error) => {
-            console.error(
-              `[OnboardingService] Failed to delete Understanding operation ${operationId}:`,
-              error,
-            );
-          }),
-        ),
-      );
-    } catch (error) {
-      console.error(
-        '[OnboardingService] Failed to initialize Understanding runtime cleanup:',
-        error,
-      );
-    }
-    await Promise.all(cleanupTasks);
   };
 
   reset = async () => {
@@ -967,7 +929,7 @@ export class OnboardingService {
     const understandingCleanup = previousState.activeTopicId
       ? await this.understandingSessionRepository.removeForReset(previousState.activeTopicId)
       : undefined;
-    if (understandingCleanup) await this.cleanupUnderstandingReset(understandingCleanup);
+    if (understandingCleanup) await this.cleanupUnderstandingReset(understandingCleanup.id);
     const state = defaultAgentOnboardingState();
 
     // Preserve users.full_name and users.username on reset.
