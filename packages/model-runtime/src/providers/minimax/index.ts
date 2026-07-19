@@ -107,6 +107,28 @@ export const buildMiniMaxAnthropicPayload = async (
   };
 };
 
+// MiniMax's OpenAI-compatible endpoint rejects the `detail` field on image
+// content parts, failing with `invalid params, invalid image detail: auto
+// (2013)`. Upstream context engineering always sets `detail: 'auto'`, a value
+// MiniMax does not accept, so strip `detail` from every `image_url` part before
+// sending. The original content reference is returned untouched when there is
+// nothing to strip. (#17252)
+const stripImageDetailFromContent = (content: any) => {
+  if (!Array.isArray(content)) return content;
+
+  let changed = false;
+  const next = content.map((part: any) => {
+    if (part?.type === 'image_url' && part.image_url && 'detail' in part.image_url) {
+      changed = true;
+      const { detail: _detail, ...imageUrl } = part.image_url;
+      return { ...part, image_url: imageUrl };
+    }
+    return part;
+  });
+
+  return changed ? next : content;
+};
+
 export const buildMiniMaxOpenAIPayload = (payload: ChatStreamPayload) => {
   const {
     enabledSearch: _enabledSearch,
@@ -147,12 +169,20 @@ export const buildMiniMaxOpenAIPayload = (payload: ChatStreamPayload) => {
     return message;
   });
 
+  // MiniMax rejects `detail: 'auto'` on image parts (see
+  // `stripImageDetailFromContent`), so sanitize multimodal content before use.
+  const sanitizedMessages = processedMessages.map((message: any) => {
+    if (!Array.isArray(message.content)) return message;
+    const content = stripImageDetailFromContent(message.content);
+    return content === message.content ? message : { ...message, content };
+  });
+
   // MiniMax API enforces `input_tokens + max_tokens <= context_window`,
   // so we must derive max_tokens dynamically from the actual input size
   // when the caller did not specify one. Estimate against the sanitized
   // messages (with stripped reasoning) — that's what we actually send.
   const safeMaxTokens = resolveSafeMaxTokens(
-    { ...payload, messages: processedMessages },
+    { ...payload, messages: sanitizedMessages },
     minimaxChatModels,
   );
 
@@ -193,7 +223,7 @@ export const buildMiniMaxOpenAIPayload = (payload: ChatStreamPayload) => {
   return {
     ...params,
     ...outputLimitParam,
-    messages: processedMessages,
+    messages: sanitizedMessages,
     reasoning_split: true,
     temperature: finalTemperature,
     ...finalThinking,
