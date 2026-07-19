@@ -17,6 +17,7 @@ import type {
   ToolCallRequestMessage,
 } from '@lobechat/device-gateway-client';
 import { GatewayClient } from '@lobechat/device-gateway-client';
+import { listHeterogeneousAgentModels } from '@lobechat/heterogeneous-agents/models';
 import type { Command } from 'commander';
 
 import { createLambdaClient } from '../api/client';
@@ -424,6 +425,11 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
   const deviceControlDeps: DeviceControlDeps = {
     getLocalFilePreview: defaultGetLocalFilePreview,
     getProjectFileIndex: defaultGetProjectFileIndex,
+    listHeterogeneousAgentModels: (params) =>
+      listHeterogeneousAgentModels({
+        ...params,
+        env: { ...process.env, ...params.env },
+      }),
     searchProjectFiles: defaultSearchProjectFiles,
   };
 

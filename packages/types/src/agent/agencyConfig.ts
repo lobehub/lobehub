@@ -10,6 +10,44 @@ export const HETEROGENEOUS_AGENT_DEFAULT_SELECTION = 'default' as const;
 
 export type HeterogeneousAgentDefaultSelection = typeof HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
 
+export type HeterogeneousAgentModelCatalogErrorCode =
+  'cli_not_found' | 'command_failed' | 'device_unavailable' | 'timeout' | 'unsupported_client';
+
+/** One model reported by a heterogeneous CLI's device-local model catalog. */
+export interface HeterogeneousAgentModel {
+  /** Complete provider/model identifier. Treat as opaque when persisting or spawning. */
+  id: string;
+  /** Everything after the first slash. May itself contain slashes. */
+  modelId: string;
+  /** Everything before the first slash, used only for display grouping. */
+  providerId: string;
+}
+
+export interface ListHeterogeneousAgentModelsParams {
+  command?: string;
+  cwd?: string;
+  env?: Record<string, string>;
+  type: 'opencode';
+}
+
+export interface HeterogeneousAgentModelCatalogSuccess {
+  models: HeterogeneousAgentModel[];
+  status: 'success';
+  updatedAt: number;
+}
+
+export interface HeterogeneousAgentModelCatalogFailure {
+  error: {
+    code: HeterogeneousAgentModelCatalogErrorCode;
+    message: string;
+  };
+  status: 'error';
+  updatedAt: number;
+}
+
+export type HeterogeneousAgentModelCatalog =
+  HeterogeneousAgentModelCatalogFailure | HeterogeneousAgentModelCatalogSuccess;
+
 /**
  * Claude Code reasoning-effort levels, mirrored 1:1 with the CLI's
  * `--effort <level>` flag.

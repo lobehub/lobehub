@@ -3,6 +3,10 @@ import type {
   CodexQuotaSnapshot,
   CodexRateLimitResetResult,
 } from '@lobechat/electron-client-ipc';
+import type {
+  HeterogeneousAgentModelCatalog,
+  ListHeterogeneousAgentModelsParams,
+} from '@lobechat/types';
 
 import { ensureElectronIpc } from '@/utils/electron/ipc';
 
@@ -48,6 +52,12 @@ class HeterogeneousAgentService {
 
   async getSessionInfo(sessionId: string) {
     return this.ipc.heterogeneousAgent.getSessionInfo({ sessionId });
+  }
+
+  async listModels(
+    params: ListHeterogeneousAgentModelsParams,
+  ): Promise<HeterogeneousAgentModelCatalog> {
+    return this.ipc.heterogeneousAgent.listModels(params);
   }
 
   async getCodexQuota(params?: {

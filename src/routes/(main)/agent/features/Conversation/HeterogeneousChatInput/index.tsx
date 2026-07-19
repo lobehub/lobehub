@@ -112,18 +112,17 @@ const HeterogeneousChatInput = memo(() => {
     !isHeterogeneousSandboxExecutionAvailable(providerType) &&
     executionTarget === 'none';
 
-  // The model + thinking-effort selector only applies to local-CLI providers
-  // (claude-code / codex) and only when this surface actually dispatches the run.
-  // Gating here (rather than letting HeteroModel self-hide) keeps the action bar
-  // from rendering an empty slot. Uses the raw `executionTarget` to mirror the
-  // gate the control bar applied before the selector moved into the input.
-  const isSelectableHeteroProvider = providerType === 'claude-code' || providerType === 'codex';
+  // OpenCode can discover models on an explicit bound device; Claude Code and
+  // Codex retain their existing local/sandbox-only selector behavior.
+  const isSelectableHeteroProvider =
+    providerType === 'claude-code' || providerType === 'codex' || providerType === 'opencode';
   const showHeteroModel =
     isSelectableHeteroProvider &&
     shouldShowHeteroModelSelector({
       boundDeviceId: agencyConfig?.boundDeviceId,
-      executionTarget: agencyConfig?.executionTarget,
+      executionTarget,
       isDesktopClient: isDesktop,
+      providerType,
     });
   // The armed-schedule chip sits immediately after the `+` that armed it, so the
   // state and the control that produced it read as one unit.

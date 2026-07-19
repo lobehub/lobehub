@@ -364,6 +364,22 @@ export default {
   'heteroAgent.modelSelector.speed.fastDesc': '1.5x speed, increased usage',
   'heteroAgent.modelSelector.speed.standard': 'Standard',
   'heteroAgent.modelSelector.speed.standardDesc': 'Default speed',
+  'heteroAgent.openCodeModel.ariaLabel': 'OpenCode model: {{model}}',
+  'heteroAgent.openCodeModel.cliNotFound': 'OpenCode is not installed on the target device.',
+  'heteroAgent.openCodeModel.defaultDesc': 'Use the default model configured in OpenCode',
+  'heteroAgent.openCodeModel.empty': 'OpenCode did not report any models.',
+  'heteroAgent.openCodeModel.error': 'Could not load models from OpenCode.',
+  'heteroAgent.openCodeModel.loading': 'Loading OpenCode models…',
+  'heteroAgent.openCodeModel.noMatch': 'No models match your search.',
+  'heteroAgent.openCodeModel.reload': 'Reload models',
+  'heteroAgent.openCodeModel.retry': 'Retry',
+  'heteroAgent.openCodeModel.saved': 'Saved model',
+  'heteroAgent.openCodeModel.search': 'Search models',
+  'heteroAgent.openCodeModel.stale': 'Not in latest catalog',
+  'heteroAgent.openCodeModel.targetUnavailable': 'The target device is unavailable.',
+  'heteroAgent.openCodeModel.timeout': 'OpenCode model discovery timed out.',
+  'heteroAgent.openCodeModel.unsupportedClient':
+    'Update the target device client to discover OpenCode models.',
   'heteroAgent.resumeReset.cwdChanged':
     'Working directory changed. Previous Claude Code session can only be resumed from its original directory, so a new conversation has started.',
   'heteroAgent.resumeReset.resumeFailed':

@@ -29,6 +29,7 @@ import {
 import type { AskUserBridge } from '@lobechat/heterogeneous-agents/askUser';
 import type { McpToolResult } from '@lobechat/heterogeneous-agents/builtinMcp';
 import { LobeBuiltinMcpServer } from '@lobechat/heterogeneous-agents/builtinMcp';
+import { listHeterogeneousAgentModels } from '@lobechat/heterogeneous-agents/models';
 import type { HeteroExecImageRef } from '@lobechat/heterogeneous-agents/protocol';
 import {
   buildHeteroExecStdinPayload,
@@ -44,6 +45,10 @@ import {
   resolveCliSpawnPlan,
   resolveCodexInitialModel,
 } from '@lobechat/heterogeneous-agents/spawn';
+import type {
+  HeterogeneousAgentModelCatalog,
+  ListHeterogeneousAgentModelsParams,
+} from '@lobechat/types';
 import { app as electronApp, BrowserWindow } from 'electron';
 
 import { HETERO_AGENT_FILES_DIR, HETERO_AGENT_TRACING_DIR } from '@/const/heteroAgent';
@@ -1612,6 +1617,24 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   async getSessionInfo(params: GetSessionInfoParams): Promise<SessionInfo> {
     const session = this.sessions.get(params.sessionId);
     return { agentSessionId: session?.agentSessionId };
+  }
+
+  /** Query OpenCode's model catalog using the same cwd/env rules as a real local session. */
+  @IpcMethod()
+  async listModels(
+    params: ListHeterogeneousAgentModelsParams,
+  ): Promise<HeterogeneousAgentModelCatalog> {
+    const env = {
+      ...buildInheritedSpawnEnv(),
+      ...buildProxyEnv(this.app.storeManager.get('networkProxy')),
+      ...params.env,
+    };
+
+    return listHeterogeneousAgentModels({
+      ...params,
+      cwd: params.cwd || electronApp.getPath('desktop'),
+      env,
+    });
   }
 
   @IpcMethod()
