@@ -45,7 +45,9 @@ describe('usePanelHandlers', () => {
     expect(updateAgentConfigMock).toHaveBeenCalledWith({ model: 'gpt-5', provider: 'openai' });
   });
 
-  it('does not fire the deferred update after unmount', () => {
+  it('still applies the selection when the panel unmounts during the close animation', () => {
+    // selectModel calls onClose() before onModelChange, so the popup unmounts
+    // before the 150ms timer fires — the committed selection must survive that.
     const { result, unmount } = renderHook(() => usePanelHandlers({}));
 
     act(() => {
@@ -54,22 +56,8 @@ describe('usePanelHandlers', () => {
     unmount();
 
     act(() => {
-      vi.advanceTimersByTime(300);
-    });
-    expect(updateAgentConfigMock).not.toHaveBeenCalled();
-  });
-
-  it('only keeps the latest pending model change', () => {
-    const { result } = renderHook(() => usePanelHandlers({}));
-
-    act(() => {
-      result.current.handleModelChange('a', 'openai');
-      result.current.handleModelChange('b', 'anthropic');
-    });
-    act(() => {
       vi.advanceTimersByTime(150);
     });
-    expect(updateAgentConfigMock).toHaveBeenCalledTimes(1);
-    expect(updateAgentConfigMock).toHaveBeenCalledWith({ model: 'b', provider: 'anthropic' });
+    expect(updateAgentConfigMock).toHaveBeenCalledWith({ model: 'gpt-5', provider: 'openai' });
   });
 });

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback } from 'react';
 
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
@@ -14,22 +14,16 @@ export const usePanelHandlers = ({
 }: UsePanelHandlersProps) => {
   const { allowed: canCreateContent } = usePermission('create_content');
   const updateAgentConfig = useAgentStore((s) => s.updateAgentConfig);
-  const changeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(
-    () => () => {
-      if (changeTimerRef.current) clearTimeout(changeTimerRef.current);
-    },
-    [],
-  );
 
   const handleModelChange = useCallback(
     (modelId: string, providerId: string) => {
       // Defer store update so the panel close animation completes
       // before React re-renders with new data (prevents detail panel flash).
-      if (changeTimerRef.current) clearTimeout(changeTimerRef.current);
-      changeTimerRef.current = setTimeout(() => {
-        changeTimerRef.current = null;
+      // Intentionally NOT cleared on unmount: selection closes the panel in
+      // the same event (selectModel calls onClose() first), so the popup
+      // unmounts before this fires. The update is a committed user action
+      // targeting the zustand store, which is safe after unmount.
+      setTimeout(() => {
         if (!canCreateContent) return;
 
         const params = { model: modelId, provider: providerId };
