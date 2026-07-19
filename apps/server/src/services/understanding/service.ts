@@ -277,6 +277,11 @@ export interface UnderstandingSourceLaunchSkipped {
   threadId: string;
 }
 
+export interface UnderstandingMergeLaunchFailed {
+  failed: true;
+  threadId: string;
+}
+
 export class UnderstandingService {
   constructor(private readonly dependencies: UnderstandingServiceDependencies) {}
 
@@ -600,7 +605,9 @@ export class UnderstandingService {
     workflowRunId: string,
     requestedThreadId = this.dependencies.ids(),
   ): Promise<
-    (UnderstandingLaunchReference & { skipped?: false }) | { skipped: true; threadId: string }
+    | (UnderstandingLaunchReference & { skipped?: false })
+    | UnderstandingMergeLaunchFailed
+    | { skipped: true; threadId: string }
   > => {
     const current = await this.activeSession(topicId, sessionId);
     if (current.runs.some((run) => !terminalStatuses.has(run.status))) {
@@ -678,9 +685,7 @@ export class UnderstandingService {
       trigger: RequestTrigger.Onboarding,
     });
     if (!launched.success) {
-      throw new UnderstandingBranchFailureError(
-        launched.error ?? 'Understanding agent launch failed',
-      );
+      return { failed: true, threadId: merge.threadId };
     }
     const claimedLaunch = await this.dependencies.launches.save(launchIdentity, {
       assistantMessageId: launched.assistantMessageId,

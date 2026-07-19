@@ -111,36 +111,28 @@ const runMerge = async (
   payload: OnboardingUnderstandingWorkflowPayload,
 ) => {
   const requestedThreadId = `merge-${context.workflowRunId}`;
-  let mergeIdentity: {
-    assistantMessageId?: string;
-    sessionId: string;
-    threadId: string;
-    topicId: string;
-  } = {
-    sessionId: payload.sessionId,
-    threadId: requestedThreadId,
-    topicId: payload.topicId,
-  };
-  let launch: Awaited<ReturnType<UnderstandingService['launchMerge']>>;
-  try {
-    launch = await context.run('merge:launch', () =>
-      service.launchMerge(
-        payload.topicId,
-        payload.sessionId,
-        context.workflowRunId,
-        requestedThreadId,
-      ),
-    );
-  } catch (error) {
-    if (error instanceof WorkflowAbort) throw error;
-    if (!(error instanceof UnderstandingBranchFailureError)) throw error;
+  const launch = await context.run('merge:launch', () =>
+    service.launchMerge(
+      payload.topicId,
+      payload.sessionId,
+      context.workflowRunId,
+      requestedThreadId,
+    ),
+  );
+  if ('failed' in launch) {
     await context.run('merge:fail', async () =>
-      toSafeStepResult(await service.failMerge(mergeIdentity)),
+      toSafeStepResult(
+        await service.failMerge({
+          sessionId: payload.sessionId,
+          threadId: launch.threadId,
+          topicId: payload.topicId,
+        }),
+      ),
     );
     return 'failed' as const;
   }
   if (launch.skipped) return 'skipped' as const;
-  mergeIdentity = {
+  const mergeIdentity = {
     assistantMessageId: launch.assistantMessageId,
     sessionId: payload.sessionId,
     threadId: launch.threadId,

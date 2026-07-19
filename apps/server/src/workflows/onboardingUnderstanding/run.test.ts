@@ -276,6 +276,24 @@ describe('runOnboardingUnderstandingWorkflow', () => {
     });
   });
 
+  it('persists an adopted merge launch failure against its actual thread', async () => {
+    const service = createService();
+    service.launchMerge.mockResolvedValue({ failed: true, threadId: 'merge-adopted' });
+
+    await expect(
+      runOnboardingUnderstandingWorkflow(createContext(initialPayload), {
+        createService: async () => service,
+      }),
+    ).resolves.toMatchObject({ merge: 'failed' });
+
+    expect(service.failMerge).toHaveBeenCalledWith({
+      sessionId: 'session-1',
+      threadId: 'merge-adopted',
+      topicId: 'topic-1',
+    });
+    expect(service.executeAgentOperation).toHaveBeenCalledTimes(2);
+  });
+
   it.each(['github:collect', 'merge:execute'])(
     'rethrows WorkflowAbort from %s without persisting a branch failure',
     async (abortingStep) => {

@@ -867,6 +867,31 @@ describe('UnderstandingService', () => {
     });
   });
 
+  it('returns the adopted thread when its agent launch is explicitly rejected', async () => {
+    const { branches, session } = await initializeAndDiscover(harness);
+    for (const branch of branches) {
+      const input = { ...branch, sessionId: session.id, topicId: 'topic' };
+      await harness.service.collectSource(input);
+      const launch = requireLaunch(await harness.service.launchSourceAnalysis(input));
+      harness.contents.set(launch.assistantMessageId, JSON.stringify(analysis));
+      await harness.service.finalizeSource({
+        ...input,
+        assistantMessageId: launch.assistantMessageId,
+      });
+    }
+    await harness.service.attachWorkflowRun('topic', session.id, 'workflow-a');
+    await harness.dependencies.sessions.setMergeRun('topic', session.id, 'workflow-a', {
+      status: 'pending',
+      threadId: 'merge-a',
+    });
+    await harness.service.attachWorkflowRun('topic', session.id, 'workflow-b');
+    harness.execAgent.mockResolvedValueOnce({ error: 'launch rejected', success: false });
+
+    await expect(
+      harness.service.launchMerge('topic', session.id, 'workflow-b', 'merge-b'),
+    ).resolves.toEqual({ failed: true, threadId: 'merge-a' });
+  });
+
   it('fences merge creation from a workflow replaced by a newer retry', async () => {
     const { branches, session } = await initializeAndDiscover(harness);
     for (const branch of branches) {
