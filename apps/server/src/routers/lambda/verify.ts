@@ -1,4 +1,4 @@
-import { VerifySkill } from '@lobechat/builtin-skills';
+import { AcceptanceSkill } from '@lobechat/builtin-skills';
 import {
   normalizeVerifySurface,
   verifyRunScenarios,
@@ -45,13 +45,17 @@ import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManag
 
 /**
  * Skills that `verify.getSkillBundle` will materialize to a builder's disk via
- * `lh verify init`. Keyed by identifier; add future pullable skills here. The
- * portable verify skill lives in @lobechat/builtin-skills but is intentionally
+ * `lh acceptance init`. Keyed by identifier; add future pullable skills here. The
+ * portable acceptance skill lives in @lobechat/builtin-skills but is intentionally
  * NOT in its `builtinSkills` runtime array (kept out of the homogeneous agent
  * runtime / tool picker), so it is referenced directly here.
+ *
+ * The legacy `verify` identifier is kept as an alias so cached callers passing
+ * `--skill verify` still resolve during the deprecation window.
  */
-const PULLABLE_SKILLS: Record<string, typeof VerifySkill> = {
-  [VerifySkill.identifier]: VerifySkill,
+const PULLABLE_SKILLS: Record<string, typeof AcceptanceSkill> = {
+  [AcceptanceSkill.identifier]: AcceptanceSkill,
+  verify: AcceptanceSkill,
 };
 
 const verifierTypeSchema = z.enum(['program', 'agent', 'llm']);

@@ -254,5 +254,13 @@
   "uploadDock.uploadStatus.pending": "In attesa di caricamento",
   "uploadDock.uploadStatus.processing": "Caricamento in corso",
   "uploadDock.uploadStatus.success": "Caricamento completato",
-  "uploadDock.uploadStatus.uploading": "Caricamento in corso"
+  "uploadDock.uploadStatus.uploading": "Caricamento in corso",
+  "work.empty.desc": "I lavori prodotti dai tuoi agenti — attività, documenti, elementi di Linear e GitHub — verranno raccolti qui.",
+  "work.empty.title": "Nessun lavoro ancora",
+  "work.group": "Lavori",
+  "work.loadError": "Qualcosa è andato storto durante il caricamento dei lavori.",
+  "work.loadErrorTitle": "Impossibile caricare i lavori",
+  "work.loadMoreError": "Impossibile caricare altri lavori.",
+  "work.retry": "Riprova",
+  "work.topicGroup.other": "Altro"
 }

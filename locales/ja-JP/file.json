@@ -254,5 +254,13 @@
   "uploadDock.uploadStatus.pending": "アップロード待機中",
   "uploadDock.uploadStatus.processing": "アップロード中",
   "uploadDock.uploadStatus.success": "アップロード完了",
-  "uploadDock.uploadStatus.uploading": "アップロード中"
+  "uploadDock.uploadStatus.uploading": "アップロード中",
+  "work.empty.desc": "エージェントが作成した作業（タスク、ドキュメント、LinearやGitHubの項目など）がここに集まります。",
+  "work.empty.title": "まだ作業がありません",
+  "work.group": "作業",
+  "work.loadError": "作業の読み込み中に問題が発生しました。",
+  "work.loadErrorTitle": "作業を読み込めませんでした",
+  "work.loadMoreError": "さらに作業を読み込むことができませんでした。",
+  "work.retry": "再試行",
+  "work.topicGroup.other": "その他"
 }

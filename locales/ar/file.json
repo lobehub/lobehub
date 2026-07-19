@@ -254,5 +254,13 @@
   "uploadDock.uploadStatus.pending": "بانتظار التحميل",
   "uploadDock.uploadStatus.processing": "جارٍ التحميل",
   "uploadDock.uploadStatus.success": "تم التحميل بنجاح",
-  "uploadDock.uploadStatus.uploading": "جارٍ التحميل"
+  "uploadDock.uploadStatus.uploading": "جارٍ التحميل",
+  "work.empty.desc": "الأعمال التي ينتجها وكلاؤك — المهام، المستندات، عناصر Linear وGitHub — ستُجمع هنا.",
+  "work.empty.title": "لا توجد أعمال بعد",
+  "work.group": "الأعمال",
+  "work.loadError": "حدث خطأ أثناء تحميل الأعمال.",
+  "work.loadErrorTitle": "تعذر تحميل الأعمال",
+  "work.loadMoreError": "فشل في تحميل المزيد من الأعمال.",
+  "work.retry": "إعادة المحاولة",
+  "work.topicGroup.other": "أخرى"
 }

@@ -254,5 +254,13 @@
   "uploadDock.uploadStatus.pending": "Изчаква качване",
   "uploadDock.uploadStatus.processing": "Качване",
   "uploadDock.uploadStatus.success": "Качването е завършено",
-  "uploadDock.uploadStatus.uploading": "Качване"
+  "uploadDock.uploadStatus.uploading": "Качване",
+  "work.empty.desc": "Работите, които вашите агенти създават — задачи, документи, елементи от Linear и GitHub — ще се събират тук.",
+  "work.empty.title": "Все още няма работи",
+  "work.group": "Работи",
+  "work.loadError": "Нещо се обърка при зареждането на работите.",
+  "work.loadErrorTitle": "Не успяхме да заредим работите",
+  "work.loadMoreError": "Неуспешно зареждане на повече работи.",
+  "work.retry": "Опитайте отново",
+  "work.topicGroup.other": "Други"
 }

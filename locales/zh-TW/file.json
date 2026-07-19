@@ -254,5 +254,13 @@
   "uploadDock.uploadStatus.pending": "等待上傳",
   "uploadDock.uploadStatus.processing": "正在上傳",
   "uploadDock.uploadStatus.success": "上傳完成",
-  "uploadDock.uploadStatus.uploading": "正在上傳"
+  "uploadDock.uploadStatus.uploading": "正在上傳",
+  "work.empty.desc": "您的代理人所產生的作品——任務、文件、Linear 和 GitHub 項目——將會集中在這裡。",
+  "work.empty.title": "尚無作品",
+  "work.group": "作品",
+  "work.loadError": "載入作品時發生錯誤。",
+  "work.loadErrorTitle": "無法載入作品",
+  "work.loadMoreError": "載入更多作品失敗。",
+  "work.retry": "重試",
+  "work.topicGroup.other": "其他"
 }

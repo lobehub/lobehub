@@ -27,9 +27,11 @@ import { consumePendingTopicRepos, getPendingTopicRepos } from '@/store/chat/pen
 import { topicSelectors } from '@/store/chat/selectors';
 import type { ChatStore } from '@/store/chat/store';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 import type { StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors, toolInterventionSelectors } from '@/store/user/selectors';
+import { isTrpcErrorCode } from '@/utils/trpcError';
 
 import { buildRunLifecycle } from '../../lifecycle/buildRunLifecycle';
 import type { RunScope } from '../../lifecycle/types';
@@ -725,6 +727,14 @@ export class GatewayActionImpl {
           topicService
             .updateTopicMetadata(result.topicId, { runningOperation: null })
             .catch(() => {});
+          // Also clear the local store copy — the server clear above does NOT touch
+          // the Zustand topic map that useGatewayReconnect reads (LOBE-12055).
+          this.clearLocalRunningOperation({
+            agentId: execContext.agentId,
+            groupId: execContext.groupId,
+            operationId: result.operationId,
+            topicId: result.topicId,
+          });
         }
         onComplete?.();
       },
@@ -773,8 +783,21 @@ export class GatewayActionImpl {
       ?.runningOperation?.operationId;
     if (topicCurrentOpId && topicCurrentOpId !== operationId) return;
 
-    // Get a fresh JWT token (original expired after 5 min)
-    const { token } = await aiAgentService.refreshGatewayToken(topicId);
+    // Get a fresh JWT token (original expired after 5 min). The server throws
+    // TRPCError NOT_FOUND when it has no running operation on this topic — our
+    // local marker is stale (e.g. an error run cleared the server marker but not
+    // the store). Clear it and bail silently so the reconnect SWR fetcher resolves
+    // and does not retry the 404 forever (LOBE-12055).
+    let token: string;
+    try {
+      ({ token } = await aiAgentService.refreshGatewayToken(topicId));
+    } catch (error) {
+      if (isTrpcErrorCode(error, 'NOT_FOUND')) {
+        this.clearLocalRunningOperation({ operationId, topicId });
+        return;
+      }
+      throw error;
+    }
 
     // Re-check after the async token refresh: a newer executeGatewayAgent call may have
     // taken over for this topic while we were waiting. If so, bail to avoid a duplicate stream.
@@ -892,6 +915,9 @@ export class GatewayActionImpl {
         // Clear the persisted marker useGatewayReconnect keys off so a dead op
         // doesn't get reconnected on every reload / task-drawer open.
         topicService.updateTopicMetadata(topicId, { runningOperation: null }).catch(() => {});
+        // Mirror the clear into the local store — the server clear above leaves the
+        // Zustand topic map stale, which useGatewayReconnect keys off (LOBE-12055).
+        this.clearLocalRunningOperation({ agentId: context.agentId, operationId, topicId });
       },
       operationId,
       resumeOnConnect: true,
@@ -933,6 +959,51 @@ export class GatewayActionImpl {
         memberOperationId,
         parentOperationId,
       });
+  };
+
+  /**
+   * Clear the client-store copy of `topic.metadata.runningOperation`.
+   *
+   * The server-side clear (`topicService.updateTopicMetadata(topicId, { runningOperation: null })`)
+   * alone leaves the Zustand store stale: `useGatewayReconnect` keys off the LOCAL
+   * copy, so after an error run (e.g. insufficient credits) the stale marker keeps
+   * firing `aiAgentService.refreshGatewayToken(topicId)`, which the server now answers
+   * with NOT_FOUND (404 — the server-side marker is already null). Raw SWR retries the
+   * 404 forever and wedges the conversation (LOBE-12055).
+   *
+   * The `updateTopic` reducer shallow-merges `value.metadata` (`{...currentTopic, ...value}`),
+   * so we spread the existing metadata to avoid dropping its other keys. Only dispatch when
+   * the topic still carries the marker for `operationId` — a late close of a finished op
+   * can race with a retry/send that already wrote a NEWER operation's marker, and clearing
+   * unconditionally would break reconnect-after-reload for that live run.
+   *
+   * `agentId`/`groupId` route the lookup + dispatch to the run's OWNING topic bucket
+   * (same convention as `updateTopicStatus`): a background completion can land after the
+   * user switched agent/group, when the active-bucket `getTopicById` would miss the topic
+   * and leave its marker stale.
+   */
+  private clearLocalRunningOperation = (params: {
+    agentId?: string;
+    groupId?: string;
+    operationId: string;
+    topicId: string;
+  }): void => {
+    const { topicId, operationId, agentId, groupId } = params;
+    const state = this.#get();
+    const key = topicMapKey({
+      agentId: agentId ?? state.activeAgentId,
+      groupId: groupId ?? state.activeGroupId,
+    });
+    const existingTopic = state.topicDataMap[key]?.items?.find((t) => t.id === topicId);
+    if (existingTopic?.metadata?.runningOperation?.operationId !== operationId) return;
+
+    state.internal_dispatchTopic({
+      agentId,
+      groupId,
+      id: topicId,
+      type: 'updateTopic',
+      value: { metadata: { ...existingTopic.metadata, runningOperation: null } },
+    });
   };
 
   private internal_cleanupGatewayConnection = (operationId: string): void => {

@@ -254,5 +254,13 @@
   "uploadDock.uploadStatus.pending": "Đang chờ tải lên",
   "uploadDock.uploadStatus.processing": "Đang tải lên",
   "uploadDock.uploadStatus.success": "Tải lên hoàn tất",
-  "uploadDock.uploadStatus.uploading": "Đang tải lên"
+  "uploadDock.uploadStatus.uploading": "Đang tải lên",
+  "work.empty.desc": "Các công việc mà nhân viên của bạn thực hiện — nhiệm vụ, tài liệu, mục Linear và GitHub — sẽ được tập hợp tại đây.",
+  "work.empty.title": "Chưa có công việc nào",
+  "work.group": "Công việc",
+  "work.loadError": "Đã xảy ra lỗi khi tải công việc.",
+  "work.loadErrorTitle": "Không thể tải công việc",
+  "work.loadMoreError": "Không thể tải thêm công việc.",
+  "work.retry": "Thử lại",
+  "work.topicGroup.other": "Khác"
 }

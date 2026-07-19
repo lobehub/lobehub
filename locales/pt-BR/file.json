@@ -254,5 +254,13 @@
   "uploadDock.uploadStatus.pending": "Aguardando envio",
   "uploadDock.uploadStatus.processing": "Enviando",
   "uploadDock.uploadStatus.success": "Envio concluído",
-  "uploadDock.uploadStatus.uploading": "Enviando"
+  "uploadDock.uploadStatus.uploading": "Enviando",
+  "work.empty.desc": "Os trabalhos que seus agentes produzem — tarefas, documentos, itens do Linear e do GitHub — serão coletados aqui.",
+  "work.empty.title": "Ainda não há trabalhos",
+  "work.group": "Trabalhos",
+  "work.loadError": "Algo deu errado ao carregar os trabalhos.",
+  "work.loadErrorTitle": "Não foi possível carregar os trabalhos",
+  "work.loadMoreError": "Falha ao carregar mais trabalhos.",
+  "work.retry": "Tentar novamente",
+  "work.topicGroup.other": "Outros"
 }

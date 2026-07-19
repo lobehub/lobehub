@@ -254,5 +254,13 @@
   "uploadDock.uploadStatus.pending": "업로드 대기 중",
   "uploadDock.uploadStatus.processing": "업로드 중",
   "uploadDock.uploadStatus.success": "업로드 완료",
-  "uploadDock.uploadStatus.uploading": "업로드 중"
+  "uploadDock.uploadStatus.uploading": "업로드 중",
+  "work.empty.desc": "에이전트가 생성한 작업 — 작업, 문서, Linear 및 GitHub 항목 — 이 여기에 수집됩니다.",
+  "work.empty.title": "아직 작업이 없습니다",
+  "work.group": "작업",
+  "work.loadError": "작업을 로드하는 중 문제가 발생했습니다.",
+  "work.loadErrorTitle": "작업을 로드할 수 없습니다",
+  "work.loadMoreError": "추가 작업을 로드하지 못했습니다.",
+  "work.retry": "다시 시도",
+  "work.topicGroup.other": "기타"
 }

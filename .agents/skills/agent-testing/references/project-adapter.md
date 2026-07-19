@@ -1,22 +1,22 @@
-# Project Adapter (`.agents/verify/PROJECT.md`)
+# Project Adapter (`.agents/acceptance/PROJECT.md`)
 
 This skill is project-agnostic. Everything specific to the project under test — how
 to start and stop it, which ports and services it needs, how auth works, which
 surfaces it has, and how to jump straight into app state — lives in a per-project
-adapter at `.agents/verify/PROJECT.md`. The skill reads it; it never guesses the
+adapter at `.agents/acceptance/PROJECT.md`. The skill reads it; it never guesses the
 project's commands.
 
 ## Where the adapter lives
 
 ```text
-<repo>/.agents/verify/            # committed — the adapter and project logs are team assets
+<repo>/.agents/acceptance/            # committed — the adapter and project logs are team assets
 ├── PROJECT.md                    # the adapter (this contract)
 ├── common-mistakes.md            # PROJECT-layer living log (writable)
 ├── probe-mock-patterns.md        # PROJECT-layer living log (writable)
 └── scripts/                      # optional: project env / probe scripts
 ```
 
-`.agents/verify/` is **committed** (the adapter and the project living logs are
+`.agents/acceptance/` is **committed** (the adapter and the project living logs are
 shared, versioned team assets). The report output directory `.records/` is
 **gitignored** — reports are per-run artifacts, published to the verify platform,
 not committed.
@@ -49,7 +49,7 @@ to by number (`PROJECT.md §2`, `§3`, …), so keep the numbering.
    the queue service up"), standalone sub-packages that need their own install,
    surfaces that only work on macOS, or any repo-specific gotcha a run must respect.
 
-`PROJECT.md` may reference project scripts under `.agents/verify/scripts/` or
+`PROJECT.md` may reference project scripts under `.agents/acceptance/scripts/` or
 anywhere in the repo.
 
 ## Copy-pasteable template
@@ -122,7 +122,7 @@ which directory/package is the server, the web app, the desktop shell, the CLI.>
 
 ## First-run bootstrap (SKILL.md Step 0.5)
 
-When `.agents/verify/PROJECT.md` is absent, build it before doing anything else:
+When `.agents/acceptance/PROJECT.md` is absent, build it before doing anything else:
 
 1. **Explore the repo.** Read the signals that reveal how the project runs:
    `package.json` scripts, `README`, CI workflows (`.github/workflows/**`),
@@ -136,8 +136,8 @@ When `.agents/verify/PROJECT.md` is absent, build it before doing anything else:
    confirm or correct it — especially the start/stop commands, the required
    services, and the auth path. Do not run a dev server or write test steps against
    an unconfirmed adapter.
-4. **Write it only after approval**, to `.agents/verify/PROJECT.md`. Create
-   `.agents/verify/` if it does not exist.
+4. **Write it only after approval**, to `.agents/acceptance/PROJECT.md`. Create
+   `.agents/acceptance/` if it does not exist.
 
 `install` (the CLI's `lh verify install`) only places the skill files; it does no repo
 exploration. The adapter draft needs a model, so the first verification run is what
@@ -155,7 +155,7 @@ next run should not rediscover the same divergence.
 The skill's `references/common-mistakes.md` and `references/probe-mock-patterns.md`
 are the **generic layer** — product-independent, read-only in consumer repos,
 updated only by PR to the CLI repo. The project's own
-`.agents/verify/common-mistakes.md` and `.agents/verify/probe-mock-patterns.md` are
+`.agents/acceptance/common-mistakes.md` and `.agents/acceptance/probe-mock-patterns.md` are
 the **project layer** — writable, and the only place a run records project-specific
 learnings. At runtime the agent reads both layers and writes only the project layer.
 When a project-layer entry turns out to be product-independent, genericize it (drop
