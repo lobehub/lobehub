@@ -41,14 +41,12 @@ vi.mock('@/server/utils/scheduleAfterResponse', () => ({
 
 vi.mock('@lobechat/database', () => {
   class StaleUnderstandingSessionError extends Error {}
-  class UnderstandingMergeSourcesChangedError extends Error {}
   class UnderstandingPreconditionError extends Error {}
   class UnderstandingResourceNotFoundError extends Error {}
   class UnderstandingSessionNotFoundError extends Error {}
 
   return {
     StaleUnderstandingSessionError,
-    UnderstandingMergeSourcesChangedError,
     UnderstandingPreconditionError,
     UnderstandingResourceNotFoundError,
     UnderstandingSessionNotFoundError,

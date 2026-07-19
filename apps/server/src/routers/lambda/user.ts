@@ -5,7 +5,6 @@ import {
 import { isDesktop } from '@lobechat/const';
 import {
   StaleUnderstandingSessionError,
-  UnderstandingMergeSourcesChangedError,
   UnderstandingPreconditionError,
   UnderstandingResourceNotFoundError,
   UnderstandingSessionNotFoundError,
@@ -74,10 +73,7 @@ const throwUnderstandingApiError = (error: unknown): never => {
     });
   }
 
-  if (
-    error instanceof StaleUnderstandingSessionError ||
-    error instanceof UnderstandingMergeSourcesChangedError
-  ) {
+  if (error instanceof StaleUnderstandingSessionError) {
     throw new TRPCError({
       code: 'CONFLICT',
       message: 'Onboarding understanding is no longer current',
