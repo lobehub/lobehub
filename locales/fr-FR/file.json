@@ -254,5 +254,13 @@
   "uploadDock.uploadStatus.pending": "En attente d’importation",
   "uploadDock.uploadStatus.processing": "Importation en cours",
   "uploadDock.uploadStatus.success": "Importation terminée",
-  "uploadDock.uploadStatus.uploading": "Importation en cours"
+  "uploadDock.uploadStatus.uploading": "Importation en cours",
+  "work.empty.desc": "Les travaux produits par vos agents — tâches, documents, éléments Linear et GitHub — seront collectés ici.",
+  "work.empty.title": "Pas encore de travaux",
+  "work.group": "Travaux",
+  "work.loadError": "Une erreur s'est produite lors du chargement des travaux.",
+  "work.loadErrorTitle": "Impossible de charger les travaux",
+  "work.loadMoreError": "Échec du chargement de travaux supplémentaires.",
+  "work.retry": "Réessayer",
+  "work.topicGroup.other": "Autre"
 }

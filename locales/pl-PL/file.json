@@ -254,5 +254,13 @@
   "uploadDock.uploadStatus.pending": "Oczekiwanie na przesłanie",
   "uploadDock.uploadStatus.processing": "Przesyłanie",
   "uploadDock.uploadStatus.success": "Przesyłanie zakończone",
-  "uploadDock.uploadStatus.uploading": "Przesyłanie"
+  "uploadDock.uploadStatus.uploading": "Przesyłanie",
+  "work.empty.desc": "Prace wykonane przez Twoich agentów — zadania, dokumenty, elementy Linear i GitHub — będą się tutaj zbierać.",
+  "work.empty.title": "Brak prac",
+  "work.group": "Prace",
+  "work.loadError": "Coś poszło nie tak podczas ładowania prac.",
+  "work.loadErrorTitle": "Nie udało się załadować prac",
+  "work.loadMoreError": "Nie udało się załadować więcej prac.",
+  "work.retry": "Spróbuj ponownie",
+  "work.topicGroup.other": "Inne"
 }

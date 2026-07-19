@@ -254,5 +254,13 @@
   "uploadDock.uploadStatus.pending": "در انتظار بارگذاری",
   "uploadDock.uploadStatus.processing": "در حال بارگذاری",
   "uploadDock.uploadStatus.success": "بارگذاری کامل شد",
-  "uploadDock.uploadStatus.uploading": "در حال بارگذاری"
+  "uploadDock.uploadStatus.uploading": "در حال بارگذاری",
+  "work.empty.desc": "آثار تولید شده توسط عوامل شما — وظایف، اسناد، آیتم‌های Linear و GitHub — در اینجا جمع‌آوری خواهند شد.",
+  "work.empty.title": "هنوز هیچ اثری وجود ندارد",
+  "work.group": "آثار",
+  "work.loadError": "مشکلی در بارگذاری آثار رخ داد.",
+  "work.loadErrorTitle": "نتوانستیم آثار را بارگذاری کنیم",
+  "work.loadMoreError": "بارگذاری آثار بیشتر شکست خورد.",
+  "work.retry": "تلاش مجدد",
+  "work.topicGroup.other": "سایر"
 }

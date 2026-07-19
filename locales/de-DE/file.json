@@ -254,5 +254,13 @@
   "uploadDock.uploadStatus.pending": "Warten auf Upload",
   "uploadDock.uploadStatus.processing": "Wird hochgeladen",
   "uploadDock.uploadStatus.success": "Upload abgeschlossen",
-  "uploadDock.uploadStatus.uploading": "Wird hochgeladen"
+  "uploadDock.uploadStatus.uploading": "Wird hochgeladen",
+  "work.empty.desc": "Die Arbeiten, die Ihre Agenten erstellen – Aufgaben, Dokumente, Linear- und GitHub-Elemente – werden hier gesammelt.",
+  "work.empty.title": "Noch keine Arbeiten",
+  "work.group": "Arbeiten",
+  "work.loadError": "Beim Laden der Arbeiten ist etwas schiefgelaufen.",
+  "work.loadErrorTitle": "Arbeiten konnten nicht geladen werden",
+  "work.loadMoreError": "Weitere Arbeiten konnten nicht geladen werden.",
+  "work.retry": "Erneut versuchen",
+  "work.topicGroup.other": "Sonstige"
 }

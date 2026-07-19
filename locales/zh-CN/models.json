@@ -1172,6 +1172,7 @@
   "qwen3.6-plus.description": "Qwen3.6 Plus支持文本、图像和视频输入，在质量、速度和成本之间实现了平衡性能。与Qwen3 VL系列相比，其多模态能力显著提升。",
   "qwen3.7-max.description": "Qwen3.7 Max是AI代理时代的旗舰全能模型，提供全面的文本、图像和视频理解能力。它在推理、函数调用和代理任务执行性能方面表现卓越。",
   "qwen3.7-plus.description": "Qwen3.7 Plus是一款多模态交互混合代理模型，基于Qwen3.7系列的文本能力，统一了视觉与语言。它在GUI操作、视觉编码和复杂代理工作流方面表现出色。",
+  "qwen3.8-max-preview.description": "Qwen3.8-Max-Preview 是阿里巴巴下一代 2.4T 参数旗舰模型的预览版，在编码和专业生产力方面相比 Qwen3.7-Max 取得了重大突破，并在全栈开发和数据分析等复杂的长周期任务上表现领先。",
   "qwen3.description": "Qwen3 是阿里巴巴推出的下一代大语言模型，在多种应用场景中表现出色。",
   "qwq-32b-preview.description": "QwQ 是 Qwen 推出的实验性研究模型，专注于推理能力的提升。",
   "qwq-32b.description": "QwQ 是 Qwen 系列中的推理模型。相比标准指令微调模型，具备更强的思维与推理能力，显著提升下游复杂任务表现。QwQ-32B 是一款中型推理模型，性能可媲美 DeepSeek-R1 和 o1-mini 等顶级模型。",

@@ -254,5 +254,13 @@
   "uploadDock.uploadStatus.pending": "Yükleme bekleniyor",
   "uploadDock.uploadStatus.processing": "Yükleniyor",
   "uploadDock.uploadStatus.success": "Yükleme tamamlandı",
-  "uploadDock.uploadStatus.uploading": "Yükleniyor"
+  "uploadDock.uploadStatus.uploading": "Yükleniyor",
+  "work.empty.desc": "Temsilcilerinizin ürettiği işler — görevler, belgeler, Linear ve GitHub öğeleri — burada toplanacak.",
+  "work.empty.title": "Henüz iş yok",
+  "work.group": "İşler",
+  "work.loadError": "İşler yüklenirken bir hata oluştu.",
+  "work.loadErrorTitle": "İşler yüklenemedi",
+  "work.loadMoreError": "Daha fazla iş yüklenemedi.",
+  "work.retry": "Tekrar Dene",
+  "work.topicGroup.other": "Diğer"
 }
