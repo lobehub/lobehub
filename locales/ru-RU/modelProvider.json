@@ -177,6 +177,7 @@
   "providerModels.config.baseURL.invalid": "Пожалуйста, введите корректный URL",
   "providerModels.config.baseURL.placeholder": "https://your-proxy-url.com/v1",
   "providerModels.config.baseURL.title": "URL прокси API",
+  "providerModels.config.builtinNotice": "Встроенные провайдеры нельзя удалить из списка. Если вы не используете этого провайдера, просто отключите его.",
   "providerModels.config.checker.button": "Проверить",
   "providerModels.config.checker.desc": "Проверьте, правильно ли указаны ключ API и URL прокси",
   "providerModels.config.checker.pass": "Проверка пройдена",

@@ -92,6 +92,10 @@ export const UserLabSchema = z.object({
    */
   enableArtifactDeployment: z.boolean().optional(),
   /**
+   * show the built-in terminal panel on the chat page (desktop only)
+   */
+  enableBuiltinTerminal: z.boolean().optional(),
+  /**
    * run Claude Code hetero sessions through the Claude Agent SDK instead of CLI spawn
    */
   enableClaudeCodeSdk: z.boolean().optional(),
@@ -123,6 +127,10 @@ export const UserLabSchema = z.object({
    * enable selecting message text and adding it to the next conversation context
    */
   enableMessageTextSelectionActions: z.boolean().optional(),
+  /**
+   * show OAuth app management in personal and workspace settings
+   */
+  enableOAuthApps: z.boolean().optional(),
   /**
    * show the "Add Platform Agent" entry in the create menu
    */

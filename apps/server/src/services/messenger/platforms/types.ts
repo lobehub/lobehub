@@ -11,7 +11,7 @@ import type { MessengerPlatformBinder } from '../types';
  * even though a bot-channel Slack provider can opt into Socket Mode/websocket),
  * so this lives on the messenger definition, not the bot-channel definition.
  */
-export type MessengerConnectionMode = Extract<ConnectionMode, 'webhook' | 'websocket'>;
+export type MessengerConnectionMode = Extract<ConnectionMode, 'polling' | 'webhook' | 'websocket'>;
 
 /** Cross-cutting services the router exposes to platform webhook gates. */
 export interface MessengerWebhookContext {
@@ -161,4 +161,10 @@ export interface MessengerPlatformDefinition {
 export type SerializedMessengerPlatformDefinition = Omit<
   MessengerPlatformDefinition,
   'createBinder' | 'oauth' | 'webhookGate'
->;
+> & {
+  access?: {
+    allowed?: boolean;
+    blockedMessage?: string;
+    requiredPlan?: 'paid';
+  };
+};

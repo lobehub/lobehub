@@ -98,10 +98,10 @@ const CODEX_FAST_SERVICE_TIER_VALUES = ['fast', 'priority'] as const;
  *
  * Two families of hetero agents are supported:
  *
- * - **Local CLI** (`claude-code` | `codex`): spawned as a child process on the
+ * - **Local CLI** (`amp` | `claude-code` | `codex`): spawned as a child process on the
  *   desktop; uses `command`, `args`, `env`, `systemContext`.
  *
- * - **Remote device** (`openclaw` | `hermes` | `amp` | `opencode`): dispatched to a machine
+ * - **Remote platform** (`openclaw` | `hermes` | `opencode`): dispatched to a machine
  *   connected via `lh connect`; device is identified by `LobeAgentAgencyConfig.boundDeviceId`.
  *   `platformAgentId` selects the named agent on the remote platform (defaults to `'main'`).
  */
@@ -451,7 +451,9 @@ export const buildHeteroExecArgs = (
   provider: HeterogeneousProviderConfig | undefined | null,
 ): string[] | undefined => {
   if (!provider) return undefined;
-  if (provider.type !== 'claude-code' && provider.type !== 'codex') return provider.args;
+  if (provider.type !== 'amp' && provider.type !== 'claude-code' && provider.type !== 'codex') {
+    return provider.args;
+  }
 
   const baseArgs = provider.args ?? [];
   const wrapperArgs = baseArgs.map((arg) => `${HETERO_EXEC_AGENT_ARG_FLAG}=${arg}`);
@@ -530,6 +532,16 @@ export interface LobeAgentAgencyConfig {
    */
   executionTarget?: DeviceExecutionTarget;
   heterogeneousProvider?: HeterogeneousProviderConfig;
+  /**
+   * Default model used by sub-agents this agent spawns via
+   * `lobe-agent.callSubAgent`. When unset, sub-agents fall back to the global
+   * default (`DEFAULT_SUB_AGENT_MODEL`, e.g. deepseek-v4-flash) rather than
+   * inheriting the parent agent's main model. Configurable in the params panel.
+   */
+  subagent?: {
+    model?: string;
+    provider?: string;
+  };
   /**
    * Ad-hoc verify criteria mounted directly on this agent, in addition to any
    * `verifyRubricId`. Use for one-off checks that don't warrant a reusable

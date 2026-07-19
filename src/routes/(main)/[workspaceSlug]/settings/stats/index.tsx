@@ -1,5 +1,6 @@
 'use client';
 
+import { Flexbox } from '@lobehub/ui';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -45,7 +46,16 @@ const WorkspaceStatsSetting = () => {
     [memberMap],
   );
 
-  return <Page enableUserDimension headerNode={<WorkspaceWelcome />} resolveUser={resolveUser} />;
+  return (
+    <Flexbox gap={16}>
+      <Page
+        enableUserDimension
+        headerNode={<WorkspaceWelcome />}
+        resolveUser={resolveUser}
+        showSettingHeader={false}
+      />
+    </Flexbox>
+  );
 };
 
 WorkspaceStatsSetting.displayName = 'WorkspaceStatsSetting';

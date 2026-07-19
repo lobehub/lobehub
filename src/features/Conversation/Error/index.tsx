@@ -257,6 +257,7 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
     const rawErrorMessage = getRawErrorMessage(error) || alertError?.message;
 
     const delAndRegenerateMessage = useConversationStore((s) => s.delAndRegenerateMessage);
+    const updateMessageError = useConversationStore((s) => s.updateMessageError);
     const resetHeteroOverloadRetry = useConversationStore((s) => s.resetHeteroOverloadRetry);
     // Standalone surface: data.id is the top-level assistant message, so its
     // parentId is the user message. Group surface passes retryScopeId directly.
@@ -345,6 +346,7 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
           autoRetry={autoRetry}
           error={sessionErrorBody}
           schedule={schedule}
+          onDismiss={() => void updateMessageError(data.id, null)}
           onOpenSystemTools={() => navigate('/settings/system-tools')}
           onRetry={handleManualRetry}
         />

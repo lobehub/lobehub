@@ -1,3 +1,10 @@
+export const AMP_CLI_INSTALL_DOCS_URL = 'https://ampcode.com/manual';
+
+export const AMP_CLI_INSTALL_COMMANDS = [
+  'curl -fsSL https://ampcode.com/install.sh | bash',
+  'brew install ampcode/tap/ampcode',
+] as const;
+
 export const CLAUDE_CODE_CLI_INSTALL_DOCS_URL =
   'https://docs.anthropic.com/en/docs/claude-code/setup';
 
@@ -43,13 +50,30 @@ export interface HeteroQuotaWindow {
 
 export type CodexQuotaWindow = HeteroQuotaWindow;
 
+export interface CodexRateLimitSnapshot {
+  /** Canonical metered limit identifier, for example `codex` or `codex_other`. */
+  limitId: string;
+  limitName: string | null;
+  primary: CodexQuotaWindow | null;
+  secondary: CodexQuotaWindow | null;
+}
+
+export interface CodexRateLimitResetCredit {
+  expiresAt: number | null;
+  grantedAt: number | null;
+  /** Opaque backend identifier used only when redeeming this specific credit. */
+  id: string | null;
+  redeemedAt?: number | null;
+  redeemStartedAt?: number | null;
+  resetType: string | null;
+  status: string;
+  title: string | null;
+}
+
 export interface CodexRateLimitResetCredits {
   availableCount: number;
-  credits?: {
-    expiresAt: number | null;
-    grantedAt: number | null;
-    status: string;
-  }[];
+  /** Detailed rows when supported by the installed Codex CLI/backend. */
+  credits?: CodexRateLimitResetCredit[];
   nextExpiresAt?: number | null;
   totalEarnedCount?: number;
 }
@@ -58,10 +82,20 @@ export interface CodexQuotaSnapshot {
   error: string | null;
   provider: 'codex';
   rateLimitResetCredits?: CodexRateLimitResetCredits | null;
+  /** Complete multi-bucket view when supported by the installed Codex app-server. */
+  rateLimits?: CodexRateLimitSnapshot[];
   session: CodexQuotaWindow | null;
   status: 'error' | 'ok' | 'unavailable';
   updatedAt: number;
   weekly: CodexQuotaWindow | null;
+}
+
+export type CodexRateLimitResetOutcome =
+  'alreadyRedeemed' | 'noCredit' | 'nothingToReset' | 'reset';
+
+export interface CodexRateLimitResetResult {
+  outcome: CodexRateLimitResetOutcome;
+  quota: CodexQuotaSnapshot;
 }
 
 /**

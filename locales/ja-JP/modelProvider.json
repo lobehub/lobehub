@@ -177,6 +177,7 @@
   "providerModels.config.baseURL.invalid": "有効なURLを入力してください",
   "providerModels.config.baseURL.placeholder": "https://your-proxy-url.com/v1",
   "providerModels.config.baseURL.title": "API プロキシアドレス",
+  "providerModels.config.builtinNotice": "組み込みプロバイダーはリストから削除することはできません。このプロバイダーを使用しない場合は、無効にしてください。",
   "providerModels.config.checker.button": "チェック",
   "providerModels.config.checker.desc": "API キーとプロキシアドレスが正しく入力されているかテストします",
   "providerModels.config.checker.pass": "チェックに合格しました",

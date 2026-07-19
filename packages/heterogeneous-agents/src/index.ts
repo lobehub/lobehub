@@ -1,4 +1,4 @@
-export { ClaudeCodeAdapter } from './adapters';
+export { AmpAdapter, ClaudeCodeAdapter } from './adapters';
 export type {
   HeterogeneousAgentType,
   LocalHeterogeneousAgentType,
@@ -26,6 +26,7 @@ export type {
 } from './mainAgentCoordinator';
 export { createMainAgentRunState, reduceMainAgent } from './mainAgentCoordinator';
 export { createAdapter, listAgentTypes } from './registry';
+export { isHeteroStatusGuideErrorData } from './spawn/classifyProcessFailure';
 export type {
   CreateMessageIntent,
   CreateThreadIntent,

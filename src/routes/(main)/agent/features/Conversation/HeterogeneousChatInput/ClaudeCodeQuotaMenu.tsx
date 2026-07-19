@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 
 import { heterogeneousAgentService } from '@/services/electron/heterogeneousAgent';
 
-import type { QuotaWindowItem } from './QuotaMenu';
+import type { FetchQuotaOptions, QuotaWindowItem } from './QuotaMenu';
 import QuotaMenu, { createQuotaSourceKey } from './QuotaMenu';
 
 const createErrorSnapshot = (error: unknown): ClaudeCodeQuotaSnapshot => ({
@@ -30,17 +30,35 @@ const ClaudeCodeQuotaMenu = memo<ClaudeCodeQuotaMenuProps>(({ env }) => {
   const sourceKey = createQuotaSourceKey('claude-code', env);
 
   const fetchQuota = useCallback(
-    () => heterogeneousAgentService.getClaudeCodeQuota({ env }),
+    (options?: FetchQuotaOptions) =>
+      heterogeneousAgentService.getClaudeCodeQuota({
+        env,
+        ...(options?.force ? { force: true } : {}),
+      }),
     [env],
   );
 
   const getWindows = useCallback(
     (quota: ClaudeCodeQuotaSnapshot): QuotaWindowItem[] => [
-      { key: 'session', label: t('heteroAgent.quota.session'), window: quota.session },
-      { key: 'weekly', label: t('heteroAgent.quota.weekly'), window: quota.weekly },
+      {
+        compactGroup: 'global',
+        compactLabel: t('heteroAgent.quota.session'),
+        key: 'session',
+        label: t('heteroAgent.quota.session'),
+        window: quota.session,
+      },
+      {
+        compactGroup: 'global',
+        compactLabel: t('heteroAgent.quota.weekly'),
+        key: 'weekly',
+        label: t('heteroAgent.quota.weekly'),
+        window: quota.weekly,
+      },
       ...(quota.scopedWeekly
         ? [
             {
+              compactGroup: 'scopedWeekly',
+              compactLabel: quota.scopedWeekly.modelName,
               key: 'scopedWeekly',
               label: t('heteroAgent.claudeQuota.scopedWeekly', {
                 model: quota.scopedWeekly.modelName,

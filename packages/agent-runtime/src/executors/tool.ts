@@ -1,7 +1,12 @@
-import type { ChatToolPayload } from '@lobechat/types';
+import type { ChatToolPayload, WorkRegistrationIntent } from '@lobechat/types';
 
 import { UsageCounter } from '../core';
-import type { AgentRuntimeHost, ToolRunContext, ToolRunResult } from '../transport';
+import type {
+  AgentRuntimeHost,
+  ToolRunContext,
+  ToolRunResult,
+  ToolWorkRegistration,
+} from '../transport';
 import type {
   AgentEvent,
   AgentInstruction,
@@ -21,6 +26,8 @@ interface ToolResultEntry {
   data: ToolRunResult;
   executionTime: number;
   isSuccess: boolean;
+  /** Tool message this result was persisted to — provenance for Work versions. */
+  sourceMessageId?: string;
   toolCall: ChatToolPayload;
   toolCallId: string;
   usageParams?: {
@@ -29,9 +36,26 @@ interface ToolResultEntry {
     toolCost: number;
     toolName: string;
   };
+  /** Carried so the post-batch accumulate loop can persist the Work version. */
+  workRegistration?: WorkRegistrationIntent;
 }
 
 const nowIso = () => new Date().toISOString();
+
+/**
+ * Skill work-registration intents carry the UNTRUNCATED tool payload
+ * (`data`/`args`) solely for server-side Work registration, which reads it
+ * off the in-process `executionResult` before anything leaves the executor.
+ * Strip it from every copy that DOES leave: realtime `tool_end` stream events
+ * (clients only read `workRegistration` as a presence flag, see
+ * gatewayEventHandler) and the recorded step `tool_result` events
+ * (AgentStateManager serializes those into Redis, where the raw payload would
+ * bloat the capped event blob).
+ */
+const redactResultForEvents = (result: ToolRunResult): ToolRunResult =>
+  result.workRegistration?.type === 'skill'
+    ? { ...result, workRegistration: { ...result.workRegistration, args: undefined, data: null } }
+    : result;
 
 const markPersistFatal = <T>(error: T): T => {
   if (error && typeof error === 'object') persistFatalErrors.add(error);
@@ -117,6 +141,7 @@ const createRunContext = ({
   state,
   stepContext,
   tool,
+  toolMessageId,
 }: {
   host: AgentRuntimeHost;
   mode: ToolRunContext['mode'];
@@ -125,6 +150,7 @@ const createRunContext = ({
   state: AgentState;
   stepContext?: AgentRuntimeContext['stepContext'];
   tool: ChatToolPayload;
+  toolMessageId?: string;
 }): ToolRunContext => {
   const toolName = toolNameOf(tool);
   const toolSource = resolveToolSource(state, tool);
@@ -148,6 +174,7 @@ const createRunContext = ({
     stepIndex: host.operation.stepIndex,
     stepContext,
     threadId: host.operation.threadId ?? state.metadata?.threadId,
+    toolMessageId,
     toolName,
     toolResultMaxLength: agentConfig?.chatConfig?.toolResultMaxLength,
     toolSource,
@@ -353,6 +380,7 @@ export const callTool =
       state,
       stepContext: runtimeContext?.stepContext,
       tool,
+      toolMessageId: payload.skipCreateToolMessage ? payload.parentMessageId : undefined,
     });
 
     await host.transports.stream.publishEvent({
@@ -401,7 +429,7 @@ export const callTool =
           maxAttempts: (tools.maxRetries ?? DEFAULT_TOOL_MAX_RETRIES) + 1,
           payload,
           phase: TOOL_EXECUTION_PHASE,
-          result: executionResult,
+          result: redactResultForEvents(executionResult),
         },
         stepIndex: host.operation.stepIndex,
         type: 'tool_end',
@@ -446,7 +474,11 @@ export const callTool =
       }
       newState.lastModified = nowIso();
 
-      events.push({ id: tool.id, result: executionResult, type: 'tool_result' });
+      events.push({
+        id: tool.id,
+        result: redactResultForEvents(executionResult),
+        type: 'tool_result',
+      });
 
       const toolCost = tools.getCost?.(runContext.toolName) ?? 0;
       const { usage, cost } = UsageCounter.accumulateTool({
@@ -460,6 +492,24 @@ export const callTool =
 
       newState.usage = usage;
       if (cost) newState.cost = cost;
+
+      // Persist the Work version ONCE, now that `accumulateTool` has resolved
+      // the cumulative cost. The tool execution only produced the registration
+      // intent (task / skill / document identity); provenance + cost are
+      // stamped here at insert time — no cost-less insert + later backfill.
+      if (executionResult.workRegistration) {
+        await tools.registerWork?.(
+          {
+            intent: executionResult.workRegistration,
+            sourceMessageId: toolMessageId,
+            sourceToolCallId: tool.id,
+            sourceToolIdentifier: tool.identifier,
+            sourceToolName: tool.apiName,
+            state: { cost: newState.cost, usage: newState.usage },
+          },
+          newState,
+        );
+      }
 
       persistActivatedTools({
         effectiveManifestMap: runContext.effectiveManifestMap,
@@ -597,7 +647,7 @@ export const callToolsBatch =
               maxAttempts: (tools.maxRetries ?? DEFAULT_TOOL_MAX_RETRIES) + 1,
               payload: { parentMessageId, toolCalling: tool },
               phase: TOOL_EXECUTION_PHASE,
-              result: executionResult,
+              result: redactResultForEvents(executionResult),
             },
             stepIndex: host.operation.stepIndex,
             type: 'tool_end',
@@ -621,15 +671,24 @@ export const callToolsBatch =
           }
           toolMessageIds.push(toolMessageId);
 
+          // `sourceMessageId` + `workRegistration` are carried so the
+          // post-batch accumulate loop can persist the Work version ONCE with
+          // this call's cumulative cost (known only then).
           const resultEntry: ToolResultEntry = {
             data: executionResult,
             executionTime,
             isSuccess,
+            sourceMessageId: toolMessageId,
             toolCall: tool,
             toolCallId: tool.id,
+            workRegistration: executionResult.workRegistration,
           };
 
-          events.push({ id: tool.id, result: executionResult, type: 'tool_result' });
+          events.push({
+            id: tool.id,
+            result: redactResultForEvents(executionResult),
+            type: 'tool_result',
+          });
 
           const toolCost = tools.getCost?.(runContext.toolName) ?? 0;
           resultEntry.usageParams = {
@@ -651,6 +710,9 @@ export const callToolsBatch =
     );
 
     const newState = structuredClone(state);
+    // Work-registration intents produced by the tool executions, paired with
+    // the cumulative cost as of their tool call so the version is inserted ONCE.
+    const workRegistrations: ToolWorkRegistration[] = [];
     for (const result of toolResults) {
       if (!result.usageParams) continue;
 
@@ -661,6 +723,25 @@ export const callToolsBatch =
       });
       newState.usage = usage;
       if (cost) newState.cost = cost;
+
+      if (result.workRegistration) {
+        // Snapshot the running totals as of this tool call so the version is
+        // inserted with the right cumulative cost; the writes fire together
+        // below (each targets its own sourceToolCallId row).
+        workRegistrations.push({
+          intent: result.workRegistration,
+          sourceMessageId: result.sourceMessageId,
+          sourceToolCallId: result.toolCallId,
+          sourceToolIdentifier: result.toolCall.identifier,
+          sourceToolName: result.toolCall.apiName,
+          state: { cost: newState.cost, usage: newState.usage },
+        });
+      }
+    }
+    if (workRegistrations.length > 0 && tools.registerWork) {
+      await Promise.all(
+        workRegistrations.map((registration) => tools.registerWork!(registration, newState)),
+      );
     }
 
     persistActivatedTools({

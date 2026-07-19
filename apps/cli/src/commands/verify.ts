@@ -1,6 +1,20 @@
+import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
+import type {
+  AcceptanceSubjectType,
+  VerifyRunOrigin,
+  VerifyRunScenario,
+  VerifySurface,
+} from '@lobechat/const/verify';
+import {
+  acceptanceSubjectTypes,
+  normalizeVerifySurface,
+  verifyEvidenceTypes,
+  verifyRunScenarios,
+  verifySurfaces,
+} from '@lobechat/const/verify';
 import type { Command } from 'commander';
 import pc from 'picocolors';
 
@@ -8,6 +22,8 @@ import { getTrpcClient } from '../api/client';
 import { confirm, outputJson, printTable, timeAgo, truncate } from '../utils/format';
 import { log } from '../utils/logger';
 import { uploadLocalFile } from '../utils/uploadLocalFile';
+import { registerAcceptanceCommands } from './verifyAcceptance';
+import { registerVerifyInstallCommand } from './verifyInstall';
 
 // ── Helpers ────────────────────────────────────────────────
 
@@ -18,6 +34,8 @@ type Decision = 'accepted' | 'overridden' | 'rejected';
 const VERIFIER_TYPES: VerifierType[] = ['program', 'agent', 'llm'];
 const ON_FAIL: OnFail[] = ['manual', 'auto_repair'];
 const DECISIONS: Decision[] = ['accepted', 'rejected', 'overridden'];
+/** The evidence media a plan item may require — the same closed set the executor gates on. */
+const EVIDENCE_TYPES = verifyEvidenceTypes;
 
 function parseConfig(raw?: string): Record<string, unknown> | undefined {
   if (!raw) return undefined;
@@ -48,6 +66,19 @@ function toVerdict(raw: unknown): Verdict {
   if (['pass', 'passed', 'ok', 'success'].includes(s)) return 'passed';
   if (['fail', 'failed', 'error'].includes(s)) return 'failed';
   return 'uncertain'; // partial / blocked / skipped / pending / unknown
+}
+
+/**
+ * The report's headline verdict when the author didn't set `summary.verdict`:
+ * derived from the ingested cases, so a report can never ship verdict-less and
+ * render as a permanent "?" in every list surface.
+ */
+export function deriveReportVerdict(cases: unknown[]): Verdict | undefined {
+  const verdicts = cases.map((c) => toVerdict((c as any)?.result ?? (c as any)?.verdict));
+  if (verdicts.length === 0) return undefined;
+  if (verdicts.includes('failed')) return 'failed';
+  if (verdicts.includes('uncertain')) return 'uncertain';
+  return 'passed';
 }
 
 /** Pick an evidence medium from a file extension. */
@@ -166,50 +197,322 @@ function pullRequestFromResult(result: Record<string, unknown>) {
   return entries.length > 0 ? Object.fromEntries(entries) : undefined;
 }
 
-function metadataForReport(
-  result: Record<string, unknown>,
-  existingMetadata?: unknown,
-): Record<string, unknown> | undefined {
-  if (!Object.prototype.hasOwnProperty.call(result, 'interactionCost')) return undefined;
-
-  const metadata = { ...objectValue(existingMetadata) };
-  const interactionCost = objectValue(result.interactionCost);
-
-  if (interactionCost) {
-    metadata.interactionCost = interactionCost;
-  } else {
-    delete metadata.interactionCost;
-  }
-
-  return metadata;
-}
-
 /**
- * The report dir remembers which verification session it created, so
- * re-verifying the same case updates one evolving `/verify/<id>` in place
- * instead of spawning a fresh list entry every round. Kept in a sidecar (not
- * result.json, which the harness regenerates each round) so it survives a
- * rewrite of the report body.
+ * The PR for a branch, asked of `gh`. A report almost always verifies a branch
+ * that already has one, but the author has to remember to write it down — and
+ * mostly doesn't, so the report loses its single most useful outbound link.
+ * Best-effort by design: no `gh`, not a repo, not authenticated, or no PR for
+ * the branch all mean "no PR", never a failed publish.
  */
-const RUN_SIDECAR = '.verify-run.json';
+function pullRequestFromBranch(branch: string | undefined) {
+  if (!branch) return undefined;
 
-function readSidecarRunId(dir: string): string | undefined {
-  const p = path.join(dir, RUN_SIDECAR);
-  if (!existsSync(p)) return undefined;
   try {
-    const parsed = JSON.parse(readFileSync(p, 'utf8'));
-    return typeof parsed?.verifyRunId === 'string' ? parsed.verifyRunId : undefined;
+    const raw = execFileSync(
+      'gh',
+      ['pr', 'view', branch, '--json', 'number,title,url'],
+      // `gh` writes its "no pull requests found" diagnostics to stderr; keep them
+      // off the CLI's own output.
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 10_000 },
+    );
+    const parsed = objectValue(JSON.parse(raw));
+    const url = safeWebUrl(firstString(parsed?.url));
+    const number = firstStringOrNumber(parsed?.number);
+    const title = firstString(parsed?.title);
+    const entries = Object.entries({ number, title, url }).filter(([, v]) => v !== undefined);
+
+    return entries.length > 0 ? Object.fromEntries(entries) : undefined;
   } catch {
     return undefined;
   }
 }
 
-function writeSidecarRunId(dir: string, verifyRunId: string): void {
-  try {
-    writeFileSync(path.join(dir, RUN_SIDECAR), `${JSON.stringify({ verifyRunId }, null, 2)}\n`);
-  } catch {
-    // Best-effort: a read-only dir just means the next run creates a new session.
+/**
+ * The surfaces the report says it exercised, as canonical values.
+ *
+ * Strict on purpose: an unrecognized surface is a hard error, not a silently
+ * dropped value. Free-form surfaces are how the field rotted — prose, runtime
+ * modes ("packaged build") and test kinds ("unit", "type-check") all ended up in
+ * it, and none of them render. Failing here puts the fix in the author's hands
+ * while they still have the context to make it.
+ */
+export function surfacesFromResult(result: Record<string, unknown>): VerifySurface[] | undefined {
+  if (!Array.isArray(result.surfaces)) return undefined;
+
+  const raw = result.surfaces.filter((s: unknown): s is string => typeof s === 'string');
+  const canonical: VerifySurface[] = [];
+  const rejected: string[] = [];
+
+  for (const value of raw) {
+    const surface = normalizeVerifySurface(value);
+    if (surface) {
+      if (!canonical.includes(surface)) canonical.push(surface);
+    } else {
+      rejected.push(value);
+    }
   }
+
+  if (rejected.length > 0) {
+    log.error(
+      `result.json "surfaces" must name the product surface a check ran on, one of: ${verifySurfaces.join(', ')}`,
+    );
+    log.error(`  rejected: ${rejected.map((v) => JSON.stringify(v)).join(', ')}`);
+    log.error(
+      '  Runtime detail ("packaged build", "CDP dev instance") belongs on a plan item\'s "method"; a test kind ("unit", "backend") is not a surface — a backend change verified through the CLI has surface "cli".',
+    );
+    process.exit(1);
+  }
+
+  return canonical.length > 0 ? canonical : undefined;
+}
+
+/**
+ * What kind of delivery the report verified. Defaults to `coding` — the
+ * agent-testing harness's home turf — and rejects an unknown value rather than
+ * storing a scenario nothing renders (mirrors the strict surface policy: the
+ * author still has the context to fix it).
+ */
+export function scenarioFromResult(result: Record<string, unknown>): VerifyRunScenario {
+  const raw = result.scenario;
+  if (raw === undefined) return 'coding';
+  if (typeof raw === 'string' && (verifyRunScenarios as readonly string[]).includes(raw)) {
+    return raw as VerifyRunScenario;
+  }
+
+  log.error(
+    `result.json "scenario" must be one of: ${verifyRunScenarios.join(', ')} — rejected: ${JSON.stringify(raw)}`,
+  );
+  process.exit(1);
+}
+
+/**
+ * A non-coding scenario's scope, passed through from result.json `context` as
+ * the scenario's own bag (the server stores it as-is; known shapes live in
+ * `@lobechat/types`). Top-level `entry` / `createdAt` are lifted as defaults so
+ * every scenario gets the shared provenance fields for free; explicit `context`
+ * keys win.
+ */
+export function genericContextFromResult(
+  result: Record<string, unknown>,
+): Record<string, unknown> | undefined {
+  const bag = objectValue(result.context) ?? {};
+  const entries = Object.entries({
+    entry: firstString(result.entry),
+    testedAt: firstString(result.createdAt),
+    ...bag,
+  }).filter(([, v]) => v !== undefined);
+
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
+}
+
+/** Reject an out-of-vocabulary plan value rather than storing a word nothing reads. */
+function assertPlanEnum<T extends string>(
+  value: string,
+  allowed: readonly T[],
+  field: string,
+  itemId: string,
+): T {
+  if ((allowed as readonly string[]).includes(value)) return value as T;
+
+  log.error(`result.json plan item "${itemId}": "${field}" must be one of: ${allowed.join(', ')}`);
+  log.error(`  rejected: ${JSON.stringify(value)}`);
+  process.exit(1);
+}
+
+/**
+ * The checks the run set out to make, as frozen plan items.
+ *
+ * Two of the fields are a closed vocabulary, not free text, because the pipeline
+ * actually acts on them:
+ *
+ * - `verifier` → {@link VerifyCheckItem.verifierType} (`program | agent | llm`):
+ *   how the item is judged. Defaults to `agent`, but a command-asserted check is
+ *   `program` and mislabelling it hides what actually produced the verdict.
+ * - `requiredEvidence` → `verifierConfig.requiredEvidence`
+ *   ({@link RequiredEvidenceSpec}, medium from {@link verifyEvidenceTypes}):
+ *   the artifact the item MUST produce. The executor's coverage gate fails an
+ *   item whose required medium is missing, so this is enforcement, not a label —
+ *   an unknown medium would silently gate on nothing.
+ *
+ * `method` / `expected` stay prose: they are the author's intent in words, which
+ * no enum can carry. Everything else the frozen {@link VerifyCheckItem} needs is
+ * filled in here, so an author writes only `{ id, title }` plus what they mean.
+ *
+ * Returns `undefined` when the report declares no `plan` field. A `plan` that is
+ * present but empty returns `[]`, recording an explicitly empty plan in this
+ * immutable snapshot.
+ */
+export function planFromResult(result: Record<string, unknown>) {
+  if (!Array.isArray(result.plan)) return undefined;
+
+  const items = result.plan.flatMap((entry: unknown, index: number) => {
+    const item = objectValue(entry);
+    const title = firstString(item?.title, item?.name);
+    // An item with no title names no check — it can't be rendered or paired.
+    if (!item || !title) return [];
+
+    const id = String(item.id ?? `case-${index + 1}`);
+    const method = firstString(item.method, item.how);
+    const expected = firstString(item.expected, item.expectation);
+
+    const verifierRaw = firstString(item.verifier, item.verifierType);
+    const verifierType = verifierRaw
+      ? assertPlanEnum(verifierRaw, VERIFIER_TYPES, 'verifier', id)
+      : ('agent' as const);
+
+    const requiredEvidence = Array.isArray(item.requiredEvidence)
+      ? item.requiredEvidence.flatMap((spec: unknown) => {
+          // Accept the bare medium (`"screenshot"`) or the full spec object.
+          const record = objectValue(spec);
+          const raw = typeof spec === 'string' ? spec : firstString(record?.type);
+          if (!raw) return [];
+
+          return [
+            {
+              hint: firstString(record?.hint),
+              type: assertPlanEnum(raw, EVIDENCE_TYPES, 'requiredEvidence', id),
+            },
+          ];
+        })
+      : [];
+
+    // Per-item surface: the acceptance union groups checks by it. Normalized to
+    // the closed set (electron → desktop); an unknown value is dropped loudly
+    // rather than stored as a mystery chip.
+    const surfaceRaw = firstString(item.surface);
+    const surface = surfaceRaw ? normalizeVerifySurface(surfaceRaw) : null;
+    if (surfaceRaw && !surface) {
+      log.warn(
+        `plan item "${id}": surface "${surfaceRaw}" names no product surface (expected ${verifySurfaces.join('/')}) — dropping it`,
+      );
+    }
+
+    // The acceptance union groups by category and folds superseded ids into
+    // the new item's iteration timeline — both authored by the harness.
+    const category = firstString(item.category, item.group);
+    const supersedes = Array.isArray(item.supersedes)
+      ? item.supersedes.filter((value: unknown): value is string => typeof value === 'string')
+      : [];
+
+    return [
+      {
+        ...(category === undefined ? {} : { category }),
+        description: firstString(item.description),
+        id,
+        index,
+        onFail: 'manual' as const,
+        required: typeof item.required === 'boolean' ? item.required : true,
+        ...(supersedes.length > 0 ? { supersedes } : {}),
+        title,
+        verifierConfig: {
+          ...(method === undefined ? {} : { method }),
+          ...(expected === undefined ? {} : { expected }),
+          ...(requiredEvidence.length > 0 ? { requiredEvidence } : {}),
+          ...(surface ? { surface } : {}),
+        },
+        verifierType,
+      },
+    ];
+  });
+
+  // `[]` is meaningful — it clears a stale plan. Only an absent `plan` field
+  // (handled above) means "don't touch what's stored".
+  return items;
+}
+
+/**
+ * The LobeHub conversation this harness is running inside, read off the env the
+ * agent runtime echoes into the child process. Lets a report published from an
+ * in-app agent link back to the session that produced it with no flags to
+ * remember. Absent (a plain terminal) → no origin, which is not an error.
+ *
+ * Reads the env and ONLY the env. `--operation` is the opposite relation — the
+ * Agent Run this session *verifies* — so letting it fall through to here would
+ * attribute the report to the run under test instead of the run that wrote it,
+ * corrupting the very provenance this records. The two ids are independent and
+ * may legitimately differ in the same publish.
+ */
+export function originFromEnv(): VerifyRunOrigin | undefined {
+  const origin: VerifyRunOrigin = {
+    agentId: firstString(process.env.LOBEHUB_AGENT_ID),
+    operationId: firstString(process.env.LOBEHUB_OPERATION_ID),
+    topicId: firstString(process.env.LOBEHUB_TOPIC_ID),
+  };
+
+  return Object.values(origin).some(Boolean) ? origin : undefined;
+}
+
+function metadataForReport(
+  result: Record<string, unknown>,
+  existingMetadata?: unknown,
+  origin?: VerifyRunOrigin,
+): Record<string, unknown> | undefined {
+  const hasInteractionCost = Object.prototype.hasOwnProperty.call(result, 'interactionCost');
+  // Nothing to write is not the same as writing an empty metadata bag.
+  if (!hasInteractionCost && !origin) return undefined;
+
+  const metadata = { ...objectValue(existingMetadata) };
+
+  if (hasInteractionCost) {
+    const interactionCost = objectValue(result.interactionCost);
+
+    if (interactionCost) {
+      metadata.interactionCost = interactionCost;
+    } else {
+      delete metadata.interactionCost;
+    }
+  }
+
+  if (origin) metadata.origin = origin;
+
+  return metadata;
+}
+
+/** A parsed acceptance subject reference (`task:<id>` / `topic:<id>` / `document:<id>`). */
+export interface AcceptanceSubjectRef {
+  subjectId: string;
+  subjectType: AcceptanceSubjectType;
+}
+
+/**
+ * Parse a `type:id` subject reference. Returns null on anything malformed —
+ * callers decide whether that is an error (an explicit `--subject`) or a
+ * silently absent field (result.json).
+ */
+export function parseSubjectRef(raw: unknown): AcceptanceSubjectRef | null {
+  if (typeof raw !== 'string') return null;
+  const idx = raw.indexOf(':');
+  if (idx <= 0) return null;
+  const type = raw.slice(0, idx).trim().toLowerCase();
+  const id = raw.slice(idx + 1).trim();
+  if (!id || !(acceptanceSubjectTypes as readonly string[]).includes(type)) return null;
+  return { subjectId: id, subjectType: type as AcceptanceSubjectType };
+}
+
+/**
+ * The acceptance subject a report attributes itself to, from result.json's
+ * `subject` field — either `"task:<id>"` or `{ type, id, requirement? }`. An
+ * explicit `--subject` flag wins over this.
+ */
+export function subjectFromResult(result: Record<string, unknown>): {
+  ref: AcceptanceSubjectRef;
+  requirement?: string;
+} | null {
+  const raw = result.subject;
+  if (typeof raw === 'string') {
+    const ref = parseSubjectRef(raw);
+    return ref ? { ref } : null;
+  }
+  const value = objectValue(raw);
+  if (!value) return null;
+  const ref = parseSubjectRef(`${firstString(value.type) ?? ''}:${firstString(value.id) ?? ''}`);
+  return ref ? { ref, requirement: firstString(value.requirement) } : null;
+}
+
+/** Default acceptance subject for a report authored inside a LobeHub topic. */
+export function subjectFromEnv(): AcceptanceSubjectRef | null {
+  const topicId = firstString(process.env.LOBEHUB_TOPIC_ID);
+  return topicId ? { subjectId: topicId, subjectType: 'topic' } : null;
 }
 
 // ── Command Registration ───────────────────────────────────
@@ -218,6 +521,15 @@ export function registerVerifyCommand(program: Command) {
   const verify = program
     .command('verify')
     .description('Manage the Agent Run delivery checker (criteria, rubrics, plans, results)');
+
+  // `verify acceptance …` — subject-level acceptance aggregates.
+  // Legacy spelling — the canonical group is the first-class `lh acceptance`.
+  registerAcceptanceCommands(verify, { deprecated: true });
+
+  // `verify install` — install the bundled agent-testing skill from this CLI
+  // package into the consumer repo. Distinct from `verify init` below, which
+  // pulls a named skill bundle live from the server.
+  registerVerifyInstallCommand(verify);
 
   // ════════════ init (materialize the portable verify skill) ════════════
   verify
@@ -1076,8 +1388,14 @@ export function registerVerifyCommand(program: Command) {
     .option('--operation <id>', 'Link the session to an existing Agent Run')
     .option('--title <title>', 'Override the session title')
     .option('--goal <goal>', 'The goal/task being verified')
-    .option('--run <verifyRunId>', 'Update an existing session in place instead of creating one')
-    .option('--new', 'Force a fresh session even if this report dir already created one')
+    .option(
+      '--subject <type:id>',
+      'Override the required acceptance subject (defaults to the current LOBEHUB_TOPIC_ID)',
+    )
+    .option(
+      '--requirement <text>',
+      'Acceptance requirement recorded when the aggregate is first created',
+    )
     .option('--open', 'Print the in-app URL to open the report')
     .option('--json [fields]', 'Output JSON')
     .action(
@@ -1086,11 +1404,11 @@ export function registerVerifyCommand(program: Command) {
         options: {
           goal?: string;
           json?: boolean | string;
-          new?: boolean;
           open?: boolean;
           operation?: string;
-          run?: string;
+          requirement?: string;
           source?: string;
+          subject?: string;
           title?: string;
         },
       ) => {
@@ -1114,81 +1432,109 @@ export function registerVerifyCommand(program: Command) {
         const reportMdPath = path.join(dir, 'report.md');
         const content = existsSync(reportMdPath) ? readFileSync(reportMdPath, 'utf8') : undefined;
 
-        // The scenario's context for the report's scope header, lifted from
-        // result.json's top-level fields. Drop empty keys so the bag stays clean.
-        const surfaces = Array.isArray(result.surfaces)
-          ? result.surfaces.filter((s: unknown) => typeof s === 'string')
-          : undefined;
-        const pullRequest = pullRequestFromResult(result);
-        const contextEntries = Object.entries({
-          branch: typeof result.branch === 'string' ? result.branch : undefined,
-          commit: typeof result.commit === 'string' ? result.commit : undefined,
-          entry: typeof result.entry === 'string' ? result.entry : undefined,
-          focus: typeof result.focus === 'string' ? result.focus : options.goal,
-          pullRequest,
-          surfaces: surfaces && surfaces.length > 0 ? surfaces : undefined,
-          testedAt: typeof result.createdAt === 'string' ? result.createdAt : undefined,
-        }).filter(([, v]) => v !== undefined);
-        const context = contextEntries.length > 0 ? Object.fromEntries(contextEntries) : undefined;
+        // What kind of delivery this report verified (default: coding).
+        const scenario = scenarioFromResult(result);
 
-        // The harness verifies software changes; tag the run so the viewer renders
-        // the coding scope header. Overridable via result.json `scenario`.
-        const scenario = result.scenario === 'coding' ? 'coding' : ('coding' as const);
+        // The scenario's context for the report's scope header. Coding lifts the
+        // well-known top-level fields (branch / commit / surfaces / PR); every
+        // other scenario passes result.json `context` through as its own bag.
+        // `pullRequest` is hoisted: the success output (text and --json) prints
+        // the PR link after the ingest, whatever the scenario resolved to.
+        let context: Record<string, unknown> | undefined;
+        let pullRequest: ReturnType<typeof pullRequestFromResult>;
+        if (scenario === 'coding') {
+          const branch = typeof result.branch === 'string' ? result.branch : undefined;
+          const surfaces = surfacesFromResult(result);
+          // An authored PR wins; otherwise ask `gh` what the branch's PR is, so the
+          // report links to it without the author having to remember the field.
+          pullRequest = pullRequestFromResult(result) ?? pullRequestFromBranch(branch);
+          const contextEntries = Object.entries({
+            branch,
+            commit: typeof result.commit === 'string' ? result.commit : undefined,
+            entry: typeof result.entry === 'string' ? result.entry : undefined,
+            pullRequest,
+            surfaces,
+            testedAt: typeof result.createdAt === 'string' ? result.createdAt : undefined,
+          }).filter(([, v]) => v !== undefined);
+          context = contextEntries.length > 0 ? Object.fromEntries(contextEntries) : undefined;
+        } else {
+          context = genericContextFromResult(result);
+        }
+
+        // What the run set out to check, written before it ran. Paired with the
+        // results by `id`, so the report can show a planned item that never ran.
+        const plan = planFromResult(result);
+
+        // Every agent-testing report belongs to an acceptance. Explicit CLI input
+        // wins, then result.json, then the authoring topic echoed by the runtime.
+        let subject = subjectFromResult(result);
+        if (options.subject) {
+          const ref = parseSubjectRef(options.subject);
+          if (!ref) {
+            log.error(
+              `--subject must be one of ${acceptanceSubjectTypes.map((t) => `${t}:<id>`).join(' | ')}`,
+            );
+            process.exit(1);
+          }
+          subject = { ref, requirement: subject?.requirement };
+        } else if (result.subject && !subject) {
+          log.error('result.json `subject` is malformed (expected "type:id" or {type,id})');
+          process.exit(1);
+        } else if (!subject) {
+          const ref = subjectFromEnv();
+          if (ref) subject = { ref };
+        }
+        if (!subject) {
+          log.error(
+            'Acceptance subject is required: run inside a LobeHub topic or pass --subject task:<id> | topic:<id> | document:<id>',
+          );
+          process.exit(1);
+        }
+        const requirement = options.requirement ?? subject?.requirement;
 
         const client = await getTrpcClient();
         const goal = options.goal ?? (typeof result.focus === 'string' ? result.focus : undefined);
         const title = options.title ?? result.title;
-        const newRunMetadata = metadataForReport(result);
-
-        // Resolve the target session. Reuse the one this report dir already
-        // created (recorded in the sidecar) so re-verifying the same case
-        // updates one evolving report in place rather than adding a list entry
-        // per round. `--run` targets a session explicitly; `--new` forces a
-        // fresh one; `--operation` links a fresh session to an Agent Run.
-        const rememberedRunId = options.new ? undefined : (options.run ?? readSidecarRunId(dir));
-        let runId!: string;
-        let reused = false;
-        if (rememberedRunId) {
-          const existing = await client.verify.getRun.query({ verifyRunId: rememberedRunId });
-          if (existing) {
-            reused = true;
-            runId = existing.id;
-            const metadata = metadataForReport(result, existing.metadata);
-            // 1a. Refresh the scope header / title / goal in place.
-            await client.verify.updateRun.mutate({
-              value: { context, goal, metadata, scenario, title },
-              verifyRunId: runId,
-            });
-          } else if (options.run) {
-            // An explicit --run that doesn't resolve is a user error, not a
-            // silent fall-through to a stray new session.
-            log.error(`Verification session not found: ${options.run}`);
-            process.exit(1);
-          } else {
-            // The remembered session was deleted — drop the stale pointer and
-            // create a fresh one below.
-            log.warn(`Recorded session ${rememberedRunId} no longer exists — creating a new one`);
-          }
+        // The title is the run's identity in every list surface — an untitled
+        // run renders as a placeholder forever, so say so before it ships.
+        if (!title) {
+          log.warn(
+            'result.json has no "title" — the run will list as untitled; set result.title (or pass --title)',
+          );
         }
+        // The in-app conversation that ran this harness, if any (env-supplied).
+        // Strictly the authoring conversation. `--operation` names the Agent Run
+        // under test and is passed to `createRun` below — a different relation.
+        const origin = originFromEnv();
+        const newRunMetadata = metadataForReport(result, undefined, origin);
 
-        // 1b. Create the verification session when not updating one in place.
-        if (!reused) {
-          const run = await client.verify.createRun.mutate({
-            context,
-            goal,
-            metadata: newRunMetadata,
-            operationId: options.operation,
-            scenario,
-            source: options.source as any,
-            title,
-          });
-          runId = run.id;
-        }
+        // Every ingest is a new immutable verification snapshot. A repair or
+        // re-verification is represented by another run on the same acceptance.
+        const run = await client.verify.createRun.mutate({
+          context,
+          goal,
+          metadata: newRunMetadata,
+          operationId: options.operation,
+          plan,
+          scenario,
+          source: options.source as any,
+          title,
+        });
+        const runId = run.id;
+
+        // 1c. Chain the session onto its subject's acceptance as the next round
+        //     BEFORE the report lands, so the report-time status rollup already
+        //     sees the aggregate.
+        const acceptance = await client.acceptance.ensure.mutate({
+          requirement,
+          subjectId: subject.ref.subjectId,
+          subjectType: subject.ref.subjectType,
+        });
+        const acceptanceId = acceptance.id;
+        await client.acceptance.attachRun.mutate({ acceptanceId, verifyRunId: runId });
 
         // 2. Ingest each case as a check result + its evidence. `checkItemId` is
-        //    the stable upsert key, so a re-ingest overwrites the matching case
-        //    rather than duplicating it. Track the ids we touch to prune dropped
-        //    cases afterwards, keeping a re-run a full replace.
+        //    the stable key within this immutable run.
         const seenCheckItemIds = new Set<string>();
         let evidenceCount = 0;
         let inlined = 0;
@@ -1204,27 +1550,14 @@ export function registerVerifyCommand(program: Command) {
             required: c.required ?? true,
             // The case's key observation is recorded as Toulmin evidence; a real
             // remediation hint (if the report provides one) goes to `suggestion`.
-            // Absent → explicit `null`, not `undefined`: ingest-report is a full
-            // replace, so a case that dropped its observation/suggestion this
-            // round must CLEAR the prior value on a reused run (undefined would be
-            // skipped by the conflict UPDATE and leave stale text on the row).
+            // Absent → explicit `null`, so this immutable snapshot records the
+            // absence instead of relying on upsert defaults.
             suggestion: typeof c.suggestion === 'string' ? c.suggestion : null,
             toulmin: typeof observation === 'string' ? { evidence: observation } : null,
             verdict,
             verifierType: 'agent',
             verifyRunId: runId,
           });
-
-          // On an in-place update, clear the case's prior evidence before
-          // re-attaching so screenshots are replaced, not stacked round on round.
-          if (reused) {
-            const prior = await client.verify.listEvidence.query({
-              checkResultId: checkResult.id,
-            });
-            for (const ev of prior) {
-              await client.verify.deleteEvidence.mutate({ id: ev.id });
-            }
-          }
 
           for (const evidenceInput of reportEvidence(c.evidence)) {
             const rel = evidenceInput.path;
@@ -1283,38 +1616,34 @@ export function registerVerifyCommand(program: Command) {
           summary: conclusion,
           totalChecks: summary.total ?? cases.length,
           uncertainChecks: (summary.blocked ?? 0) + (summary.uncertain ?? 0) || undefined,
-          verdict: summary.verdict ? toVerdict(summary.verdict) : undefined,
+          // An explicit summary.verdict wins; otherwise the headline is derived
+          // from the ingested cases (deriveReportVerdict) so no report ships
+          // verdict-less and lists as a permanent "?".
+          verdict: summary.verdict ? toVerdict(summary.verdict) : deriveReportVerdict(cases),
           verifyRunId: runId,
         });
 
-        // 4. Prune cases the report no longer has (only when updating in place —
-        //    a fresh session has nothing to prune). Keeps a re-run a full
-        //    replace: dropped checks and their evidence disappear.
-        let pruned = 0;
-        if (reused) {
-          const existingResults = await client.verify.listResultsByRun.query({
-            verifyRunId: runId,
-          });
-          for (const r of existingResults) {
-            if (!seenCheckItemIds.has(r.checkItemId)) {
-              await client.verify.deleteResult.mutate({ id: r.id });
-              pruned += 1;
-            }
-          }
-        }
-
-        // 5. Remember this session on the report dir so the next ingest of the
-        //    same dir updates it in place instead of creating a new one.
-        writeSidecarRunId(dir, runId);
+        // A case with no matching plan item means the run checked something it
+        // never planned — worth saying out loud, but not a failure. Only
+        // meaningful against a plan that actually names something: with no plan
+        // (or a cleared one) every case is trivially "unplanned", which is noise.
+        const unplanned = plan?.length
+          ? [...seenCheckItemIds].filter((id) => !plan.some((item) => item.id === id))
+          : [];
 
         if (options.json !== undefined) {
           outputJson(
             {
+              acceptanceId,
               cases: cases.length,
               evidence: evidenceCount,
               inlined,
-              pruned,
-              reused,
+              origin,
+              planItems: plan?.length ?? 0,
+              pullRequest,
+              scenario,
+              subject: subject.ref,
+              unplanned,
               verifyRunId: runId,
             },
             typeof options.json === 'string' ? options.json : undefined,
@@ -1322,17 +1651,27 @@ export function registerVerifyCommand(program: Command) {
           return;
         }
 
-        const verb = reused ? 'Updated' : 'Ingested';
         console.log(
-          `${pc.green('✓')} ${verb} ${pc.bold(String(cases.length))} case(s), ${pc.bold(String(evidenceCount))} evidence artifact(s)` +
-            `${inlined > 0 ? `, ${pc.bold(String(inlined))} inline` : ''}` +
-            `${pruned > 0 ? `, pruned ${pc.bold(String(pruned))} stale case(s)` : ''}`,
+          `${pc.green('✓')} Ingested ${pc.bold(String(cases.length))} case(s), ${pc.bold(String(evidenceCount))} evidence artifact(s)` +
+            `${inlined > 0 ? `, ${pc.bold(String(inlined))} inline` : ''}`,
         );
+        if (plan?.length) {
+          const unexecuted = plan.filter((item) => !seenCheckItemIds.has(item.id));
+          console.log(
+            `${pc.bold('plan')}: ${plan.length} item(s)` +
+              `${unexecuted.length > 0 ? pc.yellow(` — ${unexecuted.length} planned but not executed`) : ''}` +
+              `${unplanned.length > 0 ? pc.dim(` — ${unplanned.length} unplanned case(s)`) : ''}`,
+          );
+        }
+        if (pullRequest?.url) console.log(`${pc.bold('pr')}: ${pullRequest.url}`);
+        if (origin?.topicId) console.log(`${pc.bold('origin topic')}: ${origin.topicId}`);
+        console.log(`${pc.bold('verifyRunId')}: ${runId} ${pc.dim('(immutable snapshot)')}`);
         console.log(
-          `${pc.bold('verifyRunId')}: ${runId}${reused ? pc.dim(' (updated in place)') : ''}`,
+          `${pc.bold('acceptance')}: ${acceptanceId} ${pc.dim(`(${subject.ref.subjectType}:${subject.ref.subjectId})`)}`,
         );
         if (options.open) {
           console.log(`${pc.bold('open')}: /verify/${runId}`);
+          console.log(`${pc.bold('open acceptance')}: /acceptance/${acceptanceId}`);
         }
       },
     );

@@ -1,7 +1,7 @@
 import { and, count, desc, eq, inArray, isNull, ne, notInArray, sum } from 'drizzle-orm';
 
 import type { DocumentItem, NewDocument } from '../schemas';
-import { DOCUMENT_FOLDER_TYPE, documents, files } from '../schemas';
+import { DOCUMENT_FOLDER_TYPE, documents, files, works } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
@@ -318,7 +318,7 @@ export class DocumentModel {
 
       const ids = subtree.map((d) => d.id);
 
-      await (trx as LobeChatDatabase)
+      const updatedDocuments = await (trx as LobeChatDatabase)
         .update(documents)
         .set({ updatedAt: new Date(), visibility })
         .where(
@@ -327,7 +327,28 @@ export class DocumentModel {
             eq(documents.userId, this.userId),
             eq(documents.visibility, fromVisibility),
           ),
-        );
+        )
+        .returning({ id: documents.id });
+
+      const updatedDocumentIds = updatedDocuments.map(({ id }) => id);
+      if (updatedDocumentIds.length > 0) {
+        // Mirror visibility onto existing Work projections in the same
+        // transaction. Scope without works.visibility so a promotion can
+        // update rows that are currently private.
+        await (trx as LobeChatDatabase)
+          .update(works)
+          .set({ visibility })
+          .where(
+            and(
+              eq(works.resourceType, 'document'),
+              inArray(works.resourceId, updatedDocumentIds),
+              buildWorkspaceWhere(
+                { userId: this.userId, workspaceId: this.workspaceId },
+                { userId: works.userId, workspaceId: works.workspaceId },
+              ),
+            ),
+          );
+      }
 
       // No child-table cascade needed here — Pages (`sourceType: 'api'`) hold
       // content inline in `documents.content` / `documents.pages`, and the

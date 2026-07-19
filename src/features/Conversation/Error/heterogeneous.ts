@@ -5,7 +5,7 @@ import {
 import type { UIChatMessage } from '@lobechat/types';
 
 /**
- * Heterogeneous-agent (Claude Code / Codex) session errors that render the
+ * Heterogeneous CLI-agent session errors that render the
  * dedicated status-guide card (auth required, CLI missing, overload, rate
  * limit). Kept in this dependency-free module so non-React callers (e.g. the
  * message action bar) can branch on them without pulling the whole Error UI
@@ -26,7 +26,7 @@ export const isHeterogeneousAgentStatusGuideError = (
   const { agentType, code } = value as Partial<HeterogeneousAgentSessionError>;
 
   return (
-    (agentType === 'claude-code' || agentType === 'codex') &&
+    (agentType === 'amp' || agentType === 'claude-code' || agentType === 'codex') &&
     typeof code === 'string' &&
     HETEROGENEOUS_AGENT_STATUS_GUIDE_ERROR_CODES.has(code)
   );

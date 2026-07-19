@@ -29,16 +29,9 @@ import { useChatStore } from '@/store/chat';
 import { useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
 
-import AgentOverlay from './AgentOverlay';
-import {
-  BROWSER_IMPORT_BANNER_DISMISSED_STORAGE_KEY,
-  BROWSER_WEBVIEW_PARTITION,
-  BROWSER_WEBVIEW_SESSION_ATTRIBUTE,
-} from './const';
+import { BROWSER_IMPORT_BANNER_DISMISSED_STORAGE_KEY } from './const';
 import { useBrowserSidebarState } from './useBrowserSidebarState';
 import { createBrowserContext, normalizeBrowserUrl } from './utils';
-
-type WebviewElement = HTMLElement & { getWebContentsId: () => number };
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   loadingBar: css`
@@ -46,7 +39,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     position: absolute;
     z-index: 3;
-    inset-block-start: 0;
+
+    /* Anchored to the toolbar's bottom border — the page container below is
+       covered by the WebContentsView, which paints above renderer DOM. */
+    inset-block-end: -1px;
     inset-inline: 0;
 
     overflow: hidden;
@@ -144,13 +140,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   toolbarActions: css`
     margin-inline-start: auto;
   `,
-  webview: css`
+  /* The page itself is a main-process WebContentsView laid over this element —
+     nothing renders inside it. It exists to be measured. */
+  viewport: css`
     position: absolute;
     inset: 0;
-
-    width: 100%;
-    height: 100%;
-    border: 0;
   `,
 }));
 
@@ -160,15 +154,7 @@ interface BrowserPaneProps {
 
 const BrowserPane = memo<BrowserPaneProps>(({ sessionId }) => {
   const { t } = useTranslation('chat');
-  // The webview always mounts on a constant about:blank; the real first
-  // navigation is issued through the controller IPC once the guest is attached,
-  // so user-typed text never reaches the src attribute (a DOM-XSS sink). Later
-  // navigations go through the same IPC so the guest page doesn't remount.
-  // `initialUrl === undefined` renders the empty state instead of a webview;
-  // its value only seeds the address bar until the first state broadcast.
-  const [initialUrl, setInitialUrl] = useState<string>();
-  const pendingUrl = useRef<string>(undefined);
-  const state = useBrowserSidebarState(sessionId, initialUrl);
+  const state = useBrowserSidebarState(sessionId);
   const [address, setAddress] = useState('');
   const [isEditing, setIsEditing] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
@@ -177,43 +163,78 @@ const BrowserPane = memo<BrowserPaneProps>(({ sessionId }) => {
     false,
   );
   const browserRequest = useGlobalStore((s) => s.status.workingSidebarBrowserRequest);
+  const clearBrowserTabRequest = useGlobalStore((s) => s.clearBrowserTabRequest);
   const consumedNonce = useRef<number>(undefined);
-  const webviewRef = useRef<WebviewElement>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
 
-  // will-attach-webview only sees standard attributes, so the main process
-  // can't learn the sessionId there — bind it explicitly once the guest exists.
-  // The pending first navigation rides on a successful attach.
+  // The page lives in the main process, so it exists as soon as anything has
+  // navigated it — including an agent the user has never watched.
+  const hasPage = state.attached || (!!state.url && state.url !== 'about:blank');
+
+  // The overlay is drawn inside the page (a WebContentsView paints above all
+  // renderer DOM, so it can't be drawn here any more) — hand the copy over.
   useEffect(() => {
-    const el = webviewRef.current;
-    if (!el) return;
+    if (!isDesktop) return;
+    void electronBrowserSidebarService.setOverlayLabels({
+      controlling: t('workingPanel.browser.agentControlling'),
+      cursor: t('workingPanel.browser.agentCursor'),
+    });
+  }, [t]);
 
-    const handleDomReady = () => {
-      const webContentsId = el.getWebContentsId();
-      electronBrowserSidebarService
-        .attach({ sessionId, webContentsId })
-        .then((result) => {
-          if (!result.success) return;
-          const pending = pendingUrl.current;
-          pendingUrl.current = undefined;
-          if (pending) return electronBrowserSidebarService.navigate({ sessionId, url: pending });
-        })
-        .catch((error) => {
-          console.error('[BrowserSidebar] Failed to attach webview:', error);
-        });
+  // Tell the main process where to lay the page out. Polled rather than observed
+  // because the panel also moves when nothing about it resizes (the left sidebar
+  // collapsing shifts its x), and a ResizeObserver would sleep through that.
+  // A zero-sized rect — which is what `display: none` reports when another tab is
+  // active — parks the page off-screen instead of destroying it.
+  useEffect(() => {
+    if (!isDesktop || !hasPage) return;
+
+    let frame = 0;
+    let lastKey = '';
+
+    const tick = () => {
+      const element = viewportRef.current;
+      if (element) {
+        const rect = element.getBoundingClientRect();
+        const visible = rect.width >= 1 && rect.height >= 1;
+        // devicePixelRatio tracks the app zoom level, and the main process turns
+        // this CSS rect into DIP with the zoom factor. Without it in the key, a
+        // Cmd +/- that leaves the rect unchanged would strand the page at the
+        // bounds it had at the old zoom.
+        const key = visible
+          ? [rect.x, rect.y, rect.width, rect.height, window.devicePixelRatio]
+              .map((value) => Math.round(value * 100))
+              .join(',')
+          : 'parked';
+
+        if (key !== lastKey) {
+          lastKey = key;
+          void electronBrowserSidebarService.setViewport({
+            rect: visible
+              ? { height: rect.height, width: rect.width, x: rect.x, y: rect.y }
+              : undefined,
+            sessionId,
+          });
+        }
+      }
+
+      frame = requestAnimationFrame(tick);
     };
 
-    el.addEventListener('dom-ready', handleDomReady);
-    return () => el.removeEventListener('dom-ready', handleDomReady);
-  }, [initialUrl, sessionId]);
+    frame = requestAnimationFrame(tick);
 
-  // The pane is keyed by session, so switching agents back remounts it with
-  // empty local state while the main process still holds the session's page.
-  // Bring the webview back on the recorded URL instead of an empty pane.
-  useEffect(() => {
-    if (initialUrl || !state.url || state.url === 'about:blank') return;
-    pendingUrl.current = state.url;
-    setInitialUrl(state.url);
-  }, [initialUrl, state.url]);
+    // Nothing here handles "the same agent is open in another window, which took
+    // the page": the rect never changes, so this loop stays silent. The main
+    // process reclaims the page on the window's own `focus` event — a renderer
+    // `focus` listener does not fire when you switch between two windows of the
+    // same app (measured), so it cannot be the trigger.
+
+    return () => {
+      cancelAnimationFrame(frame);
+      // Park rather than close: the agent may still be driving this page.
+      void electronBrowserSidebarService.setViewport({ sessionId });
+    };
+  }, [hasPage, sessionId]);
 
   useEffect(() => {
     if (!isEditing) setAddress(state.url === 'about:blank' ? '' : state.url);
@@ -234,13 +255,6 @@ const BrowserPane = memo<BrowserPaneProps>(({ sessionId }) => {
   const openUrl = (rawUrl: string) => {
     const url = normalizeBrowserUrl(rawUrl);
     setAddress(url);
-
-    if (!initialUrl) {
-      pendingUrl.current = url;
-      setInitialUrl(url);
-      return;
-    }
-
     void runAction(() => electronBrowserSidebarService.navigate({ sessionId, url }));
   };
 
@@ -313,10 +327,17 @@ const BrowserPane = memo<BrowserPaneProps>(({ sessionId }) => {
   // External open requests (web-browsing search results, store action) arrive as
   // one-shot nonces; the pane may mount after the request was fired, so consume
   // whatever is pending on mount too.
+  //
+  // Retiring the request in the store is what makes it truly one-shot. The nonce
+  // ref alone cannot: it dies with the component, and the pane is remounted on
+  // every topic switch (the browser session key is per-topic). A request left in
+  // persisted status would then be re-consumed on each switch and would navigate
+  // that topic's page away from whatever the agent had loaded there.
   useEffect(() => {
     if (!browserRequest || consumedNonce.current === browserRequest.nonce) return;
     consumedNonce.current = browserRequest.nonce;
     openUrl(browserRequest.url);
+    clearBrowserTabRequest();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [browserRequest?.nonce]);
 
@@ -430,6 +451,17 @@ const BrowserPane = memo<BrowserPaneProps>(({ sessionId }) => {
             }
           />
         </Flexbox>
+        {/* Sits on the toolbar's edge, not inside the page container: a
+            WebContentsView paints above all renderer DOM, so a bar drawn over the
+            page area would be hidden the moment a page is showing. */}
+        {state.isLoading && (
+          <div
+            aria-label={t('workingPanel.browser.loading')}
+            aria-valuetext={t('workingPanel.browser.loading')}
+            className={styles.loadingBar}
+            role="progressbar"
+          />
+        )}
       </Flexbox>
       {!isImportBannerDismissed && (
         <Flexbox horizontal align={'center'} className={styles.importBanner} gap={12}>
@@ -458,24 +490,8 @@ const BrowserPane = memo<BrowserPaneProps>(({ sessionId }) => {
         </Flexbox>
       )}
       <Flexbox className={styles.container}>
-        {state.isLoading && (
-          <div
-            aria-label={t('workingPanel.browser.loading')}
-            aria-valuetext={t('workingPanel.browser.loading')}
-            className={styles.loadingBar}
-            role="progressbar"
-          />
-        )}
-        <AgentOverlay sessionId={sessionId} />
-        {initialUrl ? (
-          <webview
-            className={styles.webview}
-            key={sessionId}
-            partition={BROWSER_WEBVIEW_PARTITION}
-            ref={webviewRef}
-            src={'about:blank'}
-            {...{ [BROWSER_WEBVIEW_SESSION_ATTRIBUTE]: sessionId }}
-          />
+        {hasPage ? (
+          <div className={styles.viewport} ref={viewportRef} />
         ) : (
           <Center height={'100%'} width={'100%'}>
             <Empty

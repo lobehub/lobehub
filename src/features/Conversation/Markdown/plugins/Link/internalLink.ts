@@ -3,11 +3,12 @@ import { OFFICIAL_URL } from '@lobechat/const';
 
 import { getIdFromIdentifier } from '@/utils/identifier';
 
-const ROUTE_ROOTS = new Set(['agent', 'page', 'task', 'tasks', 'verify']);
+const ROUTE_ROOTS = new Set(['acceptance', 'agent', 'page', 'task', 'tasks', 'verify']);
 const BUILTIN_AGENT_SLUG_SET = new Set<string>(Object.values(BUILTIN_AGENT_SLUGS));
 const NON_SPA_ROUTE_ROOTS = new Set(['_next', 'api', 'f', 'oidc', 'trpc', 'webapi']);
 const SPA_ROUTE_ROOTS = new Set([
   'agent',
+  'acceptance',
   'community',
   'downloads',
   'eval',
@@ -25,6 +26,7 @@ const SPA_ROUTE_ROOTS = new Set([
 ]);
 
 export type InternalLinkReference =
+  | { acceptanceId: string; pathname: string; type: 'acceptance'; workspaceSlug?: string }
   | { agentId: string; pathname: string; type: 'agent'; workspaceSlug?: string }
   | {
       agentId?: string;
@@ -109,6 +111,15 @@ export const parseInternalLink = (
   }
 
   const { segments, workspaceSlug } = route;
+
+  if (segments[0] === 'acceptance' && segments[1]) {
+    return {
+      acceptanceId: segments[1],
+      pathname,
+      type: 'acceptance',
+      ...(workspaceSlug ? { workspaceSlug } : {}),
+    };
+  }
 
   if (segments[0] === 'page' && segments[1]) {
     return {

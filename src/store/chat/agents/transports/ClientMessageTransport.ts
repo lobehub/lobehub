@@ -26,7 +26,26 @@ export class ClientMessageTransport implements MessageTransport {
   ) {}
 
   createAssistantMessage(params: CreateMessageParams): Promise<RuntimeMessageRef> {
-    return this.createMessage(params);
+    const operation = this.get().operations[this.operationId];
+    if (!operation) throw new Error(`Operation not found: ${this.operationId}`);
+
+    const { agentId, groupId, isSupervisor, scope, subAgentId, threadId, topicId } =
+      operation.context;
+    const effectiveAgentId = subAgentId && scope !== 'sub_agent' ? subAgentId : agentId;
+    const metadata = {
+      ...params.metadata,
+      ...(isSupervisor && { isSupervisor: true }),
+      ...(scope === 'sub_agent' && subAgentId && { scope, subAgentId }),
+    };
+
+    return this.createMessage({
+      ...params,
+      ...(effectiveAgentId && { agentId: effectiveAgentId }),
+      ...(groupId && { groupId }),
+      ...(Object.keys(metadata).length > 0 && { metadata }),
+      ...(threadId && { threadId }),
+      ...(topicId && { topicId }),
+    });
   }
 
   createToolMessage(params: CreateMessageParams): Promise<RuntimeMessageRef> {
@@ -45,7 +64,14 @@ export class ClientMessageTransport implements MessageTransport {
   }
 
   async findById(id: string): Promise<RuntimeMessageRef | undefined> {
-    return this.getMessages().find((message) => message.id === id);
+    for (const message of this.getMessages()) {
+      if (message.id === id) return message;
+
+      const compressedMessage = message.compressedMessages?.find((item) => item.id === id);
+      if (compressedMessage) return compressedMessage;
+    }
+
+    return undefined;
   }
 
   async query(
@@ -120,7 +146,7 @@ export class ClientMessageTransport implements MessageTransport {
     const optimisticContext = { operationId };
 
     store.internal_dispatchMessage(
-      { id, type: 'createMessage', value: message },
+      { id, type: 'createMessage', value: { ...message } },
       optimisticContext,
     );
 

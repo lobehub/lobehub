@@ -187,6 +187,39 @@ describe('GeneralChatAgent', () => {
       expect(result).toEqual(expectCompressionInstruction(state.messages));
     });
 
+    it('should carry a persisted compressedGroup summary into incremental compression', async () => {
+      const agent = createCompressionAgent();
+      const state = createMockState({
+        messages: [
+          {
+            content: 'Outdated decisions',
+            id: 'compressed-group-old',
+            role: 'compressedGroup',
+          },
+          {
+            content: 'Earlier decisions and constraints',
+            id: 'compressed-group-current',
+            role: 'compressedGroup',
+          },
+          { content: 'A new follow-up question', id: 'user-message', role: 'user' },
+        ] as any,
+      });
+
+      const result = await agent.runner(
+        createMockContext('init', { model: 'gpt-4o-mini', provider: 'openai' }),
+        state,
+      );
+
+      expect(result).toEqual({
+        payload: {
+          currentTokenCount: expect.any(Number),
+          existingSummary: 'Outdated decisions\n\nEarlier decisions and constraints',
+          messages: state.messages,
+        },
+        type: 'compress_context',
+      });
+    });
+
     // Bug B: state.tools must feed into the compression budget,
     // otherwise large tool manifests (16-22K tokens observed on openrouter)
     // slip past the threshold and overflow the model context window.

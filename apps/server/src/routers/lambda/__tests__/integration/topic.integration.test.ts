@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { type LobeChatDatabase } from '@lobechat/database';
-import { sessions, topics } from '@lobechat/database/schemas';
+import { messages, sessions, topics } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -14,8 +14,7 @@ vi.mock('@/database/core/db-adaptor', () => ({
   getServerDB: vi.fn(() => testDB),
 }));
 
-// Mock next/server's after() to execute callback immediately in tests
-vi.mock('next/server', () => ({
+vi.mock('@/server/utils/scheduleAfterResponse', () => ({
   after: vi.fn((callback: () => void) => callback()),
 }));
 
@@ -30,6 +29,7 @@ vi.mock('next/server', () => ({
 describe('Topic Router Integration Tests', () => {
   let serverDB: LobeChatDatabase;
   let userId: string;
+  let otherUserId: string | undefined;
   let testSessionId: string;
   let testAgentId: string;
 
@@ -37,6 +37,7 @@ describe('Topic Router Integration Tests', () => {
     serverDB = await getTestDB();
     testDB = serverDB;
     userId = await createTestUser(serverDB);
+    otherUserId = undefined;
 
     // Create test agent
     const { agents } = await import('@/database/schemas');
@@ -61,6 +62,7 @@ describe('Topic Router Integration Tests', () => {
 
   afterEach(async () => {
     await cleanupTestUser(serverDB, userId);
+    if (otherUserId) await cleanupTestUser(serverDB, otherUserId);
   });
 
   describe('createTopic', () => {
@@ -131,6 +133,116 @@ describe('Topic Router Integration Tests', () => {
       const [createdTopic] = await serverDB.select().from(topics).where(eq(topics.id, topicId));
 
       expect(createdTopic.sessionId).toBe(testSessionId);
+    });
+  });
+
+  describe('getTopicTranscript', () => {
+    it('returns topic metadata with exact message pagination', async () => {
+      await serverDB.insert(topics).values({
+        id: 'transcript-topic',
+        title: 'Transcript Topic',
+        userId,
+      });
+      await serverDB.insert(messages).values([
+        {
+          content: 'first',
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+          id: 'transcript-message-a',
+          role: 'user',
+          topicId: 'transcript-topic',
+          userId,
+        },
+        {
+          content: 'second',
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+          id: 'transcript-message-b',
+          role: 'assistant',
+          topicId: 'transcript-topic',
+          userId,
+        },
+        {
+          content: 'third',
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+          id: 'transcript-message-c',
+          role: 'tool',
+          topicId: 'transcript-topic',
+          userId,
+        },
+      ]);
+
+      const caller = topicRouter.createCaller(createTestContext(userId));
+      const result = await caller.getTopicTranscript({
+        limit: 1,
+        offset: 1,
+        topicId: 'transcript-topic',
+      });
+
+      expect(result.topic).toMatchObject({ id: 'transcript-topic', title: 'Transcript Topic' });
+      expect(result.items).toEqual([
+        expect.objectContaining({ content: 'second', id: 'transcript-message-b' }),
+      ]);
+      expect(result.total).toBe(3);
+    });
+
+    it('does not load messages when includeMessages is false', async () => {
+      await serverDB.insert(topics).values({
+        id: 'metadata-only-topic',
+        title: 'Metadata Only',
+        userId,
+      });
+      await serverDB.insert(messages).values({
+        content: 'must not be returned',
+        id: 'metadata-only-message',
+        role: 'user',
+        topicId: 'metadata-only-topic',
+        userId,
+      });
+
+      const caller = topicRouter.createCaller(createTestContext(userId));
+      const result = await caller.getTopicTranscript({
+        includeMessages: false,
+        topicId: 'metadata-only-topic',
+      });
+
+      expect(result).toMatchObject({
+        items: [],
+        topic: { id: 'metadata-only-topic', title: 'Metadata Only' },
+        total: null,
+      });
+    });
+
+    it('rejects a missing topic instead of returning a successful empty result', async () => {
+      const caller = topicRouter.createCaller(createTestContext(userId));
+
+      await expect(caller.getTopicTranscript({ topicId: 'missing-topic' })).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+        message: 'Topic not found: missing-topic',
+      });
+    });
+
+    it('does not expose a personal topic to another authenticated user who knows its id', async () => {
+      await serverDB.insert(topics).values({
+        id: 'private-transcript-topic',
+        title: 'Private Transcript',
+        userId,
+      });
+      await serverDB.insert(messages).values({
+        content: 'private message',
+        id: 'private-transcript-message',
+        role: 'user',
+        topicId: 'private-transcript-topic',
+        userId,
+      });
+
+      otherUserId = await createTestUser(serverDB);
+      const otherCaller = topicRouter.createCaller(createTestContext(otherUserId));
+
+      await expect(
+        otherCaller.getTopicTranscript({ topicId: 'private-transcript-topic' }),
+      ).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+        message: 'Topic not found: private-transcript-topic',
+      });
     });
   });
 
@@ -467,10 +579,10 @@ describe('Topic Router Integration Tests', () => {
         .values({ title: 'Legacy Topic', sessionId: testSessionId, agentId: null, userId })
         .returning();
 
-      // Querying the agent triggers the background backfill via after().
+      // Querying the agent triggers the background backfill after the response.
       await caller.getTopics({ agentId: testAgentId });
 
-      // Wait for the after() callback to run
+      // Wait for the scheduled callback to run.
       await new Promise((resolve) => setTimeout(resolve, 100));
 
       const [migrated] = await serverDB.select().from(topics).where(eq(topics.id, legacyTopic.id));

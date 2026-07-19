@@ -159,6 +159,26 @@ export class StreamingHandler {
     return this.output;
   }
 
+  getContentParts(): MessageContentPart[] {
+    return [...this.contentParts];
+  }
+
+  getReasoningParts(): MessageContentPart[] {
+    return [...this.reasoningParts];
+  }
+
+  getThinkingContent(): string {
+    return this.thinkingContent;
+  }
+
+  hasContentImages(): boolean {
+    return this.contentParts.some((part) => part.type === 'image');
+  }
+
+  hasReasoningImages(): boolean {
+    return this.reasoningParts.some((part) => part.type === 'image');
+  }
+
   /**
    * Get reasoning duration
    */

@@ -11,9 +11,12 @@ import { finished as streamFinished } from 'node:stream/promises';
 import type {
   ClaudeCodeQuotaSnapshot,
   CodexQuotaSnapshot,
+  CodexRateLimitResetResult,
   HeterogeneousAgentSessionError,
 } from '@lobechat/electron-client-ipc';
 import {
+  AMP_CLI_INSTALL_COMMANDS,
+  AMP_CLI_INSTALL_DOCS_URL,
   CLAUDE_CODE_CLI_INSTALL_COMMANDS,
   CLAUDE_CODE_CLI_INSTALL_DOCS_URL,
   CODEX_CLI_INSTALL_COMMANDS,
@@ -23,19 +26,17 @@ import {
 import type { AskUserBridge } from '@lobechat/heterogeneous-agents/askUser';
 import type { McpToolResult } from '@lobechat/heterogeneous-agents/builtinMcp';
 import { LobeBuiltinMcpServer } from '@lobechat/heterogeneous-agents/builtinMcp';
-import type {
-  AgentContentBlock,
-  HeteroExecImageRef,
+import type { HeteroExecImageRef } from '@lobechat/heterogeneous-agents/protocol';
+import {
+  buildHeteroExecStdinPayload,
+  buildHeterogeneousPrompt,
 } from '@lobechat/heterogeneous-agents/protocol';
-import { buildHeteroExecStdinPayload } from '@lobechat/heterogeneous-agents/protocol';
 import type { AgentStreamEvent, UsageData } from '@lobechat/heterogeneous-agents/spawn';
 import {
   AgentStreamPipeline,
   buildAgentInput,
   ClaudeAgentSdkSession,
   createFileStoreImageUploader,
-  materializeImageToPath,
-  normalizeImage,
   readCodexSessionModel,
   resolveCliSpawnPlan,
   resolveCodexInitialModel,
@@ -47,8 +48,15 @@ import { detectHeterogeneousCliCommand } from '@/modules/binaries';
 import { getHeterogeneousAgentDriver } from '@/modules/heterogeneousAgent';
 import { buildBrowserMcpTools } from '@/modules/heterogeneousAgent/browserMcpTools';
 import { fetchClaudeCodeQuota } from '@/modules/heterogeneousAgent/claudeCodeQuota';
-import { fetchCodexQuota } from '@/modules/heterogeneousAgent/codexQuota';
+import {
+  consumeCodexRateLimitResetCredit as consumeCodexRateLimitResetCreditRequest,
+  fetchCodexQuota,
+} from '@/modules/heterogeneousAgent/codexQuota';
 import { createLambdaFileStorePort } from '@/modules/heterogeneousAgent/fileStorePort';
+import {
+  createQuotaCacheKey,
+  QuotaSnapshotCache,
+} from '@/modules/heterogeneousAgent/quotaSnapshotCache';
 import type {
   HeterogeneousAgentBuildPlan,
   HeterogeneousAgentImageAttachment,
@@ -102,6 +110,7 @@ const CLI_AUTH_REQUIRED_PATTERNS = [
   /\bunauthorized\b/i,
   /\b401\b/,
 ] as const;
+const AMP_AUTH_REQUIRED_PATTERNS = [/please (?:log|sign) in/i, /amp_api_key/i] as const;
 const CODEX_RESUME_CWD_MISMATCH_PATTERNS = [
   /working directory/i,
   /\bcwd\b/i,
@@ -145,10 +154,17 @@ interface StartSessionResult {
   sessionId: string;
 }
 
+/** Run identity the browser MCP tools need to reach the right in-app page. */
+interface BrowserRunBinding {
+  agentId?: string;
+  topicId?: string;
+}
+
 interface SendPromptParams {
   /**
-   * Agent this run belongs to. Binds the op to its in-app browser session
-   * (`agent:<agentId>`) so the browser MCP tools act on the right webview.
+   * Agent this run belongs to. Rides along to the renderer so it can tell
+   * whether revealing the browser panel would yank the user's view to a run
+   * they aren't watching.
    */
   agentId?: string;
   /** Image attachments to include in the prompt (downloaded from url, cached by id) */
@@ -163,6 +179,14 @@ interface SendPromptParams {
   sessionId: string;
   /** Extra context injected before the user prompt without mutating the prompt text. */
   systemContext?: string;
+  /**
+   * Topic this run belongs to. Binds the op to its in-app browser session
+   * (`topic:<topicId>`) so the browser MCP tools act on the right page.
+   *
+   * Not to be confused with `sessionId`, which is the CC/Codex agent session —
+   * a different namespace entirely.
+   */
+  topicId?: string;
 }
 
 interface CancelSessionParams {
@@ -192,10 +216,19 @@ interface GetSessionInfoParams {
 interface GetCodexQuotaParams {
   command?: string;
   env?: Record<string, string>;
+  force?: boolean;
+}
+
+interface ConsumeCodexRateLimitResetCreditParams {
+  command?: string;
+  creditId?: string;
+  env?: Record<string, string>;
+  idempotencyKey: string;
 }
 
 interface GetClaudeCodeQuotaParams {
   env?: Record<string, string>;
+  force?: boolean;
 }
 
 interface SessionInfo {
@@ -286,11 +319,17 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
    * fire many ops over its lifetime).
    */
   private opIdToIntervention = new Map<string, InterventionSlot>();
-  /** Op → agent binding for browser MCP tool session resolution. */
-  private opIdToAgentId = new Map<string, string>();
+  /**
+   * Op → run identity for browser MCP tool session resolution. The main process
+   * otherwise has no idea which topic an operation belongs to, and the browser
+   * session is keyed by topic (`topic:<topicId>`).
+   */
+  private opIdToBrowserBinding = new Map<string, BrowserRunBinding>();
   /** Lazy single MCP server, started on first claude-code prompt. */
   private builtinMcpServer?: LobeBuiltinMcpServer;
   private builtinMcpStartPromise?: Promise<LobeBuiltinMcpServer>;
+  private readonly claudeCodeQuotaCache = new QuotaSnapshotCache<ClaudeCodeQuotaSnapshot>();
+  private readonly codexQuotaCache = new QuotaSnapshotCache<CodexQuotaSnapshot>();
 
   private get remoteServerConfigCtr() {
     return this.app.getController(RemoteServerConfigCtr);
@@ -312,7 +351,30 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     const resolvedCommand = session.command.trim();
     if (resolvedCommand) return resolvedCommand;
 
-    return session.agentType === 'codex' ? 'codex' : 'claude';
+    switch (session.agentType) {
+      case 'amp': {
+        return 'amp';
+      }
+      case 'codex': {
+        return 'codex';
+      }
+      default: {
+        return 'claude';
+      }
+    }
+  }
+
+  private buildAmpCliMissingError(session: AgentSession): HeterogeneousAgentSessionError {
+    const command = this.resolveSessionCommand(session);
+
+    return {
+      agentType: 'amp',
+      code: HeterogeneousAgentSessionErrorCode.CliNotFound,
+      command,
+      docsUrl: AMP_CLI_INSTALL_DOCS_URL,
+      installCommands: AMP_CLI_INSTALL_COMMANDS,
+      message: `Amp CLI was not found. Install it and make sure \`${command}\` can be executed.`,
+    };
   }
 
   private buildCodexCliMissingError(session: AgentSession): HeterogeneousAgentSessionError {
@@ -343,6 +405,9 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
 
   private buildCliMissingError(session: AgentSession): HeterogeneousAgentSessionError | undefined {
     switch (session.agentType) {
+      case 'amp': {
+        return this.buildAmpCliMissingError(session);
+      }
       case 'claude-code': {
         return this.buildClaudeCodeCliMissingError(session);
       }
@@ -362,6 +427,17 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     const command = this.resolveSessionCommand(session);
 
     switch (session.agentType) {
+      case 'amp': {
+        return {
+          agentType: 'amp',
+          code: HeterogeneousAgentSessionErrorCode.AuthRequired,
+          command,
+          docsUrl: AMP_CLI_INSTALL_DOCS_URL,
+          message:
+            'Amp could not authenticate. Run `amp login` or configure AMP_API_KEY, then retry.',
+          stderr,
+        };
+      }
       case 'claude-code': {
         return {
           agentType: 'claude-code',
@@ -459,7 +535,12 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   ): HeterogeneousAgentSessionError | undefined {
     const message = this.getErrorMessage(error);
 
-    if (!message || !CLI_AUTH_REQUIRED_PATTERNS.some((pattern) => pattern.test(message))) return;
+    if (!message) return;
+    const patterns =
+      session.agentType === 'amp'
+        ? [...CLI_AUTH_REQUIRED_PATTERNS, ...AMP_AUTH_REQUIRED_PATTERNS]
+        : CLI_AUTH_REQUIRED_PATTERNS;
+    if (!patterns.some((pattern) => pattern.test(message))) return;
 
     return this.buildCliAuthRequiredError(session, message);
   }
@@ -526,11 +607,13 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     session: AgentSession,
   ): Promise<HeterogeneousAgentSessionError | undefined> {
     const defaultCommand =
-      session.agentType === 'claude-code'
-        ? 'claude'
-        : session.agentType === 'codex'
-          ? 'codex'
-          : undefined;
+      session.agentType === 'amp'
+        ? 'amp'
+        : session.agentType === 'claude-code'
+          ? 'claude'
+          : session.agentType === 'codex'
+            ? 'codex'
+            : undefined;
     if (!defaultCommand) return;
 
     const command = this.resolveSessionCommand(session);
@@ -538,7 +621,7 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
       command === defaultCommand
         ? await this.app.binaryManager?.detect?.(defaultCommand, true)
         : await detectHeterogeneousCliCommand(
-            session.agentType === 'claude-code' ? 'claude-code' : 'codex',
+            session.agentType as 'amp' | 'claude-code' | 'codex',
             command,
           );
 
@@ -825,11 +908,13 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
    */
   private async setupInterventionForOp(
     operationId: string,
-    agentId?: string,
+    browserBinding?: BrowserRunBinding,
   ): Promise<{ bridge: AskUserBridge; cleanup: () => Promise<void>; tmpConfigPath: string }> {
     const server = await this.ensureBuiltinMcpServerStarted();
     const bridge = server.registerOperation(operationId);
-    if (agentId) this.opIdToAgentId.set(operationId, agentId);
+    if (browserBinding?.agentId || browserBinding?.topicId) {
+      this.opIdToBrowserBinding.set(operationId, browserBinding);
+    }
     const tmpConfigPath = path.join(os.tmpdir(), `lobe-cc-mcp-${operationId}.json`);
 
     // `alwaysLoad: true` is the undocumented CC flag that promotes our
@@ -856,7 +941,7 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
       this.builtinMcpServer?.unregisterOperation(operationId);
       await slot.pumpDone;
       this.opIdToIntervention.delete(operationId);
-      this.opIdToAgentId.delete(operationId);
+      this.opIdToBrowserBinding.delete(operationId);
       await unlink(tmpConfigPath).catch(() => {
         /* file may already be gone if app crashed mid-prompt */
       });
@@ -876,12 +961,12 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     apiName: string,
     args: Record<string, unknown>,
   ): Promise<McpToolResult> {
-    const agentId = this.opIdToAgentId.get(operationId);
-    if (!agentId) {
+    const binding = this.opIdToBrowserBinding.get(operationId);
+    if (!binding?.agentId || !binding.topicId) {
       return {
         content: [
           {
-            text: 'The in-app browser is not available for this run (no agent binding). Continue without it.',
+            text: 'The in-app browser is not available for this run (no topic binding). Continue without it.',
             type: 'text',
           },
         ],
@@ -889,9 +974,11 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
       };
     }
 
-    const result = await this.app
-      .getController(BrowserControlCtr)
-      .runGatewayToolCall(apiName, { ...args, __agentId: agentId });
+    const result = await this.app.getController(BrowserControlCtr).runGatewayToolCall(apiName, {
+      ...args,
+      __agentId: binding.agentId,
+      __topicId: binding.topicId,
+    });
 
     const text =
       result.content ?? result.error?.message ?? (result.success ? 'OK' : 'Browser action failed');
@@ -916,82 +1003,20 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   }
 
   /**
-   * Convert a desktop image attachment list into shared content blocks. Each
-   * attachment's id is preserved as the cache key so repeated prompts hit the
-   * same on-disk entries.
-   */
-  private toImageContentBlocks(
-    imageList: HeterogeneousAgentImageAttachment[],
-  ): AgentContentBlock[] {
-    return imageList.map((image) => ({
-      source: { id: image.id, type: 'url', url: image.url },
-      type: 'image',
-    }));
-  }
-
-  /**
    * Build a Claude Code stream-json user message with text + base64 images.
-   * Delegates to the shared `buildAgentInput`; the desktop wrapper exists only
-   * to preserve the helper signature consumed by existing drivers.
+   * Semantic context is assembled by the shared prompt engine before the
+   * provider-specific serializer runs.
    */
   private async buildStreamJsonInput(
     prompt: string,
     imageList: HeterogeneousAgentImageAttachment[] = [],
     systemContext?: string,
   ): Promise<string> {
-    const blocks: AgentContentBlock[] = [];
-    if (systemContext && systemContext.length > 0)
-      blocks.push({ text: systemContext, type: 'text' });
-    if (prompt && prompt.length > 0) blocks.push({ text: prompt, type: 'text' });
-    blocks.push(...this.toImageContentBlocks(imageList));
-
-    const plan = await buildAgentInput('claude-code', blocks, { cacheDir: this.fileCacheDir });
+    const promptInput = buildHeterogeneousPrompt({ imageList, prompt, systemContext });
+    const plan = await buildAgentInput('claude-code', promptInput, {
+      cacheDir: this.fileCacheDir,
+    });
     return plan.stdin;
-  }
-
-  /**
-   * Materialize image attachments into stable filesystem paths for path-mode
-   * agents (Codex `--image <file>`). Fails the prompt if any image cannot be
-   * fetched / decoded — partially-attached prompts confuse the agent more
-   * than they help.
-   */
-  private async resolveCliImagePaths(
-    imageList: HeterogeneousAgentImageAttachment[] = [],
-  ): Promise<string[]> {
-    if (imageList.length === 0) return [];
-
-    const cacheDir = this.fileCacheDir;
-    const results = await Promise.allSettled(
-      imageList.map(async (image) => {
-        const normalized = await normalizeImage(
-          { id: image.id, type: 'url', url: image.url },
-          { cacheDir },
-        );
-        return materializeImageToPath(normalized, cacheDir);
-      }),
-    );
-
-    const imagePaths: string[] = [];
-    const failures: string[] = [];
-
-    for (const [index, result] of results.entries()) {
-      const imageId = imageList[index]?.id ?? `image-${index + 1}`;
-
-      if (result.status === 'fulfilled') {
-        imagePaths.push(result.value);
-        continue;
-      }
-
-      const message = this.getErrorMessage(result.reason) || 'Unknown error';
-      logger.error(`Failed to materialize image ${imageId} for CLI:`, result.reason);
-      failures.push(`${imageId}: ${message}`);
-    }
-
-    if (failures.length > 0) {
-      throw new Error(`Failed to attach image(s) to CLI: ${failures.join('; ')}`);
-    }
-
-    return imagePaths;
   }
 
   // ─── IPC methods ───
@@ -1055,7 +1080,10 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     // into `--mcp-config`. Codex / future agents skip this entirely.
     const intervention =
       session.agentType === 'claude-code'
-        ? await this.setupInterventionForOp(params.operationId, params.agentId).catch((err) => {
+        ? await this.setupInterventionForOp(params.operationId, {
+            agentId: params.agentId,
+            topicId: params.topicId,
+          }).catch((err) => {
             logger.warn('Failed to set up AskUserQuestion bridge — proceeding without it:', err);
             return undefined;
           })
@@ -1068,18 +1096,29 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     let spawnEnv: NodeJS.ProcessEnv;
     try {
       const driver = getHeterogeneousAgentDriver(session.agentType);
+      const promptInput = buildHeterogeneousPrompt({
+        imageList: params.imageList,
+        prompt: params.prompt,
+        systemContext: params.systemContext,
+      });
       spawnPlan = await driver.buildSpawnPlan({
         args: session.args,
         helpers: {
-          buildClaudeStreamJsonInput: (prompt, imageList) =>
-            this.buildStreamJsonInput(prompt, imageList, params.systemContext),
-          resolveCliImagePaths: (imageList) => this.resolveCliImagePaths(imageList),
+          buildAgentInput: async (agentType, input) => {
+            try {
+              return await buildAgentInput(agentType, input, { cacheDir: this.fileCacheDir });
+            } catch (error) {
+              logger.error('Failed to prepare heterogeneous agent input:', error);
+              throw new Error(
+                `Failed to attach image(s) to CLI: ${this.getErrorMessage(error) || 'Unknown error'}`,
+                { cause: error },
+              );
+            }
+          },
         },
-        imageList: params.imageList ?? [],
         mcpConfigPath: intervention?.tmpConfigPath,
-        prompt: params.prompt,
+        promptInput,
         resumeSessionId: session.agentSessionId,
-        systemContext: params.systemContext,
       });
 
       // Fall back to the user's Desktop so the process never inherits
@@ -1546,17 +1585,65 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   @IpcMethod()
   async getCodexQuota(params: GetCodexQuotaParams = {}): Promise<CodexQuotaSnapshot> {
     const command = params.command?.trim() || 'codex';
-    const status = await detectHeterogeneousCliCommand('codex', command);
-    const env = {
-      ...(status.resolvedPathEnv ? { PATH: status.resolvedPathEnv } : {}),
+    const sourceEnv = {
       ...buildProxyEnv(this.app.storeManager.get('networkProxy')),
       ...params.env,
     };
+    const sourceKey = createQuotaCacheKey('codex', command, sourceEnv);
 
-    return fetchCodexQuota({
+    return this.codexQuotaCache.get(
+      sourceKey,
+      async () => {
+        const status = await detectHeterogeneousCliCommand('codex', command);
+        const env = {
+          ...(status.resolvedPathEnv ? { PATH: status.resolvedPathEnv } : {}),
+          ...sourceEnv,
+        };
+
+        return fetchCodexQuota({
+          command: status.available && status.path ? status.path : command,
+          env: Object.keys(env).length > 0 ? env : undefined,
+        });
+      },
+      { force: params.force },
+    );
+  }
+
+  /**
+   * Redeem one earned Codex rate-limit reset, then bypass the quota cache so
+   * every renderer receives the post-reset windows and remaining inventory.
+   */
+  @IpcMethod()
+  async consumeCodexRateLimitResetCredit(
+    params: ConsumeCodexRateLimitResetCreditParams,
+  ): Promise<CodexRateLimitResetResult> {
+    const command = params.command?.trim() || 'codex';
+    const sourceEnv = {
+      ...buildProxyEnv(this.app.storeManager.get('networkProxy')),
+      ...params.env,
+    };
+    const sourceKey = createQuotaCacheKey('codex', command, sourceEnv);
+    const status = await detectHeterogeneousCliCommand('codex', command);
+    const env = {
+      ...(status.resolvedPathEnv ? { PATH: status.resolvedPathEnv } : {}),
+      ...sourceEnv,
+    };
+    const requestOptions = {
       command: status.available && status.path ? status.path : command,
       env: Object.keys(env).length > 0 ? env : undefined,
+    };
+
+    const outcome = await consumeCodexRateLimitResetCreditRequest({
+      ...requestOptions,
+      creditId: params.creditId,
+      idempotencyKey: params.idempotencyKey,
     });
+    this.codexQuotaCache.invalidate(sourceKey);
+    const quota = await this.codexQuotaCache.get(sourceKey, () => fetchCodexQuota(requestOptions), {
+      force: true,
+    });
+
+    return { outcome, quota };
   }
 
   /**
@@ -1568,7 +1655,13 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   async getClaudeCodeQuota(
     params: GetClaudeCodeQuotaParams = {},
   ): Promise<ClaudeCodeQuotaSnapshot> {
-    return fetchClaudeCodeQuota({ env: params.env });
+    const sourceKey = createQuotaCacheKey('claude-code', params.env);
+
+    return this.claudeCodeQuotaCache.get(
+      sourceKey,
+      () => fetchClaudeCodeQuota({ env: params.env }),
+      { force: params.force },
+    );
   }
 
   /**

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 const mockHeterogeneousAgent = vi.hoisted(() => ({
   cancelSession: vi.fn(),
+  consumeCodexRateLimitResetCredit: vi.fn(),
   getClaudeCodeQuota: vi.fn(),
   getCodexQuota: vi.fn(),
   getSessionInfo: vi.fn(),
@@ -32,7 +33,7 @@ describe('heterogeneousAgentService', () => {
     };
     mockHeterogeneousAgent.getClaudeCodeQuota.mockResolvedValue(snapshot);
 
-    const params = { env: { CLAUDE_CONFIG_DIR: '/custom/claude' } };
+    const params = { env: { CLAUDE_CONFIG_DIR: '/custom/claude' }, force: true };
     await expect(heterogeneousAgentService.getClaudeCodeQuota(params)).resolves.toEqual(snapshot);
     expect(mockHeterogeneousAgent.getClaudeCodeQuota).toHaveBeenCalledWith(params);
   });
@@ -50,9 +51,41 @@ describe('heterogeneousAgentService', () => {
     };
     mockHeterogeneousAgent.getCodexQuota.mockResolvedValue(snapshot);
 
-    const params = { command: '/usr/local/bin/codex', env: { CODEX_HOME: '/tmp/codex' } };
+    const params = {
+      command: '/usr/local/bin/codex',
+      env: { CODEX_HOME: '/tmp/codex' },
+      force: true,
+    };
     await expect(heterogeneousAgentService.getCodexQuota(params)).resolves.toEqual(snapshot);
     expect(mockHeterogeneousAgent.getCodexQuota).toHaveBeenCalledWith(params);
+  });
+
+  it('forwards Codex reset-credit consumption over IPC', async () => {
+    const { heterogeneousAgentService } = await import('./heterogeneousAgent');
+    const result = {
+      outcome: 'reset',
+      quota: {
+        error: null,
+        provider: 'codex',
+        rateLimitResetCredits: { availableCount: 0 },
+        session: { resetsAt: null, usedPercent: 0, windowMinutes: 300 },
+        status: 'ok',
+        updatedAt: 2,
+        weekly: null,
+      },
+    };
+    mockHeterogeneousAgent.consumeCodexRateLimitResetCredit.mockResolvedValue(result);
+    const params = {
+      command: '/usr/local/bin/codex',
+      creditId: 'credit-first',
+      env: { CODEX_HOME: '/tmp/codex' },
+      idempotencyKey: 'redeem-request-1',
+    };
+
+    await expect(
+      heterogeneousAgentService.consumeCodexRateLimitResetCredit(params),
+    ).resolves.toEqual(result);
+    expect(mockHeterogeneousAgent.consumeCodexRateLimitResetCredit).toHaveBeenCalledWith(params);
   });
 
   it('forwards session lifecycle calls over IPC', async () => {
@@ -63,12 +96,17 @@ describe('heterogeneousAgentService', () => {
       heterogeneousAgentService.startSession({ agentType: 'claude-code', command: 'claude' }),
     ).resolves.toEqual({ sessionId: 's1' });
 
-    await heterogeneousAgentService.sendPrompt('s1', 'hi', 'op1');
-    expect(mockHeterogeneousAgent.sendPrompt).toHaveBeenCalledWith({
-      imageList: undefined,
+    await heterogeneousAgentService.sendPrompt({
       operationId: 'op1',
       prompt: 'hi',
       sessionId: 's1',
+      topicId: 'topic-1',
+    });
+    expect(mockHeterogeneousAgent.sendPrompt).toHaveBeenCalledWith({
+      operationId: 'op1',
+      prompt: 'hi',
+      sessionId: 's1',
+      topicId: 'topic-1',
     });
 
     await heterogeneousAgentService.cancelSession('s1');

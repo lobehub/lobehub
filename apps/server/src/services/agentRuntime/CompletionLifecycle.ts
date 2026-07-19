@@ -1,6 +1,7 @@
 import { isParkedStatus } from '@lobechat/agent-runtime';
 import type { MessageContentPart } from '@lobechat/types';
 import { deserializeParts } from '@lobechat/utils';
+import { isRecord } from '@lobechat/utils/object';
 import debug from 'debug';
 
 import {
@@ -701,7 +702,9 @@ export class CompletionLifecycle {
 
   private buildLifecycleEvent(operationId: string, state: any, reason: string) {
     const metadata = state?.metadata || {};
-    const messages: any[] = Array.isArray(state?.messages) ? state.messages : [];
+    const messages = normalizeCompletionMessages(
+      Array.isArray(state?.messages) ? state.messages : [],
+    );
 
     // Pull text content off the **final** assistant turn. Content may be a
     // plain string or an OpenAI-style multimodal part array; for the array
@@ -714,7 +717,7 @@ export class CompletionLifecycle {
     const lastAssistantMessage = messages
       .slice()
       .reverse()
-      .find((m: { content?: unknown; id?: string; role: string }) => m.role === 'assistant');
+      .find((message) => message.role === 'assistant');
     const lastAssistantContent = lastAssistantMessage
       ? extractTextFromMessageContent(lastAssistantMessage.content)
       : undefined;
@@ -836,6 +839,64 @@ const extractTextFromMessageContent = (content: unknown): string | undefined => 
   }
   const joined = parts.join('');
   return joined || undefined;
+};
+
+/**
+ * Expand display-only assistant groups back into the assistant/tool sequence
+ * expected by terminal lifecycle consumers.
+ *
+ * DB rehydration runs conversation-flow parsing, which folds an entire tool
+ * chain — including its final toolless assistant turn — into one
+ * `assistantGroup` whose own content is empty. Completion hooks must inspect
+ * the persisted leaf turns rather than that virtual wrapper, otherwise they
+ * lose both the final text and the message id used by DB recovery.
+ */
+const normalizeCompletionMessages = (messages: unknown[]): Record<PropertyKey, unknown>[] => {
+  const normalized: Record<PropertyKey, unknown>[] = [];
+
+  for (const message of messages) {
+    if (!isRecord(message)) continue;
+
+    const isAssistantGroup = message.role === 'assistantGroup' || message.role === 'supervisor';
+    if (!isAssistantGroup) {
+      normalized.push(message);
+      continue;
+    }
+
+    if (!Array.isArray(message.children) || message.children.length === 0) {
+      normalized.push({ ...message, role: 'assistant' });
+      continue;
+    }
+
+    const groupStartIndex = normalized.length;
+    for (const child of message.children) {
+      if (!isRecord(child) || child.council) continue;
+
+      normalized.push({ ...child, role: 'assistant' });
+
+      if (!Array.isArray(child.tools)) continue;
+      for (const tool of child.tools) {
+        if (!isRecord(tool) || !isRecord(tool.result)) continue;
+
+        normalized.push({
+          content: tool.result.content,
+          id: tool.result.id,
+          role: 'tool',
+          tool_call_id: tool.id,
+        });
+      }
+    }
+
+    // A virtual group containing only non-message blocks (for example a
+    // council block) still marks the latest assistant boundary. Preserve an
+    // empty leaf so completion never falls back to stale text from an older
+    // turn.
+    if (normalized.length === groupStartIndex) {
+      normalized.push({ ...message, role: 'assistant' });
+    }
+  }
+
+  return normalized;
 };
 
 /**

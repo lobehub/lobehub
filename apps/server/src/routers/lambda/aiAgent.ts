@@ -324,6 +324,8 @@ const ExecSubAgentTaskSchema = z.object({
   instruction: z.string(),
   /** The parent message ID (Supervisor's tool call message or task message) */
   parentMessageId: z.string(),
+  /** Parent operation ID for dispatching callAgent hooks */
+  parentOperationId: z.string().optional(),
   /** Timeout in milliseconds (optional) */
   timeout: z.number().optional(),
   /** Task title (shown in UI, used as thread title) */
@@ -453,7 +455,7 @@ const AgentStreamEventSchema = z.object({
  * → topic reverse-lookup is unreliable per design decision).
  */
 const HeteroIngestSchema = z.object({
-  agentType: z.enum(['claude-code', 'codex']),
+  agentType: z.enum(['amp', 'claude-code', 'codex']),
   /** Initial assistant placeholder message id forwarded from the sandbox env var.
    * When present, `loadOrCreateState` uses it directly and skips the DB read of
    * topic.metadata.runningOperation, eliminating the replica-lag race condition. */
@@ -470,9 +472,16 @@ const HeteroIngestSchema = z.object({
  * (CC's per-cwd id), kept here so the server can resume next time.
  */
 const HeteroFinishSchema = z.object({
-  agentType: z.enum(['claude-code', 'codex']),
+  agentType: z.enum(['amp', 'claude-code', 'codex']),
   error: z
     .object({
+      /**
+       * Structured status-guide error for process-level failures (CLI not
+       * installed, auth required) — the CLI's `classifyHeteroProcessFailure`
+       * output. Persisted verbatim as the `ChatMessageError.body` so the
+       * client renders the dedicated guide.
+       */
+      body: z.record(z.string(), z.unknown()).optional(),
       message: z.string(),
       type: z.string(),
     })
@@ -761,6 +770,11 @@ export const aiAgentRouter = router({
         agentId,
         appContext,
         autoStart,
+        // Propagate the originating request's client IP / user agent into the run
+        // so downstream LLM-call metadata can carry them for auditing and spend
+        // attribution. These are server-derived from the tRPC context and are
+        // intentionally not part of the client-passable input schema.
+        clientIp: ctx.clientIp ?? undefined,
         deviceId,
         existingMessageIds,
         fileIds,
@@ -775,6 +789,7 @@ export const aiAgentRouter = router({
         selectedToolIds,
         slug,
         trigger: trigger ?? RequestTrigger.Chat,
+        userAgent: ctx.userAgent ?? undefined,
         userInterventionConfig,
       });
     } catch (error: any) {
@@ -974,7 +989,16 @@ export const aiAgentRouter = router({
   execSubAgentTask: aiAgentWriteProcedure
     .input(ExecSubAgentTaskSchema)
     .mutation(async ({ input, ctx }) => {
-      const { agentId, groupId, instruction, parentMessageId, title, topicId, timeout } = input;
+      const {
+        agentId,
+        groupId,
+        instruction,
+        parentMessageId,
+        parentOperationId,
+        title,
+        topicId,
+        timeout,
+      } = input;
 
       log('execSubAgentTask: agentId=%s, groupId=%s', agentId, groupId);
 
@@ -985,6 +1009,7 @@ export const aiAgentRouter = router({
           groupId,
           instruction,
           parentMessageId,
+          ...(parentOperationId && { parentOperationId }),
           timeout,
           title,
           topicId,

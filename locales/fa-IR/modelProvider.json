@@ -177,6 +177,7 @@
   "providerModels.config.baseURL.invalid": "لطفاً یک URL معتبر وارد کنید",
   "providerModels.config.baseURL.placeholder": "https://your-proxy-url.com/v1",
   "providerModels.config.baseURL.title": "آدرس پراکسی API",
+  "providerModels.config.builtinNotice": "ارائه‌دهندگان داخلی را نمی‌توان از لیست حذف کرد. اگر از این ارائه‌دهنده استفاده نمی‌کنید، فقط آن را غیرفعال کنید.",
   "providerModels.config.checker.button": "بررسی",
   "providerModels.config.checker.desc": "بررسی صحت وارد کردن کلید API و آدرس پراکسی",
   "providerModels.config.checker.pass": "بررسی موفقیت‌آمیز بود",

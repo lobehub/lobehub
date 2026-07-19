@@ -62,7 +62,7 @@ export enum SettingsTabs {
   Common = 'common',
   Connector = 'connector',
   Credits = 'credits',
-  Creds = 'creds',
+  Creds = 'credential',
   Devices = 'devices',
   Hotkey = 'hotkey',
   /** @deprecated Use ServiceModel instead */
@@ -71,6 +71,7 @@ export enum SettingsTabs {
   Memory = 'memory',
   Messenger = 'messenger',
   Notification = 'notification',
+  OAuthApps = 'oauth-apps',
   // business
   Plans = 'plans',
   Profile = 'profile',
@@ -267,6 +268,10 @@ export interface SystemStatus {
    */
   showTaskAgentPanel?: boolean;
   /**
+   * Visibility of the chat bottom terminal panel (desktop-only, Labs gated).
+   */
+  showTerminalPanel?: boolean;
+  /**
    * Visibility of the Verify workspace left-side report-list panel.
    * Independent from the nav rail so collapsing the report list does not affect other pages.
    */
@@ -307,6 +312,10 @@ export interface SystemStatus {
     subGroupBy: 'assignee' | 'none' | 'priority' | 'status';
   };
   /**
+   * Height of the chat bottom terminal panel. Persisted so resizing survives remounts.
+   */
+  terminalPanelHeight?: number;
+  /**
    * Whether to display tokens in short format
    */
   tokenDisplayFormatShort?: boolean;
@@ -324,9 +333,14 @@ export interface SystemStatus {
   /**
    * One-shot navigation request for the WorkingSidebar browser tab, so external
    * triggers (e.g. web-browsing search results) can open a URL in the in-app
-   * browser. Consumed by nonce.
+   * browser. The pane clears it (to `null`) the moment it navigates: this status
+   * is persisted, and the pane remounts whenever the browser session key changes
+   * (i.e. on every topic switch), so a request left lying around would be
+   * re-consumed and would drag that topic's page off whatever the agent had
+   * loaded. `null` rather than `undefined` because `updateSystemStatus` merges
+   * with lodash, which skips undefined.
    */
-  workingSidebarBrowserRequest?: { nonce: number; url: string };
+  workingSidebarBrowserRequest?: { nonce: number; url: string } | null;
   workingSidebarRevealRequest?: { nonce: number; path: string };
   /**
    * Active tab inside the agent chat right-side WorkingSidebar.
@@ -462,11 +476,13 @@ export const INITIAL_STATUS = {
   showRightPanel: false,
   showSystemRole: false,
   showTaskAgentPanel: false,
+  showTerminalPanel: false,
   showVerifyReportPanel: true,
   showVideoPanel: true,
   showVideoTopicPanel: true,
   sidebarExpandedKeys: [...DEFAULT_HOME_SIDEBAR_EXPANDED_KEYS],
   systemRoleExpandedMap: {},
+  terminalPanelHeight: 320,
   tokenDisplayFormatShort: true,
   topicPageSize: 20,
   verifyReportPanelWidth: 300,

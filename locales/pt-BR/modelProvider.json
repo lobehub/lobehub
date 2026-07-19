@@ -177,6 +177,7 @@
   "providerModels.config.baseURL.invalid": "Por favor, insira uma URL válida",
   "providerModels.config.baseURL.placeholder": "https://seu-url-proxy.com/v1",
   "providerModels.config.baseURL.title": "URL do Proxy da API",
+  "providerModels.config.builtinNotice": "Provedores integrados não podem ser removidos da lista. Se você não usar este provedor, apenas desative-o.",
   "providerModels.config.checker.button": "Verificar",
   "providerModels.config.checker.desc": "Teste se a chave de API e o URL do proxy foram preenchidos corretamente",
   "providerModels.config.checker.pass": "Verificação aprovada",

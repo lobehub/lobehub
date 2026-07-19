@@ -36,8 +36,11 @@ import {
   type ProviderListResponse,
   type ProviderQueryParams,
   type SkillCategoryItem,
+  type SkillCommentListResponse,
+  type SkillCommentsQueryParams,
   type SkillListResponse,
   type SkillQueryParams,
+  type SkillRatingDistribution,
 } from '@/types/discover';
 import { type MCPPluginListParams } from '@/types/plugins';
 import { cleanObject } from '@/utils/object';
@@ -542,6 +545,9 @@ class DiscoverService {
     });
   };
 
+  getSkillComments = async (params: SkillCommentsQueryParams): Promise<SkillCommentListResponse> =>
+    lambdaClient.market.skill.getSkillComments.query(params);
+
   getSkillDetail = async (params: {
     identifier: string;
     locale?: string;
@@ -563,6 +569,9 @@ class DiscoverService {
       pageSize: params.pageSize ? Number(params.pageSize) : 20,
     });
   };
+
+  getSkillRatingDistribution = async (identifier: string): Promise<SkillRatingDistribution> =>
+    lambdaClient.market.skill.getSkillRatingDistribution.query({ identifier });
 
   reportSkillEvent = async (eventData: { event: string; identifier: string; source?: string }) => {
     const allow = userGeneralSettingsSelectors.telemetry(useUserStore.getState());

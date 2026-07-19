@@ -4,6 +4,7 @@ import * as os from 'node:os';
 import path from 'node:path';
 import { PassThrough } from 'node:stream';
 
+import type { CodexQuotaSnapshot } from '@lobechat/electron-client-ipc';
 import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
 // `electron` is mocked below; this binding is the mock object so tests can
 // flip `isPackaged` to exercise the packaged-build tracing gate.
@@ -103,11 +104,13 @@ vi.mock('@lobechat/heterogeneous-agents/spawn', async (importOriginal) => {
   };
 });
 
-const { fetchCodexQuotaMock } = vi.hoisted(() => ({
+const { consumeCodexRateLimitResetCreditMock, fetchCodexQuotaMock } = vi.hoisted(() => ({
+  consumeCodexRateLimitResetCreditMock: vi.fn(),
   fetchCodexQuotaMock: vi.fn(),
 }));
 
 vi.mock('@/modules/heterogeneousAgent/codexQuota', () => ({
+  consumeCodexRateLimitResetCredit: consumeCodexRateLimitResetCreditMock,
   fetchCodexQuota: fetchCodexQuotaMock,
 }));
 
@@ -190,6 +193,7 @@ describe('HeterogeneousAgentCtr', () => {
   beforeEach(async () => {
     originalClaudeSdkLabEnv = process.env.LOBE_CLAUDE_CODE_SDK;
     appStoragePath = await mkdtemp(path.join(os.tmpdir(), 'lobehub-hetero-'));
+    consumeCodexRateLimitResetCreditMock.mockReset();
     fetchCodexQuotaMock.mockReset();
     claudeSdkSessionCloseMock.mockReset();
     claudeSdkSessionConstructMock.mockReset();
@@ -338,6 +342,165 @@ describe('HeterogeneousAgentCtr', () => {
           PATH: '/custom/bin',
         }),
       });
+    });
+
+    it('reuses automatic quota reads while explicit refresh bypasses the cache', async () => {
+      execFileMock.mockImplementation(
+        (
+          _file: string,
+          _args: string[],
+          optionsOrCallback: unknown,
+          callback?: (error: Error | null, result: { stderr: string; stdout: string }) => void,
+        ) => {
+          const resolvedCallback =
+            typeof optionsOrCallback === 'function' ? optionsOrCallback : callback;
+          resolvedCallback?.(null, { stderr: '', stdout: 'codex-cli 0.99.0' });
+        },
+      );
+      fetchCodexQuotaMock.mockResolvedValue({
+        error: null,
+        provider: 'codex',
+        session: { resetsAt: null, usedPercent: 8, windowMinutes: 300 },
+        status: 'ok',
+        updatedAt: Date.now(),
+        weekly: null,
+      });
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const params = { command: '/custom/bin/codex', env: { CODEX_HOME: '/tmp/codex-home' } };
+
+      await ctr.getCodexQuota(params);
+      await ctr.getCodexQuota(params);
+
+      expect(fetchCodexQuotaMock).toHaveBeenCalledTimes(1);
+
+      await ctr.getCodexQuota({ ...params, force: true });
+
+      expect(fetchCodexQuotaMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('consumes a reset credit and replaces the cached quota with a fresh snapshot', async () => {
+      execFileMock.mockImplementation(
+        (
+          _file: string,
+          _args: string[],
+          optionsOrCallback: unknown,
+          callback?: (error: Error | null, result: { stderr: string; stdout: string }) => void,
+        ) => {
+          const resolvedCallback =
+            typeof optionsOrCallback === 'function' ? optionsOrCallback : callback;
+          resolvedCallback?.(null, { stderr: '', stdout: 'codex-cli 0.99.0' });
+        },
+      );
+      const initialQuota = {
+        error: null,
+        provider: 'codex',
+        rateLimitResetCredits: { availableCount: 2 },
+        session: { resetsAt: null, usedPercent: 96, windowMinutes: 300 },
+        status: 'ok',
+        updatedAt: 1,
+        weekly: null,
+      };
+      const refreshedQuota = {
+        ...initialQuota,
+        rateLimitResetCredits: { availableCount: 1 },
+        session: { resetsAt: null, usedPercent: 0, windowMinutes: 300 },
+        updatedAt: 2,
+      };
+      fetchCodexQuotaMock.mockResolvedValueOnce(initialQuota).mockResolvedValueOnce(refreshedQuota);
+      consumeCodexRateLimitResetCreditMock.mockResolvedValue('reset');
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const source = {
+        command: '/custom/bin/codex',
+        env: { CODEX_HOME: '/tmp/codex-home' },
+      };
+
+      await ctr.getCodexQuota(source);
+      await expect(
+        ctr.consumeCodexRateLimitResetCredit({
+          ...source,
+          creditId: 'credit-first',
+          idempotencyKey: 'redeem-request-1',
+        }),
+      ).resolves.toEqual({ outcome: 'reset', quota: refreshedQuota });
+
+      expect(consumeCodexRateLimitResetCreditMock).toHaveBeenCalledWith({
+        command: '/custom/bin/codex',
+        creditId: 'credit-first',
+        env: { CODEX_HOME: '/tmp/codex-home' },
+        idempotencyKey: 'redeem-request-1',
+      });
+      expect(fetchCodexQuotaMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('bypasses an in-flight pre-reset quota read after consuming a credit', async () => {
+      execFileMock.mockImplementation(
+        (
+          _file: string,
+          _args: string[],
+          optionsOrCallback: unknown,
+          callback?: (error: Error | null, result: { stderr: string; stdout: string }) => void,
+        ) => {
+          const resolvedCallback =
+            typeof optionsOrCallback === 'function' ? optionsOrCallback : callback;
+          resolvedCallback?.(null, { stderr: '', stdout: 'codex-cli 0.99.0' });
+        },
+      );
+      const refreshedAt = Date.now();
+      const staleQuota = {
+        error: null,
+        provider: 'codex',
+        rateLimitResetCredits: { availableCount: 2 },
+        session: { resetsAt: null, usedPercent: 96, windowMinutes: 300 },
+        status: 'ok',
+        updatedAt: refreshedAt - 1,
+        weekly: null,
+      } satisfies CodexQuotaSnapshot;
+      const refreshedQuota = {
+        ...staleQuota,
+        rateLimitResetCredits: { availableCount: 1 },
+        session: { resetsAt: null, usedPercent: 0, windowMinutes: 300 },
+        updatedAt: refreshedAt,
+      } satisfies CodexQuotaSnapshot;
+      let resolveStaleQuota: ((quota: CodexQuotaSnapshot) => void) | undefined;
+      fetchCodexQuotaMock
+        .mockImplementationOnce(
+          () =>
+            new Promise<CodexQuotaSnapshot>((resolve) => {
+              resolveStaleQuota = resolve;
+            }),
+        )
+        .mockResolvedValueOnce(refreshedQuota);
+      consumeCodexRateLimitResetCreditMock.mockResolvedValue('reset');
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const source = {
+        command: '/custom/bin/codex',
+        env: { CODEX_HOME: '/tmp/codex-home' },
+      };
+
+      const staleRequest = ctr.getCodexQuota(source);
+      await vi.waitFor(() => expect(fetchCodexQuotaMock).toHaveBeenCalledTimes(1));
+
+      await expect(
+        ctr.consumeCodexRateLimitResetCredit({
+          ...source,
+          creditId: 'credit-first',
+          idempotencyKey: 'redeem-request-2',
+        }),
+      ).resolves.toEqual({ outcome: 'reset', quota: refreshedQuota });
+
+      resolveStaleQuota?.(staleQuota);
+      await expect(staleRequest).resolves.toEqual(staleQuota);
+      await expect(ctr.getCodexQuota(source)).resolves.toEqual(refreshedQuota);
+      expect(fetchCodexQuotaMock).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -641,6 +804,23 @@ describe('HeterogeneousAgentCtr', () => {
       ).rejects.toThrow('Claude Code CLI was not found');
 
       expect(detect).toHaveBeenCalledWith('claude', true);
+      expect(spawnCalls).toHaveLength(0);
+    });
+
+    it('fails fast with AMP-specific install guidance when AMP is unavailable', async () => {
+      const detect = vi.fn().mockResolvedValue({ available: false });
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+        binaryManager: { detect },
+      } as any);
+      const { sessionId } = await ctr.startSession({ agentType: 'amp', command: 'amp' });
+
+      await expect(
+        ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId }),
+      ).rejects.toThrow('Amp CLI was not found');
+
+      expect(detect).toHaveBeenCalledWith('amp', true);
       expect(spawnCalls).toHaveLength(0);
     });
 

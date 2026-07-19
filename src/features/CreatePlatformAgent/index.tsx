@@ -26,11 +26,11 @@ import {
 } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { DOWNLOAD_URL } from '@/const/url';
-import { lambdaQuery } from '@/libs/trpc/client';
+import { useDeviceList } from '@/features/DeviceManager/useDeviceList';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { deviceService } from '@/services/device';
 import { useAgentStore } from '@/store/agent';
 import { useHomeStore } from '@/store/home';
@@ -112,13 +112,13 @@ interface CreatePlatformAgentContentProps {
   visibility?: 'private' | 'public';
 }
 
-const COMING_SOON_PLATFORMS = new Set<RemoteHeterogeneousAgentType>(['amp', 'opencode']);
+const COMING_SOON_PLATFORMS = new Set<RemoteHeterogeneousAgentType>(['opencode']);
 
 const CreatePlatformAgentContent = memo<CreatePlatformAgentContentProps>(
   ({ groupId, visibility }) => {
     const { t } = useTranslation('chat');
     const { close, setCanDismissByClickOutside } = useModalContext();
-    const navigate = useNavigate();
+    const navigate = useWorkspaceAwareNavigate();
     const storeCreateAgent = useAgentStore((s) => s.createAgent);
     const refreshAgentList = useHomeStore((s) => s.refreshAgentList);
 
@@ -152,14 +152,15 @@ const CreatePlatformAgentContent = memo<CreatePlatformAgentContentProps>(
       type: c.type,
     }));
 
+    // Workspace-keyed SWR fetch (see useDeviceList) — the raw lambdaQuery key
+    // has no workspace dimension, so the wizard listed the previous
+    // workspace's pool after a switch (LOBE-11904).
     const {
       data: devices,
       isLoading: loadingDevices,
-      isFetching: fetchingDevices,
-      refetch: refetchDevices,
-    } = lambdaQuery.device.listDevices.useQuery(undefined, {
-      staleTime: 0,
-    });
+      isValidating: fetchingDevices,
+      mutate: refetchDevices,
+    } = useDeviceList();
 
     const selectedPlatformDef = platformDefs.find((p) => p.type === platform)!;
 

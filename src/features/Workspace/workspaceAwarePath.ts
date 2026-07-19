@@ -34,12 +34,16 @@ export const WORKSPACE_SETTINGS_TABS: ReadonlySet<string> = new Set([
   'audit-log',
   'billing',
   'connector',
+  'credential',
+  // Legacy alias for `credential` — the routers keep a redirect, so prefixed
+  // deep-links still land on `/:slug/settings/credential`.
   'creds',
   'credits',
   'devices',
   'general',
   'members',
   'messenger',
+  'oauth-apps',
   'plans',
   'provider',
   'service-model',

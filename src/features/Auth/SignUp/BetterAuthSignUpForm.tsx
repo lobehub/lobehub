@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 
 import { AuthCard } from '@/features/AuthCard';
-import { AuthAgreement } from '@/features/AuthShell';
+import { AuthAgreement, useAuthAgreement } from '@/features/AuthShell';
 import { trackLoginOrSignupClicked } from '@/features/User/UserLoginOrSignup/trackLoginOrSignupClicked';
 
 import { useSignUp } from './useSignUp';
@@ -21,6 +21,7 @@ const BetterAuthSignUpForm = () => {
   const { t } = useTranslation('auth');
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { agreementChecked, continueWithAgreement, setAgreementChecked } = useAuthAgreement();
 
   const emailInputRef = useRef<InputRef>(null);
   const passwordInputRef = useRef<InputRef>(null);
@@ -54,7 +55,15 @@ const BetterAuthSignUpForm = () => {
 
   return (
     <AuthCard footer={footer} title={t('betterAuth.signup.cardTitle', { appName: BRANDING_NAME })}>
-      <Form form={form} layout="vertical" onFinish={onSubmit}>
+      <Form
+        form={form}
+        layout="vertical"
+        onFinish={(values) =>
+          continueWithAgreement(() => {
+            void onSubmit(values);
+          })
+        }
+      >
         <Form.Item
           name="email"
           rules={[
@@ -143,13 +152,13 @@ const BetterAuthSignUpForm = () => {
 
         {businessElement}
 
+        <AuthAgreement checked={agreementChecked} onChange={setAgreementChecked} />
         <Form.Item>
           <Button block htmlType="submit" loading={loading} size="large" type="primary">
             {t('betterAuth.signup.submit')}
           </Button>
         </Form.Item>
       </Form>
-      <AuthAgreement />
     </AuthCard>
   );
 };

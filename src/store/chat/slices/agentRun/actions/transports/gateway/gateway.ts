@@ -456,6 +456,12 @@ export class GatewayActionImpl {
     // it up. We clear only after the server confirms the topic was created.
     const pendingRepos =
       isCreateNewTopic && context.agentId ? getPendingTopicRepos(context.agentId) : [];
+    // Pending repo selection wins; otherwise carry the caller-resolved topic
+    // metadata (e.g. the hetero cwd `conversationLifecycle` resolved from the
+    // effective device + per-user legacy slot) so the SERVER topic is born with
+    // it — the server can't read client-local state, and without this a
+    // workspace hetero run's first send would fall back to the device default
+    // cwd instead of the member's pick.
     const initialTopicMetadata =
       pendingRepos.length > 0
         ? {
@@ -463,7 +469,13 @@ export class GatewayActionImpl {
             workingDirectory: pendingRepos[0],
             workingDirectoryConfig: { path: pendingRepos[0], repoType: 'github' as const },
           }
-        : undefined;
+        : isCreateNewTopic && optimisticTopic?.metadata?.workingDirectory
+          ? {
+              repos: optimisticTopic.metadata.repos,
+              workingDirectory: optimisticTopic.metadata.workingDirectory,
+              workingDirectoryConfig: optimisticTopic.metadata.workingDirectoryConfig,
+            }
+          : undefined;
 
     // Honour user-initiated cancel during phase-1 init: while we await the
     // execAgentTask round-trip the caller's loading state (e.g. `sendMessage`)

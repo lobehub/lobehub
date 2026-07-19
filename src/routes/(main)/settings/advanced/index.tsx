@@ -57,8 +57,10 @@ const Page = memo(() => {
     enableClaudeCodeSdk,
     enableFoldFinishedTurn,
     enableMessageTextSelectionActions,
+    enableOAuthApps,
     enableInAppBrowser,
     enableArtifactDeployment,
+    enableBuiltinTerminal,
     updateLab,
   ] = useUserStore((s) => [
     preferenceSelectors.isPreferenceInit(s),
@@ -70,8 +72,10 @@ const Page = memo(() => {
     labPreferSelectors.enableClaudeCodeSdk(s),
     labPreferSelectors.enableFoldFinishedTurn(s),
     labPreferSelectors.enableMessageTextSelectionActions(s),
+    labPreferSelectors.enableOAuthApps(s),
     labPreferSelectors.enableInAppBrowser(s),
     labPreferSelectors.enableArtifactDeployment(s),
+    labPreferSelectors.enableBuiltinTerminal(s),
     s.updateLab,
   ]);
 
@@ -230,6 +234,19 @@ const Page = memo(() => {
       label: tLabs('features.messageTextSelectionActions.title'),
       minWidth: undefined,
     },
+    {
+      children: (
+        <Switch
+          checked={enableOAuthApps}
+          loading={!isPreferenceInit}
+          onChange={(checked) => updateLab({ enableOAuthApps: checked })}
+        />
+      ),
+      className: styles.labItem,
+      desc: tLabs('features.oauthApps.desc'),
+      label: tLabs('features.oauthApps.title'),
+      minWidth: undefined,
+    },
     ...(isDesktop
       ? [
           {
@@ -290,7 +307,7 @@ const Page = memo(() => {
           } satisfies FormItemProps,
         ]
       : []),
-    // The in-app browser rides on the Electron <webview> tag — desktop only.
+    // The in-app browser pages are main-process WebContentsViews — desktop only.
     ...(isDesktop
       ? [
           {
@@ -304,6 +321,20 @@ const Page = memo(() => {
             className: styles.labItem,
             desc: tLabs('features.inAppBrowser.desc'),
             label: tLabs('features.inAppBrowser.title'),
+            minWidth: undefined,
+          } satisfies FormItemProps,
+          // The terminal runs PTY sessions in the Electron main process — desktop only.
+          {
+            children: (
+              <Switch
+                checked={enableBuiltinTerminal}
+                loading={!isPreferenceInit}
+                onChange={(checked: boolean) => updateLab({ enableBuiltinTerminal: checked })}
+              />
+            ),
+            className: styles.labItem,
+            desc: tLabs('features.builtinTerminal.desc'),
+            label: tLabs('features.builtinTerminal.title'),
             minWidth: undefined,
           } satisfies FormItemProps,
         ]

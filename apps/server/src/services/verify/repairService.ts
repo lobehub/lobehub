@@ -1,5 +1,5 @@
+import { DEFAULT_MAX_REPAIR_ROUNDS } from '@lobechat/const/verify';
 import type { VerifyCheckItem, VerifyRunMetadata } from '@lobechat/types';
-import { DEFAULT_MAX_REPAIR_ROUNDS } from '@lobechat/types';
 import debug from 'debug';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';

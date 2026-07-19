@@ -1,6 +1,6 @@
 import { AGENT_CHAT_URL } from '@lobechat/const';
 import { AccordionItem, ActionIcon, Center, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx, keyframes } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { FolderClosedIcon, FolderOpenIcon, type LucideIcon, PlusIcon } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -9,6 +9,7 @@ import { useParams } from 'react-router';
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { TOPIC_STATUS_VISUALS } from '@/components/ExecutionStatus';
 import RingLoadingIcon from '@/components/RingLoading';
+import UnreadDot from '@/components/UnreadDot';
 import { isDesktop } from '@/const/version';
 import { useCommitWorkingDirectory } from '@/features/ChatInput/ControlBar/useCommitWorkingDirectory';
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
@@ -30,17 +31,6 @@ import {
 } from './statusCounts';
 
 const PROJECT_GROUP_PREFIX = 'project:';
-
-const rippleAnim = keyframes`
-  0% {
-    transform: scale(1);
-    opacity: 0.7;
-  }
-  100% {
-    transform: scale(3);
-    opacity: 0;
-  }
-`;
 
 const styles = createStaticStyles(({ css }) => ({
   statusBadge: css`
@@ -69,40 +59,6 @@ const styles = createStaticStyles(({ css }) => ({
   statusBadgeWaiting: css`
     color: ${cssVar.colorInfo};
     background: color-mix(in srgb, ${cssVar.colorInfo} 14%, transparent);
-  `,
-  unreadDot: css`
-    position: relative;
-    z-index: 1;
-
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-
-    background: ${cssVar.colorInfo};
-  `,
-  unreadRipple: css`
-    position: absolute;
-    inset: 0;
-
-    width: 6px;
-    height: 6px;
-    margin: auto;
-    border: 1px solid ${cssVar.colorInfo};
-    border-radius: 50%;
-
-    background: transparent;
-
-    animation: ${rippleAnim} 1.8s ease-out infinite;
-  `,
-  unreadWrapper: css`
-    position: relative;
-
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 14px;
-    height: 18px;
   `,
   addTopicAction: css`
     pointer-events: none;
@@ -191,10 +147,7 @@ const CollapsedUnreadDot = memo<{ count: number }>(({ count }) => {
 
   return (
     <Tooltip title={label}>
-      <span aria-label={label} className={styles.unreadWrapper} role="status">
-        <span className={styles.unreadRipple} />
-        <span className={styles.unreadDot} />
-      </span>
+      <UnreadDot label={label} />
     </Tooltip>
   );
 });

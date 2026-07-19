@@ -177,6 +177,9 @@ beforeEach(async () => {
   const [agent] = await serverDB
     .insert(agents)
     .values({
+      agencyConfig: {
+        subagent: { model: 'gpt-5-pro', provider: 'openai' },
+      },
       chatConfig: {},
       model: 'gpt-5-pro',
       plugins: [],

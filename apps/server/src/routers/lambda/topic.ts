@@ -11,7 +11,6 @@ import {
 import { cleanObject } from '@lobechat/utils';
 import { TRPCError } from '@trpc/server';
 import { inArray } from 'drizzle-orm';
-import { after } from 'next/server';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
@@ -34,9 +33,13 @@ import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { FileService } from '@/server/services/file';
+import { after } from '@/server/utils/scheduleAfterResponse';
 import { type BatchTaskResult } from '@/types/service';
 
-import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
+import {
+  assertWorkspaceRowManageable,
+  shouldRestrictBulkDeleteToCreator,
+} from './_helpers/assertWorkspaceRowManageable';
 import {
   batchResolveAgentIdFromSessions,
   resolveAgentIdFromSession,
@@ -56,12 +59,15 @@ const topicProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =>
       chatGroupModel: new ChatGroupModel(ctx.serverDB, ctx.userId, wsId),
       fileModel: new FileModel(ctx.serverDB, ctx.userId, wsId),
       heteroSessionImporterRepo: new HeteroSessionImporterRepo(ctx.serverDB, ctx.userId, wsId),
+      messageModel: new MessageModel(ctx.serverDB, ctx.userId, wsId),
       topicImporterRepo: new TopicImporterRepo(ctx.serverDB, ctx.userId, wsId),
       topicModel: new TopicModel(ctx.serverDB, ctx.userId, wsId),
       topicShareModel: new TopicShareModel(ctx.serverDB, ctx.userId, wsId),
     },
   });
 });
+
+const topicBulkDeleteScopeSchema = z.enum(['own', 'workspace']).default('own');
 
 interface TopicShareCtx {
   serverDB: LobeChatDatabase;
@@ -131,6 +137,38 @@ export const topicRouter = router({
       return topic;
     }),
 
+  getTopicTranscript: topicProcedure
+    .input(
+      z.object({
+        includeMessages: z.boolean().default(true),
+        limit: z.number().int().min(1).max(500).default(50),
+        offset: z.number().int().min(0).default(0),
+        topicId: z.string(),
+      }),
+    )
+    .query(async ({ input, ctx }) => {
+      const topic = await ctx.topicModel.findById(input.topicId);
+
+      if (!topic) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: `Topic not found: ${input.topicId}`,
+        });
+      }
+
+      if (!input.includeMessages) {
+        return { items: [], topic, total: null };
+      }
+
+      const transcript = await ctx.messageModel.queryTopicTranscript({
+        limit: input.limit,
+        offset: input.offset,
+        topicId: input.topicId,
+      });
+
+      return { ...transcript, topic };
+    }),
+
   getTopicContext: topicProcedure
     .input(z.object({ topicId: z.string() }))
     .query(async ({ input, ctx }) => {
@@ -151,9 +189,7 @@ export const topicRouter = router({
       }
 
       // Fallback: fetch recent messages with correct agentId/groupId
-      const wsId = ctx.workspaceId ?? undefined;
-      const messageModel = new MessageModel(ctx.serverDB, ctx.userId, wsId);
-      const messages = await messageModel.query({
+      const messages = await ctx.messageModel.query({
         agentId: topic.agentId ?? undefined,
         groupId: topic.groupId ?? undefined,
         topicId: input.topicId,
@@ -222,13 +258,20 @@ export const topicRouter = router({
 
   batchDeleteByAgentId: topicProcedure
     .use(withScopedPermission('topic:delete'))
-    .input(z.object({ agentId: z.string() }))
+    .input(z.object({ agentId: z.string(), scope: topicBulkDeleteScopeSchema }))
     .mutation(async ({ input, ctx }) => {
-      // Workspace topic sweeps are caller-scoped for every role — owners
-      // included (bulk actions only affect caller-created content).
-      const restrictToCreator = !!ctx.workspaceId;
+      const restrictToCreator = shouldRestrictBulkDeleteToCreator(ctx, input.scope);
 
       return ctx.topicModel.batchDeleteByAgentId(input.agentId, { restrictToCreator });
+    }),
+
+  batchDeleteByGroupId: topicProcedure
+    .use(withScopedPermission('topic:delete'))
+    .input(z.object({ groupId: z.string(), scope: topicBulkDeleteScopeSchema }))
+    .mutation(async ({ input, ctx }) => {
+      const restrictToCreator = shouldRestrictBulkDeleteToCreator(ctx, input.scope);
+
+      return ctx.topicModel.batchDeleteByGroupId(input.groupId, { restrictToCreator });
     }),
 
   batchDeleteBySessionId: topicProcedure
@@ -237,6 +280,7 @@ export const topicRouter = router({
       z.object({
         agentId: z.string().optional(),
         id: z.string().nullish(),
+        scope: topicBulkDeleteScopeSchema,
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -247,9 +291,7 @@ export const topicRouter = router({
         ctx.workspaceId ?? undefined,
       );
 
-      // Workspace topic sweeps are caller-scoped for every role — owners
-      // included (bulk actions only affect caller-created content).
-      const restrictToCreator = !!ctx.workspaceId;
+      const restrictToCreator = shouldRestrictBulkDeleteToCreator(ctx, input.scope);
 
       return ctx.topicModel.batchDeleteBySessionId(resolved.sessionId, { restrictToCreator });
     }),
@@ -380,11 +422,16 @@ export const topicRouter = router({
         .object({
           pageSize: z.number().max(500).optional(),
           statuses: z.array(z.string()).optional(),
+          withLastMessage: z.boolean().optional(),
         })
         .optional(),
     )
     .query(async ({ input, ctx }) => {
-      return ctx.topicModel.queryTopics({ pageSize: input?.pageSize, statuses: input?.statuses });
+      return ctx.topicModel.queryTopics({
+        pageSize: input?.pageSize,
+        statuses: input?.statuses,
+        withLastMessage: input?.withLastMessage,
+      });
     }),
 
   getShareInfo: topicProcedure
@@ -492,7 +539,6 @@ export const topicRouter = router({
         }
       };
 
-      // Use Next.js after() for non-blocking execution
       after(runMigration);
 
       return { items: result.items, total: result.total };
@@ -665,7 +711,6 @@ export const topicRouter = router({
         }
       };
 
-      // Use Next.js after() for non-blocking execution
       after(runMigration);
 
       // Assemble final result

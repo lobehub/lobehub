@@ -177,6 +177,7 @@
   "providerModels.config.baseURL.invalid": "يرجى إدخال عنوان URL صالح",
   "providerModels.config.baseURL.placeholder": "https://your-proxy-url.com/v1",
   "providerModels.config.baseURL.title": "رابط بروكسي API",
+  "providerModels.config.builtinNotice": "لا يمكن إزالة المزودين المدمجين من القائمة. إذا كنت لا تستخدم هذا المزود، فقط قم بتعطيله.",
   "providerModels.config.checker.button": "تحقق",
   "providerModels.config.checker.desc": "اختبر ما إذا تم ملء مفتاح API ورابط البروكسي بشكل صحيح",
   "providerModels.config.checker.pass": "تم التحقق بنجاح",

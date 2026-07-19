@@ -14,7 +14,8 @@
     "./portals": "./src/portals.ts",
     "./streamings": "./src/streamings.ts",
     "./identifiers": "./src/identifiers.ts",
-    "./dynamicInterventionAudits": "./src/dynamicInterventionAudits.ts"
+    "./dynamicInterventionAudits": "./src/dynamicInterventionAudits.ts",
+    "./workRegistration": "./src/workRegistration.ts"
   },
   "main": "./src/index.ts",
   "dependencies": {

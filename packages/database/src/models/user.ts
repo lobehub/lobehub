@@ -366,6 +366,32 @@ export class UserModel {
     return db.query.users.findMany({ where: inArray(users.id, ids) });
   };
 
+  /**
+   * Lean batch lookup of the display fields (name + avatar) for a set of user
+   * ids. Used to attribute a connector/tool to the member who authorized it —
+   * both the profile "authorized by X" tag and the runtime credential-ownership
+   * note resolve the same way. Selects only public-facing columns (never
+   * settings / key vaults). Callers must pass ids they are already authorized to
+   * see (e.g. userIds harvested from workspace-scoped connector rows).
+   */
+  static getDisplayInfoByIds = async (
+    db: LobeChatDatabase,
+    ids: string[],
+  ): Promise<
+    Array<{ avatar: string | null; fullName: string | null; id: string; username: string | null }>
+  > => {
+    if (ids.length === 0) return [];
+    return db
+      .select({
+        avatar: users.avatar,
+        fullName: users.fullName,
+        id: users.id,
+        username: users.username,
+      })
+      .from(users)
+      .where(inArray(users.id, ids));
+  };
+
   static getUserApiKeys = async (
     db: LobeChatDatabase,
     id: string,

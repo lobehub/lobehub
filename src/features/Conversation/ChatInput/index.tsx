@@ -11,7 +11,7 @@ import { Link } from 'react-router';
 
 import {
   getBusinessChatInputSendAreaPrefix,
-  useBusinessChatInputCostEstimateAlert,
+  useBusinessChatInputAlerts,
 } from '@/business/client/hooks/useBusinessChatInputSendAreaPrefix';
 import { useBusinessInputCompletionErrorAlert } from '@/business/client/hooks/useBusinessInputCompletionErrorAlert';
 import type { ActionKeys, ChatInputFeature } from '@/features/ChatInput';
@@ -330,7 +330,7 @@ const ChatInput = memo<ChatInputProps>(
     const disabled =
       isInputEmpty || isUploadingFiles || (!!disableQueue && isInputQueueBlocked) || !!disableSend;
     const shouldUsePlainSendButton = !showSendMenu && !!sendMenu;
-    const businessCostEstimateAlert = useBusinessChatInputCostEstimateAlert();
+    const businessAlerts = useBusinessChatInputAlerts();
     const businessSendAreaPrefix = getBusinessChatInputSendAreaPrefix(sendAreaPrefix);
 
     // Send handler - gets message, clears editor immediately, then sends
@@ -427,7 +427,7 @@ const ChatInput = memo<ChatInputProps>(
             </Flexbox>
           )}
           <InputCompletionErrorAlert />
-          {businessCostEstimateAlert}
+          {businessAlerts}
           <Flexbox
             paddingInline={12}
             ref={overlayRef}

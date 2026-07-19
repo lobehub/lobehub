@@ -46,4 +46,18 @@ describe('buildHeteroExecStdinPayload', () => {
     const payload = buildHeteroExecStdinPayload({ imageList: [], prompt: 'hello' });
     expect(payload).toBe(JSON.stringify('hello'));
   });
+
+  it('runs referenced topics through the shared prompt engine', () => {
+    const payload = buildHeteroExecStdinPayload({
+      prompt: '<refer_topic name="Previous" id="topic-ref" />\nSummarize it',
+    });
+
+    expect(JSON.parse(payload)).toEqual([
+      expect.objectContaining({ text: expect.stringContaining('`lh topic view <topic-id>`') }),
+      {
+        text: '<refer_topic name="Previous" id="topic-ref" />\nSummarize it',
+        type: 'text',
+      },
+    ]);
+  });
 });

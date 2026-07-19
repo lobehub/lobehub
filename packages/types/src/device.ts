@@ -224,6 +224,70 @@ export interface DeviceChannel {
 }
 
 /**
+ * The subset every device-listing shape shares — satisfied structurally by both
+ * `DeviceListItem` (settings list / run-target picker) and the runtime's
+ * `DeviceAttachment`, so one ordering serves every surface.
+ */
+export interface DeviceActivityOrder {
+  /** Absent on offline rows, and on a legacy gateway that omits the field. */
+  channels?: { connectedAt: string }[];
+  deviceId: string;
+  lastSeen: string;
+  online: boolean;
+}
+
+/**
+ * Most recent evidence the device was alive, as a timestamp.
+ *
+ * Online rows carry the gateway's live `connectedAt` — authoritative. Offline
+ * rows can only fall back to `lastSeen`, which today means "last REGISTERED",
+ * not "last alive": `devices.lastSeenAt` is stamped on register/enroll and
+ * never refreshed while a connection is held. A box that reconnects on every
+ * boot therefore reports a fresher `lastSeen` than one holding a month-long
+ * session. That staleness is contained by the `online` partition below, and
+ * fixing it needs a writer that stamps liveness — not a change here.
+ */
+const deviceActivityAt = (d: DeviceActivityOrder): number => {
+  // `online` with no channels is reachable: the runtime derives it as `!!live`
+  // and tolerates a gateway that omits `channels`. Fall through rather than
+  // assume a channel exists.
+  const connected = (d.online ? (d.channels ?? []) : [])
+    .map((c) => Date.parse(c.connectedAt))
+    .filter((t) => !Number.isNaN(t));
+  if (connected.length > 0) return Math.max(...connected);
+
+  const lastSeen = Date.parse(d.lastSeen);
+  return Number.isNaN(lastSeen) ? 0 : lastSeen;
+};
+
+/**
+ * Order for every device-listing surface: online first, then most recently
+ * active, then by id.
+ *
+ * `online` is a HARD partition rather than one signal among several — an
+ * offline device must never outrank an online one, however recently it was
+ * seen. The picker renders offline rows `disabled`, so an offline row sorted
+ * above an online one is pure noise pushing the only *pickable* machine out of
+ * a viewport that caps at a few rows.
+ *
+ * `deviceId` breaks ties last so the order is total and STABLE: these lists
+ * poll, and two rows sharing a timestamp must not swap places under the user's
+ * cursor between refreshes.
+ */
+export const compareDeviceByActivity = (a: DeviceActivityOrder, b: DeviceActivityOrder): number => {
+  if (a.online !== b.online) return a.online ? -1 : 1;
+
+  const diff = deviceActivityAt(b) - deviceActivityAt(a);
+  if (diff !== 0) return diff;
+
+  return a.deviceId.localeCompare(b.deviceId);
+};
+
+/** Non-mutating {@link compareDeviceByActivity} — callers pass server-built arrays. */
+export const sortDevicesByActivity = <T extends DeviceActivityOrder>(devices: T[]): T[] =>
+  [...devices].sort(compareDeviceByActivity);
+
+/**
  * Where a device sits relative to the caller:
  * - `personal`  — the caller's own machine (`devices.workspace_id IS NULL`).
  * - `workspace` — a machine enrolled into the caller's current workspace, shared

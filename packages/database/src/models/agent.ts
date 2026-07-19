@@ -440,6 +440,7 @@ export class AgentModel {
       backgroundColor: string | null;
       id: string;
       isInbox: boolean;
+      isPrivate: boolean;
       title: string | null;
     }>
   > => {
@@ -452,6 +453,7 @@ export class AgentModel {
         id: agents.id,
         slug: agents.slug,
         title: agents.title,
+        visibility: agents.visibility,
       })
       .from(agents)
       .where(and(this.ownership(), or(ne(agents.virtual, true), eq(agents.slug, INBOX_SESSION_ID))))
@@ -459,13 +461,19 @@ export class AgentModel {
 
     const normalized = rows
       .filter((row) => row.id)
-      .map(({ slug, ...row }) => {
+      .map(({ slug, visibility, ...row }) => {
         const meta = normalizeInboxAgentMeta(row, { slug });
         return {
           avatar: meta.avatar,
           backgroundColor: meta.backgroundColor,
           id: meta.id,
           isInbox: slug === INBOX_SESSION_ID,
+          // Only meaningful in workspace mode: the ownership predicate already
+          // scopes visible private rows to the caller, so `isPrivate` means
+          // "the caller's own private agent in this workspace". Personal-mode
+          // rows are all implicitly private, so the flag stays false there to
+          // signal "no grouping needed".
+          isPrivate: Boolean(this.workspaceId) && visibility === 'private',
           // The inbox title is already resolved by normalizeInboxAgentMeta; any
           // other blank title falls back to the caller-provided default.
           title: meta.title?.trim() || fallbackTitle,

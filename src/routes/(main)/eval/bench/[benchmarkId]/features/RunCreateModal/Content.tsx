@@ -9,7 +9,9 @@ import { SquareArrowOutUpRight } from 'lucide-react';
 import { type FC, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { agentService } from '@/services/agent';
 import { useEvalStore } from '@/store/eval';
 
@@ -77,6 +79,7 @@ const RunCreateContent: FC<RunCreateContentProps> = ({
   const { t: tChat } = useTranslation('chat');
   const { close } = useModalContext();
   const navigate = useWorkspaceAwareNavigate();
+  const activeWorkspaceSlug = useActiveWorkspaceSlug();
   const createRun = useEvalStore((s) => s.createRun);
   const startRun = useEvalStore((s) => s.startRun);
   const datasetList = useEvalStore((s) => s.datasetList);
@@ -133,11 +136,18 @@ const RunCreateContent: FC<RunCreateContentProps> = ({
     [allAgents],
   );
 
-  const handleOpenAgent = useCallback((agentId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    e.preventDefault();
-    window.open(AGENT_PROFILE_URL(agentId), `agent_${agentId}`, 'noopener,noreferrer');
-  }, []);
+  const handleOpenAgent = useCallback(
+    (agentId: string, e: React.MouseEvent) => {
+      e.stopPropagation();
+      e.preventDefault();
+      window.open(
+        buildWorkspaceAwarePath(AGENT_PROFILE_URL(agentId), activeWorkspaceSlug),
+        `agent_${agentId}`,
+        'noopener,noreferrer',
+      );
+    },
+    [activeWorkspaceSlug],
+  );
 
   const submit = useCallback(
     async (shouldStart: boolean) => {

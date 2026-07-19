@@ -32,6 +32,7 @@ import {
   messageStateSelectors,
   useConversationStore,
 } from '../../store';
+import { getOperationFinalRootId } from '../../store/slices/data/workSummaries';
 import InterruptedHint from '../Assistant/components/InterruptedHint';
 import Usage from '../components/Extras/Usage';
 import MessageBranch from '../components/MessageBranch';
@@ -39,6 +40,7 @@ import {
   useSetMessageItemActionElementPortialContext,
   useSetMessageItemActionTypeContext,
 } from '../Contexts/message-action-context';
+import MessageWorks from '../MessageWorks';
 import SignalCallbacks from '../SignalCallbacks';
 import FileListViewer from '../User/components/FileListViewer';
 import Group from './components/Group';
@@ -54,6 +56,22 @@ const actionBarHolder = (
     style={{ height: '28px' }}
   />
 );
+
+const findLatestWorkRootOperationId = (
+  metadata?: { work?: { rootOperationId?: unknown } } | null,
+  children?: AssistantContentBlock[],
+  taskCompletions?: AssistantContentBlock[],
+) => {
+  const blocks = [...(children ?? []), ...(taskCompletions ?? [])];
+
+  for (let index = blocks.length - 1; index >= 0; index -= 1) {
+    const rootOperationId = getOperationFinalRootId(blocks[index]?.metadata);
+    if (rootOperationId) return rootOperationId;
+  }
+
+  return getOperationFinalRootId(metadata);
+};
+
 interface GroupMessageProps {
   defaultWorkflowExpandLevel?: WorkflowExpandLevelDefault;
   disableEditing?: boolean;
@@ -101,6 +119,10 @@ const GroupMessage = memo<GroupMessageProps>(
       if (!children || children.length === 0) return [];
       return children.flatMap((child: AssistantContentBlock) => child.fileList || []);
     }, [children]);
+    const workRootOperationId = useMemo(
+      () => findLatestWorkRootOperationId(metadata, children, taskCompletions),
+      [children, metadata, taskCompletions],
+    );
 
     const isInbox = useAgentStore(builtinAgentSelectors.isInboxAgent);
     const [toggleSystemRole] = useGlobalStore((s) => [s.toggleSystemRole]);
@@ -199,6 +221,9 @@ const GroupMessage = memo<GroupMessageProps>(
               {actionBarHolder}
             </>
           )
+        }
+        afterActions={
+          workRootOperationId ? <MessageWorks rootOperationId={workRootOperationId} /> : undefined
         }
         customAvatarRender={
           isSupervisor

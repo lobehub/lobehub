@@ -1,5 +1,5 @@
 import { Tag } from '@lobehub/ui';
-import { MessageSquarePlusIcon } from 'lucide-react';
+import { MessageSquareQuoteIcon } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -38,7 +38,7 @@ export const ReferTopicView = memo<ReferTopicViewProps>(({ topicId, fallbackTitl
       }}
       onClick={handleClick}
     >
-      <Tag color="green" icon={<MessageSquarePlusIcon size={12} />} variant="filled">
+      <Tag color="blue" icon={<MessageSquareQuoteIcon size={12} />} variant="borderless">
         {title || t('defaultTitle')}
       </Tag>
     </span>

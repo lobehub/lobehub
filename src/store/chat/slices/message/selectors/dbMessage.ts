@@ -28,7 +28,12 @@ import { messageMapKey } from '../../../utils/messageMapKey';
  * Get the current chat key for accessing dbMessagesMap
  */
 export const currentDbChatKey = (s: ChatStoreState) =>
-  messageMapKey({ agentId: s.activeAgentId, topicId: s.activeTopicId });
+  messageMapKey({
+    agentId: s.activeAgentId,
+    groupId: s.activeGroupId,
+    threadId: s.activeThreadId,
+    topicId: s.activeTopicId,
+  });
 
 /**
  * Get raw messages from database by key

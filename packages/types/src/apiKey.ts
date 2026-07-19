@@ -11,6 +11,9 @@ export interface ApiKeyItem {
   // decrypted plaintext `key`; other members' rows come back masked.
   isMine?: boolean;
   key: string;
+  // A stale encrypted value must not make the whole list fail. When true,
+  // callers can still manage or rotate the row but cannot reveal its secret.
+  keyDecryptionFailed?: boolean;
   lastUsedAt?: Date | null;
   name: string;
   updatedAt: Date;

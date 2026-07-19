@@ -1,6 +1,6 @@
 'use client';
 
-import { type VerifierType, verifierTypes } from '@lobechat/types';
+import { type VerifierType, verifierTypes } from '@lobechat/const/verify';
 import { Flexbox, Input, Text, TextArea } from '@lobehub/ui';
 import { Button, Select, Switch, useModalContext } from '@lobehub/ui/base-ui';
 import { useMemo, useState } from 'react';

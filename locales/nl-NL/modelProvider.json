@@ -177,6 +177,7 @@
   "providerModels.config.baseURL.invalid": "Voer een geldige URL in",
   "providerModels.config.baseURL.placeholder": "https://your-proxy-url.com/v1",
   "providerModels.config.baseURL.title": "API-proxy-URL",
+  "providerModels.config.builtinNotice": "Ingebouwde providers kunnen niet uit de lijst worden verwijderd. Als u deze provider niet gebruikt, schakelt u deze gewoon uit.",
   "providerModels.config.checker.button": "Controleren",
   "providerModels.config.checker.desc": "Test of de API-sleutel en proxy-URL correct zijn ingevuld",
   "providerModels.config.checker.pass": "Controle geslaagd",

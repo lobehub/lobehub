@@ -7,6 +7,8 @@ import {
   type DecryptedSystemBotProvider,
   SystemBotProviderModel,
 } from '@/database/models/systemBotProvider';
+import { gatewayEnv } from '@/envs/gateway';
+import { redisEnv } from '@/envs/redis';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 
 const log = debug('lobe-server:messenger:config');
@@ -43,7 +45,7 @@ export const getMessengerConfig = () => {
 
 export const messengerEnv = getMessengerConfig();
 
-export type MessengerPlatform = 'telegram' | 'slack' | 'discord';
+export type MessengerPlatform = 'telegram' | 'slack' | 'discord' | 'wechat';
 
 export interface MessengerTelegramConfig {
   botToken: string;
@@ -69,6 +71,14 @@ export interface MessengerDiscordConfig {
    */
   clientSecret?: string;
   publicKey: string;
+}
+
+/**
+ * WeChat System Bot credentials are user-owned and acquired by QR scan, so
+ * the deployment-level provider only acts as an availability switch.
+ */
+export interface MessengerWechatConfig {
+  enabled: true;
 }
 
 // ---------------------------------------------------------------------------
@@ -160,6 +170,23 @@ export const getMessengerDiscordConfig = async (): Promise<MessengerDiscordConfi
   });
 };
 
+export const getMessengerWechatConfig = async (): Promise<MessengerWechatConfig | null> => {
+  // WeChat owns a long-polling connection in the Message Gateway, with Redis
+  // backing its QR session and per-user connection state. Do not advertise an
+  // enabled provider until the runtime can actually complete that lifecycle.
+  if (
+    gatewayEnv.MESSAGE_GATEWAY_ENABLED !== '1' ||
+    !gatewayEnv.MESSAGE_GATEWAY_URL ||
+    !gatewayEnv.MESSAGE_GATEWAY_SERVICE_TOKEN ||
+    !redisEnv.REDIS_URL ||
+    process.env.DISABLE_REDIS
+  ) {
+    return null;
+  }
+
+  return fetchAndCache<MessengerWechatConfig>('wechat', () => ({ enabled: true }));
+};
+
 export const isMessengerPlatformEnabled = async (platform: MessengerPlatform): Promise<boolean> => {
   switch (platform) {
     case 'telegram': {
@@ -171,6 +198,9 @@ export const isMessengerPlatformEnabled = async (platform: MessengerPlatform): P
     case 'discord': {
       return !!(await getMessengerDiscordConfig());
     }
+    case 'wechat': {
+      return !!(await getMessengerWechatConfig());
+    }
     default: {
       return false;
     }
@@ -178,7 +208,7 @@ export const isMessengerPlatformEnabled = async (platform: MessengerPlatform): P
 };
 
 export const getEnabledMessengerPlatforms = async (): Promise<MessengerPlatform[]> => {
-  const platforms = ['telegram', 'slack', 'discord'] as const;
+  const platforms = ['telegram', 'slack', 'discord', 'wechat'] as const;
   const checks = await Promise.all(
     platforms.map(async (p) => ((await isMessengerPlatformEnabled(p)) ? p : null)),
   );

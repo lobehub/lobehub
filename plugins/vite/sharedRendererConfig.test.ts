@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { __testing, sharedModulePreload } from './sharedRendererConfig';
+import { __testing, sharedModulePreload, sharedOptimizeDeps } from './sharedRendererConfig';
+
+describe('sharedOptimizeDeps', () => {
+  it('pre-bundles the root and base-ui entrypoints together', () => {
+    expect(sharedOptimizeDeps.include).toEqual(
+      expect.arrayContaining(['@lobehub/ui', '@lobehub/ui/base-ui']),
+    );
+  });
+});
 
 describe('sharedModulePreload', () => {
   it('keeps vendor modulepreload dependencies while excluding i18n chunks', () => {

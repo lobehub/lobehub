@@ -220,6 +220,30 @@ describe('messagesReducer', () => {
       const newState = messagesReducer(state, payload);
       expect(newState).toEqual(state);
     });
+
+    it('treats a repeated identical dispatch as a no-op (immer-draft comparison guard)', () => {
+      const payload: MessageDispatch = {
+        type: 'updatePluginState',
+        id: 'message1',
+        key: 'pluginKey',
+        value: 'pluginValue',
+      };
+
+      // First dispatch writes the value and bumps updatedAt.
+      const firstState = messagesReducer(initialState, payload);
+      const firstMessage = firstState.find((m) => m.id === 'message1')!;
+
+      // Second, identical dispatch must be a no-op. Inside `produce` the
+      // message's pluginState is an immer draft; getComparablePluginState must
+      // unwrap it via `current()` so isEqual sees no change (regression guard —
+      // immer 11.1.9 broke comparing a draft directly, causing spurious
+      // updatedAt bumps / re-renders).
+      const secondState = messagesReducer(firstState, payload);
+      const secondMessage = secondState.find((m) => m.id === 'message1')!;
+
+      expect(secondMessage).toBe(firstMessage);
+      expect(secondMessage.updatedAt).toBe(firstMessage.updatedAt);
+    });
   });
 
   describe('updateMessagePlugin', () => {

@@ -177,6 +177,7 @@
   "providerModels.config.baseURL.invalid": "Lütfen geçerli bir URL girin",
   "providerModels.config.baseURL.placeholder": "https://your-proxy-url.com/v1",
   "providerModels.config.baseURL.title": "API Proxy URL'si",
+  "providerModels.config.builtinNotice": "Yerleşik sağlayıcılar listeden kaldırılamaz. Bu sağlayıcıyı kullanmıyorsanız, sadece devre dışı bırakın.",
   "providerModels.config.checker.button": "Kontrol Et",
   "providerModels.config.checker.desc": "API Anahtarı ve proxy URL'sinin doğru girilip girilmediğini test edin",
   "providerModels.config.checker.pass": "Kontrol başarılı",

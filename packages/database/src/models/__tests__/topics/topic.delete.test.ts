@@ -369,6 +369,25 @@ describe('TopicModel - Delete', () => {
       expect(remaining[0].userId).toBe(userId2);
     });
 
+    it('batchDeleteByGroupId should scope to the caller when restrictToCreator is set', async () => {
+      await serverDB.insert(chatGroups).values({
+        id: 'ws-group',
+        title: 'Workspace Group',
+        userId,
+        workspaceId,
+      });
+      await serverDB.insert(topics).values([
+        { groupId: 'ws-group', id: 'ws-g-topic-mine', userId, workspaceId },
+        { groupId: 'ws-group', id: 'ws-g-topic-other', userId: userId2, workspaceId },
+      ]);
+
+      await workspaceTopicModel.batchDeleteByGroupId('ws-group', { restrictToCreator: true });
+
+      const remaining = await serverDB.select().from(topics).where(eq(topics.groupId, 'ws-group'));
+      expect(remaining).toHaveLength(1);
+      expect(remaining[0].userId).toBe(userId2);
+    });
+
     it('batchDeleteByAgentId should keep workspace-wide scope by default', async () => {
       await workspaceTopicModel.batchDeleteByAgentId('ws-agent');
 

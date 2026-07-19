@@ -233,7 +233,7 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
     const displayName = providerConfig?.title || provider.type;
     const AgentIcon = providerConfig?.icon;
     const showCliInstallGuide =
-      (provider.type === 'claude-code' || provider.type === 'codex') &&
+      (provider.type === 'amp' || provider.type === 'claude-code' || provider.type === 'codex') &&
       !detecting &&
       !status?.available &&
       !isUsingCustomCommand;
@@ -254,7 +254,7 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
     }, [provider.type, resolvedCommand]);
 
     const detect = useCallback(async () => {
-      // Remote platform agents (openclaw, hermes, amp, opencode, …) have no local CLI to detect.
+      // Remote platform agents (openclaw, hermes, opencode, …) have no local CLI to detect.
       if (isRemoteHeterogeneousType(provider.type) || !isDesktop || !resolvedCommand) {
         setDetecting(false);
         return;

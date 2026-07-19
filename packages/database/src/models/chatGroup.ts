@@ -84,7 +84,7 @@ export class ChatGroupModel {
       .from(chatGroupsAgents)
       .innerJoin(agents, eq(chatGroupsAgents.agentId, agents.id))
       .where(and(inArray(chatGroupsAgents.chatGroupId, groupIds), this.memberAgentVisibility()))
-      .orderBy(chatGroupsAgents.order);
+      .orderBy(chatGroupsAgents.order, chatGroupsAgents.createdAt, chatGroupsAgents.agentId);
 
     for (const { avatar, backgroundColor, chatGroupId, slug } of rows) {
       const list = map.get(chatGroupId) ?? [];
@@ -168,7 +168,7 @@ export class ChatGroupModel {
     if (!group) return null;
 
     const agents = await this.db.query.chatGroupsAgents.findMany({
-      orderBy: [chatGroupsAgents.order],
+      orderBy: [chatGroupsAgents.order, chatGroupsAgents.createdAt, chatGroupsAgents.agentId],
       where: and(
         eq(chatGroupsAgents.chatGroupId, groupId),
         this.agentsOwnership(),
@@ -374,10 +374,18 @@ export class ChatGroupModel {
       return { added: [], existing: existingIds };
     }
 
-    const newAgents: NewChatGroupAgent[] = newAgentIds.map((agentId) => ({
+    // Append new members after the current highest order so an incremental add
+    // never collapses everyone to the default `order = 0` (which would make the
+    // roster re-shuffle on every refetch). Supervisor rows sit at `order = -1`,
+    // so a group holding only a supervisor yields maxOrder = -1 → the first
+    // member gets order 0.
+    const maxOrder = existingAgents.reduce((max, agent) => Math.max(max, agent.order ?? 0), -1);
+
+    const newAgents: NewChatGroupAgent[] = newAgentIds.map((agentId, index) => ({
       agentId,
       chatGroupId: groupId,
       enabled: true,
+      order: maxOrder + 1 + index,
       userId: this.userId,
       workspaceId: this.workspaceId ?? null,
     }));
@@ -464,7 +472,7 @@ export class ChatGroupModel {
 
   async getGroupAgents(groupId: string): Promise<ChatGroupAgentItem[]> {
     return this.db.query.chatGroupsAgents.findMany({
-      orderBy: [chatGroupsAgents.order],
+      orderBy: [chatGroupsAgents.order, chatGroupsAgents.createdAt, chatGroupsAgents.agentId],
       where: and(
         eq(chatGroupsAgents.chatGroupId, groupId),
         this.agentsOwnership(),
@@ -511,12 +519,12 @@ export class ChatGroupModel {
           this.memberAgentVisibility(),
         ),
       )
-      .orderBy(chatGroupsAgents.order);
+      .orderBy(chatGroupsAgents.order, chatGroupsAgents.createdAt, chatGroupsAgents.agentId);
   }
 
   async getEnabledGroupAgents(groupId: string): Promise<ChatGroupAgentItem[]> {
     return this.db.query.chatGroupsAgents.findMany({
-      orderBy: [chatGroupsAgents.order],
+      orderBy: [chatGroupsAgents.order, chatGroupsAgents.createdAt, chatGroupsAgents.agentId],
       where: and(
         eq(chatGroupsAgents.chatGroupId, groupId),
         eq(chatGroupsAgents.enabled, true),

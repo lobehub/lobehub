@@ -180,6 +180,7 @@
   "channel.paidFeature.enforce.desc.personal": "{{name}} 僅適用於付費個人方案。升級以設定並保持此頻道連接。",
   "channel.paidFeature.enforce.desc.workspace": "{{name}} 僅適用於專業版/商業版工作區。升級此工作區以設定並保持此頻道連接。",
   "channel.paidFeature.enforce.title": "需要付費方案",
+  "channel.paidFeature.fieldLocked": "僅限付費方案使用。升級以啟用此功能。",
   "channel.paidFeature.notice.desc": "由於 {{name}} 頻道的高通信成本，我們計劃將此頻道設為付費功能。現有連接在通知期間仍可用，但現在建立或重新連接此頻道需要付費個人方案或專業版/商業版工作區。",
   "channel.paidFeature.notice.desc.personal": "由於 {{name}} 頻道的高通信成本，我們計劃將此頻道設為付費功能。現有連接在通知期間仍可用，但建立或重新連接此頻道需要付費個人方案。",
   "channel.paidFeature.notice.desc.workspace": "由於 {{name}} 頻道的高通信成本，我們計劃將此頻道設為付費功能。現有連接在通知期間仍可用，但建立或重新連接此頻道需要將此工作區升級至專業版或商業版。",

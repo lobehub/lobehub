@@ -21,10 +21,18 @@ const getAllOperations = (s: ChatStoreState): Operation[] => {
  * Get operations for current context (active agent and topic)
  */
 const getCurrentContextOperations = (s: ChatStoreState): Operation[] => {
-  const { activeAgentId, activeTopicId } = s;
+  const { activeAgentId, activeGroupId, activeThreadId, activeTopicId } = s;
   if (!activeAgentId) return [];
 
-  const contextKey = messageMapKey({ agentId: activeAgentId, topicId: activeTopicId });
+  // Must include groupId/threadId so the key matches how operations are stored
+  // (operationsByContext is keyed by the full messageMapKey(context)); otherwise
+  // group operations are never found.
+  const contextKey = messageMapKey({
+    agentId: activeAgentId,
+    groupId: activeGroupId,
+    threadId: activeThreadId,
+    topicId: activeTopicId,
+  });
   const operationIds = s.operationsByContext[contextKey] || [];
   return operationIds.map((id) => s.operations[id]).filter(Boolean);
 };
@@ -63,6 +71,24 @@ const getOperationContextFromMessage =
 
     const operation = s.operations[operationId];
     return operation?.context;
+  };
+
+/**
+ * Walk up the parent chain from an operation until the owning AI runtime
+ * operation (see AI_RUNTIME_OPERATION_TYPES) is found. Returns undefined when
+ * the chain has no runtime ancestor (e.g. a standalone tool operation).
+ */
+const findRootRuntimeOperation =
+  (operationId: string) =>
+  (s: ChatStoreState): Operation | undefined => {
+    let currentOp: Operation | undefined = s.operations[operationId];
+    while (currentOp) {
+      if (AI_RUNTIME_OPERATION_TYPES.includes(currentOp.type)) return currentOp;
+
+      const parentId: string | undefined = currentOp.parentOperationId;
+      currentOp = parentId ? s.operations[parentId] : undefined;
+    }
+    return undefined;
   };
 
 /**
@@ -812,6 +838,7 @@ const getQueuedMessages = (context: MessageMapKeyInput) => (s: ChatStoreState) =
 export const operationSelectors = {
   canInterrupt,
   canSendMessage,
+  findRootRuntimeOperation,
   getActiveOperationTypes,
   getAllOperations,
   getCurrentContextOperations,

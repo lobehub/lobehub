@@ -21,6 +21,7 @@ import type {
   UIChatMessage,
   UpdateMessageParams,
   UpdateMessageRAGParams,
+  WorkSummaryItem,
 } from '@lobechat/types';
 import { MessageGroupType, ThreadType } from '@lobechat/types';
 import type { TimingSink } from '@lobechat/utils';
@@ -77,6 +78,18 @@ import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../
 import { idGenerator } from '../utils/idGenerator';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 import { recomputeTopicUsage } from './topicUsage';
+import { WorkModel } from './work';
+
+/**
+ * Read the operation-final Work root id stamped on a message's metadata by the
+ * Work registry (`metadata.work.rootOperationId`). Mirrors the client-side
+ * `getOperationFinalRootId` without importing from the app layer.
+ */
+const getMessageWorkRootId = (metadata: unknown): string | undefined => {
+  const rootOperationId = (metadata as { work?: { rootOperationId?: unknown } } | null)?.work
+    ?.rootOperationId;
+  return typeof rootOperationId === 'string' && rootOperationId ? rootOperationId : undefined;
+};
 
 /**
  * Options for querying messages with relations
@@ -97,6 +110,10 @@ export interface QueryMessagesOptions {
     path: string | null,
     file: { fileType: string; id?: string | null },
   ) => Promise<string>;
+  /**
+   * Skip the Work-summary assembly (see `QueryMessageParams.skipWorks`).
+   */
+  skipWorks?: boolean;
   timing?: ModelTimingContext;
   /**
    * Topic ID for MessageGroup aggregation queries
@@ -106,6 +123,22 @@ export interface QueryMessagesOptions {
    * Custom where condition for message filtering
    */
   where?: SQL;
+}
+
+export interface TopicTranscriptMessage {
+  content: string | null;
+  createdAt: Date;
+  id: string;
+  messageGroupId: string | null;
+  parentId: string | null;
+  role: string;
+  threadId: string | null;
+  tools: ChatToolPayload[] | null;
+}
+
+export interface TopicTranscriptResult {
+  items: TopicTranscriptMessage[];
+  total: number;
 }
 
 export interface ModelTimingContext extends TimingSink {}
@@ -338,6 +371,7 @@ export class MessageModel {
       current = 0,
       pageSize = 1000,
       sessionId,
+      skipWorks,
       topicId,
       groupId,
       threadId,
@@ -387,6 +421,7 @@ export class MessageModel {
         current,
         pageSize,
         postProcessUrl: options.postProcessUrl,
+        skipWorks,
         timing,
         // Thread queries optionally add agent/session scope if provided
         where: agentCondition ? and(agentCondition, threadCondition) : threadCondition,
@@ -412,6 +447,7 @@ export class MessageModel {
         current,
         pageSize,
         postProcessUrl: options.postProcessUrl,
+        skipWorks,
         timing,
         topicId: topicId ?? undefined,
         where: whereCondition,
@@ -435,6 +471,7 @@ export class MessageModel {
       current,
       pageSize,
       postProcessUrl: options.postProcessUrl,
+      skipWorks,
       timing,
       topicId: topicId ?? undefined,
       where: whereCondition,
@@ -444,6 +481,57 @@ export class MessageModel {
       stageMs: getDurationMs(queryStartedAt),
     });
     return messageItems;
+  };
+
+  /**
+   * Return a lightweight, ownership-scoped transcript for a topic.
+   *
+   * Unlike the conversation query, this intentionally does not infer missing
+   * session, group, or thread filters as `IS NULL`, and it does not replace raw
+   * message-group members with synthetic nodes. Consumers such as the CLI need
+   * the complete persisted transcript and exact database pagination.
+   */
+  queryTopicTranscript = async ({
+    limit,
+    offset,
+    topicId,
+  }: {
+    limit: number;
+    offset: number;
+    topicId: string;
+  }): Promise<TopicTranscriptResult> => {
+    const where = and(this.ownership(), eq(messages.topicId, topicId));
+
+    const [items, totalResult] = await Promise.all([
+      this.db
+        .select({
+          content: messages.content,
+          createdAt: messages.createdAt,
+          id: messages.id,
+          messageGroupId: messages.messageGroupId,
+          parentId: messages.parentId,
+          role: messages.role,
+          threadId: messages.threadId,
+          tools: messages.tools,
+        })
+        .from(messages)
+        .where(where)
+        .orderBy(asc(messages.createdAt), asc(messages.id))
+        .limit(limit)
+        .offset(offset),
+      this.db
+        .select({ count: count(messages.id) })
+        .from(messages)
+        .where(where),
+    ]);
+
+    return {
+      items: items.map(({ tools, ...message }) => ({
+        ...message,
+        tools: Array.isArray(tools) ? (tools as ChatToolPayload[]) : null,
+      })),
+      total: totalResult[0]?.count ?? 0,
+    };
   };
 
   /**
@@ -490,7 +578,15 @@ export class MessageModel {
    * @returns Messages with all related data, including MessageGroup nodes
    */
   queryWithWhere = async (options: QueryMessagesOptions = {}): Promise<UIChatMessage[]> => {
-    const { where, current = 0, pageSize = 1000, postProcessUrl, topicId, timing } = options;
+    const {
+      where,
+      current = 0,
+      pageSize = 1000,
+      postProcessUrl,
+      skipWorks,
+      topicId,
+      timing,
+    } = options;
     const totalStartedAt = Date.now();
     const offset = current * pageSize;
 
@@ -571,12 +667,46 @@ export class MessageModel {
           .leftJoin(messageTranslates, eq(messageTranslates.id, messages.id))
           .leftJoin(messageTTS, eq(messageTTS.id, messages.id))
           .leftJoin(users, eq(users.id, messages.userId))
-          .orderBy(asc(messages.createdAt))
+          // Page from the NEWEST messages, not the oldest. `desc` + limit/offset
+          // fetches the most recent `pageSize` rows, so a topic with more than
+          // `pageSize` mainline messages keeps its latest turns (including the
+          // final answer) instead of silently dropping them — the previous
+          // `asc + limit` truncated exactly the newest batch, which is the worst
+          // possible slice for a chat transcript. The page is reversed back to
+          // ascending immediately below, so every downstream consumer is
+          // unaffected; only *which* rows are fetched changed. See LOBE-12011.
+          .orderBy(desc(messages.createdAt), desc(messages.id))
           .limit(pageSize)
           .offset(offset),
       { current, pageSize },
     );
     logTiming(timing, 'db.message.queryWithWhere.baseSelect:rows', { rowCount: result.length });
+
+    // Restore ascending (createdAt, id) order so downstream assembly — the
+    // MessageGroup time window, work-summary anchoring, and the final merge sort —
+    // behaves exactly as before the newest-first fetch above.
+    result.reverse();
+
+    // When the newest page is truncated (it filled `pageSize`), its oldest rows
+    // may sit mid-round. The renderer roots a slice at a single parent, so a slice
+    // cut inside a round can strand sibling chains and drop them from the screen.
+    // Align the lower boundary to a round start — a mainline `user` message — so
+    // the slice is one contiguous chain. Never trim to empty: an oversized single
+    // round with no user message in view is kept whole (the proper fix for those
+    // is lazy step loading). Thread queries pass no `topicId` and are untouched.
+    //
+    // Scope: this only serves the single "most recent page" load (`current === 0`),
+    // which is the only page the chat read path ever requests — `current`/`pageSize`
+    // offset paging is dead code here (the very premise of LOBE-12011). The trim is
+    // deliberately NOT offset-exact: the rows it drops from page 0 also fall outside
+    // page 1's `offset = pageSize` window, so a hypothetical offset walk would skip
+    // them. That is acceptable because nothing offset-walks this path; loading older
+    // history is round-cursor based (see the follow-up), which supersedes offset
+    // paging entirely and closes that gap by construction.
+    if (topicId && current === 0 && result.length >= pageSize) {
+      const firstRoundStart = result.findIndex((message) => message.role === 'user');
+      if (firstRoundStart > 0) result.splice(0, firstRoundStart);
+    }
 
     const messageIds = result.map((message) => message.id as string);
 
@@ -600,12 +730,16 @@ export class MessageModel {
       chunksList,
       messageQueriesList,
       threadData,
+      worksByMessageId,
     ] = await Promise.all([
       messageGroupNodesPromise,
       this.queryMessageFileRelations(messageIds, postProcessUrl, timing),
       this.queryMessageChunkRelations(messageIds, timing),
       this.queryMessageQueryRelations(messageIds, timing),
       this.queryMessageThreadRelations(taskMessageIds, timing),
+      skipWorks
+        ? ({} as Record<string, WorkSummaryItem[]>)
+        : this.queryMessageWorkSummaries(result, timing),
     ]);
 
     if (messageIds.length === 0 && messageGroupNodes.length === 0) {
@@ -713,6 +847,9 @@ export class MessageModel {
                 .filter((relation) => relation.messageId === item.id)
 
                 .map<ChatVideoItem>(({ id, url, name }) => ({ alt: name!, id, url })),
+              // Work summaries for this message's root operation, resolved
+              // server-side (attached only to the round's anchor message).
+              works: worksByMessageId[item.id as string],
               audioList: audioList
                 .filter((relation) => relation.messageId === item.id)
 
@@ -944,6 +1081,48 @@ export class MessageModel {
     });
 
     return chunksList;
+  };
+
+  /**
+   * Resolve Work summaries for a page of messages and key them by anchor
+   * message id — the LAST message (rows are createdAt-asc, so last occurrence)
+   * carrying each `metadata.work.rootOperationId`. Works ride the message-list
+   * payload so the in-message Works chips and the sidebar summary read from one
+   * source instead of a dedicated work-summary fetch. Attaching only to the
+   * round's last message (not every row sharing the operation) keeps the
+   * payload flat — the client re-keys by `rootOperationId`, so which row
+   * physically carries it doesn't matter.
+   */
+  private queryMessageWorkSummaries = async (
+    rows: { id: unknown; metadata: unknown }[],
+    timing?: ModelTimingContext,
+  ): Promise<Record<string, WorkSummaryItem[]>> => {
+    const anchorByRootId = new Map<string, string>();
+    for (const row of rows) {
+      const rootOperationId = getMessageWorkRootId(row.metadata);
+      if (rootOperationId) anchorByRootId.set(rootOperationId, row.id as string);
+    }
+    if (anchorByRootId.size === 0) return {};
+
+    const summaryMap = await runTimedStage(
+      timing,
+      'db.message.queryWithWhere.workSummaries',
+      () =>
+        new WorkModel(this.db, this.userId, this.workspaceId).listSummariesByRootOperations({
+          rootOperationIds: Array.from(anchorByRootId.keys()),
+        }),
+      { rootOperationCount: anchorByRootId.size },
+    );
+
+    const worksByMessageId: Record<string, WorkSummaryItem[]> = {};
+    for (const [rootOperationId, messageId] of anchorByRootId) {
+      const works = summaryMap[rootOperationId];
+      if (works && works.length > 0) worksByMessageId[messageId] = works;
+    }
+    logTiming(timing, 'db.message.queryWithWhere.workSummaries:rows', {
+      messageCount: Object.keys(worksByMessageId).length,
+    });
+    return worksByMessageId;
   };
 
   private queryMessageQueryRelations = async (

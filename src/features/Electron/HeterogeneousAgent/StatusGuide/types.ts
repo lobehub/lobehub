@@ -34,13 +34,14 @@ export interface HeterogeneousAgentStatusGuideProps {
   agentType?: string;
   autoRetry?: HeterogeneousAgentAutoRetryState;
   error?: HeterogeneousAgentSessionError | null;
+  onDismiss?: () => void;
   onOpenSystemTools?: () => void;
   onRetry?: () => void;
   schedule?: HeterogeneousAgentScheduleState;
   variant?: HeterogeneousAgentStatusGuideVariant;
 }
 
-export const SUPPORTED_HETEROGENEOUS_AGENT_TYPES = ['claude-code', 'codex'] as const;
+export const SUPPORTED_HETEROGENEOUS_AGENT_TYPES = ['amp', 'claude-code', 'codex'] as const;
 
 export type SupportedHeterogeneousAgentType = (typeof SUPPORTED_HETEROGENEOUS_AGENT_TYPES)[number];
 
@@ -57,6 +58,7 @@ export interface HeterogeneousAgentGuideStateProps {
   autoRetry?: HeterogeneousAgentAutoRetryState;
   config: HeterogeneousAgentGuideConfig;
   error?: HeterogeneousAgentSessionError | null;
+  onDismiss?: () => void;
   onOpenSystemTools?: () => void;
   onRetry?: () => void;
   schedule?: HeterogeneousAgentScheduleState;

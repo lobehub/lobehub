@@ -252,21 +252,28 @@ const FileUpload = memo(() => {
     });
   }
 
-  // Always add the "View More" option
-  knowledgeItems.push(
-    {
-      type: 'divider',
-    },
-    {
-      extra: <Icon icon={ArrowRight} />,
-      icon: <Icon icon={LibraryBig} size={MENU_ICON_SIZE} />,
-      key: 'knowledge-base-store',
-      label: t('knowledgeBase.viewMore'),
-      onClick: () => {
-        openAttachKnowledgeModal();
+  if (knowledgeItems.length > 0) {
+    knowledgeItems.push(
+      {
+        type: 'divider',
       },
-    },
-  );
+      {
+        extra: <Icon icon={ArrowRight} />,
+        icon: <Icon icon={LibraryBig} size={MENU_ICON_SIZE} />,
+        key: 'knowledge-base-store',
+        label: t('knowledgeBase.viewMore'),
+        onClick: () => {
+          openAttachKnowledgeModal();
+        },
+      },
+    );
+  } else {
+    knowledgeItems.push({
+      disabled: true,
+      key: 'knowledge-empty',
+      label: t('knowledgeBase.related.empty'),
+    });
+  }
 
   const items: ActionDropdownMenuItems = [
     ...uploadItems,

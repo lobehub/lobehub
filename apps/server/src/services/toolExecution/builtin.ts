@@ -1,6 +1,10 @@
 import { builtinTools } from '@lobechat/builtin-tools';
 import { type LobeChatDatabase } from '@lobechat/database';
-import { type ChatToolPayload } from '@lobechat/types';
+import {
+  type ChatToolPayload,
+  isWorkSkillProvider,
+  type WorkRegistrationIntent,
+} from '@lobechat/types';
 import { detectTruncatedJSON, safeParseJSON } from '@lobechat/utils';
 import debug from 'debug';
 
@@ -9,6 +13,7 @@ import { MarketService } from '@/server/services/market';
 
 import { getServerRuntime, hasServerRuntime } from './serverRuntimes';
 import { type IToolExecutor, type ToolExecutionContext, type ToolExecutionResult } from './types';
+import { resolveBuiltinToolWorkIntent } from './workRegistration';
 
 const log = debug('lobe-server:builtin-tools-executor');
 
@@ -102,7 +107,7 @@ export class BuiltinToolsExecutor implements IToolExecutor {
 
     // Route LobeHub Skills to MarketService
     if (source === 'lobehubSkill') {
-      return this.marketService.executeLobehubSkill({
+      const result = await this.marketService.executeLobehubSkill({
         args,
         context: {
           topicId: context.topicId,
@@ -110,6 +115,26 @@ export class BuiltinToolsExecutor implements IToolExecutor {
         provider: identifier,
         toolName: apiName,
       });
+
+      if (result.success && isWorkSkillProvider(identifier)) {
+        // Defer Work registration to the agent runtime so the version is written
+        // ONCE with its cumulative cost (known only after execution). Carry the
+        // UNTRUNCATED payload here: the runtime only sees the truncated
+        // `content`, but skill identity (issue/PR url, number, …) lives
+        // exclusively in the raw result.
+        return {
+          ...result,
+          workRegistration: {
+            args,
+            data: safeParseJSON(result.content) ?? result.content,
+            provider: identifier,
+            toolName: apiName,
+            type: 'skill',
+          },
+        };
+      }
+
+      return result;
     }
 
     // Route Composio tools to ComposioService. Build it request-scoped: agentId
@@ -167,7 +192,41 @@ export class BuiltinToolsExecutor implements IToolExecutor {
     }
 
     try {
-      return await runtime[apiName](args, context);
+      // Install a sink for runtimes whose Work registration is a side-effect
+      // decoupled from the returned result (the agentDocuments runtime emits its
+      // intent here instead of writing the version directly).
+      let collectedWorkIntent: WorkRegistrationIntent | undefined;
+      context.onWorkRegistration = (intent) => {
+        collectedWorkIntent = intent;
+      };
+
+      const result = await runtime[apiName](args, context);
+
+      // Manifest-driven Work registration: resolve the intent from the API's
+      // declarative `work` config + result/args and hand it to the agent
+      // runtime, which persists the Work version ONCE with its cumulative cost.
+      // Falls back to the intent a runtime emitted via `onWorkRegistration`
+      // (documents). No-op unless the API declares a `work` config or emits one.
+      //
+      // Best-effort: Work-intent resolution is post-hoc bookkeeping over an
+      // already-successful tool call, so a bug in the resolver must not turn a
+      // succeeded mutation into a reported tool failure. Isolate it from the
+      // execution try/catch below and swallow-and-log instead.
+      let workRegistration: WorkRegistrationIntent | undefined;
+      try {
+        workRegistration =
+          resolveBuiltinToolWorkIntent(identifier, apiName, { args, result }) ??
+          collectedWorkIntent;
+      } catch (workError) {
+        log(
+          'Work registration intent resolution failed for %s:%s: %O',
+          identifier,
+          apiName,
+          workError,
+        );
+      }
+
+      return workRegistration ? { ...result, workRegistration } : result;
     } catch (e) {
       const error = e as Error;
       console.error('Error executing builtin tool %s:%s: %O', identifier, apiName, error);

@@ -79,21 +79,11 @@ export interface BrowserGatewayToolCallPayload {
   apiName: string;
   args: Record<string, unknown>;
   requestId: string;
+  /** Topic the run belongs to — keys the browser session (`topic:<topicId>`). */
+  topicId: string;
 }
 
 export interface BrowserGatewayToolResultParams {
   requestId: string;
   result: BrowserToolCallResult;
-}
-
-export interface BrowserSidebarAgentStatePayload {
-  active: boolean;
-  sessionId: string;
-}
-
-export interface BrowserSidebarAgentCursorPayload {
-  click?: boolean;
-  sessionId: string;
-  x: number;
-  y: number;
 }

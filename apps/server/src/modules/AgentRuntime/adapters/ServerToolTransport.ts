@@ -1,4 +1,10 @@
-import type { ToolRunContext, ToolRunExecution, ToolTransport } from '@lobechat/agent-runtime';
+import type {
+  AgentState,
+  ToolRunContext,
+  ToolRunExecution,
+  ToolTransport,
+  ToolWorkRegistration,
+} from '@lobechat/agent-runtime';
 import { executeToolWithRetry } from '@lobechat/agent-runtime';
 import { SpanStatusCode } from '@lobechat/observability-otel/api';
 import {
@@ -26,6 +32,7 @@ import {
   GEN_AI_FUNCTION_TOOL_TYPE,
   isOperationInterrupted,
   log,
+  registerWorkFromIntent,
   TOOL_MAX_RETRIES,
   TOOL_PRICING,
 } from '../executorHelpers';
@@ -40,6 +47,24 @@ export class ServerToolTransport implements ToolTransport {
 
   getCost(toolName: string) {
     return TOOL_PRICING[toolName] || 0;
+  }
+
+  async registerWork(registration: ToolWorkRegistration, state: AgentState): Promise<void> {
+    await registerWorkFromIntent({
+      agentId: state.metadata?.agentId ?? null,
+      intent: registration.intent,
+      rootOperationId: this.ctx.operationId,
+      serverDB: this.ctx.serverDB,
+      sourceMessageId: registration.sourceMessageId,
+      sourceToolCallId: registration.sourceToolCallId,
+      sourceToolIdentifier: registration.sourceToolIdentifier,
+      sourceToolName: registration.sourceToolName,
+      state: registration.state,
+      threadId: state.metadata?.threadId,
+      topicId: state.metadata?.topicId,
+      userId: this.ctx.userId,
+      workspaceId: state.metadata?.workspaceId ?? this.ctx.workspaceId,
+    });
   }
 
   async handleError(
@@ -130,9 +155,19 @@ export class ServerToolTransport implements ToolTransport {
           manifest: context.effectiveManifestMap[chatToolPayload.identifier],
         });
         const dispatchResult = await dispatchClientTool(chatToolPayload, {
+          agentId: context.state.metadata?.agentId,
+          assistantMessageId: context.parentMessageId,
+          documentId: context.state.metadata?.documentId,
+          groupId: context.state.metadata?.groupId,
           operationId,
+          rootOperationId: operationId,
+          scope: context.state.metadata?.scope,
+          sourceMessageId: context.state.metadata?.sourceMessageId,
           streamManager,
+          taskId: context.state.metadata?.taskId,
+          threadId: context.state.metadata?.threadId,
           timeoutMs,
+          topicId: context.state.metadata?.topicId ?? this.ctx.topicId,
         });
         execution = { attempts: 1, result: dispatchResult };
       } else {
@@ -162,6 +197,7 @@ export class ServerToolTransport implements ToolTransport {
                 context.parentMessageId,
               ),
               ...(agentVisibility !== undefined && { agentVisibility }),
+              // Assistant message owning this tool call (≠ source user message).
               assistantMessageId: context.parentMessageId,
               deviceCapable: context.state.metadata?.executionPlan
                 ? isDeviceCapablePlan(context.state.metadata.executionPlan)
@@ -177,6 +213,7 @@ export class ServerToolTransport implements ToolTransport {
               messageId: context.state.metadata?.sourceMessageId,
               operationId,
               projectSkills: resolveRunProjectSkills(context.state.metadata),
+              rootOperationId: operationId,
               scope: context.state.metadata?.scope,
               serverDB,
               skipResultTruncation: true,
@@ -190,6 +227,7 @@ export class ServerToolTransport implements ToolTransport {
               threadId: context.state.metadata?.threadId,
               toolCallId: chatToolPayload.id,
               toolManifestMap: context.effectiveManifestMap,
+              toolMessageId: context.toolMessageId,
               toolResultMaxLength: context.toolResultMaxLength,
               topicId: this.ctx.topicId,
               userId,

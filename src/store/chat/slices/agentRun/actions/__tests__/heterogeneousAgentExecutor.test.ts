@@ -1635,14 +1635,16 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         imageList,
       });
 
-      expect(mockSendPrompt).toHaveBeenCalledWith(
-        'ipc-sess-1',
-        'test prompt',
-        'op-1',
+      expect(mockSendPrompt).toHaveBeenCalledWith({
+        agentId: 'agent-1',
         imageList,
-        undefined,
-        'agent-1',
-      );
+        operationId: 'op-1',
+        prompt: 'test prompt',
+        sessionId: 'ipc-sess-1',
+        systemContext: undefined,
+        // Keys the run's in-app browser session (`topic:<topicId>`) in the main process.
+        topicId: 'topic-1',
+      });
     });
 
     it('should forward context selections as heterogeneous system context', async () => {
@@ -1664,16 +1666,18 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       });
 
       expect(mockSendPrompt).toHaveBeenCalledWith(
-        'ipc-sess-1',
-        'test prompt',
-        'op-1',
-        undefined,
-        expect.stringContaining('<user_context_selections count="1">'),
-        'agent-1',
+        expect.objectContaining({
+          agentId: 'agent-1',
+          operationId: 'op-1',
+          prompt: 'test prompt',
+          sessionId: 'ipc-sess-1',
+          systemContext: expect.stringContaining('<user_context_selections count="1">'),
+        }),
       );
-      expect(mockSendPrompt.mock.calls[0][4]).toContain('filePath="src/example.ts"');
-      expect(mockSendPrompt.mock.calls[0][4]).toContain('lines="7-7"');
-      expect(mockSendPrompt.mock.calls[0][4]).toContain('const answer = 42;');
+      const { systemContext } = mockSendPrompt.mock.calls[0][0];
+      expect(systemContext).toContain('filePath="src/example.ts"');
+      expect(systemContext).toContain('lines="7-7"');
+      expect(systemContext).toContain('const answer = 42;');
     });
 
     it('should pass Claude Code model and thinking effort as spawn args', async () => {
@@ -1770,7 +1774,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         return { sessionId: sid };
       });
       mockSendPrompt.mockImplementation(
-        (sessionId: string) =>
+        ({ sessionId }: { sessionId: string }) =>
           new Promise<void>((resolve, reject) => {
             sendPromptControllers.set(sessionId, { reject, resolve });
           }),

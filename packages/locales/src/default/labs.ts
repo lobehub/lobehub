@@ -11,6 +11,9 @@ export default {
   'features.assistantMessageGroup.desc':
     'Group agent messages and their tool call results together for display',
   'features.assistantMessageGroup.title': 'Agent Message Grouping',
+  'features.builtinTerminal.desc':
+    'Show a terminal button on the chat page that opens a built-in terminal panel at the bottom, with per-topic tabs running in your local shell.',
+  'features.builtinTerminal.title': 'Built-in Terminal',
   'features.claudeCodeSdk.desc':
     'Run Claude Code sessions through the Claude Agent SDK instead of spawning the CLI. Enables richer streaming and session control.',
   'features.claudeCodeSdk.title': 'Claude Code SDK Runtime',
@@ -34,6 +37,9 @@ export default {
   'features.messageTextSelectionActions.desc':
     'Show a quick action when selecting text in chat messages so the selected text can be added to the next conversation context.',
   'features.messageTextSelectionActions.title': 'Message Text Selection Actions',
+  'features.oauthApps.desc':
+    'Show OAuth app management in personal and workspace settings. This feature is hidden by default.',
+  'features.oauthApps.title': 'OAuth Apps',
   'features.platformAgent.desc':
     'Show the "Connect Agent" entry in the create menu. Connected agents (e.g. OpenClaw, Hermes) run on your own devices and communicate back via lh connect.',
   'features.platformAgent.title': 'Connect Agent',

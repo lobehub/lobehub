@@ -21,16 +21,16 @@ const BrowserApiEnum = {
   snapshot: 'snapshot' as const,
 };
 
-const ATTACH_TIMEOUT_MS = 12_000;
-
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
  * Browser Tool Executor (client / desktop only)
  *
- * Drives the WorkingSidebar in-app browser through the Electron IPC control
- * gateway. The browser session is shared with the UI (`agent:<agentId>`), so
- * the user watches every action live in the sidebar.
+ * Drives the in-app browser through the Electron IPC control gateway. Pages are
+ * owned by the main process and keyed by session (`topic:<topicId>`), so every
+ * topic drives its own page whether or not the user is watching it — a run in a
+ * background topic never touches the page in front of the user, and two topics
+ * of the same agent no longer trample each other's page.
  */
 class BrowserExecutor extends BaseExecutor<typeof BrowserApiEnum> {
   readonly identifier = BrowserIdentifier;
@@ -61,27 +61,11 @@ class BrowserExecutor extends BaseExecutor<typeof BrowserApiEnum> {
       const sessionId = this.sessionIdOf(ctx);
       const { electronBrowserSidebarService } = await import('@/services/electron/browserSidebar');
 
-      const state = await electronBrowserSidebarService.getState({ sessionId });
-
-      if (state.attached) {
-        await this.revealBrowserTab();
-        const result = await electronBrowserSidebarService.navigate({
-          sessionId,
-          url: params.url,
-        });
-        if (!result.success) return this.failure(result.error ?? 'Navigation failed');
-      } else {
-        // No webview yet — mount it through the store request, which also opens
-        // the right panel and switches to the browser tab.
-        const { useGlobalStore } = await import('@/store/global');
-        useGlobalStore.getState().openInBrowserTab(params.url);
-
-        const attached = await this.waitForAttach(sessionId);
-        if (!attached)
-          return this.failure(
-            'The in-app browser did not open. Make sure the conversation is visible in the desktop app.',
-          );
-      }
+      // The main process creates the page on demand, so there is nothing to wait
+      // for and no UI to open first — a background agent navigates its own page.
+      await this.revealBrowserTab(ctx);
+      const result = await electronBrowserSidebarService.navigate({ sessionId, url: params.url });
+      if (!result.success) return this.failure(result.error ?? 'Navigation failed');
 
       // Let the page settle before reporting where we landed.
       await this.waitForLoad(sessionId);
@@ -121,7 +105,7 @@ class BrowserExecutor extends BaseExecutor<typeof BrowserApiEnum> {
     try {
       const disabled = await this.labDisabledFailure();
       if (disabled) return disabled;
-      await this.revealBrowserTab();
+      await this.revealBrowserTab(ctx);
       const { electronBrowserControlService } = await import('@/services/electron/browserControl');
       const result = await electronBrowserControlService.click({
         ref: params.ref,
@@ -144,7 +128,7 @@ class BrowserExecutor extends BaseExecutor<typeof BrowserApiEnum> {
     try {
       const disabled = await this.labDisabledFailure();
       if (disabled) return disabled;
-      await this.revealBrowserTab();
+      await this.revealBrowserTab(ctx);
       const { electronBrowserControlService } = await import('@/services/electron/browserControl');
       const result = await electronBrowserControlService.fill({
         ref: params.ref,
@@ -199,7 +183,7 @@ class BrowserExecutor extends BaseExecutor<typeof BrowserApiEnum> {
     try {
       const disabled = await this.labDisabledFailure();
       if (disabled) return disabled;
-      await this.revealBrowserTab();
+      await this.revealBrowserTab(ctx);
       const { electronBrowserControlService } = await import('@/services/electron/browserControl');
       const result = await electronBrowserControlService.screenshot({
         sessionId: this.sessionIdOf(ctx),
@@ -237,28 +221,43 @@ class BrowserExecutor extends BaseExecutor<typeof BrowserApiEnum> {
 
   // ==================== Helpers ====================
 
+  /**
+   * The single place a browser session key is minted, for all three execution
+   * paths (local runtime, cloud gateway, CC MCP). Keyed by topic, not agent: a
+   * topic is what the user sees as "this conversation", so its page is the one
+   * they expect the agent to be driving.
+   *
+   * A tool call always runs inside a persisted topic (the topic is created
+   * before the first tool ever executes), so a missing topicId means a caller
+   * dropped it in transit — fail loudly rather than silently sharing one page.
+   */
   private sessionIdOf(ctx?: BuiltinToolContext): string {
-    if (!ctx?.agentId) throw new Error('Browser tool requires an agent context');
-    return `agent:${ctx.agentId}`;
+    if (!ctx?.topicId) throw new Error('Browser tool requires a topic context');
+    return `topic:${ctx.topicId}`;
   }
 
-  /** Keep the user in the loop: surface the browser tab whenever the agent acts. */
-  private async revealBrowserTab() {
-    const { useGlobalStore } = await import('@/store/global');
+  /**
+   * Keep the user in the loop — but only for the run they are actually looking
+   * at. Revealing the panel for a background run would yank the user's view to
+   * something they didn't ask about, and (before pages were main-process owned)
+   * it was how a background agent ended up driving the foreground page.
+   *
+   * The topic must match too, not just the agent: the panel shows the *active*
+   * topic's page, so revealing it for a sibling topic of the same agent would
+   * present a blank page while the real action happens out of sight.
+   */
+  private async revealBrowserTab(ctx?: BuiltinToolContext) {
+    const [{ useAgentStore }, { useChatStore }, { useGlobalStore }] = await Promise.all([
+      import('@/store/agent'),
+      import('@/store/chat'),
+      import('@/store/global'),
+    ]);
+    if (!ctx?.agentId || useAgentStore.getState().activeAgentId !== ctx.agentId) return;
+    if (!ctx.topicId || useChatStore.getState().activeTopicId !== ctx.topicId) return;
+
     const store = useGlobalStore.getState();
     store.toggleRightPanel(true);
     store.setWorkingSidebarTab('browser');
-  }
-
-  private async waitForAttach(sessionId: string): Promise<boolean> {
-    const { electronBrowserSidebarService } = await import('@/services/electron/browserSidebar');
-    const deadline = Date.now() + ATTACH_TIMEOUT_MS;
-    while (Date.now() < deadline) {
-      const state = await electronBrowserSidebarService.getState({ sessionId });
-      if (state.attached) return true;
-      await sleep(300);
-    }
-    return false;
   }
 
   private async waitForLoad(sessionId: string, timeoutMs = 8000): Promise<void> {

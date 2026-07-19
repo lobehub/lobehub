@@ -1,47 +1,45 @@
 import type {
-  BrowserSidebarAttachParams,
   BrowserSidebarImportResult,
   BrowserSidebarNavigateParams,
+  BrowserSidebarOverlayLabelsParams,
   BrowserSidebarResult,
   BrowserSidebarSessionParams,
   BrowserSidebarState,
+  BrowserSidebarViewportParams,
 } from '@lobechat/electron-client-ipc';
-import type { WebContents, WebPreferences } from 'electron';
+import type { BrowserWindow, WebContents } from 'electron';
 import {
   app as electronApp,
+  BrowserWindow as ElectronBrowserWindow,
   clipboard,
   session as electronSession,
   shell,
-  webContents as electronWebContents,
 } from 'electron';
 
+import type { AgentOverlayLabels } from '@/modules/browser/agentOverlayScript';
+import { BrowserPagePool } from '@/modules/browser/BrowserPagePool';
 import { importChromeLoginData } from '@/modules/browser/importChromeLoginData';
+import { getIpcContext } from '@/utils/ipc/base';
 import { createLogger } from '@/utils/logger';
 
 import { ControllerModule, IpcMethod } from './index';
 
 const logger = createLogger('controllers:BrowserSidebarCtr');
 
-// Shared persistent profile: logins/cookies survive across agents and restarts,
-// mirroring a regular browser. Agent-driven sessions (M2) will get an isolated
-// partition instead. The renderer sets this as the <webview> `partition`
-// attribute — the only reliable identity channel into `will-attach-webview`
-// (custom data-* attributes are NOT forwarded in its params).
+/**
+ * Shared persistent profile: logins/cookies survive across agents and restarts,
+ * mirroring a regular browser.
+ */
 const BROWSER_PARTITION = 'persist:lobe-browser-app';
-const BROWSER_PARTITION_PREFIX = 'persist:lobe-browser-';
 const DEFAULT_BROWSER_URL = 'about:blank';
 const HTTP_URL_PATTERN = /^https?:\/\//i;
 const LOCAL_URL_PATTERN = /^(?:localhost|127(?:\.\d{1,3}){3}|\[?::1\]?)(?::\d+)?(?:[/?#].*)?$/i;
 const SUPPORTED_PROTOCOLS = new Set(['about:', 'http:', 'https:']);
 
-interface BrowserPageRecord {
-  error?: string;
-  isLoading: boolean;
-  sessionId: string;
-  title: string;
-  url: string;
-  webContents?: WebContents;
-}
+const DEFAULT_OVERLAY_LABELS: AgentOverlayLabels = {
+  controlling: 'Agent is controlling this page',
+  cursor: 'Agent',
+};
 
 const normalizeBrowserUrl = (value?: string): string => {
   const text = value?.trim();
@@ -70,46 +68,42 @@ const isSupportedNavigationUrl = (url: string): boolean => {
   }
 };
 
+/**
+ * Owns the in-app browser pages. Each page is a main-process `WebContentsView`,
+ * not a renderer `<webview>`: page lifetime must not depend on a React component
+ * being mounted, otherwise a background agent has no page of its own and its
+ * `navigate` ends up hijacking whichever page the user is looking at.
+ *
+ * The renderer only reports where the panel is on screen (`setViewport`); the
+ * pool hosts the matching view in the window that reported it.
+ */
 export default class BrowserSidebarCtr extends ControllerModule {
   static override readonly groupName = 'browserSidebar';
 
-  private ownerWebContentsIds = new Set<number>();
-  private pages = new Map<string, BrowserPageRecord>();
   private partitionConfigured = false;
+  private pagePool?: BrowserPagePool;
+  private overlayLabels: AgentOverlayLabels = DEFAULT_OVERLAY_LABELS;
 
   beforeAppReady() {
-    electronApp.on('web-contents-created', (_event, webContents) => {
-      this.attachOwnerWebContents(webContents);
+    electronApp.on('before-quit', () => this.disposePool());
+
+    // The parking window is a real BrowserWindow, so while it is alive the app
+    // never sees `window-all-closed` — and never quits on Windows/Linux. Tear the
+    // pool down once the last app window has gone.
+    electronApp.on('browser-window-created', (_event, window) => {
+      window.once('closed', () => {
+        if (!this.pagePool) return;
+        const appWindows = ElectronBrowserWindow.getAllWindows().filter(
+          (candidate) => !candidate.isDestroyed() && !this.pagePool!.isParkingWindow(candidate),
+        );
+        if (appWindows.length === 0) this.disposePool();
+      });
     });
-  }
-
-  /**
-   * Bind a session to an attached <webview> guest. Identity flows through this
-   * explicit call (renderer reads `getWebContentsId()` on dom-ready) because
-   * `will-attach-webview` params carry no custom attributes to match on.
-   */
-  @IpcMethod()
-  attach(params: BrowserSidebarAttachParams): BrowserSidebarResult {
-    const guest = electronWebContents.fromId(params.webContentsId);
-    if (!guest || guest.isDestroyed()) {
-      return { error: 'Webview is not available', success: false };
-    }
-
-    // Only guests living in our hardened browser partition may be claimed.
-    if (guest.session !== electronSession.fromPartition(BROWSER_PARTITION)) {
-      logger.warn(`Rejected attach for webContents ${params.webContentsId}: wrong session`);
-      return { error: 'Webview does not belong to the browser sidebar', success: false };
-    }
-
-    if (this.getLiveWebContents(params.sessionId)?.id === guest.id) return { success: true };
-
-    this.attachPageWebContents(params.sessionId, guest);
-    return { success: true };
   }
 
   @IpcMethod()
   captureScreenshotToClipboard(params: BrowserSidebarSessionParams): Promise<BrowserSidebarResult> {
-    return this.withPageWebContents(params.sessionId, async (webContents) => {
+    return this.withPage(params.sessionId, async (webContents) => {
       const image = await webContents.capturePage();
       clipboard.writeImage(image);
       return { success: true };
@@ -139,7 +133,7 @@ export default class BrowserSidebarCtr extends ControllerModule {
 
   @IpcMethod()
   goBack(params: BrowserSidebarSessionParams): Promise<BrowserSidebarResult> {
-    return this.withPageWebContents(params.sessionId, (webContents) => {
+    return this.withPage(params.sessionId, (webContents) => {
       if (!webContents.canGoBack()) return { success: false };
       webContents.goBack();
       return { success: true };
@@ -148,13 +142,17 @@ export default class BrowserSidebarCtr extends ControllerModule {
 
   @IpcMethod()
   goForward(params: BrowserSidebarSessionParams): Promise<BrowserSidebarResult> {
-    return this.withPageWebContents(params.sessionId, (webContents) => {
+    return this.withPage(params.sessionId, (webContents) => {
       if (!webContents.canGoForward()) return { success: false };
       webContents.goForward();
       return { success: true };
     });
   }
 
+  /**
+   * Creates the page if this session doesn't have one yet, so an agent can drive
+   * a page the user has never opened — no UI round-trip, no waiting for a mount.
+   */
   @IpcMethod()
   async navigate(params: BrowserSidebarNavigateParams): Promise<BrowserSidebarResult> {
     const url = normalizeBrowserUrl(params.url);
@@ -162,24 +160,23 @@ export default class BrowserSidebarCtr extends ControllerModule {
       return { error: `Unsupported URL: ${url}`, success: false };
     }
 
-    const page = this.ensurePage(params.sessionId);
+    const page = this.pool.ensure(params.sessionId);
     page.url = url;
     page.error = undefined;
 
-    const webContents = this.getLiveWebContents(params.sessionId);
-    if (!webContents) {
-      this.broadcastState(params.sessionId);
-      return { success: true };
-    }
+    await page.view.webContents.loadURL(url).catch((error: Error) => {
+      // A superseded navigation rejects here; the did-fail-load handler already
+      // records anything worth surfacing.
+      logger.debug(`Navigation to ${url} did not settle cleanly: ${error.message}`);
+    });
 
-    await webContents.loadURL(url);
     this.updateSnapshot(params.sessionId);
     return { success: true };
   }
 
   @IpcMethod()
   openExternal(params: BrowserSidebarSessionParams): Promise<BrowserSidebarResult> {
-    return this.withPageWebContents(params.sessionId, async (webContents) => {
+    return this.withPage(params.sessionId, async (webContents) => {
       const url = webContents.getURL();
       if (!url || !HTTP_URL_PATTERN.test(url)) {
         return { error: `Unsupported URL: ${url}`, success: false };
@@ -192,7 +189,7 @@ export default class BrowserSidebarCtr extends ControllerModule {
 
   @IpcMethod()
   reload(params: BrowserSidebarSessionParams): Promise<BrowserSidebarResult> {
-    return this.withPageWebContents(params.sessionId, (webContents) => {
+    return this.withPage(params.sessionId, (webContents) => {
       webContents.reload();
       return { success: true };
     });
@@ -200,107 +197,79 @@ export default class BrowserSidebarCtr extends ControllerModule {
 
   @IpcMethod()
   stop(params: BrowserSidebarSessionParams): Promise<BrowserSidebarResult> {
-    return this.withPageWebContents(params.sessionId, (webContents) => {
+    return this.withPage(params.sessionId, (webContents) => {
       webContents.stop();
       return { success: true };
     });
   }
 
-  private attachOwnerWebContents(webContents: WebContents): void {
-    if (this.ownerWebContentsIds.has(webContents.id)) return;
+  /**
+   * The renderer reports the panel rect (in its own window's coordinates) on every
+   * layout change; a missing/degenerate rect means "nobody is looking at this
+   * page", which parks it rather than destroying it.
+   *
+   * The rect is hosted in the *sender's* window, not the main one: the agent route
+   * also renders in standalone `chatSingle` windows, and placing the view in the
+   * main window would leave the standalone panel blank and paint the page over the
+   * wrong window.
+   */
+  @IpcMethod()
+  setViewport(params: BrowserSidebarViewportParams): BrowserSidebarResult {
+    const { rect, sessionId } = params;
+    const host = this.getSenderWindow();
 
-    this.ownerWebContentsIds.add(webContents.id);
+    if (!rect || rect.width < 1 || rect.height < 1 || !host) {
+      this.pool.hide(sessionId, host);
+      return { success: true };
+    }
 
-    webContents.on('will-attach-webview', (event, webPreferences, params) => {
-      // Custom data-* attributes are not forwarded here, so the partition
-      // attribute (set by the renderer) is the recognition signal.
-      if (!params.partition?.startsWith(BROWSER_PARTITION_PREFIX)) return;
-
-      const initialUrl = normalizeBrowserUrl(params.src);
-      if (!isSupportedNavigationUrl(initialUrl)) {
-        event.preventDefault();
-        logger.warn(`Blocked unsupported browser sidebar URL: ${initialUrl}`);
-        return;
-      }
-
-      this.configureBrowserSession();
-
-      params.src = initialUrl;
-      params.partition = BROWSER_PARTITION;
-
-      this.applySecureWebPreferences(webPreferences);
-    });
-
-    webContents.once('destroyed', () => {
-      this.ownerWebContentsIds.delete(webContents.id);
-    });
+    this.pool.show(sessionId, rect, host);
+    return { success: true };
   }
 
-  private applySecureWebPreferences(webPreferences: WebPreferences): void {
-    Object.assign(webPreferences, {
-      contextIsolation: true,
-      devTools: true,
-      nodeIntegration: false,
+  /** The overlay is drawn inside the page, so its copy has to come from the renderer. */
+  @IpcMethod()
+  setOverlayLabels(params: BrowserSidebarOverlayLabelsParams): BrowserSidebarResult {
+    this.overlayLabels = { controlling: params.controlling, cursor: params.cursor };
+    return { success: true };
+  }
+
+  /** Accessors for sibling controllers (BrowserControlCtr drives the pages). */
+  getSessionWebContents(sessionId: string): WebContents | undefined {
+    return this.pagePool?.webContentsOf(sessionId);
+  }
+
+  /** Mark a page as in use so the memory cap doesn't discard it mid-automation. */
+  touchPage(sessionId: string): void {
+    this.pagePool?.touch(sessionId);
+  }
+
+  getOverlayLabels(): AgentOverlayLabels {
+    return this.overlayLabels;
+  }
+
+  private get pool(): BrowserPagePool {
+    if (this.pagePool) return this.pagePool;
+
+    this.configureBrowserSession();
+    this.pagePool = new BrowserPagePool({
+      onPageChanged: (sessionId) => this.updateSnapshot(sessionId),
       partition: BROWSER_PARTITION,
-      preload: undefined,
-      sandbox: true,
-    } satisfies Partial<WebPreferences>);
+    });
+
+    return this.pagePool;
   }
 
-  private attachPageWebContents(sessionId: string, webContents: WebContents): void {
-    const page = this.ensurePage(sessionId);
-    page.webContents = webContents;
+  private disposePool(): void {
+    this.pagePool?.dispose();
+    this.pagePool = undefined;
+  }
 
-    webContents.setWindowOpenHandler(({ url }) => {
-      // target=_blank links stay inside the sidebar: retarget the current page
-      // instead of spawning detached native windows the sidebar can't manage.
-      if (HTTP_URL_PATTERN.test(url)) {
-        webContents.loadURL(url).catch((error) => {
-          logger.error(`Failed to open URL in browser sidebar: ${url}`, error);
-        });
-      }
-
-      return { action: 'deny' };
-    });
-
-    const update = () => this.updateSnapshot(sessionId);
-
-    webContents.on('page-title-updated', update);
-    webContents.on('did-start-loading', () => {
-      page.isLoading = true;
-      this.updateSnapshot(sessionId);
-    });
-    webContents.on('did-stop-loading', () => {
-      page.isLoading = false;
-      this.updateSnapshot(sessionId);
-    });
-    webContents.on('did-navigate', update);
-    webContents.on('did-navigate-in-page', update);
-    webContents.on('did-redirect-navigation', update);
-    webContents.on(
-      'did-fail-load',
-      (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
-        if (!isMainFrame || errorCode === -3) return;
-        page.error = errorDescription;
-        page.url = validatedURL || page.url;
-        page.isLoading = false;
-        this.broadcastState(sessionId);
-      },
-    );
-    webContents.once('destroyed', () => {
-      if (page.webContents?.id === webContents.id) {
-        page.webContents = undefined;
-        page.isLoading = false;
-        this.broadcastState(sessionId);
-      }
-    });
-    webContents.on('render-process-gone', (_event, details) => {
-      page.error = details.reason;
-      page.isLoading = false;
-      this.broadcastState(sessionId);
-    });
-
-    this.updateSnapshot(sessionId);
+  /** The window whose renderer made the current IPC call. */
+  private getSenderWindow(): BrowserWindow | undefined {
+    const sender = getIpcContext()?.sender;
+    if (!sender || sender.isDestroyed()) return undefined;
+    return ElectronBrowserWindow.fromWebContents(sender) ?? undefined;
   }
 
   private configureBrowserSession(): void {
@@ -327,73 +296,47 @@ export default class BrowserSidebarCtr extends ControllerModule {
     this.partitionConfigured = true;
   }
 
-  private ensurePage(sessionId: string): BrowserPageRecord {
-    const current = this.pages.get(sessionId);
-    if (current) return current;
-
-    const page: BrowserPageRecord = {
-      isLoading: false,
-      sessionId,
-      title: '',
-      url: DEFAULT_BROWSER_URL,
-    };
-    this.pages.set(sessionId, page);
-    return page;
-  }
-
-  private getLiveWebContents(sessionId: string): WebContents | undefined {
-    const webContents = this.pages.get(sessionId)?.webContents;
-    if (!webContents || webContents.isDestroyed()) return undefined;
-    return webContents;
-  }
-
-  /** Guest accessor for sibling controllers (BrowserControlCtr drives it). */
-  getSessionWebContents(sessionId: string): WebContents | undefined {
-    return this.getLiveWebContents(sessionId);
-  }
-
   private snapshot(sessionId: string): BrowserSidebarState {
-    const page = this.ensurePage(sessionId);
-    const webContents = this.getLiveWebContents(sessionId);
+    const page = this.pagePool?.get(sessionId);
+    const webContents = this.getSessionWebContents(sessionId);
+    // A page the pool discarded to stay under its memory cap still reports its
+    // URL, so the panel keeps showing it and the next visit reloads it there
+    // rather than dropping the user on a blank pane.
+    const discarded = this.pagePool?.discardedRecord(sessionId);
 
     return {
       attached: !!webContents,
       canGoBack: webContents?.canGoBack() ?? false,
       canGoForward: webContents?.canGoForward() ?? false,
-      error: page.error,
-      isLoading: webContents?.isLoading() ?? page.isLoading,
+      error: page?.error,
+      isLoading: webContents?.isLoading() ?? page?.isLoading ?? false,
       sessionId,
-      title: webContents?.getTitle() || page.title,
-      url: webContents?.getURL() || page.url,
+      title: webContents?.getTitle() || page?.title || discarded?.title || '',
+      url: webContents?.getURL() || page?.url || discarded?.url || DEFAULT_BROWSER_URL,
     };
   }
 
   private updateSnapshot(sessionId: string): void {
-    const page = this.ensurePage(sessionId);
-    const webContents = this.getLiveWebContents(sessionId);
+    const page = this.pagePool?.get(sessionId);
+    const webContents = this.getSessionWebContents(sessionId);
 
-    if (webContents) {
+    if (page && webContents) {
       page.title = webContents.getTitle();
       page.url = webContents.getURL() || page.url;
       page.isLoading = webContents.isLoading();
-      page.error = undefined;
     }
 
-    this.broadcastState(sessionId);
-  }
-
-  private broadcastState(sessionId: string): void {
     this.app.browserManager.broadcastToAllWindows(
       'browserSidebarStateChanged',
       this.snapshot(sessionId),
     );
   }
 
-  private async withPageWebContents(
+  private async withPage(
     sessionId: string,
     action: (webContents: WebContents) => BrowserSidebarResult | Promise<BrowserSidebarResult>,
   ): Promise<BrowserSidebarResult> {
-    const webContents = this.getLiveWebContents(sessionId);
+    const webContents = this.getSessionWebContents(sessionId);
     if (!webContents) return { error: 'Browser is not ready', success: false };
 
     return action(webContents);

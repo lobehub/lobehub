@@ -4,7 +4,6 @@ import { SiApple, SiLinux } from '@icons-pack/react-simple-icons';
 import { isDesktop } from '@lobechat/const';
 import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import type { DeviceExecutionTarget } from '@lobechat/types';
-import { resolveAgencyConfig } from '@lobechat/types';
 import { Microsoft } from '@lobehub/icons';
 import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
@@ -26,15 +25,13 @@ import { useTranslation } from 'react-i18next';
 
 import { DOWNLOAD_URL } from '@/const/url';
 import { useSelectExecutionTarget } from '@/features/ChatInput/hooks/useSelectExecutionTarget';
+import { useDeviceList } from '@/features/DeviceManager/useDeviceList';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { useIsGatewayModeEnabled } from '@/helpers/gatewayMode';
-import { lambdaQuery } from '@/libs/trpc/client';
+import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useElectronStore } from '@/store/electron';
-import { useUserStore } from '@/store/user';
-import { workspaceUserSettingsSelectors } from '@/store/user/selectors';
 
 const styles = createStaticStyles(({ css }) => ({
   button: css`
@@ -346,35 +343,32 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   const [open, setOpen] = useState(false);
   const navigate = useWorkspaceAwareNavigate();
 
-  const sharedAgencyConfig = useAgentStore(agentByIdSelectors.getAgencyConfigById(agentId));
   const agentWorkspaceId = useAgentStore((s) => s.agentMap[agentId]?.workspaceId);
   const isWorkspaceAgent = Boolean(agentWorkspaceId);
 
-  // The current caller's per-agent override (LOBE-11689). Only ever non-empty
-  // for workspace agents in practice — personal agents already have a single
-  // owner whose choice is the shared config. Comes from the
-  // `workspaceUserSettings` slice (backed by `workspace_user_settings.preference`),
-  // which the picker eagerly fetches on mount so what the picker shows and
-  // what dispatch will actually do always agree. Merged over the shared config
-  // via `resolveAgencyConfig`.
-  const { isLoading: isWorkspacePreferenceLoading } = useUserStore(
-    (s) => s.useFetchWorkspaceUserPreference,
-  )();
-  const override = useUserStore(workspaceUserSettingsSelectors.agentDeviceOverrideById(agentId));
-  const agencyConfig = resolveAgencyConfig(sharedAgencyConfig, override);
+  // Shared config merged with the caller's per-agent override (LOBE-11689) —
+  // the hook eagerly fetches the `workspaceUserSettings` bucket on mount so
+  // what the picker shows and what dispatch will actually do always agree.
+  const {
+    agencyConfig,
+    isPreferenceLoading: isWorkspacePreferenceLoading,
+    workspaceScoped,
+  } = useEffectiveAgencyConfig(agentId);
 
   const heteroType = agencyConfig?.heterogeneousProvider?.type;
   const boundDeviceId = agencyConfig?.boundDeviceId;
 
-  // Heterogeneous agents (Claude Code / Codex — remote types already early-return
+  // Local heterogeneous agents (remote types already early-return
   // below) bring their own toolchain and must execute somewhere, so `'none'`
   // (plain chat, no execution environment) isn't a valid target for them: hide
   // the option and never fall back to / honour a stale stored `'none'`.
   const isHetero = !!heteroType;
+  const supportsSandbox = heteroType !== 'amp';
 
-  const { data: devices, isLoading } = lambdaQuery.device.listDevices.useQuery(undefined, {
-    staleTime: 30_000,
-  });
+  // Workspace-keyed SWR fetch — the raw lambdaQuery key has no workspace
+  // dimension, so the picker kept showing the previous workspace's pool after
+  // a switch (LOBE-11904).
+  const { data: devices, isLoading } = useDeviceList();
 
   // The current machine's own gateway deviceId (desktop only), used to badge the
   // matching device row with a "This device" tag and show the local-process
@@ -383,20 +377,26 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   const gatewayDeviceInfo = useElectronStore((s) => s.gatewayDeviceInfo);
   const currentDeviceId = isDesktop ? gatewayDeviceInfo?.deviceId : undefined;
 
-  // Effective target: `resolveExecutionTarget` runs over the *merged*
-  // `agencyConfig` (shared + this user's LOBE-11689 override), so what the
-  // chip shows and what the server dispatches always agree.
-  //
-  // `workspaceScoped: false`: with per-user overrides, workspace agents can
-  // resolve `local` again — the pre-11689 coercion was only there because
-  // sharing the choice across members made a personal-scope `local` pick
-  // dangerous.
+  // A member's explicit target override may resolve `local`; without one the
+  // raw shared fallback stays workspace-scoped so a legacy `local` value keeps
+  // routing to its bound workspace device rather than this member's desktop.
   const deviceRoutingAvailable = useIsGatewayModeEnabled(agentId);
   const executionTarget = resolveExecutionTarget(agencyConfig, {
     clientExecutionAvailable: isDesktop,
     deviceRoutingAvailable,
     isHetero,
+    workspaceScoped,
   });
+
+  // Amp cannot fall back to the cloud sandbox. When a web/legacy config has no
+  // usable device target, open the picker once so `none` is an explicit setup
+  // prompt rather than a disabled-but-active sandbox row.
+  useEffect(() => {
+    if (heteroType !== 'amp') return;
+    if (isWorkspacePreferenceLoading) return;
+    if (executionTarget !== 'none') return;
+    setOpen(true);
+  }, [executionTarget, heteroType, isWorkspacePreferenceLoading]);
 
   const selectExecutionTarget = useSelectExecutionTarget(agentId);
   const handleSelect = useCallback(
@@ -613,9 +613,14 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
       ) : null}
       <OptionRow
         active={isActive('sandbox')}
-        desc={t('heteroAgent.executionTarget.sandboxDesc')}
+        disabled={!supportsSandbox}
         icon={<Icon icon={BoxIcon} size={14} />}
         label={t('heteroAgent.executionTarget.sandbox')}
+        desc={t(
+          supportsSandbox
+            ? 'heteroAgent.executionTarget.sandboxDesc'
+            : 'heteroAgent.executionTarget.ampSandboxUnsupported',
+        )}
         onClick={() => void handleSelect('sandbox')}
       />
       {deviceRows.length > 0 ? (

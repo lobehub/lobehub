@@ -62,6 +62,11 @@ export interface State {
    */
   selectedFileIds: string[];
   /**
+   * Total rows in the role-scoped select-all query. In a workspace this is
+   * caller-owned rows for members and the full visible result set for owners.
+   */
+  selectionTotal?: number;
+  /**
    * Field to sort files by
    */
   sorter: 'name' | 'createdAt' | 'size';
@@ -86,6 +91,7 @@ export const initialState: State = {
   pendingRenameItemId: null,
   searchQuery: null,
   selectAllState: 'none',
+  selectionTotal: undefined,
   selectedFileIds: [],
   sortType: SortType.Desc,
   sorter: 'createdAt',

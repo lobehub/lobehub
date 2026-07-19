@@ -2749,5 +2749,45 @@ describe('AgentModel', () => {
 
       expect(result.map((r) => r.id)).toEqual(['mb-mine']);
     });
+
+    it('should keep isPrivate false in personal mode', async () => {
+      await serverDB.insert(agents).values([{ id: 'mb-personal', title: 'Personal', userId }]);
+
+      const result = await agentModel.listMessengerBindableAgents();
+
+      expect(result.map((r) => r.isPrivate)).toEqual([false]);
+    });
+
+    it('should flag own private workspace agents and hide other members private ones', async () => {
+      const [workspace] = await serverDB
+        .insert(workspaces)
+        .values({ name: 'mb-ws', primaryOwnerId: userId, slug: 'mb-ws' })
+        .returning();
+
+      await serverDB.insert(agents).values([
+        { id: 'mb-ws-shared', title: 'Shared', userId: userId2, workspaceId: workspace.id },
+        {
+          id: 'mb-ws-private-mine',
+          title: 'Mine Private',
+          userId,
+          visibility: 'private',
+          workspaceId: workspace.id,
+        },
+        {
+          id: 'mb-ws-private-theirs',
+          title: 'Theirs Private',
+          userId: userId2,
+          visibility: 'private',
+          workspaceId: workspace.id,
+        },
+      ]);
+
+      const wsAgentModel = new AgentModel(serverDB, userId, workspace.id);
+      const result = await wsAgentModel.listMessengerBindableAgents();
+
+      expect(result.map((r) => r.id).sort()).toEqual(['mb-ws-private-mine', 'mb-ws-shared']);
+      expect(result.find((r) => r.id === 'mb-ws-shared')?.isPrivate).toBe(false);
+      expect(result.find((r) => r.id === 'mb-ws-private-mine')?.isPrivate).toBe(true);
+    });
   });
 });

@@ -132,6 +132,13 @@ export class GlobalWorkspacePaneActionImpl {
     this.#get().updateSystemStatus({ showRightPanel }, n('toggleRightPanel', newValue));
   };
 
+  toggleTerminalPanel = (newValue?: boolean): void => {
+    const showTerminalPanel =
+      typeof newValue === 'boolean' ? newValue : !this.#get().status.showTerminalPanel;
+
+    this.#get().updateSystemStatus({ showTerminalPanel }, n('toggleTerminalPanel', newValue));
+  };
+
   toggleSystemRole = (newValue?: boolean): void => {
     const showSystemRole =
       typeof newValue === 'boolean' ? newValue : !this.#get().status.mobileShowTopic;
@@ -158,6 +165,20 @@ export class GlobalWorkspacePaneActionImpl {
     this.#get().updateSystemStatus(
       { workingSidebarBrowserRequest: { nonce: Date.now(), url } },
       n('openInBrowserTab'),
+    );
+  };
+
+  /**
+   * Retire the request as soon as the browser pane has acted on it. Without
+   * this, the request survives in persisted status and every later remount of
+   * the pane — which now happens on each topic switch, since the session key is
+   * per-topic — would navigate that topic's page to the stale URL.
+   */
+  clearBrowserTabRequest = (): void => {
+    if (!this.#get().status.workingSidebarBrowserRequest) return;
+    this.#get().updateSystemStatus(
+      { workingSidebarBrowserRequest: null },
+      n('clearBrowserTabRequest'),
     );
   };
 

@@ -1,6 +1,6 @@
-import { DropdownMenu, Flexbox, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
-import { CalendarOffIcon, ChevronDown, PlayIcon, RotateCcwIcon } from 'lucide-react';
+import { Flexbox, Text } from '@lobehub/ui';
+import { Button, SplitButton } from '@lobehub/ui/base-ui';
+import { CalendarOffIcon, PlayIcon, RotateCcwIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -137,8 +137,8 @@ const TaskDetailRunPauseAction = memo(() => {
   if (isScheduled) {
     return (
       <Flexbox horizontal align={'center'} gap={12}>
-        <Flexbox horizontal gap={4}>
-          <Button
+        <SplitButton disabled={!canEditTask || isCancellingSchedule} loading={isRunningNow}>
+          <SplitButton.Main
             disabled={!canEditTask || isRunningNow}
             icon={CalendarOffIcon}
             loading={isCancellingSchedule}
@@ -146,8 +146,8 @@ const TaskDetailRunPauseAction = memo(() => {
             onClick={handleCancelSchedule}
           >
             {t('taskDetail.cancelSchedule')}
-          </Button>
-          <DropdownMenu
+          </SplitButton.Main>
+          <SplitButton.Menu
             items={[
               {
                 disabled: !canEditTask || isRunningNow || isCancellingSchedule,
@@ -157,15 +157,8 @@ const TaskDetailRunPauseAction = memo(() => {
                 onClick: handleRunNow,
               },
             ]}
-          >
-            <Button
-              disabled={!canEditTask || isCancellingSchedule}
-              icon={ChevronDown}
-              loading={isRunningNow}
-              title={canEditTask ? undefined : reason}
-            />
-          </DropdownMenu>
-        </Flexbox>
+          />
+        </SplitButton>
         {countdownText && (
           <Text fontSize={12} type={'secondary'}>
             {t('taskDetail.nextRunCountdown', { countdown: countdownText })}

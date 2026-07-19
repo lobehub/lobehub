@@ -88,8 +88,9 @@ import {
 } from './types';
 
 if (process.env.VERCEL) {
-  // eslint-disable-next-line no-console
-  debug.log = console.log.bind(console);
+  // Route debug output to stdout (`console.info`) instead of stderr, which
+  // Vercel would otherwise surface as error-level logs.
+  debug.log = console.info.bind(console);
 }
 
 const log = debug('lobe-server:agent-runtime-service');
@@ -680,7 +681,19 @@ export class AgentRuntimeService {
    * bootstrap before the topic row has been committed) so callers can skip
    * the `uiMessages` field entirely instead of pushing an empty array.
    */
-  async queryUiMessages(agentState: AgentState): Promise<UIChatMessage[] | undefined> {
+  async queryUiMessages(
+    agentState: AgentState,
+    options?: {
+      /**
+       * Skip the Work-summary assembly for mid-stream (step_start) snapshots —
+       * each step would otherwise re-run the per-type Work queries. Terminal
+       * (agent_runtime_end) snapshots keep works so the settled message list
+       * carries the round's Work chips. The client preserves previously
+       * rendered works when applying a skipped snapshot (`preserveWorks`).
+       */
+      skipWorks?: boolean;
+    },
+  ): Promise<UIChatMessage[] | undefined> {
     const agentId: string | undefined = agentState?.metadata?.agentId;
     const topicId: string | undefined = agentState?.metadata?.topicId;
     // groupId scopes group conversations. Without it the query falls into the
@@ -690,7 +703,12 @@ export class AgentRuntimeService {
     if (!agentId || !topicId) return undefined;
 
     try {
-      return await this.messageService.queryMessages({ agentId, groupId, topicId });
+      return await this.messageService.queryMessages({
+        agentId,
+        groupId,
+        skipWorks: options?.skipWorks,
+        topicId,
+      });
     } catch (error) {
       // Stream events must never fail the step. If the DB hiccups, fall back
       // to letting the client refresh as before.
@@ -840,7 +858,7 @@ export class AgentRuntimeService {
           throw new Error(`Agent state not found for operation ${operationId}`);
         }
 
-        const stepStartUiMessages = await this.queryUiMessages(agentState);
+        const stepStartUiMessages = await this.queryUiMessages(agentState, { skipWorks: true });
         await this.streamManager.publishStreamEvent(operationId, {
           data: {
             ...(stepStartUiMessages !== undefined && { uiMessages: stepStartUiMessages }),

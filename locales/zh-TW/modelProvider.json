@@ -177,6 +177,7 @@
   "providerModels.config.baseURL.invalid": "請輸入合法的 URL",
   "providerModels.config.baseURL.placeholder": "https://your-proxy-url.com/v1",
   "providerModels.config.baseURL.title": "API 代理地址",
+  "providerModels.config.builtinNotice": "內建提供者無法從列表中移除。如果您不使用此提供者，只需將其停用即可。",
   "providerModels.config.checker.button": "檢查",
   "providerModels.config.checker.desc": "測試 Api Key 與代理地址是否正確填寫",
   "providerModels.config.checker.pass": "檢查通過",

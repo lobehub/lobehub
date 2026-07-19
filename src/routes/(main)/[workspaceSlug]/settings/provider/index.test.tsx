@@ -37,10 +37,6 @@ vi.mock('@/routes/(main)/settings/provider/detail', async () => {
   return { default: ProviderDetail };
 });
 
-vi.mock('@/routes/(main)/settings/provider/(list)/Footer', () => ({
-  default: () => <div data-testid="provider-footer" />,
-}));
-
 const renderPage = (providerId: string) =>
   render(
     <MemoryRouter initialEntries={[`/?provider=${providerId}`]}>
@@ -56,18 +52,13 @@ describe('WorkspaceProviderSetting', () => {
     expect(screen.getByTestId('provider-context')).toHaveTextContent('true:true');
   });
 
-  it('hides the provider footer for OAuth device flow providers', () => {
-    isOwner.value = true;
-    renderPage('supergrok');
-
-    expect(screen.queryByTestId('provider-footer')).not.toBeInTheDocument();
-  });
-
-  it('shows the provider footer for regular providers', () => {
+  // The provider roadmap footer was removed from the provider list page in
+  // #17217, so the page renders no footer for any provider anymore.
+  it('renders no provider footer', () => {
     isOwner.value = true;
     renderPage('openai');
 
-    expect(screen.getByTestId('provider-footer')).toBeInTheDocument();
+    expect(screen.queryByTestId('provider-footer')).not.toBeInTheDocument();
   });
 
   it('renders forbidden screen for non-owners', () => {

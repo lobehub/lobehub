@@ -84,7 +84,7 @@ class WechatGatewayClient implements PlatformClient {
     const botToken = getWechatBotToken(config.credentials);
 
     this.applicationId = resolveWechatApplicationId(config, botToken);
-    this.api = new WechatApiClient(botToken, config.credentials.botId);
+    this.api = new WechatApiClient(botToken, config.credentials.botId, config.credentials.baseUrl);
   }
 
   // --- Lifecycle ---
@@ -280,9 +280,13 @@ class WechatGatewayClient implements PlatformClient {
   private async forwardToWebhook(webhookUrl: string, msg: WechatRawMessage): Promise<void> {
     try {
       log('WechatBot appId=%s forwarding msg from %s', this.applicationId, msg.from_user_id);
+      const webhookToken = this.config.credentials.webhookToken?.trim();
       const response = await fetch(webhookUrl, {
         body: JSON.stringify(msg),
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          ...(webhookToken ? { Authorization: `Bearer ${webhookToken}` } : {}),
+          'Content-Type': 'application/json',
+        },
         method: 'POST',
       });
 
@@ -324,6 +328,7 @@ class WechatGatewayClient implements PlatformClient {
   createAdapter(): Record<string, any> {
     return {
       wechat: createWechatAdapter({
+        baseUrl: this.config.credentials.baseUrl,
         botId: this.config.credentials.botId,
         botToken: this.config.credentials.botToken,
       }),

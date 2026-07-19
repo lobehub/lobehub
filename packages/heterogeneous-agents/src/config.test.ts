@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { getHeterogeneousAgentConfig, HETEROGENEOUS_AGENT_CONFIGS } from './config';
+import {
+  getHeterogeneousAgentConfig,
+  HETEROGENEOUS_AGENT_CONFIGS,
+  isRemoteHeterogeneousType,
+} from './config';
 import { HETEROGENEOUS_TYPE_LABELS } from './labels';
 
 describe('heterogeneous agent config', () => {
@@ -8,6 +12,7 @@ describe('heterogeneous agent config', () => {
     expect(HETEROGENEOUS_AGENT_CONFIGS.map((config) => config.type)).toEqual([
       'claude-code',
       'codex',
+      'amp',
     ]);
   });
 
@@ -22,6 +27,11 @@ describe('heterogeneous agent config', () => {
       title: 'Codex',
       type: 'codex',
     });
+    expect(getHeterogeneousAgentConfig('amp')).toMatchObject({
+      command: 'amp',
+      title: 'Amp',
+      type: 'amp',
+    });
   });
 
   it('derives display labels from the shared config source', () => {
@@ -33,5 +43,10 @@ describe('heterogeneous agent config', () => {
       'openclaw': 'OpenClaw',
       'opencode': 'OpenCode',
     });
+  });
+
+  it('classifies AMP as a local CLI rather than a remote platform', () => {
+    expect(isRemoteHeterogeneousType('amp')).toBe(false);
+    expect(isRemoteHeterogeneousType('openclaw')).toBe(true);
   });
 });
