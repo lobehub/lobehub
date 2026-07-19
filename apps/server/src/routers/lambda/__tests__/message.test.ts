@@ -160,6 +160,35 @@ describe('messageRouter', () => {
     expect(result).toEqual([{ id: 'msg1' }]);
   });
 
+  it('should handle getMessagesByCursor', async () => {
+    const page = {
+      hasMore: true,
+      messages: [{ id: 'msg2' }],
+      nextCursor: { createdAt: '2023-01-01T00:00:00.000Z', id: 'u1' },
+    };
+    const mockCursor = vi.fn().mockResolvedValue(page);
+    const mockGetFileAccessUrl = vi.fn().mockResolvedValue('url');
+
+    vi.mocked(MessageModel).mockImplementation(
+      () => ({ queryTopicMessagesByCursor: mockCursor }) as any,
+    );
+    vi.mocked(FileService).mockImplementation(
+      () => ({ getFileAccessUrl: mockGetFileAccessUrl }) as any,
+    );
+
+    const input = { roundLimit: 2, topicId: 'topic1' };
+    const ctx = {
+      messageModel: new MessageModel({} as any, 'user1'),
+    };
+
+    const result = await ctx.messageModel.queryTopicMessagesByCursor(input, {
+      postProcessUrl: mockGetFileAccessUrl,
+    });
+
+    expect(mockCursor).toHaveBeenCalledWith(input, expect.any(Object));
+    expect(result).toEqual(page);
+  });
+
   it('should handle getAllMessages', async () => {
     const mockQueryAll = vi.fn().mockResolvedValue([
       {

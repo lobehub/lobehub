@@ -366,6 +366,67 @@ export const messageRouter = router({
       });
     }),
 
+  /**
+   * Round-boundary cursor pagination for a topic's mainline conversation. Used by
+   * callers that only DISPLAY history (server-runtime / hetero); legacy client
+   * mode keeps using `getMessages` (full fetch) because it resends the session.
+   * Omit `cursor` for the newest page; pass a prior `nextCursor` to load older.
+   */
+  getMessagesByCursor: publicProcedure
+    .use(cloudWorkspaceAuth)
+    .use(serverDatabase)
+    .input(
+      z.object({
+        agentId: z.string().nullish(),
+        countBudget: z.number().optional(),
+        cursor: z.object({ createdAt: z.string(), id: z.string() }).nullish(),
+        roundLimit: z.number().optional(),
+        sessionId: z.string().nullish(),
+        skipWorks: z.boolean().optional(),
+        topicId: z.string(),
+        topicShareId: z.string().optional(),
+      }),
+    )
+    .query(async ({ input, ctx }) => {
+      const { topicShareId, ...queryParams } = input;
+
+      // Public access via topicShareId
+      if (topicShareId) {
+        const share = await TopicShareModel.findByShareIdWithAccessCheck(
+          ctx.serverDB,
+          topicShareId,
+          ctx.userId ?? undefined,
+        );
+
+        const shareWorkspaceId = share.workspaceId ?? undefined;
+        const messageModel = new MessageModel(ctx.serverDB, share.ownerId, shareWorkspaceId);
+        const fileService = new FileService(ctx.serverDB, share.ownerId, shareWorkspaceId);
+
+        return messageModel.queryTopicMessagesByCursor(
+          // Force skipWorks: Work summaries join LIVE task/version state, so serving
+          // them here would leak post-share mutations to anonymous visitors.
+          { ...queryParams, skipWorks: true, topicId: share.topicId },
+          {
+            postProcessUrl: (path, file) =>
+              fileService.getFileAccessUrl({ id: file.id, url: path }),
+          },
+        );
+      }
+
+      // Authenticated access - require userId
+      if (!ctx.userId) {
+        throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Authentication required' });
+      }
+
+      const wsId = ctx.workspaceId ?? undefined;
+      const messageModel = new MessageModel(ctx.serverDB, ctx.userId, wsId);
+      const fileService = new FileService(ctx.serverDB, ctx.userId, wsId);
+
+      return messageModel.queryTopicMessagesByCursor(queryParams, {
+        postProcessUrl: (path, file) => fileService.getFileAccessUrl({ id: file.id, url: path }),
+      });
+    }),
+
   rankModels: messageProcedure.query(async ({ ctx }) => {
     return ctx.messageModel.rankModels();
   }),
