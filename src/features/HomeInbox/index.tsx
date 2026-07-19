@@ -1,8 +1,10 @@
 import { Flexbox } from '@lobehub/ui';
+import { Segmented } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
-import { memo, type ReactNode, useMemo } from 'react';
+import { memo, type ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useWorkspaceMemberProfiles } from '@/business/client/hooks/useWorkspaceMemberProfiles';
 import AsyncError from '@/components/AsyncError';
 import TopicChatDrawer from '@/features/AgentTasks/AgentTaskDetail/TopicChatDrawer';
 import { BriefCardSkeleton } from '@/features/DailyBrief/BriefCardSkeleton';
@@ -12,7 +14,7 @@ import GroupBlock from '@/routes/(main)/home/features/components/GroupBlock';
 import { useBriefStore } from '@/store/brief';
 import { briefListSelectors } from '@/store/brief/selectors';
 import { useUserStore } from '@/store/user';
-import { authSelectors } from '@/store/user/slices/auth/selectors';
+import { authSelectors, userProfileSelectors } from '@/store/user/slices/auth/selectors';
 
 import InboxBriefCard from './InboxBriefCard';
 import MarkAllReadButton from './MarkAllReadButton';
@@ -27,6 +29,16 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     margin-inline-start: 6px;
     font-variant-numeric: tabular-nums;
     color: ${cssVar.colorTextQuaternary};
+  `,
+  onlyMe: css`
+    margin-inline-start: 8px;
+    padding-inline: 5px;
+    border-radius: 3px;
+
+    font-size: 11px;
+    color: ${cssVar.colorTextTertiary};
+
+    background: ${cssVar.colorFillQuaternary};
   `,
   subtitle: css`
     margin-inline-start: 8px;
@@ -68,12 +80,20 @@ const titleWithCount = (label: string, count: number, subtitle?: string): ReactN
  * - **News** — `insight` + `result` briefs (reports of finished work); read them
  *   or don't.
  *
+ * **Workspace mode** adds a mine/team split, but only over the sections it can
+ * honestly widen. Topics are workspace-shared, so the unread + running feeds
+ * already carry every member's runs — the toggle filters them by triggerer, and
+ * team view tags each row with whose it is. Briefs are per-user by a deliberate
+ * ownership rule (a member never sees another's brief), so Needs-you and News
+ * stay mine in both views; team view marks News as such rather than pretending.
+ *
  * Sections are siblings, never nested: each names itself and carries its own
  * count, and one absent section never hides another's heading.
  */
 const HomeInbox = memo(() => {
   const { t } = useTranslation('home');
   const isLogin = useUserStore(authSelectors.isLogin);
+  const myId = useUserStore(userProfileSelectors.userId);
 
   const useFetchBriefs = useBriefStore((s) => s.useFetchBriefs);
   const briefsSWR = useFetchBriefs(isLogin);
@@ -83,7 +103,28 @@ const HomeInbox = memo(() => {
   const topics = useHomeInboxTopics(isLogin);
   const recommendationsVisible = useRecommendationsVisible();
 
+  // A team context is a workspace with more than the viewer in it. In personal
+  // mode this map is empty, so `isTeam` is false and the whole mine/team layer
+  // stays dark — the inbox is byte-for-byte the personal one.
+  const memberProfiles = useWorkspaceMemberProfiles();
+  const isTeam = memberProfiles.size > 1;
+
+  const [scope, setScope] = useState<'mine' | 'team'>('mine');
+  const teamView = isTeam && scope === 'team';
+
   const { needsYou, news } = useMemo(() => splitBriefs(briefs), [briefs]);
+
+  // Topics are already workspace-wide from the server; "mine" is the viewer's
+  // own runs, "team" is everyone's. Personal mode has only the viewer's, so the
+  // filter is a no-op there.
+  const unreadTopics = useMemo(
+    () => (teamView ? topics.unread : topics.unread.filter((topic) => topic.userId === myId)),
+    [teamView, topics.unread, myId],
+  );
+  const runningTopics = useMemo(
+    () => (teamView ? topics.running : topics.running.filter((topic) => topic.userId === myId)),
+    [teamView, topics.running, myId],
+  );
 
   if (!isLogin) return null;
 
@@ -126,10 +167,32 @@ const HomeInbox = memo(() => {
     );
   }
 
+  // Mine/team lives at page level (governs the topic sections), so it rides on
+  // the first titled section's header — the primary "Needs you", or Unread when
+  // there's nothing to handle. Only shown in a team workspace.
+  const scopeToggle = isTeam ? (
+    <Segmented
+      size={'small'}
+      value={scope}
+      options={[
+        { label: t('inbox.scope.mine'), value: 'mine' },
+        { label: t('inbox.scope.team'), value: 'team' },
+      ]}
+      onChange={(value) => setScope(value as 'mine' | 'team')}
+    />
+  ) : undefined;
+  let toggleSectionKey: string | undefined;
+  const placeToggle = (key: string): ReactNode => {
+    if (!scopeToggle || toggleSectionKey) return undefined;
+    toggleSectionKey = key;
+    return scopeToggle;
+  };
+
   const sections: InboxSection[] = [];
 
   if (needsYou.length > 0)
     sections.push({
+      action: placeToggle('needsYou'),
       key: 'needsYou',
       node: (
         <Flexbox gap={12}>
@@ -150,23 +213,40 @@ const HomeInbox = memo(() => {
       title: t('inbox.unread.title'),
     });
 
-  if (topics.unread.length > 0)
+  if (unreadTopics.length > 0)
     sections.push({
+      action: placeToggle('unread'),
       key: 'unread',
-      node: <UnreadTopicList topics={topics.unread} onFollowUpSent={topics.promoteToRunning} />,
-      title: titleWithCount(t('inbox.unread.title'), topics.unread.length),
+      node: (
+        <UnreadTopicList
+          showAuthor={teamView}
+          topics={unreadTopics}
+          onFollowUpSent={topics.promoteToRunning}
+        />
+      ),
+      title: titleWithCount(t('inbox.unread.title'), unreadTopics.length),
     });
 
   // No title: the card already says "3 tasks running" on its own head.
-  if (topics.running.length > 0)
-    sections.push({ key: 'running', node: <RunningTasksCard running={topics.running} /> });
+  if (runningTopics.length > 0)
+    sections.push({
+      key: 'running',
+      node: <RunningTasksCard running={runningTopics} showAuthor={teamView} />,
+    });
 
   if (news.length > 0)
     sections.push({
       action: <MarkAllReadButton news={news} />,
       key: 'news',
       node: <NewsList news={news} />,
-      title: titleWithCount(t('inbox.news.title'), news.length, t('inbox.news.subtitle')),
+      // Team view: News is still only mine (briefs are per-user), so say so
+      // rather than let a team-scoped page imply it spans the team.
+      title: (
+        <>
+          {titleWithCount(t('inbox.news.title'), news.length, t('inbox.news.subtitle'))}
+          {teamView && <span className={styles.onlyMe}>{t('inbox.scope.onlyMe')}</span>}
+        </>
+      ),
     });
 
   if (sections.length === 0) {
@@ -189,7 +269,12 @@ const HomeInbox = memo(() => {
     <Flexbox gap={32}>
       {sections.map(({ action, key, node, title }) =>
         title ? (
-          <GroupBlock action={action} key={key} title={title}>
+          <GroupBlock
+            action={action}
+            actionAlwaysVisible={key === toggleSectionKey}
+            key={key}
+            title={title}
+          >
             {node}
           </GroupBlock>
         ) : (

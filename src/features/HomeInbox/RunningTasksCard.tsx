@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import RingLoadingIcon from '@/components/RingLoading';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
 
+import AuthorChip from './AuthorChip';
 import TopicRow from './TopicRow';
 import { type InboxTopic } from './useHomeInboxTopics';
 
@@ -104,6 +105,8 @@ const RING_COLOR = `color-mix(in srgb, ${cssVar.colorWarning} 45%, transparent)`
 
 interface RunningTasksCardProps {
   running: InboxTopic[];
+  /** Team view: tag each expanded row with whose run it is. */
+  showAuthor?: boolean;
 }
 
 /**
@@ -111,7 +114,7 @@ interface RunningTasksCardProps {
  * single line by default and only opens on demand. Nothing here is actionable;
  * it exists so the user knows work is in flight.
  */
-const RunningTasksCard = memo<RunningTasksCardProps>(({ running }) => {
+const RunningTasksCard = memo<RunningTasksCardProps>(({ running, showAuthor }) => {
   const { t } = useTranslation('home');
   const [open, setOpen] = useState(false);
 
@@ -150,6 +153,11 @@ const RunningTasksCard = memo<RunningTasksCardProps>(({ running }) => {
                   size={14}
                   style={{ color: cssVar.colorWarning }}
                 />
+              }
+              trailing={
+                showAuthor ? (
+                  <AuthorChip trigger={topic.trigger} userId={topic.userId} />
+                ) : undefined
               }
             />
           ))}

@@ -13,6 +13,7 @@ import Time from '@/routes/(main)/home/features/components/Time';
 import { useChatStore } from '@/store/chat';
 import { useTaskStore } from '@/store/task';
 
+import AuthorChip from './AuthorChip';
 import { type InboxTopic } from './useHomeInboxTopics';
 
 const DOT_WIDTH = 14;
@@ -56,6 +57,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 interface UnreadTopicItemProps {
   onFollowUpSent?: (topicId: string) => void;
+  /** Team view: show who triggered the run, right of the title. */
+  showAuthor?: boolean;
   topic: InboxTopic;
 }
 
@@ -66,7 +69,7 @@ interface UnreadTopicItemProps {
  * already said "I want to read this". The full thread lives one click deeper, in
  * the chat drawer.
  */
-const UnreadTopicItem = memo<UnreadTopicItemProps>(({ topic, onFollowUpSent }) => {
+const UnreadTopicItem = memo<UnreadTopicItemProps>(({ topic, onFollowUpSent, showAuthor }) => {
   const { t } = useTranslation('home');
   const agent = useAgentDisplayMeta(topic.agentId);
   const openTopicDrawer = useTaskStore((s) => s.openTopicDrawer);
@@ -146,6 +149,7 @@ const UnreadTopicItem = memo<UnreadTopicItemProps>(({ topic, onFollowUpSent }) =
         <Text ellipsis style={{ flex: 1, minWidth: 0 }} weight={read ? 400 : 500}>
           {topic.title}
         </Text>
+        {showAuthor && <AuthorChip trigger={topic.trigger} userId={topic.userId} />}
         <Time date={topic.updatedAt ?? topic.createdAt} />
         <Icon
           color={cssVar.colorTextQuaternary}
@@ -194,6 +198,8 @@ const UnreadTopicItem = memo<UnreadTopicItemProps>(({ topic, onFollowUpSent }) =
 
 interface UnreadTopicListProps {
   onFollowUpSent?: (topicId: string) => void;
+  /** Team view: tag each row with who triggered it. */
+  showAuthor?: boolean;
   topics: InboxTopic[];
 }
 
@@ -201,10 +207,15 @@ interface UnreadTopicListProps {
  * Runs that finished while you were away. One line each, like the news list —
  * a week of finished runs still fits on screen, and the reply is one click deep.
  */
-const UnreadTopicList = memo<UnreadTopicListProps>(({ topics, onFollowUpSent }) => (
+const UnreadTopicList = memo<UnreadTopicListProps>(({ topics, onFollowUpSent, showAuthor }) => (
   <Flexbox className={styles.list}>
     {topics.map((topic) => (
-      <UnreadTopicItem key={topic.id} topic={topic} onFollowUpSent={onFollowUpSent} />
+      <UnreadTopicItem
+        key={topic.id}
+        showAuthor={showAuthor}
+        topic={topic}
+        onFollowUpSent={onFollowUpSent}
+      />
     ))}
   </Flexbox>
 ));
