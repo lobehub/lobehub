@@ -33,14 +33,13 @@ import {
 } from '@lobechat/types';
 
 import { AgentModel } from '@/database/models/agent';
-import { AgentOperationModel } from '@/database/models/agentOperation';
 import { MessageModel } from '@/database/models/message';
-import { ThreadModel } from '@/database/models/thread';
 import { TopicModel } from '@/database/models/topic';
 import type { LobeChatDatabase } from '@/database/type';
+import { AgentRuntimeService } from '@/server/services/agentRuntime/AgentRuntimeService';
 import { AiAgentService } from '@/server/services/aiAgent';
 
-import { UnderstandingLaunchStore } from './launchStore';
+import { createUnderstandingLaunchStore } from './launchStore';
 import { discoverUnderstandingSources } from './pipeline';
 import type { UnderstandingProviderRegistry } from './providers';
 import {
@@ -131,6 +130,9 @@ interface MergeIdentity {
 interface UnderstandingServiceDependencies {
   agent: Pick<AiAgentService, 'execAgent'>;
   agentId: string;
+  agentRuntime: {
+    executeOperation: (operationId: string) => Promise<{ status: string }>;
+  };
   confirmation: { confirm: (input: ConfirmOnboardingUnderstandingInput) => Promise<unknown> };
   context: UnderstandingProviderContext;
   ids: () => string;
@@ -152,7 +154,6 @@ interface UnderstandingServiceDependencies {
     ) => Promise<void>;
   };
   messages: { readContent: (assistantMessageId: string) => Promise<unknown> };
-  operations: { findById: (operationId: string) => Promise<{ status: string } | null> };
   registry: UnderstandingProviderRegistry;
   results: {
     ensureThread: (input: {
@@ -397,7 +398,7 @@ export class UnderstandingService {
       userId: this.dependencies.context.userId,
     });
     if (!payload) throw new Error('Understanding source payload is unavailable');
-    // Upstash serializes and replays this named launch step; the persisted pointer marks completion.
+    // The workflow executes this operation only after the launch pair is durably persisted.
     await this.dependencies.results.ensureThread({
       agentId: this.dependencies.agentId,
       kind: 'source',
@@ -406,7 +407,7 @@ export class UnderstandingService {
     });
     const launched = await this.dependencies.agent.execAgent({
       appContext: { threadId: input.threadId, topicId: input.topicId },
-      autoStart: true,
+      autoStart: false,
       ephemeralUserMessage: payload.brief.slice(0, MAX_AGENT_INPUT_LENGTH),
       instructions: chainUnderstandingSource({
         diagnostics: payload.diagnostics,
@@ -419,7 +420,7 @@ export class UnderstandingService {
       suppressUserMessage: true,
       trigger: RequestTrigger.Onboarding,
     });
-    const success = launched.autoStarted;
+    if (!launched.success) throw new Error(launched.error ?? 'Understanding agent launch failed');
     await this.dependencies.launches.save(launchIdentity, {
       assistantMessageId: launched.assistantMessageId,
       operationId: launched.operationId,
@@ -435,14 +436,19 @@ export class UnderstandingService {
       assistantMessageId: launched.assistantMessageId,
       operationId: launched.operationId,
       sourceId: input.sourceId,
-      success,
+      success: true,
       threadId: input.threadId,
     };
   };
 
-  readOperationStatus = async (operationId: string) => {
-    const operation = await this.dependencies.operations.findById(operationId);
-    return { status: operation?.status ?? 'not_found' };
+  executeAgentOperation = async (operationId: string) => {
+    const { status } = await this.dependencies.agentRuntime.executeOperation(operationId);
+    if (status === 'done') return { status: 'done' as const };
+    if (status === 'error' || status === 'interrupted') return { status: 'error' as const };
+    if (status === 'waiting_for_human' || status === 'waiting_for_async_tool') {
+      return { status: 'parked' as const };
+    }
+    throw new Error(`Understanding agent operation did not settle: ${status}`);
   };
 
   finalizeSource = async (input: SourceIdentity & { assistantMessageId: string }) => {
@@ -616,7 +622,7 @@ export class UnderstandingService {
     });
     const launched = await this.dependencies.agent.execAgent({
       appContext: { threadId: merge.threadId, topicId },
-      autoStart: true,
+      autoStart: false,
       ephemeralUserMessage: JSON.stringify(analyses).slice(0, MAX_AGENT_INPUT_LENGTH),
       instructions: chainUnderstandingMerge({ diagnostics }),
       maxSteps: 1,
@@ -625,7 +631,7 @@ export class UnderstandingService {
       suppressUserMessage: true,
       trigger: RequestTrigger.Onboarding,
     });
-    const success = launched.autoStarted;
+    if (!launched.success) throw new Error(launched.error ?? 'Understanding agent launch failed');
     await this.dependencies.launches.save(launchIdentity, {
       assistantMessageId: launched.assistantMessageId,
       operationId: launched.operationId,
@@ -648,7 +654,7 @@ export class UnderstandingService {
     return {
       assistantMessageId: launched.assistantMessageId,
       operationId: launched.operationId,
-      success,
+      success: true,
       threadId: merge.threadId,
     };
   };
@@ -964,20 +970,25 @@ export const createUnderstandingService = async ({
   if (!agent) throw new Error('Onboarding Understanding agent is unavailable');
   const { context, registry } = materializeUnderstandingProviders(registrations, { db, userId });
   const messageModel = new MessageModel(db, userId);
-  const threadModel = new ThreadModel(db, userId);
   const topicModel = new TopicModel(db, userId);
+  const agentRuntime = new AgentRuntimeService(db, userId, { queueService: null });
   return new UnderstandingService({
     agent: new AiAgentService(db, userId),
     agentId: agent.id,
+    agentRuntime: {
+      executeOperation: async (operationId) => {
+        const state = await agentRuntime.executeSync(operationId, { maxSteps: 1 });
+        return { status: state.status };
+      },
+    },
     confirmation: new UnderstandingConfirmationRepository(db, userId),
     context,
     ids: randomUUID,
-    launches: new UnderstandingLaunchStore({ threads: threadModel, topics: topicModel }),
+    launches: createUnderstandingLaunchStore(db, userId),
     messages: {
       readContent: async (assistantMessageId) =>
         (await messageModel.findById(assistantMessageId))?.content,
     },
-    operations: new AgentOperationModel(db, userId),
     registry,
     results: new UnderstandingResultRepository(db, userId),
     sessions: new UnderstandingSessionRepository(db, userId),

@@ -2,7 +2,7 @@ import type { ThreadMetadata } from '@lobechat/types';
 import { ThreadType } from '@lobechat/types';
 import { describe, expect, it, vi } from 'vitest';
 
-import { UnderstandingLaunchStore } from './launchStore';
+import { type UnderstandingLaunchReference, UnderstandingLaunchStore } from './launchStore';
 
 const identity = {
   agentId: 'understanding-agent',
@@ -23,6 +23,9 @@ const createHarness = () => {
     topicId: identity.topicId,
     type: ThreadType.Isolation,
   };
+  const durable = {
+    find: vi.fn(async (): Promise<UnderstandingLaunchReference | undefined> => undefined),
+  };
   const topic: {
     metadata: {
       runningOperation?: {
@@ -40,7 +43,8 @@ const createHarness = () => {
   };
   const topics = { findById: vi.fn(async () => topic) };
   return {
-    store: new UnderstandingLaunchStore({ threads, topics }),
+    durable,
+    store: new UnderstandingLaunchStore({ durable, threads, topics }),
     thread,
     threads,
     topic,
@@ -61,6 +65,33 @@ describe('UnderstandingLaunchStore', () => {
       operationId: 'operation-1',
     });
     expect(harness.topics.findById).not.toHaveBeenCalled();
+    expect(harness.durable.find).not.toHaveBeenCalled();
+  });
+
+  it('promotes a durable launch pair before consulting topic metadata', async () => {
+    const harness = createHarness();
+    harness.durable.find.mockResolvedValue({
+      assistantMessageId: 'durable-message',
+      operationId: 'durable-operation',
+    });
+
+    await expect(harness.store.find(identity)).resolves.toEqual({
+      assistantMessageId: 'durable-message',
+      operationId: 'durable-operation',
+    });
+    expect(harness.topics.findById).not.toHaveBeenCalled();
+    expect(harness.threads.update).toHaveBeenCalledWith(identity.threadId, {
+      metadata: {
+        keep: true,
+        onboardingUnderstanding: {
+          kind: 'source',
+          launch: {
+            assistantMessageId: 'durable-message',
+            operationId: 'durable-operation',
+          },
+        },
+      },
+    });
   });
 
   it('promotes an exact topic runningOperation fallback into the thread marker', async () => {

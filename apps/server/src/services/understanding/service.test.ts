@@ -25,9 +25,11 @@ vi.mock('@lobechat/database', () => {
   };
 });
 vi.mock('@/database/models/agent', () => ({ AgentModel: class {} }));
-vi.mock('@/database/models/agentOperation', () => ({ AgentOperationModel: class {} }));
 vi.mock('@/database/models/message', () => ({ MessageModel: class {} }));
 vi.mock('@/database/models/topic', () => ({ TopicModel: class {} }));
+vi.mock('@/server/services/agentRuntime/AgentRuntimeService', () => ({
+  AgentRuntimeService: class {},
+}));
 vi.mock('@/server/services/aiAgent', () => ({ AiAgentService: class {} }));
 
 const analysis: UnderstandingAnalysis = {
@@ -104,9 +106,11 @@ const createHarness = () => {
   const gmail = provider('gmail');
   const execAgent = vi.fn(async ({ appContext }: any) => ({
     assistantMessageId: `message-${appContext.threadId}`,
-    autoStarted: true,
+    autoStarted: false,
     operationId: `operation-${appContext.threadId}`,
+    success: true,
   }));
+  const executeOperation = vi.fn(async () => ({ status: 'done' }));
   const confirmation = vi.fn(async () => ({ confirmed: true }));
   const sourceKey = ({ sourceId, threadId }: any) => `${sourceId}:${threadId}`;
   const applyStatus = (next: OnboardingUnderstandingSession) => ({
@@ -115,13 +119,13 @@ const createHarness = () => {
   });
   const dependencies = {
     agent: { execAgent },
+    agentRuntime: { executeOperation },
     agentId: 'understanding-agent',
     confirmation: { confirm: confirmation },
     context: { userId: 'user' },
     ids: () => `id-${++sequence}`,
     launches: { find: vi.fn(async () => undefined), save: vi.fn() },
     messages: { readContent: vi.fn(async (id: string) => contents.get(id)) },
-    operations: { findById: vi.fn(async () => ({ status: 'running' })) },
     registry: createUnderstandingProviderRegistry([github, gmail]),
     results: {
       ensureThread: vi.fn(),
@@ -232,6 +236,7 @@ const createHarness = () => {
     contents,
     dependencies,
     execAgent,
+    executeOperation,
     github,
     gmail,
     locators,
@@ -436,6 +441,7 @@ describe('UnderstandingService', () => {
 
     expect(harness.execAgent).toHaveBeenCalledWith(
       expect.objectContaining({
+        autoStart: false,
         ephemeralUserMessage: expect.stringContaining('PRIVATE_SOURCE_DOCUMENT'),
         maxSteps: 1,
       }),
@@ -457,6 +463,29 @@ describe('UnderstandingService', () => {
     );
     expect(harness.dependencies.launches.save.mock.invocationCallOrder[0]).toBeLessThan(
       harness.dependencies.sessions.updateSourceRun.mock.invocationCallOrder.at(-1)!,
+    );
+  });
+
+  it.each([
+    ['done', 'done'],
+    ['error', 'error'],
+    ['interrupted', 'error'],
+    ['waiting_for_human', 'parked'],
+    ['waiting_for_async_tool', 'parked'],
+  ])('maps an executed agent operation from %s to %s', async (runtimeStatus, expected) => {
+    harness.executeOperation.mockResolvedValueOnce({ status: runtimeStatus });
+
+    await expect(harness.service.executeAgentOperation('operation-id')).resolves.toEqual({
+      status: expected,
+    });
+    expect(harness.executeOperation).toHaveBeenCalledWith('operation-id');
+  });
+
+  it('retries when sync execution does not reach a terminal or parked status', async () => {
+    harness.executeOperation.mockResolvedValueOnce({ status: 'running' });
+
+    await expect(harness.service.executeAgentOperation('operation-id')).rejects.toThrow(
+      'Understanding agent operation did not settle',
     );
   });
 
@@ -602,6 +631,9 @@ describe('UnderstandingService', () => {
     expect(loser).toEqual({ skipped: true, threadId: 'merge-thread' });
     expect(harness.execAgent).toHaveBeenCalledTimes(4);
     if ('skipped' in launch) throw new Error('expected merge launch');
+    expect(harness.execAgent).toHaveBeenLastCalledWith(
+      expect.objectContaining({ autoStart: false, maxSteps: 1 }),
+    );
     harness.contents.set(
       launch.assistantMessageId,
       JSON.stringify({ ...analysis, profile: { ...analysis.profile, pronoun: 'non-specific' } }),
