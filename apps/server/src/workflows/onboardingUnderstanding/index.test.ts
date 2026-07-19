@@ -58,12 +58,15 @@ describe('OnboardingUnderstandingWorkflow', () => {
       await import('.');
 
     await expect(
-      OnboardingUnderstandingWorkflow.trigger({
-        mode: 'initial',
-        sessionId: 'session-1',
-        topicId: 'topic-1',
-        userId: 'user-1',
-      }),
+      OnboardingUnderstandingWorkflow.trigger(
+        {
+          mode: 'initial',
+          sessionId: 'session-1',
+          topicId: 'topic-1',
+          userId: 'user-1',
+        },
+        { workflowRunId: 'workflow-1' },
+      ),
     ).rejects.toBeInstanceOf(UnderstandingWorkflowUnavailableError);
     expect(triggerMock).not.toHaveBeenCalled();
   });
@@ -85,12 +88,15 @@ describe('OnboardingUnderstandingWorkflow', () => {
       await import('.');
 
     await expect(
-      OnboardingUnderstandingWorkflow.trigger({
-        mode: 'initial',
-        sessionId: 'session-1',
-        topicId: 'topic-1',
-        userId: 'user-1',
-      }),
+      OnboardingUnderstandingWorkflow.trigger(
+        {
+          mode: 'initial',
+          sessionId: 'session-1',
+          topicId: 'topic-1',
+          userId: 'user-1',
+        },
+        { workflowRunId: 'workflow-1' },
+      ),
     ).rejects.toBeInstanceOf(UnderstandingWorkflowUnavailableError);
     expect(triggerMock).not.toHaveBeenCalled();
   });

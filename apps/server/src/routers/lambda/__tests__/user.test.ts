@@ -129,12 +129,17 @@ describe('userRouter', () => {
         userId: mockUserId,
       });
       expect(mockUnderstandingService.initialize).toHaveBeenCalledWith('topic-1');
-      expect(mockTriggerUnderstandingWorkflow).toHaveBeenCalledWith({
-        mode: 'initial',
-        sessionId: 'session-1',
-        topicId: 'topic-1',
-        userId: mockUserId,
-      });
+      expect(mockTriggerUnderstandingWorkflow).toHaveBeenCalledWith(
+        {
+          mode: 'initial',
+          sessionId: 'session-1',
+          topicId: 'topic-1',
+          userId: mockUserId,
+        },
+        {
+          workflowRunId: 'onboarding-understanding-initial-session-1',
+        },
+      );
       expect(mockUnderstandingService.get).toHaveBeenCalledWith('topic-1');
       expect(result).toEqual(pollingResult);
     });
@@ -208,6 +213,7 @@ describe('userRouter', () => {
     });
 
     it('triggers a retry workflow for only the requested source', async () => {
+      mockUnderstandingService.assertRetryable.mockResolvedValueOnce('failed-thread-1');
       mockUnderstandingService.get.mockResolvedValueOnce(pollingResult);
 
       const result = await userRouter.createCaller(scopedCtx).retryOnboardingUnderstandingSource({
@@ -222,15 +228,59 @@ describe('userRouter', () => {
         sourceId: 'source-1',
         topicId: 'topic-1',
       });
-      expect(mockTriggerUnderstandingWorkflow).toHaveBeenCalledWith({
-        mode: 'retry',
+      expect(mockTriggerUnderstandingWorkflow).toHaveBeenCalledWith(
+        {
+          mode: 'retry',
+          sessionId: 'session-1',
+          sourceId: 'source-1',
+          topicId: 'topic-1',
+          userId: mockUserId,
+        },
+        {
+          workflowRunId: 'onboarding-understanding-retry-session-1-failed-thread-1',
+        },
+      );
+      expect(mockUnderstandingService.get).toHaveBeenCalledWith('topic-1');
+      expect(result).toEqual(pollingResult);
+    });
+
+    it('uses the same workflow identity for concurrent starts of one session', async () => {
+      mockUnderstandingService.initialize.mockResolvedValue({ id: 'session-1' });
+      mockUnderstandingService.get.mockResolvedValue(pollingResult);
+      const caller = userRouter.createCaller(scopedCtx);
+
+      await Promise.all([
+        caller.startOnboardingUnderstanding({ topicId: 'topic-1' }),
+        caller.startOnboardingUnderstanding({ topicId: 'topic-1' }),
+      ]);
+
+      expect(mockTriggerUnderstandingWorkflow).toHaveBeenCalledTimes(2);
+      expect(mockTriggerUnderstandingWorkflow.mock.calls.map((call) => call[1])).toEqual([
+        { workflowRunId: 'onboarding-understanding-initial-session-1' },
+        { workflowRunId: 'onboarding-understanding-initial-session-1' },
+      ]);
+    });
+
+    it('reuses the failed thread identity when retry delivery is repeated', async () => {
+      mockUnderstandingService.assertRetryable.mockResolvedValue('failed-thread-1');
+      mockUnderstandingService.get.mockResolvedValue(pollingResult);
+      const caller = userRouter.createCaller(scopedCtx);
+      const input = {
         sessionId: 'session-1',
         sourceId: 'source-1',
         topicId: 'topic-1',
-        userId: mockUserId,
-      });
-      expect(mockUnderstandingService.get).toHaveBeenCalledWith('topic-1');
-      expect(result).toEqual(pollingResult);
+      };
+
+      await Promise.all([
+        caller.retryOnboardingUnderstandingSource(input),
+        caller.retryOnboardingUnderstandingSource(input),
+      ]);
+
+      expect(mockTriggerUnderstandingWorkflow).toHaveBeenCalledTimes(2);
+      expect(mockTriggerUnderstandingWorkflow.mock.calls.map((call) => call[1])).toEqual([
+        { workflowRunId: 'onboarding-understanding-retry-session-1-failed-thread-1' },
+        { workflowRunId: 'onboarding-understanding-retry-session-1-failed-thread-1' },
+      ]);
     });
 
     it('delegates confirmation without accepting identity fields', async () => {

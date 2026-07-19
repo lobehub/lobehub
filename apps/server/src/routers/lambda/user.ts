@@ -133,6 +133,11 @@ const confirmOnboardingUnderstandingInputSchema = z
   })
   .strict() satisfies z.ZodType<ConfirmOnboardingUnderstandingInput>;
 
+const initialUnderstandingWorkflowRunId = (sessionId: string) =>
+  `onboarding-understanding-initial-${sessionId}`;
+const retryUnderstandingWorkflowRunId = (sessionId: string, threadId: string) =>
+  `onboarding-understanding-retry-${sessionId}-${threadId}`;
+
 const AVATAR_WEBAPI_PREFIX = '/webapi/';
 const OWNER_SETTING_KEYS = ['defaultAgent', 'image', 'memory', 'systemAgent', 'tts'] as const;
 const MEMBER_SETTING_KEYS = ['tool'] as const;
@@ -323,12 +328,15 @@ export const userRouter = router({
     .input(retryOnboardingUnderstandingSourceInputSchema)
     .mutation(async ({ ctx, input }): Promise<OnboardingUnderstandingPollingResult> => {
       OnboardingUnderstandingWorkflow.assertAvailable();
-      await ctx.understandingService.assertRetryable(input);
-      await OnboardingUnderstandingWorkflow.trigger({
-        ...input,
-        mode: 'retry',
-        userId: ctx.userId,
-      });
+      const threadId = await ctx.understandingService.assertRetryable(input);
+      await OnboardingUnderstandingWorkflow.trigger(
+        {
+          ...input,
+          mode: 'retry',
+          userId: ctx.userId,
+        },
+        { workflowRunId: retryUnderstandingWorkflowRunId(input.sessionId, threadId) },
+      );
       return ctx.understandingService.get(input.topicId);
     }),
 
@@ -337,12 +345,15 @@ export const userRouter = router({
     .mutation(async ({ ctx, input }): Promise<OnboardingUnderstandingPollingResult> => {
       OnboardingUnderstandingWorkflow.assertAvailable();
       const session = await ctx.understandingService.initialize(input.topicId);
-      await OnboardingUnderstandingWorkflow.trigger({
-        mode: 'initial',
-        sessionId: session.id,
-        topicId: input.topicId,
-        userId: ctx.userId,
-      });
+      await OnboardingUnderstandingWorkflow.trigger(
+        {
+          mode: 'initial',
+          sessionId: session.id,
+          topicId: input.topicId,
+          userId: ctx.userId,
+        },
+        { workflowRunId: initialUnderstandingWorkflowRunId(session.id) },
+      );
       return ctx.understandingService.get(input.topicId);
     }),
 

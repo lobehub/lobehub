@@ -338,21 +338,20 @@ describe('OnboardingService', () => {
       id: 'understanding-session',
       mergeRun: {
         assistantMessageId: 'merge-message',
-        inputThreadIds: ['source-thread'],
-        operationId: 'merge-operation',
-        status: 'processing',
+        resultId: 'merge-result',
+        status: 'completed',
         threadId: 'merge-thread',
       },
       runs: [
         {
           assistantMessageId: 'source-message',
-          operationId: 'source-operation',
+          resultId: 'source-result',
           source: { externalAccountId: 'neko', id: 'github:neko', provider: 'github' },
-          status: 'analyzing',
+          status: 'completed',
           threadId: 'source-thread',
         },
       ],
-      status: 'processing',
+      status: 'completed',
     };
     mockUnderstandingSessionRepository.removeForReset.mockResolvedValue(understandingSession);
 
@@ -379,7 +378,7 @@ describe('OnboardingService', () => {
     mockUnderstandingSessionRepository.removeForReset.mockResolvedValue({
       id: 'understanding-session',
       runs: [],
-      status: 'processing',
+      status: 'pending',
     });
     mockSourceStore.deleteSession.mockRejectedValue(new Error('redis unavailable'));
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);

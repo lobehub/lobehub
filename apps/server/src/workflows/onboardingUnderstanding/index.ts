@@ -1,5 +1,3 @@
-import { randomUUID } from 'node:crypto';
-
 import { appEnv } from '@/envs/app';
 import { injectActiveTraceHeaders } from '@/libs/observability/traceparent';
 import { workflowClient } from '@/libs/qstash';
@@ -33,14 +31,12 @@ export class OnboardingUnderstandingWorkflow {
 
   static async trigger(
     payload: OnboardingUnderstandingWorkflowPayload,
-    options: { workflowRunId?: string } = {},
+    options: { workflowRunId: string },
   ) {
     const baseUrl = this.assertAvailable();
 
     const traceHeaders = new Headers();
     injectActiveTraceHeaders(traceHeaders);
-    const workflowRunId = options.workflowRunId ?? `onboarding-understanding-${randomUUID()}`;
-
     return workflowClient.trigger({
       body: payload,
       flowControl: {
@@ -49,7 +45,7 @@ export class OnboardingUnderstandingWorkflow {
       },
       headers: Object.fromEntries(traceHeaders.entries()),
       url: new URL(`${WORKFLOW_PATH}/${encodeURIComponent(payload.sessionId)}`, baseUrl).toString(),
-      workflowRunId,
+      workflowRunId: options.workflowRunId,
     });
   }
 }
