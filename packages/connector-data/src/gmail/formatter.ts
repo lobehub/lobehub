@@ -1,46 +1,41 @@
 import { toXml } from 'xast-util-to-xml';
 import { x } from 'xastscript';
 
+import {
+  GMAIL_BODY_PREVIEW_MAX_LENGTH,
+  GMAIL_DATE_MAX_LENGTH,
+  GMAIL_EMAIL_MAX_LENGTH,
+  GMAIL_LABEL_MAX_LENGTH,
+  GMAIL_LABELS_MAX_COUNT,
+  GMAIL_MESSAGE_ID_MAX_LENGTH,
+  GMAIL_SNIPPET_MAX_LENGTH,
+  GMAIL_SOURCE_URL_MAX_LENGTH,
+  GMAIL_SUBJECT_MAX_LENGTH,
+} from './constants';
+import { clipGmailText } from './normalize';
 import type { GmailMessage } from './types';
 
 const DEFAULT_MAX_LENGTH = 48_000;
-const MAX_BODY_PREVIEW_LENGTH = 520;
-const MAX_DATE_LENGTH = 256;
-const MAX_EMAIL_LENGTH = 320;
-const MAX_LABEL_LENGTH = 80;
-const MAX_LABELS = 20;
-const MAX_MESSAGE_ID_LENGTH = 256;
 const MAX_MESSAGES = 32;
-const MAX_SNIPPET_LENGTH = 320;
-const MAX_SOURCE_URL_LENGTH = 500;
-const MAX_SUBJECT_LENGTH = 320;
-
-const clip = (value: string | undefined, limit: number) => {
-  if (!value) return undefined;
-  const overflowed = value.length > limit;
-  const clean = value.slice(0, limit).replaceAll('\u0000', '').trim();
-  if (!clean || !overflowed) return clean;
-  return `${clean.trimEnd()}...`;
-};
 
 const normalizeMessage = (message: GmailMessage): GmailMessage => {
   const labels: string[] = [];
-  const labelLimit = Math.min(message.labels.length, MAX_LABELS);
+  const labelLimit = Math.min(message.labels.length, GMAIL_LABELS_MAX_COUNT);
   for (let index = 0; index < labelLimit; index += 1) {
-    const label = clip(message.labels[index], MAX_LABEL_LENGTH);
+    const label = clipGmailText(message.labels[index], GMAIL_LABEL_MAX_LENGTH);
     if (label) labels.push(label);
   }
 
   return {
-    bodyPreview: clip(message.bodyPreview, MAX_BODY_PREVIEW_LENGTH),
-    date: clip(message.date, MAX_DATE_LENGTH),
-    id: clip(message.id, MAX_MESSAGE_ID_LENGTH) ?? '',
+    bodyPreview: clipGmailText(message.bodyPreview, GMAIL_BODY_PREVIEW_MAX_LENGTH),
+    date: clipGmailText(message.date, GMAIL_DATE_MAX_LENGTH),
+    id: clipGmailText(message.id, GMAIL_MESSAGE_ID_MAX_LENGTH) ?? '',
     labels,
-    recipient: clip(message.recipient, MAX_EMAIL_LENGTH),
-    sender: clip(message.sender, MAX_EMAIL_LENGTH),
-    snippet: clip(message.snippet, MAX_SNIPPET_LENGTH),
-    sourceUrl: clip(message.sourceUrl, MAX_SOURCE_URL_LENGTH),
-    subject: clip(message.subject, MAX_SUBJECT_LENGTH) ?? '(No subject)',
+    recipient: clipGmailText(message.recipient, GMAIL_EMAIL_MAX_LENGTH),
+    sender: clipGmailText(message.sender, GMAIL_EMAIL_MAX_LENGTH),
+    snippet: clipGmailText(message.snippet, GMAIL_SNIPPET_MAX_LENGTH),
+    sourceUrl: clipGmailText(message.sourceUrl, GMAIL_SOURCE_URL_MAX_LENGTH),
+    subject: clipGmailText(message.subject, GMAIL_SUBJECT_MAX_LENGTH) ?? '(No subject)',
   };
 };
 
@@ -74,8 +69,7 @@ const createMessagesTree = (messages: GmailMessage[]) =>
     }),
   );
 
-const serializeMessages = (messages: GmailMessage[]) => toXml(createMessagesTree(messages));
-const EMPTY_MESSAGES_XML = serializeMessages([]);
+const EMPTY_MESSAGES_XML = toXml(createMessagesTree([]));
 const MIN_XML_LENGTH = EMPTY_MESSAGES_XML.length;
 
 export interface ToGmailMessagesXmlOptions {
@@ -91,18 +85,14 @@ export const toGmailMessagesXml = (
   if (limit < MIN_XML_LENGTH) {
     throw new RangeError(`Gmail XML maxLength must be at least ${MIN_XML_LENGTH}`);
   }
-  const normalizedMessages: GmailMessage[] = [];
+  const selected: GmailMessage[] = [];
   const messageLimit = Math.min(messages.length, MAX_MESSAGES);
   for (let index = 0; index < messageLimit; index += 1) {
-    normalizedMessages.push(normalizeMessage(messages[index]));
-  }
-  const selected: GmailMessage[] = [];
-
-  for (const message of normalizedMessages) {
+    const message = normalizeMessage(messages[index]);
     const candidate = [...selected, message];
-    if (serializeMessages(candidate).length > limit) break;
+    if (toXml(createMessagesTree(candidate)).length > limit) break;
     selected.push(message);
   }
 
-  return serializeMessages(selected);
+  return toXml(createMessagesTree(selected));
 };

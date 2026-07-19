@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { loadGmailMessages } from './message';
+import { parseGmailMessages } from './message';
 
 const message = (id: string, sender = 'sender@example.com') => ({
   id,
@@ -9,10 +9,10 @@ const message = (id: string, sender = 'sender@example.com') => ({
   subject: `Subject ${id}`,
 });
 
-describe('loadGmailMessages', () => {
+describe('parseGmailMessages', () => {
   it('handles nullable fields and nested Composio envelopes', () => {
     expect(
-      loadGmailMessages({
+      parseGmailMessages({
         result: {
           data: {
             emails: [
@@ -59,7 +59,7 @@ describe('loadGmailMessages', () => {
       'response-preview',
     ],
   ])('handles Composio preview and execution response envelopes', (envelope, id) => {
-    expect(loadGmailMessages(envelope)).toMatchObject([{ id }]);
+    expect(parseGmailMessages(envelope)).toMatchObject([{ id }]);
   });
 
   it('does not enumerate unrelated top-level envelope fields', () => {
@@ -70,7 +70,7 @@ describe('loadGmailMessages', () => {
       },
     };
 
-    expect(loadGmailMessages(envelope)).toMatchObject([{ id: 'safe-envelope' }]);
+    expect(parseGmailMessages(envelope)).toMatchObject([{ id: 'safe-envelope' }]);
   });
 
   it('never reads a candidate beyond the configured bound', () => {
@@ -87,7 +87,7 @@ describe('loadGmailMessages', () => {
       },
     });
 
-    expect(loadGmailMessages({ data: proxiedCandidates })).toHaveLength(25);
+    expect(parseGmailMessages({ data: proxiedCandidates })).toHaveLength(25);
     expect(accessedBeyondBound).toBe(false);
   });
 
@@ -99,13 +99,13 @@ describe('loadGmailMessages', () => {
       },
     };
 
-    expect(loadGmailMessages({ data: [message('duplicate'), duplicate] })).toHaveLength(1);
+    expect(parseGmailMessages({ data: [message('duplicate'), duplicate] })).toHaveLength(1);
   });
 
   it('clips multi-megabyte fields before normalization work', () => {
     const replaceAll = vi.spyOn(String.prototype, 'replaceAll');
 
-    const [result] = loadGmailMessages({
+    const result = parseGmailMessages({
       data: [
         {
           messageId: 'huge',
@@ -115,7 +115,7 @@ describe('loadGmailMessages', () => {
           subject: `${'t'.repeat(1_000_000)}SUBJECT_OVERFLOW`,
         },
       ],
-    });
+    })?.[0];
     const largestNormalizedInput = Math.max(
       ...replaceAll.mock.instances.map((value) => String(value).length),
     );
@@ -141,11 +141,11 @@ describe('loadGmailMessages', () => {
         },
       });
 
-      const [result] = loadGmailMessages({
+      const result = parseGmailMessages({
         data: [{ [field]: proxiedLabels, id: `bounded-${field}`, subject: 'Bounded labels' }],
-      });
+      })?.[0];
 
-      expect(result.labels).toHaveLength(20);
+      expect(result?.labels).toHaveLength(20);
       expect(accessedBeyondBound).toBe(false);
     },
   );
@@ -164,7 +164,7 @@ describe('loadGmailMessages', () => {
     };
 
     expect(
-      loadGmailMessages({ data: [{ id: 'bounded-mime', payload, snippet: 'usable' }] }),
+      parseGmailMessages({ data: [{ id: 'bounded-mime', payload, snippet: 'usable' }] }),
     ).toEqual([
       {
         id: 'bounded-mime',
@@ -186,7 +186,7 @@ describe('loadGmailMessages', () => {
     };
 
     expect(
-      loadGmailMessages({ data: [{ id: 'safe-mime', payload, subject: 'Safe' }] }),
+      parseGmailMessages({ data: [{ id: 'safe-mime', payload, subject: 'Safe' }] }),
     ).toMatchObject([{ bodyPreview: 'Safe MIME body', id: 'safe-mime' }]);
   });
 
@@ -197,7 +197,7 @@ describe('loadGmailMessages', () => {
     );
 
     expect(
-      loadGmailMessages({
+      parseGmailMessages({
         data: [
           {
             id: 'plain',
@@ -220,5 +220,17 @@ describe('loadGmailMessages', () => {
       { bodyPreview: 'Plain <body> & useful', id: 'plain' },
       { bodyPreview: 'HTML fallback & useful', id: 'html' },
     ]);
+  });
+
+  it('limits the number of inspected candidates', () => {
+    expect(
+      parseGmailMessages({ data: [message('first'), message('second')] }, { maxCandidates: 1 }),
+    ).toMatchObject([{ id: 'first' }]);
+  });
+
+  it('rejects unsupported recursive envelope shapes', () => {
+    expect(
+      parseGmailMessages({ response: { items: [message('unexpected-recursive-envelope')] } }),
+    ).toBeUndefined();
   });
 });

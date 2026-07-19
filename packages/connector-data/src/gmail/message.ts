@@ -1,80 +1,81 @@
+import { toRecord } from '@lobechat/utils/object';
 import { htmlToText } from 'html-to-text';
 import { z } from 'zod';
 
+import {
+  GMAIL_BODY_PREVIEW_MAX_LENGTH,
+  GMAIL_DATE_MAX_LENGTH,
+  GMAIL_EMAIL_SOURCE_MAX_LENGTH,
+  GMAIL_LABEL_MAX_LENGTH,
+  GMAIL_LABELS_MAX_COUNT,
+  GMAIL_MESSAGE_ID_MAX_LENGTH,
+  GMAIL_SNIPPET_MAX_LENGTH,
+  GMAIL_SOURCE_URL_MAX_LENGTH,
+  GMAIL_SUBJECT_MAX_LENGTH,
+} from './constants';
+import { clipGmailText, extractGmailEmail } from './normalize';
 import type { GmailMessage } from './types';
 
-const MAX_BODY_PREVIEW_LENGTH = 520;
-const MAX_EMAIL_LENGTH = 320;
-const MAX_EMAIL_SOURCE_LENGTH = 2048;
 const MAX_HEADERS = 50;
-const MAX_LABEL_LENGTH = 80;
-const MAX_LABELS = 20;
-const MAX_MESSAGE_ID_LENGTH = 256;
 const MAX_MIME_CHILDREN = 16;
 const MAX_MIME_DEPTH = 8;
 const MAX_MIME_PARTS = 128;
 const MAX_RAW_BODY_LENGTH = 32_000;
 const MAX_RAW_ENCODED_BODY_LENGTH = 48_000;
-const MAX_RESPONSE_WRAPPER_DEPTH = 4;
 const MAX_RESPONSE_RESULTS = 8;
 const MAX_SEARCH_MESSAGE_CANDIDATES = 25;
-const MAX_SNIPPET_LENGTH = 320;
-const MAX_SOURCE_URL_LENGTH = 500;
-const MAX_SUBJECT_LENGTH = 320;
 
 const boundedString = (limit: number) => z.string().transform((value) => value.slice(0, limit));
 const boundedLabels = z.preprocess(
-  (value) => (Array.isArray(value) ? value.slice(0, MAX_LABELS) : value),
-  z.array(boundedString(MAX_LABEL_LENGTH + 1)),
+  (value) => (Array.isArray(value) ? value.slice(0, GMAIL_LABELS_MAX_COUNT) : value),
+  z.array(boundedString(GMAIL_LABEL_MAX_LENGTH + 1)),
 );
 
 const messageSchema = z.object({
   bodyHtml: boundedString(MAX_RAW_BODY_LENGTH).nullish(),
   bodyText: boundedString(MAX_RAW_BODY_LENGTH).nullish(),
-  date: boundedString(256).nullish(),
-  from: boundedString(MAX_EMAIL_SOURCE_LENGTH).nullish(),
+  date: boundedString(GMAIL_DATE_MAX_LENGTH).nullish(),
+  from: boundedString(GMAIL_EMAIL_SOURCE_MAX_LENGTH).nullish(),
   html: boundedString(MAX_RAW_BODY_LENGTH).nullish(),
-  id: boundedString(MAX_MESSAGE_ID_LENGTH + 1).nullish(),
+  id: boundedString(GMAIL_MESSAGE_ID_MAX_LENGTH + 1).nullish(),
   internalDate: z.union([boundedString(64), z.number()]).nullish(),
   labelIds: boundedLabels.nullish(),
   labels: boundedLabels.nullish(),
-  messageId: boundedString(MAX_MESSAGE_ID_LENGTH + 1).nullish(),
+  messageId: boundedString(GMAIL_MESSAGE_ID_MAX_LENGTH + 1).nullish(),
   messageText: boundedString(MAX_RAW_BODY_LENGTH).nullish(),
   messageTimestamp: z.union([boundedString(64), z.number()]).nullish(),
-  messageUrl: boundedString(MAX_SOURCE_URL_LENGTH + 1).nullish(),
+  messageUrl: boundedString(GMAIL_SOURCE_URL_MAX_LENGTH + 1).nullish(),
   payload: z.unknown().nullish(),
   preview: z
     .union([
-      boundedString(MAX_BODY_PREVIEW_LENGTH + 1),
-      z.object({ body: boundedString(MAX_BODY_PREVIEW_LENGTH + 1).nullish() }),
+      boundedString(GMAIL_BODY_PREVIEW_MAX_LENGTH + 1),
+      z.object({ body: boundedString(GMAIL_BODY_PREVIEW_MAX_LENGTH + 1).nullish() }),
     ])
     .nullish(),
-  sender: boundedString(MAX_EMAIL_SOURCE_LENGTH).nullish(),
-  snippet: boundedString(MAX_SNIPPET_LENGTH + 1).nullish(),
-  subject: boundedString(MAX_SUBJECT_LENGTH + 1).nullish(),
+  sender: boundedString(GMAIL_EMAIL_SOURCE_MAX_LENGTH).nullish(),
+  snippet: boundedString(GMAIL_SNIPPET_MAX_LENGTH + 1).nullish(),
+  subject: boundedString(GMAIL_SUBJECT_MAX_LENGTH + 1).nullish(),
   text: boundedString(MAX_RAW_BODY_LENGTH).nullish(),
-  threadId: boundedString(MAX_MESSAGE_ID_LENGTH + 1).nullish(),
-  to: boundedString(MAX_EMAIL_SOURCE_LENGTH).nullish(),
+  threadId: boundedString(GMAIL_MESSAGE_ID_MAX_LENGTH + 1).nullish(),
+  to: boundedString(GMAIL_EMAIL_SOURCE_MAX_LENGTH).nullish(),
 });
 
-const toRecord = (value: unknown) => {
-  if (typeof value !== 'object' || value === null) return undefined;
-  return value as Record<PropertyKey, unknown>;
-};
-
-const clip = (value: string | undefined, limit: number) => {
-  if (!value) return undefined;
-  const overflowed = value.length > limit;
-  const clean = value.slice(0, limit).replaceAll('\u0000', '').trim();
-  if (!clean || !overflowed) return clean;
-  return `${clean.trimEnd()}...`;
-};
-
-const extractEmail = (value?: string | null) => {
-  const bounded = value?.slice(0, MAX_EMAIL_SOURCE_LENGTH);
-  const match = bounded?.match(/<([^>]+)>/);
-  return clip((match?.[1] ?? bounded)?.toLowerCase(), MAX_EMAIL_LENGTH);
-};
+const messageCollectionSchema = z.union([
+  z.custom<unknown[]>(Array.isArray),
+  z.object({ messages: z.custom<unknown[]>(Array.isArray) }).transform(({ messages }) => messages),
+  z.object({ emails: z.custom<unknown[]>(Array.isArray) }).transform(({ emails }) => emails),
+  z.object({ items: z.custom<unknown[]>(Array.isArray) }).transform(({ items }) => items),
+]);
+const executionDataSchema = z.union([
+  z.object({ data: messageCollectionSchema }).transform(({ data }) => data),
+  z.object({ data_preview: messageCollectionSchema }).transform(({ data_preview }) => data_preview),
+]);
+const resultExecutionSchema = z
+  .object({ result: executionDataSchema })
+  .transform(({ result }) => result);
+const batchExecutionSchema = z.object({
+  data: z.object({ results: z.custom<unknown[]>(Array.isArray) }),
+});
 
 const getHeader = (payload: unknown, name: string) => {
   const record = toRecord(payload);
@@ -86,11 +87,6 @@ const getHeader = (payload: unknown, name: string) => {
     return header.value.slice(0, MAX_RAW_BODY_LENGTH);
   }
 };
-
-const decodeBase64UrlBody = (data: string) =>
-  Buffer.from(data.slice(0, MAX_RAW_ENCODED_BODY_LENGTH), 'base64url')
-    .toString('utf8')
-    .slice(0, MAX_RAW_BODY_LENGTH);
 
 const decodeGmailBody = (payload: unknown) => {
   const queue: Array<{ depth: number; part: unknown }> = [{ depth: 0, part: payload }];
@@ -109,7 +105,9 @@ const decodeGmailBody = (payload: unknown) => {
     const mimeType =
       typeof part.mimeType === 'string' ? part.mimeType.slice(0, 80).toLowerCase() : undefined;
 
-    if (data && mimeType === 'text/plain') return decodeBase64UrlBody(data);
+    if (data && mimeType === 'text/plain') {
+      return Buffer.from(data, 'base64url').toString('utf8').slice(0, MAX_RAW_BODY_LENGTH);
+    }
     if (data && mimeType === 'text/html' && !html) html = data;
     if (data && current.depth === 0) root = data;
     if (current.depth >= MAX_MIME_DEPTH || !Array.isArray(part.parts)) continue;
@@ -118,8 +116,13 @@ const decodeGmailBody = (payload: unknown) => {
     }
   }
 
-  if (html) return htmlToText(decodeBase64UrlBody(html), { wordwrap: false });
-  return root ? decodeBase64UrlBody(root) : undefined;
+  if (html) {
+    const decoded = Buffer.from(html, 'base64url').toString('utf8').slice(0, MAX_RAW_BODY_LENGTH);
+    return htmlToText(decoded, { wordwrap: false });
+  }
+  return root
+    ? Buffer.from(root, 'base64url').toString('utf8').slice(0, MAX_RAW_BODY_LENGTH)
+    : undefined;
 };
 
 const normalizeDate = (value: string | number | null | undefined) => {
@@ -137,102 +140,96 @@ const normalizeDate = (value: string | number | null | undefined) => {
 const normalizeMessage = (input: unknown): GmailMessage | undefined => {
   const parsed = messageSchema.safeParse(input);
   if (!parsed.success) return undefined;
-  const message = parsed.data;
-  const rawId = message.id ?? message.messageId;
+  const rawId = parsed.data.id ?? parsed.data.messageId;
   if (!rawId) return undefined;
-  const id = clip(rawId, MAX_MESSAGE_ID_LENGTH)!;
-  const rawSender = message.sender ?? message.from ?? getHeader(message.payload, 'From');
-  const rawRecipient = message.to ?? getHeader(message.payload, 'To');
-  const subject = clip(
-    message.subject ?? getHeader(message.payload, 'Subject') ?? '(No subject)',
-    MAX_SUBJECT_LENGTH,
+  const id = clipGmailText(rawId, GMAIL_MESSAGE_ID_MAX_LENGTH)!;
+  const rawSender =
+    parsed.data.sender ?? parsed.data.from ?? getHeader(parsed.data.payload, 'From');
+  const rawRecipient = parsed.data.to ?? getHeader(parsed.data.payload, 'To');
+  const subject = clipGmailText(
+    parsed.data.subject ?? getHeader(parsed.data.payload, 'Subject') ?? '(No subject)',
+    GMAIL_SUBJECT_MAX_LENGTH,
   )!;
-  const htmlBody = message.bodyHtml ?? message.html;
-  const preview = typeof message.preview === 'string' ? message.preview : message.preview?.body;
-  const directBody = message.messageText ?? message.bodyText ?? message.text;
+  const htmlBody = parsed.data.bodyHtml ?? parsed.data.html;
+  const preview =
+    typeof parsed.data.preview === 'string' ? parsed.data.preview : parsed.data.preview?.body;
+  const directBody = parsed.data.messageText ?? parsed.data.bodyText ?? parsed.data.text;
   const body =
     directBody ||
     (htmlBody
       ? htmlToText(htmlBody.slice(0, MAX_RAW_BODY_LENGTH), { wordwrap: false })
-      : (decodeGmailBody(message.payload) ?? preview ?? undefined));
+      : (decodeGmailBody(parsed.data.payload) ?? preview));
 
-  if (!rawSender && subject === '(No subject)' && !body && !message.snippet) return undefined;
+  if (!rawSender && subject === '(No subject)' && !body && !parsed.data.snippet) return undefined;
 
   return {
-    bodyPreview: clip(body, MAX_BODY_PREVIEW_LENGTH),
+    bodyPreview: clipGmailText(body ?? undefined, GMAIL_BODY_PREVIEW_MAX_LENGTH),
     date: normalizeDate(
-      message.messageTimestamp ??
-        message.internalDate ??
-        message.date ??
-        getHeader(message.payload, 'Date'),
+      parsed.data.messageTimestamp ??
+        parsed.data.internalDate ??
+        parsed.data.date ??
+        getHeader(parsed.data.payload, 'Date'),
     ),
     id,
-    labels: (message.labelIds ?? message.labels ?? [])
-      .slice(0, MAX_LABELS)
-      .map((label) => clip(label, MAX_LABEL_LENGTH)!)
-      .filter(Boolean),
-    recipient: extractEmail(rawRecipient),
-    sender: extractEmail(rawSender),
-    snippet: clip(message.snippet ?? undefined, MAX_SNIPPET_LENGTH),
-    sourceUrl: clip(
-      message.messageUrl ??
-        (message.threadId ? `gmail:thread:${message.threadId}` : `gmail:message:${id}`),
-      MAX_SOURCE_URL_LENGTH,
+    labels: (parsed.data.labelIds ?? parsed.data.labels ?? []).reduce<string[]>((labels, label) => {
+      const normalized = clipGmailText(label, GMAIL_LABEL_MAX_LENGTH);
+      if (normalized) labels.push(normalized);
+      return labels;
+    }, []),
+    recipient: extractGmailEmail(rawRecipient),
+    sender: extractGmailEmail(rawSender),
+    snippet: clipGmailText(parsed.data.snippet ?? undefined, GMAIL_SNIPPET_MAX_LENGTH),
+    sourceUrl: clipGmailText(
+      parsed.data.messageUrl ??
+        (parsed.data.threadId ? `gmail:thread:${parsed.data.threadId}` : `gmail:message:${id}`),
+      GMAIL_SOURCE_URL_MAX_LENGTH,
     ),
     subject,
   };
 };
 
-const findMessagesArray = (value: unknown, depth = 0): unknown[] | undefined => {
-  if (Array.isArray(value)) return value;
-  const record = toRecord(value);
-  if (!record) return undefined;
-  for (const key of ['messages', 'emails', 'items']) {
-    if (Array.isArray(record[key])) return record[key];
-  }
-  if (depth >= MAX_RESPONSE_WRAPPER_DEPTH) return undefined;
-  if (Array.isArray(record.results)) {
-    for (const result of record.results.slice(0, MAX_RESPONSE_RESULTS)) {
-      const messages = findMessagesArray(result, depth + 1);
-      if (messages) return messages;
-    }
-  }
-  for (const key of ['data', 'data_preview', 'response', 'result']) {
-    if (record[key] !== undefined) {
-      const messages = findMessagesArray(record[key], depth + 1);
-      if (messages) return messages;
-    }
-  }
-};
-
-const readMessageId = (value: unknown) => {
-  if (typeof value !== 'object' || value === null) return undefined;
-  const record = value as { id?: unknown; messageId?: unknown };
-  const id =
-    typeof record.id === 'string'
-      ? record.id
-      : typeof record.messageId === 'string'
-        ? record.messageId
-        : undefined;
-  return id?.slice(0, MAX_MESSAGE_ID_LENGTH);
-};
-
-export interface LoadGmailMessagesOptions {
-  maxMessages?: number;
+export interface ParseGmailMessagesOptions {
+  maxCandidates?: number;
 }
 
 export const parseGmailMessages = (
   value: unknown,
-  { maxMessages = MAX_SEARCH_MESSAGE_CANDIDATES }: LoadGmailMessagesOptions = {},
+  { maxCandidates = MAX_SEARCH_MESSAGE_CANDIDATES }: ParseGmailMessagesOptions = {},
 ): GmailMessage[] | undefined => {
-  const messages = findMessagesArray(value);
+  const direct = messageCollectionSchema.safeParse(value);
+  const execution = direct.success ? undefined : executionDataSchema.safeParse(value);
+  const result =
+    direct.success || execution?.success ? undefined : resultExecutionSchema.safeParse(value);
+  let messages = direct.success ? direct.data : execution?.success ? execution.data : result?.data;
+
+  if (!messages) {
+    const batch = batchExecutionSchema.safeParse(value);
+    if (batch.success) {
+      const resultLimit = Math.min(batch.data.data.results.length, MAX_RESPONSE_RESULTS);
+      for (let index = 0; index < resultLimit; index += 1) {
+        const response = executionDataSchema.safeParse(
+          toRecord(batch.data.data.results[index])?.response,
+        );
+        if (response.success) {
+          messages = response.data;
+          break;
+        }
+      }
+    }
+  }
+
   if (!messages) return undefined;
-  const limit = Math.min(Math.max(0, Math.floor(maxMessages)), MAX_SEARCH_MESSAGE_CANDIDATES);
+  const limit = Math.min(Math.max(0, Math.floor(maxCandidates)), MAX_SEARCH_MESSAGE_CANDIDATES);
   const deduplicated = new Map<string, GmailMessage>();
 
   for (let index = 0; index < Math.min(messages.length, limit); index += 1) {
     const candidate = messages[index];
-    const id = readMessageId(candidate);
+    const candidateRecord = toRecord(candidate);
+    const rawCandidateId = candidateRecord?.id ?? candidateRecord?.messageId;
+    const id =
+      typeof rawCandidateId === 'string'
+        ? rawCandidateId.slice(0, GMAIL_MESSAGE_ID_MAX_LENGTH)
+        : undefined;
     if (id && deduplicated.has(id)) continue;
     const message = normalizeMessage(candidate);
     if (message && !deduplicated.has(message.id)) deduplicated.set(message.id, message);
@@ -241,8 +238,3 @@ export const parseGmailMessages = (
   if (messages.length > 0 && limit > 0 && deduplicated.size === 0) return undefined;
   return [...deduplicated.values()];
 };
-
-export const loadGmailMessages = (
-  value: unknown,
-  options: LoadGmailMessagesOptions = {},
-): GmailMessage[] => parseGmailMessages(value, options) ?? [];

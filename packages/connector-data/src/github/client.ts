@@ -1,3 +1,4 @@
+import { createRecoverableMemo } from '../memo';
 import type { GitHubConnectorTransport } from './graphql/client';
 import { createGitHubGraphQLClient, createOctokitTransport } from './graphql/client';
 import {
@@ -34,18 +35,6 @@ export interface CreateGitHubConnectorClientOptions {
   /** @internal Tests and custom protocol adapters only. */
   transport?: GitHubConnectorTransport;
 }
-
-const createRecoverableMemo = <T>(load: () => Promise<T>) => {
-  let promise: Promise<T> | undefined;
-
-  return () => {
-    promise ??= load().catch((error) => {
-      promise = undefined;
-      throw error;
-    });
-    return promise;
-  };
-};
 
 export const createGitHubConnectorClient = ({
   accessToken,

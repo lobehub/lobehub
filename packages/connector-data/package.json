@@ -22,6 +22,7 @@
     "test": "vitest run --silent='passed-only'"
   },
   "dependencies": {
+    "@lobechat/utils": "workspace:*",
     "debug": "^4.4.3",
     "html-to-text": "^9.0.5",
     "octokit": "^5.0.0",

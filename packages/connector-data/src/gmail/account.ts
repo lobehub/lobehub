@@ -1,12 +1,13 @@
+import { toRecord } from '@lobechat/utils/object';
+
 import { ConnectorDataError } from '../errors';
 import { withConnectorRetry } from '../retry';
+import { extractGmailEmail } from './normalize';
 import type { GmailAccount } from './types';
 
 const MAX_ACCOUNT_ID_LENGTH = 512;
 const MAX_ACCOUNT_PAGES = 3;
 const MAX_ACCOUNTS_PER_PAGE = 100;
-const MAX_EMAIL_LENGTH = 320;
-const MAX_EMAIL_SOURCE_LENGTH = 2048;
 const MAX_SCOPE_COUNT = 100;
 const MAX_SCOPE_LENGTH = 256;
 
@@ -22,11 +23,6 @@ export interface GmailComposioConnectedAccounts {
   list: (input: GmailConnectedAccountListInput) => Promise<unknown>;
 }
 
-const toRecord = (value: unknown) => {
-  if (typeof value !== 'object' || value === null) return undefined;
-  return value as Record<PropertyKey, unknown>;
-};
-
 const readString = (
   record: Record<PropertyKey, unknown> | undefined,
   key: PropertyKey,
@@ -34,13 +30,6 @@ const readString = (
 ) => {
   const value = record?.[key];
   return typeof value === 'string' ? value.slice(0, limit) : undefined;
-};
-
-const extractEmail = (value: unknown) => {
-  if (typeof value !== 'string') return undefined;
-  const bounded = value.slice(0, MAX_EMAIL_SOURCE_LENGTH);
-  const match = bounded.match(/<([^>]+)>/);
-  return (match?.[1] ?? bounded).toLowerCase().trim().slice(0, MAX_EMAIL_LENGTH) || undefined;
 };
 
 const readScopes = (value: unknown) => {
@@ -84,13 +73,11 @@ const parseAccount = (value: unknown): GmailAccount | undefined => {
   const scopeValue = account.scopes ?? data?.scopes ?? account.scope ?? data?.scope ?? stateScope;
 
   return {
-    email: extractEmail(account.email ?? data?.email ?? metadata?.email ?? stateEmail),
+    email: extractGmailEmail(account.email ?? data?.email ?? metadata?.email ?? stateEmail),
     externalAccountId: id,
     scopes: readScopes(scopeValue),
   };
 };
-
-const readAccountId = (value: unknown) => readString(toRecord(value), 'id', MAX_ACCOUNT_ID_LENGTH);
 
 export interface LoadGmailAccountOptions {
   connectedAccountId: string;
@@ -129,7 +116,7 @@ export const loadGmailAccount = async ({
       const itemLimit = Math.min(items.length, MAX_ACCOUNTS_PER_PAGE);
       for (let index = 0; index < itemLimit; index += 1) {
         const item = items[index];
-        if (readAccountId(item) === connectedAccountId) {
+        if (readString(toRecord(item), 'id', MAX_ACCOUNT_ID_LENGTH) === connectedAccountId) {
           match = item;
           break;
         }
@@ -147,7 +134,7 @@ export const loadGmailAccount = async ({
       cursor = nextCursor;
     }
 
-    if (!ownedAccount || ownedAccount.externalAccountId !== connectedAccountId) {
+    if (!ownedAccount) {
       throw new ConnectorDataError({
         code: 'gmail_account_unavailable',
         operation: 'getAccount',
