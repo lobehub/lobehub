@@ -65,7 +65,6 @@ export class UnderstandingConfirmationRepository {
       if (
         !merge ||
         !merge.assistantMessageId ||
-        !merge.operationId ||
         merge.status !== 'completed' ||
         !['completed', 'partial'].includes(session.status)
       ) {
@@ -126,21 +125,12 @@ export class UnderstandingConfirmationRepository {
       const result = OnboardingUnderstandingMessageMetadataSchema.safeParse(
         isPlainRecord(message.metadata) ? message.metadata.onboardingUnderstanding : undefined,
       );
-      if (
-        !result.success ||
-        result.data.kind !== 'merged' ||
-        result.data.resultId !== resultId ||
-        JSON.stringify(result.data.inputThreadIds) !== JSON.stringify(merge.inputThreadIds)
-      ) {
+      if (!result.success || result.data.kind !== 'merged' || result.data.resultId !== resultId) {
         throw new UnderstandingPreconditionError('result_not_confirmable');
       }
-      const contributingRuns = session.runs.filter(
-        (run) => run.status === 'completed' && merge.inputThreadIds.includes(run.threadId),
-      );
-      if (
-        JSON.stringify(contributingRuns.map(({ threadId }) => threadId)) !==
-        JSON.stringify(merge.inputThreadIds)
-      ) {
+      const contributingRuns = session.runs.filter((run) => run.status === 'completed');
+      const inputThreadIds = contributingRuns.map(({ threadId }) => threadId);
+      if (JSON.stringify(result.data.inputThreadIds) !== JSON.stringify(inputThreadIds)) {
         throw new UnderstandingPreconditionError('result_not_confirmable');
       }
 

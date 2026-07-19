@@ -54,41 +54,14 @@ const session = {
   mergeRun: {
     assistantMessageId: 'merge-message-1',
     diagnostics: { evidenceCount: 5, failedCount: 1, succeededCount: 4 },
-    inputThreadIds: ['source-thread-1'],
-    operationId: 'merge-operation-1',
     resultId: 'merge-result-1',
     status: 'completed' as const,
     threadId: 'merge-thread-1',
   },
-  retiredMergeRuns: [
-    {
-      assistantMessageId: 'retired-merge-message',
-      inputThreadIds: ['retired-source-thread'],
-      operationId: 'retired-merge-operation',
-      resultId: 'retired-merge-result',
-      status: 'completed' as const,
-      threadId: 'retired-merge-thread',
-    },
-  ],
-  retiredRuns: [
-    {
-      assistantMessageId: 'retired-source-message',
-      operationId: 'retired-source-operation',
-      source: {
-        displayName: 'Retired Slack',
-        externalAccountId: 'retired-account',
-        id: 'slack:retired-account',
-        provider: 'slack',
-      },
-      status: 'completed' as const,
-      threadId: 'retired-source-thread',
-    },
-  ],
   runs: [
     {
       assistantMessageId: 'source-message-1',
       diagnostics: { evidenceCount: 5, failedCount: 1, succeededCount: 4 },
-      operationId: 'source-operation-1',
       source: {
         displayName: 'Primary GitHub',
         externalAccountId: 'account-1',
@@ -101,7 +74,6 @@ const session = {
     {
       assistantMessageId: 'source-message-2',
       diagnostics: { evidenceCount: 0, failedCount: 1, succeededCount: 0 },
-      operationId: 'source-operation-2',
       source: {
         displayName: 'Primary Gmail',
         externalAccountId: 'account-2',
@@ -142,7 +114,6 @@ const installResult = async (workspaceId?: string) => {
     id: session.mergeRun.threadId,
     metadata: {
       onboardingUnderstanding: { kind: 'merged' },
-      operationId: session.mergeRun.operationId,
     },
     status: 'completed',
     topicId: input.topicId,
@@ -169,7 +140,7 @@ const installResult = async (workspaceId?: string) => {
           failedCount: 1,
           succeededCount: 4,
         },
-        inputThreadIds: session.mergeRun.inputThreadIds,
+        inputThreadIds: ['source-thread-1'],
         kind: 'merged',
         resultId: input.resultId,
       },
@@ -385,7 +356,7 @@ describe('UnderstandingConfirmationRepository', () => {
     ).resolves.toBeFalsy();
   });
 
-  it('rejects a merged message whose exact input thread IDs do not match the manifest', async () => {
+  it('rejects a merged message whose input thread IDs do not match completed source runs', async () => {
     await installResult();
     await db
       .update(messages)
@@ -408,7 +379,7 @@ describe('UnderstandingConfirmationRepository', () => {
     await expect(new UserPersonaModel(db, userId).getLatestPersonaDocument()).resolves.toBeFalsy();
   });
 
-  it('rejects a manifest whose merge inputs do not match completed active source runs', async () => {
+  it('rejects when the completed source set changes after the merged result was produced', async () => {
     await installResult();
     await db
       .update(topics)
@@ -420,7 +391,7 @@ describe('UnderstandingConfirmationRepository', () => {
             startedAt: '2026-07-15T00:00:00.000Z',
             understanding: {
               ...session,
-              mergeRun: { ...session.mergeRun, inputThreadIds: ['source-thread-2'] },
+              runs: session.runs.map((run) => ({ ...run, status: 'completed' as const })),
             },
             version: 1,
           },

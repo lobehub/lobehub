@@ -3,17 +3,28 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { UnderstandingSourceStore } from './sourceStore';
 
-const redis = { eval: vi.fn(), hdel: vi.fn(), hget: vi.fn() };
+const pipeline = {
+  exec: vi.fn(),
+  expire: vi.fn(),
+  hset: vi.fn(),
+};
+const redis = { del: vi.fn(), hdel: vi.fn(), hget: vi.fn(), pipeline: vi.fn() };
 const store = new UnderstandingSourceStore(redis as unknown as Redis);
-const reference = { runId: 'run-1', sessionId: 'session-1', userId: 'user-1' };
+const reference = { sessionId: 'session-1', sourceId: 'github:account-1', userId: 'user-1' };
 
 describe('UnderstandingSourceStore', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    redis.eval.mockResolvedValue(1);
+    pipeline.exec.mockResolvedValue([
+      [null, 1],
+      [null, 1],
+    ]);
+    pipeline.expire.mockReturnValue(pipeline);
+    pipeline.hset.mockReturnValue(pipeline);
+    redis.pipeline.mockReturnValue(pipeline);
   });
 
-  it('stores payloads and locators in explicit fields with a 24 hour TTL', async () => {
+  it('stores payloads and locators with hashed identifiers and a 24 hour TTL', async () => {
     await store.put({
       ...reference,
       brief: 'collected markdown',
@@ -29,39 +40,31 @@ describe('UnderstandingSourceStore', () => {
       },
     });
 
-    expect(redis.eval).toHaveBeenNthCalledWith(
+    expect(pipeline.hset).toHaveBeenNthCalledWith(
       1,
-      expect.stringContaining("redis.call('EXISTS'"),
-      2,
-      expect.any(String),
-      expect.stringMatching(/:reset:[a-f\d]{64}$/),
+      expect.stringMatching(
+        /^onboarding_understanding:source:\{[a-f\d]{64}\}:session:[a-f\d]{64}$/,
+      ),
       expect.stringMatching(/^source:[a-f\d]{64}:payload$/),
       expect.any(String),
-      '86400',
     );
-    expect(redis.eval).toHaveBeenNthCalledWith(
-      2,
-      expect.stringContaining("redis.call('EXISTS'"),
+    expect(pipeline.hset).toHaveBeenNthCalledWith(
       2,
       expect.any(String),
-      expect.stringMatching(/:reset:[a-f\d]{64}$/),
       expect.stringMatching(/^source:[a-f\d]{64}:locator$/),
-      expect.any(String),
-      '86400',
+      expect.not.stringContaining('secret'),
     );
+    expect(pipeline.expire).toHaveBeenCalledTimes(2);
+    expect(pipeline.expire).toHaveBeenCalledWith(expect.any(String), 86_400);
   });
 
-  it('uses a dedicated session errors field', async () => {
+  it('stores discovery errors in an explicit session field', async () => {
     await store.putSessionErrors({ errors: [], sessionId: 'session-1', userId: 'user-1' });
 
-    expect(redis.eval).toHaveBeenCalledWith(
-      expect.stringContaining("redis.call('EXISTS'"),
-      2,
+    expect(pipeline.hset).toHaveBeenCalledWith(
       expect.any(String),
-      expect.stringMatching(/:reset:[a-f\d]{64}$/),
-      'session:errors',
+      'errors',
       JSON.stringify({ errors: [] }),
-      '86400',
     );
   });
 
@@ -74,7 +77,7 @@ describe('UnderstandingSourceStore', () => {
     );
   });
 
-  it('deletes only a prepared locator when a retry claim loses', async () => {
+  it('deletes an individual locator when explicitly requested', async () => {
     await store.deleteSourceLocator(reference);
 
     expect(redis.hdel).toHaveBeenCalledWith(
@@ -83,48 +86,34 @@ describe('UnderstandingSourceStore', () => {
     );
   });
 
-  it('deletes the dedicated hashed session key', async () => {
+  it('deletes the whole hashed session key without a reset tombstone', async () => {
     await store.deleteSession({ sessionId: reference.sessionId, userId: reference.userId });
 
-    expect(redis.eval).toHaveBeenCalledWith(
-      expect.stringContaining("redis.call('SET'"),
-      2,
+    expect(redis.del).toHaveBeenCalledWith(
       expect.stringMatching(
         /^onboarding_understanding:source:\{[a-f\d]{64}\}:session:[a-f\d]{64}$/,
       ),
-      expect.stringMatching(/:reset:[a-f\d]{64}$/),
-      '86400',
     );
+    expect(redis).not.toHaveProperty('eval');
   });
 
-  it('submits writer-before-reset commands in an order the atomic scripts can serialize', async () => {
-    let releaseWrite!: (result: number) => void;
-    redis.eval
-      .mockImplementationOnce(() => new Promise((resolve) => (releaseWrite = resolve)))
-      .mockResolvedValueOnce(1);
-
-    const write = store.putSessionErrors({ errors: [], sessionId: 'session-1', userId: 'user-1' });
-    await vi.waitFor(() => expect(redis.eval).toHaveBeenCalledTimes(1));
-    const reset = store.deleteSession({ sessionId: 'session-1', userId: 'user-1' });
-    releaseWrite(1);
-    await Promise.all([write, reset]);
-
-    expect(redis.eval.mock.invocationCallOrder[0]).toBeLessThan(
-      redis.eval.mock.invocationCallOrder[1],
+  it('parses stored payloads and rejects invalid data without exposing it', async () => {
+    redis.hget.mockResolvedValueOnce(
+      JSON.stringify({
+        brief: 'collected markdown',
+        diagnostics: { errors: [], evidenceCount: 1, failedCount: 0, succeededCount: 1 },
+      }),
     );
+    await expect(store.get(reference)).resolves.toMatchObject({ brief: 'collected markdown' });
+
+    redis.hget.mockResolvedValueOnce('{"brief":"RAW_PRIVATE_DATA"}');
+    const error = await store.get(reference).catch((caught) => caught);
+    expect(error).toEqual(new Error('Failed to read onboarding Understanding source data'));
+    expect(String(error)).not.toContain('RAW_PRIVATE_DATA');
   });
 
-  it('rejects a writer submitted after reset without exposing Redis details', async () => {
-    redis.eval.mockResolvedValueOnce(1).mockResolvedValueOnce(0);
-    await store.deleteSession({ sessionId: 'session-1', userId: 'user-1' });
-
-    await expect(
-      store.putSessionErrors({ errors: [], sessionId: 'session-1', userId: 'user-1' }),
-    ).rejects.toThrow('Failed to persist onboarding Understanding source data');
-  });
-
-  it('sanitizes Redis eval failures', async () => {
-    redis.eval.mockRejectedValueOnce(new Error('RAW_REDIS_SECRET'));
+  it('sanitizes Redis write failures', async () => {
+    pipeline.exec.mockRejectedValueOnce(new Error('RAW_REDIS_SECRET'));
 
     const error = await store
       .putSessionErrors({ errors: [], sessionId: 'session-1', userId: 'user-1' })
