@@ -169,6 +169,7 @@ interface CodexSelectionSource {
 const CODEX_CONFIG_FLAGS = ['-c', '--config'] as const;
 const CODEX_MODEL_FLAGS = ['-m', '--model'] as const;
 const HETERO_EXEC_AGENT_ARG_FLAG = '--agent-arg';
+const OPENCODE_MODEL_FLAGS = ['-m', '--model'] as const;
 
 const hasCliFlag = (args: string[], flag: string): boolean =>
   args.some((arg) => arg === flag || arg.startsWith(`${flag}=`));
@@ -446,7 +447,7 @@ export const buildHeteroSpawnArgs = (
     if (
       model &&
       model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
-      !hasCliFlag(baseArgs, '--model')
+      !hasAnyCliFlag(baseArgs, OPENCODE_MODEL_FLAGS)
     ) {
       extraArgs.push('--model', model);
     }
@@ -524,7 +525,7 @@ export const buildHeteroExecArgs = (
     if (
       model &&
       model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
-      !hasCliFlag(baseArgs, '--model')
+      !hasAnyCliFlag(baseArgs, OPENCODE_MODEL_FLAGS)
     ) {
       selectorArgs.push('--model', model);
     }
