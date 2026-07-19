@@ -705,7 +705,7 @@ describe('CodexAdapter', () => {
     expect(result.data.pluginState.stdout).toBe(result.data.content);
   });
 
-  it('maps todo_list items into shared todo plugin state', () => {
+  it('maps todo_list items into shared todo plugin state after successful turn completion', () => {
     const adapter = new CodexAdapter();
 
     const todoItem = {
@@ -733,10 +733,11 @@ describe('CodexAdapter', () => {
       },
       type: 'item.updated',
     });
-    const completed = adapter.adapt({
+    const deferredCompletion = adapter.adapt({
       item: todoItem,
       type: 'item.completed',
     });
+    const completed = adapter.adapt({ type: 'turn.completed' });
 
     expect(started[0]).toMatchObject({
       data: {
@@ -780,6 +781,7 @@ describe('CodexAdapter', () => {
         type: 'stream_chunk',
       }),
     ]);
+    expect(deferredCompletion).toEqual([]);
     expect(completed[0]).toMatchObject({
       data: {
         content: 'Todo list updated (1/3 completed).',
@@ -801,6 +803,7 @@ describe('CodexAdapter', () => {
       type: 'tool_end',
     });
     expect(completed.some((event) => event.data?.chunkType === 'tool_state')).toBe(false);
+    expect(adapter.flush()).toEqual([]);
   });
 
   it('emits an explicit empty Todo snapshot when a non-empty list is cleared', () => {
@@ -846,16 +849,41 @@ describe('CodexAdapter', () => {
   it('clears a pending Todo snapshot when the runtime is interrupted', () => {
     const adapter = new CodexAdapter();
 
+    const todoItem = {
+      id: 'todo-interrupted',
+      items: [
+        { completed: false, text: 'First task' },
+        { completed: false, text: 'Still running' },
+      ],
+      type: 'todo_list',
+    };
+
     adapter.adapt({
-      item: {
-        id: 'todo-interrupted',
-        items: [{ completed: false, text: 'Still running' }],
-        status: 'in_progress',
-        type: 'todo_list',
-      },
+      item: todoItem,
       type: 'item.started',
     });
+    adapter.adapt({
+      item: {
+        ...todoItem,
+        items: [
+          { completed: true, text: 'First task' },
+          { completed: false, text: 'Still running' },
+        ],
+      },
+      type: 'item.updated',
+    });
+    const deferredCompletion = adapter.adapt({
+      item: {
+        ...todoItem,
+        items: [
+          { completed: true, text: 'First task' },
+          { completed: false, text: 'Still running' },
+        ],
+      },
+      type: 'item.completed',
+    });
 
+    expect(deferredCompletion).toEqual([]);
     expect(adapter.flush()).toEqual([
       expect.objectContaining({
         data: {
@@ -871,6 +899,7 @@ describe('CodexAdapter', () => {
         type: 'tool_end',
       }),
     ]);
+    expect(adapter.flush()).toEqual([]);
   });
 
   it('ignores todo item.updated events that have no active started tool', () => {

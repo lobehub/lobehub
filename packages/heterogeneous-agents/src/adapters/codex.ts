@@ -799,6 +799,7 @@ export class CodexAdapter implements AgentEventAdapter {
 
   private hasTextInCurrentStep = false;
   private hasToolActivitySinceAgentMessage = false;
+  private deferredTodoCompletions = new Map<string, CodexTodoListItem>();
   private pendingTodoToolCalls = new Set<string>();
   private pendingToolCalls = new Set<string>();
   private pendingToolCallStepIndex = new Map<string, number>();
@@ -869,7 +870,7 @@ export class CodexAdapter implements AgentEventAdapter {
     const cumulativeUsage = toCodexUsageData(raw.usage);
     const usage = toTurnUsageFromCumulative(cumulativeUsage, this.lastCumulativeUsage);
     if (cumulativeUsage) this.lastCumulativeUsage = cumulativeUsage;
-    const events = this.drainPendingToolEndEvents();
+    const events = this.drainPendingToolEndEvents('success');
 
     if (!hadPendingEmptyTurn && (usage || model)) {
       const data: StepCompleteData = {
@@ -1021,6 +1022,18 @@ export class CodexAdapter implements AgentEventAdapter {
 
     if (!item.id) return [];
 
+    // Codex emits the same status-less todo completion before both a successful
+    // turn completion and an interrupted process exit. Keep it pending until
+    // the turn outcome tells us whether to preserve or clear the Todo state.
+    if (
+      isTodoListItem(item) &&
+      item.status === undefined &&
+      this.pendingTodoToolCalls.has(item.id)
+    ) {
+      this.deferredTodoCompletions.set(item.id, item);
+      return this.consumePendingTurnStart();
+    }
+
     const events: HeterogeneousAgentEvent[] = this.consumePendingTurnStart();
     const pendingStepIndex = this.pendingToolCallStepIndex.get(item.id);
     const belongsToCurrentStep =
@@ -1035,14 +1048,24 @@ export class CodexAdapter implements AgentEventAdapter {
     this.pendingToolCalls.delete(item.id);
     this.pendingToolCallStepIndex.delete(item.id);
     this.pendingTodoToolCalls.delete(item.id);
+    this.deferredTodoCompletions.delete(item.id);
     if (belongsToCurrentStep) this.hasToolActivitySinceAgentMessage = true;
-    const resultData = getToolResultData(item as CodexToolItem);
-    const isSuccess = isSuccessfulToolCompletion(item as CodexToolItem);
-    events.push(this.makeEvent('tool_result', resultData));
+    events.push(...this.createToolCompletionEvents(item as CodexToolItem, toolPayload));
+
+    return events;
+  }
+
+  private createToolCompletionEvents(
+    item: CodexToolItem,
+    toolPayload = toToolPayload(item),
+  ): HeterogeneousAgentEvent[] {
+    const resultData = getToolResultData(item);
+    const isSuccess = isSuccessfulToolCompletion(item);
     // Align tool_end with the server/gateway shape — carry the `{ toolCalling }`
     // payload + a `BuiltinToolResult`-shaped `result` so renderer `onAfterCall`
     // hooks resolve the executor and observe the result, identically to server runs.
-    events.push(
+    return [
+      this.makeEvent('tool_result', resultData),
       this.makeEvent('tool_end', {
         isSuccess,
         payload: { toolCalling: toolPayload },
@@ -1053,13 +1076,18 @@ export class CodexAdapter implements AgentEventAdapter {
         },
         toolCallId: item.id,
       }),
-    );
-
-    return events;
+    ];
   }
 
-  private drainPendingToolEndEvents(): HeterogeneousAgentEvent[] {
+  private drainPendingToolEndEvents(
+    terminalReason: 'interrupted' | 'success' = 'interrupted',
+  ): HeterogeneousAgentEvent[] {
     const events = [...this.pendingToolCalls].flatMap((toolCallId) => {
+      const deferredTodoCompletion = this.deferredTodoCompletions.get(toolCallId);
+      if (terminalReason === 'success' && deferredTodoCompletion) {
+        return this.createToolCompletionEvents(deferredTodoCompletion);
+      }
+
       const toolEnd = this.makeEvent('tool_end', {
         isSuccess: false,
         toolCallId,
@@ -1084,6 +1112,7 @@ export class CodexAdapter implements AgentEventAdapter {
     this.pendingTodoToolCalls.clear();
     this.pendingToolCalls.clear();
     this.pendingToolCallStepIndex.clear();
+    this.deferredTodoCompletions.clear();
     return events;
   }
 
