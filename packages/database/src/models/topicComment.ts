@@ -1,3 +1,4 @@
+import { truncateSurrogateSafe } from '@lobechat/utils';
 import type { SQL } from 'drizzle-orm';
 import {
   and,
@@ -33,23 +34,13 @@ export const TOPIC_COMMENT_PARENT_NOT_FOUND = 'Parent comment not found in the t
 export const TOPIC_COMMENT_REPLY_DEPTH_EXCEEDED = 'Replies can only target a top-level comment';
 export const TOPIC_COMMENT_REPLY_CANNOT_ANCHOR = 'A reply cannot anchor to a message';
 
-const ANCHOR_PREVIEW_MAX_LENGTH = 200;
-
 /**
- * Surrogate-safe truncation for the anchor excerpt. A bare `slice` can cut an
- * astral-plane character (emoji) in half, leaving a lone high surrogate;
- * JSON.stringify escapes it as an unpaired `\ud8xx`, which PostgreSQL's jsonb
- * parser rejects — anchored-comment creation would fail outright. Message
- * content comes from a Postgres `text` column (always valid UTF-8), so the
- * only possible lone surrogate is the one our own cut creates at the
- * boundary; dropping that final code unit is sufficient.
+ * Anchor excerpts must be cut surrogate-safely: a lone surrogate left by a
+ * mid-emoji `slice` would be escaped as an unpaired `\ud8xx` that PostgreSQL's
+ * jsonb parser rejects, failing anchored-comment creation outright (see
+ * `truncateSurrogateSafe`).
  */
-const truncateExcerpt = (content: string, maxLength: number): string => {
-  const sliced = content.slice(0, maxLength);
-  const lastCode = sliced.charCodeAt(sliced.length - 1);
-  // 0xD800–0xDBFF = high surrogate left at the cut, i.e. we split a pair
-  return lastCode >= 0xd8_00 && lastCode <= 0xdb_ff ? sliced.slice(0, -1) : sliced;
-};
+const ANCHOR_PREVIEW_MAX_LENGTH = 200;
 
 /**
  * Deletion-stable keyset cursor over the exact database `(createdAt, id)` key.
@@ -260,7 +251,7 @@ export class TopicCommentModel {
           throw new Error(TOPIC_COMMENT_MESSAGE_NOT_IN_TOPIC);
 
         anchorPreview = {
-          excerpt: truncateExcerpt(message.content ?? '', ANCHOR_PREVIEW_MAX_LENGTH),
+          excerpt: truncateSurrogateSafe(message.content ?? '', ANCHOR_PREVIEW_MAX_LENGTH),
           role: message.role,
         };
       }

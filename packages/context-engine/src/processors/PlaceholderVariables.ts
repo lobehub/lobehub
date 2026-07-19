@@ -1,3 +1,4 @@
+import { truncateSurrogateSafe } from '@lobechat/utils';
 import debug from 'debug';
 
 import { BaseProcessor } from '../base/BaseProcessor';
@@ -13,15 +14,6 @@ const log = debug('context-engine:processor:PlaceholderVariablesProcessor');
 
 const CONTENT_PREVIEW_LENGTH = 200;
 
-const truncateContentPreview = (content: string): string => {
-  let cutoff = CONTENT_PREVIEW_LENGTH;
-  const lastCharCode = content.charCodeAt(cutoff - 1);
-
-  if (lastCharCode >= 0xd8_00 && lastCharCode <= 0xdb_ff) cutoff -= 1;
-
-  return content.slice(0, cutoff);
-};
-
 /**
  * Build a short, log-safe preview of a message's content.
  *
@@ -29,16 +21,17 @@ const truncateContentPreview = (content: string): string => {
  * functions / symbols, so naively calling `.slice` on its result crashes —
  * this is exactly how a tool error result with `content: undefined`
  * (e.g. budget-exceeded errors) used to take down the whole processor.
- * Always coerce to a string before slicing.
+ * Always coerce to a string before slicing, and cut surrogate-safely so a
+ * mid-emoji slice cannot leave a lone surrogate in the preview.
  */
 export const buildContentPreview = (content: unknown): string => {
-  if (typeof content === 'string') return truncateContentPreview(content);
+  if (typeof content === 'string') return truncateSurrogateSafe(content, CONTENT_PREVIEW_LENGTH);
 
   try {
     const serialized = JSON.stringify(content);
-    return truncateContentPreview(serialized ?? String(content));
+    return truncateSurrogateSafe(serialized ?? String(content), CONTENT_PREVIEW_LENGTH);
   } catch {
-    return truncateContentPreview(String(content));
+    return truncateSurrogateSafe(String(content), CONTENT_PREVIEW_LENGTH);
   }
 };
 
