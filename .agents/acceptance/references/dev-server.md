@@ -52,22 +52,22 @@ curl -s -o /dev/null -w '%{http_code}' "$SERVER_URL/"
 AGENT_RUNTIME_MODE=queue pnpm run dev:next
 
 # Without root .env: use the self-contained agent-testing env.
-.agents/verify/scripts/init-dev-env.sh dev-next
+.agents/acceptance/scripts/init-dev-env.sh dev-next
 
 # Full-stack SPA + backend. Required for Web smoke.
 # With root .env:
 AGENT_RUNTIME_MODE=queue bun run dev
 
 # Without root .env:
-.agents/verify/scripts/init-dev-env.sh dev
+.agents/acceptance/scripts/init-dev-env.sh dev
 
 # Local QStash. Run in a separate terminal only when testing workflow paths.
-.agents/verify/scripts/init-dev-env.sh qstash
+.agents/acceptance/scripts/init-dev-env.sh qstash
 
 # Restart — required to pick up server-side code changes.
 # For a no-.env server started by init-dev-env.sh, stop only its owned process tree:
-.agents/verify/scripts/init-dev-env.sh stop-dev
-.agents/verify/scripts/init-dev-env.sh dev-next
+.agents/acceptance/scripts/init-dev-env.sh stop-dev
+.agents/acceptance/scripts/init-dev-env.sh dev-next
 ```
 
 ## When a server restart is needed

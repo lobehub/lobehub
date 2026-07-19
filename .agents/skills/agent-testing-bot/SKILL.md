@@ -25,7 +25,7 @@ PLAN (Steps 0–2) → EXECUTE (Steps 3–6) → FINISH (Step 7)
 report format, and teardown. This file only adds the bot-channel surface.
 
 For LobeHub environment/auth/probe specifics (dev server, seeded account, ports),
-the adapter is `.agents/verify/PROJECT.md`.
+the adapter is `.agents/acceptance/PROJECT.md`.
 
 ## When this surface applies
 

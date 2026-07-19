@@ -21,7 +21,7 @@ So the test surface is three layers:
   curl -sS -m4 -o /dev/null -w '%{http_code}\n' \
     "http://127.0.0.1:1234/api/v1/server/info?password=<PW>" # expect 200
   ```
-- **Electron dev running with CDP**: `.agents/verify/scripts/electron-dev.sh start`
+- **Electron dev running with CDP**: `.agents/acceptance/scripts/electron-dev.sh start`
 - The **iMessage Desktop branch** checked out (the `imessageBridge` IPC group
   and `@lobechat/chat-adapter-imessage` must be compiled into the main bundle).
   Run `pnpm install --ignore-scripts` at the repo root **and** in `apps/desktop/`

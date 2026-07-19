@@ -143,7 +143,7 @@ check_cli() {
 
     bad "CLI API-key auth failed for $SERVER_URL (http_code='$code')"
     note "seed the local API key first:"
-    note "./.agents/verify/scripts/init-dev-env.sh seed-user"
+    note "./.agents/acceptance/scripts/init-dev-env.sh seed-user"
     note "source $CLI_ENV_FILE"
     rm -f "$body_file"
     return 1
@@ -154,7 +154,7 @@ check_cli() {
   else
     bad "CLI not logged in to $SERVER_URL"
     note "automated path:"
-    note "./.agents/verify/scripts/init-dev-env.sh seed-user && source $CLI_ENV_FILE && $0 cli-seed"
+    note "./.agents/acceptance/scripts/init-dev-env.sh seed-user && source $CLI_ENV_FILE && $0 cli-seed"
     note "interactive fallback:"
     note "cd apps/cli && LOBEHUB_CLI_HOME=.lobehub-dev bun src/index.ts login --server $SERVER_URL"
     return 1
@@ -487,7 +487,7 @@ PY
       note "Use Chrome Cookie injection instead: $0 open-chrome, then pbpaste | $0 web"
     else
       note "make sure the seed user exists:"
-      note "./.agents/verify/scripts/init-dev-env.sh seed-user"
+      note "./.agents/acceptance/scripts/init-dev-env.sh seed-user"
     fi
     return 1
   fi

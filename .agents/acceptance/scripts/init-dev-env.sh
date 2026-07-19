@@ -503,7 +503,7 @@ cmd_status() {
   else
     note "QStash is not answering as QStash at $QSTASH_URL (needed for agent-runtime / queue mode)"
   fi
-  if node "$REPO_ROOT/.agents/verify/scripts/check-s3.mjs" > /dev/null 2>&1; then
+  if node "$REPO_ROOT/.agents/acceptance/scripts/check-s3.mjs" > /dev/null 2>&1; then
     ok "S3 reachable and writable: $S3_ENDPOINT/$S3_BUCKET"
   else
     note "S3 is not ready at $S3_ENDPOINT (start it with: $0 s3)"
@@ -541,7 +541,7 @@ cmd_preflight() {
     note "AGENT_RUNTIME_MODE=$AGENT_RUNTIME_MODE (not queue) — QStash not required"
   fi
 
-  if node "$REPO_ROOT/.agents/verify/scripts/check-s3.mjs" > /dev/null 2>&1; then
+  if node "$REPO_ROOT/.agents/acceptance/scripts/check-s3.mjs" > /dev/null 2>&1; then
     ok "S3 read/write/delete passed: $S3_ENDPOINT/$S3_BUCKET"
   else
     bad "S3 preflight failed at $S3_ENDPOINT/$S3_BUCKET"
@@ -655,7 +655,7 @@ cmd_s3() {
   note "starting local S3 server at $S3_ENDPOINT"
   note "bucket=$S3_BUCKET; data=$S3_DATA_DIR"
   note "keep this process running while testing file uploads"
-  exec node .agents/verify/scripts/start-s3.mjs
+  exec node .agents/acceptance/scripts/start-s3.mjs
 }
 
 cmd_dev_next() {

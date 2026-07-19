@@ -19,7 +19,7 @@
 # It then prints the app-side env you must set + how to start the worker.
 #
 # Usage (from the lobehub repo root):
-#   .agents/verify/scripts/agent-gateway/local-gateway-setup.sh
+#   .agents/acceptance/scripts/agent-gateway/local-gateway-setup.sh
 
 set -euo pipefail
 

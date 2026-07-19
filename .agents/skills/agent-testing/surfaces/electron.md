@@ -8,7 +8,7 @@ command reference.
 
 The launch/stop of the desktop dev instance, its CDP port, its login persistence,
 and any state probes all come from
-[`.agents/verify/PROJECT.md`](../references/project-adapter.md) §4/§5. This guide is
+[`.agents/acceptance/PROJECT.md`](../references/project-adapter.md) §4/§5. This guide is
 the CDP methodology; the project supplies the commands.
 
 ## Auth

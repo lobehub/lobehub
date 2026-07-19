@@ -8,8 +8,8 @@ step.
 Initialize helpers first:
 
 ```bash
-SCRIPT=".agents/verify/scripts/setup-auth.sh"
-TEST_ENV=".agents/verify/scripts/test-env.sh"
+SCRIPT=".agents/acceptance/scripts/setup-auth.sh"
+TEST_ENV=".agents/acceptance/scripts/test-env.sh"
 eval "$($TEST_ENV --exports)"
 ```
 
@@ -44,9 +44,9 @@ For the self-contained no-root-`.env` dev environment, seed the baseline user
 and API key once:
 
 ```bash
-.agents/verify/scripts/init-dev-env.sh seed-user
+.agents/acceptance/scripts/init-dev-env.sh seed-user
 source .records/env/agent-testing-cli.env
-.agents/verify/scripts/setup-auth.sh cli-seed
+.agents/acceptance/scripts/setup-auth.sh cli-seed
 ```
 
 The seed step writes `LOBE_API_KEY` for humans and maps it to the CLI's current
@@ -88,8 +88,8 @@ is authenticated.
 For the seeded local dev environment, use the automatic path:
 
 ```bash
-.agents/verify/scripts/init-dev-env.sh seed-user
-.agents/verify/scripts/setup-auth.sh web-seed
+.agents/acceptance/scripts/init-dev-env.sh seed-user
+.agents/acceptance/scripts/setup-auth.sh web-seed
 ```
 
 `web-seed` posts the seeded email/password to
@@ -154,7 +154,7 @@ and `start` seeds every new instance from that snapshot. Sign in once, not once
 per run.
 
 ```bash
-EDEV=.agents/verify/scripts/electron-dev.sh
+EDEV=.agents/acceptance/scripts/electron-dev.sh
 $EDEV login-status        # which source seeds the next instance, and its expiry
 $EDEV save-login <id>     # snapshot a live instance without stopping it
 ```
@@ -162,7 +162,7 @@ $EDEV save-login <id>     # snapshot a live instance without stopping it
 The standard check (do NOT hand-roll a store eval) once Electron is up with CDP:
 
 ```bash
-.agents/verify/scripts/app-probe.sh auth
+.agents/acceptance/scripts/app-probe.sh auth
 # → {"ok":true,"isSignedIn":true,"userId":"user_xxx"}
 ```
 

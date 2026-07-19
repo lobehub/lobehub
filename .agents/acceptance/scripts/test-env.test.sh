@@ -26,11 +26,11 @@ tmp_dir="$(mktemp -d)"
 trap 'rm -rf "$tmp_dir"' EXIT
 
 mkdir -p "$tmp_dir/lobehub-cloud-1/.agents" "$tmp_dir/lobehub/.agents"
-ln -s "$SCRIPT_DIR/.." "$tmp_dir/lobehub-cloud-1/.agents/verify"
-ln -s "$SCRIPT_DIR/.." "$tmp_dir/lobehub/.agents/verify"
+ln -s "$SCRIPT_DIR/.." "$tmp_dir/lobehub-cloud-1/.agents/acceptance"
+ln -s "$SCRIPT_DIR/.." "$tmp_dir/lobehub/.agents/acceptance"
 
-cloud_script="$tmp_dir/lobehub-cloud-1/.agents/verify/scripts/test-env.sh"
-oss_script="$tmp_dir/lobehub/.agents/verify/scripts/test-env.sh"
+cloud_script="$tmp_dir/lobehub-cloud-1/.agents/acceptance/scripts/test-env.sh"
+oss_script="$tmp_dir/lobehub/.agents/acceptance/scripts/test-env.sh"
 
 assert_eq "$("$cloud_script" --value SERVER_URL)" "http://localhost:3021"
 assert_eq "$("$cloud_script" --value SPA_PORT)" "9801"

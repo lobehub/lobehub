@@ -34,14 +34,14 @@ local JWT → `auth_success` → full local loop.
 #    reuse of AGENT_GATEWAY_SERVICE_TOKEN). Source resolves to
 #    .records/env/gateway.env by default, else .env.local; override with
 #    JWKS_SOURCE=<env file>. (Managed agent-testing runs have NO .env.local.)
-.agents/verify/scripts/agent-gateway/local-gateway-setup.sh
+.agents/acceptance/scripts/agent-gateway/local-gateway-setup.sh
 
 # 2. Start the worker (separate terminal) → http://localhost:8787
 cd ../agent-gateway && bun run dev
 curl -s -o /dev/null -w '%{http_code}\n' http://localhost:8787/health # → 200
 
 # 3. Decisive check — does the local gateway accept the app's JWT?
-node .agents/verify/scripts/agent-gateway/local-gateway-probe.mjs
+node .agents/acceptance/scripts/agent-gateway/local-gateway-probe.mjs
 #    → RECV: {"type":"auth_success"}   ✅ feasible
 
 # 4. Point the APP at the local gateway and RESTART its dev server:
@@ -80,13 +80,13 @@ exactly why the gateway must already trust the signing key via
 
 ```bash
 # 1. Start Electron with CDP
-.agents/verify/scripts/electron-dev.sh start
+.agents/acceptance/scripts/electron-dev.sh start
 
 # 2. Navigate to a chat, switch runtime to Cloud Sandbox (gateway mode)
 
 # 3. Install the probe + helpers
 agent-browser --cdp 9222 eval --stdin \
-  < .agents/verify/scripts/agent-gateway/probe.js
+  < .agents/acceptance/scripts/agent-gateway/probe.js
 
 # 4. Send a tool-call message — manually or via type+press
 agent-browser --cdp 9222 eval "window.__PROBE_EVENT('SENT')"
@@ -95,15 +95,15 @@ agent-browser --cdp 9222 eval "window.__PROBE_EVENT('SENT')"
 #    rightmost inactive tab as AWAY — edit ROUND_TRIPS / DWELL_MS in the
 #    file if you want different timing)
 agent-browser --cdp 9222 eval --stdin \
-  < .agents/verify/scripts/agent-gateway/tab-switch.js
+  < .agents/acceptance/scripts/agent-gateway/tab-switch.js
 
 # 6. Wait for streaming to finish, then dump
 agent-browser --cdp 9222 eval --stdin \
-  < .agents/verify/scripts/agent-gateway/probe-dump.js \
+  < .agents/acceptance/scripts/agent-gateway/probe-dump.js \
   > /tmp/probe.json
 
 # 7. Analyze
-node .agents/verify/scripts/agent-gateway/analyze.mjs /tmp/probe.json
+node .agents/acceptance/scripts/agent-gateway/analyze.mjs /tmp/probe.json
 ```
 
 The analyzer prints three sections: EVENTS, TIMELINE, REGRESSIONS. If

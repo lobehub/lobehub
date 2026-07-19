@@ -27,7 +27,7 @@ Finish unless the user explicitly asks to keep the environment running.
 
 **Everything project-specific comes from an adapter, not from this skill.** The
 concrete start/stop commands, ports, auth, surfaces, and probes for the project
-under test live in `.agents/verify/PROJECT.md`. This skill supplies the process,
+under test live in `.agents/acceptance/PROJECT.md`. This skill supplies the process,
 the evidence discipline, and the surface methodology; `PROJECT.md` supplies the
 commands. When a step below says "from `PROJECT.md`", read that file for the
 actual command instead of guessing. See
@@ -77,16 +77,16 @@ target selection.
   - **If the goal is verifying error/failure states, do NOT stop at happy-path
     when injection is hard.** Escalate (see the pattern library) until you have
     real failure-state evidence.
-- **Project layer** (writable, owned by the project): `.agents/verify/common-mistakes.md`
-  and `.agents/verify/probe-mock-patterns.md`, when they exist. These carry what
+- **Project layer** (writable, owned by the project): `.agents/acceptance/common-mistakes.md`
+  and `.agents/acceptance/probe-mock-patterns.md`, when they exist. These carry what
   earlier runs learned about THIS project.
 
 **The project layer is a living log — append to it during the run**, in English:
 
-- User gives negative feedback → new case in `.agents/verify/common-mistakes.md`
+- User gives negative feedback → new case in `.agents/acceptance/common-mistakes.md`
   (Wrong approach / Why / What it breaks / Correct approach).
 - You hit any probe/mock that is blocked, bypassed, or needs a workaround → new
-  item in `.agents/verify/probe-mock-patterns.md` (Situation / Doesn't work /
+  item in `.agents/acceptance/probe-mock-patterns.md` (Situation / Doesn't work /
   Works).
 
 Write project-specific learnings to the **project layer only**. Never edit the
@@ -99,7 +99,7 @@ project layer.
 
 ### Step 0.5 — Adapter check (mandatory when `PROJECT.md` is missing)
 
-If `.agents/verify/PROJECT.md` does not exist, run the first-run bootstrap in
+If `.agents/acceptance/PROJECT.md` does not exist, run the first-run bootstrap in
 [references/project-adapter.md](./references/project-adapter.md) BEFORE anything
 else: explore the repo (package.json / README / CI workflows / Makefile / compose
 files), draft a `PROJECT.md` from the fixed section skeleton, present it to the
@@ -288,7 +288,7 @@ installed; `chmod +x` is applied on install):
 | `agent-browser-klm-analyze.mjs` | Summarize interaction JSONL into `result.json.interactionCost`                                  |
 
 Project-specific probes and env scripts (the "jump straight to app state" fast
-paths) live in the project's own `.agents/verify/scripts/` and are described in
+paths) live in the project's own `.agents/acceptance/scripts/` and are described in
 `PROJECT.md` §5 — not here.
 
 #### Agent-browser interaction-cost tracing (optional, UI runs)

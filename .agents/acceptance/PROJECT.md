@@ -4,7 +4,7 @@ This is the LobeHub adapter for the generic `agent-testing` skill. The skill is
 project-agnostic; every LobeHub-specific command, port, service, and probe lives
 here. The skill reads this file — it never guesses LobeHub's commands.
 
-Scripts referenced below live under `.agents/verify/scripts/`. The generic skill
+Scripts referenced below live under `.agents/acceptance/scripts/`. The generic skill
 and its own scripts (`report-init.sh`, `cdp-screenshot.sh`, `record-gif.sh`,
 `check-screen-recording.sh`, …) are installed at `.agents/skills/agent-testing/`.
 
@@ -36,7 +36,7 @@ stale standalone install: a recently added workspace package fails to resolve �
   - With repo-root `.env` present: use the existing local config — `bun run dev`
     (full-stack, needed for Web smoke) or `AGENT_RUNTIME_MODE=queue pnpm run dev:next`
     (backend only). Do NOT call any `init-dev-env.sh` subcommand when `.env` exists.
-  - Without `.env`: use the skill-owned bootstrap `.agents/verify/scripts/init-dev-env.sh`
+  - Without `.env`: use the skill-owned bootstrap `.agents/acceptance/scripts/init-dev-env.sh`
     (Postgres, Redis, migrations, auth/key-vault/S3 test env, seed user, then the
     repo's own dev server — not `e2e/scripts/setup.ts`). It hard-blocks when
     root `.env` exists, so it can never override a user's local config.
@@ -45,10 +45,10 @@ stale standalone install: a recently added workspace package fails to resolve �
   if [[ -f .env ]]; then
     bun run dev
   else
-    .agents/verify/scripts/init-dev-env.sh setup-db
-    .agents/verify/scripts/init-dev-env.sh s3 # terminal B — keep running
-    .agents/verify/scripts/init-dev-env.sh seed-user
-    .agents/verify/scripts/init-dev-env.sh dev
+    .agents/acceptance/scripts/init-dev-env.sh setup-db
+    .agents/acceptance/scripts/init-dev-env.sh s3 # terminal B — keep running
+    .agents/acceptance/scripts/init-dev-env.sh seed-user
+    .agents/acceptance/scripts/init-dev-env.sh dev
   fi
   ```
 
@@ -59,8 +59,8 @@ stale standalone install: a recently added workspace package fails to resolve �
 - **Stop dev server (must stop only what THIS run started):**
 
   ```bash
-  .agents/verify/scripts/init-dev-env.sh clean    # stop the recorded dev-server PID tree; keep DB/Redis
-  .agents/verify/scripts/init-dev-env.sh stop-dev # just the server, no note
+  .agents/acceptance/scripts/init-dev-env.sh clean    # stop the recorded dev-server PID tree; keep DB/Redis
+  .agents/acceptance/scripts/init-dev-env.sh stop-dev # just the server, no note
   ```
 
   `clean` stops only the recorded dev-server PID tree after verifying its PID
@@ -93,15 +93,15 @@ stale standalone install: a recently added workspace package fails to resolve �
   curl -s -o /dev/null -w '%{http_code}' "$SERVER_URL/"
   ```
 
-- **Env / port resolution:** `.agents/verify/scripts/test-env.sh` is the source
+- **Env / port resolution:** `.agents/acceptance/scripts/test-env.sh` is the source
   of truth for local test ports — do NOT hard-code a port table. It reads the
   current shell plus `.env` files with the same precedence as
   `scripts/runWithEnv.mts` and prints `APP_URL`, `PORT`, `SERVER_URL`,
   `AUTH_TRUSTED_ORIGINS`, `SPA_PORT`, `MOBILE_SPA_PORT`, `DESKTOP_PORT`.
 
   ```bash
-  .agents/verify/scripts/test-env.sh                     # print resolved env + ports
-  eval "$(.agents/verify/scripts/test-env.sh --exports)" # export them
+  .agents/acceptance/scripts/test-env.sh                     # print resolved env + ports
+  eval "$(.agents/acceptance/scripts/test-env.sh --exports)" # export them
   ```
 
   Default script env (no-`.env` bootstrap): `APP_URL=http://localhost:3010`,
@@ -117,12 +117,12 @@ stale standalone install: a recently added workspace package fails to resolve �
   `lobehub`→3010, `lobehub-cloud`→3020, `lobehub-cloud-N`→`3020+N`.
 
 - **Cucumber note:** when running Cucumber against this dev server in the no-`.env`
-  branch, pass the same script env into the test process (`eval "$(.agents/verify/scripts/init-dev-env.sh env)"`)
+  branch, pass the same script env into the test process (`eval "$(.agents/acceptance/scripts/init-dev-env.sh env)"`)
   — Cucumber's own `BeforeAll` seed path must see `DATABASE_URL` or it silently
   skips setup.
 
 - **Ports/modes table, the per-path server-restart matrix, and env
-  troubleshooting:** `.agents/verify/references/dev-server.md`.
+  troubleshooting:** `.agents/acceptance/references/dev-server.md`.
 
 ## 3. Auth
 
@@ -130,9 +130,9 @@ stale standalone install: a recently added workspace package fails to resolve �
   completed. Created by `init-dev-env.sh seed-user`, which also writes a local
   CLI API key to `.records/env/agent-testing-cli.env`.
 
-- **Seeding command:** `.agents/verify/scripts/init-dev-env.sh seed-user`.
+- **Seeding command:** `.agents/acceptance/scripts/init-dev-env.sh seed-user`.
 
-- **Setup helper:** `.agents/verify/scripts/setup-auth.sh` — `status` (all
+- **Setup helper:** `.agents/acceptance/scripts/setup-auth.sh` — `status` (all
   surfaces), `status --surface <cli|web|electron>`, `cli-seed`, `cli` (interactive
   device-code, user runs it), `web-seed`, `open-chrome`, `web` (inject a copied
   Cookie header), `web-verify`. Auth is a surface-scoped gate: pick the intended
@@ -153,10 +153,10 @@ stale standalone install: a recently added workspace package fails to resolve �
   HttpOnly cookies are invisible there), then `pbpaste | setup-auth.sh web`. Use
   `localhost`, not `127.0.0.1` (better-auth cookies are stored for `localhost`).
   Never do this against production. Full decision flow, seeded-login mechanics,
-  and failure modes: `.agents/verify/references/auth.md`.
+  and failure modes: `.agents/acceptance/references/auth.md`.
 
 - **Login-state check** is standardized — do NOT hand-roll a `window.__LOBE_STORES`
-  eval; use `.agents/verify/scripts/app-probe.sh auth` (returns `{ isSignedIn, userId }`,
+  eval; use `.agents/acceptance/scripts/app-probe.sh auth` (returns `{ isSignedIn, userId }`,
   works for Electron CDP and web sessions via `AB_TARGET`).
 
 ## 4. Surfaces
@@ -194,23 +194,23 @@ stale standalone install: a recently added workspace package fails to resolve �
 
 ### Electron
 
-- Launch: `.agents/verify/scripts/electron-dev.sh start` — CDP port `9222`
+- Launch: `.agents/acceptance/scripts/electron-dev.sh start` — CDP port `9222`
   (idempotent; `status` / `stop` / `restart`; env `CDP_PORT`, `ELECTRON_LOG`,
   `ELECTRON_WAIT_S`, `RENDERER_WAIT_S`, `LOBE_LOGIN_STATE_DIR`, `KEEP_DATA`,
   `SKIP_LOGIN_SAVE`). Connect with `agent-browser --cdp 9222 snapshot -i`.
-- Stop: `.agents/verify/scripts/electron-dev.sh stop` — always use this;
+- Stop: `.agents/acceptance/scripts/electron-dev.sh stop` — always use this;
   `pkill -f "Electron"` leaves helper processes (GPU, renderer, network) alive.
 - Login persistence: `stop` snapshots the login to
   `~/.lobehub/agent-testing/electron-login`; `start` seeds each new instance
   from it (`login-status` inspects it, `save-login <id>` captures a live one).
   Sign in once, not once per run — and if an instance comes up signed out, drive
   the sign-in yourself (the OAuth+PKCE recipe and the three token-rotation traps
-  are in `.agents/verify/references/auth.md`); never ask the user to click it.
+  are in `.agents/acceptance/references/auth.md`); never ask the user to click it.
 - Concurrent instances (N worktrees / parallel runs): `electron-dev.sh` drives a
   pool — `start <id>` gives each its own CDP port, userData dir (with copied
   login), Vite port, and IPC id. Drive each with a distinct
   `agent-browser --session s<port> --cdp <port>`. Pool design, the collision
-  matrix, and the login-copy recipe: `.agents/verify/references/multi-instance.md`.
+  matrix, and the login-copy recipe: `.agents/acceptance/references/multi-instance.md`.
 
 ### Bot channels (project skill)
 
@@ -222,13 +222,13 @@ macOS-only). Route bot tests there.
 
 ## 5. Project probes & quick navigation
 
-`.agents/verify/scripts/app-probe.sh` is the LobeHub fast path into app state —
+`.agents/acceptance/scripts/app-probe.sh` is the LobeHub fast path into app state —
 use it instead of hand-rolling `window.__LOBE_STORES` eval snippets. Targets
 default to Electron (`--cdp 9222`); set `AB_TARGET="--session <name>"` for web
 sessions.
 
 ```bash
-PROBE=.agents/verify/scripts/app-probe.sh
+PROBE=.agents/acceptance/scripts/app-probe.sh
 $PROBE auth           # login check → { isSignedIn, userId }
 $PROBE route          # current SPA route
 $PROBE ops            # running chat operations (type / startTime)
@@ -253,8 +253,8 @@ The Zustand store is at `window.__LOBE_STORES` (not `__ZUSTAND_STORES__`); the
 chat input is `contenteditable` (snapshot with `-C`). For deeper one-off state
 inspection, fall back to raw `agent-browser --cdp 9222 eval`. The agent-gateway
 closed-loop probe/dump/analyze tooling lives at
-`.agents/verify/scripts/agent-gateway/`; the closed-loop + JWKS setup workflow is
-in `.agents/verify/references/agent-gateway.md`.
+`.agents/acceptance/scripts/agent-gateway/`; the closed-loop + JWKS setup workflow is
+in `.agents/acceptance/references/agent-gateway.md`.
 
 ## 6. Known constraints
 
@@ -268,8 +268,8 @@ in `.agents/verify/references/agent-gateway.md`.
   and gate before the first `agent run`:
 
   ```bash
-  .agents/verify/scripts/init-dev-env.sh qstash    # terminal B — keep running
-  .agents/verify/scripts/init-dev-env.sh preflight # non-zero exit if QStash (or Redis) is down
+  .agents/acceptance/scripts/init-dev-env.sh qstash    # terminal B — keep running
+  .agents/acceptance/scripts/init-dev-env.sh preflight # non-zero exit if QStash (or Redis) is down
   ```
 
   `FEATURE_FLAGS=-agent_self_iteration` only drops the self-iteration workflow
@@ -311,16 +311,16 @@ in `.agents/verify/references/agent-gateway.md`.
 
 Deeper LobeHub-specific notes kept alongside the moved scripts:
 
-- `.agents/verify/references/auth.md` — per-surface auth mechanics, the seeded
+- `.agents/acceptance/references/auth.md` — per-surface auth mechanics, the seeded
   web-login flow, the Electron OAuth+PKCE sign-in recipe and token-rotation traps,
   and the Chrome cookie-injection fallback + failure modes.
-- `.agents/verify/references/agent-gateway.md` — the local agent-gateway
+- `.agents/acceptance/references/agent-gateway.md` — the local agent-gateway
   closed-loop setup / probe / dump / analyze workflow (scripts under
-  `.agents/verify/scripts/agent-gateway/`).
-- `.agents/verify/references/multi-instance.md` — the concurrent Electron
+  `.agents/acceptance/scripts/agent-gateway/`).
+- `.agents/acceptance/references/multi-instance.md` — the concurrent Electron
   instance pool (N worktrees / parallel runs): per-instance CDP port, userData,
   Vite port, IPC id, the collision matrix, and the login-copy recipe.
 
-The living logs (`.agents/verify/common-mistakes.md`,
-`.agents/verify/probe-mock-patterns.md`) hold the LobeHub-specific probe/mock and
+The living logs (`.agents/acceptance/common-mistakes.md`,
+`.agents/acceptance/probe-mock-patterns.md`) hold the LobeHub-specific probe/mock and
 mistake recipes; the generic layer lives in the installed skill's `references/`.

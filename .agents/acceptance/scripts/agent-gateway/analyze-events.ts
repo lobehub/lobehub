@@ -11,7 +11,7 @@
 //   6. ROLLBACKS — msgN / childN / role drops in the active-topic timeline
 //
 // Usage:
-//   bun run .agents/verify/scripts/agent-gateway/analyze-events.ts <dump.json>
+//   bun run .agents/acceptance/scripts/agent-gateway/analyze-events.ts <dump.json>
 
 import { readFileSync } from 'node:fs';
 

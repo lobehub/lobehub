@@ -5,16 +5,16 @@
 // streaming-replay test fixtures.
 //
 // Commands:
-//   bun run .agents/verify/scripts/agent-gateway/run.ts install
+//   bun run .agents/acceptance/scripts/agent-gateway/run.ts install
 //       Bundle probe-events.ts and inject into the CDP-attached browser.
 //       Re-installing clears all buffers and re-patches WebSocket / fetch.
 //
-//   bun run .agents/verify/scripts/agent-gateway/run.ts dump [name]
+//   bun run .agents/acceptance/scripts/agent-gateway/run.ts dump [name]
 //       Stop the timeline timer, fetch the capture as JSON, write it to
 //       `.agent-gateway/<name>-<YYYYMMDD-HHmmss>.json`. `name` defaults to
 //       `dump`. Prints the absolute path written.
 //
-//   bun run .agents/verify/scripts/agent-gateway/run.ts analyze [path]
+//   bun run .agents/acceptance/scripts/agent-gateway/run.ts analyze [path]
 //       Run analyze-events.ts on the dump. `path` defaults to the most
 //       recently modified file in `.agent-gateway/`.
 //
@@ -28,7 +28,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
-// .agents/verify/scripts/agent-gateway/ → 4 levels up
+// .agents/acceptance/scripts/agent-gateway/ → 4 levels up
 const PROJECT_ROOT = path.resolve(SCRIPT_DIR, '../../../..');
 const DUMP_DIR = path.join(PROJECT_ROOT, '.agent-gateway');
 

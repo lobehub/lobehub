@@ -4,7 +4,7 @@
 > repo and updated only by PR to the CLI repo that ships this skill. Every entry
 > here must be **product-independent** — no project's packages, routes, schemas,
 > env vars, service names, or business logic. Project-specific learnings go to
-> `.agents/verify/common-mistakes.md` (the writable project layer).
+> `.agents/acceptance/common-mistakes.md` (the writable project layer).
 >
 > **Mandatory:** read this file in full before every agent-testing run and
 > self-check against each case. When the user gives negative feedback that is
