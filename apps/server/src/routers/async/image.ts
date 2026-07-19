@@ -115,18 +115,15 @@ export const imageRouter = router({
         throw new TRPCError({ code: 'FORBIDDEN', message: 'Invalid Request!' });
       }
 
-      // Resolve model mapping up front so both the success and error billing
-      // paths can reference the resolved model id.
-      const { requestedModelId, resolvedModelId } = await resolveBusinessModelMapping(
-        provider,
-        model,
-      );
-
-      // Opaque billing handle stored on the task at submission time; threaded to
-      // the completion charge so it can reconcile the pre-submission billing.
-      const asyncTask = await asyncTaskModel.findById(taskId);
-      const prechargeResult = (asyncTask?.metadata as { precharge?: unknown } | undefined)
-        ?.precharge;
+      // Billing context is loaded inside the guarded section below so that a
+      // failure (e.g. a stale model mapping) still marks the task as Error and
+      // reconciles the precharge handle; the error path falls back to identity
+      // mapping when resolution itself is what failed.
+      // requestedModelId is optional on the mapping result, so it must allow
+      // undefined even though it defaults to the raw model id.
+      let requestedModelId: string | undefined = model;
+      let resolvedModelId = model;
+      let prechargeResult: unknown;
 
       log('Updating task status to Processing: %s', taskId);
       await asyncTaskModel.update(taskId, { status: AsyncTaskStatus.Processing });
@@ -140,6 +137,20 @@ export const imageRouter = router({
         Boolean(params.imageUrls && params.imageUrls.length > 0);
 
       try {
+        // Opaque billing handle stored on the task at submission time; threaded
+        // to the completion charge so it can reconcile the pre-submission
+        // billing. Loaded before the model mapping so the handle is available
+        // for reconciliation even when mapping resolution throws.
+        const asyncTask = await asyncTaskModel.findById(taskId);
+        prechargeResult = (asyncTask?.metadata as { precharge?: unknown } | undefined)?.precharge;
+
+        // Resolve model mapping up front so both the success and error billing
+        // paths can reference the resolved model id.
+        ({ requestedModelId, resolvedModelId } = await resolveBusinessModelMapping(
+          provider,
+          model,
+        ));
+
         const imageGenerationPromise = async (signal: AbortSignal) => {
           log('Initializing agent runtime for provider: %s', provider);
 

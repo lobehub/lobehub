@@ -247,11 +247,13 @@ export const imageRouter = router({
             createdGenerations.map(async (generation, index) => {
               // Create asyncTask directly in transaction, carrying this
               // generation's billing handle (if any) for the completion charge.
+              // Presence check (not truthiness): handles are opaque, so falsy
+              // values like 0 or '' must still be stored verbatim.
               const prechargeItem = prechargeItems?.[index];
               const [createdAsyncTask] = await tx
                 .insert(asyncTasks)
                 .values({
-                  metadata: prechargeItem ? { precharge: prechargeItem } : undefined,
+                  metadata: prechargeItem === undefined ? undefined : { precharge: prechargeItem },
                   status: AsyncTaskStatus.Pending,
                   type: AsyncTaskType.ImageGeneration,
                   userId,
@@ -343,13 +345,14 @@ export const imageRouter = router({
           await Promise.allSettled(
             generationsWithTasks.map(async ({ asyncTaskId }, index) => {
               const prechargeItem = prechargeItems[index];
-              if (!prechargeItem) return;
+              if (prechargeItem === undefined) return;
               try {
                 await chargeAfterGenerate({
                   isError: true,
                   metadata: {
                     asyncTaskId,
                     generationBatchId: createdBatch.id,
+                    modelId: model,
                     topicId: generationTopicId,
                   },
                   prechargeResult: prechargeItem,
