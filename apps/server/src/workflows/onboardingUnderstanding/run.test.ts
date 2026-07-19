@@ -1,13 +1,23 @@
 // @vitest-environment node
+import { WorkflowAbort } from '@upstash/workflow';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { UnderstandingService } from '@/server/services/understanding/service';
+import {
+  UnderstandingBranchFailureError,
+  type UnderstandingService,
+} from '@/server/services/understanding/service';
 
-import { runOnboardingUnderstandingWorkflow } from './run';
+import { onboardingUnderstandingWorkflowOptions, runOnboardingUnderstandingWorkflow } from './run';
+
+const { terminalizeUnderstandingWorkflowMock } = vi.hoisted(() => ({
+  terminalizeUnderstandingWorkflowMock: vi.fn(),
+}));
 
 vi.mock('@/database/server', () => ({ getServerDB: vi.fn() }));
 vi.mock('@/server/services/understanding/service', () => ({
   createUnderstandingService: vi.fn(),
+  terminalizeUnderstandingWorkflow: terminalizeUnderstandingWorkflowMock,
+  UnderstandingBranchFailureError: class UnderstandingBranchFailureError extends Error {},
 }));
 
 const deferred = <T>() => {
@@ -174,7 +184,9 @@ describe('runOnboardingUnderstandingWorkflow', () => {
   it('persists a source failure and still merges successful sources', async () => {
     const service = createService();
     service.collectSource.mockImplementation(({ sourceId }) => {
-      if (sourceId.startsWith('gmail')) throw new Error('gmail unavailable');
+      if (sourceId.startsWith('gmail')) {
+        throw new UnderstandingBranchFailureError('gmail unavailable');
+      }
       return Promise.resolve({ sourceCount: 1 });
     });
 
@@ -243,7 +255,7 @@ describe('runOnboardingUnderstandingWorkflow', () => {
     });
     service.executeAgentOperation.mockImplementation((operationId) =>
       operationId === 'operation-existing'
-        ? Promise.reject(new Error('execution failed'))
+        ? Promise.resolve({ status: 'error' as const })
         : Promise.resolve({ status: 'done' }),
     );
 
@@ -257,5 +269,70 @@ describe('runOnboardingUnderstandingWorkflow', () => {
       threadId: 'thread-existing',
       topicId: 'topic-1',
     });
+  });
+
+  it.each(['github:collect', 'merge:execute'])(
+    'rethrows WorkflowAbort from %s without persisting a branch failure',
+    async (abortingStep) => {
+      const service = createService();
+      const context = createContext(initialPayload);
+      context.run = async <T>(step: string, handler: () => Promise<T>) => {
+        if (step === abortingStep) throw new WorkflowAbort(step);
+        return handler();
+      };
+
+      await expect(
+        runOnboardingUnderstandingWorkflow(context, { createService: async () => service }),
+      ).rejects.toBeInstanceOf(WorkflowAbort);
+      expect(service.failSource).not.toHaveBeenCalled();
+      expect(service.failMerge).not.toHaveBeenCalled();
+    },
+  );
+
+  it('rethrows unexpected collection infrastructure errors for workflow retry', async () => {
+    const service = createService();
+    service.collectSource.mockRejectedValue(new Error('database unavailable'));
+
+    await expect(
+      runOnboardingUnderstandingWorkflow(createContext(initialPayload), {
+        createService: async () => service,
+      }),
+    ).rejects.toThrow('database unavailable');
+    expect(service.failSource).not.toHaveBeenCalled();
+    expect(service.failMerge).not.toHaveBeenCalled();
+  });
+});
+
+describe('onboardingUnderstandingWorkflowOptions', () => {
+  it('bounds continuation delivery separately from the per-session trigger', () => {
+    expect(onboardingUnderstandingWorkflowOptions.flowControl).toEqual({
+      key: 'onboarding-understanding.steps',
+      parallelism: 25,
+    });
+  });
+
+  it('terminalizes the persisted session without retaining the failure response', async () => {
+    terminalizeUnderstandingWorkflowMock.mockResolvedValue(undefined);
+
+    await expect(
+      onboardingUnderstandingWorkflowOptions.failureFunction({
+        context: { requestPayload: initialPayload, workflowRunId: 'workflow-1' },
+        failHeaders: {},
+        failResponse: 'private connector content',
+        failStack: 'private stack',
+        failStatus: 500,
+      } as never),
+    ).resolves.toBe('session-terminalized');
+
+    expect(terminalizeUnderstandingWorkflowMock).toHaveBeenCalledWith({
+      db: undefined,
+      sessionId: 'session-1',
+      topicId: 'topic-1',
+      userId: 'user-1',
+      workflowRunId: 'workflow-1',
+    });
+    expect(JSON.stringify(terminalizeUnderstandingWorkflowMock.mock.calls)).not.toContain(
+      'private connector content',
+    );
   });
 });

@@ -66,6 +66,13 @@ import type {
 const UNDERSTANDING_AGENT_SLUG = 'onboarding-understanding';
 const terminalStatuses = new Set(['completed', 'failed']);
 
+export class UnderstandingBranchFailureError extends Error {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = 'UnderstandingBranchFailureError';
+  }
+}
+
 // Privacy boundary: source briefs can contain raw connector data and must never reach file/S3
 // Agent Runtime snapshots. The operation state remains durable in the runtime coordinator.
 const discardUnderstandingSnapshotStore: ISnapshotStore = {
@@ -165,7 +172,7 @@ interface UnderstandingServiceDependencies {
         topicId: string;
       },
       launch: { assistantMessageId: string; operationId: string },
-    ) => Promise<void>;
+    ) => Promise<{ assistantMessageId: string; operationId: string }>;
   };
   messages: { readContent: (assistantMessageId: string) => Promise<unknown> };
   registry: UnderstandingProviderRegistry;
@@ -346,12 +353,25 @@ export class UnderstandingService {
         userId: this.dependencies.context.userId,
       });
     }
-    const collected = await provider.collect(source, this.dependencies.context);
+    let collected;
+    try {
+      collected = await provider.collect(source, this.dependencies.context);
+    } catch (cause) {
+      throw new UnderstandingBranchFailureError('Understanding source collection failed', {
+        cause,
+      });
+    }
     const diagnostics = sanitizeProviderDiagnostics(run.source.provider, collected.diagnostics);
     const brief = collected.sourceBrief.trim().slice(0, MAX_SOURCE_BRIEF_LENGTH);
-    if (!brief) throw new Error('Understanding source collection returned no content');
+    if (!brief) {
+      throw new UnderstandingBranchFailureError(
+        'Understanding source collection returned no content',
+      );
+    }
     if (diagnostics.succeededCount === 0) {
-      throw new Error('Understanding source collection produced no successful evidence');
+      throw new UnderstandingBranchFailureError(
+        'Understanding source collection produced no successful evidence',
+      );
     }
     await this.dependencies.sourceStore.put({
       ...input,
@@ -411,7 +431,9 @@ export class UnderstandingService {
       ...input,
       userId: this.dependencies.context.userId,
     });
-    if (!payload) throw new Error('Understanding source payload is unavailable');
+    if (!payload) {
+      throw new UnderstandingBranchFailureError('Understanding source payload is unavailable');
+    }
     // The workflow executes this operation only after the launch pair is durably persisted.
     await this.dependencies.results.ensureThread({
       agentId: this.dependencies.agentId,
@@ -434,8 +456,12 @@ export class UnderstandingService {
       suppressUserMessage: true,
       trigger: RequestTrigger.Onboarding,
     });
-    if (!launched.success) throw new Error(launched.error ?? 'Understanding agent launch failed');
-    await this.dependencies.launches.save(launchIdentity, {
+    if (!launched.success) {
+      throw new UnderstandingBranchFailureError(
+        launched.error ?? 'Understanding agent launch failed',
+      );
+    }
+    const claimedLaunch = await this.dependencies.launches.save(launchIdentity, {
       assistantMessageId: launched.assistantMessageId,
       operationId: launched.operationId,
     });
@@ -444,11 +470,11 @@ export class UnderstandingService {
       input.sessionId,
       input.sourceId,
       input.threadId,
-      { assistantMessageId: launched.assistantMessageId, status: 'running' },
+      { assistantMessageId: claimedLaunch.assistantMessageId, status: 'running' },
     );
     return {
-      assistantMessageId: launched.assistantMessageId,
-      operationId: launched.operationId,
+      assistantMessageId: claimedLaunch.assistantMessageId,
+      operationId: claimedLaunch.operationId,
       sourceId: input.sourceId,
       success: true,
       threadId: input.threadId,
@@ -645,8 +671,12 @@ export class UnderstandingService {
       suppressUserMessage: true,
       trigger: RequestTrigger.Onboarding,
     });
-    if (!launched.success) throw new Error(launched.error ?? 'Understanding agent launch failed');
-    await this.dependencies.launches.save(launchIdentity, {
+    if (!launched.success) {
+      throw new UnderstandingBranchFailureError(
+        launched.error ?? 'Understanding agent launch failed',
+      );
+    }
+    const claimedLaunch = await this.dependencies.launches.save(launchIdentity, {
       assistantMessageId: launched.assistantMessageId,
       operationId: launched.operationId,
     });
@@ -659,15 +689,15 @@ export class UnderstandingService {
         ...current,
         mergeRun: {
           ...currentMerge,
-          assistantMessageId: launched.assistantMessageId,
+          assistantMessageId: claimedLaunch.assistantMessageId,
           diagnostics: CollectionDiagnosticsSummarySchema.parse(diagnostics),
           status: 'running' as const,
         },
       };
     });
     return {
-      assistantMessageId: launched.assistantMessageId,
-      operationId: launched.operationId,
+      assistantMessageId: claimedLaunch.assistantMessageId,
+      operationId: claimedLaunch.operationId,
       success: true,
       threadId: merge.threadId,
     };
@@ -1021,3 +1051,26 @@ export const createUnderstandingService = async ({
     },
   });
 };
+
+interface TerminalizeUnderstandingWorkflowOptions {
+  db: LobeChatDatabase;
+  sessionId: string;
+  topicId: string;
+  userId: string;
+  workflowRunId: string;
+}
+
+export const terminalizeUnderstandingWorkflow = ({
+  db,
+  sessionId,
+  topicId,
+  userId,
+  workflowRunId,
+}: TerminalizeUnderstandingWorkflowOptions) =>
+  new UnderstandingSessionRepository(db, userId).terminalizeWorkflow(
+    topicId,
+    sessionId,
+    workflowRunId,
+    `merge-failure-${sessionId}`,
+    canonicalCollectionError('understanding', 'workflow', 'UNDERSTANDING_WORKFLOW_FAILED', true),
+  );

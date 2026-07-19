@@ -5,6 +5,7 @@ import type {
   UnderstandingSourceRun,
 } from '@lobechat/types';
 import {
+  MAX_COLLECTION_ERRORS,
   OnboardingUnderstandingSessionSchema,
   projectOnboardingUnderstandingSessionStatus,
   ThreadType,
@@ -129,6 +130,46 @@ export class UnderstandingSessionRepository {
     workflowRunId: string,
   ): Promise<OnboardingUnderstandingSession> =>
     this.update(topicId, sessionId, (session) => ({ ...session, workflowRunId }));
+
+  terminalizeWorkflow = (
+    topicId: string,
+    sessionId: string,
+    workflowRunId: string,
+    mergeThreadId: string,
+    error: CollectionError,
+  ): Promise<OnboardingUnderstandingSession> =>
+    this.update(topicId, sessionId, (session) => {
+      if (session.workflowRunId !== workflowRunId) return session;
+
+      const errors = [...(session.errors ?? [])].filter(
+        (item) =>
+          item.code !== error.code ||
+          item.operation !== error.operation ||
+          item.provider !== error.provider,
+      );
+      errors.push(error);
+
+      const runs = session.runs.map((run) =>
+        run.status === 'pending' || run.status === 'running'
+          ? { ...run, status: 'failed' as const }
+          : run,
+      );
+      const hasCompletedSource = runs.some((run) => run.status === 'completed');
+      const mergeRun = session.mergeRun
+        ? session.mergeRun.status === 'pending' || session.mergeRun.status === 'running'
+          ? { ...session.mergeRun, status: 'failed' as const }
+          : session.mergeRun
+        : hasCompletedSource
+          ? { status: 'failed' as const, threadId: mergeThreadId }
+          : undefined;
+
+      return {
+        ...session,
+        errors: errors.slice(-MAX_COLLECTION_ERRORS),
+        mergeRun,
+        runs,
+      };
+    });
 
   updateErrors = (
     topicId: string,

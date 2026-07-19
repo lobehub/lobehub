@@ -36,10 +36,29 @@ const createHarness = () => {
     };
   } = { metadata: {} };
   const threads = {
+    claim: vi.fn(
+      async (
+        claimIdentity: typeof identity,
+        launch: UnderstandingLaunchReference,
+      ): Promise<UnderstandingLaunchReference> => {
+        if (
+          thread.topicId !== claimIdentity.topicId ||
+          thread.agentId !== claimIdentity.agentId ||
+          thread.type !== ThreadType.Isolation ||
+          thread.metadata.onboardingUnderstanding?.kind !== claimIdentity.kind
+        ) {
+          throw new Error('Understanding launch thread is unavailable');
+        }
+        const marker = thread.metadata.onboardingUnderstanding;
+        if (marker.launch) return marker.launch;
+        thread.metadata = {
+          ...thread.metadata,
+          onboardingUnderstanding: { ...marker, launch },
+        };
+        return launch;
+      },
+    ),
     findById: vi.fn(async () => thread),
-    update: vi.fn(async (_threadId: string, value: { metadata: ThreadMetadata }) => {
-      thread.metadata = value.metadata;
-    }),
   };
   const topics = { findById: vi.fn(async () => topic) };
   return {
@@ -53,6 +72,21 @@ const createHarness = () => {
 };
 
 describe('UnderstandingLaunchStore', () => {
+  it('atomically returns one winner when concurrent launches claim the same thread', async () => {
+    const harness = createHarness();
+    const first = { assistantMessageId: 'message-1', operationId: 'operation-1' };
+    const second = { assistantMessageId: 'message-2', operationId: 'operation-2' };
+
+    const claimed = await Promise.all([
+      harness.store.save(identity, first),
+      harness.store.save(identity, second),
+    ]);
+
+    expect(claimed[0]).toEqual(claimed[1]);
+    expect(claimed).toContainEqual(first);
+    expect(claimed).not.toContainEqual(second);
+  });
+
   it('recovers an explicitly paired launch from the dedicated thread marker', async () => {
     const harness = createHarness();
     harness.thread.metadata.onboardingUnderstanding = {
@@ -80,17 +114,9 @@ describe('UnderstandingLaunchStore', () => {
       operationId: 'durable-operation',
     });
     expect(harness.topics.findById).not.toHaveBeenCalled();
-    expect(harness.threads.update).toHaveBeenCalledWith(identity.threadId, {
-      metadata: {
-        keep: true,
-        onboardingUnderstanding: {
-          kind: 'source',
-          launch: {
-            assistantMessageId: 'durable-message',
-            operationId: 'durable-operation',
-          },
-        },
-      },
+    expect(harness.threads.claim).toHaveBeenCalledWith(identity, {
+      assistantMessageId: 'durable-message',
+      operationId: 'durable-operation',
     });
   });
 
@@ -109,17 +135,9 @@ describe('UnderstandingLaunchStore', () => {
       assistantMessageId: 'message-fallback',
       operationId: 'operation-fallback',
     });
-    expect(harness.threads.update).toHaveBeenCalledWith(identity.threadId, {
-      metadata: {
-        keep: true,
-        onboardingUnderstanding: {
-          kind: 'source',
-          launch: {
-            assistantMessageId: 'message-fallback',
-            operationId: 'operation-fallback',
-          },
-        },
-      },
+    expect(harness.threads.claim).toHaveBeenCalledWith(identity, {
+      assistantMessageId: 'message-fallback',
+      operationId: 'operation-fallback',
     });
     await expect(harness.store.find(identity)).resolves.toEqual(recovered);
   });
@@ -147,6 +165,6 @@ describe('UnderstandingLaunchStore', () => {
     };
 
     await expect(harness.store.find(identity)).resolves.toBeUndefined();
-    expect(harness.threads.update).not.toHaveBeenCalled();
+    expect(harness.threads.claim).not.toHaveBeenCalled();
   });
 });

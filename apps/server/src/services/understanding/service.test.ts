@@ -15,6 +15,14 @@ import type { UnderstandingProvider } from './types';
 
 const { agentRuntimeConstructor } = vi.hoisted(() => ({ agentRuntimeConstructor: vi.fn() }));
 
+const deferred = <T>() => {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+};
+
 vi.mock('@lobechat/database', () => {
   class DomainError extends Error {}
   return {
@@ -137,7 +145,10 @@ const createHarness = () => {
     confirmation: { confirm: confirmation },
     context: { userId: 'user' },
     ids: () => `id-${++sequence}`,
-    launches: { find: vi.fn(async () => undefined), save: vi.fn() },
+    launches: {
+      find: vi.fn(async () => undefined),
+      save: vi.fn(async (_identity: unknown, launch: any) => launch),
+    },
     messages: { readContent: vi.fn(async (id: string) => contents.get(id)) },
     registry: createUnderstandingProviderRegistry([github, gmail]),
     results: {
@@ -547,6 +558,40 @@ describe('UnderstandingService', () => {
     expect(harness.execAgent).toHaveBeenCalledTimes(2);
   });
 
+  it('returns one claimed source operation from concurrent launchers', async () => {
+    const { branches, session } = await initializeAndDiscover(harness);
+    const input = { ...branches[0], sessionId: session.id, topicId: 'topic' };
+    await harness.service.collectSource(input);
+    const gate = deferred<void>();
+    let launchSequence = 0;
+    harness.execAgent.mockImplementation(async () => {
+      const sequence = ++launchSequence;
+      await gate.promise;
+      return {
+        assistantMessageId: `message-${sequence}`,
+        autoStarted: false,
+        operationId: `operation-${sequence}`,
+        success: true,
+      };
+    });
+    let winner: { assistantMessageId: string; operationId: string } | undefined;
+    harness.dependencies.launches.save.mockImplementation(async (_identity, launch) => {
+      winner ??= launch;
+      return winner;
+    });
+
+    const launches = [
+      harness.service.launchSourceAnalysis(input),
+      harness.service.launchSourceAnalysis(input),
+    ];
+    await vi.waitFor(() => expect(harness.execAgent).toHaveBeenCalledTimes(2));
+    gate.resolve();
+
+    const [first, second] = await Promise.all(launches);
+    expect(first).toMatchObject(second);
+    expect(first).toMatchObject(winner!);
+  });
+
   it('recovers a durable source launch before and after its session pointer is attached', async () => {
     const { branches, session } = await initializeAndDiscover(harness);
     const input = { ...branches[0], sessionId: session.id, topicId: 'topic' };
@@ -702,6 +747,49 @@ describe('UnderstandingService', () => {
       }),
     ).resolves.toBe(result);
     expect(harness.dependencies.results.finalizeMerge).toHaveBeenCalledOnce();
+  });
+
+  it('returns one claimed merge operation from concurrent launchers', async () => {
+    const { branches, session } = await initializeAndDiscover(harness);
+    for (const branch of branches) {
+      const input = { ...branch, sessionId: session.id, topicId: 'topic' };
+      await harness.service.collectSource(input);
+      const launch = requireLaunch(await harness.service.launchSourceAnalysis(input));
+      harness.contents.set(launch.assistantMessageId, JSON.stringify(analysis));
+      await harness.service.finalizeSource({
+        ...input,
+        assistantMessageId: launch.assistantMessageId,
+      });
+    }
+    harness.dependencies.launches.find.mockResolvedValue(undefined);
+    const gate = deferred<void>();
+    let launchSequence = 0;
+    harness.execAgent.mockImplementation(async () => {
+      const sequence = ++launchSequence;
+      await gate.promise;
+      return {
+        assistantMessageId: `merge-message-${sequence}`,
+        autoStarted: false,
+        operationId: `merge-operation-${sequence}`,
+        success: true,
+      };
+    });
+    let winner: { assistantMessageId: string; operationId: string } | undefined;
+    harness.dependencies.launches.save.mockImplementation(async (_identity, launch) => {
+      winner ??= launch;
+      return winner;
+    });
+
+    const launches = [
+      harness.service.launchMerge('topic', session.id, 'merge-thread'),
+      harness.service.launchMerge('topic', session.id, 'merge-thread'),
+    ];
+    await vi.waitFor(() => expect(harness.execAgent).toHaveBeenCalledTimes(2));
+    gate.resolve();
+
+    const [first, second] = await Promise.all(launches);
+    expect(first).toMatchObject(second);
+    expect(first).toMatchObject(winner!);
   });
 
   it('replays a persisted merge failure without generating a new result identity', async () => {

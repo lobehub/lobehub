@@ -1,5 +1,5 @@
-import type { OnboardingUnderstandingSession } from '@lobechat/types';
-import { ThreadStatus, ThreadType } from '@lobechat/types';
+import type { CollectionError, OnboardingUnderstandingSession } from '@lobechat/types';
+import { MAX_COLLECTION_ERRORS, ThreadStatus, ThreadType } from '@lobechat/types';
 import { inArray } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -134,6 +134,75 @@ describe('UnderstandingSessionRepository', () => {
     await expect(
       repository.attachWorkflowRun(topicId, 'session-current', 'workflow-run-2'),
     ).resolves.toMatchObject({ workflowRunId: 'workflow-run-2' });
+  });
+
+  it('atomically terminalizes exhausted workflow work with a bounded retryable error', async () => {
+    const previousError: CollectionError = {
+      code: 'PREVIOUS_ERROR',
+      message: 'Previous error',
+      operation: 'collection',
+      provider: 'github',
+      retryable: false,
+    };
+    await repository.install(topicId, {
+      ...createSession('session-current', [
+        sourceRun('github', 'completed'),
+        sourceRun('gmail', 'running'),
+      ]),
+      errors: Array.from({ length: MAX_COLLECTION_ERRORS }, () => previousError),
+      status: 'processing',
+    });
+    await repository.attachWorkflowRun(topicId, 'session-current', 'workflow-current');
+    const workflowError: CollectionError = {
+      code: 'UNDERSTANDING_WORKFLOW_FAILED',
+      message: 'Onboarding understanding workflow failed',
+      operation: 'workflow',
+      provider: 'understanding',
+      retryable: true,
+    };
+
+    const terminal = await repository.terminalizeWorkflow(
+      topicId,
+      'session-current',
+      'workflow-current',
+      'merge-session-current',
+      workflowError,
+    );
+
+    expect(terminal).toMatchObject({
+      mergeRun: { status: 'failed', threadId: 'merge-session-current' },
+      status: 'failed',
+    });
+    expect(terminal.runs.map(({ status }) => status)).toEqual(['completed', 'failed']);
+    expect(terminal.errors).toHaveLength(MAX_COLLECTION_ERRORS);
+    expect(terminal.errors?.at(-1)).toEqual(workflowError);
+  });
+
+  it('ignores an exhausted callback from a stale workflow run', async () => {
+    await repository.install(topicId, createSession());
+    await repository.attachWorkflowRun(topicId, 'session-current', 'workflow-current');
+
+    const unchanged = await repository.terminalizeWorkflow(
+      topicId,
+      'session-current',
+      'workflow-stale',
+      'merge-session-current',
+      {
+        code: 'UNDERSTANDING_WORKFLOW_FAILED',
+        message: 'Onboarding understanding workflow failed',
+        operation: 'workflow',
+        provider: 'understanding',
+        retryable: true,
+      },
+    );
+
+    expect(unchanged).toEqual(await repository.get(topicId));
+    expect(unchanged).toMatchObject({
+      runs: [{ status: 'pending' }],
+      status: 'pending',
+      workflowRunId: 'workflow-current',
+    });
+    expect(unchanged.errors).toBeUndefined();
   });
 
   it('updates source and merge state through focused methods', async () => {

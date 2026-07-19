@@ -1,5 +1,5 @@
 import type { LobeChatDatabase } from '@lobechat/database';
-import { agentOperations, messages } from '@lobechat/database/schemas';
+import { agentOperations, messages, threads as threadTable } from '@lobechat/database/schemas';
 import type { ThreadMetadata } from '@lobechat/types';
 import {
   OnboardingUnderstandingLaunchSchema,
@@ -31,6 +31,10 @@ interface UnderstandingLaunchStoreDependencies {
     ) => Promise<UnderstandingLaunchReference | undefined>;
   };
   threads: {
+    claim: (
+      identity: UnderstandingLaunchIdentity,
+      launch: UnderstandingLaunchReference,
+    ) => Promise<UnderstandingLaunchReference>;
     findById: (threadId: string) => Promise<
       | {
           agentId?: string | null;
@@ -40,7 +44,6 @@ interface UnderstandingLaunchStoreDependencies {
         }
       | undefined
     >;
-    update: (threadId: string, value: { metadata: ThreadMetadata }) => Promise<unknown>;
   };
   topics: {
     findById: (topicId: string) => Promise<
@@ -70,8 +73,7 @@ export class UnderstandingLaunchStore {
     const durable = await this.dependencies.durable.find(identity);
     if (durable) {
       const launch = OnboardingUnderstandingLaunchSchema.parse(durable);
-      await this.save(identity, launch);
-      return launch;
+      return this.save(identity, launch);
     }
 
     const topic = await this.dependencies.topics.findById(identity.topicId);
@@ -82,29 +84,14 @@ export class UnderstandingLaunchStore {
       assistantMessageId: running.assistantMessageId,
       operationId: running.operationId,
     });
-    await this.save(identity, launch);
-    return launch;
+    return this.save(identity, launch);
   };
 
   save = async (
     identity: UnderstandingLaunchIdentity,
     launch: UnderstandingLaunchReference,
-  ): Promise<void> => {
-    const { marker, metadata } = await this.readThread(identity);
-    const parsed = OnboardingUnderstandingThreadMarkerSchema.parse({ ...marker, launch });
-    if (marker.launch) {
-      if (
-        marker.launch.assistantMessageId !== parsed.launch?.assistantMessageId ||
-        marker.launch.operationId !== parsed.launch?.operationId
-      ) {
-        throw new Error('Understanding thread already references a different agent launch');
-      }
-      return;
-    }
-    await this.dependencies.threads.update(identity.threadId, {
-      metadata: { ...metadata, onboardingUnderstanding: parsed },
-    });
-  };
+  ): Promise<UnderstandingLaunchReference> =>
+    this.dependencies.threads.claim(identity, OnboardingUnderstandingLaunchSchema.parse(launch));
 
   private readThread = async (identity: UnderstandingLaunchIdentity) => {
     const thread = await this.dependencies.threads.findById(identity.threadId);
@@ -173,11 +160,69 @@ const findDurableLaunch = async (
   return { assistantMessageId: assistant.assistantMessageId, operationId: operation.operationId };
 };
 
+const claimThreadLaunch = async (
+  db: LobeChatDatabase,
+  userId: string,
+  identity: UnderstandingLaunchIdentity,
+  launch: UnderstandingLaunchReference,
+): Promise<UnderstandingLaunchReference> =>
+  db.transaction(async (tx) => {
+    const [thread] = await tx
+      .select({
+        agentId: threadTable.agentId,
+        metadata: threadTable.metadata,
+        topicId: threadTable.topicId,
+        type: threadTable.type,
+      })
+      .from(threadTable)
+      .where(
+        and(
+          eq(threadTable.id, identity.threadId),
+          eq(threadTable.userId, userId),
+          isNull(threadTable.workspaceId),
+        ),
+      )
+      .for('update');
+    const marker = OnboardingUnderstandingThreadMarkerSchema.safeParse(
+      thread?.metadata?.onboardingUnderstanding,
+    );
+    if (
+      !thread ||
+      thread.topicId !== identity.topicId ||
+      thread.agentId !== identity.agentId ||
+      thread.type !== ThreadType.Isolation ||
+      !marker.success ||
+      marker.data.kind !== identity.kind
+    ) {
+      throw new Error('Understanding launch thread is unavailable');
+    }
+    if (marker.data.launch) return marker.data.launch;
+
+    const nextMarker = OnboardingUnderstandingThreadMarkerSchema.parse({
+      ...marker.data,
+      launch,
+    });
+    await tx
+      .update(threadTable)
+      .set({
+        metadata: { ...thread.metadata, onboardingUnderstanding: nextMarker },
+      })
+      .where(
+        and(
+          eq(threadTable.id, identity.threadId),
+          eq(threadTable.userId, userId),
+          isNull(threadTable.workspaceId),
+        ),
+      );
+    return launch;
+  });
+
 export const createUnderstandingLaunchStore = (db: LobeChatDatabase, userId: string) => {
   const threads = new ThreadModel(db, userId);
   return new UnderstandingLaunchStore({
     durable: { find: (identity) => findDurableLaunch(db, userId, identity) },
     threads: {
+      claim: (identity, launch) => claimThreadLaunch(db, userId, identity, launch),
       findById: async (threadId) => {
         const thread = await threads.findById(threadId);
         if (!thread) return;
@@ -188,7 +233,6 @@ export const createUnderstandingLaunchStore = (db: LobeChatDatabase, userId: str
           type: thread.type,
         };
       },
-      update: (threadId, value) => threads.update(threadId, value),
     },
     topics: new TopicModel(db, userId),
   });

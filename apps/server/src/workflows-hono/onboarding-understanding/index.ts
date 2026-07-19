@@ -2,7 +2,10 @@ import { withOtelMetricsForUpstashWorkflows } from '@lobechat/observability-otel
 import { serve } from '@upstash/workflow/hono';
 import { Hono } from 'hono';
 
-import { runOnboardingUnderstandingWorkflow } from '@/server/workflows/onboardingUnderstanding/run';
+import {
+  onboardingUnderstandingWorkflowOptions,
+  runOnboardingUnderstandingWorkflow,
+} from '@/server/workflows/onboardingUnderstanding/run';
 import type { OnboardingUnderstandingWorkflowPayload } from '@/server/workflows/onboardingUnderstanding/types';
 
 import { createWorkflowQstashClient } from '../qstashClient';
@@ -15,7 +18,7 @@ app.post(
     withOtelMetricsForUpstashWorkflows(runOnboardingUnderstandingWorkflow, {
       url: '/api/workflows/onboarding-understanding',
     }),
-    { qstashClient: createWorkflowQstashClient() },
+    { ...onboardingUnderstandingWorkflowOptions, qstashClient: createWorkflowQstashClient() },
   ),
 );
 

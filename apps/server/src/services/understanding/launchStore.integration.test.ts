@@ -88,6 +88,22 @@ describe('UnderstandingLaunchStore durable recovery', () => {
     await db.delete(users).where(inArray(users.id, [userId, otherUserId]));
   });
 
+  it('atomically claims one launch pair across concurrent store instances', async () => {
+    const first = { assistantMessageId: 'assistant-first', operationId: 'operation-first' };
+    const second = { assistantMessageId: 'assistant-second', operationId: 'operation-second' };
+
+    const claimed = await Promise.all([
+      createUnderstandingLaunchStore(db, userId).save(identity, first),
+      createUnderstandingLaunchStore(db, userId).save(identity, second),
+    ]);
+
+    expect(claimed[0]).toEqual(claimed[1]);
+    expect([first, second]).toContainEqual(claimed[0]);
+    await expect(createUnderstandingLaunchStore(db, userId).find(identity)).resolves.toEqual(
+      claimed[0],
+    );
+  });
+
   it('recovers an operation when neither the thread nor topic has a launch reference', async () => {
     await insertAssistant('assistant-before', new Date('2026-07-20T10:00:00.000Z'));
     await insertOperation('operation-after', new Date('2026-07-20T10:00:01.000Z'));

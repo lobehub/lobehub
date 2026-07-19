@@ -1,6 +1,10 @@
+import { WorkflowAbort } from '@upstash/workflow';
+
 import { getServerDB } from '@/database/server';
 import {
   createUnderstandingService,
+  terminalizeUnderstandingWorkflow,
+  UnderstandingBranchFailureError,
   type UnderstandingService,
   type UnderstandingSourceLaunchReference,
 } from '@/server/services/understanding/service';
@@ -79,28 +83,26 @@ const executeSource = async (
   branch: WorkflowSourceBranch,
   launch: UnderstandingSourceLaunchReference,
 ): Promise<SourceOutcome> => {
-  try {
-    const execution = await context.run(`${branch.stepName}:execute`, () =>
-      service.executeAgentOperation(launch.operationId),
-    );
-    if (execution.status !== 'done') throw new Error('Understanding source operation failed');
-
-    const result = await context.run(`${branch.stepName}:finalize`, async () =>
-      toSafeStepResult(
-        await service.finalizeSource({
-          ...sourceIdentity(payload, branch),
-          assistantMessageId: launch.assistantMessageId,
-        }),
-      ),
-    );
-    return {
-      sourceId: branch.sourceId,
-      status: result.kind === 'source' ? 'completed' : 'failed',
-    };
-  } catch {
-    // The durable step exhausted its retries; persist one terminal source result below.
+  const execution = await context.run(`${branch.stepName}:execute`, () =>
+    service.executeAgentOperation(launch.operationId),
+  );
+  if (execution.status === 'error') return failSource(context, service, payload, branch);
+  if (execution.status !== 'done') {
+    throw new Error('Understanding source operation did not settle');
   }
-  return failSource(context, service, payload, branch);
+
+  const result = await context.run(`${branch.stepName}:finalize`, async () =>
+    toSafeStepResult(
+      await service.finalizeSource({
+        ...sourceIdentity(payload, branch),
+        assistantMessageId: launch.assistantMessageId,
+      }),
+    ),
+  );
+  return {
+    sourceId: branch.sourceId,
+    status: result.kind === 'source' ? 'completed' : 'failed',
+  };
 };
 
 const runMerge = async (
@@ -119,40 +121,51 @@ const runMerge = async (
     threadId: requestedThreadId,
     topicId: payload.topicId,
   };
+  let launch: Awaited<ReturnType<UnderstandingService['launchMerge']>>;
   try {
-    const launch = await context.run('merge:launch', () =>
+    launch = await context.run('merge:launch', () =>
       service.launchMerge(payload.topicId, payload.sessionId, requestedThreadId),
     );
-    if (launch.skipped) return 'skipped' as const;
-    mergeIdentity = {
-      assistantMessageId: launch.assistantMessageId,
-      sessionId: payload.sessionId,
-      threadId: launch.threadId,
-      topicId: payload.topicId,
-    };
-
-    const execution = await context.run('merge:execute', () =>
-      service.executeAgentOperation(launch.operationId),
-    );
-    if (execution.status !== 'done') throw new Error('Understanding merge operation failed');
-
-    const result = await context.run('merge:finalize', async () =>
-      toSafeStepResult(
-        await service.finalizeMerge({
-          assistantMessageId: launch.assistantMessageId,
-          sessionId: payload.sessionId,
-          threadId: launch.threadId,
-          topicId: payload.topicId,
-        }),
-      ),
-    );
-    return result.kind === 'merged' ? ('completed' as const) : ('failed' as const);
-  } catch {
+  } catch (error) {
+    if (error instanceof WorkflowAbort) throw error;
+    if (!(error instanceof UnderstandingBranchFailureError)) throw error;
     await context.run('merge:fail', async () =>
       toSafeStepResult(await service.failMerge(mergeIdentity)),
     );
     return 'failed' as const;
   }
+  if (launch.skipped) return 'skipped' as const;
+  mergeIdentity = {
+    assistantMessageId: launch.assistantMessageId,
+    sessionId: payload.sessionId,
+    threadId: launch.threadId,
+    topicId: payload.topicId,
+  };
+
+  const execution = await context.run('merge:execute', () =>
+    service.executeAgentOperation(launch.operationId),
+  );
+  if (execution.status === 'error') {
+    await context.run('merge:fail', async () =>
+      toSafeStepResult(await service.failMerge(mergeIdentity)),
+    );
+    return 'failed' as const;
+  }
+  if (execution.status !== 'done') {
+    throw new Error('Understanding merge operation did not settle');
+  }
+
+  const result = await context.run('merge:finalize', async () =>
+    toSafeStepResult(
+      await service.finalizeMerge({
+        assistantMessageId: launch.assistantMessageId,
+        sessionId: payload.sessionId,
+        threadId: launch.threadId,
+        topicId: payload.topicId,
+      }),
+    ),
+  );
+  return result.kind === 'merged' ? ('completed' as const) : ('failed' as const);
 };
 
 export const runOnboardingUnderstandingWorkflow = async (
@@ -191,7 +204,9 @@ export const runOnboardingUnderstandingWorkflow = async (
           service.collectSource(sourceIdentity(payload, branch)),
         );
         return { branch, collected: true as const };
-      } catch {
+      } catch (error) {
+        if (error instanceof WorkflowAbort) throw error;
+        if (!(error instanceof UnderstandingBranchFailureError)) throw error;
         return { branch, collected: false as const };
       }
     }),
@@ -216,7 +231,9 @@ export const runOnboardingUnderstandingWorkflow = async (
       } else {
         launches.push({ branch: item.branch, launch });
       }
-    } catch {
+    } catch (error) {
+      if (error instanceof WorkflowAbort) throw error;
+      if (!(error instanceof UnderstandingBranchFailureError)) throw error;
       outcomes.push(await failSource(context, service, payload, item.branch));
     }
   }
@@ -235,4 +252,32 @@ export const runOnboardingUnderstandingWorkflow = async (
     : ('skipped' as const);
 
   return { merge, sources: outcomes };
+};
+
+// Trigger-side flow control serializes the initial delivery per session. This static serve-side
+// key separately bounds the continuation messages generated by each durable context.run step.
+export const onboardingUnderstandingWorkflowOptions = {
+  failureFunction: async ({
+    context,
+  }: {
+    context: { requestPayload?: unknown; workflowRunId: string };
+  }) => {
+    try {
+      const payload = OnboardingUnderstandingWorkflowPayloadSchema.parse(context.requestPayload);
+      await terminalizeUnderstandingWorkflow({
+        db: await getServerDB(),
+        sessionId: payload.sessionId,
+        topicId: payload.topicId,
+        userId: payload.userId,
+        workflowRunId: context.workflowRunId,
+      });
+      return 'session-terminalized';
+    } catch {
+      return 'session-terminalization-failed';
+    }
+  },
+  flowControl: {
+    key: 'onboarding-understanding.steps',
+    parallelism: 25,
+  },
 };
