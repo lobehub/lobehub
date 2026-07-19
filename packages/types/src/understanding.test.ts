@@ -86,7 +86,6 @@ describe('Understanding durable contracts', () => {
         mergeRun: {
           assistantMessageId: 'merge-message',
           diagnostics: { evidenceCount: 2, failedCount: 0, succeededCount: 2 },
-          inputThreadIds: ['thread'],
           resultId: 'merge-result',
           status: 'completed',
           threadId: 'merge-thread',
@@ -137,6 +136,33 @@ describe('Understanding durable contracts', () => {
     },
   );
 
+  it('uses running for merge progress and rejects source input manifests', () => {
+    const session = { id: 'session', runs: [], status: 'merging' };
+
+    expect(
+      OnboardingUnderstandingSessionSchema.safeParse({
+        ...session,
+        mergeRun: { status: 'running', threadId: 'merge-thread' },
+      }).success,
+    ).toBe(true);
+    expect(
+      OnboardingUnderstandingSessionSchema.safeParse({
+        ...session,
+        mergeRun: { status: 'processing', threadId: 'merge-thread' },
+      }).success,
+    ).toBe(false);
+    expect(
+      OnboardingUnderstandingSessionSchema.safeParse({
+        ...session,
+        mergeRun: {
+          inputThreadIds: ['source-thread'],
+          status: 'running',
+          threadId: 'merge-thread',
+        },
+      }).success,
+    ).toBe(false);
+  });
+
   it('projects polling status from source and merge business state', () => {
     const session = {
       id: 'session',
@@ -148,14 +174,14 @@ describe('Understanding durable contracts', () => {
     expect(
       projectOnboardingUnderstandingSessionStatus({
         ...session,
-        mergeRun: { inputThreadIds: ['thread'], status: 'processing', threadId: 'merge-thread' },
+        mergeRun: { status: 'running', threadId: 'merge-thread' },
         runs: [{ ...session.runs[0], status: 'completed' }],
       }),
     ).toBe('merging');
     expect(
       projectOnboardingUnderstandingSessionStatus({
         ...session,
-        mergeRun: { inputThreadIds: ['thread'], status: 'completed', threadId: 'merge-thread' },
+        mergeRun: { status: 'completed', threadId: 'merge-thread' },
         runs: [{ ...session.runs[0], status: 'completed' }],
       }),
     ).toBe('completed');

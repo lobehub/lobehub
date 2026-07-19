@@ -35,14 +35,6 @@ export class InvalidUnderstandingSessionError extends Error {
   }
 }
 
-// Transitional export for callers removed with the legacy orchestrator.
-export class UnderstandingMergeSourcesChangedError extends Error {
-  constructor() {
-    super('Understanding completed sources changed during merge claim; retry validation');
-    this.name = 'UnderstandingMergeSourcesChangedError';
-  }
-}
-
 export class UnderstandingResourceNotFoundError extends Error {
   constructor(resource: 'result' | 'session' | 'topic') {
     super(`Onboarding Understanding ${resource} was not found`);

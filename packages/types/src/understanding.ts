@@ -104,9 +104,8 @@ export interface UnderstandingSourceRun {
 export interface UnderstandingMergeRun {
   assistantMessageId?: string;
   diagnostics?: CollectionDiagnosticsSummary;
-  inputThreadIds: string[];
   resultId?: string;
-  status: 'pending' | 'processing' | 'completed' | 'failed';
+  status: UnderstandingRunStatus;
   threadId: string;
 }
 
@@ -343,9 +342,8 @@ export const UnderstandingMergeRunSchema = z
   .object({
     assistantMessageId: z.string().optional(),
     diagnostics: CollectionDiagnosticsSummarySchema.optional(),
-    inputThreadIds: z.array(z.string()),
     resultId: z.string().optional(),
-    status: z.enum(['pending', 'processing', 'completed', 'failed']),
+    status: z.enum(['pending', 'running', 'completed', 'failed']),
     threadId: z.string(),
   })
   .strict() satisfies z.ZodType<UnderstandingMergeRun>;

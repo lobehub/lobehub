@@ -130,7 +130,6 @@ describe('UnderstandingSessionRepository', () => {
     });
 
     await repository.setMergeRun(topicId, 'session-current', {
-      inputThreadIds: ['source-a-thread'],
       status: 'pending',
       threadId: 'merge-thread',
     });
@@ -164,7 +163,6 @@ describe('UnderstandingSessionRepository', () => {
     const session: OnboardingUnderstandingSession = {
       ...createSession('session-current', [sourceRun('source-a', 'completed')]),
       mergeRun: {
-        inputThreadIds: ['source-a-thread'],
         status: 'completed',
         threadId: 'merge-thread',
       },

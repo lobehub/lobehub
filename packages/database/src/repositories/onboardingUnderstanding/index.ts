@@ -3,7 +3,6 @@ export { UnderstandingResultRepository } from './result';
 export {
   InvalidUnderstandingSessionError,
   StaleUnderstandingSessionError,
-  UnderstandingMergeSourcesChangedError,
   UnderstandingPreconditionError,
   UnderstandingResourceNotFoundError,
   UnderstandingSessionNotFoundError,
