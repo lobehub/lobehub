@@ -42,6 +42,15 @@ describe('onboarding understanding workflow route', () => {
     expect(serveMock).toHaveBeenCalledOnce();
   });
 
+  it('does not decode percent characters in the session twice', async () => {
+    const response = await app.request('/session%252F1', { method: 'POST' });
+
+    await expect(response.json()).resolves.toEqual({
+      key: 'onboarding-understanding.session.session_2F1',
+      parallelism: 1,
+    });
+  });
+
   it('rejects a payload whose session does not match the route', async () => {
     serveMock.mockImplementation((handler) => async (context: any) => {
       try {

@@ -17,7 +17,7 @@ import { createWorkflowQstashClient } from '../qstashClient';
 const app = new Hono();
 
 app.post('/:sessionId', async (context) => {
-  const sessionId = decodeURIComponent(context.req.param('sessionId'));
+  const sessionId = context.req.param('sessionId');
   const handler = serve<OnboardingUnderstandingWorkflowPayload>(
     withOtelMetricsForUpstashWorkflows(
       async (workflowContext) => {
