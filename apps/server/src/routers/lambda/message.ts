@@ -56,6 +56,11 @@ const messageAnalyticsSchema = z.object({
   topicId: z.string().optional(),
 });
 
+const heterogeneousToolStateSnapshotSchema = z.object({
+  operationId: z.string().min(1),
+  snapshotSeq: z.number().int().positive(),
+});
+
 const messageBatchOperationSchema = z.discriminatedUnion('type', [
   z.object({
     message: CreateNewMessageParamsSchema,
@@ -71,6 +76,7 @@ const messageBatchOperationSchema = z.discriminatedUnion('type', [
     type: z.literal('updateToolMessage'),
     value: z.object({
       content: z.string().optional(),
+      heterogeneousToolState: heterogeneousToolStateSnapshotSchema.optional(),
       metadata: z.record(z.string(), z.any()).optional(),
       pluginError: z.any().optional(),
       pluginState: z.record(z.string(), z.any()).optional(),
@@ -706,6 +712,7 @@ export const messageRouter = router({
           id: z.string(),
           value: z.object({
             content: z.string().optional(),
+            heterogeneousToolState: heterogeneousToolStateSnapshotSchema.optional(),
             metadata: z.object({}).passthrough().optional(),
             pluginError: z.any().optional(),
             pluginState: z.object({}).passthrough().optional(),

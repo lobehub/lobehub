@@ -16,4 +16,5 @@ export type {
   ToolExecuteData,
   ToolResultMessage,
   ToolStartData,
+  ToolStateChunkData,
 } from './types';

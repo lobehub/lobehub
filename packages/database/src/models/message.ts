@@ -10,7 +10,9 @@ import type {
   ChatVideoItem,
   CreateMessageParams,
   DBMessageItem,
+  HeterogeneousToolStateSnapshot,
   IThreadType,
+  MessageMetadata,
   MessagePluginItem,
   ModelRankItem,
   ModelUsage,
@@ -2607,7 +2609,9 @@ export class MessageModel {
    * This is used by onboarding analytics to reconstruct successful assistant
    * creation results before the topic is moved into inbox.
    */
-  listMessagePluginsByTopic = async (topicId: string): Promise<MessagePluginItem[]> => {
+  listMessagePluginsByTopic = async (
+    topicId: string,
+  ): Promise<Array<MessagePluginItem & { metadata?: MessageMetadata }>> => {
     const rows = await this.db
       .select({
         apiName: messagePlugins.apiName,
@@ -2617,6 +2621,7 @@ export class MessageModel {
         id: messagePlugins.id,
         identifier: messagePlugins.identifier,
         intervention: messagePlugins.intervention,
+        metadata: messages.metadata,
         state: messagePlugins.state,
         toolCallId: messagePlugins.toolCallId,
         type: messagePlugins.type,
@@ -2635,6 +2640,7 @@ export class MessageModel {
       id: row.id,
       identifier: row.identifier ?? undefined,
       intervention: row.intervention ?? undefined,
+      metadata: row.metadata ?? undefined,
       state: row.state ?? undefined,
       toolCallId: row.toolCallId ?? undefined,
       type: row.type ?? 'default',
@@ -2650,33 +2656,79 @@ export class MessageModel {
     id: string,
     params: {
       content?: string;
+      heterogeneousToolState?: HeterogeneousToolStateSnapshot;
       metadata?: Record<string, any>;
       pluginError?: any;
       pluginState?: Record<string, any>;
     },
-  ): Promise<{ success: boolean }> => {
-    const { content, metadata, pluginState, pluginError } = params;
+  ): Promise<{ applied: boolean; snapshotSeq?: number; success: boolean }> => {
+    const { content, heterogeneousToolState, metadata, pluginState, pluginError } = params;
 
     // `undefined` while no branch has looked for the row yet; see `update` above
     // for why a write that matches nothing must not report success.
     let matchedRow: boolean | undefined;
+    let applied = true;
+    let snapshotSeq: number | undefined;
 
     try {
       await this.db.transaction(async (trx) => {
+        let existingMetadata: Record<string, any> | undefined;
+
+        if (metadata !== undefined || heterogeneousToolState !== undefined) {
+          const baseQuery = trx
+            .select({ metadata: messages.metadata })
+            .from(messages)
+            .where(and(eq(messages.id, id), this.ownership()))
+            .limit(1);
+          const [existingMessage] = heterogeneousToolState
+            ? await baseQuery.for('update')
+            : await baseQuery;
+
+          matchedRow = !!existingMessage;
+          if (!existingMessage) return;
+
+          existingMetadata = (existingMessage.metadata ?? {}) as Record<string, any>;
+
+          if (heterogeneousToolState) {
+            const currentOperationId = existingMetadata.heterogeneousToolStateOperationId;
+            const rawCurrentSeq = existingMetadata.heterogeneousToolStateSeq;
+            const currentSeq =
+              currentOperationId === heterogeneousToolState.operationId &&
+              typeof rawCurrentSeq === 'number' &&
+              Number.isFinite(rawCurrentSeq)
+                ? rawCurrentSeq
+                : 0;
+
+            if (heterogeneousToolState.snapshotSeq <= currentSeq) {
+              applied = false;
+              snapshotSeq = currentSeq;
+              return;
+            }
+
+            snapshotSeq = heterogeneousToolState.snapshotSeq;
+          }
+        }
+
         // Update messages table (content, metadata)
-        if (content !== undefined || metadata !== undefined) {
+        if (
+          content !== undefined ||
+          metadata !== undefined ||
+          heterogeneousToolState !== undefined
+        ) {
           const messageUpdateData: Record<string, any> = {};
 
           if (content !== undefined) {
             messageUpdateData.content = content;
           }
 
-          if (metadata !== undefined) {
-            // Need to merge with existing metadata
-            const existingMessage = await trx.query.messages.findFirst({
-              where: and(eq(messages.id, id), this.ownership()),
-            });
-            messageUpdateData.metadata = merge(existingMessage?.metadata || {}, metadata);
+          if (metadata !== undefined || heterogeneousToolState !== undefined) {
+            const mergedMetadata = merge(existingMetadata || {}, metadata || {});
+            messageUpdateData.metadata = heterogeneousToolState
+              ? merge(mergedMetadata, {
+                  heterogeneousToolStateOperationId: heterogeneousToolState.operationId,
+                  heterogeneousToolStateSeq: heterogeneousToolState.snapshotSeq,
+                })
+              : mergedMetadata;
           }
 
           if (Object.keys(messageUpdateData).length > 0) {
@@ -2704,7 +2756,9 @@ export class MessageModel {
             const pluginUpdateData: Record<string, any> = {};
 
             if (pluginState !== undefined) {
-              pluginUpdateData.state = merge(pluginItem.state || {}, pluginState);
+              pluginUpdateData.state = heterogeneousToolState
+                ? pluginState
+                : merge(pluginItem.state || {}, pluginState);
             }
 
             if (pluginError !== undefined) {
@@ -2717,19 +2771,21 @@ export class MessageModel {
                 .set(pluginUpdateData)
                 .where(and(eq(messagePlugins.id, id), this.pluginsOwnership()));
             }
+          } else if (heterogeneousToolState) {
+            throw new Error(`No tool plugin matched id ${id}`);
           }
         }
       });
 
       if (matchedRow === false) {
         console.error(`Update tool message error: no tool message matched id ${id}`);
-        return { success: false };
+        return { applied: false, success: false };
       }
 
-      return { success: true };
+      return { applied, snapshotSeq, success: true };
     } catch (error) {
       console.error('Update tool message error:', error);
-      return { success: false };
+      return { applied: false, success: false };
     }
   };
 

@@ -534,6 +534,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
    *
    * Returns:
    *   code / signal — child exit info
+   *   cancelled      — true when this CLI received SIGINT/SIGTERM for the run
    *   sessionId     — CC session id from `system.init` (undefined on resume failure)
    *   ingestError   — true when a batch could not be flushed after retries
    *   resumeNotFound — true when a resume-not-found error was intercepted
@@ -555,6 +556,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
     interceptResumeErrors: boolean,
     runLabel: string,
   ): Promise<{
+    cancelled: boolean;
     code: number | null;
     ingestError: boolean;
     resumeNotFound: boolean;
@@ -618,32 +620,17 @@ const exec = async (options: ExecOptions): Promise<void> => {
     // Ctrl-C → SIGINT to the child's process group.
     // Repeated Ctrl-C escalates to SIGKILL.
     let interrupted = false;
-    const onSigint = async () => {
+    const onSigint = () => {
       if (interrupted) {
         handle.kill('SIGKILL');
         return;
       }
       interrupted = true;
       handle.kill('SIGINT');
-      if (serverIngester && sink) {
-        try {
-          await serverIngester.drain();
-          await sink.finish({ result: 'cancelled' });
-        } catch {
-          // best-effort; process is exiting anyway
-        }
-      }
     };
-    const onSigterm = async () => {
+    const onSigterm = () => {
+      interrupted = true;
       handle.kill('SIGTERM');
-      if (serverIngester && sink) {
-        try {
-          await serverIngester.drain();
-          await sink.finish({ result: 'cancelled' });
-        } catch {
-          // best-effort
-        }
-      }
     };
     process.on('SIGINT', onSigint);
     process.on('SIGTERM', onSigterm);
@@ -734,6 +721,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
     }
 
     return {
+      cancelled: interrupted,
       code,
       ingestError,
       resumeNotFound,
@@ -792,7 +780,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
   // fresh session.  The server's `heteroSessionId` is updated with the new id,
   // breaking the stale-session loop.
   let result = first;
-  if (first.resumeNotFound) {
+  if (!first.cancelled && first.resumeNotFound) {
     log.info('Resume failed (session not found or context overflow) — retrying without --resume');
     result = await runOneAgent(
       {
@@ -830,7 +818,10 @@ const exec = async (options: ExecOptions): Promise<void> => {
     // still exits 0, so the exit code alone would report `success`. Treat any
     // pushed terminal error as a failed run so the topic/task is marked failed.
     const exitedClean =
-      !result.ingestError && !result.sawTerminalError && (code === 0 || signal === 'SIGTERM');
+      !result.cancelled &&
+      !result.ingestError &&
+      !result.sawTerminalError &&
+      (code === 0 || signal === 'SIGTERM');
 
     // When the run failed, pass an error detail so the server surfaces a useful
     // message instead of the generic "Agent execution failed" fallback. Prefer
@@ -845,22 +836,23 @@ const exec = async (options: ExecOptions): Promise<void> => {
     // re-deriving from the flattened message via the process-only classifier,
     // which would drop `agentType`/`code` and demote the client UI to the
     // generic error card.
-    const finishError = exitedClean
-      ? undefined
-      : result.terminalErrorData
-        ? {
-            body: { ...result.terminalErrorData },
-            message: String(result.terminalErrorData.message ?? errorDetail ?? ''),
-            type: 'AgentRuntimeError',
-          }
-        : errorDetail
-          ? buildFinishError(errorDetail.slice(-1024), 'AgentRuntimeError')
-          : undefined;
+    const finishError =
+      result.cancelled || exitedClean
+        ? undefined
+        : result.terminalErrorData
+          ? {
+              body: { ...result.terminalErrorData },
+              message: String(result.terminalErrorData.message ?? errorDetail ?? ''),
+              type: 'AgentRuntimeError',
+            }
+          : errorDetail
+            ? buildFinishError(errorDetail.slice(-1024), 'AgentRuntimeError')
+            : undefined;
 
     try {
       await sink.finish({
         error: finishError,
-        result: exitedClean ? 'success' : 'error',
+        result: result.cancelled ? 'cancelled' : exitedClean ? 'success' : 'error',
         sessionId,
       });
     } catch (err) {

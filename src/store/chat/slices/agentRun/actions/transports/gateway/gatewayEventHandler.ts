@@ -7,6 +7,7 @@ import type {
   ToolEndData,
   ToolExecuteData,
   ToolStartData,
+  ToolStateChunkData,
 } from '@lobechat/agent-gateway-client';
 import type {
   BuiltinToolResult,
@@ -27,6 +28,7 @@ import type {
 import { dbMessageSelectors } from '@/store/chat/slices/message/selectors';
 import type { ChatStore } from '@/store/chat/store';
 import { notifyDesktopHumanApprovalRequired } from '@/store/chat/utils/desktopNotification';
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 // `agent_runtime_end` reasons that are NOT a clean completion: a mid-stream
 // cancel and a deferred-tool park. These must NOT mark the topic unread, and
@@ -89,6 +91,16 @@ const getToolId = (tool: unknown): string | undefined =>
 
 const getToolResultMessageId = (tool: unknown): string | undefined =>
   isRecord(tool) ? pickNonEmptyString(tool.result_msg_id) : undefined;
+
+const isToolStateChunkData = (data: unknown): data is ToolStateChunkData =>
+  isRecord(data) &&
+  data.chunkType === 'tool_state' &&
+  data.snapshotMode === 'replace' &&
+  typeof data.toolCallId === 'string' &&
+  data.toolCallId.length > 0 &&
+  Number.isInteger(data.snapshotSeq) &&
+  (data.snapshotSeq as number) > 0 &&
+  isRecord(data.pluginState);
 
 const preserveToolResultMessageIds = (
   toolsCalling: unknown[],
@@ -421,6 +433,10 @@ export const createGatewayEventHandler = (
   // NOT reset on stream boundaries — a seq ≤ these is a redelivered duplicate.
   let lastTextSnapshotSeq = 0;
   let lastReasoningSnapshotSeq = 0;
+  const latestToolStateByCallId = new Map<string, ToolStateChunkData & { operationId: string }>();
+  const toolStateBootstrapPromiseByCallId = new Map<string, Promise<void>>();
+  const lastAppliedToolStateSeqByCallId = new Map<string, number>();
+  const completedToolStateCallIds = new Set<string>();
 
   // Tracks whether any server-confirmed state has actually arrived
   // (server-assigned assistant id, streamed text/reasoning/tools, or a SoT
@@ -458,8 +474,118 @@ export const createGatewayEventHandler = (
   // Sequential processing queue — ensures stream_chunk waits for stream_start's fetch
   let processingChain: Promise<void> = Promise.resolve();
 
-  const enqueue = (fn: () => Promise<void> | void): void => {
+  const enqueue = (fn: () => Promise<void> | void): Promise<void> => {
     processingChain = processingChain.then(fn, fn);
+    return processingChain;
+  };
+
+  const getToolMessageByCallId = (toolCallId: string): UIChatMessage | undefined => {
+    const messages = get().dbMessagesMap[messageMapKey(context)] ?? [];
+    // Tool-call ids are operation-scoped, not topic-global. Codex can reuse an
+    // id in a later run while that run's newly persisted tool row has not yet
+    // reached the store. Parent scoping prevents us from mistaking the prior
+    // run's row for the current one and skipping the bootstrap refetch.
+    return messages.findLast(
+      (message) =>
+        message.tool_call_id === toolCallId && message.parentId === currentAssistantMessageId,
+    );
+  };
+
+  const applyLatestToolState = (toolCallId: string, reapplyAfterRefetch = false): boolean => {
+    const latest = latestToolStateByCallId.get(toolCallId);
+    if (terminalState || completedToolStateCallIds.has(toolCallId)) return true;
+    const toolMessage = getToolMessageByCallId(toolCallId);
+    if (!latest || !toolMessage) return false;
+
+    const storedSeq =
+      toolMessage.metadata?.heterogeneousToolStateOperationId === latest.operationId &&
+      typeof toolMessage.metadata.heterogeneousToolStateSeq === 'number'
+        ? toolMessage.metadata.heterogeneousToolStateSeq
+        : 0;
+    const inMemorySeq = lastAppliedToolStateSeqByCallId.get(toolCallId) ?? 0;
+
+    // A bootstrap refetch can replace an optimistic seq=4 with DB seq=3. In
+    // that path the message's own watermark, not the in-memory map, decides
+    // whether the cached latest snapshot must be re-applied.
+    if (latest.snapshotSeq <= storedSeq) {
+      lastAppliedToolStateSeqByCallId.set(toolCallId, Math.max(inMemorySeq, storedSeq));
+      return true;
+    }
+    if (!reapplyAfterRefetch && latest.snapshotSeq <= inMemorySeq) return true;
+
+    lastAppliedToolStateSeqByCallId.set(toolCallId, latest.snapshotSeq);
+    get().internal_dispatchMessage(
+      {
+        id: toolMessage.id,
+        metadata: {
+          heterogeneousToolStateOperationId: latest.operationId,
+          heterogeneousToolStateSeq: latest.snapshotSeq,
+        },
+        type: 'replaceMessagePluginState',
+        value: latest.pluginState,
+      },
+      dispatchContext,
+    );
+    return true;
+  };
+
+  const scheduleToolState = (
+    data: ToolStateChunkData,
+    eventOperationId: string | undefined,
+    bootstrapRetry = false,
+  ): void => {
+    if (completedToolStateCallIds.has(data.toolCallId)) return;
+
+    const stateOperationId = eventOperationId || gatewayOperationId;
+    const previous = latestToolStateByCallId.get(data.toolCallId);
+    if (!bootstrapRetry) {
+      if (previous?.operationId === stateOperationId && data.snapshotSeq <= previous.snapshotSeq) {
+        return;
+      }
+
+      // Cache synchronously. A later seq can now overtake an in-flight bootstrap
+      // read; the bootstrap completion always reapplies this map's newest value.
+      latestToolStateByCallId.set(data.toolCallId, { ...data, operationId: stateOperationId });
+    }
+
+    if (getToolMessageByCallId(data.toolCallId)) {
+      enqueue(() => {
+        applyLatestToolState(data.toolCallId);
+      });
+      return;
+    }
+
+    if (toolStateBootstrapPromiseByCallId.has(data.toolCallId)) return;
+
+    let reconciled = false;
+    const bootstrapSnapshotSeq = data.snapshotSeq;
+    // Bootstrap reconciliation is part of the same queue as tool_end. If this
+    // read finishes late, the terminal refresh must still run after it so an
+    // intermediate DB snapshot can never become the last store replacement.
+    const bootstrapPromise = enqueue(async () => {
+      // A preceding queued tools_calling handler may have brought the row in.
+      if (!getToolMessageByCallId(data.toolCallId)) {
+        await fetchAndReplaceMessages(get, context, { skipWorks: true }).catch(console.error);
+      }
+      reconciled = applyLatestToolState(data.toolCallId, true);
+    });
+    const trackedBootstrapPromise = bootstrapPromise.finally(() => {
+      toolStateBootstrapPromiseByCallId.delete(data.toolCallId);
+
+      const latest = latestToolStateByCallId.get(data.toolCallId);
+      // A newer snapshot may have arrived while a failed/empty bootstrap was
+      // in flight. Retry for that newer state, but never spin on the same seq.
+      if (
+        !reconciled &&
+        !terminalState &&
+        !completedToolStateCallIds.has(data.toolCallId) &&
+        latest &&
+        latest.snapshotSeq > bootstrapSnapshotSeq
+      ) {
+        scheduleToolState(latest, latest.operationId, true);
+      }
+    });
+    toolStateBootstrapPromiseByCallId.set(data.toolCallId, trackedBootstrapPromise);
   };
 
   return (event: AgentStreamEvent) => {
@@ -471,6 +597,11 @@ export const createGatewayEventHandler = (
     // mid-stream until the terminal fetch corrects it. The local executor drops
     // them before forwarding; the gateway path doesn't. (DB is unaffected.)
     if ((event.data as { subagent?: unknown } | undefined)?.subagent) return;
+
+    if (event.type === 'stream_chunk' && isToolStateChunkData(event.data)) {
+      scheduleToolState(event.data, event.operationId);
+      return;
+    }
 
     if (event.type === 'agent_runtime_end' || event.type === 'error') {
       terminalState = event.type === 'error' ? 'error' : 'completed';
@@ -766,6 +897,13 @@ export const createGatewayEventHandler = (
         // Server creates tool messages in DB.
         // Loading is already active from stream_start (not cleared by stream_end).
         const data = event.data as ToolStartData | undefined;
+        const startedToolCallId =
+          getToolId(data?.toolCalling) ||
+          (isRecord(data) ? pickNonEmptyString(data.toolCallId) : undefined);
+        // A producer may reuse a call id within one operation. A new lifecycle
+        // re-opens state delivery while the seq watermark remains monotonic, so
+        // delayed snapshots from the previous lifecycle are still rejected.
+        if (startedToolCallId) completedToolStateCallIds.delete(startedToolCallId);
         enqueue(async () => {
           await dispatchOnBeforeCall(data, context.topicId ?? undefined).catch(console.error);
         });
@@ -845,6 +983,13 @@ export const createGatewayEventHandler = (
 
       case 'tool_end': {
         const data = event.data as ToolEndData | undefined;
+        const completedToolCallId =
+          getToolId(unwrapToolPayload(data?.payload)) ||
+          (isRecord(data) ? pickNonEmptyString(data.toolCallId) : undefined);
+        if (completedToolCallId) {
+          completedToolStateCallIds.add(completedToolCallId);
+          latestToolStateByCallId.delete(completedToolCallId);
+        }
         enqueue(async () => {
           const maybeRefresh = shouldSkipMessageFetch(event, runtimeType)
             ? Promise.resolve()

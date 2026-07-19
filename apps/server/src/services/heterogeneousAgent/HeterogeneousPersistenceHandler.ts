@@ -117,6 +117,8 @@ interface OperationState {
    * Recovered on a cold replica from the current assistant's stamped metadata.
    */
   heteroSessionId: string | undefined;
+  /** Last DB-confirmed tool-state seq, scoped to this operation. */
+  lastAppliedToolStateSeqByCallId: Map<string, number>;
   lastStepIndex: number;
   main: MainAgentRunState;
   operationId: string;
@@ -458,6 +460,7 @@ export class HeterogeneousPersistenceHandler {
       // which differs from the actual id when a fork/new session occurred.
       heteroSessionId: undefined,
       lastStepIndex: 0,
+      lastAppliedToolStateSeqByCallId: new Map(),
       main: createMainAgentRunState(currentAssistantMessageId),
       operationId,
       processedKeys: new Set(),
@@ -542,6 +545,19 @@ export class HeterogeneousPersistenceHandler {
     const toolPlugins = await this.deps.messageModel.listMessagePluginsByTopic(state.topicId);
     for (const plugin of toolPlugins) {
       if (plugin.toolCallId) state.toolMsgIdByCallId.set(plugin.toolCallId, plugin.id);
+      if (
+        plugin.toolCallId &&
+        plugin.metadata?.heterogeneousToolStateOperationId === state.operationId &&
+        typeof plugin.metadata.heterogeneousToolStateSeq === 'number'
+      ) {
+        state.lastAppliedToolStateSeqByCallId.set(
+          plugin.toolCallId,
+          Math.max(
+            state.lastAppliedToolStateSeqByCallId.get(plugin.toolCallId) ?? 0,
+            plugin.metadata.heterogeneousToolStateSeq,
+          ),
+        );
+      }
     }
   }
 
@@ -968,6 +984,11 @@ export class HeterogeneousPersistenceHandler {
         return;
       }
 
+      case 'updateToolState': {
+        await this.applyToolState(state, intent);
+        return;
+      }
+
       case 'recordUsage': {
         const update: Record<string, any> = {};
         if (intent.usage !== undefined) {
@@ -1015,11 +1036,49 @@ export class HeterogeneousPersistenceHandler {
       return;
     }
 
-    await this.deps.messageModel.updateToolMessage(toolMsgId, {
+    const result = await this.deps.messageModel.updateToolMessage(toolMsgId, {
       content: intent.content,
       pluginError: intent.isError ? { message: intent.content } : undefined,
       pluginState: intent.pluginState,
     });
+    if (!result.success) {
+      throw new Error(`Failed to persist tool_result for message ${toolMsgId}`);
+    }
+  }
+
+  private async applyToolState(
+    state: OperationState,
+    intent: {
+      pluginState: Record<string, unknown>;
+      snapshotSeq: number;
+      toolCallId: string;
+    },
+  ): Promise<void> {
+    const lastApplied = state.lastAppliedToolStateSeqByCallId.get(intent.toolCallId) ?? 0;
+    if (intent.snapshotSeq <= lastApplied) return;
+
+    const toolMsgId = state.toolMsgIdByCallId.get(intent.toolCallId);
+    if (!toolMsgId) {
+      throw new Error(
+        `tool_state for unknown toolCallId=${intent.toolCallId} op=${state.operationId}`,
+      );
+    }
+
+    const result = await this.deps.messageModel.updateToolMessage(toolMsgId, {
+      heterogeneousToolState: {
+        operationId: state.operationId,
+        snapshotSeq: intent.snapshotSeq,
+      },
+      pluginState: intent.pluginState,
+    });
+    if (!result.success) {
+      throw new Error(`Failed to persist tool_state for message ${toolMsgId}`);
+    }
+
+    state.lastAppliedToolStateSeqByCallId.set(
+      intent.toolCallId,
+      result.snapshotSeq ?? intent.snapshotSeq,
+    );
   }
 
   private buildToolBatchUpdate(
@@ -1145,6 +1204,11 @@ export class HeterogeneousPersistenceHandler {
 
       case 'resolveToolResult': {
         await this.applyToolResult(state, intent);
+        return;
+      }
+
+      case 'updateToolState': {
+        await this.applyToolState(state, intent);
         return;
       }
 

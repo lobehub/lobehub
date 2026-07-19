@@ -43,7 +43,7 @@ export type HeterogeneousEventType =
   | 'agent_runtime_end'
   | 'error';
 
-export type StreamChunkType = 'text' | 'reasoning' | 'tools_calling';
+export type StreamChunkType = 'text' | 'reasoning' | 'tool_state' | 'tools_calling';
 
 export interface HeterogeneousAgentEvent {
   data: any;
@@ -188,14 +188,34 @@ export interface SubagentEventContext {
 export interface StreamChunkData {
   chunkType: StreamChunkType;
   content?: string;
+  pluginState?: Record<string, unknown>;
   reasoning?: string;
+  snapshotMode?: 'replace';
+  snapshotSeq?: number;
   /**
    * Subagent context for the entire chunk — peer to `toolsCalling`,
    * `content`, and `reasoning`. Stream-state info (parent spawn id,
    * subagent turn id) belongs on the event, not inside the payloads.
    */
   subagent?: SubagentEventContext;
+  toolCallId?: string;
   toolsCalling?: ToolCallPayload[];
+}
+
+/**
+ * Non-terminal, replace-only snapshot for a running tool message.
+ *
+ * `snapshotSeq` is monotonic within `(operationId, toolCallId)`; operationId
+ * lives on the enclosing wire event. The final `tool_result` remains the
+ * authoritative terminal snapshot and does not consume this sequence.
+ */
+export interface ToolStateChunkData {
+  chunkType: 'tool_state';
+  pluginState: Record<string, unknown>;
+  snapshotMode: 'replace';
+  snapshotSeq: number;
+  subagent?: SubagentEventContext;
+  toolCallId: string;
 }
 
 /** Data shape for tool_end events */

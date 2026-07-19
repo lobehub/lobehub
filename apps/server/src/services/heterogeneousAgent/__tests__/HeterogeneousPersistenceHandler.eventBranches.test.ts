@@ -107,18 +107,43 @@ const createHarness = (
     updateToolMessage: vi.fn(
       async (
         id: string,
-        patch: { content?: string; metadata?: any; pluginError?: any; pluginState?: any },
+        patch: {
+          content?: string;
+          heterogeneousToolState?: { operationId: string; snapshotSeq: number };
+          metadata?: any;
+          pluginError?: any;
+          pluginState?: any;
+        },
       ) => {
         const existing = messages.get(id);
         if (!existing) return { success: false };
+        const snapshot = patch.heterogeneousToolState;
+        const currentSeq =
+          snapshot && existing.metadata?.heterogeneousToolStateOperationId === snapshot.operationId
+            ? (existing.metadata.heterogeneousToolStateSeq ?? 0)
+            : 0;
+        if (snapshot && snapshot.snapshotSeq <= currentSeq) {
+          return { applied: false, snapshotSeq: currentSeq, success: true };
+        }
         messages.set(id, {
           ...existing,
           content: patch.content ?? existing.content,
-          metadata: patch.metadata ?? existing.metadata,
+          metadata: snapshot
+            ? {
+                ...existing.metadata,
+                ...patch.metadata,
+                heterogeneousToolStateOperationId: snapshot.operationId,
+                heterogeneousToolStateSeq: snapshot.snapshotSeq,
+              }
+            : (patch.metadata ?? existing.metadata),
           pluginError: patch.pluginError,
           pluginState: patch.pluginState ?? existing.pluginState,
         });
-        return { success: true };
+        return {
+          applied: true,
+          snapshotSeq: snapshot?.snapshotSeq,
+          success: true,
+        };
       },
     ),
     findById: vi.fn(async (id: string) => messages.get(id) ?? null),
@@ -404,6 +429,94 @@ describe('HeterogeneousPersistenceHandler — event branch coverage', () => {
           m.reasoning?.content === 'subagent thinks hard',
       );
       expect(flushed).toBeDefined();
+    });
+
+    it('persists tool_state DB-first and drops stale in-operation snapshots', async () => {
+      const h = createHarness();
+      await ingest(h, [
+        buildEvent('stream_chunk', 0, {
+          chunkType: 'tools_calling',
+          toolsCalling: [
+            {
+              apiName: 'todo_list',
+              arguments: '{}',
+              id: 'todo-1',
+              identifier: 'codex',
+              type: 'default',
+            },
+          ],
+        }),
+        buildEvent('stream_chunk', 1, {
+          chunkType: 'tool_state',
+          pluginState: { todos: { items: [{ status: 'processing', text: 'Implement' }] } },
+          snapshotMode: 'replace',
+          snapshotSeq: 2,
+          toolCallId: 'todo-1',
+        }),
+        buildEvent('stream_chunk', 2, {
+          chunkType: 'tool_state',
+          pluginState: { stale: true },
+          snapshotMode: 'replace',
+          snapshotSeq: 1,
+          toolCallId: 'todo-1',
+        }),
+      ]);
+
+      const stateWrites = h.messageModel.updateToolMessage.mock.calls.filter(
+        ([, patch]) => patch.heterogeneousToolState,
+      );
+      expect(stateWrites).toHaveLength(1);
+      expect(stateWrites[0][1]).toMatchObject({
+        heterogeneousToolState: { operationId: h.operationId, snapshotSeq: 2 },
+        pluginState: {
+          todos: { items: [{ status: 'processing', text: 'Implement' }] },
+        },
+      });
+      const toolMessage = [...h.messages.values()].find(
+        (message) => message.tool_call_id === 'todo-1',
+      );
+      expect(toolMessage?.metadata).toMatchObject({
+        heterogeneousToolStateOperationId: h.operationId,
+        heterogeneousToolStateSeq: 2,
+      });
+      expect(toolMessage?.pluginState).not.toEqual({ stale: true });
+    });
+
+    it('restores the tool-state watermark from DB after a cold operation-state reset', async () => {
+      const h = createHarness();
+      h.messages.set('tool-existing', {
+        agentId: null,
+        content: '',
+        id: 'tool-existing',
+        metadata: {
+          heterogeneousToolStateOperationId: h.operationId,
+          heterogeneousToolStateSeq: 4,
+        },
+        pluginState: { current: true },
+        role: 'tool',
+        tool_call_id: 'todo-existing',
+        topicId: h.topicId,
+      });
+      h.messageModel.listMessagePluginsByTopic.mockResolvedValue([
+        {
+          id: 'tool-existing',
+          metadata: h.messages.get('tool-existing')?.metadata,
+          toolCallId: 'todo-existing',
+        },
+      ] as any);
+
+      await ingest(h, [
+        buildEvent('stream_chunk', 0, {
+          chunkType: 'tool_state',
+          pluginState: { stale: true },
+          snapshotMode: 'replace',
+          snapshotSeq: 3,
+          toolCallId: 'todo-existing',
+        }),
+      ]);
+
+      expect(h.messageModel.updateToolMessage).not.toHaveBeenCalled();
+      expect(h.messages.get('tool-existing')?.pluginState).toEqual({ current: true });
     });
 
     it('tools_calling with empty array is a no-op', async () => {

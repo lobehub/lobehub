@@ -45,6 +45,13 @@ interface UpdatePluginState {
   value: any;
 }
 
+interface ReplaceMessagePluginState {
+  id: string;
+  metadata?: Partial<NonNullable<UIChatMessage['metadata']>>;
+  type: 'replaceMessagePluginState';
+  value: UIChatMessage['pluginState'];
+}
+
 interface UpdateMessagePlugin {
   id: string;
   type: 'updateMessagePlugin';
@@ -87,6 +94,7 @@ export type MessageDispatch =
   | UpdateMessage
   | UpdateMessages
   | UpdatePluginState
+  | ReplaceMessagePluginState
   | UpdateMessageExtra
   | UpdateMessageMetadata
   | DeleteMessage
@@ -116,6 +124,18 @@ export const messagesReducer = (
         if (index >= 0) {
           draftState[index] = merge(draftState[index], { ...value, updatedAt: Date.now() });
         }
+      });
+    }
+
+    case 'replaceMessagePluginState': {
+      return produce(state, (draftState) => {
+        const { id, metadata, value } = payload;
+        const message = draftState.find((item) => item.id === id);
+        if (!message || message.role !== 'tool') return;
+
+        message.pluginState = value;
+        if (metadata) message.metadata = merge(message.metadata, metadata);
+        message.updatedAt = Date.now();
       });
     }
 

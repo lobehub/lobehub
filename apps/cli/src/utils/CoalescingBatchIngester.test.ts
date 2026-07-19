@@ -75,6 +75,51 @@ describe('CoalescingBatchIngester', () => {
     });
   });
 
+  it('forwards every tool-state snapshot unchanged and after preceding text', async () => {
+    const { batches, sink } = createSink();
+    const ingester = new CoalescingBatchIngester(sink);
+
+    ingester.push(textEvent('before state'));
+    ingester.push(
+      makeEvent('stream_chunk', {
+        chunkType: 'tool_state',
+        pluginState: { version: 1 },
+        snapshotMode: 'replace',
+        snapshotSeq: 1,
+        toolCallId: 'todo-1',
+      }),
+    );
+    ingester.push(
+      makeEvent('stream_chunk', {
+        chunkType: 'tool_state',
+        pluginState: { version: 2 },
+        snapshotMode: 'replace',
+        snapshotSeq: 2,
+        toolCallId: 'todo-1',
+      }),
+    );
+    await ingester.drain();
+
+    const batch = batches.flat();
+    expect(batch.map((event) => (event.data as any).chunkType)).toEqual([
+      'text',
+      'tool_state',
+      'tool_state',
+    ]);
+    expect(batch[1].data).toMatchObject({
+      pluginState: { version: 1 },
+      snapshotMode: 'replace',
+      snapshotSeq: 1,
+      toolCallId: 'todo-1',
+    });
+    expect(batch[2].data).toMatchObject({
+      pluginState: { version: 2 },
+      snapshotMode: 'replace',
+      snapshotSeq: 2,
+      toolCallId: 'todo-1',
+    });
+  });
+
   it('flushes a pending snapshot on the debounce timer without needing a following event', async () => {
     const { batches, ingest, sink } = createSink();
     const ingester = new CoalescingBatchIngester(sink);

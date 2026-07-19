@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { messageService } from '@/services/message';
 import * as agentSignalBridge from '@/store/chat/slices/agentRun/actions/lifecycle/agentSignalBridge';
 import type { ChatStore } from '@/store/chat/store';
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import { createGatewayEventHandler } from './gatewayEventHandler';
 
@@ -261,6 +262,389 @@ describe('createGatewayEventHandler', () => {
     // so this must never trigger a DB read or write.
     expect(getMessages).not.toHaveBeenCalled();
     expect(store.replaceMessages).not.toHaveBeenCalled();
+  });
+
+  it('bootstraps a missing tool once and reapplies the latest snapshot after a stale refetch', async () => {
+    const key = messageMapKey(context);
+    let resolveFetch: ((messages: UIChatMessage[]) => void) | undefined;
+    const getMessages = vi.spyOn(messageService, 'getMessages').mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveFetch = resolve as (messages: UIChatMessage[]) => void;
+        }),
+    );
+    const store = createStore();
+    (store.replaceMessages as ReturnType<typeof vi.fn>).mockImplementation(
+      (messages: UIChatMessage[]) => {
+        store.dbMessagesMap[key] = messages;
+      },
+    );
+    const handler = createGatewayEventHandler(() => store, {
+      assistantMessageId: 'seed-msg',
+      context,
+      operationId: 'op-1',
+    });
+
+    handler(
+      makeEvent('stream_chunk', {
+        chunkType: 'tool_state',
+        pluginState: { version: 3 },
+        snapshotMode: 'replace',
+        snapshotSeq: 3,
+        toolCallId: 'todo-1',
+      }),
+    );
+    await flush();
+    expect(getMessages).toHaveBeenCalledTimes(1);
+
+    // Arrives while the bootstrap read is still pending. It must update the
+    // synchronous latest cache rather than wait behind that read.
+    handler(
+      makeEvent('stream_chunk', {
+        chunkType: 'tool_state',
+        pluginState: { version: 4 },
+        snapshotMode: 'replace',
+        snapshotSeq: 4,
+        toolCallId: 'todo-1',
+      }),
+    );
+    resolveFetch?.([
+      {
+        content: '',
+        id: 'tool-msg-1',
+        metadata: {
+          heterogeneousToolStateOperationId: 'op-1',
+          heterogeneousToolStateSeq: 3,
+        },
+        parentId: 'seed-msg',
+        pluginState: { version: 3 },
+        role: 'tool',
+        tool_call_id: 'todo-1',
+      } as UIChatMessage,
+    ]);
+    await flush();
+
+    expect(getMessages).toHaveBeenCalledTimes(1);
+    expect(store.internal_dispatchMessage).toHaveBeenLastCalledWith(
+      {
+        id: 'tool-msg-1',
+        metadata: {
+          heterogeneousToolStateOperationId: 'op-1',
+          heterogeneousToolStateSeq: 4,
+        },
+        type: 'replaceMessagePluginState',
+        value: { version: 4 },
+      },
+      { operationId: 'op-1' },
+    );
+  });
+
+  it('bootstraps the current tool instead of applying a reused call id to an older run', async () => {
+    const key = messageMapKey(context);
+    const getMessages = vi.spyOn(messageService, 'getMessages').mockResolvedValue([
+      {
+        content: '',
+        id: 'tool-current',
+        parentId: 'seed-msg',
+        pluginState: { version: 1 },
+        role: 'tool',
+        tool_call_id: 'todo-1',
+      } as UIChatMessage,
+    ]);
+    const store = createStore({
+      [key]: [
+        {
+          content: 'Previous run result',
+          id: 'tool-previous',
+          parentId: 'assistant-previous',
+          pluginState: { version: 'previous' },
+          role: 'tool',
+          tool_call_id: 'todo-1',
+        } as UIChatMessage,
+      ],
+    });
+    (store.replaceMessages as ReturnType<typeof vi.fn>).mockImplementation(
+      (messages: UIChatMessage[]) => {
+        store.dbMessagesMap[key] = messages;
+      },
+    );
+    const handler = createGatewayEventHandler(() => store, {
+      assistantMessageId: 'seed-msg',
+      context,
+      operationId: 'op-1',
+    });
+
+    handler(
+      makeEvent('stream_chunk', {
+        chunkType: 'tool_state',
+        pluginState: { version: 2 },
+        snapshotMode: 'replace',
+        snapshotSeq: 2,
+        toolCallId: 'todo-1',
+      }),
+    );
+    await flush();
+
+    expect(getMessages).toHaveBeenCalledTimes(1);
+    expect(store.internal_dispatchMessage).toHaveBeenLastCalledWith(
+      {
+        id: 'tool-current',
+        metadata: {
+          heterogeneousToolStateOperationId: 'op-1',
+          heterogeneousToolStateSeq: 2,
+        },
+        type: 'replaceMessagePluginState',
+        value: { version: 2 },
+      },
+      { operationId: 'op-1' },
+    );
+  });
+
+  it('drops a tool-state event at or below the message durable watermark', async () => {
+    const key = messageMapKey(context);
+    const getMessages = vi.spyOn(messageService, 'getMessages');
+    const store = createStore({
+      [key]: [
+        {
+          content: '',
+          id: 'tool-msg-1',
+          metadata: {
+            heterogeneousToolStateOperationId: 'op-1',
+            heterogeneousToolStateSeq: 5,
+          },
+          parentId: 'seed-msg',
+          pluginState: { version: 5 },
+          role: 'tool',
+          tool_call_id: 'todo-1',
+        } as UIChatMessage,
+      ],
+    });
+    const handler = createGatewayEventHandler(() => store, {
+      assistantMessageId: 'seed-msg',
+      context,
+      operationId: 'op-1',
+    });
+
+    handler(
+      makeEvent('stream_chunk', {
+        chunkType: 'tool_state',
+        pluginState: { version: 4 },
+        snapshotMode: 'replace',
+        snapshotSeq: 4,
+        toolCallId: 'todo-1',
+      }),
+    );
+    await flush();
+
+    expect(store.internal_dispatchMessage).not.toHaveBeenCalled();
+    expect(getMessages).not.toHaveBeenCalled();
+  });
+
+  it('orders the terminal refresh after a pending bootstrap so the final tool state wins', async () => {
+    const key = messageMapKey(context);
+    const fetchResolvers: Array<(messages: UIChatMessage[]) => void> = [];
+    const getMessages = vi.spyOn(messageService, 'getMessages').mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          fetchResolvers.push(resolve as (messages: UIChatMessage[]) => void);
+        }),
+    );
+    const store = createStore();
+    (store.replaceMessages as ReturnType<typeof vi.fn>).mockImplementation(
+      (messages: UIChatMessage[]) => {
+        store.dbMessagesMap[key] = messages;
+      },
+    );
+    const handler = createGatewayEventHandler(() => store, {
+      assistantMessageId: 'seed-msg',
+      context,
+      operationId: 'op-1',
+    });
+
+    handler(
+      makeEvent('stream_chunk', {
+        chunkType: 'tool_state',
+        pluginState: { version: 3 },
+        snapshotMode: 'replace',
+        snapshotSeq: 3,
+        toolCallId: 'todo-1',
+      }),
+    );
+    await flush();
+    expect(getMessages).toHaveBeenCalledTimes(1);
+
+    handler(
+      makeEvent('tool_end', {
+        isSuccess: true,
+        toolCallId: 'todo-1',
+      }),
+    );
+
+    await flush();
+    // The terminal refresh is queued behind the bootstrap instead of racing it.
+    expect(getMessages).toHaveBeenCalledTimes(1);
+
+    fetchResolvers[0]?.([
+      {
+        content: '',
+        id: 'tool-msg-1',
+        pluginState: { version: 3 },
+        role: 'tool',
+        tool_call_id: 'todo-1',
+      } as UIChatMessage,
+    ]);
+    await flush();
+    expect(getMessages).toHaveBeenCalledTimes(2);
+
+    fetchResolvers[1]?.([
+      {
+        content: 'Todo list updated.',
+        id: 'tool-msg-1',
+        pluginState: { version: 'final' },
+        role: 'tool',
+        tool_call_id: 'todo-1',
+      } as UIChatMessage,
+    ]);
+    await flush();
+
+    expect(store.dbMessagesMap[key]).toEqual([
+      expect.objectContaining({
+        content: 'Todo list updated.',
+        pluginState: { version: 'final' },
+      }),
+    ]);
+  });
+
+  it('accepts a new tool-state lifecycle when a call id is reused in one operation', async () => {
+    const key = messageMapKey(context);
+    const store = createStore({
+      [key]: [
+        {
+          content: '',
+          id: 'tool-msg-1',
+          parentId: 'seed-msg',
+          role: 'tool',
+          tool_call_id: 'todo-1',
+        } as UIChatMessage,
+      ],
+    });
+    const handler = createGatewayEventHandler(() => store, {
+      assistantMessageId: 'seed-msg',
+      context,
+      operationId: 'op-1',
+      runtimeType: 'hetero',
+    });
+
+    handler(makeEvent('tool_start', { toolCallId: 'todo-1' }));
+    handler(
+      makeEvent('stream_chunk', {
+        chunkType: 'tool_state',
+        pluginState: { version: 1 },
+        snapshotMode: 'replace',
+        snapshotSeq: 1,
+        toolCallId: 'todo-1',
+      }),
+    );
+    await flush();
+
+    handler(
+      makeEvent('tool_end', {
+        isSuccess: true,
+        skipMessageFetch: true,
+        toolCallId: 'todo-1',
+      }),
+    );
+    await flush();
+
+    handler(makeEvent('tool_start', { toolCallId: 'todo-1' }));
+    handler(
+      makeEvent('stream_chunk', {
+        chunkType: 'tool_state',
+        pluginState: { version: 2 },
+        snapshotMode: 'replace',
+        snapshotSeq: 2,
+        toolCallId: 'todo-1',
+      }),
+    );
+    await flush();
+
+    const stateUpdates = (store.internal_dispatchMessage as ReturnType<typeof vi.fn>).mock.calls
+      .map(([payload]) => payload)
+      .filter((payload) => payload.type === 'replaceMessagePluginState');
+    expect(stateUpdates).toMatchObject([{ value: { version: 1 } }, { value: { version: 2 } }]);
+  });
+
+  it('retries bootstrap when a newer snapshot arrives before the first fetch fails', async () => {
+    const key = messageMapKey(context);
+    let rejectBootstrap: ((reason: Error) => void) | undefined;
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const getMessages = vi
+      .spyOn(messageService, 'getMessages')
+      .mockImplementationOnce(
+        () =>
+          new Promise((_, reject) => {
+            rejectBootstrap = reject;
+          }),
+      )
+      .mockResolvedValueOnce([
+        {
+          content: '',
+          id: 'tool-msg-1',
+          parentId: 'seed-msg',
+          pluginState: { version: 1 },
+          role: 'tool',
+          tool_call_id: 'todo-1',
+        } as UIChatMessage,
+      ]);
+    const store = createStore();
+    (store.replaceMessages as ReturnType<typeof vi.fn>).mockImplementation(
+      (messages: UIChatMessage[]) => {
+        store.dbMessagesMap[key] = messages;
+      },
+    );
+    const handler = createGatewayEventHandler(() => store, {
+      assistantMessageId: 'seed-msg',
+      context,
+      operationId: 'op-1',
+    });
+
+    handler(
+      makeEvent('stream_chunk', {
+        chunkType: 'tool_state',
+        pluginState: { version: 1 },
+        snapshotMode: 'replace',
+        snapshotSeq: 1,
+        toolCallId: 'todo-1',
+      }),
+    );
+    await flush();
+    expect(getMessages).toHaveBeenCalledTimes(1);
+
+    handler(
+      makeEvent('stream_chunk', {
+        chunkType: 'tool_state',
+        pluginState: { version: 2 },
+        snapshotMode: 'replace',
+        snapshotSeq: 2,
+        toolCallId: 'todo-1',
+      }),
+    );
+    rejectBootstrap?.(new Error('bootstrap failed'));
+    await flush();
+
+    expect(getMessages).toHaveBeenCalledTimes(2);
+    expect(store.internal_dispatchMessage).toHaveBeenLastCalledWith(
+      {
+        id: 'tool-msg-1',
+        metadata: {
+          heterogeneousToolStateOperationId: 'op-1',
+          heterogeneousToolStateSeq: 2,
+        },
+        type: 'replaceMessagePluginState',
+        value: { version: 2 },
+      },
+      { operationId: 'op-1' },
+    );
   });
 
   it('ignores a sub-agent progress event with no tool message anchor', async () => {

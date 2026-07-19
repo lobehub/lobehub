@@ -21,6 +21,7 @@ export type {
   MainRecordUsageIntent,
   MainResolveToolResultIntent,
   MainStreamContentIntent,
+  MainUpdateToolStateIntent,
   PersistAssistantIntent,
   SetErrorIntent,
 } from './mainAgentCoordinator';
@@ -41,6 +42,7 @@ export type {
   SubagentReduceCtx,
   SubagentRunSnapshot,
   SubagentRunsState,
+  UpdateToolStateIntent,
 } from './subagentCoordinator';
 export {
   createSubagentRunsState,
@@ -63,4 +65,5 @@ export type {
   ToolCallPayload,
   ToolEndData,
   ToolResultData,
+  ToolStateChunkData,
 } from './types';

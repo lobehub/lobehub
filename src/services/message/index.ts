@@ -5,6 +5,7 @@ import {
   type ChatTTS,
   type CreateMessageParams,
   type CreateMessageResult,
+  type HeterogeneousToolStateSnapshot,
   type MessageMetadata,
   type MessagePluginItem,
   type ModelRankItem,
@@ -60,6 +61,7 @@ export type MessageBatchOperation =
       type: 'updateToolMessage';
       value: {
         content?: string;
+        heterogeneousToolState?: HeterogeneousToolStateSnapshot;
         metadata?: Record<string, any>;
         pluginError?: any;
         pluginState?: Record<string, any>;
@@ -289,6 +291,7 @@ export class MessageService {
     id: string,
     value: {
       content?: string;
+      heterogeneousToolState?: HeterogeneousToolStateSnapshot;
       metadata?: Record<string, any>;
       pluginError?: any;
       pluginState?: Record<string, any>;
