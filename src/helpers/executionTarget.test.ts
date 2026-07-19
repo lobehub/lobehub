@@ -17,6 +17,10 @@ const ampCfg = (over: Partial<LobeAgentAgencyConfig> = {}): LobeAgentAgencyConfi
   heterogeneousProvider: { command: 'amp', type: 'amp' },
   ...over,
 });
+const openCodeCfg = (over: Partial<LobeAgentAgencyConfig> = {}): LobeAgentAgencyConfig => ({
+  heterogeneousProvider: { command: 'opencode', type: 'opencode' },
+  ...over,
+});
 
 describe('resolveWorkspaceScoped', () => {
   it('preserves shared-row coercion until a workspace member explicitly selects a target', () => {
@@ -136,9 +140,12 @@ describe('resolveExecutionTarget', () => {
   });
 
   describe('hetero providers without sandbox execution', () => {
-    it('keeps an unconfigured Amp agent pending on web instead of defaulting to sandbox', () => {
+    it.each([
+      ['Amp', ampCfg],
+      ['OpenCode', openCodeCfg],
+    ] as const)('keeps an unconfigured %s agent pending on web', (_name, providerCfg) => {
       expect(
-        resolveExecutionTarget(ampCfg(), {
+        resolveExecutionTarget(providerCfg(), {
           clientExecutionAvailable: false,
           isHetero: true,
         }),
@@ -146,7 +153,7 @@ describe('resolveExecutionTarget', () => {
 
       // Desktop can still run the CLI in-process, so its default remains local.
       expect(
-        resolveExecutionTarget(ampCfg(), {
+        resolveExecutionTarget(providerCfg(), {
           clientExecutionAvailable: true,
           isHetero: true,
         }),
@@ -157,6 +164,17 @@ describe('resolveExecutionTarget', () => {
       for (const executionTarget of ['sandbox', 'local'] as const) {
         expect(
           resolveExecutionTarget(ampCfg({ executionTarget }), {
+            clientExecutionAvailable: false,
+            isHetero: true,
+          }),
+        ).toBe('none');
+      }
+    });
+
+    it('normalizes unsupported OpenCode sandbox and unbound web-local targets to pending', () => {
+      for (const executionTarget of ['sandbox', 'local'] as const) {
+        expect(
+          resolveExecutionTarget(openCodeCfg({ executionTarget }), {
             clientExecutionAvailable: false,
             isHetero: true,
           }),
@@ -847,16 +865,22 @@ describe('resolveExecutionPlan', () => {
       }
     });
 
-    it('keeps Amp non-device targets pending instead of constructing a sandbox plan', () => {
-      for (const executionTarget of ['local', 'none', 'sandbox', undefined] as const) {
-        const plan: ExecutionPlan = resolveExecutionPlan({
-          agencyConfig: executionTarget ? ampCfg({ executionTarget }) : ampCfg(),
-          clientExecutionAvailable: false,
-          isHetero: true,
-        });
-        expect(plan).toEqual({ kind: 'none', target: 'none' });
-      }
-    });
+    it.each([
+      ['Amp', ampCfg],
+      ['OpenCode', openCodeCfg],
+    ] as const)(
+      'keeps %s non-device targets pending instead of constructing a sandbox plan',
+      (_name, providerCfg) => {
+        for (const executionTarget of ['local', 'none', 'sandbox', undefined] as const) {
+          const plan: ExecutionPlan = resolveExecutionPlan({
+            agencyConfig: executionTarget ? providerCfg({ executionTarget }) : providerCfg(),
+            clientExecutionAvailable: false,
+            isHetero: true,
+          });
+          expect(plan).toEqual({ kind: 'none', target: 'none' });
+        }
+      },
+    );
 
     it('uses an explicit sandbox capability override for legacy model-only Amp agents', () => {
       expect(

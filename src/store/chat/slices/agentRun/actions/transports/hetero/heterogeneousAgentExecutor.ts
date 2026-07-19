@@ -9,6 +9,7 @@ import {
   CODEX_CLI_INSTALL_DOCS_URL,
   type HeterogeneousAgentSessionError,
   HeterogeneousAgentSessionErrorCode,
+  OPENCODE_CLI_INSTALL_DOCS_URL,
 } from '@lobechat/electron-client-ipc';
 import {
   createMainAgentRunState,
@@ -94,7 +95,7 @@ const CLI_AUTH_REQUIRED_PATTERNS = [
 const AMP_AUTH_REQUIRED_PATTERNS = [/please (?:log|sign) in/i, /amp_api_key/i] as const;
 
 const buildCliAuthRequiredSessionError = (
-  agentType: 'amp' | 'claude-code' | 'codex',
+  agentType: 'amp' | 'claude-code' | 'codex' | 'opencode',
   rawMessage: string,
 ): HeterogeneousAgentSessionError => {
   switch (agentType) {
@@ -128,6 +129,16 @@ const buildCliAuthRequiredSessionError = (
         stderr: rawMessage,
       };
     }
+    case 'opencode': {
+      return {
+        agentType,
+        code: HeterogeneousAgentSessionErrorCode.AuthRequired,
+        docsUrl: OPENCODE_CLI_INSTALL_DOCS_URL,
+        message:
+          'OpenCode could not authenticate. Sign in again or refresh its credentials, then retry.',
+        stderr: rawMessage,
+      };
+    }
   }
 };
 
@@ -137,7 +148,14 @@ const maybeClassifyCliAuthRequiredError = (
   error: unknown,
   agentType?: string,
 ): HeterogeneousAgentSessionError | undefined => {
-  if (agentType !== 'amp' && agentType !== 'claude-code' && agentType !== 'codex') return;
+  if (
+    agentType !== 'amp' &&
+    agentType !== 'claude-code' &&
+    agentType !== 'codex' &&
+    agentType !== 'opencode'
+  ) {
+    return;
+  }
 
   const message =
     error instanceof Error
@@ -186,6 +204,9 @@ const getDefaultHeterogeneousCommand = (agentType: string): string => {
     }
     case 'codex': {
       return 'codex';
+    }
+    case 'opencode': {
+      return 'opencode';
     }
     default: {
       return 'claude';

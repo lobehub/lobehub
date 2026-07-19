@@ -13,6 +13,7 @@ describe('heterogeneous agent config', () => {
       'claude-code',
       'codex',
       'amp',
+      'opencode',
     ]);
   });
 
@@ -32,6 +33,11 @@ describe('heterogeneous agent config', () => {
       title: 'Amp',
       type: 'amp',
     });
+    expect(getHeterogeneousAgentConfig('opencode')).toMatchObject({
+      command: 'opencode',
+      title: 'OpenCode',
+      type: 'opencode',
+    });
   });
 
   it('derives display labels from the shared config source', () => {
@@ -45,8 +51,10 @@ describe('heterogeneous agent config', () => {
     });
   });
 
-  it('classifies AMP as a local CLI rather than a remote platform', () => {
+  it('classifies local CLIs separately from remote platforms', () => {
     expect(isRemoteHeterogeneousType('amp')).toBe(false);
+    expect(isRemoteHeterogeneousType('opencode')).toBe(false);
     expect(isRemoteHeterogeneousType('openclaw')).toBe(true);
+    expect(isRemoteHeterogeneousType('hermes')).toBe(true);
   });
 });

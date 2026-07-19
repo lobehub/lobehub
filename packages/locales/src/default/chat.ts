@@ -381,8 +381,8 @@ export default {
   'heteroAgent.cloudRepo.notSet': 'No repo selected',
   'heteroAgent.cloudRepo.noRepos': 'No repositories configured. Add them in agent settings.',
   'heteroAgent.cloudRepo.multiSelected': '{{count}} repos selected',
-  'heteroAgent.executionTarget.ampSandboxUnsupported':
-    'Amp currently runs only on a local or connected device',
+  'heteroAgent.executionTarget.sandboxUnsupported':
+    '{{name}} currently runs only on a local or connected device',
   'heteroAgent.executionTarget.auto': 'Auto',
   'heteroAgent.executionTarget.autoDesc':
     'Use an online device automatically, picking one when several are available',
@@ -698,11 +698,23 @@ export default {
   'codexInstallGuide.menuNotification.title': 'Codex CLI not found',
   'codexInstallGuide.reason': 'LobeHub could not start Codex: {{message}}',
   'codexInstallGuide.title': 'Install Codex CLI',
+  'opencodeInstallGuide.actions.openDocs': 'Open Install Guide',
+  'opencodeInstallGuide.actions.openSystemTools': 'Open System Tools',
+  'opencodeInstallGuide.afterInstall':
+    'After installing, run OpenCode once to sign in, then retry your message or click Re-detect in System Tools.',
+  'opencodeInstallGuide.desc':
+    'OpenCode needs its CLI to run locally. Install it and make sure the opencode command is available in your PATH.',
+  'opencodeInstallGuide.installWithBrew': 'Alternative install',
+  'opencodeInstallGuide.installWithNpm': 'Recommended install',
+  'opencodeInstallGuide.menuNotification.title': 'OpenCode CLI not found',
+  'opencodeInstallGuide.reason': 'LobeHub could not start OpenCode: {{message}}',
+  'opencodeInstallGuide.title': 'Install OpenCode CLI',
   'addAgentFromMarket': 'Add from Market',
   'newAgent': 'Create Agent',
   'newAmpAgent': 'Add Amp',
   'newClaudeCodeAgent': 'Add Claude Code',
   'newCodexAgent': 'Add Codex',
+  'newOpenCodeAgent': 'Add OpenCode',
   'newPlatformAgent': 'Connect Agent',
   'newGroupChat': 'Create Group',
   'agent.publishToWorkspace': 'Publish to Workspace',
@@ -735,7 +747,6 @@ export default {
   'platformAgent.create.desc.openclaw': 'Connect to OpenClaw running on one of your devices',
   'platformAgent.create.desc.hermes': 'Connect to Hermes running on one of your devices',
   'platformAgent.create.desc.amp': 'Connect to Amp running on one of your devices',
-  'platformAgent.create.desc.opencode': 'Connect to OpenCode running on one of your devices',
 
   // Connect agent: shared device status label (used in Select option labels)
   'platformAgent.device.online': 'Online',
@@ -767,7 +778,6 @@ export default {
   'platformAgent.create.versionTooLow': 'lh version is too low',
   'platformAgent.create.versionTooLowHint': 'Update lh to the latest version:',
   'platformAgent.create.upgradeCmd': 'npm install -g @lobehub/cli',
-  'platformAgent.create.comingSoon': 'Coming Soon',
 
   // Connect agent device guard banner
   'platformAgent.deviceGuard.deviceOffline.title': 'Device not connected',

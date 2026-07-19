@@ -21,6 +21,13 @@ describe('isHeteroStatusGuideErrorData', () => {
         message: 'usage limit reached',
       }),
     ).toBe(true);
+    expect(
+      isHeteroStatusGuideErrorData({
+        agentType: 'opencode',
+        code: 'auth_required',
+        message: 'ProviderAuthError',
+      }),
+    ).toBe(true);
   });
 
   it('rejects payloads missing the agentType/code pair or outside the guide sets', () => {
@@ -65,6 +72,17 @@ describe('classifyHeteroProcessFailure', () => {
 
     expect(result).toMatchObject({ agentType: 'codex', code: 'cli_not_found' });
     expect(result?.message).toContain('`codex`');
+  });
+
+  it('classifies a missing OpenCode binary for the install guide', () => {
+    const result = classifyHeteroProcessFailure({
+      agentType: 'opencode',
+      detail: 'Error: spawn opencode ENOENT',
+      errnoCode: 'ENOENT',
+    });
+
+    expect(result).toMatchObject({ agentType: 'opencode', code: 'cli_not_found' });
+    expect(result?.message).toContain('`opencode`');
   });
 
   it('does NOT treat an in-run ENOENT (no spawn context) as cli_not_found', () => {

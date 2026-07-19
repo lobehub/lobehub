@@ -80,15 +80,6 @@ const styles = createStaticStyles(({ css }) => ({
       border-color: ${cssVar.colorPrimary};
       background: ${cssVar.colorPrimaryBg};
     }
-
-    &[data-disabled='true'] {
-      cursor: not-allowed;
-      opacity: 0.5;
-
-      &:hover {
-        border-color: ${cssVar.colorBorderSecondary};
-      }
-    }
   `,
   platformDesc: css`
     font-size: 13px;
@@ -111,8 +102,6 @@ interface CreatePlatformAgentContentProps {
   groupId?: string;
   visibility?: 'private' | 'public';
 }
-
-const COMING_SOON_PLATFORMS = new Set<RemoteHeterogeneousAgentType>(['opencode']);
 
 const CreatePlatformAgentContent = memo<CreatePlatformAgentContentProps>(
   ({ groupId, visibility }) => {
@@ -146,7 +135,6 @@ const CreatePlatformAgentContent = memo<CreatePlatformAgentContentProps>(
     const [checkingCapability, setCheckingCapability] = useState(false);
 
     const platformDefs = REMOTE_HETEROGENEOUS_AGENT_CONFIGS.map((c) => ({
-      comingSoon: COMING_SOON_PLATFORMS.has(c.type),
       desc: t(`platformAgent.create.desc.${c.type}`),
       name: c.title,
       type: c.type,
@@ -172,7 +160,14 @@ const CreatePlatformAgentContent = memo<CreatePlatformAgentContentProps>(
       } else if (!fetchingProfile && !agentName) {
         setAgentName(selectedPlatformDef.name);
       }
-    }, [step, agentProfile, fetchingProfile]);
+    }, [
+      agentDescription,
+      agentName,
+      agentProfile,
+      fetchingProfile,
+      selectedPlatformDef.name,
+      step,
+    ]);
 
     const handlePlatformChange = useCallback((type: RemoteHeterogeneousAgentType) => {
       setPlatform(type);
@@ -343,23 +338,18 @@ const CreatePlatformAgentContent = memo<CreatePlatformAgentContentProps>(
             {platformDefs.map((def) => (
               <div
                 className={styles.platformCard}
-                data-disabled={def.comingSoon}
-                data-selected={!def.comingSoon && platform === def.type}
+                data-selected={platform === def.type}
                 key={def.type}
                 role="button"
-                tabIndex={def.comingSoon ? -1 : 0}
-                onClick={() => !def.comingSoon && handlePlatformChange(def.type)}
+                tabIndex={0}
+                onClick={() => handlePlatformChange(def.type)}
                 onKeyDown={(e) => {
-                  if (!def.comingSoon && (e.key === 'Enter' || e.key === ' '))
-                    handlePlatformChange(def.type);
+                  if (e.key === 'Enter' || e.key === ' ') handlePlatformChange(def.type);
                 }}
               >
                 <Flexbox horizontal align="center" gap={8}>
                   <Icon icon={MonitorSmartphone} size={18} />
                   <span className={styles.platformName}>{def.name}</span>
-                  {def.comingSoon && (
-                    <Tag style={{ marginInlineEnd: 0 }}>{t('platformAgent.create.comingSoon')}</Tag>
-                  )}
                 </Flexbox>
                 <span className={styles.platformDesc}>{def.desc}</span>
               </div>

@@ -28,7 +28,7 @@ import { CoalescingBatchIngester } from '../utils/CoalescingBatchIngester';
 import { log } from '../utils/logger';
 import { TrpcIngestSink } from '../utils/TrpcIngestSink';
 
-const SUPPORTED_AGENT_TYPES = new Set(['amp', 'claude-code', 'codex']);
+const SUPPORTED_AGENT_TYPES = new Set(['amp', 'claude-code', 'codex', 'opencode']);
 const CODEX_REASONING_EFFORT_CONFIG_KEY = 'model_reasoning_effort';
 const CODEX_SERVICE_TIER_CONFIG_KEY = 'service_tier';
 
@@ -123,10 +123,12 @@ const buildExtraArgs = (
               : []),
             ...(options.speed ? ['-c', `${CODEX_SERVICE_TIER_CONFIG_KEY}="${options.speed}"`] : []),
           ]
-        : [
-            ...(options.model ? ['--model', options.model] : []),
-            ...(options.effort ? ['--effort', options.effort] : []),
-          ];
+        : options.type === 'claude-code'
+          ? [
+              ...(options.model ? ['--model', options.model] : []),
+              ...(options.effort ? ['--effort', options.effort] : []),
+            ]
+          : [...(options.model ? ['--model', options.model] : [])];
   const extraArgs = [...(options.agentArg ?? []), ...selectorArgs];
 
   return extraArgs.length > 0 ? extraArgs : undefined;
@@ -377,7 +379,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
   // Build the ingest sink — no-op for standalone mode, real tRPC sink for
   // server-ingest mode.  The tRPC client reads LOBEHUB_JWT (operation-scoped
   // JWT injected by the server) for authentication.
-  const agentType = options.type as 'amp' | 'claude-code' | 'codex';
+  const agentType = options.type as 'amp' | 'claude-code' | 'codex' | 'opencode';
   let sink: TrpcIngestSink | undefined;
   let serverIngester: CoalescingBatchIngester | undefined;
   // Uploader for tool_result images (CC `Read` on an image file). Reuses the
@@ -881,7 +883,7 @@ export function registerHeteroCommand(program: Command) {
   const hetero = program
     .command('hetero')
     .description(
-      'Run heterogeneous agent CLIs (Amp / Claude Code / Codex) and stream their output',
+      'Run heterogeneous agent CLIs (Amp / Claude Code / Codex / OpenCode) and stream their output',
     );
 
   hetero
@@ -915,7 +917,7 @@ export function registerHeteroCommand(program: Command) {
     )
     .option(
       '-c, --command <bin>',
-      'Override the agent CLI binary name (default: `amp`, `claude`, or `codex`)',
+      'Override the agent CLI binary name (default: `amp`, `claude`, `codex`, or `opencode`)',
     )
     .option(
       '--operation-id <id>',

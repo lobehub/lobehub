@@ -80,9 +80,10 @@ export interface ResolveExecutionTargetOptions {
   isHetero?: boolean;
   /**
    * Whether this heterogeneous provider can execute in the server cloud
-   * sandbox. Defaults to `false` for Amp (which currently requires a local or
-   * connected device) and `true` otherwise. Callers that only know the provider
-   * through a legacy model discriminator can override the inferred capability.
+   * sandbox. Defaults to `false` for Amp and OpenCode (which currently require
+   * a local or connected device) and `true` otherwise. Callers that only know
+   * the provider through a legacy model discriminator can override the inferred
+   * capability.
    */
   sandboxExecutionAvailable?: boolean;
   /**
@@ -108,6 +109,10 @@ export interface ResolveExecutionTargetOptions {
    */
   workspaceScoped?: boolean;
 }
+
+/** Whether a heterogeneous provider can run in LobeHub's cloud sandbox. */
+export const isHeterogeneousSandboxExecutionAvailable = (type: string | undefined): boolean =>
+  type !== 'amp' && type !== 'opencode';
 
 /**
  * Single source of truth for where an agent executes — one global
@@ -169,7 +174,8 @@ export const resolveExecutionTarget = (
   // environment.
   const clientAvailable = clientExecutionAvailable && !workspaceScoped;
   const sandboxAvailable =
-    sandboxExecutionAvailable ?? agencyConfig?.heterogeneousProvider?.type !== 'amp';
+    sandboxExecutionAvailable ??
+    isHeterogeneousSandboxExecutionAvailable(agencyConfig?.heterogeneousProvider?.type);
   const stored = agencyConfig?.executionTarget;
   let effective = stored ?? (clientAvailable ? 'local' : 'none');
   if (
@@ -398,7 +404,8 @@ export const resolveExecutionPlan = (params: ResolveExecutionPlanParams): Execut
     workspaceScoped,
   });
   const sandboxAvailable =
-    sandboxExecutionAvailable ?? agencyConfig?.heterogeneousProvider?.type !== 'amp';
+    sandboxExecutionAvailable ??
+    isHeterogeneousSandboxExecutionAvailable(agencyConfig?.heterogeneousProvider?.type);
   const wantsDevice =
     !!requestedDeviceId || target === 'device' || target === 'local' || target === 'auto';
 

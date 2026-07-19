@@ -1,7 +1,8 @@
-export type HeterogeneousAgentMenuLabelKey = 'newAmpAgent' | 'newClaudeCodeAgent' | 'newCodexAgent';
+export type HeterogeneousAgentMenuLabelKey =
+  'newAmpAgent' | 'newClaudeCodeAgent' | 'newCodexAgent' | 'newOpenCodeAgent';
 
 /**
- * Config for local CLI hetero agents (Amp, Claude Code, Codex) that run as
+ * Config for local CLI hetero agents (Amp, Claude Code, Codex, OpenCode) that run as
  * desktop subprocesses via Electron IPC. Remote device agents (openclaw,
  * hermes) have their own setup flow and are not listed here.
  */
@@ -11,7 +12,7 @@ export interface HeterogeneousAgentConfig {
   menuKey: string;
   menuLabelKey: HeterogeneousAgentMenuLabelKey;
   title: string;
-  type: 'amp' | 'claude-code' | 'codex';
+  type: 'amp' | 'claude-code' | 'codex' | 'opencode';
 }
 
 export const HETEROGENEOUS_AGENT_CONFIGS = [
@@ -39,6 +40,14 @@ export const HETEROGENEOUS_AGENT_CONFIGS = [
     title: 'Amp',
     type: 'amp',
   },
+  {
+    command: 'opencode',
+    iconId: 'OpenCode',
+    menuKey: 'newOpenCodeAgent',
+    menuLabelKey: 'newOpenCodeAgent',
+    title: 'OpenCode',
+    type: 'opencode',
+  },
 ] as const satisfies readonly HeterogeneousAgentConfig[];
 
 export const getHeterogeneousAgentConfig = (type: string) =>
@@ -53,13 +62,12 @@ export const getHeterogeneousAgentConfig = (type: string) =>
  */
 export interface RemoteHeterogeneousAgentConfig {
   title: string;
-  type: 'hermes' | 'opencode' | 'openclaw';
+  type: 'hermes' | 'openclaw';
 }
 
 export const REMOTE_HETEROGENEOUS_AGENT_CONFIGS = [
   { title: 'OpenClaw', type: 'openclaw' },
   { title: 'Hermes', type: 'hermes' },
-  { title: 'OpenCode', type: 'opencode' },
 ] as const satisfies readonly RemoteHeterogeneousAgentConfig[];
 
 /** Union of all local CLI hetero types. */
@@ -74,6 +82,6 @@ export type HeterogeneousAgentType = LocalHeterogeneousAgentType | RemoteHeterog
 
 const REMOTE_HETERO_TYPES = new Set<string>(REMOTE_HETEROGENEOUS_AGENT_CONFIGS.map((c) => c.type));
 
-/** Returns true when `type` identifies a remote platform agent (openclaw, hermes, …). */
+/** Returns true when `type` identifies a remote platform agent (OpenClaw or Hermes). */
 export const isRemoteHeterogeneousType = (type: string): type is RemoteHeterogeneousAgentType =>
   REMOTE_HETERO_TYPES.has(type);

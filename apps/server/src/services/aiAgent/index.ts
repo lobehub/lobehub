@@ -1614,16 +1614,16 @@ export class AiAgentService {
     // 3.5. Hetero-agent early exit — local CLI and remote platform agents bypass the
     // server-side LLM pipeline.  After topic + message creation we hand off to
     // the device gateway (desktop) or cloud sandbox, which will push events
-    // back via `heteroIngest` / `heteroFinish` (claude-code / codex) or
+    // back via `heteroIngest` / `heteroFinish` (claude-code / codex / opencode) or
     // `agentNotify.notify` (openclaw / hermes).
     //
     // Detection: prefer agencyConfig.heterogeneousProvider.type (set by the UI),
     // fall back to model field for backwards compatibility.
-    const HETERO_AGENT_MODELS = new Set<string>(['amp', 'claude-code', 'codex']);
+    const HETERO_AGENT_MODELS = new Set<string>(['amp', 'claude-code', 'codex', 'opencode']);
     const heteroProviderType = agentConfig.agencyConfig?.heterogeneousProvider?.type;
     const isHeteroAgent = !!heteroProviderType || HETERO_AGENT_MODELS.has(model);
     const heteroType = (heteroProviderType ?? model) as
-      'amp' | 'claude-code' | 'codex' | 'hermes' | 'openclaw';
+      'amp' | 'claude-code' | 'codex' | 'hermes' | 'openclaw' | 'opencode';
 
     // ── Shared turn setup (runs for BOTH hetero and normal agents) ──────────
     // Everything up to and including persisting the turn is identical for both
@@ -1903,7 +1903,10 @@ export class AiAgentService {
           ? runAttachments.imageList.map((image) => ({ id: image.id, url: image.url }))
           : undefined;
       const heteroExecArgs =
-        heteroType === 'amp' || heteroType === 'claude-code' || heteroType === 'codex'
+        heteroType === 'amp' ||
+        heteroType === 'claude-code' ||
+        heteroType === 'codex' ||
+        heteroType === 'opencode'
           ? buildHeteroExecArgs(
               agentConfig.agencyConfig?.heterogeneousProvider?.type === heteroType
                 ? agentConfig.agencyConfig.heterogeneousProvider
@@ -2084,20 +2087,21 @@ export class AiAgentService {
           };
         }
       } else {
-        // Local CLI hetero (Amp / Claude Code / Codex) — fork between device dispatch
+        // Local CLI hetero (Amp / Claude Code / Codex / OpenCode) — fork between device dispatch
         // and cloud sandbox via the shared execution plan:
         //   - requestedDeviceId (topic-level override) always wins
         //   - executionTarget 'device' → dispatch to boundDeviceId (errors if unset)
         //   - executionTarget 'local' + boundDeviceId (desktop sync opened on web)
         //     → dispatch to that device
         //   - everything else ('sandbox' / unbound 'local' / 'none' / unset) → cloud
-        //     sandbox (the server can't spawn locally, and a hetero agent must
-        //     execute somewhere)
+        //     sandbox when the provider supports it; Amp and OpenCode remain
+        //     unrouted because they require a local or connected device
         // `onlineDeviceIds` is intentionally omitted: hetero dispatch trusts
         // the binding and fails loudly at the gateway if the device is offline.
-        // `canUseDevice` degrades device-capable targets to the sandbox for
-        // denied senders (e.g. external bot users) — without it a synced
-        // local/device binding would let them run on the owner's machine.
+        // `canUseDevice` degrades device-capable targets to the sandbox when
+        // available, or leaves device-only providers unrouted, for denied
+        // senders (e.g. external bot users). Without this a synced local/device
+        // binding would let them run on the owner's machine.
 
         // Register the op with the agent-gateway DO before dispatch, mirroring
         // the remote-hetero branch above. Local CLI hetero (claude-code / codex)
@@ -2132,7 +2136,7 @@ export class AiAgentService {
           isHetero: true,
           clientExecutionAvailable: false,
           requestedDeviceId,
-          sandboxExecutionAvailable: heteroType !== 'amp',
+          sandboxExecutionAvailable: heteroType === 'claude-code' || heteroType === 'codex',
           trigger: requestTriggerMetadata?.trigger,
         });
 
@@ -2144,7 +2148,7 @@ export class AiAgentService {
               agentId: resolvedAgentId,
               assistantMessageId: assistantMessageRecord.id,
               detail:
-                heteroType === 'amp'
+                heteroType === 'amp' || heteroType === 'opencode'
                   ? 'No device bound. Pick a local or connected device in the Execution Device switcher.'
                   : 'No device bound. Pick a device in the Execution Device switcher, or switch to Cloud sandbox.',
               message: 'No bound device for hetero agent',
@@ -2247,9 +2251,8 @@ export class AiAgentService {
             };
           }
         } else {
-          if (heteroType === 'amp') {
-            const message =
-              'Amp requires a local or connected device; cloud sandbox execution is not supported.';
+          if (heteroType === 'amp' || heteroType === 'opencode') {
+            const message = `${heteroType === 'amp' ? 'Amp' : 'OpenCode'} requires a local or connected device; cloud sandbox execution is not supported.`;
             await this.finalizeHeteroDispatchError({
               agentId: resolvedAgentId,
               assistantMessageId: assistantMessageRecord.id,

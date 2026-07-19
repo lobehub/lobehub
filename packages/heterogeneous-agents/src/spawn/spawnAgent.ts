@@ -10,7 +10,7 @@ import type { AgentPromptInput, BuildAgentInputOptions } from './input';
 import { buildAgentInput } from './input';
 
 export interface SpawnAgentOptions {
-  /** Agent type key (`'amp'` | `'claude-code'` | `'codex'`). */
+  /** Agent type key (`'amp'` | `'claude-code'` | `'codex'` | `'opencode'`). */
   agentType: string;
   /**
    * Override the CLI binary name. Defaults to the agent's standard executable.
@@ -176,6 +176,8 @@ export const AMP_BASE_ARGS = [
   '--no-archive-after-execute',
 ] as const;
 
+export const OPENCODE_BASE_ARGS = ['run', '--format', 'json', '--thinking', '--auto'] as const;
+
 const hasAnyFlag = (args: string[], flags: readonly string[]) =>
   args.some((arg) => flags.includes(arg as (typeof flags)[number]));
 
@@ -224,6 +226,13 @@ const buildAmpArgs = ({ extraArgs, inputArgs, resumeSessionId }: BuildSpawnArgsP
     : executionArgs;
 };
 
+const buildOpenCodeArgs = ({ extraArgs, inputArgs, resumeSessionId }: BuildSpawnArgsParams) => [
+  ...OPENCODE_BASE_ARGS,
+  ...(resumeSessionId ? ['--session', resumeSessionId] : []),
+  ...inputArgs,
+  ...extraArgs,
+];
+
 const buildSpawnArgs = (params: BuildSpawnArgsParams): string[] => {
   switch (params.agentType) {
     case 'amp': {
@@ -234,6 +243,9 @@ const buildSpawnArgs = (params: BuildSpawnArgsParams): string[] => {
     }
     case 'codex': {
       return buildCodexArgs(params);
+    }
+    case 'opencode': {
+      return buildOpenCodeArgs(params);
     }
     default: {
       throw new Error(`spawnAgent: unsupported agent type "${params.agentType}"`);
@@ -248,6 +260,9 @@ const defaultCommand = (agentType: string): string => {
     }
     case 'codex': {
       return 'codex';
+    }
+    case 'opencode': {
+      return 'opencode';
     }
     default: {
       return 'claude';
@@ -283,7 +298,7 @@ const killProcessTree = (proc: ChildProcess, signal: NodeJS.Signals): void => {
 };
 
 /**
- * Spawn an external agent CLI (Amp, Claude Code, or Codex) and yield its stream as
+ * Spawn an external agent CLI (Amp, Claude Code, Codex, or OpenCode) and yield its stream as
  * unified `AgentStreamEvent`s. Used by `lh hetero exec` for both standalone
  * terminal runs and (later) sandbox-driven runs that ingest into the server.
  *

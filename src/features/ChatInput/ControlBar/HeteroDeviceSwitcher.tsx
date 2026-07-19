@@ -2,7 +2,10 @@
 
 import { SiApple, SiLinux } from '@icons-pack/react-simple-icons';
 import { isDesktop } from '@lobechat/const';
-import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
+import {
+  HETEROGENEOUS_TYPE_LABELS,
+  isRemoteHeterogeneousType,
+} from '@lobechat/heterogeneous-agents';
 import type { DeviceExecutionTarget } from '@lobechat/types';
 import { Microsoft } from '@lobehub/icons';
 import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
@@ -27,7 +30,10 @@ import { DOWNLOAD_URL } from '@/const/url';
 import { useSelectExecutionTarget } from '@/features/ChatInput/hooks/useSelectExecutionTarget';
 import { useDeviceList } from '@/features/DeviceManager/useDeviceList';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { resolveExecutionTarget } from '@/helpers/executionTarget';
+import {
+  isHeterogeneousSandboxExecutionAvailable,
+  resolveExecutionTarget,
+} from '@/helpers/executionTarget';
 import { useIsGatewayModeEnabled } from '@/helpers/gatewayMode';
 import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useAgentStore } from '@/store/agent';
@@ -363,7 +369,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   // (plain chat, no execution environment) isn't a valid target for them: hide
   // the option and never fall back to / honour a stale stored `'none'`.
   const isHetero = !!heteroType;
-  const supportsSandbox = heteroType !== 'amp';
+  const supportsSandbox = isHeterogeneousSandboxExecutionAvailable(heteroType);
 
   // Workspace-keyed SWR fetch — the raw lambdaQuery key has no workspace
   // dimension, so the picker kept showing the previous workspace's pool after
@@ -388,15 +394,15 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     workspaceScoped,
   });
 
-  // Amp cannot fall back to the cloud sandbox. When a web/legacy config has no
-  // usable device target, open the picker once so `none` is an explicit setup
-  // prompt rather than a disabled-but-active sandbox row.
+  // Device-only CLIs cannot fall back to the cloud sandbox. When a web/legacy
+  // config has no usable device target, open the picker once so `none` is an
+  // explicit setup prompt rather than a disabled-but-active sandbox row.
   useEffect(() => {
-    if (heteroType !== 'amp') return;
+    if (supportsSandbox) return;
     if (isWorkspacePreferenceLoading) return;
     if (executionTarget !== 'none') return;
     setOpen(true);
-  }, [executionTarget, heteroType, isWorkspacePreferenceLoading]);
+  }, [executionTarget, isWorkspacePreferenceLoading, supportsSandbox]);
 
   const selectExecutionTarget = useSelectExecutionTarget(agentId);
   const handleSelect = useCallback(
@@ -619,7 +625,8 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
         desc={t(
           supportsSandbox
             ? 'heteroAgent.executionTarget.sandboxDesc'
-            : 'heteroAgent.executionTarget.ampSandboxUnsupported',
+            : 'heteroAgent.executionTarget.sandboxUnsupported',
+          { name: heteroType ? HETEROGENEOUS_TYPE_LABELS[heteroType] : undefined },
         )}
         onClick={() => void handleSelect('sandbox')}
       />

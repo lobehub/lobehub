@@ -52,6 +52,16 @@ vi.mock('@lobechat/heterogeneous-agents/client', () => ({
       title: 'Amp',
       type: 'amp',
     },
+    {
+      avatar: 'opencode-avatar',
+      command: 'opencode',
+      icon: () => null,
+      iconId: 'OpenCode',
+      menuKey: 'newOpenCodeAgent',
+      menuLabelKey: 'newOpenCodeAgent',
+      title: 'OpenCode',
+      type: 'opencode',
+    },
   ],
 }));
 
@@ -178,6 +188,7 @@ describe('useCreateMenuItems', () => {
       'newClaudeCodeAgent',
       'newCodexAgent',
       'newAmpAgent',
+      'newOpenCodeAgent',
       'divider',
       'addAgentFromMarket',
     ]);
@@ -301,6 +312,33 @@ describe('useCreateMenuItems', () => {
         provider: 'amp',
         systemRole: '',
         title: 'Amp',
+      },
+      groupId: undefined,
+    });
+  });
+
+  it('creates OpenCode as an independent local CLI agent', async () => {
+    const { result } = renderHook(() => useCreateMenuItems());
+
+    const openCodeItem = result.current
+      .createHeterogeneousAgentMenuItems()
+      .find((item) => isActionItem(item) && item.key === 'newOpenCodeAgent');
+
+    if (!isActionItem(openCodeItem)) throw new Error('Expected OpenCode menu item');
+
+    await act(async () => {
+      await openCodeItem.onClick?.({ domEvent: { stopPropagation: vi.fn() } });
+    });
+
+    expect(createAgentMock).toHaveBeenCalledWith({
+      config: {
+        agencyConfig: {
+          heterogeneousProvider: { command: 'opencode', type: 'opencode' },
+        },
+        avatar: 'opencode-avatar',
+        provider: 'opencode',
+        systemRole: '',
+        title: 'OpenCode',
       },
       groupId: undefined,
     });

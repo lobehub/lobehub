@@ -1,3 +1,5 @@
+import type { HeterogeneousCliAgentType } from './binary';
+
 export const AMP_CLI_INSTALL_DOCS_URL = 'https://ampcode.com/manual';
 
 export const AMP_CLI_INSTALL_COMMANDS = [
@@ -19,6 +21,12 @@ export const CODEX_CLI_INSTALL_DOCS_URL =
 export const CODEX_CLI_INSTALL_COMMANDS = [
   'npm install -g @openai/codex',
   'brew install --cask codex',
+] as const;
+
+export const OPENCODE_CLI_INSTALL_DOCS_URL = 'https://opencode.ai/docs';
+
+export const OPENCODE_CLI_INSTALL_COMMANDS = [
+  'curl -fsSL https://opencode.ai/install | bash',
 ] as const;
 
 export const HeterogeneousAgentSessionErrorCode = {
@@ -125,7 +133,7 @@ export interface ClaudeCodeQuotaSnapshot {
 }
 
 export interface HeterogeneousAgentSessionError {
-  agentType?: string;
+  agentType?: HeterogeneousCliAgentType;
   code?: HeterogeneousAgentSessionErrorCode | string;
   command?: string;
   /** Diagnostic context from the CLI's terminal event (subtype, HTTP status, turn count, …). */
