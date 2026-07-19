@@ -26,3 +26,6 @@ export const OnboardingUnderstandingWorkflowPayloadSchema = z
       });
     }
   }) satisfies z.ZodType<OnboardingUnderstandingWorkflowPayload>;
+
+export const getOnboardingUnderstandingFlowControlKey = (sessionId: string) =>
+  `onboarding-understanding.session.${sessionId.replaceAll(/[^\w.-]/g, '_')}`;

@@ -4,7 +4,10 @@ import { appEnv } from '@/envs/app';
 import { injectActiveTraceHeaders } from '@/libs/observability/traceparent';
 import { workflowClient } from '@/libs/qstash';
 
-import type { OnboardingUnderstandingWorkflowPayload } from './types';
+import {
+  getOnboardingUnderstandingFlowControlKey,
+  type OnboardingUnderstandingWorkflowPayload,
+} from './types';
 
 export type { OnboardingUnderstandingWorkflowPayload } from './types';
 
@@ -41,11 +44,11 @@ export class OnboardingUnderstandingWorkflow {
     return workflowClient.trigger({
       body: payload,
       flowControl: {
-        key: `onboarding-understanding.session.${payload.sessionId.replaceAll(/[^\w.-]/g, '_')}`,
+        key: getOnboardingUnderstandingFlowControlKey(payload.sessionId),
         parallelism: 1,
       },
       headers: Object.fromEntries(traceHeaders.entries()),
-      url: new URL(WORKFLOW_PATH, baseUrl).toString(),
+      url: new URL(`${WORKFLOW_PATH}/${encodeURIComponent(payload.sessionId)}`, baseUrl).toString(),
       workflowRunId,
     });
   }

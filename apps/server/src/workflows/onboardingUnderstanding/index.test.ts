@@ -47,7 +47,7 @@ describe('OnboardingUnderstandingWorkflow', () => {
         parallelism: 1,
       },
       headers: { traceparent: 'trace-1' },
-      url: 'http://internal:3011/api/workflows/onboarding-understanding',
+      url: 'http://internal:3011/api/workflows/onboarding-understanding/session%3A1',
       workflowRunId: 'workflow-1',
     });
   });

@@ -1,5 +1,3 @@
-import { WorkflowAbort } from '@upstash/workflow';
-
 import { getServerDB } from '@/database/server';
 import {
   createUnderstandingService,
@@ -10,6 +8,7 @@ import {
 } from '@/server/services/understanding/service';
 
 import {
+  getOnboardingUnderstandingFlowControlKey,
   type OnboardingUnderstandingWorkflowPayload,
   OnboardingUnderstandingWorkflowPayloadSchema,
 } from './types';
@@ -17,10 +16,6 @@ import {
 interface SourceBranch {
   sourceId: string;
   threadId: string;
-}
-
-interface WorkflowSourceBranch extends SourceBranch {
-  stepName: string;
 }
 
 interface SourceOutcome {
@@ -38,20 +33,7 @@ interface RunOnboardingUnderstandingWorkflowDependencies {
   createService?: (userId: string) => Promise<UnderstandingService>;
 }
 
-const addStepNames = (branches: SourceBranch[]): WorkflowSourceBranch[] => {
-  const providerCounts = new Map<string, number>();
-  return branches.map((branch) => {
-    const provider = branch.sourceId.split(':', 1)[0];
-    const count = (providerCounts.get(provider) ?? 0) + 1;
-    providerCounts.set(provider, count);
-    return { ...branch, stepName: count === 1 ? provider : `${provider}-${count}` };
-  });
-};
-
-const sourceIdentity = (
-  payload: OnboardingUnderstandingWorkflowPayload,
-  branch: WorkflowSourceBranch,
-) => ({
+const sourceIdentity = (payload: OnboardingUnderstandingWorkflowPayload, branch: SourceBranch) => ({
   sessionId: payload.sessionId,
   sourceId: branch.sourceId,
   threadId: branch.threadId,
@@ -64,40 +46,32 @@ const toSafeStepResult = (result: { kind: string; resultId: string }) => ({
   resultId: result.resultId,
 });
 
-const failSource = async (
-  context: OnboardingUnderstandingWorkflowContext,
+const persistSourceFailure = async (
   service: UnderstandingService,
   payload: OnboardingUnderstandingWorkflowPayload,
-  branch: WorkflowSourceBranch,
+  branch: SourceBranch,
 ): Promise<SourceOutcome> => {
-  const result = await context.run(`${branch.stepName}:fail`, async () =>
-    toSafeStepResult(await service.failSource(sourceIdentity(payload, branch))),
-  );
+  const result = toSafeStepResult(await service.failSource(sourceIdentity(payload, branch)));
   return { sourceId: branch.sourceId, status: result.kind === 'source' ? 'completed' : 'failed' };
 };
 
 const executeSource = async (
-  context: OnboardingUnderstandingWorkflowContext,
   service: UnderstandingService,
   payload: OnboardingUnderstandingWorkflowPayload,
-  branch: WorkflowSourceBranch,
+  branch: SourceBranch,
   launch: UnderstandingSourceLaunchReference,
 ): Promise<SourceOutcome> => {
-  const execution = await context.run(`${branch.stepName}:execute`, () =>
-    service.executeAgentOperation(launch.operationId),
-  );
-  if (execution.status === 'error') return failSource(context, service, payload, branch);
+  const execution = await service.executeAgentOperation(launch.operationId);
+  if (execution.status === 'error') return persistSourceFailure(service, payload, branch);
   if (execution.status !== 'done') {
     throw new Error('Understanding source operation did not settle');
   }
 
-  const result = await context.run(`${branch.stepName}:finalize`, async () =>
-    toSafeStepResult(
-      await service.finalizeSource({
-        ...sourceIdentity(payload, branch),
-        assistantMessageId: launch.assistantMessageId,
-      }),
-    ),
+  const result = toSafeStepResult(
+    await service.finalizeSource({
+      ...sourceIdentity(payload, branch),
+      assistantMessageId: launch.assistantMessageId,
+    }),
   );
   return {
     sourceId: branch.sourceId,
@@ -179,8 +153,8 @@ export const runOnboardingUnderstandingWorkflow = async (
     return { attached: true };
   });
 
-  const branches = addStepNames(
-    (payload.mode === 'initial'
+  const branches = (
+    payload.mode === 'initial'
       ? await context.run('discover', () => service.discover(payload.topicId, payload.sessionId))
       : [
           await context.run('retry:prepare', () =>
@@ -191,56 +165,53 @@ export const runOnboardingUnderstandingWorkflow = async (
             }),
           ),
         ]
-    ).sort((left, right) => left.sourceId.localeCompare(right.sourceId)),
+  ).sort((left, right) => left.sourceId.localeCompare(right.sourceId));
+
+  const collected = await context.run('sources:collect', () =>
+    Promise.all(
+      branches.map(async (branch) => {
+        try {
+          await service.collectSource(sourceIdentity(payload, branch));
+          return { branch, collected: true as const };
+        } catch (error) {
+          if (!(error instanceof UnderstandingBranchFailureError)) throw error;
+          return { branch, collected: false as const };
+        }
+      }),
+    ),
   );
 
-  const collected = await Promise.all(
-    branches.map(async (branch) => {
+  const launches = await context.run('sources:launch', async () => {
+    const launched: Array<{
+      branch: SourceBranch;
+      launch?: UnderstandingSourceLaunchReference;
+    }> = [];
+    for (const item of collected) {
+      if (!item.collected) {
+        launched.push({ branch: item.branch });
+        continue;
+      }
       try {
-        await context.run(`${branch.stepName}:collect`, () =>
-          service.collectSource(sourceIdentity(payload, branch)),
+        const launch = await service.launchSourceAnalysis(sourceIdentity(payload, item.branch));
+        launched.push(
+          'skipped' in launch ? { branch: item.branch } : { branch: item.branch, launch },
         );
-        return { branch, collected: true as const };
       } catch (error) {
-        if (error instanceof WorkflowAbort) throw error;
         if (!(error instanceof UnderstandingBranchFailureError)) throw error;
-        return { branch, collected: false as const };
+        launched.push({ branch: item.branch });
       }
-    }),
-  );
-
-  const outcomes: SourceOutcome[] = [];
-  const launches: Array<{
-    branch: WorkflowSourceBranch;
-    launch: UnderstandingSourceLaunchReference;
-  }> = [];
-  for (const item of collected) {
-    if (!item.collected) {
-      outcomes.push(await failSource(context, service, payload, item.branch));
-      continue;
     }
-    try {
-      const launch = await context.run(`${item.branch.stepName}:launch`, () =>
-        service.launchSourceAnalysis(sourceIdentity(payload, item.branch)),
-      );
-      if ('skipped' in launch) {
-        outcomes.push(await failSource(context, service, payload, item.branch));
-      } else {
-        launches.push({ branch: item.branch, launch });
-      }
-    } catch (error) {
-      if (error instanceof WorkflowAbort) throw error;
-      if (!(error instanceof UnderstandingBranchFailureError)) throw error;
-      outcomes.push(await failSource(context, service, payload, item.branch));
-    }
-  }
+    return launched;
+  });
 
-  outcomes.push(
-    ...(await Promise.all(
+  const outcomes = await context.run('sources:execute-finalize', () =>
+    Promise.all(
       launches.map(({ branch, launch }) =>
-        executeSource(context, service, payload, branch, launch),
+        launch
+          ? executeSource(service, payload, branch, launch)
+          : persistSourceFailure(service, payload, branch),
       ),
-    )),
+    ),
   );
   outcomes.sort((left, right) => left.sourceId.localeCompare(right.sourceId));
 
@@ -251,30 +222,26 @@ export const runOnboardingUnderstandingWorkflow = async (
   return { merge, sources: outcomes };
 };
 
-// Trigger-side flow control serializes the initial delivery per session. This static serve-side
-// key separately bounds the continuation messages generated by each durable context.run step.
-export const onboardingUnderstandingWorkflowOptions = {
+export const createOnboardingUnderstandingWorkflowOptions = (sessionId: string) => ({
   failureFunction: async ({
     context,
   }: {
     context: { requestPayload?: unknown; workflowRunId: string };
   }) => {
-    try {
-      const payload = OnboardingUnderstandingWorkflowPayloadSchema.parse(context.requestPayload);
-      await terminalizeUnderstandingWorkflow({
-        db: await getServerDB(),
-        sessionId: payload.sessionId,
-        topicId: payload.topicId,
-        userId: payload.userId,
-        workflowRunId: context.workflowRunId,
-      });
-      return 'session-terminalized';
-    } catch {
-      return 'session-terminalization-failed';
-    }
+    const parsed = OnboardingUnderstandingWorkflowPayloadSchema.safeParse(context.requestPayload);
+    if (!parsed.success || parsed.data.sessionId !== sessionId) return 'invalid-payload';
+
+    await terminalizeUnderstandingWorkflow({
+      db: await getServerDB(),
+      sessionId: parsed.data.sessionId,
+      topicId: parsed.data.topicId,
+      userId: parsed.data.userId,
+      workflowRunId: context.workflowRunId,
+    });
+    return 'session-terminalized';
   },
   flowControl: {
-    key: 'onboarding-understanding.steps',
-    parallelism: 25,
+    key: getOnboardingUnderstandingFlowControlKey(sessionId),
+    parallelism: 1,
   },
-};
+});

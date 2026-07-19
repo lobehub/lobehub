@@ -7,7 +7,10 @@ import {
   type UnderstandingService,
 } from '@/server/services/understanding/service';
 
-import { onboardingUnderstandingWorkflowOptions, runOnboardingUnderstandingWorkflow } from './run';
+import {
+  createOnboardingUnderstandingWorkflowOptions,
+  runOnboardingUnderstandingWorkflow,
+} from './run';
 
 const { terminalizeUnderstandingWorkflowMock } = vi.hoisted(() => ({
   terminalizeUnderstandingWorkflowMock: vi.fn(),
@@ -172,14 +175,9 @@ describe('runOnboardingUnderstandingWorkflow', () => {
     expect(steps).toEqual([
       'attach-workflow-run',
       'discover',
-      'github:collect',
-      'gmail:collect',
-      'github:launch',
-      'gmail:launch',
-      'github:execute',
-      'gmail:execute',
-      'github:finalize',
-      'gmail:finalize',
+      'sources:collect',
+      'sources:launch',
+      'sources:execute-finalize',
       'merge:launch',
       'merge:execute',
       'merge:finalize',
@@ -233,7 +231,7 @@ describe('runOnboardingUnderstandingWorkflow', () => {
     expect(service.collectSource).toHaveBeenCalledTimes(1);
   });
 
-  it('uses unique stable steps for multiple accounts from one provider', async () => {
+  it('uses one phase step for multiple accounts from one provider', async () => {
     const service = createService();
     service.discover.mockResolvedValue([
       { sourceId: 'github:account-2', threadId: 'thread-2' },
@@ -245,8 +243,9 @@ describe('runOnboardingUnderstandingWorkflow', () => {
       createService: async () => service,
     });
 
-    expect(steps).toContain('github:collect');
-    expect(steps).toContain('github-2:collect');
+    expect(steps.filter((step) => step === 'sources:collect')).toHaveLength(1);
+    expect(steps.filter((step) => step === 'sources:launch')).toHaveLength(1);
+    expect(steps.filter((step) => step === 'sources:execute-finalize')).toHaveLength(1);
     expect(new Set(steps).size).toBe(steps.length);
   });
 
@@ -294,7 +293,7 @@ describe('runOnboardingUnderstandingWorkflow', () => {
     expect(service.executeAgentOperation).toHaveBeenCalledTimes(2);
   });
 
-  it.each(['github:collect', 'merge:execute'])(
+  it.each(['sources:collect', 'merge:execute'])(
     'rethrows WorkflowAbort from %s without persisting a branch failure',
     async (abortingStep) => {
       const service = createService();
@@ -326,11 +325,11 @@ describe('runOnboardingUnderstandingWorkflow', () => {
   });
 });
 
-describe('onboardingUnderstandingWorkflowOptions', () => {
-  it('bounds continuation delivery separately from the per-session trigger', () => {
-    expect(onboardingUnderstandingWorkflowOptions.flowControl).toEqual({
-      key: 'onboarding-understanding.steps',
-      parallelism: 25,
+describe('createOnboardingUnderstandingWorkflowOptions', () => {
+  it('serializes continuation delivery with the trigger session key', () => {
+    expect(createOnboardingUnderstandingWorkflowOptions('session:1').flowControl).toEqual({
+      key: 'onboarding-understanding.session.session_1',
+      parallelism: 1,
     });
   });
 
@@ -338,7 +337,7 @@ describe('onboardingUnderstandingWorkflowOptions', () => {
     terminalizeUnderstandingWorkflowMock.mockResolvedValue(undefined);
 
     await expect(
-      onboardingUnderstandingWorkflowOptions.failureFunction({
+      createOnboardingUnderstandingWorkflowOptions('session-1').failureFunction({
         context: { requestPayload: initialPayload, workflowRunId: 'workflow-1' },
         failHeaders: {},
         failResponse: 'private connector content',
@@ -357,5 +356,26 @@ describe('onboardingUnderstandingWorkflowOptions', () => {
     expect(JSON.stringify(terminalizeUnderstandingWorkflowMock.mock.calls)).not.toContain(
       'private connector content',
     );
+  });
+
+  it('returns invalid-payload without opening the database', async () => {
+    terminalizeUnderstandingWorkflowMock.mockClear();
+
+    await expect(
+      createOnboardingUnderstandingWorkflowOptions('session-1').failureFunction({
+        context: { requestPayload: { sessionId: 'session-1' }, workflowRunId: 'workflow-1' },
+      } as never),
+    ).resolves.toBe('invalid-payload');
+    expect(terminalizeUnderstandingWorkflowMock).not.toHaveBeenCalled();
+  });
+
+  it('rethrows terminalization failures for Upstash retry and DLQ handling', async () => {
+    terminalizeUnderstandingWorkflowMock.mockRejectedValueOnce(new Error('database unavailable'));
+
+    await expect(
+      createOnboardingUnderstandingWorkflowOptions('session-1').failureFunction({
+        context: { requestPayload: initialPayload, workflowRunId: 'workflow-1' },
+      } as never),
+    ).rejects.toThrow('database unavailable');
   });
 });
