@@ -583,7 +583,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
   });
 
   /**
-   * Runs the executor in background, then feeds CC events and completes.
+   * Runs the executor in background, then feeds raw events or inline emitters and completes.
    * Returns a promise that resolves when the executor finishes.
    */
   async function runWithEvents(
@@ -609,9 +609,10 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
     // Wait for startSession + subscribeBroadcasts to complete
     await flush();
 
-    // Feed CC events
+    // Feed raw adapter inputs or invoke an inline emitter for already-adapted events.
     for (const event of ccEvents) {
-      ipc.emitRawLine('ipc-sess-1', event);
+      if (typeof event === 'function') event();
+      else ipc.emitRawLine('ipc-sess-1', event);
     }
 
     // Signal completion
@@ -2194,6 +2195,97 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(writes).toHaveLength(3);
     });
 
+    it('drops main tool-state snapshots that arrive after the terminal result', async () => {
+      const latePluginState = {
+        todos: { items: [{ status: 'processing', text: 'Stale progress' }] },
+      };
+      const { store } = await runWithEvents(
+        [
+          codexTurnStarted(),
+          codexTodo('item.started', 0),
+          codexTodo('item.completed', 3),
+          () =>
+            ipc.emitStreamEvent('ipc-sess-1', {
+              data: {
+                chunkType: 'tool_state',
+                pluginState: latePluginState,
+                snapshotMode: 'replace',
+                snapshotSeq: 2,
+                toolCallId: 'todo-1',
+              },
+              type: 'stream_chunk',
+            }),
+          codexTurnCompleted(),
+        ],
+        {
+          params: {
+            heterogeneousProvider: { command: 'codex', type: 'codex' as const },
+          },
+        },
+      );
+
+      const writes = mockUpdateToolMessage.mock.calls.map(([, value]) => value);
+      expect(
+        writes.some(
+          (value) =>
+            value.heterogeneousToolState?.snapshotSeq === 2 &&
+            value.pluginState === latePluginState,
+        ),
+      ).toBe(false);
+      expect(writes.some((value) => value.content === 'Todo list updated (3/3 completed).')).toBe(
+        true,
+      );
+      expect(
+        store.internal_dispatchMessage.mock.calls.some(
+          ([payload]: any[]) =>
+            payload.type === 'replaceMessagePluginState' && payload.value === latePluginState,
+        ),
+      ).toBe(false);
+    });
+
+    it('accepts main tool state again after a new tool lifecycle starts', async () => {
+      const nextPluginState = {
+        todos: { items: [{ status: 'processing', text: 'New lifecycle' }] },
+      };
+      await runWithEvents(
+        [
+          codexTurnStarted(),
+          codexTodo('item.started', 0),
+          codexTodo('item.completed', 3),
+          () =>
+            ipc.emitStreamEvent('ipc-sess-1', {
+              data: { toolCallId: 'todo-1' },
+              type: 'tool_start',
+            }),
+          () =>
+            ipc.emitStreamEvent('ipc-sess-1', {
+              data: {
+                chunkType: 'tool_state',
+                pluginState: nextPluginState,
+                snapshotMode: 'replace',
+                snapshotSeq: 2,
+                toolCallId: 'todo-1',
+              },
+              type: 'stream_chunk',
+            }),
+          codexTurnCompleted(),
+        ],
+        {
+          params: {
+            heterogeneousProvider: { command: 'codex', type: 'codex' as const },
+          },
+        },
+      );
+
+      expect(
+        mockUpdateToolMessage.mock.calls.some(
+          ([, value]) =>
+            value.heterogeneousToolState?.snapshotSeq === 2 &&
+            value.pluginState === nextPluginState,
+        ),
+      ).toBe(true);
+    });
+
     it('should persist Codex host model metadata onto the current assistant message', async () => {
       await runWithEvents(
         [
@@ -3493,6 +3585,50 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
   // ────────────────────────────────────────────────────
 
   describe('CC subagent thread-container', () => {
+    it('drops subagent tool-state snapshots that arrive after the terminal result', async () => {
+      const latePluginState = { status: 'processing' };
+      const { store } = await runWithEvents([
+        ccInit(),
+        ccToolUse('msg_main', 'toolu_task', 'Task', {
+          description: 'Inspect files',
+          subagent_type: 'Explore',
+        }),
+        ccSubagentToolUse('msg_sub', 'toolu_task', 'toolu_child', 'Read'),
+        ccSubagentToolResult('toolu_child', 'toolu_task', 'file content'),
+        () =>
+          ipc.emitStreamEvent('ipc-sess-1', {
+            data: {
+              chunkType: 'tool_state',
+              pluginState: latePluginState,
+              snapshotMode: 'replace',
+              snapshotSeq: 1,
+              subagent: { parentToolCallId: 'toolu_task' },
+              toolCallId: 'toolu_child',
+            },
+            type: 'stream_chunk',
+          }),
+        ccSubagentSpawnResult('toolu_task', 'done'),
+        ccResult(),
+      ]);
+
+      expect(
+        mockUpdateToolMessage.mock.calls.some(
+          ([, value]) =>
+            value.heterogeneousToolState?.snapshotSeq === 1 &&
+            value.pluginState === latePluginState,
+        ),
+      ).toBe(false);
+      expect(
+        mockUpdateToolMessage.mock.calls.some(([, value]) => value.content === 'file content'),
+      ).toBe(true);
+      expect(
+        store.internal_dispatchMessage.mock.calls.some(
+          ([payload]: any[]) =>
+            payload.type === 'replaceMessagePluginState' && payload.value === latePluginState,
+        ),
+      ).toBe(false);
+    });
+
     it('does not recreate a finalized subagent Thread after a client executor restart', async () => {
       mockGetThreads.mockResolvedValue([
         {

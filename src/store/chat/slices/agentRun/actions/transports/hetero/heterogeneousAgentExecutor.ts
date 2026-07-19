@@ -672,6 +672,8 @@ export const executeHeterogeneousAgent = async (
   const toolMsgIdByCallId: Map<string, string> = new Map();
   const lastAppliedToolStateSeqByCallId = new Map<string, number>();
   const mainToolCallIds = new Set<string>();
+  /** Terminal results reject later state until a new tool_start reopens the call id. */
+  const completedToolStateCallIds = new Set<string>();
   /** Final tool_result supersedes every pending non-terminal state retry. */
   const terminalToolMessageIds = new Set<string>();
   const pendingInterventionRequests = new Map<string, AgentInterventionRequestData>();
@@ -934,6 +936,7 @@ export const executeHeterogeneousAgent = async (
   ) => {
     if (!mainToolCallIds.has(toolCallId)) return;
 
+    completedToolStateCallIds.add(toolCallId);
     const toolMsgId = toolMsgIdByCallId.get(toolCallId);
     if (!toolMsgId) {
       console.warn('[HeterogeneousAgent] tool_result for unknown toolCallId:', toolCallId);
@@ -1413,6 +1416,7 @@ export const executeHeterogeneousAgent = async (
 
       case 'resolveToolResult': {
         const t = getSubagentThread(intent.threadId);
+        completedToolStateCallIds.add(intent.toolCallId);
         const toolMsgId = toolMsgIdByCallId.get(intent.toolCallId);
         if (toolMsgId) {
           terminalToolMessageIds.add(toolMsgId);
@@ -1434,6 +1438,8 @@ export const executeHeterogeneousAgent = async (
       }
 
       case 'updateToolState': {
+        if (completedToolStateCallIds.has(intent.toolCallId)) return;
+
         const t = getSubagentThread(intent.threadId);
         const toolMsgId = toolMsgIdByCallId.get(intent.toolCallId);
         if (!toolMsgId) {
@@ -1704,7 +1710,12 @@ export const executeHeterogeneousAgent = async (
       }
 
       case 'updateToolState': {
-        if (!mainToolCallIds.has(intent.toolCallId)) return;
+        if (
+          !mainToolCallIds.has(intent.toolCallId) ||
+          completedToolStateCallIds.has(intent.toolCallId)
+        ) {
+          return;
+        }
 
         const toolMsgId = toolMsgIdByCallId.get(intent.toolCallId);
         if (!toolMsgId) {
@@ -1936,6 +1947,17 @@ export const executeHeterogeneousAgent = async (
           pendingInterventionResponses.set(data.toolCallId, data);
         });
         return;
+      }
+
+      if (event.type === 'tool_start') {
+        const toolCallId = (event.data as { toolCallId?: unknown } | undefined)?.toolCallId;
+        if (typeof toolCallId === 'string') {
+          // Keep lifecycle changes on the same FIFO as results and state so a
+          // rapid result → start → state sequence cannot be observed out of order.
+          persistQueue = persistQueue.then(() => {
+            completedToolStateCallIds.delete(toolCallId);
+          });
+        }
       }
 
       // ─── tool_result: reducer writes the tool content + finalizes spawns ───
