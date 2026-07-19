@@ -163,6 +163,53 @@ describe('Understanding durable contracts', () => {
     ).toBe(false);
   });
 
+  it.each([
+    [
+      'source IDs',
+      {
+        runs: [
+          { source, status: 'pending', threadId: 'thread-a' },
+          { source, status: 'pending', threadId: 'thread-b' },
+        ],
+      },
+    ],
+    [
+      'thread IDs',
+      {
+        mergeRun: { status: 'pending', threadId: 'thread-a' },
+        runs: [{ source, status: 'pending', threadId: 'thread-a' }],
+      },
+    ],
+    [
+      'assistant message IDs',
+      {
+        mergeRun: {
+          assistantMessageId: 'message',
+          status: 'completed',
+          threadId: 'merge-thread',
+        },
+        runs: [
+          { assistantMessageId: 'message', source, status: 'completed', threadId: 'thread-a' },
+        ],
+      },
+    ],
+    [
+      'result IDs',
+      {
+        mergeRun: { resultId: 'result', status: 'completed', threadId: 'merge-thread' },
+        runs: [{ resultId: 'result', source, status: 'completed', threadId: 'thread-a' }],
+      },
+    ],
+  ])('rejects duplicate active business %s', (_label, manifest) => {
+    expect(
+      OnboardingUnderstandingSessionSchema.safeParse({
+        id: 'session',
+        status: 'processing',
+        ...manifest,
+      }).success,
+    ).toBe(false);
+  });
+
   it('projects polling status from source and merge business state', () => {
     const session = {
       id: 'session',

@@ -28,6 +28,13 @@ export class StaleUnderstandingSessionError extends Error {
   }
 }
 
+export class StaleUnderstandingWorkflowError extends Error {
+  constructor(workflowRunId: string) {
+    super(`Onboarding Understanding workflow is no longer active: ${workflowRunId}`);
+    this.name = 'StaleUnderstandingWorkflowError';
+  }
+}
+
 export class InvalidUnderstandingSessionError extends Error {
   constructor(cause: unknown) {
     super('Onboarding Understanding session manifest is invalid', { cause });
@@ -125,10 +132,12 @@ export class UnderstandingSessionRepository {
   updateSourceRun = (
     topicId: string,
     sessionId: string,
+    workflowRunId: string,
     sourceId: string,
     patch: SourceRunUpdate,
   ): Promise<OnboardingUnderstandingSession> =>
     this.update(topicId, sessionId, (session) => {
+      this.assertWorkflowRun(session, workflowRunId);
       const runIndex = session.runs.findIndex((run) => run.source.id === sourceId);
       if (runIndex < 0) throw new Error(`Understanding source was not found: ${sourceId}`);
 
@@ -141,16 +150,25 @@ export class UnderstandingSessionRepository {
   setMergeRun = (
     topicId: string,
     sessionId: string,
+    workflowRunId: string,
     mergeRun: UnderstandingMergeRun,
   ): Promise<OnboardingUnderstandingSession> =>
-    this.update(topicId, sessionId, (session) => ({ ...session, mergeRun }));
+    this.update(topicId, sessionId, (session) => {
+      this.assertWorkflowRun(session, workflowRunId);
+      if (!session.mergeRun) return { ...session, mergeRun };
+      if (session.mergeRun.threadId === mergeRun.threadId) return session;
+
+      throw new Error('Understanding session already has a different merge run');
+    });
 
   updateMergeRun = (
     topicId: string,
     sessionId: string,
+    workflowRunId: string,
     patch: MergeRunUpdate,
   ): Promise<OnboardingUnderstandingSession> =>
     this.update(topicId, sessionId, (session) => {
+      this.assertWorkflowRun(session, workflowRunId);
       if (!session.mergeRun) throw new Error('Understanding merge run was not found');
       return { ...session, mergeRun: { ...session.mergeRun, ...patch } };
     });
@@ -220,6 +238,15 @@ export class UnderstandingSessionRepository {
 
       return session;
     });
+
+  private assertWorkflowRun = (
+    session: OnboardingUnderstandingSession,
+    workflowRunId: string,
+  ): void => {
+    if (session.workflowRunId !== workflowRunId) {
+      throw new StaleUnderstandingWorkflowError(workflowRunId);
+    }
+  };
 
   private mutateSession = async (
     topicId: string,

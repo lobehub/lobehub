@@ -6,7 +6,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { getTestDB } from '../../core/getTestDB';
 import { messages, threads, topics, users } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
-import { StaleUnderstandingSessionError, UnderstandingSessionRepository } from './session';
+import {
+  StaleUnderstandingSessionError,
+  StaleUnderstandingWorkflowError,
+  UnderstandingSessionRepository,
+} from './session';
 
 const db: LobeChatDatabase = await getTestDB();
 const userId = 'understanding-session-user';
@@ -116,28 +120,40 @@ describe('UnderstandingSessionRepository', () => {
 
   it('updates source and merge state through focused methods', async () => {
     await repository.install(topicId, createSession());
+    await repository.attachWorkflowRun(topicId, 'session-current', 'workflow-run');
 
-    const sourceUpdated = await repository.updateSourceRun(topicId, 'session-current', 'source-a', {
-      assistantMessageId: 'source-message',
-      diagnostics: { evidenceCount: 4, failedCount: 1, succeededCount: 3 },
-      resultId: 'source-result',
-      status: 'completed',
-    });
+    const sourceUpdated = await repository.updateSourceRun(
+      topicId,
+      'session-current',
+      'workflow-run',
+      'source-a',
+      {
+        assistantMessageId: 'source-message',
+        diagnostics: { evidenceCount: 4, failedCount: 1, succeededCount: 3 },
+        resultId: 'source-result',
+        status: 'completed',
+      },
+    );
     expect(sourceUpdated.runs[0]).toMatchObject({
       assistantMessageId: 'source-message',
       resultId: 'source-result',
       status: 'completed',
     });
 
-    await repository.setMergeRun(topicId, 'session-current', {
+    await repository.setMergeRun(topicId, 'session-current', 'workflow-run', {
       status: 'pending',
       threadId: 'merge-thread',
     });
-    const mergeUpdated = await repository.updateMergeRun(topicId, 'session-current', {
-      assistantMessageId: 'merge-message',
-      resultId: 'merge-result',
-      status: 'completed',
-    });
+    const mergeUpdated = await repository.updateMergeRun(
+      topicId,
+      'session-current',
+      'workflow-run',
+      {
+        assistantMessageId: 'merge-message',
+        resultId: 'merge-result',
+        status: 'completed',
+      },
+    );
     expect(mergeUpdated).toMatchObject({
       mergeRun: {
         assistantMessageId: 'merge-message',
@@ -150,13 +166,70 @@ describe('UnderstandingSessionRepository', () => {
 
   it('rejects updates for an unknown source or missing merge run', async () => {
     await repository.install(topicId, createSession());
+    await repository.attachWorkflowRun(topicId, 'session-current', 'workflow-run');
 
     await expect(
-      repository.updateSourceRun(topicId, 'session-current', 'missing', { status: 'failed' }),
+      repository.updateSourceRun(topicId, 'session-current', 'workflow-run', 'missing', {
+        status: 'failed',
+      }),
     ).rejects.toThrow('source was not found');
     await expect(
-      repository.updateMergeRun(topicId, 'session-current', { status: 'failed' }),
+      repository.updateMergeRun(topicId, 'session-current', 'workflow-run', { status: 'failed' }),
     ).rejects.toThrow('merge run was not found');
+  });
+
+  it('rejects source and merge writes from an older workflow', async () => {
+    await repository.install(topicId, createSession());
+    await repository.attachWorkflowRun(topicId, 'session-current', 'workflow-old');
+    await repository.attachWorkflowRun(topicId, 'session-current', 'workflow-current');
+
+    await expect(
+      repository.updateSourceRun(topicId, 'session-current', 'workflow-old', 'source-a', {
+        status: 'completed',
+      }),
+    ).rejects.toBeInstanceOf(StaleUnderstandingWorkflowError);
+    await expect(
+      repository.setMergeRun(topicId, 'session-current', 'workflow-old', {
+        status: 'pending',
+        threadId: 'merge-thread',
+      }),
+    ).rejects.toBeInstanceOf(StaleUnderstandingWorkflowError);
+
+    await repository.setMergeRun(topicId, 'session-current', 'workflow-current', {
+      status: 'pending',
+      threadId: 'merge-thread',
+    });
+    await repository.attachWorkflowRun(topicId, 'session-current', 'workflow-newer');
+    await expect(
+      repository.updateMergeRun(topicId, 'session-current', 'workflow-current', {
+        status: 'completed',
+      }),
+    ).rejects.toBeInstanceOf(StaleUnderstandingWorkflowError);
+  });
+
+  it('creates a merge run idempotently and rejects a different merge identity', async () => {
+    await repository.install(topicId, createSession());
+    await repository.attachWorkflowRun(topicId, 'session-current', 'workflow-run');
+    const mergeRun = { status: 'pending' as const, threadId: 'merge-thread' };
+
+    const created = await repository.setMergeRun(
+      topicId,
+      'session-current',
+      'workflow-run',
+      mergeRun,
+    );
+    await expect(
+      repository.setMergeRun(topicId, 'session-current', 'workflow-run', {
+        status: 'running',
+        threadId: mergeRun.threadId,
+      }),
+    ).resolves.toEqual(created);
+    await expect(
+      repository.setMergeRun(topicId, 'session-current', 'workflow-run', {
+        status: 'pending',
+        threadId: 'different-merge-thread',
+      }),
+    ).rejects.toThrow('different merge run');
   });
 
   it('removes the session and its referenced hidden threads for onboarding reset', async () => {
@@ -217,5 +290,37 @@ describe('UnderstandingSessionRepository', () => {
     await expect(repository.get(topicId)).resolves.toBeUndefined();
     expect((await db.select().from(threads)).map(({ id }) => id)).toEqual(['ordinary-thread']);
     expect((await db.select().from(messages)).map(({ id }) => id)).toEqual(['ordinary-message']);
+  });
+
+  it('rejects reset when a referenced thread has the wrong marker', async () => {
+    const session = createSession();
+    await repository.install(topicId, session);
+    await db.insert(threads).values({
+      id: session.runs[0].threadId,
+      metadata: { onboardingUnderstanding: { kind: 'merged' } },
+      status: ThreadStatus.Pending,
+      topicId,
+      type: ThreadType.Isolation,
+      userId,
+    });
+
+    await expect(repository.removeForReset(topicId)).rejects.toThrow('Invalid Understanding');
+    await expect(repository.get(topicId)).resolves.toEqual(session);
+  });
+
+  it('rejects reset when a referenced thread belongs to another user', async () => {
+    const session = createSession();
+    await repository.install(topicId, session);
+    await db.insert(threads).values({
+      id: session.runs[0].threadId,
+      metadata: { onboardingUnderstanding: { kind: 'source' } },
+      status: ThreadStatus.Pending,
+      topicId,
+      type: ThreadType.Isolation,
+      userId: otherUserId,
+    });
+
+    await expect(repository.removeForReset(topicId)).rejects.toThrow('unowned thread');
+    await expect(repository.get(topicId)).resolves.toEqual(session);
   });
 });

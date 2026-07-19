@@ -356,7 +356,29 @@ export const OnboardingUnderstandingSessionSchema = z
     status: z.enum(['pending', 'processing', 'merging', 'completed', 'partial', 'failed']),
     workflowRunId: z.string().optional(),
   })
-  .strict() satisfies z.ZodType<OnboardingUnderstandingSession>;
+  .strict()
+  .superRefine((session, context) => {
+    const runs = [...session.runs, ...(session.mergeRun ? [session.mergeRun] : [])];
+    const identities = [
+      ['source ID', session.runs.map((run) => run.source.id)],
+      ['thread ID', runs.map((run) => run.threadId)],
+      [
+        'assistant message ID',
+        runs.flatMap((run) => (run.assistantMessageId ? [run.assistantMessageId] : [])),
+      ],
+      ['result ID', runs.flatMap((run) => (run.resultId ? [run.resultId] : []))],
+    ] as const;
+
+    for (const [label, values] of identities) {
+      if (new Set(values).size !== values.length) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Duplicate Understanding ${label}`,
+          path: ['runs'],
+        });
+      }
+    }
+  }) satisfies z.ZodType<OnboardingUnderstandingSession>;
 
 const TERMINAL_SOURCE_STATUSES: ReadonlySet<UnderstandingRunStatus> = new Set([
   'completed',
