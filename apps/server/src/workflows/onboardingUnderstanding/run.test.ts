@@ -28,7 +28,14 @@ vi.mock('@/database/server', () => ({ getServerDB: vi.fn() }));
 vi.mock('@/server/services/understanding/service', () => ({
   createUnderstandingService: vi.fn(),
   terminalizeUnderstandingWorkflow: terminalizeUnderstandingWorkflowMock,
-  UnderstandingBranchFailureError: class UnderstandingBranchFailureError extends Error {},
+  UnderstandingBranchFailureError: class UnderstandingBranchFailureError extends Error {
+    retryable: boolean;
+
+    constructor(message: string, options: { retryable?: boolean } = {}) {
+      super(message);
+      this.retryable = options.retryable ?? false;
+    }
+  },
 }));
 
 const deferred = <T>() => {
@@ -225,6 +232,39 @@ describe('runOnboardingUnderstandingWorkflow', () => {
     });
     expect(service.launchSourceAnalysis).toHaveBeenCalledTimes(1);
     expect(service.launchMerge).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['github', 'gmail'])('rethrows a retryable %s collection failure', async (provider) => {
+    const service = createService();
+    service.collectSource.mockImplementation(({ sourceId }) => {
+      if (sourceId.startsWith(provider)) {
+        throw new UnderstandingBranchFailureError(`${provider} unavailable`, { retryable: true });
+      }
+      return Promise.resolve({ sourceCount: 1 });
+    });
+
+    await expect(
+      runOnboardingUnderstandingWorkflow(createContext(initialPayload), {
+        createService: async () => service,
+      }),
+    ).rejects.toMatchObject({ retryable: true });
+    expect(service.failSource).not.toHaveBeenCalled();
+    expect(service.launchSourceAnalysis).not.toHaveBeenCalled();
+  });
+
+  it('rethrows a transient zero-provider discovery outage', async () => {
+    const service = createService();
+    service.discover.mockRejectedValue(
+      new UnderstandingBranchFailureError('source discovery unavailable', { retryable: true }),
+    );
+
+    await expect(
+      runOnboardingUnderstandingWorkflow(createContext(initialPayload), {
+        createService: async () => service,
+      }),
+    ).rejects.toMatchObject({ retryable: true });
+    expect(service.getSourceBranches).not.toHaveBeenCalled();
+    expect(service.failSource).not.toHaveBeenCalled();
   });
 
   it('prepares only the requested source in retry mode', async () => {

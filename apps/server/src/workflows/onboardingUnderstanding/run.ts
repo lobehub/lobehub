@@ -178,7 +178,7 @@ export const runOnboardingUnderstandingWorkflow = async (
           await service.collectSource(sourceIdentity(payload, branch));
           return true;
         } catch (error) {
-          if (!(error instanceof UnderstandingBranchFailureError)) throw error;
+          if (!(error instanceof UnderstandingBranchFailureError) || error.retryable) throw error;
           return false;
         }
       }),
@@ -205,7 +205,7 @@ export const runOnboardingUnderstandingWorkflow = async (
             },
           };
         } catch (error) {
-          if (!(error instanceof UnderstandingBranchFailureError)) throw error;
+          if (!(error instanceof UnderstandingBranchFailureError) || error.retryable) throw error;
           return {};
         }
       }),
@@ -214,10 +214,10 @@ export const runOnboardingUnderstandingWorkflow = async (
 
   const outcomes = await context.run('sources:execute-finalize', () =>
     Promise.all(
-      launches.map(async ({ launch }, index) => ({
+      launches.map(async (item, index) => ({
         index,
-        status: launch
-          ? await executeSource(service, payload, branches[index], launch)
+        status: item.launch
+          ? await executeSource(service, payload, branches[index], item.launch)
           : await persistSourceFailure(service, payload, branches[index]),
       })),
     ),
@@ -232,11 +232,11 @@ export const runOnboardingUnderstandingWorkflow = async (
 
 export const createOnboardingUnderstandingWorkflowOptions = (sessionId: string) => ({
   failureFunction: async ({
-    context,
+    context: { requestPayload, workflowRunId },
   }: {
     context: { requestPayload?: unknown; workflowRunId: string };
   }) => {
-    const parsed = OnboardingUnderstandingWorkflowPayloadSchema.safeParse(context.requestPayload);
+    const parsed = OnboardingUnderstandingWorkflowPayloadSchema.safeParse(requestPayload);
     if (!parsed.success || parsed.data.sessionId !== sessionId) return 'invalid-payload';
 
     try {
@@ -245,7 +245,7 @@ export const createOnboardingUnderstandingWorkflowOptions = (sessionId: string) 
         sessionId: parsed.data.sessionId,
         topicId: parsed.data.topicId,
         userId: parsed.data.userId,
-        workflowRunId: context.workflowRunId,
+        workflowRunId,
       });
     } catch (error) {
       if (

@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import type { ISnapshotStore } from '@lobechat/agent-tracing';
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
+import { ConnectorDataError } from '@lobechat/connector-data';
 import {
   StaleUnderstandingRunError,
   StaleUnderstandingSessionError,
@@ -65,12 +66,27 @@ import type {
 const UNDERSTANDING_AGENT_SLUG = 'onboarding-understanding';
 const terminalStatuses = new Set(['completed', 'failed']);
 
+interface UnderstandingBranchFailureOptions extends ErrorOptions {
+  retryable?: boolean;
+}
+
 export class UnderstandingBranchFailureError extends Error {
-  constructor(message: string, options?: ErrorOptions) {
+  readonly retryable: boolean;
+
+  constructor(message: string, options: UnderstandingBranchFailureOptions = {}) {
     super(message, options);
     this.name = 'UnderstandingBranchFailureError';
+    this.retryable = options.retryable ?? false;
   }
 }
+
+const isRetryableCollectionFailure = (error: unknown): boolean => {
+  if (error instanceof ConnectorDataError) return error.retryable;
+  if (error instanceof Error && error.cause !== undefined) {
+    return isRetryableCollectionFailure(error.cause);
+  }
+  return true;
+};
 
 // Privacy boundary: source briefs can contain raw connector data and must never reach file/S3
 // Agent Runtime snapshots. The operation state remains durable in the runtime coordinator.
@@ -241,6 +257,16 @@ export class UnderstandingService {
     const runtime = await this.dependencies.workflowRuntime();
 
     const discovery = await discoverUnderstandingSources(runtime.registry, runtime.context);
+    const unavailableProviders = discovery.errors.filter(
+      (error) =>
+        error.retryable && !discovery.sources.some((source) => source.provider === error.provider),
+    );
+    if (unavailableProviders.length > 0) {
+      throw new UnderstandingBranchFailureError(
+        'Understanding source discovery is temporarily unavailable',
+        { retryable: true },
+      );
+    }
     for (const source of discovery.sources) {
       await runtime.sourceStore.putSourceLocator({
         locator: this.locator(source),
@@ -309,18 +335,23 @@ export class UnderstandingService {
     } catch (cause) {
       throw new UnderstandingBranchFailureError('Understanding source collection failed', {
         cause,
+        retryable: isRetryableCollectionFailure(cause),
       });
     }
     const diagnostics = sanitizeProviderDiagnostics(run.source.provider, collected.diagnostics);
     const brief = collected.sourceBrief.trim().slice(0, MAX_SOURCE_BRIEF_LENGTH);
+    const retryable =
+      diagnostics.succeededCount === 0 && diagnostics.errors.some((error) => error.retryable);
     if (!brief) {
       throw new UnderstandingBranchFailureError(
         'Understanding source collection returned no content',
+        { retryable },
       );
     }
     if (diagnostics.succeededCount === 0) {
       throw new UnderstandingBranchFailureError(
         'Understanding source collection produced no successful evidence',
+        { retryable },
       );
     }
     await runtime.sourceStore.put({
@@ -372,12 +403,21 @@ export class UnderstandingService {
       return { skipped: true, sourceId: input.sourceId, threadId: input.threadId };
     }
     const runtime = await this.dependencies.workflowRuntime();
-    const payload = await runtime.sourceStore.get({
+    let payload = await runtime.sourceStore.get({
       ...input,
       userId: runtime.context.userId,
     });
     if (!payload) {
-      throw new UnderstandingBranchFailureError('Understanding source payload is unavailable');
+      await this.collectSource(input);
+      payload = await runtime.sourceStore.get({
+        ...input,
+        userId: runtime.context.userId,
+      });
+    }
+    if (!payload) {
+      throw new UnderstandingBranchFailureError('Understanding source payload is unavailable', {
+        retryable: true,
+      });
     }
     await this.dependencies.results.ensureThread({
       agentId: runtime.agentId,

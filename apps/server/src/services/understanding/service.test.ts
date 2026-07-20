@@ -1,4 +1,5 @@
 import type { ExecutionSnapshot, ISnapshotStore } from '@lobechat/agent-tracing';
+import { ConnectorDataError } from '@lobechat/connector-data';
 import type { LobeChatDatabase } from '@lobechat/database';
 import type {
   CollectionDiagnostics,
@@ -11,7 +12,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createUnderstandingProviderRegistry } from './providers';
 import { createUnderstandingService, UnderstandingService } from './service';
-import type { UnderstandingProvider } from './types';
+import { type UnderstandingProvider, UnderstandingSourceIdentificationError } from './types';
 
 const {
   agentRuntimeConstructor,
@@ -416,16 +417,40 @@ describe('UnderstandingService', () => {
   });
 
   it('keeps partial discovery results and bounded provider errors', async () => {
-    vi.mocked(harness.gmail.discoverSources).mockRejectedValueOnce(
-      new Error('private oauth error'),
+    vi.mocked(harness.gmail.identifySource).mockRejectedValueOnce(
+      new UnderstandingSourceIdentificationError({ retryable: false }),
     );
     const { branches } = await initializeAndDiscover(harness);
 
     expect(branches).toHaveLength(1);
     expect(harness.session().errors).toMatchObject([
-      { code: 'UNDERSTANDING_SOURCE_DISCOVERY_FAILED', provider: 'gmail' },
+      { code: 'UNDERSTANDING_SOURCE_IDENTIFICATION_FAILED', provider: 'gmail' },
     ]);
     expect(JSON.stringify(harness.session())).not.toContain('private oauth error');
+  });
+
+  it('retries transient provider discovery before publishing partial branches', async () => {
+    vi.mocked(harness.gmail.discoverSources).mockRejectedValueOnce(new Error('gmail unavailable'));
+    const session = await harness.service.initialize('topic');
+
+    await expect(harness.service.discover('topic', session.id)).rejects.toMatchObject({
+      retryable: true,
+    });
+    expect(harness.session()).toMatchObject({ runs: [], status: 'pending' });
+    expect(harness.session()).not.toHaveProperty('errors');
+  });
+
+  it('retries discovery when every provider is transiently unavailable', async () => {
+    vi.mocked(harness.github.discoverSources).mockRejectedValueOnce(
+      new Error('github unavailable'),
+    );
+    vi.mocked(harness.gmail.discoverSources).mockRejectedValueOnce(new Error('gmail unavailable'));
+    const session = await harness.service.initialize('topic');
+
+    await expect(harness.service.discover('topic', session.id)).rejects.toMatchObject({
+      retryable: true,
+    });
+    expect(harness.session()).toMatchObject({ runs: [], status: 'pending' });
   });
 
   it('reads source branches from the DB core without loading workflow dependencies', async () => {
@@ -490,6 +515,81 @@ describe('UnderstandingService', () => {
       harness.service.collectSource({ ...branch, sessionId: session.id, topicId: 'topic' }),
     ).rejects.toThrow('no successful evidence');
     expect(harness.payloads).toHaveLength(0);
+  });
+
+  it('marks a transient GitHub connector collection failure as retryable', async () => {
+    vi.mocked(harness.github.collect).mockRejectedValueOnce(
+      new ConnectorDataError({
+        code: 'github_request_failed',
+        operation: 'profile',
+        provider: 'github',
+        retryable: true,
+      }),
+    );
+    const { branches, session } = await initializeAndDiscover(harness);
+    const branch = branches.find(({ sourceId }) => sourceId.startsWith('github'))!;
+
+    await expect(
+      harness.service.collectSource({ ...branch, sessionId: session.id, topicId: 'topic' }),
+    ).rejects.toMatchObject({ retryable: true });
+  });
+
+  it('marks an all-failed transient Gmail collection as retryable', async () => {
+    vi.mocked(harness.gmail.collect).mockResolvedValueOnce({
+      diagnostics: {
+        errors: [
+          {
+            code: 'GMAIL_SEARCH_FAILED',
+            message: 'Gmail search category failed',
+            operation: 'recent',
+            provider: 'gmail',
+            retryable: true,
+          },
+        ],
+        evidenceCount: 0,
+        failedCount: 1,
+        succeededCount: 0,
+      },
+      sourceBrief: '',
+      sourceCount: 0,
+    });
+    const { branches, session } = await initializeAndDiscover(harness);
+    const branch = branches.find(({ sourceId }) => sourceId.startsWith('gmail'))!;
+
+    await expect(
+      harness.service.collectSource({ ...branch, sessionId: session.id, topicId: 'topic' }),
+    ).rejects.toMatchObject({ retryable: true });
+  });
+
+  it('accepts partial Gmail evidence despite retryable query failures', async () => {
+    vi.mocked(harness.gmail.collect).mockResolvedValueOnce({
+      diagnostics: {
+        errors: [
+          {
+            code: 'GMAIL_SEARCH_FAILED',
+            message: 'Gmail search category failed',
+            operation: 'recent',
+            provider: 'gmail',
+            retryable: true,
+          },
+        ],
+        evidenceCount: 1,
+        failedCount: 1,
+        succeededCount: 1,
+      },
+      sourceBrief: '<gmail>PRIVATE_SOURCE_DOCUMENT</gmail>',
+      sourceCount: 1,
+    });
+    const { branches, session } = await initializeAndDiscover(harness);
+    const branch = branches.find(({ sourceId }) => sourceId.startsWith('gmail'))!;
+
+    await expect(
+      harness.service.collectSource({ ...branch, sessionId: session.id, topicId: 'topic' }),
+    ).resolves.toEqual({
+      diagnostics: { evidenceCount: 1, failedCount: 1, succeededCount: 1 },
+      sourceCount: 1,
+    });
+    expect(harness.payloads).toHaveLength(1);
   });
 
   it('rediscovers only the affected provider when its locator expires', async () => {
@@ -592,6 +692,25 @@ describe('UnderstandingService', () => {
     expect(JSON.stringify(launch)).not.toContain('PRIVATE_SOURCE_DOCUMENT');
     expect(harness.session().runs[0]).not.toHaveProperty('operationId');
     expect(harness.session().runs[0].assistantMessageId).toBe(launch.assistantMessageId);
+  });
+
+  it('recollects an expired payload before launch without returning connector data', async () => {
+    const { branches, session } = await initializeAndDiscover(harness);
+    const branch = branches.find(({ sourceId }) => sourceId.startsWith('github'))!;
+    const input = { ...branch, sessionId: session.id, topicId: 'topic' };
+    const acknowledged = await harness.service.collectSource(input);
+    harness.payloads.clear();
+    vi.mocked(harness.github.collect).mockClear();
+
+    const launch = requireLaunch(await harness.service.launchSourceAnalysis(input));
+
+    expect(harness.github.collect).toHaveBeenCalledOnce();
+    expect(harness.execAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ephemeralUserMessage: expect.stringContaining('PRIVATE_SOURCE_DOCUMENT'),
+      }),
+    );
+    expect(JSON.stringify({ acknowledged, launch })).not.toContain('PRIVATE_SOURCE_DOCUMENT');
   });
 
   it.each([
