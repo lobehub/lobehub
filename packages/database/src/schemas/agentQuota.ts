@@ -232,7 +232,7 @@ export const agentQuotaSnapshots = pgTable(
     deviceId: uuid('device_id').references(() => devices.id, { onDelete: 'set null' }),
 
     /** Raw `limits[].kind`, e.g. `session` / `weekly_all` / `weekly_scoped`. */
-    limitKind: text('limit_kind').notNull(),
+    limitType: text('limit_type').notNull(),
     /** Model display name for scoped windows (e.g. `Fable`); `''` otherwise. */
     scopeKey: text('scope_key').notNull().default(''),
 
@@ -249,9 +249,9 @@ export const agentQuotaSnapshots = pgTable(
     createdAt: createdAt(),
   },
   (t) => [
-    index('agent_quota_snapshots_account_kind_scope_idx').on(
+    index('agent_quota_snapshots_account_type_scope_idx').on(
       t.accountId,
-      t.limitKind,
+      t.limitType,
       t.scopeKey,
       t.capturedAt,
     ),
@@ -343,7 +343,7 @@ export const agentQuotaCalibrations = pgTable(
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
 
-    limitKind: text('limit_kind').notNull(),
+    limitType: text('limit_type').notNull(),
     scopeKey: text('scope_key').notNull().default(''),
 
     /** Capacity in provider-equivalent USD (the stable unit). */
@@ -366,9 +366,9 @@ export const agentQuotaCalibrations = pgTable(
     createdAt: createdAt(),
   },
   (t) => [
-    index('agent_quota_calibrations_account_kind_scope_idx').on(
+    index('agent_quota_calibrations_account_type_scope_idx').on(
       t.accountId,
-      t.limitKind,
+      t.limitType,
       t.scopeKey,
       t.calibratedAt,
     ),
@@ -399,7 +399,7 @@ export const agentQuotaWindows = pgTable(
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
 
-    limitKind: text('limit_kind').notNull(),
+    limitType: text('limit_type').notNull(),
     scopeKey: text('scope_key').notNull().default(''),
 
     /** Natural key: provider-reported window reset instant. */
@@ -430,7 +430,7 @@ export const agentQuotaWindows = pgTable(
   (t) => [
     uniqueIndex('agent_quota_windows_natural_key_unique').on(
       t.accountId,
-      t.limitKind,
+      t.limitType,
       t.scopeKey,
       t.resetsAt,
     ),

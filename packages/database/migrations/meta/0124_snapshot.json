@@ -4017,8 +4017,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "limit_kind": {
-          "name": "limit_kind",
+        "limit_type": {
+          "name": "limit_type",
           "type": "text",
           "primaryKey": false,
           "notNull": true
@@ -4094,8 +4094,8 @@
         }
       },
       "indexes": {
-        "agent_quota_calibrations_account_kind_scope_idx": {
-          "name": "agent_quota_calibrations_account_kind_scope_idx",
+        "agent_quota_calibrations_account_type_scope_idx": {
+          "name": "agent_quota_calibrations_account_type_scope_idx",
           "columns": [
             {
               "expression": "account_id",
@@ -4104,7 +4104,7 @@
               "nulls": "last"
             },
             {
-              "expression": "limit_kind",
+              "expression": "limit_type",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -4183,8 +4183,8 @@
           "primaryKey": false,
           "notNull": false
         },
-        "limit_kind": {
-          "name": "limit_kind",
+        "limit_type": {
+          "name": "limit_type",
           "type": "text",
           "primaryKey": false,
           "notNull": true
@@ -4242,8 +4242,8 @@
         }
       },
       "indexes": {
-        "agent_quota_snapshots_account_kind_scope_idx": {
-          "name": "agent_quota_snapshots_account_kind_scope_idx",
+        "agent_quota_snapshots_account_type_scope_idx": {
+          "name": "agent_quota_snapshots_account_type_scope_idx",
           "columns": [
             {
               "expression": "account_id",
@@ -4252,7 +4252,7 @@
               "nulls": "last"
             },
             {
-              "expression": "limit_kind",
+              "expression": "limit_type",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -4655,8 +4655,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "limit_kind": {
-          "name": "limit_kind",
+        "limit_type": {
+          "name": "limit_type",
           "type": "text",
           "primaryKey": false,
           "notNull": true
@@ -4775,7 +4775,7 @@
               "nulls": "last"
             },
             {
-              "expression": "limit_kind",
+              "expression": "limit_type",
               "isExpression": false,
               "asc": true,
               "nulls": "last"

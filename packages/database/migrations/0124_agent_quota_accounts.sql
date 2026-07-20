@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS "agent_quota_calibrations" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"account_id" uuid NOT NULL,
 	"user_id" text NOT NULL,
-	"limit_kind" text NOT NULL,
+	"limit_type" text NOT NULL,
 	"scope_key" text DEFAULT '' NOT NULL,
 	"capacity_usd" numeric(20, 6) NOT NULL,
 	"capacity_tokens_equivalent" bigint,
@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS "agent_quota_snapshots" (
 	"account_id" uuid NOT NULL,
 	"user_id" text NOT NULL,
 	"device_id" uuid,
-	"limit_kind" text NOT NULL,
+	"limit_type" text NOT NULL,
 	"scope_key" text DEFAULT '' NOT NULL,
 	"resets_at" timestamp with time zone,
 	"utilization" integer NOT NULL,
@@ -99,7 +99,7 @@ CREATE TABLE IF NOT EXISTS "agent_quota_windows" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"account_id" uuid NOT NULL,
 	"user_id" text NOT NULL,
-	"limit_kind" text NOT NULL,
+	"limit_type" text NOT NULL,
 	"scope_key" text DEFAULT '' NOT NULL,
 	"resets_at" timestamp with time zone NOT NULL,
 	"window_start_at" timestamp with time zone NOT NULL,
@@ -165,8 +165,8 @@ CREATE INDEX IF NOT EXISTS "agent_provider_accounts_user_id_idx" ON "agent_provi
 CREATE INDEX IF NOT EXISTS "agent_provider_accounts_workspace_id_idx" ON "agent_provider_accounts" USING btree ("workspace_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "agent_provider_accounts_token_expires_at_idx" ON "agent_provider_accounts" USING btree ("token_expires_at");--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "agent_provider_accounts_identity_unique" ON "agent_provider_accounts" USING btree ("user_id","provider","external_account_id") WHERE "agent_provider_accounts"."external_account_id" IS NOT NULL;--> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "agent_quota_calibrations_account_kind_scope_idx" ON "agent_quota_calibrations" USING btree ("account_id","limit_kind","scope_key","calibrated_at");--> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "agent_quota_snapshots_account_kind_scope_idx" ON "agent_quota_snapshots" USING btree ("account_id","limit_kind","scope_key","captured_at");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "agent_quota_calibrations_account_type_scope_idx" ON "agent_quota_calibrations" USING btree ("account_id","limit_type","scope_key","calibrated_at");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "agent_quota_snapshots_account_type_scope_idx" ON "agent_quota_snapshots" USING btree ("account_id","limit_type","scope_key","captured_at");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "agent_quota_snapshots_account_captured_idx" ON "agent_quota_snapshots" USING btree ("account_id","captured_at");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "agent_quota_snapshots_resets_at_idx" ON "agent_quota_snapshots" USING btree ("resets_at");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "agent_quota_usage_ledger_account_occurred_idx" ON "agent_quota_usage_ledger" USING btree ("account_id","occurred_at");--> statement-breakpoint
@@ -174,6 +174,6 @@ CREATE INDEX IF NOT EXISTS "agent_quota_usage_ledger_account_model_occurred_idx"
 CREATE INDEX IF NOT EXISTS "agent_quota_usage_ledger_message_id_idx" ON "agent_quota_usage_ledger" USING btree ("message_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "agent_quota_usage_ledger_operation_id_idx" ON "agent_quota_usage_ledger" USING btree ("operation_id");--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "agent_quota_usage_ledger_external_event_unique" ON "agent_quota_usage_ledger" USING btree ("external_event_id") WHERE "agent_quota_usage_ledger"."external_event_id" IS NOT NULL;--> statement-breakpoint
-CREATE UNIQUE INDEX IF NOT EXISTS "agent_quota_windows_natural_key_unique" ON "agent_quota_windows" USING btree ("account_id","limit_kind","scope_key","resets_at");--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "agent_quota_windows_natural_key_unique" ON "agent_quota_windows" USING btree ("account_id","limit_type","scope_key","resets_at");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "agent_quota_windows_account_resets_idx" ON "agent_quota_windows" USING btree ("account_id","resets_at");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "agent_quota_windows_user_id_idx" ON "agent_quota_windows" USING btree ("user_id");
