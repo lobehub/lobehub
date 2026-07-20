@@ -24,6 +24,9 @@ import {
 } from '../../models/userMemory/persona';
 import { messages, threads, topics, userPersonaDocuments } from '../../schemas';
 import type { LobeChatDatabase, Transaction } from '../../type';
+import { getUnderstandingSourceFingerprint } from './fingerprint';
+
+export { getUnderstandingSourceFingerprint } from './fingerprint';
 
 export class UnderstandingSessionNotFoundError extends Error {
   constructor(topicId: string) {
@@ -78,11 +81,14 @@ interface ProviderMutationInput {
 }
 
 interface ClaimWritingInput {
-  agentId: string;
   sessionId: string;
   sourceFingerprint: string;
-  threadId: string;
   topicId: string;
+}
+
+interface EnsureWritingThreadInput extends ClaimWritingInput {
+  agentId: string;
+  threadId: string;
 }
 
 interface CommitWritingInput {
@@ -141,13 +147,6 @@ const initialProviderState = (): UnderstandingProviderState => ({
   status: 'pending',
   succeededCount: 0,
 });
-
-export const getUnderstandingSourceFingerprint = (session: OnboardingUnderstandingSession) =>
-  Object.entries(session.sources)
-    .filter(([, source]) => source.status === 'completed')
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([providerId, source]) => `${providerId}@${source.revision}`)
-    .join(',');
 
 const normalizeProposalProvenance = (
   session: OnboardingUnderstandingSession,
@@ -327,12 +326,10 @@ export class OnboardingUnderstandingRepository {
     this.finishProvider(input, 'failed');
 
   claimWriting = async ({
-    agentId,
     sessionId,
     sourceFingerprint,
-    threadId,
     topicId,
-  }: ClaimWritingInput): Promise<{ claimed: boolean; threadId: string }> =>
+  }: ClaimWritingInput): Promise<{ claimed: boolean }> =>
     this.db.transaction(async (tx) => {
       const topic = await lockOwnedTopic(tx, this.userId, topicId);
       const session = requireSession(
@@ -343,41 +340,9 @@ export class OnboardingUnderstandingRepository {
       if (getUnderstandingSourceFingerprint(session) !== sourceFingerprint) {
         throw new StaleUnderstandingRevisionError('writing fingerprint', sourceFingerprint);
       }
-      const [writingThread] = await tx
-        .select()
-        .from(threads)
-        .where(and(eq(threads.id, threadId), threadOwnership(this.userId)))
-        .for('update');
       if (session.writing?.sourceFingerprint === sourceFingerprint) {
-        if (
-          !writingThread ||
-          writingThread.agentId !== agentId ||
-          writingThread.topicId !== topicId ||
-          writingThread.type !== ThreadType.Isolation ||
-          writingThread.metadata?.onboardingUnderstanding?.kind !== 'writing'
-        ) {
-          throw new Error(`Invalid Understanding writing thread: ${threadId}`);
-        }
-        return { claimed: false, threadId };
+        return { claimed: false };
       }
-      if (writingThread) {
-        throw new Error(`Understanding writing thread identity is occupied: ${threadId}`);
-      }
-      const [occupied] = await tx
-        .select({ id: threads.id })
-        .from(threads)
-        .where(eq(threads.id, threadId));
-      if (occupied)
-        throw new Error(`Understanding writing thread identity is occupied: ${threadId}`);
-      await tx.insert(threads).values({
-        agentId,
-        id: threadId,
-        metadata: { onboardingUnderstanding: { kind: 'writing' } },
-        status: ThreadStatus.Pending,
-        topicId,
-        type: ThreadType.Isolation,
-        userId: this.userId,
-      });
       const next = parseSession({
         ...session,
         writing: {
@@ -388,7 +353,64 @@ export class OnboardingUnderstandingRepository {
         },
       });
       await updateTopicSession(tx, this.userId, topicId, topic.metadata!, next);
-      return { claimed: true, threadId };
+      return { claimed: true };
+    });
+
+  ensureWritingThread = async ({
+    agentId,
+    sessionId,
+    sourceFingerprint,
+    threadId,
+    topicId,
+  }: EnsureWritingThreadInput): Promise<{ threadId: string }> =>
+    this.db.transaction(async (tx) => {
+      const topic = await lockOwnedTopic(tx, this.userId, topicId);
+      const session = requireSession(
+        topicId,
+        sessionId,
+        topic.metadata?.onboardingSession?.understanding,
+      );
+      if (
+        session.writing?.sourceFingerprint !== sourceFingerprint ||
+        getUnderstandingSourceFingerprint(session) !== sourceFingerprint
+      ) {
+        throw new StaleUnderstandingRevisionError('writing fingerprint', sourceFingerprint);
+      }
+
+      const [writingThread] = await tx
+        .select()
+        .from(threads)
+        .where(and(eq(threads.id, threadId), threadOwnership(this.userId)))
+        .for('update');
+      if (writingThread) {
+        if (
+          writingThread.agentId !== agentId ||
+          writingThread.topicId !== topicId ||
+          writingThread.type !== ThreadType.Isolation ||
+          writingThread.metadata?.onboardingUnderstanding?.kind !== 'writing'
+        ) {
+          throw new Error(`Invalid Understanding writing thread: ${threadId}`);
+        }
+        return { threadId };
+      }
+
+      const [occupied] = await tx
+        .select({ id: threads.id })
+        .from(threads)
+        .where(eq(threads.id, threadId));
+      if (occupied) {
+        throw new Error(`Understanding writing thread identity is occupied: ${threadId}`);
+      }
+      await tx.insert(threads).values({
+        agentId,
+        id: threadId,
+        metadata: { onboardingUnderstanding: { kind: 'writing' } },
+        status: ThreadStatus.Pending,
+        topicId,
+        type: ThreadType.Isolation,
+        userId: this.userId,
+      });
+      return { threadId };
     });
 
   commitWriting = async ({
@@ -425,6 +447,7 @@ export class OnboardingUnderstandingRepository {
         .for('update');
       if (
         !message ||
+        message.agentId !== writingThread.agentId ||
         message.role !== 'assistant' ||
         message.topicId !== topicId ||
         message.threadId !== writingThread.id
@@ -528,7 +551,7 @@ export class OnboardingUnderstandingRepository {
         input.sessionId,
         topic.metadata?.onboardingSession?.understanding,
       );
-      if (session.writing?.status !== 'completed') {
+      if (!session.writing?.resultMessageId) {
         throw new UnderstandingPreconditionError('result_not_confirmable');
       }
 
@@ -542,13 +565,15 @@ export class OnboardingUnderstandingRepository {
         !message ||
         message.role !== 'assistant' ||
         message.topicId !== input.topicId ||
-        proposal?.resultId !== input.resultId ||
-        proposal.sourceFingerprint !== session.writing.sourceFingerprint
+        proposal?.resultId !== input.resultId
       ) {
         throw new UnderstandingResourceNotFoundError('result');
       }
       if (!message.threadId) throw new UnderstandingResourceNotFoundError('result');
-      await this.lockWritingThread(tx, input.topicId, message.threadId);
+      const writingThread = await this.lockWritingThread(tx, input.topicId, message.threadId);
+      if (message.agentId !== writingThread.agentId) {
+        throw new UnderstandingResourceNotFoundError('result');
+      }
 
       const personaVersion = await this.writePersona(tx, session.id, proposal);
       if (!session.confirmedAt) {

@@ -1712,9 +1712,11 @@ export class MessageModel {
   };
 
   findLatestAssistantMessageByThread = async ({
+    agentId,
     threadId,
     topicId,
   }: {
+    agentId: string;
     threadId: string;
     topicId: string;
   }) =>
@@ -1722,6 +1724,7 @@ export class MessageModel {
       orderBy: [desc(messages.createdAt), desc(messages.id)],
       where: and(
         this.ownership(),
+        eq(messages.agentId, agentId),
         eq(messages.topicId, topicId),
         eq(messages.threadId, threadId),
         eq(messages.role, 'assistant'),
