@@ -1,0 +1,1 @@
+CREATE INDEX "messages_topic_mainline_created_at_id_idx" ON "messages" USING btree ("topic_id","created_at","id") WHERE "messages"."thread_id" IS NULL AND "messages"."message_group_id" IS NULL;

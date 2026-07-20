@@ -868,6 +868,13 @@
       "when": 1784296516822,
       "tag": "0123_resource_permissions_and_messenger_credentials",
       "breakpoints": true
+    },
+    {
+      "idx": 124,
+      "version": "7",
+      "when": 1784480908777,
+      "tag": "0124_message_topic_mainline_cursor_idx",
+      "breakpoints": true
     }
   ],
   "version": "6"
