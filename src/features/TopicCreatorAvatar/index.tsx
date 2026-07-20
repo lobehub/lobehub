@@ -4,8 +4,6 @@ import { Avatar, Tooltip } from '@lobehub/ui';
 import { memo } from 'react';
 
 import { useAuthorInfo } from '@/business/client/hooks/useAuthorInfo';
-import { useUserStore } from '@/store/user';
-import { userProfileSelectors } from '@/store/user/selectors';
 
 interface TopicCreatorAvatarProps {
   /** Size of the avatar in px. */
@@ -15,18 +13,17 @@ interface TopicCreatorAvatarProps {
 }
 
 /**
- * In a workspace the topic list mixes topics from every member. Show the
- * creator's avatar for topics authored by someone *other* than the current
- * user so the list reads as a shared space.
+ * In a workspace the topic list mixes topics from every member. Show each
+ * topic's creator avatar as a trailing indicator — including the current user's
+ * own topics — so the list reads as a shared space.
  *
- * Renders nothing for own / personal topics: `useAuthorInfo` is a business slot
- * that resolves to a no-op (open-source) or the active workspace member profile
- * (cloud), and we pass `undefined` for the current user so it never resolves.
+ * `useAuthorInfo` is a business slot that resolves the creator profile from the
+ * *active workspace* members (cloud) or a no-op (open-source). It returns
+ * `undefined` when there is no active workspace, so this renders nothing in
+ * personal mode.
  */
 const TopicCreatorAvatar = memo<TopicCreatorAvatarProps>(({ userId, size = 16 }) => {
-  const currentUserId = useUserStore(userProfileSelectors.userId);
-  const isOther = !!userId && userId !== currentUserId;
-  const author = useAuthorInfo(isOther ? userId : undefined);
+  const author = useAuthorInfo(userId);
 
   if (!author) return null;
 

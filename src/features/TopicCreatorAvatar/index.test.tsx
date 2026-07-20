@@ -7,23 +7,10 @@ import { describe, expect, it, vi } from 'vitest';
 
 import TopicCreatorAvatar from './index';
 
-const CURRENT_USER_ID = 'me';
-
 const useAuthorInfoMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/business/client/hooks/useAuthorInfo', () => ({
   useAuthorInfo: useAuthorInfoMock,
-}));
-
-// `useUserStore(selector)` → run the selector against a fixed state so the
-// component sees a stable current user id.
-vi.mock('@/store/user', () => ({
-  useUserStore: (selector: (s: { userId: string }) => unknown) =>
-    selector({ userId: CURRENT_USER_ID }),
-}));
-
-vi.mock('@/store/user/selectors', () => ({
-  userProfileSelectors: { userId: (s: { userId: string }) => s.userId },
 }));
 
 vi.mock('@lobehub/ui', () => ({
@@ -34,37 +21,29 @@ vi.mock('@lobehub/ui', () => ({
 }));
 
 describe('TopicCreatorAvatar', () => {
-  it("renders another member's avatar for topics they created", () => {
+  it("renders a workspace member's avatar (including the current user's own topics)", () => {
+    // In a workspace `useAuthorInfo` resolves the creator profile from members —
+    // for every topic, not just other members'.
     useAuthorInfoMock.mockReturnValue({ avatar: 'https://x/y.png', fullName: 'Alice' });
 
-    const { getByTestId } = render(<TopicCreatorAvatar userId="someone-else" />);
+    const { getByTestId } = render(<TopicCreatorAvatar userId="any-member" />);
 
-    // The slot is queried with the *creator* id (not the current user).
-    expect(useAuthorInfoMock).toHaveBeenCalledWith('someone-else');
+    expect(useAuthorInfoMock).toHaveBeenCalledWith('any-member');
     const avatar = getByTestId('avatar');
     expect(avatar.getAttribute('data-avatar')).toBe('https://x/y.png');
     expect(avatar.getAttribute('data-title')).toBe('Alice');
   });
 
-  it("renders nothing for the current user's own topics", () => {
+  it('renders nothing in personal mode / when the creator is not a resolvable member', () => {
+    // No active workspace → the slot resolves to undefined → no avatar.
     useAuthorInfoMock.mockReturnValue(undefined);
 
-    const { queryByTestId } = render(<TopicCreatorAvatar userId={CURRENT_USER_ID} />);
-
-    // Own topic → slot is called with undefined so it never resolves a profile.
-    expect(useAuthorInfoMock).toHaveBeenCalledWith(undefined);
-    expect(queryByTestId('avatar')).toBeNull();
-  });
-
-  it('renders nothing when the creator is not a resolvable workspace member', () => {
-    useAuthorInfoMock.mockReturnValue(undefined);
-
-    const { queryByTestId } = render(<TopicCreatorAvatar userId="ghost" />);
+    const { queryByTestId } = render(<TopicCreatorAvatar userId="someone" />);
 
     expect(queryByTestId('avatar')).toBeNull();
   });
 
-  it('renders nothing when no userId is provided (personal / default topic)', () => {
+  it('renders nothing when no userId is provided (default / temp topic)', () => {
     useAuthorInfoMock.mockReturnValue(undefined);
 
     const { queryByTestId } = render(<TopicCreatorAvatar />);

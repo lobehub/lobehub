@@ -360,10 +360,16 @@ const TopicItem = memo<TopicItemProps>(
         description={workingDirectoryNode}
         disabled={editing}
         draggable={!editing}
-        extra={<RunningElapsedTime agentId={activeAgentId} topicId={id} />}
         href={href}
+        slots={{ titlePrefix: draftPrefix }}
         title={title === '...' ? <DotsLoading gap={3} size={4} /> : title}
         titleColor={cssVar.colorText}
+        extra={
+          <>
+            <RunningElapsedTime agentId={activeAgentId} topicId={id} />
+            <TopicCreatorAvatar userId={userId} />
+          </>
+        }
         icon={(() => {
           // A scheduled topic hasn't run yet — nothing else can be true of it,
           // so its clock outranks the other states.
@@ -446,14 +452,6 @@ const TopicItem = memo<TopicItemProps>(
             />
           );
         })()}
-        slots={{
-          titlePrefix: (
-            <>
-              <TopicCreatorAvatar userId={userId} />
-              {draftPrefix}
-            </>
-          ),
-        }}
         onClick={handleClick}
         onDoubleClick={() => void handleDoubleClick()}
         onDragStart={handleDragStart}

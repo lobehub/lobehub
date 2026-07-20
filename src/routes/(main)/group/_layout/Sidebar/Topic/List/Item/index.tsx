@@ -279,6 +279,7 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, stat
         active={active && !threadId}
         contextMenuItems={dropdownMenu}
         disabled={editing}
+        extra={<TopicCreatorAvatar userId={userId} />}
         href={!editing ? href : undefined}
         title={title === '...' ? <DotsLoading gap={3} size={4} /> : title}
         titleColor={cssVar.colorText}
@@ -314,12 +315,7 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, stat
         })()}
         slots={{
           iconPostfix: unreadNode,
-          titlePrefix: (
-            <>
-              <TopicCreatorAvatar userId={userId} />
-              {draftPrefix}
-            </>
-          ),
+          titlePrefix: draftPrefix,
         }}
         onClick={handleClick}
         onDoubleClick={() => void handleDoubleClick()}
