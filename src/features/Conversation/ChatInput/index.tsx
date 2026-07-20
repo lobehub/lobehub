@@ -47,6 +47,7 @@ import {
   getConversationChatInputUiState,
   toChatInputMessages,
 } from './utils';
+import GoalTray from './VerifyTray/GoalTray';
 
 /** Max recent messages to feed into auto-complete context (≈10 conversation turns) */
 const MAX_CONTEXT_MESSAGES = 25;
@@ -442,6 +443,7 @@ const ChatInput = memo<ChatInputProps>(
             {!disableQueue && hasQueuedMessages && <QueueTray />}
             <TodoProgress topAttached={!disableQueue && hasQueuedMessages} />
             <OpStatusTray topAttached={(!disableQueue && hasQueuedMessages) || hasTodos} />
+            <GoalTray topAttached={(!disableQueue && hasQueuedMessages) || hasTodos} />
           </Flexbox>
           <DesktopChatInput
             actionBarStyle={actionBarStyle}

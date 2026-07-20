@@ -91,7 +91,23 @@ export interface AcceptanceVisualRender {
  * a topic-level override, or a document acceptance rule, so it lives with the
  * generic aggregate rather than only in task types.
  */
+/**
+ * One user-authored acceptance criterion in a subject's standing checklist
+ * (e.g. the topic acceptance tray). Every item is judged by the verify agent;
+ * `method` is the optional "how to check" note.
+ */
+export interface AcceptanceChecklistItem {
+  id: string;
+  method?: string;
+  name: string;
+}
+
 export interface AcceptanceConfig {
+  /**
+   * The subject's standing, user-editable acceptance checklist (topic tray).
+   * Persisted here so it lives with the verify aggregate, not in client storage.
+   */
+  checklist?: AcceptanceChecklistItem[];
   enabled?: boolean;
   maxIterations?: number;
   verifierAgentId?: string;

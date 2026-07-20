@@ -13,8 +13,6 @@
   "features.claudeCodeSdk.title": "Claude Code SDK 运行时",
   "features.fleet.desc": "在标题栏显示 Fleet 入口——把当前账号下所有运行中的任务并排展示的看板。",
   "features.fleet.title": "Fleet 并排视图",
-  "features.foldFinishedTurn.desc": "当最终回答可见后，将已完成回合的过程（推理与工具调用）折叠进「已处理」标题；点击可展开过程。",
-  "features.foldFinishedTurn.title": "折叠已完成回合",
   "features.groupChat.desc": "启用多代理协同群聊功能。",
   "features.groupChat.title": "群聊（多代理）",
   "features.imessage.desc": "通过本地 LobeHub 桌面 BlueBubbles 桥接器将代理连接到 iMessage。",
@@ -31,5 +29,7 @@
   "features.platformAgent.title": "接入助理",
   "features.taskVerify.desc": "在任务详情里增加「交付验收」模块：一句话描述验收要求，AI 自动生成可编辑的验收项。",
   "features.taskVerify.title": "任务交付验收",
+  "features.topicAcceptance.desc": "在输入框上方为当前话题编写一份交付验收清单，让对话对照你随时可编辑的标准来交付。",
+  "features.topicAcceptance.title": "话题验收",
   "title": "实验室"
 }

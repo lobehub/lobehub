@@ -147,6 +147,74 @@ export const acceptanceRouter = router({
     }),
 
   /**
+   * Persist a subject's standing acceptance checklist (the topic tray). Ensures
+   * the aggregate exists, then writes the list into its `config.checklist` — so
+   * the criteria live with the verify aggregate, not in client storage.
+   */
+  saveChecklist: acceptanceWriteProcedure
+    .input(
+      z.object({
+        checklist: z.array(
+          z.object({
+            id: z.string(),
+            method: z.string().optional(),
+            name: z.string(),
+          }),
+        ),
+        subjectId: z.string(),
+        subjectType: subjectTypeSchema,
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const aggregate = await ctx.acceptanceService.ensureForSubject(
+          input.subjectType,
+          input.subjectId,
+        );
+        await ctx.acceptanceService.acceptanceModel.update(aggregate.id, {
+          config: { ...aggregate.config, checklist: input.checklist },
+        });
+        return { checklist: input.checklist, id: aggregate.id };
+      } catch (error) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: error instanceof Error ? error.message : 'Acceptance subject not found',
+        });
+      }
+    }),
+
+  /**
+   * Set (or update) a subject's acceptance goal — the one-sentence outcome the
+   * conversation is delivering. Unlike `ensure`, this overwrites: the goal is a
+   * user-editable field, so a later edit must stick.
+   */
+  saveGoal: acceptanceWriteProcedure
+    .input(
+      z.object({
+        requirement: z.string().max(2000),
+        subjectId: z.string(),
+        subjectType: subjectTypeSchema,
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const aggregate = await ctx.acceptanceService.ensureForSubject(
+          input.subjectType,
+          input.subjectId,
+        );
+        await ctx.acceptanceService.acceptanceModel.update(aggregate.id, {
+          requirement: input.requirement,
+        });
+        return { id: aggregate.id, requirement: input.requirement };
+      } catch (error) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: error instanceof Error ? error.message : 'Acceptance subject not found',
+        });
+      }
+    }),
+
+  /**
    * One-shot payload for the acceptance decision workspace: the aggregate, its
    * subject header, the round ledger (each round's run + report), and the
    * cross-round check union — every check ever planned, with its final verdict,
