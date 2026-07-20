@@ -1,8 +1,8 @@
 'use client';
 
 import { Icon, Tooltip } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
-import { TargetIcon } from 'lucide-react';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { TargetIcon, XIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -31,10 +31,38 @@ const styles = createStaticStyles(({ css }) => ({
       color 0.2s,
       background 0.2s;
 
+    /* Reveal the "close" affordance on hover: the leading target icon crossfades
+       into an ✕, signalling the whole chip cancels the armed goal on click. */
     &:hover {
       color: ${cssVar.colorText};
       background: ${cssVar.colorFillTertiary};
     }
+
+    &:hover .goal-armed-target {
+      opacity: 0;
+    }
+
+    &:hover .goal-armed-close {
+      opacity: 1;
+    }
+  `,
+  iconClose: css`
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transition: opacity 0.15s;
+  `,
+  iconSlot: css`
+    position: relative;
+
+    display: inline-flex;
+    flex: none;
+
+    width: 14px;
+    height: 14px;
+  `,
+  iconTarget: css`
+    transition: opacity 0.15s;
   `,
 }));
 
@@ -48,6 +76,9 @@ const styles = createStaticStyles(({ css }) => ({
  * earns its persistent home in the tray above the composer, so this chip hides.
  * Self-gating (returns null unless armed) so it can be appended unconditionally
  * to the action bar of every composer that renders the shared ChatInput.
+ *
+ * On hover the leading target icon crossfades into an ✕ so the "click to cancel"
+ * affordance is discoverable rather than hidden behind the tooltip alone.
  */
 const GoalArmedChip = memo(() => {
   const { t } = useTranslation('verify');
@@ -62,7 +93,14 @@ const GoalArmedChip = memo(() => {
   return (
     <Tooltip title={t('acceptance.tray.goalDisarm')}>
       <div className={styles.chip} onClick={() => disarm(agentId)}>
-        <Icon icon={TargetIcon} size={14} />
+        <span className={styles.iconSlot}>
+          <Icon
+            className={cx('goal-armed-target', styles.iconTarget)}
+            icon={TargetIcon}
+            size={14}
+          />
+          <Icon className={cx('goal-armed-close', styles.iconClose)} icon={XIcon} size={14} />
+        </span>
         <span>{t('acceptance.tray.goalLabel')}</span>
       </div>
     </Tooltip>
