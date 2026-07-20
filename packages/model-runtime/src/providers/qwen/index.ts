@@ -24,6 +24,17 @@ export const QwenLegacyModels = new Set([
   'qwen-1.8b-longcontext-chat',
 ]);
 
+/**
+ * Models that only run in thinking mode: DashScope rejects `enable_thinking: false`
+ * with 400 "The value of the enable_thinking parameter is restricted to True",
+ * so a disabled `thinking` preference must never be forwarded for them.
+ * See https://help.aliyun.com/zh/model-studio/deep-thinking
+ */
+const THINKING_FORCED_MODEL_PREFIXES = ['qwen3.8-max'];
+
+const isThinkingForcedModel = (model: string) =>
+  THINKING_FORCED_MODEL_PREFIXES.some((prefix) => model.startsWith(prefix));
+
 export const params = {
   baseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
   chatCompletion: {
@@ -80,26 +91,36 @@ export const params = {
         ...rest,
         ...(isDeepSeekV4Model
           ? {
-            ...(thinking?.type === 'enabled' || thinkingExplicitlyDisabled
-              ? { enable_thinking: !thinkingExplicitlyDisabled }
-              : {}),
-            ...(!thinkingExplicitlyDisabled && reasoning_effort && { reasoning_effort }),
-          }
-          : model.includes('-thinking')
-            ? {
-              enable_thinking: true,
-              thinking_budget:
-                thinking?.budget_tokens === 0 ? 0 : thinking?.budget_tokens || undefined,
+              ...(thinking?.type === 'enabled' || thinkingExplicitlyDisabled
+                ? { enable_thinking: !thinkingExplicitlyDisabled }
+                : {}),
+              ...(!thinkingExplicitlyDisabled && reasoning_effort && { reasoning_effort }),
             }
-            : thinking
-              ? {
-                ...(thinking.type !== undefined && {
-                  enable_thinking: thinking.type === 'enabled',
+          : isThinkingForcedModel(model)
+            ? {
+                enable_thinking: true,
+                // A disabled preference carries budget_tokens: 0 — sending it alongside
+                // a forced-on thinking flag would zero out the reasoning budget.
+                ...(!thinkingExplicitlyDisabled && {
+                  thinking_budget:
+                    thinking?.budget_tokens === 0 ? 0 : thinking?.budget_tokens || undefined,
                 }),
-                thinking_budget:
-                  thinking?.budget_tokens === 0 ? 0 : thinking?.budget_tokens || undefined,
               }
-              : {}),
+            : model.includes('-thinking')
+              ? {
+                  enable_thinking: true,
+                  thinking_budget:
+                    thinking?.budget_tokens === 0 ? 0 : thinking?.budget_tokens || undefined,
+                }
+              : thinking
+                ? {
+                    ...(thinking.type !== undefined && {
+                      enable_thinking: thinking.type === 'enabled',
+                    }),
+                    thinking_budget:
+                      thinking?.budget_tokens === 0 ? 0 : thinking?.budget_tokens || undefined,
+                  }
+                : {}),
         ...(typeof preserveThinking === 'boolean' && { preserve_thinking: preserveThinking }),
         frequency_penalty: undefined,
         messages,
