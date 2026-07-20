@@ -54,6 +54,12 @@ const currentAgentBackgroundColor = (s: AgentStoreState) =>
 
 const currentAgentTags = (s: AgentStoreState) => currentAgentData(s)?.tags || [];
 
+const currentAgentAuthorId = (s: AgentStoreState) => currentAgentData(s)?.userId;
+
+const currentAgentCreatedAt = (s: AgentStoreState) => currentAgentData(s)?.createdAt;
+
+const currentAgentVisibility = (s: AgentStoreState) => currentAgentData(s)?.visibility;
+
 /**
  * Get complete meta data for the current agent
  * Used to replace sessionMetaSelectors.currentAgentMeta
@@ -228,7 +234,16 @@ const currentKnowledgeIds = (s: AgentStoreState) => {
 };
 
 const isAgentConfigLoading = (s: AgentStoreState) =>
-  !s.activeAgentId || !s.agentMap[s.activeAgentId];
+  // A not-found agent never lands in `agentMap` — treat it as settled so the
+  // UI renders the 404 card instead of an endless skeleton.
+  !s.activeAgentId || (!s.agentMap[s.activeAgentId] && !s.agentNotFoundMap[s.activeAgentId]);
+
+/**
+ * The active agent's config fetch settled on `null` — the agent doesn't exist
+ * or the caller lost access (e.g. a workspace agent switched back to private).
+ */
+const isCurrentAgentNotFound = (s: AgentStoreState): boolean =>
+  !!s.activeAgentId && !!s.agentNotFoundMap[s.activeAgentId];
 
 /**
  * Fetch error for the active agent's config (undefined when none).
@@ -326,8 +341,10 @@ const getAgentDocumentsById = (agentId: string) => (s: AgentStoreState) =>
 export const agentSelectors = {
   currentAgentExecutionTarget,
   currentAgentHeterogeneousProviderType,
+  currentAgentAuthorId,
   currentAgentAvatar,
   currentAgentBackgroundColor,
+  currentAgentCreatedAt,
   currentAgentConfig,
   currentAgentConfigError,
   currentAgentDescription,
@@ -345,6 +362,7 @@ export const agentSelectors = {
   currentAgentTTSVoice,
   currentAgentTags,
   currentAgentTitle,
+  currentAgentVisibility,
   currentAgentWorkingDirectory,
   currentEnabledKnowledge,
   currentKnowledgeIds,
@@ -361,6 +379,7 @@ export const agentSelectors = {
   inboxAgentModel,
   isAgentConfigError,
   isAgentConfigLoading,
+  isCurrentAgentNotFound,
   isAgentModeEnabled,
   isCurrentAgentExternal,
   isCurrentAgentHeterogeneous,

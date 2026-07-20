@@ -1,9 +1,9 @@
 import { getServerFeatureFlagsValue } from '@/config/featureFlags';
 import { appEnv } from '@/envs/app';
 import { authEnv } from '@/envs/auth';
+import { buildAnalyticsConfig, fetchViteDevTemplate, renderSpaHtml } from '@/libs/spaHtml';
 import { type Locales, normalizeLocale } from '@/locales/resources';
 import { getServerAuthConfig } from '@/server/globalConfig/getServerAuthConfig';
-import { buildAnalyticsConfig, fetchViteDevTemplate, renderSpaHtml } from '@/server/spaHtml';
 import { type AuthSPAServerConfig } from '@/types/spaServerConfig';
 
 import { buildSeoMeta } from './seoMeta';

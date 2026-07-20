@@ -6,7 +6,13 @@ import {
 } from '@lobechat/heterogeneous-agents';
 import type { HeterogeneousProviderConfig } from '@lobechat/types';
 import { ActionIcon, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
-import { Button, createModal, Select, useModalContext } from '@lobehub/ui/base-ui';
+import {
+  Button as BaseButton,
+  Button,
+  createModal,
+  Select,
+  useModalContext,
+} from '@lobehub/ui/base-ui';
 import { Tag } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { t as i18nT } from 'i18next';
@@ -14,7 +20,7 @@ import { BotIcon, CheckCircle2, MonitorSmartphone, RefreshCw, XCircle } from 'lu
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { lambdaQuery } from '@/libs/trpc/client';
+import { useDeviceList } from '@/features/DeviceManager/useDeviceList';
 import { deviceService } from '@/services/device';
 import { useAgentStore } from '@/store/agent';
 
@@ -103,13 +109,14 @@ const ChangeDeviceContent = memo<ChangeDeviceContentProps>(
       setCanDismissByClickOutside(!saving);
     }, [saving, setCanDismissByClickOutside]);
 
-    const { data: devices, isLoading: loadingDevices } = lambdaQuery.device.listDevices.useQuery(
-      undefined,
-      { staleTime: 30_000 },
-    );
+    // Workspace-keyed SWR fetch (see useDeviceList) — the raw lambdaQuery key
+    // has no workspace dimension, so the list went stale across workspace
+    // switches (LOBE-11904).
+    const { data: devices, isLoading: loadingDevices } = useDeviceList();
 
     const onlineDevices = (devices ?? []).filter(
-      (d) => d.online && (!isWorkspaceAgent || d.scope === 'workspace'),
+      (d) =>
+        d.online && (!isWorkspaceAgent || (d.scope === 'workspace' && d.visibility === 'public')),
     );
 
     const checkCapability = useCallback(
@@ -198,17 +205,17 @@ const ChangeDeviceContent = memo<ChangeDeviceContentProps>(
           )}
         </Flexbox>
         <Flexbox horizontal gap={8} justify={'flex-end'}>
-          <Button disabled={saving} onClick={close}>
+          <BaseButton disabled={saving} onClick={close}>
             {t('cancel', { ns: 'common' })}
-          </Button>
-          <Button
+          </BaseButton>
+          <BaseButton
             disabled={!selectedDeviceId || checkingCapability || capabilityBad}
             loading={saving}
             type={'primary'}
             onClick={handleSave}
           >
             {t('platformAgentConfig.changeDevice')}
-          </Button>
+          </BaseButton>
         </Flexbox>
       </Flexbox>
     );
@@ -268,9 +275,8 @@ const RemoteAgentConfigCard = memo<RemoteAgentConfigCardProps>(
 
     const platformName = HETEROGENEOUS_TYPE_LABELS[provider.type] ?? provider.type;
 
-    const { data: devices } = lambdaQuery.device.listDevices.useQuery(undefined, {
-      staleTime: 30_000,
-    });
+    // Workspace-keyed SWR fetch — see the comment on the sibling call above.
+    const { data: devices } = useDeviceList();
 
     const boundDevice = devices?.find((d) => d.deviceId === boundDeviceId);
 

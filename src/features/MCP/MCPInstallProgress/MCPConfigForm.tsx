@@ -1,4 +1,5 @@
-import { Button, Flexbox, Form, Markdown } from '@lobehub/ui';
+import { Flexbox, Form, Markdown } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { Form as AForm } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import * as m from 'motion/react-m';

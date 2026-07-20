@@ -1,11 +1,14 @@
 // @vitest-environment node
+import { WORKSPACE_SYSTEM_ROLES } from '@lobechat/const/rbac';
 import { TRPCError } from '@trpc/server';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { documents, documentShares, users } from '../../schemas';
+import { documents, documentShares, users, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { seedWorkspaceRoles } from '../../utils/seedWorkspaceRoles';
 import { DocumentShareModel } from '../documentShare';
+import { RbacModel } from '../rbac';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
@@ -234,6 +237,144 @@ describe('DocumentShareModel', () => {
 
       const after = await shareModel.getByDocumentId(docId);
       expect(after!.pageViewCount).toBe(2);
+    });
+  });
+
+  describe('workspace mode ownership', () => {
+    const workspaceId = 'doc-share-ws-ownership';
+    const wsDocId = 'doc-share-ws-ownership-doc';
+    let wsShareModel: DocumentShareModel;
+
+    beforeEach(async () => {
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Ownership WS',
+        primaryOwnerId: userId,
+        slug: 'doc-share-ws-ownership',
+      });
+      await serverDB
+        .insert(documents)
+        .values({ id: wsDocId, title: 'WS Doc', userId, workspaceId, ...baseDocFields });
+      wsShareModel = new DocumentShareModel(serverDB, userId, workspaceId);
+    });
+
+    it('getByDocumentId should still find the share after switching visibility to link', async () => {
+      await wsShareModel.create(wsDocId, { visibility: 'private' });
+
+      const updated = await wsShareModel.updateVisibility(wsDocId, 'link');
+      expect(updated).not.toBeNull();
+
+      // Regression: document_shares.visibility is 'private' | 'link' (share
+      // semantics) and must not be fed into the workspace row-visibility filter.
+      const info = await wsShareModel.getByDocumentId(wsDocId);
+      expect(info).not.toBeNull();
+      expect(info!.visibility).toBe('link');
+    });
+
+    it('updatePermission works on a link share in workspace mode', async () => {
+      await wsShareModel.create(wsDocId, { visibility: 'link' });
+
+      const updated = await wsShareModel.updatePermission(wsDocId, 'edit');
+      expect(updated).not.toBeNull();
+      expect(updated!.permission).toBe('edit');
+    });
+
+    it('deleteByDocumentId removes a link share in workspace mode', async () => {
+      await wsShareModel.create(wsDocId, { visibility: 'link' });
+
+      await wsShareModel.deleteByDocumentId(wsDocId);
+
+      const info = await wsShareModel.getByDocumentId(wsDocId);
+      expect(info).toBeNull();
+    });
+
+    describe('findByDocumentIdWithAccessCheck — private is creator-only, even in a workspace', () => {
+      beforeEach(async () => {
+        await seedWorkspaceRoles(serverDB, workspaceId);
+        await new RbacModel(serverDB, userId2).assignWorkspaceRole({
+          roleName: WORKSPACE_SYSTEM_ROLES.VIEWER,
+          userId: userId2,
+          workspaceId,
+        });
+      });
+
+      it('rejects a workspace member (viewer role) for a private share', async () => {
+        await wsShareModel.create(wsDocId, { visibility: 'private' });
+
+        try {
+          await DocumentShareModel.findByDocumentIdWithAccessCheck(serverDB, wsDocId, userId2);
+          throw new Error('should not reach');
+        } catch (error) {
+          expect((error as TRPCError).code).toBe('FORBIDDEN');
+        }
+      });
+
+      it('rejects a workspace member for a doc with NO share record', async () => {
+        try {
+          await DocumentShareModel.findByDocumentIdWithAccessCheck(serverDB, wsDocId, userId2);
+          throw new Error('should not reach');
+        } catch (error) {
+          expect((error as TRPCError).code).toBe('FORBIDDEN');
+        }
+      });
+
+      it('allows the creator to view their own private share', async () => {
+        await wsShareModel.create(wsDocId, { visibility: 'private' });
+
+        const result = await DocumentShareModel.findByDocumentIdWithAccessCheck(
+          serverDB,
+          wsDocId,
+          userId,
+        );
+
+        expect(result.document.id).toBe(wsDocId);
+        expect(result.isOwner).toBe(true);
+      });
+
+      it('rejects a member for a workspace-PRIVATE doc private share (row visibility wins)', async () => {
+        const privDocId = 'doc-share-ws-priv-doc';
+        await serverDB.insert(documents).values({
+          id: privDocId,
+          title: 'WS Private Doc',
+          userId,
+          visibility: 'private',
+          workspaceId,
+          ...baseDocFields,
+        });
+        const privShareModel = new DocumentShareModel(serverDB, userId, workspaceId);
+        await privShareModel.create(privDocId, { visibility: 'private' });
+
+        try {
+          await DocumentShareModel.findByDocumentIdWithAccessCheck(serverDB, privDocId, userId2);
+          throw new Error('should not reach');
+        } catch (error) {
+          expect((error as TRPCError).code).toBe('FORBIDDEN');
+        }
+      });
+
+      it('rejects anonymous access for a private workspace share', async () => {
+        await wsShareModel.create(wsDocId, { visibility: 'private' });
+
+        try {
+          await DocumentShareModel.findByDocumentIdWithAccessCheck(serverDB, wsDocId, undefined);
+          throw new Error('should not reach');
+        } catch (error) {
+          expect((error as TRPCError).code).toBe('FORBIDDEN');
+        }
+      });
+
+      it('rejects a non-member for a private workspace share', async () => {
+        const outsiderId = 'doc-share-outsider';
+        await serverDB.insert(users).values({ id: outsiderId });
+        await wsShareModel.create(wsDocId, { visibility: 'private' });
+
+        try {
+          await DocumentShareModel.findByDocumentIdWithAccessCheck(serverDB, wsDocId, outsiderId);
+          throw new Error('should not reach');
+        } catch (error) {
+          expect((error as TRPCError).code).toBe('FORBIDDEN');
+        }
+      });
     });
   });
 });

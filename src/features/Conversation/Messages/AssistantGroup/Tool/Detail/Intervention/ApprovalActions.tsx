@@ -1,4 +1,5 @@
-import { Button, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { CornerDownLeft } from 'lucide-react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
@@ -7,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useUserStore } from '@/store/user';
 
+import { useConversationResourceAccess } from '../../../../../hooks/useConversationResourceAccess';
 import { useConversationStore } from '../../../../../store';
 import { type ApprovalMode } from './index';
 
@@ -117,11 +119,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorTextTertiary};
   `,
   submitButton: css`
-    &.ant-btn {
-      min-width: 88px;
-      height: 36px;
-      border-radius: calc(${cssVar.borderRadiusLG} - 2px);
-    }
+    min-width: 88px;
+    height: 36px;
+    border-radius: calc(${cssVar.borderRadiusLG} - 2px);
   `,
 }));
 
@@ -135,6 +135,9 @@ const ApprovalActions = memo<ApprovalActionsProps>(
 
     const isMessageCreating = messageId.startsWith('tmp_');
     const isAllowListMode = approvalMode === 'allow-list';
+    // Workspace topics are shared: a view-only member can be LOOKING at a
+    // teammate's running conversation — they must not drive its tool approvals.
+    const { canUseResource } = useConversationResourceAccess();
 
     // Ordered choices drive both the numbered rows and the 1/2/3 shortcuts.
     // "Approve & don't ask again" is a first-class option (allow-list only)
@@ -151,7 +154,7 @@ const ApprovalActions = memo<ApprovalActionsProps>(
     const addToolToAllowList = useUserStore((s) => s.addToolToAllowList);
 
     const handleSubmit = useCallback(async () => {
-      if (loading || isMessageCreating) return;
+      if (loading || isMessageCreating || !canUseResource) return;
       setLoading(true);
       try {
         if (choice === 'reject') {
@@ -171,6 +174,7 @@ const ApprovalActions = memo<ApprovalActionsProps>(
       apiName,
       approveToolCall,
       assistantGroupId,
+      canUseResource,
       choice,
       identifier,
       isAllowListMode,
@@ -194,6 +198,7 @@ const ApprovalActions = memo<ApprovalActionsProps>(
     // typing anywhere on the page so we never hijack the main chat composer.
     // The reject input has its own onKeyDown for Enter / ↑.
     useEffect(() => {
+      if (!canUseResource) return;
       const handler = (e: KeyboardEvent) => {
         const target = e.target as HTMLElement | null;
         if (target) {
@@ -235,7 +240,7 @@ const ApprovalActions = memo<ApprovalActionsProps>(
       return () => {
         window.removeEventListener('keydown', handler);
       };
-    }, [choices, handleSubmit]);
+    }, [canUseResource, choices, handleSubmit]);
 
     const handleRejectInputKeyDown = (e: ReactKeyboardEvent<HTMLInputElement>) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -257,6 +262,10 @@ const ApprovalActions = memo<ApprovalActionsProps>(
       'approve': t('tool.intervention.optionApprove'),
       'approve-remember': t('tool.intervention.optionApproveRemember'),
     };
+
+    // View-only members see the pending intervention but get no approval
+    // controls — the run belongs to a member who can use the agent.
+    if (!canUseResource) return null;
 
     return (
       <Flexbox className={styles.container}>

@@ -4,10 +4,17 @@ import { ConnectorToolPermission } from '@/database/schemas';
 import { mcpService } from '@/server/services/mcp';
 
 import { callConnectorToolById } from './exec';
+import { scheduleStaleConnectorToolsRefresh } from './refresh';
 import { ensureFreshConnectorToken } from './tokens';
 
 vi.mock('@/server/services/mcp', () => ({ mcpService: { callTool: vi.fn() } }));
 vi.mock('./tokens', () => ({ ensureFreshConnectorToken: vi.fn(async (c) => c) }));
+// The background tool-list refresh is exercised in refresh.test.ts. Here we only
+// verify the call site wires it up and stays isolated from it.
+vi.mock('./refresh', () => ({
+  buildLastSyncedAtMap: vi.fn(() => new Map()),
+  scheduleStaleConnectorToolsRefresh: vi.fn(),
+}));
 
 const connector = {
   credentials: { accessToken: 'tok', type: 'oauth2' },
@@ -109,5 +116,39 @@ describe('callConnectorToolById', () => {
         }),
       }),
     );
+  });
+
+  it('schedules a background tool-list refresh for the connector', async () => {
+    vi.mocked(mcpService.callTool).mockResolvedValue({ success: true });
+    const ctx = makeCtx([connector], [tool()]);
+
+    await callConnectorToolById({ identifier: 'my-conn', toolName: 'do_thing' }, ctx);
+
+    expect(scheduleStaleConnectorToolsRefresh).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({
+          id: 'c1',
+          mcpConnectionType: 'http',
+          mcpServerUrl: 'https://mcp.example.com',
+        }),
+      ],
+      expect.anything(),
+      ctx,
+    );
+  });
+
+  it('still returns the tool result when the background refresh scheduler throws', async () => {
+    // The refresh is a pure optimization; a failure in it must never break the
+    // tool call the user actually asked for.
+    vi.mocked(scheduleStaleConnectorToolsRefresh).mockImplementationOnce(() => {
+      throw new Error('scheduler exploded');
+    });
+    vi.mocked(mcpService.callTool).mockResolvedValue({ success: true });
+    const ctx = makeCtx([connector], [tool()]);
+
+    const res = await callConnectorToolById({ identifier: 'my-conn', toolName: 'do_thing' }, ctx);
+
+    expect(res).toEqual({ success: true });
+    expect(mcpService.callTool).toHaveBeenCalledTimes(1);
   });
 });

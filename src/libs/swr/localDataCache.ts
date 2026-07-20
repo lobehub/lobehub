@@ -36,6 +36,19 @@ export interface ScopeEntry {
   version?: string;
 }
 
+export interface LocalDataCachePutEntry {
+  data: unknown;
+  /** Full composite key, including the identity scope prefix. */
+  key: string;
+  updatedAt: number;
+  version?: string;
+}
+
+export interface LocalDataCacheBatch {
+  deleteKeys: string[];
+  putEntries: LocalDataCachePutEntry[];
+}
+
 const DB_NAME = 'lobehub-local-data';
 const STORE_NAME = 'cache';
 
@@ -67,6 +80,32 @@ export const buildLocalDataKey = (scope: string, swrKey: unknown): string =>
   `${scopePrefix(scope)}${typeof swrKey === 'string' ? swrKey : JSON.stringify(swrKey)}`;
 
 export const localDataCache = {
+  /**
+   * Atomically replace persisted cache rows.
+   *
+   * Unlike the best-effort single-row helpers below, migration callers need a
+   * rejection when the transaction cannot commit so they can keep and retry
+   * the legacy source rows on the next boot.
+   */
+  applyBatch: async ({ deleteKeys, putEntries }: LocalDataCacheBatch): Promise<void> => {
+    const table = await getTable();
+    if (!table) return;
+
+    await table.db.transaction('rw', table, async () => {
+      if (putEntries.length > 0) {
+        await table.bulkPut(
+          putEntries.map((entry) => ({
+            data: entry.data,
+            key: entry.key,
+            updatedAt: entry.updatedAt,
+            version: entry.version,
+          })),
+        );
+      }
+      if (deleteKeys.length > 0) await table.bulkDelete(deleteKeys);
+    });
+  },
+
   /**
    * Remove every entry belonging to a scope. Useful on logout / account switch.
    */

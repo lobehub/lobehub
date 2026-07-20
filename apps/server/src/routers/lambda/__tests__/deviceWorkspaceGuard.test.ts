@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { DeviceModel } from '@/database/models/device';
 
-import { assertWorkspaceRootApproved } from '../deviceWorkspaceGuard';
+import { assertWorkspaceDeviceVisible, assertWorkspaceRootApproved } from '../deviceWorkspaceGuard';
 
 const mockModel = (row: { defaultCwd?: string | null; workingDirs?: { path: string }[] } | null) =>
   ({
@@ -66,5 +66,29 @@ describe('assertWorkspaceRootApproved', () => {
       code: 'BAD_REQUEST',
     });
     expect(model.findByDeviceId).not.toHaveBeenCalled();
+  });
+});
+
+describe('assertWorkspaceDeviceVisible', () => {
+  const mockHiddenModel = (hiddenIds: string[]) =>
+    ({
+      queryWorkspaceHiddenDeviceIds: vi.fn().mockResolvedValue(hiddenIds),
+    }) as unknown as DeviceModel;
+
+  it('allows a device the caller can see', async () => {
+    const model = mockHiddenModel(['someone-elses-private']);
+    await expect(assertWorkspaceDeviceVisible(model, 'public-dev')).resolves.toBeUndefined();
+  });
+
+  it('allows a transient device with no DB row (empty hidden set)', async () => {
+    const model = mockHiddenModel([]);
+    await expect(assertWorkspaceDeviceVisible(model, 'transient-dev')).resolves.toBeUndefined();
+  });
+
+  it("rejects another member's private device with NOT_FOUND", async () => {
+    const model = mockHiddenModel(['someone-elses-private']);
+    await expect(
+      assertWorkspaceDeviceVisible(model, 'someone-elses-private'),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
 });

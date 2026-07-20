@@ -23,8 +23,8 @@ const defaultOpenAIBaseURL = 'https://api.moonshot.cn/v1';
 const anthropicBaseURL = 'https://api.moonshot.cn/anthropic';
 
 // Mock the console.error and console.warn to avoid polluting test output
-vi.spyOn(console, 'error').mockImplementation(() => { });
-vi.spyOn(console, 'warn').mockImplementation(() => { });
+vi.spyOn(console, 'error').mockImplementation(() => {});
+vi.spyOn(console, 'warn').mockImplementation(() => {});
 
 beforeEach(() => {
   loadModelsMock.mockResolvedValue([]);
@@ -370,6 +370,81 @@ describe('LobeMoonshotOpenAI', () => {
 
         const payload = getLastRequestPayload();
         expect(payload.thinking).toEqual({ keep: 'all', type: 'enabled' });
+      });
+
+      it('should not send thinking/temperature/top_p/penalties for kimi-k3', async () => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'kimi-k3',
+          temperature: 0.5,
+          top_p: 0.8,
+        });
+
+        const payload = getLastRequestPayload();
+        // K3 reasoning is always on with server-fixed sampling; the docs say not to
+        // send thinking/temperature/top_p/penalties.
+        expect(payload.thinking).toBeUndefined();
+        expect(payload.temperature).toBeUndefined();
+        expect(payload.top_p).toBeUndefined();
+        expect(payload.frequency_penalty).toBeUndefined();
+        expect(payload.presence_penalty).toBeUndefined();
+      });
+
+      it('should rename max_tokens to max_completion_tokens for kimi-k3', async () => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'kimi-k3',
+          max_tokens: 4096,
+        });
+
+        const payload = getLastRequestPayload();
+        expect(payload.max_completion_tokens).toBe(4096);
+        expect(payload.max_tokens).toBeUndefined();
+      });
+
+      it('should pass through reasoning_effort for kimi-k3', async () => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'kimi-k3',
+          reasoning_effort: 'max',
+        } as any);
+
+        const payload = getLastRequestPayload();
+        expect(payload.reasoning_effort).toBe('max');
+      });
+
+      it.each(['low', 'medium', 'high'])(
+        "should drop a non-'max' reasoning_effort (%s) for kimi-k3",
+        async (effort) => {
+          await instance.chat({
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'kimi-k3',
+            reasoning_effort: effort,
+          } as any);
+
+          const payload = getLastRequestPayload();
+          // K3 only accepts reasoning_effort 'max' (also the server default); other values
+          // would be rejected, so they are dropped instead of failing the request.
+          expect('reasoning_effort' in payload).toBe(false);
+        },
+      );
+
+      it('should force reasoning_content on assistant messages for kimi-k3', async () => {
+        await instance.chat({
+          messages: [
+            { content: 'Hello', role: 'user' },
+            { content: 'Response', role: 'assistant' },
+            { content: 'Follow-up', role: 'user' },
+          ],
+          model: 'kimi-k3',
+        });
+
+        const payload = getLastRequestPayload();
+        const assistantMessage = payload.messages.find(
+          (message: any) => message.role === 'assistant',
+        );
+
+        expect(assistantMessage?.reasoning_content).toBe('');
       });
     });
 
@@ -831,6 +906,44 @@ describe('LobeMoonshotAnthropicAI', () => {
             { content: 'Follow-up', role: 'user' },
           ],
           model: 'kimi-k2.7-code',
+        });
+
+        const payload = getLastRequestPayload();
+        const assistantMessage = payload.messages.find(
+          (message: any) => message.role === 'assistant',
+        );
+
+        expect(assistantMessage?.content).toEqual([
+          { type: 'thinking', thinking: ' ' },
+          { type: 'text', text: 'Response' },
+        ]);
+      });
+    });
+
+    describe('kimi-k3 reasoning effort models', () => {
+      it('should not send thinking/temperature/top_p for kimi-k3', async () => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'kimi-k3',
+          temperature: 0.5,
+        });
+
+        const payload = getLastRequestPayload();
+        // K3 has no `thinking` param (reasoning always on) and temperature/top_p are
+        // server-fixed; the docs advise not to send them.
+        expect(payload.thinking).toBeUndefined();
+        expect(payload.temperature).toBeUndefined();
+        expect(payload.top_p).toBeUndefined();
+      });
+
+      it('should force thinking block on assistant messages for kimi-k3', async () => {
+        await instance.chat({
+          messages: [
+            { content: 'Hello', role: 'user' },
+            { content: 'Response', role: 'assistant' },
+            { content: 'Follow-up', role: 'user' },
+          ],
+          model: 'kimi-k3',
         });
 
         const payload = getLastRequestPayload();

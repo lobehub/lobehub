@@ -2,7 +2,8 @@
 
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { ActionIcon, Avatar, Button, DropdownMenu, Flexbox, Icon, Text } from '@lobehub/ui';
+import { ActionIcon, Avatar, DropdownMenu, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import {
   ChevronDownIcon,
@@ -277,12 +278,7 @@ const ReplyArea = memo(() => {
         <ReplyPanel onCollapse={isEmptyConversation ? undefined : () => setReplyOpen(false)} />
       ) : (
         <Flexbox className={styles.replyBar}>
-          <Button
-            block
-            icon={MessageCirclePlus}
-            variant={'filled'}
-            onClick={() => setReplyOpen(true)}
-          >
+          <Button block icon={MessageCirclePlus} type={'fill'} onClick={() => setReplyOpen(true)}>
             {t('fleet.reply')}
           </Button>
         </Flexbox>

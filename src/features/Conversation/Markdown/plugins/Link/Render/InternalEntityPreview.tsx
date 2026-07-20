@@ -1,0 +1,282 @@
+'use client';
+
+import type { VerifyCodingScope } from '@lobechat/types';
+import { Avatar, Flexbox, Icon, Popover, Skeleton, Text } from '@lobehub/ui';
+import { createStaticStyles } from 'antd-style';
+import type { TFunction } from 'i18next';
+import {
+  BadgeCheckIcon,
+  BotIcon,
+  CheckCircleIcon,
+  CheckSquareIcon,
+  FileTextIcon,
+} from 'lucide-react';
+import { memo, type PropsWithChildren, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import { useClientDataSWR } from '@/libs/swr';
+import { agentService } from '@/services/agent';
+import { documentService } from '@/services/document';
+import { taskService } from '@/services/task';
+import { verifyService } from '@/services/verify';
+
+import type { InternalLinkReference } from '../internalLink';
+
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  content: css`
+    width: 320px;
+    padding: 16px;
+  `,
+  description: css`
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+
+    line-height: 1.55;
+    color: ${cssVar.colorTextSecondary};
+  `,
+  icon: css`
+    display: grid;
+    flex: none;
+    place-items: center;
+
+    width: 36px;
+    height: 36px;
+    border-radius: ${cssVar.borderRadiusLG};
+
+    color: ${cssVar.colorTextSecondary};
+
+    background: ${cssVar.colorFillTertiary};
+  `,
+  title: css`
+    overflow: hidden;
+
+    font-weight: 600;
+    line-height: 1.4;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  `,
+  type: css`
+    font-size: 12px;
+    color: ${cssVar.colorTextTertiary};
+  `,
+}));
+
+interface PreviewData {
+  avatar?: string | null;
+  backgroundColor?: string | null;
+  description?: string | null;
+  meta?: string | null;
+  secondaryMeta?: string | null;
+  title?: string | null;
+}
+
+const getVerifyStatusLabel = (status: string | null | undefined, t: TFunction<'chat'>) => {
+  switch (status) {
+    case 'delivered': {
+      return t('internalLink.preview.verifyStatus.delivered');
+    }
+    case 'errored': {
+      return t('internalLink.preview.verifyStatus.errored');
+    }
+    case 'failed': {
+      return t('internalLink.preview.verifyStatus.failed');
+    }
+    case 'passed': {
+      return t('internalLink.preview.verifyStatus.passed');
+    }
+    case 'planned': {
+      return t('internalLink.preview.verifyStatus.planned');
+    }
+    case 'repairing': {
+      return t('internalLink.preview.verifyStatus.repairing');
+    }
+    case 'uncertain': {
+      return t('internalLink.preview.verifyStatus.uncertain');
+    }
+    case 'unverified': {
+      return t('internalLink.preview.verifyStatus.unverified');
+    }
+    case 'verifying': {
+      return t('internalLink.preview.verifyStatus.verifying');
+    }
+    default: {
+      return null;
+    }
+  }
+};
+
+const getPreviewData = async (
+  reference: InternalLinkReference,
+  t: TFunction<'chat'>,
+): Promise<PreviewData | null> => {
+  switch (reference.type) {
+    case 'acceptance': {
+      const bundle = await verifyService.getAcceptanceBundle(reference.acceptanceId);
+      if (!bundle) return null;
+
+      const passed = bundle.checks.filter((check) => check.state === 'passed').length;
+      const exceptions = bundle.checks.filter(
+        (check) => check.state === 'failed' || check.state === 'uncertain',
+      ).length;
+
+      return {
+        description: bundle.acceptance.requirement || bundle.latestReport?.summary,
+        meta: t('internalLink.preview.acceptanceCounts', {
+          exceptions,
+          passed,
+          total: bundle.checks.length,
+        }),
+        secondaryMeta: t('internalLink.preview.acceptanceRounds', {
+          count: bundle.rounds.length,
+        }),
+        title: bundle.subject.title || bundle.subject.id,
+      };
+    }
+    case 'agent': {
+      return agentService.getAgentConfigById(reference.agentId);
+    }
+    case 'document': {
+      const document = await documentService.getDocumentById(reference.documentId);
+      return document
+        ? {
+            description: document.content,
+            title: document.title || document.filename,
+          }
+        : null;
+    }
+    case 'task': {
+      const result = await taskService.getDetail(reference.taskId);
+      const task = result.data;
+      return task
+        ? {
+            description: task.description || task.instruction,
+            title: task.name || task.identifier,
+          }
+        : null;
+    }
+    case 'verify': {
+      const bundle = await verifyService.getReportBundle(reference.runId);
+      if (!bundle) return null;
+
+      const { report, run } = bundle;
+      const status = report?.verdict ?? run.status;
+      const counts = report
+        ? t('internalLink.preview.verifyCounts', {
+            failed: report.failedChecks ?? 0,
+            passed: report.passedChecks ?? 0,
+            uncertain: report.uncertainChecks ?? 0,
+          })
+        : null;
+      // Branch/commit chips only exist on a coding scope (a run with no
+      // scenario predates the column and is coding); testedAt is shared.
+      const codingScope =
+        (run.scenario ?? 'coding') === 'coding' ? (run.context as VerifyCodingScope | null) : null;
+      const testedAt = (run.context as { testedAt?: string } | null)?.testedAt;
+      const scope = [
+        codingScope?.branch,
+        codingScope?.commit?.slice(0, 10),
+        testedAt ? new Date(testedAt).toLocaleString() : null,
+      ].filter(Boolean);
+
+      return {
+        description: report?.summary,
+        meta: [getVerifyStatusLabel(status, t), counts].filter(Boolean).join(' · '),
+        secondaryMeta: scope.join(' · '),
+        title: run.title,
+      };
+    }
+    case 'route': {
+      return null;
+    }
+  }
+};
+
+interface InternalEntityPreviewProps extends PropsWithChildren {
+  fallbackTitle: string;
+  reference: Exclude<InternalLinkReference, { type: 'route' }>;
+}
+
+export const InternalEntityPreview = memo<InternalEntityPreviewProps>(
+  ({ children, fallbackTitle, reference }) => {
+    const { t } = useTranslation('chat');
+    const [open, setOpen] = useState(false);
+    const { data, isLoading } = useClientDataSWR(
+      open ? ['internal-entity-preview', reference.type, reference.pathname] : null,
+      () => getPreviewData(reference, t),
+      { revalidateOnFocus: false },
+    );
+
+    const icon =
+      reference.type === 'acceptance'
+        ? BadgeCheckIcon
+        : reference.type === 'agent'
+          ? BotIcon
+          : reference.type === 'task'
+            ? CheckSquareIcon
+            : reference.type === 'verify'
+              ? CheckCircleIcon
+              : FileTextIcon;
+    const typeLabel = t(`internalLink.preview.${reference.type}`);
+
+    const content = isLoading ? (
+      <div className={styles.content}>
+        <Skeleton active avatar paragraph={{ rows: 2 }} />
+      </div>
+    ) : (
+      <Flexbox className={styles.content} gap={12}>
+        <Flexbox horizontal align="center" gap={12}>
+          {reference.type === 'agent' && data?.avatar ? (
+            <Avatar
+              avatar={data.avatar}
+              background={data.backgroundColor ?? undefined}
+              shape="square"
+              size={36}
+            />
+          ) : (
+            <span className={styles.icon}>
+              <Icon icon={icon} size={19} />
+            </span>
+          )}
+          <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
+            <span className={styles.type}>{typeLabel}</span>
+            <span className={styles.title}>{data?.title || fallbackTitle}</span>
+          </Flexbox>
+        </Flexbox>
+        {data?.description && (
+          <Text className={styles.description} fontSize={13}>
+            {data.description}
+          </Text>
+        )}
+        {data?.meta && (
+          <Text fontSize={12} type={'secondary'}>
+            {data.meta}
+          </Text>
+        )}
+        {data?.secondaryMeta && (
+          <Text fontSize={12} type={'secondary'}>
+            {data.secondaryMeta}
+          </Text>
+        )}
+      </Flexbox>
+    );
+
+    return (
+      <Popover
+        content={content}
+        mouseEnterDelay={0.35}
+        open={open}
+        placement="top"
+        styles={{ content: { borderRadius: 12, overflow: 'hidden', padding: 0 } }}
+        trigger="hover"
+        triggerProps={{ role: 'link' }}
+        onOpenChange={setOpen}
+      >
+        {children}
+      </Popover>
+    );
+  },
+);
+
+InternalEntityPreview.displayName = 'InternalEntityPreview';

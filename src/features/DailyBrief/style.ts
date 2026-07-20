@@ -8,10 +8,8 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     }
   `,
   actionBtnPrimary: css`
-    &.ant-btn {
-      width: auto !important;
-      padding-inline: 12px !important;
-    }
+    width: auto !important;
+    padding-inline: 12px !important;
   `,
   expandLink: css`
     border: 1px solid ${cssVar.colorFillTertiary} !important;

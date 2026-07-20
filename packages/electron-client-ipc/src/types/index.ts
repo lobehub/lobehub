@@ -1,4 +1,6 @@
 export * from './binary';
+export * from './browserControl';
+export * from './browserSidebar';
 export * from './dataSync';
 export * from './git';
 export * from './heterogeneousAgent';
@@ -12,6 +14,7 @@ export * from './route';
 export * from './screenCapture';
 export * from './shortcut';
 export * from './system';
+export * from './terminal';
 export * from './topicPopup';
 export * from './tray';
 export * from './update';

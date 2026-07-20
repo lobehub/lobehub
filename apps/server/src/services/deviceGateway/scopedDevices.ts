@@ -1,5 +1,6 @@
 import { type DeviceAttachment } from '@lobechat/builtin-tool-remote-device';
 import { type LobeChatDatabase } from '@lobechat/database';
+import { sortDevicesByActivity } from '@lobechat/types';
 import debug from 'debug';
 
 import { DeviceModel } from '@/database/models/device';
@@ -41,13 +42,26 @@ export const getScopedOnlineDevices = async (
   const deviceModel = new DeviceModel(serverDB, userId, workspaceId);
   const scope: 'personal' | 'workspace' = workspaceId ? 'workspace' : 'personal';
 
-  const [rows, online] = await Promise.all([
+  const [rows, hiddenIds, online] = await Promise.all([
     (workspaceId ? deviceModel.queryWorkspaceDevices() : deviceModel.queryPersonal()).catch(
       (error) => {
         log('DB device lookup failed (scope=%s); using gateway only: %O', scope, error);
         return [] as Awaited<ReturnType<typeof deviceModel.queryPersonal>>;
       },
     ),
+    // Other members' PRIVATE workspace enrollments. The gateway pool is
+    // visibility-blind (every enrolled device connects under the same
+    // `workspace:<id>` principal), so these must be dropped from the transient
+    // "online but unregistered" fallback below or they'd leak into every
+    // member's agent runs. `null` (lookup failed) fails CLOSED: without the
+    // hidden set we can't tell a genuine ghost from someone's private device,
+    // so workspace-scope transients are suppressed entirely for that request.
+    workspaceId
+      ? deviceModel.queryWorkspaceHiddenDeviceIds().catch((error) => {
+          log('DB hidden-device lookup failed; suppressing transient devices: %O', error);
+          return null;
+        })
+      : Promise.resolve([] as string[]),
     deviceGateway.queryDeviceList(userId, workspaceId),
   ]);
 
@@ -68,9 +82,18 @@ export const getScopedOnlineDevices = async (
     };
   });
   // Online in the gateway but not yet auto-registered in the DB (no alias yet).
-  const transient = online
-    .filter((d) => !seen.has(d.deviceId))
-    .map((d): DeviceAttachment => ({ ...d, friendlyName: null, scope }));
+  // Excludes other members' private enrollments (`hiddenIds`); when the hidden
+  // lookup itself failed (`null`) no workspace transient is safe to show.
+  const hidden = new Set(hiddenIds ?? []);
+  const transient =
+    hiddenIds === null
+      ? []
+      : online
+          .filter((d) => !seen.has(d.deviceId) && !hidden.has(d.deviceId))
+          .map((d): DeviceAttachment => ({ ...d, friendlyName: null, scope }));
 
-  return [...fromDb, ...transient];
+  // Online first, then most recently active — the same order the settings list
+  // and the run-target picker render, so "the first device" means the same
+  // thing to the model as it does to the user reading the picker.
+  return sortDevicesByActivity([...fromDb, ...transient]);
 };

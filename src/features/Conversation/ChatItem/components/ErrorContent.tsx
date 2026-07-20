@@ -43,13 +43,7 @@ const ErrorContent = memo<ErrorContentProps>(({ customErrorRender, error, id, on
       type={'secondary'}
       action={
         onRegenerate && (
-          <Button
-            color="default"
-            icon={<RotateCcw size={14} />}
-            size="small"
-            type="fill"
-            onClick={onRegenerate}
-          >
+          <Button icon={<RotateCcw size={14} />} size="small" type="fill" onClick={onRegenerate}>
             {t('regenerate')}
           </Button>
         )

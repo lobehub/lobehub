@@ -42,6 +42,8 @@ export default eslint(
       '.claude',
       '.serena',
       '.i18nrc.js',
+      // vendored code (copied from @microsoft/fetch-event-source)
+      'packages/utils/src/client/fetchEventSource/parse.ts',
     ],
     next: true,
     react: 'next',
@@ -148,6 +150,35 @@ export default eslint(
     files: ['apps/cli/**/*'],
     rules: {
       'no-console': 0,
+    },
+  },
+  // model-runtime debug utilities - console output is the primary interface
+  {
+    files: ['packages/model-runtime/src/utils/debugStream.ts'],
+    rules: {
+      'no-console': 0,
+    },
+  },
+  // Business stubs - keep `use`-prefixed APIs mirroring the cloud implementation,
+  // even when the OSS fallback doesn't call any hooks
+  {
+    files: [
+      'src/business/client/features/User/useBusinessMenuItems.tsx',
+      'src/business/client/hooks/useBusinessChatInputSendAreaPrefix.tsx',
+      'src/business/client/hooks/useBusinessSignup.tsx',
+      'src/business/client/hooks/useRenderBusinessBatchItem.tsx',
+      'src/business/client/hooks/useRenderBusinessChatErrorMessageExtra.tsx',
+      'src/business/client/hooks/useRenderBusinessVideoBatchItem.tsx',
+    ],
+    rules: {
+      '@eslint-react/no-unnecessary-use-prefix': 0,
+    },
+  },
+  // CommonJS files rely on `require()` by design
+  {
+    files: ['**/*.cjs'],
+    rules: {
+      '@typescript-eslint/no-require-imports': 0,
     },
   },
 );

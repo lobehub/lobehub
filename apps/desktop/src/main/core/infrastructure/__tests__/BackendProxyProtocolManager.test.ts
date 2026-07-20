@@ -230,7 +230,57 @@ describe('BackendProxyProtocolManager', () => {
     expect(response!.headers.get('Access-Control-Allow-Origin')).toBe('app://renderer');
     expect(response!.headers.get('Access-Control-Allow-Credentials')).toBe('true');
     expect(response!.headers.get('X-Src-Url')).toBe('https://remote.example.com/trpc/hello');
-    expect(await response!.text()).toBe('Backend Proxy Upstream Unavailable');
+    // The Chromium error (net::ERR_*) is the diagnosis — it must survive into the
+    // body and a header, or a packaged build gives us nothing to go on.
+    expect(response!.headers.get('X-Proxy-Error')).toBe('network down');
+    expect(await response!.text()).toContain('Backend Proxy Upstream Unavailable: network down');
+    // The failing request must not count itself: a lone failure with nothing else
+    // in flight reads 0, not 1 — otherwise every failure looks like a backlog.
+    expect(response!.headers.get('X-Proxy-Pending-Upstream')).toBe('0');
+    expect(response!.headers.get('X-Proxy-Open-Upstream-Bodies')).toBe('0');
+  });
+
+  it('reports only the OTHER in-flight requests in the pending gauge', async () => {
+    const manager = new BackendProxyProtocolManager();
+    const session = {} as any;
+
+    let releaseSlowRequest: (() => void) | undefined;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).includes('slow')) {
+        // Never settles during the test: keeps one request genuinely pending.
+        await new Promise<void>((resolve) => {
+          releaseSlowRequest = resolve;
+        });
+        return new Response('ok', { status: 200 });
+      }
+      throw new Error('network down');
+    });
+    vi.stubGlobal('fetch', fetchMock as any);
+
+    manager.registerWithRemoteBaseUrl(session, {
+      getAccessToken: async () => null,
+      getRemoteBaseUrl: async () => 'https://remote.example.com',
+    });
+
+    const slow = manager.proxy(
+      { headers: new Headers(), method: 'GET', url: 'app://renderer/trpc/slow' } as any,
+      session,
+    );
+    // Let the slow request reach `await netFetch`, so it is counted as pending.
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+    const failed = await manager.proxy(
+      { headers: new Headers(), method: 'GET', url: 'app://renderer/trpc/boom' } as any,
+      session,
+    );
+
+    expect(failed!.status).toBe(502);
+    // One other request really is still awaiting headers — the gauge shows 1, and
+    // that 1 is the slow request, not the failure reporting itself.
+    expect(failed!.headers.get('X-Proxy-Pending-Upstream')).toBe('1');
+
+    releaseSlowRequest?.();
+    await slow;
   });
 
   it('broadcasts authorizationRequired when X-Auth-Required is set on HTTP 207 (batched tRPC)', async () => {
@@ -402,7 +452,7 @@ describe('BackendProxyProtocolManager', () => {
 
       expect(res).not.toBeNull();
       expect(res!.status).toBe(502);
-      expect(await res!.text()).toBe('Backend Proxy Unavailable');
+      expect(await res!.text()).toContain('Backend Proxy Unavailable');
     });
   });
 });

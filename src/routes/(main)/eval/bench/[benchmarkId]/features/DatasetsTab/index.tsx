@@ -1,7 +1,7 @@
 'use client';
 
-import { Button, Flexbox, Text } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
+import { Flexbox, Text } from '@lobehub/ui';
+import { Button, confirmModal } from '@lobehub/ui/base-ui';
 import { App, Card, Skeleton } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Plus } from 'lucide-react';
@@ -223,6 +223,7 @@ const DatasetsTab = memo<DatasetsTabProps>(
                     total={isExpanded ? total : 0}
                     onDeleteCase={handleDeleteCase}
                     onDiffFilterChange={handleDiffFilterChange}
+                    onEdit={(dataset) => createDatasetEditModal({ dataset, onSuccess: onRefresh })}
                     onExpand={() => handleExpand(ds.id)}
                     onImport={() => handleImportDataset(ds)}
                     onPageChange={(page, pageSize) => setPagination({ current: page, pageSize })}
@@ -235,7 +236,6 @@ const DatasetsTab = memo<DatasetsTabProps>(
                         onSuccess: handleRefreshTestCases,
                       })
                     }
-                    onEdit={(dataset) => createDatasetEditModal({ dataset, onSuccess: onRefresh })}
                   />
                 );
               })}

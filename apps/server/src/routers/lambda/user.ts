@@ -19,7 +19,6 @@ import {
   UserSettingsSchema,
 } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
-import { after } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
 
@@ -40,6 +39,7 @@ import { FileS3 } from '@/server/modules/S3';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
 import { FileService } from '@/server/services/file';
 import { OnboardingService } from '@/server/services/onboarding';
+import { after } from '@/server/utils/scheduleAfterResponse';
 
 const usernameSchema = z
   .string()

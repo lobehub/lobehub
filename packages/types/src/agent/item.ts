@@ -118,7 +118,7 @@ export const CreateAgentSchema = z.object({
   model: z.string().nullish(),
   openingMessage: z.string().nullish(),
   openingQuestions: z.array(z.string()).optional(),
-  params: z.record(z.unknown()).optional(),
+  params: z.record(z.string(), z.unknown()).optional(),
   plugins: z.array(AgentPluginEntrySchema).optional(),
   provider: z.string().nullish(),
   sessionGroupId: z.string().nullish(),

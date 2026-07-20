@@ -1,7 +1,6 @@
 'use client';
 
 import {
-  Button,
   Checkbox,
   copyToClipboard,
   Flexbox,
@@ -10,7 +9,7 @@ import {
   Text,
   usePopoverContext,
 } from '@lobehub/ui';
-import { confirmModal, Select } from '@lobehub/ui/base-ui';
+import { Button, confirmModal, Select } from '@lobehub/ui/base-ui';
 import { App, Divider } from 'antd';
 import {
   FileOutputIcon,
@@ -251,13 +250,7 @@ const SharePopoverContent = memo<SharePopoverContentProps>(({ onOpenModal, topic
       <Divider style={{ margin: '4px 0' }} />
 
       <Flexbox horizontal align="center" justify="space-between">
-        <Button
-          icon={FileOutputIcon}
-          size="small"
-          type="text"
-          variant="text"
-          onClick={handleOpenModal}
-        >
+        <Button icon={FileOutputIcon} size="small" type="text" onClick={handleOpenModal}>
           {t('shareModal.popover.export')}
         </Button>
         {currentVisibility !== 'private' && (

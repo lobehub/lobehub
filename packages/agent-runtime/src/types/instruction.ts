@@ -45,6 +45,7 @@ export interface AgentRuntimeContext {
 
   /** Session info (kept for backward compatibility, will be optional in the future) */
   session?: {
+    eventCount?: number;
     messageCount: number;
     sessionId: string;
     status: AgentState['status'];
@@ -173,6 +174,8 @@ export interface SubAgentTask {
    * run on the server.
    */
   runInClient?: boolean;
+  /** Agent selected by callAgent; defaults to the current runtime agent when omitted */
+  targetAgentId?: string;
   /** Timeout in milliseconds (optional, default 30 minutes) */
   timeout?: number;
 }

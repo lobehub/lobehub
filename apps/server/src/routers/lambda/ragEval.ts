@@ -98,7 +98,7 @@ export const ragEvalRouter = router({
         question: z.string(),
         ideal: z.string().optional(),
         referenceFiles: z.array(z.string()).optional(),
-        metadata: z.record(z.unknown()).optional(),
+        metadata: z.record(z.string(), z.unknown()).optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -127,7 +127,7 @@ export const ragEvalRouter = router({
             question: z.string(),
             ideal: z.string(),
             referenceFiles: z.array(z.string()),
-            metadata: z.record(z.unknown()),
+            metadata: z.record(z.string(), z.unknown()),
           })
           .partial(),
       }),

@@ -42,6 +42,19 @@ describe('isNonRetryableRequestError', () => {
     ).toBe(true);
   });
 
+  it('returns true for provider request-body-too-large context errors', () => {
+    expect(
+      isNonRetryableRequestError({
+        error: {
+          message: 'Request body too large for gpt-4o model',
+          type: 'invalid_request_error',
+        },
+        errorType: AgentRuntimeErrorType.ProviderBizError,
+        status: 400,
+      }),
+    ).toBe(true);
+  });
+
   it('returns true for provider content_filter moderation errors', () => {
     // ROOT CAUSE:
     //

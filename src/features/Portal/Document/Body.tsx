@@ -1,7 +1,8 @@
 'use client';
 
 import { EDITOR_DEBOUNCE_TIME, EDITOR_MAX_WAIT } from '@lobechat/const';
-import { ActionIcon, Button, Flexbox, Text, TextArea } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Text, TextArea } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { debounce } from 'es-toolkit/compat';
 import { CheckIcon, PencilIcon, XIcon } from 'lucide-react';
@@ -18,8 +19,6 @@ import { portalKeys } from '@/libs/swr/keys';
 import { documentService } from '@/services/document';
 import { useAgentStore } from '@/store/agent';
 import { useDocumentStore } from '@/store/document';
-import { useUserStore } from '@/store/user';
-import { labPreferSelectors } from '@/store/user/selectors';
 import { getDocumentRenderMode } from '@/utils/documentRenderMode';
 import {
   getSkillMarkdownMetadataError,
@@ -158,7 +157,7 @@ const SkillFrontmatterBlock = memo<SkillFrontmatterBlockProps>(({ documentId, fr
         <Text type="secondary">{t('skillFrontmatter.title')}</Text>
         {editing ? (
           <Flexbox horizontal gap={8}>
-            <Button icon={XIcon} size="small" variant="outlined" onClick={handleCancel}>
+            <Button icon={XIcon} size="small" onClick={handleCancel}>
               {t('cancel')}
             </Button>
             <Button
@@ -324,10 +323,11 @@ const DocumentBody = memo(() => {
   const agentDocumentId = useResolvedAgentDocumentId();
   const fullPage = useDocumentViewFullPage();
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
-  const enableFloatingChatPanel = useUserStore(
-    labPreferSelectors.enableAgentDocumentFloatingChatPanel,
-  );
-  const panelEligible = !fullPage && enableFloatingChatPanel && !!activeAgentId && !!documentId;
+  // `agentDocumentId` is what marks this as an *agent* document: only the agent-doc
+  // openers pass it. The notebook opens plain topic documents with the id alone, and
+  // `getOrCreateChatTopic` throws NOT_FOUND on those (no `agent_documents` row), so
+  // the panel — and its topic lookup — must stay out of the way there.
+  const panelEligible = !fullPage && !!activeAgentId && !!documentId && !!agentDocumentId;
   const { topicId: docChatTopicId } = useDocumentChatTopic({
     agentId: panelEligible ? activeAgentId : undefined,
     documentId: panelEligible ? documentId : undefined,

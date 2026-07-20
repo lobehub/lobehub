@@ -340,10 +340,14 @@ const GitStatus = memo<GitStatusProps>(({ agentId, path, sourcePath, isGithub, d
   ) : (
     // Local switches over IPC; a remote device switches over RPC (deviceId set).
     <BranchSwitcher
+      agentId={agentId}
       currentBranch={branch}
       deviceId={deviceId}
+      isGithub={isGithub}
       open={switcherOpen}
       path={path}
+      sourcePath={sourcePath ?? path}
+      worktrees={worktrees}
       onExternalRefresh={refreshAfterSync}
       onOpenChange={setSwitcherOpen}
       onOptimisticCheckout={handleOptimisticCheckout}

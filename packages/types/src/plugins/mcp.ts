@@ -6,7 +6,6 @@ import type { MCPErrorType } from '@/libs/mcp';
 import type { McpConnectionType } from '../discover/mcp';
 import type { CustomPluginMetadata } from '../tool/plugin';
 
-/* eslint-disable typescript-sort-keys/string-enum */
 export enum MCPInstallStep {
   CHECKING_INSTALLATION = 'CHECKING_INSTALLATION',
   COMPLETED = 'COMPLETED',
@@ -241,7 +240,7 @@ export const StreamableHTTPAuthSchema = z
  */
 export const GetStreamableMcpServerManifestInputSchema = z.object({
   auth: StreamableHTTPAuthSchema,
-  headers: z.record(z.string()).optional(),
+  headers: z.record(z.string(), z.string()).optional(),
   identifier: z.string(),
   metadata: z
     .object({

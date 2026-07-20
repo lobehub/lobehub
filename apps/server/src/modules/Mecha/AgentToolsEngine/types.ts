@@ -104,6 +104,8 @@ export interface ServerCreateAgentToolsEngineParams {
     deviceOnline?: boolean;
     gatewayConfigured: boolean;
   };
+  /** Plugin and builtin identifiers explicitly disabled in the agent configuration. */
+  disabledPluginIds?: string[];
   /** Whether to suppress the local-system builtin while preserving other tools. */
   disableLocalSystem?: boolean;
   /**

@@ -3,11 +3,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AiAgentService } from '../index';
 
-const { mockCreateOperation, mockGetAgentConfig, mockMessageCreate } = vi.hoisted(() => ({
-  mockCreateOperation: vi.fn(),
-  mockGetAgentConfig: vi.fn(),
-  mockMessageCreate: vi.fn(),
-}));
+const { mockCreateOperation, mockGetAgentConfig, mockGetPreference, mockMessageCreate } =
+  vi.hoisted(() => ({
+    mockCreateOperation: vi.fn(),
+    mockGetAgentConfig: vi.fn(),
+    mockGetPreference: vi.fn(),
+    mockMessageCreate: vi.fn(),
+  }));
 
 vi.mock('@/libs/trusted-client', () => ({
   generateTrustedClientToken: vi.fn().mockReturnValue(undefined),
@@ -18,8 +20,16 @@ vi.mock('@/libs/trusted-client', () => ({
 vi.mock('@/database/models/message', () => ({
   MessageModel: vi.fn().mockImplementation(() => ({
     create: mockMessageCreate,
+    getLatestNonToolMessageId: vi.fn().mockResolvedValue(undefined),
+    getLatestSpineMessageId: vi.fn().mockResolvedValue(undefined),
     query: vi.fn().mockResolvedValue([]),
     update: vi.fn().mockResolvedValue({}),
+  })),
+}));
+
+vi.mock('@/database/models/workspaceUserSettings', () => ({
+  WorkspaceUserSettingsModel: vi.fn().mockImplementation(() => ({
+    getPreference: mockGetPreference,
   })),
 }));
 
@@ -138,6 +148,7 @@ describe('AiAgentService.execAgent - model/provider override', () => {
       operationId: 'op-123',
       success: true,
     });
+    mockGetPreference.mockResolvedValue({});
     service = new AiAgentService(mockDb, userId);
   });
 
@@ -196,6 +207,65 @@ describe('AiAgentService.execAgent - model/provider override', () => {
     });
 
     expect(mockCreateOperation).toHaveBeenCalledTimes(1);
+    const callArgs = mockCreateOperation.mock.calls[0][0];
+    expect(callArgs.agentConfig.model).toBe('claude-sonnet-4-6');
+    expect(callArgs.agentConfig.provider).toBe('anthropic');
+  });
+
+  it('uses the caller model preference when the workspace Agent allows member selection', async () => {
+    mockGetAgentConfig.mockResolvedValue({
+      ...defaultAgentConfig,
+      agencyConfig: { modelSelectionPolicy: 'member' },
+    });
+    mockGetPreference.mockResolvedValue({
+      agentModelOverrides: {
+        'agent-1': { model: 'claude-sonnet-4-6', provider: 'anthropic' },
+      },
+    });
+    service = new AiAgentService(mockDb, userId, { workspaceId: 'workspace-1' });
+
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
+
+    const callArgs = mockCreateOperation.mock.calls[0][0];
+    expect(callArgs.agentConfig.model).toBe('claude-sonnet-4-6');
+    expect(callArgs.agentConfig.provider).toBe('anthropic');
+  });
+
+  it('ignores a retained caller preference when the workspace model policy is missing/fixed', async () => {
+    mockGetAgentConfig.mockResolvedValue({ ...defaultAgentConfig });
+    mockGetPreference.mockResolvedValue({
+      agentModelOverrides: {
+        'agent-1': { model: 'claude-sonnet-4-6', provider: 'anthropic' },
+      },
+    });
+    service = new AiAgentService(mockDb, userId, { workspaceId: 'workspace-1' });
+
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
+
+    const callArgs = mockCreateOperation.mock.calls[0][0];
+    expect(callArgs.agentConfig.model).toBe('gpt-4');
+    expect(callArgs.agentConfig.provider).toBe('openai');
+  });
+
+  it('keeps an explicit per-run model/provider above the caller workspace preference', async () => {
+    mockGetAgentConfig.mockResolvedValue({
+      ...defaultAgentConfig,
+      agencyConfig: { modelSelectionPolicy: 'member' },
+    });
+    mockGetPreference.mockResolvedValue({
+      agentModelOverrides: {
+        'agent-1': { model: 'gpt-4', provider: 'openai' },
+      },
+    });
+    service = new AiAgentService(mockDb, userId, { workspaceId: 'workspace-1' });
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      model: 'claude-sonnet-4-6',
+      prompt: 'Hello',
+      provider: 'anthropic',
+    });
+
     const callArgs = mockCreateOperation.mock.calls[0][0];
     expect(callArgs.agentConfig.model).toBe('claude-sonnet-4-6');
     expect(callArgs.agentConfig.provider).toBe('anthropic');

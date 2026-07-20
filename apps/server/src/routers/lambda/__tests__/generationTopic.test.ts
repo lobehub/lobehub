@@ -143,6 +143,7 @@ describe('generationTopicRouter', () => {
     vi.mocked(GenerationTopicModel).mockImplementation(
       () =>
         ({
+          findById: vi.fn().mockResolvedValue({ id: mockTopicId, userId: 'test-user' }),
           update: mockUpdate,
         }) as any,
     );
@@ -184,6 +185,7 @@ describe('generationTopicRouter', () => {
     vi.mocked(GenerationTopicModel).mockImplementation(
       () =>
         ({
+          findById: vi.fn().mockResolvedValue({ id: mockTopicId, userId: 'test-user' }),
           update: mockUpdate,
         }) as any,
     );
@@ -222,6 +224,7 @@ describe('generationTopicRouter', () => {
       () =>
         ({
           delete: mockDelete,
+          findById: vi.fn().mockResolvedValue(mockDeletedTopic),
         }) as any,
     );
 
@@ -264,6 +267,7 @@ describe('generationTopicRouter', () => {
       () =>
         ({
           delete: mockDelete,
+          findById: vi.fn().mockResolvedValue(mockDeletedTopic),
         }) as any,
     );
 
@@ -308,6 +312,7 @@ describe('generationTopicRouter', () => {
       () =>
         ({
           delete: mockDelete,
+          findById: vi.fn().mockResolvedValue(mockDeletedTopic),
         }) as any,
     );
 
@@ -354,6 +359,7 @@ describe('generationTopicRouter', () => {
       () =>
         ({
           delete: mockDelete,
+          findById: vi.fn().mockResolvedValue(mockDeletedTopic),
         }) as any,
     );
 
@@ -401,6 +407,7 @@ describe('generationTopicRouter', () => {
       () =>
         ({
           delete: mockDelete,
+          findById: vi.fn().mockResolvedValue(mockDeletedTopic),
         }) as any,
     );
 
@@ -434,6 +441,7 @@ describe('generationTopicRouter', () => {
       () =>
         ({
           delete: mockDelete,
+          findById: vi.fn().mockResolvedValue(undefined),
         }) as any,
     );
 
@@ -450,7 +458,7 @@ describe('generationTopicRouter', () => {
     const result = await caller.deleteTopic({ id: mockTopicId });
     expect(result).toBeUndefined();
 
-    expect(mockDelete).toHaveBeenCalledWith(mockTopicId);
+    expect(mockDelete).not.toHaveBeenCalled();
     expect(mockDeleteFiles).not.toHaveBeenCalled(); // no files to delete
   });
 
@@ -473,6 +481,7 @@ describe('generationTopicRouter', () => {
     vi.mocked(GenerationTopicModel).mockImplementation(
       () =>
         ({
+          findById: vi.fn().mockResolvedValue({ id: mockTopicId, userId: 'test-user' }),
           update: mockUpdate,
         }) as any,
     );
@@ -507,6 +516,7 @@ describe('generationTopicRouter', () => {
     vi.mocked(GenerationTopicModel).mockImplementation(
       () =>
         ({
+          findById: vi.fn().mockResolvedValue({ id: mockTopicId, userId: 'test-user' }),
           update: mockUpdate,
         }) as any,
     );
@@ -521,7 +531,7 @@ describe('generationTopicRouter', () => {
     expect(mockUpdate).toHaveBeenCalledWith(mockTopicId, mockUpdateValue);
   });
 
-  it('should return undefined when updating non-existent topic', async () => {
+  it('should throw NOT_FOUND when updating non-existent topic', async () => {
     const mockTopicId = 'non-existent-topic';
     const mockUpdateValue = {
       title: 'New Title',
@@ -531,17 +541,19 @@ describe('generationTopicRouter', () => {
     vi.mocked(GenerationTopicModel).mockImplementation(
       () =>
         ({
+          findById: vi.fn().mockResolvedValue(undefined),
           update: mockUpdate,
         }) as any,
     );
 
     const caller = generationTopicRouter.createCaller(mockCtx);
-    const result = await caller.updateTopic({
-      id: mockTopicId,
-      value: mockUpdateValue,
-    });
 
-    expect(result).toBeUndefined();
-    expect(mockUpdate).toHaveBeenCalledWith(mockTopicId, mockUpdateValue);
+    await expect(
+      caller.updateTopic({
+        id: mockTopicId,
+        value: mockUpdateValue,
+      }),
+    ).rejects.toThrow('Generation topic not found');
+    expect(mockUpdate).not.toHaveBeenCalled();
   });
 });

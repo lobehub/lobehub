@@ -1,4 +1,5 @@
-import { Button, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Flexbox, Icon, Text } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { Card } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Database, Plus } from 'lucide-react';
@@ -49,7 +50,13 @@ const EmptyState = memo<EmptyStateProps>(({ onAddDataset }) => {
           {t('dataset.empty.description')}
         </Text>
       </Flexbox>
-      <Button icon={Plus} size="small" style={{ marginTop: 16 }} type="primary" onClick={onAddDataset}>
+      <Button
+        icon={Plus}
+        size="small"
+        style={{ marginTop: 16 }}
+        type="primary"
+        onClick={onAddDataset}
+      >
         {t('dataset.actions.addDataset')}
       </Button>
     </Card>

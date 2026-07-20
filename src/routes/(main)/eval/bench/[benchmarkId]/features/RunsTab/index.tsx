@@ -1,7 +1,7 @@
 'use client';
 
-import { Button, Flexbox, Text } from '@lobehub/ui';
-import { Select } from '@lobehub/ui/base-ui';
+import { Flexbox, Text } from '@lobehub/ui';
+import { Button, Select } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Plus } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
@@ -19,10 +19,10 @@ const styles = createStaticStyles(({ css }) => ({
   // column on narrow viewports.
   grid: css`
     display: grid;
-    gap: 12px;
     grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+    gap: 12px;
 
-    @media (max-width: 640px) {
+    @media (width <= 640px) {
       grid-template-columns: 1fr;
     }
   `,

@@ -1,5 +1,6 @@
 'use client';
 
+import { ModalHost } from '@lobehub/ui/base-ui';
 import { memo, type PropsWithChildren } from 'react';
 
 import BusinessAuthProvider from '@/business/client/BusinessAuthProvider';
@@ -35,6 +36,7 @@ const AuthShell = memo<PropsWithChildren>(({ children }) => {
             </BusinessAuthProvider>
           </LobeAnalyticsProviderWrapper>
         </AuthServerConfigProvider>
+        <ModalHost />
       </AuthThemeLite>
     </AuthLocale>
   );

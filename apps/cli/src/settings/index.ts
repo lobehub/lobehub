@@ -18,6 +18,10 @@ const SETTINGS_FILE = path.join(SETTINGS_DIR, 'settings.json');
 // Kept in its own file rather than settings.json, which is unlinked whenever
 // all server/gateway URLs are default — the connectionId must persist regardless.
 const CONNECTION_ID_FILE = path.join(SETTINGS_DIR, 'connection-id');
+// Workspaces this machine's PERSONAL connection has been shared into via the
+// `enrollWorkspace` RPC. Persisted so a daemon/process restart can re-open the
+// workspace share connections without the user re-sharing from the web UI.
+const WORKSPACE_ENROLLMENTS_FILE = path.join(SETTINGS_DIR, 'workspace-enrollments.json');
 
 export function normalizeUrl(url: string | undefined): string | undefined {
   return url ? url.replace(/\/$/, '') : undefined;
@@ -50,7 +54,9 @@ export function saveSettings(settings: StoredSettings): void {
   if (!normalized.serverUrl && !normalized.gatewayUrl && !normalized.agentGatewayUrl) {
     try {
       fs.unlinkSync(SETTINGS_FILE);
-    } catch {}
+    } catch (error) {
+      log.debug('Skipping settings file removal for default settings', error);
+    }
     return;
   }
 
@@ -81,6 +87,49 @@ export function loadOrCreateConnectionId(): string {
     // best-effort: an unwritable home dir just means a fresh id per run
   }
   return id;
+}
+
+/**
+ * Load the workspaceIds this machine is enrolled into as a shared device.
+ * Missing / corrupt file degrades to "no enrollments" — the server remains the
+ * source of truth, this list is only the reconnect hint.
+ */
+export function loadWorkspaceEnrollments(): string[] {
+  try {
+    const data = fs.readFileSync(WORKSPACE_ENROLLMENTS_FILE, 'utf8');
+    const parsed: unknown = JSON.parse(data);
+    if (Array.isArray(parsed)) return parsed.filter((v): v is string => typeof v === 'string');
+  } catch {
+    // not yet created or unreadable — treat as no enrollments
+  }
+  return [];
+}
+
+function saveWorkspaceEnrollments(workspaceIds: string[]): void {
+  try {
+    if (workspaceIds.length === 0) {
+      fs.unlinkSync(WORKSPACE_ENROLLMENTS_FILE);
+      return;
+    }
+    fs.mkdirSync(SETTINGS_DIR, { mode: 0o700, recursive: true });
+    fs.writeFileSync(WORKSPACE_ENROLLMENTS_FILE, JSON.stringify(workspaceIds, null, 2), {
+      mode: 0o600,
+    });
+  } catch {
+    // best-effort: a failed write only loses auto-reconnect after a restart
+  }
+}
+
+export function addWorkspaceEnrollment(workspaceId: string): void {
+  const current = loadWorkspaceEnrollments();
+  if (current.includes(workspaceId)) return;
+  saveWorkspaceEnrollments([...current, workspaceId]);
+}
+
+export function removeWorkspaceEnrollment(workspaceId: string): void {
+  const current = loadWorkspaceEnrollments();
+  if (!current.includes(workspaceId)) return;
+  saveWorkspaceEnrollments(current.filter((id) => id !== workspaceId));
 }
 
 export function loadSettings(): StoredSettings | null {

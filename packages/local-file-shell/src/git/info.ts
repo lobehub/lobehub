@@ -11,8 +11,10 @@ import type {
   GitLinkedPullRequest,
   GitLinkedPullRequestResult,
   GitPullRequestCiStatus,
+  GitUpstreamRef,
   GitWorkingTreeStatus,
 } from './types';
+import { getDefaultRemote, isCommitSafeForPullRequestLookup, resolveUpstream } from './upstream';
 
 const log = createLogger('local-file-shell:git');
 const execFileAsync = promisify(execFile);
@@ -24,6 +26,8 @@ type GithubStatusCheckRollupNode = {
 };
 
 type GithubPullRequestPayload = {
+  /** The PR's head branch ON GitHub — the authoritative remote ref for this branch. */
+  headRefName?: string | null;
   isDraft?: boolean;
   mergeable?: string | null;
   mergeStateStatus?: string | null;
@@ -37,7 +41,7 @@ type GithubPullRequestPayload = {
 };
 
 const GITHUB_PULL_REQUEST_FIELDS =
-  'number,url,title,state,isDraft,mergeable,mergeStateStatus,mergedAt,reviewDecision,statusCheckRollup';
+  'number,url,title,state,isDraft,mergeable,mergeStateStatus,mergedAt,reviewDecision,statusCheckRollup,headRefName';
 
 const failureConclusions = new Set([
   'action_required',
@@ -117,7 +121,15 @@ const normalizeGithubPullRequest = (pr: GithubPullRequestPayload): GitLinkedPull
   };
 };
 
-/** Current branch short name, or short SHA + `detached` for detached HEAD. */
+/**
+ * Current branch short name, or short SHA + `detached` for detached HEAD, plus the
+ * remote ref the branch publishes to.
+ *
+ * The branch itself stays a pure `.git/HEAD` read — this is the cheap leg, split
+ * from the `gh` lookup so the branch label can revalidate on every working-directory
+ * switch. Upstream resolution adds local git reads (never network, never `gh`) and
+ * only for an attached HEAD, so a detached checkout costs exactly what it did before.
+ */
 export const getGitBranch = async (dirPath: string): Promise<GitBranchInfo> => {
   try {
     const gitDir = await resolveGitDir(dirPath);
@@ -125,7 +137,11 @@ export const getGitBranch = async (dirPath: string): Promise<GitBranchInfo> => {
 
     const head = (await readFile(`${gitDir}/HEAD`, 'utf8')).trim();
     const refMatch = /^ref:\s*refs\/heads\/(.+)$/.exec(head);
-    if (refMatch) return { branch: refMatch[1] };
+    if (refMatch) {
+      const branch = refMatch[1];
+      const { upstream } = await resolveUpstream(dirPath, branch);
+      return { branch, ...(upstream ? { upstream } : {}) };
+    }
     // Detached HEAD — HEAD file contains the full sha
     if (/^[\da-f]{40}$/i.test(head)) return { branch: head.slice(0, 7), detached: true };
     return {};
@@ -135,10 +151,71 @@ export const getGitBranch = async (dirPath: string): Promise<GitBranchInfo> => {
 };
 
 /**
- * Query `gh` CLI for a saved PR number when present; otherwise fall back to the
- * PR whose head branch matches `branch`, including merged/closed PRs so stale
- * topic snapshots can refresh lifecycle state after GitHub changes outside the
- * app. Returns `status: 'gh-missing'` when `gh` is unavailable / not authed.
+ * Ask GitHub which PR carries this exact commit. The last resort of the lookup
+ * chain: it needs no local trace of the push at all, so it is what recovers a PR
+ * on a fresh clone or a second device — and, with it, the remote branch name the
+ * commit was pushed under.
+ *
+ * `{owner}/{repo}` is substituted by `gh` from the working directory's remote.
+ * Returns only the PR number + head ref; the caller re-reads the PR through the
+ * normal `gh pr view` path so every result shares one shape.
+ */
+const findPullRequestByCommit = async (
+  dirPath: string,
+  sha: string,
+): Promise<{ headRefName?: string; number: number } | undefined> => {
+  try {
+    const { stdout } = await execFileAsync(
+      'gh',
+      ['api', `repos/{owner}/{repo}/commits/${sha}/pulls`],
+      { cwd: dirPath, timeout: 8000 },
+    );
+    const parsed = JSON.parse(stdout.trim() || '[]') as {
+      head?: { ref?: string };
+      number?: number;
+    }[];
+    const [primary] = parsed;
+    if (!primary?.number) return undefined;
+
+    return { headRefName: primary.head?.ref, number: primary.number };
+  } catch (error: any) {
+    // A failing fallback must not turn "this branch has no PR" into an error: the
+    // `gh pr list` leg already proved `gh` is healthy by the time we get here.
+    log.debug('[findPullRequestByCommit] failed', { code: error?.code, sha });
+    return undefined;
+  }
+};
+
+/** Name the remote of a ref GitHub reported, where only the branch crosses the wire. */
+const toUpstreamRef = async (
+  dirPath: string,
+  branch: string | undefined | null,
+  fallback?: GitUpstreamRef,
+): Promise<GitUpstreamRef | undefined> => {
+  if (!branch) return fallback;
+  if (fallback?.branch === branch) return fallback;
+
+  const remote = fallback?.remote ?? (await getDefaultRemote(dirPath));
+  return remote ? { branch, remote } : fallback;
+};
+
+/**
+ * The PR linked to a branch, resolved cheapest-signal-first:
+ *
+ * 1. a saved PR number → `gh pr view` (the strongest link once one is known);
+ * 2. the branch's REMOTE ref → `gh pr list --head`, including merged/closed PRs so
+ *    stale topic snapshots refresh lifecycle state after GitHub changes outside the app;
+ * 3. nothing found and no remote ref was ever established → `gh` commit→PR lookup.
+ *
+ * Step 2 is the fix for the bug this chain existed to have: the head passed to
+ * `gh` is the branch that exists ON THE REMOTE, not the local branch name. The two
+ * diverge routinely — a worktree generates its own local name, and a push with an
+ * explicit refspec (`git push origin local:remote`) renames the branch in flight —
+ * and querying the local name in that state returns an empty list forever, so the
+ * PR silently never links. Step 3 then covers the case where the local repo holds
+ * no trace of the push at all.
+ *
+ * Returns `status: 'gh-missing'` when `gh` is unavailable / not authed.
  */
 export const getLinkedPullRequest = async (payload: {
   branch: string;
@@ -148,15 +225,30 @@ export const getLinkedPullRequest = async (payload: {
   const { path: dirPath, branch, pullRequestNumber } = payload;
   if (!branch && pullRequestNumber === undefined) return { pullRequest: null, status: 'ok' };
 
+  const viewPullRequest = async (number: number): Promise<GithubPullRequestPayload> => {
+    const { stdout } = await execFileAsync(
+      'gh',
+      ['pr', 'view', String(number), '--json', GITHUB_PULL_REQUEST_FIELDS],
+      { cwd: dirPath, timeout: 8000 },
+    );
+    return JSON.parse(stdout.trim() || '{}') as GithubPullRequestPayload;
+  };
+
   try {
+    // Resolved for the NAMED branch rather than HEAD, so a caller holding a topic's
+    // persisted branch gets that branch's remote ref even if the directory moved on.
+    const { sha, upstream: localUpstream } = branch
+      ? await resolveUpstream(dirPath, branch)
+      : { sha: undefined, upstream: undefined };
+
     if (pullRequestNumber !== undefined) {
-      const { stdout } = await execFileAsync(
-        'gh',
-        ['pr', 'view', String(pullRequestNumber), '--json', GITHUB_PULL_REQUEST_FIELDS],
-        { cwd: dirPath, timeout: 8000 },
-      );
-      const parsed = JSON.parse(stdout.trim() || '{}') as GithubPullRequestPayload;
-      return { pullRequest: normalizeGithubPullRequest(parsed), status: 'ok' };
+      const parsed = await viewPullRequest(pullRequestNumber);
+      const upstream = await toUpstreamRef(dirPath, parsed.headRefName, localUpstream);
+      return {
+        pullRequest: normalizeGithubPullRequest(parsed),
+        status: 'ok',
+        ...(upstream ? { upstream } : {}),
+      };
     }
 
     const { stdout } = await execFileAsync(
@@ -165,7 +257,7 @@ export const getLinkedPullRequest = async (payload: {
         'pr',
         'list',
         '--head',
-        branch,
+        localUpstream?.branch ?? branch,
         '--state',
         'all',
         '--limit',
@@ -176,10 +268,39 @@ export const getLinkedPullRequest = async (payload: {
       { cwd: dirPath, timeout: 8000 },
     );
     const parsed = JSON.parse(stdout.trim() || '[]') as GithubPullRequestPayload[];
-    if (parsed.length === 0) return { pullRequest: null, status: 'ok' };
-    const [primaryRaw, ...rest] = parsed;
-    const primary = normalizeGithubPullRequest(primaryRaw);
-    return { extraCount: rest.length, pullRequest: primary, status: 'ok' };
+
+    if (parsed.length > 0) {
+      const [primaryRaw, ...rest] = parsed;
+      const upstream = await toUpstreamRef(dirPath, primaryRaw.headRefName, localUpstream);
+      return {
+        extraCount: rest.length,
+        pullRequest: normalizeGithubPullRequest(primaryRaw),
+        status: 'ok',
+        ...(upstream ? { upstream } : {}),
+      };
+    }
+
+    // Empty. With a resolved remote ref that is a real answer — the branch has no PR.
+    // Without one, the head we just queried was only the local NAME, a guess, so the
+    // empty list proves nothing: ask GitHub by commit instead — but only about a commit
+    // that is the branch's own work, never one it merely forked from.
+    if (!localUpstream && sha && (await isCommitSafeForPullRequestLookup(dirPath, sha))) {
+      const recovered = await findPullRequestByCommit(dirPath, sha);
+      if (recovered) {
+        const upstream = await toUpstreamRef(dirPath, recovered.headRefName);
+        return {
+          pullRequest: normalizeGithubPullRequest(await viewPullRequest(recovered.number)),
+          status: 'ok',
+          ...(upstream ? { upstream } : {}),
+        };
+      }
+    }
+
+    return {
+      pullRequest: null,
+      status: 'ok',
+      ...(localUpstream ? { upstream: localUpstream } : {}),
+    };
   } catch (error: any) {
     const code = error?.code;
     const stderr: string = error?.stderr ?? '';
@@ -307,9 +428,9 @@ export const gitInfo = async (params: {
   scope: string;
 }): Promise<DeviceGitInfo> => {
   const dirPath = params.scope;
-  const { branch, detached } = await getGitBranch(dirPath);
+  const { branch, detached, upstream } = await getGitBranch(dirPath);
 
-  let info: DeviceGitInfo['info'] = { branch, detached };
+  let info: DeviceGitInfo['info'] = { branch, detached, upstream };
   if (branch && !detached && params.isGithub) {
     const pr = await getLinkedPullRequest({ branch, path: dirPath });
     info = {
@@ -318,6 +439,9 @@ export const gitInfo = async (params: {
       extraCount: pr.extraCount,
       ghMissing: pr.status === 'gh-missing',
       pullRequest: pr.pullRequest,
+      // The PR's own head ref outranks the locally-inferred one, and is the only
+      // ref available at all when the push left no local trace.
+      upstream: pr.upstream ?? upstream,
     };
   }
 

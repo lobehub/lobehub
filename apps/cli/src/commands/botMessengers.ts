@@ -1,6 +1,6 @@
 /**
  * `lh bot messengers ...` — manages the user's System Bot installations
- * (Slack workspaces, Discord guilds, Telegram), distinct from per-agent bots.
+ * (Slack workspaces, Discord guilds, Telegram, WeChat), distinct from per-agent bots.
  *
  * Mirrors `bot ...` (per-agent CRUD) and `bot message ...` (send/read), but
  * operates on `messenger_installations` (workspace-scoped) and
@@ -20,7 +20,7 @@ import pc from 'picocolors';
 import { getTrpcClient } from '../api/client';
 import { confirm, outputJson, printTable } from '../utils/format';
 
-const PLATFORMS = ['telegram', 'slack', 'discord'] as const;
+const PLATFORMS = ['telegram', 'slack', 'discord', 'wechat'] as const;
 type MessengerPlatform = (typeof PLATFORMS)[number];
 
 const validatePlatform = (value: string): MessengerPlatform => {
@@ -34,7 +34,7 @@ export function registerBotMessengersCommands(bot: Command) {
   const messengers = bot
     .command('messengers')
     .description(
-      'Manage System Bot messenger installations (Slack workspaces, Discord guilds, Telegram) ' +
+      'Manage System Bot messenger installations (Slack workspaces, Discord guilds, Telegram, WeChat) ' +
         'and per-user account links',
     );
 

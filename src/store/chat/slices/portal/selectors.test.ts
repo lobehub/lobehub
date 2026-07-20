@@ -84,6 +84,17 @@ describe('chatDockSelectors', () => {
     });
   });
 
+  describe('agent detail', () => {
+    it('should expose the active agent detail id', () => {
+      const state = createState({
+        portalStack: [{ agentId: 'agt_1', type: PortalViewType.AgentDetail }],
+      });
+
+      expect(chatPortalSelectors.showAgentDetail(state)).toBe(true);
+      expect(chatPortalSelectors.agentDetailId(state)).toBe('agt_1');
+    });
+  });
+
   describe('canGoBack', () => {
     it('should return false when stack has 0 or 1 views', () => {
       expect(chatPortalSelectors.canGoBack(createState())).toBe(false);

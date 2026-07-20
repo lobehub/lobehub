@@ -1,8 +1,14 @@
+import type { LobeChatDatabase } from '@lobechat/database';
 import { type ToolManifest } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
+import {
+  requireWorkspaceRoleWhenScoped,
+  wsCompatProcedure,
+} from '@/business/server/trpc-middlewares/workspaceAuth';
 import { getServerComposioAuthConfigId } from '@/config/composio';
+import { AgentModel } from '@/database/models/agent';
 import { ConnectorModel } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
 import { PluginModel } from '@/database/models/plugin';
@@ -14,22 +20,60 @@ import {
 } from '@/database/schemas';
 import { getComposioClient } from '@/libs/composio';
 import { inferCrudType } from '@/libs/mcp/utils';
-import { authedProcedure, router } from '@/libs/trpc/lambda';
+import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 
-const composioProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
+import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
+
+const composioProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
+  const { ctx } = opts;
   const client = getComposioClient();
-  const pluginModel = new PluginModel(opts.ctx.serverDB, opts.ctx.userId);
-  // Personal-scoped (no workspaceId/gateKeeper), matching PluginModel above:
-  // Composio connections are personal today, and the runtime reads them back
-  // with the same scoping (ComposioService is constructed with { db, userId }).
-  const connectorModel = new ConnectorModel(opts.ctx.serverDB, opts.ctx.userId);
-  const connectorToolModel = new ConnectorToolModel(opts.ctx.serverDB, opts.ctx.userId);
+  const wsId = ctx.workspaceId ?? undefined;
+  // Workspace-scoped. A Composio connection bound to a workspace agent (or a
+  // workspace's base tools) must land as a workspace-dimension row
+  // (workspace_id = wsId); otherwise the correctly workspace-scoped runtime
+  // (ComposioService/aiAgent build the model WITH wsId) can never resolve it and
+  // the tool shows as "not installed". Personal mode (wsId undefined) is
+  // unchanged — the model falls back to `workspace_id IS NULL`. No gatekeeper:
+  // Composio rows carry no encrypted credentials (the account lives in plaintext
+  // `metadata.composio.connectedAccountId`).
+  const pluginModel = new PluginModel(ctx.serverDB, ctx.userId, wsId);
+  const connectorModel = new ConnectorModel(ctx.serverDB, ctx.userId, wsId);
+  const connectorToolModel = new ConnectorToolModel(ctx.serverDB, ctx.userId, wsId);
 
   return opts.next({
-    ctx: { ...opts.ctx, composioClient: client, connectorModel, connectorToolModel, pluginModel },
+    ctx: { ...ctx, composioClient: client, connectorModel, connectorToolModel, pluginModel },
   });
 });
+
+// Writes: in a workspace, require at least the member role (blocks viewers).
+// Personal mode passes through. Row-level creator/owner enforcement is layered
+// on top per-mutation via `assertComposioRowManageable` (mirrors the native
+// connector router's connectorWriteProcedure + assertWorkspaceRowManageable).
+const composioWriteProcedure = composioProcedure.use(requireWorkspaceRoleWhenScoped('member'));
+
+/**
+ * Before mutating (overwriting/deleting) a Composio connection in a workspace,
+ * assert the caller may manage the existing row: creator or workspace owner.
+ * `buildWorkspaceWhere` makes workspace rows writable workspace-wide, so without
+ * this any member could overwrite/remove another member's connection by
+ * identifier/agentId. Checked BEFORE any external side effect (Composio account
+ * link/delete). No-op in personal mode.
+ */
+async function assertComposioRowManageable(
+  ctx: {
+    connectorModel: ConnectorModel;
+    userId: string;
+    workspaceId?: string | null;
+    workspaceRole?: string;
+  },
+  identifier: string,
+  agentId?: string,
+): Promise<void> {
+  if (!ctx.workspaceId) return;
+  const existing = await ctx.connectorModel.findScopedByIdentifier(identifier, agentId);
+  if (existing) assertWorkspaceRowManageable(ctx, existing.userId, 'connector');
+}
 
 type ComposioToolInput = {
   description?: string;
@@ -48,6 +92,14 @@ async function upsertComposioConnector(
   connectorModel: ConnectorModel,
   connectorToolModel: ConnectorToolModel,
   params: {
+    /**
+     * When set, the Composio connection is bound to this agent: the account
+     * (`metadata.composio.connectedAccountId`) lands on the agent-scoped
+     * connector row and shadows the base one at runtime (Agent > Personal). The
+     * legacy `user_installed_plugins` projection can't carry an agent scope, so
+     * agent connections skip it (the runtime resolves off metadata).
+     */
+    agentId?: string;
     composio: ComposioConnectorMetadata;
     identifier: string;
     label: string;
@@ -76,7 +128,9 @@ async function upsertComposioConnector(
         ? ConnectorStatus.error
         : ConnectorStatus.disconnected;
 
-  const [existing] = await connectorModel.queryByIdentifiers([params.identifier]);
+  // Exact-scope idempotency: an agent connection updates/creates the agent's own
+  // row, a personal connection the base row — never crossing scopes.
+  const existing = await connectorModel.findScopedByIdentifier(params.identifier, params.agentId);
   let connectorId: string;
   if (existing) {
     await connectorModel.update(existing.id, {
@@ -88,6 +142,7 @@ async function upsertComposioConnector(
     connectorId = existing.id;
   } else {
     const created = await connectorModel.create({
+      agentId: params.agentId ?? null,
       identifier: params.identifier,
       isEnabled: true,
       metadata,
@@ -125,23 +180,50 @@ async function upsertComposioConnector(
 async function deleteComposioConnector(
   connectorModel: ConnectorModel,
   identifier: string,
+  agentId?: string,
 ): Promise<void> {
-  const [existing] = await connectorModel.queryByIdentifiers([identifier]);
+  const existing = await connectorModel.findScopedByIdentifier(identifier, agentId);
   if (existing) await connectorModel.delete(existing.id);
 }
 
+/**
+ * Guard: the caller must OWN (have created) the agent before a Composio account
+ * is bound to it. Uses `existsOwnedById` (creator-only) rather than the
+ * visibility-aware `existsById`, so a member who can merely see a shared public
+ * agent can't attach their account to it.
+ */
+async function assertCanEditAgent(
+  db: LobeChatDatabase,
+  userId: string,
+  agentId: string,
+  workspaceId?: string,
+): Promise<void> {
+  const agentModel = new AgentModel(db, userId, workspaceId);
+  if (!(await agentModel.existsOwnedById(agentId))) {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'Agent not found or not editable' });
+  }
+}
+
 export const composioRouter = router({
-  createConnection: composioProcedure
+  createConnection: composioWriteProcedure
     .input(
       z.object({
+        /** Bind the connection to this agent (Agent > Personal). Requires edit rights. */
+        agentId: z.string().optional(),
         appSlug: z.string(),
         identifier: z.string(),
         label: z.string(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const { appSlug, identifier, label } = input;
+      const { appSlug, identifier, label, agentId } = input;
       const { userId } = ctx;
+
+      if (agentId)
+        await assertCanEditAgent(ctx.serverDB, userId, agentId, ctx.workspaceId ?? undefined);
+      // Block overwriting another member's workspace connection before creating
+      // the remote Composio account.
+      await assertComposioRowManageable(ctx, identifier, agentId);
 
       const callbackUrl = `${process.env.APP_URL || process.env.NEXTAUTH_URL || ''}/api/composio/oauth/callback`;
 
@@ -173,10 +255,17 @@ export const composioRouter = router({
 
       // Composio-managed OAuth auth configs no longer support `initiate`; use
       // `link` (POST /api/v3/connected_accounts/link) to get the redirect URL.
+      //
+      // `allowMultiple` for agent connections: Composio rejects a second linked
+      // account for the same (user entity, auth config) unless this is set. An
+      // agent connector is intentionally a *separate* account from the user's
+      // (and from other agents'), all under the same Composio user entity but
+      // distinguished by connectedAccountId — so agent links must allow multiple.
+      // Personal connections keep the default (one account per auth config).
       const connReq = await (ctx.composioClient.connectedAccounts as any).link(
         userId,
         authConfigId,
-        { callbackUrl },
+        { callbackUrl, ...(agentId ? { allowMultiple: true } : {}) },
       );
 
       let rawTools: any[] = [];
@@ -210,30 +299,40 @@ export const composioRouter = router({
         type: 'default',
       };
 
-      await ctx.pluginModel.create({
-        customParams: {
-          composio: {
-            appSlug,
-            authConfigId,
-            connectedAccountId: connReq.id,
-            redirectUrl: connReq.redirectUrl,
-            status: 'PENDING',
+      // Legacy plugin-table projection is personal-only (no agent_id column), so
+      // skip it for agent connections — the runtime resolves those off the
+      // agent-scoped connector row's metadata instead.
+      if (!agentId) {
+        await ctx.pluginModel.create({
+          customParams: {
+            composio: {
+              appSlug,
+              authConfigId,
+              connectedAccountId: connReq.id,
+              // The user entity the account was linked under — used at runtime as
+              // the Composio `userId` (see ComposioConnectorMetadata.linkedByUserId).
+              linkedByUserId: userId,
+              redirectUrl: connReq.redirectUrl,
+              status: 'PENDING',
+            },
           },
-        },
-        identifier,
-        manifest,
-        source: 'composio',
-        type: 'plugin',
-      });
+          identifier,
+          manifest,
+          source: 'composio',
+          type: 'plugin',
+        });
+      }
 
       // Dual-write: mirror the (pending) connection into user_connectors so the
       // runtime can resolve it off metadata once it goes ACTIVE. Tools sync on
       // updateComposioPlugin; seed them here too when already fetched.
       await upsertComposioConnector(ctx.connectorModel, ctx.connectorToolModel, {
+        agentId,
         composio: {
           appSlug,
           authConfigId,
           connectedAccountId: connReq.id,
+          linkedByUserId: userId,
           redirectUrl: connReq.redirectUrl,
           status: 'PENDING',
         },
@@ -254,22 +353,28 @@ export const composioRouter = router({
       };
     }),
 
-  deleteConnection: composioProcedure
+  deleteConnection: composioWriteProcedure
     .input(
       z.object({
+        agentId: z.string().optional(),
         connectedAccountId: z.string(),
         identifier: z.string(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      // Gate before deleting the remote account, so a non-creator/owner member
+      // can't grief another member's Composio connection.
+      await assertComposioRowManageable(ctx, input.identifier, input.agentId);
       try {
         await (ctx.composioClient.connectedAccounts as any).delete(input.connectedAccountId);
       } catch (error) {
         console.warn('[Composio] Failed to delete remote connection:', error);
       }
 
-      await ctx.pluginModel.delete(input.identifier);
-      await deleteComposioConnector(ctx.connectorModel, input.identifier);
+      // Agent connections have no plugin-table row; only remove the base plugin
+      // projection for personal connections.
+      if (!input.agentId) await ctx.pluginModel.delete(input.identifier);
+      await deleteComposioConnector(ctx.connectorModel, input.identifier, input.agentId);
 
       return { success: true };
     }),
@@ -312,17 +417,20 @@ export const composioRouter = router({
       }
     }),
 
-  removeComposioPlugin: composioProcedure
-    .input(z.object({ identifier: z.string() }))
+  removeComposioPlugin: composioWriteProcedure
+    .input(z.object({ agentId: z.string().optional(), identifier: z.string() }))
     .mutation(async ({ input, ctx }) => {
-      await ctx.pluginModel.delete(input.identifier);
-      await deleteComposioConnector(ctx.connectorModel, input.identifier);
+      await assertComposioRowManageable(ctx, input.identifier, input.agentId);
+      if (!input.agentId) await ctx.pluginModel.delete(input.identifier);
+      await deleteComposioConnector(ctx.connectorModel, input.identifier, input.agentId);
       return { success: true };
     }),
 
-  updateComposioPlugin: composioProcedure
+  updateComposioPlugin: composioWriteProcedure
     .input(
       z.object({
+        /** Bind the connection to this agent (Agent > Personal). Requires edit rights. */
+        agentId: z.string().optional(),
         appSlug: z.string(),
         authConfigId: z.string(),
         connectedAccountId: z.string(),
@@ -349,7 +457,12 @@ export const composioRouter = router({
         tools,
         status,
         redirectUrl,
+        agentId,
       } = input;
+
+      if (agentId)
+        await assertCanEditAgent(ctx.serverDB, ctx.userId, agentId, ctx.workspaceId ?? undefined);
+      await assertComposioRowManageable(ctx, identifier, agentId);
 
       const existingPlugin = await ctx.pluginModel.findById(identifier);
 
@@ -369,26 +482,48 @@ export const composioRouter = router({
       };
 
       const customParams = {
-        composio: { appSlug, authConfigId, connectedAccountId, redirectUrl, status },
+        composio: {
+          appSlug,
+          authConfigId,
+          connectedAccountId,
+          // Refresh the link owner on every (re)connect: a workspace owner may
+          // reconnect a member-created row, moving the Composio entity to the
+          // owner even though the row's userId (creator) stays put.
+          linkedByUserId: ctx.userId,
+          redirectUrl,
+          status,
+        },
       };
 
-      if (existingPlugin) {
-        await ctx.pluginModel.update(identifier, { customParams, manifest });
-      } else {
-        await ctx.pluginModel.create({
-          customParams,
-          identifier,
-          manifest,
-          source: 'composio',
-          type: 'plugin',
-        });
+      // Personal-only plugin projection: skip for agent connections (see
+      // createConnection). The agent row's metadata is the runtime source.
+      if (!agentId) {
+        if (existingPlugin) {
+          await ctx.pluginModel.update(identifier, { customParams, manifest });
+        } else {
+          await ctx.pluginModel.create({
+            customParams,
+            identifier,
+            manifest,
+            source: 'composio',
+            type: 'plugin',
+          });
+        }
       }
 
       // Dual-write: project the active connection + tool list into the connector
       // tables so the runtime resolves this Composio server without the plugin
       // table. `tools` already carries the full manifest from the client.
       await upsertComposioConnector(ctx.connectorModel, ctx.connectorToolModel, {
-        composio: { appSlug, authConfigId, connectedAccountId, redirectUrl, status },
+        agentId,
+        composio: {
+          appSlug,
+          authConfigId,
+          connectedAccountId,
+          linkedByUserId: ctx.userId,
+          redirectUrl,
+          status,
+        },
         identifier,
         label,
         replaceTools: true,

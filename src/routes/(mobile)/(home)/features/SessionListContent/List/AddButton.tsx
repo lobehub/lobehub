@@ -1,4 +1,5 @@
-import { Button, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { Plus } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -22,7 +23,7 @@ const AddButton = memo<{ groupId?: string }>(({ groupId }) => {
         block
         icon={Plus}
         loading={isValidating}
-        variant={'filled'}
+        type={'fill'}
         style={{
           marginTop: 8,
         }}

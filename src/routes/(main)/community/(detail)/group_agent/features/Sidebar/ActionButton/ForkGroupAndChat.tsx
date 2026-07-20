@@ -1,7 +1,7 @@
 'use client';
 
-import { Button, Flexbox } from '@lobehub/ui';
-import { Select } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { Button, Select } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { customAlphabet } from 'nanoid/non-secure';

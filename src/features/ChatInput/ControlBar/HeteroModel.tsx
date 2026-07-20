@@ -24,11 +24,14 @@ import {
 import { Icon } from '@lobehub/ui';
 import {
   DropdownMenuItem,
+  DropdownMenuItemContent,
+  DropdownMenuItemExtra,
+  DropdownMenuItemLabel,
   DropdownMenuPopup,
   DropdownMenuPortal,
   DropdownMenuPositioner,
   DropdownMenuRoot,
-  DropdownMenuSeparator,
+  DropdownMenuSubmenuArrow,
   DropdownMenuSubmenuRoot,
   DropdownMenuSubmenuTrigger,
   DropdownMenuTrigger,
@@ -37,6 +40,7 @@ import {
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { CheckIcon, ChevronDownIcon, ChevronRightIcon, ZapIcon } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -45,13 +49,16 @@ import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 
 import { useAgentId } from '../hooks/useAgentId';
+import { useChatInputResourceAccess } from '../hooks/useChatInputResourceAccess';
+import { OpenCodeModelSelector } from './OpenCodeModelSelector';
 
 type HeteroReasoningEffort =
   ClaudeCodeReasoningEffort | CodexReasoningEffort | HeterogeneousAgentDefaultSelection;
 
-type SelectableHeteroProviderType = 'claude-code' | 'codex';
+type SelectableHeteroProviderType = 'claude-code' | 'codex' | 'opencode';
 
 const CLAUDE_CODE_MODEL_OPTIONS = [
+  { label: 'Fable 5', value: 'fable' },
   { label: 'Opus 4.8', value: 'opus' },
   { label: 'Sonnet 4.6', value: 'sonnet' },
   { label: 'Haiku 4.5', value: 'haiku' },
@@ -100,11 +107,6 @@ const styles = createStaticStyles(({ css }) => ({
   check: css`
     flex: none;
     color: ${cssVar.colorTextSecondary};
-  `,
-  divider: css`
-    height: 1px;
-    margin-block: 6px;
-    background: ${cssVar.colorSplit};
   `,
   label: css`
     overflow: hidden;
@@ -195,39 +197,28 @@ const styles = createStaticStyles(({ css }) => ({
     color: ${cssVar.colorTextQuaternary};
   `,
   submenuTrigger: css`
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    justify-content: space-between;
-
-    min-height: 34px;
+    min-height: 36px;
     padding-inline: 10px;
-    border-radius: 8px;
-
-    font-size: 14px;
-    color: ${cssVar.colorText};
-  `,
-  submenuLead: css`
-    overflow: hidden;
-    display: flex;
-    gap: 6px;
-    align-items: center;
-
-    min-width: 0;
   `,
   submenuMeta: css`
     overflow: hidden;
-    min-width: 0;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  submenuTrail: css`
     display: inline-flex;
     flex: none;
+    gap: 4px;
     align-items: center;
-    justify-content: center;
 
+    min-width: 0;
+    max-width: 150px;
+    padding-inline-start: 16px;
+
+    font-family: inherit;
+    font-size: 14px;
     color: ${cssVar.colorTextSecondary};
+  `,
+  submenuMetaLabel: css`
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   `,
   trigger: css`
     cursor: pointer;
@@ -262,6 +253,45 @@ const styles = createStaticStyles(({ css }) => ({
     }
   `,
 }));
+
+interface SelectorSubmenuProps {
+  children: ReactNode;
+  currentValue: string;
+  icon?: typeof ZapIcon;
+  label: string;
+  popupWidth?: number;
+}
+
+const SelectorSubmenu = ({
+  children,
+  currentValue,
+  icon,
+  label,
+  popupWidth = 220,
+}: SelectorSubmenuProps) => (
+  <DropdownMenuSubmenuRoot>
+    <DropdownMenuSubmenuTrigger className={styles.submenuTrigger} label={label} openOnHover={false}>
+      <DropdownMenuItemContent>
+        <DropdownMenuItemLabel>{label}</DropdownMenuItemLabel>
+        <DropdownMenuItemExtra className={styles.submenuMeta}>
+          {icon && <Icon className={styles.optionIcon} icon={icon} size={12} />}
+          <span className={styles.submenuMetaLabel}>{currentValue}</span>
+        </DropdownMenuItemExtra>
+        <DropdownMenuSubmenuArrow>
+          <Icon icon={ChevronRightIcon} size={12} />
+        </DropdownMenuSubmenuArrow>
+      </DropdownMenuItemContent>
+    </DropdownMenuSubmenuTrigger>
+    <DropdownMenuPortal>
+      <DropdownMenuPositioner alignOffset={-4} anchor={null} placement="right" sideOffset={8}>
+        <DropdownMenuPopup className={styles.popup} style={{ minWidth: popupWidth }}>
+          <div className={styles.sectionTitle}>{label}</div>
+          <div className={styles.scroll}>{children}</div>
+        </DropdownMenuPopup>
+      </DropdownMenuPositioner>
+    </DropdownMenuPortal>
+  </DropdownMenuSubmenuRoot>
+);
 
 const stripCliFlags = (
   args: string[] | undefined,
@@ -321,7 +351,8 @@ const stripCodexConfigKey = (args: string[] | undefined, key: string): string[] 
 
 const isSelectableProviderType = (
   type: HeterogeneousProviderConfig['type'] | undefined,
-): type is SelectableHeteroProviderType => type === 'claude-code' || type === 'codex';
+): type is SelectableHeteroProviderType =>
+  type === 'claude-code' || type === 'codex' || type === 'opencode';
 
 const getModelLabel = (model: string, defaultLabel: string) => {
   if (model === HETEROGENEOUS_AGENT_DEFAULT_SELECTION) return defaultLabel;
@@ -357,10 +388,10 @@ const getTriggerText = ({
   const isDefaultEffort = effort === HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
 
   if (isDefaultModel && isDefaultEffort) return defaultConfigLabel;
-  if (isDefaultModel) return `${defaultModelLabel} · ${effortLabel}`;
-  if (isDefaultEffort) return `${modelLabel} · ${defaultReasoningLabel}`;
+  const resolvedModelLabel = isDefaultModel ? defaultModelLabel : modelLabel;
+  const resolvedEffortLabel = isDefaultEffort ? defaultReasoningLabel : effortLabel;
 
-  return `${modelLabel} · ${effortLabel}`;
+  return `${resolvedModelLabel} ${resolvedEffortLabel}`;
 };
 
 const HeteroModel = memo(() => {
@@ -372,13 +403,15 @@ const HeteroModel = memo(() => {
   );
   const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
   const { allowed: canCreateContent, reason } = usePermission('create_content');
+  // Model/effort picks write the shared agencyConfig — view-only General
+  // access disables the whole picker (disabled, not hidden).
+  const { canUseResource, isGroupContext } = useChatInputResourceAccess();
+  const enabled = canCreateContent && canUseResource;
   const [open, setOpen] = useState(false);
-  const [modelOpen, setModelOpen] = useState(false);
-  const [speedOpen, setSpeedOpen] = useState(false);
 
   const patchProvider = useCallback(
     async (patch: Partial<Pick<HeterogeneousProviderConfig, 'effort' | 'model' | 'speed'>>) => {
-      if (!canCreateContent || !agentId) return;
+      if (!enabled || !agentId) return;
 
       const nextPatch: Partial<HeterogeneousProviderConfig> = { ...patch };
       const providerType = provider?.type;
@@ -396,6 +429,10 @@ const HeteroModel = memo(() => {
           const sourceArgs = nextPatch.args ?? provider?.args;
           nextPatch.args = stripCodexConfigKey(sourceArgs, CODEX_SERVICE_TIER_CONFIG_KEY);
         }
+      } else if (providerType === 'opencode') {
+        if ('model' in patch) {
+          nextPatch.args = stripCliFlags(provider?.args, ['--model', '-m']);
+        }
       } else {
         if ('model' in patch) {
           nextPatch.args = stripCliFlags(provider?.args, ['--model']);
@@ -410,19 +447,10 @@ const HeteroModel = memo(() => {
         agencyConfig: { heterogeneousProvider: nextPatch },
       });
     },
-    [agentId, canCreateContent, provider?.args, provider?.type, updateAgentConfigById],
+    [agentId, enabled, provider?.args, provider?.type, updateAgentConfigById],
   );
   const closeMenu = useCallback(() => {
     setOpen(false);
-    setModelOpen(false);
-    setSpeedOpen(false);
-  }, []);
-  const handleOpenChange = useCallback((value: boolean) => {
-    setOpen(value);
-    if (!value) {
-      setModelOpen(false);
-      setSpeedOpen(false);
-    }
   }, []);
   const selectModel = useCallback(
     (value: string) => {
@@ -464,6 +492,23 @@ const HeteroModel = memo(() => {
   );
 
   if (!isSelectableProviderType(provider?.type)) return null;
+
+  if (provider.type === 'opencode') {
+    const model =
+      provider.model && provider.model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION
+        ? provider.model
+        : HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
+
+    return (
+      <OpenCodeModelSelector
+        agentId={agentId}
+        disabled={!canCreateContent}
+        model={model}
+        permissionReason={reason}
+        onSelect={(value) => void patchProvider({ model: value })}
+      />
+    );
+  }
 
   const providerType = provider.type;
   const model =
@@ -523,6 +568,10 @@ const HeteroModel = memo(() => {
       value: 'fast',
     },
   ];
+  const speedLabel =
+    speed === 'fast'
+      ? t('heteroAgent.modelSelector.speed.fast')
+      : t('heteroAgent.modelSelector.speed.standard');
   const triggerText = getTriggerText({
     defaultConfigLabel: t('heteroAgent.modelSelector.defaultConfig'),
     defaultModelLabel: t('heteroAgent.modelSelector.defaultModel'),
@@ -535,7 +584,7 @@ const HeteroModel = memo(() => {
 
   const trigger = (
     <div
-      className={cx(styles.trigger, !canCreateContent && styles.triggerDisabled)}
+      className={cx(styles.trigger, !enabled && styles.triggerDisabled)}
       aria-label={t('heteroAgent.modelSelector.ariaLabel', {
         model: modelLabel,
         reasoning: effortLabel,
@@ -547,9 +596,15 @@ const HeteroModel = memo(() => {
     </div>
   );
 
-  if (!canCreateContent)
+  if (!enabled)
     return (
-      <Tooltip title={reason}>
+      <Tooltip
+        title={
+          !canCreateContent
+            ? reason
+            : t(isGroupContext ? 'input.viewOnlyGroup' : 'input.viewOnlyAgent')
+        }
+      >
         <div>{trigger}</div>
       </Tooltip>
     );
@@ -583,90 +638,33 @@ const HeteroModel = memo(() => {
     ));
 
   return (
-    <DropdownMenuRoot open={open} onOpenChange={handleOpenChange}>
+    <DropdownMenuRoot open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger nativeButton={false}>{trigger}</DropdownMenuTrigger>
       <DropdownMenuPortal>
         <DropdownMenuPositioner placement="topLeft" sideOffset={8}>
-          <DropdownMenuPopup className={styles.popup} style={{ width: 208 }}>
-            <div className={styles.sectionTitle}>{t('heteroAgent.modelSelector.reasoning')}</div>
-            <div className={styles.scroll}>
+          <DropdownMenuPopup className={styles.popup} style={{ width: 240 }}>
+            <SelectorSubmenu
+              currentValue={modelLabel}
+              label={t('heteroAgent.modelSelector.model')}
+              popupWidth={240}
+            >
+              {renderOption('model', modelOptions, model, selectModel)}
+            </SelectorSubmenu>
+            <SelectorSubmenu
+              currentValue={effortLabel}
+              label={t('heteroAgent.modelSelector.reasoning')}
+            >
               {renderOption('reasoning', effortOptions, effort, selectReasoningEffort)}
-            </div>
-            <DropdownMenuSeparator className={styles.divider} />
-            <DropdownMenuSubmenuRoot open={modelOpen} onOpenChange={setModelOpen}>
-              <DropdownMenuSubmenuTrigger
-                className={styles.submenuTrigger}
-                onClick={(event) => {
-                  event.preventDefault();
-                  setModelOpen(true);
-                }}
-                onMouseEnter={() => {
-                  setModelOpen(true);
-                  setSpeedOpen(false);
-                }}
-              >
-                <span className={styles.submenuLead}>
-                  {isFastSpeed && <Icon className={styles.optionIcon} icon={ZapIcon} size={12} />}
-                  <span className={styles.submenuMeta}>{modelLabel}</span>
-                </span>
-                <span className={styles.submenuTrail}>
-                  <Icon icon={ChevronRightIcon} size={16} />
-                </span>
-              </DropdownMenuSubmenuTrigger>
-              <DropdownMenuPortal>
-                <DropdownMenuPositioner
-                  alignOffset={-4}
-                  anchor={null}
-                  placement="right"
-                  sideOffset={8}
-                >
-                  <DropdownMenuPopup className={styles.popup} style={{ minWidth: 200 }}>
-                    <div className={styles.sectionTitle}>
-                      {t('heteroAgent.modelSelector.model')}
-                    </div>
-                    <div className={styles.scroll}>
-                      {renderOption('model', modelOptions, model, selectModel)}
-                    </div>
-                  </DropdownMenuPopup>
-                </DropdownMenuPositioner>
-              </DropdownMenuPortal>
-            </DropdownMenuSubmenuRoot>
+            </SelectorSubmenu>
             {supportsFastSpeed && (
-              <DropdownMenuSubmenuRoot open={speedOpen} onOpenChange={setSpeedOpen}>
-                <DropdownMenuSubmenuTrigger
-                  className={styles.submenuTrigger}
-                  onClick={(event) => {
-                    event.preventDefault();
-                    setSpeedOpen(true);
-                  }}
-                  onMouseEnter={() => {
-                    setSpeedOpen(true);
-                    setModelOpen(false);
-                  }}
-                >
-                  <span className={styles.submenuMeta}>{t('heteroAgent.modelSelector.speed')}</span>
-                  <span className={styles.submenuTrail}>
-                    <Icon icon={ChevronRightIcon} size={16} />
-                  </span>
-                </DropdownMenuSubmenuTrigger>
-                <DropdownMenuPortal>
-                  <DropdownMenuPositioner
-                    alignOffset={-4}
-                    anchor={null}
-                    placement="right"
-                    sideOffset={8}
-                  >
-                    <DropdownMenuPopup className={styles.popup} style={{ minWidth: 232 }}>
-                      <div className={styles.sectionTitle}>
-                        {t('heteroAgent.modelSelector.speed')}
-                      </div>
-                      <div className={styles.scroll}>
-                        {renderOption('speed', speedOptions, speed, selectSpeedMode)}
-                      </div>
-                    </DropdownMenuPopup>
-                  </DropdownMenuPositioner>
-                </DropdownMenuPortal>
-              </DropdownMenuSubmenuRoot>
+              <SelectorSubmenu
+                currentValue={speedLabel}
+                icon={isFastSpeed ? ZapIcon : undefined}
+                label={t('heteroAgent.modelSelector.speed')}
+                popupWidth={240}
+              >
+                {renderOption('speed', speedOptions, speed, selectSpeedMode)}
+              </SelectorSubmenu>
             )}
           </DropdownMenuPopup>
         </DropdownMenuPositioner>

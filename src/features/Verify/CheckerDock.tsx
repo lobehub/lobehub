@@ -1,6 +1,7 @@
 import type { VerifyCheckItem } from '@lobechat/types';
-import { ActionIcon, Button, Flexbox, Icon, Input, TextArea } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { ActionIcon, Flexbox, Icon, Input, TextArea } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
+import { createStaticStyles, cssVar, cx, useThemeMode } from 'antd-style';
 import {
   Check,
   CheckCircle2,
@@ -27,15 +28,15 @@ import { useChatStore } from '@/store/chat';
 import { useVerifyResults, useVerifyState } from './hooks';
 import { countResults, phaseFromStatus } from './utils';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   actions: css`
     margin-block-start: 12px;
-    border-block-start: 1px solid ${token.colorBorderSecondary};
+    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
   body: css`
     padding-block: 0 12px;
     padding-inline: 12px;
-    border-block-start: 1px solid ${token.colorBorderSecondary};
+    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
   /* In the merged verify card the RunResult header already draws the divider —
      drop our own top border so they don't stack into a 2px line. */
@@ -51,32 +52,32 @@ const useStyles = createStyles(({ css, token }) => ({
     padding-block: 12px;
 
     &:not(:last-child) {
-      border-block-end: 1px solid ${token.colorBorderSecondary};
+      border-block-end: 1px solid ${cssVar.colorBorderSecondary};
     }
   `,
   chevron: css`
     flex: none;
-    color: ${token.colorTextQuaternary};
+    color: ${cssVar.colorTextQuaternary};
   `,
   clickable: css`
     cursor: pointer;
-    transition: background 150ms ${token.motionEaseOut};
+    transition: background 150ms ${cssVar.motionEaseOut};
 
     &:hover {
-      background: ${token.colorFillQuaternary};
+      background: ${cssVar.colorFillQuaternary};
     }
   `,
   desc: css`
     margin-block-start: 3px;
     font-size: 12px;
     line-height: 1.45;
-    color: ${token.colorTextTertiary};
+    color: ${cssVar.colorTextTertiary};
   `,
   dock: css`
     overflow: hidden;
-    border: 1px solid ${token.colorBorder};
+    border: 1px solid ${cssVar.colorBorder};
     border-radius: 16px;
-    background: ${token.colorBgElevated};
+    background: ${cssVar.colorBgElevated};
   `,
   head: css`
     cursor: pointer;
@@ -92,42 +93,44 @@ const useStyles = createStyles(({ css, token }) => ({
   inputPanel: css`
     margin-block-start: 10px;
     padding: 10px;
-    border: 1px solid ${token.colorBorderSecondary};
+    border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: 12px;
 
-    background: ${token.colorFillQuaternary};
+    background: ${cssVar.colorFillQuaternary};
   `,
   sub: css`
     overflow: hidden;
 
     font-size: 12px;
-    color: ${token.colorTextTertiary};
+    color: ${cssVar.colorTextTertiary};
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
   title: css`
     font-size: 13px;
     font-weight: 700;
-    color: ${token.colorText};
+    color: ${cssVar.colorText};
   `,
 }));
 
-const statusIcon = (status: VerifyCheckResultItem['status'] | undefined) => {
+const statusIcon = (
+  status: VerifyCheckResultItem['status'] | undefined,
+): { color: keyof typeof cssVar; icon: typeof CheckCircle2; spin: boolean } => {
   switch (status) {
     case 'passed': {
-      return { color: 'colorSuccess', icon: CheckCircle2, spin: false } as const;
+      return { color: 'colorSuccess', icon: CheckCircle2, spin: false };
     }
     case 'running': {
-      return { color: 'colorInfo', icon: LoaderCircle, spin: true } as const;
+      return { color: 'colorInfo', icon: LoaderCircle, spin: true };
     }
     case 'failed': {
-      return { color: 'colorError', icon: XCircle, spin: false } as const;
+      return { color: 'colorError', icon: XCircle, spin: false };
     }
     case 'skipped': {
-      return { color: 'colorTextQuaternary', icon: CircleAlert, spin: false } as const;
+      return { color: 'colorTextQuaternary', icon: CircleAlert, spin: false };
     }
     default: {
-      return { color: 'colorTextQuaternary', icon: Circle, spin: false } as const;
+      return { color: 'colorTextQuaternary', icon: Circle, spin: false };
     }
   }
 };
@@ -145,7 +148,7 @@ interface CheckerDockProps {
  * and a failure feedback panel.
  */
 const CheckerDock = memo<CheckerDockProps>(({ operationId, embedded }) => {
-  const { styles, cx, theme } = useStyles();
+  const { isDarkMode } = useThemeMode();
   const { t } = useTranslation('verify');
   const { data: state, mutate: mutateState } = useVerifyState(operationId);
   const { data: results, mutate: mutateResults } = useVerifyResults(operationId);
@@ -163,8 +166,6 @@ const CheckerDock = memo<CheckerDockProps>(({ operationId, embedded }) => {
   const resultByItem = new Map((results ?? []).map((r) => [r.checkItemId, r]));
 
   if (phase === 'idle' || plan.length === 0) return null;
-
-  const colorOf = (key: string) => (theme as unknown as Record<string, string>)[key];
 
   const run = async (fn: () => Promise<unknown>) => {
     setBusy(true);
@@ -219,15 +220,15 @@ const CheckerDock = memo<CheckerDockProps>(({ operationId, embedded }) => {
         {result?.status === 'running' ? (
           <RingLoadingIcon
             size={16}
-            style={{ color: theme.colorWarning }}
+            style={{ color: cssVar.colorWarning }}
             ringColor={
-              theme.isDarkMode
-                ? theme.colorWarningBorder
-                : `color-mix(in srgb, ${theme.colorWarning} 45%, transparent)`
+              isDarkMode
+                ? cssVar.colorWarningBorder
+                : `color-mix(in srgb, ${cssVar.colorWarning} 45%, transparent)`
             }
           />
         ) : (
-          <Icon color={colorOf(sIcon.color)} icon={sIcon.icon} size={16} spin={sIcon.spin} />
+          <Icon color={cssVar[sIcon.color]} icon={sIcon.icon} size={16} spin={sIcon.spin} />
         )}
         <Flexbox style={{ minWidth: 0 }}>
           <span className={styles.title} style={{ fontWeight: 600 }}>
@@ -387,7 +388,11 @@ const CheckerDock = memo<CheckerDockProps>(({ operationId, embedded }) => {
             <span className={styles.sub}>{subText}</span>
           </Flexbox>
         </Flexbox>
-        <Icon color={theme.colorTextTertiary} icon={expanded ? ChevronDown : ChevronUp} size={16} />
+        <Icon
+          color={cssVar.colorTextTertiary}
+          icon={expanded ? ChevronDown : ChevronUp}
+          size={16}
+        />
       </div>
       {expanded && body}
     </div>

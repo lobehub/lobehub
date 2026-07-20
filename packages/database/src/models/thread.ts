@@ -79,6 +79,14 @@ export class ThreadModel {
   private ownership = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, threads);
 
+  /**
+   * In workspace mode `ownership()` matches every member's threads, so a bulk
+   * "clear all" would wipe teammates' rows. Destructive sweeps must
+   * additionally pin `user_id` to the caller (personal mode is unchanged —
+   * ownership already scopes to the user there).
+   */
+  private mine = () => and(this.ownership(), eq(threads.userId, this.userId));
+
   create = async (params: CreateThreadParams) => {
     // @ts-ignore
     const [result] = await this.db
@@ -100,7 +108,7 @@ export class ThreadModel {
   };
 
   deleteAll = async () => {
-    return this.db.delete(threads).where(this.ownership());
+    return this.db.delete(threads).where(this.mine());
   };
 
   query = async () => {

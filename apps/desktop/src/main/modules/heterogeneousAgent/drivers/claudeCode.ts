@@ -17,13 +17,11 @@ export const claudeCodeDriver: HeterogeneousAgentDriver = {
   async buildSpawnPlan({
     args,
     helpers,
-    imageList,
     mcpConfigPath,
-    prompt,
+    promptInput,
     resumeSessionId,
-    systemContext,
   }: HeterogeneousAgentBuildPlanParams) {
-    const stdinPayload = await helpers.buildClaudeStreamJsonInput(prompt, imageList, systemContext);
+    const { stdin: stdinPayload } = await helpers.buildAgentInput('claude-code', promptInput);
 
     return {
       args: [

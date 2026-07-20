@@ -1,18 +1,29 @@
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
+import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { ConnectorModel } from '@/database/models/connector';
 import { PluginModel } from '@/database/models/plugin';
 import { getComposioClient } from '@/libs/composio';
-import { authedProcedure, publicProcedure, router } from '@/libs/trpc/lambda';
+import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { MCPService } from '@/server/services/mcp';
 
-const composioProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
+// wsCompatProcedure (not authedProcedure): when a request carries X-Workspace-Id
+// the models below resolve in that workspace and buildWorkspaceWhere drops the
+// userId filter, so honoring the header without verifying workspace membership
+// would let any signed-in user execute another workspace's connected account.
+// The cloud override validates membership; the OSS stub is a passthrough.
+const composioProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
+  const { ctx } = opts;
   const composioClient = getComposioClient();
-  const pluginModel = new PluginModel(opts.ctx.serverDB, opts.ctx.userId);
-  const connectorModel = new ConnectorModel(opts.ctx.serverDB, opts.ctx.userId);
-  return opts.next({ ctx: { ...opts.ctx, composioClient, connectorModel, pluginModel } });
+  // Workspace-scoped so a manual tool execution resolves the workspace-dimension
+  // Composio connection (workspace_id = wsId) rather than only the personal one.
+  // Personal mode (wsId undefined) falls back to `workspace_id IS NULL`.
+  const wsId = ctx.workspaceId ?? undefined;
+  const pluginModel = new PluginModel(ctx.serverDB, ctx.userId, wsId);
+  const connectorModel = new ConnectorModel(ctx.serverDB, ctx.userId, wsId);
+  return opts.next({ ctx: { ...ctx, composioClient, connectorModel, pluginModel } });
 });
 
 export const composioToolsRouter = router({
@@ -20,7 +31,7 @@ export const composioToolsRouter = router({
     .input(
       z.object({
         identifier: z.string(),
-        toolArgs: z.record(z.unknown()).optional(),
+        toolArgs: z.record(z.string(), z.unknown()).optional(),
         toolSlug: z.string(),
       }),
     )
@@ -31,10 +42,20 @@ export const composioToolsRouter = router({
       // Connector metadata first (new path); plugin customParams as fallback for
       // connections created before the connector projection existed.
       const [connector] = await ctx.connectorModel.queryByIdentifiers([input.identifier]);
-      let connectedAccountId = connector?.metadata?.composio?.connectedAccountId;
+      const connectorComposio = connector?.metadata?.composio;
+      let connectedAccountId = connectorComposio?.connectedAccountId;
+      // The Composio user entity that OWNS the account (linked it), NOT the
+      // caller. In a workspace the resolved row may belong to another member;
+      // passing the caller's id fails Composio's account/entity validation.
+      // `linkedByUserId` tracks the true linker (diverges from the row creator
+      // when a workspace owner reconnects a member's row); fall back to the row
+      // creator for legacy rows without it.
+      let ownerUserId: string | undefined = connectorComposio?.linkedByUserId ?? connector?.userId;
       if (!connectedAccountId) {
         const plugin = await ctx.pluginModel.findById(input.identifier);
-        connectedAccountId = plugin?.customParams?.composio?.connectedAccountId;
+        const pluginComposio = plugin?.customParams?.composio;
+        connectedAccountId = pluginComposio?.connectedAccountId;
+        ownerUserId = pluginComposio?.linkedByUserId ?? plugin?.userId;
       }
 
       if (!connectedAccountId) {
@@ -50,7 +71,7 @@ export const composioToolsRouter = router({
         // Toolkit version resolves to "latest"; allow manual execution without a
         // pinned version (Composio otherwise throws ComposioToolVersionRequiredError).
         dangerouslySkipVersionCheck: true,
-        userId: ctx.userId,
+        userId: ownerUserId ?? ctx.userId,
       });
 
       if (!result) {

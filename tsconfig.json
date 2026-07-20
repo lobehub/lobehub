@@ -26,7 +26,7 @@
       "@/config/*": ["./packages/app-config/src/*", "./src/config/*"],
       "@/locales/*": ["./packages/locales/src/*", "./src/locales/*"],
       "@/business/server/*": ["./packages/business-server/src/*", "./src/business/server/*"],
-      "@/server/*": ["./apps/server/src/*", "./src/server/*"],
+      "@/server/*": ["./apps/server/src/*"],
       "@/*": ["./src/*"],
       "~test-utils": ["./tests/utils.tsx"]
     },

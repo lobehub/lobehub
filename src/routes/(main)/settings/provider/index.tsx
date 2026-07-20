@@ -4,11 +4,9 @@ import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 import { Outlet, useParams } from 'react-router';
 
-import { isCustomBranding } from '@/const/version';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 
 import DesktopLayoutContainer from './_layout/Desktop/Container';
-import Footer from './(list)/Footer';
 import ProviderDetailPageComponent from './detail';
 import ProviderMenu from './ProviderMenu';
 
@@ -31,7 +29,6 @@ export const ProviderLayout = memo(() => {
       <ProviderMenu mobile={false} onProviderSelect={handleProviderSelect} />
       <DesktopLayoutContainer>
         <Outlet />
-        {!isCustomBranding && <Footer />}
       </DesktopLayoutContainer>
     </Flexbox>
   );

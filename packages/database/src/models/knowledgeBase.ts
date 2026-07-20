@@ -1,5 +1,5 @@
 import type { KnowledgeBaseItem } from '@lobechat/types';
-import { and, count, desc, eq, inArray, or, sum } from 'drizzle-orm';
+import { and, count, desc, eq, inArray, ne, or, sum } from 'drizzle-orm';
 
 import type { NewDocument, NewFile, NewKnowledgeBase } from '../schemas';
 import { documents, files, knowledgeBaseFiles, knowledgeBases } from '../schemas';
@@ -291,6 +291,39 @@ export class KnowledgeBaseModel {
     return candidate;
   };
 
+  /**
+   * Whether the KB's cascade (linked files + derived documents) contains rows
+   * created by someone else. Transfers rehome every cascaded row, so non-owner
+   * members must not move a KB that carries teammates' content.
+   */
+  hasForeignLinkedRows = async (id: string): Promise<boolean> => {
+    const fileLinks = await this.db
+      .select({ fileId: knowledgeBaseFiles.fileId })
+      .from(knowledgeBaseFiles)
+      .where(eq(knowledgeBaseFiles.knowledgeBaseId, id));
+    const fileIds = fileLinks.map((link) => link.fileId);
+
+    if (fileIds.length > 0) {
+      const [foreignFile] = await this.db
+        .select({ id: files.id })
+        .from(files)
+        .where(and(inArray(files.id, fileIds), ne(files.userId, this.userId)))
+        .limit(1);
+      if (foreignFile) return true;
+    }
+
+    const documentWhere =
+      fileIds.length > 0
+        ? or(eq(documents.knowledgeBaseId, id), inArray(documents.fileId, fileIds))
+        : eq(documents.knowledgeBaseId, id);
+    const [foreignDoc] = await this.db
+      .select({ id: documents.id })
+      .from(documents)
+      .where(and(documentWhere, ne(documents.userId, this.userId)))
+      .limit(1);
+    return !!foreignDoc;
+  };
+
   transferTo = async (
     id: string,
     targetWorkspaceId: string | null,
@@ -559,13 +592,21 @@ export class KnowledgeBaseModel {
     return sharedFiles.filter((f) => Number(f.kbCount) === 1).map((f) => f.fileId);
   };
 
-  deleteWithFiles = async (id: string, removeGlobalFile: boolean = true) => {
+  deleteWithFiles = async (
+    id: string,
+    removeGlobalFile: boolean = true,
+    options?: { restrictToCreator?: boolean },
+  ) => {
     const exclusiveFileIds = await this.findExclusiveFileIds(id);
 
     let deletedFiles: Array<{ id: string; url: string | null }> = [];
     if (exclusiveFileIds.length > 0) {
       const fileModel = new FileModel(this.db, this.userId, this.workspaceId);
-      const result = await fileModel.deleteMany(exclusiveFileIds, removeGlobalFile);
+      // Teammate-owned files can be linked into this KB; a non-owner member's
+      // delete must not take those file records/storage with it.
+      const result = await fileModel.deleteMany(exclusiveFileIds, removeGlobalFile, {
+        restrictToCreator: options?.restrictToCreator,
+      });
       deletedFiles = (result || []).map((f) => ({ id: f.id, url: f.url }));
     }
 
@@ -574,9 +615,20 @@ export class KnowledgeBaseModel {
     return { deletedFiles };
   };
 
-  deleteAllWithFiles = async (removeGlobalFile: boolean = true) => {
-    const allKbFileIds = await this.db
-      .select({ fileId: knowledgeBaseFiles.fileId })
+  deleteAllWithFiles = async (
+    removeGlobalFile: boolean = true,
+    options?: { restrictToCreator?: boolean },
+  ) => {
+    // Workspace clear-all from non-owner members only removes the caller's own KBs.
+    const kbWhere = options?.restrictToCreator
+      ? and(this.ownership(), eq(knowledgeBases.userId, this.userId))
+      : this.ownership();
+
+    const allKbLinks = await this.db
+      .select({
+        fileId: knowledgeBaseFiles.fileId,
+        knowledgeBaseId: knowledgeBaseFiles.knowledgeBaseId,
+      })
       .from(knowledgeBaseFiles)
       .where(
         buildWorkspaceWhere(
@@ -585,16 +637,45 @@ export class KnowledgeBaseModel {
         ),
       );
 
-    const fileIds = [...new Set(allKbFileIds.map((f) => f.fileId))];
+    let fileIds = [...new Set(allKbLinks.map((f) => f.fileId))];
+
+    if (options?.restrictToCreator) {
+      const targetKbs = await this.db
+        .select({ id: knowledgeBases.id })
+        .from(knowledgeBases)
+        .where(kbWhere);
+      const targetKbIds = new Set(targetKbs.map((kb) => kb.id));
+
+      // Files still linked to a surviving KB must outlive the narrowed clear-all.
+      const survivingFileIds = new Set(
+        allKbLinks
+          .filter((link) => !targetKbIds.has(link.knowledgeBaseId))
+          .map((link) => link.fileId),
+      );
+
+      fileIds = [
+        ...new Set(
+          allKbLinks
+            .filter(
+              (link) => targetKbIds.has(link.knowledgeBaseId) && !survivingFileIds.has(link.fileId),
+            )
+            .map((link) => link.fileId),
+        ),
+      ];
+    }
 
     let deletedFiles: Array<{ id: string; url: string | null }> = [];
     if (fileIds.length > 0) {
       const fileModel = new FileModel(this.db, this.userId, this.workspaceId);
-      const result = await fileModel.deleteMany(fileIds, removeGlobalFile);
+      // Teammate-owned files can be linked into the caller's KBs; a narrowed
+      // clear-all must not take those file records/storage with it.
+      const result = await fileModel.deleteMany(fileIds, removeGlobalFile, {
+        restrictToCreator: options?.restrictToCreator,
+      });
       deletedFiles = (result || []).map((f) => ({ id: f.id, url: f.url }));
     }
 
-    await this.db.delete(knowledgeBases).where(this.ownership());
+    await this.db.delete(knowledgeBases).where(kbWhere);
 
     return { deletedFiles };
   };

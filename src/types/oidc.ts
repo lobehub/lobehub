@@ -1,7 +1,9 @@
 export interface OidcClientMetadata {
   clientName?: string;
+  developerName?: string;
   isFirstParty: boolean;
   logo?: string;
+  policyUri?: string;
 }
 
 export interface OidcInteractionDetailsResponse {

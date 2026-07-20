@@ -1,6 +1,6 @@
-import { type AiFullModelCard } from 'model-bank';
-import { estimateTokenCount } from 'tokenx';
+import type { AiFullModelCard } from 'model-bank';
 
+import { estimateOpenAIChatInputTokens } from '../core/usageConverters';
 import type { ChatStreamPayload } from '../types/chat';
 
 /**
@@ -91,9 +91,7 @@ export class ContextExceededPreFlightError extends Error {
 
 const estimatePayloadInputTokens = (payload: Pick<ChatStreamPayload, 'messages' | 'tools'>) => {
   const { messages = [], tools } = payload;
-  const messagesText = JSON.stringify(messages);
-  const toolsText = tools && tools.length > 0 ? JSON.stringify(tools) : '';
-  return estimateTokenCount(messagesText) + (toolsText ? estimateTokenCount(toolsText) : 0);
+  return estimateOpenAIChatInputTokens(messages, { tools }).totalTokens;
 };
 
 /**

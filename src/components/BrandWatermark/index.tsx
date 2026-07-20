@@ -7,6 +7,7 @@ import { LobeHub } from '@lobehub/ui/brand';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { memo } from 'react';
 
+import { OFFICIAL_SITE } from '@/const/url';
 import { isCustomORG } from '@/const/version';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -37,7 +38,7 @@ const BrandWatermark = memo<Omit<FlexboxProps, 'children'>>(({ style, ...rest })
       ) : (
         <a
           className={styles.logoLink}
-          href={`https://lobehub.com?utm_source=${UTM_SOURCE}&utm_content=brand_watermark`}
+          href={`${OFFICIAL_SITE}?utm_source=${UTM_SOURCE}&utm_content=brand_watermark`}
           rel="noreferrer"
           target="_blank"
         >

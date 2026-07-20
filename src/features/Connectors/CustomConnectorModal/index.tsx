@@ -97,6 +97,7 @@ const cleanRecord = (record?: Record<string, string>): Record<string, string> | 
 const CustomConnectorModal = memo<CustomConnectorModalProps>(
   ({ open, onClose, connectorId, legacyPlugin, onEditSuccess }) => {
     const createConnector = useToolStore((s) => s.createConnector);
+    const deleteConnector = useToolStore((s) => s.deleteConnector);
     const updateConnector = useToolStore((s) => s.updateConnector);
     const getConnectorForEdit = useToolStore((s) => s.getConnectorForEdit);
     const startConnectorOAuth = useToolStore((s) => s.startConnectorOAuth);
@@ -200,7 +201,10 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
       };
     }, [isEditMode, isMigrationMode, legacyPlugin, connector, editFetchedData]);
 
-    const handleSave = async (value: LobeToolCustomPlugin, ctx?: { oauthPopup?: Window | null }) => {
+    const handleSave = async (
+      value: LobeToolCustomPlugin,
+      ctx?: { oauthPopup?: Window | null },
+    ) => {
       // ── Migration mode ────────────────────────────────────────────────────
       // Promote a legacy `user_installed_plugins.type='customPlugin'` row into
       // a `user_connectors` row. Server `connector.create` is idempotent on
@@ -219,6 +223,11 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
         // alone) is already inside `value`. Hand it to the orchestrator.
         const result = await executeLegacyMigrationSave(legacyPlugin, value, {
           createConnector,
+          deleteConnector,
+          // Read fresh so the rollback only deletes a connector this migration
+          // created, never one the idempotent upsert merely updated.
+          hasExistingConnector: (id) =>
+            Boolean(connectorSelectors.connectorByIdentifier(id)(useToolStore.getState())),
           syncConnectorTools,
           uninstallCustomPlugin,
         });
@@ -269,7 +278,7 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
         // submitted before `connector` resolves, but this keeps it safe.
         const headers = cleanRecord(mcp.headers);
         if (connector) {
-          const nextMetadata: Record<string, unknown> = { ...(connector.metadata ?? {}) };
+          const nextMetadata: Record<string, unknown> = { ...connector.metadata };
           if (headers) nextMetadata.customHeaders = headers;
           else delete nextMetadata.customHeaders;
           patch.metadata = nextMetadata;
@@ -325,7 +334,11 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
         mcpServerUrl: isHttp ? mcp.url?.trim() : undefined,
         mcpStdioConfig: isHttp
           ? undefined
-          : { args: mcp.args ?? [], command: (mcp.command ?? '').trim(), env: cleanRecord(mcp.env) },
+          : {
+              args: mcp.args ?? [],
+              command: (mcp.command ?? '').trim(),
+              env: cleanRecord(mcp.env),
+            },
         name: identifier,
         sourceType: ConnectorSourceType.custom,
       };

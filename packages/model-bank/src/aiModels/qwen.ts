@@ -230,7 +230,7 @@ const qwenChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_000_000,
     description:
-      'DeepSeek V4 Flash is the cost-efficient member of the V4 family with a 1M context window and hybrid thinking. Thinking mode is on by default and can be toggled via the `thinking` parameter; non-thinking mode is optimized for latency-sensitive workflows.',
+      'DeepSeek V4 Flash is the fast, cost-efficient member of the V4 family with a 1M context window and hybrid thinking — one of the cheapest capable models available.',
     displayName: 'DeepSeek V4 Flash',
     family: 'deepseek',
     generation: 'deepseek-v4',
@@ -257,7 +257,7 @@ const qwenChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_000_000,
     description:
-      'DeepSeek V4 Pro is the flagship of the V4 family, optimized for high-intensity reasoning, agentic workflows, and long-horizon planning. Thinking mode is on by default and can be toggled via the `thinking` parameter.',
+      'DeepSeek V4 Pro is the flagship of the V4 family, built for high-intensity reasoning and agentic workflows with a 1M context window — excellent Chinese writing and outstanding value for money.',
     displayName: 'DeepSeek V4 Pro',
     family: 'deepseek',
     generation: 'deepseek-v4',

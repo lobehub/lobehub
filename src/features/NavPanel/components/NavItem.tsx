@@ -124,7 +124,7 @@ const NavItem = memo<NavItemProps>(
         clickable={!disabled}
         gap={8}
         height={description ? undefined : 36}
-        paddingBlock={description ? 4 : undefined}
+        paddingBlock={description ? 8 : undefined}
         paddingInline={4}
         style={mergedStyle}
         variant={variant}
@@ -162,7 +162,7 @@ const NavItem = memo<NavItemProps>(
         <Flexbox horizontal align={'center'} flex={1} gap={8} style={{ overflow: 'hidden' }}>
           {titlePrefix}
           {description ? (
-            <Flexbox flex={1} gap={1} style={{ overflow: 'hidden' }}>
+            <Flexbox flex={1} gap={3} style={{ overflow: 'hidden' }}>
               <Text color={textColor} ellipsis={{ tooltipWhenOverflow: true }}>
                 {title}
               </Text>

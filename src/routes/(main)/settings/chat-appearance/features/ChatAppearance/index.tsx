@@ -14,6 +14,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AutoSaveHint from '@/components/Editor/AutoSaveHint';
+import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
 import { useSaveState } from '@/hooks/useSaveState';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
@@ -48,7 +49,6 @@ const ChatAppearance = memo(() => {
     <>
       <FormGroup
         collapsible={false}
-        desc={t('settingChatAppearance.transitionMode.desc')}
         gap={16}
         title={t('settingChatAppearance.transitionMode.title')}
         variant={'filled'}
@@ -82,7 +82,6 @@ const ChatAppearance = memo(() => {
       <FormGroup
         active={false}
         collapsible={false}
-        desc={t('settingChatAppearance.autoScrollOnStreaming.desc')}
         title={t('settingChatAppearance.autoScrollOnStreaming.title')}
         variant={'filled'}
         extra={
@@ -100,7 +99,6 @@ const ChatAppearance = memo(() => {
 
       <FormGroup
         collapsible={false}
-        desc={t('settingChatAppearance.linkIcon.desc')}
         gap={16}
         title={t('settingChatAppearance.linkIcon.title')}
         variant={'filled'}
@@ -119,9 +117,7 @@ const ChatAppearance = memo(() => {
 
       <FormGroup
         collapsible={false}
-        desc={t('settingChatAppearance.fontSize.desc')}
         gap={16}
-        title={t('settingChatAppearance.fontSize.title')}
         variant={'filled'}
         extra={
           <Flexbox horizontal align={'center'} gap={8}>
@@ -160,6 +156,11 @@ const ChatAppearance = memo(() => {
               onChange={(value) => handleChange('fontSize', value)}
             />
           </Flexbox>
+        }
+        title={
+          <SettingsSearchAnchor id={'appearance-font-size'}>
+            {t('settingChatAppearance.fontSize.title')}
+          </SettingsSearchAnchor>
         }
       >
         <ChatPreview fontSize={general.fontSize} />

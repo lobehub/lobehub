@@ -282,7 +282,7 @@ export class HomeRepository {
       }),
       ...chatGroupItems.map((g): EnrichedItem => ({
         // If group has custom avatar, use it (string); otherwise fallback to member avatars (array)
-        avatar: g.avatar ? g.avatar : (memberAvatarsMap.get(g.id) ?? null),
+        avatar: g.avatar || (memberAvatarsMap.get(g.id) ?? null),
         backgroundColor: g.backgroundColor,
         description: g.description,
         groupAvatar: g.avatar,
@@ -295,6 +295,7 @@ export class HomeRepository {
         type: 'group' as const,
         unreadCount: groupUnread.get(g.id) ?? 0,
         updatedAt: g.updatedAt,
+        userId: g.groupUserId,
         visibility: g.visibility,
       })),
     ];
@@ -387,6 +388,8 @@ export class HomeRepository {
           slug: agents.slug,
           title: agents.title,
           updatedAt: agents.updatedAt,
+          userId: agents.userId,
+          visibility: agents.visibility,
         })
         .from(agents)
         .leftJoin(agentsToSessions, eq(agents.id, agentsToSessions.agentId))
@@ -409,6 +412,8 @@ export class HomeRepository {
           pinned: chatGroups.pinned,
           title: chatGroups.title,
           updatedAt: chatGroups.updatedAt,
+          userId: chatGroups.userId,
+          visibility: chatGroups.visibility,
         })
         .from(chatGroups)
         .where(
@@ -443,11 +448,13 @@ export class HomeRepository {
           title: meta.title,
           type: 'agent' as const,
           updatedAt: a.updatedAt,
+          userId: a.userId,
+          visibility: a.visibility,
         });
       }),
       ...chatGroupResults.map((g) =>
         cleanObject({
-          avatar: g.avatar ? g.avatar : (memberAvatarsMap.get(g.id) ?? null),
+          avatar: g.avatar || (memberAvatarsMap.get(g.id) ?? null),
           backgroundColor: g.backgroundColor,
           description: g.description,
           id: g.id,
@@ -455,6 +462,8 @@ export class HomeRepository {
           title: g.title,
           type: 'group' as const,
           updatedAt: g.updatedAt,
+          userId: g.userId,
+          visibility: g.visibility,
         }),
       ),
     ] as SidebarAgentItem[];

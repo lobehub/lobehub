@@ -37,6 +37,7 @@ const isDarwin = getTargetPlatform() === 'darwin';
 export const nativeModules = [
   // macOS-only native modules
   ...(isDarwin ? ['node-mac-permissions'] : []),
+  '@lydell/node-pty',
   '@napi-rs/canvas',
   'get-windows',
   'node-screenshots',

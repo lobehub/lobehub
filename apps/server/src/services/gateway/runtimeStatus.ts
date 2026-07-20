@@ -14,6 +14,7 @@ export type { BotRuntimeStatus, BotRuntimeStatusSnapshot };
 
 interface UpdateBotRuntimeStatusParams {
   applicationId: string;
+  errorCode?: string;
   errorMessage?: string;
   platform: string;
   status: BotRuntimeStatus;
@@ -81,6 +82,7 @@ export async function updateBotRuntimeStatus(
   const redisClient = options.redisClient ?? getAgentRuntimeRedisClient();
   const snapshot: BotRuntimeStatusSnapshot = {
     applicationId: params.applicationId,
+    errorCode: params.errorCode,
     errorMessage: params.errorMessage,
     platform: params.platform,
     status: params.status,

@@ -1,17 +1,8 @@
 'use client';
 
 import { MCP } from '@lobehub/icons';
-import {
-  ActionIcon,
-  Avatar,
-  Button,
-  Flexbox,
-  Icon,
-  Tag,
-  Text,
-  Tooltip,
-  TooltipGroup,
-} from '@lobehub/ui';
+import { ActionIcon, Avatar, Flexbox, Icon, Tag, Text, Tooltip, TooltipGroup } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { createStaticStyles, cssVar, useResponsive } from 'antd-style';
 import {
@@ -117,7 +108,7 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
         url: '/community/agent',
       })}
     >
-      <Button icon={cate?.icon} size={'middle'} variant={'outlined'}>
+      <Button icon={cate?.icon} size={'middle'}>
         {cate?.label}
       </Button>
     </WorkspaceLink>

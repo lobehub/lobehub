@@ -10,12 +10,7 @@ const logger = createLogger('core:ShortcutManager');
 
 export interface ShortcutUpdateResult {
   errorType?:
-    | 'INVALID_ID'
-    | 'INVALID_FORMAT'
-    | 'NO_MODIFIER'
-    | 'CONFLICT'
-    | 'SYSTEM_OCCUPIED'
-    | 'UNKNOWN';
+    'INVALID_ID' | 'INVALID_FORMAT' | 'NO_MODIFIER' | 'CONFLICT' | 'SYSTEM_OCCUPIED' | 'UNKNOWN';
   success: boolean;
 }
 
@@ -172,8 +167,12 @@ export class ShortcutManager {
         this.unregisterShortcut(accelerator);
       }
 
-      // Register new shortcut
-      const success = globalShortcut.register(accelerator, callback);
+      // globalShortcut callbacks fire synchronously from native code with no
+      // task wrapper, so microtasks queued by an async handler (any `await`
+      // continuation) are not drained until the event loop next wakes — on an
+      // idle app that can be seconds later. setImmediate re-enters the handler
+      // through a normal libuv task so continuations run right away.
+      const success = globalShortcut.register(accelerator, () => setImmediate(callback));
 
       if (success) {
         this.shortcuts.set(accelerator, callback);

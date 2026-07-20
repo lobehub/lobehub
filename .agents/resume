@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+NODE_VERSION="24.11.1"
+BUN_VERSION="1.3.2"
+TOOLCHAIN_ROOT="${HOME}/.local/share/amp-toolchains"
+LOCAL_BIN="${HOME}/.local/bin"
+node_dir="${TOOLCHAIN_ROOT}/node-v${NODE_VERSION}"
+bun_dir="${TOOLCHAIN_ROOT}/bun-v${BUN_VERSION}"
+
+# Orb snapshots preserve these toolchains. Repair their user-local entry points
+# in case a resumed base environment replaced a system-level Node or Bun.
+mkdir -p "${LOCAL_BIN}"
+for executable in node npm npx corepack pnpm; do
+  if [[ -e "${node_dir}/bin/${executable}" ]]; then
+    ln -sfn "${node_dir}/bin/${executable}" "${LOCAL_BIN}/${executable}"
+  fi
+done
+if [[ -x "${bun_dir}/bun" ]]; then
+  ln -sfn "${bun_dir}/bun" "${LOCAL_BIN}/bun"
+fi
+
+echo "Orb toolchain links are ready."

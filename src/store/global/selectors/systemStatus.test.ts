@@ -90,6 +90,24 @@ describe('systemStatusSelectors', () => {
       expect(systemStatusSelectors.portalWidth(noPortalWidth)).toBe(400);
     });
 
+    it('should return workingSidebarWidth from status, defaulting to 360', () => {
+      expect(
+        systemStatusSelectors.workingSidebarWidth(
+          merge(initialState, {
+            status: { workingSidebarWidth: 520 },
+          }),
+        ),
+      ).toBe(520);
+
+      expect(
+        systemStatusSelectors.workingSidebarWidth(
+          merge(initialState, {
+            status: { workingSidebarWidth: undefined },
+          }),
+        ),
+      ).toBe(360);
+    });
+
     it('should clamp persisted left panel width to the draggable panel bounds', () => {
       expect(
         systemStatusSelectors.leftPanelWidth(

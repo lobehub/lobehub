@@ -42,12 +42,19 @@ async function preCheckStdioCommand(params: {
   return new Promise((resolve) => {
     log('Pre-checking stdio command: %s with args: %O', params.command, params.args);
 
+    // Do NOT spread the full process.env here: it would leak server-side secrets
+    // (DATABASE_URL, KEY_VAULTS_SECRET, provider API keys, OAuth/JWT secrets, ...)
+    // into the spawned MCP subprocess. Match the main StdioClientTransport below,
+    // which only exposes the safe default environment plus user-configured vars.
+    // The cast is required because this repo augments NodeJS.ProcessEnv with
+    // required app keys that a restricted env intentionally omits.
+    const env = {
+      ...getDefaultEnvironment(),
+      ...params.env,
+    } as NodeJS.ProcessEnv;
+
     const child = spawn(params.command, params.args, {
-      env: {
-        ...process.env,
-        ...getDefaultEnvironment(),
-        ...params.env,
-      },
+      env,
       stdio: ['pipe', 'pipe', 'pipe'],
     });
 

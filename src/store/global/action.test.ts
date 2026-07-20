@@ -62,6 +62,31 @@ describe('createPreferenceSlice', () => {
     });
   });
 
+  describe('openInBrowserTab / clearBrowserTabRequest', () => {
+    it('should raise a one-shot browser request and retire it once consumed', () => {
+      const { result } = renderHook(() => useGlobalStore());
+
+      act(() => {
+        useGlobalStore.setState({ isStatusInit: true });
+        result.current.openInBrowserTab('https://example.com');
+      });
+
+      expect(result.current.status.workingSidebarBrowserRequest?.url).toBe('https://example.com');
+      expect(result.current.status.workingSidebarTab).toBe('browser');
+
+      act(() => {
+        result.current.clearBrowserTabRequest();
+      });
+
+      // Must be null, not undefined: `updateSystemStatus` merges with lodash,
+      // which skips undefined — an undefined patch would leave the request in
+      // place. A surviving request is re-consumed on the browser pane's next
+      // remount (i.e. every topic switch) and drags that topic's page to the
+      // stale URL.
+      expect(result.current.status.workingSidebarBrowserRequest).toBeNull();
+    });
+  });
+
   describe('toggleAgentBuilderPanel', () => {
     it('should toggle agent builder panel without changing chat right panel', () => {
       const { result } = renderHook(() => useGlobalStore());

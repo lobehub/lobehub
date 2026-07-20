@@ -230,7 +230,11 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
           }
 
           if (updatedParts.length === 0) {
-            return { content: 'No fields to update.', state: { success: true }, success: true };
+            return {
+              content: 'No fields to update.',
+              state: { agentId, success: true },
+              success: true,
+            };
           }
 
           return {
@@ -267,7 +271,7 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
             content: params.prompt
               ? `Successfully updated system prompt (${params.prompt.length} characters)`
               : 'Successfully cleared system prompt',
-            state: { newPrompt: params.prompt, success: true },
+            state: { agentId, newPrompt: params.prompt, success: true },
             success: true,
           };
         } catch (error) {
@@ -309,7 +313,7 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
               }
               return {
                 content: `Successfully enabled "${identifier}" for agent "${agentId}"`,
-                state: { installed: true, pluginId: identifier, success: true },
+                state: { agentId, installed: true, pluginId: identifier, success: true },
                 success: true,
               };
             } catch (error) {
@@ -362,7 +366,7 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
 
           return {
             content: `Successfully enabled plugin "${identifier}" for agent "${agentId}"`,
-            state: { installed: true, pluginId: identifier, success: true },
+            state: { agentId, installed: true, pluginId: identifier, success: true },
             success: true,
           };
         } catch (error) {

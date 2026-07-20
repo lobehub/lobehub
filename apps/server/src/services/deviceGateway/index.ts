@@ -36,6 +36,7 @@ import type {
   DeviceProjectFileSearchResult,
   DeviceRenameProjectFileResult,
   DeviceWriteProjectFileResult,
+  HeterogeneousAgentModelCatalog,
   ProjectSkillMeta,
   WorkspaceInitResult,
 } from '@lobechat/types';
@@ -115,11 +116,23 @@ export class DeviceGateway {
       return devices.map((d) => ({
         // `channels` may be absent if the gateway worker deploy lags behind the
         // server (separate Cloudflare deploy); tolerate the legacy flat shape.
-        channels: (d.channels ?? []).map((c) => ({
-          channel: c.channel,
-          connectedAt: new Date(c.connectedAt).toISOString(),
-          connectionId: c.connectionId,
-        })),
+        //
+        // Sorted newest-first because every consumer reads `channels[0]` as
+        // "this device's current connection" — the settings row's
+        // "Connected {time}", a ghost row's `lastSeen`, its hostname/platform
+        // fallback — while `sortDevicesByActivity` ranks by the FRESHEST
+        // channel. The gateway promises no order, so leaving it raw lets a
+        // multi-channel device rank by one connection and get labelled with
+        // another. Normalising here (the single entry point both `listDevices`
+        // and `getScopedOnlineDevices` pull channels through) makes
+        // `channels[0]` mean the same thing everywhere.
+        channels: (d.channels ?? [])
+          .map((c) => ({
+            channel: c.channel,
+            connectedAt: new Date(c.connectedAt).toISOString(),
+            connectionId: c.connectionId,
+          }))
+          .sort((a, b) => Date.parse(b.connectedAt) - Date.parse(a.connectedAt)),
         deviceId: d.deviceId,
         hostname: d.hostname,
         lastSeen: new Date(d.connectedAt).toISOString(),
@@ -248,6 +261,97 @@ export class DeviceGateway {
   }
 
   /**
+   * Instruct an ONLINE personal device to enroll itself into a workspace: the
+   * device derives its workspace-scoped deviceId and opens a second gateway
+   * connection under the `workspace:<id>` principal using the short-lived
+   * `token` (a signed workspace-device connect token), then returns the derived
+   * identity so the caller can register the workspace row server-side. Rides
+   * the generic device RPC relay over the PERSONAL pool (no `workspaceId` in
+   * the address — the workspace connection doesn't exist yet). Failures are
+   * RETURNED with their reason — the share flow must tell the user why the
+   * device couldn't enroll (offline, outdated client) instead of silently
+   * doing nothing.
+   */
+  async enrollWorkspace(params: {
+    deviceId: string;
+    /**
+     * Dry-run: the device only derives and returns its workspace identity,
+     * without opening a share connection or persisting enrollment state.
+     * Older clients ignore the flag and enroll on the probe (pre-flag
+     * behaviour), so callers must treat the probe as possibly-enrolling.
+     */
+    identityOnly?: boolean;
+    timeout?: number;
+    token: string;
+    userId: string;
+    workspaceId: string;
+  }): Promise<{
+    error?: string;
+    identity?: { deviceId: string; identitySource: 'fallback' | 'machine-id' };
+    success: boolean;
+  }> {
+    const { deviceId, identityOnly, timeout = 30_000, token, userId, workspaceId } = params;
+    const client = this.getClient();
+    if (!client) return { error: 'Device Gateway is not configured', success: false };
+
+    try {
+      const result = await client.invokeRpc<{
+        deviceId: string;
+        identitySource: 'fallback' | 'machine-id';
+      }>(
+        { deviceId, timeout, userId },
+        {
+          method: 'enrollWorkspace',
+          params: { ...(identityOnly ? { identityOnly } : {}), token, workspaceId },
+        },
+      );
+
+      if (!result.success || !result.data) {
+        return { error: result.error || 'enrollWorkspace failed', success: false };
+      }
+
+      return { identity: result.data, success: true };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      log('enrollWorkspace: error for deviceId=%s — %s', deviceId, message);
+      return { error: message, success: false };
+    }
+  }
+
+  /**
+   * Instruct an ONLINE workspace device to drop its enrollment: close the
+   * workspace-principal connection and clear any persisted auto-reconnect state
+   * on the machine. Addressed over the WORKSPACE pool (the connection being
+   * killed), so it works regardless of who enrolled the device or whether a
+   * personal connection exists. Best-effort — callers delete the DB row either
+   * way, so an offline device simply loses its row and stops resolving.
+   */
+  async unenrollWorkspace(params: {
+    deviceId: string;
+    timeout?: number;
+    userId: string;
+    workspaceId: string;
+  }): Promise<{ error?: string; success: boolean }> {
+    const { deviceId, timeout = 10_000, userId, workspaceId } = params;
+    const client = this.getClient();
+    if (!client) return { error: 'Device Gateway is not configured', success: false };
+
+    try {
+      const result = await client.invokeRpc<{ success: boolean }>(
+        { deviceId, timeout, userId, workspaceId },
+        { method: 'unenrollWorkspace', params: { workspaceId } },
+      );
+      if (!result.success)
+        return { error: result.error || 'unenrollWorkspace failed', success: false };
+      return { success: true };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      log('unenrollWorkspace: error for deviceId=%s — %s', deviceId, message);
+      return { error: message, success: false };
+    }
+  }
+
+  /**
    * Generic helper for the granular git read RPCs (branch / PR / working-tree /
    * ahead-behind). Returns `undefined` when the gateway is unconfigured, the
    * device is offline, or the call fails — callers treat that as "unknown".
@@ -329,6 +433,55 @@ export class DeviceGateway {
     return this.invokeGitRead<DeviceGitWorktreeListItem[]>('listGitWorktrees', params, {
       path: params.path,
     });
+  }
+
+  /** Query a heterogeneous CLI's model catalog on the device that will execute it. */
+  async listHeterogeneousAgentModels(params: {
+    command?: string;
+    cwd?: string;
+    deviceId: string;
+    env?: Record<string, string>;
+    timeout?: number;
+    type: 'opencode';
+    userId: string;
+    workspaceId?: string;
+  }): Promise<HeterogeneousAgentModelCatalog> {
+    const { command, cwd, deviceId, env, timeout = 20_000, type, userId, workspaceId } = params;
+    const client = this.getClient();
+    const unavailable = (message: string): HeterogeneousAgentModelCatalog => ({
+      error: { code: 'device_unavailable', message },
+      status: 'error',
+      updatedAt: Date.now(),
+    });
+    if (!client) return unavailable('Device gateway is not configured');
+
+    try {
+      const result = await client.invokeRpc<HeterogeneousAgentModelCatalog>(
+        { deviceId, timeout, userId, workspaceId },
+        {
+          method: 'listHeterogeneousAgentModels',
+          params: { command, cwd, env, type },
+        },
+      );
+
+      if (!result.success || !result.data) {
+        const message = result.error || 'The device did not return a model catalog';
+        const unsupported =
+          message.includes('does not support heterogeneous agent model discovery') ||
+          message.includes('Unknown device RPC method');
+        log('listHeterogeneousAgentModels: failed for deviceId=%s — %s', deviceId, message);
+        return {
+          error: { code: unsupported ? 'unsupported_client' : 'device_unavailable', message },
+          status: 'error',
+          updatedAt: Date.now(),
+        };
+      }
+
+      return result.data;
+    } catch (error) {
+      log('listHeterogeneousAgentModels: error for deviceId=%s — %O', deviceId, error);
+      return unavailable(error instanceof Error ? error.message : 'Device model discovery failed');
+    }
   }
 
   /**

@@ -15,7 +15,7 @@
     "@t3-oss/env-nextjs": "^0.13.11",
     "debug": "^4.4.3",
     "lucide-react": "^1.22.0",
-    "zod": "^3.25.76"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "vite-tsconfig-paths": "^6.1.1"

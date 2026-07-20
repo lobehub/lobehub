@@ -23,13 +23,22 @@ import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { DocumentService } from '@/server/services/document';
 import { FileService } from '@/server/services/file';
+import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
 import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
 import { AsyncTaskStatus, AsyncTaskType, type IAsyncTaskError } from '@/types/asyncTask';
 import type { FileListItem, KnowledgeItemStatus } from '@/types/files';
 import { QueryFileListSchema, UploadFileSchema } from '@/types/files';
 import { TransferErrorCode } from '@/types/transferError';
 
+import {
+  assertWorkspaceRowManageable,
+  isWorkspaceNonOwner,
+} from './_helpers/assertWorkspaceRowManageable';
+
 const fileTransferEntityTypeSchema = z.enum(['document', 'file', 'folder']);
+const deleteKnowledgeItemsByQuerySchema = QueryFileListSchema.extend({
+  excludedIds: z.array(z.string()).optional(),
+});
 
 const filterKnowledgeItems = <
   T extends {
@@ -440,6 +449,7 @@ export const fileRouter = router({
       while (hasMore) {
         const knowledgeItems = await ctx.knowledgeRepo.query({
           ...input,
+          creatorUserId: isWorkspaceNonOwner(ctx) ? ctx.userId : undefined,
           limit: batchSize + 1,
           offset,
         });
@@ -459,8 +469,14 @@ export const fileRouter = router({
 
   deleteKnowledgeItemsByQuery: fileProcedure
     .use(withScopedPermission('file:delete'))
-    .input(QueryFileListSchema)
+    .input(deleteKnowledgeItemsByQuerySchema)
     .mutation(async ({ ctx, input }): Promise<{ count: number }> => {
+      // Members can sweep only rows they created. Workspace owners may clear
+      // the entire query scope, including rows uploaded by other members.
+      const restrictToCreator = isWorkspaceNonOwner(ctx);
+      const { excludedIds = [], ...query } = input;
+      const excludedIdSet = new Set(excludedIds);
+
       const fileIds: string[] = [];
       const documentIds: string[] = [];
       const batchSize = 500;
@@ -469,14 +485,17 @@ export const fileRouter = router({
 
       while (hasMore) {
         const knowledgeItems = await ctx.knowledgeRepo.query({
-          ...input,
+          ...query,
+          creatorUserId: restrictToCreator ? ctx.userId : undefined,
           limit: batchSize + 1,
           offset,
         });
 
         const currentHasMore = knowledgeItems.length > batchSize;
         const itemsToProcess = currentHasMore ? knowledgeItems.slice(0, batchSize) : knowledgeItems;
-        const filteredItems = filterKnowledgeItems(itemsToProcess, input.knowledgeBaseId);
+        const filteredItems = filterKnowledgeItems(itemsToProcess, query.knowledgeBaseId).filter(
+          (item) => !excludedIdSet.has(item.id),
+        );
 
         for (const item of filteredItems) {
           if (item.sourceType === DERIVED_DOCUMENT_SOURCE_TYPE) {
@@ -497,13 +516,30 @@ export const fileRouter = router({
       }
 
       if (documentIds.length > 0) {
-        await ctx.documentService.deleteDocuments(documentIds);
+        // Per-document delete guard, mirroring `document.deleteDocuments` — a
+        // query-driven sweep must not delete shared docs the member can't delete.
+        if (ctx.workspaceId) {
+          await Promise.all(
+            documentIds.map((id) =>
+              assertCanPerformResourceAction({
+                action: 'delete',
+                db: ctx.serverDB,
+                resourceId: id,
+                resourceType: 'document',
+                userId: ctx.userId,
+                workspaceId: ctx.workspaceId!,
+              }),
+            ),
+          );
+        }
+        await ctx.documentService.deleteDocuments(documentIds, { restrictToCreator });
       }
 
       if (fileIds.length > 0) {
         const needToRemoveFileList = await ctx.fileModel.deleteMany(
           fileIds,
           serverDBEnv.REMOVE_GLOBAL_FILE,
+          { restrictToCreator },
         );
 
         if (needToRemoveFileList && needToRemoveFileList.length > 0) {
@@ -593,6 +629,10 @@ export const fileRouter = router({
     .use(withScopedPermission('file:delete'))
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
+      const existing = await ctx.fileModel.findById(input.id);
+      if (!existing) return;
+      assertWorkspaceRowManageable(ctx, existing.userId, 'file');
+
       const file = await ctx.fileModel.delete(input.id, serverDBEnv.REMOVE_GLOBAL_FILE);
 
       if (!file) return;
@@ -613,6 +653,7 @@ export const fileRouter = router({
       const file = await ctx.fileModel.findById(input.id);
 
       if (!file) return;
+      assertWorkspaceRowManageable(ctx, file.userId, 'file');
 
       const taskId = input.type === 'embedding' ? file.embeddingTaskId : file.chunkTaskId;
 
@@ -625,6 +666,11 @@ export const fileRouter = router({
     .use(withScopedPermission('file:delete'))
     .input(z.object({ ids: z.array(z.string()) }))
     .mutation(async ({ input, ctx }) => {
+      const targets = await ctx.fileModel.findByIds(input.ids);
+      for (const target of targets) {
+        assertWorkspaceRowManageable(ctx, target.userId, 'file');
+      }
+
       const needToRemoveFileList = await ctx.fileModel.deleteMany(
         input.ids,
         serverDBEnv.REMOVE_GLOBAL_FILE,
@@ -648,6 +694,10 @@ export const fileRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const { id, metadata, name, parentId } = input;
+
+      const existing = await ctx.fileModel.findById(id);
+      if (!existing) return { success: true };
+      assertWorkspaceRowManageable(ctx, existing.userId, 'file');
 
       // Resolve parentId if it's a slug (otherwise use as-is)
       let resolvedParentId: string | null | undefined = parentId;
@@ -788,6 +838,26 @@ export const fileRouter = router({
             message: input.entityType === 'folder' ? 'Folder not found' : 'Document not found',
           });
         }
+        // Transfer stays creator-only, mirroring `document.transferDocument`.
+        if (ctx.workspaceId) {
+          await assertCanPerformResourceAction({
+            action: 'transfer',
+            db: ctx.serverDB,
+            resourceId: input.id,
+            resourceType: 'document',
+            userId: ctx.userId,
+            workspaceId: ctx.workspaceId,
+          });
+        }
+        // The transfer rehomes the entire subtree — a non-owner member must
+        // not move teammates' documents/files along with their own folder.
+        if (isWorkspaceNonOwner(ctx) && (await ctx.documentModel.subtreeHasForeignRows(input.id))) {
+          throw new TRPCError({
+            cause: { data: { code: TransferErrorCode.OwnerOnly } },
+            code: 'FORBIDDEN',
+            message: "Only workspace owners can transfer a folder containing others' content",
+          });
+        }
         const additionalSize = await ctx.documentModel.countFileUsageInSubtree(input.id);
         await businessFileTransferStorageCheck({
           additionalSize,
@@ -809,6 +879,7 @@ export const fileRouter = router({
           code: 'NOT_FOUND',
           message: 'File not found',
         });
+      assertWorkspaceRowManageable(ctx, file.userId, 'file');
       await businessFileTransferStorageCheck({
         additionalSize: file.size,
         targetUserId: ctx.userId,

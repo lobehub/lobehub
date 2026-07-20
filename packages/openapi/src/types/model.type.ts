@@ -53,15 +53,15 @@ export type GetModelsResponse = PaginationQueryResponse<{
 export type ModelDetailResponse = AiModelSelectItem;
 
 const ModelPayloadBaseSchema = z.object({
-  abilities: z.record(z.unknown()).nullish(),
-  config: z.record(z.unknown()).nullish(),
+  abilities: z.record(z.string(), z.unknown()).nullish(),
+  config: z.record(z.string(), z.unknown()).nullish(),
   contextWindowTokens: z.number().int().nullish(),
   description: z.string().nullish(),
   displayName: z.string().min(1, 'Model display name cannot be empty'),
   enabled: z.boolean().nullish(),
   organization: z.string().nullish(),
-  parameters: z.record(z.unknown()).nullish(),
-  pricing: z.record(z.unknown()).nullish(),
+  parameters: z.record(z.string(), z.unknown()).nullish(),
+  pricing: z.record(z.string(), z.unknown()).nullish(),
   releasedAt: z.string().nullish(),
   sort: z.number().int().nullish(),
   source: z.enum(['remote', 'custom', 'builtin']).nullish(),

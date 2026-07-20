@@ -16,6 +16,7 @@ vi.mock('react-i18next', () => ({
           'Set up your agent teams in a quick chat with Lobe AI. Your existing agents remain unchanged.',
         'agentOnboardingPromo.title': 'Quick Wizard',
         'changelog': 'Changelog',
+        'getApp': 'Get App',
         'productHunt.actionLabel': 'Support us',
         'productHunt.description': 'Support us on Product Hunt.',
         'productHunt.title': "We're on Product Hunt!",
@@ -37,6 +38,7 @@ interface RenderFooterOptions {
   desktop?: boolean;
   enableBusinessFeatures?: boolean;
   enabled?: boolean;
+  hideGitHub?: boolean;
   homeSidebar?: boolean;
   mobile?: boolean;
   readSlugs?: string[];
@@ -76,6 +78,7 @@ const renderFooter = async ({
   enabled = true,
   enableBusinessFeatures = false,
   homeSidebar = false,
+  hideGitHub = true,
   mobile = false,
   readSlugs = [],
   serverConfigInit = true,
@@ -181,7 +184,7 @@ const renderFooter = async ({
     return {
       bottomMenuItems: [],
       footer: {
-        hideGitHub: true,
+        hideGitHub,
         layout: 'compact',
         showEvalEntry: false,
         showSettingsEntry: true,
@@ -328,6 +331,28 @@ describe('Footer agent onboarding promotion', () => {
 });
 
 describe('Footer help menu tracking', () => {
+  it('shows Get App immediately before GitHub on web', async () => {
+    const user = userEvent.setup();
+    await renderFooter({ hideGitHub: false });
+
+    await user.click(screen.getByRole('button', { name: 'Help' }));
+
+    const getApp = await screen.findByRole('link', { name: 'Get App' });
+    const github = screen.getByRole('link', { name: 'GitHub' });
+
+    expect(getApp).toHaveAttribute('href', '/downloads');
+    expect(getApp.compareDocumentPosition(github) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  }, 20000);
+
+  it('does not show Get App in desktop builds', async () => {
+    const user = userEvent.setup();
+    await renderFooter({ desktop: true, hideGitHub: false });
+
+    await user.click(screen.getByRole('button', { name: 'Help' }));
+
+    expect(screen.queryByRole('link', { name: 'Get App' })).not.toBeInTheDocument();
+  }, 20000);
+
   it('tracks menu open with the visible item keys', async () => {
     const user = userEvent.setup();
     await renderFooter({ enableBusinessFeatures: true });

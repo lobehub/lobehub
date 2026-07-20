@@ -4,6 +4,7 @@ import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 import { Trans } from 'react-i18next';
 
+import { OFFICIAL_SITE } from '@/const/url';
 import { type LobeLinkKind } from '@/features/Conversation/Markdown/plugins/Link/parse';
 import LinkRender from '@/features/Conversation/Markdown/plugins/Link/Render';
 
@@ -59,7 +60,7 @@ const LinkIconPreview = memo(() => (
         site: (
           <SampleLink
             domain="lobehub.com"
-            href="https://lobehub.com"
+            href={OFFICIAL_SITE}
             kind="generic"
             label="lobehub.com"
           />

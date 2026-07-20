@@ -1,7 +1,7 @@
 'use client';
 
-import { ActionIcon, Button, Flexbox, Input, Text } from '@lobehub/ui';
-import { Switch } from 'antd';
+import { ActionIcon, Flexbox, Input, Text } from '@lobehub/ui';
+import { Button, Switch } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { snakeCase } from 'es-toolkit/compat';
 import { ListRestartIcon, XIcon } from 'lucide-react';

@@ -2,7 +2,7 @@
 
 import { DEFAULT_BLOCK_ANCHOR_PADDING, EditorProvider } from '@lobehub/editor/react';
 import { Flexbox } from '@lobehub/ui';
-import { createStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import type { CSSProperties, FC, ReactNode, UIEvent } from 'react';
 import { memo, useCallback, useEffect, useRef } from 'react';
 
@@ -81,7 +81,7 @@ const styles = StyleSheet.create({
   },
 });
 
-const useTableOverrideStyles = createStyles(({ css }) => ({
+const overrideStyles = createStaticStyles(({ css }) => ({
   editorContent: css`
     .lobe-editor-table-scroll-wrapper.lobe-editor-table-scroll-wrapper {
       --lobe-block-anchor-padding: var(--lobe-pageeditor-table-bleed-inline);
@@ -149,7 +149,6 @@ const PageEditorCanvas = memo<PageEditorCanvasProps>(({ header, fullWidthHeader,
   const editor = usePageEditorStore((s) => s.editor);
   const documentId = usePageEditorStore((s) => s.documentId);
   const wideScreen = useGlobalStore(systemStatusSelectors.wideScreen);
-  const { styles: overrideStyles } = useTableOverrideStyles();
   const tableBleedInline = wideScreen
     ? `${TABLE_BASE_BLEED}px`
     : `calc(${TABLE_BASE_BLEED}px + max((100cqi - ${CONVERSATION_MIN_WIDTH}px) / 2, 0px))`;

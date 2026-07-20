@@ -1,12 +1,13 @@
 /**
  * Desktop isolated workspace stub.
  *
- * `@lobechat/types` is only consumed via `import type` in desktop code and in
- * the `@lobechat/const` entrypoints it reaches (currently `desktopGlobalShortcuts`).
- * Those specifiers are erased at build time, so this package has no runtime
- * exports — we only need to surface the types that reach the desktop tsgo
- * project. Keep these in sync with `packages/types/src/hotkey.ts`.
+ * Most `@lobechat/types` consumers in the isolated desktop workspace only use
+ * type imports. Runtime exports required by workspace packages must be
+ * explicitly mirrored inside this package so a clean isolated install remains
+ * self-contained.
  */
+
+export { ReasoningGraphSchema } from './graph';
 
 export type DesktopHotkeyId = 'openSettings' | 'quickChat' | 'quickComposer' | 'showApp';
 
@@ -17,6 +18,40 @@ export interface DesktopHotkeyItem {
 }
 
 export type DesktopHotkeyConfig = Record<DesktopHotkeyId, string>;
+
+export type HeterogeneousAgentModelCatalogErrorCode =
+  'cli_not_found' | 'command_failed' | 'device_unavailable' | 'timeout' | 'unsupported_client';
+
+export interface HeterogeneousAgentModel {
+  id: string;
+  modelId: string;
+  providerId: string;
+}
+
+export interface ListHeterogeneousAgentModelsParams {
+  command?: string;
+  cwd?: string;
+  env?: Record<string, string>;
+  type: 'opencode';
+}
+
+export interface HeterogeneousAgentModelCatalogSuccess {
+  models: HeterogeneousAgentModel[];
+  status: 'success';
+  updatedAt: number;
+}
+
+export interface HeterogeneousAgentModelCatalogFailure {
+  error: {
+    code: HeterogeneousAgentModelCatalogErrorCode;
+    message: string;
+  };
+  status: 'error';
+  updatedAt: number;
+}
+
+export type HeterogeneousAgentModelCatalog =
+  HeterogeneousAgentModelCatalogFailure | HeterogeneousAgentModelCatalogSuccess;
 
 /**
  * Mirror of `@lobechat/types`' `BuiltinServerRuntimeOutput`. Reached by

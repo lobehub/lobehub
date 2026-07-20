@@ -207,4 +207,34 @@ describe('agentByIdSelectors', () => {
       expect(agentByIdSelectors.getAgentTTSVoiceById('missing')(state)).toBe('alloy');
     });
   });
+
+  describe('isAgentNotFoundById', () => {
+    it('returns true only for agents flagged in agentNotFoundMap', () => {
+      const state = createState({ agentNotFoundMap: { 'agent-gone': true } });
+
+      expect(agentByIdSelectors.isAgentNotFoundById('agent-gone')(state)).toBe(true);
+      expect(agentByIdSelectors.isAgentNotFoundById('agent-1')(state)).toBe(false);
+      expect(agentByIdSelectors.isAgentNotFoundById('')(state)).toBe(false);
+    });
+  });
+
+  describe('isAgentConfigLoadingById', () => {
+    it('reports loading while the config is absent from agentMap', () => {
+      const state = createState({ agentMap: {} });
+
+      expect(agentByIdSelectors.isAgentConfigLoadingById('agent-1')(state)).toBe(true);
+    });
+
+    it('settles once the config lands in agentMap', () => {
+      const state = createState({ agentMap: { 'agent-1': { id: 'agent-1' } } });
+
+      expect(agentByIdSelectors.isAgentConfigLoadingById('agent-1')(state)).toBe(false);
+    });
+
+    it('settles when the agent is marked not-found (no access / deleted)', () => {
+      const state = createState({ agentMap: {}, agentNotFoundMap: { 'agent-gone': true } });
+
+      expect(agentByIdSelectors.isAgentConfigLoadingById('agent-gone')(state)).toBe(false);
+    });
+  });
 });

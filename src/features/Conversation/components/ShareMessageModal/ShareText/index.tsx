@@ -1,5 +1,6 @@
 import { type UIChatMessage } from '@lobechat/types';
-import { Button, copyToClipboard, Flexbox } from '@lobehub/ui';
+import { copyToClipboard, Flexbox } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { CopyIcon } from 'lucide-react';

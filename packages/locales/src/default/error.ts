@@ -170,6 +170,8 @@ export default {
     'Repeated content policy rejections detected. Please revise your prompt before retrying.',
   'response.ProviderImageContentModerationWarning':
     'Repeated image safety rejections detected. Similar prompts may temporarily pause image generation.',
+  'response.DeviceGatewayNotConfigured':
+    "Couldn't reach a run device for this agent. Connect a device, or configure the device gateway on the server, then try again.",
   'response.ServerAgentRuntimeError':
     'Sorry, the Agent service is currently unavailable. Please try again later or contact us via email for support.',
   'response.SubscriptionKeyMismatch':

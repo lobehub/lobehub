@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import AsyncBoundary from './index';
@@ -127,4 +127,26 @@ describe('AsyncBoundary', () => {
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
     expect(screen.queryByText('EMPTY_ONBOARDING')).not.toBeInTheDocument();
   });
+
+  it.each(['inline', 'metric'] as const)(
+    'forwards Retry through the %s error variant',
+    (errorVariant) => {
+      const onRetry = vi.fn();
+
+      render(
+        <AsyncBoundary
+          data={undefined}
+          error={new Error('boom')}
+          errorVariant={errorVariant}
+          onRetry={onRetry}
+        >
+          {DATA}
+        </AsyncBoundary>,
+      );
+
+      fireEvent.click(screen.getByRole('button'));
+
+      expect(onRetry).toHaveBeenCalledTimes(1);
+    },
+  );
 });

@@ -14,7 +14,8 @@
     "./portals": "./src/portals.ts",
     "./streamings": "./src/streamings.ts",
     "./identifiers": "./src/identifiers.ts",
-    "./dynamicInterventionAudits": "./src/dynamicInterventionAudits.ts"
+    "./dynamicInterventionAudits": "./src/dynamicInterventionAudits.ts",
+    "./workRegistration": "./src/workRegistration.ts"
   },
   "main": "./src/index.ts",
   "dependencies": {
@@ -25,6 +26,7 @@
     "@lobechat/builtin-tool-agent-management": "workspace:*",
     "@lobechat/builtin-tool-agent-signal": "workspace:*",
     "@lobechat/builtin-tool-brief": "workspace:*",
+    "@lobechat/builtin-tool-browser": "workspace:*",
     "@lobechat/builtin-tool-claude-code": "workspace:*",
     "@lobechat/builtin-tool-cloud-sandbox": "workspace:*",
     "@lobechat/builtin-tool-creds": "workspace:*",
@@ -50,11 +52,11 @@
     "@lobechat/builtin-tool-web-browsing": "workspace:*",
     "@lobechat/builtin-tool-web-onboarding": "workspace:*",
     "@lobechat/const": "workspace:*",
-    "@lobehub/icons": "^5.10.0"
+    "@lobehub/icons": "^5.11.0"
   },
   "devDependencies": {
     "@lobechat/types": "workspace:*",
-    "zod": "^3.25.76"
+    "zod": "^4.4.3"
   },
   "peerDependencies": {
     "@lobehub/ui": "^5",

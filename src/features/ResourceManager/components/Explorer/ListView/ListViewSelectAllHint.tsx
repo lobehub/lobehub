@@ -1,4 +1,5 @@
-import { Button, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { useTranslation } from 'react-i18next';
 
 import type { SelectAllState } from '@/routes/(main)/resource/features/store/initialState';
@@ -8,7 +9,7 @@ import { styles } from './styles';
 
 interface ListViewSelectAllHintProps {
   dataLength: number;
-  onSelectAllResources: () => void;
+  onSelectAllResources: () => Promise<void>;
   selectAllState: SelectAllState;
   selectedCount: number;
   showSelectAllHint: boolean;

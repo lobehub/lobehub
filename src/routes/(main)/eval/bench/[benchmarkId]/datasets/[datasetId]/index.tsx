@@ -1,7 +1,7 @@
 'use client';
 
-import { Button, Flexbox, Text } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
+import { Flexbox, Text } from '@lobehub/ui';
+import { Button, confirmModal } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ArrowLeft, Database, Pencil, Plus, Trash2 } from 'lucide-react';
@@ -242,12 +242,11 @@ const DatasetDetail = memo(() => {
                 <Button
                   icon={Pencil}
                   size="small"
-                  variant="outlined"
                   onClick={() => createDatasetEditModal({ dataset, onSuccess: handleRefresh })}
                 >
                   {t('common.edit')}
                 </Button>
-                <Button danger icon={Trash2} size="small" variant="outlined" onClick={handleDelete}>
+                <Button danger icon={Trash2} size="small" onClick={handleDelete}>
                   {t('common.delete')}
                 </Button>
               </Flexbox>

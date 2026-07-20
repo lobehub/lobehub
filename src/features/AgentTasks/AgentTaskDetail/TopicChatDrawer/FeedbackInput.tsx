@@ -1,5 +1,6 @@
 import { ChatInput, ChatInputActionBar, SendButton, useEditor } from '@lobehub/editor/react';
-import { Button, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { $getRoot } from 'lexical';
 import { ChevronDownIcon, MessageCirclePlus } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
@@ -8,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { AttachmentUploadButton } from '@/features/AttachmentInput';
 import { useConversationStore } from '@/features/Conversation';
 import OpStatusTray from '@/features/Conversation/ChatInput/OpStatusTray';
+import { useConversationResourceAccess } from '@/features/Conversation/hooks/useConversationResourceAccess';
 import { EditorCanvas } from '@/features/EditorCanvas';
 import {
   getAttachmentFileIdsFromEditor,
@@ -24,6 +26,9 @@ const FeedbackInput = memo(() => {
   const [hasAttachments, setHasAttachments] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const shouldSendOnEnter = useEnterToSend();
+  // Task follow-ups send into the shared agent's topic — view-only members
+  // can watch the run but get no reply composer.
+  const { canUseResource } = useConversationResourceAccess();
 
   const canSubmit = hasContent || hasAttachments;
 
@@ -79,6 +84,8 @@ const FeedbackInput = memo(() => {
     }
   }, [editor, sendMessage, submitting]);
 
+  if (!canUseResource) return <OpStatusTray seamless />;
+
   // Mirror Fleet's ReplyArea: surface the live running-op status flush above the
   // reply affordance (seamless inline row that renders nothing when idle), so the
   // user can watch the agent work without expanding the composer.
@@ -86,7 +93,7 @@ const FeedbackInput = memo(() => {
     return (
       <Flexbox gap={8}>
         <OpStatusTray seamless />
-        <Button block icon={MessageCirclePlus} variant={'filled'} onClick={() => setExpanded(true)}>
+        <Button block icon={MessageCirclePlus} type={'fill'} onClick={() => setExpanded(true)}>
           {t('taskDetail.sendFollowUp')}
         </Button>
       </Flexbox>

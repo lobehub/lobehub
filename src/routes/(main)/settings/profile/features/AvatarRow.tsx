@@ -105,7 +105,9 @@ const AvatarRow = () => {
     <UserAvatar size={40} />
   );
 
-  return <ProfileRow action={avatarContent} label={t('profile.avatar')} />;
+  return (
+    <ProfileRow action={avatarContent} anchor={'profile-avatar'} label={t('profile.avatar')} />
+  );
 };
 
 export default AvatarRow;

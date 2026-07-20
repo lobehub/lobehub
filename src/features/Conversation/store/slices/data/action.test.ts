@@ -4,6 +4,11 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { useClientDataSWRWithSync } from '@/libs/swr';
 import { messageService } from '@/services/message';
+import {
+  clearMessageListClientCacheState,
+  MESSAGE_LIST_VERIFICATION_INTERVAL,
+  runMessageListQuery,
+} from '@/services/message/cache';
 
 import { createStore } from '../../index';
 import { dataSelectors } from './selectors';
@@ -538,6 +543,7 @@ describe('DataSlice', () => {
   describe('useFetchMessages', () => {
     beforeEach(() => {
       vi.clearAllMocks();
+      clearMessageListClientCacheState();
     });
 
     it('should pass threadId to messageService.getMessages', async () => {
@@ -567,6 +573,7 @@ describe('DataSlice', () => {
       await waitFor(() => {
         expect(messageService.getMessages).toHaveBeenCalledWith({
           agentId: 'test-session',
+          groupId: null,
           threadId: 'test-thread',
           topicId: 'test-topic',
         });
@@ -716,9 +723,32 @@ describe('DataSlice', () => {
       expect(swrKey[0]).toBe('message:list');
       expect(swrKey[1]).toEqual({
         agentId: 'test-session',
-        topicId: 'test-topic',
+        groupId: null,
         threadId: 'test-thread',
+        topicId: 'test-topic',
       });
+    });
+
+    it('skips switch-time revalidation after a successful server verification', async () => {
+      const context = {
+        agentId: 'test-session',
+        topicId: 'test-topic',
+        threadId: null,
+      };
+      await runMessageListQuery(context, async () => []);
+      vi.mocked(messageService.getMessages).mockResolvedValue([]);
+
+      const store = createStore({ context });
+      store.getState().useFetchMessages(context);
+
+      expect(vi.mocked(useClientDataSWRWithSync)).toHaveBeenCalledWith(
+        expect.any(Array),
+        expect.any(Function),
+        expect.objectContaining({
+          dedupingInterval: MESSAGE_LIST_VERIFICATION_INTERVAL,
+          revalidateIfStale: false,
+        }),
+      );
     });
 
     it('should pass groupId to messageService.getMessages for group chat', async () => {

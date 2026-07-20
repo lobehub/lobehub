@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 export type ProjectSkillScope = 'device' | 'project';
 export type ProjectSkillSource = '.agents/skills' | '.claude/skills';
 
@@ -93,6 +95,23 @@ export interface WorkingDirGithubState {
   pullRequestStatus?: DeviceGitLinkedPullRequestLookupStatus;
 }
 
+/**
+ * The remote ref a local branch publishes to.
+ *
+ * Recorded because the local branch name is a DEVICE-LOCAL label: a worktree
+ * generates its own (`worktree-feat+foo`), and a push with an explicit refspec
+ * (`git push origin local:remote`) renames the branch in flight. Carrying the
+ * local name to another machine — or to `gh pr list --head` — yields nothing.
+ * The remote ref is the only branch identity that survives leaving this machine,
+ * which also makes it the handle for re-fetching the topic's output elsewhere.
+ */
+export interface DeviceGitUpstreamRef {
+  /** Branch name ON the remote (`feat/x`), never the local name. */
+  branch: string;
+  /** Remote name (`origin`). */
+  remote: string;
+}
+
 export interface WorkingDirGitState {
   /**
    * Active checkout selected under this git source. When absent, the source
@@ -113,6 +132,12 @@ export interface WorkingDirGitState {
    * the source path itself.
    */
   isWorktree?: boolean;
+  /**
+   * Remote ref {@link branch} publishes to. Dropped alongside {@link github}
+   * whenever the branch changes — a stale remote ref would bind the topic to
+   * another branch's PR, which is worse than having none.
+   */
+  upstream?: DeviceGitUpstreamRef;
 }
 
 export interface WorkingDirConfig {
@@ -199,12 +224,99 @@ export interface DeviceChannel {
 }
 
 /**
+ * The subset every device-listing shape shares — satisfied structurally by both
+ * `DeviceListItem` (settings list / run-target picker) and the runtime's
+ * `DeviceAttachment`, so one ordering serves every surface.
+ */
+export interface DeviceActivityOrder {
+  /** Absent on offline rows, and on a legacy gateway that omits the field. */
+  channels?: { connectedAt: string }[];
+  deviceId: string;
+  lastSeen: string;
+  online: boolean;
+}
+
+/**
+ * Most recent evidence the device was alive, as a timestamp.
+ *
+ * Online rows carry the gateway's live `connectedAt` — authoritative. Offline
+ * rows can only fall back to `lastSeen`, which today means "last REGISTERED",
+ * not "last alive": `devices.lastSeenAt` is stamped on register/enroll and
+ * never refreshed while a connection is held. A box that reconnects on every
+ * boot therefore reports a fresher `lastSeen` than one holding a month-long
+ * session. That staleness is contained by the `online` partition below, and
+ * fixing it needs a writer that stamps liveness — not a change here.
+ */
+const deviceActivityAt = (d: DeviceActivityOrder): number => {
+  // `online` with no channels is reachable: the runtime derives it as `!!live`
+  // and tolerates a gateway that omits `channels`. Fall through rather than
+  // assume a channel exists.
+  const connected = (d.online ? (d.channels ?? []) : [])
+    .map((c) => Date.parse(c.connectedAt))
+    .filter((t) => !Number.isNaN(t));
+  if (connected.length > 0) return Math.max(...connected);
+
+  const lastSeen = Date.parse(d.lastSeen);
+  return Number.isNaN(lastSeen) ? 0 : lastSeen;
+};
+
+/**
+ * Order for every device-listing surface: online first, then most recently
+ * active, then by id.
+ *
+ * `online` is a HARD partition rather than one signal among several — an
+ * offline device must never outrank an online one, however recently it was
+ * seen. The picker renders offline rows `disabled`, so an offline row sorted
+ * above an online one is pure noise pushing the only *pickable* machine out of
+ * a viewport that caps at a few rows.
+ *
+ * `deviceId` breaks ties last so the order is total and STABLE: these lists
+ * poll, and two rows sharing a timestamp must not swap places under the user's
+ * cursor between refreshes.
+ */
+export const compareDeviceByActivity = (a: DeviceActivityOrder, b: DeviceActivityOrder): number => {
+  if (a.online !== b.online) return a.online ? -1 : 1;
+
+  const diff = deviceActivityAt(b) - deviceActivityAt(a);
+  if (diff !== 0) return diff;
+
+  return a.deviceId.localeCompare(b.deviceId);
+};
+
+/** Non-mutating {@link compareDeviceByActivity} — callers pass server-built arrays. */
+export const sortDevicesByActivity = <T extends DeviceActivityOrder>(devices: T[]): T[] =>
+  [...devices].sort(compareDeviceByActivity);
+
+/**
  * Where a device sits relative to the caller:
  * - `personal`  — the caller's own machine (`devices.workspace_id IS NULL`).
  * - `workspace` — a machine enrolled into the caller's current workspace, shared
  *   across its members. Drives the run-device picker's Personal/Workspace groups.
  */
 export type DeviceScope = 'personal' | 'workspace';
+
+/**
+ * Visibility of a WORKSPACE-scoped device (same contract as agents/docs/files):
+ * - `public`  — shared with every workspace member (the default pool).
+ * - `private` — enrolled for the enrolling member only; other members never
+ *   see it in lists, pickers, or agent runs.
+ * Personal-scope devices have no visibility dimension (`null` on the list item).
+ */
+export type DeviceVisibility = 'private' | 'public';
+
+/**
+ * One workspace a PERSONAL device was shared into from the personal device
+ * list. `deviceId` is the workspace-scoped twin (a different hash from the
+ * personal deviceId, linked back via `devices.shared_from_device_id`), which
+ * the revoke path passes to `device.removeWorkspaceDevice` under that
+ * workspace's scope.
+ */
+export interface DeviceWorkspaceShare {
+  deviceId: string;
+  visibility: DeviceVisibility;
+  workspaceId: string;
+  workspaceName: string | null;
+}
 
 /**
  * A device row as returned by the `device.listDevices` query — either a
@@ -250,6 +362,24 @@ export interface DeviceListItem {
   registered: boolean;
   /** Personal (own) vs. workspace-enrolled device — drives picker grouping. */
   scope: DeviceScope;
+  /**
+   * Workspace rows only: true when this enrollment was shared from a member's
+   * personal device (`shared_from_device_id` set) rather than enrolled directly
+   * on the machine — drives the "Shared by {name}" tag in the workspace list.
+   */
+  sharedFromPersonal?: boolean;
+  /**
+   * Personal rows only: the workspaces this machine was shared into from the
+   * personal device list. `undefined` for workspace rows, ghosts, and
+   * never-shared machines.
+   */
+  sharedWorkspaces?: DeviceWorkspaceShare[];
+  /**
+   * Workspace-scope rows only: private (enroller-only) vs public (shared pool).
+   * `null` for personal rows and ghost rows. Rows another member enrolled as
+   * private are filtered out server-side and never reach this list.
+   */
+  visibility: DeviceVisibility | null;
   workingDirs: WorkingDirEntry[];
 }
 
@@ -262,6 +392,8 @@ export interface DeviceGitBranchInfo {
   branch?: string;
   /** True when HEAD is detached (no branch ref). */
   detached?: boolean;
+  /** Remote ref the branch publishes to. Absent when unpushed or unresolvable. */
+  upstream?: DeviceGitUpstreamRef;
 }
 
 /**
@@ -275,6 +407,8 @@ export interface DeviceGitLinkedPullRequestResult {
   pullRequest: DeviceGitLinkedPullRequest | null;
   /** 'ok' — lookup succeeded; 'gh-missing' — gh CLI unavailable; 'error' — other failure. */
   status: DeviceGitLinkedPullRequestLookupStatus;
+  /** Remote ref the lookup queried under — the PR's own head ref when one was found. */
+  upstream?: DeviceGitUpstreamRef;
 }
 
 /**
@@ -593,3 +727,44 @@ export interface DeviceListProjectSkillsResult {
   /** Legacy source hint. Per-skill `scope` / `source` fields are authoritative. */
   source: ProjectSkillSource | null;
 }
+
+const gitLinkedPullRequestSchema = z.object({
+  ciStatus: z.enum(['failure', 'pending', 'success', 'unknown']).optional(),
+  isDraft: z.boolean().optional(),
+  mergeable: z.string().optional(),
+  mergeStateStatus: z.string().optional(),
+  mergedAt: z.string().nullable().optional(),
+  number: z.number(),
+  reviewDecision: z.string().optional(),
+  state: z.string(),
+  title: z.string(),
+  url: z.string(),
+});
+
+export const workingDirConfigSchema = z.object({
+  git: z
+    .object({
+      activeWorktree: z.string().optional(),
+      branch: z.string().optional(),
+      detached: z.boolean().optional(),
+      github: z
+        .object({
+          extraPullRequestCount: z.number().optional(),
+          pullRequest: gitLinkedPullRequestSchema.nullable().optional(),
+          pullRequestStatus: z.enum(['error', 'gh-missing', 'ok']).optional(),
+        })
+        .optional(),
+      isWorktree: z.boolean().optional(),
+      // Mirrors `WorkingDirGitState.upstream`. A field missing here is not merely
+      // unvalidated — zod strips it, so it would never survive a write.
+      upstream: z
+        .object({
+          branch: z.string(),
+          remote: z.string(),
+        })
+        .optional(),
+    })
+    .optional(),
+  path: z.string(),
+  repoType: z.enum(['git', 'github']).optional(),
+});

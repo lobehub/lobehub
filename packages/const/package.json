@@ -9,6 +9,7 @@
     "./hotkeys": "./src/hotkeys.ts",
     "./rbac": "./src/rbac.ts",
     "./url": "./src/url.ts",
+    "./verify": "./src/verify.ts",
     "./visualRef": "./src/visualRef.ts"
   },
   "main": "./src/index.ts",

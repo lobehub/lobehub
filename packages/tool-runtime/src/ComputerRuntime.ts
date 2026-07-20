@@ -106,6 +106,32 @@ export abstract class ComputerRuntime {
       }
 
       const r = result.result || {};
+
+      // Image file: `local-file-shell`'s readLocalFile refuses binary, so the
+      // IPC layer uploads the bytes to file storage and returns a durable
+      // reference instead. Carry it on `state.images` — the MessageContent
+      // tool-message processor turns the uploaded URL into an `image_url`
+      // part so vision-capable models can actually see the image.
+      if (r.isImage && r.imageUrl) {
+        const filename = r.filename || args.path;
+        const placeholder = r.content || `[Image: ${filename}]`;
+        const state: ReadFileState = {
+          content: placeholder,
+          filename,
+          fileType: r.fileType,
+          images: [
+            { fileId: r.imageFileId, mediaType: r.fileType || 'image/png', url: r.imageUrl },
+          ],
+          path: args.path,
+        };
+
+        return {
+          content: placeholder,
+          state,
+          success: true,
+        };
+      }
+
       const fileContent = r.content || '';
 
       const state: ReadFileState = {

@@ -1,3 +1,5 @@
+import { RENDERER_HANDLED_LINK_ATTR } from '@lobechat/desktop-bridge';
+
 import { findMatchingRoute } from '~common/routes';
 
 import { invoke } from './invoke';
@@ -25,6 +27,10 @@ export const setupRouteInterceptors = function () {
     async (e) => {
       const link = (e.target as HTMLElement).closest('a');
       if (link && link.href) {
+        // The renderer claims this link and will call preventDefault() itself.
+        // Return without stopPropagation() so its onClick still receives the event.
+        if (link.hasAttribute(RENDERER_HANDLED_LINK_ATTR)) return;
+
         try {
           const url = new URL(link.href);
 

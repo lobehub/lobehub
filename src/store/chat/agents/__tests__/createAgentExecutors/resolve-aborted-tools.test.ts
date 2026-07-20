@@ -31,7 +31,7 @@ describe('resolve_aborted_tools executor', () => {
       const state = createInitialState({ operationId: 'test-session' });
 
       // When
-      const result = await executeWithMockContext({
+      await executeWithMockContext({
         executor: 'resolve_aborted_tools',
         instruction,
         state,
@@ -91,7 +91,7 @@ describe('resolve_aborted_tools executor', () => {
       const state = createInitialState();
 
       // When
-      const result = await executeWithMockContext({
+      await executeWithMockContext({
         executor: 'resolve_aborted_tools',
         instruction,
         state,
@@ -357,7 +357,13 @@ describe('resolve_aborted_tools executor', () => {
       // Then
       expect(result.newState.operationId).toBe(state.operationId);
       expect(result.newState.stepCount).toBe(state.stepCount);
-      expect(result.newState.messages).toEqual(state.messages);
+      expect(result.newState.messages).toEqual([
+        ...state.messages,
+        expect.objectContaining({
+          content: 'Tool execution was aborted by user.',
+          role: 'tool',
+        }),
+      ]);
       expect(result.newState.usage).toEqual(state.usage);
     });
 
@@ -367,7 +373,7 @@ describe('resolve_aborted_tools executor', () => {
       const context = createTestContext();
       const instruction = createResolveAbortedToolsInstruction();
       const state = createInitialState({ status: 'waiting_for_human' });
-      const originalState = JSON.parse(JSON.stringify(state));
+      const originalState = structuredClone(state);
 
       // When
       const result = await executeWithMockContext({
@@ -480,7 +486,7 @@ describe('resolve_aborted_tools executor', () => {
       const state = createInitialState();
 
       // When
-      const result = await executeWithMockContext({
+      await executeWithMockContext({
         executor: 'resolve_aborted_tools',
         instruction,
         state,
@@ -529,7 +535,7 @@ describe('resolve_aborted_tools executor', () => {
       expect(result.newState.status).toBe('done');
     });
 
-    it('should handle failed message creation gracefully', async () => {
+    it('should surface failed message creation', async () => {
       // Given
       const mockStore = createMockStore({
         optimisticCreateMessage: vi.fn().mockResolvedValue(null),
@@ -538,18 +544,15 @@ describe('resolve_aborted_tools executor', () => {
       const instruction = createResolveAbortedToolsInstruction();
       const state = createInitialState();
 
-      // When
-      const result = await executeWithMockContext({
-        executor: 'resolve_aborted_tools',
-        instruction,
-        state,
-        mockStore,
-        context,
-      });
-
-      // Then - should complete despite message creation failure
-      expect(result.newState.status).toBe('done');
-      expect(result.events).toHaveLength(1);
+      await expect(
+        executeWithMockContext({
+          executor: 'resolve_aborted_tools',
+          instruction,
+          state,
+          mockStore,
+          context,
+        }),
+      ).rejects.toThrow('Failed to create tool message');
     });
   });
 

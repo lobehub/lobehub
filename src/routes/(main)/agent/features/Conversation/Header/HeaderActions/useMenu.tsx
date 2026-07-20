@@ -24,6 +24,7 @@ import { useAuthorInfo } from '@/business/client/hooks/useAuthorInfo';
 import { openRenameModal } from '@/components/RenameModal';
 import { DOCUMENT_HISTORY_QUERY_LIST_LIMIT } from '@/const/documentHistory';
 import { isDesktop } from '@/const/version';
+import { confirmRemoveTopic } from '@/features/DeleteTopicConfirm';
 import { openDocumentCompareModal } from '@/features/PageEditor/History/CompareModal';
 import { formatHistoryAbsoluteTime } from '@/features/PageEditor/History/formatHistoryDate';
 import type {
@@ -317,15 +318,11 @@ export const useMenu = (): { menuHeader?: ReactNode; menuItems: DropdownItem[] }
           key: 'delete',
           label: t('delete', { ns: 'common' }),
           onClick: () => {
-            confirmModal({
-              cancelText: t('cancel', { ns: 'common' }),
-              content: t('actions.confirmRemoveTopic', { ns: 'topic' }),
-              okButtonProps: { danger: true },
-              okText: t('delete', { ns: 'common' }),
-              onOk: async () => {
-                await removeTopic(topicId);
+            void confirmRemoveTopic({
+              onConfirm: async (removeFiles) => {
+                await removeTopic(topicId, removeFiles);
               },
-              title: t('delete', { ns: 'common' }),
+              topicIds: [topicId],
             });
           },
         },

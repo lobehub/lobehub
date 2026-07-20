@@ -1,5 +1,6 @@
 import { type DropdownItem, type DropdownMenuCheckboxItem } from '@lobehub/ui';
-import { Button, DropdownMenu, Icon } from '@lobehub/ui';
+import { DropdownMenu, Icon } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { ArrowDownWideNarrow, ChevronDown } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -184,20 +185,18 @@ const SortButton = memo(() => {
 
   const menuItems = useMemo<DropdownMenuCheckboxItem[]>(
     () =>
-      items.map(
-        (item): DropdownMenuCheckboxItem => ({
-          checked: item.key === activeItem?.key,
-          closeOnClick: true,
-          key: item.key,
-          label: item.label,
-          onCheckedChange: (checked: boolean) => {
-            if (checked) {
-              handleSort(String(item.key));
-            }
-          },
-          type: 'checkbox',
-        }),
-      ),
+      items.map((item): DropdownMenuCheckboxItem => ({
+        checked: item.key === activeItem?.key,
+        closeOnClick: true,
+        key: item.key,
+        label: item.label,
+        onCheckedChange: (checked: boolean) => {
+          if (checked) {
+            handleSort(String(item.key));
+          }
+        },
+        type: 'checkbox',
+      })),
     [activeItem?.key, handleSort, items],
   );
 

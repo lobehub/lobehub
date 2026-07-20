@@ -1,6 +1,7 @@
 'use client';
 
-import { Button, DropdownMenu, Flexbox, Icon, Text } from '@lobehub/ui';
+import { DropdownMenu, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { GithubIcon } from '@lobehub/ui/icons';
 import { createStaticStyles } from 'antd-style';
 import { FileArchive, Grid2x2Plus, Link, Store } from 'lucide-react';

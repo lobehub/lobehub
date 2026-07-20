@@ -1,27 +1,40 @@
 'use client';
 
 import { getLobehubSkillProviderById } from '@lobechat/const';
-import { Avatar, Markdown, Skeleton } from '@lobehub/ui';
+import { Avatar, Markdown, Skeleton, Tooltip } from '@lobehub/ui';
 import { Button, confirmModal } from '@lobehub/ui/base-ui';
+import { App } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
-import { Plus, SquareArrowOutUpRight, Trash2, Unplug } from 'lucide-react';
+import { Plus, SquareArrowOutUpRight, Trash2, Unplug, Wrench } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { lazy, memo, Suspense, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { ConnectorDetail } from '@/features/Connectors';
+import { ConnectorDetail, CustomConnectorModal } from '@/features/Connectors';
 import { useSkillConnect } from '@/features/SkillStore/SkillList/LobeHub/useSkillConnect';
 import { usePermission } from '@/hooks/usePermission';
+import { useResourceManageable } from '@/hooks/useResourceManageable';
 import { useToolStore } from '@/store/tool';
 import { builtinToolSelectors, lobehubSkillStoreSelectors } from '@/store/tool/selectors';
 import { connectorSelectors } from '@/store/tool/slices/connector';
+import { pluginSelectors } from '@/store/tool/slices/plugin/selectors';
 
 import { getLocalizedBuiltinSkillDetail, getNoPermissionsTitle } from './localization';
 
 const AgentSkillDetail = lazy(() => import('@/features/AgentSkillDetail'));
+// Lazy so `SkillDetail`'s static import graph stays free of the agent-navigation
+// chain (`useNavigateToAgent` → chat store); only agent connectors need it.
+const AgentConnectorUsage = lazy(() => import('../AgentConnectorUsage'));
 
 export type ToolDetailType =
-  'agent-skill' | 'builtin' | 'builtin-skill' | 'lobehub-connector' | 'mcp-connector' | 'plugin';
+  | 'agent-connector'
+  | 'agent-skill'
+  | 'builtin'
+  | 'builtin-skill'
+  | 'lobehub-connector'
+  | 'mcp-connector'
+  | 'plugin';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   description: css`
@@ -70,6 +83,20 @@ interface SkillDetailProps {
   onDelete?: () => void;
   type: ToolDetailType;
 }
+
+/**
+ * Tooltip wrapper for the manage gate. Disabled native buttons swallow hover
+ * events, so the tooltip needs an enabled wrapper element to anchor on; when
+ * there is no gate message, render children untouched.
+ */
+const ManageTooltip = ({ children, title }: { children: ReactNode; title?: string }) =>
+  title ? (
+    <Tooltip title={title}>
+      <span style={{ display: 'inline-flex' }}>{children}</span>
+    </Tooltip>
+  ) : (
+    children
+  );
 
 interface LobehubConnectorActionProps {
   identifier: string;
@@ -147,8 +174,10 @@ LobehubConnectorAction.displayName = 'LobehubConnectorAction';
 const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
   const { t } = useTranslation('plugin');
   const { t: ts } = useTranslation('setting');
+  const { message } = App.useApp();
   const [syncing, setSyncing] = useState(false);
   const [noManifest, setNoManifest] = useState(false);
+  const [migrateOpen, setMigrateOpen] = useState(false);
 
   const { allowed: canCreate } = usePermission('create_content');
   const { allowed: canEdit } = usePermission('edit_own_content');
@@ -161,6 +190,52 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
   const uninstallBuiltinTool = useToolStore((s) => s.uninstallBuiltinTool);
   const deleteAgentSkill = useToolStore((s) => s.deleteAgentSkill);
   const connector = useToolStore(connectorSelectors.connectorByIdentifier(identifier));
+  // For agent connectors the `identifier` slot carries the connector id; resolve
+  // the row from the agent-bound pool to show its owning-agent usage block.
+  const agentBoundConnector = useToolStore((s) =>
+    type === 'agent-connector'
+      ? (s.agentBoundConnectors ?? []).find((c) => c.id === identifier)
+      : undefined,
+  );
+
+  // Creator attribution for the row-level manage gate: agent skills carry it
+  // on the skill row; connector-backed types on the connector row.
+  const agentSkillRow = useToolStore(
+    (s) => (s.agentSkills || []).find((sk) => sk.id === identifier || sk.identifier === identifier),
+    isEqual,
+  );
+  const canManage = useResourceManageable(
+    type === 'agent-skill' ? agentSkillRow?.userId : connector?.userId,
+  );
+  const manageTooltip = canManage
+    ? undefined
+    : t(
+        'store.actions.manageOnlyCreator',
+        'Only the creator or a workspace owner can manage this skill',
+      );
+
+  const notifyUninstallError = useCallback(
+    (error: unknown) => {
+      const httpStatus = (error as { data?: { httpStatus?: number } })?.data?.httpStatus;
+      message.error(
+        httpStatus === 403
+          ? t(
+              'store.actions.manageOnlyCreator',
+              'Only the creator or a workspace owner can manage this skill',
+            )
+          : t('store.actions.uninstallFailed', 'Uninstall failed, please try again'),
+      );
+    },
+    [message, t],
+  );
+
+  // Legacy `user_installed_plugins` custom MCP that was never migrated to a
+  // connector. Such a row has no `user_connectors` entry, so the panel falls
+  // into the "no configurable permissions" empty state. We offer to upgrade it
+  // in place via the connector migration flow instead of leaving a dead end.
+  const legacyPlugin = useToolStore(pluginSelectors.getCustomPluginById(identifier), isEqual);
+  const canMigrateLegacy =
+    (type === 'mcp-connector' || type === 'plugin') && Boolean(legacyPlugin?.customParams?.mcp);
 
   // For lobehub-connector: get the server's tool list from the store
   const lobehubServer = useToolStore(lobehubSkillStoreSelectors.getServerByIdentifier(identifier));
@@ -255,7 +330,11 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
     confirmModal({
       okButtonProps: { danger: true },
       onOk: async () => {
-        await uninstallBuiltinTool(identifier);
+        try {
+          await uninstallBuiltinTool(identifier);
+        } catch (error) {
+          notifyUninstallError(error);
+        }
       },
       title: t('store.actions.confirmUninstall'),
     });
@@ -265,8 +344,12 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
     confirmModal({
       okButtonProps: { danger: true },
       onOk: async () => {
-        await deleteAgentSkill(identifier);
-        onDelete?.();
+        try {
+          await deleteAgentSkill(identifier);
+          onDelete?.();
+        } catch (error) {
+          notifyUninstallError(error);
+        }
       },
       title: t('store.actions.confirmUninstall'),
     });
@@ -287,15 +370,17 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
             padding: '8px 16px',
           }}
         >
-          <Button
-            danger
-            disabled={!canEdit}
-            icon={<Trash2 size={14} />}
-            size="small"
-            onClick={handleDeleteAgentSkill}
-          >
-            {t('store.actions.uninstall')}
-          </Button>
+          <ManageTooltip title={manageTooltip}>
+            <Button
+              danger
+              disabled={!canEdit || !canManage}
+              icon={<Trash2 size={14} />}
+              size="small"
+              onClick={handleDeleteAgentSkill}
+            >
+              {t('store.actions.uninstall')}
+            </Button>
+          </ManageTooltip>
         </div>
         <div style={{ flex: 1, overflow: 'hidden' }}>
           <Suspense
@@ -309,6 +394,33 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
           </Suspense>
         </div>
       </div>
+    );
+  }
+
+  // Agent-owned connector (unified settings, LOBE-11682): the `identifier` slot
+  // carries the connector id (not the slug — agent connectors can share a slug
+  // with a base connector). Reuse the same ConnectorDetail as base connectors so
+  // tool-permission editing, sync and delete behave identically; it resolves the
+  // row from the agent-bound pool via the id-aware connector selectors.
+  if (type === 'agent-connector') {
+    const usageAgentId = agentBoundConnector?.agentId;
+    return (
+      <ConnectorDetail
+        agentTitle={agentBoundConnector?.agentTitle}
+        connectorId={identifier}
+        middleSlot={
+          usageAgentId ? (
+            <Suspense fallback={null}>
+              <AgentConnectorUsage
+                agentAvatar={agentBoundConnector?.agentAvatar}
+                agentId={usageAgentId}
+                agentTitle={agentBoundConnector?.agentTitle}
+              />
+            </Suspense>
+          ) : undefined
+        }
+        onDelete={onDelete}
+      />
     );
   }
 
@@ -327,9 +439,16 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
           </div>
           <div style={{ display: 'flex', flexShrink: 0, gap: 8 }}>
             {isBuiltinInstalled ? (
-              <Button danger disabled={!canEdit} size="small" onClick={handleUninstallBuiltin}>
-                {t('store.actions.uninstall')}
-              </Button>
+              <ManageTooltip title={manageTooltip}>
+                <Button
+                  danger
+                  disabled={!canEdit || !canManage}
+                  size="small"
+                  onClick={handleUninstallBuiltin}
+                >
+                  {t('store.actions.uninstall')}
+                </Button>
+              </ManageTooltip>
             ) : (
               <Button
                 disabled={!canCreate}
@@ -367,9 +486,41 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
           <div className={styles.noPermissionsTitle}>
             {type === 'lobehub-connector' ? lobehubLabel : noPermissionsTitle}
           </div>
-          {renderLobehubConnectorAction()}
+          {canMigrateLegacy ? (
+            <Button
+              disabled={!canCreate || !canEdit}
+              icon={<Wrench size={14} />}
+              size="small"
+              type="primary"
+              onClick={() => {
+                if (!canCreate || !canEdit) return;
+                setMigrateOpen(true);
+              }}
+            >
+              {ts('tools.legacyConnector.configure')}
+            </Button>
+          ) : (
+            renderLobehubConnectorAction()
+          )}
         </div>
-        {ts('tools.noConfigurablePermissions')}
+        {canMigrateLegacy
+          ? ts('tools.legacyConnector.upgradeDesc')
+          : ts('tools.noConfigurablePermissions')}
+        {canMigrateLegacy && legacyPlugin && (
+          <CustomConnectorModal
+            legacyPlugin={legacyPlugin}
+            open={migrateOpen}
+            onClose={() => setMigrateOpen(false)}
+            onEditSuccess={async () => {
+              setMigrateOpen(false);
+              setNoManifest(false);
+              // The migration created a `user_connectors` row keyed by the same
+              // identifier; refresh so this panel resolves it and swaps to the
+              // permission editor.
+              await fetchConnectors();
+            }}
+          />
+        )}
       </div>
     );
   }

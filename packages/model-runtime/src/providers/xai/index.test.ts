@@ -7,6 +7,10 @@ import { testProvider } from '../../providerTestUtils';
 import type { XAIModelCard } from './index';
 import { LobeXAI } from './index';
 
+vi.mock('@lobechat/business-model-bank/model-config', () => ({
+  loadModels: vi.fn().mockResolvedValue([]),
+}));
+
 testProvider({
   Runtime: LobeXAI,
   provider: ModelProvider.XAI,

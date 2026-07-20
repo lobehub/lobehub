@@ -1,34 +1,28 @@
-import { nanoid } from '@lobechat/utils';
+import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
 import { App } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useNavigateToAgent } from '@/hooks/useNavigateToAgent';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useChatStore } from '@/store/chat';
+import type { ForwardTarget } from '@/store/chat/slices/forward/action';
 
 import { useConversationStore } from '../store';
-import { buildForwardedContent } from './forwardDispatch';
-import { useForwardDispatchStore } from './forwardDispatchStore';
 
-export interface ForwardTarget {
-  id: string;
-  title?: string | null;
-}
+export type { ForwardTarget } from '@/store/chat/slices/forward/action';
 
 /**
  * Returns a callback that forwards the currently-selected messages to one or
- * more target agents. The transcript is serialised once, then:
- * - the first (primary) target is parked + navigated to, so the user lands in
- *   it and {@link ForwardMessageDispatcher} sends the opening turn;
- * - any additional targets are sent in the background via the global chat store
- *   (isolated new topic each), so "分别发送" reaches every recipient.
+ * more target agents. The chat store serialises and sends the transcript into
+ * one isolated topic per target; this hook owns only selection UX and navigation.
  */
 export const useForwardMessages = () => {
   const { t } = useTranslation('chat');
   const { message } = App.useApp();
-  const navigateToAgent = useNavigateToAgent();
-  const setPendingForward = useForwardDispatchStore((s) => s.setPendingForward);
+  const navigate = useWorkspaceAwareNavigate();
+  const forwardMessages = useChatStore((s) => s.forwardMessages);
+  const clearPortalStack = useChatStore((s) => s.clearPortalStack);
   const exitSelectionMode = useConversationStore((s) => s.exitSelectionMode);
 
   // The conversation store is context-scoped (no global getState), so read the
@@ -39,54 +33,39 @@ export const useForwardMessages = () => {
   }, isEqual);
 
   return useCallback(
-    (targets: ForwardTarget[], note?: string) => {
+    async (targets: ForwardTarget[], note?: string) => {
       if (selectedMessages.length === 0) {
         message.warning(t('messageForward.empty'));
         return;
       }
       if (targets.length === 0) return;
 
-      const transcript = buildForwardedContent(selectedMessages, {
+      const primaryTarget = targets[0];
+      exitSelectionMode();
+
+      void forwardMessages({
         header: t('messageForward.transcript.header', { count: selectedMessages.length }),
+        messages: selectedMessages,
+        note,
+        onTopicCreated: (target, topicId) => {
+          if (target.id !== primaryTarget.id) return;
+          clearPortalStack();
+          navigate(AGENT_CHAT_TOPIC_URL(target.id, topicId));
+        },
         roleLabel: (role) =>
           role === 'user' ? t('messageForward.role.user') : t('messageForward.role.assistant'),
+        targets,
+      }).then((result) => {
+        if (result.succeeded.length > 0) {
+          message.success(
+            targets.length === 1
+              ? t('messageForward.success', { title: primaryTarget.title || '' })
+              : t('messageForward.successMulti', { count: result.succeeded.length }),
+          );
+        }
+        if (result.failed.length > 0) message.error(t('messageForward.failed'));
       });
-      // Append the user's optional note as the actual instruction after the
-      // forwarded context.
-      const content = note?.trim() ? `${transcript}\n\n${note.trim()}` : transcript;
-
-      const [primary, ...rest] = targets;
-
-      // Primary: park the transcript so the post-navigation dispatcher sends it.
-      setPendingForward({
-        content,
-        dispatchId: nanoid(),
-        messageCount: selectedMessages.length,
-        targetAgentId: primary.id,
-      });
-
-      // Additional recipients: fire-and-forget background sends into an isolated
-      // new topic each (no navigation, no hijacking the active topic).
-      for (const target of rest) {
-        void useChatStore
-          .getState()
-          .sendMessage({
-            context: { agentId: target.id, isNew: true, isolatedTopic: true, scope: 'main' },
-            message: content,
-            messages: [],
-          })
-          .catch(() => {});
-      }
-
-      exitSelectionMode();
-      navigateToAgent(primary.id);
-
-      message.success(
-        targets.length === 1
-          ? t('messageForward.success', { title: primary.title || '' })
-          : t('messageForward.successMulti', { count: targets.length }),
-      );
     },
-    [t, message, navigateToAgent, setPendingForward, exitSelectionMode, selectedMessages],
+    [t, message, navigate, clearPortalStack, forwardMessages, exitSelectionMode, selectedMessages],
   );
 };
