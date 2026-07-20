@@ -1,6 +1,6 @@
 import { withOtelMetricsForUpstashWorkflows } from '@lobechat/observability-otel/modules/upstash-workflow';
 import { WorkflowNonRetryableError } from '@upstash/workflow';
-import { serve } from '@upstash/workflow/hono';
+import { serve, type WorkflowBindings } from '@upstash/workflow/hono';
 import { Hono } from 'hono';
 
 import {
@@ -14,7 +14,7 @@ import {
 
 import { createWorkflowQstashClient } from '../qstashClient';
 
-const app = new Hono();
+const app = new Hono<{ Bindings: WorkflowBindings }>();
 
 app.post('/:sessionId', async (context) => {
   const sessionId = context.req.param('sessionId');
