@@ -37,6 +37,8 @@ export default {
   'acceptance.bar.rejectComment': 'Reject with comment',
   'acceptance.bar.rerun': 'Send back & rerun',
   'acceptance.bar.rerunSent': 'Sent to the origin conversation — the repair round is starting.',
+  'acceptance.checks.allAccepted.desc': 'Nice work — every acceptance check has been signed off.',
+  'acceptance.checks.allAccepted.title': 'All checks accepted 🎉',
   'acceptance.checks.copied': 'Copied',
   'acceptance.checks.copySeq': 'Copy the check label',
   'acceptance.checks.empty': 'No acceptance checks recorded yet',
