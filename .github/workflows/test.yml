@@ -51,6 +51,14 @@ jobs:
       - name: Install deps
         run: pnpm install
 
+      - name: Install CLI deps
+        run: pnpm install
+        working-directory: apps/cli
+
+      - name: Test CLI build configuration
+        run: bunx vitest run --config vitest.config.mts --silent='passed-only' tsdown.config.test.ts
+        working-directory: apps/cli
+
       - name: Test packages with coverage
         run: |
           for package in $PACKAGES; do
