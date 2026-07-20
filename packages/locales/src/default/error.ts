@@ -172,6 +172,18 @@ export default {
     'Repeated image safety rejections detected. Similar prompts may temporarily pause image generation.',
   'response.DeviceGatewayNotConfigured':
     "Couldn't reach a run device for this agent. Connect a device, or configure the device gateway on the server, then try again.",
+  'response.RemoteServerOffline':
+    'You appear to be offline. This is a problem with your local network, not the app — please check your internet connection and try again.',
+  'response.RemoteServerTimeout':
+    'The connection to the server timed out. This usually indicates a local network problem — please check your network quality, proxy, or VPN settings and try again.',
+  'response.RemoteServerDNSFailed':
+    'The server address could not be resolved. This usually indicates a local network or DNS problem — please check your network, DNS, or VPN settings and try again.',
+  'response.RemoteServerConnectionRefused':
+    'The connection to the server was refused or reset. This usually indicates a local network problem — please check your firewall, proxy, or VPN settings and try again.',
+  'response.RemoteServerCertInvalid':
+    'A secure connection to the server could not be established due to a certificate problem. Please check your system clock, or whether a proxy/firewall is intercepting the connection.',
+  'response.RemoteServerUnreachable':
+    'The server could not be reached. This usually indicates a local network problem — please check your internet connection, proxy, or VPN settings and try again.',
   'response.ServerAgentRuntimeError':
     'Sorry, the Agent service is currently unavailable. Please try again later or contact us via email for support.',
   'response.SubscriptionKeyMismatch':
