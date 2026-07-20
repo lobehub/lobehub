@@ -83,13 +83,12 @@ const currentActiveTopicSummary = (s: ChatStoreState): ChatTopicSummary | undefi
 const currentTopicMetadata = (s: ChatStoreState) => currentActiveTopic(s)?.metadata;
 
 /**
- * Get current active topic's working directory.
+ * Extract a topic's working directory from its metadata.
  * On desktop: local filesystem path.
  * On web (cloud): primary GitHub repo URL (repos[0]), or workingDirectory if set directly.
  */
-const currentTopicWorkingDirectory = (s: ChatStoreState): string | undefined => {
-  const activeTopic = currentActiveTopic(s);
-  if (!activeTopic) return;
+const extractTopicWorkingDirectory = (topic: ChatTopic | undefined): string | undefined => {
+  if (!topic) return;
 
   // Route the raw `workingDirectory` through the extractor too: it is typed as a
   // string, but a malformed legacy topic may have persisted a `WorkingDirConfig`
@@ -97,17 +96,35 @@ const currentTopicWorkingDirectory = (s: ChatStoreState): string | undefined => 
   // and this selector's declared `string | undefined` must hold at runtime.
   if (isDesktop) {
     return getWorkingDirEffectivePath(
-      activeTopic.metadata?.workingDirectoryConfig ?? activeTopic.metadata?.workingDirectory,
+      topic.metadata?.workingDirectoryConfig ?? topic.metadata?.workingDirectory,
     );
   }
 
   // Web: return primary repo from repos list, or workingDirectory if set directly
-  const meta = activeTopic.metadata;
+  const meta = topic.metadata;
   return (
     meta?.repos?.[0] ??
     getWorkingDirEffectivePath(meta?.workingDirectoryConfig ?? meta?.workingDirectory)
   );
 };
+
+/**
+ * Get a topic's working directory by id, falling back to the active topic when
+ * no id is given. Prefer the explicit-id form for async work (e.g. a streaming
+ * tool call): the executing topic is captured at request time, so reading the
+ * *active* topic here would return the wrong project if the user switched topics
+ * mid-stream.
+ */
+const getTopicWorkingDirectory =
+  (id?: string | null) =>
+  (s: ChatStoreState): string | undefined =>
+    extractTopicWorkingDirectory(id ? getTopicById(id)(s) : currentActiveTopic(s));
+
+/**
+ * Get current active topic's working directory.
+ */
+const currentTopicWorkingDirectory = (s: ChatStoreState): string | undefined =>
+  extractTopicWorkingDirectory(currentActiveTopic(s));
 
 const isCreatingTopic = (s: ChatStoreState) => s.creatingTopic;
 
@@ -287,6 +304,7 @@ export const topicSelectors = {
   displayTopics,
   displayTopicsForSidebar,
   getTopicById,
+  getTopicWorkingDirectory,
   getTopicsByAgentId,
   groupedTopicsForSidebar,
   groupedTopicsSelector,

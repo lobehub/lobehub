@@ -4,11 +4,10 @@ import { uuid } from '@lobechat/utils';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/selectors';
-import { getElectronStoreState } from '@/store/electron';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
+import { resolveEffectiveWorkingDirectory } from '../effectiveWorkingDirectory';
 import { globalAgentContextManager } from '../GlobalAgentContextManager';
 
 const placeholderVariablesRegex = /\{\{(.*?)\}\}/g;
@@ -23,19 +22,15 @@ const WORKING_DIRECTORY_UNSPECIFIED = '(not specified, use user Home directory a
  * directory") matches what tools actually search. Unlike the placeholder, this
  * returns `undefined` instead of a human-readable "(not specified…)" string, so
  * callers can safely use it as a path / scope default.
+ *
+ * Pass `topicId` for async work (e.g. a streaming tool call) so the directory is
+ * bound to the topic that *started* the request, not whatever topic is active
+ * now — the user may have switched topics mid-stream, and reading global
+ * active-topic state would then search the wrong project. Omit it (prompt-build
+ * time) to resolve against the active topic.
  */
-export const getEffectiveWorkingDirectoryPath = (): string | undefined => {
-  if (!isDesktop) return undefined;
-
-  const topicWorkingDir = topicSelectors.currentTopicWorkingDirectory(useChatStore.getState());
-  if (topicWorkingDir) return topicWorkingDir;
-
-  const currentDeviceId = getElectronStoreState().gatewayDeviceInfo?.deviceId;
-  return (
-    agentSelectors.currentAgentWorkingDirectory(currentDeviceId)(useAgentStore.getState()) ??
-    undefined
-  );
-};
+export const getEffectiveWorkingDirectoryPath = (topicId?: string | null): string | undefined =>
+  resolveEffectiveWorkingDirectory(useChatStore.getState(), topicId);
 
 export const VARIABLE_GENERATORS = {
   /**
