@@ -48,6 +48,48 @@ describe('topicSelectors', () => {
     });
   });
 
+  describe('getTopicModelById / activeTopicModel', () => {
+    const modelTopicDataMap = createTopicDataMap('test');
+    modelTopicDataMap[topicMapKey({ agentId: 'test' })].items = [
+      // Pinned model lives in the top-level `model`/`provider` columns, not metadata.
+      { id: 'withModel', name: 'With Model', model: 'gpt-5', provider: 'openai' },
+      { id: 'noModel', name: 'No Model' },
+      { id: 'modelOnly', name: 'Model Only', model: 'claude-opus-4-8' },
+    ] as any;
+
+    it('returns the model/provider pinned to a topic', () => {
+      const state = merge(initialStore, { topicDataMap: modelTopicDataMap, activeAgentId: 'test' });
+      expect(topicSelectors.getTopicModelById('withModel')(state)).toEqual({
+        model: 'gpt-5',
+        provider: 'openai',
+      });
+    });
+
+    it('defaults provider to empty string when only model is recorded', () => {
+      const state = merge(initialStore, { topicDataMap: modelTopicDataMap, activeAgentId: 'test' });
+      expect(topicSelectors.getTopicModelById('modelOnly')(state)).toEqual({
+        model: 'claude-opus-4-8',
+        provider: '',
+      });
+    });
+
+    it('returns undefined when the topic has no model recorded', () => {
+      const state = merge(initialStore, { topicDataMap: modelTopicDataMap, activeAgentId: 'test' });
+      expect(topicSelectors.getTopicModelById('noModel')(state)).toBeUndefined();
+    });
+
+    it('activeTopicModel reads the active topic model, undefined when no active topic', () => {
+      const base = merge(initialStore, { topicDataMap: modelTopicDataMap, activeAgentId: 'test' });
+      expect(topicSelectors.activeTopicModel(base)).toBeUndefined();
+
+      const active = merge(base, { activeTopicId: 'withModel' });
+      expect(topicSelectors.activeTopicModel(active)).toEqual({
+        model: 'gpt-5',
+        provider: 'openai',
+      });
+    });
+  });
+
   describe('currentTopicLength', () => {
     it('should return 0 if there are no topics', () => {
       const length = topicSelectors.currentTopicLength(initialStore);
