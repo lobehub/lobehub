@@ -438,13 +438,12 @@ export class UnderstandingService {
       };
     }
 
-    const result = await this.collectProvider(input);
+    const { transitionSession, ...result } = await this.collectProvider(input);
     if (result.status !== 'completed') return result;
 
-    const completed = await this.activeSession(input.topicId, input.sessionId);
-    const current = completed.sources[input.providerId];
+    const current = transitionSession.sources[input.providerId];
     if (current?.status !== 'completed' || current.revision !== input.revision) return stale();
-    const sourceFingerprint = getUnderstandingSourceFingerprint(completed);
+    const sourceFingerprint = getUnderstandingSourceFingerprint(transitionSession);
     if (!sourceFingerprint) throw new UnderstandingProviderContextUnavailableError();
     return {
       ...result,
@@ -481,7 +480,7 @@ export class UnderstandingService {
                 false,
               ),
             ];
-      await this.dependencies.repository.failProvider({
+      const transitionSession = await this.dependencies.repository.failProvider({
         errors,
         failedCount: Math.max(1, diagnostics.failedCount),
         providerId: input.providerId,
@@ -497,6 +496,7 @@ export class UnderstandingService {
         sourceCount: 0,
         status: 'failed' as const,
         succeededCount: diagnostics.succeededCount,
+        transitionSession,
       };
     }
 
@@ -520,7 +520,7 @@ export class UnderstandingService {
           userId: this.dependencies.userId,
         });
     if (!authoritative) throw new UnderstandingProviderContextUnavailableError();
-    await this.dependencies.repository.completeProvider({
+    const transitionSession = await this.dependencies.repository.completeProvider({
       errors: authoritative.diagnostics.errors,
       failedCount: authoritative.diagnostics.failedCount,
       providerId: input.providerId,
@@ -536,6 +536,7 @@ export class UnderstandingService {
       sourceCount: authoritative.sourceCount,
       status: 'completed' as const,
       succeededCount: authoritative.diagnostics.succeededCount,
+      transitionSession,
     };
   };
 
@@ -657,17 +658,29 @@ export class UnderstandingService {
     const runningOperation = (await this.dependencies.topic.findById(input.topicId))?.metadata
       ?.runningOperation;
     const recovered = runningOperation?.threadId === input.threadId ? runningOperation : undefined;
-    let assistantMessageId: string;
-    let assistantContent: unknown;
-    let recoveredAnalysis: ReturnType<typeof parseAnalysis> | undefined;
+    let writerResult:
+      | {
+          analysis?: ReturnType<typeof parseAnalysis>;
+          assistantMessageId: string;
+          content?: unknown;
+        }
+      | undefined;
     if (recovered) {
-      assistantMessageId = recovered.assistantMessageId;
       const runtime = await this.dependencies.writerRuntime();
       const operation = await runtime.executeOperation(recovered.operationId);
       if (operation.status !== 'done') {
         throw new Error('Onboarding Understanding persona writer did not complete');
       }
-      assistantContent = (await this.dependencies.messages.findById(assistantMessageId))?.content;
+      const content = (await this.dependencies.messages.findById(recovered.assistantMessageId))
+        ?.content;
+      try {
+        writerResult = {
+          analysis: parseAnalysis(content),
+          assistantMessageId: recovered.assistantMessageId,
+        };
+      } catch {
+        // A malformed recovered turn can be superseded in the same deterministic thread.
+      }
     } else {
       const existingAssistant = await this.dependencies.messages.findLatestAssistantMessageByThread(
         {
@@ -685,46 +698,52 @@ export class UnderstandingService {
         }
       }
       if (existingAssistant && existingAnalysis) {
-        assistantMessageId = existingAssistant.id;
-        recoveredAnalysis = existingAnalysis;
-      } else {
-        const [runtime, baseline] = await Promise.all([
-          this.dependencies.writerRuntime(),
-          this.dependencies.persona.getLatestPersonaDocument(),
-        ]);
-        const launched = await runtime.agent.execAgent({
-          appContext: { threadId: input.threadId, topicId: input.topicId },
-          autoStart: false,
-          ephemeralUserMessage: buildEphemeralDocument(contexts, baseline),
-          instructions: chainUnderstandingPersona({ diagnostics, providers }),
-          maxSteps: 1,
-          prompt: 'Write onboarding persona from collected provider contexts.',
-          slug: UNDERSTANDING_AGENT_SLUG,
-          suppressUserMessage: true,
-          trigger: RequestTrigger.Onboarding,
-        });
-        if (!launched.success || !launched.operationId || !launched.assistantMessageId) {
-          throw new Error('Unable to start onboarding Understanding persona writer');
-        }
-        assistantMessageId = launched.assistantMessageId;
-        const operation = await runtime.executeOperation(launched.operationId);
-        if (operation.status !== 'done') {
-          throw new Error('Onboarding Understanding persona writer did not complete');
-        }
-        assistantContent = (await this.dependencies.messages.findById(assistantMessageId))?.content;
+        writerResult = {
+          analysis: existingAnalysis,
+          assistantMessageId: existingAssistant.id,
+        };
       }
     }
 
+    if (!writerResult) {
+      const [runtime, baseline] = await Promise.all([
+        this.dependencies.writerRuntime(),
+        this.dependencies.persona.getLatestPersonaDocument(),
+      ]);
+      const launched = await runtime.agent.execAgent({
+        appContext: { threadId: input.threadId, topicId: input.topicId },
+        autoStart: false,
+        ephemeralUserMessage: buildEphemeralDocument(contexts, baseline),
+        instructions: chainUnderstandingPersona({ diagnostics, providers }),
+        maxSteps: 1,
+        prompt: 'Write onboarding persona from collected provider contexts.',
+        slug: UNDERSTANDING_AGENT_SLUG,
+        suppressUserMessage: true,
+        trigger: RequestTrigger.Onboarding,
+      });
+      if (!launched.success || !launched.operationId || !launched.assistantMessageId) {
+        throw new Error('Unable to start onboarding Understanding persona writer');
+      }
+      const operation = await runtime.executeOperation(launched.operationId);
+      if (operation.status !== 'done') {
+        throw new Error('Onboarding Understanding persona writer did not complete');
+      }
+      writerResult = {
+        assistantMessageId: launched.assistantMessageId,
+        content: (await this.dependencies.messages.findById(launched.assistantMessageId))?.content,
+      };
+    }
+
     const metadata = OnboardingUnderstandingMessageMetadataSchema.parse({
-      analysis: recoveredAnalysis ?? parseAnalysis(assistantContent),
+      analysis: writerResult.analysis ?? parseAnalysis(writerResult.content),
       diagnostics,
       kind: 'proposal',
       providers,
-      resultId: assistantMessageId,
+      resultId: writerResult.assistantMessageId,
       sourceFingerprint: input.sourceFingerprint,
     });
     const committed = await this.dependencies.repository.commitWriting({
-      assistantMessageId,
+      assistantMessageId: writerResult.assistantMessageId,
       metadata,
       sessionId: input.sessionId,
       sourceFingerprint: input.sourceFingerprint,
@@ -739,7 +758,7 @@ export class UnderstandingService {
         ? {}
         : { personaVersion: committed.personaVersion }),
       published: true as const,
-      resultId: assistantMessageId,
+      resultId: writerResult.assistantMessageId,
       sourceFingerprint: input.sourceFingerprint,
     };
   };

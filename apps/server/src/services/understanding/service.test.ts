@@ -520,6 +520,37 @@ describe('UnderstandingService provider collection', () => {
     expect(harness.collect).toHaveBeenCalledOnce();
   });
 
+  it('returns the fingerprint from its own completion when another provider wins the race', async () => {
+    const harness = createHarness(
+      createSession({
+        github: providerState('running', 1),
+        gmail: providerState('running', 1),
+      }),
+    );
+    harness.repository.completeProvider.mockImplementationOnce(async () => {
+      const githubCompletion = createSession({
+        github: providerState('completed', 1),
+        gmail: providerState('running', 1),
+      });
+      harness.setSession(
+        createSession({
+          github: providerState('completed', 1),
+          gmail: providerState('completed', 1),
+        }),
+      );
+      return githubCompletion;
+    });
+
+    await expect(
+      harness.service.processProvider({
+        providerId: 'github',
+        revision: 1,
+        sessionId: 'session-1',
+        topicId: 'topic-1',
+      }),
+    ).resolves.toMatchObject({ sourceFingerprint: 'github@1', status: 'completed' });
+  });
+
   it('recovers a completed provider from its revision-matching Redis context without recollecting', async () => {
     const harness = createHarness(createSession({ github: providerState('completed', 2) }));
     harness.stored.set('github', context('github', '# Existing profile', 2));
@@ -965,6 +996,52 @@ describe('UnderstandingService persona writing', () => {
     expect(harness.executeOperation).toHaveBeenCalledWith('operation-recovered');
     expect(harness.dependencies.messages.findById).toHaveBeenCalledWith('assistant-recovered');
     expect(harness.dependencies.messages.findLatestAssistantMessageByThread).not.toHaveBeenCalled();
+  });
+
+  it('replaces invalid output from a recovered operation in the same deterministic thread', async () => {
+    const harness = createHarness({
+      id: 'session-1',
+      sources: { github: providerState('completed', 1) },
+      writing: {
+        sourceFingerprint: 'github@1',
+        status: 'running',
+        updatedAt: '2026-07-20T00:00:00.000Z',
+      },
+    });
+    harness.stored.set('github', context('github', '# Profile'));
+    harness.repository.ensureWritingThread.mockImplementationOnce(async ({ threadId }) => {
+      vi.mocked(harness.dependencies.topic.findById).mockResolvedValueOnce({
+        metadata: {
+          runningOperation: {
+            assistantMessageId: 'assistant-invalid',
+            operationId: 'operation-recovered',
+            threadId,
+          },
+        },
+      });
+    });
+    vi.mocked(harness.dependencies.messages.findById).mockResolvedValueOnce({
+      content: '{"profile":{"name":"Neko"},"composition":{}}',
+    });
+
+    await expect(
+      harness.service.processCollected({
+        expectedSourceFingerprint: 'github@1',
+        sessionId: 'session-1',
+        topicId: 'topic-1',
+      }),
+    ).resolves.toMatchObject({ published: true, resultId: 'assistant-1' });
+
+    const recoveredThread = harness.repository.ensureWritingThread.mock.calls[0][0].threadId;
+    expect(harness.executeOperation).toHaveBeenNthCalledWith(1, 'operation-recovered');
+    expect(harness.executeOperation).toHaveBeenNthCalledWith(2, 'operation-1');
+    expect(harness.execAgent).toHaveBeenCalledWith(
+      expect.objectContaining({ appContext: { threadId: recoveredThread, topicId: 'topic-1' } }),
+    );
+    expect(harness.dependencies.messages.findLatestAssistantMessageByThread).not.toHaveBeenCalled();
+    expect(harness.repository.commitWriting).toHaveBeenCalledWith(
+      expect.objectContaining({ assistantMessageId: 'assistant-1' }),
+    );
   });
 
   it('reuses a completed assistant from the exact thread after runningOperation is cleared', async () => {
