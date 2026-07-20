@@ -77,8 +77,9 @@ const BriefCardActions = memo<BriefCardActionsProps>(
       <Button
         className={'brief-view-run-btn'}
         icon={Workflow}
-        shape={'round'}
         size={'small'}
+        style={{ color: cssVar.colorTextSecondary }}
+        type={'text'}
         onClick={handleViewRun}
       >
         {t('brief.viewRun')}
