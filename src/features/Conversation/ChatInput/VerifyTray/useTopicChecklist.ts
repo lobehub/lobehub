@@ -1,3 +1,5 @@
+import { toast } from '@lobehub/ui/base-ui';
+import { t } from 'i18next';
 import { useCallback } from 'react';
 
 import { useClientDataSWR } from '@/libs/swr';
@@ -10,6 +12,19 @@ import { verifyService } from '@/services/verify';
 
 import { openGoalModal } from './GoalModal';
 import type { TrayCheck } from './types';
+
+/**
+ * A dropped/offline connection (`fetch` rejects with a TypeError, or the browser
+ * reports itself offline) versus a request the server actively rejected — the
+ * two call for different copy, so the user knows whether to retry or reconnect.
+ */
+const isNetworkError = (error: unknown): boolean => {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return true;
+  const message = error instanceof Error ? error.message : String(error);
+  return /fetch failed|failed to fetch|networkerror|load failed|err_(?:network|internet)/i.test(
+    message,
+  );
+};
 
 const genId = () => `chk_${Math.random().toString(36).slice(2, 10)}`;
 
@@ -42,10 +57,24 @@ const read = async (topicId: string): Promise<TopicGoal> => {
 
 // Optimistically publish `next` to the shared SWR key so every consumer (the
 // tray + the "+" menu path) reflects it immediately, then run the write and
-// revalidate.
+// revalidate. If the write fails (topic deleted mid-edit, offline, server
+// error), roll the optimistic value back to the server truth and surface an
+// error instead of leaving a phantom unsaved edit on screen; rethrow so the
+// caller (e.g. the modal) can keep itself open rather than treating the edit as
+// done.
 const commit = async (topicId: string, next: TopicGoal, write: () => Promise<unknown>) => {
   await scopedMutate(swrKey(topicId), next, { revalidate: false });
-  await write();
+  try {
+    await write();
+  } catch (error) {
+    await scopedMutate(swrKey(topicId));
+    toast.error(
+      isNetworkError(error)
+        ? t('acceptance.tray.saveFailed.network', { ns: 'verify' })
+        : t('acceptance.tray.saveFailed.server', { ns: 'verify' }),
+    );
+    throw error;
+  }
   await scopedMutate(swrKey(topicId));
 };
 
@@ -80,9 +109,7 @@ export const openTopicGoalModal = async (topicId: string) => {
   const current = await read(topicId);
   openGoalModal({
     initialGoal: current.goal || undefined,
-    onSubmit: (goal) => {
-      void setTopicGoal(topicId, goal);
-    },
+    onSubmit: (goal) => setTopicGoal(topicId, goal),
   });
 };
 

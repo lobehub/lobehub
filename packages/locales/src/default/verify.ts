@@ -190,6 +190,8 @@ export default {
   'acceptance.tray.goalModal.setTitle': 'Set the goal',
   'acceptance.tray.goalSection': 'Goal',
   'acceptance.tray.goalArmed': 'Goal on — your next message becomes this conversation’s goal',
+  'acceptance.tray.saveFailed.network': 'You appear to be offline — the change wasn’t saved.',
+  'acceptance.tray.saveFailed.server': 'Couldn’t save the change. Please try again.',
   'acceptance.tray.menuSetGoal': 'Set goal',
   'acceptance.tray.section.method': 'How to check',
   'acceptance.tray.section.methodEmpty': 'No method described yet.',

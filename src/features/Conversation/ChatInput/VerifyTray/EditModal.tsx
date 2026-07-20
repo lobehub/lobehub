@@ -12,7 +12,7 @@ interface EditContentProps {
   /** Existing check to edit; undefined = authoring a new one. */
   initial?: TrayCheck;
   onRemove?: () => void;
-  onSubmit: (value: { method: string; name: string }) => void;
+  onSubmit: (value: { method: string; name: string }) => void | Promise<unknown>;
 }
 
 const EditContent = memo<EditContentProps>(({ initial, onRemove, onSubmit }) => {
@@ -20,12 +20,21 @@ const EditContent = memo<EditContentProps>(({ initial, onRemove, onSubmit }) => 
   const { close } = useModalContext();
   const [name, setName] = useState(initial?.name ?? '');
   const [method, setMethod] = useState(initial?.method ?? '');
+  const [saving, setSaving] = useState(false);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const trimmed = name.trim();
-    if (!trimmed) return;
-    onSubmit({ method: method.trim(), name: trimmed });
-    close();
+    if (!trimmed || saving) return;
+    setSaving(true);
+    try {
+      // Only close once the write lands; a failed save keeps the modal open.
+      await onSubmit({ method: method.trim(), name: trimmed });
+      close();
+    } catch {
+      // The caller already rolled back the optimistic value and toasted.
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -69,8 +78,15 @@ const EditContent = memo<EditContentProps>(({ initial, onRemove, onSubmit }) => 
           <span />
         )}
         <Flexbox horizontal gap={8}>
-          <Button onClick={close}>{tv('acceptance.actions.cancel')}</Button>
-          <Button disabled={!name.trim()} type={'primary'} onClick={handleSave}>
+          <Button disabled={saving} onClick={close}>
+            {tv('acceptance.actions.cancel')}
+          </Button>
+          <Button
+            disabled={!name.trim() || saving}
+            loading={saving}
+            type={'primary'}
+            onClick={handleSave}
+          >
             {tv('acceptance.tray.editModal.save')}
           </Button>
         </Flexbox>

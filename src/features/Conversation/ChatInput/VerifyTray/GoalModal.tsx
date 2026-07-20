@@ -8,19 +8,29 @@ import { useTranslation } from 'react-i18next';
 
 interface GoalContentProps {
   initialGoal?: string;
-  onSubmit: (goal: string) => void;
+  onSubmit: (goal: string) => void | Promise<unknown>;
 }
 
 const GoalContent = memo<GoalContentProps>(({ initialGoal, onSubmit }) => {
   const { t: tv } = useTranslation('verify');
   const { close } = useModalContext();
   const [goal, setGoal] = useState(initialGoal ?? '');
+  const [saving, setSaving] = useState(false);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const trimmed = goal.trim();
-    if (!trimmed) return;
-    onSubmit(trimmed);
-    close();
+    if (!trimmed || saving) return;
+    setSaving(true);
+    try {
+      // Only close once the write actually lands — a failed save (surfaced by
+      // the caller) keeps the modal open so the edit isn't silently lost.
+      await onSubmit(trimmed);
+      close();
+    } catch {
+      // The caller already rolled back the optimistic value and toasted.
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -35,8 +45,15 @@ const GoalContent = memo<GoalContentProps>(({ initialGoal, onSubmit }) => {
         onChange={(e) => setGoal(e.target.value)}
       />
       <Flexbox horizontal gap={8} justify={'flex-end'}>
-        <Button onClick={close}>{tv('acceptance.actions.cancel')}</Button>
-        <Button disabled={!goal.trim()} type={'primary'} onClick={handleSave}>
+        <Button disabled={saving} onClick={close}>
+          {tv('acceptance.actions.cancel')}
+        </Button>
+        <Button
+          disabled={!goal.trim() || saving}
+          loading={saving}
+          type={'primary'}
+          onClick={handleSave}
+        >
           {tv('acceptance.tray.goalModal.save')}
         </Button>
       </Flexbox>
