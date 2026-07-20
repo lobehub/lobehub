@@ -68,7 +68,7 @@ export const upsertUserPersonaInTransaction = async (
   const nextMetadata = params.metadata ?? existing?.metadata ?? undefined;
   const nextProfile = params.profile ?? 'default';
   const nextSourceIds = params.sourceIds ?? existing?.sourceIds ?? undefined;
-  const nextTagline = params.tagline ?? existing?.tagline ?? undefined;
+  const nextTagline = params.tagline === undefined ? existing?.tagline : params.tagline;
 
   const baseDocument: Omit<NewUserPersonaDocument, 'id' | 'userId'> = {
     capturedAt: params.capturedAt,
@@ -91,7 +91,7 @@ export const upsertUserPersonaInTransaction = async (
       !isEqual(existing.sourceIds, nextSourceIds ?? null) ||
       !isEqual(existing.metadata, nextMetadata ?? null);
 
-    if (!hasDocumentChanges && !params.snapshot) return { document: existing };
+    if (!hasDocumentChanges && params.snapshot == null) return { document: existing };
 
     const [updated] = await tx
       .update(userPersonaDocuments)
@@ -132,7 +132,7 @@ export const upsertUserPersonaInTransaction = async (
   const hasDiff =
     params.diffPersona ||
     params.diffTagline ||
-    params.snapshot ||
+    params.snapshot != null ||
     params.reasoning ||
     (params.memoryIds && params.memoryIds.length > 0) ||
     (params.sourceIds && params.sourceIds.length > 0);
@@ -272,7 +272,7 @@ export class UserPersonaModel {
           ),
         );
       if (!history) throw new UserPersonaVersionNotFoundError();
-      if (!history.snapshotPersona) throw new UserPersonaVersionSnapshotMissingError();
+      if (history.snapshotPersona == null) throw new UserPersonaVersionSnapshotMissingError();
 
       return upsertUserPersonaInTransaction(tx, this.userId, {
         editedBy: 'user',

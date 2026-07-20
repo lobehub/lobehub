@@ -306,21 +306,74 @@ describe('UnderstandingService public workflow commands', () => {
     );
   });
 
-  it('can redeliver an already running retry after an uncertain trigger failure', async () => {
-    mockTriggerProviders.mockResolvedValueOnce({ workflowRunId: 'workflow-2' });
+  it('rejects retrying a provider that is already running', async () => {
     const harness = createHarness(createSession({ github: providerState('running', 4) }));
 
-    await harness.service.retry({
-      providerId: 'github',
-      sessionId: 'session-1',
-      topicId: 'topic-1',
-    });
+    await expect(
+      harness.service.retry({
+        providerId: 'github',
+        sessionId: 'session-1',
+        topicId: 'topic-1',
+      }),
+    ).rejects.toThrow();
 
     expect(harness.repository.markProviderRunning).not.toHaveBeenCalled();
-    expect(mockTriggerProviders).toHaveBeenCalledWith(
-      expect.objectContaining({ providerIds: ['github'] }),
-      { workflowRunId: 'onboarding-understanding-retry-session-1-github-4' },
+    expect(mockTriggerProviders).not.toHaveBeenCalled();
+  });
+
+  it('returns a failed retry revision after trigger delivery fails so it can be retried', async () => {
+    const triggerError = new Error('delivery failed');
+    mockTriggerProviders
+      .mockRejectedValueOnce(triggerError)
+      .mockResolvedValueOnce({ workflowRunId: 'workflow-2' });
+    const harness = createHarness(createSession({ github: providerState('failed', 3) }));
+    harness.repository.markProviderRunning
+      .mockImplementationOnce(async () => {
+        harness.setSession(createSession({ github: providerState('running', 4) }));
+        return { claimed: true, revision: 4 };
+      })
+      .mockImplementationOnce(async () => {
+        harness.setSession(createSession({ github: providerState('running', 5) }));
+        return { claimed: true, revision: 5 };
+      });
+    harness.repository.failProvider.mockImplementationOnce(async () => {
+      const failed = createSession({ github: providerState('failed', 4) });
+      harness.setSession(failed);
+      return failed;
+    });
+    const input = { providerId: 'github', sessionId: 'session-1', topicId: 'topic-1' };
+
+    await expect(harness.service.retry(input)).rejects.toBe(triggerError);
+    expect(harness.repository.failProvider).toHaveBeenCalledWith(
+      expect.objectContaining({ providerId: 'github', revision: 4 }),
     );
+    await expect(harness.service.retry(input)).resolves.toMatchObject({ id: 'session-1' });
+    expect(mockTriggerProviders).toHaveBeenLastCalledWith(
+      expect.objectContaining({ providerIds: ['github'] }),
+      { workflowRunId: 'onboarding-understanding-retry-session-1-github-5' },
+    );
+  });
+
+  it('preserves the trigger error when retry compensation also fails', async () => {
+    const triggerError = new Error('delivery failed');
+    mockTriggerProviders.mockRejectedValueOnce(triggerError);
+    const harness = createHarness(createSession({ github: providerState('failed', 3) }));
+    harness.repository.markProviderRunning.mockResolvedValueOnce({ claimed: true, revision: 4 });
+    harness.repository.failProvider.mockRejectedValueOnce(new Error('database unavailable'));
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    await expect(
+      harness.service.retry({
+        providerId: 'github',
+        sessionId: 'session-1',
+        topicId: 'topic-1',
+      }),
+    ).rejects.toBe(triggerError);
+
+    expect(consoleError).toHaveBeenCalledWith('[understanding:retryCompensation]', {
+      errorName: 'Error',
+    });
+    consoleError.mockRestore();
   });
 });
 

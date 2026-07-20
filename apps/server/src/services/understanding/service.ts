@@ -353,9 +353,6 @@ export class UnderstandingService {
     if (!this.dependencies.providers.get(providerId) || !provider) {
       throw new UnderstandingResourceNotFoundError('session');
     }
-    if (provider.status === 'running') {
-      return { providerId, revision: provider.revision };
-    }
     if (provider.status !== 'failed') {
       throw new UnderstandingPreconditionError('source_not_retryable');
     }
@@ -377,17 +374,28 @@ export class UnderstandingService {
       await import('@/server/workflows/onboardingUnderstanding');
     OnboardingUnderstandingWorkflow.assertAvailable();
     const { revision } = await this.prepareProviderRetry(input);
-    await OnboardingUnderstandingWorkflow.triggerProviders(
-      {
-        providerIds: [input.providerId],
-        sessionId: input.sessionId,
-        topicId: input.topicId,
-        userId: this.dependencies.userId,
-      },
-      {
-        workflowRunId: `onboarding-understanding-retry-${input.sessionId}-${input.providerId}-${revision}`,
-      },
-    );
+    try {
+      await OnboardingUnderstandingWorkflow.triggerProviders(
+        {
+          providerIds: [input.providerId],
+          sessionId: input.sessionId,
+          topicId: input.topicId,
+          userId: this.dependencies.userId,
+        },
+        {
+          workflowRunId: `onboarding-understanding-retry-${input.sessionId}-${input.providerId}-${revision}`,
+        },
+      );
+    } catch (triggerError) {
+      try {
+        await this.failProvider({ ...input, revision });
+      } catch (compensationError) {
+        console.error('[understanding:retryCompensation]', {
+          errorName: compensationError instanceof Error ? compensationError.name : 'UnknownError',
+        });
+      }
+      throw triggerError;
+    }
     return this.get(input.topicId);
   };
 

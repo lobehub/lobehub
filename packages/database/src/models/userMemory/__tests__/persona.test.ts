@@ -223,5 +223,51 @@ describe('UserPersonaModel', () => {
         'User persona version snapshot is unavailable',
       );
     });
+
+    it('clears the current tagline when the restored snapshot has a null tagline', async () => {
+      await personaModel.upsertPersona({ persona: '# v1', snapshot: '# v1', tagline: null });
+      await personaModel.upsertPersona({
+        persona: '# v2',
+        snapshot: '# v2',
+        tagline: 'Current tagline',
+      });
+      const [firstVersion] = (await personaModel.listDiffs()).toReversed();
+
+      const restored = await personaModel.restoreVersion(firstVersion.id);
+
+      expect(restored.document).toMatchObject({ persona: '# v1', tagline: null, version: 3 });
+    });
+
+    it('restores an empty persona snapshot as a new version', async () => {
+      const { document } = await personaModel.upsertPersona({ persona: '# current' });
+      const [history] = await serverDB
+        .insert(userPersonaDocumentHistories)
+        .values({
+          nextVersion: 0,
+          personaId: document.id,
+          profile: 'default',
+          snapshotPersona: '',
+          userId,
+        })
+        .returning();
+
+      const restored = await personaModel.restoreVersion(history.id);
+
+      expect(restored.document).toMatchObject({ persona: '', version: 2 });
+      expect(restored.diff).toMatchObject({ snapshotPersona: '' });
+    });
+
+    it('rejects a history entry from a non-default profile', async () => {
+      await personaModel.upsertPersona({
+        persona: '# work',
+        profile: 'work',
+        snapshot: '# work',
+      });
+      const [workVersion] = await personaModel.listDiffs(50, 'work');
+
+      await expect(personaModel.restoreVersion(workVersion.id)).rejects.toThrow(
+        'User persona version was not found',
+      );
+    });
   });
 });

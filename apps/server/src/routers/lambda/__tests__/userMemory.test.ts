@@ -1,6 +1,10 @@
 import { TRPCError } from '@trpc/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import {
+  UserPersonaVersionNotFoundError,
+  UserPersonaVersionSnapshotMissingError,
+} from '@/database/models/userMemory/persona';
 import { userMemoryRouter } from '@/server/routers/lambda/userMemory';
 import { AsyncTaskErrorType, AsyncTaskStatus, AsyncTaskType } from '@/types/asyncTask';
 import { MemorySourceType } from '@/types/userMemory';
@@ -354,6 +358,22 @@ describe('userMemoryRouter persona versions', () => {
       { historyId: 'history-1', personaVersion: 4 },
     );
     expect(mockRestorePersonaVersion).toHaveBeenCalledWith('history-1');
+  });
+
+  it('maps an unavailable persona version to not found', async () => {
+    mockRestorePersonaVersion.mockRejectedValue(new UserPersonaVersionNotFoundError());
+
+    await expect(
+      createCaller().restorePersonaVersion({ historyId: 'history-missing' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('maps a missing persona snapshot to a failed precondition', async () => {
+    mockRestorePersonaVersion.mockRejectedValue(new UserPersonaVersionSnapshotMissingError());
+
+    await expect(
+      createCaller().restorePersonaVersion({ historyId: 'history-incomplete' }),
+    ).rejects.toMatchObject({ code: 'PRECONDITION_FAILED' });
   });
 
   it.each(['listPersonaVersions', 'restorePersonaVersion'] as const)(
