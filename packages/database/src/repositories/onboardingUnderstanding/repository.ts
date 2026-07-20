@@ -100,6 +100,19 @@ interface FailWritingInput {
   topicId: string;
 }
 
+interface ProviderClaim {
+  claimed: boolean;
+  revision: number;
+}
+
+const PROVIDER_ID_PATTERN = /^[\w-]+$/;
+
+const assertProviderId = (providerId: string) => {
+  if (!PROVIDER_ID_PATTERN.test(providerId)) {
+    throw new InvalidUnderstandingSessionError(`Invalid provider id: ${providerId}`);
+  }
+};
+
 const topicOwnership = (topicId: string, userId: string) =>
   and(eq(topics.id, topicId), eq(topics.userId, userId), isNull(topics.workspaceId));
 
@@ -110,11 +123,14 @@ const messageOwnership = (userId: string) =>
   and(eq(messages.userId, userId), isNull(messages.workspaceId));
 
 const parseSession = (value: unknown): OnboardingUnderstandingSession => {
+  let session: OnboardingUnderstandingSession;
   try {
-    return OnboardingUnderstandingSessionSchema.parse(value);
+    session = OnboardingUnderstandingSessionSchema.parse(value);
   } catch (error) {
     throw new InvalidUnderstandingSessionError(error);
   }
+  Object.keys(session.sources).forEach(assertProviderId);
+  return session;
 };
 
 const initialProviderState = (): UnderstandingProviderState => ({
@@ -131,6 +147,33 @@ const getSourceFingerprint = (session: OnboardingUnderstandingSession) =>
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([providerId, source]) => `${providerId}@${source.revision}`)
     .join(',');
+
+const assertProposalProvenance = (
+  session: OnboardingUnderstandingSession,
+  proposal: OnboardingUnderstandingMessageMetadata,
+) => {
+  const completedSources = Object.entries(session.sources)
+    .filter(([, source]) => source.status === 'completed')
+    .sort(([left], [right]) => left.localeCompare(right));
+  const providerIds = completedSources.map(([providerId]) => providerId);
+  if (!isEqual(proposal.providers, providerIds)) {
+    throw new Error('Understanding proposal providers do not match completed sources');
+  }
+
+  const succeededCount = completedSources.reduce(
+    (total, [, source]) => total + source.succeededCount,
+    0,
+  );
+  const failedCount = completedSources.reduce((total, [, source]) => total + source.failedCount, 0);
+  const providerSet = new Set(providerIds);
+  if (
+    proposal.diagnostics.succeededCount !== succeededCount ||
+    proposal.diagnostics.failedCount !== failedCount ||
+    proposal.diagnostics.errors.some(({ provider }) => !providerSet.has(provider))
+  ) {
+    throw new Error('Understanding proposal diagnostics do not match completed sources');
+  }
+};
 
 const getStoredProposal = (metadata: unknown) => {
   if (!isPlainRecord(metadata)) return;
@@ -216,6 +259,7 @@ export class OnboardingUnderstandingRepository {
     providerIds: string[],
   ): Promise<OnboardingUnderstandingSession> =>
     this.db.transaction(async (tx) => {
+      providerIds.forEach(assertProviderId);
       const topic = await lockOwnedTopic(tx, this.userId, topicId);
       const onboardingSession = topic.metadata?.onboardingSession;
       if (!onboardingSession) throw new UnderstandingSessionNotFoundError(topicId);
@@ -233,8 +277,9 @@ export class OnboardingUnderstandingRepository {
     topicId: string,
     sessionId: string,
     providerId: string,
-  ): Promise<number> =>
+  ): Promise<ProviderClaim> =>
     this.db.transaction(async (tx) => {
+      assertProviderId(providerId);
       const topic = await lockOwnedTopic(tx, this.userId, topicId);
       const session = requireSession(
         topicId,
@@ -243,7 +288,7 @@ export class OnboardingUnderstandingRepository {
       );
       const provider = session.sources[providerId];
       if (!provider) throw new UnderstandingResourceNotFoundError('session');
-      if (provider.status === 'running') return provider.revision;
+      if (provider.status === 'running') return { claimed: false, revision: provider.revision };
 
       const revision = provider.revision + 1;
       const next = parseSession({
@@ -262,7 +307,7 @@ export class OnboardingUnderstandingRepository {
         },
       });
       await updateTopicSession(tx, this.userId, topicId, topic.metadata!, next);
-      return revision;
+      return { claimed: true, revision };
     });
 
   completeProvider = (input: ProviderMutationInput): Promise<OnboardingUnderstandingSession> =>
@@ -288,55 +333,41 @@ export class OnboardingUnderstandingRepository {
       if (getSourceFingerprint(session) !== sourceFingerprint) {
         throw new StaleUnderstandingRevisionError('writing fingerprint', sourceFingerprint);
       }
-      const writingThreads = (
-        await tx
-          .select()
-          .from(threads)
-          .where(
-            and(
-              eq(threads.topicId, topicId),
-              eq(threads.type, ThreadType.Isolation),
-              threadOwnership(this.userId),
-            ),
-          )
-          .for('update')
-      ).filter(({ metadata }) => metadata?.onboardingUnderstanding?.kind === 'writing');
-      if (writingThreads.length > 1) {
-        throw new Error(`Multiple Understanding writing threads exist for topic: ${topicId}`);
-      }
-
-      let writingThread = writingThreads[0];
-      if (!writingThread) {
-        const [occupied] = await tx
-          .select({ id: threads.id })
-          .from(threads)
-          .where(eq(threads.id, threadId));
-        if (occupied)
-          throw new Error(`Understanding writing thread identity is occupied: ${threadId}`);
-        [writingThread] = await tx
-          .insert(threads)
-          .values({
-            agentId,
-            id: threadId,
-            metadata: { onboardingUnderstanding: { kind: 'writing' } },
-            status: ThreadStatus.Pending,
-            topicId,
-            type: ThreadType.Isolation,
-            userId: this.userId,
-          })
-          .returning();
-      } else if (writingThread.agentId !== agentId) {
-        throw new Error(`Invalid Understanding writing thread: ${writingThread.id}`);
-      }
-
+      const [writingThread] = await tx
+        .select()
+        .from(threads)
+        .where(and(eq(threads.id, threadId), threadOwnership(this.userId)))
+        .for('update');
       if (session.writing?.sourceFingerprint === sourceFingerprint) {
-        return { claimed: false, threadId: writingThread.id };
+        if (
+          !writingThread ||
+          writingThread.agentId !== agentId ||
+          writingThread.topicId !== topicId ||
+          writingThread.type !== ThreadType.Isolation ||
+          writingThread.metadata?.onboardingUnderstanding?.kind !== 'writing'
+        ) {
+          throw new Error(`Invalid Understanding writing thread: ${threadId}`);
+        }
+        return { claimed: false, threadId };
       }
-
-      await tx
-        .update(threads)
-        .set({ status: ThreadStatus.Pending, updatedAt: new Date() })
-        .where(and(eq(threads.id, writingThread.id), threadOwnership(this.userId)));
+      if (writingThread) {
+        throw new Error(`Understanding writing thread identity is occupied: ${threadId}`);
+      }
+      const [occupied] = await tx
+        .select({ id: threads.id })
+        .from(threads)
+        .where(eq(threads.id, threadId));
+      if (occupied)
+        throw new Error(`Understanding writing thread identity is occupied: ${threadId}`);
+      await tx.insert(threads).values({
+        agentId,
+        id: threadId,
+        metadata: { onboardingUnderstanding: { kind: 'writing' } },
+        status: ThreadStatus.Pending,
+        topicId,
+        type: ThreadType.Isolation,
+        userId: this.userId,
+      });
       const next = parseSession({
         ...session,
         writing: {
@@ -347,7 +378,7 @@ export class OnboardingUnderstandingRepository {
         },
       });
       await updateTopicSession(tx, this.userId, topicId, topic.metadata!, next);
-      return { claimed: true, threadId: writingThread.id };
+      return { claimed: true, threadId };
     });
 
   commitWriting = async ({
@@ -376,6 +407,7 @@ export class OnboardingUnderstandingRepository {
       ) {
         return { published: false };
       }
+      assertProposalProvenance(session, proposal);
 
       const writingThread = await this.lockWritingThread(tx, topicId, threadId);
       const [message] = await tx
@@ -547,6 +579,7 @@ export class OnboardingUnderstandingRepository {
     input: ProviderMutationInput,
     status: 'completed' | 'failed',
   ): Promise<OnboardingUnderstandingSession> => {
+    assertProviderId(input.providerId);
     const errors = input.errors.slice(-MAX_COLLECTION_ERRORS);
     return this.db.transaction(async (tx) => {
       const topic = await lockOwnedTopic(tx, this.userId, input.topicId);

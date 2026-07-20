@@ -20,6 +20,7 @@ import {
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import {
+  InvalidUnderstandingSessionError,
   OnboardingUnderstandingRepository,
   StaleUnderstandingRevisionError,
   UnderstandingResourceNotFoundError,
@@ -63,9 +64,10 @@ const proposal = (
   resultId: string,
   sourceFingerprint: string,
   providers: string[],
+  succeededCount: number,
 ): OnboardingUnderstandingMessageMetadata => ({
   analysis,
-  diagnostics,
+  diagnostics: { ...diagnostics, succeededCount },
   kind: 'proposal',
   providers,
   resultId,
@@ -143,13 +145,44 @@ describe('OnboardingUnderstandingRepository', () => {
         version: 7,
       },
     });
+
+    await installTopic({ id: 'invalid-provider-topic' });
+    await expect(
+      repository.initialize('invalid-provider-topic', 'invalid-provider-session', ['github,bad']),
+    ).rejects.toBeInstanceOf(InvalidUnderstandingSessionError);
+
+    await db
+      .update(topics)
+      .set({
+        metadata: {
+          ...topic.metadata,
+          onboardingSession: {
+            ...topic.metadata!.onboardingSession!,
+            understanding: {
+              ...first,
+              sources: { 'github@bad': first.sources.github },
+            },
+          },
+        },
+      })
+      .where(eq(topics.id, topicId));
+    await expect(repository.get(topicId)).rejects.toBeInstanceOf(InvalidUnderstandingSessionError);
   });
 
   it('advances providers only through the active revision', async () => {
     await repository.initialize(topicId, sessionId, ['github', 'gmail']);
-    const revision = await repository.markProviderRunning(topicId, sessionId, 'github');
-
-    expect(revision).toBe(1);
+    const claims = await Promise.all([
+      repository.markProviderRunning(topicId, sessionId, 'github'),
+      repository.markProviderRunning(topicId, sessionId, 'github'),
+    ]);
+    expect(claims).toEqual(
+      expect.arrayContaining([
+        { claimed: true, revision: 1 },
+        { claimed: false, revision: 1 },
+      ]),
+    );
+    expect(claims.filter(({ claimed }) => claimed)).toHaveLength(1);
+    const revision = 1;
     await expect(
       repository.completeProvider({
         errors: [],
@@ -178,7 +211,11 @@ describe('OnboardingUnderstandingRepository', () => {
       succeededCount: 3,
     });
 
-    const retryRevision = await repository.markProviderRunning(topicId, sessionId, 'gmail');
+    const { revision: retryRevision } = await repository.markProviderRunning(
+      topicId,
+      sessionId,
+      'gmail',
+    );
     await repository.failProvider({
       errors: [providerFailure],
       failedCount: 1,
@@ -196,7 +233,11 @@ describe('OnboardingUnderstandingRepository', () => {
 
   it('claims a fingerprint once and rejects a stale proposal after more sources arrive', async () => {
     await repository.initialize(topicId, sessionId, ['github', 'gmail']);
-    const githubRevision = await repository.markProviderRunning(topicId, sessionId, 'github');
+    const { revision: githubRevision } = await repository.markProviderRunning(
+      topicId,
+      sessionId,
+      'github',
+    );
     await repository.completeProvider({
       errors: [],
       failedCount: 0,
@@ -211,21 +252,25 @@ describe('OnboardingUnderstandingRepository', () => {
       agentId,
       sessionId,
       sourceFingerprint: 'github@1',
-      threadId: 'writing-thread',
+      threadId: 'github-writing-thread',
       topicId,
     });
-    await insertAssistantMessage('stale-message', 'writing-thread');
+    await insertAssistantMessage('stale-message', 'github-writing-thread');
     const duplicateClaim = await repository.claimWriting({
       agentId,
       sessionId,
       sourceFingerprint: 'github@1',
-      threadId: 'unused-thread',
+      threadId: 'github-writing-thread',
       topicId,
     });
-    expect(firstClaim).toEqual({ claimed: true, threadId: 'writing-thread' });
-    expect(duplicateClaim).toEqual({ claimed: false, threadId: 'writing-thread' });
+    expect(firstClaim).toEqual({ claimed: true, threadId: 'github-writing-thread' });
+    expect(duplicateClaim).toEqual({ claimed: false, threadId: 'github-writing-thread' });
 
-    const gmailRevision = await repository.markProviderRunning(topicId, sessionId, 'gmail');
+    const { revision: gmailRevision } = await repository.markProviderRunning(
+      topicId,
+      sessionId,
+      'gmail',
+    );
     await repository.completeProvider({
       errors: [],
       failedCount: 0,
@@ -239,10 +284,10 @@ describe('OnboardingUnderstandingRepository', () => {
     await expect(
       repository.commitWriting({
         assistantMessageId: 'stale-message',
-        metadata: proposal('stale-result', 'github@1', ['github']),
+        metadata: proposal('stale-result', 'github@1', ['github'], 3),
         sessionId,
         sourceFingerprint: 'github@1',
-        threadId: 'writing-thread',
+        threadId: 'github-writing-thread',
         topicId,
       }),
     ).resolves.toEqual({ published: false });
@@ -251,18 +296,73 @@ describe('OnboardingUnderstandingRepository', () => {
       agentId,
       sessionId,
       sourceFingerprint: 'github@1,gmail@1',
-      threadId: 'writing-thread',
+      threadId: 'combined-writing-thread',
       topicId,
     });
-    await insertAssistantMessage('current-message', 'writing-thread');
+    await insertAssistantMessage('current-message', 'combined-writing-thread');
+
+    const writingThreads = await db
+      .select({ id: threads.id })
+      .from(threads)
+      .where(eq(threads.topicId, topicId));
+    expect(writingThreads).toEqual(
+      expect.arrayContaining([{ id: 'github-writing-thread' }, { id: 'combined-writing-thread' }]),
+    );
+    await expect(
+      db
+        .select({ id: messages.id })
+        .from(messages)
+        .where(eq(messages.threadId, 'combined-writing-thread')),
+    ).resolves.toEqual([{ id: 'current-message' }]);
+
+    const combinedProposal = proposal('current-result', 'github@1,gmail@1', ['github', 'gmail'], 5);
+    await expect(
+      repository.commitWriting({
+        assistantMessageId: 'current-message',
+        metadata: { ...combinedProposal, providers: ['gmail', 'github'] },
+        sessionId,
+        sourceFingerprint: 'github@1,gmail@1',
+        threadId: 'combined-writing-thread',
+        topicId,
+      }),
+    ).rejects.toThrow('proposal providers');
+    await expect(
+      repository.commitWriting({
+        assistantMessageId: 'current-message',
+        metadata: {
+          ...combinedProposal,
+          diagnostics: { ...combinedProposal.diagnostics, succeededCount: 4 },
+        },
+        sessionId,
+        sourceFingerprint: 'github@1,gmail@1',
+        threadId: 'combined-writing-thread',
+        topicId,
+      }),
+    ).rejects.toThrow('proposal diagnostics');
+    await expect(
+      repository.commitWriting({
+        assistantMessageId: 'current-message',
+        metadata: {
+          ...combinedProposal,
+          diagnostics: {
+            ...combinedProposal.diagnostics,
+            errors: [{ ...providerFailure, provider: 'slack' }],
+          },
+        },
+        sessionId,
+        sourceFingerprint: 'github@1,gmail@1',
+        threadId: 'combined-writing-thread',
+        topicId,
+      }),
+    ).rejects.toThrow('proposal diagnostics');
 
     await expect(
       repository.commitWriting({
         assistantMessageId: 'current-message',
-        metadata: proposal('current-result', 'github@1,gmail@1', ['github', 'gmail']),
+        metadata: combinedProposal,
         sessionId,
         sourceFingerprint: 'github@1,gmail@1',
-        threadId: 'writing-thread',
+        threadId: 'combined-writing-thread',
         topicId,
       }),
     ).resolves.toEqual({ published: true });
@@ -273,7 +373,7 @@ describe('OnboardingUnderstandingRepository', () => {
       .where(eq(messages.id, 'current-message'));
     expect(message.metadata).toEqual({
       keep: true,
-      onboardingUnderstanding: proposal('current-result', 'github@1,gmail@1', ['github', 'gmail']),
+      onboardingUnderstanding: combinedProposal,
     });
     expect((await repository.get(topicId))?.writing).toMatchObject({
       resultMessageId: 'current-message',
@@ -284,7 +384,7 @@ describe('OnboardingUnderstandingRepository', () => {
 
   it('confirms version one, then publishes one new Persona version per later fingerprint', async () => {
     await repository.initialize(topicId, sessionId, ['github', 'gmail']);
-    const revision = await repository.markProviderRunning(topicId, sessionId, 'github');
+    const { revision } = await repository.markProviderRunning(topicId, sessionId, 'github');
     await repository.completeProvider({
       errors: [],
       failedCount: 0,
@@ -304,7 +404,7 @@ describe('OnboardingUnderstandingRepository', () => {
     await insertAssistantMessage('github-message', 'writing-thread');
     await repository.commitWriting({
       assistantMessageId: 'github-message',
-      metadata: proposal('github-result', 'github@1', ['github']),
+      metadata: proposal('github-result', 'github@1', ['github'], 3),
       sessionId,
       sourceFingerprint: 'github@1',
       threadId: 'writing-thread',
@@ -345,7 +445,11 @@ describe('OnboardingUnderstandingRepository', () => {
         .where(eq(userPersonaDocumentHistories.userId, userId)),
     ).toHaveLength(1);
 
-    const gmailRevision = await repository.markProviderRunning(topicId, sessionId, 'gmail');
+    const { revision: gmailRevision } = await repository.markProviderRunning(
+      topicId,
+      sessionId,
+      'gmail',
+    );
     await repository.completeProvider({
       errors: [],
       failedCount: 0,
@@ -359,17 +463,17 @@ describe('OnboardingUnderstandingRepository', () => {
       agentId,
       sessionId,
       sourceFingerprint: 'github@1,gmail@1',
-      threadId: 'writing-thread',
+      threadId: 'combined-writing-thread',
       topicId,
     });
-    await insertAssistantMessage('combined-message', 'writing-thread');
-    const combined = proposal('combined-result', 'github@1,gmail@1', ['github', 'gmail']);
+    await insertAssistantMessage('combined-message', 'combined-writing-thread');
+    const combined = proposal('combined-result', 'github@1,gmail@1', ['github', 'gmail'], 5);
     const published = await repository.commitWriting({
       assistantMessageId: 'combined-message',
       metadata: combined,
       sessionId,
       sourceFingerprint: combined.sourceFingerprint,
-      threadId: 'writing-thread',
+      threadId: 'combined-writing-thread',
       topicId,
     });
     const replayed = await repository.commitWriting({
@@ -377,7 +481,7 @@ describe('OnboardingUnderstandingRepository', () => {
       metadata: combined,
       sessionId,
       sourceFingerprint: combined.sourceFingerprint,
-      threadId: 'writing-thread',
+      threadId: 'combined-writing-thread',
       topicId,
     });
 
@@ -388,7 +492,7 @@ describe('OnboardingUnderstandingRepository', () => {
     expect(persona?.metadata).toMatchObject({
       onboardingUnderstanding: {
         composition: analysis.composition,
-        diagnostics: { evidenceCount: 4, failedCount: 0, succeededCount: 2 },
+        diagnostics: { evidenceCount: 4, failedCount: 0, succeededCount: 5 },
         profile: analysis.profile,
         providers: ['github', 'gmail'],
         sessionId,
@@ -404,7 +508,11 @@ describe('OnboardingUnderstandingRepository', () => {
 
   it('guards stale failures and preserves the valid proposal while a newer write fails', async () => {
     await repository.initialize(topicId, sessionId, ['github']);
-    const firstRevision = await repository.markProviderRunning(topicId, sessionId, 'github');
+    const { revision: firstRevision } = await repository.markProviderRunning(
+      topicId,
+      sessionId,
+      'github',
+    );
     await repository.completeProvider({
       errors: [],
       failedCount: 0,
@@ -424,13 +532,17 @@ describe('OnboardingUnderstandingRepository', () => {
     await insertAssistantMessage('valid-message', 'writing-thread');
     await repository.commitWriting({
       assistantMessageId: 'valid-message',
-      metadata: proposal('valid-result', 'github@1', ['github']),
+      metadata: proposal('valid-result', 'github@1', ['github'], 3),
       sessionId,
       sourceFingerprint: 'github@1',
       threadId: 'writing-thread',
       topicId,
     });
-    const secondRevision = await repository.markProviderRunning(topicId, sessionId, 'github');
+    const { revision: secondRevision } = await repository.markProviderRunning(
+      topicId,
+      sessionId,
+      'github',
+    );
     await repository.completeProvider({
       errors: [],
       failedCount: 0,
@@ -444,7 +556,7 @@ describe('OnboardingUnderstandingRepository', () => {
       agentId,
       sessionId,
       sourceFingerprint: 'github@2',
-      threadId: 'writing-thread',
+      threadId: 'second-writing-thread',
       topicId,
     });
 
@@ -475,7 +587,7 @@ describe('OnboardingUnderstandingRepository', () => {
 
   it('resets only the owned personal session and rejects other-user and workspace topics', async () => {
     await repository.initialize(topicId, sessionId, ['github']);
-    const revision = await repository.markProviderRunning(topicId, sessionId, 'github');
+    const { revision } = await repository.markProviderRunning(topicId, sessionId, 'github');
     await repository.completeProvider({
       errors: [],
       failedCount: 0,
@@ -492,10 +604,34 @@ describe('OnboardingUnderstandingRepository', () => {
       threadId: 'writing-thread',
       topicId,
     });
+    const { revision: secondRevision } = await repository.markProviderRunning(
+      topicId,
+      sessionId,
+      'github',
+    );
+    await repository.completeProvider({
+      errors: [],
+      failedCount: 0,
+      providerId: 'github',
+      revision: secondRevision,
+      sessionId,
+      succeededCount: 3,
+      topicId,
+    });
+    await repository.claimWriting({
+      agentId,
+      sessionId,
+      sourceFingerprint: 'github@2',
+      threadId: 'second-writing-thread',
+      topicId,
+    });
     const removed = await repository.removeForReset(topicId);
     expect(removed?.id).toBe(sessionId);
     expect(await repository.get(topicId)).toBeUndefined();
     expect(await db.select().from(threads).where(eq(threads.id, 'writing-thread'))).toHaveLength(0);
+    expect(
+      await db.select().from(threads).where(eq(threads.id, 'second-writing-thread')),
+    ).toHaveLength(0);
 
     await installTopic({ id: 'other-topic', ownerId: otherUserId });
     const otherRepository = new OnboardingUnderstandingRepository(db, otherUserId);
