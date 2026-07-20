@@ -457,6 +457,21 @@ const client = new pg.Client({ connectionString: databaseUrl });
     ],
   );
 
+  // Self-heal the inbox agent: a prior test run (e.g. `lh agent edit --slug inbox`)
+  // can turn the built-in default cloud agent into a heterogeneous (external-CLI)
+  // one, which then fails every run with GATEWAY_NOT_CONFIGURED. Reset any polluted
+  // inbox row for the test user back to a clean cloud default. Idempotent — a
+  // healthy inbox never matches the `heterogeneousProvider` filter.
+  const inboxReset = await client.query(
+    `UPDATE agents
+     SET provider = NULL, model = NULL, agency_config = NULL, updated_at = now()
+     WHERE user_id = $1 AND slug = 'inbox' AND agency_config ? 'heterogeneousProvider'`,
+    [TEST_USER.id],
+  );
+  if (inboxReset.rowCount > 0) {
+    console.log(`reset ${inboxReset.rowCount} polluted inbox agent(s) back to cloud default`);
+  }
+
   const cliEnvFile = writeCliEnvFile();
 
   console.log('seeded baseline user:');

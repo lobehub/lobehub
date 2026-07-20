@@ -470,6 +470,21 @@ interface ResolvedWorkspaceInit {
 }
 
 /**
+ * Turn a raw device-gateway dispatch error code into a human-readable headline.
+ * The gateway returns terse machine codes (e.g. `GATEWAY_NOT_CONFIGURED`) which,
+ * surfaced verbatim, render as a cryptic error card. We rewrite the headline the
+ * user reads while the caller keeps the raw code (returned + stored in `detail`)
+ * for diagnostics.
+ */
+const HETERO_DISPATCH_ERROR_HEADLINES: Record<string, string> = {
+  GATEWAY_NOT_CONFIGURED:
+    "The run device gateway isn't configured on the server, so this agent can't reach a device to run on. Configure the device gateway, or switch this agent to a connected local device.",
+};
+
+const humanizeHeteroDispatchError = (raw?: string): string =>
+  (raw && HETERO_DISPATCH_ERROR_HEADLINES[raw]) || raw || 'Device dispatch failed';
+
+/**
  * AI Agent Service
  *
  * Encapsulates agent execution logic that can be triggered via:
@@ -2083,7 +2098,7 @@ export class AiAgentService {
             agentId: resolvedAgentId,
             assistantMessageId: assistantMessageRecord.id,
             detail: result.error ?? 'Device dispatch failed',
-            message: result.error ?? 'Device dispatch failed',
+            message: humanizeHeteroDispatchError(result.error),
             operationId,
             topicId,
           });
@@ -2247,7 +2262,7 @@ export class AiAgentService {
               agentId: resolvedAgentId,
               assistantMessageId: assistantMessageRecord.id,
               detail: result.error ?? 'Device dispatch failed',
-              message: result.error ?? 'Device dispatch failed',
+              message: humanizeHeteroDispatchError(result.error),
               operationId,
               topicId,
             });

@@ -1102,6 +1102,16 @@ export class AgentModel {
 
     const mergedValue = merge(agent, restData);
 
+    // The inbox is LobeHub's built-in default cloud agent; it must never be
+    // turned into a heterogeneous (external-CLI) agent. A stray
+    // `heterogeneousProvider` — e.g. from a CLI `agent edit --slug inbox` or a
+    // mis-targeted tool call — reroutes the whole chat surface through the device
+    // gateway and breaks it with GATEWAY_NOT_CONFIGURED. Strip it at this write
+    // chokepoint regardless of caller (mirrors AGENT_BUILDER_PROTECTED_FIELDS).
+    if (agent.slug === INBOX_SESSION_ID && mergedValue.agencyConfig?.heterogeneousProvider) {
+      delete mergedValue.agencyConfig.heterogeneousProvider;
+    }
+
     // Apply the processed parameters
     mergedValue.params = Object.keys(updatedParams).length > 0 ? updatedParams : undefined;
 
