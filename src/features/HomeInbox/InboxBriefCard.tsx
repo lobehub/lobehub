@@ -1,6 +1,7 @@
 import { DEFAULT_AVATAR, INBOX_SESSION_ID } from '@lobechat/const';
-import { Avatar, Block, Flexbox, Text } from '@lobehub/ui';
+import { Avatar, Block, Flexbox, Icon, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
+import { CircleAlert } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -114,6 +115,18 @@ const InboxBriefCard = memo<InboxBriefCardProps>(({ brief }) => {
         )}
         <Flexbox flex={1} gap={6} style={{ minWidth: 0 }}>
           <Flexbox horizontal align={'center'} gap={8}>
+            {/* The meta-row status glyph can't carry severity for an error: on
+                failure the task is set to paused/scheduled, which renders as the
+                neutral "waiting for human" hand. Give the error headline its own
+                error-colored alert so the card reads as a failure at a glance. */}
+            {isError && (
+              <Icon
+                color={cssVar.colorError}
+                icon={CircleAlert}
+                size={16}
+                style={{ flex: 'none' }}
+              />
+            )}
             <Text ellipsis style={{ flex: 1, minWidth: 0 }} weight={500}>
               {title}
             </Text>

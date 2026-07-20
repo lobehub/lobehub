@@ -11,6 +11,7 @@ export default {
   'brief.action.feedback': 'Feedback',
   'brief.action.ignore': 'Ignore',
   'brief.action.retry': 'Retry',
+  'brief.action.upgrade': 'Upgrade plan',
   'brief.agentSignal.selfReview.applied.heading': 'Updated',
   'brief.agentSignal.selfReview.applied.summary': '{{count}} dream update was applied.',
   'brief.agentSignal.selfReview.applied.summary_plural': '{{count}} dream updates were applied.',

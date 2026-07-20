@@ -517,6 +517,54 @@ describe('TaskLifecycleService.onTopicComplete', () => {
       expect(brief.summary).toBe('Workspace budget exceeded');
       expect(brief.topicId).toBe('topic-1');
     });
+
+    it('a budget error leads with an upgrade remedy instead of a futile retry', async () => {
+      const task = baseTask({ automationMode: 'schedule' });
+      findById.mockResolvedValue(task);
+
+      await service.onTopicComplete({
+        errorCode: 'InsufficientBudgetForModel',
+        errorMessage: 'Workspace budget exceeded',
+        operationId: 'op-1',
+        reason: 'error',
+        runTrigger: 'manual',
+        taskId: 'task-1',
+        taskIdentifier: 'TASK-1',
+        topicId: 'topic-1',
+      });
+
+      const brief = createBrief.mock.calls.at(-1)?.[0];
+      const keys = brief.actions.map((a: { key: string }) => a.key);
+      // Retrying a budget failure just re-fails — offer the fix, not Retry.
+      expect(keys).toContain('upgrade');
+      expect(keys).not.toContain('retry');
+      const upgrade = brief.actions.find((a: { key: string }) => a.key === 'upgrade');
+      expect(upgrade.type).toBe('link');
+      expect(upgrade.url).toBeTruthy();
+      // Structured cause persisted for observability / future mapping.
+      expect(brief.metadata).toEqual({ error: { code: 'InsufficientBudgetForModel' } });
+    });
+
+    it('a non-billing error keeps the default retry action', async () => {
+      const task = baseTask({ automationMode: 'schedule' });
+      findById.mockResolvedValue(task);
+
+      await service.onTopicComplete({
+        errorCode: 'ProviderBizError',
+        errorMessage: 'upstream 500',
+        operationId: 'op-1',
+        reason: 'error',
+        runTrigger: 'manual',
+        taskId: 'task-1',
+        taskIdentifier: 'TASK-1',
+        topicId: 'topic-1',
+      });
+
+      const brief = createBrief.mock.calls.at(-1)?.[0];
+      const keys = brief.actions.map((a: { key: string }) => a.key);
+      expect(keys).toContain('retry');
+      expect(keys).not.toContain('upgrade');
+    });
   });
 
   describe('reason=done recovery audit (LOBE-11390)', () => {
