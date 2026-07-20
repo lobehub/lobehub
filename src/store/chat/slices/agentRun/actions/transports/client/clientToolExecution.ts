@@ -3,6 +3,7 @@ import { type BuiltinToolContext } from '@lobechat/types';
 import debug from 'debug';
 import { produce } from 'immer';
 
+import { getEffectiveWorkingDirectoryPath } from '@/helpers/parserPlaceholder';
 import { mcpService } from '@/services/mcp';
 import { type ChatStore } from '@/store/chat/store';
 import { hasExecutor, invokeExecutor } from '@/store/tool/slices/builtin/executors';
@@ -169,6 +170,13 @@ export class ClientToolExecutionActionImpl {
           topicId: topicId ?? operation?.context?.topicId,
           toolCallId,
           toolMessageId,
+          // Effective working directory (topic override > agent per-device value),
+          // resolved from the SAME source as the `{{workingDirectory}}` system
+          // prompt placeholder and the intervention path-scope audit. Tools like
+          // local-system grep/search use this as the default scope so the search
+          // actually runs where the prompt promises — not the Electron main
+          // process `process.cwd()` (which is `/` in a packaged app → 0 matches).
+          workingDirectory: getEffectiveWorkingDirectoryPath(),
         };
 
         log('[ClientToolCall] execute:start', {

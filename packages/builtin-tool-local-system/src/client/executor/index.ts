@@ -13,13 +13,13 @@ import type {
   WriteLocalFileParams,
 } from '@lobechat/electron-client-ipc';
 import { LocalSystemExecutionRuntime } from '@lobechat/tool-runtime';
-import type { BuiltinToolResult } from '@lobechat/types';
+import type { BuiltinToolContext, BuiltinToolResult } from '@lobechat/types';
 import { BaseExecutor } from '@lobechat/types';
 
 import { localFileService } from '@/services/electron/localFileService';
 
 import { LocalSystemIdentifier } from '../../types';
-import { resolveArgsWithScope } from '../../utils/path';
+import { resolveArgsWithScope, resolvePathWithScope } from '../../utils/path';
 
 const DEFAULT_FILE_SEARCH_LIMIT = 100;
 
@@ -215,9 +215,28 @@ class LocalSystemExecutor extends BaseExecutor<typeof LocalSystemApiEnum> {
 
   // ==================== Search & Find ====================
 
-  grepContent = async (params: GrepContentParams): Promise<BuiltinToolResult> => {
+  grepContent = async (
+    params: GrepContentParams,
+    ctx?: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
     try {
-      const resolvedParams = resolveArgsWithScope(params, 'path');
+      // Resolve the search root to an ABSOLUTE path anchored on the agent's
+      // effective working directory. The grep manifest/systemRole tell the model
+      // `scope` "defaults to the working directory", but without this the
+      // downstream `resolveSearchPath` drops to the Electron main process
+      // `process.cwd()` (`/` in a packaged app) — so a scope-less OR relative
+      // (e.g. `.`) scope made every grep return 0 matches. `ctx.workingDirectory`
+      // is sourced from the same place as the `{{workingDirectory}}` prompt
+      // placeholder, so what the search targets matches what the prompt promises.
+      // `resolvePathWithScope(scope, workingDir)` treats the model's `scope` as a
+      // path resolved against the working directory:
+      // - scope omitted → working directory
+      // - scope relative (`.`, `src`) → joined onto the working directory
+      // - scope absolute → used as-is
+      // It only returns undefined when there is no working directory AND no scope
+      // (web / nothing configured) — then we leave params untouched.
+      const searchRoot = resolvePathWithScope(params.scope, ctx?.workingDirectory);
+      const resolvedParams = searchRoot ? { ...params, path: searchRoot } : params;
       // Forward the full IPC params (glob / output_mode / -i / -A / -B / -C / -n /
       // multiline / head_limit / type / tool) instead of stripping to {directory, pattern}.
       // ComputerRuntime.callService passes args through unchanged, so the runtime type

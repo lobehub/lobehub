@@ -13,6 +13,30 @@ import { globalAgentContextManager } from '../GlobalAgentContextManager';
 
 const placeholderVariablesRegex = /\{\{(.*?)\}\}/g;
 
+const WORKING_DIRECTORY_UNSPECIFIED = '(not specified, use user Home directory as default)';
+
+/**
+ * The effective working directory as an actual filesystem path, or `undefined`
+ * when nothing is configured (or off-desktop). This is the SAME resolution the
+ * `{{workingDirectory}}` system-prompt placeholder shows the model — keep them
+ * sourced from here so what the prompt promises ("defaults to the working
+ * directory") matches what tools actually search. Unlike the placeholder, this
+ * returns `undefined` instead of a human-readable "(not specified…)" string, so
+ * callers can safely use it as a path / scope default.
+ */
+export const getEffectiveWorkingDirectoryPath = (): string | undefined => {
+  if (!isDesktop) return undefined;
+
+  const topicWorkingDir = topicSelectors.currentTopicWorkingDirectory(useChatStore.getState());
+  if (topicWorkingDir) return topicWorkingDir;
+
+  const currentDeviceId = getElectronStoreState().gatewayDeviceInfo?.deviceId;
+  return (
+    agentSelectors.currentAgentWorkingDirectory(currentDeviceId)(useAgentStore.getState()) ??
+    undefined
+  );
+};
+
 export const VARIABLE_GENERATORS = {
   /**
    * Time-related template variables
@@ -158,15 +182,7 @@ export const VARIABLE_GENERATORS = {
    */
   workingDirectory: () => {
     if (!isDesktop) return '';
-
-    const topicWorkingDir = topicSelectors.currentTopicWorkingDirectory(useChatStore.getState());
-    if (topicWorkingDir) return topicWorkingDir;
-
-    const currentDeviceId = getElectronStoreState().gatewayDeviceInfo?.deviceId;
-    const agentWorkingDir = agentSelectors.currentAgentWorkingDirectory(currentDeviceId)(
-      useAgentStore.getState(),
-    );
-    return agentWorkingDir ?? '(not specified, use user Home directory as default)';
+    return getEffectiveWorkingDirectoryPath() ?? WORKING_DIRECTORY_UNSPECIFIED;
   },
 } as Record<string, () => string>;
 
