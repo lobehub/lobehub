@@ -1,3 +1,4 @@
+import { isPlainRecord } from '@lobechat/utils/object';
 import { and, desc, eq } from 'drizzle-orm';
 import isEqual from 'fast-deep-equal';
 
@@ -17,6 +18,7 @@ export interface UpsertUserPersonaParams {
   editedBy?: 'user' | 'agent' | 'agent_tool';
   memoryIds?: string[] | null;
   metadata?: Record<string, unknown> | null;
+  metadataPatch?: Record<string, unknown>;
   persona: string;
   profile?: string | null;
   reasoning?: string | null;
@@ -48,25 +50,36 @@ export const lockUserPersonaOwner = async (tx: Transaction, userId: string): Pro
   if (!owner) throw new Error('User persona owner was not found');
 };
 
+export const getUserPersonaForUpdateInTransaction = async (
+  tx: Transaction,
+  userId: string,
+  profile = 'default',
+): Promise<UserPersonaDocument | undefined> => {
+  const [document] = await tx
+    .select()
+    .from(userPersonaDocuments)
+    .where(and(eq(userPersonaDocuments.userId, userId), eq(userPersonaDocuments.profile, profile)))
+    .for('update');
+
+  return document;
+};
+
 export const upsertUserPersonaInTransaction = async (
   tx: Transaction,
   userId: string,
   params: UpsertUserPersonaParams,
 ): Promise<{ diff?: UserPersonaDocumentHistoriesItem; document: UserPersonaDocument }> => {
-  const [existing] = await tx
-    .select()
-    .from(userPersonaDocuments)
-    .where(
-      and(
-        eq(userPersonaDocuments.userId, userId),
-        eq(userPersonaDocuments.profile, params.profile ?? 'default'),
-      ),
-    )
-    .for('update');
+  await lockUserPersonaOwner(tx, userId);
+
+  const nextProfile = params.profile ?? 'default';
+  const existing = await getUserPersonaForUpdateInTransaction(tx, userId, nextProfile);
   const nextVersion = (existing?.version ?? 0) + 1;
   const nextMemoryIds = params.memoryIds ?? existing?.memoryIds ?? undefined;
-  const nextMetadata = params.metadata ?? existing?.metadata ?? undefined;
-  const nextProfile = params.profile ?? 'default';
+  const metadataBase = params.metadata ?? existing?.metadata ?? undefined;
+  const nextMetadata =
+    !params.metadataPatch || Object.keys(params.metadataPatch).length === 0
+      ? metadataBase
+      : { ...(isPlainRecord(metadataBase) ? metadataBase : {}), ...params.metadataPatch };
   const nextSourceIds = params.sourceIds ?? existing?.sourceIds ?? undefined;
   const nextTagline = params.tagline === undefined ? existing?.tagline : params.tagline;
 
@@ -91,7 +104,7 @@ export const upsertUserPersonaInTransaction = async (
       !isEqual(existing.sourceIds, nextSourceIds ?? null) ||
       !isEqual(existing.metadata, nextMetadata ?? null);
 
-    if (!hasDocumentChanges && params.snapshot == null) return { document: existing };
+    if (!hasDocumentChanges) return { document: existing };
 
     const [updated] = await tx
       .update(userPersonaDocuments)
@@ -146,7 +159,7 @@ export const upsertUserPersonaInTransaction = async (
         diffTagline: params.diffTagline ?? undefined,
         editedBy: params.editedBy ?? 'agent',
         memoryIds: params.memoryIds ?? undefined,
-        metadata: params.metadata ?? undefined,
+        metadata: nextMetadata,
         nextVersion: document.version,
         personaId: document.id,
         previousVersion: existing?.version,
@@ -249,15 +262,11 @@ export class UserPersonaModel {
   upsertPersona = async (
     params: UpsertUserPersonaParams,
   ): Promise<{ diff?: UserPersonaDocumentHistoriesItem; document: UserPersonaDocument }> => {
-    return this.db.transaction(async (tx) => {
-      await lockUserPersonaOwner(tx, this.userId);
-      return upsertUserPersonaInTransaction(tx, this.userId, params);
-    });
+    return this.db.transaction((tx) => upsertUserPersonaInTransaction(tx, this.userId, params));
   };
 
   restoreVersion = async (historyId: string) => {
     return this.db.transaction(async (tx) => {
-      await lockUserPersonaOwner(tx, this.userId);
       const [history] = await tx
         .select({
           snapshotPersona: userPersonaDocumentHistories.snapshotPersona,

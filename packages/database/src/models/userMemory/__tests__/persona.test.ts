@@ -8,6 +8,57 @@ import { UserPersonaModel } from '../persona';
 
 const userId = 'persona-user';
 
+interface MetadataMergeCase {
+  expectedMetadata: Record<string, unknown> | null;
+  expectedVersion: number;
+  initialMetadata?: Record<string, unknown> | null;
+  initialPatch?: Record<string, unknown>;
+  name: string;
+  updateMetadata?: Record<string, unknown> | null;
+  updatePatch: Record<string, unknown>;
+}
+
+const metadataMergeCases: MetadataMergeCase[] = [
+  {
+    expectedMetadata: { preference: { concise: true } },
+    expectedVersion: 1,
+    initialMetadata: { preference: { concise: true } },
+    name: 'preserves existing metadata when metadata is undefined and the patch is empty',
+    updateMetadata: undefined,
+    updatePatch: {},
+  },
+  {
+    expectedMetadata: {
+      onboardingUnderstanding: { sessionId: 'session-1' },
+      preference: { concise: true },
+    },
+    expectedVersion: 2,
+    initialMetadata: { preference: { concise: true } },
+    name: 'preserves existing metadata when metadata is null and applies the patch',
+    updateMetadata: null,
+    updatePatch: { onboardingUnderstanding: { sessionId: 'session-1' } },
+  },
+  {
+    expectedMetadata: null,
+    expectedVersion: 1,
+    initialPatch: {},
+    name: 'keeps an empty patch over absent metadata as a no-op',
+    updatePatch: {},
+  },
+  {
+    expectedMetadata: {
+      added: true,
+      collision: 'patch',
+      replacement: true,
+    },
+    expectedVersion: 2,
+    initialMetadata: { existing: true },
+    name: 'uses explicit metadata as the replacement base with patch precedence',
+    updateMetadata: { collision: 'metadata', replacement: true },
+    updatePatch: { added: true, collision: 'patch' },
+  },
+];
+
 let personaModel: UserPersonaModel;
 const serverDB: LobeChatDatabase = await getTestDB();
 
@@ -90,6 +141,96 @@ describe('UserPersonaModel', () => {
     expect(document.version).toBe(1);
     expect(document.updatedAt).toEqual(created.updatedAt);
     expect(document.accessedAt).toEqual(created.accessedAt);
+
+    const persisted = await serverDB.query.userPersonaDocumentHistories.findMany({
+      where: (t, { eq }) => eq(t.userId, userId),
+    });
+    expect(persisted).toHaveLength(existingDiffs.length);
+  });
+
+  it('shallowly merges metadata patches into the current persona metadata', async () => {
+    await personaModel.upsertPersona({
+      metadata: { preference: { concise: true } },
+      persona: '# Persona',
+    });
+
+    const { diff, document } = await personaModel.upsertPersona({
+      diffPersona: '- captured onboarding understanding',
+      metadataPatch: {
+        onboardingUnderstanding: {
+          sessionId: 'session-1',
+          sourceFingerprint: 'github@1',
+        },
+      },
+      persona: '# Persona',
+    });
+
+    const expectedMetadata = {
+      onboardingUnderstanding: {
+        sessionId: 'session-1',
+        sourceFingerprint: 'github@1',
+      },
+      preference: { concise: true },
+    };
+    expect(document.metadata).toEqual(expectedMetadata);
+    expect(document.version).toBe(2);
+    expect(diff?.metadata).toEqual(expectedMetadata);
+
+    const persisted = await serverDB.query.userPersonaDocuments.findFirst({
+      where: (t, { eq }) => eq(t.userId, userId),
+    });
+    expect(persisted?.metadata).toEqual(expectedMetadata);
+  });
+
+  it.each(metadataMergeCases)(
+    '$name',
+    async ({
+      expectedMetadata,
+      expectedVersion,
+      initialMetadata,
+      initialPatch,
+      updateMetadata,
+      updatePatch,
+    }) => {
+      await personaModel.upsertPersona({
+        metadata: initialMetadata,
+        metadataPatch: initialPatch,
+        persona: '# Persona',
+      });
+
+      const { document } = await personaModel.upsertPersona({
+        metadata: updateMetadata,
+        metadataPatch: updatePatch,
+        persona: '# Persona',
+      });
+
+      expect(document.metadata).toEqual(expectedMetadata);
+      expect(document.version).toBe(expectedVersion);
+    },
+  );
+
+  it('does not create a new version when an identical metadata patch is repeated', async () => {
+    const params = {
+      metadataPatch: {
+        onboardingUnderstanding: {
+          sessionId: 'session-1',
+          sourceFingerprint: 'github@1',
+        },
+      },
+      persona: '# Stable persona',
+      snapshot: '# Stable persona',
+      tagline: 'Stable',
+    };
+    const { document: created } = await personaModel.upsertPersona(params);
+    const existingDiffs = await serverDB.query.userPersonaDocumentHistories.findMany({
+      where: (t, { eq }) => eq(t.userId, userId),
+    });
+
+    const { diff, document } = await personaModel.upsertPersona(params);
+
+    expect(document.metadata).toEqual(params.metadataPatch);
+    expect(document.version).toBe(created.version);
+    expect(diff).toBeUndefined();
 
     const persisted = await serverDB.query.userPersonaDocumentHistories.findMany({
       where: (t, { eq }) => eq(t.userId, userId),
