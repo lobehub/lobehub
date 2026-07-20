@@ -33,7 +33,7 @@ import {
   RotateCcw,
   SquareArrowOutUpRight,
 } from 'lucide-react';
-import { memo, useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams, useSearchParams } from 'react-router';
 
@@ -44,6 +44,7 @@ import AgentProfilePopup from '@/features/AgentProfileCard/AgentProfilePopup';
 import { mutate as globalMutate } from '@/libs/swr';
 import { verifyKeys } from '@/libs/swr/keys';
 import { verifyService } from '@/services/verify';
+import { useChatStore } from '@/store/chat';
 
 import { useAcceptanceBundle } from '../hooks';
 import ReportViewer from '../ReportViewer';
@@ -230,7 +231,11 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
   const [roundFilter, setRoundFilter] = useState<number | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set());
-  const [seeded, setSeeded] = useState(false);
+  // Which aggregate the expand/collapse defaults were seeded for. Keyed by id
+  // (not a one-shot boolean) so switching aggregates — the portal embed swaps
+  // `acceptanceId` without remounting — re-seeds each one's defaults instead of
+  // leaving a later aggregate's evidence collapsed under the first's seed.
+  const seededIdRef = useRef<string | null>(null);
   const [highlightRound, setHighlightRound] = useState<number | null>(null);
   const [ledgerExpand, setLedgerExpand] = useState(!isEmbedded);
   // Entering the narrow regime closes the ledger (it would cover the report);
@@ -253,13 +258,17 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
     return () => clearInterval(timer);
   }, [status, mutate]);
 
-  // Exceptions and visually-evidenced checks start expanded (P-08) — once,
-  // on first load, so the user's own toggling is never overwritten. A check
-  // the user already accepted is settled business and stays folded regardless
-  // of its evidence; groups accepted in full start collapsed for the same
-  // reason.
+  // Exceptions and visually-evidenced checks start expanded (P-08) — a check
+  // still awaiting the user's review shows its evidence (screenshots included)
+  // up front, not folded away. Seeded once per aggregate (see `seededIdRef`),
+  // and only after its checks have arrived, so the user's own toggling is never
+  // overwritten and an aggregate whose checks stream in a beat late still seeds.
+  // A check the user already accepted is settled business and stays folded
+  // regardless of its evidence; groups accepted in full start collapsed too.
   useEffect(() => {
-    if (seeded || !data) return;
+    if (!data || data.checks.length === 0) return;
+    if (seededIdRef.current === acceptanceId) return;
+    seededIdRef.current = acceptanceId ?? null;
     setExpanded(
       new Set(
         data.checks
@@ -278,8 +287,7 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
           .map((group) => group.key),
       ),
     );
-    setSeeded(true);
-  }, [data, seeded, t]);
+  }, [data, acceptanceId, t]);
 
   const counts = useMemo(() => {
     const checks = data?.checks ?? [];
@@ -606,7 +614,23 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
   // agent reads the feedback itself via the CLI, no hand-summarizing. The
   // aggregate is stamped `repairing` so the page (and the list) show the
   // send-back took effect instead of sitting unchanged.
+  //
+  // Portal embed exception: the acceptance sits beside the live conversation, so
+  // a send-back drafts the prompt into the user's own composer (left) for them
+  // to review and send — never a silent backend post behind their back.
   const handleRerun = async () => {
+    if (isEmbedded) {
+      const editor = useChatStore.getState().mainInputEditor;
+      if (!editor) return;
+      editor.instance?.setDocument('markdown', repairPrompt);
+      editor.focus();
+      toast.success({
+        placement: 'bottom',
+        style: { marginBlockEnd: 88 },
+        title: t('acceptance.bar.rerunDrafted'),
+      });
+      return;
+    }
     if (!origin?.topic) return;
     setRerunPending(true);
     try {
@@ -961,7 +985,7 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
               needsFixCount={needsFixCount}
               pending={pending}
               repairing={acceptance.status === 'repairing'}
-              rerunAvailable={Boolean(origin?.topic)}
+              rerunAvailable={isEmbedded || Boolean(origin?.topic)}
               rerunPending={rerunPending}
               state={barState}
               statusText={barTexts.statusText}

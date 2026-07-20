@@ -36,6 +36,7 @@ export default {
   'acceptance.bar.progressZero': '{{total}} checks awaiting your review',
   'acceptance.bar.rejectComment': 'Reject with comment',
   'acceptance.bar.rerun': 'Send back & rerun',
+  'acceptance.bar.rerunDrafted': 'Drafted into your composer — review and send it.',
   'acceptance.bar.rerunSent': 'Sent to the origin conversation — the repair round is starting.',
   'acceptance.checks.copied': 'Copied',
   'acceptance.checks.copySeq': 'Copy the check label',
