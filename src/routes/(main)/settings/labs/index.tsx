@@ -77,7 +77,9 @@ const Page = memo(() => {
     return <Skeleton active paragraph={{ rows: 5 }} title={false} />;
   }
 
-  const labItems: FormItemProps[] = [
+  // Cross-surface experiments. Platform-specific ones (Electron main-process
+  // features) live in the Desktop group below; everything else is General.
+  const generalItems: FormItemProps[] = [
     {
       children: (
         <Switch
@@ -143,36 +145,6 @@ const Page = memo(() => {
       label: tLabs('features.oauthApps.title'),
       minWidth: undefined,
     },
-    ...(isDesktop
-      ? [
-          {
-            children: (
-              <Switch
-                checked={enableImessage}
-                loading={!isPreferenceInit}
-                onChange={(checked: boolean) => updateLab({ enableImessage: checked })}
-              />
-            ),
-            className: styles.labItem,
-            desc: tLabs('features.imessage.desc'),
-            label: tLabs('features.imessage.title'),
-            minWidth: undefined,
-          } satisfies FormItemProps,
-          {
-            children: (
-              <Switch
-                checked={enableClaudeCodeSdk}
-                loading={!isPreferenceInit}
-                onChange={(checked: boolean) => updateLab({ enableClaudeCodeSdk: checked })}
-              />
-            ),
-            className: styles.labItem,
-            desc: tLabs('features.claudeCodeSdk.desc'),
-            label: tLabs('features.claudeCodeSdk.title'),
-            minWidth: undefined,
-          } satisfies FormItemProps,
-        ]
-      : []),
     ...(hasGatewayUrl
       ? [
           {
@@ -186,38 +158,6 @@ const Page = memo(() => {
             className: styles.labItem,
             desc: tLabs('features.platformAgent.desc'),
             label: tLabs('features.platformAgent.title'),
-            minWidth: undefined,
-          } satisfies FormItemProps,
-        ]
-      : []),
-    // The in-app browser pages are main-process WebContentsViews — desktop only.
-    ...(isDesktop
-      ? [
-          {
-            children: (
-              <Switch
-                checked={enableInAppBrowser}
-                loading={!isPreferenceInit}
-                onChange={(checked: boolean) => updateLab({ enableInAppBrowser: checked })}
-              />
-            ),
-            className: styles.labItem,
-            desc: tLabs('features.inAppBrowser.desc'),
-            label: tLabs('features.inAppBrowser.title'),
-            minWidth: undefined,
-          } satisfies FormItemProps,
-          // The terminal runs PTY sessions in the Electron main process — desktop only.
-          {
-            children: (
-              <Switch
-                checked={enableBuiltinTerminal}
-                loading={!isPreferenceInit}
-                onChange={(checked: boolean) => updateLab({ enableBuiltinTerminal: checked })}
-              />
-            ),
-            className: styles.labItem,
-            desc: tLabs('features.builtinTerminal.desc'),
-            label: tLabs('features.builtinTerminal.title'),
             minWidth: undefined,
           } satisfies FormItemProps,
         ]
@@ -237,17 +177,86 @@ const Page = memo(() => {
     } satisfies FormItemProps,
   ];
 
-  const labsGroup: FormGroupItemType = {
-    children: labItems,
-    title: tLabs('title'),
-  };
+  // Desktop-only experiments: iMessage bridge, the Claude Code SDK runtime, and
+  // the in-app browser / built-in terminal (both main-process WebContentsViews /
+  // PTY sessions).
+  const desktopItems: FormItemProps[] = [
+    {
+      children: (
+        <Switch
+          checked={enableImessage}
+          loading={!isPreferenceInit}
+          onChange={(checked: boolean) => updateLab({ enableImessage: checked })}
+        />
+      ),
+      className: styles.labItem,
+      desc: tLabs('features.imessage.desc'),
+      label: tLabs('features.imessage.title'),
+      minWidth: undefined,
+    } satisfies FormItemProps,
+    {
+      children: (
+        <Switch
+          checked={enableClaudeCodeSdk}
+          loading={!isPreferenceInit}
+          onChange={(checked: boolean) => updateLab({ enableClaudeCodeSdk: checked })}
+        />
+      ),
+      className: styles.labItem,
+      desc: tLabs('features.claudeCodeSdk.desc'),
+      label: tLabs('features.claudeCodeSdk.title'),
+      minWidth: undefined,
+    },
+    {
+      children: (
+        <Switch
+          checked={enableInAppBrowser}
+          loading={!isPreferenceInit}
+          onChange={(checked: boolean) => updateLab({ enableInAppBrowser: checked })}
+        />
+      ),
+      className: styles.labItem,
+      desc: tLabs('features.inAppBrowser.desc'),
+      label: tLabs('features.inAppBrowser.title'),
+      minWidth: undefined,
+    },
+    {
+      children: (
+        <Switch
+          checked={enableBuiltinTerminal}
+          loading={!isPreferenceInit}
+          onChange={(checked: boolean) => updateLab({ enableBuiltinTerminal: checked })}
+        />
+      ),
+      className: styles.labItem,
+      desc: tLabs('features.builtinTerminal.desc'),
+      label: tLabs('features.builtinTerminal.title'),
+      minWidth: undefined,
+    },
+  ];
+
+  const items: FormGroupItemType[] = [
+    {
+      children: generalItems,
+      title: tLabs('group.general'),
+    },
+  ];
+
+  // The Desktop group only renders in the Electron shell — all its experiments
+  // are main-process features that do not exist on web.
+  if (isDesktop) {
+    items.push({
+      children: desktopItems,
+      title: tLabs('group.desktop'),
+    });
+  }
 
   return (
     <>
       <SettingHeader title={tLabs('title')} />
       <Form
         collapsible={false}
-        items={[labsGroup]}
+        items={items}
         itemsType={'group'}
         variant={'filled'}
         {...FORM_STYLE}

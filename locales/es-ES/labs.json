@@ -11,8 +11,6 @@
   "features.builtinTerminal.title": "Terminal Integrado",
   "features.claudeCodeSdk.desc": "Ejecuta sesiones de Claude Code a través del SDK de Claude Agent en lugar de iniciar la CLI. Permite una transmisión más rica y un mejor control de las sesiones.",
   "features.claudeCodeSdk.title": "Entorno de Ejecución del SDK de Claude Code",
-  "features.foldFinishedTurn.desc": "Colapsa el proceso (razonamiento y llamadas a herramientas) de los turnos de agente finalizados y no más recientes bajo un encabezado \"Procesado\". La respuesta final permanece visible; haz clic para expandir el proceso.",
-  "features.foldFinishedTurn.title": "Colapsar Turnos Finalizados",
   "features.groupChat.desc": "Activa la coordinación de chat grupal con múltiples agentes.",
   "features.groupChat.title": "Chat Grupal (Multiagente)",
   "features.imessage.desc": "Conectar agentes a iMessage a través del puente local LobeHub Desktop BlueBubbles.",
@@ -29,5 +27,9 @@
   "features.platformAgent.title": "Conectar Agente",
   "features.taskVerify.desc": "Agrega una sección de aceptación de entrega a los detalles de la tarea: describe la aceptación en una frase y permite que la IA genere criterios de verificación editables.",
   "features.taskVerify.title": "Aceptación de Entrega de Tarea",
+  "features.topicAcceptance.desc": "Crea una lista de verificación de entrega para el tema actual justo encima del compositor, para que la conversación cumpla con los estándares que puedes editar en cualquier momento.",
+  "features.topicAcceptance.title": "Aceptación de Tema",
+  "group.desktop": "Escritorio",
+  "group.general": "General",
   "title": "Laboratorios"
 }

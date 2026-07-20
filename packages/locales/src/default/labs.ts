@@ -43,5 +43,7 @@ export default {
   'features.topicAcceptance.desc':
     'Author a delivery checklist for the current topic right above the composer, so the conversation is held to standards you can edit any time.',
   'features.topicAcceptance.title': 'Topic Acceptance',
+  'group.desktop': 'Desktop',
+  'group.general': 'General',
   'title': 'Labs',
 };

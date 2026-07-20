@@ -11,8 +11,6 @@
   "features.builtinTerminal.title": "الطرفية المدمجة",
   "features.claudeCodeSdk.desc": "قم بتشغيل جلسات Claude Code من خلال Claude Agent SDK بدلاً من تشغيل واجهة سطر الأوامر (CLI). يتيح ذلك بثًا أكثر ثراءً وتحكمًا أفضل في الجلسات.",
   "features.claudeCodeSdk.title": "وقت تشغيل Claude Code SDK",
-  "features.foldFinishedTurn.desc": "طي العملية (الاستدلال واستدعاءات الأدوات) للأدوار المكتملة وغير الأحدث تحت عنوان \"تمت المعالجة\". يبقى الجواب النهائي مرئيًا؛ انقر لتوسيع العملية.",
-  "features.foldFinishedTurn.title": "طي الأدوار المكتملة",
   "features.groupChat.desc": "تمكين تنسيق الدردشة الجماعية متعددة الوكلاء.",
   "features.groupChat.title": "دردشة جماعية (متعددة الوكلاء)",
   "features.imessage.desc": "ربط الوكلاء بـ iMessage من خلال جسر BlueBubbles المحلي لتطبيق LobeHub Desktop.",
@@ -29,5 +27,9 @@
   "features.platformAgent.title": "اتصال الوكيل",
   "features.taskVerify.desc": "أضف قسم قبول التسليم إلى تفاصيل المهمة: قم بوصف القبول في جملة واحدة ودع الذكاء الاصطناعي يولد معايير تحقق قابلة للتعديل.",
   "features.taskVerify.title": "قبول تسليم المهمة",
+  "features.topicAcceptance.desc": "قم بإنشاء قائمة تحقق للتسليم للموضوع الحالي مباشرة فوق المؤلف، بحيث يتم إجراء المحادثة وفقًا للمعايير التي يمكنك تعديلها في أي وقت.",
+  "features.topicAcceptance.title": "قبول الموضوع",
+  "group.desktop": "سطح المكتب",
+  "group.general": "عام",
   "title": "المختبرات"
 }

@@ -11,8 +11,6 @@
   "features.builtinTerminal.title": "Terminal Tích Hợp",
   "features.claudeCodeSdk.desc": "Chạy các phiên Claude Code thông qua Claude Agent SDK thay vì khởi chạy CLI. Cho phép truyền tải phong phú hơn và kiểm soát phiên làm việc.",
   "features.claudeCodeSdk.title": "Thời gian chạy Claude Code SDK",
-  "features.foldFinishedTurn.desc": "Thu gọn quy trình (lập luận và các cuộc gọi công cụ) của các lượt tác nhân đã hoàn thành, không phải lượt mới nhất, dưới tiêu đề \"Đã xử lý\". Câu trả lời cuối cùng vẫn hiển thị; nhấp để mở rộng quy trình.",
-  "features.foldFinishedTurn.title": "Thu gọn các lượt đã hoàn thành",
   "features.groupChat.desc": "Kích hoạt phối hợp trò chuyện nhóm với nhiều tác nhân.",
   "features.groupChat.title": "Trò Chuyện Nhóm (Đa Tác Nhân)",
   "features.imessage.desc": "Kết nối các đại lý với iMessage thông qua cầu nối BlueBubbles LobeHub Desktop cục bộ.",
@@ -29,5 +27,9 @@
   "features.platformAgent.title": "Kết nối Agent",
   "features.taskVerify.desc": "Thêm phần chấp nhận giao hàng vào chi tiết nhiệm vụ: mô tả chấp nhận trong một câu và để AI tạo tiêu chí xác minh có thể chỉnh sửa.",
   "features.taskVerify.title": "Chấp Nhận Giao Nhiệm Vụ",
+  "features.topicAcceptance.desc": "Tạo danh sách kiểm tra giao hàng cho chủ đề hiện tại ngay phía trên trình soạn thảo, để cuộc trò chuyện tuân theo các tiêu chuẩn mà bạn có thể chỉnh sửa bất kỳ lúc nào.",
+  "features.topicAcceptance.title": "Chấp nhận Chủ đề",
+  "group.desktop": "Máy tính để bàn",
+  "group.general": "Chung",
   "title": "Phòng Thí Nghiệm"
 }

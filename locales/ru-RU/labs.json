@@ -11,8 +11,6 @@
   "features.builtinTerminal.title": "Встроенный терминал",
   "features.claudeCodeSdk.desc": "Запускайте сеансы Claude Code через Claude Agent SDK вместо запуска CLI. Обеспечивает более богатую потоковую передачу и управление сеансами.",
   "features.claudeCodeSdk.title": "Среда выполнения Claude Code SDK",
-  "features.foldFinishedTurn.desc": "Свернуть процесс (рассуждения и вызовы инструментов) завершённых, не последних ходов агента под заголовком «Обработано». Окончательный ответ остаётся видимым; нажмите, чтобы развернуть процесс.",
-  "features.foldFinishedTurn.title": "Свернуть завершённые ходы",
   "features.groupChat.desc": "Включите координацию группового чата с несколькими агентами.",
   "features.groupChat.title": "Групповой чат (мультиагентный)",
   "features.imessage.desc": "Подключайте агентов к iMessage через локальный мост LobeHub Desktop BlueBubbles.",
@@ -29,5 +27,9 @@
   "features.platformAgent.title": "Подключить агент",
   "features.taskVerify.desc": "Добавьте раздел приемки доставки в детали задачи: опишите приемку в одном предложении, и ИИ создаст редактируемые критерии проверки.",
   "features.taskVerify.title": "Приемка доставки задачи",
+  "features.topicAcceptance.desc": "Создайте контрольный список доставки для текущей темы прямо над редактором, чтобы разговор соответствовал стандартам, которые вы можете редактировать в любое время.",
+  "features.topicAcceptance.title": "Принятие темы",
+  "group.desktop": "Настольный компьютер",
+  "group.general": "Общие",
   "title": "Лаборатория"
 }

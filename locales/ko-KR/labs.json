@@ -11,8 +11,6 @@
   "features.builtinTerminal.title": "내장 터미널",
   "features.claudeCodeSdk.desc": "Claude Agent SDK를 통해 Claude Code 세션을 실행하여 CLI를 생성하는 대신 사용합니다. 더 풍부한 스트리밍과 세션 제어를 가능하게 합니다.",
   "features.claudeCodeSdk.title": "Claude Code SDK 런타임",
-  "features.foldFinishedTurn.desc": "완료된 비최신 에이전트 턴의 프로세스(추론 및 도구 호출)를 \"처리됨\" 헤더 아래로 축소합니다. 최종 답변은 계속 표시되며, 프로세스를 확장하려면 클릭하세요.",
-  "features.foldFinishedTurn.title": "완료된 턴 축소",
   "features.groupChat.desc": "다중 도우미 그룹 채팅 조정 기능을 활성화합니다.",
   "features.groupChat.title": "그룹 채팅 (다중 도우미)",
   "features.imessage.desc": "로컬 LobeHub Desktop BlueBubbles 브리지를 통해 에이전트를 iMessage에 연결합니다.",
@@ -29,5 +27,9 @@
   "features.platformAgent.title": "에이전트 연결",
   "features.taskVerify.desc": "작업 세부 정보에 배송 수락 섹션을 추가하세요: 수락을 한 문장으로 설명하고 AI가 편집 가능한 검증 기준을 생성하도록 합니다.",
   "features.taskVerify.title": "작업 배송 수락",
+  "features.topicAcceptance.desc": "현재 주제에 대한 전달 체크리스트를 작성하여 작곡기 바로 위에 배치하면 대화를 언제든지 편집 가능한 표준에 맞출 수 있습니다.",
+  "features.topicAcceptance.title": "주제 수락",
+  "group.desktop": "데스크탑",
+  "group.general": "일반",
   "title": "실험실"
 }

@@ -11,8 +11,6 @@
   "features.builtinTerminal.title": "Yerleşik Terminal",
   "features.claudeCodeSdk.desc": "Claude Agent SDK aracılığıyla Claude Code oturumlarını çalıştırın, CLI başlatmak yerine. Daha zengin akış ve oturum kontrolü sağlar.",
   "features.claudeCodeSdk.title": "Claude Code SDK Çalışma Zamanı",
-  "features.foldFinishedTurn.desc": "Tamamlanmış, en son olmayan ajan dönüşlerinin sürecini (akıl yürütme ve araç çağrıları) \"İşlenmiş\" başlığı altında daraltın. Nihai cevap görünür kalır; süreci genişletmek için tıklayın.",
-  "features.foldFinishedTurn.title": "Tamamlanmış Dönüşleri Daralt",
   "features.groupChat.desc": "Çoklu temsilci grup sohbeti koordinasyonunu etkinleştirin.",
   "features.groupChat.title": "Grup Sohbeti (Çoklu Temsilci)",
   "features.imessage.desc": "Ajanları, yerel LobeHub Masaüstü BlueBubbles köprüsü aracılığıyla iMessage'a bağlayın.",
@@ -29,5 +27,9 @@
   "features.platformAgent.title": "Bağlantı Ajanı",
   "features.taskVerify.desc": "Görev detayına teslimat kabul bölümü ekleyin: kabulü bir cümleyle açıklayın ve düzenlenebilir doğrulama kriterlerini AI ile oluşturun.",
   "features.taskVerify.title": "Görev Teslimat Kabulü",
+  "features.topicAcceptance.desc": "Mevcut konu için bir teslimat kontrol listesi oluşturun ve bunu düzenleyiciye hemen üstüne yerleştirin, böylece konuşma her zaman düzenleyebileceğiniz standartlara uygun şekilde yapılır.",
+  "features.topicAcceptance.title": "Konu Kabulü",
+  "group.desktop": "Masaüstü",
+  "group.general": "Genel",
   "title": "Deneysel Özellikler"
 }

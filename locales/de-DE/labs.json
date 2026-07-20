@@ -11,8 +11,6 @@
   "features.builtinTerminal.title": "Integriertes Terminal",
   "features.claudeCodeSdk.desc": "Führen Sie Claude Code-Sitzungen über das Claude Agent SDK aus, anstatt die CLI zu starten. Ermöglicht reichhaltigeres Streaming und Sitzungssteuerung.",
   "features.claudeCodeSdk.title": "Claude Code SDK-Laufzeit",
-  "features.foldFinishedTurn.desc": "Klappen Sie den Prozess (Argumentation und Werkzeugaufrufe) abgeschlossener, nicht letzter Agenten-Züge unter einer \"Verarbeitet\"-Überschrift zusammen. Die endgültige Antwort bleibt sichtbar; klicken Sie, um den Prozess zu erweitern.",
-  "features.foldFinishedTurn.title": "Abgeschlossene Züge einklappen",
   "features.groupChat.desc": "Koordination von Gruppenchats mit mehreren Agenten aktivieren.",
   "features.groupChat.title": "Gruppenchat (Multi-Agenten)",
   "features.imessage.desc": "Verbinden Sie Agenten mit iMessage über die lokale LobeHub Desktop BlueBubbles-Bridge.",
@@ -29,5 +27,9 @@
   "features.platformAgent.title": "Agent verbinden",
   "features.taskVerify.desc": "Fügen Sie einen Abschnitt zur Lieferannahme in die Aufgabenbeschreibung hinzu: Beschreiben Sie die Annahme in einem Satz und lassen Sie die KI bearbeitbare Überprüfungskriterien erstellen.",
   "features.taskVerify.title": "Aufgabenlieferung und -annahme",
+  "features.topicAcceptance.desc": "Erstellen Sie eine Liefercheckliste für das aktuelle Thema direkt über dem Editor, damit die Unterhaltung den Standards entspricht, die Sie jederzeit bearbeiten können.",
+  "features.topicAcceptance.title": "Themenakzeptanz",
+  "group.desktop": "Desktop",
+  "group.general": "Allgemein",
   "title": "Labs"
 }

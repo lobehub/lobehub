@@ -29,5 +29,7 @@
   "features.taskVerify.title": "任务交付验收",
   "features.topicAcceptance.desc": "在输入框上方为当前话题编写一份交付验收清单，让对话对照你随时可编辑的标准来交付。",
   "features.topicAcceptance.title": "话题验收",
+  "group.desktop": "桌面端",
+  "group.general": "通用",
   "title": "实验室"
 }

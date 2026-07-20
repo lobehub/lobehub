@@ -11,8 +11,6 @@
   "features.builtinTerminal.title": "ترمینال داخلی",
   "features.claudeCodeSdk.desc": "اجرای جلسات Claude Code از طریق Claude Agent SDK به جای اجرای CLI. امکان پخش غنی‌تر و کنترل جلسات را فراهم می‌کند.",
   "features.claudeCodeSdk.title": "محیط اجرایی Claude Code SDK",
-  "features.foldFinishedTurn.desc": "فرآیند (استدلال و تماس‌های ابزار) نوبت‌های پایان‌یافته و غیرآخرین عامل را تحت عنوان \"پردازش شده\" جمع کنید. پاسخ نهایی قابل مشاهده باقی می‌ماند؛ برای گسترش فرآیند کلیک کنید.",
-  "features.foldFinishedTurn.title": "جمع کردن نوبت‌های پایان‌یافته",
   "features.groupChat.desc": "فعال‌سازی هماهنگی گفت‌وگوی گروهی چندعاملی.",
   "features.groupChat.title": "گفت‌وگوی گروهی (چندعاملی)",
   "features.imessage.desc": "اتصال نمایندگان به iMessage از طریق پل BlueBubbles دسکتاپ LobeHub محلی.",
@@ -29,5 +27,9 @@
   "features.platformAgent.title": "اتصال عامل",
   "features.taskVerify.desc": "یک بخش پذیرش تحویل به جزئیات وظیفه اضافه کنید: پذیرش را در یک جمله توضیح دهید و اجازه دهید هوش مصنوعی معیارهای قابل ویرایش تأیید را تولید کند.",
   "features.taskVerify.title": "پذیرش تحویل وظیفه",
+  "features.topicAcceptance.desc": "یک چک لیست تحویل برای موضوع فعلی درست بالای بخش نویسنده ایجاد کنید، تا مکالمه مطابق استانداردهایی که می‌توانید هر زمان ویرایش کنید، برگزار شود.",
+  "features.topicAcceptance.title": "پذیرش موضوع",
+  "group.desktop": "دسکتاپ",
+  "group.general": "عمومی",
   "title": "آزمایشگاه‌ها"
 }
