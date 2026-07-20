@@ -676,14 +676,17 @@ export class UnderstandingService {
           topicId: input.topicId,
         },
       );
-      if (existingAssistant) {
-        assistantMessageId = existingAssistant.id;
+      let existingAnalysis: ReturnType<typeof parseAnalysis> | undefined;
+      if (existingAssistant && !existingAssistant.error) {
         try {
-          if (existingAssistant.error) throw new Error('Assistant message has an error');
-          recoveredAnalysis = parseAnalysis(existingAssistant.content);
+          existingAnalysis = parseAnalysis(existingAssistant.content);
         } catch {
-          throw new Error('Onboarding Understanding existing assistant output is invalid');
+          // A malformed completed turn can be superseded in the same deterministic thread.
         }
+      }
+      if (existingAssistant && existingAnalysis) {
+        assistantMessageId = existingAssistant.id;
+        recoveredAnalysis = existingAnalysis;
       } else {
         const [runtime, baseline] = await Promise.all([
           this.dependencies.writerRuntime(),

@@ -1000,7 +1000,7 @@ describe('UnderstandingService persona writing', () => {
     );
   });
 
-  it('never launches a second turn over an invalid assistant placeholder', async () => {
+  it('replaces an invalid existing assistant in the same deterministic thread', async () => {
     const harness = createHarness({
       id: 'session-1',
       sources: { github: providerState('completed', 1) },
@@ -1012,9 +1012,8 @@ describe('UnderstandingService persona writing', () => {
     });
     harness.stored.set('github', context('github', '# Profile'));
     harness.setThreadAssistant({
-      content: '',
-      error: { message: 'generation failed' },
-      id: 'assistant-placeholder',
+      content: '{"profile":{"name":"Neko"},"composition":{}}',
+      id: 'assistant-invalid',
       role: 'assistant',
       threadId: 'exact-thread-selected-by-query',
     });
@@ -1025,8 +1024,17 @@ describe('UnderstandingService persona writing', () => {
         sessionId: 'session-1',
         topicId: 'topic-1',
       }),
-    ).rejects.toThrow('existing assistant output is invalid');
-    expect(harness.execAgent).not.toHaveBeenCalled();
+    ).resolves.toMatchObject({ published: true, resultId: 'assistant-1' });
+    expect(harness.execAgent).toHaveBeenCalledOnce();
+    const queriedThread = vi.mocked(
+      harness.dependencies.messages.findLatestAssistantMessageByThread,
+    ).mock.calls[0][0].threadId;
+    expect(harness.execAgent).toHaveBeenCalledWith(
+      expect.objectContaining({ appContext: { threadId: queriedThread, topicId: 'topic-1' } }),
+    );
+    expect(harness.repository.commitWriting).toHaveBeenCalledWith(
+      expect.objectContaining({ assistantMessageId: 'assistant-1' }),
+    );
   });
 
   it('preserves every closing provider boundary within the input budget', async () => {
