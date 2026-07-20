@@ -2,7 +2,7 @@ import { getDocumentTemplate } from '@lobechat/agent-templates';
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { CURRENT_ONBOARDING_VERSION } from '@lobechat/const';
 import type { OnboardingUserInfo } from '@lobechat/context-engine';
-import { UnderstandingSessionRepository } from '@lobechat/database';
+import { OnboardingUnderstandingRepository } from '@lobechat/database';
 import type {
   AgentOnboardingStructuredField,
   ChatTopicMetadata,
@@ -125,7 +125,7 @@ export class OnboardingService {
   private inboxDocumentsInitialized = false;
   private readonly messageModel: MessageModel;
   private readonly topicModel: TopicModel;
-  private readonly understandingSessionRepository: UnderstandingSessionRepository;
+  private readonly understandingRepository: OnboardingUnderstandingRepository;
   private readonly userId: string;
   private readonly userModel: UserModel;
 
@@ -139,7 +139,7 @@ export class OnboardingService {
     this.agentService = new AgentService(db, userId);
     this.messageModel = new MessageModel(db, userId);
     this.topicModel = new TopicModel(db, userId);
-    this.understandingSessionRepository = new UnderstandingSessionRepository(db, userId);
+    this.understandingRepository = new OnboardingUnderstandingRepository(db, userId);
     this.userModel = new UserModel(db, userId);
   }
 
@@ -927,7 +927,7 @@ export class OnboardingService {
   reset = async () => {
     const previousState = this.ensureState((await this.getUserState()).agentOnboarding);
     const understandingCleanup = previousState.activeTopicId
-      ? await this.understandingSessionRepository.removeForReset(previousState.activeTopicId)
+      ? await this.understandingRepository.removeForReset(previousState.activeTopicId)
       : undefined;
     if (understandingCleanup) await this.cleanupUnderstandingReset(understandingCleanup.id);
     const state = defaultAgentOnboardingState();

@@ -18,6 +18,7 @@ import type {
   OnboardingUnderstandingMessageMetadata,
   OnboardingUnderstandingPollingResult,
   OnboardingUnderstandingSession,
+  RetryOnboardingUnderstandingProviderInput,
 } from '@lobechat/types';
 import {
   MAX_COLLECTION_ERRORS,
@@ -282,6 +283,23 @@ export class UnderstandingService {
     return this.dependencies.repository.initialize(topicId, this.dependencies.ids(), providerIds);
   };
 
+  start = async (topicId: string): Promise<OnboardingUnderstandingPollingResult> => {
+    const { OnboardingUnderstandingWorkflow } =
+      await import('@/server/workflows/onboardingUnderstanding');
+    OnboardingUnderstandingWorkflow.assertAvailable();
+    const session = await this.initialize(topicId);
+    await OnboardingUnderstandingWorkflow.triggerProviders(
+      {
+        providerIds: Object.keys(session.sources),
+        sessionId: session.id,
+        topicId,
+        userId: this.dependencies.userId,
+      },
+      { workflowRunId: `onboarding-understanding-initial-${session.id}` },
+    );
+    return this.get(topicId);
+  };
+
   get = async (topicId: string): Promise<OnboardingUnderstandingPollingResult> => {
     await this.dependencies.topic.assertActiveOnboardingTopic(topicId);
     const session = await this.dependencies.repository.get(topicId);
@@ -335,6 +353,9 @@ export class UnderstandingService {
     if (!this.dependencies.providers.get(providerId) || !provider) {
       throw new UnderstandingResourceNotFoundError('session');
     }
+    if (provider.status === 'running') {
+      return { providerId, revision: provider.revision };
+    }
     if (provider.status !== 'failed') {
       throw new UnderstandingPreconditionError('source_not_retryable');
     }
@@ -347,6 +368,27 @@ export class UnderstandingService {
     );
     if (!claim.claimed) throw new StaleUnderstandingRevisionError(providerId, provider.revision);
     return { providerId, revision: claim.revision };
+  };
+
+  retry = async (
+    input: RetryOnboardingUnderstandingProviderInput,
+  ): Promise<OnboardingUnderstandingPollingResult> => {
+    const { OnboardingUnderstandingWorkflow } =
+      await import('@/server/workflows/onboardingUnderstanding');
+    OnboardingUnderstandingWorkflow.assertAvailable();
+    const { revision } = await this.prepareProviderRetry(input);
+    await OnboardingUnderstandingWorkflow.triggerProviders(
+      {
+        providerIds: [input.providerId],
+        sessionId: input.sessionId,
+        topicId: input.topicId,
+        userId: this.dependencies.userId,
+      },
+      {
+        workflowRunId: `onboarding-understanding-retry-${input.sessionId}-${input.providerId}-${revision}`,
+      },
+    );
+    return this.get(input.topicId);
   };
 
   processProvider = async (input: ProviderClaimInput) => {

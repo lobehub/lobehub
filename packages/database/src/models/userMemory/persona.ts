@@ -25,6 +25,20 @@ export interface UpsertUserPersonaParams {
   tagline?: string | null;
 }
 
+export class UserPersonaVersionNotFoundError extends Error {
+  constructor() {
+    super('User persona version was not found');
+    this.name = 'UserPersonaVersionNotFoundError';
+  }
+}
+
+export class UserPersonaVersionSnapshotMissingError extends Error {
+  constructor() {
+    super('User persona version snapshot is unavailable');
+    this.name = 'UserPersonaVersionSnapshotMissingError';
+  }
+}
+
 export const lockUserPersonaOwner = async (tx: Transaction, userId: string): Promise<void> => {
   const [owner] = await tx
     .select({ id: users.id })
@@ -77,7 +91,7 @@ export const upsertUserPersonaInTransaction = async (
       !isEqual(existing.sourceIds, nextSourceIds ?? null) ||
       !isEqual(existing.metadata, nextMetadata ?? null);
 
-    if (!hasDocumentChanges) return { document: existing };
+    if (!hasDocumentChanges && !params.snapshot) return { document: existing };
 
     const [updated] = await tx
       .update(userPersonaDocuments)
@@ -183,6 +197,30 @@ export class UserPersonaModel {
     });
   };
 
+  listVersions = async (limit = 50) => {
+    return this.db
+      .select({
+        createdAt: userPersonaDocumentHistories.createdAt,
+        id: userPersonaDocumentHistories.id,
+        nextVersion: userPersonaDocumentHistories.nextVersion,
+        previousVersion: userPersonaDocumentHistories.previousVersion,
+        snapshotPersona: userPersonaDocumentHistories.snapshotPersona,
+        snapshotTagline: userPersonaDocumentHistories.snapshotTagline,
+      })
+      .from(userPersonaDocumentHistories)
+      .where(
+        and(
+          eq(userPersonaDocumentHistories.userId, this.userId),
+          eq(userPersonaDocumentHistories.profile, 'default'),
+        ),
+      )
+      .orderBy(
+        desc(userPersonaDocumentHistories.createdAt),
+        desc(userPersonaDocumentHistories.nextVersion),
+      )
+      .limit(limit);
+  };
+
   appendDiff = async (
     params: Omit<NewUserPersonaDocumentHistoriesItem, 'id' | 'userId'> & { personaId: string },
   ): Promise<UserPersonaDocumentHistoriesItem> => {
@@ -214,6 +252,34 @@ export class UserPersonaModel {
     return this.db.transaction(async (tx) => {
       await lockUserPersonaOwner(tx, this.userId);
       return upsertUserPersonaInTransaction(tx, this.userId, params);
+    });
+  };
+
+  restoreVersion = async (historyId: string) => {
+    return this.db.transaction(async (tx) => {
+      await lockUserPersonaOwner(tx, this.userId);
+      const [history] = await tx
+        .select({
+          snapshotPersona: userPersonaDocumentHistories.snapshotPersona,
+          snapshotTagline: userPersonaDocumentHistories.snapshotTagline,
+        })
+        .from(userPersonaDocumentHistories)
+        .where(
+          and(
+            eq(userPersonaDocumentHistories.id, historyId),
+            eq(userPersonaDocumentHistories.userId, this.userId),
+            eq(userPersonaDocumentHistories.profile, 'default'),
+          ),
+        );
+      if (!history) throw new UserPersonaVersionNotFoundError();
+      if (!history.snapshotPersona) throw new UserPersonaVersionSnapshotMissingError();
+
+      return upsertUserPersonaInTransaction(tx, this.userId, {
+        editedBy: 'user',
+        persona: history.snapshotPersona,
+        snapshot: history.snapshotPersona,
+        tagline: history.snapshotTagline,
+      });
     });
   };
 }

@@ -163,4 +163,65 @@ describe('UserPersonaModel', () => {
     const diffs = await personaModel.listDiffs();
     expect(diffs).toHaveLength(2);
   });
+
+  describe('restoreVersion', () => {
+    it('restores a snapshot as a new current version without deleting history', async () => {
+      await personaModel.upsertPersona({
+        persona: '# v1',
+        snapshot: '# v1',
+        tagline: 'First',
+      });
+      await personaModel.upsertPersona({
+        persona: '# v2',
+        snapshot: '# v2',
+        tagline: 'Second',
+      });
+      const [firstVersion] = (await personaModel.listDiffs()).toReversed();
+
+      const restored = await personaModel.restoreVersion(firstVersion.id);
+
+      expect(restored.document).toMatchObject({
+        persona: '# v1',
+        tagline: 'First',
+        version: 3,
+      });
+      expect(restored.diff).toMatchObject({
+        editedBy: 'user',
+        nextVersion: 3,
+        previousVersion: 2,
+        snapshotPersona: '# v1',
+        snapshotTagline: 'First',
+      });
+      await expect(personaModel.listDiffs()).resolves.toHaveLength(3);
+    });
+
+    it('rejects a history entry owned by another user', async () => {
+      const otherUserId = 'persona-other-user';
+      await serverDB.insert(users).values({ id: otherUserId });
+      const otherModel = new UserPersonaModel(serverDB, otherUserId);
+      await otherModel.upsertPersona({ persona: '# private', snapshot: '# private' });
+      const [otherVersion] = await otherModel.listDiffs();
+
+      await expect(personaModel.restoreVersion(otherVersion.id)).rejects.toThrow(
+        'User persona version was not found',
+      );
+    });
+
+    it('rejects a history entry without a persona snapshot', async () => {
+      const { document } = await personaModel.upsertPersona({ persona: '# current' });
+      const [history] = await serverDB
+        .insert(userPersonaDocumentHistories)
+        .values({
+          nextVersion: 1,
+          personaId: document.id,
+          profile: 'default',
+          userId,
+        })
+        .returning();
+
+      await expect(personaModel.restoreVersion(history.id)).rejects.toThrow(
+        'User persona version snapshot is unavailable',
+      );
+    });
+  });
 });

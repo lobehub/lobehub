@@ -4,13 +4,18 @@ import type {
   OnboardingUnderstandingSession,
   UnderstandingAnalysis,
 } from '@lobechat/types';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MAX_AGENT_INPUT_LENGTH } from './sanitizer';
 import { UnderstandingService, type UnderstandingServiceDependencies } from './service';
 import type { StoredUnderstandingProviderContext } from './sourceStore';
 import type { UnderstandingProvider } from './types';
 import { UnderstandingProviderRetryableError } from './types';
+
+const { mockAssertWorkflowAvailable, mockTriggerProviders } = vi.hoisted(() => ({
+  mockAssertWorkflowAvailable: vi.fn(),
+  mockTriggerProviders: vi.fn(),
+}));
 
 vi.mock('@lobechat/database', async () => {
   const { getUnderstandingSourceFingerprint } =
@@ -43,6 +48,12 @@ vi.mock('@/server/services/agentRuntime/AgentRuntimeService', () => ({
 }));
 vi.mock('@/server/services/aiAgent', () => ({
   AiAgentService: class {},
+}));
+vi.mock('@/server/workflows/onboardingUnderstanding', () => ({
+  OnboardingUnderstandingWorkflow: {
+    assertAvailable: mockAssertWorkflowAvailable,
+    triggerProviders: mockTriggerProviders,
+  },
 }));
 vi.mock('./providers', () => ({
   builtinUnderstandingProviderRegistrations: [],
@@ -157,13 +168,13 @@ const createHarness = (initialSession: OnboardingUnderstandingSession | null = c
     failProvider: vi.fn(async () => session!),
     failWriting: vi.fn(async () => session),
     get: vi.fn(async () => session),
-    initialize: vi.fn(
-      async (_topicId: string, sessionId: string, providerIds: string[]) =>
-        ({
-          id: sessionId,
-          sources: Object.fromEntries(providerIds.map((id) => [id, providerState('pending')])),
-        }) as OnboardingUnderstandingSession,
-    ),
+    initialize: vi.fn(async (_topicId: string, sessionId: string, providerIds: string[]) => {
+      session = {
+        id: sessionId,
+        sources: Object.fromEntries(providerIds.map((id) => [id, providerState('pending')])),
+      } as OnboardingUnderstandingSession;
+      return session;
+    }),
     markProviderRunning: vi.fn(async () => ({ claimed: true, revision: 1 })),
   };
   const sourceStore = {
@@ -224,6 +235,94 @@ const createHarness = (initialSession: OnboardingUnderstandingSession | null = c
     stored,
   };
 };
+
+describe('UnderstandingService public workflow commands', () => {
+  beforeEach(() => {
+    mockAssertWorkflowAvailable.mockReset();
+    mockTriggerProviders.mockReset();
+  });
+
+  it('preflights workflow availability before initializing provider state', async () => {
+    const harness = createHarness(null);
+    mockAssertWorkflowAvailable.mockImplementationOnce(() => {
+      throw new Error('workflow unavailable');
+    });
+
+    await expect(harness.service.start('topic-1')).rejects.toThrow('workflow unavailable');
+    expect(harness.repository.initialize).not.toHaveBeenCalled();
+  });
+
+  it('initializes all providers and triggers the provider workflow with safe identifiers', async () => {
+    mockTriggerProviders.mockResolvedValueOnce({ workflowRunId: 'workflow-1' });
+    const harness = createHarness(null);
+
+    const result = await harness.service.start('topic-1');
+
+    expect(mockTriggerProviders).toHaveBeenCalledWith(
+      {
+        providerIds: ['github', 'gmail'],
+        sessionId: 'session-new',
+        topicId: 'topic-1',
+        userId: 'user-1',
+      },
+      { workflowRunId: 'onboarding-understanding-initial-session-new' },
+    );
+    expect(result).toMatchObject({ id: 'session-new', status: 'processing' });
+    expect(JSON.stringify(mockTriggerProviders.mock.calls.at(-1))).not.toContain('PRIVATE_');
+  });
+
+  it('reuses initialized state when start delivery is retried', async () => {
+    mockTriggerProviders
+      .mockRejectedValueOnce(new Error('delivery uncertain'))
+      .mockResolvedValueOnce({ workflowRunId: 'workflow-2' });
+    const harness = createHarness(null);
+
+    await expect(harness.service.start('topic-1')).rejects.toThrow('delivery uncertain');
+    await expect(harness.service.start('topic-1')).resolves.toMatchObject({ id: 'session-new' });
+
+    expect(harness.repository.initialize).toHaveBeenCalledOnce();
+    expect(mockTriggerProviders).toHaveBeenCalledTimes(2);
+  });
+
+  it('prepares a failed provider and triggers only that provider', async () => {
+    mockTriggerProviders.mockResolvedValueOnce({ workflowRunId: 'workflow-1' });
+    const harness = createHarness(createSession({ github: providerState('failed', 3) }));
+    harness.repository.markProviderRunning.mockResolvedValueOnce({ claimed: true, revision: 4 });
+
+    await harness.service.retry({
+      providerId: 'github',
+      sessionId: 'session-1',
+      topicId: 'topic-1',
+    });
+
+    expect(mockTriggerProviders).toHaveBeenCalledWith(
+      {
+        providerIds: ['github'],
+        sessionId: 'session-1',
+        topicId: 'topic-1',
+        userId: 'user-1',
+      },
+      { workflowRunId: 'onboarding-understanding-retry-session-1-github-4' },
+    );
+  });
+
+  it('can redeliver an already running retry after an uncertain trigger failure', async () => {
+    mockTriggerProviders.mockResolvedValueOnce({ workflowRunId: 'workflow-2' });
+    const harness = createHarness(createSession({ github: providerState('running', 4) }));
+
+    await harness.service.retry({
+      providerId: 'github',
+      sessionId: 'session-1',
+      topicId: 'topic-1',
+    });
+
+    expect(harness.repository.markProviderRunning).not.toHaveBeenCalled();
+    expect(mockTriggerProviders).toHaveBeenCalledWith(
+      expect.objectContaining({ providerIds: ['github'] }),
+      { workflowRunId: 'onboarding-understanding-retry-session-1-github-4' },
+    );
+  });
+});
 
 describe('UnderstandingService provider collection', () => {
   it('claims a pending revision before collecting it', async () => {

@@ -153,6 +153,7 @@ export interface ConfirmOnboardingUnderstandingInput extends OnboardingUnderstan
 
 export interface ConfirmOnboardingUnderstandingResult {
   confirmed: true;
+  personaVersion: number;
   resultId: string;
   sessionId: string;
 }

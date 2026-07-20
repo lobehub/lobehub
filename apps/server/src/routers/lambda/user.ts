@@ -4,6 +4,7 @@ import {
 } from '@lobechat/builtin-tool-web-onboarding/utils';
 import { isDesktop } from '@lobechat/const';
 import {
+  StaleUnderstandingRevisionError,
   StaleUnderstandingSessionError,
   UnderstandingPreconditionError,
   UnderstandingResourceNotFoundError,
@@ -15,7 +16,7 @@ import type {
   ConfirmOnboardingUnderstandingResult,
   OnboardingUnderstandingPollingResult,
   OnboardingUnderstandingTopicInput,
-  RetryOnboardingUnderstandingSourceInput,
+  RetryOnboardingUnderstandingProviderInput,
   UserInitializationState,
   UserPreference,
   UserSettings,
@@ -55,10 +56,7 @@ import {
   type UnderstandingService,
 } from '@/server/services/understanding/service';
 import { after } from '@/server/utils/scheduleAfterResponse';
-import {
-  OnboardingUnderstandingWorkflow,
-  UnderstandingWorkflowUnavailableError,
-} from '@/server/workflows/onboardingUnderstanding';
+import { UnderstandingWorkflowUnavailableError } from '@/server/workflows/onboardingUnderstanding';
 
 const throwUnderstandingApiError = (error: unknown): never => {
   if (error instanceof TRPCError) throw error;
@@ -73,7 +71,10 @@ const throwUnderstandingApiError = (error: unknown): never => {
     });
   }
 
-  if (error instanceof StaleUnderstandingSessionError) {
+  if (
+    error instanceof StaleUnderstandingRevisionError ||
+    error instanceof StaleUnderstandingSessionError
+  ) {
     throw new TRPCError({
       code: 'CONFLICT',
       message: 'Onboarding understanding is no longer current',
@@ -116,11 +117,11 @@ const onboardingUnderstandingTopicInputSchema = z
   .strict() satisfies z.ZodType<OnboardingUnderstandingTopicInput>;
 const retryOnboardingUnderstandingSourceInputSchema = z
   .object({
+    providerId: understandingIdSchema,
     sessionId: understandingIdSchema,
-    sourceId: understandingIdSchema,
     topicId: understandingIdSchema,
   })
-  .strict() satisfies z.ZodType<RetryOnboardingUnderstandingSourceInput>;
+  .strict() satisfies z.ZodType<RetryOnboardingUnderstandingProviderInput>;
 const confirmOnboardingUnderstandingInputSchema = z
   .object({
     resultId: understandingIdSchema,
@@ -128,11 +129,6 @@ const confirmOnboardingUnderstandingInputSchema = z
     topicId: understandingIdSchema,
   })
   .strict() satisfies z.ZodType<ConfirmOnboardingUnderstandingInput>;
-
-const initialUnderstandingWorkflowRunId = (sessionId: string) =>
-  `onboarding-understanding-initial-${sessionId}`;
-const retryUnderstandingWorkflowRunId = (sessionId: string, threadId: string) =>
-  `onboarding-understanding-retry-${sessionId}-${threadId}`;
 
 const AVATAR_WEBAPI_PREFIX = '/webapi/';
 const OWNER_SETTING_KEYS = ['defaultAgent', 'image', 'memory', 'systemAgent', 'tts'] as const;
@@ -215,10 +211,11 @@ export const userRouter = router({
   confirmOnboardingUnderstanding: understandingServiceProcedure
     .input(confirmOnboardingUnderstandingInputSchema)
     .mutation(async ({ ctx, input }) => {
-      await ctx.understandingService.confirm(input);
+      const { personaVersion } = await ctx.understandingService.confirm(input);
 
       return {
         confirmed: true,
+        personaVersion,
         resultId: input.resultId,
         sessionId: input.sessionId,
       } satisfies ConfirmOnboardingUnderstandingResult;
@@ -323,34 +320,13 @@ export const userRouter = router({
   retryOnboardingUnderstandingSource: understandingServiceProcedure
     .input(retryOnboardingUnderstandingSourceInputSchema)
     .mutation(async ({ ctx, input }): Promise<OnboardingUnderstandingPollingResult> => {
-      OnboardingUnderstandingWorkflow.assertAvailable();
-      const threadId = await ctx.understandingService.assertRetryable(input);
-      await OnboardingUnderstandingWorkflow.trigger(
-        {
-          ...input,
-          mode: 'retry',
-          userId: ctx.userId,
-        },
-        { workflowRunId: retryUnderstandingWorkflowRunId(input.sessionId, threadId) },
-      );
-      return ctx.understandingService.get(input.topicId);
+      return ctx.understandingService.retry(input);
     }),
 
   startOnboardingUnderstanding: understandingServiceProcedure
     .input(onboardingUnderstandingTopicInputSchema)
     .mutation(async ({ ctx, input }): Promise<OnboardingUnderstandingPollingResult> => {
-      OnboardingUnderstandingWorkflow.assertAvailable();
-      const session = await ctx.understandingService.initialize(input.topicId);
-      await OnboardingUnderstandingWorkflow.trigger(
-        {
-          mode: 'initial',
-          sessionId: session.id,
-          topicId: input.topicId,
-          userId: ctx.userId,
-        },
-        { workflowRunId: initialUnderstandingWorkflowRunId(session.id) },
-      );
-      return ctx.understandingService.get(input.topicId);
+      return ctx.understandingService.start(input.topicId);
     }),
 
   updateAvatar: userProcedure.input(z.string()).mutation(async ({ ctx, input }) => {

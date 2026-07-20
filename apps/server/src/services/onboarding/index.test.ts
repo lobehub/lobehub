@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { CURRENT_ONBOARDING_VERSION } from '@lobechat/const';
-import { UnderstandingSessionRepository } from '@lobechat/database';
+import { OnboardingUnderstandingRepository } from '@lobechat/database';
 import type { OnboardingUnderstandingSession } from '@lobechat/types';
 import { SaveUserQuestionInputSchema } from '@lobechat/types';
 import { merge } from '@lobechat/utils';
@@ -41,7 +41,7 @@ vi.mock('@/server/services/agentDocuments', () => ({
 }));
 
 vi.mock('@lobechat/database', () => ({
-  UnderstandingSessionRepository: vi.fn(),
+  OnboardingUnderstandingRepository: vi.fn(),
 }));
 
 vi.mock('@/server/services/understanding/sourceStore', () => ({
@@ -81,7 +81,7 @@ describe('OnboardingService', () => {
   let mockSourceStore: {
     deleteSession: ReturnType<typeof vi.fn>;
   };
-  let mockUnderstandingSessionRepository: {
+  let mockUnderstandingRepository: {
     removeForReset: ReturnType<typeof vi.fn>;
   };
   let mockUserModel: {
@@ -202,7 +202,7 @@ describe('OnboardingService', () => {
     mockSourceStore = {
       deleteSession: vi.fn(async () => undefined),
     };
-    mockUnderstandingSessionRepository = {
+    mockUnderstandingRepository = {
       removeForReset: vi.fn(async () => undefined),
     };
 
@@ -213,8 +213,8 @@ describe('OnboardingService', () => {
     vi.mocked(TopicModel).mockImplementation(() => mockTopicModel as any);
     vi.mocked(AgentService).mockImplementation(() => mockAgentService as any);
     vi.mocked(UnderstandingSourceStore).mockImplementation(() => mockSourceStore as any);
-    vi.mocked(UnderstandingSessionRepository).mockImplementation(
-      () => mockUnderstandingSessionRepository as any,
+    vi.mocked(OnboardingUnderstandingRepository).mockImplementation(
+      () => mockUnderstandingRepository as any,
     );
   });
 
@@ -336,32 +336,25 @@ describe('OnboardingService', () => {
     };
     const understandingSession: OnboardingUnderstandingSession = {
       id: 'understanding-session',
-      mergeRun: {
-        assistantMessageId: 'merge-message',
-        resultId: 'merge-result',
-        status: 'completed',
-        threadId: 'merge-thread',
-      },
-      runs: [
-        {
-          assistantMessageId: 'source-message',
-          resultId: 'source-result',
-          source: { externalAccountId: 'neko', id: 'github:neko', provider: 'github' },
+      sources: {
+        github: {
+          errors: [],
+          failedCount: 0,
+          revision: 1,
           status: 'completed',
-          threadId: 'source-thread',
+          succeededCount: 1,
         },
-      ],
-      status: 'completed',
+      },
     };
-    mockUnderstandingSessionRepository.removeForReset.mockResolvedValue(understandingSession);
+    mockUnderstandingRepository.removeForReset.mockResolvedValue(understandingSession);
 
     const service = new OnboardingService(mockDb, userId);
     const result = await service.reset();
 
-    expect(mockUnderstandingSessionRepository.removeForReset).toHaveBeenCalledWith('topic-1');
-    expect(
-      mockUnderstandingSessionRepository.removeForReset.mock.invocationCallOrder[0],
-    ).toBeLessThan(mockUserModel.updateUser.mock.invocationCallOrder[0]);
+    expect(mockUnderstandingRepository.removeForReset).toHaveBeenCalledWith('topic-1');
+    expect(mockUnderstandingRepository.removeForReset.mock.invocationCallOrder[0]).toBeLessThan(
+      mockUserModel.updateUser.mock.invocationCallOrder[0],
+    );
     expect(mockSourceStore.deleteSession).toHaveBeenCalledWith({
       sessionId: understandingSession.id,
       userId,
@@ -375,10 +368,9 @@ describe('OnboardingService', () => {
       activeTopicId: 'topic-1',
       version: CURRENT_ONBOARDING_VERSION,
     };
-    mockUnderstandingSessionRepository.removeForReset.mockResolvedValue({
+    mockUnderstandingRepository.removeForReset.mockResolvedValue({
       id: 'understanding-session',
-      runs: [],
-      status: 'pending',
+      sources: {},
     });
     mockSourceStore.deleteSession.mockRejectedValue(new Error('redis unavailable'));
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
