@@ -540,6 +540,30 @@ describe('Group', () => {
     expect(screen.getByTestId('tail-running')).toHaveAttribute('data-id', 'assistant-1');
   });
 
+  it('does not add a tail indicator when the inline segment ends on an empty placeholder', () => {
+    // The settled tool is followed by an empty LOADING_FLAT placeholder that
+    // stays inside the inline segment; that block renders its OWN running line,
+    // so the tail must NOT stack a second identical one on top.
+    mockIsGenerating = true;
+    render(
+      <Group
+        isLatestItem
+        id="assistant-1"
+        messageIndex={0}
+        blocks={[
+          blk({
+            content: '',
+            id: 'block-1',
+            tools: [{ apiName: 'bash', id: 'tool-1', result: { content: 'done' } } as any],
+          }),
+          blk({ content: LOADING_FLAT, id: 'block-2' }),
+        ]}
+      />,
+    );
+
+    expect(screen.queryByTestId('tail-running')).not.toBeInTheDocument();
+  });
+
   it('anchors the running indicator to the tool RESULT createdAt, not the tool-call block', () => {
     mockIsGenerating = true;
     // The tool result lands after the tool-call block; the tail timer must start

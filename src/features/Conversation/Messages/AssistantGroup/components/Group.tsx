@@ -471,11 +471,18 @@ const Group = memo<GroupChildrenProps>(
     // fill it. Multi-tool segments keep their own chrome; a tool still executing
     // is covered by its own loading placeholder (areWorkflowToolsComplete=false).
     const lastSegment = segments.at(-1);
+    // …unless that inline segment already ends on an empty placeholder block:
+    // while generating, that block is kept and renders its OWN "…is running"
+    // line (MessageContent → ContentLoading), so a tail indicator here would
+    // stack a second identical line on top of it. Let the block own the gap.
+    const lastInlineBlock =
+      lastSegment?.kind === 'workflow' ? lastSegment.blocks.at(-1) : undefined;
     const showTailRunningIndicator =
       isGenerating &&
       lastSegment?.kind === 'workflow' &&
       shouldInlineWorkflowSegment(lastSegment.blocks) &&
-      areWorkflowToolsComplete(lastSegment.blocks.flatMap((block) => block.tools ?? []));
+      areWorkflowToolsComplete(lastSegment.blocks.flatMap((block) => block.tools ?? [])) &&
+      !(lastInlineBlock && isEmptyBlock(lastInlineBlock));
 
     if (isCollapsed) {
       return (
