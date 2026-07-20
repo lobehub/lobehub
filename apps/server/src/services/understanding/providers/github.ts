@@ -14,19 +14,26 @@ import type { LobeChatDatabase } from '@/database/type';
 import { ensureFreshConnectorToken } from '@/server/services/connector/tokens';
 
 import type {
-  SourceCandidate,
-  UnderstandingProvider,
+  UnderstandingProviderCandidate,
+  UnderstandingProviderDefinition,
   UnderstandingProviderRegistration,
 } from '../types';
-import { UnderstandingSourceIdentificationError } from '../types';
+import { UnderstandingProviderAuthorizationError } from '../types';
 
 const log = debug('lobe-server:understanding:github');
 
 interface GitHubProviderDependencies {
-  loadCredential?: (candidate: SourceCandidate<'github'>) => Promise<unknown>;
+  loadCredential?: (candidate: UnderstandingProviderCandidate<'github'>) => Promise<unknown>;
   now?: () => number;
   queryAuthAccounts?: () => Promise<Array<{ id: string; providerId: string }>>;
-  queryConnectors?: () => Promise<Array<{ id: string; isEnabled: boolean; status: string }>>;
+  queryConnectors?: () => Promise<
+    Array<{
+      credentialOrigin?: 'connector' | 'integration';
+      id: string;
+      isEnabled: boolean;
+      status: string;
+    }>
+  >;
 }
 
 interface GateKeeper {
@@ -211,7 +218,9 @@ const collectGitHubContext = async (
     profile = await profilePromise;
   } catch (error) {
     handleProfileError(error);
-    throw new Error('GitHub profile collection failed', { cause: error });
+    throw new UnderstandingProviderAuthorizationError({
+      retryable: error instanceof ConnectorDataError ? error.retryable : false,
+    });
   }
 
   const [supplementalResults, contributorBatch] = await Promise.all([
@@ -220,6 +229,16 @@ const collectGitHubContext = async (
   ]);
   const operations = [...supplementalOperations, ...contributorBatch.operations];
   const results = [...supplementalResults, ...contributorBatch.results];
+  if (
+    results.some(
+      (result) =>
+        result.status === 'rejected' &&
+        result.reason instanceof ConnectorDataError &&
+        result.reason.retryable,
+    )
+  ) {
+    throw new UnderstandingProviderAuthorizationError({ retryable: true });
+  }
   const context: GitHubUserContext = { profile };
   const errors: Array<SupplementalGitHubDiagnostic & { provider: 'github'; retryable: boolean }> =
     [];
@@ -257,9 +276,9 @@ const materializeGitHubProvider = ({
   gateKeeper,
   userId,
   workspaceId,
-}: GitHubProviderContextOptions): UnderstandingProvider<'github', GitHubCredential> => {
+}: GitHubProviderContextOptions): UnderstandingProviderDefinition<'github', GitHubCredential> => {
   const connectorModel = new ConnectorModel(db, userId, workspaceId, gateKeeper);
-  const loadCredential = async (candidate: SourceCandidate<'github'>) => {
+  const loadCredential = async (candidate: UnderstandingProviderCandidate<'github'>) => {
     switch (candidate.credentialOrigin) {
       case 'auth_account': {
         const id = parseCredentialReferenceId(candidate.credentialReference, 'auth_account');
@@ -282,8 +301,12 @@ const materializeGitHubProvider = ({
             }
           : undefined;
       }
-      case 'connector': {
-        const id = parseCredentialReferenceId(candidate.credentialReference, 'connector');
+      case 'connector':
+      case 'integration': {
+        const id = parseCredentialReferenceId(
+          candidate.credentialReference,
+          candidate.credentialOrigin,
+        );
         const connector = await connectorModel.findById(id);
         if (
           !connector ||
@@ -323,7 +346,10 @@ export const createGitHubUnderstandingProvider = ({
   now = Date.now,
   queryAuthAccounts = async () => [],
   queryConnectors = async () => [],
-}: GitHubProviderDependencies = {}): UnderstandingProvider<'github', GitHubCredential> => ({
+}: GitHubProviderDependencies = {}): UnderstandingProviderDefinition<
+  'github',
+  GitHubCredential
+> => ({
   collect: async (source) => {
     const client = createGitHubConnectorClient({ accessToken: source.credential.accessToken });
     const { context, errors, failedCount, succeededCount } = await collectGitHubContext(client);
@@ -352,15 +378,13 @@ export const createGitHubUnderstandingProvider = ({
         failedCount,
         succeededCount,
       },
-      sourceBrief: [
-        'Provider: github',
-        '# Source Brief',
-        toGitHubUserContextMarkdown(context),
-      ].join('\n\n'),
+      context: ['Provider: github', '# Source Brief', toGitHubUserContextMarkdown(context)].join(
+        '\n\n',
+      ),
       sourceCount,
     };
   },
-  discoverSources: async () => {
+  discoverCandidates: async () => {
     const [accounts, connectors] = await Promise.all([queryAuthAccounts(), queryConnectors()]);
     return [
       ...accounts
@@ -373,16 +397,16 @@ export const createGitHubUnderstandingProvider = ({
         })),
       ...connectors
         .filter(({ isEnabled, status }) => isEnabled && status === 'connected')
-        .map(({ id }) => ({
-          candidateId: `connector:${id}`,
-          credentialOrigin: 'connector' as const,
-          credentialReference: `connector:${id}`,
+        .map(({ credentialOrigin = 'connector', id }) => ({
+          candidateId: `${credentialOrigin}:${id}`,
+          credentialOrigin,
+          credentialReference: `${credentialOrigin}:${id}`,
           provider: 'github' as const,
         })),
     ].sort((left, right) => left.candidateId.localeCompare(right.candidateId));
   },
   id: 'github',
-  identifySource: async (candidate) => {
+  identifyCandidate: async (candidate) => {
     try {
       const loaded = LoadedGitHubCredentialSchema.safeParse(await loadCredential(candidate));
       if (!loaded.success || isExpired(loaded.data.expiresAt, now())) {
@@ -401,7 +425,7 @@ export const createGitHubUnderstandingProvider = ({
         grantedScopes: parseScopes(loaded.data.scope, loaded.data.scopes),
       };
     } catch (error) {
-      throw new UnderstandingSourceIdentificationError({
+      throw new UnderstandingProviderAuthorizationError({
         retryable: error instanceof ConnectorDataError ? error.retryable : false,
       });
     }

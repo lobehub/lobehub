@@ -6,11 +6,11 @@ import { ConnectorModel } from '@/database/models/connector';
 import { getComposioClient } from '@/libs/composio';
 
 import type {
-  SourceCandidate,
-  UnderstandingProvider,
+  UnderstandingProviderCandidate,
+  UnderstandingProviderDefinition,
   UnderstandingProviderRegistration,
 } from '../types';
-import { UnderstandingSourceIdentificationError } from '../types';
+import { UnderstandingProviderAuthorizationError } from '../types';
 
 const GMAIL_PROFILE_SEARCHES = [
   { operation: 'recent', query: 'newer_than:90d' },
@@ -111,7 +111,7 @@ interface ActiveGmailConnectorReference extends GmailConnectorReference {
   composio: NonNullable<GmailConnectorReference['composio']>;
 }
 
-const connectorIdFromCandidate = (candidate: SourceCandidate<'gmail'>) => {
+const connectorIdFromCandidate = (candidate: UnderstandingProviderCandidate<'gmail'>) => {
   const prefix = 'connector:';
   if (
     candidate.credentialOrigin !== 'connector' ||
@@ -142,7 +142,7 @@ export const createGmailUnderstandingProvider = ({
   composio,
   findConnector = async () => null,
   queryConnectors = async () => [],
-}: GmailProviderDependencies = {}): UnderstandingProvider<'gmail', GmailCredential> => ({
+}: GmailProviderDependencies = {}): UnderstandingProviderDefinition<'gmail', GmailCredential> => ({
   collect: async (source, { userId }) => {
     const client = createGmailConnectorClient({
       composio: typeof composio === 'function' ? composio() : (composio ?? getComposioClient()),
@@ -155,6 +155,16 @@ export const createGmailUnderstandingProvider = ({
     const fulfilled = settled.filter(
       (result): result is PromiseFulfilledResult<GmailMessage[]> => result.status === 'fulfilled',
     );
+    if (
+      settled.some(
+        (result) =>
+          result.status === 'rejected' &&
+          result.reason instanceof ConnectorDataError &&
+          result.reason.retryable,
+      )
+    ) {
+      throw new UnderstandingProviderAuthorizationError({ retryable: true });
+    }
     const errors = settled.flatMap((result, index) =>
       result.status === 'rejected'
         ? [
@@ -179,14 +189,15 @@ export const createGmailUnderstandingProvider = ({
     if (selected.length === 0) {
       return {
         diagnostics,
-        sourceBrief: '',
+        context: '',
         sourceCount: 0,
       };
     }
 
+    const xml = toGmailMessagesXml(selected);
     return {
       diagnostics,
-      sourceBrief: [
+      context: `${[
         'Provider: gmail',
         '# Source Brief',
         '## Gmail Message Signals',
@@ -194,14 +205,11 @@ export const createGmailUnderstandingProvider = ({
         '- CATEGORY_PROMOTIONS is low-weight; use it only for product names, product-discovery behavior, and broad interest areas.',
         '- Prefer CATEGORY_UPDATES, CATEGORY_PERSONAL, IMPORTANT, INBOX, receipts, account notices, direct usage notices, and briefing/calendar emails for durable user understanding.',
         '- Repeated marketing emails should not become identity, role, or work-style claims unless corroborated by stronger non-promotional evidence.',
-        '```xml',
-        toGmailMessagesXml(selected),
-        '```',
-      ].join('\n\n'),
+      ].join('\n\n')}\n\n\`\`\`xml\n${xml}\n\`\`\``,
       sourceCount: selected.length,
     };
   },
-  discoverSources: async () =>
+  discoverCandidates: async () =>
     (await queryConnectors())
       .filter(isActiveGmailConnector)
       .map(({ id }) => ({
@@ -212,7 +220,7 @@ export const createGmailUnderstandingProvider = ({
       }))
       .sort((left, right) => left.candidateId.localeCompare(right.candidateId)),
   id: 'gmail',
-  identifySource: async (candidate, { userId }) => {
+  identifyCandidate: async (candidate, { userId }) => {
     try {
       const connectorId = connectorIdFromCandidate(candidate);
       const connector = await findConnector(connectorId);
@@ -235,7 +243,7 @@ export const createGmailUnderstandingProvider = ({
         grantedScopes: [...new Set(account.scopes)].sort(),
       };
     } catch (error) {
-      throw new UnderstandingSourceIdentificationError({
+      throw new UnderstandingProviderAuthorizationError({
         retryable: error instanceof ConnectorDataError ? error.retryable : false,
       });
     }

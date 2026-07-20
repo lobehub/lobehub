@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import {
   type CollectionDiagnostics,
   CollectionDiagnosticsSchema,
+  MAX_COLLECTION_COUNT,
   MAX_PROVIDER_ID_LENGTH,
 } from '@lobechat/types';
 import type Redis from 'ioredis';
@@ -11,53 +12,48 @@ import { z } from 'zod';
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 
 import { MAX_SOURCE_BRIEF_LENGTH } from './sanitizer';
-import type { SourceCandidate } from './types';
 
-const SOURCE_STORE_PREFIX = 'onboarding_understanding:source';
-const SOURCE_STORE_TTL_SECONDS = 86_400;
+const SOURCE_STORE_PREFIX = 'onboarding_understanding:context';
+const SOURCE_STORE_TTL_SECONDS = 3 * 24 * 60 * 60;
 
-interface SourceReference {
+interface SessionReference {
   sessionId: string;
-  sourceId: string;
   userId: string;
 }
 
-interface SourceRunReference extends SourceReference {
-  threadId: string;
+interface ProviderReference extends SessionReference {
+  providerId: string;
+  revision: number;
 }
 
-const SourcePayloadSchema = z
-  .object({
-    brief: z.string().max(MAX_SOURCE_BRIEF_LENGTH),
-    diagnostics: CollectionDiagnosticsSchema,
-  })
-  .strict();
-
-const SourceLocatorSchema = z
-  .object({
-    candidateId: z.string().max(512),
-    credentialOrigin: z.enum(['auth_account', 'connector', 'integration']),
-    credentialReference: z.string().max(512),
-    provider: z.string().max(MAX_PROVIDER_ID_LENGTH),
-  })
-  .strict();
-
-export interface SourcePayload {
-  brief: string;
+export interface StoredUnderstandingProviderContext {
+  context: string;
   diagnostics: CollectionDiagnostics;
+  providerId: string;
+  revision: number;
+  sourceCount: number;
 }
+
+const StoredUnderstandingProviderContextSchema = z
+  .object({
+    context: z.string().max(MAX_SOURCE_BRIEF_LENGTH),
+    diagnostics: CollectionDiagnosticsSchema,
+    providerId: z.string().trim().min(1).max(MAX_PROVIDER_ID_LENGTH),
+    revision: z.number().int().nonnegative().max(MAX_COLLECTION_COUNT),
+    sourceCount: z.number().int().nonnegative().max(MAX_COLLECTION_COUNT),
+  })
+  .strict() satisfies z.ZodType<StoredUnderstandingProviderContext>;
 
 const digestIdentifier = (value: string): string => {
   if (!value || value.length > 512) throw new TypeError('Invalid Understanding source identifier');
   return createHash('sha256').update(value).digest('hex');
 };
 
-const sessionKey = ({ sessionId, userId }: Omit<SourceReference, 'sourceId'>): string =>
+const sessionKey = ({ sessionId, userId }: SessionReference): string =>
   `${SOURCE_STORE_PREFIX}:{${digestIdentifier(userId)}}:session:${digestIdentifier(sessionId)}`;
 
-const payloadField = (sourceId: string, threadId: string): string =>
-  `source:${digestIdentifier(sourceId)}:run:${digestIdentifier(threadId)}:payload`;
-const locatorField = (sourceId: string): string => `source:${digestIdentifier(sourceId)}:locator`;
+const providerField = (providerId: string): string =>
+  z.string().trim().min(1).max(MAX_PROVIDER_ID_LENGTH).parse(providerId);
 
 export class UnderstandingSourceStore {
   private readonly redis: Redis;
@@ -67,87 +63,66 @@ export class UnderstandingSourceStore {
     this.redis = redis;
   }
 
-  async deleteSourcePayload(reference: SourceRunReference): Promise<void> {
-    await this.deleteField(reference, payloadField(reference.sourceId, reference.threadId));
-  }
-
-  async deleteSession(reference: Omit<SourceReference, 'sourceId'>): Promise<void> {
+  async deleteSession(reference: SessionReference): Promise<void> {
     try {
       await this.redis.del(sessionKey(reference));
     } catch {
-      throw new Error('Failed to reset onboarding Understanding source data');
+      throw new Error('Failed to reset onboarding Understanding provider contexts');
     }
   }
 
-  async get(reference: SourceRunReference): Promise<SourcePayload | null> {
-    return this.readField(
-      reference,
-      payloadField(reference.sourceId, reference.threadId),
-      SourcePayloadSchema,
-    );
-  }
-
-  async getSourceLocator(reference: SourceReference): Promise<SourceCandidate | null> {
-    return this.readField(reference, locatorField(reference.sourceId), SourceLocatorSchema);
-  }
-
-  async put(input: SourceRunReference & SourcePayload): Promise<void> {
-    await this.putField(
-      input,
-      payloadField(input.sourceId, input.threadId),
-      SourcePayloadSchema.parse({ brief: input.brief, diagnostics: input.diagnostics }),
-    );
-  }
-
-  async putSourceLocator(input: SourceReference & { locator: SourceCandidate }): Promise<void> {
-    await this.putField(
-      input,
-      locatorField(input.sourceId),
-      SourceLocatorSchema.parse(input.locator),
-    );
-  }
-
-  private async deleteField(
-    reference: Omit<SourceReference, 'sourceId'>,
-    field: string,
-  ): Promise<void> {
+  async get(reference: ProviderReference): Promise<StoredUnderstandingProviderContext | null> {
     try {
-      await this.redis.hdel(sessionKey(reference), field);
+      const field = providerField(reference.providerId);
+      const serialized = await this.redis.hget(sessionKey(reference), field);
+      if (!serialized) return null;
+      const stored = StoredUnderstandingProviderContextSchema.parse(JSON.parse(serialized));
+      if (stored.providerId !== field || stored.revision !== reference.revision) {
+        throw new Error('Stored provider context does not match its reference');
+      }
+      return stored;
     } catch {
-      throw new Error('Failed to delete onboarding Understanding source data');
+      throw new Error('Failed to read onboarding Understanding provider context');
     }
   }
 
-  private async putField(
-    reference: Omit<SourceReference, 'sourceId'>,
-    field: string,
-    value: unknown,
-  ): Promise<void> {
+  async list(reference: SessionReference): Promise<StoredUnderstandingProviderContext[]> {
     try {
+      const serializedByProvider = await this.redis.hgetall(sessionKey(reference));
+      return Object.entries(serializedByProvider)
+        .map(([field, serialized]) => {
+          const stored = StoredUnderstandingProviderContextSchema.parse(JSON.parse(serialized));
+          if (stored.providerId !== field) {
+            throw new Error('Stored provider context does not match its field');
+          }
+          return stored;
+        })
+        .sort((left, right) => left.providerId.localeCompare(right.providerId));
+    } catch {
+      throw new Error('Failed to read onboarding Understanding provider contexts');
+    }
+  }
+
+  async put(input: SessionReference & StoredUnderstandingProviderContext): Promise<void> {
+    try {
+      const stored = StoredUnderstandingProviderContextSchema.parse({
+        context: input.context,
+        diagnostics: input.diagnostics,
+        providerId: input.providerId,
+        revision: input.revision,
+        sourceCount: input.sourceCount,
+      });
+      const key = sessionKey(input);
       const results = await this.redis
         .multi()
-        .hset(sessionKey(reference), field, JSON.stringify(value))
-        .expire(sessionKey(reference), SOURCE_STORE_TTL_SECONDS)
+        .hset(key, providerField(stored.providerId), JSON.stringify(stored))
+        .expire(key, SOURCE_STORE_TTL_SECONDS)
         .exec();
       if (!results || results.some(([error]) => error)) {
         throw new Error('Redis transaction failed');
       }
     } catch {
-      throw new Error('Failed to persist onboarding Understanding source data');
-    }
-  }
-
-  private async readField<T>(
-    reference: Omit<SourceReference, 'sourceId'>,
-    field: string,
-    schema: z.ZodType<T>,
-  ): Promise<T | null> {
-    try {
-      const serialized = await this.redis.hget(sessionKey(reference), field);
-      if (!serialized) return null;
-      return schema.parse(JSON.parse(serialized));
-    } catch {
-      throw new Error('Failed to read onboarding Understanding source data');
+      throw new Error('Failed to persist onboarding Understanding provider context');
     }
   }
 }

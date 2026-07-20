@@ -54,6 +54,18 @@ const canonicalErrors: Record<string, { code: string; operation: string }> = {
     operation: 'recent_repositories',
   },
   GMAIL_SEARCH_FAILED: { code: 'GMAIL_SEARCH_FAILED', operation: 'search' },
+  UNDERSTANDING_PROVIDER_AUTHORIZATION_FAILED: {
+    code: 'UNDERSTANDING_PROVIDER_AUTHORIZATION_FAILED',
+    operation: 'authorize',
+  },
+  UNDERSTANDING_PROVIDER_COLLECTION_FAILED: {
+    code: 'UNDERSTANDING_PROVIDER_COLLECTION_FAILED',
+    operation: 'collect',
+  },
+  UNDERSTANDING_PROVIDER_RESOLUTION_FAILED: {
+    code: 'UNDERSTANDING_PROVIDER_RESOLUTION_FAILED',
+    operation: 'resolve',
+  },
 };
 
 const boundedCount = (value: number) =>
