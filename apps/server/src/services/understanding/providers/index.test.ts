@@ -111,6 +111,33 @@ describe('createUnderstandingProviderRegistry', () => {
     await expect(registered.collect(context)).resolves.toMatchObject({ context: '# collected' });
   });
 
+  it('rejects candidates missing a required scope without collecting', async () => {
+    const collect = vi.fn(async () => ({
+      context: '# should not run',
+      diagnostics,
+      sourceCount: 1,
+    }));
+    const registered = createUnderstandingProviderRegistry([
+      definition({
+        collect,
+        identifyCandidate: vi.fn(async () => ({
+          credential: { token: 'private-token' },
+          externalAccountId: 'account-1',
+          grantedScopes: ['extra'],
+        })),
+      }),
+    ]).get('example')!;
+
+    await expect(registered.collect(context)).resolves.toMatchObject({
+      context: '',
+      diagnostics: {
+        errors: [expect.objectContaining({ code: 'UNDERSTANDING_PROVIDER_AUTHORIZATION_FAILED' })],
+      },
+      sourceCount: 0,
+    });
+    expect(collect).not.toHaveBeenCalled();
+  });
+
   it('returns bounded diagnostics for permanent absence and authorization failure', async () => {
     const absent = createUnderstandingProviderRegistry([
       definition({ discoverCandidates: vi.fn(async () => []) }),
@@ -156,5 +183,48 @@ describe('createUnderstandingProviderRegistry', () => {
     const error = await registered.collect(context).catch((caught) => caught);
     expect(error).toMatchObject({ name: 'UnderstandingProviderRetryableError', retryable: true });
     expect(String(error)).not.toContain('private');
+  });
+
+  it('retries when one identification is transient even if a fallback succeeds', async () => {
+    const upstream = new ConnectorDataError({
+      code: 'private_code',
+      operation: 'private_operation',
+      provider: 'example',
+      retryable: true,
+    });
+    const collect = vi.fn();
+    const registered = createUnderstandingProviderRegistry([
+      definition({
+        collect,
+        discoverCandidates: vi.fn(async () => [
+          {
+            candidateId: 'connector:available',
+            credentialOrigin: 'connector',
+            credentialReference: 'connector:available',
+            provider: 'example',
+          },
+          {
+            candidateId: 'auth_account:transient',
+            credentialOrigin: 'auth_account',
+            credentialReference: 'auth_account:transient',
+            provider: 'example',
+          },
+        ]),
+        identifyCandidate: vi.fn(async (candidate) => {
+          if (candidate.candidateId === 'auth_account:transient') throw upstream;
+          return {
+            credential: { token: 'fallback-token' },
+            externalAccountId: 'fallback',
+            grantedScopes: ['read'],
+          };
+        }),
+      }),
+    ]).get('example')!;
+
+    await expect(registered.collect(context)).rejects.toMatchObject({
+      name: 'UnderstandingProviderRetryableError',
+      retryable: true,
+    });
+    expect(collect).not.toHaveBeenCalled();
   });
 });

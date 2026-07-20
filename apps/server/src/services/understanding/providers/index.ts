@@ -63,11 +63,6 @@ const compareCandidates = (
 ) => {
   const leftScopes = new Set(left.identified.grantedScopes);
   const rightScopes = new Set(right.identified.grantedScopes);
-  const requiredDifference =
-    Number(definition.requiredScopes.every((scope) => rightScopes.has(scope))) -
-    Number(definition.requiredScopes.every((scope) => leftScopes.has(scope)));
-  if (requiredDifference !== 0) return requiredDifference;
-
   const optionalDifference =
     definition.usefulOptionalScopes.filter((scope) => rightScopes.has(scope)).length -
     definition.usefulOptionalScopes.filter((scope) => leftScopes.has(scope)).length;
@@ -102,15 +97,19 @@ const resolveCandidate = async (
       identified: await definition.identifyCandidate(candidate, context),
     })),
   );
+  if (results.some((result) => result.status === 'rejected' && retryable(result.reason))) {
+    throw new UnderstandingProviderRetryableError();
+  }
   const identified = results.flatMap((result) =>
-    result.status === 'fulfilled' && result.value.identified.externalAccountId.trim()
+    result.status === 'fulfilled' &&
+    result.value.identified.externalAccountId.trim() &&
+    definition.requiredScopes.every((scope) =>
+      result.value.identified.grantedScopes.includes(scope),
+    )
       ? [result.value]
       : [],
   );
   if (identified.length === 0) {
-    if (results.some((result) => result.status === 'rejected' && retryable(result.reason))) {
-      throw new UnderstandingProviderRetryableError();
-    }
     return null;
   }
 

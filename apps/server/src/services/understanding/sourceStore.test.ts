@@ -7,12 +7,7 @@ vi.mock('@/server/modules/AgentRuntime/redis', () => ({
   getAgentRuntimeRedisClient: vi.fn(),
 }));
 
-const transaction = {
-  exec: vi.fn(),
-  expire: vi.fn(),
-  hset: vi.fn(),
-};
-const redis = { del: vi.fn(), hget: vi.fn(), hgetall: vi.fn(), multi: vi.fn() };
+const redis = { del: vi.fn(), eval: vi.fn(), hget: vi.fn(), hgetall: vi.fn() };
 const store = new UnderstandingSourceStore(redis as unknown as Redis);
 const reference = { sessionId: 'session-1', userId: 'user-1' };
 const github = {
@@ -26,34 +21,58 @@ const github = {
 describe('UnderstandingSourceStore', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    transaction.exec.mockResolvedValue([
-      [null, 1],
-      [null, 1],
-    ]);
-    transaction.expire.mockReturnValue(transaction);
-    transaction.hset.mockReturnValue(transaction);
-    redis.multi.mockReturnValue(transaction);
+    redis.eval.mockResolvedValue(1);
   });
 
   it('stores one provider field under hashed user/session keys for exactly three days', async () => {
     await store.put({ ...reference, ...github });
 
-    expect(transaction.hset).toHaveBeenCalledWith(
+    expect(redis.eval).toHaveBeenCalledWith(
+      expect.stringContaining("redis.call('HSET', key, field, payload)"),
+      1,
       expect.stringMatching(
         /^onboarding_understanding:context:\{[a-f\d]{64}\}:session:[a-f\d]{64}$/,
       ),
       'github',
+      '1',
       JSON.stringify(github),
+      String(3 * 24 * 60 * 60),
     );
-    expect(transaction.expire).toHaveBeenCalledWith(expect.any(String), 3 * 24 * 60 * 60);
   });
 
-  it('replaces a provider by writing the same hash field', async () => {
-    await store.put({ ...reference, ...github });
-    await store.put({ ...reference, ...github, context: '# Updated', revision: 2 });
+  it('keeps newer revisions when an older collection completes later', async () => {
+    redis.eval.mockResolvedValueOnce(1).mockResolvedValueOnce(0);
+    const revision2 = { ...reference, ...github, context: '# Updated', revision: 2 };
 
-    expect(transaction.hset.mock.calls[0][1]).toBe('github');
-    expect(transaction.hset.mock.calls[1][1]).toBe('github');
+    await expect(store.put(revision2)).resolves.toBe(true);
+    await expect(store.put({ ...reference, ...github })).resolves.toBe(false);
+
+    expect(redis.eval.mock.calls[0].slice(2)).toEqual([
+      expect.any(String),
+      'github',
+      '2',
+      JSON.stringify({
+        context: revision2.context,
+        diagnostics: revision2.diagnostics,
+        providerId: revision2.providerId,
+        revision: revision2.revision,
+        sourceCount: revision2.sourceCount,
+      }),
+      String(3 * 24 * 60 * 60),
+    ]);
+    expect(redis.eval.mock.calls[1][4]).toBe('1');
+    expect(redis.eval.mock.calls[1][0]).toContain('currentRevision >= revision');
+  });
+
+  it('uses first-write-wins for equal revisions', async () => {
+    redis.eval.mockResolvedValueOnce(1).mockResolvedValueOnce(0);
+
+    await expect(store.put({ ...reference, ...github })).resolves.toBe(true);
+    await expect(
+      store.put({ ...reference, ...github, context: '# Duplicate revision' }),
+    ).resolves.toBe(false);
+
+    expect(redis.eval.mock.calls[1][4]).toBe('1');
   });
 
   it('reads a provider only when its provider and revision match', async () => {

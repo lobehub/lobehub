@@ -15,6 +15,29 @@ import { MAX_SOURCE_BRIEF_LENGTH } from './sanitizer';
 
 const SOURCE_STORE_PREFIX = 'onboarding_understanding:context';
 const SOURCE_STORE_TTL_SECONDS = 3 * 24 * 60 * 60;
+const PUT_PROVIDER_CONTEXT_SCRIPT = `
+local key = KEYS[1]
+local field = ARGV[1]
+local revision = tonumber(ARGV[2])
+local payload = ARGV[3]
+local ttl = tonumber(ARGV[4])
+local current = redis.call('HGET', key, field)
+
+if current then
+  local decodedSuccessfully, decoded = pcall(cjson.decode, current)
+  if not decodedSuccessfully or type(decoded) ~= 'table' or decoded.providerId ~= field or type(decoded.revision) ~= 'number' then
+    return redis.error_reply('invalid provider context')
+  end
+  local currentRevision = decoded.revision
+  if currentRevision >= revision then
+    return 0
+  end
+end
+
+redis.call('HSET', key, field, payload)
+redis.call('EXPIRE', key, ttl)
+return 1
+`;
 
 interface SessionReference {
   sessionId: string;
@@ -103,7 +126,7 @@ export class UnderstandingSourceStore {
     }
   }
 
-  async put(input: SessionReference & StoredUnderstandingProviderContext): Promise<void> {
+  async put(input: SessionReference & StoredUnderstandingProviderContext): Promise<boolean> {
     try {
       const stored = StoredUnderstandingProviderContextSchema.parse({
         context: input.context,
@@ -113,14 +136,17 @@ export class UnderstandingSourceStore {
         sourceCount: input.sourceCount,
       });
       const key = sessionKey(input);
-      const results = await this.redis
-        .multi()
-        .hset(key, providerField(stored.providerId), JSON.stringify(stored))
-        .expire(key, SOURCE_STORE_TTL_SECONDS)
-        .exec();
-      if (!results || results.some(([error]) => error)) {
-        throw new Error('Redis transaction failed');
-      }
+      const written = await this.redis.eval(
+        PUT_PROVIDER_CONTEXT_SCRIPT,
+        1,
+        key,
+        providerField(stored.providerId),
+        String(stored.revision),
+        JSON.stringify(stored),
+        String(SOURCE_STORE_TTL_SECONDS),
+      );
+      if (written !== 0 && written !== 1) throw new Error('Unexpected Redis CAS result');
+      return written === 1;
     } catch {
       throw new Error('Failed to persist onboarding Understanding provider context');
     }
