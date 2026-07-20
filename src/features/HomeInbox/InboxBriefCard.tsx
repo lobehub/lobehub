@@ -54,14 +54,20 @@ const InboxBriefCard = memo<InboxBriefCardProps>(({ brief }) => {
   const isInbox = agent?.id === INBOX_SESSION_ID;
   const canNavigate = Boolean(brief.taskId);
 
-  // Error briefs used to carry a log-style title ("T-1 topic #1 (tpc_…) error")
-  // and an "Execution failed: …" summary. The task identity already sits in the
-  // meta row above, so the card headline just states, in the user's language,
-  // that the run failed; the summary keeps only the underlying reason. The
-  // prefix strip is defensive for briefs written before the server stopped
-  // baking it in.
+  // The run-failure brief used to carry a log-style title ("T-1 topic #1
+  // (tpc_…) error") and an "Execution failed: …" summary. The task identity
+  // already sits in the meta row above, so its headline is localized to a plain
+  // "run failed" and the summary keeps only the underlying reason (the prefix
+  // strip is defensive for rows written before the server stopped baking it in).
+  //
+  // Scope the headline override to the run-failure brief only (server stores the
+  // stable English title `<id> run failed`, see taskLifecycle). Other error
+  // briefs — verify failure, heartbeat timeout, agent-signal — carry their own
+  // specific, sometimes already-localized title that must not be clobbered;
+  // falls back to the stored title if the server phrasing ever changes.
   const isError = brief.type === 'error';
-  const title = isError ? t('inbox.error.title', { ns: 'home' }) : brief.title;
+  const isRunFailure = isError && / run failed$/i.test(brief.title);
+  const title = isRunFailure ? t('inbox.error.title', { ns: 'home' }) : brief.title;
   const summary = isError
     ? brief.summary.replace(/^execution failed:\s*/i, '').trim()
     : brief.summary;

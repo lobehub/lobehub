@@ -50,6 +50,17 @@ and whether the offered action can actually resolve the cause.
   topic id moved to the structured `topicId` field that lights up "View run" — the ✅ example
   now cited beside the new Feedback §4.5.
 
+> ⚠️ **Review catch — the localized headline must be scoped, not blanket.** The first
+> implementation overrode the title for _every_ `type: 'error'` brief, but there are **5**
+> error-brief producers, and 4 carry legitimately distinct titles: verify (`failed
+verification` / `verification errored`, `verify/settle.ts`), heartbeat (`heartbeat timeout`,
+> `watchdog.ts` / `task.ts`), and agent-signal (`brief.agentSignal.selfReview.error.title` —
+> **already localized** server-side, `briefText.ts`). A blanket "运行失败" clobbered all of
+> them. Fix: scope the override to the run-failure brief only (server stores the stable English
+> `<id> run failed`; client localizes just that, falls back to the stored title otherwise).
+> Lesson for the checklist: **before overriding a shared record type's user-facing field by
+> `type`, enumerate every producer of that type** — a `type` is rarely single-source.
+
 ## 3 — Experience gaps (ranked)
 
 **① Log-style copy with internal ids — ux §4.5 (Meaningful)** 🟠 **\[fixed this run]** Title
