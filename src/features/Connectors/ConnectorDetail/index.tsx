@@ -2,8 +2,8 @@ import { getComposioAppByIdentifier, getLobehubSkillProviderById } from '@lobech
 import { Tooltip } from '@lobehub/ui';
 import { Button, confirmModal } from '@lobehub/ui/base-ui';
 import { useSize } from 'ahooks';
-import { createStaticStyles } from 'antd-style';
 import { App } from 'antd';
+import { createStaticStyles } from 'antd-style';
 import { PencilIcon, RefreshCwIcon, Trash2, Unplug } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { memo, useCallback, useRef, useState } from 'react';
