@@ -6,6 +6,7 @@ import type {
   UnderstandingProviderState,
 } from '@lobechat/types';
 import {
+  CollectionDiagnosticsSchema,
   CollectionDiagnosticsSummarySchema,
   MAX_COLLECTION_ERRORS,
   OnboardingUnderstandingMessageMetadataSchema,
@@ -148,7 +149,7 @@ const getSourceFingerprint = (session: OnboardingUnderstandingSession) =>
     .map(([providerId, source]) => `${providerId}@${source.revision}`)
     .join(',');
 
-const assertProposalProvenance = (
+const normalizeProposalProvenance = (
   session: OnboardingUnderstandingSession,
   proposal: OnboardingUnderstandingMessageMetadata,
 ) => {
@@ -160,19 +161,24 @@ const assertProposalProvenance = (
     throw new Error('Understanding proposal providers do not match completed sources');
   }
 
-  const succeededCount = completedSources.reduce(
+  const terminalSources = Object.entries(session.sources)
+    .filter(([, source]) => source.status === 'completed' || source.status === 'failed')
+    .sort(([left], [right]) => left.localeCompare(right));
+  const succeededCount = terminalSources.reduce(
     (total, [, source]) => total + source.succeededCount,
     0,
   );
-  const failedCount = completedSources.reduce((total, [, source]) => total + source.failedCount, 0);
-  const providerSet = new Set(providerIds);
-  if (
-    proposal.diagnostics.succeededCount !== succeededCount ||
-    proposal.diagnostics.failedCount !== failedCount ||
-    proposal.diagnostics.errors.some(({ provider }) => !providerSet.has(provider))
-  ) {
-    throw new Error('Understanding proposal diagnostics do not match completed sources');
-  }
+  const failedCount = terminalSources.reduce((total, [, source]) => total + source.failedCount, 0);
+  const errors = terminalSources
+    .flatMap(([, source]) => source.errors)
+    .slice(-MAX_COLLECTION_ERRORS);
+  const diagnostics = CollectionDiagnosticsSchema.parse({
+    errors,
+    evidenceCount: proposal.diagnostics.evidenceCount,
+    failedCount,
+    succeededCount,
+  });
+  return OnboardingUnderstandingMessageMetadataSchema.parse({ ...proposal, diagnostics });
 };
 
 const getStoredProposal = (metadata: unknown) => {
@@ -273,6 +279,10 @@ export class OnboardingUnderstandingRepository {
       return session;
     });
 
+  /**
+   * Claim this provider in its own durable Upstash context.run step. Upstash replays the winning
+   * result into the separate collection/Redis step, so retries never recollect a running revision.
+   */
   markProviderRunning = async (
     topicId: string,
     sessionId: string,
@@ -389,8 +399,8 @@ export class OnboardingUnderstandingRepository {
     threadId,
     topicId,
   }: CommitWritingInput): Promise<{ personaVersion?: number; published: boolean }> => {
-    const proposal = OnboardingUnderstandingMessageMetadataSchema.parse(metadata);
-    if (proposal.sourceFingerprint !== sourceFingerprint) {
+    const requestedProposal = OnboardingUnderstandingMessageMetadataSchema.parse(metadata);
+    if (requestedProposal.sourceFingerprint !== sourceFingerprint) {
       throw new Error('Understanding proposal fingerprint does not match the writing claim');
     }
 
@@ -407,7 +417,7 @@ export class OnboardingUnderstandingRepository {
       ) {
         return { published: false };
       }
-      assertProposalProvenance(session, proposal);
+      const proposal = normalizeProposalProvenance(session, requestedProposal);
 
       const writingThread = await this.lockWritingThread(tx, topicId, threadId);
       const [message] = await tx

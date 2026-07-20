@@ -231,6 +231,90 @@ describe('OnboardingUnderstandingRepository', () => {
     });
   });
 
+  it('derives durable diagnostics from all terminal providers', async () => {
+    await repository.initialize(topicId, sessionId, ['github', 'gmail']);
+    const { revision: githubRevision } = await repository.markProviderRunning(
+      topicId,
+      sessionId,
+      'github',
+    );
+    await repository.completeProvider({
+      errors: [],
+      failedCount: 0,
+      providerId: 'github',
+      revision: githubRevision,
+      sessionId,
+      succeededCount: 3,
+      topicId,
+    });
+    const { revision: gmailRevision } = await repository.markProviderRunning(
+      topicId,
+      sessionId,
+      'gmail',
+    );
+    await repository.failProvider({
+      errors: [providerFailure],
+      failedCount: 1,
+      providerId: 'gmail',
+      revision: gmailRevision,
+      sessionId,
+      succeededCount: 0,
+      topicId,
+    });
+    await repository.claimWriting({
+      agentId,
+      sessionId,
+      sourceFingerprint: 'github@1',
+      threadId: 'partial-writing-thread',
+      topicId,
+    });
+    await insertAssistantMessage('partial-message', 'partial-writing-thread');
+    const fabricated = proposal('partial-result', 'github@1', ['github'], 999);
+    fabricated.diagnostics.failedCount = 999;
+    fabricated.diagnostics.errors = [{ ...providerFailure, provider: 'slack' }];
+
+    await expect(
+      repository.commitWriting({
+        assistantMessageId: 'partial-message',
+        metadata: fabricated,
+        sessionId,
+        sourceFingerprint: 'github@1',
+        threadId: 'partial-writing-thread',
+        topicId,
+      }),
+    ).resolves.toEqual({ published: true });
+
+    const [message] = await db
+      .select({ metadata: messages.metadata })
+      .from(messages)
+      .where(eq(messages.id, 'partial-message'));
+    const expectedDiagnostics = {
+      errors: [providerFailure],
+      evidenceCount: 4,
+      failedCount: 1,
+      succeededCount: 3,
+    };
+    expect(message.metadata).toMatchObject({
+      onboardingUnderstanding: {
+        diagnostics: expectedDiagnostics,
+        providers: ['github'],
+      },
+    });
+    expect(JSON.stringify(message.metadata)).not.toContain('slack');
+    expect(JSON.stringify(message.metadata)).not.toContain('999');
+
+    await repository.confirm({ resultId: 'partial-result', sessionId, topicId });
+    const persona = await new UserPersonaModel(db, userId).getLatestPersonaDocument();
+    expect(persona?.metadata).toMatchObject({
+      onboardingUnderstanding: {
+        diagnostics: { evidenceCount: 4, failedCount: 1, succeededCount: 3 },
+        providers: ['github'],
+      },
+    });
+    expect(JSON.stringify(persona?.metadata)).not.toContain('slack');
+    expect(JSON.stringify(persona?.metadata)).not.toContain('999');
+  });
+
   it('claims a fingerprint once and rejects a stale proposal after more sources arrive', async () => {
     await repository.initialize(topicId, sessionId, ['github', 'gmail']);
     const { revision: githubRevision } = await repository.markProviderRunning(
@@ -326,35 +410,6 @@ describe('OnboardingUnderstandingRepository', () => {
         topicId,
       }),
     ).rejects.toThrow('proposal providers');
-    await expect(
-      repository.commitWriting({
-        assistantMessageId: 'current-message',
-        metadata: {
-          ...combinedProposal,
-          diagnostics: { ...combinedProposal.diagnostics, succeededCount: 4 },
-        },
-        sessionId,
-        sourceFingerprint: 'github@1,gmail@1',
-        threadId: 'combined-writing-thread',
-        topicId,
-      }),
-    ).rejects.toThrow('proposal diagnostics');
-    await expect(
-      repository.commitWriting({
-        assistantMessageId: 'current-message',
-        metadata: {
-          ...combinedProposal,
-          diagnostics: {
-            ...combinedProposal.diagnostics,
-            errors: [{ ...providerFailure, provider: 'slack' }],
-          },
-        },
-        sessionId,
-        sourceFingerprint: 'github@1,gmail@1',
-        threadId: 'combined-writing-thread',
-        topicId,
-      }),
-    ).rejects.toThrow('proposal diagnostics');
 
     await expect(
       repository.commitWriting({
