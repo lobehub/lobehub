@@ -7,6 +7,7 @@ import { QwenAIStream } from '../../core/streams';
 import { processMultiProviderModelList } from '../../utils/modelParse';
 import { createQwenImage } from './createImage';
 import { createQwenVideo } from './createVideo';
+import { isThinkingForcedQwenModel } from './qwenModelId';
 
 export interface QwenModelCard {
   id: string;
@@ -23,17 +24,6 @@ export const QwenLegacyModels = new Set([
   'qwen-1.8b-chat',
   'qwen-1.8b-longcontext-chat',
 ]);
-
-/**
- * Models that only run in thinking mode: DashScope rejects `enable_thinking: false`
- * with 400 "The value of the enable_thinking parameter is restricted to True",
- * so a disabled `thinking` preference must never be forwarded for them.
- * See https://help.aliyun.com/zh/model-studio/deep-thinking
- */
-const THINKING_FORCED_MODEL_PREFIXES = ['qwen3.8-max'];
-
-const isThinkingForcedModel = (model: string) =>
-  THINKING_FORCED_MODEL_PREFIXES.some((prefix) => model.startsWith(prefix));
 
 export const params = {
   baseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
@@ -96,7 +86,7 @@ export const params = {
                 : {}),
               ...(!thinkingExplicitlyDisabled && reasoning_effort && { reasoning_effort }),
             }
-          : isThinkingForcedModel(model)
+          : isThinkingForcedQwenModel(model)
             ? {
                 enable_thinking: true,
                 // A disabled preference carries budget_tokens: 0 — sending it alongside
