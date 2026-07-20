@@ -52,7 +52,7 @@
       "groupSlug": "all-non-major-dependencies"
     },
     {
-      "description": "Schedule patch and minor monthly"
+      "description": "Schedule patch and minor monthly",
       "matchUpdateTypes": ["patch", "minor"],
       "schedule": "* 0-3 1 * *"
     }
