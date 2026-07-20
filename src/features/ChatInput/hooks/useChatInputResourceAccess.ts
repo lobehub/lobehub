@@ -1,5 +1,8 @@
 'use client';
 
+import { useSyncExternalStore } from 'react';
+import type { StoreApi } from 'zustand';
+
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
@@ -7,7 +10,25 @@ import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 
-import { useChatInputStore } from '../store';
+import { type State, useChatInputStoreApiOptional } from '../store';
+
+const EMPTY_SUBSCRIBE = () => () => {};
+
+/**
+ * Reads the bound `agentId` from the ChatInput store, reactively when a store
+ * Provider exists and falling back to `undefined` otherwise. This hook is
+ * reached from the shared <Action> component, which the image/video generation
+ * prompt reuses outside any ChatInput store — reading the store directly there
+ * would throw ("...used zustand provider as an ancestor.").
+ */
+const useChatInputAgentId = (): string | undefined => {
+  const storeApi = useChatInputStoreApiOptional() as StoreApi<State> | undefined;
+  return useSyncExternalStore(
+    storeApi ? storeApi.subscribe : EMPTY_SUBSCRIBE,
+    () => storeApi?.getState().agentId,
+    () => undefined,
+  );
+};
 
 /**
  * Per-resource General-access gating for the chat input: resolves which
@@ -18,7 +39,7 @@ import { useChatInputStore } from '../store';
  * loading defaults permissive — the server remains the enforcement point.
  */
 export const useChatInputResourceAccess = () => {
-  const chatInputAgentId = useChatInputStore((s) => s.agentId);
+  const chatInputAgentId = useChatInputAgentId();
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
   const agentVisibility = useAgentStore((s) =>
     chatInputAgentId ? s.agentMap[chatInputAgentId]?.visibility : undefined,

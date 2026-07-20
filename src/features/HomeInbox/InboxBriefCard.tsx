@@ -53,6 +53,12 @@ const InboxBriefCard = memo<InboxBriefCardProps>(({ brief }) => {
   const isInbox = agent?.id === INBOX_SESSION_ID;
   const canNavigate = Boolean(brief.taskId);
 
+  // Error briefs carry their title + human, localized summary from the server
+  // (taskLifecycle / verify / watchdog / agent-signal each own their copy), so
+  // the card renders them verbatim — no client-side title override or string
+  // munging. `isError` only drives the severity glyph below.
+  const isError = brief.type === 'error';
+
   const hasTaskMeta = Boolean(brief.taskStatus || brief.taskIdentifier || brief.taskName);
 
   const openTask = () => {
@@ -79,7 +85,16 @@ const InboxBriefCard = memo<InboxBriefCardProps>(({ brief }) => {
           gap={7}
           onClick={canNavigate ? openTask : undefined}
         >
-          {brief.taskStatus && <StatusGlyph status={brief.taskStatus} variant={'task'} />}
+          {/* On error the task glyph would render its paused/scheduled state
+              (the neutral "waiting for human" hand), which reads as pending, not
+              failed. Show the topic-failed alert (red TriangleAlert) so the row
+              reads as an error at a glance — the one true failure glyph, no extra
+              icon on the headline. */}
+          {isError ? (
+            <StatusGlyph status={'failed'} variant={'topic'} />
+          ) : (
+            brief.taskStatus && <StatusGlyph status={brief.taskStatus} variant={'task'} />
+          )}
           {brief.taskIdentifier && <span className={styles.taskRef}>{brief.taskIdentifier}</span>}
           {brief.taskName && <span className={styles.taskName}>{brief.taskName}</span>}
           <Flexbox flex={1} />

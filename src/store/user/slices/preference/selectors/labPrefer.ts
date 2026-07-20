@@ -15,8 +15,6 @@ export const labPreferSelectors = {
     s.preference.lab?.enableBuiltinTerminal ?? false,
   enableClaudeCodeSdk: (s: UserState): boolean => s.preference.lab?.enableClaudeCodeSdk ?? false,
   enableFleet: (s: UserState): boolean => s.preference.lab?.enableFleet ?? false,
-  enableFoldFinishedTurn: (s: UserState): boolean =>
-    s.preference.lab?.enableFoldFinishedTurn ?? false,
   enableImessage: (s: UserState): boolean => s.preference.lab?.enableImessage ?? false,
   enableInAppBrowser: (s: UserState): boolean => s.preference.lab?.enableInAppBrowser ?? false,
   enableInputMarkdown: (s: UserState): boolean =>
@@ -28,4 +26,6 @@ export const labPreferSelectors = {
   enableOAuthApps: (s: UserState): boolean => s.preference.lab?.enableOAuthApps ?? false,
   enablePlatformAgent: (s: UserState): boolean => s.preference.lab?.enablePlatformAgent ?? false,
   enableTaskVerify: (s: UserState): boolean => s.preference.lab?.enableTaskVerify ?? false,
+  enableTopicAcceptance: (s: UserState): boolean =>
+    s.preference.lab?.enableTopicAcceptance ?? false,
 };

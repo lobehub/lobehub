@@ -55,12 +55,12 @@ const Page = memo(() => {
     enableImessage,
     enableFleet,
     enableClaudeCodeSdk,
-    enableFoldFinishedTurn,
     enableMessageTextSelectionActions,
     enableOAuthApps,
     enableInAppBrowser,
     enableArtifactDeployment,
     enableBuiltinTerminal,
+    enableTopicAcceptance,
     updateLab,
   ] = useUserStore((s) => [
     preferenceSelectors.isPreferenceInit(s),
@@ -70,12 +70,12 @@ const Page = memo(() => {
     labPreferSelectors.enableImessage(s),
     labPreferSelectors.enableFleet(s),
     labPreferSelectors.enableClaudeCodeSdk(s),
-    labPreferSelectors.enableFoldFinishedTurn(s),
     labPreferSelectors.enableMessageTextSelectionActions(s),
     labPreferSelectors.enableOAuthApps(s),
     labPreferSelectors.enableInAppBrowser(s),
     labPreferSelectors.enableArtifactDeployment(s),
     labPreferSelectors.enableBuiltinTerminal(s),
+    labPreferSelectors.enableTopicAcceptance(s),
     s.updateLab,
   ]);
 
@@ -211,19 +211,6 @@ const Page = memo(() => {
     {
       children: (
         <Switch
-          checked={enableFoldFinishedTurn}
-          loading={!isPreferenceInit}
-          onChange={(checked) => updateLab({ enableFoldFinishedTurn: checked })}
-        />
-      ),
-      className: styles.labItem,
-      desc: tLabs('features.foldFinishedTurn.desc'),
-      label: tLabs('features.foldFinishedTurn.title'),
-      minWidth: undefined,
-    },
-    {
-      children: (
-        <Switch
           checked={enableMessageTextSelectionActions}
           loading={!isPreferenceInit}
           onChange={(checked) => updateLab({ enableMessageTextSelectionActions: checked })}
@@ -232,6 +219,19 @@ const Page = memo(() => {
       className: styles.labItem,
       desc: tLabs('features.messageTextSelectionActions.desc'),
       label: tLabs('features.messageTextSelectionActions.title'),
+      minWidth: undefined,
+    },
+    {
+      children: (
+        <Switch
+          checked={enableTopicAcceptance}
+          loading={!isPreferenceInit}
+          onChange={(checked) => updateLab({ enableTopicAcceptance: checked })}
+        />
+      ),
+      className: styles.labItem,
+      desc: tLabs('features.topicAcceptance.desc'),
+      label: tLabs('features.topicAcceptance.title'),
       minWidth: undefined,
     },
     {

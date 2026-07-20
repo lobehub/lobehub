@@ -18,6 +18,7 @@ import {
   PlusIcon,
   SearchCheck,
   Settings2Icon,
+  TargetIcon,
   TypeIcon,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -36,6 +37,7 @@ import {
   chatConfigByIdSelectors,
 } from '@/store/agent/selectors';
 import { aiModelSelectors, aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
+import { useChatStore } from '@/store/chat';
 import { useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
@@ -45,8 +47,10 @@ import {
   useServerConfigStore,
 } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
-import { settingsSelectors } from '@/store/user/selectors';
+import { labPreferSelectors, settingsSelectors } from '@/store/user/selectors';
 
+import { useGoalArmStore } from '../../../Conversation/ChatInput/VerifyTray/goalArmStore';
+import { openTopicGoalModal } from '../../../Conversation/ChatInput/VerifyTray/useTopicChecklist';
 import { useAgentId } from '../../hooks/useAgentId';
 import { useChatInputResourceAccess } from '../../hooks/useChatInputResourceAccess';
 import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
@@ -288,11 +292,19 @@ const PlusAction = memo(() => {
   const { t } = useTranslation('chat');
   const { t: tEditor } = useTranslation('editor');
   const { t: tSetting } = useTranslation('setting');
+  const { t: tVerify } = useTranslation('verify');
   const isDark = useIsDark();
   const agentId = useAgentId();
   const { canConfigureResource } = useChatInputResourceAccess();
   const { updateAgentChatConfig } = useUpdateAgentConfig();
   const [dropdownOpen, setDropdownOpen] = useState(false);
+
+  // Topic acceptance (lab): a "new acceptance item" entry in the "+" menu, so a
+  // topic's checklist starts from here instead of an always-on strip above the
+  // composer. Global stores only — Plus renders on surfaces without conversation
+  // context.
+  const enableTopicAcceptance = useUserStore(labPreferSelectors.enableTopicAcceptance);
+  const activeTopicId = useChatStore((s) => s.activeTopicId);
 
   const upload = useFileStore((s) => s.uploadChatFiles);
   const { enableKnowledgeBase } = useServerConfigStore(featureFlagsSelectors);
@@ -529,11 +541,35 @@ const PlusAction = memo(() => {
                 ),
               ),
             } as ActionDropdownMenuItems[number],
-            { type: 'divider' },
           ]
         : [];
 
-    const capabilityItems: ActionDropdownMenuItems = canConfigureResource
+    // Agent Gateway sits below the formatting toolbar (grouped with advanced
+    // params), gated on the resource-configuration permission.
+    const gatewayItem: ActionDropdownMenuItems =
+      canConfigureResource && enableGatewayMode
+        ? [
+            {
+              checked: isGatewayModeEnabled,
+              icon: Cloud,
+              key: 'gateway-mode',
+              label: (
+                <PopoverLabel
+                  label={renderGatewayModeLabel()}
+                  popoverContent={gatewayModeInfo}
+                  // Clear the trailing toggle so the card sits to the right of the whole menu.
+                  sideOffset={64}
+                />
+              ),
+              onCheckedChange: handleToggleGatewayMode,
+              type: 'switch',
+            } as ActionDropdownMenuItems[number],
+          ]
+        : [];
+
+    // Memory / Web Search / Skills form one group (no dividers between them),
+    // hidden entirely when the user can't configure resources.
+    const coreItems: ActionDropdownMenuItems = canConfigureResource
       ? [
           // Memory toggle — trailing switch; toggle by clicking the switch or the whole row
           {
@@ -609,55 +645,37 @@ const PlusAction = memo(() => {
                   type: 'switch',
                 } as ActionDropdownMenuItems[number],
               ]),
-          ...(enableGatewayMode
-            ? [
-                {
-                  checked: isGatewayModeEnabled,
-                  icon: Cloud,
-                  key: 'gateway-mode',
-                  label: (
-                    <PopoverLabel
-                      label={renderGatewayModeLabel()}
-                      popoverContent={gatewayModeInfo}
-                      // Clear the trailing toggle so the card sits to the right of the whole menu.
-                      sideOffset={64}
-                    />
-                  ),
-                  onCheckedChange: handleToggleGatewayMode,
-                  type: 'switch',
-                } as ActionDropdownMenuItems[number],
-              ]
-            : []),
-          { type: 'divider' },
-          // Skills (with "Add Skills..." merged in) sits directly under the Web Search divider.
+          // Skills (with "Add Skills..." merged in) stays in the same group.
           ...toolsItems,
-          // Formatting toolbar toggle — trailing switch; toggle by clicking the switch or the whole row
-          {
-            checked: Boolean(showTypoBar),
-            icon: TypeIcon,
-            key: 'typo',
-            label: tEditor('actions.typobar.title'),
-            onCheckedChange: (checked: boolean) => setShowTypoBar(checked),
-            type: 'switch',
-          },
-          // Advanced parameter settings — mirrors ParamsPanelToggle in the agent header.
-          {
-            icon: Settings2Icon,
-            key: 'params',
-            label: renderActive(tSetting('settingModel.params.title'), isParamsPanelActive),
-            onClick: handleToggleParams,
-          },
         ]
-      : [
-          {
-            checked: Boolean(showTypoBar),
-            icon: TypeIcon,
-            key: 'typo',
-            label: tEditor('actions.typobar.title'),
-            onCheckedChange: (checked: boolean) => setShowTypoBar(checked),
-            type: 'switch',
-          },
-        ];
+      : [];
+
+    // Formatting toolbar is always available; Agent Gateway + advanced params
+    // only when the user can configure resources.
+    const formatItems: ActionDropdownMenuItems = [
+      // Formatting toolbar toggle — trailing switch; toggle by clicking the switch or the whole row
+      {
+        checked: Boolean(showTypoBar),
+        icon: TypeIcon,
+        key: 'typo',
+        label: tEditor('actions.typobar.title'),
+        onCheckedChange: (checked: boolean) => setShowTypoBar(checked),
+        type: 'switch',
+      },
+      // Agent Gateway directly below the formatting toolbar.
+      ...gatewayItem,
+      // Advanced parameter settings — only when resources can be configured.
+      ...(canConfigureResource
+        ? [
+            {
+              icon: Settings2Icon,
+              key: 'params',
+              label: renderActive(tSetting('settingModel.params.title'), isParamsPanelActive),
+              onClick: handleToggleParams,
+            } as ActionDropdownMenuItems[number],
+          ]
+        : []),
+    ];
 
     // "Add Attachments..." merges file upload with the knowledge base (libraries / files).
     // When the knowledge base is disabled there is no submenu, so Upload stays a top-level entry.
@@ -692,11 +710,45 @@ const PlusAction = memo(() => {
         ]
       : uploadItems;
 
-    return [...attachmentsItems, ...capabilityItems];
+    // Before a topic exists there is nothing to persist a goal onto, so the
+    // entry *arms* the goal (the next message becomes it); once a topic exists
+    // it opens the editor directly.
+    const acceptanceItems: ActionDropdownMenuItems = enableTopicAcceptance
+      ? [
+          {
+            icon: TargetIcon,
+            key: 'set-topic-goal',
+            label: tVerify('acceptance.tray.menuSetGoal'),
+            onClick: () => {
+              if (activeTopicId) {
+                void openTopicGoalModal(activeTopicId);
+              } else if (agentId) {
+                useGoalArmStore.getState().arm(agentId);
+                message.success(tVerify('acceptance.tray.goalArmed'));
+              }
+            },
+          },
+        ]
+      : [];
+
+    // Grouped with a single divider only between non-empty groups:
+    // [attachments] | [memory · search · skills] | [set goal] | [formatting · gateway · params]
+    const menuGroups: ActionDropdownMenuItems[] = [
+      attachmentsItems,
+      coreItems,
+      acceptanceItems,
+      formatItems,
+    ];
+    return menuGroups
+      .filter((group) => group.length > 0)
+      .flatMap((group, index) => (index === 0 ? group : [{ type: 'divider' as const }, ...group]));
   }, [
-    activeSearchOption,
     agentId,
+    activeSearchOption,
+    activeTopicId,
     canConfigureResource,
+    enableTopicAcceptance,
+    tVerify,
     canUploadImage,
     canUploadVideo,
     canUploadAudio,

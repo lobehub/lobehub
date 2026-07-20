@@ -1,6 +1,8 @@
 import type {
+  AcceptanceChecklistItem,
   AcceptanceCheckReviewAction,
   AcceptanceReviewAnnotation,
+  AcceptanceSubjectType,
   VerifierType,
   VerifyCheckItem,
   VerifyEvidence,
@@ -140,6 +142,24 @@ export class VerifyService {
   // ---- subject-level acceptance ----
   getAcceptanceBundle = (id: string): Promise<AcceptanceBundle> =>
     lambdaClient.acceptance.getBundle.query({ id });
+
+  /** The acceptance aggregate for a subject (topic/task/document), or null. */
+  getAcceptanceBySubject = (subjectType: AcceptanceSubjectType, subjectId: string) =>
+    lambdaClient.acceptance.getBySubject.query({ subjectId, subjectType });
+
+  /** Persist a subject's standing acceptance checklist (topic tray). */
+  saveAcceptanceChecklist = (
+    subjectType: AcceptanceSubjectType,
+    subjectId: string,
+    checklist: AcceptanceChecklistItem[],
+  ) => lambdaClient.acceptance.saveChecklist.mutate({ checklist, subjectId, subjectType });
+
+  /** Set/update a subject's acceptance goal (the one-sentence outcome). */
+  saveAcceptanceGoal = (
+    subjectType: AcceptanceSubjectType,
+    subjectId: string,
+    requirement: string,
+  ) => lambdaClient.acceptance.saveGoal.mutate({ requirement, subjectId, subjectType });
 
   listAcceptances = (): Promise<AcceptanceListItem[]> => lambdaClient.acceptance.list.query();
 

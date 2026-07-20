@@ -471,11 +471,23 @@ const Group = memo<GroupChildrenProps>(
     // fill it. Multi-tool segments keep their own chrome; a tool still executing
     // is covered by its own loading placeholder (areWorkflowToolsComplete=false).
     const lastSegment = segments.at(-1);
+    // …unless that inline segment already ends on a LOADING_FLAT placeholder:
+    // that block mounts MessageContent, which renders its OWN "…is running" line
+    // (ContentBlock gates on text/LOADING_FLAT/tools), so the tail would stack a
+    // second identical line on top. Narrowly LOADING_FLAT (and tool-less): a
+    // blank `content: ''` shell — what the gateway emits on stream_start — does
+    // NOT mount MessageContent, so the tail must stay to fill the gap until the
+    // first content chunk lands.
+    const lastInlineBlock =
+      lastSegment?.kind === 'workflow' ? lastSegment.blocks.at(-1) : undefined;
+    const lastInlineRendersOwnLoading =
+      lastInlineBlock?.content === LOADING_FLAT && !lastInlineBlock.tools?.length;
     const showTailRunningIndicator =
       isGenerating &&
       lastSegment?.kind === 'workflow' &&
       shouldInlineWorkflowSegment(lastSegment.blocks) &&
-      areWorkflowToolsComplete(lastSegment.blocks.flatMap((block) => block.tools ?? []));
+      areWorkflowToolsComplete(lastSegment.blocks.flatMap((block) => block.tools ?? [])) &&
+      !lastInlineRendersOwnLoading;
 
     if (isCollapsed) {
       return (

@@ -142,4 +142,16 @@ describe('Advanced settings page', () => {
 
     expect(screen.queryByText('features.taskVerify.title')).toBeNull();
   });
+
+  it('renders the topic acceptance (tray) lab toggle', () => {
+    useUserStore.setState({
+      isUserStateInit: true,
+      setSettings: vi.fn(),
+      updateLab: vi.fn(),
+    });
+
+    render(<Page />, { wrapper: createWrapper() });
+
+    expect(screen.getByText('features.topicAcceptance.title')).toBeDefined();
+  });
 });

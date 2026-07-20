@@ -3,14 +3,26 @@
 import { Icon } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import dayjs from 'dayjs';
-import { CalendarClockIcon, CheckIcon, ChevronRight, PlusIcon, TypeIcon } from 'lucide-react';
+import {
+  CalendarClockIcon,
+  CheckIcon,
+  ChevronRight,
+  PlusIcon,
+  TargetIcon,
+  TypeIcon,
+} from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { message } from '@/components/AntdStaticMethods';
 import Action from '@/features/ChatInput/ActionBar/components/Action';
 import { type ActionDropdownMenuItems } from '@/features/ChatInput/ActionBar/components/ActionDropdown';
 import { useChatInputStore } from '@/features/ChatInput/store';
 import { useConversationStore } from '@/features/Conversation';
+import { useGoalArmStore } from '@/features/Conversation/ChatInput/VerifyTray/goalArmStore';
+import { openTopicGoalModal } from '@/features/Conversation/ChatInput/VerifyTray/useTopicChecklist';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
 
 import { OFFSETS_IN_HOURS, resolveScheduleTime } from './scheduleTime';
 
@@ -30,12 +42,16 @@ import { OFFSETS_IN_HOURS, resolveScheduleTime } from './scheduleTime';
 const HeteroPlus = memo(() => {
   const { t } = useTranslation('chat');
   const { t: tEditor } = useTranslation('editor');
+  const { t: tVerify } = useTranslation('verify');
   const [open, setOpen] = useState(false);
 
   const [showTypoBar, setShowTypoBar] = useChatInputStore((s) => [s.showTypoBar, s.setShowTypoBar]);
 
   const scheduledSendAt = useConversationStore((s) => s.scheduledSendAt);
   const setScheduledSendAt = useConversationStore((s) => s.setScheduledSendAt);
+  const topicId = useConversationStore((s) => s.context.topicId);
+  const agentId = useConversationStore((s) => s.context.agentId);
+  const enableTopicAcceptance = useUserStore(labPreferSelectors.enableTopicAcceptance);
 
   const armSchedule = useCallback(
     (hours: number) => {
@@ -86,8 +102,40 @@ const HeteroPlus = memo(() => {
         onCheckedChange: (checked: boolean) => setShowTypoBar(checked),
         type: 'switch',
       },
+      // Topic goal (lab): before a topic exists this *arms* the goal (the next
+      // message becomes it); once a topic exists it opens the editor directly.
+      ...(enableTopicAcceptance
+        ? ([
+            { type: 'divider' },
+            {
+              icon: TargetIcon,
+              key: 'set-topic-goal',
+              label: tVerify('acceptance.tray.menuSetGoal'),
+              onClick: () => {
+                setOpen(false);
+                if (topicId) {
+                  void openTopicGoalModal(topicId);
+                } else if (agentId) {
+                  useGoalArmStore.getState().arm(agentId);
+                  message.success(tVerify('acceptance.tray.goalArmed'));
+                }
+              },
+            },
+          ] as ActionDropdownMenuItems)
+        : []),
     ];
-  }, [t, tEditor, showTypoBar, setShowTypoBar, armSchedule, scheduledSendAt]);
+  }, [
+    t,
+    tEditor,
+    tVerify,
+    showTypoBar,
+    setShowTypoBar,
+    armSchedule,
+    scheduledSendAt,
+    enableTopicAcceptance,
+    agentId,
+    topicId,
+  ]);
 
   return (
     <Action

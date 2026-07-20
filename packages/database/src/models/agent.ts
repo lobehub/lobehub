@@ -1,5 +1,5 @@
 import { BUILTIN_AGENT_SLUGS, getAgentPersistConfig } from '@lobechat/builtin-agents';
-import { INBOX_SESSION_ID } from '@lobechat/const';
+import { INBOX_SESSION_ID, isHeterogeneousAgentModelId } from '@lobechat/const';
 import type { AgentRankItem, LobeAgentAgencyConfig } from '@lobechat/types';
 import { pruneWorkingDirByDeviceDeletes } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
@@ -1101,6 +1101,23 @@ export class AgentModel {
     }
 
     const mergedValue = merge(agent, restData);
+
+    // The inbox is LobeHub's built-in default cloud agent; it must never be
+    // turned into a heterogeneous (external-CLI) agent. Two independent inputs can
+    // flip it — a stray `agencyConfig.heterogeneousProvider`, and a legacy hetero
+    // `model` id (amp / claude-code / codex / opencode), which AiAgentService still
+    // treats as heterogeneous on its own even without a provider config. Either one
+    // reroutes the whole chat surface through the device gateway and breaks it with
+    // GATEWAY_NOT_CONFIGURED, so sanitize both at this write chokepoint regardless
+    // of caller (mirrors AGENT_BUILDER_PROTECTED_FIELDS).
+    if (agent.slug === INBOX_SESSION_ID) {
+      if (mergedValue.agencyConfig?.heterogeneousProvider) {
+        delete mergedValue.agencyConfig.heterogeneousProvider;
+      }
+      if (isHeterogeneousAgentModelId(mergedValue.model)) {
+        mergedValue.model = null;
+      }
+    }
 
     // Apply the processed parameters
     mergedValue.params = Object.keys(updatedParams).length > 0 ? updatedParams : undefined;
