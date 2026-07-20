@@ -62,10 +62,8 @@ export class TopicService {
     return lambdaClient.topic.importTopic.mutate(params);
   };
 
-  getHeteroSessionImportStatus = (
-    sessions: { sessionId: string; topicClientId: string }[],
-  ): Promise<HeteroSessionImportStatus> => {
-    return lambdaClient.topic.getHeteroSessionImportStatus.query({ sessions });
+  getHeteroSessionImportStatus = (): Promise<HeteroSessionImportStatus> => {
+    return lambdaClient.topic.getHeteroSessionImportStatus.query();
   };
 
   importHeteroSessions = (params: {

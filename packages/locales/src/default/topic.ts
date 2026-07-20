@@ -132,6 +132,9 @@ export default {
     'No Claude Code (~/.claude/projects) or Codex (~/.codex/sessions) transcripts were found. Use them in a terminal first, then try again.',
   'heteroImport.empty.title': 'No local agent sessions found',
   'heteroImport.entry': 'Import Local Agent Sessions',
+  'heteroImport.error.desc':
+    'Could not read the local sessions. Check that LobeHub can access your transcripts, then retry.',
+  'heteroImport.error.title': 'Scan failed',
   'heteroImport.footer.hint':
     'Pick sessions to import — re-imports skip existing content automatically',
   'heteroImport.footer.import': 'Import {{count}} sessions',

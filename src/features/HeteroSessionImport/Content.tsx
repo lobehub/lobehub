@@ -10,7 +10,7 @@ import { Flexbox, Icon, NeuralNetworkLoading, ScrollShadow, SearchBar, Text } fr
 import { Button, useModalContext } from '@lobehub/ui/base-ui';
 import { Checkbox, Progress } from 'antd';
 import { createStaticStyles } from 'antd-style';
-import { Check, FolderSearch, X } from 'lucide-react';
+import { Check, FolderSearch, TriangleAlert, X } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -20,14 +20,7 @@ import { useChatStore } from '@/store/chat';
 
 import { SessionRow } from './SessionList';
 import SidebarTree, { type TreeScope } from './SidebarTree';
-import {
-  deriveSessionStatus,
-  dirKeyOf,
-  fmtTokens,
-  type ImportRowState,
-  selectable,
-  topicClientIdOf,
-} from './utils';
+import { deriveSessionStatus, dirKeyOf, fmtTokens, type ImportRowState, selectable } from './utils';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   footer: css`
@@ -39,7 +32,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 const CONTENT_HEIGHT = 'min(680px, calc(100vh - 240px))';
 
-type Phase = 'done' | 'empty' | 'importing' | 'scanning' | 'select';
+type Phase = 'done' | 'empty' | 'error' | 'importing' | 'scanning' | 'select';
 
 interface ContentProps {
   agentId: string;
@@ -66,21 +59,23 @@ const Content = memo<ContentProps>(({ agentId }) => {
     setProgress({});
     try {
       const result = await electronHeteroSessionService.listLocalSessions();
-      const digests = result.groups.flatMap((g) => g.sessions);
-      if (digests.length === 0) {
+      if (result.groups.length === 0) {
         setGroups([]);
         setPhase('empty');
         return;
       }
-      const importStatus = await topicService.getHeteroSessionImportStatus(
-        digests.map((d) => ({ sessionId: d.sessionId, topicClientId: topicClientIdOf(d) })),
-      );
+      const importStatus = await topicService.getHeteroSessionImportStatus();
       setGroups(result.groups);
       setStatus(importStatus);
       setPhase('select');
-    } catch {
+    } catch (e) {
+      // a failed scan is NOT an empty machine — say so, or the user reads a
+      // broken request as "you have no sessions". The raw reason is a
+      // developer string (parse errors, stack noise), so keep it in the console
+      // and show the actionable copy instead.
+      console.error('[HeteroSessionImport] scan failed', e);
       setGroups([]);
-      setPhase('empty');
+      setPhase('error');
     }
   }, []);
 
@@ -255,6 +250,20 @@ const Content = memo<ContentProps>(({ agentId }) => {
         <Text weight={500}>{t('heteroImport.empty.title')}</Text>
         <Text fontSize={13} style={{ maxWidth: 380, textAlign: 'center' }} type="secondary">
           {t('heteroImport.empty.desc')}
+        </Text>
+        <Button size="small" onClick={scan}>
+          {t('heteroImport.footer.rescan')}
+        </Button>
+      </Flexbox>
+    );
+
+  if (phase === 'error')
+    return (
+      <Flexbox align="center" gap={12} justify="center" style={{ height: CONTENT_HEIGHT }}>
+        <Icon icon={TriangleAlert} size={40} style={{ opacity: 0.5 }} />
+        <Text weight={500}>{t('heteroImport.error.title')}</Text>
+        <Text fontSize={13} style={{ maxWidth: 380, textAlign: 'center' }} type="secondary">
+          {t('heteroImport.error.desc')}
         </Text>
         <Button size="small" onClick={scan}>
           {t('heteroImport.footer.rescan')}

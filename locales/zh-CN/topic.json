@@ -109,6 +109,8 @@
   "heteroImport.empty.desc": "没有找到 Claude Code(~/.claude/projects)或 Codex(~/.codex/sessions)的会话记录。在终端里使用过它们之后再来试试。",
   "heteroImport.empty.title": "未发现本地 Agent 会话",
   "heteroImport.entry": "导入本地 Agent 会话",
+  "heteroImport.error.desc": "无法读取本地会话记录。请确认 LobeHub 有权限访问转录文件后重试。",
+  "heteroImport.error.title": "扫描失败",
   "heteroImport.footer.hint": "勾选要导入的会话,重复导入会自动跳过已有内容",
   "heteroImport.footer.import": "导入 {{count}} 个会话",
   "heteroImport.footer.importEmpty": "导入",
