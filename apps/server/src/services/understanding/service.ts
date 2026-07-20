@@ -290,7 +290,12 @@ export class UnderstandingService {
     const session = await this.initialize(topicId);
     await OnboardingUnderstandingWorkflow.triggerProviders(
       {
-        providerIds: Object.keys(session.sources),
+        providers: Object.entries(session.sources)
+          .toSorted(([left], [right]) => left.localeCompare(right))
+          .map(([id, source]) => ({
+            id,
+            revision: source.status === 'pending' ? source.revision + 1 : source.revision,
+          })),
         sessionId: session.id,
         topicId,
         userId: this.dependencies.userId,
@@ -377,7 +382,7 @@ export class UnderstandingService {
     try {
       await OnboardingUnderstandingWorkflow.triggerProviders(
         {
-          providerIds: [input.providerId],
+          providers: [{ id: input.providerId, revision }],
           sessionId: input.sessionId,
           topicId: input.topicId,
           userId: this.dependencies.userId,
@@ -399,11 +404,34 @@ export class UnderstandingService {
     return this.get(input.topicId);
   };
 
-  processProvider = async (input: ProviderClaimInput) => {
+  processProvider = async (input: ProviderOperationInput) => {
     const session = await this.activeSession(input.topicId, input.sessionId);
     const provider = this.dependencies.providers.get(input.providerId);
     const state = session.sources[input.providerId];
     if (!provider || !state) throw new UnderstandingResourceNotFoundError('session');
+
+    const stale = () => ({
+      failedCount: 0,
+      providerId: input.providerId,
+      revision: input.revision,
+      sourceCount: 0,
+      status: 'stale' as const,
+      succeededCount: 0,
+    });
+
+    if (state.status === 'pending') {
+      if (state.revision + 1 !== input.revision) return stale();
+      const claim = await this.dependencies.repository.markProviderRunning(
+        input.topicId,
+        input.sessionId,
+        input.providerId,
+        { revision: state.revision, status: 'pending' },
+      );
+      if (!claim.claimed) return this.processProvider(input);
+      if (claim.revision !== input.revision) return stale();
+    } else if (state.revision !== input.revision) {
+      return stale();
+    }
 
     if (state.status === 'failed') {
       return {
@@ -438,26 +466,12 @@ export class UnderstandingService {
       };
     }
 
-    let revision = state.revision;
-    if (state.status === 'pending') {
-      const claim = await this.dependencies.repository.markProviderRunning(
-        input.topicId,
-        input.sessionId,
-        input.providerId,
-        { revision: state.revision, status: 'pending' },
-      );
-      if (!claim.claimed) return this.processProvider(input);
-      revision = claim.revision;
-    }
-
-    const result = await this.collectProvider({ ...input, revision });
+    const result = await this.collectProvider(input);
     if (result.status !== 'completed') return result;
 
     const completed = await this.activeSession(input.topicId, input.sessionId);
     const current = completed.sources[input.providerId];
-    if (current?.status !== 'completed' || current.revision !== revision) {
-      throw new StaleUnderstandingRevisionError(input.providerId, revision);
-    }
+    if (current?.status !== 'completed' || current.revision !== input.revision) return stale();
     const sourceFingerprint = getUnderstandingSourceFingerprint(completed);
     if (!sourceFingerprint) throw new UnderstandingProviderContextUnavailableError();
     return {

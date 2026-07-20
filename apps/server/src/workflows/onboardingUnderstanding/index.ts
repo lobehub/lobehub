@@ -41,7 +41,7 @@ export class OnboardingUnderstandingWorkflow {
     const parsed = ProcessUnderstandingProvidersPayloadSchema.parse(input);
     const payload = {
       ...parsed,
-      providerIds: [...new Set(parsed.providerIds)].sort(),
+      providers: parsed.providers.toSorted((left, right) => left.id.localeCompare(right.id)),
     };
     const traceHeaders = new Headers();
     injectActiveTraceHeaders(traceHeaders);

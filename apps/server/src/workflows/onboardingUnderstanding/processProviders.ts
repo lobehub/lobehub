@@ -20,7 +20,7 @@ import {
   ProcessUnderstandingProvidersPayloadSchema,
 } from './types';
 
-type ProviderService = Pick<UnderstandingService, 'failProvider' | 'get' | 'processProvider'>;
+type ProviderService = Pick<UnderstandingService, 'failProvider' | 'processProvider'>;
 
 type ProviderWorkflowContext = Pick<
   WorkflowContext<ProcessUnderstandingProvidersPayload>,
@@ -59,20 +59,21 @@ export const processUnderstandingProviders = async (
   const parsed = ProcessUnderstandingProvidersPayloadSchema.parse(context.requestPayload);
   const payload = {
     ...parsed,
-    providerIds: [...new Set(parsed.providerIds)].sort(),
+    providers: parsed.providers.toSorted((left, right) => left.id.localeCompare(right.id)),
   };
   const service = await (dependencies.createService ?? createService)(payload.userId);
 
   const providers = await Promise.all(
-    payload.providerIds.map(async (providerId) => {
-      const result = await context.run(`provider:${providerId}:process`, () =>
+    payload.providers.map(async ({ id: providerId, revision }) => {
+      const result = await context.run(`provider:${providerId}:${revision}:process`, () =>
         service.processProvider({
           providerId,
+          revision,
           sessionId: payload.sessionId,
           topicId: payload.topicId,
         }),
       );
-      if (result.status === 'completed') {
+      if (result.status === 'completed' && result.revision === revision) {
         await context.invoke(`provider:${providerId}:write:${result.revision}`, {
           body: {
             sessionId: payload.sessionId,
@@ -110,26 +111,15 @@ export const failRunningUnderstandingProviders = async (
   dependencies: ProviderFailureDependencies = {},
 ) => {
   const payload = ProcessUnderstandingProvidersPayloadSchema.parse(input);
-  const providerIds = [...new Set(payload.providerIds)].sort();
   const service = await (dependencies.createService ?? createService)(payload.userId);
   const failedProviderIds: string[] = [];
-  let current: Awaited<ReturnType<ProviderService['get']>>;
-  try {
-    current = await service.get(payload.topicId);
-  } catch (error) {
-    if (isTerminalizedSession(error)) return { failedProviderIds };
-    throw error;
-  }
-  if (current.id !== payload.sessionId) return { failedProviderIds };
 
   await Promise.all(
-    providerIds.map(async (providerId) => {
-      const source = current.sources[providerId];
-      if (source?.status !== 'running') return;
+    payload.providers.map(async ({ id: providerId, revision }) => {
       try {
         const failed = await service.failProvider({
           providerId,
-          revision: source.revision,
+          revision,
           sessionId: payload.sessionId,
           topicId: payload.topicId,
         });

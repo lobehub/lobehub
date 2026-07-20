@@ -8,10 +8,15 @@ const providerIdSchema = z
   .regex(/^[\w-]+$/);
 
 export interface ProcessUnderstandingProvidersPayload {
-  providerIds: string[];
+  providers: UnderstandingProviderAttempt[];
   sessionId: string;
   topicId: string;
   userId: string;
+}
+
+export interface UnderstandingProviderAttempt {
+  id: string;
+  revision: number;
 }
 
 export interface ProcessCollectedUnderstandingPayload {
@@ -23,7 +28,18 @@ export interface ProcessCollectedUnderstandingPayload {
 
 export const ProcessUnderstandingProvidersPayloadSchema = z
   .object({
-    providerIds: z.array(providerIdSchema).min(1).max(16),
+    providers: z
+      .array(
+        z
+          .object({ id: providerIdSchema, revision: z.number().int().positive().max(1_000_000) })
+          .strict(),
+      )
+      .min(1)
+      .max(16)
+      .refine(
+        (providers) => new Set(providers.map(({ id }) => id)).size === providers.length,
+        'Provider attempts must be unique',
+      ),
     sessionId: identifierSchema,
     topicId: identifierSchema,
     userId: identifierSchema,

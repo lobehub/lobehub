@@ -32,7 +32,7 @@ describe('OnboardingUnderstandingWorkflow', () => {
   it('triggers provider processing with a safe payload, trace headers, and session flow control', async () => {
     const { OnboardingUnderstandingWorkflow } = await import('.');
     const payload = {
-      providerIds: ['github'],
+      providers: [{ id: 'github', revision: 1 }],
       sessionId: 'session:1',
       topicId: 'topic-1',
       userId: 'user-1',
@@ -56,7 +56,10 @@ describe('OnboardingUnderstandingWorkflow', () => {
 
     await OnboardingUnderstandingWorkflow.triggerProviders(
       {
-        providerIds: ['gmail', 'github'],
+        providers: [
+          { id: 'gmail', revision: 1 },
+          { id: 'github', revision: 1 },
+        ],
         sessionId: 'session-1',
         topicId: 'topic-1',
         userId: 'user-1',
@@ -79,7 +82,7 @@ describe('OnboardingUnderstandingWorkflow', () => {
     );
     await expect(
       OnboardingUnderstandingWorkflow.triggerProviders({
-        providerIds: ['github'],
+        providers: [{ id: 'github', revision: 1 }],
         sessionId: 'session-1',
         topicId: 'topic-1',
         userId: 'user-1',

@@ -1,3 +1,4 @@
+import { StaleUnderstandingRevisionError } from '@lobechat/database';
 import type {
   CollectionDiagnostics,
   OnboardingUnderstandingMessageMetadata,
@@ -260,7 +261,10 @@ describe('UnderstandingService public workflow commands', () => {
 
     expect(mockTriggerProviders).toHaveBeenCalledWith(
       {
-        providerIds: ['github', 'gmail'],
+        providers: [
+          { id: 'github', revision: 1 },
+          { id: 'gmail', revision: 1 },
+        ],
         sessionId: 'session-new',
         topicId: 'topic-1',
         userId: 'user-1',
@@ -284,6 +288,28 @@ describe('UnderstandingService public workflow commands', () => {
     expect(mockTriggerProviders).toHaveBeenCalledTimes(2);
   });
 
+  it('derives initial attempt revisions from an existing session state', async () => {
+    mockTriggerProviders.mockResolvedValueOnce({ workflowRunId: 'workflow-1' });
+    const harness = createHarness(
+      createSession({
+        github: providerState('pending', 2),
+        gmail: providerState('running', 4),
+      }),
+    );
+
+    await harness.service.start('topic-1');
+
+    expect(mockTriggerProviders).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providers: [
+          { id: 'github', revision: 3 },
+          { id: 'gmail', revision: 4 },
+        ],
+      }),
+      { workflowRunId: 'onboarding-understanding-initial-session-1' },
+    );
+  });
+
   it('prepares a failed provider and triggers only that provider', async () => {
     mockTriggerProviders.mockResolvedValueOnce({ workflowRunId: 'workflow-1' });
     const harness = createHarness(createSession({ github: providerState('failed', 3) }));
@@ -297,7 +323,7 @@ describe('UnderstandingService public workflow commands', () => {
 
     expect(mockTriggerProviders).toHaveBeenCalledWith(
       {
-        providerIds: ['github'],
+        providers: [{ id: 'github', revision: 4 }],
         sessionId: 'session-1',
         topicId: 'topic-1',
         userId: 'user-1',
@@ -349,9 +375,16 @@ describe('UnderstandingService public workflow commands', () => {
     );
     await expect(harness.service.retry(input)).resolves.toMatchObject({ id: 'session-1' });
     expect(mockTriggerProviders).toHaveBeenLastCalledWith(
-      expect.objectContaining({ providerIds: ['github'] }),
+      expect.objectContaining({ providers: [{ id: 'github', revision: 5 }] }),
       { workflowRunId: 'onboarding-understanding-retry-session-1-github-5' },
     );
+    await expect(harness.service.processProvider({ ...input, revision: 4 })).resolves.toMatchObject(
+      { revision: 4, status: 'stale' },
+    );
+    harness.repository.failProvider.mockRejectedValueOnce(
+      new StaleUnderstandingRevisionError('github', 4),
+    );
+    await expect(harness.service.failProvider({ ...input, revision: 4 })).resolves.toBeUndefined();
   });
 
   it('preserves the trigger error when retry compensation also fails', async () => {
@@ -393,6 +426,7 @@ describe('UnderstandingService provider collection', () => {
     await expect(
       harness.service.processProvider({
         providerId: 'github',
+        revision: 1,
         sessionId: 'session-1',
         topicId: 'topic-1',
       }),
@@ -425,6 +459,7 @@ describe('UnderstandingService provider collection', () => {
     await expect(
       harness.service.processProvider({
         providerId: 'github',
+        revision: 1,
         sessionId: 'session-1',
         topicId: 'topic-1',
       }),
@@ -445,6 +480,7 @@ describe('UnderstandingService provider collection', () => {
     await expect(
       harness.service.processProvider({
         providerId: 'github',
+        revision: 2,
         sessionId: 'session-1',
         topicId: 'topic-1',
       }),
@@ -467,6 +503,7 @@ describe('UnderstandingService provider collection', () => {
     await expect(
       harness.service.processProvider({
         providerId: 'github',
+        revision: 3,
         sessionId: 'session-1',
         topicId: 'topic-1',
       }),
@@ -482,6 +519,28 @@ describe('UnderstandingService provider collection', () => {
         topicId: 'topic-1',
       }),
     ).resolves.toEqual({ providerId: 'github', revision: 4 });
+  });
+
+  it('does not let an older accepted attempt process a newer running revision', async () => {
+    const harness = createHarness(createSession({ github: providerState('running', 5) }));
+
+    await expect(
+      harness.service.processProvider({
+        providerId: 'github',
+        revision: 4,
+        sessionId: 'session-1',
+        topicId: 'topic-1',
+      }),
+    ).resolves.toEqual({
+      failedCount: 0,
+      providerId: 'github',
+      revision: 4,
+      sourceCount: 0,
+      status: 'stale',
+      succeededCount: 0,
+    });
+    expect(harness.collect).not.toHaveBeenCalled();
+    expect(harness.repository.markProviderRunning).not.toHaveBeenCalled();
   });
 
   it('stores raw context but returns only bounded collection state', async () => {
