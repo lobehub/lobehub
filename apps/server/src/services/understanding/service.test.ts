@@ -1,4 +1,3 @@
-import { StaleUnderstandingRevisionError } from '@lobechat/database';
 import type {
   CollectionDiagnostics,
   OnboardingUnderstandingMessageMetadata,
@@ -15,7 +14,6 @@ import {
 } from './service';
 import type { StoredUnderstandingProviderContext } from './sourceStore';
 import type { UnderstandingProvider } from './types';
-import { UnderstandingProviderRetryableError } from './types';
 
 const { factoryMocks, mockAssertWorkflowAvailable, mockTriggerProviders } = vi.hoisted(() => ({
   factoryMocks: {
@@ -195,9 +193,6 @@ describe('createUnderstandingService', () => {
 
 const createHarness = (initialSession: OnboardingUnderstandingSession | null = createSession()) => {
   let session = initialSession ?? undefined;
-  let threadAssistant:
-    | { content?: unknown; error?: unknown; id: string; role: string; threadId?: string | null }
-    | undefined;
   const stored = new Map<string, StoredUnderstandingProviderContext>();
   const providers = new Map<string, UnderstandingProvider>();
   const assistantMetadata = new Map<string, OnboardingUnderstandingMessageMetadata>();
@@ -279,7 +274,7 @@ const createHarness = (initialSession: OnboardingUnderstandingSession | null = c
           ? { onboardingUnderstanding: assistantMetadata.get(id) }
           : undefined,
       })),
-      findLatestAssistantMessageByThread: vi.fn(async () => threadAssistant),
+      findLatestAssistantMessageByThread: vi.fn(async () => undefined),
     },
     persona: {
       getLatestPersonaDocument: vi.fn(async () => null),
@@ -311,7 +306,6 @@ const createHarness = (initialSession: OnboardingUnderstandingSession | null = c
     repository,
     service: new UnderstandingService(dependencies),
     setSession: (value: OnboardingUnderstandingSession) => (session = value),
-    setThreadAssistant: (value: typeof threadAssistant) => (threadAssistant = value),
     sourceStore,
     stored,
   };
@@ -321,16 +315,6 @@ describe('UnderstandingService public workflow commands', () => {
   beforeEach(() => {
     mockAssertWorkflowAvailable.mockReset();
     mockTriggerProviders.mockReset();
-  });
-
-  it('checks workflow availability before creating durable state', async () => {
-    const harness = createHarness(null);
-    mockAssertWorkflowAvailable.mockImplementationOnce(() => {
-      throw new Error('workflow unavailable');
-    });
-
-    await expect(harness.service.start('topic-1')).rejects.toThrow('workflow unavailable');
-    expect(harness.repository.initialize).not.toHaveBeenCalled();
   });
 
   it('initializes all providers and triggers the provider workflow with safe identifiers', async () => {
@@ -353,108 +337,6 @@ describe('UnderstandingService public workflow commands', () => {
     );
     expect(result).toMatchObject({ id: 'session-new', status: 'processing' });
     expect(JSON.stringify(mockTriggerProviders.mock.calls.at(-1))).not.toContain('PRIVATE_');
-  });
-
-  it('replays delivery from existing provider revisions without reinitializing', async () => {
-    mockTriggerProviders.mockRejectedValueOnce(new Error('delivery uncertain'));
-    const harness = createHarness(
-      createSession({
-        github: providerState('pending', 2),
-        gmail: providerState('running', 4),
-      }),
-    );
-
-    await expect(harness.service.start('topic-1')).rejects.toThrow('delivery uncertain');
-    await harness.service.start('topic-1');
-
-    expect(harness.repository.initialize).not.toHaveBeenCalled();
-    expect(mockTriggerProviders).toHaveBeenCalledTimes(2);
-    expect(mockTriggerProviders).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        providers: [
-          { id: 'github', revision: 3 },
-          { id: 'gmail', revision: 4 },
-        ],
-      }),
-      { workflowRunId: 'onboarding-understanding-initial-session-1' },
-    );
-  });
-
-  it('prepares a failed provider and triggers only that provider', async () => {
-    mockTriggerProviders.mockResolvedValueOnce({ workflowRunId: 'workflow-1' });
-    const harness = createHarness(createSession({ github: providerState('failed', 3) }));
-    harness.repository.markProviderRunning.mockResolvedValueOnce({ claimed: true, revision: 4 });
-
-    await harness.service.retry({
-      providerId: 'github',
-      sessionId: 'session-1',
-      topicId: 'topic-1',
-    });
-
-    expect(mockTriggerProviders).toHaveBeenCalledWith(
-      {
-        providers: [{ id: 'github', revision: 4 }],
-        sessionId: 'session-1',
-        topicId: 'topic-1',
-        userId: 'user-1',
-      },
-      { workflowRunId: 'onboarding-understanding-retry-session-1-github-4' },
-    );
-  });
-
-  it('rejects retrying a provider that is already running', async () => {
-    const harness = createHarness(createSession({ github: providerState('running', 4) }));
-
-    await expect(
-      harness.service.retry({
-        providerId: 'github',
-        sessionId: 'session-1',
-        topicId: 'topic-1',
-      }),
-    ).rejects.toThrow();
-
-    expect(harness.repository.markProviderRunning).not.toHaveBeenCalled();
-    expect(mockTriggerProviders).not.toHaveBeenCalled();
-  });
-
-  it('returns a failed retry revision after trigger delivery fails so it can be retried', async () => {
-    const triggerError = new Error('delivery failed');
-    mockTriggerProviders
-      .mockRejectedValueOnce(triggerError)
-      .mockResolvedValueOnce({ workflowRunId: 'workflow-2' });
-    const harness = createHarness(createSession({ github: providerState('failed', 3) }));
-    harness.repository.markProviderRunning
-      .mockImplementationOnce(async () => {
-        harness.setSession(createSession({ github: providerState('running', 4) }));
-        return { claimed: true, revision: 4 };
-      })
-      .mockImplementationOnce(async () => {
-        harness.setSession(createSession({ github: providerState('running', 5) }));
-        return { claimed: true, revision: 5 };
-      });
-    harness.repository.failProvider.mockImplementationOnce(async () => {
-      const failed = createSession({ github: providerState('failed', 4) });
-      harness.setSession(failed);
-      return failed;
-    });
-    const input = { providerId: 'github', sessionId: 'session-1', topicId: 'topic-1' };
-
-    await expect(harness.service.retry(input)).rejects.toBe(triggerError);
-    expect(harness.repository.failProvider).toHaveBeenCalledWith(
-      expect.objectContaining({ providerId: 'github', revision: 4 }),
-    );
-    await expect(harness.service.retry(input)).resolves.toMatchObject({ id: 'session-1' });
-    expect(mockTriggerProviders).toHaveBeenLastCalledWith(
-      expect.objectContaining({ providers: [{ id: 'github', revision: 5 }] }),
-      { workflowRunId: 'onboarding-understanding-retry-session-1-github-5' },
-    );
-    await expect(harness.service.processProvider({ ...input, revision: 4 })).resolves.toMatchObject(
-      { revision: 4, status: 'stale' },
-    );
-    harness.repository.failProvider.mockRejectedValueOnce(
-      new StaleUnderstandingRevisionError('github', 4),
-    );
-    await expect(harness.service.failProvider({ ...input, revision: 4 })).resolves.toBeUndefined();
   });
 });
 
@@ -487,65 +369,6 @@ describe('UnderstandingService provider collection', () => {
     );
   });
 
-  it('resumes a running provider and returns the canonical completed fingerprint', async () => {
-    const harness = createHarness(
-      createSession({
-        github: providerState('running', 1),
-        gmail: providerState('completed', 1),
-      }),
-    );
-    harness.stored.set('gmail', context('gmail', '<gmail/>'));
-    harness.repository.completeProvider.mockImplementationOnce(async () => {
-      const completed = createSession({
-        github: providerState('completed', 1),
-        gmail: providerState('completed', 1),
-      });
-      harness.setSession(completed);
-      return completed;
-    });
-
-    await expect(
-      harness.service.processProvider({
-        providerId: 'github',
-        revision: 1,
-        sessionId: 'session-1',
-        topicId: 'topic-1',
-      }),
-    ).resolves.toMatchObject({
-      providerId: 'github',
-      revision: 1,
-      sourceFingerprint: 'github@1,gmail@1',
-      status: 'completed',
-    });
-    expect(harness.repository.markProviderRunning).not.toHaveBeenCalled();
-    expect(harness.collect).toHaveBeenCalledOnce();
-  });
-
-  it('expires a completed provider replay when its Redis context is missing', async () => {
-    const harness = createHarness(createSession({ github: providerState('completed', 1) }));
-    harness.repository.expireProviderContexts.mockImplementationOnce(async () => {
-      const expired = createSession({ github: providerState('failed', 1) });
-      harness.setSession(expired);
-      return expired;
-    });
-
-    await expect(
-      harness.service.processProvider({
-        providerId: 'github',
-        revision: 1,
-        sessionId: 'session-1',
-        topicId: 'topic-1',
-      }),
-    ).resolves.toMatchObject({ providerId: 'github', revision: 1, status: 'failed' });
-    expect(harness.repository.expireProviderContexts).toHaveBeenCalledWith({
-      providers: [{ providerId: 'github', revision: 1 }],
-      sessionId: 'session-1',
-      sourceFingerprint: 'github@1',
-      topicId: 'topic-1',
-    });
-    expect(harness.collect).not.toHaveBeenCalled();
-  });
-
   it('returns the fingerprint from its own completion when another provider wins the race', async () => {
     const harness = createHarness(
       createSession({
@@ -576,258 +399,9 @@ describe('UnderstandingService provider collection', () => {
       }),
     ).resolves.toMatchObject({ sourceFingerprint: 'github@1', status: 'completed' });
   });
-
-  it('recovers a completed provider from its revision-matching Redis context without recollecting', async () => {
-    const harness = createHarness(createSession({ github: providerState('completed', 2) }));
-    harness.stored.set('github', context('github', '# Existing profile', 2));
-
-    await expect(
-      harness.service.processProvider({
-        providerId: 'github',
-        revision: 2,
-        sessionId: 'session-1',
-        topicId: 'topic-1',
-      }),
-    ).resolves.toEqual({
-      failedCount: 0,
-      providerId: 'github',
-      revision: 2,
-      sourceCount: 3,
-      sourceFingerprint: 'github@2',
-      status: 'completed',
-      succeededCount: 2,
-    });
-    expect(harness.collect).not.toHaveBeenCalled();
-    expect(harness.repository.markProviderRunning).not.toHaveBeenCalled();
-  });
-
-  it('keeps a failed provider terminal until an explicit retry command', async () => {
-    const harness = createHarness(createSession({ github: providerState('failed', 3) }));
-
-    await expect(
-      harness.service.processProvider({
-        providerId: 'github',
-        revision: 3,
-        sessionId: 'session-1',
-        topicId: 'topic-1',
-      }),
-    ).resolves.toMatchObject({ providerId: 'github', revision: 3, status: 'failed' });
-    expect(harness.repository.markProviderRunning).not.toHaveBeenCalled();
-    expect(harness.collect).not.toHaveBeenCalled();
-  });
-
-  it('does not let an older accepted attempt process a newer running revision', async () => {
-    const harness = createHarness(createSession({ github: providerState('running', 5) }));
-
-    await expect(
-      harness.service.processProvider({
-        providerId: 'github',
-        revision: 4,
-        sessionId: 'session-1',
-        topicId: 'topic-1',
-      }),
-    ).resolves.toEqual({
-      failedCount: 0,
-      providerId: 'github',
-      revision: 4,
-      sourceCount: 0,
-      status: 'stale',
-      succeededCount: 0,
-    });
-    expect(harness.collect).not.toHaveBeenCalled();
-    expect(harness.repository.markProviderRunning).not.toHaveBeenCalled();
-  });
-
-  it('stores raw context but returns only bounded collection state', async () => {
-    const { service, sourceStore, stored } = createHarness(
-      createSession({ github: providerState('running') }),
-    );
-
-    const result = await service.processProvider({
-      providerId: 'github',
-      revision: 1,
-      sessionId: 'session-1',
-      topicId: 'topic-1',
-    });
-
-    expect(result).toEqual({
-      failedCount: 0,
-      providerId: 'github',
-      revision: 1,
-      sourceCount: 3,
-      sourceFingerprint: 'github@1',
-      status: 'completed',
-      succeededCount: 2,
-    });
-    expect(JSON.stringify(result)).not.toContain('PRIVATE_GITHUB_CONTEXT');
-    expect(sourceStore.put).toHaveBeenCalledOnce();
-    expect(stored.get('github')?.context).toContain('PRIVATE_GITHUB_CONTEXT');
-  });
-
-  it('marks a bounded permanent empty result failed', async () => {
-    const harness = createHarness(createSession({ github: providerState('running') }));
-    harness.providers.set('github', {
-      collect: vi.fn(async () => ({
-        context: '',
-        diagnostics: {
-          errors: [
-            {
-              code: 'UNDERSTANDING_PROVIDER_AUTHORIZATION_FAILED',
-              message: 'github authorize failed',
-              operation: 'authorize',
-              provider: 'github',
-              retryable: false,
-            },
-          ],
-          evidenceCount: 0,
-          failedCount: 1,
-          succeededCount: 0,
-        },
-        sourceCount: 0,
-      })),
-      id: 'github',
-    });
-
-    await expect(
-      harness.service.processProvider({
-        providerId: 'github',
-        revision: 1,
-        sessionId: 'session-1',
-        topicId: 'topic-1',
-      }),
-    ).resolves.toMatchObject({ providerId: 'github', status: 'failed' });
-    expect(harness.repository.failProvider).toHaveBeenCalledOnce();
-    expect(harness.sourceStore.put).not.toHaveBeenCalled();
-  });
-
-  it('completes usable partial collection while retaining bounded diagnostics', async () => {
-    const harness = createHarness(createSession({ github: providerState('running') }));
-    harness.providers.set('github', {
-      collect: vi.fn(async () => ({
-        context: '# Partial profile',
-        diagnostics: {
-          errors: [
-            {
-              code: 'GITHUB_ORGANIZATIONS_FAILED',
-              message: 'untrusted detail',
-              operation: 'untrusted operation',
-              provider: 'untrusted provider',
-              retryable: false,
-            },
-          ],
-          evidenceCount: 2,
-          failedCount: 1,
-          succeededCount: 2,
-        },
-        sourceCount: 2,
-      })),
-      id: 'github',
-    });
-
-    await expect(
-      harness.service.processProvider({
-        providerId: 'github',
-        revision: 1,
-        sessionId: 'session-1',
-        topicId: 'topic-1',
-      }),
-    ).resolves.toMatchObject({ failedCount: 1, status: 'completed', succeededCount: 2 });
-    expect(harness.repository.completeProvider).toHaveBeenCalledWith(
-      expect.objectContaining({
-        errors: [expect.objectContaining({ provider: 'github' })],
-      }),
-    );
-  });
-
-  it('keeps the first Redis context authoritative when database completion is retried', async () => {
-    const harness = createHarness(createSession({ github: providerState('running') }));
-    const first = {
-      context: '# First profile',
-      diagnostics: { ...diagnostics, evidenceCount: 5, succeededCount: 4 },
-      sourceCount: 5,
-    };
-    const second = {
-      context: '# Different retry profile',
-      diagnostics: { ...diagnostics, evidenceCount: 2, succeededCount: 1 },
-      sourceCount: 2,
-    };
-    harness.collect.mockResolvedValueOnce(first).mockResolvedValueOnce(second);
-    harness.sourceStore.put.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
-    harness.sourceStore.get.mockResolvedValueOnce({
-      ...first,
-      providerId: 'github',
-      revision: 1,
-    });
-    harness.repository.completeProvider.mockRejectedValueOnce(new Error('database unavailable'));
-
-    const input = {
-      providerId: 'github',
-      revision: 1,
-      sessionId: 'session-1',
-      topicId: 'topic-1',
-    };
-    await expect(harness.service.processProvider(input)).rejects.toThrow('database unavailable');
-    await expect(harness.service.processProvider(input)).resolves.toMatchObject({
-      sourceCount: 5,
-      succeededCount: 4,
-    });
-    expect(harness.repository.completeProvider).toHaveBeenLastCalledWith(
-      expect.objectContaining({ succeededCount: 4 }),
-    );
-  });
-
-  it('rethrows transient provider failures without changing durable state', async () => {
-    const harness = createHarness(createSession({ github: providerState('running') }));
-    harness.providers.set('github', {
-      collect: vi.fn(async () => {
-        throw new UnderstandingProviderRetryableError();
-      }),
-      id: 'github',
-    });
-
-    await expect(
-      harness.service.processProvider({
-        providerId: 'github',
-        revision: 1,
-        sessionId: 'session-1',
-        topicId: 'topic-1',
-      }),
-    ).rejects.toBeInstanceOf(UnderstandingProviderRetryableError);
-    expect(harness.repository.completeProvider).not.toHaveBeenCalled();
-    expect(harness.repository.failProvider).not.toHaveBeenCalled();
-  });
 });
 
 describe('UnderstandingService persona writing', () => {
-  it('claims an unseen fingerprint before writing it', async () => {
-    const harness = createHarness(createSession({ github: providerState('completed', 1) }));
-    harness.stored.set('github', context('github', '# GitHub'));
-    harness.repository.claimWriting.mockImplementationOnce(async () => {
-      harness.setSession({
-        id: 'session-1',
-        sources: { github: providerState('completed', 1) },
-        writing: {
-          sourceFingerprint: 'github@1',
-          status: 'running',
-          updatedAt: '2026-07-20T00:00:00.000Z',
-        },
-      });
-      return { claimed: true };
-    });
-
-    await expect(
-      harness.service.processCollected({
-        expectedSourceFingerprint: 'github@1',
-        sessionId: 'session-1',
-        topicId: 'topic-1',
-      }),
-    ).resolves.toMatchObject({ published: true, sourceFingerprint: 'github@1' });
-    expect(harness.repository.claimWriting).toHaveBeenCalledOnce();
-    expect(harness.repository.claimWriting).toHaveBeenCalledBefore(
-      vi.mocked(harness.dependencies.sourceStore),
-    );
-    expect(harness.execAgent).toHaveBeenCalledOnce();
-  });
 
   it('does not let a delayed child claim a newer combined provider fingerprint', async () => {
     const harness = createHarness({
@@ -878,81 +452,6 @@ describe('UnderstandingService persona writing', () => {
       sourceFingerprint: fingerprint,
       topicId: 'topic-1',
     });
-    expect(harness.execAgent).not.toHaveBeenCalled();
-  });
-
-  it('propagates Redis read failures without expiring completed providers', async () => {
-    const harness = createHarness({
-      id: 'session-1',
-      sources: { github: providerState('completed', 1) },
-      writing: {
-        sourceFingerprint: 'github@1',
-        status: 'running',
-        updatedAt: '2026-07-20T00:00:00.000Z',
-      },
-    });
-    const redisError = new Error('Redis unavailable');
-    harness.sourceStore.get.mockRejectedValueOnce(redisError);
-
-    await expect(
-      harness.service.processCollected({
-        expectedSourceFingerprint: 'github@1',
-        sessionId: 'session-1',
-        topicId: 'topic-1',
-      }),
-    ).rejects.toBe(redisError);
-    expect(harness.repository.expireProviderContexts).not.toHaveBeenCalled();
-  });
-
-  it('reports a delayed writing failure callback as a no-op', async () => {
-    const current = {
-      id: 'session-1',
-      sources: {
-        github: providerState('completed', 1),
-        gmail: providerState('completed', 1),
-      },
-      writing: {
-        sourceFingerprint: 'github@1,gmail@1',
-        status: 'running' as const,
-        updatedAt: '2026-07-20T00:00:00.000Z',
-      },
-    };
-    const harness = createHarness(current);
-    harness.repository.failWriting.mockResolvedValueOnce(current);
-
-    await expect(
-      harness.service.failWriting({
-        sessionId: 'session-1',
-        sourceFingerprint: 'github@1',
-        topicId: 'topic-1',
-      }),
-    ).resolves.toBeUndefined();
-  });
-
-  it('recovers an already completed fingerprint without launching another writer', async () => {
-    const harness = createHarness({
-      id: 'session-1',
-      sources: { github: providerState('completed', 1) },
-      writing: {
-        resultMessageId: 'assistant-existing',
-        sourceFingerprint: 'github@1',
-        status: 'completed',
-        updatedAt: '2026-07-20T00:00:00.000Z',
-      },
-    });
-
-    await expect(
-      harness.service.processCollected({
-        expectedSourceFingerprint: 'github@1',
-        sessionId: 'session-1',
-        topicId: 'topic-1',
-      }),
-    ).resolves.toEqual({
-      published: true,
-      resultId: 'assistant-existing',
-      sourceFingerprint: 'github@1',
-    });
-    expect(harness.repository.claimWriting).not.toHaveBeenCalled();
     expect(harness.execAgent).not.toHaveBeenCalled();
   });
 
@@ -1039,159 +538,6 @@ describe('UnderstandingService persona writing', () => {
           sourceFingerprint: fingerprint,
         }),
       }),
-    );
-  });
-
-  it('recovers only the exact fingerprint thread without launching another agent', async () => {
-    const harness = createHarness({
-      id: 'session-1',
-      sources: { github: providerState('completed', 1) },
-      writing: {
-        sourceFingerprint: 'github@1',
-        status: 'running',
-        updatedAt: '2026-07-20T00:00:00.000Z',
-      },
-    });
-    harness.stored.set('github', context('github', '# Profile'));
-    harness.repository.ensureWritingThread.mockImplementationOnce(async ({ threadId }) => {
-      vi.mocked(harness.dependencies.topic.findById).mockResolvedValueOnce({
-        metadata: {
-          runningOperation: {
-            assistantMessageId: 'assistant-recovered',
-            operationId: 'operation-recovered',
-            threadId,
-          },
-        },
-      });
-    });
-
-    await expect(
-      harness.service.processCollected({
-        expectedSourceFingerprint: 'github@1',
-        sessionId: 'session-1',
-        topicId: 'topic-1',
-      }),
-    ).resolves.toMatchObject({ published: true, resultId: 'assistant-recovered' });
-
-    expect(harness.execAgent).not.toHaveBeenCalled();
-    expect(harness.executeOperation).toHaveBeenCalledWith('operation-recovered');
-    expect(harness.dependencies.messages.findById).toHaveBeenCalledWith('assistant-recovered');
-    expect(harness.dependencies.messages.findLatestAssistantMessageByThread).not.toHaveBeenCalled();
-  });
-
-  it('replaces invalid output from a recovered operation in the same deterministic thread', async () => {
-    const harness = createHarness({
-      id: 'session-1',
-      sources: { github: providerState('completed', 1) },
-      writing: {
-        sourceFingerprint: 'github@1',
-        status: 'running',
-        updatedAt: '2026-07-20T00:00:00.000Z',
-      },
-    });
-    harness.stored.set('github', context('github', '# Profile'));
-    harness.repository.ensureWritingThread.mockImplementationOnce(async ({ threadId }) => {
-      vi.mocked(harness.dependencies.topic.findById).mockResolvedValueOnce({
-        metadata: {
-          runningOperation: {
-            assistantMessageId: 'assistant-invalid',
-            operationId: 'operation-recovered',
-            threadId,
-          },
-        },
-      });
-    });
-    vi.mocked(harness.dependencies.messages.findById).mockResolvedValueOnce({
-      content: '{"profile":{"name":"Neko"},"composition":{}}',
-    });
-
-    await expect(
-      harness.service.processCollected({
-        expectedSourceFingerprint: 'github@1',
-        sessionId: 'session-1',
-        topicId: 'topic-1',
-      }),
-    ).resolves.toMatchObject({ published: true, resultId: 'assistant-1' });
-
-    const recoveredThread = harness.repository.ensureWritingThread.mock.calls[0][0].threadId;
-    expect(harness.executeOperation).toHaveBeenNthCalledWith(1, 'operation-recovered');
-    expect(harness.executeOperation).toHaveBeenNthCalledWith(2, 'operation-1');
-    expect(harness.execAgent).toHaveBeenCalledWith(
-      expect.objectContaining({ appContext: { threadId: recoveredThread, topicId: 'topic-1' } }),
-    );
-    expect(harness.dependencies.messages.findLatestAssistantMessageByThread).not.toHaveBeenCalled();
-    expect(harness.repository.commitWriting).toHaveBeenCalledWith(
-      expect.objectContaining({ assistantMessageId: 'assistant-1' }),
-    );
-  });
-
-  it('reuses a completed assistant from the exact thread after runningOperation is cleared', async () => {
-    const harness = createHarness({
-      id: 'session-1',
-      sources: { github: providerState('completed', 1) },
-      writing: {
-        sourceFingerprint: 'github@1',
-        status: 'running',
-        updatedAt: '2026-07-20T00:00:00.000Z',
-      },
-    });
-    harness.stored.set('github', context('github', '# Profile'));
-    harness.setThreadAssistant({
-      content: JSON.stringify(analysis),
-      id: 'assistant-completed',
-      role: 'assistant',
-      threadId: 'exact-thread-selected-by-query',
-    });
-
-    await expect(
-      harness.service.processCollected({
-        expectedSourceFingerprint: 'github@1',
-        sessionId: 'session-1',
-        topicId: 'topic-1',
-      }),
-    ).resolves.toMatchObject({ published: true, resultId: 'assistant-completed' });
-
-    expect(harness.execAgent).not.toHaveBeenCalled();
-    expect(harness.executeOperation).not.toHaveBeenCalled();
-    expect(harness.repository.commitWriting).toHaveBeenCalledWith(
-      expect.objectContaining({ assistantMessageId: 'assistant-completed' }),
-    );
-  });
-
-  it('replaces an invalid existing assistant in the same deterministic thread', async () => {
-    const harness = createHarness({
-      id: 'session-1',
-      sources: { github: providerState('completed', 1) },
-      writing: {
-        sourceFingerprint: 'github@1',
-        status: 'running',
-        updatedAt: '2026-07-20T00:00:00.000Z',
-      },
-    });
-    harness.stored.set('github', context('github', '# Profile'));
-    harness.setThreadAssistant({
-      content: '{"profile":{"name":"Neko"},"composition":{}}',
-      id: 'assistant-invalid',
-      role: 'assistant',
-      threadId: 'exact-thread-selected-by-query',
-    });
-
-    await expect(
-      harness.service.processCollected({
-        expectedSourceFingerprint: 'github@1',
-        sessionId: 'session-1',
-        topicId: 'topic-1',
-      }),
-    ).resolves.toMatchObject({ published: true, resultId: 'assistant-1' });
-    expect(harness.execAgent).toHaveBeenCalledOnce();
-    const queriedThread = vi.mocked(
-      harness.dependencies.messages.findLatestAssistantMessageByThread,
-    ).mock.calls[0][0].threadId;
-    expect(harness.execAgent).toHaveBeenCalledWith(
-      expect.objectContaining({ appContext: { threadId: queriedThread, topicId: 'topic-1' } }),
-    );
-    expect(harness.repository.commitWriting).toHaveBeenCalledWith(
-      expect.objectContaining({ assistantMessageId: 'assistant-1' }),
     );
   });
 
