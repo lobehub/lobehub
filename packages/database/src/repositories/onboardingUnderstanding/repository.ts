@@ -417,8 +417,6 @@ export class OnboardingUnderstandingRepository {
       ) {
         return { published: false };
       }
-      const proposal = normalizeProposalProvenance(session, requestedProposal);
-
       const writingThread = await this.lockWritingThread(tx, topicId, threadId);
       const [message] = await tx
         .select()
@@ -439,7 +437,8 @@ export class OnboardingUnderstandingRepository {
         if (
           session.writing.resultMessageId !== assistantMessageId ||
           !stored ||
-          !isEqual(stored, proposal)
+          stored.sourceFingerprint !== sourceFingerprint ||
+          writingThread.status !== ThreadStatus.Completed
         ) {
           throw new UnderstandingPreconditionError('writing_not_active');
         }
@@ -454,6 +453,7 @@ export class OnboardingUnderstandingRepository {
         throw new UnderstandingPreconditionError('writing_not_active');
       }
 
+      const proposal = normalizeProposalProvenance(session, requestedProposal);
       const existingMetadata = isPlainRecord(message.metadata) ? message.metadata : {};
       await tx
         .update(messages)

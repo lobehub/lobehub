@@ -315,6 +315,86 @@ describe('OnboardingUnderstandingRepository', () => {
     expect(JSON.stringify(persona?.metadata)).not.toContain('999');
   });
 
+  it('replays a completed fingerprint after another provider fails without rewriting it', async () => {
+    await repository.initialize(topicId, sessionId, ['github', 'gmail']);
+    const { revision: githubRevision } = await repository.markProviderRunning(
+      topicId,
+      sessionId,
+      'github',
+    );
+    await repository.completeProvider({
+      errors: [],
+      failedCount: 0,
+      providerId: 'github',
+      revision: githubRevision,
+      sessionId,
+      succeededCount: 3,
+      topicId,
+    });
+    await repository.claimWriting({
+      agentId,
+      sessionId,
+      sourceFingerprint: 'github@1',
+      threadId: 'github-writing-thread',
+      topicId,
+    });
+    await insertAssistantMessage('github-message', 'github-writing-thread');
+    const githubProposal = proposal('github-result', 'github@1', ['github'], 3);
+    await repository.commitWriting({
+      assistantMessageId: 'github-message',
+      metadata: githubProposal,
+      sessionId,
+      sourceFingerprint: 'github@1',
+      threadId: 'github-writing-thread',
+      topicId,
+    });
+    await repository.confirm({ resultId: 'github-result', sessionId, topicId });
+
+    const { revision: gmailRevision } = await repository.markProviderRunning(
+      topicId,
+      sessionId,
+      'gmail',
+    );
+    await repository.failProvider({
+      errors: [providerFailure],
+      failedCount: 1,
+      providerId: 'gmail',
+      revision: gmailRevision,
+      sessionId,
+      succeededCount: 0,
+      topicId,
+    });
+
+    await expect(
+      repository.commitWriting({
+        assistantMessageId: 'github-message',
+        metadata: githubProposal,
+        sessionId,
+        sourceFingerprint: 'github@1',
+        threadId: 'github-writing-thread',
+        topicId,
+      }),
+    ).resolves.toEqual({ personaVersion: 1, published: true });
+
+    const [message] = await db
+      .select({ metadata: messages.metadata })
+      .from(messages)
+      .where(eq(messages.id, 'github-message'));
+    expect(message.metadata).toEqual({
+      keep: true,
+      onboardingUnderstanding: githubProposal,
+    });
+    const persona = await new UserPersonaModel(db, userId).getLatestPersonaDocument();
+    expect(persona?.version).toBe(1);
+    expect(JSON.stringify(persona?.metadata)).not.toContain('GMAIL_SEARCH_FAILED');
+    expect(
+      await db
+        .select()
+        .from(userPersonaDocumentHistories)
+        .where(eq(userPersonaDocumentHistories.userId, userId)),
+    ).toHaveLength(1);
+  });
+
   it('claims a fingerprint once and rejects a stale proposal after more sources arrive', async () => {
     await repository.initialize(topicId, sessionId, ['github', 'gmail']);
     const { revision: githubRevision } = await repository.markProviderRunning(
