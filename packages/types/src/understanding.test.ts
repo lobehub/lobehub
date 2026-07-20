@@ -3,6 +3,7 @@ import { describe, expect, expectTypeOf, it } from 'vitest';
 import { threadMetadataSchema } from './topic/thread';
 import type {
   CollectionDiagnostics,
+  ConfirmOnboardingUnderstandingInput,
   OnboardingUnderstandingMessageMetadata,
   OnboardingUnderstandingPollingResult,
   OnboardingUnderstandingSession,
@@ -236,6 +237,19 @@ describe('Understanding durable contracts', () => {
       sourceId: string;
       topicId: string;
     }>().not.toMatchTypeOf<RetryOnboardingUnderstandingProviderInput>();
+  });
+
+  it('uses resultId as the confirmation stale-display guard', () => {
+    expectTypeOf<{
+      resultId: string;
+      sessionId: string;
+      topicId: string;
+    }>().toMatchTypeOf<ConfirmOnboardingUnderstandingInput>();
+    expectTypeOf<{
+      sessionId: string;
+      sourceFingerprint: string;
+      topicId: string;
+    }>().not.toMatchTypeOf<ConfirmOnboardingUnderstandingInput>();
   });
 
   it('projects polling status from provider and writing state', () => {
