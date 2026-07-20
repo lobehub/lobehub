@@ -106,14 +106,17 @@ describe('MCPClient', () => {
 
         process.env[SECRET_KEY] = SECRET_VALUE;
         try {
+          // Print ONLY the two probed keys to stderr (never the whole env), then
+          // exit non-zero so the main transport connect fails and the pre-check
+          // path we are guarding runs. Keeping the dump narrow avoids writing
+          // unrelated CI/server secrets into errorLog if this test ever fails.
+          const childScript = `console.error('${SECRET_KEY}=' + (process.env.${SECRET_KEY} ?? '') + '\\n${ALLOWED_KEY}=' + (process.env.${ALLOWED_KEY} ?? '')); process.exit(1);`;
           const mcpClient = new MCPClient({
             id: 'env-leak-test',
             name: 'Env Leak Test',
             type: 'stdio',
             command: process.execPath,
-            // Dump the child env to stderr then exit non-zero: the main transport
-            // connect fails, which triggers the pre-check path we are guarding.
-            args: ['-e', 'console.error(JSON.stringify(process.env)); process.exit(1);'],
+            args: ['-e', childScript],
             env: { [ALLOWED_KEY]: ALLOWED_VALUE },
           } as any);
 
