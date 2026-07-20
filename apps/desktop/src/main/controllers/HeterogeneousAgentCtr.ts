@@ -1,7 +1,7 @@
 import type { ChildProcess } from 'node:child_process';
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { unlinkSync } from 'node:fs';
+import { existsSync, unlinkSync } from 'node:fs';
 import { access, appendFile, mkdir, unlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -53,6 +53,7 @@ import { app as electronApp, BrowserWindow } from 'electron';
 
 import { HETERO_AGENT_FILES_DIR, HETERO_AGENT_TRACING_DIR } from '@/const/heteroAgent';
 import { detectHeterogeneousCliCommand } from '@/modules/binaries';
+import { resolveCliScript } from '@/modules/cliEmbedding';
 import { getHeterogeneousAgentDriver } from '@/modules/heterogeneousAgent';
 import { buildBrowserMcpTools } from '@/modules/heterogeneousAgent/browserMcpTools';
 import { fetchClaudeCodeQuota } from '@/modules/heterogeneousAgent/claudeCodeQuota';
@@ -1899,10 +1900,14 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   }
 
   /**
-   * Spawn `lh hetero exec` for gateway-driven agent runs.
-   * The `lh` CLI handles everything downstream — no local
+   * Spawn the embedded CLI's `hetero exec` for gateway-driven agent runs.
+   * The bundled CLI handles everything downstream — no local
    * AgentStreamPipeline or IPC broadcast needed. Mirrors
    * `spawnHeteroSandbox()` on the server side.
+   *
+   * Resolves only after the child either starts or fails to start. Node reports
+   * failures such as an inaccessible cwd asynchronously through `error`, so an
+   * eager accepted ack would strand the server operation without a producer.
    */
   spawnLhHeteroExec(params: {
     agentType: string;
@@ -1918,7 +1923,7 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     serverUrl: string;
     systemContext?: string;
     topicId: string;
-  }): void {
+  }): Promise<{ reason?: string; status: 'accepted' | 'rejected' }> {
     const {
       agentType,
       args: extraArgs,
@@ -1962,35 +1967,75 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
       ...(extraArgs ?? []),
     ];
 
+    const stdinPayload = buildHeteroExecStdinPayload({ imageList, prompt, systemContext });
+    const cliScript = resolveCliScript();
+    if (!existsSync(cliScript)) {
+      return Promise.resolve({
+        reason: `Embedded CLI not found at ${cliScript}`,
+        status: 'rejected',
+      });
+    }
+
     const env = {
       ...process.env,
       ...buildProxyEnv(this.app.storeManager.get('networkProxy')),
+      ELECTRON_RUN_AS_NODE: '1',
       LOBEHUB_JWT: jwt,
       LOBEHUB_SERVER: serverUrl,
     };
 
     logger.info('spawnLhHeteroExec: type=%s op=%s topic=%s', agentType, operationId, topicId);
 
-    const child = spawn('lh', args, {
+    // Execute the CLI shipped with this desktop build. A bare `lh` would prefer
+    // an older global install earlier on PATH, letting model discovery report a
+    // capability that the actual execution runtime does not support.
+    const child = spawn(process.execPath, [cliScript, ...args], {
       cwd: workDir,
       env,
       stdio: ['pipe', 'inherit', 'inherit'],
     });
 
-    // systemContext / image attachments turn the payload into a content-block
-    // array so CC sees the context block first, then the user's message, then
-    // the images — mirrors spawnHeteroSandbox. lh handles both shapes via
-    // coerceJsonPrompt, so no lh changes are required.
-    const stdinPayload = buildHeteroExecStdinPayload({ imageList, prompt, systemContext });
-    child.stdin.write(stdinPayload);
-    child.stdin.end();
-
-    child.on('error', (err) => {
-      logger.error('spawnLhHeteroExec: spawn failed — %s', err.message);
-    });
-
     child.on('exit', (code, signal) => {
       logger.info('spawnLhHeteroExec: exited — op=%s code=%s signal=%s', operationId, code, signal);
+    });
+
+    return new Promise((resolve) => {
+      let settled = false;
+      const settle = (result: { reason?: string; status: 'accepted' | 'rejected' }) => {
+        if (settled) return;
+        settled = true;
+        resolve(result);
+      };
+
+      child.stdin.once('error', (err) => {
+        logger.error(
+          'spawnLhHeteroExec: stdin write failed — op=%s error=%s',
+          operationId,
+          err.message,
+        );
+        settle({ reason: err.message, status: 'rejected' });
+      });
+
+      child.once('spawn', () => {
+        try {
+          child.stdin.write(stdinPayload);
+          child.stdin.end();
+          settle({ status: 'accepted' });
+        } catch (err) {
+          const reason = err instanceof Error ? err.message : String(err);
+          logger.error(
+            'spawnLhHeteroExec: stdin write threw — op=%s error=%s',
+            operationId,
+            reason,
+          );
+          settle({ reason, status: 'rejected' });
+        }
+      });
+
+      child.once('error', (err) => {
+        logger.error('spawnLhHeteroExec: spawn failed — %s', err.message);
+        settle({ reason: err.message, status: 'rejected' });
+      });
     });
   }
 }
