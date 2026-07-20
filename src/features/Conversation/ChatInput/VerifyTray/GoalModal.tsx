@@ -8,10 +8,12 @@ import { useTranslation } from 'react-i18next';
 
 interface GoalContentProps {
   initialGoal?: string;
+  /** Clear the topic's goal. Only offered when editing an existing goal. */
+  onDelete?: () => void | Promise<unknown>;
   onSubmit: (goal: string) => void | Promise<unknown>;
 }
 
-const GoalContent = memo<GoalContentProps>(({ initialGoal, onSubmit }) => {
+const GoalContent = memo<GoalContentProps>(({ initialGoal, onDelete, onSubmit }) => {
   const { t: tv } = useTranslation('verify');
   const { close } = useModalContext();
   const [goal, setGoal] = useState(initialGoal ?? '');
@@ -44,18 +46,35 @@ const GoalContent = memo<GoalContentProps>(({ initialGoal, onSubmit }) => {
         value={goal}
         onChange={(e) => setGoal(e.target.value)}
       />
-      <Flexbox horizontal gap={8} justify={'flex-end'}>
-        <Button disabled={saving} onClick={close}>
-          {tv('acceptance.actions.cancel')}
-        </Button>
-        <Button
-          disabled={!goal.trim() || saving}
-          loading={saving}
-          type={'primary'}
-          onClick={handleSave}
-        >
-          {tv('acceptance.tray.goalModal.save')}
-        </Button>
+      <Flexbox horizontal align={'center'} justify={'space-between'}>
+        {onDelete ? (
+          <Button
+            danger
+            disabled={saving}
+            type={'text'}
+            onClick={() => {
+              void onDelete();
+              close();
+            }}
+          >
+            {tv('acceptance.tray.goalModal.delete')}
+          </Button>
+        ) : (
+          <span />
+        )}
+        <Flexbox horizontal gap={8}>
+          <Button disabled={saving} onClick={close}>
+            {tv('acceptance.actions.cancel')}
+          </Button>
+          <Button
+            disabled={!goal.trim() || saving}
+            loading={saving}
+            type={'primary'}
+            onClick={handleSave}
+          >
+            {tv('acceptance.tray.goalModal.save')}
+          </Button>
+        </Flexbox>
       </Flexbox>
     </Flexbox>
   );

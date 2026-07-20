@@ -318,6 +318,13 @@ const ChatInput = memo<ChatInputProps>(
     // can square the top corners of OpStatusTray when it sits flush below.
     const hasTodos = (selectCurrentTurnTodosFromMessages(dbMessages)?.items.length ?? 0) > 0;
 
+    // Detect whether OpStatusTray will render (mirrors its own `!startTime`
+    // gate) so GoalTray — which sits flush below it — can square its top corners
+    // and merge with the status strip instead of showing a seam.
+    const hasOpStatus = useChatStore(
+      (s) => operationSelectors.getVisibleAgentRuntimeStartTimeByContext(context)(s) !== undefined,
+    );
+
     // Computed state
     const isInputEmpty = !inputMessage.trim() && fileList.length === 0 && contextList.length === 0;
     const { placeholderVariant, showSendMenu, showStopButton } = getConversationChatInputUiState({
@@ -443,7 +450,9 @@ const ChatInput = memo<ChatInputProps>(
             {!disableQueue && hasQueuedMessages && <QueueTray />}
             <TodoProgress topAttached={!disableQueue && hasQueuedMessages} />
             <OpStatusTray topAttached={(!disableQueue && hasQueuedMessages) || hasTodos} />
-            <GoalTray topAttached={(!disableQueue && hasQueuedMessages) || hasTodos} />
+            <GoalTray
+              topAttached={(!disableQueue && hasQueuedMessages) || hasTodos || hasOpStatus}
+            />
           </Flexbox>
           <DesktopChatInput
             actionBarStyle={actionBarStyle}

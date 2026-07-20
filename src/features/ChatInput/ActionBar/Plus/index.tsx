@@ -723,8 +723,9 @@ const PlusAction = memo(() => {
               if (activeTopicId) {
                 void openTopicGoalModal(activeTopicId);
               } else if (agentId) {
+                // Arm only — the persistent "armed" chip above the composer is the
+                // feedback now (the next message becomes the goal), not a toast.
                 useGoalArmStore.getState().arm(agentId);
-                message.success(tVerify('acceptance.tray.goalArmed'));
               }
             },
           },
