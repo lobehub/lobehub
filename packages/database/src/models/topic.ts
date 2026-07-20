@@ -590,9 +590,9 @@ export class TopicModel {
   };
 
   /**
-   * Query the current user's topics, optionally filtered by status. Used by the
-   * Fleet view to list actively-running topics across all agents without
-   * pulling the full topic set to the client.
+   * Query the current user's topics, optionally filtered by status — e.g. to
+   * list actively-running topics across all agents without pulling the full
+   * topic set to the client.
    *
    * `withLastMessage` additionally pulls each topic's last assistant reply, so a
    * list can show what the agent actually said instead of just a title. The

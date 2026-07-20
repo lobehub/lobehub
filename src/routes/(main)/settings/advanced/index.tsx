@@ -53,7 +53,6 @@ const Page = memo(() => {
     enableInputMarkdown,
     enablePlatformAgent,
     enableImessage,
-    enableFleet,
     enableClaudeCodeSdk,
     enableMessageTextSelectionActions,
     enableOAuthApps,
@@ -68,7 +67,6 @@ const Page = memo(() => {
     labPreferSelectors.enableInputMarkdown(s),
     labPreferSelectors.enablePlatformAgent(s),
     labPreferSelectors.enableImessage(s),
-    labPreferSelectors.enableFleet(s),
     labPreferSelectors.enableClaudeCodeSdk(s),
     labPreferSelectors.enableMessageTextSelectionActions(s),
     labPreferSelectors.enableOAuthApps(s),
@@ -260,19 +258,6 @@ const Page = memo(() => {
             className: styles.labItem,
             desc: tLabs('features.imessage.desc'),
             label: tLabs('features.imessage.title'),
-            minWidth: undefined,
-          } satisfies FormItemProps,
-          {
-            children: (
-              <Switch
-                checked={enableFleet}
-                loading={!isPreferenceInit}
-                onChange={(checked: boolean) => updateLab({ enableFleet: checked })}
-              />
-            ),
-            className: styles.labItem,
-            desc: tLabs('features.fleet.desc'),
-            label: tLabs('features.fleet.title'),
             minWidth: undefined,
           } satisfies FormItemProps,
           {

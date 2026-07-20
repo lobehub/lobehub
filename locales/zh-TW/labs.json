@@ -11,8 +11,6 @@
   "features.builtinTerminal.title": "內建終端",
   "features.claudeCodeSdk.desc": "透過 Claude Agent SDK 執行 Claude Code 會話，而非啟動 CLI。提供更豐富的串流和會話控制功能。",
   "features.claudeCodeSdk.title": "Claude Code SDK 執行環境",
-  "features.fleet.desc": "在標題欄中顯示 Fleet 項目——一個並排顯示所有代理執行任務的儀表板。",
-  "features.fleet.title": "Fleet 檢視",
   "features.foldFinishedTurn.desc": "將已完成且非最新代理回合的過程（推理和工具調用）折疊到「已處理」標題下。最終答案保持可見；點擊以展開過程。",
   "features.foldFinishedTurn.title": "折疊已完成回合",
   "features.groupChat.desc": "啟用多智能體群組聊天編排功能。",

@@ -11,8 +11,6 @@
   "features.builtinTerminal.title": "الطرفية المدمجة",
   "features.claudeCodeSdk.desc": "قم بتشغيل جلسات Claude Code من خلال Claude Agent SDK بدلاً من تشغيل واجهة سطر الأوامر (CLI). يتيح ذلك بثًا أكثر ثراءً وتحكمًا أفضل في الجلسات.",
   "features.claudeCodeSdk.title": "وقت تشغيل Claude Code SDK",
-  "features.fleet.desc": "عرض إدخال الأسطول في شريط العنوان — لوحة معلومات جنبًا إلى جنب لجميع المهام الجارية عبر وكلائك.",
-  "features.fleet.title": "عرض الأسطول",
   "features.foldFinishedTurn.desc": "طي العملية (الاستدلال واستدعاءات الأدوات) للأدوار المكتملة وغير الأحدث تحت عنوان \"تمت المعالجة\". يبقى الجواب النهائي مرئيًا؛ انقر لتوسيع العملية.",
   "features.foldFinishedTurn.title": "طي الأدوار المكتملة",
   "features.groupChat.desc": "تمكين تنسيق الدردشة الجماعية متعددة الوكلاء.",

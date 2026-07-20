@@ -11,8 +11,6 @@
   "features.builtinTerminal.title": "組み込みターミナル",
   "features.claudeCodeSdk.desc": "Claude Agent SDKを使用してClaude Codeセッションを実行し、CLIを起動する代わりに利用します。より豊かなストリーミングとセッション管理を可能にします。",
   "features.claudeCodeSdk.title": "Claude Code SDKランタイム",
-  "features.fleet.desc": "タイトルバーにフリートエントリを表示します。エージェント全体で実行中のタスクを並べて表示するダッシュボードです。",
-  "features.fleet.title": "フリートビュー",
   "features.foldFinishedTurn.desc": "完了した最新ではないエージェントのターンのプロセス（推論やツールの呼び出し）を「処理済み」ヘッダーの下に折りたたみます。最終的な回答は表示されたままです。プロセスを展開するにはクリックしてください。",
   "features.foldFinishedTurn.title": "完了したターンを折りたたむ",
   "features.groupChat.desc": "複数のAIアシスタントによるグループチャット機能を有効にします。",

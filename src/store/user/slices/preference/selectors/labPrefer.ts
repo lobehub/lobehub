@@ -14,7 +14,6 @@ export const labPreferSelectors = {
   enableBuiltinTerminal: (s: UserState): boolean =>
     s.preference.lab?.enableBuiltinTerminal ?? false,
   enableClaudeCodeSdk: (s: UserState): boolean => s.preference.lab?.enableClaudeCodeSdk ?? false,
-  enableFleet: (s: UserState): boolean => s.preference.lab?.enableFleet ?? false,
   enableImessage: (s: UserState): boolean => s.preference.lab?.enableImessage ?? false,
   enableInAppBrowser: (s: UserState): boolean => s.preference.lab?.enableInAppBrowser ?? false,
   enableInputMarkdown: (s: UserState): boolean =>

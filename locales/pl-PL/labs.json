@@ -11,8 +11,6 @@
   "features.builtinTerminal.title": "Wbudowany Terminal",
   "features.claudeCodeSdk.desc": "Uruchamiaj sesje Claude Code za pomocą Claude Agent SDK zamiast uruchamiania CLI. Umożliwia bardziej zaawansowane przesyłanie strumieniowe i kontrolę sesji.",
   "features.claudeCodeSdk.title": "Środowisko wykonawcze Claude Code SDK",
-  "features.fleet.desc": "Wyświetl wpis Fleet w pasku tytułu — zestawienie obok siebie wszystkich uruchomionych zadań na Twoich agentach.",
-  "features.fleet.title": "Widok Fleet",
   "features.foldFinishedTurn.desc": "Zwiń proces (rozumowanie i wywołania narzędzi) zakończonych, nie najnowszych tur agenta pod nagłówkiem „Przetworzone”. Ostateczna odpowiedź pozostaje widoczna; kliknij, aby rozwinąć proces.",
   "features.foldFinishedTurn.title": "Zwiń Zakończone Tury",
   "features.groupChat.desc": "Włącz koordynację czatu grupowego z wieloma agentami.",

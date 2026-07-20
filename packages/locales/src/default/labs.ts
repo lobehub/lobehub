@@ -17,9 +17,6 @@ export default {
   'features.claudeCodeSdk.desc':
     'Run Claude Code sessions through the Claude Agent SDK instead of spawning the CLI. Enables richer streaming and session control.',
   'features.claudeCodeSdk.title': 'Claude Code SDK Runtime',
-  'features.fleet.desc':
-    'Show the Fleet entry in the title bar — a side-by-side dashboard of all running tasks across your agents.',
-  'features.fleet.title': 'Fleet View',
   'features.imessage.desc':
     'Connect agents to iMessage through the local LobeHub Desktop BlueBubbles bridge.',
   'features.imessage.title': 'iMessage Channel',

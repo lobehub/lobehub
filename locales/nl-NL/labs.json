@@ -11,8 +11,6 @@
   "features.builtinTerminal.title": "Ingebouwde Terminal",
   "features.claudeCodeSdk.desc": "Voer Claude Code-sessies uit via de Claude Agent SDK in plaats van de CLI te starten. Biedt rijkere streaming en sessiebeheer.",
   "features.claudeCodeSdk.title": "Claude Code SDK Runtime",
-  "features.fleet.desc": "Toon de Fleet-invoer in de titelbalk — een zij-aan-zij dashboard van alle lopende taken over uw agents.",
-  "features.fleet.title": "Fleet-weergave",
   "features.foldFinishedTurn.desc": "Vouw het proces (redenering en hulpmiddeloproepen) van voltooide, niet-laatste agentbeurten onder een kop \"Verwerkt\". Het uiteindelijke antwoord blijft zichtbaar; klik om het proces uit te vouwen.",
   "features.foldFinishedTurn.title": "Vouw Voltooide Beurten",
   "features.groupChat.desc": "Schakel coördinatie van groepschats met meerdere agenten in.",

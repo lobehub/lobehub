@@ -134,12 +134,6 @@ export const topicKeys = {
   ]),
 };
 
-// ---- fleet (Observation Mode board) -------------------------------------
-export const fleetKeys = {
-  /** Account-wide set of actively-running topics powering the Observation board. */
-  runningTopics: def('fleet:runningTopics', () => ['fleet:runningTopics']),
-};
-
 // ---- agent --------------------------------------------------------------
 export const agentKeys = {
   /** Sidebar agent list. */
@@ -1053,7 +1047,6 @@ export const swrKeys = {
   eval: evalKeys,
   favorite: favoriteKeys,
   file: fileKeys,
-  fleet: fleetKeys,
   fork: forkKeys,
   gateway: gatewayKeys,
   global: globalKeys,
