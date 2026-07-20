@@ -67,8 +67,11 @@ run just re-hits the same wall — yet the card offers only `重试` / `忽略`,
 `taskLifecycle` stores raw cause, no error-type → action mapping) + L2 (only 忽略 / 重试 render).
 **Remedy:** map known terminal error types (`InsufficientBudgetForModel` →
 `limitation.workspace.insufficientBudget.*`) to a **remedy action** (link to billing/top-up)
-that leads the row; keep Retry as secondary only for transient causes. _(Not yet done — larger
-change; needs an error-code → action mapping. Filed as follow-up.)_
+that leads the row; keep Retry as secondary only for transient causes. _(Done — the
+completion event's structured `errorType` is threaded through both `onTopicComplete`
+callers into the brief; billing causes get an `upgrade` link action + `metadata.error.code`,
+and `BriefCardActions` was fixed so a link-type primary navigates. Verified via agent-testing
+T-220: budget card renders 忽略 + 升级方案 → app.lobehub.com/settings/plans, no 重试.)_
 
 **③ The card doesn't read AS an error — severity legibility (Certainty)** 🟠 The only status
 cue is the meta-row `StatusGlyph`, driven by **task status** — but on error the task is set to
@@ -78,13 +81,15 @@ So a _failed_ run shows the same neutral/pending glyph as a healthy pause — no
 icon (confirmed L2: the screenshot's 🤚 is that hand). The card leans entirely on copy to say
 "error". **Remedy:** for `type === 'error'` briefs give the card an error accent (error-colored
 alert glyph on the content, or drive the glyph to a failure visual) so severity is legible
-pre-reading. _(Not yet done.)_
+pre-reading. _(Done — a red `CircleAlert` renders on the headline for `type: 'error'` briefs.
+Verified via agent-testing T-220.)_
 
 **④ "View run" was dead on error briefs — Overview+Detail (Meaningful)** 🟡 **\[fixed this run]**
 `showViewRun = taskId && topicId` (`BriefCardActions.tsx:66`), but the error brief's `create()`
 never passed `topicId` — so the one affordance to **inspect why it failed** never rendered; the
 user could Retry or Ignore but not _look_. **Remedy (done):** pass `topicId` to the error brief
-so "View run" appears (⏳ confirm on the render at L2).
+so "View run" appears. Verified via agent-testing T-220: both seeded briefs carrying a
+`topicId` render a visible 查看运行轨迹 entry; the legacy brief without one does not.
 
 **⑤ `忽略` is a permanent dismiss with no undo — Act (Certainty)** 🟡 `忽略` resolves the brief
 (`handleResolve('ignore')`) with no confirm/undo; an error dismissed by accident is gone from
