@@ -287,7 +287,23 @@ const AcceptancePage = memo<AcceptancePageProps>(({ acceptanceId: explicitAccept
           .map((group) => group.key),
       ),
     );
-  }, [data, acceptanceId, t]);
+    // First run (one round): nothing has been reviewed yet, so open on the whole
+    // list. Second round onward: the reviewer came back for what's still unsigned
+    // — land them on 未验收. A deep-link's explicit `?filter=` always wins.
+    const defaultFilter: CheckFilter = data.rounds.length > 1 ? 'pending' : 'all';
+    if (isEmbedded) {
+      setLocalFilter(defaultFilter);
+    } else if (!urlFilterRaw && defaultFilter !== 'all') {
+      setSearchParams(
+        (prev) => {
+          const params = new URLSearchParams(prev);
+          params.set('filter', defaultFilter);
+          return params;
+        },
+        { replace: true },
+      );
+    }
+  }, [data, acceptanceId, t, isEmbedded, urlFilterRaw, setSearchParams]);
 
   const counts = useMemo(() => {
     const checks = data?.checks ?? [];

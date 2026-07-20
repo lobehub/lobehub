@@ -15,6 +15,15 @@ const VERIFY_REPORT_SWR_CONFIG = {
   revalidateOnReconnect: false,
 } as const;
 
+// The acceptance bundle is a LIVE decision surface — rounds run and reviews land
+// while the reviewer is away — so unlike the immutable report snapshots it
+// revalidates on focus/reconnect. Coming back to the tab shows the current state
+// without a manual refresh (focus is throttled by SWR's default 5s).
+const ACCEPTANCE_BUNDLE_SWR_CONFIG = {
+  revalidateOnFocus: true,
+  revalidateOnReconnect: true,
+} as const;
+
 /** Plan + rollup status for one Agent Run. Pass null operationId to skip. */
 export const useVerifyState = (operationId: string | null) =>
   useClientDataSWR(operationId ? verifyKeys.state(operationId) : null, () =>
@@ -40,7 +49,7 @@ export const useAcceptanceBundle = (acceptanceId: string | null) =>
   useClientDataSWR(
     acceptanceId ? verifyKeys.acceptanceBundle(acceptanceId) : null,
     () => verifyService.getAcceptanceBundle(acceptanceId!),
-    VERIFY_REPORT_SWR_CONFIG,
+    ACCEPTANCE_BUNDLE_SWR_CONFIG,
   );
 
 /** The caller's recent acceptance aggregates (with subject headers) — the list panel. */
